@@ -21,7 +21,7 @@ Live at https://system.aristora.org. The pilot unit is Grade 11 Quadratic equati
 ## How it deploys
 
 Every push to `main` deploys on Vercel. `vercel.json` runs
-`npx convex deploy --cmd 'npm run build'`, which builds the phone app and pushes the Convex backend.
+`scripts/vercel-build.sh`, which checks the Convex key, pushes the Convex backend and builds the phone app.
 The `CONVEX_DEPLOY_KEY` lives only in Vercel's environment variables. **Never commit keys or passwords: this repo is public.**
 
 ## There is no login
