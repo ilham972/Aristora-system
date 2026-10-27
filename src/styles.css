@@ -1509,3 +1509,7 @@ input.full {
   flex-direction: column;
   gap: 2px;
 }
+/* Notices sit above the Call bar when it is showing. */
+.app:has(.call-bar) .toasts {
+  bottom: calc(var(--tabs) + env(safe-area-inset-bottom) + 80px);
+}
