@@ -3,7 +3,7 @@ import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { mutate } from "./backend";
 import { Register } from "./board";
-import { fmtMin, type View } from "./derive";
+import { fmtMin, shortMin, type View } from "./derive";
 import { ReportView, type Report } from "./report";
 import { act, currentRole, toast, type Board } from "./store";
 import { Empty, Sheet } from "./ui";
@@ -122,7 +122,22 @@ export function Correction(props: { board: Board; views: View[]; now: number }) 
   );
 }
 
-/** Rooms asking for students. Correction sends them and taps Sent. */
+const ROOM = { theory: "Theory", evaluation: "Evaluation" } as const;
+
+async function notNow(callId: Id<"calls">, name: string, room: keyof typeof ROOM) {
+  const ok = await act(() => mutate(api.calls.decline, { callId, by: currentRole() }));
+  if (!ok) return;
+  toast(`${name} not sent. ${ROOM[room]} is told.`, "info", () => {
+    void act(() => mutate(api.calls.undoDecline, { callId, by: currentRole() })).then((back) => {
+      if (back === false) toast(`Can't bring the call back: ${name}'s plan changed meanwhile.`, "error");
+    });
+  });
+}
+
+/**
+ * Rooms asking for students: one slim strip per room, stuck under the header so it shows
+ * even when the register is scrolled. Tap × for "not now", Sent when they've gone.
+ */
 function CallsBand(props: { board: Board; views: View[]; now: number }) {
   const { board, views, now } = props;
   const byId = new Map(views.map((v) => [v.s._id as string, v]));
@@ -135,47 +150,53 @@ function CallsBand(props: { board: Board; views: View[]; now: number }) {
     .filter((r) => r.calls.length > 0);
 
   return (
-    <div class="calls" aria-live="assertive">
+    <div class="calls stick" aria-live="assertive">
       {rooms.map(({ room, calls }) => {
         const oldest = Math.min(...calls.map((c) => c.createdAt));
         const late = now - oldest > 60_000;
         return (
-          <section key={room} class={`call-card ${room}${late ? " late" : ""}`}>
-            <header>
-              <h2>
-                <span class="pulse" aria-hidden="true" />
-                Send to {room === "theory" ? "Theory" : "Evaluation"}
-              </h2>
-              <span class="call-age">{fmtMin(now - oldest)}</span>
-            </header>
-            <ul class="call-names">
-              {calls.map((c) => (
-                <li key={c._id}>
-                  <span class="call-name">{byId.get(c.studentId)?.s.name ?? "?"}</span>
-                  {c.kind === "theory" && c.room === "evaluation" && <span class="call-tag">for theory</span>}
-                  <button
-                    type="button"
-                    class="not-now"
-                    onClick={() => void act(() => mutate(api.calls.decline, { callId: c._id, by: currentRole() }))}
-                  >
-                    Not now
-                  </button>
-                </li>
-              ))}
+          <section key={room} class={`call-strip ${room}${late ? " late" : ""}`} aria-label={`Send to ${ROOM[room]}`}>
+            <span class="cs-room">
+              <span class="pulse" aria-hidden="true" />
+              <span class="cs-room-text">
+                <b>{ROOM[room]}</b>
+                <small>{shortMin(now - oldest)}</small>
+              </span>
+            </span>
+            <ul class="cs-names">
+              {calls.map((c) => {
+                const name = byId.get(c.studentId)?.s.name ?? "?";
+                return (
+                  <li key={c._id} class="cs-chip">
+                    <span class="call-name">{name}</span>
+                    <button
+                      type="button"
+                      class="cs-x"
+                      aria-label={`Not now: ${name}`}
+                      onClick={() => void notNow(c._id, name, room)}
+                    >
+                      ×
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
             <button
               type="button"
-              class={`btn ${room} wide big`}
-              onClick={() => void act(() => mutate(api.calls.send, { callIds: calls.map((c) => c._id), by: currentRole() }))}
+              class={`btn ${room} cs-send`}
+              onClick={async () => {
+                const r = await act(() => mutate(api.calls.send, { callIds: calls.map((c) => c._id), by: currentRole() }));
+                if (r?.skipped.length) toast(`${r.skipped.join(". ")}.`, "error");
+              }}
             >
-              {calls.length === 1 ? "Sent" : `Sent all ${calls.length}`}
+              {calls.length === 1 ? "Sent" : `Sent ${calls.length}`}
             </button>
           </section>
         );
       })}
       {pulls.map((c) => (
         <p key={c._id} class="pull-note">
-          {byId.get(c.studentId)?.s.name ?? "?"} goes from Evaluation straight to Theory. Nothing to do.
+          <b>{byId.get(c.studentId)?.s.name ?? "?"}</b> goes from Evaluation straight to Theory. Nothing to do.
         </p>
       ))}
     </div>

@@ -33,6 +33,26 @@ async function phone(backend: ReturnType<typeof makeBackend>, role: string, size
   const ctx = await browser.newContext(size);
   await backend.attach(ctx);
   await ctx.addInitScript((r) => localStorage.setItem("aristora.role", r), role);
+  // Headless Chrome has no voices: record what the phone would say instead.
+  await ctx.addInitScript(() => {
+    const said: string[] = [];
+    const fake = {
+      speaking: false,
+      pending: false,
+      paused: false,
+      getVoices: () => [],
+      speak: (u: SpeechSynthesisUtterance) => {
+        if (u.text.trim()) said.push(u.text);
+      },
+      cancel() {},
+      pause() {},
+      resume() {},
+      addEventListener() {},
+      removeEventListener() {},
+    };
+    Object.defineProperty(window, "speechSynthesis", { value: fake, configurable: true });
+    (window as unknown as { __said: string[] }).__said = said;
+  });
   const page = await ctx.newPage();
   page.on("console", (m) => {
     if (m.type() === "error" || m.type() === "warning") problems.push(`[${role} ${m.type()}] ${m.text()}`);
@@ -61,6 +81,14 @@ const contains = (l: L, text: string) => until(async () => (await l.first().inne
 const textsAre = (l: L, list: string[]) =>
   until(async () => JSON.stringify((await l.allInnerTexts()).map((x) => x.trim())) === JSON.stringify(list), `${list.join(", ")} in ${l}`);
 const shot = (p: Page, name: string, full = false) => p.screenshot({ path: join(SHOTS, `${name}.png`), fullPage: full });
+const said = (p: Page) => p.evaluate(() => (window as unknown as { __said: string[] }).__said);
+const hears = async (p: Page, words: string) => {
+  try {
+    await until(async () => (await said(p)).includes(words), `phone says "${words}"`);
+  } catch (e) {
+    throw new Error(`${(e as Error).message}; it said: ${JSON.stringify(await said(p))}`);
+  }
+};
 const row = (p: Page, name: string) => p.locator(".reg-row", { has: p.locator(".reg-n", { hasText: name }) });
 const circle = (r: L, q: number) => r.locator(".reg-act").getByRole("button", { name: new RegExp(`^Q${q}\\b`) });
 
@@ -75,7 +103,9 @@ test("the register: a whole class on three phones", async () => {
   const E = await phone(backend, "evaluation");
 
   await visible(C.getByText("No students yet"));
+  await visible(C.getByRole("button", { name: /turn on alerts/ })); // phones need one tap before they can make sound
   await C.getByRole("button", { name: "Settings" }).click();
+  await count(C.locator(".sound-banner"), 0);
   await C.getByRole("button", { name: "Load 10 demo students" }).click();
   await visible(C.getByText("10 demo students loaded."));
   await C.getByRole("button", { name: "Back to the class" }).click();
@@ -117,14 +147,25 @@ test("the register: a whole class on three phones", async () => {
   await shot(T, "r05-theory-selected");
   await T.locator(".call-bar").getByRole("button", { name: "Call 4" }).click();
 
-  // Correction: Dilan is out (Not now), the other three are sent.
-  const card = C.locator(".call-card.theory");
-  await count(card.locator(".call-name"), 4);
+  // Correction hears the names, sees one slim strip; Dilan is out (Not now, undo, Not now), the other three are sent.
+  const strip = C.locator(".call-strip.theory");
+  await count(strip.locator(".call-name"), 4);
+  await hears(C, "Fathima, Ahamed, Dilan and Nila, go to Theory."); // most urgent first, as Theory picked them
+  expect((await strip.boundingBox())!.height).toBeLessThan(110); // was a 300 px card
   await shot(C, "r06-correction-call");
-  await card.locator("li", { hasText: "Dilan" }).getByRole("button", { name: "Not now" }).click();
-  await count(card.locator(".call-name"), 3);
-  await card.getByRole("button", { name: "Sent all 3" }).click();
-  await count(C.locator(".call-card"), 0);
+  await C.evaluate(() => window.scrollTo(0, 400));
+  await until(async () => ((await strip.boundingBox())?.y ?? 0) < 120, "the strip stays under the header");
+  await shot(C, "r06b-correction-call-scrolled");
+  await C.evaluate(() => window.scrollTo(0, 0));
+  await strip.getByRole("button", { name: "Not now: Dilan" }).click();
+  await count(strip.locator(".call-name"), 3);
+  await contains(C.locator(".toast"), "Dilan not sent");
+  await C.locator(".toast").getByRole("button", { name: "Undo" }).click();
+  await count(strip.locator(".call-name"), 4);
+  await strip.getByRole("button", { name: "Not now: Dilan" }).click();
+  await count(strip.locator(".call-name"), 3);
+  await strip.getByRole("button", { name: "Sent 3" }).click();
+  await count(C.locator(".call-strip"), 0);
 
   // Theory teaches: Fathima the whole section (one tap on D), Ahamed only 23 and 24, Nila nothing yet.
   await contains(T.locator(".inroom.theory"), "Fathima");
@@ -132,6 +173,7 @@ test("the register: a whole class on three phones", async () => {
   await circle(row(T, "Ahamed"), 23).click();
   await circle(row(T, "Ahamed"), 24).click();
   await shot(T, "r07-theory-teaching");
+  expect((await T.locator(".inroom.theory").boundingBox())!.height).toBeLessThan(110);
   await T.locator(".inroom.theory").getByRole("button", { name: "Send back", exact: true }).click();
   await contains(T.locator(".toast"), "Back to the hall");
   const f = await marksOf(backend, "Fathima");
@@ -144,11 +186,13 @@ test("the register: a whole class on three phones", async () => {
   // --- Evaluation calls Kumar; Theory then takes him straight from the evaluation room.
   await row(E, "Kumar").locator(".reg-name").click();
   await E.locator(".call-bar").getByRole("button", { name: "Call 1" }).click();
-  await C.locator(".call-card.evaluation").getByRole("button", { name: "Sent" }).click();
+  await hears(C, "Kumar, go to Evaluation.");
+  await C.locator(".call-strip.evaluation").getByRole("button", { name: "Sent" }).click();
   await contains(E.locator(".inroom.evaluation"), "Kumar");
   await row(T, "Kumar").locator(".reg-name").click();
   await T.locator(".call-bar").getByRole("button", { name: "Call 1" }).click();
-  await contains(E.locator(".pull-banner"), "Theory is free and wants Kumar now");
+  await contains(E.locator(".pull-banner"), "Theory wants Kumar now");
+  await hears(E, "Theory wants Kumar now.");
   await circle(row(E, "Kumar"), 28).click(); // explained Q28 only
   await shot(E, "r08-evaluation-pull");
   await E.locator(".pull-banner").getByRole("button", { name: "Send to Theory" }).click();
@@ -164,19 +208,38 @@ test("the register: a whole class on three phones", async () => {
   await E.locator(".call-bar").getByRole("button", { name: "Clear" }).click();
 
   // Theory: all taught for Kumar (section E) in one tap.
-  await T.locator(".inroom.theory").getByRole("button", { name: "All taught, send back" }).click();
+  await T.locator(".inroom.theory").getByRole("button", { name: "All taught" }).click();
   await until(async () => (await marksOf(backend, "Kumar")).marks["34"]?.s === "taught", "Kumar E taught");
 
   // Theory busy with Tharun -> Evaluation teaches Rizwan section C itself.
+  // Both rooms call at once: Correction gets two slim strips and hears both.
   await row(T, "Tharun").locator(".reg-name").click();
   await T.locator(".call-bar").getByRole("button", { name: "Call 1" }).click();
-  await C.locator(".call-card.theory").getByRole("button", { name: "Sent" }).click();
   await row(E, "Rizwan").locator(".reg-name").click();
   await E.locator(".call-bar").getByRole("button", { name: "Teach 1" }).click();
-  await C.locator(".call-card.evaluation").getByRole("button", { name: "Sent" }).click();
-  await contains(E.locator(".inroom.evaluation"), "section C");
-  await E.locator(".inroom.evaluation").getByRole("button", { name: "All explained, send back" }).click();
+  await count(C.locator(".call-strip"), 2);
+  await hears(C, "Rizwan, go to Evaluation.");
+  await shot(C, "r09b-correction-two-rooms");
+  const small = await phone(backend, "correction", { ...PHONE, viewport: { width: 360, height: 740 } });
+  await count(small.locator(".call-strip"), 2);
+  expect(await small.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+  await shot(small, "r09c-correction-two-rooms-360px");
+  await small.context().close();
+  await C.locator(".call-strip.theory").getByRole("button", { name: "Sent" }).click();
+  await C.locator(".call-strip.evaluation").getByRole("button", { name: "Sent" }).click();
+  await visible(E.locator(".inroom.evaluation").getByRole("img", { name: "section C" }));
+  await shot(E, "r09d-evaluation-teaching-theory");
+  await E.locator(".inroom.evaluation").getByRole("button", { name: "All taught" }).click();
   await until(async () => (await marksOf(backend, "Rizwan")).marks["15"]?.s === "taught", "Rizwan C taught");
+
+  // Settings, Alerts: test the alert on this phone.
+  await C.getByRole("button", { name: "Settings" }).click();
+  await C.getByRole("button", { name: "Alerts", exact: true }).click();
+  await contains(C.locator(".alert-status"), "Alerts are on");
+  await C.getByRole("button", { name: "Test the alert" }).click();
+  await until(async () => (await said(C)).some((w) => /^Test\. \w+, go to Theory\.$/.test(w)), "the test alert speaks");
+  await shot(C, "r09e-settings-alerts", true);
+  await C.getByRole("button", { name: "Back to the class" }).click();
 
   // Correction: Keerthi arrives (tap her name); open Ahamed's whole book from the strip.
   await row(C, "Keerthi").locator(".reg-name").click();
@@ -204,5 +267,35 @@ test("the register: a whole class on three phones", async () => {
     await small.context().close();
   }
 
+  expect(problems, problems.join("\n")).toEqual([]);
+});
+
+test("a phone without the screen wake lock (iPhone 7 Plus) keeps the screen on with the silent video", async () => {
+  const backend = makeBackend(modules);
+  const ctx = await browser.newContext(PHONE);
+  await backend.attach(ctx);
+  await ctx.addInitScript(() => {
+    Object.defineProperty(Navigator.prototype, "wakeLock", { get: () => undefined, configurable: true });
+    localStorage.setItem("aristora.role", "correction");
+  });
+  const page = await ctx.newPage();
+  page.on("console", (m) => {
+    if (m.type() === "error" || m.type() === "warning") problems.push(`[old phone ${m.type()}] ${m.text()}`);
+  });
+  page.on("pageerror", (e) => problems.push(`[old phone pageerror] ${e.message}`));
+  await page.goto(site.url);
+  const videoPlaying = () => page.evaluate(() => !!document.querySelector("video") && !document.querySelector("video")!.paused);
+
+  await page.getByRole("button", { name: /turn on alerts/ }).click();
+  await until(videoPlaying, "the silent video plays");
+  await count(page.locator(".sound-banner"), 0);
+
+  // The phone was locked and opened again: the video stopped, so the banner asks for one tap.
+  await page.evaluate(() => document.querySelector("video")!.pause());
+  await visible(page.getByRole("button", { name: /keep the screen on/ }));
+  await page.getByRole("button", { name: /keep the screen on/ }).click();
+  await until(videoPlaying, "the video plays again");
+  await count(page.locator(".sound-banner"), 0);
+  await ctx.close();
   expect(problems, problems.join("\n")).toEqual([]);
 });

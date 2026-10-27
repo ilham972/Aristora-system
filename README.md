@@ -10,6 +10,15 @@ across the class). Tap the strip or the name to open a student's whole book.
   theory by tapping ◎ circles or the section letter.
 - **Evaluation** taps names to call, and taps red circles to mark them explained. When Theory is busy, he can teach theory too.
 
+## Alerts
+
+- **Correction's phone** chimes and reads the names out: "Ahamed and Nila, go to Theory." It repeats every 30 seconds
+  until he taps Sent or × (not now). Calls show as one slim strip per room, stuck under the header.
+- **Evaluation** hears "Theory wants Kumar now." Theory and Evaluation hear a knock when a student runs out of work.
+- A phone needs one tap on the page before it may make sound (the amber banner). After that every tap re-arms it.
+- The page keeps the screen on (screen wake lock; on iPhones without it, a tiny silent video). A locked phone can't
+  ring: a web page can't wake a phone. Settings → Alerts has a Test button and the phone settings to change.
+
 Live at https://system.aristora.org. The pilot unit is Grade 11 Quadratic equations (questions 1–61, from the book's contents page).
 
 ## The rules (in `convex/lib/status.ts`)

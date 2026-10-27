@@ -41,6 +41,12 @@ export function fmtMin(ms: number): string {
   return m < 1 ? "under 1 min" : `${m} min`;
 }
 
+/** "4 min", or "<1 min": for the tight call strips. */
+export function shortMin(ms: number): string {
+  const m = Math.max(0, Math.floor(ms / 60_000));
+  return m < 1 ? "<1 min" : `${m} min`;
+}
+
 /** " (3 min)" once it's a minute or more, else nothing. */
 export function forMin(ms: number | undefined): string {
   if (ms === undefined || ms < 60_000) return "";

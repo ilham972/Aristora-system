@@ -208,9 +208,31 @@ describe("calls between the rooms", () => {
     const a = await addIn(t, "Ahamed");
     const b = await addIn(t, "Fathima");
     const res = await t.mutation(api.calls.create, { studentIds: [a, b], room: "theory", kind: "theory" });
-    await t.mutation(api.calls.decline, { callId: res.created[0].callId });
+    expect(await t.mutation(api.calls.decline, { callId: res.created[0].callId })).toBe(true);
+    expect(await t.mutation(api.calls.decline, { callId: res.created[0].callId })).toBe(false); // already done
     await t.mutation(api.calls.cancel, { callIds: [res.created[1].callId] });
     expect((await state(t)).calls).toHaveLength(0);
+  });
+
+  test("Not now can be undone, unless something else happened since", async () => {
+    const t = setup();
+    const a = await addIn(t, "Ahamed");
+    const b = await addIn(t, "Fathima");
+    const res = await t.mutation(api.calls.create, { studentIds: [a, b], room: "theory", kind: "theory" });
+    const [ca, cb] = res.created.map((c) => c.callId);
+    await t.mutation(api.calls.decline, { callId: ca });
+    expect(await t.mutation(api.calls.undoDecline, { callId: ca })).toBe(true);
+    const calls = (await state(t)).calls;
+    expect(calls.map((c) => c.status)).toEqual(["requested", "requested"]);
+    expect(calls[0].endedAt).toBeUndefined();
+    expect(await t.mutation(api.calls.undoDecline, { callId: ca })).toBe(false); // not declined any more
+
+    // Fathima: declined, then Evaluation calls her -> the old call can't come back.
+    await t.mutation(api.calls.decline, { callId: cb });
+    await mark(t, b, 5, "wrong");
+    const ev = await t.mutation(api.calls.create, { studentIds: [b], room: "evaluation", kind: "evaluation" });
+    expect(ev.created).toHaveLength(1);
+    expect(await t.mutation(api.calls.undoDecline, { callId: cb })).toBe(false);
   });
 
   test("R12: Back in hall closes a forgotten sitting; a pending pull becomes a normal call", async () => {

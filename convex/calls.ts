@@ -136,12 +136,31 @@ export const decline = mutation({
   handler: async (ctx, args) => {
     const now = Date.now();
     const c = await ctx.db.get(args.callId);
-    if (!c || c.status !== "requested") return;
+    if (!c || c.status !== "requested") return false;
     const session = await currentSession(ctx, now);
     await ctx.db.patch(c._id, { status: "declined", endedAt: now });
     const s = await ctx.db.get(c.studentId);
     await log(ctx, session, now, { kind: "not-now", by: cleanBy(args.by), studentId: c.studentId, name: s?.name, value: c.room });
     await touch(ctx, session, now);
+    return true;
+  },
+});
+
+/** Correction tapped "Not now" by mistake: the call comes back, as long as nothing else happened since. */
+export const undoDecline = mutation({
+  args: { callId: v.id("calls"), by: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const c = await ctx.db.get(args.callId);
+    if (!c || c.status !== "declined") return false;
+    const s = await ctx.db.get(c.studentId);
+    if (!s || s.archived || !s.present || s.room) return false;
+    if ((await activeCalls(ctx, s._id)).length > 0) return false;
+    const session = await currentSession(ctx, now);
+    await ctx.db.patch(c._id, { status: "requested", endedAt: undefined });
+    await log(ctx, session, now, { kind: "not-now-undo", by: cleanBy(args.by), studentId: s._id, name: s.name, value: c.room });
+    await touch(ctx, session, now);
+    return true;
   },
 });
 

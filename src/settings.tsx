@@ -6,11 +6,11 @@ import { longLabel, UNIT } from "../convex/lib/unit";
 import { mutate, subscribe } from "./backend";
 import { fmtMin, type View } from "./derive";
 import { ReportView, type Report } from "./report";
-import { alert, unlockSound } from "./sound";
+import { setVoiceOn, testAlert, useAlertsState } from "./sound";
 import { act, currentRole, toast } from "./store";
 import { Sheet, STATE_WORDS } from "./ui";
 
-type Tab = "students" | "reports" | "history" | "privacy";
+type Tab = "students" | "alerts" | "reports" | "history" | "privacy";
 
 function useQuery<T>(fn: Parameters<typeof subscribe>[0], args: Record<string, unknown>): T | undefined {
   const [value, setValue] = useState<T | undefined>(undefined);
@@ -35,6 +35,7 @@ export function Settings(props: { views: View[]; onClose: () => void }) {
         {(
           [
             ["students", "Students"],
+            ["alerts", "Alerts"],
             ["reports", "Reports"],
             ["history", "History"],
             ["privacy", "Privacy"],
@@ -46,6 +47,7 @@ export function Settings(props: { views: View[]; onClose: () => void }) {
         ))}
       </nav>
       {tab === "students" && <Students views={props.views} />}
+      {tab === "alerts" && <Alerts views={props.views} />}
       {tab === "reports" && <Reports />}
       {tab === "history" && <History />}
       {tab === "privacy" && <Privacy />}
@@ -163,18 +165,6 @@ function Students(props: { views: View[] }) {
         <p class="muted">Demo students can only be loaded into an empty class.</p>
       )}
 
-      <h3 class="block-title">Sound</h3>
-      <button
-        type="button"
-        class="btn ghost wide"
-        onClick={() => {
-          unlockSound();
-          setTimeout(() => alert("call"), 150);
-        }}
-      >
-        Play the call sound
-      </button>
-
       {editing && (
         <Sheet
           title="Rename"
@@ -230,6 +220,72 @@ function Students(props: { views: View[] }) {
           <p class="muted">Their history stays in the History list.</p>
         </Sheet>
       )}
+    </div>
+  );
+}
+
+/** This phone's alerts: test them, names on or off, and the phone settings that make them reliable. */
+function Alerts(props: { views: View[] }) {
+  const st = useAlertsState();
+  const name = props.views.find((v) => v.where !== "absent")?.s.name ?? props.views[0]?.s.name ?? "Rimas";
+  const canSpeak = typeof window !== "undefined" && "speechSynthesis" in window;
+  return (
+    <div class="settings-body">
+      <div class={`alert-status ${st.on ? "ok" : "off"}`} role="status">
+        <b>{st.on ? "Alerts are on" : "Alerts are off"}</b>
+        <span>
+          {st.on
+            ? st.awake === "off"
+              ? "This phone may still lock its screen by itself. Do step 3 below."
+              : "The screen stays on while this page is open."
+            : "Tap anywhere on this page to turn them on."}
+        </span>
+      </div>
+      <button type="button" class="btn primary wide big" onClick={() => testAlert(name)}>
+        Test the alert
+      </button>
+      <p class="muted">
+        You should hear a chime, then "{name}, go to Theory".
+        {canSpeak ? "" : " This phone can't read names out loud; it will only chime."}
+      </p>
+      {canSpeak && (
+        <label class="switch-row">
+          <input type="checkbox" checked={st.voice} onChange={(e) => setVoiceOn((e.target as HTMLInputElement).checked)} />
+          <span>
+            <b>Say names out loud</b>
+            <small>Correction hears "Ahamed and Nila, go to Theory". It repeats every 30 seconds until you tap Sent or ×.</small>
+          </span>
+        </label>
+      )}
+      <p class="note">
+        Alerts follow the tab that is open. Correction hears calls. Theory and Evaluation hear a knock when a student runs out of
+        work, and Evaluation hears "Theory wants Kumar now".
+      </p>
+
+      <h3 class="block-title">Set up each phone once</h3>
+      <ol class="steps">
+        <li>
+          <b>Volume up.</b> Tap Test the alert, and while it plays press the volume-up button until it's loud.
+        </li>
+        <li>
+          <b>iPhone: silent switch off.</b> The small switch on the left side must not show orange.
+        </li>
+        <li>
+          <b>Screen never sleeps during class.</b> iPhone: Settings, Display &amp; Brightness, Auto-Lock, Never. Redmi: open
+          Settings, search "Sleep", choose Never.
+        </li>
+        <li>
+          <b>Power saving off during class.</b> iPhone: Low Power Mode off (it locks the screen after 30 seconds). Redmi: Battery
+          saver off.
+        </li>
+        <li>
+          <b>Keep this page on screen.</b> Don't press the power button and don't switch to another app: a locked phone can't
+          ring.
+        </li>
+        <li>
+          <b>Charger nearby.</b> The screen stays on for the whole class.
+        </li>
+      </ol>
     </div>
   );
 }
@@ -302,6 +358,8 @@ function describe(e: Doc<"events">): string {
       return `sent to ${ROOM_WORD[v] ?? v}`;
     case "not-now":
       return `not sent to ${ROOM_WORD[v] ?? v} (not now)`;
+    case "not-now-undo":
+      return `call to ${ROOM_WORD[v] ?? v} back on ("not now" undone)`;
     case "cancel":
       return `call to ${ROOM_WORD[v] ?? v} cancelled`;
     case "bumped":

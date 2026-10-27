@@ -4,7 +4,7 @@ import type { Id } from "../convex/_generated/dataModel";
 import { longLabel } from "../convex/lib/unit";
 import { mutate } from "./backend";
 import { Register } from "./board";
-import { evalQueue, fmtMin, roomBusy, roomCalls, sameMistakes, theoryGroups, type RoomCall, type View } from "./derive";
+import { evalQueue, roomBusy, roomCalls, sameMistakes, theoryGroups, type RoomCall, type View } from "./derive";
 import { act, currentRole, toast, type Board } from "./store";
 import { flushTaps } from "./taps";
 
@@ -66,7 +66,11 @@ export function Theory(props: { board: Board; views: View[]; now: number }) {
 
   return (
     <main class={`page${pick.sel.size ? " with-bar" : ""}`}>
-      <InRoom room="theory" calls={room} />
+      {room.length > 0 && (
+        <div class="stick">
+          <InRoom room="theory" calls={room} />
+        </div>
+      )}
       {groups.length > 0 && (
         <div class="chips-row" role="group" aria-label="Next to teach">
           <span class="chips-label">Next to teach</span>
@@ -91,7 +95,8 @@ export function Theory(props: { board: Board; views: View[]; now: number }) {
         legend={
           <>
             Tap names to choose who to call. Tap the <b class="k-theory">section letter</b> to mark all its theory taught. Tap a ◎
-            circle: taught, then skip, then clear.
+            circle: taught, then skip, then clear. When they leave, <b>All taught</b> marks the whole section;{" "}
+            <b>Send back</b> keeps only what you tapped.
           </>
         }
         selected={pick.sel}
@@ -147,28 +152,32 @@ export function Evaluation(props: { board: Board; views: View[]; now: number }) 
 
   return (
     <main class={`page${pick.sel.size ? " with-bar" : ""}`}>
-      {pulls.map((rc) => (
-        <div key={rc.c._id} class="pull-banner" role="alert">
-          <p>
-            <strong>Theory is free and wants {rc.v?.s.name} now.</strong> Tap the circles you've explained, then send them. The
-            rest stays waiting.
-          </p>
-          <button
-            type="button"
-            class="btn"
-            onClick={async () => {
-              await flushTaps();
-              const r = await act(() =>
-                mutate(api.calls.finish, { items: [{ callId: rc.c._id, explained: [] }], by: currentRole() }),
-              );
-              if (r) toast(`${rc.v?.s.name} goes to Theory now.`);
-            }}
-          >
-            Send to Theory
-          </button>
+      {room.length > 0 && (
+        <div class="stick">
+          {pulls.map((rc) => (
+            <div key={rc.c._id} class="pull-banner" role="alert">
+              <p>
+                <b>Theory wants {rc.v?.s.name} now.</b>
+                <small>Tap the circles you explained first. The rest stays waiting.</small>
+              </p>
+              <button
+                type="button"
+                class="btn small"
+                onClick={async () => {
+                  await flushTaps();
+                  const r = await act(() =>
+                    mutate(api.calls.finish, { items: [{ callId: rc.c._id, explained: [] }], by: currentRole() }),
+                  );
+                  if (r) toast(`${rc.v?.s.name} goes to Theory now.`);
+                }}
+              >
+                Send to Theory
+              </button>
+            </div>
+          ))}
+          <InRoom room="evaluation" calls={room} />
         </div>
-      ))}
-      <InRoom room="evaluation" calls={room} />
+      )}
       {same.length > 0 && (
         <div class="chips-row" role="group" aria-label="Same wrong answer">
           <span class="chips-label">Same mistake</span>
@@ -193,7 +202,8 @@ export function Evaluation(props: { board: Board; views: View[]; now: number }) 
         legend={
           <>
             Tap names to choose who to call. Tap a <b class="k-wrong">red circle</b> when you've explained it (it turns{" "}
-            <b class="k-explained">violet</b>); tap again to undo.
+            <b class="k-explained">violet</b>); tap again to undo. When they leave, <b>All explained</b> marks every red circle;{" "}
+            <b>Send back</b> keeps only what you tapped.
           </>
         }
         selected={pick.sel}
@@ -256,12 +266,15 @@ export function Evaluation(props: { board: Board; views: View[]; now: number }) 
 
 // ---------------- With you (the room) ----------------
 
+/** Who is in the room, in one slim strip, with the two ways to send them back. */
 function InRoom(props: { room: RoomName; calls: RoomCall[] }) {
   const { room, calls } = props;
   const [busy, setBusy] = useState(false);
   if (calls.length === 0) return null;
   const finishable = calls.filter((rc) => !(rc.c.status === "requested" && rc.c.pull));
   const anyLong = calls.some((rc) => rc.long);
+  const kinds = new Set(finishable.map((rc) => rc.c.kind));
+  const allLabel = kinds.size > 1 ? "All done" : kinds.has("theory") ? "All taught" : "All explained";
 
   const done = async (all: boolean) => {
     setBusy(true);
@@ -281,24 +294,38 @@ function InRoom(props: { room: RoomName; calls: RoomCall[] }) {
     }
   };
 
+  // A group taught one section shows its letter once, not on every name.
+  const sections = new Set(calls.map((rc) => (rc.c.kind === "theory" ? rc.c.section : "-")));
+  const oneSection = sections.size === 1 && !sections.has("-") ? [...sections][0] : undefined;
+
   return (
-    <section class={`inroom ${room}`} aria-label="With you">
-      <h2>With you</h2>
-      <ul class="inroom-names">
+    <section class={`inroom ${room}${anyLong ? " long" : ""}`} aria-label={anyLong ? "Still with you?" : "With you"}>
+      {oneSection && (
+        <span class="ir-sec one" role="img" aria-label={`section ${oneSection}`}>
+          {oneSection}
+        </span>
+      )}
+      {anyLong && <span class="ir-label">Still with you?</span>}
+      <ul class="ir-names">
         {calls.map((rc) => {
-          const status = rc.c.status === "sent" ? fmtMin(rc.minutes) : rc.c.pull ? "after Evaluation" : "not sent yet";
+          const name = rc.v?.s.name ?? "?";
+          const minutes = Math.floor(rc.minutes / 60_000);
+          const status = rc.c.status === "sent" ? (minutes >= 1 ? `${minutes}m` : "") : rc.c.pull ? "in Evaluation" : "not sent";
+          const section = !oneSection && rc.c.kind === "theory" ? rc.c.section : undefined;
           return (
-            <li key={rc.c._id} class={rc.long ? "long" : ""}>
-              <b>{rc.v?.s.name ?? "?"}</b>
-              <small>
-                {status}
-                {rc.c.kind === "theory" && rc.c.section ? `, section ${rc.c.section}` : ""}
-              </small>
+            <li key={rc.c._id} class={`ir-chip${rc.c.status === "sent" ? "" : " coming"}${rc.long ? " long" : ""}`}>
+              <b>{name}</b>
+              {section && (
+                <span class="ir-sec" role="img" aria-label={`section ${section}`}>
+                  {section}
+                </span>
+              )}
+              {status && <small>{status}</small>}
               {rc.c.status === "requested" && (
                 <button
                   type="button"
-                  class="x-btn"
-                  aria-label={`Cancel the call for ${rc.v?.s.name ?? ""}`}
+                  class="cs-x"
+                  aria-label={`Cancel the call for ${name}`}
                   onClick={() => void act(() => mutate(api.calls.cancel, { callIds: [rc.c._id], by: currentRole() }))}
                 >
                   ×
@@ -308,21 +335,15 @@ function InRoom(props: { room: RoomName; calls: RoomCall[] }) {
           );
         })}
       </ul>
-      {anyLong && <p class="note red">Still with them? Tap a button below when they leave.</p>}
       {finishable.length > 0 && (
-        <div class="row-actions">
-          <button type="button" class={`btn ${room}`} disabled={busy} onClick={() => void done(true)}>
-            {room === "theory" ? "All taught, send back" : "All explained, send back"}
+        <span class="ir-actions">
+          <button type="button" class={`btn ${room} small`} disabled={busy} onClick={() => void done(true)}>
+            {allLabel}
           </button>
-          <button type="button" class="btn ghost" disabled={busy} onClick={() => void done(false)}>
+          <button type="button" class="btn ghost small" disabled={busy} onClick={() => void done(false)}>
             Send back
           </button>
-        </div>
-      )}
-      {finishable.length > 0 && (
-        <p class="hint">
-          "Send back" keeps only what you tapped on the circles{room === "theory" ? " (for a part-taught section)" : ""}.
-        </p>
+        </span>
       )}
     </section>
   );
