@@ -1,0 +1,25 @@
+{
+  "name": "aristora-system",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Aristora class system: correction, theory and evaluation teachers working from one live student board.",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc -p convex --noEmit && tsc -p . --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fontsource/barlow": "5.3.0",
+    "@fontsource/barlow-semi-condensed": "5.3.0",
+    "convex": "1.48.0",
+    "esbuild": "0.28.2",
+    "preact": "10.29.8",
+    "typescript": "5.9.3"
+  },
+  "devDependencies": {
+    "@edge-runtime/vm": "5.0.0",
+    "convex-test": "0.0.65",
+    "vitest": "5.0.5"
+  }
+}
