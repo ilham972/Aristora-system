@@ -1,20 +1,37 @@
-// Live class data for this phone: the board from Convex, server time,
+// Live class data for this phone: the board from Convex, the syllabus, server time,
 // instant (optimistic) marks, toasts.
 
 import { useCallback, useEffect, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Doc, Id } from "../convex/_generated/dataModel";
-import { computeStatus, type Mark, type MarkState, type Marks, type Status } from "../convex/lib/status";
+import { fighter, type Fighter, type MasterData } from "../convex/lib/book";
+import { EMPTY_MASTER, type MState } from "../convex/lib/master";
+import { computeStatus, type Mark, type Marks, type Status } from "../convex/lib/status";
 import { errorText, mutate, subscribe, watchLink, type Link } from "./backend";
 
 export type Student = Doc<"students">;
 export type Call = Doc<"calls">;
+export type Unit = Doc<"units">;
+export type BookDoc = Doc<"books">;
+export type Progress = Doc<"progress">;
+export type Stage = "fighter" | "master" | "legend" | "sprint";
 export type Board = {
   students: Student[];
+  progress: Record<string, Progress>;
+  books: Record<string, BookDoc>;
   calls: Call[];
   session: { _id: Id<"sessions">; startedAt: number; lastActivityAt: number } | null;
+  legacy: boolean;
 };
 export type Role = "correction" | "theory" | "evaluation";
+
+export const STAGES: { id: Stage; name: string; short: string }[] = [
+  { id: "fighter", name: "Fighter", short: "F" },
+  { id: "master", name: "Master", short: "M" },
+  { id: "legend", name: "Legend", short: "L" },
+  { id: "sprint", name: "Exam Sprint", short: "S" },
+];
+export const stageName = (s: Stage | null | undefined) => STAGES.find((x) => x.id === s)?.name ?? "No stage";
 
 let board: Board | null = null;
 let boardError: string | null = null;
@@ -27,19 +44,49 @@ function emit() {
   for (const l of listeners) l();
 }
 
+let units: Unit[] | null = null;
+const unitById = new Map<string, Unit>();
+let ensuring = false;
+
+/** One-time data updates on the server (syllabus, books, students from before stages). */
+async function ensureData() {
+  if (ensuring) return;
+  ensuring = true;
+  try {
+    await mutate(api.setup.ensure, {});
+  } catch {
+    /* offline: the next board update tries again */
+  } finally {
+    ensuring = false;
+  }
+}
+
 export function startStore() {
+  void ensureData();
   subscribe(
     api.state.get,
     {},
     (value) => {
       board = value;
       boardError = null;
+      if (value.legacy) void ensureData();
       emit();
     },
     (e) => {
       boardError = errorText(e);
       emit();
     },
+  );
+  subscribe(
+    api.catalog.units,
+    {},
+    (value) => {
+      units = value;
+      unitById.clear();
+      for (const u of value) unitById.set(u._id, u);
+      emit();
+    },
+    () => {},
   );
   watchLink((l) => {
     link = l;
@@ -79,7 +126,32 @@ export function useStore() {
       listeners.delete(force);
     };
   }, []);
-  return { board, boardError, link };
+  return { board, boardError, link, units };
+}
+
+export function unitOf(id: string | undefined | null): Unit | null {
+  return id ? (unitById.get(id) ?? null) : null;
+}
+export function allUnits(): Unit[] {
+  return units ?? [];
+}
+
+// ---- A student's book and his work in it ----
+
+export function bookDocOf(s: Student): BookDoc | null {
+  if (!board || !s.unitId || (s.stage !== "fighter" && s.stage !== "master")) return null;
+  return board.books[`${s.unitId}:${s.stage}`] ?? null;
+}
+export function fighterOf(s: Student): Fighter | null {
+  const b = bookDocOf(s);
+  return b && b.data.kind === "fighter" ? fighter(b.data) : null;
+}
+export function masterOf(s: Student): MasterData | null {
+  const b = bookDocOf(s);
+  return b && b.data.kind === "master" ? b.data : null;
+}
+export function progressOf(s: Student): Progress | null {
+  return board?.progress[s._id] ?? null;
 }
 
 /** Re-render every `ms` so timers move. Returns server time. */
@@ -104,12 +176,15 @@ export function currentRole(): Role {
 type Pending = { mark: Mark | null; token: number };
 const overlay = new Map<string, Map<number, Pending>>();
 let tokens = 0;
-const statusCache = new WeakMap<Student, Status>();
+const statusCache = new WeakMap<object, Status>();
+const NO_MARKS: Marks = {};
 
+/** His circles in his theory book, with taps not saved yet shown at once. */
 export function marksOf(s: Student): Marks {
+  const base = (s.stage === "fighter" ? progressOf(s)?.marks : undefined) ?? NO_MARKS;
   const o = overlay.get(s._id);
-  if (!o || o.size === 0) return s.marks;
-  const m: Marks = { ...s.marks };
+  if (!o || o.size === 0) return base;
+  const m: Marks = { ...base };
   for (const [q, p] of o) {
     if (p.mark === null) delete m[String(q)];
     else m[String(q)] = p.mark;
@@ -117,15 +192,63 @@ export function marksOf(s: Student): Marks {
   return m;
 }
 
-export function statusOf(s: Student): Status {
+/** Saved circle states only (what a burst of taps starts from). */
+export function savedMarks(s: Student): Marks {
+  return (s.stage === "fighter" ? progressOf(s)?.marks : undefined) ?? NO_MARKS;
+}
+
+export function statusOf(s: Student): Status | null {
+  const f = fighterOf(s);
+  if (!f) return null;
   const o = overlay.get(s._id);
-  if (o && o.size > 0) return computeStatus(marksOf(s));
-  let st = statusCache.get(s);
-  if (!st) {
-    st = computeStatus(s.marks);
-    statusCache.set(s, st);
+  if (o && o.size > 0) return computeStatus(marksOf(s), f);
+  const p = progressOf(s);
+  const key: object = p ?? f.data;
+  let st = statusCache.get(key);
+  if (!st || !p) {
+    st = computeStatus(p?.marks ?? NO_MARKS, f);
+    if (p) statusCache.set(key, st);
   }
   return st;
+}
+
+/** His workbook state (Master), with explanations not saved yet shown at once. */
+export function masterStateOf(s: Student): MState {
+  const base = ((s.stage === "master" ? progressOf(s)?.m : undefined) as MState | undefined) ?? EMPTY_MASTER;
+  const o = mOverlay.get(s._id);
+  if (!o || o.size === 0) return base;
+  const q = { ...base.q };
+  for (const [n, on] of o) {
+    const r = q[String(n)];
+    if (!r) continue;
+    if (on) q[String(n)] = { ...r, x: r.x ?? now() };
+    else {
+      const { x: _x, ...rest } = r;
+      q[String(n)] = rest;
+    }
+  }
+  return { ...base, q };
+}
+
+const mOverlay = new Map<string, Map<number, boolean>>();
+
+/** Evaluation taps on a Master student's lost-mark question: explained or not, shown at once. */
+export async function setExplained(s: Student, qs: number[], on: boolean): Promise<void> {
+  let o = mOverlay.get(s._id);
+  if (!o) {
+    o = new Map();
+    mOverlay.set(s._id, o);
+  }
+  for (const q of qs) o.set(q, on);
+  emit();
+  try {
+    await mutate(api.workbook.explain, { studentId: s._id, unitId: s.unitId, qs, on, by: role });
+  } catch (e) {
+    toast(errorText(e), "error");
+  } finally {
+    for (const q of qs) if (o.get(q) === on) o.delete(q);
+    emit();
+  }
 }
 
 /** Show a circle's new state at once, before the server confirms. Returns a token. */
@@ -147,43 +270,6 @@ export function dropOverlay(studentId: string, q: number, token: number) {
   if (o?.get(q)?.token === token) {
     o.delete(q);
     emit();
-  }
-}
-
-function withOverlay<T>(s: Student, q: number, mark: Mark | null, run: () => Promise<T>): Promise<T> {
-  let o = overlay.get(s._id);
-  if (!o) {
-    o = new Map();
-    overlay.set(s._id, o);
-  }
-  const token = ++tokens;
-  o.set(q, { mark, token });
-  emit();
-  return run().finally(() => {
-    if (o!.get(q)?.token === token) o!.delete(q);
-    emit();
-  });
-}
-
-export async function setMark(s: Student, q: number, state: MarkState | null): Promise<boolean> {
-  const prev = marksOf(s)[String(q)] ?? null;
-  if ((prev?.s ?? null) === state) return true;
-  const n = (prev?.n ?? 0) + (state === "wrong" ? 1 : 0);
-  const next: Mark | null = state === null ? null : n ? { s: state, n, t: now() } : { s: state, t: now() };
-  try {
-    await withOverlay(s, q, next, () => mutate(api.marks.set, { studentId: s._id, q, s: state, by: role }));
-    return true;
-  } catch (e) {
-    toast(errorText(e), "error");
-    return false;
-  }
-}
-
-export async function restoreMark(s: Student, q: number, mark: Mark | null) {
-  try {
-    await withOverlay(s, q, mark, () => mutate(api.marks.restore, { studentId: s._id, q, mark, by: role }));
-  } catch (e) {
-    toast(errorText(e), "error");
   }
 }
 

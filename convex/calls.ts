@@ -7,11 +7,15 @@ import {
   currentSession,
   fail,
   log,
+  masterState,
+  placeOf,
+  progressFor,
   refresh,
   touch,
 } from "./lib/backend";
+import { fighter } from "./lib/book";
+import { computeMaster } from "./lib/master";
 import { computeStatus } from "./lib/status";
-import { sectionById } from "./lib/unit";
 import { room } from "./schema";
 
 type Rejected = { studentId: Id<"students">; name: string; reason: string };
@@ -49,9 +53,20 @@ export const create = mutation({
       }
       const reject = (reason: string) => rejected.push({ studentId: id, name: s.name, reason });
       if (!s.present) { reject("isn't signed in. Ask Correction to sign them in first"); continue; }
-      const status = computeStatus(s.marks);
-      if (args.kind === "theory" && !status.nextTheory) { reject("has no theory left"); continue; }
-      if (args.kind === "evaluation" && status.pending.length === 0) { reject("has no wrong answers waiting"); continue; }
+      const place = await placeOf(ctx, s);
+      if (!place.book || !place.unit) { reject("has no book in the app for this stage"); continue; }
+      let section: string | undefined;
+      if (place.book.data.kind === "fighter") {
+        const status = computeStatus(place.progress?.marks ?? {}, fighter(place.book.data));
+        if (args.kind === "theory" && !status.nextTheory) { reject("has no theory left"); continue; }
+        if (args.kind === "evaluation" && status.pending.length === 0) { reject("has no wrong answers waiting"); continue; }
+        if (args.kind === "theory") section = status.nextTheory!;
+      } else {
+        const ms = computeMaster(masterState(place.progress), place.book.data);
+        if (args.kind === "theory" && !ms.reteach) { reject("isn't marked for re-teaching (Correction or Evaluation marks it)"); continue; }
+        if (args.kind === "evaluation" && ms.pending.length === 0) { reject("has no lost marks to explain"); continue; }
+        if (args.kind === "theory") section = "R";
+      }
 
       const active = await activeCalls(ctx, id);
       let pull = false;
@@ -76,7 +91,9 @@ export const create = mutation({
         kind: args.kind,
         status: "requested",
         group,
-        section: args.kind === "theory" ? status.nextTheory! : undefined,
+        section,
+        unitId: place.unit._id,
+        stage: place.book.stage,
         pull: pull || undefined,
         createdAt: now,
         sessionId: session?._id,
@@ -213,59 +230,24 @@ export const finish = mutation({
       if (c.pull && c.status === "requested") continue; // still in the evaluation room
       const s = await ctx.db.get(c.studentId);
       if (!s) continue;
-      const marks = { ...s.marks };
-      let value = "";
-
-      if (c.kind === "theory") {
-        const section = sectionById(c.section ?? "");
-        if (section) {
-          const taught = new Set(item.taught ?? section.teach);
-          const covered: number[] = [];
-          for (const q of section.teach) {
-            const m = marks[String(q)];
-            if (taught.has(q) && m?.s !== "taught" && m?.s !== "skip") {
-              marks[String(q)] = { s: "taught", t: now };
-              covered.push(q);
-            }
-          }
-          const skipped: number[] = [];
-          for (const q of item.skip ?? []) {
-            if (section.solo.includes(q) && !marks[String(q)]) {
-              marks[String(q)] = { s: "skip", t: now };
-              skipped.push(q);
-            }
-          }
-          value = `${section.id}: taught ${covered.join(",") || "-"}${skipped.length ? `; skip ${skipped.join(",")}` : ""}`;
-        }
-      } else {
-        const explained: number[] = [];
-        for (const q of item.explained ?? []) {
-          const m = marks[String(q)];
-          if (m?.s === "wrong") {
-            marks[String(q)] = m.n ? { s: "explained", n: m.n, t: now } : { s: "explained", t: now };
-            explained.push(q);
-          }
-        }
-        let re = "";
-        const section = item.reteach ? sectionById(item.reteach) : undefined;
-        if (section && section.teach.length > 0) {
-          for (const q of section.teach) delete marks[String(q)];
-          re = `; re-teach ${section.id}`;
-        }
-        value = `explained ${explained.join(",") || "-"}${re}`;
-        if (explained.length) {
-          await log(ctx, session, now, { kind: "explained", by, studentId: s._id, name: s.name, value: String(explained.length) });
-        }
-      }
+      const value = await record(ctx, c, s, item, now, session, by);
 
       await ctx.db.patch(c._id, { status: "done", sentAt: c.sentAt ?? c.createdAt, endedAt: now });
       await ctx.db.patch(s._id, {
-        marks,
         room: s.room === c.room ? undefined : s.room,
         lastActivityAt: now,
         lastSeenAt: now,
       });
-      await log(ctx, session, now, { kind: `done-${c.kind}`, by, studentId: s._id, name: s.name, value, ms: now - (c.sentAt ?? c.createdAt) });
+      const unit = c.unitId ? await ctx.db.get(c.unitId) : null;
+      await log(ctx, session, now, {
+        kind: `done-${c.kind}`,
+        by,
+        studentId: s._id,
+        name: s.name,
+        unit: unit?.key,
+        value,
+        ms: now - (c.sentAt ?? c.createdAt),
+      });
 
       // Theory was waiting for him: he goes straight there.
       if (c.room === "evaluation") {
@@ -283,6 +265,102 @@ export const finish = mutation({
     return { done };
   },
 });
+
+type FinishItem = { taught?: number[]; skip?: number[]; explained?: number[]; reteach?: string };
+
+/** Write what happened in the room into the book the call was about. Returns the history line. */
+async function record(
+  ctx: MutationCtx,
+  c: Doc<"calls">,
+  s: Doc<"students">,
+  item: FinishItem,
+  now: number,
+  session: Doc<"sessions"> | null,
+  by: string | undefined,
+): Promise<string> {
+  const unitId = c.unitId ?? s.unitId;
+  const stage = c.stage ?? (c.section === "R" ? "master" : s.stage === "master" ? "master" : "fighter");
+  if (!unitId) return "";
+  const p = await progressFor(ctx, s._id, unitId, stage);
+  const book = await ctx.db
+    .query("books")
+    .withIndex("by_unit_stage", (q) => q.eq("unitId", unitId).eq("stage", stage))
+    .first();
+  if (!p || !book) return "";
+
+  if (book.data.kind === "master") {
+    const m = masterState(p);
+    if (c.kind === "theory") {
+      if (!m.reteach) return "re-teach";
+      // "Send back" (nothing marked taught) keeps the request: he still needs the unit taught again.
+      if (item.taught !== undefined) return "re-teach-kept";
+      const { reteach: _r, ...rest } = m;
+      await ctx.db.patch(p._id, { m: rest, updatedAt: now });
+      return "re-taught";
+    }
+    const q = { ...m.q };
+    const explained: number[] = [];
+    for (const n of item.explained ?? []) {
+      const r = q[String(n)];
+      if (r?.lost && !r.x) {
+        q[String(n)] = { ...r, x: now };
+        explained.push(n);
+      }
+    }
+    if (explained.length) {
+      await ctx.db.patch(p._id, { m: { ...m, q }, updatedAt: now });
+      await log(ctx, session, now, { kind: "explained", by, studentId: s._id, name: s.name, value: String(explained.length) });
+    }
+    return `explained ${explained.join(",") || "-"}`;
+  }
+
+  const book1 = fighter(book.data);
+  const marks = { ...p.marks };
+  let value = "";
+  if (c.kind === "theory") {
+    const section = book1.sectionById(c.section ?? "");
+    if (section) {
+      const taught = new Set(item.taught ?? section.teach);
+      const covered: number[] = [];
+      for (const q of section.teach) {
+        const m = marks[String(q)];
+        if (taught.has(q) && m?.s !== "taught" && m?.s !== "skip") {
+          marks[String(q)] = { s: "taught", t: now };
+          covered.push(q);
+        }
+      }
+      const skipped: number[] = [];
+      for (const q of item.skip ?? []) {
+        if (section.solo.includes(q) && !marks[String(q)]) {
+          marks[String(q)] = { s: "skip", t: now };
+          skipped.push(q);
+        }
+      }
+      value = `${section.id}: taught ${covered.join(",") || "-"}${skipped.length ? `; skip ${skipped.join(",")}` : ""}`;
+    }
+  } else {
+    const explained: number[] = [];
+    for (const q of item.explained ?? []) {
+      const m = marks[String(q)];
+      if (m?.s === "wrong") {
+        marks[String(q)] = m.n ? { s: "explained", n: m.n, t: now } : { s: "explained", t: now };
+        explained.push(q);
+      }
+    }
+    let re = "";
+    const section = item.reteach ? book1.sectionById(item.reteach) : undefined;
+    if (section && section.teach.length > 0) {
+      for (const q of section.teach) delete marks[String(q)];
+      re = `; re-teach ${section.id}`;
+    }
+    value = `explained ${explained.join(",") || "-"}${re}`;
+    if (explained.length) {
+      await log(ctx, session, now, { kind: "explained", by, studentId: s._id, name: s.name, value: String(explained.length) });
+    }
+  }
+  await ctx.db.patch(p._id, { marks, updatedAt: now });
+  return value;
+}
 
 /** Correction: a teacher forgot "Done" and the student is back in the hall. */
 export const release = mutation({

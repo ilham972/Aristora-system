@@ -1,9 +1,14 @@
-// Turns the live board into what each teacher needs to see: tiles, queues, groups.
+// Turns the live board into what each teacher needs to see: rows, queues, groups.
+// Every student has his own book: a theory book (Fighter), a workbook (Master), or none in the app
+// (Legend, Exam Sprint, or a unit whose book isn't loaded yet).
 
+import type { Fighter, MasterData, SectionData } from "../convex/lib/book";
+import { computeMaster, masterEvalUrgency, type MState, type MStatus } from "../convex/lib/master";
 import {
   evalUrgency,
   LONG_SITTING_MS,
   oldestPendingAt,
+  QUIET_PAPERS_MS,
   quietLimit,
   theoryUrgency,
   type EvalUrgency,
@@ -11,15 +16,39 @@ import {
   type Status,
   type Urgency,
 } from "../convex/lib/status";
-import { longLabel, sectionById, SECTIONS, type Section } from "../convex/lib/unit";
-import { marksOf, statusOf, type Board, type Call, type Student } from "./store";
+import {
+  fighterOf,
+  marksOf,
+  masterOf,
+  masterStateOf,
+  stageName,
+  statusOf,
+  unitOf,
+  type Board,
+  type Call,
+  type Stage,
+  type Student,
+  type Unit,
+} from "./store";
 
-export type Tone = "red" | "amber" | "green" | "yellow" | "theory" | "evaluation" | "grey" | "done";
+export type Tone = "red" | "amber" | "green" | "yellow" | "theory" | "evaluation" | "grey" | "done" | "none";
+export type Kind = "fighter" | "master" | "none";
 
 export type View = {
   s: Student;
-  st: Status;
+  unit: Unit | null;
+  stage: Stage | null;
+  kind: Kind;
+  /** Fighter: his theory book, where he stands, his circles. */
+  f: Fighter | null;
+  st: Status | null;
   marks: Marks;
+  /** Master: his workbook, where he stands, his levels and marks. */
+  mb: MasterData | null;
+  ms: MStatus | null;
+  mm: MState;
+  /** Questions waiting for the Evaluation teacher, in either book. */
+  pending: number[];
   calls: Call[];
   /** Where he is right now. */
   where: "absent" | "hall" | "theory" | "evaluation";
@@ -27,12 +56,14 @@ export type View = {
   calledTo?: "theory" | "evaluation";
   /** Theory will take him straight from the evaluation room. */
   pulled: boolean;
-  /** Minutes he has been out of work (server idle clock), if out of work. */
+  /** How long he has been out of work (server idle clock), if out of work. */
   idleMs?: number;
   quietMs?: number;
   quiet: boolean;
   tone: Tone;
   line: string;
+  /** "G11 · U13" */
+  tag: string;
 };
 
 /** "3 min", or "under 1 min". */
@@ -60,6 +91,12 @@ export function fmtClock(ms: number): string {
   return `${h}:${String(m).padStart(2, "0")}`;
 }
 
+/** "G11 · U13" for a student's place. */
+export function tagOf(s: Student, unit: Unit | null): string {
+  const g = s.grade ? `G${s.grade}` : "";
+  return unit ? `${g} · ${unit.code}` : g;
+}
+
 const sectionName = (id: string | null) => (id ? `${id} theory` : "theory");
 
 export function buildViews(board: Board, now: number): View[] {
@@ -69,16 +106,26 @@ export function buildViews(board: Board, now: number): View[] {
     list.push(c);
     byStudent.set(c.studentId, list);
   }
-  const views = board.students.map((s) => {
-    const st = statusOf(s);
-    const marks = marksOf(s);
+  const views = board.students.map((s): View => {
+    const unit = unitOf(s.unitId);
+    const stage = (s.stage ?? null) as Stage | null;
+    const f = stage === "fighter" ? fighterOf(s) : null;
+    const mb = stage === "master" ? masterOf(s) : null;
+    const st = f ? statusOf(s) : null;
+    const marks = f ? marksOf(s) : {};
+    const mm = masterStateOf(s);
+    const ms = mb ? computeMaster(mm, mb) : null;
+    const kind: Kind = st ? "fighter" : ms ? "master" : "none";
+    const pending = st ? st.pending : ms ? ms.pending : [];
     const calls = byStudent.get(s._id) ?? [];
     const requested = calls.find((c) => c.status === "requested" && !c.pull);
     const pulled = calls.some((c) => c.status === "requested" && c.pull);
     const where: View["where"] = !s.present ? "absent" : (s.room ?? "hall");
     const idleMs = s.idleSince !== undefined ? Math.max(0, now - s.idleSince) : undefined;
     const quietMs = s.lastActivityAt !== undefined ? now - s.lastActivityAt : undefined;
-    const quiet = where === "hall" && !requested && !st.dry && !st.finished && quietMs !== undefined && quietMs >= quietLimit(st);
+    const limit = st ? quietLimit(st) : QUIET_PAPERS_MS;
+    const busy = st ? !st.dry && !st.finished : ms ? !ms.dry && !ms.finished : false;
+    const quiet = where === "hall" && !requested && busy && quietMs !== undefined && quietMs >= limit;
 
     let tone: Tone;
     let line: string;
@@ -92,24 +139,74 @@ export function buildViews(board: Board, now: number): View[] {
     } else if (requested) {
       tone = requested.room;
       line = `Called to ${requested.room === "theory" ? "Theory" : "Evaluation"}`;
-    } else if (st.finished) {
-      tone = "done";
-      line = "Finished the unit";
-    } else if (st.dry) {
-      tone = "red";
-      const what = st.needs.includes("theory") ? `needs ${sectionName(st.nextTheory)}` : "waiting for evaluation";
-      line = `Out of work${forMin(idleMs)}: ${what}`;
-    } else if (quiet) {
-      tone = "yellow";
-      line = `Quiet for ${fmtMin(quietMs!)}. Go and check`;
-    } else if (st.left <= 2 && st.nextTheory) {
-      tone = "amber";
-      line = `${st.left} left, then ${sectionName(st.nextTheory)}`;
+    } else if (st) {
+      if (st.finished) {
+        tone = "done";
+        line = "Finished the book";
+      } else if (st.dry) {
+        tone = "red";
+        const what = st.needs.includes("theory") ? `needs ${sectionName(st.nextTheory)}` : "waiting for evaluation";
+        line = `Out of work${forMin(idleMs)}: ${what}`;
+      } else if (quiet) {
+        tone = "yellow";
+        line = `Quiet for ${fmtMin(quietMs!)}. Go and check`;
+      } else if (st.left <= 2 && st.nextTheory) {
+        tone = "amber";
+        line = `${st.left} left, then ${sectionName(st.nextTheory)}`;
+      } else {
+        tone = "green";
+        line = `${f!.longLabel(st.doable[0])} next${st.left > 1 ? `, ${st.left} left` : ""}`;
+      }
+    } else if (ms) {
+      const w = ms.waiting[0];
+      if (ms.finished) {
+        tone = "done";
+        line = `Finished the workbook: ${ms.unit.pct}%`;
+      } else if (ms.dry) {
+        tone = "red";
+        line = `Out of work${forMin(idleMs)}: ${ms.needs.includes("correction") ? `Level ${w.n} to correct` : "waiting for evaluation"}`;
+      } else if (quiet) {
+        tone = "yellow";
+        line = `Quiet for ${fmtMin(quietMs!)}. Go and check`;
+      } else if (w) {
+        tone = "amber";
+        line = `Level ${w.n} to correct${forMin(ms.waitingSince === null ? undefined : now - ms.waitingSince)}`;
+      } else {
+        tone = "green";
+        line = `On Level ${ms.current!.n}${ms.sofar.pct !== null ? `, ${ms.sofar.pct}% so far` : ""}`;
+      }
     } else {
-      tone = "green";
-      line = `${longLabel(st.doable[0])} next${st.left > 1 ? `, ${st.left} left` : ""}`;
+      tone = "none";
+      line =
+        stage === "legend" || stage === "sprint"
+          ? `${stageName(stage)}: in the app soon`
+          : unit
+            ? `No ${stage === "master" ? "workbook" : "theory book"} for ${unit.code} in the app yet`
+            : "Choose a unit";
     }
-    return { s, st, marks, calls, where, calledTo: requested?.room, pulled, idleMs, quietMs, quiet, tone, line };
+    return {
+      s,
+      unit,
+      stage,
+      kind,
+      f,
+      st,
+      marks,
+      mb,
+      ms,
+      mm,
+      pending,
+      calls,
+      where,
+      calledTo: requested?.room,
+      pulled,
+      idleMs,
+      quietMs,
+      quiet,
+      tone,
+      line,
+      tag: tagOf(s, unit),
+    };
   });
   return views.sort((a, b) => a.s.name.localeCompare(b.s.name));
 }
@@ -124,43 +221,75 @@ export type TheoryMember = {
   /** Calling him takes him from the evaluation room. */
   inEvaluation: boolean;
 };
-export type TheoryGroup = { section: Section; members: TheoryMember[]; reteach: boolean };
+export type TheoryGroup = {
+  key: string;
+  unit: Unit | null;
+  /** The section to teach (Fighter), or null for a Master re-teach. */
+  section: SectionData | null;
+  /** "U13 D", "U08 re-teach". */
+  label: string;
+  members: TheoryMember[];
+  reteach: boolean;
+};
 
 const rankU: Record<Urgency, number> = { red: 0, amber: 1, green: 2 };
+
+function left(v: View): number {
+  return v.st ? v.st.left : v.ms ? (v.ms.current ? 99 : 0) : 99;
+}
 
 function theorySort(a: TheoryMember, b: TheoryMember) {
   return (
     rankU[a.urgency] - rankU[b.urgency] ||
     (b.v.idleMs ?? 0) - (a.v.idleMs ?? 0) ||
-    a.v.st.left - b.v.st.left ||
+    left(a.v) - left(b.v) ||
     (a.v.s.lastSeenAt ?? 0) - (b.v.s.lastSeenAt ?? 0) ||
     a.v.s.name.localeCompare(b.v.s.name)
   );
 }
 
-/** Students who need theory next, grouped by section, most urgent group first. */
+/** Students who need theory next, grouped by unit and section (or a Master re-teach), most urgent group first. */
 export function theoryGroups(views: View[]): TheoryGroup[] {
-  const groups = new Map<string, TheoryMember[]>();
+  const groups = new Map<string, { unit: Unit | null; section: SectionData | null; members: TheoryMember[] }>();
   for (const v of views) {
-    if (v.where === "absent" || !v.st.nextTheory) continue;
+    if (v.where === "absent") continue;
     if (v.calls.some((c) => c.kind === "theory")) continue; // already called / being taught
+    let key: string;
+    let section: SectionData | null = null;
+    let urgency: Urgency;
+    if (v.st && v.f && v.st.nextTheory) {
+      key = `${v.s.unitId}:${v.st.nextTheory}`;
+      section = v.f.sectionById(v.st.nextTheory) ?? null;
+      urgency = theoryUrgency(v.st);
+    } else if (v.ms?.reteach) {
+      key = `${v.s.unitId}:R`;
+      urgency = v.ms.dry ? "red" : "amber";
+    } else continue;
     const inEvaluation = v.where === "evaluation";
     const m: TheoryMember = {
       v,
-      urgency: theoryUrgency(v.st),
+      urgency,
       inEvaluation,
       note: inEvaluation ? "In Evaluation now" : v.calledTo === "evaluation" ? "Evaluation called them" : undefined,
     };
-    const list = groups.get(v.st.nextTheory) ?? [];
-    list.push(m);
-    groups.set(v.st.nextTheory, list);
+    const g = groups.get(key) ?? { unit: v.unit, section, members: [] };
+    g.members.push(m);
+    groups.set(key, g);
   }
   const out: TheoryGroup[] = [];
-  for (const [id, members] of groups) {
-    members.sort(theorySort);
-    out.push({ section: sectionById(id)!, members, reteach: members.some((m) => m.v.st.reteach) });
+  for (const [key, g] of groups) {
+    g.members.sort(theorySort);
+    const code = g.unit?.code ?? "?";
+    out.push({
+      key,
+      unit: g.unit,
+      section: g.section,
+      label: g.section ? `${code} ${g.section.id}` : `${code} re-teach`,
+      members: g.members,
+      reteach: g.section ? g.members.some((m) => m.v.st?.reteach) : true,
+    });
   }
-  return out.sort((a, b) => theorySort(a.members[0], b.members[0]) || a.section.id.localeCompare(b.section.id));
+  return out.sort((a, b) => theorySort(a.members[0], b.members[0]) || a.label.localeCompare(b.label));
 }
 
 /** Who to tick by default: up to 3 of the most urgent, in the hall. */
@@ -183,13 +312,25 @@ export type EvalMember = {
 
 const rankE: Record<EvalUrgency, number> = { red: 0, ready: 1, wait: 2 };
 
+/** When his oldest waiting question went wrong (or lost marks). */
+export function pendingSince(v: View): number | null {
+  if (v.st) return oldestPendingAt(v.marks, v.st);
+  return v.ms?.pendingAt ?? null;
+}
+
+export function evalUrgencyOf(v: View, now: number): EvalUrgency {
+  if (v.st) return evalUrgency(v.marks, v.st, now);
+  if (v.ms) return masterEvalUrgency(v.ms, now);
+  return "wait";
+}
+
 export function evalQueue(views: View[], now: number): EvalMember[] {
   const out: EvalMember[] = [];
   for (const v of views) {
-    if (v.where === "absent" || v.st.pending.length === 0) continue;
+    if (v.where === "absent" || v.pending.length === 0) continue;
     if (v.calls.some((c) => c.room === "evaluation")) continue; // already called / in the room
-    const urgency = evalUrgency(v.marks, v.st, now);
-    const oldest = oldestPendingAt(v.marks, v.st);
+    const urgency = evalUrgencyOf(v, now);
+    const oldest = pendingSince(v);
     const readyInMs = urgency === "wait" && oldest !== null ? Math.max(0, oldest + 10 * 60_000 - now) : undefined;
     const theory = v.calls.find((c) => c.room === "theory");
     out.push({
@@ -199,31 +340,38 @@ export function evalQueue(views: View[], now: number): EvalMember[] {
       blockedBy: theory ? (theory.status === "sent" ? "In Theory now" : "Called to Theory") : undefined,
     });
   }
-  const age = (m: EvalMember) => oldestPendingAt(m.v.marks, m.v.st) ?? 0;
+  const age = (m: EvalMember) => pendingSince(m.v) ?? 0;
+  const stuck = (m: EvalMember) => m.v.st?.stuck.length ?? 0;
   return out.sort(
     (a, b) =>
       Number(!!a.blockedBy) - Number(!!b.blockedBy) ||
       rankE[a.urgency] - rankE[b.urgency] ||
-      b.v.st.stuck.length - a.v.st.stuck.length ||
+      stuck(b) - stuck(a) ||
       age(a) - age(b) ||
       a.v.s.name.localeCompare(b.v.s.name),
   );
 }
 
-/** The same question wrong for 2+ students who can be called now. */
-export function sameMistakes(queue: EvalMember[]): { q: number; members: EvalMember[] }[] {
-  const byQ = new Map<number, EvalMember[]>();
+/** "Q22", "2016 paper": a question as the student's book prints it. */
+export function qName(v: View, q: number): string {
+  return v.f ? v.f.longLabel(q) : `Q${q}`;
+}
+
+/** The same question of the same book wrong for 2+ students who can be called now. */
+export function sameMistakes(queue: EvalMember[]): { key: string; label: string; q: number; members: EvalMember[] }[] {
+  const byQ = new Map<string, { label: string; q: number; members: EvalMember[] }>();
   for (const m of queue) {
     if (m.blockedBy) continue;
-    for (const q of m.v.st.pending) {
-      const list = byQ.get(q) ?? [];
-      list.push(m);
-      byQ.set(q, list);
+    for (const q of m.v.pending) {
+      const key = `${m.v.s.unitId}:${m.v.stage}:${q}`;
+      const g = byQ.get(key) ?? { label: `${m.v.unit?.code ?? ""} ${qName(m.v, q)}`.trim(), q, members: [] };
+      g.members.push(m);
+      byQ.set(key, g);
     }
   }
   return [...byQ.entries()]
-    .filter(([, list]) => list.length >= 2)
-    .map(([q, members]) => ({ q, members }))
+    .filter(([, g]) => g.members.length >= 2)
+    .map(([key, g]) => ({ key, ...g }))
     .sort((a, b) => b.members.length - a.members.length || a.q - b.q);
 }
 
@@ -247,11 +395,12 @@ export function roomBusy(board: Board, room: "theory" | "evaluation") {
 }
 
 /** Sections that hold his waiting wrong answers (for "re-teach"). */
-export function pendingSections(st: Status): Section[] {
+export function pendingSections(v: View): SectionData[] {
+  if (!v.f || !v.st) return [];
   const ids = new Set<string>();
-  for (const q of st.pending) {
-    const s = SECTIONS.find((x) => x.solo.includes(q));
+  for (const q of v.st.pending) {
+    const s = v.f.sections.find((x) => x.solo.includes(q));
     if (s && s.kind === "ladder") ids.add(s.id);
   }
-  return SECTIONS.filter((s) => ids.has(s.id));
+  return v.f.sections.filter((s) => ids.has(s.id));
 }

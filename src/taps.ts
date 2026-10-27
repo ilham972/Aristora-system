@@ -4,9 +4,19 @@
 
 import { api } from "../convex/_generated/api";
 import type { Mark, MarkState } from "../convex/lib/status";
-import { longLabel, sectionById, typeOf } from "../convex/lib/unit";
 import { errorText, mutate } from "./backend";
-import { currentRole, dropOverlay, marksOf, now, putOverlay, toast, type Role, type Student } from "./store";
+import {
+  currentRole,
+  dropOverlay,
+  fighterOf,
+  marksOf,
+  now,
+  putOverlay,
+  savedMarks,
+  toast,
+  type Role,
+  type Student,
+} from "./store";
 
 export const SAVE_AFTER_MS = 900;
 
@@ -22,11 +32,10 @@ const WORDS: Record<MarkState, string> = {
 /** What one more tap does, for this teacher. undefined = this teacher can't change it. */
 export function nextState(
   role: Role,
-  q: number,
+  type: "teach" | "solo",
   current: MarkState | null,
   base: MarkState | null,
 ): MarkState | null | undefined {
-  const type = typeOf(q);
   if (role === "correction") {
     if (type !== "solo") return undefined;
     // right -> wrong -> slip -> back to how it was (empty, or explained/skip for a redo)
@@ -52,12 +61,13 @@ export function nextState(
   return undefined;
 }
 
-export function canTap(role: Role, q: number, base: MarkState | null): boolean {
-  return nextState(role, q, base, base) !== undefined;
+export function canTap(role: Role, type: "teach" | "solo", base: MarkState | null): boolean {
+  return nextState(role, type, base, base) !== undefined;
 }
 
 type Burst = {
   student: Student;
+  unitId: Student["unitId"];
   base: Map<number, Mark | null>;
   next: Map<number, MarkState | null>;
   tokens: Map<number, number>;
@@ -72,7 +82,7 @@ export function isUnsaved(studentId: string, q: number): boolean {
 function burstFor(student: Student): Burst {
   let b = bursts.get(student._id);
   if (!b) {
-    b = { student, base: new Map(), next: new Map(), tokens: new Map(), timer: null };
+    b = { student, unitId: student.unitId, base: new Map(), next: new Map(), tokens: new Map(), timer: null };
     bursts.set(student._id, b);
   }
   b.student = student;
@@ -95,11 +105,13 @@ function schedule(b: Burst) {
 /** One tap on one circle. Returns false if this teacher can't change it. */
 export function tap(student: Student, q: number): boolean {
   const role = currentRole();
+  const book = fighterOf(student);
+  if (!book || !book.isQuestion(q)) return false;
   const b = burstFor(student);
-  if (!b.base.has(q)) b.base.set(q, student.marks[String(q)] ?? null);
+  if (!b.base.has(q)) b.base.set(q, savedMarks(student)[String(q)] ?? null);
   const base = b.base.get(q)?.s ?? null;
   const current = marksOf(student)[String(q)]?.s ?? null;
-  const next = nextState(role, q, current, base);
+  const next = nextState(role, book.typeOf(q), current, base);
   if (next === undefined) {
     if (b.next.size === 0) bursts.delete(student._id);
     return false;
@@ -111,10 +123,10 @@ export function tap(student: Student, q: number): boolean {
 
 /** Theory: tap the section letter = all its teacher questions taught (tap again = back). */
 export function tapSection(student: Student, sectionId: string) {
-  const sec = sectionById(sectionId);
+  const sec = fighterOf(student)?.sectionById(sectionId);
   if (!sec || sec.teach.length === 0) return;
   const b = burstFor(student);
-  for (const q of sec.teach) if (!b.base.has(q)) b.base.set(q, student.marks[String(q)] ?? null);
+  for (const q of sec.teach) if (!b.base.has(q)) b.base.set(q, savedMarks(student)[String(q)] ?? null);
   const shown = marksOf(student);
   const allTaught = sec.teach.every((q) => shown[String(q)]?.s === "taught");
   for (const q of sec.teach) {
@@ -138,21 +150,23 @@ async function commit(studentId: string): Promise<void> {
     return;
   }
   try {
-    const res = await mutate(api.marks.setMany, { studentId: b.student._id, items, by: currentRole() });
+    const res = await mutate(api.marks.setMany, { studentId: b.student._id, unitId: b.unitId, items, by: currentRole() });
     drop();
-    const words = items.map((it) => `${longLabel(it.q)} ${it.s ? WORDS[it.s] : "cleared"}`).join(", ");
-    toast(`${b.student.name}: ${words}`, "info", () => void undo(b.student, res.prev));
+    const book = fighterOf(b.student);
+    const label = (q: number) => (book ? book.longLabel(q) : `Q${q}`);
+    const words = items.map((it) => `${label(it.q)} ${it.s ? WORDS[it.s] : "cleared"}`).join(", ");
+    toast(`${b.student.name}: ${words}`, "info", () => void undo(b.student, b.unitId, res.prev));
   } catch (e) {
     drop();
     toast(errorText(e), "error");
   }
 }
 
-async function undo(student: Student, prev: { q: number; mark: Mark | null }[]) {
+async function undo(student: Student, unitId: Student["unitId"], prev: { q: number; mark: Mark | null }[]) {
   if (prev.length === 0) return;
   const tokens = prev.map((p) => [p.q, putOverlay(student._id, p.q, p.mark)] as const);
   try {
-    await mutate(api.marks.restoreMany, { studentId: student._id, items: prev, by: currentRole() });
+    await mutate(api.marks.restoreMany, { studentId: student._id, unitId, items: prev, by: currentRole() });
   } catch (e) {
     toast(errorText(e), "error");
   } finally {

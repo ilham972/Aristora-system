@@ -3,7 +3,12 @@
 import { ConvexError } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
+import { fighter, type Fighter, type MasterData } from "./book";
+import { computeMaster, EMPTY_MASTER, type MState } from "./master";
 import { computeStatus } from "./status";
+
+export type Stage = "fighter" | "master" | "legend" | "sprint";
+export type BookStage = "fighter" | "master";
 
 /** A session with no activity for this long is closed automatically. */
 export const STALE_SESSION_MS = 4 * 60 * 60_000;
@@ -30,6 +35,103 @@ export async function getStudent(ctx: QueryCtx, id: Id<"students">): Promise<Doc
   return s;
 }
 
+// ---------------------------------------------------------------- where a student is: unit, book, progress
+
+export async function bookFor(ctx: QueryCtx, unitId: Id<"units">, stage: BookStage): Promise<Doc<"books"> | null> {
+  return await ctx.db
+    .query("books")
+    .withIndex("by_unit_stage", (q) => q.eq("unitId", unitId).eq("stage", stage))
+    .first();
+}
+
+export async function progressFor(
+  ctx: QueryCtx,
+  studentId: Id<"students">,
+  unitId: Id<"units">,
+  stage: BookStage,
+): Promise<Doc<"progress"> | null> {
+  return await ctx.db
+    .query("progress")
+    .withIndex("by_student_unit_stage", (q) => q.eq("studentId", studentId).eq("unitId", unitId).eq("stage", stage))
+    .first();
+}
+
+export async function ensureProgress(
+  ctx: MutationCtx,
+  studentId: Id<"students">,
+  unitId: Id<"units">,
+  stage: BookStage,
+  now: number,
+): Promise<Doc<"progress">> {
+  const p = await progressFor(ctx, studentId, unitId, stage);
+  if (p) return p;
+  const id = await ctx.db.insert("progress", {
+    studentId,
+    unitId,
+    stage,
+    marks: {},
+    m: stage === "master" ? EMPTY_MASTER : undefined,
+    startedAt: now,
+    updatedAt: now,
+  });
+  return (await ctx.db.get(id))!;
+}
+
+export function asFighter(book: Doc<"books">): Fighter {
+  if (book.data.kind !== "fighter") fail("That book is not a theory book.");
+  return fighter(book.data);
+}
+
+export function asMaster(book: Doc<"books">): MasterData {
+  if (book.data.kind !== "master") fail("That book is not a workbook.");
+  return book.data;
+}
+
+export interface Place {
+  student: Doc<"students">;
+  stage: Stage | null;
+  unit: Doc<"units"> | null;
+  book: Doc<"books"> | null;
+  progress: Doc<"progress"> | null;
+}
+
+/** His current unit, its book for his stage, and his work in it. */
+export async function placeOf(ctx: QueryCtx, student: Doc<"students">): Promise<Place> {
+  const stage = (student.stage ?? null) as Stage | null;
+  const unit = student.unitId ? await ctx.db.get(student.unitId) : null;
+  let book: Doc<"books"> | null = null;
+  let progress: Doc<"progress"> | null = null;
+  if (unit && (stage === "fighter" || stage === "master")) {
+    book = await bookFor(ctx, unit._id, stage);
+    progress = await progressFor(ctx, student._id, unit._id, stage);
+  }
+  return { student, stage, unit, book, progress };
+}
+
+/** The place where marks can be written: fails with a clear message when he moved on or has no book. */
+export async function workPlace(
+  ctx: MutationCtx,
+  student: Doc<"students">,
+  stage: BookStage,
+  unitId: Id<"units"> | undefined,
+  now: number,
+): Promise<{ unit: Doc<"units">; book: Doc<"books">; progress: Doc<"progress"> }> {
+  if (student.stage !== stage || !student.unitId) {
+    fail(`${student.name} is not in ${stage === "fighter" ? "Fighter" : "Master"} now. Refresh the page.`);
+  }
+  if (unitId && unitId !== student.unitId) fail(`${student.name} moved to another unit. Refresh the page.`);
+  const unit = await ctx.db.get(student.unitId);
+  if (!unit) fail("That unit no longer exists.");
+  const book = await bookFor(ctx, unit._id, stage);
+  if (!book) fail(`${unit.key} has no ${stage === "fighter" ? "theory book" : "workbook"} in the app yet.`);
+  const progress = await ensureProgress(ctx, student._id, unit._id, stage, now);
+  return { unit, book, progress };
+}
+
+export function masterState(p: Doc<"progress"> | null): MState {
+  return (p?.m as MState | undefined) ?? EMPTY_MASTER;
+}
+
 export async function openSession(ctx: QueryCtx): Promise<Doc<"sessions"> | null> {
   return await ctx.db.query("sessions").withIndex("by_open", (q) => q.eq("open", true)).first();
 }
@@ -39,6 +141,7 @@ type LogInput = {
   by?: string;
   studentId?: Id<"students">;
   name?: string;
+  unit?: string;
   q?: number;
   value?: string;
   ms?: number;
@@ -115,9 +218,9 @@ export async function refresh(
 ) {
   const s = await ctx.db.get(id);
   if (!s) return;
-  const status = computeStatus(s.marks);
-  const idleNow = session !== null && s.present && !s.archived && !s.room && status.dry;
-  const reason = status.needs.join("+") || "work";
+  const { dry, needs } = await dryOf(ctx, s);
+  const idleNow = session !== null && s.present && !s.archived && !s.room && dry;
+  const reason = needs.join("+") || "work";
   if (idleNow) {
     if (s.idleSince === undefined) {
       await ctx.db.patch(id, { idleSince: now, idleReason: reason });
@@ -128,6 +231,18 @@ export async function refresh(
   } else if (s.idleSince !== undefined) {
     await closeIdle(ctx, s, now, session);
   }
+}
+
+/** Is he out of work, and what would give him work again? (Legend / Exam Sprint and missing books: not tracked.) */
+export async function dryOf(ctx: QueryCtx, s: Doc<"students">): Promise<{ dry: boolean; needs: string[] }> {
+  const p = await placeOf(ctx, s);
+  if (!p.book) return { dry: false, needs: [] };
+  if (p.book.data.kind === "fighter") {
+    const st = computeStatus(p.progress?.marks ?? {}, fighter(p.book.data));
+    return { dry: st.dry, needs: st.needs };
+  }
+  const ms = computeMaster(masterState(p.progress), p.book.data);
+  return { dry: ms.dry, needs: ms.needs };
 }
 
 const round1 = (min: number) => Math.round(min * 10) / 10;
@@ -160,9 +275,14 @@ type Row = {
   idleMin: number;
   idleTheoryMin: number;
   idleEvalMin: number;
+  idleCorrMin: number;
   right: number;
   wrong: number;
   slip: number;
+  /** Master: levels corrected today, marks got / possible in them. */
+  levels: number;
+  got: number;
+  max: number;
 };
 
 async function buildReport(ctx: MutationCtx, session: Doc<"sessions">, endAt: number) {
@@ -173,23 +293,35 @@ async function buildReport(ctx: MutationCtx, session: Doc<"sessions">, endAt: nu
   const row = (id: string, name: string) => {
     let r = rows.get(id);
     if (!r) {
-      r = { name, idleMin: 0, idleTheoryMin: 0, idleEvalMin: 0, right: 0, wrong: 0, slip: 0 };
+      r = { name, idleMin: 0, idleTheoryMin: 0, idleEvalMin: 0, idleCorrMin: 0, right: 0, wrong: 0, slip: 0, levels: 0, got: 0, max: 0 };
       rows.set(id, r);
     }
     return r;
   };
   let explained = 0;
+  const waits: number[] = [];
   for (const e of events) {
     if (!e.studentId) continue;
     const r = row(e.studentId, e.name ?? "?");
     if (e.kind === "idle" && e.ms) {
       const min = e.ms / 60_000;
+      const why = e.value ?? "";
       r.idleMin += min;
-      if ((e.value ?? "").includes("theory")) r.idleTheoryMin += min;
+      if (why.includes("theory")) r.idleTheoryMin += min;
+      else if (why.includes("correction")) r.idleCorrMin += min;
       else r.idleEvalMin += min;
     }
     if (e.kind === "mark" && (e.value === "right" || e.value === "wrong" || e.value === "slip")) r[e.value]++;
     if (e.kind === "explained") explained += Number(e.value ?? 0);
+    if (e.kind === "level-marks") {
+      const m = /^[^ ]+ (\d+)\/(\d+)/.exec(e.value ?? "");
+      if (m) {
+        r.levels++;
+        r.got += Number(m[1]);
+        r.max += Number(m[2]);
+      }
+      if (e.ms !== undefined) waits.push(e.ms / 60_000);
+    }
   }
 
   const sittings = (kind: "theory" | "evaluation") => {
@@ -218,6 +350,7 @@ async function buildReport(ctx: MutationCtx, session: Doc<"sessions">, endAt: nu
       idleMin: round1(r.idleMin),
       idleTheoryMin: round1(r.idleTheoryMin),
       idleEvalMin: round1(r.idleEvalMin),
+      idleCorrMin: round1(r.idleCorrMin),
     }))
     .sort((a, b) => b.idleMin - a.idleMin || a.name.localeCompare(b.name));
   const sum = (f: (r: Row) => number) => list.reduce((a, r) => a + f(r), 0);
@@ -229,6 +362,13 @@ async function buildReport(ctx: MutationCtx, session: Doc<"sessions">, endAt: nu
     idleMin: round1(sum((r) => r.idleMin)),
     idleTheoryMin: round1(sum((r) => r.idleTheoryMin)),
     idleEvalMin: round1(sum((r) => r.idleEvalMin)),
+    idleCorrMin: round1(sum((r) => r.idleCorrMin)),
+    master: {
+      levels: sum((r) => r.levels),
+      pct: sum((r) => r.max) ? Math.round((sum((r) => r.got) / sum((r) => r.max)) * 100) : null,
+      avgWaitMin: waits.length ? round1(waits.reduce((a, b) => a + b, 0) / waits.length) : null,
+      maxWaitMin: waits.length ? round1(Math.max(...waits)) : null,
+    },
     marks: { right: sum((r) => r.right), wrong: sum((r) => r.wrong), slip: sum((r) => r.slip) },
     wrongRate: marked ? Math.round((sum((r) => r.wrong) / marked) * 100) : null,
     theory: sittings("theory"),

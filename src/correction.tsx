@@ -20,12 +20,13 @@ export function Correction(props: { board: Board; views: View[]; now: number }) 
   const red = present.filter((v) => v.tone === "red").length;
   const quiet = present.filter((v) => v.tone === "yellow").length;
   const inRooms = present.filter((v) => v.where === "theory" || v.where === "evaluation").length;
+  const toCorrect = present.reduce((a, v) => a + (v.ms?.waiting.length ?? 0), 0);
 
   if (views.length === 0) {
     return (
       <main class="page">
         <Empty title="No students yet">
-          Open settings (the gear at the top) to add your students, or load 10 demo students to try the system.
+          Open settings (the gear at the top) to add your students, or load the demo students to try the system.
         </Empty>
       </main>
     );
@@ -41,6 +42,7 @@ export function Correction(props: { board: Board; views: View[]; now: number }) 
         ) : (
           <>
             <span class={red ? "t-red strong" : ""}>{red} with no work</span>
+            {toCorrect > 0 && <span class="t-amber strong">{toCorrect === 1 ? "1 level" : `${toCorrect} levels`} to correct</span>}
             <span class={quiet ? "t-yellow strong" : ""}>{quiet} quiet</span>
             <span>{inRooms} in rooms</span>
             <span>{absent.length} not here</span>
@@ -53,8 +55,9 @@ export function Correction(props: { board: Board; views: View[]; now: number }) 
         now={now}
         legend={
           <>
-            Tap a circle: <b class="k-right">once ✓ right</b>, <b class="k-wrong">twice ✗ wrong</b>,{" "}
-            <b class="k-slip">3 times ↻ slip</b>. It saves when you stop. Tap a name or the colour strip for the whole book.
+            Fighter: tap a circle <b class="k-right">once ✓ right</b>, <b class="k-wrong">twice ✗ wrong</b>,{" "}
+            <b class="k-slip">3 times ↻ slip</b>; it saves when you stop. Master: tap the <b>level</b> the student hands in to
+            give the marks. Tap a name or the strip for the whole book.
           </>
         }
         onName={(v) => {

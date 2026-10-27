@@ -1,13 +1,16 @@
 import { describe, expect, test } from "vitest";
+import { fighter, PILOT_FIGHTER } from "../convex/lib/book";
 import type { MarkState } from "../convex/lib/status";
 import { nextState } from "../src/taps";
+
+const BOOK = fighter(PILOT_FIGHTER);
 
 /** Tap n times starting from `base`; returns the states seen after each tap. */
 function taps(role: "correction" | "theory" | "evaluation", q: number, base: MarkState | null, n: number) {
   const seen: (MarkState | null | undefined)[] = [];
   let cur: MarkState | null = base;
   for (let i = 0; i < n; i++) {
-    const next = nextState(role, q, cur, base);
+    const next = nextState(role, BOOK.typeOf(q), cur, base);
     seen.push(next);
     if (next === undefined) break;
     cur = next;

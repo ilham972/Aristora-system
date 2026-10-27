@@ -1,7 +1,6 @@
 import { useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
-import { longLabel } from "../convex/lib/unit";
 import { mutate } from "./backend";
 import { Register } from "./board";
 import { evalQueue, roomBusy, roomCalls, sameMistakes, theoryGroups, type RoomCall, type View } from "./derive";
@@ -57,12 +56,12 @@ export function Theory(props: { board: Board; views: View[]; now: number }) {
   const room = roomCalls(board, views, "theory", now);
   const pick = useSelection(views, (v) => {
     if (v.where === "absent") return "not signed in";
-    if (!v.st.nextTheory) return "no theory left";
+    if (!v.st?.nextTheory && !v.ms?.reteach) return v.kind === "master" ? "not marked for re-teaching" : "no theory to teach here";
     if (v.calls.some((c) => c.kind === "theory")) return "already called for theory";
     return null;
   });
   const selected = views.filter((v) => pick.sel.has(v.s._id));
-  const sections = [...new Set(selected.map((v) => v.st.nextTheory))].join(", ");
+  const sections = [...new Set(selected.map((v) => (v.st?.nextTheory ? `${v.unit?.code ?? ""} ${v.st.nextTheory}` : `${v.unit?.code ?? ""} re-teach`).trim()))].join(", ");
 
   return (
     <main class={`page${pick.sel.size ? " with-bar" : ""}`}>
@@ -76,13 +75,13 @@ export function Theory(props: { board: Board; views: View[]; now: number }) {
           <span class="chips-label">Next to teach</span>
           {groups.map((g) => (
             <button
-              key={g.section.id}
+              key={g.key}
               type="button"
               class={`group-chip u-${g.members[0].urgency}`}
-              aria-label={`Select the ${g.members.length} students who need section ${g.section.id}`}
+              aria-label={`Select the ${g.members.length} students who need ${g.section ? `section ${g.section.id}` : "re-teaching"} of ${g.unit?.code ?? "this unit"}`}
               onClick={() => pick.set(g.members.filter((m) => !m.inEvaluation).map((m) => m.v.s._id))}
             >
-              {g.section.id}
+              {g.label}
               <b>{g.members.length}</b>
             </button>
           ))}
@@ -109,7 +108,7 @@ export function Theory(props: { board: Board; views: View[]; now: number }) {
         <div class="call-bar theory" role="region" aria-label="Call">
           <div class="call-bar-text">
             <b>{selected.map((v) => v.s.name).join(", ")}</b>
-            <small>{sections.includes(",") ? `Sections ${sections}` : `Section ${sections}`}</small>
+            <small>{sections}</small>
           </div>
           <button type="button" class="btn ghost small" onClick={pick.clear}>
             Clear
@@ -137,17 +136,18 @@ export function Evaluation(props: { board: Board; views: View[]; now: number }) 
   const queue = evalQueue(views, now);
   const same = sameMistakes(queue);
   const theoryBusy = roomBusy(board, "theory");
-  const canTeachHere = (v: View) => theoryBusy && v.st.dry && v.st.needs.includes("theory") && v.calls.length === 0;
+  const canTeachHere = (v: View) =>
+    theoryBusy && v.calls.length === 0 && (!!(v.st?.dry && v.st.needs.includes("theory")) || !!v.ms?.reteach);
   const pick = useSelection(views, (v) => {
     if (v.where === "absent") return "not signed in";
     if (v.calls.some((c) => c.room === "evaluation")) return "already called";
     if (v.calls.some((c) => c.room === "theory")) return "Theory has called them (theory comes first)";
-    if (v.st.pending.length === 0 && !canTeachHere(v)) return "nothing wrong to explain";
+    if (v.pending.length === 0 && !canTeachHere(v)) return v.kind === "master" ? "no lost marks to explain" : "nothing wrong to explain";
     return null;
   });
   const selected = views.filter((v) => pick.sel.has(v.s._id));
-  const forEval = selected.filter((v) => v.st.pending.length > 0);
-  const forTheory = selected.filter((v) => v.st.pending.length === 0 && canTeachHere(v));
+  const forEval = selected.filter((v) => v.pending.length > 0);
+  const forTheory = selected.filter((v) => v.pending.length === 0 && canTeachHere(v));
   const pulls = room.filter((rc) => rc.c.status === "sent" && rc.v?.pulled);
 
   return (
@@ -183,13 +183,13 @@ export function Evaluation(props: { board: Board; views: View[]; now: number }) 
           <span class="chips-label">Same mistake</span>
           {same.slice(0, 4).map((g) => (
             <button
-              key={g.q}
+              key={g.key}
               type="button"
               class="group-chip u-red"
-              aria-label={`Select the ${g.members.length} students who got ${longLabel(g.q)} wrong`}
+              aria-label={`Select the ${g.members.length} students who got ${g.label} wrong`}
               onClick={() => pick.set(g.members.map((m) => m.v.s._id))}
             >
-              {longLabel(g.q)}
+              {g.label}
               <b>{g.members.length}</b>
             </button>
           ))}
@@ -216,7 +216,9 @@ export function Evaluation(props: { board: Board; views: View[]; now: number }) 
         <div class="call-bar evaluation" role="region" aria-label="Call">
           <div class="call-bar-text">
             <b>{selected.map((v) => v.s.name).join(", ")}</b>
-            {forTheory.length > 0 && <small>Theory is busy: you teach {forTheory.map((v) => v.st.nextTheory).join(", ")}</small>}
+            {forTheory.length > 0 && (
+              <small>Theory is busy: you teach {forTheory.map((v) => v.st?.nextTheory ?? "re-teach").join(", ")}</small>
+            )}
           </div>
           <button type="button" class="btn ghost small" onClick={pick.clear}>
             Clear
@@ -284,7 +286,7 @@ function InRoom(props: { room: RoomName; calls: RoomCall[] }) {
         ? all
           ? { callId: rc.c._id }
           : { callId: rc.c._id, taught: [], skip: [] }
-        : { callId: rc.c._id, explained: all ? (rc.v?.st.pending ?? []) : [] },
+        : { callId: rc.c._id, explained: all ? (rc.v?.pending ?? []) : [] },
     );
     const res = await act(() => mutate(api.calls.finish, { items, by: currentRole() }));
     setBusy(false);
@@ -295,7 +297,7 @@ function InRoom(props: { room: RoomName; calls: RoomCall[] }) {
   };
 
   // A group taught one section shows its letter once, not on every name.
-  const sections = new Set(calls.map((rc) => (rc.c.kind === "theory" ? rc.c.section : "-")));
+  const sections = new Set(calls.map((rc) => (rc.c.kind === "theory" ? (rc.c.section === "R" ? "↺" : rc.c.section) : "-")));
   const oneSection = sections.size === 1 && !sections.has("-") ? [...sections][0] : undefined;
 
   return (
@@ -311,7 +313,7 @@ function InRoom(props: { room: RoomName; calls: RoomCall[] }) {
           const name = rc.v?.s.name ?? "?";
           const minutes = Math.floor(rc.minutes / 60_000);
           const status = rc.c.status === "sent" ? (minutes >= 1 ? `${minutes}m` : "") : rc.c.pull ? "in Evaluation" : "not sent";
-          const section = !oneSection && rc.c.kind === "theory" ? rc.c.section : undefined;
+          const section = !oneSection && rc.c.kind === "theory" ? (rc.c.section === "R" ? "↺" : rc.c.section) : undefined;
           return (
             <li key={rc.c._id} class={`ir-chip${rc.c.status === "sent" ? "" : " coming"}${rc.long ? " long" : ""}`}>
               <b>{name}</b>

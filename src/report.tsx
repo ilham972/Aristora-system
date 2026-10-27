@@ -5,6 +5,8 @@ export type Report = {
   idleMin: number;
   idleTheoryMin: number;
   idleEvalMin: number;
+  idleCorrMin?: number;
+  master?: { levels: number; pct: number | null; avgWaitMin: number | null; maxWaitMin: number | null };
   marks: { right: number; wrong: number; slip: number };
   wrongRate: number | null;
   theory: { sittings: number; students: number; avgMin: number | null; maxMin: number | null };
@@ -14,6 +16,7 @@ export type Report = {
     idleMin: number;
     idleTheoryMin: number;
     idleEvalMin: number;
+    idleCorrMin?: number;
     right: number;
     wrong: number;
     slip: number;
@@ -44,6 +47,12 @@ export function ReportView(props: { report: Report }) {
       </div>
       <p class="report-split">
         Waiting for theory: <b>{n1(r.idleTheoryMin)} min</b>. Waiting for evaluation: <b>{n1(r.idleEvalMin)} min</b>.
+        {r.idleCorrMin ? (
+          <>
+            {" "}
+            Waiting for correction: <b>{n1(r.idleCorrMin)} min</b>.
+          </>
+        ) : null}
       </p>
 
       <table class="report-table">
@@ -69,6 +78,15 @@ export function ReportView(props: { report: Report }) {
               {r.wrongRate !== null && <> ({r.wrongRate}% wrong)</>}
             </td>
           </tr>
+          {r.master && r.master.levels > 0 && (
+            <tr>
+              <th scope="row">Workbook levels</th>
+              <td>
+                {plural(r.master.levels, "level", "levels")} corrected, {r.master.pct}% of the marks; waited for correction{" "}
+                {n1(r.master.avgWaitMin)} min on average, longest {n1(r.master.maxWaitMin)} min
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
 
@@ -84,6 +102,7 @@ export function ReportView(props: { report: Report }) {
                   <small>
                     {s.idleTheoryMin > 0 && ` theory ${n1(s.idleTheoryMin)}`}
                     {s.idleEvalMin > 0 && ` evaluation ${n1(s.idleEvalMin)}`}
+                    {(s.idleCorrMin ?? 0) > 0 && ` correction ${n1(s.idleCorrMin ?? 0)}`}
                   </small>
                 </span>
               </li>

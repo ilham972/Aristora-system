@@ -1,7 +1,7 @@
 // The rules engine. Pure functions, shared by the backend (idle tracking)
 // and the phone screens (queues, colours), so both always agree.
 
-import { FINAL, LADDER, PAST, SECTIONS, type Section } from "./unit";
+import type { Fighter, SectionData } from "./book";
 
 export type TeachState = "taught" | "skip";
 export type SoloState = "right" | "wrong" | "slip" | "explained" | "skip";
@@ -63,9 +63,12 @@ export function markOf(marks: Marks, q: number): Mark | undefined {
   return marks[String(q)];
 }
 
-export function computeStatus(marks: Marks): Status {
+/** Where a student stands in a theory book: what he can do now, what he waits for. */
+export function computeStatus(marks: Marks, book: Fighter): Status {
+  const SECTIONS = book.sections;
+  const LADDER = book.ladder;
   const st = (q: number) => marks[String(q)]?.s;
-  const teachDone = (s: Section) => s.teach.every((q) => st(q) === "taught" || st(q) === "skip");
+  const teachDone = (s: SectionData) => s.teach.every((q) => st(q) === "taught" || st(q) === "skip");
   const tried = (q: number) => st(q) !== undefined;
   const isRedo = (q: number) => st(q) === "slip" || st(q) === "explained";
 
@@ -85,7 +88,7 @@ export function computeStatus(marks: Marks): Status {
   ).map((s) => s.id);
 
   const doable: number[] = [];
-  const open = (s: Section) => {
+  const open = (s: SectionData) => {
     const stopped = blocked.includes(s.id);
     for (const q of s.solo) {
       if (isRedo(q)) doable.push(q);
@@ -95,9 +98,9 @@ export function computeStatus(marks: Marks): Status {
   for (const s of LADDER) if (teachDone(s)) open(s);
   // R13: past papers open once every ladder question has been tried.
   const pastOpen = LADDER.every((s) => s.solo.every(tried));
-  if (pastOpen) open(PAST);
-  const finalOpen = pastOpen && PAST.solo.every(tried);
-  if (finalOpen) open(FINAL);
+  if (pastOpen) for (const s of book.past) open(s);
+  const finalOpen = pastOpen && book.past.every((s) => s.solo.every(tried));
+  if (finalOpen && book.final) open(book.final);
 
   const next = LADDER.find((s) => !teachDone(s)) ?? null;
   const finished = SECTIONS.every(

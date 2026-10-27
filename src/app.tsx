@@ -217,6 +217,10 @@ function alertItems(role: Role, board: Board, views: View[], now: number): Alert
     for (const c of board.calls)
       if (c.status === "requested" && !c.pull)
         items.push({ key: `call:${c._id}`, kind: "call", name: nameOf.get(c.studentId) ?? "", room: c.room, repeat: true });
+    // A workbook student with every level handed in waits for Correction: knock once.
+    for (const v of views)
+      if (v.where === "hall" && v.ms?.dry && v.ms.needs.includes("correction"))
+        items.push({ key: `red:${v.s._id}`, kind: "red", name: v.s.name, room: "theory", repeat: false });
   } else if (role === "theory") {
     for (const g of theoryGroups(views))
       for (const m of g.members)
@@ -245,7 +249,8 @@ function sayFor(items: AlertItem[]): { kind: AlertKind; words?: string } | null 
 /**
  * Alerts for this phone's job. Correction hears "Ahamed and Nila, go to Theory", again every
  * 30 seconds until he taps Sent or Not now. Evaluation hears "Theory wants Kumar now" the same way.
- * Theory and Evaluation get a knock when a student runs out of work.
+ * A knock when a student runs out of work: Theory or Evaluation for theory books, Correction when
+ * every workbook level he handed in is waiting to be corrected.
  */
 function Alerts(props: { role: Role; board: Board; views: View[]; now: number; live: boolean }) {
   const { role, board, views, now, live } = props;

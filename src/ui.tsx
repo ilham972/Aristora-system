@@ -1,12 +1,14 @@
 import type { ComponentChildren } from "preact";
 import { useEffect, useRef } from "preact/hooks";
 import type { MarkState } from "../convex/lib/status";
-import { shortLabel, typeOf } from "../convex/lib/unit";
 import { dismissToast, useToasts } from "./store";
 
 /** One circle from the contents page: double ring = with the teacher, single = alone. */
 export function Q(props: {
   q: number;
+  /** Text inside: the number, or a past paper's year. */
+  label?: string;
+  teach?: boolean;
   s?: MarkState;
   size?: "sm" | "md" | "lg" | "act";
   selected?: boolean;
@@ -16,12 +18,11 @@ export function Q(props: {
   onClick?: () => void;
   title?: string;
 }) {
-  const teach = typeOf(props.q) === "teach";
-  const label = shortLabel(props.q);
+  const label = props.label ?? String(props.q);
   const cls = [
     "q",
     props.size ?? "md",
-    teach ? "teach" : "solo",
+    props.teach ? "teach" : "solo",
     label.length > 2 ? "pill" : "",
     props.selected ? "sel" : "",
     props.dim ? "dim" : "",

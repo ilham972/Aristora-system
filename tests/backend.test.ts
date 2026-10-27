@@ -8,13 +8,28 @@ const modules = import.meta.glob("../convex/**/*.ts");
 const MIN = 60_000;
 const START = new Date("2026-10-27T14:00:00+05:30").getTime();
 
-function setup() {
-  return convexTest(schema, modules);
+async function setup() {
+  const t = convexTest(schema, modules);
+  await t.mutation(api.setup.ensure, {});
+  return t;
 }
-type T = ReturnType<typeof setup>;
+type T = Awaited<ReturnType<typeof setup>>;
 
+async function unitId(t: T, key: string) {
+  return await t.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", key)).first())!._id);
+}
+/** A Grade 11 student on the pilot theory book (Fighter). */
+async function addStudent(t: T, name: string) {
+  return await t.mutation(api.students.add, { name, grade: 11, term: 2, stage: "fighter", unitId: await unitId(t, "G11-U13") });
+}
 async function addIn(t: T, name: string) {
-  const id = await t.mutation(api.students.add, { name });
+  const id = await addStudent(t, name);
+  await t.mutation(api.students.setPresent, { id, present: true });
+  return id;
+}
+/** A Grade 7 student on the Directed numbers workbook (Master), signed in. */
+async function addMaster(t: T, name: string) {
+  const id = await t.mutation(api.students.add, { name, grade: 7, term: 1, stage: "master", unitId: await unitId(t, "G7-U08") });
   await t.mutation(api.students.setPresent, { id, present: true });
   return id;
 }
@@ -24,8 +39,19 @@ async function teachSection(t: T, id: Id<"students">, qs: number[]) {
 async function mark(t: T, id: Id<"students">, q: number, s: "right" | "wrong" | "slip" | "skip" | "explained" | null) {
   return await t.mutation(api.marks.set, { studentId: id, q, s });
 }
+/** The student, with his circles in his current book as `marks` and his workbook state as `m`. */
 async function student(t: T, id: Id<"students">) {
-  return await t.run(async (ctx) => (await ctx.db.get(id))!);
+  return await t.run(async (ctx) => {
+    const s = (await ctx.db.get(id))!;
+    const p =
+      s.unitId && (s.stage === "fighter" || s.stage === "master")
+        ? await ctx.db
+            .query("progress")
+            .withIndex("by_student_unit_stage", (q) => q.eq("studentId", id).eq("unitId", s.unitId!).eq("stage", s.stage as "fighter" | "master"))
+            .first()
+        : null;
+    return { ...s, marks: p?.marks ?? {}, m: p?.m ?? { q: {}, lv: {} } };
+  });
 }
 async function state(t: T) {
   return await t.query(api.state.get, {});
@@ -44,20 +70,20 @@ afterEach(() => {
 
 describe("students and attendance", () => {
   test("duplicate names are refused, case-insensitive", async () => {
-    const t = setup();
-    await t.mutation(api.students.add, { name: "Ahamed" });
-    await expect(t.mutation(api.students.add, { name: "  ahamed " })).rejects.toThrow(/already on the list/);
+    const t = await setup();
+    await addStudent(t, "Ahamed");
+    await expect(addStudent(t, "  ahamed ")).rejects.toThrow(/already on the list/);
   });
 
   test("the first tap-in starts the session", async () => {
-    const t = setup();
+    const t = await setup();
     expect((await state(t)).session).toBeNull();
     await addIn(t, "Ahamed");
     expect((await state(t)).session).not.toBeNull();
   });
 
   test("removed students disappear from the board and can come back with progress", async () => {
-    const t = setup();
+    const t = await setup();
     const id = await addIn(t, "Ahamed");
     await teachSection(t, id, [1, 2, 3, 4]);
     await t.mutation(api.students.setArchived, { id, archived: true });
@@ -71,7 +97,7 @@ describe("students and attendance", () => {
 
 describe("marking", () => {
   test("wrong counts up; the same tap twice changes nothing; undo restores exactly", async () => {
-    const t = setup();
+    const t = await setup();
     const id = await addIn(t, "Ahamed");
     await teachSection(t, id, [1, 2, 3, 4]);
     await mark(t, id, 5, "wrong");
@@ -85,15 +111,15 @@ describe("marking", () => {
   });
 
   test("a ladder question can't be 'taught' and a teacher question can't be 'right'", async () => {
-    const t = setup();
+    const t = await setup();
     const id = await addIn(t, "Ahamed");
     await expect(t.mutation(api.marks.set, { studentId: id, q: 5, s: "taught" })).rejects.toThrow(/ladder question/);
     await expect(t.mutation(api.marks.set, { studentId: id, q: 1, s: "right" })).rejects.toThrow(/teacher question/);
-    await expect(t.mutation(api.marks.set, { studentId: id, q: 62, s: "right" })).rejects.toThrow(/not in this unit/);
+    await expect(t.mutation(api.marks.set, { studentId: id, q: 62, s: "right" })).rejects.toThrow(/not in this book/);
   });
 
   test("R2: skip a whole section's theory", async () => {
-    const t = setup();
+    const t = await setup();
     const id = await addIn(t, "Ahamed");
     await t.mutation(api.marks.skipSection, { studentId: id, section: "A" });
     const s = await student(t, id);
@@ -103,7 +129,7 @@ describe("marking", () => {
 
 describe("calls between the rooms", () => {
   test("theory call: requested, sent by Correction, done records the theory and skips", async () => {
-    const t = setup();
+    const t = await setup();
     const id = await addIn(t, "Ahamed");
     const { created } = await t.mutation(api.calls.create, { studentIds: [id], room: "theory", kind: "theory" });
     expect(created).toHaveLength(1);
@@ -119,7 +145,7 @@ describe("calls between the rooms", () => {
   });
 
   test("R1: unticked teacher questions stay on the theory list", async () => {
-    const t = setup();
+    const t = await setup();
     const id = await addIn(t, "Ahamed");
     const { created } = await t.mutation(api.calls.create, { studentIds: [id], room: "theory", kind: "theory" });
     await t.mutation(api.calls.send, { callIds: [created[0].callId] });
@@ -132,7 +158,7 @@ describe("calls between the rooms", () => {
   });
 
   test("first call wins: evaluation can't take a student Theory has called", async () => {
-    const t = setup();
+    const t = await setup();
     const id = await addIn(t, "Ahamed");
     await teachSection(t, id, [1, 2, 3, 4]);
     await mark(t, id, 5, "wrong");
@@ -143,7 +169,7 @@ describe("calls between the rooms", () => {
   });
 
   test("theory first: a waiting evaluation call is cancelled when Theory calls", async () => {
-    const t = setup();
+    const t = await setup();
     const id = await addIn(t, "Ahamed");
     await teachSection(t, id, [1, 2, 3, 4]);
     await mark(t, id, 5, "wrong");
@@ -156,7 +182,7 @@ describe("calls between the rooms", () => {
   });
 
   test("theory pulls from the evaluation room: half-done evaluation, the rest stays waiting", async () => {
-    const t = setup();
+    const t = await setup();
     const id = await addIn(t, "Ahamed");
     await teachSection(t, id, [1, 2, 3, 4]);
     for (const q of [5, 6, 7]) await mark(t, id, q, "wrong");
@@ -178,7 +204,7 @@ describe("calls between the rooms", () => {
   });
 
   test("the evaluation teacher can teach theory when Theory is busy", async () => {
-    const t = setup();
+    const t = await setup();
     const id = await addIn(t, "Ahamed");
     const res = await t.mutation(api.calls.create, { studentIds: [id], room: "evaluation", kind: "theory" });
     await t.mutation(api.calls.send, { callIds: [res.created[0].callId] });
@@ -190,8 +216,8 @@ describe("calls between the rooms", () => {
   });
 
   test("calls are refused for absent students, no theory left, or nothing to explain", async () => {
-    const t = setup();
-    const absent = await t.mutation(api.students.add, { name: "Keerthi" });
+    const t = await setup();
+    const absent = await addStudent(t, "Keerthi");
     const id = await addIn(t, "Ahamed");
     const r1 = await t.mutation(api.calls.create, { studentIds: [absent], room: "theory", kind: "theory" });
     expect(r1.rejected[0].reason).toMatch(/signed in/);
@@ -204,7 +230,7 @@ describe("calls between the rooms", () => {
   });
 
   test("R11: Not now sends the call back; cancel works before he is sent", async () => {
-    const t = setup();
+    const t = await setup();
     const a = await addIn(t, "Ahamed");
     const b = await addIn(t, "Fathima");
     const res = await t.mutation(api.calls.create, { studentIds: [a, b], room: "theory", kind: "theory" });
@@ -215,7 +241,7 @@ describe("calls between the rooms", () => {
   });
 
   test("Not now can be undone, unless something else happened since", async () => {
-    const t = setup();
+    const t = await setup();
     const a = await addIn(t, "Ahamed");
     const b = await addIn(t, "Fathima");
     const res = await t.mutation(api.calls.create, { studentIds: [a, b], room: "theory", kind: "theory" });
@@ -236,7 +262,7 @@ describe("calls between the rooms", () => {
   });
 
   test("R12: Back in hall closes a forgotten sitting; a pending pull becomes a normal call", async () => {
-    const t = setup();
+    const t = await setup();
     const id = await addIn(t, "Ahamed");
     await teachSection(t, id, [1, 2, 3, 4]);
     await mark(t, id, 5, "wrong");
@@ -250,7 +276,7 @@ describe("calls between the rooms", () => {
   });
 
   test("re-teach sends the section back to the theory list", async () => {
-    const t = setup();
+    const t = await setup();
     const id = await addIn(t, "Ahamed");
     await teachSection(t, id, [1, 2, 3, 4]);
     for (const q of [5, 6, 7]) await mark(t, id, q, "wrong");
@@ -263,7 +289,7 @@ describe("calls between the rooms", () => {
   });
 
   test("tapping a student out cancels his calls", async () => {
-    const t = setup();
+    const t = await setup();
     const id = await addIn(t, "Ahamed");
     const res = await t.mutation(api.calls.create, { studentIds: [id], room: "theory", kind: "theory" });
     await t.mutation(api.calls.send, { callIds: [res.created[0].callId] });
@@ -276,7 +302,7 @@ describe("calls between the rooms", () => {
 
 describe("idle minutes and the session report", () => {
   test("idle counts only while he sits in the hall with nothing to do", async () => {
-    const t = setup();
+    const t = await setup();
     const id = await addIn(t, "Ahamed"); // new: needs A theory -> idle from now
     advance(7);
     const res = await t.mutation(api.calls.create, { studentIds: [id], room: "theory", kind: "theory" });
@@ -299,7 +325,7 @@ describe("idle minutes and the session report", () => {
   });
 
   test("a group of 3 taught together counts as one sitting", async () => {
-    const t = setup();
+    const t = await setup();
     const ids = [await addIn(t, "A1"), await addIn(t, "A2"), await addIn(t, "A3")];
     const res = await t.mutation(api.calls.create, { studentIds: ids, room: "theory", kind: "theory" });
     await t.mutation(api.calls.send, { callIds: res.created.map((c) => c.callId) });
@@ -310,7 +336,7 @@ describe("idle minutes and the session report", () => {
   });
 
   test("wrong rate and evaluation stats", async () => {
-    const t = setup();
+    const t = await setup();
     const id = await addIn(t, "Ahamed");
     await teachSection(t, id, [1, 2, 3, 4]);
     await mark(t, id, 5, "right");
@@ -327,10 +353,10 @@ describe("idle minutes and the session report", () => {
   });
 
   test("a session left open is closed by the next class, idle capped at the last activity", async () => {
-    const t = setup();
+    const t = await setup();
     await addIn(t, "Ahamed"); // idle from START
     advance(30);
-    await t.mutation(api.students.add, { name: "Fathima" }); // last activity is still the tap-in
+    await addStudent(t, "Fathima"); // last activity is still the tap-in
     advance(60 * 24 * 2); // two days later
     await addIn(t, "Nila");
     const sessions = await t.query(api.state.sessions, {});
@@ -343,30 +369,34 @@ describe("idle minutes and the session report", () => {
 
 describe("demo students", () => {
   test("load only into an empty class; remove deletes only demo students", async () => {
-    const t = setup();
+    const t = await setup();
     await t.mutation(api.demo.load, {});
     const st = await state(t);
-    expect(st.students).toHaveLength(10);
-    expect(st.students.filter((s) => s.present)).toHaveLength(9);
+    expect(st.students).toHaveLength(14);
+    expect(st.students.filter((s) => s.present)).toHaveLength(13);
+    expect(new Set(st.students.map((s) => s.grade))).toEqual(new Set([7, 9, 11]));
+    expect(Object.keys(st.progress)).toHaveLength(13); // Legend has no book yet
     await expect(t.mutation(api.demo.load, {})).rejects.toThrow(/empty class/);
-    const real = await t.mutation(api.students.add, { name: "Real Student" });
-    expect(await t.mutation(api.demo.remove, {})).toBe(10);
+    const real = await addStudent(t, "Real Student");
+    expect(await t.mutation(api.demo.remove, {})).toBe(14);
     const after = await state(t);
     expect(after.students.map((s) => s._id)).toEqual([real]);
+    const left = await t.run(async (ctx) => (await ctx.db.query("progress").collect()).length);
+    expect(left).toBe(1); // only the real student's
   });
 
   test("demo idle clocks start for students out of work", async () => {
-    const t = setup();
+    const t = await setup();
     await t.mutation(api.demo.load, {});
     const st = await state(t);
     const idle = st.students.filter((s) => s.idleSince !== undefined).map((s) => s.name).sort();
-    expect(idle).toEqual(["Fathima", "Rizwan"]);
+    expect(idle).toEqual(["Fathima", "Rizwan", "Vimal"]); // Vimal: every level handed in, waiting for correction
   });
 });
 
 describe("taps on the board (batches)", () => {
   test("a burst saves only final states; wrong counts once; undo restores all", async () => {
-    const t = setup();
+    const t = await setup();
     const id = await addIn(t, "Ahamed");
     const res1 = await t.mutation(api.marks.setMany, {
       studentId: id,
@@ -397,7 +427,7 @@ describe("taps on the board (batches)", () => {
   });
 
   test("bad items are refused before anything is saved", async () => {
-    const t = setup();
+    const t = await setup();
     const id = await addIn(t, "Ahamed");
     await expect(
       t.mutation(api.marks.setMany, { studentId: id, items: [{ q: 1, s: "taught" }, { q: 5, s: "taught" }] }),
@@ -406,7 +436,7 @@ describe("taps on the board (batches)", () => {
   });
 
   test("Done without data sends back without marking anything", async () => {
-    const t = setup();
+    const t = await setup();
     const id = await addIn(t, "Ahamed");
     const res = await t.mutation(api.calls.create, { studentIds: [id], room: "theory", kind: "theory" });
     await t.mutation(api.calls.send, { callIds: [res.created[0].callId] });
