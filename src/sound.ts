@@ -32,11 +32,32 @@ export function unlockSound() {
 type Tone = [freq: number, start: number, length: number];
 const PATTERNS: Record<"call" | "red" | "pull", { tones: Tone[]; vibrate: number[] }> = {
   // Two rising notes, twice: someone is waiting for Correction to send him.
-  call: { tones: [[660, 0, 0.14], [880, 0.16, 0.18], [660, 0.5, 0.14], [880, 0.66, 0.18]], vibrate: [180, 90, 180, 90, 180] },
+  call: {
+    tones: [
+      [660, 0, 0.14],
+      [880, 0.16, 0.18],
+      [660, 0.5, 0.14],
+      [880, 0.66, 0.18],
+    ],
+    vibrate: [180, 90, 180, 90, 180],
+  },
   // One low double knock: a student just ran out of work.
-  red: { tones: [[392, 0, 0.12], [392, 0.18, 0.12]], vibrate: [120, 80, 120] },
+  red: {
+    tones: [
+      [392, 0, 0.12],
+      [392, 0.18, 0.12],
+    ],
+    vibrate: [120, 80, 120],
+  },
   // Three quick notes: Theory is taking your student.
-  pull: { tones: [[784, 0, 0.1], [988, 0.12, 0.1], [1175, 0.24, 0.16]], vibrate: [100, 60, 100, 60, 200] },
+  pull: {
+    tones: [
+      [784, 0, 0.1],
+      [988, 0.12, 0.1],
+      [1175, 0.24, 0.16],
+    ],
+    vibrate: [100, 60, 100, 60, 200],
+  },
 };
 
 export function alert(kind: keyof typeof PATTERNS) {

@@ -131,7 +131,9 @@ function Students(props: { views: View[] }) {
                 <button
                   type="button"
                   class="link-btn"
-                  onClick={() => void act(() => mutate(api.students.setArchived, { id: a._id, archived: false, by: currentRole() }))}
+                  onClick={() =>
+                    void act(() => mutate(api.students.setArchived, { id: a._id, archived: false, by: currentRole() }))
+                  }
                 >
                   Bring back
                 </button>
@@ -182,7 +184,9 @@ function Students(props: { views: View[] }) {
               type="button"
               class="btn primary wide"
               onClick={async () => {
-                const ok = await act(() => mutate(api.students.rename, { id: editing.id, name: editing.name, by: currentRole() }));
+                const ok = await act(() =>
+                  mutate(api.students.rename, { id: editing.id, name: editing.name, by: currentRole() }),
+                );
                 if (ok !== undefined) setEditing(null);
               }}
             >
@@ -246,11 +250,24 @@ function Reports() {
       <ul class="plain-list">
         {list.map((s) => (
           <li key={s._id}>
-            <button type="button" class="report-row" onClick={() => setOpen(open === s._id ? null : s._id)} aria-expanded={open === s._id}>
+            <button
+              type="button"
+              class="report-row"
+              onClick={() => setOpen(open === s._id ? null : s._id)}
+              aria-expanded={open === s._id}
+            >
               <span>
-                {new Date(s.startedAt).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}
+                {new Date(s.startedAt).toLocaleString(undefined, {
+                  weekday: "short",
+                  day: "numeric",
+                  month: "short",
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
               </span>
-              <span class={s.report && s.report.idleMin > 10 ? "t-red" : "muted"}>{s.report ? `${s.report.idleMin} min idle` : ""}</span>
+              <span class={s.report && s.report.idleMin > 10 ? "t-red" : "muted"}>
+                {s.report ? `${s.report.idleMin} min idle` : ""}
+              </span>
             </button>
             {open === s._id && s.report && <ReportView report={s.report} />}
           </li>
@@ -267,13 +284,15 @@ function describe(e: Doc<"events">): string {
   const v = e.value ?? "";
   switch (e.kind) {
     case "mark":
-      return v === "clear" ? `${longLabel(e.q ?? 0)} mark cleared` : `${longLabel(e.q ?? 0)} marked ${STATE_WORDS[v as MarkState] ?? v}`;
+      return v === "clear"
+        ? `${longLabel(e.q ?? 0)} mark cleared`
+        : `${longLabel(e.q ?? 0)} marked ${STATE_WORDS[v as MarkState] ?? v}`;
     case "undo":
       return `${longLabel(e.q ?? 0)} mark undone`;
     case "in":
-      return "tapped in";
+      return "signed in";
     case "out":
-      return "tapped out";
+      return "signed out";
     case "call": {
       const [room, kind, pull] = v.split("/");
       const forTheory = kind === "theory" ? " for theory" : "";
@@ -361,16 +380,16 @@ function Privacy() {
       </p>
       <ul>
         <li>read every student's name, marks, calls and history</li>
-        <li>mark answers, call and send students, tap them in or out</li>
+        <li>mark answers, call and send students, sign them in or out</li>
         <li>add, rename or remove students, and end the session</li>
       </ul>
       <p>
-        They don't even need this page: the database address is in the public GitHub code, so someone who knows how can
-        change data directly.
+        They don't even need this page: the database address is in the public GitHub code, so someone who knows how can change
+        data directly.
       </p>
       <p>
-        <strong>They cannot</strong> delete the database, change the app, or see your Convex or Vercel keys. Removed
-        students can be brought back, and every change is listed in History.
+        <strong>They cannot</strong> delete the database, change the app, or see your Convex or Vercel keys. Removed students can
+        be brought back, and every change is listed in History.
       </p>
       <p>To stay safe:</p>
       <ul>

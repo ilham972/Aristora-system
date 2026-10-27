@@ -128,6 +128,28 @@ export function statusOf(s: Student): Status {
   return st;
 }
 
+/** Show a circle's new state at once, before the server confirms. Returns a token. */
+export function putOverlay(studentId: string, q: number, mark: Mark | null): number {
+  let o = overlay.get(studentId);
+  if (!o) {
+    o = new Map();
+    overlay.set(studentId, o);
+  }
+  const token = ++tokens;
+  o.set(q, { mark, token });
+  emit();
+  return token;
+}
+
+/** Remove an instant state once the server has it (only if no newer tap replaced it). */
+export function dropOverlay(studentId: string, q: number, token: number) {
+  const o = overlay.get(studentId);
+  if (o?.get(q)?.token === token) {
+    o.delete(q);
+    emit();
+  }
+}
+
 function withOverlay<T>(s: Student, q: number, mark: Mark | null, run: () => Promise<T>): Promise<T> {
   let o = overlay.get(s._id);
   if (!o) {

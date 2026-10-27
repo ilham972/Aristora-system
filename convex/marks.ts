@@ -87,6 +87,87 @@ export const restore = mutation({
   },
 });
 
+/**
+ * Several circles of one student at once: what a burst of taps on the board
+ * saves (only the final state of each circle is sent). Returns what each was
+ * before, so the phone can offer Undo.
+ */
+export const setMany = mutation({
+  args: {
+    studentId: v.id("students"),
+    items: v.array(v.object({ q: v.number(), s: v.union(markState, v.null()) })),
+    by: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    if (args.items.length === 0) return { prev: [] as { q: number; mark: Mark | null }[] };
+    if (args.items.length > 61) fail("Too many circles at once.");
+    for (const it of args.items) {
+      if (!isQuestion(it.q)) fail("That question is not in this unit.");
+      if (it.s !== null) checkState(it.q, it.s);
+    }
+    const student = await getStudent(ctx, args.studentId);
+    const marks = { ...student.marks };
+    const prev: { q: number; mark: Mark | null }[] = [];
+    const changed: { q: number; s: MarkState | null }[] = [];
+    for (const it of args.items) {
+      const key = String(it.q);
+      const before: Mark | null = marks[key] ?? null;
+      if ((before?.s ?? null) === it.s) continue;
+      prev.push({ q: it.q, mark: before });
+      changed.push(it);
+      if (it.s === null) {
+        delete marks[key];
+      } else {
+        const n = (before?.n ?? 0) + (it.s === "wrong" ? 1 : 0);
+        marks[key] = n > 0 ? { s: it.s, n, t: now } : { s: it.s, t: now };
+      }
+    }
+    if (changed.length === 0) return { prev };
+    const session = await currentSession(ctx, now);
+    const anySolo = changed.some((c) => typeOf(c.q) === "solo");
+    await ctx.db.patch(student._id, anySolo ? { marks, lastActivityAt: now } : { marks });
+    const by = cleanBy(args.by);
+    for (const c of changed) {
+      await log(ctx, session, now, { kind: "mark", by, studentId: student._id, name: student.name, q: c.q, value: c.s ?? "clear" });
+    }
+    await refresh(ctx, student._id, now, session);
+    await touch(ctx, session, now);
+    return { prev };
+  },
+});
+
+/** Undo a burst: put circles back exactly as they were. */
+export const restoreMany = mutation({
+  args: {
+    studentId: v.id("students"),
+    items: v.array(v.object({ q: v.number(), mark: v.union(markValue, v.null()) })),
+    by: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    if (args.items.length > 61) fail("Too many circles at once.");
+    for (const it of args.items) {
+      if (!isQuestion(it.q)) fail("That question is not in this unit.");
+      if (it.mark) checkState(it.q, it.mark.s);
+    }
+    const student = await getStudent(ctx, args.studentId);
+    const marks = { ...student.marks };
+    for (const it of args.items) {
+      if (it.mark === null) delete marks[String(it.q)];
+      else marks[String(it.q)] = it.mark;
+    }
+    const session = await currentSession(ctx, now);
+    await ctx.db.patch(student._id, { marks });
+    const by = cleanBy(args.by);
+    for (const it of args.items) {
+      await log(ctx, session, now, { kind: "undo", by, studentId: student._id, name: student.name, q: it.q, value: it.mark?.s ?? "clear" });
+    }
+    await refresh(ctx, student._id, now, session);
+    await touch(ctx, session, now);
+  },
+});
+
 /** R2: he already knows a whole section, so its teacher questions are skipped. */
 export const skipSection = mutation({
   args: { studentId: v.id("students"), section: v.string(), by: v.optional(v.string()) },

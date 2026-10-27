@@ -48,7 +48,7 @@ export const create = mutation({
         continue;
       }
       const reject = (reason: string) => rejected.push({ studentId: id, name: s.name, reason });
-      if (!s.present) { reject("isn't tapped in. Ask Correction to tap in first"); continue; }
+      if (!s.present) { reject("isn't signed in. Ask Correction to sign them in first"); continue; }
       const status = computeStatus(s.marks);
       if (args.kind === "theory" && !status.nextTheory) { reject("has no theory left"); continue; }
       if (args.kind === "evaluation" && status.pending.length === 0) { reject("has no wrong answers waiting"); continue; }

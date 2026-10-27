@@ -8,9 +8,11 @@ import { dismissToast, useToasts } from "./store";
 export function Q(props: {
   q: number;
   s?: MarkState;
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "act";
   selected?: boolean;
   dim?: boolean;
+  /** Tapped but not saved yet. */
+  pending?: boolean;
   onClick?: () => void;
   title?: string;
 }) {
@@ -23,13 +25,21 @@ export function Q(props: {
     label.length > 2 ? "pill" : "",
     props.selected ? "sel" : "",
     props.dim ? "dim" : "",
+    props.pending ? "pending" : "",
   ]
     .filter(Boolean)
     .join(" ");
   const text = `${label.length > 2 ? label : `Q${label}`}${props.s ? `, ${STATE_WORDS[props.s]}` : ""}`;
   if (props.onClick) {
     return (
-      <button type="button" class={cls} data-s={props.s} onClick={props.onClick} aria-label={props.title ?? text} aria-pressed={props.selected}>
+      <button
+        type="button"
+        class={cls}
+        data-s={props.s}
+        onClick={props.onClick}
+        aria-label={props.title ?? text}
+        aria-pressed={props.selected}
+      >
         {label}
       </button>
     );
@@ -51,7 +61,14 @@ export const STATE_WORDS: Record<MarkState, string> = {
 };
 
 /** A panel that slides up from the bottom. */
-export function Sheet(props: { title: ComponentChildren; sub?: ComponentChildren; onClose: () => void; children: ComponentChildren; foot?: ComponentChildren; tone?: string }) {
+export function Sheet(props: {
+  title: ComponentChildren;
+  sub?: ComponentChildren;
+  onClose: () => void;
+  children: ComponentChildren;
+  foot?: ComponentChildren;
+  tone?: string;
+}) {
   const panel = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const prev = document.activeElement as HTMLElement | null;

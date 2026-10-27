@@ -194,7 +194,7 @@ describe("calls between the rooms", () => {
     const absent = await t.mutation(api.students.add, { name: "Keerthi" });
     const id = await addIn(t, "Ahamed");
     const r1 = await t.mutation(api.calls.create, { studentIds: [absent], room: "theory", kind: "theory" });
-    expect(r1.rejected[0].reason).toMatch(/tapped in/);
+    expect(r1.rejected[0].reason).toMatch(/signed in/);
     const r2 = await t.mutation(api.calls.create, { studentIds: [id], room: "evaluation", kind: "evaluation" });
     expect(r2.rejected[0].reason).toMatch(/no wrong answers/);
     await t.mutation(api.marks.skipSection, { studentId: id, section: "A" });
@@ -339,5 +339,59 @@ describe("demo students", () => {
     const st = await state(t);
     const idle = st.students.filter((s) => s.idleSince !== undefined).map((s) => s.name).sort();
     expect(idle).toEqual(["Fathima", "Rizwan"]);
+  });
+});
+
+describe("taps on the board (batches)", () => {
+  test("a burst saves only final states; wrong counts once; undo restores all", async () => {
+    const t = setup();
+    const id = await addIn(t, "Ahamed");
+    const res1 = await t.mutation(api.marks.setMany, {
+      studentId: id,
+      items: [
+        { q: 1, s: "taught" },
+        { q: 2, s: "taught" },
+        { q: 3, s: "taught" },
+        { q: 4, s: "taught" },
+      ],
+    });
+    expect(res1.prev.map((p) => p.mark)).toEqual([null, null, null, null]);
+    const res2 = await t.mutation(api.marks.setMany, {
+      studentId: id,
+      items: [
+        { q: 5, s: "right" },
+        { q: 6, s: "wrong" },
+        { q: 7, s: "slip" },
+        { q: 8, s: null },
+      ],
+    });
+    expect(res2.prev.map((p) => p.q)).toEqual([5, 6, 7]); // 8 unchanged
+    let s = await student(t, id);
+    expect(s.marks["6"]).toMatchObject({ s: "wrong", n: 1 });
+    await t.mutation(api.marks.restoreMany, { studentId: id, items: res2.prev });
+    s = await student(t, id);
+    expect([5, 6, 7].map((q) => s.marks[String(q)])).toEqual([undefined, undefined, undefined]);
+    expect(s.marks["1"]?.s).toBe("taught");
+  });
+
+  test("bad items are refused before anything is saved", async () => {
+    const t = setup();
+    const id = await addIn(t, "Ahamed");
+    await expect(
+      t.mutation(api.marks.setMany, { studentId: id, items: [{ q: 1, s: "taught" }, { q: 5, s: "taught" }] }),
+    ).rejects.toThrow(/ladder question/);
+    expect((await student(t, id)).marks["1"]).toBeUndefined();
+  });
+
+  test("Done without data sends back without marking anything", async () => {
+    const t = setup();
+    const id = await addIn(t, "Ahamed");
+    const res = await t.mutation(api.calls.create, { studentIds: [id], room: "theory", kind: "theory" });
+    await t.mutation(api.calls.send, { callIds: [res.created[0].callId] });
+    await t.mutation(api.marks.setMany, { studentId: id, items: [{ q: 1, s: "taught" }, { q: 2, s: "taught" }] });
+    await t.mutation(api.calls.finish, { items: [{ callId: res.created[0].callId, taught: [], skip: [] }] });
+    const s = await student(t, id);
+    expect([1, 2, 3, 4].map((q) => s.marks[String(q)]?.s)).toEqual(["taught", "taught", undefined, undefined]);
+    expect(s.room).toBeUndefined();
   });
 });

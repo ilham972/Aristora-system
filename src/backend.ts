@@ -2,12 +2,7 @@
 // window.__ARISTORA_TEST_BACKEND__; the real app never sets it.
 
 import { ConvexClient } from "convex/browser";
-import {
-  getFunctionName,
-  type FunctionArgs,
-  type FunctionReference,
-  type FunctionReturnType,
-} from "convex/server";
+import { getFunctionName, type FunctionArgs, type FunctionReference, type FunctionReturnType } from "convex/server";
 
 declare const __CONVEX_URL__: string;
 

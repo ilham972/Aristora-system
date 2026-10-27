@@ -9,7 +9,15 @@ export type Report = {
   wrongRate: number | null;
   theory: { sittings: number; students: number; avgMin: number | null; maxMin: number | null };
   evaluation: { sittings: number; students: number; avgMin: number | null; maxMin: number | null; explained: number };
-  students: { name: string; idleMin: number; idleTheoryMin: number; idleEvalMin: number; right: number; wrong: number; slip: number }[];
+  students: {
+    name: string;
+    idleMin: number;
+    idleTheoryMin: number;
+    idleEvalMin: number;
+    right: number;
+    wrong: number;
+    slip: number;
+  }[];
 };
 
 const n1 = (x: number | null) => (x === null ? "–" : Number.isInteger(x) ? String(x) : x.toFixed(1));
@@ -17,7 +25,13 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 
 export function ReportView(props: { report: Report }) {
   const r = props.report;
-  const date = new Date(r.startedAt).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+  const date = new Date(r.startedAt).toLocaleString(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
   const idleStudents = r.students.filter((s) => s.idleMin > 0);
   return (
     <div class="report">
@@ -44,8 +58,8 @@ export function ReportView(props: { report: Report }) {
           <tr>
             <th scope="row">Evaluation sittings</th>
             <td>
-              {r.evaluation.sittings} ({plural(r.evaluation.students, "student", "students")}), average {n1(r.evaluation.avgMin)} min,{" "}
-              {plural(r.evaluation.explained, "answer", "answers")} explained
+              {r.evaluation.sittings} ({plural(r.evaluation.students, "student", "students")}), average {n1(r.evaluation.avgMin)}{" "}
+              min, {plural(r.evaluation.explained, "answer", "answers")} explained
             </td>
           </tr>
           <tr>

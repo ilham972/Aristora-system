@@ -1,33 +1,18 @@
 import { useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
-import { longLabel, sectionById } from "../convex/lib/unit";
+import { longLabel } from "../convex/lib/unit";
 import { mutate } from "./backend";
-import {
-  defaultPick,
-  forMin,
-  evalQueue,
-  fmtMin,
-  pendingSections,
-  roomBusy,
-  roomCalls,
-  sameMistakes,
-  theoryGroups,
-  type RoomCall,
-  type TheoryGroup,
-  type View,
-} from "./derive";
-import { StudentSheet } from "./student-sheet";
+import { Register } from "./board";
+import { evalQueue, fmtMin, roomBusy, roomCalls, sameMistakes, theoryGroups, type RoomCall, type View } from "./derive";
 import { act, currentRole, toast, type Board } from "./store";
-import { Empty, Q, SectionBadge, Sheet } from "./ui";
+import { flushTaps } from "./taps";
 
 type RoomName = "theory" | "evaluation";
 const ROOM: Record<RoomName, string> = { theory: "Theory", evaluation: "Evaluation" };
 
 async function call(ids: string[], room: RoomName, kind: RoomName): Promise<boolean> {
-  const res = await act(() =>
-    mutate(api.calls.create, { studentIds: ids as Id<"students">[], room, kind, by: currentRole() }),
-  );
+  const res = await act(() => mutate(api.calls.create, { studentIds: ids as Id<"students">[], room, kind, by: currentRole() }));
   if (!res) return false;
   for (const r of res.rejected) toast(`${r.name} ${r.reason}.`, "error");
   if (res.created.length) {
@@ -41,110 +26,101 @@ async function call(ids: string[], room: RoomName, kind: RoomName): Promise<bool
   return res.created.length > 0;
 }
 
+function useSelection(views: View[], can: (v: View) => string | null) {
+  const [picked, setPicked] = useState<string[]>([]);
+  const byId = new Map(views.map((v) => [v.s._id as string, v]));
+  const sel = new Set(picked.filter((id) => byId.has(id) && can(byId.get(id)!) === null));
+  return {
+    sel,
+    toggle(v: View) {
+      const why = can(v);
+      if (why) {
+        toast(`${v.s.name}: ${why}`, "error");
+        return;
+      }
+      setPicked(sel.has(v.s._id) ? [...sel].filter((x) => x !== v.s._id) : [...sel, v.s._id]);
+    },
+    set(ids: string[]) {
+      setPicked(ids.filter((id) => byId.has(id) && can(byId.get(id)!) === null));
+    },
+    clear() {
+      setPicked([]);
+    },
+  };
+}
+
 // ---------------- Theory ----------------
 
 export function Theory(props: { board: Board; views: View[]; now: number }) {
   const { board, views, now } = props;
   const groups = theoryGroups(views);
   const room = roomCalls(board, views, "theory", now);
-  const [overrides, setOverrides] = useState<Record<string, string[]>>({});
-  const [doneOpen, setDoneOpen] = useState(false);
-  const [openId, setOpenId] = useState<string | null>(null);
-  const open = views.find((v) => v.s._id === openId);
+  const pick = useSelection(views, (v) => {
+    if (v.where === "absent") return "not signed in";
+    if (!v.st.nextTheory) return "no theory left";
+    if (v.calls.some((c) => c.kind === "theory")) return "already called for theory";
+    return null;
+  });
+  const selected = views.filter((v) => pick.sel.has(v.s._id));
+  const sections = [...new Set(selected.map((v) => v.st.nextTheory))].join(", ");
 
   return (
-    <main class="page">
-      <InRoom room="theory" calls={room} onDone={() => setDoneOpen(true)} />
-      <h2 class="list-title">Next to teach</h2>
-      {groups.length === 0 ? (
-        <Empty title="No one needs theory right now">Students appear here when their next section needs teaching.</Empty>
-      ) : (
-        groups.map((g) => {
-          const ids = new Set(g.members.map((m) => m.v.s._id as string));
-          const picked = (overrides[g.section.id] ?? defaultPick(g)).filter((id) => ids.has(id));
-          const toggle = (id: string) =>
-            setOverrides({
-              ...overrides,
-              [g.section.id]: picked.includes(id) ? picked.filter((x) => x !== id) : [...picked, id],
-            });
-          return (
-            <GroupCard
+    <main class={`page${pick.sel.size ? " with-bar" : ""}`}>
+      <InRoom room="theory" calls={room} />
+      {groups.length > 0 && (
+        <div class="chips-row" role="group" aria-label="Next to teach">
+          <span class="chips-label">Next to teach</span>
+          {groups.map((g) => (
+            <button
               key={g.section.id}
-              g={g}
-              picked={picked}
-              onToggle={toggle}
-              onName={setOpenId}
-              onCall={async () => {
-                if (await call(picked, "theory", "theory")) {
-                  const next = { ...overrides };
-                  delete next[g.section.id];
-                  setOverrides(next);
-                }
-              }}
-            />
-          );
-        })
-      )}
-      {doneOpen && <DoneSheet room="theory" calls={room} onClose={() => setDoneOpen(false)} />}
-      {open && <StudentSheet view={open} onClose={() => setOpenId(null)} />}
-    </main>
-  );
-}
-
-function GroupCard(props: {
-  g: TheoryGroup;
-  picked: string[];
-  onToggle: (id: string) => void;
-  onName: (id: string) => void;
-  onCall: () => void;
-}) {
-  const { g, picked } = props;
-  const top = g.members[0].urgency;
-  return (
-    <section class={`group g-${top}`}>
-      <header class="group-head">
-        <SectionBadge badge={g.section.badge} />
-        <div>
-          <h3>
-            {g.section.title}
-            {g.reteach && <span class="tag">re-teach</span>}
-          </h3>
-          <p class="muted">
-            Page {g.section.page}, questions {g.section.teach[0]} to {g.section.teach[g.section.teach.length - 1]}
-          </p>
+              type="button"
+              class={`group-chip u-${g.members[0].urgency}`}
+              aria-label={`Select the ${g.members.length} students who need section ${g.section.id}`}
+              onClick={() => pick.set(g.members.filter((m) => !m.inEvaluation).map((m) => m.v.s._id))}
+            >
+              {g.section.id}
+              <b>{g.members.length}</b>
+            </button>
+          ))}
         </div>
-      </header>
-      <ul class="members">
-        {g.members.map((m) => {
-          const id = m.v.s._id as string;
-          const on = picked.includes(id);
-          const info =
-            m.urgency === "red" ? `Out of work${forMin(m.v.idleMs)}` : `${m.v.st.left} left`;
-          return (
-            <li key={id} class={`member u-${m.urgency}${on ? " on" : ""}`}>
-              <label class="member-pick">
-                <input type="checkbox" checked={on} onChange={() => props.onToggle(id)} />
-                <span class="dot" aria-hidden="true" />
-                <span class="member-name">{m.v.s.name}</span>
-                <span class="member-info">
-                  {info}
-                  {m.note && <small>{m.inEvaluation ? "In Evaluation: calling takes them from there" : `${m.note}: calling cancels that`}</small>}
-                </span>
-              </label>
-              <button type="button" class="icon-btn small" aria-label={`Open ${m.v.s.name}`} onClick={() => props.onName(id)}>
-                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                  <circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2" />
-                  <circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="2" />
-                </svg>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-      <button type="button" class="btn theory wide big" disabled={picked.length === 0} onClick={props.onCall}>
-        {picked.length === 0 ? "Tick who to call" : `Call ${picked.length} to Theory`}
-      </button>
-    </section>
+      )}
+      <Register
+        role="theory"
+        views={views}
+        now={now}
+        legend={
+          <>
+            Tap names to choose who to call. Tap the <b class="k-theory">section letter</b> to mark all its theory taught. Tap a ◎
+            circle: taught, then skip, then clear.
+          </>
+        }
+        selected={pick.sel}
+        onName={(v) => {
+          pick.toggle(v);
+          return true;
+        }}
+      />
+      {pick.sel.size > 0 && (
+        <div class="call-bar theory" role="region" aria-label="Call">
+          <div class="call-bar-text">
+            <b>{selected.map((v) => v.s.name).join(", ")}</b>
+            <small>{sections.includes(",") ? `Sections ${sections}` : `Section ${sections}`}</small>
+          </div>
+          <button type="button" class="btn ghost small" onClick={pick.clear}>
+            Clear
+          </button>
+          <button
+            type="button"
+            class="btn theory"
+            onClick={async () => {
+              if (await call([...pick.sel], "theory", "theory")) pick.clear();
+            }}
+          >
+            Call {pick.sel.size}
+          </button>
+        </div>
+      )}
+    </main>
   );
 }
 
@@ -152,311 +128,202 @@ function GroupCard(props: {
 
 export function Evaluation(props: { board: Board; views: View[]; now: number }) {
   const { board, views, now } = props;
+  const room = roomCalls(board, views, "evaluation", now);
   const queue = evalQueue(views, now);
   const same = sameMistakes(queue);
-  const room = roomCalls(board, views, "evaluation", now);
-  const [doneOpen, setDoneOpen] = useState(false);
-  const [openId, setOpenId] = useState<string | null>(null);
-  const open = views.find((v) => v.s._id === openId);
-  const pulls = room.filter((rc) => {
-    const v = rc.v;
-    return rc.c.status === "sent" && v?.pulled;
-  });
   const theoryBusy = roomBusy(board, "theory");
-  const help = theoryBusy
-    ? theoryGroups(views)
-        .flatMap((g) => g.members)
-        .filter((m) => m.urgency === "red" && !m.inEvaluation && !m.v.calledTo)
-    : [];
+  const canTeachHere = (v: View) => theoryBusy && v.st.dry && v.st.needs.includes("theory") && v.calls.length === 0;
+  const pick = useSelection(views, (v) => {
+    if (v.where === "absent") return "not signed in";
+    if (v.calls.some((c) => c.room === "evaluation")) return "already called";
+    if (v.calls.some((c) => c.room === "theory")) return "Theory has called them (theory comes first)";
+    if (v.st.pending.length === 0 && !canTeachHere(v)) return "nothing wrong to explain";
+    return null;
+  });
+  const selected = views.filter((v) => pick.sel.has(v.s._id));
+  const forEval = selected.filter((v) => v.st.pending.length > 0);
+  const forTheory = selected.filter((v) => v.st.pending.length === 0 && canTeachHere(v));
+  const pulls = room.filter((rc) => rc.c.status === "sent" && rc.v?.pulled);
 
   return (
-    <main class="page">
+    <main class={`page${pick.sel.size ? " with-bar" : ""}`}>
       {pulls.map((rc) => (
         <div key={rc.c._id} class="pull-banner" role="alert">
           <p>
-            <strong>Theory wants {rc.v?.s.name} now.</strong> Finish the question you're on, then tap Done.{" "}
-            {rc.v?.s.name} goes straight to Theory. Anything not explained stays waiting.
+            <strong>Theory is free and wants {rc.v?.s.name} now.</strong> Tap the circles you've explained, then send them. The
+            rest stays waiting.
           </p>
-          <button type="button" class="btn evaluation" onClick={() => setDoneOpen(true)}>
-            Done
+          <button
+            type="button"
+            class="btn"
+            onClick={async () => {
+              await flushTaps();
+              const r = await act(() =>
+                mutate(api.calls.finish, { items: [{ callId: rc.c._id, explained: [] }], by: currentRole() }),
+              );
+              if (r) toast(`${rc.v?.s.name} goes to Theory now.`);
+            }}
+          >
+            Send to Theory
           </button>
         </div>
       ))}
-      <InRoom room="evaluation" calls={room} onDone={() => setDoneOpen(true)} />
-
+      <InRoom room="evaluation" calls={room} />
       {same.length > 0 && (
-        <div class="same">
-          <h2 class="list-title">Same wrong answer</h2>
-          {same.slice(0, 3).map((g) => (
-            <div key={g.q} class="same-row">
-              <Q q={g.q} s="wrong" size="md" />
-              <span class="same-names">{g.members.map((m) => m.v.s.name).join(", ")}</span>
-              <button
-                type="button"
-                class="btn evaluation small"
-                onClick={() => void call(g.members.map((m) => m.v.s._id), "evaluation", "evaluation")}
-              >
-                Call {g.members.length}
-              </button>
-            </div>
+        <div class="chips-row" role="group" aria-label="Same wrong answer">
+          <span class="chips-label">Same mistake</span>
+          {same.slice(0, 4).map((g) => (
+            <button
+              key={g.q}
+              type="button"
+              class="group-chip u-red"
+              aria-label={`Select the ${g.members.length} students who got ${longLabel(g.q)} wrong`}
+              onClick={() => pick.set(g.members.map((m) => m.v.s._id))}
+            >
+              {longLabel(g.q)}
+              <b>{g.members.length}</b>
+            </button>
           ))}
         </div>
       )}
-
-      <h2 class="list-title">Waiting for you</h2>
-      {queue.length === 0 ? (
-        <Empty title="No wrong answers waiting">Students appear here when Correction marks an answer wrong.</Empty>
-      ) : (
-        <ul class="queue">
-          {queue.map((m) => {
-            const v = m.v;
-            const what = v.st.stuck.length
-              ? `Stuck on ${v.st.stuck.map(longLabel).join(", ")}`
-              : v.st.blocked.length
-                ? `Stopped: 3 wrong in ${v.st.blocked.join(", ")}`
-                : v.st.dry
-                  ? `Out of work${forMin(v.idleMs)}`
-                  : m.urgency === "ready"
-                    ? "Ready"
-                    : `Ready in ${Math.max(1, Math.ceil((m.readyInMs ?? 0) / 60_000))} min`;
-            return (
-              <li key={v.s._id} class={`qrow e-${m.urgency}${m.blockedBy ? " blocked" : ""}`}>
-                <button type="button" class="qrow-main" onClick={() => setOpenId(v.s._id)}>
-                  <span class="dot" aria-hidden="true" />
-                  <span class="member-name">{v.s.name}</span>
-                  <span class="member-info">{m.blockedBy ?? what}</span>
-                  <span class="qrow-qs">
-                    {v.st.pending.map((q) => (
-                      <Q key={q} q={q} s="wrong" size="sm" />
-                    ))}
-                  </span>
-                </button>
-                {!m.blockedBy && (
-                  <button type="button" class="btn evaluation small" onClick={() => void call([v.s._id], "evaluation", "evaluation")}>
-                    Call
-                  </button>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-
-      {help.length > 0 && (
-        <div class="help">
-          <h2 class="list-title">Theory is busy. These students are out of work</h2>
-          <ul class="queue">
-            {help.map((m) => (
-              <li key={m.v.s._id} class="qrow e-red">
-                <button type="button" class="qrow-main" onClick={() => setOpenId(m.v.s._id)}>
-                  <span class="dot" aria-hidden="true" />
-                  <span class="member-name">{m.v.s.name}</span>
-                  <span class="member-info">Needs {m.v.st.nextTheory} theory</span>
-                </button>
-                <button type="button" class="btn theory small" onClick={() => void call([m.v.s._id], "evaluation", "theory")}>
-                  Teach here
-                </button>
-              </li>
-            ))}
-          </ul>
+      <Register
+        role="evaluation"
+        views={views}
+        now={now}
+        legend={
+          <>
+            Tap names to choose who to call. Tap a <b class="k-wrong">red circle</b> when you've explained it (it turns{" "}
+            <b class="k-explained">violet</b>); tap again to undo.
+          </>
+        }
+        selected={pick.sel}
+        onName={(v) => {
+          pick.toggle(v);
+          return true;
+        }}
+      />
+      {pick.sel.size > 0 && (
+        <div class="call-bar evaluation" role="region" aria-label="Call">
+          <div class="call-bar-text">
+            <b>{selected.map((v) => v.s.name).join(", ")}</b>
+            {forTheory.length > 0 && <small>Theory is busy: you teach {forTheory.map((v) => v.st.nextTheory).join(", ")}</small>}
+          </div>
+          <button type="button" class="btn ghost small" onClick={pick.clear}>
+            Clear
+          </button>
+          {forEval.length > 0 && (
+            <button
+              type="button"
+              class="btn evaluation"
+              onClick={async () => {
+                if (
+                  await call(
+                    forEval.map((v) => v.s._id),
+                    "evaluation",
+                    "evaluation",
+                  )
+                )
+                  pick.clear();
+              }}
+            >
+              Call {forEval.length}
+            </button>
+          )}
+          {forTheory.length > 0 && (
+            <button
+              type="button"
+              class="btn theory"
+              onClick={async () => {
+                if (
+                  await call(
+                    forTheory.map((v) => v.s._id),
+                    "evaluation",
+                    "theory",
+                  )
+                )
+                  pick.clear();
+              }}
+            >
+              Teach {forTheory.length}
+            </button>
+          )}
         </div>
       )}
-
-      {doneOpen && <DoneSheet room="evaluation" calls={room} onClose={() => setDoneOpen(false)} />}
-      {open && <StudentSheet view={open} onClose={() => setOpenId(null)} />}
+      {queue.length === 0 && views.some((v) => v.where !== "absent") && <p class="muted center">No wrong answers waiting.</p>}
     </main>
   );
 }
 
-// ---------------- In your room ----------------
+// ---------------- With you (the room) ----------------
 
-function InRoom(props: { room: RoomName; calls: RoomCall[]; onDone: () => void }) {
+function InRoom(props: { room: RoomName; calls: RoomCall[] }) {
   const { room, calls } = props;
+  const [busy, setBusy] = useState(false);
   if (calls.length === 0) return null;
   const finishable = calls.filter((rc) => !(rc.c.status === "requested" && rc.c.pull));
   const anyLong = calls.some((rc) => rc.long);
+
+  const done = async (all: boolean) => {
+    setBusy(true);
+    await flushTaps();
+    const items = finishable.map((rc) =>
+      rc.c.kind === "theory"
+        ? all
+          ? { callId: rc.c._id }
+          : { callId: rc.c._id, taught: [], skip: [] }
+        : { callId: rc.c._id, explained: all ? (rc.v?.st.pending ?? []) : [] },
+    );
+    const res = await act(() => mutate(api.calls.finish, { items, by: currentRole() }));
+    setBusy(false);
+    if (res) {
+      const toTheory = finishable.filter((rc) => rc.v?.pulled).map((rc) => rc.v!.s.name);
+      toast(toTheory.length ? `Saved. ${toTheory.join(", ")} goes to Theory now.` : "Saved. Back to the hall.");
+    }
+  };
+
   return (
-    <section class={`inroom ${room}`}>
-      <h2>In your room</h2>
-      <ul>
+    <section class={`inroom ${room}`} aria-label="With you">
+      <h2>With you</h2>
+      <ul class="inroom-names">
         {calls.map((rc) => {
-          const name = rc.v?.s.name ?? "?";
-          const status =
-            rc.c.status === "sent"
-              ? `With you, ${fmtMin(rc.minutes)}`
-              : rc.c.pull
-                ? "Comes from Evaluation when they finish"
-                : "Waiting for Correction to send";
+          const status = rc.c.status === "sent" ? fmtMin(rc.minutes) : rc.c.pull ? "after Evaluation" : "not sent yet";
           return (
             <li key={rc.c._id} class={rc.long ? "long" : ""}>
-              <span class="member-name">{name}</span>
-              <span class="member-info">
+              <b>{rc.v?.s.name ?? "?"}</b>
+              <small>
                 {status}
-                {rc.c.kind === "theory" && rc.c.section && <small>Section {rc.c.section}</small>}
-              </span>
+                {rc.c.kind === "theory" && rc.c.section ? `, section ${rc.c.section}` : ""}
+              </small>
               {rc.c.status === "requested" && (
                 <button
                   type="button"
-                  class="btn ghost small"
+                  class="x-btn"
+                  aria-label={`Cancel the call for ${rc.v?.s.name ?? ""}`}
                   onClick={() => void act(() => mutate(api.calls.cancel, { callIds: [rc.c._id], by: currentRole() }))}
                 >
-                  Cancel
+                  ×
                 </button>
               )}
             </li>
           );
         })}
       </ul>
-      {anyLong && <p class="note red">Still with them? Tap Done when they leave.</p>}
+      {anyLong && <p class="note red">Still with them? Tap a button below when they leave.</p>}
       {finishable.length > 0 && (
-        <button type="button" class={`btn ${room} wide big`} onClick={props.onDone}>
-          Done
-        </button>
+        <div class="row-actions">
+          <button type="button" class={`btn ${room}`} disabled={busy} onClick={() => void done(true)}>
+            {room === "theory" ? "All taught, send back" : "All explained, send back"}
+          </button>
+          <button type="button" class="btn ghost" disabled={busy} onClick={() => void done(false)}>
+            Send back
+          </button>
+        </div>
+      )}
+      {finishable.length > 0 && (
+        <p class="hint">
+          "Send back" keeps only what you tapped on the circles{room === "theory" ? " (for a part-taught section)" : ""}.
+        </p>
       )}
     </section>
-  );
-}
-
-// ---------------- Done ----------------
-
-type Draft = { taught: number[]; skip: number[]; explained: number[]; reteach: string | null };
-
-function DoneSheet(props: { room: RoomName; calls: RoomCall[]; onClose: () => void }) {
-  const items = props.calls.filter((rc) => rc.v && !(rc.c.status === "requested" && rc.c.pull));
-  const [drafts, setDrafts] = useState<Record<string, Draft>>(() => {
-    const d: Record<string, Draft> = {};
-    for (const rc of items) {
-      const v = rc.v!;
-      const sec = rc.c.section ? sectionById(rc.c.section) : undefined;
-      d[rc.c._id] = {
-        taught: sec ? sec.teach.filter((q) => !["taught", "skip"].includes(v.marks[String(q)]?.s ?? "")) : [],
-        skip: [],
-        explained: [...v.st.pending],
-        reteach: null,
-      };
-    }
-    return d;
-  });
-  const [saving, setSaving] = useState(false);
-  const goesToTheory = props.room === "evaluation" ? items.filter((rc) => rc.v?.pulled).map((rc) => rc.v!.s.name) : [];
-
-  const set = (id: string, patch: Partial<Draft>) => setDrafts({ ...drafts, [id]: { ...drafts[id], ...patch } });
-  const flip = (list: number[], q: number) => (list.includes(q) ? list.filter((x) => x !== q) : [...list, q]);
-
-  const save = async () => {
-    setSaving(true);
-    const res = await act(() =>
-      mutate(api.calls.finish, {
-        by: currentRole(),
-        items: items.map((rc) => {
-          const d = drafts[rc.c._id];
-          return rc.c.kind === "theory"
-            ? { callId: rc.c._id, taught: d.taught, skip: d.skip }
-            : { callId: rc.c._id, explained: d.explained, reteach: d.reteach ?? undefined };
-        }),
-      }),
-    );
-    setSaving(false);
-    if (res) {
-      toast(goesToTheory.length ? `Saved. ${goesToTheory.join(", ")} goes to Theory now.` : "Saved. Back to the hall.");
-      props.onClose();
-    }
-  };
-
-  return (
-    <Sheet
-      title="What did you finish?"
-      sub="Tap anything you didn't reach. It stays on the list."
-      onClose={props.onClose}
-      tone={props.room}
-      foot={
-        <button type="button" class={`btn ${props.room} wide big`} disabled={saving || items.length === 0} onClick={() => void save()}>
-          {goesToTheory.length ? `Save: ${goesToTheory.join(", ")} goes to Theory` : "Save and send back to the hall"}
-        </button>
-      }
-    >
-      {items.length === 0 && <p class="muted">No one is in your room.</p>}
-      {items.map((rc) => {
-        const v = rc.v!;
-        const d = drafts[rc.c._id];
-        if (rc.c.kind === "theory") {
-          const sec = sectionById(rc.c.section ?? "");
-          if (!sec) return null;
-          return (
-            <div key={rc.c._id} class="done-block">
-              <h3>
-                {v.s.name} <span class="muted">section {sec.id}</span>
-              </h3>
-              <p class="done-label">Taught</p>
-              <div class="book-qs">
-                {sec.teach.map((q) => {
-                  const already = ["taught", "skip"].includes(v.marks[String(q)]?.s ?? "");
-                  return (
-                    <Q
-                      key={q}
-                      q={q}
-                      size="lg"
-                      s={already || d.taught.includes(q) ? "taught" : undefined}
-                      dim={already}
-                      onClick={already ? undefined : () => set(rc.c._id, { taught: flip(d.taught, q) })}
-                    />
-                  );
-                })}
-              </div>
-              <p class="done-label">Can skip (optional)</p>
-              <div class="book-qs">
-                {sec.solo.map((q) => {
-                  const done = v.marks[String(q)] !== undefined;
-                  return (
-                    <Q
-                      key={q}
-                      q={q}
-                      size="md"
-                      s={done ? v.marks[String(q)]!.s : d.skip.includes(q) ? "skip" : undefined}
-                      dim={done}
-                      onClick={done ? undefined : () => set(rc.c._id, { skip: flip(d.skip, q) })}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-          );
-        }
-        const sections = pendingSections(v.st);
-        return (
-          <div key={rc.c._id} class="done-block">
-            <h3>{v.s.name}</h3>
-            {v.st.pending.length === 0 ? (
-              <p class="muted">No wrong answers left.</p>
-            ) : (
-              <>
-                <p class="done-label">Explained</p>
-                <div class="book-qs">
-                  {v.st.pending.map((q) => (
-                    <Q
-                      key={q}
-                      q={q}
-                      size="lg"
-                      s={d.explained.includes(q) ? "explained" : "wrong"}
-                      onClick={() => set(rc.c._id, { explained: flip(d.explained, q) })}
-                    />
-                  ))}
-                </div>
-              </>
-            )}
-            {sections.map((sec) => (
-              <label key={sec.id} class="check">
-                <input
-                  type="checkbox"
-                  checked={d.reteach === sec.id}
-                  onChange={() => set(rc.c._id, { reteach: d.reteach === sec.id ? null : sec.id })}
-                />
-                <span>Didn't understand section {sec.id}: send back to Theory to teach again</span>
-              </label>
-            ))}
-          </div>
-        );
-      })}
-    </Sheet>
   );
 }

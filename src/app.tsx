@@ -116,7 +116,13 @@ export function App() {
         <button type="button" class="sound-banner" onClick={unlockSound}>
           <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
             <path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor" />
-            <path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            <path
+              d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            />
           </svg>
           Tap here to turn on alert sounds
         </button>
@@ -202,7 +208,8 @@ function Alerts(props: { role: Role; board: Board; views: View[]; now: number })
   if (role === "correction") {
     for (const c of board.calls) if (c.status === "requested" && !c.pull) keys.add(`call:${c._id}`);
   } else if (role === "theory") {
-    for (const g of theoryGroups(views)) for (const m of g.members) if (m.urgency === "red" && !m.inEvaluation) keys.add(`red:${m.v.s._id}`);
+    for (const g of theoryGroups(views))
+      for (const m of g.members) if (m.urgency === "red" && !m.inEvaluation) keys.add(`red:${m.v.s._id}`);
   } else {
     for (const m of evalQueue(views, now)) if (m.urgency === "red" && !m.blockedBy) keys.add(`red:${m.v.s._id}`);
     for (const c of board.calls) if (c.pull && c.status === "requested") keys.add(`pull:${c._id}`);

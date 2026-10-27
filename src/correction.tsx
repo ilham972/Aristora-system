@@ -1,18 +1,19 @@
 import { useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
+import type { Id } from "../convex/_generated/dataModel";
 import { mutate } from "./backend";
+import { Register } from "./board";
 import { fmtMin, type View } from "./derive";
 import { ReportView, type Report } from "./report";
-import { StudentSheet } from "./student-sheet";
-import { act, currentRole, type Board } from "./store";
-import { Empty, Q, Sheet } from "./ui";
+import { act, currentRole, toast, type Board } from "./store";
+import { Empty, Sheet } from "./ui";
+
+const signIn = (id: Id<"students">) => act(() => mutate(api.students.setPresent, { id, present: true, by: currentRole() }));
 
 export function Correction(props: { board: Board; views: View[]; now: number }) {
   const { board, views, now } = props;
-  const [openId, setOpenId] = useState<string | null>(null);
   const [ending, setEnding] = useState(false);
   const [report, setReport] = useState<Report | null>(null);
-  const open = views.find((v) => v.s._id === openId);
 
   const present = views.filter((v) => v.where !== "absent");
   const absent = views.filter((v) => v.where === "absent");
@@ -20,13 +21,12 @@ export function Correction(props: { board: Board; views: View[]; now: number }) 
   const quiet = present.filter((v) => v.tone === "yellow").length;
   const inRooms = present.filter((v) => v.where === "theory" || v.where === "evaluation").length;
 
-  const tapIn = (id: string) =>
-    act(() => mutate(api.students.setPresent, { id: id as View["s"]["_id"], present: true, by: currentRole() }));
-
   if (views.length === 0) {
     return (
       <main class="page">
-        <Empty title="No students yet">Open settings (the gear at the top) to add your students, or load 10 demo students to try the system.</Empty>
+        <Empty title="No students yet">
+          Open settings (the gear at the top) to add your students, or load 10 demo students to try the system.
+        </Empty>
       </main>
     );
   }
@@ -37,56 +37,42 @@ export function Correction(props: { board: Board; views: View[]; now: number }) 
 
       <div class="summary" aria-label="Class summary">
         {present.length === 0 ? (
-          <span>No one is tapped in yet. Tap students in as they arrive.</span>
+          <span>Nobody is signed in yet. Tap a name when the student arrives.</span>
         ) : (
           <>
-            <span class={red ? "t-red strong" : ""}>{red} out of work</span>
-            <span class={quiet ? "t-yellow strong" : ""}>{quiet} to check</span>
+            <span class={red ? "t-red strong" : ""}>{red} with no work</span>
+            <span class={quiet ? "t-yellow strong" : ""}>{quiet} quiet</span>
             <span>{inRooms} in rooms</span>
             <span>{absent.length} not here</span>
           </>
         )}
       </div>
-
-      <ul class="tiles">
-        {views.map((v) => (
-          <li key={v.s._id}>
-            <div class={`tile tone-${v.tone}`}>
-              <button type="button" class="tile-main" onClick={() => setOpenId(v.s._id)}>
-                <span class="tile-name">{v.s.name}</span>
-                <span class="tile-line">{v.line}</span>
-                {v.where !== "absent" && v.st.doable.length > 0 && (
-                  <span class="tile-qs">
-                    {v.st.doable.slice(0, 3).map((q) => (
-                      <Q key={q} q={q} s={v.marks[String(q)]?.s} size="sm" />
-                    ))}
-                  </span>
-                )}
-              </button>
-              {v.st.pending.length > 0 && v.where !== "absent" && (
-                <span class="tile-x" aria-label={`${v.st.pending.length} wrong waiting for evaluation`}>
-                  ✗{v.st.pending.length}
-                </span>
-              )}
-              {v.where === "absent" && (
-                <button type="button" class="tile-in" onClick={() => void tapIn(v.s._id)}>
-                  Tap in
-                </button>
-              )}
-            </div>
-          </li>
-        ))}
-      </ul>
+      <Register
+        role="correction"
+        views={views}
+        now={now}
+        legend={
+          <>
+            Tap a circle: <b class="k-right">once ✓ right</b>, <b class="k-wrong">twice ✗ wrong</b>,{" "}
+            <b class="k-slip">3 times ↻ slip</b>. It saves when you stop. Tap a name or the colour strip for the whole book.
+          </>
+        }
+        onName={(v) => {
+          if (v.where !== "absent") return false;
+          void signIn(v.s._id).then((r) => r !== undefined && toast(`${v.s.name} signed in.`));
+          return true;
+        }}
+      />
 
       {absent.length > 1 && present.length === 0 && (
         <button
           type="button"
           class="btn ghost wide"
           onClick={async () => {
-            for (const v of absent) await tapIn(v.s._id);
+            for (const v of absent) await signIn(v.s._id);
           }}
         >
-          Everyone is here: tap in all {absent.length}
+          Everyone is here: sign in all {absent.length}
         </button>
       )}
 
@@ -99,12 +85,10 @@ export function Correction(props: { board: Board; views: View[]; now: number }) 
         </div>
       )}
 
-      {open && <StudentSheet view={open} onClose={() => setOpenId(null)} />}
-
       {ending && (
         <Sheet
           title="End the session?"
-          sub="Everyone is tapped out, open calls are closed, and today's report is saved."
+          sub="Everyone is signed out, open calls are closed, and today's report is saved."
           onClose={() => setEnding(false)}
           foot={
             <div class="row-actions">
@@ -125,7 +109,7 @@ export function Correction(props: { board: Board; views: View[]; now: number }) 
             </div>
           }
         >
-          <p class="muted">Students who are still with a teacher are sent back to the hall first.</p>
+          <p class="muted">Students still with a teacher are sent back to the hall first.</p>
         </Sheet>
       )}
 
@@ -138,7 +122,7 @@ export function Correction(props: { board: Board; views: View[]; now: number }) 
   );
 }
 
-/** The alert band: rooms asking for students. Correction sends them. */
+/** Rooms asking for students. Correction sends them and taps Sent. */
 function CallsBand(props: { board: Board; views: View[]; now: number }) {
   const { board, views, now } = props;
   const byId = new Map(views.map((v) => [v.s._id as string, v]));
@@ -160,36 +144,31 @@ function CallsBand(props: { board: Board; views: View[]; now: number }) {
             <header>
               <h2>
                 <span class="pulse" aria-hidden="true" />
-                {room === "theory" ? "Theory" : "Evaluation"} wants
+                Send to {room === "theory" ? "Theory" : "Evaluation"}
               </h2>
               <span class="call-age">{fmtMin(now - oldest)}</span>
             </header>
-            <ul>
-              {calls.map((c) => {
-                const v = byId.get(c.studentId);
-                return (
-                  <li key={c._id}>
-                    <span class="call-name">{v?.s.name ?? "?"}</span>
-                    {c.kind === "theory" && c.room === "evaluation" && <span class="call-tag">for theory</span>}
-                    <button
-                      type="button"
-                      class="btn ghost small"
-                      onClick={() => void act(() => mutate(api.calls.decline, { callId: c._id, by: currentRole() }))}
-                    >
-                      Not now
-                    </button>
-                  </li>
-                );
-              })}
+            <ul class="call-names">
+              {calls.map((c) => (
+                <li key={c._id}>
+                  <span class="call-name">{byId.get(c.studentId)?.s.name ?? "?"}</span>
+                  {c.kind === "theory" && c.room === "evaluation" && <span class="call-tag">for theory</span>}
+                  <button
+                    type="button"
+                    class="not-now"
+                    onClick={() => void act(() => mutate(api.calls.decline, { callId: c._id, by: currentRole() }))}
+                  >
+                    Not now
+                  </button>
+                </li>
+              ))}
             </ul>
             <button
               type="button"
               class={`btn ${room} wide big`}
-              onClick={() =>
-                void act(() => mutate(api.calls.send, { callIds: calls.map((c) => c._id), by: currentRole() }))
-              }
+              onClick={() => void act(() => mutate(api.calls.send, { callIds: calls.map((c) => c._id), by: currentRole() }))}
             >
-              {calls.length === 1 ? `Sent ${byId.get(calls[0].studentId)?.s.name ?? ""}` : `Sent all ${calls.length}`}
+              {calls.length === 1 ? "Sent" : `Sent all ${calls.length}`}
             </button>
           </section>
         );

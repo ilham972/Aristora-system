@@ -1,10 +1,14 @@
 # Aristora class board
 
-One live board for three teachers, each on their own phone:
+One live class register for three teachers, each on their own phone. Every tab shows all students, one row each:
+the circles that matter right now (big, tap them) and the whole book as a thin colour strip (every question lined up
+across the class). Tap the strip or the name to open a student's whole book.
 
-- **Correction** walks the hall, marks every ladder answer (✓ right, ✗ wrong, ↻ careless slip), taps students in and out, and sends called students to the rooms.
-- **Theory** sees who needs which section next, grouped by section and sorted by urgency. Then he calls a group.
-- **Evaluation** sees the wrong answers waiting to be explained. When Theory is busy, he can also teach theory.
+- **Correction** walks the hall and marks answers by tapping circles: once ✓ right, twice ✗ wrong, three times ↻ slip.
+  Taps save when you stop tapping. He signs students in and sends called students to the rooms.
+- **Theory** taps names to pick who to call (or a "Next to teach" chip to pick a whole section group), then marks
+  theory by tapping ◎ circles or the section letter.
+- **Evaluation** taps names to call, and taps red circles to mark them explained. When Theory is busy, he can teach theory too.
 
 Live at https://system.aristora.org. The pilot unit is Grade 11 Quadratic equations (questions 1–61, from the book's contents page).
 

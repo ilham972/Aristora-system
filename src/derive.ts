@@ -69,11 +69,10 @@ export function buildViews(board: Board, now: number): View[] {
     const calls = byStudent.get(s._id) ?? [];
     const requested = calls.find((c) => c.status === "requested" && !c.pull);
     const pulled = calls.some((c) => c.status === "requested" && c.pull);
-    const where: View["where"] = !s.present ? "absent" : s.room ?? "hall";
+    const where: View["where"] = !s.present ? "absent" : (s.room ?? "hall");
     const idleMs = s.idleSince !== undefined ? Math.max(0, now - s.idleSince) : undefined;
     const quietMs = s.lastActivityAt !== undefined ? now - s.lastActivityAt : undefined;
-    const quiet =
-      where === "hall" && !requested && !st.dry && !st.finished && quietMs !== undefined && quietMs >= quietLimit(st);
+    const quiet = where === "hall" && !requested && !st.dry && !st.finished && quietMs !== undefined && quietMs >= quietLimit(st);
 
     let tone: Tone;
     let line: string;
