@@ -27,12 +27,17 @@ export type ReadWorkbook = {
 
 const SHORT_MARKS = 2; // a Part I question (as printed: the engine's P1_MARK)
 
-const SHEET = /<div class="msh"[^>]*>([\s\S]*?)<\/table>/g;
+// A block that starts a page gets " pt" and its page footer inside (class="msh pt", "si pt", "bk pt", "lvl pt").
+const SHEET = /<div class="msh(?: [^"]*)?"[^>]*>([\s\S]*?)<\/table>/g;
+const HAS_SHEET = /<div class="msh[ "]/;
 const TOKEN =
   /<div class="(si|pq)(?: [^"]*)?" data-q="\d+"|<span class="qn(?: q3)?">(\d+)<\/span>|<span class="pm">\((\d+)\s|<div class="mk">\((\d+)\s|<span class="lvo">\/ (\d+)<\/span>/g;
-const ROW = /<tr><td class="c0">([^<]*)<\/td>([\s\S]*?)<\/tr>/g;
-const CELL = /<td><em>Level (\d+)<\/em><i>\s*(\d+)(?:\s*[–-]\s*(\d+))?\s*<\/i><b>\/\s*(\d+)<\/b><\/td>/g;
-const ROW_TOTAL = /<td class="cz">[\s\S]*?<b>\/\s*(\d+)<\/b><\/td>/;
+// A row per part; a part with many levels wraps onto more rows (its name and total span them: rowspan), and the
+// continuation rows have no name cell (G8 U03 v4: Part II Levels 10-17, then 18-24).
+const ROW = /<tr[^>]*>([\s\S]*?)<\/tr>/g;
+const ROW_NAME = /^\s*<td class="c0"[^>]*>([^<]*)<\/td>/;
+const CELL = /<td(?: [^>]*)?><em>Level (\d+)<\/em><i>\s*(\d+)(?:\s*[–-]\s*(\d+))?\s*<\/i><b>\/\s*(\d+)<\/b><\/td>/g;
+const ROW_TOTAL = /<td class="cz"[^>]*>[\s\S]*?<b>\/\s*(\d+)<\/b><\/td>/;
 
 /** "பகுதி II" → "II"; Grades 10–11 "பகுதி IA" / "பகுதி I A" → "IA". */
 function partIdOf(label: string): PartId | null {
@@ -126,24 +131,32 @@ function readUnit(
   const plan = grade !== null ? partsForGrade(grade) : [];
   const parts: MasterPart[] = [];
   const levels: MasterLevel[] = [];
+  const rows: { name: string; total: number; levels: MasterLevel[] }[] = [];
   for (const row of sheet.matchAll(ROW)) {
-    const id = partIdOf(row[1]);
+    const cells: MasterLevel[] = [];
+    for (const c of row[1].matchAll(CELL)) {
+      const a = Number(c[2]);
+      cells.push({ n: Number(c[1]), from: a, to: c[3] ? Number(c[3]) : a, max: Number(c[4]) });
+    }
+    const name = ROW_NAME.exec(row[1]);
+    if (name) rows.push({ name: name[1], total: Number(ROW_TOTAL.exec(row[1])?.[1] ?? NaN), levels: cells });
+    else if (rows.length) rows[rows.length - 1].levels.push(...cells); // the same part, wrapped onto another row
+    else if (cells.length) problems.push("The marks sheet has levels before any part name.");
+  }
+  for (const row of rows) {
+    const id = partIdOf(row.name);
     if (!id) {
-      problems.push(`Can't read the part name "${row[1].trim()}".`);
+      problems.push(`Can't read the part name "${row.name.trim()}".`);
       continue;
     }
     const kind = plan.find((p) => p.id === id)?.kind;
     if (grade !== null && !kind) problems.push(`Grade ${grade} workbooks have no part ${id}.`);
-    const mine: MasterLevel[] = [];
-    for (const c of row[2].matchAll(CELL)) {
-      const a = Number(c[2]);
-      mine.push({ n: Number(c[1]), from: a, to: c[3] ? Number(c[3]) : a, max: Number(c[4]) });
-    }
+    const mine = row.levels;
     if (mine.length === 0) {
       problems.push(`Part ${id} has no levels on the marks sheet.`);
       continue;
     }
-    const total = Number(ROW_TOTAL.exec(row[2])?.[1] ?? NaN);
+    const total = row.total;
     const sum = mine.reduce((s, l) => s + l.max, 0);
     if (total !== sum) problems.push(`Part ${id}: its levels add up to ${sum}, but its total says ${total}.`);
     const p0 = mine[0].from;
@@ -211,7 +224,7 @@ export function readWorkbookFiles(files: { name: string; bytes: Uint8Array }[]):
       out.push({ file: f.name, problem: "This zip can't be opened. Download it again and retry." });
       continue;
     }
-    const found = pages.flatMap((h) => (h.includes('class="msh"') ? readWorkbookHtml(h, f.name) : []));
+    const found = pages.flatMap((h) => (HAS_SHEET.test(h) ? readWorkbookHtml(h, f.name) : []));
     if (found.length === 0) out.push({ file: f.name, problem: "No marks sheet inside: is this a workbook (level edition)?" });
     out.push(...found);
   }

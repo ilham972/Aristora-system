@@ -9,6 +9,8 @@ import schema from "../convex/schema";
 import { asOwner } from "./helpers";
 import { nameHint, readWorkbookFiles, readWorkbookHtml, type ReadWorkbook } from "../src/workbookFile";
 import U01 from "./fixtures/workbook-g8-u01.html?raw";
+import U03 from "./fixtures/workbook-g8-u03.html?raw";
+import U10 from "./fixtures/workbook-g8-u10.html?raw";
 
 const FILE = "G8_U01_Workbook_source_v3.zip";
 const LEVEL_MAX = [20, 20, 20, 20, 24, 18, 22, 20, 19, 18, 20, 9];
@@ -32,6 +34,31 @@ describe("reading a workbook file", () => {
     const read = readWorkbookHtml(U01, FILE);
     expect(read).toHaveLength(1);
     expectU01(read[0]);
+  });
+
+  test("a marks sheet that starts a new page (class \"msh pt\", its page footer inside): Grade 8 U10", () => {
+    const [w] = readWorkbookHtml(U10, "G8_U10_Workbook_source_v2.zip");
+    expect(w.problems).toEqual([]);
+    expect(w).toMatchObject({ grade: 8, code: "U10", en: "Indices", total: 148 });
+    expect(w.data.parts.map((p) => [p.id, p.from, p.to])).toEqual([
+      ["I", 1, 43],
+      ["II", 44, 58],
+    ]);
+    expect(w.data.levels.map((l) => l.max)).toEqual([20, 20, 20, 26, 19, 22, 21]);
+  });
+
+  test("a part whose levels wrap onto a second row of the marks sheet: Grade 8 U03, 24 levels", () => {
+    const [w] = readWorkbookHtml(U03, "G8_U03_Workbook_source_v4.zip");
+    expect(w.problems).toEqual([]);
+    expect(w).toMatchObject({ grade: 8, code: "U03", en: "Angles", total: 467 });
+    expect(w.data.parts.map((p) => [p.id, p.from, p.to])).toEqual([
+      ["I", 1, 88],
+      ["II", 89, 131],
+    ]);
+    expect(w.data.levels).toHaveLength(24);
+    expect(w.data.levels[8]).toEqual({ n: 9, from: 81, to: 88, max: 16 });
+    expect(w.data.levels[17]).toEqual({ n: 18, from: 113, to: 115, max: 19 }); // first level of the second row
+    expect(w.data.levels[23]).toEqual({ n: 24, from: 131, to: 131, max: 14 });
   });
 
   test("the unit's source zip: book.html is found inside, the Python files are ignored", () => {
