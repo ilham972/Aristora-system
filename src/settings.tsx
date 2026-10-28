@@ -4,6 +4,7 @@ import type { Doc, Id } from "../convex/_generated/dataModel";
 import { secretHash } from "../convex/lib/auth";
 import { PART_NAME, partsForGrade, type PartId } from "../convex/lib/book";
 import type { MarkState } from "../convex/lib/status";
+import { slDate } from "../convex/lib/day";
 import { termOf } from "../convex/lib/syllabus";
 import { mutate, randomKey } from "./backend";
 import { fmtMin, type View } from "./derive";
@@ -27,7 +28,8 @@ import {
   type Stage,
   type Unit,
 } from "./store";
-import { Sheet, STATE_WORDS } from "./ui";
+import { ATTENDANCE_SINCE, AWAY_DAYS, daysAway, studentStats } from "./stats";
+import { GRADES, GradeRow, Sheet, STATE_WORDS, useGrade } from "./ui";
 
 type Tab = "students" | "books" | "people" | "alerts" | "reports" | "history" | "account";
 
@@ -68,33 +70,39 @@ export function Settings(props: { views: View[]; onClose: () => void }) {
   );
 }
 
+type Removed = {
+  _id: Id<"students">;
+  name: string;
+  demo: boolean;
+  grade: number | null;
+  created: number;
+  archivedAt: number | null;
+};
+
 function Students(props: { views: View[] }) {
   const [name, setName] = useState("");
-  const [grade, setGrade] = useState<number>(() => {
-    try {
-      return Number(localStorage.getItem("aristora.lastGrade")) || 11;
-    } catch {
-      return 11;
-    }
-  });
+  // One grade pill does two jobs: it filters the list below and it is the grade of the student you add.
+  const [grade, setGrade] = useGrade(
+    "aristora.lastGrade",
+    () => GRADES.find((g) => props.views.some((v) => v.s.grade === g)) ?? GRADES[0],
+  );
   const [editing, setEditing] = useState<{ id: Id<"students">; name: string } | null>(null);
   const [moving, setMoving] = useState<string | null>(null);
   const [confirmDemo, setConfirmDemo] = useState(false);
-  const archived = useQuery<{ _id: Id<"students">; name: string; demo: boolean }[]>(api.state.archived, {});
+  const archived = useQuery<Removed[]>(api.state.archived, {});
   const hasDemo = props.views.some((v) => v.s.demo) || (archived ?? []).some((a) => a.demo);
-  const term = termOf(now());
+  const t = now();
+  const term = termOf(t);
+  const ofGrade = (g: number) => props.views.filter((v) => v.s.grade === g);
+  const list = ofGrade(grade);
+  const removedHere = (archived ?? []).filter((a) => a.grade === grade);
 
   const add = async (e: Event) => {
     e.preventDefault();
     if (!name.trim()) return;
     const id = await act(() => mutate(api.students.add, { name, grade, term, by: currentRole() }));
     if (id) {
-      try {
-        localStorage.setItem("aristora.lastGrade", String(grade));
-      } catch {
-        /* private mode */
-      }
-      toast(`Added ${name.trim()}: Grade ${grade}, Term ${term}, Fighter. Tap Move to change.`);
+      toast(`Added ${name.trim()} to Grade ${grade} (Term ${term}, Fighter). Tap Move to change.`);
       setName("");
     }
   };
@@ -102,71 +110,86 @@ function Students(props: { views: View[] }) {
 
   return (
     <div class="settings-body">
+      {may("reports") && <StudentNumbers views={props.views} removed={archived ?? []} now={t} />}
+
       <form class="add-form" onSubmit={add}>
-        <label for="new-name">Add a student</label>
+        <label for="new-name">Add a student to Grade {grade}</label>
         <div class="add-row">
           <input
             id="new-name"
             value={name}
             maxLength={40}
             autoComplete="off"
-            placeholder="First name and initial, like Ahamed R"
+            placeholder="Name and initial: Ahamed R"
             onInput={(e) => setName((e.target as HTMLInputElement).value)}
           />
           <button type="submit" class="btn primary">
             Add
           </button>
         </div>
-        <div class="chip-pick" role="group" aria-label="Grade of the new student">
-          {[6, 7, 8, 9, 10, 11].map((g) => (
-            <button key={g} type="button" class={g === grade ? "on" : ""} aria-pressed={g === grade} onClick={() => setGrade(g)}>
-              Grade {g}
-            </button>
-          ))}
-        </div>
       </form>
+      <GradeRow
+        value={grade}
+        onPick={setGrade}
+        label="Grade: shows its students, and new students go in it"
+        count={(g) => {
+          const n = ofGrade(g).length;
+          return { text: String(n), aria: n === 1 ? "1 student" : `${n} students` };
+        }}
+      />
 
-      <ul class="plain-list">
-        {props.views.map((v) => (
-          <li key={v.s._id}>
-            <span class="st-who">
-              <span>
-                {v.s.name}
-                {v.s.demo && <span class="demo-tag">Demo</span>}
-              </span>
-              <small>
-                Grade {v.s.grade ?? "?"} · Term {v.s.term ?? "?"} · {stageName(v.stage as Stage)}
-                {v.unit ? ` · ${v.unit.code} ${v.unit.en}` : ""}
-              </small>
-            </span>
-            <span class="list-actions">
-              <button type="button" class="link-btn" onClick={() => setMoving(v.s._id)}>
-                Move
-              </button>
-              <button type="button" class="link-btn" onClick={() => setEditing({ id: v.s._id, name: v.s.name })}>
-                Rename
-              </button>
-              <button
-                type="button"
-                class="link-btn danger"
-                onClick={async () => {
-                  const r = await act(() => mutate(api.students.setArchived, { id: v.s._id, archived: true, by: currentRole() }));
-                  if (r !== undefined) toast(`${v.s.name} removed. You can bring them back below.`);
-                }}
-              >
-                Remove
-              </button>
-            </span>
-          </li>
-        ))}
-      </ul>
+      <h3 class="list-title">
+        Grade {grade} · {list.length === 1 ? "1 student" : `${list.length} students`}
+      </h3>
+      {list.length === 0 ? (
+        <p class="muted">No Grade {grade} students yet. Type a name above and tap Add.</p>
+      ) : (
+        <ul class="plain-list">
+          {list.map((v) => {
+            const away = daysAway(v.s, t);
+            return (
+              <li key={v.s._id}>
+                <span class="st-who">
+                  <span>
+                    {v.s.name}
+                    {v.s.demo && <span class="demo-tag">Demo</span>}
+                  </span>
+                  <small>
+                    Term {v.s.term ?? "?"} · {stageName(v.stage as Stage)}
+                    {v.unit ? ` · ${v.unit.code} ${v.unit.en}` : ""}
+                  </small>
+                  {!v.s.demo && away >= AWAY_DAYS && <small class="away-note">Not seen for {away} days</small>}
+                </span>
+                <span class="list-actions">
+                  <button type="button" class="link-btn" onClick={() => setMoving(v.s._id)}>
+                    Move
+                  </button>
+                  <button type="button" class="link-btn" onClick={() => setEditing({ id: v.s._id, name: v.s.name })}>
+                    Rename
+                  </button>
+                  <button
+                    type="button"
+                    class="link-btn danger"
+                    onClick={async () => {
+                      const r = await act(() => mutate(api.students.setArchived, { id: v.s._id, archived: true, by: currentRole() }));
+                      if (r !== undefined) toast(`${v.s.name} removed. You can bring them back below.`);
+                    }}
+                  >
+                    Remove
+                  </button>
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
       {moveView && <MoveSheet v={moveView} onClose={() => setMoving(null)} />}
 
-      {archived && archived.length > 0 && (
+      {removedHere.length > 0 && (
         <>
-          <h3 class="block-title">Removed students</h3>
+          <h3 class="block-title">Removed from Grade {grade}</h3>
           <ul class="plain-list">
-            {archived.map((a) => (
+            {removedHere.map((a) => (
               <li key={a._id}>
                 <span class="muted">{a.name}</span>
                 <button
@@ -242,6 +265,68 @@ function Students(props: { views: View[] }) {
         </Sheet>
       )}
     </div>
+  );
+}
+
+/** The founder's four numbers: students now, growth this month, who came this week, who has stopped coming. */
+function StudentNumbers(props: { views: View[]; removed: Removed[]; now: number }) {
+  const [showAway, setShowAway] = useState(false);
+  const st = studentStats(
+    props.views.map((v) => v.s),
+    props.removed,
+    props.now,
+  );
+  const since = slDate(ATTENDANCE_SINCE);
+  return (
+    <>
+      <section class="stats" aria-label="Student numbers">
+        <div class="stat">
+          <b>{st.total}</b>
+          <span>{st.total === 1 ? "student now" : "students now"}</span>
+          <small>{st.demo > 0 ? `+${st.demo} demo, not counted` : "Grades 6 to 11"}</small>
+        </div>
+        <div class="stat">
+          <b>{st.added > 0 ? `+${st.added}` : "0"}</b>
+          <span>added this month</span>
+          <small>{st.left === 0 ? "none removed" : `${st.left} removed`}</small>
+        </div>
+        <div class="stat">
+          <b>
+            {st.week}
+            <i> of {st.total}</i>
+          </b>
+          <span>came in the last 7 days</span>
+          {st.newWeek && <small>counting from {since}</small>}
+        </div>
+        <button
+          type="button"
+          class={`stat${st.away.length ? " warn" : ""}`}
+          disabled={st.away.length === 0}
+          onClick={() => setShowAway(true)}
+        >
+          <b>{st.away.length}</b>
+          <span>not seen for 2+ weeks</span>
+          <small>{st.away.length ? "tap to see who" : st.newAway ? `counting from ${since}` : "everyone is coming"}</small>
+        </button>
+      </section>
+      {showAway && (
+        <Sheet title="Not seen for 2+ weeks" sub="Longest away first. Worth a call to the parents." onClose={() => setShowAway(false)}>
+          <ul class="plain-list">
+            {st.away.map(({ s, days }) => (
+              <li key={s._id}>
+                <span class="st-who">
+                  <span>{s.name}</span>
+                  <small>
+                    Grade {s.grade ?? "?"} · {s.lastInAt ? `last came ${slDate(s.lastInAt)}` : "never signed in on Attendance"}
+                  </small>
+                </span>
+                <b class="away-note">{days} days</b>
+              </li>
+            ))}
+          </ul>
+        </Sheet>
+      )}
+    </>
   );
 }
 
@@ -615,6 +700,8 @@ function describe(e: Doc<"events">): string {
       return "signed in";
     case "out":
       return "signed out";
+    case "in-undo":
+      return "sign-in taken back (tapped by mistake)";
     case "call": {
       const [room, kind, pull] = v.split("/");
       const forTheory = kind === "theory" ? " for theory" : "";

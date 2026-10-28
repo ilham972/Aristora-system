@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { callPhrase, pullPhrase, type RoomName } from "./announce";
+import { Attendance } from "./attendance";
 import type { Link } from "./backend";
 import { Correction } from "./correction";
-import { buildViews, evalQueue, fmtClock, theoryGroups, type View } from "./derive";
+import { buildViews, evalQueue, fmtClock, liveSession, theoryGroups, type View } from "./derive";
 import { Evaluation, Theory } from "./rooms";
 import { Settings } from "./settings";
 import { alertsState, armAlerts, listenForTaps, ring, useAlertsState, type AlertKind } from "./sound";
 import { clearHash, PinSheet, pinAsked, readHash, SignIn, stopAskingPin, type Hash } from "./signin";
-import { setRole, signOutHere, useStore, useTick, type Board, type Role } from "./store";
+import { may, setRole, signOutHere, useStore, useTick, type Board, type Role } from "./store";
 import { Sheet, Toasts } from "./ui";
 
 const ROLES: { id: Role; label: string }[] = [
@@ -15,7 +16,6 @@ const ROLES: { id: Role; label: string }[] = [
   { id: "theory", label: "Theory" },
   { id: "evaluation", label: "Evaluation" },
 ];
-const STALE_MS = 4 * 60 * 60_000;
 
 function loadRole(): Role {
   try {
@@ -30,7 +30,7 @@ function loadRole(): Role {
 export function App() {
   const { board, boardError, link, me } = useStore();
   const [chosen, setRoleState] = useState<Role>(loadRole);
-  const [page, setPage] = useState<"board" | "settings">("board");
+  const [page, setPage] = useState<"board" | "settings" | "attendance">("board");
   // The address bar can hold a sign-in link (#join=...) or the setup code (#setup=...).
   const [, setHashSeen] = useState(0);
   const hash: Hash = readHash();
@@ -115,15 +115,45 @@ export function App() {
     .filter((m) => m.urgency === "red" && !m.inEvaluation).length;
   const evalRed = evalQueue(views, now).filter((m) => m.urgency === "red" && !m.blockedBy).length;
   const toSend = board.calls.filter((c) => c.status === "requested" && !c.pull).length;
-  const session = board.session && now - board.session.lastActivityAt < STALE_MS ? board.session : null;
+  const session = liveSession(board, now);
+  // Attendance (signing students in) is Correction's job: the owner and anyone with the Correction tab.
+  const canAttend = may("correction");
+  const shown = page === "attendance" && !canAttend ? "board" : page;
+  const inClass = views.filter((v) => v.where !== "absent").length;
 
   return (
     <div class="app" data-role={role}>
       <div class="top-wrap" ref={topRef}>
         <header class="top">
-          <div class="top-role">
-            <span class="role-mark" aria-hidden="true" />
-            <h1>{page === "settings" ? "Settings" : ROLES.find((r) => r.id === role)!.label}</h1>
+          <div class="top-left">
+            {canAttend ? (
+              <button
+                type="button"
+                class={`att-btn${shown === "attendance" ? " on" : ""}`}
+                aria-pressed={shown === "attendance"}
+                onClick={() => setPage(shown === "attendance" ? "board" : "attendance")}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  width="21"
+                  height="21"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="9" cy="8" r="3.6" />
+                  <path d="M2.5 20.5c.7-3.7 3.3-5.8 6.5-5.8s5.8 2.1 6.5 5.8" />
+                  <path d="m15.6 10.6 2.1 2.1 4.3-4.6" />
+                </svg>
+                <span>Attendance</span>
+                {inClass > 0 && <b class="att-n" aria-label={`${inClass} in class`}>{inClass}</b>}
+              </button>
+            ) : (
+              <span class="top-count">{inClass} in class</span>
+            )}
           </div>
           <div class="top-meta">
             {session ? (
@@ -136,9 +166,9 @@ export function App() {
             <LinkDot link={link} />
             <button
               type="button"
-              class={`icon-btn${page === "settings" ? " on" : ""}`}
+              class={`icon-btn${shown === "settings" ? " on" : ""}`}
               aria-label="Settings"
-              onClick={() => setPage(page === "settings" ? "board" : "settings")}
+              onClick={() => setPage(shown === "settings" ? "board" : "settings")}
             >
               <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
                 <path
@@ -170,10 +200,12 @@ export function App() {
         </button>
       )}
 
-      {page === "settings" ? (
+      {shown === "settings" ? (
         <Settings views={views} onClose={() => setPage("board")} />
+      ) : shown === "attendance" ? (
+        <Attendance board={board} views={views} now={now} role={role} />
       ) : role === "correction" ? (
-        <Correction board={board} views={views} now={now} />
+        <Correction board={board} views={views} now={now} onAttendance={() => setPage("attendance")} />
       ) : role === "theory" ? (
         <Theory board={board} views={views} now={now} />
       ) : (
@@ -187,7 +219,7 @@ export function App() {
             <button
               key={r.id}
               type="button"
-              class={`tab ${r.id}${role === r.id && page === "board" ? " on" : ""}`}
+              class={`tab ${r.id}${role === r.id && shown === "board" ? " on" : ""}`}
               aria-current={role === r.id ? "page" : undefined}
               onClick={() => {
                 setRoleState(r.id);

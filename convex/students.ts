@@ -6,13 +6,17 @@ import {
   cleanBy,
   cleanName,
   currentSession,
+  endVisit,
   ensureProgress,
   ensureSession,
   fail,
   getStudent,
+  lastVisit,
   log,
   refresh,
+  startVisit,
   touch,
+  UNDO_IN_MS,
   type Stage,
 } from "./lib/backend";
 import { termOf } from "./lib/syllabus";
@@ -165,14 +169,15 @@ export const setArchived = mutation({
       for (const c of await activeCalls(ctx, s._id)) {
         await ctx.db.patch(c._id, { status: c.status === "sent" ? "done" : "cancelled", endedAt: now });
       }
+      if (s.present) await endVisit(ctx, s._id, now);
       await refreshOut(ctx, s._id, now, session);
-      await ctx.db.patch(s._id, { archived: true, present: false, room: undefined });
+      await ctx.db.patch(s._id, { archived: true, present: false, room: undefined, archivedAt: now });
     } else {
       const all = await ctx.db.query("students").withIndex("by_archived", (q) => q.eq("archived", false)).collect();
       if (all.some((o) => o.name.toLowerCase() === s.name.toLowerCase())) {
         fail(`Rename the current "${s.name}" first.`);
       }
-      await ctx.db.patch(s._id, { archived: false, present: false });
+      await ctx.db.patch(s._id, { archived: false, present: false, archivedAt: undefined });
     }
     await log(ctx, session, now, {
       kind: args.archived ? "student-remove" : "student-restore",
@@ -188,31 +193,67 @@ async function refreshOut(ctx: Parameters<typeof refresh>[0], id: Parameters<typ
   await refresh(ctx, id, now, session);
 }
 
-/** Tap in when he arrives, tap out when he leaves. The first tap-in starts the session. */
+/**
+ * Attendance: tap in when he arrives (the time goes in the register), tap out when he leaves.
+ * The first tap-in starts the session. `undo` takes back a sign-in tapped by mistake: the visit is deleted,
+ * as if it never happened (after UNDO_IN_MS it is an ordinary sign-out).
+ */
 export const setPresent = mutation({
-  args: { token: v.optional(v.string()), id: v.id("students"), present: v.boolean(), by: v.optional(v.string()) },
+  args: {
+    token: v.optional(v.string()),
+    id: v.id("students"),
+    present: v.boolean(),
+    undo: v.optional(v.boolean()),
+    by: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
     await actor(ctx, args.token, ["correction"], args.by);
     const now = Date.now();
-    const s = await getStudent(ctx, args.id);
-    if (s.archived) fail(`${s.name} was removed from the class.`);
+    const first = await getStudent(ctx, args.id);
+    if (first.archived) fail(`${first.name} was removed from the class.`);
     const by = cleanBy(args.by);
     if (args.present) {
       const session = await ensureSession(ctx, now, by);
+      // Read him after the session check: a class left open since yesterday has just signed everyone out.
+      const s = await getStudent(ctx, args.id);
       if (!s.present) {
-        await ctx.db.patch(s._id, { present: true, lastActivityAt: now });
+        await ctx.db.patch(s._id, { present: true, lastActivityAt: now, lastInAt: now });
+        await startVisit(ctx, s._id, now, session);
         await log(ctx, session, now, { kind: "in", by, studentId: s._id, name: s.name });
       }
       await refresh(ctx, s._id, now, session);
       await touch(ctx, session, now);
-    } else {
-      const session = await currentSession(ctx, now);
-      for (const c of await activeCalls(ctx, s._id)) {
-        await ctx.db.patch(c._id, { status: c.status === "sent" ? "done" : "cancelled", endedAt: now });
-      }
-      if (s.present) await log(ctx, session, now, { kind: "out", by, studentId: s._id, name: s.name });
-      await refreshOut(ctx, s._id, now, session);
-      await touch(ctx, session, now);
+      return true;
     }
+    const session = await currentSession(ctx, now);
+    const s = await getStudent(ctx, args.id);
+    for (const c of await activeCalls(ctx, s._id)) {
+      await ctx.db.patch(c._id, { status: c.status === "sent" ? "done" : "cancelled", endedAt: now });
+    }
+    if (!s.present) {
+      await refreshOut(ctx, s._id, now, session);
+      return true;
+    }
+    const visit = await lastVisit(ctx, s._id);
+    if (args.undo && visit && visit.outAt === undefined && now - visit.inAt <= UNDO_IN_MS) {
+      // Tapped by mistake: he was never here. No visit, no idle time, his last arrival as before.
+      await ctx.db.delete(visit._id);
+      const before = await lastVisit(ctx, s._id);
+      await ctx.db.patch(s._id, {
+        present: false,
+        room: undefined,
+        idleSince: undefined,
+        idleReason: undefined,
+        lastInAt: before?.inAt,
+      });
+      await log(ctx, session, now, { kind: "in-undo", by, studentId: s._id, name: s.name });
+      await touch(ctx, session, now);
+      return true;
+    }
+    await endVisit(ctx, s._id, now);
+    await log(ctx, session, now, { kind: "out", by, studentId: s._id, name: s.name });
+    await refreshOut(ctx, s._id, now, session);
+    await touch(ctx, session, now);
+    return true;
   },
 });

@@ -13,7 +13,7 @@ import { CorrectSheet, MasterBook, MasterStrip } from "./master";
 import { MoveSheet } from "./move";
 import { act, currentRole, savedMarks, setExplained, STAGES, type Role } from "./store";
 import { canTap, isUnsaved, tap, tapSection } from "./taps";
-import { Q } from "./ui";
+import { Empty, Q } from "./ui";
 
 const CORRECTION_RECENT_MS = 2 * 60_000;
 const EXPLAINED_RECENT_MS = 3 * 60_000;
@@ -73,7 +73,11 @@ export function masterCircles(v: View, now: number): number[] {
 
 /** Colour and short words for the name cell, from this teacher's point of view. */
 export function rowState(role: Role, v: View, now: number): { tone: RowTone; text: string } {
-  if (v.where === "absent") return { tone: "grey", text: role === "correction" ? "Tap to sign in" : "Not here" };
+  if (v.where === "absent") {
+    // Only gone-home students with levels to correct are shown; the list's title says "Gone home".
+    const w = v.ms?.waiting ?? [];
+    return { tone: "grey", text: w.length === 1 ? `Correct L${w[0].n}` : w.length ? `${w.length} to correct` : "Not here" };
+  }
   const sent = v.calls.find((c) => c.status === "sent");
   const since = (t?: number) => (t ? mins(now - t) : "");
   if (v.where === "theory" || v.where === "evaluation") {
@@ -253,8 +257,8 @@ export function Register(props: {
   role: Role;
   views: View[];
   now: number;
-  /** How to tap, shown until the teacher taps "Got it". */
-  legend: ComponentChildren;
+  /** How to tap, shown until the teacher taps "Got it". None: no help box (a second list on the page). */
+  legend: ComponentChildren | null;
   selected?: Set<string>;
   /** Several grades shown together: sort by grade, with a small header for each. */
   grouped?: boolean;
@@ -287,7 +291,7 @@ export function Register(props: {
   const correctView = correcting ? views.find((x) => x.s._id === correcting.id) : undefined;
   return (
     <>
-      {legend && (
+      {legend && props.legend !== null && (
         <div class="legend-box">
           <p class="legend-line">{props.legend}</p>
           <button type="button" class="btn ghost small" onClick={() => showLegend(false)}>
@@ -296,7 +300,7 @@ export function Register(props: {
         </div>
       )}
       <section class="register" aria-label="Class register">
-        {!legend && (
+        {!legend && props.legend !== null && (
           <div class="reg-head">
             <button type="button" class="how-btn" onClick={() => showLegend(true)}>
               How to tap
@@ -366,6 +370,25 @@ export function Register(props: {
         <CorrectSheet v={correctView} level={correcting.level} now={now} onClose={() => setCorrecting(null)} />
       )}
     </>
+  );
+}
+
+/** Nobody signed in: what the room tabs show instead of an empty register. */
+export function NobodyHere() {
+  return (
+    <Empty title="Nobody is signed in yet">Students show here once Correction signs them in on Attendance.</Empty>
+  );
+}
+
+/** Gone home with workbook levels still to correct: the marks don't have to wait until he comes back. */
+export function GoneHome(props: { role: Role; views: View[]; now: number }) {
+  const list = props.views.filter((v) => v.where === "absent" && (v.ms?.waiting.length ?? 0) > 0);
+  if (list.length === 0) return null;
+  return (
+    <section class="gone" aria-label="Gone home, levels to correct">
+      <h3 class="list-title">Gone home, levels to correct</h3>
+      <Register role={props.role} views={list} now={props.now} legend={null} onName={() => false} />
+    </section>
   );
 }
 

@@ -99,7 +99,17 @@ export function tagOf(s: Student, unit: Unit | null): string {
 
 const sectionName = (id: string | null) => (id ? `${id} theory` : "theory");
 
+/** A class with no activity for this long is over, even if nobody tapped End the session (as on the server). */
+export const STALE_MS = 4 * 60 * 60_000;
+
+/** The class going on now, or null (none, or one left open since an earlier day). */
+export function liveSession(board: Board, now: number): Board["session"] {
+  return board.session && now - board.session.lastActivityAt < STALE_MS ? board.session : null;
+}
+
 export function buildViews(board: Board, now: number): View[] {
+  // Yesterday's class left open still says "present" until the next tap closes it: nobody is here.
+  const live = liveSession(board, now) !== null;
   const byStudent = new Map<string, Call[]>();
   for (const c of board.calls) {
     const list = byStudent.get(c.studentId) ?? [];
@@ -120,7 +130,7 @@ export function buildViews(board: Board, now: number): View[] {
     const calls = byStudent.get(s._id) ?? [];
     const requested = calls.find((c) => c.status === "requested" && !c.pull);
     const pulled = calls.some((c) => c.status === "requested" && c.pull);
-    const where: View["where"] = !s.present ? "absent" : (s.room ?? "hall");
+    const where: View["where"] = !s.present || !live ? "absent" : (s.room ?? "hall");
     const idleMs = s.idleSince !== undefined ? Math.max(0, now - s.idleSince) : undefined;
     const quietMs = s.lastActivityAt !== undefined ? now - s.lastActivityAt : undefined;
     const limit = st ? quietLimit(st) : QUIET_PAPERS_MS;

@@ -13,6 +13,7 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
+import type * as attendance from "../attendance.js";
 import type * as auth from "../auth.js";
 import type * as calls from "../calls.js";
 import type * as catalog from "../catalog.js";
@@ -21,6 +22,7 @@ import type * as demo from "../demo.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_backend from "../lib/backend.js";
 import type * as lib_book from "../lib/book.js";
+import type * as lib_day from "../lib/day.js";
 import type * as lib_master from "../lib/master.js";
 import type * as lib_owner from "../lib/owner.js";
 import type * as lib_sha256 from "../lib/sha256.js";
@@ -43,6 +45,7 @@ import type * as workbook from "../workbook.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  attendance: typeof attendance;
   auth: typeof auth;
   calls: typeof calls;
   catalog: typeof catalog;
@@ -51,6 +54,7 @@ declare const fullApi: ApiFromModules<{
   "lib/auth": typeof lib_auth;
   "lib/backend": typeof lib_backend;
   "lib/book": typeof lib_book;
+  "lib/day": typeof lib_day;
   "lib/master": typeof lib_master;
   "lib/owner": typeof lib_owner;
   "lib/sha256": typeof lib_sha256;

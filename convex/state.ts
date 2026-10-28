@@ -61,7 +61,14 @@ export const archived = query({
       .query("students")
       .withIndex("by_archived", (q) => q.eq("archived", true))
       .collect();
-    return list.map((s) => ({ _id: s._id, name: s.name, demo: s.demo ?? false, grade: s.grade ?? null }));
+    return list.map((s) => ({
+      _id: s._id,
+      name: s.name,
+      demo: s.demo ?? false,
+      grade: s.grade ?? null,
+      created: s._creationTime,
+      archivedAt: s.archivedAt ?? null,
+    }));
   },
 });
 

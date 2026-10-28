@@ -1,5 +1,5 @@
 import type { ComponentChildren } from "preact";
-import { useEffect, useRef } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import type { MarkState } from "../convex/lib/status";
 import { dismissToast, useToasts } from "./store";
 
@@ -145,5 +145,58 @@ export function SectionBadge(props: { badge: string }) {
     <span class="badge" aria-hidden="true">
       {props.badge}
     </span>
+  );
+}
+
+export const GRADES = [6, 7, 8, 9, 10, 11];
+
+/** A grade this phone remembers for one page: the last one tapped there. */
+export function useGrade(key: string, fallback: () => number): [number, (g: number) => void] {
+  const [grade, setGrade] = useState<number>(() => {
+    try {
+      const saved = Number(localStorage.getItem(key));
+      if (GRADES.includes(saved)) return saved;
+    } catch {
+      /* private mode */
+    }
+    return fallback();
+  });
+  const pick = (g: number) => {
+    setGrade(g);
+    try {
+      localStorage.setItem(key, String(g));
+    } catch {
+      /* private mode */
+    }
+  };
+  return [grade, pick];
+}
+
+/** Grades 6 to 11 in one row on any phone. Each can carry a small number under it (who is here, how many). */
+export function GradeRow(props: {
+  value: number;
+  onPick: (g: number) => void;
+  label: string;
+  count?: (g: number) => { text: string; aria: string; some?: boolean };
+}) {
+  return (
+    <div class="grade-row" role="group" aria-label={props.label}>
+      {GRADES.map((g) => {
+        const c = props.count?.(g);
+        return (
+          <button
+            key={g}
+            type="button"
+            class={`${g === props.value ? "on" : ""}${c?.some ? " some" : ""}`}
+            aria-pressed={g === props.value}
+            aria-label={`Grade ${g}${c ? `: ${c.aria}` : ""}`}
+            onClick={() => props.onPick(g)}
+          >
+            <b>{g}</b>
+            {c && <small>{c.text}</small>}
+          </button>
+        );
+      })}
+    </div>
   );
 }

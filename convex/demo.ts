@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, type MutationCtx } from "./_generated/server";
-import { bookFor, cleanBy, currentSession, ensureSession, fail, log, refresh, touch } from "./lib/backend";
+import { bookFor, cleanBy, currentSession, ensureSession, fail, log, refresh, startVisit, touch } from "./lib/backend";
 import { fighter, KNOWN_WORKBOOKS, levelOutOf, PILOT_UNIT, type MasterData } from "./lib/book";
 import type { MQ, MState } from "./lib/master";
 import type { Mark } from "./lib/status";
@@ -176,7 +176,16 @@ export const load = mutation({
         lastActivityAt: now - 10 * 60_000,
       }),
     );
-    for (const id of ids) await refresh(ctx, id, now, session);
+    for (const id of ids) {
+      // The ones in class arrived a little before their last mark, so the register has a time for them.
+      const s = (await ctx.db.get(id))!;
+      if (s.present) {
+        const inAt = Math.min(now, (s.lastActivityAt ?? now) - 15 * 60_000);
+        await ctx.db.patch(id, { lastInAt: inAt });
+        await startVisit(ctx, id, inAt, session);
+      }
+      await refresh(ctx, id, now, session);
+    }
     await log(ctx, session, now, { kind: "demo-load", by, value: String(ids.length) });
     await touch(ctx, session, now);
   },
@@ -200,6 +209,9 @@ export const remove = mutation({
       }
       for (const p of await ctx.db.query("progress").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) {
         await ctx.db.delete(p._id);
+      }
+      for (const a of await ctx.db.query("attendance").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) {
+        await ctx.db.delete(a._id);
       }
       await ctx.db.delete(s._id);
     }

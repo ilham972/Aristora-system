@@ -146,10 +146,14 @@ test("the register: a whole class on three phones", async () => {
   await C.getByRole("button", { name: "Load demo students (three grades)" }).click();
   await visible(C.getByText(/^14 demo students loaded/));
   await C.getByRole("button", { name: "Back to the class" }).click();
-  await count(C.locator(".reg-row"), 14);
+  // Only the 13 signed in are on the register (Keerthi isn't here yet); no page title or logo in the top bar.
+  await count(C.locator(".reg-row"), 13);
+  await count(row(C, "Keerthi"), 0);
+  await count(row(T, "Keerthi"), 0);
+  await count(C.locator(".top h1, .top .role-mark"), 0);
+  await contains(C.getByRole("button", { name: /^Attendance/ }), "13");
   await namesAre(C.locator(".reg-row.rt-red .reg-n"), ["Fathima", "Rizwan", "Vimal"]); // no work (Vimal: every level waits)
   await count(C.locator(".reg-row.rt-yellow"), 1); // Tharun: quiet
-  await count(C.locator(".reg-row.absent"), 1); // Keerthi
   await shot(C, "r01-correction-register", true);
   await shot(T, "r02-theory-register", true);
   await shot(E, "r03-evaluation-register", true);
@@ -279,9 +283,55 @@ test("the register: a whole class on three phones", async () => {
   await shot(C, "r09e-settings-alerts", true);
   await C.getByRole("button", { name: "Back to the class" }).click();
 
-  // Correction: Keerthi arrives (tap her name); open Ahamed's whole book from the strip.
-  await row(C, "Keerthi").locator(".reg-name").click();
+  // Attendance (top left): grades 6-11 in one row. Keerthi (Grade 11) arrives: one tap signs her in with the time.
+  await C.getByRole("button", { name: /^Attendance/ }).click();
+  const grades = C.locator(".grade-row button");
+  await textsAre(grades.locator("b"), ["6", "7", "8", "9", "10", "11"]);
+  const tops = await grades.evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
+  expect(new Set(tops).size).toBe(1); // one row
+  await C.getByRole("button", { name: /^Grade 11\b/ }).click();
+  await contains(C.locator(".attendance .summary"), "Grade 11: 9 of 10 here");
+  await contains(C.getByRole("button", { name: /^Grade 7\b/ }), "3/3");
+  await textsAre(C.locator(".att-list .ap.in .ap-n"), ["Ahamed", "Dilan", "Fathima", "Kumar", "Nila", "Rizwan", "Sana", "Tharun", "Yasmin"]);
+  const keerthi = C.getByRole("button", { name: /^Keerthi:/ });
+  await keerthi.click();
   await until(async () => (await marksOf(backend, "Keerthi")).present, "Keerthi signed in");
+  await contains(C.locator(".toast"), "Keerthi signed in, ");
+  // A wrong tap: Undo takes it back as if it never happened.
+  await C.locator(".toast").getByRole("button", { name: "Undo" }).click();
+  await until(async () => !(await marksOf(backend, "Keerthi")).present, "Keerthi's sign-in taken back");
+  const visitsOf = (name: string) =>
+    backend.t.run(async (ctx) => {
+      const s = (await ctx.db.query("students").collect()).find((x) => x.name === name)!;
+      return await ctx.db
+        .query("attendance")
+        .withIndex("by_student", (q) => q.eq("studentId", s._id))
+        .collect();
+    });
+  expect(await visitsOf("Keerthi")).toHaveLength(0);
+  await keerthi.click();
+  await until(async () => (await marksOf(backend, "Keerthi")).present, "Keerthi signed in again");
+  await contains(keerthi, "✓");
+  await contains(C.locator(".attendance .summary"), "Grade 11: 10 of 10 here");
+  expect(await visitsOf("Keerthi")).toHaveLength(1);
+  await visible(row(T, "Keerthi")); // Theory sees her at once
+  await shot(C, "r10a-attendance", true);
+  // Tapping someone who is here asks before signing them out.
+  await C.getByRole("button", { name: /^Keerthi:/ }).click();
+  await contains(C.locator(".sheet h2"), "Keerthi");
+  await visible(C.locator(".sheet").getByRole("button", { name: "Sign out: going home" }));
+  await C.locator(".sheet").getByRole("button", { name: "Keep" }).click();
+  // The phone remembers the last grade on this page.
+  await C.getByRole("button", { name: /^Grade 7\b/ }).click();
+  await textsAre(C.locator(".att-list .ap-n"), ["Malik", "Priya", "Vimal"]);
+  await C.reload();
+  await C.getByRole("button", { name: /^Attendance/ }).click();
+  await until(async () => (await C.getByRole("button", { name: /^Grade 7\b/ }).getAttribute("aria-pressed")) === "true", "Grade 7 remembered");
+  await C.getByRole("button", { name: /^Grade 11\b/ }).click();
+  await C.locator(".tabs").getByRole("button", { name: "Correction" }).click();
+  await visible(row(C, "Keerthi"));
+
+  // Correction: open Ahamed's whole book from the strip.
   await row(C, "Ahamed").locator(".reg-strip").click();
   await visible(row(C, "Ahamed").locator(".book-open"));
   await shot(C, "r10-correction-whole-book", true);
@@ -295,13 +345,43 @@ test("the register: a whole class on three phones", async () => {
   await contains(C.locator(".report-hero"), "minutes students sat with nothing to do");
   await shot(C, "r11-report", true);
   await C.locator(".sheet").getByRole("button", { name: "Close" }).click();
-  await count(C.locator(".reg-row.absent"), 14);
+  // Everyone signed out: an empty register, the visits closed, and the workbook levels still waiting stay reachable.
+  await visible(C.getByText("Nobody is signed in yet"));
+  await namesAre(C.locator(".gone .reg-n"), ["Malik", "Vimal"]);
+  await contains(row(C, "Vimal").locator(".reg-s"), "Correct L8"); // his last level, handed in before he left
+  const open = await backend.t.run(async (ctx) => (await ctx.db.query("attendance").collect()).filter((a) => a.outAt === undefined).length);
+  expect(open).toBe(0);
+  await shot(C, "r11b-correction-after-class", true);
+  await C.getByRole("button", { name: "Open Attendance" }).click();
+  await count(C.locator(".att-list .ap.in"), 0);
+  await count(C.locator(".att-list .ap.left"), 10); // all of Grade 11 went home
+  await C.locator(".tabs").getByRole("button", { name: "Correction" }).click();
 
-  // Small Android phone: nothing spills sideways on any tab.
+  // Attendance on the smallest phones (360 px Redmi, 320 px): the six grades stay in one row, nothing sideways.
+  for (const [width, grade, name] of [
+    [360, 11, "Ahamed"],
+    [320, 7, "Malik"],
+  ] as const) {
+    const small = await phone(backend, "correction", { ...PHONE, viewport: { width, height: 640 } });
+    await small.getByRole("button", { name: /^Attendance/ }).click();
+    await small.getByRole("button", { name: new RegExp(`^Grade ${grade}\\b`) }).click();
+    await small.getByRole("button", { name: new RegExp(`^${name}:`) }).click();
+    await until(async () => (await marksOf(backend, name)).present, `${name} signed in`);
+    await count(small.locator(".sheet"), 0);
+    const rows = await small
+      .locator(".grade-row button")
+      .evaluateAll((els) => new Set(els.map((e) => Math.round(e.getBoundingClientRect().top))).size);
+    expect(rows).toBe(1);
+    expect(await small.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    await shot(small, `r13-attendance-${width}px`, true);
+    await small.context().close();
+  }
+
+  // Small Android phone: nothing spills sideways on any tab (two grades in class: Ahamed G11, Malik G7).
   for (const role of ["correction", "theory", "evaluation"]) {
     const small = await phone(backend, role, { ...PHONE, viewport: { width: 360, height: 740 } });
-    await count(small.locator(".reg-row"), 14); // loaded (signing in comes first), then measure
-    await visible(small.locator(".grade-pills"));
+    await visible(row(small, "Ahamed")); // loaded, then measure
+    await textsAre(small.locator(".grade-pills .gp b"), ["All", "7", "11"]);
     expect(await small.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
     await shot(small, `r12-${role}-360px`, true);
     await small.context().close();
@@ -319,10 +399,10 @@ test("Master: workbook levels corrected, lost marks explained, re-teach, Exam Sp
   await C.getByRole("button", { name: "Load demo students (three grades)" }).click();
   await visible(C.getByText(/^14 demo students loaded/));
   await C.getByRole("button", { name: "Back to the class" }).click();
-  await count(C.locator(".reg-row"), 14);
+  await count(C.locator(".reg-row"), 13);
 
   // Grade pills: every tab can look at one grade; each pill says what waits for this teacher there.
-  await textsAre(C.locator(".grade-pills .gp b"), ["All", "G7", "G9", "G11"]);
+  await textsAre(C.locator(".grade-pills .gp b"), ["All", "7", "9", "11"]); // numbers only, one row
   await until(async () => (await C.locator(".reg-grade").allTextContents()).join("|") === "Grade 7|Grade 9|Grade 11", "grade headers");
   // Correction: Vimal (G7) waits for marks = red; Tharun (G11) is quiet = amber; nothing in G9.
   expect(await C.getByRole("button", { name: /^Grade 7:/ }).getAttribute("aria-label")).toBe("Grade 7: 3 here, 1 need you now");
@@ -334,10 +414,10 @@ test("Master: workbook levels corrected, lost marks explained, re-teach, Exam Sp
   await contains(C.locator(".summary"), "1 with no work");
   await shot(C, "m00-correction-grade-7");
   await C.getByRole("button", { name: /^All grades:/ }).click();
-  await count(C.locator(".reg-row"), 14);
+  await count(C.locator(".reg-row"), 13);
   // Theory looks at Grade 11 only (the phone remembers it).
   await T.getByRole("button", { name: /^Grade 11:/ }).click();
-  await count(T.locator(".reg-row"), 10);
+  await count(T.locator(".reg-row"), 9); // Keerthi isn't signed in
 
   // Correction sees every grade in one register. Malik handed Level 3 in 6 minutes ago and is on Level 4.
   const malik = row(C, "Malik");
@@ -450,8 +530,28 @@ test("Master: workbook levels corrected, lost marks explained, re-teach, Exam Sp
   expect(p.m!.lv["2"]?.done).toBeGreaterThan(0);
   await textsAre(priya.locator(".lv-pill b"), ["L2", "L3"]);
 
-  // Owner: a new workbook from its contents page and marks table (Grade 8 U01).
+  // Settings → Students: the grade pill filters the list and is the grade of the new student; the owner's numbers.
   await C.getByRole("button", { name: "Settings" }).click();
+  await contains(C.locator(".stats"), "+14 demo, not counted");
+  await contains(C.locator(".stats .stat").first(), "0");
+  await contains(C.getByRole("button", { name: /^Grade 11\b/ }), "10");
+  await C.getByRole("button", { name: /^Grade 7\b/ }).click();
+  await contains(C.locator(".add-form label"), "Add a student to Grade 7");
+  await textsAre(C.locator(".settings-body > .plain-list .st-who > span:first-child"), ["MalikDemo", "PriyaDemo", "VimalDemo"]);
+  await C.getByLabel("Add a student to Grade 7").fill("Hana M");
+  await C.getByRole("button", { name: "Add", exact: true }).click();
+  await contains(C.locator(".toast"), "Added Hana M to Grade 7");
+  await textsAre(C.locator(".settings-body > .plain-list .st-who > span:first-child"), ["Hana M", "MalikDemo", "PriyaDemo", "VimalDemo"]);
+  await contains(C.locator(".list-title"), "Grade 7 · 4 students");
+  await contains(C.locator(".stats .stat").first(), "1");
+  await contains(C.locator(".stats .stat").nth(1), "+1");
+  expect((await marksOf(backend, "Hana M")).grade).toBe(7);
+  await C.getByRole("button", { name: /^Grade 9\b/ }).click();
+  await textsAre(C.locator(".settings-body > .plain-list .st-who > span:first-child"), ["ZainabDemo"]);
+  await shot(C, "m06b-students-page", true);
+  await C.getByRole("button", { name: /^Grade 7\b/ }).click();
+
+  // Owner: a new workbook from its contents page and marks table (Grade 8 U01).
   await C.getByRole("button", { name: "Books", exact: true }).click();
   await C.locator(".unit-list").getByRole("button", { name: /^U01/ }).first().click();
   const us = C.locator(".sheet");
@@ -567,7 +667,8 @@ test("accounts: the owner sets up, adds a teacher, her phone signs in with the l
     expect(new URL(R.url()).hash).toBe("");
     // Only her tab, though the phone last showed Theory.
     await textsAre(R.locator(".tabs .tab"), ["Correction"]);
-    await contains(R.locator(".top h1"), "Correction");
+    await contains(R.locator(".tabs .tab.on"), "Correction");
+    await visible(R.getByRole("button", { name: /^Attendance/ })); // Correction takes attendance
     await R.getByRole("button", { name: "Settings" }).click();
     await textsAre(R.locator(".seg button"), ["Alerts", "Reports", "History", "Account"]); // no People: owner only
     await shot(R, "a05b-teacher-settings", true);

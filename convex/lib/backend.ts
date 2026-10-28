@@ -4,6 +4,7 @@ import { ConvexError } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { fighter, type Fighter, type MasterData } from "./book";
+import { slDay } from "./day";
 import { computeMaster, EMPTY_MASTER, type MState } from "./master";
 import { computeStatus } from "./status";
 
@@ -200,6 +201,36 @@ export async function activeCalls(ctx: QueryCtx, studentId: Id<"students">) {
   return [...requested, ...sent];
 }
 
+// ---------------------------------------------------------------- attendance: one row per visit
+
+/** A sign-in tapped by mistake can be undone this long after (then it is a normal sign-out). */
+export const UNDO_IN_MS = 5 * 60_000;
+
+/** His latest visit (open or closed), or null. */
+export async function lastVisit(ctx: QueryCtx, studentId: Id<"students">): Promise<Doc<"attendance"> | null> {
+  return await ctx.db
+    .query("attendance")
+    .withIndex("by_student", (q) => q.eq("studentId", studentId))
+    .order("desc")
+    .first();
+}
+
+/** He arrived: a new visit in the register. */
+export async function startVisit(
+  ctx: MutationCtx,
+  studentId: Id<"students">,
+  at: number,
+  session: Doc<"sessions"> | null,
+): Promise<void> {
+  await ctx.db.insert("attendance", { studentId, day: slDay(at), inAt: at, ...(session ? { sessionId: session._id } : {}) });
+}
+
+/** He left, or the session ended: close his open visit. */
+export async function endVisit(ctx: MutationCtx, studentId: Id<"students">, at: number): Promise<void> {
+  const v = await lastVisit(ctx, studentId);
+  if (v && v.outAt === undefined) await ctx.db.patch(v._id, { outAt: Math.max(at, v.inAt) });
+}
+
 async function closeIdle(
   ctx: MutationCtx,
   s: Doc<"students">,
@@ -270,6 +301,7 @@ export async function closeSession(
     for (const c of open) await ctx.db.patch(c._id, { status: status === "sent" ? "done" : "cancelled", endedAt: endAt });
   }
   for (const s of students) {
+    if (s.present) await endVisit(ctx, s._id, endAt);
     await ctx.db.patch(s._id, { present: false, room: undefined, idleSince: undefined, idleMs: 0 });
   }
 

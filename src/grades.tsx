@@ -94,7 +94,8 @@ export function GradePills(props: {
     }
     const on = props.filter === g;
     const n = here(vs);
-    const label = g === "all" ? "All" : `G${g}`;
+    // Numbers only ("7", not "Grade 7" or "G7"): the row fits on the smallest phones.
+    const label = g === "all" ? "All" : String(g);
     const words = `${g === "all" ? "All grades" : `Grade ${g}`}: ${n} here${red ? `, ${red} need you now` : amber ? `, ${amber} need you soon` : ""}`;
     return (
       <button key={String(g)} type="button" class={`gp${on ? " on" : ""}`} aria-pressed={on} aria-label={words} onClick={() => props.onPick(g)}>

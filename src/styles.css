@@ -127,31 +127,47 @@ ul {
   background: var(--card);
   border-bottom: 4px solid var(--role);
 }
-.top-role {
+.top-left {
   display: flex;
   align-items: center;
-  gap: 10px;
   min-width: 0;
 }
-.top-role h1 {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-family: var(--cond);
+/* Attendance: the page for signing students in, where the page title used to be. */
+.att-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 12px 0 11px;
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--ink);
   font-weight: 700;
-  font-size: 25px;
-  line-height: 1.1;
-  color: var(--role);
+  font-size: 16px;
   white-space: nowrap;
 }
-.role-mark {
-  width: 18px;
-  height: 18px;
-  flex: none;
-  border-radius: 50%;
-  background: var(--role);
-  box-shadow: 0 0 0 3px var(--card), 0 0 0 5px var(--role);
-  margin: 0 3px;
+.att-btn.on {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+.att-n {
+  min-width: 24px;
+  height: 24px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--green);
+  color: #fff;
+  font-size: 13.5px;
+  display: grid;
+  place-items: center;
+}
+.top-count {
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--ink-2);
+  white-space: nowrap;
 }
 .top-meta {
   display: flex;
@@ -1370,6 +1386,9 @@ button.q:disabled {
   border-radius: 16px;
   color: var(--ink-2);
 }
+.empty .btn {
+  margin-top: 14px;
+}
 .empty-title {
   font-weight: 700;
   font-size: 17px;
@@ -2103,7 +2122,13 @@ p.small {
   color: var(--ink);
 }
 .signin .role-mark {
-  --role: var(--ink);
+  width: 18px;
+  height: 18px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--ink);
+  box-shadow: 0 0 0 3px var(--card), 0 0 0 5px var(--ink);
+  margin: 0 3px;
 }
 .si-card {
   width: 100%;
@@ -2258,32 +2283,38 @@ p.small {
   background: var(--line-2);
 }
 
-/* ---------- Grade pills: one grade at a time, with what waits for you in the others ---------- */
+/* ---------- Grade pills on the three tabs: one grade at a time, with what waits for you in the others.
+   One row on every phone (as the founder asked for grades): All, 7, 9, 11 ... with how many are here under each. */
 
 .stick:empty {
   display: none;
 }
 .grade-pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 6px;
-  padding-top: 2px;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 6px;
+  padding-top: 4px;
 }
 .gp {
   position: relative;
-  display: inline-flex;
-  align-items: baseline;
-  gap: 5px;
-  min-height: 40px;
-  padding: 0 12px;
-  border-radius: 999px;
+  min-width: 0;
+  min-height: 46px;
+  padding: 3px 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border-radius: 14px;
   border: 1.5px solid var(--line);
   background: var(--card);
-  font-size: 15px;
-  color: var(--ink-2);
-  line-height: 38px;
+  color: var(--ink);
+  line-height: 1;
 }
 .gp b {
+  font-family: var(--cond);
+  font-size: 19px;
   font-weight: 700;
 }
 .gp small {
@@ -2333,4 +2364,185 @@ p.small {
 }
 .reg-grade:not(:first-child) {
   border-top: 1px solid var(--line);
+}
+
+/* ---------- Attendance and grade pills ---------- */
+
+.calls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+/* Attendance and Students: grades 6-11, one row on every phone, equal widths, a small number under each. */
+.grade-row {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+}
+.grade-row button {
+  min-width: 0;
+  min-height: 52px;
+  padding: 4px 2px;
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  line-height: 1;
+}
+.grade-row b {
+  font-family: var(--cond);
+  font-size: 22px;
+  font-weight: 700;
+}
+.grade-row small {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.grade-row button.some small {
+  color: var(--green-ink);
+}
+.grade-row button.on {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+.grade-row button.on small {
+  color: #c9d0dd;
+}
+.grade-row button.on.some small {
+  color: #8fe3ad;
+}
+.att-top {
+  gap: 8px;
+}
+.att-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.att-list li {
+  max-width: 100%;
+}
+/* One student: white = not here yet, green = here (with the arrival time), grey = went home today. */
+.ap {
+  max-width: 100%;
+  min-height: 46px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 15px;
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 1.15;
+}
+.ap-n {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ap-t {
+  flex: none;
+  font-size: 13px;
+  font-weight: 700;
+}
+.ap.in {
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
+}
+.ap.in .ap-t {
+  color: #d9f7e4;
+}
+.ap.busy {
+  background: var(--green-soft);
+  border-color: var(--green);
+  color: var(--green-ink);
+}
+.ap.left {
+  background: var(--line-2);
+  border-style: dashed;
+  color: var(--ink-2);
+}
+.ap.left .ap-t {
+  color: var(--ink-3);
+}
+.gone {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+/* ---------- Students page: the founder's numbers ---------- */
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.stat {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--ink);
+  text-align: left;
+  font: inherit;
+}
+.stat b {
+  font-family: var(--cond);
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.05;
+}
+.stat b i {
+  font-style: normal;
+  font-size: 16px;
+  color: var(--ink-2);
+}
+.stat span {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.stat small {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+button.stat:disabled {
+  cursor: default;
+}
+.stat.warn {
+  border: 1.5px solid var(--red);
+  background: var(--red-soft);
+}
+.stat.warn b,
+.stat.warn small {
+  color: var(--red-ink);
+}
+.away-note {
+  color: var(--red-ink);
+  font-weight: 700;
+}
+.h-by.attendance {
+  background: var(--green-soft);
+  color: var(--green-ink);
 }

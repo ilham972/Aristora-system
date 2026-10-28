@@ -2,30 +2,28 @@ import { useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { mutate } from "./backend";
-import { Register } from "./board";
-import { fmtMin, shortMin, type View } from "./derive";
+import { GoneHome, Register } from "./board";
+import { fmtMin, liveSession, shortMin, type View } from "./derive";
 import { GradePills, gradesOf, inGrade, needsOf, useGradeFilter } from "./grades";
 import { ReportView, type Report } from "./report";
 import { act, currentRole, may, toast, type Board } from "./store";
 import { Empty, Sheet } from "./ui";
 
-const signIn = (id: Id<"students">) => act(() => mutate(api.students.setPresent, { id, present: true, by: currentRole() }));
-
-export function Correction(props: { board: Board; views: View[]; now: number }) {
+export function Correction(props: { board: Board; views: View[]; now: number; onAttendance: () => void }) {
   const { board, now } = props;
   const [ending, setEnding] = useState(false);
   const [report, setReport] = useState<Report | null>(null);
-  const grades = gradesOf(props.views);
+  // Only students signed in on Attendance are in the register; the grade pills show the grades in class now.
+  const inClass = props.views.filter((v) => v.where !== "absent");
+  const grades = gradesOf(inClass);
   const [grade, setGrade] = useGradeFilter("correction", grades);
   // One grade at a time if the teacher chose one; the summary and the register follow it.
-  const views = inGrade(props.views, grade);
-
-  const present = views.filter((v) => v.where !== "absent");
-  const absent = views.filter((v) => v.where === "absent");
+  const present = inGrade(inClass, grade);
   const red = present.filter((v) => v.tone === "red").length;
   const quiet = present.filter((v) => v.tone === "yellow").length;
   const inRooms = present.filter((v) => v.where === "theory" || v.where === "evaluation").length;
   const toCorrect = present.reduce((a, v) => a + (v.ms?.waiting.length ?? 0), 0);
+  const session = liveSession(board, now);
 
   if (props.views.length === 0) {
     return (
@@ -43,56 +41,48 @@ export function Correction(props: { board: Board; views: View[]; now: number }) 
     <main class="page">
       <div class="stick">
         <CallsBand board={board} views={props.views} now={now} />
-        <GradePills views={props.views} needs={needsOf("correction", board, props.views, now)} filter={grade} onPick={setGrade} />
+        <GradePills views={inClass} needs={needsOf("correction", board, props.views, now)} filter={grade} onPick={setGrade} />
       </div>
 
-      <div class="summary" aria-label="Class summary">
-        {present.length === 0 ? (
-          <span>Nobody is signed in yet. Tap a name when the student arrives.</span>
-        ) : (
-          <>
+      {inClass.length === 0 ? (
+        <div class="empty">
+          <p class="empty-title">Nobody is signed in yet</p>
+          <p>Students show here once they are signed in on Attendance.</p>
+          <button type="button" class="btn primary" onClick={props.onAttendance}>
+            Open Attendance
+          </button>
+        </div>
+      ) : (
+        <>
+          <div class="summary" aria-label="Class summary">
+            <span class="strong">{present.length} in class</span>
             <span class={red ? "t-red strong" : ""}>{red} with no work</span>
             {toCorrect > 0 && <span class="t-amber strong">{toCorrect === 1 ? "1 level" : `${toCorrect} levels`} to correct</span>}
             <span class={quiet ? "t-yellow strong" : ""}>{quiet} quiet</span>
             <span>{inRooms} in rooms</span>
-            <span>{absent.length} not here</span>
-          </>
-        )}
-      </div>
-      <Register
-        role="correction"
-        views={views}
-        grouped={grade === "all" && grades.length > 1}
-        now={now}
-        legend={
-          <>
-            Fighter: tap a circle <b class="k-right">once ✓ right</b>, <b class="k-wrong">twice ✗ wrong</b>,{" "}
-            <b class="k-slip">3 times ↻ slip</b>; it saves when you stop. Master: tap the <b>level</b> the student hands in to
-            give the marks. Tap a name or the strip for the whole book.
-          </>
-        }
-        onName={(v) => {
-          if (v.where !== "absent") return false;
-          void signIn(v.s._id).then((r) => r !== undefined && toast(`${v.s.name} signed in.`));
-          return true;
-        }}
-      />
-
-      {absent.length > 1 && present.length === 0 && (
-        <button
-          type="button"
-          class="btn ghost wide"
-          onClick={async () => {
-            for (const v of absent) await signIn(v.s._id);
-          }}
-        >
-          Everyone is here: sign in all {absent.length}
-        </button>
+          </div>
+          <Register
+            role="correction"
+            views={present}
+            grouped={grade === "all" && grades.length > 1}
+            now={now}
+            legend={
+              <>
+                Fighter: tap a circle <b class="k-right">once ✓ right</b>, <b class="k-wrong">twice ✗ wrong</b>,{" "}
+                <b class="k-slip">3 times ↻ slip</b>; it saves when you stop. Master: tap the <b>level</b> the student hands in to
+                give the marks. Tap a name or the strip for the whole book.
+              </>
+            }
+            onName={() => false}
+          />
+        </>
       )}
 
-      {board.session && (
+      <GoneHome role="correction" views={inGrade(props.views, grade)} now={now} />
+
+      {session && (
         <div class="end-wrap">
-          <p class="muted">Class started {fmtMin(now - board.session.startedAt)} ago.</p>
+          <p class="muted">Class started {fmtMin(now - session.startedAt)} ago.</p>
           <button type="button" class="btn ghost" onClick={() => setEnding(true)}>
             End the session
           </button>
@@ -149,10 +139,10 @@ async function notNow(callId: Id<"calls">, name: string, room: keyof typeof ROOM
 }
 
 /**
- * Rooms asking for students: one slim strip per room, stuck under the header so it shows
- * even when the register is scrolled. Tap × for "not now", Sent when they've gone.
+ * Rooms asking for students: one slim strip per room. The page keeps it stuck under the header (with the grade
+ * pills) so it shows even when the register is scrolled. Tap × for "not now", Sent when they've gone.
  */
-function CallsBand(props: { board: Board; views: View[]; now: number }) {
+export function CallsBand(props: { board: Board; views: View[]; now: number }) {
   const { board, views, now } = props;
   const byId = new Map(views.map((v) => [v.s._id as string, v]));
   const waiting = board.calls.filter((c) => c.status === "requested" && !c.pull);

@@ -136,7 +136,24 @@ export default defineSchema({
     idleSince: v.optional(v.number()),
     idleReason: v.optional(v.string()),
     idleMs: v.number(),
+    /** When he last arrived (signed in on Attendance). Every visit is in the attendance table. */
+    lastInAt: v.optional(v.number()),
+    /** When he was removed from the class (for "left this month"). */
+    archivedAt: v.optional(v.number()),
   }).index("by_archived", ["archived"]),
+
+  /** The attendance register: one row per visit, when he arrived and when he left. */
+  attendance: defineTable({
+    studentId: v.id("students"),
+    /** The day in Sri Lanka: "2026-10-28". */
+    day: v.string(),
+    inAt: v.number(),
+    /** Signed out, or the session ended. Missing while he is in class. */
+    outAt: v.optional(v.number()),
+    sessionId: v.optional(v.id("sessions")),
+  })
+    .index("by_student", ["studentId", "inAt"])
+    .index("by_day", ["day", "inAt"]),
 
   /** One student's work in one book: theory-book circles (Fighter) or workbook levels and marks (Master). */
   progress: defineTable({

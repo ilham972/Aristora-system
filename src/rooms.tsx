@@ -2,7 +2,7 @@ import { useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { mutate } from "./backend";
-import { Register } from "./board";
+import { GoneHome, NobodyHere, Register } from "./board";
 import { evalQueue, roomBusy, roomCalls, sameMistakes, theoryGroups, type RoomCall, type View } from "./derive";
 import { GradePills, gradesOf, inGrade, needsOf, useGradeFilter } from "./grades";
 import { act, currentRole, toast, type Board } from "./store";
@@ -54,9 +54,12 @@ function useSelection(views: View[], can: (v: View) => string | null) {
 export function Theory(props: { board: Board; views: View[]; now: number }) {
   const { board, now } = props;
   const all = props.views;
-  const grades = gradesOf(all);
+  // Only students signed in on Attendance are on the register; the grade pills show the grades in class now.
+  const inClass = all.filter((v) => v.where !== "absent");
+  const grades = gradesOf(inClass);
   const [grade, setGrade] = useGradeFilter("theory", grades);
   const views = inGrade(all, grade);
+  const here = inGrade(inClass, grade);
   // With every grade showing, chips name the grade too: "G11 U13 D".
   const named = grade === "all" && grades.length > 1;
   const groups = theoryGroups(views);
@@ -74,7 +77,7 @@ export function Theory(props: { board: Board; views: View[]; now: number }) {
     <main class={`page${pick.sel.size ? " with-bar" : ""}`}>
       <div class="stick">
         {room.length > 0 && <InRoom room="theory" calls={room} />}
-        <GradePills views={all} needs={needsOf("theory", board, all, now)} filter={grade} onPick={setGrade} />
+        <GradePills views={inClass} needs={needsOf("theory", board, all, now)} filter={grade} onPick={setGrade} />
       </div>
       {groups.length > 0 && (
         <div class="chips-row" role="group" aria-label="Next to teach">
@@ -93,9 +96,10 @@ export function Theory(props: { board: Board; views: View[]; now: number }) {
           ))}
         </div>
       )}
+      {inClass.length === 0 && <NobodyHere />}
       <Register
         role="theory"
-        views={views}
+        views={here}
         grouped={named}
         now={now}
         legend={
@@ -140,9 +144,11 @@ export function Theory(props: { board: Board; views: View[]; now: number }) {
 export function Evaluation(props: { board: Board; views: View[]; now: number }) {
   const { board, now } = props;
   const all = props.views;
-  const grades = gradesOf(all);
+  const inClass = all.filter((v) => v.where !== "absent");
+  const grades = gradesOf(inClass);
   const [grade, setGrade] = useGradeFilter("evaluation", grades);
   const views = inGrade(all, grade);
+  const here = inGrade(inClass, grade);
   const named = grade === "all" && grades.length > 1;
   const room = roomCalls(board, all, "evaluation", now);
   const queue = evalQueue(views, now);
@@ -191,7 +197,7 @@ export function Evaluation(props: { board: Board; views: View[]; now: number }) 
           <InRoom room="evaluation" calls={room} />
           </>
         )}
-        <GradePills views={all} needs={needsOf("evaluation", board, all, now)} filter={grade} onPick={setGrade} />
+        <GradePills views={inClass} needs={needsOf("evaluation", board, all, now)} filter={grade} onPick={setGrade} />
       </div>
       {same.length > 0 && (
         <div class="chips-row" role="group" aria-label="Same wrong answer">
@@ -210,9 +216,10 @@ export function Evaluation(props: { board: Board; views: View[]; now: number }) 
           ))}
         </div>
       )}
+      {inClass.length === 0 && <NobodyHere />}
       <Register
         role="evaluation"
-        views={views}
+        views={here}
         grouped={named}
         now={now}
         legend={
@@ -277,7 +284,8 @@ export function Evaluation(props: { board: Board; views: View[]; now: number }) 
           )}
         </div>
       )}
-      {queue.length === 0 && views.some((v) => v.where !== "absent") && <p class="muted center">No wrong answers waiting.</p>}
+      {queue.length === 0 && here.length > 0 && <p class="muted center">No wrong answers waiting.</p>}
+      <GoneHome role="evaluation" views={views} now={now} />
     </main>
   );
 }
