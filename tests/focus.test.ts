@@ -2,24 +2,32 @@
 // a paper can be, the part taps, moving on to the next question, where lost marks go, and Take back's snapshot.
 
 import { describe, expect, test } from "vitest";
-import { KNOWN_WORKBOOKS } from "../convex/lib/book";
+import { fighter, KNOWN_WORKBOOKS, PILOT_FIGHTER } from "../convex/lib/book";
 import { computeMaster, type MState } from "../convex/lib/master";
+import { computeStatus, type Marks } from "../convex/lib/status";
 import type { View } from "../src/derive";
 import {
   beforeOf,
   candidates,
   CARRY_MS,
   carryLevel,
+  draftOf,
+  extendQueue,
+  fighterQueue,
   focusLists,
   focusNeeds,
+  fromDraft,
   itemsOf,
   markedParts,
   nextIndex,
+  nothingWhy,
   openLevels,
   questionsOf,
+  resumeAt,
   routeOf,
   sumOf,
   type Carry,
+  type Draft,
 } from "../src/focusData";
 
 const G7U08 = KNOWN_WORKBOOKS[0].data;
@@ -43,15 +51,33 @@ function wb(name: string, lv: MState["lv"] = {}, opts: { where?: View["where"]; 
     mm: m,
   } as unknown as View;
 }
-const fighter = (name: string, where: View["where"] = "hall") =>
-  ({ s: { _id: name, name, stage: "fighter", grade: 11 }, stage: "fighter", kind: "fighter", where, mb: null, ms: null, mm: { q: {}, lv: {} } }) as unknown as View;
+const PILOT = fighter(PILOT_FIGHTER);
+/** A theory-book student (the G11 pilot book) with these circles. */
+function th(name: string, marks: Marks = {}, where: View["where"] = "hall"): View {
+  return {
+    s: { _id: name, name, unitId: "u13", grade: 11, stage: "fighter", lastSeenAt: 0 },
+    stage: "fighter",
+    kind: "fighter",
+    where,
+    f: PILOT,
+    st: computeStatus(marks, PILOT),
+    marks,
+    mb: null,
+    ms: null,
+    mm: { q: {}, lv: {} },
+  } as unknown as View;
+}
+const taught = (from: number, to: number): Marks =>
+  Object.fromEntries(Array.from({ length: to - from + 1 }, (_, i) => [String(from + i), { s: "taught" as const, t: 1 }]));
+const noTheoryBook = (name: string) =>
+  ({ s: { _id: name, name, stage: "fighter", grade: 11 }, stage: "fighter", kind: "none", where: "hall", f: null, st: null, mb: null, ms: null, mm: { q: {}, lv: {} } }) as unknown as View;
 const noBook = (name: string) =>
   ({ s: { _id: name, name, stage: "master", grade: 9 }, stage: "master", kind: "none", where: "hall", mb: null, ms: null, mm: { q: {}, lv: {} } }) as unknown as View;
 /** Every level corrected: nothing left to correct. */
 const allFixed = () => Object.fromEntries(G7U08.levels.map((l) => [String(l.n), { done: 1, fixed: 2, got: l.max }]));
 
 describe("who the Focus tab offers", () => {
-  test("workbook students in class with a level to correct, A–Z; gone home only with handed-in levels", () => {
+  test("workbook and theory-book students in class with something to mark, A–Z; the rest say why", () => {
     const lists = focusLists([
       wb("vimal"),
       wb("Ahamed"),
@@ -60,15 +86,20 @@ describe("who the Focus tab offers", () => {
       wb("Gone, nothing in", {}, { where: "absent" }),
       wb("Nila", { "3": { done: 7 } }, { where: "absent" }),
       wb("Priya", {}, { where: "evaluation" }),
-      fighter("Kumar"),
-      fighter("Away", "absent"),
+      th("Kumar", taught(1, 4)), // section A taught: Q5-8 open
+      th("Arun"), // nothing taught yet: waits for A theory
+      th("Away", taught(1, 4), "absent"), // his notebook went home with him
       noBook("Zainab"),
+      noTheoryBook("Ravi"),
     ]);
     // A–Z whatever the case; a student in a room still has papers to correct.
-    expect(lists.here.map((v) => v.s.name)).toEqual(["Ahamed", "Malik", "Priya", "vimal"]);
+    expect(lists.here.map((v) => v.s.name)).toEqual(["Ahamed", "Kumar", "Malik", "Priya", "vimal"]);
     expect(lists.gone.map((v) => v.s.name)).toEqual(["Nila"]);
-    expect(lists.noBook.map((v) => v.s.name)).toEqual(["Zainab"]);
-    expect(lists.fighters).toBe(1);
+    expect(lists.noBook.map((v) => v.s.name)).toEqual(["Ravi", "Zainab"]);
+    expect(lists.nothing.map((v) => [v.s.name, nothingWhy(v)])).toEqual([
+      ["Arun", "waits for A theory"],
+      ["Done", "finished"],
+    ]);
   });
 
   test("a paper's possible levels: handed in (oldest first), then the one he works on; gone home: handed in only", () => {
@@ -155,5 +186,46 @@ describe("Take back", () => {
     // His Level 3 is already corrected: nowhere to put them.
     expect(carryLevel(c, wb("Ahead", allFixed()), 2_000)).toBeNull();
     expect(carryLevel(null, priya, 2_000)).toBeNull();
+  });
+});
+
+describe("theory books (Fighter) in Focus", () => {
+  test("his questions in book order: what he can do now, redo ones included; questions that open later join the end", () => {
+    // A taught: Q5-8. Q5 slipped (redo), Q6 right.
+    const kumar = th("Kumar", { ...taught(1, 4), "5": { s: "slip", t: 2 }, "6": { s: "right", t: 2 } });
+    expect(fighterQueue(kumar)).toEqual([5, 7, 8]);
+    // B taught later: Q12-14 join after the ones on the paper, never the ones before.
+    expect(extendQueue([5, 7, 8], [5, 7, 8, 12, 13, 14])).toEqual([5, 7, 8, 12, 13, 14]);
+    expect(extendQueue([7, 8], [5, 7, 8])).toEqual([7, 8]);
+    expect(extendQueue([], [5])).toEqual([5]);
+  });
+});
+
+describe("a workbook level marked part of the way (drafts)", () => {
+  const d = (over: Partial<Draft> = {}): Draft => ({
+    studentId: "Malik",
+    unitId: U08._id,
+    level: 3,
+    q: { "21": { g: 2 }, "22": { g: 0, dk: true }, "23": { g: 1, p: [1, 0] } },
+    updatedAt: 5,
+    ...over,
+  });
+  test("his draft counts while his level isn't corrected and he is on the same workbook", () => {
+    const malik = wb("Malik", { "3": { done: 2 } });
+    expect(draftOf([d()], malik, 3)?.updatedAt).toBe(5);
+    expect(draftOf([d()], malik, 4)).toBeNull();
+    expect(draftOf([d({ unitId: "u09" })], malik, 3)).toBeNull(); // he moved on
+    expect(draftOf([d()], wb("Malik", { "3": { done: 2, fixed: 3, got: 20 } }), 3)).toBeNull(); // corrected elsewhere
+    expect(draftOf(undefined, malik, 3)).toBeNull(); // not loaded yet
+  });
+  test("the paper opens with his marks, at the first question not marked yet", () => {
+    const { given, parts } = fromDraft(d());
+    expect(given).toEqual({ 21: { g: 2 }, 22: { g: 0, dk: true }, 23: { g: 1 } });
+    expect(parts).toEqual({ 23: [1, 0] });
+    const qs = questionsOf(level(3));
+    expect(resumeAt(qs, given)).toBe(3); // Q24
+    expect(resumeAt(qs, {})).toBe(0);
+    expect(resumeAt(qs, Object.fromEntries(qs.map((q) => [q, { g: 2 }])))).toBe(qs.length); // all marked: the level's marks
+    expect(fromDraft(null)).toEqual({ given: {}, parts: {} });
   });
 });

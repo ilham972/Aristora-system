@@ -1,4 +1,5 @@
-// The Focus tab's lists and rules: one person corrects workbook levels, one question at a time.
+// The Focus tab's lists and rules: one person corrects, one question at a time, workbooks (Master: marks per
+// question, saved per level) and theory books (Fighter: right / wrong / slip, saved per question).
 // No screens here (src/focus.tsx draws them), so every rule can be tested on its own.
 //
 // The two mistakes it is built against:
@@ -7,6 +8,7 @@
 //   moves on is ignored (a double tap can't mark the next question);
 // - marks on the wrong student: names A–Z that never move, hidden while a paper is open, the name huge and on the
 //   Save button, and a saved level can be taken back for 30 minutes, its marks moving to the right student.
+// A workbook level marked part of the way is kept on the server as a draft (convex/focus.ts) until it is saved.
 
 import { levelOutOf, type MasterLevel } from "../convex/lib/book";
 import type { KeyAnswer, KeyPart } from "../convex/lib/key";
@@ -21,14 +23,14 @@ export const TAKE_BACK_MS = 30 * 60_000;
 export const CARRY_MS = 10 * 60_000;
 
 export type FocusLists = {
-  /** In class (hall or a room), workbook in the app, a level to correct: A–Z. */
+  /** In class (hall or a room) with something to mark: a workbook level, or theory-book questions he can do. A–Z. */
   here: View[];
-  /** Gone home today with handed-in levels still to correct: A–Z. */
+  /** Gone home today with handed-in workbook levels still to correct: A–Z. */
   gone: View[];
-  /** In class on a workbook whose book isn't in the app yet: nothing to correct here. */
+  /** In class, but his unit's book isn't in the app yet. */
   noBook: View[];
-  /** In class with a theory book: corrected on the Correction tab. */
-  fighters: number;
+  /** In class with a book, but nothing to mark now (waits for Theory or Evaluation, or finished). */
+  nothing: View[];
 };
 
 const byName = (a: View, b: View) => a.s.name.localeCompare(b.s.name, undefined, { sensitivity: "base" });
@@ -38,22 +40,37 @@ export function focusLists(views: View[]): FocusLists {
   const here: View[] = [];
   const gone: View[] = [];
   const noBook: View[] = [];
-  let fighters = 0;
+  const nothing: View[] = [];
   for (const v of views) {
     const present = v.where !== "absent";
-    if (v.s.stage !== "master") {
-      if (present && v.kind === "fighter") fighters++;
+    if (v.s.stage === "fighter") {
+      if (!present) continue; // his notebook went home with him
+      if (!v.st || !v.f) noBook.push(v);
+      else if (v.st.doable.length) here.push(v);
+      else nothing.push(v);
       continue;
     }
+    if (v.s.stage !== "master") continue; // Legend, Exam Sprint: full papers on paper for now
     if (!v.ms || !v.mb) {
       if (present) noBook.push(v);
       continue;
     }
     if (present) {
       if (candidates(v).length) here.push(v);
+      else nothing.push(v);
     } else if (v.ms.waiting.length) gone.push(v);
   }
-  return { here: here.sort(byName), gone: gone.sort(byName), noBook: noBook.sort(byName), fighters };
+  return { here: here.sort(byName), gone: gone.sort(byName), noBook: noBook.sort(byName), nothing: nothing.sort(byName) };
+}
+
+/** Why there is nothing to mark for him now, in a few words. */
+export function nothingWhy(v: View): string {
+  const need = v.st?.needs ?? v.ms?.needs ?? [];
+  if (v.st?.finished || v.ms?.finished) return "finished";
+  if (v.st && need.includes("theory")) return `waits for ${v.st.nextTheory} theory`;
+  if (need.includes("theory")) return "waits for Theory";
+  if (need.includes("evaluation")) return "waits for Evaluation";
+  return "nothing open";
 }
 
 /**
@@ -149,6 +166,48 @@ export type Carry = {
 export function carryLevel(c: Carry | null, v: View, now: number): MasterLevel | null {
   if (!c || now - c.at > CARRY_MS || v.s.unitId !== c.unitId) return null;
   return candidates(v).find((l) => l.from === c.from && l.to === c.to) ?? openLevels(v).find((l) => l.from === c.from && l.to === c.to) ?? null;
+}
+
+// ---- Theory books (Fighter): questions in book order, right / wrong / slip ----
+
+/**
+ * The questions to mark for a theory-book student, in book order: what he can do now (redo ones included). The paper
+ * keeps this list while it is open; questions that open meanwhile (past papers after the ladder) join at the end.
+ */
+export function fighterQueue(v: View): number[] {
+  return v.st ? [...v.st.doable] : [];
+}
+export function extendQueue(qs: number[], doable: number[]): number[] {
+  const last = qs.length ? qs[qs.length - 1] : 0;
+  const extra = doable.filter((q) => q > last && !qs.includes(q));
+  return extra.length ? [...qs, ...extra] : qs;
+}
+
+// ---- Workbook drafts (convex/focus.ts): a level marked part of the way ----
+
+export type DraftQ = { g: number; dk?: boolean; p?: number[] };
+export type Draft = { studentId: string; unitId: string; level: number; q: Record<string, DraftQ>; updatedAt: number; by?: string };
+
+/** His draft for a level while it still counts: the same workbook, the level not corrected yet. */
+export function draftOf(drafts: readonly Draft[] | null | undefined, v: View, level: number): Draft | null {
+  if (!drafts || !v.mb || v.mm.lv[String(level)]?.fixed) return null;
+  return drafts.find((d) => d.studentId === v.s._id && d.unitId === v.s.unitId && d.level === level) ?? null;
+}
+
+/** A draft's marks as a paper keeps them. */
+export function fromDraft(d: Draft | null): { given: Record<number, Given>; parts: Record<number, number[]> } {
+  const given: Record<number, Given> = {};
+  const parts: Record<number, number[]> = {};
+  for (const [k, r] of Object.entries(d?.q ?? {})) {
+    given[Number(k)] = r.dk ? { g: 0, dk: true } : { g: r.g };
+    if (r.p && !r.dk) parts[Number(k)] = [...r.p];
+  }
+  return { given, parts };
+}
+
+/** Where a paper opens: the first question not marked yet, or the level's marks when every one is. */
+export function resumeAt(qs: number[], given: Record<number, Given>): number {
+  return nextIndex(qs, given, -1);
 }
 
 /** Pills: what waits for the corrector, student by student (red: he has nothing to do until it's corrected). */

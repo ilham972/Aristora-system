@@ -3357,6 +3357,18 @@ body.fc-marking .toasts {
   background: transparent;
   color: var(--red-ink);
 }
+/* Theory-book students: their next question in Theory's blue. A level marked part of the way: dashed. */
+.fc-pill.th {
+  border-left: 4px solid var(--theory);
+}
+.fc-tags i.th {
+  background: var(--theory-soft);
+  color: var(--theory-ink);
+}
+.fc-tags i.d {
+  outline: 1.5px dashed currentColor;
+  outline-offset: -1.5px;
+}
 .fc-carry {
   display: flex;
   align-items: center;
@@ -3433,9 +3445,48 @@ body.fc-marking .toasts {
   font-weight: 700;
   color: var(--ink-2);
 }
-.fc-chlv,
-.fc-x {
+.fc-stop {
   flex: none;
+  align-self: flex-start;
+  margin-top: 2px;
+}
+/* The level in the paper's top line is also the button to change it. */
+.fc-lvchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 8px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  font: 700 13.5px/1.25 var(--font);
+  color: var(--ink);
+  vertical-align: baseline;
+}
+.fc-lvchip span {
+  color: var(--ink-3);
+}
+.fc-resumed {
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: var(--yellow-soft);
+  color: var(--yellow-ink);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.fc-resumed .link-btn,
+.fc-clear {
+  padding: 0 2px;
+  font-size: 13.5px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.fc-resumed .link-btn {
+  color: var(--yellow-ink);
+}
+.fc-clear {
+  align-self: flex-start;
+  color: var(--ink-3);
 }
 .fc-warn,
 .fc-nokey,
@@ -3559,9 +3610,39 @@ body.fc-marking .toasts {
   background: var(--theory-soft);
   color: var(--theory-ink);
 }
+.fc-sq.s-right {
+  border-color: var(--green);
+  background: var(--green-soft);
+  color: var(--green-ink);
+}
+.fc-sq.s-wrong {
+  border-color: var(--red);
+  background: var(--red-soft);
+  color: var(--red-ink);
+}
+.fc-sq.s-slip {
+  border-color: var(--amber);
+  background: var(--amber-soft);
+  color: var(--amber-ink);
+}
+.fc-sq.s-explained {
+  border-color: var(--evaluation);
+  background: var(--evaluation-soft);
+  color: var(--evaluation-ink);
+}
+.fc-sq.was {
+  border-style: dashed;
+}
 .fc-sq.on {
   border-color: var(--ink);
   box-shadow: 0 0 0 2px var(--ink);
+}
+.fc-strip li.fc-more {
+  flex: none;
+  align-self: center;
+  padding: 0 4px;
+  font: 700 13px/1 var(--font);
+  color: var(--ink-3);
 }
 
 .fc-card {
@@ -3728,6 +3809,58 @@ body.fc-marking .toasts {
 }
 .fc-row .fc-n {
   height: auto;
+}
+/* Theory book: wrong and slip side by side, right (the big button) under them. */
+.fc-row2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.fc-n.wrong,
+.fc-n.slip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.fc-n.wrong small,
+.fc-n.slip small {
+  font-size: 15px;
+  font-weight: 700;
+}
+.fc-n.wrong {
+  border-color: var(--red);
+  color: var(--red-ink);
+}
+.fc-n.slip {
+  border-color: var(--amber);
+  color: var(--amber-ink);
+}
+.fc-n.wrong.on {
+  background: var(--red);
+  color: #fff;
+}
+.fc-n.slip.on {
+  background: var(--amber);
+  color: #2b1b00;
+}
+.fc-now {
+  font-size: 17px;
+  font-weight: 700;
+}
+.fc-now.s-right {
+  color: var(--green-ink);
+}
+.fc-now.s-wrong {
+  color: var(--red-ink);
+}
+.fc-now.s-slip {
+  color: var(--amber-ink);
+}
+.fc-now .link-btn {
+  padding: 0 4px;
+  font-size: 15px;
+  text-decoration: underline;
 }
 .fc-n {
   height: 52px;

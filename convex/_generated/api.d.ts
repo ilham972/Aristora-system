@@ -19,6 +19,7 @@ import type * as calls from "../calls.js";
 import type * as catalog from "../catalog.js";
 import type * as clock from "../clock.js";
 import type * as demo from "../demo.js";
+import type * as focus from "../focus.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_backend from "../lib/backend.js";
 import type * as lib_book from "../lib/book.js";
@@ -54,6 +55,7 @@ declare const fullApi: ApiFromModules<{
   catalog: typeof catalog;
   clock: typeof clock;
   demo: typeof demo;
+  focus: typeof focus;
   "lib/auth": typeof lib_auth;
   "lib/backend": typeof lib_backend;
   "lib/book": typeof lib_book;

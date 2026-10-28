@@ -92,6 +92,8 @@ export const masterState = v.object({
   ),
   reteach: v.optional(v.object({ at: v.number(), by: v.optional(v.string()) })),
 });
+/** One question of a Focus draft: marks given so far, "?" (dk), and the part marks tapped (p). */
+export const draftMark = v.object({ g: v.number(), dk: v.optional(v.boolean()), p: v.optional(v.array(v.number())) });
 /** One question of a workbook's answer key (convex/lib/key.ts): a short answer, or its parts' answers and marks. */
 export const keyAnswer = v.object({
   q: v.number(),
@@ -161,6 +163,20 @@ export default defineSchema({
     /** When he was removed from the class (for "left this month"). */
     archivedAt: v.optional(v.number()),
   }).index("by_archived", ["archived"]),
+
+  /**
+   * Focus tab: a workbook level marked part of the way (stopped at Q6, or marked as the student goes), kept until the
+   * level is saved with workbook.correct. A draft counts nowhere: not in the level's marks, not for Evaluation or
+   * Theory, not in reports. q = question number → marks given (dk = "?"), p = the part marks tapped.
+   */
+  drafts: defineTable({
+    studentId: v.id("students"),
+    unitId: v.id("units"),
+    level: v.number(),
+    q: v.record(v.string(), draftMark),
+    updatedAt: v.number(),
+    by: v.optional(v.string()),
+  }).index("by_student", ["studentId"]),
 
   /** The attendance register: one row per visit, when he arrived and when he left. */
   attendance: defineTable({

@@ -1070,22 +1070,28 @@ test("Focus: one question at a time, names that never move, a paper taken back a
   const says = (l: L, text: string) =>
     until(async () => (await l.first().innerText()).replace(/\s+/g, " ").includes(text), `"${text}" in ${l}`);
 
-  // The names: A–Z per grade, each with the level(s) his paper can be; grade pills filter.
-  await textsAre(F.locator(".grade-pills .gp b"), ["All", "7", "8"]);
-  await until(async () => (await F.locator(".fc-group .fc-h").allTextContents()).join("|") === "Grade 7|Grade 8", "grade headers");
-  await textsAre(F.locator(".fc-pill .fc-pn"), ["Malik", "Priya", "Vimal", "Nimal"]);
+  // The names: A–Z per grade (workbook and theory-book students), each with what his paper can be; grade pills filter.
+  await textsAre(F.locator(".grade-pills .gp b"), ["All", "7", "8", "11"]);
+  await until(
+    async () => (await F.locator(".fc-group .fc-h").allTextContents()).join("|") === "Grade 7|Grade 8|Grade 11",
+    "grade headers",
+  );
+  await textsAre(F.locator(".fc-pill .fc-pn"), ["Malik", "Priya", "Vimal", "Nimal", "Ahamed", "Dilan", "Kumar", "Nila", "Sana", "Tharun", "Yasmin"]);
   await textsAre(name("Malik").locator(".fc-tags i"), ["L3", "L4"]);
   await count(name("Malik").locator(".fc-tags i.w"), 1); // L3 handed in
   await visible(F.locator(".fc-pill.red", { hasText: "Vimal" })); // out of work until L8 is corrected
   await textsAre(name("Nimal").locator(".fc-tags i"), ["L1", "no key"]);
-  await contains(F.locator(".fc-help + p"), "Theory-book students (9 in class)");
+  // Theory book: the next question he can do (a past paper by its year), and how many more.
+  await textsAre(name("Nila").locator(".fc-tags i"), ["Q19", "+3"]);
+  await textsAre(name("Yasmin").locator(".fc-tags i"), ["2022", "+8"]);
+  await contains(F.locator(".fc-nothing"), "Nothing to mark now: Fathima (waits for D theory), Rizwan (waits for C theory).");
   expect(await F.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await shot(F, "f01-focus-names", true);
 
   // Priya: one level open, so it opens at once. The names hide while her paper is open.
   await tap(name("Priya"));
   await contains(F.locator(".fc-name"), "Priya");
-  await contains(F.locator(".fc-where"), "G7 · U08 · Level 2 · Q11–20");
+  await contains(F.locator(".fc-where"), "G7 · U08 · L2 · Q11–20");
   await count(F.locator(".fc-pill"), 0);
   await count(F.locator(".grade-pills"), 0);
   await contains(F.locator(".fc-qn"), "11");
@@ -1142,7 +1148,7 @@ test("Focus: one question at a time, names that never move, a paper taken back a
   await contains(F.locator(".fc-lv.w small"), "handed in 6 min ago");
   await shot(F, "f04-focus-which-level");
   await tap(F.locator(".fc-lv", { hasText: "Level 3" }));
-  await contains(F.locator(".fc-where"), "Level 3 · Q21–30");
+  await contains(F.locator(".fc-where"), "L3 · Q21–30");
   for (let q = 21; q <= 30; q++) {
     await contains(F.locator(".fc-qn"), String(q));
     await tap(F.locator(".fc-go"));
@@ -1167,7 +1173,7 @@ test("Focus: one question at a time, names that never move, a paper taken back a
   // Tap Priya: her Level 3 opens with those marks, ready to save.
   await tap(name("Priya"));
   await contains(F.locator(".fc-carried"), "taken back from Malik");
-  await contains(F.locator(".fc-where"), "Level 3 · Q21–30");
+  await contains(F.locator(".fc-where"), "L3 · Q21–30");
   await says(F.locator(".fc-total"), "20 / 20");
   await shot(F, "f06-focus-marks-moved");
   await tap(F.getByRole("button", { name: /^Save Priya · 20 \/ 20/ }));
@@ -1198,12 +1204,61 @@ test("Focus: one question at a time, names that never move, a paper taken back a
   await F.locator(".tabs").getByRole("button", { name: "Focus" }).click();
   await contains(F.locator(".fc-name"), "Nimal");
   await contains(F.locator(".fc-qn"), "2");
-  // Closing with marks given asks first; nothing is saved.
-  await tap(F.getByRole("button", { name: "Close this paper" }));
-  await contains(F.locator(".sheet h2"), "Close Nimal's paper?");
-  await tap(F.locator(".sheet").getByRole("button", { name: "Throw them away" }));
+  // Stop in the middle: every mark is kept (on the server, for any phone) and the paper opens again where it stopped.
+  await tap(F.getByRole("button", { name: "Q2: 0 of 2" }));
+  await contains(F.locator(".fc-qn"), "3");
+  await tap(F.getByRole("button", { name: "Stop: every mark is kept" }));
   await count(F.locator(".fc-paper"), 0);
-  expect((await marksOf(backend, "Nimal")).m?.lv["1"]).toBeUndefined();
+  const drafts = () => backend.t.run(async (ctx) => (await ctx.db.query("drafts").collect()).map((d) => JSON.stringify(d.q)));
+  await until(async () => (await drafts()).join() === JSON.stringify({ "1": { g: 2 }, "2": { g: 0 } }), "Nimal's draft on the server");
+  expect((await marksOf(backend, "Nimal")).m?.lv["1"]).toBeUndefined(); // nothing counts until the level is saved
+  await textsAre(name("Nimal").locator(".fc-tags i"), ["L1 2/10", "no key"]);
+  await tap(name("Nimal"));
+  await contains(F.locator(".fc-resumed"), "2 already marked");
+  await contains(F.locator(".fc-qn"), "3");
+  await textsAre(F.locator(".fc-sq b"), ["2", "0", "", "", "", "", "", "", "", ""]);
+  await shot(F, "f06b-focus-resumed");
+  // Marks put on the wrong student are cleared (asked first).
+  await tap(F.locator(".fc-resumed").getByRole("button", { name: "Clear them" }));
+  await contains(F.locator(".sheet h2"), "Clear Nimal's marks on Level 1?");
+  await tap(F.locator(".sheet").getByRole("button", { name: "Clear the marks" }));
+  await textsAre(F.locator(".fc-sq b"), ["", "", "", "", "", "", "", "", "", ""]);
+  await contains(F.locator(".fc-qn"), "1");
+  await until(async () => (await drafts()).length === 0, "Nimal's draft gone");
+  await tap(F.getByRole("button", { name: "Stop: every mark is kept" }));
+
+  // A theory-book student: his questions in book order, ✓ right / ✗ wrong / ↻ slip, saved like the Correction tab's circles.
+  await tap(F.getByRole("button", { name: /^Grade 11:/ }));
+  await tap(name("Nila"));
+  await contains(F.locator(".fc-where"), "G11 · U13 · theory book");
+  await contains(F.locator(".fc-qn"), "19");
+  await contains(F.locator(".fc-qmeta"), "Section C · Forming the equation");
+  await textsAre(F.locator(".fc-strip .fc-sq small"), ["19", "20", "21", "22"]);
+  await shot(F, "f13-focus-theory-book");
+  await tap(F.getByRole("button", { name: "Q19: right" }));
+  await contains(F.locator(".fc-qn"), "20");
+  await tap(F.getByRole("button", { name: "Q20: wrong" }));
+  await tap(F.getByRole("button", { name: "Q21: slip" }));
+  await contains(F.locator(".fc-qn"), "22");
+  await textsAre(F.locator(".fc-strip .fc-sq b"), ["✓", "✗", "↻", ""]);
+  // His notebook ends at Q21: Stop. The marks reach the server like the Correction tab's taps.
+  await tap(F.getByRole("button", { name: "Stop: every mark is kept" }));
+  const nila = async () => (await marksOf(backend, "Nila")).marks;
+  await until(async () => {
+    const mk = await nila();
+    return mk["19"]?.s === "right" && mk["20"]?.s === "wrong" && mk["21"]?.s === "slip";
+  }, "Nila's marks saved");
+  expect((await nila())["20"]?.n).toBe(1);
+  await contains(F.locator(".fc-sv").first(), "Nila · Q19–Q21 · 3 marks");
+  // Marked on the wrong student? Take back puts them as they were.
+  await tap(F.locator(".fc-sv", { hasText: "Nila" }).getByRole("button", { name: "Take back" }));
+  await contains(F.locator(".sheet h2"), "Take back Nila's marks?");
+  await tap(F.locator(".sheet").getByRole("button", { name: "Take back" }));
+  await contains(F.locator(".toast"), "Taken back: Nila's marks are as they were.");
+  await until(async () => {
+    const mk = await nila();
+    return !mk["19"] && !mk["20"] && !mk["21"];
+  }, "Nila's marks back as they were");
   await F.context().close();
 
   // The smallest phone (320 px): Vimal's last level. Q56 in two parts: tap the wrong part, the big button adds up.
@@ -1256,6 +1311,15 @@ test("Focus: one question at a time, names that never move, a paper taken back a
   await stap(S.getByRole("button", { name: /^Save Vimal · 13 \/ 15/ }));
   await contains(S.locator(".toast"), "Saved: Vimal, Level 8, 13 / 15. Evaluation: Q56.");
   expect((await marksOf(backend, "Vimal")).m!.q["56"]).toMatchObject({ got: 2, max: 4, lost: true });
+  // A theory book on the smallest phone: name, question and the three buttons fit above the tabs.
+  await stap(S.locator(".fc-pill", { hasText: "Kumar" }));
+  await contains(S.locator(".fc-qn"), "30");
+  const right = (await S.locator(".fc-go").boundingBox())!;
+  expect(right.y + right.height).toBeLessThanOrEqual(568 - 66);
+  expect((await S.locator(".fc-name").boundingBox())!.y).toBeGreaterThan(0);
+  expect(await S.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(S, "f14-focus-theory-320");
+  await stap(S.getByRole("button", { name: "Stop: every mark is kept" }));
   await S.context().close();
 
   // 360 px: the names and a question.
