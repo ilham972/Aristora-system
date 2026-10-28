@@ -1066,6 +1066,145 @@ button.q:disabled {
 .mstrip i.lv.low {
   background: var(--red);
 }
+/* Master: where he is on the bar. A marker ▼ over the level he works on (dark) and each level waiting for
+   correction (amber); levels next to each other share one marker. The tap buttons stay in the row. */
+.reg-strip.rs-m {
+  align-items: flex-end;
+}
+.mtrack {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.mmarks {
+  display: flex;
+  gap: 2px;
+  height: 13px;
+}
+.mmarks .ms {
+  position: relative;
+  flex-basis: 0;
+  min-width: 0;
+}
+.mmarks .ms.gap {
+  margin-left: 4px;
+}
+.mk {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  display: inline-flex;
+  white-space: nowrap;
+  font: 700 10px/13px var(--font);
+  letter-spacing: 0.2px;
+}
+.mk b {
+  padding: 0 4px;
+  background: var(--ink);
+  color: #fff;
+}
+.mk b.w {
+  background: var(--amber);
+  color: var(--ink);
+}
+.mk b:first-child {
+  border-radius: 4px 0 0 4px;
+}
+.mk b:last-child {
+  border-radius: 0 4px 4px 0;
+}
+.mk b:only-child {
+  border-radius: 4px;
+}
+.mk::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 13px;
+  margin-left: -4px;
+  border: 4px solid transparent;
+  border-bottom: 0;
+  border-top-color: var(--ink);
+}
+.mk.w::after {
+  border-top-color: var(--amber);
+}
+/* near the ends of the bar the marker leans inwards; its arrow stays on the level */
+.mk.al-l {
+  transform: translateX(-7px);
+}
+.mk.al-l::after {
+  left: 7px;
+}
+.mk.al-r {
+  transform: translateX(calc(-100% + 7px));
+}
+.mk.al-r::after {
+  left: auto;
+  right: 7px;
+  margin-left: 0;
+  margin-right: -4px;
+}
+/* Where a workbook student goes next (Correction): Theory / Evaluation, with how many questions */
+.to-chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 26px;
+  padding: 0 7px;
+  border-radius: 13px;
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.to-chip b {
+  font-size: 13px;
+}
+.to-chip i,
+.to-theory i {
+  font-style: normal;
+}
+.to-chip .s,
+.to-theory .s {
+  display: none;
+}
+/* narrow phones (360, iPhone 7): short words, so the row's buttons and chips stay in sight */
+@media (max-width: 389px) {
+  .to-chip .w,
+  .to-theory .w {
+    display: none;
+  }
+  .to-chip .s,
+  .to-theory .s {
+    display: inline;
+  }
+  .to-theory {
+    padding: 0 8px;
+  }
+}
+.to-chip.theory {
+  background: var(--theory-soft);
+  color: var(--theory-ink);
+}
+.to-chip.evaluation {
+  background: var(--evaluation-soft);
+  color: var(--evaluation-ink);
+}
+/* Evaluation: "→ Theory" on a workbook student's row */
+.to-theory {
+  flex: none;
+  height: 40px;
+  padding: 0 12px;
+  border: 2px solid var(--theory);
+  border-radius: 20px;
+  background: var(--theory-soft);
+  color: var(--theory-ink);
+  font: 700 14px/1 var(--font);
+  white-space: nowrap;
+}
 .lv-pill {
   flex: none;
   min-width: 52px;
@@ -1896,6 +2035,115 @@ p.small {
 }
 .ct-nokey {
   margin: 6px 0 0;
+}
+/* "?" = he couldn't start it: 0 marks, straight to Theory (set apart from the marks) */
+.ct-m.dk {
+  margin-right: 6px;
+  color: var(--theory-ink);
+  border-color: var(--theory);
+}
+.ct-m.dk.on {
+  background: var(--theory);
+  color: #fff;
+}
+/* Where the lost marks go: Evaluation or Theory */
+.ct-route {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 10px 0 2px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--line-2);
+}
+.ct-dk {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--theory-ink);
+}
+.ct-route-l {
+  font-size: 14px;
+  font-weight: 700;
+}
+.seg {
+  display: inline-flex;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.seg-b {
+  height: 38px;
+  padding: 0 12px;
+  border: 0;
+  background: var(--card);
+  font: 700 14px/1 var(--font);
+  color: var(--ink-2);
+}
+.seg-b + .seg-b {
+  border-left: 2px solid var(--ink);
+}
+.seg-b.evaluation.on {
+  background: var(--evaluation);
+  color: #fff;
+}
+.seg-b.theory.on {
+  background: var(--theory);
+  color: #fff;
+}
+.ct-route-why {
+  flex-basis: 100%;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+/* Needs theory: the lost questions to send, as toggles */
+.th-qs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 8px;
+}
+.th-q {
+  min-width: 58px;
+  height: 48px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  line-height: 1;
+}
+.th-q b {
+  font: 700 15px/1 var(--font);
+}
+.th-q small {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--ink-3);
+}
+.th-q.on {
+  border-color: var(--theory);
+  background: var(--theory-soft);
+  color: var(--theory-ink);
+}
+.th-q.on small {
+  color: var(--theory-ink);
+}
+.th-whole {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  font-size: 14.5px;
+  font-weight: 600;
+}
+.th-whole input {
+  width: 22px;
+  height: 22px;
 }
 .ct-q {
   flex: none;

@@ -3,7 +3,7 @@ import { callPhrase, pullPhrase, type RoomName } from "./announce";
 import { Attendance } from "./attendance";
 import type { Link } from "./backend";
 import { Correction } from "./correction";
-import { buildViews, evalQueue, fmtClock, liveSession, theoryGroups, type View } from "./derive";
+import { buildViews, evalQueue, fmtClock, liveSession, theoryGroups, theoryMembers, type View } from "./derive";
 import { Evaluation, Theory } from "./rooms";
 import { Settings } from "./settings";
 import { alertsState, armAlerts, listenForTaps, ring, useAlertsState, type AlertKind } from "./sound";
@@ -110,9 +110,7 @@ export function App() {
   }
 
   const views = buildViews(board, now);
-  const theoryRed = theoryGroups(views)
-    .flatMap((g) => g.members)
-    .filter((m) => m.urgency === "red" && !m.inEvaluation).length;
+  const theoryRed = theoryMembers(theoryGroups(views)).filter((m) => m.urgency === "red" && !m.inEvaluation).length;
   const evalRed = evalQueue(views, now).filter((m) => m.urgency === "red" && !m.blockedBy).length;
   const toSend = board.calls.filter((c) => c.status === "requested" && !c.pull).length;
   const session = liveSession(board, now);
@@ -337,10 +335,9 @@ function alertItems(role: Role, board: Board, views: View[], now: number): Alert
       if (v.where === "hall" && v.ms?.dry && v.ms.needs.includes("correction"))
         items.push({ key: `red:${v.s._id}`, kind: "red", name: v.s.name, room: "theory", repeat: false });
   } else if (role === "theory") {
-    for (const g of theoryGroups(views))
-      for (const m of g.members)
-        if (m.urgency === "red" && !m.inEvaluation)
-          items.push({ key: `red:${m.v.s._id}`, kind: "red", name: m.v.s.name, room: "theory", repeat: false });
+    for (const m of theoryMembers(theoryGroups(views)))
+      if (m.urgency === "red" && !m.inEvaluation)
+        items.push({ key: `red:${m.v.s._id}`, kind: "red", name: m.v.s.name, room: "theory", repeat: false });
   } else {
     for (const m of evalQueue(views, now))
       if (m.urgency === "red" && !m.blockedBy)

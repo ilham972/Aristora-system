@@ -238,6 +238,98 @@ describe("Master: levels and marks", () => {
   });
 });
 
+describe("Master: Theory comes after Correction and Evaluation", () => {
+  test("'?' goes straight to Theory; the other lost marks wait for Evaluation", async () => {
+    const t = await setup();
+    const id = await addMaster(t, "Malik");
+    const it = items(G7U08, 1, [4, 7]).map((x) => (x.q === 7 ? { q: 7, got: 0, dk: true } : x));
+    const res = await t.mutation(api.workbook.correct, { studentId: id, level: 1, items: it, by: "correction" });
+    expect(res).toMatchObject({ got: 16, theory: [7], evaluation: [4] });
+    const { m } = await work(t, id);
+    expect(m.q["7"]).toMatchObject({ got: 0, lost: true, dk: true, tb: "correction" });
+    const ms = computeMaster(m, G7U08);
+    expect([ms.pending, ms.theory, ms.reteach, ms.wholeUnit]).toEqual([[4], [7], true, false]);
+    const bad = it.map((x) => (x.q === 7 ? { q: 7, got: 2, dk: true } : x));
+    await expect(t.mutation(api.workbook.correct, { studentId: id, level: 1, items: bad })).rejects.toThrow(/couldn't start it, so 0 marks/);
+  });
+
+  test("a level he mostly got wrong: its lost marks go to Theory instead of Evaluation", async () => {
+    const t = await setup();
+    const id = await addMaster(t, "Priya");
+    const res = await t.mutation(api.workbook.correct, {
+      studentId: id,
+      level: 1,
+      items: items(G7U08, 1, [1, 2, 3, 4, 5, 6]),
+      to: "theory",
+      by: "correction",
+    });
+    expect(res).toMatchObject({ got: 8, theory: [1, 2, 3, 4, 5, 6], evaluation: [] });
+    const ms = computeMaster((await work(t, id)).m, G7U08);
+    expect([ms.pending, ms.theory, ms.dry]).toEqual([[], [1, 2, 3, 4, 5, 6], false]); // he carries on with Level 2
+    const ev = await t.mutation(api.calls.create, { studentIds: [id], room: "evaluation", kind: "evaluation" });
+    expect(ev.rejected[0].reason).toMatch(/no lost marks/);
+    const th = await t.mutation(api.calls.create, { studentIds: [id], room: "theory", kind: "theory" });
+    expect(th.created).toHaveLength(1);
+  });
+
+  test("Evaluation sends questions to Theory and takes them back; only lost questions go", async () => {
+    const t = await setup();
+    const id = await addMaster(t, "Vimal");
+    await t.mutation(api.workbook.correct, { studentId: id, level: 1, items: items(G7U08, 1, [2, 3, 9]) });
+    await t.mutation(api.workbook.explain, { studentId: id, qs: [9], on: true });
+    await expect(t.mutation(api.workbook.toTheory, { studentId: id, qs: [5], on: true })).rejects.toThrow(/hasn't lost marks/);
+    expect(await t.mutation(api.workbook.toTheory, { studentId: id, qs: [2, 3, 9], on: true, by: "evaluation" })).toBe(true);
+    let { m } = await work(t, id);
+    let ms = computeMaster(m, G7U08);
+    expect([ms.theory, ms.pending, ms.dry]).toEqual([[2, 3, 9], [], false]);
+    expect(m.q["2"]).toMatchObject({ tb: "evaluation" });
+    await t.mutation(api.workbook.toTheory, { studentId: id, qs: [9], on: false });
+    ({ m } = await work(t, id));
+    ms = computeMaster(m, G7U08);
+    expect([ms.theory, ms.pending]).toEqual([[2, 3], []]); // Q9 was explained already
+    const line = await t.run(async (ctx) => (await ctx.db.query("events").collect()).filter((e) => e.kind === "to-theory").at(-1));
+    expect(line).toMatchObject({ value: "Q2, Q3, Q9", who: "Owner" });
+  });
+
+  test("Theory taps taught; Send back keeps the rest; All taught clears them; marking again keeps what happened", async () => {
+    const t = await setup();
+    const id = await addMaster(t, "Malik");
+    await t.mutation(api.workbook.correct, { studentId: id, level: 1, items: items(G7U08, 1, [3, 6]), to: "theory" });
+    const th = await t.mutation(api.calls.create, { studentIds: [id], room: "theory", kind: "theory" });
+    await t.mutation(api.calls.send, { callIds: [th.created[0].callId] });
+    await t.mutation(api.workbook.taught, { studentId: id, qs: [3], on: true });
+    await t.mutation(api.calls.finish, { items: [{ callId: th.created[0].callId, taught: [], skip: [] }] });
+    let ms = computeMaster((await work(t, id)).m, G7U08);
+    expect(ms.theory).toEqual([6]);
+    const th2 = await t.mutation(api.calls.create, { studentIds: [id], room: "theory", kind: "theory" });
+    await t.mutation(api.calls.send, { callIds: [th2.created[0].callId] });
+    await t.mutation(api.calls.finish, { items: [{ callId: th2.created[0].callId }] });
+    let { m } = await work(t, id);
+    ms = computeMaster(m, G7U08);
+    expect([ms.theory, ms.reteach]).toEqual([[], false]);
+    const done = await t.run(async (ctx) => (await ctx.db.query("events").collect()).filter((e) => e.kind === "done-theory").at(-1));
+    expect(done?.value).toBe("taught 6");
+    // Correcting the level again the same way keeps "taught"; nothing goes back to Theory.
+    await t.mutation(api.workbook.correct, { studentId: id, level: 1, items: items(G7U08, 1, [3, 6]) });
+    ({ m } = await work(t, id));
+    expect(m.q["6"]).toMatchObject({ th: expect.any(Number), tt: expect.any(Number) });
+    expect(computeMaster(m, G7U08).theory).toEqual([]);
+  });
+
+  test("every level done and only Theory left: out of work, waiting for Theory", async () => {
+    const t = await setup();
+    const id = await addMaster(t, "Priya");
+    for (const l of G7U08.levels) await t.mutation(api.workbook.correct, { studentId: id, level: l.n, items: items(G7U08, l.n) });
+    expect(computeMaster((await work(t, id)).m, G7U08).finished).toBe(true);
+    const it = items(G7U08, 1).map((x) => (x.q === 1 ? { q: 1, got: 0, dk: true } : x));
+    await t.mutation(api.workbook.correct, { studentId: id, level: 1, items: it });
+    const { s, m } = await work(t, id);
+    const ms = computeMaster(m, G7U08);
+    expect([ms.finished, ms.dry, ms.needs]).toEqual([false, true, ["theory"]]);
+    expect(s.idleReason).toBe("theory");
+  });
+});
+
 describe("moving students between units and stages", () => {
   test("next stage keeps the old work; Exam Sprint remembers where he was; wrong grade refused", async () => {
     const t = await setup();

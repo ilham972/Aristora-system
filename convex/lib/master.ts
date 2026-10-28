@@ -3,20 +3,37 @@
 // The book is cut into levels (the contents page and the marks box at the end of each level). The student does a
 // level alone. When he hands it in, Correction taps "Level done" (the waiting clock starts) and later corrects it,
 // or corrects it at once: marks for each question when the workbook knows them, else the level's total and which
-// questions lost marks. He goes straight on to the next level. Questions that lost marks wait for the Evaluation
-// teacher. The marks table: level marks, part totals, the unit total out of the book's marks, and
-// percentage = total × 100 ÷ the book's marks.
+// questions lost marks. He goes straight on to the next level. The marks table: level marks, part totals, the unit
+// total out of the book's marks, and percentage = total × 100 ÷ the book's marks.
+//
+// Who teaches a lost question (Master's order is Correction → Evaluation → Theory, only when needed):
+// - lost marks wait for Evaluation, who explains them;
+// - Theory gets a question when it is sent there: Correction marks "?" (he couldn't start it), or sends a level's
+//   lost marks to Theory (a level under half: he forgot the theory), or Evaluation finds he needs theory. He keeps
+//   working; Theory calls him when ready (never pushed into a busy room) and marks the questions taught.
 
 import { bookTotal, partOf, type MasterData, type MasterLevel, type PartId } from "./book";
 import { EVAL_READY_MS } from "./status";
 
-/** One corrected question. got/max when the workbook knows its marks; lost = it lost marks. x = explained at. */
+/**
+ * One corrected question. got/max when the workbook knows its marks; lost = it lost marks. x = explained at.
+ * th = sent to Theory at (tb = by which tab), tt = Theory taught it at, dk = "?": he couldn't start it.
+ */
 export interface MQ {
   got?: number;
   max?: number;
   lost: boolean;
   t: number;
   x?: number;
+  th?: number;
+  tb?: string;
+  tt?: number;
+  dk?: boolean;
+}
+
+/** Waiting for Theory: sent there and not taught yet. */
+export function forTheory(r: MQ | undefined): boolean {
+  return !!r?.th && !r.tt;
 }
 /** One level (key = its number): done = handed in (waiting since), fixed = corrected, got = its marks. */
 export interface MLevel {
@@ -34,7 +51,7 @@ export interface MState {
 
 export const EMPTY_MASTER: MState = { q: {}, lv: {} };
 
-export type MNeed = "correction" | "evaluation";
+export type MNeed = "correction" | "evaluation" | "theory";
 
 export interface Score {
   got: number;
@@ -51,10 +68,14 @@ export interface MStatus {
   waiting: MasterLevel[];
   waitingSince: number | null;
   corrected: number;
-  /** Question numbers that lost marks and aren't explained yet. */
+  /** Question numbers that lost marks and wait for Evaluation (not explained, not sent to Theory). */
   pending: number[];
   /** When the oldest of those was corrected. */
   pendingAt: number | null;
+  /** Question numbers sent to Theory and not taught yet. */
+  theory: number[];
+  /** When the oldest of those was sent. */
+  theoryAt: number | null;
   /** The corrected levels: marks got ÷ their marks (how well he does). */
   sofar: Score;
   /** The marks table's line: total ÷ the whole book's marks (the unit's final percentage). */
@@ -65,7 +86,9 @@ export interface MStatus {
   dry: boolean;
   needs: MNeed[];
   finished: boolean;
+  /** Theory has something for him: questions sent there, or the whole unit (`wholeUnit`). */
   reteach: boolean;
+  wholeUnit: boolean;
 }
 
 export function score(got: number, max: number): Score {
@@ -79,6 +102,8 @@ export function computeMaster(m: MState, book: MasterData): MStatus {
   let corrected = 0;
   const pending: number[] = [];
   let pendingAt: number | null = null;
+  const theory: number[] = [];
+  let theoryAt: number | null = null;
   let got = 0;
   let max = 0;
   const parts: Partial<Record<PartId, { got: number; max: number }>> = {};
@@ -102,7 +127,10 @@ export function computeMaster(m: MState, book: MasterData): MStatus {
     }
     for (let q = l.from; q <= l.to; q++) {
       const r = m.q[String(q)];
-      if (r?.lost && !r.x) {
+      if (forTheory(r)) {
+        theory.push(q);
+        if (theoryAt === null || r!.th! < theoryAt) theoryAt = r!.th!;
+      } else if (r?.lost && !r.x && !r.th) {
         pending.push(q);
         if (pendingAt === null || r.t < pendingAt) pendingAt = r.t;
       }
@@ -110,12 +138,13 @@ export function computeMaster(m: MState, book: MasterData): MStatus {
   }
   waiting.sort((a, b) => (m.lv[String(a.n)]?.done ?? 0) - (m.lv[String(b.n)]?.done ?? 0));
   const waitingSince = waiting.length ? (m.lv[String(waiting[0].n)]?.done ?? null) : null;
-  const finished = levels.length > 0 && corrected === levels.length && pending.length === 0;
+  const finished = levels.length > 0 && corrected === levels.length && pending.length === 0 && theory.length === 0;
   const dry = !finished && current === null;
   const needs: MNeed[] = [];
   if (dry) {
     if (waiting.length) needs.push("correction");
     if (pending.length) needs.push("evaluation");
+    if (theory.length || m.reteach) needs.push("theory");
   }
   const byPart: Partial<Record<PartId, Score>> = {};
   for (const [id, v] of Object.entries(parts)) byPart[id as PartId] = score(v!.got, v!.max);
@@ -127,6 +156,8 @@ export function computeMaster(m: MState, book: MasterData): MStatus {
     corrected,
     pending,
     pendingAt,
+    theory,
+    theoryAt,
     sofar: score(got, max),
     unit: score(got, bookTotal(book)),
     byPart,
@@ -134,7 +165,8 @@ export function computeMaster(m: MState, book: MasterData): MStatus {
     dry,
     needs,
     finished,
-    reteach: !!m.reteach,
+    reteach: !!m.reteach || theory.length > 0,
+    wholeUnit: !!m.reteach,
   };
 }
 

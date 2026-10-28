@@ -449,6 +449,10 @@ test("Master: workbook levels corrected, lost marks explained, re-teach, Exam Sp
   await contains(malik.locator(".strip-tag"), "G7 · U08");
   await contains(row(C, "Zainab").locator(".strip-tag"), "G9 · U21");
   await textsAre(row(C, "Vimal").locator(".lv-pill b"), ["L8"]);
+  // The bar shows where each one is: Malik's L3 (waiting, amber) and L4 (working, dark) share one marker.
+  await textsAre(malik.locator(".mk b"), ["L3", "4"]);
+  await textsAre(row(C, "Vimal").locator(".mk b"), ["L8"]);
+  await textsAre(row(C, "Priya").locator(".mk b"), ["L2"]);
   await shot(C, "m01-correction-three-grades", true);
 
   // G7 U08 gets an answer key (a fake one): the correction sheet shows each answer under its marks.
@@ -484,6 +488,7 @@ test("Master: workbook levels corrected, lost marks explained, re-teach, Exam Sp
   expect(m.q["24"]).toMatchObject({ got: 0, max: 2, lost: true });
   expect(m.q["25"]).toMatchObject({ got: 2, max: 2, lost: false });
   await textsAre(malik.locator(".lv-pill b"), ["L4"]);
+  await textsAre(malik.locator(".mk b"), ["L4"]);
 
   // Priya hands Level 2 in: it waits, and she goes on to Level 3.
   await row(C, "Priya").locator(".lv-pill").click();
@@ -491,6 +496,7 @@ test("Master: workbook levels corrected, lost marks explained, re-teach, Exam Sp
   await contains(C.locator(".toast"), "Priya: Level 2 handed in");
   await textsAre(row(C, "Priya").locator(".lv-pill b"), ["L2", "L3"]);
   await count(row(C, "Priya").locator(".lv-pill.waiting"), 1);
+  await textsAre(row(C, "Priya").locator(".mk b"), ["L2", "3"]);
   expect((await marksOf(backend, "Priya")).m!.lv["2"]?.done).toBeGreaterThan(0);
 
   // Evaluation: Malik's lost marks are red circles; tap Q24 when it's explained.
@@ -500,6 +506,22 @@ test("Master: workbook levels corrected, lost marks explained, re-teach, Exam Sp
   await em.locator(".reg-act").getByRole("button", { name: /^Q24\b/ }).click();
   await until(async () => (await marksOf(backend, "Malik")).m!.q["24"]?.x !== undefined, "Malik Q24 explained");
   await until(async () => (await em.locator(".reg-act .q[data-s=explained]").count()) === 1, "Q24 turns violet");
+
+  // Evaluation sees Malik forgot the theory behind Q13 and Q17: "→ Theory" sends them; he carries on working.
+  await em.getByRole("button", { name: "Malik needs theory: choose the questions" }).click();
+  const ts = E.locator(".sheet");
+  await contains(ts.locator("h2"), "Malik · Needs theory");
+  await textsAre(ts.locator(".th-q.on b"), ["Q4", "Q13", "Q17"]); // the ones not explained yet
+  await ts.getByRole("button", { name: "Q4", exact: true }).click();
+  await textsAre(ts.locator(".th-q.on b"), ["Q13", "Q17"]);
+  await shot(E, "m03b-evaluation-needs-theory");
+  await ts.getByRole("button", { name: "Send to Theory" }).click();
+  await contains(E.locator(".toast"), "Malik: Q13 Q17 for Theory. He carries on; Theory calls him.");
+  expect((await marksOf(backend, "Malik")).m!.q["13"]).toMatchObject({ th: expect.any(Number), tb: "evaluation" });
+  await textsAre(em.locator(".reg-act .q"), ["4", "24"]);
+  // Correction sees where Malik goes next.
+  await contains(malik.locator(".to-chip.theory b"), "2");
+  await contains(malik.locator(".to-chip.evaluation b"), "1");
 
   // Evaluation calls Vimal, explains everything in the room.
   await row(E, "Vimal").locator(".reg-name").click();
@@ -513,13 +535,25 @@ test("Master: workbook levels corrected, lost marks explained, re-teach, Exam Sp
     return v.q["22"]?.x !== undefined && v.q["51"]?.x !== undefined;
   }, "Vimal Q22 and Q51 explained");
 
+  // Correction marks Vimal's Level 8: he couldn't even start Q57 ("?"), so it goes straight to Theory.
+  await row(C, "Vimal").locator(".lv-pill.waiting").click();
+  const vs = C.locator(".sheet");
+  await contains(vs.locator("h2"), "Vimal · Level 8");
+  await vs.getByRole("button", { name: "All full marks" }).click();
+  await vs.getByRole("button", { name: "Q57: couldn't start it (to Theory)" }).click();
+  await contains(vs.locator(".ct-dk"), "Q57: couldn't start, so straight to Theory.");
+  await shot(C, "m03c-correct-question-mark");
+  await vs.getByRole("button", { name: /^Save / }).click();
+  await contains(C.locator(".toast"), "Theory: Q57.");
+  expect((await marksOf(backend, "Vimal")).m!.q["57"]).toMatchObject({ dk: true, got: 0, tb: "correction" });
+  await contains(row(C, "Vimal").locator(".to-chip.theory b"), "1");
+
   // Correction opens Malik's workbook (the marks table) and asks for the unit to be taught again.
   await malik.locator(".reg-strip").click();
   await visible(malik.locator(".mtable"));
   await contains(malik.locator(".mt-unit"), "52 / 146");
   await shot(C, "m04-correction-marks-table", true);
-  await malik.getByRole("button", { name: "Needs theory again" }).click();
-  await visible(malik.getByRole("button", { name: "Re-teach asked ✓" }));
+  await visible(malik.getByRole("button", { name: "Theory: Q13 Q17 ✓" }));
   // Theory is looking at Grade 11: the Grade 7 pill lights up for Malik.
   const g7 = T.getByRole("button", { name: /^Grade 7:/ });
   await until(async () => /need you/.test((await g7.getAttribute("aria-label")) ?? ""), "Theory's Grade 7 pill shows Malik");
@@ -528,8 +562,18 @@ test("Master: workbook levels corrected, lost marks explained, re-teach, Exam Sp
   await g7.click();
   await count(T.locator(".reg-row"), 3);
 
-  // Theory: one chip selects everyone waiting for a re-teach; Sent; sent back early keeps the request.
+  // Theory sees the questions sent to it: Malik Q13 Q17 (still working), Vimal Q57 (nothing else to do: red).
+  const tm = row(T, "Malik");
+  await textsAre(tm.locator(".reg-act .q"), ["13", "17"]);
+  await contains(tm.locator(".reg-s"), "Q13 Q17");
+  await contains(row(T, "Vimal").locator(".reg-s"), "No work");
+  await textsAre(row(T, "Vimal").locator(".reg-act .q"), ["57"]);
+  // The workbook chip selects everyone with questions for Theory; this time Theory takes Malik only.
+  await count(T.locator(".chips-row .group-chip"), 1); // no question shared by both: just the workbook's chip
+  await contains(T.locator(".chips-row .group-chip"), "U08 workbook");
   await T.getByRole("button", { name: /need re-teaching of U08/ }).click();
+  await textsAre(T.locator(".reg-row.sel .reg-n"), ["Malik", "Vimal"]);
+  await row(T, "Vimal").locator(".reg-name").click();
   await textsAre(T.locator(".reg-row.sel .reg-n"), ["Malik"]);
   await T.locator(".call-bar").getByRole("button", { name: "Call 1" }).click();
   await hears(C, "Malik, go to Theory.");
@@ -537,16 +581,36 @@ test("Master: workbook levels corrected, lost marks explained, re-teach, Exam Sp
   await visible(T.locator(".inroom.theory").getByRole("img", { name: "section ↺" }));
   await count(T.locator(".inroom.theory .ir-chip.coming"), 0); // sent: he is in the room
   await until(async () => (await marksOf(backend, "Malik")).room === "theory", "Malik in Theory");
+  // Q13 taught (tapped); sent back early: Q17 stays with Theory.
+  await tm.locator(".reg-act").getByRole("button", { name: /^Q13\b/ }).click();
+  await until(async () => (await marksOf(backend, "Malik")).m!.q["13"]?.tt !== undefined, "Q13 taught");
   await shot(T, "m05-theory-reteach");
   await T.locator(".inroom.theory").getByRole("button", { name: "Send back", exact: true }).click();
   await until(async () => (await marksOf(backend, "Malik")).room === undefined, "Malik back in the hall");
-  expect((await marksOf(backend, "Malik")).m!.reteach).toBeDefined();
-  await T.getByRole("button", { name: /need re-teaching of U08/ }).click();
+  let mt = (await marksOf(backend, "Malik")).m!;
+  expect([mt.q["17"]?.th !== undefined, mt.q["17"]?.tt]).toEqual([true, undefined]);
+  await count(T.locator(".inroom.theory"), 0); // Theory's phone sees him gone before calling again
+  await textsAre(tm.locator(".reg-act .q"), ["13", "17"]);
+  await tm.locator(".reg-name").click();
   await T.locator(".call-bar").getByRole("button", { name: "Call 1" }).click();
   await C.locator(".call-strip.theory").getByRole("button", { name: "Sent" }).click();
   await T.locator(".inroom.theory").getByRole("button", { name: "All taught" }).click();
-  await until(async () => (await marksOf(backend, "Malik")).m!.reteach === undefined, "re-teach done");
-  await visible(malik.getByRole("button", { name: "Needs theory again" }));
+  await until(async () => (await marksOf(backend, "Malik")).m!.q["17"]?.tt !== undefined, "Q17 taught");
+  await visible(malik.getByRole("button", { name: "Needs theory", exact: true }));
+  // The whole unit can be asked from the open book too, and taken back.
+  await malik.getByRole("button", { name: "Needs theory", exact: true }).click();
+  const ws = C.locator(".sheet");
+  await contains(ws.locator("h2"), "Malik · Needs theory");
+  await ws.getByRole("button", { name: "Q4", exact: true }).click(); // only the unit, not Q4
+  await ws.getByLabel("The whole unit again (he forgot it all)").check();
+  await ws.getByRole("button", { name: "Send to Theory" }).click();
+  await until(async () => (await marksOf(backend, "Malik")).m!.reteach !== undefined, "whole unit asked");
+  await malik.getByRole("button", { name: "Theory: Whole unit ✓" }).click();
+  await C.locator(".sheet").getByLabel("The whole unit again (he forgot it all)").uncheck();
+  await C.locator(".sheet").getByRole("button", { name: "Take back from Theory" }).click();
+  await until(async () => (await marksOf(backend, "Malik")).m!.reteach === undefined, "whole unit taken back");
+  mt = (await marksOf(backend, "Malik")).m!;
+  expect(mt.q["4"]?.th).toBeUndefined();
 
   // Exam Sprint before the exam, then back to the same workbook with nothing lost.
   const priya = row(C, "Priya");
@@ -685,16 +749,25 @@ test("Master: workbook levels corrected, lost marks explained, re-teach, Exam Sp
 
   // Small Android phone: the correction sheet and the marks table fit.
   const small = await phone(backend, "correction", { ...PHONE, viewport: { width: 360, height: 740 } });
-  await row(small, "Vimal").locator(".lv-pill").click();
+  await visible(row(small, "Vimal").locator(".to-chip.theory"));
+  await contains(row(small, "Vimal").locator(".to-chip.theory"), "Th");
+  for (const name of ["Malik", "Priya", "Vimal"]) {
+    const act = row(small, name).locator(".reg-act");
+    expect(await act.evaluate((el) => el.scrollWidth <= el.clientWidth + 1), `${name}'s row fits at 360 px`).toBe(true);
+  }
+  await shot(small, "m08d-master-rows-360px");
+  // Vimal's Level 8, corrected with a "?": opened again from his marks table, Part II answers under the marks.
+  await row(small, "Vimal").locator(".reg-strip").click();
+  await row(small, "Vimal").getByRole("button", { name: /^Level 8, questions 56 to 57/ }).click();
   await visible(small.locator(".sheet .ct-list"));
   await contains(small.locator(".sheet .ct-row", { hasText: "Q56" }).locator(".ct-key"), "B56");
+  await visible(small.locator(".sheet").getByRole("button", { name: "Q57: couldn't start it (to Theory)", pressed: true }));
   expect(await small.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
   const box = (await small.locator(".sheet").boundingBox())!;
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(360);
   await shot(small, "m09-correct-level-360px");
   await small.locator(".sheet").getByRole("button", { name: "Close" }).click();
-  await row(small, "Vimal").locator(".reg-strip").click();
   await visible(row(small, "Vimal").locator(".mtable"));
   expect(await small.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
   await shot(small, "m10-marks-table-360px", true);

@@ -9,9 +9,9 @@ import type { SectionData } from "../convex/lib/book";
 import { evalUrgency, theoryUrgency, type MarkState } from "../convex/lib/status";
 import { mutate } from "./backend";
 import { evalUrgencyOf, pendingSince, type View } from "./derive";
-import { CorrectSheet, MasterBook, MasterStrip } from "./master";
+import { CorrectSheet, MasterBook, MasterStrip, TheorySheet, theoryChoices, theoryWords } from "./master";
 import { MoveSheet } from "./move";
-import { act, currentRole, savedMarks, setExplained, STAGES, type Role } from "./store";
+import { act, currentRole, savedMarks, setExplained, setTaught, STAGES, type Role } from "./store";
 import { canTap, isUnsaved, tap, tapSection } from "./taps";
 import { Empty, Q } from "./ui";
 
@@ -108,7 +108,10 @@ export function rowState(role: Role, v: View, now: number): { tone: RowTone; tex
   }
   if (v.ms) {
     if (v.ms.finished) return { tone: "done", text: `Finished ${v.ms.unit.pct}%` };
-    if (role === "theory") return v.ms.reteach ? { tone: v.ms.dry ? "red" : "amber", text: "Re-teach" } : { tone: "none", text: "Master" };
+    if (role === "theory") {
+      if (!v.ms.reteach) return { tone: "none", text: "Master" };
+      return { tone: v.ms.dry ? "red" : "amber", text: v.ms.dry ? `No work${idle}` : theoryWords(v.ms) };
+    }
     if (role === "evaluation") return evalState(v, now, idle);
     const w = v.ms.waiting;
     if (v.ms.dry) return { tone: "red", text: `No work${idle}` };
@@ -125,7 +128,10 @@ export function rowState(role: Role, v: View, now: number): { tone: RowTone; tex
 
 function evalState(v: View, now: number, idle: string): { tone: RowTone; text: string } {
   const dry = v.st ? v.st.dry : !!v.ms?.dry;
-  if (v.pending.length === 0) return { tone: "none", text: dry ? `No work${idle}` : v.ms ? "Nothing lost" : "Nothing wrong" };
+  if (v.pending.length === 0) {
+    if (v.ms?.reteach && !dry) return { tone: "none", text: `Theory: ${theoryWords(v.ms)}` };
+    return { tone: "none", text: dry ? `No work${idle}` : v.ms ? "Nothing lost" : "Nothing wrong" };
+  }
   const u = v.st ? evalUrgency(v.marks, v.st, now) : evalUrgencyOf(v, now);
   if (u === "red") {
     if (v.st?.stuck.length) return { tone: "red", text: "Stuck" };
@@ -194,7 +200,7 @@ function FighterBook(props: { role: Role; v: View }) {
   );
 }
 
-function Book(props: { role: Role; v: View; onMove: () => void; onCorrect: (level: number) => void }) {
+function Book(props: { role: Role; v: View; onMove: () => void; onCorrect: (level: number) => void; onTheory: () => void }) {
   const { role, v } = props;
   return (
     <div class="book-open">
@@ -215,15 +221,8 @@ function Book(props: { role: Role; v: View; onMove: () => void; onCorrect: (leve
           Move: unit or stage
         </button>
         {v.ms && role !== "theory" && (
-          <button
-            type="button"
-            class={`btn ghost small${v.ms.reteach ? " on" : ""}`}
-            aria-pressed={v.ms.reteach}
-            onClick={() =>
-              void act(() => mutate(api.workbook.reteach, { studentId: v.s._id, unitId: v.s.unitId, on: !v.ms!.reteach, by: currentRole() }))
-            }
-          >
-            {v.ms.reteach ? "Re-teach asked ✓" : "Needs theory again"}
+          <button type="button" class={`btn ghost small${v.ms.reteach ? " on" : ""}`} onClick={props.onTheory}>
+            {v.ms.reteach ? `Theory: ${theoryWords(v.ms)} ✓` : "Needs theory"}
           </button>
         )}
         {role === "correction" && v.where !== "absent" && (v.where === "theory" || v.where === "evaluation") && (
@@ -272,6 +271,7 @@ export function Register(props: {
   const [open, setOpen] = useState<string | null>(null);
   const [moving, setMoving] = useState<string | null>(null);
   const [correcting, setCorrecting] = useState<{ id: string; level: number } | null>(null);
+  const [toTheory, setToTheory] = useState<string | null>(null);
   const [legend, setLegend] = useState<boolean>(() => {
     try {
       return localStorage.getItem(legendKey(role)) !== "hidden";
@@ -289,6 +289,7 @@ export function Register(props: {
   };
   const moveView = moving ? views.find((x) => x.s._id === moving) : undefined;
   const correctView = correcting ? views.find((x) => x.s._id === correcting.id) : undefined;
+  const theoryView = toTheory ? views.find((x) => x.s._id === toTheory) : undefined;
   return (
     <>
       {legend && props.legend !== null && (
@@ -336,11 +337,17 @@ export function Register(props: {
                   <span class="reg-s">{st.text}</span>
                 </button>
                 <div class="reg-act">
-                  <Actions role={role} v={v} now={now} onCorrect={(level) => setCorrecting({ id: v.s._id, level })} />
+                  <Actions
+                    role={role}
+                    v={v}
+                    now={now}
+                    onCorrect={(level) => setCorrecting({ id: v.s._id, level })}
+                    onTheory={() => setToTheory(v.s._id)}
+                  />
                 </div>
                 <button
                   type="button"
-                  class="reg-strip"
+                  class={`reg-strip${v.kind === "master" ? " rs-m" : ""}`}
                   aria-expanded={isOpen}
                   aria-label={`${v.s.name}: ${isOpen ? "close" : "open"} the whole book`}
                   onClick={() => setOpen(isOpen ? null : v.s._id)}
@@ -357,6 +364,7 @@ export function Register(props: {
                     v={v}
                     onMove={() => setMoving(v.s._id)}
                     onCorrect={(level) => setCorrecting({ id: v.s._id, level })}
+                    onTheory={() => setToTheory(v.s._id)}
                   />
                 )}
               </li>
@@ -369,6 +377,7 @@ export function Register(props: {
       {correctView && correcting && (
         <CorrectSheet v={correctView} level={correcting.level} now={now} onClose={() => setCorrecting(null)} />
       )}
+      {theoryView && <TheorySheet v={theoryView} onClose={() => setToTheory(null)} />}
     </>
   );
 }
@@ -392,8 +401,38 @@ export function GoneHome(props: { role: Role; views: View[]; now: number }) {
   );
 }
 
+/** Master questions sent to Theory that Theory can tap taught (and ones just taught, to undo). */
+export function theoryCircles(v: View, now: number): number[] {
+  if (!v.ms) return [];
+  const recent = Object.entries(v.mm.q)
+    .filter(([, r]) => r?.tt !== undefined && now - r.tt < EXPLAINED_RECENT_MS)
+    .map(([q]) => Number(q));
+  return [...new Set([...v.ms.theory, ...recent])].sort((a, b) => a - b).slice(0, 6);
+}
+
+/** Where this Master student goes next, for Correction: "Theory 2", "Eval 1". */
+function RouteChips(props: { v: View }) {
+  const ms = props.v.ms!;
+  return (
+    <>
+      {ms.reteach && (
+        <span class="to-chip theory" title={`Theory: ${theoryWords(ms)}`}>
+          <i class="w">Theory</i>
+          <i class="s">Th</i> <b>{ms.theory.length || "unit"}</b>
+        </span>
+      )}
+      {ms.pending.length > 0 && (
+        <span class="to-chip evaluation" title={`Evaluation: ${ms.pending.map((q) => `Q${q}`).join(" ")}`}>
+          <i class="w">Eval</i>
+          <i class="s">Ev</i> <b>{ms.pending.length}</b>
+        </span>
+      )}
+    </>
+  );
+}
+
 /** What this teacher can tap on the row right now. */
-function Actions(props: { role: Role; v: View; now: number; onCorrect: (level: number) => void }) {
+function Actions(props: { role: Role; v: View; now: number; onCorrect: (level: number) => void; onTheory: () => void }) {
   const { role, v, now } = props;
   if (v.where === "absent") return null;
   if (v.kind === "fighter") {
@@ -437,7 +476,10 @@ function Actions(props: { role: Role; v: View; now: number; onCorrect: (level: n
     const ms = v.ms!;
     if (role === "evaluation") {
       const qs = masterCircles(v, now);
-      if (qs.length === 0) return <span class="reg-none">{ms.waiting.length ? "Not corrected yet" : ""}</span>;
+      const canSend = theoryChoices(v).some((q) => !v.mm.q[String(q)]?.th);
+      if (qs.length === 0 && !canSend) {
+        return <span class="reg-none">{ms.reteach ? `Theory: ${theoryWords(ms)}` : ms.waiting.length ? "Not corrected yet" : ""}</span>;
+      }
       return (
         <>
           {qs.map((q) => {
@@ -454,12 +496,44 @@ function Actions(props: { role: Role; v: View; now: number; onCorrect: (level: n
               />
             );
           })}
+          {canSend && (
+            <button type="button" class="to-theory" aria-label={`${v.s.name} needs theory: choose the questions`} onClick={props.onTheory}>
+              <span aria-hidden="true">→</span> <i class="w">Theory</i>
+              <i class="s">Th</i>
+            </button>
+          )}
+        </>
+      );
+    }
+    if (role === "theory") {
+      const qs = theoryCircles(v, now);
+      if (qs.length === 0) return <span class="reg-none">{ms.wholeUnit ? "Whole unit again" : ""}</span>;
+      return (
+        <>
+          {qs.map((q) => {
+            const taught = v.mm.q[String(q)]?.tt !== undefined;
+            const who = v.mm.q[String(q)]?.dk ? "couldn't start it" : v.mm.q[String(q)]?.tb === "evaluation" ? "from Evaluation" : "from Correction";
+            return (
+              <Q
+                key={q}
+                q={q}
+                teach
+                s={taught ? "taught" : undefined}
+                size="act"
+                title={`Q${q}: ${taught ? "taught" : `to teach (${who})`}`}
+                onClick={() => void setTaught(v.s, [q], !taught)}
+              />
+            );
+          })}
         </>
       );
     }
     if (role === "correction") {
       const pills = [...ms.waiting.slice(0, 2), ...(ms.current ? [ms.current] : [])];
-      if (pills.length === 0) return <span class="reg-none">{ms.finished ? "Workbook finished" : ms.pending.length ? "Waiting for evaluation" : ""}</span>;
+      if (pills.length === 0) {
+        if (ms.reteach || ms.pending.length) return <RouteChips v={v} />;
+        return <span class="reg-none">{ms.finished ? "Workbook finished" : ""}</span>;
+      }
       return (
         <>
           {pills.map((l) => {
@@ -478,10 +552,11 @@ function Actions(props: { role: Role; v: View; now: number; onCorrect: (level: n
               </button>
             );
           })}
+          <RouteChips v={v} />
         </>
       );
     }
-    return <span class="reg-none">{ms.reteach ? "Re-teach asked" : ""}</span>;
+    return <span class="reg-none">{ms.reteach ? `Theory: ${theoryWords(ms)}` : ""}</span>;
   }
   return <span class="reg-none">{v.stage === "legend" || v.stage === "sprint" ? "Full papers on paper for now" : ""}</span>;
 }

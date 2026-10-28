@@ -14,7 +14,7 @@ import {
   touch,
 } from "./lib/backend";
 import { fighter } from "./lib/book";
-import { computeMaster } from "./lib/master";
+import { computeMaster, forTheory } from "./lib/master";
 import { computeStatus } from "./lib/status";
 import { room } from "./schema";
 import { actor, allowed } from "./lib/auth";
@@ -301,12 +301,16 @@ async function record(
   if (book.data.kind === "master") {
     const m = masterState(p);
     if (c.kind === "theory") {
-      if (!m.reteach) return "re-teach";
-      // "Send back" (nothing marked taught) keeps the request: he still needs the unit taught again.
-      if (item.taught !== undefined) return "re-teach-kept";
+      // The questions sent to Theory: "All taught" covers every one (and the whole-unit request); "Send back"
+      // keeps the ones not tapped taught (they were saved as he tapped), so Theory calls him again for them.
+      const open = Object.entries(m.q).filter(([, r]) => forTheory(r));
+      if (!m.reteach && open.length === 0) return "re-teach";
+      if (item.taught !== undefined) return open.length || m.reteach ? "re-teach-kept" : "re-taught";
+      const q = { ...m.q };
+      for (const [n, r] of open) q[n] = { ...r, tt: now };
       const { reteach: _r, ...rest } = m;
-      await ctx.db.patch(p._id, { m: rest, updatedAt: now });
-      return "re-taught";
+      await ctx.db.patch(p._id, { m: { ...rest, q }, updatedAt: now });
+      return open.length ? `taught ${open.map(([n]) => n).join(",")}` : "re-taught";
     }
     const q = { ...m.q };
     const explained: number[] = [];

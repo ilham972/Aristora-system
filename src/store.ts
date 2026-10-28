@@ -309,13 +309,14 @@ export function statusOf(s: Student): Status | null {
   return st;
 }
 
-/** His workbook state (Master), with explanations not saved yet shown at once. */
+/** His workbook state (Master), with explanations and Theory's taps not saved yet shown at once. */
 export function masterStateOf(s: Student): MState {
   const base = ((s.stage === "master" ? progressOf(s)?.m : undefined) as MState | undefined) ?? EMPTY_MASTER;
   const o = mOverlay.get(s._id);
-  if (!o || o.size === 0) return base;
+  const t = tOverlay.get(s._id);
+  if ((!o || o.size === 0) && (!t || t.size === 0)) return base;
   const q = { ...base.q };
-  for (const [n, on] of o) {
+  for (const [n, on] of o ?? []) {
     const r = q[String(n)];
     if (!r) continue;
     if (on) q[String(n)] = { ...r, x: r.x ?? now() };
@@ -324,10 +325,39 @@ export function masterStateOf(s: Student): MState {
       q[String(n)] = rest;
     }
   }
+  for (const [n, on] of t ?? []) {
+    const r = q[String(n)];
+    if (!r?.th) continue;
+    if (on) q[String(n)] = { ...r, tt: r.tt ?? now() };
+    else {
+      const { tt: _tt, ...rest } = r;
+      q[String(n)] = rest;
+    }
+  }
   return { ...base, q };
 }
 
 const mOverlay = new Map<string, Map<number, boolean>>();
+const tOverlay = new Map<string, Map<number, boolean>>();
+
+/** Theory taps on a Master question sent to it: taught or not, shown at once. */
+export async function setTaught(s: Student, qs: number[], on: boolean): Promise<void> {
+  let o = tOverlay.get(s._id);
+  if (!o) {
+    o = new Map();
+    tOverlay.set(s._id, o);
+  }
+  for (const q of qs) o.set(q, on);
+  emit();
+  try {
+    await mutate(api.workbook.taught, { studentId: s._id, unitId: s.unitId, qs, on, by: role });
+  } catch (e) {
+    toast(errorText(e), "error");
+  } finally {
+    for (const q of qs) if (o.get(q) === on) o.delete(q);
+    emit();
+  }
+}
 
 /** Evaluation taps on a Master student's lost-mark question: explained or not, shown at once. */
 export async function setExplained(s: Student, qs: number[], on: boolean): Promise<void> {

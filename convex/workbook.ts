@@ -1,9 +1,13 @@
 // Master: the past-paper workbook, level by level.
 //   Level done -> the student handed the level in; it waits for correction (he starts the next level at once).
 //   Correct    -> the level's marks: each question's marks when the workbook knows them, else the level's total
-//                 and which questions lost marks. Correcting again changes them.
+//                 and which questions lost marks. Correcting again changes them. "?" (dk) = he couldn't start it:
+//                 0 marks, straight to Theory. `to: "theory"` sends the level's lost marks to Theory instead of
+//                 Evaluation (a level under half: he forgot the theory).
 //   Explain    -> the Evaluation teacher, for the questions that lost marks.
-//   Re-teach   -> Correction or Evaluation asks Theory to teach the unit again.
+//   To Theory  -> Correction or Evaluation sends lost questions to Theory (he keeps working; Theory calls him).
+//   Taught     -> Theory, for the questions sent to it.
+//   Re-teach   -> Correction or Evaluation asks Theory to teach the whole unit again.
 
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -118,12 +122,17 @@ export const correct = mutation({
   args: {
     ...base,
     level: v.number(),
-    items: v.array(v.object({ q: v.number(), got: v.optional(v.number()), lost: v.optional(v.boolean()) })),
+    items: v.array(
+      v.object({ q: v.number(), got: v.optional(v.number()), lost: v.optional(v.boolean()), dk: v.optional(v.boolean()) }),
+    ),
     total: v.optional(v.number()),
+    /** Where the lost marks go: Evaluation (the default) or Theory. "?" questions always go to Theory. */
+    to: v.optional(v.union(v.literal("evaluation"), v.literal("theory"))),
   },
   handler: async (ctx, args) => {
     await actor(ctx, args.token, ["correction", "evaluation"], args.by);
     const now = Date.now();
+    const by = cleanBy(args.by);
     const student = await getStudent(ctx, args.studentId);
     const { unit, book, progress, m } = await masterWork(ctx, student, args.unitId, now);
     const l = levelOf(book, args.level);
@@ -141,17 +150,29 @@ export const correct = mutation({
       let row: MQ;
       if (each) {
         const max = each[it.q - l.from];
-        if (it.got === undefined || !Number.isInteger(it.got) || it.got < 0 || it.got > max) {
+        if (it.dk && it.got) fail(`Question ${it.q}: "?" means he couldn't start it, so 0 marks.`);
+        const g = it.dk ? 0 : it.got;
+        if (g === undefined || !Number.isInteger(g) || g < 0 || g > max) {
           fail(`Question ${it.q}: marks must be 0 to ${max}.`);
         }
-        got += it.got;
-        row = { got: it.got, max, lost: it.got < max, t: now };
+        got += g;
+        row = { got: g, max, lost: g < max, t: now };
       } else {
+        if (it.dk) fail(`Question ${it.q}: "?" needs each question's marks in the workbook.`);
         if (it.lost === undefined) fail(`Question ${it.q}: say whether it lost marks.`);
         row = { lost: it.lost, t: now };
       }
-      // Re-marked the same way keeps "explained"; new marks need a new explanation.
-      if (before?.x && before.lost === row.lost && before.got === row.got) row.x = before.x;
+      if (it.dk) row.dk = true;
+      // Re-marked the same way keeps what happened to it (explained, sent to Theory, taught); new marks start over.
+      if (before && before.lost === row.lost && before.got === row.got && !!before.dk === !!row.dk) {
+        const { x, th, tb, tt } = before;
+        row = { ...row, ...(x ? { x } : {}), ...(th ? { th } : {}), ...(tb ? { tb } : {}), ...(tt ? { tt } : {}) };
+      }
+      // Theory gets it: "?" always; every lost question when the level's lost marks go to Theory.
+      if (row.lost && !row.th && !row.tt && (row.dk || args.to === "theory")) {
+        row.th = now;
+        if (by) row.tb = by;
+      }
       rows[String(it.q)] = row;
     }
     if (!each) {
@@ -167,7 +188,6 @@ export const correct = mutation({
     const key = String(l.n);
     const lv = m.lv[key] ?? {};
     const doneAt = lv.done ?? now;
-    const by = cleanBy(args.by);
     const again = !!lv.fixed;
     m.lv[key] = { done: doneAt, fixed: now, by, got };
     const session = await currentSession(ctx, now);
@@ -185,7 +205,15 @@ export const correct = mutation({
     await refresh(ctx, student._id, now, session);
     await touch(ctx, session, now);
     const st = computeMaster(m, book);
-    return { got, max: l.max, unitPct: st.unit.pct, sofarPct: st.sofar.pct };
+    const lost = Object.entries(rows).filter(([, r]) => r.lost);
+    return {
+      got,
+      max: l.max,
+      unitPct: st.unit.pct,
+      sofarPct: st.sofar.pct,
+      theory: lost.filter(([, r]) => r.th && !r.tt).map(([q]) => Number(q)),
+      evaluation: lost.filter(([, r]) => !r.th && !r.x).map(([q]) => Number(q)),
+    };
   },
 });
 
@@ -228,6 +256,91 @@ export const explain = mutation({
   },
 });
 
+/**
+ * Correction or Evaluation: Theory should teach these lost questions (on = false: take them back, not taught yet).
+ * He keeps working; Theory sees him at the top of its list with the questions and calls him when ready.
+ */
+export const toTheory = mutation({
+  args: { ...base, qs: v.array(v.number()), on: v.boolean() },
+  handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["correction", "evaluation"], args.by);
+    const now = Date.now();
+    if (args.qs.length === 0) return true;
+    if (args.qs.length > 400) fail("Too many questions at once.");
+    const by = cleanBy(args.by);
+    const student = await getStudent(ctx, args.studentId);
+    const { unit, progress, m } = await masterWork(ctx, student, args.unitId, now);
+    const changed: number[] = [];
+    for (const q of args.qs) {
+      const r = m.q[String(q)];
+      if (!r?.lost) fail(`Question ${q} hasn't lost marks: only corrected questions that lost marks go to Theory.`);
+      if (r.tt) continue; // already taught
+      if (args.on && !r.th) {
+        m.q[String(q)] = { ...r, th: now, ...(by ? { tb: by } : {}) };
+        changed.push(q);
+      } else if (!args.on && r.th) {
+        const { th: _th, tb: _tb, ...rest } = r;
+        m.q[String(q)] = rest;
+        changed.push(q);
+      }
+    }
+    if (changed.length === 0) return true;
+    const session = await currentSession(ctx, now);
+    await ctx.db.patch(progress._id, { m, updatedAt: now });
+    await log(ctx, session, now, {
+      kind: args.on ? "to-theory" : "to-theory-off",
+      by,
+      studentId: student._id,
+      name: student.name,
+      unit: unit.key,
+      value: changed.map((q) => `Q${q}`).join(", "),
+    });
+    await refresh(ctx, student._id, now, session);
+    await touch(ctx, session, now);
+    return true;
+  },
+});
+
+/** Theory: these questions sent to it were taught (or, with on = false, not after all). */
+export const taught = mutation({
+  args: { ...base, qs: v.array(v.number()), on: v.boolean() },
+  handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["theory", "evaluation"], args.by);
+    const now = Date.now();
+    if (args.qs.length === 0) return true;
+    if (args.qs.length > 400) fail("Too many questions at once.");
+    const student = await getStudent(ctx, args.studentId);
+    const { unit, progress, m } = await masterWork(ctx, student, args.unitId, now);
+    let n = 0;
+    for (const q of args.qs) {
+      const r = m.q[String(q)];
+      if (!r?.th) continue;
+      if (args.on && !r.tt) {
+        m.q[String(q)] = { ...r, tt: now };
+        n++;
+      } else if (!args.on && r.tt) {
+        const { tt: _tt, ...rest } = r;
+        m.q[String(q)] = rest;
+        n++;
+      }
+    }
+    if (n === 0) return true;
+    const session = await currentSession(ctx, now);
+    await ctx.db.patch(progress._id, { m, updatedAt: now });
+    await log(ctx, session, now, {
+      kind: args.on ? "taught" : "untaught",
+      by: cleanBy(args.by),
+      studentId: student._id,
+      name: student.name,
+      unit: unit.key,
+      value: String(n),
+    });
+    await refresh(ctx, student._id, now, session);
+    await touch(ctx, session, now);
+    return true;
+  },
+});
+
 /** Correction or Evaluation: Theory should teach this unit again (on = false: not needed any more). */
 export const reteach = mutation({
   args: { ...base, on: v.boolean() },
@@ -236,7 +349,7 @@ export const reteach = mutation({
     const now = Date.now();
     const student = await getStudent(ctx, args.studentId);
     const { unit, progress, m } = await masterWork(ctx, student, args.unitId, now);
-    if (!!m.reteach === args.on) return;
+    if (!!m.reteach === args.on) return true;
     const by = cleanBy(args.by);
     if (args.on) m.reteach = { at: now, by };
     else delete m.reteach;
@@ -249,6 +362,8 @@ export const reteach = mutation({
       name: student.name,
       unit: unit.key,
     });
+    await refresh(ctx, student._id, now, session);
     await touch(ctx, session, now);
+    return true;
   },
 });

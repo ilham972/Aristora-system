@@ -741,6 +741,7 @@ function describe(e: Doc<"events">): string {
     case "done-theory": {
       if (v === "re-taught") return "re-taught by Theory";
       if (v === "re-teach-kept") return "sent back by Theory before the re-teach (still needs it)";
+      if (v.startsWith("taught ") && !v.includes(":")) return `workbook ${v.slice(7).split(",").map((q) => `Q${q}`).join(", ")} taught by Theory`;
       const m = /^(\w+): taught ([\d,-]+)(?:; skip ([\d,]+))?/.exec(v);
       if (!m) return "theory finished";
       const taught = m[2] === "-" ? "nothing new taught" : `taught ${m[2].split(",").join(", ")}`;
@@ -772,9 +773,17 @@ function describe(e: Doc<"events">): string {
     case "unexplained":
       return `${v} explanation undone`;
     case "reteach":
-      return "needs theory again (re-teach asked)";
+      return "needs the whole unit taught again";
     case "reteach-off":
-      return "re-teach no longer needed";
+      return "whole-unit re-teach no longer needed";
+    case "to-theory":
+      return `sent to Theory: ${v}`;
+    case "to-theory-off":
+      return `taken back from Theory: ${v}`;
+    case "taught":
+      return `${v} taught by Theory`;
+    case "untaught":
+      return `${v} taught, undone`;
     case "move":
       return `moved: ${v}`;
     case "book-save":

@@ -7,6 +7,7 @@ import { evalQueue, roomBusy, roomCalls, sameMistakes, theoryGroups, type RoomCa
 import { GradePills, gradesOf, inGrade, needsOf, useGradeFilter } from "./grades";
 import { act, currentRole, toast, type Board } from "./store";
 import { flushTaps } from "./taps";
+import { theoryWords } from "./master";
 
 type RoomName = "theory" | "evaluation";
 const ROOM: Record<RoomName, string> = { theory: "Theory", evaluation: "Evaluation" };
@@ -66,12 +67,18 @@ export function Theory(props: { board: Board; views: View[]; now: number }) {
   const room = roomCalls(board, all, "theory", now);
   const pick = useSelection(views, (v) => {
     if (v.where === "absent") return "not signed in";
-    if (!v.st?.nextTheory && !v.ms?.reteach) return v.kind === "master" ? "not marked for re-teaching" : "no theory to teach here";
+    if (!v.st?.nextTheory && !v.ms?.reteach) return v.kind === "master" ? "nothing sent to Theory" : "no theory to teach here";
     if (v.calls.some((c) => c.kind === "theory")) return "already called for theory";
     return null;
   });
   const selected = views.filter((v) => pick.sel.has(v.s._id));
-  const sections = [...new Set(selected.map((v) => (v.st?.nextTheory ? `${v.unit?.code ?? ""} ${v.st.nextTheory}` : `${v.unit?.code ?? ""} re-teach`).trim()))].join(", ");
+  const sections = [
+    ...new Set(
+      selected.map((v) =>
+        (v.st?.nextTheory ? `${v.unit?.code ?? ""} ${v.st.nextTheory}` : `${v.unit?.code ?? ""} ${v.ms ? theoryWords(v.ms) : "re-teach"}`).trim(),
+      ),
+    ),
+  ].join(", ");
 
   return (
     <main class={`page${pick.sel.size ? " with-bar" : ""}`}>
@@ -87,7 +94,9 @@ export function Theory(props: { board: Board; views: View[]; now: number }) {
               key={g.key}
               type="button"
               class={`group-chip u-${g.members[0].urgency}`}
-              aria-label={`Select the ${g.members.length} students who need ${g.section ? `section ${g.section.id}` : "re-teaching"} of ${g.unit?.code ?? "this unit"}`}
+              aria-label={`Select the ${g.members.length} students who need ${
+                g.section ? `section ${g.section.id}` : g.q !== undefined ? `Q${g.q}` : "re-teaching"
+              } of ${g.unit?.code ?? "this unit"}`}
               onClick={() => pick.set(g.members.filter((m) => !m.inEvaluation).map((m) => m.v.s._id))}
             >
               {named && g.unit ? `G${g.unit.grade} ${g.label}` : g.label}
@@ -106,7 +115,8 @@ export function Theory(props: { board: Board; views: View[]; now: number }) {
           <>
             Tap names to choose who to call. Tap the <b class="k-theory">section letter</b> to mark all its theory taught. Tap a ◎
             circle: taught, then skip, then clear. When they leave, <b>All taught</b> marks the whole section;{" "}
-            <b>Send back</b> keeps only what you tapped.
+            <b>Send back</b> keeps only what you tapped. Workbook students show the questions sent to you: tap each ◎
+            when taught.
           </>
         }
         selected={pick.sel}

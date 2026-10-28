@@ -74,6 +74,11 @@ export const masterState = v.object({
       lost: v.boolean(),
       t: v.number(),
       x: v.optional(v.number()),
+      /** Sent to Theory at (by Correction or Evaluation); tt = Theory taught it; dk = "?": he couldn't start it. */
+      th: v.optional(v.number()),
+      tb: v.optional(v.string()),
+      tt: v.optional(v.number()),
+      dk: v.optional(v.boolean()),
     }),
   ),
   lv: v.record(

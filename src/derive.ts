@@ -174,7 +174,9 @@ export function buildViews(board: Board, now: number): View[] {
         line = `Finished the workbook: ${ms.unit.pct}%`;
       } else if (ms.dry) {
         tone = "red";
-        line = `Out of work${forMin(idleMs)}: ${ms.needs.includes("correction") ? `Level ${w.n} to correct` : "waiting for evaluation"}`;
+        line = `Out of work${forMin(idleMs)}: ${
+          ms.needs.includes("correction") ? `Level ${w.n} to correct` : ms.needs.includes("evaluation") ? "waiting for evaluation" : "waiting for Theory"
+        }`;
       } else if (quiet) {
         tone = "yellow";
         line = `Quiet for ${fmtMin(quietMs!)}. Go and check`;
@@ -234,9 +236,11 @@ export type TheoryMember = {
 export type TheoryGroup = {
   key: string;
   unit: Unit | null;
-  /** The section to teach (Fighter), or null for a Master re-teach. */
+  /** The section to teach (Fighter), or null for a Master workbook. */
   section: SectionData | null;
-  /** "U13 D", "U08 re-teach". */
+  /** Master: the one question this group needs (two or more students). */
+  q?: number;
+  /** "U13 D", "U08 workbook", "U08 Q13". */
   label: string;
   members: TheoryMember[];
   reteach: boolean;
@@ -258,48 +262,65 @@ function theorySort(a: TheoryMember, b: TheoryMember) {
   );
 }
 
-/** Students who need theory next, grouped by unit and section (or a Master re-teach), most urgent group first. */
+/**
+ * Students who need theory next, most urgent group first. Fighter: by unit and section (his next section). Master
+ * (Theory comes after Correction and Evaluation): one group per workbook with everyone who has questions sent to
+ * Theory (or the whole unit), plus a group per question two or more of them need (one lesson for all). A Master
+ * student can be in both: chips are only shortcuts for choosing who to call.
+ */
 export function theoryGroups(views: View[]): TheoryGroup[] {
-  const groups = new Map<string, { unit: Unit | null; section: SectionData | null; members: TheoryMember[] }>();
+  const groups = new Map<string, { unit: Unit | null; section: SectionData | null; q?: number; members: TheoryMember[] }>();
+  const add = (key: string, v: View, section: SectionData | null, m: TheoryMember, q?: number) => {
+    const g = groups.get(key) ?? { unit: v.unit, section, q, members: [] };
+    g.members.push(m);
+    groups.set(key, g);
+  };
   for (const v of views) {
     if (v.where === "absent") continue;
     if (v.calls.some((c) => c.kind === "theory")) continue; // already called / being taught
-    let key: string;
-    let section: SectionData | null = null;
-    let urgency: Urgency;
-    if (v.st && v.f && v.st.nextTheory) {
-      key = `${v.s.unitId}:${v.st.nextTheory}`;
-      section = v.f.sectionById(v.st.nextTheory) ?? null;
-      urgency = theoryUrgency(v.st);
-    } else if (v.ms?.reteach) {
-      key = `${v.s.unitId}:R`;
-      urgency = v.ms.dry ? "red" : "amber";
-    } else continue;
     const inEvaluation = v.where === "evaluation";
-    const m: TheoryMember = {
+    const member = (urgency: Urgency): TheoryMember => ({
       v,
       urgency,
       inEvaluation,
       note: inEvaluation ? "In Evaluation now" : v.calledTo === "evaluation" ? "Evaluation called them" : undefined,
-    };
-    const g = groups.get(key) ?? { unit: v.unit, section, members: [] };
-    g.members.push(m);
-    groups.set(key, g);
+    });
+    if (v.st && v.f && v.st.nextTheory) {
+      add(`${v.s.unitId}:${v.st.nextTheory}`, v, v.f.sectionById(v.st.nextTheory) ?? null, member(theoryUrgency(v.st)));
+    } else if (v.ms?.reteach) {
+      const m = member(v.ms.dry ? "red" : "amber");
+      add(`${v.s.unitId}:R`, v, null, m);
+      for (const q of v.ms.theory) add(`${v.s.unitId}:Q${q}`, v, null, m, q);
+    }
   }
   const out: TheoryGroup[] = [];
   for (const [key, g] of groups) {
+    if (g.q !== undefined && g.members.length < 2) continue; // only he needs it: his workbook's chip has him
     g.members.sort(theorySort);
     const code = g.unit?.code ?? "?";
     out.push({
       key,
       unit: g.unit,
       section: g.section,
-      label: g.section ? `${code} ${g.section.id}` : `${code} re-teach`,
+      q: g.q,
+      label: g.section ? `${code} ${g.section.id}` : g.q !== undefined ? `${code} Q${g.q}` : `${code} workbook`,
       members: g.members,
       reteach: g.section ? g.members.some((m) => m.v.st?.reteach) : true,
     });
   }
-  return out.sort((a, b) => theorySort(a.members[0], b.members[0]) || a.label.localeCompare(b.label));
+  return out.sort(
+    (a, b) =>
+      theorySort(a.members[0], b.members[0]) ||
+      b.members.length - a.members.length ||
+      a.label.localeCompare(b.label, undefined, { numeric: true }),
+  );
+}
+
+/** Each student once, from groups that may share students (Master question chips). */
+export function theoryMembers(groups: TheoryGroup[]): TheoryMember[] {
+  const seen = new Map<string, TheoryMember>();
+  for (const g of groups) for (const m of g.members) if (!seen.has(m.v.s._id)) seen.set(m.v.s._id, m);
+  return [...seen.values()];
 }
 
 /** Who to tick by default: up to 3 of the most urgent, in the hall. */

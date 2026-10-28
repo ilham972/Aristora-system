@@ -70,7 +70,8 @@ export function Correction(props: { board: Board; views: View[]; now: number; on
               <>
                 Fighter: tap a circle <b class="k-right">once ✓ right</b>, <b class="k-wrong">twice ✗ wrong</b>,{" "}
                 <b class="k-slip">3 times ↻ slip</b>; it saves when you stop. Master: tap the <b>level</b> the student hands in to
-                give the marks. Tap a name or the strip for the whole book.
+                give the marks; <b class="k-theory">?</b> = he couldn't start it (goes to Theory). Tap a name or the strip for the
+                whole book.
               </>
             }
             onName={() => false}
