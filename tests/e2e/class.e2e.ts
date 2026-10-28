@@ -512,6 +512,8 @@ test("accounts: the owner sets up, adds a teacher, her phone signs in with the l
     await O.getByRole("button", { name: "People", exact: true }).click();
     await O.getByRole("button", { name: "Add a teacher" }).click();
     const add = O.locator(".sheet");
+    await add.getByRole("button", { name: "Add, then send the sign-in link" }).click(); // no name yet: it says so
+    await contains(O.locator(".toast"), "Type the teacher's name first");
     await add.getByLabel("Name (first name and initial)").fill("Rimas");
     await shot(O, "a03-add-teacher");
     await add.getByRole("button", { name: "Add, then send the sign-in link" }).click();
@@ -540,7 +542,8 @@ test("accounts: the owner sets up, adds a teacher, her phone signs in with the l
     await textsAre(R.locator(".tabs .tab"), ["Correction"]);
     await contains(R.locator(".top h1"), "Correction");
     await R.getByRole("button", { name: "Settings" }).click();
-    await textsAre(R.locator(".seg button"), ["Alerts", "Reports", "History", "Account"]);
+    await textsAre(R.locator(".seg button"), ["Alerts", "Reports", "History", "Account"]); // no People: owner only
+    await shot(R, "a05b-teacher-settings", true);
     await R.getByRole("button", { name: "Back to the class" }).click();
     // The same link can't be used again.
     const again = await phone(backend, "correction", PHONE, null, url);

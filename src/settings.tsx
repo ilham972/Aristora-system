@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useRef, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Doc, Id } from "../convex/_generated/dataModel";
 import { secretHash } from "../convex/lib/auth";
@@ -910,8 +910,16 @@ function PersonSheet(props: { person?: Person; onClose: () => void; onAdded?: (i
   const [can, setCan] = useState<Extra[]>(p?.can ?? ["reports"]);
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
+  const nameRef = useRef<HTMLInputElement>(null);
   const toggle = <T,>(list: T[], x: T) => (list.includes(x) ? list.filter((y) => y !== x) : [...list, x]);
   const save = async () => {
+    // Say what's missing instead of a grey button (the name box may be scrolled out of sight).
+    if (!name.trim()) {
+      nameRef.current?.scrollIntoView({ block: "center" });
+      nameRef.current?.focus();
+      return toast(p ? "Type the name first." : "Type the teacher's name first (at the top).", "error");
+    }
+    if (!owner && tabs.length === 0) return toast("Tick at least one tab: Correction, Theory or Evaluation.", "error");
     setBusy(true);
     if (p) {
       const r = await act(() => mutate(api.people.update, owner ? { id: p._id, name } : { id: p._id, name, tabs, can }));
@@ -932,14 +940,20 @@ function PersonSheet(props: { person?: Person; onClose: () => void; onAdded?: (i
       sub={owner ? "The owner can always do everything." : "Tick what they may do. You can change it any time."}
       onClose={props.onClose}
       foot={
-        <button type="button" class="btn primary wide" disabled={busy || !name.trim() || (!owner && tabs.length === 0)} onClick={() => void save()}>
+        <button type="button" class="btn primary wide" disabled={busy} onClick={() => void save()}>
           {p ? "Save" : "Add, then send the sign-in link"}
         </button>
       }
     >
       <label class="si-field">
         Name (first name and initial)
-        <input value={name} maxLength={40} autoComplete="off" onInput={(e) => setName((e.target as HTMLInputElement).value)} />
+        <input
+          ref={nameRef}
+          value={name}
+          maxLength={40}
+          autoComplete="off"
+          onInput={(e) => setName((e.target as HTMLInputElement).value)}
+        />
       </label>
       {!owner && (
         <>
