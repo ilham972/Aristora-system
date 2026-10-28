@@ -1,35 +1,54 @@
 import { useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Doc, Id } from "../convex/_generated/dataModel";
+import { secretHash } from "../convex/lib/auth";
 import { PART_NAME, partsForGrade, type PartId } from "../convex/lib/book";
 import type { MarkState } from "../convex/lib/status";
 import { termOf } from "../convex/lib/syllabus";
-import { mutate } from "./backend";
+import { mutate, randomKey } from "./backend";
 import { fmtMin, type View } from "./derive";
 import { useQuery } from "./live";
 import { MoveSheet } from "./move";
 import { ReportView, type Report } from "./report";
 import { setVoiceOn, testAlert, useAlertsState } from "./sound";
-import { act, allUnits, currentRole, now, stageName, toast, type Stage, type Unit } from "./store";
+import { PinSheet } from "./signin";
+import {
+  act,
+  allUnits,
+  currentMe,
+  currentRole,
+  may,
+  now,
+  signOutHere,
+  stageName,
+  toast,
+  type Extra,
+  type Role,
+  type Stage,
+  type Unit,
+} from "./store";
 import { Sheet, STATE_WORDS } from "./ui";
 
-type Tab = "students" | "books" | "alerts" | "reports" | "history" | "privacy";
+type Tab = "students" | "books" | "people" | "alerts" | "reports" | "history" | "account";
+
+const SETTINGS_TABS: [Tab, string, () => boolean][] = [
+  ["students", "Students", () => may("students")],
+  ["books", "Books", () => may("books")],
+  ["people", "People", () => may("owner")],
+  ["alerts", "Alerts", () => true],
+  ["reports", "Reports", () => may("reports")],
+  ["history", "History", () => may("reports")],
+  ["account", "Account", () => true],
+];
 
 export function Settings(props: { views: View[]; onClose: () => void }) {
-  const [tab, setTab] = useState<Tab>("students");
+  const shown = SETTINGS_TABS.filter(([, , ok]) => ok());
+  const [chosen, setTab] = useState<Tab>(shown[0][0]);
+  const tab = shown.some(([id]) => id === chosen) ? chosen : shown[0][0];
   return (
     <main class="page settings">
       <nav class="seg" aria-label="Settings sections">
-        {(
-          [
-            ["students", "Students"],
-            ["books", "Books"],
-            ["alerts", "Alerts"],
-            ["reports", "Reports"],
-            ["history", "History"],
-            ["privacy", "Privacy"],
-          ] as [Tab, string][]
-        ).map(([id, label]) => (
+        {shown.map(([id, label]) => (
           <button key={id} type="button" class={tab === id ? "on" : ""} aria-pressed={tab === id} onClick={() => setTab(id)}>
             {label}
           </button>
@@ -40,7 +59,8 @@ export function Settings(props: { views: View[]; onClose: () => void }) {
       {tab === "alerts" && <Alerts views={props.views} />}
       {tab === "reports" && <Reports />}
       {tab === "history" && <History />}
-      {tab === "privacy" && <Privacy />}
+      {tab === "people" && <People />}
+      {tab === "account" && <Account />}
       <button type="button" class="btn ghost wide" onClick={props.onClose}>
         Back to the class
       </button>
@@ -164,25 +184,7 @@ function Students(props: { views: View[] }) {
         </>
       )}
 
-      <h3 class="block-title">Try it with demo students</h3>
-      {props.views.length === 0 ? (
-        <button
-          type="button"
-          class="btn ghost wide"
-          onClick={async () => {
-            const r = await act(() => mutate(api.demo.load, { by: currentRole() }));
-            if (r !== undefined) toast("14 demo students loaded: Grade 11 Fighter, Grade 7 Master, Grade 9 Legend.");
-          }}
-        >
-          Load demo students (three grades)
-        </button>
-      ) : hasDemo ? (
-        <button type="button" class="btn ghost wide" onClick={() => setConfirmDemo(true)}>
-          Delete the demo students
-        </button>
-      ) : (
-        <p class="muted">Demo students can only be loaded into an empty class.</p>
-      )}
+      {may("owner") && <Demo views={props.views} hasDemo={hasDemo} onDelete={() => setConfirmDemo(true)} />}
 
       {editing && (
         <Sheet
@@ -240,6 +242,33 @@ function Students(props: { views: View[] }) {
         </Sheet>
       )}
     </div>
+  );
+}
+
+/** Owner only: demo students to try the app with (only into an empty class). */
+function Demo(props: { views: View[]; hasDemo: boolean; onDelete: () => void }) {
+  return (
+    <>
+      <h3 class="block-title">Try it with demo students</h3>
+      {props.views.length === 0 ? (
+        <button
+          type="button"
+          class="btn ghost wide"
+          onClick={async () => {
+            const r = await act(() => mutate(api.demo.load, { by: currentRole() }));
+            if (r !== undefined) toast("14 demo students loaded: Grade 11 Fighter, Grade 7 Master, Grade 9 Legend.");
+          }}
+        >
+          Load demo students (three grades)
+        </button>
+      ) : props.hasDemo ? (
+        <button type="button" class="btn ghost wide" onClick={props.onDelete}>
+          Delete the demo students
+        </button>
+      ) : (
+        <p class="muted">Demo students can only be loaded into an empty class.</p>
+      )}
+    </>
   );
 }
 
@@ -660,6 +689,26 @@ function describe(e: Doc<"events">): string {
       return `${v} demo students loaded`;
     case "demo-remove":
       return `${v} demo students deleted`;
+    case "owner-setup":
+      return "set up the owner account";
+    case "sign-in":
+      return `signed in a phone (${v === "pin" ? "with PIN" : "with a sign-in link"})`;
+    case "sign-out":
+      return `signed out a phone (${v})`;
+    case "pin-set":
+      return "set a new PIN";
+    case "person-add":
+      return `added ${v}`;
+    case "person-edit":
+      return `changed what ${v} may do`;
+    case "person-remove":
+      return `removed ${v} (all their phones signed out)`;
+    case "link-made":
+      return `made a sign-in link for ${v}`;
+    case "device-out":
+      return `signed out ${v}`;
+    case "pin-clear":
+      return `cleared ${v}'s PIN`;
     default:
       return e.kind;
   }
@@ -671,7 +720,7 @@ function History() {
   const shown = list.filter((e) => e.kind !== "explained");
   return (
     <div class="settings-body">
-      <p class="muted">Every change, newest first, with the phone tab it came from. The tab name is not proof of who did it.</p>
+      <p class="muted">Every change, newest first, with the person who made it (coloured by the tab they used).</p>
       {shown.length === 0 ? (
         <p class="muted">Nothing has happened yet.</p>
       ) : (
@@ -684,7 +733,11 @@ function History() {
                 {e.unit && <span class="h-unit">{e.unit.replace("-", " ")} </span>}
                 {describe(e)}
               </span>
-              {e.by && <span class={`h-by ${e.by}`}>{e.by}</span>}
+              {(e.who || e.by) && (
+                <span class={`h-by ${e.by ?? "owner"}`} title={e.by ? `${e.who ?? ""} (${e.by} tab)` : undefined}>
+                  {e.who ?? e.by}
+                </span>
+              )}
             </li>
           ))}
         </ul>
@@ -693,31 +746,322 @@ function History() {
   );
 }
 
-function Privacy() {
+const TAB_NAMES: Record<Role, string> = { correction: "Correction", theory: "Theory", evaluation: "Evaluation" };
+const EXTRA_NAMES: Record<Extra, string> = { students: "Students", books: "Books", reports: "Reports and History" };
+const EXTRA_HELP: Record<Extra, string> = {
+  students: "add, rename, remove students",
+  books: "workbooks and unit names",
+  reports: "end-of-class reports and the history",
+};
+
+function canWords(p: { role: string; tabs: Role[]; can: Extra[] }): string {
+  if (p.role === "owner") return "Owner: everything";
+  const tabs = p.tabs.map((t) => TAB_NAMES[t]).join(", ");
+  return p.can.length ? `${tabs} · also ${p.can.map((c) => EXTRA_NAMES[c]).join(", ")}` : tabs;
+}
+
+function ago(t: number): string {
+  const min = Math.floor((now() - t) / 60_000);
+  if (min < 2) return "just now";
+  if (min < 60) return `${min} min ago`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h} h ago`;
+  const d = Math.floor(h / 24);
+  return d === 1 ? "yesterday" : `${d} days ago`;
+}
+
+function untilWords(t: number): string {
+  return new Date(t).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" });
+}
+
+/** This phone: who is signed in, the PIN, signing out, and what the sign-in protects. */
+function Account() {
+  const me = currentMe();
+  const [pin, setPin] = useState(false);
+  const [out, setOut] = useState(false);
+  if (!me) return null;
   return (
-    <div class="settings-body prose">
-      <p>
-        <strong>There is no login.</strong> Anyone who has this link can see and change everything here:
-      </p>
-      <ul>
-        <li>read every student's name, marks, calls and history</li>
-        <li>mark answers, call and send students, sign them in or out</li>
-        <li>add, rename or remove students, and end the session</li>
-      </ul>
-      <p>
-        They don't even need this page: the database address is in the public GitHub code, so someone who knows how can change
-        data directly.
-      </p>
-      <p>
-        <strong>They cannot</strong> delete the database, change the app, or see your Convex or Vercel keys. Removed students can
-        be brought back, and every change is listed in History.
-      </p>
-      <p>To stay safe:</p>
-      <ul>
-        <li>Use first name and initial only. No surnames, phone numbers or addresses.</li>
-        <li>Share the link only with your three teachers.</li>
-        <li>If marks look wrong, check History to see what changed and when.</li>
-      </ul>
+    <div class="settings-body">
+      <div class="acct">
+        <span class="acct-name">{me.name}</span>
+        <span class="muted">{canWords(me)}</span>
+      </div>
+      <button type="button" class="btn ghost wide" onClick={() => setPin(true)}>
+        {me.hasPin ? "Change my PIN" : "Choose a PIN"}
+      </button>
+      <button type="button" class="btn ghost wide" onClick={() => setOut(true)}>
+        Sign out this phone
+      </button>
+      <h3 class="block-title">Privacy</h3>
+      <div class="prose">
+        <ul>
+          <li>Only people the owner adds can sign in. Each phone signs in once and stays signed in.</li>
+          <li>Every change is saved with the name of the person who made it (Settings, History).</li>
+          <li>Lost a phone? The owner signs it out in Settings, People. A phone not used for 4 months signs out by itself.</li>
+          <li>A sign-in link is like a key: it works once, for one day. Send it only to that teacher.</li>
+          <li>For students, use first name and initial only. No surnames, phone numbers or addresses.</li>
+        </ul>
+      </div>
+      {pin && <PinSheet hasPin={me.hasPin} onClose={() => setPin(false)} />}
+      {out && (
+        <Sheet
+          title="Sign out this phone?"
+          sub={`To use it again, ${me.name} needs a new sign-in link${me.hasPin ? " or the PIN" : ""}.`}
+          onClose={() => setOut(false)}
+          foot={
+            <div class="row-actions">
+              <button type="button" class="btn ghost" onClick={() => setOut(false)}>
+                Stay signed in
+              </button>
+              <button type="button" class="btn primary" onClick={() => void signOutHere()}>
+                Sign out
+              </button>
+            </div>
+          }
+        >
+          <p class="muted">Nothing is deleted. The class carries on on the other phones.</p>
+        </Sheet>
+      )}
     </div>
+  );
+}
+
+type Person = {
+  _id: Id<"users">;
+  name: string;
+  role: "owner" | "teacher";
+  tabs: Role[];
+  can: Extra[];
+  hasPin: boolean;
+  lockedUntil: number | null;
+  devices: { _id: Id<"devices">; label: string; createdAt: number; lastSeenAt: number }[];
+  linkUntil: number | null;
+  createdAt: number;
+};
+
+/** Owner: the people who can sign in, what each may do, their phones, sign-in links. */
+function People() {
+  const list = useQuery<Person[]>(api.people.list, {});
+  const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<Id<"users"> | null>(null);
+  const [link, setLink] = useState<{ name: string; url: string; until: number } | null>(null);
+  const me = currentMe();
+  const sendLink = async (p: { _id: Id<"users">; name: string }) => {
+    const code = randomKey(16);
+    const r = await act(() => mutate(api.people.makeLink, { id: p._id, codeHash: secretHash("link", code) }));
+    if (r) setLink({ name: p.name, url: `${location.origin}/#join=${code}`, until: r.expiresAt });
+  };
+  if (!list) return <p class="muted settings-body">Loading…</p>;
+  const person = editing ? list.find((p) => p._id === editing) : undefined;
+  return (
+    <div class="settings-body">
+      <p class="muted">
+        Add each teacher once, then send them a sign-in link on WhatsApp. They tap it on their own phone and stay signed in.
+      </p>
+      <button type="button" class="btn primary wide" onClick={() => setAdding(true)}>
+        Add a teacher
+      </button>
+      <ul class="people">
+        {list.map((p) => (
+          <li key={p._id} class="person">
+            <div class="p-head">
+              <b>{p.name}</b>
+              {p._id === me?._id && <span class="p-tag">You</span>}
+            </div>
+            <p class="p-can">{canWords(p)}</p>
+            <p class="p-phones">
+              {p.devices.length === 0
+                ? "No phone signed in"
+                : `${p.devices.length} phone${p.devices.length === 1 ? "" : "s"} signed in, used ${ago(p.devices[0].lastSeenAt)}`}
+              {p.linkUntil ? ` · link waiting until ${untilWords(p.linkUntil)}` : ""}
+              {p.lockedUntil ? " · PIN locked (wrong PINs)" : p.hasPin ? " · has a PIN" : ""}
+            </p>
+            <div class="row-actions wrap">
+              <button type="button" class="btn small" onClick={() => void sendLink(p)}>
+                Send sign-in link
+              </button>
+              <button type="button" class="btn ghost small" onClick={() => setEditing(p._id)}>
+                {p.role === "owner" ? "Phones" : "Change"}
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+      {adding && (
+        <PersonSheet
+          onClose={() => setAdding(false)}
+          onAdded={(id, name) => {
+            setAdding(false);
+            void sendLink({ _id: id, name });
+          }}
+        />
+      )}
+      {person && <PersonSheet person={person} onClose={() => setEditing(null)} />}
+      {link && <LinkSheet {...link} onClose={() => setLink(null)} />}
+    </div>
+  );
+}
+
+function PersonSheet(props: { person?: Person; onClose: () => void; onAdded?: (id: Id<"users">, name: string) => void }) {
+  const p = props.person;
+  const owner = p?.role === "owner";
+  const [name, setName] = useState(p?.name ?? "");
+  const [tabs, setTabs] = useState<Role[]>(p?.tabs ?? ["correction"]);
+  const [can, setCan] = useState<Extra[]>(p?.can ?? ["reports"]);
+  const [confirm, setConfirm] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const toggle = <T,>(list: T[], x: T) => (list.includes(x) ? list.filter((y) => y !== x) : [...list, x]);
+  const save = async () => {
+    setBusy(true);
+    if (p) {
+      const r = await act(() => mutate(api.people.update, owner ? { id: p._id, name } : { id: p._id, name, tabs, can }));
+      setBusy(false);
+      if (r !== undefined) {
+        toast(`${name.trim()} saved.`);
+        props.onClose();
+      }
+    } else {
+      const id = await act(() => mutate(api.people.add, { name, tabs, can }));
+      setBusy(false);
+      if (id) props.onAdded?.(id, name.trim());
+    }
+  };
+  return (
+    <Sheet
+      title={p ? p.name : "Add a teacher"}
+      sub={owner ? "The owner can always do everything." : "Tick what they may do. You can change it any time."}
+      onClose={props.onClose}
+      foot={
+        <button type="button" class="btn primary wide" disabled={busy || !name.trim() || (!owner && tabs.length === 0)} onClick={() => void save()}>
+          {p ? "Save" : "Add, then send the sign-in link"}
+        </button>
+      }
+    >
+      <label class="si-field">
+        Name (first name and initial)
+        <input value={name} maxLength={40} autoComplete="off" onInput={(e) => setName((e.target as HTMLInputElement).value)} />
+      </label>
+      {!owner && (
+        <>
+          <h3 class="block-title">Tabs</h3>
+          <div class="perm-list">
+            {(Object.keys(TAB_NAMES) as Role[]).map((t) => (
+              <label key={t} class="perm">
+                <input type="checkbox" checked={tabs.includes(t)} onChange={() => setTabs(toggle(tabs, t))} />
+                <span>{TAB_NAMES[t]}</span>
+              </label>
+            ))}
+          </div>
+          <h3 class="block-title">Also</h3>
+          <div class="perm-list">
+            {(Object.keys(EXTRA_NAMES) as Extra[]).map((x) => (
+              <label key={x} class="perm">
+                <input type="checkbox" checked={can.includes(x)} onChange={() => setCan(toggle(can, x))} />
+                <span>
+                  {EXTRA_NAMES[x]}
+                  <small>{EXTRA_HELP[x]}</small>
+                </span>
+              </label>
+            ))}
+          </div>
+        </>
+      )}
+      {p && (
+        <>
+          <h3 class="block-title">Phones signed in</h3>
+          {p.devices.length === 0 ? (
+            <p class="muted">None. Send a sign-in link.</p>
+          ) : (
+            <ul class="plain-list">
+              {p.devices.map((d) => (
+                <li key={d._id}>
+                  <span class="st-who">
+                    <span>
+                      {d.label}
+                      {d._id === currentMe()?.deviceId && <span class="p-tag">This phone</span>}
+                    </span>
+                    <small>
+                      Signed in {ago(d.createdAt)} · used {ago(d.lastSeenAt)}
+                    </small>
+                  </span>
+                  <button
+                    type="button"
+                    class="link-btn danger"
+                    onClick={async () => {
+                      const r = await act(() => mutate(api.people.signOutDevice, { deviceId: d._id }));
+                      if (r) toast(`${p.name}: ${d.label} signed out.`);
+                    }}
+                  >
+                    Sign out
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {(p.hasPin || p.lockedUntil) && (
+            <button
+              type="button"
+              class="btn ghost wide"
+              onClick={async () => {
+                const r = await act(() => mutate(api.people.clearPin, { id: p._id }));
+                if (r) toast(`${p.name}'s PIN cleared. Send a sign-in link; they choose a new PIN after.`);
+              }}
+            >
+              Clear the PIN (forgotten or locked)
+            </button>
+          )}
+          {!owner &&
+            (confirm ? (
+              <div class="row-actions">
+                <button type="button" class="btn ghost" onClick={() => setConfirm(false)}>
+                  Keep {p.name}
+                </button>
+                <button
+                  type="button"
+                  class="btn danger"
+                  onClick={async () => {
+                    const r = await act(() => mutate(api.people.remove, { id: p._id }));
+                    if (r !== undefined) {
+                      toast(`${p.name} removed. Their phones are signed out.`);
+                      props.onClose();
+                    }
+                  }}
+                >
+                  Remove {p.name}
+                </button>
+              </div>
+            ) : (
+              <button type="button" class="btn ghost wide danger-text" onClick={() => setConfirm(true)}>
+                Remove {p.name}
+              </button>
+            ))}
+        </>
+      )}
+    </Sheet>
+  );
+}
+
+/** The new sign-in link: send it on WhatsApp, or copy it. It is shown only now. */
+function LinkSheet(props: { name: string; url: string; until: number; onClose: () => void }) {
+  const text = `${props.name}, this is your sign-in link for the ARISTORA class system. Tap it on your own phone (it works once, until ${untilWords(props.until)}):\n${props.url}`;
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(props.url);
+      toast("Link copied. Paste it into a message to " + props.name + ".");
+    } catch {
+      toast("Couldn't copy. Press and hold the link to copy it.", "error");
+    }
+  };
+  return (
+    <Sheet title={`Sign-in link for ${props.name}`} sub={`Works once, until ${untilWords(props.until)}. Send it only to ${props.name}.`} onClose={props.onClose}>
+      <a class="btn whatsapp wide big" href={`https://wa.me/?text=${encodeURIComponent(text)}`} target="_blank" rel="noopener noreferrer">
+        Send on WhatsApp
+      </a>
+      <button type="button" class="btn ghost wide" onClick={() => void copy()}>
+        Copy the link
+      </button>
+      <input class="full link-text" readOnly value={props.url} aria-label="Sign-in link" onFocus={(e) => (e.target as HTMLInputElement).select()} />
+      <p class="muted small">This link is shown only now. If it gets lost, send a new one: the old one stops working.</p>
+    </Sheet>
   );
 }

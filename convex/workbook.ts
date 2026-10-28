@@ -22,6 +22,7 @@ import {
 } from "./lib/backend";
 import { levelOutOf, type MasterData } from "./lib/book";
 import { computeMaster, type MQ, type MState } from "./lib/master";
+import { actor } from "./lib/auth";
 
 async function masterWork(ctx: MutationCtx, student: Doc<"students">, unitId: Id<"units"> | undefined, now: number) {
   const { unit, book, progress } = await workPlace(ctx, student, "master", unitId, now);
@@ -43,6 +44,7 @@ function levelOf(book: MasterData, n: number) {
 }
 
 const base = {
+  token: v.optional(v.string()),
   studentId: v.id("students"),
   unitId: v.optional(v.id("units")),
   by: v.optional(v.string()),
@@ -52,6 +54,7 @@ const base = {
 export const levelDone = mutation({
   args: { ...base, level: v.number() },
   handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["correction", "evaluation"], args.by);
     const now = Date.now();
     const student = await getStudent(ctx, args.studentId);
     const { unit, book, progress, m } = await masterWork(ctx, student, args.unitId, now);
@@ -81,6 +84,7 @@ export const levelDone = mutation({
 export const undoDone = mutation({
   args: { ...base, level: v.number() },
   handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["correction", "evaluation"], args.by);
     const now = Date.now();
     const student = await getStudent(ctx, args.studentId);
     const { unit, book, progress, m } = await masterWork(ctx, student, args.unitId, now);
@@ -118,6 +122,7 @@ export const correct = mutation({
     total: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["correction", "evaluation"], args.by);
     const now = Date.now();
     const student = await getStudent(ctx, args.studentId);
     const { unit, book, progress, m } = await masterWork(ctx, student, args.unitId, now);
@@ -188,6 +193,7 @@ export const correct = mutation({
 export const explain = mutation({
   args: { ...base, qs: v.array(v.number()), on: v.boolean() },
   handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["evaluation"], args.by);
     const now = Date.now();
     if (args.qs.length === 0) return;
     if (args.qs.length > 400) fail("Too many questions at once.");
@@ -226,6 +232,7 @@ export const explain = mutation({
 export const reteach = mutation({
   args: { ...base, on: v.boolean() },
   handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["correction", "evaluation"], args.by);
     const now = Date.now();
     const student = await getStudent(ctx, args.studentId);
     const { unit, progress, m } = await masterWork(ctx, student, args.unitId, now);

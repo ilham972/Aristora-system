@@ -17,6 +17,7 @@ import { fighter } from "./lib/book";
 import { computeMaster } from "./lib/master";
 import { computeStatus } from "./lib/status";
 import { room } from "./schema";
+import { actor, allowed } from "./lib/auth";
 
 type Rejected = { studentId: Id<"students">; name: string; reason: string };
 
@@ -28,12 +29,14 @@ type Rejected = { studentId: Id<"students">; name: string; reason: string };
  */
 export const create = mutation({
   args: {
+    token: v.optional(v.string()),
     studentIds: v.array(v.id("students")),
     room,
     kind: room,
     by: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await actor(ctx, args.token, [args.room], args.by);
     const now = Date.now();
     const by = cleanBy(args.by);
     const ids = [...new Set(args.studentIds)];
@@ -123,8 +126,9 @@ async function sendNow(ctx: MutationCtx, c: Doc<"calls">, now: number, session: 
 
 /** Correction: "Sent" - the student is on his way. */
 export const send = mutation({
-  args: { callIds: v.array(v.id("calls")), by: v.optional(v.string()) },
+  args: { token: v.optional(v.string()), callIds: v.array(v.id("calls")), by: v.optional(v.string()) },
   handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["correction"], args.by);
     const now = Date.now();
     const by = cleanBy(args.by);
     const session = await currentSession(ctx, now);
@@ -149,8 +153,9 @@ export const send = mutation({
 
 /** Correction: "Not now" (toilet, break). The call goes back to the teacher. */
 export const decline = mutation({
-  args: { callId: v.id("calls"), by: v.optional(v.string()) },
+  args: { token: v.optional(v.string()), callId: v.id("calls"), by: v.optional(v.string()) },
   handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["correction"], args.by);
     const now = Date.now();
     const c = await ctx.db.get(args.callId);
     if (!c || c.status !== "requested") return false;
@@ -165,8 +170,9 @@ export const decline = mutation({
 
 /** Correction tapped "Not now" by mistake: the call comes back, as long as nothing else happened since. */
 export const undoDecline = mutation({
-  args: { callId: v.id("calls"), by: v.optional(v.string()) },
+  args: { token: v.optional(v.string()), callId: v.id("calls"), by: v.optional(v.string()) },
   handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["correction"], args.by);
     const now = Date.now();
     const c = await ctx.db.get(args.callId);
     if (!c || c.status !== "declined") return false;
@@ -183,8 +189,9 @@ export const undoDecline = mutation({
 
 /** Room teacher changed his mind before the student was sent. */
 export const cancel = mutation({
-  args: { callIds: v.array(v.id("calls")), by: v.optional(v.string()) },
+  args: { token: v.optional(v.string()), callIds: v.array(v.id("calls")), by: v.optional(v.string()) },
   handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["correction", "theory", "evaluation"], args.by);
     const now = Date.now();
     const session = await currentSession(ctx, now);
     for (const id of args.callIds) {
@@ -204,6 +211,7 @@ export const cancel = mutation({
  */
 export const finish = mutation({
   args: {
+    token: v.optional(v.string()),
     items: v.array(
       v.object({
         callId: v.id("calls"),
@@ -220,6 +228,7 @@ export const finish = mutation({
     by: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const user = await actor(ctx, args.token, ["theory", "evaluation"], args.by);
     const now = Date.now();
     const by = cleanBy(args.by);
     const session = await currentSession(ctx, now);
@@ -228,6 +237,7 @@ export const finish = mutation({
       const c = await ctx.db.get(item.callId);
       if (!c || (c.status !== "sent" && c.status !== "requested")) continue;
       if (c.pull && c.status === "requested") continue; // still in the evaluation room
+      if (!allowed(user, c.room)) fail(`Only ${c.room === "theory" ? "Theory" : "Evaluation"} can finish this.`);
       const s = await ctx.db.get(c.studentId);
       if (!s) continue;
       const value = await record(ctx, c, s, item, now, session, by);
@@ -364,8 +374,9 @@ async function record(
 
 /** Correction: a teacher forgot "Done" and the student is back in the hall. */
 export const release = mutation({
-  args: { studentId: v.id("students"), by: v.optional(v.string()) },
+  args: { token: v.optional(v.string()), studentId: v.id("students"), by: v.optional(v.string()) },
   handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["correction"], args.by);
     const now = Date.now();
     const s = await ctx.db.get(args.studentId);
     if (!s) fail("That student no longer exists.");

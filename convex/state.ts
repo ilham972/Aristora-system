@@ -1,14 +1,16 @@
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import { query } from "./_generated/server";
+import { viewer } from "./lib/auth";
 
 /**
  * Everything the phones need, live: the students, each one's work in his current book,
  * the books in use, the open calls and the session.
  */
 export const get = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { token: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    await viewer(ctx, args.token);
     const students = await ctx.db
       .query("students")
       .withIndex("by_archived", (q) => q.eq("archived", false))
@@ -52,8 +54,9 @@ export const get = query({
 });
 
 export const archived = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { token: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    await viewer(ctx, args.token, "students");
     const list = await ctx.db
       .query("students")
       .withIndex("by_archived", (q) => q.eq("archived", true))
@@ -63,16 +66,19 @@ export const archived = query({
 });
 
 export const history = query({
-  args: { limit: v.optional(v.number()) },
-  handler: async (ctx, { limit }) => {
+  args: { token: v.optional(v.string()), limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    await viewer(ctx, args.token, "reports");
+    const { limit } = args;
     const n = Math.min(Math.max(Math.floor(limit ?? 80), 1), 300);
     return await ctx.db.query("events").withIndex("by_at").order("desc").take(n);
   },
 });
 
 export const sessions = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { token: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    await viewer(ctx, args.token, "reports");
     const list = await ctx.db.query("sessions").withIndex("by_startedAt").order("desc").take(20);
     return list
       .filter((s) => !s.open)

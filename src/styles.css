@@ -2080,3 +2080,180 @@ p.small {
   font-weight: 700;
   color: var(--ink-2);
 }
+
+/* ---------- Signing in, people, this phone ---------- */
+
+.signin {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px 16px 40px;
+}
+.si-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--cond);
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+}
+.signin .role-mark {
+  --role: var(--ink);
+}
+.si-card {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 18px;
+  border-radius: 18px;
+  background: var(--card);
+  border: 1px solid var(--line);
+}
+.si-card h1 {
+  font-family: var(--cond);
+  font-size: 26px;
+  line-height: 1.1;
+}
+.si-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.si-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 700;
+  font-size: 15px;
+}
+.si-field input {
+  width: 100%;
+  min-height: 50px;
+  padding: 0 14px;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  font-size: 18px;
+  font-weight: 600;
+}
+.si-field input[type="password"] {
+  letter-spacing: 0.3em;
+}
+.si-error {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--red-soft);
+  color: var(--red-ink);
+  font-weight: 600;
+}
+.acct {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--card);
+  border: 1px solid var(--line);
+}
+.acct-name {
+  font-family: var(--cond);
+  font-weight: 700;
+  font-size: 22px;
+}
+.people {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.person {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--card);
+  border: 1px solid var(--line);
+}
+.p-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+}
+.p-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: var(--line-2);
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 700;
+  vertical-align: middle;
+}
+.p-can {
+  font-weight: 600;
+  font-size: 14.5px;
+}
+.p-phones {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.person .row-actions {
+  margin-top: 6px;
+}
+.perm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.perm {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 6px 12px;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  font-weight: 700;
+}
+.perm input {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  accent-color: var(--ink);
+}
+.perm span {
+  display: flex;
+  flex-direction: column;
+}
+.perm small {
+  font-weight: 500;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+.btn.whatsapp {
+  background: #128c4b;
+  text-decoration: none;
+}
+.btn.danger {
+  background: var(--red);
+}
+.danger-text {
+  color: var(--red-ink) !important;
+}
+.link-text {
+  font-size: 13px !important;
+  color: var(--ink-2);
+}
+.h-by.owner {
+  background: var(--line-2);
+}

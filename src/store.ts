@@ -7,7 +7,8 @@ import type { Doc, Id } from "../convex/_generated/dataModel";
 import { fighter, type Fighter, type MasterData } from "../convex/lib/book";
 import { EMPTY_MASTER, type MState } from "../convex/lib/master";
 import { computeStatus, type Mark, type Marks, type Status } from "../convex/lib/status";
-import { errorText, mutate, subscribe, watchLink, type Link } from "./backend";
+import { SIGNED_OUT } from "../convex/lib/auth";
+import { errorText, mutate, phoneToken, savePhoneToken, subscribe, watchLink, type Link } from "./backend";
 
 export type Student = Doc<"students">;
 export type Call = Doc<"calls">;
@@ -24,6 +25,18 @@ export type Board = {
   legacy: boolean;
 };
 export type Role = "correction" | "theory" | "evaluation";
+export type Extra = "students" | "books" | "reports";
+/** This phone's person, as the server tells it. */
+export type Me = {
+  _id: Id<"users">;
+  name: string;
+  role: "owner" | "teacher";
+  tabs: Role[];
+  can: Extra[];
+  hasPin: boolean;
+  deviceId: Id<"devices">;
+};
+export type MeState = { user: Me | null; setupDone: boolean };
 
 export const STAGES: { id: Stage; name: string; short: string }[] = [
   { id: "fighter", name: "Fighter", short: "F" },
@@ -47,6 +60,10 @@ function emit() {
 let units: Unit[] | null = null;
 const unitById = new Map<string, Unit>();
 let ensuring = false;
+/** Undefined until the server answers who this phone is. */
+let me: MeState | undefined;
+let stopMe: (() => void) | null = null;
+let stopBoard: (() => void) | null = null;
 
 /** One-time data updates on the server (syllabus, books, students from before stages). */
 async function ensureData() {
@@ -62,14 +79,36 @@ async function ensureData() {
 }
 
 export function startStore() {
-  void ensureData();
-  subscribe(
-    api.state.get,
+  watchMe();
+  watchLink((l) => {
+    link = l;
+    emit();
+  });
+  void syncClock();
+  setInterval(() => void syncClock(), 10 * 60_000);
+}
+
+/** Who this phone is. Signed in: the class data comes. Signed out (or signed out by the owner): it stops. */
+function watchMe() {
+  stopMe?.();
+  stopMe = subscribe(
+    api.auth.me,
     {},
     (value) => {
-      board = value;
-      boardError = null;
-      if (value.legacy) void ensureData();
+      me = value;
+      if (value.user) {
+        if (!value.user.tabs.includes(role)) role = value.user.tabs[0] ?? "correction";
+        if (!stopBoard) stopBoard = startBoard();
+      } else {
+        stopBoard?.();
+        stopBoard = null;
+        board = null;
+        if (phoneToken()) {
+          // The key no longer works (signed out from the owner's phone, or unused for months).
+          savePhoneToken(null);
+          watchMe();
+        }
+      }
       emit();
     },
     (e) => {
@@ -77,23 +116,81 @@ export function startStore() {
       emit();
     },
   );
-  subscribe(
-    api.catalog.units,
-    {},
-    (value) => {
-      units = value;
-      unitById.clear();
-      for (const u of value) unitById.set(u._id, u);
-      emit();
-    },
-    () => {},
-  );
-  watchLink((l) => {
-    link = l;
-    emit();
-  });
-  void syncClock();
-  setInterval(() => void syncClock(), 10 * 60_000);
+}
+
+/** This phone has just signed in with a new key. */
+export function signedIn(token: string) {
+  savePhoneToken(token);
+  me = undefined;
+  watchMe();
+  emit();
+}
+
+/** Sign this phone out. */
+export async function signOutHere(): Promise<void> {
+  try {
+    await mutate(api.auth.signOut, {});
+  } catch {
+    /* offline: the key is forgotten here anyway */
+  }
+  stopBoard?.();
+  stopBoard = null;
+  board = null;
+  savePhoneToken(null);
+  me = undefined;
+  watchMe();
+  emit();
+}
+
+function startBoard(): () => void {
+  void ensureData();
+  const stops = [
+    subscribe(
+      api.state.get,
+      {},
+      (value) => {
+        board = value;
+        boardError = null;
+        if (value.legacy) void ensureData();
+        emit();
+      },
+      (e) => {
+        const text = errorText(e);
+        if (text === SIGNED_OUT) return; // the sign-in screen takes over
+        boardError = text;
+        emit();
+      },
+    ),
+    subscribe(
+      api.catalog.units,
+      {},
+      (value) => {
+        units = value;
+        unitById.clear();
+        for (const u of value) unitById.set(u._id, u);
+        emit();
+      },
+      () => {},
+    ),
+  ];
+  return () => {
+    for (const stop of stops) stop();
+    board = null;
+    boardError = null;
+  };
+}
+
+export function currentMe(): Me | null {
+  return me?.user ?? null;
+}
+
+/** Owner, or has this permission (tabs and extras). */
+export function may(what: Role | Extra | "owner"): boolean {
+  const u = me?.user;
+  if (!u) return false;
+  if (u.role === "owner") return true;
+  if (what === "owner") return false;
+  return (u.tabs as string[]).includes(what) || (u.can as string[]).includes(what);
 }
 
 async function syncClock() {
@@ -126,7 +223,7 @@ export function useStore() {
       listeners.delete(force);
     };
   }, []);
-  return { board, boardError, link, units };
+  return { board, boardError, link, units, me };
 }
 
 export function unitOf(id: string | undefined | null): Unit | null {

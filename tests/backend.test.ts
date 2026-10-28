@@ -3,13 +3,14 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
+import { asOwner } from "./helpers";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 const MIN = 60_000;
 const START = new Date("2026-10-27T14:00:00+05:30").getTime();
 
 async function setup() {
-  const t = convexTest(schema, modules);
+  const t = await asOwner(convexTest(schema, modules));
   await t.mutation(api.setup.ensure, {});
   return t;
 }

@@ -6,8 +6,9 @@ import { buildViews, evalQueue, fmtClock, theoryGroups, type View } from "./deri
 import { Evaluation, Theory } from "./rooms";
 import { Settings } from "./settings";
 import { alertsState, armAlerts, listenForTaps, ring, useAlertsState, type AlertKind } from "./sound";
-import { setRole, useStore, useTick, type Board, type Role } from "./store";
-import { Toasts } from "./ui";
+import { clearHash, PinSheet, pinAsked, readHash, SignIn, stopAskingPin, type Hash } from "./signin";
+import { setRole, signOutHere, useStore, useTick, type Board, type Role } from "./store";
+import { Sheet, Toasts } from "./ui";
 
 const ROLES: { id: Role; label: string }[] = [
   { id: "correction", label: "Correction" },
@@ -27,13 +28,25 @@ function loadRole(): Role {
 }
 
 export function App() {
-  const { board, boardError, link } = useStore();
-  const [role, setRoleState] = useState<Role>(loadRole);
+  const { board, boardError, link, me } = useStore();
+  const [chosen, setRoleState] = useState<Role>(loadRole);
   const [page, setPage] = useState<"board" | "settings">("board");
+  // The address bar can hold a sign-in link (#join=...) or the setup code (#setup=...).
+  const [, setHashSeen] = useState(0);
+  const hash: Hash = readHash();
+  const forgetHash = () => {
+    clearHash();
+    setHashSeen((n) => n + 1);
+  };
+  const [pinClosedFor, setPinClosedFor] = useState<string | null>(null);
   const now = useTick(10_000);
   const alerts = useAlertsState();
   const topRef = useRef<HTMLDivElement>(null);
   const loaded = !!board;
+  const user = me?.user ?? null;
+  // Only the tabs this person may use; the phone remembers the last one.
+  const tabs = ROLES.filter((r) => !user || user.tabs.includes(r.id));
+  const role: Role = tabs.some((r) => r.id === chosen) ? chosen : (tabs[0]?.id ?? "correction");
 
   setRole(role);
   useEffect(() => {
@@ -45,6 +58,11 @@ export function App() {
   }, [role]);
   // Phones only allow sound after a tap: every tap turns alerts (back) on where needed.
   useEffect(() => listenForTaps(), []);
+  useEffect(() => {
+    const seen = () => setHashSeen((n) => n + 1);
+    window.addEventListener("hashchange", seen);
+    return () => window.removeEventListener("hashchange", seen);
+  }, []);
   // Sticky strips sit right under the header, whatever its height (it grows when offline).
   useEffect(() => {
     const el = topRef.current;
@@ -57,6 +75,23 @@ export function App() {
     return () => ro.disconnect();
   }, [loaded]);
 
+  if (me === undefined) {
+    return (
+      <div class="boot">
+        {boardError ? (
+          <>
+            <p>
+              <strong>Can't reach the class board.</strong>
+            </p>
+            <p>{boardError}</p>
+          </>
+        ) : (
+          <SlowLoad />
+        )}
+      </div>
+    );
+  }
+  if (!user) return <SignIn setupDone={me.setupDone} />;
   if (!board) {
     return (
       <div class="boot">
@@ -146,7 +181,7 @@ export function App() {
       )}
 
       <nav class="tabs" aria-label="Choose your job">
-        {ROLES.map((r) => {
+        {tabs.map((r) => {
           const badge = r.id === "correction" ? toSend : r.id === "theory" ? theoryRed : evalRed;
           return (
             <button
@@ -168,7 +203,55 @@ export function App() {
       </nav>
       <Toasts />
       <Alerts role={role} board={board} views={views} now={now} live={link.connected} />
+      {(hash.join || hash.setup) && (
+        <Sheet
+          title={`Signed in as ${user.name}`}
+          sub="You opened a sign-in link on a phone that is already signed in."
+          onClose={forgetHash}
+          foot={
+            <div class="row-actions">
+              <button
+                type="button"
+                class="btn ghost"
+                onClick={forgetHash}
+              >
+                Keep {user.name}
+              </button>
+              <button type="button" class="btn primary" onClick={() => void signOutHere()}>
+                Sign out, use the link
+              </button>
+            </div>
+          }
+        >
+          <p class="muted">A link is for one person's phone. If this phone is now someone else's, sign out first.</p>
+        </Sheet>
+      )}
+      {pinAsked() && pinClosedFor !== user._id && !user.hasPin && !(hash.join || hash.setup) && (
+        <PinSheet
+          hasPin={false}
+          first
+          onClose={() => {
+            stopAskingPin();
+            setPinClosedFor(user._id);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+/** "Loading…", and after a while a hint: phones without data wait here. */
+function SlowLoad() {
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    const id = setTimeout(() => setSlow(true), 8000);
+    return () => clearTimeout(id);
+  }, []);
+  return (
+    <>
+      <p>Loading…</p>
+      {slow && <p class="muted">Still loading. Check that this phone has mobile data or Wi-Fi.</p>}
+    </>
   );
 }
 

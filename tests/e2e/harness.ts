@@ -30,9 +30,24 @@ export function makeBackend(modules: Record<string, () => Promise<unknown>>) {
   async function deliver(id: string) {
     const s = subs.get(id);
     if (!s) return;
-    const value = await t.query(makeFunctionReference<"query">(s.name), s.args as never);
+    let value: unknown = null;
+    let error: string | null = null;
+    try {
+      value = await t.query(makeFunctionReference<"query">(s.name), s.args as never);
+    } catch (e) {
+      // Like Convex: a query that throws reaches the page's error callback; the subscription stays.
+      const data = (e as { data?: unknown }).data;
+      error = typeof data === "string" ? data : String((e as Error).message ?? e);
+    }
     await s.page
-      .evaluate(([i, v]) => (window as unknown as { __abDeliver(i: string, v: unknown): void }).__abDeliver(i, v), [id, value] as const)
+      .evaluate(
+        ([i, v, err]) => {
+          const w = window as unknown as { __abDeliver(i: string, v: unknown): void; __abDeliverError(i: string, e: string): void };
+          if (err !== null) w.__abDeliverError(i, err);
+          else w.__abDeliver(i, v);
+        },
+        [id, value, error] as const,
+      )
       .catch(() => undefined);
   }
   async function push() {
@@ -68,15 +83,23 @@ export function makeBackend(modules: Record<string, () => Promise<unknown>>) {
         __abMutation(n: string, a: unknown): Promise<{ value?: unknown; __error?: string }>;
       };
       const cbs: Record<string, (v: unknown) => void> = {};
+      const errs: Record<string, (e: unknown) => void> = {};
       let n = 0;
       w.__abDeliver = (id: string, v: unknown) => cbs[id]?.(v);
+      w.__abDeliverError = (id: string, message: string) => {
+        const e = new Error(message) as Error & { data?: string };
+        e.data = message;
+        errs[id]?.(e);
+      };
       w.__ARISTORA_TEST_BACKEND__ = {
         subscribe(name: string, args: unknown, cb: (v: unknown) => void, onError: (e: unknown) => void) {
           const id = `s${++n}${Math.random().toString(36).slice(2, 6)}`;
           cbs[id] = cb;
+          errs[id] = onError;
           w.__abSubscribe(name, args, id).catch(onError);
           return () => {
             delete cbs[id];
+            delete errs[id];
             void w.__abUnsubscribe(id);
           };
         },

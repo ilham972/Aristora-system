@@ -17,6 +17,7 @@ import {
 } from "./lib/backend";
 import { termOf } from "./lib/syllabus";
 import { stage } from "./schema";
+import { actor } from "./lib/auth";
 
 const STAGE_WORD: Record<Stage, string> = { fighter: "Fighter", master: "Master", legend: "Legend", sprint: "Exam Sprint" };
 
@@ -47,6 +48,7 @@ async function checkPlace(
 
 export const add = mutation({
   args: {
+    token: v.optional(v.string()),
     name: v.string(),
     grade: v.optional(v.number()),
     term: v.optional(v.number()),
@@ -55,6 +57,7 @@ export const add = mutation({
     by: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["students"]);
     const now = Date.now();
     const name = cleanName(args.name);
     const all = await ctx.db.query("students").withIndex("by_archived", (q) => q.eq("archived", false)).collect();
@@ -97,6 +100,7 @@ export const add = mutation({
  */
 export const move = mutation({
   args: {
+    token: v.optional(v.string()),
     id: v.id("students"),
     grade: v.number(),
     term: v.number(),
@@ -105,6 +109,7 @@ export const move = mutation({
     by: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["any"], args.by);
     const now = Date.now();
     const s = await getStudent(ctx, args.id);
     const unit = await checkPlace(ctx, args.grade, args.term, args.stage, args.unitId);
@@ -132,8 +137,9 @@ export const move = mutation({
 });
 
 export const rename = mutation({
-  args: { id: v.id("students"), name: v.string(), by: v.optional(v.string()) },
+  args: { token: v.optional(v.string()), id: v.id("students"), name: v.string(), by: v.optional(v.string()) },
   handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["students"]);
     const now = Date.now();
     const s = await getStudent(ctx, args.id);
     const name = cleanName(args.name);
@@ -149,8 +155,9 @@ export const rename = mutation({
 
 /** Remove from the class (kept, and can be restored with all progress). */
 export const setArchived = mutation({
-  args: { id: v.id("students"), archived: v.boolean(), by: v.optional(v.string()) },
+  args: { token: v.optional(v.string()), id: v.id("students"), archived: v.boolean(), by: v.optional(v.string()) },
   handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["students"]);
     const now = Date.now();
     const s = await getStudent(ctx, args.id);
     const session = await currentSession(ctx, now);
@@ -183,8 +190,9 @@ async function refreshOut(ctx: Parameters<typeof refresh>[0], id: Parameters<typ
 
 /** Tap in when he arrives, tap out when he leaves. The first tap-in starts the session. */
 export const setPresent = mutation({
-  args: { id: v.id("students"), present: v.boolean(), by: v.optional(v.string()) },
+  args: { token: v.optional(v.string()), id: v.id("students"), present: v.boolean(), by: v.optional(v.string()) },
   handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["correction"], args.by);
     const now = Date.now();
     const s = await getStudent(ctx, args.id);
     if (s.archived) fail(`${s.name} was removed from the class.`);

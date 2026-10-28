@@ -12,6 +12,74 @@ type TestBackend = {
 };
 
 const testBackend = (globalThis as { __ARISTORA_TEST_BACKEND__?: TestBackend }).__ARISTORA_TEST_BACKEND__;
+
+// ---- This phone's sign-in key ----
+// Made here from the phone's secure random numbers, kept in this browser, sent with every request.
+// The server keeps only its SHA-256.
+
+const TOKEN_KEY = "aristora.token";
+let token: string | null = (() => {
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+})();
+
+export function phoneToken(): string | null {
+  return token;
+}
+
+export function savePhoneToken(t: string | null): void {
+  token = t;
+  try {
+    if (t) localStorage.setItem(TOKEN_KEY, t);
+    else localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* private mode: signed in until the page is closed */
+  }
+}
+
+/** Random bytes from the phone's secure generator, as base64url text. */
+export function randomKey(bytes = 32): string {
+  const b = new Uint8Array(bytes);
+  crypto.getRandomValues(b);
+  let s = "";
+  for (const x of b) s += String.fromCharCode(x);
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+/** A short name for this phone, for the owner's list of signed-in phones. */
+export function deviceLabel(): string {
+  const ua = navigator.userAgent;
+  const os = /iPhone/.test(ua)
+    ? "iPhone"
+    : /iPad/.test(ua)
+      ? "iPad"
+      : /Android/.test(ua)
+        ? "Android"
+        : /Macintosh/.test(ua)
+          ? "Mac"
+          : /Windows/.test(ua)
+            ? "Windows"
+            : "Phone";
+  const browser = /Edg\//.test(ua)
+    ? "Edge"
+    : /SamsungBrowser/.test(ua)
+      ? "Samsung"
+      : /CriOS|Chrome\//.test(ua)
+        ? "Chrome"
+        : /FxiOS|Firefox\//.test(ua)
+          ? "Firefox"
+          : /Safari\//.test(ua)
+            ? "Safari"
+            : "";
+  return browser ? `${os} · ${browser}` : os;
+}
+
+function withToken<A>(args: A): A {
+  return token ? ({ token, ...(args as object) } as A) : args;
+}
 let client: ConvexClient | null = null;
 function convex(): ConvexClient {
   if (!client) client = new ConvexClient(__CONVEX_URL__);
@@ -24,10 +92,11 @@ export function subscribe<Q extends FunctionReference<"query">>(
   onValue: (value: FunctionReturnType<Q>) => void,
   onError: (e: unknown) => void,
 ): () => void {
+  const a = withToken(args);
   if (testBackend) {
-    return testBackend.subscribe(getFunctionName(query), args, onValue as (v: unknown) => void, onError);
+    return testBackend.subscribe(getFunctionName(query), a, onValue as (v: unknown) => void, onError);
   }
-  const unsub = convex().onUpdate(query, args, onValue, (e) => onError(e));
+  const unsub = convex().onUpdate(query, a, onValue, (e) => onError(e));
   return () => unsub();
 }
 
@@ -35,8 +104,9 @@ export async function mutate<M extends FunctionReference<"mutation">>(
   fn: M,
   args: FunctionArgs<M>,
 ): Promise<FunctionReturnType<M>> {
-  if (testBackend) return (await testBackend.mutation(getFunctionName(fn), args)) as FunctionReturnType<M>;
-  return await convex().mutation(fn, args);
+  const a = withToken(args);
+  if (testBackend) return (await testBackend.mutation(getFunctionName(fn), a)) as FunctionReturnType<M>;
+  return await convex().mutation(fn, a);
 }
 
 export type Link = { connected: boolean; everConnected: boolean; sending: number };

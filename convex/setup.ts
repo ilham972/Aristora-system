@@ -1,7 +1,9 @@
+import { v } from "convex/values";
 import { mutation } from "./_generated/server";
 import { bookFor } from "./lib/backend";
 import { KNOWN_WORKBOOKS, PILOT_FIGHTER, PILOT_UNIT } from "./lib/book";
 import { SYLLABUS, unitKey, unitOrder } from "./lib/syllabus";
+import { actor } from "./lib/auth";
 
 /** Bump when ensure() has new one-time work to do. */
 export const DATA_VERSION = 1;
@@ -12,8 +14,9 @@ export const DATA_VERSION = 1;
  * (they were all on the Grade 11 pilot book) moved onto it with their marks.
  */
 export const ensure = mutation({
-  args: {},
-  handler: async (ctx) => {
+  args: { token: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["any"]);
     const meta = await ctx.db.query("meta").withIndex("by_key", (q) => q.eq("key", "data")).first();
     if (meta && Number(meta.value) >= DATA_VERSION) return { version: Number(meta.value), changed: false };
     const now = Date.now();

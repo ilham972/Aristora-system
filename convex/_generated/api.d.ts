@@ -13,16 +13,21 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
+import type * as auth from "../auth.js";
 import type * as calls from "../calls.js";
 import type * as catalog from "../catalog.js";
 import type * as clock from "../clock.js";
 import type * as demo from "../demo.js";
+import type * as lib_auth from "../lib/auth.js";
 import type * as lib_backend from "../lib/backend.js";
 import type * as lib_book from "../lib/book.js";
 import type * as lib_master from "../lib/master.js";
+import type * as lib_owner from "../lib/owner.js";
+import type * as lib_sha256 from "../lib/sha256.js";
 import type * as lib_status from "../lib/status.js";
 import type * as lib_syllabus from "../lib/syllabus.js";
 import type * as marks from "../marks.js";
+import type * as people from "../people.js";
 import type * as sessions from "../sessions.js";
 import type * as setup from "../setup.js";
 import type * as state from "../state.js";
@@ -38,16 +43,21 @@ import type * as workbook from "../workbook.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  auth: typeof auth;
   calls: typeof calls;
   catalog: typeof catalog;
   clock: typeof clock;
   demo: typeof demo;
+  "lib/auth": typeof lib_auth;
   "lib/backend": typeof lib_backend;
   "lib/book": typeof lib_book;
   "lib/master": typeof lib_master;
+  "lib/owner": typeof lib_owner;
+  "lib/sha256": typeof lib_sha256;
   "lib/status": typeof lib_status;
   "lib/syllabus": typeof lib_syllabus;
   marks: typeof marks;
+  people: typeof people;
   sessions: typeof sessions;
   setup: typeof setup;
   state: typeof state;

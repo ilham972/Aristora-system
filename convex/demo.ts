@@ -6,6 +6,7 @@ import { fighter, KNOWN_WORKBOOKS, levelOutOf, PILOT_UNIT, type MasterData } fro
 import type { MQ, MState } from "./lib/master";
 import type { Mark } from "./lib/status";
 import { unitKey } from "./lib/syllabus";
+import { actor } from "./lib/auth";
 
 type FighterPlan = {
   name: string;
@@ -92,8 +93,9 @@ async function unitByKey(ctx: MutationCtx, grade: number, code: string): Promise
 
 /** Fill an empty class with 14 demo students of three grades, ready to play with. */
 export const load = mutation({
-  args: { by: v.optional(v.string()) },
+  args: { token: v.optional(v.string()), by: v.optional(v.string()) },
   handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["owner"]);
     const now = Date.now();
     const by = cleanBy(args.by);
     const current = await ctx.db.query("students").withIndex("by_archived", (q) => q.eq("archived", false)).first();
@@ -182,8 +184,9 @@ export const load = mutation({
 
 /** Delete every demo student and their work (real students are never touched). */
 export const remove = mutation({
-  args: { by: v.optional(v.string()) },
+  args: { token: v.optional(v.string()), by: v.optional(v.string()) },
   handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["owner"]);
     const now = Date.now();
     const all = await ctx.db.query("students").collect();
     const demo = all.filter((s) => s.demo);

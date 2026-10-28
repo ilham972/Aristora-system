@@ -136,6 +136,13 @@ export async function openSession(ctx: QueryCtx): Promise<Doc<"sessions"> | null
   return await ctx.db.query("sessions").withIndex("by_open", (q) => q.eq("open", true)).first();
 }
 
+// Who is doing this mutation, set once by the permission check, so every history line can name them.
+const actors = new WeakMap<object, string>();
+
+export function rememberActor(ctx: MutationCtx, name: string): void {
+  actors.set(ctx, name);
+}
+
 type LogInput = {
   kind: string;
   by?: string;
@@ -153,7 +160,8 @@ export async function log(
   now: number,
   e: LogInput,
 ): Promise<void> {
-  await ctx.db.insert("events", { at: now, sessionId: session?._id, ...e });
+  const who = e.kind === "idle" ? undefined : actors.get(ctx);
+  await ctx.db.insert("events", { at: now, sessionId: session?._id, ...(who ? { who } : {}), ...e });
 }
 
 /** The open session, closing it first if it was left open from an earlier day. */

@@ -4,6 +4,8 @@
 import { mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { afterAll, beforeAll, expect, test } from "vitest";
+import { normalizeCode, secretHash } from "../../convex/lib/auth";
+import { addPerson, OWNER_TOKEN } from "../helpers";
 import { makeBackend, playwright, serveDist } from "./harness";
 
 type Page = import("playwright").Page;
@@ -29,10 +31,29 @@ afterAll(async () => {
   await site?.close();
 });
 
-async function phone(backend: ReturnType<typeof makeBackend>, role: string, size = PHONE): Promise<Page> {
+/** A class backend with the owner's account (every phone below is the owner's unless it says otherwise). */
+async function newClass() {
+  const backend = makeBackend(modules);
+  await addPerson(backend.t, { name: "Owner", token: OWNER_TOKEN, role: "owner" });
+  return backend;
+}
+
+/** A phone on one tab, signed in with this key (null: not signed in), opening `at` (default: the app). */
+async function phone(
+  backend: ReturnType<typeof makeBackend>,
+  role: string,
+  size = PHONE,
+  token: string | null = OWNER_TOKEN,
+  at?: string,
+): Promise<Page> {
   const ctx = await browser.newContext(size);
   await backend.attach(ctx);
-  await ctx.addInitScript((r) => localStorage.setItem("aristora.role", r), role);
+  await ctx.addInitScript(([r, tk]) => {
+    if (sessionStorage.getItem("aristora.test.started")) return; // only on the first load
+    sessionStorage.setItem("aristora.test.started", "1");
+    localStorage.setItem("aristora.role", r!);
+    if (tk) localStorage.setItem("aristora.token", tk);
+  }, [role, token] as const);
   // Headless Chrome has no voices: record what the phone would say instead.
   await ctx.addInitScript(() => {
     const said: string[] = [];
@@ -58,7 +79,7 @@ async function phone(backend: ReturnType<typeof makeBackend>, role: string, size
     if (m.type() === "error" || m.type() === "warning") problems.push(`[${role} ${m.type()}] ${m.text()}`);
   });
   page.on("pageerror", (e) => problems.push(`[${role} pageerror] ${e.message}`));
-  await page.goto(site.url);
+  await page.goto(at ?? site.url);
   return page;
 }
 
@@ -113,7 +134,7 @@ async function marksOf(backend: ReturnType<typeof makeBackend>, name: string) {
 }
 
 test("the register: a whole class on three phones", async () => {
-  const backend = makeBackend(modules);
+  const backend = await newClass();
   const C = await phone(backend, "correction");
   const T = await phone(backend, "theory");
   const E = await phone(backend, "evaluation");
@@ -288,7 +309,7 @@ test("the register: a whole class on three phones", async () => {
 });
 
 test("Master: workbook levels corrected, lost marks explained, re-teach, Exam Sprint and back", async () => {
-  const backend = makeBackend(modules);
+  const backend = await newClass();
   const C = await phone(backend, "correction");
   const T = await phone(backend, "theory");
   const E = await phone(backend, "evaluation");
@@ -461,14 +482,121 @@ test("Master: workbook levels corrected, lost marks explained, re-teach, Exam Sp
   expect(problems, problems.join("\n")).toEqual([]);
 });
 
+test("accounts: the owner sets up, adds a teacher, her phone signs in with the link and is signed out again", async () => {
+  const env = (globalThis as unknown as { process: { env: Record<string, string | undefined> } }).process.env;
+  const CODE = "TEST-C0DE-1234-ABCD-WXYZ";
+  env.ARISTORA_SETUP_SHA256 = secretHash("setup", normalizeCode(CODE));
+  try {
+    const backend = makeBackend(modules); // nobody has an account yet
+    const O = await phone(backend, "correction", PHONE, null, `${site.url}/#setup=${CODE}`);
+    await visible(O.getByRole("heading", { name: "Set up the owner account" }));
+    expect(await O.getByLabel("Setup code").inputValue()).toBe(CODE);
+    await O.getByLabel("Your name").fill("Ilham");
+    await O.getByLabel("Choose a PIN (6 digits)").fill("482913");
+    await O.getByLabel("The same PIN again").fill("482913");
+    await shot(O, "a01-owner-setup");
+    await O.getByRole("button", { name: "Set up", exact: true }).click();
+    await visible(O.getByText("No students yet"));
+    expect(new URL(O.url()).hash).toBe(""); // the code is gone from the address bar
+    await contains(O.locator(".toast"), "Welcome, Ilham");
+
+    // A phone that isn't signed in sees only the sign-in screen.
+    const stranger = await phone(backend, "correction", PHONE, null);
+    await visible(stranger.getByRole("heading", { name: "Sign in" }));
+    await count(stranger.locator(".reg-row, .tabs"), 0);
+    await shot(stranger, "a02-sign-in");
+    await stranger.context().close();
+
+    // The owner adds Rimas (Correction only) and gets her sign-in link.
+    await O.getByRole("button", { name: "Settings" }).click();
+    await O.getByRole("button", { name: "People", exact: true }).click();
+    await O.getByRole("button", { name: "Add a teacher" }).click();
+    const add = O.locator(".sheet");
+    await add.getByLabel("Name (first name and initial)").fill("Rimas");
+    await shot(O, "a03-add-teacher");
+    await add.getByRole("button", { name: "Add, then send the sign-in link" }).click();
+    await contains(O.locator(".sheet h2"), "Sign-in link for Rimas");
+    const url = await O.locator(".sheet .link-text").inputValue();
+    expect(url).toMatch(/\/#join=[A-Za-z0-9_-]{22}$/);
+    const wa = (await O.locator(".sheet").getByRole("link", { name: "Send on WhatsApp" }).getAttribute("href"))!;
+    expect(wa.startsWith("https://wa.me/?text=")).toBe(true);
+    expect(decodeURIComponent(wa)).toContain(url);
+    await shot(O, "a04-link-sheet");
+    await O.locator(".sheet").getByRole("button", { name: "Close" }).click();
+    await contains(O.locator(".person", { hasText: "Rimas" }), "link waiting until");
+
+    // Rimas taps the link on her phone: one tap, then a PIN for later.
+    const R = await phone(backend, "theory", PHONE, null, url);
+    await visible(R.getByText("This link signs in"));
+    await shot(R, "a05-link-sign-in");
+    await R.getByRole("button", { name: "Sign in as Rimas" }).click();
+    await contains(R.locator(".sheet h2"), "Choose a PIN");
+    await R.locator(".sheet").getByLabel("New PIN (6 digits)").fill("583920");
+    await R.locator(".sheet").getByLabel("The same PIN again").fill("583920");
+    await R.locator(".sheet").getByRole("button", { name: "Save PIN" }).click();
+    await contains(R.locator(".toast"), "PIN saved");
+    expect(new URL(R.url()).hash).toBe("");
+    // Only her tab, though the phone last showed Theory.
+    await textsAre(R.locator(".tabs .tab"), ["Correction"]);
+    await contains(R.locator(".top h1"), "Correction");
+    await R.getByRole("button", { name: "Settings" }).click();
+    await textsAre(R.locator(".seg button"), ["Alerts", "Reports", "History", "Account"]);
+    await R.getByRole("button", { name: "Back to the class" }).click();
+    // The same link can't be used again.
+    const again = await phone(backend, "correction", PHONE, null, url);
+    await visible(again.getByText("already used"));
+    await again.context().close();
+
+    // The owner sees her phone and signs it out; her phone shows the sign-in screen at once.
+    await contains(O.locator(".person", { hasText: "Rimas" }), "1 phone signed in");
+    await O.locator(".person", { hasText: "Rimas" }).getByRole("button", { name: "Change" }).click();
+    await shot(O, "a06-person-phones");
+    await O.locator(".sheet").getByRole("button", { name: "Sign out", exact: true }).click();
+    await contains(O.locator(".toast"), "Rimas:");
+    await visible(R.getByRole("heading", { name: "Sign in" }));
+    expect(await R.evaluate(() => localStorage.getItem("aristora.token"))).toBeNull();
+
+    // She signs back in with her name and PIN (a wrong PIN first).
+    await R.getByLabel("Your name").fill("rimas");
+    await R.getByLabel("PIN (6 digits)").fill("583921");
+    await R.getByRole("button", { name: "Sign in", exact: true }).click();
+    await visible(R.getByText("don't match"));
+    await R.getByLabel("PIN (6 digits)").fill("583920");
+    await R.getByRole("button", { name: "Sign in", exact: true }).click();
+    await textsAre(R.locator(".tabs .tab"), ["Correction"]);
+
+    // The history names who did each thing.
+    await O.locator(".sheet").getByRole("button", { name: "Close" }).click();
+    await O.getByRole("button", { name: "History", exact: true }).click();
+    await contains(O.locator(".history"), "made a sign-in link for Rimas");
+    await contains(O.locator(".history"), "signed in a phone (with PIN)");
+    await shot(O, "a07-history", true);
+
+    // Small Android phone: the sign-in screen and People fit.
+    const small = await phone(backend, "correction", { ...PHONE, viewport: { width: 360, height: 740 } }, null);
+    await visible(small.getByRole("heading", { name: "Sign in" }));
+    expect(await small.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+    await shot(small, "a08-sign-in-360px");
+    await small.context().close();
+    await O.setViewportSize({ width: 360, height: 740 });
+    await O.getByRole("button", { name: "People", exact: true }).click();
+    expect(await O.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+    await shot(O, "a09-people-360px", true);
+  } finally {
+    delete env.ARISTORA_SETUP_SHA256;
+  }
+  expect(problems, problems.join("\n")).toEqual([]);
+});
+
 test("a phone without the screen wake lock (iPhone 7 Plus) keeps the screen on with the silent video", async () => {
-  const backend = makeBackend(modules);
+  const backend = await newClass();
   const ctx = await browser.newContext(PHONE);
   await backend.attach(ctx);
-  await ctx.addInitScript(() => {
+  await ctx.addInitScript((tk) => {
     Object.defineProperty(Navigator.prototype, "wakeLock", { get: () => undefined, configurable: true });
     localStorage.setItem("aristora.role", "correction");
-  });
+    localStorage.setItem("aristora.token", tk);
+  }, OWNER_TOKEN);
   const page = await ctx.newPage();
   page.on("console", (m) => {
     if (m.type() === "error" || m.type() === "warning") problems.push(`[old phone ${m.type()}] ${m.text()}`);

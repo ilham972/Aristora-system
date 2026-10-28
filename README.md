@@ -1,6 +1,7 @@
 # Aristora class board
 
-One live class register for three teachers, each on their own phone. Every tab shows all students, one row each:
+One live class register for three teachers, each on their own phone, for every grade (6–11) at once. Every tab shows
+all students, one row each:
 the circles that matter right now (big, tap them) and the whole book as a thin colour strip (every question lined up
 across the class). Tap the strip or the name to open a student's whole book.
 
@@ -21,6 +22,17 @@ across the class). Tap the strip or the name to open a student's whole book.
 
 Live at https://system.aristora.org. The pilot unit is Grade 11 Quadratic equations (questions 1–61, from the book's contents page).
 
+## Grades, units and stages
+
+Each student has a grade, a term, a stage and a unit. A term runs **Fighter** (the theory book, unit by unit) →
+**Master** (the past-paper workbook, unit by unit) → **Legend** (whole papers) → **Exam Sprint** (just before the exam,
+then back to where he was). After Term 3 he moves up a grade. The syllabus is in `convex/lib/syllabus.ts`.
+
+Master follows the printed workbook: levels with their marks, the unit total and percentage as in the book's marks
+table. The student hands a level in (Correction taps it: the waiting clock starts) and goes on to the next level;
+Correction gives each question its marks; questions that lost marks go to Evaluation; Correction or Evaluation can ask
+Theory to teach the unit again. New workbooks are typed in under Settings → Books.
+
 ## The rules (in `convex/lib/status.ts`)
 
 - A section's ladder opens when all its teacher questions are taught (or skipped).
@@ -37,10 +49,18 @@ Every push to `main` deploys on Vercel. `vercel.json` runs
 `scripts/vercel-build.sh`, which checks the Convex key, pushes the Convex backend and builds the phone app.
 The `CONVEX_DEPLOY_KEY` lives only in Vercel's environment variables. **Never commit keys or passwords: this repo is public.**
 
-## There is no login
+## Accounts
 
-Anyone with the link, or with the database address in this code, can read and change the class data.
-Use first name and initial only. Every change is listed in Settings → History.
+Only people the owner adds can sign in; every query and change checks the phone's sign-in (`convex/lib/auth.ts`).
+
+- The owner sets up once with a private setup code (only its SHA-256 is in `convex/lib/owner.ts`).
+- The owner adds teachers in Settings → People, ticks their tabs (Correction, Theory, Evaluation) and extras
+  (Students, Books, Reports), and sends each a one-tap sign-in link on WhatsApp (one use, 24 hours).
+- A phone signs in once and stays signed in. It makes its own random key; the database keeps only the key's SHA-256.
+  A 6-digit PIN signs in on another phone (5 wrong PINs lock it for a while).
+- The owner can sign any phone out, clear a forgotten PIN, or remove a teacher. History names who did each thing.
+
+Use first name and initial only for students.
 
 ## Code
 

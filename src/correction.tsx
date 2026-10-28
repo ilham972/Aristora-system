@@ -5,7 +5,7 @@ import { mutate } from "./backend";
 import { Register } from "./board";
 import { fmtMin, shortMin, type View } from "./derive";
 import { ReportView, type Report } from "./report";
-import { act, currentRole, toast, type Board } from "./store";
+import { act, currentRole, may, toast, type Board } from "./store";
 import { Empty, Sheet } from "./ui";
 
 const signIn = (id: Id<"students">) => act(() => mutate(api.students.setPresent, { id, present: true, by: currentRole() }));
@@ -26,7 +26,9 @@ export function Correction(props: { board: Board; views: View[]; now: number }) 
     return (
       <main class="page">
         <Empty title="No students yet">
-          Open settings (the gear at the top) to add your students, or load the demo students to try the system.
+          {may("students")
+            ? `Open settings (the gear at the top) to add your students${may("owner") ? ", or load the demo students to try the system" : ""}.`
+            : "The owner (or a teacher allowed to add students) adds them in Settings."}
         </Empty>
       </main>
     );

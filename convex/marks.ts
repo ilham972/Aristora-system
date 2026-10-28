@@ -7,6 +7,7 @@ import { asFighter, cleanBy, currentSession, fail, getStudent, log, refresh, tou
 import type { Fighter } from "./lib/book";
 import { SOLO_STATES, TEACH_STATES, type Mark, type MarkState } from "./lib/status";
 import { markState, markValue } from "./schema";
+import { actor } from "./lib/auth";
 
 function checkState(book: Fighter, q: number, s: MarkState) {
   if (!book.isQuestion(q)) fail("That question is not in this book.");
@@ -30,6 +31,7 @@ const unitArg = v.optional(v.id("units"));
 /** Set one circle. Correction uses right / wrong / slip; teachers use taught / skip / explained. */
 export const set = mutation({
   args: {
+    token: v.optional(v.string()),
     studentId: v.id("students"),
     q: v.number(),
     s: v.union(markState, v.null()),
@@ -37,6 +39,7 @@ export const set = mutation({
     by: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["correction", "theory", "evaluation"], args.by);
     const now = Date.now();
     const student = await getStudent(ctx, args.studentId);
     const { unit, book, progress } = await fighterWork(ctx, student, args.unitId, now);
@@ -74,6 +77,7 @@ export const set = mutation({
 /** Undo: put a circle back exactly as it was. */
 export const restore = mutation({
   args: {
+    token: v.optional(v.string()),
     studentId: v.id("students"),
     q: v.number(),
     mark: v.union(markValue, v.null()),
@@ -81,6 +85,7 @@ export const restore = mutation({
     by: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["correction", "theory", "evaluation"], args.by);
     const now = Date.now();
     const student = await getStudent(ctx, args.studentId);
     const { unit, book, progress } = await fighterWork(ctx, student, args.unitId, now);
@@ -112,12 +117,14 @@ export const restore = mutation({
  */
 export const setMany = mutation({
   args: {
+    token: v.optional(v.string()),
     studentId: v.id("students"),
     items: v.array(v.object({ q: v.number(), s: v.union(markState, v.null()) })),
     unitId: unitArg,
     by: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["correction", "theory", "evaluation"], args.by);
     const now = Date.now();
     if (args.items.length === 0) return { prev: [] as { q: number; mark: Mark | null }[] };
     if (args.items.length > 200) fail("Too many circles at once.");
@@ -168,12 +175,14 @@ export const setMany = mutation({
 /** Undo a burst: put circles back exactly as they were. */
 export const restoreMany = mutation({
   args: {
+    token: v.optional(v.string()),
     studentId: v.id("students"),
     items: v.array(v.object({ q: v.number(), mark: v.union(markValue, v.null()) })),
     unitId: unitArg,
     by: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["correction", "theory", "evaluation"], args.by);
     const now = Date.now();
     if (args.items.length > 200) fail("Too many circles at once.");
     const student = await getStudent(ctx, args.studentId);
@@ -208,8 +217,9 @@ export const restoreMany = mutation({
 
 /** R2: he already knows a whole section, so its teacher questions are skipped. */
 export const skipSection = mutation({
-  args: { studentId: v.id("students"), section: v.string(), unitId: unitArg, by: v.optional(v.string()) },
+  args: { token: v.optional(v.string()), studentId: v.id("students"), section: v.string(), unitId: unitArg, by: v.optional(v.string()) },
   handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["correction", "theory", "evaluation"], args.by);
     const now = Date.now();
     const student = await getStudent(ctx, args.studentId);
     const { unit, book, progress } = await fighterWork(ctx, student, args.unitId, now);

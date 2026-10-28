@@ -11,11 +11,13 @@ import {
   type MasterPart,
 } from "./lib/book";
 import { partId } from "./schema";
+import { actor, viewer } from "./lib/auth";
 
 /** The whole syllabus, in grade and book order. */
 export const units = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { token: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    await viewer(ctx, args.token);
     const list = await ctx.db.query("units").collect();
     return list.sort((a, b) => a.grade - b.grade || a.order - b.order);
   },
@@ -23,8 +25,9 @@ export const units = query({
 
 /** Which units have which books (no contents: that comes with the board). */
 export const books = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { token: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    await viewer(ctx, args.token);
     const list = await ctx.db.query("books").collect();
     return list.map((b) => ({
       _id: b._id,
@@ -52,6 +55,7 @@ export const books = query({
  */
 export const saveWorkbook = mutation({
   args: {
+    token: v.optional(v.string()),
     unitId: v.id("units"),
     parts: v.array(v.object({ id: partId, to: v.number(), each: v.optional(v.number()) })),
     levels: v.array(v.object({ to: v.number(), max: v.number() })),
@@ -59,6 +63,7 @@ export const saveWorkbook = mutation({
     by: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["books"]);
     const now = Date.now();
     const unit = await ctx.db.get(args.unitId);
     if (!unit) fail("That unit no longer exists.");
@@ -109,8 +114,9 @@ export const saveWorkbook = mutation({
 
 /** Fix a unit's names (the Tamil names of Grade 7 are translations to check). */
 export const renameUnit = mutation({
-  args: { unitId: v.id("units"), en: v.string(), ta: v.string(), by: v.optional(v.string()) },
+  args: { token: v.optional(v.string()), unitId: v.id("units"), en: v.string(), ta: v.string(), by: v.optional(v.string()) },
   handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["books"]);
     const now = Date.now();
     const unit = await ctx.db.get(args.unitId);
     if (!unit) fail("That unit no longer exists.");

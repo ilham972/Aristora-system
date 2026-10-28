@@ -31,6 +31,11 @@ export const partId = v.union(
   v.literal("IIB"),
 );
 
+/** The three working tabs (rooms) a teacher can be allowed. */
+export const tab = v.union(v.literal("correction"), v.literal("theory"), v.literal("evaluation"));
+/** Extra permissions beyond the tabs. */
+export const extra = v.union(v.literal("students"), v.literal("books"), v.literal("reports"));
+
 export const fighterData = v.object({
   kind: v.literal("fighter"),
   sections: v.array(
@@ -194,9 +199,53 @@ export default defineSchema({
     q: v.optional(v.number()),
     value: v.optional(v.string()),
     ms: v.optional(v.number()),
+    /** The signed-in person who did it (by = the tab it was done from). */
+    who: v.optional(v.string()),
   })
     .index("by_at", ["at"])
     .index("by_session", ["sessionId"]),
+
+  /** People who can sign in: the owner and teachers. (Parents and students: a later, separate site.) */
+  users: defineTable({
+    name: v.string(),
+    /** Lower-case name, for signing in with a PIN. */
+    nameKey: v.string(),
+    role: v.union(v.literal("owner"), v.literal("teacher")),
+    tabs: v.array(tab),
+    can: v.array(extra),
+    /** SHA-256 of the PIN with this user's id; the PIN itself is never stored. */
+    pinHash: v.optional(v.string()),
+    /** Wrong PINs in a row, and the lock they caused. */
+    fails: v.optional(v.number()),
+    lockedUntil: v.optional(v.number()),
+    active: v.boolean(),
+    createdAt: v.number(),
+  }).index("by_name", ["nameKey"]),
+
+  /** A signed-in phone. It keeps a random token; only the token's SHA-256 is stored here. */
+  devices: defineTable({
+    userId: v.id("users"),
+    tokenHash: v.string(),
+    label: v.string(),
+    createdAt: v.number(),
+    lastSeenAt: v.number(),
+    revokedAt: v.optional(v.number()),
+  })
+    .index("by_token", ["tokenHash"])
+    .index("by_user", ["userId"]),
+
+  /** One-tap sign-in links (sent on WhatsApp): one use, 24 hours. Only the code's SHA-256 is stored. */
+  links: defineTable({
+    userId: v.id("users"),
+    codeHash: v.string(),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+    usedAt: v.optional(v.number()),
+    cancelledAt: v.optional(v.number()),
+    createdBy: v.optional(v.id("users")),
+  })
+    .index("by_code", ["codeHash"])
+    .index("by_user", ["userId"]),
 
   /** Small settings: the data version (for one-time updates). */
   meta: defineTable({ key: v.string(), value: v.any() }).index("by_key", ["key"]),

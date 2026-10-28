@@ -8,6 +8,7 @@ import { checkMaster, KNOWN_WORKBOOKS, levelOutOf, type MasterData } from "../co
 import { computeMaster, type MState } from "../convex/lib/master";
 import { SYLLABUS } from "../convex/lib/syllabus";
 import schema from "../convex/schema";
+import { asOwner } from "./helpers";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 const MIN = 60_000;
@@ -15,7 +16,7 @@ const START = new Date("2026-10-27T14:00:00+05:30").getTime();
 const G7U08 = KNOWN_WORKBOOKS[0].data;
 
 async function setup() {
-  const t = convexTest(schema, modules);
+  const t = await asOwner(convexTest(schema, modules));
   await t.mutation(api.setup.ensure, {});
   return t;
 }
@@ -78,7 +79,7 @@ describe("the syllabus and the books", () => {
   });
 
   test("students from before stages move onto the pilot book with their marks", async () => {
-    const t = convexTest(schema, modules);
+    const t = await asOwner(convexTest(schema, modules));
     const old = await t.run(async (ctx) =>
       ctx.db.insert("students", {
         name: "Old Timer",
