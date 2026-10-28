@@ -424,6 +424,13 @@ export function toast(text: string, kind: Toast["kind"] = "info", undo?: () => v
   setTimeout(() => dismissToast(id), kind === "error" ? 7000 : undo ? 6000 : 3500);
 }
 
+/** Remove every toast (the Focus tab opening a paper: nothing may sit over its number pad). */
+export function clearToasts() {
+  if (toasts.length === 0) return;
+  toasts = [];
+  for (const l of toastListeners) l();
+}
+
 export function dismissToast(id: number) {
   const before = toasts.length;
   toasts = toasts.filter((t) => t.id !== id);

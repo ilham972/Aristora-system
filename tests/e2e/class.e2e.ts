@@ -5,6 +5,7 @@ import { mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { strToU8, zipSync } from "fflate";
 import { afterAll, beforeAll, expect, test } from "vitest";
+import { api } from "../../convex/_generated/api";
 import { normalizeCode, secretHash } from "../../convex/lib/auth";
 import { outOf } from "../../convex/lib/book";
 import { readWorkbookHtml } from "../../src/workbookFile";
@@ -939,8 +940,8 @@ test("accounts: the owner sets up, adds a teacher, her phone signs in with the l
     await R.locator(".sheet").getByRole("button", { name: "Save PIN" }).click();
     await contains(R.locator(".toast"), "PIN saved");
     expect(new URL(R.url()).hash).toBe("");
-    // Only her tab, though the phone last showed Theory.
-    await textsAre(R.locator(".tabs .tab"), ["Correction"]);
+    // Only her job's tabs (Correction, and Focus: the same job one question at a time), though the phone last showed Theory.
+    await textsAre(R.locator(".tabs .tab"), ["Correction", "Focus"]);
     await contains(R.locator(".tabs .tab.on"), "Correction");
     await visible(R.getByRole("button", { name: /^Attendance/ })); // Correction takes attendance
     await R.getByRole("button", { name: "Settings" }).click();
@@ -968,7 +969,7 @@ test("accounts: the owner sets up, adds a teacher, her phone signs in with the l
     await visible(R.getByText("don't match"));
     await R.getByLabel("PIN (6 digits)").fill("583920");
     await R.getByRole("button", { name: "Sign in", exact: true }).click();
-    await textsAre(R.locator(".tabs .tab"), ["Correction"]);
+    await textsAre(R.locator(".tabs .tab"), ["Correction", "Focus"]);
 
     // The history names who did each thing.
     await O.locator(".sheet").getByRole("button", { name: "Close" }).click();
@@ -1021,5 +1022,254 @@ test("a phone without the screen wake lock (iPhone 7 Plus) keeps the screen on w
   await until(videoPlaying, "the video plays again");
   await count(page.locator(".sound-banner"), 0);
   await ctx.close();
+  expect(problems, problems.join("\n")).toEqual([]);
+});
+
+test("Focus: one question at a time, names that never move, a paper taken back and given to the right student", async () => {
+  const backend = await newClass();
+  const F = await phone(backend, "focus");
+  const E = await phone(backend, "evaluation");
+  await F.getByRole("button", { name: "Settings" }).click();
+  await F.getByRole("button", { name: "Load demo students (three grades)" }).click();
+  await visible(F.getByText(/^14 demo students loaded/));
+  await F.getByRole("button", { name: "Back to the class" }).click();
+  // The Focus tab sits next to Correction; it is the Correction job.
+  await textsAre(F.locator(".tabs .tab > span:nth-child(2)"), ["Correction", "Focus", "Theory", "Evaluation"]);
+  await contains(F.locator(".tabs .tab.on"), "Focus");
+
+  // G7 U08 gets a FAKE answer key (Q56 in parts with their marks); a Grade 8 student joins on U01 (no key).
+  const answers = Array.from({ length: 57 }, (_, i) => {
+    const q = i + 1;
+    if (q === 56) return { q, parts: [{ p: "i", a: "work → **B56**", m: 2 }, { p: "ii", a: "C56", m: 2 }] };
+    return { q, a: q <= 37 ? `A${q}` : `B${q}` };
+  });
+  const u01 = await backend.t.run(async (ctx) => {
+    const unit = async (key: string) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", key)).first())!;
+    const u08 = await unit("G7-U08");
+    await ctx.db.insert("keys", { unitId: u08._id, answers, updatedAt: Date.now() });
+    const b = (await ctx.db
+      .query("books")
+      .withIndex("by_unit_stage", (q) => q.eq("unitId", u08._id).eq("stage", "master"))
+      .first())!;
+    await ctx.db.patch(b._id, { keyCount: answers.length });
+    const g8 = await unit("G8-U01");
+    await ctx.db.insert("books", { unitId: g8._id, stage: "master", data: U01_READ.data, updatedAt: Date.now() });
+    return g8._id;
+  });
+  const nimal = await backend.t.mutation(api.students.add, { token: OWNER_TOKEN, name: "Nimal", grade: 8, term: 1, stage: "master", unitId: u01 });
+  await backend.t.mutation(api.students.setPresent, { token: OWNER_TOKEN, id: nimal, present: true });
+  await backend.push(); // the phones see what changed outside them
+
+  // A person corrects at a human pace: never two taps within the double-tap guard.
+  const tap = async (l: L) => {
+    await F.waitForTimeout(420);
+    await l.click();
+  };
+  const name = (n: string) => F.locator(".fc-pill", { has: F.locator(".fc-pn", { hasText: n }) });
+  /** Flex boxes run their parts onto lines: compare with the spaces squeezed. */
+  const says = (l: L, text: string) =>
+    until(async () => (await l.first().innerText()).replace(/\s+/g, " ").includes(text), `"${text}" in ${l}`);
+
+  // The names: A–Z per grade, each with the level(s) his paper can be; grade pills filter.
+  await textsAre(F.locator(".grade-pills .gp b"), ["All", "7", "8"]);
+  await until(async () => (await F.locator(".fc-group .fc-h").allTextContents()).join("|") === "Grade 7|Grade 8", "grade headers");
+  await textsAre(F.locator(".fc-pill .fc-pn"), ["Malik", "Priya", "Vimal", "Nimal"]);
+  await textsAre(name("Malik").locator(".fc-tags i"), ["L3", "L4"]);
+  await count(name("Malik").locator(".fc-tags i.w"), 1); // L3 handed in
+  await visible(F.locator(".fc-pill.red", { hasText: "Vimal" })); // out of work until L8 is corrected
+  await textsAre(name("Nimal").locator(".fc-tags i"), ["L1", "no key"]);
+  await contains(F.locator(".fc-help + p"), "Theory-book students (9 in class)");
+  expect(await F.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(F, "f01-focus-names", true);
+
+  // Priya: one level open, so it opens at once. The names hide while her paper is open.
+  await tap(name("Priya"));
+  await contains(F.locator(".fc-name"), "Priya");
+  await contains(F.locator(".fc-where"), "G7 · U08 · Level 2 · Q11–20");
+  await count(F.locator(".fc-pill"), 0);
+  await count(F.locator(".grade-pills"), 0);
+  await contains(F.locator(".fc-qn"), "11");
+  await contains(F.locator(".fc-ans"), "A11");
+  await contains(F.locator(".fc-qmeta"), "Part I · 2 marks");
+  await shot(F, "f02-focus-question");
+  // Full marks is the big button; the next question comes by itself.
+  await tap(F.locator(".fc-go"));
+  await contains(F.locator(".fc-qn"), "12");
+  // A double tap gives ONE mark: Q12 full, and Q13 is on screen, not skipped.
+  await F.waitForTimeout(420);
+  await F.locator(".fc-go").dblclick();
+  await contains(F.locator(".fc-qn"), "13");
+  await textsAre(F.locator(".fc-sq b"), ["2", "2", "", "", "", "", "", "", "", ""]);
+  // Q13 wrong, Q14 one mark, Q15 blank (?), the rest full.
+  await tap(F.getByRole("button", { name: "Q13: 0 of 2" }));
+  await tap(F.getByRole("button", { name: "Q14: 1 of 2" }));
+  await tap(F.getByRole("button", { name: "Q15: blank, couldn't start it (to Theory)" }));
+  for (const q of [16, 17, 18, 19, 20]) {
+    await contains(F.locator(".fc-qn"), String(q));
+    await tap(F.locator(".fc-go"));
+  }
+  await says(F.locator(".fc-total"), "15 / 20");
+  await contains(F.locator(".fc-sum .ct-dk"), "Q15: blank, so straight to Theory.");
+  await visible(F.locator(".segc-b.evaluation.on"));
+  // He spots Q14 was really right: tap it in the strip, give 2, and he is back at the level's marks.
+  await tap(F.locator(".fc-sq", { hasText: "14" }));
+  await contains(F.locator(".fc-qn"), "14");
+  await visible(F.locator(".fc-n.on", { hasText: "1" }));
+  await says(F.locator(".fc-go"), "1 / 2"); // the big button keeps his mark until he changes it
+  await tap(F.getByRole("button", { name: "Q14: 2 of 2" }));
+  await says(F.locator(".fc-total"), "16 / 20");
+  await shot(F, "f03-focus-summary");
+  await tap(F.getByRole("button", { name: /^Save Priya · 16 \/ 20/ }));
+  await contains(F.locator(".toast"), "Saved: Priya, Level 2, 16 / 20. Theory: Q15. Evaluation: Q13.");
+  // Saved exactly as the Correction tab saves it.
+  const p2 = (await marksOf(backend, "Priya")).m!;
+  expect(p2.lv["2"]).toMatchObject({ got: 16, by: "correction" });
+  expect(p2.q["13"]).toMatchObject({ got: 0, max: 2, lost: true });
+  expect(p2.q["14"]).toMatchObject({ got: 2, lost: false });
+  expect(p2.q["15"]).toMatchObject({ got: 0, dk: true, tb: "correction" });
+  await textsAre(name("Priya").locator(".fc-tags i"), ["L3"]);
+  await contains(F.locator(".fc-sv").first(), "Priya · L2 · 16 / 20");
+  // The list survives a reload of the page (Chrome may reload a tab left in the background).
+  await F.reload();
+  await contains(F.locator(".fc-sv").first(), "Priya · L2 · 16 / 20");
+  await visible(F.locator(".fc-sv").first().getByRole("button", { name: "Take back" }));
+
+  // Malik has two levels open: the phone asks which one this paper is (no toast left over the pad).
+  await tap(name("Malik"));
+  await count(F.locator(".toast"), 0);
+  await contains(F.locator(".fc-ask"), "Which level is this paper?");
+  await textsAre(F.locator(".fc-lv b"), ["Level 3", "Level 4"]);
+  await contains(F.locator(".fc-lv.w small"), "handed in 6 min ago");
+  await shot(F, "f04-focus-which-level");
+  await tap(F.locator(".fc-lv", { hasText: "Level 3" }));
+  await contains(F.locator(".fc-where"), "Level 3 · Q21–30");
+  for (let q = 21; q <= 30; q++) {
+    await contains(F.locator(".fc-qn"), String(q));
+    await tap(F.locator(".fc-go"));
+  }
+  await tap(F.getByRole("button", { name: /^Save Malik · 20 \/ 20/ }));
+  await contains(F.locator(".toast"), "Saved: Malik, Level 3, 20 / 20.");
+  expect((await marksOf(backend, "Malik")).m!.lv["3"]).toMatchObject({ got: 20 });
+
+  // It was Priya's Level 3 paper. Take it back: Malik's Level 3 waits again exactly as before, out of the report.
+  await tap(F.locator(".fc-sv", { hasText: "Malik" }).getByRole("button", { name: "Take back" }));
+  await contains(F.locator(".sheet h2"), "Take back Malik's Level 3?");
+  await shot(F, "f05-focus-take-back");
+  await tap(F.locator(".sheet").getByRole("button", { name: "Take back" }));
+  await contains(F.locator(".toast"), "Taken back: Malik's Level 3 is as it was.");
+  const mk = (await marksOf(backend, "Malik")).m!;
+  expect(mk.lv["3"].fixed).toBeUndefined();
+  expect(mk.lv["3"].done).toBeGreaterThan(0);
+  expect(mk.q["21"]).toBeUndefined();
+  await contains(F.locator(".fc-sv.back"), "taken back");
+  await textsAre(name("Malik").locator(".fc-tags i"), ["L3", "L4"]);
+  await contains(F.locator(".fc-carry"), "Marks taken back from Malik (Q21–30)");
+  // Tap Priya: her Level 3 opens with those marks, ready to save.
+  await tap(name("Priya"));
+  await contains(F.locator(".fc-carried"), "taken back from Malik");
+  await contains(F.locator(".fc-where"), "Level 3 · Q21–30");
+  await says(F.locator(".fc-total"), "20 / 20");
+  await shot(F, "f06-focus-marks-moved");
+  await tap(F.getByRole("button", { name: /^Save Priya · 20 \/ 20/ }));
+  await contains(F.locator(".toast"), "Saved: Priya, Level 3, 20 / 20.");
+  expect((await marksOf(backend, "Priya")).m!.lv["3"]).toMatchObject({ got: 20, by: "correction" });
+  await count(F.locator(".fc-carry"), 0);
+  const kinds = await backend.t.run(async (ctx) => (await ctx.db.query("events").collect()).filter((e) => e.kind.startsWith("level-")));
+  expect(kinds.filter((e) => e.kind === "level-marks").map((e) => `${e.name} ${e.value}`)).toEqual(["Priya 2 16/20", "Priya 3 20/20"]);
+  expect(kinds.find((e) => e.kind === "level-unmarked")).toMatchObject({ name: "Malik", value: "3 20/20" });
+
+  // While a paper is open, a call still rings on this phone (it is the Correction job) and is sent from here.
+  await tap(F.getByRole("button", { name: /^Grade 8:/ }));
+  await textsAre(F.locator(".fc-pill .fc-pn"), ["Nimal"]);
+  await tap(name("Nimal"));
+  await contains(F.locator(".fc-nokey"), "No answer key for this workbook yet");
+  await tap(F.locator(".fc-go"));
+  await contains(F.locator(".fc-qn"), "2");
+  await row(E, "Malik").locator(".reg-name").click();
+  await E.locator(".call-bar").getByRole("button", { name: "Call 1" }).click();
+  await hears(F, "Malik, go to Evaluation.");
+  await F.locator(".call-strip.evaluation").getByRole("button", { name: "Sent" }).click();
+  await count(F.locator(".call-strip"), 0);
+  await contains(F.locator(".fc-qn"), "2"); // still on his paper, at the same question
+  // Switching tabs keeps the open paper.
+  await F.locator(".tabs").getByRole("button", { name: "Correction" }).click();
+  await visible(row(F, "Priya"));
+  await textsAre(row(F, "Priya").locator(".lv-pill b"), ["L4"]); // the Correction tab sees Focus's saves
+  await F.locator(".tabs").getByRole("button", { name: "Focus" }).click();
+  await contains(F.locator(".fc-name"), "Nimal");
+  await contains(F.locator(".fc-qn"), "2");
+  // Closing with marks given asks first; nothing is saved.
+  await tap(F.getByRole("button", { name: "Close this paper" }));
+  await contains(F.locator(".sheet h2"), "Close Nimal's paper?");
+  await tap(F.locator(".sheet").getByRole("button", { name: "Throw them away" }));
+  await count(F.locator(".fc-paper"), 0);
+  expect((await marksOf(backend, "Nimal")).m?.lv["1"]).toBeUndefined();
+  await F.context().close();
+
+  // The smallest phone (320 px): Vimal's last level. Q56 in two parts: tap the wrong part, the big button adds up.
+  const S = await phone(backend, "focus", { ...PHONE, viewport: { width: 320, height: 568 } });
+  const stap = async (l: L) => {
+    await S.waitForTimeout(420);
+    await l.click();
+  };
+  await visible(S.locator(".fc-pill").first());
+  expect(await S.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  // Four tabs fit: every label inside its tab.
+  expect(
+    await S.evaluate(() =>
+      [...document.querySelectorAll(".tabs .tab")].every((t) => (t.children[1] as HTMLElement).getBoundingClientRect().width <= t.getBoundingClientRect().width - 4),
+    ),
+  ).toBe(true);
+  await shot(S, "f07-focus-names-320", true);
+  await stap(S.locator(".fc-pill", { hasText: "Vimal" }));
+  await contains(S.locator(".fc-qn"), "56");
+  await textsAre(S.locator(".fc-part .fc-pt em"), ["i)", "ii)"]);
+  await says(S.locator(".fc-go"), "4 / 4");
+  // The parts give the marks: no number row, just "?" and the big button; every part, the name and the strip on
+  // screen above the pad (the tap on the name already turned the alerts banner off).
+  await count(S.locator(".fc-nums"), 0);
+  await count(S.locator(".sound-banner"), 0);
+  const padTop = (await S.locator(".fc-pad").boundingBox())!.y;
+  const lastPart = (await S.locator(".fc-part").last().boundingBox())!;
+  expect(lastPart.y + lastPart.height).toBeLessThanOrEqual(padTop);
+  expect((await S.locator(".fc-name").boundingBox())!.y).toBeGreaterThan(0);
+  expect((await S.locator(".fc-strip").boundingBox())!.y).toBeGreaterThan(0);
+  await stap(S.getByRole("button", { name: "Part ii: 0 of 2" }));
+  await says(S.locator(".fc-go"), "2 / 4");
+  await count(S.locator(".fc-go.part"), 1);
+  await shot(S, "f08-focus-parts-320");
+  // The pad is on screen, above the tabs, with nothing spilling sideways.
+  const go = (await S.locator(".fc-go").boundingBox())!;
+  expect(go.y + go.height).toBeLessThanOrEqual(568 - 66);
+  expect(await S.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await stap(S.locator(".fc-go"));
+  // Q57 is 11 marks: ? and 0 to 11 all fit, and the pad stays on screen.
+  await contains(S.locator(".fc-qn"), "57");
+  await count(S.locator(".fc-nums .fc-n"), 13);
+  const go57 = (await S.locator(".fc-go").boundingBox())!;
+  expect(go57.y + go57.height).toBeLessThanOrEqual(568 - 66);
+  expect(await S.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(S, "f09-focus-11-marks-320");
+  await stap(S.locator(".fc-go"));
+  await says(S.locator(".fc-total"), "13 / 15");
+  await shot(S, "f10-focus-summary-320");
+  await stap(S.getByRole("button", { name: /^Save Vimal · 13 \/ 15/ }));
+  await contains(S.locator(".toast"), "Saved: Vimal, Level 8, 13 / 15. Evaluation: Q56.");
+  expect((await marksOf(backend, "Vimal")).m!.q["56"]).toMatchObject({ got: 2, max: 4, lost: true });
+  await S.context().close();
+
+  // 360 px: the names and a question.
+  const M = await phone(backend, "focus", { ...PHONE, viewport: { width: 360, height: 640 } });
+  await visible(M.locator(".fc-pill").first());
+  expect(await M.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(M, "f11-focus-names-360", true);
+  await M.locator(".fc-pill", { hasText: "Malik" }).click();
+  await M.locator(".fc-lv", { hasText: "Level 4" }).click();
+  await contains(M.locator(".fc-qn"), "31");
+  const g360 = (await M.locator(".fc-go").boundingBox())!;
+  expect(g360.y + g360.height).toBeLessThanOrEqual(640 - 66);
+  await shot(M, "f12-focus-question-360");
+  await M.context().close();
+  await E.context().close();
   expect(problems, problems.join("\n")).toEqual([]);
 });

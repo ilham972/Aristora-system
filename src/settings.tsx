@@ -631,7 +631,7 @@ function Alerts(props: { views: View[] }) {
         </label>
       )}
       <p class="note">
-        Alerts follow the tab that is open. Correction hears calls. Theory and Evaluation hear a knock when a student runs out of
+        Alerts follow the tab that is open. Correction and Focus hear calls. Theory and Evaluation hear a knock when a student runs out of
         work, and Evaluation hears "Theory wants Kumar now".
       </p>
 
@@ -767,6 +767,10 @@ function describe(e: Doc<"events">): string {
     case "level-remarks": {
       const [n, marks] = v.split(" ");
       return `Level ${n} ${e.kind === "level-remarks" ? "re-marked" : "corrected"}: ${marks}${e.ms ? ` (waited ${fmtMin(e.ms)})` : ""}`;
+    }
+    case "level-unmarked": {
+      const [n, marks] = v.split(" ");
+      return `Level ${n}: correction (${marks}) taken back`;
     }
     case "explained":
       return `${v} explained`;

@@ -4,6 +4,7 @@ import { Attendance } from "./attendance";
 import type { Link } from "./backend";
 import { Correction } from "./correction";
 import { buildViews, evalQueue, fmtClock, liveSession, theoryGroups, theoryMembers, type View } from "./derive";
+import { Focus } from "./focus";
 import { Evaluation, Theory } from "./rooms";
 import { Progress } from "./progress";
 import { Settings } from "./settings";
@@ -12,16 +13,23 @@ import { clearHash, PinSheet, pinAsked, readHash, SignIn, stopAskingPin, type Ha
 import { may, setRole, signOutHere, useStore, useTick, type Board, type Role } from "./store";
 import { Sheet, Toasts } from "./ui";
 
-const ROLES: { id: Role; label: string }[] = [
+/** A tab in the bottom bar. Focus is the Correction job, one question at a time (src/focus.tsx). */
+type TabId = Role | "focus";
+
+const ROLES: { id: TabId; label: string }[] = [
   { id: "correction", label: "Correction" },
+  { id: "focus", label: "Focus" },
   { id: "theory", label: "Theory" },
   { id: "evaluation", label: "Evaluation" },
 ];
 
-function loadRole(): Role {
+/** The job a tab does: who may open it, what its phone hears, and what the server records as `by`. */
+const jobOf = (t: TabId): Role => (t === "focus" ? "correction" : t);
+
+function loadRole(): TabId {
   try {
     const r = localStorage.getItem("aristora.role");
-    if (r === "correction" || r === "theory" || r === "evaluation") return r;
+    if (r === "correction" || r === "focus" || r === "theory" || r === "evaluation") return r;
   } catch {
     /* private mode */
   }
@@ -30,7 +38,7 @@ function loadRole(): Role {
 
 export function App() {
   const { board, boardError, link, me } = useStore();
-  const [chosen, setRoleState] = useState<Role>(loadRole);
+  const [chosen, setRoleState] = useState<TabId>(loadRole);
   const [page, setPage] = useState<"board" | "settings" | "attendance" | "progress">("board");
   // The address bar can hold a sign-in link (#join=...) or the setup code (#setup=...).
   const [, setHashSeen] = useState(0);
@@ -46,17 +54,18 @@ export function App() {
   const loaded = !!board;
   const user = me?.user ?? null;
   // Only the tabs this person may use; the phone remembers the last one.
-  const tabs = ROLES.filter((r) => !user || user.tabs.includes(r.id));
-  const role: Role = tabs.some((r) => r.id === chosen) ? chosen : (tabs[0]?.id ?? "correction");
+  const tabs = ROLES.filter((r) => !user || user.tabs.includes(jobOf(r.id)));
+  const tab: TabId = tabs.some((r) => r.id === chosen) ? chosen : (tabs[0]?.id ?? "correction");
+  const role: Role = jobOf(tab);
 
   setRole(role);
   useEffect(() => {
     try {
-      localStorage.setItem("aristora.role", role);
+      localStorage.setItem("aristora.role", tab);
     } catch {
       /* private mode */
     }
-  }, [role]);
+  }, [tab]);
   // Phones only allow sound after a tap: every tap turns alerts (back) on where needed.
   useEffect(() => listenForTaps(), []);
   useEffect(() => {
@@ -123,7 +132,7 @@ export function App() {
   const inClass = views.filter((v) => v.where !== "absent").length;
 
   return (
-    <div class="app" data-role={role}>
+    <div class="app" data-role={role} data-tab={tab}>
       <div class="top-wrap" ref={topRef}>
         <header class="top">
           <div class="top-left">
@@ -233,6 +242,8 @@ export function App() {
         <Progress board={board} now={now} />
       ) : shown === "attendance" ? (
         <Attendance board={board} views={views} now={now} role={role} />
+      ) : tab === "focus" ? (
+        <Focus board={board} views={views} now={now} onAttendance={() => setPage("attendance")} />
       ) : role === "correction" ? (
         <Correction board={board} views={views} now={now} onAttendance={() => setPage("attendance")} />
       ) : role === "theory" ? (
@@ -241,15 +252,15 @@ export function App() {
         <Evaluation board={board} views={views} now={now} />
       )}
 
-      <nav class="tabs" aria-label="Choose your job">
+      <nav class={`tabs n${tabs.length}`} aria-label="Choose your job">
         {tabs.map((r) => {
-          const badge = r.id === "correction" ? toSend : r.id === "theory" ? theoryRed : evalRed;
+          const badge = r.id === "correction" ? toSend : r.id === "theory" ? theoryRed : r.id === "evaluation" ? evalRed : 0;
           return (
             <button
               key={r.id}
               type="button"
-              class={`tab ${r.id}${role === r.id && shown === "board" ? " on" : ""}`}
-              aria-current={role === r.id ? "page" : undefined}
+              class={`tab ${r.id}${tab === r.id && shown === "board" ? " on" : ""}`}
+              aria-current={tab === r.id ? "page" : undefined}
               onClick={() => {
                 setRoleState(r.id);
                 setPage("board");
@@ -257,7 +268,7 @@ export function App() {
             >
               <span class="tab-mark" aria-hidden="true" />
               <span>{r.label}</span>
-              {badge > 0 && role !== r.id && <span class="tab-badge">{badge}</span>}
+              {badge > 0 && jobOf(r.id) !== role && <span class="tab-badge">{badge}</span>}
             </button>
           );
         })}

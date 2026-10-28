@@ -4,6 +4,7 @@
 //                 and which questions lost marks. Correcting again changes them. "?" (dk) = he couldn't start it:
 //                 0 marks, straight to Theory. `to: "theory"` sends the level's lost marks to Theory instead of
 //                 Evaluation (a level under half: he forgot the theory).
+//   Uncorrect  -> Take back (Focus tab): a level saved on the wrong student goes back to how it was (30 minutes).
 //   Explain    -> the Evaluation teacher, for the questions that lost marks.
 //   To Theory  -> Correction or Evaluation sends lost questions to Theory (he keeps working; Theory calls him).
 //   Taught     -> Theory, for the questions sent to it.
@@ -27,6 +28,7 @@ import {
 import { levelOutOf, type MasterData } from "./lib/book";
 import { computeMaster, type MQ, type MState } from "./lib/master";
 import { actor } from "./lib/auth";
+import { masterState as masterStateShape } from "./schema";
 
 async function masterWork(ctx: MutationCtx, student: Doc<"students">, unitId: Id<"units"> | undefined, now: number) {
   const { unit, book, progress } = await workPlace(ctx, student, "master", unitId, now);
@@ -214,6 +216,75 @@ export const correct = mutation({
       theory: lost.filter(([, r]) => r.th && !r.tt).map(([q]) => Number(q)),
       evaluation: lost.filter(([, r]) => !r.th && !r.x).map(([q]) => Number(q)),
     };
+  },
+});
+
+/** How long a correction can be taken back (the Focus tab offers it on the phone that saved it). */
+export const UNCORRECT_MS = 30 * 60_000;
+
+/**
+ * Take a correction back: a paper marked on the wrong student (or as the wrong level). The level and its questions go
+ * back to exactly how they were before that save (`before`, kept by the phone that saved it: handed in and waiting,
+ * or not handed in yet), and its "corrected" line leaves the class report as if it never happened (the history says
+ * it was taken back). Only the latest correction of that level (`fixed` = its time), within 30 minutes, and only while
+ * nobody has worked on its marks since: explained, sent to Theory or taught.
+ */
+export const uncorrect = mutation({
+  args: {
+    ...base,
+    level: v.number(),
+    fixed: v.number(),
+    before: v.object({ lv: v.optional(masterStateShape.fields.lv.value), q: v.optional(masterStateShape.fields.q) }),
+  },
+  handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["correction", "evaluation"], args.by);
+    const now = Date.now();
+    const student = await getStudent(ctx, args.studentId);
+    const { unit, book, progress, m } = await masterWork(ctx, student, args.unitId, now);
+    const l = levelOf(book, args.level);
+    const key = String(l.n);
+    const lv = m.lv[key];
+    if (!lv?.fixed) fail(`Level ${l.n} isn't corrected: nothing to take back.`);
+    if (lv.fixed !== args.fixed) fail(`Level ${l.n} was corrected again since. Open it on the Correction tab.`);
+    if (now - lv.fixed > UNCORRECT_MS) fail(`Too late to take back (over 30 minutes). Correct Level ${l.n} again on the Correction tab.`);
+    const since = (t: number | undefined) => t !== undefined && t > lv.fixed!;
+    for (let q = l.from; q <= l.to; q++) {
+      const r = m.q[String(q)];
+      if (!r) continue;
+      if (since(r.x)) fail(`Evaluation already explained Q${q}. Correct Level ${l.n} again on the Correction tab instead.`);
+      if (since(r.th) || since(r.tt)) fail(`Q${q} already went to Theory. Correct Level ${l.n} again on the Correction tab instead.`);
+    }
+    // Only this level's questions come back; anything else in `before` is ignored.
+    const rows = args.before.q ?? {};
+    for (let q = l.from; q <= l.to; q++) {
+      const was = rows[String(q)];
+      if (was) m.q[String(q)] = was;
+      else delete m.q[String(q)];
+    }
+    if (args.before.lv && Object.keys(args.before.lv).length) m.lv[key] = args.before.lv;
+    else delete m.lv[key];
+    // Its "corrected" line leaves the report (logged at the very moment it was fixed).
+    for (const e of await ctx.db
+      .query("events")
+      .withIndex("by_at", (q) => q.eq("at", lv.fixed!))
+      .collect()) {
+      if (e.studentId === student._id && (e.kind === "level-marks" || e.kind === "level-remarks") && e.value?.startsWith(`${key} `)) {
+        await ctx.db.delete(e._id);
+      }
+    }
+    const session = await currentSession(ctx, now);
+    await ctx.db.patch(progress._id, { m, updatedAt: now });
+    await log(ctx, session, now, {
+      kind: "level-unmarked",
+      by: cleanBy(args.by),
+      studentId: student._id,
+      name: student.name,
+      unit: unit.key,
+      value: `${key} ${lv.got ?? 0}/${l.max}`,
+    });
+    await refresh(ctx, student._id, now, session);
+    await touch(ctx, session, now);
+    return true;
   },
 });
 
