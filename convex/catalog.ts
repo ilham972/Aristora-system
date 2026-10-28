@@ -50,8 +50,9 @@ export const books = query({
 });
 
 /**
- * A unit's workbook (Master), copied from its contents page and marks table: where each part ends, the marks of
- * each short question, and each level's last question and marks. Question marks already known are kept.
+ * A unit's workbook (Master), typed from its contents page and marks table, or read from the book file the owner
+ * uploaded: where each part ends, the marks of each short question, and each level's last question and marks.
+ * Question marks already known are kept, except for an uploaded book (`replace`): its marks are the whole truth.
  */
 export const saveWorkbook = mutation({
   args: {
@@ -60,6 +61,7 @@ export const saveWorkbook = mutation({
     parts: v.array(v.object({ id: partId, to: v.number(), each: v.optional(v.number()) })),
     levels: v.array(v.object({ to: v.number(), max: v.number() })),
     marks: v.optional(v.record(v.string(), v.number())),
+    replace: v.optional(v.boolean()),
     by: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -92,7 +94,7 @@ export const saveWorkbook = mutation({
     const old = await bookFor(ctx, unit._id, "master");
     const last = parts.length ? parts[parts.length - 1].to : 0;
     const marks: Record<string, number> = {};
-    const oldMarks = old?.data.kind === "master" ? (old.data.marks ?? {}) : {};
+    const oldMarks = !args.replace && old?.data.kind === "master" ? (old.data.marks ?? {}) : {};
     for (const [k, m] of Object.entries({ ...oldMarks, ...(args.marks ?? {}) })) {
       if (Number(k) >= 1 && Number(k) <= last) marks[k] = m;
     }
@@ -106,9 +108,10 @@ export const saveWorkbook = mutation({
       kind: "book-save",
       by: cleanBy(args.by),
       unit: unit.key,
-      value: `${levels.length} levels, ${bookTotal(data)} marks`,
+      value: `${levels.length} levels, ${bookTotal(data)} marks${args.replace ? " (uploaded book)" : ""}`,
     });
     await touch(ctx, session, now);
+    return true;
   },
 });
 

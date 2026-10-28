@@ -3,8 +3,10 @@
 
 import { mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { strToU8, zipSync } from "fflate";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { normalizeCode, secretHash } from "../../convex/lib/auth";
+import U01_BOOK from "../fixtures/workbook-g8-u01.html?raw";
 import { addPerson, OWNER_TOKEN } from "../helpers";
 import { makeBackend, playwright, serveDist } from "./harness";
 
@@ -588,6 +590,46 @@ test("Master: workbook levels corrected, lost marks explained, re-teach, Exam Sp
   });
   expect((saved?.data as { levels: { max: number }[] }).levels.map((l) => l.max)).toEqual([20, 20, 20, 20, 25]);
   await shot(C, "m08-books-grade8", true);
+
+  // Upload workbooks: the unit zips from the workbook chats, read on the phone, checked, saved in one tap.
+  // U01's real book replaces the typed one; a broken U02 is refused with the reason.
+  const zipOf = (html: string) => Buffer.from(zipSync({ "book.html": strToU8(html), "u01.py": strToU8("# not read") }));
+  const brokenU02 = U01_BOOK.replace("அலகு 1 · எண்கோலங்கள்", "அலகு 2 · சுற்றளவு").replace(
+    '<span class="qn">53</span>\n<span class="pm">(1 புள்ளி)',
+    '<span class="qn">53</span>\n<span class="pm">(2 புள்ளிகள்)',
+  );
+  const upload = C.locator(".upload-btn input[type=file]");
+  await upload.setInputFiles([
+    { name: "G8_U01_Workbook_source_v3.zip", mimeType: "application/zip", buffer: zipOf(U01_BOOK) },
+    { name: "G8_U02_Workbook_source_v1.zip", mimeType: "application/zip", buffer: zipOf(brokenU02) },
+  ]);
+  const up = C.locator(".sheet");
+  await contains(up.locator("h2"), "2 workbooks found");
+  await contains(up.locator(".up-replace"), "G8 · U01");
+  await contains(up.locator(".up-replace"), "Part I 1–52 · Part II 53–73 · 12 levels · 230 marks");
+  await contains(up.locator(".up-replace .up-state"), "Replaces the one in the app (5 levels, 105 marks)");
+  await contains(up.locator(".up-bad"), "Level 6 prints / 18, but its questions add up to 19.");
+  await shot(C, "m08b-upload-workbooks");
+  await up.getByRole("button", { name: "Save 1 workbook" }).click();
+  await contains(C.locator(".toast"), "Saved G8 · U01");
+  const uploaded = await backend.t.run(async (ctx) => {
+    const u = await ctx.db
+      .query("units")
+      .withIndex("by_key", (q) => q.eq("key", "G8-U01"))
+      .first();
+    return (await ctx.db
+      .query("books")
+      .withIndex("by_unit_stage", (q) => q.eq("unitId", u!._id).eq("stage", "master"))
+      .first())!.data as { levels: { max: number }[]; marks: Record<string, number> };
+  });
+  expect(uploaded.levels.map((l) => l.max)).toEqual([20, 20, 20, 20, 24, 18, 22, 20, 19, 18, 20, 9]);
+  expect(uploaded.marks["63"]).toBe(11);
+  await contains(C.getByRole("button", { name: /^Grade 8\b/ }), "1/");
+  // The same file again: nothing to save.
+  await upload.setInputFiles([{ name: "G8_U01_Workbook_source_v3.zip", mimeType: "application/zip", buffer: zipOf(U01_BOOK) }]);
+  await contains(C.locator(".sheet .up-same .up-state"), "Already in the app");
+  await visible(C.locator(".sheet").getByRole("button", { name: "Nothing to save" }));
+  await C.locator(".sheet").getByRole("button", { name: "Cancel" }).click();
   await C.getByRole("button", { name: "Back to the class" }).click();
 
   // Small Android phone: the correction sheet and the marks table fit.

@@ -2546,3 +2546,69 @@ button.stat:disabled {
   background: var(--green-soft);
   color: var(--green-ink);
 }
+
+/* ---------- Books: uploading workbooks ---------- */
+
+.upload-btn {
+  position: relative;
+  gap: 10px;
+}
+.upload-btn input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.upload-btn.busy {
+  opacity: 0.7;
+}
+.up-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.up-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+}
+.up-list small {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.up-state {
+  font-size: 14px;
+  font-weight: 700;
+}
+.up-new {
+  border-color: var(--green) !important;
+}
+.up-new .up-state {
+  color: var(--green-ink);
+}
+.up-replace {
+  border-color: var(--amber) !important;
+}
+.up-replace .up-state {
+  color: var(--amber-ink);
+}
+.up-same .up-state,
+.up-skip .up-state {
+  color: var(--ink-3);
+}
+.up-bad {
+  border-color: var(--red) !important;
+  background: var(--red-soft) !important;
+}
+.up-bad .up-state {
+  color: var(--red-ink);
+}
+.up-file {
+  word-break: break-all;
+}

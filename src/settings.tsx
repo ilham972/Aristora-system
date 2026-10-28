@@ -29,6 +29,7 @@ import {
   type Unit,
 } from "./store";
 import { ATTENDANCE_SINCE, AWAY_DAYS, daysAway, studentStats } from "./stats";
+import { UploadBooks } from "./upload";
 import { GRADES, GradeRow, Sheet, STATE_WORDS, useGrade } from "./ui";
 
 type Tab = "students" | "books" | "people" | "alerts" | "reports" | "history" | "account";
@@ -375,20 +376,24 @@ type BookRow = {
 function Books() {
   const units = allUnits();
   const books = useQuery<BookRow[]>(api.catalog.books, {}) ?? [];
-  const [grade, setGrade] = useState(8);
+  const [grade, setGrade] = useGrade("aristora.booksGrade", () => 8);
   const [open, setOpen] = useState<Unit | null>(null);
   const list = units.filter((u) => u.grade === grade);
   const bookOf = (u: Unit, st: "fighter" | "master") => books.find((b) => b.unitId === u._id && b.stage === st);
   const done = (st: "fighter" | "master") => list.filter((u) => bookOf(u, st)).length;
   return (
     <div class="settings-body">
-      <div class="chip-pick" role="group" aria-label="Grade">
-        {[6, 7, 8, 9, 10, 11].map((g) => (
-          <button key={g} type="button" class={g === grade ? "on" : ""} aria-pressed={g === grade} onClick={() => setGrade(g)}>
-            Grade {g}
-          </button>
-        ))}
-      </div>
+      <UploadBooks units={units} books={books} onSaved={setGrade} />
+      <GradeRow
+        value={grade}
+        onPick={setGrade}
+        label="Grade"
+        count={(g) => {
+          const us = units.filter((u) => u.grade === g);
+          const n = us.filter((u) => bookOf(u, "master")).length;
+          return { text: `${n}/${us.length}`, aria: `${n} of ${us.length} workbooks in the app`, some: n > 0 };
+        }}
+      />
       <p class="muted">
         {list.length} units. Theory books (Fighter) in the app: {done("fighter")}. Workbooks (Master): {done("master")}.
       </p>
