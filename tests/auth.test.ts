@@ -147,7 +147,12 @@ describe("permissions", () => {
     await owner.mutation(api.people.update, { id: rimasId, tabs: ["correction", "evaluation"], can: ["students", "reports"] });
     expect((await rimas.query(api.auth.me, {})).user).toMatchObject({ tabs: ["correction", "evaluation"], can: ["students", "reports"] });
     await rimas.mutation(api.students.add, { name: "Nila" });
-    await rimas.query(api.state.history, {});
+    // History: she sees the class, not the owner's people changes.
+    const hers = await rimas.query(api.state.history, {});
+    expect(hers.some((e) => e.kind === "student-add")).toBe(true);
+    expect(hers.some((e) => e.kind === "person-add" || e.kind === "link-made" || e.kind === "sign-in")).toBe(false);
+    const owners = await owner.query(api.state.history, {});
+    expect(owners.some((e) => e.kind === "person-add")).toBe(true);
     const ownerId = (await owner.query(api.auth.me, {})).user!._id;
     await expect(owner.mutation(api.people.update, { id: ownerId as Id<"users">, tabs: ["theory"] })).rejects.toThrow(/always do everything/);
     await expect(owner.mutation(api.people.remove, { id: ownerId as Id<"users"> })).rejects.toThrow(/can't be removed/);

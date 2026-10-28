@@ -65,13 +65,29 @@ export const archived = query({
   },
 });
 
+/** Sign-ins, PINs and people changes: the owner's business only. */
+const ACCOUNT_KINDS = new Set([
+  "owner-setup",
+  "sign-in",
+  "sign-out",
+  "pin-set",
+  "pin-clear",
+  "person-add",
+  "person-edit",
+  "person-remove",
+  "link-made",
+  "device-out",
+]);
+
 export const history = query({
   args: { token: v.optional(v.string()), limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
-    await viewer(ctx, args.token, "reports");
+    const user = await viewer(ctx, args.token, "reports");
     const { limit } = args;
     const n = Math.min(Math.max(Math.floor(limit ?? 80), 1), 300);
-    return await ctx.db.query("events").withIndex("by_at").order("desc").take(n);
+    if (user.role === "owner") return await ctx.db.query("events").withIndex("by_at").order("desc").take(n);
+    const rows = await ctx.db.query("events").withIndex("by_at").order("desc").take(n * 2);
+    return rows.filter((e) => !ACCOUNT_KINDS.has(e.kind)).slice(0, n);
   },
 });
 
