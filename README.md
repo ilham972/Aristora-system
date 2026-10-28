@@ -66,5 +66,6 @@ Use first name and initial only for students.
 
 - `convex/`: database schema, functions, and the shared rules engine (`lib/`)
 - `src/`: the phone app (Preact)
+- `scripts/workbook-from-pdf.py`: reads a past-paper workbook PDF into the app's workbook data (levels and marks)
 - `tests/`: rules and backend tests (`npm test`); a three-phone run-through in `tests/e2e`
   (`npm run build` with `CONVEX_URL` set, then `npx vitest run -c vitest.e2e.config.ts`)
