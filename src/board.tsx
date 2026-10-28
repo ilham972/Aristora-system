@@ -3,7 +3,7 @@
 // his whole book as a thin strip, with his grade and unit. Tap the strip to open the book.
 
 import { useState } from "preact/hooks";
-import type { ComponentChildren } from "preact";
+import { Fragment, type ComponentChildren } from "preact";
 import { api } from "../convex/_generated/api";
 import type { SectionData } from "../convex/lib/book";
 import { evalUrgency, theoryUrgency, type MarkState } from "../convex/lib/status";
@@ -256,10 +256,15 @@ export function Register(props: {
   /** How to tap, shown until the teacher taps "Got it". */
   legend: ComponentChildren;
   selected?: Set<string>;
+  /** Several grades shown together: sort by grade, with a small header for each. */
+  grouped?: boolean;
   /** Return true if the tap was handled; otherwise it opens the whole book. */
   onName: (v: View) => boolean | void;
 }) {
-  const { role, views, now } = props;
+  const { role, now } = props;
+  const views = props.grouped
+    ? [...props.views].sort((a, b) => (a.s.grade ?? 99) - (b.s.grade ?? 99) || a.s.name.localeCompare(b.s.name))
+    : props.views;
   const [open, setOpen] = useState<string | null>(null);
   const [moving, setMoving] = useState<string | null>(null);
   const [correcting, setCorrecting] = useState<{ id: string; level: number } | null>(null);
@@ -299,12 +304,19 @@ export function Register(props: {
           </div>
         )}
         <ul class="reg-list">
-          {views.map((v) => {
+          {views.map((v, i) => {
             const st = rowState(role, v, now);
             const selected = props.selected?.has(v.s._id) ?? false;
             const isOpen = open === v.s._id;
+            const head = props.grouped && (i === 0 || views[i - 1].s.grade !== v.s.grade);
             return (
-              <li key={v.s._id} class={`reg-row rt-${st.tone}${selected ? " sel" : ""}${v.where === "absent" ? " absent" : ""}`}>
+              <Fragment key={v.s._id}>
+              {head && (
+                <li class="reg-grade" aria-hidden="true">
+                  {v.s.grade ? `Grade ${v.s.grade}` : "No grade"}
+                </li>
+              )}
+              <li class={`reg-row rt-${st.tone}${selected ? " sel" : ""}${v.where === "absent" ? " absent" : ""}`}>
                 <button
                   type="button"
                   class="reg-name"
@@ -344,6 +356,7 @@ export function Register(props: {
                   />
                 )}
               </li>
+              </Fragment>
             );
           })}
         </ul>

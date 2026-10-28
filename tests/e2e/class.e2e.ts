@@ -300,6 +300,8 @@ test("the register: a whole class on three phones", async () => {
   // Small Android phone: nothing spills sideways on any tab.
   for (const role of ["correction", "theory", "evaluation"]) {
     const small = await phone(backend, role, { ...PHONE, viewport: { width: 360, height: 740 } });
+    await count(small.locator(".reg-row"), 14); // loaded (signing in comes first), then measure
+    await visible(small.locator(".grade-pills"));
     expect(await small.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
     await shot(small, `r12-${role}-360px`, true);
     await small.context().close();
@@ -318,6 +320,24 @@ test("Master: workbook levels corrected, lost marks explained, re-teach, Exam Sp
   await visible(C.getByText(/^14 demo students loaded/));
   await C.getByRole("button", { name: "Back to the class" }).click();
   await count(C.locator(".reg-row"), 14);
+
+  // Grade pills: every tab can look at one grade; each pill says what waits for this teacher there.
+  await textsAre(C.locator(".grade-pills .gp b"), ["All", "G7", "G9", "G11"]);
+  await until(async () => (await C.locator(".reg-grade").allTextContents()).join("|") === "Grade 7|Grade 9|Grade 11", "grade headers");
+  // Correction: Vimal (G7) waits for marks = red; Tharun (G11) is quiet = amber; nothing in G9.
+  expect(await C.getByRole("button", { name: /^Grade 7:/ }).getAttribute("aria-label")).toBe("Grade 7: 3 here, 1 need you now");
+  expect(await C.getByRole("button", { name: /^Grade 11:/ }).getAttribute("aria-label")).toBe("Grade 11: 9 here, 1 need you soon");
+  expect(await C.getByRole("button", { name: /^Grade 9:/ }).getAttribute("aria-label")).toBe("Grade 9: 1 here");
+  await C.getByRole("button", { name: /^Grade 7:/ }).click();
+  await count(C.locator(".reg-row"), 3);
+  await count(C.locator(".reg-grade"), 0);
+  await contains(C.locator(".summary"), "1 with no work");
+  await shot(C, "m00-correction-grade-7");
+  await C.getByRole("button", { name: /^All grades:/ }).click();
+  await count(C.locator(".reg-row"), 14);
+  // Theory looks at Grade 11 only (the phone remembers it).
+  await T.getByRole("button", { name: /^Grade 11:/ }).click();
+  await count(T.locator(".reg-row"), 10);
 
   // Correction sees every grade in one register. Malik handed Level 3 in 6 minutes ago and is on Level 4.
   const malik = row(C, "Malik");
@@ -380,6 +400,13 @@ test("Master: workbook levels corrected, lost marks explained, re-teach, Exam Sp
   await shot(C, "m04-correction-marks-table", true);
   await malik.getByRole("button", { name: "Needs theory again" }).click();
   await visible(malik.getByRole("button", { name: "Re-teach asked ✓" }));
+  // Theory is looking at Grade 11: the Grade 7 pill lights up for Malik.
+  const g7 = T.getByRole("button", { name: /^Grade 7:/ });
+  await until(async () => /need you/.test((await g7.getAttribute("aria-label")) ?? ""), "Theory's Grade 7 pill shows Malik");
+  await visible(g7.locator(".gp-badge"));
+  await shot(T, "m04b-theory-grade-7-waiting");
+  await g7.click();
+  await count(T.locator(".reg-row"), 3);
 
   // Theory: one chip selects everyone waiting for a re-teach; Sent; sent back early keeps the request.
   await T.getByRole("button", { name: /need re-teaching of U08/ }).click();

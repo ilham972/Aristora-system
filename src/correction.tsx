@@ -4,6 +4,7 @@ import type { Id } from "../convex/_generated/dataModel";
 import { mutate } from "./backend";
 import { Register } from "./board";
 import { fmtMin, shortMin, type View } from "./derive";
+import { GradePills, gradesOf, inGrade, needsOf, useGradeFilter } from "./grades";
 import { ReportView, type Report } from "./report";
 import { act, currentRole, may, toast, type Board } from "./store";
 import { Empty, Sheet } from "./ui";
@@ -11,9 +12,13 @@ import { Empty, Sheet } from "./ui";
 const signIn = (id: Id<"students">) => act(() => mutate(api.students.setPresent, { id, present: true, by: currentRole() }));
 
 export function Correction(props: { board: Board; views: View[]; now: number }) {
-  const { board, views, now } = props;
+  const { board, now } = props;
   const [ending, setEnding] = useState(false);
   const [report, setReport] = useState<Report | null>(null);
+  const grades = gradesOf(props.views);
+  const [grade, setGrade] = useGradeFilter("correction", grades);
+  // One grade at a time if the teacher chose one; the summary and the register follow it.
+  const views = inGrade(props.views, grade);
 
   const present = views.filter((v) => v.where !== "absent");
   const absent = views.filter((v) => v.where === "absent");
@@ -22,7 +27,7 @@ export function Correction(props: { board: Board; views: View[]; now: number }) 
   const inRooms = present.filter((v) => v.where === "theory" || v.where === "evaluation").length;
   const toCorrect = present.reduce((a, v) => a + (v.ms?.waiting.length ?? 0), 0);
 
-  if (views.length === 0) {
+  if (props.views.length === 0) {
     return (
       <main class="page">
         <Empty title="No students yet">
@@ -36,7 +41,10 @@ export function Correction(props: { board: Board; views: View[]; now: number }) 
 
   return (
     <main class="page">
-      <CallsBand board={board} views={views} now={now} />
+      <div class="stick">
+        <CallsBand board={board} views={props.views} now={now} />
+        <GradePills views={props.views} needs={needsOf("correction", board, props.views, now)} filter={grade} onPick={setGrade} />
+      </div>
 
       <div class="summary" aria-label="Class summary">
         {present.length === 0 ? (
@@ -54,6 +62,7 @@ export function Correction(props: { board: Board; views: View[]; now: number }) 
       <Register
         role="correction"
         views={views}
+        grouped={grade === "all" && grades.length > 1}
         now={now}
         legend={
           <>
@@ -155,7 +164,7 @@ function CallsBand(props: { board: Board; views: View[]; now: number }) {
     .filter((r) => r.calls.length > 0);
 
   return (
-    <div class="calls stick" aria-live="assertive">
+    <div class="calls" aria-live="assertive">
       {rooms.map(({ room, calls }) => {
         const oldest = Math.min(...calls.map((c) => c.createdAt));
         const late = now - oldest > 60_000;

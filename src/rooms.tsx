@@ -4,6 +4,7 @@ import type { Id } from "../convex/_generated/dataModel";
 import { mutate } from "./backend";
 import { Register } from "./board";
 import { evalQueue, roomBusy, roomCalls, sameMistakes, theoryGroups, type RoomCall, type View } from "./derive";
+import { GradePills, gradesOf, inGrade, needsOf, useGradeFilter } from "./grades";
 import { act, currentRole, toast, type Board } from "./store";
 import { flushTaps } from "./taps";
 
@@ -51,9 +52,15 @@ function useSelection(views: View[], can: (v: View) => string | null) {
 // ---------------- Theory ----------------
 
 export function Theory(props: { board: Board; views: View[]; now: number }) {
-  const { board, views, now } = props;
+  const { board, now } = props;
+  const all = props.views;
+  const grades = gradesOf(all);
+  const [grade, setGrade] = useGradeFilter("theory", grades);
+  const views = inGrade(all, grade);
+  // With every grade showing, chips name the grade too: "G11 U13 D".
+  const named = grade === "all" && grades.length > 1;
   const groups = theoryGroups(views);
-  const room = roomCalls(board, views, "theory", now);
+  const room = roomCalls(board, all, "theory", now);
   const pick = useSelection(views, (v) => {
     if (v.where === "absent") return "not signed in";
     if (!v.st?.nextTheory && !v.ms?.reteach) return v.kind === "master" ? "not marked for re-teaching" : "no theory to teach here";
@@ -65,11 +72,10 @@ export function Theory(props: { board: Board; views: View[]; now: number }) {
 
   return (
     <main class={`page${pick.sel.size ? " with-bar" : ""}`}>
-      {room.length > 0 && (
-        <div class="stick">
-          <InRoom room="theory" calls={room} />
-        </div>
-      )}
+      <div class="stick">
+        {room.length > 0 && <InRoom room="theory" calls={room} />}
+        <GradePills views={all} needs={needsOf("theory", board, all, now)} filter={grade} onPick={setGrade} />
+      </div>
       {groups.length > 0 && (
         <div class="chips-row" role="group" aria-label="Next to teach">
           <span class="chips-label">Next to teach</span>
@@ -81,7 +87,7 @@ export function Theory(props: { board: Board; views: View[]; now: number }) {
               aria-label={`Select the ${g.members.length} students who need ${g.section ? `section ${g.section.id}` : "re-teaching"} of ${g.unit?.code ?? "this unit"}`}
               onClick={() => pick.set(g.members.filter((m) => !m.inEvaluation).map((m) => m.v.s._id))}
             >
-              {g.label}
+              {named && g.unit ? `G${g.unit.grade} ${g.label}` : g.label}
               <b>{g.members.length}</b>
             </button>
           ))}
@@ -90,6 +96,7 @@ export function Theory(props: { board: Board; views: View[]; now: number }) {
       <Register
         role="theory"
         views={views}
+        grouped={named}
         now={now}
         legend={
           <>
@@ -131,8 +138,13 @@ export function Theory(props: { board: Board; views: View[]; now: number }) {
 // ---------------- Evaluation ----------------
 
 export function Evaluation(props: { board: Board; views: View[]; now: number }) {
-  const { board, views, now } = props;
-  const room = roomCalls(board, views, "evaluation", now);
+  const { board, now } = props;
+  const all = props.views;
+  const grades = gradesOf(all);
+  const [grade, setGrade] = useGradeFilter("evaluation", grades);
+  const views = inGrade(all, grade);
+  const named = grade === "all" && grades.length > 1;
+  const room = roomCalls(board, all, "evaluation", now);
   const queue = evalQueue(views, now);
   const same = sameMistakes(queue);
   const theoryBusy = roomBusy(board, "theory");
@@ -152,8 +164,9 @@ export function Evaluation(props: { board: Board; views: View[]; now: number }) 
 
   return (
     <main class={`page${pick.sel.size ? " with-bar" : ""}`}>
-      {room.length > 0 && (
-        <div class="stick">
+      <div class="stick">
+        {room.length > 0 && (
+          <>
           {pulls.map((rc) => (
             <div key={rc.c._id} class="pull-banner" role="alert">
               <p>
@@ -176,8 +189,10 @@ export function Evaluation(props: { board: Board; views: View[]; now: number }) 
             </div>
           ))}
           <InRoom room="evaluation" calls={room} />
-        </div>
-      )}
+          </>
+        )}
+        <GradePills views={all} needs={needsOf("evaluation", board, all, now)} filter={grade} onPick={setGrade} />
+      </div>
       {same.length > 0 && (
         <div class="chips-row" role="group" aria-label="Same wrong answer">
           <span class="chips-label">Same mistake</span>
@@ -189,7 +204,7 @@ export function Evaluation(props: { board: Board; views: View[]; now: number }) 
               aria-label={`Select the ${g.members.length} students who got ${g.label} wrong`}
               onClick={() => pick.set(g.members.map((m) => m.v.s._id))}
             >
-              {g.label}
+              {named ? `G${g.members[0].v.s.grade ?? "?"} ${g.label}` : g.label}
               <b>{g.members.length}</b>
             </button>
           ))}
@@ -198,6 +213,7 @@ export function Evaluation(props: { board: Board; views: View[]; now: number }) 
       <Register
         role="evaluation"
         views={views}
+        grouped={named}
         now={now}
         legend={
           <>
