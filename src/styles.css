@@ -1863,10 +1863,39 @@ p.small {
 }
 .ct-row {
   display: flex;
+  flex-wrap: wrap; /* the answer key goes on its own line under the marks */
   align-items: center;
-  gap: 10px;
+  gap: 4px 10px;
   padding: 6px 0;
   border-bottom: 1px solid var(--line-2);
+}
+/* The answer key under a question's marks: the final answer in bold, each Part II part on its own line. */
+.ct-key {
+  flex-basis: 100%;
+  min-width: 0;
+  padding-left: 54px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13.5px;
+  line-height: 1.35;
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+.ct-key b {
+  color: var(--ink);
+}
+.ct-key .kp em {
+  font-style: normal;
+  font-weight: 700;
+  color: var(--ink-3);
+}
+.ct-key .kp small {
+  margin-left: 4px;
+  color: var(--ink-3);
+}
+.ct-nokey {
+  margin: 6px 0 0;
 }
 .ct-q {
   flex: none;
@@ -1875,6 +1904,8 @@ p.small {
   font-size: 15px;
 }
 .ct-marks {
+  flex: 1 1 0; /* stays beside its question number and wraps its own buttons */
+  min-width: 0;
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
@@ -2585,6 +2616,18 @@ button.stat:disabled {
 .up-state {
   font-size: 14px;
   font-weight: 700;
+}
+.up-list .up-key {
+  color: var(--ink-3);
+}
+.up-list .up-key.ok,
+.key-note.ok {
+  color: var(--green-ink);
+  font-weight: 700;
+}
+.key-note {
+  margin: 6px 0 0;
+  color: var(--ink-3);
 }
 .up-new {
   border-color: var(--green) !important;

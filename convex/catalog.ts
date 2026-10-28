@@ -10,8 +10,9 @@ import {
   type MasterLevel,
   type MasterPart,
 } from "./lib/book";
-import { partId } from "./schema";
+import { keyAnswer, partId } from "./schema";
 import { actor, viewer } from "./lib/auth";
+import { checkKey } from "./lib/key";
 
 /** The whole syllabus, in grade and book order. */
 export const units = query({
@@ -44,15 +45,40 @@ export const books = query({
             }
           : null,
       questions: b.data.kind === "fighter" ? b.data.sections.reduce((a, s) => a + s.teach.length + s.solo.length, 0) : null,
+      keyCount: b.keyCount ?? null,
       updatedAt: b.updatedAt,
     }));
   },
 });
 
+/** A workbook's answer key, for the teacher correcting a level (null: no key yet). Never sent with the board. */
+export const key = query({
+  args: { token: v.optional(v.string()), unitId: v.id("units") },
+  handler: async (ctx, args) => {
+    await viewer(ctx, args.token, "correction", "evaluation", "theory", "books");
+    const k = await ctx.db
+      .query("keys")
+      .withIndex("by_unit", (q) => q.eq("unitId", args.unitId))
+      .first();
+    return k ? { answers: k.answers, updatedAt: k.updatedAt } : null;
+  },
+});
+
+/** Parts, levels and marks in one line: the same line = the same question numbers, so a key still fits. */
+function shape(d: MasterData): string {
+  const marks = Object.entries(d.marks ?? {})
+    .sort(([a], [b]) => Number(a) - Number(b))
+    .map(([q, m]) => `${q}:${m}`);
+  return JSON.stringify([d.parts.map((p) => [p.id, p.from, p.to, p.each ?? null]), d.levels.map((l) => [l.from, l.to, l.max]), marks]);
+}
+
 /**
  * A unit's workbook (Master), typed from its contents page and marks table, or read from the book file the owner
  * uploaded: where each part ends, the marks of each short question, and each level's last question and marks.
  * Question marks already known are kept, except for an uploaded book (`replace`): its marks are the whole truth.
+ * An uploaded book may bring its answer key: it replaces the old one. Without one, the old key stays only while the
+ * question numbers and marks are the same (a re-cut book would show answers beside the wrong questions).
+ * Students' marks are never touched here.
  */
 export const saveWorkbook = mutation({
   args: {
@@ -62,6 +88,7 @@ export const saveWorkbook = mutation({
     levels: v.array(v.object({ to: v.number(), max: v.number() })),
     marks: v.optional(v.record(v.string(), v.number())),
     replace: v.optional(v.boolean()),
+    key: v.optional(v.array(keyAnswer)),
     by: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -101,14 +128,34 @@ export const saveWorkbook = mutation({
     const data: MasterData = Object.keys(marks).length ? { kind: "master", parts, levels, marks } : { kind: "master", parts, levels };
     const problems = checkMaster(data);
     if (problems.length) fail(problems[0]);
-    if (old) await ctx.db.patch(old._id, { data, updatedAt: now });
-    else await ctx.db.insert("books", { unitId: unit._id, stage: "master", data, updatedAt: now });
+    const newKey = args.key?.length ? args.key : null;
+    if (newKey) {
+      if (!args.replace) fail("An answer key comes only with an uploaded workbook.");
+      const bad = checkKey(newKey, data);
+      if (bad.length) fail(bad[0]);
+    }
+
+    // The answer key: the new one, or the old one while the question numbers still fit, or none.
+    const oldKey = await ctx.db
+      .query("keys")
+      .withIndex("by_unit", (q) => q.eq("unitId", unit._id))
+      .first();
+    const keepOld = !newKey && !!oldKey && old?.data.kind === "master" && shape(old.data) === shape(data);
+    const keyCount: number | undefined = newKey ? newKey.length : keepOld ? oldKey!.answers.length : undefined;
+    if (newKey) {
+      if (oldKey) await ctx.db.patch(oldKey._id, { answers: newKey, updatedAt: now });
+      else await ctx.db.insert("keys", { unitId: unit._id, answers: newKey, updatedAt: now });
+    } else if (oldKey && !keepOld) await ctx.db.delete(oldKey._id);
+
+    if (old) await ctx.db.patch(old._id, { data, updatedAt: now, keyCount });
+    else await ctx.db.insert("books", { unitId: unit._id, stage: "master", data, updatedAt: now, ...(keyCount ? { keyCount } : {}) });
     const session = await currentSession(ctx, now);
+    const keyWords = newKey ? ` + answer key (${newKey.length})` : oldKey && !keepOld ? " (old answer key removed)" : "";
     await log(ctx, session, now, {
       kind: "book-save",
       by: cleanBy(args.by),
       unit: unit.key,
-      value: `${levels.length} levels, ${bookTotal(data)} marks${args.replace ? " (uploaded book)" : ""}`,
+      value: `${levels.length} levels, ${bookTotal(data)} marks${args.replace ? " (uploaded book)" : ""}${keyWords}`,
     });
     await touch(ctx, session, now);
     return true;

@@ -370,6 +370,7 @@ type BookRow = {
     marksKnown: number;
   } | null;
   questions: number | null;
+  keyCount: number | null;
 };
 
 /** The syllabus by grade, which units have their books in the app, and setting up a workbook. */
@@ -381,6 +382,7 @@ function Books() {
   const list = units.filter((u) => u.grade === grade);
   const bookOf = (u: Unit, st: "fighter" | "master") => books.find((b) => b.unitId === u._id && b.stage === st);
   const done = (st: "fighter" | "master") => list.filter((u) => bookOf(u, st)).length;
+  const keys = list.filter((u) => bookOf(u, "master")?.keyCount).length;
   return (
     <div class="settings-body">
       <UploadBooks units={units} books={books} onSaved={setGrade} />
@@ -395,7 +397,7 @@ function Books() {
         }}
       />
       <p class="muted">
-        {list.length} units. Theory books (Fighter) in the app: {done("fighter")}. Workbooks (Master): {done("master")}.
+        {list.length} units. In the app: theory books (F) {done("fighter")} · workbooks (M) {done("master")} · answer keys (K) {keys}.
       </p>
       {[1, 2, 3, 0].map((t) => {
         const us = list.filter((u) => u.term === t);
@@ -420,6 +422,13 @@ function Books() {
                       </i>
                       <i class={m ? "has" : ""} title={m ? `Workbook: ${m.master?.levels.length} levels` : "No workbook yet"}>
                         M
+                      </i>
+                      <i
+                        class={m?.keyCount ? "has" : ""}
+                        title={m?.keyCount ? `Answer key: ${m.keyCount} answers` : "No answer key yet"}
+                        aria-label={m?.keyCount ? `Answer key: ${m.keyCount} answers` : "No answer key yet"}
+                      >
+                        K
                       </i>
                     </button>
                   </li>
@@ -573,6 +582,13 @@ function UnitSheet(props: { unit: Unit; book?: BookRow; fighter?: BookRow; onClo
           Total: {levels.reduce((a, l) => a + Number(l.max || 0), 0)} marks
           {m ? ` · ${m.marksKnown} question marks known from the book` : ""}
         </p>
+        {m && (
+          <p class={`small key-note${props.book?.keyCount ? " ok" : ""}`}>
+            {props.book?.keyCount
+              ? `✓ Answer key: ${props.book.keyCount} answers. Teachers see them when they correct a level.`
+              : "No answer key yet. Upload the unit's zip with its answer key (Upload workbooks)."}
+          </p>
+        )}
       </div>
       <button type="button" class="btn primary wide" disabled={busy || !levels.length} onClick={() => void saveBook()}>
         Save the workbook

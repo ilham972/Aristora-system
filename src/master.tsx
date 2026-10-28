@@ -4,11 +4,39 @@
 import { useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import { levelOutOf, PART_NAME } from "../convex/lib/book";
+import { boldRuns, type KeyAnswer } from "../convex/lib/key";
 import { partTotals } from "../convex/lib/master";
 import { mutate } from "./backend";
 import type { View } from "./derive";
+import { useQuery } from "./live";
 import { act, currentRole, toast, type Role } from "./store";
 import { Sheet } from "./ui";
+
+/** Answer-key text: plain text, the final answer in bold (never HTML from the file). */
+function KeyText(props: { text: string }) {
+  return <>{boldRuns(props.text).map(([s, b], i) => (b ? <b key={i}>{s}</b> : s))}</>;
+}
+
+/** One question's answer under its marks: a short answer, or each part with its marks. */
+export function KeyLine(props: { k: KeyAnswer }) {
+  const { k } = props;
+  return (
+    <div class="ct-key">
+      {k.parts?.length ? (
+        k.parts.map((p, i) => (
+          <span key={i} class="kp">
+            <em>{p.p})</em> <KeyText text={p.a} />
+            {p.m ? <small>({p.m})</small> : null}
+          </span>
+        ))
+      ) : (
+        <span class="kp">
+          <KeyText text={k.a ?? ""} />
+        </span>
+      )}
+    </div>
+  );
+}
 
 /** The workbook as a thin strip: one block per level, coloured by its marks. */
 export function MasterStrip(props: { v: View }) {
@@ -116,6 +144,9 @@ export function CorrectSheet(props: { v: View; level: number; now: number; onClo
   );
   const [total, setTotal] = useState<string>(lv?.fixed ? String(lv.got ?? "") : "");
   const [busy, setBusy] = useState(false);
+  // The answer key is fetched only now, while this level is open (it never travels with the board).
+  const keyQ = useQuery<{ answers: KeyAnswer[] } | null>(api.catalog.key, { unitId: v.s.unitId });
+  const answer = new Map((keyQ?.answers ?? []).map((a) => [a.q, a]));
   if (!mb || !l) return null;
 
   const sum = each ? qs.reduce((a, q) => a + (got[q] ?? 0), 0) : Number(total || 0);
@@ -190,6 +221,7 @@ export function CorrectSheet(props: { v: View; level: number; now: number; onClo
           {complete ? ` · ${pct}%` : ""}
         </span>
       </div>
+      {keyQ === null && <p class="muted small ct-nokey">No answer key for this workbook yet.</p>}
       {each ? (
         <ul class="ct-list">
           {qs.map((q, i) => {
@@ -211,6 +243,7 @@ export function CorrectSheet(props: { v: View; level: number; now: number; onClo
                     </button>
                   ))}
                 </span>
+                {answer.has(q) && <KeyLine k={answer.get(q)!} />}
               </li>
             );
           })}

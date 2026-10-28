@@ -87,6 +87,12 @@ export const masterState = v.object({
   ),
   reteach: v.optional(v.object({ at: v.number(), by: v.optional(v.string()) })),
 });
+/** One question of a workbook's answer key (convex/lib/key.ts): a short answer, or its parts' answers and marks. */
+export const keyAnswer = v.object({
+  q: v.number(),
+  a: v.optional(v.string()),
+  parts: v.optional(v.array(v.object({ p: v.string(), a: v.string(), m: v.optional(v.number()) }))),
+});
 
 export default defineSchema({
   /** The syllabus: Grade 6-11, every unit in term order. Seeded once, then edited in the app. */
@@ -110,7 +116,16 @@ export default defineSchema({
     title: v.optional(v.string()),
     data: v.union(fighterData, masterData),
     updatedAt: v.number(),
+    /** How many answers its key has (the key itself is in `keys`); missing = no key. */
+    keyCount: v.optional(v.number()),
   }).index("by_unit_stage", ["unitId", "stage"]),
+
+  /** A workbook's answer key, read only when a teacher opens a level to correct. Teachers only, never in the code. */
+  keys: defineTable({
+    unitId: v.id("units"),
+    answers: v.array(keyAnswer),
+    updatedAt: v.number(),
+  }).index("by_unit", ["unitId"]),
 
   students: defineTable({
     name: v.string(),

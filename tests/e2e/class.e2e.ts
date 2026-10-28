@@ -6,9 +6,30 @@ import { join, resolve } from "node:path";
 import { strToU8, zipSync } from "fflate";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { normalizeCode, secretHash } from "../../convex/lib/auth";
+import { outOf } from "../../convex/lib/book";
+import { readWorkbookHtml } from "../../src/workbookFile";
 import U01_BOOK from "../fixtures/workbook-g8-u01.html?raw";
 import { addPerson, OWNER_TOKEN } from "../helpers";
 import { makeBackend, playwright, serveDist } from "./harness";
+
+// A FAKE answer key for the U01 skeleton, shaped like the engine's answer-key.json (real answers never go in the repo).
+const U01_READ = readWorkbookHtml(U01_BOOK, "G8_U01_Workbook_source_v3.zip")[0];
+const U01_KEY = {
+  kind: "aristora-answer-key",
+  version: 1,
+  grade: 8,
+  units: [
+    {
+      no: 1,
+      code: "U01",
+      questions: Array.from({ length: 73 }, (_, i) => {
+        const q = i + 1;
+        const m = outOf(U01_READ.data, q)!;
+        return q <= 52 ? { q, part: "I", marks: 2, a: `A${q}` } : { q, part: "II", marks: m, a: [{ p: "i", a: `work → **B${q}**`, m }] };
+      }),
+    },
+  ],
+};
 
 type Page = import("playwright").Page;
 type Browser = import("playwright").Browser;
@@ -430,10 +451,27 @@ test("Master: workbook levels corrected, lost marks explained, re-teach, Exam Sp
   await textsAre(row(C, "Vimal").locator(".lv-pill b"), ["L8"]);
   await shot(C, "m01-correction-three-grades", true);
 
+  // G7 U08 gets an answer key (a fake one): the correction sheet shows each answer under its marks.
+  await backend.t.run(async (ctx) => {
+    const u = (await ctx.db
+      .query("units")
+      .withIndex("by_key", (q) => q.eq("key", "G7-U08"))
+      .first())!;
+    const answers = Array.from({ length: 57 }, (_, i) => {
+      const q = i + 1;
+      if (q === 24) return { q, a: "−3 + 5 = **2**" };
+      return q <= 37 ? { q, a: `A${q}` } : { q, parts: [{ p: "i", a: `a longer working line, then → **B${q}**`, m: 2 }, { p: "ii", a: `C${q}` }] };
+    });
+    await ctx.db.insert("keys", { unitId: u._id, answers, updatedAt: Date.now() });
+  });
+
   // Correct Level 3: all full marks, then Q24 lost both marks.
   await malik.locator(".lv-pill.waiting").click();
   const sheet = C.locator(".sheet");
   await contains(sheet.locator("h2"), "Malik · Level 3");
+  await contains(sheet.locator(".ct-row", { hasText: "Q24" }).locator(".ct-key"), "−3 + 5 = 2");
+  await contains(sheet.locator(".ct-row", { hasText: "Q24" }).locator(".ct-key b"), "2");
+  await contains(sheet.locator(".ct-row", { hasText: "Q25" }).locator(".ct-key"), "A25");
   await sheet.getByRole("button", { name: "All full marks" }).click();
   await contains(sheet.locator(".ct-sum"), "20 / 20 · 100%");
   await sheet.getByRole("button", { name: "Q24: 0 of 2" }).click();
@@ -593,14 +631,21 @@ test("Master: workbook levels corrected, lost marks explained, re-teach, Exam Sp
 
   // Upload workbooks: the unit zips from the workbook chats, read on the phone, checked, saved in one tap.
   // U01's real book replaces the typed one; a broken U02 is refused with the reason.
-  const zipOf = (html: string) => Buffer.from(zipSync({ "book.html": strToU8(html), "u01.py": strToU8("# not read") }));
+  const zipOf = (html: string, key?: unknown) =>
+    Buffer.from(
+      zipSync({
+        "book.html": strToU8(html),
+        "u01.py": strToU8("# not read"),
+        ...(key ? { "answer-key.json": strToU8(JSON.stringify(key)) } : {}),
+      }),
+    );
   const brokenU02 = U01_BOOK.replace("அலகு 1 · எண்கோலங்கள்", "அலகு 2 · சுற்றளவு").replace(
     '<span class="qn">53</span>\n<span class="pm">(1 புள்ளி)',
     '<span class="qn">53</span>\n<span class="pm">(2 புள்ளிகள்)',
   );
   const upload = C.locator(".upload-btn input[type=file]");
   await upload.setInputFiles([
-    { name: "G8_U01_Workbook_source_v3.zip", mimeType: "application/zip", buffer: zipOf(U01_BOOK) },
+    { name: "G8_U01_Workbook_source_v3.zip", mimeType: "application/zip", buffer: zipOf(U01_BOOK, U01_KEY) },
     { name: "G8_U02_Workbook_source_v1.zip", mimeType: "application/zip", buffer: zipOf(brokenU02) },
   ]);
   const up = C.locator(".sheet");
@@ -608,10 +653,15 @@ test("Master: workbook levels corrected, lost marks explained, re-teach, Exam Sp
   await contains(up.locator(".up-replace"), "G8 · U01");
   await contains(up.locator(".up-replace"), "Part I 1–52 · Part II 53–73 · 12 levels · 230 marks");
   await contains(up.locator(".up-replace .up-state"), "Replaces the one in the app (5 levels, 105 marks)");
+  await contains(up.locator(".up-replace .up-key.ok"), "✓ Answer key: all 73 questions");
   await contains(up.locator(".up-bad"), "Level 6 prints / 18, but its questions add up to 19.");
   await shot(C, "m08b-upload-workbooks");
   await up.getByRole("button", { name: "Save 1 workbook" }).click();
-  await contains(C.locator(".toast"), "Saved G8 · U01");
+  await contains(C.locator(".toast"), "Saved G8 · U01 Number patterns with its answer key");
+  const keyRow = C.locator(".unit-list li", { hasText: "U01" });
+  await textsAre(keyRow.locator("i.has"), ["M", "K"]);
+  await shot(C, "m08c-books-with-key", true);
+  expect(await backend.t.run(async (ctx) => (await ctx.db.query("keys").collect()).map((k) => k.answers.length).sort())).toEqual([57, 73]);
   const uploaded = await backend.t.run(async (ctx) => {
     const u = await ctx.db
       .query("units")
@@ -625,9 +675,10 @@ test("Master: workbook levels corrected, lost marks explained, re-teach, Exam Sp
   expect(uploaded.levels.map((l) => l.max)).toEqual([20, 20, 20, 20, 24, 18, 22, 20, 19, 18, 20, 9]);
   expect(uploaded.marks["63"]).toBe(11);
   await contains(C.getByRole("button", { name: /^Grade 8\b/ }), "1/");
-  // The same file again: nothing to save.
+  // The same book again without a key: nothing to save, the key stays.
   await upload.setInputFiles([{ name: "G8_U01_Workbook_source_v3.zip", mimeType: "application/zip", buffer: zipOf(U01_BOOK) }]);
   await contains(C.locator(".sheet .up-same .up-state"), "Already in the app");
+  await contains(C.locator(".sheet .up-same .up-key"), "Keeps the answer key already in the app");
   await visible(C.locator(".sheet").getByRole("button", { name: "Nothing to save" }));
   await C.locator(".sheet").getByRole("button", { name: "Cancel" }).click();
   await C.getByRole("button", { name: "Back to the class" }).click();
@@ -636,6 +687,7 @@ test("Master: workbook levels corrected, lost marks explained, re-teach, Exam Sp
   const small = await phone(backend, "correction", { ...PHONE, viewport: { width: 360, height: 740 } });
   await row(small, "Vimal").locator(".lv-pill").click();
   await visible(small.locator(".sheet .ct-list"));
+  await contains(small.locator(".sheet .ct-row", { hasText: "Q56" }).locator(".ct-key"), "B56");
   expect(await small.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
   const box = (await small.locator(".sheet").boundingBox())!;
   expect(box.x).toBeGreaterThanOrEqual(0);

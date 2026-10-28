@@ -6,9 +6,12 @@
 // - a level strip after each level (<span class="lvo">/ 18</span>).
 // This is the same reading as the engine's own marks_check (collection_book.py), plus the app's checkMaster.
 // If a future engine renames these classes, uploads say "No marks sheet": fix this file, not the books.
+// The zip may also carry answer-key.json (the engine's answers, by printed question number): it is checked against
+// the book (numbers, and each question's marks, so a key from another version of the book is refused).
 
 import { unzipSync } from "fflate";
-import { checkMaster, partsForGrade, type MasterData, type MasterLevel, type MasterPart, type PartId } from "../convex/lib/book";
+import { checkMaster, outOf, partsForGrade, type MasterData, type MasterLevel, type MasterPart, type PartId } from "../convex/lib/book";
+import { checkKey, type KeyAnswer } from "../convex/lib/key";
 
 export type ReadWorkbook = {
   /** Where it came from ("G8_U01_Workbook_source_v3.zip"). */
@@ -21,6 +24,8 @@ export type ReadWorkbook = {
   ta: string | null;
   data: MasterData;
   total: number;
+  /** Its answer key from answer-key.json in the same zip, or null (none in the file). */
+  key: KeyAnswer[] | null;
   /** Empty when the book is right; otherwise plain words for the owner. */
   problems: string[];
 };
@@ -30,6 +35,8 @@ const SHORT_MARKS = 2; // a Part I question (as printed: the engine's P1_MARK)
 // A block that starts a page gets " pt" and its page footer inside (class="msh pt", "si pt", "bk pt", "lvl pt").
 const SHEET = /<div class="msh(?: [^"]*)?"[^>]*>([\s\S]*?)<\/table>/g;
 const HAS_SHEET = /<div class="msh[ "]/;
+/** The answer key inside a unit's source zip. */
+const KEY_FILE = /(^|\/)answer-key\.json$/i;
 const TOKEN =
   /<div class="(si|pq)(?: [^"]*)?" data-q="\d+"|<span class="qn(?: q3)?">(\d+)<\/span>|<span class="pm">\((\d+)\s|<div class="mk">\((\d+)\s|<span class="lvo">\/ (\d+)<\/span>/g;
 // A row per part; a part with many levels wraps onto more rows (its name and total span them: rowspan), and the
@@ -193,7 +200,70 @@ function readUnit(
   });
   const data: MasterData = { kind: "master", parts, levels, marks };
   if (problems.length === 0) problems.push(...checkMaster(data));
-  return { file, grade, unitNo, code, en, ta, data, total, problems: [...new Set(problems)] };
+  return { file, grade, unitNo, code, en, ta, data, total, key: null, problems: [...new Set(problems)] };
+}
+
+/** answer-key.json as the workbook engine writes it. */
+export type KeyFile = {
+  grade: number | null;
+  units: { no: number; answers: KeyAnswer[]; marks: Map<number, number> }[];
+};
+
+/** Read answer-key.json; a string = what's wrong with it, in plain words. */
+export function readKeyFile(text: string): KeyFile | string {
+  const bad = "The answer key file isn't one the app knows.";
+  let j: unknown;
+  try {
+    j = JSON.parse(text);
+  } catch {
+    return "The answer key file can't be read.";
+  }
+  const o = j as { kind?: unknown; version?: unknown; grade?: unknown; units?: unknown };
+  if (!o || typeof o !== "object" || o.kind !== "aristora-answer-key" || o.version !== 1 || !Array.isArray(o.units)) return bad;
+  const units: KeyFile["units"] = [];
+  for (const u of o.units as { no?: unknown; questions?: unknown }[]) {
+    if (typeof u?.no !== "number" || !Array.isArray(u.questions)) return bad;
+    const answers: KeyAnswer[] = [];
+    const marks = new Map<number, number>();
+    for (const x of u.questions as { q?: unknown; marks?: unknown; a?: unknown }[]) {
+      if (typeof x?.q !== "number") return bad;
+      if (typeof x.marks === "number") marks.set(x.q, x.marks);
+      if (typeof x.a === "string") answers.push({ q: x.q, a: x.a });
+      else if (Array.isArray(x.a)) {
+        const parts = (x.a as { p?: unknown; a?: unknown; m?: unknown }[]).map((r) => ({
+          p: String(r?.p ?? ""),
+          a: String(r?.a ?? ""),
+          ...(typeof r?.m === "number" ? { m: r.m } : {}),
+        }));
+        answers.push({ q: x.q, parts });
+      } else return bad;
+    }
+    units.push({ no: u.no, answers, marks });
+  }
+  return { grade: typeof o.grade === "number" ? o.grade : null, units };
+}
+
+/** Put a unit's answers on the workbook read from the same zip, or say why they don't fit it. */
+function attachKey(w: ReadWorkbook, file: KeyFile): void {
+  const mine = file.units.find((u) => u.no === w.unitNo);
+  if (!mine || mine.answers.length === 0) return;
+  if (file.grade !== null && w.grade !== null && file.grade !== w.grade) {
+    w.problems.push(`The answer key is for Grade ${file.grade}, the book is Grade ${w.grade}.`);
+    return;
+  }
+  for (const [q, m] of mine.marks) {
+    const inBook = outOf(w.data, q);
+    if (inBook !== null && inBook !== m) {
+      w.problems.push(`The answer key is for another version of this book: question ${q} is ${inBook} marks in the book, ${m} in the key.`);
+      return;
+    }
+  }
+  const bad = checkKey(mine.answers, w.data);
+  if (bad.length) {
+    w.problems.push(...bad);
+    return;
+  }
+  w.key = [...mine.answers].sort((a, b) => a.q - b.q);
 }
 
 /** A zip file starts with "PK\x03\x04". */
@@ -210,10 +280,16 @@ export function readWorkbookFiles(files: { name: string; bytes: Uint8Array }[]):
   const decode = (b: Uint8Array) => new TextDecoder("utf-8").decode(b);
   for (const f of files) {
     let pages: string[] = [];
+    let keyText: string | null = null;
     try {
       if (isZip(f.bytes)) {
-        const inside = unzipSync(f.bytes, { filter: (e) => /\.html?$/i.test(e.name) && e.originalSize < 30_000_000 });
-        pages = Object.values(inside).map(decode);
+        const inside = unzipSync(f.bytes, {
+          filter: (e) => (/\.html?$/i.test(e.name) && e.originalSize < 30_000_000) || (KEY_FILE.test(e.name) && e.originalSize < 2_000_000),
+        });
+        for (const [name, bytes] of Object.entries(inside)) {
+          if (KEY_FILE.test(name)) keyText = decode(bytes);
+          else pages.push(decode(bytes));
+        }
       } else if (/\.html?$/i.test(f.name)) {
         pages = [decode(f.bytes)];
       } else {
@@ -226,6 +302,13 @@ export function readWorkbookFiles(files: { name: string; bytes: Uint8Array }[]):
     }
     const found = pages.flatMap((h) => (HAS_SHEET.test(h) ? readWorkbookHtml(h, f.name) : []));
     if (found.length === 0) out.push({ file: f.name, problem: "No marks sheet inside: is this a workbook (level edition)?" });
+    if (keyText !== null && found.length) {
+      const key = readKeyFile(keyText);
+      for (const w of found) {
+        if (typeof key === "string") w.problems.push(key);
+        else if (w.problems.length === 0) attachKey(w, key);
+      }
+    }
     out.push(...found);
   }
   return out;

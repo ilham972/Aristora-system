@@ -16,6 +16,7 @@ type InApp = {
   unitId: string;
   stage: "fighter" | "master";
   master: { parts: { id: string; from: number; to: number }[]; levels: { n: number; from: number; to: number; max: number }[]; total: number; marksKnown: number } | null;
+  keyCount: number | null;
 };
 
 type Row = {
@@ -26,6 +27,8 @@ type Row = {
   /** "new" / "replace" / "same" / "skip" / "bad" */
   state: "new" | "replace" | "same" | "skip" | "bad";
   words: string;
+  /** What happens to the answer key, and whether it is a good thing ("yes") or worth a look ("no"). */
+  keyLine?: { words: string; ok: boolean };
   unit?: Unit;
   book?: ReadWorkbook;
 };
@@ -54,11 +57,31 @@ export function uploadRows(found: ReturnType<typeof readWorkbookFiles>, units: U
     const title = `G${f.grade ?? "?"} · ${f.code} ${unit?.en ?? f.en ?? ""}`.trim();
     if (f.problems.length) return { key: `bad${i}`, file: f.file, title, detail: "", state: "bad", words: f.problems.join(" ") };
     if (!unit) return { key: `bad${i}`, file: f.file, title, detail: "", state: "bad", words: `Grade ${f.grade} has no unit ${f.code} in the app.` };
-    const old = books.find((b) => b.unitId === unit._id && b.stage === "master")?.master ?? null;
-    const state = !old ? "new" : sameAsApp(f, old) ? "same" : "replace";
+    const inApp = books.find((b) => b.unitId === unit._id && b.stage === "master");
+    const old = inApp?.master ?? null;
+    const same = !!old && sameAsApp(f, old);
+    const answers = f.key?.length ?? 0;
+    const hadKey = !!inApp?.keyCount;
+    const state = !old ? "new" : same && !answers ? "same" : "replace";
     const words =
-      state === "new" ? "New" : state === "same" ? "Already in the app" : `Replaces the one in the app (${old!.levels.length} levels, ${old!.total} marks)`;
-    return { key: unit._id, file: f.file, title, detail: describeBook(f), state, words, unit, book: f };
+      state === "new"
+        ? "New"
+        : state === "same"
+          ? "Already in the app"
+          : same
+            ? hadKey
+              ? "Same book: updates its answer key"
+              : "Same book: adds its answer key"
+            : `Replaces the one in the app (${old!.levels.length} levels, ${old!.total} marks)`;
+    const last = f.data.levels.length ? f.data.levels[f.data.levels.length - 1].to : 0;
+    const keyLine = answers
+      ? { words: `✓ Answer key: ${answers === last ? `all ${answers} questions` : `${answers} of ${last} questions`}`, ok: true }
+      : hadKey && same
+        ? { words: "Keeps the answer key already in the app", ok: true }
+        : hadKey
+          ? { words: "No answer key in this file: the old one goes (its questions changed)", ok: false }
+          : { words: "No answer key in this file", ok: false };
+    return { key: unit._id, file: f.file, title, detail: describeBook(f), state, words, keyLine, unit, book: f };
   });
   // The same unit in two files (an old and a new version): the last file picked wins.
   rows.forEach((r, i) => {
@@ -104,6 +127,7 @@ export function UploadBooks(props: { units: Unit[]; books: InApp[]; onSaved: (gr
           levels: w.data.levels.map((l) => ({ to: l.to, max: l.max })),
           marks: w.data.marks ?? {},
           replace: true,
+          ...(w.key?.length ? { key: w.key } : {}),
           by: currentRole(),
         }),
       );
@@ -112,7 +136,13 @@ export function UploadBooks(props: { units: Unit[]; books: InApp[]; onSaved: (gr
     }
     setSaving(false);
     if (saved > 0) {
-      toast(saved === 1 ? `Saved ${ready[0].title}. Students on it see the new levels now.` : `Saved ${saved} workbooks. Students on them see the new levels now.`);
+      const keys = ready.slice(0, saved).filter((r) => r.book?.key?.length).length;
+      const withKeys = keys === 0 ? "" : saved === 1 ? " with its answer key" : keys === saved ? ", all with answer keys" : `, ${keys} with answer keys`;
+      toast(
+        saved === 1
+          ? `Saved ${ready[0].title}${withKeys}. Students on it see the new levels now.`
+          : `Saved ${saved} workbooks${withKeys}. Students on them see the new levels now.`,
+      );
       props.onSaved(ready[0].unit!.grade);
     }
     if (saved === ready.length) setRows(null);
@@ -127,7 +157,9 @@ export function UploadBooks(props: { units: Unit[]; books: InApp[]; onSaved: (gr
         </svg>
         {reading ? "Reading the books…" : "Upload workbooks"}
       </label>
-      <p class="muted">Pick the unit zips from the workbook chats, one or many at once. The app reads the levels and marks; you check them, then save.</p>
+      <p class="muted">
+        Pick the unit zips from the workbook chats, one or many at once. The app reads the levels, marks and answer key; you check them, then save.
+      </p>
 
       {rows && (
         <Sheet
@@ -151,6 +183,7 @@ export function UploadBooks(props: { units: Unit[]; books: InApp[]; onSaved: (gr
                 <b>{r.title}</b>
                 {r.detail && <small>{r.detail}</small>}
                 <span class="up-state">{r.words}</span>
+                {r.keyLine && r.state !== "bad" && r.state !== "skip" && <small class={`up-key${r.keyLine.ok ? " ok" : ""}`}>{r.keyLine.words}</small>}
                 {r.state === "bad" && <small class="up-file">{r.file}</small>}
               </li>
             ))}
