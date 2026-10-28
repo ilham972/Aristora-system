@@ -163,6 +163,25 @@ ul {
   display: grid;
   place-items: center;
 }
+.att-n.zero {
+  background: var(--line);
+  color: var(--ink-2);
+}
+.top-left {
+  gap: 8px;
+}
+.prog-btn {
+  padding: 0 14px 0 12px;
+}
+/* very narrow phones: the Progress button is its icon only */
+@media (max-width: 359px) {
+  .prog-w {
+    display: none;
+  }
+  .prog-btn {
+    padding: 0 11px;
+  }
+}
 .top-count {
   font-weight: 700;
   font-size: 16px;
@@ -2067,13 +2086,13 @@ p.small {
   font-size: 14px;
   font-weight: 700;
 }
-.seg {
+.segc {
   display: inline-flex;
   border: 2px solid var(--ink);
   border-radius: 12px;
   overflow: hidden;
 }
-.seg-b {
+.segc-b {
   height: 38px;
   padding: 0 12px;
   border: 0;
@@ -2081,14 +2100,14 @@ p.small {
   font: 700 14px/1 var(--font);
   color: var(--ink-2);
 }
-.seg-b + .seg-b {
+.segc-b + .segc-b {
   border-left: 2px solid var(--ink);
 }
-.seg-b.evaluation.on {
+.segc-b.evaluation.on {
   background: var(--evaluation);
   color: #fff;
 }
-.seg-b.theory.on {
+.segc-b.theory.on {
   background: var(--theory);
   color: #fff;
 }
@@ -2902,4 +2921,343 @@ button.stat:disabled {
 }
 .up-file {
   word-break: break-all;
+}
+
+/* ============ Progress (top bar → Progress): Units race, Term grid, poster ============ */
+.progress {
+  gap: 12px;
+  padding-bottom: 24px;
+}
+.pg-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.segc.plain .segc-b.on {
+  background: var(--ink);
+  color: #fff;
+}
+.share-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.pf {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pf-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 12px;
+  border: 1.5px solid var(--line);
+  border-radius: 18px;
+  background: var(--card);
+  font: 700 14px/1 var(--font);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.pf-chip b {
+  color: var(--ink);
+}
+.pf-chip.on {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
+}
+.pf-chip.on b {
+  color: #fff;
+}
+.pf-chip.today.on {
+  border-color: var(--green);
+  background: var(--green);
+}
+.lanes {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.lane {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 10px 12px 4px;
+}
+.lane-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 6px;
+}
+.lane-t {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.lane-t b {
+  font: 700 15.5px/1.2 var(--font);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lane-t small {
+  font-size: 12.5px;
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lane-n {
+  flex: none;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 13px;
+  background: var(--line-2);
+  font: 700 13px/26px var(--font);
+  text-align: center;
+}
+.lane-note {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.lane-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.lr {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  grid-template-areas:
+    "rk name nums"
+    "rk bar meta";
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 5px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line-2);
+}
+.rk {
+  grid-area: rk;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--line-2);
+  font: 800 14px/1 var(--font);
+}
+.rk.r1 {
+  background: #f2c200;
+}
+.rk.r2 {
+  background: #c3cad6;
+}
+.rk.r3 {
+  background: #d99a5b;
+}
+.lr-name {
+  grid-area: name;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font: 700 16px/1.2 var(--cond);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.here {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+}
+.lr-nums {
+  grid-area: nums;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  white-space: nowrap;
+}
+.lr-nums b {
+  font: 700 15px/1 var(--font);
+}
+.lr-pct {
+  font: 800 14px/1 var(--font);
+}
+.lr-pct.good {
+  color: var(--green-ink);
+}
+.lr-pct.mid {
+  color: var(--amber-ink);
+}
+.lr-pct.low {
+  color: var(--red-ink);
+}
+.lr-pct.theory {
+  color: var(--theory-ink);
+}
+.lr-bar {
+  grid-area: bar;
+  min-width: 0;
+}
+.lr-meta {
+  grid-area: meta;
+  display: inline-flex;
+  gap: 8px;
+  justify-content: flex-end;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.lr-meta .up {
+  color: var(--green-ink);
+}
+.rbar {
+  height: 10px;
+}
+.fbar {
+  display: block;
+  height: 10px;
+  border-radius: 3px;
+  background: #e4e8ef;
+  overflow: hidden;
+}
+.fbar i {
+  display: block;
+  height: 100%;
+  background: var(--green);
+}
+.fbar.f i {
+  background: var(--theory);
+}
+.fbar.none {
+  background: repeating-linear-gradient(135deg, #eef0f4 0 4px, #f7f8fa 4px 8px);
+}
+/* Term: students × the term's units */
+.term {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.term-top {
+  display: flex;
+}
+.tg {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 6px 0;
+}
+.tg-row {
+  display: grid;
+  align-items: center;
+  column-gap: 3px;
+  padding: 3px 8px;
+}
+.tg-head {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--ink-3);
+  text-align: center;
+}
+.tg-head span:first-child {
+  text-align: left;
+}
+.tg-name {
+  min-width: 0;
+  font: 700 13.5px/1.2 var(--cond);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tc {
+  --fill: var(--amber);
+  --empty: #fff0d1;
+  min-width: 0;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: linear-gradient(to top, var(--fill) var(--p, 0%), var(--empty) var(--p, 0%));
+  color: #fff;
+  font: 800 13px/24px var(--font);
+}
+.tc-f {
+  --fill: var(--theory);
+  --empty: var(--theory-soft);
+}
+.tc-none {
+  --empty: #eef0f4;
+  --fill: #eef0f4;
+}
+.tc.done {
+  background: var(--green);
+}
+.tc-f.done {
+  background: var(--theory);
+}
+.tc.cur {
+  box-shadow: inset 0 0 0 2.5px var(--ink);
+}
+.tg-pct {
+  font: 700 12.5px/1 var(--font);
+  text-align: right;
+}
+.tg-key {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.8;
+  color: var(--ink-2);
+}
+.tg-key .tc {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  vertical-align: -2px;
+  font-size: 10px;
+  line-height: 14px;
+  text-align: center;
+  border-radius: 3px;
+}
+/* The poster sheet */
+.poster-opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 8px 0 12px;
+}
+.poster-opts label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14.5px;
+  font-weight: 600;
+}
+.poster-opts input {
+  width: 20px;
+  height: 20px;
+}
+.poster-pages {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.poster-page {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(22, 33, 62, 0.18);
 }

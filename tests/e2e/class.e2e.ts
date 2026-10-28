@@ -776,6 +776,113 @@ test("Master: workbook levels corrected, lost marks explained, re-teach, Exam Sp
   expect(problems, problems.join("\n")).toEqual([]);
 });
 
+test("Progress: one grade's race per unit, who finished what, and the poster for the parents", async () => {
+  const backend = await newClass();
+  const C = await phone(backend, "correction");
+  await C.getByRole("button", { name: "Settings" }).click();
+  await C.getByRole("button", { name: "Load demo students (three grades)" }).click();
+  await visible(C.getByText(/^14 demo students loaded/));
+  await C.getByRole("button", { name: "Back to the class" }).click();
+
+  // Top bar: Attendance is its icon and the count; Progress sits next to it.
+  const att = C.getByRole("button", { name: "Attendance: 13 in class" });
+  await visible(att);
+  expect((await att.innerText()).trim()).toBe("13");
+  await C.getByRole("button", { name: "Progress", exact: true }).click();
+
+  // Grade 7: three workbook students on U08, ranked by levels done.
+  await C.getByRole("button", { name: /^Grade 7:/ }).click();
+  const lane = C.locator(".lane", { hasText: "U08 Directed numbers" });
+  await textsAre(lane.locator(".lr-name"), ["Vimal", "Malik", "Priya"]);
+  await textsAre(lane.locator(".rk"), ["1", "2", "3"]);
+  const malik = lane.locator(".lr", { hasText: "Malik" });
+  await contains(malik.locator(".lr-nums"), "3/8");
+  await contains(malik.locator(".lr-pct"), "85%");
+  await contains(malik.locator(".lr-meta"), "+3 today");
+  await count(malik.locator(".rbar i"), 8);
+  await count(malik.locator(".rbar i.wait"), 1);
+  const chips = async () => (await C.locator(".pf-chip").allTextContents()).map((x) => x.replace(/\s+/g, " ").trim());
+  await until(async () => JSON.stringify(await chips()) === JSON.stringify(["Master 3", "Came today 3"]), "stage and today chips");
+  await shot(C, "p01-progress-units-grade-7", true);
+  // The Grade 7 poster (workbook levels as blocks), kept for a look.
+  await C.getByRole("button", { name: "Share poster" }).click();
+  await visible(C.locator(".sheet canvas.poster-page"));
+  const png7 = await C.locator(".sheet canvas.poster-page").first().evaluate((c) => (c as HTMLCanvasElement).toDataURL("image/png"));
+  await (await import("node:fs/promises")).writeFile(join(SHOTS, "p04a-poster-grade-7.png"), Buffer.from(png7.split(",")[1], "base64"));
+  await C.locator(".sheet").getByRole("button", { name: "Close" }).click();
+
+  // Term: who finished what. Vimal is furthest; a tap tells the details.
+  await C.getByRole("button", { name: "Term", exact: true }).click();
+  await visible(C.locator(".tg"));
+  const first = C.locator(".tg-row:not(.tg-head)").first();
+  await contains(first.locator(".tg-name"), "Vimal");
+  const cell = first.locator(".tc.cur");
+  await count(cell, 1);
+  await cell.click();
+  await contains(C.locator(".toast"), "Vimal · U08 · Master: 8 of 8 levels");
+  await shot(C, "p02-progress-term-grade-7", true);
+
+  // Grade 11: the theory book race (Fighter), the term grid fits 320 px.
+  await C.getByRole("button", { name: /^Grade 11:/ }).click();
+  await C.getByRole("button", { name: "Units", exact: true }).click();
+  const f = C.locator(".lane", { hasText: "U13" });
+  await count(f.locator(".lr"), 10);
+  await count(f.locator(".fbar.f"), 10);
+  await C.locator(".pf-chip.today").click(); // only who came today: Keerthi isn't in
+  await count(f.locator(".lr"), 9);
+  await C.locator(".pf-chip.today").click();
+
+  // The poster: drawn on the phone, 1080 × 1350, shared through the phone's share sheet.
+  await C.getByRole("button", { name: "Share poster" }).click();
+  const ps = C.locator(".sheet");
+  await contains(ps.locator("h2"), "Poster · Grade 11");
+  await visible(ps.locator("canvas.poster-page"));
+  expect(await ps.locator("canvas.poster-page").first().evaluate((c) => [(c as HTMLCanvasElement).width, (c as HTMLCanvasElement).height])).toEqual([
+    1080, 1350,
+  ]);
+  await visible(ps.getByRole("button", { name: /^Share/ }));
+  await count(ps.locator("canvas.poster-page"), 1); // ten students fit one image
+  await shot(C, "p03-poster-sheet");
+  const png = await ps.locator("canvas.poster-page").first().evaluate((c) => (c as HTMLCanvasElement).toDataURL("image/png"));
+  const { writeFile } = await import("node:fs/promises");
+  await writeFile(join(SHOTS, "p04-poster-grade-11.png"), Buffer.from(png.split(",")[1], "base64"));
+  // Marks off: the images are drawn again.
+  await ps.getByLabel("Marks %").uncheck();
+  await visible(ps.locator("canvas.poster-page"));
+  await visible(ps.getByRole("button", { name: /^Share/ }));
+  // A phone that can share files: the PNGs go to the share sheet.
+  await C.evaluate(() => {
+    const nav = navigator as unknown as { canShare: () => boolean; share: (d: { files: File[] }) => Promise<void> };
+    nav.canShare = () => true;
+    nav.share = async (d) => {
+      (window as unknown as { __shared: string[] }).__shared = d.files.map((x) => `${x.name}|${x.type}|${x.size > 5000}`);
+    };
+  });
+  await ps.getByRole("button", { name: /^Share/ }).click();
+  await until(async () => ((await C.evaluate(() => (window as unknown as { __shared?: string[] }).__shared)) ?? []).length > 0, "shared");
+  const shared = await C.evaluate(() => (window as unknown as { __shared: string[] }).__shared);
+  expect(shared[0]).toMatch(/^ARISTORA-Grade11-\d{4}-\d{2}-\d{2}(-1)?\.png\|image\/png\|true$/);
+  // Save: the images download (a computer, or a phone that can't share).
+  const [dl] = await Promise.all([C.waitForEvent("download"), ps.getByRole("button", { name: "Save" }).click()]);
+  expect(dl.suggestedFilename()).toMatch(/^ARISTORA-Grade11-.*\.png$/);
+  await ps.getByRole("button", { name: "Close" }).click();
+
+  // Small phones: the page and the top bar fit, no sideways scrolling.
+  for (const width of [360, 320]) {
+    const small = await phone(backend, "correction", { ...PHONE, viewport: { width, height: 700 } });
+    await small.getByRole("button", { name: "Progress", exact: true }).click();
+    await visible(small.locator(".lane"));
+    expect(await small.evaluate(() => document.documentElement.scrollWidth), `units at ${width} px`).toBeLessThanOrEqual(width);
+    await small.getByRole("button", { name: "Term", exact: true }).click();
+    await visible(small.locator(".tg"));
+    expect(await small.evaluate(() => document.documentElement.scrollWidth), `term at ${width} px`).toBeLessThanOrEqual(width);
+    await shot(small, `p05-progress-term-${width}px`, true);
+    await small.context().close();
+  }
+
+  expect(problems, problems.join("\n")).toEqual([]);
+});
+
 test("accounts: the owner sets up, adds a teacher, her phone signs in with the link and is signed out again", async () => {
   const env = (globalThis as unknown as { process: { env: Record<string, string | undefined> } }).process.env;
   const CODE = "TEST-C0DE-1234-ABCD-WXYZ";

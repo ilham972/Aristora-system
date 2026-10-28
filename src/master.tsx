@@ -466,10 +466,10 @@ export function CorrectSheet(props: { v: View; level: number; now: number; onClo
           {lostQs.length > 0 && (
             <>
               <span class="ct-route-l">Lost marks go to</span>
-              <span class="seg" role="group" aria-label="Lost marks go to">
+              <span class="segc" role="group" aria-label="Lost marks go to">
                 <button
                   type="button"
-                  class={`seg-b evaluation${route === "evaluation" ? " on" : ""}`}
+                  class={`segc-b evaluation${route === "evaluation" ? " on" : ""}`}
                   aria-pressed={route === "evaluation"}
                   onClick={() => setTo("evaluation")}
                 >
@@ -477,7 +477,7 @@ export function CorrectSheet(props: { v: View; level: number; now: number; onClo
                 </button>
                 <button
                   type="button"
-                  class={`seg-b theory${route === "theory" ? " on" : ""}`}
+                  class={`segc-b theory${route === "theory" ? " on" : ""}`}
                   aria-pressed={route === "theory"}
                   onClick={() => setTo("theory")}
                 >

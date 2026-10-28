@@ -5,6 +5,7 @@ import type { Link } from "./backend";
 import { Correction } from "./correction";
 import { buildViews, evalQueue, fmtClock, liveSession, theoryGroups, theoryMembers, type View } from "./derive";
 import { Evaluation, Theory } from "./rooms";
+import { Progress } from "./progress";
 import { Settings } from "./settings";
 import { alertsState, armAlerts, listenForTaps, ring, useAlertsState, type AlertKind } from "./sound";
 import { clearHash, PinSheet, pinAsked, readHash, SignIn, stopAskingPin, type Hash } from "./signin";
@@ -30,7 +31,7 @@ function loadRole(): Role {
 export function App() {
   const { board, boardError, link, me } = useStore();
   const [chosen, setRoleState] = useState<Role>(loadRole);
-  const [page, setPage] = useState<"board" | "settings" | "attendance">("board");
+  const [page, setPage] = useState<"board" | "settings" | "attendance" | "progress">("board");
   // The address bar can hold a sign-in link (#join=...) or the setup code (#setup=...).
   const [, setHashSeen] = useState(0);
   const hash: Hash = readHash();
@@ -116,7 +117,9 @@ export function App() {
   const session = liveSession(board, now);
   // Attendance (signing students in) is Correction's job: the owner and anyone with the Correction tab.
   const canAttend = may("correction");
-  const shown = page === "attendance" && !canAttend ? "board" : page;
+  // Progress shows every student's marks: the owner and teachers with Reports.
+  const canProgress = may("reports");
+  const shown = (page === "attendance" && !canAttend) || (page === "progress" && !canProgress) ? "board" : page;
   const inClass = views.filter((v) => v.where !== "absent").length;
 
   return (
@@ -129,6 +132,7 @@ export function App() {
                 type="button"
                 class={`att-btn${shown === "attendance" ? " on" : ""}`}
                 aria-pressed={shown === "attendance"}
+                aria-label={`Attendance: ${inClass} in class`}
                 onClick={() => setPage(shown === "attendance" ? "board" : "attendance")}
               >
                 <svg
@@ -146,11 +150,36 @@ export function App() {
                   <path d="M2.5 20.5c.7-3.7 3.3-5.8 6.5-5.8s5.8 2.1 6.5 5.8" />
                   <path d="m15.6 10.6 2.1 2.1 4.3-4.6" />
                 </svg>
-                <span>Attendance</span>
-                {inClass > 0 && <b class="att-n" aria-label={`${inClass} in class`}>{inClass}</b>}
+                <b class={`att-n${inClass ? "" : " zero"}`} aria-hidden="true">
+                  {inClass}
+                </b>
               </button>
             ) : (
               <span class="top-count">{inClass} in class</span>
+            )}
+            {canProgress && (
+              <button
+                type="button"
+                class={`att-btn prog-btn${shown === "progress" ? " on" : ""}`}
+                aria-pressed={shown === "progress"}
+                aria-label="Progress"
+                onClick={() => setPage(shown === "progress" ? "board" : "progress")}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  width="21"
+                  height="21"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M4 20V10M10 20V4M16 20v-7M21 20H3" />
+                </svg>
+                <span class="prog-w">Progress</span>
+              </button>
             )}
           </div>
           <div class="top-meta">
@@ -200,6 +229,8 @@ export function App() {
 
       {shown === "settings" ? (
         <Settings views={views} onClose={() => setPage("board")} />
+      ) : shown === "progress" ? (
+        <Progress board={board} now={now} />
       ) : shown === "attendance" ? (
         <Attendance board={board} views={views} now={now} role={role} />
       ) : role === "correction" ? (
