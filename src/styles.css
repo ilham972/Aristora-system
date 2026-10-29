@@ -172,7 +172,8 @@ ul {
 }
 /* Focus (marking papers) and Progress: icons, Focus with how many papers wait. */
 .prog-btn,
-.focus-btn {
+.focus-btn,
+.class-btn {
   padding: 0 10px;
 }
 .focus-btn .att-n {
@@ -622,8 +623,7 @@ button.q:disabled {
   flex-direction: column;
   gap: 6px;
 }
-.call-strip,
-.inroom {
+.call-strip {
   --c: var(--theory);
   --c-soft: var(--theory-soft);
   --c-ink: var(--theory-ink);
@@ -636,8 +636,7 @@ button.q:disabled {
   border-radius: 14px;
   background: var(--card);
 }
-.call-strip.evaluation,
-.inroom.evaluation {
+.call-strip.evaluation {
   --c: var(--evaluation);
   --c-soft: var(--evaluation-soft);
   --c-ink: var(--evaluation-ink);
@@ -695,12 +694,10 @@ button.q:disabled {
     opacity: 0;
   }
 }
-.cs-names,
-.ir-names {
+.cs-names {
   display: contents;
 }
-.cs-chip,
-.ir-chip {
+.cs-chip {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -713,8 +710,7 @@ button.q:disabled {
 .call-strip.late .cs-chip {
   background: var(--card);
 }
-.call-name,
-.ir-chip b {
+.call-name {
   font-family: var(--cond);
   font-size: 18px;
   font-weight: 700;
@@ -750,77 +746,7 @@ button.q:disabled {
   padding: 0 4px;
 }
 
-/* With you (Theory, Evaluation) */
-.inroom {
-  background: var(--c-soft);
-}
-.inroom.long {
-  border-color: var(--red);
-}
-.ir-label {
-  flex: none;
-  font-family: var(--cond);
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--c-ink);
-  min-height: 38px;
-  display: flex;
-  align-items: center;
-}
-.inroom.long .ir-label {
-  color: var(--red-ink);
-}
-.ir-chip {
-  background: var(--card);
-  padding-right: 12px;
-}
-.ir-chip small {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--ink-2);
-  white-space: nowrap;
-}
-.ir-chip.coming {
-  padding-right: 3px;
-  background: transparent;
-  border: 1.5px dashed var(--c);
-}
-.ir-chip.coming b {
-  color: var(--ink-2);
-}
-.ir-chip.long small {
-  color: var(--red-ink);
-  font-weight: 700;
-}
-.ir-sec {
-  flex: none;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 4px;
-  border-radius: 6px;
-  background: var(--c);
-  color: #fff;
-  font-size: 12.5px;
-  font-weight: 700;
-  display: grid;
-  place-items: center;
-}
-.ir-sec.one {
-  min-width: 32px;
-  height: 32px;
-  border-radius: 9px;
-  font-size: 17px;
-}
-.ir-actions {
-  flex: none;
-  display: flex;
-  gap: 6px;
-  margin-left: auto;
-}
-.ir-actions .btn.small {
-  min-height: 40px;
-  padding: 0 12px;
-}
+/* Evaluation: Theory wants her student now */
 .pull-banner {
   display: flex;
   align-items: center;
@@ -1450,49 +1376,6 @@ button.q:disabled {
 }
 
 /* ---------- Rooms: calling and "With you" ---------- */
-
-.chips-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-.chips-label {
-  margin: 0 2px 0 4px;
-  font-size: 13.5px;
-  font-weight: 700;
-  color: var(--ink-2);
-}
-.group-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  min-height: 42px;
-  padding: 0 8px 0 13px;
-  border-radius: 999px;
-  border: 2px solid var(--green);
-  background: var(--card);
-  font: 700 17px/1 var(--font);
-  color: var(--ink);
-}
-.group-chip b {
-  min-width: 24px;
-  height: 24px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: var(--ink);
-  color: #fff;
-  font-size: 13px;
-  display: grid;
-  place-items: center;
-}
-.group-chip.u-amber {
-  border-color: var(--amber);
-}
-.group-chip.u-red {
-  border-color: var(--red);
-  background: var(--red-soft);
-}
 .call-bar {
   position: fixed;
   left: 0;
@@ -4826,4 +4709,930 @@ body.fc-marking .toasts {
   background: var(--theory-soft);
   font-size: 14px;
   line-height: 1.3;
+}
+
+/* ---------- The control panel (src/deck.tsx): tiles that filter, with red / orange / yellow numbers (very urgent,
+   soon, later: the founder's colours); today's score for a room. ---------- */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(var(--n, 3), minmax(0, 1fr));
+  gap: 6px;
+}
+.tiles.n2 {
+  --n: 2;
+}
+.tiles.n4 {
+  --n: 4;
+}
+.tiles.n5 {
+  --n: 5;
+}
+.tile {
+  min-width: 0;
+  min-height: 54px;
+  padding: 6px 8px 7px;
+  border-radius: 12px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 4px;
+  text-align: left;
+  transition: transform 0.12s ease, background-color 0.18s ease, border-color 0.18s ease;
+}
+.tile:active,
+.tp-pill:active,
+.unit-p:active,
+.st-chip:active,
+.ev-c:active,
+.ev-same:active {
+  transform: scale(0.97);
+}
+.tile-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px;
+  min-width: 0;
+}
+.tile-top small {
+  min-width: 0;
+  font: 700 11.5px/1.1 var(--font);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tile-top b {
+  font: 700 21px/1 var(--cond);
+}
+.tile.hot:not(.on) {
+  border-color: var(--red);
+}
+.tile.on {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+.tile.on .tile-top small {
+  color: rgba(255, 255, 255, 0.78);
+}
+.tile.zero {
+  opacity: 0.55;
+}
+/* Four or five tiles on a phone (Class with every stage): smaller words, so "FIGHTER" stays whole. */
+@media (max-width: 400px) {
+  .tiles.n4 .tile,
+  .tiles.n5 .tile {
+    padding: 5px 5px 6px;
+  }
+  .tiles.n4 .tile-top small,
+  .tiles.n5 .tile-top small {
+    font-size: 9.5px;
+    letter-spacing: 0;
+  }
+  .tiles.n4 .tile-top b,
+  .tiles.n5 .tile-top b {
+    font-size: 18px;
+  }
+}
+.heat {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+.heat i {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font: 700 12px/1 var(--font);
+  font-style: normal;
+}
+.heat i.h-red {
+  background: var(--red);
+  color: #fff;
+}
+.heat i.h-orange {
+  background: #ec7311;
+  color: #fff;
+}
+.heat i.h-yellow {
+  background: var(--yellow-soft);
+  color: var(--yellow-ink);
+  box-shadow: inset 0 0 0 1.5px var(--yellow);
+}
+
+.sc {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sc-cells {
+  display: flex;
+  align-items: stretch;
+  gap: 5px;
+}
+.sc-lbl {
+  flex: none;
+  align-self: center;
+  width: 38px;
+  font: 700 11px/1.1 var(--font);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.sc-c {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 4px 4px 5px;
+  border-radius: 10px;
+  border: 1px solid var(--line-2);
+  background: var(--card);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.05;
+}
+.sc-c b {
+  font: 700 17px/1.1 var(--cond);
+}
+.sc-c small {
+  font: 700 10px/1.15 var(--font);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.sc-c.good {
+  border-color: transparent;
+  background: var(--green-soft);
+}
+.sc-c.good b {
+  color: var(--green-ink);
+}
+.sc-c.warn {
+  border-color: transparent;
+  background: var(--amber-soft);
+}
+.sc-c.warn b {
+  color: var(--amber-ink);
+}
+.sc-c.bad {
+  border-color: transparent;
+  background: var(--red-soft);
+}
+.sc-c.bad b {
+  color: var(--red-ink);
+}
+.sc-cheer {
+  padding: 0 2px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.sc-cheer.green {
+  color: var(--green-ink);
+}
+.sc-cheer.amber {
+  color: var(--amber-ink);
+}
+
+/* Cards and questions rise in when they appear (never sideways: see the gotchas). */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.tp-card,
+.tp-room,
+.ev-room,
+.ev-h,
+.ev-q,
+.ev-c,
+.tp-pill {
+  animation: rise 0.22s ease-out both;
+}
+
+/* ---------- Theory page: every lesson as a pill (one order that never moves), the picked one as a card ---------- */
+.tp-pills {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+.tp-pills.one {
+  grid-template-columns: minmax(0, 1fr);
+}
+.tp-pill {
+  position: relative;
+  min-width: 0;
+  min-height: 52px;
+  padding: 6px 6px 6px 5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 12px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  text-align: left;
+  transition: transform 0.12s ease, background-color 0.18s ease, border-color 0.18s ease;
+}
+.tp-pill.u-red {
+  border-color: var(--red);
+}
+.tp-pill.u-amber {
+  border-color: #ec7311;
+}
+.tp-pill.on {
+  border-color: var(--theory);
+  background: var(--theory-soft);
+  box-shadow: inset 0 0 0 1.5px var(--theory);
+}
+.tp-pill.starving:not(.on) {
+  animation: rise 0.22s ease-out both, hot-ring 1.6s ease-in-out 0.3s infinite;
+}
+@keyframes hot-ring {
+  50% {
+    box-shadow: 0 0 0 4px rgba(220, 35, 56, 0.22);
+  }
+}
+.tp-pill .tf-badge-l.sm {
+  width: 28px;
+  height: 28px;
+  font-size: 15px;
+}
+.tp-pill-t {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.1;
+}
+.tp-pill-t b {
+  font-size: 13.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tp-pill-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.tp-pill-sub small {
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* The page's pick: a small tag on the pill's top edge. */
+.tp-best {
+  position: absolute;
+  top: -8px;
+  right: 8px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--theory);
+  color: #fff;
+  font: 700 10.5px/1.3 var(--font);
+  font-style: normal;
+  letter-spacing: 0.03em;
+}
+.tp-pill .heat {
+  flex: none;
+  flex-wrap: nowrap;
+}
+.tp-pill .heat i {
+  min-width: 18px;
+  height: 18px;
+  font-size: 11px;
+}
+/* The picked lesson: smaller than the old cards, so the names show without scrolling. */
+.tf-card.tp-card {
+  gap: 7px;
+  padding: 9px 9px 10px;
+}
+.tp-card .tf-head .tf-badge-l {
+  width: 32px;
+  height: 32px;
+  font-size: 17px;
+}
+.tp-card .tf-title b {
+  font-size: 16px;
+}
+.tp-card .tf-title small {
+  font-size: 12.5px;
+}
+.tp-card .tf-tag {
+  font-size: 12px;
+}
+.tp-card .tp-m {
+  min-height: 44px;
+}
+.tp-card .tp-call {
+  min-height: 46px;
+}
+
+/* ---------- Evaluation page (src/evalFocus.tsx) ---------- */
+.ev-page {
+  gap: 12px;
+}
+.ev-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tf-card.ev-room {
+  gap: 8px;
+  padding: 9px;
+  border-color: var(--evaluation);
+  background: linear-gradient(180deg, var(--evaluation-soft), var(--card) 80px);
+}
+.ev-room .tf-kicker {
+  color: var(--evaluation-ink);
+}
+.ev-h {
+  border-radius: 12px;
+  border: 1.5px solid var(--line-2);
+  background: var(--card);
+}
+.ev-h.long {
+  border-color: var(--amber);
+}
+.ev-h.pulled {
+  border-color: var(--theory);
+}
+.ev-h-head {
+  width: 100%;
+  min-height: 46px;
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+.ev-h-name {
+  flex: none;
+  font: 700 19px/1.1 var(--cond);
+}
+.ev-h-tag {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ev-h-min {
+  flex: none;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.ev-h-min.long {
+  color: var(--amber-ink);
+}
+.ev-h-go {
+  flex: none;
+  width: 14px;
+  color: var(--ink-3);
+}
+.ev-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 0 10px 8px;
+}
+.ev-sq {
+  min-width: 44px;
+  height: 34px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 2px solid var(--red);
+  background: var(--red-soft);
+  color: var(--red-ink);
+  font: 700 13.5px/1 var(--font);
+  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+.ev-sq.now {
+  box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--ink);
+}
+.ev-sq.d-x {
+  border-color: var(--evaluation);
+  background: var(--evaluation);
+  color: #fff;
+}
+.ev-sq.d-th {
+  border-color: var(--theory);
+  background: var(--theory-soft);
+  color: var(--theory-ink);
+}
+.ev-sq.d-skip {
+  border-color: var(--line);
+  background: var(--card);
+  color: var(--ink-3);
+}
+.ev-q {
+  margin: 0 10px 10px;
+  padding: 10px;
+  border-radius: 12px;
+  background: var(--ground);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ev-q-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ev-q-n {
+  font: 700 28px/1 var(--cond);
+}
+.ev-q-lost {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--red-ink);
+}
+.ev-key {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 15px;
+}
+.ev-key > small {
+  font: 700 11px/1.2 var(--font);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.ev-key.muted {
+  font-size: 13px;
+}
+.ev-q-acts {
+  display: flex;
+  gap: 6px;
+}
+.ev-b {
+  min-height: 50px;
+  padding: 0 11px;
+  border-radius: 12px;
+  border: 2px solid var(--line);
+  background: var(--card);
+  color: var(--ink-2);
+  font: 700 14.5px/1.1 var(--font);
+  transition: transform 0.1s ease, background-color 0.18s ease;
+}
+.ev-b:active {
+  transform: scale(0.96);
+}
+.ev-b.th {
+  border-color: var(--theory);
+  color: var(--theory-ink);
+}
+.ev-b.th.on {
+  background: var(--theory);
+  color: #fff;
+}
+.ev-b.skip.on {
+  border-color: var(--ink-2);
+  background: var(--ink-2);
+  color: #fff;
+}
+.ev-b.x {
+  flex: 1 1 auto;
+  border-color: var(--evaluation);
+  background: var(--evaluation);
+  color: #fff;
+  font-size: 17px;
+}
+.ev-b.x.on {
+  background: var(--evaluation-ink);
+  border-color: var(--evaluation-ink);
+}
+.ev-h-acts {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 0 10px 10px;
+}
+.ev-h-acts .link-btn {
+  font-size: 13.5px;
+  color: var(--ink-2);
+  text-decoration: underline;
+}
+.ev-h-sum {
+  flex: 1 1 auto;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+.ev-teaching {
+  padding: 0 10px 8px;
+  font-size: 14px;
+}
+.ev-next {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ev-next-h {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ev-next-h small {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink-3);
+}
+.ev-same {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 50px;
+  padding: 6px 10px 6px 6px;
+  border-radius: 12px;
+  border: 1.5px dashed var(--evaluation);
+  background: var(--evaluation-soft);
+  text-align: left;
+}
+.ev-same-q {
+  flex: none;
+  min-width: 52px;
+  height: 36px;
+  padding: 0 8px;
+  border-radius: 10px;
+  background: var(--evaluation);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font: 700 13.5px/1 var(--font);
+  white-space: nowrap;
+}
+.ev-same-t {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+.ev-same-t b {
+  font-size: 14px;
+  color: var(--evaluation-ink);
+}
+.ev-same-t small {
+  font-size: 12.5px;
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ev-same-go {
+  flex: none;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--evaluation-ink);
+}
+.ev-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.ev-later {
+  margin: 6px 2px 0;
+  font: 700 12.5px/1.2 var(--font);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.ev-c {
+  --edge: transparent;
+  width: 100%;
+  min-height: 52px;
+  padding: 6px 10px 6px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 12px;
+  border: 1.5px solid var(--line-2);
+  background: var(--card);
+  box-shadow: inset 4px 0 0 var(--edge);
+  text-align: left;
+  transition: transform 0.1s ease, background-color 0.18s ease, border-color 0.18s ease;
+}
+.ev-c.h-red {
+  --edge: var(--red);
+}
+.ev-c.h-orange {
+  --edge: #ec7311;
+}
+.ev-c.h-yellow {
+  --edge: var(--yellow);
+}
+.ev-tick {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  display: grid;
+  place-items: center;
+}
+.ev-c.on {
+  border-color: var(--evaluation);
+  background: var(--evaluation-soft);
+}
+.ev-c.on .ev-tick {
+  border-color: var(--evaluation);
+  background: var(--evaluation);
+}
+.ev-c.on .ev-tick::after {
+  content: "✓";
+  color: #fff;
+  font: 700 14px/1 var(--font);
+}
+.ev-c.hold {
+  border-style: dashed;
+}
+.ev-c.hold .ev-c-who b {
+  color: var(--ink-2);
+}
+.ev-c-who {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+.ev-c-who b {
+  font: 700 17px/1.15 var(--cond);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ev-c-who small {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--evaluation-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ev-c-why {
+  flex: none;
+  max-width: 55%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+  line-height: 1.15;
+}
+.ev-c-why b {
+  font-size: 13px;
+}
+.ev-c.h-red .ev-c-why b {
+  color: var(--red-ink);
+}
+.ev-c.h-orange .ev-c-why b {
+  color: #a94c00;
+}
+.ev-c.h-yellow .ev-c-why b {
+  color: var(--yellow-ink);
+}
+.ev-c-why small {
+  max-width: 100%;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ev-teach {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 14px;
+  border: 1.5px dashed var(--theory);
+  background: var(--theory-soft);
+}
+.ev-teach p {
+  font-size: 14px;
+}
+.ev-teach-names {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+/* ---------- Class page: who he needs next (on every row), units in use, what they are doing ---------- */
+.nx {
+  flex: none;
+  display: inline-flex;
+  gap: 4px;
+}
+.nx-c {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 19px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font: 700 11.5px/1 var(--font);
+  font-style: normal;
+  white-space: nowrap;
+}
+.nx-c.theory {
+  background: var(--theory-soft);
+  color: var(--theory-ink);
+}
+.nx-c.evaluation {
+  background: var(--evaluation-soft);
+  color: var(--evaluation-ink);
+}
+.nx-c.correction {
+  background: var(--amber-soft);
+  color: var(--amber-ink);
+}
+.nx-c.now.theory {
+  background: var(--theory);
+  color: #fff;
+}
+.nx-c.now.evaluation {
+  background: var(--evaluation);
+  color: #fff;
+}
+.nx-c.beat::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: nx-pulse 1.4s ease-in-out infinite;
+}
+@keyframes nx-pulse {
+  0%,
+  100% {
+    transform: scale(0.6);
+    opacity: 0.45;
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 1;
+  }
+}
+.unit-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.unit-p {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 6px 0 11px;
+  border-radius: 999px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  font-weight: 700;
+  font-size: 14.5px;
+  transition: transform 0.12s ease, background-color 0.18s ease;
+}
+.unit-p small {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--ground);
+  color: var(--ink-2);
+  font-size: 12.5px;
+  display: grid;
+  place-items: center;
+}
+.unit-p.on {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+.unit-p.on small {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+.summary.st-chips {
+  gap: 6px;
+  padding: 0;
+}
+.st-chip {
+  min-height: 34px;
+  padding: 0 11px;
+  border-radius: 999px;
+  border: 1.5px solid var(--line-2);
+  background: var(--card);
+  font-size: 14.5px;
+  transition: transform 0.12s ease, border-color 0.18s ease;
+}
+.st-chip.on {
+  border-color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+.st-chip.zero {
+  opacity: 0.65;
+  cursor: default;
+}
+.show-all {
+  align-self: center;
+  font-size: 14px;
+  color: var(--ink-2);
+  text-decoration: underline;
+}
+
+/* ---------- The top bar: Class next to Focus; no bottom bar for a phone without Theory or Evaluation ---------- */
+/* Class: its red count sits on the icon's corner (four buttons and the clock must fit a 320 px phone). */
+.class-btn {
+  position: relative;
+}
+.class-btn .att-n {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 4px;
+  border: 2px solid var(--card);
+  background: var(--red);
+  color: #fff;
+  font-size: 11px;
+}
+.app.no-tabs {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 24px);
+}
+/* The smallest phones (320 px): four buttons, the clock and Settings still fit. */
+@media (max-width: 345px) {
+  .top {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  .top-left {
+    gap: 3px;
+  }
+  .att-btn {
+    gap: 2px;
+    padding: 0 5px;
+  }
+  .att-btn svg {
+    width: 19px;
+    height: 19px;
+  }
+  .top-meta {
+    gap: 4px;
+  }
+  .clock {
+    font-size: 16px;
+  }
+  .icon-btn {
+    width: 34px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tp-card,
+  .tp-room,
+  .ev-room,
+  .ev-h,
+  .ev-q,
+  .ev-c,
+  .tp-pill,
+  .tp-pill.starving:not(.on),
+  .nx-c.beat::before {
+    animation: none;
+  }
 }

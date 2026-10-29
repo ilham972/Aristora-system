@@ -135,10 +135,10 @@ describe("Minutes, not questions: his pace from his marks", () => {
     const byName = Object.fromEntries(l.members.map((m) => [m.v.s.name, m]));
     expect(byName.Fast.outIn).toBe(2 * MIN);
     expect(byName.Fast.urgent).toBe(true);
-    expect(memberWords(byName.Fast)).toBe("out in 2m");
+    expect(memberWords(byName.Fast)).toBe("2 left · out ~2m");
     expect(byName.Slow.outIn).toBe(20 * MIN);
     expect(byName.Slow.urgent).toBe(false);
-    expect(memberWords(byName.Slow)).toBe("out in 20m");
+    expect(memberWords(byName.Slow)).toBe("2 left · out ~20m");
     expect(l.frees).toBe(1);
     // Theory is busy for another 10 minutes: then the slow one runs out before the next lesson ends too.
     expect(planLessons([fast, slow], NOW, { lessonMs: LESSON_MS, startInMs: 10 * MIN })[0].frees).toBe(2);

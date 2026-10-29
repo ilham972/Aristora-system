@@ -12,6 +12,7 @@ import { useQuery } from "./live";
 import { MoveSheet } from "./move";
 import { ReportView, type Report } from "./report";
 import { setVoiceOn, testAlert, useAlertsState } from "./sound";
+import { setTonesOn, tone, tonesOn } from "./tones";
 import { PinSheet } from "./signin";
 import {
   act,
@@ -600,6 +601,7 @@ function UnitSheet(props: { unit: Unit; book?: BookRow; fighter?: BookRow; onClo
 /** This phone's alerts: test them, names on or off, and the phone settings that make them reliable. */
 function Alerts(props: { views: View[] }) {
   const st = useAlertsState();
+  const [tones, setTones] = useState(tonesOn);
   const name = props.views.find((v) => v.where !== "absent")?.s.name ?? props.views[0]?.s.name ?? "Rimas";
   const canSpeak = typeof window !== "undefined" && "speechSynthesis" in window;
   return (
@@ -630,6 +632,22 @@ function Alerts(props: { views: View[] }) {
           </span>
         </label>
       )}
+      <label class="switch-row">
+        <input
+          type="checkbox"
+          checked={tones}
+          onChange={(e) => {
+            const on = (e.target as HTMLInputElement).checked;
+            setTonesOn(on);
+            setTones(on);
+            if (on) tone("done");
+          }}
+        />
+        <span>
+          <b>Sounds on my taps</b>
+          <small>A soft sound when you call students, explain a question, or send someone back to work.</small>
+        </span>
+      </label>
       <p class="note">
         Alerts follow the tab that is open. Correction and Focus hear calls. Theory and Evaluation hear a knock when a student runs out of
         work, and Evaluation hears "Theory wants Kumar now".
@@ -869,11 +887,11 @@ function History() {
 
 const TAB_NAMES: Record<Role, string> = { correction: "Correction", theory: "Theory", evaluation: "Evaluation" };
 const EXTRA_NAMES: Record<Extra, string> = { students: "Students", books: "Books", reports: "Reports and History" };
-/** What each job opens (everyone has the Class tab). */
+/** What each job opens (everyone has Class, at the top). */
 const TAB_HELP: Record<Role, string> = {
   correction: "Attendance, Focus (marking papers), sending students to the rooms",
-  theory: "the Theory page",
-  evaluation: "the Evaluation page",
+  theory: "the Theory page (bottom)",
+  evaluation: "the Evaluation page (bottom)",
 };
 const EXTRA_HELP: Record<Extra, string> = {
   students: "add, rename, remove students",

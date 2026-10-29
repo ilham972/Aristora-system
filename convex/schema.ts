@@ -237,6 +237,13 @@ export default defineSchema({
     endedAt: v.optional(v.number()),
     lastActivityAt: v.number(),
     report: v.optional(v.any()),
+    /**
+     * Each room's score for this class (the Theory and Evaluation pages show it): stats[room][key] = a number.
+     * calls / ahead (called while he still had work) / done (students taught or explained) / lessons (Theory's Done
+     * taps that taught something) / qs (questions explained or taught) / waitMs, maxWaitMs (out-of-work time spent
+     * waiting for that room, closed waits only). Rooms: theory, evaluation, correction (waits only).
+     */
+    stats: v.optional(v.record(v.string(), v.record(v.string(), v.number()))),
   })
     .index("by_open", ["open"])
     .index("by_startedAt", ["startedAt"]),

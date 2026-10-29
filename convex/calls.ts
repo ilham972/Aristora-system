@@ -3,6 +3,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx } from "./_generated/server";
 import {
   activeCalls,
+  addStats,
   cleanBy,
   currentSession,
   fail,
@@ -59,13 +60,17 @@ export const create = mutation({
       const place = await placeOf(ctx, s);
       if (!place.book || !place.unit) { reject("has no book in the app for this stage"); continue; }
       let section: string | undefined;
+      // Called while he still had work: the teacher saw it coming (the room's "ahead" score).
+      let dry = false;
       if (place.book.data.kind === "fighter") {
         const status = computeStatus(place.progress?.marks ?? {}, fighter(place.book.data));
+        dry = status.dry;
         if (args.kind === "theory" && !status.nextTheory) { reject("has no theory left"); continue; }
         if (args.kind === "evaluation" && status.pending.length === 0) { reject("has no wrong answers waiting"); continue; }
         if (args.kind === "theory") section = status.nextTheory!;
       } else {
         const ms = computeMaster(masterState(place.progress), place.book.data);
+        dry = ms.dry;
         if (args.kind === "theory" && !ms.reteach) { reject("isn't marked for re-teaching (Correction or Evaluation marks it)"); continue; }
         if (args.kind === "evaluation" && ms.pending.length === 0) { reject("has no lost marks to explain"); continue; }
         if (args.kind === "theory") section = "R";
@@ -112,6 +117,7 @@ export const create = mutation({
         value: `${args.room}${args.kind !== args.room ? "/" + args.kind : ""}${pull ? "/pull" : ""}`,
       });
       created.push({ studentId: id, callId, pull, bumped });
+      await addStats(ctx, session, args.room, { calls: 1, ahead: dry ? 0 : 1 });
     }
     await touch(ctx, session, now);
     return { created, rejected };
@@ -236,6 +242,7 @@ export const finish = mutation({
     const by = cleanBy(args.by);
     const session = await currentSession(ctx, now);
     let done = 0;
+    let lesson = false;
     for (const item of args.items) {
       const c = await ctx.db.get(item.callId);
       if (!c || (c.status !== "sent" && c.status !== "requested")) continue;
@@ -243,7 +250,9 @@ export const finish = mutation({
       if (!allowed(user, c.room)) fail(`Only ${c.room === "theory" ? "Theory" : "Evaluation"} can finish this.`);
       const s = await ctx.db.get(c.studentId);
       if (!s) continue;
-      const value = await record(ctx, c, s, item, now, session, by);
+      const { value, n } = await record(ctx, c, s, item, now, session, by);
+      await addStats(ctx, session, c.room, { done: 1, qs: n });
+      if (c.room === "theory") lesson = true;
 
       await ctx.db.patch(c._id, { status: "done", sentAt: c.sentAt ?? c.createdAt, endedAt: now });
       await ctx.db.patch(s._id, {
@@ -274,6 +283,8 @@ export const finish = mutation({
       await refresh(ctx, s._id, now, session);
       done++;
     }
+    // One Done (or Send back) on the Theory page = one lesson, however many students it sent back.
+    if (lesson) await addStats(ctx, session, "theory", { lessons: 1 });
     await touch(ctx, session, now);
     return { done };
   },
@@ -281,7 +292,10 @@ export const finish = mutation({
 
 type FinishItem = { taught?: number[]; skip?: number[]; explained?: number[]; reteach?: string };
 
-/** Write what happened in the room into the book the call was about. Returns the history line. */
+/**
+ * Write what happened in the room into the book the call was about. Returns the history line, and n = how many
+ * questions it explained or taught (the room's score).
+ */
 async function record(
   ctx: MutationCtx,
   c: Doc<"calls">,
@@ -290,7 +304,20 @@ async function record(
   now: number,
   session: Doc<"sessions"> | null,
   by: string | undefined,
-): Promise<string> {
+): Promise<{ value: string; n: number }> {
+  const r = await recordInBook(ctx, c, s, item, now, session, by);
+  return typeof r === "string" ? { value: r, n: 0 } : r;
+}
+
+async function recordInBook(
+  ctx: MutationCtx,
+  c: Doc<"calls">,
+  s: Doc<"students">,
+  item: FinishItem,
+  now: number,
+  session: Doc<"sessions"> | null,
+  by: string | undefined,
+): Promise<string | { value: string; n: number }> {
   const unitId = c.unitId ?? s.unitId;
   const stage = c.stage ?? (c.section === "R" ? "master" : s.stage === "master" ? "master" : "fighter");
   if (!unitId) return "";
@@ -313,7 +340,7 @@ async function record(
       for (const [n, r] of open) q[n] = { ...r, tt: now };
       const { reteach: _r, ...rest } = m;
       await ctx.db.patch(p._id, { m: { ...rest, q }, updatedAt: now });
-      return open.length ? `taught ${open.map(([n]) => n).join(",")}` : "re-taught";
+      return { value: open.length ? `taught ${open.map(([n]) => n).join(",")}` : "re-taught", n: open.length };
     }
     const q = { ...m.q };
     const explained: number[] = [];
@@ -328,12 +355,13 @@ async function record(
       await ctx.db.patch(p._id, { m: { ...m, q }, updatedAt: now });
       await log(ctx, session, now, { kind: "explained", by, studentId: s._id, name: s.name, value: String(explained.length) });
     }
-    return `explained ${explained.join(",") || "-"}`;
+    return { value: `explained ${explained.join(",") || "-"}`, n: explained.length };
   }
 
   const book1 = fighter(book.data);
   const marks = { ...p.marks };
   let value = "";
+  let n = 0;
   if (c.kind === "theory") {
     const section = book1.sectionById(c.section ?? "");
     if (section) {
@@ -354,6 +382,7 @@ async function record(
         }
       }
       value = `${section.id}: taught ${covered.join(",") || "-"}${skipped.length ? `; skip ${skipped.join(",")}` : ""}`;
+      n = covered.length;
     }
   } else {
     const explained: number[] = [];
@@ -371,12 +400,13 @@ async function record(
       re = `; re-teach ${section.id}`;
     }
     value = `explained ${explained.join(",") || "-"}${re}`;
+    n = explained.length;
     if (explained.length) {
       await log(ctx, session, now, { kind: "explained", by, studentId: s._id, name: s.name, value: String(explained.length) });
     }
   }
   await ctx.db.patch(p._id, { marks, updatedAt: now });
-  return value;
+  return { value, n };
 }
 
 /** Correction: a teacher forgot "Done" and the student is back in the hall. */

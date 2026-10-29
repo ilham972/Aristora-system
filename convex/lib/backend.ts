@@ -242,7 +242,37 @@ async function closeIdle(
   await ctx.db.patch(s._id, { idleSince: undefined, idleReason: undefined, idleMs: s.idleMs + ms });
   if (ms > 0) {
     await log(ctx, session, until, { kind: "idle", studentId: s._id, name: s.name, ms, value: s.idleReason });
+    // The rooms' scores: a wait counts for each room he was waiting for ("theory+evaluation": both).
+    for (const room of STAT_ROOMS) {
+      if (!(s.idleReason ?? "").split("+").includes(room)) continue;
+      await addStats(ctx, session, room, { waitMs: ms }, { maxWaitMs: ms });
+    }
   }
+}
+
+/** The rooms that keep a score for the class (session.stats). */
+export const STAT_ROOMS = ["theory", "evaluation", "correction"] as const;
+
+/**
+ * Add to a room's score for this class (session.stats): `add` is summed, `max` keeps the larger. Reads the session
+ * again first, so several changes in one mutation all count.
+ */
+export async function addStats(
+  ctx: MutationCtx,
+  session: Doc<"sessions"> | null,
+  room: string,
+  add: Record<string, number>,
+  max: Record<string, number> = {},
+) {
+  if (!session) return;
+  const fresh = await ctx.db.get(session._id);
+  if (!fresh || !fresh.open) return;
+  const all = { ...(fresh.stats ?? {}) };
+  const mine = { ...(all[room] ?? {}) };
+  for (const [k, n] of Object.entries(add)) if (n) mine[k] = (mine[k] ?? 0) + n;
+  for (const [k, n] of Object.entries(max)) mine[k] = Math.max(mine[k] ?? 0, n);
+  all[room] = mine;
+  await ctx.db.patch(session._id, { stats: all });
 }
 
 /**

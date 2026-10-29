@@ -1,17 +1,19 @@
-// The class register: one row per student, whatever his grade and stage. Left: the name. Right: what this
-// teacher can tap right now (theory-book circles, ◎ to teach, lost marks to explain; workbook papers are marked in
-// Focus). Below: his whole book as a thin strip, with his grade and unit. Tap the name or the strip to open it: his
-// buttons first (going home, Theory, back in the hall, Move), then the book.
+// The class register: one row per student, whatever his grade and stage. Left: the name and what he is doing now
+// (one colour, the same for everyone who looks). Right: what this teacher can tap right now (theory-book circles, ◎ to
+// teach, lost marks to explain; workbook papers are marked in Focus). Below: his grade and unit, who he needs next
+// ("Theory D ~8m", "Eval 2": a soft pulse when it is now or within 5 minutes), and his whole book as a thin strip.
+// Tap the name or the strip to open it: his buttons first (going home, Theory, back in the hall, Move), then the book.
 
 import { useState } from "preact/hooks";
 import { Fragment, type ComponentChildren } from "preact";
 import { api } from "../convex/_generated/api";
 import type { SectionData } from "../convex/lib/book";
-import { evalUrgency, theoryUrgency, type MarkState } from "../convex/lib/status";
+import type { MarkState } from "../convex/lib/status";
 import { mutate } from "./backend";
-import { evalUrgencyOf, pendingSince, type View } from "./derive";
+import type { View } from "./derive";
 import { CorrectSheet, MasterBook, MasterStrip, TheorySheet, theoryChoices, theoryWords } from "./master";
 import { MoveSheet } from "./move";
+import { nextOf, nowOf } from "./nextData";
 import { act, currentRole, may, savedMarks, setExplained, setTaught, STAGES, type Role } from "./store";
 import { canTap, isUnsaved, tap, tapSection } from "./taps";
 import { Empty, Q } from "./ui";
@@ -70,78 +72,6 @@ export function masterCircles(v: View, now: number): number[] {
     .filter(([, r]) => r?.x !== undefined && now - r.x < EXPLAINED_RECENT_MS)
     .map(([q]) => Number(q));
   return [...new Set([...v.ms.pending, ...recent])].sort((a, b) => a - b).slice(0, 6);
-}
-
-/** Colour and short words for the name cell, from this teacher's point of view. */
-export function rowState(role: Role, v: View, now: number): { tone: RowTone; text: string } {
-  if (v.where === "absent") {
-    // Only gone-home students with levels to correct are shown; the list's title says "Gone home".
-    const w = v.ms?.waiting ?? [];
-    return { tone: "grey", text: w.length === 1 ? `Correct L${w[0].n}` : w.length ? `${w.length} to correct` : "Not here" };
-  }
-  const sent = v.calls.find((c) => c.status === "sent");
-  const since = (t?: number) => (t ? mins(now - t) : "");
-  if (v.where === "theory" || v.where === "evaluation") {
-    const mine = role === v.where;
-    return {
-      tone: v.where,
-      text: mine
-        ? `With you${since(sent?.sentAt)}`
-        : `In ${v.where === "theory" ? "Theory" : "Evaluation"}${since(sent?.sentAt)}`,
-    };
-  }
-  if (v.calledTo) return { tone: v.calledTo, text: `Called: ${v.calledTo === "theory" ? "Theory" : "Evaluation"}` };
-  const idle = mins(v.idleMs);
-
-  if (v.st) {
-    if (v.st.finished) return { tone: "done", text: "Finished" };
-    if (role === "theory") {
-      if (!v.st.nextTheory) return { tone: "none", text: "No theory left" };
-      const u = theoryUrgency(v.st);
-      if (u === "red") return { tone: "red", text: `No work${idle}` };
-      return { tone: u, text: `${v.st.left} left` };
-    }
-    if (role === "evaluation") return evalState(v, now, idle);
-    if (v.st.dry) return { tone: "red", text: `No work${idle}` };
-    if (v.quiet) return { tone: "yellow", text: `Quiet${mins(v.quietMs)}` };
-    if (v.st.left <= 2 && v.st.nextTheory) return { tone: "amber", text: `${v.st.left} left` };
-    return { tone: "green", text: `${v.st.left} left` };
-  }
-  if (v.ms) {
-    if (v.ms.finished) return { tone: "done", text: `Finished ${v.ms.unit.pct}%` };
-    if (role === "theory") {
-      if (!v.ms.reteach) return { tone: "none", text: "Master" };
-      return { tone: v.ms.dry ? "red" : "amber", text: v.ms.dry ? `No work${idle}` : theoryWords(v.ms) };
-    }
-    if (role === "evaluation") return evalState(v, now, idle);
-    const w = v.ms.waiting;
-    if (v.ms.dry) return { tone: "red", text: `No work${idle}` };
-    if (w.length) {
-      const waited = mins(v.ms.waitingSince === null ? undefined : now - v.ms.waitingSince);
-      return { tone: "amber", text: w.length === 1 ? `Correct L${w[0].n}${waited}` : `${w.length} to correct${waited}` };
-    }
-    if (v.quiet) return { tone: "yellow", text: `Quiet${mins(v.quietMs)}` };
-    return { tone: "green", text: `On Level ${v.ms.current!.n}` };
-  }
-  const st = STAGES.find((x) => x.id === v.stage);
-  return { tone: "none", text: v.stage === "legend" || v.stage === "sprint" ? (st?.name ?? "") : "No book yet" };
-}
-
-function evalState(v: View, now: number, idle: string): { tone: RowTone; text: string } {
-  const dry = v.st ? v.st.dry : !!v.ms?.dry;
-  if (v.pending.length === 0) {
-    if (v.ms?.reteach && !dry) return { tone: "none", text: `Theory: ${theoryWords(v.ms)}` };
-    return { tone: "none", text: dry ? `No work${idle}` : v.ms ? "Nothing lost" : "Nothing wrong" };
-  }
-  const u = v.st ? evalUrgency(v.marks, v.st, now) : evalUrgencyOf(v, now);
-  if (u === "red") {
-    if (v.st?.stuck.length) return { tone: "red", text: "Stuck" };
-    if (v.st?.blocked.length) return { tone: "red", text: `Stopped in ${v.st.blocked[0]}` };
-    return { tone: "red", text: `No work${idle}` };
-  }
-  if (u === "ready") return { tone: "amber", text: "Ready" };
-  const t = pendingSince(v);
-  return { tone: "none", text: `Ready in ${Math.max(1, Math.ceil(((t ?? now) + 10 * 60_000 - now) / 60_000))} min` };
 }
 
 /** A theory book as a thin strip: every question in its place, coloured by its state. */
@@ -270,6 +200,8 @@ export function Register(props: {
   grouped?: boolean;
   /** Return true if the tap was handled; otherwise it opens the whole book. */
   onName: (v: View) => boolean | void;
+  /** The class's minutes a question (for "Theory D ~8m"); 4 min if not given. */
+  pace?: number;
 }) {
   const { role, now } = props;
   const views = props.grouped
@@ -317,7 +249,10 @@ export function Register(props: {
         )}
         <ul class="reg-list">
           {views.map((v, i) => {
-            const st = rowState(role, v, now);
+            const st = nowOf(v, now);
+            // Two chips only when both are short: a narrow phone keeps the first whole rather than two cut ones.
+            const all = nextOf(v, now, props.pace ?? 4 * 60_000);
+            const needs = all.length > 1 && all[0].text.length + all[1].text.length > 17 ? all.slice(0, 1) : all;
             const selected = props.selected?.has(v.s._id) ?? false;
             const isOpen = open === v.s._id;
             const head = props.grouped && (i === 0 || views[i - 1].s.grade !== v.s.grade);
@@ -357,6 +292,15 @@ export function Register(props: {
                     <b>{STAGES.find((x) => x.id === v.stage)?.short ?? "?"}</b>
                     {v.tag}
                   </span>
+                  {needs.length > 0 && (
+                    <span class="nx" aria-label={`Next: ${needs.map((n) => n.text).join(", ")}`}>
+                      {needs.map((n) => (
+                        <i key={n.room} class={`nx-c ${n.room}${n.pulse ? " beat" : ""}${n.inMs === 0 ? " now" : ""}`}>
+                          {n.text}
+                        </i>
+                      ))}
+                    </span>
+                  )}
                   {v.kind === "master" ? <MasterStrip v={v} /> : <Strip v={v} />}
                 </button>
                 {isOpen && (
@@ -409,27 +353,6 @@ export function theoryCircles(v: View, now: number): number[] {
     .filter(([, r]) => r?.tt !== undefined && now - r.tt < EXPLAINED_RECENT_MS)
     .map(([q]) => Number(q));
   return [...new Set([...v.ms.theory, ...recent])].sort((a, b) => a - b).slice(0, 6);
-}
-
-/** Where this Master student goes next, for Correction: "Theory 2", "Eval 1". */
-function RouteChips(props: { v: View }) {
-  const ms = props.v.ms!;
-  return (
-    <>
-      {ms.reteach && (
-        <span class="to-chip theory" title={`Theory: ${theoryWords(ms)}`}>
-          <i class="w">Theory</i>
-          <i class="s">Th</i> <b>{ms.theory.length || "unit"}</b>
-        </span>
-      )}
-      {ms.pending.length > 0 && (
-        <span class="to-chip evaluation" title={`Evaluation: ${ms.pending.map((q) => `Q${q}`).join(" ")}`}>
-          <i class="w">Eval</i>
-          <i class="s">Ev</i> <b>{ms.pending.length}</b>
-        </span>
-      )}
-    </>
-  );
 }
 
 /** What this teacher can tap on the row right now. */
@@ -530,8 +453,7 @@ function Actions(props: { role: Role; v: View; now: number; onTheory: () => void
       );
     }
     if (role === "correction") {
-      // Papers are marked in Focus (the levels are on his strip and under his name); here: where he goes next.
-      if (ms.reteach || ms.pending.length) return <RouteChips v={v} />;
+      // Papers are marked in Focus; where he goes next is on every row ("Eval 2", "Theory 1"), for everyone.
       return <span class="reg-none">{ms.finished ? "Workbook finished" : ""}</span>;
     }
     return <span class="reg-none">{ms.reteach ? `Theory: ${theoryWords(ms)}` : ""}</span>;

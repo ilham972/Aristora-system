@@ -11,6 +11,7 @@
 import media from "nosleep.js/src/media.js";
 import { useEffect, useState } from "preact/hooks";
 import { chimeWav, SOUNDS, type AlertKind } from "./chime";
+import { armTones } from "./tones";
 
 export type { AlertKind } from "./chime";
 
@@ -296,6 +297,7 @@ function playVideo() {
 export function armAlerts() {
   tapped = true;
   prime();
+  armTones();
   unlockVoice();
   try {
     // iPhone (iOS 17+): page sound plays even with the silent switch on.

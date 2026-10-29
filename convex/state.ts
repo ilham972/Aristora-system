@@ -45,7 +45,7 @@ export const get = query({
       books,
       calls: [...requested, ...sent],
       session: session
-        ? { _id: session._id, startedAt: session.startedAt, lastActivityAt: session.lastActivityAt }
+        ? { _id: session._id, startedAt: session.startedAt, lastActivityAt: session.lastActivityAt, stats: session.stats ?? {} }
         : null,
       /** Data from before grades and stages: the phone runs setup.ensure first. */
       legacy,

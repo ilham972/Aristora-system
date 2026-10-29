@@ -1,13 +1,14 @@
 // The Theory page: everything the Theory teacher needs on one screen, for 20–30 students (the rules are in
 // src/theoryFocusData.ts).
-// - At the top, one line: who is with you, who is coming, who has no work, how long your lessons take.
+// - Today's score, and one line: who is with you, who is coming, who has no work, how long your lessons take.
 // - The lessons going on: what to teach, who is here ("got it" for each), who is on the way, who can still join.
-// - Next: the 3 lessons to teach now, most useful first, with who needs each, ticked (6 at most); one tap calls them.
-// - Soon: the other lessons, one line each (tap to open). Then how many need nothing from Theory yet.
-// Marking taught without calling, a student's whole book and Move are on the Class tab (tap his name).
+// - The control panel: All / Fighter / Master with how many need theory (red no work now, orange soon, yellow later),
+//   then every lesson as a pill with its numbers. The page picks the most useful (marked Next); the teacher picks any.
+//   The picked lesson: who needs it, with what each is doing ("2 left · out ~4m"), ticked (6 at most); one tap calls.
+// Marking taught without calling, a student's whole book and Move are on the Class page (tap his name).
 
 import type { ComponentChildren } from "preact";
-import { useRef, useState } from "preact/hooks";
+import { useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import type { SectionData } from "../convex/lib/book";
@@ -15,13 +16,17 @@ import { mutate } from "./backend";
 import { NobodyHere } from "./board";
 import type { RoomCall, View } from "./derive";
 import { useQuery } from "./live";
+import { Heat, Tiles, TodayStrip } from "./deck";
+import { scoreOf } from "./score";
 import { act, currentRole, toast, type Board, type Unit } from "./store";
 import { flushTaps } from "./taps";
 import {
   defaultTicks,
   joiners,
+  kindCounts,
   LATE_SEND_MS,
   LESSON_CAP,
+  lessonHeat,
   lessonLength,
   memberWords,
   mShort,
@@ -37,6 +42,7 @@ import {
   type Member,
   type RoomLesson,
 } from "./theoryFocusData";
+import { tone } from "./tones";
 import { Empty } from "./ui";
 
 /** Call students to Theory (Correction is told and sends them). */
@@ -47,6 +53,7 @@ async function callTheory(ids: string[]): Promise<boolean> {
   if (!res) return false;
   for (const r of res.rejected) toast(`${r.name} ${r.reason}.`, "error");
   if (res.created.length) {
+    tone("call");
     const n = res.created.length;
     const pulled = res.created.filter((c) => c.pull).length;
     const bumped = res.created.filter((c) => c.bumped).length;
@@ -67,8 +74,13 @@ export function TheoryTab(props: { board: Board; views: View[]; now: number }) {
   const recent = useQuery<{ ms: number[] }>(api.calls.lessons, {});
   const lessonMs = lessonLength(recent?.ms);
   const room = roomLessons(board, views, now);
-  const plan = planLessons(views, now, { lessonMs, startInMs: startIn(room, lessonMs, now) });
+  const freeIn = startIn(room, lessonMs, now);
+  const plan = planLessons(views, now, { lessonMs, startInMs: freeIn });
   const open = toPlan(plan, room);
+  const [kind, setKind] = useState<"all" | LessonKind>("all");
+  // The lesson she picked (else the page's pick), and her ticks per lesson: kept while she switches between them.
+  const [sel, setSel] = useState<string | null>(null);
+  const [picks, setPicks] = useState<Record<string, string[] | null>>({});
   const inClass = views.filter((v) => v.where !== "absent");
   const withYou = room.reduce((a, l) => a + l.here.length, 0);
   const coming = room.reduce((a, l) => a + l.coming.length, 0);
@@ -78,6 +90,14 @@ export function TheoryTab(props: { board: Board; views: View[]; now: number }) {
     ...room.flatMap((l) => [...l.here.map((st) => st.v.s._id as string), ...l.coming.map((rc) => rc.c.studentId as string)]),
   ]);
   const others = inClass.filter((v) => !listed.has(v.s._id)).length;
+  const counts = kindCounts(open);
+  const shown = kind === "all" ? open : open.filter((l) => l.kind === kind);
+  // The pills keep one order (book, unit, section), so nothing moves under her finger as minutes pass; the page's
+  // pick (the most useful lesson) is marked Next.
+  const pills = [...shown].sort(pillOrder);
+  const best = shown[0]?.key;
+  const current = shown.find((l) => l.key === sel) ?? shown[0];
+  const score = scoreOf(board, views, "theory", now);
 
   if (inClass.length === 0 && room.length === 0) {
     return (
@@ -88,11 +108,13 @@ export function TheoryTab(props: { board: Board; views: View[]; now: number }) {
   }
   return (
     <main class="page tp-page">
+      <TodayStrip s={score} room="theory" inClass={inClass.length} />
       <div class="summary tp-sum" aria-label="Theory now">
         <span class="strong">{withYou} with you</span>
         {coming > 0 && <span class="t-theory strong">{coming} coming</span>}
         <span class={noWork ? "t-red strong" : ""}>{noWork} with no work</span>
         <span>lessons ~{Math.round(lessonMs / 60_000)} min</span>
+        {room.length > 0 && <span>free in ~{mShort(freeIn)}</span>}
       </div>
 
       {room.map((l) => (
@@ -104,19 +126,42 @@ export function TheoryTab(props: { board: Board; views: View[]; now: number }) {
       )}
 
       {open.length > 0 && (
-        // One keyed list, so a lesson moving between Next and Soon keeps its ticks; one being worked on stays open.
         <section class="tp-list" aria-label="Next">
+          <Tiles
+            label="Show one kind of book"
+            value={kind}
+            onPick={(k) => {
+              setKind(k);
+              setSel(null);
+            }}
+            items={[
+              { id: "all", label: "All", c: counts.all },
+              { id: "section", label: "Fighter", c: counts.section },
+              { id: "workbook", label: "Master", c: counts.workbook },
+            ]}
+          />
           <h3 class="tf-h">Next</h3>
-          {open.flatMap((l, i) => [
-            ...(i === NEXT_CARDS
-              ? [
-                  <h3 key="soon-h" class="tf-h">
-                    Soon
-                  </h3>,
-                ]
-              : []),
-            <LessonItem key={l.key} l={l} rank={i} />,
-          ])}
+          {pills.length === 0 ? (
+            <p class="muted small">Nobody here needs this kind of lesson now.</p>
+          ) : (
+            <div class={`tp-pills${pills.length === 1 ? " one" : ""}`} role="group" aria-label="Lessons">
+              {pills.map((l) => (
+                <LessonPill key={l.key} l={l} on={l.key === current?.key} best={l.key === best} onPick={() => setSel(l.key)} />
+              ))}
+            </div>
+          )}
+          {current && (
+            <NextCard
+              key={current.key}
+              l={current}
+              first={current.key === best}
+              picked={picks[current.key] ?? null}
+              setPicked={(ids) => {
+                setPicks({ ...picks, [current.key]: ids });
+                if (ids !== null) setSel(current.key);
+              }}
+            />
+          )}
         </section>
       )}
 
@@ -126,10 +171,19 @@ export function TheoryTab(props: { board: Board; views: View[]; now: number }) {
         </p>
       )}
       <p class="muted small tf-help">
-        Tick who comes ({LESSON_CAP} at most) and tap <b>Call</b>: Correction sends them. To mark taught without calling,
-        or to Move a student: the <b>Class</b> tab, tap his name.
+        The page ticks who needs it most; tick whoever you want ({LESSON_CAP} at most) and tap <b>Call</b>: Correction sends
+        them. To mark taught without calling, or to Move a student: <b>Class</b> at the top, tap his name.
       </p>
     </main>
+  );
+}
+
+/** The pills' one order: theory books first (by unit and section), then workbooks. */
+function pillOrder(a: Lesson, b: Lesson): number {
+  return (
+    Number(a.kind === "workbook") - Number(b.kind === "workbook") ||
+    (a.unit?.grade ?? 0) - (b.unit?.grade ?? 0) ||
+    a.label.localeCompare(b.label, undefined, { numeric: true })
   );
 }
 
@@ -185,42 +239,35 @@ function whatOf(m: { v: View; qs: number[]; whole: boolean; teach: number[] }, s
 
 // ---------------- Next ----------------
 
-/** Next shows this many lessons as cards; the rest (Soon) are one line each until opened. */
-const NEXT_CARDS = 3;
-
-/**
- * One lesson in the list: a card in Next, a line in Soon. The order changes as minutes pass, so a card doesn't fold
- * the moment it slips one place: it stays a card until it is 2 places below Next. A card the teacher touched (ticked,
- * or opened from Soon) stays a card, with his ticks.
- */
-function LessonItem(props: { l: Lesson; rank: number }) {
-  const { l, rank } = props;
-  const [picked, setPicked] = useState<string[] | null>(null);
-  const [opened, setOpened] = useState(false);
-  const wasCard = useRef(false);
-  const card = rank < NEXT_CARDS || opened || picked !== null || (wasCard.current && rank < NEXT_CARDS + 2);
-  wasCard.current = card;
-  if (card) {
-    return (
-      <NextCard
-        l={l}
-        first={rank === 0}
-        picked={picked}
-        setPicked={setPicked}
-        onClose={rank >= NEXT_CARDS ? () => (setOpened(false), setPicked(null)) : undefined}
-      />
-    );
-  }
-  return <SoonLine l={l} onOpen={() => setOpened(true)} />;
+/** One lesson as a pill: its letter, its name, and how many need it (red no work now, orange soon, yellow later). */
+function LessonPill(props: { l: Lesson; on: boolean; best: boolean; onPick: () => void }) {
+  const { l, on } = props;
+  const heat = lessonHeat(l);
+  const hue = l.starving || heat.red ? "red" : heat.orange ? "amber" : "green";
+  return (
+    <button
+      type="button"
+      class={`tp-pill u-${hue}${on ? " on" : ""}${l.starving ? " starving" : ""}`}
+      aria-pressed={on}
+      aria-label={`${lessonTitle(l)}: ${heat.total} need it. ${whyWords(l)}${props.best ? ". The page's pick" : ""}`}
+      onClick={props.onPick}
+    >
+      {props.best && <i class="tp-best">Next</i>}
+      <span class={`tf-badge-l sm${l.kind === "workbook" ? " wb" : ""}`} aria-hidden="true">
+        {l.kind === "section" ? (l.section?.badge ?? "?") : "W"}
+      </span>
+      <span class="tp-pill-t">
+        <b>{l.kind === "section" ? (l.section?.title ?? "Theory") : `${l.unit?.en ?? "Workbook"}: workbook`}</b>
+        <span class="tp-pill-sub">
+          <Heat c={heat} />
+          <small>{l.unit ? `G${l.unit.grade} ${l.unit.code}` : ""}</small>
+        </span>
+      </span>
+    </button>
+  );
 }
 
-function NextCard(props: {
-  l: Lesson;
-  first: boolean;
-  picked: string[] | null;
-  setPicked: (ids: string[] | null) => void;
-  onClose?: () => void;
-}) {
+function NextCard(props: { l: Lesson; first: boolean; picked: string[] | null; setPicked: (ids: string[] | null) => void }) {
   const { l, first, picked, setPicked } = props;
   const [busy, setBusy] = useState(false);
   const ids = new Set(l.members.map((m) => m.v.s._id as string));
@@ -232,12 +279,12 @@ function NextCard(props: {
     else if (chosen.length >= LESSON_CAP) toast(`${LESSON_CAP} at most in one lesson. Untick someone first.`, "error");
     else setPicked([...chosen, id]);
   };
-  const tone = l.starving || l.members.some((m) => m.outIn === 0 && !m.hold) ? "red" : l.frees > 0 ? "amber" : "green";
+  const hue = l.starving || l.members.some((m) => m.outIn === 0 && !m.hold) ? "red" : l.frees > 0 ? "amber" : "green";
   return (
-    <section class={`tf-card tp-card u-${tone}${first ? " first" : ""}`} aria-label={lessonTitle(l)}>
-      {first && <p class="tf-kicker">{l.frees > 0 ? "Teach next" : "Nobody is waiting. Teach ahead:"}</p>}
+    <section class={`tf-card tp-card u-${hue}${first ? " first" : ""}`} aria-label={lessonTitle(l)}>
+      <p class="tf-kicker">{first ? (l.frees > 0 ? "Teach next" : "Nobody is waiting. Teach ahead:") : "Your pick"}</p>
       <LessonHead kind={l.kind} unit={l.unit} section={l.section} sub={lessonSub(l)} />
-      <p class={`tp-why u-${tone}`}>{whyWords(l)}</p>
+      <p class={`tp-why u-${hue}`}>{whyWords(l)}</p>
       <ul class="tp-grid" aria-label="Who needs it">
         {l.members.map((m) => (
           <li key={m.v.s._id}>
@@ -258,9 +305,9 @@ function NextCard(props: {
         >
           {chosen.length === 0 ? "Tick who to call" : `Call ${chosen.length}`}
         </button>
-        {props.onClose && (
-          <button type="button" class="btn ghost small" onClick={props.onClose}>
-            Close
+        {picked !== null && (
+          <button type="button" class="btn ghost small" onClick={() => setPicked(null)}>
+            Page's pick
           </button>
         )}
       </div>
@@ -282,28 +329,6 @@ function MemberChip(props: { m: Member; on: boolean; what: string; onTap: () => 
       <b>{m.v.s.name}</b>
       <small>{words}</small>
       {what && <small class="tp-what">{what}</small>}
-    </button>
-  );
-}
-
-function SoonLine(props: { l: Lesson; onOpen: () => void }) {
-  const { l } = props;
-  const n = l.members.length;
-  return (
-    <button type="button" class="tp-soon" aria-expanded={false} aria-label={`${lessonTitle(l)}: ${n} need it. ${whyWords(l)}. Open`} onClick={props.onOpen}>
-      <span class={`tf-badge-l sm${l.kind === "workbook" ? " wb" : ""}`} aria-hidden="true">
-        {l.kind === "section" ? (l.section?.badge ?? "?") : "W"}
-      </span>
-      <span class="tp-soon-t">
-        <b>{l.kind === "section" ? (l.section?.title ?? "Theory") : `${l.unit?.en ?? "Workbook"}: workbook`}</b>
-        <small>
-          {l.unit ? `G${l.unit.grade} · ${l.unit.code}${l.section ? ` ${l.section.id}` : ""} · ` : ""}
-          {n} · {whyWords(l)}
-        </small>
-      </span>
-      <span class="tp-soon-go" aria-hidden="true">
-        ›
-      </span>
     </button>
   );
 }
@@ -354,6 +379,7 @@ function RoomBlock(props: { l: RoomLesson; join: Member[]; now: number }) {
     const res = ok ? await act(() => mutate(api.calls.finish, { items, by: currentRole() })) : undefined;
     setBusy(false);
     if (!res) return;
+    tone(sendBackOnly ? "tick" : "done");
     const names = list.map((st) => st.v.s.name).join(", ");
     const stay = l.here.filter((st) => !list.includes(st)).map((st) => st.v.s.name);
     toast(
@@ -529,7 +555,7 @@ function RoomBlock(props: { l: RoomLesson; join: Member[]; now: number }) {
 }
 
 /** Called, not here yet: on the way (red when Correction hasn't sent him for 3 minutes), or finishing in Evaluation. */
-function Coming(props: { calls: RoomCall[]; now: number }) {
+export function Coming(props: { calls: RoomCall[]; now: number }) {
   const { calls, now } = props;
   return (
     <ul class="tp-coming" aria-label="On the way">

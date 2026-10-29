@@ -4,13 +4,38 @@ import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { mutate } from "./backend";
 import { GoneHome, Register } from "./board";
+import { Tiles } from "./deck";
 import { fmtMin, liveSession, shortMin, type View } from "./derive";
 import { GradePills, gradesOf, inGrade, needsOf, useGradeFilter } from "./grades";
+import { nowOf } from "./nextData";
 import { ReportView, type Report } from "./report";
-import { act, currentRole, may, toast, type Board, type Role } from "./store";
+import { act, currentRole, may, STAGES, toast, type Board, type Role, type Stage } from "./store";
+import { classPace, type HeatCount } from "./theoryFocusData";
 import { Empty, Sheet } from "./ui";
 
-/** How to tap the rows, for each job (the Class tab shows each teacher's own taps). */
+type StatusFilter = "all" | "red" | "correct" | "quiet" | "rooms";
+
+/** Who a status chip shows. */
+const STATUS: Record<Exclude<StatusFilter, "all">, (v: View) => boolean> = {
+  red: (v) => v.where === "hall" && v.tone === "red",
+  correct: (v) => (v.ms?.waiting.length ?? 0) > 0,
+  quiet: (v) => v.where === "hall" && v.tone === "yellow",
+  rooms: (v) => v.where === "theory" || v.where === "evaluation",
+};
+
+/** Rows by colour, for a tile: red = no work, orange = running out soon, yellow = quiet. */
+function heatOfRows(vs: View[], now: number): HeatCount {
+  const c: HeatCount = { red: 0, orange: 0, yellow: 0, total: vs.length };
+  for (const v of vs) {
+    const t = nowOf(v, now).tone;
+    if (t === "red") c.red++;
+    else if (t === "amber") c.orange++;
+    else if (t === "yellow") c.yellow++;
+  }
+  return c;
+}
+
+/** How to tap the rows, for each job (the Class page shows each teacher's own taps). */
 const LEGEND: Record<Role, ComponentChildren> = {
   correction: (
     <>
@@ -23,19 +48,19 @@ const LEGEND: Record<Role, ComponentChildren> = {
     <>
       Tap the <b class="k-theory">section letter</b> to mark all its theory taught. Tap a ◎ circle: taught, then skip, then
       clear. Workbook students show the questions sent to you: tap each ◎ when taught. Tap a name for his book and Move. To
-      call students: the <b>Theory</b> tab.
+      call students: the <b>Theory</b> page (bottom).
     </>
   ),
   evaluation: (
     <>
       Tap a <b class="k-wrong">red circle</b> when you've explained it (it turns <b class="k-explained">violet</b>); tap again
-      to undo. Tap a name for his buttons and his whole book. To call students: the <b>Evaluation</b> tab.
+      to undo. Tap a name for his buttons and his whole book. To call students: the <b>Evaluation</b> page (bottom).
     </>
   ),
 };
 
 /**
- * The Class tab: everyone's home. The whole class at a glance (who is here, who has no work, who is where), each
+ * The Class page (the icon at the top): everyone's view of the class. The whole class at a glance (who is here, who has no work, who is where), each
  * teacher's own taps on the rows (the job this phone does: Correction's circles, Theory's ◎ and section letters,
  * Evaluation's red circles), and a student's buttons and whole book under his name. Correction also sends called
  * students (the strips at the top), corrects gone-home levels and ends the session.
@@ -49,13 +74,42 @@ export function ClassPage(props: { board: Board; views: View[]; now: number; job
   const inClass = props.views.filter((v) => v.where !== "absent");
   const grades = gradesOf(inClass);
   const [grade, setGrade] = useGradeFilter(job, grades);
-  // One grade at a time if the teacher chose one; the summary and the register follow it.
-  const present = inGrade(inClass, grade);
-  const red = present.filter((v) => v.tone === "red").length;
-  const quiet = present.filter((v) => v.tone === "yellow").length;
-  const inRooms = present.filter((v) => v.where === "theory" || v.where === "evaluation").length;
+  // The control panel: grade, then stage (Fighter, Master ...), then unit (only the units in use, one grade at a time),
+  // then what they are doing (the status chips). Every button shows how many; the register follows them all.
+  const [stage, setStage] = useState<"all" | Stage>("all");
+  const [unit, setUnit] = useState<string>("all");
+  const [status, setStatus] = useState<StatusFilter>("all");
+  const pace = classPace(props.views);
+  const inGradeNow = inGrade(inClass, grade);
+  const stages = STAGES.filter((st) => inGradeNow.some((v) => v.stage === st.id));
+  const stageOn = stage !== "all" && stages.some((st) => st.id === stage) ? stage : "all";
+  const byStage = stageOn === "all" ? inGradeNow : inGradeNow.filter((v) => v.stage === stageOn);
+  const oneGrade = grade !== "all" || grades.length === 1;
+  const units = oneGrade ? unitsOf(byStage) : [];
+  const unitOn = unit !== "all" && units.some((u) => u.id === unit) ? unit : "all";
+  const present = unitOn === "all" ? byStage : byStage.filter((v) => v.s.unitId === unitOn);
+  const red = present.filter(STATUS.red).length;
+  const quiet = present.filter(STATUS.quiet).length;
+  const inRooms = present.filter(STATUS.rooms).length;
   const toCorrect = present.reduce((a, v) => a + (v.ms?.waiting.length ?? 0), 0);
+  const statusOn: StatusFilter =
+    status === "all" || (status === "red" && red) || (status === "quiet" && quiet) || (status === "rooms" && inRooms) || (status === "correct" && toCorrect)
+      ? status
+      : "all";
+  const rows = statusOn === "all" ? present : present.filter(STATUS[statusOn]);
+  const filtered = stageOn !== "all" || unitOn !== "all" || statusOn !== "all";
   const session = liveSession(board, now);
+  const chip = (id: StatusFilter, n: number, words: string, cls = "") => (
+    <button
+      type="button"
+      class={`st-chip${cls ? ` ${cls}` : ""}${statusOn === id ? " on" : ""}${n === 0 && id !== "all" ? " zero" : ""}`}
+      aria-pressed={statusOn === id}
+      disabled={n === 0 && id !== "all"}
+      onClick={() => setStatus(statusOn === id ? "all" : id)}
+    >
+      {words}
+    </button>
+  );
 
   if (props.views.length === 0) {
     return (
@@ -88,21 +142,83 @@ export function ClassPage(props: { board: Board; views: View[]; now: number; job
         </div>
       ) : (
         <>
-          <div class="summary" aria-label="Class summary">
-            <span class="strong">{present.length} in class</span>
-            <span class={red ? "t-red strong" : ""}>{red} with no work</span>
-            {toCorrect > 0 && <span class="t-amber strong">{toCorrect === 1 ? "1 level" : `${toCorrect} levels`} to correct</span>}
-            <span class={quiet ? "t-yellow strong" : ""}>{quiet} quiet</span>
-            <span>{inRooms} in rooms</span>
+          {stages.length > 1 && (
+            <Tiles
+              label="Show one stage"
+              value={stageOn}
+              onPick={(id) => {
+                setStage(id);
+                setUnit("all");
+              }}
+              items={[
+                { id: "all" as const, label: "All", c: heatOfRows(inGradeNow, now) },
+                ...stages.map((st) => ({ id: st.id, label: st.id === "sprint" ? "Sprint" : st.name, c: heatOfRows(inGradeNow.filter((v) => v.stage === st.id), now) })),
+              ]}
+            />
+          )}
+          {units.length > 1 && (
+            <nav class="unit-pills" aria-label="Show one unit">
+              {units.map((u) => (
+                <button
+                  key={u.id}
+                  type="button"
+                  class={`unit-p${unitOn === u.id ? " on" : ""}`}
+                  aria-pressed={unitOn === u.id}
+                  aria-label={`Unit ${u.code}: ${u.n} here`}
+                  onClick={() => setUnit(unitOn === u.id ? "all" : u.id)}
+                >
+                  <b>{u.code}</b>
+                  <small>{u.n}</small>
+                </button>
+              ))}
+            </nav>
+          )}
+          <div class="summary st-chips" aria-label="Class summary">
+            {chip("all", present.length, `${present.length} in class`, "strong")}
+            {chip("red", red, `${red} with no work`, red ? "t-red strong" : "")}
+            {toCorrect > 0 && chip("correct", toCorrect, `${toCorrect === 1 ? "1 level" : `${toCorrect} levels`} to correct`, "t-amber strong")}
+            {chip("quiet", quiet, `${quiet} quiet`, quiet ? "t-yellow strong" : "")}
+            {chip("rooms", inRooms, `${inRooms} in rooms`)}
           </div>
-          <Register
-            role={job}
-            views={present}
-            grouped={grade === "all" && grades.length > 1}
-            now={now}
-            legend={LEGEND[job]}
-            onName={() => false}
-          />
+          {rows.length === 0 ? (
+            <div class="empty">
+              <p class="empty-title">Nobody here matches</p>
+              <button
+                type="button"
+                class="btn ghost"
+                onClick={() => {
+                  setStage("all");
+                  setUnit("all");
+                  setStatus("all");
+                }}
+              >
+                Show everyone
+              </button>
+            </div>
+          ) : (
+            <Register
+              role={job}
+              views={rows}
+              grouped={grade === "all" && grades.length > 1}
+              now={now}
+              pace={pace}
+              legend={LEGEND[job]}
+              onName={() => false}
+            />
+          )}
+          {filtered && rows.length > 0 && (
+            <button
+              type="button"
+              class="link-btn show-all"
+              onClick={() => {
+                setStage("all");
+                setUnit("all");
+                setStatus("all");
+              }}
+            >
+              Show everyone ({inGradeNow.length})
+            </button>
+          )}
         </>
       )}
 
@@ -152,6 +268,18 @@ export function ClassPage(props: { board: Board; views: View[]; now: number; job
       )}
     </main>
   );
+}
+
+/** The units these students are on (only those), with how many on each, in book order. */
+function unitsOf(vs: View[]): { id: string; code: string; n: number }[] {
+  const by = new Map<string, { id: string; code: string; n: number }>();
+  for (const v of vs) {
+    if (!v.unit) continue;
+    const u = by.get(v.unit._id) ?? { id: v.unit._id as string, code: v.unit.code, n: 0 };
+    u.n++;
+    by.set(v.unit._id, u);
+  }
+  return [...by.values()].sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
 }
 
 const ROOM = { theory: "Theory", evaluation: "Evaluation" } as const;

@@ -173,17 +173,24 @@ export type PlanOpts = {
   startInMs: number;
 };
 
+/**
+ * When he runs out of work, from now: 0 = out of work now; null = finished, or not known (a workbook student still on a
+ * level). A theory-book student is on one question now (since his last mark), then the rest, at his own pace.
+ */
+export function outInOf(v: View, now: number, pace: number): number | null {
+  if (v.st) {
+    if (v.st.dry) return 0;
+    if (v.st.finished) return null;
+    const own = paceOf(v) ?? pace;
+    const since = Math.max(0, now - (v.s.lastActivityAt ?? now));
+    return (v.st.left - 1) * own + Math.max(own / 4, own - since);
+  }
+  return v.ms?.dry ? 0 : null;
+}
+
 function memberOf(v: View, inEvaluation: boolean, section: SectionData | null, now: number, pace: number, horizon: number): Member {
   const own = paceOf(v) ?? pace;
-  let outIn: number | null = null;
-  if (v.st) {
-    if (v.st.dry) outIn = 0;
-    else if (!v.st.finished) {
-      // He is on one question now (since his last mark), then the rest.
-      const since = Math.max(0, now - (v.s.lastActivityAt ?? now));
-      outIn = (v.st.left - 1) * own + Math.max(own / 4, own - since);
-    }
-  } else if (v.ms?.dry) outIn = 0;
+  const outIn = outInOf(v, now, pace);
   let waited: number | undefined;
   if (v.ms) {
     const times = v.ms.theory.map((q) => v.mm.q[String(q)]?.th).filter((t): t is number => t !== undefined);
@@ -292,8 +299,44 @@ export function memberWords(m: Member): string {
   if (m.hold === "home" && m.homeAt !== undefined) return `home ${slClock(m.homeAt)}`;
   if (m.outIn === 0) return m.wait >= 60_000 ? `no work ${mShort(m.wait)}` : "no work";
   if (m.waited !== undefined && m.waited >= 60_000) return `waited ${mShort(m.waited)}`;
-  if (m.outIn !== null && m.outIn <= 30 * 60_000) return `out in ${mShort(Math.max(60_000, m.outIn))}`;
-  return "working";
+  // The facts, so the teacher can judge (he knows who is slow): questions left, and when the page thinks he runs out.
+  if (m.outIn !== null && m.outIn <= 30 * 60_000) {
+    const out = `out ~${mShort(Math.max(60_000, m.outIn))}`;
+    return m.v.st ? `${m.v.st.left} left · ${out}` : out;
+  }
+  return m.v.st && !m.v.st.finished ? `${m.v.st.left} left` : "working";
+}
+
+/** The founder's colours for a count: red = very urgent (no work now), orange = soon, yellow = not urgent yet. */
+export type Heat = "red" | "orange" | "yellow";
+export type HeatCount = { red: number; orange: number; yellow: number; total: number };
+export const heatOf = (m: Member): Heat => (m.urgency === "red" ? "red" : m.urgency === "amber" ? "orange" : "yellow");
+
+/** How many need Theory, by book (theory book = Fighter, workbook = Master) and colour; each student once. */
+export function kindCounts(plan: Lesson[]): Record<"all" | LessonKind, HeatCount> {
+  const zero = (): HeatCount => ({ red: 0, orange: 0, yellow: 0, total: 0 });
+  const out = { all: zero(), section: zero(), workbook: zero() };
+  const seen = new Set<string>();
+  for (const l of plan)
+    for (const m of l.members) {
+      if (seen.has(m.v.s._id)) continue;
+      seen.add(m.v.s._id);
+      for (const c of [out.all, out[l.kind]]) {
+        c[heatOf(m)]++;
+        c.total++;
+      }
+    }
+  return out;
+}
+
+/** A lesson's students by colour (the lesson pill's numbers). */
+export function lessonHeat(l: Lesson): HeatCount {
+  const c: HeatCount = { red: 0, orange: 0, yellow: 0, total: 0 };
+  for (const m of l.members) {
+    c[heatOf(m)]++;
+    c.total++;
+  }
+  return c;
 }
 
 /** Why this lesson is where it is, in one line: "3 need it now · Fathima: no work 6m". */

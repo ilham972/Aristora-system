@@ -190,6 +190,43 @@ describe("calls between the rooms", () => {
     expect((await t.run((ctx) => ctx.db.get(plain.created[0].callId)))?.bumped).toBeUndefined();
   });
 
+  test("each room's score for the class: calls, ahead, done, lessons, explained, and the waits for it", async () => {
+    const t = await setup();
+    const stats = async () =>
+      await t.run(async (ctx) => (await ctx.db.query("sessions").withIndex("by_open", (q) => q.eq("open", true)).first())?.stats ?? {});
+    // Ahamed has no work until A is taught: he waits for Theory from the moment he is signed in.
+    const a = await addIn(t, "Ahamed");
+    // Bilal has A taught: he still has work when Theory calls him (ahead).
+    const b = await addIn(t, "Bilal");
+    await teachSection(t, b, [1, 2, 3, 4]);
+    advance(5);
+    const { created } = await t.mutation(api.calls.create, { studentIds: [a, b], room: "theory", kind: "theory" });
+    expect(created).toHaveLength(2);
+    advance(2);
+    await t.mutation(api.calls.send, { callIds: created.map((c) => c.callId) });
+    let s = await stats();
+    expect(s.theory).toMatchObject({ calls: 2, ahead: 1 });
+    // Only Ahamed waited (7 min, the clock moves ~1 ms per mutation); Bilal had work.
+    expect(Math.round(s.theory.waitMs / 1000)).toBe(7 * 60);
+    expect(Math.round(s.theory.maxWaitMs / 1000)).toBe(7 * 60);
+    advance(10);
+    // One Done for both = one lesson: Ahamed is taught A (4 questions), Bilal his next section, B (3).
+    await t.mutation(api.calls.finish, { items: created.map((c) => ({ callId: c.callId })) });
+    s = await stats();
+    expect(s.theory).toMatchObject({ calls: 2, ahead: 1, done: 2, lessons: 1, qs: 7 });
+    // Evaluation: Bilal answers Q5 wrong, is called and explained.
+    await mark(t, b, 5, "wrong");
+    const ev = await t.mutation(api.calls.create, { studentIds: [b], room: "evaluation", kind: "evaluation" });
+    await t.mutation(api.calls.send, { callIds: [ev.created[0].callId] });
+    await t.mutation(api.calls.finish, { items: [{ callId: ev.created[0].callId, explained: [5] }] });
+    s = await stats();
+    expect(s.evaluation).toMatchObject({ calls: 1, ahead: 1, done: 1, qs: 1 });
+    expect(s.theory.lessons).toBe(1); // her Done is not a Theory lesson
+    // The board carries the scores to every phone.
+    const board = await t.query(api.state.get, {});
+    expect(board.session?.stats.theory.lessons).toBe(1);
+  });
+
   test("how long Theory's lessons take: sent to Done in the theory room, newest first; Theory only", async () => {
     const t = await setup();
     for (const [name, min] of [["Ahamed", 9], ["Bilal", 13]] as const) {

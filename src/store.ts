@@ -21,7 +21,8 @@ export type Board = {
   progress: Record<string, Progress>;
   books: Record<string, BookDoc>;
   calls: Call[];
-  session: { _id: Id<"sessions">; startedAt: number; lastActivityAt: number } | null;
+  /** stats[room][key]: each room's score for this class (src/score.ts); missing on an old server. */
+  session: { _id: Id<"sessions">; startedAt: number; lastActivityAt: number; stats?: Record<string, Record<string, number>> } | null;
   legacy: boolean;
 };
 export type Role = "correction" | "theory" | "evaluation";

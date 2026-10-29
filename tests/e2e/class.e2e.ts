@@ -141,7 +141,11 @@ const topFits = (p: Page) =>
     const meta = document.querySelector(".top-meta")!.getBoundingClientRect();
     return left.right <= meta.left + 0.5 && meta.right <= window.innerWidth + 0.5;
   });
-const shot = (p: Page, name: string, full = false) => p.screenshot({ path: join(SHOTS, `${name}.png`), fullPage: full });
+/** A picture of the phone, once the cards have risen in (0.22 s). */
+const shot = async (p: Page, name: string, full = false) => {
+  await p.waitForTimeout(260);
+  return p.screenshot({ path: join(SHOTS, `${name}.png`), fullPage: full });
+};
 const said = (p: Page) => p.evaluate(() => (window as unknown as { __said: string[] }).__said);
 const hears = async (p: Page, words: string) => {
   try {
@@ -152,16 +156,28 @@ const hears = async (p: Page, words: string) => {
 };
 const row = (p: Page, name: string) => p.locator(".reg-row", { has: p.locator(".reg-n", { hasText: name }) });
 const circle = (r: L, q: number) => r.locator(".reg-act").getByRole("button", { name: new RegExp(`^Q${q}\\b`) });
-/** The bottom bar's tabs: Class (everyone's), Theory, Evaluation. */
-const tab = (p: Page, name: "Class" | "Theory" | "Evaluation") => p.locator(".tabs").getByRole("button", { name, exact: true });
-/** The Theory page: a lesson's card (opened from Soon when it is there). */
+/** The bottom bar's tabs (Theory, Evaluation); Class is the icon at the top, next to Focus. */
+const tab = (p: Page, name: "Class" | "Theory" | "Evaluation") =>
+  name === "Class" ? p.locator(".top .class-btn") : p.locator(`.tabs .tab.${name.toLowerCase()}`);
+/** The Theory page: a lesson's card (its pill is tapped first when another lesson is open). */
 async function lessonCard(p: Page, title: string): Promise<L> {
   const card = p.locator(".tp-card", { has: p.locator(".tf-title b", { hasText: title }) });
-  const soon = p.locator(".tp-soon", { has: p.locator(".tp-soon-t b", { hasText: title }) });
-  await until(async () => (await card.count()) + (await soon.count()) > 0, `the ${title} lesson on the Theory page`);
-  if ((await card.count()) === 0) await soon.first().click();
+  const pill = p.locator(".tp-pill", { has: p.locator(".tp-pill-t b", { hasText: title }) });
+  await until(async () => (await card.count()) + (await pill.count()) > 0, `the ${title} lesson on the Theory page`);
+  if ((await card.count()) === 0) await pill.first().click();
   await visible(card);
   return card;
+}
+/** The Evaluation page: a student on the Call next list, and a student with her. */
+const evRow = (p: Page, name: string) => p.locator(".ev-c", { has: p.locator(".ev-c-who b", { hasText: name }) });
+const evHere = (p: Page, name: string) => p.locator(".ev-h", { has: p.locator(".ev-h-name", { hasText: name }) });
+/** Tick exactly these students on the Evaluation page (the page's pick cleared first), then Call. */
+async function evCallOnly(p: Page, names: string[]) {
+  await visible(evRow(p, names[0]));
+  if (await p.locator(".call-bar").count()) await p.locator(".call-bar").getByRole("button", { name: "Clear" }).click();
+  await count(p.locator(".ev-c.on"), 0);
+  for (const n of names) await evRow(p, n).click();
+  await p.locator(".call-bar").getByRole("button", { name: `Call ${names.length}` }).click();
 }
 /** A student on a Theory card (tap: ticked or not). */
 const chip = (card: L, name: string) => card.locator(".tp-m", { has: card.page().locator("b", { hasText: name }) });
@@ -214,7 +230,7 @@ test("the register: a whole class on three phones", async () => {
   await count(C.locator(".reg-row.rt-yellow"), 1); // Tharun: quiet
   await shot(C, "r01-correction-register", true);
   await shot(T, "r02-theory-page", true);
-  await shot(E, "r03-evaluation-register", true);
+  await shot(E, "r03-evaluation-page", true);
 
   // --- Correction: 1 tap right, 2 taps wrong, 3 taps slip (and no false "wrong").
   const ahamed = row(C, "Ahamed");
@@ -284,19 +300,23 @@ test("the register: a whole class on three phones", async () => {
   expect((await marksOf(backend, "Nila")).marks["23"]).toBeUndefined();
   expect(f.room).toBeUndefined();
 
-  // --- Evaluation calls Kumar; Theory then takes him straight from the evaluation room.
-  await row(E, "Kumar").locator(".reg-name").click();
-  await E.locator(".call-bar").getByRole("button", { name: "Call 1" }).click();
+  // --- Evaluation calls Kumar (the page ticked others; she picks him alone); Theory then takes him straight from the
+  // evaluation room.
+  await evCallOnly(E, ["Kumar"]);
   await hears(C, "Kumar, go to Evaluation.");
   await C.locator(".call-strip.evaluation").getByRole("button", { name: "Sent" }).click();
-  await contains(E.locator(".inroom.evaluation"), "Kumar");
+  const kh = evHere(E, "Kumar");
+  await visible(kh);
   const eCard = await lessonCard(T, "Surds & approximation");
   await contains(chip(eCard, "Kumar").locator("small"), "in Eval"); // listed, not ticked: calling takes him from Evaluation
   expect(await chip(eCard, "Kumar").getAttribute("aria-pressed")).toBe("false");
   await callOnly(eCard, ["Kumar"]);
   await contains(E.locator(".pull-banner"), "Theory wants Kumar now");
   await hears(E, "Theory wants Kumar now.");
-  await circle(row(E, "Kumar"), 28).click(); // explained Q28 only
+  // His questions one at a time: she explained Q28, then the page shows Q29.
+  await contains(kh.locator(".ev-q-n"), "Q28");
+  await kh.getByRole("button", { name: "Explained", exact: true }).click();
+  await contains(kh.locator(".ev-q-n"), "Q29");
   await shot(E, "r08-evaluation-pull");
   await E.locator(".pull-banner").getByRole("button", { name: "Send to Theory" }).click();
   await until(async () => (await marksOf(backend, "Kumar")).room === "theory", "Kumar in Theory");
@@ -304,9 +324,9 @@ test("the register: a whole class on three phones", async () => {
   expect(k.marks["28"]?.s).toBe("explained");
   expect(k.marks["29"]?.s).toBe("wrong");
 
-  // Same mistake: U13 Q22 wrong for Ahamed and Fathima -> one chip selects both.
-  await E.getByRole("button", { name: /got U13 Q22 wrong/ }).click();
-  await textsAre(E.locator(".reg-row.sel .reg-n"), ["Ahamed", "Fathima"]);
+  // Same question: U13 Q22 wrong for Ahamed and Fathima -> one tap ticks both (explain once).
+  await E.getByRole("button", { name: /^Same question U13 Q22/ }).click();
+  await namesAre(E.locator(".ev-c.on .ev-c-who b"), ["Ahamed", "Fathima"]);
   await shot(E, "r09-evaluation-same-mistake");
   await E.locator(".call-bar").getByRole("button", { name: "Clear" }).click();
 
@@ -317,9 +337,13 @@ test("the register: a whole class on three phones", async () => {
   // Theory busy with Tharun -> Evaluation teaches Rizwan section C itself.
   // Both rooms call at once: Correction gets two slim strips and hears both.
   await callOnly(await lessonCard(T, "Expand & simplify"), ["Tharun"]);
-  await contains(row(E, "Tharun").locator(".reg-s"), "Called: Theory"); // Evaluation's phone knows Theory is busy
-  await row(E, "Rizwan").locator(".reg-name").click();
-  await E.locator(".call-bar").getByRole("button", { name: "Teach 1" }).click();
+  const teach = E.locator(".ev-teach"); // Evaluation's page knows Theory is busy
+  await visible(teach);
+  for (const b of await teach.locator(".tp-m").all()) {
+    const who = ((await b.locator("b").textContent()) ?? "").trim();
+    if (((await b.getAttribute("aria-pressed")) === "true") !== (who === "Rizwan")) await b.click();
+  }
+  await teach.getByRole("button", { name: "Teach 1" }).click();
   await count(C.locator(".call-strip"), 2);
   await hears(C, "Rizwan, go to Evaluation.");
   await shot(C, "r09b-correction-two-rooms");
@@ -330,9 +354,9 @@ test("the register: a whole class on three phones", async () => {
   await small.context().close();
   await C.locator(".call-strip.theory").getByRole("button", { name: "Sent" }).click();
   await C.locator(".call-strip.evaluation").getByRole("button", { name: "Sent" }).click();
-  await visible(E.locator(".inroom.evaluation").getByRole("img", { name: "section C" }));
+  await contains(evHere(E, "Rizwan").locator(".ev-teaching"), "section C");
   await shot(E, "r09d-evaluation-teaching-theory");
-  await E.locator(".inroom.evaluation").getByRole("button", { name: "All taught" }).click();
+  await evHere(E, "Rizwan").getByRole("button", { name: "Done: taught" }).click();
   await until(async () => (await marksOf(backend, "Rizwan")).marks["15"]?.s === "taught", "Rizwan C taught");
 
   // Settings, Alerts: test the alert on this phone.
@@ -445,7 +469,7 @@ test("the register: a whole class on three phones", async () => {
     const small = await phone(backend, role, { ...PHONE, viewport: { width: 360, height: 740 } });
     if (role === "theory") await visible(small.locator(".tp-page .tp-sum"));
     else {
-      await visible(row(small, "Ahamed")); // loaded, then measure
+      if (role === "correction") await visible(row(small, "Ahamed")); // loaded, then measure
       await textsAre(small.locator(".grade-pills .gp b"), ["All", "7", "11"]);
     }
     expect(await small.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
@@ -491,7 +515,8 @@ test("Master: workbook levels corrected, lost marks explained, re-teach, Exam Sp
   // No level buttons on the rows any more (papers are marked in Focus): his words and his bar say it.
   const malik = row(C, "Malik");
   await count(C.locator(".reg-row .lv-pill"), 0);
-  await contains(malik.locator(".reg-s"), "Correct L3 6m");
+  await contains(malik.locator(".reg-s"), "On Level 4");
+  await contains(malik.locator(".nx-c.correction"), "Correct L3"); // what he needs next, for everyone who looks
   await contains(malik.locator(".strip-tag"), "G7 · U08");
   await contains(row(C, "Zainab").locator(".strip-tag"), "G9 · U21");
   await contains(row(C, "Vimal").locator(".reg-s"), "No work"); // every level handed in, waiting for marks
@@ -551,7 +576,8 @@ test("Master: workbook levels corrected, lost marks explained, re-teach, Exam Sp
   await textsAre(row(C, "Priya").locator(".mk b"), ["L2", "3"]);
   expect((await marksOf(backend, "Priya")).m!.lv["2"]?.done).toBeGreaterThan(0);
 
-  // Evaluation: Malik's lost marks are red circles; tap Q24 when it's explained.
+  // Evaluation, on the Class page (her taps on its rows): Malik's lost marks are red circles; tap Q24 when it's explained.
+  await tab(E, "Class").click();
   const em = row(E, "Malik");
   await textsAre(em.locator(".reg-act .q"), ["4", "13", "17", "24"]);
   await shot(E, "m03-evaluation-lost-marks", true);
@@ -571,17 +597,17 @@ test("Master: workbook levels corrected, lost marks explained, re-teach, Exam Sp
   await contains(E.locator(".toast"), "Malik: Q13 Q17 for Theory. He carries on; Theory calls him.");
   expect((await marksOf(backend, "Malik")).m!.q["13"]).toMatchObject({ th: expect.any(Number), tb: "evaluation" });
   await textsAre(em.locator(".reg-act .q"), ["4", "24"]);
-  // Correction sees where Malik goes next.
-  await contains(malik.locator(".to-chip.theory b"), "2");
-  await contains(malik.locator(".to-chip.evaluation b"), "1");
+  // Everyone sees where Malik goes next.
+  await contains(malik.locator(".nx-c.theory"), "Theory 2");
+  await contains(malik.locator(".nx-c.evaluation"), "Eval 1");
 
-  // Evaluation calls Vimal, explains everything in the room.
-  await row(E, "Vimal").locator(".reg-name").click();
-  await E.locator(".call-bar").getByRole("button", { name: "Call 1" }).click();
+  // Evaluation calls Vimal from her page and explains everything in one tap.
+  await tab(E, "Evaluation").click();
+  await evCallOnly(E, ["Vimal"]);
   await hears(C, "Vimal, go to Evaluation.");
   await C.locator(".call-strip.evaluation").getByRole("button", { name: "Sent" }).click();
-  await contains(E.locator(".inroom.evaluation"), "Vimal");
-  await E.locator(".inroom.evaluation").getByRole("button", { name: "All explained" }).click();
+  await visible(evHere(E, "Vimal"));
+  await evHere(E, "Vimal").getByRole("button", { name: "All explained: back to work" }).click();
   await until(async () => {
     const v = (await marksOf(backend, "Vimal")).m!;
     return v.q["22"]?.x !== undefined && v.q["51"]?.x !== undefined;
@@ -599,7 +625,7 @@ test("Master: workbook levels corrected, lost marks explained, re-teach, Exam Sp
   await vs.getByRole("button", { name: /^Save / }).click();
   await contains(C.locator(".toast"), "Theory: Q57.");
   expect((await marksOf(backend, "Vimal")).m!.q["57"]).toMatchObject({ dk: true, got: 0, tb: "correction" });
-  await contains(row(C, "Vimal").locator(".to-chip.theory b"), "1");
+  await contains(row(C, "Vimal").locator(".nx-c.theory"), "Theory 1");
   await row(C, "Vimal").locator(".reg-strip").click(); // closes his book
 
   // Correction opens Malik's workbook (the marks table) and asks for the unit to be taught again.
@@ -619,7 +645,7 @@ test("Master: workbook levels corrected, lost marks explained, re-teach, Exam Sp
   // Theory sees the questions sent to it: Malik Q13 Q17 (still working), Vimal Q57 (nothing else to do: red).
   const tm = row(T, "Malik");
   await textsAre(tm.locator(".reg-act .q"), ["13", "17"]);
-  await contains(tm.locator(".reg-s"), "Q13 Q17");
+  await contains(tm.locator(".nx-c.theory"), "Theory 2");
   await contains(row(T, "Vimal").locator(".reg-s"), "No work");
   await textsAre(row(T, "Vimal").locator(".reg-act .q"), ["57"]);
   // The Theory page: one workbook card for everyone with questions for Theory (no question shared by both); this time
@@ -805,11 +831,12 @@ test("Master: workbook levels corrected, lost marks explained, re-teach, Exam Sp
 
   // Small Android phone: the correction sheet and the marks table fit.
   const small = await phone(backend, "correction", { ...PHONE, viewport: { width: 360, height: 740 } });
-  await visible(row(small, "Vimal").locator(".to-chip.theory"));
-  await contains(row(small, "Vimal").locator(".to-chip.theory"), "Th");
+  await visible(row(small, "Vimal").locator(".strip-tag"));
   for (const name of ["Malik", "Priya", "Vimal"]) {
     const act = row(small, name).locator(".reg-act");
     expect(await act.evaluate((el) => el.scrollWidth <= el.clientWidth + 1), `${name}'s row fits at 360 px`).toBe(true);
+    const strip = row(small, name).locator(".reg-strip");
+    expect(await strip.evaluate((el) => el.scrollWidth <= el.clientWidth + 1), `${name}'s next and bar fit at 360 px`).toBe(true);
   }
   await shot(small, "m08d-master-rows-360px");
   // Vimal's Level 8, corrected with a "?": opened again from his marks table, Part II answers under the marks.
@@ -995,12 +1022,13 @@ test("accounts: the owner sets up, adds a teacher, her phone signs in with the l
     await R.locator(".sheet").getByRole("button", { name: "Save PIN" }).click();
     await contains(R.locator(".toast"), "PIN saved");
     expect(new URL(R.url()).hash).toBe("");
-    // Her job is Correction: the Class tab (everyone's), Attendance and Focus at the top; no Theory tab, though the phone
-    // last showed Theory.
-    await textsAre(R.locator(".tabs .tab"), ["Class"]);
-    await contains(R.locator(".tabs .tab.on"), "Class");
+    // Her job is Correction: no bottom bar (Theory and Evaluation are the teachers' pages); Attendance, Focus and Class at
+    // the top, and she starts on Focus, though the phone last showed Theory.
     await visible(R.getByRole("button", { name: /^Attendance/ })); // Correction takes attendance
     await visible(R.getByRole("button", { name: /^Focus/ })); // and marks papers
+    await visible(R.getByRole("button", { name: /^Class/ })); // and sees the whole class
+    await count(R.locator(".tabs"), 0);
+    expect(await R.getByRole("button", { name: /^Focus/ }).getAttribute("aria-pressed")).toBe("true");
     await R.getByRole("button", { name: "Settings" }).click();
     await textsAre(R.locator(".seg button"), ["Alerts", "Reports", "History", "Account"]); // no People: owner only
     await shot(R, "a05b-teacher-settings", true);
@@ -1026,7 +1054,8 @@ test("accounts: the owner sets up, adds a teacher, her phone signs in with the l
     await visible(R.getByText("don't match"));
     await R.getByLabel("PIN (6 digits)").fill("583920");
     await R.getByRole("button", { name: "Sign in", exact: true }).click();
-    await textsAre(R.locator(".tabs .tab"), ["Class"]);
+    await visible(R.getByRole("button", { name: /^Focus/ }));
+    await count(R.locator(".tabs"), 0);
 
     // The history names who did each thing.
     await O.locator(".sheet").getByRole("button", { name: "Close" }).click();
@@ -1090,8 +1119,9 @@ test("Focus: one question at a time, names that never move, a paper taken back a
   await F.getByRole("button", { name: "Load demo students (three grades)" }).click();
   await visible(F.getByText(/^14 demo students loaded/));
   await F.getByRole("button", { name: "Back to the class" }).click();
-  // Focus is at the top (the target): the Correction job. The tabs are Class, Theory, Evaluation; the phone opens on Focus.
-  await textsAre(F.locator(".tabs .tab > span:nth-child(2)"), ["Class", "Theory", "Evaluation"]);
+  // Focus is at the top (the target): the Correction job, with Class next to it. The bottom tabs are Theory and
+  // Evaluation; the phone opens on Focus.
+  await textsAre(F.locator(".tabs .tab > span:nth-child(2)"), ["Theory", "Evaluation"]);
   expect(await F.getByRole("button", { name: /^Focus/ }).getAttribute("aria-pressed")).toBe("true");
   await count(F.locator(".tabs .tab.on"), 0);
 
@@ -1249,8 +1279,7 @@ test("Focus: one question at a time, names that never move, a paper taken back a
   await contains(F.locator(".fc-nokey"), "No answer key for this workbook yet");
   await tap(F.locator(".fc-go"));
   await contains(F.locator(".fc-qn"), "2");
-  await row(E, "Malik").locator(".reg-name").click();
-  await E.locator(".call-bar").getByRole("button", { name: "Call 1" }).click();
+  await evCallOnly(E, ["Malik"]);
   await hears(F, "Malik, go to Evaluation.");
   await F.locator(".call-strip.evaluation").getByRole("button", { name: "Sent" }).click();
   await count(F.locator(".call-strip"), 0);
@@ -1327,7 +1356,7 @@ test("Focus: one question at a time, names that never move, a paper taken back a
   };
   await visible(S.locator(".fc-pill").first());
   expect(await S.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  // Four tabs fit: every label inside its tab.
+  // The tabs fit: every label inside its tab.
   expect(
     await S.evaluate(() =>
       [...document.querySelectorAll(".tabs .tab")].every((t) => (t.children[1] as HTMLElement).getBoundingClientRect().width <= t.getBoundingClientRect().width - 4),
@@ -1396,7 +1425,7 @@ test("Focus: one question at a time, names that never move, a paper taken back a
   expect(problems, problems.join("\n")).toEqual([]);
 });
 
-test("Theory: one page for the whole class (lessons going on, Next, Soon); Evaluation told; the owl while loading", async () => {
+test("Theory: one page for the whole class (lessons going on, the control panel, one lesson open); Evaluation told; the owl", async () => {
   const backend = await newClass();
   const C = await phone(backend, "correction");
   const T = await phone(backend, "theory");
@@ -1405,15 +1434,23 @@ test("Theory: one page for the whole class (lessons going on, Next, Soon); Evalu
   await visible(C.getByText(/^14 demo students loaded/));
   await C.getByRole("button", { name: "Back to the class" }).click();
   const marks = async (name: string) => (await marksOf(backend, name)).marks;
-  const titles = T.locator(".tp-card .tf-title b, .tp-soon-t b");
+  const titles = T.locator(".tp-pill-t b");
 
-  // One line on top; Next: the 3 lessons to teach now, most useful first, with who needs each (ticked) and why. Soon: the
-  // rest, one line each. D gives work to 3 now (Fathima has none; Ahamed and Dilan run out within a lesson).
+  // Today's score and one line on top. The control panel: All / Fighter / Master with how many need theory (red no work,
+  // orange soon, yellow later), then every lesson as a pill, in one order that never moves; the page's pick (D: it gives
+  // work to 3 now: Fathima has none, Ahamed and Dilan run out within a lesson) is marked Next and open below.
+  await visible(T.locator(".sc"));
   await contains(T.locator(".tp-sum"), "2 with no work"); // Fathima and Rizwan
   await contains(T.locator(".tp-sum"), "lessons ~12 min");
-  await namesAre(titles, ["Completing the square", "Forming the equation", "Expand & simplify", "Surds & approximation"]);
-  await count(T.locator(".tp-card"), 3);
-  await count(T.locator(".tp-soon"), 1);
+  await until(
+    async () => JSON.stringify(await T.locator(".tp-list .tile .tile-top small").allTextContents()) === '["All","Fighter","Master"]',
+    "the All, Fighter and Master tiles",
+  );
+  expect(await T.locator(".tp-list .tile").first().getAttribute("aria-label")).toMatch(/^All: \d+, 2 very urgent/);
+  await textsAre(titles, ["Expand & simplify", "Forming the equation", "Completing the square", "Surds & approximation"]);
+  await count(T.locator(".tp-card"), 1);
+  await contains(T.locator(".tp-pill.on"), "Completing the square");
+  await contains(T.locator(".tp-pill.on .tp-best"), "Next");
   // (the heading is drawn in capitals: read its text, not its look)
   await until(async () => (await T.locator(".tp-card").first().locator(".tf-kicker").textContent()) === "Teach next", "Teach next");
   await count(T.locator(".tp-card.first.u-red"), 1); // somebody has no work
@@ -1425,7 +1462,7 @@ test("Theory: one page for the whole class (lessons going on, Next, Soon); Evalu
   await namesAre(d.locator(".tp-m b"), ["Fathima", "Ahamed", "Dilan", "Nila"]);
   await count(d.locator(".tp-m.on"), 4);
   await contains(chip(d, "Fathima").locator("small"), "no work");
-  await contains(chip(d, "Ahamed").locator("small"), "out in");
+  await contains(chip(d, "Ahamed").locator("small"), "left · out ~"); // what he still has, so she can judge
   // Names three to a line.
   const tops = await d.locator(".tp-m").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
   expect(tops.filter((t) => t === tops[0])).toHaveLength(3);
@@ -1532,8 +1569,7 @@ test("Theory: one page for the whole class (lessons going on, Next, Soon); Evalu
   // Evaluation calls Kumar: Theory lists him on the E card but doesn't tick him. Theory takes him anyway: Evaluation
   // is told her call went (theory comes first). Then Theory changes its mind: × cancels the call.
   const E = await phone(backend, "evaluation");
-  await row(E, "Kumar").locator(".reg-name").click();
-  await E.locator(".call-bar").getByRole("button", { name: "Call 1" }).click();
+  await evCallOnly(E, ["Kumar"]);
   const e = await lessonCard(T, "Surds & approximation");
   await contains(chip(e, "Kumar").locator("small"), "Eval called");
   expect(await chip(e, "Kumar").getAttribute("aria-pressed")).toBe("false");
@@ -1596,5 +1632,97 @@ test("Theory: one page for the whole class (lessons going on, Next, Soon); Evalu
   }
   expect(await O.locator('link[rel="apple-touch-icon"]').getAttribute("href")).toBe("/apple-touch-icon.png");
   await ctx.close();
+  expect(problems, problems.join("\n")).toEqual([]);
+});
+
+test("Evaluation: the page's pick or hers, 3 at once, one question at a time with the answer key, today's score", async () => {
+  const backend = await newClass();
+  const C = await phone(backend, "correction");
+  const E = await phone(backend, "evaluation");
+  await C.getByRole("button", { name: "Settings" }).click();
+  await C.getByRole("button", { name: "Load demo students (three grades)" }).click();
+  await visible(C.getByText(/^14 demo students loaded/));
+  await C.getByRole("button", { name: "Back to the class" }).click();
+  // A FAKE answer key for the demo workbook (G7 U08).
+  await backend.t.run(async (ctx) => {
+    const u = (await ctx.db
+      .query("units")
+      .withIndex("by_key", (q) => q.eq("key", "G7-U08"))
+      .first())!;
+    const answers = Array.from({ length: 57 }, (_, i) => (i + 1 === 22 ? { q: 22, a: "−7 + 4 = **−3**" } : { q: i + 1, a: `A${i + 1}` }));
+    await ctx.db.insert("keys", { unitId: u._id, answers, updatedAt: Date.now() });
+  });
+  await backend.push();
+
+  // Who to call: no work / stuck first (red), then waited 10 minutes (orange); what each is doing meanwhile. The page
+  // ticks the 3 most urgent (3 with her at most).
+  const names = E.locator(".ev-c .ev-c-who b");
+  await textsAre(names, ["Dilan", "Vimal", "Fathima", "Malik", "Kumar"]);
+  await namesAre(E.locator(".ev-c.on .ev-c-who b"), ["Dilan", "Vimal", "Fathima"]);
+  await contains(E.locator(".call-bar"), "Call 3");
+  await contains(evRow(E, "Dilan").locator(".ev-c-why b"), "stuck: Q18");
+  await contains(evRow(E, "Malik").locator(".ev-c-why b"), "waited 40m");
+  await contains(evRow(E, "Kumar").locator(".ev-c-why small"), "4 left · out ~"); // still working: she can wait
+  expect(await E.getByRole("button", { name: /^Fighter:/ }).getAttribute("aria-label")).toBe("Fighter: 3, 2 very urgent, 1 soon");
+  expect(await E.getByRole("button", { name: /^Master:/ }).getAttribute("aria-label")).toBe("Master: 2, 1 very urgent, 1 soon");
+  await visible(E.locator(".sc")); // today's score
+  expect(await E.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(E, "e01-evaluation-page", true);
+
+  // She looks at the workbooks only, and calls Vimal alone (the page had ticked Malik too).
+  await E.getByRole("button", { name: /^Master:/ }).click();
+  await textsAre(names, ["Vimal", "Malik"]);
+  await namesAre(E.locator(".ev-c.on .ev-c-who b"), ["Vimal", "Malik"]);
+  await evRow(E, "Malik").click();
+  await E.locator(".call-bar").getByRole("button", { name: "Call 1" }).click();
+  await contains(E.locator(".toast"), "Called 1. Correction sends him over.");
+  await hears(C, "Vimal, go to Evaluation.");
+  await C.locator(".call-strip.evaluation").getByRole("button", { name: "Sent" }).click();
+
+  // With her: his questions one at a time, his marks and the key's answer. Q22 explained; Q51 needs theory.
+  const vh = evHere(E, "Vimal");
+  await contains(vh.locator(".ev-q-n"), "Q22");
+  await contains(vh.locator(".ev-q-lost"), "got 0/");
+  await contains(vh.locator(".ev-key"), "−3");
+  await shot(E, "e02-explaining");
+  await vh.getByRole("button", { name: "Explained", exact: true }).click();
+  await contains(vh.locator(".ev-q-n"), "Q51");
+  await vh.getByRole("button", { name: "→ Theory" }).click();
+  await contains(vh.locator(".ev-h-sum"), "1 explained · 1 to Theory");
+  await textsAre(vh.locator(".ev-sq.d-x"), ["Q22"]);
+  await vh.getByRole("button", { name: "Done: back to work" }).click();
+  await contains(E.locator(".toast"), "Saved: Vimal back to work (1 explained, Q51 to Theory).");
+  const vm = (await marksOf(backend, "Vimal")).m!;
+  expect(vm.q["22"]?.x).toBeDefined();
+  expect(vm.q["51"]).toMatchObject({ th: expect.any(Number), tb: "evaluation" });
+  expect(vm.q["51"].x).toBeUndefined();
+
+  // Back to everyone: she calls three; the room is full, so a fourth can't be ticked.
+  await E.getByRole("button", { name: /^All:/ }).click();
+  await evCallOnly(E, ["Dilan", "Fathima", "Kumar"]);
+  await contains(E.locator(".ev-next-h small"), "Room full (3 with you)");
+  await evRow(E, "Malik").click();
+  await contains(E.locator(".toast"), "3 with you at most. Send someone back first.");
+  await hears(C, "Dilan, Fathima and Kumar, go to Evaluation.");
+  await C.locator(".call-strip.evaluation").getByRole("button", { name: "Sent 3" }).click();
+  await count(E.locator(".ev-h"), 3);
+  await count(E.locator(".ev-h:not(.closed)"), 1); // one open at a time
+  await shot(E, "e03-three-with-her", true);
+  const fh = evHere(E, "Fathima");
+  if (((await fh.getAttribute("class")) ?? "").includes("closed")) await fh.locator(".ev-h-head").click();
+  await fh.getByRole("button", { name: "All explained: back to work" }).click();
+  await until(async () => (await marksOf(backend, "Fathima")).marks["22"]?.s === "explained", "Fathima Q22 explained");
+  await count(E.locator(".ev-h"), 2);
+  // Today's score: 2 students explained to, 2 of the 4 called while they still had work.
+  await contains(E.locator(".sc-c", { hasText: "seen" }), "2");
+  await contains(E.locator(".sc-c", { hasText: "ahead" }), "2/4");
+
+  // The smallest phone: everything fits, the top bar too.
+  const S = await phone(backend, "evaluation", { ...PHONE, viewport: { width: 320, height: 568 } });
+  await visible(S.locator(".ev-room"));
+  expect(await S.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  expect(await topFits(S), "the top bar fits at 320 px").toBe(true);
+  await shot(S, "e04-evaluation-320", true);
+  await S.context().close();
   expect(problems, problems.join("\n")).toEqual([]);
 });

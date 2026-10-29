@@ -306,7 +306,7 @@ function stopPaper() {
 async function takeBackLevel(s: SavedLevel): Promise<boolean> {
   const v = latestViews.find((x) => x.s._id === s.studentId);
   if (!v || v.s.unitId !== s.unitId) {
-    toast(`${s.name} is on another book now. Use the Class tab (tap his name).`, "error");
+    toast(`${s.name} is on another book now. Use Class at the top (tap his name).`, "error");
     return false;
   }
   const fixed = v.mm.lv[String(s.level)]?.fixed;
@@ -315,7 +315,7 @@ async function takeBackLevel(s: SavedLevel): Promise<boolean> {
     return false;
   }
   if (Math.abs(fixed - s.at) > 2 * 60_000) {
-    toast(`${s.name}'s Level ${s.level} was corrected again since. Open it on the Class tab (tap his name).`, "error");
+    toast(`${s.name}'s Level ${s.level} was corrected again since. Open it on Class at the top (tap his name).`, "error");
     return false;
   }
   const ok = await act(() =>
@@ -341,12 +341,12 @@ async function takeBackLevel(s: SavedLevel): Promise<boolean> {
 async function takeBackMarks(s: SavedMarks): Promise<boolean> {
   const v = latestViews.find((x) => x.s._id === s.studentId);
   if (!v || v.s.unitId !== s.unitId || v.kind !== "fighter") {
-    toast(`${s.name} is on another book now. Use the Class tab (tap his name).`, "error");
+    toast(`${s.name} is on another book now. Use Class at the top (tap his name).`, "error");
     return false;
   }
   const moved = s.items.find((it) => (v.marks[String(it.q)]?.s ?? null) !== it.s);
   if (moved) {
-    toast(`${s.name}'s ${v.f?.longLabel(moved.q) ?? `Q${moved.q}`} was changed since. Fix it on the Class tab (tap his name).`, "error");
+    toast(`${s.name}'s ${v.f?.longLabel(moved.q) ?? `Q${moved.q}`} was changed since. Fix it on Class at the top (tap his name).`, "error");
     return false;
   }
   try {
@@ -837,7 +837,7 @@ function Marking(props: {
   if (!each) {
     return (
       <Empty title="This workbook doesn't list each question's marks">
-        Correct Level {level.n} on the Class tab: tap his name, then Level {level.n} in his marks table (the level's total and
+        Correct Level {level.n} on Class (at the top): tap his name, then Level {level.n} in his marks table (the level's total and
         which questions lost marks).
       </Empty>
     );
