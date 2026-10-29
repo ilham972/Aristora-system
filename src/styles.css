@@ -193,6 +193,10 @@ ul {
     padding-left: 10px;
     padding-right: 10px;
   }
+  .top-stat {
+    gap: 5px;
+    padding: 0 9px 0 8px;
+  }
   .top-left {
     gap: 5px;
   }
@@ -212,11 +216,42 @@ ul {
     width: 38px;
   }
 }
-.top-count {
-  font-weight: 700;
-  font-size: 16px;
-  color: var(--ink-2);
+/* Top right: how many are in class, the class clock and the link dot in one capsule (Attendance for Correction). */
+.top-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 11px 0 10px;
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--ink);
   white-space: nowrap;
+}
+button.top-stat:active {
+  transform: scale(0.97);
+}
+.ts-ic {
+  flex: none;
+  color: var(--green-ink);
+}
+.ts-n {
+  font: 700 17px/1 var(--font);
+  color: var(--green-ink);
+}
+.top-stat.zero .ts-ic,
+.top-stat.zero .ts-n {
+  color: var(--ink-3);
+}
+.ts-sep {
+  width: 1.5px;
+  height: 18px;
+  border-radius: 1px;
+  background: var(--line);
+}
+.top-stat .clock {
+  font-size: 17px;
 }
 .top-meta {
   display: flex;
@@ -1377,6 +1412,26 @@ button.q:disabled {
 .sheet-foot {
   padding: 12px 18px calc(12px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--line-2);
+}
+/* A full-page sheet (Attendance, from Correction's + or the count by the clock): the whole screen, fast. */
+.sheet-wrap.fullpage {
+  align-items: stretch;
+}
+.sheet-wrap.fullpage .sheet {
+  height: 100%;
+  max-height: none;
+  border-radius: 0;
+  padding-top: env(safe-area-inset-top);
+  animation-duration: 0.14s;
+}
+.sheet-wrap.fullpage .sheet-body {
+  flex: 1 1 auto;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+}
+.sheet .attendance {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
 /* ---------- Rooms: calling and "With you" ---------- */
@@ -3163,36 +3218,99 @@ button.stat:disabled {
   pointer-events: auto;
 }
 body.fc-marking .toasts {
-  top: calc(var(--top-h, 68px) + 8px);
+  top: calc(var(--top-h, 68px) + var(--fc-stick-h, 0px) + 6px);
   bottom: auto;
+}
+/* Correction: the names and the grades pinned under the top bar (with the calls); the paper scrolls under them. */
+.fc-stick {
+  box-shadow: 0 1px 0 var(--line-2);
+}
+/* A sheet open over a paper (Attendance, his card): the toasts go back to the bottom, off the sheet's title. */
+body.locked.fc-marking .toasts {
+  top: auto;
+  bottom: calc(24px + env(safe-area-inset-bottom));
 }
 
 /* One page (30 Oct 2026): tiny name pills on top, tiny grade pills under them, the open paper below. */
 .fc-page {
   gap: 10px;
 }
-.fc-names {
+/* One row that scrolls sideways (src/hrow.tsx): the names, the level bar, the questions. Nothing wraps, so nothing
+   below moves; faded edges say there is more; a dot on an edge = someone red or amber hidden that way. */
+.hrow {
+  position: relative;
+  min-width: 0;
+}
+.hrow-in {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 5px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
 }
-/* A grade's number before its names (under All). */
-.fc-g {
-  min-width: 18px;
-  padding: 0 1px 0 3px;
-  font: 700 12px/1 var(--cond);
+.hrow-in::-webkit-scrollbar {
+  display: none;
+}
+.hrow.more-r .hrow-in {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 26px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 26px), transparent);
+}
+.hrow.more-l .hrow-in {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 26px);
+  mask-image: linear-gradient(to right, transparent, #000 26px);
+}
+.hrow.more-l.more-r .hrow-in {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 26px, #000 calc(100% - 26px), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 26px, #000 calc(100% - 26px), transparent);
+}
+.hrow-dot {
+  position: absolute;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  margin-top: -5px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--ground);
+  pointer-events: none;
+}
+.hrow-dot.l {
+  left: 0;
+}
+.hrow-dot.r {
+  right: 0;
+}
+.hrow-dot.red {
+  background: var(--red);
+}
+.hrow-dot.amber {
+  background: var(--amber);
+}
+
+/* One grade's row: + first (that grade's Attendance), always in the same place; then its names in one line. */
+.fc-namerow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+}
+.fc-namerow .hrow {
+  flex: 1 1 auto;
+}
+.fc-names {
+  gap: 5px;
+  padding: 4px 2px;
+}
+.fc-names .fc-nm {
+  flex: none;
+}
+.fc-none {
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 700;
   color: var(--ink-3);
-  text-align: right;
-}
-.fc-gl {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  max-width: 100%;
-}
-.fc-gl:not(:first-child) {
-  margin-left: 4px;
 }
 .fc-nm {
   position: relative;
@@ -3273,20 +3391,60 @@ body.fc-marking .toasts {
 }
 .fc-tools .grade-pills {
   flex: 1 1 auto;
+  min-width: 0;
 }
-.grade-pills.tiny {
+/* + : that grade's Attendance (full page), first in the names row. */
+.fc-add {
+  flex: none;
+  width: 38px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 10px;
+  border: 1.5px solid var(--green);
+  background: var(--green-soft);
+  color: var(--green-ink);
+  transition: transform 0.1s ease;
+}
+.fc-add:active {
+  transform: scale(0.92);
+}
+/* A grade with no students at all: pale, and it can't be tapped. */
+.fc-grades .gp.none {
+  border-style: dashed;
+  background: transparent;
+  color: var(--ink-3);
+  opacity: 0.55;
+}
+/* Correction's grades 6–11: always in the same places, each with "here/total" (as on Attendance) and a badge for what
+   waits for the corrector there. */
+.grade-pills.fc-grades {
   padding-top: 0;
   gap: 5px;
 }
-.grade-pills.tiny .gp {
-  min-height: 30px;
+.fc-grades .gp {
+  min-height: 40px;
   padding: 2px;
-  border-radius: 10px;
+  border-radius: 11px;
 }
-.grade-pills.tiny .gp b {
-  font-size: 16px;
+.fc-grades .gp b {
+  font-size: 17px;
 }
-.grade-pills.tiny .gp-badge {
+.fc-grades .gp small {
+  font-size: 10.5px;
+  letter-spacing: -0.01em;
+}
+.fc-grades .gp.some small {
+  color: var(--green-ink);
+}
+.fc-grades .gp.on small {
+  color: #c4cad8;
+}
+.fc-grades .gp.on.some small {
+  color: #8fe3ad;
+}
+.fc-grades .gp-badge {
   top: -6px;
   right: -5px;
   min-width: 17px;
@@ -3296,13 +3454,28 @@ body.fc-marking .toasts {
 .fc-savedbtn {
   flex: none;
   margin-left: auto;
-  height: 30px;
+  height: 40px;
   padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   border-radius: 10px;
   border: 1.5px solid var(--line);
   background: var(--card);
   font: 700 13px/1 var(--font);
   color: var(--ink-2);
+}
+.fc-savedbtn:disabled {
+  opacity: 0.4;
+}
+/* The smallest phones: ↶ alone, so + and the six grades keep their room. */
+@media (max-width: 345px) {
+  .fc-savedw {
+    display: none;
+  }
+  .fc-savedbtn {
+    padding: 0 9px;
+  }
 }
 .fc-hint {
   padding: 18px 12px;
@@ -3450,11 +3623,11 @@ body.fc-marking .toasts {
 /* The level bar: every level of his workbook, a small button each (corrected levels by their marks, handed in
    amber, the one he is on outlined, done before the app pale); the open one ringed. */
 .fc-lvbar {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(26px, 1fr));
   gap: 3px;
+  padding: 5px 4px;
 }
 .fc-lb {
+  flex: 0 0 30px;
   height: 28px;
   min-width: 0;
   padding: 0;
@@ -3503,7 +3676,6 @@ body.fc-marking .toasts {
   color: var(--green-ink);
 }
 .fc-lb.on {
-  transform: translateY(-2px);
   box-shadow: 0 0 0 2px var(--ground), 0 0 0 4px var(--ink);
 }
 .fc-lb:active {
@@ -3698,10 +3870,8 @@ body.fc-marking .toasts {
 
 .fc-strip {
   margin: 0;
-  padding: 0;
+  padding: 3px 2px;
   list-style: none;
-  display: flex;
-  flex-wrap: wrap;
   gap: 4px;
 }
 .fc-strip li {
@@ -3777,13 +3947,6 @@ body.fc-marking .toasts {
 .fc-sq.on {
   border-color: var(--ink);
   box-shadow: 0 0 0 2px var(--ink);
-}
-.fc-strip li.fc-more {
-  flex: none;
-  align-self: center;
-  padding: 0 4px;
-  font: 700 13px/1 var(--font);
-  color: var(--ink-3);
 }
 
 .fc-card {

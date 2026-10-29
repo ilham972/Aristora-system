@@ -62,6 +62,9 @@ export const STATE_WORDS: Record<MarkState, string> = {
 };
 
 /** A panel that slides up from the bottom. */
+/** Sheets open now: the page under them stays still until the last one closes (a sheet can open over another). */
+let openSheets = 0;
+
 export function Sheet(props: {
   title: ComponentChildren;
   sub?: ComponentChildren;
@@ -69,6 +72,8 @@ export function Sheet(props: {
   children: ComponentChildren;
   foot?: ComponentChildren;
   tone?: string;
+  /** The whole screen (Attendance), not a panel from the bottom. */
+  full?: boolean;
 }) {
   const panel = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -78,15 +83,17 @@ export function Sheet(props: {
       if (e.key === "Escape") props.onClose();
     };
     document.addEventListener("keydown", onKey);
+    openSheets++;
     document.body.classList.add("locked");
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.body.classList.remove("locked");
+      openSheets = Math.max(0, openSheets - 1);
+      if (openSheets === 0) document.body.classList.remove("locked");
       prev?.focus?.();
     };
   }, []);
   return (
-    <div class="sheet-wrap" onClick={(e) => e.target === e.currentTarget && props.onClose()}>
+    <div class={`sheet-wrap${props.full ? " fullpage" : ""}`} onClick={(e) => e.target === e.currentTarget && props.onClose()}>
       <div class="sheet" role="dialog" aria-modal="true" tabIndex={-1} ref={panel} data-tone={props.tone}>
         <div class="sheet-head">
           <div class="sheet-title">

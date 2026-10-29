@@ -16,9 +16,11 @@ import {
   draftOf,
   extendQueue,
   fighterQueue,
+  focusGrade,
   focusNeeds,
   focusPills,
   fromDraft,
+  gradeNeeds,
   itemsOf,
   levelLook,
   markedParts,
@@ -311,6 +313,26 @@ describe("one page: which level opens, the level bar, the next level after Save"
     expect(blankWords(qs, given)).toBe("Q56 (ii), Q57");
     const d: Draft = { studentId: "V", unitId: U08._id, level: 8, q: { "56": { g: 2, dk: true, dkp: ["ii"], p: [2, 0] } }, updatedAt: 1 };
     expect(fromDraft(d)).toEqual({ given: { 56: { g: 2, dk: true, dkp: ["ii"] } }, parts: { 56: [2, 0] } });
+  });
+
+  test("one grade's names at a time: the one chosen (even before anyone of it is in), else the youngest in", () => {
+    const all = [6, 7, 8, 9, 11];
+    expect(focusGrade(8, [7, 8, 11], all)).toBe(8);
+    expect(focusGrade(9, [7, 8, 11], all)).toBe(9); // nobody of Grade 9 in yet: its + signs them in
+    expect(focusGrade(10, [7, 8, 11], all)).toBe(7); // no Grade 10 students at all: the youngest grade in
+    expect(focusGrade(null, [11, 7], all)).toBe(7);
+    expect(focusGrade(null, [], all)).toBe(6); // nobody in yet: the youngest grade
+    expect(focusGrade(7, [], [])).toBeNull(); // no students
+  });
+
+  test("the fixed grade pills 6–11 carry what waits there: red no work until corrected, amber handed in", () => {
+    const allIn = Object.fromEntries(G7U08.levels.map((l) => [String(l.n), { done: l.n }]));
+    const views = [wb("Malik", { "1": { done: 5 } }), wb("Dry", allIn), wb("Priya"), th("Kumar", taught(1, 4)), noBook("Zainab")];
+    const pills = focusPills(views);
+    const per = gradeNeeds(pills, focusNeeds(views));
+    expect(per.get(7)).toEqual({ red: 1, amber: 1 });
+    expect(per.get(11)).toEqual({ red: 0, amber: 0 });
+    expect(per.get(6)).toBeUndefined();
   });
 
   test("a unit finished: the next workbook of that term in book order, Legend after the term's last, nothing outside the terms", () => {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { callPhrase, pullPhrase, type RoomName } from "./announce";
-import { Attendance } from "./attendance";
+import { AttendanceSheet } from "./attendance";
 import type { Link } from "./backend";
 import { ClassPage } from "./correction";
 import { buildViews, evalQueue, fmtClock, liveSession, theoryGroups, theoryMembers, type View } from "./derive";
@@ -21,7 +21,7 @@ import { Sheet, Toasts } from "./ui";
  * Evaluation has no bottom bar: Focus is the corrector's home, Class everyone else's.
  */
 type TabId = "theory" | "evaluation";
-type Page = "board" | "class" | "settings" | "attendance" | "progress" | "focus";
+type Page = "board" | "class" | "settings" | "progress" | "focus";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "theory", label: "Theory" },
@@ -65,7 +65,7 @@ export function App() {
   const [chosen, setTab] = useState<TabId>(start.tab);
   const [page, setPage] = useState<Page>(start.page);
   const [lastJob, setLastJob] = useState<Role | null>(loadJob);
-  // Settings, Attendance and Progress go back to the page they were opened from: Focus, Class or the bottom tab.
+  // Settings and Progress go back to the page they were opened from: Correction (focus), Class or the bottom tab.
   const [backTo, setBackTo] = useState<Home>(start.page === "focus" || start.page === "class" ? start.page : "board");
   // Focus tapped again goes back to the page it was opened from: Class or the bottom tab.
   const [focusFrom, setFocusFrom] = useState<"board" | "class">(start.page === "class" ? "class" : "board");
@@ -77,6 +77,8 @@ export function App() {
     setHashSeen((n) => n + 1);
   };
   const [pinClosedFor, setPinClosedFor] = useState<string | null>(null);
+  // Attendance: a full page over any page (from the count by the clock, or Class when nobody is in yet).
+  const [attOpen, setAttOpen] = useState(false);
   const now = useTick(10_000);
   const alerts = useAlertsState();
   const topRef = useRef<HTMLDivElement>(null);
@@ -86,21 +88,21 @@ export function App() {
   const jobs = JOBS.filter((j) => !user || user.role === "owner" || user.tabs.includes(j));
   const tabs = TABS.filter((t) => jobs.includes(t.id));
   const tab: TabId = tabs.some((t) => t.id === chosen) ? chosen : (tabs[0]?.id ?? "theory");
-  // Attendance and Focus (signing students in, marking papers) are Correction's job; Progress needs Reports.
+  // Correction (marking papers, and signing students in with its +) is Correction's job; Progress needs Reports.
   const canCorrect = may("correction");
   const canProgress = may("reports");
   // Home: the bottom tab, else Focus for a corrector, else Class.
   const home: Home = tabs.length ? "board" : canCorrect ? "focus" : "class";
   const wanted: Page = page === "board" && !tabs.length ? home : page;
   const shown: Page =
-    ((wanted === "attendance" || wanted === "focus") && !canCorrect) || (wanted === "progress" && !canProgress)
+    (wanted === "focus" && !canCorrect) || (wanted === "progress" && !canProgress)
       ? backTo === "focus" && !canCorrect
         ? home
         : backTo
       : wanted;
   const base: Home = shown === "focus" || shown === "class" || shown === "board" ? shown : backTo;
   /** Open a page from the top bar; the same button again goes back. */
-  const toggle = (p: "settings" | "attendance" | "progress") => {
+  const toggle = (p: "settings" | "progress") => {
     if (shown === p) {
       setPage(backTo);
       return;
@@ -212,14 +214,15 @@ export function App() {
       <div class="top-wrap" ref={topRef}>
         <header class="top">
           <div class="top-left">
-            {canCorrect ? (
+            {canCorrect && (
               <button
                 type="button"
-                class={`att-btn${shown === "attendance" ? " on" : ""}`}
-                aria-pressed={shown === "attendance"}
-                aria-label={`Attendance: ${inClass} in class`}
-                onClick={() => toggle("attendance")}
+                class={`att-btn focus-btn${shown === "focus" ? " on" : ""}`}
+                aria-pressed={shown === "focus"}
+                aria-label={`Correction: mark papers${papers ? `, ${papers} waiting` : ""}`}
+                onClick={() => go("focus")}
               >
+                {/* A marked paper: the page with a tick. */}
                 <svg
                   viewBox="0 0 24 24"
                   width="21"
@@ -231,38 +234,9 @@ export function App() {
                   stroke-linecap="round"
                   stroke-linejoin="round"
                 >
-                  <circle cx="9" cy="8" r="3.6" />
-                  <path d="M2.5 20.5c.7-3.7 3.3-5.8 6.5-5.8s5.8 2.1 6.5 5.8" />
-                  <path d="m15.6 10.6 2.1 2.1 4.3-4.6" />
-                </svg>
-                <b class={`att-n${inClass ? "" : " zero"}`} aria-hidden="true">
-                  {inClass}
-                </b>
-              </button>
-            ) : (
-              <span class="top-count">{inClass} in class</span>
-            )}
-            {canCorrect && (
-              <button
-                type="button"
-                class={`att-btn focus-btn${shown === "focus" ? " on" : ""}`}
-                aria-pressed={shown === "focus"}
-                aria-label={`Focus: mark papers${papers ? `, ${papers} waiting` : ""}`}
-                onClick={() => go("focus")}
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  width="21"
-                  height="21"
-                  aria-hidden="true"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                >
-                  <circle cx="12" cy="12" r="8.2" />
-                  <circle cx="12" cy="12" r="3.6" />
-                  <path d="M12 1.8v3M12 19.2v3M1.8 12h3M19.2 12h3" />
+                  <path d="M14 2.8H7.2A2.2 2.2 0 0 0 5 5v14a2.2 2.2 0 0 0 2.2 2.2h9.6A2.2 2.2 0 0 0 19 19V7.8Z" />
+                  <path d="M14 2.8v5h5" />
+                  <path d="m8.6 14.6 2.5 2.5 4.5-5" />
                 </svg>
                 {papers > 0 && (
                   <b class={`att-n${papersRed ? " red" : ""}`} aria-hidden="true">
@@ -324,14 +298,12 @@ export function App() {
             )}
           </div>
           <div class="top-meta">
-            {session ? (
-              <span class="clock" title="Time since the session started">
-                {fmtClock(now - session.startedAt)}
-              </span>
-            ) : (
-              <span class="clock off">No class</span>
-            )}
-            <LinkDot link={link} />
+            <TopStat
+              inClass={inClass}
+              clock={session ? fmtClock(now - session.startedAt) : null}
+              link={link}
+              onTap={canCorrect ? () => setAttOpen(true) : undefined}
+            />
             <button
               type="button"
               class={`icon-btn${shown === "settings" ? " on" : ""}`}
@@ -371,13 +343,11 @@ export function App() {
       {shown === "settings" ? (
         <Settings views={views} onClose={() => setPage(backTo)} />
       ) : shown === "class" ? (
-        <ClassPage board={board} views={views} now={now} job={role} onAttendance={() => toggle("attendance")} />
+        <ClassPage board={board} views={views} now={now} job={role} onAttendance={() => setAttOpen(true)} />
       ) : shown === "progress" ? (
         <Progress board={board} now={now} />
-      ) : shown === "attendance" ? (
-        <Attendance board={board} views={views} now={now} role={role} />
       ) : shown === "focus" ? (
-        <Focus board={board} views={views} now={now} onAttendance={() => toggle("attendance")} />
+        <Focus board={board} views={views} now={now} />
       ) : tab === "evaluation" ? (
         <EvaluationPage board={board} views={views} now={now} />
       ) : (
@@ -409,6 +379,7 @@ export function App() {
           })}
         </nav>
       )}
+      {attOpen && canCorrect && <AttendanceSheet board={board} views={views} now={now} onClose={() => setAttOpen(false)} />}
       <Toasts />
       <Alerts role={role} board={board} views={views} now={now} live={link.connected} />
       {(hash.join || hash.setup) && (
@@ -460,6 +431,52 @@ function SlowLoad() {
       <p>Loading…</p>
       {slow && <p class="muted">Still loading. Check that this phone has mobile data or Wi-Fi.</p>}
     </>
+  );
+}
+
+/**
+ * Top right: how many are in class, the class clock and the link dot, in one capsule. For whoever signs students in
+ * (Correction, the owner) it is also a way into Attendance from any page.
+ */
+function TopStat(props: { inClass: number; clock: string | null; link: Link; onTap?: () => void }) {
+  const { inClass, clock } = props;
+  const words = `${inClass} in class, ${clock ? `class time ${clock}` : "no class now"}`;
+  const inside = (
+    <>
+      <svg
+        class="ts-ic"
+        viewBox="0 0 24 24"
+        width="17"
+        height="17"
+        aria-hidden="true"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2.2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="9" cy="8" r="3.4" />
+        <path d="M2.8 20.2c.6-3.5 3.1-5.5 6.2-5.5s5.6 2 6.2 5.5" />
+        <path d="M15.6 4.8a3.4 3.4 0 0 1 0 6.4M18.2 14.9c1.7.9 2.8 2.6 3.1 5.3" />
+      </svg>
+      <b class={`ts-n${inClass ? "" : " zero"}`} aria-hidden="true">
+        {inClass}
+      </b>
+      <i class="ts-sep" aria-hidden="true" />
+      <span class={`clock${clock ? "" : " off"}`} aria-hidden="true">
+        {clock ?? "No class"}
+      </span>
+      <LinkDot link={props.link} />
+    </>
+  );
+  return props.onTap ? (
+    <button type="button" class={`top-stat${inClass ? "" : " zero"}`} aria-label={`${words}. Attendance`} onClick={props.onTap}>
+      {inside}
+    </button>
+  ) : (
+    <div class={`top-stat${inClass ? "" : " zero"}`} role="group" aria-label={words}>
+      {inside}
+    </div>
   );
 }
 

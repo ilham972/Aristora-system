@@ -1,6 +1,8 @@
 // Attendance: sign students in as they arrive. Pick the grade, tap the name; the time goes in the register,
-// and the student appears in Correction, Theory and Evaluation.
+// and the student appears in Correction, Theory and Evaluation. Since 30 Oct 2026 it is a full-page sheet: from
+// Correction (tap the grade, then + before its names: that grade only), or the count by the clock (any grade).
 
+import type { ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
@@ -9,7 +11,7 @@ import { mutate } from "./backend";
 import { CallsBand } from "./correction";
 import type { View } from "./derive";
 import { useQuery } from "./live";
-import { act, may, now as serverNow, toast, type Board, type Role } from "./store";
+import { act, may, now as serverNow, toast, type Board } from "./store";
 import { Empty, GRADES, GradeRow, Sheet, useGrade } from "./ui";
 
 type Visit = { studentId: Id<"students">; inAt: number; outAt: number | null };
@@ -21,12 +23,26 @@ const WHERE: Record<View["where"], string> = { hall: "in the hall", theory: "in 
 const setPresent = (id: Id<"students">, present: boolean, undo = false) =>
   act(() => mutate(api.students.setPresent, { id, present, by: "attendance", ...(undo ? { undo: true } : {}) }));
 
-export function Attendance(props: { board: Board; views: View[]; now: number; role: Role }) {
-  const { board, views, now, role } = props;
-  const [grade, setGrade] = useGrade(
+export function AttendanceSheet(props: {
+  board: Board;
+  views: View[];
+  now: number;
+  /** Open on this grade (Correction's). */
+  grade?: number | null;
+  /** That grade only (from Correction's +: the grade was picked there): no row of grades. */
+  only?: boolean;
+  onClose: () => void;
+}) {
+  const { board, views, now } = props;
+  const [stored, store] = useGrade(
     "aristora.attendanceGrade",
     () => GRADES.find((g) => views.some((v) => v.s.grade === g)) ?? GRADES[0],
   );
+  const [grade, setGradeHere] = useState<number>(props.grade ?? stored);
+  const setGrade = (g: number) => {
+    setGradeHere(g);
+    store(g);
+  };
   const [busy, setBusy] = useState<string[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const visits = useQuery<Visit[]>(api.attendance.day, { day: slDay(now) });
@@ -54,75 +70,89 @@ export function Attendance(props: { board: Board; views: View[]; now: number; ro
     }
   };
 
+  const inClass = views.filter(isIn).length;
+  const sheet = (body: ComponentChildren) => (
+    <Sheet
+      full
+      title={props.only ? `Attendance · Grade ${grade}` : "Attendance"}
+      sub={props.only ? undefined : `${inClass} in class`}
+      onClose={props.onClose}
+    >
+      <div class="attendance">{body}</div>
+    </Sheet>
+  );
+
   if (views.length === 0) {
-    return (
-      <main class="page">
-        <Empty title="No students yet">
-          {may("students") ? "Add your students in Settings (the gear at the top) → Students." : "The owner adds them in Settings."}
-        </Empty>
-      </main>
+    return sheet(
+      <Empty title="No students yet">
+        {may("students") ? "Add your students in Settings (the gear at the top) → Students." : "The owner adds them in Settings."}
+      </Empty>,
     );
   }
 
   return (
-    <main class="page attendance">
-      <div class="stick att-top">
-        {role === "correction" && <CallsBand board={board} views={views} now={now} />}
-        <GradeRow
-          value={grade}
-          onPick={setGrade}
-          label="Grade"
-          count={(g) => {
-            const all = ofGrade(g);
-            const n = all.filter(isIn).length;
-            if (all.length === 0) return { text: "–", aria: "no students" };
-            return { text: `${n}/${all.length}`, aria: `${n} of ${all.length} here`, some: n > 0 };
-          }}
-        />
-      </div>
-      <p class="summary">
-        <span class="strong">
-          Grade {grade}: {here} of {list.length} here
-        </span>
-        <span>Tap a name when the student arrives.</span>
-      </p>
+    <>
+      {sheet(
+        <>
+          {may("correction") && <CallsBand board={board} views={views} now={now} />}
+          {!props.only && (
+            <GradeRow
+              value={grade}
+              onPick={setGrade}
+              label="Grade"
+              count={(g) => {
+                const all = ofGrade(g);
+                const n = all.filter(isIn).length;
+                if (all.length === 0) return { text: "–", aria: "no students" };
+                return { text: `${n}/${all.length}`, aria: `${n} of ${all.length} here`, some: n > 0 };
+              }}
+            />
+          )}
+          <p class="summary">
+            <span class="strong">
+              Grade {grade}: {here} of {list.length} here
+            </span>
+            <span>Tap a name when the student arrives; tap a green one when he goes home.</span>
+          </p>
 
-      {list.length === 0 ? (
-        <Empty title={`No Grade ${grade} students yet`}>
-          {may("students") ? "Add them in Settings → Students." : "The owner adds them in Settings."}
-        </Empty>
-      ) : (
-        <ul class="att-list" aria-label={`Grade ${grade} students`}>
-          {list.map((v) => {
-            const inNow = isIn(v);
-            const wait = !inNow && busy.includes(v.s._id);
-            const left = inNow ? undefined : leftAt.get(v.s._id);
-            const since = v.s.lastInAt;
-            const tone = inNow ? "in" : wait ? "busy" : left ? "left" : "";
-            const time = inNow ? (since ? `✓ ${slClock(since, false)}` : "✓") : wait ? "…" : left ? `left ${slClock(left, false)}` : "";
-            const label = inNow
-              ? `${v.s.name}: here${since ? ` since ${slClock(since)}` : ""}`
-              : wait
-                ? `${v.s.name}: signing in`
-                : left
-                  ? `${v.s.name}: went home at ${slClock(left)}, tap to sign in again`
-                  : `${v.s.name}: tap to sign in`;
-            return (
-              <li key={v.s._id}>
-                <button
-                  type="button"
-                  class={`ap ${tone}`}
-                  aria-label={label}
-                  aria-pressed={inNow}
-                  onClick={() => (inNow ? setOpenId(v.s._id) : void signIn(v))}
-                >
-                  <span class="ap-n">{v.s.name}</span>
-                  {time && <span class="ap-t">{time}</span>}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+          {list.length === 0 ? (
+            <Empty title={`No Grade ${grade} students yet`}>
+              {may("students") ? "Add them in Settings → Students." : "The owner adds them in Settings."}
+            </Empty>
+          ) : (
+            <ul class="att-list" aria-label={`Grade ${grade} students`}>
+              {list.map((v) => {
+                const inNow = isIn(v);
+                const wait = !inNow && busy.includes(v.s._id);
+                const left = inNow ? undefined : leftAt.get(v.s._id);
+                const since = v.s.lastInAt;
+                const tone = inNow ? "in" : wait ? "busy" : left ? "left" : "";
+                const time = inNow ? (since ? `✓ ${slClock(since, false)}` : "✓") : wait ? "…" : left ? `left ${slClock(left, false)}` : "";
+                const label = inNow
+                  ? `${v.s.name}: here${since ? ` since ${slClock(since)}` : ""}`
+                  : wait
+                    ? `${v.s.name}: signing in`
+                    : left
+                      ? `${v.s.name}: went home at ${slClock(left)}, tap to sign in again`
+                      : `${v.s.name}: tap to sign in`;
+                return (
+                  <li key={v.s._id}>
+                    <button
+                      type="button"
+                      class={`ap ${tone}`}
+                      aria-label={label}
+                      aria-pressed={inNow}
+                      onClick={() => (inNow ? setOpenId(v.s._id) : void signIn(v))}
+                    >
+                      <span class="ap-n">{v.s.name}</span>
+                      {time && <span class="ap-t">{time}</span>}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </>,
       )}
 
       {open && (
@@ -169,6 +199,6 @@ export function Attendance(props: { board: Board; views: View[]; now: number; ro
           )}
         </Sheet>
       )}
-    </main>
+    </>
   );
 }

@@ -40,8 +40,8 @@ const LEGEND: Record<Role, ComponentChildren> = {
   correction: (
     <>
       Theory book: tap a circle <b class="k-right">once ✓ right</b>, <b class="k-wrong">twice ✗ wrong</b>,{" "}
-      <b class="k-slip">3 times ↻ slip</b>; it saves when you stop. Workbook papers: mark them in <b>Focus</b> (the target at
-      the top). Tap a name for his buttons (going home, Theory, Move) and his whole book.
+      <b class="k-slip">3 times ↻ slip</b>; it saves when you stop. Workbook papers: mark them in <b>Correction</b> (the page
+      with a tick, at the top). Tap a name for his buttons (going home, Theory, Move) and his whole book.
     </>
   ),
   theory: (
@@ -70,7 +70,7 @@ export function ClassPage(props: { board: Board; views: View[]; now: number; job
   const [ending, setEnding] = useState(false);
   const [report, setReport] = useState<Report | null>(null);
   const canCorrect = may("correction");
-  // Only students signed in on Attendance are in the register; the grade pills show the grades in class now.
+  // Only students signed in (Attendance) are in the register; the grade pills show the grades in class now.
   const inClass = props.views.filter((v) => v.where !== "absent");
   const grades = gradesOf(inClass);
   const [grade, setGrade] = useGradeFilter(job, grades);
@@ -133,10 +133,10 @@ export function ClassPage(props: { board: Board; views: View[]; now: number; job
       {inClass.length === 0 ? (
         <div class="empty">
           <p class="empty-title">Nobody is signed in yet</p>
-          <p>Students show here once they are signed in on Attendance.</p>
+          <p>Students show here once they are signed in (Correction: + by the grades).</p>
           {canCorrect && (
             <button type="button" class="btn primary" onClick={props.onAttendance}>
-              Open Attendance
+              Sign students in
             </button>
           )}
         </div>

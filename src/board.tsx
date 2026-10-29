@@ -1,6 +1,6 @@
 // The class register: one row per student, whatever his grade and stage. Left: the name and what he is doing now
 // (one colour, the same for everyone who looks). Right: what this teacher can tap right now (theory-book circles, ◎ to
-// teach, lost marks to explain; workbook papers are marked in Focus). Below: his grade and unit, who he needs next
+// teach, lost marks to explain; workbook papers are marked in Correction). Below: his grade and unit, who he needs next
 // ("Theory D ~8m", "Eval 2": a soft pulse when it is now or within 5 minutes), and his whole book as a thin strip.
 // Tap the name or the strip to open it: his buttons first (going home, Theory, back in the hall, Move), then the book.
 
@@ -330,7 +330,7 @@ export function Register(props: {
 /** Nobody signed in: what the room tabs show instead of an empty register. */
 export function NobodyHere() {
   return (
-    <Empty title="Nobody is signed in yet">Students show here once Correction signs them in on Attendance.</Empty>
+    <Empty title="Nobody is signed in yet">Students show here once Correction signs them in.</Empty>
   );
 }
 
@@ -454,7 +454,7 @@ function Actions(props: { role: Role; v: View; now: number; onTheory: () => void
       );
     }
     if (role === "correction") {
-      // Papers are marked in Focus; where he goes next is on every row ("Eval 2", "Theory 1"), for everyone.
+      // Papers are marked in Correction (the Focus page); where he goes next is on every row ("Eval 2", "Theory 1"), for everyone.
       return <span class="reg-none">{ms.finished ? "Workbook finished" : ""}</span>;
     }
     return <span class="reg-none">{ms.reteach ? `Theory: ${theoryWords(ms)}` : ""}</span>;

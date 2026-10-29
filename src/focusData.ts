@@ -70,6 +70,32 @@ export function focusPills(views: View[]): Pill[] {
   return [...here, ...gone].sort(order).map(pill);
 }
 
+/**
+ * The grade whose names show (one grade at a time, one line, + first to sign its students in): the one chosen on this
+ * phone, while that grade has students at all (even if none is in yet: + is how they come in); else the youngest
+ * grade with someone in, else the youngest grade with students; null when there are no students.
+ */
+export function focusGrade(chosen: number | null, here: number[], all: number[]): number | null {
+  if (chosen !== null && all.includes(chosen)) return chosen;
+  if (here.length) return Math.min(...here);
+  return all.length ? Math.min(...all) : null;
+}
+
+/** Red and amber per grade (what waits for the corrector there): the badges on the fixed grade pills 6–11. */
+export function gradeNeeds(pills: Pill[], needs: Map<string, "red" | "amber">): Map<number, { red: number; amber: number }> {
+  const out = new Map<number, { red: number; amber: number }>();
+  for (const p of pills) {
+    const g = p.v.s.grade;
+    if (typeof g !== "number") continue;
+    const c = out.get(g) ?? { red: 0, amber: 0 };
+    const n = needs.get(p.v.s._id);
+    if (n === "red") c.red++;
+    else if (n === "amber") c.amber++;
+    out.set(g, c);
+  }
+  return out;
+}
+
 /** Why there is nothing to mark for him now, in a few words. */
 export function nothingWhy(v: View): string {
   const need = v.st?.needs ?? v.ms?.needs ?? [];

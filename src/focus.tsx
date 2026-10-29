@@ -1,10 +1,14 @@
-// The Focus page: one person corrects, fast, without marks landing on the wrong question or the wrong student. It is
-// the Correction job (same calls, same alerts) and saves exactly like the Class page's correct sheet, so Evaluation and
-// Theory see nothing different. The rules and lists are in src/focusData.ts, the saving as you go in src/focusSave.ts.
+// The Correction page (it was called Focus; the code keeps that name): one person corrects, fast, without marks landing
+// on the wrong question or the wrong student. It is the Correction job (same calls, same alerts) and saves exactly like
+// the Class page's correct sheet, so Evaluation and Theory see nothing different. The rules and lists are in
+// src/focusData.ts, the saving as you go in src/focusSave.ts.
 //
-// One page (30 Oct 2026, after a real class: students on different stages, units and levels):
-// 1. Names on top: tiny pills A–Z that never move (the open one dark), tiny grade pills under them. Tapping another
-//    name keeps every mark of the open paper (a level marked to the end saves itself) and opens his. No Stop.
+// One page (30 Oct 2026, after a real class: students on different stages, units and levels). Every row is ONE line
+// that scrolls sideways (src/hrow.tsx), so nothing below it ever moves:
+// 1. Names on top: one grade at a time, + first (that grade's Attendance, full page), then tiny pills A–Z (the open
+//    one dark, kept in view by itself). Under them the grades 6–11, always in the same places (no All), each with
+//    "here/total" and what waits there. Tapping another name keeps every mark of the open paper (a level marked to
+//    the end saves itself) and opens his. No Stop.
 // 2. His paper: the name huge; his stage and unit (tap: Fighter or Master, then every unit of his grade by number and
 //    Tamil name; one tap moves him); his card (Going home, Needs theory, Move and the marks table, as on Class).
 // 3. Workbook (Master): the level bar (every level; tap an old one to check or change its marks). The level opens by
@@ -14,11 +18,11 @@
 //    last one, the unit's marks (to write on the marks sheet in his book).
 // 4. Theory book (Fighter): the questions he can do now, in book order, one at a time: ✓ right, ✗ wrong, ↻ slip,
 //    saved like the Class rows' circles (marks.setMany).
-// 5. "Saved on this phone" (↶ by the grades): Take back within 30 minutes (a level: workbook.uncorrect, its marks then
+// 5. "Saved on this phone" (↶ after the grades): Take back within 30 minutes (a level: workbook.uncorrect, its marks then
 //    wait for the right student; theory marks: put back as they were).
 
 import type { ComponentChildren } from "preact";
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { PART_NAME, partOf, type MasterLevel } from "../convex/lib/book";
@@ -39,9 +43,11 @@ import {
   draftOf,
   extendQueue,
   fighterQueue,
+  focusGrade,
   focusNeeds,
   focusPills,
   fromDraft,
+  gradeNeeds,
   itemsOf,
   levelLook,
   markedParts,
@@ -68,7 +74,9 @@ import {
   type Pill,
 } from "./focusData";
 import { dropDraft, flushFocus, queueDraft, setFighterMark } from "./focusSave";
-import { GradePills, gradesOf, type GradeFilter } from "./grades";
+import { AttendanceSheet } from "./attendance";
+import { gradesOf } from "./grades";
+import { HRow } from "./hrow";
 import { useQuery } from "./live";
 import { MasterBook, TheorySheet } from "./master";
 import { MoveSheet } from "./move";
@@ -87,7 +95,7 @@ import {
   type Stage,
   type Unit,
 } from "./store";
-import { Empty, Sheet } from "./ui";
+import { Empty, GRADES, Sheet } from "./ui";
 
 // ---- What the page remembers while the app is open (switching pages and back keeps the open paper) ----
 
@@ -230,17 +238,20 @@ function remember(s: Saved) {
 
 const GRADE_KEY = "aristora.grade.focus";
 
-/** This phone's grade filter for Focus, remembered (its own, not the Class page's). */
-function useFocusGrade(grades: number[]): [GradeFilter, (g: GradeFilter) => void] {
-  const [chosen, setChosen] = useState<GradeFilter>(() => {
+/**
+ * The grade whose names show on this phone, remembered (any grade with students, even before anyone of it is in).
+ * The one shown is always the one remembered: the names never jump to another grade by themselves.
+ */
+function useFocusGrade(here: number[], all: number[]): [number | null, (g: number) => void] {
+  const [chosen, setChosen] = useState<number | null>(() => {
     try {
       const raw = localStorage.getItem(GRADE_KEY);
-      return raw && /^\d+$/.test(raw) ? Number(raw) : "all";
+      return raw && /^\d+$/.test(raw) ? Number(raw) : null;
     } catch {
-      return "all";
+      return null;
     }
   });
-  const set = (g: GradeFilter) => {
+  const set = (g: number) => {
     setChosen(g);
     try {
       localStorage.setItem(GRADE_KEY, String(g));
@@ -248,7 +259,11 @@ function useFocusGrade(grades: number[]): [GradeFilter, (g: GradeFilter) => void
       /* private mode */
     }
   };
-  return [chosen !== "all" && grades.length > 1 && grades.includes(chosen) ? chosen : "all", set];
+  const grade = focusGrade(chosen, here, all);
+  useEffect(() => {
+    if (grade !== null && grade !== chosen) set(grade);
+  }, [grade]);
+  return [grade, set];
 }
 
 // ---- Opening, leaving and saving papers ----
@@ -548,9 +563,9 @@ async function takeBackMarks(s: SavedMarks): Promise<boolean> {
 
 // ---- The page ----
 
-type SheetName = "unit" | "card" | "move" | "theory" | "saved";
+type SheetName = "unit" | "card" | "move" | "theory" | "saved" | "attendance";
 
-export function Focus(props: { board: Board; views: View[]; now: number; onAttendance: () => void }) {
+export function Focus(props: { board: Board; views: View[]; now: number }) {
   const { board, views, now } = props;
   latestViews = views;
   const drafts = useQuery<Draft[]>(api.focus.drafts, {});
@@ -564,9 +579,14 @@ export function Focus(props: { board: Board; views: View[]; now: number; onAtten
   };
   const pills = focusPills(views);
   const grades = gradesOf(pills.map((p) => p.v));
-  const [grade, setGrade] = useFocusGrade(grades);
-  const shown = grade === "all" ? pills : pills.filter((p) => p.v.s.grade === grade);
+  const [grade, setGrade] = useFocusGrade(grades, gradesOf(views));
+  const shown = pills.filter((p) => p.v.s.grade === grade);
   const v = paper ? (views.find((x) => x.s._id === paper.studentId) ?? null) : null;
+  // His paper opened from elsewhere (Saved, a level from his card): his grade's names show, his own one dark.
+  const paperGrade = v?.s.grade;
+  useEffect(() => {
+    if (typeof paperGrade === "number" && paperGrade !== grade) setGrade(paperGrade);
+  }, [paper?.studentId]);
   const waitingCarry = carry && now - carry.at <= CARRY_MS ? carry : null;
 
   // His paper no longer fits him (moved to another book from another phone, or removed): open what fits now.
@@ -609,24 +629,41 @@ export function Focus(props: { board: Board; views: View[]; now: number; onAtten
     return () => document.body.classList.remove("fc-marking");
   }, [marking]);
 
-  const inClass = views.some((x) => x.where !== "absent");
+  // The names and the grades are pinned under the top bar (they never scroll away); toasts go just below them.
+  const stick = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = stick.current;
+    if (!el) return;
+    const set = () => document.documentElement.style.setProperty("--fc-stick-h", `${el.offsetHeight}px`);
+    set();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   return (
     <main class="page fc-page">
-      <div class="stick">
+      <div class="stick fc-stick" ref={stick}>
         <CallsBand board={board} views={views} now={now} />
+        {views.length > 0 && grade !== null && (
+          <NameBar
+            pills={shown}
+            grade={grade}
+            openId={paper?.studentId}
+            drafts={drafts}
+            onPick={(x) => openFor(x, now)}
+            onAdd={() => setSheet("attendance")}
+          />
+        )}
+        {views.length > 0 && (
+          <GradeBar views={views} pills={pills} needs={focusNeeds(views)} grade={grade} onPick={setGrade} saved={saved.length} onSaved={() => setSheet("saved")} />
+        )}
       </div>
       {views.length === 0 ? (
         <Empty title="No students yet">
           {may("students") ? "Open settings (the gear at the top) to add your students." : "The owner adds students in Settings."}
         </Empty>
-      ) : !inClass && pills.length === 0 ? (
-        <div class="empty">
-          <p class="empty-title">Nobody is signed in yet</p>
-          <p>Students show here once they are signed in on Attendance.</p>
-          <button type="button" class="btn primary" onClick={props.onAttendance}>
-            Open Attendance
-          </button>
-        </div>
       ) : (
         <>
           {waitingCarry && (
@@ -646,32 +683,27 @@ export function Focus(props: { board: Board; views: View[]; now: number; onAtten
               </button>
             </div>
           )}
-          <NameBar pills={shown} grouped={grade === "all" && grades.length > 1} openId={paper?.studentId} drafts={drafts} onPick={(x) => openFor(x, now)} />
-          <div class="fc-tools">
-            <GradePills tiny views={pills.map((p) => p.v)} needs={focusNeeds(views)} filter={grade} onPick={setGrade} />
-            {saved.length > 0 && (
-              <button type="button" class="fc-savedbtn" aria-label={`Saved on this phone: ${saved.length}`} onClick={() => setSheet("saved")}>
-                <span aria-hidden="true">↶</span> Saved
-              </button>
-            )}
-          </div>
           {paper && v ? (
             <PaperView key={`${paper.studentId}`} v={v} paper={paper} drafts={drafts} now={now} onSheet={setSheet} />
-          ) : (
+          ) : shown.length > 0 ? (
             <p class="fc-hint">Tap the name on the paper.</p>
-          )}
+          ) : null}
           {!paper && (
             <p class="muted small fc-help">
               Tap a name: his paper opens at the level to correct. One tap for each question (the big green button is full
               marks, a number gives fewer, <b>?</b> = blank; a question in parts: each part's marks, or <b>?</b> for a part
               left blank). Tapping another name keeps every mark; a level marked to the end saves itself. Tap a level on the
-              bar to open it (an old one: check or change its marks). His unit at the top changes his stage or unit.
+              bar to open it (an old one: check or change its marks). His unit at the top changes his stage or unit. One
+              grade's names at a time: tap the grade, then <b>+</b> to sign its students in.
             </p>
           )}
         </>
       )}
 
       {sheet === "saved" && <SavedSheet now={now} onClose={() => setSheet(null)} />}
+      {sheet === "attendance" && grade !== null && (
+        <AttendanceSheet board={board} views={views} now={now} grade={grade} only onClose={() => setSheet(null)} />
+      )}
       {v && sheet === "unit" && <StageUnitSheet v={v} onClose={() => setSheet(null)} />}
       {v && sheet === "card" && (
         <Sheet title={v.s.name} sub={tagOf(v.s, v.unit)} onClose={() => setSheet(null)}>
@@ -703,50 +735,118 @@ const TONE_WORDS: Record<string, string> = {
   home: "gone home, levels to correct",
 };
 
-/** Tiny name pills, A–Z (grouped by grade under All): the one open is dark. */
-function NameBar(props: { pills: Pill[]; grouped: boolean; openId?: string; drafts: Draft[] | undefined; onPick: (v: View) => void }) {
+/**
+ * One grade's row: + first, always in the same place (that grade's Attendance), then its tiny name pills A–Z in ONE
+ * line that scrolls sideways: the open one is dark and kept in view; a red or amber dot on an edge says a student who
+ * waits for the corrector is hidden that way.
+ */
+function NameBar(props: {
+  pills: Pill[];
+  grade: number;
+  openId?: string;
+  drafts: Draft[] | undefined;
+  onPick: (v: View) => void;
+  onAdd: () => void;
+}) {
   const { pills, drafts } = props;
   const marking = (v: View) => !!v.mb && (drafts ?? []).some((d) => d.studentId === v.s._id && d.unitId === v.s.unitId && Object.keys(d.q).length > 0);
   return (
-    <nav class="fc-names" aria-label="Students: tap the name on the paper">
-      {pills.flatMap((p, i) => {
-        const g = p.v.s.grade;
-        const head = props.grouped && (i === 0 || pills[i - 1].v.s.grade !== g);
-        const on = p.v.s._id === props.openId;
-        const d = marking(p.v);
-        const words = [p.tone ? TONE_WORDS[p.tone] : "", p.waiting > 1 ? `${p.waiting} levels handed in` : "", d ? "marked part of the way" : ""]
-          .filter(Boolean)
-          .join(", ");
-        const button = (
-          <button
-            key={p.v.s._id}
-            type="button"
-            class={`fc-nm${p.tone ? ` ${p.tone}` : ""}${on ? " on" : ""}${d ? " d" : ""}`}
-            aria-pressed={on}
-            aria-label={`${p.v.s.name}${words ? `: ${words}` : ""}`}
-            onClick={() => props.onPick(p.v)}
-          >
-            {p.v.s.name}
-            {p.waiting > 1 && (
-              <i class="fc-nm-n" aria-hidden="true">
-                {p.waiting}
-              </i>
-            )}
-          </button>
-        );
-        // A grade's number stays with its first name (never alone at the end of a line).
-        return head
-          ? [
-              <span key={`g${g}`} class="fc-gl">
-                <span class="fc-g" aria-hidden="true">
-                  {g ?? "?"}
-                </span>
-                {button}
-              </span>,
-            ]
-          : [button];
-      })}
-    </nav>
+    <div class="fc-namerow">
+      <button type="button" class="fc-add" aria-label={`Attendance: Grade ${props.grade}`} onClick={props.onAdd}>
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+      </button>
+      {pills.length === 0 ? (
+        <p class="fc-none">Nobody from Grade {props.grade} is in yet: tap + as they arrive.</p>
+      ) : (
+        <HRow as="nav" class="fc-names" label={`Grade ${props.grade}: tap the name on the paper`} list={props.grade} at={props.openId}>
+          {pills.map((p) => {
+            const on = p.v.s._id === props.openId;
+            const d = marking(p.v);
+            const words = [p.tone ? TONE_WORDS[p.tone] : "", p.waiting > 1 ? `${p.waiting} levels handed in` : "", d ? "marked part of the way" : ""]
+              .filter(Boolean)
+              .join(", ");
+            return (
+              <button
+                key={p.v.s._id}
+                type="button"
+                class={`fc-nm${p.tone ? ` ${p.tone}` : ""}${on ? " on" : ""}${d ? " d" : ""}`}
+                data-u={p.tone === "red" || p.tone === "amber" ? p.tone : undefined}
+                aria-pressed={on}
+                aria-label={`${p.v.s.name}${words ? `: ${words}` : ""}`}
+                onClick={() => props.onPick(p.v)}
+              >
+                {p.v.s.name}
+                {p.waiting > 1 && (
+                  <i class="fc-nm-n" aria-hidden="true">
+                    {p.waiting}
+                  </i>
+                )}
+              </button>
+            );
+          })}
+        </HRow>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Under the names: the grades 6–11, always in the same places (no All: one grade's names at a time), each with how
+ * many are in out of its students ("9/10", as on Attendance) and what waits for the corrector there; a grade with no
+ * students at all is pale. ↶ Saved at the end.
+ */
+function GradeBar(props: {
+  views: View[];
+  pills: Pill[];
+  needs: Map<string, "red" | "amber">;
+  grade: number | null;
+  onPick: (g: number) => void;
+  saved: number;
+  onSaved: () => void;
+}) {
+  const per = gradeNeeds(props.pills, props.needs);
+  return (
+    <div class="fc-tools">
+      <nav class="grade-pills fc-grades" aria-label="Show one grade">
+        {GRADES.map((g) => {
+          const all = props.views.filter((x) => x.s.grade === g);
+          const here = all.filter((x) => x.where !== "absent").length;
+          const c = per.get(g);
+          const on = props.grade === g;
+          const words = all.length
+            ? `Grade ${g}: ${here} of ${all.length} here${c?.red ? `, ${c.red} need you now` : c?.amber ? `, ${c.amber} handed in` : ""}`
+            : `Grade ${g}: no students`;
+          return (
+            <button
+              key={g}
+              type="button"
+              class={`gp${on ? " on" : ""}${all.length ? "" : " none"}${here ? " some" : ""}`}
+              aria-pressed={on}
+              aria-label={words}
+              disabled={all.length === 0}
+              onClick={() => props.onPick(g)}
+            >
+              <b>{g}</b>
+              <small>{all.length ? `${here}/${all.length}` : "–"}</small>
+              {c?.red ? <i class="gp-badge red">{c.red}</i> : c?.amber ? <i class="gp-badge amber">{c.amber}</i> : null}
+            </button>
+          );
+        })}
+      </nav>
+      {/* Always there (pale until the first save), so the grades never move. */}
+      <button
+        type="button"
+        class="fc-savedbtn"
+        disabled={props.saved === 0}
+        aria-label={props.saved ? `Saved on this phone: ${props.saved}` : "Nothing saved on this phone yet"}
+        onClick={props.onSaved}
+      >
+        <span aria-hidden="true">↶</span>
+        <span class="fc-savedw">Saved</span>
+      </button>
+    </div>
   );
 }
 
@@ -967,8 +1067,9 @@ function LevelBar(props: { v: View; open: number | null; drafts: Draft[] | undef
   const mb = v.mb!;
   const ms = v.ms!;
   const newPart = (i: number) => i > 0 && mb.parts.some((p) => p.from === mb.levels[i].from);
+  // One line that scrolls sideways: the open level stays in the middle (the ones after it in view).
   return (
-    <div class={`fc-lvbar${mb.levels.length > 12 ? " many" : ""}`} role="group" aria-label="Levels">
+    <HRow class="fc-lvbar" label="Levels" list={`${v.s._id}:${v.s.unitId}`} at={props.open} idle="end">
       {mb.levels.map((l, i) => {
         const look = levelLook(v, l, props.drafts);
         const pct = ms.byLevel[String(l.n)]?.pct ?? null;
@@ -988,7 +1089,7 @@ function LevelBar(props: { v: View; open: number | null; drafts: Draft[] | undef
           </button>
         );
       })}
-    </div>
+    </HRow>
   );
 }
 
@@ -1173,6 +1274,31 @@ function KeyText(props: { text: string }) {
   return <>{boldRuns(props.text).map(([s, b], i) => (b ? <b key={i}>{s}</b> : s))}</>;
 }
 
+/**
+ * The question on screen (or the level's marks) stays in view between the pinned names and the pad: on a short phone
+ * the paper scrolls by itself, just enough and never past the card's top. A new paper starts from the top.
+ */
+function useCardInView(key: unknown) {
+  const opened = useRef(false);
+  useLayoutEffect(() => {
+    const fresh = !opened.current;
+    opened.current = true;
+    if (fresh) window.scrollTo(0, 0);
+    const card = document.querySelector<HTMLElement>(".fc-paper .fc-card, .fc-paper .fc-sum");
+    if (!card) return;
+    const stick = document.querySelector<HTMLElement>(".fc-stick");
+    const pads = document.querySelectorAll<HTMLElement>(".fc-paper .fc-pad");
+    const pad = pads[pads.length - 1];
+    const top = (stick ? stick.getBoundingClientRect().bottom : 0) + 6;
+    const bottom = (pad ? pad.getBoundingClientRect().top : window.innerHeight) - 6;
+    const r = card.getBoundingClientRect();
+    const dy = r.bottom > bottom || r.top < top ? Math.min(r.bottom - bottom, r.top - top) : 0;
+    if (Math.abs(dy) < 3) return;
+    if (fresh || typeof window.scrollBy !== "function") window.scrollTo(0, window.scrollY + dy);
+    else window.scrollBy({ top: dy, behavior: "smooth" });
+  }, [key]);
+}
+
 function Marking(props: {
   v: View;
   paper: MasterPaper;
@@ -1183,6 +1309,9 @@ function Marking(props: {
 }) {
   const { v, paper, level, keyQ, lock } = props;
   const each = marksOfLevel(v, level);
+  const qs = questionsOf(level);
+  const at = Math.min(paper.at, qs.length);
+  useCardInView(`${level.n}:${at}`);
   if (!each) {
     return (
       <Empty title="This workbook doesn't list each question's marks">
@@ -1191,8 +1320,6 @@ function Marking(props: {
       </Empty>
     );
   }
-  const qs = questionsOf(level);
-  const at = Math.min(paper.at, qs.length);
   const answers = new Map((keyQ?.answers ?? []).map((a) => [a.q, a]));
   const go = (i: number) => setPaper({ ...paper, at: i });
   const marked = qs.filter((q) => paper.given[q]);
@@ -1237,7 +1364,7 @@ function Marking(props: {
 function Strip(props: { qs: number[]; each: number[]; given: Record<number, Given>; at: number; onGo: (i: number) => void }) {
   const { qs, each, given, at } = props;
   return (
-    <ol class="fc-strip" aria-label="Questions of this level">
+    <HRow as="ol" class="fc-strip" label="Questions of this level" list={qs[0]} at={at}>
       {qs.map((q, i) => {
         const g = given[q];
         const cls = !g ? "" : g.dk ? " dk" : g.g === each[i] ? " full" : g.g === 0 ? " zero" : " part";
@@ -1257,7 +1384,7 @@ function Strip(props: { qs: number[]; each: number[]; given: Record<number, Give
           </li>
         );
       })}
-    </ol>
+    </HRow>
   );
 }
 
@@ -1640,6 +1767,7 @@ function FighterPaperView(props: { v: View; paper: FighterPaper; head: Component
   const lock = useRef(0);
   const qs = paper.qs;
   const at = Math.min(paper.at, qs.length);
+  useCardInView(at);
   // Questions that opened meanwhile (the past papers, once every ladder question was tried) join at the end.
   useEffect(() => {
     if (at < qs.length || openPaper !== paper) return;
@@ -1688,13 +1816,9 @@ function FighterStrip(props: { v: View; paper: FighterPaper; at: number }) {
   const { v, paper, at } = props;
   const qs = paper.qs;
   const f = v.f!;
-  const SHOW = 10;
-  const start = Math.max(0, Math.min(at - 3, qs.length - SHOW));
-  const end = Math.min(qs.length, start + SHOW);
   return (
-    <ol class="fc-strip" aria-label="His questions">
-      {qs.slice(start, end).map((q, k) => {
-        const i = start + k;
+    <HRow as="ol" class="fc-strip" label="His questions" list={v.s._id} at={at}>
+      {qs.map((q, i) => {
         const s = v.marks[String(q)]?.s;
         // Only what this paper changed counts as marked here (a redo still shows how it was, faintly).
         const mine = q in paper.base && (paper.base[q]?.s ?? null) !== (s ?? null);
@@ -1714,12 +1838,7 @@ function FighterStrip(props: { v: View; paper: FighterPaper; at: number }) {
           </li>
         );
       })}
-      {end < qs.length && (
-        <li class="fc-more" aria-hidden="true">
-          +{qs.length - end}
-        </li>
-      )}
-    </ol>
+    </HRow>
   );
 }
 

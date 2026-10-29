@@ -319,7 +319,7 @@ function StudentNumbers(props: { views: View[]; removed: Removed[]; now: number 
                 <span class="st-who">
                   <span>{s.name}</span>
                   <small>
-                    Grade {s.grade ?? "?"} · {s.lastInAt ? `last came ${slDate(s.lastInAt)}` : "never signed in on Attendance"}
+                    Grade {s.grade ?? "?"} · {s.lastInAt ? `last came ${slDate(s.lastInAt)}` : "never signed in"}
                   </small>
                 </span>
                 <b class="away-note">{days} days</b>
@@ -649,7 +649,7 @@ function Alerts(props: { views: View[] }) {
         </span>
       </label>
       <p class="note">
-        Alerts follow the tab that is open. Correction and Focus hear calls. Theory and Evaluation hear a knock when a student runs out of
+        Alerts follow the page that is open. Correction hears calls (and Class, on a Correction phone). Theory and Evaluation hear a knock when a student runs out of
         work, and Evaluation hears "Theory wants Kumar now".
       </p>
 
@@ -889,7 +889,7 @@ const TAB_NAMES: Record<Role, string> = { correction: "Correction", theory: "The
 const EXTRA_NAMES: Record<Extra, string> = { students: "Students", books: "Books", reports: "Reports and History" };
 /** What each job opens (everyone has Class, at the top). */
 const TAB_HELP: Record<Role, string> = {
-  correction: "Attendance, Focus (marking papers), sending students to the rooms",
+  correction: "the Correction page at the top (marking papers, + to sign students in), sending students to the rooms",
   theory: "the Theory page (bottom)",
   evaluation: "the Evaluation page (bottom)",
 };
