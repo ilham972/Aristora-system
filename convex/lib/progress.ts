@@ -74,7 +74,7 @@ export function summarizeMaster(m: MState, book: MasterData, today: string, visi
     if (at) {
       done++;
       if (slDay(at) === today) todayN++;
-    }
+    } else if (lv?.pre) done++; // done on paper before the app: done, but not today's work
     seen(lv?.done);
     seen(lv?.fixed);
     marks.push(lv?.fixed ? (st.byLevel[String(l.n)]?.pct ?? 100) : null);

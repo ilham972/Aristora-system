@@ -7,25 +7,34 @@ import { computeMaster, type MState } from "../convex/lib/master";
 import { computeStatus, type Marks } from "../convex/lib/status";
 import type { View } from "../src/derive";
 import {
+  autoLevel,
   beforeOf,
+  blankWords,
   candidates,
   CARRY_MS,
   carryLevel,
   draftOf,
   extendQueue,
   fighterQueue,
-  focusLists,
   focusNeeds,
+  focusPills,
   fromDraft,
   itemsOf,
+  levelLook,
   markedParts,
+  nextBook,
   nextIndex,
+  nextOpen,
   nothingWhy,
   openLevels,
   questionsOf,
   resumeAt,
   routeOf,
+  sameGiven,
+  savedGiven,
   sumOf,
+  unitDone,
+  unitNo,
   type Carry,
   type Draft,
 } from "../src/focusData";
@@ -77,11 +86,13 @@ const noBook = (name: string) =>
 const allFixed = () => Object.fromEntries(G7U08.levels.map((l) => [String(l.n), { done: 1, fixed: 2, got: l.max }]));
 
 describe("who the Focus tab offers", () => {
-  test("workbook and theory-book students in class with something to mark, A–Z; the rest say why", () => {
-    const lists = focusLists([
+  test("every student in class (any stage, a book or not) by grade then A–Z; then gone home with levels to correct", () => {
+    const allIn = Object.fromEntries(G7U08.levels.map((l) => [String(l.n), { done: l.n }]));
+    const pills = focusPills([
       wb("vimal"),
       wb("Ahamed"),
-      wb("Malik", { "1": { done: 5 } }),
+      wb("Malik", { "1": { done: 5 }, "2": { done: 6 } }),
+      wb("Dry", allIn),
       wb("Done", allFixed()),
       wb("Gone, nothing in", {}, { where: "absent" }),
       wb("Nila", { "3": { done: 7 } }, { where: "absent" }),
@@ -92,14 +103,22 @@ describe("who the Focus tab offers", () => {
       noBook("Zainab"),
       noTheoryBook("Ravi"),
     ]);
-    // A–Z whatever the case; a student in a room still has papers to correct.
-    expect(lists.here.map((v) => v.s.name)).toEqual(["Ahamed", "Kumar", "Malik", "Priya", "vimal"]);
-    expect(lists.gone.map((v) => v.s.name)).toEqual(["Nila"]);
-    expect(lists.noBook.map((v) => v.s.name)).toEqual(["Ravi", "Zainab"]);
-    expect(lists.nothing.map((v) => [v.s.name, nothingWhy(v)])).toEqual([
-      ["Arun", "waits for A theory"],
-      ["Done", "finished"],
+    // Grade 7 (A–Z, then gone home), Grade 9, Grade 11: whatever the case; a student in a room is offered too.
+    expect(pills.map((p) => `${p.v.s.name}${p.tone ? ` ${p.tone}` : ""}${p.waiting ? ` ${p.waiting}` : ""}`)).toEqual([
+      "Ahamed",
+      "Done",
+      "Dry red 8",
+      "Malik amber 2",
+      "Priya",
+      "vimal",
+      "Nila home 1",
+      "Zainab nb",
+      "Arun",
+      "Kumar th",
+      "Ravi nb",
     ]);
+    expect(nothingWhy(th("Arun"))).toBe("waits for A theory");
+    expect(nothingWhy(wb("Done", allFixed()))).toBe("finished");
   });
 
   test("a paper's possible levels: handed in (oldest first), then the one he works on; gone home: handed in only", () => {
@@ -227,5 +246,80 @@ describe("a workbook level marked part of the way (drafts)", () => {
     expect(resumeAt(qs, {})).toBe(0);
     expect(resumeAt(qs, Object.fromEntries(qs.map((q) => [q, { g: 2 }])))).toBe(qs.length); // all marked: the level's marks
     expect(fromDraft(null)).toEqual({ given: {}, parts: {} });
+  });
+});
+
+describe("one page: which level opens, the level bar, the next level after Save", () => {
+  const draft = (name: string, level: number, at: number): Draft => ({ studentId: name, unitId: U08._id, level, q: { [String(level * 10 - 9)]: { g: 2 } }, updatedAt: at });
+
+  test("a level he was marking first, then the oldest handed in, then the one he is on; all corrected: none", () => {
+    const malik = wb("Malik", { "1": { done: 1, fixed: 2, got: 20 }, "3": { done: 9 }, "2": { done: 5 } });
+    expect(autoLevel(malik, [])?.n).toBe(2); // the oldest handed in
+    expect(autoLevel(malik, [draft("Malik", 3, 50), draft("Malik", 4, 40)])?.n).toBe(3); // the latest he was marking
+    expect(autoLevel(wb("Priya", { "1": { done: 1, fixed: 2, got: 20 } }), [])?.n).toBe(2); // the one he is on
+    expect(autoLevel(wb("Done", allFixed()), [])).toBeNull();
+    // Gone home: only what he handed in.
+    expect(autoLevel(wb("Nila", { "1": { done: 5 } }, { where: "absent" }), [])?.n).toBe(1);
+  });
+
+  test("after a save: the next level not corrected (he did two or three without correcting), then one left earlier", () => {
+    const v = wb("Vimal", { "1": { done: 1, fixed: 2, got: 20 }, "3": { done: 3, fixed: 4, got: 20 } });
+    expect(nextOpen(v, 2)?.n).toBe(4); // 3 is corrected: on to 4
+    expect(nextOpen(v, 8)?.n).toBe(2); // nothing after 8: the one left earlier
+    // Levels the server just closed (the board may not show them yet) are skipped.
+    expect(nextOpen(v, 4, [5, 6])?.n).toBe(7);
+    const last = wb("Last", Object.fromEntries(G7U08.levels.filter((l) => l.n < 8).map((l) => [String(l.n), { done: 1, fixed: 2, got: l.max }])));
+    expect(nextOpen(last, 8)).toBeNull();
+    expect(unitDone(last, [8])).toBe(true);
+    expect(unitDone(last)).toBe(false);
+  });
+
+  test("levels done on paper before the app count as done: not opened, not 'on it now'", () => {
+    const v = wb("Priya", { "1": { pre: 9 }, "2": { pre: 9 }, "3": { pre: 9 }, "4": { done: 9, fixed: 9, got: 14 } });
+    expect(autoLevel(v, [])?.n).toBe(5);
+    expect(nextOpen(v, 4)?.n).toBe(5);
+    expect([1, 4, 5, 6].map((n) => levelLook(v, level(n), []))).toEqual(["pre", "fixed", "current", "later"]);
+    expect(levelLook(wb("M", { "2": { done: 5 } }), level(2), [draft("M", 2, 1)])).toBe("draft");
+    expect(levelLook(wb("M", { "2": { done: 5 } }), level(2), [])).toBe("waiting");
+    expect(v.ms!.pre).toBe(3);
+  });
+
+  test("a corrected level opened again shows its saved marks; nothing changed = nothing to save", () => {
+    const q = {
+      "21": { got: 2, max: 2, lost: false, t: 1 },
+      "22": { got: 0, max: 2, lost: true, t: 1, dk: true },
+      "23": { got: 1, max: 2, lost: true, t: 1 },
+    };
+    const v = wb("Malik", { "3": { done: 1, fixed: 2, got: 15 } }, { q });
+    const g = savedGiven(v, level(3));
+    expect([g[21], g[22], g[23]]).toEqual([{ g: 2 }, { g: 0, dk: true }, { g: 1 }]);
+    const qs = questionsOf(level(3));
+    expect(sameGiven(qs, g, { ...g })).toBe(true);
+    expect(sameGiven(qs, g, { ...g, 23: { g: 2 } })).toBe(false);
+    expect(unitNo("U04")).toBe(4);
+    expect(unitNo("U31")).toBe(31);
+  });
+
+  test("'?' on one part: the answered parts keep their marks; it counts, goes to the server and to the draft as such", () => {
+    const qs = [56, 57];
+    const given = { 56: { g: 2, dk: true, dkp: ["ii"] }, 57: { g: 0, dk: true } };
+    expect(sumOf(qs, given)).toBe(2);
+    expect(itemsOf(qs, given)).toEqual([
+      { q: 56, got: 2, dk: true, dkp: ["ii"] },
+      { q: 57, got: 0, dk: true },
+    ]);
+    expect(blankWords(qs, given)).toBe("Q56 (ii), Q57");
+    const d: Draft = { studentId: "V", unitId: U08._id, level: 8, q: { "56": { g: 2, dk: true, dkp: ["ii"], p: [2, 0] } }, updatedAt: 1 };
+    expect(fromDraft(d)).toEqual({ given: { 56: { g: 2, dk: true, dkp: ["ii"] } }, parts: { 56: [2, 0] } });
+  });
+
+  test("a unit finished: the next workbook of that term in book order, Legend after the term's last, nothing outside the terms", () => {
+    const u = (id: string, grade: number, term: number, order: number) => ({ _id: id, grade, term, order });
+    const units = [u("g7u09", 7, 1, 9), u("g7u08", 7, 1, 8), u("g7u10", 7, 2, 10), u("g8u01", 8, 1, 1), u("g9u00", 9, 0, 0)];
+    expect(nextBook(units, units[1])).toEqual({ stage: "master", unit: units[0] });
+    expect(nextBook(units, units[0])).toEqual({ stage: "legend", unit: units[0] });
+    expect(nextBook(units, units[2])).toEqual({ stage: "legend", unit: units[2] });
+    expect(nextBook(units, units[4])).toBeNull();
+    expect(nextBook(units, null)).toBeNull();
   });
 });

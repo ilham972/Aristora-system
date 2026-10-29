@@ -17,7 +17,8 @@ import { EVAL_READY_MS } from "./status";
 
 /**
  * One corrected question. got/max when the workbook knows its marks; lost = it lost marks. x = explained at.
- * th = sent to Theory at (tb = by which tab), tt = Theory taught it at, dk = "?": he couldn't start it.
+ * th = sent to Theory at (tb = by which tab), tt = Theory taught it at, dk = "?": he couldn't start it (the whole
+ * question, 0 marks; or, with dkp, only those parts: the parts he answered keep their marks).
  */
 export interface MQ {
   got?: number;
@@ -29,18 +30,24 @@ export interface MQ {
   tb?: string;
   tt?: number;
   dk?: boolean;
+  dkp?: string[];
 }
 
 /** Waiting for Theory: sent there and not taught yet. */
 export function forTheory(r: MQ | undefined): boolean {
   return !!r?.th && !r.tt;
 }
-/** One level (key = its number): done = handed in (waiting since), fixed = corrected, got = its marks. */
+/**
+ * One level (key = its number): done = handed in (waiting since), fixed = corrected, got = its marks. pre = done on
+ * paper before the app (a later level was handed in or corrected while this one had no record): it counts as done,
+ * with no marks in the app.
+ */
 export interface MLevel {
   done?: number;
   fixed?: number;
   by?: string;
   got?: number;
+  pre?: number;
 }
 export interface MState {
   q: Record<string, MQ>;
@@ -68,6 +75,8 @@ export interface MStatus {
   waiting: MasterLevel[];
   waitingSince: number | null;
   corrected: number;
+  /** Levels done on paper before the app (no marks here). */
+  pre: number;
   /** Question numbers that lost marks and wait for Evaluation (not explained, not sent to Theory). */
   pending: number[];
   /** When the oldest of those was corrected. */
@@ -109,9 +118,12 @@ export function computeMaster(m: MState, book: MasterData): MStatus {
   const parts: Partial<Record<PartId, { got: number; max: number }>> = {};
   const byLevel: Record<string, Score> = {};
 
+  let pre = 0;
   for (const l of levels) {
     const s = m.lv[String(l.n)];
-    if (!s?.done && !current) current = l;
+    const before = !!s?.pre && !s.done && !s.fixed;
+    if (before) pre++;
+    if (!s?.done && !s?.fixed && !before && !current) current = l;
     if (s?.done && !s.fixed) waiting.push(l);
     if (!s?.fixed) continue;
     corrected++;
@@ -138,7 +150,7 @@ export function computeMaster(m: MState, book: MasterData): MStatus {
   }
   waiting.sort((a, b) => (m.lv[String(a.n)]?.done ?? 0) - (m.lv[String(b.n)]?.done ?? 0));
   const waitingSince = waiting.length ? (m.lv[String(waiting[0].n)]?.done ?? null) : null;
-  const finished = levels.length > 0 && corrected === levels.length && pending.length === 0 && theory.length === 0;
+  const finished = levels.length > 0 && corrected + pre === levels.length && pending.length === 0 && theory.length === 0;
   const dry = !finished && current === null;
   const needs: MNeed[] = [];
   if (dry) {
@@ -154,6 +166,7 @@ export function computeMaster(m: MState, book: MasterData): MStatus {
     waiting,
     waitingSince,
     corrected,
+    pre,
     pending,
     pendingAt,
     theory,

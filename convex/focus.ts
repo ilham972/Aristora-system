@@ -42,7 +42,15 @@ async function draftsOf(ctx: MutationCtx, studentId: Doc<"students">["_id"]) {
 export const mark = mutation({
   args: {
     ...base,
-    set: v.array(v.object({ q: v.number(), g: v.number(), dk: v.optional(v.boolean()), p: v.optional(v.array(v.number())) })),
+    set: v.array(
+      v.object({
+        q: v.number(),
+        g: v.number(),
+        dk: v.optional(v.boolean()),
+        p: v.optional(v.array(v.number())),
+        dkp: v.optional(v.array(v.string())),
+      }),
+    ),
     clear: v.optional(v.array(v.number())),
   },
   handler: async (ctx, args) => {
@@ -71,10 +79,15 @@ export const mark = mutation({
     for (const it of args.set) {
       if (!inLevel(it.q)) fail(`Question ${it.q} is not in Level ${l.n}.`);
       const max = each[it.q - l.from];
-      if (it.dk && it.g !== 0) fail(`Question ${it.q}: "?" means he couldn't start it, so 0 marks.`);
+      const dkp = it.dkp && it.dkp.length ? [...new Set(it.dkp)] : undefined;
+      if (dkp && (!it.dk || dkp.length > 20 || dkp.some((p) => p.length === 0 || p.length > 12))) {
+        fail(`Question ${it.q}: the blank parts are not right.`);
+      }
+      if (it.dk && it.g !== 0 && !dkp) fail(`Question ${it.q}: "?" means he couldn't start it, so 0 marks.`);
       if (!Number.isInteger(it.g) || it.g < 0 || it.g > max) fail(`Question ${it.q}: marks must be 0 to ${max}.`);
-      const row: Infer<typeof draftMark> = it.dk ? { g: 0, dk: true } : { g: it.g };
-      if (it.p && !it.dk) {
+      if (dkp && it.g >= max) fail(`Question ${it.q}: a part left blank can't have full marks.`);
+      const row: Infer<typeof draftMark> = dkp ? { g: it.g, dk: true, dkp } : it.dk ? { g: 0, dk: true } : { g: it.g };
+      if (it.p && (!it.dk || dkp)) {
         const ok = it.p.length <= 20 && it.p.every((x) => Number.isInteger(x) && x >= 0) && it.p.reduce((a, b) => a + b, 0) === it.g;
         if (!ok) fail(`Question ${it.q}: its parts don't add up to ${it.g}.`);
         row.p = it.p;

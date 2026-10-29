@@ -77,6 +77,8 @@ export function GradePills(props: {
   needs: Map<string, Need>;
   filter: GradeFilter;
   onPick: (g: GradeFilter) => void;
+  /** Small, in one line with no count under the number (Focus: the names and the paper share the screen). */
+  tiny?: boolean;
 }) {
   const grades = gradesOf(props.views);
   if (grades.length < 2) return null;
@@ -100,13 +102,13 @@ export function GradePills(props: {
     return (
       <button key={String(g)} type="button" class={`gp${on ? " on" : ""}`} aria-pressed={on} aria-label={words} onClick={() => props.onPick(g)}>
         <b>{label}</b>
-        <small>{n}</small>
+        {!props.tiny && <small>{n}</small>}
         {red > 0 ? <i class="gp-badge red">{red}</i> : amber > 0 ? <i class="gp-badge amber">{amber}</i> : null}
       </button>
     );
   };
   return (
-    <nav class="grade-pills" aria-label="Show one grade">
+    <nav class={`grade-pills${props.tiny ? " tiny" : ""}`} aria-label="Show one grade">
       {pill("all")}
       {grades.map((g) => pill(g))}
     </nav>

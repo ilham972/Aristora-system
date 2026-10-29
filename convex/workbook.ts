@@ -49,6 +49,31 @@ function levelOf(book: MasterData, n: number) {
   return l;
 }
 
+/**
+ * A level is handed in or corrected: the levels before it that have no record at all were done on paper before the
+ * app (he started this unit before 28 Oct 2026, or the corrector skipped them). They count as done (`pre` = now),
+ * so the app doesn't think he is still on Level 1. Returns their numbers.
+ */
+function markBefore(m: MState, book: MasterData, n: number, now: number): number[] {
+  const out: number[] = [];
+  for (const l of book.levels) {
+    if (l.n >= n) break;
+    const lv = m.lv[String(l.n)];
+    if (lv && (lv.done || lv.fixed || lv.pre)) continue;
+    m.lv[String(l.n)] = { pre: now };
+    out.push(l.n);
+  }
+  return out;
+}
+
+/** Undo markBefore for one save or hand-in (the levels it marked at that moment). */
+function unmarkBefore(m: MState, at: number | undefined) {
+  if (at === undefined) return;
+  for (const [k, lv] of Object.entries(m.lv)) {
+    if (lv.pre === at && !lv.done && !lv.fixed) delete m.lv[k];
+  }
+}
+
 const base = {
   token: v.optional(v.string()),
   studentId: v.id("students"),
@@ -68,7 +93,9 @@ export const levelDone = mutation({
     const key = String(l.n);
     const lv = m.lv[key] ?? {};
     if (lv.done) return { already: true };
-    m.lv[key] = { ...lv, done: now };
+    const { pre: _pre, ...rest } = lv;
+    m.lv[key] = { ...rest, done: now };
+    markBefore(m, book, l.n, now);
     const session = await currentSession(ctx, now);
     await ctx.db.patch(progress._id, { m, updatedAt: now });
     await ctx.db.patch(student._id, { lastActivityAt: now });
@@ -100,6 +127,7 @@ export const undoDone = mutation({
     if (!lv?.done) return false;
     if (lv.fixed) fail("That level is already corrected.");
     delete m.lv[key];
+    unmarkBefore(m, lv.done);
     const session = await currentSession(ctx, now);
     await ctx.db.patch(progress._id, { m, updatedAt: now });
     await log(ctx, session, now, {
@@ -125,7 +153,14 @@ export const correct = mutation({
     ...base,
     level: v.number(),
     items: v.array(
-      v.object({ q: v.number(), got: v.optional(v.number()), lost: v.optional(v.boolean()), dk: v.optional(v.boolean()) }),
+      v.object({
+        q: v.number(),
+        got: v.optional(v.number()),
+        lost: v.optional(v.boolean()),
+        dk: v.optional(v.boolean()),
+        /** "?" on these parts only (he left them blank); the parts he answered keep their marks. */
+        dkp: v.optional(v.array(v.string())),
+      }),
     ),
     total: v.optional(v.number()),
     /** Where the lost marks go: Evaluation (the default) or Theory. "?" questions always go to Theory. */
@@ -150,13 +185,15 @@ export const correct = mutation({
       if (it.q < l.from || it.q > l.to) fail(`Question ${it.q} is not in Level ${l.n}.`);
       const before = m.q[String(it.q)];
       let row: MQ;
+      const dkp = blankParts(it.q, it.dk, it.dkp);
       if (each) {
         const max = each[it.q - l.from];
-        if (it.dk && it.got) fail(`Question ${it.q}: "?" means he couldn't start it, so 0 marks.`);
-        const g = it.dk ? 0 : it.got;
+        if (it.dk && it.got && !dkp) fail(`Question ${it.q}: "?" means he couldn't start it, so 0 marks.`);
+        const g = it.dk && !dkp ? 0 : it.got;
         if (g === undefined || !Number.isInteger(g) || g < 0 || g > max) {
           fail(`Question ${it.q}: marks must be 0 to ${max}.`);
         }
+        if (dkp && g >= max) fail(`Question ${it.q}: a part left blank can't have full marks.`);
         got += g;
         row = { got: g, max, lost: g < max, t: now };
       } else {
@@ -165,8 +202,10 @@ export const correct = mutation({
         row = { lost: it.lost, t: now };
       }
       if (it.dk) row.dk = true;
+      if (dkp) row.dkp = dkp;
       // Re-marked the same way keeps what happened to it (explained, sent to Theory, taught); new marks start over.
-      if (before && before.lost === row.lost && before.got === row.got && !!before.dk === !!row.dk) {
+      const sameBlank = (before?.dkp ?? []).join(",") === (row.dkp ?? []).join(",");
+      if (before && before.lost === row.lost && before.got === row.got && !!before.dk === !!row.dk && sameBlank) {
         const { x, th, tb, tt } = before;
         row = { ...row, ...(x ? { x } : {}), ...(th ? { th } : {}), ...(tb ? { tb } : {}), ...(tt ? { tt } : {}) };
       }
@@ -192,6 +231,7 @@ export const correct = mutation({
     const doneAt = lv.done ?? now;
     const again = !!lv.fixed;
     m.lv[key] = { done: doneAt, fixed: now, by, got };
+    const pre = markBefore(m, book, l.n, now);
     const session = await currentSession(ctx, now);
     await ctx.db.patch(progress._id, { m, updatedAt: now });
     await ctx.db.patch(student._id, { lastActivityAt: now });
@@ -215,9 +255,21 @@ export const correct = mutation({
       sofarPct: st.sofar.pct,
       theory: lost.filter(([, r]) => r.th && !r.tt).map(([q]) => Number(q)),
       evaluation: lost.filter(([, r]) => !r.th && !r.x).map(([q]) => Number(q)),
+      /** Levels before it now counted as done on paper before the app. */
+      pre,
     };
   },
 });
+
+/** "?" on some parts only: the parts' names (dk must be set too). Undefined: none, or the whole question. */
+function blankParts(q: number, dk: boolean | undefined, dkp: string[] | undefined): string[] | undefined {
+  if (!dkp || dkp.length === 0) return undefined;
+  if (!dk) fail(`Question ${q}: a part left blank is a "?".`);
+  if (dkp.length > 20 || dkp.some((p) => typeof p !== "string" || p.length === 0 || p.length > 12)) {
+    fail(`Question ${q}: the blank parts' names are not right.`);
+  }
+  return [...new Set(dkp)];
+}
 
 /** How long a correction can be taken back (the Focus tab offers it on the phone that saved it). */
 export const UNCORRECT_MS = 30 * 60_000;
@@ -263,6 +315,8 @@ export const uncorrect = mutation({
     }
     if (args.before.lv && Object.keys(args.before.lv).length) m.lv[key] = args.before.lv;
     else delete m.lv[key];
+    // The levels that save counted as done before the app go back to having no record.
+    unmarkBefore(m, lv.fixed);
     // Its "corrected" line leaves the report (logged at the very moment it was fixed).
     for (const e of await ctx.db
       .query("events")

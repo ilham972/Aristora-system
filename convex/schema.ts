@@ -79,6 +79,8 @@ export const masterState = v.object({
       tb: v.optional(v.string()),
       tt: v.optional(v.number()),
       dk: v.optional(v.boolean()),
+      /** "?" on some parts only ("iii"): he left those blank; the parts he answered keep their marks (dk is set too). */
+      dkp: v.optional(v.array(v.string())),
     }),
   ),
   lv: v.record(
@@ -88,12 +90,19 @@ export const masterState = v.object({
       fixed: v.optional(v.number()),
       by: v.optional(v.string()),
       got: v.optional(v.number()),
+      /** Done on paper before the app: a later level was handed in or corrected while this one had no record. */
+      pre: v.optional(v.number()),
     }),
   ),
   reteach: v.optional(v.object({ at: v.number(), by: v.optional(v.string()) })),
 });
-/** One question of a Focus draft: marks given so far, "?" (dk), and the part marks tapped (p). */
-export const draftMark = v.object({ g: v.number(), dk: v.optional(v.boolean()), p: v.optional(v.array(v.number())) });
+/** One question of a Focus draft: marks given so far, "?" (dk; dkp = only these parts blank), the part marks (p). */
+export const draftMark = v.object({
+  g: v.number(),
+  dk: v.optional(v.boolean()),
+  p: v.optional(v.array(v.number())),
+  dkp: v.optional(v.array(v.string())),
+});
 /** One question of a workbook's answer key (convex/lib/key.ts): a short answer, or its parts' answers and marks. */
 export const keyAnswer = v.object({
   q: v.number(),

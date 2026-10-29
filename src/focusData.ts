@@ -6,9 +6,12 @@
 // - marks on the wrong question: one question on screen at a time, its number huge, its answer beside it, every
 //   question needs its own tap (full marks is one tap, never "untouched = full"), and a tap right after the screen
 //   moves on is ignored (a double tap can't mark the next question);
-// - marks on the wrong student: names A–Z that never move, hidden while a paper is open, the name huge and on the
-//   Save button, and a saved level can be taken back for 30 minutes, its marks moving to the right student.
+// - marks on the wrong student: names A–Z that never move (tiny pills on top, the open one dark), the name huge over
+//   the paper, and a saved level can be taken back for 30 minutes, its marks moving to the right student.
 // A workbook level marked part of the way is kept on the server as a draft (convex/focus.ts) until it is saved.
+// Since 30 Oct 2026 Focus is one page: the names stay on top while a paper is open; tapping another name keeps every
+// mark (a level marked to the end saves itself); the level opens by itself (a draft, else the oldest handed in, else
+// the one he is on) and the next level opens after each save; any level can be opened from the level bar.
 
 import { levelOutOf, type MasterLevel } from "../convex/lib/book";
 import type { KeyAnswer, KeyPart } from "../convex/lib/key";
@@ -22,45 +25,49 @@ export const TAKE_BACK_MS = 30 * 60_000;
 /** Marks taken back wait this long for the right student's name. */
 export const CARRY_MS = 10 * 60_000;
 
-export type FocusLists = {
-  /** In class (hall or a room) with something to mark: a workbook level, or theory-book questions he can do. A–Z. */
-  here: View[];
-  /** Gone home today with handed-in workbook levels still to correct: A–Z. */
-  gone: View[];
-  /** In class, but his unit's book isn't in the app yet. */
-  noBook: View[];
-  /** In class with a book, but nothing to mark now (waits for Theory or Evaluation, or finished). */
-  nothing: View[];
-};
-
 const byName = (a: View, b: View) => a.s.name.localeCompare(b.s.name, undefined, { sensitivity: "base" });
 
-/** Who the Focus tab offers, in a fixed order (names never move under the finger). */
-export function focusLists(views: View[]): FocusLists {
+/** How a name pill looks: what waits for the corrector there. */
+export type PillTone =
+  /** Nothing to do until his handed-in level is corrected. */
+  | "red"
+  /** A level handed in, waiting. */
+  | "amber"
+  /** Theory book with questions to mark. */
+  | "th"
+  /** No book in the app for his stage and unit (or Legend, Exam Sprint): tap to choose his unit. */
+  | "nb"
+  /** Gone home with handed-in levels. */
+  | "home"
+  | "";
+
+export type Pill = { v: View; tone: PillTone; waiting: number };
+
+/**
+ * The name pills, in a fixed order (names never move under the finger): by grade, everyone signed in A–Z, then those
+ * gone home with handed-in levels still to correct (their papers stayed). Every stage: the corrector may have to
+ * change a student's unit or stage (his paper is from another unit).
+ */
+export function focusPills(views: View[]): Pill[] {
   const here: View[] = [];
   const gone: View[] = [];
-  const noBook: View[] = [];
-  const nothing: View[] = [];
   for (const v of views) {
-    const present = v.where !== "absent";
-    if (v.s.stage === "fighter") {
-      if (!present) continue; // his notebook went home with him
-      if (!v.st || !v.f) noBook.push(v);
-      else if (v.st.doable.length) here.push(v);
-      else nothing.push(v);
-      continue;
-    }
-    if (v.s.stage !== "master") continue; // Legend, Exam Sprint: full papers on paper for now
-    if (!v.ms || !v.mb) {
-      if (present) noBook.push(v);
-      continue;
-    }
-    if (present) {
-      if (candidates(v).length) here.push(v);
-      else nothing.push(v);
-    } else if (v.ms.waiting.length) gone.push(v);
+    if (v.where !== "absent") here.push(v);
+    else if (v.ms?.waiting.length) gone.push(v);
   }
-  return { here: here.sort(byName), gone: gone.sort(byName), noBook: noBook.sort(byName), nothing: nothing.sort(byName) };
+  const pill = (v: View): Pill => {
+    const waiting = v.ms?.waiting.length ?? 0;
+    let tone: PillTone = "";
+    if (v.where === "absent") tone = "home";
+    else if (v.kind === "none") tone = "nb";
+    else if (v.ms?.dry && v.ms.needs.includes("correction")) tone = "red";
+    else if (waiting) tone = "amber";
+    else if (v.st?.doable.length) tone = "th";
+    return { v, tone, waiting };
+  };
+  const byGrade = (a: View, b: View) => (a.s.grade ?? 99) - (b.s.grade ?? 99);
+  const order = (a: View, b: View) => byGrade(a, b) || Number(a.where === "absent") - Number(b.where === "absent") || byName(a, b);
+  return [...here, ...gone].sort(order).map(pill);
 }
 
 /** Why there is nothing to mark for him now, in a few words. */
@@ -112,8 +119,14 @@ export function markedParts(k: KeyAnswer | undefined, max: number): KeyPart[] | 
   return parts.reduce((a, p) => a + (p.m ?? 0), 0) === max ? parts : null;
 }
 
-/** One question's mark on this phone: g marks, or "?" (dk: he couldn't start it, 0 marks, straight to Theory). */
-export type Given = { g: number; dk?: boolean };
+/**
+ * One question's mark on this phone: g marks, or "?" (dk: he couldn't start it, 0 marks, straight to Theory). With
+ * dkp, only those parts were left blank: the parts he answered keep their marks (g), and it still goes to Theory.
+ */
+export type Given = { g: number; dk?: boolean; dkp?: string[] };
+
+/** The marks a question counts for: 0 for a whole "?", else g (a part left blank counts 0 inside g). */
+export const marksOf = (g: Given | undefined) => (!g ? 0 : g.dk && !g.dkp ? 0 : g.g);
 
 /** After a question is marked: the next one not marked yet (after it, then from the start), or the summary. */
 export function nextIndex(qs: number[], given: Record<number, Given>, from: number): number {
@@ -124,7 +137,7 @@ export function nextIndex(qs: number[], given: Record<number, Given>, from: numb
 
 /** The level's marks so far. */
 export function sumOf(qs: number[], given: Record<number, Given>): number {
-  return qs.reduce((a, q) => a + (given[q]?.dk ? 0 : (given[q]?.g ?? 0)), 0);
+  return qs.reduce((a, q) => a + marksOf(given[q]), 0);
 }
 
 /** Where the level's lost marks go, as on the Correction tab: Theory when the level is under half, else Evaluation. */
@@ -134,8 +147,20 @@ export function routeOf(sum: number, max: number, to: "auto" | "evaluation" | "t
 }
 
 /** What the server gets (workbook.correct): every question of the level. */
-export function itemsOf(qs: number[], given: Record<number, Given>): { q: number; got: number; dk?: true }[] {
-  return qs.map((q) => (given[q].dk ? { q, got: 0, dk: true as const } : { q, got: given[q].g }));
+export function itemsOf(qs: number[], given: Record<number, Given>): { q: number; got: number; dk?: true; dkp?: string[] }[] {
+  return qs.map((q) => {
+    const g = given[q];
+    if (g.dk && g.dkp?.length) return { q, got: g.g, dk: true as const, dkp: [...g.dkp] };
+    return g.dk ? { q, got: 0, dk: true as const } : { q, got: g.g };
+  });
+}
+
+/** "Q15, Q56 (ii)": the questions with a "?", for the summary. */
+export function blankWords(qs: number[], given: Record<number, Given>): string {
+  return qs
+    .filter((q) => given[q]?.dk)
+    .map((q) => (given[q].dkp?.length ? `Q${q} (${given[q].dkp!.join(", ")})` : `Q${q}`))
+    .join(", ");
 }
 
 /** The level and its questions as they were before a save: what Take back puts back. */
@@ -185,7 +210,7 @@ export function extendQueue(qs: number[], doable: number[]): number[] {
 
 // ---- Workbook drafts (convex/focus.ts): a level marked part of the way ----
 
-export type DraftQ = { g: number; dk?: boolean; p?: number[] };
+export type DraftQ = { g: number; dk?: boolean; p?: number[]; dkp?: string[] };
 export type Draft = { studentId: string; unitId: string; level: number; q: Record<string, DraftQ>; updatedAt: number; by?: string };
 
 /** His draft for a level while it still counts: the same workbook, the level not corrected yet. */
@@ -199,10 +224,100 @@ export function fromDraft(d: Draft | null): { given: Record<number, Given>; part
   const given: Record<number, Given> = {};
   const parts: Record<number, number[]> = {};
   for (const [k, r] of Object.entries(d?.q ?? {})) {
-    given[Number(k)] = r.dk ? { g: 0, dk: true } : { g: r.g };
-    if (r.p && !r.dk) parts[Number(k)] = [...r.p];
+    given[Number(k)] = r.dk && r.dkp?.length ? { g: r.g, dk: true, dkp: [...r.dkp] } : r.dk ? { g: 0, dk: true } : { g: r.g };
+    if (r.p && (!r.dk || r.dkp?.length)) parts[Number(k)] = [...r.p];
   }
   return { given, parts };
+}
+
+// ---- Which level opens (the level bar, one page) ----
+
+const fixedOrPre = (v: View, n: number) => {
+  const lv = v.mm.lv[String(n)];
+  return !!lv?.fixed || (!!lv?.pre && !lv.done);
+};
+
+/**
+ * The level his paper opens on: one he was marking (a draft, the latest), else the oldest handed in, else the one he
+ * works on now (while he is in class). Null: every level is corrected (or done before the app): the unit's marks.
+ */
+export function autoLevel(v: View, drafts: readonly Draft[] | null | undefined): MasterLevel | null {
+  if (!v.ms || !v.mb) return null;
+  const mine = (drafts ?? [])
+    .filter((d) => d.studentId === v.s._id && d.unitId === v.s.unitId && !fixedOrPre(v, d.level) && Object.keys(d.q).length)
+    .sort((a, b) => b.updatedAt - a.updatedAt)[0];
+  const fromDraft = mine ? v.mb.levels.find((l) => l.n === mine.level) : undefined;
+  if (fromDraft) return fromDraft;
+  if (v.ms.waiting.length) return v.ms.waiting[0];
+  if (v.ms.current && v.where !== "absent") return v.ms.current;
+  return v.mb.levels.find((l) => !fixedOrPre(v, l.n)) ?? null;
+}
+
+/**
+ * After a level is saved (or handed in): the next level to open, the first after it not corrected (nor done before the
+ * app), then one left earlier. `done` = levels the server has just closed (the board may not show them yet). Null:
+ * the unit is finished.
+ */
+export function nextOpen(v: View, n: number, done: number[] = []): MasterLevel | null {
+  if (!v.mb) return null;
+  const open = (l: MasterLevel) => l.n !== n && !done.includes(l.n) && !fixedOrPre(v, l.n);
+  return v.mb.levels.find((l) => l.n > n && open(l)) ?? v.mb.levels.find((l) => l.n < n && open(l)) ?? null;
+}
+
+/** Every level corrected or done before the app: the unit's marks are final (Focus shows them). */
+export function unitDone(v: View, done: number[] = []): boolean {
+  return !!v.mb && v.mb.levels.length > 0 && v.mb.levels.every((l) => done.includes(l.n) || fixedOrPre(v, l.n));
+}
+
+/** A level on the level bar. */
+export type LevelLook = "fixed" | "waiting" | "draft" | "current" | "pre" | "later";
+export function levelLook(v: View, l: MasterLevel, drafts: readonly Draft[] | null | undefined): LevelLook {
+  const lv = v.mm.lv[String(l.n)];
+  if (lv?.fixed) return "fixed";
+  if (draftOf(drafts, v, l.n) && Object.keys(draftOf(drafts, v, l.n)!.q).length) return "draft";
+  if (lv?.done) return "waiting";
+  if (lv?.pre) return "pre";
+  if (v.ms?.current?.n === l.n) return "current";
+  return "later";
+}
+
+/** A corrected level's marks as a paper shows them (opened again from the level bar, to check or change). */
+export function savedGiven(v: View, l: MasterLevel): Record<number, Given> {
+  const out: Record<number, Given> = {};
+  for (const q of questionsOf(l)) {
+    const r = v.mm.q[String(q)];
+    if (!r) continue;
+    out[q] = r.dk && r.dkp?.length ? { g: r.got ?? 0, dk: true, dkp: [...r.dkp] } : r.dk ? { g: 0, dk: true } : { g: r.got ?? 0 };
+  }
+  return out;
+}
+
+/** Two sets of marks for the same questions are the same (nothing to save after looking at an old level). */
+export function sameGiven(qs: number[], a: Record<number, Given>, b: Record<number, Given>): boolean {
+  return qs.every((q) => {
+    const x = a[q];
+    const y = b[q];
+    if (!x || !y) return !x && !y;
+    return x.g === y.g && !!x.dk === !!y.dk && (x.dkp ?? []).join(",") === (y.dkp ?? []).join(",");
+  });
+}
+
+/** A unit's number in its grade ("U04" → 4): the corrector picks units by number and Tamil name. */
+export function unitNo(code: string): number {
+  const n = Number(code.replace(/\D/g, ""));
+  return Number.isFinite(n) ? n : 0;
+}
+
+type UnitLike = { _id: string; grade: number; term: number; order: number };
+
+/** After a workbook's last level: the next workbook of that unit's term (in book order), else Legend (whole papers)
+ *  after the term's last unit, the same as Class → Move. Nothing for a book outside the terms (term 0). */
+export function nextBook<U extends UnitLike>(units: U[], unit: U | null | undefined): { stage: "master" | "legend"; unit: U } | null {
+  if (!unit || !unit.term) return null;
+  const list = units.filter((u) => u.grade === unit.grade && u.term === unit.term).sort((a, b) => a.order - b.order);
+  const i = list.findIndex((u) => u._id === unit._id);
+  if (i < 0) return null;
+  return i + 1 < list.length ? { stage: "master", unit: list[i + 1] } : { stage: "legend", unit };
 }
 
 /** Where a paper opens: the first question not marked yet, or the level's marks when every one is. */

@@ -1031,6 +1031,10 @@ button.q:disabled {
 .mstrip i.lv.wait {
   background: repeating-linear-gradient(135deg, var(--amber) 0 3px, #ffe2a8 3px 6px);
 }
+/* Done on paper before the app: done, no marks here. */
+.mstrip i.lv.pre {
+  background: #bfe0c9;
+}
 .mstrip i.lv.good {
   background: var(--green);
 }
@@ -1857,6 +1861,11 @@ input.full {
 }
 .mt-lv.current {
   border-color: var(--ink);
+}
+.mt-lv.before {
+  border-style: dashed;
+  border-color: #9fcdae;
+  color: var(--green-ink);
 }
 .mt-lv:disabled {
   opacity: 1;
@@ -3158,87 +3167,151 @@ body.fc-marking .toasts {
   bottom: auto;
 }
 
-.fc-h {
-  margin: 2px 2px 0;
-  font: 700 12.5px/1.2 var(--font);
-  letter-spacing: 0.4px;
-  text-transform: uppercase;
-  color: var(--ink-3);
+/* One page (30 Oct 2026): tiny name pills on top, tiny grade pills under them, the open paper below. */
+.fc-page {
+  gap: 10px;
 }
-.fc-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.fc-pills {
+.fc-names {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  align-items: center;
+  gap: 5px;
 }
-.fc-pill {
-  max-width: 100%;
-  min-height: 48px;
-  padding: 5px 12px 6px 13px;
+/* A grade's number before its names (under All). */
+.fc-g {
+  min-width: 18px;
+  padding: 0 1px 0 3px;
+  font: 700 12px/1 var(--cond);
+  color: var(--ink-3);
+  text-align: right;
+}
+.fc-gl {
   display: inline-flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 3px;
-  border-radius: 14px;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+}
+.fc-gl:not(:first-child) {
+  margin-left: 4px;
+}
+.fc-nm {
+  position: relative;
+  height: 30px;
+  max-width: 100%;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
   border: 1.5px solid var(--line);
   background: var(--card);
-  text-align: left;
-  line-height: 1.1;
+  color: var(--ink);
+  font: 700 14px/1 var(--font);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
 }
-.fc-pill.amber {
+.fc-nm:active {
+  transform: scale(0.95);
+}
+.fc-nm.amber {
   border-color: var(--amber);
-  box-shadow: inset 0 0 0 1px var(--amber);
-}
-.fc-pill.red {
-  border-color: var(--red);
-  box-shadow: inset 0 0 0 1px var(--red);
-}
-.fc-pill:active {
-  transform: translateY(1px);
-}
-.fc-pn {
-  font-size: 17px;
-  font-weight: 700;
-  overflow-wrap: anywhere;
-}
-.fc-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-.fc-tags i {
-  padding: 3px 6px;
-  border-radius: 6px;
-  background: var(--line-2);
-  color: var(--ink-2);
-  font: 700 12px/1 var(--font);
-  font-style: normal;
-}
-.fc-tags i.w {
   background: var(--amber-soft);
-  color: var(--amber-ink);
 }
-.fc-tags i.nk {
-  padding-left: 1px;
-  background: transparent;
+.fc-nm.red {
+  border-color: var(--red);
+  background: var(--red-soft);
   color: var(--red-ink);
 }
-/* Theory-book students: their next question in Theory's blue. A level marked part of the way: dashed. */
-.fc-pill.th {
+.fc-nm.th {
   border-left: 4px solid var(--theory);
 }
-.fc-tags i.th {
-  background: var(--theory-soft);
-  color: var(--theory-ink);
+.fc-nm.nb {
+  border-style: dashed;
+  color: var(--ink-3);
 }
-.fc-tags i.d {
-  outline: 1.5px dashed currentColor;
-  outline-offset: -1.5px;
+.fc-nm.home {
+  border-style: dashed;
+  border-color: var(--amber);
+  color: var(--ink-2);
+}
+.fc-nm.home::before {
+  content: "⌂";
+  font-size: 13px;
+  color: var(--ink-3);
+}
+/* A level marked part of the way: a dashed ring. */
+.fc-nm.d {
+  outline: 1.5px dashed var(--ink-2);
+  outline-offset: 1.5px;
+}
+.fc-nm.on {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
+}
+.fc-nm.on.home::before {
+  color: #c4cad8;
+}
+.fc-nm-n {
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--amber);
+  color: #3d2600;
+  font: 700 11px/1 var(--font);
+  font-style: normal;
+}
+.fc-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.fc-tools .grade-pills {
+  flex: 1 1 auto;
+}
+.grade-pills.tiny {
+  padding-top: 0;
+  gap: 5px;
+}
+.grade-pills.tiny .gp {
+  min-height: 30px;
+  padding: 2px;
+  border-radius: 10px;
+}
+.grade-pills.tiny .gp b {
+  font-size: 16px;
+}
+.grade-pills.tiny .gp-badge {
+  top: -6px;
+  right: -5px;
+  min-width: 17px;
+  height: 17px;
+  font-size: 11px;
+}
+.fc-savedbtn {
+  flex: none;
+  margin-left: auto;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 10px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  font: 700 13px/1 var(--font);
+  color: var(--ink-2);
+}
+.fc-hint {
+  padding: 18px 12px;
+  border-radius: 14px;
+  border: 1.5px dashed var(--line);
+  text-align: center;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink-2);
 }
 .fc-carry {
   display: flex;
@@ -3306,7 +3379,7 @@ body.fc-marking .toasts {
   min-width: 0;
 }
 .fc-name {
-  font: 700 30px/1 var(--cond);
+  font: 700 28px/1 var(--cond);
   letter-spacing: -0.3px;
   overflow-wrap: anywhere;
 }
@@ -3323,22 +3396,258 @@ body.fc-marking .toasts {
   gap: 6px;
   margin-top: 2px;
 }
-/* The level in the paper's top line is also the button to change it. */
-.fc-lvchip {
+/* His stage and unit under his name: tap to change them. */
+.fc-unit {
+  max-width: 100%;
+  margin-top: 4px;
+  padding: 3px 8px 3px 3px;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  border-radius: 8px;
+  gap: 6px;
+  border-radius: 9px;
   border: 1.5px solid var(--line);
   background: var(--card);
-  font: 700 13.5px/1.25 var(--font);
+  font: 700 14px/1.2 var(--font);
   color: var(--ink);
-  vertical-align: baseline;
+  text-align: left;
 }
-.fc-lvchip span {
+.fc-unit b {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  background: var(--ink);
+  color: #fff;
+  font-size: 12px;
+}
+.fc-unit b.st-master {
+  background: #b7791f;
+}
+.fc-unit b.st-legend {
+  background: var(--evaluation);
+}
+.fc-unit b.st-sprint {
+  background: var(--red);
+}
+.fc-unit span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fc-unit i {
+  font-style: normal;
   color: var(--ink-3);
 }
+.fc-cardbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* The level bar: every level of his workbook, a small button each (corrected levels by their marks, handed in
+   amber, the one he is on outlined, done before the app pale); the open one ringed. */
+.fc-lvbar {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(26px, 1fr));
+  gap: 3px;
+}
+.fc-lb {
+  height: 28px;
+  min-width: 0;
+  padding: 0;
+  border-radius: 7px;
+  border: 1.5px solid var(--line);
+  background: var(--line-2);
+  color: var(--ink-2);
+  font: 700 12.5px/1 var(--font);
+  transition: transform 0.1s ease, box-shadow 0.15s ease;
+}
+.fc-lb.gap {
+  margin-left: 5px;
+}
+.fc-lb.fixed {
+  border-color: var(--green);
+  background: var(--green);
+  color: #fff;
+}
+.fc-lb.fixed.mid {
+  border-color: var(--amber);
+  background: var(--amber);
+  color: #3d2600;
+}
+.fc-lb.fixed.low {
+  border-color: var(--red);
+  background: var(--red);
+}
+.fc-lb.waiting {
+  border-color: var(--amber);
+  background: repeating-linear-gradient(-45deg, var(--amber-soft) 0 4px, #ffd98a 4px 8px);
+  color: var(--amber-ink);
+}
+.fc-lb.draft {
+  border: 1.5px dashed var(--ink-2);
+  background: var(--card);
+  color: var(--ink);
+}
+.fc-lb.current {
+  border: 2px solid var(--ink);
+  background: var(--card);
+  color: var(--ink);
+}
+.fc-lb.pre {
+  border-color: #cfe8d7;
+  background: #e8f4ec;
+  color: var(--green-ink);
+}
+.fc-lb.on {
+  transform: translateY(-2px);
+  box-shadow: 0 0 0 2px var(--ground), 0 0 0 4px var(--ink);
+}
+.fc-lb:active {
+  transform: scale(0.94);
+}
+.fc-lvline {
+  margin-top: -4px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.fc-lvline b {
+  color: var(--ink);
+}
+.fc-lvline.waiting {
+  color: var(--amber-ink);
+}
+.fc-lvline.fixed {
+  color: var(--green-ink);
+}
+
+/* Every level corrected: the unit's marks (to write on the marks sheet in his book). */
+.fc-over {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-radius: 16px;
+  border: 2px solid var(--green);
+  background: linear-gradient(180deg, var(--green-soft), var(--card) 120px);
+  animation: rise 0.35s ease-out both;
+}
+.fc-over-k {
+  font: 700 13px/1.2 var(--font);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--green-ink);
+}
+.fc-over .fc-total b {
+  color: var(--green-ink);
+}
+.fc-next {
+  min-height: 56px;
+  font-size: 17px;
+}
+
+/* His stage and unit (the popover): Fighter or Master, then every unit of his grade by number and Tamil name. */
+.su-stages {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.su-st {
+  min-height: 54px;
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  border-radius: 12px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  text-align: left;
+}
+.su-st b {
+  font-size: 17px;
+}
+.su-st small {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+.su-st.on {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
+}
+.su-st.on small {
+  color: #c4cad8;
+}
+.su-st.master.on {
+  border-color: #b7791f;
+  background: #b7791f;
+}
+.su-st.master.on small {
+  color: #fbe7c4;
+}
+.su-units {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.su-u {
+  width: 100%;
+  min-height: 46px;
+  padding: 6px 10px 6px 6px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 12px;
+  border: 1.5px solid var(--line-2);
+  background: var(--card);
+  text-align: left;
+}
+.su-u b {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  background: var(--ground);
+  font: 700 18px/1 var(--cond);
+}
+.su-u span {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 15.5px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.su-u small {
+  flex: none;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-3);
+}
+.su-u.nb span {
+  color: var(--ink-3);
+}
+.su-u.on {
+  border-color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+.su-u.on b {
+  background: var(--ink);
+  color: #fff;
+}
+.su-u small.su-now {
+  color: var(--ink);
+}
+/* The level in the paper's top line is also the button to change it. */
 .fc-resumed {
   padding: 7px 10px;
   border-radius: 10px;
@@ -3382,50 +3691,9 @@ body.fc-marking .toasts {
   color: var(--yellow-ink);
   font-weight: 600;
 }
-
-.fc-levels {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
 .fc-ask {
   font-size: 16px;
   font-weight: 700;
-}
-.fc-lv {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  column-gap: 14px;
-  align-items: center;
-  padding: 12px 14px;
-  border-radius: 14px;
-  border: 1.5px solid var(--line);
-  background: var(--card);
-  text-align: left;
-}
-.fc-lv b {
-  grid-row: span 2;
-  font: 700 24px/1 var(--cond);
-}
-.fc-lv span {
-  font-size: 19px;
-  font-weight: 700;
-}
-.fc-lv small {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ink-3);
-}
-.fc-lv.w {
-  border-color: var(--amber);
-  background: var(--amber-soft);
-}
-.fc-lv.w small {
-  color: var(--amber-ink);
-}
-.fc-other {
-  align-self: flex-start;
-  cursor: pointer;
 }
 
 .fc-strip {
@@ -3654,6 +3922,43 @@ body.fc-marking .toasts {
   border-color: var(--red);
   background: var(--red);
 }
+/* "?" on one part: he left it blank. */
+.fc-pb.dk {
+  border-color: var(--theory);
+  color: var(--theory-ink);
+}
+.fc-pb.dk.on {
+  border-color: var(--theory);
+  background: var(--theory);
+  color: #fff;
+}
+.fc-part.blank .fc-pt {
+  color: var(--theory-ink);
+}
+/* A Part II question without part marks: "a part left blank" goes with the marks he got. */
+.fc-pblank {
+  min-height: 38px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 10px;
+  border: 1.5px dashed var(--theory);
+  background: var(--card);
+  color: var(--theory-ink);
+  font: 700 14px/1.2 var(--font);
+  text-align: left;
+}
+.fc-pblank b {
+  font-size: 18px;
+}
+.fc-pblank.on {
+  border-style: solid;
+  background: var(--theory-soft);
+}
+.fc-n:disabled {
+  opacity: 0.35;
+}
 
 /* The pad: every mark as a number, and under it one big button that gives what is shown (full marks first). */
 .fc-pad {
@@ -3836,6 +4141,19 @@ body.fc-marking .toasts {
 .fc-total span {
   margin-left: auto;
   font-size: 20px;
+}
+.fc-sum.remark {
+  border-color: var(--green);
+}
+.fc-remark {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--green-ink);
+}
+.fc-remark .link-btn {
+  padding: 0 2px;
+  font-size: 14px;
+  text-decoration: underline;
 }
 .fc-route {
   display: flex;
@@ -5593,6 +5911,7 @@ body.fc-marking .toasts {
   font-size: 11px;
 }
 .app.no-tabs {
+  --tabs: 0px;
   padding-bottom: calc(env(safe-area-inset-bottom) + 24px);
 }
 /* The smallest phones (320 px): four buttons, the clock and Settings still fit. */

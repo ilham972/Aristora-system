@@ -1,18 +1,21 @@
-// The Focus tab: one person corrects, fast, without marks landing on the wrong question or the wrong student. It is
-// the Correction job (same calls, same alerts) and saves exactly like the Correction tab, so Evaluation and Theory
-// see nothing different. The rules and lists are in src/focusData.ts, the saving as you go in src/focusSave.ts.
+// The Focus page: one person corrects, fast, without marks landing on the wrong question or the wrong student. It is
+// the Correction job (same calls, same alerts) and saves exactly like the Class page's correct sheet, so Evaluation and
+// Theory see nothing different. The rules and lists are in src/focusData.ts, the saving as you go in src/focusSave.ts.
 //
-// 1. Pick the name on the paper or notebook: pills A–Z per grade that never move (grade pills filter). They hide
-//    while a paper is open, so a stray tap can't switch the student halfway.
-// 2. Workbook (Master): the level opens at once when there is one; with two or more the corrector says which. One
-//    question at a time: number huge, the key's answer beside it, one tap each (the big button = full marks, a number
-//    gives that, ? = blank). The next question comes by itself; a tap right after is ignored. Every mark is kept as a
-//    draft on the server, so Stop keeps them and the paper opens again where it stopped. At the end: the level's
-//    marks, where lost marks go, Save with the student's name on it (workbook.correct).
-// 3. Theory book (Fighter): the questions he can do now, in book order, one at a time: ✓ right, ✗ wrong, ↻ slip,
-//    saved like the Correction tab's circles (marks.setMany). Stop when his notebook ends.
-// 4. "Saved on this phone": Take back within 30 minutes (a level: workbook.uncorrect, its marks then wait for the
-//    right student; theory marks: put back as they were).
+// One page (30 Oct 2026, after a real class: students on different stages, units and levels):
+// 1. Names on top: tiny pills A–Z that never move (the open one dark), tiny grade pills under them. Tapping another
+//    name keeps every mark of the open paper (a level marked to the end saves itself) and opens his. No Stop.
+// 2. His paper: the name huge; his stage and unit (tap: Fighter or Master, then every unit of his grade by number and
+//    Tamil name; one tap moves him); his card (Going home, Needs theory, Move and the marks table, as on Class).
+// 3. Workbook (Master): the level bar (every level; tap an old one to check or change its marks). The level opens by
+//    itself: one he was marking, else the oldest handed in, else the one he is on. One question at a time: number
+//    huge, the key's answer, one tap each (the big button = what is shown, a number gives that, ? = blank; a Part II
+//    question in parts: each part's marks, or ? for that part only). Save: the next level opens by itself; after the
+//    last one, the unit's marks (to write on the marks sheet in his book).
+// 4. Theory book (Fighter): the questions he can do now, in book order, one at a time: ✓ right, ✗ wrong, ↻ slip,
+//    saved like the Class rows' circles (marks.setMany).
+// 5. "Saved on this phone" (↶ by the grades): Take back within 30 minutes (a level: workbook.uncorrect, its marks then
+//    wait for the right student; theory marks: put back as they were).
 
 import type { ComponentChildren } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
@@ -22,55 +25,82 @@ import { PART_NAME, partOf, type MasterLevel } from "../convex/lib/book";
 import { slClock } from "../convex/lib/day";
 import { boldRuns, type KeyAnswer } from "../convex/lib/key";
 import type { Mark, MarkState } from "../convex/lib/status";
+import { termOf } from "../convex/lib/syllabus";
 import { errorText, mutate } from "./backend";
+import { Book } from "./board";
 import { CallsBand } from "./correction";
 import { fmtMin, tagOf, type View } from "./derive";
 import {
+  autoLevel,
   beforeOf,
-  candidates,
+  blankWords,
   CARRY_MS,
   carryLevel,
   draftOf,
   extendQueue,
   fighterQueue,
-  focusLists,
   focusNeeds,
+  focusPills,
   fromDraft,
   itemsOf,
+  levelLook,
   markedParts,
+  marksOf,
   marksOfLevel,
+  nextBook,
   nextIndex,
+  nextOpen,
   nothingWhy,
-  openLevels,
   questionsOf,
   resumeAt,
   routeOf,
+  sameGiven,
+  savedGiven,
   sumOf,
   TAKE_BACK_MS,
   TAP_GUARD_MS,
+  unitNo,
   type Before,
   type Carry,
   type Draft,
-  type FocusLists,
   type Given,
+  type LevelLook,
+  type Pill,
 } from "./focusData";
 import { dropDraft, flushFocus, queueDraft, setFighterMark } from "./focusSave";
-import { GradePills, gradesOf, inGrade, type GradeFilter } from "./grades";
+import { GradePills, gradesOf, type GradeFilter } from "./grades";
 import { useQuery } from "./live";
-import { act, bookDocOf, clearToasts, currentRole, may, now as serverNow, savedMarks, toast, type Board } from "./store";
+import { MasterBook, TheorySheet } from "./master";
+import { MoveSheet } from "./move";
+import {
+  act,
+  allUnits,
+  clearToasts,
+  currentRole,
+  may,
+  now as serverNow,
+  savedMarks,
+  stageName,
+  STAGES,
+  toast,
+  type Board,
+  type Stage,
+  type Unit,
+} from "./store";
 import { Empty, Sheet } from "./ui";
 
-// ---- What the tab remembers while the app is open (switching tabs and back keeps the open paper) ----
+// ---- What the page remembers while the app is open (switching pages and back keeps the open paper) ----
 
 type MasterPaper = {
   kind: "master";
   studentId: string;
   unitId: string;
-  /** null: the corrector must say which level the paper is. */
-  level: number | null;
+  level: number;
   given: Record<number, Given>;
   /** A Part II question's part marks, once he changed one (the big button then gives their sum). */
   parts: Record<number, number[]>;
+  /** A Part II question's parts marked "?" (left blank), by name, before its mark is given. */
+  blanks: Record<number, string[]>;
   /** The question on screen (its place in the level); the number of questions = the level's summary. */
   at: number;
   to: "auto" | "evaluation" | "theory";
@@ -82,6 +112,8 @@ type MasterPaper = {
   checked?: boolean;
   /** Save tapped and not answered yet (its own correction arriving is not "corrected meanwhile"). */
   saving?: boolean;
+  /** A corrected level opened again: its saved marks. Changes stay on this phone until "Save changes". */
+  remark?: Record<number, Given>;
 };
 
 type FighterPaper = {
@@ -96,7 +128,14 @@ type FighterPaper = {
   base: Record<number, Mark | null>;
 };
 
-type Paper = MasterPaper | FighterPaper;
+/** Every level of his workbook corrected (or done before the app): the unit's marks. */
+type OverPaper = { kind: "over"; studentId: string; unitId: string };
+/** No book in the app for his stage and unit (or Legend, Exam Sprint): choose his unit. */
+type NonePaper = { kind: "none"; studentId: string; unitId: string | null; stage: string | null };
+/** Moved to another stage or unit from here: opens there as soon as the board shows it. */
+type WaitPaper = { kind: "wait"; studentId: string; unitId: string; stage: Stage };
+
+type Paper = MasterPaper | FighterPaper | OverPaper | NonePaper | WaitPaper;
 
 type SavedLevel = {
   kind: "level";
@@ -191,7 +230,7 @@ function remember(s: Saved) {
 
 const GRADE_KEY = "aristora.grade.focus";
 
-/** This phone's grade filter for the Focus tab, remembered (its own, not the Correction tab's). */
+/** This phone's grade filter for Focus, remembered (its own, not the Class page's). */
 function useFocusGrade(grades: number[]): [GradeFilter, (g: GradeFilter) => void] {
   const [chosen, setChosen] = useState<GradeFilter>(() => {
     try {
@@ -212,11 +251,15 @@ function useFocusGrade(grades: number[]): [GradeFilter, (g: GradeFilter) => void
   return [chosen !== "all" && grades.length > 1 && grades.includes(chosen) ? chosen : "all", set];
 }
 
+// ---- Opening, leaving and saving papers ----
+
 /** A workbook paper on this level, with the marks given before (his draft), opening where they stopped. */
 function masterAt(v: View, l: MasterLevel): MasterPaper {
   const d = draftOf(latestDrafts, v, l.n);
   const { given, parts } = fromDraft(d);
   const count = Object.keys(given).length;
+  const blanks: Record<number, string[]> = {};
+  for (const [q, g] of Object.entries(given)) if (g.dkp?.length) blanks[Number(q)] = [...g.dkp];
   return {
     kind: "master",
     studentId: v.s._id,
@@ -224,6 +267,7 @@ function masterAt(v: View, l: MasterLevel): MasterPaper {
     level: l.n,
     given,
     parts,
+    blanks,
     at: resumeAt(questionsOf(l), given),
     to: "auto",
     checked: latestDrafts !== undefined,
@@ -231,75 +275,206 @@ function masterAt(v: View, l: MasterLevel): MasterPaper {
   };
 }
 
-/** Open a student's paper: his theory book, or his workbook (the marks taken back wait for him on the same questions). */
-function openFor(v: View, now: number) {
-  clearToasts();
-  if (v.kind === "fighter") {
-    setPaper({ kind: "fighter", studentId: v.s._id, unitId: v.s.unitId!, qs: fighterQueue(v), at: 0, base: {} });
-  } else {
-    const fits = carryLevel(carry, v, now);
-    if (fits && carry) {
-      const c = carry;
-      carry = null;
-      const qs = questionsOf(fits);
-      // The marks are his now: kept as his draft at once, like any marks (Stop keeps them).
-      for (const q of qs) if (c.given[q]) queueDraft(v.s._id, v.s.unitId!, fits.n, q, c.given[q], c.parts?.[q]);
-      setPaper({
-        kind: "master",
-        studentId: v.s._id,
-        unitId: v.s.unitId!,
-        level: fits.n,
-        given: { ...c.given },
-        parts: { ...(c.parts ?? {}) },
-        at: qs.length,
-        to: "auto",
-        carriedFrom: c.fromName,
-        checked: true,
-      });
-    } else {
-      const cs = candidates(v);
-      setPaper(
-        cs.length === 1
-          ? masterAt(v, cs[0])
-          : { kind: "master", studentId: v.s._id, unitId: v.s.unitId!, level: null, given: {}, parts: {}, at: 0, to: "auto" },
-      );
+/** A corrected level opened again: its saved marks, on the level's marks (tap a box to change one). */
+function remarkAt(v: View, l: MasterLevel): MasterPaper {
+  const given = savedGiven(v, l);
+  const blanks: Record<number, string[]> = {};
+  for (const [q, g] of Object.entries(given)) if (g.dkp?.length) blanks[Number(q)] = [...g.dkp];
+  return {
+    kind: "master",
+    studentId: v.s._id,
+    unitId: v.s.unitId!,
+    level: l.n,
+    given,
+    parts: {},
+    blanks,
+    at: questionsOf(l).length,
+    to: "auto",
+    checked: true,
+    remark: { ...given },
+  };
+}
+
+/** A level of his workbook: corrected = check or change its marks; else mark it (from his draft). */
+function paperAt(v: View, l: MasterLevel): MasterPaper {
+  return v.mm.lv[String(l.n)]?.fixed ? remarkAt(v, l) : masterAt(v, l);
+}
+
+/** What opens for a student: his theory book, his workbook at the right level, the unit's marks, or choose a unit. */
+function paperFor(v: View, now: number): Paper {
+  if (v.kind === "fighter") return { kind: "fighter", studentId: v.s._id, unitId: v.s.unitId!, qs: fighterQueue(v), at: 0, base: {} };
+  if (v.kind !== "master") return { kind: "none", studentId: v.s._id, unitId: v.s.unitId ?? null, stage: v.stage };
+  const fits = carryLevel(carry, v, now);
+  if (fits && carry) {
+    const c = carry;
+    carry = null;
+    const qs = questionsOf(fits);
+    // The marks are his now: kept as his draft at once, like any marks.
+    for (const q of qs) if (c.given[q]) queueDraft(v.s._id, v.s.unitId!, fits.n, q, c.given[q], c.parts?.[q]);
+    const blanks: Record<number, string[]> = {};
+    for (const q of qs) if (c.given[q]?.dkp?.length) blanks[q] = [...c.given[q].dkp!];
+    return {
+      kind: "master",
+      studentId: v.s._id,
+      unitId: v.s.unitId!,
+      level: fits.n,
+      given: { ...c.given },
+      parts: { ...(c.parts ?? {}) },
+      blanks,
+      at: qs.length,
+      to: "auto",
+      carriedFrom: c.fromName,
+      checked: true,
+    };
+  }
+  const l = autoLevel(v, latestDrafts);
+  return l ? masterAt(v, l) : { kind: "over", studentId: v.s._id, unitId: v.s.unitId! };
+}
+
+/** Theory-book marks this paper changed: they join "Saved on this phone" (Take back). */
+function rememberFighter(p: FighterPaper) {
+  const v = latestViews.find((x) => x.s._id === p.studentId);
+  const items: SavedMarks["items"] = [];
+  const prev: SavedMarks["prev"] = [];
+  for (const [k, was] of Object.entries(p.base)) {
+    const s = v?.marks[k]?.s ?? null;
+    if ((was?.s ?? null) === s) continue;
+    items.push({ q: Number(k), s });
+    prev.push({ q: Number(k), mark: was });
+  }
+  if (!v || !items.length) return;
+  items.sort((a, b) => a.q - b.q);
+  remember({
+    kind: "marks",
+    id: ++savedIds,
+    studentId: p.studentId,
+    name: v.s.name,
+    unitId: p.unitId,
+    tag: tagOf(v.s, v.unit),
+    items,
+    prev,
+    labels: items.map((it) => (v.f ? qLabel(v.f, it.q) : `Q${it.q}`)),
+    at: serverNow(),
+  });
+}
+
+/**
+ * Save a level (workbook.correct), as the Save button does. Its draft goes first, so it can't arrive after the level
+ * is saved. `auto`: the corrector moved on (another name or level) with every question marked. Null when it failed.
+ */
+async function saveLevel(v: View, p: MasterPaper, l: MasterLevel, auto: boolean) {
+  await flushFocus();
+  const qs = questionsOf(l);
+  const route = routeOf(sumOf(qs, p.given), l.max, p.to);
+  const before = beforeOf(v.mm, l);
+  const res = await act(() =>
+    mutate(api.workbook.correct, {
+      studentId: v.s._id,
+      unitId: v.s.unitId,
+      level: l.n,
+      items: itemsOf(qs, p.given),
+      to: route,
+      by: currentRole(),
+    }),
+  );
+  if (!res) return null;
+  if (!p.remark) void dropDraft(p.studentId, p.unitId, l.n);
+  remember({
+    kind: "level",
+    id: ++savedIds,
+    studentId: v.s._id,
+    name: v.s.name,
+    unitId: v.s.unitId!,
+    tag: tagOf(v.s, v.unit),
+    level: l.n,
+    from: l.from,
+    to: l.to,
+    got: res.got,
+    max: res.max,
+    given: { ...p.given },
+    parts: { ...p.parts },
+    before,
+    at: serverNow(),
+  });
+  const go = (who: string, list: number[]) => (list.length ? ` ${who}: ${list.map((q) => `Q${q}`).join(" ")}.` : "");
+  const pre = res.pre.length ? ` Level${res.pre.length === 1 ? "" : "s"} ${runs(res.pre)}: done before the app.` : "";
+  toast(
+    `${p.remark ? "Changed" : "Saved"}: ${v.s.name}, Level ${l.n}, ${res.got} / ${res.max}.${go("Theory", res.theory)}${go("Evaluation", res.evaluation)}${pre}${auto ? " (saved as you moved on)" : ""}`,
+  );
+  return res;
+}
+
+/** "1–3", "1, 4": level numbers, short. */
+function runs(ns: number[]): string {
+  const s = [...ns].sort((a, b) => a - b);
+  const out: string[] = [];
+  for (let i = 0; i < s.length; i++) {
+    let j = i;
+    while (j + 1 < s.length && s[j + 1] === s[j] + 1) j++;
+    out.push(j > i ? `${s[i]}–${s[j]}` : String(s[i]));
+    i = j;
+  }
+  return out.join(", ");
+}
+
+/**
+ * The open paper is left (another name, another level, Done): every mark is kept. A workbook level marked to the end
+ * saves itself (or its changes, for a corrected level opened again); theory marks join "Saved on this phone".
+ */
+function leave() {
+  const p = openPaper;
+  if (!p) return;
+  if (p.kind === "fighter") rememberFighter(p);
+  if (p.kind === "master" && !p.saving) {
+    const v = latestViews.find((x) => x.s._id === p.studentId);
+    const l = v?.mb?.levels.find((x) => x.n === p.level);
+    if (v && l && v.s.unitId === p.unitId && marksOfLevel(v, l)) {
+      const qs = questionsOf(l);
+      const complete = qs.every((q) => p.given[q]);
+      const changed = !p.remark || !sameGiven(qs, p.given, p.remark);
+      if (complete && changed) {
+        void saveLevel(v, p, l, true);
+        return;
+      }
     }
   }
+  void flushFocus();
+}
+
+/** Tap a name: leave the open paper (every mark kept) and open his. */
+function openFor(v: View, now: number) {
+  if (openPaper && openPaper.studentId === v.s._id && openPaper.kind !== "wait") return;
+  clearToasts();
+  leave();
+  setPaper(paperFor(v, now));
   window.scrollTo(0, 0);
 }
 
-/** Stop: close the paper. Every mark is already kept (or goes now); theory marks join "Saved on this phone". */
-function stopPaper() {
-  const p = openPaper;
-  if (!p) return;
-  if (p.kind === "fighter") {
-    const v = latestViews.find((x) => x.s._id === p.studentId);
-    const items: SavedMarks["items"] = [];
-    const prev: SavedMarks["prev"] = [];
-    for (const [k, was] of Object.entries(p.base)) {
-      const s = v?.marks[k]?.s ?? null;
-      if ((was?.s ?? null) === s) continue;
-      items.push({ q: Number(k), s });
-      prev.push({ q: Number(k), mark: was });
-    }
-    if (v && items.length) {
-      items.sort((a, b) => a.q - b.q);
-      remember({
-        kind: "marks",
-        id: ++savedIds,
-        studentId: p.studentId,
-        name: v.s.name,
-        unitId: p.unitId,
-        tag: tagOf(v.s, v.unit),
-        items,
-        prev,
-        labels: items.map((it) => (v.f ? qLabel(v.f, it.q) : `Q${it.q}`)),
-        at: serverNow(),
-      });
-    }
-  }
-  setPaper(null);
-  void flushFocus();
+/** Open one level of his workbook (the level bar, his marks table). */
+function openLevel(v: View, n: number) {
+  const l = v.mb?.levels.find((x) => x.n === n);
+  if (!l) return;
+  if (openPaper?.kind === "master" && openPaper.studentId === v.s._id && openPaper.level === n) return;
+  leave();
+  setPaper(paperAt(v, l));
+}
+
+/** Move him to another stage or unit (his paper is from there): the page opens it as soon as the board shows it. */
+async function moveTo(v: View, stage: Stage, u: Unit): Promise<boolean> {
+  // The open paper's marks reach the server first (they stay with the unit he leaves).
+  await flushFocus();
+  const t = u.term || v.s.term || termOf(serverNow());
+  const r = await act(() =>
+    mutate(api.students.move, { id: v.s._id, grade: u.grade, term: t, stage, unitId: u._id as Id<"units">, by: currentRole() }),
+  );
+  if (r === undefined) return false;
+  setPaper({ kind: "wait", studentId: v.s._id, unitId: u._id, stage });
+  toast(
+    stage === "fighter" || stage === "master"
+      ? `${v.s.name}: ${stageName(stage)} · ${unitNo(u.code)} ${u.ta || u.en}.`
+      : `${v.s.name}: ${stageName(stage)}, Grade ${u.grade}, Term ${t}.`,
+  );
+  return true;
 }
 
 /** Take a saved level back (after the corrector confirmed): it goes back to how it was; its marks wait for the right student. */
@@ -332,6 +507,8 @@ async function takeBackLevel(s: SavedLevel): Promise<boolean> {
   s.back = true;
   keepSaved();
   carry = { unitId: s.unitId, from: s.from, to: s.to, given: { ...s.given }, parts: { ...s.parts }, fromName: s.name, at: serverNow() };
+  // His paper (if open) goes back to how it is now.
+  if (openPaper?.studentId === s.studentId) setPaper(null);
   emit();
   toast(`Taken back: ${s.name}'s Level ${s.level} is as it was. Tap the right student: these marks go to him.`);
   return true;
@@ -363,12 +540,15 @@ async function takeBackMarks(s: SavedMarks): Promise<boolean> {
   }
   s.back = true;
   keepSaved();
+  if (openPaper?.studentId === s.studentId) setPaper(null);
   emit();
   toast(`Taken back: ${s.name}'s marks are as they were.`);
   return true;
 }
 
-// ---- The tab ----
+// ---- The page ----
+
+type SheetName = "unit" | "card" | "move" | "theory" | "saved";
 
 export function Focus(props: { board: Board; views: View[]; now: number; onAttendance: () => void }) {
   const { board, views, now } = props;
@@ -376,95 +556,70 @@ export function Focus(props: { board: Board; views: View[]; now: number; onAtten
   const drafts = useQuery<Draft[]>(api.focus.drafts, {});
   latestDrafts = drafts;
   const paper = useFocusState();
-  const lists = focusLists(views);
-  const offered = [...lists.here, ...lists.gone];
-  const grades = gradesOf(offered);
+  const [sheet, setSheetNow] = useState<SheetName | null>(null);
+  // Toasts sit at the top while a paper is open: a sheet opening clears them (they would cover its title).
+  const setSheet = (x: SheetName | null) => {
+    if (x) clearToasts();
+    setSheetNow(x);
+  };
+  const pills = focusPills(views);
+  const grades = gradesOf(pills.map((p) => p.v));
   const [grade, setGrade] = useFocusGrade(grades);
+  const shown = grade === "all" ? pills : pills.filter((p) => p.v.s.grade === grade);
   const v = paper ? (views.find((x) => x.s._id === paper.studentId) ?? null) : null;
-  const lost =
-    !!paper && (!v || v.s.unitId !== paper.unitId || (paper.kind === "fighter" ? !v.st || !v.f : !v.ms || !v.mb));
+  const waitingCarry = carry && now - carry.at <= CARRY_MS ? carry : null;
+
+  // His paper no longer fits him (moved to another book from another phone, or removed): open what fits now.
+  const moved =
+    !!paper &&
+    paper.kind !== "wait" &&
+    (!v ||
+      (paper.kind === "master" && (v.kind !== "master" || v.s.unitId !== paper.unitId)) ||
+      (paper.kind === "fighter" && (v.kind !== "fighter" || v.s.unitId !== paper.unitId)) ||
+      (paper.kind === "over" && (v.kind !== "master" || v.s.unitId !== paper.unitId)) ||
+      (paper.kind === "none" && (v.kind !== "none" || (v.s.unitId ?? null) !== paper.unitId || v.stage !== paper.stage)));
+  useEffect(() => {
+    if (!moved || !paper) return;
+    if (!v) {
+      setPaper(null);
+      toast("That student was removed: the paper was closed. Marks given before were kept.", "error");
+      return;
+    }
+    const wasMarking = paper.kind === "master" || paper.kind === "fighter";
+    setPaper(paperFor(v, now));
+    if (wasMarking) toast(`${v.s.name} is on ${tagOf(v.s, v.unit) || "another book"} now: opened there.`);
+  }, [moved]);
+  // Moved from here: open his new book as soon as the board shows him there.
+  const arrived = paper?.kind === "wait" && !!v && v.s.unitId === paper.unitId && v.s.stage === paper.stage;
+  useEffect(() => {
+    if (arrived && v) setPaper(paperFor(v, now));
+  }, [arrived]);
+  // A level saved to the end with nothing after it: the unit's marks (when the board shows the last save).
+  useEffect(() => {
+    if (paper?.kind === "master" && v?.kind === "master" && !paper.saving && openPaper === paper) {
+      const l = v.mb!.levels.find((x) => x.n === paper.level);
+      if (!l) setPaper(paperFor(v, now));
+    }
+  });
 
   // While a paper is open, toasts show at the top: nothing may sit over the pad.
-  const marking = !!paper && !lost;
+  const marking = !!paper;
   useEffect(() => {
     document.body.classList.toggle("fc-marking", marking);
     return () => document.body.classList.remove("fc-marking");
   }, [marking]);
-  // His paper can't be marked any more (removed, or moved to another book meanwhile): close it, say why.
-  useEffect(() => {
-    if (!lost || !paper) return;
-    const name = v?.s.name ?? "That student";
-    stopPaper();
-    toast(`${name} is no longer on that book: the paper was closed. Marks given before were kept.`, "error");
-  }, [lost]);
 
+  const inClass = views.some((x) => x.where !== "absent");
   return (
     <main class="page fc-page">
       <div class="stick">
         <CallsBand board={board} views={views} now={now} />
-        {!marking && <GradePills views={offered} needs={focusNeeds(views)} filter={grade} onPick={setGrade} />}
       </div>
-      {marking && v && paper ? (
-        paper.kind === "fighter" ? (
-          <FighterPaperView v={v} paper={paper} />
-        ) : (
-          <MasterPaperView v={v} paper={paper} drafts={drafts} now={now} />
-        )
-      ) : (
-        <Picker views={views} lists={lists} drafts={drafts} grade={grade} grades={grades} now={now} onAttendance={props.onAttendance} />
-      )}
-    </main>
-  );
-}
-
-// ---- Picking the student ----
-
-function Picker(props: {
-  views: View[];
-  lists: FocusLists;
-  drafts: Draft[] | undefined;
-  grade: GradeFilter;
-  grades: number[];
-  now: number;
-  onAttendance: () => void;
-}) {
-  const { lists, grade, now, drafts } = props;
-  const here = inGrade(lists.here, grade);
-  const gone = inGrade(lists.gone, grade);
-  const noBook = inGrade(lists.noBook, grade);
-  const nothing = inGrade(lists.nothing, grade);
-  const grouped = grade === "all" && props.grades.length > 1;
-  const inClass = props.views.some((v) => v.where !== "absent");
-  const waitingCarry = carry && now - carry.at <= CARRY_MS ? carry : null;
-  const pick = (v: View) => openFor(v, now);
-
-  if (props.views.length === 0) {
-    return (
-      <Empty title="No students yet">
-        {may("students") ? "Open settings (the gear at the top) to add your students." : "The owner adds students in Settings."}
-      </Empty>
-    );
-  }
-  return (
-    <>
-      {waitingCarry && (
-        <div class="fc-carry" role="status">
-          <span>
-            Marks taken back from <b>{waitingCarry.fromName}</b> (Q{waitingCarry.from}–{waitingCarry.to}): tap the right student.
-          </span>
-          <button
-            type="button"
-            class="btn ghost small"
-            onClick={() => {
-              carry = null;
-              emit();
-            }}
-          >
-            Drop
-          </button>
-        </div>
-      )}
-      {!inClass && lists.gone.length === 0 ? (
+      {views.length === 0 ? (
+        <Empty title="No students yet">
+          {may("students") ? "Open settings (the gear at the top) to add your students." : "The owner adds students in Settings."}
+        </Empty>
+      ) : !inClass && pills.length === 0 ? (
         <div class="empty">
           <p class="empty-title">Nobody is signed in yet</p>
           <p>Students show here once they are signed in on Attendance.</p>
@@ -472,114 +627,197 @@ function Picker(props: {
             Open Attendance
           </button>
         </div>
-      ) : here.length === 0 && gone.length === 0 ? (
-        <Empty title="Nothing to mark right now">Students in class with a workbook level or theory-book questions show here.</Empty>
-      ) : grouped ? (
-        props.grades
-          .filter((g) => here.some((v) => v.s.grade === g))
-          .map((g) => (
-            <section key={g} class="fc-group" aria-label={`Grade ${g}`}>
-              <h3 class="fc-h">Grade {g}</h3>
-              <Pills list={here.filter((v) => v.s.grade === g)} drafts={drafts} onPick={pick} />
-            </section>
-          ))
       ) : (
-        here.length > 0 && <Pills list={here} drafts={drafts} onPick={pick} />
+        <>
+          {waitingCarry && (
+            <div class="fc-carry" role="status">
+              <span>
+                Marks taken back from <b>{waitingCarry.fromName}</b> (Q{waitingCarry.from}–{waitingCarry.to}): tap the right student.
+              </span>
+              <button
+                type="button"
+                class="btn ghost small"
+                onClick={() => {
+                  carry = null;
+                  emit();
+                }}
+              >
+                Drop
+              </button>
+            </div>
+          )}
+          <NameBar pills={shown} grouped={grade === "all" && grades.length > 1} openId={paper?.studentId} drafts={drafts} onPick={(x) => openFor(x, now)} />
+          <div class="fc-tools">
+            <GradePills tiny views={pills.map((p) => p.v)} needs={focusNeeds(views)} filter={grade} onPick={setGrade} />
+            {saved.length > 0 && (
+              <button type="button" class="fc-savedbtn" aria-label={`Saved on this phone: ${saved.length}`} onClick={() => setSheet("saved")}>
+                <span aria-hidden="true">↶</span> Saved
+              </button>
+            )}
+          </div>
+          {paper && v ? (
+            <PaperView key={`${paper.studentId}`} v={v} paper={paper} drafts={drafts} now={now} onSheet={setSheet} />
+          ) : (
+            <p class="fc-hint">Tap the name on the paper.</p>
+          )}
+          {!paper && (
+            <p class="muted small fc-help">
+              Tap a name: his paper opens at the level to correct. One tap for each question (the big green button is full
+              marks, a number gives fewer, <b>?</b> = blank; a question in parts: each part's marks, or <b>?</b> for a part
+              left blank). Tapping another name keeps every mark; a level marked to the end saves itself. Tap a level on the
+              bar to open it (an old one: check or change its marks). His unit at the top changes his stage or unit.
+            </p>
+          )}
+        </>
       )}
 
-      {gone.length > 0 && (
-        <section class="fc-group" aria-label="Gone home, levels to correct">
-          <h3 class="fc-h">Gone home: levels to correct</h3>
-          <Pills list={gone} drafts={drafts} onPick={pick} />
-        </section>
+      {sheet === "saved" && <SavedSheet now={now} onClose={() => setSheet(null)} />}
+      {v && sheet === "unit" && <StageUnitSheet v={v} onClose={() => setSheet(null)} />}
+      {v && sheet === "card" && (
+        <Sheet title={v.s.name} sub={tagOf(v.s, v.unit)} onClose={() => setSheet(null)}>
+          <Book
+            role="correction"
+            v={v}
+            onMove={() => setSheet("move")}
+            onCorrect={(n) => {
+              setSheet(null);
+              openLevel(v, n);
+            }}
+            onTheory={() => setSheet("theory")}
+          />
+        </Sheet>
       )}
-
-      {nothing.length > 0 && (
-        <p class="muted small fc-nothing">
-          Nothing to mark now: {nothing.map((v) => `${v.s.name} (${nothingWhy(v)})`).join(", ")}.
-        </p>
-      )}
-      {noBook.length > 0 && (
-        <p class="muted small fc-nobook">
-          No book in the app for: {noBook.map((v) => `${v.s.name} (${tagOf(v.s, v.unit)})`).join(", ")}.
-        </p>
-      )}
-
-      <SavedList now={now} />
-
-      <p class="muted small fc-help">
-        Tap the name on the paper. Workbook: one tap for each question (the big green button is full marks, a number gives
-        fewer, <b>?</b> = blank). Theory book: <b>✓</b> right, <b>✗</b> wrong, <b>↻</b> slip. The next question comes by
-        itself, and <b>Stop</b> keeps every mark. <b>Later</b> = handed in, correct it later. Two levels on a name: one
-        handed in (amber) and the one he is on now.
-      </p>
-    </>
+      {v && sheet === "move" && <MoveSheet v={v} onClose={() => setSheet(null)} />}
+      {v && sheet === "theory" && v.ms && <TheorySheet v={v} onClose={() => setSheet(null)} />}
+    </main>
   );
 }
 
-function Pills(props: { list: View[]; drafts: Draft[] | undefined; onPick: (v: View) => void }) {
-  const needs = focusNeeds(props.list);
+// ---- The names ----
+
+const TONE_WORDS: Record<string, string> = {
+  red: "no work until it's corrected",
+  amber: "a level handed in",
+  th: "theory book",
+  nb: "no book in the app: choose his unit",
+  home: "gone home, levels to correct",
+};
+
+/** Tiny name pills, A–Z (grouped by grade under All): the one open is dark. */
+function NameBar(props: { pills: Pill[]; grouped: boolean; openId?: string; drafts: Draft[] | undefined; onPick: (v: View) => void }) {
+  const { pills, drafts } = props;
+  const marking = (v: View) => !!v.mb && (drafts ?? []).some((d) => d.studentId === v.s._id && d.unitId === v.s.unitId && Object.keys(d.q).length > 0);
   return (
-    <div class="fc-pills">
-      {props.list.map((v) => {
-        const need = needs.get(v.s._id);
-        if (v.kind === "fighter") {
-          const qs = v.st!.doable;
-          const first = qLabel(v.f!, qs[0]);
-          return (
-            <button
-              key={v.s._id}
-              type="button"
-              class="fc-pill th"
-              aria-label={`${v.s.name}: theory book, ${v.f!.longLabel(qs[0])} next${qs.length > 1 ? `, ${qs.length} he can do` : ""}`}
-              onClick={() => props.onPick(v)}
-            >
-              <b class="fc-pn">{v.s.name}</b>
-              <span class="fc-tags" aria-hidden="true">
-                <i class="th">{first}</i>
-                {qs.length > 1 && <i>+{qs.length - 1}</i>}
-              </span>
-            </button>
-          );
-        }
-        const cs = candidates(v);
-        const waiting = new Set(v.ms!.waiting.map((l) => l.n));
-        const noKey = !bookDocOf(v.s)?.keyCount;
-        const marked = (l: MasterLevel) => Object.keys(draftOf(props.drafts, v, l.n)?.q ?? {}).length;
-        const words = cs
-          .map((l) => `Level ${l.n}${waiting.has(l.n) ? " handed in" : ""}${marked(l) ? `, ${marked(l)} of ${l.to - l.from + 1} marked` : ""}`)
+    <nav class="fc-names" aria-label="Students: tap the name on the paper">
+      {pills.flatMap((p, i) => {
+        const g = p.v.s.grade;
+        const head = props.grouped && (i === 0 || pills[i - 1].v.s.grade !== g);
+        const on = p.v.s._id === props.openId;
+        const d = marking(p.v);
+        const words = [p.tone ? TONE_WORDS[p.tone] : "", p.waiting > 1 ? `${p.waiting} levels handed in` : "", d ? "marked part of the way" : ""]
+          .filter(Boolean)
           .join(", ");
-        return (
+        const button = (
           <button
-            key={v.s._id}
+            key={p.v.s._id}
             type="button"
-            class={`fc-pill${need ? ` ${need}` : ""}`}
-            aria-label={`${v.s.name}: ${words}${noKey ? ", no answer key" : ""}`}
-            onClick={() => props.onPick(v)}
+            class={`fc-nm${p.tone ? ` ${p.tone}` : ""}${on ? " on" : ""}${d ? " d" : ""}`}
+            aria-pressed={on}
+            aria-label={`${p.v.s.name}${words ? `: ${words}` : ""}`}
+            onClick={() => props.onPick(p.v)}
           >
-            <b class="fc-pn">{v.s.name}</b>
-            <span class="fc-tags" aria-hidden="true">
-              {cs.slice(0, 3).map((l) => (
-                <i key={l.n} class={`${waiting.has(l.n) ? "w" : ""}${marked(l) ? " d" : ""}`}>
-                  L{l.n}
-                  {marked(l) ? ` ${marked(l)}/${l.to - l.from + 1}` : ""}
-                </i>
-              ))}
-              {cs.length > 3 && <i>+{cs.length - 3}</i>}
-              {noKey && <i class="nk">no key</i>}
-            </span>
+            {p.v.s.name}
+            {p.waiting > 1 && (
+              <i class="fc-nm-n" aria-hidden="true">
+                {p.waiting}
+              </i>
+            )}
           </button>
         );
+        // A grade's number stays with its first name (never alone at the end of a line).
+        return head
+          ? [
+              <span key={`g${g}`} class="fc-gl">
+                <span class="fc-g" aria-hidden="true">
+                  {g ?? "?"}
+                </span>
+                {button}
+              </span>,
+            ]
+          : [button];
       })}
-    </div>
+    </nav>
   );
 }
 
-function SavedList(props: { now: number }) {
+// ---- Sheets ----
+
+type BookInfo = { unitId: string; stage: "fighter" | "master" };
+
+/** His stage (Fighter or Master) and unit: every unit of his grade by number and Tamil name; one tap moves him. */
+function StageUnitSheet(props: { v: View; onClose: () => void }) {
+  const { v } = props;
+  const books = useQuery<BookInfo[]>(api.catalog.books, {});
+  const [stage, setStage] = useState<"fighter" | "master">(v.stage === "fighter" ? "fighter" : "master");
+  const [busy, setBusy] = useState(false);
+  const units = allUnits()
+    .filter((u) => u.grade === v.s.grade)
+    .sort((a, b) => unitNo(a.code) - unitNo(b.code) || a.order - b.order);
+  const has = (u: Unit) => (books ? books.some((b) => b.unitId === u._id && b.stage === stage) : true);
+  const pick = async (u: Unit) => {
+    if (u._id === v.s.unitId && stage === v.stage) {
+      props.onClose();
+      return;
+    }
+    setBusy(true);
+    const ok = await moveTo(v, stage, u);
+    setBusy(false);
+    if (ok) props.onClose();
+  };
+  return (
+    <Sheet
+      title={`${v.s.name}: stage and unit`}
+      sub={`Grade ${v.s.grade ?? "?"}. Tap his stage, then the unit on his paper: he moves there at once.`}
+      onClose={props.onClose}
+    >
+      <div class="su-stages" role="group" aria-label="Stage">
+        {(["fighter", "master"] as const).map((st) => (
+          <button key={st} type="button" class={`su-st ${st}${stage === st ? " on" : ""}`} aria-pressed={stage === st} onClick={() => setStage(st)}>
+            <b>{st === "fighter" ? "Fighter" : "Master"}</b>
+            <small>{st === "fighter" ? "theory book" : "past-paper workbook"}</small>
+          </button>
+        ))}
+      </div>
+      <ul class="su-units" aria-label="Unit">
+        {units.map((u) => {
+          const here = u._id === v.s.unitId && stage === v.stage;
+          const book = has(u);
+          return (
+            <li key={u._id}>
+              <button
+                type="button"
+                class={`su-u${here ? " on" : ""}${book ? "" : " nb"}`}
+                disabled={busy}
+                aria-label={`${unitNo(u.code)} ${u.ta || u.en}${here ? ", he is on it now" : ""}${book ? "" : ", no book in the app yet"}`}
+                onClick={() => void pick(u)}
+              >
+                <b>{unitNo(u.code)}</b>
+                <span lang="ta">{u.ta || u.en}</span>
+                {here ? <small class="su-now">now</small> : !book ? <small>no book</small> : null}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </Sheet>
+  );
+}
+
+/** "Saved on this phone": the last 5 saves, each can be taken back for 30 minutes (asked first). */
+function SavedSheet(props: { now: number; onClose: () => void }) {
   const { now } = props;
   const [asking, setAsking] = useState<Saved | null>(null);
   const [busy, setBusy] = useState(false);
-  if (saved.length === 0) return null;
   const what = (s: Saved) =>
     s.kind === "level" ? (
       <>
@@ -591,10 +829,49 @@ function SavedList(props: { now: number }) {
         {s.items.length} mark{s.items.length === 1 ? "" : "s"}
       </>
     );
+  if (asking) {
+    return (
+      <Sheet
+        title={asking.kind === "level" ? `Take back ${asking.name}'s Level ${asking.level}?` : `Take back ${asking.name}'s marks?`}
+        sub={
+          asking.kind === "level"
+            ? `Saved ${asking.got} / ${asking.max} on the wrong student or the wrong level? It goes back to how it was before.`
+            : `${asking.items.length} theory-book mark${asking.items.length === 1 ? "" : "s"} on the wrong student? They go back to how they were.`
+        }
+        onClose={() => setAsking(null)}
+        foot={
+          <div class="row-actions">
+            <button type="button" class="btn ghost" onClick={() => setAsking(null)}>
+              Keep it
+            </button>
+            <button
+              type="button"
+              class="btn danger"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                const ok = asking.kind === "level" ? await takeBackLevel(asking) : await takeBackMarks(asking);
+                setBusy(false);
+                setAsking(null);
+                if (ok) props.onClose();
+              }}
+            >
+              Take back
+            </button>
+          </div>
+        }
+      >
+        <p class="muted">
+          {asking.kind === "level"
+            ? "The marks stay on this phone: tap the right student next and they go to him, ready to save."
+            : "Then open the right student and mark his questions."}
+        </p>
+      </Sheet>
+    );
+  }
   return (
-    <section class="fc-saved" aria-label="Saved on this phone">
-      <h3 class="fc-h">Saved on this phone</h3>
-      <ul>
+    <Sheet title="Saved on this phone" sub="Saved on the wrong student? Take it back within 30 minutes." onClose={props.onClose}>
+      <ul class="fc-saved">
         {saved.map((s) => {
           const canTake = !s.back && now - s.at < TAKE_BACK_MS;
           return (
@@ -612,65 +889,50 @@ function SavedList(props: { now: number }) {
           );
         })}
       </ul>
-      {asking && (
-        <Sheet
-          title={asking.kind === "level" ? `Take back ${asking.name}'s Level ${asking.level}?` : `Take back ${asking.name}'s marks?`}
-          sub={
-            asking.kind === "level"
-              ? `Saved ${asking.got} / ${asking.max} on the wrong student or the wrong level? It goes back to how it was before.`
-              : `${asking.items.length} theory-book mark${asking.items.length === 1 ? "" : "s"} on the wrong student? They go back to how they were.`
-          }
-          onClose={() => setAsking(null)}
-          foot={
-            <div class="row-actions">
-              <button type="button" class="btn ghost" onClick={() => setAsking(null)}>
-                Keep it
-              </button>
-              <button
-                type="button"
-                class="btn danger"
-                disabled={busy}
-                onClick={async () => {
-                  setBusy(true);
-                  if (asking.kind === "level") await takeBackLevel(asking);
-                  else await takeBackMarks(asking);
-                  setBusy(false);
-                  setAsking(null);
-                }}
-              >
-                Take back
-              </button>
-            </div>
-          }
-        >
-          <p class="muted">
-            {asking.kind === "level"
-              ? "The marks stay on this phone: tap the right student next and they go to him, ready to save."
-              : "Then open the right student and mark his questions."}
-          </p>
-        </Sheet>
-      )}
-    </section>
+    </Sheet>
   );
 }
 
 // ---- One paper ----
 
+function PaperView(props: { v: View; paper: Paper; drafts: Draft[] | undefined; now: number; onSheet: (s: SheetName) => void }) {
+  const { v, paper, now } = props;
+  const head = (later?: () => void) => <PaperHead v={v} later={later} onUnit={() => props.onSheet("unit")} onCard={() => props.onSheet("card")} />;
+  if (paper.kind === "fighter" && v.kind === "fighter") return <FighterPaperView v={v} paper={paper} head={head()} />;
+  if (paper.kind === "master" && v.kind === "master") return <MasterPaperView v={v} paper={paper} drafts={props.drafts} now={now} head={head} />;
+  if (paper.kind === "over" && v.kind === "master") return <OverView v={v} drafts={props.drafts} head={head()} />;
+  if (paper.kind === "wait") {
+    return (
+      <div class="fc-paper">
+        {head()}
+        <p class="fc-hint">Opening his new book…</p>
+      </div>
+    );
+  }
+  return <NoBookView v={v} head={head()} onUnit={() => props.onSheet("unit")} />;
+}
+
 /**
- * The paper's top: whose it is (huge), his book, and Stop (every mark is kept). A workbook level he hasn't handed in
- * yet also has Later: handed in, correct it later (the waiting clock starts, he goes on with the next level).
+ * The paper's top: whose it is (huge); his stage and unit (tap: change them); his card (marks table and buttons). A
+ * workbook level he hasn't handed in yet also has Later: handed in, correct it later (the waiting clock starts).
  */
-function PaperHead(props: { v: View; later?: () => void; children?: ComponentChildren }) {
+function PaperHead(props: { v: View; later?: () => void; onUnit: () => void; onCard: () => void }) {
   const { v } = props;
+  const st = STAGES.find((x) => x.id === v.stage);
   return (
     <header class="fc-head">
       <div class="fc-who">
         <h2 class="fc-name">{v.s.name}</h2>
-        <p class="fc-where">
-          {tagOf(v.s, v.unit)}
-          {v.kind === "fighter" ? " · theory book" : ""}
-          {props.children}
-        </p>
+        <button
+          type="button"
+          class="fc-unit"
+          aria-label={`${st?.name ?? "No stage"}, ${v.unit ? `unit ${unitNo(v.unit.code)} ${v.unit.ta || v.unit.en}` : "no unit"}: change his stage or unit`}
+          onClick={props.onUnit}
+        >
+          <b class={`st-${v.stage ?? "none"}`}>{st?.short ?? "?"}</b>
+          <span lang="ta">{v.unit ? `${unitNo(v.unit.code)} · ${v.unit.ta || v.unit.en}` : "Choose his unit"}</span>
+          <i aria-hidden="true">▾</i>
+        </button>
       </div>
       <div class="fc-head-acts">
         {props.later && (
@@ -678,79 +940,134 @@ function PaperHead(props: { v: View; later?: () => void; children?: ComponentChi
             Later
           </button>
         )}
-        <button type="button" class="btn ghost small fc-stop" aria-label="Stop: every mark is kept" onClick={stopPaper}>
-          Stop
+        <button type="button" class="btn ghost small fc-cardbtn" aria-label={`${v.s.name}: his marks and buttons`} onClick={props.onCard}>
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <rect x="3.5" y="4" width="17" height="16" rx="2.5" />
+            <path d="M3.5 9.5h17M9.5 9.5V20" />
+          </svg>
+          Marks
         </button>
       </div>
     </header>
   );
 }
 
-function MasterPaperView(props: { v: View; paper: MasterPaper; drafts: Draft[] | undefined; now: number }) {
+const LOOK_WORDS: Record<LevelLook, string> = {
+  fixed: "corrected",
+  waiting: "handed in, to correct",
+  draft: "marked part of the way",
+  current: "he is on it now",
+  pre: "done before the app",
+  later: "not done yet",
+};
+
+/** His workbook's levels in one bar (like the Class rows), each a button: the open one ringed. */
+function LevelBar(props: { v: View; open: number | null; drafts: Draft[] | undefined; onPick: (n: number) => void }) {
+  const { v } = props;
+  const mb = v.mb!;
+  const ms = v.ms!;
+  const newPart = (i: number) => i > 0 && mb.parts.some((p) => p.from === mb.levels[i].from);
+  return (
+    <div class={`fc-lvbar${mb.levels.length > 12 ? " many" : ""}`} role="group" aria-label="Levels">
+      {mb.levels.map((l, i) => {
+        const look = levelLook(v, l, props.drafts);
+        const pct = ms.byLevel[String(l.n)]?.pct ?? null;
+        const mark = look === "fixed" ? (pct === null || pct >= 80 ? " good" : pct >= 50 ? " mid" : " low") : "";
+        const on = props.open === l.n;
+        const got = v.mm.lv[String(l.n)]?.got;
+        return (
+          <button
+            key={l.n}
+            type="button"
+            class={`fc-lb ${look}${mark}${on ? " on" : ""}${newPart(i) ? " gap" : ""}`}
+            aria-pressed={on}
+            aria-label={`Level ${l.n}, Q${l.from}–${l.to}: ${LOOK_WORDS[look]}${look === "fixed" ? `, ${got ?? 0} of ${l.max}` : ""}`}
+            onClick={() => props.onPick(l.n)}
+          >
+            {l.n}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Under the bar: the open level, its questions, and where it stands. */
+function LevelLine(props: { v: View; l: MasterLevel; look: LevelLook; now: number; remark: boolean }) {
+  const { v, l, look, now } = props;
+  const lv = v.mm.lv[String(l.n)];
+  const part = partOf(v.mb!, l.from)?.id;
+  const state =
+    props.remark || look === "fixed"
+      ? `corrected ${lv?.got ?? 0} / ${l.max}`
+      : look === "waiting" && lv?.done
+        ? `handed in ${fmtMin(now - lv.done)} ago`
+        : look === "current"
+          ? "he is on it now"
+          : look === "pre"
+            ? "done before the app"
+            : look === "draft"
+              ? "marked part of the way"
+              : `/ ${l.max}`;
+  return (
+    <p class={`fc-lvline ${props.remark ? "fixed" : look}`}>
+      <b>Level {l.n}</b> · Q{l.from}–{l.to}
+      {part ? ` · ${PART_NAME[part]}` : ""} · {state}
+    </p>
+  );
+}
+
+function MasterPaperView(props: {
+  v: View;
+  paper: MasterPaper;
+  drafts: Draft[] | undefined;
+  now: number;
+  head: (later?: () => void) => ComponentChildren;
+}) {
   const { v, paper, now } = props;
   const mb = v.mb!;
-  const level = paper.level !== null ? (mb.levels.find((l) => l.n === paper.level) ?? null) : null;
+  const level = mb.levels.find((l) => l.n === paper.level) ?? null;
   // The answer key comes only while a paper is open (it never travels with the board).
   const keyQ = useQuery<{ answers: KeyAnswer[] } | null>(api.catalog.key, { unitId: v.s.unitId });
   const [clearing, setClearing] = useState(false);
   const lock = useRef(0);
   const marks = Object.keys(paper.given).length;
-  const fixedNow = level && !paper.saving ? v.mm.lv[String(level.n)]?.fixed : undefined;
+  const fixedNow = level && !paper.saving && !paper.remark ? v.mm.lv[String(level.n)]?.fixed : undefined;
 
   // Opened before the drafts arrived: load his marks as soon as they do (only if nothing was marked meanwhile).
   useEffect(() => {
-    if (!level || paper.checked || props.drafts === undefined || openPaper !== paper) return;
+    if (!level || paper.checked || paper.remark || props.drafts === undefined || openPaper !== paper) return;
     setPaper(marks ? { ...paper, checked: true } : masterAt(v, level));
   }, [props.drafts, level?.n]);
 
-  const changeLevel = () => setPaper({ kind: "master", studentId: paper.studentId, unitId: paper.unitId, level: null, given: {}, parts: {}, at: 0, to: "auto" });
-  // Handed in, to correct later (the level pills on the Class rows did this before): the waiting clock starts.
-  const lvNow = level ? v.mm.lv[String(level.n)] : undefined;
-  const canLater = !!level && !lvNow?.done && !lvNow?.fixed && v.where !== "absent" && !paper.saving;
+  if (!level) return null;
+  // Handed in, to correct later (the waiting clock starts); the page closes his paper.
+  const lvNow = v.mm.lv[String(level.n)];
+  const canLater = !lvNow?.done && !lvNow?.fixed && v.where !== "absent" && !paper.saving && !paper.remark;
   const later = async () => {
-    if (!level) return;
     const n = level.n;
     const r = await act(() => mutate(api.workbook.levelDone, { studentId: v.s._id, unitId: v.s.unitId!, level: n, by: currentRole() }));
     if (r) {
-      stopPaper();
-      toast(`${v.s.name}: Level ${n} handed in. It waits for you as an amber L${n}.`);
+      void flushFocus();
+      if (openPaper === paper || (openPaper?.kind === "master" && openPaper.studentId === v.s._id)) setPaper(null);
+      toast(`${v.s.name}: Level ${n} handed in. It waits as an amber level on his bar.`);
     }
   };
+  const look = levelLook(v, level, props.drafts);
 
   return (
     <div class="fc-paper">
-      <PaperHead v={v} later={canLater ? () => void later() : undefined}>
-        {level && (
-          <>
-            {" · "}
-            <button type="button" class="fc-lvchip" aria-label={`Level ${level.n}, questions ${level.from} to ${level.to}: change level`} onClick={changeLevel}>
-              L{level.n} · Q{level.from}–{level.to} <span aria-hidden="true">▾</span>
-            </button>
-          </>
-        )}
-      </PaperHead>
-
+      {props.head(canLater ? () => void later() : undefined)}
+      <LevelBar v={v} open={level.n} drafts={props.drafts} onPick={(n) => openLevel(v, n)} />
+      <LevelLine v={v} l={level} look={look} now={now} remark={!!paper.remark} />
       {fixedNow !== undefined && (
         <p class="fc-warn" role="alert">
-          Level {level!.n} is already corrected ({v.mm.lv[String(level!.n)]?.got ?? 0} / {level!.max}). Saving replaces those marks.
+          Level {level.n} was corrected meanwhile ({v.mm.lv[String(level.n)]?.got ?? 0} / {level.max}). Saving replaces those marks.
         </p>
       )}
+      <Marking v={v} paper={paper} level={level} keyQ={keyQ} lock={lock} onClear={() => setClearing(true)} />
 
-      {!level ? (
-        <LevelChoice
-          v={v}
-          drafts={props.drafts}
-          now={now}
-          onPick={(n) => {
-            lock.current = Date.now() + TAP_GUARD_MS;
-            setPaper(masterAt(v, mb.levels.find((l) => l.n === n)!));
-          }}
-        />
-      ) : (
-        <Marking v={v} paper={paper} level={level} keyQ={keyQ} lock={lock} onClear={() => setClearing(true)} />
-      )}
-
-      {clearing && level && (
+      {clearing && (
         <Sheet
           title={`Clear ${v.s.name}'s marks on Level ${level.n}?`}
           sub={`${marks} question${marks === 1 ? " is" : "s are"} marked. Clearing forgets them; nothing else changes.`}
@@ -766,7 +1083,7 @@ function MasterPaperView(props: { v: View; paper: MasterPaper; drafts: Draft[] |
                 onClick={() => {
                   setClearing(false);
                   void dropDraft(paper.studentId, paper.unitId, level.n);
-                  setPaper({ ...paper, given: {}, parts: {}, at: 0, carriedFrom: undefined, resumed: undefined });
+                  setPaper({ ...paper, given: {}, parts: {}, blanks: {}, at: 0, carriedFrom: undefined, resumed: undefined });
                 }}
               >
                 Clear the marks
@@ -781,42 +1098,74 @@ function MasterPaperView(props: { v: View; paper: MasterPaper; drafts: Draft[] |
   );
 }
 
-/** Which level is this paper? Only asked when there is more than one it could be. */
-function LevelChoice(props: { v: View; drafts: Draft[] | undefined; now: number; onPick: (n: number) => void }) {
-  const { v, now } = props;
-  const cs = candidates(v);
-  const rest = openLevels(v).filter((l) => !cs.some((c) => c.n === l.n));
-  const [other, setOther] = useState(cs.length === 0);
-  const waiting = new Set(v.ms!.waiting.map((l) => l.n));
-  const button = (l: MasterLevel) => {
-    const done = v.mm.lv[String(l.n)]?.done;
-    const marked = Object.keys(draftOf(props.drafts, v, l.n)?.q ?? {}).length;
-    return (
-      <button key={l.n} type="button" class={`fc-lv${waiting.has(l.n) ? " w" : ""}`} onClick={() => props.onPick(l.n)}>
-        <b>Level {l.n}</b>
-        <span>
-          Q{l.from}–{l.to}
-        </span>
-        <small>
-          {marked ? `${marked} of ${l.to - l.from + 1} marked · ` : ""}
-          {waiting.has(l.n) && done ? `handed in ${fmtMin(now - done)} ago` : v.ms!.current?.n === l.n ? "working on it now" : `/ ${l.max}`}
-        </small>
-      </button>
-    );
-  };
+/** Every level corrected (or done before the app): the unit's marks, to write on the marks sheet in his book. */
+function OverView(props: { v: View; drafts: Draft[] | undefined; head: ComponentChildren }) {
+  const { v } = props;
+  const ms = v.ms!;
+  const [busy, setBusy] = useState(false);
+  // The usual next step, the same as Class → Move: the next workbook of the term, else Legend (whole papers).
+  const step = nextBook(allUnits(), v.unit);
   return (
-    <section class="fc-levels" aria-label="Which level is this paper?">
-      <p class="fc-ask">Which level is this paper? Look at its first question number.</p>
-      {cs.map(button)}
-      {rest.length > 0 &&
-        (other ? (
-          rest.map(button)
-        ) : (
-          <button type="button" class="link-btn fc-other" onClick={() => setOther(true)}>
-            Another level…
+    <div class="fc-paper">
+      {props.head}
+      <LevelBar v={v} open={null} drafts={props.drafts} onPick={(n) => openLevel(v, n)} />
+      <section class="fc-over" aria-label="The unit's marks">
+        <p class="fc-over-k">{v.unit ? `Unit ${unitNo(v.unit.code)} finished` : "Workbook finished"}</p>
+        <p class="fc-total">
+          <b>{ms.unit.got}</b> / {ms.unit.max}
+          <span>{ms.unit.pct ?? 0}%</span>
+        </p>
+        {ms.pre > 0 && (
+          <p class="muted small">
+            {ms.pre} level{ms.pre === 1 ? " was" : "s were"} done before the app: their marks are only on his paper.
+          </p>
+        )}
+        <p class="muted small">Write these on the marks sheet at the back of his book. Tap a level to check it.</p>
+        <MasterBook role="correction" v={v} onCorrect={(n) => openLevel(v, n)} />
+      </section>
+      {step && (
+        <div class="fc-pad">
+          <button
+            type="button"
+            class="btn big wide fc-next"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              await moveTo(v, step.stage, step.unit);
+              setBusy(false);
+            }}
+          >
+            {step.stage === "master" ? (
+              <>
+                Next: Master · {unitNo(step.unit.code)} <span lang="ta">{step.unit.ta || step.unit.en}</span>
+              </>
+            ) : (
+              "Next: Legend (whole papers)"
+            )}
           </button>
-        ))}
-    </section>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** No book in the app for his stage and unit (or Legend, Exam Sprint): say so, and how to choose his unit. */
+function NoBookView(props: { v: View; head: ComponentChildren; onUnit: () => void }) {
+  const { v } = props;
+  const title =
+    v.stage === "legend" || v.stage === "sprint"
+      ? `${STAGES.find((x) => x.id === v.stage)?.name}: full papers on paper for now`
+      : !v.unit
+        ? "Choose his unit"
+        : `No ${v.stage === "fighter" ? "theory book" : "workbook"} for ${tagOf(v.s, v.unit)} in the app yet`;
+  return (
+    <div class="fc-paper">
+      {props.head}
+      <Empty title={title}>If his paper is from another stage or unit, choose it: he moves there at once.</Empty>
+      <button type="button" class="btn primary wide" onClick={props.onUnit}>
+        Choose his stage and unit
+      </button>
+    </div>
   );
 }
 
@@ -850,7 +1199,7 @@ function Marking(props: {
   return (
     <>
       <Strip qs={qs} each={each} given={paper.given} at={at} onGo={go} />
-      {paper.resumed && !paper.carriedFrom && (
+      {paper.resumed && !paper.carriedFrom && !paper.remark && (
         <p class="fc-resumed">
           {paper.resumed.count} already marked ({slClock(paper.resumed.at)}): tap a box above to check one.{" "}
           <button type="button" class="link-btn" onClick={props.onClear}>
@@ -873,9 +1222,9 @@ function Marking(props: {
           lock={lock}
         />
       ) : (
-        <Summary v={v} paper={paper} level={level} each={each} qs={qs} lock={lock} />
+        <Summary key={`sum${level.n}`} v={v} paper={paper} level={level} each={each} qs={qs} lock={lock} />
       )}
-      {marked.length > 0 && !paper.resumed && at < qs.length && (
+      {marked.length > 0 && !paper.resumed && !paper.remark && at < qs.length && (
         <button type="button" class="link-btn fc-clear" onClick={props.onClear}>
           Clear these marks
         </button>
@@ -892,17 +1241,18 @@ function Strip(props: { qs: number[]; each: number[]; given: Record<number, Give
       {qs.map((q, i) => {
         const g = given[q];
         const cls = !g ? "" : g.dk ? " dk" : g.g === each[i] ? " full" : g.g === 0 ? " zero" : " part";
+        const words = !g ? "not marked" : g.dk ? (g.dkp?.length ? `${g.g} of ${each[i]}, ? ${g.dkp.join(" ")} blank` : "? blank") : `${g.g} of ${each[i]}`;
         return (
           <li key={q}>
             <button
               type="button"
               class={`fc-sq${cls}${i === at ? " on" : ""}`}
               aria-current={i === at ? "step" : undefined}
-              aria-label={`Q${q}: ${g ? (g.dk ? "? blank" : `${g.g} of ${each[i]}`) : "not marked"}`}
+              aria-label={`Q${q}: ${words}`}
               onClick={() => props.onGo(i)}
             >
               <small>{q}</small>
-              <b>{g ? (g.dk ? "?" : g.g) : ""}</b>
+              <b>{!g ? "" : g.dk ? (g.dkp?.length ? `${g.g}?` : "?") : g.g}</b>
             </button>
           </li>
         );
@@ -910,6 +1260,9 @@ function Strip(props: { qs: number[]; each: number[]; given: Record<number, Give
     </ol>
   );
 }
+
+/** A Part II question: its parts' names (i, ii, ...). */
+const isPartTwo = (v: View, q: number) => (partOf(v.mb!, q)?.id ?? "").startsWith("II");
 
 function QuestionCard(props: {
   v: View;
@@ -928,10 +1281,21 @@ function QuestionCard(props: {
   const prev = paper.given[q];
   const parts = markedParts(k, max);
   const full = parts?.map((p) => p.m!) ?? null;
+  // Parts left blank ("?"), by name: as tapped on this card, else as his mark so far says.
+  const blanks = paper.blanks[q] ?? prev?.dkp ?? [];
+  const touched = paper.parts[q] !== undefined || paper.blanks[q] !== undefined;
   // Part marks as tapped; before any tap, full marks (unless his mark so far says otherwise: then none is lit).
   const pm = paper.parts[q] ?? (prev && (prev.dk || prev.g !== max) ? null : full);
-  // The big button gives what is shown: the parts' sum once one was changed, else his mark so far, else full marks.
-  const offer: Given = paper.parts[q] ? { g: paper.parts[q].reduce((a, b) => a + b, 0) } : (prev ?? { g: max });
+  // A Part II question without part marks: "? a part left blank" goes with the marks he got.
+  const [partBlank, setPartBlank] = useState(() => !parts && !!prev?.dkp?.length);
+  const multi = !parts && max >= 3 && isPartTwo(v, q);
+  // The big button gives what is shown: the parts once one was changed, else his mark so far, else full marks.
+  let offer: Given = prev ?? { g: max };
+  if (parts && touched) {
+    const marks = pm ?? full!;
+    const sum = marks.reduce((a, b) => a + b, 0);
+    offer = blanks.length === parts.length ? { g: 0, dk: true } : blanks.length ? { g: sum, dk: true, dkp: [...blanks] } : { g: sum };
+  }
   const part = partOf(v.mb!, q)?.id;
 
   const give = (g: Given) => {
@@ -940,21 +1304,39 @@ function QuestionCard(props: {
     const next = nextIndex(qs, given, i);
     // The summary's Save sits where the marks were: a longer pause before it can be tapped.
     lock.current = Date.now() + (next === qs.length ? TAP_GUARD_MS * 2 : TAP_GUARD_MS);
-    // Kept as his draft on the server (Stop keeps it; another phone sees it).
-    queueDraft(paper.studentId, paper.unitId, paper.level!, q, g, !g.dk ? paper.parts[q] : undefined);
+    // Kept as his draft on the server (another name keeps it; another phone sees it). A corrected level opened again
+    // changes only on this phone until "Save changes".
+    if (!paper.remark) queueDraft(paper.studentId, paper.unitId, paper.level, q, g, parts && paper.parts[q] ? paper.parts[q] : undefined);
     setPaper({ ...paper, given, at: next });
   };
   const setPart = (j: number, g: number) => {
-    if (Date.now() < lock.current || !full) return;
+    if (Date.now() < lock.current || !full || !parts) return;
     const next = [...(pm ?? full)];
     next[j] = g;
-    setPaper({ ...paper, parts: { ...paper.parts, [q]: next } });
+    setPaper({
+      ...paper,
+      parts: { ...paper.parts, [q]: next },
+      blanks: { ...paper.blanks, [q]: blanks.filter((b) => b !== parts[j].p) },
+    });
+  };
+  // "?" on one part: he left it blank (0 marks for it); again = not blank (full marks for it).
+  const blankPart = (j: number) => {
+    if (Date.now() < lock.current || !full || !parts) return;
+    const name = parts[j].p;
+    const on = blanks.includes(name);
+    const next = [...(pm ?? full)];
+    next[j] = on ? full[j] : 0;
+    setPaper({
+      ...paper,
+      parts: { ...paper.parts, [q]: next },
+      blanks: { ...paper.blanks, [q]: on ? blanks.filter((b) => b !== name) : [...blanks, name] },
+    });
   };
   const tone = offer.dk ? "dk" : offer.g === max ? "full" : offer.g === 0 ? "zero" : "part";
   const blank = (
     <button
       type="button"
-      class={`fc-n dk${prev?.dk ? " on" : ""}`}
+      class={`fc-n dk${prev?.dk && !prev.dkp?.length ? " on" : ""}`}
       aria-label={`Q${q}: blank, couldn't start it (to Theory)`}
       onClick={() => give({ g: 0, dk: true })}
     >
@@ -1009,55 +1391,85 @@ function QuestionCard(props: {
           )}
         </div>
         {parts && (
-          // Each part with its marks, full width: he taps only a part that lost marks; the big button adds up.
+          // Each part with its marks, full width: he taps only a part that lost marks (or ? when he left it blank);
+          // the big button adds up.
           <ul class="fc-parts">
-            {parts.map((p, j) => (
-              <li key={j} class="fc-part">
-                <span class="fc-pt">
-                  <em>{p.p})</em> <KeyText text={p.a} />
-                </span>
-                <span class={`fc-pm${p.m! >= 4 ? " many" : ""}`} role="group" aria-label={`Part ${p.p}, out of ${p.m}`}>
-                  {Array.from({ length: p.m! + 1 }, (_, g) => (
+            {parts.map((p, j) => {
+              const isBlank = blanks.includes(p.p);
+              return (
+                <li key={j} class={`fc-part${isBlank ? " blank" : ""}`}>
+                  <span class="fc-pt">
+                    <em>{p.p})</em> <KeyText text={p.a} />
+                  </span>
+                  <span class={`fc-pm${p.m! >= 4 ? " many" : ""}`} role="group" aria-label={`Part ${p.p}, out of ${p.m}`}>
                     <button
-                      key={g}
                       type="button"
-                      class={`fc-pb${pm?.[j] === g ? " on" : ""}${g === p.m ? " full" : g === 0 ? " zero" : ""}`}
-                      aria-pressed={pm?.[j] === g}
-                      aria-label={`Part ${p.p}: ${g} of ${p.m}`}
-                      onClick={() => setPart(j, g)}
+                      class={`fc-pb dk${isBlank ? " on" : ""}`}
+                      aria-pressed={isBlank}
+                      aria-label={`Part ${p.p}: ? left blank`}
+                      onClick={() => blankPart(j)}
                     >
-                      {g}
+                      ?
                     </button>
-                  ))}
-                </span>
-              </li>
-            ))}
+                    {Array.from({ length: p.m! + 1 }, (_, g) => {
+                      const on = !isBlank && pm?.[j] === g;
+                      return (
+                        <button
+                          key={g}
+                          type="button"
+                          class={`fc-pb${on ? " on" : ""}${g === p.m ? " full" : g === 0 ? " zero" : ""}`}
+                          aria-pressed={on}
+                          aria-label={`Part ${p.p}: ${g} of ${p.m}`}
+                          onClick={() => setPart(j, g)}
+                        >
+                          {g}
+                        </button>
+                      );
+                    })}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>
 
       <div class="fc-pad">
         {parts ? (
-          // The parts give the marks: only "?" and the big button here, so the parts keep the screen.
+          // The parts give the marks: only "?" (the whole question) and the big button here, so the parts keep the screen.
           <div class="fc-row">
             {blank}
             <GoButton q={q} max={max} offer={offer} tone={tone} onGive={give} />
           </div>
         ) : (
           <>
+            {multi && (
+              <button
+                type="button"
+                class={`fc-pblank${partBlank ? " on" : ""}`}
+                aria-pressed={partBlank}
+                onClick={() => setPartBlank(!partBlank)}
+              >
+                <b>?</b> {partBlank ? "A part left blank: now tap the marks he got" : "A part left blank (he answered the rest)"}
+              </button>
+            )}
             <div class={`fc-nums${max >= 5 ? " many" : ""}`} role="group" aria-label={`Marks for Q${q}, out of ${max}`}>
               {blank}
-              {Array.from({ length: max + 1 }, (_, g) => (
-                <button
-                  key={g}
-                  type="button"
-                  class={`fc-n${prev && !prev.dk && prev.g === g ? " on" : ""}${g === max ? " full" : g === 0 ? " zero" : ""}`}
-                  aria-label={`Q${q}: ${g} of ${max}`}
-                  onClick={() => give({ g })}
-                >
-                  {g}
-                </button>
-              ))}
+              {Array.from({ length: max + 1 }, (_, g) => {
+                const on = !!prev && (partBlank ? !!prev.dkp?.length : !prev.dk) && prev.g === g;
+                return (
+                  <button
+                    key={g}
+                    type="button"
+                    class={`fc-n${on ? " on" : ""}${g === max ? " full" : g === 0 ? " zero" : ""}`}
+                    disabled={partBlank && g === max}
+                    aria-label={`Q${q}: ${g} of ${max}${partBlank ? ", a part blank" : ""}`}
+                    onClick={() => give(partBlank ? { g, dk: true, dkp: ["part"] } : { g })}
+                  >
+                    {g}
+                  </button>
+                );
+              })}
             </div>
             <GoButton q={q} max={max} offer={offer} tone={tone} onGive={give} />
           </>
@@ -1070,20 +1482,22 @@ function QuestionCard(props: {
 /** The big button: gives what is shown (full marks unless he changed it). */
 function GoButton(props: { q: number; max: number; offer: Given; tone: string; onGive: (g: Given) => void }) {
   const { q, max, offer } = props;
+  const partBlank = !!offer.dk && !!offer.dkp?.length;
   return (
     <button
       type="button"
       class={`fc-go ${props.tone}`}
-      aria-label={`Give Q${q} ${offer.dk ? "? blank" : `${offer.g} of ${max}`}`}
+      aria-label={`Give Q${q} ${offer.dk && !partBlank ? "? blank" : `${offer.g} of ${max}${partBlank ? `, ? ${offer.dkp!.join(" ")} blank` : ""}`}`}
       onClick={() => props.onGive(offer)}
     >
-      {offer.dk ? (
+      {offer.dk && !partBlank ? (
         "? blank"
       ) : (
         <>
           {offer.g === max && <span aria-hidden="true">✓</span>}
           <b>{offer.g}</b> / {max}
           {offer.g === max && <small>full</small>}
+          {partBlank && <small>? {offer.dkp!.join(" ")} blank</small>}
         </>
       )}
     </button>
@@ -1104,58 +1518,34 @@ function Summary(props: { v: View; paper: MasterPaper; level: MasterLevel; each:
   const sum = sumOf(qs, paper.given);
   const pct = Math.round((sum / level.max) * 100);
   const lostQs = qs.filter((q, i) => paper.given[q] && !paper.given[q].dk && paper.given[q].g < each[i]);
-  const dkQs = qs.filter((q) => paper.given[q]?.dk);
+  const blanks = blankWords(qs, paper.given);
   const route = routeOf(sum, level.max, paper.to);
+  const remark = paper.remark;
+  const changed = !remark || !sameGiven(qs, paper.given, remark);
+  const back = remark ? autoLevel(v, latestDrafts) : null;
 
   const save = async () => {
-    if (!ready || busy || missing.length) return;
+    if (!ready || busy || missing.length || !changed) return;
     setBusy(true);
     setPaper({ ...paper, saving: true });
-    // Its draft goes first, so it can't arrive after the level is saved.
-    await flushFocus();
-    const before = beforeOf(v.mm, level);
-    const res = await act(() =>
-      mutate(api.workbook.correct, {
-        studentId: v.s._id,
-        unitId: v.s.unitId,
-        level: level.n,
-        items: itemsOf(qs, paper.given),
-        to: route,
-        by: currentRole(),
-      }),
-    );
+    const res = await saveLevel(v, paper, level, false);
     setBusy(false);
+    const still = openPaper?.kind === "master" && openPaper.studentId === paper.studentId && openPaper.level === level.n;
     if (!res) {
-      if (openPaper?.kind === "master") setPaper({ ...openPaper, saving: false });
+      if (still && openPaper?.kind === "master") setPaper({ ...openPaper, saving: false });
       return;
     }
-    void dropDraft(paper.studentId, paper.unitId, level.n);
-    remember({
-      kind: "level",
-      id: ++savedIds,
-      studentId: v.s._id,
-      name: v.s.name,
-      unitId: v.s.unitId!,
-      tag: tagOf(v.s, v.unit),
-      level: level.n,
-      from: level.from,
-      to: level.to,
-      got: res.got,
-      max: res.max,
-      given: { ...paper.given },
-      parts: { ...paper.parts },
-      before,
-      at: serverNow(),
-    });
-    setPaper(null);
-    const go = (who: string, list: number[]) => (list.length ? ` ${who}: ${list.map((q) => `Q${q}`).join(" ")}.` : "");
-    toast(`Saved: ${v.s.name}, Level ${level.n}, ${res.got} / ${res.max}.${go("Theory", res.theory)}${go("Evaluation", res.evaluation)}`);
+    if (!still) return; // another name was tapped meanwhile: that paper stays
+    // On to the next level by itself (he did two or three without correcting); after the last, the unit's marks. A
+    // corrected level changed: back to the level to correct now.
+    const next = remark ? autoLevel(v, latestDrafts) : nextOpen(v, level.n, res.pre);
+    setPaper(next && next.n !== level.n ? paperAt(v, next) : { kind: "over", studentId: v.s._id, unitId: v.s.unitId! });
     window.scrollTo(0, 0);
   };
 
   return (
     <>
-      <section class="fc-sum" aria-label="The level's marks">
+      <section class={`fc-sum${remark ? " remark" : ""}`} aria-label="The level's marks">
         {paper.carriedFrom && (
           <p class="fc-carried">
             These marks came from the paper taken back from <b>{paper.carriedFrom}</b>. Check them, then save.
@@ -1165,14 +1555,27 @@ function Summary(props: { v: View; paper: MasterPaper; level: MasterLevel; each:
           <b>{sum}</b> / {level.max}
           <span>{pct}%</span>
         </p>
+        {remark && (
+          <p class="fc-remark">
+            {changed ? "Changed: save to keep it." : "Corrected before. Tap a question above to change its marks."}
+            {back && back.n !== level.n && (
+              <>
+                {" "}
+                <button type="button" class="link-btn" onClick={() => openLevel(v, back.n)}>
+                  Back to Level {back.n}
+                </button>
+              </>
+            )}
+          </p>
+        )}
         {missing.length > 0 && (
           <p class="fc-warn">
             Not marked yet: {missing.map((q) => `Q${q}`).join(" ")}. Tap them above.
           </p>
         )}
-        {dkQs.length > 0 && (
+        {blanks && (
           <p class="ct-dk">
-            <b>?</b> {dkQs.map((q) => `Q${q}`).join(" ")}: blank, so straight to Theory.
+            <b>?</b> {blanks}: blank, so straight to Theory.
           </p>
         )}
         {lostQs.length > 0 && (
@@ -1205,11 +1608,16 @@ function Summary(props: { v: View; paper: MasterPaper; level: MasterLevel; each:
             </small>
           </div>
         )}
-        <p class="muted small">Tap a question above to see or change its marks.</p>
+        {!remark && <p class="muted small">Tap a question above to see or change its marks. Save opens his next level.</p>}
       </section>
       <div class="fc-pad">
-        <button type="button" class="btn big wide fc-save" disabled={busy || !ready || missing.length > 0} onClick={() => void save()}>
-          Save {v.s.name} · {sum} / {level.max}
+        <button
+          type="button"
+          class="btn big wide fc-save"
+          disabled={busy || !ready || missing.length > 0 || !changed}
+          onClick={() => void save()}
+        >
+          {remark ? (changed ? `Save changes · ${v.s.name} · ${sum} / ${level.max}` : "No changes") : `Save ${v.s.name} · ${sum} / ${level.max}`}
         </button>
       </div>
     </>
@@ -1227,7 +1635,7 @@ function qLabel(f: NonNullable<View["f"]>, q: number): string {
   return l === String(q) ? `Q${l}` : l;
 }
 
-function FighterPaperView(props: { v: View; paper: FighterPaper }) {
+function FighterPaperView(props: { v: View; paper: FighterPaper; head: ComponentChildren }) {
   const { v, paper } = props;
   const lock = useRef(0);
   const qs = paper.qs;
@@ -1240,7 +1648,7 @@ function FighterPaperView(props: { v: View; paper: FighterPaper }) {
   });
   return (
     <div class="fc-paper">
-      <PaperHead v={v} />
+      {props.head}
       <FighterStrip v={v} paper={paper} at={at} />
       {at < qs.length ? (
         <FighterCard key={qs[at]} v={v} paper={paper} i={at} lock={lock} />
@@ -1258,7 +1666,14 @@ function FighterPaperView(props: { v: View; paper: FighterPaper }) {
             <p class="muted small">Tap a box above to see or change a mark.</p>
           </section>
           <div class="fc-pad">
-            <button type="button" class="btn big wide fc-save" onClick={stopPaper}>
+            <button
+              type="button"
+              class="btn big wide fc-save"
+              onClick={() => {
+                leave();
+                setPaper(null);
+              }}
+            >
               Done: {v.s.name}
             </button>
           </div>

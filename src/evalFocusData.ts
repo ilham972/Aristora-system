@@ -202,7 +202,7 @@ export function decisionWords(h: { qs: number[] }, dec: Record<number, Decision 
 export function lostWords(v: View, q: number): string {
   const r = v.mm.q[String(q)];
   if (!r) return v.marks[String(q)]?.n && v.marks[String(q)]!.n! >= 2 ? "wrong twice" : "wrong";
-  if (r.dk) return "?";
+  if (r.dk) return r.dkp?.length ? `${r.got ?? 0}/${r.max ?? "?"} · ? ${r.dkp.join(" ")}` : "?";
   return r.max !== undefined ? `${r.got ?? 0}/${r.max}` : "lost";
 }
 

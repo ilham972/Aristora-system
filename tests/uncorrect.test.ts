@@ -187,3 +187,68 @@ describe("Take back refused", () => {
     expect((await work(t, malik.id)).lv["1"]).toMatchObject({ fixed: back.fixed });
   });
 });
+
+describe("levels done on paper before the app, and '?' on one part", () => {
+  test("correcting Level 4 first: Levels 1–3 count as done before the app; he is on Level 5, not Level 1", async () => {
+    const t = await setup();
+    const who = await addMaster(t, "Priya");
+    const r = await t.mutation(api.workbook.correct, { studentId: who.id, unitId: who.unitId, level: 4, items: items(4), by: "correction" });
+    expect(r.pre).toEqual([1, 2, 3]);
+    const m = await work(t, who.id);
+    expect([1, 2, 3].map((n) => !!m.lv[String(n)]?.pre)).toEqual([true, true, true]);
+    const { computeMaster } = await import("../convex/lib/master");
+    const st = computeMaster(m, BOOK);
+    expect(st.current?.n).toBe(5);
+    expect(st.waiting).toEqual([]);
+    expect([st.corrected, st.pre]).toEqual([1, 3]);
+    // Marking Level 2 now (the paper turned up): it is corrected, no longer "before".
+    await t.mutation(api.workbook.correct, { studentId: who.id, unitId: who.unitId, level: 2, items: items(2), by: "correction" });
+    const m2 = await work(t, who.id);
+    expect(m2.lv["2"]).toMatchObject({ fixed: expect.any(Number), got: 20 });
+    expect(m2.lv["2"].pre).toBeUndefined();
+    // Every level corrected or done before: the unit is finished.
+    for (const n of [5, 6, 7, 8]) await t.mutation(api.workbook.correct, { studentId: who.id, unitId: who.unitId, level: n, items: items(n), by: "correction" });
+    expect(computeMaster(await work(t, who.id), BOOK).finished).toBe(true);
+  });
+
+  test("Take back of that save, and an undone hand-in, put the earlier levels back to no record", async () => {
+    const t = await setup();
+    const who = await addMaster(t, "Malik");
+    const back = await save(t, who, 3);
+    expect(!!(await work(t, who.id)).lv["1"]?.pre).toBe(true);
+    await t.mutation(api.workbook.uncorrect, back);
+    const m = await work(t, who.id);
+    expect([m.lv["1"], m.lv["2"], m.lv["3"]]).toEqual([undefined, undefined, undefined]);
+    // Handed in (Later) on Level 2 marks Level 1; undoing the hand-in takes it back.
+    await t.mutation(api.workbook.levelDone, { studentId: who.id, unitId: who.unitId, level: 2, by: "correction" });
+    expect(!!(await work(t, who.id)).lv["1"]?.pre).toBe(true);
+    await t.mutation(api.workbook.undoDone, { studentId: who.id, unitId: who.unitId, level: 2, by: "correction" });
+    expect((await work(t, who.id)).lv).toEqual({});
+  });
+
+  test("'?' on one part: the parts he answered keep their marks, the question goes to Theory with the part's name", async () => {
+    const t = await setup();
+    const who = await addMaster(t, "Vimal");
+    // Level 8 = Q56 (4 marks) and Q57 (11 marks). Q56: part ii left blank, part i right (2 of 4).
+    const it = [
+      { q: 56, got: 2, dk: true, dkp: ["ii"] },
+      { q: 57, got: 11 },
+    ];
+    const r = await t.mutation(api.workbook.correct, { studentId: who.id, unitId: who.unitId, level: 8, items: it, by: "correction" });
+    expect(r.got).toBe(13);
+    expect(r.theory).toEqual([56]);
+    const m = await work(t, who.id);
+    expect(m.q["56"]).toMatchObject({ got: 2, max: 4, lost: true, dk: true, dkp: ["ii"], tb: "correction" });
+    // Refused: a blank part with full marks; a whole "?" with marks; blank parts without "?".
+    const bad = async (x: { q: number; got: number; dk?: boolean; dkp?: string[] }) =>
+      await expect(t.mutation(api.workbook.correct, { studentId: who.id, unitId: who.unitId, level: 8, items: [x, { q: 57, got: 11 }], by: "correction" })).rejects.toThrow();
+    await bad({ q: 56, got: 4, dk: true, dkp: ["ii"] });
+    await bad({ q: 56, got: 2, dk: true });
+    await bad({ q: 56, got: 2, dkp: ["ii"] });
+    // The same in a Focus draft (kept as he marks).
+    await t.mutation(api.workbook.uncorrect, { studentId: who.id, unitId: who.unitId, level: 8, fixed: m.lv["8"].fixed!, before: { q: {} }, by: "correction" });
+    await t.mutation(api.focus.mark, { studentId: who.id, unitId: who.unitId, level: 8, set: [{ q: 56, g: 2, dk: true, dkp: ["ii"], p: [2, 0] }], by: "correction" });
+    const d = await t.run(async (ctx) => (await ctx.db.query("drafts").collect())[0]);
+    expect(d.q["56"]).toEqual({ g: 2, dk: true, dkp: ["ii"], p: [2, 0] });
+  });
+});

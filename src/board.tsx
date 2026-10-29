@@ -132,7 +132,7 @@ function FighterBook(props: { role: Role; v: View }) {
 }
 
 /** His opened row: what he is on, his buttons first (they used to hide under the marks table), then his whole book. */
-function Book(props: { role: Role; v: View; onMove: () => void; onCorrect: (level: number) => void; onTheory: () => void }) {
+export function Book(props: { role: Role; v: View; onMove: () => void; onCorrect: (level: number) => void; onTheory: () => void }) {
   const { role, v } = props;
   const here = v.where !== "absent";
   // Sending home and back to the hall are Correction's (the owner too); sending to Theory: Correction or Evaluation.
@@ -436,7 +436,8 @@ function Actions(props: { role: Role; v: View; now: number; onTheory: () => void
         <>
           {qs.map((q) => {
             const taught = v.mm.q[String(q)]?.tt !== undefined;
-            const who = v.mm.q[String(q)]?.dk ? "couldn't start it" : v.mm.q[String(q)]?.tb === "evaluation" ? "from Evaluation" : "from Correction";
+            const r = v.mm.q[String(q)];
+            const who = r?.dk ? (r.dkp?.length ? `couldn't start part ${r.dkp.join(", ")}` : "couldn't start it") : r?.tb === "evaluation" ? "from Evaluation" : "from Correction";
             return (
               <Q
                 key={q}

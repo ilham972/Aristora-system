@@ -19,7 +19,7 @@ type Timer = ReturnType<typeof setTimeout> | null;
 
 // ---- Workbook drafts ----
 
-type DraftItem = { q: number; g: number; dk?: boolean; p?: number[] };
+type DraftItem = { q: number; g: number; dk?: boolean; p?: number[]; dkp?: string[] };
 type DraftJob = { studentId: string; unitId: string; level: number; set: Map<number, DraftItem>; clear: Set<number>; timer: Timer };
 const draftJobs = new Map<string, DraftJob>();
 const draftKey = (studentId: string, level: number) => `${studentId}:${level}`;
@@ -34,7 +34,10 @@ export function queueDraft(studentId: string, unitId: string, level: number, q: 
   }
   if (given) {
     job.clear.delete(q);
-    job.set.set(q, given.dk ? { q, g: 0, dk: true } : parts ? { q, g: given.g, p: parts } : { q, g: given.g });
+    const item: DraftItem =
+      given.dk && given.dkp?.length ? { q, g: given.g, dk: true, dkp: [...given.dkp] } : given.dk ? { q, g: 0, dk: true } : { q, g: given.g };
+    if (parts && (!given.dk || given.dkp?.length)) item.p = parts;
+    job.set.set(q, item);
   } else {
     job.set.delete(q);
     job.clear.add(q);

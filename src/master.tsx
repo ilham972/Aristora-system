@@ -97,6 +97,7 @@ export function MasterStrip(props: { v: View }) {
           let cls = "lv";
           if (lv?.fixed) cls += sc?.pct === null || sc === undefined ? " good" : sc.pct >= 80 ? " good" : sc.pct >= 50 ? " mid" : " low";
           else if (lv?.done) cls += " wait";
+          else if (lv?.pre) cls += " pre";
           else if (ms.current?.n === l.n) cls += " cur";
           // Each block's width is its share of the book's marks.
           return <i key={l.n} class={`${cls}${newPart(i) ? " gap" : ""}`} style={{ flexGrow: l.max }} />;
@@ -232,7 +233,7 @@ export function MasterBook(props: { role: Role; v: View; onCorrect: (level: numb
             <div class="mt-levels">
               {levels.map((l) => {
                 const lv = v.mm.lv[String(l.n)];
-                const state = lv?.fixed ? "fixed" : lv?.done ? "waiting" : ms.current?.n === l.n ? "current" : "later";
+                const state = lv?.fixed ? "fixed" : lv?.done ? "waiting" : lv?.pre ? "before" : ms.current?.n === l.n ? "current" : "later";
                 return (
                   <button
                     key={l.n}
@@ -240,14 +241,14 @@ export function MasterBook(props: { role: Role; v: View; onCorrect: (level: numb
                     class={`mt-lv ${state}`}
                     disabled={role === "theory"}
                     onClick={() => props.onCorrect(l.n)}
-                    aria-label={`Level ${l.n}, questions ${l.from} to ${l.to}: ${lv?.fixed ? `${lv.got} out of ${l.max}` : state === "waiting" ? "waiting for correction" : "not corrected"}`}
+                    aria-label={`Level ${l.n}, questions ${l.from} to ${l.to}: ${lv?.fixed ? `${lv.got} out of ${l.max}` : state === "waiting" ? "waiting for correction" : state === "before" ? "done before the app" : "not corrected"}`}
                   >
                     <span>Level {l.n}</span>
                     <small>
                       {l.from}–{l.to}
                     </small>
                     <b>
-                      {lv?.fixed ? lv.got : state === "waiting" ? "…" : "–"} / {l.max}
+                      {lv?.fixed ? lv.got : state === "waiting" ? "…" : state === "before" ? "✓" : "–"} / {l.max}
                     </b>
                   </button>
                 );
@@ -294,6 +295,10 @@ export function CorrectSheet(props: { v: View; level: number; now: number; onClo
   const [dk, setDk] = useState<Record<number, boolean>>(() =>
     Object.fromEntries(qs.map((q) => [q, lv?.fixed ? !!v.mm.q[String(q)]?.dk : false])),
   );
+  // "?" on some parts only (given in Focus): the parts he answered keep their marks, unless the corrector changes it here.
+  const [dkp, setDkp] = useState<Record<number, string[] | undefined>>(() =>
+    Object.fromEntries(qs.map((q) => [q, lv?.fixed ? v.mm.q[String(q)]?.dkp : undefined])),
+  );
   const [to, setTo] = useState<"auto" | "evaluation" | "theory">("auto");
   const [total, setTotal] = useState<string>(lv?.fixed ? String(lv.got ?? "") : "");
   const [busy, setBusy] = useState(false);
@@ -317,7 +322,9 @@ export function CorrectSheet(props: { v: View; level: number; now: number; onClo
         studentId: v.s._id,
         unitId: v.s.unitId,
         level: l.n,
-        items: each ? qs.map((q) => (dk[q] ? { q, got: 0, dk: true } : { q, got: got[q]! })) : qs.map((q) => ({ q, lost: lost[q] })),
+        items: each
+          ? qs.map((q) => (dk[q] ? (dkp[q]?.length ? { q, got: got[q] ?? 0, dk: true, dkp: dkp[q] } : { q, got: 0, dk: true }) : { q, got: got[q]! }))
+          : qs.map((q) => ({ q, lost: lost[q] })),
         total: each ? undefined : Number(total),
         to: route,
         by: currentRole(),
@@ -400,6 +407,7 @@ export function CorrectSheet(props: { v: View; level: number; now: number; onClo
                     aria-label={`Q${q}: couldn't start it (to Theory)`}
                     onClick={() => {
                       setDk({ ...dk, [q]: !dk[q] });
+                      setDkp({ ...dkp, [q]: undefined });
                       setGot({ ...got, [q]: dk[q] ? null : 0 });
                     }}
                   >
@@ -409,12 +417,13 @@ export function CorrectSheet(props: { v: View; level: number; now: number; onClo
                     <button
                       key={g}
                       type="button"
-                      class={`ct-m${got[q] === g && !dk[q] ? " on" : ""}${g === max ? " full" : g === 0 ? " zero" : ""}`}
-                      aria-pressed={got[q] === g && !dk[q]}
+                      class={`ct-m${got[q] === g && (!dk[q] || !!dkp[q]?.length) ? " on" : ""}${g === max ? " full" : g === 0 ? " zero" : ""}`}
+                      aria-pressed={got[q] === g && (!dk[q] || !!dkp[q]?.length)}
                       aria-label={`Q${q}: ${g} of ${max}`}
                       onClick={() => {
                         setGot({ ...got, [q]: g });
                         if (dk[q]) setDk({ ...dk, [q]: false });
+                        if (dkp[q]) setDkp({ ...dkp, [q]: undefined });
                       }}
                     >
                       {g}
