@@ -75,7 +75,10 @@ async function phone(
   await ctx.addInitScript(([r, tk]) => {
     if (sessionStorage.getItem("aristora.test.started")) return; // only on the first load
     sessionStorage.setItem("aristora.test.started", "1");
-    localStorage.setItem("aristora.role", r!);
+    const [tab, view] = r!.split(":");
+    localStorage.setItem("aristora.role", tab);
+    // Theory phones open the full screen ("All", as before) unless the test asks for the focus views ("theory:focus").
+    localStorage.setItem("aristora.theoryView", view === "focus" ? "focus" : "all");
     if (tk) localStorage.setItem("aristora.token", tk);
   }, [role, token] as const);
   // Headless Chrome has no voices: record what the phone would say instead.
@@ -1335,5 +1338,173 @@ test("Focus: one question at a time, names that never move, a paper taken back a
   await shot(M, "f12-focus-question-360");
   await M.context().close();
   await E.context().close();
+  expect(problems, problems.join("\n")).toEqual([]);
+});
+
+test("Theory: Next lessons to call, the Room to teach in, All as before; the owl while loading", async () => {
+  const backend = await newClass();
+  const C = await phone(backend, "correction");
+  const T = await phone(backend, "theory:focus");
+  await C.getByRole("button", { name: "Settings" }).click();
+  await C.getByRole("button", { name: "Load demo students (three grades)" }).click();
+  await visible(C.getByText(/^14 demo students loaded/));
+  await C.getByRole("button", { name: "Back to the class" }).click();
+  const card = (title: string) => T.locator(".tf-card", { has: T.locator(".tf-title b", { hasText: title }) });
+  const st = (l: L, name: string) => l.locator(".tf-st", { has: T.locator("b", { hasText: name }) });
+  const view = (name: string) => T.locator(".tf-views").getByRole("button", { name: new RegExp(`^${name}`) });
+  const marks = async (name: string) => (await marksOf(backend, name)).marks;
+
+  // Next: one card per lesson, the most urgent first, with who needs it (ticked) and why.
+  await visible(T.locator(".tf-v.on", { hasText: "Next" }));
+  await namesAre(T.locator(".tf-card .tf-title b"), ["Expand & simplify", "Forming the equation", "Completing the square", "Surds & approximation"]);
+  // (the heading is drawn in capitals: read its text, not its look)
+  await until(async () => (await T.locator(".tf-card").first().locator(".tf-kicker").textContent()) === "Teach next", "Teach next");
+  await count(T.locator(".tf-card.first.u-red"), 1); // somebody has no work
+  await contains(view("Next").locator(".tf-badge"), "2"); // Fathima and Rizwan: no work
+  const d = card("Completing the square");
+  await contains(d.locator(".tf-tag"), "G11 · U13 · section D · teach Q23–26");
+  await namesAre(d.locator(".tf-st b"), ["Fathima", "Ahamed", "Dilan", "Nila"]);
+  await count(d.locator(".tf-st.on"), 4);
+  await contains(st(d, "Fathima").locator("small"), "no work");
+  expect(await T.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(T, "t01-theory-next", true);
+
+  // Nila still has work: leave her out. Call 3: Correction hears it; the Theory phone shows them on the way.
+  await st(d, "Nila").click();
+  await contains(d.locator(".tf-call"), "Call 3");
+  await d.locator(".tf-call").click();
+  await contains(T.locator(".toast"), "Called 3. Correction sends them over.");
+  await visible(T.locator(".tf-v.on", { hasText: "Room" }));
+  await namesAre(T.locator(".tf-cm b"), ["Fathima", "Ahamed", "Dilan"]);
+  await until(
+    async () => (await said(C)).some((s) => ["Fathima", "Ahamed", "Dilan"].every((n) => s.includes(n)) && s.endsWith("go to Theory.")),
+    "Correction hears the three names",
+  );
+  await C.locator(".call-strip.theory").getByRole("button", { name: /^Sent/ }).click();
+
+  // The Room: the lesson, big; what was taught; each student "got it". The bell rang before Q26; Dilan didn't get it.
+  const room = T.locator(".tf-card.room");
+  await contains(room.locator(".tf-title b"), "Completing the square");
+  await namesAre(room.locator(".tf-rs-name"), ["Fathima", "Ahamed", "Dilan"]);
+  await textsAre(room.locator(".tf-teach .tf-q.on"), ["Q23", "Q24", "Q25", "Q26"]);
+  await count(T.locator(".tf-cm"), 0);
+  await shot(T, "t02-theory-room", true);
+  await room.getByRole("button", { name: "Q26 taught" }).click();
+  await room.getByRole("button", { name: "Dilan: got it" }).click();
+  await contains(room.locator(".tf-rs.stays"), "Dilan");
+  await contains(room.getByRole("button", { name: /^Done/ }), "Done: 2 back to work");
+  await shot(T, "t03-theory-room-marked", true);
+  await room.getByRole("button", { name: /^Done/ }).click();
+  // (they arrived together: A–Z)
+  await contains(T.locator(".toast"), "Saved: Ahamed, Fathima back to work. Dilan stays with you.");
+  for (const who of ["Fathima", "Ahamed"]) {
+    await until(async () => (await marks(who))["25"]?.s === "taught", `${who} taught Q23-25`);
+    const mk = await marks(who);
+    expect([mk["23"]?.s, mk["24"]?.s, mk["25"]?.s, mk["26"]?.s ?? null]).toEqual(["taught", "taught", "taught", null]);
+  }
+  expect((await marks("Dilan"))["23"]).toBeUndefined();
+  // Dilan stays; the lesson's ticks start again from "all"; who else needs D now can join (Nila).
+  await namesAre(room.locator(".tf-rs-name"), ["Dilan"]);
+  await count(room.locator(".tf-teach .tf-q.on"), 4);
+  await contains(room.locator(".tf-join"), "Nila");
+  await room.getByRole("button", { name: /^Call Nila to join/ }).click();
+  await namesAre(T.locator(".tf-cm b"), ["Nila"]);
+  // Dilan has to go: back to the hall without it (D stays on his list).
+  await room.getByRole("button", { name: "Send Dilan back without it" }).click();
+  await contains(T.locator(".toast"), "Dilan: back to the hall, not taught.");
+  expect((await marksOf(backend, "Dilan")).room).toBeUndefined();
+  // Nila arrives: Done for her, every teach question.
+  await hears(C, "Nila, go to Theory.");
+  await C.locator(".call-strip.theory").getByRole("button", { name: /^Sent/ }).click();
+  await namesAre(room.locator(".tf-rs-name"), ["Nila"]);
+  await room.getByRole("button", { name: /^Done/ }).click();
+  await until(async () => (await marks("Nila"))["26"]?.s === "taught", "Nila taught Q23-26");
+  // The room is empty: back to Next by itself. Dilan is on the D card again.
+  await visible(T.locator(".tf-v.on", { hasText: "Next" }));
+  // Fathima and Ahamed still need Q26 (the bell rang): back on the D card with just that; Dilan needs all of D.
+  const d2 = card("Completing the square");
+  await namesAre(d2.locator(".tf-st b"), ["Fathima", "Ahamed", "Dilan"]);
+  await contains(st(d2, "Fathima").locator("small"), "Q26");
+  await contains(st(d2, "Dilan").locator("small"), "2 left");
+  expect(await st(d2, "Dilan").locator("small").textContent()).not.toContain("Q2");
+  await contains(d2.locator(".tf-tag"), "teach Q23–26");
+
+  // A workbook lesson: Evaluation sent Malik's Q13 and Q17 to Theory. He gets Q13 today; Q17 waits.
+  await backend.t.run(async (ctx) => {
+    const s = (await ctx.db.query("students").collect()).find((x) => x.name === "Malik")!;
+    const p = (await ctx.db
+      .query("progress")
+      .withIndex("by_student_unit_stage", (q) => q.eq("studentId", s._id).eq("unitId", s.unitId!).eq("stage", "master"))
+      .first())!;
+    const m = p.m!;
+    const now = Date.now();
+    await ctx.db.patch(p._id, { m: { ...m, q: { ...m.q, "13": { ...m.q["13"], th: now, tb: "evaluation" }, "17": { ...m.q["17"], th: now, tb: "evaluation" } } } });
+  });
+  await backend.push();
+  const w = card("Directed numbers: workbook");
+  await contains(w.locator(".tf-tag"), "G7 · U08");
+  await contains(st(w, "Malik").locator("small"), "Q13 Q17");
+  await shot(T, "t04-theory-next-workbook", true);
+  await w.locator(".tf-call").click();
+  await hears(C, "Malik, go to Theory.");
+  await C.locator(".call-strip.theory").getByRole("button", { name: /^Sent/ }).click();
+  await contains(room.locator(".tf-title b"), "Directed numbers: workbook");
+  await textsAre(room.locator(".tf-rs-qs .tf-q.on"), ["Q13", "Q17"]);
+  await room.getByRole("button", { name: "Malik Q17 taught" }).click();
+  await shot(T, "t05-theory-room-workbook", true);
+  await room.getByRole("button", { name: /^Done/ }).click();
+  await until(async () => (await marksOf(backend, "Malik")).m!.q["13"]?.tt !== undefined, "Malik Q13 taught");
+  const mm = (await marksOf(backend, "Malik")).m!;
+  expect(mm.q["17"]).toMatchObject({ th: expect.any(Number) });
+  expect(mm.q["17"].tt).toBeUndefined();
+  await visible(T.locator(".tf-v.on", { hasText: "Next" }));
+  await contains(st(card("Directed numbers: workbook"), "Malik").locator("small"), "Q17");
+
+  // All: the Theory screen as it was, with the views on top.
+  await view("All").click();
+  await visible(T.locator(".reg-row").first());
+  await visible(T.locator(".stick .tf-views"));
+  await shot(T, "t06-theory-all");
+  await view("Next").click();
+  await visible(card("Completing the square"));
+
+  // The smallest phone: Next and the views fit, no sideways scrolling.
+  const S = await phone(backend, "theory:focus", { ...PHONE, viewport: { width: 320, height: 568 } });
+  await visible(S.locator(".tf-card").first());
+  expect(await S.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(S, "t07-theory-next-320", true);
+  await S.context().close();
+
+  // The owl while loading (a phone that isn't a test browser keeps it on screen at least 1.2 s), then the app.
+  const ctx = await browser.newContext(PHONE);
+  await backend.attach(ctx);
+  await ctx.addInitScript((tk) => {
+    Object.defineProperty(Navigator.prototype, "webdriver", { get: () => false, configurable: true });
+    localStorage.setItem("aristora.role", "correction");
+    localStorage.setItem("aristora.token", tk);
+  }, OWNER_TOKEN);
+  const O = await ctx.newPage();
+  O.on("pageerror", (e) => problems.push(`[owl pageerror] ${e.message}`));
+  await O.goto(site.url);
+  await visible(O.locator("#splash .owl .owl-head"));
+  await contains(O.locator("#splash .splash-name"), "ARISTORA");
+  expect(await O.locator("#splash .owl-lid").count()).toBe(2);
+  await shot(O, "t08-owl-splash");
+  await until(async () => (await O.locator("#splash").count()) === 0, "the owl goes once the class is loaded", 6000);
+  await visible(O.locator(".reg-row").first());
+  // The install details: the manifest with the owl icons, the tab icon, the Apple icon.
+  const man = await O.evaluate(async () => (await fetch("/manifest.webmanifest")).json());
+  expect(man).toMatchObject({ short_name: "ARISTORA", display: "standalone", background_color: "#16213E" });
+  expect(man.icons.map((i: { src: string; purpose: string }) => `${i.src} ${i.purpose}`)).toEqual([
+    "/icon-192.png any",
+    "/icon-512.png any",
+    "/icon-maskable-192.png maskable",
+    "/icon-maskable-512.png maskable",
+  ]);
+  for (const f of ["/icon.svg", "/icon-32.png", "/apple-touch-icon.png", ...man.icons.map((i: { src: string }) => i.src)]) {
+    expect(await O.evaluate(async (f) => (await fetch(f)).status, f), f).toBe(200);
+  }
+  expect(await O.locator('link[rel="apple-touch-icon"]').getAttribute("href")).toBe("/apple-touch-icon.png");
+  await ctx.close();
   expect(problems, problems.join("\n")).toEqual([]);
 });

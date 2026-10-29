@@ -5,11 +5,13 @@ import type { Link } from "./backend";
 import { Correction } from "./correction";
 import { buildViews, evalQueue, fmtClock, liveSession, theoryGroups, theoryMembers, type View } from "./derive";
 import { Focus } from "./focus";
-import { Evaluation, Theory } from "./rooms";
+import { Evaluation } from "./rooms";
+import { TheoryTab } from "./theoryFocus";
 import { Progress } from "./progress";
 import { Settings } from "./settings";
 import { alertsState, armAlerts, listenForTaps, ring, useAlertsState, type AlertKind } from "./sound";
 import { clearHash, PinSheet, pinAsked, readHash, SignIn, stopAskingPin, type Hash } from "./signin";
+import { hideSplash } from "./splash";
 import { may, setRole, signOutHere, useStore, useTick, type Board, type Role } from "./store";
 import { Sheet, Toasts } from "./ui";
 
@@ -74,6 +76,11 @@ export function App() {
     return () => window.removeEventListener("hashchange", seen);
   }, []);
   // Sticky strips sit right under the header, whatever its height (it grows when offline).
+  // The loading owl goes once there is a real screen to show: the class, the sign-in, or an error to read.
+  const firstScreen = me === undefined ? !!boardError : !me.user || !!board || !!boardError;
+  useEffect(() => {
+    if (firstScreen) hideSplash();
+  }, [firstScreen]);
   useEffect(() => {
     const el = topRef.current;
     if (!el) return;
@@ -247,7 +254,7 @@ export function App() {
       ) : role === "correction" ? (
         <Correction board={board} views={views} now={now} onAttendance={() => setPage("attendance")} />
       ) : role === "theory" ? (
-        <Theory board={board} views={views} now={now} />
+        <TheoryTab board={board} views={views} now={now} />
       ) : (
         <Evaluation board={board} views={views} now={now} />
       )}

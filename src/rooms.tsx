@@ -1,3 +1,4 @@
+import type { ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
@@ -52,7 +53,8 @@ function useSelection(views: View[], can: (v: View) => string | null) {
 
 // ---------------- Theory ----------------
 
-export function Theory(props: { board: Board; views: View[]; now: number }) {
+/** The full Theory screen (the Theory tab's "All" view); `top` = the view switch, stuck above everything. */
+export function Theory(props: { board: Board; views: View[]; now: number; top?: ComponentChildren }) {
   const { board, now } = props;
   const all = props.views;
   // Only students signed in on Attendance are on the register; the grade pills show the grades in class now.
@@ -83,6 +85,7 @@ export function Theory(props: { board: Board; views: View[]; now: number }) {
   return (
     <main class={`page${pick.sel.size ? " with-bar" : ""}`}>
       <div class="stick">
+        {props.top}
         {room.length > 0 && <InRoom room="theory" calls={room} />}
         <GradePills views={inClass} needs={needsOf("theory", board, all, now)} filter={grade} onPick={setGrade} />
       </div>
