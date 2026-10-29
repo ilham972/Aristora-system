@@ -220,6 +220,8 @@ export default defineSchema({
     stage: v.optional(bookStage),
     /** Theory is taking him straight from the evaluation room. */
     pull: v.optional(v.boolean()),
+    /** This theory call cancelled Evaluation's call for him (theory comes first): her phone tells her so. */
+    bumped: v.optional(v.boolean()),
     createdAt: v.number(),
     sentAt: v.optional(v.number()),
     endedAt: v.optional(v.number()),

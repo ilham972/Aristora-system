@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
-import { asOwner } from "./helpers";
+import { addPerson, asOwner, asPhone } from "./helpers";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 const MIN = 60_000;
@@ -180,6 +180,36 @@ describe("calls between the rooms", () => {
     expect(th.created[0].pull).toBe(false);
     const evCall = await t.run((ctx) => ctx.db.get(ev.created[0].callId));
     expect(evCall?.status).toBe("cancelled");
+    // Evaluation is told: the theory call says it took him from her.
+    expect(th.created[0].bumped).toBe(true);
+    expect((await t.run((ctx) => ctx.db.get(th.created[0].callId)))?.bumped).toBe(true);
+    // A theory call that took nobody from her says nothing.
+    const other = await addIn(t, "Bilal");
+    const plain = await t.mutation(api.calls.create, { studentIds: [other], room: "theory", kind: "theory" });
+    expect(plain.created[0].bumped).toBe(false);
+    expect((await t.run((ctx) => ctx.db.get(plain.created[0].callId)))?.bumped).toBeUndefined();
+  });
+
+  test("how long Theory's lessons take: sent to Done in the theory room, newest first; Theory only", async () => {
+    const t = await setup();
+    for (const [name, min] of [["Ahamed", 9], ["Bilal", 13]] as const) {
+      const id = await addIn(t, name);
+      const { created } = await t.mutation(api.calls.create, { studentIds: [id], room: "theory", kind: "theory" });
+      await t.mutation(api.calls.send, { callIds: [created[0].callId] });
+      advance(min);
+      await t.mutation(api.calls.finish, { items: [{ callId: created[0].callId, taught: [] }] });
+    }
+    // Evaluation teaching theory in her room is not Theory's lesson.
+    const c = await addIn(t, "Chandran");
+    const ev = await t.mutation(api.calls.create, { studentIds: [c], room: "evaluation", kind: "theory" });
+    await t.mutation(api.calls.send, { callIds: [ev.created[0].callId] });
+    advance(30);
+    await t.mutation(api.calls.finish, { items: [{ callId: ev.created[0].callId, taught: [] }] });
+    const { ms } = await t.query(api.calls.lessons, {});
+    expect(ms.map((x) => Math.round(x / MIN))).toEqual([13, 9]);
+    const token = "eval-token-0123456789abcdefghijklmnopqrstuvwxyz";
+    await addPerson(t, { name: "Eve", token, tabs: ["evaluation"] });
+    await expect(asPhone(t, token).query(api.calls.lessons, {})).rejects.toThrow();
   });
 
   test("theory pulls from the evaluation room: half-done evaluation, the rest stays waiting", async () => {

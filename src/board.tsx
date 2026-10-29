@@ -1,6 +1,7 @@
 // The class register: one row per student, whatever his grade and stage. Left: the name. Right: what this
-// teacher can tap right now (theory-book circles, workbook levels to correct, lost marks to explain). Below:
-// his whole book as a thin strip, with his grade and unit. Tap the strip to open the book.
+// teacher can tap right now (theory-book circles, ◎ to teach, lost marks to explain; workbook papers are marked in
+// Focus). Below: his whole book as a thin strip, with his grade and unit. Tap the name or the strip to open it: his
+// buttons first (going home, Theory, back in the hall, Move), then the book.
 
 import { useState } from "preact/hooks";
 import { Fragment, type ComponentChildren } from "preact";
@@ -11,7 +12,7 @@ import { mutate } from "./backend";
 import { evalUrgencyOf, pendingSince, type View } from "./derive";
 import { CorrectSheet, MasterBook, MasterStrip, TheorySheet, theoryChoices, theoryWords } from "./master";
 import { MoveSheet } from "./move";
-import { act, currentRole, savedMarks, setExplained, setTaught, STAGES, type Role } from "./store";
+import { act, currentRole, may, savedMarks, setExplained, setTaught, STAGES, type Role } from "./store";
 import { canTap, isUnsaved, tap, tapSection } from "./taps";
 import { Empty, Q } from "./ui";
 
@@ -200,8 +201,13 @@ function FighterBook(props: { role: Role; v: View }) {
   );
 }
 
+/** His opened row: what he is on, his buttons first (they used to hide under the marks table), then his whole book. */
 function Book(props: { role: Role; v: View; onMove: () => void; onCorrect: (level: number) => void; onTheory: () => void }) {
   const { role, v } = props;
+  const here = v.where !== "absent";
+  // Sending home and back to the hall are Correction's (the owner too); sending to Theory: Correction or Evaluation.
+  const canCorrect = may("correction");
+  const canRefer = role !== "theory" && (canCorrect || may("evaluation"));
   return (
     <div class="book-open">
       <p class="book-title">
@@ -213,19 +219,23 @@ function Book(props: { role: Role; v: View; onMove: () => void; onCorrect: (leve
           {v.unit?.ta ? ` · ${v.unit.ta}` : ""}
         </span>
       </p>
-      {v.kind === "fighter" && <FighterBook role={role} v={v} />}
-      {v.kind === "master" && <MasterBook role={role} v={v} onCorrect={props.onCorrect} />}
-      {v.kind === "none" && <p class="muted">{v.line}</p>}
-      <div class="row-actions wrap">
-        <button type="button" class="btn ghost small" onClick={props.onMove}>
-          Move: unit or stage
-        </button>
-        {v.ms && role !== "theory" && (
+      <div class="row-actions wrap book-acts" role="group" aria-label={`${v.s.name}: buttons`}>
+        {canCorrect && here && (
+          <button
+            type="button"
+            class="btn ghost small"
+            aria-label={`Sign ${v.s.name} out: going home`}
+            onClick={() => void act(() => mutate(api.students.setPresent, { id: v.s._id, present: false, by: currentRole() }))}
+          >
+            Going home
+          </button>
+        )}
+        {v.ms && canRefer && (
           <button type="button" class={`btn ghost small${v.ms.reteach ? " on" : ""}`} onClick={props.onTheory}>
             {v.ms.reteach ? `Theory: ${theoryWords(v.ms)} ✓` : "Needs theory"}
           </button>
         )}
-        {role === "correction" && v.where !== "absent" && (v.where === "theory" || v.where === "evaluation") && (
+        {canCorrect && here && (v.where === "theory" || v.where === "evaluation") && (
           <button
             type="button"
             class="btn ghost small"
@@ -234,16 +244,13 @@ function Book(props: { role: Role; v: View; onMove: () => void; onCorrect: (leve
             Back in the hall
           </button>
         )}
-        {role === "correction" && v.where !== "absent" && (
-          <button
-            type="button"
-            class="btn ghost small"
-            onClick={() => void act(() => mutate(api.students.setPresent, { id: v.s._id, present: false, by: currentRole() }))}
-          >
-            Sign out (going home)
-          </button>
-        )}
+        <button type="button" class="btn ghost small" onClick={props.onMove}>
+          Move: unit or stage
+        </button>
       </div>
+      {v.kind === "fighter" && <FighterBook role={role} v={v} />}
+      {v.kind === "master" && <MasterBook role={role} v={v} onCorrect={props.onCorrect} />}
+      {v.kind === "none" && <p class="muted">{v.line}</p>}
     </div>
   );
 }
@@ -328,7 +335,7 @@ export function Register(props: {
                   onClick={() => {
                     if (!props.onName(v)) setOpen(isOpen ? null : v.s._id);
                   }}
-                  aria-pressed={role === "correction" ? undefined : selected}
+                  aria-pressed={props.selected ? selected : undefined}
                 >
                   <span class="reg-n">
                     {selected && <span class="tick" aria-hidden="true" />}
@@ -337,13 +344,7 @@ export function Register(props: {
                   <span class="reg-s">{st.text}</span>
                 </button>
                 <div class="reg-act">
-                  <Actions
-                    role={role}
-                    v={v}
-                    now={now}
-                    onCorrect={(level) => setCorrecting({ id: v.s._id, level })}
-                    onTheory={() => setToTheory(v.s._id)}
-                  />
+                  <Actions role={role} v={v} now={now} onTheory={() => setToTheory(v.s._id)} />
                 </div>
                 <button
                   type="button"
@@ -432,7 +433,7 @@ function RouteChips(props: { v: View }) {
 }
 
 /** What this teacher can tap on the row right now. */
-function Actions(props: { role: Role; v: View; now: number; onCorrect: (level: number) => void; onTheory: () => void }) {
+function Actions(props: { role: Role; v: View; now: number; onTheory: () => void }) {
   const { role, v, now } = props;
   if (v.where === "absent") return null;
   if (v.kind === "fighter") {
@@ -529,32 +530,9 @@ function Actions(props: { role: Role; v: View; now: number; onCorrect: (level: n
       );
     }
     if (role === "correction") {
-      const pills = [...ms.waiting.slice(0, 2), ...(ms.current ? [ms.current] : [])];
-      if (pills.length === 0) {
-        if (ms.reteach || ms.pending.length) return <RouteChips v={v} />;
-        return <span class="reg-none">{ms.finished ? "Workbook finished" : ""}</span>;
-      }
-      return (
-        <>
-          {pills.map((l) => {
-            const waiting = ms.waiting.includes(l);
-            const since = v.mm.lv[String(l.n)]?.done;
-            return (
-              <button
-                key={l.n}
-                type="button"
-                class={`lv-pill${waiting ? " waiting" : ""}`}
-                aria-label={`Level ${l.n}, questions ${l.from} to ${l.to}${waiting ? ", waiting for correction" : ""}`}
-                onClick={() => props.onCorrect(l.n)}
-              >
-                <b>L{l.n}</b>
-                <small>{waiting ? mins(since === undefined ? undefined : now - since).trim() || "now" : `${l.from}–${l.to}`}</small>
-              </button>
-            );
-          })}
-          <RouteChips v={v} />
-        </>
-      );
+      // Papers are marked in Focus (the levels are on his strip and under his name); here: where he goes next.
+      if (ms.reteach || ms.pending.length) return <RouteChips v={v} />;
+      return <span class="reg-none">{ms.finished ? "Workbook finished" : ""}</span>;
     }
     return <span class="reg-none">{ms.reteach ? `Theory: ${theoryWords(ms)}` : ""}</span>;
   }

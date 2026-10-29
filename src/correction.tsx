@@ -1,3 +1,4 @@
+import type { ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
@@ -6,17 +7,48 @@ import { GoneHome, Register } from "./board";
 import { fmtMin, liveSession, shortMin, type View } from "./derive";
 import { GradePills, gradesOf, inGrade, needsOf, useGradeFilter } from "./grades";
 import { ReportView, type Report } from "./report";
-import { act, currentRole, may, toast, type Board } from "./store";
+import { act, currentRole, may, toast, type Board, type Role } from "./store";
 import { Empty, Sheet } from "./ui";
 
-export function Correction(props: { board: Board; views: View[]; now: number; onAttendance: () => void }) {
-  const { board, now } = props;
+/** How to tap the rows, for each job (the Class tab shows each teacher's own taps). */
+const LEGEND: Record<Role, ComponentChildren> = {
+  correction: (
+    <>
+      Theory book: tap a circle <b class="k-right">once ✓ right</b>, <b class="k-wrong">twice ✗ wrong</b>,{" "}
+      <b class="k-slip">3 times ↻ slip</b>; it saves when you stop. Workbook papers: mark them in <b>Focus</b> (the target at
+      the top). Tap a name for his buttons (going home, Theory, Move) and his whole book.
+    </>
+  ),
+  theory: (
+    <>
+      Tap the <b class="k-theory">section letter</b> to mark all its theory taught. Tap a ◎ circle: taught, then skip, then
+      clear. Workbook students show the questions sent to you: tap each ◎ when taught. Tap a name for his book and Move. To
+      call students: the <b>Theory</b> tab.
+    </>
+  ),
+  evaluation: (
+    <>
+      Tap a <b class="k-wrong">red circle</b> when you've explained it (it turns <b class="k-explained">violet</b>); tap again
+      to undo. Tap a name for his buttons and his whole book. To call students: the <b>Evaluation</b> tab.
+    </>
+  ),
+};
+
+/**
+ * The Class tab: everyone's home. The whole class at a glance (who is here, who has no work, who is where), each
+ * teacher's own taps on the rows (the job this phone does: Correction's circles, Theory's ◎ and section letters,
+ * Evaluation's red circles), and a student's buttons and whole book under his name. Correction also sends called
+ * students (the strips at the top), corrects gone-home levels and ends the session.
+ */
+export function ClassPage(props: { board: Board; views: View[]; now: number; job: Role; onAttendance: () => void }) {
+  const { board, now, job } = props;
   const [ending, setEnding] = useState(false);
   const [report, setReport] = useState<Report | null>(null);
+  const canCorrect = may("correction");
   // Only students signed in on Attendance are in the register; the grade pills show the grades in class now.
   const inClass = props.views.filter((v) => v.where !== "absent");
   const grades = gradesOf(inClass);
-  const [grade, setGrade] = useGradeFilter("correction", grades);
+  const [grade, setGrade] = useGradeFilter(job, grades);
   // One grade at a time if the teacher chose one; the summary and the register follow it.
   const present = inGrade(inClass, grade);
   const red = present.filter((v) => v.tone === "red").length;
@@ -40,17 +72,19 @@ export function Correction(props: { board: Board; views: View[]; now: number; on
   return (
     <main class="page">
       <div class="stick">
-        <CallsBand board={board} views={props.views} now={now} />
-        <GradePills views={inClass} needs={needsOf("correction", board, props.views, now)} filter={grade} onPick={setGrade} />
+        {canCorrect && <CallsBand board={board} views={props.views} now={now} />}
+        <GradePills views={inClass} needs={needsOf(job, board, props.views, now)} filter={grade} onPick={setGrade} />
       </div>
 
       {inClass.length === 0 ? (
         <div class="empty">
           <p class="empty-title">Nobody is signed in yet</p>
           <p>Students show here once they are signed in on Attendance.</p>
-          <button type="button" class="btn primary" onClick={props.onAttendance}>
-            Open Attendance
-          </button>
+          {canCorrect && (
+            <button type="button" class="btn primary" onClick={props.onAttendance}>
+              Open Attendance
+            </button>
+          )}
         </div>
       ) : (
         <>
@@ -62,26 +96,19 @@ export function Correction(props: { board: Board; views: View[]; now: number; on
             <span>{inRooms} in rooms</span>
           </div>
           <Register
-            role="correction"
+            role={job}
             views={present}
             grouped={grade === "all" && grades.length > 1}
             now={now}
-            legend={
-              <>
-                Fighter: tap a circle <b class="k-right">once ✓ right</b>, <b class="k-wrong">twice ✗ wrong</b>,{" "}
-                <b class="k-slip">3 times ↻ slip</b>; it saves when you stop. Master: tap the <b>level</b> the student hands in to
-                give the marks; <b class="k-theory">?</b> = he couldn't start it (goes to Theory). Tap a name or the strip for the
-                whole book.
-              </>
-            }
+            legend={LEGEND[job]}
             onName={() => false}
           />
         </>
       )}
 
-      <GoneHome role="correction" views={inGrade(props.views, grade)} now={now} />
+      {job !== "theory" && <GoneHome role={job} views={inGrade(props.views, grade)} now={now} />}
 
-      {session && (
+      {canCorrect && session && (
         <div class="end-wrap">
           <p class="muted">Class started {fmtMin(now - session.startedAt)} ago.</p>
           <button type="button" class="btn ghost" onClick={() => setEnding(true)}>

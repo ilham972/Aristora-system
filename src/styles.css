@@ -170,16 +170,45 @@ ul {
 .top-left {
   gap: 8px;
 }
-.prog-btn {
-  padding: 0 14px 0 12px;
+/* Focus (marking papers) and Progress: icons, Focus with how many papers wait. */
+.prog-btn,
+.focus-btn {
+  padding: 0 10px;
 }
-/* very narrow phones: the Progress button is its icon only */
-@media (max-width: 359px) {
-  .prog-w {
-    display: none;
+.focus-btn .att-n {
+  background: var(--amber-soft);
+  color: var(--amber-ink);
+  box-shadow: inset 0 0 0 1.5px var(--amber);
+}
+.focus-btn .att-n.red {
+  background: var(--red);
+  color: #fff;
+  box-shadow: none;
+}
+/* Phones (most are 360–393 px, the smallest 320): the top bar's buttons sit closer, so three of them and the clock
+   always fit. */
+@media (max-width: 400px) {
+  .top {
+    padding-left: 10px;
+    padding-right: 10px;
   }
-  .prog-btn {
-    padding: 0 11px;
+  .top-left {
+    gap: 5px;
+  }
+  .top-meta {
+    gap: 6px;
+  }
+  .att-btn {
+    gap: 4px;
+    padding: 0 7px;
+  }
+  .att-n {
+    min-width: 22px;
+    padding: 0 5px;
+    font-size: 13px;
+  }
+  .icon-btn {
+    width: 38px;
   }
 }
 .top-count {
@@ -1223,36 +1252,6 @@ button.q:disabled {
   color: var(--theory-ink);
   font: 700 14px/1 var(--font);
   white-space: nowrap;
-}
-.lv-pill {
-  flex: none;
-  min-width: 52px;
-  height: 44px;
-  padding: 0 8px;
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1px;
-  border: 2px solid var(--ink);
-  border-radius: 12px;
-  background: var(--card);
-  line-height: 1;
-}
-.lv-pill b {
-  font: 700 16px/1 var(--font);
-}
-.lv-pill small {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--ink-2);
-}
-.lv-pill.waiting {
-  border-color: var(--amber);
-  background: var(--amber-soft);
-}
-.lv-pill.waiting small {
-  color: var(--amber-ink);
 }
 .rt-red {
   --edge: var(--red);
@@ -3265,17 +3264,6 @@ button.stat:disabled {
 /* ---------- Focus tab: one question at a time (src/focus.tsx) ----------
    The pad sits at the same place for every question (bottom, above the tabs); toasts never cover it. */
 
-@media (max-width: 400px) {
-  .tabs.n4 .tab {
-    font-size: 13.5px;
-  }
-}
-.tab.focus .tab-mark {
-  background: radial-gradient(circle, currentColor 0 2px, transparent 2.6px);
-}
-.tab.focus.on .tab-mark {
-  background: radial-gradient(circle, var(--card) 0 2px, currentColor 2.6px);
-}
 .app[data-tab="focus"] .toast {
   pointer-events: none; /* the words never swallow a tap meant for a name */
 }
@@ -3445,9 +3433,11 @@ body.fc-marking .toasts {
   font-weight: 700;
   color: var(--ink-2);
 }
-.fc-stop {
+.fc-head-acts {
   flex: none;
   align-self: flex-start;
+  display: flex;
+  gap: 6px;
   margin-top: 2px;
 }
 /* The level in the paper's top line is also the button to change it. */
@@ -4404,55 +4394,9 @@ body.fc-marking .toasts {
   }
 }
 
-/* ---------- Theory tab: Next / Room / All (src/theoryFocus.tsx) ----------
-   Next = lesson cards (a section or a workbook) with who needs it; Room = the lesson going on, big. */
-
-.tf-views {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 4px;
-  padding: 4px;
-  border-radius: 14px;
-  background: var(--card);
-  border: 1.5px solid var(--line-2);
-}
-.tf-v {
-  position: relative;
-  min-height: 40px;
-  border: 0;
-  border-radius: 10px;
-  background: transparent;
-  font: 700 15px/1 var(--font);
-  color: var(--ink-2);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-}
-.tf-v.on {
-  background: var(--theory);
-  color: #fff;
-}
-.tf-badge {
-  min-width: 20px;
-  height: 20px;
-  padding: 0 5px;
-  border-radius: 999px;
-  display: inline-grid;
-  place-items: center;
-  font: 700 12px/1 var(--font);
-  font-style: normal;
-  background: var(--theory-soft);
-  color: var(--theory-ink);
-}
-.tf-v.on .tf-badge {
-  background: #fff;
-}
-.tf-badge.red,
-.tf-v.on .tf-badge.red {
-  background: var(--red);
-  color: #fff;
-}
+/* ---------- Theory page (src/theoryFocus.tsx) ----------
+   One page for 20–30 students: the lessons going on (who is here, who is coming), Next (3 cards), Soon (one line
+   each). Names sit three to a line. */
 
 .tf-card {
   padding: 12px 12px 14px;
@@ -4540,61 +4484,6 @@ body.fc-marking .toasts {
   font-size: 13px;
   font-weight: 700;
   color: var(--ink-3);
-}
-.tf-who {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.tf-st {
-  min-height: 46px;
-  max-width: 100%;
-  padding: 5px 10px 6px 6px;
-  display: grid;
-  grid-template-columns: 22px auto;
-  grid-template-rows: auto auto;
-  column-gap: 6px;
-  align-items: center;
-  border-radius: 12px;
-  border: 1.5px solid var(--line);
-  background: var(--card);
-  text-align: left;
-  line-height: 1.1;
-}
-.tf-st .tf-tick {
-  grid-row: span 2;
-  width: 22px;
-  height: 22px;
-  border-radius: 7px;
-  border: 2px solid var(--line);
-  display: grid;
-  place-items: center;
-  font-size: 14px;
-  font-weight: 700;
-  color: #fff;
-}
-.tf-st b {
-  font-size: 16px;
-  overflow-wrap: anywhere;
-}
-.tf-st small {
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--ink-3);
-}
-.tf-st.u-red small {
-  color: var(--red-ink);
-}
-.tf-st.u-amber small {
-  color: var(--amber-ink);
-}
-.tf-st.on {
-  border-color: var(--theory);
-  background: var(--theory-soft);
-}
-.tf-st.on .tf-tick {
-  border-color: var(--theory);
-  background: var(--theory);
 }
 .tf-help {
   margin-top: 2px;
@@ -4713,16 +4602,6 @@ body.fc-marking .toasts {
 .tf-jn.u-red small {
   color: var(--red-ink);
 }
-.tf-coming {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.tf-coming ul {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
 .tf-h {
   margin: 2px 2px 0;
   font: 700 12.5px/1.2 var(--font);
@@ -4730,22 +4609,221 @@ body.fc-marking .toasts {
   text-transform: uppercase;
   color: var(--ink-3);
 }
-.tf-cm {
+
+.tp-page {
+  gap: 12px;
+}
+.tp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tf-card.tp-card,
+.tf-card.tp-room {
+  gap: 8px;
+  padding: 10px 10px 12px;
+}
+.tp-why {
+  font: 700 13.5px/1.25 var(--font);
+  color: var(--ink-2);
+}
+.tp-why.u-red {
+  color: var(--red-ink);
+}
+.tp-why.u-amber {
+  color: var(--amber-ink);
+}
+.tp-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.tp-m,
+.tp-got {
+  position: relative;
+  width: 100%;
+  min-height: 48px;
+  padding: 5px 6px 6px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1px;
+  border-radius: 11px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  text-align: left;
+  line-height: 1.15;
+}
+.tp-m b,
+.tp-got b {
+  max-width: 100%;
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tp-m small,
+.tp-got small {
+  max-width: 100%;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tp-m.u-red small {
+  color: var(--red-ink);
+}
+.tp-m.u-amber small {
+  color: var(--amber-ink);
+}
+.tp-m small.tp-what,
+.tp-got small.tp-what {
+  color: var(--theory-ink);
+  font-weight: 600;
+}
+/* Ticked: he comes to the lesson. */
+.tp-m.on {
+  border-color: var(--theory);
+  background: var(--theory-soft);
+  box-shadow: inset 0 0 0 1px var(--theory);
+}
+.tp-m.on::after {
+  content: "✓";
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font: 700 13px/1 var(--font);
+  color: var(--theory-ink);
+}
+.tp-m.on b {
+  padding-right: 12px;
+}
+.tp-m.hold {
+  border-style: dashed;
+}
+.tp-m.hold b {
+  color: var(--ink-2);
+}
+.tp-got.on {
+  border-color: var(--green);
+  background: var(--green-soft);
+}
+.tp-got.on small {
+  color: var(--green-ink);
+}
+.tp-got:not(.on) {
+  border-color: var(--amber);
+  background: var(--amber-soft);
+}
+.tp-got:not(.on) small {
+  color: var(--amber-ink);
+}
+.tp-acts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tp-acts .tp-call {
+  flex: 1 1 auto;
+}
+.tf-badge-l.sm {
+  width: 30px;
+  height: 30px;
+  margin: 2px;
+  font-size: 16px;
+  box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--theory);
+}
+.tp-soon {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 8px 8px 12px;
-  border-radius: 12px;
+  min-height: 52px;
+  padding: 6px 10px 6px 8px;
+  border-radius: 14px;
+  border: 1.5px solid var(--line-2);
+  background: var(--card);
+  text-align: left;
+}
+.tp-soon-t {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.15;
+}
+.tp-soon-t b,
+.tp-soon-t small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tp-soon-t b {
+  font-size: 15px;
+}
+.tp-soon-t small {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink-3);
+}
+.tp-soon-go {
+  flex: none;
+  font: 700 22px/1 var(--font);
+  color: var(--ink-3);
+}
+.tf-card.tp-room.starting {
+  border-style: dashed;
+  background: var(--card);
+}
+.tp-coming {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tp-c {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  max-width: 100%;
+  padding: 3px 4px 3px 10px;
+  border-radius: 999px;
   border: 1.5px dashed var(--theory);
   background: var(--card);
 }
-.tf-cm b {
-  font-size: 16px;
+.tp-c b {
+  font-size: 15px;
 }
-.tf-cm small {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink-2);
+.tp-c small {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.tp-c.late {
+  border-style: solid;
+  border-color: var(--red);
+  background: var(--red-soft);
+}
+.tp-c.late small {
+  color: var(--red-ink);
+}
+.tp-c.pull small {
+  color: var(--evaluation-ink);
+}
+.tp-all-back {
+  align-self: center;
+}
+
+/* Evaluation: Theory called someone she had called (theory comes first). */
+.bump-note {
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1.5px solid var(--theory);
+  background: var(--theory-soft);
+  font-size: 14px;
+  line-height: 1.3;
 }

@@ -1,4 +1,4 @@
-// The Theory tab's Next and Room views (src/theoryFocusData.ts), from plain views as the phones build them.
+// The Theory page's rules (src/theoryFocusData.ts), from plain views as the phones build them.
 
 import { describe, expect, test } from "vitest";
 import { fighter, KNOWN_WORKBOOKS, PILOT_FIGHTER } from "../convex/lib/book";
@@ -6,13 +6,32 @@ import { computeMaster, type MState } from "../convex/lib/master";
 import { computeStatus, type Marks } from "../convex/lib/status";
 import type { View } from "../src/derive";
 import type { Board } from "../src/store";
-import { defaultTicks, joiners, memberWords, nextLessons, redCount, roomLessons, teachLeft, workbookDone } from "../src/theoryFocusData";
+import {
+  defaultTicks,
+  joiners,
+  LESSON_CAP,
+  LESSON_MS,
+  lessonLength,
+  memberWords,
+  paceOf,
+  planLessons,
+  redCount,
+  roomLeft,
+  roomLessons,
+  startIn,
+  teachLeft,
+  toPlan,
+  whyWords,
+  workbookDone,
+} from "../src/theoryFocusData";
 
 const PILOT = fighter(PILOT_FIGHTER);
 const G7U08 = KNOWN_WORKBOOKS[0].data;
 const U13 = { _id: "u13", code: "U13", grade: 11, en: "Equations", ta: "சமன்பாடுகள்" };
 const U08 = { _id: "u08", code: "U08", grade: 7, en: "Directed numbers", ta: "திசை எண்கள்" };
-const NOW = 1_000_000;
+const MIN = 60_000;
+const NOW = Date.UTC(2026, 9, 29, 10, 0); // 3:30 PM in Sri Lanka
+const FREE = { lessonMs: LESSON_MS, startInMs: 0 }; // Theory is free now, lessons of 12 min
 
 const taught = (...sections: string[]): Marks =>
   Object.fromEntries(
@@ -20,17 +39,30 @@ const taught = (...sections: string[]): Marks =>
   );
 const right = (from: number, to: number): Marks =>
   Object.fromEntries(Array.from({ length: to - from + 1 }, (_, i) => [String(from + i), { s: "right" as const, t: 1 }]));
+/** Answers to these questions, one every `step` ms from `start`. */
+const timed = (qs: number[], start: number, step: number): Marks =>
+  Object.fromEntries(qs.map((q, i) => [String(q), { s: "right" as const, t: start + i * step }]));
+const solo = (id: string) => PILOT.sectionById(id)!.solo;
+/** A, B, C taught and done; D needs teaching (he has no work). */
+const READY_D = { ...taught("A", "B", "C"), ...right(5, 8), ...right(12, 14), ...right(18, 22) };
+/** A, B taught and done; C needs teaching (he has no work). */
+const READY_C = { ...taught("A", "B"), ...right(5, 8), ...right(12, 14) };
 
 type Call = { _id: string; studentId: string; room: "theory" | "evaluation"; kind: "theory" | "evaluation"; status: string; section?: string; unitId?: string; createdAt: number; sentAt?: number; pull?: boolean };
 
 /** A theory-book student (the G11 pilot book). */
-function th(name: string, marks: Marks, o: { where?: View["where"]; idleMs?: number; calls?: Call[] } = {}): View {
+function th(
+  name: string,
+  marks: Marks,
+  o: { where?: View["where"]; idleMs?: number; calls?: Call[]; calledTo?: "theory" | "evaluation"; lastInAt?: number; lastActivityAt?: number } = {},
+): View {
   return {
-    s: { _id: name, name, unitId: U13._id, grade: 11, stage: "fighter", lastSeenAt: 0 },
+    s: { _id: name, name, unitId: U13._id, grade: 11, stage: "fighter", lastSeenAt: 0, lastInAt: o.lastInAt, lastActivityAt: o.lastActivityAt },
     unit: U13,
     stage: "fighter",
     kind: "fighter",
     where: o.where ?? "hall",
+    calledTo: o.calledTo,
     f: PILOT,
     st: computeStatus(marks, PILOT),
     marks,
@@ -41,13 +73,14 @@ function th(name: string, marks: Marks, o: { where?: View["where"]; idleMs?: num
     idleMs: o.idleMs,
   } as unknown as View;
 }
-/** A workbook student with these questions sent to Theory (their levels corrected). */
-function wb(name: string, qs: number[], o: { whole?: boolean; where?: View["where"]; calls?: Call[] } = {}): View {
+/** A workbook student with these questions sent to Theory `sentAgo` ago (their levels corrected). */
+function wb(name: string, qs: number[], o: { whole?: boolean; where?: View["where"]; calls?: Call[]; sentAgo?: number } = {}): View {
+  const at = NOW - (o.sentAgo ?? 0);
   const q: MState["q"] = {};
-  for (const n of qs) q[String(n)] = { got: 0, max: 2, lost: true, t: 1, th: 2 };
+  for (const n of qs) q[String(n)] = { got: 0, max: 2, lost: true, t: at, th: at };
   const lv: MState["lv"] = {};
   for (const l of G7U08.levels) if (qs.some((n) => n >= l.from && n <= l.to)) lv[String(l.n)] = { done: 1, fixed: 1, got: l.max - 2 };
-  const m: MState = { q, lv, ...(o.whole ? { reteach: { at: 1 } } : {}) };
+  const m: MState = { q, lv, ...(o.whole ? { reteach: { at } } : {}) };
   return {
     s: { _id: name, name, unitId: U08._id, grade: 7, stage: "master", lastSeenAt: 0 },
     unit: U08,
@@ -63,69 +96,161 @@ function wb(name: string, qs: number[], o: { whole?: boolean; where?: View["wher
   } as unknown as View;
 }
 const board = (calls: Call[]) => ({ calls }) as unknown as Board;
+const names = (l: { members: { v: View }[] }) => l.members.map((m) => m.v.s.name);
 
-describe("Next: lessons to teach", () => {
-  // Rizwan: A B taught and done → nothing to do (red), needs C. Fathima: C done, needs D (red, idle longer).
-  // Ahamed: 2 left in C (amber), needs D. Nila: working (green), needs D. Kumar in Evaluation, needs C.
-  const rizwan = th("Rizwan", { ...taught("A", "B"), ...right(5, 8), ...right(12, 14) }, { idleMs: 4 * 60_000 });
-  const fathima = th("Fathima", { ...taught("A", "B", "C"), ...right(5, 8), ...right(12, 14), ...right(18, 22) }, { idleMs: 9 * 60_000 });
-  const ahamed = th("Ahamed", { ...taught("A", "B", "C"), ...right(5, 8), ...right(12, 14), ...right(18, 20) });
-  const nila = th("Nila", { ...taught("A", "B", "C"), ...right(5, 8), ...right(12, 14) });
-  const kumar = th("Kumar", { ...taught("A", "B"), ...right(5, 8), ...right(12, 14) }, { where: "evaluation" });
+describe("Minutes, not questions: his pace from his marks", () => {
+  test("the time between his answers; marks given together share it; a lesson or a break starts again", () => {
+    const d = solo("D");
+    // One answer every 4 minutes.
+    expect(paceOf(th("A", { ...READY_D, ...taught("D"), ...timed(d.slice(0, 4), NOW - 16 * MIN, 4 * MIN) }))).toBe(4 * MIN);
+    // Correction marked 5 answers at once, 20 minutes after the one before: 4 minutes each, not 0.
+    const batch = { ...timed([d[0]], NOW - 21 * MIN, 0), ...timed(d.slice(1, 6), NOW - MIN - 20_000, 5_000) };
+    expect(paceOf(th("B", { ...READY_D, ...taught("D"), ...batch }))).toBe(4 * MIN);
+    // A lesson in between (D taught) is not one slow question; neither is a night (yesterday's answers).
+    const c = solo("C");
+    const split = {
+      ...taught("A", "B", "C"),
+      ...right(5, 8),
+      ...right(12, 14),
+      ...timed(c, NOW - 60 * MIN, 3 * MIN), // C: one every 3 min
+      ...Object.fromEntries(PILOT.sectionById("D")!.teach.map((q) => [String(q), { s: "taught" as const, t: NOW - 40 * MIN }])),
+      ...timed(d.slice(0, 2), NOW - 25 * MIN, 3 * MIN),
+    };
+    expect(paceOf(th("C", split))).toBe(3 * MIN);
+    // Fewer than 3 answers to go on: not known (the class's pace is used).
+    expect(paceOf(th("D", { ...READY_D, ...taught("D"), ...timed(d.slice(0, 2), NOW - 8 * MIN, 4 * MIN) }))).toBeNull();
+  });
 
-  test("one card per section, most urgent first; who needs it, in order", () => {
-    const next = nextLessons([nila, rizwan, ahamed, fathima, kumar]);
-    expect(next.map((l) => [l.key, l.section?.id, l.urgency, l.members.map((m) => m.v.s.name)])).toEqual([
-      ["u13:D", "D", "red", ["Fathima", "Ahamed", "Nila"]], // Fathima idle 9 min beats Rizwan's 4
-      ["u13:C", "C", "red", ["Rizwan", "Kumar"]],
+  test("out of work before Theory is free again counts; working for longer doesn't", () => {
+    const d = solo("D");
+    const e = PILOT.sectionById("E")!;
+    // Both have 2 questions of D left. Fast: 1 min a question; slow: 10 min a question.
+    const base = { ...READY_D, ...taught("D"), ...right(d[0], d[d.length - 3]) };
+    const fast = th("Fast", { ...base, ...timed(d.slice(0, d.length - 2), NOW - (d.length - 3) * MIN, MIN) }, { lastActivityAt: NOW });
+    const slow = th("Slow", { ...base, ...timed(d.slice(0, d.length - 2), NOW - (d.length - 3) * 10 * MIN, 10 * MIN) }, { lastActivityAt: NOW });
+    expect(fast.st!.left).toBe(2);
+    expect(slow.st!.left).toBe(2);
+    const [l] = planLessons([fast, slow], NOW, FREE);
+    expect(l.section).toBe(e);
+    const byName = Object.fromEntries(l.members.map((m) => [m.v.s.name, m]));
+    expect(byName.Fast.outIn).toBe(2 * MIN);
+    expect(byName.Fast.urgent).toBe(true);
+    expect(memberWords(byName.Fast)).toBe("out in 2m");
+    expect(byName.Slow.outIn).toBe(20 * MIN);
+    expect(byName.Slow.urgent).toBe(false);
+    expect(memberWords(byName.Slow)).toBe("out in 20m");
+    expect(l.frees).toBe(1);
+    // Theory is busy for another 10 minutes: then the slow one runs out before the next lesson ends too.
+    expect(planLessons([fast, slow], NOW, { lessonMs: LESSON_MS, startInMs: 10 * MIN })[0].frees).toBe(2);
+  });
+});
+
+describe("Next: the lesson that gives work to the most comes first", () => {
+  test("group size counts: three out of work 1–2 min beat one out of work 4 min", () => {
+    const rizwan = th("Rizwan", READY_C, { idleMs: 4 * MIN });
+    const fathima = th("Fathima", READY_D, { idleMs: 2 * MIN });
+    const ahamed = th("Ahamed", READY_D, { idleMs: MIN });
+    const nila = th("Nila", READY_D, { idleMs: MIN });
+    const plan = planLessons([rizwan, fathima, ahamed, nila], NOW, FREE);
+    expect(plan.map((l) => [l.key, l.frees, names(l)])).toEqual([
+      ["u13:D", 3, ["Fathima", "Ahamed", "Nila"]],
+      ["u13:C", 1, ["Rizwan"]],
     ]);
-    expect(next[0].kind).toBe("section");
-    // Ticked by default: everyone in the hall; Kumar is in Evaluation (calling him takes him out): not ticked.
-    expect(defaultTicks(next[1])).toEqual(["Rizwan"]);
-    expect(next[1].members.map(memberWords)).toEqual(["no work 4 min", "in Evaluation"]);
-    expect(next[0].members.map(memberWords)).toEqual(["no work 9 min", "2 left", "working"]);
-    // The Next badge: students with no work who need Theory (not in Evaluation).
-    expect(redCount(next)).toBe(2);
+    expect(whyWords(plan[0])).toBe("3 need it now · Fathima: no work 2m");
+    expect(whyWords(plan[1])).toBe("1 needs it now · Rizwan: no work 4m");
+    expect(plan[0].members.map(memberWords)).toEqual(["no work 2m", "no work 1m", "no work 1m"]);
+    expect(redCount(plan)).toBe(4);
+  });
+
+  test("nobody starves: out of work 20 minutes puts his lesson first", () => {
+    const rizwan = th("Rizwan", READY_C, { idleMs: 21 * MIN });
+    const others = ["Fathima", "Ahamed", "Nila"].map((n) => th(n, READY_D, { idleMs: MIN }));
+    const plan = planLessons([rizwan, ...others], NOW, FREE);
+    expect(plan.map((l) => [l.key, l.starving])).toEqual([
+      ["u13:C", true],
+      ["u13:D", false],
+    ]);
+  });
+
+  test("a workbook question waiting 20 minutes counts like a student out of work", () => {
+    const malik = wb("Malik", [13, 17], { sentAgo: 25 * MIN });
+    const priya = wb("Priya", [13], { sentAgo: 5 * MIN });
+    const vimal = wb("Vimal", [], { whole: true, sentAgo: 2 * MIN });
+    const [l] = planLessons([malik, priya, vimal], NOW, FREE);
+    expect([l.key, l.kind, l.section]).toEqual(["u08:R", "workbook", null]);
+    expect(names(l)).toEqual(["Malik", "Priya", "Vimal"]); // the longest waiting first
+    expect(l.members.map((m) => [m.urgent, memberWords(m), m.qs, m.whole])).toEqual([
+      [true, "waited 25m", [13, 17], false],
+      [false, "waited 5m", [13], false],
+      [false, "waited 2m", [], true],
+    ]);
+    expect(l.frees).toBe(1);
+    expect(l.shared).toEqual([{ q: 13, n: 2 }]);
+    expect(whyWords(l)).toBe("1 needs it now · Malik: waited 25m");
+    // Starving only at 40: 20 past the 20 that made it count.
+    expect(planLessons([wb("Malik", [13], { sentAgo: 41 * MIN })], NOW, FREE)[0].starving).toBe(true);
+  });
+
+  test("nobody needs it now: teach ahead, the first one to run out first", () => {
+    const d = solo("D");
+    const working = th("Dilan", { ...READY_D, ...taught("D"), ...right(d[0], d[0]) });
+    const [l] = planLessons([working], NOW, FREE);
+    expect(l.frees).toBe(0);
+    expect(whyWords(l)).toBe(`Teach ahead · first out in ${(d.length - 1) * 4}m`);
+    expect(defaultTicks(l)).toEqual(["Dilan"]); // he comes too: bigger groups, fewer lessons
+  });
+});
+
+describe("Who is ticked for a lesson", () => {
+  test("everyone who can come, out of work first, 6 at most", () => {
+    const eight = ["A1", "B2", "C3", "D4", "E5", "F6", "G7", "H8"].map((n, i) => th(n, READY_D, { idleMs: (8 - i) * MIN }));
+    const [l] = planLessons(eight, NOW, FREE);
+    expect(l.members).toHaveLength(8);
+    expect(l.frees).toBe(LESSON_CAP);
+    expect(defaultTicks(l)).toEqual(["A1", "B2", "C3", "D4", "E5", "F6"]);
+  });
+
+  test("in Evaluation, called by Evaluation, or going home before he could practise: listed, not ticked", () => {
+    const kumar = th("Kumar", READY_D, { where: "evaluation", idleMs: 5 * MIN });
+    const sana = th("Sana", READY_D, { calledTo: "evaluation", idleMs: 5 * MIN });
+    const raj = th("Raj", READY_D, { lastInAt: NOW - 115 * MIN, idleMs: 5 * MIN }); // goes home in 5 minutes
+    const hana = th("Hana", READY_D, { lastInAt: NOW - 30 * MIN, idleMs: 2 * MIN }); // here for another 90
+    const [l] = planLessons([kumar, sana, raj, hana], NOW, FREE);
+    expect(names(l)).toEqual(["Hana", "Kumar", "Raj", "Sana"]);
+    expect(l.members.map((m) => [m.v.s.name, m.hold ?? null])).toEqual([
+      ["Hana", null],
+      ["Kumar", "evaluation"],
+      ["Raj", "home"],
+      ["Sana", "evalCalled"],
+    ]);
+    expect(l.members.map(memberWords)).toEqual(["no work 2m", "in Eval", "home 3:35 PM", "Eval called"]);
+    expect(defaultTicks(l)).toEqual(["Hana"]);
+    expect(l.frees).toBe(1);
+    expect(redCount([l])).toBe(3); // Kumar is in Evaluation: not counted; Sana and Raj have no work
   });
 
   test("a lesson stopped part way: he needs only what is left of the section", () => {
-    const part = th("Fathima", { ...taught("A", "B", "C"), ...right(5, 8), ...right(12, 14), ...right(18, 22), "23": { s: "taught", t: 2 }, "24": { s: "skip", t: 2 } });
-    const all = th("Dilan", { ...taught("A", "B", "C"), ...right(5, 8), ...right(12, 14), ...right(18, 22) });
+    const part = th("Fathima", { ...READY_D, "23": { s: "taught", t: 2 }, "24": { s: "skip", t: 2 } });
+    const all = th("Dilan", READY_D);
     expect(teachLeft(part, PILOT.sectionById("D")!)).toEqual([25, 26]);
-    const [d] = nextLessons([part, all]);
+    const [d] = planLessons([part, all], NOW, FREE);
     expect(d.members.map((m) => [m.v.s.name, m.teach])).toEqual([
       ["Dilan", [23, 24, 25, 26]],
       ["Fathima", [25, 26]],
     ]);
     expect(d.teach).toEqual([23, 24, 25, 26]);
-    expect(nextLessons([part])[0].teach).toEqual([25, 26]);
   });
 
   test("students already called for theory, or gone home, are not offered again", () => {
-    const called = th("Rizwan", { ...taught("A", "B"), ...right(5, 8), ...right(12, 14) }, {
+    const called = th("Rizwan", READY_C, {
       calls: [{ _id: "c1", studentId: "Rizwan", room: "theory", kind: "theory", status: "requested", section: "C", createdAt: 1 }],
     });
-    const home = th("Sana", { ...taught("A", "B") }, { where: "absent" });
-    expect(nextLessons([called, home])).toEqual([]);
-  });
-
-  test("a workbook: one card for everyone with questions sent to Theory, shared questions first", () => {
-    const next = nextLessons([wb("Malik", [13, 17]), wb("Priya", [13]), wb("Vimal", [], { whole: true })]);
-    expect(next).toHaveLength(1);
-    const l = next[0];
-    expect([l.key, l.kind, l.section]).toEqual(["u08:R", "workbook", null]);
-    expect(l.members.map((m) => [m.v.s.name, m.qs, m.whole])).toEqual(
-      expect.arrayContaining([
-        ["Malik", [13, 17], false],
-        ["Priya", [13], false],
-        ["Vimal", [], true],
-      ]),
-    );
-    expect(l.shared).toEqual([{ q: 13, n: 2 }]);
+    const home = th("Sana", taught("A", "B"), { where: "absent" });
+    expect(planLessons([called, home], NOW, FREE)).toEqual([]);
   });
 });
 
-describe("Room: the lesson going on", () => {
+describe("The lessons going on", () => {
   const call = (id: string, who: string, status: string, o: Partial<Call> = {}): Call => ({
     _id: id,
     studentId: who,
@@ -134,45 +259,72 @@ describe("Room: the lesson going on", () => {
     status,
     section: "D",
     unitId: "u13",
-    createdAt: NOW - 10 * 60_000,
-    sentAt: status === "sent" ? NOW - 8 * 60_000 : undefined,
+    createdAt: NOW - 10 * MIN,
+    sentAt: status === "sent" ? NOW - 8 * MIN : undefined,
     ...o,
   });
-  const base = { ...taught("A", "B", "C"), ...right(5, 8), ...right(12, 14), ...right(18, 22) };
 
-  test("students sent are grouped by lesson; called ones are on the way; a lesson knows how long", () => {
+  test("one block per lesson: who is here, who is on the way; lessons going on first", () => {
     const calls = [
       call("c1", "Fathima", "sent"),
-      call("c2", "Ahamed", "sent", { sentAt: NOW - 25 * 60_000 }),
+      call("c2", "Ahamed", "sent", { sentAt: NOW - 25 * MIN }),
       call("c3", "Malik", "sent", { section: "R", unitId: "u08" }),
       call("c4", "Nila", "requested"),
       call("c5", "Kumar", "requested", { pull: true }),
+      call("c7", "Priya", "requested", { section: "C", createdAt: NOW - MIN }),
       { ...call("c6", "Zara", "sent"), room: "evaluation", kind: "evaluation" } as Call,
     ];
     const views = [
-      th("Fathima", base, { where: "theory", calls: [calls[0]] }),
-      th("Ahamed", base, { where: "theory", calls: [calls[1]] }),
+      th("Fathima", READY_D, { where: "theory", calls: [calls[0]] }),
+      th("Ahamed", READY_D, { where: "theory", calls: [calls[1]] }),
       wb("Malik", [13, 17], { where: "theory", calls: [calls[2]] }),
-      th("Nila", base, { calls: [calls[3]] }),
-      th("Kumar", base, { where: "evaluation", calls: [calls[4]] }),
+      th("Nila", READY_D, { calls: [calls[3]] }),
+      th("Kumar", READY_D, { where: "evaluation", calls: [calls[4]] }),
+      th("Priya", READY_C, { calls: [calls[5]] }),
     ];
-    const { lessons, coming } = roomLessons(board(calls), views, NOW);
-    expect(lessons.map((l) => [l.key, l.kind, l.section?.id ?? null, l.here.map((s) => s.v.s.name), l.long])).toEqual([
-      ["u13:D", "section", "D", ["Ahamed", "Fathima"], true], // Ahamed has been here 25 min: "Still with you?"
-      ["u08:R", "workbook", null, ["Malik"], false],
+    const room = roomLessons(board(calls), views, NOW);
+    expect(
+      room.map((l) => [l.key, l.kind, l.section?.id ?? null, l.here.map((s) => s.v.s.name), l.coming.map((rc) => rc.v?.s.name), l.long]),
+    ).toEqual([
+      ["u13:D", "section", "D", ["Ahamed", "Fathima"], ["Nila", "Kumar"], true], // Ahamed here 25 min: "Still with you?"
+      ["u08:R", "workbook", null, ["Malik"], [], false],
+      ["u13:C", "section", "C", [], ["Priya"], false], // nobody here yet: starting
     ]);
-    expect(lessons[0].since).toBe(NOW - 25 * 60_000);
-    expect(lessons[1].here[0].qs).toEqual([13, 17]);
-    expect(coming.map((rc) => [rc.v?.s.name, !!rc.c.pull])).toEqual([
-      ["Nila", false],
-      ["Kumar", true],
-    ]);
+    expect(room[0].since).toBe(NOW - 25 * MIN);
+    expect(room[1].here[0].qs).toEqual([13, 17]);
+    expect(roomLeft(room[0])).toBe(LESSON_CAP - 4);
+    // Theory is free again when the lesson going on ends (2 minutes at least); only on the way: a whole lesson.
+    expect(startIn(room, LESSON_MS, NOW)).toBe(2 * MIN);
+    expect(startIn([{ ...room[0], since: NOW - 4 * MIN }], LESSON_MS, NOW)).toBe(8 * MIN);
+    expect(startIn([room[2]], LESSON_MS, NOW)).toBe(LESSON_MS);
+    expect(startIn([], LESSON_MS, NOW)).toBe(0);
   });
 
-  test("who else needs the same lesson now can join it (not those in Evaluation)", () => {
-    const next = nextLessons([th("Dilan", base), th("Sana", base, { where: "evaluation" }), th("Rizwan", { ...taught("A", "B"), ...right(5, 8), ...right(12, 14) })]);
-    expect(joiners({ key: "u13:D" }, next).map((m) => m.v.s.name)).toEqual(["Dilan"]);
-    expect(joiners({ key: "u13:E" }, next)).toEqual([]);
+  test("who needs the same lesson now can join while there's room; a full lesson goes back to Next", () => {
+    const calls = [call("c1", "Fathima", "sent"), call("c2", "Ahamed", "sent")];
+    const views = [
+      th("Fathima", READY_D, { where: "theory", calls: [calls[0]] }),
+      th("Ahamed", READY_D, { where: "theory", calls: [calls[1]] }),
+      th("Hana", READY_D, { idleMs: 2 * MIN }), // out of work: can join
+      th("Dilan", { ...READY_D, ...taught("D") }), // working on D, needs E: another lesson
+      th("Sana", READY_D, { where: "evaluation" }), // in Evaluation: not offered
+    ];
+    const room = roomLessons(board(calls), views, NOW);
+    const plan = planLessons(views, NOW, { lessonMs: LESSON_MS, startInMs: startIn(room, LESSON_MS, NOW) });
+    expect(joiners(room[0], plan).map((m) => m.v.s.name)).toEqual(["Hana"]);
+    // D is going on with room: its students join it instead of a new card in Next.
+    expect(toPlan(plan, room).map((l) => l.key)).toEqual(["u13:E"]);
+    // Full (6): nobody joins, and D shows in Next again for the next lesson.
+    const full = { ...room[0], coming: Array.from({ length: 4 }, () => room[0].here[0].rc) };
+    expect(joiners(full, plan)).toEqual([]);
+    expect(toPlan(plan, [full]).map((l) => l.key)).toEqual(["u13:D", "u13:E"]);
+  });
+
+  test("how long lessons take: the middle of the recent ones, 12 min until there are 3", () => {
+    expect(lessonLength(undefined)).toBe(LESSON_MS);
+    expect(lessonLength([10 * MIN, 11 * MIN])).toBe(LESSON_MS);
+    expect(lessonLength([10 * MIN, 11 * MIN, 9 * MIN, 50 * MIN, MIN])).toBe(10 * MIN); // 50 and 1 are left out
+    expect(lessonLength([8 * MIN, 10 * MIN, 9 * MIN, 11 * MIN])).toBe(9.5 * MIN);
   });
 
   test("Done for a workbook student: all ticked or the whole unit = all taught; otherwise only the ticked ones", () => {

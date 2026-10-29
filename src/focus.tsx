@@ -306,7 +306,7 @@ function stopPaper() {
 async function takeBackLevel(s: SavedLevel): Promise<boolean> {
   const v = latestViews.find((x) => x.s._id === s.studentId);
   if (!v || v.s.unitId !== s.unitId) {
-    toast(`${s.name} is on another book now. Use the Correction tab.`, "error");
+    toast(`${s.name} is on another book now. Use the Class tab (tap his name).`, "error");
     return false;
   }
   const fixed = v.mm.lv[String(s.level)]?.fixed;
@@ -315,7 +315,7 @@ async function takeBackLevel(s: SavedLevel): Promise<boolean> {
     return false;
   }
   if (Math.abs(fixed - s.at) > 2 * 60_000) {
-    toast(`${s.name}'s Level ${s.level} was corrected again since. Open it on the Correction tab.`, "error");
+    toast(`${s.name}'s Level ${s.level} was corrected again since. Open it on the Class tab (tap his name).`, "error");
     return false;
   }
   const ok = await act(() =>
@@ -341,12 +341,12 @@ async function takeBackLevel(s: SavedLevel): Promise<boolean> {
 async function takeBackMarks(s: SavedMarks): Promise<boolean> {
   const v = latestViews.find((x) => x.s._id === s.studentId);
   if (!v || v.s.unitId !== s.unitId || v.kind !== "fighter") {
-    toast(`${s.name} is on another book now. Use the Correction tab.`, "error");
+    toast(`${s.name} is on another book now. Use the Class tab (tap his name).`, "error");
     return false;
   }
   const moved = s.items.find((it) => (v.marks[String(it.q)]?.s ?? null) !== it.s);
   if (moved) {
-    toast(`${s.name}'s ${v.f?.longLabel(moved.q) ?? `Q${moved.q}`} was changed since. Fix it on the Correction tab.`, "error");
+    toast(`${s.name}'s ${v.f?.longLabel(moved.q) ?? `Q${moved.q}`} was changed since. Fix it on the Class tab (tap his name).`, "error");
     return false;
   }
   try {
@@ -510,7 +510,8 @@ function Picker(props: {
       <p class="muted small fc-help">
         Tap the name on the paper. Workbook: one tap for each question (the big green button is full marks, a number gives
         fewer, <b>?</b> = blank). Theory book: <b>✓</b> right, <b>✗</b> wrong, <b>↻</b> slip. The next question comes by
-        itself, and <b>Stop</b> keeps every mark. Two levels on a name: one handed in (amber) and the one he is on now.
+        itself, and <b>Stop</b> keeps every mark. <b>Later</b> = handed in, correct it later. Two levels on a name: one
+        handed in (amber) and the one he is on now.
       </p>
     </>
   );
@@ -655,8 +656,11 @@ function SavedList(props: { now: number }) {
 
 // ---- One paper ----
 
-/** The paper's top: whose it is (huge), his book, and Stop (every mark is kept). */
-function PaperHead(props: { v: View; children?: ComponentChildren }) {
+/**
+ * The paper's top: whose it is (huge), his book, and Stop (every mark is kept). A workbook level he hasn't handed in
+ * yet also has Later: handed in, correct it later (the waiting clock starts, he goes on with the next level).
+ */
+function PaperHead(props: { v: View; later?: () => void; children?: ComponentChildren }) {
   const { v } = props;
   return (
     <header class="fc-head">
@@ -668,9 +672,16 @@ function PaperHead(props: { v: View; children?: ComponentChildren }) {
           {props.children}
         </p>
       </div>
-      <button type="button" class="btn ghost small fc-stop" aria-label="Stop: every mark is kept" onClick={stopPaper}>
-        Stop
-      </button>
+      <div class="fc-head-acts">
+        {props.later && (
+          <button type="button" class="btn ghost small fc-later" aria-label="Handed in: correct later" onClick={props.later}>
+            Later
+          </button>
+        )}
+        <button type="button" class="btn ghost small fc-stop" aria-label="Stop: every mark is kept" onClick={stopPaper}>
+          Stop
+        </button>
+      </div>
     </header>
   );
 }
@@ -693,10 +704,22 @@ function MasterPaperView(props: { v: View; paper: MasterPaper; drafts: Draft[] |
   }, [props.drafts, level?.n]);
 
   const changeLevel = () => setPaper({ kind: "master", studentId: paper.studentId, unitId: paper.unitId, level: null, given: {}, parts: {}, at: 0, to: "auto" });
+  // Handed in, to correct later (the level pills on the Class rows did this before): the waiting clock starts.
+  const lvNow = level ? v.mm.lv[String(level.n)] : undefined;
+  const canLater = !!level && !lvNow?.done && !lvNow?.fixed && v.where !== "absent" && !paper.saving;
+  const later = async () => {
+    if (!level) return;
+    const n = level.n;
+    const r = await act(() => mutate(api.workbook.levelDone, { studentId: v.s._id, unitId: v.s.unitId!, level: n, by: currentRole() }));
+    if (r) {
+      stopPaper();
+      toast(`${v.s.name}: Level ${n} handed in. It waits for you as an amber L${n}.`);
+    }
+  };
 
   return (
     <div class="fc-paper">
-      <PaperHead v={v}>
+      <PaperHead v={v} later={canLater ? () => void later() : undefined}>
         {level && (
           <>
             {" · "}
@@ -814,7 +837,8 @@ function Marking(props: {
   if (!each) {
     return (
       <Empty title="This workbook doesn't list each question's marks">
-        Correct Level {level.n} on the Correction tab (the level's total and which questions lost marks).
+        Correct Level {level.n} on the Class tab: tap his name, then Level {level.n} in his marks table (the level's total and
+        which questions lost marks).
       </Empty>
     );
   }

@@ -869,6 +869,12 @@ function History() {
 
 const TAB_NAMES: Record<Role, string> = { correction: "Correction", theory: "Theory", evaluation: "Evaluation" };
 const EXTRA_NAMES: Record<Extra, string> = { students: "Students", books: "Books", reports: "Reports and History" };
+/** What each job opens (everyone has the Class tab). */
+const TAB_HELP: Record<Role, string> = {
+  correction: "Attendance, Focus (marking papers), sending students to the rooms",
+  theory: "the Theory page",
+  evaluation: "the Evaluation page",
+};
 const EXTRA_HELP: Record<Extra, string> = {
   students: "add, rename, remove students",
   books: "workbooks and unit names",
@@ -1078,12 +1084,15 @@ function PersonSheet(props: { person?: Person; onClose: () => void; onAdded?: (i
       </label>
       {!owner && (
         <>
-          <h3 class="block-title">Tabs</h3>
+          <h3 class="block-title">Jobs</h3>
           <div class="perm-list">
             {(Object.keys(TAB_NAMES) as Role[]).map((t) => (
               <label key={t} class="perm">
                 <input type="checkbox" checked={tabs.includes(t)} onChange={() => setTabs(toggle(tabs, t))} />
-                <span>{TAB_NAMES[t]}</span>
+                <span>
+                  {TAB_NAMES[t]}
+                  <small>{TAB_HELP[t]}</small>
+                </span>
               </label>
             ))}
           </div>

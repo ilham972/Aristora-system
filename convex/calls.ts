@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import { mutation, type MutationCtx } from "./_generated/server";
+import { mutation, query, type MutationCtx } from "./_generated/server";
 import {
   activeCalls,
   cleanBy,
@@ -17,7 +17,7 @@ import { fighter } from "./lib/book";
 import { computeMaster, forTheory } from "./lib/master";
 import { computeStatus } from "./lib/status";
 import { room } from "./schema";
-import { actor, allowed } from "./lib/auth";
+import { actor, allowed, viewer } from "./lib/auth";
 
 type Rejected = { studentId: Id<"students">; name: string; reason: string };
 
@@ -45,7 +45,7 @@ export const create = mutation({
     if (args.room === "theory" && args.kind !== "theory") fail("The theory room only teaches theory.");
     const session = await currentSession(ctx, now);
     const group = `${now.toString(36)}${Math.floor(Math.random() * 1e9).toString(36)}`;
-    const created: { studentId: Id<"students">; callId: Id<"calls">; pull: boolean }[] = [];
+    const created: { studentId: Id<"students">; callId: Id<"calls">; pull: boolean; bumped: boolean }[] = [];
     const rejected: Rejected[] = [];
 
     for (const id of ids) {
@@ -73,6 +73,7 @@ export const create = mutation({
 
       const active = await activeCalls(ctx, id);
       let pull = false;
+      let bumped = false;
       if (args.room === "theory") {
         if (active.some((c) => c.room === "theory")) { reject("is already called to Theory"); continue; }
         if (active.some((c) => c.kind === "theory")) { reject("is already getting theory in Evaluation"); continue; }
@@ -80,6 +81,7 @@ export const create = mutation({
           if (c.room === "evaluation" && c.status === "requested") {
             await ctx.db.patch(c._id, { status: "cancelled", endedAt: now });
             await log(ctx, session, now, { kind: "bumped", by, studentId: id, name: s.name, value: "theory first" });
+            bumped = true;
           }
         }
         pull = active.some((c) => c.room === "evaluation" && c.status === "sent");
@@ -98,6 +100,7 @@ export const create = mutation({
         unitId: place.unit._id,
         stage: place.book.stage,
         pull: pull || undefined,
+        bumped: bumped || undefined,
         createdAt: now,
         sessionId: session?._id,
       });
@@ -108,7 +111,7 @@ export const create = mutation({
         name: s.name,
         value: `${args.room}${args.kind !== args.room ? "/" + args.kind : ""}${pull ? "/pull" : ""}`,
       });
-      created.push({ studentId: id, callId, pull });
+      created.push({ studentId: id, callId, pull, bumped });
     }
     await touch(ctx, session, now);
     return { created, rejected };
@@ -393,5 +396,26 @@ export const release = mutation({
     await log(ctx, session, now, { kind: "back-to-hall", by: cleanBy(args.by), studentId: s._id, name: s.name });
     await refresh(ctx, s._id, now, session);
     await touch(ctx, session, now);
+  },
+});
+
+/**
+ * How long Theory's lessons take, for the Theory page's forecasts: from "sent" to Done, the last 20 lessons in the
+ * theory room (very short or very long ones are left out on the phone). Newest first.
+ */
+export const lessons = query({
+  args: { token: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    await viewer(ctx, args.token, "theory");
+    const recent = await ctx.db
+      .query("calls")
+      .withIndex("by_status", (q) => q.eq("status", "done"))
+      .order("desc")
+      .take(200);
+    const ms = recent
+      .filter((c) => c.room === "theory" && c.kind === "theory" && c.sentAt !== undefined && c.endedAt !== undefined)
+      .map((c) => c.endedAt! - c.sentAt!)
+      .slice(0, 20);
+    return { ms };
   },
 });

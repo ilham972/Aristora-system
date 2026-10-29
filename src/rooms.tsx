@@ -1,14 +1,12 @@
-import type { ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { mutate } from "./backend";
 import { GoneHome, NobodyHere, Register } from "./board";
-import { evalQueue, roomBusy, roomCalls, sameMistakes, theoryGroups, type RoomCall, type View } from "./derive";
+import { evalQueue, roomBusy, roomCalls, sameMistakes, type RoomCall, type View } from "./derive";
 import { GradePills, gradesOf, inGrade, needsOf, useGradeFilter } from "./grades";
 import { act, currentRole, toast, type Board } from "./store";
 import { flushTaps } from "./taps";
-import { theoryWords } from "./master";
 
 type RoomName = "theory" | "evaluation";
 const ROOM: Record<RoomName, string> = { theory: "Theory", evaluation: "Evaluation" };
@@ -51,107 +49,6 @@ function useSelection(views: View[], can: (v: View) => string | null) {
   };
 }
 
-// ---------------- Theory ----------------
-
-/** The full Theory screen (the Theory tab's "All" view); `top` = the view switch, stuck above everything. */
-export function Theory(props: { board: Board; views: View[]; now: number; top?: ComponentChildren }) {
-  const { board, now } = props;
-  const all = props.views;
-  // Only students signed in on Attendance are on the register; the grade pills show the grades in class now.
-  const inClass = all.filter((v) => v.where !== "absent");
-  const grades = gradesOf(inClass);
-  const [grade, setGrade] = useGradeFilter("theory", grades);
-  const views = inGrade(all, grade);
-  const here = inGrade(inClass, grade);
-  // With every grade showing, chips name the grade too: "G11 U13 D".
-  const named = grade === "all" && grades.length > 1;
-  const groups = theoryGroups(views);
-  const room = roomCalls(board, all, "theory", now);
-  const pick = useSelection(views, (v) => {
-    if (v.where === "absent") return "not signed in";
-    if (!v.st?.nextTheory && !v.ms?.reteach) return v.kind === "master" ? "nothing sent to Theory" : "no theory to teach here";
-    if (v.calls.some((c) => c.kind === "theory")) return "already called for theory";
-    return null;
-  });
-  const selected = views.filter((v) => pick.sel.has(v.s._id));
-  const sections = [
-    ...new Set(
-      selected.map((v) =>
-        (v.st?.nextTheory ? `${v.unit?.code ?? ""} ${v.st.nextTheory}` : `${v.unit?.code ?? ""} ${v.ms ? theoryWords(v.ms) : "re-teach"}`).trim(),
-      ),
-    ),
-  ].join(", ");
-
-  return (
-    <main class={`page${pick.sel.size ? " with-bar" : ""}`}>
-      <div class="stick">
-        {props.top}
-        {room.length > 0 && <InRoom room="theory" calls={room} />}
-        <GradePills views={inClass} needs={needsOf("theory", board, all, now)} filter={grade} onPick={setGrade} />
-      </div>
-      {groups.length > 0 && (
-        <div class="chips-row" role="group" aria-label="Next to teach">
-          <span class="chips-label">Next to teach</span>
-          {groups.map((g) => (
-            <button
-              key={g.key}
-              type="button"
-              class={`group-chip u-${g.members[0].urgency}`}
-              aria-label={`Select the ${g.members.length} students who need ${
-                g.section ? `section ${g.section.id}` : g.q !== undefined ? `Q${g.q}` : "re-teaching"
-              } of ${g.unit?.code ?? "this unit"}`}
-              onClick={() => pick.set(g.members.filter((m) => !m.inEvaluation).map((m) => m.v.s._id))}
-            >
-              {named && g.unit ? `G${g.unit.grade} ${g.label}` : g.label}
-              <b>{g.members.length}</b>
-            </button>
-          ))}
-        </div>
-      )}
-      {inClass.length === 0 && <NobodyHere />}
-      <Register
-        role="theory"
-        views={here}
-        grouped={named}
-        now={now}
-        legend={
-          <>
-            Tap names to choose who to call. Tap the <b class="k-theory">section letter</b> to mark all its theory taught. Tap a ◎
-            circle: taught, then skip, then clear. When they leave, <b>All taught</b> marks the whole section;{" "}
-            <b>Send back</b> keeps only what you tapped. Workbook students show the questions sent to you: tap each ◎
-            when taught.
-          </>
-        }
-        selected={pick.sel}
-        onName={(v) => {
-          pick.toggle(v);
-          return true;
-        }}
-      />
-      {pick.sel.size > 0 && (
-        <div class="call-bar theory" role="region" aria-label="Call">
-          <div class="call-bar-text">
-            <b>{selected.map((v) => v.s.name).join(", ")}</b>
-            <small>{sections}</small>
-          </div>
-          <button type="button" class="btn ghost small" onClick={pick.clear}>
-            Clear
-          </button>
-          <button
-            type="button"
-            class="btn theory"
-            onClick={async () => {
-              if (await call([...pick.sel], "theory", "theory")) pick.clear();
-            }}
-          >
-            Call {pick.sel.size}
-          </button>
-        </div>
-      )}
-    </main>
-  );
-}
-
 // ---------------- Evaluation ----------------
 
 export function Evaluation(props: { board: Board; views: View[]; now: number }) {
@@ -180,10 +77,19 @@ export function Evaluation(props: { board: Board; views: View[]; now: number }) 
   const forEval = selected.filter((v) => v.pending.length > 0);
   const forTheory = selected.filter((v) => v.pending.length === 0 && canTeachHere(v));
   const pulls = room.filter((rc) => rc.c.status === "sent" && rc.v?.pulled);
+  // Theory called someone she had called (theory comes first): her call is gone, so she is told why.
+  const byId = new Map(all.map((v) => [v.s._id as string, v]));
+  const bumped = board.calls.filter((c) => c.room === "theory" && c.bumped && byId.get(c.studentId)?.where !== "absent");
 
   return (
     <main class={`page${pick.sel.size ? " with-bar" : ""}`}>
       <div class="stick">
+        {bumped.length > 0 && (
+          <p class="bump-note" role="status">
+            <b>Theory took {bumped.map((c) => byId.get(c.studentId)?.s.name ?? "?").join(", ")} first.</b> Your call was cancelled:
+            call {bumped.length === 1 ? "him" : "them"} again after Theory.
+          </p>
+        )}
         {room.length > 0 && (
           <>
           {pulls.map((rc) => (

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { callPhrase, pullPhrase, type RoomName } from "./announce";
 import { Attendance } from "./attendance";
 import type { Link } from "./backend";
-import { Correction } from "./correction";
+import { ClassPage } from "./correction";
 import { buildViews, evalQueue, fmtClock, liveSession, theoryGroups, theoryMembers, type View } from "./derive";
 import { Focus } from "./focus";
 import { Evaluation } from "./rooms";
@@ -15,33 +15,51 @@ import { hideSplash } from "./splash";
 import { may, setRole, signOutHere, useStore, useTick, type Board, type Role } from "./store";
 import { Sheet, Toasts } from "./ui";
 
-/** A tab in the bottom bar. Focus is the Correction job, one question at a time (src/focus.tsx). */
-type TabId = Role | "focus";
+/**
+ * The bottom bar. Class is everyone's home (the whole class, each teacher's own taps on the rows); Theory and
+ * Evaluation are those teachers' own pages. Marking papers (Focus) is a page from the top bar: the Correction job.
+ */
+type TabId = "class" | "theory" | "evaluation";
+type Page = "board" | "settings" | "attendance" | "progress" | "focus";
 
-const ROLES: { id: TabId; label: string }[] = [
-  { id: "correction", label: "Correction" },
-  { id: "focus", label: "Focus" },
+const TABS: { id: TabId; label: string }[] = [
+  { id: "class", label: "Class" },
   { id: "theory", label: "Theory" },
   { id: "evaluation", label: "Evaluation" },
 ];
+const JOBS: Role[] = ["correction", "theory", "evaluation"];
 
-/** The job a tab does: who may open it, what its phone hears, and what the server records as `by`. */
-const jobOf = (t: TabId): Role => (t === "focus" ? "correction" : t);
-
-function loadRole(): TabId {
+/** Where this phone was: its tab, and Focus if it was marking. Before 29 Oct 2026 "correction" was the Class tab and "focus" a tab. */
+function loadStart(): { tab: TabId; page: Page } {
   try {
     const r = localStorage.getItem("aristora.role");
-    if (r === "correction" || r === "focus" || r === "theory" || r === "evaluation") return r;
+    if (r === "theory" || r === "evaluation") return { tab: r, page: "board" };
+    if (r === "focus") return { tab: "class", page: "focus" };
   } catch {
     /* private mode */
   }
-  return "correction";
+  return { tab: "class", page: "board" };
+}
+
+/** The job this phone did last (Theory, Evaluation, or Correction in Focus): the Class tab's taps follow it. */
+function loadJob(): Role | null {
+  try {
+    const j = localStorage.getItem("aristora.job");
+    if (j === "correction" || j === "theory" || j === "evaluation") return j;
+  } catch {
+    /* private mode */
+  }
+  return null;
 }
 
 export function App() {
   const { board, boardError, link, me } = useStore();
-  const [chosen, setRoleState] = useState<TabId>(loadRole);
-  const [page, setPage] = useState<"board" | "settings" | "attendance" | "progress">("board");
+  const [start] = useState(loadStart);
+  const [chosen, setTab] = useState<TabId>(start.tab);
+  const [page, setPage] = useState<Page>(start.page);
+  const [lastJob, setLastJob] = useState<Role | null>(loadJob);
+  // Settings, Attendance and Progress opened from Focus go back to Focus (the corrector's page), else to the tab.
+  const [backTo, setBackTo] = useState<"board" | "focus">(start.page === "focus" ? "focus" : "board");
   // The address bar can hold a sign-in link (#join=...) or the setup code (#setup=...).
   const [, setHashSeen] = useState(0);
   const hash: Hash = readHash();
@@ -55,19 +73,45 @@ export function App() {
   const topRef = useRef<HTMLDivElement>(null);
   const loaded = !!board;
   const user = me?.user ?? null;
-  // Only the tabs this person may use; the phone remembers the last one.
-  const tabs = ROLES.filter((r) => !user || user.tabs.includes(jobOf(r.id)));
-  const tab: TabId = tabs.some((r) => r.id === chosen) ? chosen : (tabs[0]?.id ?? "correction");
-  const role: Role = jobOf(tab);
+  // Class for everyone; Theory and Evaluation for those teachers. The phone remembers the last one.
+  const jobs = JOBS.filter((j) => !user || user.role === "owner" || user.tabs.includes(j));
+  const tabs = TABS.filter((t) => t.id === "class" || jobs.includes(t.id));
+  const tab: TabId = tabs.some((t) => t.id === chosen) ? chosen : "class";
+  // Attendance and Focus (signing students in, marking papers) are Correction's job; Progress needs Reports.
+  const canCorrect = may("correction");
+  const canProgress = may("reports");
+  const shown: Page =
+    ((page === "attendance" || page === "focus") && !canCorrect) || (page === "progress" && !canProgress) ? "board" : page;
+  /** Open a page from the top bar; the same button again goes back. */
+  const toggle = (p: "settings" | "attendance" | "progress") => {
+    if (shown === p) {
+      setPage(backTo);
+      return;
+    }
+    if (shown === "focus" || shown === "board") setBackTo(shown);
+    setPage(p);
+  };
+  // The job decides the taps, what the phone hears and the `by` the server records. Class: the job done last.
+  const classJob: Role = lastJob && jobs.includes(lastJob) ? lastJob : (jobs[0] ?? "correction");
+  const role: Role = shown === "focus" ? "correction" : tab === "class" ? classJob : tab;
 
   setRole(role);
   useEffect(() => {
     try {
-      localStorage.setItem("aristora.role", tab);
+      localStorage.setItem("aristora.role", shown === "focus" ? "focus" : tab);
     } catch {
       /* private mode */
     }
-  }, [tab]);
+    const job: Role | null = shown === "focus" ? "correction" : tab === "class" ? null : tab;
+    if (job && job !== lastJob) {
+      setLastJob(job);
+      try {
+        localStorage.setItem("aristora.job", job);
+      } catch {
+        /* private mode */
+      }
+    }
+  }, [tab, shown]);
   // Phones only allow sound after a tap: every tap turns alerts (back) on where needed.
   useEffect(() => listenForTaps(), []);
   useEffect(() => {
@@ -131,25 +175,23 @@ export function App() {
   const evalRed = evalQueue(views, now).filter((m) => m.urgency === "red" && !m.blockedBy).length;
   const toSend = board.calls.filter((c) => c.status === "requested" && !c.pull).length;
   const session = liveSession(board, now);
-  // Attendance (signing students in) is Correction's job: the owner and anyone with the Correction tab.
-  const canAttend = may("correction");
-  // Progress shows every student's marks: the owner and teachers with Reports.
-  const canProgress = may("reports");
-  const shown = (page === "attendance" && !canAttend) || (page === "progress" && !canProgress) ? "board" : page;
   const inClass = views.filter((v) => v.where !== "absent").length;
+  // Focus's count: workbook levels handed in, waiting to be corrected; red when someone has no work until then.
+  const papers = views.reduce((a, v) => a + (v.ms?.waiting.length ?? 0), 0);
+  const papersRed = views.some((v) => v.where === "hall" && v.ms?.dry && v.ms.needs.includes("correction"));
 
   return (
-    <div class="app" data-role={role} data-tab={tab}>
+    <div class="app" data-role={role} data-tab={shown === "focus" ? "focus" : tab}>
       <div class="top-wrap" ref={topRef}>
         <header class="top">
           <div class="top-left">
-            {canAttend ? (
+            {canCorrect ? (
               <button
                 type="button"
                 class={`att-btn${shown === "attendance" ? " on" : ""}`}
                 aria-pressed={shown === "attendance"}
                 aria-label={`Attendance: ${inClass} in class`}
-                onClick={() => setPage(shown === "attendance" ? "board" : "attendance")}
+                onClick={() => toggle("attendance")}
               >
                 <svg
                   viewBox="0 0 24 24"
@@ -173,13 +215,45 @@ export function App() {
             ) : (
               <span class="top-count">{inClass} in class</span>
             )}
+            {canCorrect && (
+              <button
+                type="button"
+                class={`att-btn focus-btn${shown === "focus" ? " on" : ""}`}
+                aria-pressed={shown === "focus"}
+                aria-label={`Focus: mark papers${papers ? `, ${papers} waiting` : ""}`}
+                onClick={() => {
+                  setBackTo("board");
+                  setPage(shown === "focus" ? "board" : "focus");
+                }}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  width="21"
+                  height="21"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                >
+                  <circle cx="12" cy="12" r="8.2" />
+                  <circle cx="12" cy="12" r="3.6" />
+                  <path d="M12 1.8v3M12 19.2v3M1.8 12h3M19.2 12h3" />
+                </svg>
+                {papers > 0 && (
+                  <b class={`att-n${papersRed ? " red" : ""}`} aria-hidden="true">
+                    {papers}
+                  </b>
+                )}
+              </button>
+            )}
             {canProgress && (
               <button
                 type="button"
                 class={`att-btn prog-btn${shown === "progress" ? " on" : ""}`}
                 aria-pressed={shown === "progress"}
                 aria-label="Progress"
-                onClick={() => setPage(shown === "progress" ? "board" : "progress")}
+                onClick={() => toggle("progress")}
               >
                 <svg
                   viewBox="0 0 24 24"
@@ -194,7 +268,6 @@ export function App() {
                 >
                   <path d="M4 20V10M10 20V4M16 20v-7M21 20H3" />
                 </svg>
-                <span class="prog-w">Progress</span>
               </button>
             )}
           </div>
@@ -211,7 +284,7 @@ export function App() {
               type="button"
               class={`icon-btn${shown === "settings" ? " on" : ""}`}
               aria-label="Settings"
-              onClick={() => setPage(shown === "settings" ? "board" : "settings")}
+              onClick={() => toggle("settings")}
             >
               <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
                 <path
@@ -244,24 +317,36 @@ export function App() {
       )}
 
       {shown === "settings" ? (
-        <Settings views={views} onClose={() => setPage("board")} />
+        <Settings views={views} onClose={() => setPage(backTo)} />
       ) : shown === "progress" ? (
         <Progress board={board} now={now} />
       ) : shown === "attendance" ? (
         <Attendance board={board} views={views} now={now} role={role} />
-      ) : tab === "focus" ? (
-        <Focus board={board} views={views} now={now} onAttendance={() => setPage("attendance")} />
-      ) : role === "correction" ? (
-        <Correction board={board} views={views} now={now} onAttendance={() => setPage("attendance")} />
-      ) : role === "theory" ? (
+      ) : shown === "focus" ? (
+        <Focus board={board} views={views} now={now} onAttendance={() => toggle("attendance")} />
+      ) : tab === "theory" ? (
         <TheoryTab board={board} views={views} now={now} />
-      ) : (
+      ) : tab === "evaluation" ? (
         <Evaluation board={board} views={views} now={now} />
+      ) : (
+        <ClassPage board={board} views={views} now={now} job={role} onAttendance={() => toggle("attendance")} />
       )}
 
-      <nav class={`tabs n${tabs.length}`} aria-label="Choose your job">
+      <nav class={`tabs n${tabs.length}`} aria-label="Choose your page">
         {tabs.map((r) => {
-          const badge = r.id === "correction" ? toSend : r.id === "theory" ? theoryRed : r.id === "evaluation" ? evalRed : 0;
+          // A red number: something waits for that page's job while this phone is busy elsewhere.
+          const badge =
+            r.id === "class"
+              ? canCorrect && role !== "correction"
+                ? toSend
+                : 0
+              : r.id === "theory"
+                ? role !== "theory"
+                  ? theoryRed
+                  : 0
+                : role !== "evaluation"
+                  ? evalRed
+                  : 0;
           return (
             <button
               key={r.id}
@@ -269,13 +354,14 @@ export function App() {
               class={`tab ${r.id}${tab === r.id && shown === "board" ? " on" : ""}`}
               aria-current={tab === r.id ? "page" : undefined}
               onClick={() => {
-                setRoleState(r.id);
+                setTab(r.id);
+                setBackTo("board");
                 setPage("board");
               }}
             >
               <span class="tab-mark" aria-hidden="true" />
               <span>{r.label}</span>
-              {badge > 0 && jobOf(r.id) !== role && <span class="tab-badge">{badge}</span>}
+              {badge > 0 && <span class="tab-badge">{badge}</span>}
             </button>
           );
         })}
