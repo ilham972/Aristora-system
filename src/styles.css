@@ -170,21 +170,10 @@ ul {
 .top-left {
   gap: 8px;
 }
-/* Focus (marking papers) and Progress: icons, Focus with how many papers wait. */
+/* Class and Progress: icons in the top bar (Correction moved to the bottom bar, 30 Oct 2026). */
 .prog-btn,
-.focus-btn,
 .class-btn {
   padding: 0 10px;
-}
-.focus-btn .att-n {
-  background: var(--amber-soft);
-  color: var(--amber-ink);
-  box-shadow: inset 0 0 0 1.5px var(--amber);
-}
-.focus-btn .att-n.red {
-  background: var(--red);
-  color: #fff;
-  box-shadow: none;
 }
 /* Phones (most are 360–393 px, the smallest 320): the top bar's buttons sit closer, so three of them and the clock
    always fit. */
@@ -386,6 +375,15 @@ button.top-stat:active {
 }
 .tab.theory.on {
   color: var(--theory);
+}
+/* Correction (a bottom tab since 30 Oct 2026): a paper's square mark, ink when open; its count amber (papers handed
+   in), red when someone has no work until marked. */
+.tab.correction .tab-mark {
+  border-radius: 4px;
+}
+.tab-badge.tb-amber {
+  background: var(--amber);
+  color: #3d2600;
 }
 .tab.evaluation.on {
   color: var(--evaluation);
@@ -5939,8 +5937,8 @@ body.locked.fc-marking .toasts {
   text-decoration: underline;
 }
 
-/* ---------- The top bar: Class next to Focus; no bottom bar for a phone without Theory or Evaluation ---------- */
-/* Class: its red count sits on the icon's corner (four buttons and the clock must fit a 320 px phone). */
+/* ---------- The top bar: Class and Progress; no bottom bar for a phone with none of the jobs ---------- */
+/* Class: its red count sits on the icon's corner (the buttons and the clock must fit a 320 px phone). */
 .class-btn {
   position: relative;
 }
@@ -5960,7 +5958,7 @@ body.locked.fc-marking .toasts {
   --tabs: 0px;
   padding-bottom: calc(env(safe-area-inset-bottom) + 24px);
 }
-/* The smallest phones (320 px): four buttons, the clock and Settings still fit. */
+/* The smallest phones (320 px): the buttons, the clock and Settings still fit. */
 @media (max-width: 345px) {
   .top {
     padding-left: 8px;

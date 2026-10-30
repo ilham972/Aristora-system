@@ -164,8 +164,8 @@ const hears = async (p: Page, words: string) => {
 };
 const row = (p: Page, name: string) => p.locator(".reg-row", { has: p.locator(".reg-n", { hasText: name }) });
 const circle = (r: L, q: number) => r.locator(".reg-act").getByRole("button", { name: new RegExp(`^Q${q}\\b`) });
-/** The bottom bar's tabs (Theory, Evaluation); Class is the icon at the top, next to Correction. */
-const tab = (p: Page, name: "Class" | "Theory" | "Evaluation") =>
+/** The bottom bar's tabs (Correction, Theory, Evaluation: since 30 Oct 2026 Correction is a tab too); Class is the icon at the top. */
+const tab = (p: Page, name: "Class" | "Correction" | "Theory" | "Evaluation") =>
   name === "Class" ? p.locator(".top .class-btn") : p.locator(`.tabs .tab.${name.toLowerCase()}`);
 /**
  * The Theory page (rebuilt 30 Oct 2026): every lesson is a tiny pill (data-lesson: "U13 D", "U08 workbook"); tapping it
@@ -633,16 +633,15 @@ test("Master: workbook levels corrected, lost marks explained, re-teach, Exam Sp
   await textsAre(malik.locator(".mk b"), ["L4"]);
   await malik.locator(".reg-name").click(); // closes his book
 
-  // Priya hands Level 2 in: in Correction (the page with a tick, at the top) tap her name, then Later. It waits; she
-  // goes on to Level 3.
-  await C.getByRole("button", { name: /^Correction/ }).click();
+  // Priya hands Level 2 in: in Correction (the bottom tab) tap her name, then Later. It waits; she goes on to Level 3.
+  await tab(C, "Correction").click();
   await C.locator(".fc-nm", { hasText: "Priya" }).click();
   await contains(C.locator(".fc-lvline"), "Level 2");
   await C.getByRole("button", { name: "Handed in: correct later" }).click();
   await contains(C.locator(".toast"), "Priya: Level 2 handed in");
   await count(C.locator(".fc-paper"), 0);
-  await contains(C.getByRole("button", { name: /^Correction/ }), "2"); // two papers wait: Priya's L2 and Vimal's L8
-  await C.getByRole("button", { name: /^Correction/ }).click(); // back to the class
+  await tab(C, "Class").click(); // back to the class
+  await contains(tab(C, "Correction").locator(".tab-badge"), "2"); // two papers wait: Priya's L2 and Vimal's L8
   await textsAre(row(C, "Priya").locator(".mk b"), ["L2", "3"]);
   expect((await marksOf(backend, "Priya")).m!.lv["2"]?.done).toBeGreaterThan(0);
 
@@ -1098,13 +1097,13 @@ test("accounts: the owner sets up, adds a teacher, her phone signs in with the l
     await R.locator(".sheet").getByRole("button", { name: "Save PIN" }).click();
     await contains(R.locator(".toast"), "PIN saved");
     expect(new URL(R.url()).hash).toBe("");
-    // Her job is Correction: no bottom bar (Theory and Evaluation are the teachers' pages); Correction and Class at the
-    // top, and she starts on Correction, though the phone last showed Theory.
-    await visible(R.getByRole("button", { name: /^Correction/ })); // marks papers, + takes attendance
+    // Her job is Correction: the bottom bar has only Correction (Theory and Evaluation are the teachers' pages); Class
+    // at the top; she starts on Correction, though the phone last showed Theory.
+    await visible(tab(R, "Correction")); // marks papers, + takes attendance
     await visible(R.getByRole("button", { name: /^Class/ })); // and sees the whole class
     await visible(R.getByRole("button", { name: /in class.*\. Attendance$/ })); // the count by the clock: Attendance too
-    await count(R.locator(".tabs"), 0);
-    expect(await R.getByRole("button", { name: /^Correction/ }).getAttribute("aria-pressed")).toBe("true");
+    await textsAre(R.locator(".tabs .tab > span:nth-child(2)"), ["Correction"]);
+    expect(await tab(R, "Correction").getAttribute("aria-current")).toBe("page");
     await R.getByRole("button", { name: "Settings" }).click();
     await textsAre(R.locator(".seg button"), ["Alerts", "Reports", "History", "Account"]); // no People: owner only
     await shot(R, "a05b-teacher-settings", true);
@@ -1130,8 +1129,8 @@ test("accounts: the owner sets up, adds a teacher, her phone signs in with the l
     await visible(R.getByText("don't match"));
     await R.getByLabel("PIN (6 digits)").fill("583920");
     await R.getByRole("button", { name: "Sign in", exact: true }).click();
-    await visible(R.getByRole("button", { name: /^Correction/ }));
-    await count(R.locator(".tabs"), 0);
+    await visible(tab(R, "Correction"));
+    await textsAre(R.locator(".tabs .tab > span:nth-child(2)"), ["Correction"]);
 
     // The history names who did each thing.
     await O.locator(".sheet").getByRole("button", { name: "Close" }).click();
@@ -1195,11 +1194,12 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
   await F.getByRole("button", { name: "Load demo students (three grades)" }).click();
   await visible(F.getByText(/^14 demo students loaded/));
   await F.getByRole("button", { name: "Back to the class" }).click();
-  // Correction is at the top (the page with a tick; it was "Focus"), with Class next to it. The bottom tabs are Theory
-  // and Evaluation; the phone opens on Correction.
-  await textsAre(F.locator(".tabs .tab > span:nth-child(2)"), ["Theory", "Evaluation"]);
-  expect(await F.getByRole("button", { name: /^Correction/ }).getAttribute("aria-pressed")).toBe("true");
-  await count(F.locator(".tabs .tab.on"), 0);
+  // Correction is a bottom tab (it was at the top, and was "Focus"), first of the jobs; Class is at the top. The phone
+  // opens on Correction.
+  await textsAre(F.locator(".tabs .tab > span:nth-child(2)"), ["Correction", "Theory", "Evaluation"]);
+  expect(await tab(F, "Correction").getAttribute("aria-current")).toBe("page");
+  await count(F.locator(".tabs .tab.on"), 1);
+  await count(F.locator(".top .focus-btn"), 0);
 
   // G7 U08 gets a FAKE answer key (Q56 in parts with their marks); a Grade 8 student joins on U01 (no key).
   const answers = Array.from({ length: 57 }, (_, i) => {
@@ -1424,7 +1424,7 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
   await tab(F, "Class").click();
   await visible(row(F, "Priya"));
   await textsAre(row(F, "Priya").locator(".mk b"), ["L4"]); // Class sees Focus's saves
-  await F.getByRole("button", { name: /^Correction/ }).click();
+  await tab(F, "Correction").click();
   await contains(F.locator(".fc-name"), "Nimal");
   await contains(F.locator(".fc-qn"), "2");
   // No Stop: tapping another name keeps every mark (on the server, for any phone); his paper opens again where it stopped.
@@ -2174,7 +2174,7 @@ test("Several books at once: every book stays on Evaluation and Theory, one book
   expect((await marksOf(backend, "Vimal")).idleSince).toBeUndefined(); // the idle clock stopped
 
   // Correction: his U08 Level 3 (handed in before he moved on) still counts; tapping his name opens U08 there.
-  await C.getByRole("button", { name: /^Correction/ }).click();
+  await tab(C, "Correction").click();
   await C.getByRole("button", { name: /^Grade 7\b/ }).click();
   await visible(C.locator(".fc-nm.amber", { hasText: "Malik" }));
   await C.locator(".fc-nm", { hasText: "Malik" }).click();

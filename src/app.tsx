@@ -16,28 +16,29 @@ import { may, setRole, signOutHere, useStore, useTick, type Board, type Role } f
 import { Sheet, Toasts } from "./ui";
 
 /**
- * The bottom bar: the teachers' own pages, Theory and Evaluation (each for that job). The whole class (Class) is an
- * icon in the top bar, for everyone, next to Focus (marking papers: the Correction job). A phone without Theory or
- * Evaluation has no bottom bar: Focus is the corrector's home, Class everyone else's.
+ * The bottom bar (30 Oct 2026, his call): each job's own page, Correction (marking papers; the code calls it Focus),
+ * Theory and Evaluation, for the jobs this person has. The whole class (Class) is an icon in the top bar, for
+ * everyone, with Progress. A phone with none of the jobs has no bottom bar: Class is its home.
  */
-type TabId = "theory" | "evaluation";
-type Page = "board" | "class" | "settings" | "progress" | "focus";
+type TabId = "correction" | "theory" | "evaluation";
+type Page = "board" | "class" | "settings" | "progress";
 
 const TABS: { id: TabId; label: string }[] = [
+  { id: "correction", label: "Correction" },
   { id: "theory", label: "Theory" },
   { id: "evaluation", label: "Evaluation" },
 ];
 const JOBS: Role[] = ["correction", "theory", "evaluation"];
 
 /**
- * Where this phone was: Theory or Evaluation (the bottom bar), Focus, or Class. "correction" meant the Class tab
- * (before 29 Oct 2026), now the Class page.
+ * Where this phone was: Correction ("focus"), Theory or Evaluation (the bottom bar), or Class. "correction" meant the
+ * Class tab (before 29 Oct 2026), now the Class page.
  */
 function loadStart(): { tab: TabId; page: Page } {
   try {
     const r = localStorage.getItem("aristora.role");
     if (r === "theory" || r === "evaluation") return { tab: r, page: "board" };
-    if (r === "focus") return { tab: "theory", page: "focus" };
+    if (r === "focus") return { tab: "correction", page: "board" };
     if (r === "class" || r === "correction") return { tab: "theory", page: "class" };
   } catch {
     /* private mode */
@@ -45,10 +46,10 @@ function loadStart(): { tab: TabId; page: Page } {
   return { tab: "theory", page: "board" };
 }
 
-/** The pages a top-bar page goes back to. */
-type Home = "board" | "focus" | "class";
+/** The pages a top-bar page goes back to: the bottom tab, or Class. */
+type Home = "board" | "class";
 
-/** The job this phone did last (Theory, Evaluation, or Correction in Focus): the Class page's taps follow it. */
+/** The job this phone did last (Correction, Theory or Evaluation): the Class page's taps follow it. */
 function loadJob(): Role | null {
   try {
     const j = localStorage.getItem("aristora.job");
@@ -65,10 +66,8 @@ export function App() {
   const [chosen, setTab] = useState<TabId>(start.tab);
   const [page, setPage] = useState<Page>(start.page);
   const [lastJob, setLastJob] = useState<Role | null>(loadJob);
-  // Settings and Progress go back to the page they were opened from: Correction (focus), Class or the bottom tab.
-  const [backTo, setBackTo] = useState<Home>(start.page === "focus" || start.page === "class" ? start.page : "board");
-  // Focus tapped again goes back to the page it was opened from: Class or the bottom tab.
-  const [focusFrom, setFocusFrom] = useState<"board" | "class">(start.page === "class" ? "class" : "board");
+  // Settings and Progress go back to the page they were opened from: Class or the bottom tab.
+  const [backTo, setBackTo] = useState<Home>(start.page === "class" ? "class" : "board");
   // The address bar can hold a sign-in link (#join=...) or the setup code (#setup=...).
   const [, setHashSeen] = useState(0);
   const hash: Hash = readHash();
@@ -84,52 +83,44 @@ export function App() {
   const topRef = useRef<HTMLDivElement>(null);
   const loaded = !!board;
   const user = me?.user ?? null;
-  // Theory and Evaluation for those teachers (the bottom bar); Class for everyone (the top bar).
+  // Correction, Theory and Evaluation for those jobs (the bottom bar); Class for everyone (the top bar).
   const jobs = JOBS.filter((j) => !user || user.role === "owner" || user.tabs.includes(j));
   const tabs = TABS.filter((t) => jobs.includes(t.id));
   const tab: TabId = tabs.some((t) => t.id === chosen) ? chosen : (tabs[0]?.id ?? "theory");
   // Correction (marking papers, and signing students in with its +) is Correction's job; Progress needs Reports.
   const canCorrect = may("correction");
   const canProgress = may("reports");
-  // Home: the bottom tab, else Focus for a corrector, else Class.
-  const home: Home = tabs.length ? "board" : canCorrect ? "focus" : "class";
+  // Home: the bottom tab, else Class.
+  const home: Home = tabs.length ? "board" : "class";
   const wanted: Page = page === "board" && !tabs.length ? home : page;
-  const shown: Page =
-    (wanted === "focus" && !canCorrect) || (wanted === "progress" && !canProgress)
-      ? backTo === "focus" && !canCorrect
-        ? home
-        : backTo
-      : wanted;
-  const base: Home = shown === "focus" || shown === "class" || shown === "board" ? shown : backTo;
+  const shown: Page = wanted === "progress" && !canProgress ? backTo : wanted;
+  const base: Home = shown === "class" || shown === "board" ? shown : backTo;
   /** Open a page from the top bar; the same button again goes back. */
   const toggle = (p: "settings" | "progress") => {
     if (shown === p) {
       setPage(backTo);
       return;
     }
-    if (shown === "focus" || shown === "board" || shown === "class") setBackTo(shown);
+    if (shown === "board" || shown === "class") setBackTo(shown);
     setPage(p);
   };
-  /** Focus and Class from the top bar: Focus toggles (back to where it was opened from); Class just opens. */
-  const go = (p: "focus" | "class") => {
-    let to: Home = p;
-    if (p === "focus" && shown === "focus") to = focusFrom === "board" && tabs.length ? "board" : "class";
-    else if (p === "focus" && (base === "board" || base === "class")) setFocusFrom(base);
-    setBackTo(to);
-    setPage(to);
+  /** Class from the top bar: it just opens. */
+  const goClass = () => {
+    setBackTo("class");
+    setPage("class");
   };
   // The job decides the taps, what the phone hears and the `by` the server records. Class: the job done last.
   const classJob: Role = lastJob && jobs.includes(lastJob) ? lastJob : (jobs[0] ?? "correction");
-  const role: Role = base === "focus" ? "correction" : base === "class" ? classJob : tab;
+  const role: Role = base === "class" ? classJob : tab;
 
   setRole(role);
   useEffect(() => {
     try {
-      localStorage.setItem("aristora.role", base === "focus" ? "focus" : base === "class" ? "class" : tab);
+      localStorage.setItem("aristora.role", base === "class" ? "class" : tab === "correction" ? "focus" : tab);
     } catch {
       /* private mode */
     }
-    const job: Role | null = base === "focus" ? "correction" : base === "class" ? null : tab;
+    const job: Role | null = base === "class" ? null : tab;
     if (job && job !== lastJob) {
       setLastJob(job);
       try {
@@ -203,54 +194,28 @@ export function App() {
   const toSend = board.calls.filter((c) => c.status === "requested" && !c.pull).length;
   const session = liveSession(board, now);
   const inClass = views.filter((v) => v.where !== "absent").length;
-  // Focus's count: workbook levels handed in, waiting to be corrected; red when someone has no work until then.
+  // Correction's count (its tab): workbook levels handed in, waiting to be corrected; red when someone has no work
+  // until then.
   const papers = views.reduce((a, v) => a + waitingAll(v), 0);
   const papersRed = views.some((v) => v.where === "hall" && v.noWork && !!v.ms?.needs.includes("correction"));
   // Class's count: students in the hall with no work right now (red), for whoever looks.
   const idleNow = views.filter((v) => v.where === "hall" && v.tone === "red").length;
 
   return (
-    <div class={`app${tabs.length ? "" : " no-tabs"}`} data-role={role} data-tab={shown === "focus" ? "focus" : shown === "class" ? "class" : tab}>
+    <div
+      class={`app${tabs.length ? "" : " no-tabs"}`}
+      data-role={role}
+      data-tab={shown === "class" ? "class" : tab === "correction" ? "focus" : tab}
+    >
       <div class="top-wrap" ref={topRef}>
         <header class="top">
           <div class="top-left">
-            {canCorrect && (
-              <button
-                type="button"
-                class={`att-btn focus-btn${shown === "focus" ? " on" : ""}`}
-                aria-pressed={shown === "focus"}
-                aria-label={`Correction: mark papers${papers ? `, ${papers} waiting` : ""}`}
-                onClick={() => go("focus")}
-              >
-                {/* A marked paper: the page with a tick. */}
-                <svg
-                  viewBox="0 0 24 24"
-                  width="21"
-                  height="21"
-                  aria-hidden="true"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M14 2.8H7.2A2.2 2.2 0 0 0 5 5v14a2.2 2.2 0 0 0 2.2 2.2h9.6A2.2 2.2 0 0 0 19 19V7.8Z" />
-                  <path d="M14 2.8v5h5" />
-                  <path d="m8.6 14.6 2.5 2.5 4.5-5" />
-                </svg>
-                {papers > 0 && (
-                  <b class={`att-n${papersRed ? " red" : ""}`} aria-hidden="true">
-                    {papers}
-                  </b>
-                )}
-              </button>
-            )}
             <button
               type="button"
               class={`att-btn class-btn${shown === "class" ? " on" : ""}`}
               aria-pressed={shown === "class"}
               aria-label={`Class: the whole class${idleNow ? `, ${idleNow} with no work` : ""}`}
-              onClick={() => go("class")}
+              onClick={goClass}
             >
               <svg
                 viewBox="0 0 24 24"
@@ -346,7 +311,7 @@ export function App() {
         <ClassPage board={board} views={views} now={now} job={role} onAttendance={() => setAttOpen(true)} />
       ) : shown === "progress" ? (
         <Progress board={board} now={now} />
-      ) : shown === "focus" ? (
+      ) : tab === "correction" ? (
         <Focus board={board} views={views} now={now} />
       ) : tab === "evaluation" ? (
         <EvaluationPage board={board} views={views} now={now} />
@@ -357,14 +322,18 @@ export function App() {
       {tabs.length > 0 && (
         <nav class={`tabs n${tabs.length}`} aria-label="Choose your page">
           {tabs.map((r) => {
-            // A red number: something waits for that page's job while this phone is busy elsewhere.
-            const badge = r.id === "theory" ? (role !== "theory" || shown !== "board" ? theoryRed : 0) : role !== "evaluation" || shown !== "board" ? evalRed : 0;
+            // A number: something waits for that page's job while this phone is busy elsewhere. Theory, Evaluation:
+            // students with no work (red). Correction: papers handed in (amber; red when someone has no work until then).
+            const away = role !== r.id || shown !== "board";
+            const badge = !away ? 0 : r.id === "theory" ? theoryRed : r.id === "evaluation" ? evalRed : papers;
+            const amber = r.id === "correction" && !papersRed;
             return (
               <button
                 key={r.id}
                 type="button"
                 class={`tab ${r.id}${tab === r.id && shown === "board" ? " on" : ""}`}
                 aria-current={tab === r.id && shown === "board" ? "page" : undefined}
+                aria-label={`${r.label}${badge ? `, ${badge} ${r.id === "correction" ? "waiting" : "with no work"}` : ""}`}
                 onClick={() => {
                   setTab(r.id);
                   setBackTo("board");
@@ -373,7 +342,7 @@ export function App() {
               >
                 <span class="tab-mark" aria-hidden="true" />
                 <span>{r.label}</span>
-                {badge > 0 && <span class="tab-badge">{badge}</span>}
+                {badge > 0 && <span class={`tab-badge${amber ? " tb-amber" : ""}`}>{badge}</span>}
               </button>
             );
           })}

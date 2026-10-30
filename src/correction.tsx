@@ -40,8 +40,8 @@ const LEGEND: Record<Role, ComponentChildren> = {
   correction: (
     <>
       Theory book: tap a circle <b class="k-right">once ✓ right</b>, <b class="k-wrong">twice ✗ wrong</b>,{" "}
-      <b class="k-slip">3 times ↻ slip</b>; it saves when you stop. Workbook papers: mark them in <b>Correction</b> (the page
-      with a tick, at the top). Tap a name for his buttons (going home, Theory, Move) and his whole book.
+      <b class="k-slip">3 times ↻ slip</b>; it saves when you stop. Workbook papers: mark them in <b>Correction</b> (the tab at the
+      bottom). Tap a name for his buttons (going home, Theory, Move) and his whole book.
     </>
   ),
   theory: (
