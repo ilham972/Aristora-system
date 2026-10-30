@@ -26,7 +26,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { PART_NAME, partOf, type MasterLevel } from "../convex/lib/book";
-import { slClock } from "../convex/lib/day";
+import { levelWaits, teachState, type TeachState } from "../convex/lib/master";
+import { slClock, slDate, slDay } from "../convex/lib/day";
 import { boldRuns, type KeyAnswer } from "../convex/lib/key";
 import type { Mark, MarkState } from "../convex/lib/status";
 import { termOf } from "../convex/lib/syllabus";
@@ -380,7 +381,7 @@ function rememberFighter(p: FighterPaper) {
 async function saveLevel(v: View, p: MasterPaper, l: MasterLevel, auto: boolean) {
   await flushFocus();
   const qs = questionsOf(l);
-  const route = routeOf(sumOf(qs, p.given), l.max, p.to);
+  const route = routeOf(p.to);
   const before = beforeOf(v.mm, l);
   const res = await act(() =>
     mutate(api.workbook.correct, {
@@ -854,17 +855,56 @@ function GradeBar(props: {
 
 type BookInfo = { unitId: string; stage: "fighter" | "master" };
 
-/** His stage (Fighter or Master) and unit: every unit of his grade by number and Tamil name; one tap moves him. */
+type UnitCell = {
+  unitId: string;
+  stage: "fighter" | "master";
+  done: number;
+  total: number;
+  pct: number | null;
+  evaluation: number;
+  theory: number;
+  finished: boolean;
+};
+type StudentUnits = { cells: UnitCell[]; given: { unitId: string; stage: "fighter" | "master"; at: number }[] } | null;
+
+/**
+ * His stage and unit, every unit of his grade as a tiny pill in one view (no scrolling), Term 1 / 2 / 3 apart. Each
+ * pill: number and Tamil name, a soft fill for how far he is (its colour = his marks), a violet number = wrong answers
+ * waiting for Evaluation, blue = waiting for Theory, ✓ = the book was given to him. "Move him" (one tap moves him
+ * and closes) or "Books given" (each tap gives or takes back that unit's book; the sheet stays open).
+ */
 function StageUnitSheet(props: { v: View; onClose: () => void }) {
   const { v } = props;
   const books = useQuery<BookInfo[]>(api.catalog.books, {});
+  const mine = useQuery<StudentUnits>(api.progress.student, { studentId: v.s._id });
   const [stage, setStage] = useState<"fighter" | "master">(v.stage === "fighter" ? "fighter" : "master");
+  const [mode, setMode] = useState<"move" | "given">("move");
   const [busy, setBusy] = useState(false);
-  const units = allUnits()
-    .filter((u) => u.grade === v.s.grade)
-    .sort((a, b) => unitNo(a.code) - unitNo(b.code) || a.order - b.order);
+  // Taps not answered yet: the pill shows the new state at once.
+  const [flip, setFlip] = useState<Record<string, boolean>>({});
+  const units = allUnits().filter((u) => u.grade === v.s.grade);
+  const terms = [1, 2, 3, 0]
+    .map((t) => ({
+      t,
+      list: units.filter((u) => (u.term || 0) === t).sort((a, b) => unitNo(a.code) - unitNo(b.code) || a.order - b.order),
+    }))
+    .filter((x) => x.list.length > 0);
   const has = (u: Unit) => (books ? books.some((b) => b.unitId === u._id && b.stage === stage) : true);
+  const cellOf = (u: Unit) => mine?.cells.find((c) => c.unitId === u._id && c.stage === stage);
+  const givenOf = (u: Unit) => flip[`${u._id}:${stage}`] ?? !!mine?.given.some((g) => g.unitId === u._id && g.stage === stage);
+  const bookWord = stage === "fighter" ? "theory book" : "workbook";
+
   const pick = async (u: Unit) => {
+    if (mode === "given") {
+      const key = `${u._id}:${stage}`;
+      const next = !givenOf(u);
+      setFlip((f) => ({ ...f, [key]: next }));
+      const ok = await act(() =>
+        mutate(api.students.setGiven, { id: v.s._id, unitId: u._id as Id<"units">, stage, given: next, by: currentRole() }),
+      );
+      if (!ok) setFlip((f) => ({ ...f, [key]: !next }));
+      return;
+    }
     if (u._id === v.s.unitId && stage === v.stage) {
       props.onClose();
       return;
@@ -874,41 +914,110 @@ function StageUnitSheet(props: { v: View; onClose: () => void }) {
     setBusy(false);
     if (ok) props.onClose();
   };
+
   return (
     <Sheet
-      title={`${v.s.name}: stage and unit`}
-      sub={`Grade ${v.s.grade ?? "?"}. Tap his stage, then the unit on his paper: he moves there at once.`}
+      full
+      cls="su-sheet"
+      title={`${v.s.name}: units`}
       onClose={props.onClose}
     >
-      <div class="su-stages" role="group" aria-label="Stage">
-        {(["fighter", "master"] as const).map((st) => (
-          <button key={st} type="button" class={`su-st ${st}${stage === st ? " on" : ""}`} aria-pressed={stage === st} onClick={() => setStage(st)}>
-            <b>{st === "fighter" ? "Fighter" : "Master"}</b>
-            <small>{st === "fighter" ? "theory book" : "past-paper workbook"}</small>
-          </button>
-        ))}
-      </div>
-      <ul class="su-units" aria-label="Unit">
-        {units.map((u) => {
-          const here = u._id === v.s.unitId && stage === v.stage;
-          const book = has(u);
-          return (
-            <li key={u._id}>
+      <div class="su-all">
+        <div class="su-bar">
+          <div class="segc su-stages" role="group" aria-label="Stage">
+            {(["fighter", "master"] as const).map((st) => (
               <button
+                key={st}
                 type="button"
-                class={`su-u${here ? " on" : ""}${book ? "" : " nb"}`}
-                disabled={busy}
-                aria-label={`${unitNo(u.code)} ${u.ta || u.en}${here ? ", he is on it now" : ""}${book ? "" : ", no book in the app yet"}`}
-                onClick={() => void pick(u)}
+                class={`segc-b su-st ${st}${stage === st ? " on" : ""}`}
+                aria-pressed={stage === st}
+                onClick={() => setStage(st)}
               >
-                <b>{unitNo(u.code)}</b>
-                <span lang="ta">{u.ta || u.en}</span>
-                {here ? <small class="su-now">now</small> : !book ? <small>no book</small> : null}
+                {st === "fighter" ? "Fighter" : "Master"}
               </button>
-            </li>
-          );
-        })}
-      </ul>
+            ))}
+          </div>
+          <div class="segc su-modes" role="group" aria-label="A tap on a unit">
+            <button type="button" class={`segc-b${mode === "move" ? " on" : ""}`} aria-pressed={mode === "move"} onClick={() => setMode("move")}>
+              Move him
+            </button>
+            <button type="button" class={`segc-b${mode === "given" ? " on" : ""}`} aria-pressed={mode === "given"} onClick={() => setMode("given")}>
+              Books given
+            </button>
+          </div>
+        </div>
+        {terms.map(({ t, list }) => (
+          <section key={t} class="su-term" aria-label={t ? `Term ${t}` : "Extra"}>
+            <p class="su-tl">
+              <span>{t ? `Term ${t}` : "Extra"}</span>
+            </p>
+            <div class={`su-grid${mode === "given" ? " gm" : ""}`}>
+              {list.map((u) => {
+                const here = u._id === v.s.unitId && stage === v.stage;
+                const book = has(u);
+                const c = cellOf(u);
+                const given = givenOf(u);
+                const p = c && c.total > 0 ? Math.round((c.done / c.total) * 100) : 0;
+                // The fill's colour: his marks (workbook), blue for the theory book or before any correction.
+                const tone =
+                  !c || c.done === 0 ? "" : stage === "fighter" ? " th" : c.pct === null ? " plain" : c.pct >= 80 ? " good" : c.pct >= 50 ? " mid" : " low";
+                const words = [
+                  here ? "he is on it now" : "",
+                  c ? `${c.done} of ${c.total} ${stage === "master" ? "levels" : "questions"} done${c.pct !== null ? `, ${c.pct}%` : ""}` : "",
+                  c?.evaluation ? `${c.evaluation} waiting for Evaluation` : "",
+                  c?.theory ? `${c.theory} waiting for Theory` : "",
+                  given ? `${bookWord} given` : "",
+                  book ? "" : "no book in the app yet",
+                ]
+                  .filter(Boolean)
+                  .join(", ");
+                return (
+                  <button
+                    key={u._id}
+                    type="button"
+                    class={`su-p${tone}${here ? " on" : ""}${book ? "" : " nb"}${given ? " given" : ""}`}
+                    style={`--p:${p}%`}
+                    disabled={busy}
+                    aria-pressed={mode === "given" ? given : undefined}
+                    aria-label={`${unitNo(u.code)} ${u.ta || u.en}${words ? `: ${words}` : ""}`}
+                    onClick={() => void pick(u)}
+                  >
+                    <b>{unitNo(u.code)}</b>
+                    <span lang="ta">{u.ta || u.en}</span>
+                    {c?.evaluation ? (
+                      <i class="su-w e" aria-hidden="true">
+                        {c.evaluation}
+                      </i>
+                    ) : c?.theory ? (
+                      <i class="su-w t" aria-hidden="true">
+                        {c.theory}
+                      </i>
+                    ) : null}
+                    {given && (
+                      <i class="su-g" aria-hidden="true">
+                        ✓
+                      </i>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        ))}
+        <p class="su-key muted small">
+          {mode === "move" ? (
+            <>
+              <b>Move him:</b> tap the unit on his paper.
+            </>
+          ) : (
+            <>
+              <b>Books given:</b> tap each {bookWord} you gave him; tap again to take it back.
+            </>
+          )}{" "}
+          Fill = how far he is (green, amber, red = his marks). <i class="su-w e">2</i> waiting for Evaluation, <i class="su-w t">1</i> for Theory.{" "}
+          <i class="su-g">✓</i> book given. Dark ring = his unit now.
+        </p>
+      </div>
     </Sheet>
   );
 }
@@ -1020,35 +1129,67 @@ function PaperHead(props: { v: View; later?: () => void; onUnit: () => void; onC
   const { v } = props;
   const st = STAGES.find((x) => x.id === v.stage);
   return (
-    <header class="fc-head">
-      <div class="fc-who">
-        <h2 class="fc-name">{v.s.name}</h2>
-        <button
-          type="button"
-          class="fc-unit"
-          aria-label={`${st?.name ?? "No stage"}, ${v.unit ? `unit ${unitNo(v.unit.code)} ${v.unit.ta || v.unit.en}` : "no unit"}: change his stage or unit`}
-          onClick={props.onUnit}
-        >
-          <b class={`st-${v.stage ?? "none"}`}>{st?.short ?? "?"}</b>
-          <span lang="ta">{v.unit ? `${unitNo(v.unit.code)} · ${v.unit.ta || v.unit.en}` : "Choose his unit"}</span>
-          <i aria-hidden="true">▾</i>
-        </button>
-      </div>
-      <div class="fc-head-acts">
-        {props.later && (
-          <button type="button" class="btn ghost small fc-later" aria-label="Handed in: correct later" onClick={props.later}>
-            Later
+    <>
+      <header class="fc-head">
+        <div class="fc-who">
+          <h2 class="fc-name">{v.s.name}</h2>
+          <button
+            type="button"
+            class="fc-unit"
+            aria-label={`${st?.name ?? "No stage"}, ${v.unit ? `unit ${unitNo(v.unit.code)} ${v.unit.ta || v.unit.en}` : "no unit"}: change his stage or unit`}
+            onClick={props.onUnit}
+          >
+            <b class={`st-${v.stage ?? "none"}`}>{st?.short ?? "?"}</b>
+            <span lang="ta">{v.unit ? `${unitNo(v.unit.code)} · ${v.unit.ta || v.unit.en}` : "Choose his unit"}</span>
+            <i aria-hidden="true">▾</i>
           </button>
-        )}
-        <button type="button" class="btn ghost small fc-cardbtn" aria-label={`${v.s.name}: his marks and buttons`} onClick={props.onCard}>
-          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-            <rect x="3.5" y="4" width="17" height="16" rx="2.5" />
-            <path d="M3.5 9.5h17M9.5 9.5V20" />
-          </svg>
-          Marks
-        </button>
-      </div>
-    </header>
+        </div>
+        <div class="fc-head-acts">
+          {props.later && (
+            <button type="button" class="btn ghost small fc-later" aria-label="Handed in: correct later" onClick={props.later}>
+              Later
+            </button>
+          )}
+          <button type="button" class="btn ghost small fc-cardbtn" aria-label={`${v.s.name}: his marks and buttons`} onClick={props.onCard}>
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <rect x="3.5" y="4" width="17" height="16" rx="2.5" />
+              <path d="M3.5 9.5h17M9.5 9.5V20" />
+            </svg>
+            Marks
+          </button>
+        </div>
+      </header>
+      {v.where === "absent" && <SignedOut v={v} />}
+    </>
+  );
+}
+
+/**
+ * His paper while he is signed out (never signed in today, or gone home): his lost marks reach no teacher, because
+ * Evaluation and Theory only see students in class. One tap signs him in.
+ */
+function SignedOut(props: { v: View }) {
+  const { v } = props;
+  const [busy, setBusy] = useState(false);
+  return (
+    <p class="fc-out" role="status">
+      <span>
+        <b>Signed out:</b> Evaluation and Theory don't see him.
+      </span>
+      <button
+        type="button"
+        class="btn small"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          const ok = await act(() => mutate(api.students.setPresent, { id: v.s._id, present: true, by: "attendance" }));
+          setBusy(false);
+          if (ok) toast(`${v.s.name} signed in, ${slClock(serverNow())}.`);
+        }}
+      >
+        Sign him in
+      </button>
+    </p>
   );
 }
 
@@ -1076,13 +1217,17 @@ function LevelBar(props: { v: View; open: number | null; drafts: Draft[] | undef
         const mark = look === "fixed" ? (pct === null || pct >= 80 ? " good" : pct >= 50 ? " mid" : " low") : "";
         const on = props.open === l.n;
         const got = v.mm.lv[String(l.n)]?.got;
+        // Corrected, and lost marks still wait: a dot (violet = Evaluation, blue = Theory).
+        const w = look === "fixed" ? levelWaits(v.mm, l) : { evaluation: 0, theory: 0 };
+        const wait = w.evaluation ? " w-eval" : w.theory ? " w-theory" : "";
+        const waitWords = w.evaluation ? `, ${w.evaluation} waiting for Evaluation` : w.theory ? `, ${w.theory} waiting for Theory` : "";
         return (
           <button
             key={l.n}
             type="button"
-            class={`fc-lb ${look}${mark}${on ? " on" : ""}${newPart(i) ? " gap" : ""}`}
+            class={`fc-lb ${look}${mark}${wait}${on ? " on" : ""}${newPart(i) ? " gap" : ""}`}
             aria-pressed={on}
-            aria-label={`Level ${l.n}, Q${l.from}–${l.to}: ${LOOK_WORDS[look]}${look === "fixed" ? `, ${got ?? 0} of ${l.max}` : ""}`}
+            aria-label={`Level ${l.n}, Q${l.from}–${l.to}: ${LOOK_WORDS[look]}${look === "fixed" ? `, ${got ?? 0} of ${l.max}${waitWords}` : ""}`}
             onClick={() => props.onPick(l.n)}
           >
             {l.n}
@@ -1311,7 +1456,9 @@ function Marking(props: {
   const each = marksOfLevel(v, level);
   const qs = questionsOf(level);
   const at = Math.min(paper.at, qs.length);
-  useCardInView(`${level.n}:${at}`);
+  useCardInView(`${level.n}:${at}:${v.where === "absent"}`); // the signed-out line comes or goes: the card moves
+  // A corrected level shows what the teachers did with each lost question (E = Evaluation, T = Theory).
+  const fixedLevel = !!v.mm.lv[String(level.n)]?.fixed;
   if (!each) {
     return (
       <Empty title="This workbook doesn't list each question's marks">
@@ -1325,7 +1472,7 @@ function Marking(props: {
   const marked = qs.filter((q) => paper.given[q]);
   return (
     <>
-      <Strip qs={qs} each={each} given={paper.given} at={at} onGo={go} />
+      <Strip qs={qs} each={each} given={paper.given} at={at} onGo={go} teach={fixedLevel ? (q) => teachState(v.mm.q[String(q)]) : undefined} />
       {paper.resumed && !paper.carriedFrom && !paper.remark && (
         <p class="fc-resumed">
           {paper.resumed.count} already marked ({slClock(paper.resumed.at)}): tap a box above to check one.{" "}
@@ -1360,8 +1507,23 @@ function Marking(props: {
   );
 }
 
+/** What the teachers did with a lost question: E (Evaluation) / T (Theory), filled = done, hollow = waiting. */
+const TEACH_WORDS: Record<TeachState, string> = {
+  eval: "waiting for Evaluation",
+  explained: "explained by Evaluation",
+  theory: "sent to Theory, not taught yet",
+  taught: "taught by Theory",
+};
+
 /** The level's questions as small boxes: where he is, and each mark given. Tap one to see or change it. */
-function Strip(props: { qs: number[]; each: number[]; given: Record<number, Given>; at: number; onGo: (i: number) => void }) {
+function Strip(props: {
+  qs: number[];
+  each: number[];
+  given: Record<number, Given>;
+  at: number;
+  onGo: (i: number) => void;
+  teach?: (q: number) => TeachState | null;
+}) {
   const { qs, each, given, at } = props;
   return (
     <HRow as="ol" class="fc-strip" label="Questions of this level" list={qs[0]} at={at}>
@@ -1369,22 +1531,47 @@ function Strip(props: { qs: number[]; each: number[]; given: Record<number, Give
         const g = given[q];
         const cls = !g ? "" : g.dk ? " dk" : g.g === each[i] ? " full" : g.g === 0 ? " zero" : " part";
         const words = !g ? "not marked" : g.dk ? (g.dkp?.length ? `${g.g} of ${each[i]}, ? ${g.dkp.join(" ")} blank` : "? blank") : `${g.g} of ${each[i]}`;
+        const t = props.teach?.(q) ?? null;
         return (
           <li key={q}>
             <button
               type="button"
               class={`fc-sq${cls}${i === at ? " on" : ""}`}
               aria-current={i === at ? "step" : undefined}
-              aria-label={`Q${q}: ${words}`}
+              aria-label={`Q${q}: ${words}${t ? `, ${TEACH_WORDS[t]}` : ""}`}
               onClick={() => props.onGo(i)}
             >
               <small>{q}</small>
               <b>{!g ? "" : g.dk ? (g.dkp?.length ? `${g.g}?` : "?") : g.g}</b>
+              {t && (
+                <i class={`fc-ts ${t}`} aria-hidden="true">
+                  {t === "eval" || t === "explained" ? "E" : "T"}
+                </i>
+              )}
             </button>
           </li>
         );
       })}
     </HRow>
+  );
+}
+
+/** On a corrected question that lost marks: what Evaluation and Theory did with it, and when. */
+function TeachLine(props: { v: View; level: number; q: number }) {
+  const { v } = props;
+  if (!v.mm.lv[String(props.level)]?.fixed) return null;
+  const r = v.mm.q[String(props.q)];
+  const t = teachState(r);
+  if (!t || !r) return null;
+  const at = t === "explained" ? r.x : t === "taught" ? r.tt : t === "theory" ? r.th : undefined;
+  return (
+    <p class={`fc-teach ${t}`}>
+      <i class={`fc-ts ${t}`} aria-hidden="true">
+        {t === "eval" || t === "explained" ? "E" : "T"}
+      </i>
+      {TEACH_WORDS[t][0].toUpperCase() + TEACH_WORDS[t].slice(1)}
+      {at ? `, ${slDay(at) === slDay(serverNow()) ? "" : `${slDate(at)} `}${slClock(at)}` : ""}
+    </p>
   );
 }
 
@@ -1487,6 +1674,7 @@ function QuestionCard(props: {
             {part ? PART_NAME[part] : ""} · {max} mark{max === 1 ? "" : "s"}
           </span>
         </div>
+        <TeachLine v={v} level={paper.level} q={q} />
         <div class="fc-q">
           <span class="fc-qn" aria-hidden="true">
             <small>Q</small>
@@ -1646,7 +1834,7 @@ function Summary(props: { v: View; paper: MasterPaper; level: MasterLevel; each:
   const pct = Math.round((sum / level.max) * 100);
   const lostQs = qs.filter((q, i) => paper.given[q] && !paper.given[q].dk && paper.given[q].g < each[i]);
   const blanks = blankWords(qs, paper.given);
-  const route = routeOf(sum, level.max, paper.to);
+  const route = routeOf(paper.to);
   const remark = paper.remark;
   const changed = !remark || !sameGiven(qs, paper.given, remark);
   const back = remark ? autoLevel(v, latestDrafts) : null;
@@ -1727,11 +1915,7 @@ function Summary(props: { v: View; paper: MasterPaper; level: MasterLevel; each:
               </button>
             </span>
             <small class="ct-route-why">
-              {route === "theory"
-                ? paper.to === "auto"
-                  ? "Under half: he forgot the theory, so Theory teaches it again."
-                  : "Theory teaches these again."
-                : "Evaluation explains each one."}
+              {route === "theory" ? "Theory teaches these again (he forgot the theory)." : "Evaluation explains each one."}
             </small>
           </div>
         )}
@@ -1767,7 +1951,7 @@ function FighterPaperView(props: { v: View; paper: FighterPaper; head: Component
   const lock = useRef(0);
   const qs = paper.qs;
   const at = Math.min(paper.at, qs.length);
-  useCardInView(at);
+  useCardInView(`${at}:${v.where === "absent"}`);
   // Questions that opened meanwhile (the past papers, once every ladder question was tried) join at the end.
   useEffect(() => {
     if (at < qs.length || openPaper !== paper) return;

@@ -3,7 +3,7 @@
 //   Correct    -> the level's marks: each question's marks when the workbook knows them, else the level's total
 //                 and which questions lost marks. Correcting again changes them. "?" (dk) = he couldn't start it:
 //                 0 marks, straight to Theory. `to: "theory"` sends the level's lost marks to Theory instead of
-//                 Evaluation (a level under half: he forgot the theory).
+//                 Evaluation (only when the corrector picks it: he forgot the theory).
 //   Uncorrect  -> Take back (Focus tab): a level saved on the wrong student goes back to how it was (30 minutes).
 //   Explain    -> the Evaluation teacher, for the questions that lost marks.
 //   To Theory  -> Correction or Evaluation sends lost questions to Theory (he keeps working; Theory calls him).

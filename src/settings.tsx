@@ -810,6 +810,10 @@ function describe(e: Doc<"events">): string {
       return `moved: ${v}`;
     case "book-save":
       return `workbook saved: ${v}`;
+    case "book-given":
+      return `book given: ${v}`;
+    case "book-given-off":
+      return `book taken back: ${v}`;
     case "unit-rename":
       return `unit renamed: ${v}`;
     case "session-start":

@@ -213,6 +213,9 @@ export const remove = mutation({
       for (const a of await ctx.db.query("attendance").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) {
         await ctx.db.delete(a._id);
       }
+      for (const h of await ctx.db.query("handouts").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) {
+        await ctx.db.delete(h._id);
+      }
       await ctx.db.delete(s._id);
     }
     const session = await currentSession(ctx, now);

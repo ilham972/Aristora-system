@@ -74,6 +74,8 @@ export function Sheet(props: {
   tone?: string;
   /** The whole screen (Attendance), not a panel from the bottom. */
   full?: boolean;
+  /** An extra class on the sheet's wrap, for one sheet's own look. */
+  cls?: string;
 }) {
   const panel = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -93,7 +95,7 @@ export function Sheet(props: {
     };
   }, []);
   return (
-    <div class={`sheet-wrap${props.full ? " fullpage" : ""}`} onClick={(e) => e.target === e.currentTarget && props.onClose()}>
+    <div class={`sheet-wrap${props.full ? " fullpage" : ""}${props.cls ? ` ${props.cls}` : ""}`} onClick={(e) => e.target === e.currentTarget && props.onClose()}>
       <div class="sheet" role="dialog" aria-modal="true" tabIndex={-1} ref={panel} data-tone={props.tone}>
         <div class="sheet-head">
           <div class="sheet-title">

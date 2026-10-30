@@ -1883,6 +1883,7 @@ input.full {
   gap: 6px;
 }
 .mt-lv {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -1898,6 +1899,21 @@ input.full {
 .mt-lv span {
   font-size: 12.5px;
   font-weight: 700;
+}
+/* Lost marks still waiting on a corrected level: "E 2" (Evaluation) or "T 1" (Theory), top right. */
+.mt-lv .mt-w {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  padding: 2px 5px;
+  border-radius: 999px;
+  font: 700 10.5px/1 var(--font);
+  font-style: normal;
+  color: #fff;
+  background: var(--evaluation);
+}
+.mt-lv .mt-w.t {
+  background: var(--theory);
 }
 .mt-lv small {
   font-size: 11px;
@@ -3627,6 +3643,7 @@ body.locked.fc-marking .toasts {
   padding: 5px 4px;
 }
 .fc-lb {
+  position: relative;
   flex: 0 0 30px;
   height: 28px;
   min-width: 0;
@@ -3678,6 +3695,41 @@ body.locked.fc-marking .toasts {
 .fc-lb.on {
   box-shadow: 0 0 0 2px var(--ground), 0 0 0 4px var(--ink);
 }
+/* A corrected level whose lost marks still wait: a dot (violet = Evaluation, blue = Theory). */
+.fc-lb.w-eval::after,
+.fc-lb.w-theory::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--evaluation);
+  box-shadow: 0 0 0 1.5px #fff;
+}
+.fc-lb.w-theory::after {
+  background: var(--theory);
+}
+/* His paper while he is signed out: Evaluation and Theory don't see him (one tap signs him in). */
+.fc-out {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px 10px;
+  border-radius: 12px;
+  border: 1.5px solid var(--amber);
+  background: var(--amber-soft);
+  color: var(--amber-ink);
+  font-size: 13px;
+  line-height: 1.25;
+}
+.fc-out span {
+  flex: 1 1 auto;
+}
+.fc-out .btn {
+  flex: none;
+}
 .fc-lb:active {
   transform: scale(0.94);
 }
@@ -3723,101 +3775,184 @@ body.locked.fc-marking .toasts {
 }
 
 /* His stage and unit (the popover): Fighter or Master, then every unit of his grade by number and Tamil name. */
-.su-stages {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+/* His units (Correction's unit sheet, full page): every unit of his grade as a tiny pill in one view, Term 1 / 2 / 3
+   apart. The pill's soft fill = how far he is (colour = his marks); a violet number = waiting for Evaluation, blue =
+   for Theory; ✓ = the book was given; dark ring = his unit now. */
+/* All of it in one screen, no scrolling (Grade 8's 31 units, 12 rows, on a 360 x 640 phone): a low header, tight
+   gaps, a little wider. */
+.su-sheet .sheet-head {
+  align-items: center;
+  padding: 4px 4px 4px 16px;
 }
-.su-st {
-  min-height: 54px;
-  padding: 6px 10px;
+.su-sheet .sheet-title h2 {
+  font-size: 23px;
+}
+.su-sheet .sheet-head .icon-btn {
+  width: 40px;
+  height: 40px;
+}
+.su-sheet .sheet-body {
+  padding-top: 10px;
+}
+.su-all {
+  margin: -2px -6px 0;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 2px;
-  border-radius: 12px;
-  border: 1.5px solid var(--line);
-  background: var(--card);
-  text-align: left;
+  gap: 8px;
 }
-.su-st b {
-  font-size: 17px;
+.su-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
-.su-st small {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--ink-3);
+.su-bar .segc-b {
+  height: 32px;
+  padding: 0 11px;
+  font-size: 13.5px;
 }
-.su-st.on {
-  border-color: var(--ink);
+.su-bar .segc-b.on {
   background: var(--ink);
   color: #fff;
 }
-.su-st.on small {
-  color: #c4cad8;
-}
-.su-st.master.on {
-  border-color: #b7791f;
+.su-bar .segc-b.su-st.master.on {
   background: #b7791f;
 }
-.su-st.master.on small {
-  color: #fbe7c4;
-}
-.su-units {
-  margin-top: 10px;
+.su-term {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
 }
-.su-u {
-  width: 100%;
-  min-height: 46px;
-  padding: 6px 10px 6px 6px;
+.su-tl {
   display: flex;
   align-items: center;
-  gap: 10px;
-  border-radius: 12px;
-  border: 1.5px solid var(--line-2);
-  background: var(--card);
-  text-align: left;
+  gap: 8px;
+  font: 700 10.5px/1 var(--font);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
 }
-.su-u b {
-  flex: none;
-  width: 34px;
-  height: 34px;
-  border-radius: 9px;
-  display: grid;
-  place-items: center;
-  background: var(--ground);
-  font: 700 18px/1 var(--cond);
-}
-.su-u span {
+.su-tl::after {
+  content: "";
   flex: 1 1 auto;
+  height: 1.5px;
+  background: var(--line);
+}
+.su-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+.su-p {
+  --p: 0%;
+  --f: rgba(22, 33, 62, 0.08);
+  position: relative;
   min-width: 0;
-  font-size: 15.5px;
-  font-weight: 600;
-  line-height: 1.25;
+  min-height: 34px;
+  padding: 2px 4px 2px 3px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 9px;
+  border: 1.5px solid var(--line);
+  background: linear-gradient(to right, var(--f) var(--p), var(--card) var(--p));
+  color: var(--ink);
+  text-align: left;
+  transition: transform 0.1s ease;
 }
-.su-u small {
+.su-p:active {
+  transform: scale(0.96);
+}
+.su-p b {
   flex: none;
-  font-size: 12px;
-  font-weight: 700;
+  min-width: 18px;
+  font: 700 16px/1 var(--cond);
+  text-align: center;
+}
+.su-p span {
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: break-word;
+}
+.su-p.good {
+  --f: rgba(22, 163, 74, 0.2);
+}
+.su-p.mid {
+  --f: rgba(217, 119, 6, 0.22);
+}
+.su-p.low {
+  --f: rgba(220, 38, 38, 0.18);
+}
+.su-p.plain,
+.su-p.th {
+  --f: rgba(37, 99, 235, 0.16);
+}
+.su-p.nb {
+  border-style: dashed;
+}
+.su-p.nb span {
   color: var(--ink-3);
 }
-.su-u.nb span {
-  color: var(--ink-3);
-}
-.su-u.on {
+.su-p.on {
   border-color: var(--ink);
   box-shadow: inset 0 0 0 1px var(--ink);
 }
-.su-u.on b {
-  background: var(--ink);
+/* "Books given": every pill is an on/off; a given book is outlined green. */
+.su-grid.gm .su-p {
+  border-style: solid;
+}
+.su-grid.gm .su-p.given {
+  border-color: var(--green);
+  box-shadow: inset 0 0 0 1px var(--green);
+}
+.su-w,
+.su-g {
+  display: inline-grid;
+  place-items: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  font: 700 10.5px/1 var(--font);
+  font-style: normal;
   color: #fff;
 }
-.su-u small.su-now {
-  color: var(--ink);
+.su-p .su-w {
+  position: absolute;
+  top: -5px;
+  right: -4px;
+  box-shadow: 0 0 0 2px var(--card);
+}
+.su-w.e {
+  background: var(--evaluation);
+}
+.su-w.t {
+  background: var(--theory);
+}
+.su-g {
+  background: var(--green);
+}
+.su-p .su-g {
+  position: absolute;
+  bottom: -5px;
+  right: -4px;
+  box-shadow: 0 0 0 2px var(--card);
+}
+.su-key {
+  line-height: 1.6;
+}
+/* A wide phone: four to a row. */
+@media (min-width: 440px) {
+  .su-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 /* The level in the paper's top line is also the button to change it. */
 .fc-resumed {
@@ -3870,7 +4005,7 @@ body.locked.fc-marking .toasts {
 
 .fc-strip {
   margin: 0;
-  padding: 3px 2px;
+  padding: 7px 2px 3px;
   list-style: none;
   gap: 4px;
 }
@@ -3879,6 +4014,7 @@ body.locked.fc-marking .toasts {
   max-width: 46px;
 }
 .fc-sq {
+  position: relative;
   width: 100%;
   height: 40px;
   padding: 0;
@@ -3947,6 +4083,57 @@ body.locked.fc-marking .toasts {
 .fc-sq.on {
   border-color: var(--ink);
   box-shadow: 0 0 0 2px var(--ink);
+}
+/* What the teachers did with a lost question (a corrected level): E = Evaluation, T = Theory; filled = done,
+   hollow = still waiting. On the box's corner, and in words on the question. */
+.fc-ts {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  font: 800 9.5px/1 var(--font);
+  font-style: normal;
+}
+.fc-sq .fc-ts {
+  position: absolute;
+  top: -7px;
+  right: -5px;
+  box-shadow: 0 0 0 1.5px var(--card);
+}
+.fc-ts.eval {
+  border: 1.5px solid var(--evaluation);
+  background: var(--card);
+  color: var(--evaluation);
+}
+.fc-ts.explained {
+  background: var(--evaluation);
+  color: #fff;
+}
+.fc-ts.theory {
+  border: 1.5px solid var(--theory);
+  background: var(--card);
+  color: var(--theory);
+}
+.fc-ts.taught {
+  background: var(--theory);
+  color: #fff;
+}
+.fc-teach {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+.fc-teach.eval,
+.fc-teach.explained {
+  color: var(--evaluation-ink);
+}
+.fc-teach.theory,
+.fc-teach.taught {
+  color: var(--theory-ink);
 }
 
 .fc-card {

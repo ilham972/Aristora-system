@@ -9,7 +9,7 @@
 // Who teaches a lost question (Master's order is Correction → Evaluation → Theory, only when needed):
 // - lost marks wait for Evaluation, who explains them;
 // - Theory gets a question when it is sent there: Correction marks "?" (he couldn't start it), or sends a level's
-//   lost marks to Theory (a level under half: he forgot the theory), or Evaluation finds he needs theory. He keeps
+//   lost marks to Theory (when the corrector picks it: he forgot the theory), or Evaluation finds he needs theory. He keeps
 //   working; Theory calls him when ready (never pushed into a busy room) and marks the questions taught.
 
 import { bookTotal, partOf, type MasterData, type MasterLevel, type PartId } from "./book";
@@ -36,6 +36,30 @@ export interface MQ {
 /** Waiting for Theory: sent there and not taught yet. */
 export function forTheory(r: MQ | undefined): boolean {
   return !!r?.th && !r.tt;
+}
+
+/**
+ * What the teachers did with a corrected question that lost marks (or was "?"): waiting for Evaluation, explained by
+ * her, sent to Theory (not taught yet), taught by Theory. Null = nothing to do (full marks, or not corrected).
+ */
+export type TeachState = "eval" | "explained" | "theory" | "taught";
+export function teachState(r: MQ | undefined): TeachState | null {
+  if (!r) return null;
+  if (r.th) return r.tt ? "taught" : "theory";
+  if (!r.lost) return null;
+  return r.x ? "explained" : "eval";
+}
+
+/** A corrected level's questions still waiting for a teacher (Evaluation, Theory). */
+export function levelWaits(m: MState, l: { from: number; to: number }): { evaluation: number; theory: number } {
+  let evaluation = 0;
+  let theory = 0;
+  for (let q = l.from; q <= l.to; q++) {
+    const t = teachState(m.q[String(q)]);
+    if (t === "eval") evaluation++;
+    else if (t === "theory") theory++;
+  }
+  return { evaluation, theory };
 }
 /**
  * One level (key = its number): done = handed in (waiting since), fixed = corrected, got = its marks. pre = done on

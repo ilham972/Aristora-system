@@ -187,6 +187,18 @@ export default defineSchema({
     by: v.optional(v.string()),
   }).index("by_student", ["studentId"]),
 
+  /**
+   * Books handed to a student (a unit's theory book or workbook), ticked in Correction's unit sheet: which books he
+   * has, so nobody photographs the shelf again. One row per student, unit and book; untick = the row goes.
+   */
+  handouts: defineTable({
+    studentId: v.id("students"),
+    unitId: v.id("units"),
+    stage: bookStage,
+    at: v.number(),
+    by: v.optional(v.string()),
+  }).index("by_student", ["studentId"]),
+
   /** The attendance register: one row per visit, when he arrived and when he left. */
   attendance: defineTable({
     studentId: v.id("students"),

@@ -20,7 +20,7 @@ import {
   type Stage,
 } from "./lib/backend";
 import { termOf } from "./lib/syllabus";
-import { stage } from "./schema";
+import { bookStage, stage } from "./schema";
 import { actor } from "./lib/auth";
 
 const STAGE_WORD: Record<Stage, string> = { fighter: "Fighter", master: "Master", legend: "Legend", sprint: "Exam Sprint" };
@@ -136,6 +136,42 @@ export const move = mutation({
     });
     await refresh(ctx, s._id, now, session);
     await touch(ctx, session, now);
+    return true;
+  },
+});
+
+/** A unit's book handed to him (given) or taken back: Correction's unit sheet, "Books given". */
+export const setGiven = mutation({
+  args: {
+    token: v.optional(v.string()),
+    id: v.id("students"),
+    unitId: v.id("units"),
+    stage: bookStage,
+    given: v.boolean(),
+    by: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["correction"], args.by);
+    const now = Date.now();
+    const s = await getStudent(ctx, args.id);
+    const unit = await ctx.db.get(args.unitId);
+    if (!unit) fail("That unit no longer exists.");
+    if (s.grade !== undefined && unit.grade !== s.grade) fail(`${unit.code} is a Grade ${unit.grade} unit, not Grade ${s.grade}.`);
+    const rows = (await ctx.db.query("handouts").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()).filter(
+      (h) => h.unitId === unit._id && h.stage === args.stage,
+    );
+    if (args.given === rows.length > 0) return true;
+    if (args.given) await ctx.db.insert("handouts", { studentId: s._id, unitId: unit._id, stage: args.stage, at: now, by: cleanBy(args.by) });
+    else for (const h of rows) await ctx.db.delete(h._id);
+    const session = await currentSession(ctx, now);
+    await log(ctx, session, now, {
+      kind: args.given ? "book-given" : "book-given-off",
+      by: cleanBy(args.by),
+      studentId: s._id,
+      name: s.name,
+      unit: unit.key,
+      value: `${unit.key} ${args.stage === "fighter" ? "theory book" : "workbook"}`,
+    });
     return true;
   },
 });

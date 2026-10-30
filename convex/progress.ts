@@ -7,9 +7,10 @@ import { query } from "./_generated/server";
 import { viewer } from "./lib/auth";
 import { masterState } from "./lib/backend";
 import { bookTotal, fighter } from "./lib/book";
+import { computeMaster } from "./lib/master";
 import { slDay } from "./lib/day";
 import { daysBetween, summarizeFighter, summarizeMaster, type Cell } from "./lib/progress";
-import type { Marks } from "./lib/status";
+import { computeStatus, type Marks } from "./lib/status";
 
 export const board = query({
   args: { token: v.optional(v.string()), grade: v.number() },
@@ -86,5 +87,78 @@ export const board = query({
       }),
       students: rows,
     };
+  },
+});
+
+/** One unit of one student, for Correction's unit sheet: how far, how well, and what still waits for the teachers. */
+export type UnitCell = {
+  unitId: Id<"units">;
+  stage: "fighter" | "master";
+  /** Workbook: levels done (handed in, corrected or done before the app) / levels. Theory book: solo questions done. */
+  done: number;
+  total: number;
+  /** Workbook: marks % of the corrected levels (null before the first correction). */
+  pct: number | null;
+  /** Lost marks / wrong answers still waiting for Evaluation. */
+  evaluation: number;
+  /** Workbook questions sent to Theory and not taught yet. */
+  theory: number;
+  finished: boolean;
+};
+
+/**
+ * One student across all his units (Correction's unit sheet): each unit's progress and what waits for Evaluation or
+ * Theory, and the books he was given. Read only while the sheet is open (it never travels with the board).
+ */
+export const student = query({
+  args: { token: v.optional(v.string()), studentId: v.id("students") },
+  handler: async (ctx, args) => {
+    await viewer(ctx, args.token, "correction", "evaluation", "theory");
+    const s = await ctx.db.get(args.studentId);
+    if (!s) return null;
+    const today = slDay(Date.now());
+    const cells: UnitCell[] = [];
+    for (const p of await ctx.db.query("progress").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) {
+      const book = await ctx.db
+        .query("books")
+        .withIndex("by_unit_stage", (q) => q.eq("unitId", p.unitId).eq("stage", p.stage))
+        .first();
+      if (!book) continue;
+      if (book.data.kind === "master" && p.stage === "master") {
+        const m = masterState(p);
+        const sum = summarizeMaster(m, book.data, today, new Set());
+        const st = computeMaster(m, book.data);
+        cells.push({
+          unitId: p.unitId,
+          stage: "master",
+          done: sum.done,
+          total: sum.levels,
+          pct: sum.pct,
+          evaluation: st.pending.length,
+          theory: st.theory.length,
+          finished: st.finished,
+        });
+      } else if (book.data.kind === "fighter" && p.stage === "fighter") {
+        const f = fighter(book.data);
+        const sum = summarizeFighter(p.marks as Marks, f, today, new Set());
+        const st = computeStatus(p.marks as Marks, f);
+        cells.push({
+          unitId: p.unitId,
+          stage: "fighter",
+          done: sum.done,
+          total: sum.total,
+          pct: null,
+          evaluation: st.pending.length,
+          theory: 0,
+          finished: sum.finished,
+        });
+      }
+    }
+    const given = (await ctx.db.query("handouts").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()).map((h) => ({
+      unitId: h.unitId,
+      stage: h.stage,
+      at: h.at,
+    }));
+    return { cells, given };
   },
 });

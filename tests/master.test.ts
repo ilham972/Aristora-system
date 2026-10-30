@@ -5,10 +5,10 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { checkMaster, KNOWN_WORKBOOKS, levelOutOf, type MasterData } from "../convex/lib/book";
-import { computeMaster, type MState } from "../convex/lib/master";
+import { computeMaster, levelWaits, teachState, type MState } from "../convex/lib/master";
 import { SYLLABUS } from "../convex/lib/syllabus";
 import schema from "../convex/schema";
-import { asOwner } from "./helpers";
+import { addPerson, asOwner, asPhone } from "./helpers";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 const MIN = 60_000;
@@ -369,5 +369,94 @@ describe("moving students between units and stages", () => {
     const s = await t.run((ctx) => ctx.db.get(id));
     const u = await t.run((ctx) => ctx.db.get(s!.unitId!));
     expect([s?.term, s?.stage, u?.key]).toEqual([3, "fighter", "G8-U22"]); // 27 October = Term 3
+  });
+});
+
+describe("Correction's unit sheet: what the teachers did, each unit's progress, the books given", () => {
+  test("each lost question: waiting for Evaluation, explained; sent to Theory, taught (the E and T on Correction)", async () => {
+    const t = await setup();
+    const id = await addMaster(t, "Malik");
+    const l1 = G7U08.levels[0];
+    // Q2 and Q3 lost marks, Q7 "?" (couldn't start it): no Theory unless picked, even on a poor level.
+    const it = items(G7U08, 1, [2, 3, 7]).map((x) => (x.q === 7 ? { q: 7, got: 0, dk: true } : x));
+    await t.mutation(api.workbook.correct, { studentId: id, level: 1, items: it, by: "correction" });
+    let { m } = await work(t, id);
+    expect([teachState(m.q["1"]), teachState(m.q["2"]), teachState(m.q["7"]), teachState(undefined)]).toEqual([null, "eval", "theory", null]);
+    expect(levelWaits(m, l1)).toEqual({ evaluation: 2, theory: 1 });
+    await t.mutation(api.workbook.explain, { studentId: id, qs: [2], on: true });
+    await t.mutation(api.workbook.toTheory, { studentId: id, qs: [3], on: true });
+    await t.mutation(api.workbook.taught, { studentId: id, qs: [7], on: true });
+    ({ m } = await work(t, id));
+    expect([teachState(m.q["2"]), teachState(m.q["3"]), teachState(m.q["7"])]).toEqual(["explained", "theory", "taught"]);
+    expect(levelWaits(m, l1)).toEqual({ evaluation: 0, theory: 1 });
+    // Q2 re-marked full: nothing to explain any more.
+    await t.mutation(api.workbook.correct, { studentId: id, level: 1, items: it.map((x) => (x.q === 2 ? items(G7U08, 1)[1] : x)) });
+    ({ m } = await work(t, id));
+    expect(teachState(m.q["2"])).toBeNull();
+  });
+
+  test("his units: levels done of the book, marks %, waiting for Evaluation / Theory; theory-book questions", async () => {
+    const t = await setup();
+    const id = await addMaster(t, "Priya");
+    const u08 = await unitId(t, "G7-U08");
+    expect(await t.query(api.progress.student, { studentId: id })).toEqual({
+      cells: [{ unitId: u08, stage: "master", done: 0, total: 8, pct: null, evaluation: 0, theory: 0, finished: false }],
+      given: [],
+    });
+    const it = items(G7U08, 1, [2, 3]);
+    await t.mutation(api.workbook.correct, { studentId: id, level: 1, items: it, to: "theory" });
+    await t.mutation(api.workbook.correct, { studentId: id, level: 2, items: items(G7U08, 2, [12]) });
+    const got = it.reduce((a, x) => a + x.got, 0) + items(G7U08, 2, [12]).reduce((a, x) => a + x.got, 0);
+    const max = G7U08.levels[0].max + G7U08.levels[1].max;
+    const r = (await t.query(api.progress.student, { studentId: id }))!;
+    expect(r.cells).toEqual([
+      { unitId: u08, stage: "master", done: 2, total: 8, pct: Math.round((got / max) * 100), evaluation: 1, theory: 2, finished: false },
+    ]);
+    // The theory book (Grade 11 U13): solo questions done, wrong answers waiting for Evaluation.
+    const u13 = await unitId(t, "G11-U13");
+    const nila = await t.mutation(api.students.add, { name: "Nila", grade: 11, term: 2, stage: "fighter", unitId: u13 });
+    const solo = await t.run(async (ctx) => {
+      const b = (await ctx.db
+        .query("books")
+        .withIndex("by_unit_stage", (q) => q.eq("unitId", u13).eq("stage", "fighter"))
+        .first())!;
+      return b.data.kind === "fighter" ? b.data.sections.flatMap((x) => x.solo) : [];
+    });
+    await t.mutation(api.marks.set, { studentId: nila, q: solo[0], s: "right" });
+    await t.mutation(api.marks.set, { studentId: nila, q: solo[1], s: "wrong" });
+    const f = (await t.query(api.progress.student, { studentId: nila }))!.cells;
+    expect(f).toHaveLength(1);
+    expect(f[0]).toMatchObject({ unitId: u13, stage: "fighter", done: 1, pct: null, evaluation: 1, theory: 0, finished: false });
+    expect(f[0].total).toBeGreaterThan(20);
+  });
+
+  test("books given: on and off per unit and book, logged, his grade only; Correction's phones only", async () => {
+    const t = await setup();
+    const id = await addMaster(t, "Vimal");
+    const u08 = await unitId(t, "G7-U08");
+    const u09 = await unitId(t, "G7-U09");
+    await t.mutation(api.students.setGiven, { id, unitId: u08, stage: "master", given: true, by: "correction" });
+    await t.mutation(api.students.setGiven, { id, unitId: u08, stage: "master", given: true }); // twice: still one
+    await t.mutation(api.students.setGiven, { id, unitId: u09, stage: "fighter", given: true });
+    let r = (await t.query(api.progress.student, { studentId: id }))!;
+    expect(r.given.map((g) => `${g.unitId === u08 ? "U08" : "U09"} ${g.stage}`).sort()).toEqual(["U08 master", "U09 fighter"]);
+    expect(r.given[0].at).toBeGreaterThanOrEqual(START);
+    await t.mutation(api.students.setGiven, { id, unitId: u09, stage: "fighter", given: false });
+    await t.mutation(api.students.setGiven, { id, unitId: u09, stage: "fighter", given: false }); // already off
+    r = (await t.query(api.progress.student, { studentId: id }))!;
+    expect(r.given.map((g) => g.stage)).toEqual(["master"]);
+    const log = await t.run(async (ctx) => (await ctx.db.query("events").collect()).filter((e) => e.kind.startsWith("book-given")));
+    expect(log.map((e) => `${e.kind} ${e.value}`)).toEqual(["book-given G7-U08 workbook", "book-given G7-U09 theory book", "book-given-off G7-U09 theory book"]);
+    // Another grade's unit is refused; so is a phone without Correction (Theory may look, not change).
+    await expect(t.mutation(api.students.setGiven, { id, unitId: await unitId(t, "G8-U01"), stage: "master", given: true })).rejects.toThrow(
+      /Grade 8 unit, not Grade 7/,
+    );
+    const theory = "theory-token-0123456789abcdefghijklmnopqrstuvwxyz";
+    await addPerson(t, { name: "Ravi", token: theory, tabs: ["theory"] });
+    await expect(asPhone(t, theory).mutation(api.students.setGiven, { id, unitId: u09, stage: "master", given: true })).rejects.toThrow();
+    expect((await asPhone(t, theory).query(api.progress.student, { studentId: id }))!.given).toHaveLength(1);
+    const reports = "reports-token-0123456789abcdefghijklmnopqrstuvwxyz";
+    await addPerson(t, { name: "Sana", token: reports, tabs: [], can: ["reports"] });
+    await expect(asPhone(t, reports).query(api.progress.student, { studentId: id })).rejects.toThrow(/This needs/);
   });
 });

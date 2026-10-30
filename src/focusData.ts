@@ -166,10 +166,12 @@ export function sumOf(qs: number[], given: Record<number, Given>): number {
   return qs.reduce((a, q) => a + marksOf(given[q]), 0);
 }
 
-/** Where the level's lost marks go, as on the Correction tab: Theory when the level is under half, else Evaluation. */
-export function routeOf(sum: number, max: number, to: "auto" | "evaluation" | "theory"): "evaluation" | "theory" {
-  if (to !== "auto") return to;
-  return max > 0 && Math.round((sum / max) * 100) < 50 ? "theory" : "evaluation";
+/**
+ * Where the level's lost marks go: Evaluation, unless the corrector picks Theory (since 30 Oct 2026: a level under half
+ * no longer goes to Theory by itself; those students vanished from the Evaluation page). "?" always goes to Theory.
+ */
+export function routeOf(to: "auto" | "evaluation" | "theory"): "evaluation" | "theory" {
+  return to === "theory" ? "theory" : "evaluation";
 }
 
 /** What the server gets (workbook.correct): every question of the level. */

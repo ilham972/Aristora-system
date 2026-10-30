@@ -166,11 +166,10 @@ describe("marking one question at a time", () => {
     ]);
   });
 
-  test("lost marks go to Theory when the level is under half, else Evaluation; the corrector can change it", () => {
-    expect(routeOf(9, 20, "auto")).toBe("theory");
-    expect(routeOf(10, 20, "auto")).toBe("evaluation"); // exactly half: Evaluation, as on the Correction tab
-    expect(routeOf(19, 20, "theory")).toBe("theory");
-    expect(routeOf(2, 20, "evaluation")).toBe("evaluation");
+  test("lost marks go to Evaluation (even under half: wrong answers must reach her page); Theory only when picked", () => {
+    expect(routeOf("auto")).toBe("evaluation");
+    expect(routeOf("theory")).toBe("theory");
+    expect(routeOf("evaluation")).toBe("evaluation");
   });
 
   test("part taps only when every part has its marks and they add up to the question's marks", () => {

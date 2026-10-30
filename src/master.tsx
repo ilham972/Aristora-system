@@ -5,7 +5,7 @@ import { useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import { levelOutOf, PART_NAME } from "../convex/lib/book";
 import { boldRuns, type KeyAnswer } from "../convex/lib/key";
-import { partTotals } from "../convex/lib/master";
+import { levelWaits, partTotals } from "../convex/lib/master";
 import { mutate } from "./backend";
 import type { View } from "./derive";
 import { useQuery } from "./live";
@@ -234,6 +234,9 @@ export function MasterBook(props: { role: Role; v: View; onCorrect: (level: numb
               {levels.map((l) => {
                 const lv = v.mm.lv[String(l.n)];
                 const state = lv?.fixed ? "fixed" : lv?.done ? "waiting" : lv?.pre ? "before" : ms.current?.n === l.n ? "current" : "later";
+                // Corrected, and lost marks still wait for a teacher: "E 2" (Evaluation) or "T 1" (Theory).
+                const w = lv?.fixed ? levelWaits(v.mm, l) : null;
+                const wait = w?.evaluation ? `E ${w.evaluation}` : w?.theory ? `T ${w.theory}` : "";
                 return (
                   <button
                     key={l.n}
@@ -241,8 +244,13 @@ export function MasterBook(props: { role: Role; v: View; onCorrect: (level: numb
                     class={`mt-lv ${state}`}
                     disabled={role === "theory"}
                     onClick={() => props.onCorrect(l.n)}
-                    aria-label={`Level ${l.n}, questions ${l.from} to ${l.to}: ${lv?.fixed ? `${lv.got} out of ${l.max}` : state === "waiting" ? "waiting for correction" : state === "before" ? "done before the app" : "not corrected"}`}
+                    aria-label={`Level ${l.n}, questions ${l.from} to ${l.to}: ${lv?.fixed ? `${lv.got} out of ${l.max}` : state === "waiting" ? "waiting for correction" : state === "before" ? "done before the app" : "not corrected"}${w?.evaluation ? `, ${w.evaluation} waiting for Evaluation` : w?.theory ? `, ${w.theory} waiting for Theory` : ""}`}
                   >
+                    {wait && (
+                      <i class={`mt-w ${w?.evaluation ? "e" : "t"}`} aria-hidden="true">
+                        {wait}
+                      </i>
+                    )}
                     <span>Level {l.n}</span>
                     <small>
                       {l.from}–{l.to}
@@ -277,7 +285,7 @@ export function MasterBook(props: { role: Role; v: View; onCorrect: (level: numb
  * Correct one level. With every question's marks known: tap each question's marks ("All full marks" first, then
  * lower the few that lost marks); "?" = he couldn't start it (0 marks, straight to Theory). Otherwise: the level's
  * marks and which questions lost marks. Then where the lost marks go: Evaluation (explains them), or Theory when he
- * forgot the theory (the default when the level is under half).
+ * forgot the theory (only when the corrector picks it).
  */
 export function CorrectSheet(props: { v: View; level: number; now: number; onClose: () => void }) {
   const { v } = props;
@@ -310,10 +318,10 @@ export function CorrectSheet(props: { v: View; level: number; now: number; onClo
   const sum = each ? qs.reduce((a, q) => a + (got[q] ?? 0), 0) : Number(total || 0);
   const complete = each ? qs.every((q) => got[q] !== null && got[q] !== undefined) : total !== "" && Number.isInteger(Number(total));
   const pct = Math.round((sum / l.max) * 100);
-  // Lost marks (not "?"): Evaluation explains them, or Theory teaches again (the default under half).
+  // Lost marks (not "?"): Evaluation explains them, or Theory teaches again (only when the corrector picks it).
   const lostQs = each ? qs.filter((q, i) => got[q] !== null && got[q] !== undefined && got[q]! < each[i] && !dk[q]) : qs.filter((q) => lost[q]);
   const dkQs = each ? qs.filter((q) => dk[q]) : [];
-  const route = to !== "auto" ? to : complete && pct < 50 ? "theory" : "evaluation";
+  const route = to === "theory" ? "theory" : "evaluation";
 
   const save = async () => {
     setBusy(true);
@@ -494,11 +502,7 @@ export function CorrectSheet(props: { v: View; level: number; now: number; onClo
                 </button>
               </span>
               <small class="ct-route-why">
-                {route === "theory"
-                  ? to === "auto"
-                    ? "Under half: he forgot the theory, so Theory teaches it again."
-                    : "Theory teaches these again."
-                  : "Evaluation explains each one."}
+                {route === "theory" ? "Theory teaches these again (he forgot the theory)." : "Evaluation explains each one."}
               </small>
             </>
           )}
