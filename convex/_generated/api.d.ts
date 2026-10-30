@@ -25,6 +25,7 @@ import type * as focus from "../focus.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_backend from "../lib/backend.js";
 import type * as lib_book from "../lib/book.js";
+import type * as lib_claims from "../lib/claims.js";
 import type * as lib_day from "../lib/day.js";
 import type * as lib_family from "../lib/family.js";
 import type * as lib_key from "../lib/key.js";
@@ -65,6 +66,7 @@ declare const fullApi: ApiFromModules<{
   "lib/auth": typeof lib_auth;
   "lib/backend": typeof lib_backend;
   "lib/book": typeof lib_book;
+  "lib/claims": typeof lib_claims;
   "lib/day": typeof lib_day;
   "lib/family": typeof lib_family;
   "lib/key": typeof lib_key;

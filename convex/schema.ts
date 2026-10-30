@@ -195,6 +195,25 @@ export default defineSchema({
   }).index("by_student", ["studentId"]),
 
   /**
+   * Who has a student's book open on the Correction page (31 Oct 2026): one corrector per book at a time, so two
+   * correctors never mark the same paper; two can each have one of his books. Her phone says it is still there every
+   * 20 s (seenAt); after a minute of silence (phone locked, page closed) anyone can take it. Another corrector can ask
+   * for it (ask); the holder gives it (the claim moves to the asker) or keeps it (kept).
+   */
+  claims: defineTable({
+    studentId: v.id("students"),
+    unitId: v.id("units"),
+    userId: v.id("users"),
+    name: v.string(),
+    at: v.number(),
+    seenAt: v.number(),
+    ask: v.optional(v.object({ userId: v.id("users"), name: v.string(), at: v.number() })),
+    kept: v.optional(v.object({ userId: v.id("users"), at: v.number() })),
+  })
+    .index("by_paper", ["studentId", "unitId"])
+    .index("by_user", ["userId"]),
+
+  /**
    * Books handed to a student (a unit's theory book or workbook), ticked in Correction's unit sheet: which books he
    * has, so nobody photographs the shelf again. One row per student, unit and book; untick = the row goes.
    */

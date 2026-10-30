@@ -544,6 +544,59 @@ describe("Several books at once (30 Oct 2026): every book reaches the rooms, one
     await expect(t.mutation(api.workbook.explain, { studentId: id, unitId: await unitId(t, "G7-U10"), qs: [1], on: true })).rejects.toThrow();
   });
 
+  test("two correctors at once (31 Oct 2026): each on one of his books without moving him; one corrector per book", async () => {
+    const { t, id, u08, u09 } = await twoBooks();
+    const NISHA = "nisha-phone-token-0123456789abcdefghijklmnopqrstuv";
+    const KAVI = "kavi-phone-token-0123456789abcdefghijklmnopqrstuvw";
+    await addPerson(t, { name: "Nisha", token: NISHA, tabs: ["correction"] });
+    await addPerson(t, { name: "Kavi", token: KAVI, tabs: ["correction"] });
+    const nisha = asPhone(t, NISHA);
+    const kavi = asPhone(t, KAVI);
+    const where = async () => (await t.run(async (ctx) => (await ctx.db.get(id))!)).unitId;
+    // Level 2 handed in on both books: two papers to correct. Handing in U08's (not his book now) doesn't move him.
+    await t.mutation(api.workbook.levelDone, { studentId: id, unitId: u08, level: 2 });
+    await t.mutation(api.workbook.levelDone, { studentId: id, unitId: u09, level: 2 });
+    expect(await where()).toBe(u09);
+    // Each opens one of his books: both hold.
+    expect(await nisha.mutation(api.focus.claim, { studentId: id, unitId: u08 })).toMatchObject({ ok: true });
+    expect(await kavi.mutation(api.focus.claim, { studentId: id, unitId: u09 })).toMatchObject({ ok: true });
+    // Both mark at once: Nisha's U08 draft survives Kavi's marks on U09 (it used to be wiped).
+    const q = G7U08.levels.find((l) => l.n === 2)!.from;
+    await nisha.mutation(api.focus.mark, { studentId: id, unitId: u08, level: 2, set: [{ q, g: 2 }] });
+    await kavi.mutation(api.focus.mark, { studentId: id, unitId: u09, level: 2, set: [{ q, g: 0 }] });
+    const drafts = await t.query(api.focus.drafts, {});
+    expect(drafts.map((d) => `${d.unitId === u08 ? "U08" : "U09"} L${d.level}`).sort()).toEqual(["U08 L2", "U09 L2"]);
+    // Nisha saves U08 Level 2: it lands in U08, and he is still on U09.
+    await nisha.mutation(api.workbook.correct, { studentId: id, unitId: u08, level: 2, items: items(G7U08, 2), by: "correction" });
+    expect((await book(t, id, u08)).lv["2"]?.fixed).toBeGreaterThan(0);
+    expect(await where()).toBe(u09);
+    // The same book: one corrector at a time. Kavi can't take U08 while Nisha's phone is there, nor mark it.
+    expect(await kavi.mutation(api.focus.claim, { studentId: id, unitId: u08 })).toMatchObject({ ok: false, by: "Nisha" });
+    await expect(kavi.mutation(api.focus.mark, { studentId: id, unitId: u08, level: 3, set: [{ q: G7U08.levels[2].from, g: 2 }] })).rejects.toThrow(
+      /Nisha is correcting Malik's Unit 8/,
+    );
+    // Kavi asks; only the holder answers; Nisha gives it: U08 is Kavi's, her U09 is free (one book each).
+    expect(await kavi.mutation(api.focus.ask, { studentId: id, unitId: u08 })).toBe("asked");
+    expect((await t.query(api.focus.claims, {})).find((c) => c.unitId === u08)?.ask?.name).toBe("Kavi");
+    expect(await kavi.mutation(api.focus.answer, { studentId: id, unitId: u08, give: true })).toBe(false);
+    expect(await nisha.mutation(api.focus.answer, { studentId: id, unitId: u08, give: true })).toBe(true);
+    let cl = await t.query(api.focus.claims, {});
+    expect(cl.map((c) => `${c.name} ${c.unitId === u08 ? "U08" : "U09"}`)).toEqual(["Kavi U08"]);
+    // Nisha's phone hears it on its next "still here".
+    expect(await nisha.mutation(api.focus.claim, { studentId: id, unitId: u08, ping: true })).toMatchObject({ ok: false, by: "Kavi" });
+    // Nisha asks back; Kavi keeps it.
+    expect(await nisha.mutation(api.focus.ask, { studentId: id, unitId: u08 })).toBe("asked");
+    await kavi.mutation(api.focus.answer, { studentId: id, unitId: u08, give: false });
+    cl = await t.query(api.focus.claims, {});
+    expect(cl[0]).toMatchObject({ name: "Kavi", kept: { userId: expect.any(String) } });
+    expect(cl[0].ask).toBeUndefined();
+    // Kavi's phone goes quiet for a minute (locked): Nisha takes it without asking. Leaving frees it.
+    advance(1.1);
+    expect(await nisha.mutation(api.focus.claim, { studentId: id, unitId: u08 })).toMatchObject({ ok: true, took: "Kavi" });
+    await nisha.mutation(api.focus.release, { studentId: id, unitId: u08 });
+    expect(await t.query(api.focus.claims, {})).toEqual([]);
+  });
+
   test("out of work only when every book given to him is blocked: a given book with work stops the idle clock", async () => {
     const t = await setup();
     const id = await addMaster(t, "Vimal");

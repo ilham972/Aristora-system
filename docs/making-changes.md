@@ -131,6 +131,8 @@ EOF
 - The repo isn't prettier-clean and has no prettier config: NEVER `npx prettier --write` a file (it reflows all of it at
   80 columns: a 1,300-line diff). If it happened: `git merge-file` HEAD (ours) with prettier-150(HEAD) as base and
   prettier-150(yours), fix the conflicts, then reverse the hunks that only change whitespace.
+- Correction's paper is one student AND one book: its book is `bookId(v)` and its view `viewOfPaper(views, paper)`;
+  never move him to correct another book (`moveTo` = Move, a deliberate act), never follow him when his book now changes.
 - Several books: never assume `v.s.unitId` is the book of a view, call or queue entry: use `v.unit` / `c.unitId`
   (`withBooks`, `roomCalls`, `teachWork`). Out of work is `v.noWork`, never `st.dry`/`ms.dry` alone (a blocked book
   with a given book that has work is NOT out of work). Rules-test fake views need `others`/`noWork`/`key` (`asView`).

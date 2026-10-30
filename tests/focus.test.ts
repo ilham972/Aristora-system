@@ -52,7 +52,8 @@ function wb(name: string, lv: MState["lv"] = {}, opts: { where?: View["where"]; 
   const m: MState = { q: opts.q ?? {}, lv };
   return asView({
     s: { _id: name, name, unitId: opts.unitId ?? U08._id, grade: opts.grade ?? 7, stage: "master", lastSeenAt: 0 },
-    unit: U08,
+    // A view's unit is its own book (his book now here): another unit id = that unit.
+    unit: opts.unitId ? { ...U08, _id: opts.unitId } : U08,
     stage: "master",
     kind: "master",
     where: opts.where ?? "hall",

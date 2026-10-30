@@ -15,42 +15,31 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, type MutationCtx } from "./_generated/server";
 import {
   asMaster,
-  bookFor,
   cleanBy,
   currentSession,
   fail,
   getStudent,
   log,
+  masterPlace,
   masterState,
-  progressFor,
+  mustHoldBook,
   refresh,
   touch,
-  workPlace,
 } from "./lib/backend";
 import { levelOutOf, type MasterData } from "./lib/book";
 import { computeMaster, markBefore, type MQ, type MState } from "./lib/master";
 import { actor } from "./lib/auth";
 import { masterState as masterStateShape } from "./schema";
 
-async function masterWork(ctx: MutationCtx, student: Doc<"students">, unitId: Id<"units"> | undefined, now: number) {
-  const { unit, book, progress } = await workPlace(ctx, student, "master", unitId, now);
-  return { unit, book: asMaster(book), progress, m: copy(masterState(progress)) };
-}
-
 /**
- * A teacher's work in any of his books (he works on several at once): his book now, or another workbook he has
- * work in (Evaluation and Theory see every book). Never creates work in a book he hasn't started.
+ * A workbook of his: his book now, or another workbook he has work in (he works on several at once). Correction,
+ * Evaluation and Theory all work on any of his books; correcting one never moves him (masterPlace).
  */
-async function teachWork(ctx: MutationCtx, student: Doc<"students">, unitId: Id<"units"> | undefined, now: number) {
-  if (!unitId || (unitId === student.unitId && student.stage === "master")) return await masterWork(ctx, student, unitId, now);
-  const unit = await ctx.db.get(unitId);
-  if (!unit) fail("That unit no longer exists.");
-  const book = await bookFor(ctx, unit._id, "master");
-  if (!book) fail(`${unit.key} has no workbook in the app.`);
-  const progress = await progressFor(ctx, student._id, unit._id, "master");
-  if (!progress) fail(`${student.name} has no work in ${unit.key}.`);
+async function masterWork(ctx: MutationCtx, student: Doc<"students">, unitId: Id<"units"> | undefined, now: number) {
+  const { unit, book, progress } = await masterPlace(ctx, student, unitId, now);
   return { unit, book: asMaster(book), progress, m: copy(masterState(progress)) };
 }
+const teachWork = masterWork;
 
 function copy(m: MState): MState {
   return {
@@ -167,11 +156,12 @@ export const correct = mutation({
     to: v.optional(v.union(v.literal("evaluation"), v.literal("theory"))),
   },
   handler: async (ctx, args) => {
-    await actor(ctx, args.token, ["correction", "evaluation"], args.by);
+    const me = await actor(ctx, args.token, ["correction", "evaluation"], args.by);
     const now = Date.now();
     const by = cleanBy(args.by);
     const student = await getStudent(ctx, args.studentId);
     const { unit, book, progress, m } = await masterWork(ctx, student, args.unitId, now);
+    await mustHoldBook(ctx, me, student, unit, now);
     const l = levelOf(book, args.level);
     const count = l.to - l.from + 1;
     const qs = new Set(args.items.map((x) => x.q));

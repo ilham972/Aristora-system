@@ -2220,14 +2220,38 @@ test("Several books at once: every book stays on Evaluation and Theory, one book
   await contains(evRow(E, "Vimal").locator(".ev-c-why small"), "on U09");
   expect((await marksOf(backend, "Vimal")).idleSince).toBeUndefined(); // the idle clock stopped
 
-  // Correction: his U08 Level 3 (handed in before he moved on) still counts; tapping his name opens U08 there.
+  // Correction: his U08 Level 3 (handed in before he moved on) still counts; tapping his name opens U08 there,
+  // without moving him (31 Oct 2026: each corrector's paper is her own, he stays on U09 for everyone).
   await tab(C, "Correction").click();
   await C.getByRole("button", { name: /^Grade 7\b/ }).click();
   await visible(C.locator(".fc-nm.amber", { hasText: "Malik" }));
   await C.locator(".fc-nm", { hasText: "Malik" }).click();
-  await contains(C.locator(".toast"), "Malik: Master · 8");
-  await until(async () => (await marksOf(backend, "Malik")).unitKey === "G7-U08", "Malik back on U08 for the paper");
   await says(C.locator(".fc-lvline"), "Level 3");
+  await textsAre(C.locator(".fc-bk.on i"), ["8"]);
+  expect((await marksOf(backend, "Malik")).unitKey).toBe("G7-U09");
+  // A second corrector, Kavi: Malik's only book to correct is open on the owner's phone (her first letter, dim).
+  // Kavi asks for it; the owner gives it: the owner's paper closes, Kavi's opens on U08 Level 3.
+  const KAVI = "kavi-phone-token-0123456789abcdefghijklmnopqrstuvw";
+  await addPerson(backend.t, { name: "Kavi", token: KAVI, tabs: ["correction"] });
+  const K = await phone(backend, "focus", PHONE, KAVI);
+  await K.getByRole("button", { name: /^Grade 7\b/ }).click();
+  await visible(K.locator(".fc-nm.fc-held", { hasText: "Malik" }));
+  await says(K.locator(".fc-nm", { hasText: "Malik" }).locator(".fc-nm-who"), "O");
+  await K.locator(".fc-nm", { hasText: "Malik" }).click();
+  await contains(K.locator(".sheet-title"), "Owner has Malik's Unit 8");
+  await shot(K, "c01-correction-ask");
+  await K.getByRole("button", { name: "Ask Owner" }).click();
+  await contains(K.locator(".sheet-body"), "Asked Owner");
+  await contains(C.locator(".sheet-title"), "Kavi asks for Malik's Unit 8");
+  await shot(C, "c02-correction-give");
+  await C.getByRole("button", { name: "Give it to Kavi" }).click();
+  await contains(C.locator(".toast"), "Malik's Unit 8 is Kavi's now");
+  await count(C.locator(".fc-paper"), 0);
+  await says(K.locator(".fc-lvline"), "Level 3");
+  await contains(K.locator(".toast"), "Owner gave you Malik's Unit 8");
+  await visible(C.locator(".fc-nm.fc-held", { hasText: "Malik" }));
+  await shot(K, "c03-correction-given");
+  await K.context().close();
   await E.context().close();
   expect(problems, problems.join("\n")).toEqual([]);
 });

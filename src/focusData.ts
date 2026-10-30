@@ -14,6 +14,7 @@
 // the one he is on) and the next level opens after each save; any level can be opened from the level bar.
 
 import { levelOutOf, type MasterLevel } from "../convex/lib/book";
+import { heldBy, type Claim } from "../convex/lib/claims";
 import type { KeyAnswer, KeyPart } from "../convex/lib/key";
 import { homeToCheck, type MLevel, type MQ, type MState } from "../convex/lib/master";
 import { waitingAll, type View } from "./derive";
@@ -226,7 +227,7 @@ export type Carry = {
 
 /** The level of this student the carried marks fit, if any: same workbook, same questions, one he can hand in. */
 export function carryLevel(c: Carry | null, v: View, now: number): MasterLevel | null {
-  if (!c || now - c.at > CARRY_MS || v.s.unitId !== c.unitId) return null;
+  if (!c || now - c.at > CARRY_MS || bookId(v) !== c.unitId) return null;
   return candidates(v).find((l) => l.from === c.from && l.to === c.to) ?? openLevels(v).find((l) => l.from === c.from && l.to === c.to) ?? null;
 }
 
@@ -253,7 +254,7 @@ export type Draft = { studentId: string; unitId: string; level: number; q: Recor
 /** His draft for a level while it still counts: the same workbook, the level not corrected yet. */
 export function draftOf(drafts: readonly Draft[] | null | undefined, v: View, level: number): Draft | null {
   if (!drafts || !v.mb || v.mm.lv[String(level)]?.fixed) return null;
-  return drafts.find((d) => d.studentId === v.s._id && d.unitId === v.s.unitId && d.level === level) ?? null;
+  return drafts.find((d) => d.studentId === v.s._id && d.unitId === bookId(v) && d.level === level) ?? null;
 }
 
 /** A draft's marks as a paper keeps them. */
@@ -281,7 +282,7 @@ const fixedOrPre = (v: View, n: number) => {
 export function autoLevel(v: View, drafts: readonly Draft[] | null | undefined, skip?: number): MasterLevel | null {
   if (!v.ms || !v.mb) return null;
   const mine = (drafts ?? [])
-    .filter((d) => d.studentId === v.s._id && d.unitId === v.s.unitId && !fixedOrPre(v, d.level) && Object.keys(d.q).length)
+    .filter((d) => d.studentId === v.s._id && d.unitId === bookId(v) && !fixedOrPre(v, d.level) && Object.keys(d.q).length)
     .sort((a, b) => b.updatedAt - a.updatedAt)[0];
   const fromDraft = mine ? v.mb.levels.find((l) => l.n === mine.level) : undefined;
   if (fromDraft) return fromDraft;
@@ -383,6 +384,57 @@ export function booksOf(v: View, no: (unitId: string) => number): BookPill[] {
   for (const g of v.given) if (!g.done) put(g.unitId, g.stage, false, 0);
   for (const b of v.others) if (b.unit && b.stage === "master" && b.ms?.waiting.length) put(b.unit._id, "master", false, b.ms.waiting.length);
   return [...out.values()].sort((a, b) => no(a.unitId) - no(b.unitId) || Number(a.stage === "master") - Number(b.stage === "master"));
+}
+
+// ---- One student, several books, several correctors (31 Oct 2026) ----
+
+/** The book a view is about: his book now for his main view, that book for one of his other books. */
+export function bookId(v: View): string | undefined {
+  return (v.unit?._id ?? v.s.unitId) as string | undefined;
+}
+
+/** The view a paper is on: his book now, or one of his other books (null: he left, or that book has nothing now). */
+export function viewOfPaper(views: readonly View[], p: { studentId: string; unitId: string | null }): View | null {
+  const v = views.find((x) => x.s._id === p.studentId);
+  if (!v) return null;
+  if (!p.unitId || bookId(v) === p.unitId) return v;
+  return v.others.find((b) => bookId(b) === p.unitId) ?? null;
+}
+
+/**
+ * Which of his books opens when his name is tapped, without moving him (each corrector's paper is her own): his book
+ * now when it has something to correct, else another book with a level handed in, else one marked at home; a book
+ * another corrector has open is skipped when another one has work. `held`: the only book with work is hers (ask her).
+ * Nothing to correct anywhere: his book now (the level he is on, or the unit's marks).
+ */
+export function bookToOpen(
+  v: View,
+  claims: readonly Claim[] | null | undefined,
+  me: string | null | undefined,
+  now: number,
+): { view: View; held: Claim | null; skipped: Claim | null } {
+  const here = v.where !== "absent";
+  const handedIn = (b: View) => !!b.ms?.waiting.length;
+  const atHome = (b: View) => here && homeLevels(b).length > 0;
+  const work = [
+    ...(handedIn(v) || atHome(v) ? [v] : []),
+    ...v.others.filter(handedIn),
+    ...v.others.filter((b) => !handedIn(b) && atHome(b)),
+  ];
+  const holder = (b: View) => heldBy(claims, me, v.s._id, bookId(b), now);
+  const free = work.find((b) => !holder(b));
+  if (free) return { view: free, held: null, skipped: work[0] !== free ? holder(work[0]) : null };
+  if (work.length) return { view: work[0], held: holder(work[0]), skipped: null };
+  return { view: v, held: holder(v), skipped: null };
+}
+
+/** Someone else has one of his books open: her claim (the names row shows her first letter). */
+export function heldOne(v: View, claims: readonly Claim[] | null | undefined, me: string | null | undefined, now: number): Claim | null {
+  for (const b of [v, ...v.others]) {
+    const c = heldBy(claims, me, v.s._id, bookId(b), now);
+    if (c) return c;
+  }
+  return null;
 }
 
 /** Pills: what waits for the corrector, student by student (red: he has nothing to do until it's corrected). */

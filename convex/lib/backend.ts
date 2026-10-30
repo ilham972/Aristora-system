@@ -1,6 +1,7 @@
 // Backend-only helpers: sessions, the history log, idle tracking.
 
 import { ConvexError } from "convex/values";
+import { claimLive } from "./claims";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { fighter, type Fighter, type MasterData } from "./book";
@@ -127,6 +128,40 @@ export async function workPlace(
   if (!book) fail(`${unit.key} has no ${stage === "fighter" ? "theory book" : "workbook"} in the app yet.`);
   const progress = await ensureProgress(ctx, student._id, unit._id, stage, now);
   return { unit, book, progress };
+}
+
+/**
+ * A workbook of his to correct, hand in or mark: his book now, or another workbook he has work in (he works on several
+ * at once). Correcting another book never moves him (31 Oct 2026): two correctors can each have one of his books open.
+ */
+export async function masterPlace(
+  ctx: MutationCtx,
+  student: Doc<"students">,
+  unitId: Id<"units"> | undefined,
+  now: number,
+): Promise<{ unit: Doc<"units">; book: Doc<"books">; progress: Doc<"progress"> }> {
+  if (!unitId || (unitId === student.unitId && student.stage === "master")) return await workPlace(ctx, student, "master", unitId, now);
+  const unit = await ctx.db.get(unitId);
+  if (!unit) fail("That unit no longer exists.");
+  const book = await bookFor(ctx, unit._id, "master");
+  if (!book) fail(`${unit.key} has no workbook in the app.`);
+  const progress = await progressFor(ctx, student._id, unit._id, "master");
+  if (!progress) fail(`${student.name} has no work in ${unit.key}.`);
+  return { unit, book, progress };
+}
+
+/**
+ * One corrector per book (31 Oct 2026): another corrector has this book open on the Correction page and her phone spoke
+ * in the last minute. Marks from anyone else would cross hers: refused, with her name (ask her for it).
+ */
+export async function mustHoldBook(ctx: MutationCtx, me: Doc<"users">, student: Doc<"students">, unit: Doc<"units">, now: number) {
+  const c = await ctx.db
+    .query("claims")
+    .withIndex("by_paper", (q) => q.eq("studentId", student._id).eq("unitId", unit._id))
+    .first();
+  if (c && c.userId !== me._id && claimLive(c, now)) {
+    fail(`${c.name} is correcting ${student.name}'s Unit ${Number(unit.code.replace(/\D/g, "")) || unit.code} now. Ask her for it.`);
+  }
 }
 
 export function masterState(p: Doc<"progress"> | null): MState {

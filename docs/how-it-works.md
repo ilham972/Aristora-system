@@ -63,8 +63,8 @@ per student. Evaluation: ticking his other book swaps it; her card shows that bo
 red/orange waits, else "Also waiting: U09 (2)". Fair order (both rooms): no work, then not seen by that room today
 (`students.seen[room]`, set on finish/keep; `seenToday`), then stuck / longest wait. Teachers' taps on any book
 (`teachWork` in `workbook.ts`; overlays keyed student:unit). Correction: names count handed-in levels of all books
-(`waitingAll`); tapping a name whose book now has none opens (moves to) the book that has one; "Also handed in:
-U08 · L3" on his paper (`AlsoHandedIn`). Class rows: "On U09" when his book is blocked but a given book has work;
+(`waitingAll`); tapping a name whose book now has none opens the book that has one, WITHOUT moving him (31 Oct:
+each corrector's paper is her own; below, "Several correctors"). Class rows: "On U09" when his book is blocked but a given book has work;
 chips for other books ("U08 Eval 2"). Absent students: book now only.
 
 **Grade pills:** on Class and the Evaluation page, "All 7 9 11" for the grades in class now (hidden with fewer than
@@ -249,6 +249,23 @@ two errors: marks on the wrong question and on the wrong student. Meant for the 
   (`focusGrade(chosen, here, all)`, remembered in `aristora.grade.focus`; it never jumps by itself; a paper opened
   from elsewhere switches to his grade). **↶ Saved** at the end, always there (pale until the first save).
 - No Stop: another name (`leave()`) saves a level marked to the end that changed ("(saved as you moved on)").
+- **Several correctors at once** (31 Oct 2026, his voice note: two correctors fought over Raj). Each phone's paper is
+  its own: a paper = one student AND one of his books (`bookId(v)`, `viewOfPaper`). Opening another book never moves
+  him (`masterPlace` on the server: correct, hand in, drafts and Take back work on any book he has a progress row in;
+  before, `moveTo` moved him and every other corrector's paper followed him). A name opens his book with something to
+  correct (`bookToOpen`: book now, else a book with a level handed in, else one marked at home); his books row opens a
+  book of his the same way (a book he hasn't started still moves him, as before). His paper never jumps to another
+  book by itself: if its book has nothing more, it closes ("that book has nothing more to correct now").
+  **One corrector per book:** the open book is claimed (`claims` table, `convex/focus.ts`: `claim`, `release`;
+  `src/focus.tsx` `holdFor`/`claimBook`); her phone says "still here" every 20 s while the page is on screen
+  (`stillHere`, `CLAIM_PING_MS`); a minute of silence (phone locked, other tab) and anyone can take it ("Nisha's phone
+  was quiet for a minute: …yours now"). Another corrector's name pill shows her first letter (`.fc-nm-who`); dim
+  (`.fc-held`) when his only book to correct is hers. Tapping it: `AskSheet` "Nisha has Raj's Unit 8" → **Ask Nisha**
+  → her phone shows `GiveSheet` (a sheet, nothing under her finger moves; a soft tone) **Give it to Kavi** (her paper
+  closes, her marks go with the book: they are server drafts) / **Keep it** ("Nisha keeps Raj's Unit 8"). The server
+  refuses marks and saves on a book someone else holds live (`mustHoldBook` in `focus.mark` and `workbook.correct`).
+  Drafts of his other books are never wiped by marks on one book (only drafts of corrected levels; others after 2
+  days). Not covered: the Class page's correct sheet doesn't claim (it is refused while someone holds the book).
 - **His paper:** name huge; **Later** (`workbook.levelDone`); **Marks** = Class's `Book` in a sheet; signed out (gone
   home, or never signed in): an amber line "Signed out: Evaluation and Theory don't see him" + **Sign him in**
   (`SignedOut`). **His books in one line** under his name (`BookRow`, `e34a29c`, another chat): a book button first

@@ -6598,3 +6598,28 @@ body.locked.tp-padded .toasts {
   background: var(--green);
   color: #fff;
 }
+
+/* Correction, one corrector per book (31 Oct 2026): another corrector has one of his books open (her first letter);
+   his only book to correct is hers = the name is dim (a tap asks her for it). */
+.fc-nm-who {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  margin-left: 3px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--ink-2);
+  color: #fff;
+  font: 700 10px/1 var(--font);
+  font-style: normal;
+}
+.fc-nm.fc-held {
+  opacity: 0.55;
+  border-style: dashed;
+}
+.fc-ask-t {
+  margin: 0;
+  color: var(--ink-2);
+  line-height: 1.45;
+}

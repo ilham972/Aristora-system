@@ -28,6 +28,7 @@ import type { Id } from "../convex/_generated/dataModel";
 import { PART_NAME, partOf, type MasterLevel } from "../convex/lib/book";
 import { homeToCheck, levelWaits, teachState, type TeachState } from "../convex/lib/master";
 import { slClock, slDate, slDay } from "../convex/lib/day";
+import { claimLive, CLAIM_PING_MS, type Claim } from "../convex/lib/claims";
 import { boldRuns, type KeyAnswer } from "../convex/lib/key";
 import type { Mark, MarkState } from "../convex/lib/status";
 import { termOf } from "../convex/lib/syllabus";
@@ -37,7 +38,10 @@ import { CallsBand } from "./correction";
 import { fmtMin, tagOf, type View } from "./derive";
 import {
   autoLevel,
-  homeLevels,
+  bookId,
+  bookToOpen,
+  heldOne,
+  viewOfPaper,
   beforeOf,
   blankWords,
   CARRY_MS,
@@ -87,6 +91,7 @@ import {
   act,
   allUnits,
   clearToasts,
+  currentMe,
   currentRole,
   may,
   now as serverNow,
@@ -99,6 +104,7 @@ import {
   type Stage,
   type Unit,
 } from "./store";
+import { tone } from "./tones";
 import { Empty, GRADES, Sheet } from "./ui";
 
 // ---- What the page remembers while the app is open (switching pages and back keeps the open paper) ----
@@ -214,6 +220,7 @@ let carry: Carry | null = null;
 let savedIds = saved.reduce((a, s) => Math.max(a, s.id), 0);
 let latestViews: View[] = [];
 let latestDrafts: Draft[] | undefined;
+let latestClaims: Claim[] | undefined;
 const listeners = new Set<() => void>();
 
 function emit() {
@@ -221,7 +228,99 @@ function emit() {
 }
 function setPaper(p: Paper | null) {
   openPaper = p;
+  holdFor(p);
   emit();
+}
+
+// ---- One corrector per book (31 Oct 2026) ----
+// Each corrector's paper is her own (switching books never moves him for anyone else). The book her paper is on is
+// claimed on the server while it is open, so another corrector can't mark it at the same time: she asks for it.
+
+type Ask = { studentId: string; unitId: string; who: string; name: string; tag: string; state: "held" | "asked" | "kept" };
+/** The book this phone has claimed (one at a time). */
+let holding: { studentId: string; unitId: string } | null = null;
+/** A name tapped whose book another corrector has open: the sheet that asks her for it. */
+let asking: Ask | null = null;
+const meId = () => (currentMe()?._id as string | undefined) ?? null;
+const markable = (p: Paper | null): p is MasterPaper | FighterPaper => !!p && (p.kind === "master" || p.kind === "fighter");
+const ids = (h: { studentId: string; unitId: string }) => ({
+  studentId: h.studentId as Id<"students">,
+  unitId: h.unitId as Id<"units">,
+  by: currentRole(),
+});
+const bookWords = (studentId: string, unitId: string) => {
+  const v = viewOfPaper(latestViews, { studentId, unitId });
+  const u = unitOf(unitId);
+  return { name: v?.s.name ?? "his", tag: u ? `Unit ${unitNo(u.code)}` : "book" };
+};
+
+/** The book this phone works on is claimed; the one it left is free again. */
+function holdFor(p: Paper | null) {
+  const want = markable(p) ? { studentId: p.studentId, unitId: p.unitId } : null;
+  if (want && holding && want.studentId === holding.studentId && want.unitId === holding.unitId) return;
+  const was = holding;
+  holding = want;
+  if (was) void mutate(api.focus.release, ids(was)).catch(() => {});
+  if (want) void claimBook(want);
+}
+
+async function claimBook(want: { studentId: string; unitId: string }) {
+  try {
+    const r = await mutate(api.focus.claim, ids(want));
+    if (holding !== want) return;
+    const { name, tag } = bookWords(want.studentId, want.unitId);
+    if (!r.ok) {
+      // Another corrector opened it a moment before: hers. This phone offers to ask her.
+      holding = null;
+      if (markable(openPaper) && openPaper.studentId === want.studentId && openPaper.unitId === want.unitId) openPaper = null;
+      asking = { ...want, who: r.by ?? "Another corrector", name, tag, state: "held" };
+      emit();
+    } else if (r.took) {
+      toast(`${r.took}'s phone was quiet for a minute: ${name}'s ${tag} is yours now.`);
+    }
+  } catch {
+    /* no signal: the next "still here" tries again */
+  }
+}
+
+/** Her book went to another corrector (given, or taken while her phone was quiet): her paper closes, marks kept. */
+function lostBook(h: { studentId: string; unitId: string }, by: string | null) {
+  holding = null;
+  const { name, tag } = bookWords(h.studentId, h.unitId);
+  if (markable(openPaper) && openPaper.studentId === h.studentId && openPaper.unitId === h.unitId) {
+    void flushFocus();
+    openPaper = null;
+  }
+  emit();
+  toast(`${by ?? "Another corrector"} has ${name}'s ${tag} now. Your marks were kept.`);
+}
+
+/** "Still here" every 20 s while the Correction page is on screen (a locked phone stops: after a minute it is free). */
+async function stillHere() {
+  const h = holding;
+  if (!h || document.visibilityState !== "visible") return;
+  try {
+    const r = await mutate(api.focus.claim, { ...ids(h), ping: true });
+    if (!r.ok && holding === h) lostBook(h, r.by);
+  } catch {
+    /* no signal: try again next time */
+  }
+}
+
+/** Open this book of his (one of his books, without moving him), unless another corrector has it: then ask her. */
+function openBook(v: View, now: number) {
+  const unitId = bookId(v);
+  const c = unitId ? (latestClaims ?? []).find((x) => x.studentId === v.s._id && x.unitId === unitId) : undefined;
+  if (c && unitId && c.userId !== meId() && claimLive(c, serverNow())) {
+    const { name, tag } = bookWords(v.s._id, unitId);
+    asking = { studentId: v.s._id, unitId, who: c.name, name, tag, state: "held" };
+    emit();
+    return;
+  }
+  clearToasts();
+  leave();
+  window.scrollTo(0, 0);
+  setPaper(paperFor(v, now));
 }
 function useFocusState(): Paper | null {
   const [, set] = useState(0);
@@ -282,7 +381,7 @@ function masterAt(v: View, l: MasterLevel): MasterPaper {
   return {
     kind: "master",
     studentId: v.s._id,
-    unitId: v.s.unitId!,
+    unitId: bookId(v)!,
     level: l.n,
     given,
     parts,
@@ -302,7 +401,7 @@ function remarkAt(v: View, l: MasterLevel): MasterPaper {
   return {
     kind: "master",
     studentId: v.s._id,
-    unitId: v.s.unitId!,
+    unitId: bookId(v)!,
     level: l.n,
     given,
     parts: {},
@@ -321,7 +420,7 @@ function paperAt(v: View, l: MasterLevel): MasterPaper {
 
 /** What opens for a student: his theory book, his workbook at the right level, the unit's marks, or choose a unit. */
 function paperFor(v: View, now: number): Paper {
-  if (v.kind === "fighter") return { kind: "fighter", studentId: v.s._id, unitId: v.s.unitId!, qs: fighterQueue(v), at: 0, base: {} };
+  if (v.kind === "fighter") return { kind: "fighter", studentId: v.s._id, unitId: bookId(v)!, qs: fighterQueue(v), at: 0, base: {} };
   if (v.kind !== "master") return { kind: "none", studentId: v.s._id, unitId: v.s.unitId ?? null, stage: v.stage };
   const fits = carryLevel(carry, v, now);
   if (fits && carry) {
@@ -329,13 +428,13 @@ function paperFor(v: View, now: number): Paper {
     carry = null;
     const qs = questionsOf(fits);
     // The marks are his now: kept as his draft at once, like any marks.
-    for (const q of qs) if (c.given[q]) queueDraft(v.s._id, v.s.unitId!, fits.n, q, c.given[q], c.parts?.[q]);
+    for (const q of qs) if (c.given[q]) queueDraft(v.s._id, bookId(v)!, fits.n, q, c.given[q], c.parts?.[q]);
     const blanks: Record<number, string[]> = {};
     for (const q of qs) if (c.given[q]?.dkp?.length) blanks[q] = [...c.given[q].dkp!];
     return {
       kind: "master",
       studentId: v.s._id,
-      unitId: v.s.unitId!,
+      unitId: bookId(v)!,
       level: fits.n,
       given: { ...c.given },
       parts: { ...(c.parts ?? {}) },
@@ -348,7 +447,7 @@ function paperFor(v: View, now: number): Paper {
   }
   const l = autoLevel(v, latestDrafts);
   // A level marked at home opens with the phone's marks, to check (the others open to mark).
-  return l ? paperAt(v, l) : { kind: "over", studentId: v.s._id, unitId: v.s.unitId! };
+  return l ? paperAt(v, l) : { kind: "over", studentId: v.s._id, unitId: bookId(v)! };
 }
 
 /** Theory-book marks this paper changed: they join "Saved on this phone" (Take back). */
@@ -390,7 +489,7 @@ async function saveLevel(v: View, p: MasterPaper, l: MasterLevel, auto: boolean)
   const res = await act(() =>
     mutate(api.workbook.correct, {
       studentId: v.s._id,
-      unitId: v.s.unitId,
+      unitId: bookId(v) as Id<"units"> | undefined,
       level: l.n,
       items: itemsOf(qs, p.given),
       to: route,
@@ -404,7 +503,7 @@ async function saveLevel(v: View, p: MasterPaper, l: MasterLevel, auto: boolean)
     id: ++savedIds,
     studentId: v.s._id,
     name: v.s.name,
-    unitId: v.s.unitId!,
+    unitId: bookId(v)!,
     tag: tagOf(v.s, v.unit),
     level: l.n,
     from: l.from,
@@ -446,9 +545,9 @@ function leave() {
   if (!p) return;
   if (p.kind === "fighter") rememberFighter(p);
   if (p.kind === "master" && !p.saving) {
-    const v = latestViews.find((x) => x.s._id === p.studentId);
+    const v = viewOfPaper(latestViews, p);
     const l = v?.mb?.levels.find((x) => x.n === p.level);
-    if (v && l && v.s.unitId === p.unitId && marksOfLevel(v, l)) {
+    if (v && l && marksOfLevel(v, l)) {
       const qs = questionsOf(l);
       const complete = qs.every((q) => p.given[q]);
       const changed = !p.remark || !sameGiven(qs, p.given, p.remark);
@@ -461,23 +560,19 @@ function leave() {
   void flushFocus();
 }
 
-/** Tap a name: leave the open paper (every mark kept) and open his. */
+/**
+ * Tap a name: leave the open paper (every mark kept) and open his book with something to correct (his book now, else
+ * another book with a level handed in or marked at home). It never moves him: another corrector can be on another of
+ * his books at the same time. A book another corrector has open is skipped; if it's the only one, ask her for it.
+ */
 function openFor(v: View, now: number) {
   if (openPaper && openPaper.studentId === v.s._id && openPaper.kind !== "wait") return;
-  clearToasts();
-  leave();
-  window.scrollTo(0, 0);
-  // He works on several books: nothing handed in in this one but a level of another book is: that book opens.
-  const here = v.where !== "absent";
-  const other =
-    !v.ms?.waiting.length && !(here && homeLevels(v).length)
-      ? (v.others.find((b) => b.ms?.waiting.length) ?? (here ? v.others.find((b) => homeLevels(b).length) : undefined))
-      : undefined;
-  if (other?.unit) {
-    void moveTo(v, "master", other.unit);
-    return;
+  const pick = bookToOpen(v, latestClaims, meId(), serverNow());
+  openBook(pick.view, now);
+  if (pick.skipped && !pick.held) {
+    const was = bookWords(v.s._id, pick.skipped.unitId);
+    toast(`${pick.skipped.name} has ${v.s.name}'s ${was.tag}: ${bookWords(v.s._id, bookId(pick.view)!).tag} opened.`);
   }
-  setPaper(paperFor(v, now));
 }
 
 /** Open one level of his workbook (the level bar, his marks table). */
@@ -509,9 +604,9 @@ async function moveTo(v: View, stage: Stage, u: Unit): Promise<boolean> {
 
 /** Take a saved level back (after the corrector confirmed): it goes back to how it was; its marks wait for the right student. */
 async function takeBackLevel(s: SavedLevel): Promise<boolean> {
-  const v = latestViews.find((x) => x.s._id === s.studentId);
-  if (!v || v.s.unitId !== s.unitId) {
-    toast(`${s.name} is on another book now. Use Class at the top (tap his name).`, "error");
+  const v = viewOfPaper(latestViews, s);
+  if (!v) {
+    toast(`${s.name}'s book is not open here now. Use Class at the top (tap his name).`, "error");
     return false;
   }
   const fixed = v.mm.lv[String(s.level)]?.fixed;
@@ -585,7 +680,49 @@ export function Focus(props: { board: Board; views: View[]; now: number }) {
   latestViews = views;
   const drafts = useQuery<Draft[]>(api.focus.drafts, {});
   latestDrafts = drafts;
+  const claims = useQuery<Claim[]>(api.focus.claims, {});
+  latestClaims = claims;
   const paper = useFocusState();
+  const me = meId();
+  // "Still here" while this page is on screen; back on screen = at once (her book may have gone meanwhile).
+  useEffect(() => {
+    const t = window.setInterval(() => void stillHere(), CLAIM_PING_MS);
+    const seen = () => {
+      if (document.visibilityState === "visible") void stillHere();
+    };
+    document.addEventListener("visibilitychange", seen);
+    void stillHere();
+    return () => {
+      window.clearInterval(t);
+      document.removeEventListener("visibilitychange", seen);
+    };
+  }, []);
+  // Her book: another corrector asks for it (a sheet over the paper: nothing under her finger moves).
+  const mine = holding && claims ? (claims.find((c) => c.studentId === holding!.studentId && c.unitId === holding!.unitId && c.userId === me) ?? null) : null;
+  const askedMe = mine?.ask ?? null;
+  useEffect(() => {
+    if (askedMe) tone("call");
+  }, [askedMe?.at]);
+  // Asked another corrector for a book: given to me (open it), free now (open it), or kept (say so).
+  useEffect(() => {
+    const a = asking;
+    if (!a || a.state !== "asked" || !claims) return;
+    const c = claims.find((x) => x.studentId === a.studentId && x.unitId === a.unitId);
+    const bv = viewOfPaper(views, a);
+    if (!c || c.userId === me || !claimLive(c, serverNow())) {
+      asking = null;
+      if (bv) {
+        clearToasts();
+        leave();
+        window.scrollTo(0, 0);
+        setPaper(paperFor(bv, now));
+      } else emit();
+      toast(c && c.userId === me ? `${a.who} gave you ${a.name}'s ${a.tag}.` : `${a.name}'s ${a.tag} is free now: opened.`);
+    } else if (!c.ask && c.kept?.userId === me) {
+      asking = { ...a, state: "kept" };
+      emit();
+    }
+  }, [claims]);
   const [sheet, setSheetNow] = useState<SheetName | null>(null);
   // Toasts sit at the top while a paper is open: a sheet opening clears them (they would cover its title).
   const setSheet = (x: SheetName | null) => {
@@ -596,7 +733,8 @@ export function Focus(props: { board: Board; views: View[]; now: number }) {
   const grades = gradesOf(pills.map((p) => p.v));
   const [grade, setGrade] = useFocusGrade(grades, gradesOf(views));
   const shown = pills.filter((p) => p.v.s.grade === grade);
-  const v = paper ? (views.find((x) => x.s._id === paper.studentId) ?? null) : null;
+  const main = paper ? (views.find((x) => x.s._id === paper.studentId) ?? null) : null;
+  const v = paper ? (paper.kind === "wait" ? main : viewOfPaper(views, paper)) : null;
   // His paper opened from elsewhere (Saved, a level from his card): his grade's names show, his own one dark.
   const paperGrade = v?.s.grade;
   useEffect(() => {
@@ -604,30 +742,35 @@ export function Focus(props: { board: Board; views: View[]; now: number }) {
   }, [paper?.studentId]);
   const waitingCarry = carry && now - carry.at <= CARRY_MS ? carry : null;
 
-  // His paper no longer fits him (moved to another book from another phone, or removed): open what fits now.
+  // His paper no longer fits: removed, his book moved (by Move, from any phone), or that book has nothing more now.
+  // It never follows him to another book by itself: each corrector opens what she wants.
   const moved =
     !!paper &&
     paper.kind !== "wait" &&
     (!v ||
-      (paper.kind === "master" && (v.kind !== "master" || v.s.unitId !== paper.unitId)) ||
-      (paper.kind === "fighter" && (v.kind !== "fighter" || v.s.unitId !== paper.unitId)) ||
-      (paper.kind === "over" && (v.kind !== "master" || v.s.unitId !== paper.unitId)) ||
+      (paper.kind === "master" && v.kind !== "master") ||
+      (paper.kind === "fighter" && v.kind !== "fighter") ||
+      (paper.kind === "over" && v.kind !== "master") ||
       (paper.kind === "none" && (v.kind !== "none" || (v.s.unitId ?? null) !== paper.unitId || v.stage !== paper.stage)));
   useEffect(() => {
     if (!moved || !paper) return;
-    if (!v) {
+    if (!main) {
       setPaper(null);
       toast("That student was removed: the paper was closed. Marks given before were kept.", "error");
       return;
     }
     const wasMarking = paper.kind === "master" || paper.kind === "fighter";
-    setPaper(paperFor(v, now));
-    if (wasMarking) toast(`${v.s.name} is on ${tagOf(v.s, v.unit) || "another book"} now: opened there.`);
+    if (paper.kind === "none") {
+      setPaper(paperFor(main, now));
+      return;
+    }
+    setPaper(null);
+    if (wasMarking) toast(`${main.s.name}: that book has nothing more to correct now. Marks given were kept.`);
   }, [moved]);
   // Moved from here: open his new book as soon as the board shows him there.
-  const arrived = paper?.kind === "wait" && !!v && v.s.unitId === paper.unitId && v.s.stage === paper.stage;
+  const arrived = paper?.kind === "wait" && !!main && main.s.unitId === paper.unitId && main.s.stage === paper.stage;
   useEffect(() => {
-    if (arrived && v) setPaper(paperFor(v, now));
+    if (arrived && main) setPaper(paperFor(main, now));
   }, [arrived]);
   // A level saved to the end with nothing after it: the unit's marks (when the board shows the last save).
   useEffect(() => {
@@ -667,6 +810,9 @@ export function Focus(props: { board: Board; views: View[]; now: number }) {
             grade={grade}
             openId={paper?.studentId}
             drafts={drafts}
+            claims={claims}
+            me={me}
+            now={now}
             onPick={(x) => openFor(x, now)}
             onAdd={() => setSheet("attendance")}
           />
@@ -719,7 +865,7 @@ export function Focus(props: { board: Board; views: View[]; now: number }) {
       {sheet === "attendance" && grade !== null && (
         <AttendanceSheet board={board} views={views} now={now} grade={grade} only onClose={() => setSheet(null)} />
       )}
-      {v && sheet === "unit" && <StageUnitSheet v={v} onClose={() => setSheet(null)} />}
+      {main && sheet === "unit" && <StageUnitSheet v={main} onClose={() => setSheet(null)} />}
       {v && sheet === "card" && (
         <Sheet title={v.s.name} sub={tagOf(v.s, v.unit)} onClose={() => setSheet(null)}>
           <Book
@@ -734,9 +880,111 @@ export function Focus(props: { board: Board; views: View[]; now: number }) {
           />
         </Sheet>
       )}
-      {v && sheet === "move" && <MoveSheet v={v} onClose={() => setSheet(null)} />}
+      {main && sheet === "move" && <MoveSheet v={main} onClose={() => setSheet(null)} />}
+      {askedMe && mine && <GiveSheet claim={mine} ask={askedMe} />}
+      {asking && !askedMe && <AskSheet a={asking} />}
       {v && sheet === "theory" && v.ms && <TheorySheet v={v} onClose={() => setSheet(null)} />}
     </main>
+  );
+}
+
+// ---- One corrector per book: asking for a book, giving it ----
+
+/**
+ * Another corrector asks for the book on her paper: give it (her paper closes, her marks go with the book) or keep
+ * it. A sheet over the paper, so nothing under her finger moves.
+ */
+function GiveSheet(props: { claim: Claim; ask: { userId: string; name: string; at: number } }) {
+  const { claim, ask } = props;
+  const [busy, setBusy] = useState(false);
+  const { name, tag } = bookWords(claim.studentId, claim.unitId);
+  const answer = async (give: boolean) => {
+    setBusy(true);
+    if (give) await flushFocus();
+    const ok = await act(() => mutate(api.focus.answer, { ...ids(claim), give }));
+    setBusy(false);
+    if (!ok || !give) return;
+    // Hers now: this phone lets go without freeing it.
+    holding = null;
+    if (markable(openPaper) && openPaper.studentId === claim.studentId && openPaper.unitId === claim.unitId) openPaper = null;
+    emit();
+    toast(`${name}'s ${tag} is ${ask.name}'s now. Your marks went with it.`);
+  };
+  return (
+    <Sheet
+      title={`${ask.name} asks for ${name}'s ${tag}`}
+      sub="One corrector per book at a time"
+      onClose={() => void answer(false)}
+      foot={
+        <div class="row-actions">
+          <button type="button" class="btn ghost" disabled={busy} onClick={() => void answer(false)}>
+            Keep it
+          </button>
+          <button type="button" class="btn primary" disabled={busy} onClick={() => void answer(true)}>
+            Give it to {ask.name}
+          </button>
+        </div>
+      }
+    >
+      <p class="fc-ask-t">
+        Give it: your paper closes here and opens on {ask.name}'s phone, with every mark you gave. Keep it: {ask.name} is told
+        you are still correcting it.
+      </p>
+    </Sheet>
+  );
+}
+
+/** A book another corrector has open: ask her for it, wait for her answer, or let it be. */
+function AskSheet(props: { a: Ask }) {
+  const { a } = props;
+  const [busy, setBusy] = useState(false);
+  const close = async () => {
+    if (a.state === "asked") await mutate(api.focus.unask, ids(a)).catch(() => {});
+    asking = null;
+    emit();
+  };
+  const ask = async () => {
+    setBusy(true);
+    const r = await act(() => mutate(api.focus.ask, ids(a)));
+    setBusy(false);
+    if (r === "asked") {
+      asking = { ...a, state: "asked" };
+      emit();
+    } else if (r === "free") {
+      asking = null;
+      const v = viewOfPaper(latestViews, a);
+      if (v) openBook(v, serverNow());
+      else emit();
+    }
+  };
+  const words =
+    a.state === "kept"
+      ? `${a.who} is still correcting it. Tap another name, or ask again later.`
+      : a.state === "asked"
+        ? `Asked ${a.who}. It opens here as soon as she gives it to you.`
+        : `${a.who} is correcting it now. Two correctors on one book would mark it twice: ask her for it.`;
+  return (
+    <Sheet
+      title={a.state === "kept" ? `${a.who} keeps ${a.name}'s ${a.tag}` : `${a.who} has ${a.name}'s ${a.tag}`}
+      sub="One corrector per book at a time"
+      onClose={() => void close()}
+      foot={
+        <div class="row-actions">
+          <button type="button" class="btn ghost" onClick={() => void close()}>
+            {a.state === "asked" ? "Cancel" : "Close"}
+          </button>
+          {a.state !== "asked" && (
+            <button type="button" class="btn primary" disabled={busy} onClick={() => void ask()}>
+              Ask {a.who}
+            </button>
+          )}
+        </div>
+      }
+    >
+      <p class="fc-ask-t" role="status">
+        {words}
+      </p>
+    </Sheet>
   );
 }
 
@@ -760,11 +1008,14 @@ function NameBar(props: {
   grade: number;
   openId?: string;
   drafts: Draft[] | undefined;
+  claims: Claim[] | undefined;
+  me: string | null;
+  now: number;
   onPick: (v: View) => void;
   onAdd: () => void;
 }) {
   const { pills, drafts } = props;
-  const marking = (v: View) => !!v.mb && (drafts ?? []).some((d) => d.studentId === v.s._id && d.unitId === v.s.unitId && Object.keys(d.q).length > 0);
+  const marking = (v: View) => (drafts ?? []).some((d) => d.studentId === v.s._id && Object.keys(d.q).length > 0);
   return (
     <div class="fc-namerow">
       <button type="button" class="fc-add" aria-label={`Attendance: Grade ${props.grade}`} onClick={props.onAdd}>
@@ -779,11 +1030,15 @@ function NameBar(props: {
           {pills.map((p) => {
             const on = p.v.s._id === props.openId;
             const d = marking(p.v);
+            // Another corrector has one of his books open: her first letter; dim when it's his only book to correct.
+            const other = on ? null : heldOne(p.v, props.claims, props.me, props.now);
+            const busy = !!other && !!bookToOpen(p.v, props.claims, props.me, props.now).held;
             const words = [
               p.tone ? TONE_WORDS[p.tone] : "",
               p.waiting > 1 ? `${p.waiting} levels handed in` : "",
               d ? "marked part of the way" : "",
               p.home ? `${p.home} marked at home, to check` : "",
+              other ? `${other.name} is correcting ${busy ? "his book" : "one of his books"}` : "",
             ]
               .filter(Boolean)
               .join(", ");
@@ -791,7 +1046,7 @@ function NameBar(props: {
               <button
                 key={p.v.s._id}
                 type="button"
-                class={`fc-nm${p.tone ? ` ${p.tone}` : ""}${on ? " on" : ""}${d ? " d" : ""}`}
+                class={`fc-nm${p.tone ? ` ${p.tone}` : ""}${on ? " on" : ""}${d ? " d" : ""}${busy ? " fc-held" : ""}`}
                 data-u={p.tone === "red" || p.tone === "amber" ? p.tone : undefined}
                 aria-pressed={on}
                 aria-label={`${p.v.s.name}${words ? `: ${words}` : ""}`}
@@ -806,6 +1061,11 @@ function NameBar(props: {
                 {p.home > 0 && (
                   <i class="fc-nm-h" aria-hidden="true">
                     ⌂{p.home > 1 ? p.home : ""}
+                  </i>
+                )}
+                {other && (
+                  <i class="fc-nm-who" aria-hidden="true">
+                    {other.name.slice(0, 1).toUpperCase()}
                   </i>
                 )}
               </button>
@@ -1173,7 +1433,7 @@ function PaperHead(props: { v: View; later?: () => void; onUnit: () => void; onC
           </button>
         </div>
       </header>
-      <BookRow v={v} onUnits={props.onUnit} />
+      <BookRow v={v.home ?? v} open={bookId(v)} onUnits={props.onUnit} />
       {v.where === "absent" && <SignedOut v={v} />}
     </>
   );
@@ -1185,7 +1445,7 @@ function PaperHead(props: { v: View; later?: () => void; onUnit: () => void; onC
  * (no dialog). The book button first, like + on the names row, opens all the units of his grade (Move him, Books
  * given).
  */
-function BookRow(props: { v: View; onUnits: () => void }) {
+function BookRow(props: { v: View; open: string | undefined; onUnits: () => void }) {
   const { v } = props;
   const books = booksOf(v, (id) => unitNo(unitOf(id)?.code ?? ""));
   return (
@@ -1199,21 +1459,27 @@ function BookRow(props: { v: View; onUnits: () => void }) {
       {books.length === 0 ? (
         <p class="fc-none">No book yet: tap the book to choose his unit.</p>
       ) : (
-        <HRow as="nav" class="fc-books" label={`${v.s.name}'s books: tap one to correct it`} list={v.s._id} at={`${v.s.unitId}:${v.stage}`}>
+        <HRow as="nav" class="fc-books" label={`${v.s.name}'s books: tap one to correct it`} list={v.s._id} at={props.open}>
           {books.map((b) => {
             const u = unitOf(b.unitId);
             if (!u) return null;
             const name = `${b.stage === "fighter" ? "Theory book" : "Workbook"} ${unitNo(u.code)} ${u.ta || u.en}`;
+            const on = b.unitId === props.open;
+            // One of his books with a view (his book now, or one with something waiting): opens it here, he stays
+            // where he is. A book he hasn't started (given, nothing waiting): he moves to it, as before.
+            const bv = [v, ...v.others].find((x) => bookId(x) === b.unitId && x.stage === b.stage);
             return (
               <button
                 key={`${b.unitId}:${b.stage}`}
                 type="button"
-                class={`fc-bk${b.now ? " on" : ""}`}
+                class={`fc-bk${on ? " on" : ""}`}
                 data-u={b.waiting ? "amber" : undefined}
-                aria-pressed={b.now}
-                aria-label={`${name}${b.now ? ", on his paper now" : ""}${b.waiting ? `, ${b.waiting} level${b.waiting === 1 ? "" : "s"} handed in` : ""}`}
+                aria-pressed={on}
+                aria-label={`${name}${on ? ", on this paper" : ""}${b.now && !on ? ", his book now" : ""}${b.waiting ? `, ${b.waiting} level${b.waiting === 1 ? "" : "s"} handed in` : ""}`}
                 onClick={() => {
-                  if (!b.now) void moveTo(v, b.stage, u);
+                  if (on) return;
+                  if (bv) openBook(bv, serverNow());
+                  else void moveTo(v, b.stage, u);
                 }}
               >
                 <b class={`st-${b.stage}`}>{b.stage === "fighter" ? "F" : "M"}</b>
@@ -1275,7 +1541,7 @@ function LevelBar(props: { v: View; open: number | null; drafts: Draft[] | undef
   const newPart = (i: number) => i > 0 && mb.parts.some((p) => p.from === mb.levels[i].from);
   // One line that scrolls sideways: the open level stays in the middle (the ones after it in view).
   return (
-    <HRow class="fc-lvbar" label="Levels" list={`${v.s._id}:${v.s.unitId}`} at={props.open} idle="end">
+    <HRow class="fc-lvbar" label="Levels" list={`${v.s._id}:${bookId(v)}`} at={props.open} idle="end">
       {mb.levels.map((l, i) => {
         const look = levelLook(v, l, props.drafts);
         const pct = ms.byLevel[String(l.n)]?.pct ?? null;
@@ -1342,7 +1608,7 @@ function MasterPaperView(props: {
   const mb = v.mb!;
   const level = mb.levels.find((l) => l.n === paper.level) ?? null;
   // The answer key comes only while a paper is open (it never travels with the board).
-  const keyQ = useQuery<{ answers: KeyAnswer[] } | null>(api.catalog.key, { unitId: v.s.unitId });
+  const keyQ = useQuery<{ answers: KeyAnswer[] } | null>(api.catalog.key, { unitId: bookId(v) as Id<"units"> | undefined });
   const [clearing, setClearing] = useState(false);
   const lock = useRef(0);
   const marks = Object.keys(paper.given).length;
@@ -1360,7 +1626,7 @@ function MasterPaperView(props: {
   const canLater = !lvNow?.done && !lvNow?.fixed && v.where !== "absent" && !paper.saving && !paper.remark;
   const later = async () => {
     const n = level.n;
-    const r = await act(() => mutate(api.workbook.levelDone, { studentId: v.s._id, unitId: v.s.unitId!, level: n, by: currentRole() }));
+    const r = await act(() => mutate(api.workbook.levelDone, { studentId: v.s._id, unitId: bookId(v) as Id<"units">, level: n, by: currentRole() }));
     if (r) {
       void flushFocus();
       if (openPaper === paper || (openPaper?.kind === "master" && openPaper.studentId === v.s._id)) setPaper(null);
@@ -1912,14 +2178,14 @@ function Summary(props: { v: View; paper: MasterPaper; level: MasterLevel; each:
   const checked = async () => {
     if (!ready || busy) return;
     setBusy(true);
-    const r = await act(() => mutate(api.workbook.homeChecked, { studentId: v.s._id, unitId: v.s.unitId, level: level.n, by: currentRole() }));
+    const r = await act(() => mutate(api.workbook.homeChecked, { studentId: v.s._id, unitId: bookId(v) as Id<"units"> | undefined, level: level.n, by: currentRole() }));
     setBusy(false);
     if (!r) return;
     toast(`Checked: ${v.s.name}, Level ${level.n} (marked at home), ${sum} / ${level.max}.`);
     const still = openPaper?.kind === "master" && openPaper.studentId === paper.studentId && openPaper.level === level.n;
     if (!still) return;
     const next = autoLevel(v, latestDrafts, level.n);
-    setPaper(next && next.n !== level.n ? paperAt(v, next) : { kind: "over", studentId: v.s._id, unitId: v.s.unitId! });
+    setPaper(next && next.n !== level.n ? paperAt(v, next) : { kind: "over", studentId: v.s._id, unitId: bookId(v)! });
     window.scrollTo(0, 0);
   };
 
@@ -1938,7 +2204,7 @@ function Summary(props: { v: View; paper: MasterPaper; level: MasterLevel; each:
     // On to the next level by itself (he did two or three without correcting); after the last, the unit's marks. A
     // corrected level changed: back to the level to correct now.
     const next = remark ? autoLevel(v, latestDrafts) : nextOpen(v, level.n, res.pre);
-    setPaper(next && next.n !== level.n ? paperAt(v, next) : { kind: "over", studentId: v.s._id, unitId: v.s.unitId! });
+    setPaper(next && next.n !== level.n ? paperAt(v, next) : { kind: "over", studentId: v.s._id, unitId: bookId(v)! });
     window.scrollTo(0, 0);
   };
 
