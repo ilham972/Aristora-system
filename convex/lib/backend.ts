@@ -8,6 +8,7 @@ import { fighter, type Fighter, type MasterData } from "./book";
 import { slDay } from "./day";
 import { computeMaster, EMPTY_MASTER, homeToCheck, type MState } from "./master";
 import { computeStatus } from "./status";
+import { digestOf, type Digest } from "./ceo";
 
 export type Stage = "fighter" | "master" | "legend" | "sprint";
 export type BookStage = "fighter" | "master";
@@ -188,6 +189,7 @@ type LogInput = {
   q?: number;
   value?: string;
   ms?: number;
+  took?: number;
 };
 
 export async function log(
@@ -457,9 +459,44 @@ type Row = {
   max: number;
 };
 
+/** Events of one class read for the CEO page: a class has a few thousand; more than this is cut. */
+export const DIGEST_EVENTS = 8_000;
+
+/**
+ * One class for the CEO page (convex/lib/ceo.ts): its history, calls and visits read once. Kept in the report when the
+ * class ends; the class going on (and classes ended before 31 Oct 2026) are read again when the page asks.
+ */
+export async function readDigest(
+  ctx: QueryCtx,
+  session: Doc<"sessions">,
+  end: number,
+  got?: { events: Doc<"events">[]; calls: Doc<"calls">[] },
+): Promise<Digest> {
+  const events =
+    got?.events ??
+    (await ctx.db.query("events").withIndex("by_session", (q) => q.eq("sessionId", session._id)).take(DIGEST_EVENTS));
+  const calls = got?.calls ?? (await ctx.db.query("calls").withIndex("by_session", (q) => q.eq("sessionId", session._id)).collect());
+  const days = new Set([slDay(session.startedAt), slDay(end)]);
+  const visits: Doc<"attendance">[] = [];
+  for (const day of days) visits.push(...(await ctx.db.query("attendance").withIndex("by_day", (q) => q.eq("day", day)).collect()));
+  const students = await ctx.db.query("students").collect();
+  return digestOf({
+    start: session.startedAt,
+    end,
+    events: events.map((e) => ({ ...e, studentId: e.studentId as string | undefined })),
+    calls: calls.map((c) => ({ ...c, studentId: c.studentId as string })),
+    visits: visits
+      .filter((x) => x.inAt < end && (x.outAt ?? end) > session.startedAt)
+      .map((x) => ({ studentId: x.studentId as string, inAt: x.inAt, outAt: x.outAt })),
+    students: students.map((x) => ({ _id: x._id as string, stage: x.stage, demo: x.demo })),
+    stats: session.stats,
+  });
+}
+
 async function buildReport(ctx: MutationCtx, session: Doc<"sessions">, endAt: number) {
   const events = await ctx.db.query("events").withIndex("by_session", (q) => q.eq("sessionId", session._id)).collect();
   const calls = await ctx.db.query("calls").withIndex("by_session", (q) => q.eq("sessionId", session._id)).collect();
+  const digest = await readDigest(ctx, session, endAt, { events, calls });
 
   const rows = new Map<string, Row>();
   const row = (id: string, name: string) => {
@@ -546,5 +583,6 @@ async function buildReport(ctx: MutationCtx, session: Doc<"sessions">, endAt: nu
     theory: sittings("theory"),
     evaluation: { ...sittings("evaluation"), explained },
     students: list,
+    digest,
   };
 }

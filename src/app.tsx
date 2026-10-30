@@ -7,6 +7,7 @@ import { buildViews, evalQueue, fmtClock, isWalking, liveSession, theoryGroups, 
 import { Focus } from "./focus";
 import { EvaluationPage } from "./evalFocus";
 import { TheoryTab } from "./theoryFocus";
+import { CeoPage } from "./ceo";
 import { Progress } from "./progress";
 import { Settings } from "./settings";
 import { alertsState, armAlerts, listenForTaps, ring, useAlertsState, type AlertKind } from "./sound";
@@ -21,7 +22,7 @@ import { Sheet, Toasts } from "./ui";
  * everyone, with Progress. A phone with none of the jobs has no bottom bar: Class is its home.
  */
 type TabId = "correction" | "theory" | "evaluation";
-type Page = "board" | "class" | "settings" | "progress";
+type Page = "board" | "class" | "settings" | "progress" | "ceo";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "correction", label: "Correction" },
@@ -90,13 +91,15 @@ export function App() {
   // Correction (marking papers, and signing students in with its +) is Correction's job; Progress needs Reports.
   const canCorrect = may("correction");
   const canProgress = may("reports");
+  // The CEO page: the owner only (it shows each teacher's own numbers and his money).
+  const isOwner = user?.role === "owner";
   // Home: the bottom tab, else Class.
   const home: Home = tabs.length ? "board" : "class";
   const wanted: Page = page === "board" && !tabs.length ? home : page;
-  const shown: Page = wanted === "progress" && !canProgress ? backTo : wanted;
+  const shown: Page = (wanted === "progress" && !canProgress) || (wanted === "ceo" && !isOwner) ? backTo : wanted;
   const base: Home = shown === "class" || shown === "board" ? shown : backTo;
   /** Open a page from the top bar; the same button again goes back. */
-  const toggle = (p: "settings" | "progress") => {
+  const toggle = (p: "settings" | "progress" | "ceo") => {
     if (shown === p) {
       setPage(backTo);
       return;
@@ -261,6 +264,31 @@ export function App() {
                 </svg>
               </button>
             )}
+            {isOwner && (
+              <button
+                type="button"
+                class={`att-btn ceo-btn${shown === "ceo" ? " on" : ""}`}
+                aria-pressed={shown === "ceo"}
+                aria-label="CEO: the whole business"
+                onClick={() => toggle("ceo")}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  width="21"
+                  height="21"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3.5 17a8.5 8.5 0 1 1 17 0" />
+                  <path d="M12 17l4.2-5.6" />
+                  <circle cx="12" cy="17" r="1.4" fill="currentColor" />
+                </svg>
+              </button>
+            )}
           </div>
           <div class="top-meta">
             <TopStat
@@ -311,6 +339,8 @@ export function App() {
         <ClassPage board={board} views={views} now={now} job={role} onAttendance={() => setAttOpen(true)} />
       ) : shown === "progress" ? (
         <Progress board={board} now={now} />
+      ) : shown === "ceo" ? (
+        <CeoPage board={board} views={views} now={now} />
       ) : tab === "correction" ? (
         <Focus board={board} views={views} now={now} />
       ) : tab === "evaluation" ? (

@@ -9,6 +9,8 @@ declare const __CONVEX_URL__: string;
 type TestBackend = {
   subscribe(name: string, args: unknown, cb: (v: unknown) => void, onError: (e: unknown) => void): () => void;
   mutation(name: string, args: unknown): Promise<unknown>;
+  /** One answer to a query (the test harness has it; older fakes don't). */
+  query?(name: string, args: unknown): Promise<unknown>;
 };
 
 const testBackend = (globalThis as { __ARISTORA_TEST_BACKEND__?: TestBackend }).__ARISTORA_TEST_BACKEND__;
@@ -98,6 +100,41 @@ export function subscribe<Q extends FunctionReference<"query">>(
   }
   const unsub = convex().onUpdate(query, a, onValue, (e) => onError(e));
   return () => unsub();
+}
+
+/**
+ * A query read once, not watched (the CEO page: a live query would run again on every tap of every teacher).
+ */
+export async function fetchOnce<Q extends FunctionReference<"query">>(query: Q, args: FunctionArgs<Q>): Promise<FunctionReturnType<Q>> {
+  const a = withToken(args);
+  if (testBackend?.query) return (await testBackend.query(getFunctionName(query), a)) as FunctionReturnType<Q>;
+  if (testBackend) {
+    const tb = testBackend;
+    return await new Promise<FunctionReturnType<Q>>((ok, no) => {
+      let done = false;
+      let off: (() => void) | null = null;
+      const finish = () => {
+        done = true;
+        queueMicrotask(() => off?.());
+      };
+      off = tb.subscribe(
+        getFunctionName(query),
+        a,
+        (v) => {
+          if (done) return;
+          finish();
+          ok(v as FunctionReturnType<Q>);
+        },
+        (e) => {
+          if (done) return;
+          finish();
+          no(e);
+        },
+      );
+      if (done) off();
+    });
+  }
+  return (await convex().query(query, a)) as FunctionReturnType<Q>;
 }
 
 export async function mutate<M extends FunctionReference<"mutation">>(

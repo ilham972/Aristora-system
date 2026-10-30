@@ -162,3 +162,127 @@ export const student = query({
     return { cells, given };
   },
 });
+
+/**
+ * One student's sheet (Progress → his name, the CEO page's lists): everything about him for the owner, and the parents'
+ * WhatsApp image (src/studentReport.ts). His visits, every book of his (how far, marks, each level's dates, when
+ * teachers explained or taught his questions) and his room visits. Read only while the sheet is open.
+ */
+export const report = query({
+  args: { token: v.optional(v.string()), studentId: v.id("students") },
+  handler: async (ctx, args) => {
+    await viewer(ctx, args.token, "reports");
+    const s = await ctx.db.get(args.studentId);
+    if (!s) return null;
+    const now = Date.now();
+    const today = slDay(now);
+    const grade = s.grade ?? null;
+    const gradeUnits =
+      grade === null ? [] : await ctx.db.query("units").withIndex("by_grade", (q) => q.eq("grade", grade)).collect();
+    const visits = (await ctx.db.query("attendance").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()).map((x) => ({
+      day: x.day,
+      inAt: x.inAt,
+      outAt: x.outAt ?? null,
+    }));
+    const visitDays = new Set(visits.map((x) => x.day));
+    const bookOf = async (unitId: Id<"units">, stage: "fighter" | "master") =>
+      await ctx.db
+        .query("books")
+        .withIndex("by_unit_stage", (q) => q.eq("unitId", unitId).eq("stage", stage))
+        .first();
+
+    const units = new Map<string, Doc<"units">>(gradeUnits.map((u) => [u._id as string, u]));
+    const rows = [];
+    for (const p of await ctx.db.query("progress").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) {
+      const unit = units.get(p.unitId) ?? (await ctx.db.get(p.unitId));
+      const book = await bookOf(p.unitId, p.stage);
+      if (!unit || !book) continue;
+      const current = s.unitId === p.unitId && s.stage === p.stage;
+      if (book.data.kind === "master" && p.stage === "master") {
+        const m = masterState(p);
+        const lastT = Math.max(p.updatedAt, ...Object.values(m.lv).map((l) => l?.fixed ?? l?.done ?? 0));
+        const cell = summarizeMaster(m, book.data, today, daysBetween(visitDays, slDay(p.startedAt), current ? today : slDay(lastT)));
+        const st = computeMaster(m, book.data);
+        rows.push({
+          unitId: p.unitId,
+          stage: "master" as const,
+          current,
+          startedAt: p.startedAt,
+          m: cell,
+          levels: book.data.levels.map((l) => {
+            const lv = m.lv[String(l.n)];
+            return { n: l.n, max: l.max, done: lv?.done ?? null, fixed: lv?.fixed ?? null, got: lv?.got ?? null, pre: !!lv?.pre, home: lv?.home ?? null };
+          }),
+          // When teachers helped: each question explained (Evaluation) or taught (Theory), and sent to Theory.
+          explained: Object.values(m.q).flatMap((r) => (r?.x ? [r.x] : [])),
+          taught: Object.values(m.q).flatMap((r) => (r?.tt ? [r.tt] : [])),
+          waiting: { levels: st.waiting.length, evaluation: st.pending.length, theory: st.theory.length },
+        });
+      } else if (book.data.kind === "fighter" && p.stage === "fighter") {
+        const f = fighter(book.data);
+        const marks = p.marks as Marks;
+        const until = current ? today : slDay(p.updatedAt);
+        const st = computeStatus(marks, f);
+        rows.push({
+          unitId: p.unitId,
+          stage: "fighter" as const,
+          current,
+          startedAt: p.startedAt,
+          f: summarizeFighter(marks, f, today, daysBetween(visitDays, slDay(p.startedAt), until)),
+          right: Object.values(marks).flatMap((x) => (x?.s === "right" ? [x.t] : [])),
+          explained: Object.values(marks).flatMap((x) => (x?.s === "explained" ? [x.t] : [])),
+          taught: Object.values(marks).flatMap((x) => (x?.s === "taught" ? [x.t] : [])),
+          waiting: { levels: 0, evaluation: st.pending.length, theory: 0 },
+        });
+      }
+      if (!units.has(p.unitId)) units.set(p.unitId, unit);
+    }
+
+    const calls = (
+      await ctx.db
+        .query("calls")
+        .withIndex("by_student_status", (q) => q.eq("studentId", s._id).eq("status", "done"))
+        .order("desc")
+        .take(300)
+    ).map((c) => ({ kind: c.kind, start: c.arrivedAt ?? c.sentAt ?? c.createdAt, end: c.endedAt ?? null }));
+
+    const bookInfo = async (u: Doc<"units">) => {
+      const mb = await bookOf(u._id, "master");
+      const fb = await bookOf(u._id, "fighter");
+      return {
+        _id: u._id,
+        grade: u.grade,
+        code: u.code,
+        en: u.en,
+        ta: u.ta,
+        term: u.term,
+        order: u.order,
+        master: mb && mb.data.kind === "master" ? { levels: mb.data.levels.length, total: bookTotal(mb.data) } : null,
+        fighter: fb && fb.data.kind === "fighter" ? { solo: fb.data.sections.reduce((a, x) => a + x.solo.length, 0) } : null,
+      };
+    };
+    const unitList = [];
+    for (const u of [...units.values()].sort((a, b) => a.grade - b.grade || a.order - b.order)) unitList.push(await bookInfo(u));
+
+    return {
+      now,
+      today,
+      student: {
+        _id: s._id,
+        name: s.name,
+        grade,
+        term: s.term ?? null,
+        stage: s.stage ?? null,
+        unitId: s.unitId ?? null,
+        present: s.present,
+        archived: s.archived,
+        lastInAt: s.lastInAt ?? null,
+        created: s._creationTime,
+      },
+      units: unitList,
+      rows,
+      visits,
+      calls,
+    };
+  },
+});

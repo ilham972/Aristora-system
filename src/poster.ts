@@ -57,8 +57,8 @@ export function paginate(lanes: Lane[]): PosterPage[] {
   return pages.filter((p, k) => p.blocks.length || k === 0);
 }
 
-const FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Tamil", "Tamil Sangam MN", "Nirmala UI", sans-serif';
-const C = {
+export const FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Tamil", "Tamil Sangam MN", "Nirmala UI", sans-serif';
+export const C = {
   navy: "#16213e",
   ink: "#16213e",
   ink2: "#4c5770",
@@ -78,7 +78,7 @@ const C = {
   bronze: "#d99a5b",
 };
 const STAGE_COLOR: Record<Stage, string> = { fighter: C.navy, master: "#b7791f", legend: "#8a3ffc", sprint: C.red };
-const TA_DAYS = ["ஞாயிறு", "திங்கள்", "செவ்வாய்", "புதன்", "வியாழன்", "வெள்ளி", "சனி"];
+export const TA_DAYS = ["ஞாயிறு", "திங்கள்", "செவ்வாய்", "புதன்", "வியாழன்", "வெள்ளி", "சனி"];
 const EN_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -96,7 +96,7 @@ export async function drawPoster(b: PBoard, opts: PosterOpts): Promise<HTMLCanva
   return pages.map((p, i) => drawPage(b, p, i, pages.length, opts, logo));
 }
 
-function loadImage(src: string): Promise<HTMLImageElement> {
+export function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((ok, no) => {
     const im = new Image();
     im.onload = () => ok(im);
@@ -105,9 +105,9 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
-type G = CanvasRenderingContext2D;
+export type G = CanvasRenderingContext2D;
 
-function text(g: G, s: string, x: number, y: number, font: string, color: string, align: CanvasTextAlign = "left", maxW?: number) {
+export function text(g: G, s: string, x: number, y: number, font: string, color: string, align: CanvasTextAlign = "left", maxW?: number) {
   g.font = `${font} ${FONT}`;
   g.fillStyle = color;
   g.textAlign = align;
@@ -115,12 +115,12 @@ function text(g: G, s: string, x: number, y: number, font: string, color: string
   g.fillText(maxW ? fit(g, s, maxW) : s, x, y);
 }
 
-function width(g: G, s: string, font: string): number {
+export function width(g: G, s: string, font: string): number {
   g.font = `${font} ${FONT}`;
   return g.measureText(s).width;
 }
 
-function fit(g: G, s: string, maxW: number): string {
+export function fit(g: G, s: string, maxW: number): string {
   if (g.measureText(s).width <= maxW) return s;
   let t = s;
   while (t.length > 1 && g.measureText(`${t}…`).width > maxW) t = t.slice(0, -1);
@@ -128,7 +128,7 @@ function fit(g: G, s: string, maxW: number): string {
 }
 
 /** A rounded rectangle path (no roundRect on iOS 15 Safari). */
-function rr(g: G, x: number, y: number, w: number, h: number, r: number) {
+export function rr(g: G, x: number, y: number, w: number, h: number, r: number) {
   const k = Math.min(r, w / 2, h / 2);
   g.beginPath();
   g.moveTo(x + k, y);
@@ -139,7 +139,7 @@ function rr(g: G, x: number, y: number, w: number, h: number, r: number) {
   g.closePath();
 }
 
-function hatch(g: G): CanvasPattern | string {
+export function hatch(g: G): CanvasPattern | string {
   const p = document.createElement("canvas");
   p.width = 12;
   p.height = 12;
@@ -160,7 +160,7 @@ function hatch(g: G): CanvasPattern | string {
   return g.createPattern(p, "repeat") ?? C.amber;
 }
 
-function pctColor(p: number): string {
+export function pctColor(p: number): string {
   return p >= 80 ? C.green : p >= 50 ? C.amber : C.red;
 }
 

@@ -172,6 +172,7 @@ ul {
 }
 /* Class and Progress: icons in the top bar (Correction moved to the bottom bar, 30 Oct 2026). */
 .prog-btn,
+.ceo-btn,
 .class-btn {
   padding: 0 10px;
 }
@@ -6622,4 +6623,886 @@ body.locked.tp-padded .toasts {
   margin: 0;
   color: var(--ink-2);
   line-height: 1.45;
+}
+
+
+/* ---------- The CEO page (owner only, 31 Oct 2026; src/ceo.tsx) ----------
+   Cards like the Progress page; numbers in the condensed face; red / amber / green only when they mean
+   act now / watch / fine, always with words. */
+.ceo {
+  padding-bottom: 24px;
+}
+.ceo-tabs {
+  display: flex;
+  width: 100%;
+}
+.ceo-tabs .segc-b {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 4px;
+}
+.ceo-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: rise 0.22s ease-out both;
+}
+.ceo-card h3 {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font: 700 16px/1.25 var(--font);
+}
+.ceo-card h3 small {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.ceo-card h3 .ceo-link {
+  margin-left: auto;
+}
+.ceo-card p {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.4;
+}
+.ceo-card p small {
+  color: var(--ink-3);
+  font-weight: 600;
+}
+.ceo-h {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font: 700 18px/1.2 var(--font);
+}
+.ceo-h small {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.ceo-sub {
+  color: var(--ink-2);
+  font-size: 13.5px !important;
+}
+.ceo-note {
+  color: var(--ink-3);
+  font-size: 12.5px !important;
+  font-weight: 600;
+}
+.ceo-mix {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.ceo-upd {
+  margin: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+.ceo-link {
+  border: 0;
+  background: none;
+  padding: 6px 4px;
+  font: 700 13.5px/1 var(--font);
+  color: var(--theory-ink);
+  text-decoration: underline;
+}
+.ceo-link:disabled {
+  color: var(--ink-3);
+}
+/* The status dot: always next to words that say the same thing. */
+.ceo-dot {
+  flex: none;
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ink-3);
+}
+.ceo-dot.t-red {
+  background: var(--red);
+}
+.ceo-dot.t-amber {
+  background: var(--amber);
+}
+.ceo-dot.t-green {
+  background: var(--green);
+}
+.ceo-dot.t-grey {
+  background: var(--line);
+}
+.ceo-says {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ceo-say {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-size: 14.5px;
+  font-weight: 700;
+  line-height: 1.35;
+  background: var(--card);
+  border: 1px solid var(--line);
+}
+.ceo-say .ceo-dot {
+  transform: translateY(-1px);
+}
+.ceo-say.t-red {
+  background: var(--red-soft);
+  border-color: transparent;
+  color: var(--red-ink);
+}
+.ceo-say.t-amber {
+  background: var(--amber-soft);
+  border-color: transparent;
+  color: var(--amber-ink);
+}
+.ceo-say.t-green {
+  background: var(--green-soft);
+  border-color: transparent;
+  color: var(--green-ink);
+}
+/* Tiles: a number, what it counts, one line of context. */
+.ceo-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.ceo-tiles.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.ceo-tile {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+}
+.ceo-card .ceo-tile {
+  background: var(--ground);
+  border-color: transparent;
+}
+.ceo-tile b {
+  font: 700 26px/1.05 var(--cond);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ceo-tiles.money .ceo-tile b {
+  font-size: 21px;
+}
+.ceo-tile span {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.ceo-tile small {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+  line-height: 1.25;
+}
+.ceo-tile.t-red {
+  background: var(--red-soft);
+  border-color: transparent;
+}
+.ceo-tile.t-red b,
+.ceo-tile.t-red small {
+  color: var(--red-ink);
+}
+.ceo-tile.t-amber {
+  background: var(--amber-soft);
+  border-color: transparent;
+}
+.ceo-tile.t-amber b,
+.ceo-tile.t-amber small {
+  color: var(--amber-ink);
+}
+.ceo-tile.t-green b {
+  color: var(--green-ink);
+}
+@media (max-width: 345px) {
+  .ceo-tiles.three .ceo-tile {
+    padding: 8px 7px;
+  }
+  .ceo-tiles.three .ceo-tile b {
+    font-size: 23px;
+  }
+  .ceo-tile span {
+    font-size: 12.5px;
+  }
+}
+/* The idle number, and the team's capacity: one big number each. */
+.ceo-hero,
+.ceo-cap {
+  gap: 2px;
+}
+.ceo-hero span,
+.ceo-cap span {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+.ceo-hero b,
+.ceo-cap b {
+  font: 700 40px/1.05 var(--cond);
+}
+.ceo-cap b {
+  font-size: 30px;
+}
+.ceo-hero small,
+.ceo-cap small {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+  line-height: 1.35;
+}
+.ceo-hero.t-red {
+  border: 1.5px solid var(--red);
+  background: var(--red-soft);
+}
+.ceo-hero.t-red b {
+  color: var(--red-ink);
+}
+.ceo-hero.t-amber {
+  border: 1.5px solid var(--amber);
+  background: var(--amber-soft);
+}
+.ceo-hero.t-amber b {
+  color: var(--amber-ink);
+}
+.ceo-hero.t-green b {
+  color: var(--green-ink);
+}
+.ceo-why {
+  color: var(--ink) !important;
+}
+.ceo-sure {
+  margin: 0;
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-size: 13.5px;
+  font-weight: 700;
+  background: var(--card);
+  border: 1px dashed var(--line);
+  color: var(--ink-2);
+}
+.ceo-sure.s-none,
+.ceo-sure.s-early {
+  background: var(--yellow-soft);
+  border: 0;
+  color: var(--yellow-ink);
+}
+/* A room right now, and a room's verdict. */
+.ceo-room header,
+.ceo-verdict header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.ceo-room header h3,
+.ceo-verdict header h3 {
+  flex: none;
+}
+.ceo-rn,
+.ceo-verdict header b {
+  margin-left: auto;
+  min-width: 0;
+  text-align: right;
+  font-size: 14.5px;
+  font-weight: 700;
+}
+.ceo-room.r-correction {
+  border-left: 5px solid var(--ink);
+}
+.ceo-room.r-evaluation {
+  border-left: 5px solid var(--evaluation);
+}
+.ceo-room.r-theory {
+  border-left: 5px solid var(--theory);
+}
+.ceo-verdict.t-red {
+  border: 1.5px solid var(--red);
+}
+.ceo-verdict.t-red header b {
+  color: var(--red-ink);
+}
+.ceo-verdict.t-amber {
+  border: 1.5px solid var(--amber);
+}
+.ceo-verdict.t-amber header b {
+  color: var(--amber-ink);
+}
+.ceo-verdict.t-green header b {
+  color: var(--green-ink);
+}
+.ceo-verdict.t-grey header b {
+  color: var(--ink-3);
+}
+.ceo-plus {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--ground);
+  color: var(--ink) !important;
+}
+/* The busy share of each room: a thin bar. */
+.ceo-meter {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr) 42px;
+  grid-template-areas:
+    "l b v"
+    "w w w";
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 2px;
+}
+.ceo-ml {
+  grid-area: l;
+  font-size: 14px;
+  font-weight: 700;
+}
+.ceo-mb {
+  grid-area: b;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--line-2);
+  overflow: hidden;
+}
+.ceo-mb i {
+  display: block;
+  height: 100%;
+  border-radius: 5px;
+  background: var(--ink-3);
+}
+.ceo-mb i.t-green {
+  background: var(--green);
+}
+.ceo-mb i.t-amber {
+  background: var(--amber);
+}
+.ceo-mb i.t-red {
+  background: var(--red);
+}
+.ceo-mv {
+  grid-area: v;
+  text-align: right;
+  font: 700 16px/1 var(--cond);
+}
+.ceo-mw {
+  grid-area: w;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+/* Bars: columns from one baseline, thin, rounded at the top; tap one to read it. */
+.ceo-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ceo-plot {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 56px;
+  border-bottom: 1px solid var(--line);
+}
+.ceo-col {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  padding: 0 1px;
+  border: 0;
+  background: none;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.ceo-col i {
+  display: block;
+  width: 100%;
+  max-width: 24px;
+  border-radius: 4px 4px 0 0;
+  background: var(--ink-2);
+}
+.ceo-col i.t-red {
+  background: var(--red);
+}
+.ceo-col i.t-amber {
+  background: var(--amber);
+}
+.ceo-col i.t-green {
+  background: var(--green);
+}
+.ceo-col i.t-grey {
+  background: var(--line);
+}
+.ceo-col.sel {
+  background: var(--line-2);
+  border-radius: 4px 4px 0 0;
+}
+.ceo-xm {
+  display: flex;
+  gap: 2px;
+}
+.ceo-xm span {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: visible;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-3);
+  text-align: center;
+}
+.ceo-xm span:first-child {
+  text-align: left;
+}
+.ceo-xm span:last-child {
+  text-align: right;
+}
+.ceo-read {
+  min-height: 1.4em;
+  font-size: 13px !important;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+.ceo-lrow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ceo-lrow .ceo-plot {
+  height: 40px;
+}
+.ceo-lk {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+.ceo-lk small {
+  font-weight: 600;
+  color: var(--ink-3);
+}
+/* Names to tap: each opens his whole sheet. */
+.ceo-names {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ceo-names li + li {
+  border-top: 1px solid var(--line-2);
+}
+.ceo-nm {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 9px 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  font: inherit;
+  color: var(--ink);
+}
+.ceo-nm b {
+  flex: none;
+  max-width: 45%;
+  font: 700 16px/1.2 var(--cond);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ceo-nm span {
+  min-width: 0;
+  margin-left: auto;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+/* Each person, and small tables. */
+.ceo-people {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ceo-people li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 8px;
+}
+.ceo-people b {
+  font: 700 16px/1.2 var(--cond);
+}
+.ceo-people small {
+  grid-column: 1 / -1;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.ceo-tag {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--role-soft);
+  color: var(--ink);
+}
+.ceo-tag.r-evaluation {
+  background: var(--evaluation-soft);
+  color: var(--evaluation-ink);
+}
+.ceo-tag.r-theory {
+  background: var(--theory-soft);
+  color: var(--theory-ink);
+}
+.ceo-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+.ceo-table th {
+  text-align: right;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-2);
+  padding: 4px 4px 6px;
+  border-bottom: 1px solid var(--line);
+}
+.ceo-table td {
+  text-align: right;
+  padding: 6px 4px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--line-2);
+}
+.ceo-table th:first-child,
+.ceo-table td:first-child {
+  text-align: left;
+}
+.ceo-table tr.sum td {
+  font-weight: 800;
+}
+.ceo-table td.t-red {
+  color: var(--red-ink);
+  font-weight: 800;
+}
+.ceo-table td.t-amber {
+  color: var(--amber-ink);
+  font-weight: 800;
+}
+.ceo-mx th,
+.ceo-mx td {
+  text-align: center;
+}
+.ceo-facts {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+}
+.ceo-facts small {
+  color: var(--ink-3);
+  font-weight: 600;
+}
+.ceo-money label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+.ceo-money input {
+  height: 44px;
+  padding: 0 12px;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  font: 700 17px/1 var(--font);
+  color: var(--ink);
+  background: var(--card);
+}
+
+/* ---------- One student's sheet (src/studentSheet.tsx): Progress → his name ---------- */
+.pg-open {
+  border: 0;
+  background: none;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  text-align: left;
+}
+.pg-nm {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-bottom: 3px; /* room for the underline inside the ellipsis' clip */
+}
+.sr {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sr-card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sr-card h3 {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  font: 700 15.5px/1.25 var(--font);
+}
+.sr-card h3 small {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.sr-line {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.sr-wait {
+  color: var(--amber-ink);
+}
+.sr-att {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.sr-big {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.sr-big b {
+  font: 700 40px/1 var(--cond);
+}
+.sr-big span {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+.sr-grid {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(7, 18px);
+  gap: 4px;
+}
+.sr-grid i {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--line-2);
+}
+.sr-grid i.sr-gh {
+  height: auto;
+  background: none;
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-3);
+  text-align: center;
+}
+.sr-grid i.came {
+  background: var(--green);
+}
+.sr-grid i.future {
+  background: none;
+  border: 1.5px dashed var(--line);
+}
+.sr-units {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.sr-units li + li {
+  border-top: 1px solid var(--line-2);
+}
+.sr-unit {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  grid-template-areas:
+    "n t v"
+    "n b b";
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 4px;
+  padding: 7px 0;
+}
+.sr-unit.cur {
+  margin: 0 -6px;
+  padding: 7px 6px;
+  border-radius: 10px;
+  background: var(--role-soft);
+}
+.sr-un {
+  grid-area: n;
+  align-self: start;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  font: 700 14px/1 var(--cond);
+  background: var(--line-2);
+}
+.sr-unit.cur .sr-un {
+  background: var(--ink);
+  color: #fff;
+}
+.sr-ut {
+  grid-area: t;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.sr-ut b {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: break-word;
+}
+.sr-ut small {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sr-ub {
+  grid-area: b;
+  min-width: 0;
+}
+.sr-uv {
+  grid-area: v;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.sr-uv b {
+  font: 700 16px/1.1 var(--cond);
+}
+.sr-uv small {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-3);
+}
+.sr-pct.good {
+  color: var(--green-ink);
+}
+.sr-pct.mid {
+  color: var(--amber-ink);
+}
+.sr-pct.low {
+  color: var(--red-ink);
+}
+.sr-unit.big .sr-ut b {
+  font-size: 15.5px;
+}
+.sr-nums {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  gap: 8px;
+}
+.sr-num {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: var(--ground);
+}
+.sr-num b {
+  font: 700 24px/1.05 var(--cond);
+}
+.sr-num span {
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.sr-num small {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.sr-rank {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+.sr-note {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+.sr-note textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  font: 600 15px/1.35 var(--font);
+  color: var(--ink);
+  resize: vertical;
+}
+.tg-name .pg-open {
+  max-width: 100%;
+  padding-bottom: 3px;
+  font: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* A name that opens his sheet: a quiet underline says it can be tapped. */
+.lr-name.pg-open .pg-nm,
+.tg-name .pg-open {
+  text-decoration: underline;
+  text-decoration-color: var(--ink-3);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
 }

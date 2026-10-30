@@ -99,6 +99,10 @@ EOF
   phone needs (the rooms' scores) live on the session doc, which the board already sends: never a query over
   `events` per tap (thousands of rows a class, every phone, every change). `more` only carries books with something
   waiting, for students in class: keep it that way.
+- The CEO page reads `ceo.overview` with `fetchOnce` (one answer, again every 5 minutes), never `useQuery`: it reads a
+  class's events, and a live query would run again on every tap of every teacher. Its classes are digests kept in the
+  report (`report.digest`, v 1): change the digest's shape → raise `v` (old reports are then read again, 3 at most) and
+  keep `sumDigests` adding every field. Demo students never count there: an e2e makes them real (`demo: false`).
 - A Master student can sit in several Theory groups: count students with `theoryMembers()`, never by summing.
 - Master lost marks count only on corrected (`fixed`) levels: `computeMaster` skips the rest.
 - The convex-test clock adds about 1 ms per mutation: compare times within half a second. Fake the date

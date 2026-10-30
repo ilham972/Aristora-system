@@ -40,6 +40,8 @@ async function masterWork(ctx: MutationCtx, student: Doc<"students">, unitId: Id
   return { unit, book: asMaster(book), progress, m: copy(masterState(progress)) };
 }
 const teachWork = masterWork;
+/** A draft older than this was a level left half-marked for a long time: its time isn't kept (the CEO page). */
+const TOOK_KEEP_MS = 60 * 60_000;
 
 function copy(m: MState): MState {
   return {
@@ -223,6 +225,13 @@ export const correct = mutation({
     // A level marked at home stays one (⌂); the corrector's marks on it are her check of his working.
     m.lv[key] = { done: doneAt, fixed: now, by, got, ...(lv.home ? { home: lv.home, hc: now } : {}) };
     const pre = markBefore(m, book, l.n, now);
+    // How long it took to correct (the CEO page's Correction minutes): from the draft's first mark to this Save.
+    const draft = again
+      ? null
+      : (await ctx.db.query("drafts").withIndex("by_student", (q) => q.eq("studentId", student._id)).collect()).find(
+          (d) => d.unitId === unit._id && d.level === l.n,
+        );
+    const took = draft ? Math.max(0, now - draft._creationTime) : undefined;
     const session = await currentSession(ctx, now);
     await ctx.db.patch(progress._id, { m, updatedAt: now });
     await ctx.db.patch(student._id, { lastActivityAt: now });
@@ -234,6 +243,7 @@ export const correct = mutation({
       unit: unit.key,
       value: `${key} ${got}/${l.max}`,
       ms: again ? undefined : now - doneAt,
+      ...(took !== undefined && took <= TOOK_KEEP_MS ? { took } : {}),
     });
     await refresh(ctx, student._id, now, session);
     await touch(ctx, session, now);

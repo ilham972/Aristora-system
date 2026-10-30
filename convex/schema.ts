@@ -323,6 +323,8 @@ export default defineSchema({
     q: v.optional(v.number()),
     value: v.optional(v.string()),
     ms: v.optional(v.number()),
+    /** A workbook level corrected on the Correction page: ms from its first mark to Save (31 Oct 2026, the CEO page). */
+    took: v.optional(v.number()),
     /** The signed-in person who did it (by = the tab it was done from). */
     who: v.optional(v.string()),
   })

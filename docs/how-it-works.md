@@ -322,6 +322,60 @@ term's units (furthest book per square; tap for details). Pace = per class day h
 marks and ranking, after my warning; switches Marks %, Ranking, Only who came today): 1080 × 1350 PNGs, Tamil first;
 Share = the phone's share sheet (WhatsApp), Save downloads.
 
+**One student's sheet (31 Oct 2026, his ask: "the individual progress sheet I share on WhatsApp to the parents").**
+Progress → tap any name (Units race or Term grid; also the names on the CEO page) → `StudentSheet`
+(`src/studentSheet.tsx`, full page): his book now (bar, level, pace), attendance (days in the last 4 weeks, a 4 × 7 dot
+grid Monday first, last came, hours, minutes a visit), his term's units (bar, done/of, %, ✓), this week vs last week
+(levels, marks, days), teachers' help in 4 weeks (questions explained / taught, Evaluation visits, Theory lessons),
+what waits now, best and weakest unit. Built by `buildModel` (`src/studentReport.ts`) from `progress.report` (owner +
+Reports; read only while open). **Share with parents**: one 1080 × 1350 image, Tamil first (`drawReport`, the poster's
+drawing helpers): header with the owl and his name, attendance grid, now + level bar, the term as unit squares (fill =
+how far, ✓, ring = now), this week, optional rank, optional note, footer. Switches: Marks % (on), **Rank in his unit**
+(off by default, his choice 31 Oct: "2nd of 3 on Unit 8" from the Progress race, `RankOf` reads `progress.board` only
+when on), a note (never saved, wraps to 4 lines). Share = the phone's share sheet (`shareFiles`), Save downloads
+`ARISTORA-<name>-<day>.png`.
+
+**The CEO page (owner only, 31 Oct 2026, his voice note: "I want to think like a CEO").** A gauge icon in the top bar
+after Progress (`ceo-btn`, owner only: per-teacher numbers and money). Built around his decisions, not every number.
+Four tabs (`aristora.ceoTab`):
+- **Now** (from the board every phone already has, no extra reads; `nowOf` in `src/ceoData.ts`): up to 3 advice lines
+  (`adviceOf`: who has no work and which room can free them, Correction behind → "Evaluation is free: she can correct",
+  Theory lessons waiting while Evaluation is free → Teach, a walk that never arrived, calls not sent); tiles in class /
+  no work / running out; a card per room: what waits (levels / questions + students / students + lessons), minutes of
+  work at the measured speed (else his guesses 3 min a level, 2 a question, 12 a lesson, marked "guess"), how long its
+  usual people take to clear it, the oldest wait, how many have no work until then, with her / on the way; the no-work
+  names (tap = his sheet); grades here; today so far.
+- **Today** (the day's classes summed): the headline **idle minutes per student-hour** (under 3 good, 3–6 watch, 6+
+  bad; the usual = the middle of the earlier days; what they waited for), tiles (came, student-hours, most at once,
+  levels corrected/handed in/%, explained, lessons, answers marked, wait for Correction, walks that never arrived), each
+  room's busy share as a meter (over 85% = the queue grows), the class every 15 minutes as three small bar rows on one
+  time line (in class / no work / levels waiting; tap = one reading for that moment), each person (room, minutes busy,
+  levels with minutes each, lessons, students), the last class days (idle bars + table).
+- **Team** (the last 10 finished class days, `loadOf`): how sure (none / early < 3 classes or 15 student-hours / fair /
+  good ≥ 8), what the team can carry (students at once at 80% busy, the limit room, students a day = at once × class
+  length ÷ stay, average and busiest), a verdict per room (`verdictOf`: red "Needs another person" at 85% busy or 6
+  idle min an hour waiting for it; amber "Near the limit" at 65% / 3; green "OK: room for ~N more at once"; the
+  arithmetic "people × 48 ÷ need"; one more person: the new limit (`withOneMore`) and, with money, her cost in students'
+  fees), Fighter vs Master teacher minutes per student-hour per room (+ idle, hours seen; "not enough of both" under 2
+  student-hours each), speeds (a level, an answer, a question, a lesson, idle).
+- **Business**: money (his 3 numbers once: average fee, a corrector's pay, a teacher's pay → fees from students still
+  coming, the team's cost from the usual people per room, what is left, cost per student, fees at risk from students
+  away 2+ weeks; `ceo.setMoney`, meta `ceo.money`, owner only); students (+joined, −left this month, grade × stage
+  table); attendance (came this week, days a week each, slipping, 14-day bars); quietly leaving (`risksOf`: 14+ days red,
+  7–13 amber, coming half as often as the 4 weeks before; tap = his sheet); learning (levels and marks this week vs last,
+  units finished this month, levels checked at home, below 50% in 2 weeks); books (workbooks/units, keys, theory books
+  per grade; "no workbook yet" for the next unit of students 70%+ through theirs); the family app (students with it).
+- **How the numbers are made** (`convex/lib/ceo.ts`, `digestOf`, pure and tested): one class = its events, calls and
+  visits. Teacher minutes per person: Evaluation/Theory = Arrived (else Sent) → Done of each call she finished (45 min
+  at most; calls the class's end closed don't count), overlaps once, shared among the students with her; Correction =
+  each level from its draft's first mark to Save (**`took` on the `level-marks` event, timed since 31 Oct 2026** in
+  `workbook.correct`; untimed = 3 min, at most 12), a home level checked or a re-mark = 1 min, a theory-book answer =
+  the time since her previous mark (90 s at most). A person counts in the room where she spent most minutes. Students:
+  visit minutes, most at once, stage by what he worked on. Idle by what he waited for (two rooms = half each). The
+  digest is kept in the class report when it ends (`report.digest`, v 1); the class going on and the 3 newest classes
+  ended before digests existed are read again by `ceo.overview` (owner only, `fetchOnce` on opening and every 5 minutes
+  while on screen, never a live query). Demo students never count.
+
 **Moving a student.** Class → his name → Move: the usual next step in one tap (next unit, Master from the first unit,
 next workbook, Legend, Exam Sprint, back after the sprint, next term, up a grade), or pick grade, term, stage and
 unit. A teacher always confirms.

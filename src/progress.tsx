@@ -3,6 +3,7 @@
 //   how many he finished today, and his pace per class day.
 // - Term: every student against every unit of the term: finished, partway (how far), or not started.
 // - Share poster: the board as images for the parents' WhatsApp group (src/poster.ts).
+// - Tap a name: his whole sheet, to share with his parents (src/studentSheet.tsx).
 
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
@@ -20,6 +21,7 @@ import {
   type StageFilter,
 } from "./progressData";
 import { stageName, STAGES, toast, type Board } from "./store";
+import { StudentSheet } from "./studentSheet";
 import { Empty, GradeRow, Sheet, useGrade } from "./ui";
 
 function remembered<T extends string>(key: string, ok: readonly T[], fallback: T): [T, (v: T) => void] {
@@ -57,6 +59,8 @@ export function Progress(props: { board: Board; now: number }) {
   const [stage, setStage] = useState<StageFilter>("all");
   const [todayOnly, setTodayOnly] = useState(false);
   const [poster, setPoster] = useState(false);
+  // One student's whole sheet (tap his name), to share with his parents.
+  const [student, setStudent] = useState<string | null>(null);
 
   return (
     <main class="page progress">
@@ -97,13 +101,14 @@ export function Progress(props: { board: Board; now: number }) {
         <>
           <Filters data={data} stage={stage} setStage={setStage} todayOnly={todayOnly} setTodayOnly={setTodayOnly} />
           {view === "units" ? (
-            <Units data={data} stage={stage} todayOnly={todayOnly} />
+            <Units data={data} stage={stage} todayOnly={todayOnly} onOpen={setStudent} />
           ) : (
-            <Term data={data} stage={stage} todayOnly={todayOnly} now={props.now} />
+            <Term data={data} stage={stage} todayOnly={todayOnly} now={props.now} onOpen={setStudent} />
           )}
         </>
       )}
       {poster && data && <PosterSheet data={data} onClose={() => setPoster(false)} />}
+      {student && <StudentSheet studentId={student} onClose={() => setStudent(null)} />}
     </main>
   );
 }
@@ -151,19 +156,19 @@ function Filters(props: {
 
 // ---------------- Units: a race per unit ----------------
 
-function Units(props: { data: PBoard; stage: StageFilter; todayOnly: boolean }) {
+function Units(props: { data: PBoard; stage: StageFilter; todayOnly: boolean; onOpen: (id: string) => void }) {
   const lanes = buildLanes(props.data, { stage: props.stage, todayOnly: props.todayOnly });
   if (lanes.length === 0) return <p class="muted center">Nobody here with these filters.</p>;
   return (
     <div class="lanes">
       {lanes.map((l) => (
-        <LaneCard key={l.key} lane={l} />
+        <LaneCard key={l.key} lane={l} onOpen={props.onOpen} />
       ))}
     </div>
   );
 }
 
-function LaneCard(props: { lane: Lane }) {
+function LaneCard(props: { lane: Lane; onOpen: (id: string) => void }) {
   const { lane } = props;
   const short = STAGES.find((x) => x.id === lane.stage)?.short ?? "?";
   return (
@@ -183,7 +188,7 @@ function LaneCard(props: { lane: Lane }) {
       {lane.note && <p class="lane-note">{lane.note}</p>}
       <ol class="lane-rows">
         {lane.rows.map((r) => (
-          <RaceRow key={r.s._id} r={r} />
+          <RaceRow key={r.s._id} r={r} onOpen={props.onOpen} />
         ))}
       </ol>
     </section>
@@ -194,16 +199,16 @@ function tone(p: number | null): string {
   return p === null ? "" : p >= 80 ? " good" : p >= 50 ? " mid" : " low";
 }
 
-function RaceRow(props: { r: LaneRow }) {
+function RaceRow(props: { r: LaneRow; onOpen: (id: string) => void }) {
   const { r } = props;
   const unitWord = r.kind === "m" ? "levels" : "questions";
   return (
     <li class="lr" aria-label={`${r.rank ? `${r.rank}. ` : ""}${r.s.name}${r.kind !== "none" ? `: ${r.done} of ${r.of} ${unitWord}` : ""}`}>
       <span class={`rk${r.rank !== null && r.rank <= 3 ? ` r${r.rank}` : ""}`}>{r.rank ?? "–"}</span>
-      <span class="lr-name">
-        {r.s.name}
+      <button type="button" class="lr-name pg-open" onClick={() => props.onOpen(r.s._id)} aria-label={`${r.s.name}: his whole sheet`}>
+        <span class="pg-nm">{r.s.name}</span>
         {r.s.cameToday && <i class="here" title="Came today" aria-label="came today" />}
-      </span>
+      </button>
       <span class="lr-nums">
         {r.kind !== "none" && (
           <>
@@ -253,7 +258,7 @@ function RaceBar(props: { r: LaneRow }) {
 
 // ---------------- Term: who finished what ----------------
 
-function Term(props: { data: PBoard; stage: StageFilter; todayOnly: boolean; now: number }) {
+function Term(props: { data: PBoard; stage: StageFilter; todayOnly: boolean; now: number; onOpen: (id: string) => void }) {
   const { data } = props;
   const [term, setTerm] = useState<number>(() => usualTerm(data.students, termOf(props.now)));
   const { units, rows } = buildTerm(data, term, { stage: props.stage, todayOnly: props.todayOnly });
@@ -287,7 +292,9 @@ function Term(props: { data: PBoard; stage: StageFilter; todayOnly: boolean; now
           {rows.map((r) => (
             <div key={r.s._id} class="tg-row" role="row" style={{ gridTemplateColumns: cols }}>
               <span class="tg-name" role="rowheader">
-                {r.s.name}
+                <button type="button" class="pg-open" onClick={() => props.onOpen(r.s._id)} aria-label={`${r.s.name}: his whole sheet`}>
+                  {r.s.name}
+                </button>
               </span>
               {r.cells.map((c) => (
                 <button
