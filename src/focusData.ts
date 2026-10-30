@@ -353,6 +353,26 @@ export function resumeAt(qs: number[], given: Record<number, Given>): number {
   return nextIndex(qs, given, -1);
 }
 
+/** One of his books on Correction's row: which unit and book, the one open now, levels handed in there. */
+export type BookPill = { unitId: string; stage: "fighter" | "master"; now: boolean; waiting: number };
+
+/**
+ * Correction's row of his books (he works on several at once): his book now, every book given to him that he hasn't
+ * finished, and any other book with a level handed in. One fixed order (unit number, theory book first), so nothing
+ * moves under the finger. `no` = a unit's number.
+ */
+export function booksOf(v: View, no: (unitId: string) => number): BookPill[] {
+  const out = new Map<string, BookPill>();
+  const put = (unitId: string, stage: "fighter" | "master", now: boolean, waiting: number) => {
+    const had = out.get(`${unitId}:${stage}`);
+    out.set(`${unitId}:${stage}`, { unitId, stage, now: now || !!had?.now, waiting: Math.max(waiting, had?.waiting ?? 0) });
+  };
+  if (v.unit && (v.stage === "fighter" || v.stage === "master")) put(v.unit._id, v.stage, true, v.ms?.waiting.length ?? 0);
+  for (const g of v.given) if (!g.done) put(g.unitId, g.stage, false, 0);
+  for (const b of v.others) if (b.unit && b.stage === "master" && b.ms?.waiting.length) put(b.unit._id, "master", false, b.ms.waiting.length);
+  return [...out.values()].sort((a, b) => no(a.unitId) - no(b.unitId) || Number(a.stage === "master") - Number(b.stage === "master"));
+}
+
 /** Pills: what waits for the corrector, student by student (red: he has nothing to do until it's corrected). */
 export function focusNeeds(views: View[]): Map<string, "red" | "amber"> {
   const out = new Map<string, "red" | "amber">();

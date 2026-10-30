@@ -9,7 +9,8 @@ import { givenWork, mayBeOpen, openWork } from "./lib/backend";
  * the books in use, the open calls and the session.
  * A student in class works on several books at once: `more` = his other books with something waiting (a level handed
  * in, marks to explain, questions for Theory), so Evaluation, Theory and Correction see every book; `given` = the
- * books given to him (not his book now) and whether each still has work (then he is not "out of work").
+ * books given to him (not his book now): whether each still has work (then he is not "out of work") and whether it is
+ * finished (Correction's row of his books leaves it out).
  */
 export const get = query({
   args: { token: v.optional(v.string()) },
@@ -22,7 +23,7 @@ export const get = query({
     const progress: Record<string, Doc<"progress">> = {};
     const books: Record<string, Doc<"books">> = {};
     const more: Record<string, Doc<"progress">[]> = {};
-    const given: Record<string, { unitId: Id<"units">; stage: "fighter" | "master"; work: boolean }[]> = {};
+    const given: Record<string, { unitId: Id<"units">; stage: "fighter" | "master"; work: boolean; done: boolean }[]> = {};
     const cache = new Map<string, Doc<"books"> | null>();
     const bookOf = async (unitId: Id<"units">, stage: "fighter" | "master") => {
       const key = `${unitId}:${stage}`;

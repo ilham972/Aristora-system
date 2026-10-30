@@ -23,7 +23,7 @@ export type Board = {
   /** Students in class: their other books with something waiting (missing on an old server). */
   more?: Record<string, Progress[]>;
   /** Books given to them (not their book now): does each still have work? */
-  given?: Record<string, { unitId: Id<"units">; stage: "fighter" | "master"; work: boolean }[]>;
+  given?: Record<string, { unitId: Id<"units">; stage: "fighter" | "master"; work: boolean; done?: boolean }[]>;
   calls: Call[];
   /** stats[room][key]: each room's score for this class (src/score.ts); missing on an old server. */
   session: { _id: Id<"sessions">; startedAt: number; lastActivityAt: number; stats?: Record<string, Record<string, number>> } | null;

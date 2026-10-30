@@ -75,6 +75,8 @@ export type View = {
   noWork: boolean;
   /** Books given to him (not this one) that still have work: ["U09"]. */
   otherWork: string[];
+  /** The books given to him (not his book now): work left, finished. */
+  given: { unitId: string; stage: "fighter" | "master"; work: boolean; done: boolean }[];
   /** His other books with something waiting (a level handed in, marks to explain, questions for Theory). */
   others: View[];
   /** On one of his other books: his main view (his book now, where he is). */
@@ -186,9 +188,10 @@ export function buildViews(board: Board, now: number): View[] {
     const quietMs = s.lastActivityAt !== undefined ? now - s.lastActivityAt : undefined;
     const limit = st ? quietLimit(st) : QUIET_PAPERS_MS;
     // Several books at once: his book now blocked is not "out of work" while a book given to him has work.
-    const otherWork = (board.given?.[s._id] ?? [])
-      .filter((g) => g.work && !(g.unitId === s.unitId && g.stage === stage))
-      .map((g) => unitOf(g.unitId)?.code ?? "?");
+    const given = (board.given?.[s._id] ?? [])
+      .filter((g) => !(g.unitId === s.unitId && g.stage === stage))
+      .map((g) => ({ unitId: g.unitId as string, stage: g.stage, work: g.work, done: !!g.done }));
+    const otherWork = given.filter((g) => g.work).map((g) => unitOf(g.unitId)?.code ?? "?");
     const dryHere = st ? st.dry : ms ? ms.dry : false;
     const noWork = dryHere && otherWork.length === 0;
     const onOther = `on ${otherWork.join(", ")}`;
@@ -285,6 +288,7 @@ export function buildViews(board: Board, now: number): View[] {
       key: `${s._id}:${s.unitId ?? ""}:${stage ?? ""}`,
       noWork,
       otherWork,
+      given,
       others: [],
     };
     for (const p of board.more?.[s._id] ?? []) {

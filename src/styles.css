@@ -3585,22 +3585,52 @@ body.locked.fc-marking .toasts {
   gap: 6px;
   margin-top: 2px;
 }
-/* His stage and unit under his name: tap to change them. */
-.fc-unit {
-  max-width: 100%;
-  margin-top: 4px;
-  padding: 3px 8px 3px 3px;
-  display: inline-flex;
+/* His books in ONE line under his name (his book now dark; the book button first opens all his units). */
+.fc-bookrow {
+  display: flex;
   align-items: center;
   gap: 6px;
-  border-radius: 9px;
+  min-width: 0;
+}
+.fc-units {
+  flex: none;
+  width: 38px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 10px;
+  border: 1.5px solid #b7791f;
+  background: #fdf3e1;
+  color: #8a5a12;
+  transition: transform 0.1s ease;
+}
+.fc-units:active {
+  transform: scale(0.92);
+}
+.fc-bookrow .hrow {
+  flex: 1 1 auto;
+}
+.fc-books {
+  gap: 5px;
+  padding: 3px 2px;
+}
+.fc-bk {
+  position: relative;
+  flex: none;
+  height: 32px;
+  padding: 0 9px 0 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 10px;
   border: 1.5px solid var(--line);
   background: var(--card);
-  font: 700 14px/1.2 var(--font);
   color: var(--ink);
-  text-align: left;
+  font: 700 13px/1 var(--font);
+  white-space: nowrap;
 }
-.fc-unit b {
+.fc-bk b {
   flex: none;
   width: 20px;
   height: 20px;
@@ -3611,24 +3641,40 @@ body.locked.fc-marking .toasts {
   color: #fff;
   font-size: 12px;
 }
-.fc-unit b.st-master {
+.fc-bk b.st-master {
   background: #b7791f;
 }
-.fc-unit b.st-legend {
-  background: var(--evaluation);
+.fc-bk i {
+  font: 700 16px/1 var(--cond);
+  font-style: normal;
 }
-.fc-unit b.st-sprint {
-  background: var(--red);
-}
-.fc-unit span {
-  min-width: 0;
+.fc-bk span {
+  max-width: 7.5em;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 12.5px;
+  font-weight: 600;
 }
-.fc-unit i {
+.fc-bk.on {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
+}
+.fc-bk.on b {
+  box-shadow: 0 0 0 1.5px #fff;
+}
+/* Levels handed in in that book (amber, like the names). */
+.fc-bk .fc-bk-n {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--amber);
+  color: #fff;
+  font: 700 11px/1 var(--font);
   font-style: normal;
-  color: var(--ink-3);
 }
 .fc-cardbtn {
   display: inline-flex;
@@ -3710,24 +3756,6 @@ body.locked.fc-marking .toasts {
 }
 .fc-lb.w-theory::after {
   background: var(--theory);
-}
-/* Levels handed in in his other books (he works on several at once): a tap opens that book. */
-.fc-also {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--amber-ink);
-}
-.fc-also-b {
-  padding: 4px 10px;
-  border-radius: 999px;
-  border: 1.5px solid var(--amber);
-  background: var(--amber-soft);
-  color: var(--amber-ink);
-  font: 700 13px/1.2 var(--font);
 }
 /* His paper while he is signed out: Evaluation and Theory don't see him (one tap signs him in). */
 .fc-out {

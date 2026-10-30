@@ -1225,7 +1225,7 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
   // Priya: her paper opens under the names at the level she is on (L2). The names stay; hers is dark.
   await tap(name("Priya"));
   await contains(F.locator(".fc-name"), "Priya");
-  await contains(F.locator(".fc-unit"), "8 ·");
+  await textsAre(F.locator(".fc-bk.on i"), ["8"]); // her book now, dark, in the row of her books
   await visible(F.locator(".fc-nm.on", { hasText: "Priya" }));
   await textsAre(F.locator(".fc-lvbar .fc-lb"), ["1", "2", "3", "4", "5", "6", "7", "8"]);
   await visible(F.locator(".fc-lb.fixed.on, .fc-lb.current.on", { hasText: "2" }));
@@ -1404,10 +1404,10 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
   await says(F.locator(".fc-lvline"), "Level 4");
   expect((await marksOf(backend, "Nimal")).m!.lv["1"]?.pre).toBeGreaterThan(0);
 
-  // His units (tap the unit under his name): all 31 of Grade 8 on one screen, no scrolling, as small pills (number and
-  // Tamil name) under Term 1 / 2 / 3. Each fills as far as he got (green: good marks); his unit now has a dark ring.
+  // His units (the book button before his books): all 31 of Grade 8 on one screen, no scrolling, as small pills (number
+  // and Tamil name) under Term 1 / 2 / 3. Each fills as far as he got (green: good marks); his unit now has a dark ring.
   const pill = (n: number) => F.locator(".su-p", { has: F.locator("b", { hasText: new RegExp(`^${n}$`) }) });
-  await tap(F.locator(".fc-unit"));
+  await tap(F.locator(".fc-units"));
   await contains(F.locator(".sheet h2"), "Nimal: units");
   await visible(F.locator(".su-st.master.on"));
   expect(await F.locator(".su-tl").allTextContents()).toEqual(["Term 1", "Term 2", "Term 3"]);
@@ -1436,13 +1436,13 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
   await contains(F.locator(".fc-paper .empty-title"), "No workbook for G8 · U02 in the app yet");
   expect((await marksOf(backend, "Nimal")).unitKey).toBe("G8-U02");
   // Back to unit 1: his paper opens there again, at the level he is on (4).
-  await tap(F.locator(".fc-unit"));
+  await tap(F.locator(".fc-units"));
   await tap(pill(1));
   await says(F.locator(".fc-lvline"), "Level 4");
   expect((await marksOf(backend, "Nimal")).unitKey).toBe("G8-U01");
   // Books given: each tap gives that unit's workbook (✓, green) or takes it back; the sheet stays open. Per book:
   // the theory book of the same unit is not given.
-  await tap(F.locator(".fc-unit"));
+  await tap(F.locator(".fc-units"));
   await tap(F.locator(".sheet").getByRole("button", { name: "Books given" }));
   await contains(F.locator(".su-key"), "Books given: tap each workbook you gave him");
   await tap(pill(1));
@@ -1464,7 +1464,7 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
   await tap(F.locator(".sheet").getByRole("button", { name: "Close" }));
   await count(F.locator(".sheet"), 0);
   // Opened again: from the server.
-  await tap(F.locator(".fc-unit"));
+  await tap(F.locator(".fc-units"));
   await visible(pill(1).and(F.locator(".given")));
   await tap(F.locator(".sheet").getByRole("button", { name: "Close" }));
   const given = await backend.t.run(async (ctx) => (await ctx.db.query("events").collect()).filter((e) => e.kind.startsWith("book-given")));
@@ -1473,11 +1473,28 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
     "book-given G8-U03 workbook",
     "book-given-off G8-U03 workbook",
   ]);
+  // His books in ONE line under his name: his book now (dark) and every book given to him that he hasn't finished.
+  // Give him U03 too: it joins the row; one tap switches his paper to it (no dialog), another tap back.
+  await textsAre(F.locator(".fc-bk i"), ["1"]);
+  const u03 = await backend.t.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G8-U03")).first())!._id);
+  await backend.t.mutation(api.students.setGiven, { token: OWNER_TOKEN, id: nimal, unitId: u03, stage: "master", given: true });
+  await backend.push();
+  await textsAre(F.locator(".fc-bk i"), ["1", "3"]);
+  expect(await F.locator(".fc-bookrow").evaluate((e) => e.getBoundingClientRect().height < 44)).toBe(true);
+  await shot(F, "f15d-correction-books-row");
+  const bk = (n: number) => F.locator(".fc-bk").filter({ has: F.locator("i", { hasText: new RegExp(`^${n}$`) }) });
+  await tap(bk(3));
+  await contains(F.locator(".toast"), "Nimal: Master · 3");
+  await contains(F.locator(".fc-paper .empty-title"), "No workbook for G8 · U03 in the app yet");
+  await textsAre(F.locator(".fc-bk.on i"), ["3"]);
+  await tap(bk(1));
+  await says(F.locator(".fc-lvline"), "Level 4");
+  expect((await marksOf(backend, "Nimal")).unitKey).toBe("G8-U01");
 
   // A theory-book student: his questions in book order, ✓ right / ✗ wrong / ↻ slip, saved like the Class rows' circles.
   await tap(F.getByRole("button", { name: /^Grade 11\b/ }));
   await tap(name("Nila"));
-  await contains(F.locator(".fc-unit"), "13 ·");
+  await textsAre(F.locator(".fc-bk.on i"), ["13"]);
   await contains(F.locator(".fc-qn"), "19");
   await contains(F.locator(".fc-qmeta"), "Section C · Forming the equation");
   await textsAre(F.locator(".fc-strip .fc-sq small"), ["19", "20", "21", "22"]);

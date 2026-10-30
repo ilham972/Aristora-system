@@ -8,6 +8,7 @@ export function asView(o: Record<string, unknown>): View {
   return {
     others: [],
     otherWork: [],
+    given: [],
     key: v.s._id,
     ...o,
     noWork: v.noWork ?? !!(v.st?.dry ?? v.ms?.dry),

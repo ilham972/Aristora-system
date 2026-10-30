@@ -73,6 +73,7 @@ import {
   type Given,
   type LevelLook,
   type Pill,
+  booksOf,
 } from "./focusData";
 import { dropDraft, flushFocus, queueDraft, setFighterMark } from "./focusSave";
 import { AttendanceSheet } from "./attendance";
@@ -92,6 +93,7 @@ import {
   stageName,
   STAGES,
   toast,
+  unitOf,
   type Board,
   type Stage,
   type Unit,
@@ -1128,27 +1130,17 @@ function PaperView(props: { v: View; paper: Paper; drafts: Draft[] | undefined; 
 }
 
 /**
- * The paper's top: whose it is (huge); his stage and unit (tap: change them); his card (marks table and buttons). A
- * workbook level he hasn't handed in yet also has Later: handed in, correct it later (the waiting clock starts).
+ * The paper's top: whose it is (huge); his card (marks table and buttons); then his books in one line (tap one to
+ * correct it). A workbook level he hasn't handed in yet also has Later: handed in, correct it later (the waiting
+ * clock starts).
  */
 function PaperHead(props: { v: View; later?: () => void; onUnit: () => void; onCard: () => void }) {
   const { v } = props;
-  const st = STAGES.find((x) => x.id === v.stage);
   return (
     <>
       <header class="fc-head">
         <div class="fc-who">
           <h2 class="fc-name">{v.s.name}</h2>
-          <button
-            type="button"
-            class="fc-unit"
-            aria-label={`${st?.name ?? "No stage"}, ${v.unit ? `unit ${unitNo(v.unit.code)} ${v.unit.ta || v.unit.en}` : "no unit"}: change his stage or unit`}
-            onClick={props.onUnit}
-          >
-            <b class={`st-${v.stage ?? "none"}`}>{st?.short ?? "?"}</b>
-            <span lang="ta">{v.unit ? `${unitNo(v.unit.code)} · ${v.unit.ta || v.unit.en}` : "Choose his unit"}</span>
-            <i aria-hidden="true">▾</i>
-          </button>
         </div>
         <div class="fc-head-acts">
           {props.later && (
@@ -1165,26 +1157,59 @@ function PaperHead(props: { v: View; later?: () => void; onUnit: () => void; onC
           </button>
         </div>
       </header>
+      <BookRow v={v} onUnits={props.onUnit} />
       {v.where === "absent" && <SignedOut v={v} />}
-      <AlsoHandedIn v={v} />
     </>
   );
 }
 
-/** Levels handed in in his other books (he works on several at once): one tap opens that book. */
-function AlsoHandedIn(props: { v: View }) {
+/**
+ * His books in ONE line that scrolls sideways (30 Oct 2026): his book now (dark), every book given to him that he
+ * hasn't finished, any other book with a level handed in (amber count). A tap switches his paper to that book at once
+ * (no dialog). The book button first, like + on the names row, opens all the units of his grade (Move him, Books
+ * given).
+ */
+function BookRow(props: { v: View; onUnits: () => void }) {
   const { v } = props;
-  const list = v.others.filter((b) => b.ms?.waiting.length && b.unit);
-  if (list.length === 0) return null;
+  const books = booksOf(v, (id) => unitNo(unitOf(id)?.code ?? ""));
   return (
-    <p class="fc-also">
-      <span>Also handed in:</span>
-      {list.map((b) => (
-        <button key={b.key} type="button" class="fc-also-b" onClick={() => void moveTo(v, "master", b.unit!)}>
-          {b.unit!.code} · L{b.ms!.waiting.map((l) => l.n).join(", L")}
-        </button>
-      ))}
-    </p>
+    <div class="fc-bookrow">
+      <button type="button" class="fc-units" aria-label={`${v.s.name}: all units (move him, books given)`} onClick={props.onUnits}>
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5z" />
+          <path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19" />
+        </svg>
+      </button>
+      {books.length === 0 ? (
+        <p class="fc-none">No book yet: tap the book to choose his unit.</p>
+      ) : (
+        <HRow as="nav" class="fc-books" label={`${v.s.name}'s books: tap one to correct it`} list={v.s._id} at={`${v.s.unitId}:${v.stage}`}>
+          {books.map((b) => {
+            const u = unitOf(b.unitId);
+            if (!u) return null;
+            const name = `${b.stage === "fighter" ? "Theory book" : "Workbook"} ${unitNo(u.code)} ${u.ta || u.en}`;
+            return (
+              <button
+                key={`${b.unitId}:${b.stage}`}
+                type="button"
+                class={`fc-bk${b.now ? " on" : ""}`}
+                data-u={b.waiting ? "amber" : undefined}
+                aria-pressed={b.now}
+                aria-label={`${name}${b.now ? ", on his paper now" : ""}${b.waiting ? `, ${b.waiting} level${b.waiting === 1 ? "" : "s"} handed in` : ""}`}
+                onClick={() => {
+                  if (!b.now) void moveTo(v, b.stage, u);
+                }}
+              >
+                <b class={`st-${b.stage}`}>{b.stage === "fighter" ? "F" : "M"}</b>
+                <i>{unitNo(u.code)}</i>
+                <span lang="ta">{u.ta || u.en}</span>
+                {b.waiting > 0 && <em class="fc-bk-n">{b.waiting}</em>}
+              </button>
+            );
+          })}
+        </HRow>
+      )}
+    </div>
   );
 }
 

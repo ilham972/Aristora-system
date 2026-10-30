@@ -37,6 +37,7 @@ import {
   sumOf,
   unitDone,
   unitNo,
+  booksOf,
   type Carry,
   type Draft,
 } from "../src/focusData";
@@ -343,5 +344,33 @@ describe("one page: which level opens, the level bar, the next level after Save"
     expect(nextBook(units, units[2])).toEqual({ stage: "legend", unit: units[2] });
     expect(nextBook(units, units[4])).toBeNull();
     expect(nextBook(units, null)).toBeNull();
+  });
+});
+
+describe("his books in one line on the paper (several books at once)", () => {
+  test("his book now, the books given that he hasn't finished, other books with a level handed in; fixed order", () => {
+    const other = asView({ s: { _id: "Malik" }, unit: { _id: "u05", code: "U05" }, stage: "master", ms: { waiting: [{ n: 2 }] } });
+    const v = asView({
+      s: { _id: "Malik", name: "Malik" },
+      unit: { _id: "u08", code: "U08" },
+      stage: "master",
+      ms: { waiting: [{ n: 3 }], dry: false },
+      given: [
+        { unitId: "u09", stage: "master", work: true, done: false },
+        { unitId: "u10", stage: "master", work: false, done: true }, // finished: not on the row
+        { unitId: "u08", stage: "fighter", work: true, done: false }, // the theory book of the same unit
+        { unitId: "u05", stage: "master", work: false, done: false },
+      ],
+      others: [other],
+    });
+    const no = (id: string) => Number(id.slice(1));
+    expect(booksOf(v, no)).toEqual([
+      { unitId: "u05", stage: "master", now: false, waiting: 1 },
+      { unitId: "u08", stage: "fighter", now: false, waiting: 0 },
+      { unitId: "u08", stage: "master", now: true, waiting: 1 },
+      { unitId: "u09", stage: "master", now: false, waiting: 0 },
+    ]);
+    // Nothing given, no unit: an empty row (the book button still opens his units).
+    expect(booksOf(asView({ s: { _id: "Zainab" }, unit: null, stage: "legend" }), no)).toEqual([]);
   });
 });

@@ -324,12 +324,18 @@ export async function dryOf(ctx: QueryCtx, s: Doc<"students">): Promise<{ dry: b
 
 /** A book he could work on now: a level (workbook) or a question (theory book) to do. No book in the app: yes. */
 export function workLeft(book: Doc<"books"> | null, p: Doc<"progress"> | null): boolean {
-  if (!book) return true; // a printed book the app can't see: he has work
+  return bookState(book, p).work;
+}
+
+/** work = something he can do now; done = finished (every level corrected, nothing left for a teacher). */
+export function bookState(book: Doc<"books"> | null, p: Doc<"progress"> | null): { work: boolean; done: boolean } {
+  if (!book) return { work: true, done: false }; // a printed book the app can't see: he has work
   if (book.data.kind === "fighter") {
     const st = computeStatus(p?.marks ?? {}, fighter(book.data));
-    return !st.dry && !st.finished;
+    return { work: !st.dry && !st.finished, done: st.finished };
   }
-  return computeMaster(masterState(p), book.data).current !== null;
+  const ms = computeMaster(masterState(p), book.data);
+  return { work: ms.current !== null, done: ms.finished };
 }
 
 /** The books given to him (not his book now), and whether each still has work. */
@@ -337,8 +343,8 @@ export async function givenWork(
   ctx: QueryCtx,
   s: Doc<"students">,
   cache?: Map<string, Doc<"books"> | null>,
-): Promise<{ unitId: Id<"units">; stage: BookStage; work: boolean }[]> {
-  const out: { unitId: Id<"units">; stage: BookStage; work: boolean }[] = [];
+): Promise<{ unitId: Id<"units">; stage: BookStage; work: boolean; done: boolean }[]> {
+  const out: { unitId: Id<"units">; stage: BookStage; work: boolean; done: boolean }[] = [];
   for (const h of await ctx.db.query("handouts").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) {
     if (h.unitId === s.unitId && h.stage === s.stage) continue;
     const key = `${h.unitId}:${h.stage}`;
@@ -347,7 +353,7 @@ export async function givenWork(
       book = await bookFor(ctx, h.unitId, h.stage);
       cache?.set(key, book);
     }
-    out.push({ unitId: h.unitId, stage: h.stage, work: workLeft(book, await progressFor(ctx, s._id, h.unitId, h.stage)) });
+    out.push({ unitId: h.unitId, stage: h.stage, ...bookState(book, await progressFor(ctx, s._id, h.unitId, h.stage)) });
   }
   return out;
 }
