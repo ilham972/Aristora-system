@@ -30,3 +30,15 @@ export function slDate(t: number): string {
   const d = new Date(t + SL_OFFSET_MS);
   return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
 }
+
+/** Days since 1 Jan 1970 in Sri Lanka: consecutive days differ by 1 (streaks). */
+export function slDayNo(t: number): number {
+  return Math.floor((t + SL_OFFSET_MS) / DAY_MS);
+}
+
+/** When this week began in Sri Lanka: Monday 00:00 (the family app's weekly points start again then). */
+export function slWeekStart(t: number): number {
+  const day = slDayNo(t);
+  const monday = day - ((new Date(day * DAY_MS).getUTCDay() + 6) % 7);
+  return monday * DAY_MS - SL_OFFSET_MS;
+}

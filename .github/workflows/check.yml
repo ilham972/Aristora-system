@@ -6,14 +6,14 @@ name: check
 
 on:
   push:
-    branches: ["ci-check"]
+    branches: ["ci-check", "ci-*"]
   workflow_dispatch: {}
 
 permissions:
   contents: write
 
 concurrency:
-  group: ci-check
+  group: ${{ github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -111,7 +111,7 @@ jobs:
           git config user.email "aristora-check@users.noreply.github.com"
           git add -f ci-report
           git commit -m "Check report for ${GITHUB_SHA::7}" -q
-          git push origin HEAD:ci-check
+          git push origin HEAD:${{ github.ref_name }}
 
       - name: Fail when a check failed
         if: always()

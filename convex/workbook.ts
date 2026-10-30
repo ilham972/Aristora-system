@@ -28,7 +28,7 @@ import {
   workPlace,
 } from "./lib/backend";
 import { levelOutOf, type MasterData } from "./lib/book";
-import { computeMaster, type MQ, type MState } from "./lib/master";
+import { computeMaster, markBefore, type MQ, type MState } from "./lib/master";
 import { actor } from "./lib/auth";
 import { masterState as masterStateShape } from "./schema";
 
@@ -64,23 +64,6 @@ function levelOf(book: MasterData, n: number) {
   const l = book.levels.find((x) => x.n === n);
   if (!l) fail("That level is not in this workbook.");
   return l;
-}
-
-/**
- * A level is handed in or corrected: the levels before it that have no record at all were done on paper before the
- * app (he started this unit before 28 Oct 2026, or the corrector skipped them). They count as done (`pre` = now),
- * so the app doesn't think he is still on Level 1. Returns their numbers.
- */
-function markBefore(m: MState, book: MasterData, n: number, now: number): number[] {
-  const out: number[] = [];
-  for (const l of book.levels) {
-    if (l.n >= n) break;
-    const lv = m.lv[String(l.n)];
-    if (lv && (lv.done || lv.fixed || lv.pre)) continue;
-    m.lv[String(l.n)] = { pre: now };
-    out.push(l.n);
-  }
-  return out;
 }
 
 /** Undo markBefore for one save or hand-in (the levels it marked at that moment). */
@@ -247,7 +230,8 @@ export const correct = mutation({
     const lv = m.lv[key] ?? {};
     const doneAt = lv.done ?? now;
     const again = !!lv.fixed;
-    m.lv[key] = { done: doneAt, fixed: now, by, got };
+    // A level marked at home stays one (⌂); the corrector's marks on it are her check of his working.
+    m.lv[key] = { done: doneAt, fixed: now, by, got, ...(lv.home ? { home: lv.home, hc: now } : {}) };
     const pre = markBefore(m, book, l.n, now);
     const session = await currentSession(ctx, now);
     await ctx.db.patch(progress._id, { m, updatedAt: now });
@@ -506,6 +490,38 @@ export const reteach = mutation({
     });
     await refresh(ctx, student._id, now, session);
     await touch(ctx, session, now);
+    return true;
+  },
+});
+
+/**
+ * Correction looked at the working of a level marked at home and the phone's marks stand (⌂ → ✓). The questions the
+ * phone left to her (names, reasons, drawings) must be marked first: she marks them with Save, which also checks it.
+ */
+export const homeChecked = mutation({
+  args: { ...base, level: v.number() },
+  handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["correction", "evaluation"], args.by);
+    const now = Date.now();
+    const student = await getStudent(ctx, args.studentId);
+    const { unit, book, progress, m } = await teachWork(ctx, student, args.unitId, now);
+    const l = levelOf(book, args.level);
+    const lv = m.lv[String(l.n)];
+    if (!lv?.home || !lv.fixed) fail(`Level ${l.n} was not marked at home.`);
+    if (lv.hc) return true;
+    const left: number[] = [];
+    for (let q = l.from; q <= l.to; q++) if (!m.q[String(q)]) left.push(q);
+    if (left.length) fail(`Mark ${left.map((q) => `Q${q}`).join(", ")} first: the phone left ${left.length === 1 ? "it" : "them"} to you.`);
+    m.lv[String(l.n)] = { ...lv, hc: now };
+    await ctx.db.patch(progress._id, { m, updatedAt: now });
+    await log(ctx, null, now, {
+      kind: "level-checked",
+      by: cleanBy(args.by),
+      studentId: student._id,
+      name: student.name,
+      unit: unit.key,
+      value: `${l.n} ${lv.got ?? 0}/${l.max}`,
+    });
     return true;
   },
 });

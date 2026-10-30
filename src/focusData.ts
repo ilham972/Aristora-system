@@ -15,7 +15,7 @@
 
 import { levelOutOf, type MasterLevel } from "../convex/lib/book";
 import type { KeyAnswer, KeyPart } from "../convex/lib/key";
-import type { MLevel, MQ, MState } from "../convex/lib/master";
+import { homeToCheck, type MLevel, type MQ, type MState } from "../convex/lib/master";
 import { waitingAll, type View } from "./derive";
 
 /** How long after the screen moves on a tap is ignored (a double tap must not mark the next question). */
@@ -41,7 +41,16 @@ export type PillTone =
   | "home"
   | "";
 
-export type Pill = { v: View; tone: PillTone; waiting: number };
+export type Pill = { v: View; tone: PillTone; waiting: number; home: number };
+
+/** Levels of this book marked at home that Correction hasn't checked (⌂). */
+export function homeLevels(v: View): MasterLevel[] {
+  return v.mb ? v.mb.levels.filter((l) => homeToCheck(v.mm.lv[String(l.n)])) : [];
+}
+/** ⌂ in all his books (he works on several at once). */
+export function homeAll(v: View): number {
+  return homeLevels(v).length + v.others.reduce((a, b) => a + homeLevels(b).length, 0);
+}
 
 /**
  * The name pills, in a fixed order (names never move under the finger): by grade, everyone signed in A–Z, then those
@@ -63,7 +72,7 @@ export function focusPills(views: View[]): Pill[] {
     else if (v.noWork && v.ms?.needs.includes("correction")) tone = "red";
     else if (waiting) tone = "amber";
     else if (v.st?.doable.length) tone = "th";
-    return { v, tone, waiting };
+    return { v, tone, waiting, home: v.where === "absent" ? 0 : homeAll(v) };
   };
   const byGrade = (a: View, b: View) => (a.s.grade ?? 99) - (b.s.grade ?? 99);
   const order = (a: View, b: View) => byGrade(a, b) || Number(a.where === "absent") - Number(b.where === "absent") || byName(a, b);
@@ -269,7 +278,7 @@ const fixedOrPre = (v: View, n: number) => {
  * The level his paper opens on: one he was marking (a draft, the latest), else the oldest handed in, else the one he
  * works on now (while he is in class). Null: every level is corrected (or done before the app): the unit's marks.
  */
-export function autoLevel(v: View, drafts: readonly Draft[] | null | undefined): MasterLevel | null {
+export function autoLevel(v: View, drafts: readonly Draft[] | null | undefined, skip?: number): MasterLevel | null {
   if (!v.ms || !v.mb) return null;
   const mine = (drafts ?? [])
     .filter((d) => d.studentId === v.s._id && d.unitId === v.s.unitId && !fixedOrPre(v, d.level) && Object.keys(d.q).length)
@@ -277,6 +286,9 @@ export function autoLevel(v: View, drafts: readonly Draft[] | null | undefined):
   const fromDraft = mine ? v.mb.levels.find((l) => l.n === mine.level) : undefined;
   if (fromDraft) return fromDraft;
   if (v.ms.waiting.length) return v.ms.waiting[0];
+  // Marked at home: his working to look at (he is here with his book), oldest first.
+  const home = v.where !== "absent" ? homeLevels(v).find((l) => l.n !== skip) : undefined;
+  if (home) return home;
   if (v.ms.current && v.where !== "absent") return v.ms.current;
   return v.mb.levels.find((l) => !fixedOrPre(v, l.n)) ?? null;
 }

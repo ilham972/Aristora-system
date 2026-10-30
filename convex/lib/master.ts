@@ -72,6 +72,14 @@ export interface MLevel {
   by?: string;
   got?: number;
   pre?: number;
+  /** Marked at home by the phone (the family app); hc = the corrector checked his working in class. */
+  home?: number;
+  hc?: number;
+}
+
+/** A level marked at home that the corrector hasn't checked yet (⌂ on Correction). */
+export function homeToCheck(lv: MLevel | undefined): boolean {
+  return !!lv?.home && !!lv.fixed && !lv.hc;
 }
 export interface MState {
   q: Record<string, MQ>;
@@ -223,6 +231,23 @@ export function partTotals(book: MasterData): Partial<Record<PartId, number>> {
   for (const l of book.levels) {
     const pid = partOf(book, l.from)?.id;
     if (pid) out[pid] = (out[pid] ?? 0) + l.max;
+  }
+  return out;
+}
+
+/**
+ * A level is handed in or corrected (in class or at home): the levels before it that have no record at all were done
+ * on paper before the app (he started this unit before 28 Oct 2026, or the corrector skipped them). They count as done
+ * (`pre` = now), so the app doesn't think he is still on Level 1. Returns their numbers.
+ */
+export function markBefore(m: MState, book: MasterData, n: number, now: number): number[] {
+  const out: number[] = [];
+  for (const l of book.levels) {
+    if (l.n >= n) break;
+    const lv = m.lv[String(l.n)];
+    if (lv && (lv.done || lv.fixed || lv.pre)) continue;
+    m.lv[String(l.n)] = { pre: now };
+    out.push(l.n);
   }
   return out;
 }

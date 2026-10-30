@@ -76,11 +76,23 @@ export function makeBackend(modules: Record<string, () => Promise<unknown>>) {
     await context.exposeBinding("__abUnsubscribe", (_src, id: string) => {
       subs.delete(id);
     });
+    // One answer to a query (the family app asks, it doesn't watch).
+    await context.exposeBinding("__abQuery", (_src, name: string, args: Record<string, unknown>) =>
+      serial(async () => {
+        try {
+          return { value: (await t.query(makeFunctionReference<"query">(name), args as never)) ?? null };
+        } catch (e) {
+          const data = (e as { data?: unknown }).data;
+          return { __error: typeof data === "string" ? data : String((e as Error).message ?? e) };
+        }
+      }),
+    );
     await context.addInitScript(() => {
       const w = window as unknown as Record<string, unknown> & {
         __abSubscribe(n: string, a: unknown, id: string): Promise<void>;
         __abUnsubscribe(id: string): Promise<void>;
         __abMutation(n: string, a: unknown): Promise<{ value?: unknown; __error?: string }>;
+        __abQuery(n: string, a: unknown): Promise<{ value?: unknown; __error?: string }>;
       };
       const cbs: Record<string, (v: unknown) => void> = {};
       const errs: Record<string, (e: unknown) => void> = {};
@@ -105,6 +117,15 @@ export function makeBackend(modules: Record<string, () => Promise<unknown>>) {
         },
         async mutation(name: string, args: unknown) {
           const r = await w.__abMutation(name, args);
+          if (r && r.__error) {
+            const e = new Error(r.__error) as Error & { data?: string };
+            e.data = r.__error;
+            throw e;
+          }
+          return r.value;
+        },
+        async query(name: string, args: unknown) {
+          const r = await w.__abQuery(name, args);
           if (r && r.__error) {
             const e = new Error(r.__error) as Error & { data?: string };
             e.data = r.__error;

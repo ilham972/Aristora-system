@@ -31,6 +31,7 @@ import {
 } from "./store";
 import { ATTENDANCE_SINCE, AWAY_DAYS, daysAway, studentStats } from "./stats";
 import { UploadBooks } from "./upload";
+import { FamilySheet, PhoneAnswers } from "./familySheet";
 import { GRADES, GradeRow, Sheet, STATE_WORDS, useGrade } from "./ui";
 
 type Tab = "students" | "books" | "people" | "alerts" | "reports" | "history" | "account";
@@ -90,6 +91,7 @@ function Students(props: { views: View[] }) {
   );
   const [editing, setEditing] = useState<{ id: Id<"students">; name: string } | null>(null);
   const [moving, setMoving] = useState<string | null>(null);
+  const [family, setFamily] = useState<string | null>(null);
   const [confirmDemo, setConfirmDemo] = useState(false);
   const archived = useQuery<Removed[]>(api.state.archived, {});
   const hasDemo = props.views.some((v) => v.s.demo) || (archived ?? []).some((a) => a.demo);
@@ -163,6 +165,9 @@ function Students(props: { views: View[] }) {
                   {!v.s.demo && away >= AWAY_DAYS && <small class="away-note">Not seen for {away} days</small>}
                 </span>
                 <span class="list-actions">
+                  <button type="button" class="link-btn" onClick={() => setFamily(v.s._id)}>
+                    Family
+                  </button>
                   <button type="button" class="link-btn" onClick={() => setMoving(v.s._id)}>
                     Move
                   </button>
@@ -186,6 +191,9 @@ function Students(props: { views: View[] }) {
         </ul>
       )}
       {moveView && <MoveSheet v={moveView} onClose={() => setMoving(null)} />}
+      {family && props.views.some((v) => v.s._id === family) && (
+        <FamilySheet v={props.views.find((v) => v.s._id === family)!} onClose={() => setFamily(null)} />
+      )}
 
       {removedHere.length > 0 && (
         <>
@@ -590,6 +598,7 @@ function UnitSheet(props: { unit: Unit; book?: BookRow; fighter?: BookRow; onClo
               : "No answer key yet. Upload the unit's zip with its answer key (Upload workbooks)."}
           </p>
         )}
+        {m && props.book?.keyCount ? <PhoneAnswers unitId={unit._id} /> : null}
       </div>
       <button type="button" class="btn primary wide" disabled={busy || !levels.length} onClick={() => void saveBook()}>
         Save the workbook
@@ -779,6 +788,24 @@ function describe(e: Doc<"events">): string {
       return `was out of work for ${fmtMin(e.ms ?? 0)}, waiting for ${v.split("+").join(" and ")}`;
     case "level-done":
       return `Level ${v} handed in, waiting for correction`;
+    case "level-home": {
+      const [n, marks] = v.split(" ");
+      return `Level ${n} marked at home on the phone: ${marks} (⌂ to check)`;
+    }
+    case "level-checked": {
+      const [n, marks] = v.split(" ");
+      return `Level ${n} (marked at home) checked: ${marks}`;
+    }
+    case "family-link":
+      return "family link made";
+    case "family-in":
+      return `family phone signed in${v ? ` (${v})` : ""}`;
+    case "family-out":
+      return "family phone signed out";
+    case "family-off":
+      return `family phones signed out (${v})`;
+    case "open-all":
+      return v === "on" ? "every World opened in the family app" : "Worlds open in order again (family app)";
     case "level-undo":
       return `Level ${v}: "handed in" undone`;
     case "level-marks":

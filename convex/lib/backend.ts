@@ -5,7 +5,7 @@ import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { fighter, type Fighter, type MasterData } from "./book";
 import { slDay } from "./day";
-import { computeMaster, EMPTY_MASTER, type MState } from "./master";
+import { computeMaster, EMPTY_MASTER, homeToCheck, type MState } from "./master";
 import { computeStatus } from "./status";
 
 export type Stage = "fighter" | "master" | "legend" | "sprint";
@@ -364,8 +364,10 @@ export async function givenWork(
  */
 export function openWork(book: Doc<"books">, p: Doc<"progress">): boolean {
   if (book.data.kind === "fighter") return computeStatus(p.marks ?? {}, fighter(book.data)).pending.length > 0;
-  const ms = computeMaster(masterState(p), book.data);
-  return ms.waiting.length > 0 || ms.pending.length > 0 || ms.theory.length > 0 || ms.reteach;
+  const m = masterState(p);
+  const ms = computeMaster(m, book.data);
+  // A level marked at home that Correction hasn't checked yet is work for her (⌂).
+  return ms.waiting.length > 0 || ms.pending.length > 0 || ms.theory.length > 0 || ms.reteach || Object.values(m.lv).some(homeToCheck);
 }
 
 /** Quick look before reading the book: could this row have anything waiting at all? */
@@ -374,7 +376,7 @@ export function mayBeOpen(p: Doc<"progress">): boolean {
   const m = masterState(p);
   return (
     !!m.reteach ||
-    Object.values(m.lv).some((l) => !!l?.done && !l.fixed) ||
+    Object.values(m.lv).some((l) => (!!l?.done && !l.fixed) || homeToCheck(l)) ||
     Object.values(m.q).some((r) => (!!r?.lost && !r.x && !r.th) || (!!r?.th && !r.tt))
   );
 }

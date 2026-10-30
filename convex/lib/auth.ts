@@ -38,7 +38,7 @@ const PERM_WORDS: Record<Exclude<Perm, "any">, string> = {
 };
 
 /** SHA-256 of a secret, tagged by what it is (a token can never pass as a link code). */
-export function secretHash(kind: "token" | "link" | "setup", secret: string): string {
+export function secretHash(kind: "token" | "link" | "setup" | "family-link" | "family-token", secret: string): string {
   return sha256Hex(`aristora:${kind}:${secret}`);
 }
 
@@ -141,4 +141,47 @@ export function publicUser(user: Doc<"users">) {
     can: user.role === "owner" ? EXTRAS : user.can,
     hasPin: !!user.pinHash,
   };
+}
+
+// ---- Family phones (the family app, app.aristora.org) ----
+// A family phone sees one student: its own child. Its token lives in familyDevices (never in devices), hashed with
+// its own tag, so it can never pass viewer() or actor(): every teacher function stays closed to it.
+
+/** What a signed-out family phone is told (the family app looks for these words). */
+export const FAMILY_SIGNED_OUT = "This phone is signed out of ARISTORA. Ask the class for a new link.";
+/** Family links work this long, once. */
+export const FAMILY_LINK_MS = 7 * 24 * 60 * 60_000;
+
+/** The family phone and its student, or null (unknown, signed out, unused for 120 days, or the student removed). */
+export async function familyOf(
+  ctx: QueryCtx,
+  token: string | undefined,
+): Promise<{ device: Doc<"familyDevices">; student: Doc<"students"> } | null> {
+  if (!token || token.length < 40 || token.length > 128) return null;
+  const device = await ctx.db
+    .query("familyDevices")
+    .withIndex("by_token", (q) => q.eq("tokenHash", secretHash("family-token", token)))
+    .first();
+  if (!device || device.revokedAt !== undefined) return null;
+  if (Date.now() - device.lastSeenAt > DEVICE_IDLE_MS) return null;
+  const student = await ctx.db.get(device.studentId);
+  if (!student || student.archived) return null;
+  return { device, student };
+}
+
+/** Family queries: the student this phone belongs to. */
+export async function familyViewer(ctx: QueryCtx, token: string | undefined): Promise<Doc<"students">> {
+  const s = await familyOf(ctx, token);
+  if (!s) fail(FAMILY_SIGNED_OUT);
+  return s.student;
+}
+
+/** Family mutations: the student this phone belongs to; keeps the phone's "last used" time. */
+export async function familyActor(ctx: MutationCtx, token: string | undefined): Promise<Doc<"students">> {
+  const s = await familyOf(ctx, token);
+  if (!s) fail(FAMILY_SIGNED_OUT);
+  const now = Date.now();
+  if (now - s.device.lastSeenAt > SEEN_EVERY_MS) await ctx.db.patch(s.device._id, { lastSeenAt: now });
+  rememberActor(ctx, `family of ${s.student.name}`);
+  return s.student;
 }

@@ -92,6 +92,9 @@ export const masterState = v.object({
       got: v.optional(v.number()),
       /** Done on paper before the app: a later level was handed in or corrected while this one had no record. */
       pre: v.optional(v.number()),
+      /** Marked at home by the phone (the family app), at; hc = the corrector looked at his working (Checked). */
+      home: v.optional(v.number()),
+      hc: v.optional(v.number()),
     }),
   ),
   reteach: v.optional(v.object({ at: v.number(), by: v.optional(v.string()) })),
@@ -173,6 +176,8 @@ export default defineSchema({
     lastInAt: v.optional(v.number()),
     /** When he was removed from the class (for "left this month"). */
     archivedAt: v.optional(v.number()),
+    /** The family app opens every World for him (else: his unit, books given, and the next after a finished one). */
+    openAll: v.optional(v.boolean()),
   }).index("by_archived", ["archived"]),
 
   /**
@@ -338,6 +343,33 @@ export default defineSchema({
   })
     .index("by_code", ["codeHash"])
     .index("by_user", ["userId"]),
+
+  /**
+   * The family app (app.aristora.org): a student's family signs in with a link sent on WhatsApp (one use, 7 days).
+   * A family phone sees only its own child, through convex/family.ts; it can never pass as a teacher's phone (its own
+   * table and its own hash tag). Only SHA-256 of the code and the token are stored.
+   */
+  familyLinks: defineTable({
+    studentId: v.id("students"),
+    codeHash: v.string(),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+    usedAt: v.optional(v.number()),
+    cancelledAt: v.optional(v.number()),
+    createdBy: v.optional(v.id("users")),
+  })
+    .index("by_code", ["codeHash"])
+    .index("by_student", ["studentId"]),
+  familyDevices: defineTable({
+    studentId: v.id("students"),
+    tokenHash: v.string(),
+    label: v.string(),
+    createdAt: v.number(),
+    lastSeenAt: v.number(),
+    revokedAt: v.optional(v.number()),
+  })
+    .index("by_token", ["tokenHash"])
+    .index("by_student", ["studentId"]),
 
   /** Small settings: the data version (for one-time updates). */
   meta: defineTable({ key: v.string(), value: v.any() }).index("by_key", ["key"]),

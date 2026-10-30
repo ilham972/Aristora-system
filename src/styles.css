@@ -6511,3 +6511,90 @@ body.locked.tp-padded .toasts {
     font-size: 16px;
   }
 }
+
+/* ---------- The family app on the teachers' side (Settings → Students → Family; Books; Correction's ⌂) ---------- */
+.fam-sheet .fam-phones li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.fam-open {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 0;
+}
+.fam-open input {
+  width: 22px;
+  height: 22px;
+  margin-top: 2px;
+  flex: none;
+}
+.fam-open span {
+  display: grid;
+  gap: 2px;
+}
+.phone-ans {
+  margin-top: 6px;
+}
+.phone-ans-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  display: grid;
+  gap: 2px;
+  font-size: 13px;
+}
+.phone-ans-list li {
+  display: flex;
+  gap: 8px;
+  padding: 3px 6px;
+  border-radius: 6px;
+}
+.phone-ans-list li.teach {
+  background: var(--evaluation-soft);
+}
+.phone-ans-list li b {
+  min-width: 34px;
+  flex: none;
+}
+.phone-ans-list .pa-ok + .pa-ok::before,
+.phone-ans-list .pa-t + .pa-ok::before,
+.phone-ans-list .pa-ok + .pa-t::before,
+.phone-ans-list .pa-t + .pa-t::before {
+  content: " · ";
+  color: var(--ink-3);
+}
+.phone-ans-list .pa-t {
+  color: var(--evaluation-ink);
+  font-weight: 700;
+}
+/* Correction: a name with levels marked at home to check, a level marked at home, Checked. */
+.fc-nm-h {
+  font-style: normal;
+  font: 700 11px/1 var(--font);
+  color: var(--evaluation-ink);
+  background: var(--evaluation-soft);
+  border-radius: 999px;
+  padding: 2px 4px;
+  margin-left: 3px;
+}
+.fc-lb.home {
+  box-shadow: inset 0 0 0 2px var(--evaluation);
+}
+.fc-lb.home::before {
+  content: "⌂";
+  position: absolute;
+  top: -1px;
+  left: 2px;
+  font: 700 9px/1 var(--font);
+  color: var(--evaluation-ink);
+}
+.fc-remark.fc-home {
+  color: var(--evaluation-ink);
+  font-weight: 700;
+}
+.btn.fc-hcheck {
+  background: var(--green);
+  color: #fff;
+}

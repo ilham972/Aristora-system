@@ -26,7 +26,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { PART_NAME, partOf, type MasterLevel } from "../convex/lib/book";
-import { levelWaits, teachState, type TeachState } from "../convex/lib/master";
+import { homeToCheck, levelWaits, teachState, type TeachState } from "../convex/lib/master";
 import { slClock, slDate, slDay } from "../convex/lib/day";
 import { boldRuns, type KeyAnswer } from "../convex/lib/key";
 import type { Mark, MarkState } from "../convex/lib/status";
@@ -37,6 +37,7 @@ import { CallsBand } from "./correction";
 import { fmtMin, tagOf, type View } from "./derive";
 import {
   autoLevel,
+  homeLevels,
   beforeOf,
   blankWords,
   CARRY_MS,
@@ -346,7 +347,8 @@ function paperFor(v: View, now: number): Paper {
     };
   }
   const l = autoLevel(v, latestDrafts);
-  return l ? masterAt(v, l) : { kind: "over", studentId: v.s._id, unitId: v.s.unitId! };
+  // A level marked at home opens with the phone's marks, to check (the others open to mark).
+  return l ? paperAt(v, l) : { kind: "over", studentId: v.s._id, unitId: v.s.unitId! };
 }
 
 /** Theory-book marks this paper changed: they join "Saved on this phone" (Take back). */
@@ -466,7 +468,11 @@ function openFor(v: View, now: number) {
   leave();
   window.scrollTo(0, 0);
   // He works on several books: nothing handed in in this one but a level of another book is: that book opens.
-  const other = !v.ms?.waiting.length ? v.others.find((b) => b.ms?.waiting.length) : undefined;
+  const here = v.where !== "absent";
+  const other =
+    !v.ms?.waiting.length && !(here && homeLevels(v).length)
+      ? (v.others.find((b) => b.ms?.waiting.length) ?? (here ? v.others.find((b) => homeLevels(b).length) : undefined))
+      : undefined;
   if (other?.unit) {
     void moveTo(v, "master", other.unit);
     return;
@@ -773,7 +779,12 @@ function NameBar(props: {
           {pills.map((p) => {
             const on = p.v.s._id === props.openId;
             const d = marking(p.v);
-            const words = [p.tone ? TONE_WORDS[p.tone] : "", p.waiting > 1 ? `${p.waiting} levels handed in` : "", d ? "marked part of the way" : ""]
+            const words = [
+              p.tone ? TONE_WORDS[p.tone] : "",
+              p.waiting > 1 ? `${p.waiting} levels handed in` : "",
+              d ? "marked part of the way" : "",
+              p.home ? `${p.home} marked at home, to check` : "",
+            ]
               .filter(Boolean)
               .join(", ");
             return (
@@ -790,6 +801,11 @@ function NameBar(props: {
                 {p.waiting > 1 && (
                   <i class="fc-nm-n" aria-hidden="true">
                     {p.waiting}
+                  </i>
+                )}
+                {p.home > 0 && (
+                  <i class="fc-nm-h" aria-hidden="true">
+                    ⌂{p.home > 1 ? p.home : ""}
                   </i>
                 )}
               </button>
@@ -1270,13 +1286,14 @@ function LevelBar(props: { v: View; open: number | null; drafts: Draft[] | undef
         const w = look === "fixed" ? levelWaits(v.mm, l) : { evaluation: 0, theory: 0 };
         const wait = w.evaluation ? " w-eval" : w.theory ? " w-theory" : "";
         const waitWords = w.evaluation ? `, ${w.evaluation} waiting for Evaluation` : w.theory ? `, ${w.theory} waiting for Theory` : "";
+        const home = homeToCheck(v.mm.lv[String(l.n)]);
         return (
           <button
             key={l.n}
             type="button"
-            class={`fc-lb ${look}${mark}${wait}${on ? " on" : ""}${newPart(i) ? " gap" : ""}`}
+            class={`fc-lb ${look}${mark}${wait}${home ? " home" : ""}${on ? " on" : ""}${newPart(i) ? " gap" : ""}`}
             aria-pressed={on}
-            aria-label={`Level ${l.n}, Q${l.from}–${l.to}: ${LOOK_WORDS[look]}${look === "fixed" ? `, ${got ?? 0} of ${l.max}${waitWords}` : ""}`}
+            aria-label={`Level ${l.n}, Q${l.from}–${l.to}: ${home ? "marked at home, to check" : LOOK_WORDS[look]}${look === "fixed" ? `, ${got ?? 0} of ${l.max}${waitWords}` : ""}`}
             onClick={() => props.onPick(l.n)}
           >
             {l.n}
@@ -1293,7 +1310,9 @@ function LevelLine(props: { v: View; l: MasterLevel; look: LevelLook; now: numbe
   const lv = v.mm.lv[String(l.n)];
   const part = partOf(v.mb!, l.from)?.id;
   const state =
-    props.remark || look === "fixed"
+    (props.remark || look === "fixed") && lv?.home
+      ? `⌂ marked at home ${lv.got ?? 0} / ${l.max}${lv.hc ? " · checked" : " · to check"}`
+      : props.remark || look === "fixed"
       ? `corrected ${lv?.got ?? 0} / ${l.max}`
       : look === "waiting" && lv?.done
         ? `handed in ${fmtMin(now - lv.done)} ago`
@@ -1887,6 +1906,22 @@ function Summary(props: { v: View; paper: MasterPaper; level: MasterLevel; each:
   const remark = paper.remark;
   const changed = !remark || !sameGiven(qs, paper.given, remark);
   const back = remark ? autoLevel(v, latestDrafts) : null;
+  // Marked at home by the phone (⌂): she looks at his working; Checked when the marks stand, else change and save.
+  const home = !!remark && homeToCheck(v.mm.lv[String(level.n)]);
+  const checkOk = home && !changed && missing.length === 0;
+  const checked = async () => {
+    if (!ready || busy) return;
+    setBusy(true);
+    const r = await act(() => mutate(api.workbook.homeChecked, { studentId: v.s._id, unitId: v.s.unitId, level: level.n, by: currentRole() }));
+    setBusy(false);
+    if (!r) return;
+    toast(`Checked: ${v.s.name}, Level ${level.n} (marked at home), ${sum} / ${level.max}.`);
+    const still = openPaper?.kind === "master" && openPaper.studentId === paper.studentId && openPaper.level === level.n;
+    if (!still) return;
+    const next = autoLevel(v, latestDrafts, level.n);
+    setPaper(next && next.n !== level.n ? paperAt(v, next) : { kind: "over", studentId: v.s._id, unitId: v.s.unitId! });
+    window.scrollTo(0, 0);
+  };
 
   const save = async () => {
     if (!ready || busy || missing.length || !changed) return;
@@ -1920,8 +1955,16 @@ function Summary(props: { v: View; paper: MasterPaper; level: MasterLevel; each:
           <span>{pct}%</span>
         </p>
         {remark && (
-          <p class="fc-remark">
-            {changed ? "Changed: save to keep it." : "Corrected before. Tap a question above to change its marks."}
+          <p class={`fc-remark${home ? " fc-home" : ""}`}>
+            {home
+              ? changed
+                ? "Changed: save to keep it (that checks it too)."
+                : missing.length
+                  ? "⌂ Marked at home. The phone left the questions below to you: mark them, then save."
+                  : "⌂ Marked at home by the phone. Look at his working in his book: Checked if it stands, or tap a question to change it."
+              : changed
+                ? "Changed: save to keep it."
+                : "Corrected before. Tap a question above to change its marks."}
             {back && back.n !== level.n && (
               <>
                 {" "}
@@ -1971,14 +2014,20 @@ function Summary(props: { v: View; paper: MasterPaper; level: MasterLevel; each:
         {!remark && <p class="muted small">Tap a question above to see or change its marks. Save opens his next level.</p>}
       </section>
       <div class="fc-pad">
-        <button
-          type="button"
-          class="btn big wide fc-save"
-          disabled={busy || !ready || missing.length > 0 || !changed}
-          onClick={() => void save()}
-        >
-          {remark ? (changed ? `Save changes · ${v.s.name} · ${sum} / ${level.max}` : "No changes") : `Save ${v.s.name} · ${sum} / ${level.max}`}
-        </button>
+        {checkOk ? (
+          <button type="button" class="btn big wide fc-save fc-hcheck" disabled={busy || !ready} onClick={() => void checked()}>
+            Checked ✓ · {v.s.name} · {sum} / {level.max}
+          </button>
+        ) : (
+          <button
+            type="button"
+            class="btn big wide fc-save"
+            disabled={busy || !ready || missing.length > 0 || !changed}
+            onClick={() => void save()}
+          >
+            {remark ? (changed ? `Save changes · ${v.s.name} · ${sum} / ${level.max}` : "No changes") : `Save ${v.s.name} · ${sum} / ${level.max}`}
+          </button>
+        )}
       </div>
     </>
   );
