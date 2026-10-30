@@ -440,14 +440,14 @@ describe("calls between the rooms", () => {
     expect((await t.run((ctx) => ctx.db.get(again)))!.status).toBe("sent");
   });
 
-  test("Evaluation's calls don't walk; who may tap Arrived", async () => {
+  test("Evaluation's calls walk too; who may tap Arrived", async () => {
     const t = await setup();
     const a = await addIn(t, "Ahamed");
     await teachSection(t, a, [1, 2, 3, 4]);
     await mark(t, a, 5, "wrong");
     const ev = await t.mutation(api.calls.create, { studentIds: [a], room: "evaluation", kind: "evaluation" });
     await t.mutation(api.calls.send, { callIds: [ev.created[0].callId] });
-    expect((await t.run((ctx) => ctx.db.get(ev.created[0].callId)))!.walk).toBeUndefined();
+    expect((await t.run((ctx) => ctx.db.get(ev.created[0].callId)))!.walk).toBe(true);
     // A Theory call: Theory and Correction may say he is there; an Evaluation-only teacher may not.
     const b = await addIn(t, "Bilal");
     const th = await t.mutation(api.calls.create, { studentIds: [b], room: "theory", kind: "theory" });
@@ -458,6 +458,8 @@ describe("calls between the rooms", () => {
     await addPerson(t, { name: "Cora", token: cor, tabs: ["correction"] });
     await expect(asPhone(t, eve).mutation(api.calls.arrive, { callIds: [th.created[0].callId], by: "evaluation" })).rejects.toThrow();
     expect((await asPhone(t, cor).mutation(api.calls.arrive, { callIds: [th.created[0].callId], by: "correction" })).arrived).toBe(1);
+    // Her own call: Evaluation says he is there.
+    expect((await asPhone(t, eve).mutation(api.calls.arrive, { callIds: [ev.created[0].callId], by: "evaluation" })).arrived).toBe(1);
   });
 });
 

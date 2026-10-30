@@ -10,7 +10,7 @@ import { slClock } from "../convex/lib/day";
 import { EVAL_READY_MS } from "../convex/lib/status";
 import { evalQueue, pendingSince, roomBusy, roomCalls, type RoomCall, type View } from "./derive";
 import type { Board } from "./store";
-import { mShort, outInOf, type Heat, type HeatCount } from "./theoryFocusData";
+import { LATE_SEND_MS, mShort, outInOf, sinceWords, type Heat, type HeatCount } from "./theoryFocusData";
 
 /** Students with Evaluation at once, at most (the founder's number, 2026-10-29). */
 export const EVAL_CAP = 3;
@@ -153,19 +153,53 @@ export type EvalHere = {
   qs: number[];
 };
 
-/** Who is with her now (sent), first come first, and who is on the way (called, not sent yet). */
+/** His questions for this call: in the book of this call only (never another book's numbers under this call). */
+function hereOf(rc: RoomCall, v: View): EvalHere {
+  const sameBook = !rc.c.unitId || (v.unit?._id === rc.c.unitId && (!rc.c.stage || v.stage === rc.c.stage));
+  return { rc, v, kind: rc.c.kind, qs: rc.c.kind === "evaluation" && sameBook ? [...v.pending] : [] };
+}
+
+/**
+ * Who is with her now (Arrived; calls from before 30 Oct 2026: sent), first come first, and who is on the way (called
+ * and not sent yet, or sent and walking there).
+ */
 export function evalRoom(board: Board, views: View[], now: number): { here: EvalHere[]; coming: RoomCall[] } {
   const calls = roomCalls(board, views, "evaluation", now);
   const here: EvalHere[] = [];
   const coming: RoomCall[] = [];
   for (const rc of calls) {
-    // His questions in the book of this call only (never another book's numbers under this call).
-    const sameBook = !rc.c.unitId || !rc.v || (rc.v.unit?._id === rc.c.unitId && (!rc.c.stage || rc.v.stage === rc.c.stage));
-    if (rc.c.status === "sent" && rc.v) here.push({ rc, v: rc.v, kind: rc.c.kind, qs: rc.c.kind === "evaluation" && sameBook ? [...rc.v.pending] : [] });
-    else if (rc.c.status === "requested") coming.push(rc);
+    if (rc.c.status === "sent" && rc.v && !rc.walking) here.push(hereOf(rc, rc.v));
+    else if (rc.c.status === "requested" || rc.walking) coming.push(rc);
   }
-  here.sort((a, b) => (a.rc.c.sentAt ?? a.rc.c.createdAt) - (b.rc.c.sentAt ?? b.rc.c.createdAt));
+  const at = (h: EvalHere) => h.rc.c.arrivedAt ?? h.rc.c.sentAt ?? h.rc.c.createdAt;
+  here.sort((a, b) => at(a) - at(b));
   return { here, coming };
+}
+
+/** here = with her; walking = Correction sent him; called = not sent yet. */
+export type EvalState = "here" | "walking" | "called";
+export type EvalItem = { h: EvalHere; state: EvalState; id: string; name: string; late: boolean };
+
+/**
+ * Everyone she called, in the order she called them (nobody moves when he arrives: only his pill's look changes), each
+ * with his questions. Late (red): sent and not there after 3 minutes, or Correction hasn't sent him for 3 minutes.
+ */
+export function evalItems(board: Board, views: View[], now: number): EvalItem[] {
+  return roomCalls(board, views, "evaluation", now).flatMap((rc) => {
+    if (!rc.v) return [];
+    const state: EvalState | null = rc.walking ? "walking" : rc.c.status === "sent" ? "here" : rc.c.status === "requested" ? "called" : null;
+    if (!state) return [];
+    const late = state === "walking" ? rc.lost : state === "called" && now - rc.c.createdAt >= LATE_SEND_MS;
+    return [{ h: hereOf(rc, rc.v), state, id: rc.c.studentId as string, name: rc.v.s.name, late }];
+  });
+}
+
+/** Where he is, in a few words: "on the way 1m", "not here 4m", "called", "not sent 4m", "with you 5m". */
+export function evalWords(it: EvalItem, now: number): string {
+  const rc = it.h.rc;
+  if (it.state === "walking") return it.late ? `not here ${mShort(rc.walkMs)}` : `on the way${sinceWords(rc.walkMs)}`;
+  if (it.state === "called") return it.late ? `not sent ${mShort(now - rc.c.createdAt)}` : "called";
+  return `with you${sinceWords(rc.minutes)}`;
 }
 
 /** Room left: 3 at once, counting those on the way. */

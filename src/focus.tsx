@@ -654,7 +654,7 @@ export function Focus(props: { board: Board; views: View[]; now: number }) {
   return (
     <main class="page fc-page">
       <div class="stick fc-stick" ref={stick}>
-        <CallsBand board={board} views={views} now={now} />
+        <CallsBand board={board} views={views} now={now} paper />
         {views.length > 0 && grade !== null && (
           <NameBar
             pills={shown}

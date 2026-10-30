@@ -1433,43 +1433,6 @@ button.q:disabled {
 }
 
 /* ---------- Rooms: calling and "With you" ---------- */
-.call-bar {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: calc(var(--tabs) + env(safe-area-inset-bottom));
-  z-index: 35;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  max-width: 560px;
-  margin: 0 auto;
-  padding: 10px 12px;
-  background: var(--card);
-  border-top: 3px solid var(--role);
-  box-shadow: 0 -6px 18px rgba(22, 33, 62, 0.12);
-}
-.call-bar-text {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-.call-bar-text b {
-  font-family: var(--cond);
-  font-size: 17px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.call-bar-text small {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--ink-2);
-}
-.page.with-bar {
-  padding-bottom: 80px;
-}
 .center {
   text-align: center;
 }
@@ -1832,9 +1795,6 @@ input.full {
   gap: 2px;
 }
 /* Notices sit above the Call bar when it is showing. */
-.app:has(.call-bar) .toasts {
-  bottom: calc(var(--tabs) + env(safe-area-inset-bottom) + 80px);
-}
 
 /* ---------- Master: marks table, correction sheet ---------- */
 
@@ -4989,49 +4949,9 @@ body.locked.fc-marking .toasts {
   }
 }
 
-/* ---------- Shared by the room pages (the Evaluation page's cards, the on-the-way list, question toggles) ----------
-   The Theory page's own styles (rebuilt 30 Oct 2026) are the .tp-* block near the end of this file. */
-
-.tf-card {
-  padding: 12px 12px 14px;
-  border-radius: 16px;
-  border: 1.5px solid var(--line-2);
-  background: var(--card);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.tf-card.first {
-  border-color: var(--theory);
-  box-shadow: inset 0 0 0 1px var(--theory);
-}
-.tf-card.first.u-red {
-  border-color: var(--red);
-  box-shadow: inset 0 0 0 1px var(--red);
-}
-.tf-card.room {
-  border-color: var(--theory);
-  background: linear-gradient(180deg, var(--theory-soft), var(--card) 90px);
-}
-.tf-card.room.long {
-  border-color: var(--amber);
-  background: linear-gradient(180deg, var(--amber-soft), var(--card) 90px);
-}
-.tf-kicker {
-  font: 700 12.5px/1.2 var(--font);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--theory-ink);
-}
-.tf-card.u-red .tf-kicker {
-  color: var(--red-ink);
-}
-.tf-card.long .tf-kicker {
-  color: var(--amber-ink);
-}
-.tf-help {
-  margin-top: 2px;
-}
+/* ---------- Shared by the room pages (question toggles, the Teach chips) ----------
+   The rebuilt pages' own styles (30 Oct 2026) are the .tp-* (both rooms) and Evaluation blocks near the end of this
+   file. */
 
 /* Room */
 .tf-lbl {
@@ -5069,13 +4989,6 @@ body.locked.fc-marking .toasts {
   font-size: 13.5px;
   color: var(--ink-2);
   text-decoration: underline;
-}
-.tf-h {
-  margin: 2px 2px 0;
-  font: 700 12.5px/1.2 var(--font);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--ink-3);
 }
 
 .tp-m {
@@ -5139,42 +5052,6 @@ body.locked.fc-marking .toasts {
 .tp-m.hold b {
   color: var(--ink-2);
 }
-.tp-coming {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.tp-c {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 40px;
-  max-width: 100%;
-  padding: 3px 4px 3px 10px;
-  border-radius: 999px;
-  border: 1.5px dashed var(--theory);
-  background: var(--card);
-}
-.tp-c b {
-  font-size: 15px;
-}
-.tp-c small {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--ink-3);
-  white-space: nowrap;
-}
-.tp-c.late {
-  border-style: solid;
-  border-color: var(--red);
-  background: var(--red-soft);
-}
-.tp-c.late small {
-  color: var(--red-ink);
-}
-.tp-c.pull small {
-  color: var(--evaluation-ink);
-}
 .tp-all-back {
   align-self: center;
 }
@@ -5222,8 +5099,7 @@ body.locked.fc-marking .toasts {
 .tile:active,
 .unit-p:active,
 .st-chip:active,
-.ev-c:active,
-.ev-same:active {
+.ev-c:active {
   transform: scale(0.97);
 }
 .tile-top {
@@ -5391,8 +5267,6 @@ body.locked.fc-marking .toasts {
     transform: none;
   }
 }
-.ev-room,
-.ev-h,
 .ev-q,
 .ev-c {
   animation: rise 0.22s ease-out both;
@@ -5402,70 +5276,9 @@ body.locked.fc-marking .toasts {
 .ev-page {
   gap: 12px;
 }
-.ev-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.tf-card.ev-room {
-  gap: 8px;
-  padding: 9px;
-  border-color: var(--evaluation);
-  background: linear-gradient(180deg, var(--evaluation-soft), var(--card) 80px);
-}
-.ev-room .tf-kicker {
-  color: var(--evaluation-ink);
-}
-.ev-h {
-  border-radius: 12px;
-  border: 1.5px solid var(--line-2);
-  background: var(--card);
-}
-.ev-h.long {
-  border-color: var(--amber);
-}
-.ev-h.pulled {
-  border-color: var(--theory);
-}
-.ev-h-head {
-  width: 100%;
-  min-height: 46px;
-  padding: 6px 10px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border: 0;
-  background: transparent;
-  text-align: left;
-}
 .ev-h-name {
   flex: none;
   font: 700 19px/1.1 var(--cond);
-}
-.ev-h-tag {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--ink-3);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.ev-h-min {
-  flex: none;
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--ink-2);
-  white-space: nowrap;
-}
-.ev-h-min.long {
-  color: var(--amber-ink);
-}
-.ev-h-go {
-  flex: none;
-  width: 14px;
-  color: var(--ink-3);
 }
 .ev-strip {
   display: flex;
@@ -5581,30 +5394,9 @@ body.locked.fc-marking .toasts {
   background: var(--evaluation-ink);
   border-color: var(--evaluation-ink);
 }
-.ev-h-acts {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 8px 12px;
-  padding: 0 10px 10px;
-}
 /* One book per call: Done here and he stays for his next book (no walk back), or a note to call him again later. */
-.ev-h .ev-keep {
-  display: block;
-  width: calc(100% - 20px);
-  margin: 0 10px 10px;
-  border-color: var(--evaluation);
-  color: var(--evaluation-ink);
-  font-weight: 700;
-}
 .ev-also {
   margin: 0 10px 10px;
-}
-.ev-h-acts .link-btn {
-  font-size: 13.5px;
-  color: var(--ink-2);
-  text-decoration: underline;
 }
 .ev-h-sum {
   flex: 1 1 auto;
@@ -5631,54 +5423,6 @@ body.locked.fc-marking .toasts {
   font-size: 12.5px;
   font-weight: 700;
   color: var(--ink-3);
-}
-.ev-same {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 50px;
-  padding: 6px 10px 6px 6px;
-  border-radius: 12px;
-  border: 1.5px dashed var(--evaluation);
-  background: var(--evaluation-soft);
-  text-align: left;
-}
-.ev-same-q {
-  flex: none;
-  min-width: 52px;
-  height: 36px;
-  padding: 0 8px;
-  border-radius: 10px;
-  background: var(--evaluation);
-  color: #fff;
-  display: grid;
-  place-items: center;
-  font: 700 13.5px/1 var(--font);
-  white-space: nowrap;
-}
-.ev-same-t {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  line-height: 1.15;
-}
-.ev-same-t b {
-  font-size: 14px;
-  color: var(--evaluation-ink);
-}
-.ev-same-t small {
-  font-size: 12.5px;
-  color: var(--ink-2);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.ev-same-go {
-  flex: none;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--evaluation-ink);
 }
 .ev-list {
   display: flex;
@@ -5987,8 +5731,6 @@ body.locked.fc-marking .toasts {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ev-room,
-  .ev-h,
   .ev-q,
   .ev-c,
   .nx-c.beat::before {
@@ -6679,5 +6421,93 @@ body.locked.tp-padded .toasts {
 @media (max-width: 360px) {
   .call-strip.cs-lost {
     flex-wrap: wrap;
+  }
+}
+
+/* ---------- Evaluation page, rebuilt 30 Oct 2026 like the Theory page (the .tp-* pieces: pinned rows, Room and Call
+   at the bottom, her room as pills, one file at a time), in her colour. ---------- */
+.ev-stick .pull-banner {
+  padding: 6px 6px 6px 10px;
+  border-radius: 12px;
+}
+.ev-stick .pull-banner b {
+  font-size: 15px;
+}
+.ev-stick .bump-note {
+  padding: 6px 10px;
+  font-size: 13px;
+}
+/* The same question for 2+: tiny pills in one line (tap = tick them). */
+.ev-sames {
+  gap: 5px;
+  padding: 2px 2px 4px;
+}
+.ev-same {
+  flex: none;
+  height: 32px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  border: 1.5px dashed var(--evaluation);
+  background: var(--evaluation-soft);
+  color: var(--evaluation-ink);
+  font: 700 14px/1 var(--font);
+  white-space: nowrap;
+  transition: transform 0.1s ease;
+}
+.ev-same i {
+  font-style: normal;
+  font-size: 12.5px;
+}
+.ev-same:active {
+  transform: scale(0.95);
+}
+.ev-c .tp-ln-g {
+  display: inline-grid;
+  min-width: 17px;
+  height: 17px;
+  font-size: 10.5px;
+  vertical-align: 1px;
+}
+.ev-c .tp-ln-n {
+  font-size: 13px;
+}
+.ev-left-n {
+  flex: none;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--evaluation-ink);
+}
+.ev-file .ev-strip,
+.ev-file .ev-teaching {
+  padding: 0;
+}
+.ev-file .ev-also {
+  margin: 0;
+}
+.ev-file .ev-q {
+  margin: 0;
+}
+.ev-file.long {
+  border-color: var(--amber);
+}
+.tp-pad .ev-call,
+.tp-pad .ev-done {
+  height: 56px;
+  min-height: 56px;
+  min-width: 0;
+  padding: 0 10px;
+  border-radius: 14px;
+  font-size: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (max-width: 360px) {
+  .tp-pad .ev-call,
+  .tp-pad .ev-done {
+    font-size: 16px;
   }
 }

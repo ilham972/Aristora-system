@@ -30,6 +30,9 @@ describe("what the phones say", () => {
   test("Correction hears who was sent to Theory and isn't there after 3 minutes", () => {
     expect(lostPhrase([{ name: "Kumar", room: "theory" }])).toBe("Kumar hasn't reached Theory.");
     expect(lostPhrase([{ name: "Kumar", room: "theory" }, { name: "Nila", room: "theory" }])).toBe("Kumar and Nila haven't reached Theory.");
+    expect(lostPhrase([{ name: "Kumar", room: "theory" }, { name: "Zara", room: "evaluation" }])).toBe(
+      "Kumar hasn't reached Theory. Zara hasn't reached Evaluation.",
+    );
     expect(lostPhrase([])).toBe("");
   });
 });

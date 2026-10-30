@@ -11,7 +11,7 @@
 //   sends back everyone who got it.
 // Marking taught without calling, a student's whole book and Move are on the Class page (tap his name).
 
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useRef, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import type { SectionData } from "../convex/lib/book";
@@ -19,12 +19,13 @@ import { slClock } from "../convex/lib/day";
 import type { KeyAnswer } from "../convex/lib/key";
 import { mutate } from "./backend";
 import { NobodyHere } from "./board";
-import type { RoomCall, View } from "./derive";
-import { heatWords, TodayStrip } from "./deck";
+import type { View } from "./derive";
+import { TodayStrip } from "./deck";
 import { unitNo } from "./focusData";
 import { HRow } from "./hrow";
 import { useQuery } from "./live";
 import { KeyLine, MasterStrip } from "./master";
+import { KindBar, ListIcon, RoomIcon, usePinned } from "./roomkit";
 import { scoreOf } from "./score";
 import { act, currentRole, toast, type Board, type Unit } from "./store";
 import { flushTaps } from "./taps";
@@ -33,7 +34,6 @@ import {
   HOLD_MS,
   joiners,
   kindCounts,
-  LATE_SEND_MS,
   LESSON_CAP,
   lessonLength,
   memberWords,
@@ -45,6 +45,7 @@ import {
   roomLeft,
   roomLessons,
   roomWords,
+  sinceWords,
   STAY_MS,
   startIn,
   teachLeft,
@@ -112,22 +113,8 @@ export function TheoryTab(props: { board: Board; views: View[]; now: number }) {
   const order = useRef<PillOrder | null>(null);
   const touched = useRef(0);
 
-  // The pinned rows' height: toasts go just under them, never over the two buttons at the bottom.
-  const stick = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    document.body.classList.add("tp-padded");
-    return () => document.body.classList.remove("tp-padded");
-  }, []);
-  useEffect(() => {
-    const el = stick.current;
-    if (!el) return;
-    const set = () => document.documentElement.style.setProperty("--tp-stick-h", `${el.offsetHeight}px`);
-    set();
-    if (typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(set);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [view]);
+  // The pinned rows' height: toasts sit just above the two buttons at the bottom, never over them.
+  const stick = usePinned(view);
 
   const inClass = views.filter((v) => v.where !== "absent");
   const counts = kindCounts(plan);
@@ -259,7 +246,11 @@ export function TheoryTab(props: { board: Board; views: View[]; now: number }) {
           <>
             <KindBar
               value={kind}
-              counts={counts}
+              items={[
+                { id: "all", label: "All", c: counts.all },
+                { id: "section", label: "Fighter", c: counts.section },
+                { id: "workbook", label: "Master", c: counts.workbook },
+              ]}
               onPick={(k) => {
                 setKind(k);
                 setSel(null);
@@ -399,40 +390,8 @@ export function TheoryTab(props: { board: Board; views: View[]; now: number }) {
 
 // ---------------- The pinned rows ----------------
 
-/** All / Fighter / Master: how many need theory (each student once), red = no work now. Pale when none. */
-function KindBar(props: { value: Kind; counts: Record<Kind, HeatCount>; onPick: (k: Kind) => void }) {
-  const list: { id: Kind; label: string }[] = [
-    { id: "all", label: "All" },
-    { id: "section", label: "Fighter" },
-    { id: "workbook", label: "Master" },
-  ];
-  return (
-    <nav class="tp-kinds" aria-label="Show one kind of book">
-      {list.map((it) => {
-        const c = props.counts[it.id];
-        const on = props.value === it.id;
-        return (
-          <button
-            key={it.id}
-            type="button"
-            class={`tp-kind${on ? " on" : ""}`}
-            aria-pressed={on}
-            disabled={!on && it.id !== "all" && c.total === 0}
-            aria-label={`${it.label}: ${c.total}, ${heatWords(c)}`}
-            onClick={() => props.onPick(it.id)}
-          >
-            {it.label}
-            <b>{c.total}</b>
-            {c.red > 0 && <i class="tp-kind-r">{c.red}</i>}
-          </button>
-        );
-      })}
-    </nav>
-  );
-}
-
 /** A lesson's name the way he wants it: the grade as a number, the unit number, the Tamil name (a section: its letter and Tamil title). */
-function LessonName(props: { unit: Unit | null; section: SectionData | null; kind: LessonKind }) {
+export function LessonName(props: { unit: Unit | null; section: SectionData | null; kind: LessonKind }) {
   const { unit, section } = props;
   const ta = props.kind === "section" ? section?.tamil || unit?.ta : unit?.ta;
   return (
@@ -493,7 +452,7 @@ function RoomHead(props: { room: RoomLesson[]; items: RoomItem[]; now: number })
     <p class={`tp-rhead${long ? " lt-long" : ""}`} aria-label="Your room">
       <span class="strong">{here} with you</span>
       {coming > 0 && <span class={lost ? "t-red strong" : "t-theory strong"}>{coming} on the way</span>}
-      {since !== null && <span>{long ? `Still with you? ${mShort(now - since)}` : mShort(now - since)}</span>}
+      {since !== null && now - since >= 60_000 && <span>{long ? `Still with you? ${mShort(now - since)}` : mShort(now - since)}</span>}
     </p>
   );
 }
@@ -502,7 +461,7 @@ function RoomHead(props: { room: RoomLesson[]; items: RoomItem[]; now: number })
 function RoomPill(props: { it: RoomItem; on: boolean; stays: boolean; now: number; onPick: () => void }) {
   const { it, on } = props;
   const cls = it.state === "here" ? "rs-in" : it.state === "walking" ? "rs-walk" : it.state === "eval" ? "rs-ev" : "rs-call";
-  const small = it.state === "here" ? "" : it.state === "walking" ? mShort(it.rc.walkMs) : it.state === "eval" ? "Eval" : "called";
+  const small = it.state === "here" ? "" : it.state === "walking" ? sinceWords(it.rc.walkMs).trim() : it.state === "eval" ? "Eval" : "called";
   return (
     <button
       type="button"
@@ -784,51 +743,6 @@ function FileQuestions(props: {
               {r?.x ? <small>explained {slClock(r.x)}</small> : null}
             </span>
             {k && <KeyLine k={k} />}
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
-function RoomIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M4 21h16M6 21V4h9v17M15 6h3v15" />
-      <circle cx="12.5" cy="12.5" r="0.9" fill="currentColor" />
-    </svg>
-  );
-}
-
-function ListIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
-      <path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01" />
-    </svg>
-  );
-}
-
-/** Called, not here yet: on the way (red when Correction hasn't sent him for 3 minutes), or finishing in Evaluation. */
-export function Coming(props: { calls: RoomCall[]; now: number }) {
-  const { calls, now } = props;
-  return (
-    <ul class="tp-coming" aria-label="On the way">
-      {calls.map((rc) => {
-        const name = rc.v?.s.name ?? "?";
-        const waited = now - rc.c.createdAt;
-        const late = !rc.c.pull && waited >= LATE_SEND_MS;
-        return (
-          <li key={rc.c._id} class={`tp-c${late ? " late" : ""}${rc.c.pull ? " pull" : ""}`}>
-            <b>{name}</b>
-            <small>{rc.c.pull ? "in Eval first" : late ? `not sent ${mShort(waited)}` : `coming${waited >= 60_000 ? ` ${mShort(waited)}` : ""}`}</small>
-            <button
-              type="button"
-              class="cs-x"
-              aria-label={`Cancel the call for ${name}`}
-              onClick={() => void act(() => mutate(api.calls.cancel, { callIds: [rc.c._id], by: currentRole() }))}
-            >
-              ×
-            </button>
           </li>
         );
       })}

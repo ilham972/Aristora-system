@@ -532,10 +532,13 @@ export function roomItems(room: RoomLesson[], now: number): RoomItem[] {
   return out.sort((a, b) => a.rc.c.createdAt - b.rc.c.createdAt || a.name.localeCompare(b.name));
 }
 
-/** The pill's words for where he is: "1m" on the way, "called 2m", "in Eval". */
+/** " 4m" from a minute on ("on the way" just after Sent, never "0m"). */
+export const sinceWords = (ms: number) => (ms >= 60_000 ? ` ${mShort(ms)}` : "");
+
+/** The pill's words for where he is: "on the way 1m", "not here 4m", "called", "not sent 4m", "in Eval first", "with you 5m". */
 export function roomWords(it: RoomItem, now: number): string {
-  if (it.state === "walking") return it.late ? `not here ${mShort(it.rc.walkMs)}` : `on the way ${mShort(it.rc.walkMs)}`;
+  if (it.state === "walking") return it.late ? `not here ${mShort(it.rc.walkMs)}` : `on the way${sinceWords(it.rc.walkMs)}`;
   if (it.state === "called") return it.late ? `not sent ${mShort(now - it.rc.c.createdAt)}` : "called";
   if (it.state === "eval") return "in Eval first";
-  return `with you ${mShort(it.rc.minutes)}`;
+  return `with you${sinceWords(it.rc.minutes)}`;
 }

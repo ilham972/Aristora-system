@@ -12,8 +12,10 @@ import {
   defaultEvalTicks,
   EVAL_CAP,
   evalCounts,
+  evalItems,
   evalLeft,
   evalRoom,
+  evalWords,
   finishPlan,
   qLabel,
   sameGroups,
@@ -37,7 +39,18 @@ const right = (from: number, to: number): Marks =>
   Object.fromEntries(Array.from({ length: to - from + 1 }, (_, i) => [String(from + i), { s: "right" as const, t: NOW - 30 * MIN }]));
 const wrong = (q: number, ago: number, n = 1): Marks => ({ [String(q)]: { s: "wrong", n, t: NOW - ago * MIN } });
 
-type Call = { _id: string; studentId: string; room: "theory" | "evaluation"; kind: "theory" | "evaluation"; status: string; createdAt: number; sentAt?: number; pull?: boolean };
+type Call = {
+  _id: string;
+  studentId: string;
+  room: "theory" | "evaluation";
+  kind: "theory" | "evaluation";
+  status: string;
+  createdAt: number;
+  sentAt?: number;
+  pull?: boolean;
+  walk?: boolean;
+  arrivedAt?: number;
+};
 
 /** A theory-book student (the G11 pilot book). */
 function th(name: string, marks: Marks, o: { where?: View["where"]; idleMs?: number; calls?: Call[]; lastActivityAt?: number; pulled?: boolean } = {}): View {
@@ -150,6 +163,29 @@ describe("With her: 3 at once, one question at a time", () => {
     expect(room.here.map((h) => [h.v.s.name, h.qs])).toEqual([["Kumar", [18, 19]]]);
     expect(room.coming.map((rc) => rc.c.studentId)).toEqual(["Nila"]);
     expect(evalLeft(room)).toBe(1);
+  });
+
+  test("her room (30 Oct 2026): sent = on the way until she taps Arrived; late after 3 minutes; in call order", () => {
+    const c = (id: string, o: Partial<Call>): Call => ({ _id: `c-${id}`, studentId: id, room: "evaluation", kind: "evaluation", status: "sent", createdAt: NOW - 10 * MIN, ...o });
+    const calls = [
+      c("Kumar", { walk: true, sentAt: NOW - 8 * MIN, arrivedAt: NOW - 6 * MIN }),
+      c("Nila", { walk: true, sentAt: NOW - MIN }),
+      c("Sana", { walk: true, sentAt: NOW - 4 * MIN }),
+      c("Zara", { status: "requested", createdAt: NOW - 4 * MIN, sentAt: undefined }),
+    ];
+    const vs = calls.map((x) => th(x.studentId, { ...IN_C, ...wrong(18, 30) }, { where: x.status === "sent" ? "evaluation" : "hall", calls: [x] }));
+    const room = evalRoom(board(calls), vs, NOW);
+    expect(room.here.map((h) => h.v.s.name)).toEqual(["Kumar"]);
+    expect(room.coming.map((rc) => rc.c.studentId)).toEqual(["Nila", "Sana", "Zara"]);
+    expect(evalLeft(room)).toBe(0); // 3 at most, counting those on the way
+    const items = evalItems(board(calls), vs, NOW);
+    expect(items.map((it) => [it.name, it.state, it.late, evalWords(it, NOW)])).toEqual([
+      ["Kumar", "here", false, "with you 6m"],
+      ["Nila", "walking", false, "on the way 1m"],
+      ["Sana", "walking", true, "not here 4m"],
+      ["Zara", "called", true, "not sent 4m"],
+    ]);
+    expect(items[0].h.qs).toEqual([18]);
   });
 
   test("Done: what she decided; 'All explained' fills in the rest; theory books re-teach the section", () => {

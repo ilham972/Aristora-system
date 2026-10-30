@@ -24,11 +24,14 @@ export function callPhrase(calls: { name: string; room: RoomName }[]): string {
   return parts.join(" ");
 }
 
-/** Correction's phone, when a student sent to Theory isn't there after 3 minutes: go and find him. */
+/** Correction's phone, when a student sent to a room isn't there after 3 minutes: go and find him. */
 export function lostPhrase(calls: { name: string; room: RoomName }[]): string {
-  const names = calls.map((c) => c.name);
-  const who = joinNames(names);
-  return who ? `${who} ${names.length === 1 ? "hasn't" : "haven't"} reached ${ROOM_WORD[calls[0].room]}.` : "";
+  const parts: string[] = [];
+  for (const room of ["theory", "evaluation"] as const) {
+    const names = calls.filter((c) => c.room === room).map((c) => c.name);
+    if (names.length) parts.push(`${joinNames(names)} ${names.length === 1 ? "hasn't" : "haven't"} reached ${ROOM_WORD[room]}.`);
+  }
+  return parts.join(" ");
 }
 
 /** Evaluation's phone, when Theory takes a student straight from the evaluation room. */

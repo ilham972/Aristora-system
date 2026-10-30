@@ -297,19 +297,20 @@ async function notNow(callId: Id<"calls">, name: string, room: keyof typeof ROOM
 /**
  * Rooms asking for students: one slim strip per room. The page keeps it stuck under the header (with the grade
  * pills) so it shows even when the register is scrolled. Tap × for "not now", Sent when they've gone.
- * Sent to Theory (30 Oct 2026): a quiet strip counts his 3 minutes down until Theory taps Arrived; after 3 minutes a
- * red strip (and the phone says so) until Correction finds him: "Reached" (he is there) or "In the hall" (back to work).
+ * Sent to a room (30 Oct 2026): a quiet strip counts his 3 minutes down until its teacher taps Arrived; after 3 minutes
+ * a red strip (and the phone says so) until Correction finds him: "Reached" (he is there) or "In the hall" (back to work).
+ * `paper` (the Correction page): no countdown strip, so the paper keeps its room on small phones; the red one still shows.
  */
-export function CallsBand(props: { board: Board; views: View[]; now: number }) {
+export function CallsBand(props: { board: Board; views: View[]; now: number; paper?: boolean }) {
   const { board, views, now } = props;
   const byId = new Map(views.map((v) => [v.s._id as string, v]));
   const waiting = board.calls.filter((c) => c.status === "requested" && !c.pull);
   const pulls = board.calls.filter((c) => c.status === "requested" && c.pull);
   const walked = (c: Board["calls"][number]) => now - (c.sentAt ?? c.createdAt);
   const walking = board.calls.filter(isWalking);
-  const onWay = walking.filter((c) => walked(c) < WALK_MS);
+  const onWay = props.paper ? [] : walking.filter((c) => walked(c) < WALK_MS);
   const lost = walking.filter((c) => walked(c) >= WALK_MS);
-  if (waiting.length === 0 && pulls.length === 0 && walking.length === 0) return null;
+  if (waiting.length === 0 && pulls.length === 0 && onWay.length === 0 && lost.length === 0) return null;
   const nameOf = (c: { studentId: string }) => byId.get(c.studentId)?.s.name ?? "?";
 
   const rooms = (["theory", "evaluation"] as const)
@@ -366,35 +367,39 @@ export function CallsBand(props: { board: Board; views: View[]; now: number }) {
           <b>{byId.get(c.studentId)?.s.name ?? "?"}</b> goes from Evaluation straight to Theory. Nothing to do.
         </p>
       ))}
-      {onWay.length > 0 && (
-        <section class="call-strip theory cs-walk" aria-label="On the way to Theory">
-          <span class="cs-room-text">
-            <b>To Theory</b>
-            <small>walking</small>
-          </span>
-          <ul class="cs-names">
-            {onWay.map((c) => (
-              <li key={c._id} class="cs-chip">
-                <span class="call-name">{nameOf(c)}</span>
-                <small class="cs-left">{Math.max(1, Math.ceil((WALK_MS - walked(c)) / 60_000))}m left</small>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      {(["theory", "evaluation"] as const).map((room) => {
+        const list = onWay.filter((c) => c.room === room);
+        if (list.length === 0) return null;
+        return (
+          <section key={room} class={`call-strip ${room} cs-walk`} aria-label={`On the way to ${ROOM[room]}`}>
+            <span class="cs-room-text">
+              <b>To {ROOM[room]}</b>
+              <small>walking</small>
+            </span>
+            <ul class="cs-names">
+              {list.map((c) => (
+                <li key={c._id} class="cs-chip">
+                  <span class="call-name">{nameOf(c)}</span>
+                  <small class="cs-left">{Math.max(1, Math.ceil((WALK_MS - walked(c)) / 60_000))}m left</small>
+                </li>
+              ))}
+            </ul>
+          </section>
+        );
+      })}
       {lost.map((c) => {
         const name = nameOf(c);
         return (
-          <section key={c._id} class="call-strip cs-lost" aria-label={`${name} hasn't reached Theory`}>
+          <section key={c._id} class="call-strip cs-lost" aria-label={`${name} hasn't reached ${ROOM[c.room]}`}>
             <span class="cs-lost-t">
-              <b>{name}</b> isn't in Theory · {Math.floor(walked(c) / 60_000)}m
+              <b>{name}</b> isn't in {ROOM[c.room]} · {Math.floor(walked(c) / 60_000)}m
             </span>
             <button
               type="button"
               class="btn small cs-reached"
               onClick={async () => {
                 const r = await act(() => mutate(api.calls.arrive, { callIds: [c._id], by: currentRole() }));
-                if (r?.arrived) toast(`${name} reached Theory.`);
+                if (r?.arrived) toast(`${name} reached ${ROOM[c.room]}.`);
               }}
             >
               Reached
@@ -404,7 +409,7 @@ export function CallsBand(props: { board: Board; views: View[]; now: number }) {
               class="btn ghost small cs-hall"
               onClick={async () => {
                 const r = await act(() => mutate(api.calls.cancel, { callIds: [c._id], by: currentRole() }));
-                if (r) toast(`${name} is back in the hall. Theory can call him again.`);
+                if (r) toast(`${name} is back in the hall. ${ROOM[c.room]} can call him again.`);
               }}
             >
               In the hall

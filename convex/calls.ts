@@ -137,8 +137,9 @@ async function bookPlace(ctx: MutationCtx, s: Doc<"students">, unitId: Id<"units
 }
 
 async function sendNow(ctx: MutationCtx, c: Doc<"calls">, now: number, session: Doc<"sessions"> | null, by?: string) {
-  // To Theory he walks, and Theory taps Arrived when he is there (Correction is told if he isn't, after 3 minutes).
-  await ctx.db.patch(c._id, { status: "sent", sentAt: now, ...(c.room === "theory" ? { walk: true } : {}) });
+  // He walks to the room, and its teacher taps Arrived when he is there (Correction is told if he isn't, after 3
+  // minutes). Theory's calls since 30 Oct 2026, Evaluation's too since the same evening.
+  await ctx.db.patch(c._id, { status: "sent", sentAt: now, walk: true });
   const s = await ctx.db.get(c.studentId);
   if (!s) return;
   await ctx.db.patch(s._id, { room: c.room });
@@ -209,12 +210,12 @@ export const undoDecline = mutation({
   },
 });
 
-/** Sent to Theory, not there yet (Theory hasn't tapped Arrived). */
+/** Sent to a room, not there yet (its teacher hasn't tapped Arrived). */
 const walking = (c: Doc<"calls">) => c.status === "sent" && !!c.walk && c.arrivedAt === undefined;
 
 /**
- * Room teacher changed her mind before the student was sent; or he was sent to Theory and never got there (Theory:
- * "Not coming", Correction: "In the hall"): the call ends and he is back in the hall.
+ * Room teacher changed her mind before the student was sent; or he was sent and never got there (the teacher: "Not
+ * coming", Correction: "In the hall"): the call ends and he is back in the hall.
  */
 export const cancel = mutation({
   args: { token: v.optional(v.string()), callIds: v.array(v.id("calls")), by: v.optional(v.string()) },
@@ -250,8 +251,9 @@ export const cancel = mutation({
 export const UNDO_ARRIVE_MS = 2 * 60_000;
 
 /**
- * Theory: "Arrived" - he is in the room (sent at Sent, he walked there). Correction may say it too ("He reached
- * Theory") when its phone asks where he is. A student who came before Correction tapped Sent is sent and here at once.
+ * The room's teacher: "Arrived" - he is in the room (sent at Sent, he walked there). Correction may say it too ("He
+ * reached Theory") when its phone asks where he is. A student who came before Correction tapped Sent is sent and here
+ * at once.
  */
 export const arrive = mutation({
   args: { token: v.optional(v.string()), callIds: v.array(v.id("calls")), by: v.optional(v.string()) },

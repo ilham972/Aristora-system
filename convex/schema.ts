@@ -248,9 +248,9 @@ export default defineSchema({
     createdAt: v.number(),
     sentAt: v.optional(v.number()),
     /**
-     * Sent to the theory room (30 Oct 2026): he walks there and Theory taps Arrived (arrivedAt). Until then he is on
-     * his way; after 3 minutes Correction is told to look for him. Calls without it (Evaluation, older calls) count as
-     * there once sent.
+     * Sent to a room (30 Oct 2026): he walks there and its teacher taps Arrived (arrivedAt). Until then he is on his
+     * way; after 3 minutes Correction is told to look for him. Calls without it (older calls, "keep him") count as there
+     * once sent.
      */
     walk: v.optional(v.boolean()),
     arrivedAt: v.optional(v.number()),
