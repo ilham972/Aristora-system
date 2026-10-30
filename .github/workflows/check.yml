@@ -1,0 +1,122 @@
+# The full check (typecheck, unit tests, build, run-throughs on simulated phones) on a GitHub machine, for chats
+# that can't install packages. It runs only on the branch "ci-check" (or by hand), never on main, and writes its
+# report back onto that branch (ci-report/: one log per step, the outcome of each, the screenshots picked in ci/pick).
+# Vercel never builds "ci-check" (vercel.json: git.deploymentEnabled).
+name: check
+
+on:
+  push:
+    branches: ["ci-check"]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ci-check
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      TZ: Asia/Colombo
+      CONVEX_URL: https://qualified-fish-602.convex.cloud
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install
+        id: install
+        shell: bash
+        run: |
+          mkdir -p ci-report
+          set -o pipefail
+          npm ci --no-audit --no-fund 2>&1 | tail -40 | tee ci-report/1-install.log
+
+      - name: Typecheck
+        id: typecheck
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run typecheck 2>&1 | tee ci-report/2-typecheck.log
+
+      - name: Unit tests
+        id: unit
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npx vitest run 2>&1 | tee ci-report/3-unit.log
+
+      - name: Build
+        id: build
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee ci-report/4-build.log
+
+      - name: Chromium
+        id: chromium
+        if: steps.build.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          v=$(cat ci/playwright-version 2>/dev/null || echo 1.63.0)
+          (npm install --no-save --no-audit --no-fund "playwright@$v" && npx playwright install --with-deps chromium) 2>&1 | tail -30 | tee ci-report/5-chromium.log
+
+      - name: Run-throughs on simulated phones
+        id: e2e
+        if: steps.chromium.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          only=$(cat ci/e2e-only 2>/dev/null || true)
+          if [ -n "$only" ]; then
+            SHOTS=$PWD/shots timeout 1800 npx vitest run -c vitest.e2e.config.ts -t "$only" 2>&1 | tee ci-report/6-e2e.log
+          else
+            SHOTS=$PWD/shots timeout 1800 npx vitest run -c vitest.e2e.config.ts 2>&1 | tee ci-report/6-e2e.log
+          fi
+
+      - name: Report back onto the branch
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p ci-report/shots
+          {
+            echo "commit ${GITHUB_SHA}"
+            echo "install ${{ steps.install.outcome }}"
+            echo "typecheck ${{ steps.typecheck.outcome }}"
+            echo "unit ${{ steps.unit.outcome }}"
+            echo "build ${{ steps.build.outcome }}"
+            echo "chromium ${{ steps.chromium.outcome }}"
+            echo "e2e ${{ steps.e2e.outcome }}"
+          } > ci-report/outcome.txt
+          pick=$(cat ci/pick 2>/dev/null || echo "t*")
+          if [ -d shots ]; then
+            for g in $pick; do cp shots/$g.png ci-report/shots/ 2>/dev/null || true; done
+          fi
+          git config user.name "aristora-check"
+          git config user.email "aristora-check@users.noreply.github.com"
+          git add -f ci-report
+          git commit -m "Check report for ${GITHUB_SHA::7}" -q
+          git push origin HEAD:ci-check
+
+      - name: Fail when a check failed
+        if: always()
+        shell: bash
+        run: |
+          for s in "${{ steps.install.outcome }}" "${{ steps.typecheck.outcome }}" "${{ steps.unit.outcome }}" "${{ steps.build.outcome }}" "${{ steps.chromium.outcome }}" "${{ steps.e2e.outcome }}"; do
+            if [ "$s" != "success" ]; then exit 1; fi
+          done

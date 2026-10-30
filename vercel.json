@@ -4,6 +4,7 @@
   "installCommand": "npm ci --omit=dev",
   "buildCommand": "sh scripts/vercel-build.sh",
   "outputDirectory": "dist",
+  "git": { "deploymentEnabled": { "ci-check": false } },
   "headers": [
     {
       "source": "/assets/(.*)",
