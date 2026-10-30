@@ -5,9 +5,7 @@
 // Next: who he needs and when ("Theory D ~8m", "Eval 2", "Correct L3"), soonest first. A chip pulses only when he
 // needs it now or within 5 minutes: if everything pulsed, nothing would stand out.
 
-import { evalUrgency } from "../convex/lib/status";
-import { masterEvalUrgency } from "../convex/lib/master";
-import { pendingSince, type Tone, type View } from "./derive";
+import { evalUrgencyOf, pendingSince, type Tone, type View } from "./derive";
 import { stageName } from "./store";
 import { mShort, outInOf } from "./theoryFocusData";
 
@@ -50,16 +48,20 @@ export function nowOf(v: View, now: number): { tone: Tone; text: string } {
   }
   if (v.calledTo) return { tone: v.calledTo, text: `Called: ${v.calledTo === "theory" ? "Theory" : "Evaluation"}` };
   const idle = mins(v.idleMs);
+  // His book now blocked but a book given to him has work: he is on that one (several books at once).
+  const onOther = { tone: "green" as Tone, text: `On ${v.otherWork.join(", ")}` };
   if (v.st) {
     if (v.st.finished) return { tone: "done", text: "Finished" };
-    if (v.st.dry) return { tone: "red", text: `No work${idle}` };
+    if (v.noWork) return { tone: "red", text: `No work${idle}` };
+    if (v.st.dry) return onOther;
     if (v.quiet) return { tone: "yellow", text: `Quiet${mins(v.quietMs)}` };
     const at = placeOf(v);
     return { tone: v.st.left <= 2 && v.st.nextTheory ? "amber" : "green", text: `${at ? `${at} · ` : ""}${v.st.left} left` };
   }
   if (v.ms) {
     if (v.ms.finished) return { tone: "done", text: `Finished ${v.ms.unit.pct}%` };
-    if (v.ms.dry) return { tone: "red", text: `No work${idle}` };
+    if (v.noWork) return { tone: "red", text: `No work${idle}` };
+    if (v.ms.dry) return onOther;
     if (v.quiet) return { tone: "yellow", text: `Quiet${mins(v.quietMs)}` };
     return { tone: "green", text: `On Level ${v.ms.current!.n}` };
   }
@@ -85,7 +87,7 @@ export function nextOf(v: View, now: number, pace: number): Need[] {
   if (v.st) {
     if (v.st.finished) return [];
     if (v.st.nextTheory) {
-      const t = v.st.dry && v.st.needs.includes("theory") ? 0 : outInOf(v, now, pace);
+      const t = v.noWork && v.st.needs.includes("theory") ? 0 : outInOf(v, now, pace);
       const label = `Theory ${v.st.nextTheory}`;
       out.push({
         room: "theory",
@@ -94,22 +96,29 @@ export function nextOf(v: View, now: number, pace: number): Need[] {
         pulse: t !== null && t <= SOON_MS,
       });
     }
-    if (v.st.pending.length) evalNeed(v.st.pending.length, evalUrgency(v.marks, v.st, now));
+    if (v.st.pending.length) evalNeed(v.st.pending.length, evalUrgencyOf(v, now));
   } else if (v.ms) {
     if (v.ms.finished) return [];
     if (v.ms.waiting.length) {
       const w = v.ms.waiting;
-      out.push({ room: "correction", text: w.length === 1 ? `Correct L${w[0].n}` : `Correct ${w.length}`, inMs: 0, pulse: v.ms.dry });
+      out.push({ room: "correction", text: w.length === 1 ? `Correct L${w[0].n}` : `Correct ${w.length}`, inMs: 0, pulse: v.noWork });
     }
-    if (v.ms.pending.length) evalNeed(v.ms.pending.length, masterEvalUrgency(v.ms, now));
+    if (v.ms.pending.length) evalNeed(v.ms.pending.length, evalUrgencyOf(v, now));
     if (v.ms.reteach) {
       out.push({
         room: "theory",
         text: `Theory ${v.ms.theory.length || "unit"}`,
-        inMs: v.ms.dry ? 0 : null,
-        pulse: v.ms.dry,
+        inMs: v.noWork ? 0 : null,
+        pulse: v.noWork,
       });
     }
+  }
+  // His other books: what waits there, one chip each ("U08 L3", "U08 Eval 2", "U08 Theory 1").
+  for (const b of v.others) {
+    const code = b.unit?.code ?? "";
+    if (b.ms?.waiting.length) out.push({ room: "correction", text: `${code} L${b.ms.waiting[0].n}`, inMs: null, pulse: false });
+    else if (b.pending.length) out.push({ room: "evaluation", text: `${code} Eval ${b.pending.length}`, inMs: null, pulse: false });
+    else if (b.ms?.reteach) out.push({ room: "theory", text: `${code} Theory ${b.ms.theory.length || "unit"}`, inMs: null, pulse: false });
   }
   return out.sort((a, b) => order(a) - order(b)).slice(0, 2);
 }

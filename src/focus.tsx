@@ -462,8 +462,14 @@ function openFor(v: View, now: number) {
   if (openPaper && openPaper.studentId === v.s._id && openPaper.kind !== "wait") return;
   clearToasts();
   leave();
-  setPaper(paperFor(v, now));
   window.scrollTo(0, 0);
+  // He works on several books: nothing handed in in this one but a level of another book is: that book opens.
+  const other = !v.ms?.waiting.length ? v.others.find((b) => b.ms?.waiting.length) : undefined;
+  if (other?.unit) {
+    void moveTo(v, "master", other.unit);
+    return;
+  }
+  setPaper(paperFor(v, now));
 }
 
 /** Open one level of his workbook (the level bar, his marks table). */
@@ -1160,7 +1166,25 @@ function PaperHead(props: { v: View; later?: () => void; onUnit: () => void; onC
         </div>
       </header>
       {v.where === "absent" && <SignedOut v={v} />}
+      <AlsoHandedIn v={v} />
     </>
+  );
+}
+
+/** Levels handed in in his other books (he works on several at once): one tap opens that book. */
+function AlsoHandedIn(props: { v: View }) {
+  const { v } = props;
+  const list = v.others.filter((b) => b.ms?.waiting.length && b.unit);
+  if (list.length === 0) return null;
+  return (
+    <p class="fc-also">
+      <span>Also handed in:</span>
+      {list.map((b) => (
+        <button key={b.key} type="button" class="fc-also-b" onClick={() => void moveTo(v, "master", b.unit!)}>
+          {b.unit!.code} · L{b.ms!.waiting.map((l) => l.n).join(", L")}
+        </button>
+      ))}
+    </p>
   );
 }
 

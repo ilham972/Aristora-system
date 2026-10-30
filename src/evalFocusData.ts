@@ -41,22 +41,24 @@ export function qLabel(v: View, q: number): string {
   return s === String(q) ? `Q${q}` : s;
 }
 
-/** What he is doing meanwhile, in a few words. */
-export function workWords(v: View, now: number, pace: number): string {
+/** What he is doing meanwhile, in a few words (on his book now; or another book of his when that one is blocked). */
+export function workWords(v0: View, now: number, pace: number): string {
+  const v = v0.home ?? v0;
+  if (v.noWork) return v.idleMs !== undefined && v.idleMs >= 60_000 ? `no work ${mShort(v.idleMs)}` : "no work";
+  if ((v.st?.dry || v.ms?.dry) && v.otherWork.length) return `on ${v.otherWork[0]}`;
   if (v.st) {
     if (v.st.finished) return "finished";
-    if (v.st.dry) return v.idleMs !== undefined && v.idleMs >= 60_000 ? `no work ${mShort(v.idleMs)}` : "no work";
     const out = outInOf(v, now, pace);
     return out !== null && out <= 30 * 60_000 ? `${v.st.left} left · out ~${mShort(Math.max(60_000, out))}` : `${v.st.left} left`;
   }
-  if (v.ms) {
-    if (v.ms.dry) return v.idleMs !== undefined && v.idleMs >= 60_000 ? `no work ${mShort(v.idleMs)}` : "no work";
-    return v.ms.current ? `on L${v.ms.current.n}` : "finished";
-  }
+  if (v.ms) return v.ms.current ? `on L${v.ms.current.n}` : "finished";
   return "";
 }
 
-/** Everyone with something for Evaluation (not called by her yet), most urgent first. */
+/**
+ * Everyone with something for Evaluation (not called by her yet), most urgent first: one entry per book (a student
+ * with wrong answers in two books is listed twice; one book per call).
+ */
 export function candidates(views: View[], now: number, pace: number): Cand[] {
   return evalQueue(views, now).map((m) => {
     const v = m.v;
@@ -89,8 +91,10 @@ export function candidates(views: View[], now: number, pace: number): Cand[] {
 export function evalCounts(list: Cand[]): Record<EvalFilter, HeatCount> {
   const zero = (): HeatCount => ({ red: 0, orange: 0, yellow: 0, total: 0 });
   const out = { all: zero(), fighter: zero(), master: zero() };
+  const counted = new Set<string>();
   for (const c of list) {
-    if (c.hold) continue;
+    if (c.hold || counted.has(c.v.s._id)) continue; // his most urgent book only (the list is in order)
+    counted.add(c.v.s._id);
     for (const x of [out.all, out[c.kind]]) {
       x[c.heat]++;
       x.total++;
@@ -107,7 +111,7 @@ export function sameGroups(list: Cand[]): SameGroup[] {
   for (const c of list) {
     if (c.hold) continue;
     for (const q of c.qs) {
-      const key = `${c.v.s.unitId}:${c.v.stage}:${q}`;
+      const key = `${c.v.unit?._id ?? c.v.s.unitId}:${c.v.stage}:${q}`;
       const g = by.get(key) ?? { key, label: `${c.v.unit?.code ?? ""} ${qLabel(c.v, q)}`.trim(), q, members: [] };
       g.members.push(c);
       by.set(key, g);
@@ -116,12 +120,26 @@ export function sameGroups(list: Cand[]): SameGroup[] {
   return [...by.values()].filter((g) => g.members.length >= 2).sort((a, b) => b.members.length - a.members.length || a.q - b.q);
 }
 
-/** Who the page ticks for her: the most urgent she can call (no work, stuck, waited 10 min), as many as fit. */
+/**
+ * Who the page ticks for her: the most urgent she can call (no work, stuck, waited 10 min), as many as fit; one book
+ * per student. Returns book keys (View.key).
+ */
 export function defaultEvalTicks(list: Cand[], left: number): string[] {
-  return list
-    .filter((c) => !c.hold && c.heat !== "yellow")
-    .slice(0, Math.max(0, left))
-    .map((c) => c.v.s._id);
+  const out: string[] = [];
+  const who = new Set<string>();
+  for (const c of list) {
+    if (out.length >= Math.max(0, left)) break;
+    if (c.hold || c.heat === "yellow" || who.has(c.v.s._id)) continue;
+    who.add(c.v.s._id);
+    out.push(c.v.key);
+  }
+  return out;
+}
+
+/** His other books with something for Evaluation (not this one): "keep him for U09" when she finishes this one. */
+export function nextBooks(v: View): View[] {
+  const home = v.home ?? v;
+  return [home, ...home.others].filter((b) => b.key !== v.key && b.pending.length > 0);
 }
 
 // ---------------- The room ----------------
@@ -141,7 +159,9 @@ export function evalRoom(board: Board, views: View[], now: number): { here: Eval
   const here: EvalHere[] = [];
   const coming: RoomCall[] = [];
   for (const rc of calls) {
-    if (rc.c.status === "sent" && rc.v) here.push({ rc, v: rc.v, kind: rc.c.kind, qs: rc.c.kind === "evaluation" ? [...rc.v.pending] : [] });
+    // His questions in the book of this call only (never another book's numbers under this call).
+    const sameBook = !rc.c.unitId || !rc.v || (rc.v.unit?._id === rc.c.unitId && (!rc.c.stage || rc.v.stage === rc.c.stage));
+    if (rc.c.status === "sent" && rc.v) here.push({ rc, v: rc.v, kind: rc.c.kind, qs: rc.c.kind === "evaluation" && sameBook ? [...rc.v.pending] : [] });
     else if (rc.c.status === "requested") coming.push(rc);
   }
   here.sort((a, b) => (a.rc.c.sentAt ?? a.rc.c.createdAt) - (b.rc.c.sentAt ?? b.rc.c.createdAt));
@@ -157,7 +177,7 @@ export function evalLeft(room: { here: EvalHere[]; coming: RoomCall[] }): number
 export function canTeachHere(board: Board, v: View): boolean {
   if (v.where !== "hall" || v.calls.length > 0 || v.pending.length > 0) return false;
   if (!roomBusy(board, "theory")) return false;
-  return !!(v.st?.dry && v.st.needs.includes("theory")) || !!v.ms?.reteach;
+  return !!(v.noWork && v.st?.needs.includes("theory")) || !!v.ms?.reteach;
 }
 
 // ---------------- Explaining, question by question ----------------

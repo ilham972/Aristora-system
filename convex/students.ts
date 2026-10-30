@@ -164,6 +164,7 @@ export const setGiven = mutation({
     if (args.given) await ctx.db.insert("handouts", { studentId: s._id, unitId: unit._id, stage: args.stage, at: now, by: cleanBy(args.by) });
     else for (const h of rows) await ctx.db.delete(h._id);
     const session = await currentSession(ctx, now);
+    await refresh(ctx, s._id, now, session); // a book given = work: he may not be out of work any more
     await log(ctx, session, now, {
       kind: args.given ? "book-given" : "book-given-off",
       by: cleanBy(args.by),

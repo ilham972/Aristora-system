@@ -812,6 +812,8 @@ function describe(e: Doc<"events">): string {
       return `workbook saved: ${v}`;
     case "book-given":
       return `book given: ${v}`;
+    case "keep":
+      return `kept in Evaluation for ${v} (his next book)`;
     case "book-given-off":
       return `book taken back: ${v}`;
     case "unit-rename":

@@ -20,6 +20,10 @@ export type Board = {
   students: Student[];
   progress: Record<string, Progress>;
   books: Record<string, BookDoc>;
+  /** Students in class: their other books with something waiting (missing on an old server). */
+  more?: Record<string, Progress[]>;
+  /** Books given to them (not their book now): does each still have work? */
+  given?: Record<string, { unitId: Id<"units">; stage: "fighter" | "master"; work: boolean }[]>;
   calls: Call[];
   /** stats[room][key]: each room's score for this class (src/score.ts); missing on an old server. */
   session: { _id: Id<"sessions">; startedAt: number; lastActivityAt: number; stats?: Record<string, Record<string, number>> } | null;
@@ -310,11 +314,25 @@ export function statusOf(s: Student): Status | null {
   return st;
 }
 
+/** A book's doc (any unit and stage), if the board has it. */
+export function bookDocAt(unitId: string, stage: string): BookDoc | null {
+  return board?.books[`${unitId}:${stage}`] ?? null;
+}
+
 /** His workbook state (Master), with explanations and Theory's taps not saved yet shown at once. */
 export function masterStateOf(s: Student): MState {
   const base = ((s.stage === "master" ? progressOf(s)?.m : undefined) as MState | undefined) ?? EMPTY_MASTER;
-  const o = mOverlay.get(s._id);
-  const t = tOverlay.get(s._id);
+  return withMasterTaps(base, `${s._id}:${s.unitId}`);
+}
+
+/** His state in another workbook of his (he works on several at once), with taps not saved yet. */
+export function masterStateIn(s: Student, p: Progress): MState {
+  return withMasterTaps(((p.m as MState | undefined) ?? EMPTY_MASTER) as MState, `${s._id}:${p.unitId}`);
+}
+
+function withMasterTaps(base: MState, key: string): MState {
+  const o = mOverlay.get(key);
+  const t = tOverlay.get(key);
   if ((!o || o.size === 0) && (!t || t.size === 0)) return base;
   const q = { ...base.q };
   for (const [n, on] of o ?? []) {
@@ -341,17 +359,18 @@ export function masterStateOf(s: Student): MState {
 const mOverlay = new Map<string, Map<number, boolean>>();
 const tOverlay = new Map<string, Map<number, boolean>>();
 
-/** Theory taps on a Master question sent to it: taught or not, shown at once. */
-export async function setTaught(s: Student, qs: number[], on: boolean): Promise<void> {
-  let o = tOverlay.get(s._id);
+/** Theory taps on a Master question sent to it: taught or not, shown at once. `unitId`: the book (default: his now). */
+export async function setTaught(s: Student, qs: number[], on: boolean, unitId?: Id<"units">): Promise<void> {
+  const u = unitId ?? s.unitId;
+  let o = tOverlay.get(`${s._id}:${u}`);
   if (!o) {
     o = new Map();
-    tOverlay.set(s._id, o);
+    tOverlay.set(`${s._id}:${u}`, o);
   }
   for (const q of qs) o.set(q, on);
   emit();
   try {
-    await mutate(api.workbook.taught, { studentId: s._id, unitId: s.unitId, qs, on, by: role });
+    await mutate(api.workbook.taught, { studentId: s._id, unitId: u, qs, on, by: role });
   } catch (e) {
     toast(errorText(e), "error");
   } finally {
@@ -360,17 +379,18 @@ export async function setTaught(s: Student, qs: number[], on: boolean): Promise<
   }
 }
 
-/** Evaluation taps on a Master student's lost-mark question: explained or not, shown at once. */
-export async function setExplained(s: Student, qs: number[], on: boolean): Promise<void> {
-  let o = mOverlay.get(s._id);
+/** Evaluation taps on a Master student's lost-mark question: explained or not, shown at once. `unitId`: the book. */
+export async function setExplained(s: Student, qs: number[], on: boolean, unitId?: Id<"units">): Promise<void> {
+  const u = unitId ?? s.unitId;
+  let o = mOverlay.get(`${s._id}:${u}`);
   if (!o) {
     o = new Map();
-    mOverlay.set(s._id, o);
+    mOverlay.set(`${s._id}:${u}`, o);
   }
   for (const q of qs) o.set(q, on);
   emit();
   try {
-    await mutate(api.workbook.explain, { studentId: s._id, unitId: s.unitId, qs, on, by: role });
+    await mutate(api.workbook.explain, { studentId: s._id, unitId: u, qs, on, by: role });
   } catch (e) {
     toast(errorText(e), "error");
   } finally {

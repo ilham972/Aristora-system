@@ -4,8 +4,10 @@ import { mutation, query, type MutationCtx } from "./_generated/server";
 import {
   activeCalls,
   addStats,
+  bookFor,
   cleanBy,
   currentSession,
+  dryOf,
   fail,
   log,
   masterState,
@@ -17,7 +19,7 @@ import {
 import { fighter } from "./lib/book";
 import { computeMaster, forTheory } from "./lib/master";
 import { computeStatus } from "./lib/status";
-import { room } from "./schema";
+import { bookStage, room } from "./schema";
 import { actor, allowed, viewer } from "./lib/auth";
 
 type Rejected = { studentId: Id<"students">; name: string; reason: string };
@@ -34,6 +36,8 @@ export const create = mutation({
     studentIds: v.array(v.id("students")),
     room,
     kind: room,
+    /** The book each student is called for (he works on several at once); default: his book now. */
+    books: v.optional(v.array(v.object({ studentId: v.id("students"), unitId: v.id("units"), stage: bookStage }))),
     by: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -57,20 +61,20 @@ export const create = mutation({
       }
       const reject = (reason: string) => rejected.push({ studentId: id, name: s.name, reason });
       if (!s.present) { reject("isn't signed in. Ask Correction to sign them in first"); continue; }
-      const place = await placeOf(ctx, s);
-      if (!place.book || !place.unit) { reject("has no book in the app for this stage"); continue; }
+      const target = args.books?.find((b) => b.studentId === id);
+      const place = target ? await bookPlace(ctx, s, target.unitId, target.stage) : await placeOf(ctx, s);
+      if (!place.book || !place.unit) { reject(target ? "has no book in the app for that unit" : "has no book in the app for this stage"); continue; }
+      if (target && !place.progress) { reject(`has no work in ${place.unit.code} yet`); continue; }
       let section: string | undefined;
-      // Called while he still had work: the teacher saw it coming (the room's "ahead" score).
-      let dry = false;
+      // Called while he still had work (in any of his books): the teacher saw it coming (the room's "ahead" score).
+      const dry = (await dryOf(ctx, s)).dry;
       if (place.book.data.kind === "fighter") {
         const status = computeStatus(place.progress?.marks ?? {}, fighter(place.book.data));
-        dry = status.dry;
         if (args.kind === "theory" && !status.nextTheory) { reject("has no theory left"); continue; }
         if (args.kind === "evaluation" && status.pending.length === 0) { reject("has no wrong answers waiting"); continue; }
         if (args.kind === "theory") section = status.nextTheory!;
       } else {
         const ms = computeMaster(masterState(place.progress), place.book.data);
-        dry = ms.dry;
         if (args.kind === "theory" && !ms.reteach) { reject("isn't marked for re-teaching (Correction or Evaluation marks it)"); continue; }
         if (args.kind === "evaluation" && ms.pending.length === 0) { reject("has no lost marks to explain"); continue; }
         if (args.kind === "theory") section = "R";
@@ -123,6 +127,14 @@ export const create = mutation({
     return { created, rejected };
   },
 });
+
+/** One of his books (not necessarily his book now): its unit, book and his work in it. */
+async function bookPlace(ctx: MutationCtx, s: Doc<"students">, unitId: Id<"units">, stage: "fighter" | "master") {
+  const unit = await ctx.db.get(unitId);
+  const book = unit ? await bookFor(ctx, unit._id, stage) : null;
+  const progress = unit ? await progressFor(ctx, s._id, unit._id, stage) : null;
+  return { unit, book, progress };
+}
 
 async function sendNow(ctx: MutationCtx, c: Doc<"calls">, now: number, session: Doc<"sessions"> | null, by?: string) {
   await ctx.db.patch(c._id, { status: "sent", sentAt: now });
@@ -214,6 +226,18 @@ export const cancel = mutation({
   },
 });
 
+const finishItem = v.object({
+  callId: v.id("calls"),
+  /** Theory: teacher questions covered (untick the ones not reached). */
+  taught: v.optional(v.array(v.number())),
+  /** Theory: ladder questions he may skip. */
+  skip: v.optional(v.array(v.number())),
+  /** Evaluation: wrong answers explained (the rest stay waiting). */
+  explained: v.optional(v.array(v.number())),
+  /** Evaluation: send this section back to the theory list. */
+  reteach: v.optional(v.string()),
+});
+
 /**
  * Room teacher: "Done". Records what happened and sends him back to the hall,
  * or straight to Theory if Theory is waiting for him.
@@ -221,19 +245,7 @@ export const cancel = mutation({
 export const finish = mutation({
   args: {
     token: v.optional(v.string()),
-    items: v.array(
-      v.object({
-        callId: v.id("calls"),
-        /** Theory: teacher questions covered (untick the ones not reached). */
-        taught: v.optional(v.array(v.number())),
-        /** Theory: ladder questions he may skip. */
-        skip: v.optional(v.array(v.number())),
-        /** Evaluation: wrong answers explained (the rest stay waiting). */
-        explained: v.optional(v.array(v.number())),
-        /** Evaluation: send this section back to the theory list. */
-        reteach: v.optional(v.string()),
-      }),
-    ),
+    items: v.array(finishItem),
     by: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -259,6 +271,7 @@ export const finish = mutation({
         room: s.room === c.room ? undefined : s.room,
         lastActivityAt: now,
         lastSeenAt: now,
+        seen: { ...s.seen, [c.room]: now },
       });
       const unit = c.unitId ? await ctx.db.get(c.unitId) : null;
       await log(ctx, session, now, {
@@ -287,6 +300,68 @@ export const finish = mutation({
     if (lesson) await addStats(ctx, session, "theory", { lessons: 1 });
     await touch(ctx, session, now);
     return { done };
+  },
+});
+
+/**
+ * Evaluation: Done with this book, and he stays for his next one (no walk back to the hall): this call ends like
+ * Done, and a call for his other book starts with him already in the room. One book per call (30 Oct 2026).
+ */
+export const keep = mutation({
+  args: {
+    token: v.optional(v.string()),
+    item: finishItem,
+    unitId: v.id("units"),
+    stage: bookStage,
+    by: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["evaluation"], args.by);
+    const now = Date.now();
+    const by = cleanBy(args.by);
+    const session = await currentSession(ctx, now);
+    const c = await ctx.db.get(args.item.callId);
+    if (!c || c.status !== "sent" || c.room !== "evaluation" || c.kind !== "evaluation") fail("He isn't with you any more.");
+    if (c.unitId === args.unitId && c.stage === args.stage) fail("That is the book you just finished.");
+    const s = await ctx.db.get(c.studentId);
+    if (!s) fail("That student was removed.");
+    const theory = await ctx.db
+      .query("calls")
+      .withIndex("by_student_status", (q) => q.eq("studentId", s._id).eq("status", "requested"))
+      .collect();
+    if (theory.some((w) => w.room === "theory")) fail(`Theory wants ${s.name} now: send him there first.`);
+    const next = await bookPlace(ctx, s, args.unitId, args.stage);
+    if (!next.unit || !next.book || !next.progress) fail(`${s.name} has nothing to explain in that unit.`);
+    const waiting =
+      next.book.data.kind === "fighter"
+        ? computeStatus(next.progress.marks ?? {}, fighter(next.book.data)).pending.length
+        : computeMaster(masterState(next.progress), next.book.data).pending.length;
+    if (waiting === 0) fail(`${s.name} has nothing to explain in ${next.unit.code}.`);
+
+    const { value, n } = await record(ctx, c, s, args.item, now, session, by);
+    await addStats(ctx, session, "evaluation", { done: 1, qs: n });
+    await ctx.db.patch(c._id, { status: "done", sentAt: c.sentAt ?? c.createdAt, endedAt: now });
+    const unit = c.unitId ? await ctx.db.get(c.unitId) : null;
+    await log(ctx, session, now, { kind: "done-evaluation", by, studentId: s._id, name: s.name, unit: unit?.key, value, ms: now - (c.sentAt ?? c.createdAt) });
+
+    const callId = await ctx.db.insert("calls", {
+      studentId: s._id,
+      room: "evaluation",
+      kind: "evaluation",
+      status: "sent",
+      group: c.group,
+      unitId: next.unit._id,
+      stage: args.stage,
+      createdAt: now,
+      sentAt: now,
+      sessionId: session?._id,
+    });
+    await ctx.db.patch(s._id, { room: "evaluation", lastActivityAt: now, lastSeenAt: now, seen: { ...s.seen, evaluation: now } });
+    await log(ctx, session, now, { kind: "keep", by, studentId: s._id, name: s.name, unit: next.unit.key, value: next.unit.code });
+    await addStats(ctx, session, "evaluation", { calls: 1, ahead: (await dryOf(ctx, s)).dry ? 0 : 1 });
+    await refresh(ctx, s._id, now, session);
+    await touch(ctx, session, now);
+    return { callId };
   },
 });
 

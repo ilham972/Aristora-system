@@ -28,6 +28,7 @@ import {
   evalRoom,
   finishPlan,
   lostWords,
+  nextBooks,
   qLabel,
   sameGroups,
   type Cand,
@@ -48,10 +49,16 @@ import { Empty } from "./ui";
 
 type Decisions = Record<string, Record<number, Decision | undefined>>;
 
-/** Call students to her room: to explain, or (Theory busy) to teach theory herself. Correction sends them. */
-async function callEval(ids: string[], kind: "evaluation" | "theory"): Promise<boolean> {
+/**
+ * Call students to her room: to explain, or (Theory busy) to teach theory herself. Correction sends them. Each is
+ * called for one book (the one on his row): he works on several at once.
+ */
+async function callEval(picks: View[], kind: "evaluation" | "theory"): Promise<boolean> {
+  const books = picks.flatMap((v) =>
+    v.unit && (v.stage === "fighter" || v.stage === "master") ? [{ studentId: v.s._id, unitId: v.unit._id, stage: v.stage }] : [],
+  );
   const res = await act(() =>
-    mutate(api.calls.create, { studentIds: ids as Id<"students">[], room: "evaluation", kind, by: currentRole() }),
+    mutate(api.calls.create, { studentIds: picks.map((v) => v.s._id), room: "evaluation", kind, books, by: currentRole() }),
   );
   if (!res) return false;
   for (const r of res.rejected) toast(`${r.name} ${r.reason}.`, "error");
@@ -84,8 +91,11 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
   const counts = evalCounts(everyone);
   const list = kind === "all" ? everyone : everyone.filter((c) => c.kind === kind);
   const groups = sameGroups(list);
-  const callable = new Map(list.filter((c) => !c.hold).map((c) => [c.v.s._id as string, c]));
-  const chosen = (picked ?? defaultEvalTicks(list, left)).filter((id) => callable.has(id)).slice(0, left);
+  // Ticks are books (View.key): one book per student per call.
+  const callable = new Map(list.filter((c) => !c.hold).map((c) => [c.v.key, c]));
+  const chosen = (picked ?? defaultEvalTicks(list, left)).filter((k) => callable.has(k)).slice(0, left);
+  // He stays for his next book when the room has space, or nobody urgent waits for it.
+  const canKeep = left > 0 || !list.some((c) => !c.hold && c.heat !== "yellow");
   const teach = inGrade(inClass, grade).filter((v) => canTeachHere(board, v));
   const teachChosen = (teachPick ?? teach.slice(0, left).map((v) => v.s._id as string)).filter((id) => teach.some((v) => v.s._id === id));
   const byId = new Map(all.map((v) => [v.s._id as string, v]));
@@ -97,22 +107,47 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
   const score = scoreOf(board, all, "evaluation", now);
 
   const toggle = (c: Cand) => {
-    const id = c.v.s._id as string;
+    const id = c.v.key;
     if (c.hold) {
       toast(`${c.v.s.name}: ${c.hold}. Theory comes first.`, "error");
       return;
     }
+    // One book per call: ticking his other book swaps it.
+    const same = chosen.find((k) => k !== id && callable.get(k)?.v.s._id === c.v.s._id);
     if (chosen.includes(id)) setPicked(chosen.filter((x) => x !== id));
+    else if (same) setPicked(chosen.map((k) => (k === same ? id : k)));
     else if (left === 0) toast(`${EVAL_CAP} with you at most. Send someone back first.`, "error");
     else if (chosen.length >= left) toast(`Room for ${left} more (${EVAL_CAP} with you at most). Untick someone first.`, "error");
     else setPicked([...chosen, id]);
+  };
+
+  /** Done with this book, and he stays for his next one (no walk back to the hall). */
+  const keep = async (h: EvalHere, next: View, how: "all" | "decided") => {
+    if (!next.unit || (next.stage !== "fighter" && next.stage !== "master")) return;
+    setBusy(true);
+    await flushTaps();
+    const p = finishPlan(h, dec[h.v.key] ?? {}, how === "all");
+    let ok = true;
+    if (p.theoryQs.length) {
+      ok = !!(await act(() =>
+        mutate(api.workbook.toTheory, { studentId: h.v.s._id, unitId: h.v.unit?._id ?? h.v.s.unitId, qs: p.theoryQs, on: true, by: currentRole() }),
+      ));
+    }
+    const item = { callId: h.rc.c._id, explained: p.explained, ...(p.reteach ? { reteach: p.reteach } : {}) };
+    const res = ok ? await act(() => mutate(api.calls.keep, { item, unitId: next.unit!._id, stage: next.stage as "fighter" | "master", by: currentRole() })) : undefined;
+    setBusy(false);
+    if (!res) return;
+    const { [h.v.key]: _gone, ...rest } = dec;
+    setDec(rest);
+    tone("done");
+    toast(`Saved: ${h.v.s.name} stays for ${next.unit.code} (${next.pending.length} to explain).`);
   };
 
   /** Send one student back (Done), or to Theory when Theory wants him now. */
   const finish = async (h: EvalHere, how: "all" | "decided" | "nothing") => {
     setBusy(true);
     await flushTaps();
-    const id = h.v.s._id as string;
+    const id = h.v.key;
     let ok = true;
     let item: { callId: Id<"calls">; explained?: number[]; reteach?: string; taught?: number[]; skip?: number[] };
     let words = "";
@@ -122,7 +157,9 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
     } else {
       const p = how === "nothing" ? { explained: [], theoryQs: [] as number[], reteach: undefined } : finishPlan(h, dec[id] ?? {}, how === "all");
       if (p.theoryQs.length) {
-        ok = !!(await act(() => mutate(api.workbook.toTheory, { studentId: h.v.s._id, unitId: h.v.s.unitId, qs: p.theoryQs, on: true, by: currentRole() })));
+        ok = !!(await act(() =>
+          mutate(api.workbook.toTheory, { studentId: h.v.s._id, unitId: h.v.unit?._id ?? h.v.s.unitId, qs: p.theoryQs, on: true, by: currentRole() }),
+        ));
       }
       item = { callId: h.rc.c._id, explained: p.explained, ...(p.reteach ? { reteach: p.reteach } : {}) };
       const th = p.theoryQs.length ? p.theoryQs.map((q) => qLabel(h.v, q)).join(" ") : p.reteach ? `section ${p.reteach}` : "";
@@ -179,10 +216,13 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
               h={h}
               first={i === 0}
               now={now}
-              dec={dec[h.v.s._id] ?? {}}
-              setDec={(d) => setDec({ ...dec, [h.v.s._id]: d })}
+              dec={dec[h.v.key] ?? {}}
+              setDec={(d) => setDec({ ...dec, [h.v.key]: d })}
               busy={busy}
               onFinish={(how) => void finish(h, how)}
+              next={h.kind === "evaluation" && !h.v.pulled ? nextBooks(h.v)[0] : undefined}
+              canKeep={canKeep}
+              onKeep={(next, how) => void keep(h, next, how)}
             />
           ))}
           {room.coming.length > 0 && <Coming calls={room.coming} now={now} />}
@@ -225,7 +265,7 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
               class="ev-same"
               aria-label={`Same question ${g.label}: tick ${g.members.map((m) => m.v.s.name).join(", ")}`}
               onClick={() => {
-                const ids = g.members.map((m) => m.v.s._id as string).slice(0, Math.max(left, 0));
+                const ids = g.members.map((m) => m.v.key).slice(0, Math.max(left, 0));
                 if (ids.length === 0) toast(`${EVAL_CAP} with you at most. Send someone back first.`, "error");
                 else setPicked(ids);
               }}
@@ -245,8 +285,8 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
               const laterStart = (c.heat === "yellow" || !!c.hold) && (i === 0 || (list[i - 1].heat !== "yellow" && !list[i - 1].hold));
               return [
                 ...(laterStart ? [<li key="later" class="ev-later">Later</li>] : []),
-                <li key={c.v.s._id}>
-                  <CandRow c={c} on={chosen.includes(c.v.s._id)} named={grade === "all" && grades.length > 1} onTap={() => toggle(c)} />
+                <li key={c.v.key}>
+                  <CandRow c={c} on={chosen.includes(c.v.key)} named={grade === "all" && grades.length > 1} onTap={() => toggle(c)} />
                 </li>,
               ];
             })}
@@ -286,7 +326,7 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
                 return;
               }
               setBusy(true);
-              if (await callEval(teachChosen, "theory")) setTeachPick(null);
+              if (await callEval(teach.filter((v) => teachChosen.includes(v.s._id)), "theory")) setTeachPick(null);
               setBusy(false);
             }}
           >
@@ -309,7 +349,14 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
       {chosen.length > 0 && (
         <div class="call-bar evaluation" role="region" aria-label="Call">
           <div class="call-bar-text">
-            <b>{chosen.map((id) => callable.get(id)?.v.s.name ?? "?").join(", ")}</b>
+            <b>
+              {chosen
+                .map((k) => {
+                  const c = callable.get(k);
+                  return c ? (c.v.home || c.v.others.length ? `${c.v.s.name} ${c.v.unit?.code ?? ""}`.trim() : c.v.s.name) : "?";
+                })
+                .join(", ")}
+            </b>
             <small>{picked === null ? "The page's pick: tap names to change it" : `${chosen.length} ticked`}</small>
           </div>
           <button type="button" class="btn ghost small" onClick={() => setPicked([])}>
@@ -321,7 +368,7 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
             disabled={busy}
             onClick={async () => {
               setBusy(true);
-              if (await callEval(chosen, "evaluation")) setPicked(null);
+              if (await callEval(chosen.flatMap((k) => { const c = callable.get(k); return c ? [c.v] : []; }), "evaluation")) setPicked(null);
               setBusy(false);
             }}
           >
@@ -351,7 +398,7 @@ function CandRow(props: { c: Cand; on: boolean; named: boolean; onTap: () => voi
       <span class="ev-c-who">
         <b>{c.v.s.name}</b>
         <small>
-          {props.named || c.kind === "master" ? `${c.v.tag} · ` : ""}
+          {props.named || c.kind === "master" || c.v.home || c.v.others.length ? `${c.v.tag} · ` : ""}
           {shown.join(" ")}
         </small>
       </span>
@@ -367,7 +414,7 @@ function CandRow(props: { c: Cand; on: boolean; named: boolean; onTap: () => voi
 
 /** The answer key's answer for a workbook question (it comes only while she has the student). */
 function KeyFor(props: { v: View; q: number }) {
-  const keyQ = useQuery<{ answers: KeyAnswer[] } | null>(api.catalog.key, { unitId: props.v.s.unitId });
+  const keyQ = useQuery<{ answers: KeyAnswer[] } | null>(api.catalog.key, { unitId: props.v.unit?._id ?? props.v.s.unitId });
   if (keyQ === undefined) return <p class="ev-key muted">Loading the answer…</p>;
   const k = keyQ?.answers.find((a) => a.q === props.q);
   if (!k) return <p class="ev-key muted">{keyQ === null ? "No answer key for this workbook yet." : "No answer for this question in the key."}</p>;
@@ -389,8 +436,13 @@ function HereCard(props: {
   setDec: (d: Record<number, Decision | undefined>) => void;
   busy: boolean;
   onFinish: (how: "all" | "decided" | "nothing") => void;
+  /** His next book with something to explain (one book per call): keep him for it, or call him again later. */
+  next?: View;
+  canKeep: boolean;
+  onKeep: (next: View, how: "all" | "decided") => void;
 }) {
   const { h, dec, now } = props;
+  const nextWords = props.next ? `${props.next.unit?.code ?? "his other book"} (${props.next.pending.length})` : "";
   const v = h.v;
   const [open, setOpen] = useState<boolean | null>(null);
   const isOpen = open ?? props.first;
@@ -511,6 +563,19 @@ function HereCard(props: {
               </>
             )}
           </div>
+          {props.next &&
+            (props.canKeep ? (
+              <button
+                type="button"
+                class="btn ghost ev-keep"
+                disabled={props.busy}
+                onClick={() => props.onKeep(props.next!, decided === 0 ? "all" : "decided")}
+              >
+                {decided === 0 ? "All explained" : "Done"}, keep him for {nextWords}
+              </button>
+            ) : (
+              <p class="ev-also muted small">Also waiting: {nextWords}. Others need the room: call him again later.</p>
+            ))}
         </>
       )}
     </div>

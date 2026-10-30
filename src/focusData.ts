@@ -16,7 +16,7 @@
 import { levelOutOf, type MasterLevel } from "../convex/lib/book";
 import type { KeyAnswer, KeyPart } from "../convex/lib/key";
 import type { MLevel, MQ, MState } from "../convex/lib/master";
-import type { View } from "./derive";
+import { waitingAll, type View } from "./derive";
 
 /** How long after the screen moves on a tap is ignored (a double tap must not mark the next question). */
 export const TAP_GUARD_MS = 350;
@@ -56,11 +56,11 @@ export function focusPills(views: View[]): Pill[] {
     else if (v.ms?.waiting.length) gone.push(v);
   }
   const pill = (v: View): Pill => {
-    const waiting = v.ms?.waiting.length ?? 0;
+    const waiting = waitingAll(v); // in all his books (he works on several at once)
     let tone: PillTone = "";
     if (v.where === "absent") tone = "home";
-    else if (v.kind === "none") tone = "nb";
-    else if (v.ms?.dry && v.ms.needs.includes("correction")) tone = "red";
+    else if (v.kind === "none" && !waiting) tone = "nb";
+    else if (v.noWork && v.ms?.needs.includes("correction")) tone = "red";
     else if (waiting) tone = "amber";
     else if (v.st?.doable.length) tone = "th";
     return { v, tone, waiting };
@@ -357,9 +357,8 @@ export function resumeAt(qs: number[], given: Record<number, Given>): number {
 export function focusNeeds(views: View[]): Map<string, "red" | "amber"> {
   const out = new Map<string, "red" | "amber">();
   for (const v of views) {
-    if (!v.ms) continue;
-    if (v.where !== "absent" && v.ms.dry && v.ms.needs.includes("correction")) out.set(v.s._id, "red");
-    else if (v.ms.waiting.length) out.set(v.s._id, "amber");
+    if (v.where !== "absent" && v.noWork && v.ms?.needs.includes("correction")) out.set(v.s._id, "red");
+    else if (waitingAll(v)) out.set(v.s._id, "amber");
   }
   return out;
 }

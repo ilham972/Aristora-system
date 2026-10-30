@@ -24,6 +24,7 @@ import {
   whyWords,
   workbookDone,
 } from "../src/theoryFocusData";
+import { asView } from "./views";
 
 const PILOT = fighter(PILOT_FIGHTER);
 const G7U08 = KNOWN_WORKBOOKS[0].data;
@@ -56,7 +57,7 @@ function th(
   marks: Marks,
   o: { where?: View["where"]; idleMs?: number; calls?: Call[]; calledTo?: "theory" | "evaluation"; lastInAt?: number; lastActivityAt?: number } = {},
 ): View {
-  return {
+  return asView({
     s: { _id: name, name, unitId: U13._id, grade: 11, stage: "fighter", lastSeenAt: 0, lastInAt: o.lastInAt, lastActivityAt: o.lastActivityAt },
     unit: U13,
     stage: "fighter",
@@ -71,7 +72,7 @@ function th(
     mm: { q: {}, lv: {} },
     calls: o.calls ?? [],
     idleMs: o.idleMs,
-  } as unknown as View;
+  });
 }
 /** A workbook student with these questions sent to Theory `sentAgo` ago (their levels corrected). */
 function wb(name: string, qs: number[], o: { whole?: boolean; where?: View["where"]; calls?: Call[]; sentAgo?: number } = {}): View {
@@ -81,7 +82,7 @@ function wb(name: string, qs: number[], o: { whole?: boolean; where?: View["wher
   const lv: MState["lv"] = {};
   for (const l of G7U08.levels) if (qs.some((n) => n >= l.from && n <= l.to)) lv[String(l.n)] = { done: 1, fixed: 1, got: l.max - 2 };
   const m: MState = { q, lv, ...(o.whole ? { reteach: { at } } : {}) };
-  return {
+  return asView({
     s: { _id: name, name, unitId: U08._id, grade: 7, stage: "master", lastSeenAt: 0 },
     unit: U08,
     stage: "master",
@@ -93,7 +94,7 @@ function wb(name: string, qs: number[], o: { whole?: boolean; where?: View["wher
     ms: computeMaster(m, G7U08),
     mm: m,
     calls: o.calls ?? [],
-  } as unknown as View;
+  });
 }
 const board = (calls: Call[]) => ({ calls }) as unknown as Board;
 const names = (l: { members: { v: View }[] }) => l.members.map((m) => m.v.s.name);

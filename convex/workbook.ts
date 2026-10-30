@@ -15,12 +15,14 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, type MutationCtx } from "./_generated/server";
 import {
   asMaster,
+  bookFor,
   cleanBy,
   currentSession,
   fail,
   getStudent,
   log,
   masterState,
+  progressFor,
   refresh,
   touch,
   workPlace,
@@ -32,6 +34,21 @@ import { masterState as masterStateShape } from "./schema";
 
 async function masterWork(ctx: MutationCtx, student: Doc<"students">, unitId: Id<"units"> | undefined, now: number) {
   const { unit, book, progress } = await workPlace(ctx, student, "master", unitId, now);
+  return { unit, book: asMaster(book), progress, m: copy(masterState(progress)) };
+}
+
+/**
+ * A teacher's work in any of his books (he works on several at once): his book now, or another workbook he has
+ * work in (Evaluation and Theory see every book). Never creates work in a book he hasn't started.
+ */
+async function teachWork(ctx: MutationCtx, student: Doc<"students">, unitId: Id<"units"> | undefined, now: number) {
+  if (!unitId || (unitId === student.unitId && student.stage === "master")) return await masterWork(ctx, student, unitId, now);
+  const unit = await ctx.db.get(unitId);
+  if (!unit) fail("That unit no longer exists.");
+  const book = await bookFor(ctx, unit._id, "master");
+  if (!book) fail(`${unit.key} has no workbook in the app.`);
+  const progress = await progressFor(ctx, student._id, unit._id, "master");
+  if (!progress) fail(`${student.name} has no work in ${unit.key}.`);
   return { unit, book: asMaster(book), progress, m: copy(masterState(progress)) };
 }
 
@@ -351,7 +368,7 @@ export const explain = mutation({
     if (args.qs.length === 0) return;
     if (args.qs.length > 400) fail("Too many questions at once.");
     const student = await getStudent(ctx, args.studentId);
-    const { unit, progress, m } = await masterWork(ctx, student, args.unitId, now);
+    const { unit, progress, m } = await teachWork(ctx, student, args.unitId, now);
     let n = 0;
     for (const q of args.qs) {
       const r = m.q[String(q)];
@@ -394,7 +411,7 @@ export const toTheory = mutation({
     if (args.qs.length > 400) fail("Too many questions at once.");
     const by = cleanBy(args.by);
     const student = await getStudent(ctx, args.studentId);
-    const { unit, progress, m } = await masterWork(ctx, student, args.unitId, now);
+    const { unit, progress, m } = await teachWork(ctx, student, args.unitId, now);
     const changed: number[] = [];
     for (const q of args.qs) {
       const r = m.q[String(q)];
@@ -435,7 +452,7 @@ export const taught = mutation({
     if (args.qs.length === 0) return true;
     if (args.qs.length > 400) fail("Too many questions at once.");
     const student = await getStudent(ctx, args.studentId);
-    const { unit, progress, m } = await masterWork(ctx, student, args.unitId, now);
+    const { unit, progress, m } = await teachWork(ctx, student, args.unitId, now);
     let n = 0;
     for (const q of args.qs) {
       const r = m.q[String(q)];
@@ -473,7 +490,7 @@ export const reteach = mutation({
     await actor(ctx, args.token, ["correction", "evaluation"], args.by);
     const now = Date.now();
     const student = await getStudent(ctx, args.studentId);
-    const { unit, progress, m } = await masterWork(ctx, student, args.unitId, now);
+    const { unit, progress, m } = await teachWork(ctx, student, args.unitId, now);
     if (!!m.reteach === args.on) return true;
     const by = cleanBy(args.by);
     if (args.on) m.reteach = { at: now, by };

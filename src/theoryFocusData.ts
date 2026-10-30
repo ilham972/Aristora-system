@@ -17,7 +17,7 @@
 import type { SectionData } from "../convex/lib/book";
 import { slClock } from "../convex/lib/day";
 import type { MarkState, Urgency } from "../convex/lib/status";
-import { roomCalls, theoryGroups, type RoomCall, type View } from "./derive";
+import { roomCalls, seenToday, theoryGroups, type RoomCall, type View } from "./derive";
 import type { Board, Unit } from "./store";
 
 export type LessonKind = "section" | "workbook";
@@ -140,6 +140,8 @@ export type Member = {
   whole: boolean;
   /** Section: its teach questions he still needs (all of them, unless an earlier lesson stopped part way). */
   teach: number[];
+  /** Theory already had him today: those not seen yet go first (fair turns). */
+  seen: boolean;
 };
 
 export type Lesson = {
@@ -177,19 +179,21 @@ export type PlanOpts = {
  * When he runs out of work, from now: 0 = out of work now; null = finished, or not known (a workbook student still on a
  * level). A theory-book student is on one question now (since his last mark), then the rest, at his own pace.
  */
-export function outInOf(v: View, now: number, pace: number): number | null {
+export function outInOf(v0: View, now: number, pace: number): number | null {
+  // His work is on his book now (another book of his has its own view): out of work only when every book is blocked.
+  const v = v0.home ?? v0;
+  if (v.noWork) return 0;
   if (v.st) {
-    if (v.st.dry) return 0;
-    if (v.st.finished) return null;
+    if (v.st.dry || v.st.finished) return null;
     const own = paceOf(v) ?? pace;
     const since = Math.max(0, now - (v.s.lastActivityAt ?? now));
     return (v.st.left - 1) * own + Math.max(own / 4, own - since);
   }
-  return v.ms?.dry ? 0 : null;
+  return null;
 }
 
 function memberOf(v: View, inEvaluation: boolean, section: SectionData | null, now: number, pace: number, horizon: number): Member {
-  const own = paceOf(v) ?? pace;
+  const own = paceOf(v.home ?? v) ?? pace;
   const outIn = outInOf(v, now, pace);
   let waited: number | undefined;
   if (v.ms) {
@@ -216,6 +220,7 @@ function memberOf(v: View, inEvaluation: boolean, section: SectionData | null, n
     qs: v.ms ? [...v.ms.theory] : [],
     whole: !!v.ms?.wholeUnit,
     teach: teachLeft(v, section),
+    seen: seenToday(v, "theory", now),
   };
 }
 
@@ -223,6 +228,7 @@ function memberOrder(a: Member, b: Member): number {
   return (
     Number(!!a.hold) - Number(!!b.hold) ||
     Number(b.outIn === 0) - Number(a.outIn === 0) ||
+    Number(a.seen) - Number(b.seen) ||
     b.wait - a.wait ||
     Number(b.urgent) - Number(a.urgent) ||
     (a.outIn ?? Infinity) - (b.outIn ?? Infinity) ||

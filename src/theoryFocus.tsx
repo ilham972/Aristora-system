@@ -46,9 +46,13 @@ import { tone } from "./tones";
 import { Empty } from "./ui";
 
 /** Call students to Theory (Correction is told and sends them). */
-async function callTheory(ids: string[]): Promise<boolean> {
+/** Call students to a lesson: each for the book of that lesson (he works on several books at once). */
+async function callTheory(picks: View[]): Promise<boolean> {
+  const books = picks.flatMap((v) =>
+    v.unit && (v.stage === "fighter" || v.stage === "master") ? [{ studentId: v.s._id, unitId: v.unit._id, stage: v.stage }] : [],
+  );
   const res = await act(() =>
-    mutate(api.calls.create, { studentIds: ids as Id<"students">[], room: "theory", kind: "theory", by: currentRole() }),
+    mutate(api.calls.create, { studentIds: picks.map((v) => v.s._id), room: "theory", kind: "theory", books, by: currentRole() }),
   );
   if (!res) return false;
   for (const r of res.rejected) toast(`${r.name} ${r.reason}.`, "error");
@@ -299,7 +303,7 @@ function NextCard(props: { l: Lesson; first: boolean; picked: string[] | null; s
           disabled={busy || chosen.length === 0}
           onClick={async () => {
             setBusy(true);
-            if (await callTheory(chosen)) setPicked(null);
+            if (await callTheory(l.members.filter((m) => chosen.includes(m.v.s._id)).map((m) => m.v))) setPicked(null);
             setBusy(false);
           }}
         >
@@ -368,7 +372,7 @@ function RoomBlock(props: { l: RoomLesson; join: Member[]; now: number }) {
         else {
           if (d.taught.length) {
             const r = await act(() =>
-              mutate(api.workbook.taught, { studentId: st.v.s._id, unitId: st.v.s.unitId, qs: d.taught, on: true, by: currentRole() }),
+              mutate(api.workbook.taught, { studentId: st.v.s._id, unitId: st.v.unit?._id ?? st.v.s.unitId, qs: d.taught, on: true, by: currentRole() }),
             );
             if (r === undefined) ok = false;
           }
@@ -536,7 +540,7 @@ function RoomBlock(props: { l: RoomLesson; join: Member[]; now: number }) {
               class={`tf-jn u-${m.urgency}`}
               aria-label={`Call ${m.v.s.name} to join (${memberWords(m)})`}
               disabled={busy}
-              onClick={() => void callTheory([m.v.s._id])}
+              onClick={() => void callTheory([m.v])}
             >
               <b>+ {m.v.s.name}</b>
               <small>{memberWords(m)}</small>

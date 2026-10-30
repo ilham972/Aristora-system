@@ -460,3 +460,102 @@ describe("Correction's unit sheet: what the teachers did, each unit's progress, 
     await expect(asPhone(t, reports).query(api.progress.student, { studentId: id })).rejects.toThrow(/This needs/);
   });
 });
+
+describe("Several books at once (30 Oct 2026): every book reaches the rooms, one book per call", () => {
+  /** Malik on G7 U08 with Q4 lost on Level 1, then moved on to U09 (a copy of the U08 skeleton) with Q2 lost there. */
+  async function twoBooks() {
+    const t = await setup();
+    const u08 = await unitId(t, "G7-U08");
+    const u09 = await unitId(t, "G7-U09");
+    await t.run(async (ctx) => {
+      await ctx.db.insert("books", { unitId: u09, stage: "master", data: G7U08, updatedAt: Date.now() });
+    });
+    const id = await addMaster(t, "Malik");
+    await t.mutation(api.workbook.correct, { studentId: id, level: 1, items: items(G7U08, 1, [4]), by: "correction" });
+    await t.mutation(api.students.move, { id, grade: 7, term: 1, stage: "master", unitId: u09 });
+    await t.mutation(api.workbook.correct, { studentId: id, level: 1, items: items(G7U08, 1, [2]), by: "correction" });
+    return { t, id, u08, u09 };
+  }
+  const book = async (t: T, id: Id<"students">, unit: Id<"units">) =>
+    await t.run(async (ctx) => {
+      const p = (await ctx.db.query("progress").withIndex("by_student", (q) => q.eq("studentId", id)).collect()).find((x) => x.unitId === unit);
+      return (p?.m ?? { q: {}, lv: {} }) as MState;
+    });
+
+  test("the board sends his other books with something waiting (in class only), and the books given with work", async () => {
+    const { t, id, u08, u09 } = await twoBooks();
+    let b = await t.query(api.state.get, {});
+    expect(b.progress[id].unitId).toBe(u09);
+    expect((b.more?.[id] ?? []).map((p) => p.unitId)).toEqual([u08]);
+    expect(Object.keys(b.books)).toContain(`${u08}:master`);
+    // Explained: nothing waits in U08 any more, so it stops travelling.
+    await t.mutation(api.workbook.explain, { studentId: id, unitId: u08, qs: [4], on: true });
+    b = await t.query(api.state.get, {});
+    expect(b.more?.[id]).toBeUndefined();
+    // Books given: a fresh book has work; a book with no workbook in the app counts as work too.
+    await t.mutation(api.students.setGiven, { id, unitId: u08, stage: "master", given: true });
+    await t.mutation(api.students.setGiven, { id, unitId: await unitId(t, "G7-U10"), stage: "master", given: true });
+    b = await t.query(api.state.get, {});
+    expect(b.given?.[id]?.map((g) => g.work)).toEqual([true, true]);
+    await t.mutation(api.students.setPresent, { id, present: false });
+    b = await t.query(api.state.get, {});
+    expect(b.more?.[id]).toBeUndefined();
+    expect(b.given?.[id]).toBeUndefined();
+  });
+
+  test("Evaluation calls him for his U08 book while he is on U09; Done writes into U08; Keep him for U09", async () => {
+    const { t, id, u08, u09 } = await twoBooks();
+    await expect(t.mutation(api.calls.create, { studentIds: [id], room: "evaluation", kind: "evaluation", books: [{ studentId: id, unitId: await unitId(t, "G7-U10"), stage: "master" }] })).resolves.toMatchObject({
+      created: [],
+      rejected: [{ reason: "has no book in the app for that unit" }],
+    });
+    const res = await t.mutation(api.calls.create, { studentIds: [id], room: "evaluation", kind: "evaluation", books: [{ studentId: id, unitId: u08, stage: "master" }] });
+    const callId = res.created[0].callId;
+    expect((await t.run(async (ctx) => (await ctx.db.get(callId))!)).unitId).toBe(u08);
+    // One book per call: he can't be called for U09 at the same time.
+    const again = await t.mutation(api.calls.create, { studentIds: [id], room: "evaluation", kind: "evaluation" });
+    expect(again.rejected[0].reason).toMatch(/already called/);
+    await t.mutation(api.calls.send, { callIds: [callId] });
+    await expect(t.mutation(api.calls.keep, { item: { callId, explained: [4] }, unitId: u08, stage: "master" })).rejects.toThrow(/the book you just finished/);
+    const kept = await t.mutation(api.calls.keep, { item: { callId, explained: [4] }, unitId: u09, stage: "master" });
+    expect((await book(t, id, u08)).q["4"]?.x).toBeGreaterThan(0);
+    expect((await book(t, id, u09)).q["2"]?.x).toBeUndefined();
+    const next = await t.run(async (ctx) => (await ctx.db.get(kept.callId))!);
+    expect(next).toMatchObject({ status: "sent", room: "evaluation", unitId: u09 });
+    const s = await t.run(async (ctx) => (await ctx.db.get(id))!);
+    expect(s.room).toBe("evaluation");
+    expect(s.seen?.evaluation).toBeGreaterThan(0);
+    await t.mutation(api.calls.finish, { items: [{ callId: kept.callId, explained: [2] }] });
+    expect((await book(t, id, u09)).q["2"]?.x).toBeGreaterThan(0);
+    // Nothing left to explain in U09 now: a call for that book is refused.
+    const r2 = await t.mutation(api.calls.create, { studentIds: [id], room: "evaluation", kind: "evaluation", books: [{ studentId: id, unitId: u09, stage: "master" }] });
+    expect(r2.rejected[0].reason).toMatch(/no lost marks/);
+  });
+
+  test("teachers act on any book he has work in: explain, to Theory and taught in U08 while he is on U09", async () => {
+    const { t, id, u08 } = await twoBooks();
+    await t.mutation(api.workbook.toTheory, { studentId: id, unitId: u08, qs: [4], on: true, by: "evaluation" });
+    expect((await book(t, id, u08)).q["4"]).toMatchObject({ th: expect.any(Number), tb: "evaluation" });
+    const th = await t.mutation(api.calls.create, { studentIds: [id], room: "theory", kind: "theory", books: [{ studentId: id, unitId: u08, stage: "master" }] });
+    expect(th.created).toHaveLength(1);
+    await t.mutation(api.workbook.taught, { studentId: id, unitId: u08, qs: [4], on: true });
+    expect((await book(t, id, u08)).q["4"]?.tt).toBeGreaterThan(0);
+    // A book he never started: refused, nothing created.
+    await expect(t.mutation(api.workbook.explain, { studentId: id, unitId: await unitId(t, "G7-U10"), qs: [1], on: true })).rejects.toThrow();
+  });
+
+  test("out of work only when every book given to him is blocked: a given book with work stops the idle clock", async () => {
+    const t = await setup();
+    const id = await addMaster(t, "Vimal");
+    for (const l of G7U08.levels) await t.mutation(api.workbook.levelDone, { studentId: id, level: l.n });
+    let s = (await work(t, id)).s;
+    expect(s.idleSince).toBeDefined(); // every level handed in: no work until corrected
+    expect(s.idleReason).toBe("correction");
+    await t.mutation(api.students.setGiven, { id, unitId: await unitId(t, "G7-U09"), stage: "master", given: true });
+    s = (await work(t, id)).s;
+    expect(s.idleSince).toBeUndefined();
+    await t.mutation(api.students.setGiven, { id, unitId: await unitId(t, "G7-U09"), stage: "master", given: false });
+    s = (await work(t, id)).s;
+    expect(s.idleSince).toBeDefined();
+  });
+});

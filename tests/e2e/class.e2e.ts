@@ -7,7 +7,7 @@ import { strToU8, zipSync } from "fflate";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { api } from "../../convex/_generated/api";
 import { normalizeCode, secretHash } from "../../convex/lib/auth";
-import { outOf } from "../../convex/lib/book";
+import { KNOWN_WORKBOOKS, outOf } from "../../convex/lib/book";
 import { readWorkbookHtml } from "../../src/workbookFile";
 import U01_BOOK from "../fixtures/workbook-g8-u01.html?raw";
 import { addPerson, OWNER_TOKEN } from "../helpers";
@@ -1947,5 +1947,106 @@ test("Evaluation: the page's pick or hers, 3 at once, one question at a time wit
   expect(await topFits(S), "the top bar fits at 320 px").toBe(true);
   await shot(S, "e04-evaluation-320", true);
   await S.context().close();
+  expect(problems, problems.join("\n")).toEqual([]);
+});
+
+test("Several books at once: every book stays on Evaluation and Theory, one book per call, keep him for the next, given books mean work", async () => {
+  const backend = await newClass();
+  const C = await phone(backend, "correction");
+  const E = await phone(backend, "evaluation");
+  await C.getByRole("button", { name: "Settings" }).click();
+  await C.getByRole("button", { name: "Load demo students (three grades)" }).click();
+  await visible(C.getByText(/^14 demo students loaded/));
+  await C.getByRole("button", { name: "Back to the class" }).click();
+  // A second workbook for Grade 7 (U09: the U08 skeleton again, test only). Malik (lost marks in U08: Q4 Q13 Q17)
+  // moves on to U09 while his U08 papers are not explained yet, and loses marks there too (Q2).
+  const G7U08 = KNOWN_WORKBOOKS[0].data;
+  const ids = await backend.t.run(async (ctx) => {
+    const unit = async (key: string) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", key)).first())!;
+    const u09 = await unit("G7-U09");
+    await ctx.db.insert("books", { unitId: u09._id, stage: "master", data: G7U08, updatedAt: Date.now() });
+    const malik = (await ctx.db.query("students").collect()).find((x) => x.name === "Malik")!;
+    const vimal = (await ctx.db.query("students").collect()).find((x) => x.name === "Vimal")!;
+    return { u08: (await unit("G7-U08"))._id, u09: u09._id, malik: malik._id, vimal: vimal._id };
+  });
+  await backend.t.mutation(api.students.move, { token: OWNER_TOKEN, id: ids.malik, grade: 7, term: 1, stage: "master", unitId: ids.u09 });
+  const l1 = G7U08.levels[0];
+  const items = Array.from({ length: l1.to - l1.from + 1 }, (_, i) => ({ q: l1.from + i, got: l1.from + i === 2 ? 0 : 2 }));
+  await backend.t.mutation(api.workbook.correct, { token: OWNER_TOKEN, studentId: ids.malik, level: 1, items, by: "correction" });
+  // Correction sends U08's Q17 to Theory (his U08 book, though he is on U09 now).
+  await backend.t.mutation(api.workbook.toTheory, { token: OWNER_TOKEN, studentId: ids.malik, unitId: ids.u08, qs: [17], on: true, by: "correction" });
+  await backend.push();
+
+  // Evaluation lists him once per book: U08 (Q4 Q13) and U09 (Q2). One book per call: ticking his other book swaps.
+  const malikRows = E.locator(".ev-c", { has: E.locator(".ev-c-who b", { hasText: "Malik" }) });
+  await count(malikRows, 2);
+  const u08Row = malikRows.filter({ hasText: "U08" });
+  const u09Row = malikRows.filter({ hasText: "U09" });
+  await contains(u08Row.locator(".ev-c-who small"), "G7 · U08 · Q4 Q13");
+  await contains(u09Row.locator(".ev-c-who small"), "G7 · U09 · Q2");
+  await shot(E, "b01-evaluation-two-books", true);
+  if (await E.locator(".call-bar").count()) await E.locator(".call-bar").getByRole("button", { name: "Clear" }).click();
+  await count(E.locator(".ev-c.on"), 0);
+  await u09Row.click();
+  await u08Row.click();
+  await count(malikRows.and(E.locator(".on")), 1);
+  await visible(u08Row.and(E.locator(".on")));
+  await contains(E.locator(".call-bar"), "Malik U08");
+  await E.locator(".call-bar").getByRole("button", { name: "Call 1" }).click();
+  await contains(E.locator(".toast"), "Called 1.");
+  const callOf = () =>
+    backend.t.run(async (ctx) => (await ctx.db.query("calls").collect()).filter((c) => c.studentId === ids.malik && c.room === "evaluation"));
+  expect((await callOf()).map((c) => c.unitId)).toEqual([ids.u08]);
+  await hears(C, "Malik, go to Evaluation.");
+  await C.locator(".call-strip.evaluation").getByRole("button", { name: "Sent" }).click();
+
+  // With her: U08's questions only. Done, and he stays for U09 (no walk back): the room has space.
+  const mh = evHere(E, "Malik");
+  await contains(mh.locator(".ev-h-tag"), "G7 · U08 · 2 to explain");
+  await contains(mh.locator(".ev-q-n"), "Q4");
+  await shot(E, "b02-evaluation-keep");
+  await mh.getByRole("button", { name: "All explained, keep him for U09 (1)" }).click();
+  await contains(E.locator(".toast"), "Saved: Malik stays for U09 (1 to explain).");
+  await contains(mh.locator(".ev-h-tag"), "G7 · U09 · 1 to explain");
+  await contains(mh.locator(".ev-q-n"), "Q2");
+  await mh.getByRole("button", { name: "All explained: back to work" }).click();
+  await count(evHere(E, "Malik"), 0);
+  const rows = () =>
+    backend.t.run(async (ctx) => {
+      const all = await ctx.db.query("progress").withIndex("by_student", (q) => q.eq("studentId", ids.malik)).collect();
+      return { u08: all.find((p) => p.unitId === ids.u08)!.m!, u09: all.find((p) => p.unitId === ids.u09)!.m! };
+    });
+  const r = await rows();
+  expect([r.u08.q["4"]?.x, r.u08.q["13"]?.x, r.u09.q["2"]?.x].every((x) => typeof x === "number")).toBe(true);
+  expect(r.u08.q["17"]).toMatchObject({ th: expect.any(Number) }); // still Theory's
+  expect((await callOf()).map((c) => `${c.unitId === ids.u08 ? "U08" : "U09"} ${c.status}`)).toEqual(["U08 done", "U09 done"]);
+  const kept = await backend.t.run(async (ctx) => (await ctx.db.query("events").collect()).filter((e) => e.kind === "keep"));
+  expect(kept.map((e) => `${e.name} ${e.value}`)).toEqual(["Malik U09"]);
+  expect((await marksOf(backend, "Malik")).seen?.evaluation).toBeGreaterThan(0);
+
+  // Theory sees his U08 question though he is on U09: the U08 workbook lesson has him.
+  const T = await phone(backend, "theory");
+  await T.locator(".tp-pill", { hasText: "G7 U08" }).click();
+  await visible(T.locator(".tp-card .tp-m", { hasText: "Malik" }));
+  await shot(T, "b03-theory-other-book");
+  await T.context().close();
+
+  // Vimal has no work until his Level 8 is corrected (red). Give him the U09 workbook (Books given): he has work.
+  await visible(evRow(E, "Vimal").and(E.locator(".h-red")));
+  await backend.t.mutation(api.students.setGiven, { token: OWNER_TOKEN, id: ids.vimal, unitId: ids.u09, stage: "master", given: true });
+  await backend.push();
+  await until(async () => !((await evRow(E, "Vimal").getAttribute("class")) ?? "").includes("h-red"), "Vimal not red any more");
+  await contains(evRow(E, "Vimal").locator(".ev-c-why small"), "on U09");
+  expect((await marksOf(backend, "Vimal")).idleSince).toBeUndefined(); // the idle clock stopped
+
+  // Correction: his U08 Level 3 (handed in before he moved on) still counts; tapping his name opens U08 there.
+  await C.getByRole("button", { name: /^Correction/ }).click();
+  await C.getByRole("button", { name: /^Grade 7\b/ }).click();
+  await visible(C.locator(".fc-nm.amber", { hasText: "Malik" }));
+  await C.locator(".fc-nm", { hasText: "Malik" }).click();
+  await contains(C.locator(".toast"), "Malik: Master · 8");
+  await until(async () => (await marksOf(backend, "Malik")).unitKey === "G7-U08", "Malik back on U08 for the paper");
+  await says(C.locator(".fc-lvline"), "Level 3");
+  await E.context().close();
   expect(problems, problems.join("\n")).toEqual([]);
 });

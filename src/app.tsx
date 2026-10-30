@@ -3,7 +3,7 @@ import { callPhrase, pullPhrase, type RoomName } from "./announce";
 import { AttendanceSheet } from "./attendance";
 import type { Link } from "./backend";
 import { ClassPage } from "./correction";
-import { buildViews, evalQueue, fmtClock, liveSession, theoryGroups, theoryMembers, type View } from "./derive";
+import { buildViews, evalQueue, fmtClock, liveSession, theoryGroups, theoryMembers, waitingAll, type View } from "./derive";
 import { Focus } from "./focus";
 import { EvaluationPage } from "./evalFocus";
 import { TheoryTab } from "./theoryFocus";
@@ -199,13 +199,13 @@ export function App() {
 
   const views = buildViews(board, now);
   const theoryRed = theoryMembers(theoryGroups(views)).filter((m) => m.urgency === "red" && !m.inEvaluation).length;
-  const evalRed = evalQueue(views, now).filter((m) => m.urgency === "red" && !m.blockedBy).length;
+  const evalRed = new Set(evalQueue(views, now).filter((m) => m.urgency === "red" && !m.blockedBy).map((m) => m.v.s._id)).size;
   const toSend = board.calls.filter((c) => c.status === "requested" && !c.pull).length;
   const session = liveSession(board, now);
   const inClass = views.filter((v) => v.where !== "absent").length;
   // Focus's count: workbook levels handed in, waiting to be corrected; red when someone has no work until then.
-  const papers = views.reduce((a, v) => a + (v.ms?.waiting.length ?? 0), 0);
-  const papersRed = views.some((v) => v.where === "hall" && v.ms?.dry && v.ms.needs.includes("correction"));
+  const papers = views.reduce((a, v) => a + waitingAll(v), 0);
+  const papersRed = views.some((v) => v.where === "hall" && v.noWork && !!v.ms?.needs.includes("correction"));
   // Class's count: students in the hall with no work right now (red), for whoever looks.
   const idleNow = views.filter((v) => v.where === "hall" && v.tone === "red").length;
 
@@ -527,7 +527,7 @@ function alertItems(role: Role, board: Board, views: View[], now: number): Alert
         items.push({ key: `call:${c._id}`, kind: "call", name: nameOf.get(c.studentId) ?? "", room: c.room, repeat: true });
     // A workbook student with every level handed in waits for Correction: knock once.
     for (const v of views)
-      if (v.where === "hall" && v.ms?.dry && v.ms.needs.includes("correction"))
+      if (v.where === "hall" && v.noWork && v.ms?.needs.includes("correction"))
         items.push({ key: `red:${v.s._id}`, kind: "red", name: v.s.name, room: "theory", repeat: false });
   } else if (role === "theory") {
     for (const m of theoryMembers(theoryGroups(views)))
@@ -535,7 +535,7 @@ function alertItems(role: Role, board: Board, views: View[], now: number): Alert
         items.push({ key: `red:${m.v.s._id}`, kind: "red", name: m.v.s.name, room: "theory", repeat: false });
   } else {
     for (const m of evalQueue(views, now))
-      if (m.urgency === "red" && !m.blockedBy)
+      if (m.urgency === "red" && !m.blockedBy && !items.some((x) => x.key === `red:${m.v.s._id}`))
         items.push({ key: `red:${m.v.s._id}`, kind: "red", name: m.v.s.name, room: "evaluation", repeat: false });
     for (const c of board.calls)
       if (c.pull && c.status === "requested")

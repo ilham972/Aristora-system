@@ -163,6 +163,8 @@ export default defineSchema({
     lastActivityAt: v.optional(v.number()),
     /** Last time a room teacher finished with him. Breaks ties in the queues. */
     lastSeenAt: v.optional(v.number()),
+    /** Last time each room finished with him: "not seen today" goes first on the Evaluation and Theory pages. */
+    seen: v.optional(v.object({ theory: v.optional(v.number()), evaluation: v.optional(v.number()) })),
     /** Idle tracking for the end-of-session report. */
     idleSince: v.optional(v.number()),
     idleReason: v.optional(v.string()),

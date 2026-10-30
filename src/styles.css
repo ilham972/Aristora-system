@@ -3711,6 +3711,24 @@ body.locked.fc-marking .toasts {
 .fc-lb.w-theory::after {
   background: var(--theory);
 }
+/* Levels handed in in his other books (he works on several at once): a tap opens that book. */
+.fc-also {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--amber-ink);
+}
+.fc-also-b {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1.5px solid var(--amber);
+  background: var(--amber-soft);
+  color: var(--amber-ink);
+  font: 700 13px/1.2 var(--font);
+}
 /* His paper while he is signed out: Evaluation and Theory don't see him (one tap signs him in). */
 .fc-out {
   display: flex;
@@ -5906,6 +5924,18 @@ body.locked.fc-marking .toasts {
   flex-wrap: wrap;
   gap: 8px 12px;
   padding: 0 10px 10px;
+}
+/* One book per call: Done here and he stays for his next book (no walk back), or a note to call him again later. */
+.ev-h .ev-keep {
+  display: block;
+  width: calc(100% - 20px);
+  margin: 0 10px 10px;
+  border-color: var(--evaluation);
+  color: var(--evaluation-ink);
+  font-weight: 700;
+}
+.ev-also {
+  margin: 0 10px 10px;
 }
 .ev-h-acts .link-btn {
   font-size: 13.5px;

@@ -21,6 +21,7 @@ import {
 import { nextOf, nowOf } from "../src/nextData";
 import { cheerOf, scoreOf } from "../src/score";
 import type { Board } from "../src/store";
+import { asView } from "./views";
 
 const PILOT = fighter(PILOT_FIGHTER);
 const G7U08 = KNOWN_WORKBOOKS[0].data;
@@ -41,7 +42,7 @@ type Call = { _id: string; studentId: string; room: "theory" | "evaluation"; kin
 /** A theory-book student (the G11 pilot book). */
 function th(name: string, marks: Marks, o: { where?: View["where"]; idleMs?: number; calls?: Call[]; lastActivityAt?: number; pulled?: boolean } = {}): View {
   const st = computeStatus(marks, PILOT);
-  return {
+  return asView({
     s: { _id: name, name, unitId: U13._id, grade: 11, stage: "fighter", lastSeenAt: 0, lastActivityAt: o.lastActivityAt ?? NOW - MIN },
     unit: U13,
     stage: "fighter",
@@ -58,7 +59,7 @@ function th(name: string, marks: Marks, o: { where?: View["where"]; idleMs?: num
     idleMs: o.idleMs,
     pulled: !!o.pulled,
     tag: "G11 · U13",
-  } as unknown as View;
+  });
 }
 /** A workbook student: levels 1..fixed corrected with these questions lost (40 min ago), then `waiting` handed in. */
 function wb(name: string, lost: number[], o: { fixed?: number; waiting?: number[]; where?: View["where"]; calls?: Call[] } = {}): View {
@@ -69,7 +70,7 @@ function wb(name: string, lost: number[], o: { fixed?: number; waiting?: number[
   }
   for (const n of o.waiting ?? []) m.lv[String(n)] = { done: NOW - 5 * MIN };
   const ms = computeMaster(m, G7U08);
-  return {
+  return asView({
     s: { _id: name, name, unitId: U08._id, grade: 7, stage: "master", lastSeenAt: 0 },
     unit: U08,
     stage: "master",
@@ -85,7 +86,7 @@ function wb(name: string, lost: number[], o: { fixed?: number; waiting?: number[
     calls: o.calls ?? [],
     pulled: false,
     tag: "G7 · U08",
-  } as unknown as View;
+  });
 }
 const board = (calls: Call[], stats: Record<string, Record<string, number>> = {}) =>
   ({ calls, session: { _id: "s", startedAt: NOW - 60 * MIN, lastActivityAt: NOW, stats } }) as unknown as Board;

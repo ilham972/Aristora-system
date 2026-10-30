@@ -5,6 +5,7 @@ import { describe, expect, test } from "vitest";
 import { KNOWN_WORKBOOKS } from "../convex/lib/book";
 import { computeMaster, type MState } from "../convex/lib/master";
 import { theoryGroups, theoryMembers, type View } from "../src/derive";
+import { asView } from "./views";
 
 const G7U08 = KNOWN_WORKBOOKS[0].data;
 const U08 = { _id: "u08", code: "U08", grade: 7 };
@@ -19,7 +20,7 @@ function master(name: string, theory: number[], opts: { whole?: boolean; allDone
     if (opts.allDone || theory.some((n) => n >= l.from && n <= l.to)) lv[String(l.n)] = { done: 1, fixed: 1, got: l.max };
   }
   const m: MState = { q, lv, ...(opts.whole ? { reteach: { at: 1 } } : {}) };
-  return {
+  return asView({
     s: { _id: name, name, unitId: U08._id, lastSeenAt: 0 },
     unit: U08,
     where: "hall",
@@ -29,7 +30,7 @@ function master(name: string, theory: number[], opts: { whole?: boolean; allDone
     ms: computeMaster(m, G7U08),
     mm: m,
     idleMs: 0,
-  } as unknown as View;
+  });
 }
 
 describe("Theory's chips for workbook students", () => {

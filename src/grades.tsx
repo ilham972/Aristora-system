@@ -3,7 +3,7 @@
 // so nothing is missed behind a filter. Calls, "With you" and the alerts are never filtered.
 
 import { useState } from "preact/hooks";
-import { evalQueue, theoryGroups, type View } from "./derive";
+import { evalQueue, theoryGroups, waitingAll, type View } from "./derive";
 import type { Board, Role } from "./store";
 
 export type GradeFilter = "all" | number;
@@ -20,8 +20,8 @@ export function needsOf(role: Role, board: Board, views: View[], now: number): M
     for (const c of board.calls) if (c.status === "requested" && !c.pull) put(c.studentId, "red");
     for (const v of views) {
       if (v.where === "absent") continue;
-      if (v.ms?.dry && v.ms.needs.includes("correction")) put(v.s._id, "red");
-      else if (v.ms?.waiting.length || v.quiet) put(v.s._id, "amber");
+      if (v.noWork && v.ms?.needs.includes("correction")) put(v.s._id, "red");
+      else if (waitingAll(v) || v.quiet) put(v.s._id, "amber");
     }
   } else if (role === "theory") {
     for (const g of theoryGroups(views)) {

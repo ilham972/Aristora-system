@@ -40,6 +40,7 @@ import {
   type Carry,
   type Draft,
 } from "../src/focusData";
+import { asView } from "./views";
 
 const G7U08 = KNOWN_WORKBOOKS[0].data;
 const U08 = { _id: "u08", code: "U08", grade: 7 };
@@ -48,7 +49,7 @@ const level = (n: number) => G7U08.levels.find((l) => l.n === n)!;
 /** A workbook student: `lv` = his levels (done/fixed times), in class unless `where` says otherwise. */
 function wb(name: string, lv: MState["lv"] = {}, opts: { where?: View["where"]; q?: MState["q"]; unitId?: string; grade?: number } = {}): View {
   const m: MState = { q: opts.q ?? {}, lv };
-  return {
+  return asView({
     s: { _id: name, name, unitId: opts.unitId ?? U08._id, grade: opts.grade ?? 7, stage: "master", lastSeenAt: 0 },
     unit: U08,
     stage: "master",
@@ -60,12 +61,12 @@ function wb(name: string, lv: MState["lv"] = {}, opts: { where?: View["where"]; 
     mb: G7U08,
     ms: computeMaster(m, G7U08),
     mm: m,
-  } as unknown as View;
+  });
 }
 const PILOT = fighter(PILOT_FIGHTER);
 /** A theory-book student (the G11 pilot book) with these circles. */
 function th(name: string, marks: Marks = {}, where: View["where"] = "hall"): View {
-  return {
+  return asView({
     s: { _id: name, name, unitId: "u13", grade: 11, stage: "fighter", lastSeenAt: 0 },
     stage: "fighter",
     kind: "fighter",
@@ -76,14 +77,14 @@ function th(name: string, marks: Marks = {}, where: View["where"] = "hall"): Vie
     mb: null,
     ms: null,
     mm: { q: {}, lv: {} },
-  } as unknown as View;
+  });
 }
 const taught = (from: number, to: number): Marks =>
   Object.fromEntries(Array.from({ length: to - from + 1 }, (_, i) => [String(from + i), { s: "taught" as const, t: 1 }]));
 const noTheoryBook = (name: string) =>
-  ({ s: { _id: name, name, stage: "fighter", grade: 11 }, stage: "fighter", kind: "none", where: "hall", f: null, st: null, mb: null, ms: null, mm: { q: {}, lv: {} } }) as unknown as View;
+  asView({ s: { _id: name, name, stage: "fighter", grade: 11 }, stage: "fighter", kind: "none", where: "hall", f: null, st: null, mb: null, ms: null, mm: { q: {}, lv: {} } });
 const noBook = (name: string) =>
-  ({ s: { _id: name, name, stage: "master", grade: 9 }, stage: "master", kind: "none", where: "hall", mb: null, ms: null, mm: { q: {}, lv: {} } }) as unknown as View;
+  asView({ s: { _id: name, name, stage: "master", grade: 9 }, stage: "master", kind: "none", where: "hall", mb: null, ms: null, mm: { q: {}, lv: {} } });
 /** Every level corrected: nothing left to correct. */
 const allFixed = () => Object.fromEntries(G7U08.levels.map((l) => [String(l.n), { done: 1, fixed: 2, got: l.max }]));
 

@@ -302,16 +302,75 @@ export async function refresh(
   }
 }
 
-/** Is he out of work, and what would give him work again? (Legend / Exam Sprint and missing books: not tracked.) */
+/**
+ * Is he out of work, and what would give him work again? (Legend / Exam Sprint and missing books: not tracked.)
+ * A student works on several books at once (30 Oct 2026): his book now blocked is not "out of work" while a book
+ * given to him (Books given) still has work.
+ */
 export async function dryOf(ctx: QueryCtx, s: Doc<"students">): Promise<{ dry: boolean; needs: string[] }> {
   const p = await placeOf(ctx, s);
   if (!p.book) return { dry: false, needs: [] };
+  let out: { dry: boolean; needs: string[] };
   if (p.book.data.kind === "fighter") {
     const st = computeStatus(p.progress?.marks ?? {}, fighter(p.book.data));
-    return { dry: st.dry, needs: st.needs };
+    out = { dry: st.dry, needs: st.needs };
+  } else {
+    const ms = computeMaster(masterState(p.progress), p.book.data);
+    out = { dry: ms.dry, needs: ms.needs };
   }
-  const ms = computeMaster(masterState(p.progress), p.book.data);
-  return { dry: ms.dry, needs: ms.needs };
+  if (out.dry && (await givenWork(ctx, s)).some((g) => g.work)) return { dry: false, needs: [] };
+  return out;
+}
+
+/** A book he could work on now: a level (workbook) or a question (theory book) to do. No book in the app: yes. */
+export function workLeft(book: Doc<"books"> | null, p: Doc<"progress"> | null): boolean {
+  if (!book) return true; // a printed book the app can't see: he has work
+  if (book.data.kind === "fighter") {
+    const st = computeStatus(p?.marks ?? {}, fighter(book.data));
+    return !st.dry && !st.finished;
+  }
+  return computeMaster(masterState(p), book.data).current !== null;
+}
+
+/** The books given to him (not his book now), and whether each still has work. */
+export async function givenWork(
+  ctx: QueryCtx,
+  s: Doc<"students">,
+  cache?: Map<string, Doc<"books"> | null>,
+): Promise<{ unitId: Id<"units">; stage: BookStage; work: boolean }[]> {
+  const out: { unitId: Id<"units">; stage: BookStage; work: boolean }[] = [];
+  for (const h of await ctx.db.query("handouts").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) {
+    if (h.unitId === s.unitId && h.stage === s.stage) continue;
+    const key = `${h.unitId}:${h.stage}`;
+    let book = cache?.get(key);
+    if (book === undefined) {
+      book = await bookFor(ctx, h.unitId, h.stage);
+      cache?.set(key, book);
+    }
+    out.push({ unitId: h.unitId, stage: h.stage, work: workLeft(book, await progressFor(ctx, s._id, h.unitId, h.stage)) });
+  }
+  return out;
+}
+
+/**
+ * A book (not his book now) with something waiting: a level handed in, lost marks or wrong answers to explain,
+ * questions for Theory. The rooms see every such book, whatever unit he is on now.
+ */
+export function openWork(book: Doc<"books">, p: Doc<"progress">): boolean {
+  if (book.data.kind === "fighter") return computeStatus(p.marks ?? {}, fighter(book.data)).pending.length > 0;
+  const ms = computeMaster(masterState(p), book.data);
+  return ms.waiting.length > 0 || ms.pending.length > 0 || ms.theory.length > 0 || ms.reteach;
+}
+
+/** Quick look before reading the book: could this row have anything waiting at all? */
+export function mayBeOpen(p: Doc<"progress">): boolean {
+  if (p.stage === "fighter") return Object.values(p.marks ?? {}).some((m) => m?.s === "wrong");
+  const m = masterState(p);
+  return (
+    !!m.reteach ||
+    Object.values(m.lv).some((l) => !!l?.done && !l.fixed) ||
+    Object.values(m.q).some((r) => (!!r?.lost && !r.x && !r.th) || (!!r?.th && !r.tt))
+  );
 }
 
 const round1 = (min: number) => Math.round(min * 10) / 10;
