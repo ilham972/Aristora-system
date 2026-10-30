@@ -25,9 +25,9 @@ import { unitNo } from "./focusData";
 import { HRow } from "./hrow";
 import { useQuery } from "./live";
 import { KeyLine, MasterStrip } from "./master";
-import { KindBar, ListIcon, RoomIcon, usePinned } from "./roomkit";
+import { byUrgency, KindBar, ListIcon, NO_HEAT, RoomIcon, usePinned } from "./roomkit";
 import { scoreOf } from "./score";
-import { act, currentRole, toast, type Board, type Unit } from "./store";
+import { act, currentMe, currentRole, toast, type Board, type Unit } from "./store";
 import { flushTaps } from "./taps";
 import {
   defaultTicks,
@@ -87,18 +87,22 @@ async function callTheory(picks: View[]): Promise<boolean> {
   return res.created.length > 0;
 }
 
-type Kind = "all" | LessonKind;
+/** Fighter (theory books), Master (workbooks), Legend (whole papers: not in the app yet). No "All" (31 Oct 2026). */
+type Kind = LessonKind | "legend";
 
 export function TheoryTab(props: { board: Board; views: View[]; now: number }) {
   const { board, views, now } = props;
   // How long this teacher's lessons take, learnt from Done (12 min until there are a few).
   const recent = useQuery<{ ms: number[] }>(api.calls.lessons, {});
   const lessonMs = lessonLength(recent?.ms);
-  const room = roomLessons(board, views, now);
+  // Her own room (31 Oct 2026): another Theory teacher's students are hers.
+  const me = currentMe()?._id ?? null;
+  const room = roomLessons(board, views, now, me);
   const freeIn = startIn(room, lessonMs, now);
   const plan = planLessons(views, now, { lessonMs, startInMs: freeIn });
   const [view, setView] = useState<"lessons" | "room">("lessons");
-  const [kind, setKind] = useState<Kind>("all");
+  // The kind she picked; none = the most urgent one (the page's pick).
+  const [picked, setPicked] = useState<Kind | null>(null);
   // The lesson she opened (else the first pill), and her ticks per lesson: kept while she switches between them.
   const [sel, setSel] = useState<string | null>(null);
   const [picks, setPicks] = useState<Record<string, string[] | null>>({});
@@ -118,7 +122,14 @@ export function TheoryTab(props: { board: Board; views: View[]; now: number }) {
 
   const inClass = views.filter((v) => v.where !== "absent");
   const counts = kindCounts(plan);
-  const shownPlan = kind === "all" ? plan : plan.filter((l) => l.kind === kind);
+  const kinds = byUrgency<{ id: Kind; label: string; c: HeatCount }>([
+    { id: "section", label: "Fighter", c: counts.section },
+    { id: "workbook", label: "Master", c: counts.workbook },
+    { id: "legend", label: "Legend", c: NO_HEAT },
+  ]);
+  const has = (k: Kind | null) => !!k && (kinds.find((x) => x.id === k)?.c.total ?? 0) > 0;
+  const kind: Kind = has(picked) ? picked! : (kinds.find((x) => x.c.total > 0)?.id ?? "workbook");
+  const shownPlan = plan.filter((l) => l.kind === kind);
   const ord = nextOrder(order.current, shownPlan, Date.now() - touched.current < HOLD_MS);
   order.current = ord;
   const byKey = new Map(shownPlan.map((l) => [l.key, l]));
@@ -246,13 +257,9 @@ export function TheoryTab(props: { board: Board; views: View[]; now: number }) {
           <>
             <KindBar
               value={kind}
-              items={[
-                { id: "all", label: "All", c: counts.all },
-                { id: "section", label: "Fighter", c: counts.section },
-                { id: "workbook", label: "Master", c: counts.workbook },
-              ]}
+              items={kinds}
               onPick={(k) => {
-                setKind(k);
+                setPicked(k);
                 setSel(null);
               }}
             />

@@ -45,15 +45,22 @@ export function nowOf(v: View, now: number): { tone: Tone; text: string } {
   if (v.where === "theory" || v.where === "evaluation") {
     const sent = v.calls.find((c) => c.status === "sent" && c.room === v.where);
     const room = v.where === "theory" ? "Theory" : "Evaluation";
+    // With a teacher of her own room (31 Oct 2026): her name says where he is.
+    const who = sent?.teacher;
     // Sent to Theory, not there yet (Theory taps Arrived): red after 3 minutes, Correction looks for him.
     if (sent && isWalking(sent)) {
       const walked = now - (sent.sentAt ?? sent.createdAt);
-      return walked >= WALK_MS ? { tone: "red", text: `Not in ${room}${mins(walked)}` } : { tone: v.where, text: `Going to ${room}${mins(walked)}` };
+      return walked >= WALK_MS
+        ? { tone: "red", text: `Not ${who ? `with ${who}` : `in ${room}`}${mins(walked)}` }
+        : { tone: v.where, text: `Going to ${who ?? room}${mins(walked)}` };
     }
     const at = sent?.arrivedAt ?? sent?.sentAt;
-    return { tone: v.where, text: `In ${room}${mins(at ? now - at : undefined)}` };
+    return { tone: v.where, text: `${who ? `With ${who}` : `In ${room}`}${mins(at ? now - at : undefined)}` };
   }
-  if (v.calledTo) return { tone: v.calledTo, text: `Called: ${v.calledTo === "theory" ? "Theory" : "Evaluation"}` };
+  if (v.calledTo) {
+    const c = v.calls.find((x) => x.status === "requested" && x.room === v.calledTo);
+    return { tone: v.calledTo, text: `Called: ${c?.teacher ?? (v.calledTo === "theory" ? "Theory" : "Evaluation")}` };
+  }
   const idle = mins(v.idleMs);
   // His book now blocked but a book given to him has work: he is on that one (several books at once).
   const onOther = { tone: "green" as Tone, text: `On ${v.otherWork.join(", ")}` };

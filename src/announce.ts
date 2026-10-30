@@ -14,24 +14,40 @@ export function joinNames(names: string[]): string {
   return `${n.slice(0, -1).join(", ")} and ${n[n.length - 1]}`;
 }
 
-/** Correction's phone: "Ahamed and Nila, go to Theory. Kumar, go to Evaluation." */
-export function callPhrase(calls: { name: string; room: RoomName }[]): string {
-  const parts: string[] = [];
+type Called = { name: string; room: RoomName; teacher?: string };
+
+/** The calls grouped by room, then by the teacher who called them (31 Oct 2026: each teacher has her own room). */
+function byTeacher(calls: Called[]): { room: RoomName; teacher: string; names: string[] }[] {
+  const out: { room: RoomName; teacher: string; names: string[] }[] = [];
   for (const room of ["theory", "evaluation"] as const) {
-    const names = calls.filter((c) => c.room === room).map((c) => c.name);
-    if (names.length) parts.push(`${joinNames(names)}, go to ${ROOM_WORD[room]}.`);
+    for (const c of calls) {
+      if (c.room !== room) continue;
+      const teacher = clean(c.teacher ?? "");
+      const g = out.find((x) => x.room === room && x.teacher === teacher);
+      if (g) g.names.push(c.name);
+      else out.push({ room, teacher, names: [c.name] });
+    }
   }
-  return parts.join(" ");
+  return out;
+}
+
+/** "Fathima in Theory" (her own room), or just "Theory" for a call without a teacher. */
+function whereTo(room: RoomName, teacher: string): string {
+  return teacher ? `${teacher} in ${ROOM_WORD[room]}` : ROOM_WORD[room];
+}
+
+/** Correction's phone: "Ahamed and Nila, go to Fathima in Theory. Kumar, go to Nila in Evaluation." */
+export function callPhrase(calls: Called[]): string {
+  return byTeacher(calls)
+    .map((g) => `${joinNames(g.names)}, go to ${whereTo(g.room, g.teacher)}.`)
+    .join(" ");
 }
 
 /** Correction's phone, when a student sent to a room isn't there after 3 minutes: go and find him. */
-export function lostPhrase(calls: { name: string; room: RoomName }[]): string {
-  const parts: string[] = [];
-  for (const room of ["theory", "evaluation"] as const) {
-    const names = calls.filter((c) => c.room === room).map((c) => c.name);
-    if (names.length) parts.push(`${joinNames(names)} ${names.length === 1 ? "hasn't" : "haven't"} reached ${ROOM_WORD[room]}.`);
-  }
-  return parts.join(" ");
+export function lostPhrase(calls: Called[]): string {
+  return byTeacher(calls)
+    .map((g) => `${joinNames(g.names)} ${g.names.length === 1 ? "hasn't" : "haven't"} reached ${whereTo(g.room, g.teacher)}.`)
+    .join(" ");
 }
 
 /** Evaluation's phone, when Theory takes a student straight from the evaluation room. */

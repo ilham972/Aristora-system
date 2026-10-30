@@ -41,7 +41,7 @@ export const create = mutation({
     by: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await actor(ctx, args.token, [args.room], args.by);
+    const me = await actor(ctx, args.token, [args.room], args.by);
     const now = Date.now();
     const by = cleanBy(args.by);
     const ids = [...new Set(args.studentIds)];
@@ -83,19 +83,24 @@ export const create = mutation({
       const active = await activeCalls(ctx, id);
       let pull = false;
       let bumped = false;
+      let bumpedFrom: Id<"users"> | undefined;
+      const whose = (c: Doc<"calls">) => (c.teacher ? ` (${c.teacher})` : "");
       if (args.room === "theory") {
-        if (active.some((c) => c.room === "theory")) { reject("is already called to Theory"); continue; }
+        const theory = active.find((c) => c.room === "theory");
+        if (theory) { reject(`is already called to Theory${whose(theory)}`); continue; }
         if (active.some((c) => c.kind === "theory")) { reject("is already getting theory in Evaluation"); continue; }
         for (const c of active) {
           if (c.room === "evaluation" && c.status === "requested") {
             await ctx.db.patch(c._id, { status: "cancelled", endedAt: now });
             await log(ctx, session, now, { kind: "bumped", by, studentId: id, name: s.name, value: "theory first" });
             bumped = true;
+            bumpedFrom = c.teacherId;
           }
         }
         pull = active.some((c) => c.room === "evaluation" && c.status === "sent");
       } else if (active.length > 0) {
-        reject(active.some((c) => c.room === "theory") ? "is called to Theory (theory comes first)" : "is already called to Evaluation");
+        const theory = active.find((c) => c.room === "theory");
+        reject(theory ? `is called to Theory${whose(theory)} (theory comes first)` : `is already called to Evaluation${whose(active[0])}`);
         continue;
       }
 
@@ -110,6 +115,9 @@ export const create = mutation({
         stage: place.book.stage,
         pull: pull || undefined,
         bumped: bumped || undefined,
+        ...(bumpedFrom ? { bumpedFrom } : {}),
+        teacherId: me._id,
+        teacher: me.name,
         createdAt: now,
         sessionId: session?._id,
       });
@@ -431,6 +439,7 @@ export const keep = mutation({
       group: c.group,
       unitId: next.unit._id,
       stage: args.stage,
+      ...(c.teacherId ? { teacherId: c.teacherId, teacher: c.teacher } : {}),
       createdAt: now,
       sentAt: now,
       sessionId: session?._id,

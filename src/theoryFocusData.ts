@@ -391,8 +391,8 @@ export type RoomLesson = {
 };
 
 /** Theory's lessons now: one per lesson, with who is here and who is on the way. Lessons going on first. */
-export function roomLessons(board: Board, views: View[], now: number): RoomLesson[] {
-  const calls = roomCalls(board, views, "theory", now).filter((rc) => rc.c.kind === "theory");
+export function roomLessons(board: Board, views: View[], now: number, me?: string | null): RoomLesson[] {
+  const calls = roomCalls(board, views, "theory", now, me).filter((rc) => rc.c.kind === "theory");
   const lessons = new Map<string, RoomLesson>();
   for (const rc of calls) {
     const v = rc.v;

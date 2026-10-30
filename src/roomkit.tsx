@@ -11,7 +11,7 @@ import type { HeatCount } from "./theoryFocusData";
 export function KindBar<T extends string>(props: { value: T; items: { id: T; label: string; c: HeatCount }[]; onPick: (k: T) => void }) {
   return (
     <nav class="tp-kinds" aria-label="Show one kind of book">
-      {props.items.map((it, i) => {
+      {props.items.map((it) => {
         const on = props.value === it.id;
         return (
           <button
@@ -19,7 +19,7 @@ export function KindBar<T extends string>(props: { value: T; items: { id: T; lab
             type="button"
             class={`tp-kind${on ? " on" : ""}`}
             aria-pressed={on}
-            disabled={!on && i > 0 && it.c.total === 0}
+            disabled={!on && it.c.total === 0}
             aria-label={`${it.label}: ${it.c.total}, ${heatWords(it.c)}`}
             onClick={() => props.onPick(it.id)}
           >
@@ -32,6 +32,20 @@ export function KindBar<T extends string>(props: { value: T; items: { id: T; lab
     </nav>
   );
 }
+
+/**
+ * The most urgent first (31 Oct 2026, his rule: the order follows the situation): most red, then most waiting; ties
+ * keep the given order (Fighter, Master, Legend), so a pill moves only when the class changes.
+ */
+export function byUrgency<T extends { c: HeatCount }>(items: T[]): T[] {
+  return items
+    .map((it, i) => ({ it, i }))
+    .sort((a, b) => b.it.c.red - a.it.c.red || b.it.c.total - a.it.c.total || a.i - b.i)
+    .map((x) => x.it);
+}
+
+/** Nothing waiting (Legend has no books in the app yet). */
+export const NO_HEAT: HeatCount = { red: 0, orange: 0, yellow: 0, total: 0 };
 
 /**
  * The rows pinned under the top bar: their height goes to --tp-stick-h, and the page is marked (body.tp-padded) so

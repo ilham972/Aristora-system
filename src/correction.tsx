@@ -313,22 +313,38 @@ export function CallsBand(props: { board: Board; views: View[]; now: number; pap
   if (waiting.length === 0 && pulls.length === 0 && onWay.length === 0 && lost.length === 0) return null;
   const nameOf = (c: { studentId: string }) => byId.get(c.studentId)?.s.name ?? "?";
 
-  const rooms = (["theory", "evaluation"] as const)
-    .map((room) => ({ room, calls: waiting.filter((c) => c.room === room) }))
-    .filter((r) => r.calls.length > 0);
+  // One strip per teacher (31 Oct 2026: each Theory or Evaluation teacher has her own room): her name first, so
+  // Correction sends each student to the right table.
+  type Call = Board["calls"][number];
+  const byTeacher = (list: Call[]) => {
+    const out: { key: string; room: "theory" | "evaluation"; teacher: string; calls: Call[] }[] = [];
+    for (const room of ["theory", "evaluation"] as const)
+      for (const c of list) {
+        if (c.room !== room) continue;
+        const teacher = c.teacher ?? "";
+        const g = out.find((x) => x.room === room && x.teacher === teacher);
+        if (g) g.calls.push(c);
+        else out.push({ key: `${room}:${c.teacherId ?? ""}`, room, teacher, calls: [c] });
+      }
+    return out;
+  };
+  const toWhom = (room: "theory" | "evaluation", teacher: string) => (teacher ? `${teacher} in ${ROOM[room]}` : ROOM[room]);
 
   return (
     <div class="calls" aria-live="assertive">
-      {rooms.map(({ room, calls }) => {
+      {byTeacher(waiting).map(({ key, room, teacher, calls }) => {
         const oldest = Math.min(...calls.map((c) => c.createdAt));
         const late = now - oldest > 60_000;
         return (
-          <section key={room} class={`call-strip ${room}${late ? " late" : ""}`} aria-label={`Send to ${ROOM[room]}`}>
+          <section key={key} class={`call-strip ${room}${late ? " late" : ""}`} aria-label={`Send to ${toWhom(room, teacher)}`}>
             <span class="cs-room">
               <span class="pulse" aria-hidden="true" />
               <span class="cs-room-text">
-                <b>{ROOM[room]}</b>
-                <small>{shortMin(now - oldest)}</small>
+                <b>{teacher || ROOM[room]}</b>
+                <small>
+                  {teacher ? `${ROOM[room]} · ` : ""}
+                  {shortMin(now - oldest)}
+                </small>
               </span>
             </span>
             <ul class="cs-names">
@@ -367,14 +383,12 @@ export function CallsBand(props: { board: Board; views: View[]; now: number; pap
           <b>{byId.get(c.studentId)?.s.name ?? "?"}</b> goes from Evaluation straight to Theory. Nothing to do.
         </p>
       ))}
-      {(["theory", "evaluation"] as const).map((room) => {
-        const list = onWay.filter((c) => c.room === room);
-        if (list.length === 0) return null;
+      {byTeacher(onWay).map(({ key, room, teacher, calls: list }) => {
         return (
-          <section key={room} class={`call-strip ${room} cs-walk`} aria-label={`On the way to ${ROOM[room]}`}>
+          <section key={key} class={`call-strip ${room} cs-walk`} aria-label={`On the way to ${toWhom(room, teacher)}`}>
             <span class="cs-room-text">
-              <b>To {ROOM[room]}</b>
-              <small>walking</small>
+              <b>To {teacher || ROOM[room]}</b>
+              <small>{teacher ? `${ROOM[room]} · walking` : "walking"}</small>
             </span>
             <ul class="cs-names">
               {list.map((c) => (
@@ -390,9 +404,9 @@ export function CallsBand(props: { board: Board; views: View[]; now: number; pap
       {lost.map((c) => {
         const name = nameOf(c);
         return (
-          <section key={c._id} class="call-strip cs-lost" aria-label={`${name} hasn't reached ${ROOM[c.room]}`}>
+          <section key={c._id} class="call-strip cs-lost" aria-label={`${name} hasn't reached ${toWhom(c.room, c.teacher ?? "")}`}>
             <span class="cs-lost-t">
-              <b>{name}</b> isn't in {ROOM[c.room]} · {Math.floor(walked(c) / 60_000)}m
+              <b>{name}</b> isn't {c.teacher ? `with ${c.teacher}` : `in ${ROOM[c.room]}`} · {Math.floor(walked(c) / 60_000)}m
             </span>
             <button
               type="button"

@@ -278,6 +278,14 @@ export default defineSchema({
      */
     walk: v.optional(v.boolean()),
     arrivedAt: v.optional(v.number()),
+    /**
+     * The teacher who called him (31 Oct 2026): each Theory or Evaluation teacher has her own room. Correction says her
+     * name ("Kumar, go to Nila in Evaluation"); only her phone shows him in her room. Calls without it are shared.
+     */
+    teacherId: v.optional(v.id("users")),
+    teacher: v.optional(v.string()),
+    /** This theory call cancelled the Evaluation call of this teacher (her phone says "Theory took Kumar first"). */
+    bumpedFrom: v.optional(v.id("users")),
     endedAt: v.optional(v.number()),
     sessionId: v.optional(v.id("sessions")),
   })

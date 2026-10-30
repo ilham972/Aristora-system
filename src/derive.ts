@@ -512,12 +512,16 @@ export const isWalking = (c: Call) => c.status === "sent" && !!c.walk && c.arriv
  */
 export type RoomCall = { c: Call; v?: View; minutes: number; long: boolean; walking: boolean; walkMs: number; lost: boolean };
 
-export function roomCalls(board: Board, views: View[], room: "theory" | "evaluation", now: number): RoomCall[] {
+/** Her own call (31 Oct 2026: each teacher has her own room); calls without a teacher are everyone's. */
+export const isMine = (c: Call, me: string | null | undefined) => !me || !c.teacherId || c.teacherId === me;
+
+/** The calls to a room; with `me`, only that teacher's (her room). */
+export function roomCalls(board: Board, views: View[], room: "theory" | "evaluation", now: number, me?: string | null): RoomCall[] {
   const byId = new Map(views.map((v) => [v.s._id as string, v.home ?? v]));
   // A call is for one of his books: the view of that book (his main view when the call names none).
   const byBook = new Map(withBooks([...byId.values()]).map((v) => [v.key, v]));
   return board.calls
-    .filter((c) => c.room === room)
+    .filter((c) => c.room === room && isMine(c, me))
     .map((c) => {
       const walking = isWalking(c);
       const walkMs = walking ? Math.max(0, now - (c.sentAt ?? c.createdAt)) : 0;

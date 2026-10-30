@@ -163,8 +163,8 @@ function hereOf(rc: RoomCall, v: View): EvalHere {
  * Who is with her now (Arrived; calls from before 30 Oct 2026: sent), first come first, and who is on the way (called
  * and not sent yet, or sent and walking there).
  */
-export function evalRoom(board: Board, views: View[], now: number): { here: EvalHere[]; coming: RoomCall[] } {
-  const calls = roomCalls(board, views, "evaluation", now);
+export function evalRoom(board: Board, views: View[], now: number, me?: string | null): { here: EvalHere[]; coming: RoomCall[] } {
+  const calls = roomCalls(board, views, "evaluation", now, me);
   const here: EvalHere[] = [];
   const coming: RoomCall[] = [];
   for (const rc of calls) {
@@ -184,8 +184,8 @@ export type EvalItem = { h: EvalHere; state: EvalState; id: string; name: string
  * Everyone she called, in the order she called them (nobody moves when he arrives: only his pill's look changes), each
  * with his questions. Late (red): sent and not there after 3 minutes, or Correction hasn't sent him for 3 minutes.
  */
-export function evalItems(board: Board, views: View[], now: number): EvalItem[] {
-  return roomCalls(board, views, "evaluation", now).flatMap((rc) => {
+export function evalItems(board: Board, views: View[], now: number, me?: string | null): EvalItem[] {
+  return roomCalls(board, views, "evaluation", now, me).flatMap((rc) => {
     if (!rc.v) return [];
     const state: EvalState | null = rc.walking ? "walking" : rc.c.status === "sent" ? "here" : rc.c.status === "requested" ? "called" : null;
     if (!state) return [];

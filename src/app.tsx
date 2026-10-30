@@ -12,7 +12,7 @@ import { Settings } from "./settings";
 import { alertsState, armAlerts, listenForTaps, ring, useAlertsState, type AlertKind } from "./sound";
 import { clearHash, PinSheet, pinAsked, readHash, SignIn, stopAskingPin, type Hash } from "./signin";
 import { hideSplash } from "./splash";
-import { may, setRole, signOutHere, useStore, useTick, type Board, type Role } from "./store";
+import { currentMe, may, setRole, signOutHere, useStore, useTick, type Board, type Role } from "./store";
 import { Sheet, Toasts } from "./ui";
 
 /**
@@ -484,7 +484,7 @@ function LinkBanner(props: { link: Link }) {
 
 const REPEAT_MS = 30_000;
 
-type AlertItem = { key: string; kind: AlertKind; name: string; room: RoomName; repeat: boolean };
+type AlertItem = { key: string; kind: AlertKind; name: string; room: RoomName; repeat: boolean; teacher?: string };
 
 /** What this phone's job should hear about right now. */
 function alertItems(role: Role, board: Board, views: View[], now: number): AlertItem[] {
@@ -493,11 +493,11 @@ function alertItems(role: Role, board: Board, views: View[], now: number): Alert
   if (role === "correction") {
     for (const c of board.calls)
       if (c.status === "requested" && !c.pull)
-        items.push({ key: `call:${c._id}`, kind: "call", name: nameOf.get(c.studentId) ?? "", room: c.room, repeat: true });
+        items.push({ key: `call:${c._id}`, kind: "call", name: nameOf.get(c.studentId) ?? "", room: c.room, repeat: true, teacher: c.teacher });
     // Sent to Theory 3 minutes ago and Theory hasn't tapped Arrived: where is he? (Again every 30 s until it's settled.)
     for (const c of board.calls)
       if (isWalking(c) && now - (c.sentAt ?? c.createdAt) >= WALK_MS)
-        items.push({ key: `lost:${c._id}`, kind: "lost", name: nameOf.get(c.studentId) ?? "", room: c.room, repeat: true });
+        items.push({ key: `lost:${c._id}`, kind: "lost", name: nameOf.get(c.studentId) ?? "", room: c.room, repeat: true, teacher: c.teacher });
     // A workbook student with every level handed in waits for Correction: knock once.
     for (const v of views)
       if (v.where === "hall" && v.noWork && v.ms?.needs.includes("correction"))
@@ -510,8 +510,12 @@ function alertItems(role: Role, board: Board, views: View[], now: number): Alert
     for (const m of evalQueue(views, now))
       if (m.urgency === "red" && !m.blockedBy && !items.some((x) => x.key === `red:${m.v.s._id}`))
         items.push({ key: `red:${m.v.s._id}`, kind: "red", name: m.v.s.name, room: "evaluation", repeat: false });
+    // Theory wants a student who is with an Evaluation teacher: only she hears it (each teacher has her own room).
+    const me = currentMe()?._id;
+    const mine = (studentId: string) =>
+      board.calls.some((e) => e.studentId === studentId && e.room === "evaluation" && e.status === "sent" && (!e.teacherId || e.teacherId === me));
     for (const c of board.calls)
-      if (c.pull && c.status === "requested")
+      if (c.pull && c.status === "requested" && mine(c.studentId))
         items.push({ key: `pull:${c._id}`, kind: "pull", name: nameOf.get(c.studentId) ?? "", room: "theory", repeat: true });
   }
   return items;

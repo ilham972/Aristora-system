@@ -50,6 +50,8 @@ type Call = {
   pull?: boolean;
   walk?: boolean;
   arrivedAt?: number;
+  teacherId?: string;
+  teacher?: string;
 };
 
 /** A theory-book student (the G11 pilot book). */
@@ -186,6 +188,12 @@ describe("With her: 3 at once, one question at a time", () => {
       ["Zara", "called", true, "not sent 4m"],
     ]);
     expect(items[0].h.qs).toEqual([18]);
+    // Two Evaluation teachers (31 Oct 2026): each sees only the students she called; calls from before are everyone's.
+    const mine = calls.map((x, i) => ({ ...x, ...(i < 2 ? { teacherId: "u-nila", teacher: "Nila" } : i === 2 ? { teacherId: "u-sara", teacher: "Sara" } : {}) }));
+    const vs2 = mine.map((x) => th(x.studentId, { ...IN_C, ...wrong(18, 30) }, { where: x.status === "sent" ? "evaluation" : "hall", calls: [x] }));
+    expect(evalItems(board(mine), vs2, NOW, "u-nila").map((it) => it.name)).toEqual(["Kumar", "Nila", "Zara"]);
+    expect(evalItems(board(mine), vs2, NOW, "u-sara").map((it) => it.name)).toEqual(["Sana", "Zara"]);
+    expect(evalRoom(board(mine), vs2, NOW, "u-sara").coming.map((rc) => rc.c.studentId)).toEqual(["Sana", "Zara"]);
   });
 
   test("Done: what she decided; 'All explained' fills in the rest; theory books re-teach the section", () => {

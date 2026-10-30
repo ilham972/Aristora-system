@@ -49,7 +49,7 @@ import { useQuery } from "./live";
 import { KeyLine, MasterStrip } from "./master";
 import { KindBar, ListIcon, RoomIcon, usePinned } from "./roomkit";
 import { scoreOf } from "./score";
-import { act, currentRole, toast, type Board } from "./store";
+import { act, currentMe, currentRole, toast, type Board } from "./store";
 import { flushTaps } from "./taps";
 import { LessonName } from "./theoryFocus";
 import { classPace, mShort, sinceWords, STAY_MS } from "./theoryFocusData";
@@ -100,8 +100,10 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
   const pace = classPace(all);
 
   // The room and Theory's notes are never filtered.
-  const room = evalRoom(board, all, now);
-  const items = evalItems(board, all, now);
+  // Her own room (31 Oct 2026): another Evaluation teacher's students are hers.
+  const me = currentMe()?._id ?? null;
+  const room = evalRoom(board, all, now, me);
+  const items = evalItems(board, all, now, me);
   const left = evalLeft(room);
   const everyone = candidates(views, now, pace);
   const counts = evalCounts(everyone);
@@ -115,7 +117,9 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
   const teach = inGrade(inClass, grade).filter((v) => canTeachHere(board, v));
   const teachChosen = (teachPick ?? teach.slice(0, left).map((v) => v.s._id as string)).filter((id) => teach.some((v) => v.s._id === id));
   const byId = new Map(all.map((v) => [v.s._id as string, v]));
-  const bumped = board.calls.filter((c) => c.room === "theory" && c.bumped && byId.get(c.studentId)?.where !== "absent");
+  const bumped = board.calls.filter(
+    (c) => c.room === "theory" && c.bumped && (!c.bumpedFrom || c.bumpedFrom === me) && byId.get(c.studentId)?.where !== "absent",
+  );
   const pulls = room.here.filter((h) => h.v.pulled);
   const score = scoreOf(board, all, "evaluation", now);
   const open = items.find((it) => it.id === openId) ?? items.find((it) => it.state !== "here") ?? items[0];

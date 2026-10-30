@@ -22,6 +22,19 @@ describe("what the phones say", () => {
     expect(callPhrase([])).toBe("");
   });
 
+  test("each teacher has her own room: Correction says her name (31 Oct 2026)", () => {
+    expect(callPhrase([{ name: "Raj", room: "evaluation", teacher: "Nila" }])).toBe("Raj, go to Nila in Evaluation.");
+    expect(
+      callPhrase([
+        { name: "Raj", room: "evaluation", teacher: "Nila" },
+        { name: "Kumar", room: "evaluation", teacher: "Sara" },
+        { name: "Ahamed", room: "theory", teacher: "Fathima" },
+        { name: "Zara", room: "evaluation", teacher: "Nila" },
+      ]),
+    ).toBe("Ahamed, go to Fathima in Theory. Raj and Zara, go to Nila in Evaluation. Kumar, go to Sara in Evaluation.");
+    expect(lostPhrase([{ name: "Kumar", room: "theory", teacher: "Fathima" }])).toBe("Kumar hasn't reached Fathima in Theory.");
+  });
+
   test("Evaluation hears who Theory is taking", () => {
     expect(pullPhrase(["Kumar"])).toBe("Theory wants Kumar now.");
     expect(pullPhrase([])).toBe("");

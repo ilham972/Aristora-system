@@ -98,6 +98,14 @@ chips for other books ("U08 Eval 2"). Absent students: book now only.
   Kumar now" and taps "Send to Theory"). Theory calling someone Evaluation had **called** cancels her call: the
   theory call carries `bumped`, and Evaluation's page says "Theory took Kumar first" while it lasts.
 - When Theory is busy, Evaluation can teach theory itself ("Teach").
+- **Each teacher her own room** (31 Oct 2026, his answer: "Correction says her name"). A call carries who called
+  (`teacherId`, `teacher`; `calls.create`, kept by `calls.keep`). Correction hears "Raj and Zara, go to Nila in
+  Evaluation." (`callPhrase` groups by room, then teacher; `lostPhrase` "Kumar hasn't reached Fathima in Theory."); one
+  call strip per teacher (her name first, then the room). Her page's room = her calls only (`roomCalls(…, me)`,
+  `isMine`; calls without a teacher are everyone's): Arrived, Done, her lessons, her 3 (Evaluation) count only hers.
+  Another teacher's student isn't suggested (the server says "is already called to Evaluation (Nila)"). Pulls go to the
+  Evaluation teacher who has him; a bump note only to the teacher whose call Theory cancelled (`bumpedFrom`). Class
+  rows: "With Nila 4m", "Going to Nila 1m", "Not with Nila 4m", "Called: Nila". The score stays per room.
 - Status flow: `requested → sent → done | cancelled | declined`. `section: "R"` is a Master theory call.
 - **Arrived (30 Oct, `b4ac688`; Evaluation too since `17919d8`):** a call Correction sent is **on his way** (`walk:
   true`, set by `sendNow`) until the room's teacher taps **Arrived** (`arrivedAt`, `calls.arrive`: that room's
@@ -157,8 +165,9 @@ sites. Final answer bold from `**…**`, never HTML; Books page K pill. A re-upl
 
 **Theory page (rebuilt 30 Oct 2026, `b4ac688`, his voice note; `src/theoryFocus.tsx`, rules in `src/theoryFocusData.ts`).**
 Like Correction: small things in fixed places.
-- **Pinned** (`.tp-stick`): today's score in one thin line (`TodayStrip compact`), All / Fighter / Master (`KindBar`,
-  pale at 0, red count), then every lesson as a tiny pill in ONE sideways line (`HRow`), the most useful first
+- **Pinned** (`.tp-stick`): today's score in one thin line (`TodayStrip compact`), Fighter / Master / Legend (`KindBar`,
+  the most urgent first and picked: `byUrgency`; no All since 31 Oct, his call; Legend pale until its books exist;
+  pale at 0, red count), then that kind's lessons, each as a tiny pill in ONE sideways line (`HRow`), the most useful first
   (`planLessons`): grade chip, unit number (Fighter: "13·D"), the Tamil name (Fighter: the section's Tamil title),
   how many need it; a red (no work now / starving) or amber (soon) line under it (`pillTone`); Fighter = blue left
   edge; a lesson going on in her room = blue count (`lt-going`). The order holds still (`nextOrder`): it re-ranks

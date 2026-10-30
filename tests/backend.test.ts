@@ -461,6 +461,32 @@ describe("calls between the rooms", () => {
     // Her own call: Evaluation says he is there.
     expect((await asPhone(t, eve).mutation(api.calls.arrive, { callIds: [ev.created[0].callId], by: "evaluation" })).arrived).toBe(1);
   });
+
+  test("each teacher her own room (31 Oct 2026): a call carries who called; the others are told whose he is", async () => {
+    const t = await setup();
+    const nila = "nila-token-0123456789abcdefghijklmnopqrstuvwxyz";
+    const sara = "sara-token-0123456789abcdefghijklmnopqrstuvwxyz";
+    const fat = "fath-token-0123456789abcdefghijklmnopqrstuvwxyz";
+    await addPerson(t, { name: "Nila", token: nila, tabs: ["evaluation"] });
+    await addPerson(t, { name: "Sara", token: sara, tabs: ["evaluation"] });
+    await addPerson(t, { name: "Fathima", token: fat, tabs: ["theory"] });
+    const a = await addIn(t, "Ahamed");
+    await teachSection(t, a, [1, 2, 3, 4]);
+    await mark(t, a, 5, "wrong");
+    const ev = await asPhone(t, nila).mutation(api.calls.create, { studentIds: [a], room: "evaluation", kind: "evaluation", by: "evaluation" });
+    const call = async (id: Id<"calls">) => (await t.run((ctx) => ctx.db.get(id)))!;
+    expect(await call(ev.created[0].callId)).toMatchObject({ teacher: "Nila" });
+    // Sara can't call him too: he is Nila's.
+    const again = await asPhone(t, sara).mutation(api.calls.create, { studentIds: [a], room: "evaluation", kind: "evaluation", by: "evaluation" });
+    expect(again.rejected[0].reason).toBe("is already called to Evaluation (Nila)");
+    // Theory first: Fathima's call cancels Nila's request and remembers it was Nila's (only her phone says so).
+    const th = await asPhone(t, fat).mutation(api.calls.create, { studentIds: [a], room: "theory", kind: "theory", by: "theory" });
+    expect(th.created).toHaveLength(1);
+    const c = await call(th.created[0].callId);
+    expect(c).toMatchObject({ teacher: "Fathima", bumped: true });
+    expect(c.bumpedFrom).toBe((await call(ev.created[0].callId)).teacherId);
+    expect((await call(ev.created[0].callId)).status).toBe("cancelled");
+  });
 });
 
 describe("idle minutes and the session report", () => {
