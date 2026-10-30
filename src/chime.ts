@@ -1,7 +1,7 @@
 // The alert sounds, made as WAV files in memory (no audio files to download).
 // Bright notes around 1-1.6 kHz: the range small phone speakers play loudest.
 
-export type AlertKind = "call" | "pull" | "red";
+export type AlertKind = "call" | "pull" | "red" | "lost";
 
 type Note = [freq: number, start: number];
 export const SOUNDS: Record<AlertKind, { notes: Note[]; seconds: number; speakAt: number; vibrate: number[] }> = {
@@ -32,6 +32,18 @@ export const SOUNDS: Record<AlertKind, { notes: Note[]; seconds: number; speakAt
     seconds: 4.2,
     speakAt: 0.95,
     vibrate: [200, 100, 200, 100, 400],
+  },
+  // Four notes going down: a student sent to Theory isn't there after 3 minutes (Correction: find him).
+  lost: {
+    notes: [
+      [1568, 0],
+      [1319, 0.12],
+      [1047, 0.24],
+      [880, 0.36],
+    ],
+    seconds: 4.2,
+    speakAt: 0.95,
+    vibrate: [400, 100, 400, 100, 400],
   },
   // A double knock: a student just ran out of work.
   red: {

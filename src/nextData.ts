@@ -5,7 +5,7 @@
 // Next: who he needs and when ("Theory D ~8m", "Eval 2", "Correct L3"), soonest first. A chip pulses only when he
 // needs it now or within 5 minutes: if everything pulsed, nothing would stand out.
 
-import { evalUrgencyOf, pendingSince, type Tone, type View } from "./derive";
+import { evalUrgencyOf, isWalking, pendingSince, WALK_MS, type Tone, type View } from "./derive";
 import { stageName } from "./store";
 import { mShort, outInOf } from "./theoryFocusData";
 
@@ -44,7 +44,14 @@ export function nowOf(v: View, now: number): { tone: Tone; text: string } {
   }
   if (v.where === "theory" || v.where === "evaluation") {
     const sent = v.calls.find((c) => c.status === "sent" && c.room === v.where);
-    return { tone: v.where, text: `In ${v.where === "theory" ? "Theory" : "Evaluation"}${mins(sent?.sentAt ? now - sent.sentAt : undefined)}` };
+    const room = v.where === "theory" ? "Theory" : "Evaluation";
+    // Sent to Theory, not there yet (Theory taps Arrived): red after 3 minutes, Correction looks for him.
+    if (sent && isWalking(sent)) {
+      const walked = now - (sent.sentAt ?? sent.createdAt);
+      return walked >= WALK_MS ? { tone: "red", text: `Not in ${room}${mins(walked)}` } : { tone: v.where, text: `Going to ${room}${mins(walked)}` };
+    }
+    const at = sent?.arrivedAt ?? sent?.sentAt;
+    return { tone: v.where, text: `In ${room}${mins(at ? now - at : undefined)}` };
   }
   if (v.calledTo) return { tone: v.calledTo, text: `Called: ${v.calledTo === "theory" ? "Theory" : "Evaluation"}` };
   const idle = mins(v.idleMs);

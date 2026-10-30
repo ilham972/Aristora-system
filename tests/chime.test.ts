@@ -25,7 +25,7 @@ const rms = (x: Float32Array) => Math.sqrt(x.reduce((a, b) => a + b * b, 0) / Ma
 const peak = (x: Float32Array) => x.reduce((a, b) => Math.max(a, Math.abs(b)), 0);
 
 describe("alert sounds", () => {
-  test.each(["call", "pull", "red"] as AlertKind[])("%s is a valid, loud WAV under 5 seconds", (kind) => {
+  test.each(["call", "pull", "red", "lost"] as AlertKind[])("%s is a valid, loud WAV under 5 seconds", (kind) => {
     const w = read(chimeWav(kind));
     expect([w.riff, w.wave, w.fmt, w.data]).toEqual(["RIFF", "WAVE", "fmt ", "data"]);
     expect([w.format, w.channels, w.rate, w.bits]).toEqual([1, 1, RATE, 16]);
@@ -39,7 +39,7 @@ describe("alert sounds", () => {
     expect(rms(w.samples.slice(0, Math.round(0.5 * RATE)))).toBeGreaterThan(0.25); // the notes carry real energy
   });
 
-  test.each(["call", "pull"] as AlertKind[])("%s goes quiet before the names are read", (kind) => {
+  test.each(["call", "pull", "lost"] as AlertKind[])("%s goes quiet before the names are read", (kind) => {
     const w = read(chimeWav(kind));
     const from = Math.round(SOUNDS[kind].speakAt * RATE);
     expect(rms(w.samples.slice(from))).toBeLessThan(0.01);

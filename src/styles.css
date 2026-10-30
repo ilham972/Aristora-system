@@ -4991,9 +4991,8 @@ body.locked.fc-marking .toasts {
   }
 }
 
-/* ---------- Theory page (src/theoryFocus.tsx) ----------
-   One page for 20–30 students: the lessons going on (who is here, who is coming), Next (3 cards), Soon (one line
-   each). Names sit three to a line. */
+/* ---------- Shared by the room pages (the Evaluation page's cards, the on-the-way list, question toggles) ----------
+   The Theory page's own styles (rebuilt 30 Oct 2026) are the .tp-* block near the end of this file. */
 
 .tf-card {
   padding: 12px 12px 14px;
@@ -5032,56 +5031,6 @@ body.locked.fc-marking .toasts {
 .tf-card.long .tf-kicker {
   color: var(--amber-ink);
 }
-.tf-head {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-}
-.tf-badge-l {
-  flex: none;
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: var(--theory);
-  color: #fff;
-  font: 700 20px/1 var(--cond);
-  box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--theory);
-  margin: 3px 3px 0;
-}
-.tf-badge-l.wb {
-  background: var(--card);
-  color: var(--theory-ink);
-}
-.tf-head.big .tf-badge-l {
-  width: 46px;
-  height: 46px;
-  font-size: 25px;
-}
-.tf-title {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.tf-title b {
-  font-size: 18px;
-  line-height: 1.15;
-}
-.tf-head.big .tf-title b {
-  font: 700 23px/1.1 var(--cond);
-}
-.tf-title small {
-  font-size: 14px;
-  color: var(--ink-2);
-}
-.tf-tag {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ink-3);
-}
 .tf-help {
   margin-top: 2px;
 }
@@ -5093,16 +5042,13 @@ body.locked.fc-marking .toasts {
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
-.tf-teach,
-.tf-rs-qs,
-.tf-join {
+.tf-teach {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
 }
-.tf-teach .tf-lbl,
-.tf-join .tf-lbl {
+.tf-teach .tf-lbl {
   flex-basis: 100%;
 }
 .tf-q {
@@ -5119,85 +5065,12 @@ body.locked.fc-marking .toasts {
   background: var(--theory);
   color: #fff;
 }
-.tf-room {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.tf-rs {
-  padding: 8px 8px 8px 12px;
-  border-radius: 12px;
-  border: 1.5px solid var(--line-2);
-  background: var(--card);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.tf-rs.stays {
-  border-color: var(--amber);
-  background: var(--amber-soft);
-}
-.tf-rs-top {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.tf-rs-name {
-  flex: 1 1 auto;
-  min-width: 0;
-  font: 700 21px/1.1 var(--cond);
-  overflow-wrap: anywhere;
-}
-.tf-got {
-  flex: none;
-  min-height: 44px;
-  padding: 0 14px;
-  border-radius: 12px;
-  border: 2px solid var(--amber);
-  background: var(--card);
-  color: var(--amber-ink);
-  font: 700 15px/1 var(--font);
-}
-.tf-got.on {
-  border-color: var(--green);
-  background: var(--green);
-  color: #fff;
-}
 .tf-back {
   align-self: flex-start;
   padding: 0;
   font-size: 13.5px;
   color: var(--ink-2);
   text-decoration: underline;
-}
-.tf-join {
-  padding-top: 4px;
-  border-top: 1px dashed var(--line);
-}
-.tf-jn {
-  min-height: 42px;
-  padding: 4px 10px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  border-radius: 12px;
-  border: 1.5px dashed var(--theory);
-  background: var(--card);
-  text-align: left;
-  line-height: 1.1;
-}
-.tf-jn b {
-  font-size: 15px;
-  color: var(--theory-ink);
-}
-.tf-jn small {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--ink-3);
-}
-.tf-jn.u-red small {
-  color: var(--red-ink);
 }
 .tf-h {
   margin: 2px 2px 0;
@@ -5207,36 +5080,7 @@ body.locked.fc-marking .toasts {
   color: var(--ink-3);
 }
 
-.tp-page {
-  gap: 12px;
-}
-.tp-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.tf-card.tp-card,
-.tf-card.tp-room {
-  gap: 8px;
-  padding: 10px 10px 12px;
-}
-.tp-why {
-  font: 700 13.5px/1.25 var(--font);
-  color: var(--ink-2);
-}
-.tp-why.u-red {
-  color: var(--red-ink);
-}
-.tp-why.u-amber {
-  color: var(--amber-ink);
-}
-.tp-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
-}
-.tp-m,
-.tp-got {
+.tp-m {
   position: relative;
   width: 100%;
   min-height: 48px;
@@ -5252,16 +5096,14 @@ body.locked.fc-marking .toasts {
   text-align: left;
   line-height: 1.15;
 }
-.tp-m b,
-.tp-got b {
+.tp-m b {
   max-width: 100%;
   font-size: 15px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.tp-m small,
-.tp-got small {
+.tp-m small {
   max-width: 100%;
   font-size: 12px;
   font-weight: 700;
@@ -5275,11 +5117,6 @@ body.locked.fc-marking .toasts {
 }
 .tp-m.u-amber small {
   color: var(--amber-ink);
-}
-.tp-m small.tp-what,
-.tp-got small.tp-what {
-  color: var(--theory-ink);
-  font-weight: 600;
 }
 /* Ticked: he comes to the lesson. */
 .tp-m.on {
@@ -5303,77 +5140,6 @@ body.locked.fc-marking .toasts {
 }
 .tp-m.hold b {
   color: var(--ink-2);
-}
-.tp-got.on {
-  border-color: var(--green);
-  background: var(--green-soft);
-}
-.tp-got.on small {
-  color: var(--green-ink);
-}
-.tp-got:not(.on) {
-  border-color: var(--amber);
-  background: var(--amber-soft);
-}
-.tp-got:not(.on) small {
-  color: var(--amber-ink);
-}
-.tp-acts {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.tp-acts .tp-call {
-  flex: 1 1 auto;
-}
-.tf-badge-l.sm {
-  width: 30px;
-  height: 30px;
-  margin: 2px;
-  font-size: 16px;
-  box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--theory);
-}
-.tp-soon {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 52px;
-  padding: 6px 10px 6px 8px;
-  border-radius: 14px;
-  border: 1.5px solid var(--line-2);
-  background: var(--card);
-  text-align: left;
-}
-.tp-soon-t {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  line-height: 1.15;
-}
-.tp-soon-t b,
-.tp-soon-t small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.tp-soon-t b {
-  font-size: 15px;
-}
-.tp-soon-t small {
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--ink-3);
-}
-.tp-soon-go {
-  flex: none;
-  font: 700 22px/1 var(--font);
-  color: var(--ink-3);
-}
-.tf-card.tp-room.starting {
-  border-style: dashed;
-  background: var(--card);
 }
 .tp-coming {
   display: flex;
@@ -5456,7 +5222,6 @@ body.locked.fc-marking .toasts {
   transition: transform 0.12s ease, background-color 0.18s ease, border-color 0.18s ease;
 }
 .tile:active,
-.tp-pill:active,
 .unit-p:active,
 .st-chip:active,
 .ev-c:active,
@@ -5628,138 +5393,11 @@ body.locked.fc-marking .toasts {
     transform: none;
   }
 }
-.tp-card,
-.tp-room,
 .ev-room,
 .ev-h,
 .ev-q,
-.ev-c,
-.tp-pill {
+.ev-c {
   animation: rise 0.22s ease-out both;
-}
-
-/* ---------- Theory page: every lesson as a pill (one order that never moves), the picked one as a card ---------- */
-.tp-pills {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
-}
-.tp-pills.one {
-  grid-template-columns: minmax(0, 1fr);
-}
-.tp-pill {
-  position: relative;
-  min-width: 0;
-  min-height: 52px;
-  padding: 6px 6px 6px 5px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  border-radius: 12px;
-  border: 1.5px solid var(--line);
-  background: var(--card);
-  text-align: left;
-  transition: transform 0.12s ease, background-color 0.18s ease, border-color 0.18s ease;
-}
-.tp-pill.u-red {
-  border-color: var(--red);
-}
-.tp-pill.u-amber {
-  border-color: #ec7311;
-}
-.tp-pill.on {
-  border-color: var(--theory);
-  background: var(--theory-soft);
-  box-shadow: inset 0 0 0 1.5px var(--theory);
-}
-.tp-pill.starving:not(.on) {
-  animation: rise 0.22s ease-out both, hot-ring 1.6s ease-in-out 0.3s infinite;
-}
-@keyframes hot-ring {
-  50% {
-    box-shadow: 0 0 0 4px rgba(220, 35, 56, 0.22);
-  }
-}
-.tp-pill .tf-badge-l.sm {
-  width: 28px;
-  height: 28px;
-  font-size: 15px;
-}
-.tp-pill-t {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  line-height: 1.1;
-}
-.tp-pill-t b {
-  font-size: 13.5px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.tp-pill-sub {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-.tp-pill-sub small {
-  min-width: 0;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--ink-3);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-/* The page's pick: a small tag on the pill's top edge. */
-.tp-best {
-  position: absolute;
-  top: -8px;
-  right: 8px;
-  padding: 1px 6px;
-  border-radius: 6px;
-  background: var(--theory);
-  color: #fff;
-  font: 700 10.5px/1.3 var(--font);
-  font-style: normal;
-  letter-spacing: 0.03em;
-}
-.tp-pill .heat {
-  flex: none;
-  flex-wrap: nowrap;
-}
-.tp-pill .heat i {
-  min-width: 18px;
-  height: 18px;
-  font-size: 11px;
-}
-/* The picked lesson: smaller than the old cards, so the names show without scrolling. */
-.tf-card.tp-card {
-  gap: 7px;
-  padding: 9px 9px 10px;
-}
-.tp-card .tf-head .tf-badge-l {
-  width: 32px;
-  height: 32px;
-  font-size: 17px;
-}
-.tp-card .tf-title b {
-  font-size: 16px;
-}
-.tp-card .tf-title small {
-  font-size: 12.5px;
-}
-.tp-card .tf-tag {
-  font-size: 12px;
-}
-.tp-card .tp-m {
-  min-height: 44px;
-}
-.tp-card .tp-call {
-  min-height: 46px;
 }
 
 /* ---------- Evaluation page (src/evalFocus.tsx) ---------- */
@@ -6351,15 +5989,697 @@ body.locked.fc-marking .toasts {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tp-card,
-  .tp-room,
   .ev-room,
   .ev-h,
   .ev-q,
   .ev-c,
-  .tp-pill,
-  .tp-pill.starving:not(.on),
   .nx-c.beat::before {
     animation: none;
+  }
+}
+
+/* ---------- Theory page, rebuilt 30 Oct 2026 (src/theoryFocus.tsx): small things in fixed places, like Correction.
+   Pinned: today in one line, All / Fighter / Master, the lessons (or her room) as tiny pills in one line. Under them:
+   the open lesson's students (or one student's file). At the bottom, always in the same two places: Room and Call
+   (Lessons and Done in her room). Nothing pulses; a red or amber line says how urgent. ---------- */
+.tp-page {
+  gap: 10px;
+}
+.tp-stick {
+  gap: 6px;
+  box-shadow: 0 1px 0 var(--line-2);
+}
+/* Today's score in one thin line (the Theory page). */
+.sc.sc-thin .sc-cells {
+  gap: 4px;
+}
+.sc.sc-thin .sc-lbl {
+  width: auto;
+  padding-right: 2px;
+  font-size: 10px;
+}
+.sc.sc-thin .sc-c {
+  flex-direction: row;
+  justify-content: center;
+  align-items: baseline;
+  gap: 3px;
+  padding: 3px 4px;
+  border-radius: 8px;
+}
+.sc.sc-thin .sc-c b {
+  font-size: 14px;
+}
+.sc.sc-thin .sc-c small {
+  font-size: 9.5px;
+}
+/* All / Fighter / Master: one line of three. */
+.tp-kinds {
+  display: flex;
+  gap: 5px;
+}
+.tp-kind {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 30px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border-radius: 999px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  color: var(--ink-2);
+  font: 700 13px/1 var(--font);
+  white-space: nowrap;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+.tp-kind b {
+  color: var(--ink);
+  font-size: 14px;
+}
+.tp-kind.on {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
+}
+.tp-kind.on b {
+  color: #fff;
+}
+.tp-kind:disabled {
+  opacity: 0.4;
+}
+.tp-kind:active:not(:disabled) {
+  transform: scale(0.96);
+}
+.tp-kind-r {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--red);
+  color: #fff;
+  font: 700 10.5px/1 var(--font);
+  font-style: normal;
+}
+/* The lessons: tiny pills in one line, the most useful first. */
+.tp-lrow {
+  min-height: 41px;
+  display: flex;
+  align-items: center;
+}
+.tp-lrow .hrow {
+  flex: 1 1 auto;
+}
+.tp-lps,
+.tp-rps {
+  gap: 5px;
+  padding: 4px 2px 5px;
+}
+.tp-lp,
+.tp-rp {
+  flex: none;
+  position: relative;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  font: 700 14px/1 var(--font);
+  white-space: nowrap;
+  overflow: hidden;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+.tp-lp {
+  max-width: 172px;
+  padding: 0 6px 0 5px;
+}
+.tp-lp:active,
+.tp-rp:active {
+  transform: scale(0.95);
+}
+.tp-lp.on {
+  max-width: min(250px, calc(100vw - 110px));
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
+}
+/* A theory book (Fighter): the blue edge, as on Correction's names. */
+.tp-lp.lt-th {
+  border-left: 4px solid var(--theory);
+}
+/* The line under a pill: red = someone has no work now, amber = soon. */
+.tp-lp.lt-red::after,
+.tp-lp.lt-amber::after,
+.tp-rp.rs-late::after,
+.tp-side.lt-red::after,
+.tp-side.lt-amber::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 2px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--red);
+}
+.tp-lp.lt-amber::after,
+.tp-side.lt-amber::after {
+  background: var(--amber);
+}
+.tp-ln-g {
+  flex: none;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  background: var(--ink);
+  color: #fff;
+  font: 700 11.5px/1 var(--font);
+  font-style: normal;
+}
+.tp-lp.on .tp-ln-g {
+  background: #fff;
+  color: var(--ink);
+}
+.tp-ln-n {
+  flex: none;
+  font: 700 15px/1 var(--cond);
+}
+.tp-ln-t {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.tp-lp-c {
+  flex: none;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--line-2);
+  color: var(--ink);
+  font: 700 12px/1 var(--font);
+  font-style: normal;
+}
+.tp-lp.lt-red .tp-lp-c {
+  background: var(--red-soft);
+  color: var(--red-ink);
+}
+.tp-lp.lt-amber .tp-lp-c {
+  background: var(--amber-soft);
+  color: var(--amber-ink);
+}
+.tp-lp.on .tp-lp-c {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+/* A lesson going on in her room (more can join): its count is blue. */
+.tp-lp.lt-going .tp-lp-c {
+  background: var(--theory);
+  color: #fff;
+}
+.tp-none {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink-3);
+}
+/* Under the pinned rows: the open lesson (or a file), then the two buttons at the bottom. */
+.tp-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  /* Ends where the pad sticks (the tabs + 24 px): the two buttons sit in the same place on a short page and a long one.
+     40 = the page's 14 px top padding - the pinned rows' 8 px pull-up + their 10 px gap + the app's 24 px. */
+  min-height: calc(100vh - var(--top-h, 68px) - var(--tp-stick-h, 120px) - var(--tabs) - env(safe-area-inset-bottom) - 40px);
+  min-height: calc(100dvh - var(--top-h, 68px) - var(--tp-stick-h, 120px) - var(--tabs) - env(safe-area-inset-bottom) - 40px);
+}
+.tp-quiet {
+  margin: 4px 2px;
+}
+.tp-pad {
+  position: sticky;
+  bottom: calc(var(--tabs) + env(safe-area-inset-bottom) + 24px);
+  z-index: 5;
+  margin-top: auto;
+  padding-top: 8px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: 8px;
+  background: var(--ground);
+}
+.tp-side {
+  position: relative;
+  height: 56px;
+  min-width: 0;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  font: 700 15px/1 var(--font);
+  transition: transform 0.1s ease;
+}
+.tp-side b {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--ink);
+  color: #fff;
+  font: 700 13px/1 var(--font);
+}
+.tp-side.lt-red b {
+  background: var(--red);
+}
+.tp-side:disabled {
+  opacity: 0.45;
+}
+.tp-side:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.tp-pad .tp-call,
+.tp-pad .tp-done {
+  height: 56px;
+  min-height: 56px;
+  min-width: 0;
+  padding: 0 10px;
+  border-radius: 14px;
+  font-size: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* The open lesson: a line of facts, then its students, one row each. */
+.tp-lesson {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tp-lh {
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.tp-lh-t {
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+.tp-reset {
+  flex: none;
+  padding: 2px 4px;
+  font-size: 13px;
+}
+.tp-reset:disabled {
+  opacity: 0.35;
+}
+.tp-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.tp-row {
+  width: 100%;
+  min-height: 48px;
+  padding: 6px 10px 6px 9px;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  border-radius: 12px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  text-align: left;
+  font: inherit;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+.tp-row:active {
+  transform: scale(0.99);
+}
+.tp-tick {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: 2px solid var(--line);
+  background: var(--card);
+  display: grid;
+  place-items: center;
+}
+.tp-row.on {
+  border-color: var(--theory);
+  background: var(--theory-soft);
+}
+.tp-row.on .tp-tick {
+  border-color: var(--theory);
+  background: var(--theory);
+}
+.tp-row.on .tp-tick::after {
+  content: "";
+  width: 9px;
+  height: 5px;
+  border: solid #fff;
+  border-width: 0 0 2.5px 2.5px;
+  transform: translateY(-1px) rotate(-45deg);
+}
+.tp-row-m {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.tp-row-m b {
+  font-size: 16px;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tp-row-m small {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tp-row.u-red .tp-row-m small {
+  color: var(--red-ink);
+}
+.tp-row.u-amber .tp-row-m small {
+  color: var(--amber-ink);
+}
+.tp-row.lt-hold {
+  border-style: dashed;
+}
+.tp-row.lt-hold .tp-row-m b {
+  color: var(--ink-2);
+}
+.tp-row-q {
+  max-width: 44vw;
+  font: 700 13px/1.2 var(--cond);
+  color: var(--ink-2);
+  text-align: right;
+}
+/* Her room: one line; then everyone she called, as pills that never move. */
+.tp-rhead {
+  margin: 0;
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.tp-rhead.lt-long span:last-child {
+  color: var(--amber-ink);
+  font-weight: 700;
+}
+.tp-rp {
+  padding: 0 11px;
+}
+.tp-rp small {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--ink-3);
+}
+.tp-rp.rs-walk,
+.tp-rp.rs-call,
+.tp-rp.rs-ev {
+  border-style: dashed;
+  background: var(--ground);
+}
+.tp-rp.rs-walk {
+  border-color: var(--theory);
+}
+.tp-rp.rs-late {
+  border-color: var(--red);
+  color: var(--red-ink);
+}
+.tp-rp.rs-late small {
+  color: var(--red-ink);
+}
+.tp-rp.rs-stay {
+  outline: 2px solid var(--amber);
+  outline-offset: 1px;
+}
+.tp-rp.on {
+  border-style: solid;
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
+}
+.tp-rp.on small {
+  color: #c4cad8;
+}
+/* His file: where he is and one big button, what to teach him, his unit and his day. */
+.tp-file {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+}
+.tp-fh {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.tp-fh-t {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tp-fname {
+  font: 700 24px/1.1 var(--font);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tp-fh-t small {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-3);
+}
+.tp-fh-t small.t-red {
+  color: var(--red-ink);
+}
+.btn.tp-arrive {
+  flex: none;
+  min-width: 118px;
+  height: 48px;
+  border-radius: 12px;
+  background: var(--green);
+  font-size: 17px;
+}
+.tp-gotit {
+  flex: none;
+  min-width: 128px;
+  height: 48px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1.5px solid var(--amber);
+  background: var(--amber-soft);
+  color: var(--amber-ink);
+  font: 700 15px/1 var(--font);
+}
+.tp-gotit.on {
+  border-color: var(--green);
+  background: var(--green-soft);
+  color: var(--green-ink);
+}
+.tp-fl {
+  margin: 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tp-fl .tp-ln-t {
+  white-space: normal;
+  font-size: 14px;
+}
+.tf-q.lt-done {
+  opacity: 0.55;
+}
+.tp-whole {
+  align-self: flex-start;
+}
+.tp-fq {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tp-fq li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 4px 10px;
+}
+.tp-fq li .ct-key {
+  grid-column: 1 / -1;
+}
+.tp-fq-w {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+}
+.tp-fq-w b {
+  font-size: 15px;
+}
+.tp-fq-w small {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink-3);
+}
+.tp-fx {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line-2);
+}
+.tp-fx small {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.tp-fx-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tp-flinks {
+  display: flex;
+}
+.tp-body .tp-all-back {
+  align-self: center;
+}
+/* Toasts sit just above Room and Call on the Theory page: never over the buttons, nor over his file's Arrived. */
+body.tp-padded .toasts {
+  bottom: calc(var(--tabs) + env(safe-area-inset-bottom) + 24px + 56px + 16px);
+}
+body.locked.tp-padded .toasts {
+  top: auto;
+  bottom: calc(24px + env(safe-area-inset-bottom));
+}
+.app[data-tab="theory"] .toast {
+  pointer-events: none;
+}
+.app[data-tab="theory"] .toast button {
+  pointer-events: auto;
+}
+@media (max-width: 360px) {
+  .tp-side svg {
+    display: none;
+  }
+  .tp-side {
+    gap: 5px;
+    font-size: 14px;
+  }
+  .tp-pad .tp-call,
+  .tp-pad .tp-done {
+    font-size: 16px;
+  }
+  .tp-lp {
+    max-width: 150px;
+  }
+  .tp-kind {
+    padding: 0 5px;
+    font-size: 12.5px;
+  }
+  .btn.tp-arrive {
+    min-width: 100px;
+  }
+  .tp-gotit {
+    min-width: 112px;
+    font-size: 14px;
+  }
+}
+/* Correction: sent to Theory, walking (his 3 minutes count down), and red when he isn't there after 3 minutes. */
+.call-strip.cs-walk {
+  border-style: dashed;
+  padding: 3px 6px 3px 10px;
+  gap: 4px 8px;
+}
+.call-strip.cs-walk .cs-chip {
+  min-height: 30px;
+  padding: 0 10px;
+}
+.call-strip.cs-walk .call-name {
+  font-size: 16px;
+}
+.cs-left {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.call-strip.cs-lost {
+  --c: var(--red);
+  --c-soft: var(--red-soft);
+  --c-ink: var(--red-ink);
+  border-color: var(--red);
+  background: var(--red-soft);
+  flex-wrap: nowrap;
+}
+.cs-lost-t {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 15px;
+  color: var(--red-ink);
+}
+.cs-lost-t b {
+  font-family: var(--cond);
+  font-size: 18px;
+}
+.call-strip.cs-lost .btn.small {
+  flex: none;
+  padding: 0 10px;
+}
+.btn.cs-reached {
+  background: var(--green);
+}
+@media (max-width: 360px) {
+  .call-strip.cs-lost {
+    flex-wrap: wrap;
   }
 }

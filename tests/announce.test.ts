@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { callPhrase, joinNames, pullPhrase } from "../src/announce";
+import { callPhrase, joinNames, lostPhrase, pullPhrase } from "../src/announce";
 
 describe("what the phones say", () => {
   test("names are joined the way people say them", () => {
@@ -25,5 +25,11 @@ describe("what the phones say", () => {
   test("Evaluation hears who Theory is taking", () => {
     expect(pullPhrase(["Kumar"])).toBe("Theory wants Kumar now.");
     expect(pullPhrase([])).toBe("");
+  });
+
+  test("Correction hears who was sent to Theory and isn't there after 3 minutes", () => {
+    expect(lostPhrase([{ name: "Kumar", room: "theory" }])).toBe("Kumar hasn't reached Theory.");
+    expect(lostPhrase([{ name: "Kumar", room: "theory" }, { name: "Nila", room: "theory" }])).toBe("Kumar and Nila haven't reached Theory.");
+    expect(lostPhrase([])).toBe("");
   });
 });

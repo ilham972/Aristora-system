@@ -500,7 +500,17 @@ export function sameMistakes(queue: EvalMember[]): { key: string; label: string;
 
 // ---------------- Rooms ----------------
 
-export type RoomCall = { c: Call; v?: View; minutes: number; long: boolean };
+/** Sent to Theory and not there after this long: Correction is told to look for him (the founder's 3 minutes). */
+export const WALK_MS = 3 * 60_000;
+
+/** Sent to Theory and Theory hasn't tapped Arrived yet: on his way. */
+export const isWalking = (c: Call) => c.status === "sent" && !!c.walk && c.arrivedAt === undefined;
+
+/**
+ * A call to a room. `walking`: sent to Theory, not there yet (`walkMs` since Sent; `lost` after 3 minutes). `minutes`:
+ * since he got there (Arrived, or Sent for calls that don't walk), else since the call.
+ */
+export type RoomCall = { c: Call; v?: View; minutes: number; long: boolean; walking: boolean; walkMs: number; lost: boolean };
 
 export function roomCalls(board: Board, views: View[], room: "theory" | "evaluation", now: number): RoomCall[] {
   const byId = new Map(views.map((v) => [v.s._id as string, v.home ?? v]));
@@ -509,9 +519,19 @@ export function roomCalls(board: Board, views: View[], room: "theory" | "evaluat
   return board.calls
     .filter((c) => c.room === room)
     .map((c) => {
-      const since = c.sentAt ?? c.createdAt;
+      const walking = isWalking(c);
+      const walkMs = walking ? Math.max(0, now - (c.sentAt ?? c.createdAt)) : 0;
+      const since = walking ? c.createdAt : (c.arrivedAt ?? c.sentAt ?? c.createdAt);
       const v = (c.unitId && c.stage ? byBook.get(`${c.studentId}:${c.unitId}:${c.stage}`) : undefined) ?? byId.get(c.studentId);
-      return { c, v, minutes: now - since, long: c.status === "sent" && now - since >= LONG_SITTING_MS };
+      return {
+        c,
+        v,
+        minutes: now - since,
+        long: c.status === "sent" && !walking && now - since >= LONG_SITTING_MS,
+        walking,
+        walkMs,
+        lost: walking && walkMs >= WALK_MS,
+      };
     })
     .sort((a, b) => a.c.createdAt - b.c.createdAt);
 }

@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { callPhrase, pullPhrase, type RoomName } from "./announce";
+import { callPhrase, lostPhrase, pullPhrase, type RoomName } from "./announce";
 import { AttendanceSheet } from "./attendance";
 import type { Link } from "./backend";
 import { ClassPage } from "./correction";
-import { buildViews, evalQueue, fmtClock, liveSession, theoryGroups, theoryMembers, waitingAll, type View } from "./derive";
+import { buildViews, evalQueue, fmtClock, isWalking, liveSession, theoryGroups, theoryMembers, WALK_MS, waitingAll, type View } from "./derive";
 import { Focus } from "./focus";
 import { EvaluationPage } from "./evalFocus";
 import { TheoryTab } from "./theoryFocus";
@@ -525,6 +525,10 @@ function alertItems(role: Role, board: Board, views: View[], now: number): Alert
     for (const c of board.calls)
       if (c.status === "requested" && !c.pull)
         items.push({ key: `call:${c._id}`, kind: "call", name: nameOf.get(c.studentId) ?? "", room: c.room, repeat: true });
+    // Sent to Theory 3 minutes ago and Theory hasn't tapped Arrived: where is he? (Again every 30 s until it's settled.)
+    for (const c of board.calls)
+      if (isWalking(c) && now - (c.sentAt ?? c.createdAt) >= WALK_MS)
+        items.push({ key: `lost:${c._id}`, kind: "lost", name: nameOf.get(c.studentId) ?? "", room: c.room, repeat: true });
     // A workbook student with every level handed in waits for Correction: knock once.
     for (const v of views)
       if (v.where === "hall" && v.noWork && v.ms?.needs.includes("correction"))
@@ -547,6 +551,8 @@ function alertItems(role: Role, board: Board, views: View[], now: number): Alert
 function sayFor(items: AlertItem[]): { kind: AlertKind; words?: string } | null {
   const calls = items.filter((i) => i.kind === "call");
   if (calls.length) return { kind: "call", words: callPhrase(calls) };
+  const lost = items.filter((i) => i.kind === "lost");
+  if (lost.length) return { kind: "lost", words: lostPhrase(lost) };
   const pulls = items.filter((i) => i.kind === "pull");
   if (pulls.length) return { kind: "pull", words: pullPhrase(pulls.map((p) => p.name)) };
   if (items.some((i) => i.kind === "red")) return { kind: "red" };

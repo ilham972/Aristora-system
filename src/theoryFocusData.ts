@@ -1,8 +1,9 @@
 // The Theory page's rules (src/theoryFocus.tsx draws them). Plain functions: the tests run them on fake classes.
 //
 // A lesson is what Theory teaches a group at once: a theory-book section (G11 U13 · D) or a workbook's questions sent
-// to Theory (G7 U08). The page shows the lessons going on (who is here, who is on the way), then Next: the lessons to
-// teach now, most useful first, and Soon: the rest, one line each.
+// to Theory (G7 U08). The page (rebuilt 30 Oct 2026) shows every lesson as a tiny pill in one line, most useful first,
+// the open one's students under it, and her room: everyone she called, on the way (Correction sent him; she taps
+// Arrived when he is there) or with her.
 //
 // "Most useful" (agreed with the founder, 2026-10-29), in minutes, not questions:
 // - each theory-book student's pace comes from his own marks (else the class's, else 4 min a question), so the page
@@ -377,9 +378,9 @@ export type RoomLesson = {
   kind: LessonKind;
   unit: Unit | null;
   section: SectionData | null;
-  /** With Theory now (sent), first come first. */
+  /** With Theory now (Arrived; calls from before 30 Oct 2026: sent), first come first. */
   here: RoomStudent[];
-  /** Called, not sent yet (or finishing in Evaluation first). */
+  /** Called and not there yet: not sent yet, walking there (sent, not Arrived), or finishing in Evaluation first. */
   coming: RoomCall[];
   /** When the first of them arrived; null while nobody is here yet. */
   since: number | null;
@@ -410,15 +411,15 @@ export function roomLessons(board: Board, views: View[], now: number): RoomLesso
     };
     if (!l.section && section) l.section = section;
     if (!l.unit && v?.unit) l.unit = v.unit;
-    if (rc.c.status === "sent" && v) {
+    if (rc.c.status === "sent" && v && !rc.walking) {
       l.here.push({ rc, v, qs: v.ms ? [...v.ms.theory] : [], whole: !!v.ms?.wholeUnit, teach: teachLeft(v, section) });
-      const t = rc.c.sentAt ?? rc.c.createdAt;
+      const t = rc.c.arrivedAt ?? rc.c.sentAt ?? rc.c.createdAt;
       l.since = l.since === null ? t : Math.min(l.since, t);
       l.long = l.long || rc.long;
-    } else if (rc.c.status === "requested") l.coming.push(rc);
+    } else if (rc.c.status === "requested" || rc.walking) l.coming.push(rc);
     lessons.set(key, l);
   }
-  const arrived = (st: RoomStudent) => st.rc.c.sentAt ?? st.rc.c.createdAt;
+  const arrived = (st: RoomStudent) => st.rc.c.arrivedAt ?? st.rc.c.sentAt ?? st.rc.c.createdAt;
   const called = (l: RoomLesson) => Math.min(...[...l.here.map((st) => st.rc.c.createdAt), ...l.coming.map((rc) => rc.c.createdAt)]);
   for (const l of lessons.values()) {
     l.here.sort((a, b) => arrived(a) - arrived(b) || a.v.s.name.localeCompare(b.v.s.name));
@@ -467,4 +468,74 @@ export function workbookDone(qs: number[], whole: boolean, ticked: Set<number>, 
   if ((whole && wholeTicked) || (!whole && qs.length > 0 && qs.every((q) => ticked.has(q)))) return { all: true };
   if (!whole && qs.length === 0) return { all: true };
   return { all: false, taught: qs.filter((q) => ticked.has(q)) };
+}
+
+// ---------------- The pills (30 Oct 2026) ----------------
+
+/** The line under a lesson's pill: red = someone has no work now (or starves), amber = soon; none = later. */
+export function pillTone(l: Lesson): "red" | "amber" | null {
+  const h = lessonHeat(l);
+  return l.starving || h.red ? "red" : h.orange ? "amber" : null;
+}
+
+/** What moves a pill: its colour, starving, and how many need it. */
+const pillSig = (l: Lesson) => `${l.starving ? "s" : ""}${pillTone(l) ?? "-"}${l.members.length}`;
+
+/** After her last touch on the pills, they keep their places this long. */
+export const HOLD_MS = 5000;
+
+export type PillOrder = { keys: string[]; sig: Record<string, string> };
+
+/**
+ * The pills' order: the page's ranking, the most useful lesson first (the founder, 30 Oct 2026), held still while
+ * nothing real changes, so a pill never slides away as minutes pass. It ranks again when a lesson comes or goes or a
+ * lesson's colour or count changes. While she touches the row (`hold`), places stay and new lessons go at the end;
+ * the ranking catches up once she lets go.
+ */
+export function nextOrder(prev: PillOrder | null, plan: Lesson[], hold: boolean): PillOrder {
+  const sig = Object.fromEntries(plan.map((l) => [l.key, pillSig(l)]));
+  const ranked = plan.map((l) => l.key);
+  if (!prev) return { keys: ranked, sig };
+  const same = ranked.length === prev.keys.length && ranked.every((k) => prev.sig[k] === sig[k]);
+  if (same) return { keys: prev.keys, sig };
+  if (hold) {
+    const kept = prev.keys.filter((k) => k in sig);
+    // The old looks are kept, so the ranking runs again when she lets go.
+    return {
+      keys: [...kept, ...ranked.filter((k) => !kept.includes(k))],
+      sig: Object.fromEntries(Object.entries(prev.sig).filter(([k]) => k in sig)),
+    };
+  }
+  return { keys: ranked, sig };
+}
+
+// ---------------- Her room ----------------
+
+/** here = with her; walking = Correction sent him; called = not sent yet; eval = finishing in Evaluation first. */
+export type RoomState = "here" | "walking" | "called" | "eval";
+export type RoomItem = { rc: RoomCall; lesson: RoomLesson; state: RoomState; id: string; name: string; late: boolean; st?: RoomStudent };
+
+/**
+ * Everyone she called, in the order she called them (nobody moves when he arrives: only his pill's look changes).
+ * Late (red): sent and not there after 3 minutes, or Correction hasn't sent him for 3 minutes.
+ */
+export function roomItems(room: RoomLesson[], now: number): RoomItem[] {
+  const out: RoomItem[] = [];
+  for (const l of room) {
+    for (const st of l.here) out.push({ rc: st.rc, lesson: l, state: "here", id: st.v.s._id, name: st.v.s.name, late: false, st });
+    for (const rc of l.coming) {
+      const state: RoomState = rc.walking ? "walking" : rc.c.pull ? "eval" : "called";
+      const late = rc.walking ? rc.lost : state === "called" && now - rc.c.createdAt >= LATE_SEND_MS;
+      out.push({ rc, lesson: l, state, id: rc.c.studentId, name: rc.v?.s.name ?? "?", late });
+    }
+  }
+  return out.sort((a, b) => a.rc.c.createdAt - b.rc.c.createdAt || a.name.localeCompare(b.name));
+}
+
+/** The pill's words for where he is: "1m" on the way, "called 2m", "in Eval". */
+export function roomWords(it: RoomItem, now: number): string {
+  if (it.state === "walking") return it.late ? `not here ${mShort(it.rc.walkMs)}` : `on the way ${mShort(it.rc.walkMs)}`;
+  if (it.state === "called") return it.late ? `not sent ${mShort(now - it.rc.c.createdAt)}` : "called";
+  if (it.state === "eval") return "in Eval first";
+  return `with you ${mShort(it.rc.minutes)}`;
 }

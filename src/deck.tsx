@@ -51,8 +51,11 @@ export function Tiles<T extends string>(props: { label: string; items: { id: T; 
 
 const m = (ms: number) => `${Math.round(ms / 60_000)}m`;
 
-/** Today's score for this room: what she did, called ahead of time, and how long students waited for her. */
-export function TodayStrip(props: { s: Score; room: "theory" | "evaluation"; inClass: number }) {
+/**
+ * Today's score for this room: what she did, called ahead of time, and how long students waited for her. `compact`
+ * (the Theory page): one thin line, no sentence under it.
+ */
+export function TodayStrip(props: { s: Score; room: "theory" | "evaluation"; inClass: number; compact?: boolean }) {
   const { s, room } = props;
   const cheer = cheerOf(s, props.inClass);
   const aheadTone = s.calls >= 4 ? (s.ahead / s.calls >= 0.75 ? "good" : s.ahead / s.calls < 0.4 ? "bad" : "") : "";
@@ -72,7 +75,7 @@ export function TodayStrip(props: { s: Score; room: "theory" | "evaluation"; inC
     { n: m(s.waitMs), label: "waits", tone: s.waitMs || s.maxWaitMs ? waitTone : "", title: `Students sat with no work waiting for you today; longest ${m(s.maxWaitMs)}` },
   );
   return (
-    <section class="sc" aria-label="Today">
+    <section class={`sc${props.compact ? " sc-thin" : ""}`} aria-label="Today">
       <div class="sc-cells">
         <span class="sc-lbl">Today</span>
         {cells.map((c) => (
@@ -82,7 +85,7 @@ export function TodayStrip(props: { s: Score; room: "theory" | "evaluation"; inC
           </span>
         ))}
       </div>
-      {cheer && <p class={`sc-cheer ${cheer.tone}`}>{cheer.text}</p>}
+      {cheer && !props.compact && <p class={`sc-cheer ${cheer.tone}`}>{cheer.text}</p>}
     </section>
   );
 }

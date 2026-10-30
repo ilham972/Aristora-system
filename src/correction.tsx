@@ -5,7 +5,7 @@ import type { Id } from "../convex/_generated/dataModel";
 import { mutate } from "./backend";
 import { GoneHome, Register } from "./board";
 import { Tiles } from "./deck";
-import { fmtMin, liveSession, shortMin, type View } from "./derive";
+import { fmtMin, isWalking, liveSession, shortMin, WALK_MS, type View } from "./derive";
 import { GradePills, gradesOf, inGrade, needsOf, useGradeFilter } from "./grades";
 import { nowOf } from "./nextData";
 import { ReportView, type Report } from "./report";
@@ -297,13 +297,20 @@ async function notNow(callId: Id<"calls">, name: string, room: keyof typeof ROOM
 /**
  * Rooms asking for students: one slim strip per room. The page keeps it stuck under the header (with the grade
  * pills) so it shows even when the register is scrolled. Tap × for "not now", Sent when they've gone.
+ * Sent to Theory (30 Oct 2026): a quiet strip counts his 3 minutes down until Theory taps Arrived; after 3 minutes a
+ * red strip (and the phone says so) until Correction finds him: "Reached" (he is there) or "In the hall" (back to work).
  */
 export function CallsBand(props: { board: Board; views: View[]; now: number }) {
   const { board, views, now } = props;
   const byId = new Map(views.map((v) => [v.s._id as string, v]));
   const waiting = board.calls.filter((c) => c.status === "requested" && !c.pull);
   const pulls = board.calls.filter((c) => c.status === "requested" && c.pull);
-  if (waiting.length === 0 && pulls.length === 0) return null;
+  const walked = (c: Board["calls"][number]) => now - (c.sentAt ?? c.createdAt);
+  const walking = board.calls.filter(isWalking);
+  const onWay = walking.filter((c) => walked(c) < WALK_MS);
+  const lost = walking.filter((c) => walked(c) >= WALK_MS);
+  if (waiting.length === 0 && pulls.length === 0 && walking.length === 0) return null;
+  const nameOf = (c: { studentId: string }) => byId.get(c.studentId)?.s.name ?? "?";
 
   const rooms = (["theory", "evaluation"] as const)
     .map((room) => ({ room, calls: waiting.filter((c) => c.room === room) }))
@@ -359,6 +366,52 @@ export function CallsBand(props: { board: Board; views: View[]; now: number }) {
           <b>{byId.get(c.studentId)?.s.name ?? "?"}</b> goes from Evaluation straight to Theory. Nothing to do.
         </p>
       ))}
+      {onWay.length > 0 && (
+        <section class="call-strip theory cs-walk" aria-label="On the way to Theory">
+          <span class="cs-room-text">
+            <b>To Theory</b>
+            <small>walking</small>
+          </span>
+          <ul class="cs-names">
+            {onWay.map((c) => (
+              <li key={c._id} class="cs-chip">
+                <span class="call-name">{nameOf(c)}</span>
+                <small class="cs-left">{Math.max(1, Math.ceil((WALK_MS - walked(c)) / 60_000))}m left</small>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {lost.map((c) => {
+        const name = nameOf(c);
+        return (
+          <section key={c._id} class="call-strip cs-lost" aria-label={`${name} hasn't reached Theory`}>
+            <span class="cs-lost-t">
+              <b>{name}</b> isn't in Theory · {Math.floor(walked(c) / 60_000)}m
+            </span>
+            <button
+              type="button"
+              class="btn small cs-reached"
+              onClick={async () => {
+                const r = await act(() => mutate(api.calls.arrive, { callIds: [c._id], by: currentRole() }));
+                if (r?.arrived) toast(`${name} reached Theory.`);
+              }}
+            >
+              Reached
+            </button>
+            <button
+              type="button"
+              class="btn ghost small cs-hall"
+              onClick={async () => {
+                const r = await act(() => mutate(api.calls.cancel, { callIds: [c._id], by: currentRole() }));
+                if (r) toast(`${name} is back in the hall. Theory can call him again.`);
+              }}
+            >
+              In the hall
+            </button>
+          </section>
+        );
+      })}
     </div>
   );
 }

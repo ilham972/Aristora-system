@@ -366,6 +366,99 @@ describe("calls between the rooms", () => {
     expect(s.room).toBeUndefined();
     expect((await state(t)).calls).toHaveLength(0);
   });
+
+  test("Arrived: sent to Theory he walks until Theory taps Arrived; the lesson's time starts there", async () => {
+    const t = await setup();
+    const a = await addIn(t, "Ahamed");
+    const b = await addIn(t, "Bilal");
+    const res = await t.mutation(api.calls.create, { studentIds: [a, b], room: "theory", kind: "theory" });
+    const [ca, cb] = res.created.map((c) => c.callId);
+    await t.mutation(api.calls.send, { callIds: [ca] });
+    const call = async (id: Id<"calls">) => (await t.run((ctx) => ctx.db.get(id)))!;
+    expect(await call(ca)).toMatchObject({ status: "sent", walk: true });
+    expect((await call(ca)).arrivedAt).toBeUndefined();
+    expect((await student(t, a)).room).toBe("theory");
+    advance(2);
+    expect(await t.mutation(api.calls.arrive, { callIds: [ca] })).toEqual({ arrived: 1, skipped: [] });
+    const arrivedAt = (await call(ca)).arrivedAt!;
+    expect(arrivedAt).toBeGreaterThan(START + 2 * MIN - 1000);
+    // Tapping Arrived again changes nothing.
+    expect((await t.mutation(api.calls.arrive, { callIds: [ca] })).arrived).toBe(0);
+    // Bilal came by himself before Correction tapped Sent: sent and here at once.
+    expect((await t.mutation(api.calls.arrive, { callIds: [cb] })).arrived).toBe(1);
+    expect(await call(cb)).toMatchObject({ status: "sent", walk: true });
+    expect((await call(cb)).arrivedAt).toBeDefined();
+    expect((await student(t, b)).room).toBe("theory");
+    // The lesson took 10 minutes from Arrived (not 12 from Sent).
+    advance(10);
+    await t.mutation(api.calls.finish, { items: [{ callId: ca, taught: [] }] });
+    const { ms } = await t.query(api.calls.lessons, {});
+    expect(Math.round(ms[0] / MIN)).toBe(10);
+    // The history says when each one got there.
+    const hist = await t.run(async (ctx) => (await ctx.db.query("events").collect()).filter((e) => e.kind === "arrived"));
+    expect(hist.map((e) => [e.name, Math.round((e.ms ?? 0) / MIN)])).toEqual([
+      ["Ahamed", 2],
+      ["Bilal", 0],
+    ]);
+  });
+
+  test("Arrived on the wrong name can be taken back at once; later it can't", async () => {
+    const t = await setup();
+    const a = await addIn(t, "Ahamed");
+    const res = await t.mutation(api.calls.create, { studentIds: [a], room: "theory", kind: "theory" });
+    const id = res.created[0].callId;
+    await t.mutation(api.calls.send, { callIds: [id] });
+    await t.mutation(api.calls.arrive, { callIds: [id] });
+    expect(await t.mutation(api.calls.unarrive, { callId: id })).toBe(true);
+    expect((await t.run((ctx) => ctx.db.get(id)))!.arrivedAt).toBeUndefined();
+    expect(await t.mutation(api.calls.unarrive, { callId: id })).toBe(false); // not arrived any more
+    await t.mutation(api.calls.arrive, { callIds: [id] });
+    advance(3);
+    await expect(t.mutation(api.calls.unarrive, { callId: id })).rejects.toThrow(/Too late/);
+  });
+
+  test("never got there: Theory's 'Not coming' or Correction's 'In the hall' ends the walk; he is back in the hall", async () => {
+    const t = await setup();
+    const a = await addIn(t, "Ahamed");
+    const res = await t.mutation(api.calls.create, { studentIds: [a], room: "theory", kind: "theory" });
+    const id = res.created[0].callId;
+    await t.mutation(api.calls.send, { callIds: [id] });
+    advance(4);
+    expect(await t.mutation(api.calls.cancel, { callIds: [id] })).toBe(true);
+    expect((await t.run((ctx) => ctx.db.get(id)))!.status).toBe("cancelled");
+    expect((await student(t, a)).room).toBeUndefined();
+    const ev = await t.run(async (ctx) => (await ctx.db.query("events").collect()).find((e) => e.kind === "not-reached"));
+    expect(ev).toMatchObject({ name: "Ahamed", value: "theory" });
+    expect(Math.round((ev?.ms ?? 0) / MIN)).toBe(4);
+    // Back on Theory's list: she can call him again.
+    expect((await t.mutation(api.calls.create, { studentIds: [a], room: "theory", kind: "theory" })).created).toHaveLength(1);
+    // Once he is there, cancel no longer ends the call (Done or Send back does).
+    const again = (await state(t)).calls[0]._id;
+    await t.mutation(api.calls.send, { callIds: [again] });
+    await t.mutation(api.calls.arrive, { callIds: [again] });
+    await t.mutation(api.calls.cancel, { callIds: [again] });
+    expect((await t.run((ctx) => ctx.db.get(again)))!.status).toBe("sent");
+  });
+
+  test("Evaluation's calls don't walk; who may tap Arrived", async () => {
+    const t = await setup();
+    const a = await addIn(t, "Ahamed");
+    await teachSection(t, a, [1, 2, 3, 4]);
+    await mark(t, a, 5, "wrong");
+    const ev = await t.mutation(api.calls.create, { studentIds: [a], room: "evaluation", kind: "evaluation" });
+    await t.mutation(api.calls.send, { callIds: [ev.created[0].callId] });
+    expect((await t.run((ctx) => ctx.db.get(ev.created[0].callId)))!.walk).toBeUndefined();
+    // A Theory call: Theory and Correction may say he is there; an Evaluation-only teacher may not.
+    const b = await addIn(t, "Bilal");
+    const th = await t.mutation(api.calls.create, { studentIds: [b], room: "theory", kind: "theory" });
+    await t.mutation(api.calls.send, { callIds: [th.created[0].callId] });
+    const eve = "eval-token-0123456789abcdefghijklmnopqrstuvwxyz";
+    const cor = "corr-token-0123456789abcdefghijklmnopqrstuvwxyz";
+    await addPerson(t, { name: "Eve", token: eve, tabs: ["evaluation"] });
+    await addPerson(t, { name: "Cora", token: cor, tabs: ["correction"] });
+    await expect(asPhone(t, eve).mutation(api.calls.arrive, { callIds: [th.created[0].callId], by: "evaluation" })).rejects.toThrow();
+    expect((await asPhone(t, cor).mutation(api.calls.arrive, { callIds: [th.created[0].callId], by: "correction" })).arrived).toBe(1);
+  });
 });
 
 describe("idle minutes and the session report", () => {

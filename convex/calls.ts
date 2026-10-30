@@ -137,7 +137,8 @@ async function bookPlace(ctx: MutationCtx, s: Doc<"students">, unitId: Id<"units
 }
 
 async function sendNow(ctx: MutationCtx, c: Doc<"calls">, now: number, session: Doc<"sessions"> | null, by?: string) {
-  await ctx.db.patch(c._id, { status: "sent", sentAt: now });
+  // To Theory he walks, and Theory taps Arrived when he is there (Correction is told if he isn't, after 3 minutes).
+  await ctx.db.patch(c._id, { status: "sent", sentAt: now, ...(c.room === "theory" ? { walk: true } : {}) });
   const s = await ctx.db.get(c.studentId);
   if (!s) return;
   await ctx.db.patch(s._id, { room: c.room });
@@ -208,7 +209,13 @@ export const undoDecline = mutation({
   },
 });
 
-/** Room teacher changed his mind before the student was sent. */
+/** Sent to Theory, not there yet (Theory hasn't tapped Arrived). */
+const walking = (c: Doc<"calls">) => c.status === "sent" && !!c.walk && c.arrivedAt === undefined;
+
+/**
+ * Room teacher changed her mind before the student was sent; or he was sent to Theory and never got there (Theory:
+ * "Not coming", Correction: "In the hall"): the call ends and he is back in the hall.
+ */
 export const cancel = mutation({
   args: { token: v.optional(v.string()), callIds: v.array(v.id("calls")), by: v.optional(v.string()) },
   handler: async (ctx, args) => {
@@ -217,12 +224,82 @@ export const cancel = mutation({
     const session = await currentSession(ctx, now);
     for (const id of args.callIds) {
       const c = await ctx.db.get(id);
-      if (!c || c.status !== "requested") continue;
+      if (!c || (c.status !== "requested" && !walking(c))) continue;
+      const lost = walking(c);
       await ctx.db.patch(c._id, { status: "cancelled", endedAt: now });
       const s = await ctx.db.get(c.studentId);
-      await log(ctx, session, now, { kind: "cancel", by: cleanBy(args.by), studentId: c.studentId, name: s?.name, value: c.room });
+      if (lost && s) {
+        if (s.room === c.room) await ctx.db.patch(s._id, { room: undefined, lastActivityAt: now });
+        await refresh(ctx, s._id, now, session);
+      }
+      await log(ctx, session, now, {
+        kind: lost ? "not-reached" : "cancel",
+        by: cleanBy(args.by),
+        studentId: c.studentId,
+        name: s?.name,
+        value: c.room,
+        ms: lost ? now - (c.sentAt ?? now) : undefined,
+      });
     }
     await touch(ctx, session, now);
+    return true;
+  },
+});
+
+/** "Arrived" can be taken back this soon after (a tap on the wrong name). */
+export const UNDO_ARRIVE_MS = 2 * 60_000;
+
+/**
+ * Theory: "Arrived" - he is in the room (sent at Sent, he walked there). Correction may say it too ("He reached
+ * Theory") when its phone asks where he is. A student who came before Correction tapped Sent is sent and here at once.
+ */
+export const arrive = mutation({
+  args: { token: v.optional(v.string()), callIds: v.array(v.id("calls")), by: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const user = await actor(ctx, args.token, ["theory", "evaluation", "correction"], args.by);
+    const now = Date.now();
+    const by = cleanBy(args.by);
+    const session = await currentSession(ctx, now);
+    let arrived = 0;
+    const skipped: string[] = [];
+    for (const id of args.callIds) {
+      const c = await ctx.db.get(id);
+      if (!c || (c.status !== "requested" && c.status !== "sent")) continue;
+      if (!allowed(user, c.room) && !allowed(user, "correction")) fail(`Only ${c.room === "theory" ? "Theory" : "Evaluation"} or Correction can say he is there.`);
+      const s = await ctx.db.get(c.studentId);
+      if (!s) continue;
+      if (c.status === "requested") {
+        if (c.pull || s.room) {
+          skipped.push(`${s.name} is still in ${s.room === "theory" ? "Theory" : "Evaluation"}`);
+          continue;
+        }
+        await sendNow(ctx, c, now, session, by); // he came by himself before Correction tapped Sent
+      } else if (c.arrivedAt !== undefined) continue;
+      await ctx.db.patch(c._id, { arrivedAt: now });
+      await log(ctx, session, now, { kind: "arrived", by, studentId: s._id, name: s.name, value: c.room, ms: now - (c.sentAt ?? now) });
+      arrived++;
+    }
+    await touch(ctx, session, now);
+    return { arrived, skipped };
+  },
+});
+
+/** Arrived on the wrong name: he is on his way again (only just after, and only while he is still in the room). */
+export const unarrive = mutation({
+  args: { token: v.optional(v.string()), callId: v.id("calls"), by: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const user = await actor(ctx, args.token, ["theory", "evaluation", "correction"], args.by);
+    const now = Date.now();
+    const c = await ctx.db.get(args.callId);
+    if (!c || c.status !== "sent" || c.arrivedAt === undefined) return false;
+    if (!allowed(user, c.room) && !allowed(user, "correction")) fail("Only the room's teacher or Correction can take that back.");
+    if (now - c.arrivedAt > UNDO_ARRIVE_MS) fail("Too late to take that back.");
+    await ctx.db.patch(c._id, { arrivedAt: undefined });
+    const session = await currentSession(ctx, now);
+    const s = await ctx.db.get(c.studentId);
+    await log(ctx, session, now, { kind: "arrived-undo", by: cleanBy(args.by), studentId: c.studentId, name: s?.name, value: c.room });
+    await touch(ctx, session, now);
+    return true;
   },
 });
 
@@ -281,7 +358,7 @@ export const finish = mutation({
         name: s.name,
         unit: unit?.key,
         value,
-        ms: now - (c.sentAt ?? c.createdAt),
+        ms: now - (c.arrivedAt ?? c.sentAt ?? c.createdAt),
       });
 
       // Theory was waiting for him: he goes straight there.
@@ -505,8 +582,8 @@ export const release = mutation({
 });
 
 /**
- * How long Theory's lessons take, for the Theory page's forecasts: from "sent" to Done, the last 20 lessons in the
- * theory room (very short or very long ones are left out on the phone). Newest first.
+ * How long Theory's lessons take, for the Theory page's forecasts: from Arrived (before 30 Oct 2026: "sent") to Done,
+ * the last 20 lessons in the theory room (very short or very long ones are left out on the phone). Newest first.
  */
 export const lessons = query({
   args: { token: v.optional(v.string()) },
@@ -518,8 +595,8 @@ export const lessons = query({
       .order("desc")
       .take(200);
     const ms = recent
-      .filter((c) => c.room === "theory" && c.kind === "theory" && c.sentAt !== undefined && c.endedAt !== undefined)
-      .map((c) => c.endedAt! - c.sentAt!)
+      .filter((c) => c.room === "theory" && c.kind === "theory" && (c.arrivedAt ?? c.sentAt) !== undefined && c.endedAt !== undefined)
+      .map((c) => c.endedAt! - (c.arrivedAt ?? c.sentAt)!)
       .slice(0, 20);
     return { ms };
   },

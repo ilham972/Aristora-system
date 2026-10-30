@@ -9,6 +9,10 @@ import type { Board } from "../src/store";
 import {
   defaultTicks,
   joiners,
+  nextOrder,
+  pillTone,
+  roomItems,
+  roomWords,
   LESSON_CAP,
   LESSON_MS,
   lessonLength,
@@ -49,7 +53,20 @@ const READY_D = { ...taught("A", "B", "C"), ...right(5, 8), ...right(12, 14), ..
 /** A, B taught and done; C needs teaching (he has no work). */
 const READY_C = { ...taught("A", "B"), ...right(5, 8), ...right(12, 14) };
 
-type Call = { _id: string; studentId: string; room: "theory" | "evaluation"; kind: "theory" | "evaluation"; status: string; section?: string; unitId?: string; createdAt: number; sentAt?: number; pull?: boolean };
+type Call = {
+  _id: string;
+  studentId: string;
+  room: "theory" | "evaluation";
+  kind: "theory" | "evaluation";
+  status: string;
+  section?: string;
+  unitId?: string;
+  createdAt: number;
+  sentAt?: number;
+  pull?: boolean;
+  walk?: boolean;
+  arrivedAt?: number;
+};
 
 /** A theory-book student (the G11 pilot book). */
 function th(
@@ -335,5 +352,77 @@ describe("The lessons going on", () => {
     expect(workbookDone([13], true, new Set(), true)).toEqual({ all: true }); // the whole unit covers his questions
     expect(workbookDone([13], true, new Set([13]), false)).toEqual({ all: false, taught: [13] }); // the unit stays asked
     expect(workbookDone([], false, new Set(), false)).toEqual({ all: true });
+  });
+});
+
+describe("The rebuilt page (30 Oct 2026): pills that hold still, and her room with Arrived", () => {
+  const call = (id: string, who: string, status: string, o: Partial<Call> = {}): Call => ({
+    _id: id,
+    studentId: who,
+    room: "theory",
+    kind: "theory",
+    status,
+    section: "D",
+    unitId: "u13",
+    createdAt: NOW - 10 * MIN,
+    sentAt: status === "sent" ? NOW - 8 * MIN : undefined,
+    ...o,
+  });
+
+  test("the pills: the page's ranking, held still until something real changes; new ones wait while she touches them", () => {
+    const views = [th("Fathima", READY_D, { idleMs: 6 * MIN }), th("Priya", READY_C), wb("Malik", [13, 17], { sentAgo: 5 * MIN })];
+    const plan = planLessons(views, NOW, FREE);
+    const first = nextOrder(null, plan, false);
+    expect(first.keys).toEqual(plan.map((l) => l.key));
+    expect(pillTone(plan.find((l) => l.key === "u13:D")!)).toBe("red"); // Fathima has no work
+    // A minute later the ranking would swap two lessons, but nothing she can see changed: the pills stay.
+    const swapped = [...plan].reverse();
+    expect(nextOrder(first, swapped, false).keys).toEqual(first.keys);
+    // A new lesson while she touches the row: it goes at the end, the others keep their places...
+    // (Sana: A–D taught and done, no work until E is taught, for 30 minutes.)
+    const READY_E = { ...READY_D, ...taught("D"), ...Object.fromEntries(solo("D").map((q) => [String(q), { s: "right" as const, t: 1 }])) };
+    const more = planLessons([...views, th("Sana", READY_E, { idleMs: 30 * MIN })], NOW, FREE);
+    const held = nextOrder(first, more, true);
+    expect(held.keys.slice(0, first.keys.length)).toEqual(first.keys);
+    expect(held.keys).toHaveLength(more.length);
+    // ...and once she lets go the ranking catches up (Sana has waited 30 minutes: her lesson first).
+    const after = nextOrder(held, more, false);
+    expect(after.keys).toEqual(more.map((l) => l.key));
+    expect(after.keys[0]).toBe("u13:E");
+  });
+
+  test("sent to Theory he is on the way until Arrived: not with her yet; late after 3 minutes; the lesson's clock starts at Arrived", () => {
+    const calls = [
+      call("c1", "Fathima", "sent", { walk: true, arrivedAt: NOW - 5 * MIN }),
+      call("c2", "Ahamed", "sent", { walk: true, sentAt: NOW - MIN }),
+      call("c3", "Dilan", "sent", { walk: true, sentAt: NOW - 4 * MIN }),
+      call("c4", "Nila", "requested", { createdAt: NOW - 4 * MIN }),
+      call("c5", "Kumar", "requested", { pull: true }),
+    ];
+    const views = [
+      th("Fathima", READY_D, { where: "theory", calls: [calls[0]] }),
+      th("Ahamed", READY_D, { where: "theory", calls: [calls[1]] }),
+      th("Dilan", READY_D, { where: "theory", calls: [calls[2]] }),
+      th("Nila", READY_D, { calls: [calls[3]] }),
+      th("Kumar", READY_D, { where: "evaluation", calls: [calls[4]] }),
+    ];
+    const room = roomLessons(board(calls), views, NOW);
+    expect(room).toHaveLength(1);
+    expect(room[0].here.map((s) => s.v.s.name)).toEqual(["Fathima"]);
+    expect(room[0].coming.map((rc) => rc.v?.s.name)).toEqual(["Ahamed", "Dilan", "Kumar", "Nila"]);
+    expect(room[0].since).toBe(NOW - 5 * MIN); // from Arrived, not from Sent
+    const items = roomItems(room, NOW);
+    // In the order she called them (all at once here: A–Z), whatever happened since.
+    expect(items.map((it) => [it.name, it.state, it.late])).toEqual([
+      ["Ahamed", "walking", false],
+      ["Dilan", "walking", true],
+      ["Fathima", "here", false],
+      ["Kumar", "eval", false],
+      ["Nila", "called", true],
+    ]);
+    expect(items.map((it) => roomWords(it, NOW))).toEqual(["on the way 1m", "not here 4m", "with you 5m", "in Eval first", "not sent 4m"]);
+    // Older calls (sent before 30 Oct 2026, no walk) count as there.
+    const old = roomLessons(board([call("c9", "Fathima", "sent")]), [th("Fathima", READY_D, { where: "theory", calls: [] })], NOW);
+    expect(old[0].here).toHaveLength(1);
   });
 });
