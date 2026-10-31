@@ -1,0 +1,23 @@
+
+> aristora-system@1.0.0 build
+> node scripts/build.mjs
+
+
+  dist/assets/app-V6SDN66Z.js                                        453.8kb
+  dist/assets/app-RAAERWD6.css                                       109.0kb
+  dist/assets/barlow-semi-condensed-latin-700-normal-DVQBTNQV.woff2   22.7kb
+  dist/assets/barlow-semi-condensed-latin-600-normal-YSX2SY2B.woff2   22.4kb
+  dist/assets/barlow-latin-700-normal-5OFOGNFS.woff2                  22.3kb
+  dist/assets/barlow-latin-600-normal-APFZWJSU.woff2                  22.2kb
+  dist/assets/barlow-latin-400-normal-NENW7MY5.woff2                  21.7kb
+  dist/assets/barlow-latin-500-normal-XG5KS5C2.woff2                  21.5kb
+  dist/assets/barlow-semi-condensed-latin-600-normal-PUSKTFKN.woff    19.6kb
+  dist/assets/barlow-semi-condensed-latin-700-normal-RQTTCVLQ.woff    19.5kb
+  dist/assets/barlow-latin-600-normal-IMDL24A2.woff                   19.4kb
+  dist/assets/barlow-latin-700-normal-WICR22MF.woff                   19.3kb
+  dist/assets/barlow-latin-400-normal-NP6ENZ2E.woff                   19.1kb
+  dist/assets/barlow-latin-500-normal-HZFCIMMG.woff                   19.1kb
+
+⚡ Done in 64ms
+Built dist/ for https://qualified-fish-602.convex.cloud: app-V6SDN66Z.js 454 KB, app-RAAERWD6.css 109 KB
+Built the family app: fam-HH3X7SZN.js + fam-SIJ2LJ3A.css, 16.1 KB over the wire (budget 50 KB)

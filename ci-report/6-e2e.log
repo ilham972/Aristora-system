@@ -1,0 +1,22 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90m/home/runner/work/Aristora-system/Aristora-system[39m
+
+ [32m✓[39m tests/e2e/class.e2e.ts [2m([22m[2m11 tests[22m[2m)[22m[33m 189032[2mms[22m[39m
+   [33m[2m✓[22m[39m the register: a whole class on three phones[33m 38360[2mms[22m[39m
+   [33m[2m✓[22m[39m Master: workbook levels corrected, lost marks explained, re-teach, Exam Sprint and back[33m 23727[2mms[22m[39m
+   [33m[2m✓[22m[39m Progress: one grade's race per unit, who finished what, and the poster for the parents[33m 3765[2mms[22m[39m
+   [33m[2m✓[22m[39m accounts: the owner sets up, adds a teacher, her phone signs in with the link and is signed out again[33m 5564[2mms[22m[39m
+   [33m[2m✓[22m[39m Correction: one page (one grade's names in one line, + for attendance, the level bar, his unit), one question at a time, ? on a part, Take back[33m 65159[2mms[22m[39m
+   [33m[2m✓[22m[39m Theory: one screen like Evaluation: grade, stage, unit and lesson rows; her room box with Call, Arrived and Done; Taught for everyone with her; Correction's 3 minutes; the owl[33m 18790[2mms[22m[39m
+   [33m[2m✓[22m[39m Evaluation: one screen: grade, stage, unit and questions the most urgent first; her room box with Call, Arrived and Done; one question for everyone with her[33m 7231[2mms[22m[39m
+   [33m[2m✓[22m[39m Several books at once: every book stays on Evaluation and Theory, one book per call, keep him for the next, given books mean work[33m 6802[2mms[22m[39m
+   [33m[2m✓[22m[39m CEO page: now, today, team, business, money; one student's sheet for his parents[33m 10787[2mms[22m[39m
+   [33m[2m✓[22m[39m Test class: a grade copied and the extra test students; only a phone showing the test class sees them, never the class[33m 7051[2mms[22m[39m
+ [32m✓[39m tests/e2e/family.e2e.ts [2m([22m[2m1 test[22m[2m)[22m[33m 11078[2mms[22m[39m
+   [33m[2m✓[22m[39m the family app: join, a level on the pad, Check once, the reveal, XP and the board; Correction's ⌂ and Checked[33m 10957[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m2 passed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[32m12 passed[39m[22m[90m (12)[39m
+[2m   Start at [22m 10:06:57
+[2m   Duration [22m 201.25s[2m (tests 100%)[22m
+
