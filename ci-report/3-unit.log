@@ -1,0 +1,38 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90m/home/runner/work/Aristora-system/Aristora-system[39m
+
+ [32m✓[39m tests/theoryFocus.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 44[2mms[22m[39m
+ [32m✓[39m tests/evalFocus.test.ts [2m([22m[2m23 tests[22m[2m)[22m[32m 37[2mms[22m[39m
+ [32m✓[39m tests/master.test.ts [2m([22m[2m25 tests[22m[2m)[22m[33m 1306[2mms[22m[39m
+ [32m✓[39m tests/focus.test.ts [2m([22m[2m21 tests[22m[2m)[22m[32m 39[2mms[22m[39m
+ [32m✓[39m tests/family.test.ts [2m([22m[2m15 tests[22m[2m)[22m[33m 668[2mms[22m[39m
+ [32m✓[39m tests/backend.test.ts [2m([22m[2m38 tests[22m[2m)[22m[33m 2120[2mms[22m[39m
+ [32m✓[39m tests/ceo.test.ts [2m([22m[2m23 tests[22m[2m)[22m[33m 404[2mms[22m[39m
+ [32m✓[39m tests/auth.test.ts [2m([22m[2m11 tests[22m[2m)[22m[33m 569[2mms[22m[39m
+ [32m✓[39m tests/uncorrect.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 582[2mms[22m[39m
+ [32m✓[39m tests/answerKey.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 412[2mms[22m[39m
+ [32m✓[39m tests/tute.test.ts [2m([22m[2m11 tests[22m[2m)[22m[33m 496[2mms[22m[39m
+ [32m✓[39m tests/attendance.test.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 522[2mms[22m[39m
+ [32m✓[39m tests/workbookFile.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 153[2mms[22m[39m
+ [32m✓[39m tests/drafts.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 340[2mms[22m[39m
+ [32m✓[39m tests/status.test.ts [2m([22m[2m17 tests[22m[2m)[22m[32m 25[2mms[22m[39m
+ [32m✓[39m tests/roomRows.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m tests/stats.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m tests/derive.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 24[2mms[22m[39m
+ [32m✓[39m tests/progress.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 307[2mms[22m[39m
+ [32m✓[39m tests/roomDecisions.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m tests/announce.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m tests/chime.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 166[2mms[22m[39m
+ [32m✓[39m tests/taps.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 20[2mms[22m[39m
+ [32m✓[39m tests/evalPace.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m tests/hrow.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m tests/sha256.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 87[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m26 passed[39m[22m[90m (26)[39m
+[2m      Tests [22m [1m[32m293 passed[39m[22m[90m (293)[39m
+[2m   Start at [22m 01:51:31
+[2m   Duration [22m 6.75s[2m (tests 55%, transform 16%, import 14%, environment 13%, worker 1%)[22m
+
+[2m    Isolate [22m [33m26 workers spawned[39m[2m · ~234ms startup each (spawn + environment, per file)[22m
+[2m            [22m [2mat least ~1.80s faster with [22m[33misolate: false[39m[2m — reuses workers across files instead of one per file[22m
+
