@@ -33,19 +33,7 @@ export function KindBar<T extends string>(props: { value: T; items: { id: T; lab
   );
 }
 
-/**
- * The most urgent first (31 Oct 2026, his rule: the order follows the situation): most red, then most waiting; ties
- * keep the given order (Fighter, Master, Legend), so a pill moves only when the class changes.
- */
-export function byUrgency<T extends { c: HeatCount }>(items: T[]): T[] {
-  return items
-    .map((it, i) => ({ it, i }))
-    .sort((a, b) => b.it.c.red - a.it.c.red || b.it.c.total - a.it.c.total || a.i - b.i)
-    .map((x) => x.it);
-}
-
-/** Nothing waiting (Legend has no books in the app yet). */
-export const NO_HEAT: HeatCount = { red: 0, orange: 0, yellow: 0, total: 0 };
+export { byUrgency, NO_HEAT } from "./theoryFocusData";
 
 /**
  * The rows pinned under the top bar: their height goes to --tp-stick-h, and the page is marked (body.tp-padded) so

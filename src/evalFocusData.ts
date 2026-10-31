@@ -1,19 +1,19 @@
 // The Evaluation page's rules (src/evalFocus.tsx draws them). Plain functions: the tests run them on fake classes.
 //
-// Evaluation explains wrong answers (theory books) and lost marks (workbooks), one student at a time, with up to 3
-// students in her room at once (the founder's number, 2026-10-29). The page shows who is with her (each student's
-// questions one by one, with the answer key), who is on the way, and who to call next: no work / stuck / stopped first
-// (red), then ready (waited 10 minutes: orange), then later (yellow). The system ticks its best guess; the teacher
-// calls whoever she wants (1, 2 or 3), with the facts beside each name: what he still has to do, and how long.
+// Evaluation explains wrong answers (theory books) and lost marks (workbooks). One screen (31 Oct 2026, his voice
+// note): grade → stage → unit → a group of questions the same students got wrong, each the most urgent first and
+// picked; then her room (up to 6 with her, his number), the questions as squares and one question at a time with
+// the answer: Explained counts for everyone with her who has it. Urgency: no work / stuck / stopped first (red), then
+// ready (waited 10 minutes: orange), then later (yellow). The page picks; she can pick anything.
 
 import { slClock } from "../convex/lib/day";
 import { EVAL_READY_MS } from "../convex/lib/status";
 import { evalQueue, pendingSince, roomBusy, roomCalls, type RoomCall, type View } from "./derive";
 import type { Board } from "./store";
-import { LATE_SEND_MS, mShort, outInOf, sinceWords, type Heat, type HeatCount } from "./theoryFocusData";
+import { byUrgency, LATE_SEND_MS, mShort, NO_HEAT, outInOf, sinceWords, type Heat, type HeatCount } from "./theoryFocusData";
 
-/** Students with Evaluation at once, at most (the founder's number, 2026-10-29). */
-export const EVAL_CAP = 3;
+/** Students with one Evaluation teacher at once, at most (his number: 3 on 29 Oct, 6 on 31 Oct for the room box). */
+export const EVAL_CAP = 6;
 
 export type EvalKind = "fighter" | "master";
 export type EvalFilter = "all" | EvalKind;
@@ -265,3 +265,122 @@ export function homeSoon(v: View, now: number): string {
   const at = v.s.lastInAt !== undefined ? v.s.lastInAt + 2 * 60 * 60_000 : undefined;
   return at !== undefined && at > now && at - now <= 30 * 60_000 ? `home ${slClock(at)}` : "";
 }
+
+// ---------------- One screen: grade → stage → unit → questions (31 Oct 2026) ----------------
+
+export const EVAL_GRADES = [6, 7, 8, 9, 10, 11];
+export type EvalStage = EvalKind | "legend";
+
+/** How many need her, by colour; each student once, held ones (with Theory) not counted. */
+export function tally(list: readonly Cand[]): HeatCount {
+  const out = { ...NO_HEAT };
+  const seen = new Set<string>();
+  for (const c of list) {
+    if (c.hold || seen.has(c.v.s._id)) continue;
+    seen.add(c.v.s._id);
+    out[c.heat]++;
+    out.total++;
+  }
+  return out;
+}
+
+/** The grade a book belongs to (his book's grade, else his own). */
+export const bookGrade = (c: Cand) => c.v.unit?.grade ?? c.v.s.grade;
+
+/** Grades 6 to 11, the most urgent first (ties: 6 first); a grade with nobody waiting goes last. */
+export function gradeRow(list: readonly Cand[]): { grade: number; c: HeatCount }[] {
+  return byUrgency(EVAL_GRADES.map((grade) => ({ grade, c: tally(list.filter((c) => bookGrade(c) === grade)) })));
+}
+
+/** Fighter / Master / Legend in one grade, the most urgent first (Legend: no books yet). */
+export function stageRow(list: readonly Cand[]): { id: EvalStage; label: string; c: HeatCount }[] {
+  return byUrgency<{ id: EvalStage; label: string; c: HeatCount }>([
+    { id: "fighter", label: "Fighter", c: tally(list.filter((c) => c.kind === "fighter")) },
+    { id: "master", label: "Master", c: tally(list.filter((c) => c.kind === "master")) },
+    { id: "legend", label: "Legend", c: NO_HEAT },
+  ]);
+}
+
+export type UnitPill = { key: string; unit: NonNullable<View["unit"]>; c: HeatCount; cands: Cand[] };
+
+/** The books of one grade and stage with something for her: the most urgent first, then by unit number. */
+export function unitRow(list: readonly Cand[]): UnitPill[] {
+  const by = new Map<string, UnitPill>();
+  for (const c of list) {
+    const u = c.v.unit;
+    if (!u) continue;
+    const key = `${u._id}:${c.v.stage}`;
+    const p = by.get(key) ?? { key, unit: u, c: NO_HEAT, cands: [] };
+    p.cands.push(c);
+    by.set(key, p);
+  }
+  const pills = [...by.values()]
+    .map((p) => ({ ...p, c: tally(p.cands) }))
+    .sort((a, b) => a.unit.code.localeCompare(b.unit.code, undefined, { numeric: true }));
+  return byUrgency(pills).filter((p) => p.c.total > 0);
+}
+
+/** Questions the same students got wrong (one pill), the students, and the most urgent of them. */
+export type QGroup = { key: string; qs: number[]; cands: Cand[]; heat: Heat };
+const HEAT_RANK: Record<Heat, number> = { red: 0, orange: 1, yellow: 2 };
+
+/**
+ * One book's questions as pills: questions waiting for exactly the same students make one pill ("13 · 17": Raj and
+ * Nila both lost marks on both). The most urgent students first, then the most students, then the first question.
+ * Students with Theory (held) are left out: she can't call them.
+ */
+export function qGroups(cands: readonly Cand[]): QGroup[] {
+  const callable = cands.filter((c) => !c.hold);
+  const byQ = new Map<number, Cand[]>();
+  for (const c of callable) for (const q of c.qs) byQ.set(q, [...(byQ.get(q) ?? []), c]);
+  const bySet = new Map<string, QGroup>();
+  for (const [q, cs] of [...byQ.entries()].sort((a, b) => a[0] - b[0])) {
+    const who = cs.map((c) => c.v.key).sort().join(",");
+    const g = bySet.get(who);
+    if (g) g.qs.push(q);
+    else bySet.set(who, { key: "", qs: [q], cands: cs, heat: cs.reduce<Heat>((h, c) => (HEAT_RANK[c.heat] < HEAT_RANK[h] ? c.heat : h), "yellow") });
+  }
+  return [...bySet.values()]
+    .map((g) => ({ ...g, key: g.qs.join(".") }))
+    .sort((a, b) => HEAT_RANK[a.heat] - HEAT_RANK[b.heat] || b.cands.length - a.cands.length || a.qs[0] - b.qs[0]);
+}
+
+/** One question of her session: the book, the students who need it, and how many of them she already did. */
+export type SessionQ = { key: string; q: number; v: View; who: EvalHere[] };
+
+/**
+ * The questions to explain to the students with her (Arrived), each once: the one most of them need first (explain
+ * once), then by question number. Nobody arrived yet: those on the way (to prepare). `extra`: questions to show
+ * before anyone is called (the group she picked).
+ */
+export function sessionQs(here: readonly EvalHere[], coming: readonly EvalHere[], extra?: { v: View; qs: number[] }): SessionQ[] {
+  const from = here.length ? here : coming;
+  const by = new Map<string, SessionQ>();
+  for (const h of from) {
+    if (h.kind !== "evaluation") continue;
+    for (const q of h.qs) {
+      const key = `${h.v.unit?._id ?? h.v.s.unitId}:${q}`;
+      const sq = by.get(key) ?? { key, q, v: h.v, who: [] };
+      sq.who.push(h);
+      by.set(key, sq);
+    }
+  }
+  if (by.size === 0 && extra) {
+    for (const q of extra.qs) {
+      const key = `${extra.v.unit?._id ?? extra.v.s.unitId}:${q}`;
+      by.set(key, { key, q, v: extra.v, who: [] });
+    }
+  }
+  return [...by.values()].sort((a, b) => b.who.length - a.who.length || (a.v.unit?.code ?? "").localeCompare(b.v.unit?.code ?? "") || a.q - b.q);
+}
+
+/** Who with her still needs this question decided. */
+export function undecided(sq: SessionQ, dec: Record<string, Record<number, Decision | undefined>>): EvalHere[] {
+  return sq.who.filter((h) => (dec[h.v.key] ?? {})[sq.q] === undefined);
+}
+
+/** Every question of his decided (or nothing to explain): Done sends him back. */
+export function allDecided(h: EvalHere, dec: Record<string, Record<number, Decision | undefined>>): boolean {
+  return h.kind === "evaluation" && h.qs.every((q) => (dec[h.v.key] ?? {})[q] !== undefined);
+}
+

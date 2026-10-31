@@ -7506,3 +7506,422 @@ body.locked.tp-padded .toasts {
   text-decoration-thickness: 1px;
   text-underline-offset: 2px;
 }
+
+/* ---- Evaluation: one screen (31 Oct 2026, his voice note). Grades, stages, units and question groups pinned; her
+   room as a box of pills with Call / Arrived / Done beside it; Correction's squares, card and pad below. ---- */
+/* Toasts sit above the pad (taller than Theory's two buttons): never over Explained. */
+body.evx-on .toasts {
+  bottom: calc(var(--tabs) + env(safe-area-inset-bottom) + 24px + 140px);
+}
+.evx-grades {
+  display: flex;
+  gap: 4px;
+}
+.evx-g {
+  flex: 1 1 0;
+  min-width: 0;
+  position: relative;
+  height: 38px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border-radius: 10px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+}
+.evx-g b {
+  font: 700 16px/1 var(--cond);
+}
+.evx-g i {
+  min-height: 10px;
+  font: 700 10.5px/1 var(--font);
+  font-style: normal;
+  color: var(--ink-3);
+}
+.evx-g.on {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
+}
+.evx-g.on i {
+  color: #c4cad8;
+}
+.evx-g:disabled {
+  opacity: 0.4;
+}
+.evx-g:active:not(:disabled) {
+  transform: scale(0.96);
+}
+.evx-g-r {
+  position: absolute;
+  top: -6px;
+  right: -3px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--red);
+  color: #fff;
+  font: 700 10px/1 var(--font);
+  font-style: normal;
+  box-shadow: 0 0 0 1.5px var(--ground);
+}
+.evx-rowbox {
+  min-height: 36px;
+}
+.evx-u,
+.evx-qg {
+  flex: none;
+  position: relative;
+  height: 32px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  font: 700 14px/1 var(--font);
+  white-space: nowrap;
+}
+.evx-u {
+  max-width: 172px;
+  overflow: hidden;
+}
+.evx-u.on {
+  max-width: min(250px, calc(100vw - 110px));
+}
+.evx-u.on,
+.evx-qg.on {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
+}
+.evx-u.ur::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 2px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--red);
+}
+.evx-n,
+.evx-qg i {
+  flex: none;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--line-2);
+  color: var(--ink);
+  font: 700 12px/1 var(--font);
+  font-style: normal;
+}
+.evx-u.on .evx-n,
+.evx-qg.on i {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+.evx-qg b {
+  font: 700 15px/1 var(--cond);
+}
+.evx-qg.qg-red {
+  border-color: var(--red);
+}
+.evx-qg.qg-orange {
+  border-color: var(--amber);
+}
+.evx-qg.evx-teach {
+  border-style: dashed;
+  border-color: var(--theory);
+  color: var(--theory-ink);
+}
+.evx-qg.evx-teach.on {
+  background: var(--theory);
+  color: #fff;
+}
+.evx-u:active,
+.evx-qg:active,
+.evx-sp:active {
+  transform: scale(0.95);
+}
+/* Her room: the box of pills (two rows at most) and Call / Arrived / Done beside it. */
+.evx-room {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+.evx-box {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 6px 8px 8px;
+  border-radius: 14px;
+  border: 1.5px solid var(--evaluation);
+  background: var(--card);
+}
+.evx-bh {
+  margin: 0 0 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+.evx-bh b {
+  color: var(--ink);
+}
+.evx-bh.lt-long span:last-of-type {
+  color: var(--amber-ink);
+  font-weight: 700;
+}
+.evx-bh .evx-reset {
+  margin-left: auto;
+  font-size: 12.5px;
+}
+.evx-lock {
+  flex: none;
+  color: var(--evaluation-ink);
+}
+.evx-pills {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 5px;
+  max-height: 72px;
+  overflow-y: auto;
+}
+.evx-sp {
+  position: relative;
+  height: 31px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 999px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  font: 700 13.5px/1 var(--font);
+  white-space: nowrap;
+}
+.evx-sp small {
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.8;
+}
+.evx-sp.s-in {
+  border-color: var(--evaluation);
+  background: var(--evaluation);
+  color: #fff;
+}
+.evx-sp.s-done {
+  border-color: var(--green);
+  background: var(--green-soft);
+  color: var(--green-ink);
+}
+.evx-sp.s-th {
+  border-color: var(--theory);
+  background: var(--theory-soft);
+  color: var(--theory-ink);
+}
+.evx-sp.s-walk {
+  border-style: dashed;
+  border-color: var(--evaluation);
+  color: var(--evaluation-ink);
+}
+.evx-sp.s-call {
+  border-style: dotted;
+  border-color: var(--evaluation);
+  color: var(--evaluation-ink);
+}
+.evx-sp.s-late {
+  border-color: var(--red);
+  color: var(--red-ink);
+}
+.evx-sp.s-pull {
+  box-shadow: 0 0 0 2px var(--amber);
+}
+.evx-sp.s-sug {
+  opacity: 0.5;
+}
+.evx-sp.s-sug.on {
+  opacity: 1;
+  border-color: var(--ink);
+}
+.evx-sp.s-sug.on::before {
+  content: "✓";
+  font-size: 12px;
+}
+.evx-sp.sg-red::after,
+.evx-sp.sg-orange::after,
+.evx-sp.s-late::after {
+  content: "";
+  position: absolute;
+  left: 9px;
+  right: 9px;
+  bottom: 2px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--red);
+}
+.evx-sp.sg-orange::after {
+  background: var(--amber);
+}
+.evx-none {
+  margin: 4px 2px;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.evx-col {
+  flex: none;
+  width: 26%;
+  min-width: 84px;
+  max-width: 120px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.evx-col .btn {
+  flex: 1 1 0;
+  min-height: 34px;
+  padding: 0 6px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.evx-col .evx-arrive {
+  border: 1.5px solid var(--evaluation);
+  background: var(--card);
+  color: var(--evaluation-ink);
+}
+.evx-col .evx-done {
+  border: 1.5px solid var(--green);
+  background: var(--card);
+  color: var(--green-ink);
+}
+.evx-col .btn:disabled {
+  opacity: 0.4;
+}
+/* The questions (Correction's squares) and one question with its answer. */
+.evx-hint {
+  margin: 2px 4px;
+}
+.fc-qn.evx-yr {
+  font-size: 34px;
+}
+.evx-who {
+  margin: 0 0 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 15px;
+  font-weight: 700;
+}
+.evx-who small {
+  color: var(--ink-3);
+}
+.evx-who .d {
+  color: var(--ink-3);
+}
+.evx-who .d-x::before {
+  content: "✓ ";
+  color: var(--evaluation-ink);
+}
+/* Correction's pad: → Theory and Not now side by side, Explained the big one under them. */
+.fc-n.evx-b {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 18px;
+}
+.fc-n.evx-b small {
+  font-size: 15px;
+  font-weight: 700;
+}
+.fc-n.evx-b.th {
+  border-color: var(--theory);
+  color: var(--theory-ink);
+}
+.fc-n.evx-b.th.on {
+  background: var(--theory);
+  color: #fff;
+}
+.fc-n.evx-b.skip {
+  color: var(--ink-2);
+}
+.fc-n.evx-b.skip.on {
+  border-color: var(--ink-2);
+  background: var(--ink-2);
+  color: #fff;
+}
+.fc-go.evx-x {
+  background: var(--evaluation);
+}
+.fc-go.evx-x.on {
+  background: var(--evaluation-ink);
+}
+.fc-go.evx-x:disabled {
+  opacity: 0.4;
+}
+.evx-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+}
+@media (max-width: 360px) {
+  .evx-g b {
+    font-size: 15px;
+  }
+  .evx-col {
+    min-width: 78px;
+  }
+  .evx-sp {
+    padding: 0 8px;
+    font-size: 13px;
+  }
+}
+/* A sheet open over the Evaluation page (his file): toasts at the top, off the sheet's buttons. */
+body.locked.evx-on .toasts {
+  top: calc(env(safe-area-inset-top) + 10px);
+  bottom: auto;
+}
+/* Short phones (iPhone 7, small Redmis): the pad in ONE row, so the question and her room stay in view. */
+@media (max-height: 720px) {
+  .evx-pad {
+    flex-direction: row;
+    align-items: stretch;
+  }
+  .evx-pad .fc-row2 {
+    flex: 2 1 0;
+  }
+  .evx-pad .fc-go {
+    flex: 1.5 1 0;
+    width: auto;
+    height: 52px;
+    gap: 5px;
+    font-size: 17px;
+  }
+  .evx-pad .fc-go b {
+    font-size: 18px;
+  }
+  .evx-pad .fc-go small {
+    font-size: 12px;
+  }
+  .evx-pad .fc-n.evx-b small {
+    font-size: 13.5px;
+  }
+}

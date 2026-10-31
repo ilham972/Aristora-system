@@ -7,6 +7,8 @@ import { computeMaster, type MState } from "../convex/lib/master";
 import { computeStatus, type Marks } from "../convex/lib/status";
 import type { View } from "../src/derive";
 import {
+  allDecided,
+  bookGrade,
   candidates,
   decisionWords,
   defaultEvalTicks,
@@ -17,8 +19,14 @@ import {
   evalRoom,
   evalWords,
   finishPlan,
+  gradeRow,
+  qGroups,
   qLabel,
   sameGroups,
+  sessionQs,
+  stageRow,
+  undecided,
+  unitRow,
 } from "../src/evalFocusData";
 import { nextOf, nowOf } from "../src/nextData";
 import { cheerOf, scoreOf } from "../src/score";
@@ -129,7 +137,8 @@ describe("Who to call: most urgent first, with what each does meanwhile", () => 
   });
 
   test("the page ticks the most urgent it has room for; never a 'later' one", () => {
-    expect(defaultEvalTicks(list, EVAL_CAP)).toEqual(["Dilan", "Fathima", "Malik"]);
+    expect(defaultEvalTicks(list, 3)).toEqual(["Dilan", "Fathima", "Malik"]);
+    expect(defaultEvalTicks(list, EVAL_CAP)).toEqual(["Dilan", "Fathima", "Malik", "Kumar"]); // 6 with her (31 Oct)
     expect(defaultEvalTicks(list, 1)).toEqual(["Dilan"]);
     expect(defaultEvalTicks(list, 0)).toEqual([]);
     expect(defaultEvalTicks(candidates([later], NOW, PACE), 3)).toEqual([]);
@@ -153,9 +162,24 @@ describe("Who to call: most urgent first, with what each does meanwhile", () => 
     expect(groups.map((g) => [g.label, names(g.members)])).toEqual([["U13 Q22", ["Ahamed", "Fathima"]]]); // both out of work: the older wrong answer first
     expect(qLabel(a, 22)).toBe("Q22");
   });
+
+  test("one screen (31 Oct 2026): grades, stages, units and question groups, each the most urgent first", () => {
+    // Grade 11 (2 red) before 7 (orange only); grades with nothing last, 6 to 10 in order.
+    expect(gradeRow(list).map((g) => [g.grade, g.c.total])).toEqual([[11, 4], [7, 1], [6, 0], [8, 0], [9, 0], [10, 0]]);
+    const g11 = list.filter((c) => bookGrade(c) === 11);
+    expect(stageRow(g11).map((x) => [x.id, x.c.total])).toEqual([["fighter", 4], ["master", 0], ["legend", 0]]);
+    expect(stageRow(list.filter((c) => bookGrade(c) === 7)).map((x) => x.id)).toEqual(["master", "fighter", "legend"]);
+    expect(unitRow(g11).map((u) => [u.unit.code, u.c.total])).toEqual([["U13", 4]]);
+    // The same students' questions make one pill: Dilan and Nila both have Q18 (Dilan stuck: red, first).
+    expect(qGroups(g11).map((g) => [g.qs, names(g.cands), g.heat])).toEqual([
+      [[18], ["Dilan", "Nila"], "red"],
+      [[22], ["Fathima"], "red"],
+      [[20], ["Kumar"], "orange"],
+    ]);
+  });
 });
 
-describe("With her: 3 at once, one question at a time", () => {
+describe("With her: 6 at once, one question at a time", () => {
   const sent = (id: string, kind: "evaluation" | "theory" = "evaluation"): Call => ({ _id: `c-${id}`, studentId: id, room: "evaluation", kind, status: "sent", createdAt: NOW - 5 * MIN, sentAt: NOW - 4 * MIN });
   test("the room counts who is here and who is on the way", () => {
     const k = th("Kumar", { ...IN_C, ...wrong(18, 14), ...wrong(19, 12) }, { where: "evaluation", calls: [sent("Kumar")] });
@@ -164,7 +188,23 @@ describe("With her: 3 at once, one question at a time", () => {
     const room = evalRoom(board([k.calls[0] as Call, coming]), [k, n], NOW);
     expect(room.here.map((h) => [h.v.s.name, h.qs])).toEqual([["Kumar", [18, 19]]]);
     expect(room.coming.map((rc) => rc.c.studentId)).toEqual(["Nila"]);
-    expect(evalLeft(room)).toBe(1);
+    expect(evalLeft(room)).toBe(EVAL_CAP - 2);
+  });
+
+  test("one screen (31 Oct 2026): each question once for everyone with her who has it, the most shared first", () => {
+    const a = th("Ahamed", { ...IN_C, ...right(19, 21), ...wrong(18, 12), ...wrong(22, 12) }, { where: "evaluation", calls: [sent("Ahamed")] });
+    const f = th("Fathima", { ...IN_C, ...right(18, 21), ...wrong(22, 14) }, { where: "evaluation", calls: [sent("Fathima")] });
+    const room = evalRoom(board([a.calls[0] as Call, f.calls[0] as Call]), [a, f], NOW);
+    const qs = sessionQs(room.here, []);
+    expect(qs.map((x) => [x.q, x.who.map((h) => h.v.s.name)])).toEqual([
+      [22, ["Ahamed", "Fathima"]],
+      [18, ["Ahamed"]],
+    ]);
+    // Explained once for both: Fathima is done (Done sends her back), Ahamed still has Q18.
+    const dec = { [a.key]: { 22: "x" as const }, [f.key]: { 22: "x" as const } };
+    expect(undecided(qs[0], dec)).toEqual([]);
+    expect(undecided(qs[1], dec).map((h) => h.v.s.name)).toEqual(["Ahamed"]);
+    expect(room.here.map((h) => allDecided(h, dec))).toEqual([false, true]);
   });
 
   test("her room (30 Oct 2026): sent = on the way until she taps Arrived; late after 3 minutes; in call order", () => {
@@ -179,7 +219,7 @@ describe("With her: 3 at once, one question at a time", () => {
     const room = evalRoom(board(calls), vs, NOW);
     expect(room.here.map((h) => h.v.s.name)).toEqual(["Kumar"]);
     expect(room.coming.map((rc) => rc.c.studentId)).toEqual(["Nila", "Sana", "Zara"]);
-    expect(evalLeft(room)).toBe(0); // 3 at most, counting those on the way
+    expect(evalLeft(room)).toBe(EVAL_CAP - 4); // 6 at most, counting those on the way
     const items = evalItems(board(calls), vs, NOW);
     expect(items.map((it) => [it.name, it.state, it.late, evalWords(it, NOW)])).toEqual([
       ["Kumar", "here", false, "with you 6m"],

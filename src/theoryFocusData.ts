@@ -317,6 +317,20 @@ export function memberWords(m: Member): string {
 /** The founder's colours for a count: red = very urgent (no work now), orange = soon, yellow = not urgent yet. */
 export type Heat = "red" | "orange" | "yellow";
 export type HeatCount = { red: number; orange: number; yellow: number; total: number };
+
+/** Nothing waiting (Legend has no books in the app yet). */
+export const NO_HEAT: HeatCount = { red: 0, orange: 0, yellow: 0, total: 0 };
+
+/**
+ * The most urgent first (31 Oct 2026, his rule: the order follows the situation): most red, then most waiting; ties
+ * keep the given order (grade 6 to 11; Fighter, Master, Legend), so a pill moves only when the class changes.
+ */
+export function byUrgency<T extends { c: HeatCount }>(items: T[]): T[] {
+  return items
+    .map((it, i) => ({ it, i }))
+    .sort((a, b) => b.it.c.red - a.it.c.red || b.it.c.total - a.it.c.total || a.i - b.i)
+    .map((x) => x.it);
+}
 export const heatOf = (m: Member): Heat => (m.urgency === "red" ? "red" : m.urgency === "amber" ? "orange" : "yellow");
 
 /** How many need Theory, by book (theory book = Fighter, workbook = Master) and colour; each student once. */

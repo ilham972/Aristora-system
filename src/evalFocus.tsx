@@ -1,65 +1,76 @@
-// The Evaluation page (rebuilt 30 Oct 2026, like the Theory page; rules in src/evalFocusData.ts). Small things in
-// fixed places, nothing that pushes the page down.
-// - Pinned under the top bar: today's score in one thin line; Theory's notes (it took your student first, or wants him
-//   now); then the grades and All / Fighter / Master (or, in her room, who is with her and everyone she called).
-// - Under them, who to call: the same question for 2+ as tiny pills (explain once), then everyone most urgent first,
-//   with his questions, why, and what he does meanwhile; the page ticks its best guess, she ticks anyone (3 at most).
-//   Theory is busy: teach it here. Gone home with levels to correct.
-// - At the bottom, always in the same two places: Room (everyone she called) and Call; in her room: Waiting and Done.
-// - Her room: everyone she called as pills that never move (dashed while on the way, red when not there after 3
-//   minutes); tap one for his file: Arrived, then his questions one at a time with the answer key (→ Theory, Not now,
-//   Explained), keep him for his next book, his unit and his day.
-// Tapping red circles without calling, → Theory without calling, a student's book and Move: the Class page.
+// The Evaluation page: one screen (31 Oct 2026, his voice note; rules in src/evalFocusData.ts). Like Correction:
+// small things in fixed places, and the buttons she taps fast at the bottom.
+// - Pinned: Theory's notes (it took your student first, or wants him now); grades 6–11, Fighter / Master / Legend,
+//   the units that need her (number + Tamil), and the questions the same students got wrong ("13 · 17"). Each row the
+//   most urgent first and already picked; she can pick anything.
+// - Her room: a box of student pills (two rows, 6 at most): with her (solid; a lock on the box), on the way (dashed),
+//   called (dotted), late (red); then the ones the page picked for those questions (ticked; tap = untick: grey). Right
+//   of it, always in the same places: Call, Arrived, Done. Tap someone in her room: his file.
+// - The questions to explain as tiny squares (like Correction), one at a time with the answer; at the bottom, fixed:
+//   → Theory, Not now and the big Explained: one tap counts for everyone with her who has that question.
+// - Theory is busy: "Teach" at the end of the questions row. Today's score and who went home with levels to correct
+//   at the end. Red circles / → Theory without calling, a student's book and Move: the Class page.
 
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { slClock } from "../convex/lib/day";
 import type { KeyAnswer } from "../convex/lib/key";
+import { joinNames } from "./announce";
 import { mutate } from "./backend";
 import { GoneHome, NobodyHere } from "./board";
-import { TodayStrip } from "./deck";
+import { heatWords, TodayStrip } from "./deck";
 import type { View } from "./derive";
 import {
+  allDecided,
+  bookGrade,
   canTeachHere,
   candidates,
   decisionWords,
-  defaultEvalTicks,
   EVAL_CAP,
-  evalCounts,
   evalItems,
-  evalLeft,
   evalRoom,
   evalWords,
   finishPlan,
+  gradeRow,
   lostWords,
   nextBooks,
+  qGroups,
   qLabel,
-  sameGroups,
-  type Cand,
+  sessionQs,
+  stageRow,
+  undecided,
+  unitRow,
   type Decision,
-  type EvalFilter,
   type EvalHere,
   type EvalItem,
+  type EvalStage,
+  type SessionQ,
 } from "./evalFocusData";
 import { unitNo } from "./focusData";
-import { GradePills, gradesOf, inGrade, needsOf, useGradeFilter } from "./grades";
 import { HRow } from "./hrow";
 import { useQuery } from "./live";
 import { KeyLine, MasterStrip } from "./master";
-import { KindBar, ListIcon, RoomIcon, usePinned } from "./roomkit";
+import { KindBar, usePinned } from "./roomkit";
 import { scoreOf } from "./score";
-import { act, currentMe, currentRole, toast, type Board } from "./store";
+import { act, clearToasts, currentMe, currentRole, toast, type Board } from "./store";
 import { flushTaps } from "./taps";
 import { LessonName } from "./theoryFocus";
-import { classPace, mShort, sinceWords, STAY_MS } from "./theoryFocusData";
+import { classPace, mShort, sinceWords, STAY_MS, type Heat, type HeatCount } from "./theoryFocusData";
 import { tone } from "./tones";
+import { Sheet } from "./ui";
 
 type Decisions = Record<string, Record<number, Decision | undefined>>;
+/** What she picked in the rows (anything left out: the page's pick, the most urgent). */
+type Pick = { grade?: number; stage?: EvalStage; unit?: string; group?: string };
+/** The questions row's last pill when Theory is busy: she teaches theory herself. */
+const TEACH = "teach";
+/** Someone the page offers for the picked questions (or to teach): ticked = called with Call. */
+type Offer = { key: string; v: View; heat: Heat; why: string; work: string };
 
 /**
- * Call students to her room: to explain, or (Theory busy) to teach theory herself. Correction sends them. Each is
- * called for one book (the one on his row): he works on several at once.
+ * Call students to her room: to explain, or (Theory busy) to teach theory herself. Correction sends them (and says
+ * her name). Each is called for one book: he works on several at once.
  */
 async function callEval(picks: View[], kind: "evaluation" | "theory"): Promise<boolean> {
   const books = picks.flatMap((v) =>
@@ -80,71 +91,160 @@ async function callEval(picks: View[], kind: "evaluation" | "theory"): Promise<b
 
 /** "U09" → "unit 9": how he names a book (no U-codes on screen). */
 const unitWords = (v: View | undefined) => (v?.unit ? `unit ${unitNo(v.unit.code)}` : "his other book");
+/** "13", "C3", "2016": a question in a square or a pill (the Q goes, the book's own label stays). */
+const short = (v: View, q: number) => qLabel(v, q).replace(/^Q/, "");
 
 export function EvaluationPage(props: { board: Board; views: View[]; now: number }) {
   const { board, now } = props;
   const all = props.views;
   const inClass = all.filter((v) => v.where !== "absent");
-  const grades = gradesOf(inClass);
-  const [grade, setGrade] = useGradeFilter("evaluation", grades);
-  const views = inGrade(all, grade);
-  const [view, setView] = useState<"list" | "room">("list");
-  const [kind, setKind] = useState<EvalFilter>("all");
-  const [picked, setPicked] = useState<string[] | null>(null);
-  const [teachPick, setTeachPick] = useState<string[] | null>(null);
-  const [dec, setDec] = useState<Decisions>({});
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  // The pinned rows' height: toasts sit just above the two buttons at the bottom, never over them.
-  const stick = usePinned(view);
-  const pace = classPace(all);
-
-  // The room and Theory's notes are never filtered.
   // Her own room (31 Oct 2026): another Evaluation teacher's students are hers.
   const me = currentMe()?._id ?? null;
   const room = evalRoom(board, all, now, me);
   const items = evalItems(board, all, now, me);
-  const left = evalLeft(room);
-  const everyone = candidates(views, now, pace);
-  const counts = evalCounts(everyone);
-  const list = kind === "all" ? everyone : everyone.filter((c) => c.kind === kind);
-  const groups = sameGroups(list);
-  // Ticks are books (View.key): one book per student per call.
-  const callable = new Map(list.filter((c) => !c.hold).map((c) => [c.v.key, c]));
-  const chosen = (picked ?? defaultEvalTicks(list, left)).filter((k) => callable.has(k)).slice(0, left);
-  // He stays for his next book when the room has space, or nobody urgent waits for it.
-  const canKeep = left > 0 || !list.some((c) => !c.hold && c.heat !== "yellow");
-  const teach = inGrade(inClass, grade).filter((v) => canTeachHere(board, v));
-  const teachChosen = (teachPick ?? teach.slice(0, left).map((v) => v.s._id as string)).filter((id) => teach.some((v) => v.s._id === id));
+  const left = Math.max(0, EVAL_CAP - items.length);
+  const [pick, setPick] = useState<Pick>({});
+  const [ticks, setTicks] = useState<{ group: string; keys: string[] } | null>(null);
+  const [dec, setDec] = useState<Decisions>({});
+  const [at, setAt] = useState<string | null>(null);
+  const [fileId, setFileId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  // The pinned rows' height (the page ends where the pad sticks); toasts sit above the pad.
+  const stick = usePinned("evx");
+  useEffect(() => {
+    document.body.classList.add("evx-on");
+    return () => document.body.classList.remove("evx-on");
+  }, []);
+
+  // ---- The rows: each the most urgent first; with someone in her room, his book is the page's pick ----
+  const everyone = candidates(all, now, classPace(all));
+  const roomV = (room.here[0] ?? items[0]?.h)?.v;
+  const grades = gradeRow(everyone);
+  const gradeCount = (g: number | undefined) => grades.find((x) => x.grade === g)?.c.total ?? 0;
+  const roomGrade = roomV ? (roomV.unit?.grade ?? roomV.s.grade) : undefined;
+  const grade =
+    pick.grade !== undefined && gradeCount(pick.grade) > 0
+      ? pick.grade
+      : roomGrade !== undefined && gradeCount(roomGrade) > 0
+        ? roomGrade
+        : (grades.find((x) => x.c.total > 0)?.grade ?? null);
+  const inGrade = everyone.filter((c) => bookGrade(c) === grade);
+  const stages = stageRow(inGrade);
+  const stageCount = (s: EvalStage | undefined) => stages.find((x) => x.id === s)?.c.total ?? 0;
+  const roomStage = roomV && roomGrade === grade && (roomV.stage === "fighter" || roomV.stage === "master") ? roomV.stage : undefined;
+  const stage: EvalStage =
+    pick.stage && stageCount(pick.stage) > 0 ? pick.stage : roomStage && stageCount(roomStage) > 0 ? roomStage : (stages.find((x) => x.c.total > 0)?.id ?? "master");
+  const units = unitRow(inGrade.filter((c) => c.kind === stage));
+  const roomUnit = roomV?.unit ? `${roomV.unit._id}:${roomV.stage}` : undefined;
+  const unitKey =
+    pick.unit && units.some((u) => u.key === pick.unit) ? pick.unit : roomUnit && units.some((u) => u.key === roomUnit) ? roomUnit : (units[0]?.key ?? null);
+  const unit = units.find((u) => u.key === unitKey) ?? null;
+  const groups = unit ? qGroups(unit.cands) : [];
+  // Theory is busy and someone has no work until he gets theory: she can teach it (any grade: he has nothing for her).
+  const teach = inClass.filter((v) => canTeachHere(board, v));
+  const groupKey =
+    pick.group && (groups.some((g) => g.key === pick.group) || (pick.group === TEACH && teach.length > 0))
+      ? pick.group
+      : (groups[0]?.key ?? (teach.length ? TEACH : null));
+  const group = groups.find((g) => g.key === groupKey) ?? null;
+
+  // ---- Who the page offers for those questions (or to teach), and who she ticked ----
+  const offers: Offer[] =
+    groupKey === TEACH
+      ? teach.map((v) => ({ key: v.key, v, heat: "red", why: v.st?.nextTheory ? `section ${v.st.nextTheory}` : "his workbook", work: "" }))
+      : (group?.cands ?? []).map((c) => ({ key: c.v.key, v: c.v, heat: c.heat, why: c.why, work: c.work }));
+  // The page ticks who is ready (no work, stuck, waited 10 min), as many as fit; "later" ones she ticks herself.
+  const pagePick = offers.filter((o) => groupKey === TEACH || o.heat !== "yellow").map((o) => o.key);
+  const chosen = (ticks && ticks.group === groupKey ? ticks.keys : pagePick).filter((k) => offers.some((o) => o.key === k)).slice(0, left);
+  const toggle = (o: Offer) => {
+    if (!groupKey) return;
+    const on = chosen.includes(o.key);
+    if (!on && chosen.length >= left) {
+      toast(left === 0 ? `${EVAL_CAP} with you at most. Send someone back first.` : `Room for ${left} more (${EVAL_CAP} at most). Untick someone first.`, "error");
+      return;
+    }
+    tone("tick");
+    setTicks({ group: groupKey, keys: on ? chosen.filter((k) => k !== o.key) : [...chosen, o.key] });
+  };
+  const pickRow = (p: Pick) => {
+    setPick(p);
+    setTicks(null);
+  };
+
+  // ---- Her room: who is with her, on the way, done ----
+  const walkers = items.filter((it) => it.state !== "here");
+  const evalHere = room.here.filter((h) => h.kind === "evaluation");
+  const done = room.here.filter((h) => !h.v.pulled && allDecided(h, dec));
   const byId = new Map(all.map((v) => [v.s._id as string, v]));
   const bumped = board.calls.filter(
     (c) => c.room === "theory" && c.bumped && (!c.bumpedFrom || c.bumpedFrom === me) && byId.get(c.studentId)?.where !== "absent",
   );
   const pulls = room.here.filter((h) => h.v.pulled);
   const score = scoreOf(board, all, "evaluation", now);
-  const open = items.find((it) => it.id === openId) ?? items.find((it) => it.state !== "here") ?? items[0];
-  const waitingRed = everyone.some((c) => !c.hold && c.heat === "red");
+  const file = items.find((it) => it.id === fileId) ?? null;
 
-  const toggle = (c: Cand) => {
-    const id = c.v.key;
-    if (c.hold) {
-      toast(`${c.v.s.name}: ${c.hold}. Theory comes first.`, "error");
-      return;
-    }
-    // One book per call: ticking his other book swaps it.
-    const same = chosen.find((k) => k !== id && callable.get(k)?.v.s._id === c.v.s._id);
-    if (chosen.includes(id)) setPicked(chosen.filter((x) => x !== id));
-    else if (same) setPicked(chosen.map((k) => (k === same ? id : k)));
-    else if (left === 0) toast(`${EVAL_CAP} with you at most. Send someone back first.`, "error");
-    else if (chosen.length >= left) toast(`Room for ${left} more (${EVAL_CAP} with you at most). Untick someone first.`, "error");
-    else setPicked([...chosen, id]);
+  // ---- The questions: everyone with her who has it, each question once (the most shared first) ----
+  const qs = sessionQs(
+    evalHere,
+    items.filter((it) => it.state !== "here").map((it) => it.h),
+    group && items.length === 0 ? { v: group.cands[0].v, qs: group.qs } : undefined,
+  );
+  const live = evalHere.length > 0;
+  const sq = qs.find((x) => x.key === at) ?? (live ? qs.find((x) => undecided(x, dec).length > 0) : undefined) ?? qs[0] ?? null;
+  const mixed = new Set(qs.map((x) => x.v.unit?._id)).size > 1;
+  const allAre = (d: Decision) => !!sq && sq.who.length > 0 && sq.who.every((h) => (dec[h.v.key] ?? {})[sq.q] === d);
+  const canDecide = live && !!sq && sq.who.length > 0 && !busy;
+  // Before anyone is called: who among those offered has the question on screen.
+  const preview = sq && sq.who.length === 0 ? offers.filter((o) => o.v.pending.includes(sq.q) && o.v.unit?._id === sq.v.unit?._id).map((o) => o.v) : [];
+
+  /** One tap: for everyone with her who has this question (tap the same again: undone); then the next question. */
+  const choose = (d: Decision) => {
+    if (!sq || !canDecide) return;
+    const undo = allAre(d);
+    const next: Decisions = { ...dec };
+    for (const h of sq.who) next[h.v.key] = { ...(next[h.v.key] ?? {}), [sq.q]: undo ? undefined : d };
+    setDec(next);
+    if (undo) return;
+    if (d === "x") tone("tick");
+    const i = qs.findIndex((x) => x.key === sq.key);
+    const open = (x: SessionQ) => undecided(x, next).length > 0;
+    const to = qs.find((x, j) => j > i && open(x)) ?? qs.find(open);
+    if (to) setAt(to.key);
   };
 
-  /** After Done: the next one with her opens; an empty room goes back to the list. */
-  const after = (goneId: string) => {
-    const rest = items.filter((it) => it.id !== goneId);
-    if (rest.length === 0) setView("list");
-    else setOpenId((rest.find((it) => it.state === "here") ?? rest[0]).id);
+  /** Send students back (Done), or to Theory when Theory wants him now. `all`: what she didn't decide = explained. */
+  const finish = async (hs: EvalHere[], how: "decided" | "all" | "nothing") => {
+    if (hs.length === 0) return;
+    setBusy(true);
+    await flushTaps();
+    let ok = true;
+    const out: { callId: Id<"calls">; explained?: number[]; reteach?: string; taught?: number[]; skip?: number[] }[] = [];
+    for (const h of hs) {
+      if (h.kind === "theory") {
+        out.push(how === "nothing" ? { callId: h.rc.c._id, taught: [], skip: [] } : { callId: h.rc.c._id });
+        continue;
+      }
+      const p = how === "nothing" ? { explained: [] as number[], theoryQs: [] as number[], reteach: undefined } : finishPlan(h, dec[h.v.key] ?? {}, how === "all");
+      if (p.theoryQs.length) {
+        ok =
+          ok &&
+          !!(await act(() =>
+            mutate(api.workbook.toTheory, { studentId: h.v.s._id, unitId: h.v.unit?._id ?? h.v.s.unitId, qs: p.theoryQs, on: true, by: currentRole() }),
+          ));
+      }
+      out.push({ callId: h.rc.c._id, explained: p.explained, ...(p.reteach ? { reteach: p.reteach } : {}) });
+    }
+    const res = ok ? await act(() => mutate(api.calls.finish, { items: out, by: currentRole() })) : undefined;
+    setBusy(false);
+    if (!res) return;
+    const rest = { ...dec };
+    for (const h of hs) delete rest[h.v.key];
+    setDec(rest);
+    setAt(null);
+    if (hs.some((h) => h.v.s._id === fileId)) setFileId(null);
+    tone(how === "nothing" ? "tick" : "done");
+    const names = joinNames(hs.map((h) => h.v.s.name));
+    toast(hs.length === 1 && hs[0].v.pulled ? `${names} goes to Theory now.` : how === "nothing" ? `${names} back to work.` : `Saved: ${names} back to work.`);
   };
 
   /** Done with this book, and he stays for his next one (no walk back to the hall). */
@@ -165,88 +265,51 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
     if (!res) return;
     const { [h.v.key]: _gone, ...rest } = dec;
     setDec(rest);
+    setFileId(null);
     tone("done");
     toast(`Saved: ${h.v.s.name} stays for ${unitWords(next)} (${next.pending.length} to explain).`);
   };
 
-  /** Send one student back (Done), or to Theory when Theory wants him now. */
-  const finish = async (h: EvalHere, how: "all" | "decided" | "nothing") => {
-    setBusy(true);
-    await flushTaps();
-    const id = h.v.key;
-    let ok = true;
-    let item: { callId: Id<"calls">; explained?: number[]; reteach?: string; taught?: number[]; skip?: number[] };
-    let words = "";
-    if (h.kind === "theory") {
-      item = how === "nothing" ? { callId: h.rc.c._id, taught: [], skip: [] } : { callId: h.rc.c._id };
-      words = how === "nothing" ? "not taught" : "taught";
-    } else {
-      const p = how === "nothing" ? { explained: [], theoryQs: [] as number[], reteach: undefined } : finishPlan(h, dec[id] ?? {}, how === "all");
-      if (p.theoryQs.length) {
-        ok = !!(await act(() =>
-          mutate(api.workbook.toTheory, { studentId: h.v.s._id, unitId: h.v.unit?._id ?? h.v.s.unitId, qs: p.theoryQs, on: true, by: currentRole() }),
-        ));
-      }
-      item = { callId: h.rc.c._id, explained: p.explained, ...(p.reteach ? { reteach: p.reteach } : {}) };
-      const th = p.theoryQs.length ? p.theoryQs.map((q) => qLabel(h.v, q)).join(" ") : p.reteach ? `section ${p.reteach}` : "";
-      words = [`${p.explained.length} explained`, th ? `${th} to Theory` : ""].filter(Boolean).join(", ");
-    }
-    const res = ok ? await act(() => mutate(api.calls.finish, { items: [item], by: currentRole() })) : undefined;
-    setBusy(false);
-    if (!res) return;
-    const { [id]: _gone, ...rest } = dec;
-    setDec(rest);
-    tone(how === "nothing" ? "tick" : "done");
-    toast(h.v.pulled ? `${h.v.s.name} goes to Theory now (${words}).` : `Saved: ${h.v.s.name} back to work (${words}).`);
-    after(h.v.s._id);
-  };
-
-  const arrive = async (it: EvalItem) => {
-    const res = await act(() => mutate(api.calls.arrive, { callIds: [it.h.rc.c._id], by: currentRole() }));
+  /** They came in: everyone on the way (Arrived at the right), or one from his file. */
+  const arrive = async (list: EvalItem[]) => {
+    if (list.length === 0) return;
+    const res = await act(() => mutate(api.calls.arrive, { callIds: list.map((it) => it.h.rc.c._id), by: currentRole() }));
     if (!res) return;
     for (const s of res.skipped) toast(`${s}.`, "error");
     if (!res.arrived) return;
     tone("tick");
-    const callId = it.h.rc.c._id;
-    toast(`${it.name} is here.`, "info", () => void act(() => mutate(api.calls.unarrive, { callId, by: currentRole() })));
-    // He stays open: she starts on his questions (the next one on the way has his own pill).
-    setOpenId(it.id);
+    const names = joinNames(list.map((it) => it.name));
+    if (list.length === 1) {
+      const callId = list[0].h.rc.c._id;
+      toast(`${names} is here.`, "info", () => void act(() => mutate(api.calls.unarrive, { callId, by: currentRole() })));
+    } else toast(`${names} are here.`);
   };
   const cancel = async (it: EvalItem) => {
     const r = await act(() => mutate(api.calls.cancel, { callIds: [it.h.rc.c._id], by: currentRole() }));
     if (!r) return;
+    setFileId(null);
     tone("clear");
     toast(it.state === "walking" ? `${it.name} didn't come: back in the hall.` : `The call for ${it.name} is cancelled.`);
   };
 
   if (inClass.length === 0 && room.here.length === 0) {
     return (
-      <main class="page ev-page">
+      <main class="page ev-page evx-page">
         <NobodyHere />
-        <GoneHome role="evaluation" views={views} now={now} />
+        <GoneHome role="evaluation" views={all} now={now} />
       </main>
     );
   }
 
-  // The open file's Done (at the bottom): what it does for him.
-  const oh = open?.state === "here" ? open.h : undefined;
-  const oDecided = oh ? oh.qs.filter((x) => (dec[oh.v.key] ?? {})[x] !== undefined).length : 0;
-  const doneHow: "all" | "decided" = !oh || oh.v.pulled || oh.qs.length === 0 ? "decided" : oh.kind === "theory" || oDecided === 0 ? "all" : "decided";
-  const doneLabel = !oh
-    ? "Done"
-    : oh.kind === "theory"
-      ? "Done: taught"
-      : oh.v.pulled
-        ? "Send to Theory"
-        : oh.qs.length === 0 || oDecided > 0
-          ? "Done: back to work"
-          : "All explained";
-  const roomTone = items.some((it) => it.late) ? "lt-red" : items.some((it) => it.state !== "here") ? "lt-amber" : "";
+  const label = groupKey === TEACH ? "Teach" : "Call";
+  const long = room.here.find((h) => h.rc.long);
+  const late = items.some((it) => it.late);
+  const n = sq?.who.length ?? 0;
+  const theoryOk = !!sq && (!!sq.v.f || !!sq.v.ms);
 
   return (
-    <main class="page ev-page">
+    <main class="page ev-page evx-page">
       <div class="stick tp-stick ev-stick" ref={stick}>
-        <TodayStrip s={score} room="evaluation" inClass={inClass.length} compact />
         {bumped.length > 0 && (
           <p class="bump-note" role="status">
             <b>Theory took {bumped.map((c) => byId.get(c.studentId)?.s.name ?? "?").join(", ")} first.</b> Call {bumped.length === 1 ? "him" : "them"} again
@@ -259,349 +322,404 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
               <b>Theory wants {h.v.s.name} now.</b>
               <small>What you marked Explained is saved; the rest stays waiting.</small>
             </p>
-            <button type="button" class="btn small" disabled={busy} onClick={() => void finish(h, "decided")}>
+            <button type="button" class="btn small" disabled={busy} onClick={() => void finish([h], "decided")}>
               Send to Theory
             </button>
           </div>
         ))}
-        {view === "list" ? (
-          <>
-            <GradePills views={inClass} needs={needsOf("evaluation", board, all, now)} filter={grade} onPick={setGrade} />
-            <KindBar
-              value={kind}
-              items={[
-                { id: "all", label: "All", c: counts.all },
-                { id: "fighter", label: "Fighter", c: counts.fighter },
-                { id: "master", label: "Master", c: counts.master },
-              ]}
-              onPick={(k) => {
-                setKind(k);
-                setPicked(null);
-              }}
-            />
-          </>
-        ) : (
-          <>
-            <EvalRoomHead items={items} now={now} />
-            {items.length === 0 ? (
-              <p class="tp-none">Nobody in your room. Call from the list.</p>
-            ) : (
-              <HRow as="nav" class="tp-rps" label="Your room: everyone you called" list="room" at={open?.id}>
-                {items.map((it) => (
-                  <RoomPill key={it.h.rc.c._id} it={it} on={it.id === open?.id} now={now} onPick={() => setOpenId(it.id)} />
-                ))}
-              </HRow>
-            )}
-          </>
-        )}
+        <GradeRow rows={grades} value={grade} onPick={(g) => pickRow({ grade: g })} />
+        <KindBar<EvalStage> value={stage} items={stages} onPick={(s) => pickRow({ grade: grade ?? undefined, stage: s })} />
       </div>
 
-      <div class="tp-body">
-        {view === "list" ? (
-          <section class="ev-next" aria-label="Call next">
-            {groups.length > 0 && (
-              <HRow as="nav" class="ev-sames" label="The same question for 2 or more: explain it once" list={kind} at={null}>
-                {groups.map((g) => (
-                  <button
-                    key={g.key}
-                    type="button"
-                    class="ev-same"
-                    aria-label={`Same question ${g.label}: tick ${g.members.map((m) => m.v.s.name).join(", ")}`}
-                    onClick={() => {
-                      const ids = g.members.map((m) => m.v.key).slice(0, Math.max(left, 0));
-                      if (ids.length === 0) toast(`${EVAL_CAP} with you at most. Send someone back first.`, "error");
-                      else setPicked(ids);
-                    }}
-                  >
-                    <b>
-                      {g.members[0].v.unit ? `${unitNo(g.members[0].v.unit.code)}·` : ""}
-                      {qLabel(g.members[0].v, g.q)}
-                    </b>
-                    <i>×{g.members.length}</i>
-                  </button>
-                ))}
-              </HRow>
-            )}
-            <div class="tp-lh ev-next-h">
-              <small class={`tp-lh-t${left === 0 ? " t-amber" : ""}`}>
-                {left === 0 ? `Room full (${EVAL_CAP} with you)` : `room for ${left}`}
-                {groups.length > 0 ? " · same question: tap it to tick them" : ""}
-              </small>
-              <button type="button" class="link-btn tp-reset" onClick={() => setPicked(picked === null ? [] : null)}>
-                {picked === null ? "Clear" : "Page's pick"}
-              </button>
-            </div>
-            {list.length === 0 ? (
-              <p class="muted small tp-quiet">Nothing to explain now: wrong answers and lost marks show here as soon as they are marked.</p>
-            ) : (
-              <ul class="ev-list" aria-label="Who to call">
-                {list.flatMap((c, i) => {
-                  const laterStart = (c.heat === "yellow" || !!c.hold) && (i === 0 || (list[i - 1].heat !== "yellow" && !list[i - 1].hold));
-                  return [
-                    ...(laterStart ? [<li key="later" class="ev-later">Later</li>] : []),
-                    <li key={c.v.key}>
-                      <CandRow c={c} on={chosen.includes(c.v.key)} named={grade === "all" && grades.length > 1} onTap={() => toggle(c)} />
-                    </li>,
-                  ];
-                })}
-              </ul>
-            )}
-            {teach.length > 0 && (
-              <section class="ev-teach" aria-label="Theory is busy: teach it here">
-                <p>
-                  <b>Theory is busy.</b> No work until they get theory: teach it here.
-                </p>
-                <div class="ev-teach-names">
-                  {teach.map((v) => {
-                    const on = teachChosen.includes(v.s._id);
-                    return (
-                      <button
-                        key={v.s._id}
-                        type="button"
-                        class={`tp-m u-red${on ? " on" : ""}`}
-                        aria-pressed={on}
-                        onClick={() => setTeachPick(on ? teachChosen.filter((x) => x !== v.s._id) : [...teachChosen, v.s._id])}
-                      >
-                        <b>{v.s.name}</b>
-                        <small>{v.st?.nextTheory ? `section ${v.st.nextTheory}` : "workbook"}</small>
-                      </button>
-                    );
-                  })}
-                </div>
-                <button
-                  type="button"
-                  class="btn theory"
-                  disabled={busy || teachChosen.length === 0 || left === 0}
-                  onClick={async () => {
-                    if (teachChosen.length > left) {
-                      toast(`Room for ${left} more (${EVAL_CAP} with you at most).`, "error");
-                      return;
-                    }
-                    setBusy(true);
-                    if (await callEval(teach.filter((v) => teachChosen.includes(v.s._id)), "theory")) setTeachPick(null);
-                    setBusy(false);
-                  }}
-                >
-                  {left === 0 ? "Room full" : `Teach ${teachChosen.length}`}
-                </button>
-              </section>
-            )}
-            <GoneHome role="evaluation" views={views} now={now} />
-          </section>
-        ) : open ? (
-          <EvalFile
-            key={open.h.rc.c._id}
-            it={open}
-            now={now}
-            busy={busy}
-            dec={dec[open.h.v.key] ?? {}}
-            setDec={(d) => setDec({ ...dec, [open.h.v.key]: d })}
-            onArrive={() => void arrive(open)}
-            onCancel={() => void cancel(open)}
-            onSendBack={() => void finish(open.h, "nothing")}
-            next={open.state === "here" && open.h.kind === "evaluation" && !open.h.v.pulled ? nextBooks(open.h.v)[0] : undefined}
-            canKeep={canKeep}
-            onKeep={(next, how) => void keep(open.h, next, how)}
-          />
-        ) : null}
-
-        <div class="tp-pad">
-          {view === "list" ? (
-            <button
-              type="button"
-              class={`tp-side${roomTone ? ` ${roomTone}` : ""}`}
-              disabled={items.length === 0}
-              aria-label={`Your room: ${room.here.length} with you, ${items.length - room.here.length} on the way`}
-              onClick={() => setView("room")}
-            >
-              <RoomIcon />
-              <span>Room</span>
-              <b>{items.length}</b>
-            </button>
+      <div class="tp-body evx-body">
+        <div class="evx-rowbox">
+          {units.length === 0 ? (
+            <p class="tp-none">Nothing to explain {grade === null ? "now" : `in Grade ${grade} ${stage === "legend" ? "Legend" : stage === "fighter" ? "Fighter" : "Master"}`}.</p>
           ) : (
-            <button
-              type="button"
-              class={`tp-side${waitingRed ? " lt-red" : ""}`}
-              aria-label={`Waiting for you: ${everyone.filter((c) => !c.hold).length}`}
-              onClick={() => setView("list")}
-            >
-              <ListIcon />
-              <span>Waiting</span>
-              <b>{everyone.filter((c) => !c.hold).length}</b>
-            </button>
+            <HRow as="nav" class="evx-units" label="Units that need you, the most urgent first" list={`${grade}:${stage}`} at={unitKey}>
+              {units.map((u) => {
+                const on = u.key === unitKey;
+                return (
+                  <button
+                    key={u.key}
+                    type="button"
+                    class={`evx-u${on ? " on" : ""}${u.c.red ? " ur" : ""}`}
+                    data-u={u.c.red ? "red" : undefined}
+                    aria-pressed={on}
+                    aria-label={`Unit ${unitNo(u.unit.code)}: ${u.c.total}, ${heatWords(u.c)}`}
+                    onClick={() => pickRow({ grade: grade ?? undefined, stage, unit: u.key })}
+                  >
+                    <span class="tp-ln-n">{unitNo(u.unit.code)}</span>
+                    <span class="tp-ln-t" lang="ta">
+                      {u.unit.ta || u.unit.en}
+                    </span>
+                    <i class="evx-n">{u.c.total}</i>
+                  </button>
+                );
+              })}
+            </HRow>
           )}
-          {view === "list" ? (
+        </div>
+        {(groups.length > 0 || teach.length > 0) && (
+          <HRow as="nav" class="evx-qgs" label="Questions the same students got wrong, the most urgent first" list={unitKey ?? "none"} at={groupKey}>
+            {groups.map((g) => {
+              const on = g.key === groupKey;
+              const v = g.cands[0].v;
+              const words = g.qs.length > 4 ? [...g.qs.slice(0, 3).map((q) => short(v, q)), `+${g.qs.length - 3}`] : g.qs.map((q) => short(v, q));
+              return (
+                <button
+                  key={g.key}
+                  type="button"
+                  class={`evx-qg qg-${g.heat}${on ? " on" : ""}`}
+                  data-u={g.heat === "red" ? "red" : g.heat === "orange" ? "amber" : undefined}
+                  aria-pressed={on}
+                  aria-label={`${g.qs.map((q) => qLabel(v, q)).join(", ")}: ${joinNames(g.cands.map((c) => c.v.s.name))}`}
+                  onClick={() => pickRow({ grade: grade ?? undefined, stage, unit: unitKey ?? undefined, group: g.key })}
+                >
+                  <b>{words.join(" · ")}</b>
+                  <i>×{g.cands.length}</i>
+                </button>
+              );
+            })}
+            {teach.length > 0 && (
+              <button
+                key={TEACH}
+                type="button"
+                class={`evx-qg evx-teach${groupKey === TEACH ? " on" : ""}`}
+                aria-pressed={groupKey === TEACH}
+                aria-label={`Theory is busy: teach ${joinNames(teach.map((v) => v.s.name))} yourself`}
+                onClick={() => pickRow({ grade: grade ?? undefined, stage, unit: unitKey ?? undefined, group: TEACH })}
+              >
+                <b>◎ Teach</b>
+                <i>{teach.length}</i>
+              </button>
+            )}
+          </HRow>
+        )}
+        <section class="evx-room" aria-label="Your room">
+          <div class="evx-box">
+            <p class={`evx-bh${long ? " lt-long" : ""}`}>
+              {room.here.length > 0 && <LockIcon />}
+              <b>{room.here.length} with you</b>
+              {walkers.length > 0 && <span class={late ? "t-red strong" : "t-evaluation strong"}>{walkers.length} on the way</span>}
+              <span>{long ? `Still with you? ${mShort(long.rc.minutes)}` : left === 0 ? `full (${EVAL_CAP})` : `room for ${left}`}</span>
+              {offers.length > 0 && (
+                <button type="button" class="link-btn evx-reset" onClick={() => setTicks(ticks && ticks.group === groupKey ? null : { group: groupKey!, keys: [] })}>
+                  {ticks && ticks.group === groupKey ? "Page's pick" : "Clear"}
+                </button>
+              )}
+            </p>
+            <div class="evx-pills" aria-label="Your room and who to call">
+              {items.map((it) => (
+                <RoomPill
+                  key={it.h.rc.c._id}
+                  it={it}
+                  dec={dec}
+                  now={now}
+                  onPick={() => {
+                    clearToasts();
+                    setFileId(it.id);
+                  }}
+                />
+              ))}
+              {offers.map((o) => {
+                const on = chosen.includes(o.key);
+                return (
+                  <button
+                    key={o.key}
+                    type="button"
+                    class={`evx-sp s-sug sg-${o.heat}${on ? " on" : ""}`}
+                    data-name={o.v.s.name}
+                    aria-pressed={on}
+                    aria-label={`${o.v.s.name}: ${o.why}${o.work ? `, ${o.work}` : ""}`}
+                    onClick={() => toggle(o)}
+                  >
+                    {o.v.s.name}
+                  </button>
+                );
+              })}
+              {items.length === 0 && offers.length === 0 && <p class="evx-none">Nobody to call now.</p>}
+            </div>
+          </div>
+          <div class="evx-col">
             <button
               type="button"
-              class="btn evaluation ev-call"
+              class="btn evaluation evx-call"
               disabled={busy || chosen.length === 0}
               onClick={async () => {
                 setBusy(true);
-                if (await callEval(chosen.flatMap((k) => { const c = callable.get(k); return c ? [c.v] : []; }), "evaluation")) setPicked(null);
+                const picked = offers.filter((o) => chosen.includes(o.key)).map((o) => o.v);
+                if (await callEval(picked, groupKey === TEACH ? "theory" : "evaluation")) setTicks(null);
                 setBusy(false);
               }}
             >
-              {left === 0 ? `Room full (${EVAL_CAP})` : chosen.length === 0 ? "Tick who to call" : `Call ${chosen.length}`}
+              {left === 0 ? "Full" : chosen.length ? `${label} ${chosen.length}` : label}
             </button>
-          ) : (
-            <button type="button" class="btn evaluation ev-done" disabled={busy || !oh} onClick={() => oh && void finish(oh, doneHow)}>
-              {doneLabel}
+            <button type="button" class="btn evx-arrive" disabled={busy || walkers.length === 0} onClick={() => void arrive(walkers)}>
+              Arrived{walkers.length ? ` ${walkers.length}` : ""}
             </button>
-          )}
+            <button type="button" class="btn evx-done" disabled={busy || done.length === 0} onClick={() => void finish(done, "decided")}>
+              Done{done.length ? ` ${done.length}` : ""}
+            </button>
+          </div>
+        </section>
+
+        {qs.length > 0 ? (
+          <HRow as="ol" class="fc-strip evx-strip" label="The questions to explain" list={qs.map((x) => x.key).join(",")} at={sq?.key}>
+            {qs.map((x) => {
+              const st = squareOf(x, dec);
+              return (
+                <li key={x.key}>
+                  <button
+                    type="button"
+                    class={`fc-sq${st.cls}${x.key === sq?.key ? " on" : ""}`}
+                    aria-current={x.key === sq?.key ? "step" : undefined}
+                    aria-label={`${qLabel(x.v, x.q)}: ${x.who.length ? `${x.who.length} with you` : "to prepare"}${st.words ? `, ${st.words}` : ""}`}
+                    onClick={() => setAt(x.key)}
+                  >
+                    <small>
+                      {mixed && x.v.unit ? `${unitNo(x.v.unit.code)}·` : ""}
+                      {short(x.v, x.q)}
+                    </small>
+                    <b>{st.sign || (x.who.length > 1 ? `×${x.who.length}` : "")}</b>
+                  </button>
+                </li>
+              );
+            })}
+          </HRow>
+        ) : (
+          <p class="muted small evx-hint">
+            {room.here.some((h) => h.kind === "theory")
+              ? "Teaching theory: tap his name, then Done: taught."
+              : items.length
+                ? "Nothing left to explain to your room: Done sends them back."
+                : "Pick the questions above, then Call: they open here, one at a time."}
+          </p>
+        )}
+
+        {sq && (
+          <section class="fc-card evx-card" key={sq.key} aria-label={`${qLabel(sq.v, sq.q)} and its answer`}>
+            <div class="fc-q">
+              <span class={`fc-qn${/^Q\d+$/.test(qLabel(sq.v, sq.q)) ? "" : " evx-yr"}`}>
+                {/^Q\d+$/.test(qLabel(sq.v, sq.q)) ? (
+                  <>
+                    <small>Q</small>
+                    {sq.q}
+                  </>
+                ) : (
+                  qLabel(sq.v, sq.q)
+                )}
+              </span>
+              <div class="fc-ans">
+                <p class="evx-who">
+                  {sq.who.length === 0
+                    ? preview.length
+                      ? preview.map((v) => (
+                          <span key={v.key}>
+                            {v.s.name} <small>{lostWords(v, sq.q)}</small>
+                          </span>
+                        ))
+                      : "Nobody with you has it."
+                    : sq.who.map((h) => {
+                        const d = (dec[h.v.key] ?? {})[sq.q];
+                        return (
+                          <span key={h.v.key} class={d ? `d d-${d}` : ""}>
+                            {h.v.s.name} <small>{lostWords(h.v, sq.q)}</small>
+                          </span>
+                        );
+                      })}
+                </p>
+                {sq.v.ms && sq.v.unit ? <EvalKey unitId={sq.v.unit._id} q={sq.q} /> : <p class="muted small">Check his answer in his notebook.</p>}
+                {!live && <p class="muted small">{sq.who.length > 0 ? "Tap Arrived when they come in." : "Call them, then Arrived when they come in."}</p>}
+              </div>
+            </div>
+          </section>
+        )}
+
+        <div class="fc-pad evx-pad">
+          <div class="fc-row2">
+            <button
+              type="button"
+              class={`fc-n evx-b th${allAre("th") ? " on" : ""}`}
+              disabled={!canDecide || !theoryOk}
+              aria-pressed={allAre("th")}
+              onClick={() => choose("th")}
+            >
+              <b aria-hidden="true">→</b>
+              <small>Theory</small>
+            </button>
+            <button type="button" class={`fc-n evx-b skip${allAre("skip") ? " on" : ""}`} disabled={!canDecide} aria-pressed={allAre("skip")} onClick={() => choose("skip")}>
+              <small>Not now</small>
+            </button>
+          </div>
+          <button type="button" class={`fc-go evx-x${allAre("x") ? " on" : ""}`} disabled={!canDecide} aria-pressed={allAre("x")} onClick={() => choose("x")}>
+            <span aria-hidden="true">✓</span>
+            <b>Explained</b>
+            {n > 1 && <small>for {n}</small>}
+          </button>
         </div>
       </div>
+
+      <div class="evx-foot">
+        <TodayStrip s={score} room="evaluation" inClass={inClass.length} compact />
+        <GoneHome role="evaluation" views={all} now={now} />
+      </div>
+
+      {file && (
+        <EvalFileSheet
+          it={file}
+          now={now}
+          busy={busy}
+          dec={dec[file.h.v.key] ?? {}}
+          next={file.state === "here" && file.h.kind === "evaluation" && !file.h.v.pulled ? nextBooks(file.h.v)[0] : undefined}
+          canKeep={left > 0 || !everyone.some((c) => !c.hold && c.heat !== "yellow")}
+          onClose={() => setFileId(null)}
+          onArrive={() => void arrive([file])}
+          onCancel={() => void cancel(file)}
+          onFinish={(how) => void finish([file.h], how)}
+          onKeep={(next, how) => void keep(file.h, next, how)}
+        />
+      )}
     </main>
   );
 }
 
-/** Her room in one line: who is with her, who is on the way, how many fit. */
-function EvalRoomHead(props: { items: EvalItem[]; now: number }) {
-  const here = props.items.filter((it) => it.state === "here");
-  const coming = props.items.length - here.length;
-  const lost = props.items.some((it) => it.late);
-  const long = here.find((it) => it.h.rc.long);
+/** A question's square: what was decided for the students with her (all of them, or some). */
+function squareOf(x: SessionQ, dec: Decisions): { cls: string; sign: string; words: string } {
+  const ds = x.who.map((h) => (dec[h.v.key] ?? {})[x.q]);
+  if (ds.length === 0 || ds.every((d) => d === undefined)) return { cls: "", sign: "", words: "" };
+  if (ds.some((d) => d === undefined)) return { cls: " part", sign: "", words: "some done" };
+  if (ds.every((d) => d === "x")) return { cls: " s-explained", sign: "✓", words: "explained" };
+  if (ds.every((d) => d === "th")) return { cls: " dk", sign: "T", words: "to Theory" };
+  if (ds.every((d) => d === "skip")) return { cls: " was", sign: "–", words: "not now" };
+  return { cls: " part", sign: "✓", words: "decided" };
+}
+
+/** Grades 6 to 11 in ONE row (his rule), the most urgent first; a grade with nobody waiting is pale. */
+function GradeRow(props: { rows: { grade: number; c: HeatCount }[]; value: number | null; onPick: (g: number) => void }) {
   return (
-    <p class={`tp-rhead${long ? " lt-long" : ""}`} aria-label="Your room">
-      <span class="strong">{here.length} with you</span>
-      {coming > 0 && <span class={lost ? "t-red strong" : "t-evaluation strong"}>{coming} on the way</span>}
-      <span>{long ? `Still with you? ${mShort(long.h.rc.minutes)}` : `${EVAL_CAP} at most`}</span>
-    </p>
+    <nav class="evx-grades" aria-label="Grades, the most urgent first">
+      {props.rows.map((r) => {
+        const on = r.grade === props.value;
+        return (
+          <button
+            key={r.grade}
+            type="button"
+            class={`evx-g${on ? " on" : ""}`}
+            aria-pressed={on}
+            disabled={!on && r.c.total === 0}
+            aria-label={`Grade ${r.grade}: ${r.c.total}, ${heatWords(r.c)}`}
+            onClick={() => props.onPick(r.grade)}
+          >
+            <b>{r.grade}</b>
+            <i>{r.c.total || ""}</i>
+            {r.c.red > 0 && <em class="evx-g-r">{r.c.red}</em>}
+          </button>
+        );
+      })}
+    </nav>
   );
 }
 
-/** Someone she called: dashed while on the way, red when late. */
-function RoomPill(props: { it: EvalItem; on: boolean; now: number; onPick: () => void }) {
-  const { it, on } = props;
-  const cls = it.state === "here" ? "rs-in" : it.state === "walking" ? "rs-walk" : "rs-call";
-  const small = it.state === "here" ? (it.h.v.pulled ? "Theory" : "") : it.state === "walking" ? sinceWords(it.h.rc.walkMs).trim() : "called";
+/** The answer for one workbook question (teachers only), fetched while it is open. */
+function EvalKey(props: { unitId: string; q: number }) {
+  const keyQ = useQuery<{ answers: KeyAnswer[] } | null>(api.catalog.key, { unitId: props.unitId as Id<"units"> });
+  const k = keyQ?.answers.find((a) => a.q === props.q);
+  if (keyQ === undefined) return <p class="muted small">Loading the answer…</p>;
+  if (!k) return <p class="muted small">{keyQ === null ? "No answer key for this workbook yet." : "No answer for this question in the key."}</p>;
+  return (
+    <div class="ev-key">
+      <small>Answer</small>
+      <KeyLine k={k} />
+    </div>
+  );
+}
+
+function LockIcon() {
+  return (
+    <svg class="evx-lock" viewBox="0 0 24 24" width="14" height="14" aria-label="In use" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+      <rect x="5" y="11" width="14" height="10" rx="2" />
+      <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+    </svg>
+  );
+}
+
+/** Someone she called: solid with her (✓ when all his questions are done), dashed on the way, dotted called, red late. */
+function RoomPill(props: { it: EvalItem; dec: Decisions; now: number; onPick: () => void }) {
+  const { it } = props;
+  const finished = it.state === "here" && allDecided(it.h, props.dec);
+  const cls =
+    it.state === "here" ? (it.h.kind === "theory" ? "s-th" : finished ? "s-done" : "s-in") : it.state === "walking" ? "s-walk" : "s-call";
+  const small = it.state === "walking" ? sinceWords(it.h.rc.walkMs).trim() : it.h.kind === "theory" && it.state === "here" ? "◎" : "";
   return (
     <button
       type="button"
-      class={`tp-rp ev-rp ${cls}${it.late ? " rs-late" : ""}${it.h.v.pulled ? " rs-stay" : ""}${on ? " on" : ""}`}
+      class={`evx-sp ${cls}${it.late ? " s-late" : ""}${it.h.v.pulled ? " s-pull" : ""}`}
       data-u={it.late ? "red" : undefined}
       data-name={it.name}
-      aria-pressed={on}
-      aria-label={`${it.name}: ${evalWords(it, props.now)}${it.h.v.pulled ? ", Theory wants him" : ""}`}
+      aria-label={`${it.name}: ${evalWords(it, props.now)}${finished ? ", all done" : ""}${it.h.v.pulled ? ", Theory wants him" : ""}`}
       onClick={props.onPick}
     >
+      {finished && <span aria-hidden="true">✓ </span>}
       {it.name}
       {small && <small>{small}</small>}
     </button>
   );
 }
 
-// ---------------- Call next: one student ----------------
-
-/** One student to call: tick, name, his questions (and his book when it matters), why, what he does meanwhile. */
-function CandRow(props: { c: Cand; on: boolean; named: boolean; onTap: () => void }) {
-  const { c, on } = props;
-  const qs = c.qs.map((q) => qLabel(c.v, q));
-  const shown = qs.length > 4 ? [...qs.slice(0, 3), `+${qs.length - 3}`] : qs;
-  const book = (props.named || c.kind === "master" || !!c.v.home || c.v.others.length > 0) && c.v.unit;
-  return (
-    <button
-      type="button"
-      class={`ev-c h-${c.heat}${on ? " on" : ""}${c.hold ? " hold" : ""}`}
-      data-name={c.v.s.name}
-      aria-pressed={on}
-      aria-label={`${c.v.s.name}: ${c.why}${c.work ? `, ${c.work}` : ""}${c.hold ? `, ${c.hold}` : ""}`}
-      onClick={props.onTap}
-    >
-      <span class="ev-tick" aria-hidden="true" />
-      <span class="ev-c-who">
-        <b>{c.v.s.name}</b>
-        <small>
-          {book && (
-            <>
-              <i class="tp-ln-g">{c.v.unit!.grade}</i> <span class="tp-ln-n">{unitNo(c.v.unit!.code)}</span>
-              {" · "}
-            </>
-          )}
-          {shown.join(" ")}
-        </small>
-      </span>
-      <span class="ev-c-why">
-        <b>{c.hold ?? c.why}</b>
-        {c.work && <small>{c.work}</small>}
-      </span>
-    </button>
-  );
-}
-
-// ---------------- Her room: one student's file ----------------
-
 const DEC_WORDS: Record<Decision, string> = { x: "explained", th: "to Theory", skip: "not now" };
 
 /**
- * One student she called, like a doctor's file: where he is (Arrived when he comes in), his book, then his questions
- * one at a time with what he got and the answer key (→ Theory, Not now, Explained: on to the next by itself); keep him
- * for his next book; his unit and his day. Done is the button at the bottom.
+ * One student she called, like a doctor's file: where he is (Arrived), his book, his questions with what was
+ * decided, his unit and his day; send him back, keep him for his next book, or cancel the call.
  */
-function EvalFile(props: {
+function EvalFileSheet(props: {
   it: EvalItem;
   now: number;
   busy: boolean;
   dec: Record<number, Decision | undefined>;
-  setDec: (d: Record<number, Decision | undefined>) => void;
-  onArrive: () => void;
-  onCancel: () => void;
-  onSendBack: () => void;
-  /** His next book with something to explain (one book per call): keep him for it, or call him again later. */
   next?: View;
   canKeep: boolean;
+  onClose: () => void;
+  onArrive: () => void;
+  onCancel: () => void;
+  onFinish: (how: "decided" | "all" | "nothing") => void;
   onKeep: (next: View, how: "all" | "decided") => void;
 }) {
   const { it, dec, now } = props;
   const h = it.h;
   const v = h.v;
   const isHere = it.state === "here";
-  const firstOpen = h.qs.findIndex((q) => dec[q] === undefined);
-  const [at, setAt] = useState<number | null>(null);
-  const idx = Math.min(at ?? (firstOpen < 0 ? Math.max(0, h.qs.length - 1) : firstOpen), Math.max(0, h.qs.length - 1));
-  const q = h.qs[idx];
-  const decided = h.qs.filter((x) => dec[x] !== undefined).length;
-  const theoryOk = !!v.f || !!v.ms;
-  // The answer key (teachers only), fetched while his file is open.
-  const keyQ = useQuery<{ answers: KeyAnswer[] } | null>(api.catalog.key, { unitId: v.unit?._id ?? v.s.unitId });
-  const k = v.ms ? keyQ?.answers.find((a) => a.q === q) : undefined;
+  const decided = h.qs.filter((q) => dec[q] !== undefined).length;
   const main = v.home ?? v;
   const home = v.s.lastInAt !== undefined ? v.s.lastInAt + STAY_MS : undefined;
   const nextWords = props.next ? `${unitWords(props.next)} (${props.next.pending.length})` : "";
-
-  const choose = (d: Decision) => {
-    const next = { ...dec, [q]: dec[q] === d ? undefined : d };
-    props.setDec(next);
-    if (d === "x" && next[q] === "x") tone("tick");
-    if (next[q] === undefined) return;
-    // On to the next question nobody decided yet (after this one), else stay.
-    const after = h.qs.findIndex((x, i) => i > idx && next[x] === undefined);
-    const before = h.qs.findIndex((x) => next[x] === undefined);
-    const to = after >= 0 ? after : before;
-    if (to >= 0) setAt(to);
-  };
-
+  const foot = isHere ? (
+    <div class="row-actions evx-file-acts">
+      <button type="button" class="btn ghost" disabled={props.busy} onClick={() => props.onFinish("nothing")}>
+        {h.kind === "theory" ? "Not taught" : "Nothing explained"}
+      </button>
+      <button type="button" class="btn evaluation" disabled={props.busy} onClick={() => props.onFinish(h.kind === "theory" || decided > 0 ? "decided" : "all")}>
+        {h.kind === "theory" ? "Done: taught" : v.pulled ? "Send to Theory" : decided > 0 || h.qs.length === 0 ? "Done: back to work" : "All explained"}
+      </button>
+    </div>
+  ) : (
+    <div class="row-actions evx-file-acts">
+      <button type="button" class="btn ghost" disabled={props.busy} onClick={props.onCancel}>
+        {it.state === "walking" ? "Not coming" : "Cancel the call"}
+      </button>
+      <button type="button" class="btn tp-arrive" disabled={props.busy} onClick={props.onArrive}>
+        Arrived
+      </button>
+    </div>
+  );
   return (
-    <section class={`tp-file ev-file${h.rc.long ? " long" : ""}`} aria-label={`${it.name}'s file`}>
-      <div class="tp-fh">
-        <span class="tp-fh-t">
-          <b class="tp-fname ev-h-name">{it.name}</b>
-          <small class={it.late ? "t-red" : ""}>{evalWords(it, now)}</small>
-        </span>
-        {isHere ? (
-          <span class="ev-left-n">{h.kind === "theory" ? "theory" : h.qs.length ? `${h.qs.length - decided} to explain` : "done"}</span>
-        ) : (
-          <button type="button" class="btn tp-arrive" disabled={props.busy} onClick={props.onArrive}>
-            Arrived
-          </button>
-        )}
-      </div>
-
+    <Sheet title={it.name} sub={evalWords(it, now)} onClose={props.onClose} foot={foot} cls="evx-file">
       {v.unit && (
         <p class="tp-fl">
           <LessonName unit={v.unit} section={null} kind="workbook" />
         </p>
       )}
-
       {h.kind === "theory" ? (
         <p class="ev-teaching">
           You teach <b>{v.st?.nextTheory ? `section ${v.st.nextTheory}` : v.ms ? "his workbook questions" : "theory"}</b> (Theory was busy).
@@ -611,63 +729,24 @@ function EvalFile(props: {
       ) : (
         <>
           <div class="ev-strip" role="group" aria-label={`${it.name}'s questions`}>
-            {h.qs.map((x, i) => (
-              <button
-                key={x}
-                type="button"
-                class={`ev-sq${i === idx ? " now" : ""}${dec[x] ? ` d-${dec[x]}` : ""}`}
-                aria-label={`${qLabel(v, x)}${dec[x] ? `: ${DEC_WORDS[dec[x]!]}` : ""}`}
-                aria-current={i === idx ? "true" : undefined}
-                onClick={() => setAt(i)}
-              >
+            {h.qs.map((x) => (
+              <span key={x} class={`ev-sq${dec[x] ? ` d-${dec[x]}` : ""}`} aria-label={`${qLabel(v, x)}${dec[x] ? `: ${DEC_WORDS[dec[x]!]}` : ""}`}>
                 {qLabel(v, x)}
-              </button>
+              </span>
             ))}
           </div>
-          <div class="ev-q" key={q}>
-            <div class="ev-q-top">
-              <b class="ev-q-n">{v.f ? v.f.longLabel(q) : `Q${q}`}</b>
-              <span class="ev-q-lost">{v.ms ? `got ${lostWords(v, q)}` : lostWords(v, q)}</span>
-            </div>
-            {!v.ms ? (
-              <p class="ev-key muted">Check his answer in his notebook.</p>
-            ) : keyQ === undefined ? (
-              <p class="ev-key muted">Loading the answer…</p>
-            ) : k ? (
-              <div class="ev-key">
-                <small>Answer</small>
-                <KeyLine k={k} />
-              </div>
-            ) : (
-              <p class="ev-key muted">{keyQ === null ? "No answer key for this workbook yet." : "No answer for this question in the key."}</p>
-            )}
-            <div class="ev-q-acts">
-              {theoryOk && (
-                <button type="button" class={`ev-b th${dec[q] === "th" ? " on" : ""}`} aria-pressed={dec[q] === "th"} onClick={() => choose("th")}>
-                  → Theory
-                </button>
-              )}
-              <button type="button" class={`ev-b skip${dec[q] === "skip" ? " on" : ""}`} aria-pressed={dec[q] === "skip"} onClick={() => choose("skip")}>
-                Not now
-              </button>
-              <button type="button" class={`ev-b x${dec[q] === "x" ? " on" : ""}`} aria-pressed={dec[q] === "x"} onClick={() => choose("x")}>
-                {dec[q] === "x" ? "✓ Explained" : "Explained"}
-              </button>
-            </div>
-          </div>
-          {decided > 0 && <p class="ev-h-sum">{decisionWords(h, dec)}</p>}
+          <p class="ev-h-sum">{decided > 0 ? decisionWords(h, dec) : `${h.qs.length} to explain: the squares on the page, one at a time.`}</p>
         </>
       )}
-
       {props.next &&
+        isHere &&
         (props.canKeep ? (
-          <button type="button" class="btn ghost ev-keep" disabled={props.busy} onClick={() => props.onKeep(props.next!, decided === 0 ? "all" : "decided")}>
+          <button type="button" class="btn ghost ev-keep" disabled={props.busy} onClick={() => props.next && props.onKeep(props.next, decided === 0 ? "all" : "decided")}>
             {decided === 0 ? "All explained" : "Done"}, keep him for {nextWords}
           </button>
         ) : (
           <p class="ev-also muted small">Also waiting: {nextWords}. Others need the room: call him again later.</p>
         ))}
-
       <div class="tp-fx">
         {v.ms && v.mb && (
           <div class="tp-fx-bar">
@@ -680,9 +759,7 @@ function EvalFile(props: {
           </div>
         )}
         {v.st && (
-          <small>
-            {v.st.finished ? "Finished his book" : v.st.left === 0 ? "No work until these are explained or taught" : `${v.st.left} left in his section`}
-          </small>
+          <small>{v.st.finished ? "Finished his book" : v.st.left === 0 ? "No work until these are explained or taught" : `${v.st.left} left in his section`}</small>
         )}
         <small>
           {v.s.lastInAt !== undefined ? `Came ${slClock(v.s.lastInAt)}` : "Here today"}
@@ -690,18 +767,6 @@ function EvalFile(props: {
           {main.noWork && main.idleMs ? ` · no work ${mShort(main.idleMs)}` : ""}
         </small>
       </div>
-
-      <div class="tp-flinks">
-        {isHere ? (
-          <button type="button" class="link-btn tf-back" disabled={props.busy} onClick={props.onSendBack}>
-            {h.kind === "theory" ? "Send back: not taught" : "Send back: nothing explained"}
-          </button>
-        ) : (
-          <button type="button" class="link-btn tf-back" disabled={props.busy} aria-label={`Cancel the call for ${it.name}`} onClick={props.onCancel}>
-            {it.state === "walking" ? "Not coming: cancel the call" : "Cancel the call"}
-          </button>
-        )}
-      </div>
-    </section>
+    </Sheet>
   );
 }

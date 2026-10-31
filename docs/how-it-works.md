@@ -206,28 +206,39 @@ Like Correction: small things in fixed places.
   one Theory teacher gives ~10 lessons in 2 h (groups of 3–5 keep 8–12 busy); more = a second person teaching
   theory (Evaluation can, "Teach"). Workbook days: 3 is enough (corrector + Theory + Evaluation).
 
-**Evaluation page (rebuilt like Theory, `17919d8`; `src/evalFocus.tsx` `EvaluationPage`, rules in `src/evalFocusData.ts`).**
-- **3 with her at once** (`EVAL_CAP`, his number), counting those called or on the way. Shared pieces with Theory in
-  `src/roomkit.tsx` (`KindBar`, `usePinned`, the icons) and the `.tp-*` styles (pinned rows, pad, room pills, file).
-- **Pinned:** today's score in one line; the bump note ("Theory took Kumar first.") and the pull banner ("Theory wants
-  Kumar now" → **Send to Theory**: sends what she marked) when they happen; then the grade pills and All / Fighter /
-  Master (list) or the room line + her room's pills (room).
-- **The list** (`candidates`, evalQueue order, one entry per book): same question for 2+ as tiny pills in one line
-  ("13·Q22 ×2": a tap ticks them); "room for N" / "Room full (3 with you)" + Clear ↔ Page's pick; rows (`CandRow`,
-  `.ev-c` + `h-red/h-orange/h-yellow`): tick, name, his questions (grade chip + unit number when it matters, never
-  U-codes), why ("stuck: Q18", "no work 6m", "waited 14m", "ready in 4m") and what he does meanwhile; "Later"
-  divider; someone Theory has is listed, not callable. The page ticks the most urgent that fit (`defaultEvalTicks`).
-  **Theory is busy** (`canTeachHere`): tick, "Teach N". Gone home with levels to correct at the end.
-- **Fixed at the bottom:** **Room N** / **Call N** (`ev-call`); in her room **Waiting N** / **Done** (`ev-done`) for the
-  open file: "All explained" (nothing decided), "Done: back to work", "Done: taught" (teaching theory), "Send to
-  Theory" (Theory wants him).
-- **Her room** (`evalItems`, `evalWords`): everyone she called, pills in call order (`rs-call`, `rs-walk`, `rs-in`,
-  `rs-late`; amber ring = Theory wants him). **His file** (`EvalFile`): name, where he is, **Arrived** (a fixed place)
-  → "N to explain"; his book (grade, unit number, Tamil); his questions as a strip, ONE at a time with what he got and
-  the answer (`catalog.key` while open), **→ Theory / Not now / Explained** (next by itself; tap again = undo); "1
-  explained · 1 to Theory · 1 stays"; **keep him for unit 9 (1)** (`calls.keep`) or "Also waiting"; his unit bar and
-  day; Send back: nothing explained / Cancel the call. Done (`finishPlan`): a theory book's "→ Theory" sends its
-  section back (`reteach`); workbook → `workbook.toTheory` first. An empty room goes back to the list.
+**Evaluation page (one screen, 31 Oct 2026, his voice note; `src/evalFocus.tsx` `EvaluationPage`, rules in
+`src/evalFocusData.ts`).** No Room button: everything on one page, small things in fixed places like Correction.
+- **6 with her at once** (`EVAL_CAP`, his number on 31 Oct; was 3), counting those called or on the way. Her room =
+  her own calls (each Evaluation teacher has her own: `evalRoom`/`evalItems` with `me`).
+- **Pinned rows, each the most urgent first and already picked** (`byUrgency`: most red, then most waiting; ties keep
+  the natural order). She can pick anything; a pick lasts while it has someone; with someone in her room the page
+  picks his book. (1) **Grades 6–11** in ONE row, all six (`gradeRow`, `.evx-g`: number, count, red badge; pale =
+  nothing for her). (2) **Fighter / Master / Legend** (`stageRow`, the Theory page's `KindBar`; Legend pale: no books
+  yet). (3) **Units** that need her: number + Tamil name + count (`unitRow`, `.evx-u`, red line = no work). (4)
+  **Question groups** (`qGroups`, `.evx-qg`): questions waiting for exactly the same students make one pill ("13 ·
+  17", "×2"), red first, then the most students. Theory busy (`canTeachHere`, any grade): **◎ Teach N** at the end of
+  that row. Above them, when it happens: the bump note and the pull banner (**Send to Theory**).
+- **Her room box** (`.evx-room`, left ~¾): her students as pills (`.evx-sp`): with her solid (`s-in`; ✓ green when all
+  his questions are decided: `s-done`; ◎ teaching theory: `s-th`), on the way dashed (`s-walk`, minutes), called
+  dotted (`s-call`), late red (`s-late`), amber ring = Theory wants him (`s-pull`); then the picked group's students
+  (`s-sug`): ticked = dark ✓ (the page ticks red and orange ones, as many as fit), grey = unticked. Its line: lock icon
+  + "2 with you · 1 on the way · room for 3" (amber "Still with you?" at 20 min) + Clear ↔ Page's pick. Right of it, in
+  fixed places: **Call N** (or Teach N), **Arrived N** (everyone on the way), **Done N** (those with every question
+  decided: `allDecided`; `calls.finish` for all of them at once).
+- **The questions** (`sessionQs`): Correction's squares (`.fc-strip .fc-sq`): each question ONCE for everyone with her
+  who has it, the most shared first (×2); before anyone comes, the picked group's (to prepare). One question at a
+  time like Correction's card (`.fc-card`, `.fc-qn`): who has it with his marks ("Vimal 0/2"), the answer (`EvalKey`:
+  `catalog.key` while open; theory books: "Check his answer in his notebook."). **Fixed at the bottom** (Correction's
+  pad, `.fc-pad`): **→ Theory** and **Not now** side by side, the big **✓ Explained** ("for 2"): one tap = that
+  decision for everyone with her who has it (tap again = undo), then the next open question. Pale until someone
+  arrived. Squares: ✓ explained, T Theory, – not now, amber = some done.
+- **His file** (tap his pill: `EvalFileSheet`, a sheet): where he is, his book, his questions with what was decided
+  ("1 explained · 1 to Theory · 1 stays"), **keep him for unit 9 (1)** (`calls.keep`) or "Also waiting", his unit
+  bar and day; Arrived / Not coming (Cancel the call), or Nothing explained / All explained / Done: back to work /
+  Done: taught / Send to Theory. Done (`finishPlan`): a theory book's "→ Theory" sends its section back
+  (`reteach`); workbook → `workbook.toTheory` first.
+- At the end: today's score (`TodayStrip compact`) and who went home with levels to correct (`GoneHome`). Toasts sit
+  above the pad (`body.evx-on`).
 
 **Today's score and sounds (`c360fa3`).** Per room, for the class: `session.stats[room]` = calls, ahead (called
 while he still had work), done (sent back from the room), lessons (Theory's Done taps), qs (explained or taught),
