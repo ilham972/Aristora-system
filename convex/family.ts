@@ -13,7 +13,7 @@ import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type QueryCtx } from "./_generated/server";
 import { checkToken, familyActor, familyViewer, secretHash } from "./lib/auth";
-import { asMaster, bookFor, currentSession, ensureProgress, fail, log, masterState, refresh } from "./lib/backend";
+import { asMaster, bookFor, currentSession, ensureProgress, fail, keyRow, log, masterState, refresh } from "./lib/backend";
 import { partOf } from "./lib/book";
 import { masterRows, streakOf, weekXp, worldsOf, xpSince, type World } from "./lib/family";
 import { slWeekStart } from "./lib/day";
@@ -138,10 +138,7 @@ async function playable(ctx: QueryCtx, s: Doc<"students">, unitId: Id<"units">, 
   if (st === "class") fail("This level is with your teacher.");
   if (st === "pre") fail("This level was done before the app.");
   if (st !== "play") fail("Do the levels in order: finish the level before it.");
-  const key = await ctx.db
-    .query("keys")
-    .withIndex("by_unit", (q) => q.eq("unitId", unitId))
-    .first();
+  const key = await keyRow(ctx, unitId, "master");
   if (!key) fail("This World can't be marked on the phone yet.");
   return { world, data, level, keys: phoneKey(key.answers, data) };
 }

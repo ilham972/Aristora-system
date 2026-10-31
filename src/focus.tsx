@@ -86,6 +86,8 @@ import { gradesOf } from "./grades";
 import { HRow } from "./hrow";
 import { useQuery } from "./live";
 import { MasterBook, TheorySheet } from "./master";
+import { QuestionToggle } from "./bookQuestion";
+import { AnswerKey } from "./roomkit";
 import { MoveSheet } from "./move";
 import {
   act,
@@ -2081,6 +2083,7 @@ function QuestionCard(props: {
             })}
           </ul>
         )}
+        <QuestionToggle unitId={bookId(v)} stage="master" q={q} />
       </section>
 
       <div class="fc-pad">
@@ -2447,11 +2450,15 @@ function FighterCard(props: { v: View; paper: FighterPaper; i: number; lock: { c
                 </button>
               </p>
             ) : (
-              <p class="muted small">{redo || "Check his answer in the notebook."}</p>
+              <>
+                {redo && <p class="muted small">{redo}</p>}
+                {bookId(v) ? <AnswerKey unitId={bookId(v)!} q={q} stage="fighter" /> : <p class="muted small">Check his answer in the notebook.</p>}
+              </>
             )}
             {sec.kind === "past" && <p class="muted small">{f.longLabel(q)}</p>}
           </div>
         </div>
+        <QuestionToggle unitId={bookId(v)} stage="fighter" q={q} />
       </section>
 
       <div class="fc-pad">

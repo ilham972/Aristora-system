@@ -50,6 +50,7 @@ import { unitNo } from "./focusData";
 import { HRow } from "./hrow";
 import { MasterStrip } from "./master";
 import { AnswerKey, GradeRow, KindBar, LockIcon, usePinned } from "./roomkit";
+import { QuestionToggle } from "./bookQuestion";
 import { scoreOf } from "./score";
 import { act, clearToasts, currentMe, currentRole, toast, type Board } from "./store";
 import { flushTaps } from "./taps";
@@ -528,7 +529,12 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
                         );
                       })}
                 </p>
-                {sq.v.ms && sq.v.unit ? <AnswerKey unitId={sq.v.unit._id} q={sq.q} /> : <p class="muted small">Check his answer in his notebook.</p>}
+                {sq.v.unit ? (
+                  <AnswerKey unitId={sq.v.unit._id} q={sq.q} stage={sq.v.ms ? "master" : "fighter"} />
+                ) : (
+                  <p class="muted small">Check his answer in his notebook.</p>
+                )}
+                <QuestionToggle unitId={sq.v.unit?._id} stage={sq.v.ms ? "master" : "fighter"} q={sq.q} />
                 {!live && <p class="muted small">{sq.who.length > 0 ? "Tap Arrived when they come in." : "Call them, then Arrived when they come in."}</p>}
               </div>
             </div>

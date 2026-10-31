@@ -9,7 +9,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { actor, FAMILY_LINK_MS, viewer } from "./lib/auth";
-import { asMaster, bookFor, cleanBy, fail, getStudent, log } from "./lib/backend";
+import { asMaster, bookFor, cleanBy, fail, getStudent, keyRow, log } from "./lib/backend";
 import { allPhone, phoneKey, phoneShare, wantWords } from "./lib/phone";
 
 const token = v.optional(v.string());
@@ -116,10 +116,7 @@ export const answers = query({
     const book = await bookFor(ctx, args.unitId, "master");
     if (!book) return null;
     const data = asMaster(book);
-    const key = await ctx.db
-      .query("keys")
-      .withIndex("by_unit", (q) => q.eq("unitId", args.unitId))
-      .first();
+    const key = await keyRow(ctx, args.unitId, "master");
     if (!key) return { share: null, qs: [] };
     const keys = phoneKey(key.answers, data);
     return {

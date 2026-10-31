@@ -192,6 +192,11 @@ export function levelOutOf(data: MasterData, l: MasterLevel): number[] | null {
   return out;
 }
 
+/** The first question of a workbook: 1, or where a topic tute's past papers start (they go on from its ladder). */
+export function firstQuestion(data: MasterData): number {
+  return data.parts.length ? data.parts[0].from : 1;
+}
+
 export function bookTotal(data: MasterData): number {
   return data.levels.reduce((a, l) => a + l.max, 0);
 }
@@ -207,7 +212,10 @@ export function checkMaster(data: MasterData): string[] {
   if (!data.parts.length) out.push("The workbook has no parts.");
   if (!data.levels.length) out.push("The workbook has no levels.");
   const ids = new Set<string>();
-  let next = 1;
+  // A workbook starts at question 1; a topic tute's Master book goes on from its ladder (Sets: 56–66).
+  const first = firstQuestion(data);
+  if (!Number.isInteger(first) || first < 1 || first > 999) out.push("The first question number is wrong.");
+  let next = first;
   for (const p of data.parts) {
     if (ids.has(p.id)) out.push(`${PART_NAME[p.id]} is listed twice.`);
     ids.add(p.id);
@@ -217,7 +225,7 @@ export function checkMaster(data: MasterData): string[] {
     next = p.to + 1;
   }
   const last = next - 1;
-  let q = 1;
+  let q = first;
   data.levels.forEach((l, i) => {
     if (l.n !== i + 1) out.push(`Levels must be numbered 1, 2, 3 … (found Level ${l.n}).`);
     if (l.from !== q) out.push(`Level ${l.n} should start at question ${q}.`);

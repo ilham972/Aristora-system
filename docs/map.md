@@ -26,7 +26,7 @@ The technical memory of the app, kept with the code and updated in the same comm
 | Settings tabs and who sees them | `src/settings.tsx`: `SETTINGS_TABS` |
 | Students page (grade filter + add, rename, remove, bring back) and its numbers; the test class (copy a grade, the extra test students, delete them, this phone's switch) | `src/settings.tsx`: `Students` (`testing`: the test class's list, no Add form, the test students' notes), `StudentNumbers`, `TestClass`, `TestSwitch` (also in `Account`), `Demo`; the maths in `src/stats.ts`; the phone's choice `testMode`/`setTestMode` in `src/store.ts` (`aristora.testClass`); TEST in the top bar: `TopStat` `test` in `src/app.tsx` |
 | Books page, F/M/K pills, typing in a workbook, renaming units | `src/settings.tsx`: `Books`, `UnitSheet` |
-| upload workbooks, unit zip, "mastery book" files, answer key file | `src/upload.tsx`: `UploadBooks`, `uploadRows`; the reader `src/workbookFile.ts`: `readWorkbookFiles`, `readWorkbookHtml`, `readKeyFile`, `attachKey`, `nameHint` |
+| upload workbooks, unit zip, "mastery book" files, answer key file, the O/L essay tute zip ("fighter + mastery"), questions in the app | `src/upload.tsx`: `UploadBooks`, `uploadRows` (`tuteRow`, `howMany`), `saveQuestions` (batches); the reader `src/workbookFile.ts`: `readWorkbookFiles`, `readWorkbookHtml`, `readKeyFile`, `attachKey`, `nameHint`, `readTuteFile` (`ReadTute`); the cards `src/bookQuestions.ts`: `questionCards`, `tuteQuestions`, `workbookQuestions`, `bookCssOf`; showing one `src/bookQuestion.tsx`: `QuestionToggle`, `BookQuestion` (shadow root, `PHONE_CSS`, `safeFragment`); the server's check `convex/lib/questions.ts`: `unsafeHtml`, `unsafeCss`, `cleanHtml`, `QUESTIONS_BATCH_MAX` |
 | Alerts page (test, voice, "Sounds on my taps", phone setup steps); the small sounds | `src/settings.tsx`: `Alerts`; alerts in `src/sound.ts`, `src/chime.ts` (kinds call/pull/red/lost), `src/announce.ts` (`callPhrase`, `pullPhrase`, `lostPhrase`: by room, then teacher: "go to Nila in Evaluation"); tap sounds in `src/tones.ts` (`tone`, `armTones`, `tonesOn`) |
 | Reports | `src/settings.tsx`: `Reports`; `src/report.tsx`: `ReportView`; built server-side in `closeSession` (`convex/lib/backend.ts`) |
 | History lines (wording) | `src/settings.tsx`: `describe()` (+ book-given, keep), `History` |
@@ -63,20 +63,27 @@ The technical memory of the app, kept with the code and updated in the same comm
   "code": "U01", "en", "ta", "questions": [{"q": 1, "part": "I", "marks": 2, "a": "15"}, {"q": 53, "part": "II",
   "marks": 3, "a": [{"p": "i", "a": "6", "m": 1}, …]}]}]}`. Plain text; `**…**` = the final answer. Written by
   the engine's `answer_key(B)` / `write_answer_key(B)` (past-paper-workbook skill, also its `answer_key.py`).
+- `tute.json` (an ol-essay source zip; its engine's `Tute.app_book()`): `{"kind": "aristora-tute", "version": 1,
+  "grade": 11, "unit": {"no": 24, "code", "en", "ta"}, "title", "fighter": {"sections": [{"id": "A", "tamil",
+  "title", "teach": [1], "solo": [2]}], "answers": [{"q": 1, "a"} | {"q": 3, "parts": [{"p", "a"}]}]}, "master":
+  {"part": "IIB", "levels": [{"n", "from": 56, "to": 56, "max": 10}], "questions": [{"q": 56, "label": "2016",
+  "marks": 10}], "answers": [{"q": 56, "parts": [{"p": "i", "a", "m": 2}]}]}}`. Its book.html: ladder cards
+  `<div class="qq[ pt]" data-q="N">`, paper cards `pq` (data-q = the printed number), the running footer
+  `fl fc fr tab` inside a page's first card. Fixture: `tests/fixtures/tute-skeleton.*` (a FAKE tute from the engine).
 
 ## Server (`convex/`)
 
 | File | What's in it |
 |---|---|
-| `schema.ts` | every table: `units`, `books` (+`keyCount`), `keys`, `students` (+`seen` per room), `progress` (`m.q` rows with x/th/tb/tt/dk/dkp, `m.lv` done/fixed/got/pre), `calls` (+`pull`, `bumped`/`bumpedFrom`, `unitId`/`stage` = its book, `walk`/`arrivedAt` = on the way / there, `teacherId`/`teacher` = who called: her room), `sessions` (+`stats[room][key]`), `events` (with `who`), `attendance` (by_student, by_day), `meta`, `users`, `devices`, `links`, `drafts` (Focus), `claims` (one corrector per book: student, unit, user, name, seenAt, ask, kept), `handouts` (books given: student, unit, stage, at, by; by_student), `familyLinks`/`familyDevices` (the family app; `students.openAll`, `lv.home`/`lv.hc` = checked at home / looked at by the corrector); validators `keyAnswer`, `masterState` (reused by `uncorrect`), `draftMark` |
+| `schema.ts` | every table: `units`, `books` (+`keyCount`, `qCount`), `keys` (+`stage`: missing = the workbook's), `questions` (unit, stage, q, html; by_book), `bookCss`, `students` (+`seen` per room), `progress` (`m.q` rows with x/th/tb/tt/dk/dkp, `m.lv` done/fixed/got/pre), `calls` (+`pull`, `bumped`/`bumpedFrom`, `unitId`/`stage` = its book, `walk`/`arrivedAt` = on the way / there, `teacherId`/`teacher` = who called: her room), `sessions` (+`stats[room][key]`), `events` (with `who`), `attendance` (by_student, by_day), `meta`, `users`, `devices`, `links`, `drafts` (Focus), `claims` (one corrector per book: student, unit, user, name, seenAt, ask, kept), `handouts` (books given: student, unit, stage, at, by; by_student), `familyLinks`/`familyDevices` (the family app; `students.openAll`, `lv.home`/`lv.hc` = checked at home / looked at by the corrector); validators `keyAnswer`, `masterState` (reused by `uncorrect`), `draftMark` |
 | `lib/auth.ts` | `viewer`, `actor`, `allowed`, `deviceOf`, `SIGNED_OUT`, `secretHash`, `pinHash`, `checkPin`, `normalizeCode`, `publicUser` |
 | `lib/backend.ts` | `readDigest` (one class's events (`DIGEST_EVENTS` 8,000 at most), calls and visits → `digestOf`; `buildReport` keeps it as `report.digest`), `fail`, `log` (+who, + `took`), `rememberActor`, sessions (`currentSession`, `ensureSession`, `closeSession`), visits (`startVisit`, `endVisit`, `lastVisit`, `UNDO_IN_MS`), `refresh`/`dryOf` (idle tracking; a given book with work = not dry; `closeIdle` adds the room waits), `addStats`/`STAT_ROOMS` (the rooms' scores), `placeOf`/`workPlace` (his book now), `masterPlace` (any workbook of his), `mustHoldBook` (one corrector per book), `progressFor`, `ensureProgress`, `bookFor`, `masterState`; several books: `givenWork` (+`done`), `bookState` (work, done), `workLeft`, `openWork`, `mayBeOpen` |
 | `lib/day.ts` | Sri Lanka calendar: `slDay` ("2026-10-28"), `slMonth`, `slClock` ("3:42 PM"), `slDate` ("28 Oct"), `DAY_MS` |
 | `lib/status.ts` | the Fighter rules engine `computeStatus` and its constants, urgencies |
 | `lib/master.ts` | the Master engine `computeMaster` (levels, waiting, `pre`, `pending`, `theory`, `wholeUnit`, `reteach`, percentages, dry/needs incl. theory), `forTheory`, `teachState` (eval/explained/theory/taught), `levelWaits`, `partTotals`, `masterEvalUrgency` |
 | `lib/progress.ts` | Progress maths, shared: `summarizeMaster`/`summarizeFighter`, `daysBetween`, `pace`, `ranks` (competition ranking 1, 2, 2, 4) |
-| `lib/book.ts` | book types, `fighter()`, `checkMaster`, `outOf`, `levelOutOf`, `partOf`, `partsForGrade`, `PILOT_FIGHTER`, `PILOT_UNIT`, `KNOWN_WORKBOOKS` |
-| `lib/key.ts` | answer keys: `KeyAnswer`/`KeyPart`, `checkKey`, `boldRuns`, `lastQuestion` |
+| `lib/book.ts` | book types, `fighter()`, `checkFighter`, `checkMaster` (a workbook may start after 1: `firstQuestion`), `outOf`, `levelOutOf`, `partOf`, `partsForGrade`, `PILOT_FIGHTER`, `PILOT_UNIT`, `KNOWN_WORKBOOKS` |
+| `lib/key.ts` | answer keys: `KeyAnswer`/`KeyPart`, `checkKey`, `checkFighterKey` (a theory book's), `boldRuns`, `lastQuestion`; `lib/backend.ts` `keyRow` (a book's key row) |
 | `lib/syllabus.ts` | `SYLLABUS` (seed only), `unitKey`, `termOf(now)` (Jan–Apr = 1, May–Aug = 2, Sep–Dec = 3) |
 | `lib/owner.ts` | the owner setup code's hash (env `ARISTORA_SETUP_SHA256` overrides it) |
 | `auth.ts` | `me`, `setupOwner`, `peekLink`, `useLink`, `signInPin`, `setPin`, `signOut` |
@@ -95,7 +102,7 @@ The technical memory of the app, kept with the code and updated in the same comm
 | `family.ts` | the family phone (`app.aristora.org`): `peek`, `join` (the WhatsApp link, one use, 7 days), `hello`, `signOut`, `me` (Worlds, levels, XP, streak), `level` (each question's boxes, never the answers), `check` (marks a whole level once with the key; saves it with ⌂), `board` (this week in his grade) |
 | `families.ts` | the teachers' side (owner or Students): `makeLink`, `phones`, `signOutAll`, `setOpenAll`, `answers` |
 | `lib/family.ts`, `lib/phone.ts` | his Worlds (`worldsOf`, `levelStates`, `weekXp`, `streakOf`); home marking from the key (`phoneKey`, `markQuestion`, `boxCount`, `wantWords`, `allPhone`, `phoneShare`) |
-| `catalog.ts` | `units`, `books` (+`keyCount`), `key`, `saveWorkbook` (+`key`), `renameUnit` |
+| `catalog.ts` | `units`, `books` (+`keyCount`, `qCount`), `key` (+`stage`), `question`, `bookCss`, `saveWorkbook` (+`key`; drops the questions when the book's numbers change), `saveTute` (a topic tute: both books + both keys, `saveTuteBook`, `bookShape`), `saveQuestions`, `renameUnit` |
 | `sessions.ts` | `end` (End the session) |
 | `setup.ts` | `ensure()`: one-time data updates; `DATA_VERSION` (1) |
 | `demo.ts` | owner only: `load` (14 students: 10 G11 Fighter, Malik/Priya/Vimal G7 Master, Zainab G9 Legend; the 13 in class get visits; Keerthi is not in; only into an empty real class), `remove` (`test`: the test students, else the demo ones; `wipe`: calls, progress, visits, handouts, drafts, claims); the test class: `testInfo` (query: real students per grade, copies, cases), `copyGrade` (`testName`, `copyOf`), `cases` (`F_CASES`, `M_CASES`, `caseMaster`, `twoWorkbooks`: the extra test students), `TEST_CAP` 120 |
@@ -115,7 +122,8 @@ The technical memory of the app, kept with the code and updated in the same comm
 - `derive.test.ts`: Theory groups for workbook students, from fake views.
 - `progress.test.ts`: ranks, pace, class days; `progress.board`; owner/Reports only. Fake time 2026-10-28 15:00.
 - `auth.test.ts`, `attendance.test.ts`, `stats.test.ts`.
-- `workbookFile.test.ts` (fixtures = skeletons of his real books), `answerKey.test.ts` (FAKE keys).
+- `workbookFile.test.ts` (fixtures = skeletons of his real books), `answerKey.test.ts` (FAKE keys), `tute.test.ts`
+  (a FAKE tute: two books, keys by book, questions cut, cleaned, stored and dropped, refusals).
 - `focus.test.ts` (Correction rules: name pills, the grade shown, grade badges, the level that opens, the next level
   and workbook, re-mark, ? on a part), `uncorrect.test.ts` (Take back, done before the app, `dkp`), `drafts.test.ts`,
   `hrow.test.ts` (the one-line row: centring, edges, hidden red/amber).

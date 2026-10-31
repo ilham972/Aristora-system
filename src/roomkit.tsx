@@ -15,7 +15,7 @@ import { heatWords } from "./deck";
 import { unitNo } from "./focusData";
 import { useQuery } from "./live";
 import { KeyLine } from "./master";
-import type { Unit } from "./store";
+import { bookDocAt, type Unit } from "./store";
 import type { HeatCount, LessonKind } from "./theoryFocusData";
 
 /** All / Fighter / Master: how many need her (each student once), red = no work now. Pale when none. */
@@ -117,12 +117,23 @@ export function LessonName(props: { unit: Unit | null; section: SectionData | nu
   );
 }
 
-/** The answer for one workbook question (teachers only), fetched while it is open. */
-export function AnswerKey(props: { unitId: string; q: number }) {
-  const keyQ = useQuery<{ answers: KeyAnswer[] } | null>(api.catalog.key, { unitId: props.unitId as Id<"units"> });
+/** The answer for one question (teachers only), fetched while it is open: the workbook's key, or the theory book's
+ *  (a topic tute brings both). A theory book without a key asks for the notebook, without fetching anything. */
+export function AnswerKey(props: { unitId: string; q: number; stage?: "fighter" | "master" }) {
+  const stage = props.stage ?? "master";
+  const none = stage === "fighter" && !bookDocAt(props.unitId, "fighter")?.keyCount;
+  if (none) return <p class="muted small">Check his answer in his notebook.</p>;
+  return <KeyFetch unitId={props.unitId} q={props.q} stage={stage} />;
+}
+
+function KeyFetch(props: { unitId: string; q: number; stage: "fighter" | "master" }) {
+  const keyQ = useQuery<{ answers: KeyAnswer[] } | null>(api.catalog.key, { unitId: props.unitId as Id<"units">, stage: props.stage });
   const k = keyQ?.answers.find((a) => a.q === props.q);
   if (keyQ === undefined) return <p class="muted small">Loading the answer…</p>;
-  if (!k) return <p class="muted small">{keyQ === null ? "No answer key for this workbook yet." : "No answer for this question in the key."}</p>;
+  if (!k) {
+    const words = keyQ === null ? (props.stage === "fighter" ? "Check his answer in his notebook." : "No answer key for this workbook yet.") : "No answer for this question in the key.";
+    return <p class="muted small">{words}</p>;
+  }
   return (
     <div class="ev-key">
       <small>Answer</small>

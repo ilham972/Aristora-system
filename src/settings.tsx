@@ -496,6 +496,7 @@ type BookRow = {
   } | null;
   questions: number | null;
   keyCount: number | null;
+  qCount: number | null;
 };
 
 /** The syllabus by grade, which units have their books in the app, and setting up a workbook. */
@@ -507,7 +508,10 @@ function Books() {
   const list = units.filter((u) => u.grade === grade);
   const bookOf = (u: Unit, st: "fighter" | "master") => books.find((b) => b.unitId === u._id && b.stage === st);
   const done = (st: "fighter" | "master") => list.filter((u) => bookOf(u, st)).length;
-  const keys = list.filter((u) => bookOf(u, "master")?.keyCount).length;
+  const both = (u: Unit) => [bookOf(u, "fighter"), bookOf(u, "master")].filter((b): b is BookRow => !!b);
+  const allHave = (u: Unit, f: (b: BookRow) => number | null) => both(u).length > 0 && both(u).every((b) => (f(b) ?? 0) > 0);
+  const keys = list.filter((u) => allHave(u, (b) => b.keyCount)).length;
+  const texts = list.filter((u) => allHave(u, (b) => b.qCount)).length;
   return (
     <div class="settings-body">
       <UploadBooks units={units} books={books} onSaved={setGrade} />
@@ -522,7 +526,8 @@ function Books() {
         }}
       />
       <p class="muted">
-        {list.length} units. In the app: theory books (F) {done("fighter")} · workbooks (M) {done("master")} · answer keys (K) {keys}.
+        {list.length} units. In the app: theory books (F) {done("fighter")} · workbooks (M) {done("master")} · answer keys (K) {keys} · questions
+        as printed (Q) {texts}.
       </p>
       {[1, 2, 3, 0].map((t) => {
         const us = list.filter((u) => u.term === t);
@@ -534,6 +539,16 @@ function Books() {
               {us.map((u) => {
                 const f = bookOf(u, "fighter");
                 const m = bookOf(u, "master");
+                const kWords = both(u).length
+                  ? both(u)
+                      .map((b) => `${b.stage === "fighter" ? "theory book" : "workbook"}: ${b.keyCount ? `answer key, ${b.keyCount} answers` : "no answer key"}`)
+                      .join(" · ")
+                  : "No answer key yet";
+                const qWords = both(u).length
+                  ? both(u)
+                      .map((b) => `${b.stage === "fighter" ? "theory book" : "workbook"}: ${b.qCount ? `${b.qCount} questions as printed` : "no question text"}`)
+                      .join(" · ")
+                  : "No question text yet";
                 return (
                   <li key={u._id}>
                     <button type="button" onClick={() => setOpen(u)}>
@@ -548,12 +563,11 @@ function Books() {
                       <i class={m ? "has" : ""} title={m ? `Workbook: ${m.master?.levels.length} levels` : "No workbook yet"}>
                         M
                       </i>
-                      <i
-                        class={m?.keyCount ? "has" : ""}
-                        title={m?.keyCount ? `Answer key: ${m.keyCount} answers` : "No answer key yet"}
-                        aria-label={m?.keyCount ? `Answer key: ${m.keyCount} answers` : "No answer key yet"}
-                      >
+                      <i class={allHave(u, (b) => b.keyCount) ? "has" : ""} title={kWords} aria-label={kWords}>
                         K
+                      </i>
+                      <i class={allHave(u, (b) => b.qCount) ? "has" : ""} title={qWords} aria-label={qWords}>
+                        Q
                       </i>
                     </button>
                   </li>
@@ -639,8 +653,14 @@ function UnitSheet(props: { unit: Unit; book?: BookRow; fighter?: BookRow; onClo
       <p class="muted">
         {props.fighter
           ? `In the app${props.fighter.title ? `: ${props.fighter.title}` : ""}, ${props.fighter.questions} questions.`
-          : "Not in the app yet. Send the book's PDF or source zip to Claude to load it."}
+          : "Not in the app yet. An essay tute's source zip brings it (Upload workbooks above)."}
       </p>
+      {props.fighter && (
+        <p class={`small key-note${props.fighter.keyCount ? " ok" : ""}`}>
+          {props.fighter.keyCount ? `✓ Answer key: ${props.fighter.keyCount} answers.` : "No answer key: teachers check answers in the notebook."}
+          {props.fighter.qCount ? ` ✓ Questions as printed: ${props.fighter.qCount}.` : ""}
+        </p>
+      )}
 
       <h3 class="block-title">Workbook (Master)</h3>
       <p class="muted">Copy it from the workbook's contents page and its marks table (புள்ளி அட்டவணை).</p>
@@ -712,6 +732,7 @@ function UnitSheet(props: { unit: Unit; book?: BookRow; fighter?: BookRow; onClo
             {props.book?.keyCount
               ? `✓ Answer key: ${props.book.keyCount} answers. Teachers see them when they correct a level.`
               : "No answer key yet. Upload the unit's zip with its answer key (Upload workbooks)."}
+            {props.book?.qCount ? ` ✓ Questions as printed: ${props.book.qCount}.` : ""}
           </p>
         )}
         {m && props.book?.keyCount ? <PhoneAnswers unitId={unit._id} /> : null}

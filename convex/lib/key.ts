@@ -5,7 +5,7 @@
 //   tap, and a key (about 13 KB a unit) is read only when a teacher opens a level to correct.
 // - Only teachers read it. When parents' or students' sites come, they must never get this table.
 
-import { outOf, type MasterData } from "./book";
+import { fighter, firstQuestion, outOf, type FighterData, type MasterData } from "./book";
 
 /** One part of a Part II question: its label ("ii", "a iii"), the answer (**bold** = the final answer), its marks. */
 export type KeyPart = { p: string; a: string; m?: number };
@@ -25,22 +25,43 @@ export function lastQuestion(book: MasterData): number {
  * the book's marks for that question was made for another version of the book: refused, never shown.
  */
 export function checkKey(key: KeyAnswer[], book: MasterData): string[] {
+  const first = firstQuestion(book);
   const last = lastQuestion(book);
   const seen = new Set<number>();
   for (const k of key) {
-    if (!Number.isInteger(k.q) || k.q < 1 || k.q > last) return [`The answer key has a question ${k.q}; the book has 1 to ${last}.`];
-    if (seen.has(k.q)) return [`The answer key has question ${k.q} twice.`];
-    seen.add(k.q);
+    if (!Number.isInteger(k.q) || k.q < first || k.q > last) return [`The answer key has a question ${k.q}; the book has ${first} to ${last}.`];
+    const bad = answerProblem(k, seen);
+    if (bad) return [bad];
     const parts = k.parts ?? [];
-    if (!(k.a ?? "").trim() && !parts.some((p) => p.a.trim())) return [`Question ${k.q} has an empty answer in the key.`];
-    const texts = [k.a ?? "", ...parts.flatMap((p) => [p.p, p.a])];
-    if (parts.length > KEY_PARTS_MAX || texts.some((t) => t.length > KEY_TEXT_MAX)) return [`Question ${k.q}'s answer is too long.`];
     const marks = parts.map((p) => p.m);
     const max = outOf(book, k.q);
     if (parts.length && max !== null && marks.every((m) => typeof m === "number")) {
       const sum = marks.reduce<number>((s, m) => s + (m ?? 0), 0);
       if (sum !== max) return [`The answer key is for another version of this book: question ${k.q} is ${max} marks in the book, ${sum} in the key.`];
     }
+  }
+  return [];
+}
+
+/** What is wrong with one answer on its own (twice, empty, too long), or "" when it is fine. */
+function answerProblem(k: KeyAnswer, seen: Set<number>): string {
+  if (seen.has(k.q)) return `The answer key has question ${k.q} twice.`;
+  seen.add(k.q);
+  const parts = k.parts ?? [];
+  if (!(k.a ?? "").trim() && !parts.some((p) => p.a.trim())) return `Question ${k.q} has an empty answer in the key.`;
+  const texts = [k.a ?? "", ...parts.flatMap((p) => [p.p, p.a])];
+  if (parts.length > KEY_PARTS_MAX || texts.some((t) => t.length > KEY_TEXT_MAX)) return `Question ${k.q}'s answer is too long.`;
+  return "";
+}
+
+/** Problems with a theory book's key (a topic tute's ladder answers); [] when it is fine. No marks in a theory book. */
+export function checkFighterKey(key: KeyAnswer[], book: FighterData): string[] {
+  const f = fighter(book);
+  const seen = new Set<number>();
+  for (const k of key) {
+    if (!f.isQuestion(k.q)) return [`The answer key has a question ${k.q}; the theory book has no such question.`];
+    const bad = answerProblem(k, seen);
+    if (bad) return [bad];
   }
   return [];
 }

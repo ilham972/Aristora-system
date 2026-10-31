@@ -11,6 +11,8 @@ import { KNOWN_WORKBOOKS, outOf } from "../../convex/lib/book";
 import { digestOf, type DCall, type DEvent } from "../../convex/lib/ceo";
 import { readWorkbookHtml } from "../../src/workbookFile";
 import U01_BOOK from "../fixtures/workbook-g8-u01.html?raw";
+import TUTE_BOOK from "../fixtures/tute-skeleton.html?raw";
+import TUTE_JSON from "../fixtures/tute-skeleton.json?raw";
 import { addPerson, OWNER_TOKEN } from "../helpers";
 import { makeBackend, playwright, serveDist } from "./harness";
 
@@ -2564,4 +2566,78 @@ test("Test class: a grade copied and the extra test students; only a phone showi
   expect(left.filter((x) => x.test)).toEqual([]);
   expect(left).toHaveLength(14);
   expect(problems, problems.join("\n")).toEqual([]);
+});
+
+test("Topic tute: one zip = the unit's theory book and workbook, both answer keys, every question as printed", async () => {
+  const backend = await newClass();
+  const C = await phone(backend, "focus");
+  await C.getByRole("button", { name: "Settings" }).click();
+  await C.getByRole("button", { name: "Load demo students (three grades)" }).click();
+  await visible(C.getByText(/^14 demo students loaded/));
+
+  // The FAKE tute, filed under G11 U13 (where the demo's Grade 11 class works on the pilot theory book).
+  const json = JSON.parse(TUTE_JSON);
+  json.unit = { ...json.unit, no: 13, code: "U13" };
+  const zip = Buffer.from(zipSync({ "book.html": strToU8(TUTE_BOOK), "tute.json": strToU8(JSON.stringify(json)), "content.py": strToU8("") }));
+  await C.getByRole("button", { name: "Books", exact: true }).click();
+  await C.getByRole("button", { name: /^Grade 11\b/ }).click();
+  await C.locator(".upload-btn input[type=file]").setInputFiles([{ name: "Sample_tute_source.zip", mimeType: "application/zip", buffer: zip }]);
+  const up = C.locator(".sheet");
+  await contains(up.locator(".up-replace"), "G11 · U13 Equations · topic tute");
+  await contains(up.locator(".up-replace"), "Theory book: A–B, 5 questions (2 with the teacher) · Workbook: Paper II B 6–8, 3 levels, 30 marks");
+  await contains(up.locator(".up-replace .up-state"), "Replaces the theory book (61 questions) in the app");
+  await contains(up.locator(".up-replace"), "✓ Answer keys: ladder all 5 · past papers all 3");
+  await contains(up.locator(".up-replace"), "✓ Questions as printed: ladder all 5 · past papers all 3");
+  await shot(C, "t01-upload-tute");
+  await contains(up.locator("h2"), "1 tute found");
+  await up.getByRole("button", { name: "Save 1 tute" }).click();
+  await contains(C.locator(".toast"), "Saved G11 · U13 Equations · topic tute: its theory book and workbook, with their answer keys");
+  const u13 = C.locator(".unit-list li", { hasText: "U13" });
+  await textsAre(u13.locator("i.has"), ["F", "M", "K", "Q"]);
+  const counts = await backend.t.run(async (ctx) => {
+    const u = (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G11-U13")).first())!;
+    const books = await ctx.db.query("books").withIndex("by_unit_stage", (q) => q.eq("unitId", u._id)).collect();
+    return books.map((b) => [b.stage, b.keyCount, b.qCount]).sort();
+  });
+  expect(counts).toEqual([
+    ["fighter", 5, 5],
+    ["master", 3, 3],
+  ]);
+  await shot(C, "t02-books-grade11", true);
+
+  // A Grade 11 student on the new theory book, its teacher question taught: Correction shows Q2 with its answer and,
+  // one tap away, the question as printed (drawn apart from the app, fitted to the phone).
+  const kumar = await backend.t.run(async (ctx) => {
+    const s = (await ctx.db.query("students").collect()).find((x) => x.grade === 11 && x.present && x.stage === "fighter")!;
+    const p = (await ctx.db.query("progress").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()).find((x) => x.stage === "fighter")!;
+    await ctx.db.patch(p._id, { marks: { "1": { s: "taught", t: Date.now() - 60_000 } } });
+    return s.name;
+  });
+  await backend.push();
+  await C.getByRole("button", { name: "Back to the class" }).click();
+  await C.locator(".fc-grades").getByRole("button", { name: /^Grade 11\b|^11\b/ }).first().click();
+  await C.locator(".fc-nm", { hasText: new RegExp(`^${kumar}`) }).first().click();
+  const card = C.locator(".fc-card.fighter");
+  await contains(card.locator(".fc-qmeta"), "Section A · First part");
+  await contains(card.locator(".ev-key"), "A1 B2");
+  const toggle = card.getByRole("button", { name: "Show the question" });
+  await toggle.click();
+  await until(
+    async () => (await card.locator(".bq-view").evaluate((el) => el.shadowRoot?.querySelector(".qv .qs")?.textContent ?? "")).includes("மாதிரி வினா இரண்டு"),
+    "the printed question in its shadow root",
+  );
+  const fits = await card.locator(".bq-view").evaluate((el) => {
+    const box = el.shadowRoot!.querySelector(".qv") as HTMLElement;
+    const fig = el.shadowRoot!.querySelector(".dg") as HTMLElement;
+    return { fits: box.scrollWidth <= box.clientWidth + 1, zoom: fig.style.zoom, footer: !!el.shadowRoot!.querySelector(".fl, .fc, .fr, .tab") };
+  });
+  expect(fits.fits).toBe(true); // the 150 mm figure shrinks to the phone
+  expect(Number(fits.zoom)).toBeLessThan(1);
+  expect(fits.footer).toBe(false);
+  expect(await C.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(C, "t03-correction-fighter-question");
+
+  // Class's view of the opened question stays unstyled by the book (its CSS lives only in the shadow root).
+  expect(await C.locator(".fc-qn").first().evaluate((el) => getComputedStyle(el).backgroundColor)).not.toBe("rgb(17, 17, 17)");
+  expect(problems.filter((x) => !x.includes("[focus warning]"))).toEqual([]);
 });

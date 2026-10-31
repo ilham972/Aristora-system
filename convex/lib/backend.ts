@@ -47,6 +47,15 @@ export async function bookFor(ctx: QueryCtx, unitId: Id<"units">, stage: BookSta
     .first();
 }
 
+/** A book's answer key row. Rows without a stage are the workbook's (Master): every key before the topic tutes. */
+export async function keyRow(ctx: QueryCtx, unitId: Id<"units">, stage: BookStage): Promise<Doc<"keys"> | null> {
+  const rows = await ctx.db
+    .query("keys")
+    .withIndex("by_unit", (q) => q.eq("unitId", unitId))
+    .collect();
+  return rows.find((k) => (k.stage ?? "master") === stage) ?? null;
+}
+
 export async function progressFor(
   ctx: QueryCtx,
   studentId: Id<"students">,

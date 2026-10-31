@@ -28,8 +28,9 @@ import { HRow } from "./hrow";
 import { useQuery } from "./live";
 import { MasterStrip } from "./master";
 import { AnswerKey, GradeRow, KindBar, LessonName, LockIcon, usePinned } from "./roomkit";
+import { QuestionToggle } from "./bookQuestion";
 import { scoreOf } from "./score";
-import { act, clearToasts, currentMe, currentRole, toast, type Board } from "./store";
+import { act, bookDocAt, clearToasts, currentMe, currentRole, toast, type Board } from "./store";
 import { flushTaps } from "./taps";
 import {
   decOf,
@@ -530,8 +531,16 @@ export function TheoryTab(props: { board: Board; views: View[]; now: number }) {
                 {sq.kind === "workbook" && typeof sq.q === "number" && sq.unit ? (
                   <AnswerKey unitId={sq.unit._id} q={sq.q} />
                 ) : sq.kind === "section" ? (
-                  <p class="muted small">The teacher's question of his book: teach it, then the next.</p>
+                  <>
+                    <p class="muted small">The teacher's question of his book: teach it, then the next.</p>
+                    {typeof sq.q === "number" && sq.unit && !!bookDocAt(sq.unit._id, "fighter")?.keyCount && (
+                      <AnswerKey unitId={sq.unit._id} q={sq.q} stage="fighter" />
+                    )}
+                  </>
                 ) : null}
+                {typeof sq.q === "number" && sq.unit && (
+                  <QuestionToggle unitId={sq.unit._id} stage={sq.kind === "section" ? "fighter" : "master"} q={sq.q} />
+                )}
                 {!live && <p class="muted small">{sq.who.length > 0 ? "Tap Arrived when they come in." : "Call them, then Arrived when they come in."}</p>}
               </div>
             </div>

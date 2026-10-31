@@ -35,6 +35,7 @@ import type * as lib_master from "../lib/master.js";
 import type * as lib_owner from "../lib/owner.js";
 import type * as lib_phone from "../lib/phone.js";
 import type * as lib_progress from "../lib/progress.js";
+import type * as lib_questions from "../lib/questions.js";
 import type * as lib_sha256 from "../lib/sha256.js";
 import type * as lib_status from "../lib/status.js";
 import type * as lib_syllabus from "../lib/syllabus.js";
@@ -78,6 +79,7 @@ declare const fullApi: ApiFromModules<{
   "lib/owner": typeof lib_owner;
   "lib/phone": typeof lib_phone;
   "lib/progress": typeof lib_progress;
+  "lib/questions": typeof lib_questions;
   "lib/sha256": typeof lib_sha256;
   "lib/status": typeof lib_status;
   "lib/syllabus": typeof lib_syllabus;

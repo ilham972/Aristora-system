@@ -8098,3 +8098,44 @@ body.locked.evx-on .toasts {
 .tcl-switch .segc-b {
   white-space: nowrap;
 }
+
+/* ---------------------------------------------------------------- A question as printed (src/bookQuestion.tsx)
+   Under Correction's, Evaluation's and Theory's question card: one button always in the same place (pale when the
+   book has no question text in the app), the printed question under it in its own shadow root. */
+.bq {
+  margin-top: 10px;
+}
+.bq-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1.5px dashed var(--line);
+  border-radius: 10px;
+  background: none;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.bq-btn.on {
+  border-style: solid;
+  color: var(--ink);
+}
+.bq-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.bq-view {
+  margin-top: 8px;
+  border: 1.5px solid var(--line-2);
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+}
+.bq-none {
+  margin: 8px 2px 0;
+}

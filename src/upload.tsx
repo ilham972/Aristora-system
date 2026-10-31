@@ -1,22 +1,27 @@
 // Settings → Books → Upload workbooks: the unit zips (or book.html files) from the workbook chats go straight into
-// the app. This phone reads each book's parts, levels and marks (src/workbookFile.ts), the owner checks the list, and
-// one tap saves them. No typing, no chat, no deploy.
+// the app. This phone reads each book's parts, levels and marks (src/workbookFile.ts), its answer key and its printed
+// questions (src/bookQuestions.ts), the owner checks the list, and one tap saves them. No typing, no chat, no deploy.
+// A topic tute's zip (ol-essay, with tute.json) is TWO books of its unit: the ladder = the theory book (Fighter), the
+// past papers = the workbook (Master), each with its answers and questions.
 
 import { useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
-import { PART_NAME } from "../convex/lib/book";
+import { bookTotal, fighter, PART_NAME } from "../convex/lib/book";
+import { QUESTIONS_BATCH_MAX } from "../convex/lib/questions";
 import { mutate } from "./backend";
 import { act, currentRole, toast, type Unit } from "./store";
 import { Sheet } from "./ui";
-import { readWorkbookFiles, type ReadWorkbook } from "./workbookFile";
+import { readWorkbookFiles, type ReadTute, type ReadWorkbook } from "./workbookFile";
 
 /** What the Books page knows about a unit's workbook already in the app. */
 type InApp = {
   unitId: string;
   stage: "fighter" | "master";
   master: { parts: { id: string; from: number; to: number }[]; levels: { n: number; from: number; to: number; max: number }[]; total: number; marksKnown: number } | null;
+  questions?: number | null;
   keyCount: number | null;
+  qCount?: number | null;
 };
 
 type Row = {
@@ -29,9 +34,49 @@ type Row = {
   words: string;
   /** What happens to the answer key, and whether it is a good thing ("yes") or worth a look ("no"). */
   keyLine?: { words: string; ok: boolean };
+  /** The printed questions this file brings. */
+  qLine?: { words: string; ok: boolean };
   unit?: Unit;
   book?: ReadWorkbook;
+  tute?: ReadTute;
 };
+
+/** "✓ Answer key: all 73 questions" / "…: 70 of 73 questions". */
+function countWords(n: number, of: number): string {
+  return n === of ? `all ${of}` : `${n} of ${of}`;
+}
+
+/** The row of a topic tute: its two books against what the unit has in the app. */
+function tuteRow(t: ReadTute, i: number, units: Unit[], books: InApp[]): Row {
+  const unit = units.find((u) => u.grade === t.grade && u.code === t.code);
+  const title = `G${t.grade ?? "?"} · ${t.code} ${unit?.en ?? t.en ?? ""} · topic tute`.trim();
+  if (t.problems.length) return { key: `bad${i}`, file: t.file, title, detail: "", state: "bad", words: t.problems.join(" ") };
+  if (!unit) return { key: `bad${i}`, file: t.file, title, detail: "", state: "bad", words: `Grade ${t.grade} has no unit ${t.code} in the app.` };
+  const f = fighter(t.fighter);
+  const teach = t.fighter.sections.reduce((a, s) => a + s.teach.length, 0);
+  const secs = t.fighter.sections.map((s) => s.id);
+  const p = t.master.parts[0];
+  const detail =
+    `Theory book: ${secs[0]}–${secs[secs.length - 1]}, ${f.all.length} questions (${teach} with the teacher) · ` +
+    `Workbook: ${PART_NAME[p.id]} ${p.from}–${p.to}, ${t.master.levels.length} levels, ${bookTotal(t.master)} marks`;
+  const inF = books.find((b) => b.unitId === unit._id && b.stage === "fighter");
+  const inM = books.find((b) => b.unitId === unit._id && b.stage === "master");
+  const had = [inF ? `theory book (${inF.questions ?? "?"} questions)` : "", inM?.master ? `workbook (${inM.master.levels.length} levels, ${inM.master.total} marks)` : ""].filter(Boolean);
+  const words = had.length ? `Replaces the ${had.join(" and the ")} in the app` : "New: theory book + workbook";
+  const fk = t.fighterKey?.length ?? 0;
+  const mk = t.masterKey?.length ?? 0;
+  const keyLine =
+    fk || mk
+      ? { words: `✓ Answer keys: ladder ${countWords(fk, f.all.length)} · past papers ${countWords(mk, t.master.levels.length)}`, ok: fk === f.all.length && mk === t.master.levels.length }
+      : { words: "No answer keys in this file", ok: false };
+  const fq = t.questions.fighter.size;
+  const mq = t.questions.master.size;
+  const qLine =
+    fq + mq && t.css
+      ? { words: `✓ Questions as printed: ladder ${countWords(fq, f.all.length)} · past papers ${countWords(mq, t.master.levels.length)}`, ok: fq === f.all.length && mq === t.master.levels.length }
+      : { words: "No printed questions found (book.html missing?)", ok: false };
+  return { key: unit._id, file: t.file, title, detail, state: had.length ? "replace" : "new", words, keyLine, qLine, unit, tute: t };
+}
 
 function describeBook(w: ReadWorkbook): string {
   const parts = w.data.parts.map((p) => `${PART_NAME[p.id]} ${p.from}–${p.to}`).join(" · ");
@@ -53,6 +98,7 @@ function sameAsApp(w: ReadWorkbook, m: NonNullable<InApp["master"]>): boolean {
 export function uploadRows(found: ReturnType<typeof readWorkbookFiles>, units: Unit[], books: InApp[]): Row[] {
   const rows: Row[] = found.map((f, i): Row => {
     if ("problem" in f) return { key: `bad${i}`, file: f.file, title: f.file, detail: "", state: "bad", words: f.problem };
+    if ("kind" in f) return tuteRow(f, i, units, books);
     const unit = units.find((u) => u.grade === f.grade && u.code === f.code);
     const title = `G${f.grade ?? "?"} · ${f.code} ${unit?.en ?? f.en ?? ""}`.trim();
     if (f.problems.length) return { key: `bad${i}`, file: f.file, title, detail: "", state: "bad", words: f.problems.join(" ") };
@@ -62,16 +108,19 @@ export function uploadRows(found: ReturnType<typeof readWorkbookFiles>, units: U
     const same = !!old && sameAsApp(f, old);
     const answers = f.key?.length ?? 0;
     const hadKey = !!inApp?.keyCount;
-    const state = !old ? "new" : same && !answers ? "same" : "replace";
+    const qs = f.questions?.size ?? 0;
+    const state = !old ? "new" : same && !answers && (!qs || !!inApp?.qCount) ? "same" : "replace";
     const words =
       state === "new"
         ? "New"
         : state === "same"
           ? "Already in the app"
           : same
-            ? hadKey
-              ? "Same book: updates its answer key"
-              : "Same book: adds its answer key"
+            ? answers
+              ? hadKey
+                ? "Same book: updates its answer key"
+                : "Same book: adds its answer key"
+              : "Same book: adds its questions"
             : `Replaces the one in the app (${old!.levels.length} levels, ${old!.total} marks)`;
     const last = f.data.levels.length ? f.data.levels[f.data.levels.length - 1].to : 0;
     const keyLine = answers
@@ -81,7 +130,8 @@ export function uploadRows(found: ReturnType<typeof readWorkbookFiles>, units: U
         : hadKey
           ? { words: "No answer key in this file: the old one goes (its questions changed)", ok: false }
           : { words: "No answer key in this file", ok: false };
-    return { key: unit._id, file: f.file, title, detail: describeBook(f), state, words, keyLine, unit, book: f };
+    const qLine = qs ? { words: `✓ Questions as printed: ${countWords(qs, last - (f.data.parts[0]?.from ?? 1) + 1)}`, ok: true } : undefined;
+    return { key: unit._id, file: f.file, title, detail: describeBook(f), state, words, keyLine, qLine, unit, book: f };
   });
   // The same unit in two files (an old and a new version): the last file picked wins.
   rows.forEach((r, i) => {
@@ -91,6 +141,35 @@ export function uploadRows(found: ReturnType<typeof readWorkbookFiles>, units: U
     }
   });
   return rows;
+}
+
+/** "1 workbook", "2 tutes", "3 books" (a tute is two books, a workbook one). */
+function howMany(rows: Row[]): string {
+  const tutes = rows.filter((r) => r.tute).length;
+  const word = tutes === rows.length ? "tute" : tutes === 0 ? "workbook" : "book";
+  return `${rows.length} ${word}${rows.length === 1 ? "" : "s"}`;
+}
+
+/** A book's printed questions, a few saves of about half a megabyte each (the first takes the old ones away). */
+async function saveQuestions(unitId: Id<"units">, stage: "fighter" | "master", qs: Map<number, string>, css: string): Promise<boolean> {
+  if (!qs.size || !css) return true;
+  const batches: { q: number; html: string }[][] = [[]];
+  let size = 0;
+  for (const [q, html] of [...qs].sort((a, b) => a[0] - b[0])) {
+    if (size + html.length > QUESTIONS_BATCH_MAX && batches[batches.length - 1].length) {
+      batches.push([]);
+      size = 0;
+    }
+    batches[batches.length - 1].push({ q, html });
+    size += html.length;
+  }
+  for (let i = 0; i < batches.length; i++) {
+    const ok = await act(() =>
+      mutate(api.catalog.saveQuestions, { unitId, stage, first: i === 0, ...(i === 0 ? { css } : {}), items: batches[i], by: currentRole() }),
+    );
+    if (!ok) return false;
+  }
+  return true;
 }
 
 export function UploadBooks(props: { units: Unit[]; books: InApp[]; onSaved: (grade: number) => void }) {
@@ -119,6 +198,27 @@ export function UploadBooks(props: { units: Unit[]; books: InApp[]; onSaved: (gr
     setSaving(true);
     let saved = 0;
     for (const r of ready) {
+      const unitId = r.unit!._id as Id<"units">;
+      if (r.tute) {
+        const t = r.tute;
+        const ok =
+          (await act(() =>
+            mutate(api.catalog.saveTute, {
+              unitId,
+              ...(t.title ? { title: t.title } : {}),
+              fighter: { sections: t.fighter.sections.map((x) => ({ id: x.id, title: x.title, tamil: x.tamil, teach: x.teach, solo: x.solo })) },
+              master: { part: t.part, levels: t.master.levels.map((l) => ({ from: l.from, to: l.to, max: l.max })), marks: t.master.marks ?? {} },
+              ...(t.fighterKey ? { fighterKey: t.fighterKey } : {}),
+              ...(t.masterKey ? { masterKey: t.masterKey } : {}),
+              by: currentRole(),
+            }),
+          )) &&
+          (await saveQuestions(unitId, "fighter", t.questions.fighter, t.css)) &&
+          (await saveQuestions(unitId, "master", t.questions.master, t.css));
+        if (!ok) break;
+        saved++;
+        continue;
+      }
       const w = r.book!;
       const ok = await act(() =>
         mutate(api.catalog.saveWorkbook, {
@@ -131,17 +231,19 @@ export function UploadBooks(props: { units: Unit[]; books: InApp[]; onSaved: (gr
           by: currentRole(),
         }),
       );
-      if (!ok) break; // the error is on screen; the rest wait for another try
+      if (!ok || (w.questions?.size && !(await saveQuestions(unitId, "master", w.questions, w.css ?? "")))) break; // the error is on screen
       saved++;
     }
     setSaving(false);
     if (saved > 0) {
-      const keys = ready.slice(0, saved).filter((r) => r.book?.key?.length).length;
+      const keys = ready.slice(0, saved).filter((r) => r.book?.key?.length || r.tute?.masterKey?.length).length;
       const withKeys = keys === 0 ? "" : saved === 1 ? " with its answer key" : keys === saved ? ", all with answer keys" : `, ${keys} with answer keys`;
       toast(
-        saved === 1
-          ? `Saved ${ready[0].title}${withKeys}. Students on it see the new levels now.`
-          : `Saved ${saved} workbooks${withKeys}. Students on them see the new levels now.`,
+        saved === 1 && ready[0].tute
+          ? `Saved ${ready[0].title}: its theory book and workbook${ready[0].tute.fighterKey || ready[0].tute.masterKey ? ", with their answer keys" : ""}. Students on them see them now.`
+          : saved === 1
+            ? `Saved ${ready[0].title}${withKeys}. Students on it see the new levels now.`
+            : `Saved ${howMany(ready.slice(0, saved))}${withKeys}. Students on them see the new levels now.`,
       );
       props.onSaved(ready[0].unit!.grade);
     }
@@ -158,12 +260,13 @@ export function UploadBooks(props: { units: Unit[]; books: InApp[]; onSaved: (gr
         {reading ? "Reading the books…" : "Upload workbooks"}
       </label>
       <p class="muted">
-        Pick the unit zips from the workbook chats, one or many at once. The app reads the levels, marks and answer key; you check them, then save.
+        Pick the unit zips from the workbook and essay chats, one or many at once. The app reads the levels, marks, answer keys and the
+        printed questions; an essay tute becomes the unit's theory book and workbook. You check them, then save.
       </p>
 
       {rows && (
         <Sheet
-          title={rows.length === 1 ? "1 workbook found" : `${rows.length} workbooks found`}
+          title={`${howMany(rows)} found`}
           sub="Check the list. Nothing is saved until you tap Save."
           onClose={() => setRows(null)}
           foot={
@@ -172,7 +275,7 @@ export function UploadBooks(props: { units: Unit[]; books: InApp[]; onSaved: (gr
                 Cancel
               </button>
               <button type="button" class="btn primary" disabled={saving || ready.length === 0} onClick={() => void save()}>
-                {saving ? "Saving…" : ready.length === 0 ? "Nothing to save" : ready.length === 1 ? "Save 1 workbook" : `Save ${ready.length} workbooks`}
+                {saving ? "Saving…" : ready.length === 0 ? "Nothing to save" : `Save ${howMany(ready)}`}
               </button>
             </div>
           }
@@ -184,6 +287,7 @@ export function UploadBooks(props: { units: Unit[]; books: InApp[]; onSaved: (gr
                 {r.detail && <small>{r.detail}</small>}
                 <span class="up-state">{r.words}</span>
                 {r.keyLine && r.state !== "bad" && r.state !== "skip" && <small class={`up-key${r.keyLine.ok ? " ok" : ""}`}>{r.keyLine.words}</small>}
+                {r.qLine && r.state !== "bad" && r.state !== "skip" && <small class={`up-key${r.qLine.ok ? " ok" : ""}`}>{r.qLine.words}</small>}
                 {r.state === "bad" && <small class="up-file">{r.file}</small>}
               </li>
             ))}

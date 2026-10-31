@@ -76,6 +76,12 @@ chips for other books ("U08 Eval 2"). Absent students: book now only.
   - ladder A–F: teacher questions ("teach", double-ring circles) and solo questions;
   - past papers P, with year labels;
   - final challenge X.
+- **Topic tutes (O/L essay books, 31 Oct 2026, his ask): one zip, two books.** An ol-essay source zip carries
+  `tute.json`; the upload makes its ladder the unit's Fighter book (sections A–F only, no P/X: `badge` = the letter)
+  and its past papers + final challenge the unit's Master book (one part IIA/IIB, **one paper = one level of 10
+  marks**, numbers as printed and going on from the ladder: Sets 1–55 + 56–66; `checkMaster` lets a workbook start
+  after 1: `firstQuestion`). Both with their keys (`catalog.saveTute`). It replaces the unit's books (the pilot
+  G11-U13 too: marks on questions no longer in the book are ignored by `computeStatus`).
 - Taps (Class rows and the opened book):
   - Correction on solo circles: once ✓ right, twice ✗ wrong, three times ↻ slip. Taps save 0.9 s after the
     last tap, and the toast has Undo.
@@ -127,7 +133,8 @@ chips for other books ("U08 Eval 2"). Absent students: book now only.
   (G7 U08 = 146, G8 U01 = 230, G8 U02 = 223, G8 U03 = 467 in 24 levels).
 - **Getting workbooks in: he uploads them himself** in Settings → Books → **Upload workbooks**: one or many unit
   source zips (or book.html) from the workbook chats. The phone reads them (no AI, no deploy), shows New /
-  Replaces / Already in the app / refused-with-reason, and one tap saves them (`saveWorkbook` with `replace`).
+  Replaces / Already in the app / refused-with-reason, and one tap saves them (`saveWorkbook` with `replace`). A tute
+  zip is one row "topic tute" (both books, both keys, the questions): "Save 1 tute" (`saveTute`).
 - The unit % = marks ÷ book total. "So far %" counts corrected levels only.
 - **The bar under the row** shows where he is: a marker ▼ "L3 4" over the level he works on (dark) and each waiting
   level (amber); neighbours share one marker; near the ends it leans inwards (`markerRuns`, `.mk`).
@@ -162,6 +169,22 @@ past-paper-workbook chat in "answer key only" mode, §4b); he uploads the zip as
 key"). The reader checks numbers, each question's marks and the grade. Own table `keys`, never in `books`; fetched
 (`catalog.key`) only while a level or an Evaluation card is open; teachers + owner only, never the parents'/students'
 sites. Final answer bold from `**…**`, never HTML; Books page K pill. A re-upload without a key keeps it.
+**One key per book** (`keys.stage`; a row without one = the workbook's, as before): `catalog.key {stage}`,
+`keyRow(ctx, unit, stage)` (the family app reads the workbook's). A theory book's key (topic tutes) shows on
+Correction's Fighter card, Evaluation (`AnswerKey stage`) and Theory's teacher questions; without one: "Check his
+answer in his notebook" (no fetch). Books page **K** = every book of the unit in the app has its key.
+
+**Questions as printed (31 Oct 2026).** Every upload also cuts each question card out of the zip's book.html
+(`src/bookQuestions.ts`: tutes `qq` = Fighter, `pq` = Master; workbooks `si`/`pq` per unit, split at the marks
+sheets; the printed number = the card's `qn`; footers and side tabs out) and the book's CSS (fonts, `@page` and
+`@media screen` out), cleaned (`cleanHtml`), saved after the book in ~600 KB saves (`catalog.saveQuestions`: the first
+takes the old ones away; the server refuses anything that runs, loads or posts: `unsafeHtml`/`unsafeCss`). Own
+tables `questions` (unit, stage, q, html) and `bookCss`, `books.qCount`; gone when a re-upload changes the book's
+questions (`bookShape`). Read one at a time (`catalog.question`, `catalog.bookCss`) under Correction's, Evaluation's
+and Theory's question card: **Show the question** (`QuestionToggle`, `src/bookQuestion.tsx`; always there, pale with
+no text in the app; stays open from question to question) draws it in a **shadow root** (the book's `.qn .band .sq`
+never meet the app's), cleaned again (`safeFragment`), figures and tables wider than the phone zoomed down, working
+space hidden. Books page **Q** = every book has its questions. Old zips: upload them again once (no new chat).
 
 **Theory page (one screen, 31 Oct 2026, his voice note "rebuild the theory page also same like this": the Evaluation
 page's layout; `src/theoryFocus.tsx` `TheoryTab`, rules in `src/theoryFocusData.ts`).** No Room button, no Lessons

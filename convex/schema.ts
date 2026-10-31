@@ -137,14 +137,35 @@ export default defineSchema({
     updatedAt: v.number(),
     /** How many answers its key has (the key itself is in `keys`); missing = no key. */
     keyCount: v.optional(v.number()),
+    /** How many of its questions are in `questions` (read from the uploaded book.html); missing = none. */
+    qCount: v.optional(v.number()),
   }).index("by_unit_stage", ["unitId", "stage"]),
 
-  /** A workbook's answer key, read only when a teacher opens a level to correct. Teachers only, never in the code. */
+  /** A book's answer key, read only when a teacher opens a question. Teachers only, never in the code.
+   *  stage: whose key (a topic tute brings both); missing = the workbook's (Master), as every key before. */
   keys: defineTable({
     unitId: v.id("units"),
+    stage: v.optional(bookStage),
     answers: v.array(keyAnswer),
     updatedAt: v.number(),
   }).index("by_unit", ["unitId"]),
+
+  /** Each printed question of a book as the book draws it (cleaned HTML), read only while a teacher opens it.
+   *  Teachers only, never in the code (his books' content). */
+  questions: defineTable({
+    unitId: v.id("units"),
+    stage: bookStage,
+    q: v.number(),
+    html: v.string(),
+  }).index("by_book", ["unitId", "stage", "q"]),
+
+  /** The book's own CSS (fonts and print rules removed), to draw its questions. One row per book. */
+  bookCss: defineTable({
+    unitId: v.id("units"),
+    stage: bookStage,
+    css: v.string(),
+    updatedAt: v.number(),
+  }).index("by_book", ["unitId", "stage"]),
 
   students: defineTable({
     name: v.string(),
