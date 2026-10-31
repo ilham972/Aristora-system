@@ -168,7 +168,7 @@ describe("Who to call: most urgent first, with what each does meanwhile", () => 
 
   test("one screen (31 Oct 2026): grades, stages, units and question groups, each the most urgent first", () => {
     // Grade 11 (2 red) before 7 (orange only); grades with nothing last, 6 to 10 in order.
-    expect(gradeRow(list).map((g) => [g.grade, g.c.total])).toEqual([[11, 4], [7, 1], [6, 0], [8, 0], [9, 0], [10, 0]]);
+    expect(gradeRow(list).map((g) => [g.grade, g.c.total])).toEqual([[11, 4], [7, 1], [6, 0], [8, 0], [9, 0], [10, 0], [12, 0]]); // 12 = OL
     const g11 = list.filter((c) => bookGrade(c) === 11);
     expect(stageRow(g11).map((x) => [x.id, x.c.total])).toEqual([["fighter", 4], ["master", 0], ["legend", 0]]);
     expect(stageRow(list.filter((c) => bookGrade(c) === 7)).map((x) => x.id)).toEqual(["master", "fighter", "legend"]);
@@ -340,6 +340,7 @@ describe("The audit's fixes (1 Nov 2026)", () => {
       [8, 0, false],
       [9, 0, false],
       [10, 0, false],
+      [12, 0, false], // OL
     ]);
   });
 

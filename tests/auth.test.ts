@@ -74,7 +74,7 @@ describe("owner setup", () => {
     );
     // The owner's phone works.
     await asPhone(t, tok(1)).mutation(api.setup.ensure, {});
-    expect((await asPhone(t, tok(1)).query(api.catalog.units, {})).length).toBe(171);
+    expect((await asPhone(t, tok(1)).query(api.catalog.units, {})).length).toBe(171 + 53); // Grades 6–11 + the OL topics
     // Nothing secret is stored as typed.
     const rows = await t.run(async (ctx) => ({ users: await ctx.db.query("users").collect(), devices: await ctx.db.query("devices").collect() }));
     expect(JSON.stringify(rows)).not.toContain("482913");

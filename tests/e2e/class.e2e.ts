@@ -551,7 +551,7 @@ test("the register: a whole class on three phones", async () => {
   for (const role of ["correction", "theory", "evaluation"]) {
     const small = await phone(backend, role, { ...PHONE, viewport: { width: 360, height: 740 } });
     if (role === "theory") await visible(small.locator(".tp-page .tp-kinds"));
-    else if (role === "evaluation") await count(small.locator(".evx-grades .evx-g"), 6); // grades 6-11, one row
+    else if (role === "evaluation") await count(small.locator(".evx-grades .evx-g"), 7); // grades 6-11 and OL, one row
     else {
       if (role === "correction") await visible(row(small, "Ahamed")); // loaded, then measure
       await textsAre(small.locator(".grade-pills .gp b"), ["All", "7", "11"]);
@@ -1492,7 +1492,8 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
   await tap(F.locator(".fc-units"));
   await contains(F.locator(".sheet h2"), "Nimal: units");
   await visible(F.locator(".su-st.master.on"));
-  expect(await F.locator(".su-tl").allTextContents()).toEqual(["Term 1", "Term 2", "Term 3"]);
+  expect(await F.locator(".su-tl > span").allTextContents()).toEqual(["Term 1", "Term 2", "Term 3"]);
+  await count(F.locator(".su-olb"), 0); // OL books are for Grade 10 and 11 students: no switch for Grade 8
   const units = await F.locator(".su-p b").allTextContents();
   expect(units.length).toBe(31);
   expect(units.slice(0, 3)).toEqual(["1", "2", "3"]);
@@ -1762,11 +1763,11 @@ test("Theory: one screen like Evaluation: grade, stage, unit and lesson rows; he
   // grades pale; Fighter (Master and Legend pale); unit 13 in Tamil; then its sections, D first (it gives work to the
   // most). No English names, no U-codes, nothing pulsing.
   const grades = T.locator(".evx-g");
-  await until(async () => JSON.stringify(await grades.locator("b").allTextContents()) === '["6","7","8","9","10","11"]', "the grades in their places");
+  await until(async () => JSON.stringify(await grades.locator("b").allTextContents()) === '["6","7","8","9","10","11","OL"]', "the grades in their places");
   const t11 = T.locator(".evx-g").filter({ has: T.locator("b", { hasText: /^11$/ }) });
   await until(async () => (await t11.getAttribute("aria-pressed")) === "true", "Grade 11 picked");
   expect(await t11.getAttribute("class")).toContain("pri1"); // the most urgent: red outline
-  await count(T.locator(".evx-g:disabled"), 5);
+  await count(T.locator(".evx-g:disabled"), 6); // OL pale too
   expect(new Set(await grades.evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)))).size).toBe(1);
   await until(
     async () => JSON.stringify(await T.locator(".tp-kind").evaluateAll((els) => els.map((e) => e.firstChild?.textContent))) === '["Fighter","Master","Legend"]',
@@ -2090,7 +2091,7 @@ test("Evaluation: one screen: grade, stage, unit and questions the most urgent f
   // The grades in fixed places (1 Nov 2026), the most urgent already picked: Grade 11 (Dilan stuck, Fathima no work)
   // outlined red, then 7 orange; the grades with nothing for her pale. All six in ONE row.
   const grades = E.locator(".evx-g");
-  await until(async () => JSON.stringify(await grades.locator("b").allTextContents()) === '["6","7","8","9","10","11"]', "the grades in their places");
+  await until(async () => JSON.stringify(await grades.locator("b").allTextContents()) === '["6","7","8","9","10","11","OL"]', "the grades in their places");
   const g11 = E.locator(".evx-g").filter({ has: E.locator("b", { hasText: /^11$/ }) });
   await until(async () => (await g11.getAttribute("aria-pressed")) === "true", "Grade 11 picked");
   expect(await g11.getAttribute("class")).toContain("pri1");
@@ -2105,7 +2106,7 @@ test("Evaluation: one screen: grade, stage, unit and questions the most urgent f
     return c;
   });
   expect(await g11.evaluate((el) => getComputedStyle(el).borderTopColor)).toBe(red);
-  await count(E.locator(".evx-g:disabled"), 4);
+  await count(E.locator(".evx-g:disabled"), 5); // OL pale too
   expect(new Set(await grades.evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)))).size).toBe(1);
   await until(
     async () => JSON.stringify(await E.locator(".tp-kind").evaluateAll((els) => els.map((e) => e.firstChild?.textContent))) === '["Fighter","Master","Legend"]',
@@ -2749,4 +2750,72 @@ test("Topic tute: one zip = the unit's theory book and workbook, both answer key
   // Class's view of the opened question stays unstyled by the book (its CSS lives only in the shadow root).
   expect(await C.locator(".fc-qn").first().evaluate((el) => getComputedStyle(el).backgroundColor)).not.toBe("rgb(17, 17, 17)");
   expect(problems.filter((x) => !x.includes("[focus warning]"))).toEqual([]);
+});
+
+test("OL: the O/L books by paper part; a tute filed under its topic; a Grade 11 student given one, or the whole OL", async () => {
+  const backend = await newClass();
+  const C = await phone(backend, "focus");
+  await C.getByRole("button", { name: "Settings" }).click();
+  await C.getByRole("button", { name: "Load demo students (three grades)" }).click();
+  await visible(C.getByText(/^14 demo students loaded/));
+
+  // Books: OL after 11 in the grade row; its 53 topics under the four parts, numbered as on his tracker sheet.
+  await C.getByRole("button", { name: "Books", exact: true }).click();
+  await C.locator(".grade-row").getByRole("button", { name: /^OL\b/ }).click();
+  await textsAre(C.locator(".settings-body .block-title"), [
+    "பகுதி 1A · Paper I · Part A",
+    "பகுதி 1B · Paper I · Part B",
+    "பகுதி 2A · Paper II · Part A",
+    "பகுதி 2B · Paper II · Part B",
+  ]);
+  const u44 = C.locator(".unit-list li", { hasText: "Simultaneous equations" });
+  await contains(u44.locator("b"), "03");
+  await contains(C.locator(".unit-list li", { hasText: "Sets and probability" }).locator("b"), "12");
+  const json = JSON.parse(TUTE_JSON);
+  json.grade = "OL";
+  json.unit = { no: 44, code: "U44", en: "Simultaneous equations", ta: "ஒருங்கமை சமன்பாடு" };
+  json.master.part = "IIA";
+  const zip = Buffer.from(zipSync({ "book.html": strToU8(TUTE_BOOK), "tute.json": strToU8(JSON.stringify(json)), "content.py": strToU8("") }));
+  await C.locator(".upload-btn input[type=file]").setInputFiles([{ name: "Simultaneous_tute_source.zip", mimeType: "application/zip", buffer: zip }]);
+  await contains(C.locator(".sheet .up-new"), "OL · U44 Simultaneous equations · topic tute");
+  await C.locator(".sheet").getByRole("button", { name: "Save 1 tute" }).click();
+  await contains(C.locator(".toast"), "Saved OL · U44 Simultaneous equations · topic tute");
+  await textsAre(u44.locator("i.has"), ["F", "M", "K", "Q"]);
+  await shot(C, "o01-books-ol");
+  const narrow = await phone(backend, "focus", { ...PHONE, viewport: { width: 320, height: 640 } });
+  await narrow.getByRole("button", { name: "Settings" }).click();
+  await narrow.getByRole("button", { name: "Books", exact: true }).click();
+  const row = narrow.locator(".grade-row");
+  await shot(narrow, "o02-books-grade-row-320");
+  const fit = await row.evaluate((el) => ({ sw: el.scrollWidth, cw: el.clientWidth, h: Math.round(el.getBoundingClientRect().height), n: el.children.length }));
+  expect(fit.sw <= fit.cw + 1 && fit.h < 70, `seven grades in one row at 320 px: ${JSON.stringify(fit)}`).toBe(true);
+
+  // Correction: a Grade 11 student's units sheet → OL books: the four parts; the whole OL in one tap (only the books in
+  // the app: Simultaneous equations); then he moves onto it and stays Grade 11.
+  await C.getByRole("button", { name: "Back to the class" }).click();
+  await C.locator(".fc-grades").getByRole("button", { name: /^Grade 11\b|^11\b/ }).first().click();
+  const kumar = await backend.t.run(async (ctx) => (await ctx.db.query("students").collect()).find((x) => x.grade === 11 && x.present)!.name);
+  await C.locator(".fc-nm", { hasText: new RegExp(`^${kumar}`) }).first().click();
+  await C.waitForTimeout(420);
+  await C.locator(".fc-units").click();
+  await C.locator(".su-olb").click();
+  const parts = ["பகுதி 1A · Paper I · Part A", "பகுதி 1B · Paper I · Part B", "பகுதி 2A · Paper II · Part A", "பகுதி 2B · Paper II · Part B"];
+  await until(async () => JSON.stringify(await C.locator(".su-tl > span").allTextContents()) === JSON.stringify(parts), "the four parts"); // drawn in capitals
+  await visible(C.locator(".su-olb", { hasText: "Grade 11 ›" }));
+  await C.locator(".sheet .su-st.master").click();
+  await C.locator(".sheet").getByRole("button", { name: "Books given" }).click();
+  await C.locator(".su-olall", { hasText: "Give him every OL workbook in the app (1)" }).click();
+  await contains(C.locator(".toast"), `${kumar}: 1 OL workbook given.`);
+  await visible(C.locator(".su-olall", { hasText: "Take back every OL workbook (1)" }));
+  await shot(C, "o03-units-sheet-ol");
+  await C.locator(".sheet").getByRole("button", { name: "Move him" }).click();
+  await C.locator(".su-p", { hasText: "ஒருங்கமை சமன்பாடு" }).click();
+  await contains(C.locator(".toast"), `${kumar}: Master · OL 3 ஒருங்கமை சமன்பாடு.`);
+  const s = await backend.t.run(async (ctx) => {
+    const st = (await ctx.db.query("students").collect()).find((x) => x.name === kumar)!;
+    const u = (await ctx.db.get(st.unitId!))!;
+    return [st.grade, st.stage, u.key];
+  });
+  expect(s).toEqual([11, "master", "OL-U44"]);
+  expect(problems.filter((x) => !x.includes("warning]"))).toEqual([]);
 });

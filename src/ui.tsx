@@ -1,3 +1,4 @@
+import { gradeName, gradeWords } from "../convex/lib/syllabus";
 import type { ComponentChildren } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { MarkState } from "../convex/lib/status";
@@ -160,11 +161,11 @@ export function SectionBadge(props: { badge: string }) {
 export const GRADES = [6, 7, 8, 9, 10, 11];
 
 /** A grade this phone remembers for one page: the last one tapped there. */
-export function useGrade(key: string, fallback: () => number): [number, (g: number) => void] {
+export function useGrade(key: string, fallback: () => number, allowed: readonly number[] = GRADES): [number, (g: number) => void] {
   const [grade, setGrade] = useState<number>(() => {
     try {
       const saved = Number(localStorage.getItem(key));
-      if (GRADES.includes(saved)) return saved;
+      if (allowed.includes(saved)) return saved;
     } catch {
       /* private mode */
     }
@@ -187,10 +188,13 @@ export function GradeRow(props: {
   onPick: (g: number) => void;
   label: string;
   count?: (g: number) => { text: string; aria: string; some?: boolean };
+  /** Default: the school grades 6–11. The Books page adds OL (the O/L books). */
+  grades?: readonly number[];
 }) {
+  const grades = props.grades ?? GRADES;
   return (
-    <div class="grade-row" role="group" aria-label={props.label}>
-      {GRADES.map((g) => {
+    <div class={`grade-row${grades.length === 7 ? " g7" : ""}`} role="group" aria-label={props.label}>
+      {grades.map((g) => {
         const c = props.count?.(g);
         return (
           <button
@@ -198,10 +202,10 @@ export function GradeRow(props: {
             type="button"
             class={`${g === props.value ? "on" : ""}${c?.some ? " some" : ""}`}
             aria-pressed={g === props.value}
-            aria-label={`Grade ${g}${c ? `: ${c.aria}` : ""}`}
+            aria-label={`${gradeWords(g)}${c ? `: ${c.aria}` : ""}`}
             onClick={() => props.onPick(g)}
           >
-            <b>{g}</b>
+            <b>{gradeName(g)}</b>
             {c && <small>{c.text}</small>}
           </button>
         );

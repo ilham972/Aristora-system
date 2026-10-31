@@ -10,6 +10,7 @@
 // - AnswerKey: one workbook question's answer (teachers only), fetched while it is open.
 // - LockIcon: her room is in use. usePinned: the pinned rows' height (toasts sit above the pad, never over it).
 
+import { gradeName, gradeWords } from "../convex/lib/syllabus";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
@@ -99,7 +100,7 @@ export function usePinned(key: unknown) {
  */
 export function GradeRow(props: { rows: { grade: number; c: HeatCount; room?: boolean; rank?: number }[]; value: number | null; onPick: (g: number) => void }) {
   return (
-    <nav class="evx-grades" aria-label="Grades 6 to 11; the most urgent outlined red, then orange, then yellow">
+    <nav class="evx-grades" aria-label="Grades 6 to 11 and OL; the most urgent outlined red, then orange, then yellow">
       {[...props.rows]
         .sort((a, b) => a.grade - b.grade)
         .map((r) => {
@@ -112,10 +113,10 @@ export function GradeRow(props: { rows: { grade: number; c: HeatCount; room?: bo
               class={`evx-g${on ? " on" : ""}${pri ? ` pri${pri}` : ""}`}
               aria-pressed={on}
               disabled={!on && r.c.total === 0 && !r.room}
-              aria-label={`Grade ${r.grade}: ${r.c.total}, ${heatWords(r.c)}${pri ? `, most urgent ${RANK_WORDS[pri - 1]}` : ""}${r.room ? ", your room" : ""}`}
+              aria-label={`${gradeWords(r.grade)}: ${r.c.total}, ${heatWords(r.c)}${pri ? `, most urgent ${RANK_WORDS[pri - 1]}` : ""}${r.room ? ", your room" : ""}`}
               onClick={() => props.onPick(r.grade)}
             >
-              <b>{r.grade}</b>
+              <b>{gradeName(r.grade)}</b>
               <i>{r.c.total || ""}</i>
               {r.c.red > 0 && <em class="evx-g-r">{r.c.red}</em>}
             </button>
@@ -158,7 +159,7 @@ export function LessonName(props: { unit: Unit | null; section: SectionData | nu
     <>
       {unit && (
         <i class="tp-ln-g" aria-hidden="true">
-          {unit.grade}
+          {gradeName(unit.grade)}
         </i>
       )}
       <b class="tp-ln-n">

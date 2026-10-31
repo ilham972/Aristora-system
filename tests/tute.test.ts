@@ -203,3 +203,72 @@ describe("saving a tute", () => {
     expect(keys.map((k) => k.stage ?? "master").sort()).toEqual(["fighter", "master"]); // patched, not doubled
   });
 });
+
+describe("OL: the O/L books by paper part, for any student", () => {
+  let raw: ReturnType<typeof fresh>;
+  let t: Awaited<ReturnType<typeof asOwner>>;
+  const olUnit = async (code: string) =>
+    await raw.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", `OL-${code}`)).first())!);
+  const olTute = (part = "IIA") =>
+    edit((j) => {
+      j.grade = "OL";
+      j.unit = { no: 44, code: "U44", en: "Simultaneous equations", ta: "ஒருங்கமை சமன்பாடு" };
+      j.master.part = part;
+    });
+
+  beforeEach(async () => {
+    raw = fresh();
+    t = await asOwner(raw);
+    await t.mutation(api.setup.ensure, {});
+  });
+
+  test("a tute filed under an OL topic: its part must be the topic's part", async () => {
+    const units = await t.query(api.catalog.units, {});
+    const [r] = read(olTute()) as ReadTute[];
+    expect([r.grade, r.code, r.problems]).toEqual([12, "U44", []]);
+    const [row] = uploadRows([r], units as never[], []);
+    expect(row).toMatchObject({ state: "new", title: "OL · U44 Simultaneous equations · topic tute" });
+    const [wrong] = uploadRows(read(olTute("IIB")), units as never[], []);
+    expect(wrong).toMatchObject({ state: "bad", words: "Simultaneous equations is in Paper II · Part A; this tute's papers say Paper II B." });
+    const u = await olUnit("U44");
+    const save = (part: "IIA" | "IIB") =>
+      t.mutation(api.catalog.saveTute, {
+        unitId: u._id,
+        fighter: { sections: r.fighter.sections.map((x) => ({ id: x.id, title: x.title, tamil: x.tamil, teach: x.teach, solo: x.solo })) },
+        master: { part, levels: r.master.levels.map((l) => ({ from: l.from, to: l.to, max: l.max })), marks: r.master.marks! },
+        masterKey: r.masterKey!,
+      });
+    await expect(save("IIB")).rejects.toThrow(/Simultaneous equations is in Paper II · Part A/);
+    expect(await save("IIA")).toBe(true);
+  });
+
+  test("a Grade 10 student gets an OL book, moves onto one (his grade and term stay), or the whole OL at once", async () => {
+    const g10u1 = await raw.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G10-U01")).first())!);
+    const id = await t.mutation(api.students.add, { name: "Nimal", grade: 10, term: 2, stage: "master", unitId: g10u1._id });
+    const u44 = await olUnit("U44");
+    const u45 = await olUnit("U45");
+    expect(await t.mutation(api.students.setGiven, { id, unitId: u44._id, stage: "master", given: true })).toBe(true);
+    await t.mutation(api.students.move, { id, grade: 12, term: 3, stage: "master", unitId: u45._id });
+    const s = await raw.run(async (ctx) => await ctx.db.get(id));
+    expect([s!.grade, s!.term, s!.unitId]).toEqual([10, 2, u45._id]);
+    // The whole OL syllabus: only the OL workbooks in the app (none yet: nothing to give).
+    expect(await t.mutation(api.students.giveAllOl, { id, stage: "master", given: true })).toBe(0);
+    for (const u of [u44, u45]) {
+      await raw.run(async (ctx) => {
+        await ctx.db.insert("books", { unitId: u._id, stage: "master", data: { kind: "master", parts: [{ id: "IIA", from: 1, to: 2, kind: "cards" }], levels: [{ n: 1, from: 1, to: 2, max: 20 }], marks: { "1": 10, "2": 10 } }, updatedAt: 1 });
+      });
+    }
+    expect(await t.mutation(api.students.giveAllOl, { id, stage: "master", given: true })).toBe(1); // U44 was given already
+    const given = async () => (await raw.run(async (ctx) => await ctx.db.query("handouts").collect())).map((h) => h.unitId).sort();
+    expect(await given()).toEqual([u44._id, u45._id].sort());
+    expect(await t.mutation(api.students.giveAllOl, { id, stage: "master", given: false })).toBe(2);
+    expect(await given()).toEqual([]);
+    // A school unit of another grade is still refused; OL is for Grades 10 and 11 only.
+    const g9 = await raw.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G9-U01")).first())!);
+    await expect(t.mutation(api.students.setGiven, { id, unitId: g9._id, stage: "master", given: true })).rejects.toThrow(/not Grade 10/);
+    const g8 = await t.mutation(api.students.add, { name: "Ravi", grade: 8, term: 2, stage: "master", unitId: (await raw.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G8-U01")).first())!))._id });
+    await expect(t.mutation(api.students.setGiven, { id: g8, unitId: u44._id, stage: "master", given: true })).rejects.toThrow(/Grade 10 and 11/);
+    await expect(t.mutation(api.students.move, { id: g8, grade: 8, term: 2, stage: "master", unitId: u44._id })).rejects.toThrow(/Grade 10 and 11/);
+    await expect(t.mutation(api.students.giveAllOl, { id: g8, stage: "master", given: true })).rejects.toThrow(/Grade 10 and 11/);
+  });
+});

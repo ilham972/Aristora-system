@@ -6,7 +6,7 @@ import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { checkMaster, KNOWN_WORKBOOKS, levelOutOf, type MasterData } from "../convex/lib/book";
 import { computeMaster, levelWaits, teachState, type MState } from "../convex/lib/master";
-import { SYLLABUS } from "../convex/lib/syllabus";
+import { OL_TOPICS, olNumber, SYLLABUS } from "../convex/lib/syllabus";
 import schema from "../convex/schema";
 import { addPerson, asOwner, asPhone } from "./helpers";
 
@@ -65,14 +65,20 @@ describe("the syllabus and the books", () => {
   test("Grade 6-11 units load once, in term order; setup runs any number of times", async () => {
     const t = await setup();
     const units = await t.query(api.catalog.units, {});
-    expect(units).toHaveLength(SYLLABUS.length);
+    expect(units).toHaveLength(SYLLABUS.length + OL_TOPICS.length);
     const count = (g: number) => units.filter((u) => u.grade === g && u.term > 0).length;
     expect([6, 7, 8, 9, 10, 11].map(count)).toEqual([25, 29, 31, 28, 32, 25]);
+    // OL (grade 12): his O/L tracker sheet by paper part, Paper 2 split as the exam's questions (A 1–6, B 7–12).
+    const ol = units.filter((u) => u.grade === 12);
+    expect([1, 2, 3, 4].map((p) => ol.filter((u) => u.term === p).length)).toEqual([34, 7, 6, 6]);
+    expect(ol.find((u) => u.en === "Simultaneous equations")).toMatchObject({ key: "OL-U44", code: "U44", term: 3, ta: "ஒருங்கமை சமன்பாடு" });
+    expect(olNumber(ol.find((u) => u.code === "U48")!, units)).toBe(7); // Paper 2's numbers run on into Part B
+    expect(olNumber(ol.find((u) => u.code === "U35")!, units)).toBe(1);
     expect(units.find((u) => u.key === "G8-U31")?.en).toBe("Tessellation");
     expect(units.find((u) => u.key === "G11-U13")?.term).toBe(2);
     const again = await t.mutation(api.setup.ensure, {});
     expect(again.changed).toBe(false);
-    expect(await t.query(api.catalog.units, {})).toHaveLength(SYLLABUS.length);
+    expect(await t.query(api.catalog.units, {})).toHaveLength(SYLLABUS.length + OL_TOPICS.length);
     const books = await t.query(api.catalog.books, {});
     expect(books.map((b) => b.stage).sort()).toEqual(["fighter", "master"]);
     expect(books.find((b) => b.stage === "master")?.master?.total).toBe(146);

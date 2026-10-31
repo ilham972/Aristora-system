@@ -571,7 +571,7 @@ export function roomWords(it: RoomItem, now: number): string {
 
 // ---------------- One screen: grade → stage → unit → lesson (31 Oct 2026) ----------------
 
-export const THEORY_GRADES = [6, 7, 8, 9, 10, 11];
+export const THEORY_GRADES = [6, 7, 8, 9, 10, 11, 12]; // 12 = OL (the O/L books)
 /** Fighter (theory books), Master (workbooks), Legend (whole papers: no books in the app yet). */
 export type TheoryStage = LessonKind | "legend";
 

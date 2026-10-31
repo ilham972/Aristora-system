@@ -22,6 +22,7 @@ import {
   type PartId,
 } from "../convex/lib/book";
 import { checkFighterKey, checkKey, type KeyAnswer } from "../convex/lib/key";
+import { OL } from "../convex/lib/syllabus";
 import { tuteQuestions, workbookQuestions } from "./bookQuestions";
 
 export type ReadWorkbook = {
@@ -98,7 +99,8 @@ export function readTuteFile(text: string, html: string | null, file: string): R
   const m = j?.master as J | undefined;
   if (j?.kind !== "aristora-tute" || j.version !== 1 || typeof unit?.no !== "number" || !Array.isArray(f?.sections) || !Array.isArray(m?.levels)) return bad;
   const part = String(m!.part ?? "") as PartId;
-  const grade = typeof j.grade === "number" ? j.grade : null;
+  // "OL" = the O/L books (grade 12 in the app); a school grade is a number.
+  const grade = typeof j.grade === "number" ? j.grade : j.grade === "OL" ? OL : null;
   const problems: string[] = [];
   const fighter: FighterData = {
     kind: "fighter",

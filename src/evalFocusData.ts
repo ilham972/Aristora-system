@@ -275,7 +275,7 @@ export function lostWords(v: View, q: number): string {
 
 // ---------------- One screen: grade → stage → unit → questions (31 Oct 2026) ----------------
 
-export const EVAL_GRADES = [6, 7, 8, 9, 10, 11];
+export const EVAL_GRADES = [6, 7, 8, 9, 10, 11, 12]; // 12 = OL (the O/L books)
 export type EvalStage = EvalKind | "legend";
 
 /** How many need her, by colour; each student once, held ones (with Theory) not counted. */

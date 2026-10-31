@@ -3,6 +3,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, type QueryCtx } from "./_generated/server";
 import {
   activeCalls,
+  bookFor,
   cleanBy,
   cleanName,
   currentSession,
@@ -19,7 +20,7 @@ import {
   UNDO_IN_MS,
   type Stage,
 } from "./lib/backend";
-import { termOf } from "./lib/syllabus";
+import { OL, termOf } from "./lib/syllabus";
 import { bookStage, stage } from "./schema";
 import { actor } from "./lib/auth";
 import { giveIndex } from "./lib/family";
@@ -47,8 +48,15 @@ async function checkPlace(
   }
   const unit = await ctx.db.get(unitId);
   if (!unit) fail("That unit no longer exists.");
-  if (unit.grade !== grade) fail(`${unit.code} is a Grade ${unit.grade} unit, not Grade ${grade}.`);
+  // An OL book is for Grade 10 and 11 students (his grade stays); a school unit only his grade's.
+  if (unit.grade === OL) checkOl(grade);
+  else if (unit.grade !== grade) fail(`${unit.code} is a Grade ${unit.grade} unit, not Grade ${grade}.`);
   return unit;
+}
+
+/** OL (the O/L books) is for Grade 10 and 11 students only (his rule, 1 Nov 2026): one topic or all of them. */
+function checkOl(grade: number | undefined): void {
+  if (grade !== 10 && grade !== 11) fail("OL books are for Grade 10 and 11 students.");
 }
 
 export const add = mutation({
@@ -120,8 +128,13 @@ export const move = mutation({
     await actor(ctx, args.token, ["any"], args.by);
     const now = Date.now();
     const s = await getStudent(ctx, args.id);
-    const unit = await checkPlace(ctx, args.grade, args.term, args.stage, args.unitId);
-    const patch: Partial<Doc<"students">> = { grade: args.grade, term: args.term, stage: args.stage, unitId: unit?._id };
+    // To an OL book: he keeps his own grade and term (OL is the O/L books, not a class he moves into).
+    const target = args.unitId ? await ctx.db.get(args.unitId) : null;
+    const ol = target?.grade === OL;
+    const grade = ol ? (s.grade ?? 11) : args.grade;
+    const term = ol ? (s.term ?? termOf(now)) : args.term;
+    const unit = await checkPlace(ctx, grade, term, args.stage, args.unitId);
+    const patch: Partial<Doc<"students">> = { grade, term, stage: args.stage, unitId: unit?._id };
     if (args.stage === "sprint" && s.stage !== "sprint" && s.stage) {
       patch.back = { stage: s.stage, unitId: s.unitId, term: s.term ?? args.term };
     } else if (args.stage !== "sprint") {
@@ -136,7 +149,7 @@ export const move = mutation({
       studentId: s._id,
       name: s.name,
       unit: unit?.key,
-      value: `Grade ${args.grade} · Term ${args.term} · ${STAGE_WORD[args.stage]}`,
+      value: `${ol ? "OL" : `Grade ${grade} · Term ${term}`} · ${STAGE_WORD[args.stage]}`,
     });
     await refresh(ctx, s._id, now, session);
     await touch(ctx, session, now);
@@ -160,7 +173,9 @@ export const setGiven = mutation({
     const s = await getStudent(ctx, args.id);
     const unit = await ctx.db.get(args.unitId);
     if (!unit) fail("That unit no longer exists.");
-    if (s.grade !== undefined && unit.grade !== s.grade) fail(`${unit.code} is a Grade ${unit.grade} unit, not Grade ${s.grade}.`);
+    if (unit.grade === OL) {
+      if (args.given) checkOl(s.grade);
+    } else if (s.grade !== undefined && unit.grade !== s.grade) fail(`${unit.code} is a Grade ${unit.grade} unit, not Grade ${s.grade}.`);
     const rows = (await ctx.db.query("handouts").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()).filter(
       (h) => h.unitId === unit._id && h.stage === args.stage,
     );
@@ -178,6 +193,49 @@ export const setGiven = mutation({
       value: `${unit.key} ${args.stage === "fighter" ? "theory book" : "workbook"}`,
     });
     return true;
+  },
+});
+
+/**
+ * The whole OL syllabus at once (his ask, 1 Nov 2026): every OL unit's workbook (or theory book) given to him, or all
+ * taken back. Only books that are in the app: a given book with nothing in the app counts as work, and 53 of them
+ * would hide him from "out of work" for good. Tap again after new books come in.
+ */
+export const giveAllOl = mutation({
+  args: { token: v.optional(v.string()), id: v.id("students"), stage: bookStage, given: v.boolean(), by: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["correction"], args.by);
+    const now = Date.now();
+    const s = await getStudent(ctx, args.id);
+    if (args.given) checkOl(s.grade);
+    const units = await ctx.db.query("units").withIndex("by_grade", (q) => q.eq("grade", OL)).collect();
+    const mine = (await ctx.db.query("handouts").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()).filter(
+      (h) => h.stage === args.stage,
+    );
+    let n = 0;
+    for (const u of units) {
+      const rows = mine.filter((h) => h.unitId === u._id);
+      if (args.given) {
+        if (rows.length || !(await bookFor(ctx, u._id, args.stage))) continue;
+        await ctx.db.insert("handouts", { studentId: s._id, unitId: u._id, stage: args.stage, at: now, by: cleanBy(args.by) });
+        n++;
+      } else if (rows.length) {
+        for (const h of rows) await ctx.db.delete(h._id);
+        n++;
+      }
+    }
+    if (n === 0) return 0;
+    const session = await currentSession(ctx, now);
+    await refresh(ctx, s._id, now, session);
+    const book = args.stage === "fighter" ? "theory books" : "workbooks";
+    await log(ctx, session, now, {
+      kind: args.given ? "book-given" : "book-given-off",
+      by: cleanBy(args.by),
+      studentId: s._id,
+      name: s.name,
+      value: `OL: ${n} ${book}`,
+    });
+    return n;
   },
 });
 

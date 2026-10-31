@@ -1,3 +1,4 @@
+import { BOOK_GRADES, gradeWords, OL, OL_PARTS, olNumber } from "../convex/lib/syllabus";
 import { useRef, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Doc, Id } from "../convex/_generated/dataModel";
@@ -503,7 +504,7 @@ type BookRow = {
 function Books() {
   const units = allUnits();
   const books = useQuery<BookRow[]>(api.catalog.books, {}) ?? [];
-  const [grade, setGrade] = useGrade("aristora.booksGrade", () => 8);
+  const [grade, setGrade] = useGrade("aristora.booksGrade", () => 8, BOOK_GRADES);
   const [open, setOpen] = useState<Unit | null>(null);
   const list = units.filter((u) => u.grade === grade);
   const bookOf = (u: Unit, st: "fighter" | "master") => books.find((b) => b.unitId === u._id && b.stage === st);
@@ -519,6 +520,7 @@ function Books() {
         value={grade}
         onPick={setGrade}
         label="Grade"
+        grades={BOOK_GRADES}
         count={(g) => {
           const us = units.filter((u) => u.grade === g);
           const n = us.filter((u) => bookOf(u, "master")).length;
@@ -526,15 +528,16 @@ function Books() {
         }}
       />
       <p class="muted">
-        {list.length} units. In the app: theory books (F) {done("fighter")} · workbooks (M) {done("master")} · answer keys (K) {keys} · questions
+        {grade === OL ? `${list.length} O/L topics by paper part, as on the O/L exam (any student can be given them).` : `${list.length} units.`} In
+        the app: theory books (F) {done("fighter")} · workbooks (M) {done("master")} · answer keys (K) {keys} · questions
         as printed (Q) {texts}.
       </p>
-      {[1, 2, 3, 0].map((t) => {
+      {(grade === OL ? [1, 2, 3, 4] : [1, 2, 3, 0]).map((t) => {
         const us = list.filter((u) => u.term === t);
         if (!us.length) return null;
         return (
           <div key={t}>
-            <h3 class="block-title">{t ? `Term ${t}` : "Extra"}</h3>
+            <h3 class="block-title">{grade === OL ? `${OL_PARTS[t].ta} · ${OL_PARTS[t].en}` : t ? `Term ${t}` : "Extra"}</h3>
             <ul class="unit-list">
               {us.map((u) => {
                 const f = bookOf(u, "fighter");
@@ -552,7 +555,7 @@ function Books() {
                 return (
                   <li key={u._id}>
                     <button type="button" onClick={() => setOpen(u)}>
-                      <b>{u.code}</b>
+                      <b>{grade === OL ? String(olNumber(u, units)).padStart(2, "0") : u.code}</b>
                       <span>
                         {u.en}
                         <small>{u.ta}</small>
@@ -637,7 +640,7 @@ function UnitSheet(props: { unit: Unit; book?: BookRow; fighter?: BookRow; onClo
   };
 
   return (
-    <Sheet title={`Grade ${unit.grade} · ${unit.code}`} sub={`${unit.en} · ${unit.ta}`} onClose={props.onClose}>
+    <Sheet title={`${gradeWords(unit.grade)} · ${unit.code}`} sub={`${unit.en} · ${unit.ta}`} onClose={props.onClose}>
       <h3 class="block-title">Names</h3>
       <div class="add-row">
         <input value={en} maxLength={80} aria-label="English name" onInput={(e) => setEn((e.target as HTMLInputElement).value)} />

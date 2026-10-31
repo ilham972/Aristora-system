@@ -31,7 +31,7 @@ import { slClock, slDate, slDay } from "../convex/lib/day";
 import { claimLive, CLAIM_PING_MS, type Claim } from "../convex/lib/claims";
 import { boldRuns, type KeyAnswer } from "../convex/lib/key";
 import type { Mark, MarkState } from "../convex/lib/status";
-import { termOf } from "../convex/lib/syllabus";
+import { OL, OL_PARTS, olNumber, termOf } from "../convex/lib/syllabus";
 import { errorText, mutate } from "./backend";
 import { Book } from "./board";
 import { CallsBand } from "./correction";
@@ -590,16 +590,17 @@ function openLevel(v: View, n: number) {
 async function moveTo(v: View, stage: Stage, u: Unit): Promise<boolean> {
   // The open paper's marks reach the server first (they stay with the unit he leaves).
   await flushFocus();
-  const t = u.term || v.s.term || termOf(serverNow());
+  const ol = u.grade === OL;
+  const t = ol ? v.s.term || termOf(serverNow()) : u.term || v.s.term || termOf(serverNow());
   const r = await act(() =>
-    mutate(api.students.move, { id: v.s._id, grade: u.grade, term: t, stage, unitId: u._id as Id<"units">, by: currentRole() }),
+    mutate(api.students.move, { id: v.s._id, grade: ol ? (v.s.grade ?? 11) : u.grade, term: t, stage, unitId: u._id as Id<"units">, by: currentRole() }),
   );
   if (r === undefined) return false;
   setPaper({ kind: "wait", studentId: v.s._id, unitId: u._id, stage });
   toast(
     stage === "fighter" || stage === "master"
-      ? `${v.s.name}: ${stageName(stage)} · ${unitNo(u.code)} ${u.ta || u.en}.`
-      : `${v.s.name}: ${stageName(stage)}, Grade ${u.grade}, Term ${t}.`,
+      ? `${v.s.name}: ${stageName(stage)} · ${ol ? `OL ${olNumber(u, allUnits())}` : unitNo(u.code)} ${u.ta || u.en}.`
+      : `${v.s.name}: ${stageName(stage)}, ${ol ? `OL ${u.ta || u.en}` : `Grade ${u.grade}, Term ${t}`}.`,
   );
   return true;
 }
@@ -1168,17 +1169,41 @@ function StageUnitSheet(props: { v: View; onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   // Taps not answered yet: the pill shows the new state at once.
   const [flip, setFlip] = useState<Record<string, boolean>>({});
-  const units = allUnits().filter((u) => u.grade === v.s.grade);
-  const terms = [1, 2, 3, 0]
+  // His grade's units, or the OL books (the O/L topics by paper part: any student can be given them).
+  const all = allUnits();
+  // OL is for Grade 10 and 11 students (his rule): the switch shows only for them.
+  const olOk = v.s.grade === 10 || v.s.grade === 11;
+  const [olView, setOlView] = useState(() => olOk && all.find((u) => u._id === v.s.unitId)?.grade === OL);
+  const units = all.filter((u) => u.grade === (olView ? OL : v.s.grade));
+  const terms = (olView ? [1, 2, 3, 4] : [1, 2, 3, 0])
     .map((t) => ({
       t,
-      list: units.filter((u) => (u.term || 0) === t).sort((a, b) => unitNo(a.code) - unitNo(b.code) || a.order - b.order),
+      list: units.filter((u) => (u.term || 0) === t).sort((a, b) => a.order - b.order || unitNo(a.code) - unitNo(b.code)),
     }))
     .filter((x) => x.list.length > 0);
+  const numberOf = (u: Unit) => (olView ? olNumber(u, all) : unitNo(u.code));
   const has = (u: Unit) => (books ? books.some((b) => b.unitId === u._id && b.stage === stage) : true);
   const cellOf = (u: Unit) => mine?.cells.find((c) => c.unitId === u._id && c.stage === stage);
   const givenOf = (u: Unit) => flip[`${u._id}:${stage}`] ?? !!mine?.given.some((g) => g.unitId === u._id && g.stage === stage);
   const bookWord = stage === "fighter" ? "theory book" : "workbook";
+  const olBooks = olView && books ? units.filter((u) => books.some((b) => b.unitId === u._id && b.stage === stage)) : [];
+  const olAllGiven = olBooks.length > 0 && olBooks.every((u) => givenOf(u));
+  /** Every OL book in the app given to him (or all taken back): his whole O/L syllabus in one tap. */
+  const giveAll = async () => {
+    setBusy(true);
+    const n = await act(() => mutate(api.students.giveAllOl, { id: v.s._id, stage, given: !olAllGiven, by: currentRole() }));
+    setBusy(false);
+    if (typeof n === "number") {
+      setFlip({});
+      toast(
+        n === 0
+          ? "Nothing to change."
+          : olAllGiven
+            ? `${v.s.name}: ${n} OL ${bookWord}${n === 1 ? "" : "s"} taken back.`
+            : `${v.s.name}: ${n} OL ${bookWord}${n === 1 ? "" : "s"} given.`,
+      );
+    }
+  };
 
   const pick = async (u: Unit) => {
     if (mode === "given") {
@@ -1232,10 +1257,15 @@ function StageUnitSheet(props: { v: View; onClose: () => void }) {
             </button>
           </div>
         </div>
-        {terms.map(({ t, list }) => (
-          <section key={t} class="su-term" aria-label={t ? `Term ${t}` : "Extra"}>
+        {terms.map(({ t, list }, ti) => (
+          <section key={`${olView ? "ol" : "g"}${t}`} class="su-term" aria-label={olView ? OL_PARTS[t].en : t ? `Term ${t}` : "Extra"}>
             <p class="su-tl">
-              <span>{t ? `Term ${t}` : "Extra"}</span>
+              <span>{olView ? `${OL_PARTS[t].ta} · ${OL_PARTS[t].en}` : t ? `Term ${t}` : "Extra"}</span>
+              {ti === 0 && olOk && (
+                <button type="button" class="su-olb" onClick={() => setOlView(!olView)}>
+                  {olView ? `Grade ${v.s.grade ?? ""} ›` : "OL books ›"}
+                </button>
+              )}
             </p>
             <div class={`su-grid${mode === "given" ? " gm" : ""}`}>
               {list.map((u) => {
@@ -1265,10 +1295,10 @@ function StageUnitSheet(props: { v: View; onClose: () => void }) {
                     style={`--p:${p}%`}
                     disabled={busy}
                     aria-pressed={mode === "given" ? given : undefined}
-                    aria-label={`${unitNo(u.code)} ${u.ta || u.en}${words ? `: ${words}` : ""}`}
+                    aria-label={`${olView ? "OL " : ""}${numberOf(u)} ${u.ta || u.en}${words ? `: ${words}` : ""}`}
                     onClick={() => void pick(u)}
                   >
-                    <b>{unitNo(u.code)}</b>
+                    <b>{numberOf(u)}</b>
                     <span lang="ta">{u.ta || u.en}</span>
                     {c?.evaluation ? (
                       <i class="su-w e" aria-hidden="true">
@@ -1290,6 +1320,15 @@ function StageUnitSheet(props: { v: View; onClose: () => void }) {
             </div>
           </section>
         ))}
+        {olView && mode === "given" && (
+          <button type="button" class="btn wide su-olall" disabled={busy || olBooks.length === 0} onClick={() => void giveAll()}>
+            {olBooks.length === 0
+              ? `No OL ${bookWord}s in the app yet`
+              : olAllGiven
+                ? `Take back every OL ${bookWord} (${olBooks.length})`
+                : `Give him every OL ${bookWord} in the app (${olBooks.length})`}
+          </button>
+        )}
         <p class="su-key muted small">
           {mode === "move" ? (
             <>

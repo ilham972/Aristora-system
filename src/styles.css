@@ -8217,3 +8217,33 @@ body.locked.evx-on .toasts {
 .fam-how {
   margin: 0 0 10px;
 }
+
+/* The Books page's grade row with OL (the O/L books): seven in one row, as narrow as 320 px. */
+.grade-row.g7 {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+.grade-row.g7 small {
+  font-size: 11px;
+}
+
+/* Correction's units sheet: "OL books ›" / "Grade 11 ›" at the right of the first section's line (no extra height:
+   the sheet is tuned to show a grade's units in one screen), and the whole OL syllabus in one tap. */
+.su-olb {
+  order: 2;
+  flex: none;
+  margin: -5px 0;
+  height: 20px;
+  padding: 0 9px;
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--ink);
+  font: 700 10.5px/1 var(--font);
+  letter-spacing: 0.02em;
+  text-transform: none;
+  cursor: pointer;
+}
+.su-olall {
+  margin-top: 8px;
+}

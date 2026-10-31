@@ -2,12 +2,12 @@ import { v } from "convex/values";
 import { mutation } from "./_generated/server";
 import { bookFor } from "./lib/backend";
 import { KNOWN_WORKBOOKS, PILOT_FIGHTER, PILOT_UNIT } from "./lib/book";
-import { SYLLABUS, unitKey, unitOrder } from "./lib/syllabus";
+import { OL, OL_TOPICS, SYLLABUS, unitKey, unitOrder } from "./lib/syllabus";
 import { actor } from "./lib/auth";
 import { giveIndex } from "./lib/family";
 
 /** Bump when ensure() has new one-time work to do. */
-export const DATA_VERSION = 2;
+export const DATA_VERSION = 3;
 
 /**
  * One-time data updates, safe to run any number of times (every phone calls it when the app opens):
@@ -54,6 +54,14 @@ export const ensure = mutation({
       const u = await unit(w.grade, w.code);
       if (!u || (await bookFor(ctx, u._id, "master"))) continue;
       await ctx.db.insert("books", { unitId: u._id, stage: "master", data: w.data, updatedAt: now });
+    }
+
+    // 5. The OL books' topics (version 3, 1 Nov 2026): his O/L tracker sheet, by paper part, once.
+    if (!(await ctx.db.query("units").withIndex("by_grade", (q) => q.eq("grade", OL)).first())) {
+      for (const [i, [part, en, ta]] of OL_TOPICS.entries()) {
+        const code = `U${String(i + 1).padStart(2, "0")}`;
+        await ctx.db.insert("units", { grade: OL, code, key: unitKey(OL, code), term: part, en, ta, order: i + 1 });
+      }
     }
 
     // 3. Students from before stages: Grade 11, Term 2, Fighter on the pilot book, marks kept.

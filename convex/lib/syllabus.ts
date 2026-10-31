@@ -206,9 +206,100 @@ export const SYLLABUS: UnitSeed[] = [
 
 export const GRADES = [6, 7, 8, 9, 10, 11] as const;
 
-/** "G8-U03": the stable key of a unit (grade + code). */
+/**
+ * OL: the O/L exam's own "grade" of books (his request, 1 Nov 2026), stored as grade 12 and shown as "OL". Its topics
+ * follow the exam paper, not the school terms: a unit's `term` is its part (1 = Paper I A, 2 = Paper I B, 3 = Paper II A,
+ * 4 = Paper II B). No student is in it: teachers give OL books to any student (mostly Grade 11, some Grade 10), one by
+ * one or all at once, and his own grade and term stay as they are.
+ */
+export const OL = 12;
+/** Every grade that has books: 6–11 and OL. */
+export const BOOK_GRADES = [...GRADES, OL] as const;
+export const OL_PARTS: Record<number, { id: "IA" | "IB" | "IIA" | "IIB"; en: string; ta: string }> = {
+  1: { id: "IA", en: "Paper I · Part A", ta: "பகுதி 1A" },
+  2: { id: "IB", en: "Paper I · Part B", ta: "பகுதி 1B" },
+  3: { id: "IIA", en: "Paper II · Part A", ta: "பகுதி 2A" },
+  4: { id: "IIB", en: "Paper II · Part B", ta: "பகுதி 2B" },
+};
+
+/** "OL" for the O/L books, the number for a school grade. */
+export function gradeName(grade: number | null | undefined): string {
+  return grade === OL ? "OL" : String(grade ?? "?");
+}
+
+/** "Grade 8", or "OL". */
+export function gradeWords(grade: number | null | undefined): string {
+  return grade === OL ? "OL" : `Grade ${grade ?? "?"}`;
+}
+
+/** His O/L tracker sheet (Paper 1 A 34, Paper 1 B 7, Paper 2 12 = A 1–6 + B 7–12, as the exam's questions), in his
+ *  order and his Tamil; seeded once (setup.ensure step 4), then renamed in the app. */
+export const OL_TOPICS: [part: 1 | 2 | 3 | 4, en: string, ta: string][] = [
+  [1, "Square root", "வர்க்கமூலம்"],
+  [1, "Inverse proportion", "நேர்மாறு விகிதசமன்"],
+  [1, "Taxes", "வரிகள்"],
+  [1, "Simple interest", "எளிய வட்டி"],
+  [1, "Indices and logarithms", "சுட்டிகளும் மடக்கைகளும்"],
+  [1, "Geometric progressions", "பெருக்கல் விருத்தி"],
+  [1, "Compound interest", "கூட்டு வட்டி"],
+  [1, "Perimeter", "சுற்றளவு"],
+  [1, "Area", "பரப்பளவு"],
+  [1, "Prism", "அரியம்"],
+  [1, "Cylinder", "உருளை"],
+  [1, "Speed", "கதி"],
+  [1, "Rates", "வீதம்"],
+  [1, "Angles of elevation and depression", "ஏற்றக்கோணம், இறக்கக்கோணம்"],
+  [1, "Trigonometry", "திரிகோண கணிதம்"],
+  [1, "Factors", "காரணிகள்"],
+  [1, "Least common multiple", "பொ.ம.சி"],
+  [1, "Algebraic fractions", "அட்சரகணிதப் பின்னங்கள்"],
+  [1, "Quadratic equations", "இருபடிச் சமன்பாடு"],
+  [1, "Straight line", "நேர்கோடு"],
+  [1, "Inequalities", "சமனிலிகள்"],
+  [1, "Matrices", "தாயம்"],
+  [1, "Triangles", "முக்கோணிகள்"],
+  [1, "Congruence", "ஒருங்கிசைவு"],
+  [1, "Parallelograms", "இணைகரம்"],
+  [1, "Angles in a circle", "வட்டத்தின் கோணங்கள்"],
+  [1, "Chords of a circle", "வட்ட நாண்கள்"],
+  [1, "Loci", "ஒழுக்குகள்"],
+  [1, "Pythagoras' theorem", "பைதகரசின் தேற்றம்"],
+  [1, "Mid-point theorem", "நடுப்புள்ளித் தேற்றம்"],
+  [1, "Cyclic quadrilaterals", "வட்ட நாற்பக்கல்கள்"],
+  [1, "Data representation", "தரவுகளை வகைகுறித்தல்"],
+  [1, "Sets", "தொடைகள்"],
+  [1, "Probability", "நிகழ்தகவு"],
+  [2, "Fractions", "பின்னங்கள்"],
+  [2, "Perimeter and area", "சுற்றளவும் பரப்பளவும்"],
+  [2, "Share market", "பங்குச்சந்தை"],
+  [2, "Distance–time graph", "தூர – நேர வரைபு"],
+  [2, "Taxes", "வரிகள்"],
+  [2, "Tree diagrams and grids", "மரவரியும் நெய்யரியும்"],
+  [2, "Data representation", "தரவுகளை வகைகுறித்தல்"],
+  [3, "Percentages", "சதவீதம்"],
+  [3, "Graphs", "வரைபு"],
+  [3, "Simultaneous equations", "ஒருங்கமை சமன்பாடு"],
+  [3, "Quadratic equations", "இருபடிச் சமன்பாடு"],
+  [3, "Statistics", "புள்ளிவிபரவியல்"],
+  [3, "Trigonometry", "திரிகோண கணிதம்"],
+  [4, "Arithmetic and geometric progressions", "கூட்டல் பெருக்கல் விருத்தி"],
+  [4, "Constructions", "அமைப்பு"],
+  [4, "Volume and logarithms", "கனவளவும் மடக்கையும்"],
+  [4, "Theorems on rectilinear plane figures", "நேர்கோட்டுத் தளவுருவங்களின் தேற்றங்கள்"],
+  [4, "Circle theorems", "வட்டத் தேற்றங்கள்"],
+  [4, "Sets and probability", "தொடைகளும் நிகழ்தகவும்"],
+];
+
+/** "G8-U03" (OL: "OL-U44"): the stable key of a unit (grade + code). */
 export function unitKey(grade: number, code: string): string {
-  return `G${grade}-${code}`;
+  return grade === OL ? `OL-${code}` : `G${grade}-${code}`;
+}
+
+/** An OL topic's number on his sheet: its place in its paper (Paper 1 A 01–34, 1 B 01–07, Paper 2 01–12). */
+export function olNumber(unit: { term: number; order: number }, units: readonly { grade: number; term: number; order: number }[]): number {
+  const paper = (t: number) => (t <= 2 ? t : 3); // Paper 2 numbers run on from Part A into Part B
+  const same = units.filter((u) => u.grade === OL && paper(u.term) === paper(unit.term)).sort((a, b) => a.term - b.term || a.order - b.order);
+  return same.findIndex((u) => u.term === unit.term && u.order === unit.order) + 1;
 }
 
 /** Book order inside a grade: U00 (extra) last, then by code. */

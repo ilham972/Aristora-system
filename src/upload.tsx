@@ -9,6 +9,7 @@ import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { bookTotal, fighter, PART_NAME } from "../convex/lib/book";
 import { QUESTIONS_BATCH_MAX } from "../convex/lib/questions";
+import { gradeWords, OL, OL_PARTS } from "../convex/lib/syllabus";
 import { mutate } from "./backend";
 import { act, currentRole, toast, type Unit } from "./store";
 import { Sheet } from "./ui";
@@ -49,9 +50,13 @@ function countWords(n: number, of: number): string {
 /** The row of a topic tute: its two books against what the unit has in the app. */
 function tuteRow(t: ReadTute, i: number, units: Unit[], books: InApp[]): Row {
   const unit = units.find((u) => u.grade === t.grade && u.code === t.code);
-  const title = `G${t.grade ?? "?"} · ${t.code} ${unit?.en ?? t.en ?? ""} · topic tute`.trim();
+  const title = `${t.grade === OL ? "OL" : `G${t.grade ?? "?"}`} · ${t.code} ${unit?.en ?? t.en ?? ""} · topic tute`.trim();
   if (t.problems.length) return { key: `bad${i}`, file: t.file, title, detail: "", state: "bad", words: t.problems.join(" ") };
-  if (!unit) return { key: `bad${i}`, file: t.file, title, detail: "", state: "bad", words: `Grade ${t.grade} has no unit ${t.code} in the app.` };
+  if (!unit) return { key: `bad${i}`, file: t.file, title, detail: "", state: "bad", words: `${gradeWords(t.grade)} has no unit ${t.code} in the app.` };
+  if (unit.grade === OL && OL_PARTS[unit.term]?.id !== t.part) {
+    const words = `${unit.en} is in ${OL_PARTS[unit.term]?.en ?? "another part"}; this tute's papers say ${PART_NAME[t.part]}.`;
+    return { key: `bad${i}`, file: t.file, title, detail: "", state: "bad", words };
+  }
   const f = fighter(t.fighter);
   const teach = t.fighter.sections.reduce((a, s) => a + s.teach.length, 0);
   const secs = t.fighter.sections.map((s) => s.id);

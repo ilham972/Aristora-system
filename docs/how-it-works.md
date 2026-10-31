@@ -174,6 +174,23 @@ sites. Final answer bold from `**…**`, never HTML; Books page K pill. A re-upl
 Correction's Fighter card, Evaluation (`AnswerKey stage`) and Theory's teacher questions; without one: "Check his
 answer in his notebook" (no fetch). Books page **K** = every book of the unit in the app has its key.
 
+**OL: the O/L books (1 Nov 2026, his O/L tracker sheet).** A "grade" of books, not of students: grade 12 shown as
+**OL** (`OL`, `gradeName`, `gradeWords`), its 53 topics seeded once from his sheet (`setup.ensure` step 4,
+`DATA_VERSION` 2; keys `OL-U01`…`OL-U53`), a unit's `term` = its paper part (1 = Paper I A, 34 topics; 2 = Paper I B,
+7; 3 = Paper II A, 6; 4 = Paper II B, 6: his Paper 2's 12 split as the exam's questions 1–6 / 7–12), numbered as on
+his sheet (`olNumber`; Paper 2 runs 01–12). Why: a school unit mixes O/L topics (G11 U13 Equations = quadratic +
+simultaneous), so O/L essay tutes file under an OL topic (tute.json `"grade": "OL"`; its papers' part must be the
+topic's: the upload row and `saveTute` refuse otherwise). Books page: OL after 11 (`BOOK_GRADES`, `.grade-row.g7`),
+topics by part. **OL books are for Grade 10 and 11 students** (his rule: OL is "universal" for both; a Grade 10
+student stays Grade 10): `setGiven`, `move` and `giveAllOl` accept an OL unit only for them (`checkOl`) and keep his own
+grade and term. Correction's units sheet (Grade 10 and 11 students): **OL books ›** at the right of the first section's
+line (no extra height: a grade still fits one screen) shows the four parts; there, Books given
+has **Give him every OL workbook in the app** (`giveAllOl`: only books in the app, because a given book with nothing
+in the app counts as work and 53 of them would hide him from "out of work"; tap again after new books come). Theory
+and Evaluation group OL books under an **OL** grade pill (`EVAL_GRADES`/`THEORY_GRADES` + 12; seven fit 320 px). Not
+yet: OL in Progress (his OL books are not in his grade's race) and in Class → Move's own picker (Correction's units
+sheet moves him).
+
 **Questions as printed (31 Oct 2026).** Every upload also cuts each question card out of the zip's book.html
 (`src/bookQuestions.ts`: tutes `qq` = Fighter, `pq` = Master; workbooks `si`/`pq` per unit, split at the marks
 sheets; the printed number = the card's `qn`; footers and side tabs out) and the book's CSS (fonts, `@page` and

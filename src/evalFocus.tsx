@@ -12,6 +12,7 @@
 // - Theory is busy: "Teach" at the end of the questions row. Today's score and who went home with levels to correct
 //   at the end. Red circles / → Theory without calling, a student's book and Move: the Class page.
 
+import { gradeWords } from "../convex/lib/syllabus";
 import { useEffect, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
@@ -384,7 +385,7 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
       <div class="tp-body evx-body">
         <div class="evx-rowbox" onPointerDownCapture={heldUnits.touch} onScrollCapture={heldUnits.touch}>
           {units.length === 0 ? (
-            <p class="tp-none">Nothing to explain {grade === null ? "now" : `in Grade ${grade} ${stage === "legend" ? "Legend" : stage === "fighter" ? "Fighter" : "Master"}`}.</p>
+            <p class="tp-none">Nothing to explain {grade === null ? "now" : `in ${gradeWords(grade)} ${stage === "legend" ? "Legend" : stage === "fighter" ? "Fighter" : "Master"}`}.</p>
           ) : (
             <HRow as="nav" class="evx-units" label="Units that need you, the most urgent first" list={heldUnits.list.map((u) => u.key).join(",")} at={unitKey}>
               {heldUnits.list.map((u) => {

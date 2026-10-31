@@ -15,6 +15,7 @@
 // - Tap someone in her room: his file (Arrived, his questions taught or not, send him back, cancel the call).
 // Marking taught without calling, a student's whole book and Move: the Class page (tap his name).
 
+import { gradeWords } from "../convex/lib/syllabus";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
@@ -362,7 +363,7 @@ export function TheoryTab(props: { board: Board; views: View[]; now: number }) {
       <div class="tp-body evx-body">
         <div class="evx-rowbox" onPointerDownCapture={heldUnits.touch} onScrollCapture={heldUnits.touch}>
           {units.length === 0 ? (
-            <p class="tp-none">Nobody needs theory {grade === null ? "now" : `in Grade ${grade} ${stageWords}`}.</p>
+            <p class="tp-none">Nobody needs theory {grade === null ? "now" : `in ${gradeWords(grade)} ${stageWords}`}.</p>
           ) : (
             <HRow as="nav" class="evx-units" label="Units that need you, the most urgent first" list={heldUnits.list.map((u) => u.key).join(",")} at={unitKey}>
               {heldUnits.list.map((u) => {

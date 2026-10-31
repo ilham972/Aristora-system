@@ -20,6 +20,7 @@ import { bookStage, keyAnswer, partId } from "./schema";
 import { actor, viewer } from "./lib/auth";
 import { checkFighterKey, checkKey, type KeyAnswer } from "./lib/key";
 import { QUESTION_HTML_MAX, BOOK_CSS_MAX, unsafeCss, unsafeHtml } from "./lib/questions";
+import { gradeWords, OL, OL_PARTS } from "./lib/syllabus";
 
 type Stage = "fighter" | "master";
 
@@ -268,7 +269,10 @@ export const saveTute = mutation({
     const unit = await ctx.db.get(args.unitId);
     if (!unit) fail("That unit no longer exists.");
     if (!partsForGrade(unit.grade).some((p) => p.id === args.master.part && p.kind === "cards")) {
-      fail(`Grade ${unit.grade} workbooks have no ${PART_NAME[args.master.part]} for essays.`);
+      fail(`${gradeWords(unit.grade)} workbooks have no ${PART_NAME[args.master.part]} for essays.`);
+    }
+    if (unit.grade === OL && OL_PARTS[unit.term]?.id !== args.master.part) {
+      fail(`${unit.en} is in ${OL_PARTS[unit.term]?.en ?? "another part"}; the tute's papers say ${PART_NAME[args.master.part]}.`);
     }
     const fdata: FighterData = {
       kind: "fighter",

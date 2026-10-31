@@ -465,7 +465,7 @@ describe("One screen (31 Oct 2026): grade, stage, unit and lesson rows; what to 
     ];
     const plan = planLessons(views, NOW, FREE);
     const grades = theoryGradeRow(plan);
-    expect(grades.map((g) => g.grade)).toEqual([11, 7, 6, 8, 9, 10]);
+    expect(grades.map((g) => g.grade)).toEqual([11, 7, 6, 8, 9, 10, 12]); // 12 = OL
     expect(grades[0].c).toEqual({ red: 2, orange: 0, yellow: 1, total: 3 }); // Kumar counts, as yellow
     expect(grades[1].c).toMatchObject({ orange: 1, total: 2 });
     const g11 = plan.filter((l) => l.unit?.grade === 11);
