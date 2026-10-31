@@ -1,7 +1,9 @@
 // The pieces the two room pages share (Theory, Evaluation; one screen each since 31 Oct 2026): small things in fixed
 // places, like Correction.
-// - GradeRow: grades 6–11 in ONE row, the most urgent first, a count and a red badge each; pale when nothing waits.
-// - KindBar: Fighter / Master / Legend in one line, with how many need her (red = no work now); pale at 0.
+// - GradeRow: grades 6–11 in ONE row, the most urgent first, a count and a red badge each; pale when nothing waits
+//   (her room's grade never: a dot in her room's colour). Which one is picked: src/roomRows.ts.
+// - KindBar: Fighter / Master / Legend in one line, with how many need her (red = no work now); pale at 0 (her
+//   room's stage never). BackToRoom: while she looks at another book, one tap shows her room's again.
 // - LessonName: a book the way he wants it: the grade as a small number, the unit number, the Tamil name.
 // - AnswerKey: one workbook question's answer (teachers only), fetched while it is open.
 // - LockIcon: her room is in use. usePinned: the pinned rows' height (toasts sit above the pad, never over it).
@@ -18,8 +20,11 @@ import { KeyLine } from "./master";
 import { bookDocAt, type Unit } from "./store";
 import type { HeatCount, LessonKind } from "./theoryFocusData";
 
-/** All / Fighter / Master: how many need her (each student once), red = no work now. Pale when none. */
-export function KindBar<T extends string>(props: { value: T; items: { id: T; label: string; c: HeatCount }[]; onPick: (k: T) => void }) {
+/**
+ * All / Fighter / Master: how many need her (each student once), red = no work now. Pale when none, unless her room
+ * has a book there (`room`: a dot in her room's colour; she can always tap where her room is).
+ */
+export function KindBar<T extends string>(props: { value: T; items: { id: T; label: string; c: HeatCount; room?: boolean }[]; onPick: (k: T) => void }) {
   return (
     <nav class="tp-kinds" aria-label="Show one kind of book">
       {props.items.map((it) => {
@@ -30,17 +35,27 @@ export function KindBar<T extends string>(props: { value: T; items: { id: T; lab
             type="button"
             class={`tp-kind${on ? " on" : ""}`}
             aria-pressed={on}
-            disabled={!on && it.c.total === 0}
-            aria-label={`${it.label}: ${it.c.total}, ${heatWords(it.c)}`}
+            disabled={!on && it.c.total === 0 && !it.room}
+            aria-label={`${it.label}: ${it.c.total}, ${heatWords(it.c)}${it.room ? ", your room" : ""}`}
             onClick={() => props.onPick(it.id)}
           >
             {it.label}
             <b>{it.c.total}</b>
             {it.c.red > 0 && <i class="tp-kind-r">{it.c.red}</i>}
+            {it.room && <span class="evx-me" aria-hidden="true" />}
           </button>
         );
       })}
     </nav>
+  );
+}
+
+/** While she looks at another book to call someone: one tap and the rows show her room's book again. */
+export function BackToRoom(props: { onBack: () => void }) {
+  return (
+    <button type="button" class="link-btn evx-back" onClick={props.onBack}>
+      Back to your room
+    </button>
   );
 }
 
@@ -69,8 +84,11 @@ export function usePinned(key: unknown) {
   return stick;
 }
 
-/** Grades 6 to 11 in ONE row (his rule), the most urgent first; a grade with nobody waiting is pale. */
-export function GradeRow(props: { rows: { grade: number; c: HeatCount }[]; value: number | null; onPick: (g: number) => void }) {
+/**
+ * Grades 6 to 11 in ONE row (his rule), the most urgent first; a grade with nobody waiting is pale, unless her room
+ * has a book there (`room`: a dot in her room's colour, and she can tap it).
+ */
+export function GradeRow(props: { rows: { grade: number; c: HeatCount; room?: boolean }[]; value: number | null; onPick: (g: number) => void }) {
   return (
     <nav class="evx-grades" aria-label="Grades, the most urgent first">
       {props.rows.map((r) => {
@@ -81,13 +99,14 @@ export function GradeRow(props: { rows: { grade: number; c: HeatCount }[]; value
             type="button"
             class={`evx-g${on ? " on" : ""}`}
             aria-pressed={on}
-            disabled={!on && r.c.total === 0}
-            aria-label={`Grade ${r.grade}: ${r.c.total}, ${heatWords(r.c)}`}
+            disabled={!on && r.c.total === 0 && !r.room}
+            aria-label={`Grade ${r.grade}: ${r.c.total}, ${heatWords(r.c)}${r.room ? ", your room" : ""}`}
             onClick={() => props.onPick(r.grade)}
           >
             <b>{r.grade}</b>
             <i>{r.c.total || ""}</i>
             {r.c.red > 0 && <em class="evx-g-r">{r.c.red}</em>}
+            {r.room && <span class="evx-me" aria-hidden="true" />}
           </button>
         );
       })}

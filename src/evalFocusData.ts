@@ -9,6 +9,7 @@
 import { slClock } from "../convex/lib/day";
 import { EVAL_READY_MS } from "../convex/lib/status";
 import { evalQueue, pendingSince, roomBusy, roomCalls, type RoomCall, type View } from "./derive";
+import { roomBooksOf, roomRows, type RoomBook, type RowPick } from "./roomRows";
 import type { Board } from "./store";
 import { byUrgency, LATE_SEND_MS, mShort, NO_HEAT, outInOf, sinceWords, type Heat, type HeatCount } from "./theoryFocusData";
 
@@ -286,6 +287,8 @@ export function tally(list: readonly Cand[]): HeatCount {
 
 /** The grade a book belongs to (his book's grade, else his own). */
 export const bookGrade = (c: Cand) => c.v.unit?.grade ?? c.v.s.grade;
+/** A book's key in the units row ("<unit>:<stage>"), for a student waiting or one in her room. */
+export const bookKey = (v: View) => `${v.unit?._id ?? v.s.unitId}:${v.stage}`;
 
 /** Grades 6 to 11, the most urgent first (ties: 6 first); a grade with nobody waiting goes last. */
 export function gradeRow(list: readonly Cand[]): { grade: number; c: HeatCount }[] {
@@ -309,7 +312,7 @@ export function unitRow(list: readonly Cand[]): UnitPill[] {
   for (const c of list) {
     const u = c.v.unit;
     if (!u) continue;
-    const key = `${u._id}:${c.v.stage}`;
+    const key = bookKey(c.v);
     const p = by.get(key) ?? { key, unit: u, c: NO_HEAT, cands: [] };
     p.cands.push(c);
     by.set(key, p);
@@ -347,6 +350,42 @@ export function qGroups(cands: readonly Cand[]): QGroup[] {
 
 /** One question of her session: the book, the students who need it, and how many of them she already did. */
 export type SessionQ = { key: string; q: number; v: View; who: EvalHere[] };
+
+/** The book a question on her screen is from, as the rows name it (no unit in the app: not in the rows). */
+export const evalRoomBook = (x: SessionQ): RoomBook<EvalStage> | null =>
+  x.v.unit ? { key: bookKey(x.v), grade: x.v.unit.grade, stage: x.v.kind === "master" ? "master" : "fighter" } : null;
+
+/**
+ * The pinned rows (his screenshot, 31 Oct 2026: src/roomRows.ts): her pick while it has someone; else, with someone
+ * in her room, the book of the question on her screen (`open`); else the most urgent. Her room's grade, stage and
+ * unit are always there (`room` = marked; a unit nobody else waits for goes at the end of its row).
+ */
+export function evalRows(pick: RowPick<EvalStage>, everyone: readonly Cand[], roomQs: readonly SessionQ[], open: SessionQ | undefined) {
+  const inGradeOf = (g: number | null) => everyone.filter((c) => bookGrade(c) === g);
+  const rows = roomRows<EvalStage>({
+    pick,
+    room: roomBooksOf(roomQs, open, evalRoomBook),
+    grades: gradeRow(everyone),
+    stages: (g) => stageRow(inGradeOf(g)),
+    units: (g, s) => unitRow(inGradeOf(g).filter((c) => c.kind === s)).map((u) => u.key),
+    rest: "master",
+  });
+  const inGrade = inGradeOf(rows.grade);
+  const unitOf = new Map(roomQs.flatMap((x) => (x.v.unit ? [[bookKey(x.v), x.v.unit] as const] : [])));
+  const units: (UnitPill & { room: boolean })[] = [
+    ...unitRow(inGrade.filter((c) => c.kind === rows.stage)),
+    ...rows.roomOnly.flatMap((key) => {
+      const unit = unitOf.get(key);
+      return unit ? [{ key, unit, c: NO_HEAT, cands: [] as Cand[] }] : [];
+    }),
+  ].map((u) => ({ ...u, room: rows.roomUnits.has(u.key) }));
+  return {
+    ...rows,
+    grades: gradeRow(everyone).map((x) => ({ ...x, room: rows.roomGrades.has(x.grade) })),
+    stages: stageRow(inGrade).map((x) => ({ ...x, room: rows.roomStages.has(x.id) })),
+    units,
+  };
+}
 
 /**
  * The questions to explain to the students with her (Arrived), each once: the one most of them need first (explain

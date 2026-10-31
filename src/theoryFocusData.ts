@@ -20,6 +20,7 @@ import type { SectionData } from "../convex/lib/book";
 import { slClock } from "../convex/lib/day";
 import type { MarkState, Urgency } from "../convex/lib/status";
 import { roomCalls, seenToday, theoryGroups, type RoomCall, type View } from "./derive";
+import { roomBooksOf, roomRows, type RoomBook, type RowPick } from "./roomRows";
 import type { Board, Unit } from "./store";
 
 export type LessonKind = "section" | "workbook";
@@ -751,6 +752,41 @@ export function theorySquares(items: readonly RoomItem[], pill?: LessonPill | nu
       (a.kind === "workbook" ? b.who.length - a.who.length : 0) ||
       qn(a.q) - qn(b.q),
   );
+}
+
+/** The book a square on her screen is from, as the rows name it (no unit: not in the rows). */
+export const theoryRoomBook = (x: TheorySquare): RoomBook<TheoryStage> | null => (x.unit ? { key: x.unit._id as string, grade: x.unit.grade, stage: x.kind } : null);
+
+/**
+ * The pinned rows (his screenshot, 31 Oct 2026: src/roomRows.ts): her pick while it has someone; else, with someone
+ * in her room, the book of the question on her screen (`open`); else the most urgent. Her room's grade, stage and
+ * unit are always there (`room` = marked; a unit nobody else waits for goes at the end of its row).
+ */
+export function theoryRows(pick: RowPick<TheoryStage>, plan: readonly Lesson[], roomSqs: readonly TheorySquare[], open: TheorySquare | undefined) {
+  const inGradeOf = (g: number | null) => plan.filter((l) => lessonGrade(l) === g);
+  const rows = roomRows<TheoryStage>({
+    pick,
+    room: roomBooksOf(roomSqs, open, theoryRoomBook),
+    grades: theoryGradeRow(plan),
+    stages: (g) => theoryStageRow(inGradeOf(g)),
+    units: (g, s) => theoryUnitRow(inGradeOf(g).filter((l) => l.kind === s)).map((u) => u.key),
+    rest: "workbook",
+  });
+  const inGrade = inGradeOf(rows.grade);
+  const unitOf = new Map(roomSqs.flatMap((x) => (x.unit ? [[x.unit._id as string, x.unit] as const] : [])));
+  const units: (TheoryUnit & { room: boolean })[] = [
+    ...theoryUnitRow(inGrade.filter((l) => l.kind === rows.stage)),
+    ...rows.roomOnly.flatMap((key) => {
+      const unit = unitOf.get(key);
+      return unit ? [{ key, unit, c: NO_HEAT, lessons: [] as Lesson[] }] : [];
+    }),
+  ].map((u) => ({ ...u, room: rows.roomUnits.has(u.key) }));
+  return {
+    ...rows,
+    grades: theoryGradeRow(plan).map((x) => ({ ...x, room: rows.roomGrades.has(x.grade) })),
+    stages: theoryStageRow(inGrade).map((x) => ({ ...x, room: rows.roomStages.has(x.id) })),
+    units,
+  };
 }
 
 /** His decisions (per book). */

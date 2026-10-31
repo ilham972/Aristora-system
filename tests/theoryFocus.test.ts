@@ -18,6 +18,7 @@ import {
   tDecisionWords,
   theoryFinish,
   theoryGradeRow,
+  theoryRows,
   theorySquares,
   theoryStageRow,
   theoryUnitRow,
@@ -504,6 +505,24 @@ describe("One screen (31 Oct 2026): grade, stage, unit and lesson rows; what to 
     const items = work.map((p) => ({ key: p.key, sig: lessonPillSig(p) }));
     const first = holdOrder(null, items, false);
     expect(holdOrder(first, [...items].reverse(), false).keys).toEqual(first.keys);
+  });
+
+  test("his screenshot (31 Oct 2026): Malik alone needs his workbook's lesson and is with her: the rows stay on it", () => {
+    const c = call("c-m", "Malik", "sent", { section: "R", unitId: "u08", arrivedAt: NOW - 3 * MIN });
+    const views = [th("Fathima", READY_D, { idleMs: 6 * MIN }), wb("Malik", [13, 17], { where: "theory", calls: [c] })];
+    const plan = planLessons(views, NOW, FREE);
+    // The cause: called, he is not in the plan; Grade 7 had nobody (pale), the rows jumped to Grade 11's D.
+    expect(theoryGradeRow(plan).find((g) => g.grade === 7)!.c.total).toBe(0);
+    const sqs = theorySquares(roomItems(roomLessons(board([c]), views, NOW), NOW));
+    expect(sqs.map((x) => x.q)).toEqual([13, 17]);
+    const r = theoryRows({}, plan, sqs, sqs[0]);
+    expect([r.grade, r.stage, r.unit, r.onRoom]).toEqual([7, "workbook", "u08", true]);
+    expect(r.grades.filter((g) => g.room).map((g) => g.grade)).toEqual([7]);
+    expect(r.stages.find((s) => s.id === "workbook")).toMatchObject({ room: true });
+    expect(r.units.map((u) => [u.unit.code, u.c.total, u.room, u.lessons.length])).toEqual([["U08", 0, true, 0]]);
+    // To call the next lesson she taps Grade 11: its rows, not her room's; her room's grade brings them back.
+    expect(theoryRows({ grade: 11 }, plan, sqs, sqs[0])).toMatchObject({ grade: 11, stage: "section", unit: "u13", onRoom: false });
+    expect(theoryRows({ grade: 7 }, plan, sqs, sqs[0])).toMatchObject({ grade: 7, unit: "u08", onRoom: true });
   });
 
   test("what to teach: each question once for everyone with her; Taught for all; Done when every question of his is decided", () => {

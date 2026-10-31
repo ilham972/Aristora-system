@@ -1944,6 +1944,23 @@ test("Theory: one screen like Evaluation: grade, stage, unit and lesson rows; he
   await C.locator(".call-strip.theory").getByRole("button", { name: /^Sent/ }).click();
   await evArrive(T, ["Malik"]);
   await textsAre(T.locator(".evx-strip .fc-sq small"), ["13", "17"]);
+  // His screenshot (31 Oct 2026): nobody else needs Malik's lesson, yet the rows stay on it (Grade 7, Master, unit 8,
+  // each with her room's dot) and the box offers nobody from another book.
+  const onGrade = async () => T.locator(".evx-g.on b").textContent();
+  await until(async () => (await onGrade()) === "7", "her room's grade stays picked");
+  await visible(T.locator(".evx-g.on .evx-me"));
+  await contains(T.locator(".tp-kind.on"), "Master");
+  await textsAre(T.locator(".evx-u.on .tp-ln-n"), ["8"]);
+  await visible(T.locator(".evx-u.on .evx-me"));
+  await count(T.locator(".evx-sp.s-sug"), 0);
+  // She looks at Grade 11 for the next lesson: its rows and its lesson (to prepare, the pad pale); back to her room.
+  await evPick(T, { grade: "11" });
+  await textsAre(T.locator(".evx-u.on .tp-ln-n"), ["13"]);
+  await visible(T.locator(".evx-x:disabled"));
+  await shot(T, "t05c-theory-another-book");
+  await T.locator(".evx-card .evx-back").click();
+  await until(async () => (await onGrade()) === "7", "back to her room's grade");
+  await textsAre(T.locator(".evx-strip .fc-sq small"), ["13", "17"]);
   await contains(T.locator(".evx-who"), "Malik 0/2 · Evaluation");
   await visible(T.locator(".evx-card .muted", { hasText: "No answer key for this workbook yet." }));
   const mf = await evFile(T, "Malik");
@@ -1956,6 +1973,9 @@ test("Theory: one screen like Evaluation: grade, stage, unit and lesson rows; he
   await T.locator(".evx-b.skip").click();
   await evDone(T).click();
   await until(async () => (await marksOf(backend, "Malik")).m!.q["13"]?.tt !== undefined, "Malik Q13 taught");
+  // Saved: her room is empty, so the rows show the most urgent again (Grade 11) until she picks.
+  await contains(T.locator(".toast"), "Saved: Malik back to work.");
+  await until(async () => (await onGrade()) === "11", "the most urgent grade");
   const mm = (await marksOf(backend, "Malik")).m!;
   expect(mm.q["17"]).toMatchObject({ th: expect.any(Number) });
   expect(mm.q["17"].tt).toBeUndefined();
@@ -2157,6 +2177,48 @@ test("Evaluation: one screen: grade, stage, unit and questions the most urgent f
   await contains(E.locator(".evx-bh"), "room for 4");
   // Today's score: 3 explained to so far.
   await contains(E.locator(".sc-c", { hasText: "seen" }), "3");
+
+  // His screenshot (31 Oct 2026): nobody else waits for unit 13 now, yet the rows stay on her room's book (Grade 11,
+  // Fighter, unit 13, each with her room's dot), the box offers nobody from another book, and the questions on screen
+  // are theirs. Grade 7 still shows Malik waiting.
+  const onGrade = (p: Page) => p.locator(".evx-g.on b").textContent();
+  await until(async () => (await onGrade(E)) === "11", "her room's grade stays picked");
+  await visible(E.locator(".evx-g.on .evx-me"));
+  await visible(E.locator(".tp-kind.on .evx-me"));
+  await contains(E.locator(".tp-kind.on"), "Fighter");
+  await textsAre(E.locator(".evx-u.on .tp-ln-n"), ["13"]);
+  await visible(E.locator(".evx-u.on .evx-me"));
+  await count(E.locator(".evx-sp.s-sug"), 0);
+  await textsAre(E.locator(".evx-strip .fc-sq small"), ["18", "28", "29"]);
+  await visible(E.locator(".evx-g:not(:disabled)", { hasText: "7" }));
+  await shot(E, "e06-room-rows");
+  // To call Malik next she taps Grade 7: the rows, the box and the question on screen are unit 8's (to prepare, the pad
+  // pale); "Back to your room" shows her room's again.
+  await evPick(E, { grade: "7" });
+  await textsAre(E.locator(".evx-u.on .tp-ln-n"), ["8"]);
+  expect(await namesOf(E.locator(".evx-sp.s-sug"))).toEqual(["Malik"]);
+  await textsAre(E.locator(".evx-strip .fc-sq small"), ["4", "13", "17"]);
+  await contains(E.locator(".evx-who"), "Malik");
+  await visible(E.locator(".evx-x:disabled"));
+  expect(await E.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(E, "e07-another-book");
+  await E.locator(".evx-card .evx-back").click();
+  await until(async () => (await onGrade(E)) === "11", "back to her room's grade");
+  await textsAre(E.locator(".evx-strip .fc-sq small"), ["18", "28", "29"]);
+  // She calls Malik from Grade 7: two books in her room. The rows show the book of the question on her screen; a tap on
+  // a square of the other book takes them there.
+  await evPick(E, { grade: "7" });
+  await contains(evCall(E), "Call 1");
+  await evCall(E).click();
+  await contains(E.locator(".toast"), "Called 1.");
+  await contains(E.locator(".evx-bh"), "room for 3");
+  await textsAre(E.locator(".evx-strip .fc-sq small"), ["8·4", "8·13", "8·17", "13·18", "13·28", "13·29"]);
+  await until(async () => (await onGrade(E)) === "7", "the open question's grade");
+  await textsAre(E.locator(".evx-u.on .tp-ln-n"), ["8"]);
+  await E.locator(".evx-strip .fc-sq", { hasText: "13·18" }).click();
+  await until(async () => (await onGrade(E)) === "11", "the rows go with the question");
+  await textsAre(E.locator(".evx-u.on .tp-ln-n"), ["13"]);
+  await contains(E.locator(".evx-card .fc-qn"), "18");
 
   // The smallest phone: the grades in one row, the big button on screen above the tabs, the top bar fits.
   const S = await phone(backend, "evaluation", { ...PHONE, viewport: { width: 320, height: 568 } });

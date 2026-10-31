@@ -192,9 +192,9 @@ list: one page, small things in fixed places like Correction. It reuses the Eval
 shared `src/roomkit.tsx`) in Theory's blue (`.tpx-page`).
 - **Pinned:** grades 6–11 in ONE row (`GradeRow`, `theoryGradeRow`) and Fighter / Master / Legend (`KindBar`,
   `theoryStageRow`; Legend pale until its books exist). Each the most urgent first (`byUrgency`) and already picked;
-  she can pick anything (a pick lasts while it has someone; with someone in her room the page picks his lesson).
-  Counts = everyone who needs Theory, each once; held students (in Evaluation, called by her, going home) count but
-  never as urgent (`rowHeat`).
+  she can pick anything. Counts = everyone who needs Theory, each once; held students (in Evaluation, called by her,
+  going home) count but never as urgent (`rowHeat`). Which grade, stage and unit are picked: **her room's book**, the
+  same rule as Evaluation (`theoryRows`, `src/roomRows.ts`, below).
 - **Under them:** the units that need her (`theoryUnitRow`, `.evx-u`: number + Tamil, red line = no work), then the
   lessons (`lessonPills`, `.evx-qg`): a theory book's sections ("D" + its Tamil title, how many; the plan's order,
   the most useful first: `planLessons`), or a workbook's questions sent to Theory grouped by the students who need
@@ -246,10 +246,11 @@ shared `src/roomkit.tsx`) in Theory's blue (`.tpx-page`).
 - **6 with her at once** (`EVAL_CAP`, his number on 31 Oct; was 3), counting those called or on the way. Her room =
   her own calls (each Evaluation teacher has her own: `evalRoom`/`evalItems` with `me`).
 - **Pinned rows, each the most urgent first and already picked** (`byUrgency`: most red, then most waiting; ties keep
-  the natural order). She can pick anything; a pick lasts while it has someone; with someone in her room the page
-  picks his book. (1) **Grades 6–11** in ONE row, all six (`gradeRow`, `.evx-g`: number, count, red badge; pale =
-  nothing for her). (2) **Fighter / Master / Legend** (`stageRow`, the Theory page's `KindBar`; Legend pale: no books
-  yet). (3) **Units** that need her: number + Tamil name + count (`unitRow`, `.evx-u`, red line = no work). (4)
+  the natural order). She can pick anything; a pick lasts while it has someone. **Her room's book** (the rule of both
+  pages, `src/roomRows.ts`): see "The rows show her room's book" below. (1) **Grades 6–11** in ONE row, all six
+  (`gradeRow`, `.evx-g`: number, count, red badge; pale = nothing for her). (2) **Fighter / Master / Legend**
+  (`stageRow`, the Theory page's `KindBar`; Legend pale: no books yet). (3) **Units** that need her: number + Tamil
+  name + count (`unitRow`, `.evx-u`, red line = no work). (4)
   **Question groups** (`qGroups`, `.evx-qg`): questions waiting for exactly the same students make one pill ("13 ·
   17", "×2"), red first, then the most students. Theory busy (`canTeachHere`, any grade): **◎ Teach N** at the end of
   that row. Above them, when it happens: the bump note and the pull banner (**Send to Theory**).
@@ -274,6 +275,22 @@ shared `src/roomkit.tsx`) in Theory's blue (`.tpx-page`).
   (`reteach`); workbook → `workbook.toTheory` first.
 - At the end: today's score (`TodayStrip compact`) and who went home with levels to correct (`GoneHome`). Toasts sit
   above the pad (`body.evx-on`).
+
+**The rows show her room's book (Theory and Evaluation, 31 Oct 2026, his screenshot).** The bug: Raza and Umair
+(Grade 9 fractions) were with Evaluation, but the rows said Grade 8 unit 1, Grade 9 was pale and could not be tapped,
+and the room box offered Grade 8 students next to them. The rows were built only from who WAITS (`candidates`,
+`planLessons` skip anyone called); calling everyone of a book took that book out of the rows, so "with someone in her
+room the page picks his book" failed exactly when she had called them all, and the page fell to the most urgent grade
+while the questions on screen were still her room's. The rule now (`roomRows`, used by `evalRows` / `theoryRows`):
+- Her room's books (the books of the questions on her screen: with her, else on the way) are ALWAYS in the rows:
+  their grade and stage never pale, a unit nobody else waits for is added at the END of the unit row (nothing shifts),
+  each with a dot in the room's colour (`.evx-me`: violet on Evaluation, blue on Theory).
+- With someone in her room, the page's pick = the book of the question on her screen (two books in her room: tap a
+  square of the other book, or a decision moves on to it, and the rows go with it).
+- Her own pick (to find who to call next) lasts while it has someone. While she looks at a book that isn't her
+  room's, the squares and the card are that book's picked questions (to prepare, the pad pale), never her room's
+  under another book's name, with **Back to your room** (`BackToRoom`) in the card. Call, Arrived and "keep him" end
+  her pick: the rows show her room again. After Done empties her room: the most urgent, as before.
 
 **Today's score and sounds (`c360fa3`).** Per room, for the class: `session.stats[room]` = calls, ahead (called
 while he still had work), done (sent back from the room), lessons (Theory's Done taps), qs (explained or taught),

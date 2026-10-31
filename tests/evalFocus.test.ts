@@ -17,6 +17,7 @@ import {
   evalItems,
   evalLeft,
   evalRoom,
+  evalRows,
   evalWords,
   finishPlan,
   gradeRow,
@@ -252,6 +253,59 @@ describe("With her: 6 at once, one question at a time", () => {
     expect(h.qs).toEqual([4, 13, 17]);
     expect(finishPlan(h, { 4: "x", 13: "th" }, false)).toEqual({ explained: [4], theoryQs: [13] });
     expect(finishPlan(h, { 13: "th" }, true)).toEqual({ explained: [4, 17], theoryQs: [13] });
+  });
+});
+
+describe("His screenshot (31 Oct 2026): the rows show her room's book, even when nobody else waits for it", () => {
+  const sent = (id: string): Call => ({ _id: `c-${id}`, studentId: id, room: "evaluation", kind: "evaluation", status: "sent", createdAt: NOW - 6 * MIN, sentAt: NOW - 5 * MIN, walk: true, arrivedAt: NOW - 4 * MIN });
+  // Raza and Umair (here a Grade 7 workbook; his were Grade 9 fractions) are with her: nobody else waits for that
+  // book. Grade 11 waits: Dilan stuck, Fathima with no work.
+  const raza = wb("Raza", [4, 13], { where: "evaluation", calls: [sent("Raza")] });
+  const umair = wb("Umair", [4, 17], { where: "evaluation", calls: [sent("Umair")] });
+  const dilan = th("Dilan", { ...IN_C, ...right(19, 20), ...wrong(18, 6, 2) });
+  const fathima = th("Fathima", { ...IN_C, ...right(18, 21), ...wrong(22, 8) }, { idleMs: 6 * MIN });
+  const views = [raza, umair, dilan, fathima];
+  const roomQs = sessionQs(evalRoom(board([sent("Raza"), sent("Umair")]), views, NOW).here, []);
+  const everyone = candidates(views, NOW, PACE);
+
+  test("the cause: called students leave the waiting list, so their grade had nobody (pale, not tappable)", () => {
+    expect(names(everyone)).toEqual(["Dilan", "Fathima"]);
+    expect(gradeRow(everyone).find((g) => g.grade === 7)!.c.total).toBe(0);
+    // Q4 for both first (explain once), then each one's own.
+    expect(roomQs.map((x) => [x.q, x.who.map((h) => h.v.s.name)])).toEqual([
+      [4, ["Raza", "Umair"]],
+      [13, ["Raza"]],
+      [17, ["Umair"]],
+    ]);
+  });
+
+  test("the rows stay on her room's book: Grade 7, Master, unit 8, each marked as her room's", () => {
+    const r = evalRows({}, everyone, roomQs, roomQs[0]);
+    expect([r.grade, r.stage, r.unit, r.onRoom]).toEqual([7, "master", "u08:master", true]);
+    expect(r.grades.find((g) => g.grade === 7)).toMatchObject({ room: true, c: { total: 0 } });
+    expect(r.grades.filter((g) => g.room).map((g) => g.grade)).toEqual([7]);
+    expect(r.stages.find((s) => s.id === "master")).toMatchObject({ room: true });
+    expect(r.units.map((u) => [u.unit.code, u.c.total, u.room, u.cands.length])).toEqual([["U08", 0, true, 0]]);
+  });
+
+  test("she taps Grade 11 to call the next ones: Grade 11's rows, not her room's; her room's grade brings it back", () => {
+    const r = evalRows({ grade: 11 }, everyone, roomQs, roomQs[0]);
+    expect([r.grade, r.stage, r.unit, r.onRoom]).toEqual([11, "fighter", "u13:fighter", false]);
+    expect(r.grades.find((g) => g.grade === 7)!.room).toBe(true);
+    expect(r.units.map((u) => [u.unit.code, u.room])).toEqual([["U13", false]]);
+    expect(evalRows({ grade: 7 }, everyone, roomQs, roomQs[0])).toMatchObject({ grade: 7, unit: "u08:master", onRoom: true });
+  });
+
+  test("Grade 11 with her too: the rows show the book of the question on her screen", () => {
+    const d = th("Dilan", { ...IN_C, ...right(19, 20), ...wrong(18, 6, 2) }, { where: "evaluation", calls: [sent("Dilan")] });
+    const vs = [raza, umair, d, fathima];
+    const qs = sessionQs(evalRoom(board([sent("Raza"), sent("Umair"), sent("Dilan")]), vs, NOW).here, []);
+    const cands = candidates(vs, NOW, PACE);
+    const q18 = qs.find((x) => x.q === 18)!;
+    expect(evalRows({}, cands, qs, q18)).toMatchObject({ grade: 11, stage: "fighter", unit: "u13:fighter", onRoom: true });
+    expect(evalRows({}, cands, qs, qs[0])).toMatchObject({ grade: 7, stage: "master", unit: "u08:master", onRoom: true });
+    // Grade 11: Fathima still waits there, so its unit is in its place, picked, and marked hers.
+    expect(evalRows({}, cands, qs, q18).units.map((u) => [u.unit.code, u.c.total, u.room])).toEqual([["U13", 1, true]]);
   });
 });
 

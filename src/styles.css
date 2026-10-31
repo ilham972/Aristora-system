@@ -8139,3 +8139,46 @@ body.locked.evx-on .toasts {
 .bq-none {
   margin: 8px 2px 0;
 }
+
+/* ---- Her room's book in the rows (31 Oct 2026, his screenshot: her room on Grade 9 fractions, the rows on Grade 8).
+   A dot in the room's colour on its grade, stage and unit (src/roomRows.ts); "Back to your room" while she looks at
+   another book to call someone. ---- */
+.evx-page {
+  --room-dot: var(--evaluation);
+  --room-ink: var(--evaluation-ink);
+}
+.tpx-page {
+  --room-dot: var(--theory);
+  --room-ink: var(--theory-ink);
+}
+.evx-me {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--room-dot, var(--evaluation));
+  box-shadow: 0 0 0 1.5px var(--card);
+}
+.evx-g.on > .evx-me,
+.tp-kind.on > .evx-me,
+.evx-u.on > .evx-me {
+  box-shadow: 0 0 0 1.5px #fff;
+}
+.tp-kinds .tp-kind {
+  position: relative;
+}
+.evx-g > .evx-me,
+.tp-kind > .evx-me {
+  position: absolute;
+  top: 4px;
+  left: 5px;
+}
+.tp-kind > .evx-me {
+  left: 9px;
+}
+.evx-back {
+  padding: 0 2px;
+  font-size: inherit;
+  color: var(--room-ink, var(--evaluation-ink));
+  text-decoration: underline;
+}
