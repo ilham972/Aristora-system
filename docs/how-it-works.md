@@ -450,9 +450,11 @@ students, `calls.lessons` skips test calls `calls.test`, the 120 limit counts re
   "Dilrash R test" (`testName`, `copyOf`): the same grade, term, stage, book now, every book's levels and marks
   (`progress` rows copied), books given (`handouts`), signed in now; again = they start over from the real ones.
 - **Add the extra test students** (`demo.cases`): one for every situation of the Theory and Evaluation pages, named by
-  it, with a note in the list (`testCase`): Grade 11 theory book: No work D, Starving D (25 min: D first), Soon D, Later
-  D, Seen D (Theory had him today), In Eval D (in the maker's Evaluation room), Eval called (called by her), Home soon
-  (goes home in 5 min), No work C, Ready 20, Fresh 21 (not ready), Stuck 19, Stopped C; Grade 7 workbook: Lost 4·9
+  it, with a note in the list (`testCase`): Grade 11 Unit 13's theory book, built from the book the unit has
+  (`fighterCases`: the pilot's letters and numbers here; a topic tute that replaced it gives its own, and a case its
+  ladder is too small for is left out): No work D, Starving D (25 min: D first), Soon D, Later D, Seen D (Theory had him
+  today), In Eval D (in the maker's Evaluation room), Eval called (called by her), Home soon (goes home in 5 min), No
+  work C, Ready 20, Fresh 21 (not ready), Stuck 19, Stopped C; Grade 7 workbook: Lost 4·9
   a/b/c (one pill), Lost 13 a/b, Lost 13·17 (Q13 with others, Q17 alone), Crowd 1–7 (Q2: 6 at most), All done 51 (no
   work), Theory 13·17, Theory 13 (Q13 ×2), Whole unit, Couldn't 4 (? on Q4, no work), Gone home (a level to correct);
   and Two books (two workbooks of one grade, Grade 8 first) when a grade has two. Again = they start over.

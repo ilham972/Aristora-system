@@ -105,7 +105,7 @@ The technical memory of the app, kept with the code and updated in the same comm
 | `catalog.ts` | `units`, `books` (+`keyCount`, `qCount`), `key` (+`stage`), `question`, `bookCss`, `saveWorkbook` (+`key`; drops the questions when the book's numbers change), `saveTute` (a topic tute: both books + both keys, `saveTuteBook`, `bookShape`), `saveQuestions`, `renameUnit` |
 | `sessions.ts` | `end` (End the session) |
 | `setup.ts` | `ensure()`: one-time data updates; `DATA_VERSION` (1) |
-| `demo.ts` | owner only: `load` (14 students: 10 G11 Fighter, Malik/Priya/Vimal G7 Master, Zainab G9 Legend; the 13 in class get visits; Keerthi is not in; only into an empty real class), `remove` (`test`: the test students, else the demo ones; `wipe`: calls, progress, visits, handouts, drafts, claims); the test class: `testInfo` (query: real students per grade, copies, cases), `copyGrade` (`testName`, `copyOf`), `cases` (`F_CASES`, `M_CASES`, `caseMaster`, `twoWorkbooks`: the extra test students), `TEST_CAP` 120 |
+| `demo.ts` | owner only: `load` (14 students: 10 G11 Fighter, Malik/Priya/Vimal G7 Master, Zainab G9 Legend; the 13 in class get visits; Keerthi is not in; only into an empty real class), `remove` (`test`: the test students, else the demo ones; `wipe`: calls, progress, visits, handouts, drafts, claims); the test class: `testInfo` (query: real students per grade, copies, cases), `copyGrade` (`testName`, `copyOf`), `cases` (`fighterCases` (from the unit's own theory book), `M_CASES`, `caseMaster`, `twoWorkbooks`: the extra test students), `TEST_CAP` 120 |
 | `clock.ts` | `ping` (server time, public) |
 
 ## Tests (`tests/`)
@@ -113,7 +113,7 @@ The technical memory of the app, kept with the code and updated in the same comm
 - `status.test.ts`: the rules. `backend.test.ts`: students, calls (theory first + `bumped`, `calls.lessons` Theory
   only), sessions, reports, and "each room's score for the class" (calls, ahead, done, lessons, qs, waits); "the test
   class" (a grade copied with its levels and books given, again = start over; the extra test students each in his
-  situation; only `state.get({test})` shows them; never in the score or the report; delete only them; owner only; the
+  situation, also on a tute-shaped theory book; only `state.get({test})` shows them; never in the score or the report; delete only them; owner only; the
   120 limit counts real students).
 - `master.test.ts`: syllabus, stages, workbooks, Move; "Master: Theory comes after Correction and Evaluation";
   "Correction's unit sheet" (`teachState`/`levelWaits`, `progress.student` cells, `setGiven` on/off/grade/permissions);

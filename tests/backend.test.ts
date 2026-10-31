@@ -696,6 +696,31 @@ describe("the test class (31 Oct 2026): test students only phones in test mode s
     expect(left).toEqual({ progress: 1, calls: 0, visits: 1 });
   });
 
+  test("the extra test students follow the unit's own theory book (a topic tute can replace the pilot)", async () => {
+    const t = await setup();
+    // A tute's ladder in place of the pilot: two sections, other numbers.
+    await t.run(async (ctx) => {
+      const u = (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G11-U13")).first())!;
+      const b = (await ctx.db.query("books").withIndex("by_unit_stage", (q) => q.eq("unitId", u._id).eq("stage", "fighter")).first())!;
+      const sections = [
+        { id: "A", badge: "A", title: "First", tamil: "First", kind: "ladder" as const, teach: [1, 2], solo: [3, 4, 5, 6] },
+        { id: "B", badge: "B", title: "Second", tamil: "Second", kind: "ladder" as const, teach: [7], solo: [8, 9, 10] },
+      ];
+      await ctx.db.patch(b._id, { data: { kind: "fighter", sections } });
+    });
+    expect(await t.mutation(api.demo.cases, {})).toBe(13 + 19);
+    const st = await t.query(api.state.get, { test: true });
+    const by = (name: string) => st.students.find((s) => s.name === name)!;
+    const book = (await t.run(async (ctx) => (await ctx.db.query("books").collect()).find((b) => b.stage === "fighter")!.data)) as FighterData;
+    const f = (name: string) => computeStatus(st.progress[by(name)._id].marks, fighter(book));
+    expect([f("No work B").nextTheory, f("No work B").dry]).toEqual(["B", true]);
+    expect([f("No work A").nextTheory, f("No work A").dry]).toEqual(["A", true]);
+    expect([f("Soon B").left, f("Later B").left]).toEqual([2, 4]);
+    expect([f("Ready 5").pending, f("Fresh 5").pending, f("Stuck 4").stuck, f("Stopped A").blocked]).toEqual([[5], [5], [4], ["A"]]);
+    expect(f("In Eval B").pending).toEqual([6]);
+    expect(by("No work B").testCase).toBe("Theory: needs section B, no work for 6 min (red)");
+  });
+
   test("only the owner makes or deletes test students; the 120 limit counts real students only", async () => {
     const raw = convexTest(schema, modules);
     const t = await asOwner(raw);
