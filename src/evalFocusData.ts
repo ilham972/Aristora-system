@@ -398,7 +398,8 @@ export function sessionQs(here: readonly EvalHere[], coming: readonly EvalHere[]
   for (const h of from) {
     if (h.kind !== "evaluation") continue;
     for (const q of h.qs) {
-      const key = `${h.v.unit?._id ?? h.v.s.unitId}:${q}`;
+      // The book is in the key: a unit can have a theory book AND a workbook, each with its own Q22 (audit, 31 Oct).
+      const key = `${bookKey(h.v)}:${q}`;
       const sq = by.get(key) ?? { key, q, v: h.v, who: [] };
       sq.who.push(h);
       by.set(key, sq);
@@ -406,11 +407,13 @@ export function sessionQs(here: readonly EvalHere[], coming: readonly EvalHere[]
   }
   if (by.size === 0 && extra) {
     for (const q of extra.qs) {
-      const key = `${extra.v.unit?._id ?? extra.v.s.unitId}:${q}`;
+      const key = `${bookKey(extra.v)}:${q}`;
       by.set(key, { key, q, v: extra.v, who: [] });
     }
   }
-  return [...by.values()].sort((a, b) => b.who.length - a.who.length || (a.v.unit?.code ?? "").localeCompare(b.v.unit?.code ?? "") || a.q - b.q);
+  return [...by.values()].sort(
+    (a, b) => b.who.length - a.who.length || (a.v.unit?.code ?? "").localeCompare(b.v.unit?.code ?? "") || String(a.v.stage).localeCompare(String(b.v.stage)) || a.q - b.q,
+  );
 }
 
 /** Who with her still needs this question decided. */

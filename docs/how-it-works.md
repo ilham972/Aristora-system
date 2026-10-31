@@ -262,7 +262,8 @@ shared `src/roomkit.tsx`) in Theory's blue (`.tpx-page`).
   fixed places: **Call N** (or Teach N), **Arrived N** (everyone on the way), **Done N** (those with every question
   decided: `allDecided`; `calls.finish` for all of them at once).
 - **The questions** (`sessionQs`): Correction's squares (`.fc-strip .fc-sq`): each question ONCE for everyone with her
-  who has it, the most shared first (×2); before anyone comes, the picked group's (to prepare). One question at a
+  who has it, the most shared first (×2); one per BOOK (key `bookKey:q`: a unit's theory book and its workbook each
+  keep their own Q22; with both on screen the theory book's squares carry the section letter, "C·22"); before anyone comes, the picked group's (to prepare). One question at a
   time like Correction's card (`.fc-card`, `.fc-qn`): who has it with his marks ("Vimal 0/2"), the answer (`EvalKey`:
   `catalog.key` while open; theory books: "Check his answer in his notebook."). **Fixed at the bottom** (Correction's
   pad, `.fc-pad`): **→ Theory** and **Not now** side by side, the big **✓ Explained** ("for 2"): one tap = that
@@ -291,6 +292,13 @@ while the questions on screen were still her room's. The rule now (`roomRows`, u
   room's, the squares and the card are that book's picked questions (to prepare, the pad pale), never her room's
   under another book's name, with **Back to your room** (`BackToRoom`) in the card. Call, Arrived and "keep him" end
   her pick: the rows show her room again. After Done empties her room: the most urgent, as before.
+
+**Her taps are kept on her phone until Done (Theory and Evaluation; the audit, 31 Oct 2026).** Explained / → Theory /
+Not now and Taught / Not reached lived only in the page: the app shows one page at a time, so opening Class, Settings
+or another tab, or the page loading again (Chrome drops a tab in the background), lost them, and "All explained" in his
+file then marked as explained even the questions she had sent to Theory. Now `useRoomDecisions` (`src/roomDecisions.ts`)
+keeps them in localStorage `aristora.dec.evaluation` / `.theory`, per CALL (a new call starts empty), dropped at Done
+and 12 hours after a call ends; memory when storage is refused. This phone only (another phone doesn't see them).
 
 **Today's score and sounds (`c360fa3`).** Per room, for the class: `session.stats[room]` = calls, ahead (called
 while he still had work), done (sent back from the room), lessons (Theory's Done taps), qs (explained or taught),

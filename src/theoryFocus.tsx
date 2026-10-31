@@ -28,6 +28,7 @@ import { unitNo } from "./focusData";
 import { HRow } from "./hrow";
 import { useQuery } from "./live";
 import { MasterStrip } from "./master";
+import { useRoomDecisions } from "./roomDecisions";
 import { AnswerKey, BackToRoom, GradeRow, KindBar, LessonName, LockIcon, usePinned } from "./roomkit";
 import { QuestionToggle } from "./bookQuestion";
 import { scoreOf } from "./score";
@@ -131,7 +132,11 @@ export function TheoryTab(props: { board: Board; views: View[]; now: number }) {
   const left = Math.max(0, LESSON_CAP - items.length);
   const [pick, setPick] = useState<Pick>({});
   const [ticks, setTicks] = useState<{ pill: string; ids: string[] } | null>(null);
-  const [dec, setDec] = useState<TDecisions>({});
+  // Her taps (taught / not reached) stay on this phone until Done: another page or a reload keeps them.
+  const [dec, setDec] = useRoomDecisions<TDecisions[string]>(
+    "theory",
+    items.map((it) => ({ id: it.rc.c._id as string, key: itemKey(it) })),
+  );
   const [at, setAt] = useState<string | null>(null);
   const [fileId, setFileId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

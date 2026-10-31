@@ -48,6 +48,7 @@ import {
 import { unitNo } from "./focusData";
 import { HRow } from "./hrow";
 import { MasterStrip } from "./master";
+import { useRoomDecisions } from "./roomDecisions";
 import { AnswerKey, BackToRoom, GradeRow, KindBar, LockIcon, usePinned } from "./roomkit";
 import { QuestionToggle } from "./bookQuestion";
 import { scoreOf } from "./score";
@@ -103,7 +104,11 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
   const left = Math.max(0, EVAL_CAP - items.length);
   const [pick, setPick] = useState<Pick>({});
   const [ticks, setTicks] = useState<{ group: string; keys: string[] } | null>(null);
-  const [dec, setDec] = useState<Decisions>({});
+  // Her taps (explained / to Theory / not now) stay on this phone until Done: another page or a reload keeps them.
+  const [dec, setDec] = useRoomDecisions<Decisions[string]>(
+    "evaluation",
+    items.map((it) => ({ id: it.h.rc.c._id as string, key: it.h.v.key })),
+  );
   const [at, setAt] = useState<string | null>(null);
   const [fileId, setFileId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -185,7 +190,13 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
   const qs = onRoom ? roomQs : picked;
   const inBook = (x: SessionQ) => bookKey(x.v) === unitKey;
   const sq = onRoom ? ((atRoom && inBook(atRoom) ? atRoom : firstOpen(roomQs.filter(inBook))) ?? null) : (qs.find((x) => x.key === at) ?? qs[0] ?? null);
-  const mixed = new Set(qs.map((x) => x.v.unit?._id)).size > 1;
+  const nUnits = new Set(qs.map((x) => x.v.unit?._id)).size;
+  const mixed = nUnits > 1;
+  // A unit's theory book AND its workbook on screen (a topic tute, or a term-test workbook): the theory book's squares
+  // carry their section letter ("C·22"), so the two Q22s never look the same.
+  const twoBooks = new Set(qs.map((x) => bookKey(x.v))).size > nUnits;
+  const tag = (x: SessionQ) =>
+    `${mixed && x.v.unit ? `${unitNo(x.v.unit.code)}·` : ""}${twoBooks && x.v.f ? `${x.v.f.sections.find((sec) => sec.solo.includes(x.q))?.id ?? "F"}·` : ""}`;
   const allAre = (d: Decision) => !!sq && sq.who.length > 0 && sq.who.every((h) => (dec[h.v.key] ?? {})[sq.q] === d);
   const canDecide = live && !!sq && sq.who.length > 0 && !busy;
   // Before anyone is called: who among those offered has the question on screen.
@@ -485,7 +496,7 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
                     }}
                   >
                     <small>
-                      {mixed && x.v.unit ? `${unitNo(x.v.unit.code)}·` : ""}
+                      {tag(x)}
                       {short(x.v, x.q)}
                     </small>
                     <b>{st.sign || (x.who.length > 1 ? `×${x.who.length}` : "")}</b>

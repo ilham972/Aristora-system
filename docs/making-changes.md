@@ -148,6 +148,8 @@ EOF
 - Theory/Evaluation rows: never build what a room's pills or squares mean from who WAITS only (`candidates`, `planLessons`
   skip anyone called): her room's book falls out of the rows the moment she calls the last of them (his screenshot, 31
   Oct 2026). `roomRows` adds her room's books; keep the rows and the questions on screen about the same book.
+- The app shows ONE page at a time (`app.tsx`): leaving a page unmounts it. Anything a teacher taps that must last
+  until a save (Theory/Evaluation decisions) goes through `useRoomDecisions` or a server draft, never plain `useState`.
 - e2e `evPick` taps a row only when it isn't pressed yet: after Done / Call, wait for the toast before picking (a room
   still saving is still her room, so the row looks picked and the tap is skipped).
 - e2e: data written with `backend.t.run`/`.mutation` reaches the phones only after `await backend.push()`. Focus

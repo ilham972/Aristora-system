@@ -309,6 +309,21 @@ describe("His screenshot (31 Oct 2026): the rows show her room's book, even when
   });
 });
 
+describe("Audit (31 Oct 2026): a unit with a theory book AND a workbook", () => {
+  test("the same number in each book is two questions on her screen, never one square for both", () => {
+    const sent = (id: string): Call => ({ _id: `c-${id}`, studentId: id, room: "evaluation", kind: "evaluation", status: "sent", createdAt: NOW - 6 * MIN, sentAt: NOW - 5 * MIN, walk: true, arrivedAt: NOW - 4 * MIN });
+    // Ahamed: the theory book of unit 13 (Q22 wrong). Sana: a workbook of the same unit 13 (Q22 lost marks).
+    const f = asView({ ...th("Ahamed", { ...IN_C, ...right(19, 21), ...wrong(22, 12) }, { where: "evaluation", calls: [sent("Ahamed")] }), key: "Ahamed:u13:fighter" });
+    const w = wb("Sana", [22], { fixed: 3, where: "evaluation", calls: [sent("Sana")] });
+    const m = asView({ ...w, unit: U13, s: { ...w.s, unitId: U13._id, grade: 11 }, key: "Sana:u13:master" });
+    const qs = sessionQs(evalRoom(board([sent("Ahamed"), sent("Sana")]), [f, m], NOW).here, []);
+    expect(qs.filter((x) => x.q === 22).map((x) => [x.v.stage, x.who.map((h) => h.v.s.name)])).toEqual([
+      ["fighter", ["Ahamed"]],
+      ["master", ["Sana"]],
+    ]);
+  });
+});
+
 describe("Every row, for everyone: now and next", () => {
   test("a theory-book student: where he is, and Theory when he runs out (a pulse within 5 minutes)", () => {
     const working = th("Nila", { ...IN_C, ...right(18, 19) }, { lastActivityAt: NOW });

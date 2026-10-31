@@ -981,7 +981,8 @@ test("Progress: one grade's race per unit, who finished what, and the poster for
   await count(malik.locator(".rbar i"), 8);
   await count(malik.locator(".rbar i.wait"), 1);
   const chips = async () => (await C.locator(".pf-chip").allTextContents()).map((x) => x.replace(/\s+/g, " ").trim());
-  await until(async () => JSON.stringify(await chips()) === JSON.stringify(["Master 3", "Came today 3"]), "stage and today chips");
+  // (Just after midnight the demo's visits are yesterday's: no "Came today" then.)
+  if (!nearMidnight()) await until(async () => JSON.stringify(await chips()) === JSON.stringify(["Master 3", "Came today 3"]), "stage and today chips");
   await shot(C, "p01-progress-units-grade-7", true);
   // The Grade 7 poster (workbook levels as blocks), kept for a look.
   await C.getByRole("button", { name: "Share poster" }).click();
@@ -1875,6 +1876,11 @@ test("Theory: one screen like Evaluation: grade, stage, unit and lesson rows; he
   await T.locator(".evx-b.skip").click();
   await count(T.locator(".evx-sp.s-done"), 2);
   await contains(evDone(T), "Done 2");
+  // Her taps stay on her phone until Done (the audit, 31 Oct 2026): another page in between keeps them.
+  await tab(T, "Class").click();
+  await visible(T.locator(".reg-row").first());
+  await tab(T, "Theory").click();
+  await contains(evDone(T), "Done 2");
   await shot(T, "t04-theory-teaching");
   // Ahamed didn't get Q25: in his file, his Q25 back to not decided. He stays; Done sends Fathima back.
   const ah = await evFile(T, "Ahamed");
@@ -2132,6 +2138,14 @@ test("Evaluation: one screen: grade, stage, unit and questions the most urgent f
   await E.locator(".evx-x").click();
   await count(E.locator(".evx-sp.s-done"), 2);
   await contains(evDone(E), "Done 2");
+  // Her taps stay on her phone until Done (the audit, 31 Oct 2026): another page, or the page loaded again, lost them.
+  await tab(E, "Class").click();
+  await visible(E.locator(".reg-row").first());
+  await tab(E, "Evaluation").click();
+  await contains(evDone(E), "Done 2");
+  await E.reload();
+  await contains(evDone(E), "Done 2");
+  await textsAre(E.locator(".evx-strip .fc-sq.s-explained small"), ["22"]);
   await evDone(E).click();
   await contains(E.locator(".toast"), "Saved: Fathima and Ahamed back to work.");
   await until(
