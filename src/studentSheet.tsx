@@ -9,7 +9,7 @@ import { useQuery } from "./live";
 import { saveFiles, shareFiles } from "./poster";
 import { buildLanes, type PBoard } from "./progressData";
 import { buildModel, drawReport, lastWords, nth, reportFile, type ImageOpts, type Model, type RankLine, type SR, type UnitLine } from "./studentReport";
-import { now as serverNow, stageName, toast } from "./store";
+import { now as serverNow, stageName, testMode, toast } from "./store";
 import { Sheet } from "./ui";
 
 const tone = (p: number | null) => (p === null ? "" : p >= 80 ? " good" : p >= 50 ? " mid" : " low");
@@ -233,7 +233,7 @@ function Bar(props: { x: UnitLine }) {
 
 /** His place in his unit's race (the Progress page's Units view), only when the owner turns rank on. */
 function RankOf(props: { grade: number; studentId: string; onRank: (r: RankLine | null) => void }) {
-  const pb = useQuery<PBoard>(api.progress.board, { grade: props.grade });
+  const pb = useQuery<PBoard>(api.progress.board, testMode() ? { grade: props.grade, test: true } : { grade: props.grade });
   useEffect(() => {
     if (!pb) return;
     const lane = buildLanes(pb, { stage: "all", todayOnly: false }).find((l) => l.rows.some((r) => r.s._id === props.studentId));

@@ -64,11 +64,12 @@ export const add = mutation({
     await actor(ctx, args.token, ["students"]);
     const now = Date.now();
     const name = cleanName(args.name);
-    const all = await ctx.db.query("students").withIndex("by_archived", (q) => q.eq("archived", false)).collect();
+    // The real class: test students (the test class) are another list, and demo students don't count.
+    const all = (await ctx.db.query("students").withIndex("by_archived", (q) => q.eq("archived", false)).collect()).filter((s) => !s.test);
     if (all.some((s) => s.name.toLowerCase() === name.toLowerCase())) {
       fail(`"${name}" is already on the list. Add an initial, like "${name} R".`);
     }
-    if (all.length >= 120) fail("120 students is the limit for one class list.");
+    if (all.filter((s) => !s.demo).length >= 120) fail("120 students is the limit for one class list.");
     const grade = args.grade ?? 11;
     const term = args.term ?? termOf(now);
     const st: Stage = args.stage ?? "fighter";

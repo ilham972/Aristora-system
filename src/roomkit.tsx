@@ -1,11 +1,22 @@
-// The pieces the two room pages share (Theory, Evaluation; 30 Oct 2026): small things in fixed places, like Correction.
-// - KindBar: All / Fighter / Master in one line, with how many need her (red = no work now); pale at 0.
-// - usePinned: the pinned rows' height (toasts sit above the two buttons at the bottom, never over them).
-// - The two buttons' icons: her room, and the list to call from.
+// The pieces the two room pages share (Theory, Evaluation; one screen each since 31 Oct 2026): small things in fixed
+// places, like Correction.
+// - GradeRow: grades 6–11 in ONE row, the most urgent first, a count and a red badge each; pale when nothing waits.
+// - KindBar: Fighter / Master / Legend in one line, with how many need her (red = no work now); pale at 0.
+// - LessonName: a book the way he wants it: the grade as a small number, the unit number, the Tamil name.
+// - AnswerKey: one workbook question's answer (teachers only), fetched while it is open.
+// - LockIcon: her room is in use. usePinned: the pinned rows' height (toasts sit above the pad, never over it).
 
-import { useEffect, useRef } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
+import { api } from "../convex/_generated/api";
+import type { Id } from "../convex/_generated/dataModel";
+import type { SectionData } from "../convex/lib/book";
+import type { KeyAnswer } from "../convex/lib/key";
 import { heatWords } from "./deck";
-import type { HeatCount } from "./theoryFocusData";
+import { unitNo } from "./focusData";
+import { useQuery } from "./live";
+import { KeyLine } from "./master";
+import type { Unit } from "./store";
+import type { HeatCount, LessonKind } from "./theoryFocusData";
 
 /** All / Fighter / Master: how many need her (each student once), red = no work now. Pale when none. */
 export function KindBar<T extends string>(props: { value: T; items: { id: T; label: string; c: HeatCount }[]; onPick: (k: T) => void }) {
@@ -36,17 +47,17 @@ export function KindBar<T extends string>(props: { value: T; items: { id: T; lab
 export { byUrgency, NO_HEAT } from "./theoryFocusData";
 
 /**
- * The rows pinned under the top bar: their height goes to --tp-stick-h, and the page is marked (body.tp-padded) so
- * toasts sit just above the two buttons at the bottom. `key` = what changes their height (the view).
+ * The rows pinned under the top bar: their height goes to --tp-stick-h (the body ends where the pad sticks, so the pad
+ * never moves), and the page is marked (body.tp-padded) so toasts sit above the pad. A callback ref: measured whenever
+ * the rows appear (a page that first said "Nobody is signed in" has no rows yet). `key` = what changes their height.
  */
 export function usePinned(key: unknown) {
-  const stick = useRef<HTMLDivElement>(null);
+  const [el, stick] = useState<HTMLDivElement | null>(null);
   useEffect(() => {
     document.body.classList.add("tp-padded");
     return () => document.body.classList.remove("tp-padded");
   }, []);
   useEffect(() => {
-    const el = stick.current;
     if (!el) return;
     const set = () => document.documentElement.style.setProperty("--tp-stick-h", `${el.offsetHeight}px`);
     set();
@@ -54,25 +65,78 @@ export function usePinned(key: unknown) {
     const ro = new ResizeObserver(set);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [key]);
+  }, [el, key]);
   return stick;
 }
 
-/** Her room: a door. */
-export function RoomIcon() {
+/** Grades 6 to 11 in ONE row (his rule), the most urgent first; a grade with nobody waiting is pale. */
+export function GradeRow(props: { rows: { grade: number; c: HeatCount }[]; value: number | null; onPick: (g: number) => void }) {
   return (
-    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M4 21h16M6 21V4h9v17M15 6h3v15" />
-      <circle cx="12.5" cy="12.5" r="0.9" fill="currentColor" />
-    </svg>
+    <nav class="evx-grades" aria-label="Grades, the most urgent first">
+      {props.rows.map((r) => {
+        const on = r.grade === props.value;
+        return (
+          <button
+            key={r.grade}
+            type="button"
+            class={`evx-g${on ? " on" : ""}`}
+            aria-pressed={on}
+            disabled={!on && r.c.total === 0}
+            aria-label={`Grade ${r.grade}: ${r.c.total}, ${heatWords(r.c)}`}
+            onClick={() => props.onPick(r.grade)}
+          >
+            <b>{r.grade}</b>
+            <i>{r.c.total || ""}</i>
+            {r.c.red > 0 && <em class="evx-g-r">{r.c.red}</em>}
+          </button>
+        );
+      })}
+    </nav>
   );
 }
 
-/** The list she calls from. */
-export function ListIcon() {
+/** A lesson's name the way he wants it: the grade as a number, the unit number, the Tamil name (a section: its letter and Tamil title). */
+export function LessonName(props: { unit: Unit | null; section: SectionData | null; kind: LessonKind }) {
+  const { unit, section } = props;
+  const ta = props.kind === "section" ? section?.tamil || unit?.ta : unit?.ta;
   return (
-    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
-      <path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01" />
+    <>
+      {unit && (
+        <i class="tp-ln-g" aria-hidden="true">
+          {unit.grade}
+        </i>
+      )}
+      <b class="tp-ln-n">
+        {unit ? unitNo(unit.code) : "?"}
+        {props.kind === "section" && section ? `·${section.id}` : ""}
+      </b>
+      <span class="tp-ln-t" lang="ta">
+        {ta}
+      </span>
+    </>
+  );
+}
+
+/** The answer for one workbook question (teachers only), fetched while it is open. */
+export function AnswerKey(props: { unitId: string; q: number }) {
+  const keyQ = useQuery<{ answers: KeyAnswer[] } | null>(api.catalog.key, { unitId: props.unitId as Id<"units"> });
+  const k = keyQ?.answers.find((a) => a.q === props.q);
+  if (keyQ === undefined) return <p class="muted small">Loading the answer…</p>;
+  if (!k) return <p class="muted small">{keyQ === null ? "No answer key for this workbook yet." : "No answer for this question in the key."}</p>;
+  return (
+    <div class="ev-key">
+      <small>Answer</small>
+      <KeyLine k={k} />
+    </div>
+  );
+}
+
+/** Her room is in use (someone is with her). */
+export function LockIcon() {
+  return (
+    <svg class="evx-lock" viewBox="0 0 24 24" width="14" height="14" aria-label="In use" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+      <rect x="5" y="11" width="14" height="10" rx="2" />
+      <path d="M8 11V8a4 4 0 0 1 8 0v3" />
     </svg>
   );
 }

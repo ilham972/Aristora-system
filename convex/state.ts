@@ -11,15 +11,22 @@ import { givenWork, mayBeOpen, openWork } from "./lib/backend";
  * in, marks to explain, questions for Theory), so Evaluation, Theory and Correction see every book; `given` = the
  * books given to him (not his book now): whether each still has work (then he is not "out of work") and whether it is
  * finished (Correction's row of his books leaves it out).
+ * Two classes share the server (31 Oct 2026): the real class, and the test class (test students) that only a phone in
+ * test mode sees (`test`). Each phone gets its own class's students and their calls; `tests` = how many test students
+ * there are (so a real-class phone can offer the switch).
  */
 export const get = query({
-  args: { token: v.optional(v.string()) },
+  args: { token: v.optional(v.string()), test: v.optional(v.boolean()) },
   handler: async (ctx, args) => {
     await viewer(ctx, args.token);
-    const students = await ctx.db
+    const everyone = await ctx.db
       .query("students")
       .withIndex("by_archived", (q) => q.eq("archived", false))
       .collect();
+    const test = !!args.test;
+    const students = everyone.filter((s) => !!s.test === test);
+    const tests = everyone.filter((s) => s.test).length;
+    const ours = new Set(students.map((s) => s._id as string));
     const progress: Record<string, Doc<"progress">> = {};
     const books: Record<string, Doc<"books">> = {};
     const more: Record<string, Doc<"progress">[]> = {};
@@ -38,8 +45,10 @@ export const get = query({
       }
       return cache.get(key) ?? null;
     };
-    const requested = await ctx.db.query("calls").withIndex("by_status", (q) => q.eq("status", "requested")).collect();
-    const sent = await ctx.db.query("calls").withIndex("by_status", (q) => q.eq("status", "sent")).collect();
+    const requested = (await ctx.db.query("calls").withIndex("by_status", (q) => q.eq("status", "requested")).collect()).filter((c) =>
+      ours.has(c.studentId),
+    );
+    const sent = (await ctx.db.query("calls").withIndex("by_status", (q) => q.eq("status", "sent")).collect()).filter((c) => ours.has(c.studentId));
     // A book a room has him for travels while the call lasts (so her card shows that book, even with nothing left).
     const called = new Set([...requested, ...sent].map((c) => `${c.studentId}:${c.unitId}:${c.stage}`));
     for (const s of students) {
@@ -85,6 +94,8 @@ export const get = query({
         : null,
       /** Data from before grades and stages: the phone runs setup.ensure first. */
       legacy,
+      /** Test students in the test class (any phone may switch to it: Settings). */
+      tests,
     };
   },
 });
@@ -101,6 +112,7 @@ export const archived = query({
       _id: s._id,
       name: s.name,
       demo: s.demo ?? false,
+      test: s.test ?? false,
       grade: s.grade ?? null,
       created: s._creationTime,
       archivedAt: s.archivedAt ?? null,
@@ -139,8 +151,10 @@ export const sessions = query({
   handler: async (ctx, args) => {
     await viewer(ctx, args.token, "reports");
     const list = await ctx.db.query("sessions").withIndex("by_startedAt").order("desc").take(20);
+    // A class only the test class used has an empty report (test students are never in it): not a class.
+    const empty = (r: unknown) => !!r && Array.isArray((r as { students?: unknown }).students) && (r as { students: unknown[] }).students.length === 0;
     return list
-      .filter((s) => !s.open)
+      .filter((s) => !s.open && !empty(s.report))
       .map((s) => ({ _id: s._id, startedAt: s.startedAt, endedAt: s.endedAt, report: s.report ?? null }));
   },
 });

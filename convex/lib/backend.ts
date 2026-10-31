@@ -279,8 +279,9 @@ async function closeIdle(
   await ctx.db.patch(s._id, { idleSince: undefined, idleReason: undefined, idleMs: s.idleMs + ms });
   if (ms > 0) {
     await log(ctx, session, until, { kind: "idle", studentId: s._id, name: s.name, ms, value: s.idleReason });
-    // The rooms' scores: a wait counts for each room he was waiting for ("theory+evaluation": both).
-    for (const room of STAT_ROOMS) {
+    // The rooms' scores: a wait counts for each room he was waiting for ("theory+evaluation": both). Never a test
+    // student's (the test class doesn't count).
+    for (const room of s.test ? [] : STAT_ROOMS) {
       if (!(s.idleReason ?? "").split("+").includes(room)) continue;
       await addStats(ctx, session, room, { waitMs: ms }, { maxWaitMs: ms });
     }
@@ -494,9 +495,13 @@ export async function readDigest(
 }
 
 async function buildReport(ctx: MutationCtx, session: Doc<"sessions">, endAt: number) {
-  const events = await ctx.db.query("events").withIndex("by_session", (q) => q.eq("sessionId", session._id)).collect();
-  const calls = await ctx.db.query("calls").withIndex("by_session", (q) => q.eq("sessionId", session._id)).collect();
-  const digest = await readDigest(ctx, session, endAt, { events, calls });
+  const allEvents = await ctx.db.query("events").withIndex("by_session", (q) => q.eq("sessionId", session._id)).collect();
+  const allCalls = await ctx.db.query("calls").withIndex("by_session", (q) => q.eq("sessionId", session._id)).collect();
+  const digest = await readDigest(ctx, session, endAt, { events: allEvents, calls: allCalls });
+  // The test class (test students) is never in the class's report.
+  const tests = new Set((await ctx.db.query("students").collect()).filter((x) => x.test).map((x) => x._id as string));
+  const events = allEvents.filter((e) => !e.studentId || !tests.has(e.studentId));
+  const calls = allCalls.filter((c) => !tests.has(c.studentId));
 
   const rows = new Map<string, Row>();
   const row = (id: string, name: string) => {

@@ -118,6 +118,7 @@ export const create = mutation({
         ...(bumpedFrom ? { bumpedFrom } : {}),
         teacherId: me._id,
         teacher: me.name,
+        ...(s.test ? { test: true } : {}),
         createdAt: now,
         sessionId: session?._id,
       });
@@ -129,7 +130,8 @@ export const create = mutation({
         value: `${args.room}${args.kind !== args.room ? "/" + args.kind : ""}${pull ? "/pull" : ""}`,
       });
       created.push({ studentId: id, callId, pull, bumped });
-      await addStats(ctx, session, args.room, { calls: 1, ahead: dry ? 0 : 1 });
+      // The test class never counts in the room's score.
+      if (!s.test) await addStats(ctx, session, args.room, { calls: 1, ahead: dry ? 0 : 1 });
     }
     await touch(ctx, session, now);
     return { created, rejected };
@@ -350,8 +352,8 @@ export const finish = mutation({
       const s = await ctx.db.get(c.studentId);
       if (!s) continue;
       const { value, n } = await record(ctx, c, s, item, now, session, by);
-      await addStats(ctx, session, c.room, { done: 1, qs: n });
-      if (c.room === "theory") lesson = true;
+      if (!s.test) await addStats(ctx, session, c.room, { done: 1, qs: n });
+      if (c.room === "theory" && !s.test) lesson = true;
 
       await ctx.db.patch(c._id, { status: "done", sentAt: c.sentAt ?? c.createdAt, endedAt: now });
       await ctx.db.patch(s._id, {
@@ -426,7 +428,7 @@ export const keep = mutation({
     if (waiting === 0) fail(`${s.name} has nothing to explain in ${next.unit.code}.`);
 
     const { value, n } = await record(ctx, c, s, args.item, now, session, by);
-    await addStats(ctx, session, "evaluation", { done: 1, qs: n });
+    if (!s.test) await addStats(ctx, session, "evaluation", { done: 1, qs: n });
     await ctx.db.patch(c._id, { status: "done", sentAt: c.sentAt ?? c.createdAt, endedAt: now });
     const unit = c.unitId ? await ctx.db.get(c.unitId) : null;
     await log(ctx, session, now, { kind: "done-evaluation", by, studentId: s._id, name: s.name, unit: unit?.key, value, ms: now - (c.sentAt ?? c.createdAt) });
@@ -440,13 +442,14 @@ export const keep = mutation({
       unitId: next.unit._id,
       stage: args.stage,
       ...(c.teacherId ? { teacherId: c.teacherId, teacher: c.teacher } : {}),
+      ...(s.test ? { test: true } : {}),
       createdAt: now,
       sentAt: now,
       sessionId: session?._id,
     });
     await ctx.db.patch(s._id, { room: "evaluation", lastActivityAt: now, lastSeenAt: now, seen: { ...s.seen, evaluation: now } });
     await log(ctx, session, now, { kind: "keep", by, studentId: s._id, name: s.name, unit: next.unit.key, value: next.unit.code });
-    await addStats(ctx, session, "evaluation", { calls: 1, ahead: (await dryOf(ctx, s)).dry ? 0 : 1 });
+    if (!s.test) await addStats(ctx, session, "evaluation", { calls: 1, ahead: (await dryOf(ctx, s)).dry ? 0 : 1 });
     await refresh(ctx, s._id, now, session);
     await touch(ctx, session, now);
     return { callId };
@@ -606,7 +609,7 @@ export const lessons = query({
       .order("desc")
       .take(200);
     const ms = recent
-      .filter((c) => c.room === "theory" && c.kind === "theory" && (c.arrivedAt ?? c.sentAt) !== undefined && c.endedAt !== undefined)
+      .filter((c) => c.room === "theory" && c.kind === "theory" && !c.test && (c.arrivedAt ?? c.sentAt) !== undefined && c.endedAt !== undefined)
       .map((c) => c.endedAt! - (c.arrivedAt ?? c.sentAt)!)
       .slice(0, 20);
     return { ms };

@@ -8,8 +8,20 @@ import type { View } from "../src/derive";
 import type { Board } from "../src/store";
 import {
   defaultTicks,
+  holdOrder,
   joiners,
+  lessonPills,
+  lessonPillSig,
+  needsOf,
   nextOrder,
+  tAllDecided,
+  tDecisionWords,
+  theoryFinish,
+  theoryGradeRow,
+  theorySquares,
+  theoryStageRow,
+  theoryUnitRow,
+  tUndecided,
   pillTone,
   roomItems,
   roomWords,
@@ -424,5 +436,130 @@ describe("The rebuilt page (30 Oct 2026): pills that hold still, and her room wi
     // Older calls (sent before 30 Oct 2026, no walk) count as there.
     const old = roomLessons(board([call("c9", "Fathima", "sent")]), [th("Fathima", READY_D, { where: "theory", calls: [] })], NOW);
     expect(old[0].here).toHaveLength(1);
+  });
+});
+
+describe("One screen (31 Oct 2026): grade, stage, unit and lesson rows; what to teach, one square at a time", () => {
+  const call = (id: string, who: string, status: string, o: Partial<Call> = {}): Call => ({
+    _id: id,
+    studentId: who,
+    room: "theory",
+    kind: "theory",
+    status,
+    section: "D",
+    unitId: "u13",
+    createdAt: NOW - 10 * MIN,
+    sentAt: status === "sent" ? NOW - 8 * MIN : undefined,
+    walk: true,
+    ...o,
+  });
+
+  test("the rows: each the most urgent first; held students count but never as urgent; Legend always there", () => {
+    const views = [
+      th("Fathima", READY_D, { idleMs: 6 * MIN }), // no work: red
+      th("Kumar", READY_D, { where: "evaluation" }), // in Evaluation: held, not urgent
+      th("Priya", READY_C, { idleMs: MIN }),
+      wb("Malik", [13, 17], { sentAgo: 25 * MIN }), // waited 20+ min: urgent (orange)
+      wb("Vimal", [13], { sentAgo: 5 * MIN }),
+    ];
+    const plan = planLessons(views, NOW, FREE);
+    const grades = theoryGradeRow(plan);
+    expect(grades.map((g) => g.grade)).toEqual([11, 7, 6, 8, 9, 10]);
+    expect(grades[0].c).toEqual({ red: 2, orange: 0, yellow: 1, total: 3 }); // Kumar counts, as yellow
+    expect(grades[1].c).toMatchObject({ orange: 1, total: 2 });
+    const g11 = plan.filter((l) => l.unit?.grade === 11);
+    expect(theoryStageRow(g11).map((x) => [x.label, x.c.total])).toEqual([
+      ["Fighter", 3],
+      ["Master", 0],
+      ["Legend", 0],
+    ]);
+    const units = theoryUnitRow(g11.filter((l) => l.kind === "section"));
+    expect(units.map((u) => [u.unit.code, u.c.total, u.lessons.map((l) => l.section?.id)])).toEqual([["U13", 3, ["D", "C"]]]);
+  });
+
+  test("the lessons: a theory book's sections; a workbook's questions by the same students (one pill), then the whole unit", () => {
+    const views = [
+      th("Fathima", READY_D, { idleMs: 6 * MIN }),
+      th("Priya", READY_C, { idleMs: MIN }),
+      wb("Malik", [13, 17], { sentAgo: 25 * MIN }),
+      wb("Vimal", [13], { sentAgo: 5 * MIN }),
+      wb("Sana", [4], { sentAgo: 5 * MIN, whole: true }),
+      wb("Rizwan", [], { sentAgo: 5 * MIN, whole: true }),
+    ];
+    const plan = planLessons(views, NOW, FREE);
+    const sec = lessonPills(theoryUnitRow(plan.filter((l) => l.kind === "section"))[0]);
+    expect(sec.map((p) => [p.label, p.qs, p.members.map((m) => m.v.s.name)])).toEqual([
+      ["D", [23, 24, 25, 26], ["Fathima"]],
+      ["C", [15, 16, 17], ["Priya"]],
+    ]);
+    const work = lessonPills(theoryUnitRow(plan.filter((l) => l.kind === "workbook"))[0]);
+    // Q13: Malik and Vimal (Malik waited 25 min: orange first); Q17 Malik alone; Q4 Sana; the whole unit: Sana, Rizwan.
+    expect(work.map((p) => [p.label, p.heat, p.members.map((m) => m.v.s.name).sort()])).toEqual([
+      ["13", "orange", ["Malik", "Vimal"]],
+      ["17", "orange", ["Malik"]],
+      ["Whole unit", "yellow", ["Rizwan", "Sana"]],
+      ["4", "yellow", ["Sana"]],
+    ]);
+    // The row holds still while nothing she can see changes (the hold of the Theory pills, 30 Oct 2026).
+    const items = work.map((p) => ({ key: p.key, sig: lessonPillSig(p) }));
+    const first = holdOrder(null, items, false);
+    expect(holdOrder(first, [...items].reverse(), false).keys).toEqual(first.keys);
+  });
+
+  test("what to teach: each question once for everyone with her; Taught for all; Done when every question of his is decided", () => {
+    const calls = [
+      call("c1", "Fathima", "sent", { arrivedAt: NOW - 4 * MIN }),
+      call("c2", "Ahamed", "sent", { arrivedAt: NOW - 3 * MIN }),
+      call("c3", "Malik", "sent", { section: "R", unitId: "u08", arrivedAt: NOW - 3 * MIN }),
+      call("c4", "Nila", "sent", { sentAt: NOW - MIN }), // on the way
+    ];
+    const partly = { ...READY_D, "23": { s: "taught" as const, t: 1 } }; // Ahamed had Q23 before
+    const views = [
+      th("Fathima", READY_D, { where: "theory", calls: [calls[0]] }),
+      th("Ahamed", partly, { where: "theory", calls: [calls[1]] }),
+      wb("Malik", [13, 17], { where: "theory", calls: [calls[2]], whole: true }),
+      th("Nila", READY_D, { where: "theory", calls: [calls[3]] }),
+    ];
+    const items = roomItems(roomLessons(board(calls), views, NOW), NOW);
+    const sqs = theorySquares(items);
+    // Only those with her (Nila is on the way). The lesson with more students first, a section in the book's order
+    // (its teach questions build on each other: Q23 for Fathima, Ahamed had it), then Malik's workbook.
+    expect(sqs.map((x) => [x.q, x.who.map((it) => it.name).sort()])).toEqual([
+      [23, ["Fathima"]],
+      [24, ["Ahamed", "Fathima"]],
+      [25, ["Ahamed", "Fathima"]],
+      [26, ["Ahamed", "Fathima"]],
+      [13, ["Malik"]],
+      [17, ["Malik"]],
+      ["whole", ["Malik"]],
+    ]);
+    const fathima = items.find((it) => it.name === "Fathima")!;
+    const malik = items.find((it) => it.name === "Malik")!;
+    expect(needsOf(fathima)).toEqual([23, 24, 25, 26]);
+    expect(needsOf(malik)).toEqual([13, 17, "whole"]);
+    // Taught Q23-25 for both, Q26 not reached (the bell): Fathima and Ahamed are done; Malik isn't.
+    const dec = {
+      [fathima.st!.v.key]: { "23": "t", "24": "t", "25": "t", "26": "n" },
+      [items.find((it) => it.name === "Ahamed")!.st!.v.key]: { "24": "t", "25": "t", "26": "n" },
+    } as const;
+    expect(items.filter((it) => tAllDecided(it, dec)).map((it) => it.name).sort()).toEqual(["Ahamed", "Fathima"]);
+    expect(tUndecided(sqs[0], dec)).toEqual([]);
+    expect(theoryFinish(fathima, dec[fathima.st!.v.key], false)).toEqual({ kind: "section", taught: [23, 24, 25] });
+    expect(tDecisionWords(fathima, dec[fathima.st!.v.key])).toBe("3 taught · 1 not reached");
+    // Malik: Q13 taught, Q17 not reached, the whole unit not reached: Q13 alone is marked taught, the rest stays.
+    expect(theoryFinish(malik, { "13": "t", "17": "n", whole: "n" }, false)).toEqual({ kind: "workbook", done: { all: false, taught: [13] } });
+    // Everything taught (or All taught): all.
+    expect(theoryFinish(malik, {}, true)).toEqual({ kind: "workbook", done: { all: true } });
+    // Nobody with her yet: the ones on the way (to get ready); nobody called: the picked lesson's (to prepare).
+    const onlyWalking = items.filter((it) => it.name === "Nila");
+    expect(theorySquares(onlyWalking).map((x) => x.q)).toEqual([23, 24, 25, 26]);
+    const plan = planLessons([th("Hana", READY_D, { idleMs: MIN })], NOW, FREE);
+    const pill = lessonPills(theoryUnitRow(plan)[0])[0];
+    expect(theorySquares([], pill).map((x) => [x.q, x.who.length])).toEqual([
+      [23, 0],
+      [24, 0],
+      [25, 0],
+      [26, 0],
+    ]);
   });
 });

@@ -178,6 +178,15 @@ export default defineSchema({
     archivedAt: v.optional(v.number()),
     /** The family app opens every World for him (else: his unit, books given, and the next after a finished one). */
     openAll: v.optional(v.boolean()),
+    /**
+     * A test student (31 Oct 2026): the test class, a class of its own. Only phones in test mode see test students
+     * (state.get `test`); the real class never does, and they never count (demo is set too). copyOf = the real student
+     * he copies (his grade, stage, books, levels and books given, as they were when copied); testCase = what an extra
+     * test student is for ("Theory: needs D, no work 6 min").
+     */
+    test: v.optional(v.boolean()),
+    copyOf: v.optional(v.id("students")),
+    testCase: v.optional(v.string()),
   }).index("by_archived", ["archived"]),
 
   /**
@@ -286,6 +295,8 @@ export default defineSchema({
     teacher: v.optional(v.string()),
     /** This theory call cancelled the Evaluation call of this teacher (her phone says "Theory took Kumar first"). */
     bumpedFrom: v.optional(v.id("users")),
+    /** A call for a test student (the test class): never in a room's score, nor in Theory's lesson times. */
+    test: v.optional(v.boolean()),
     endedAt: v.optional(v.number()),
     sessionId: v.optional(v.id("sessions")),
   })

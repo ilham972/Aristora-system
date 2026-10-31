@@ -20,7 +20,7 @@ import {
   type PBoard,
   type StageFilter,
 } from "./progressData";
-import { stageName, STAGES, toast, type Board } from "./store";
+import { stageName, STAGES, testMode, toast, type Board } from "./store";
 import { StudentSheet } from "./studentSheet";
 import { Empty, GradeRow, Sheet, useGrade } from "./ui";
 
@@ -54,7 +54,7 @@ export function Progress(props: { board: Board; now: number }) {
     const here = active.filter((s) => s.present && s.grade);
     return here.length ? here[0].grade! : 8;
   });
-  const data = useQuery<PBoard>(api.progress.board, { grade });
+  const data = useQuery<PBoard>(api.progress.board, testMode() ? { grade, test: true } : { grade });
   const [view, setView] = remembered("aristora.progressView", ["units", "term"] as const, "units");
   const [stage, setStage] = useState<StageFilter>("all");
   const [todayOnly, setTodayOnly] = useState(false);

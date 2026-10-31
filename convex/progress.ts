@@ -13,7 +13,8 @@ import { daysBetween, summarizeFighter, summarizeMaster, type Cell } from "./lib
 import { computeStatus, type Marks } from "./lib/status";
 
 export const board = query({
-  args: { token: v.optional(v.string()), grade: v.number() },
+  /** test: the test class's students instead of the real class's (a phone in test mode). */
+  args: { token: v.optional(v.string()), grade: v.number(), test: v.optional(v.boolean()) },
   handler: async (ctx, args) => {
     await viewer(ctx, args.token, "reports");
     const now = Date.now();
@@ -27,7 +28,7 @@ export const board = query({
     for (const b of await ctx.db.query("books").collect()) if (unitIds.has(b.unitId)) books.set(`${b.unitId}:${b.stage}`, b);
 
     const students = (await ctx.db.query("students").withIndex("by_archived", (q) => q.eq("archived", false)).collect())
-      .filter((s) => s.grade === args.grade)
+      .filter((s) => s.grade === args.grade && !!s.test === !!args.test)
       .sort((a, b) => a.name.localeCompare(b.name));
     const came = new Set(
       (await ctx.db.query("attendance").withIndex("by_day", (q) => q.eq("day", today)).collect()).map((x) => x.studentId),

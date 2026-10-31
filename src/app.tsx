@@ -13,7 +13,7 @@ import { Settings } from "./settings";
 import { alertsState, armAlerts, listenForTaps, ring, useAlertsState, type AlertKind } from "./sound";
 import { clearHash, PinSheet, pinAsked, readHash, SignIn, stopAskingPin, type Hash } from "./signin";
 import { hideSplash } from "./splash";
-import { currentMe, may, setRole, signOutHere, useStore, useTick, type Board, type Role } from "./store";
+import { currentMe, may, setRole, signOutHere, testMode, useStore, useTick, type Board, type Role } from "./store";
 import { Sheet, Toasts } from "./ui";
 
 /**
@@ -206,7 +206,7 @@ export function App() {
 
   return (
     <div
-      class={`app${tabs.length ? "" : " no-tabs"}`}
+      class={`app${tabs.length ? "" : " no-tabs"}${testMode() ? " test-mode" : ""}`}
       data-role={role}
       data-tab={shown === "class" ? "class" : tab === "correction" ? "focus" : tab}
     >
@@ -294,6 +294,7 @@ export function App() {
             <TopStat
               inClass={inClass}
               clock={session ? fmtClock(now - session.startedAt) : null}
+              test={testMode()}
               link={link}
               onTap={canCorrect ? () => setAttOpen(true) : undefined}
             />
@@ -437,9 +438,10 @@ function SlowLoad() {
  * Top right: how many are in class, the class clock and the link dot, in one capsule. For whoever signs students in
  * (Correction, the owner) it is also a way into Attendance from any page.
  */
-function TopStat(props: { inClass: number; clock: string | null; link: Link; onTap?: () => void }) {
+function TopStat(props: { inClass: number; clock: string | null; test?: boolean; link: Link; onTap?: () => void }) {
   const { inClass, clock } = props;
-  const words = `${inClass} in class, ${clock ? `class time ${clock}` : "no class now"}`;
+  // The test class (Settings): TEST where the clock is, so nobody mistakes it for the real class.
+  const words = props.test ? `The test class: ${inClass} test students in class` : `${inClass} in class, ${clock ? `class time ${clock}` : "no class now"}`;
   const inside = (
     <>
       <svg
@@ -462,8 +464,8 @@ function TopStat(props: { inClass: number; clock: string | null; link: Link; onT
         {inClass}
       </b>
       <i class="ts-sep" aria-hidden="true" />
-      <span class={`clock${clock ? "" : " off"}`} aria-hidden="true">
-        {clock ?? "No class"}
+      <span class={`clock${props.test ? " ts-test" : clock ? "" : " off"}`} aria-hidden="true">
+        {props.test ? "TEST" : (clock ?? "No class")}
       </span>
       <LinkDot link={props.link} />
     </>

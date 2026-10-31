@@ -1,9 +1,10 @@
 // The Theory page's rules (src/theoryFocus.tsx draws them). Plain functions: the tests run them on fake classes.
 //
 // A lesson is what Theory teaches a group at once: a theory-book section (G11 U13 · D) or a workbook's questions sent
-// to Theory (G7 U08). The page (rebuilt 30 Oct 2026) shows every lesson as a tiny pill in one line, most useful first,
-// the open one's students under it, and her room: everyone she called, on the way (Correction sent him; she taps
-// Arrived when he is there) or with her.
+// to Theory (G7 U08). The page is ONE screen (31 Oct 2026, his voice note: "the theory page also same like" the
+// Evaluation page): grade → Fighter/Master/Legend → unit → lesson (a section; a workbook's questions the same students
+// need, or the whole unit), each the most urgent first and already picked; her room as a box of pills (6 at most) with
+// Call, Arrived and Done; what to teach as squares, one at a time, Taught for everyone with her who needs it.
 //
 // "Most useful" (agreed with the founder, 2026-10-29), in minutes, not questions:
 // - each theory-book student's pace comes from his own marks (else the class's, else 4 min a question), so the page
@@ -465,6 +466,7 @@ export function joiners(l: RoomLesson, plan: Lesson[]): Member[] {
 }
 
 /** Next and Soon: every lesson to plan, except one going on that still has room (its students join it instead). */
+// (Used by the tests: the one screen offers the picked lesson's students instead.)
 export function toPlan(plan: Lesson[], room: RoomLesson[]): Lesson[] {
   const going = new Map(room.map((l) => [l.key, l]));
   return plan.filter((p) => {
@@ -507,8 +509,17 @@ export type PillOrder = { keys: string[]; sig: Record<string, string> };
  * the ranking catches up once she lets go.
  */
 export function nextOrder(prev: PillOrder | null, plan: Lesson[], hold: boolean): PillOrder {
-  const sig = Object.fromEntries(plan.map((l) => [l.key, pillSig(l)]));
-  const ranked = plan.map((l) => l.key);
+  return holdOrder(
+    prev,
+    plan.map((l) => ({ key: l.key, sig: pillSig(l) })),
+    hold,
+  );
+}
+
+/** nextOrder for any pills: `sig` = what moves a pill (its colour and count). */
+export function holdOrder(prev: PillOrder | null, items: { key: string; sig: string }[], hold: boolean): PillOrder {
+  const sig = Object.fromEntries(items.map((p) => [p.key, p.sig]));
+  const ranked = items.map((p) => p.key);
   if (!prev) return { keys: ranked, sig };
   const same = ranked.length === prev.keys.length && ranked.every((k) => prev.sig[k] === sig[k]);
   if (same) return { keys: prev.keys, sig };
@@ -555,4 +566,230 @@ export function roomWords(it: RoomItem, now: number): string {
   if (it.state === "called") return it.late ? `not sent ${mShort(now - it.rc.c.createdAt)}` : "called";
   if (it.state === "eval") return "in Eval first";
   return `with you${sinceWords(it.rc.minutes)}`;
+}
+
+// ---------------- One screen: grade → stage → unit → lesson (31 Oct 2026) ----------------
+
+export const THEORY_GRADES = [6, 7, 8, 9, 10, 11];
+/** Fighter (theory books), Master (workbooks), Legend (whole papers: no books in the app yet). */
+export type TheoryStage = LessonKind | "legend";
+
+/** A student's colour in the rows: held ones (in Evaluation, called by her, going home) count, but never as urgent. */
+export const rowHeat = (m: Member): Heat => (m.hold ? "yellow" : heatOf(m));
+
+/** How many need Theory in these lessons, each student once, by colour (the first lesson that has him decides). */
+export function tallyLessons(lessons: readonly Lesson[]): HeatCount {
+  const out = { ...NO_HEAT };
+  const seen = new Set<string>();
+  for (const l of lessons)
+    for (const m of l.members) {
+      if (seen.has(m.v.s._id)) continue;
+      seen.add(m.v.s._id);
+      out[rowHeat(m)]++;
+      out.total++;
+    }
+  return out;
+}
+
+/** The grade a lesson's book belongs to. */
+export const lessonGrade = (l: Lesson): number | undefined => l.unit?.grade ?? l.members[0]?.v.s.grade;
+
+/** Grades 6 to 11, the most urgent first (ties: 6 first); a grade with nobody for Theory goes last. */
+export function theoryGradeRow(plan: readonly Lesson[]): { grade: number; c: HeatCount }[] {
+  return byUrgency(THEORY_GRADES.map((grade) => ({ grade, c: tallyLessons(plan.filter((l) => lessonGrade(l) === grade)) })));
+}
+
+/** Fighter / Master / Legend in one grade, the most urgent first (Legend: no books yet). */
+export function theoryStageRow(plan: readonly Lesson[]): { id: TheoryStage; label: string; c: HeatCount }[] {
+  return byUrgency<{ id: TheoryStage; label: string; c: HeatCount }>([
+    { id: "section", label: "Fighter", c: tallyLessons(plan.filter((l) => l.kind === "section")) },
+    { id: "workbook", label: "Master", c: tallyLessons(plan.filter((l) => l.kind === "workbook")) },
+    { id: "legend", label: "Legend", c: NO_HEAT },
+  ]);
+}
+
+export type TheoryUnit = { key: string; unit: Unit; c: HeatCount; lessons: Lesson[] };
+
+/** The books of one grade and stage that need Theory: the most urgent first, then by unit number. */
+export function theoryUnitRow(plan: readonly Lesson[]): TheoryUnit[] {
+  const by = new Map<string, TheoryUnit>();
+  for (const l of plan) {
+    if (!l.unit) continue;
+    const u = by.get(l.unit._id) ?? { key: l.unit._id as string, unit: l.unit, c: NO_HEAT, lessons: [] };
+    u.lessons.push(l);
+    by.set(u.key, u);
+  }
+  const units = [...by.values()]
+    .map((u) => ({ ...u, c: tallyLessons(u.lessons) }))
+    .sort((a, b) => a.unit.code.localeCompare(b.unit.code, undefined, { numeric: true }));
+  return byUrgency(units).filter((u) => u.c.total > 0);
+}
+
+/**
+ * A pill of the lessons row: a theory book's section (its teach questions), or a workbook's questions sent to Theory
+ * that exactly the same students need ("13 · 17"), or the whole unit again.
+ */
+export type LessonPill = {
+  key: string;
+  lesson: Lesson;
+  /** "D", "13 · 17", "Whole unit". */
+  label: string;
+  /** Section: the teach questions anyone of them needs; workbook: these questions. */
+  qs: number[];
+  whole: boolean;
+  /** Who needs it, in the lesson's order (no work first). */
+  members: Member[];
+  /** The most urgent of them (held ones: yellow). */
+  heat: Heat;
+};
+
+const HEAT_RANK: Record<Heat, number> = { red: 0, orange: 1, yellow: 2 };
+const topHeat = (ms: readonly Member[]): Heat => ms.map(rowHeat).reduce<Heat>((h, x) => (HEAT_RANK[x] < HEAT_RANK[h] ? x : h), "yellow");
+
+/**
+ * One unit's lessons as pills. A theory book: its sections, the most useful first (planLessons). A workbook: its
+ * questions for Theory grouped by the students who need them (the same students: one pill), the most urgent first,
+ * then the most students, then the first question; the whole unit again after its colour's questions.
+ */
+export function lessonPills(u: TheoryUnit): LessonPill[] {
+  const sections: LessonPill[] = [];
+  const groups: LessonPill[] = [];
+  for (const l of u.lessons) {
+    if (l.kind === "section") {
+      sections.push({ key: l.key, lesson: l, label: l.section?.id ?? "?", qs: l.teach, whole: false, members: l.members, heat: topHeat(l.members) });
+      continue;
+    }
+    const byQ = new Map<number, Member[]>();
+    for (const m of l.members) for (const q of m.qs) byQ.set(q, [...(byQ.get(q) ?? []), m]);
+    const bySet = new Map<string, { qs: number[]; members: Member[] }>();
+    for (const [q, ms] of [...byQ.entries()].sort((a, b) => a[0] - b[0])) {
+      const who = ms.map((m) => m.v.key).sort().join(",");
+      const g = bySet.get(who);
+      if (g) g.qs.push(q);
+      else bySet.set(who, { qs: [q], members: ms });
+    }
+    for (const g of bySet.values())
+      groups.push({ key: `${l.key}:${g.qs.join(".")}`, lesson: l, label: g.qs.join(" · "), qs: g.qs, whole: false, members: g.members, heat: topHeat(g.members) });
+    const whole = l.members.filter((m) => m.whole);
+    if (whole.length) groups.push({ key: `${l.key}:whole`, lesson: l, label: "Whole unit", qs: [], whole: true, members: whole, heat: topHeat(whole) });
+  }
+  groups.sort(
+    (a, b) =>
+      HEAT_RANK[a.heat] - HEAT_RANK[b.heat] ||
+      b.members.length - a.members.length ||
+      Number(a.whole) - Number(b.whole) ||
+      (a.qs[0] ?? 0) - (b.qs[0] ?? 0),
+  );
+  return [...sections, ...groups];
+}
+
+/** What moves a lesson pill (its colour and how many need it): the row holds still otherwise (holdOrder). */
+export const lessonPillSig = (p: LessonPill) => `${p.heat}${p.members.length}${p.lesson.starving ? "s" : ""}`;
+
+// ---------------- Her room on one screen: what to teach, one square at a time ----------------
+
+/** "whole" = the whole unit again (a workbook's whole-unit request). */
+export type TQ = number | "whole";
+/** What she decided for a question: taught, or not reached (the bell rang first: it stays his). */
+export type TDecision = "t" | "n";
+export type TDecisions = Record<string, Record<string, TDecision | undefined>>;
+
+/** His book's key (student:unit:stage): decisions are per book. */
+export const itemKey = (it: RoomItem): string => (it.st?.v ?? it.rc.v)?.key ?? it.id;
+
+/** What he needs taught in her room: the section's teach questions he still needs; his workbook's questions for Theory and the whole unit. */
+export function needsOf(it: RoomItem): TQ[] {
+  const v = it.st?.v ?? it.rc.v;
+  if (!v) return [];
+  if (it.lesson.kind === "section") return teachLeft(v, it.lesson.section);
+  return [...(v.ms?.theory ?? []), ...(v.ms?.wholeUnit ? (["whole"] as const) : [])];
+}
+
+/** One square: a question (or the whole unit) of one book, and who in her room needs it. */
+export type TheorySquare = { key: string; q: TQ; kind: LessonKind; section: SectionData | null; unit: Unit | null; v: View; who: RoomItem[] };
+
+/**
+ * The questions to teach, each once for everyone who needs it: with her (Arrived); nobody here yet: those on the way
+ * (to get ready); nobody called: the picked pill's (to prepare). The one most of them need first, then by unit and
+ * question; the whole unit last.
+ */
+export function theorySquares(items: readonly RoomItem[], pill?: LessonPill | null): TheorySquare[] {
+  const here = items.filter((it) => it.state === "here");
+  const from = here.length ? here : items;
+  const by = new Map<string, TheorySquare>();
+  for (const it of from) {
+    const v = it.st?.v ?? it.rc.v;
+    if (!v) continue;
+    const l = it.lesson;
+    for (const q of needsOf(it)) {
+      const key = `${l.unit?._id ?? v.unit?._id ?? "?"}:${l.kind === "section" ? (l.section?.id ?? "") : "W"}:${q}`;
+      const sq = by.get(key) ?? { key, q, kind: l.kind, section: l.section, unit: l.unit ?? v.unit, v, who: [] };
+      sq.who.push(it);
+      by.set(key, sq);
+    }
+  }
+  if (by.size === 0 && pill && pill.members.length) {
+    const l = pill.lesson;
+    const v = pill.members[0].v;
+    const qs: TQ[] = [...pill.qs, ...(pill.whole ? (["whole"] as const) : [])];
+    for (const q of qs) {
+      const key = `${l.unit?._id ?? "?"}:${l.kind === "section" ? (l.section?.id ?? "") : "W"}:${q}`;
+      by.set(key, { key, q, kind: l.kind, section: l.section, unit: l.unit, v, who: [] });
+    }
+  }
+  // One lesson after another (the one with the most students first). A section's teach questions in the book's order
+  // (they build on each other); a workbook's the most shared first (explain once for many), the whole unit last.
+  const qn = (q: TQ) => (q === "whole" ? Infinity : q);
+  const lessonOf = (x: TheorySquare) => x.key.slice(0, x.key.lastIndexOf(":"));
+  const size = new Map<string, number>();
+  for (const x of by.values()) size.set(lessonOf(x), Math.max(size.get(lessonOf(x)) ?? 0, x.who.length));
+  return [...by.values()].sort(
+    (a, b) =>
+      (size.get(lessonOf(b)) ?? 0) - (size.get(lessonOf(a)) ?? 0) ||
+      (a.unit?.code ?? "").localeCompare(b.unit?.code ?? "", undefined, { numeric: true }) ||
+      lessonOf(a).localeCompare(lessonOf(b)) ||
+      (a.kind === "workbook" ? b.who.length - a.who.length : 0) ||
+      qn(a.q) - qn(b.q),
+  );
+}
+
+/** His decisions (per book). */
+export const decOf = (dec: TDecisions, it: RoomItem): Record<string, TDecision | undefined> => dec[itemKey(it)] ?? {};
+
+/** Who with her still needs this square decided. */
+export function tUndecided(sq: TheorySquare, dec: TDecisions): RoomItem[] {
+  return sq.who.filter((it) => it.state === "here" && decOf(dec, it)[String(sq.q)] === undefined);
+}
+
+/** With her, and every question of his decided (or nothing left to teach): Done sends him back. */
+export function tAllDecided(it: RoomItem, dec: TDecisions): boolean {
+  if (it.state !== "here") return false;
+  const d = decOf(dec, it);
+  return needsOf(it).every((q) => d[String(q)] !== undefined);
+}
+
+/**
+ * What Done sends for one student. A section: the teach questions marked taught (the rest stay his). A workbook:
+ * workbookDone (everything taught = all; else the taught ones one by one, the rest stay for Theory). `all`: what she
+ * didn't decide counts as taught ("All taught").
+ */
+export function theoryFinish(
+  it: RoomItem,
+  d: Record<string, TDecision | undefined>,
+  all: boolean,
+): { kind: "section"; taught: number[] } | { kind: "workbook"; done: ReturnType<typeof workbookDone> } {
+  const taught = (q: TQ) => (d[String(q)] ?? (all ? "t" : undefined)) === "t";
+  const v = it.st?.v ?? it.rc.v;
+  if (it.lesson.kind === "section") return { kind: "section", taught: (v ? teachLeft(v, it.lesson.section) : []).filter(taught) };
+  const qs = v?.ms ? [...v.ms.theory] : [];
+  const whole = !!v?.ms?.wholeUnit;
+  return { kind: "workbook", done: workbookDone(qs, whole, new Set(qs.filter(taught)), whole && taught("whole")) };
+}
+
+/** "2 taught · 1 not reached · 1 to do": what Done will do for him. */
+export function tDecisionWords(it: RoomItem, d: Record<string, TDecision | undefined>): string {
+  const qs = needsOf(it);
+  const n = (x: TDecision) => qs.filter((q) => d[String(q)] === x).length;
+  const open = qs.filter((q) => d[String(q)] === undefined).length;
+  return [n("t") ? `${n("t")} taught` : "", n("n") ? `${n("n")} not reached` : "", open ? `${open} to do` : ""].filter(Boolean).join(" · ");
 }

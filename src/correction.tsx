@@ -9,7 +9,7 @@ import { fmtMin, isWalking, liveSession, shortMin, WALK_MS, type View } from "./
 import { GradePills, gradesOf, inGrade, needsOf, useGradeFilter } from "./grades";
 import { nowOf } from "./nextData";
 import { ReportView, type Report } from "./report";
-import { act, currentRole, may, STAGES, toast, type Board, type Role, type Stage } from "./store";
+import { act, currentRole, may, STAGES, testMode, toast, type Board, type Role, type Stage } from "./store";
 import { classPace, type HeatCount } from "./theoryFocusData";
 import { Empty, Sheet } from "./ui";
 
@@ -224,7 +224,10 @@ export function ClassPage(props: { board: Board; views: View[]; now: number; job
 
       {job !== "theory" && <GoneHome role={job} views={inGrade(props.views, grade)} now={now} />}
 
-      {canCorrect && session && (
+      {canCorrect && session && testMode() && (
+        <p class="muted end-wrap">The test class: End the session is on the real class's phones only (it signs everyone out).</p>
+      )}
+      {canCorrect && session && !testMode() && (
         <div class="end-wrap">
           <p class="muted">Class started {fmtMin(now - session.startedAt)} ago.</p>
           <button type="button" class="btn ghost" onClick={() => setEnding(true)}>

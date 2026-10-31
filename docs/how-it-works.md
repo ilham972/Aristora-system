@@ -7,7 +7,7 @@ The technical memory of the app, kept with the code and updated in the same comm
   now": the one Correction last opened). **He works on several books at once** (`ce6fe9d`): every book with
   something waiting reaches the rooms (below, "Several books").
 - `back` remembers where to return after Exam Sprint.
-- `present` is set in Attendance (or by demo load); `lastInAt` = his last arrival (home time = +2 h on the
+- `present` is set in Attendance (or by demo load, or the test class); `lastInAt` = his last arrival (home time = +2 h on the
   Theory page); `archivedAt` = when he was removed (for "removed this month").
 - `room` is set while he is with Theory or Evaluation.
 - `idleSince`/`idleMs` count out-of-work time; `idleReason` = what he waits for (`correction`, `evaluation`,
@@ -67,7 +67,7 @@ red/orange waits, else "Also waiting: U09 (2)". Fair order (both rooms): no work
 each corrector's paper is her own; below, "Several correctors"). Class rows: "On U09" when his book is blocked but a given book has work;
 chips for other books ("U08 Eval 2"). Absent students: book now only.
 
-**Grade pills:** on Class and the Evaluation page, "All 7 9 11" for the grades in class now (hidden with fewer than
+**Grade pills:** on Class, "All 7 9 11" for the grades in class now (Theory and Evaluation: grades 6–11, `GradeRow`) (hidden with fewer than
 2), each with how many are here and a red/amber badge for what waits for this job there. Remembered per job
 (`aristora.grade.<job>`); falls back to All when that grade has nobody.
 
@@ -92,7 +92,7 @@ chips for other books ("U08 Eval 2"). Absent students: book now only.
     "Still with you?".
 
 **Calls.**
-- Theory ticks names on a lesson card and taps **Call**; Evaluation ticks names on its page. Correction's phone says
+- Theory and Evaluation tick names in their room box (one screen each) and tap **Call**. Correction's phone says
   "Ahamed and Nila, go to Theory" every 30 seconds until Correction taps Sent or × (not now, undoable).
 - Theory comes first: Theory can take a student straight out of Evaluation (pull: Evaluation hears "Theory wants
   Kumar now" and taps "Send to Theory"). Theory calling someone Evaluation had **called** cancels her call: the
@@ -163,36 +163,48 @@ key"). The reader checks numbers, each question's marks and the grade. Own table
 (`catalog.key`) only while a level or an Evaluation card is open; teachers + owner only, never the parents'/students'
 sites. Final answer bold from `**…**`, never HTML; Books page K pill. A re-upload without a key keeps it.
 
-**Theory page (rebuilt 30 Oct 2026, `b4ac688`, his voice note; `src/theoryFocus.tsx`, rules in `src/theoryFocusData.ts`).**
-Like Correction: small things in fixed places.
-- **Pinned** (`.tp-stick`): today's score in one thin line (`TodayStrip compact`), Fighter / Master / Legend (`KindBar`,
-  the most urgent first and picked: `byUrgency`; no All since 31 Oct, his call; Legend pale until its books exist;
-  pale at 0, red count), then that kind's lessons, each as a tiny pill in ONE sideways line (`HRow`), the most useful first
-  (`planLessons`): grade chip, unit number (Fighter: "13·D"), the Tamil name (Fighter: the section's Tamil title),
-  how many need it; a red (no work now / starving) or amber (soon) line under it (`pillTone`); Fighter = blue left
-  edge; a lesson going on in her room = blue count (`lt-going`). The order holds still (`nextOrder`): it re-ranks
-  only when a lesson comes or goes or its colour or count changes, never within 5 s of her last touch on the row
-  (`HOLD_MS`); after Call or Done at once. The first pill is open by default; the open one shows its whole name.
-- **The open lesson** (`LessonList`): one line of facts ("teach Q23–26", "Q13 ×2: teach once", "in your room: 1 ·
-  room for 5") + Page's pick; one row per student: tick, name, what he does (`memberWords`), what he needs ("Q13
-  Q17", "whole unit", "Q26"). A lesson going on: ticks only who can join, up to its room left ("Lesson full: Done
-  first").
-- **Fixed at the bottom** (`.tp-pad`, sticky; `.tp-body` min-height puts it in the same place on a short page):
-  left **Room N** (amber line = someone on the way, red = late) / in her room **Lessons N**; right **Call N** /
-  **Done**. Toasts sit just above them (`body.tp-padded`).
-- **Her room** (`roomItems`): everyone she called, pills in call order that never move: dashed = called or on the way
-  (`rs-call`, `rs-walk`), red line = not sent 3 min or not there 3 min after Sent (`rs-late`), solid = with her
-  (`rs-in`), amber ring = didn't get it (`rs-stay`). The line above: "2 with you · 1 on the way · 9m" (amber "Still
-  with you?" at 20 min).
-- **His file** (`StudentFile`, "like a doctor"): name, where he is, ONE big button in a fixed place: **Arrived**
-  (then the next one on the way opens by itself) → **✓ Got it / Not yet: stays**. His lesson (grade, unit, Tamil);
-  Fighter: the teach questions as toggles ("Taught"; untick what the bell stopped); workbook (`FileQuestions`): each
-  question for Theory with what he got ("got 0/2", "? couldn't start"), who sent it and when, explained at, the
-  answer (`catalog.key` while open), Whole unit toggle; his unit bar (`MasterStrip`, "On L4 · so far 85% · 1 for
-  Evaluation") or Fighter's "N questions left before he needs it"; came / home times, no work; other books waiting.
-  Links: Send him back without it / Cancel the call. **Done** sends back everyone with her who got it
-  (`calls.finish`; part-taught workbook: `workbook.taught` first); an empty room goes back to Lessons by itself.
-  Not in the file yet: past lessons (needs an events query by student, section 8).
+**Theory page (one screen, 31 Oct 2026, his voice note "rebuild the theory page also same like this": the Evaluation
+page's layout; `src/theoryFocus.tsx` `TheoryTab`, rules in `src/theoryFocusData.ts`).** No Room button, no Lessons
+list: one page, small things in fixed places like Correction. It reuses the Evaluation page's pieces (`.evx-*`, the
+shared `src/roomkit.tsx`) in Theory's blue (`.tpx-page`).
+- **Pinned:** grades 6–11 in ONE row (`GradeRow`, `theoryGradeRow`) and Fighter / Master / Legend (`KindBar`,
+  `theoryStageRow`; Legend pale until its books exist). Each the most urgent first (`byUrgency`) and already picked;
+  she can pick anything (a pick lasts while it has someone; with someone in her room the page picks his lesson).
+  Counts = everyone who needs Theory, each once; held students (in Evaluation, called by her, going home) count but
+  never as urgent (`rowHeat`).
+- **Under them:** the units that need her (`theoryUnitRow`, `.evx-u`: number + Tamil, red line = no work), then the
+  lessons (`lessonPills`, `.evx-qg`): a theory book's sections ("D" + its Tamil title, how many; the plan's order,
+  the most useful first: `planLessons`), or a workbook's questions sent to Theory grouped by the students who need
+  them (the same students = one pill: "13 · 17 ×2"; the most urgent, then the most students) and "Whole unit". The
+  lessons row holds still 5 s after her touch (`holdOrder`, `lessonPillSig`); a lesson going on in her room has a blue
+  count (`qg-going`).
+- **Her room box** (`.evx-room`, left ~¾, `LESSON_CAP` 6 at most, counting those called or on the way): her pills
+  (`roomItems`): with her solid (`s-in`; ✓ green when every question of his is decided: `s-done`), on the way dashed
+  (`s-walk`, minutes), called dotted (`s-call`), finishing in Evaluation first (`s-ev`, "Eval": Theory took him from
+  Evaluation, he comes when she sends him), late red (`s-late`: not sent 3 min, or not there 3 min after Sent). Then the
+  picked lesson's students (`s-sug`): the page ticks everyone who can come, no work first (`memberOrder`), as many as
+  fit; with someone already with her (the lock), only those who need it now (joiners); held ones listed with a tag
+  ("Eval", "home", dashed), not ticked. Its line: lock + "2 with you · 1 coming · room for 3" (amber "Still with
+  you?" at 20 min) + Clear ↔ Page's pick. Right of it: **Call N**, **Arrived N** (everyone on the way), **Done N**
+  (those with every question decided: `tAllDecided`).
+- **What to teach** (`theorySquares`): Correction's squares, each question ONCE for everyone with her who needs it
+  ("D·23 ×2"): one lesson after another (the most students first); a section's teach questions in book order (they
+  build on each other), a workbook's the most shared first, the whole unit last. Nobody here yet: those on the way;
+  nobody called: the picked lesson's (to prepare). One at a time (`.fc-card`): the section's letter and Tamil title, or
+  the unit; who needs it (workbook: "Malik 0/2 · Evaluation 12m" = what he got and who sent it); the answer
+  (`AnswerKey`, workbooks). **Fixed at the bottom** (`.fc-pad`): **Not reached** and the big **✓ Taught** ("for 2"):
+  one tap = that decision for everyone with her who needs it (tap again = undo), then the next open question. Arrived
+  opens the first open question (on both pages). The rows keep the picked pill in view when they re-rank.
+- **Done** (`theoryFinish`): a section: the teach questions marked Taught (`calls.finish` `taught`; Not reached stay his,
+  so the lesson comes back); a workbook: `workbookDone` (all taught = `{callId}`; else `workbook.taught` for the taught
+  ones first, the rest stay for Theory). **Send everyone back: nothing taught** at the end of the page.
+- **His file** (tap his pill: `TheoryFileSheet`, a sheet, `cls="evx-file"`): where he is; his lesson (grade, unit,
+  Tamil); his questions as toggles (tap: taught → not reached → not decided: one student who didn't get it stays
+  with her while the others go); workbook: each question's marks, who sent it, explained at; his unit bar
+  (`MasterStrip`) or "N questions left before he needs it"; came / home / no work; other books waiting. Here: **Not
+  taught** / **All taught** or **Done: back to work**; not here: **Not coming** / **Cancel the call** and **Arrived**
+  ("In Evaluation first" while Evaluation still has him).
+- At the end: today's score (`TodayStrip compact`). Toasts sit above the pad (`body.evx-on`).
 - **The rules (agreed 2026-10-29):** minutes, not questions. Pace = time between his answers (marks given together
   share it; a lesson or a 25-min break starts again; ≥3 answers), else the class's middle pace, else 4 min. Out in =
   questions left × pace. A lesson's worth = how many it gives work to who are out of work now or will be before
@@ -222,7 +234,7 @@ Like Correction: small things in fixed places.
   his questions are decided: `s-done`; ◎ teaching theory: `s-th`), on the way dashed (`s-walk`, minutes), called
   dotted (`s-call`), late red (`s-late`), amber ring = Theory wants him (`s-pull`); then the picked group's students
   (`s-sug`): ticked = dark ✓ (the page ticks red and orange ones, as many as fit), grey = unticked. Its line: lock icon
-  + "2 with you · 1 on the way · room for 3" (amber "Still with you?" at 20 min) + Clear ↔ Page's pick. Right of it, in
+  + "2 with you · 1 coming · room for 3" (amber "Still with you?" at 20 min) + Clear ↔ Page's pick (the words shorten, Clear stays). Right of it, in
   fixed places: **Call N** (or Teach N), **Arrived N** (everyone on the way), **Done N** (those with every question
   decided: `allDecided`; `calls.finish` for all of them at once).
 - **The questions** (`sessionQs`): Correction's squares (`.fc-strip .fc-sq`): each question ONCE for everyone with her
@@ -387,6 +399,30 @@ Four tabs (`aristora.ceoTab`):
   ended before digests existed are read again by `ceo.overview` (owner only, `fetchOnce` on opening and every 5 minutes
   while on screen, never a live query). Demo students never count.
 
+**The test class (31 Oct 2026, his voice note: "create demo students accounts for test ... dilrash test ... same stage,
+unit and levels ... and add extra demo accounts").** Test students are a class of their own on the same server
+(`students.test`, with `demo` too): **only a phone showing the test class sees them** (`state.get({test})` sends a
+phone one class's students and their calls; `progress.board({test})` too); the real class never sees them, and they
+never count (reports `buildReport`, the CEO page, the Students numbers, the rooms' scores: `addStats` skips test
+students, `calls.lessons` skips test calls `calls.test`, the 120 limit counts real students only). Owner only
+(Settings → Students → **Test class**, `demo.ts`):
+- **Copy Grade N's students** (`demo.copyGrade`): every real student of the grade (the Students page's grade row) as
+  "Dilrash R test" (`testName`, `copyOf`): the same grade, term, stage, book now, every book's levels and marks
+  (`progress` rows copied), books given (`handouts`), signed in now; again = they start over from the real ones.
+- **Add the extra test students** (`demo.cases`): one for every situation of the Theory and Evaluation pages, named by
+  it, with a note in the list (`testCase`): Grade 11 theory book: No work D, Starving D (25 min: D first), Soon D, Later
+  D, Seen D (Theory had him today), In Eval D (in the maker's Evaluation room), Eval called (called by her), Home soon
+  (goes home in 5 min), No work C, Ready 20, Fresh 21 (not ready), Stuck 19, Stopped C; Grade 7 workbook: Lost 4·9
+  a/b/c (one pill), Lost 13 a/b, Lost 13·17 (Q13 with others, Q17 alone), Crowd 1–7 (Q2: 6 at most), All done 51 (no
+  work), Theory 13·17, Theory 13 (Q13 ×2), Whole unit, Couldn't 4 (? on Q4, no work), Gone home (a level to correct);
+  and Two books (two workbooks of one grade, Grade 8 first) when a grade has two. Again = they start over.
+- **This phone shows: The class | Test class (N)** (`TestSwitch`, also in Settings → Account for any teacher while test
+  students exist; `aristora.testClass` on the phone, `setTestMode` starts the board again). A phone in the test class:
+  a striped pink top bar and **TEST** where the class clock is; the Students list shows test students (no Add form);
+  End the session is hidden (it would sign everyone out). **Delete the test students** (`demo.remove({test})`: them and
+  their calls, books, visits, books given, drafts and claims). They share the class's session: making them starts one
+  if none is open (a class only test students used has an empty report and isn't listed in Reports).
+
 **Moving a student.** Class → his name → Move: the usual next step in one tap (next unit, Master from the first unit,
 next workbook, Legend, Exam Sprint, back after the sprint, next term, up a grade), or pick grade, term, stage and
 unit. A teacher always confirms.
@@ -441,7 +477,7 @@ on the family phone, taps **Check** once per level and sees ✓ / ✗ at once; t
 - Workbook permissions: `correct`, `uncorrect`, `levelDone`, `toTheory`, `reteach`, and Correction's drafts
   (`focus.drafts`/`mark`/`drop`) = Correction or Evaluation; `explain` = Evaluation; `taught` = Theory or Evaluation.
   `calls.lessons` = Theory; `calls.keep` = Evaluation.
-- Owner-only: People (user management), demo students, and the account lines of the history (sign-ins, PINs,
+- Owner-only: People (user management), demo students, the test class, and the account lines of the history (sign-ins, PINs,
   links, people changes).
 - The permission names are `Perm` in `convex/lib/auth.ts`: jobs, extras, `"owner"`, `"any"`.
 

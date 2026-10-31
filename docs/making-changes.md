@@ -86,11 +86,13 @@ EOF
   is `.seg`) until `e311e74`. Before a new class, grep `\.name\b` ANYWHERE in `styles.css` (not only `^`): `.today`
   exists inside `.pf-chip.today`. Modifiers too: a row chip called `pulse` became the call strip's 10 px `.pulse`
   dot, and bubble colours `.h-red {color:#fff}` turned every list name white when the rows reused `h-red` as a
-  modifier. Scope helpers (`.heat i.h-red`) and give modifiers odd names (`.beat`).
+  modifier; the test class's switch button once took `.tcl` (the block's flex column) and lost its centring. Scope helpers (`.heat i.h-red`) and give modifiers odd names (`.beat`).
 - **`.here` is a bare global class** (an 8 px green dot): never use it as a modifier. The Theory page's modifiers are
   `lt-*` (pills) and `rs-*` (room); old `.tp-got`/`.tp-pill` styles were removed with the rebuild.
-- The Theory page's buttons must not move: `.tp-body`'s min-height ends where `.tp-pad` sticks (the 40 px in it is
-  the page padding, the pinned rows' pull-up and gap, and the app's 24 px). Change one, change the other.
+- The Theory and Evaluation pages' pad must not move: `.tp-body`'s min-height ends where the pad sticks (the 40 px in
+  it is the page padding, the pinned rows' pull-up and gap, and the app's 24 px; `--tp-stick-h` = the pinned rows,
+  measured by `usePinned`'s callback ref whenever they appear: a page that first rendered "Nobody is signed in" has no
+  rows to measure, and a body too short lets the pad float with the content). Change one, change the other.
 - A mutation that returns nothing comes back as `null`, and `act()` treats that as failure. Return `true` from
   mutations whose callers check the result.
 - Every public function needs `token` in its `args`, because the client always sends it (40–128 characters).
@@ -155,6 +157,13 @@ EOF
 - A list re-ranked every 10 s moves under the finger: keep the buttons in one fixed order and show the rank with a
   tag (Theory's pills + "Next"); keep what the teacher touched (her ticks, her pick).
 - Demo marks share one time (the right answers 30 min ago): demo paces are null, so the class pace is 4 min.
+- **Two classes on one server** (31 Oct 2026): test students (`students.test`) are the test class: `state.get` and
+  `progress.board` send one class (`test`), never both. Anything new that counts or lists students across the school
+  must skip test students (`s.test`: the rooms' scores, the report, Theory's lesson times use `calls.test`; demo is set
+  on them too, so "demo never counts" places already skip them). They share the session: never let a test-mode phone
+  end it (End the session is hidden there).
+- The Theory and Evaluation pages are the same one-screen pieces (`.evx-*`, `src/roomkit.tsx`); Theory's colours come
+  from `.tpx-page`. Change a shared piece and look at BOTH pages' shots. The e2e `ev*` helpers drive both pages.
 - Demo work is dated 30–70 min back: just after Sri Lanka midnight it is "yesterday" and "today" checks fail. The
   e2e guards them with `nearMidnight()` (Asia/Colombo hour < 2); don't "fix" a test that fails only then.
 - `overflow-x: auto` clips vertically too: rings and lifts inside a one-line row need padding in the row (no

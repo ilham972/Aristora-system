@@ -15,7 +15,6 @@ import { useEffect, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { slClock } from "../convex/lib/day";
-import type { KeyAnswer } from "../convex/lib/key";
 import { joinNames } from "./announce";
 import { mutate } from "./backend";
 import { GoneHome, NobodyHere } from "./board";
@@ -49,14 +48,13 @@ import {
 } from "./evalFocusData";
 import { unitNo } from "./focusData";
 import { HRow } from "./hrow";
-import { useQuery } from "./live";
-import { KeyLine, MasterStrip } from "./master";
-import { KindBar, usePinned } from "./roomkit";
+import { MasterStrip } from "./master";
+import { AnswerKey, GradeRow, KindBar, LockIcon, usePinned } from "./roomkit";
 import { scoreOf } from "./score";
 import { act, clearToasts, currentMe, currentRole, toast, type Board } from "./store";
 import { flushTaps } from "./taps";
-import { LessonName } from "./theoryFocus";
-import { classPace, mShort, sinceWords, STAY_MS, type Heat, type HeatCount } from "./theoryFocusData";
+import { LessonName } from "./roomkit";
+import { classPace, mShort, sinceWords, STAY_MS, type Heat } from "./theoryFocusData";
 import { tone } from "./tones";
 import { Sheet } from "./ui";
 
@@ -278,6 +276,7 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
     for (const s of res.skipped) toast(`${s}.`, "error");
     if (!res.arrived) return;
     tone("tick");
+    setAt(null); // they are here: the first open question opens
     const names = joinNames(list.map((it) => it.name));
     if (list.length === 1) {
       const callId = list[0].h.rc.c._id;
@@ -336,7 +335,7 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
           {units.length === 0 ? (
             <p class="tp-none">Nothing to explain {grade === null ? "now" : `in Grade ${grade} ${stage === "legend" ? "Legend" : stage === "fighter" ? "Fighter" : "Master"}`}.</p>
           ) : (
-            <HRow as="nav" class="evx-units" label="Units that need you, the most urgent first" list={`${grade}:${stage}`} at={unitKey}>
+            <HRow as="nav" class="evx-units" label="Units that need you, the most urgent first" list={units.map((u) => u.key).join(",")} at={unitKey}>
               {units.map((u) => {
                 const on = u.key === unitKey;
                 return (
@@ -361,7 +360,7 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
           )}
         </div>
         {(groups.length > 0 || teach.length > 0) && (
-          <HRow as="nav" class="evx-qgs" label="Questions the same students got wrong, the most urgent first" list={unitKey ?? "none"} at={groupKey}>
+          <HRow as="nav" class="evx-qgs" label="Questions the same students got wrong, the most urgent first" list={groups.map((g) => g.key).join(",")} at={groupKey}>
             {groups.map((g) => {
               const on = g.key === groupKey;
               const v = g.cands[0].v;
@@ -401,7 +400,7 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
             <p class={`evx-bh${long ? " lt-long" : ""}`}>
               {room.here.length > 0 && <LockIcon />}
               <b>{room.here.length} with you</b>
-              {walkers.length > 0 && <span class={late ? "t-red strong" : "t-evaluation strong"}>{walkers.length} on the way</span>}
+              {walkers.length > 0 && <span class={late ? "t-red strong" : "t-evaluation strong"}>{walkers.length} coming</span>}
               <span>{long ? `Still with you? ${mShort(long.rc.minutes)}` : left === 0 ? `full (${EVAL_CAP})` : `room for ${left}`}</span>
               {offers.length > 0 && (
                 <button type="button" class="link-btn evx-reset" onClick={() => setTicks(ticks && ticks.group === groupKey ? null : { group: groupKey!, keys: [] })}>
@@ -529,7 +528,7 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
                         );
                       })}
                 </p>
-                {sq.v.ms && sq.v.unit ? <EvalKey unitId={sq.v.unit._id} q={sq.q} /> : <p class="muted small">Check his answer in his notebook.</p>}
+                {sq.v.ms && sq.v.unit ? <AnswerKey unitId={sq.v.unit._id} q={sq.q} /> : <p class="muted small">Check his answer in his notebook.</p>}
                 {!live && <p class="muted small">{sq.who.length > 0 ? "Tap Arrived when they come in." : "Call them, then Arrived when they come in."}</p>}
               </div>
             </div>
@@ -593,55 +592,6 @@ function squareOf(x: SessionQ, dec: Decisions): { cls: string; sign: string; wor
   if (ds.every((d) => d === "th")) return { cls: " dk", sign: "T", words: "to Theory" };
   if (ds.every((d) => d === "skip")) return { cls: " was", sign: "–", words: "not now" };
   return { cls: " part", sign: "✓", words: "decided" };
-}
-
-/** Grades 6 to 11 in ONE row (his rule), the most urgent first; a grade with nobody waiting is pale. */
-function GradeRow(props: { rows: { grade: number; c: HeatCount }[]; value: number | null; onPick: (g: number) => void }) {
-  return (
-    <nav class="evx-grades" aria-label="Grades, the most urgent first">
-      {props.rows.map((r) => {
-        const on = r.grade === props.value;
-        return (
-          <button
-            key={r.grade}
-            type="button"
-            class={`evx-g${on ? " on" : ""}`}
-            aria-pressed={on}
-            disabled={!on && r.c.total === 0}
-            aria-label={`Grade ${r.grade}: ${r.c.total}, ${heatWords(r.c)}`}
-            onClick={() => props.onPick(r.grade)}
-          >
-            <b>{r.grade}</b>
-            <i>{r.c.total || ""}</i>
-            {r.c.red > 0 && <em class="evx-g-r">{r.c.red}</em>}
-          </button>
-        );
-      })}
-    </nav>
-  );
-}
-
-/** The answer for one workbook question (teachers only), fetched while it is open. */
-function EvalKey(props: { unitId: string; q: number }) {
-  const keyQ = useQuery<{ answers: KeyAnswer[] } | null>(api.catalog.key, { unitId: props.unitId as Id<"units"> });
-  const k = keyQ?.answers.find((a) => a.q === props.q);
-  if (keyQ === undefined) return <p class="muted small">Loading the answer…</p>;
-  if (!k) return <p class="muted small">{keyQ === null ? "No answer key for this workbook yet." : "No answer for this question in the key."}</p>;
-  return (
-    <div class="ev-key">
-      <small>Answer</small>
-      <KeyLine k={k} />
-    </div>
-  );
-}
-
-function LockIcon() {
-  return (
-    <svg class="evx-lock" viewBox="0 0 24 24" width="14" height="14" aria-label="In use" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
-      <rect x="5" y="11" width="14" height="10" rx="2" />
-      <path d="M8 11V8a4 4 0 0 1 8 0v3" />
-    </svg>
-  );
 }
 
 /** Someone she called: solid with her (✓ when all his questions are done), dashed on the way, dotted called, red late. */

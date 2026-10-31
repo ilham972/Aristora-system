@@ -7925,3 +7925,176 @@ body.locked.evx-on .toasts {
     font-size: 13.5px;
   }
 }
+
+/* ---- Theory: one screen (31 Oct 2026, his voice note "the theory page also same like this"). The Evaluation page's
+   pieces (.evx-*) in Theory's blue: grades, stages, units and lessons; her room box with Call / Arrived / Done; the
+   squares, one question, and the pad (Not reached, Taught). ---- */
+.tpx-page .evx-box {
+  border-color: var(--theory);
+}
+.tpx-page .evx-lock {
+  color: var(--theory-ink);
+}
+.tpx-page .evx-sp.s-in {
+  border-color: var(--theory);
+  background: var(--theory);
+  color: #fff;
+}
+.tpx-page .evx-sp.s-walk,
+.tpx-page .evx-sp.s-call {
+  border-color: var(--theory);
+  color: var(--theory-ink);
+}
+.tpx-page .evx-sp.s-late {
+  border-color: var(--red);
+  color: var(--red-ink);
+}
+/* Finishing in Evaluation first (Theory took him: he comes when she sends him). */
+.tpx-page .evx-sp.s-ev {
+  border-style: dotted;
+  border-color: var(--evaluation);
+  color: var(--evaluation-ink);
+}
+/* Listed, not ticked by the page: in Evaluation, called by her, or going home soon. */
+.tpx-page .evx-sp.s-hold {
+  border-style: dashed;
+}
+.tpx-page .evx-col .evx-arrive {
+  border-color: var(--theory);
+  color: var(--theory-ink);
+}
+.tpx-page .fc-go.evx-x {
+  background: var(--theory);
+}
+.tpx-page .fc-go.evx-x.on {
+  background: var(--theory-ink);
+}
+.tpx-page .evx-who .d-x::before {
+  color: var(--theory-ink);
+}
+.tpx-pad .fc-row2 {
+  grid-template-columns: 1fr;
+}
+/* A section in the lessons row: its letter, the Tamil title (cut; the open one whole), how many need it. */
+.evx-qg.tpx-sec {
+  max-width: 172px;
+  overflow: hidden;
+}
+.evx-qg.tpx-sec.on {
+  max-width: min(260px, calc(100vw - 110px));
+}
+.evx-qg.tpx-sec .tp-ln-t {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font: 600 12.5px/1 var(--font);
+}
+/* A lesson going on in her room: its count in Theory blue. */
+.evx-qg.qg-going i {
+  background: var(--theory);
+  color: #fff;
+}
+.tpx-what {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--theory-ink);
+}
+/* His file: his questions as toggles (taught, not reached), and each with what he got and who sent it. */
+.ev-sq.tq {
+  border-color: var(--theory);
+  background: var(--theory-soft);
+  color: var(--theory-ink);
+}
+.ev-sq.tq.d-t {
+  background: var(--theory);
+  color: #fff;
+}
+.ev-sq.tq.d-n {
+  border-color: var(--line);
+  border-style: dashed;
+  background: var(--card);
+  color: var(--ink-3);
+}
+.ev-sq.tq:disabled {
+  opacity: 0.6;
+}
+.tpx-fq {
+  margin: 0 10px 8px;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 14px;
+}
+.tpx-fq small {
+  color: var(--ink-3);
+}
+.evx-foot .tpx-all-back {
+  align-self: center;
+}
+@media (max-height: 720px) {
+  .tpx-pad .fc-row2 {
+    flex: 1 1 0;
+  }
+  .tpx-pad .fc-go {
+    flex: 2 1 0;
+  }
+}
+
+/* ---- The test class (31 Oct 2026): a phone showing the test students says so everywhere: a striped top bar and TEST
+   where the class clock is. The switch and the test students' notes in Settings → Students. ---- */
+.app.test-mode .top {
+  background: repeating-linear-gradient(135deg, #ffe0ec 0 10px, #fff6f9 10px 20px);
+  border-bottom-color: #d6336c;
+}
+.top-stat .clock.ts-test {
+  color: #c2255c;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+.tcl {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tcl-switch {
+  align-self: flex-start;
+}
+.segc-b.tclb.on {
+  background: #d6336c;
+  color: #fff;
+}
+.tcl-note {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1.5px dashed #d6336c;
+  background: #fff0f5;
+  font-size: 14px;
+}
+.tcl-case {
+  color: #a61e4d;
+}
+.tcl-del {
+  align-self: flex-start;
+}
+/* The room box's line never hides Clear: the words shorten (…), the button keeps its place. */
+.evx-bh > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.evx-bh > b,
+.evx-bh .evx-reset {
+  flex: none;
+}
+/* Under the pad (it sticks 24 px above the tabs): the page's ground, so nothing shows through under the big button. */
+.fc-pad.evx-pad {
+  box-shadow: 0 24px 0 0 var(--ground);
+}
+.tcl-switch .segc-b {
+  white-space: nowrap;
+}

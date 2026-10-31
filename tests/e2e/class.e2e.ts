@@ -168,80 +168,13 @@ const circle = (r: L, q: number) => r.locator(".reg-act").getByRole("button", { 
 /** The bottom bar's tabs (Correction, Theory, Evaluation: since 30 Oct 2026 Correction is a tab too); Class is the icon at the top. */
 const tab = (p: Page, name: "Class" | "Correction" | "Theory" | "Evaluation") =>
   name === "Class" ? p.locator(".top .class-btn") : p.locator(`.tabs .tab.${name.toLowerCase()}`);
-/**
- * The Theory page (rebuilt 30 Oct 2026): every lesson is a tiny pill (data-lesson: "U13 D", "U08 workbook"); tapping it
- * opens its students under the pills. Lessons and her room swap with the button at the bottom left.
- */
-async function lessonCard(p: Page, label: string): Promise<L> {
-  await toLessons(p);
-  const pill = p.locator(`.tp-lp[data-lesson="${label}"]`);
-  // Fighter (sections, "U13 D") or Master (workbooks, "U08 workbook"): one kind at a time (no All since 31 Oct 2026).
-  const kind = p.locator(".tp-kind", { hasText: label.endsWith("workbook") ? "Master" : "Fighter" });
-  if ((await pill.count()) === 0 && (await kind.getAttribute("aria-pressed")) !== "true") await kind.click();
-  await visible(pill);
-  if ((await pill.getAttribute("aria-pressed")) !== "true") await pill.click();
-  await until(async () => (await pill.getAttribute("aria-pressed")) === "true", `the ${label} lesson open`);
-  return p.locator(".tp-lesson");
-}
-/** Theory's lessons, or Evaluation's list to call from (the button at the bottom left: Lessons / Waiting). */
-async function toLessons(p: Page) {
-  const side = p.locator(".tp-pad .tp-side");
-  // (A Done that empties her room goes back to the list by itself: wait for whichever comes first.)
-  await until(async () => {
-    if ((await p.locator(".tp-kinds").count()) > 0) return true;
-    const t = (await side.textContent()) ?? "";
-    if ((t.includes("Lessons") || t.includes("Waiting")) && (await side.isEnabled())) await side.click({ timeout: 1000 }).catch(() => undefined);
-    return false;
-  }, "the list");
-}
-async function toRoom(p: Page) {
-  const side = p.locator(".tp-pad .tp-side");
-  await visible(side);
-  if (((await side.textContent()) ?? "").includes("Room")) {
-    await until(async () => !(await side.isDisabled()), "someone in her room");
-    await side.click();
-  }
-  await visible(p.locator(".tp-rhead"));
-}
-/** Someone she called, as a pill in her room. */
-const roomPill = (p: Page, name: string) => p.locator(`.tp-rp[data-name="${name}"]`);
 /** The names on these pills (or rows), as data-name says. */
 const namesOf = (l: L) => l.evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.name ?? ""));
-/** His file in her room (his pill tapped). */
-async function file(p: Page, name: string): Promise<L> {
-  await toRoom(p);
-  await roomPill(p, name).click();
-  const f = p.locator(".tp-file", { has: p.locator(".tp-fname", { hasText: name }) });
-  await visible(f);
-  return f;
-}
-/** Theory taps Arrived for each, as they walk in (Correction sent them). */
-async function arrive(p: Page, names: string[]) {
-  for (const n of names) {
-    const f = await file(p, n);
-    await f.getByRole("button", { name: "Arrived" }).click();
-    await until(async () => ((await roomPill(p, n).getAttribute("class")) ?? "").includes("rs-in"), `${n} is with her`);
-  }
-}
-/** A student in the open lesson (tap: ticked or not). */
-const chip = (card: L, name: string) => card.locator(`.tp-row[data-name="${name}"]`);
-/** Tick exactly these students in the open lesson, then Call (the button at the bottom). */
-async function callOnly(card: L, names: string[]) {
-  const p = card.page();
-  const rows = card.locator(".tp-row");
-  const n = await rows.count();
-  for (let i = 0; i < n; i++) {
-    const r = rows.nth(i);
-    const name = (await r.getAttribute("data-name")) ?? "";
-    if (((await r.getAttribute("aria-pressed")) === "true") !== names.includes(name)) await r.click();
-  }
-  await contains(p.locator(".tp-pad .tp-call"), `Call ${names.length}`);
-  await p.locator(".tp-pad .tp-call").click();
-}
 /**
- * The Evaluation page (one screen, 31 Oct 2026): rows of grades, stages (.tp-kind), units and question groups, each
- * the most urgent first; her room box (pills: .evx-sp, offers .s-sug) with Call, Arrived and Done beside it; the
- * questions as Correction's squares, one question with its answer, and the pad (→ Theory, Not now, Explained).
+ * The Evaluation and Theory pages (one screen each, 31 Oct 2026; the same pieces): rows of grades, stages (.tp-kind),
+ * units and question groups or lessons (.evx-qg: "22 · 51", "D", "13 · 17"), each the most urgent first; her room box
+ * (pills: .evx-sp, offers .s-sug) with Call, Arrived and Done beside it; the questions as Correction's squares, one
+ * question, and the pad (Evaluation: → Theory, Not now, Explained; Theory: Not reached, Taught).
  */
 const evCall = (p: Page) => p.locator(".evx-call");
 const evArrived = (p: Page) => p.locator(".evx-arrive");
@@ -376,11 +309,13 @@ test("the register: a whole class on three phones", async () => {
   await C.locator(".toast").getByRole("button", { name: "Undo" }).click();
   await until(async () => (await marksOf(backend, "Nila")).marks["19"] === undefined, "Nila Q19 undone");
 
-  // --- Theory: the D lesson, everyone who needs it ticked; one tap calls them.
-  const dCard = await lessonCard(T, "U13 D");
-  await namesAre(dCard.locator(".tp-row.on .tp-row-m b"), ["Ahamed", "Dilan", "Fathima", "Nila"]);
+  // --- Theory (one screen): Grade 11, Fighter, unit 13, section D, the most urgent and already picked; everyone who
+  // needs it ticked in her room box; one tap calls them.
+  await evPick(T, { grade: "11", stage: "Fighter", unit: "13", group: "D" });
+  await namesAre(T.locator(".evx-sp.s-sug.on"), ["Ahamed", "Dilan", "Fathima", "Nila"]);
   await shot(T, "r05-theory-next");
-  await T.locator(".tp-pad").getByRole("button", { name: "Call 4" }).click();
+  await contains(evCall(T), "Call 4");
+  await evCall(T).click();
 
   // Correction hears the names, sees one slim strip; Dilan is out (Not now, undo, Not now), the other three are sent.
   const strip = C.locator(".call-strip.theory");
@@ -405,13 +340,12 @@ test("the register: a whole class on three phones", async () => {
   await namesAre(C.locator(".call-strip.cs-walk .call-name"), ["Ahamed", "Fathima", "Nila"]);
   await contains(C.locator(".call-strip.cs-walk"), "3m left");
   await shot(C, "r06c-correction-walking");
-  // Theory's room: the three on the way; she taps Arrived as each walks in. Correction's strip goes.
-  await toRoom(T);
+  // Theory's room: the three on the way; she taps Arrived as they walk in. Correction's strip goes.
   await until(
-    async () => JSON.stringify((await namesOf(T.locator(".tp-rp.rs-walk"))).sort()) === '["Ahamed","Fathima","Nila"]',
+    async () => JSON.stringify((await namesOf(T.locator(".evx-sp.s-walk"))).sort()) === '["Ahamed","Fathima","Nila"]',
     "the three on the way in her room",
   );
-  await arrive(T, ["Ahamed", "Fathima", "Nila"]);
+  await evArrive(T, ["Ahamed", "Fathima", "Nila"]);
   await count(C.locator(".call-strip"), 0);
 
   // Theory teaches on the Class tab's rows (Theory's "All" lives there now): Fathima the whole section (one tap on D),
@@ -422,7 +356,6 @@ test("the register: a whole class on three phones", async () => {
   await circle(row(T, "Ahamed"), 24).click();
   await shot(T, "r07-theory-teaching-on-class");
   await tab(T, "Theory").click();
-  await toRoom(T);
   await T.getByRole("button", { name: "Send everyone back: nothing taught" }).click();
   await contains(T.locator(".toast"), "back to the hall, not taught");
   const f = await marksOf(backend, "Fathima");
@@ -439,10 +372,11 @@ test("the register: a whole class on three phones", async () => {
   await C.locator(".call-strip.evaluation").getByRole("button", { name: "Sent" }).click();
   // He walks over: Evaluation taps Arrived (beside her room box).
   await evArrive(E, ["Kumar"]);
-  const eCard = await lessonCard(T, "U13 E");
-  await contains(chip(eCard, "Kumar").locator("small"), "in Eval"); // listed, not ticked: calling takes him from Evaluation
-  expect(await chip(eCard, "Kumar").getAttribute("aria-pressed")).toBe("false");
-  await callOnly(eCard, ["Kumar"]);
+  await evPick(T, { grade: "11", stage: "Fighter", unit: "13", group: "E" });
+  await contains(evOffer(T, "Kumar"), "Eval"); // listed, not ticked: calling takes him from Evaluation
+  expect(await evOffer(T, "Kumar").getAttribute("aria-label")).toContain("in Eval");
+  expect(await evOffer(T, "Kumar").getAttribute("aria-pressed")).toBe("false");
+  await evCallOnly(T, ["Kumar"]);
   await contains(E.locator(".pull-banner"), "Theory wants Kumar now");
   await hears(E, "Theory wants Kumar now.");
   // His questions one at a time (Correction's squares): she explained Q28, then the page shows Q29.
@@ -461,14 +395,15 @@ test("the register: a whole class on three phones", async () => {
   expect(await namesOf(E.locator(".evx-sp.s-sug"))).toEqual(["Ahamed", "Fathima"]);
   await shot(E, "r09-evaluation-same-mistake");
 
-  // Theory: he walks over from Evaluation (Arrived), then all taught for Kumar (section E) in one tap.
-  await arrive(T, ["Kumar"]);
-  await T.locator(".tp-pad .tp-done").click();
+  // Theory: he walks over from Evaluation (Arrived), then all taught for Kumar (section E) in one tap (his file).
+  await evArrive(T, ["Kumar"]);
+  await (await evFile(T, "Kumar")).getByRole("button", { name: "All taught" }).click();
   await until(async () => (await marksOf(backend, "Kumar")).marks["34"]?.s === "taught", "Kumar E taught");
 
   // Theory busy with Tharun -> Evaluation teaches Rizwan section C itself.
   // Both rooms call at once: Correction gets two slim strips and hears both.
-  await callOnly(await lessonCard(T, "U13 B"), ["Tharun"]);
+  await evPick(T, { grade: "11", stage: "Fighter", unit: "13", group: "B" });
+  await evCallOnly(T, ["Tharun"]);
   const teach = E.locator(".evx-qg.evx-teach"); // Evaluation's page knows Theory is busy: Teach, at the end of the row
   await visible(teach);
   await teach.click();
@@ -795,39 +730,47 @@ test("Master: workbook levels corrected, lost marks explained, re-teach, Exam Sp
   await contains(tm.locator(".nx-c.theory"), "Theory 2");
   await contains(row(T, "Vimal").locator(".reg-s"), "No work");
   await textsAre(row(T, "Vimal").locator(".reg-act .q"), ["57"]);
-  // The Theory page: one workbook card for everyone with questions for Theory (no question shared by both); this time
-  // Theory takes Malik only.
+  // The Theory page: Grade 7, Master, unit 8: the questions sent to Theory as pills, the same students' questions in
+  // one: Vimal's Q57 (no work: red) first, then Malik's Q13 and Q17 (one pill: only he needs them). Theory takes Malik.
   await tab(T, "Theory").click();
-  const wCard = await lessonCard(T, "U08 workbook");
-  await namesAre(wCard.locator(".tp-row-m b"), ["Malik", "Vimal"]);
-  expect(await wCard.locator(".tp-lh-t").textContent()).not.toContain("×");
-  await contains(chip(wCard, "Vimal").locator("small"), "no work");
-  await callOnly(wCard, ["Malik"]);
+  await evPick(T, { grade: "7", stage: "Master", unit: "8" });
+  await textsAre(T.locator(".evx-qg b"), ["57", "13 · 17"]);
+  expect(await evOffer(T, "Vimal").getAttribute("aria-label")).toContain("no work");
+  await evPick(T, { group: "13 · 17" });
+  expect(await namesOf(T.locator(".evx-sp.s-sug"))).toEqual(["Malik"]);
+  await evCallOnly(T, ["Malik"]);
   await hears(C, "Malik, go to Owner in Theory.");
   await C.locator(".call-strip.theory").getByRole("button", { name: "Sent" }).click();
   await until(async () => (await marksOf(backend, "Malik")).room === "theory", "Malik on his way to Theory");
-  // He walks in: Arrived. His file: his questions for Theory with what he got and who sent them.
-  const mf = await file(T, "Malik");
-  await mf.getByRole("button", { name: "Arrived" }).click();
-  await visible(mf.getByRole("button", { name: "Malik: got it" }));
-  await textsAre(mf.locator(".tp-fq .tf-q.on"), ["Q13", "Q17"]);
-  await contains(mf.locator(".tp-fq-w").first(), "Evaluation");
-  // Q13 taught; the bell rang before Q17: it stays with Theory.
-  await mf.getByRole("button", { name: "Malik Q17 taught" }).click();
+  // He walks in: Arrived. His questions as squares, each with what he got and who sent it; his file says the same.
+  await evArrive(T, ["Malik"]);
+  await textsAre(T.locator(".evx-strip .fc-sq small"), ["13", "17"]);
+  await contains(T.locator(".evx-who"), "Malik 0/2 · Evaluation");
+  const mf = await evFile(T, "Malik");
+  await contains(mf.locator(".tpx-fq"), "Evaluation");
+  await mf.getByRole("button", { name: "Close" }).click();
+  // Q13 taught; the bell rang before Q17: Not reached (it stays with Theory). Done.
+  await T.locator(".evx-x").click();
+  await contains(T.locator(".evx-card .fc-qn"), "17");
+  await T.locator(".evx-b.skip").click();
   await shot(T, "m05-theory-reteach");
-  await T.locator(".tp-pad .tp-done").click();
+  await contains(evDone(T), "Done 1");
+  await evDone(T).click();
   await until(async () => (await marksOf(backend, "Malik")).room === undefined, "Malik back in the hall");
   let mt = (await marksOf(backend, "Malik")).m!;
   expect(mt.q["13"]?.tt).toBeDefined();
   expect([mt.q["17"]?.th !== undefined, mt.q["17"]?.tt]).toEqual([true, undefined]);
-  await visible(T.locator(".tp-pad .tp-side:disabled")); // her room is empty: Theory's phone sees him gone
+  await count(T.locator(".evx-sp:not(.s-sug)"), 0); // her room is empty: Theory's phone sees him gone
   await tab(T, "Class").click();
   await textsAre(tm.locator(".reg-act .q"), ["13", "17"]); // Q13 just taught (tap to undo), Q17 still to teach
   await tab(T, "Theory").click();
-  await callOnly(await lessonCard(T, "U08 workbook"), ["Malik"]);
+  await evPick(T, { grade: "7", stage: "Master", unit: "8", group: "17" });
+  await evCallOnly(T, ["Malik"]);
   await C.locator(".call-strip.theory").getByRole("button", { name: "Sent" }).click();
-  await arrive(T, ["Malik"]);
-  await T.locator(".tp-pad .tp-done").click();
+  await evArrive(T, ["Malik"]);
+  await T.locator(".evx-x").click();
+  await contains(evDone(T), "Done 1");
+  await evDone(T).click();
   await until(async () => (await marksOf(backend, "Malik")).m!.q["17"]?.tt !== undefined, "Q17 taught");
   await visible(malik.getByRole("button", { name: "Needs theory", exact: true }));
   // The whole unit can be asked from the open book too, and taken back.
@@ -1801,7 +1744,7 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
   expect(problems, problems.join("\n")).toEqual([]);
 });
 
-test("Theory: lessons as tiny pills, most useful first; her room with Arrived and his file; Correction's 3 minutes; the owl", async () => {
+test("Theory: one screen like Evaluation: grade, stage, unit and lesson rows; her room box with Call, Arrived and Done; Taught for everyone with her; Correction's 3 minutes; the owl", async () => {
   const backend = await newClass();
   const C = await phone(backend, "correction");
   const T = await phone(backend, "theory");
@@ -1810,90 +1753,94 @@ test("Theory: lessons as tiny pills, most useful first; her room with Arrived an
   await visible(C.getByText(/^14 demo students loaded/));
   await C.getByRole("button", { name: "Back to the class" }).click();
   const marks = async (name: string) => (await marksOf(backend, name)).marks;
-  const callBtn = T.locator(".tp-pad .tp-call");
-  const doneBtn = T.locator(".tp-pad .tp-done");
+  const roomPills = T.locator(".evx-sp:not(.s-sug)");
 
-  // Pinned under the top bar: today's score in one thin line, Fighter / Master / Legend (the most urgent first and
-  // picked; no All since 31 Oct 2026; Legend pale: no books yet), then every lesson of that kind as a tiny pill in ONE
-  // line, the most useful first: D gives work to 3 now (Fathima has none, Ahamed and Dilan run out within a lesson). A pill: the grade, the unit number (and section), the Tamil name, how many need it, a red line. No English
-  // names, no U-codes, no W badges, nothing pulsing.
-  await visible(T.locator(".sc.sc-thin"));
-  await count(T.locator(".sc-cheer"), 0);
+  // The rows, each the most urgent first and already picked: Grade 11 (Fathima and Rizwan have no work), the other
+  // grades pale; Fighter (Master and Legend pale); unit 13 in Tamil; then its sections, D first (it gives work to the
+  // most). No English names, no U-codes, nothing pulsing.
+  const grades = T.locator(".evx-g");
+  await until(async () => JSON.stringify(await grades.locator("b").allTextContents()) === '["11","6","7","8","9","10"]', "the grades, most urgent first");
+  expect(await grades.first().getAttribute("aria-pressed")).toBe("true");
+  await count(T.locator(".evx-g:disabled"), 5);
+  expect(new Set(await grades.evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)))).size).toBe(1);
   await until(
     async () => JSON.stringify(await T.locator(".tp-kind").evaluateAll((els) => els.map((e) => e.firstChild?.textContent))) === '["Fighter","Master","Legend"]',
     "the Fighter, Master and Legend buttons, the most urgent first",
   );
-  expect(await T.locator(".tp-kind").first().getAttribute("aria-label")).toMatch(/^Fighter: \d+, 2 very urgent/);
+  expect(await T.locator(".tp-kind").first().getAttribute("aria-label")).toMatch(/^Fighter: 8, 2 very urgent/);
   expect(await T.locator(".tp-kind").first().getAttribute("aria-pressed")).toBe("true");
   await visible(T.locator(".tp-kind:disabled", { hasText: "Legend" }));
-  await until(async () => (await T.locator(".tp-lp").first().getAttribute("data-lesson")) === "U13 D", "D first");
-  expect(await T.locator(".tp-lp").evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.lesson))).toEqual(
-    expect.arrayContaining(["U13 B", "U13 C", "U13 D", "U13 E"]),
-  );
-  const dPill = T.locator('.tp-lp[data-lesson="U13 D"]');
-  expect(await dPill.getAttribute("aria-pressed")).toBe("true"); // the first one is open
-  await contains(dPill.locator(".tp-ln-g"), "11");
-  await contains(dPill.locator(".tp-ln-n"), "13·D");
-  expect(await dPill.locator(".tp-ln-t").textContent()).toMatch(/^[^A-Za-z]+$/); // Tamil only
-  await contains(dPill.locator(".tp-lp-c"), "4");
-  expect(await dPill.getAttribute("class")).toContain("lt-red");
-  const pillTops = await T.locator(".tp-lp").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
-  expect(new Set(pillTops).size).toBe(1); // one line
-  const stickText = await T.locator(".tp-stick").innerText();
-  expect(stickText).not.toMatch(/Completing|Equations|workbook|U13|G11/);
-  await count(T.locator(".tf-badge-l, .tp-best, .tp-pill"), 0);
+  await textsAre(T.locator(".evx-u .tp-ln-n"), ["13"]);
+  expect(await T.locator(".evx-u .tp-ln-t").textContent()).toMatch(/^[^A-Za-z]+$/); // Tamil only
+  await until(async () => (await T.locator(".evx-qg b").first().textContent()) === "D", "D first");
+  expect((await T.locator(".evx-qg b").allTextContents()).sort()).toEqual(["B", "C", "D", "E"]);
+  const dPill = T.locator(".evx-qg").filter({ has: T.locator("b").getByText("D", { exact: true }) });
+  expect(await dPill.getAttribute("aria-pressed")).toBe("true");
+  expect(await dPill.locator(".tp-ln-t").textContent()).toMatch(/^[^A-Za-z]+$/); // the section's Tamil title
+  await contains(dPill.locator("i"), "4");
+  expect(await dPill.getAttribute("class")).toContain("qg-red");
+  expect(new Set(await T.locator(".evx-qg").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)))).size).toBe(1);
+  expect(await T.locator(".evx-qgs").innerText()).not.toMatch(/Completing|Equations|workbook|U13|G11/);
   expect(
     await T.evaluate(() => [...document.querySelectorAll(".tp-page *")].filter((e) => getComputedStyle(e).animationIterationCount === "infinite").length),
   ).toBe(0);
-  // Under them, the open lesson: D's students, each with what he needs and is doing.
-  const d = await lessonCard(T, "U13 D");
-  await contains(d.locator(".tp-lh-t"), "teach Q23–26");
-  await namesAre(d.locator(".tp-row-m b"), ["Fathima", "Ahamed", "Dilan", "Nila"]);
-  await count(d.locator(".tp-row.on"), 4);
-  await contains(chip(d, "Fathima").locator("small"), "no work");
-  await contains(chip(d, "Ahamed").locator("small"), "left · out ~"); // what he still has, so she can judge
-  // At the bottom, always in the same two places: Room (nobody yet) and Call.
-  await contains(callBtn, "Call 4");
-  await visible(T.locator(".tp-pad .tp-side:disabled"));
-  const padY = async () => Math.round((await T.locator(".tp-pad").boundingBox())!.y);
+  // Her room box: D's four, ticked by the page (no work first); beside it Call 4, Arrived and Done pale.
+  expect(await namesOf(T.locator(".evx-sp.s-sug"))).toEqual(["Fathima", "Ahamed", "Dilan", "Nila"]);
+  await count(T.locator(".evx-sp.s-sug.on"), 4);
+  expect(await evOffer(T, "Fathima").getAttribute("aria-label")).toContain("no work");
+  expect(await evOffer(T, "Ahamed").getAttribute("aria-label")).toContain("left · out ~"); // what he still has, so she can judge
+  await contains(evCall(T), "Call 4");
+  await visible(evArrived(T).and(T.locator(":disabled")));
+  await visible(evDone(T).and(T.locator(":disabled")));
+  await contains(T.locator(".evx-bh"), "room for 6");
+  // What to teach, to prepare before they come: D's four teacher questions, the first with who needs it; the pad pale.
+  await textsAre(T.locator(".evx-strip .fc-sq small"), ["D·23", "D·24", "D·25", "D·26"]);
+  await contains(T.locator(".evx-card .fc-qn"), "23");
+  await contains(T.locator(".evx-card .tpx-what"), "D");
+  await contains(T.locator(".evx-card .evx-who"), "Fathima");
+  await visible(T.locator(".evx-x:disabled"));
+  await visible(T.locator(".evx-foot .sc.sc-thin")); // today's score, at the end
+  expect(await T.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  const padY = async () => Math.round((await T.locator(".evx-pad").boundingBox())!.y);
   const y0 = await padY();
   expect(y0 + 56).toBeLessThanOrEqual(844 - 66); // above the tabs, on screen
-  expect(await T.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await shot(T, "t01-theory-page");
 
-  // Nila still has work: leave her out. Call 3: Correction hears it; her room shows 3; nothing moved.
-  await chip(d, "Nila").click();
-  await contains(callBtn, "Call 3");
-  await callBtn.click();
+  // Nila still has work: leave her out. Call 3: Correction hears it with her name; her room shows them called.
+  await evOffer(T, "Nila").click();
+  await contains(evCall(T), "Call 3");
+  await evCall(T).click();
   await contains(T.locator(".toast"), "Called 3. Correction sends them over.");
-  await contains(T.locator(".tp-pad .tp-side b"), "3");
-  expect(Math.abs((await padY()) - y0)).toBeLessThanOrEqual(2);
   await until(
     async () => (await said(C)).some((s) => ["Fathima", "Ahamed", "Dilan"].every((n) => s.includes(n)) && s.endsWith("go to Owner in Theory.")),
     "Correction hears the three names",
   );
+  await count(T.locator(".evx-sp.s-call"), 3);
+  await contains(T.locator(".evx-bh"), "room for 3");
+  expect(Math.abs((await padY()) - y0)).toBeLessThanOrEqual(2);
   // Correction is slow: after 3 minutes her room shows it in red.
   await backend.t.run(async (ctx) => {
     for (const c of await ctx.db.query("calls").collect()) if (c.status === "requested") await ctx.db.patch(c._id, { createdAt: c.createdAt - 4 * 60_000 });
   });
   await backend.push();
-  await toRoom(T);
-  await count(T.locator(".tp-rp.rs-call.rs-late"), 3);
-  expect(await roomPill(T, "Fathima").getAttribute("aria-label")).toContain("not sent 4m");
+  await count(T.locator(".evx-sp.s-call.s-late"), 3);
+  expect(await evPill(T, "Fathima").getAttribute("aria-label")).toContain("not sent 4m");
   await shot(T, "t02-theory-room-called-late");
   await C.locator(".call-strip.theory").getByRole("button", { name: /^Sent/ }).click();
 
   // Sent: they walk over (dashed pills); Correction's phone counts their 3 minutes down.
-  await count(T.locator(".tp-rp.rs-walk"), 3);
+  await count(T.locator(".evx-sp.s-walk"), 3);
   await contains(C.locator(".call-strip.cs-walk"), "3m left");
-  // Fathima walks in: her file, one tap: Arrived. The next one on the way opens by itself.
-  const f1 = await file(T, "Fathima");
-  await contains(f1.locator(".tp-fh-t small"), "on the way");
-  await f1.getByRole("button", { name: "Arrived" }).click();
-  await contains(T.locator(".toast"), "Fathima is here.");
-  await visible(T.locator(".tp-file .tp-fname", { hasText: "Ahamed" }));
-  await T.locator(".tp-file").getByRole("button", { name: "Arrived" }).click();
-  await until(async () => ((await roomPill(T, "Ahamed").getAttribute("class")) ?? "").includes("rs-in"), "Ahamed is with her");
+  // Fathima and Ahamed walk in: their files, Arrived (one at a time; Arrived beside the box takes everyone on the way).
+  for (const name of ["Fathima", "Ahamed"]) {
+    const f = await evFile(T, name);
+    await contains(f.locator(".sheet-title p"), "on the way");
+    await f.getByRole("button", { name: "Arrived" }).click();
+    await contains(T.locator(".toast"), `${name} is here.`);
+    await until(async () => /\bs-in\b/.test((await evPill(T, name).getAttribute("class")) ?? ""), `${name} is with her`);
+    await f.getByRole("button", { name: "Close" }).click();
+  }
+  await visible(T.locator(".evx-bh .evx-lock"));
   // Dilan never gets there: after 3 minutes Correction's phone says so and shows him in red; Theory's pill is red too.
   await backend.t.run(async (ctx) => {
     const dilan = (await ctx.db.query("students").collect()).find((x) => x.name === "Dilan")!;
@@ -1904,64 +1851,78 @@ test("Theory: lessons as tiny pills, most useful first; her room with Arrived an
   await hears(C, "Dilan hasn't reached Owner in Theory.");
   const lost = C.locator(".call-strip.cs-lost");
   await contains(lost, "Dilan isn't with Owner");
-  await count(T.locator(".tp-rp.rs-walk.rs-late"), 1);
-  await contains(T.locator(".tp-rhead"), "1 on the way");
+  await count(T.locator(".evx-sp.s-walk.s-late"), 1);
+  await contains(T.locator(".evx-bh"), "1 coming");
   await shot(C, "t03-correction-lost");
   // Correction finds him at his desk: "In the hall". He is back to work; Theory can call him again.
   await lost.getByRole("button", { name: "In the hall" }).click();
   await contains(C.locator(".toast"), "Dilan is back in the hall.");
   await count(C.locator(".call-strip"), 0);
   expect((await marksOf(backend, "Dilan")).room).toBeUndefined();
-  await count(T.locator(".tp-rp"), 2);
-  expect(Math.abs((await padY()) - y0)).toBeLessThanOrEqual(2); // Room's buttons never moved
+  await count(roomPills, 2);
+  expect(Math.abs((await padY()) - y0)).toBeLessThanOrEqual(2); // the pad never moved
 
-  // The lesson: what was taught (the bell rang before Q26), and who got it (Ahamed didn't: he stays).
-  const fa = await file(T, "Fathima");
-  await textsAre(fa.locator(".tf-teach .tf-q.on"), ["Q23", "Q24", "Q25", "Q26"]);
-  await fa.getByRole("button", { name: "Q26 taught" }).click();
-  await contains(doneBtn, "Done: back to work");
-  await shot(T, "t04-theory-his-file");
-  const ah = await file(T, "Ahamed");
-  await ah.getByRole("button", { name: "Ahamed: got it" }).click();
-  await contains(doneBtn, "Done: 1 back to work");
-  await doneBtn.click();
+  // The lesson: Q23 to Q25 taught for both (one tap each, the next opens by itself); the bell rang before Q26.
+  await textsAre(T.locator(".evx-strip .fc-sq small"), ["D·23", "D·24", "D·25", "D·26"]);
+  await contains(T.locator(".evx-x"), "for 2");
+  for (const q of ["23", "24", "25"]) {
+    await contains(T.locator(".evx-card .fc-qn"), q);
+    await T.locator(".evx-x").click();
+  }
+  await contains(T.locator(".evx-card .fc-qn"), "26");
+  await T.locator(".evx-b.skip").click();
+  await count(T.locator(".evx-sp.s-done"), 2);
+  await contains(evDone(T), "Done 2");
+  await shot(T, "t04-theory-teaching");
+  // Ahamed didn't get Q25: in his file, his Q25 back to not decided. He stays; Done sends Fathima back.
+  const ah = await evFile(T, "Ahamed");
+  await contains(ah.locator(".ev-h-sum"), "3 taught · 1 not reached");
+  await ah.getByRole("button", { name: "Ahamed Q25: taught" }).click();
+  await ah.getByRole("button", { name: "Ahamed Q25: not reached" }).click();
+  await contains(ah.locator(".ev-h-sum"), "1 to do");
+  await shot(T, "t04b-theory-his-file");
+  await ah.getByRole("button", { name: "Close" }).click();
+  await contains(evDone(T), "Done 1");
+  await evDone(T).click();
   await contains(T.locator(".toast"), "Saved: Fathima back to work. Ahamed stays with you.");
   await until(async () => (await marks("Fathima"))["25"]?.s === "taught", "Fathima taught Q23-25");
   const fm = await marks("Fathima");
   expect([fm["23"]?.s, fm["24"]?.s, fm["25"]?.s, fm["26"]?.s ?? null]).toEqual(["taught", "taught", "taught", null]);
   expect((await marks("Ahamed"))["23"]).toBeUndefined();
-  // Ahamed stays; the ticks start again from "all". He has to go: back to the hall without it (D stays his).
-  await count(T.locator(".tp-rp"), 1);
-  const ah2 = await file(T, "Ahamed");
-  await count(ah2.locator(".tf-teach .tf-q.on"), 4);
-  await ah2.getByRole("button", { name: "Send Ahamed back without it" }).click();
+  // Ahamed has to go: back to the hall without it (D stays his).
+  await count(roomPills, 1);
+  await (await evFile(T, "Ahamed")).getByRole("button", { name: "Not taught" }).click();
   await contains(T.locator(".toast"), "Ahamed: back to the hall, not taught.");
   expect((await marksOf(backend, "Ahamed")).room).toBeUndefined();
-  // Her room is empty: back to the lessons by itself.
-  await visible(T.locator(".tp-kinds"));
+  await count(roomPills, 0);
 
-  // Fathima needs only Q26 now; Ahamed and Dilan all of D. Dilan goes first; while D is going on, its pill is blue and
-  // Nila joins it.
-  const d2 = await lessonCard(T, "U13 D");
-  await namesAre(d2.locator(".tp-row-m b"), ["Fathima", "Ahamed", "Dilan", "Nila"]);
-  await contains(chip(d2, "Fathima").locator(".tp-row-q"), "Q26");
-  await count(chip(d2, "Dilan").locator(".tp-row-q"), 0);
-  await callOnly(d2, ["Dilan"]);
+  // D again: Fathima needs only Q26 now; the others all of it (the preview says who needs which). Dilan goes first;
+  // while D is going on its count is blue, and Nila joins it.
+  await evPick(T, { grade: "11", stage: "Fighter", unit: "13", group: "D" });
+  await T.locator(".evx-strip .fc-sq", { hasText: "D·23" }).click();
+  await until(async () => !(await T.locator(".evx-card .evx-who").innerText()).includes("Fathima"), "Q23: not Fathima");
+  await T.locator(".evx-strip .fc-sq", { hasText: "D·26" }).click();
+  await contains(T.locator(".evx-card .evx-who"), "Fathima");
+  await evCallOnly(T, ["Dilan"]);
   await hears(C, "Dilan, go to Owner in Theory.");
   await C.locator(".call-strip.theory").getByRole("button", { name: /^Sent/ }).click();
-  const d3 = await lessonCard(T, "U13 D");
-  await visible(T.locator('.tp-lp.lt-going[data-lesson="U13 D"]'));
-  await contains(d3.locator(".tp-lh-t"), "in your room: 1 · room for 5");
-  await callOnly(d3, ["Nila"]);
+  await visible(T.locator(".evx-qg.qg-going").filter({ has: T.locator("b").getByText("D", { exact: true }) }));
+  await contains(T.locator(".evx-bh"), "room for 5");
+  await evCallOnly(T, ["Nila"]);
   await hears(C, "Nila, go to Owner in Theory.");
   await C.locator(".call-strip.theory").getByRole("button", { name: /^Sent/ }).click();
-  await arrive(T, ["Dilan", "Nila"]);
-  await doneBtn.click();
+  await evArrive(T, ["Dilan", "Nila"]);
+  for (const q of ["23", "24", "25", "26"]) {
+    await contains(T.locator(".evx-card .fc-qn"), q);
+    await T.locator(".evx-x").click();
+  }
+  await contains(evDone(T), "Done 2");
+  await evDone(T).click();
   await until(async () => (await marks("Nila"))["26"]?.s === "taught", "Nila taught Q23-26");
   await until(async () => (await marks("Dilan"))["26"]?.s === "taught", "Dilan taught Q23-26");
 
-  // A workbook lesson: Evaluation sent Malik's Q13 and Q17 to Theory. His file shows them with what he got and who
-  // sent them, and his unit. He gets Q13 today; Q17 waits.
+  // A workbook lesson: Evaluation sent Malik's Q13 and Q17 to Theory. Grade 7, Master, unit 8: one pill for both (he
+  // alone needs them). His squares show what he got and who sent them; his file too, and his unit.
   await backend.t.run(async (ctx) => {
     const s = (await ctx.db.query("students").collect()).find((x) => x.name === "Malik")!;
     const p = (await ctx.db
@@ -1973,43 +1934,45 @@ test("Theory: lessons as tiny pills, most useful first; her room with Arrived an
     await ctx.db.patch(p._id, { m: { ...m, q: { ...m.q, "13": { ...m.q["13"], th: now, tb: "evaluation" }, "17": { ...m.q["17"], th: now, tb: "evaluation" } } } });
   });
   await backend.push();
-  const w = await lessonCard(T, "U08 workbook");
-  await contains(T.locator('.tp-lp[data-lesson="U08 workbook"] .tp-ln-g'), "7");
-  await contains(T.locator('.tp-lp[data-lesson="U08 workbook"] .tp-ln-n'), "8");
-  await contains(chip(w, "Malik").locator(".tp-row-q"), "Q13 Q17");
+  await evPick(T, { grade: "7", stage: "Master", unit: "8", group: "13 · 17" });
+  expect(await namesOf(T.locator(".evx-sp.s-sug"))).toEqual(["Malik"]);
   await shot(T, "t05-theory-workbook-lesson");
-  await callOnly(w, ["Malik"]);
+  await evCallOnly(T, ["Malik"]);
   await hears(C, "Malik, go to Owner in Theory.");
   await C.locator(".call-strip.theory").getByRole("button", { name: /^Sent/ }).click();
-  const mf = await file(T, "Malik");
-  await mf.getByRole("button", { name: "Arrived" }).click();
-  await visible(mf.getByRole("button", { name: "Malik: got it" }));
-  await textsAre(mf.locator(".tp-fq .tf-q.on"), ["Q13", "Q17"]);
-  await contains(mf.locator(".tp-fq-w").first(), "Evaluation");
+  await evArrive(T, ["Malik"]);
+  await textsAre(T.locator(".evx-strip .fc-sq small"), ["13", "17"]);
+  await contains(T.locator(".evx-who"), "Malik 0/2 · Evaluation");
+  await visible(T.locator(".evx-card .muted", { hasText: "No answer key for this workbook yet." }));
+  const mf = await evFile(T, "Malik");
+  await contains(mf.locator(".tpx-fq"), "Q17");
   await visible(mf.locator(".tp-fx .mtrack"));
-  await mf.getByRole("button", { name: "Malik Q17 taught" }).click();
   await shot(T, "t05b-theory-file-workbook");
-  await doneBtn.click();
+  await mf.getByRole("button", { name: "Close" }).click();
+  // He gets Q13 today; Q17 waits (Not reached).
+  await T.locator(".evx-x").click();
+  await T.locator(".evx-b.skip").click();
+  await evDone(T).click();
   await until(async () => (await marksOf(backend, "Malik")).m!.q["13"]?.tt !== undefined, "Malik Q13 taught");
   const mm = (await marksOf(backend, "Malik")).m!;
   expect(mm.q["17"]).toMatchObject({ th: expect.any(Number) });
   expect(mm.q["17"].tt).toBeUndefined();
-  await contains(chip(await lessonCard(T, "U08 workbook"), "Malik").locator(".tp-row-q"), "Q17");
+  await evPick(T, { grade: "7", stage: "Master", unit: "8" });
+  await textsAre(T.locator(".evx-qg b"), ["17"]);
 
   // Evaluation calls Kumar: Theory lists him on E but doesn't tick him. Theory takes him anyway: Evaluation is told
   // her call went (theory comes first). Then Theory changes its mind: cancel the call in his file.
   const E = await phone(backend, "evaluation");
   await evCallOnly(E, ["Kumar"]);
-  const e = await lessonCard(T, "U13 E");
-  await contains(chip(e, "Kumar").locator("small"), "Eval called");
-  expect(await chip(e, "Kumar").getAttribute("aria-pressed")).toBe("false");
-  await callOnly(e, ["Kumar"]);
+  await evPick(T, { grade: "11", stage: "Fighter", unit: "13", group: "E" });
+  await until(async () => ((await evOffer(T, "Kumar").getAttribute("aria-label")) ?? "").includes("Eval called"), "Kumar: Eval called");
+  expect(await evOffer(T, "Kumar").getAttribute("aria-pressed")).toBe("false");
+  await evCallOnly(T, ["Kumar"]);
   await contains(T.locator(".toast"), "Called 1. Correction sends him over. Evaluation had called him: she is told.");
   await contains(E.locator(".bump-note"), "Theory took Kumar first.");
   await shot(E, "t06-evaluation-told");
-  const kf = await file(T, "Kumar");
-  await kf.getByRole("button", { name: "Cancel the call for Kumar" }).click();
-  await count(T.locator(".tp-rp"), 0);
+  await (await evFile(T, "Kumar")).getByRole("button", { name: "Cancel the call" }).click();
+  await count(roomPills, 0);
   await count(E.locator(".bump-note"), 0);
   await E.context().close();
 
@@ -2022,18 +1985,18 @@ test("Theory: lessons as tiny pills, most useful first; her room with Arrived an
   await shot(T, "t07-class-as-theory");
   await tab(T, "Theory").click();
 
-  // The smallest phone: the pills in one line, Room and Call fit at the bottom, no sideways scrolling.
+  // The smallest phone: the grades in one row, the room box and its buttons fit, the big Taught on screen above the
+  // tabs, no sideways scrolling.
   const S = await phone(backend, "theory", { ...PHONE, viewport: { width: 320, height: 568 } });
-  await visible(S.locator(".tp-lp").first());
+  await visible(S.locator(".evx-call"));
   expect(await S.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  expect(new Set(await S.locator(".evx-g").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)))).size).toBe(1);
   const fits = await S.evaluate(() =>
-    [...document.querySelectorAll(".tp-pad > *, .tp-kind, .tp-row")].every((el) => el.scrollWidth <= el.clientWidth + 1 && el.getBoundingClientRect().right <= 320.5),
+    [...document.querySelectorAll(".evx-col .btn, .tp-kind, .evx-box")].every((el) => el.scrollWidth <= el.clientWidth + 1 && el.getBoundingClientRect().right <= 320.5),
   );
-  expect(fits, "every button and row fits at 320 px").toBe(true);
-  const sTops = await S.locator(".tp-lp").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
-  expect(new Set(sTops).size).toBe(1);
-  const sPad = await S.locator(".tp-pad .tp-call").boundingBox();
-  expect(sPad!.y + sPad!.height).toBeLessThanOrEqual(568 - 66 + 1); // on screen, above the tabs
+  expect(fits, "every button fits at 320 px").toBe(true);
+  const big = await S.locator(".evx-x").boundingBox();
+  expect(big!.y + big!.height).toBeLessThanOrEqual(568 - 66 + 1); // on screen, above the tabs
   expect(await topFits(S), "the top bar fits at 320 px").toBe(true);
   await shot(S, "t08-theory-320");
   await S.context().close();
@@ -2276,10 +2239,10 @@ test("Several books at once: every book stays on Evaluation and Theory, one book
   expect(kept.map((e) => `${e.name} ${e.value}`)).toEqual(["Malik U09"]);
   expect((await marksOf(backend, "Malik")).seen?.evaluation).toBeGreaterThan(0);
 
-  // Theory sees his U08 question though he is on U09: the U08 workbook lesson has him.
+  // Theory sees his U08 question though he is on U09: Grade 7, Master, unit 8, Q17 has him.
   const T = await phone(backend, "theory");
-  await lessonCard(T, "U08 workbook");
-  await visible(chip(T.locator(".tp-lesson"), "Malik"));
+  await evPick(T, { grade: "7", stage: "Master", unit: "8", group: "17" });
+  await visible(evOffer(T, "Malik"));
   await shot(T, "b03-theory-other-book");
   await T.context().close();
 
@@ -2515,5 +2478,90 @@ test("CEO page: now, today, team, business, money; one student's sheet for his p
     await shot(small, `ceo10-sheet-${width}px`);
     await small.context().close();
   }
+  expect(problems, problems.join("\n")).toEqual([]);
+});
+
+test("Test class: a grade copied and the extra test students; only a phone showing the test class sees them, never the class", async () => {
+  const backend = await newClass();
+  const O = await phone(backend, "evaluation");
+  await O.getByRole("button", { name: "Settings" }).click();
+  await O.getByRole("button", { name: "Load demo students (three grades)" }).click();
+  await visible(O.getByText(/^14 demo students loaded/));
+  // They are the real class here (the test class copies real students).
+  await backend.t.run(async (ctx) => {
+    for (const x of await ctx.db.query("students").collect()) await ctx.db.patch(x._id, { demo: false });
+  });
+  await backend.push();
+  const NILA = "nila-eval-token-0123456789abcdefghijklmnopqrstuvw";
+  await addPerson(backend.t, { name: "Nila", token: NILA, tabs: ["evaluation", "theory"] });
+  const N = await phone(backend, "evaluation", PHONE, NILA);
+
+  // Settings → Students → Grade 7 → Test class: copy its 3 students. This phone shows the test class now: TEST in
+  // the top bar, only the copies in the list (with the Test tag).
+  await O.getByRole("button", { name: /^Grade 7\b/ }).click();
+  const tcl = O.locator(".tcl");
+  await contains(tcl.getByRole("button", { name: /^Copy Grade 7/ }), "Copy Grade 7's 3 students");
+  await tcl.getByRole("button", { name: /^Copy Grade 7/ }).click();
+  await contains(O.locator(".toast"), "3 test students: copies of Grade 7. This phone shows the test class now.");
+  await visible(O.locator(".app.test-mode"));
+  await contains(O.locator(".top-stat .clock"), "TEST");
+  await count(O.locator(".plain-list > li"), 3);
+  for (const n of ["Malik test", "Priya test", "Vimal test"]) await visible(O.locator(".plain-list .st-who", { hasText: n }));
+  await count(O.locator(".plain-list .demo-tag", { hasText: "Test" }), 3);
+  await visible(O.locator(".tcl-note"));
+  // The extra test students, one for each situation (their notes say which).
+  await O.locator(".tcl").getByRole("button", { name: "Add the extra test students (every case)" }).click();
+  await contains(O.locator(".toast"), "32 extra test students, one for every case.");
+  await contains(O.locator(".tcl-switch .segc-b.tclb"), "Test class (35)");
+  await O.getByRole("button", { name: /^Grade 11\b/ }).click();
+  await visible(O.locator(".tcl-case", { hasText: "Theory: needs section D, no work for 6 min" }));
+  await shot(O, "x01-test-class-settings");
+  await O.getByRole("button", { name: "Back to the class" }).click();
+
+  // Evaluation, in the test class: two of them are in her room already (one with her, one called), so the 7 who lost
+  // Q2 get 4 ticks: room for 4.
+  await visible(evPill(O, "In Eval D").and(O.locator(".s-in")));
+  await visible(evPill(O, "Eval called").and(O.locator(".s-call")));
+  await evPick(O, { grade: "7", stage: "Master", unit: "8", group: "2" });
+  await count(O.locator(".evx-sp.s-sug"), 7);
+  await count(O.locator(".evx-sp.s-sug.on"), 4);
+  await contains(O.locator(".evx-bh"), "room for 4");
+  await shot(O, "x02-test-class-evaluation");
+  // Theory, in the test class: D first (Starving D has waited 25 minutes), held students listed but not ticked.
+  await tab(O, "Theory").click();
+  await evPick(O, { grade: "11", stage: "Fighter", unit: "13", group: "D" });
+  await until(async () => (await namesOf(O.locator(".evx-sp.s-sug")))[0] === "Starving D", "Starving D first");
+  await count(O.locator(".evx-sp.s-sug.on"), 6);
+  expect(await evOffer(O, "Home soon").getAttribute("aria-pressed")).toBe("false");
+  await contains(evOffer(O, "Home soon"), "home");
+  await contains(evOffer(O, "In Eval D"), "Eval");
+  await shot(O, "x03-test-class-theory");
+
+  // Nila's phone shows the class: no test student anywhere. Her Settings offer the switch.
+  await evPick(N, { grade: "7", stage: "Master", unit: "8" });
+  await count(N.locator('.evx-sp[data-name="Crowd 1"]'), 0);
+  await count(N.locator(".app.test-mode"), 0);
+  await N.getByRole("button", { name: "Settings" }).click();
+  await N.getByRole("button", { name: "Account", exact: true }).click();
+  await shot(N, "x04-test-class-switch");
+  await N.locator(".tcl-switch").getByRole("button", { name: /^Test class/ }).click();
+  await visible(N.locator(".app.test-mode"));
+  await N.getByRole("button", { name: "Back to the class" }).click();
+  // In her own room (empty), the 7 who lost Q2: 6 ticked, never more (his number).
+  await evPick(N, { grade: "7", stage: "Master", unit: "8", group: "2" });
+  await count(N.locator(".evx-sp.s-sug"), 7);
+  await count(N.locator(".evx-sp.s-sug.on"), 6);
+  await contains(N.locator(".evx-bh"), "room for 6");
+  await N.context().close();
+
+  // The owner deletes them: only test students go; this phone shows the class again.
+  await O.getByRole("button", { name: "Settings" }).click();
+  await O.locator(".tcl").getByRole("button", { name: "Delete the 35 test students" }).click();
+  await O.locator(".sheet").getByRole("button", { name: "Delete test students" }).click();
+  await contains(O.locator(".toast"), "Deleted 35 test students. This phone shows the class again.");
+  await count(O.locator(".app.test-mode"), 0);
+  const left = await backend.t.run(async (ctx) => (await ctx.db.query("students").collect()).map((x) => ({ name: x.name, test: !!x.test })));
+  expect(left.filter((x) => x.test)).toEqual([]);
+  expect(left).toHaveLength(14);
   expect(problems, problems.join("\n")).toEqual([]);
 });

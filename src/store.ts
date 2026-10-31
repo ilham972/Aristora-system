@@ -28,6 +28,8 @@ export type Board = {
   /** stats[room][key]: each room's score for this class (src/score.ts); missing on an old server. */
   session: { _id: Id<"sessions">; startedAt: number; lastActivityAt: number; stats?: Record<string, Record<string, number>> } | null;
   legacy: boolean;
+  /** How many test students there are (the test class: a phone in test mode sees only them); missing on an old server. */
+  tests?: number;
 };
 export type Role = "correction" | "theory" | "evaluation";
 export type Extra = "students" | "books" | "reports";
@@ -69,6 +71,39 @@ let ensuring = false;
 let me: MeState | undefined;
 let stopMe: (() => void) | null = null;
 let stopBoard: (() => void) | null = null;
+
+// ---- The test class (31 Oct 2026): a phone in test mode sees only the test students, a phone in the class only the
+// real ones. Each phone chooses (Settings); the choice stays on the phone.
+const TEST_KEY = "aristora.testClass";
+let test = (() => {
+  try {
+    return localStorage.getItem(TEST_KEY) === "1";
+  } catch {
+    return false;
+  }
+})();
+
+/** This phone shows the test class (test students only). */
+export function testMode(): boolean {
+  return test;
+}
+
+/** Switch this phone between the class and the test class: its board starts again with the other class. */
+export function setTestMode(on: boolean) {
+  if (on === test) return;
+  test = on;
+  try {
+    if (on) localStorage.setItem(TEST_KEY, "1");
+    else localStorage.removeItem(TEST_KEY);
+  } catch {
+    /* private mode: for this visit only */
+  }
+  if (stopBoard) {
+    stopBoard();
+    stopBoard = startBoard();
+  }
+  emit();
+}
 
 /** One-time data updates on the server (syllabus, books, students from before stages). */
 async function ensureData() {
@@ -152,7 +187,7 @@ function startBoard(): () => void {
   const stops = [
     subscribe(
       api.state.get,
-      {},
+      test ? { test: true } : {},
       (value) => {
         board = value;
         boardError = null;

@@ -3,6 +3,9 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
+import { fighter, type FighterData, type MasterData } from "../convex/lib/book";
+import { computeMaster, type MState } from "../convex/lib/master";
+import { computeStatus } from "../convex/lib/status";
 import { addPerson, asOwner, asPhone } from "./helpers";
 
 const modules = import.meta.glob("../convex/**/*.ts");
@@ -580,6 +583,133 @@ describe("demo students", () => {
     const st = await state(t);
     const idle = st.students.filter((s) => s.idleSince !== undefined).map((s) => s.name).sort();
     expect(idle).toEqual(["Fathima", "Rizwan", "Vimal"]); // Vimal: every level handed in, waiting for correction
+  });
+});
+
+describe("the test class (31 Oct 2026): test students only phones in test mode see", () => {
+  test("a grade copied: the same book, levels and books given, signed in; copying again starts over", async () => {
+    const t = await setup();
+    const malik = await addMaster(t, "Malik R");
+    const items = Array.from({ length: 10 }, (_, i) => ({ q: i + 1, got: i + 1 === 4 ? 0 : 2 }));
+    await t.mutation(api.workbook.correct, { studentId: malik, level: 1, items, by: "correction" });
+    await t.mutation(api.workbook.levelDone, { studentId: malik, level: 2, by: "correction" });
+    const u09 = await unitId(t, "G7-U09");
+    await t.mutation(api.students.setGiven, { id: malik, unitId: u09, stage: "master", given: true });
+    await t.mutation(api.students.setPresent, { id: malik, present: false }); // he went home: his copy is in class anyway
+    await addIn(t, "Nila"); // Grade 11: not copied
+    expect(await t.mutation(api.demo.copyGrade, { grade: 7 })).toBe(1);
+
+    // The real class never sees the test class (only how many there are).
+    const real = await state(t);
+    expect(real.students.map((s) => s.name).sort()).toEqual(["Malik R", "Nila"]);
+    expect(real.tests).toBe(1);
+    // The test class: the copy only, signed in, on Malik's book with Malik's levels and his books given.
+    const st = await t.query(api.state.get, { test: true });
+    expect(st.students.map((s) => s.name)).toEqual(["Malik R test"]);
+    const copy = st.students[0];
+    expect(copy).toMatchObject({ test: true, demo: true, copyOf: malik, present: true, grade: 7, stage: "master", unitId: await unitId(t, "G7-U08") });
+    expect(st.progress[copy._id].m).toEqual(real.progress[malik].m);
+    expect(st.given[copy._id]).toEqual([{ unitId: u09, stage: "master", work: true, done: false }]);
+    expect(st.session).not.toBeNull();
+    expect(await t.query(api.demo.testInfo, {})).toEqual({ real: { "7": 1, "11": 1 }, copies: { "7": 1 }, cases: 0, tests: 1 });
+
+    // His copy explained (a test); copying again starts over from the real Malik.
+    await t.run(async (ctx) => {
+      const p = (await ctx.db.query("progress").withIndex("by_student", (q) => q.eq("studentId", copy._id)).collect())[0];
+      await ctx.db.patch(p._id, { m: { q: {}, lv: {} } });
+    });
+    expect(await t.mutation(api.demo.copyGrade, { grade: 7 })).toBe(1);
+    const again = await t.query(api.state.get, { test: true });
+    expect(again.students).toHaveLength(1);
+    expect(again.students[0]._id).not.toBe(copy._id);
+    expect(again.progress[again.students[0]._id].m).toEqual(real.progress[malik].m);
+    expect((await student(t, malik)).m.lv["2"]?.done).toBeDefined(); // the real Malik untouched
+    await expect(t.mutation(api.demo.copyGrade, { grade: 9 })).rejects.toThrow(/No Grade 9 students/);
+  });
+
+  test("the extra test students: one for each situation; their calls never count; deleting them leaves the class", async () => {
+    const t = await setup();
+    await addIn(t, "Real R");
+    expect(await t.mutation(api.demo.cases, {})).toBe(32); // 13 theory-book + 19 workbook (no grade with two workbooks here)
+    const st = await t.query(api.state.get, { test: true });
+    expect(st.students).toHaveLength(32);
+    const by = (name: string) => st.students.find((s) => s.name === name)!;
+    // Minutes ago (the test clock moves a few ms inside each mutation).
+    const ago = (at: number | undefined) => Math.round((Date.now() - at!) / MIN);
+    // Each test student is in the situation his name says.
+    const books = await t.run(async (ctx) => await ctx.db.query("books").collect());
+    const fbook = books.find((b) => b.stage === "fighter")!.data as FighterData;
+    const wbook = books.find((b) => b.stage === "master")!.data as MasterData;
+    const f = (name: string) => computeStatus(st.progress[by(name)._id].marks, fighter(fbook));
+    const m = (name: string) => computeMaster(st.progress[by(name)._id].m as MState, wbook);
+    expect([f("No work D").nextTheory, f("No work D").dry]).toEqual(["D", true]);
+    expect([ago(by("No work D").idleSince), ago(by("Starving D").idleSince)]).toEqual([6, 25]);
+    expect([f("Soon D").left, f("Later D").left]).toEqual([2, 5]);
+    expect(ago(by("Seen D").seen?.theory)).toBe(40);
+    expect(ago(by("Home soon").lastInAt)).toBe(115);
+    expect([f("No work C").nextTheory, f("No work C").dry]).toEqual(["C", true]);
+    expect([f("Ready 20").pending, f("Ready 20").left]).toEqual([[20], 2]);
+    expect(f("Fresh 21").pending).toEqual([21]);
+    expect(f("Stuck 19").stuck).toEqual([19]);
+    expect([f("Stopped C").blocked, f("Stopped C").dry]).toEqual([["C"], true]);
+    expect(by("In Eval D").room).toBe("evaluation");
+    expect(st.calls.map((c) => `${st.students.find((s) => s._id === c.studentId)!.name} ${c.status} ${c.arrivedAt ? "here" : ""}`.trim()).sort()).toEqual([
+      "Eval called requested",
+      "In Eval D sent here",
+    ]);
+    expect(st.calls.every((c) => c.test && c.teacher === "Owner")).toBe(true);
+    for (const x of ["a", "b", "c"]) expect(m(`Lost 4·9 ${x}`).pending).toEqual([4, 9]);
+    expect(ago(m("Lost 4·9 c").pendingAt!)).toBe(5); // not ready yet
+    expect([m("Lost 13 a").pending, m("Lost 13·17").pending]).toEqual([[13], [13, 17]]);
+    for (let i = 1; i <= 7; i++) expect(m(`Crowd ${i}`).pending).toEqual([2]);
+    expect([m("All done 51").pending, m("All done 51").dry]).toEqual([[51], true]);
+    expect([m("Theory 13·17").theory, m("Theory 13").theory, m("Theory 13·17").pending]).toEqual([[13, 17], [13], []]);
+    expect([m("Whole unit").wholeUnit, m("Whole unit").current?.n]).toEqual([true, 4]);
+    expect([m("Couldn't 4").theory, m("Couldn't 4").dry, m("Couldn't 4").pending]).toEqual([[4], true, []]);
+    expect([by("Gone home").present, m("Gone home").waiting.map((l) => l.n)]).toEqual([false, [2]]);
+    expect(by("No work D").testCase).toMatch(/^Theory: needs section D/);
+
+    // The real class: none of them, none of their calls.
+    const real = await state(t);
+    expect(real.students.map((s) => s.name)).toEqual(["Real R"]);
+    expect(real.calls).toHaveLength(0);
+    // A test student called: his call is a test call, never in the room's score.
+    const c = await t.mutation(api.calls.create, { studentIds: [by("Ready 20")._id], room: "evaluation", kind: "evaluation" });
+    expect(c.created).toHaveLength(1);
+    expect((await state(t)).session?.stats?.evaluation?.calls ?? 0).toBe(0);
+    await t.mutation(api.calls.finish, { items: [{ callId: c.created[0].callId, explained: [20] }] });
+    expect((await state(t)).session?.stats?.evaluation?.done ?? 0).toBe(0);
+    // The class report: the real student only.
+    const report = await t.mutation(api.sessions.end, {});
+    expect(report.students.map((r: { name: string }) => r.name)).toEqual(["Real R"]);
+
+    // Delete: the demo button leaves them; the test class's button deletes them all and everything of theirs.
+    expect(await t.mutation(api.demo.remove, {})).toBe(0);
+    expect(await t.mutation(api.demo.remove, { test: true })).toBe(32);
+    expect((await t.query(api.state.get, { test: true })).students).toHaveLength(0);
+    expect((await state(t)).students.map((s) => s.name)).toEqual(["Real R"]);
+    const left = await t.run(async (ctx) => ({
+      progress: (await ctx.db.query("progress").collect()).length,
+      calls: (await ctx.db.query("calls").collect()).length,
+      visits: (await ctx.db.query("attendance").collect()).length,
+    }));
+    expect(left).toEqual({ progress: 1, calls: 0, visits: 1 });
+  });
+
+  test("only the owner makes or deletes test students; the 120 limit counts real students only", async () => {
+    const raw = convexTest(schema, modules);
+    const t = await asOwner(raw);
+    await t.mutation(api.setup.ensure, {});
+    await addPerson(raw, { name: "Nila", token: "nila-token-0123456789abcdefghijklmnopqrstuvwxyz", tabs: ["evaluation"], can: ["students"] });
+    const nila = asPhone(raw, "nila-token-0123456789abcdefghijklmnopqrstuvwxyz");
+    await expect(nila.mutation(api.demo.cases, {})).rejects.toThrow(/owner/);
+    await expect(nila.mutation(api.demo.copyGrade, { grade: 7 })).rejects.toThrow(/owner/);
+    await expect(nila.mutation(api.demo.remove, { test: true })).rejects.toThrow(/owner/);
+    await expect(nila.query(api.demo.testInfo, {})).rejects.toThrow(/owner/);
+    await t.mutation(api.demo.cases, {});
+    // 32 test students don't fill the class list: a teacher can still add real students.
+    await nila.mutation(api.students.add, { name: "New R", grade: 7 });
+    expect((await t.query(api.state.get, {})).students.map((s) => s.name)).toEqual(["New R"]);
   });
 });
 
