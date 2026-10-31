@@ -8189,3 +8189,31 @@ body.locked.evx-on .toasts {
 .evx-tl .btn {
   flex: none;
 }
+
+.fam-idcode {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 10px 14px;
+  margin-bottom: 6px;
+  border-radius: 14px;
+  background: var(--evaluation-soft);
+}
+.fam-idcode > span {
+  display: grid;
+}
+.fam-idcode small {
+  color: var(--evaluation-ink);
+  font-weight: 700;
+}
+.fam-idcode b {
+  font: 800 28px/1.1 var(--font);
+  letter-spacing: 0.08em;
+  color: var(--ink);
+}
+.fam-idcode .link-btn {
+  margin-left: auto;
+}
+.fam-how {
+  margin: 0 0 10px;
+}

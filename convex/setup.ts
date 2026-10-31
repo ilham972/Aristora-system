@@ -4,9 +4,10 @@ import { bookFor } from "./lib/backend";
 import { KNOWN_WORKBOOKS, PILOT_FIGHTER, PILOT_UNIT } from "./lib/book";
 import { SYLLABUS, unitKey, unitOrder } from "./lib/syllabus";
 import { actor } from "./lib/auth";
+import { giveIndex } from "./lib/family";
 
 /** Bump when ensure() has new one-time work to do. */
-export const DATA_VERSION = 1;
+export const DATA_VERSION = 2;
 
 /**
  * One-time data updates, safe to run any number of times (every phone calls it when the app opens):
@@ -78,6 +79,11 @@ export const ensure = mutation({
         await ctx.db.patch(s._id, { grade: 11, term: 2, stage: "fighter", unitId: pilot._id, marks: undefined });
       }
     }
+
+    // 4. Index numbers for the family app (1 Nov 2026): every student of the class from before, oldest first
+    //    (removed ones too: a number is never reused). Demo and test students have none.
+    const unnumbered = (await ctx.db.query("students").collect()).filter((s) => !s.demo && !s.test && typeof s.index !== "number");
+    for (const s of unnumbered.sort((a, b) => a._creationTime - b._creationTime)) await giveIndex(ctx, s);
 
     if (meta) await ctx.db.patch(meta._id, { value: DATA_VERSION });
     else await ctx.db.insert("meta", { key: "data", value: DATA_VERSION });

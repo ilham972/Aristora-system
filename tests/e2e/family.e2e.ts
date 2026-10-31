@@ -240,3 +240,58 @@ test("the family app: join, a level on the pad, Check once, the reveal, XP and t
 
   expect(problems).toEqual([]);
 });
+
+test("index and code: the Family sheet shows them (the code made on the phone); a family phone signs in with them", async () => {
+  const backend = makeBackend(modules);
+  const t = backend.t;
+  await addPerson(t, { name: "Owner", token: OWNER_TOKEN, role: "owner" });
+  const as = { token: OWNER_TOKEN };
+  await t.mutation(api.setup.ensure, as);
+  const u01 = await t.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G8-U01")).first())!._id);
+  await t.mutation(api.catalog.saveWorkbook, {
+    ...as,
+    unitId: u01,
+    parts: BOOK.data.parts.map((p) => ({ id: p.id, to: p.to, ...(p.each ? { each: p.each } : {}) })),
+    levels: BOOK.data.levels.map((l) => ({ to: l.to, max: l.max })),
+    marks: BOOK.data.marks ?? {},
+    replace: true,
+    key: fakeKey(),
+  });
+  await t.mutation(api.students.add, { ...as, name: "Hana K", grade: 8, term: 1, stage: "master", unitId: u01 });
+
+  // The owner: Settings → Students → Grade 8 → Hana K (#1001) → Family: her index and a code made on this phone.
+  const C = await open(backend, site.url, size(360, 740), () => {
+    if (sessionStorage.getItem("t")) return;
+    sessionStorage.setItem("t", "1");
+    localStorage.setItem("aristora.role", "focus");
+    localStorage.setItem("aristora.token", "owner-phone-token-0123456789abcdefghijklmnopqrstuv");
+  });
+  await C.getByRole("button", { name: "Settings" }).click();
+  await C.getByRole("button", { name: /^Grade 8\b/ }).click();
+  const row = C.locator(".settings-body > .plain-list li", { hasText: "Hana K" });
+  await contains(row.locator(".st-who small"), "#1001");
+  await row.getByRole("button", { name: "Family" }).click();
+  const idcode = C.locator(".fam-idcode b");
+  await until(async () => /^\d{4}$/.test((await idcode.nth(1).innerText()).trim()), "her code");
+  expect((await idcode.nth(0).innerText()).trim()).toBe("1001");
+  const code = (await idcode.nth(1).innerText()).trim();
+  await contains(C.locator(".fam-how"), "types these");
+  await noSideScroll(C);
+  await shot(C, "fam10-family-sheet");
+
+  // A family phone with no link: index and code. A wrong code first.
+  const P = await open(backend, `${site.url}/f/`, size(360, 740));
+  await visible(P.locator(".f-form"));
+  await P.getByLabel(/Index/).fill("1001");
+  await P.getByLabel("Code").fill(code === "0001" ? "0002" : "0001");
+  await P.getByRole("button", { name: "உள்நுழை" }).click();
+  await contains(P.locator(".f-err"), "தவறு");
+  await noSideScroll(P);
+  await shot(P, "fam11-signin-wrong");
+  await P.getByLabel("Code").fill(code);
+  await P.getByRole("button", { name: "உள்நுழை" }).click();
+  await contains(P.locator(".f-next"), "Level 1");
+  await shot(P, "fam12-signed-in");
+
+  expect(problems).toEqual([]);
+});

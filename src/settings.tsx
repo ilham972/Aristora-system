@@ -173,7 +173,7 @@ function Students(props: { views: View[] }) {
                     {v.s.demo && <span class="demo-tag">{v.s.test ? "Test" : "Demo"}</span>}
                   </span>
                   <small>
-                    Term {v.s.term ?? "?"} · {stageName(v.stage as Stage)}
+                    {typeof v.s.index === "number" ? `#${v.s.index} · ` : ""}Term {v.s.term ?? "?"} · {stageName(v.stage as Stage)}
                     {v.unit ? ` · ${v.unit.code} ${v.unit.en}` : ""}
                   </small>
                   {v.s.testCase && <small class="tcl-case">{v.s.testCase}</small>}
@@ -939,6 +939,8 @@ function describe(e: Doc<"events">): string {
       return `family phone signed in${v ? ` (${v})` : ""}`;
     case "family-out":
       return "family phone signed out";
+    case "family-code":
+      return v === "first" ? "family app code made" : "family app code changed";
     case "family-off":
       return `family phones signed out (${v})`;
     case "open-all":

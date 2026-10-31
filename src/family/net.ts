@@ -92,6 +92,11 @@ export const mutation = (path: string, args: Record<string, unknown> = {}) => ca
 /** The two open calls (no token yet). */
 export const peek = (code: string) => call("query", "family:peek", { code }) as Promise<{ name: string | null; problem: string | null }>;
 export const join = (code: string, t: string) => call("mutation", "family:join", { code, token: t, label: phoneLabel() }) as Promise<{ name: string }>;
+/** His index number and code (the other way in). */
+export const signInIndex = (index: number, code: string, t: string) =>
+  call("mutation", "family:signIn", { index, code, token: t, label: phoneLabel() }) as Promise<
+    { ok: true; name: string } | { ok: false; why: "wrong" | "locked"; minutes: number }
+  >;
 
 /** Small things kept on this phone (the last home screen, typed answers): never needed, only faster. */
 export function keep<T>(key: string, value?: T | null): T | null {

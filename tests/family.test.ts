@@ -329,3 +329,86 @@ describe("the family app on the server", () => {
     expect(me.streak).toEqual({ days: 0, today: false });
   });
 });
+
+describe("index numbers and codes (sign in without a link)", () => {
+  let raw: ReturnType<typeof fresh>;
+  let t: Awaited<ReturnType<typeof asOwner>>;
+  const indexOf = async (id: Id<"students">) => await raw.run(async (ctx) => (await ctx.db.get(id))!.index);
+  const signIn = (index: number, code: string, token = FAM) => raw.mutation(api.family.signIn, { index, code, token, label: "Android" });
+  const fam = (tok: string) => asPhone(raw, tok);
+
+  beforeEach(async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-01T18:00:00+05:30"));
+    raw = fresh();
+    t = await asOwner(raw);
+    await t.mutation(api.setup.ensure, {});
+  });
+  afterEach(() => vi.useRealTimers());
+
+  test("every student gets the next index number for good; the data step numbers those from before, oldest first", async () => {
+    const a = await t.mutation(api.students.add, { name: "Asha K", grade: 8, term: 1 });
+    const b = await t.mutation(api.students.add, { name: "Bala S", grade: 8, term: 1 });
+    expect([await indexOf(a), await indexOf(b)]).toEqual([1001, 1002]);
+    // Removed and brought back: the same number; a new student never gets a number used before.
+    await t.mutation(api.students.setArchived, { id: a, archived: true });
+    const c = await t.mutation(api.students.add, { name: "Chandra P", grade: 8, term: 1 });
+    expect(await indexOf(c)).toBe(1003);
+    await t.mutation(api.students.setArchived, { id: a, archived: false });
+    expect(await indexOf(a)).toBe(1001);
+    // Students from before index numbers (and a demo one, which gets none): the data step numbers them.
+    const [old1, old2, demo] = await raw.run(async (ctx) => {
+      const row = { archived: false, present: false, grade: 8, term: 1, stage: "master" as const, idleMs: 0 };
+      const x = await ctx.db.insert("students", { ...row, name: "Old One" });
+      const y = await ctx.db.insert("students", { ...row, name: "Old Two" });
+      const z = await ctx.db.insert("students", { ...row, name: "Demo D", demo: true });
+      const meta = (await ctx.db.query("meta").withIndex("by_key", (q) => q.eq("key", "data")).first())!;
+      await ctx.db.patch(meta._id, { value: 1 });
+      return [x, y, z];
+    });
+    await t.mutation(api.setup.ensure, {});
+    expect([await indexOf(old1), await indexOf(old2), await indexOf(demo)]).toEqual([1004, 1005, undefined]);
+  });
+
+  test("the code: the owner or a Students teacher sets it; never an easy one; never on the class board", async () => {
+    const hana = await t.mutation(api.students.add, { name: "Hana K", grade: 8, term: 1 });
+    await addPerson(raw, { name: "Corrector", token: "corrector-token-0123456789abcdefghijklmnopqrstu", tabs: ["correction"] });
+    await expect(
+      asPhone(raw, "corrector-token-0123456789abcdefghijklmnopqrstu").mutation(api.families.setCode, { studentId: hana, code: "4719" }),
+    ).rejects.toThrow(/Students/);
+    for (const bad of ["1111", "1234", "9876", "12a4", "123"]) {
+      await expect(t.mutation(api.families.setCode, { studentId: hana, code: bad })).rejects.toThrow(/4 digits/);
+    }
+    expect(await t.mutation(api.families.setCode, { studentId: hana, code: "4719" })).toBe(true);
+    expect(await t.query(api.families.phones, { studentId: hana })).toMatchObject({ index: 1001, code: "4719", locked: false });
+    // The class board goes to every teacher's phone: no code in it.
+    expect(JSON.stringify(await t.query(api.state.get, {}))).not.toMatch(/"code":"\d{4}"/);
+    // The history says a code was made, never the code.
+    const line = await raw.run(async (ctx) => (await ctx.db.query("events").collect()).find((e) => e.kind === "family-code"));
+    expect(line).toMatchObject({ name: "Hana K", value: "first" });
+    expect(JSON.stringify(line)).not.toContain("4719");
+  });
+
+  test("sign in with index and code; a wrong one or an unknown index says the same; 5 wrong = 15 minutes", async () => {
+    const hana = await t.mutation(api.students.add, { name: "Hana K", grade: 8, term: 1 });
+    expect(await signIn(1001, "4719")).toEqual({ ok: false, why: "wrong", minutes: 0 }); // no code yet
+    await t.mutation(api.families.setCode, { studentId: hana, code: "4719" });
+    expect(await signIn(1001, "4719")).toEqual({ ok: true, name: "Hana K" });
+    expect((await fam(FAM).query(api.family.me, {})).name).toBe("Hana K");
+    expect(await signIn(9999, "4719", FAM2)).toEqual({ ok: false, why: "wrong", minutes: 0 });
+    // A classmate guessing: 4 wrong, then the 5th locks it (even the right code waits).
+    for (let i = 0; i < 4; i++) expect(await signIn(1001, "0000", FAM2)).toEqual({ ok: false, why: "wrong", minutes: 0 });
+    expect(await signIn(1001, "0000", FAM2)).toEqual({ ok: false, why: "locked", minutes: 15 });
+    expect(await signIn(1001, "4719", FAM2)).toMatchObject({ ok: false, why: "locked" });
+    expect((await t.query(api.families.phones, { studentId: hana })).locked).toBe(true);
+    vi.setSystemTime(new Date(Date.now() + 16 * 60_000));
+    expect(await signIn(1001, "4719", FAM2)).toEqual({ ok: true, name: "Hana K" });
+    // New code: the old one stops; phones already in stay in.
+    await t.mutation(api.families.setCode, { studentId: hana, code: "5820" });
+    expect(await signIn(1001, "4719", "family-phone-token-3-0123456789abcdefghijklmnopqrs")).toMatchObject({ ok: false, why: "wrong" });
+    expect((await fam(FAM).query(api.family.me, {})).name).toBe("Hana K");
+    // Removed: no sign in.
+    await t.mutation(api.students.setArchived, { id: hana, archived: true });
+    expect(await signIn(1001, "5820", "family-phone-token-4-0123456789abcdefghijklmnopqrs")).toMatchObject({ ok: false, why: "wrong" });
+  });
+});

@@ -517,7 +517,14 @@ on the family phone, taps **Check** once per level and sees ✓ / ✗ at once; t
   first visit.
 - Words: Tamil first, no school words: a unit = a **World**, marks = **XP** (1 mark = 1 XP), his streak, this week's
   board in his grade. Only the level he is on can be played (the first with no record): the paper book is the truth.
-- Join: Settings → Students → his name → **Family** (`FamilySheet`): a family link on WhatsApp (one use, 7 days); the
+- Sign in (his answer, 1 Nov): his **index number** (1001, 1002…, never reused: `students.index`, given by
+  `students.add` and the data step v2; demo and test students have none; on his Students row as #1001) and a
+  **4-digit code** (`familyCodes`, made on the teacher's phone with secure random, never an easy one; only the owner
+  and Students teachers read it, on his Family sheet; never on the class board). app.aristora.org asks for both
+  (`family.signIn`, open): a wrong code or an unknown index answer the same; 5 wrong in a row lock it 15 minutes;
+  New code replaces it and clears a lock. Why not the index alone: a classmate could Check his level with wrong
+  answers. The WhatsApp link (one use, 7 days) stays as a shortcut; the message carries the index and code too.
+- Settings → Students → his name → **Family** (`FamilySheet`): index and code, New code, Send it on WhatsApp; the
   family phones and Sign out; **Open every World** (else they open in order: his unit now, books given, levels done
   there, the next after a finished one). Books → a workbook: how much the phone marks and exactly what it accepts per
   question (`PhoneAnswers`, `families.answers`).
