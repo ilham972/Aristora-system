@@ -8,7 +8,7 @@ import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { BoardRow, FamilyLevel, FamilyMe, FamilyResult } from "../../convex/family";
 import type { World, WorldLevel } from "../../convex/lib/family";
 import type { Box } from "../../convex/lib/phone";
-import { isSignedOut, join, keep, mutation, NetError, peek, query, randomKey, saveToken, token } from "./net";
+import { isSignedOut, join, keep, mutation, NetError, peek, query, randomKey, saveToken, signInIndex, token } from "./net";
 import { armSound, buzz, setSoundOn, sound, soundOn } from "./sound";
 
 type Checked = {
@@ -124,7 +124,16 @@ export function App() {
   let body: ComponentChildren;
   if (screen.k === "load") body = <Splash />;
   else if (screen.k === "join") body = <Join code={screen.code} onIn={() => { history.replaceState(null, "", location.pathname); setScreen({ k: "home" }); void loadMe(); }} />;
-  else if (screen.k === "nolink") body = <NoLink why={screen.why} />;
+  else if (screen.k === "nolink")
+    body = (
+      <SignIn
+        why={screen.why}
+        onIn={() => {
+          setScreen({ k: "home" });
+          void loadMe();
+        }}
+      />
+    );
   else if (screen.k === "board") body = <Board onBack={home} />;
   else if (screen.k === "level")
     body = (
@@ -171,14 +180,72 @@ function Splash() {
   );
 }
 
-function NoLink(props: { why?: string }) {
+/** His index number and code (from the class), once on each phone; or the WhatsApp link, which signs in by itself. */
+function SignIn(props: { why?: string; onIn: () => void }) {
+  const [index, setIndex] = useState("");
+  const [code, setCode] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const digits = (s: string, n: number) => s.replace(/\D/g, "").slice(0, n);
+  const go = async (e: Event) => {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setErr(null);
+    const t = randomKey(32);
+    try {
+      const r = await signInIndex(Number(index), code, t);
+      if (r.ok) {
+        saveToken(t);
+        keep("me", null);
+        sound("level");
+        props.onIn();
+        return;
+      }
+      buzz(40);
+      setErr(r.why === "locked" ? `பல தடவை தவறு. ${r.minutes} நிமிடம் கழித்து மீண்டும் முயற்சி செய்.` : "Index எண் அல்லது code தவறு. மீண்டும் பார்.");
+    } catch (x) {
+      setErr(problemWords(x));
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <div class="f-center f-pad">
       <img class="f-owl big" src="/icon.svg" alt="ARISTORA" />
       <h1 class="f-h1">ARISTORA</h1>
       {props.why && <p class="f-muted">{props.why}</p>}
-      <p class="f-lead">உன் வகுப்பிடம் உனக்கான link ஐக் கேள். அதை இந்த phone இல் திற.</p>
-      <p class="f-muted small">Ask the class for your family link, then open it on this phone.</p>
+      <form class="f-form" onSubmit={(e) => void go(e)}>
+        <label>
+          <span>Index எண் · Index number</span>
+          <input
+            inputMode="numeric"
+            autoComplete="username"
+            maxLength={6}
+            value={index}
+            onInput={(e) => setIndex(digits((e.target as HTMLInputElement).value, 6))}
+          />
+        </label>
+        <label>
+          <span>Code</span>
+          <input
+            inputMode="numeric"
+            autoComplete="current-password"
+            maxLength={4}
+            value={code}
+            onInput={(e) => setCode(digits((e.target as HTMLInputElement).value, 4))}
+          />
+        </label>
+        {err && (
+          <p class="f-err" role="alert">
+            {err}
+          </p>
+        )}
+        <button type="submit" class="f-btn go big" disabled={busy || index.length < 4 || code.length !== 4}>
+          {busy ? "…" : "உள்நுழை"}
+        </button>
+      </form>
+      <p class="f-muted small">மறந்துவிட்டாயா? உன் வகுப்பிடம் கேள். · Forgot them? Ask the class.</p>
     </div>
   );
 }

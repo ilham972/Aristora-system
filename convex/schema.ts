@@ -199,6 +199,8 @@ export default defineSchema({
     archivedAt: v.optional(v.number()),
     /** The family app opens every World for him (else: his unit, books given, and the next after a finished one). */
     openAll: v.optional(v.boolean()),
+    /** His index number (1001, 1002…, never reused): he types it with his code in the family app. Not secret. */
+    index: v.optional(v.number()),
     /**
      * A test student (31 Oct 2026): the test class, a class of its own. Only phones in test mode see test students
      * (state.get `test`); the real class never does, and they never count (demo is set too). copyOf = the real student
@@ -208,7 +210,9 @@ export default defineSchema({
     test: v.optional(v.boolean()),
     copyOf: v.optional(v.id("students")),
     testCase: v.optional(v.string()),
-  }).index("by_archived", ["archived"]),
+  })
+    .index("by_archived", ["archived"])
+    .index("by_index", ["index"]),
 
   /**
    * Focus tab: a workbook level marked part of the way (stopped at Q6, or marked as the student goes), kept until the
@@ -421,6 +425,17 @@ export default defineSchema({
   })
     .index("by_code", ["codeHash"])
     .index("by_student", ["studentId"]),
+  /**
+   * His family app code (4 digits, made on a teacher's phone): only the owner and Students teachers read it (Family
+   * sheet), never the class board (every phone gets every student row). 5 wrong in a row = locked for 15 minutes.
+   */
+  familyCodes: defineTable({
+    studentId: v.id("students"),
+    code: v.string(),
+    fails: v.optional(v.number()),
+    lockedUntil: v.optional(v.number()),
+    updatedAt: v.number(),
+  }).index("by_student", ["studentId"]),
   familyDevices: defineTable({
     studentId: v.id("students"),
     tokenHash: v.string(),

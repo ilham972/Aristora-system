@@ -1,5 +1,6 @@
 // The family app (app.aristora.org): a student and his family, on their own phone, see only him.
 //   peek / join  -> open the WhatsApp link (one use, 7 days): this phone is his family's from now on.
+//   signIn       -> or type his index number and 4-digit code (5 wrong in a row: locked 15 minutes).
 //   me           -> his Worlds and levels, XP this week, his streak.
 //   level        -> the level he is on: each question's boxes (numbers, or answers in n), never the answers.
 //   check        -> his typed answers for a whole level, once: the server marks them with the answer key and saves the
@@ -7,7 +8,8 @@
 //                   at his working in class and taps Checked (or changes a mark). What the phone can't mark (names,
 //                   reasons, drawings) waits for her.
 //   board        -> this week's XP in his grade (first name and initial only).
-// Every function takes the family phone's token (familyViewer / familyActor); peek and join are open on purpose.
+// Every function takes the family phone's token (familyViewer / familyActor); peek, join and signIn are open on
+// purpose (they are how a phone gets its token).
 
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -15,7 +17,7 @@ import { mutation, query, type QueryCtx } from "./_generated/server";
 import { checkToken, familyActor, familyViewer, secretHash } from "./lib/auth";
 import { asMaster, bookFor, currentSession, ensureProgress, fail, keyRow, log, masterState, refresh } from "./lib/backend";
 import { partOf } from "./lib/book";
-import { masterRows, streakOf, weekXp, worldsOf, xpSince, type World } from "./lib/family";
+import { CODE_FAILS, CODE_LOCK_MS, codeRow, masterRows, streakOf, weekXp, worldsOf, xpSince, type World } from "./lib/family";
 import { slWeekStart } from "./lib/day";
 import { computeMaster, markBefore, type MQ, type MState } from "./lib/master";
 import { boxCount, formOf, INPUT_MAX, markQuestion, phoneKey, type FormQ } from "./lib/phone";
@@ -70,6 +72,49 @@ export const join = mutation({
     });
     await log(ctx, null, now, { kind: "family-in", studentId: student!._id, name: student!.name, value: (args.label ?? "").slice(0, 40) });
     return { name: student!.name };
+  },
+});
+
+/**
+ * This phone signs in with his index number and code (open: they are the key). Wrong answers can't throw (that would
+ * undo the count): they answer. An unknown index answers the same as a wrong code (no list of numbers to find).
+ */
+export const signIn = mutation({
+  args: { index: v.number(), code: v.string(), token: v.string(), label: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    checkToken(args.token);
+    const wrong = { ok: false as const, why: "wrong" as const, minutes: 0 };
+    const s = Number.isInteger(args.index)
+      ? await ctx.db
+          .query("students")
+          .withIndex("by_index", (q) => q.eq("index", args.index))
+          .first()
+      : null;
+    const row = s && !s.archived && !s.demo && !s.test ? await codeRow(ctx, s._id) : null;
+    if (!s || !row) return wrong;
+    if (row.lockedUntil !== undefined && now < row.lockedUntil) {
+      return { ok: false as const, why: "locked" as const, minutes: Math.ceil((row.lockedUntil - now) / 60_000) };
+    }
+    if (args.code.trim() !== row.code) {
+      const fails = (row.fails ?? 0) + 1;
+      if (fails >= CODE_FAILS) {
+        await ctx.db.patch(row._id, { fails: 0, lockedUntil: now + CODE_LOCK_MS });
+        return { ok: false as const, why: "locked" as const, minutes: Math.round(CODE_LOCK_MS / 60_000) };
+      }
+      await ctx.db.patch(row._id, { fails, lockedUntil: undefined });
+      return wrong;
+    }
+    await ctx.db.patch(row._id, { fails: undefined, lockedUntil: undefined });
+    await ctx.db.insert("familyDevices", {
+      studentId: s._id,
+      tokenHash: secretHash("family-token", args.token),
+      label: (args.label ?? "Phone").slice(0, 40),
+      createdAt: now,
+      lastSeenAt: now,
+    });
+    await log(ctx, null, now, { kind: "family-in", studentId: s._id, name: s.name, value: `${(args.label ?? "").slice(0, 40)} · index` });
+    return { ok: true as const, name: s.name };
   },
 });
 

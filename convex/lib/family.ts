@@ -6,7 +6,7 @@
 // - Only the level he is on can be played (the first with no record): the paper book is the truth, level by level.
 
 import type { Doc, Id } from "../_generated/dataModel";
-import type { QueryCtx } from "../_generated/server";
+import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { MasterData } from "./book";
 import { slDayNo, slWeekStart } from "./day";
 import { computeMaster, EMPTY_MASTER, type MState } from "./master";
@@ -173,3 +173,38 @@ export function streakOf(rows: Doc<"progress">[], now: number): { days: number; 
   }
   return { days: n, today: has };
 }
+
+// ---- Index numbers and codes (his answer, 1 Nov 2026): he signs in with both, on his phone and his parent's ----
+
+/** The first index number; then 1002, 1003… Never reused, even after a student is removed. */
+export const FIRST_INDEX = 1001;
+/** Wrong codes in a row before the lock, and how long it lasts (a classmate can't guess 4 digits). */
+export const CODE_FAILS = 5;
+export const CODE_LOCK_MS = 15 * 60_000;
+
+/** His index number: his own, or the next one (kept for good). */
+export async function giveIndex(ctx: MutationCtx, s: Doc<"students">): Promise<number> {
+  if (typeof s.index === "number") return s.index;
+  const meta = await ctx.db
+    .query("meta")
+    .withIndex("by_key", (q) => q.eq("key", "nextIndex"))
+    .first();
+  const n = Math.max(FIRST_INDEX, Number(meta?.value ?? FIRST_INDEX));
+  await ctx.db.patch(s._id, { index: n });
+  if (meta) await ctx.db.patch(meta._id, { value: n + 1 });
+  else await ctx.db.insert("meta", { key: "nextIndex", value: n + 1 });
+  return n;
+}
+
+/** A code too easy to guess: 1111, 1234, 9876 (the phone makes another). */
+export function weakCode(code: string): boolean {
+  return /^(\d)\1{3}$/.test(code) || "0123456789".includes(code) || "9876543210".includes(code);
+}
+
+export async function codeRow(ctx: QueryCtx, studentId: Id<"students">): Promise<Doc<"familyCodes"> | null> {
+  return await ctx.db
+    .query("familyCodes")
+    .withIndex("by_student", (q) => q.eq("studentId", studentId))
+    .first();
+}
+

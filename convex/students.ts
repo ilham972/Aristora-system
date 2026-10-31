@@ -22,6 +22,7 @@ import {
 import { termOf } from "./lib/syllabus";
 import { bookStage, stage } from "./schema";
 import { actor } from "./lib/auth";
+import { giveIndex } from "./lib/family";
 
 const STAGE_WORD: Record<Stage, string> = { fighter: "Fighter", master: "Master", legend: "Legend", sprint: "Exam Sprint" };
 
@@ -87,6 +88,8 @@ export const add = mutation({
       idleMs: 0,
     });
     if (unit && (st === "fighter" || st === "master")) await ensureProgress(ctx, id, unit._id, st, now);
+    // His index number for the family app (1001, 1002…, for good).
+    await giveIndex(ctx, (await ctx.db.get(id))!);
     await log(ctx, session, now, {
       kind: "student-add",
       by: cleanBy(args.by),

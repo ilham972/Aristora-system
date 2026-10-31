@@ -1,11 +1,14 @@
 // Settings → Students → Family: the family app for one student (app.aristora.org).
-// - Send a family link on WhatsApp: his family opens it on their phone once (7 days); that phone sees only him.
+// - His index number and 4-digit code (1 Nov 2026): he types them at app.aristora.org, on his phone and his parent's.
+//   The code is made on this phone the first time the sheet opens; New code replaces it (and clears a lock).
+// - Send on WhatsApp: the address, his index and code, and a one-tap link (one use, 7 days).
 // - The family phones signed in, and Sign out (a lost phone, a link sent to the wrong number).
 // - Open every World: off = Worlds open in order (his unit now, books given, and the next when one is done).
 
-import { useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import { secretHash } from "../convex/lib/auth";
+import { weakCode } from "../convex/lib/family";
 import { slDate } from "../convex/lib/day";
 import { mutate, randomKey } from "./backend";
 import type { View } from "./derive";
@@ -22,7 +25,29 @@ export function familyUrl(code: string): string {
   return `${base}#join=${code}`;
 }
 
-type Phones = { phones: { label: string; since: number; lastSeenAt: number }[]; linkUntil: number | null; openAll: boolean };
+/** The family app's address, as a family types it. */
+export function familyHome(): string {
+  return location.hostname === "system.aristora.org" ? "app.aristora.org" : `${location.host}/f/`;
+}
+
+/** A 4-digit code from the phone's secure random numbers (never an easy one like 1111 or 1234). */
+export function newFamilyCode(): string {
+  const b = new Uint32Array(1);
+  for (;;) {
+    crypto.getRandomValues(b);
+    const c = String(b[0] % 10000).padStart(4, "0");
+    if (!weakCode(c)) return c;
+  }
+}
+
+type Phones = {
+  phones: { label: string; since: number; lastSeenAt: number }[];
+  linkUntil: number | null;
+  openAll: boolean;
+  index: number | null;
+  code: string | null;
+  locked: boolean;
+};
 
 export function FamilySheet(props: { v: View; onClose: () => void }) {
   const s = props.v.s;
@@ -30,6 +55,19 @@ export function FamilySheet(props: { v: View; onClose: () => void }) {
   const [link, setLink] = useState<{ url: string; until: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const first = s.name.split(" ")[0];
+  const none = !!s.demo || !!s.test;
+
+  // His code: made here (secure random) the first time anyone opens his sheet.
+  const making = useRef(false);
+  const setCode = async () => {
+    making.current = true;
+    const r = await act(() => mutate(api.families.setCode, { studentId: s._id, code: newFamilyCode(), by: currentRole() }));
+    making.current = false;
+    return r;
+  };
+  useEffect(() => {
+    if (info && info.code === null && !making.current && !none) void setCode();
+  }, [info?.code, info === undefined]);
 
   const make = async () => {
     setBusy(true);
@@ -38,8 +76,9 @@ export function FamilySheet(props: { v: View; onClose: () => void }) {
     setBusy(false);
     if (r) setLink({ url: familyUrl(code), until: r.expiresAt });
   };
+  const keys = info?.index && info.code ? `Index ${info.index}, Code ${info.code}` : "";
   const text = link
-    ? `ARISTORA: ${s.name}'s app. Open this link on the phone he will use (it works once, until ${slDate(link.until)}):\n${link.url}\n\n${s.name} இன் ARISTORA app. இந்த link ஐ அவன் பயன்படுத்தும் phone இல் திறக்கவும் (ஒரு முறை மட்டும்).`
+    ? `ARISTORA: ${s.name}'s app.\nOpen ${familyHome()} and type ${keys}.\nOr tap this link once (until ${slDate(link.until)}):\n${link.url}\n\n${s.name} இன் ARISTORA app: ${familyHome()} → ${keys}.`
     : "";
   const copy = async () => {
     try {
@@ -57,7 +96,37 @@ export function FamilySheet(props: { v: View; onClose: () => void }) {
       onClose={props.onClose}
       cls="fam-sheet"
     >
-      {link ? (
+      {none ? (
+        <p class="muted">Demo and test students have no family app.</p>
+      ) : (
+        <div class="fam-idcode" aria-live="polite">
+          <span>
+            <small>Index</small>
+            <b>{info?.index ?? "…"}</b>
+          </span>
+          <span>
+            <small>Code</small>
+            <b>{info?.code ?? "…"}</b>
+          </span>
+          <button
+            type="button"
+            class="link-btn"
+            disabled={!info?.code}
+            onClick={async () => {
+              if (await setCode()) toast(`${s.name}: a new code. The old one stops working (phones already in stay in).`);
+            }}
+          >
+            New code
+          </button>
+        </div>
+      )}
+      {!none && (
+        <p class="muted small fam-how">
+          {first} opens <b>{familyHome()}</b> and types these, on his phone and his parent's. Forgot? Read them out again.
+          {info?.locked ? " Locked now (5 wrong codes): New code opens it." : ""}
+        </p>
+      )}
+      {none ? null : link ? (
         <>
           <a class="btn whatsapp wide big" href={`https://wa.me/?text=${encodeURIComponent(text)}`} target="_blank" rel="noopener noreferrer">
             Send on WhatsApp
@@ -69,8 +138,8 @@ export function FamilySheet(props: { v: View; onClose: () => void }) {
           <p class="muted small">It works once, until {slDate(link.until)}. For a second phone, send another link.</p>
         </>
       ) : (
-        <button type="button" class="btn primary wide big" disabled={busy} onClick={() => void make()}>
-          Make a family link
+        <button type="button" class="btn primary wide big" disabled={busy || !info?.code} onClick={() => void make()}>
+          Send it on WhatsApp
         </button>
       )}
 

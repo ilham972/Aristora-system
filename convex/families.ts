@@ -3,12 +3,14 @@
 //   phones      -> his family's phones and link (the Family sheet).
 //   signOutAll  -> every family phone of his signs out; an unused link stops working.
 //   setOpenAll  -> "Open every World" for him (else they open in order).
+//   setCode     -> his family app code (4 digits, made on the teacher's phone); with his index number he signs in.
 //   answers     -> what the phone accepts for each question of a workbook (teachers check it once per unit).
 // Owner, or a teacher with Students. Family phones can't call any of these (viewer / actor).
 
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { actor, FAMILY_LINK_MS, viewer } from "./lib/auth";
+import { codeRow, giveIndex, weakCode } from "./lib/family";
 import { asMaster, bookFor, cleanBy, fail, getStudent, keyRow, log } from "./lib/backend";
 import { allPhone, phoneKey, phoneShare, wantWords } from "./lib/phone";
 
@@ -56,10 +58,14 @@ export const phones = query({
       .query("familyLinks")
       .withIndex("by_student", (q) => q.eq("studentId", s._id))
       .collect()).find((l) => l.usedAt === undefined && l.cancelledAt === undefined && l.expiresAt > now);
+    const code = await codeRow(ctx, s._id);
     return {
       phones: devices.map((d) => ({ label: d.label, since: d.createdAt, lastSeenAt: d.lastSeenAt })),
       linkUntil: link?.expiresAt ?? null,
       openAll: !!s.openAll,
+      index: s.index ?? null,
+      code: code?.code ?? null,
+      locked: code?.lockedUntil !== undefined && code.lockedUntil > now,
     };
   },
 });
@@ -130,3 +136,28 @@ export const answers = query({
     };
   },
 });
+
+/**
+ * His family app code: 4 digits made on the teacher's phone (secure random; Convex's own random numbers are seeded),
+ * shown on his Family sheet. A new code replaces the old one at once (a phone already signed in stays in) and clears a
+ * lock. A student from before index numbers gets his index now.
+ */
+export const setCode = mutation({
+  args: { token, studentId: v.id("students"), code: v.string(), by: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["owner", "students"], args.by);
+    const s = await getStudent(ctx, args.studentId);
+    if (s.archived) fail(`${s.name} was removed. Bring them back first.`);
+    if (s.demo || s.test) fail("Demo and test students have no family app.");
+    if (!/^\d{4}$/.test(args.code) || weakCode(args.code)) fail("The code must be 4 digits, not easy to guess.");
+    const now = Date.now();
+    await giveIndex(ctx, s);
+    const row = await codeRow(ctx, s._id);
+    if (row) await ctx.db.patch(row._id, { code: args.code, fails: undefined, lockedUntil: undefined, updatedAt: now });
+    else await ctx.db.insert("familyCodes", { studentId: s._id, code: args.code, updatedAt: now });
+    // Never the code itself in the history.
+    await log(ctx, null, now, { kind: "family-code", by: cleanBy(args.by), studentId: s._id, name: s.name, value: row ? "new" : "first" });
+    return true;
+  },
+});
+
