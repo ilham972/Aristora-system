@@ -82,6 +82,11 @@ EOF
 
 ## Gotchas learned the hard way
 
+- **Vercel serves a file before any rewrite.** "/" is `index.html` (a file), so the first family app rule (rewrite "/"
+  on app.aristora.org → `/f/index.html`) never ran: app.aristora.org showed the teachers' sign-in (`8ee3b16`, his
+  screenshot of 1 Nov). Send a host to another page with a **redirect** (redirects run before files), and give links
+  the real path (`/f/`). `tests/hosting.test.ts` holds it.
+
 - **CSS class names are global:** `a17ca46` added a `.seg` segmented control and it boxed the Settings menu (which
   is `.seg`) until `e311e74`. Before a new class, grep `\.name\b` ANYWHERE in `styles.css` (not only `^`): `.today`
   exists inside `.pf-chip.today`. Modifiers too: a row chip called `pulse` became the call strip's 10 px `.pulse`

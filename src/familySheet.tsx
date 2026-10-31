@@ -13,9 +13,12 @@ import { useQuery } from "./live";
 import { act, currentRole, toast } from "./store";
 import { Sheet } from "./ui";
 
-/** Where families open the app: app.aristora.org (from the class system's own address), else /f/ here (tests). */
+/**
+ * Where families open the app: app.aristora.org/f/ (from the class system's own address), else /f/ here (tests). The
+ * family app lives under /f/ on both addresses; app.aristora.org/ only redirects there (vercel.json).
+ */
 export function familyUrl(code: string): string {
-  const base = location.hostname === "system.aristora.org" ? "https://app.aristora.org/" : `${location.origin}/f/index.html`;
+  const base = location.hostname === "system.aristora.org" ? "https://app.aristora.org/f/" : `${location.origin}/f/index.html`;
   return `${base}#join=${code}`;
 }
 

@@ -76,7 +76,6 @@ const famHtml = (await readFile("public/family/index.html", "utf8"))
   .replace("%CSS%", `/f/assets/${basename(famCss)}`)
   .replace("%JS%", `/f/assets/${basename(famJs)}`);
 await writeFile("dist/f/index.html", famHtml);
-await cp("public/family/sw.js", "dist/sw.js");
 await cp("public/family/sw.js", "dist/f/sw.js");
 await cp("public/family/family.webmanifest", "dist/family.webmanifest");
 const gz = async (f) => gzipSync(await readFile(f)).length;

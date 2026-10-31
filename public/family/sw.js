@@ -1,4 +1,4 @@
-// The family app's offline helper (app.aristora.org only; the teachers' app has none).
+// The family app's offline helper, scope /f/ only (the teachers' app has none and must never get one).
 // - The page: from the network when there is one (a new version shows at once), else the copy kept here.
 // - Its files (/f/assets/, new names every version) and the owl: kept once fetched, and fetched at install.
 // - The server's answers (convex.cloud) are never touched.

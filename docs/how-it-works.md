@@ -511,8 +511,10 @@ names: "call the parents"; from 28 Oct 2026, `ATTENDANCE_SINCE`; rows red at 14+
 made a pile for the corrector in class. Now the student does the level on paper, types its answers in the family app
 on the family phone, taps **Check** once per level and sees ✓ / ✗ at once; the class sees his marks before he walks in.
 - Its own tiny bundle (`src/family/`, ~16 KB over the wire; `scripts/build.mjs` stops the build over 50 KB), no fonts,
-  no client library (Convex's plain HTTP API, `src/family/net.ts`). app.aristora.org → `/f/index.html` (`vercel.json`;
-  also `/f/` on system.aristora.org); a service worker there only: it opens with no signal after the first visit.
+  no client library (Convex's plain HTTP API, `src/family/net.ts`). It lives under `/f/` on both addresses; family
+  links are app.aristora.org/f/#join=…, and app.aristora.org/ redirects to /f/ (`vercel.json`, a redirect: a rewrite of
+  "/" never runs, Vercel serves index.html first). A service worker under /f/ only: it opens with no signal after the
+  first visit.
 - Words: Tamil first, no school words: a unit = a **World**, marks = **XP** (1 mark = 1 XP), his streak, this week's
   board in his grade. Only the level he is on can be played (the first with no record): the paper book is the truth.
 - Join: Settings → Students → his name → **Family** (`FamilySheet`): a family link on WhatsApp (one use, 7 days); the

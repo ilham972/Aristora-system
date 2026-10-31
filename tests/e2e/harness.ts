@@ -158,7 +158,7 @@ export async function serveDist(root: string): Promise<{ url: string; close: () 
   };
   const server = http.createServer(async (req, res) => {
     const path = decodeURIComponent((req.url ?? "/").split("?")[0]);
-    const file = normalize(join(root, path === "/" ? "index.html" : path));
+    const file = normalize(join(root, path.endsWith("/") ? `${path}index.html` : path)); // a folder: its index.html, as on Vercel
     if (!file.startsWith(root)) {
       res.writeHead(403).end();
       return;

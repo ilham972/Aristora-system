@@ -191,7 +191,7 @@ The technical memory of the app, kept with the code and updated in the same comm
 - `scripts/build.mjs`: esbuild bundles `src/main.tsx` into `dist/` with the Convex address; refuses without
   `CONVEX_URL`. `scripts/vercel-build.sh`: Vercel's build (`convex deploy` + build on `main`).
 - `scripts/workbook-from-pdf.py`: the old way for a PDF-only workbook. Prefer the upload.
-- `vercel.json`: security headers and the CSP; app.aristora.org → the family app (`/f/index.html`);
+- `vercel.json`: security headers and the CSP; app.aristora.org/ redirects to the family app (`/f/`);
   `git.deploymentEnabled` keeps Vercel off `ci-check` and every `ci-*` branch. `scripts/build.mjs` also builds the
   family app (`dist/f/`, 50 KB budget).
   `public/`: the page, icons (`icon-512.png` is the poster's logo).

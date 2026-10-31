@@ -114,7 +114,7 @@ test("the family app: join, a level on the pad, Check once, the reveal, XP and t
   await t.mutation(api.families.makeLink, { ...as, studentId: hana, codeHash: secretHash("family-link", code) });
 
   // The family link: hello, Start.
-  const F = await open(backend, `${site.url}/f/index.html#join=${code}`);
+  const F = await open(backend, `${site.url}/f/#join=${code}`); // as the family link: app.aristora.org/f/#join=…
   await contains(F.locator(".f-h1"), "Hana");
   await shot(F, "fam00-join");
   await F.getByRole("button", { name: "தொடங்கு" }).click();

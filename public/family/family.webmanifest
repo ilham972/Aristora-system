@@ -1,10 +1,10 @@
 {
-  "id": "/family",
+  "id": "/f/",
   "name": "ARISTORA",
   "short_name": "ARISTORA",
   "description": "Levels, XP and streaks for ARISTORA students.",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "/f/",
+  "scope": "/f/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#16213E",

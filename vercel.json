@@ -5,8 +5,8 @@
   "buildCommand": "sh scripts/vercel-build.sh",
   "outputDirectory": "dist",
   "git": { "deploymentEnabled": { "ci-check": false, "ci-*": false } },
-  "rewrites": [
-    { "source": "/", "has": [{ "type": "host", "value": "app.aristora.org" }], "destination": "/f/index.html" }
+  "redirects": [
+    { "source": "/", "has": [{ "type": "host", "value": "app.aristora.org" }], "destination": "/f/", "permanent": false }
   ],
   "headers": [
     {
