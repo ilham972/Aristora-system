@@ -333,7 +333,7 @@ describe("the family app on the server", () => {
 describe("index numbers and codes (sign in without a link)", () => {
   let raw: ReturnType<typeof fresh>;
   let t: Awaited<ReturnType<typeof asOwner>>;
-  const indexOf = async (id: Id<"students">) => await raw.run(async (ctx) => (await ctx.db.get(id))!.index);
+  const indexOf = async (id: Id<"students">) => await raw.run(async (ctx) => (await ctx.db.get(id))!.index ?? null);
   const signIn = (index: number, code: string, token = FAM) => raw.mutation(api.family.signIn, { index, code, token, label: "Android" });
   const fam = (tok: string) => asPhone(raw, tok);
 
@@ -367,7 +367,7 @@ describe("index numbers and codes (sign in without a link)", () => {
       return [x, y, z];
     });
     await t.mutation(api.setup.ensure, {});
-    expect([await indexOf(old1), await indexOf(old2), await indexOf(demo)]).toEqual([1004, 1005, undefined]);
+    expect([await indexOf(old1), await indexOf(old2), await indexOf(demo)]).toEqual([1004, 1005, null]);
   });
 
   test("the code: the owner or a Students teacher sets it; never an easy one; never on the class board", async () => {
