@@ -150,6 +150,10 @@ EOF
   Oct 2026). `roomRows` adds her room's books; keep the rows and the questions on screen about the same book.
 - The app shows ONE page at a time (`app.tsx`): leaving a page unmounts it. Anything a teacher taps that must last
   until a save (Theory/Evaluation decisions) goes through `useRoomDecisions` or a server draft, never plain `useState`.
+- After an awaited mutation, never reset what the teacher may have changed meanwhile: compare with its value at the tap
+  (`follow(since)`, `setTicks((t) => (t === ticked ? null : t))`): a tap on the next grade right after Call was wiped.
+- A function passed straight as `onClick` gets the tap event as its first argument: `onBack={() => follow()}`, never
+  `onBack={follow}` once `follow` takes an argument (Back to your room silently did nothing).
 - e2e `evPick` taps a row only when it isn't pressed yet: after Done / Call, wait for the toast before picking (a room
   still saving is still her room, so the row looks picked and the tap is skipped).
 - e2e: data written with `backend.t.run`/`.mutation` reaches the phones only after `await backend.push()`. Focus

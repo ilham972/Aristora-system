@@ -191,11 +191,13 @@ page's layout; `src/theoryFocus.tsx` `TheoryTab`, rules in `src/theoryFocusData.
 list: one page, small things in fixed places like Correction. It reuses the Evaluation page's pieces (`.evx-*`, the
 shared `src/roomkit.tsx`) in Theory's blue (`.tpx-page`).
 - **Pinned:** grades 6–11 in ONE row (`GradeRow`, `theoryGradeRow`) and Fighter / Master / Legend (`KindBar`,
-  `theoryStageRow`; Legend pale until its books exist). Each the most urgent first (`byUrgency`) and already picked;
-  she can pick anything. Counts = everyone who needs Theory, each once; held students (in Evaluation, called by her,
+  `theoryStageRow`, `THEORY_STAGES`; Legend pale until its books exist), **in fixed places** like Correction (1 Nov
+  2026, his call after "a car whose pedals move"): the 1st, 2nd and 3rd most urgent (`byUrgency` + `withRanks`)
+  outlined red, orange, yellow (`.pri1`–`.pri3`); the most urgent already picked; she can pick anything. Counts = everyone who needs Theory, each once; held students (in Evaluation, called by her,
   going home) count but never as urgent (`rowHeat`). Which grade, stage and unit are picked: **her room's book**, the
   same rule as Evaluation (`theoryRows`, `src/roomRows.ts`, below).
-- **Under them:** the units that need her (`theoryUnitRow`, `.evx-u`: number + Tamil, red line = no work), then the
+- **Under them:** the units that need her (`theoryUnitRow`, `.evx-u`: number + Tamil, red line = no work; the most
+  urgent first, holding still 5 s after her touch: `useHeld`), then the
   lessons (`lessonPills`, `.evx-qg`): a theory book's sections ("D" + its Tamil title, how many; the plan's order,
   the most useful first: `planLessons`), or a workbook's questions sent to Theory grouped by the students who need
   them (the same students = one pill: "13 · 17 ×2"; the most urgent, then the most students) and "Whole unit". The
@@ -208,7 +210,8 @@ shared `src/roomkit.tsx`) in Theory's blue (`.tpx-page`).
   picked lesson's students (`s-sug`): the page ticks everyone who can come, no work first (`memberOrder`), as many as
   fit; with someone already with her (the lock), only those who need it now (joiners); held ones listed with a tag
   ("Eval", "home", dashed), not ticked. Its line: lock + "2 with you · 1 coming · room for 3" (amber "Still with
-  you?" at 20 min) + Clear ↔ Page's pick. Right of it: **Call N**, **Arrived N** (everyone on the way), **Done N**
+  you?" at 20 min) + Clear ↔ Page's pick. Right of it: **Call N**, **Arrived N** (only those Correction SENT: one
+  called but not sent, or one who came early: tap his name, then Arrived; 1 Nov 2026), **Done N**
   (those with every question decided: `tAllDecided`).
 - **What to teach** (`theorySquares`): Correction's squares, each question ONCE for everyone with her who needs it
   ("D·23 ×2"): one lesson after another (the most students first); a section's teach questions in book order (they
@@ -245,22 +248,36 @@ shared `src/roomkit.tsx`) in Theory's blue (`.tpx-page`).
 `src/evalFocusData.ts`).** No Room button: everything on one page, small things in fixed places like Correction.
 - **6 with her at once** (`EVAL_CAP`, his number on 31 Oct; was 3), counting those called or on the way. Her room =
   her own calls (each Evaluation teacher has her own: `evalRoom`/`evalItems` with `me`).
-- **Pinned rows, each the most urgent first and already picked** (`byUrgency`: most red, then most waiting; ties keep
-  the natural order). She can pick anything; a pick lasts while it has someone. **Her room's book** (the rule of both
-  pages, `src/roomRows.ts`): see "The rows show her room's book" below. (1) **Grades 6–11** in ONE row, all six
-  (`gradeRow`, `.evx-g`: number, count, red badge; pale = nothing for her). (2) **Fighter / Master / Legend**
-  (`stageRow`, the Theory page's `KindBar`; Legend pale: no books yet). (3) **Units** that need her: number + Tamil
-  name + count (`unitRow`, `.evx-u`, red line = no work). (4)
-  **Question groups** (`qGroups`, `.evx-qg`): questions waiting for exactly the same students make one pill ("13 ·
-  17", "×2"), red first, then the most students. Theory busy (`canTeachHere`, any grade): **◎ Teach N** at the end of
-  that row. Above them, when it happens: the bump note and the pull banner (**Send to Theory**).
+- **Pinned rows, the most urgent already picked** (`byUrgency`: most red, then most waiting; ties keep the natural
+  order). She can pick anything; a pick lasts while it has someone. **Her room's book** (the rule of both pages,
+  `src/roomRows.ts`): see "The rows show her room's book" below. (1) **Grades 6–11** in ONE row, all six, **in fixed
+  places** (1 Nov 2026, his call: "a car whose pedals move"; `gradeRow` keeps the urgency order for the page's pick,
+  `GradeRow` draws 6 to 11): number, count, red badge; the 1st, 2nd, 3rd most urgent outlined red, orange, yellow
+  (`withRanks`, `.pri1`–`.pri3`); pale = nothing for her. (2) **Fighter / Master / Legend** in fixed places too
+  (`stageRow`, `EVAL_STAGES`, the Theory page's `KindBar`, the same outlines; Legend pale: no books yet). (3) **Units**
+  that need her: number + Tamil name + count (`unitRow`, `.evx-u`, red line = no work), the most urgent first, holding
+  still 5 s after her touch (`useHeld`). (4) **Question groups** (`qGroups`, `.evx-qg`): questions waiting for exactly
+  the same students make one pill ("13 · 17", "×2"), red first, then the most students, holding still the same way.
+  Theory busy (`canTeachHere`, any grade): **◎ Teach N** at the end of that row, never the page's pick (1 Nov 2026:
+  one tap took students Theory was about to call; she taps it, then they are ticked). Above them, when it happens: the bump note and the pull banner (**Send to Theory**).
 - **Her room box** (`.evx-room`, left ~¾): her students as pills (`.evx-sp`): with her solid (`s-in`; ✓ green when all
   his questions are decided: `s-done`; ◎ teaching theory: `s-th`), on the way dashed (`s-walk`, minutes), called
   dotted (`s-call`), late red (`s-late`), amber ring = Theory wants him (`s-pull`); then the picked group's students
-  (`s-sug`): ticked = dark ✓ (the page ticks red and orange ones, as many as fit), grey = unticked. Its line: lock icon
-  + "2 with you · 1 coming · room for 3" (amber "Still with you?" at 20 min) + Clear ↔ Page's pick (the words shorten, Clear stays). Right of it, in
-  fixed places: **Call N** (or Teach N), **Arrived N** (everyone on the way), **Done N** (those with every question
-  decided: `allDecided`; `calls.finish` for all of them at once).
+  (`s-sug`): ticked = dark ✓ (the page ticks red and orange ones, as many as fit; never one going home within 15
+  minutes, `leavingAt`/`LEAVING_MS`: his pill says "home 5:10"), grey = unticked. Its line: lock icon + "2 with you ·
+  1 coming · room for 3" (amber "Still with you?" at 20 min) + Clear ↔ Page's pick (the words shorten, Clear stays).
+  With someone with her, "room for 3" gives way to **"free ~6m"** (1 Nov 2026, his pick: `src/evalPace.ts`): every
+  question still open for someone with her once, and those on the way, at HER pace, learnt on her phone
+  (`aristora.evalPace`: the time between her Explained / → Theory taps or since Arrived, 15 s–10 min, the middle of
+  the last 20; 3 min until she has 3). Free within 4 min, nobody on the way, someone ticked: **"· call now"** in amber
+  and the Call button ringed amber (`.evx-call.ahead`): they walk in as she finishes. Right of it, in fixed places:
+  **Call N** (or Teach N), **Arrived N** (only those Correction sent, as on Theory), **Done N** (those with every
+  question decided: `allDecided`; `calls.finish` for all of them at once).
+- **The same mistake by 4+** (`SAME_MISTAKE_N`, a workbook group of 4+ waiting students, 1 Nov 2026, his pick): the
+  card (to prepare) says "7 lost Q2: teach it once in Theory?" and **All 7 to Theory** sends those questions to Theory
+  for all of them (`workbook.toTheory` each); Theory's page shows them as one lesson ("2 ×7"). The owner's CEO page,
+  Now: **Lost by many now** (`hardQuestions`: a book's question lost by 3+ students in class, waiting for Evaluation
+  or with Theory, the most first, top 5).
 - **The questions** (`sessionQs`): Correction's squares (`.fc-strip .fc-sq`): each question ONCE for everyone with her
   who has it, the most shared first (×2); one per BOOK (key `bookKey:q`: a unit's theory book and its workbook each
   keep their own Q22; with both on screen the theory book's squares carry the section letter, "C·22"); before anyone comes, the picked group's (to prepare). One question at a
@@ -284,14 +301,15 @@ and the room box offered Grade 8 students next to them. The rows were built only
 room the page picks his book" failed exactly when she had called them all, and the page fell to the most urgent grade
 while the questions on screen were still her room's. The rule now (`roomRows`, used by `evalRows` / `theoryRows`):
 - Her room's books (the books of the questions on her screen: with her, else on the way) are ALWAYS in the rows:
-  their grade and stage never pale, a unit nobody else waits for is added at the END of the unit row (nothing shifts),
-  each with a dot in the room's colour (`.evx-me`: violet on Evaluation, blue on Theory).
+  their grade and stage never pale, a unit nobody else waits for is added at the END of the unit row (nothing shifts);
+  "your room" for a screen reader (the violet dot of 31 Oct went on 1 Nov: he found it ugly and unclear).
 - With someone in her room, the page's pick = the book of the question on her screen (two books in her room: tap a
   square of the other book, or a decision moves on to it, and the rows go with it).
 - Her own pick (to find who to call next) lasts while it has someone. While she looks at a book that isn't her
   room's, the squares and the card are that book's picked questions (to prepare, the pad pale), never her room's
   under another book's name, with **Back to your room** (`BackToRoom`) in the card. Call, Arrived and "keep him" end
-  her pick: the rows show her room again. After Done empties her room: the most urgent, as before.
+  her pick: the rows show her room again, unless she picked something else while the server answered (`follow(since)`:
+  a tap on the next grade right after Call used to be wiped). After Done empties her room: the most urgent.
 
 **Her taps are kept on her phone until Done (Theory and Evaluation; the audit, 31 Oct 2026).** Explained / → Theory /
 Not now and Taught / Not reached lived only in the page: the app shows one page at a time, so opening Class, Settings

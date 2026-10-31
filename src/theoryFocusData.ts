@@ -20,7 +20,7 @@ import type { SectionData } from "../convex/lib/book";
 import { slClock } from "../convex/lib/day";
 import type { MarkState, Urgency } from "../convex/lib/status";
 import { roomCalls, seenToday, theoryGroups, type RoomCall, type View } from "./derive";
-import { roomBooksOf, roomRows, type RoomBook, type RowPick } from "./roomRows";
+import { roomBooksOf, roomRows, withRanks, type RoomBook, type RowPick } from "./roomRows";
 import type { Board, Unit } from "./store";
 
 export type LessonKind = "section" | "workbook";
@@ -783,11 +783,14 @@ export function theoryRows(pick: RowPick<TheoryStage>, plan: readonly Lesson[], 
   ].map((u) => ({ ...u, room: rows.roomUnits.has(u.key) }));
   return {
     ...rows,
-    grades: theoryGradeRow(plan).map((x) => ({ ...x, room: rows.roomGrades.has(x.grade) })),
-    stages: theoryStageRow(inGrade).map((x) => ({ ...x, room: rows.roomStages.has(x.id) })),
+    grades: withRanks(theoryGradeRow(plan)).map((x) => ({ ...x, room: rows.roomGrades.has(x.grade) })),
+    stages: withRanks(theoryStageRow(inGrade)).map((x) => ({ ...x, room: rows.roomStages.has(x.id) })),
     units,
   };
 }
+
+/** Stages in their fixed places on the row (Fighter, Master, Legend). */
+export const THEORY_STAGES: readonly TheoryStage[] = ["section", "workbook", "legend"];
 
 /** His decisions (per book). */
 export const decOf = (dec: TDecisions, it: RoomItem): Record<string, TDecision | undefined> => dec[itemKey(it)] ?? {};

@@ -6,12 +6,11 @@
 // the answer: Explained counts for everyone with her who has it. Urgency: no work / stuck / stopped first (red), then
 // ready (waited 10 minutes: orange), then later (yellow). The page picks; she can pick anything.
 
-import { slClock } from "../convex/lib/day";
 import { EVAL_READY_MS } from "../convex/lib/status";
-import { evalQueue, pendingSince, roomBusy, roomCalls, type RoomCall, type View } from "./derive";
-import { roomBooksOf, roomRows, type RoomBook, type RowPick } from "./roomRows";
+import { evalQueue, pendingSince, roomBusy, roomCalls, withBooks, type RoomCall, type View } from "./derive";
+import { roomBooksOf, roomRows, withRanks, type RoomBook, type RowPick } from "./roomRows";
 import type { Board } from "./store";
-import { byUrgency, LATE_SEND_MS, mShort, NO_HEAT, outInOf, sinceWords, type Heat, type HeatCount } from "./theoryFocusData";
+import { byUrgency, LATE_SEND_MS, mShort, NO_HEAT, outInOf, sinceWords, STAY_MS, type Heat, type HeatCount } from "./theoryFocusData";
 
 /** Students with one Evaluation teacher at once, at most (his number: 3 on 29 Oct, 6 on 31 Oct for the room box). */
 export const EVAL_CAP = 6;
@@ -34,7 +33,18 @@ export type Cand = {
   waited: number;
   /** Theory has him (called, or in the theory room): listed, not callable. */
   hold?: string;
+  /** He goes home within 15 minutes (arrival + 2 hours): listed, never ticked by the page (1 Nov 2026). */
+  home?: number;
 };
+
+/** Going home soon: within this, the page doesn't tick him for a call (Theory doesn't either). */
+export const LEAVING_MS = 15 * 60_000;
+
+/** When he goes home (arrival + 2 hours), if that is within the next 15 minutes. */
+export function leavingAt(v: View, now: number): number | undefined {
+  const at = v.s.lastInAt !== undefined ? v.s.lastInAt + STAY_MS : undefined;
+  return at !== undefined && at > now && at - now <= LEAVING_MS ? at : undefined;
+}
 
 /** "Q22", "2016" (a past paper: its year), "Q13": a question as his book prints it. */
 export function qLabel(v: View, q: number): string {
@@ -84,6 +94,7 @@ export function candidates(views: View[], now: number, pace: number): Cand[] {
       qs: [...v.pending],
       waited,
       hold: m.blockedBy,
+      home: leavingAt(v, now),
     };
   });
 }
@@ -261,11 +272,6 @@ export function lostWords(v: View, q: number): string {
   return r.max !== undefined ? `${r.got ?? 0}/${r.max}` : "lost";
 }
 
-/** When he goes home (arrival + 2 hours): "home 5:10 PM", if within the next 30 minutes. */
-export function homeSoon(v: View, now: number): string {
-  const at = v.s.lastInAt !== undefined ? v.s.lastInAt + 2 * 60 * 60_000 : undefined;
-  return at !== undefined && at > now && at - now <= 30 * 60_000 ? `home ${slClock(at)}` : "";
-}
 
 // ---------------- One screen: grade → stage → unit → questions (31 Oct 2026) ----------------
 
@@ -381,10 +387,39 @@ export function evalRows(pick: RowPick<EvalStage>, everyone: readonly Cand[], ro
   ].map((u) => ({ ...u, room: rows.roomUnits.has(u.key) }));
   return {
     ...rows,
-    grades: gradeRow(everyone).map((x) => ({ ...x, room: rows.roomGrades.has(x.grade) })),
-    stages: stageRow(inGrade).map((x) => ({ ...x, room: rows.roomStages.has(x.id) })),
+    grades: withRanks(gradeRow(everyone)).map((x) => ({ ...x, room: rows.roomGrades.has(x.grade) })),
+    stages: withRanks(stageRow(inGrade)).map((x) => ({ ...x, room: rows.roomStages.has(x.id) })),
     units,
   };
+}
+
+/** Stages in their fixed places on the row (Fighter, Master, Legend). */
+export const EVAL_STAGES: readonly EvalStage[] = ["fighter", "master", "legend"];
+
+/** The same mistake by this many waiting students: the page suggests one Theory lesson instead (1 Nov 2026). */
+export const SAME_MISTAKE_N = 4;
+
+/** A question lost by several students in class now (waiting for Evaluation, or sent to Theory). */
+export type HardQ = { key: string; grade: number; code: string; ta: string; q: number; label: string; n: number; theory: number };
+
+/**
+ * Questions lost by `min`+ students in class now, the most first (the owner's "which book questions are badly
+ * understood", 1 Nov 2026): each book's lost marks still waiting for Evaluation or sent to Theory.
+ */
+export function hardQuestions(views: readonly View[], min = 3): HardQ[] {
+  const by = new Map<string, HardQ>();
+  for (const v of withBooks([...views])) {
+    if (v.where === "absent" || !v.unit) continue;
+    const theory = new Set(v.ms?.theory ?? []);
+    for (const q of new Set([...v.pending, ...theory])) {
+      const key = `${bookKey(v)}:${q}`;
+      const h = by.get(key) ?? { key, grade: v.unit.grade, code: v.unit.code, ta: v.unit.ta ?? "", q, label: qLabel(v, q), n: 0, theory: 0 };
+      h.n++;
+      if (theory.has(q)) h.theory++;
+      by.set(key, h);
+    }
+  }
+  return [...by.values()].filter((h) => h.n >= min).sort((a, b) => b.n - a.n || a.grade - b.grade || a.code.localeCompare(b.code) || a.q - b.q);
 }
 
 /**

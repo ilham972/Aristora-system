@@ -31,12 +31,14 @@ import {
   evalItems,
   evalRoom,
   evalRows,
+  EVAL_STAGES,
   evalWords,
   finishPlan,
   lostWords,
   nextBooks,
   qGroups,
   qLabel,
+  SAME_MISTAKE_N,
   sessionQs,
   undecided,
   type Decision,
@@ -49,7 +51,8 @@ import { unitNo } from "./focusData";
 import { HRow } from "./hrow";
 import { MasterStrip } from "./master";
 import { useRoomDecisions } from "./roomDecisions";
-import { AnswerKey, BackToRoom, GradeRow, KindBar, LockIcon, usePinned } from "./roomkit";
+import { callAhead, evalPaceMs, freeIn, noteExplained, noteStart } from "./evalPace";
+import { AnswerKey, BackToRoom, GradeRow, KindBar, LockIcon, useHeld, usePinned } from "./roomkit";
 import { QuestionToggle } from "./bookQuestion";
 import { scoreOf } from "./score";
 import { act, clearToasts, currentMe, currentRole, toast, type Board } from "./store";
@@ -65,7 +68,9 @@ type Pick = { grade?: number; stage?: EvalStage; unit?: string; group?: string }
 /** The questions row's last pill when Theory is busy: she teaches theory herself. */
 const TEACH = "teach";
 /** Someone the page offers for the picked questions (or to teach): ticked = called with Call. */
-type Offer = { key: string; v: View; heat: Heat; why: string; work: string };
+type Offer = { key: string; v: View; heat: Heat; why: string; work: string; home?: number };
+/** "5:10": a clock time without AM/PM, for a small tag. */
+const shortClock = (t: number) => slClock(t).replace(/\s?[AP]M$/i, "");
 
 /**
  * Call students to her room: to explain, or (Theory busy) to teach theory herself. Correction sends them (and says
@@ -139,24 +144,55 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
   const unitKey = rows.unit;
   const unit = units.find((u) => u.key === unitKey) ?? null;
   const groups = unit ? qGroups(unit.cands) : [];
+  // Units and question pills: the most urgent first, holding still while she touches them (1 Nov 2026).
+  const heldUnits = useHeld(units, (u) => u.key, (u) => `${u.c.red}.${u.c.total}`);
+  const heldGroups = useHeld(groups, (g) => g.key, (g) => `${g.heat}.${g.cands.length}`);
   /** Back to her room: her pick ends, the rows show her room's book again (else the most urgent). */
-  const follow = () => setPick((p) => (Object.keys(p).length ? {} : p));
+  // `since`: what she had picked when she tapped (Call, Arrived, keep). The answer comes a moment later; if she picked
+  // something else meanwhile (the next grade to call), her new pick stays (1 Nov 2026: it used to be wiped).
+  const follow = (since?: Pick) => setPick((p) => (since !== undefined && p !== since ? p : Object.keys(p).length ? {} : p));
   // Theory is busy and someone has no work until he gets theory: she can teach it (any grade: he has nothing for her).
   const teach = inClass.filter((v) => canTeachHere(board, v));
+  // Teach is never the page's pick (1 Nov 2026): one tap would take students Theory is about to call. She taps it.
   const groupKey =
-    pick.group && (groups.some((g) => g.key === pick.group) || (pick.group === TEACH && teach.length > 0))
-      ? pick.group
-      : (groups[0]?.key ?? (teach.length ? TEACH : null));
+    pick.group && (groups.some((g) => g.key === pick.group) || (pick.group === TEACH && teach.length > 0)) ? pick.group : (groups[0]?.key ?? null);
   const group = groups.find((g) => g.key === groupKey) ?? null;
 
   // ---- Who the page offers for those questions (or to teach), and who she ticked ----
   const offers: Offer[] =
     groupKey === TEACH
       ? teach.map((v) => ({ key: v.key, v, heat: "red", why: v.st?.nextTheory ? `section ${v.st.nextTheory}` : "his workbook", work: "" }))
-      : (group?.cands ?? []).map((c) => ({ key: c.v.key, v: c.v, heat: c.heat, why: c.why, work: c.work }));
-  // The page ticks who is ready (no work, stuck, waited 10 min), as many as fit; "later" ones she ticks herself.
-  const pagePick = offers.filter((o) => groupKey === TEACH || o.heat !== "yellow").map((o) => o.key);
+      : (group?.cands ?? []).map((c) => ({ key: c.v.key, v: c.v, heat: c.heat, why: c.why, work: c.work, home: c.home }));
+  // The page ticks who is ready (no work, stuck, waited 10 min), as many as fit; "later" ones she ticks herself, and
+  // anyone going home within 15 minutes too (1 Nov 2026).
+  const pagePick = offers.filter((o) => groupKey === TEACH || (o.heat !== "yellow" && o.home === undefined)).map((o) => o.key);
   const chosen = (ticks && ticks.group === groupKey ? ticks.keys : pagePick).filter((k) => offers.some((o) => o.key === k)).slice(0, left);
+  // Arrived counts only those Correction sent (walking): a student called but never sent is never marked here by
+  // mistake (1 Nov 2026). One who comes before he is sent: tap his name, then Arrived.
+  const sentOnes = items.filter((it) => it.state === "walking");
+  // When she is free, at her pace (learnt on this phone), and whether to call the next ones now (1 Nov 2026).
+  const freeMs = live
+    ? freeIn({ open: roomQs.filter((x) => undecided(x, dec).length > 0).length, coming: walkers.reduce((n, it) => n + it.h.qs.length, 0), pace: evalPaceMs() })
+    : null;
+  const ahead = freeMs !== null && callAhead({ live, freeInMs: freeMs, coming: walkers.length, left, ticked: chosen.length });
+  // The same mistake by 4+ students waiting, in a workbook: one Theory lesson instead of explaining it 4 times.
+  const sameMistake = !!group && groupKey !== TEACH && group.cands.length >= SAME_MISTAKE_N && !!group.cands[0].v.ms;
+  const toTheoryAll = async () => {
+    if (!group) return;
+    setBusy(true);
+    let n = 0;
+    for (const c of group.cands) {
+      const ok = await act(() =>
+        mutate(api.workbook.toTheory, { studentId: c.v.s._id, unitId: c.v.unit?._id ?? c.v.s.unitId, qs: group.qs, on: true, by: currentRole() }),
+      );
+      if (!ok) break;
+      n++;
+    }
+    setBusy(false);
+    if (!n) return;
+    tone("done");
+    toast(`Sent to Theory: ${group.qs.map((q) => qLabel(group.cands[0].v, q)).join(" ")} for ${n}. Theory sees it as one lesson.`);
+  };
   const toggle = (o: Offer) => {
     if (!groupKey) return;
     const on = chosen.includes(o.key);
@@ -211,6 +247,7 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
     setDec(next);
     if (undo) return;
     if (d === "x") tone("tick");
+    if (d === "x" || d === "th") noteExplained(Date.now());
     const i = qs.findIndex((x) => x.key === sq.key);
     const open = (x: SessionQ) => undecided(x, next).length > 0;
     const to = qs.find((x, j) => j > i && open(x)) ?? qs.find(open);
@@ -267,13 +304,14 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
       ));
     }
     const item = { callId: h.rc.c._id, explained: p.explained, ...(p.reteach ? { reteach: p.reteach } : {}) };
+    const before = pick;
     const res = ok ? await act(() => mutate(api.calls.keep, { item, unitId: next.unit!._id, stage: next.stage as "fighter" | "master", by: currentRole() })) : undefined;
     setBusy(false);
     if (!res) return;
     const { [h.v.key]: _gone, ...rest } = dec;
     setDec(rest);
     setFileId(null);
-    follow(); // his next book: the rows show it
+    follow(before); // his next book: the rows show it
     tone("done");
     toast(`Saved: ${h.v.s.name} stays for ${unitWords(next)} (${next.pending.length} to explain).`);
   };
@@ -281,13 +319,15 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
   /** They came in: everyone on the way (Arrived at the right), or one from his file. */
   const arrive = async (list: EvalItem[]) => {
     if (list.length === 0) return;
+    const before = pick;
     const res = await act(() => mutate(api.calls.arrive, { callIds: list.map((it) => it.h.rc.c._id), by: currentRole() }));
     if (!res) return;
     for (const s of res.skipped) toast(`${s}.`, "error");
     if (!res.arrived) return;
     tone("tick");
     setAt(null); // they are here: the first open question opens, and the rows show its book
-    follow();
+    follow(before);
+    noteStart(Date.now()); // her pace: the first explanation is timed from now
     const names = joinNames(list.map((it) => it.name));
     if (list.length === 1) {
       const callId = list[0].h.rc.c._id;
@@ -338,16 +378,16 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
           </div>
         ))}
         <GradeRow rows={grades} value={grade} onPick={(g) => pickRow({ grade: g })} />
-        <KindBar<EvalStage> value={stage} items={stages} onPick={(s) => pickRow({ grade: grade ?? undefined, stage: s })} />
+        <KindBar<EvalStage> value={stage} items={stages} order={EVAL_STAGES} onPick={(s) => pickRow({ grade: grade ?? undefined, stage: s })} />
       </div>
 
       <div class="tp-body evx-body">
-        <div class="evx-rowbox">
+        <div class="evx-rowbox" onPointerDownCapture={heldUnits.touch} onScrollCapture={heldUnits.touch}>
           {units.length === 0 ? (
             <p class="tp-none">Nothing to explain {grade === null ? "now" : `in Grade ${grade} ${stage === "legend" ? "Legend" : stage === "fighter" ? "Fighter" : "Master"}`}.</p>
           ) : (
-            <HRow as="nav" class="evx-units" label="Units that need you, the most urgent first" list={units.map((u) => u.key).join(",")} at={unitKey}>
-              {units.map((u) => {
+            <HRow as="nav" class="evx-units" label="Units that need you, the most urgent first" list={heldUnits.list.map((u) => u.key).join(",")} at={unitKey}>
+              {heldUnits.list.map((u) => {
                 const on = u.key === unitKey;
                 const mine = u.room;
                 return (
@@ -360,7 +400,6 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
                     aria-label={`Unit ${unitNo(u.unit.code)}: ${u.c.total}, ${heatWords(u.c)}${mine ? ", your room" : ""}`}
                     onClick={() => pickRow({ grade: grade ?? undefined, stage, unit: u.key })}
                   >
-                    {mine && <span class="evx-me" aria-hidden="true" />}
                     <span class="tp-ln-n">{unitNo(u.unit.code)}</span>
                     <span class="tp-ln-t" lang="ta">
                       {u.unit.ta || u.unit.en}
@@ -373,8 +412,9 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
           )}
         </div>
         {(groups.length > 0 || teach.length > 0) && (
-          <HRow as="nav" class="evx-qgs" label="Questions the same students got wrong, the most urgent first" list={groups.map((g) => g.key).join(",")} at={groupKey}>
-            {groups.map((g) => {
+          <div onPointerDownCapture={heldGroups.touch} onScrollCapture={heldGroups.touch}>
+          <HRow as="nav" class="evx-qgs" label="Questions the same students got wrong, the most urgent first" list={heldGroups.list.map((g) => g.key).join(",")} at={groupKey}>
+            {heldGroups.list.map((g) => {
               const on = g.key === groupKey;
               const v = g.cands[0].v;
               const words = g.qs.length > 4 ? [...g.qs.slice(0, 3).map((q) => short(v, q)), `+${g.qs.length - 3}`] : g.qs.map((q) => short(v, q));
@@ -407,6 +447,7 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
               </button>
             )}
           </HRow>
+          </div>
         )}
         <section class="evx-room" aria-label="Your room">
           <div class="evx-box">
@@ -414,7 +455,15 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
               {room.here.length > 0 && <LockIcon />}
               <b>{room.here.length} with you</b>
               {walkers.length > 0 && <span class={late ? "t-red strong" : "t-evaluation strong"}>{walkers.length} coming</span>}
-              <span>{long ? `Still with you? ${mShort(long.rc.minutes)}` : left === 0 ? `full (${EVAL_CAP})` : `room for ${left}`}</span>
+              <span class={ahead && !long ? "t-amber strong" : undefined}>
+                {long
+                  ? `Still with you? ${mShort(long.rc.minutes)}`
+                  : left === 0
+                    ? `full (${EVAL_CAP})`
+                    : freeMs !== null
+                      ? `free ~${mShort(Math.max(60_000, freeMs))}${ahead ? " · call now" : ""}`
+                      : `room for ${left}`}
+              </span>
               {offers.length > 0 && (
                 <button type="button" class="link-btn evx-reset" onClick={() => setTicks(ticks && ticks.group === groupKey ? null : { group: groupKey!, keys: [] })}>
                   {ticks && ticks.group === groupKey ? "Page's pick" : "Clear"}
@@ -443,10 +492,11 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
                     class={`evx-sp s-sug sg-${o.heat}${on ? " on" : ""}`}
                     data-name={o.v.s.name}
                     aria-pressed={on}
-                    aria-label={`${o.v.s.name}: ${o.why}${o.work ? `, ${o.work}` : ""}`}
+                    aria-label={`${o.v.s.name}: ${o.why}${o.work ? `, ${o.work}` : ""}${o.home !== undefined ? `, goes home ${slClock(o.home)}` : ""}`}
                     onClick={() => toggle(o)}
                   >
                     {o.v.s.name}
+                    {o.home !== undefined && <small>home {shortClock(o.home)}</small>}
                   </button>
                 );
               })}
@@ -456,22 +506,23 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
           <div class="evx-col">
             <button
               type="button"
-              class="btn evaluation evx-call"
+              class={`btn evaluation evx-call${ahead ? " ahead" : ""}`}
               disabled={busy || chosen.length === 0}
               onClick={async () => {
                 setBusy(true);
                 const who = offers.filter((o) => chosen.includes(o.key)).map((o) => o.v);
+                const [before, ticked] = [pick, ticks];
                 if (await callEval(who, groupKey === TEACH ? "theory" : "evaluation")) {
-                  setTicks(null);
-                  follow(); // called: the rows go back to her room
+                  setTicks((t) => (t === ticked ? null : t));
+                  follow(before); // called: the rows go back to her room (unless she picked another meanwhile)
                 }
                 setBusy(false);
               }}
             >
               {left === 0 ? "Full" : chosen.length ? `${label} ${chosen.length}` : label}
             </button>
-            <button type="button" class="btn evx-arrive" disabled={busy || walkers.length === 0} onClick={() => void arrive(walkers)}>
-              Arrived{walkers.length ? ` ${walkers.length}` : ""}
+            <button type="button" class="btn evx-arrive" disabled={busy || sentOnes.length === 0} onClick={() => void arrive(sentOnes)}>
+              Arrived{sentOnes.length ? ` ${sentOnes.length}` : ""}
             </button>
             <button type="button" class="btn evx-done" disabled={busy || done.length === 0} onClick={() => void finish(done, "decided")}>
               Done{done.length ? ` ${done.length}` : ""}
@@ -509,7 +560,7 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
           <p class="muted small evx-hint">
             {browsing ? (
               <>
-                Not your room's book. <BackToRoom onBack={follow} />
+                Not your room's book. <BackToRoom onBack={() => follow()} />
               </>
             ) : room.here.some((h) => h.kind === "theory") ? (
               "Teaching theory: tap his name, then Done: taught."
@@ -558,6 +609,16 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
                 ) : (
                   <p class="muted small">Check his answer in his notebook.</p>
                 )}
+                {sameMistake && sq.who.length === 0 && group && (
+                  <p class="evx-tl">
+                    <span>
+                      {group.cands.length} lost {group.qs.map((q) => qLabel(sq.v, q)).join(" ")}: teach it once in Theory?
+                    </span>
+                    <button type="button" class="btn small theory" disabled={busy} onClick={() => void toTheoryAll()}>
+                      All {group.cands.length} to Theory
+                    </button>
+                  </p>
+                )}
                 <QuestionToggle unitId={sq.v.unit?._id} stage={sq.v.ms ? "master" : "fighter"} q={sq.q} />
                 {(!live || sq.who.length === 0) && (
                   <p class="muted small">
@@ -565,7 +626,7 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
                     {browsing && (
                       <>
                         {" "}
-                        <BackToRoom onBack={follow} />
+                        <BackToRoom onBack={() => follow()} />
                       </>
                     )}
                   </p>

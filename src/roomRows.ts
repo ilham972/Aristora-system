@@ -87,3 +87,13 @@ export function roomBooksOf<Q, S extends string>(qs: readonly Q[], open: Q | und
   }
   return out;
 }
+
+/**
+ * The grade and stage buttons stay in fixed places (6 7 8 9 10 11; Fighter Master Legend: his call, 1 Nov 2026, "like
+ * a car's pedals"); how urgent each is shows as its outline: the 1st most urgent red, the 2nd orange, the 3rd yellow.
+ * `rows` come most urgent first (byUrgency); rank 0 = nobody waits there.
+ */
+export function withRanks<T extends { c: HeatCount }>(rows: readonly T[]): (T & { rank: number })[] {
+  let n = 0;
+  return rows.map((r) => ({ ...r, rank: r.c.total > 0 ? ++n : 0 }));
+}

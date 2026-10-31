@@ -29,7 +29,7 @@ import { HRow } from "./hrow";
 import { useQuery } from "./live";
 import { MasterStrip } from "./master";
 import { useRoomDecisions } from "./roomDecisions";
-import { AnswerKey, BackToRoom, GradeRow, KindBar, LessonName, LockIcon, usePinned } from "./roomkit";
+import { AnswerKey, BackToRoom, GradeRow, KindBar, LessonName, LockIcon, useHeld, usePinned } from "./roomkit";
 import { QuestionToggle } from "./bookQuestion";
 import { scoreOf } from "./score";
 import { act, bookDocAt, clearToasts, currentMe, currentRole, toast, type Board } from "./store";
@@ -57,6 +57,7 @@ import {
   tDecisionWords,
   theoryFinish,
   theoryRows,
+  THEORY_STAGES,
   theorySquares,
   tUndecided,
   type LessonPill,
@@ -167,13 +168,17 @@ export function TheoryTab(props: { board: Board; views: View[]; now: number }) {
   const { grades, grade, stages, stage, units } = rows;
   const unitKey = rows.unit;
   const unit = units.find((u) => u.key === unitKey) ?? null;
+  // Units: the most urgent first, holding still while she touches them (1 Nov 2026; the lessons row below already does).
+  const heldUnits = useHeld(units, (u) => u.key, (u) => `${u.c.red}.${u.c.total}`);
   const onRoom = rows.onRoom;
   const inBook = (x: TheorySquare) => x.unit?._id === unitKey && x.kind === stage;
   // On her room's book: the open question there (it decides the lesson pill too).
   const roomSq = onRoom ? ((atRoom && inBook(atRoom) ? atRoom : firstOpen(roomSqs.filter(inBook))) ?? null) : null;
   const roomL = roomSq?.who[0]?.lesson;
   /** Back to her room: her pick ends, the rows show her room's book again (else the most urgent). */
-  const follow = () => setPick((p) => (Object.keys(p).length ? {} : p));
+  // `since`: what she had picked when she tapped (Call, Arrived, keep). The answer comes a moment later; if she picked
+  // something else meanwhile (the next grade to call), her new pick stays (1 Nov 2026: it used to be wiped).
+  const follow = (since?: Pick) => setPick((p) => (since !== undefined && p !== since ? p : Object.keys(p).length ? {} : p));
   const ranked = unit ? lessonPills(unit) : [];
   const ord = holdOrder(
     order.current,
@@ -214,17 +219,20 @@ export function TheoryTab(props: { board: Board; views: View[]; now: number }) {
   const call = async () => {
     if (chosen.length === 0) return;
     setBusy(true);
+    const [before, ticked] = [pick, ticks];
     const ok = await callTheory(offers.filter((m) => chosen.includes(m.v.s._id)).map((m) => m.v));
     setBusy(false);
     if (ok) {
-      setTicks(null);
+      setTicks((t) => (t === ticked ? null : t));
       order.current = null; // the ranking catches up at once (her finger is on Call, not on the row)
-      follow(); // called: the rows go back to her room
+      follow(before); // called: the rows go back to her room (unless she picked another meanwhile)
     }
   };
 
   // ---- Her room: who is with her, on the way, done ----
-  const walkers = items.filter((it) => it.state === "walking" || it.state === "called");
+  // Arrived counts only those Correction sent (walking): one called but never sent is never marked here by mistake
+  // (1 Nov 2026). One who comes before he is sent: tap his name, then Arrived.
+  const walkers = items.filter((it) => it.state === "walking");
   const done = items.filter((it) => tAllDecided(it, dec));
   const file = items.find((it) => it.id === fileId) ?? null;
   const score = scoreOf(board, views, "theory", now);
@@ -309,13 +317,14 @@ export function TheoryTab(props: { board: Board; views: View[]; now: number }) {
   /** They came in: everyone on the way (Arrived beside her room), or one from his file. */
   const arrive = async (list: RoomItem[]) => {
     if (list.length === 0) return;
+    const before = pick;
     const res = await act(() => mutate(api.calls.arrive, { callIds: list.map((it) => it.rc.c._id), by: currentRole() }));
     if (!res) return;
     for (const s of res.skipped) toast(`${s}.`, "error");
     if (!res.arrived) return;
     tone("tick");
     setAt(null); // the lesson starts: the first open question opens, and the rows show its book
-    follow();
+    follow(before);
     const names = joinNames(list.map((it) => it.name));
     if (list.length === 1) {
       const callId = list[0].rc.c._id;
@@ -347,16 +356,16 @@ export function TheoryTab(props: { board: Board; views: View[]; now: number }) {
     <main class="page tp-page ev-page evx-page tpx-page">
       <div class="stick tp-stick ev-stick" ref={stick}>
         <GradeRow rows={grades} value={grade} onPick={(g) => pickRow({ grade: g })} />
-        <KindBar<TheoryStage> value={stage} items={stages} onPick={(s) => pickRow({ grade: grade ?? undefined, stage: s })} />
+        <KindBar<TheoryStage> value={stage} items={stages} order={THEORY_STAGES} onPick={(s) => pickRow({ grade: grade ?? undefined, stage: s })} />
       </div>
 
       <div class="tp-body evx-body">
-        <div class="evx-rowbox">
+        <div class="evx-rowbox" onPointerDownCapture={heldUnits.touch} onScrollCapture={heldUnits.touch}>
           {units.length === 0 ? (
             <p class="tp-none">Nobody needs theory {grade === null ? "now" : `in Grade ${grade} ${stageWords}`}.</p>
           ) : (
-            <HRow as="nav" class="evx-units" label="Units that need you, the most urgent first" list={units.map((u) => u.key).join(",")} at={unitKey}>
-              {units.map((u) => {
+            <HRow as="nav" class="evx-units" label="Units that need you, the most urgent first" list={heldUnits.list.map((u) => u.key).join(",")} at={unitKey}>
+              {heldUnits.list.map((u) => {
                 const on = u.key === unitKey;
                 const mine = u.room;
                 return (
@@ -369,7 +378,6 @@ export function TheoryTab(props: { board: Board; views: View[]; now: number }) {
                     aria-label={`Unit ${unitNo(u.unit.code)}: ${u.c.total}, ${heatWords(u.c)}${mine ? ", your room" : ""}`}
                     onClick={() => pickRow({ grade: grade ?? undefined, stage, unit: u.key })}
                   >
-                    {mine && <span class="evx-me" aria-hidden="true" />}
                     <span class="tp-ln-n">{unitNo(u.unit.code)}</span>
                     <span class="tp-ln-t" lang="ta">
                       {u.unit.ta || u.unit.en}
@@ -489,7 +497,7 @@ export function TheoryTab(props: { board: Board; views: View[]; now: number }) {
           <p class="muted small evx-hint">
             {browsing ? (
               <>
-                Not your room's book. <BackToRoom onBack={follow} />
+                Not your room's book. <BackToRoom onBack={() => follow()} />
               </>
             ) : items.length ? (
               "Nothing left to teach to your room: Done sends them back."
@@ -564,7 +572,7 @@ export function TheoryTab(props: { board: Board; views: View[]; now: number }) {
                     {browsing && (
                       <>
                         {" "}
-                        <BackToRoom onBack={follow} />
+                        <BackToRoom onBack={() => follow()} />
                       </>
                     )}
                   </p>

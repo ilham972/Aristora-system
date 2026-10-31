@@ -1762,8 +1762,10 @@ test("Theory: one screen like Evaluation: grade, stage, unit and lesson rows; he
   // grades pale; Fighter (Master and Legend pale); unit 13 in Tamil; then its sections, D first (it gives work to the
   // most). No English names, no U-codes, nothing pulsing.
   const grades = T.locator(".evx-g");
-  await until(async () => JSON.stringify(await grades.locator("b").allTextContents()) === '["11","6","7","8","9","10"]', "the grades, most urgent first");
-  expect(await grades.first().getAttribute("aria-pressed")).toBe("true");
+  await until(async () => JSON.stringify(await grades.locator("b").allTextContents()) === '["6","7","8","9","10","11"]', "the grades in their places");
+  const t11 = T.locator(".evx-g").filter({ has: T.locator("b", { hasText: /^11$/ }) });
+  await until(async () => (await t11.getAttribute("aria-pressed")) === "true", "Grade 11 picked");
+  expect(await t11.getAttribute("class")).toContain("pri1"); // the most urgent: red outline
   await count(T.locator(".evx-g:disabled"), 5);
   expect(new Set(await grades.evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)))).size).toBe(1);
   await until(
@@ -1951,13 +1953,13 @@ test("Theory: one screen like Evaluation: grade, stage, unit and lesson rows; he
   await evArrive(T, ["Malik"]);
   await textsAre(T.locator(".evx-strip .fc-sq small"), ["13", "17"]);
   // His screenshot (31 Oct 2026): nobody else needs Malik's lesson, yet the rows stay on it (Grade 7, Master, unit 8,
-  // each with her room's dot) and the box offers nobody from another book.
+  // each marked hers for a screen reader) and the box offers nobody from another book.
   const onGrade = async () => T.locator(".evx-g.on b").textContent();
   await until(async () => (await onGrade()) === "7", "her room's grade stays picked");
-  await visible(T.locator(".evx-g.on .evx-me"));
+  expect(await T.locator(".evx-g.on").getAttribute("aria-label")).toContain("your room");
   await contains(T.locator(".tp-kind.on"), "Master");
   await textsAre(T.locator(".evx-u.on .tp-ln-n"), ["8"]);
-  await visible(T.locator(".evx-u.on .evx-me"));
+  expect(await T.locator(".evx-u.on").getAttribute("aria-label")).toContain("your room");
   await count(T.locator(".evx-sp.s-sug"), 0);
   // She looks at Grade 11 for the next lesson: its rows and its lesson (to prepare, the pad pale); back to her room.
   await evPick(T, { grade: "11" });
@@ -2085,18 +2087,31 @@ test("Evaluation: one screen: grade, stage, unit and questions the most urgent f
   });
   await backend.push();
 
-  // The rows, each the most urgent first and already picked: Grade 11 (Dilan stuck, Fathima no work), then 7; the
-  // grades with nothing for her pale. All six in ONE row.
+  // The grades in fixed places (1 Nov 2026), the most urgent already picked: Grade 11 (Dilan stuck, Fathima no work)
+  // outlined red, then 7 orange; the grades with nothing for her pale. All six in ONE row.
   const grades = E.locator(".evx-g");
-  await until(async () => JSON.stringify(await grades.locator("b").allTextContents()) === '["11","7","6","8","9","10"]', "the grades, most urgent first");
-  expect(await grades.first().getAttribute("aria-pressed")).toBe("true");
+  await until(async () => JSON.stringify(await grades.locator("b").allTextContents()) === '["6","7","8","9","10","11"]', "the grades in their places");
+  const g11 = E.locator(".evx-g").filter({ has: E.locator("b", { hasText: /^11$/ }) });
+  await until(async () => (await g11.getAttribute("aria-pressed")) === "true", "Grade 11 picked");
+  expect(await g11.getAttribute("class")).toContain("pri1");
+  expect(await E.locator(".evx-g").filter({ has: E.locator("b", { hasText: /^7$/ }) }).getAttribute("class")).toContain("pri2");
+  // The outline really is the red of "very urgent" (the page's own --red).
+  const red = await E.evaluate(() => {
+    const d = document.createElement("div");
+    d.style.color = "var(--red)";
+    document.body.append(d);
+    const c = getComputedStyle(d).color;
+    d.remove();
+    return c;
+  });
+  expect(await g11.evaluate((el) => getComputedStyle(el).borderTopColor)).toBe(red);
   await count(E.locator(".evx-g:disabled"), 4);
   expect(new Set(await grades.evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)))).size).toBe(1);
   await until(
     async () => JSON.stringify(await E.locator(".tp-kind").evaluateAll((els) => els.map((e) => e.firstChild?.textContent))) === '["Fighter","Master","Legend"]',
     "Fighter first",
   );
-  expect(await E.getByRole("button", { name: /^Fighter:/ }).getAttribute("aria-label")).toBe("Fighter: 4, 2 very urgent, 2 soon");
+  expect(await E.getByRole("button", { name: /^Fighter:/ }).getAttribute("aria-label")).toBe("Fighter: 4, 2 very urgent, 2 soon, most urgent 1st");
   await visible(E.locator(".tp-kind:disabled", { hasText: "Legend" }));
   await textsAre(E.locator(".evx-u .tp-ln-n"), ["13"]);
   expect(await E.locator(".evx-u .tp-ln-t").textContent()).toMatch(/^[^A-Za-z]+$/); // Tamil only
@@ -2129,6 +2144,10 @@ test("Evaluation: one screen: grade, stage, unit and questions the most urgent f
   await count(C.locator(".call-strip"), 0);
   await contains(E.locator(".evx-bh"), "2 with you");
   await visible(E.locator(".evx-bh .evx-lock"));
+  // Free in ~3 min (one question for both, 3 min until her phone learns her pace), nobody on the way, Dilan and Kumar
+  // waiting for unit 13: call now, the Call button lit (1 Nov 2026).
+  await contains(E.locator(".evx-bh"), "free ~3m · call now");
+  await visible(E.locator(".evx-call.ahead"));
   // Q22 once for both: Explained (for 2); their pills are done; Done 2 sends both back.
   await textsAre(E.locator(".evx-strip .fc-sq small"), ["22"]);
   await contains(E.locator(".evx-who"), "Fathima");
@@ -2193,15 +2212,15 @@ test("Evaluation: one screen: grade, stage, unit and questions the most urgent f
   await contains(E.locator(".sc-c", { hasText: "seen" }), "3");
 
   // His screenshot (31 Oct 2026): nobody else waits for unit 13 now, yet the rows stay on her room's book (Grade 11,
-  // Fighter, unit 13, each with her room's dot), the box offers nobody from another book, and the questions on screen
+  // Fighter, unit 13, each marked hers for a screen reader), the box offers nobody from another book, and the questions on screen
   // are theirs. Grade 7 still shows Malik waiting.
   const onGrade = (p: Page) => p.locator(".evx-g.on b").textContent();
   await until(async () => (await onGrade(E)) === "11", "her room's grade stays picked");
-  await visible(E.locator(".evx-g.on .evx-me"));
-  await visible(E.locator(".tp-kind.on .evx-me"));
+  expect(await E.locator(".evx-g.on").getAttribute("aria-label")).toContain("your room");
+  expect(await E.locator(".tp-kind.on").getAttribute("aria-label")).toContain("your room");
   await contains(E.locator(".tp-kind.on"), "Fighter");
   await textsAre(E.locator(".evx-u.on .tp-ln-n"), ["13"]);
-  await visible(E.locator(".evx-u.on .evx-me"));
+  expect(await E.locator(".evx-u.on").getAttribute("aria-label")).toContain("your room");
   await count(E.locator(".evx-sp.s-sug"), 0);
   await textsAre(E.locator(".evx-strip .fc-sq small"), ["18", "28", "29"]);
   await visible(E.locator(".evx-g:not(:disabled)", { hasText: "7" }));
@@ -2603,7 +2622,7 @@ test("Test class: a grade copied and the extra test students; only a phone showi
   await evPick(O, { grade: "7", stage: "Master", unit: "8", group: "2" });
   await count(O.locator(".evx-sp.s-sug"), 7);
   await count(O.locator(".evx-sp.s-sug.on"), 4);
-  await contains(O.locator(".evx-bh"), "room for 4");
+  await contains(evCall(O), "Call 4"); // room for 4 (with someone with her the line says when she is free instead)
   await shot(O, "x02-test-class-evaluation");
   // Theory, in the test class: D first (Starving D has waited 25 minutes), held students listed but not ticked.
   await tab(O, "Theory").click();
@@ -2631,6 +2650,20 @@ test("Test class: a grade copied and the extra test students; only a phone showi
   await count(N.locator(".evx-sp.s-sug.on"), 6);
   await contains(N.locator(".evx-bh"), "room for 6");
   await N.context().close();
+
+  // The same mistake by 7 (Q2 of unit 8): one Theory lesson instead of explaining it 7 times (1 Nov 2026). Her room is
+  // busy (Grade 11), so the card shows Q2 to prepare, with the suggestion; one tap sends Q2 to Theory for all 7, and
+  // Theory sees them as one lesson.
+  await tab(O, "Evaluation").click();
+  await evPick(O, { grade: "7", stage: "Master", unit: "8", group: "2" });
+  const tl = O.locator(".evx-card .evx-tl");
+  await contains(tl, "7 lost Q2: teach it once in Theory?");
+  await shot(O, "x05-same-mistake");
+  await tl.getByRole("button", { name: "All 7 to Theory" }).click();
+  await contains(O.locator(".toast"), "Sent to Theory: Q2 for 7.");
+  await tab(O, "Theory").click();
+  await evPick(O, { grade: "7", stage: "Master", unit: "8" });
+  await visible(O.locator(".evx-qg").filter({ hasText: "×7" }));
 
   // The owner deletes them: only test students go; this phone shows the class again.
   await O.getByRole("button", { name: "Settings" }).click();

@@ -21,6 +21,8 @@ import {
   evalWords,
   finishPlan,
   gradeRow,
+  hardQuestions,
+  leavingAt,
   qGroups,
   qLabel,
   sameGroups,
@@ -321,6 +323,42 @@ describe("Audit (31 Oct 2026): a unit with a theory book AND a workbook", () => 
       ["fighter", ["Ahamed"]],
       ["master", ["Sana"]],
     ]);
+  });
+});
+
+describe("The audit's fixes (1 Nov 2026)", () => {
+  test("the rows: the most urgent grade and stage get rank 1 (red), the next 2 (orange); her room's grade none", () => {
+    const sent = (id: string): Call => ({ _id: `c-${id}`, studentId: id, room: "evaluation", kind: "evaluation", status: "sent", createdAt: NOW - 6 * MIN, sentAt: NOW - 5 * MIN, walk: true, arrivedAt: NOW - 4 * MIN });
+    const raza = wb("Raza", [4, 13], { where: "evaluation", calls: [sent("Raza")] });
+    const views = [raza, th("Dilan", { ...IN_C, ...right(19, 20), ...wrong(18, 6, 2) }), wb("Malik", [4, 13, 17])];
+    const qs = sessionQs(evalRoom(board([sent("Raza")]), views, NOW).here, []);
+    const r = evalRows({}, candidates(views, NOW, PACE), qs, qs[0]);
+    expect(r.grades.map((g) => [g.grade, g.rank, !!g.room])).toEqual([
+      [11, 1, false],
+      [7, 2, true],
+      [6, 0, false],
+      [8, 0, false],
+      [9, 0, false],
+      [10, 0, false],
+    ]);
+  });
+
+  test("going home within 15 minutes (arrival + 2 hours): listed with his time, never ticked by the page", () => {
+    const at = (ago: number) => asView({ ...wb("Priya", [4]), s: { ...wb("Priya", [4]).s, lastInAt: NOW - ago * MIN } });
+    expect(leavingAt(at(110), NOW)).toBe(NOW + 10 * MIN);
+    expect(leavingAt(at(60), NOW)).toBeUndefined(); // an hour left
+    expect(leavingAt(at(130), NOW)).toBeUndefined(); // past his usual time: no guess
+    expect(candidates([at(110)], NOW, PACE)[0].home).toBe(NOW + 10 * MIN);
+  });
+
+  test("lost by many now: the same question of the same book, 3+ students, the most first; Theory's counted", () => {
+    const toTheory = (v: View, q: number) => asView({ ...v, ms: { ...v.ms!, theory: [...v.ms!.theory, q], pending: v.ms!.pending.filter((x) => x !== q) }, pending: v.pending.filter((x) => x !== q) });
+    const views = [wb("A", [4, 13]), wb("B", [4, 13]), toTheory(wb("C", [4, 17]), 4), wb("D", [13]), wb("E", [17])];
+    expect(hardQuestions(views).map((h) => [h.label, h.n, h.theory, h.grade])).toEqual([
+      ["Q4", 3, 1, 7],
+      ["Q13", 3, 0, 7],
+    ]);
+    expect(hardQuestions(views, 2).map((h) => h.label)).toEqual(["Q4", "Q13", "Q17"]);
   });
 });
 

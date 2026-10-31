@@ -35,6 +35,8 @@ import {
   type Tone,
 } from "./ceoData";
 import type { View } from "./derive";
+import { hardQuestions } from "./evalFocusData";
+import { unitNo } from "./focusData";
 import { ATTENDANCE_SINCE } from "./stats";
 import { act, stageName, type Board, type Stage } from "./store";
 import { StudentSheet } from "./studentSheet";
@@ -257,6 +259,8 @@ function NowTab(props: { board: Board; views: View[]; now: number; load: Load | 
     );
   }
   const longest = n.noWork[0];
+  // The same question lost by 3+ students in class now: the owner sees which book questions are badly understood.
+  const hard = hardQuestions(props.views).slice(0, 5);
   return (
     <>
       <Advice n={n} />
@@ -280,6 +284,18 @@ function NowTab(props: { board: Board; views: View[]; now: number; load: Load | 
               right: `${x.min} min${x.why.length ? ` · waits for ${x.why.map((r) => ROOM_NAME[r]).join(" or ")}` : ""}`,
             }))}
           />
+        </section>
+      )}
+      {hard.length > 0 && (
+        <section class="ceo-card" aria-label="Questions lost by many students now">
+          <h3>Lost by many now</h3>
+          {hard.map((h) => (
+            <p key={h.key} class="ceo-mix">
+              <b>{h.label}</b> · Grade {h.grade} · unit {unitNo(h.code)}{" "}
+              <span lang="ta">{h.ta}</span>: {h.n} students{h.theory ? ` (${h.theory} with Theory)` : ""}
+            </p>
+          ))}
+          <p class="muted small">One question that many lose: teach it once in Theory, or check how the book asks it.</p>
         </section>
       )}
       <p class="ceo-mix">

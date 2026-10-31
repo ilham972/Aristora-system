@@ -8140,45 +8140,52 @@ body.locked.evx-on .toasts {
   margin: 8px 2px 0;
 }
 
-/* ---- Her room's book in the rows (31 Oct 2026, his screenshot: her room on Grade 9 fractions, the rows on Grade 8).
-   A dot in the room's colour on its grade, stage and unit (src/roomRows.ts); "Back to your room" while she looks at
-   another book to call someone. ---- */
+/* ---- Her room's book in the rows (31 Oct 2026, his screenshot: her room on Grade 9 fractions, the rows on Grade 8;
+   src/roomRows.ts): "Back to your room" while she looks at another book to call someone. (The room's dot went on 1 Nov:
+   he found it ugly and unclear.) ---- */
 .evx-page {
-  --room-dot: var(--evaluation);
   --room-ink: var(--evaluation-ink);
 }
 .tpx-page {
-  --room-dot: var(--theory);
   --room-ink: var(--theory-ink);
-}
-.evx-me {
-  flex: none;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--room-dot, var(--evaluation));
-  box-shadow: 0 0 0 1.5px var(--card);
-}
-.evx-g.on > .evx-me,
-.tp-kind.on > .evx-me,
-.evx-u.on > .evx-me {
-  box-shadow: 0 0 0 1.5px #fff;
-}
-.tp-kinds .tp-kind {
-  position: relative;
-}
-.evx-g > .evx-me,
-.tp-kind > .evx-me {
-  position: absolute;
-  top: 4px;
-  left: 5px;
-}
-.tp-kind > .evx-me {
-  left: 9px;
 }
 .evx-back {
   padding: 0 2px;
   font-size: inherit;
   color: var(--room-ink, var(--evaluation-ink));
   text-decoration: underline;
+}
+
+/* ---- Theory and Evaluation rows in fixed places (1 Nov 2026, his call): the 1st, 2nd, 3rd most urgent grade or stage
+   outlined red, orange, yellow (his colours). Evaluation: "free ~6m · call now" lights the Call button amber; the same
+   mistake by 4+ suggests one Theory lesson in the card. ---- */
+.evx-g.pri1,
+.tp-kind.pri1 {
+  border-color: var(--red);
+  border-width: 2px;
+}
+.evx-g.pri2,
+.tp-kind.pri2 {
+  border-color: var(--amber);
+  border-width: 2px;
+}
+.evx-g.pri3,
+.tp-kind.pri3 {
+  border-color: var(--yellow);
+  border-width: 2px;
+}
+.evx-call.ahead:not(:disabled) {
+  box-shadow: 0 0 0 3px var(--amber);
+}
+.evx-tl {
+  margin: 8px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  font-size: 13px;
+  color: var(--theory-ink);
+}
+.evx-tl .btn {
+  flex: none;
 }

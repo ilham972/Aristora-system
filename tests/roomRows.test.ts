@@ -2,7 +2,7 @@
 // room on Grade 9 fractions, the rows on Grade 8 unit 1, Grade 9 pale).
 
 import { describe, expect, test } from "vitest";
-import { roomBooksOf, roomRows, type RoomBook, type RowPick } from "../src/roomRows";
+import { roomBooksOf, roomRows, withRanks, type RoomBook, type RowPick } from "../src/roomRows";
 import type { HeatCount } from "../src/theoryFocusData";
 
 type S = "fighter" | "master" | "legend";
@@ -81,5 +81,26 @@ describe("The rows always say which book the question on her screen is from", ()
     expect(roomBooksOf(qs, qs[1], (q) => q.b)).toEqual([FRACTIONS, G8U05]);
     expect(roomBooksOf(qs, undefined, (q) => q.b)).toEqual([G8U05, FRACTIONS]);
     expect(roomBooksOf([] as Q[], undefined, (q) => q.b)).toEqual([]);
+  });
+});
+
+describe("Fixed places, urgency as an outline (1 Nov 2026): the 1st, 2nd, 3rd most urgent", () => {
+  test("ranks follow the urgency order; nobody waiting = no rank", () => {
+    const rows = [
+      { grade: 9, c: n(3, 2) },
+      { grade: 8, c: n(2, 1) },
+      { grade: 7, c: n(1) },
+      { grade: 11, c: n(1) },
+      { grade: 6, c: zero },
+      { grade: 10, c: zero },
+    ];
+    expect(withRanks(rows).map((r) => [r.grade, r.rank])).toEqual([
+      [9, 1],
+      [8, 2],
+      [7, 3],
+      [11, 4],
+      [6, 0],
+      [10, 0],
+    ]);
   });
 });
