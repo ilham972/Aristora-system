@@ -9,7 +9,7 @@ import { computeMaster, levelWaits, teachState, type MState } from "../convex/li
 import { OL_TOPICS, olNumber, SYLLABUS } from "../convex/lib/syllabus";
 import schema from "../convex/schema";
 import { addPerson, asOwner, asPhone } from "./helpers";
-import { bookRace, raceTotals } from "../src/progressData";
+import { bookRace, raceTotals, sheetOf } from "../src/progressData";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 const MIN = 60_000;
@@ -387,6 +387,14 @@ describe("one book's race: Correction's race button (1 Nov 2026)", () => {
     ]);
     expect(raw!.size.solo).toBe(race[0].of);
     expect(raceTotals(race)).toMatchObject({ n: 3, today: 7, finished: 0 });
+    // The question sheet: Section A's columns 1–8; Banu right on 5, 6, nothing on 7 and 8; Q12 left out by nobody.
+    const sh = sheetOf(raw!);
+    expect(sh.groups.map((g) => g.label)).toEqual(["A", "B", "C", "D", "E", "F", "P", "\u2605"]);
+    const banu = sh.rows.find((r) => r.s.name === "Banu")!;
+    expect(banu.cells.slice(0, 8)).toEqual(["taught", "taught", "taught", "taught", "right", "right", "todo", "todo"]);
+    const ahamed = sh.rows.find((r) => r.s.name === "Ahamed")!;
+    expect(ahamed.cells[sh.cols.findIndex((c) => c.q === 12)]).toBe("right");
+    expect(sh.used).toContain("teach");
     // A Correction teacher (no Reports) reads it; an empty book of another unit is null.
     const token = "kavi-correction-phone-0123456789abcdefghijklmnop";
     await addPerson(t, { name: "Kavi", token, tabs: ["correction"] });

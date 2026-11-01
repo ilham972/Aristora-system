@@ -255,3 +255,135 @@ export function raceTotals(rows: readonly RaceRow[]): { n: number; came: number;
     finished: rows.filter((r) => (r.m?.finished ?? r.f?.finished) === true).length,
   };
 }
+
+// ---- One book's question sheet (2 Nov 2026, his ask): the race button is for the corrector to check her work, so it
+// shows every student against every question, each square by its state. Not a leaderboard (that is Progress). ----
+
+/** A square's state. Theory book: right, wrong, slip, explained, skip (he knew it), skipped (left out: a later one is
+ * marked), todo; teacher questions taught, tskip (skipped by Theory), teach (not taught yet). Workbook: full, part,
+ * zero, blank (? = didn't know), explained, taught, pre (done before the app), handed (handed in, to correct), todo. */
+export type QState =
+  | "right"
+  | "wrong"
+  | "slip"
+  | "explained"
+  | "skip"
+  | "skipped"
+  | "todo"
+  | "taught"
+  | "tskip"
+  | "teach"
+  | "full"
+  | "part"
+  | "zero"
+  | "blank"
+  | "pre"
+  | "handed";
+
+export const QSTATE_WORDS: Record<QState, string> = {
+  right: "Right",
+  wrong: "Wrong",
+  slip: "Slip",
+  explained: "Explained",
+  skip: "Knew it (skipped)",
+  skipped: "Left out",
+  todo: "Not done yet",
+  taught: "Theory taught",
+  tskip: "Theory skipped",
+  teach: "Theory not taught",
+  full: "Full marks",
+  part: "Part marks",
+  zero: "No marks",
+  blank: "? Didn't know",
+  pre: "Before the app",
+  handed: "Handed in, to correct",
+};
+
+export type SheetCol = { q: number; label: string; group: string; teach: boolean; first: boolean };
+export type SheetGroup = { id: string; label: string; cols: number };
+export type SheetRow = RaceRow & { cells: QState[] };
+export type QSheet = { cols: SheetCol[]; groups: SheetGroup[]; rows: SheetRow[]; used: QState[] };
+
+/** A theory book's question's state for one student (`order` = the book's solo questions in order). */
+export function fighterState(marks: Record<string, string>, q: number, teach: boolean, lastDone: number): QState {
+  const s = marks[String(q)];
+  if (teach) return s === "taught" ? "taught" : s === "skip" ? "tskip" : "teach";
+  if (s === "right" || s === "wrong" || s === "slip" || s === "explained" || s === "skip") return s;
+  return q < lastDone ? "skipped" : "todo";
+}
+
+type MQState = { got?: number; max?: number; dk?: boolean; x?: boolean; th?: boolean; tt?: boolean };
+type MLvState = { done?: boolean; fixed?: boolean; pre?: boolean };
+
+/** A workbook question's state for one student. */
+export function masterQState(mq: Record<string, MQState>, lv: MLvState | undefined, q: number): QState {
+  const r = mq[String(q)];
+  if (lv?.fixed || (lv?.pre && r)) {
+    if (!r) return "full";
+    const lost = r.dk || (r.got ?? 0) < (r.max ?? 0);
+    if (lost && r.tt) return "taught";
+    if (lost && r.x) return "explained";
+    if (r.dk) return "blank";
+    if ((r.got ?? 0) === 0 && (r.max ?? 0) > 0) return "zero";
+    return lost ? "part" : "full";
+  }
+  if (lv?.pre) return "pre";
+  if (lv?.done) return "handed";
+  return "todo";
+}
+
+/** The whole book: columns in book order (grouped by section or level), every student's squares, furthest first. */
+export function sheetOf(b: BookBoard): QSheet {
+  const race = bookRace(b);
+  const cols: SheetCol[] = [];
+  const groups: SheetGroup[] = [];
+  if (b.stage === "fighter") {
+    for (const sec of b.sections) {
+      const qs = [...sec.teach, ...sec.solo].sort((x, y) => x - y);
+      const label = sec.kind === "ladder" ? sec.badge || sec.id : sec.kind === "past" ? sec.id : "★";
+      groups.push({ id: sec.id, label, cols: qs.length });
+      qs.forEach((q, i) =>
+        cols.push({ q, label: (b.labels as Record<string, string>)[String(q)] ?? String(q), group: sec.id, teach: sec.teach.includes(q), first: i === 0 }),
+      );
+    }
+  } else {
+    for (const l of b.levels) {
+      groups.push({ id: String(l.n), label: String(l.n), cols: l.to - l.from + 1 });
+      for (let q = l.from; q <= l.to; q++) cols.push({ q, label: String(q), group: String(l.n), teach: false, first: q === l.from });
+    }
+  }
+  const levelOf = new Map<number, number>();
+  for (const l of b.levels) for (let q = l.from; q <= l.to; q++) levelOf.set(q, l.n);
+  const used = new Set<QState>();
+  const rows: SheetRow[] = race.map((r) => {
+    const st = r.s;
+    let cells: QState[];
+    if (b.stage === "fighter") {
+      const marks = (st.marks ?? {}) as Record<string, string>;
+      const solo = cols.filter((c) => !c.teach).map((c) => c.q);
+      const lastDone = Math.max(0, ...solo.filter((q) => marks[String(q)]));
+      cells = cols.map((c) => fighterState(marks, c.q, c.teach, lastDone));
+    } else {
+      const mq = (st.mq ?? {}) as Record<string, MQState>;
+      const lv = (st.lv ?? {}) as Record<string, MLvState>;
+      cells = cols.map((c) => masterQState(mq, lv[String(levelOf.get(c.q))], c.q));
+    }
+    for (const c of cells) used.add(c);
+    return { ...r, cells };
+  });
+  const order = Object.keys(QSTATE_WORDS) as QState[];
+  return { cols, groups, rows, used: order.filter((x) => used.has(x)) };
+}
+
+/** Names that may be blurred on the shared image: everyone but the first three places. */
+export function mayBlur(r: { rank: number | null }): boolean {
+  return r.rank === null || r.rank > 3;
+}
+
+/** The quick blur choices: the last three, or everyone after the first three (only those who may be blurred). */
+export function blurPick(rows: readonly { s: { _id: string }; rank: number | null }[], how: "last3" | "allButTop3" | "none"): Set<string> {
+  const ok = rows.filter(mayBlur);
+  if (how === "none") return new Set();
+  if (how === "allButTop3") return new Set(ok.map((r) => r.s._id));
+  return new Set(ok.slice(-3).map((r) => r.s._id));
+}

@@ -78,17 +78,36 @@ describe("the Progress numbers", () => {
   });
 });
 
-describe("the race image's pages (1 Nov 2026)", () => {
-  test("a class fits one 1080 × 1350 image with bigger rows when small; a big one goes on to a second", async () => {
-    const { racePages } = await import("../src/racePoster");
-    const one = racePages(12);
-    expect(one).toHaveLength(1);
-    expect(one[0].rows).toBe(12);
-    expect(one[0].rowH).toBeGreaterThanOrEqual(46);
-    expect(racePages(3)[0].rowH).toBe(78);
-    const big = racePages(40);
-    expect(big.length).toBeGreaterThan(1);
-    expect(big.reduce((a, p) => a + p.rows, 0)).toBe(40);
-    expect(big.every((p) => p.rowH >= 46)).toBe(true);
+describe("one book's question sheet (2 Nov 2026)", () => {
+  test("a theory-book question: its mark, left out when a later one is marked, teacher questions by Theory", async () => {
+    const { fighterState } = await import("../src/progressData");
+    const m = { "5": "right", "6": "wrong", "8": "slip", "9": "explained", "1": "taught", "2": "skip" };
+    expect([5, 6, 8, 9].map((q) => fighterState(m, q, false, 9))).toEqual(["right", "wrong", "slip", "explained"]);
+    expect(fighterState(m, 7, false, 9)).toBe("skipped");
+    expect(fighterState(m, 12, false, 9)).toBe("todo");
+    expect([1, 2, 3].map((q) => fighterState(m, q, true, 9))).toEqual(["taught", "tskip", "teach"]);
+  });
+  test("a workbook question: by its corrected marks, or handed in, before the app, not done", async () => {
+    const { masterQState } = await import("../src/progressData");
+    const mq = { "1": { got: 2, max: 2 }, "2": { got: 1, max: 2 }, "3": { got: 0, max: 2 }, "4": { got: 0, max: 2, dk: true }, "5": { got: 0, max: 2, x: true }, "6": { got: 0, max: 2, dk: true, tt: true } };
+    const fixed = { fixed: true };
+    expect([1, 2, 3, 4, 5, 6, 7].map((q) => masterQState(mq, fixed, q))).toEqual(["full", "part", "zero", "blank", "explained", "taught", "full"]);
+    expect(masterQState({}, { done: true }, 9)).toBe("handed");
+    expect(masterQState({}, { pre: true }, 9)).toBe("pre");
+    expect(masterQState({}, undefined, 9)).toBe("todo");
+  });
+  test("blur: never the first three; last three, or all but the top three", async () => {
+    const { blurPick, mayBlur } = await import("../src/progressData");
+    const rows = [1, 2, 3, 3, 5, 6, 7].map((rank, i) => ({ s: { _id: `s${i}` }, rank }));
+    expect(rows.map(mayBlur)).toEqual([false, false, false, false, true, true, true]);
+    expect([...blurPick(rows, "last3")]).toEqual(["s4", "s5", "s6"]);
+    expect([...blurPick(rows.slice(0, 5), "last3")]).toEqual(["s4"]);
+    expect([...blurPick(rows, "allButTop3")]).toEqual(["s4", "s5", "s6"]);
+    expect(blurPick(rows, "none").size).toBe(0);
+  });
+  test("the image grows with the class (one image, never cut)", async () => {
+    const { sheetHeight } = await import("../src/racePoster");
+    expect(sheetHeight(30, 2)).toBeGreaterThan(sheetHeight(10, 2));
+    expect(sheetHeight(10, 2) - sheetHeight(9, 2)).toBe(50);
   });
 });

@@ -1620,21 +1620,33 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
   await tap(F.locator(".fc-strip").getByRole("button", { name: "Q19: right" }));
   await contains(F.locator(".fc-now"), "Saved: ✓ right.");
   await shot(F, "f13b-focus-theory-saved");
-  // The class in this book (1 Nov 2026, his ask): everyone's race on one screen, Nila highlighted; Share for the group.
-  await tap(F.getByRole("button", { name: /^The class in this book/ }));
-  await visible(F.locator(".br-row.me", { hasText: "Nila" }));
-  await count(F.locator(".br-row.me"), 1);
-  await contains(F.locator(".br-me"), "Nila is");
-  await contains(F.locator(".br-sheet .sheet-foot .btn.primary"), "Share to the group");
+  // This book's questions (2 Nov 2026, his ask): every student against every question on one screen, Nila ringed.
+  await tap(F.getByRole("button", { name: /^This book's questions/ }));
+  await visible(F.locator(".br-r.me", { hasText: "Nila" }));
+  await count(F.locator(".br-r.me"), 1);
+  await textsAre(F.locator(".br-head .br-qs i"), ["A", "B", "C", "D", "E", "F", "P", "\u2605"]);
+  await count(F.locator(".br-r.me .br-qs i"), 61);
+  // Her marks today on Q19–Q21 show as right / wrong / slip in Nila's row (Section C zoomed: Q15–Q22).
+  await tap(F.locator(".br-zoom").getByRole("button", { name: "Section C" }));
+  await textsAre(F.locator(".br-head .br-qs i"), ["15", "16", "17", "18", "19", "20", "21", "22"]);
+  const nilaC = await F.locator(".br-r.me .br-qs i").evaluateAll((els) => els.map((e) => e.className));
+  expect(nilaC.slice(4, 7)).toEqual(["q-right", "q-wrong", "q-slip"]);
+  await tap(F.locator(".br-zoom").getByRole("button", { name: "All" }));
   expect(
     await F.locator(".br-sheet .sheet-body").evaluate((el) => el.scrollHeight <= el.clientHeight + 1),
     "the whole class in one shot",
   ).toBe(true);
-  await shot(F, "f13d-focus-book-race");
-  // The image for the group (Save = the same file Share sends): a 1080 × 1350 PNG, nobody highlighted.
+  // Blur for the group: the last three; the first can't be blurred.
+  await tap(F.locator(".br-blur").getByRole("button", { name: "Last 3" }));
+  await count(F.locator(".br-nm.blur"), 3);
+  await tap(F.locator(".br-rows .br-r").first().locator(".br-nm"));
+  await count(F.locator(".br-nm.blur"), 3);
+  await contains(F.locator(".br-sheet .sheet-foot .btn.primary"), "Share to the group · 3 blurred");
+  await shot(F, "f13d-focus-book-sheet");
+  // The image for the group (Save = the same file Share sends): white, nobody ringed, three names blurred.
   const [raceDl] = await Promise.all([F.waitForEvent("download"), F.locator(".br-sheet .sheet-foot").getByRole("button", { name: "Save" }).click()]);
   expect(raceDl.suggestedFilename()).toMatch(/^ARISTORA-TheoryBook-G11-U13-\d{4}-\d\d-\d\d\.png$/);
-  await raceDl.saveAs(join(SHOTS, "f13e-race-image.png"));
+  await raceDl.saveAs(join(SHOTS, "f13e-sheet-image.png"));
   await F.keyboard.press("Escape");
   await count(F.locator(".br-sheet"), 0);
   await tap(name("Kumar"));

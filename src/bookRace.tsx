@@ -1,122 +1,191 @@
-// One book's race (1 Nov 2026, his ask): Correction's race button, left of the home icon on a student's paper. Every
-// student in that book (theory book or workbook) on ONE screen, ranked like the Progress page, the student whose paper
-// is open highlighted so she can compare him with the class. Share = the same race as an image for the class WhatsApp
-// group, with nobody highlighted (src/racePoster.ts).
+// One book's question sheet (2 Nov 2026, his ask; first built 1 Nov as a race): Correction's sheet button, left of the
+// home icon on a student's paper. The corrector checks her own work: every student in that book against every question,
+// each square by its state (right, wrong, slip, explained, left out, not done, theory taught or not; a workbook's full,
+// part, no marks, ?, handed in), the whole book on ONE screen or one section / level zoomed in. The student whose paper
+// is open is ringed. Share = the same sheet as a plain image for the class WhatsApp group (src/racePoster.ts): nobody
+// ringed, and the names she taps are blurred there (never the first three) so nobody is put down.
 
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useMemo, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { useQuery } from "./live";
 import { saveFiles, shareFiles } from "./poster";
-import { RaceBar } from "./progress";
-import { bookRace, raceTotals, type BookBoard, type RaceRow } from "./progressData";
-import { bookTitle, drawRace, raceFiles } from "./racePoster";
+import { blurPick, mayBlur, QSTATE_WORDS, raceTotals, sheetOf, type BookBoard, type SheetRow } from "./progressData";
+import { bookTitle, drawSheet, sheetFile } from "./racePoster";
 import { testMode, toast } from "./store";
 import { Sheet } from "./ui";
 
 export function BookRaceSheet(props: { unitId: string; stage: "fighter" | "master"; studentId: string; onClose: () => void }) {
   const args = { unitId: props.unitId as Id<"units">, stage: props.stage, ...(testMode() ? { test: true } : {}) };
   const data = useQuery<BookBoard | null>(api.progress.book, args);
-  const rows = data ? bookRace(data) : [];
-  const [files, setFiles] = useState<File[] | null>(null);
+  const sh = useMemo(() => (data ? sheetOf(data) : null), [data]);
+  const [zoom, setZoom] = useState<string | null>(null);
+  const [blurred, setBlurred] = useState<Set<string>>(new Set());
+  const [file, setFile] = useState<File | null>(null);
   const [failed, setFailed] = useState(false);
-  // The image is made as soon as the race is here, so Share works on the first tap (phones only share right after one).
-  const sig = data ? `${data.today}:${rows.map((r) => `${r.s._id}${r.done}.${r.today}.${r.pct}`).join(",")}` : "";
+
+  // The image is made ahead (and again after each blur tap), so Share works on the first tap: phones only share right
+  // after one.
+  const sig = sh ? `${data!.today}:${sh.rows.map((r) => `${r.s._id}${r.cells.join("")}${r.today}`).join(",")}:${[...blurred].sort().join(",")}` : "";
   useEffect(() => {
-    if (!data) return;
+    if (!data || !sh) return;
     let off = false;
-    setFiles(null);
+    setFile(null);
     setFailed(false);
-    drawRace(data, rows)
-      .then((cs) => raceFiles(cs, data))
-      .then((fs) => !off && setFiles(fs))
-      .catch(() => !off && setFailed(true));
+    const t = setTimeout(() => {
+      drawSheet(data, sh, blurred)
+        .then((cv) => sheetFile(cv, data))
+        .then((f) => !off && setFile(f))
+        .catch(() => !off && setFailed(true));
+    }, 150);
     return () => {
       off = true;
+      clearTimeout(t);
     };
   }, [sig]);
 
-  if (data === undefined) {
+  if (data === undefined || data === null || !sh) {
     return (
-      <Sheet title="The class in this book" onClose={props.onClose} full cls="br-sheet">
-        <p class="muted center">Loading…</p>
+      <Sheet title="This book's questions" onClose={props.onClose} full cls="br-sheet">
+        <p class="muted center">{data === null ? "This book isn't in the app." : "Loading…"}</p>
       </Sheet>
     );
   }
-  if (data === null) {
-    return (
-      <Sheet title="The class in this book" onClose={props.onClose} full cls="br-sheet">
-        <p class="muted center">This book isn't in the app.</p>
-      </Sheet>
-    );
-  }
-  const t = raceTotals(rows);
+  const t = raceTotals(sh.rows);
   const title = bookTitle(data);
   const share = async () => {
-    if (!files) return;
-    const r = await shareFiles(files, `ARISTORA · ${title.ta} · ${title.en}`);
-    if (r === "saved") toast(files.length === 1 ? "Saved the image. Attach it in WhatsApp." : `Saved ${files.length} images. Attach them in WhatsApp.`);
+    if (!file) return;
+    const r = await shareFiles([file], `${title.ta} · ${title.en}`);
+    if (r === "saved") toast("Saved the image. Attach it in WhatsApp.");
   };
-  const me = rows.find((r) => r.s._id === props.studentId);
+  const toggle = (r: SheetRow) => {
+    if (!mayBlur(r)) {
+      toast("The first three always show.");
+      return;
+    }
+    const next = new Set(blurred);
+    if (next.has(r.s._id)) next.delete(r.s._id);
+    else next.add(r.s._id);
+    setBlurred(next);
+  };
+  const pick = (how: "last3" | "allButTop3" | "none") => setBlurred(blurPick(sh.rows, how));
+
+  // The columns shown: the whole book, or one section / level.
+  const idx = sh.cols.map((c, i) => i).filter((i) => !zoom || sh.cols[i].group === zoom);
+  const n = Math.max(1, sh.rows.length);
   return (
     <Sheet
       title={<span lang="ta">{title.ta}</span>}
-      sub={`${title.en} · ${t.n} students · came today ${t.came} · +${t.today} today${t.finished ? ` · ${t.finished} finished` : ""}`}
+      sub={`${title.en} · ${t.n} students · ${t.came} came today · +${t.today} today`}
       onClose={props.onClose}
       full
       cls="br-sheet"
       foot={
         <div class="row-actions">
-          <button type="button" class="btn ghost" disabled={!files} onClick={() => files && saveFiles(files)}>
+          <button type="button" class="btn ghost" disabled={!file} onClick={() => file && saveFiles([file])}>
             Save
           </button>
-          <button type="button" class="btn primary" disabled={!files} onClick={() => void share()}>
-            {files ? (files.length > 1 ? `Share ${files.length} images` : "Share to the group") : failed ? "Couldn't make the image" : "Making the image…"}
+          <button type="button" class="btn primary" disabled={!file} onClick={() => void share()}>
+            {file ? `Share to the group${blurred.size ? ` · ${blurred.size} blurred` : ""}` : failed ? "Couldn't make the image" : "Making the image…"}
           </button>
         </div>
       }
     >
-      {me && (
-        <p class="br-me">
-          <b>{me.s.name}</b> is <b>{me.rank ? ordinal(me.rank) : "–"}</b> of {t.n}: {me.done}/{me.of} {me.kind === "m" ? "levels" : "questions"}
-          {me.today > 0 ? `, +${me.today} today` : ""}. The shared image highlights nobody.
-        </p>
-      )}
-      <ol class="br-list" style={{ "--n": String(Math.max(1, rows.length)) }} aria-label="The class in this book, furthest first">
-        {rows.map((r) => (
-          <Row key={r.s._id} r={r} me={r.s._id === props.studentId} />
+      <div class="br-zoom" role="group" aria-label={data.stage === "master" ? "Levels" : "Sections"}>
+        <button type="button" class={`br-z${zoom === null ? " on" : ""}`} aria-pressed={zoom === null} onClick={() => setZoom(null)}>
+          All
+        </button>
+        {sh.groups.map((gr) => (
+          <button
+            key={gr.id}
+            type="button"
+            class={`br-z${zoom === gr.id ? " on" : ""}`}
+            aria-pressed={zoom === gr.id}
+            aria-label={data.stage === "master" ? `Level ${gr.label}` : `Section ${gr.label}`}
+            onClick={() => setZoom(zoom === gr.id ? null : gr.id)}
+          >
+            {gr.label}
+          </button>
         ))}
-      </ol>
+      </div>
+
+      <div class="br-grid" style={{ "--n": String(n), "--c": String(idx.length) }}>
+        <div class="br-r br-head" aria-hidden="true">
+          <span />
+          <span />
+          <span class="br-qs">
+            {zoom
+              ? idx.map((i) => (
+                  <i key={i} class={sh.cols[i].teach ? "t" : ""}>
+                    {sh.cols[i].label}
+                  </i>
+                ))
+              : sh.groups.map((gr) => (
+                  <i key={gr.id} style={{ gridColumn: `span ${gr.cols}` }} class="g">
+                    {gr.label}
+                  </i>
+                ))}
+          </span>
+          <span />
+        </div>
+        <ol class="br-rows" aria-label="Every student's questions, furthest first">
+          {sh.rows.map((r) => {
+            const me = r.s._id === props.studentId;
+            const blur = blurred.has(r.s._id);
+            return (
+              <li
+                key={r.s._id}
+                class={`br-r${me ? " me" : ""}`}
+                aria-current={me ? "true" : undefined}
+                aria-label={`${r.rank ? `${r.rank}. ` : ""}${r.s.name}: ${r.done} of ${r.of}${blur ? ", blurred on the shared image" : ""}${me ? " (this paper)" : ""}`}
+              >
+                <span class={`rk${r.rank !== null && r.rank <= 3 ? ` r${r.rank}` : ""}`}>{r.rank ?? "–"}</span>
+                <button
+                  type="button"
+                  class={`br-nm${blur ? " blur" : ""}`}
+                  aria-pressed={blur}
+                  aria-label={`${r.s.name}: ${blur ? "show" : "blur"} his name on the shared image`}
+                  onClick={() => toggle(r)}
+                >
+                  <span>{r.s.name}</span>
+                  {r.s.cameToday && <i class="br-here" aria-hidden="true" />}
+                </button>
+                <span class="br-qs">
+                  {idx.map((i) => (
+                    <i key={i} class={`q-${r.cells[i]}${!zoom && sh.cols[i].first && i > 0 ? " g1" : ""}`} title={`${sh.cols[i].label}: ${QSTATE_WORDS[r.cells[i]]}`} />
+                  ))}
+                </span>
+                <b class="br-n">
+                  {r.done}/{r.of}
+                </b>
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+
+      <ul class="br-legend" aria-label="What the colours mean">
+        {sh.used.map((st) => (
+          <li key={st}>
+            <i class={`q-${st}`} aria-hidden="true" />
+            {QSTATE_WORDS[st]}
+          </li>
+        ))}
+      </ul>
+
+      <div class="br-blur" role="group" aria-label="Blur names on the shared image">
+        <span>Blur on the image:</span>
+        <button type="button" class="br-z" onClick={() => pick("last3")}>
+          Last 3
+        </button>
+        <button type="button" class="br-z" onClick={() => pick("allButTop3")}>
+          All but top 3
+        </button>
+        <button type="button" class="br-z" disabled={blurred.size === 0} onClick={() => pick("none")}>
+          None
+        </button>
+      </div>
+      <p class="muted small br-hint">Tap a name to blur it on the shared image. The first three always show; nobody is ringed there.</p>
     </Sheet>
-  );
-}
-
-function ordinal(n: number): string {
-  const s = n % 100 >= 11 && n % 100 <= 13 ? "th" : n % 10 === 1 ? "st" : n % 10 === 2 ? "nd" : n % 10 === 3 ? "rd" : "th";
-  return `${n}${s}`;
-}
-
-function Row(props: { r: RaceRow; me: boolean }) {
-  const { r } = props;
-  const word = r.kind === "m" ? "levels" : "questions";
-  return (
-    <li
-      class={`br-row${props.me ? " me" : ""}`}
-      aria-current={props.me ? "true" : undefined}
-      aria-label={`${r.rank ? `${r.rank}. ` : ""}${r.s.name}: ${r.done} of ${r.of} ${word}${r.today ? `, ${r.today} today` : ""}${props.me ? " (this paper)" : ""}`}
-    >
-      <span class={`rk${r.rank !== null && r.rank <= 3 ? ` r${r.rank}` : ""}`}>{r.rank ?? "–"}</span>
-      <span class="br-nm">
-        {r.s.name}
-        {r.s.cameToday && <i class="br-here" aria-hidden="true" />}
-      </span>
-      <span class="br-bar">
-        <RaceBar r={r} />
-      </span>
-      <b class="br-n">
-        {r.done}/{r.of}
-      </b>
-      <span class="br-t">{r.today > 0 ? <em>+{r.today}</em> : r.kind === "m" && r.pct !== null ? `${r.pct}%` : ""}</span>
-    </li>
   );
 }

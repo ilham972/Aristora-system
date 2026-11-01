@@ -1486,7 +1486,7 @@ function PaperHead(props: { v: View; later?: () => void; onUnit: () => void; onC
   const [busy, setBusy] = useState(false);
   const [race, setRace] = useState(false);
   const away = v.where === "absent";
-  // The whole class in this book (1 Nov 2026, his ask): its race, him highlighted, Share for the group.
+  // The whole class in this book, question by question (2 Nov 2026, his ask): she checks her correction; Share for the group.
   const raceBook = bookId(v);
   const raceStage = v.stage === "fighter" || v.stage === "master" ? v.stage : null;
   // He went home (1 Nov 2026, his ask: no more + → find him → sign out): one tap, here beside Marks. His paper stays
@@ -1512,14 +1512,13 @@ function PaperHead(props: { v: View; later?: () => void; onUnit: () => void; onC
           <button
             type="button"
             class="btn ghost small fc-racebtn"
-            aria-label={`The class in this book: everyone's progress, ${v.s.name} highlighted`}
+            aria-label={`This book's questions: every student, ${v.s.name} ringed`}
             disabled={!raceBook || !raceStage}
             onClick={() => setRace(true)}
           >
             <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M3.5 20.5h17" />
-              <path d="M9 20.5V8.5h6v12" />
-              <path d="M3.5 20.5v-7h5.5M15 20.5v-4.5h5.5v4.5" />
+              <rect x="3.5" y="4" width="17" height="16" rx="2" />
+              <path d="M3.5 9.3h17M3.5 14.7h17M9.2 4v16M14.8 4v16" />
             </svg>
           </button>
           <button

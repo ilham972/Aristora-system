@@ -8568,9 +8568,9 @@ body.locked.evx-on .toasts {
   white-space: nowrap;
 }
 
-/* ---- One book's race (1 Nov 2026, his ask; src/bookRace.tsx): Correction's race button beside the home icon opens
-   every student in the open book on ONE screen (rows shrink with the class: --n), the student of the paper
-   highlighted; Share = an image for the group with nobody highlighted (src/racePoster.ts). ---- */
+/* ---- One book's question sheet (2 Nov 2026, his ask; src/bookRace.tsx): Correction's sheet button beside the home
+   icon. Every student in the open book against every question, a square each by its state, on ONE screen (rows shrink
+   with the class: --n; columns: --c); the paper's student ringed; tapped names blurred on the shared image only. ---- */
 .fc-racebtn {
   display: inline-grid;
   place-items: center;
@@ -8581,80 +8581,205 @@ body.locked.evx-on .toasts {
 .br-sheet .sheet-body {
   overscroll-behavior: contain;
 }
-.br-me {
-  margin: 0 0 6px;
-  padding: 6px 10px;
-  border-radius: 10px;
-  background: var(--line-2);
-  font-size: 13px;
-  line-height: 1.3;
+.br-zoom,
+.br-blur {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 1px 0 6px;
+}
+.br-z {
+  flex: none;
+  min-width: 30px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  font: 700 12.5px/1 var(--font);
+}
+.br-z.on {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
+}
+.br-z:disabled {
+  opacity: 0.4;
+}
+.br-blur span {
+  flex: none;
+  font: 700 12px/1 var(--font);
   color: var(--ink-2);
 }
-.br-list {
+.br-hint {
+  margin: 0;
+}
+.br-grid {
+  margin-bottom: 6px;
+}
+.br-rows {
   margin: 0;
   padding: 0;
   list-style: none;
 }
-.br-row {
+.br-r {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) 30% 44px 34px;
+  grid-template-columns: 20px 66px minmax(0, 1fr) 38px;
   align-items: center;
-  column-gap: 8px;
-  height: clamp(26px, calc((100dvh - 250px) / var(--n, 10)), 44px);
-  padding: 0 6px;
-  border-top: 1px solid var(--line-2);
+  column-gap: 5px;
+  height: clamp(22px, calc((100dvh - 330px) / var(--n, 10)), 36px);
+  padding: 0 3px;
+  border-radius: 7px;
 }
-.br-row:first-child {
-  border-top-color: transparent;
+.br-rows .br-r:nth-child(even) {
+  background: #f4f6f9;
 }
-.br-row .rk {
+.br-r.br-head {
+  height: 18px;
+}
+.br-r .rk {
   grid-area: auto;
-  width: 22px;
-  height: 22px;
-  font-size: 12px;
+  width: 19px;
+  height: 19px;
+  font-size: 10.5px;
 }
 .br-nm {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  text-align: left;
+  font: 700 13px/1.1 var(--cond);
+}
+.br-nm span {
   overflow: hidden;
-  font: 700 15px/1.1 var(--cond);
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+/* Blurred on the shared image: blurred here too, so she sees what the group will see. */
+.br-nm.blur span {
+  filter: blur(3px);
+  opacity: 0.8;
+}
 .br-here {
   flex: none;
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--green);
 }
-.br-bar .rbar,
-.br-bar .fbar {
-  height: 9px;
+.br-qs {
+  display: grid;
+  grid-template-columns: repeat(var(--c, 10), minmax(0, 1fr));
+  gap: 1px;
+  height: 100%;
+  padding: 3px 0;
+}
+.br-qs i {
+  display: block;
+  min-width: 0;
+  border-radius: 2px;
+  font-style: normal;
+}
+.br-head .br-qs {
+  padding: 0;
+}
+.br-head .br-qs i {
+  overflow: hidden;
+  text-align: center;
+  font: 700 9.5px/18px var(--font);
+  color: var(--ink-3);
+}
+.br-head .br-qs i.g {
+  overflow: visible;
+  font-size: 11px;
+  color: var(--ink-2);
+}
+.br-head .br-qs i.t {
+  color: var(--theory-ink);
+}
+.br-qs i.g1 {
+  box-shadow: -1.5px 0 0 var(--ground);
+  margin-left: 1.5px;
 }
 .br-n {
   text-align: right;
-  font: 800 13px/1 var(--font);
+  font: 800 11.5px/1 var(--font);
   font-variant-numeric: tabular-nums;
 }
-.br-t {
-  text-align: right;
-  font: 700 11.5px/1 var(--font);
-  color: var(--ink-2);
-}
-.br-t em {
-  font-style: normal;
-  color: var(--green-ink);
-}
-/* The student of the open paper: navy ring and a soft fill, so she sees at once where he stands. */
-.br-row.me {
-  border-radius: 9px;
-  border-top-color: transparent;
-  background: var(--card);
+/* The paper's student: a navy ring, so she sees at once where he stands. */
+.br-r.me {
   box-shadow: inset 0 0 0 2px var(--ink);
 }
-.br-row.me + .br-row {
-  border-top-color: transparent;
+.br-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 10px;
+  margin: 0 0 6px;
+  padding: 0;
+  list-style: none;
+  font: 600 11px/1.3 var(--font);
+  color: var(--ink-2);
+}
+.br-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.br-legend i {
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+}
+/* The squares' states (the same colours as the shared image: QSTATE_FILL in src/racePoster.ts). */
+.q-right,
+.q-full {
+  background: #149a48;
+}
+.q-wrong,
+.q-zero {
+  background: #dc2338;
+}
+.q-slip,
+.q-part {
+  background: #f29f05;
+}
+.q-explained {
+  background: #8a3ffc;
+}
+.q-skip {
+  background: #9fd8b2;
+}
+.q-pre {
+  background: #cfe8d7;
+}
+.q-skipped {
+  background: #4c5770;
+}
+.q-todo {
+  background: #dde2ea;
+}
+.q-taught {
+  background: #2d5be3;
+}
+.q-tskip {
+  background: #7f9bea;
+}
+/* Not taught yet: pale blue (an outline turns solid on a square this thin). */
+.q-teach {
+  background: #cdd9fb;
+}
+.q-blank {
+  background: #1d3b8f;
+}
+.q-handed {
+  background: #ffe2a8;
+  box-shadow: inset 0 0 0 1.5px #f29f05;
 }
