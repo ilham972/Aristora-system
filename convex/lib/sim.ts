@@ -1,13 +1,13 @@
 // The simulation (1 Nov 2026, his voice note: "upgrade the test feature ... like a simulation ... the correction will
 // happen automatically ... easy, medium and hard ... set the students count ... I want to see the performance of each
-// teacher in the CEO dashboard"). Made-up students work through the books in the app at a pace and with mistakes that
+// teacher in the Owner dashboard"). Made-up students work through the books in the app at a pace and with mistakes that
 // depend on the level; the app plays Correction (it marks each workbook level when it is handed in, marks each
 // theory-book answer, and sends the students Theory and Evaluation call); the Theory and Evaluation teachers practise on
 // their own pages exactly as in a class. Pure functions, shared by the server (convex/sim.ts) and the owner's phone
-// (the CEO page's Sim tab).
+// (the Owner page's Sim tab).
 
 import { levelOutOf, type Fighter, type MasterData, type MasterLevel } from "./book";
-import { digestOf, ROOMS, type DCall, type DEvent, type Digest, type DVisit, type RoomKey } from "./ceo";
+import { digestOf, ROOMS, type DCall, type DEvent, type Digest, type DVisit, type RoomKey } from "./boss";
 import type { MQ, MState } from "./master";
 import { AMBER_AT, type Mark } from "./status";
 
@@ -22,13 +22,13 @@ export const SIM_MINUTES = [20, 30, 45, 60] as const;
 export const SIM_MAX = 40;
 /** The app takes a step every few seconds: students work, hand in, the app corrects and sends. */
 export const TICK_MS = 5_000;
-/** One reading of the class a minute (the CEO page's minute-by-minute bars). */
+/** One reading of the class a minute (the Owner page's minute-by-minute bars). */
 export const SAMPLE_MS = 60_000;
 /** Readings kept (two hours). */
 export const SAMPLES_MAX = 120;
 /** No step for this long: a phone that sees it starts the steps again. */
 export const STALE_TICK_MS = 30_000;
-/** Who the app's Correction is in the history and on the CEO page. */
+/** Who the app's Correction is in the history and on the Owner page. */
 export const ROBOT = "Simulation";
 /** Sent and not marked Arrived for this long: the app (as Correction would) says he reached the room. */
 export const REACHED_MS = 3 * MIN;
@@ -455,7 +455,7 @@ export function addFighterSample(x: SimSample, st: { pending: number[]; nextTheo
   if (st.nextTheory && st.left <= AMBER_AT) x.ts++;
 }
 
-// ---------------------------------------------------------------- the scoreboard (the CEO page's Sim tab)
+// ---------------------------------------------------------------- the scoreboard (the Owner page's Sim tab)
 
 export type SimEvent = DEvent & { name?: string; q?: number };
 export type SimCall = DCall & { _id?: string; teacherId?: string; ahead?: boolean; walk?: boolean };
@@ -631,7 +631,7 @@ export function simBoard(input: { start: number; end: number; events: SimEvent[]
 
 /**
  * Was the room enough for this load? Idle minutes per student-hour waiting for it: 6+ needs another person, 3–6 near
- * the limit, under 3 kept up (the CEO page's thresholds). Grey until there is a quarter of a student-hour to judge.
+ * the limit, under 3 kept up (the Owner page's thresholds). Grey until there is a quarter of a student-hour to judge.
  */
 export function roomLoad(d: Digest, room: RoomKey): { tone: "red" | "amber" | "green" | "grey"; rate: number | null } {
   const hours = d.studentMin / 60;

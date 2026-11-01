@@ -103,7 +103,7 @@ export function subscribe<Q extends FunctionReference<"query">>(
 }
 
 /**
- * A query read once, not watched (the CEO page: a live query would run again on every tap of every teacher).
+ * A query read once, not watched (the Owner page: a live query would run again on every tap of every teacher).
  */
 export async function fetchOnce<Q extends FunctionReference<"query">>(query: Q, args: FunctionArgs<Q>): Promise<FunctionReturnType<Q>> {
   const a = withToken(args);

@@ -1,4 +1,4 @@
-// The CEO page's Sim tab (1 Nov 2026, his voice note: "I want to see the performance of each teacher ... where heavy
+// The Owner page's Sim tab (1 Nov 2026, his voice note: "I want to see the performance of each teacher ... where heavy
 // workload going, how much explaining, how much theory taught, and what is happening"). Read every 15 seconds while it is
 // open (convex/sim.ts board; never a live query: it reads the simulation's whole history). One screen, top to bottom:
 // the simulation and its controls, the headline (students with no work), where the work waits now, each teacher, the
@@ -10,8 +10,8 @@ import { api } from "../convex/_generated/api";
 import { slClock } from "../convex/lib/day";
 import { simMinutes, STALE_TICK_MS, type SimSample } from "../convex/lib/sim";
 import { errorText, fetchOnce, mutate } from "./backend";
-import { Bars, Dot, Meter, Names, Tile } from "./ceoKit";
-import { minWords, ROOM_NAME, type Tone } from "./ceoData";
+import { Bars, Dot, Meter, Names, Tile } from "./bossKit";
+import { minWords, ROOM_NAME, type Tone } from "./bossData";
 import { SimControls } from "./sim";
 import { busyToneOf, clockWords, feedText, LEVEL_NAME, rateTone, roomVerdict, teacherWords, trendOf } from "./simData";
 import type { Board } from "./store";
@@ -84,7 +84,7 @@ export function SimTab(props: { board: Board; now: number; onOpen: (id: string) 
           Practice for Theory and Evaluation before a real class: made-up students work, the app plays Correction, and this
           tab shows each teacher's numbers live.
         </Empty>
-        <section class="ceo-card">
+        <section class="boss-card">
           <h3>Start one</h3>
           <SimControls sim={null} onChange={() => void b.reload()} />
         </section>
@@ -102,12 +102,12 @@ export function SimTab(props: { board: Board; now: number; onOpen: (id: string) 
 
   return (
     <>
-      <section class="ceo-card sim-head" aria-label="The simulation">
+      <section class="boss-card sim-head" aria-label="The simulation">
         <h3>
           Simulation · {LEVEL_NAME[sim.level]} · {sim.count} students
           <small class={`sim-st${running ? " on" : ""}`}>{running ? "Running" : `Ended ${slClock(sim.endedAt ?? props.now)}`}</small>
         </h3>
-        <p class="ceo-sub">
+        <p class="boss-sub">
           {clockWords(m, !running)} · started {slClock(sim.startedAt)}
           {sim.by ? ` by ${sim.by}` : ""}
         </p>
@@ -126,14 +126,14 @@ export function SimTab(props: { board: Board; now: number; onOpen: (id: string) 
         <p class="muted center">The first numbers come in a minute.</p>
       ) : (
         <>
-          <section class={`ceo-card ceo-hero t-${rateTone(board.rate)}`} aria-label="Students with no work">
+          <section class={`boss-card boss-hero t-${rateTone(board.rate)}`} aria-label="Students with no work">
             <span>Idle minutes per student-hour</span>
             <b>{board.rate ?? "–"}</b>
             <small>
               {minWords(d.idle.total)} with no work in all. Under 3 is good; 6 or more means the team can't carry this load.
             </small>
             {d.idle.total > 0 && (
-              <small class="ceo-why">
+              <small class="boss-why">
                 Waiting for:{" "}
                 {(["evaluation", "theory", "correction"] as const)
                   .filter((r) => d.idle[r] >= 0.5)
@@ -144,7 +144,7 @@ export function SimTab(props: { board: Board; now: number; onOpen: (id: string) 
           </section>
 
           {board.outs.length > 0 && (
-            <section class="ceo-card" aria-label="No work now">
+            <section class="boss-card" aria-label="No work now">
               <h3>No work now</h3>
               <Names
                 onOpen={props.onOpen}
@@ -161,12 +161,12 @@ export function SimTab(props: { board: Board; now: number; onOpen: (id: string) 
           {last && <WhereNow last={last} samples={samples} />}
 
           {(m.done >= 10 || !running) && (
-            <section class="ceo-card" aria-label="Did each room keep up">
+            <section class="boss-card" aria-label="Did each room keep up">
               <h3>Did each room keep up?</h3>
               {(["evaluation", "theory"] as const).map((r) => {
                 const v = roomVerdict(d, r, people(r));
                 return (
-                  <p key={r} class={`ceo-say t-${v.tone}`}>
+                  <p key={r} class={`boss-say t-${v.tone}`}>
                     <Dot tone={v.tone} label={v.tone} />
                     <span>
                       <b>{v.head}.</b> {v.why}
@@ -177,7 +177,7 @@ export function SimTab(props: { board: Board; now: number; onOpen: (id: string) 
             </section>
           )}
 
-          <section class="ceo-card" aria-label="Each teacher">
+          <section class="boss-card" aria-label="Each teacher">
             <h3>Each teacher</h3>
             {board.teachers.length === 0 ? (
               <p class="muted small">
@@ -194,8 +194,8 @@ export function SimTab(props: { board: Board; now: number; onOpen: (id: string) 
                       <span class={`sim-room r-${t.room}`}>{ROOM_NAME[t.room]}</span>
                     </p>
                     <p>{w.main}</p>
-                    <p class="ceo-sub">{w.calls}</p>
-                    {w.arrived && <p class="ceo-sub">{w.arrived}</p>}
+                    <p class="boss-sub">{w.calls}</p>
+                    {w.arrived && <p class="boss-sub">{w.arrived}</p>}
                     <Meter
                       label="Busy"
                       share={t.busyPct}
@@ -209,9 +209,9 @@ export function SimTab(props: { board: Board; now: number; onOpen: (id: string) 
 
           {samples.length >= 2 && <Line samples={samples} start={sim.startedAt} />}
 
-          <section class="ceo-card" aria-label="What the app did as Correction">
+          <section class="boss-card" aria-label="What the app did as Correction">
             <h3>The app as Correction</h3>
-            <div class="ceo-tiles">
+            <div class="boss-tiles">
               <Tile v={board.robot.levels} k="levels corrected" sub={`${d.rooms.correction.handedIn} handed in`} />
               <Tile v={board.robot.marks} k="answers marked" sub="theory books" />
               <Tile v={board.robot.sent} k="students sent" />
@@ -220,7 +220,7 @@ export function SimTab(props: { board: Board; now: number; onOpen: (id: string) 
           </section>
 
           {(live?.feed.length ?? 0) > 0 && (
-            <section class="ceo-card" aria-label="What is happening">
+            <section class="boss-card" aria-label="What is happening">
               <h3>
                 What is happening<small>newest first</small>
               </h3>
@@ -241,9 +241,9 @@ export function SimTab(props: { board: Board; now: number; onOpen: (id: string) 
       )}
 
       {past && past.length > 0 && (
-        <section class="ceo-card" aria-label="Simulations before">
+        <section class="boss-card" aria-label="Simulations before">
           <h3>Before</h3>
-          <table class="ceo-table sim-past">
+          <table class="boss-table sim-past">
             <thead>
               <tr>
                 <th>When</th>
@@ -273,9 +273,9 @@ export function SimTab(props: { board: Board; now: number; onOpen: (id: string) 
         </section>
       )}
 
-      <p class="ceo-upd">
+      <p class="boss-upd">
         {b.busy ? "Updating…" : "Every 15 s"}
-        <button type="button" class="ceo-link" disabled={b.busy} onClick={() => void b.reload()}>
+        <button type="button" class="boss-link" disabled={b.busy} onClick={() => void b.reload()}>
           Refresh
         </button>
       </p>
@@ -292,9 +292,9 @@ function WhereNow(props: { last: SimSample; samples: SimSample[] }) {
     { room: "correction", n: last.cq, words: `${plural(last.cq, "level")} (the app)`, trend: trendOf(samples, "cq") },
   ];
   return (
-    <section class="ceo-card" aria-label="Where the work waits now">
+    <section class="boss-card" aria-label="Where the work waits now">
       <h3>Where the work waits</h3>
-      <p class="ceo-sub">
+      <p class="boss-sub">
         {last.n} in class · {last.room} with a teacher
       </p>
       {rows.map((r) => (
@@ -321,7 +321,7 @@ function Line(props: { samples: SimSample[]; start: number }) {
   const words = (i: number) =>
     `Minute ${minute(i)}: ${s[i].idle} with no work · ${plural(s[i].eq, "question")} for Evaluation · ${s[i].ts} for Theory · ${s[i].room} with a teacher`;
   return (
-    <section class="ceo-card" aria-label="The class minute by minute">
+    <section class="boss-card" aria-label="The class minute by minute">
       <h3>Minute by minute</h3>
       <span class="sim-lbl">With no work</span>
       <Bars values={s.map((x) => x.idle)} tones={s.map((x): Tone | "plain" => (x.idle ? "red" : "plain"))} words={words} sel={sel} onPick={setSel} />
@@ -329,7 +329,7 @@ function Line(props: { samples: SimSample[]; start: number }) {
       <Bars values={s.map((x) => x.eq)} words={words} sel={sel} onPick={setSel} />
       <span class="sim-lbl">Students for Theory</span>
       <Bars values={s.map((x) => x.ts)} words={words} marks={marks} sel={sel} onPick={setSel} />
-      <p class="ceo-read">{sel !== null && sel < s.length ? words(sel) : "Tap a minute to read it."}</p>
+      <p class="boss-read">{sel !== null && sel < s.length ? words(sel) : "Tap a minute to read it."}</p>
     </section>
   );
 }

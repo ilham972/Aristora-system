@@ -172,7 +172,7 @@ ul {
 }
 /* Class and Progress: icons in the top bar (Correction moved to the bottom bar, 30 Oct 2026). */
 .prog-btn,
-.ceo-btn,
+.boss-btn,
 .class-btn {
   padding: 0 10px;
 }
@@ -6626,17 +6626,17 @@ body.locked.tp-padded .toasts {
 }
 
 
-/* ---------- The CEO page (owner only, 31 Oct 2026; src/ceo.tsx) ----------
+/* ---------- The Owner page (owner only, 31 Oct 2026; src/boss.tsx) ----------
    Cards like the Progress page; numbers in the condensed face; red / amber / green only when they mean
    act now / watch / fine, always with words. */
-.ceo {
+.boss {
   padding-bottom: 24px;
 }
-.ceo-tabs {
+.boss-tabs {
   display: flex;
   width: 100%;
 }
-.ceo-tabs .segc-b {
+.boss-tabs .segc-b {
   flex: 1 1 0;
   min-width: 0;
   padding: 0 4px;
@@ -6645,11 +6645,11 @@ body.locked.tp-padded .toasts {
   white-space: nowrap;
 }
 @media (max-width: 345px) {
-  .ceo-tabs .segc-b {
+  .boss-tabs .segc-b {
     padding: 0 2px;
   }
 }
-.ceo-card {
+.boss-card {
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 16px;
@@ -6659,31 +6659,31 @@ body.locked.tp-padded .toasts {
   gap: 8px;
   animation: rise 0.22s ease-out both;
 }
-.ceo-card h3 {
+.boss-card h3 {
   margin: 0;
   display: flex;
   align-items: baseline;
   gap: 8px;
   font: 700 16px/1.25 var(--font);
 }
-.ceo-card h3 small {
+.boss-card h3 small {
   font-size: 12.5px;
   font-weight: 600;
   color: var(--ink-2);
 }
-.ceo-card h3 .ceo-link {
+.boss-card h3 .boss-link {
   margin-left: auto;
 }
-.ceo-card p {
+.boss-card p {
   margin: 0;
   font-size: 14.5px;
   line-height: 1.4;
 }
-.ceo-card p small {
+.boss-card p small {
   color: var(--ink-3);
   font-weight: 600;
 }
-.ceo-h {
+.boss-h {
   margin: 0;
   display: flex;
   align-items: baseline;
@@ -6691,28 +6691,28 @@ body.locked.tp-padded .toasts {
   gap: 8px;
   font: 700 18px/1.2 var(--font);
 }
-.ceo-h small {
+.boss-h small {
   font-size: 13px;
   font-weight: 600;
   color: var(--ink-2);
   white-space: nowrap;
 }
-.ceo-sub {
+.boss-sub {
   color: var(--ink-2);
   font-size: 13.5px !important;
 }
-.ceo-note {
+.boss-note {
   color: var(--ink-3);
   font-size: 12.5px !important;
   font-weight: 600;
 }
-.ceo-mix {
+.boss-mix {
   margin: 0;
   font-size: 13.5px;
   font-weight: 600;
   color: var(--ink-2);
 }
-.ceo-upd {
+.boss-upd {
   margin: 0;
   display: flex;
   justify-content: center;
@@ -6722,7 +6722,7 @@ body.locked.tp-padded .toasts {
   font-weight: 600;
   color: var(--ink-3);
 }
-.ceo-link {
+.boss-link {
   border: 0;
   background: none;
   padding: 6px 4px;
@@ -6730,11 +6730,11 @@ body.locked.tp-padded .toasts {
   color: var(--theory-ink);
   text-decoration: underline;
 }
-.ceo-link:disabled {
+.boss-link:disabled {
   color: var(--ink-3);
 }
 /* The status dot: always next to words that say the same thing. */
-.ceo-dot {
+.boss-dot {
   flex: none;
   display: inline-block;
   width: 10px;
@@ -6742,24 +6742,24 @@ body.locked.tp-padded .toasts {
   border-radius: 50%;
   background: var(--ink-3);
 }
-.ceo-dot.t-red {
+.boss-dot.t-red {
   background: var(--red);
 }
-.ceo-dot.t-amber {
+.boss-dot.t-amber {
   background: var(--amber);
 }
-.ceo-dot.t-green {
+.boss-dot.t-green {
   background: var(--green);
 }
-.ceo-dot.t-grey {
+.boss-dot.t-grey {
   background: var(--line);
 }
-.ceo-says {
+.boss-says {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
-.ceo-say {
+.boss-say {
   margin: 0;
   display: flex;
   align-items: baseline;
@@ -6772,34 +6772,34 @@ body.locked.tp-padded .toasts {
   background: var(--card);
   border: 1px solid var(--line);
 }
-.ceo-say .ceo-dot {
+.boss-say .boss-dot {
   transform: translateY(-1px);
 }
-.ceo-say.t-red {
+.boss-say.t-red {
   background: var(--red-soft);
   border-color: transparent;
   color: var(--red-ink);
 }
-.ceo-say.t-amber {
+.boss-say.t-amber {
   background: var(--amber-soft);
   border-color: transparent;
   color: var(--amber-ink);
 }
-.ceo-say.t-green {
+.boss-say.t-green {
   background: var(--green-soft);
   border-color: transparent;
   color: var(--green-ink);
 }
 /* Tiles: a number, what it counts, one line of context. */
-.ceo-tiles {
+.boss-tiles {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
-.ceo-tiles.three {
+.boss-tiles.three {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
-.ceo-tile {
+.boss-tile {
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -6809,106 +6809,106 @@ body.locked.tp-padded .toasts {
   border-radius: 14px;
   background: var(--card);
 }
-.ceo-card .ceo-tile {
+.boss-card .boss-tile {
   background: var(--ground);
   border-color: transparent;
 }
-.ceo-tile b {
+.boss-tile b {
   font: 700 26px/1.05 var(--cond);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.ceo-tiles.money .ceo-tile b {
+.boss-tiles.money .boss-tile b {
   font-size: 21px;
 }
-.ceo-tile span {
+.boss-tile span {
   font-size: 13px;
   font-weight: 700;
   line-height: 1.2;
 }
-.ceo-tile small {
+.boss-tile small {
   font-size: 12px;
   font-weight: 600;
   color: var(--ink-2);
   line-height: 1.25;
 }
-.ceo-tile.t-red {
+.boss-tile.t-red {
   background: var(--red-soft);
   border-color: transparent;
 }
-.ceo-tile.t-red b,
-.ceo-tile.t-red small {
+.boss-tile.t-red b,
+.boss-tile.t-red small {
   color: var(--red-ink);
 }
-.ceo-tile.t-amber {
+.boss-tile.t-amber {
   background: var(--amber-soft);
   border-color: transparent;
 }
-.ceo-tile.t-amber b,
-.ceo-tile.t-amber small {
+.boss-tile.t-amber b,
+.boss-tile.t-amber small {
   color: var(--amber-ink);
 }
-.ceo-tile.t-green b {
+.boss-tile.t-green b {
   color: var(--green-ink);
 }
 @media (max-width: 345px) {
-  .ceo-tiles.three .ceo-tile {
+  .boss-tiles.three .boss-tile {
     padding: 8px 7px;
   }
-  .ceo-tiles.three .ceo-tile b {
+  .boss-tiles.three .boss-tile b {
     font-size: 23px;
   }
-  .ceo-tile span {
+  .boss-tile span {
     font-size: 12.5px;
   }
 }
 /* The idle number, and the team's capacity: one big number each. */
-.ceo-hero,
-.ceo-cap {
+.boss-hero,
+.boss-cap {
   gap: 2px;
 }
-.ceo-hero span,
-.ceo-cap span {
+.boss-hero span,
+.boss-cap span {
   font-size: 13.5px;
   font-weight: 700;
   color: var(--ink-2);
 }
-.ceo-hero b,
-.ceo-cap b {
+.boss-hero b,
+.boss-cap b {
   font: 700 40px/1.05 var(--cond);
 }
-.ceo-cap b {
+.boss-cap b {
   font-size: 30px;
 }
-.ceo-hero small,
-.ceo-cap small {
+.boss-hero small,
+.boss-cap small {
   font-size: 13px;
   font-weight: 600;
   color: var(--ink-2);
   line-height: 1.35;
 }
-.ceo-hero.t-red {
+.boss-hero.t-red {
   border: 1.5px solid var(--red);
   background: var(--red-soft);
 }
-.ceo-hero.t-red b {
+.boss-hero.t-red b {
   color: var(--red-ink);
 }
-.ceo-hero.t-amber {
+.boss-hero.t-amber {
   border: 1.5px solid var(--amber);
   background: var(--amber-soft);
 }
-.ceo-hero.t-amber b {
+.boss-hero.t-amber b {
   color: var(--amber-ink);
 }
-.ceo-hero.t-green b {
+.boss-hero.t-green b {
   color: var(--green-ink);
 }
-.ceo-why {
+.boss-why {
   color: var(--ink) !important;
 }
-.ceo-sure {
+.boss-sure {
   margin: 0;
   padding: 9px 12px;
   border-radius: 12px;
@@ -6918,67 +6918,67 @@ body.locked.tp-padded .toasts {
   border: 1px dashed var(--line);
   color: var(--ink-2);
 }
-.ceo-sure.s-none,
-.ceo-sure.s-early {
+.boss-sure.s-none,
+.boss-sure.s-early {
   background: var(--yellow-soft);
   border: 0;
   color: var(--yellow-ink);
 }
 /* A room right now, and a room's verdict. */
-.ceo-room header,
-.ceo-verdict header {
+.boss-room header,
+.boss-verdict header {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
 }
-.ceo-room header h3,
-.ceo-verdict header h3 {
+.boss-room header h3,
+.boss-verdict header h3 {
   flex: none;
 }
-.ceo-rn,
-.ceo-verdict header b {
+.boss-rn,
+.boss-verdict header b {
   margin-left: auto;
   min-width: 0;
   text-align: right;
   font-size: 14.5px;
   font-weight: 700;
 }
-.ceo-room.r-correction {
+.boss-room.r-correction {
   border-left: 5px solid var(--ink);
 }
-.ceo-room.r-evaluation {
+.boss-room.r-evaluation {
   border-left: 5px solid var(--evaluation);
 }
-.ceo-room.r-theory {
+.boss-room.r-theory {
   border-left: 5px solid var(--theory);
 }
-.ceo-verdict.t-red {
+.boss-verdict.t-red {
   border: 1.5px solid var(--red);
 }
-.ceo-verdict.t-red header b {
+.boss-verdict.t-red header b {
   color: var(--red-ink);
 }
-.ceo-verdict.t-amber {
+.boss-verdict.t-amber {
   border: 1.5px solid var(--amber);
 }
-.ceo-verdict.t-amber header b {
+.boss-verdict.t-amber header b {
   color: var(--amber-ink);
 }
-.ceo-verdict.t-green header b {
+.boss-verdict.t-green header b {
   color: var(--green-ink);
 }
-.ceo-verdict.t-grey header b {
+.boss-verdict.t-grey header b {
   color: var(--ink-3);
 }
-.ceo-plus {
+.boss-plus {
   padding: 8px 10px;
   border-radius: 10px;
   background: var(--ground);
   color: var(--ink) !important;
 }
 /* The busy share of each room: a thin bar. */
-.ceo-meter {
+.boss-meter {
   display: grid;
   grid-template-columns: 84px minmax(0, 1fr) 42px;
   grid-template-areas:
@@ -6988,58 +6988,58 @@ body.locked.tp-padded .toasts {
   column-gap: 8px;
   row-gap: 2px;
 }
-.ceo-ml {
+.boss-ml {
   grid-area: l;
   font-size: 14px;
   font-weight: 700;
 }
-.ceo-mb {
+.boss-mb {
   grid-area: b;
   height: 10px;
   border-radius: 5px;
   background: var(--line-2);
   overflow: hidden;
 }
-.ceo-mb i {
+.boss-mb i {
   display: block;
   height: 100%;
   border-radius: 5px;
   background: var(--ink-3);
 }
-.ceo-mb i.t-green {
+.boss-mb i.t-green {
   background: var(--green);
 }
-.ceo-mb i.t-amber {
+.boss-mb i.t-amber {
   background: var(--amber);
 }
-.ceo-mb i.t-red {
+.boss-mb i.t-red {
   background: var(--red);
 }
-.ceo-mv {
+.boss-mv {
   grid-area: v;
   text-align: right;
   font: 700 16px/1 var(--cond);
 }
-.ceo-mw {
+.boss-mw {
   grid-area: w;
   font-size: 12.5px;
   font-weight: 600;
   color: var(--ink-2);
 }
 /* Bars: columns from one baseline, thin, rounded at the top; tap one to read it. */
-.ceo-bars {
+.boss-bars {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
-.ceo-plot {
+.boss-plot {
   display: flex;
   align-items: flex-end;
   gap: 2px;
   height: 56px;
   border-bottom: 1px solid var(--line);
 }
-.ceo-col {
+.boss-col {
   flex: 1 1 0;
   min-width: 0;
   height: 100%;
@@ -7050,34 +7050,34 @@ body.locked.tp-padded .toasts {
   align-items: flex-end;
   justify-content: center;
 }
-.ceo-col i {
+.boss-col i {
   display: block;
   width: 100%;
   max-width: 24px;
   border-radius: 4px 4px 0 0;
   background: var(--ink-2);
 }
-.ceo-col i.t-red {
+.boss-col i.t-red {
   background: var(--red);
 }
-.ceo-col i.t-amber {
+.boss-col i.t-amber {
   background: var(--amber);
 }
-.ceo-col i.t-green {
+.boss-col i.t-green {
   background: var(--green);
 }
-.ceo-col i.t-grey {
+.boss-col i.t-grey {
   background: var(--line);
 }
-.ceo-col.sel {
+.boss-col.sel {
   background: var(--line-2);
   border-radius: 4px 4px 0 0;
 }
-.ceo-xm {
+.boss-xm {
   display: flex;
   gap: 2px;
 }
-.ceo-xm span {
+.boss-xm span {
   flex: 1 1 0;
   min-width: 0;
   overflow: visible;
@@ -7087,47 +7087,47 @@ body.locked.tp-padded .toasts {
   color: var(--ink-3);
   text-align: center;
 }
-.ceo-xm span:first-child {
+.boss-xm span:first-child {
   text-align: left;
 }
-.ceo-xm span:last-child {
+.boss-xm span:last-child {
   text-align: right;
 }
-.ceo-read {
+.boss-read {
   min-height: 1.4em;
   font-size: 13px !important;
   font-weight: 700;
   color: var(--ink-2);
 }
-.ceo-lrow {
+.boss-lrow {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
-.ceo-lrow .ceo-plot {
+.boss-lrow .boss-plot {
   height: 40px;
 }
-.ceo-lk {
+.boss-lk {
   font-size: 13px;
   font-weight: 700;
   color: var(--ink-2);
 }
-.ceo-lk small {
+.boss-lk small {
   font-weight: 600;
   color: var(--ink-3);
 }
 /* Names to tap: each opens his whole sheet. */
-.ceo-names {
+.boss-names {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
 }
-.ceo-names li + li {
+.boss-names li + li {
   border-top: 1px solid var(--line-2);
 }
-.ceo-nm {
+.boss-nm {
   width: 100%;
   display: flex;
   align-items: baseline;
@@ -7139,7 +7139,7 @@ body.locked.tp-padded .toasts {
   font: inherit;
   color: var(--ink);
 }
-.ceo-nm b {
+.boss-nm b {
   flex: none;
   max-width: 45%;
   font: 700 16px/1.2 var(--cond);
@@ -7147,7 +7147,7 @@ body.locked.tp-padded .toasts {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.ceo-nm span {
+.boss-nm span {
   min-width: 0;
   margin-left: auto;
   text-align: right;
@@ -7156,7 +7156,7 @@ body.locked.tp-padded .toasts {
   color: var(--ink-2);
 }
 /* Each person, and small tables. */
-.ceo-people {
+.boss-people {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -7164,21 +7164,21 @@ body.locked.tp-padded .toasts {
   flex-direction: column;
   gap: 8px;
 }
-.ceo-people li {
+.boss-people li {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 2px 8px;
 }
-.ceo-people b {
+.boss-people b {
   font: 700 16px/1.2 var(--cond);
 }
-.ceo-people small {
+.boss-people small {
   grid-column: 1 / -1;
   font-size: 12.5px;
   font-weight: 600;
   color: var(--ink-2);
 }
-.ceo-tag {
+.boss-tag {
   font-size: 12px;
   font-weight: 700;
   padding: 2px 8px;
@@ -7186,20 +7186,20 @@ body.locked.tp-padded .toasts {
   background: var(--role-soft);
   color: var(--ink);
 }
-.ceo-tag.r-evaluation {
+.boss-tag.r-evaluation {
   background: var(--evaluation-soft);
   color: var(--evaluation-ink);
 }
-.ceo-tag.r-theory {
+.boss-tag.r-theory {
   background: var(--theory-soft);
   color: var(--theory-ink);
 }
-.ceo-table {
+.boss-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 13.5px;
 }
-.ceo-table th {
+.boss-table th {
   text-align: right;
   font-size: 12px;
   font-weight: 700;
@@ -7207,32 +7207,32 @@ body.locked.tp-padded .toasts {
   padding: 4px 4px 6px;
   border-bottom: 1px solid var(--line);
 }
-.ceo-table td {
+.boss-table td {
   text-align: right;
   padding: 6px 4px;
   font-weight: 600;
   border-bottom: 1px solid var(--line-2);
 }
-.ceo-table th:first-child,
-.ceo-table td:first-child {
+.boss-table th:first-child,
+.boss-table td:first-child {
   text-align: left;
 }
-.ceo-table tr.sum td {
+.boss-table tr.sum td {
   font-weight: 800;
 }
-.ceo-table td.t-red {
+.boss-table td.t-red {
   color: var(--red-ink);
   font-weight: 800;
 }
-.ceo-table td.t-amber {
+.boss-table td.t-amber {
   color: var(--amber-ink);
   font-weight: 800;
 }
-.ceo-mx th,
-.ceo-mx td {
+.boss-mx th,
+.boss-mx td {
   text-align: center;
 }
-.ceo-facts {
+.boss-facts {
   margin: 0;
   padding: 0;
   list-style: none;
@@ -7241,18 +7241,18 @@ body.locked.tp-padded .toasts {
   gap: 6px;
   font-size: 14px;
 }
-.ceo-facts small {
+.boss-facts small {
   color: var(--ink-3);
   font-weight: 600;
 }
-.ceo-money label {
+.boss-money label {
   display: flex;
   flex-direction: column;
   gap: 4px;
   font-size: 13.5px;
   font-weight: 700;
 }
-.ceo-money input {
+.boss-money input {
   height: 44px;
   padding: 0 12px;
   border: 1.5px solid var(--line);
@@ -8262,7 +8262,7 @@ body.locked.evx-on .toasts {
 }
 
 /* ---- The simulation (1 Nov 2026, his voice note; src/sim.tsx, src/simTab.tsx): the owner's controls in Settings →
-   Students and on the CEO page's Sim tab, this phone's switch, the Join banner, the scoreboard. The simulation's colour
+   Students and on the Owner page's Sim tab, this phone's switch, the Join banner, the scoreboard. The simulation's colour
    is the old test class's pink (a phone in it still has the striped top bar, now with SIM). ---- */
 .sim {
   display: flex;
@@ -8413,8 +8413,8 @@ body.locked.evx-on .toasts {
 .sim-banner.over b {
   background: var(--ink);
 }
-/* The CEO page: the Sim tab has a dot while a simulation runs. */
-.ceo-tabs .segc-b.sim-on::after {
+/* The Owner page: the Sim tab has a dot while a simulation runs. */
+.boss-tabs .segc-b.sim-on::after {
   content: "";
   display: inline-block;
   width: 7px;
@@ -8424,7 +8424,7 @@ body.locked.evx-on .toasts {
   background: #d6336c;
   vertical-align: 2px;
 }
-.ceo-tabs .segc-b.sim-on.on::after {
+.boss-tabs .segc-b.sim-on.on::after {
   background: #fff;
 }
 .sim-head h3 {

@@ -1,10 +1,10 @@
-// The simulation's words on the owner's phone (the CEO page's Sim tab, Settings → Students): what happened, each
+// The simulation's words on the owner's phone (the Owner page's Sim tab, Settings → Students): what happened, each
 // teacher's line, whether a room kept up. The numbers come from convex/lib/sim.ts (simBoard), read by convex/sim.ts.
 
-import type { Digest } from "../convex/lib/ceo";
+import type { Digest } from "../convex/lib/boss";
 import { PLANS, roomLoad, ROBOT, type SimLevel, type SimSample, type TeacherLine } from "../convex/lib/sim";
 import type { FeedEvent } from "../convex/sim";
-import { minWords, ROOM_NAME, type Tone } from "./ceoData";
+import { minWords, ROOM_NAME, type Tone } from "./bossData";
 
 export const LEVEL_NAME: Record<SimLevel, string> = { easy: PLANS.easy.name, medium: PLANS.medium.name, hard: PLANS.hard.name };
 
@@ -112,7 +112,7 @@ export function busyToneOf(share: number | null): Tone {
   return share > 0.85 ? "red" : share > 0.65 ? "amber" : "green";
 }
 
-/** Did the room keep up with this load? The CEO page's thresholds: idle minutes per student-hour waiting for it. */
+/** Did the room keep up with this load? The Owner page's thresholds: idle minutes per student-hour waiting for it. */
 export function roomVerdict(d: Digest, r: "evaluation" | "theory", people: number): { tone: Tone; head: string; why: string } {
   const { tone, rate } = roomLoad(d, r);
   const name = ROOM_NAME[r];

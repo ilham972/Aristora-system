@@ -165,7 +165,7 @@ export const student = query({
 });
 
 /**
- * One student's sheet (Progress → his name, the CEO page's lists): everything about him for the owner, and the parents'
+ * One student's sheet (Progress → his name, the Owner page's lists): everything about him for the owner, and the parents'
  * WhatsApp image (src/studentReport.ts). His visits, every book of his (how far, marks, each level's dates, when
  * teachers explained or taught his questions) and his room visits. Read only while the sheet is open.
  */

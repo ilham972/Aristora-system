@@ -1,4 +1,4 @@
-// The CEO page's arithmetic (convex/lib/ceo.ts): one class's digest, many classes' load, the verdicts, money.
+// The Owner page's arithmetic (convex/lib/boss.ts): one class's digest, many classes' load, the verdicts, money.
 
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
@@ -17,7 +17,7 @@ import {
   type DCall,
   type DEvent,
   type Digest,
-} from "../convex/lib/ceo";
+} from "../convex/lib/boss";
 
 const T0 = Date.UTC(2026, 9, 31, 10, 0); // 3:30 PM in Sri Lanka
 const min = (n: number) => T0 + n * 60_000;
@@ -273,7 +273,7 @@ describe("moneyOf: his three numbers", () => {
   });
 });
 
-// ---------------------------------------------------------------- the server: ceo.overview, ceo.setMoney, progress.report
+// ---------------------------------------------------------------- the server: boss.overview, boss.setMoney, progress.report
 
 
 const modules = import.meta.glob("../convex/**/*.ts");
@@ -319,7 +319,7 @@ describe("the server side", () => {
 
     // The class going on: read live.
     at(30);
-    const live = await t.query(api.ceo.overview, {});
+    const live = await t.query(api.boss.overview, {});
     expect(live.classes).toHaveLength(1);
     expect(live.classes[0].open).toBe(true);
     const d = live.classes[0].digest;
@@ -333,7 +333,7 @@ describe("the server side", () => {
 
     // A teacher, even with Reports, can't open it.
     await addPerson(t, { name: "Nila", token: NILA, tabs: ["theory"], can: ["reports"] });
-    await expect(asPhone(t, NILA).query(api.ceo.overview, {})).rejects.toThrow(/owner/i);
+    await expect(asPhone(t, NILA).query(api.boss.overview, {})).rejects.toThrow(/owner/i);
 
     // End the class: its digest is kept in the report and used from then on.
     at(60);
@@ -341,20 +341,20 @@ describe("the server side", () => {
     const report = await t.run(async (ctx) => (await ctx.db.query("sessions").first())!.report as { digest?: { v: number; minutes: number } });
     expect(report.digest?.v).toBe(1);
     expect(report.digest?.minutes).toBe(60);
-    const after = await t.query(api.ceo.overview, {});
+    const after = await t.query(api.boss.overview, {});
     expect(after.classes[0]).toMatchObject({ open: false });
     expect(after.classes[0].digest.studentMin).toBe(60);
   });
 
   test("money: the owner's three numbers, whole rupees, never for teachers", async () => {
     const t = await setup();
-    expect((await t.query(api.ceo.overview, {})).money).toBeNull();
-    await expect(t.mutation(api.ceo.setMoney, { fee: 0, corrector: 1, teacher: 1 })).rejects.toThrow(/fee/);
-    await expect(t.mutation(api.ceo.setMoney, { fee: 2500.5, corrector: 1, teacher: 1 })).rejects.toThrow(/whole rupees/);
-    expect(await t.mutation(api.ceo.setMoney, { fee: 2500, corrector: 20000, teacher: 35000 })).toBe(true);
-    expect((await t.query(api.ceo.overview, {})).money).toMatchObject({ fee: 2500, corrector: 20000, teacher: 35000 });
+    expect((await t.query(api.boss.overview, {})).money).toBeNull();
+    await expect(t.mutation(api.boss.setMoney, { fee: 0, corrector: 1, teacher: 1 })).rejects.toThrow(/fee/);
+    await expect(t.mutation(api.boss.setMoney, { fee: 2500.5, corrector: 1, teacher: 1 })).rejects.toThrow(/whole rupees/);
+    expect(await t.mutation(api.boss.setMoney, { fee: 2500, corrector: 20000, teacher: 35000 })).toBe(true);
+    expect((await t.query(api.boss.overview, {})).money).toMatchObject({ fee: 2500, corrector: 20000, teacher: 35000 });
     await addPerson(t, { name: "Nila", token: NILA, tabs: ["correction"], can: ["reports"] });
-    await expect(asPhone(t, NILA).mutation(api.ceo.setMoney, { fee: 1, corrector: 1, teacher: 1 })).rejects.toThrow(/owner/i);
+    await expect(asPhone(t, NILA).mutation(api.boss.setMoney, { fee: 1, corrector: 1, teacher: 1 })).rejects.toThrow(/owner/i);
   });
 
   test("one student's sheet: Reports only; visits, books, levels with their dates, teachers' help", async () => {

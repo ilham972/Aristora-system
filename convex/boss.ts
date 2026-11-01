@@ -1,14 +1,14 @@
-// The CEO page (owner only, 31 Oct 2026): everything the owner decides on, read once when the page opens (and every few
-// minutes while it stays open): the classes of the last four weeks as digests (convex/lib/ceo.ts), who comes and who
+// The Owner page (owner only, 31 Oct 2026): everything the owner decides on, read once when the page opens (and every few
+// minutes while it stays open): the classes of the last four weeks as digests (convex/lib/boss.ts), who comes and who
 // stopped coming, what they learn, which books are missing, the family app, and his money numbers. Never part of the
-// board every phone watches (src/ceo.tsx fetches it once, not live: a live query would run again on every tap).
+// board every phone watches (src/boss.tsx fetches it once, not live: a live query would run again on every tap).
 
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import { actor, viewer } from "./lib/auth";
 import { fail, masterState, readDigest, STALE_SESSION_MS } from "./lib/backend";
-import type { Digest, Money } from "./lib/ceo";
+import type { Digest, Money } from "./lib/boss";
 import { DAY_MS, slDay, slMonth, slWeekStart } from "./lib/day";
 import { computeMaster } from "./lib/master";
 
@@ -22,7 +22,7 @@ const SOON_SHARE = 0.7;
 /** Corrected levels in the last two weeks below this % (2 levels at least): he needs attention. */
 const LOW_PCT = 50;
 
-const MONEY_KEY = "ceo.money";
+const MONEY_KEY = "boss.money";
 
 export const overview = query({
   args: { token: v.optional(v.string()) },

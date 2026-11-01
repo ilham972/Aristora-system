@@ -292,7 +292,7 @@ shared `src/roomkit.tsx`) in Theory's blue (`.tpx-page`).
   question decided: `allDecided`; `calls.finish` for all of them at once).
 - **The same mistake by 4+** (`SAME_MISTAKE_N`, a workbook group of 4+ waiting students, 1 Nov 2026, his pick): the
   card (to prepare) says "7 lost Q2: teach it once in Theory?" and **All 7 to Theory** sends those questions to Theory
-  for all of them (`workbook.toTheory` each); Theory's page shows them as one lesson ("2 ×7"). The owner's CEO page,
+  for all of them (`workbook.toTheory` each); Theory's page shows them as one lesson ("2 ×7"). The owner's Owner page,
   Now: **Lost by many now** (`hardQuestions`: a book's question lost by 3+ students in class, waiting for Evaluation
   or with Theory, the most first, top 5).
 - **The questions** (`sessionQs`): Correction's squares (`.fc-strip .fc-sq`): each question ONCE for everyone with her
@@ -440,7 +440,7 @@ marks and ranking, after my warning; switches Marks %, Ranking, Only who came to
 Share = the phone's share sheet (WhatsApp), Save downloads.
 
 **One student's sheet (31 Oct 2026, his ask: "the individual progress sheet I share on WhatsApp to the parents").**
-Progress → tap any name (Units race or Term grid; also the names on the CEO page) → `StudentSheet`
+Progress → tap any name (Units race or Term grid; also the names on the Owner page) → `StudentSheet`
 (`src/studentSheet.tsx`, full page): his book now (bar, level, pace), attendance (days in the last 4 weeks, a 4 × 7 dot
 grid Monday first, last came, hours, minutes a visit), his term's units (bar, done/of, %, ✓), this week vs last week
 (levels, marks, days), teachers' help in 4 weeks (questions explained / taught, Evaluation visits, Theory lessons),
@@ -452,10 +452,10 @@ how far, ✓, ring = now), this week, optional rank, optional note, footer. Swit
 when on), a note (never saved, wraps to 4 lines). Share = the phone's share sheet (`shareFiles`), Save downloads
 `ARISTORA-<name>-<day>.png`.
 
-**The CEO page (owner only, 31 Oct 2026, his voice note: "I want to think like a CEO").** A gauge icon in the top bar
-after Progress (`ceo-btn`, owner only: per-teacher numbers and money). Built around his decisions, not every number.
-Five tabs (`aristora.ceoTab`; the fifth, **Sim**, is the simulation's scoreboard: below, "The simulation"):
-- **Now** (from the board every phone already has, no extra reads; `nowOf` in `src/ceoData.ts`): up to 3 advice lines
+**The Owner page (owner only, 31 Oct 2026, his voice note: "I want to think like a Owner").** A gauge icon in the top bar
+after Progress (`boss-btn`, owner only: per-teacher numbers and money). Built around his decisions, not every number.
+Five tabs (`aristora.bossTab`; the fifth, **Sim**, is the simulation's scoreboard: below, "The simulation"):
+- **Now** (from the board every phone already has, no extra reads; `nowOf` in `src/bossData.ts`): up to 3 advice lines
   (`adviceOf`: who has no work and which room can free them, Correction behind → "Evaluation is free: she can correct",
   Theory lessons waiting while Evaluation is free → Teach, a walk that never arrived, calls not sent); tiles in class /
   no work / running out; a card per room: what waits (levels / questions + students / students + lessons), minutes of
@@ -477,12 +477,12 @@ Five tabs (`aristora.ceoTab`; the fifth, **Sim**, is the simulation's scoreboard
   student-hours each), speeds (a level, an answer, a question, a lesson, idle).
 - **Business**: money (his 3 numbers once: average fee, a corrector's pay, a teacher's pay → fees from students still
   coming, the team's cost from the usual people per room, what is left, cost per student, fees at risk from students
-  away 2+ weeks; `ceo.setMoney`, meta `ceo.money`, owner only); students (+joined, −left this month, grade × stage
+  away 2+ weeks; `boss.setMoney`, meta `boss.money`, owner only); students (+joined, −left this month, grade × stage
   table); attendance (came this week, days a week each, slipping, 14-day bars); quietly leaving (`risksOf`: 14+ days red,
   7–13 amber, coming half as often as the 4 weeks before; tap = his sheet); learning (levels and marks this week vs last,
   units finished this month, levels checked at home, below 50% in 2 weeks); books (workbooks/units, keys, theory books
   per grade; "no workbook yet" for the next unit of students 70%+ through theirs); the family app (students with it).
-- **How the numbers are made** (`convex/lib/ceo.ts`, `digestOf`, pure and tested): one class = its events, calls and
+- **How the numbers are made** (`convex/lib/boss.ts`, `digestOf`, pure and tested): one class = its events, calls and
   visits. Teacher minutes per person: Evaluation/Theory = Arrived (else Sent) → Done of each call she finished (45 min
   at most; calls the class's end closed don't count), overlaps once, shared among the students with her; Correction =
   each level from its draft's first mark to Save (**`took` on the `level-marks` event, timed since 31 Oct 2026** in
@@ -490,16 +490,16 @@ Five tabs (`aristora.ceoTab`; the fifth, **Sim**, is the simulation's scoreboard
   the time since her previous mark (90 s at most). A person counts in the room where she spent most minutes. Students:
   visit minutes, most at once, stage by what he worked on. Idle by what he waited for (two rooms = half each). The
   digest is kept in the class report when it ends (`report.digest`, v 1); the class going on and the 3 newest classes
-  ended before digests existed are read again by `ceo.overview` (owner only, `fetchOnce` on opening and every 5 minutes
+  ended before digests existed are read again by `boss.overview` (owner only, `fetchOnce` on opening and every 5 minutes
   while on screen, never a live query). Demo students never count.
 
 **The simulation (1 Nov 2026, his voice note: "upgrade the test feature ... like a simulation ... the correction will
 happen automatically ... easy, medium and hard ... set the students count ... I want to see the performance of each
-teacher in the CEO dashboard").** Practice for the Theory and Evaluation teachers before a real class. It replaced the
+teacher in the Owner dashboard").** Practice for the Theory and Evaluation teachers before a real class. It replaced the
 test class of 31 Oct (copy a grade, the extra test students: his words "remove that test feature"; the extra test
 students live on as a test fixture, `tests/cases.ts` `makeCases`). Server `convex/sim.ts`, pure rules
-`convex/lib/sim.ts`, phones `src/sim.tsx` (controls, switch, banner) and `src/simTab.tsx` (the CEO page's Sim tab).
-- **Start** (owner: Settings → Students → **Simulation**, or the CEO page → Sim): **Easy / Medium / Hard**, **students**
+`convex/lib/sim.ts`, phones `src/sim.tsx` (controls, switch, banner) and `src/simTab.tsx` (the Owner page's Sim tab).
+- **Start** (owner: Settings → Students → **Simulation**, or the Owner page → Sim): **Easy / Medium / Hard**, **students**
   5–30, **minutes** 20–60 (the phone remembers the last choice: `aristora.simLevel/Count/Minutes`). The books it uses are
   listed ("Grade 7 (1 workbook) · Grade 11 (1 theory book)"); a real class signed in = an amber line (it never mixes, but
   practise after the class). Start (`sim.start`): the last simulation's made-up students go, new ones are made (test
@@ -525,7 +525,7 @@ students live on as a test fixture, `tests/cases.ts` `makeCases`). Server `conve
   each level 30–90 s after it was handed in, unless a person has his book open on the Correction page (a corrector can
   practise too: one corrector per book) (`markLevel`: marks lost at the level's rate, some "?": 0 and straight to
   Theory; lost marks to Evaluation), sends a called student 8–25 s after the call (Sent: he walks), and when nobody taps
-  Arrived for 3 minutes says he reached the room (Correction's Reached; the CEO page counts it as her missed Arrived). A
+  Arrived for 3 minutes says he reached the room (Correction's Reached; the Owner page counts it as her missed Arrived). A
   finished book: the next workbook of his grade (a theory book: its own unit's workbook first), else he goes home. One
   reading of the class a minute (`SimSample`: in class, no work, questions and students for Evaluation, students for
   Theory, with a teacher, levels for Correction), two hours kept. One student's trouble never stops the others (his step
@@ -543,8 +543,8 @@ students live on as a test fixture, `tests/cases.ts` `makeCases`). Server `conve
   clock is; the score line under Theory and Evaluation says **Practice** and shows the simulation's own score
   (`sims.stats`: `roomStats` in `convex/lib/backend.ts` sends a test student's calls, Done, lessons, questions and waits
   there, never to the class's). A phone in a running simulation checks every 45 s that its steps still go
-  (`sim.nudge`: no step for 30 s = a new chain of steps; the old one stops itself), and so does the CEO page.
-- **The CEO page → Sim** (owner; `sim.board` read every 15 s while open, `fetchOnce`, never a live query): the
+  (`sim.nudge`: no step for 30 s = a new chain of steps; the old one stops itself), and so does the Owner page.
+- **The Owner page → Sim** (owner; `sim.board` read every 15 s while open, `fetchOnce`, never a live query): the
   simulation and its controls; the headline **idle minutes per student-hour** (under 3 good, 6+ the team can't carry
   this load; waiting for Evaluation / Theory / Correction); **No work now** (names, minutes, what for: tap = his sheet);
   **Where the work waits** (questions and students for Evaluation, students for Theory, levels for the app; ↑/↓ = grew or

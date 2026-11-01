@@ -1,6 +1,6 @@
-// The CEO page (owner only, 31 Oct 2026): what each class cost in teacher minutes and gave in work, and what the team
-// can carry. Pure functions: the server reads one class's events, calls and visits (convex/ceo.ts; closeSession keeps
-// the result in the class report as `digest`), the phones combine classes and draw (src/ceo.tsx). No AI, arithmetic.
+// The Owner page (owner only, 31 Oct 2026): what each class cost in teacher minutes and gave in work, and what the team
+// can carry. Pure functions: the server reads one class's events, calls and visits (convex/boss.ts; closeSession keeps
+// the result in the class report as `digest`), the phones combine classes and draw (src/boss.tsx). No AI, arithmetic.
 //
 // Teacher minutes, per person:
 // - Evaluation and Theory: from Arrived (else Sent) to Done of every call she finished. Students with her at the same

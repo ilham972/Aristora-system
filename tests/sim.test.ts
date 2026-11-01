@@ -1,5 +1,5 @@
 // The simulation (1 Nov 2026, his voice note): made-up students on the books in the app, the app playing Correction,
-// Theory and Evaluation practising, each teacher's numbers on the CEO page. The rules (convex/lib/sim.ts) and the server
+// Theory and Evaluation practising, each teacher's numbers on the Owner page. The rules (convex/lib/sim.ts) and the server
 // (convex/sim.ts), the steps taken by hand with the clock moved (`manual`: no steps are scheduled in the tests).
 
 import { convexTest } from "convex-test";

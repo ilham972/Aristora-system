@@ -8,7 +8,7 @@ import { afterAll, beforeAll, expect, test } from "vitest";
 import { api, internal } from "../../convex/_generated/api";
 import { normalizeCode, secretHash } from "../../convex/lib/auth";
 import { KNOWN_WORKBOOKS, outOf } from "../../convex/lib/book";
-import { digestOf, type DCall, type DEvent } from "../../convex/lib/ceo";
+import { digestOf, type DCall, type DEvent } from "../../convex/lib/boss";
 import { readWorkbookHtml } from "../../src/workbookFile";
 import U01_BOOK from "../fixtures/workbook-g8-u01.html?raw";
 import TUTE_BOOK from "../fixtures/tute-skeleton.html?raw";
@@ -2430,7 +2430,7 @@ function pastDigest(start: number, ids: string[]) {
   return digestOf({ start, end, events, calls, visits, students: ids.map((id) => ({ _id: id, stage: "master" })), stats: { theory: { qs: 9 } } });
 }
 
-test("CEO page: now, today, team, business, money; one student's sheet for his parents", async () => {
+test("Owner page: now, today, team, business, money; one student's sheet for his parents", async () => {
   const backend = await newClass();
   const O = await phone(backend, "correction");
   await O.getByRole("button", { name: "Settings" }).click();
@@ -2438,7 +2438,7 @@ test("CEO page: now, today, team, business, money; one student's sheet for his p
   await visible(O.getByText(/^14 demo students loaded/));
   await O.getByRole("button", { name: "Back to the class" }).click();
 
-  // The CEO page never counts demo students: make them real. Three earlier classes, and Keerthi gone for 20 days.
+  // The Owner page never counts demo students: make them real. Three earlier classes, and Keerthi gone for 20 days.
   const DAY = 24 * 60 * 60_000;
   const ids = await backend.t.run(async (ctx) => {
     const all = await ctx.db.query("students").collect();
@@ -2467,58 +2467,58 @@ test("CEO page: now, today, team, business, money; one student's sheet for his p
   await backend.t.mutation(api.workbook.correct, { token: OWNER_TOKEN, studentId: malik.id, unitId: malik.unitId, level: malik.level, items, by: "correction" });
   await backend.push();
 
-  // The owner's top bar has the CEO icon, and it still fits.
+  // The owner's top bar has the Owner icon, and it still fits.
   expect(await topFits(O)).toBe(true);
-  await O.getByRole("button", { name: "CEO: the whole business" }).click();
+  await O.getByRole("button", { name: "Owner: the whole business" }).click();
 
   // Now: who is here, who has no work, minutes of work waiting in each room.
-  await visible(O.locator(".ceo-room.r-correction"));
-  await contains(O.locator(".ceo-tile").first(), "13");
-  await count(O.locator(".ceo-room"), 3);
-  await visible(O.locator(".ceo-say").first());
-  await shot(O, "ceo01-now", true);
+  await visible(O.locator(".boss-room.r-correction"));
+  await contains(O.locator(".boss-tile").first(), "13");
+  await count(O.locator(".boss-room"), 3);
+  await visible(O.locator(".boss-say").first());
+  await shot(O, "boss01-now", true);
 
   // Today: the idle number first, the work, each room's busy share, each person.
   await O.getByRole("button", { name: "Today", exact: true }).click();
-  await visible(O.locator(".ceo-hero"));
-  await says(O.locator(".ceo-h"), "Today");
-  await contains(O.locator(".ceo-tile", { hasText: "levels corrected" }), "1");
-  await count(O.locator(".ceo-meter"), 3);
-  await visible(O.locator(".ceo-people li", { hasText: "Owner" }));
-  await visible(O.locator(".ceo-table"));
-  await shot(O, "ceo02-today", true);
+  await visible(O.locator(".boss-hero"));
+  await says(O.locator(".boss-h"), "Today");
+  await contains(O.locator(".boss-tile", { hasText: "levels corrected" }), "1");
+  await count(O.locator(".boss-meter"), 3);
+  await visible(O.locator(".boss-people li", { hasText: "Owner" }));
+  await visible(O.locator(".boss-table"));
+  await shot(O, "boss02-today", true);
 
   // Team: three earlier classes; Evaluation busy 90% = needs another person; the limit and one more person.
   await O.getByRole("button", { name: "Team", exact: true }).click();
-  await count(O.locator(".ceo-verdict"), 3);
-  await contains(O.locator(".ceo-sure"), "3 classes");
-  await contains(O.locator(".ceo-verdict.t-red"), "Evaluation");
-  await contains(O.locator(".ceo-verdict.t-red"), "Needs another person");
-  await contains(O.locator(".ceo-cap"), "students at once");
-  await contains(O.locator(".ceo-cap"), "The limit is Evaluation");
-  await contains(O.locator(".ceo-plus"), "One more person here");
-  await contains(O.locator(".ceo-facts"), "3 min");
-  await shot(O, "ceo03-team", true);
+  await count(O.locator(".boss-verdict"), 3);
+  await contains(O.locator(".boss-sure"), "3 classes");
+  await contains(O.locator(".boss-verdict.t-red"), "Evaluation");
+  await contains(O.locator(".boss-verdict.t-red"), "Needs another person");
+  await contains(O.locator(".boss-cap"), "students at once");
+  await contains(O.locator(".boss-cap"), "The limit is Evaluation");
+  await contains(O.locator(".boss-plus"), "One more person here");
+  await contains(O.locator(".boss-facts"), "3 min");
+  await shot(O, "boss03-team", true);
 
   // Business: the money numbers once, then rupees; Keerthi is leaving; her sheet opens from the list.
   await O.getByRole("button", { name: "Business", exact: true }).click();
   await O.getByLabel("Average monthly fee per student").fill("2500");
   await O.getByLabel("A corrector's pay a month").fill("20000");
   await O.getByLabel("A teacher's pay a month (Theory, Evaluation)").fill("35000");
-  await O.locator(".ceo-money").getByRole("button", { name: "Save" }).click();
-  await visible(O.locator(".ceo-money .ceo-tile"));
-  await contains(O.locator(".ceo-money"), "Rs 2,500");
-  await contains(O.locator(".ceo-money"), "at risk");
-  expect(await backend.t.run(async (ctx) => (await ctx.db.query("meta").collect()).find((x) => x.key === "ceo.money")?.value?.fee)).toBe(2500);
-  await visible(O.locator(".ceo-mx"));
-  await shot(O, "ceo04-business", true);
-  await O.locator(".ceo-nm", { hasText: "Keerthi" }).click();
+  await O.locator(".boss-money").getByRole("button", { name: "Save" }).click();
+  await visible(O.locator(".boss-money .boss-tile"));
+  await contains(O.locator(".boss-money"), "Rs 2,500");
+  await contains(O.locator(".boss-money"), "at risk");
+  expect(await backend.t.run(async (ctx) => (await ctx.db.query("meta").collect()).find((x) => x.key === "boss.money")?.value?.fee)).toBe(2500);
+  await visible(O.locator(".boss-mx"));
+  await shot(O, "boss04-business", true);
+  await O.locator(".boss-nm", { hasText: "Keerthi" }).click();
   await contains(O.locator(".sr-sheet .sheet-title h2"), "Keerthi");
   await contains(O.locator('.sr-sheet .sr-card[aria-label="Attendance"] .sr-line'), "Last came: 20 days ago");
   await O.locator(".sr-sheet").getByRole("button", { name: "Close" }).click();
   // Team with money: what one more person costs, in students' fees.
   await O.getByRole("button", { name: "Team", exact: true }).click();
-  await contains(O.locator(".ceo-verdict.t-red .ceo-plus"), "the fees of 14 students");
+  await contains(O.locator(".boss-verdict.t-red .boss-plus"), "the fees of 14 students");
 
   // Progress → Malik: his whole sheet; Share with parents: one Tamil-first image, rank off until switched on.
   await O.getByRole("button", { name: "Progress", exact: true }).click();
@@ -2528,7 +2528,7 @@ test("CEO page: now, today, team, business, money; one student's sheet for his p
   await contains(sheet.locator(".sheet-title h2"), "Malik");
   await visible(sheet.locator(".sr-card", { hasText: "Now" }).locator(".sr-unit.cur"));
   await count(sheet.locator(".sr-grid i.sr-d"), 28);
-  await shot(O, "ceo05-student-sheet", true);
+  await shot(O, "boss05-student-sheet", true);
   await sheet.getByRole("button", { name: "Share with parents" }).click();
   const share = O.locator(".sheet-wrap:not(.sr-sheet) .sheet");
   await visible(share.locator("canvas.poster-page"));
@@ -2539,7 +2539,7 @@ test("CEO page: now, today, team, business, money; one student's sheet for his p
     const png = await share.locator("canvas.poster-page").evaluate((c) => (c as HTMLCanvasElement).toDataURL("image/png"));
     await writeFile(join(SHOTS, name), Buffer.from(png.split(",")[1], "base64"));
   };
-  await save("ceo06-parents-image.png");
+  await save("boss06-parents-image.png");
   await share.getByLabel("Rank in his unit").check();
   await contains(share.locator(".sr-rank"), "2nd of 3 on Unit 8");
   await share.locator("textarea").fill(
@@ -2547,8 +2547,8 @@ test("CEO page: now, today, team, business, money; one student's sheet for his p
   );
   await O.waitForTimeout(700);
   await visible(share.getByRole("button", { name: "Share", exact: true }));
-  await save("ceo07-parents-image-rank-note.png");
-  await shot(O, "ceo08-share-sheet");
+  await save("boss07-parents-image-rank-note.png");
+  await shot(O, "boss08-share-sheet");
   await O.evaluate(() => {
     const nav = navigator as unknown as { canShare: () => boolean; share: (d: { files: File[] }) => Promise<void> };
     nav.canShare = () => true;
@@ -2560,32 +2560,32 @@ test("CEO page: now, today, team, business, money; one student's sheet for his p
   await until(async () => ((await O.evaluate(() => (window as unknown as { __shared?: string[] }).__shared)) ?? []).length > 0, "shared");
   expect((await O.evaluate(() => (window as unknown as { __shared: string[] }).__shared))[0]).toMatch(/^ARISTORA-Malik-\d{4}-\d{2}-\d{2}\.png\|image\/png\|true$/);
 
-  // A teacher, even with Reports, has no CEO icon.
+  // A teacher, even with Reports, has no Owner icon.
   const NILA = "nila-phone-token-0123456789abcdefghijklmnopqrstuvwx";
   await addPerson(backend.t, { name: "Nila", token: NILA, tabs: ["theory"], can: ["reports"] });
   const N = await phone(backend, "theory", PHONE, NILA);
   await visible(N.getByRole("button", { name: "Progress", exact: true }));
-  await count(N.getByRole("button", { name: "CEO: the whole business" }), 0);
+  await count(N.getByRole("button", { name: "Owner: the whole business" }), 0);
   await N.context().close();
 
   // Small phones: the top bar fits with four icons, no page scrolls sideways.
   for (const width of [360, 320]) {
     const small = await phone(backend, "correction", { ...PHONE, viewport: { width, height: 700 } });
-    await visible(small.getByRole("button", { name: "CEO: the whole business" }));
+    await visible(small.getByRole("button", { name: "Owner: the whole business" }));
     expect(await topFits(small), `top bar at ${width} px`).toBe(true);
-    await small.getByRole("button", { name: "CEO: the whole business" }).click();
+    await small.getByRole("button", { name: "Owner: the whole business" }).click();
     for (const tab of ["Now", "Today", "Team", "Business"]) {
       await small.getByRole("button", { name: tab, exact: true }).click();
-      await visible(small.locator(".ceo-card").first());
+      await visible(small.locator(".boss-card").first());
       expect(await small.evaluate(() => document.documentElement.scrollWidth), `${tab} at ${width} px`).toBeLessThanOrEqual(width);
-      await shot(small, `ceo09-${tab.toLowerCase()}-${width}px`, true);
+      await shot(small, `boss09-${tab.toLowerCase()}-${width}px`, true);
     }
     await small.getByRole("button", { name: "Progress", exact: true }).click();
     await small.getByRole("button", { name: /^Grade 7:/ }).click();
     await small.getByRole("button", { name: "Malik: his whole sheet" }).click();
     await visible(small.locator(".sr-sheet .sr-unit.cur"));
     expect(await small.evaluate(() => document.documentElement.scrollWidth), `sheet at ${width} px`).toBeLessThanOrEqual(width);
-    await shot(small, `ceo10-sheet-${width}px`);
+    await shot(small, `boss10-sheet-${width}px`);
     await small.context().close();
   }
   expect(problems, problems.join("\n")).toEqual([]);
@@ -2598,7 +2598,7 @@ async function simStep(backend: ReturnType<typeof makeBackend>, n = 1) {
   await backend.push();
 }
 
-test("Simulation: the owner starts it, a teacher joins from the banner, the app sends whom she calls, the CEO page shows her numbers", async () => {
+test("Simulation: the owner starts it, a teacher joins from the banner, the app sends whom she calls, the Owner page shows her numbers", async () => {
   const backend = await newClass();
   const O = await phone(backend, "evaluation");
   const NILA = "nila-eval-token-0123456789abcdefghijklmnopqrstuvw";
@@ -2667,29 +2667,29 @@ test("Simulation: the owner starts it, a teacher joins from the banner, the app 
   await contains(N.locator(".toast"), "back to work");
   await simStep(backend, 2);
 
-  // The CEO page → Sim: Nila's numbers, where the work waits, what happened.
-  await O.getByRole("button", { name: /^CEO/ }).click();
-  await O.locator(".ceo-tabs").getByRole("button", { name: /^Simulation/ }).click();
+  // The Owner page → Sim: Nila's numbers, where the work waits, what happened.
+  await O.getByRole("button", { name: /^Owner/ }).click();
+  await O.locator(".boss-tabs").getByRole("button", { name: /^Simulation/ }).click();
   const t = O.locator(".sim-t", { hasText: "Nila" });
   await contains(t, "Evaluation");
   await contains(t, "explained");
   await contains(t, `Called ${names.length}`);
   await contains(O.locator(".sim-head"), "Simulation · Hard · 10 students");
   await visible(O.locator(".sim-feed li", { hasText: "Nila" }));
-  await shot(O, "s05-ceo-sim");
-  await shot(O, "s05-ceo-sim-full", true);
+  await shot(O, "s05-boss-sim");
+  await shot(O, "s05-boss-sim-full", true);
   for (const width of [360, 320]) {
     const small = await phone(backend, "evaluation", { ...PHONE, viewport: { width, height: 740 } });
-    await small.getByRole("button", { name: /^CEO/ }).click();
-    await small.locator(".ceo-tabs").getByRole("button", { name: /^Simulation/ }).click();
+    await small.getByRole("button", { name: /^Owner/ }).click();
+    await small.locator(".boss-tabs").getByRole("button", { name: /^Simulation/ }).click();
     await visible(small.locator(".sim-t", { hasText: "Nila" }));
     expect(await small.evaluate(() => document.documentElement.scrollWidth), `Sim tab at ${width} px`).toBeLessThanOrEqual(width);
     expect(await topFits(small), `top bar at ${width} px`).toBe(true);
-    await shot(small, `s06-ceo-sim-${width}px`, true);
+    await shot(small, `s06-boss-sim-${width}px`, true);
     await small.context().close();
   }
 
-  // End now (the CEO page): everyone goes home; the scoreboard stays. Nila's phone: back to the class.
+  // End now (the Owner page): everyone goes home; the scoreboard stays. Nila's phone: back to the class.
   await O.locator(".sim-head").getByRole("button", { name: "End now" }).click();
   await O.locator(".sheet").getByRole("button", { name: "End it" }).click();
   await contains(O.locator(".toast"), "The simulation ended.");

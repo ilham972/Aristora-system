@@ -8,7 +8,7 @@ import { fighter, type Fighter, type MasterData } from "./book";
 import { slDay } from "./day";
 import { computeMaster, EMPTY_MASTER, homeToCheck, type MState } from "./master";
 import { computeStatus } from "./status";
-import { digestOf, type Digest } from "./ceo";
+import { digestOf, type Digest } from "./boss";
 
 export type Stage = "fighter" | "master" | "legend" | "sprint";
 export type BookStage = "fighter" | "master";
@@ -503,11 +503,11 @@ type Row = {
   max: number;
 };
 
-/** Events of one class read for the CEO page: a class has a few thousand; more than this is cut. */
+/** Events of one class read for the Owner page: a class has a few thousand; more than this is cut. */
 export const DIGEST_EVENTS = 8_000;
 
 /**
- * One class for the CEO page (convex/lib/ceo.ts): its history, calls and visits read once. Kept in the report when the
+ * One class for the Owner page (convex/lib/boss.ts): its history, calls and visits read once. Kept in the report when the
  * class ends; the class going on (and classes ended before 31 Oct 2026) are read again when the page asks.
  */
 export async function readDigest(

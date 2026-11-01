@@ -1,6 +1,6 @@
-// The simulation on the phones (1 Nov 2026, his voice note): the owner's controls (Settings → Students, and the CEO
+// The simulation on the phones (1 Nov 2026, his voice note): the owner's controls (Settings → Students, and the Owner
 // page's Sim tab), this phone's switch, and the banner that takes a teacher's phone into it. The server is
-// convex/sim.ts; the CEO page's scoreboard is src/simTab.tsx.
+// convex/sim.ts; the Owner page's scoreboard is src/simTab.tsx.
 
 import { useEffect, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
@@ -56,7 +56,7 @@ function booksWords(books: SimStatus["books"]): string {
 
 /**
  * Start a simulation (Easy / Medium / Hard, how many students, how long), or, while one runs: its clock, Easy / Medium /
- * Hard from now on, +5 students, End now. `status` comes from Settings (its books and the real class); the CEO page
+ * Hard from now on, +5 students, End now. `status` comes from Settings (its books and the real class); the Owner page
  * passes what it has.
  */
 export function SimControls(props: { sim: SimInfo | null; status?: SimStatus; onChange?: () => void; noLine?: boolean }) {
@@ -123,7 +123,7 @@ export function SimControls(props: { sim: SimInfo | null; status?: SimStatus; on
         {ending && (
           <Sheet
             title="End the simulation?"
-            sub="Everyone goes home. The scoreboard stays on the CEO page (Sim)."
+            sub="Everyone goes home. The scoreboard stays on the Owner page (Sim)."
             onClose={() => setEnding(false)}
             foot={
               <div class="row-actions">
@@ -136,7 +136,7 @@ export function SimControls(props: { sim: SimInfo | null; status?: SimStatus; on
                   onClick={async () => {
                     setEnding(false);
                     const ok = await run(() => mutate(api.sim.end, { by: currentRole() }));
-                    if (ok !== undefined) toast("The simulation ended. Its scoreboard: CEO page → Sim.");
+                    if (ok !== undefined) toast("The simulation ended. Its scoreboard: Owner page → Sim.");
                   }}
                 >
                   End it
@@ -226,11 +226,11 @@ export function SimPanel() {
       <p class="muted small">
         Practice for Theory and Evaluation. Made-up students work through your books; the app plays Correction (it corrects
         their levels and sends the students you call). Only phones showing the simulation see them (the top bar says SIM);
-        nothing counts in reports, numbers or the CEO page. Watch each teacher live: CEO page → Sim.
+        nothing counts in reports, numbers or the Owner page. Watch each teacher live: Owner page → Sim.
       </p>
       {!running && sim?.status === "ended" && (
         <p class="sim-last">
-          Last one: {LEVEL_NAME[sim.level]} · {sim.count} students · {clockWords(simMinutes(sim, now), true)}. Its scoreboard: CEO page → Sim.
+          Last one: {LEVEL_NAME[sim.level]} · {sim.count} students · {clockWords(simMinutes(sim, now), true)}. Its scoreboard: Owner page → Sim.
         </p>
       )}
       {st ? <SimControls sim={sim} status={st} /> : <p class="muted small">Loading…</p>}

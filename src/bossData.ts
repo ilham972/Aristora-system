@@ -1,16 +1,16 @@
-// The CEO page's numbers and words (owner only, 31 Oct 2026). No screen code here (src/ceo.tsx draws).
+// The Owner page's numbers and words (owner only, 31 Oct 2026). No screen code here (src/boss.tsx draws).
 // - Now: from the board every phone already watches (no extra reads): what waits for each room, in minutes of work.
-// - Today, Team, Business: from the owner's overview (convex/ceo.ts), read once and every few minutes while open.
-// The arithmetic of a class and of the team is in convex/lib/ceo.ts (shared with the server and the tests).
+// - Today, Team, Business: from the owner's overview (convex/boss.ts), read once and every few minutes while open.
+// The arithmetic of a class and of the team is in convex/lib/boss.ts (shared with the server and the tests).
 
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "../convex/_generated/api";
-import { loadOf, ROOMS, sumDigests, type Digest, type Load, type RoomKey } from "../convex/lib/ceo";
+import { loadOf, ROOMS, sumDigests, type Digest, type Load, type RoomKey } from "../convex/lib/boss";
 import { DAY_MS, slDay } from "../convex/lib/day";
 import { isWalking, pendingSince, theoryGroups, theoryMembers, waitingAll, withBooks, WALK_MS, type View } from "./derive";
 import type { Board, Stage } from "./store";
 
-export type Overview = FunctionReturnType<typeof api.ceo.overview>;
+export type Overview = FunctionReturnType<typeof api.boss.overview>;
 export type OStudent = Overview["students"][number];
 export type Tone = "red" | "amber" | "green" | "grey";
 

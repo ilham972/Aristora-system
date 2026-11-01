@@ -1,11 +1,11 @@
 // The simulation (1 Nov 2026, his voice note): practice for the Theory and Evaluation teachers before a real class.
-// The owner starts one (Settings → Students, or the CEO page's Sim tab): Easy, Medium or Hard, how many students, how
+// The owner starts one (Settings → Students, or the Owner page's Sim tab): Easy, Medium or Hard, how many students, how
 // many minutes. Made-up students (test students: only phones showing the simulation see them, nothing counts) are put on
 // the books in the app, spread over grades and stages; then every few seconds the app takes a step for each of them:
 // he arrives, works on his level or question at his pace, hands it in; the app plays Correction: it corrects the level
 // (marks lost at the level's rate, some "?" for Theory), marks each theory-book answer, sends the students Theory and
 // Evaluation call, and says "he reached the room" when nobody tapped Arrived for 3 minutes. Theory and Evaluation work on
-// their own pages exactly as in a class. The CEO page's Sim tab shows each teacher's numbers live, and keeps the
+// their own pages exactly as in a class. The Owner page's Sim tab shows each teacher's numbers live, and keeps the
 // scoreboard when it ends. The pure rules are in convex/lib/sim.ts.
 
 import { v, type Infer } from "convex/values";
@@ -322,7 +322,7 @@ export const setLevel = mutation({
   },
 });
 
-/** Owner: End now. Everyone goes home, the scoreboard is kept (the CEO page's Sim tab). */
+/** Owner: End now. Everyone goes home, the scoreboard is kept (the Owner page's Sim tab). */
 export const end = mutation({
   args: { token: v.optional(v.string()), by: v.optional(v.string()) },
   handler: async (ctx, args) => {
@@ -436,7 +436,7 @@ async function kidStep(
   k.came = true;
 
   // Called by Theory or Evaluation: the app sends him (Correction's Sent); sent and nobody tapped Arrived for 3
-  // minutes: the app says he reached the room (Correction's "Reached"), and the CEO page counts it as her missed Arrived.
+  // minutes: the app says he reached the room (Correction's "Reached"), and the Owner page counts it as her missed Arrived.
   for (const c of await activeCalls(ctx, s._id)) {
     if (c.status === "requested" && !c.pull && !s.room && now - c.createdAt >= sendDelayMs(P, c._id)) {
       await ctx.db.patch(c._id, { status: "sent", sentAt: now, walk: true });
@@ -689,7 +689,7 @@ async function realIn(ctx: QueryCtx, session: Doc<"sessions">): Promise<boolean>
 
 // ---------------------------------------------------------------- the scoreboard
 
-/** Lines of history the CEO page's feed shows (what is happening), the newest first. */
+/** Lines of history the Owner page's feed shows (what is happening), the newest first. */
 const FEED_KINDS = new Set([
   "sim-start",
   "sim-add",
@@ -793,7 +793,7 @@ async function reportOf(ctx: QueryCtx, simId: Id<"sims">) {
 }
 
 /**
- * Owner (the CEO page's Sim tab, read every few seconds while it is open): the simulation now, or the last one's kept
+ * Owner (the Owner page's Sim tab, read every few seconds while it is open): the simulation now, or the last one's kept
  * scoreboard; the ones before it to compare.
  */
 export const board = query({

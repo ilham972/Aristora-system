@@ -352,7 +352,7 @@ export default defineSchema({
     bumpedFrom: v.optional(v.id("users")),
     /** A call for a test student (the simulation): never in a room's score, nor in Theory's lesson times. */
     test: v.optional(v.boolean()),
-    /** Called while he still had work (the teacher saw it coming): each teacher's "ahead" on the CEO page. */
+    /** Called while he still had work (the teacher saw it coming): each teacher's "ahead" on the Owner page. */
     ahead: v.optional(v.boolean()),
     endedAt: v.optional(v.number()),
     sessionId: v.optional(v.id("sessions")),
@@ -391,7 +391,7 @@ export default defineSchema({
     q: v.optional(v.number()),
     value: v.optional(v.string()),
     ms: v.optional(v.number()),
-    /** A workbook level corrected on the Correction page: ms from its first mark to Save (31 Oct 2026, the CEO page). */
+    /** A workbook level corrected on the Correction page: ms from its first mark to Save (31 Oct 2026, the Owner page). */
     took: v.optional(v.number()),
     /** The signed-in person who did it (by = the tab it was done from). */
     who: v.optional(v.string()),
@@ -507,7 +507,7 @@ export default defineSchema({
     /** The rooms' practice score (like session.stats, for the test class): the Theory and Evaluation pages show it. */
     stats: v.optional(v.record(v.string(), v.record(v.string(), v.number()))),
     /**
-     * As it ended, in a few numbers (the CEO page's "Before"). The whole scoreboard is in simReports: every phone reads
+     * As it ended, in a few numbers (the Owner page's "Before"). The whole scoreboard is in simReports: every phone reads
      * this row on each change of the class, so it stays small.
      */
     summary: v.optional(
@@ -524,7 +524,7 @@ export default defineSchema({
     .index("by_status", ["status"])
     .index("by_startedAt", ["startedAt"]),
 
-  /** A simulation's scoreboard as it ended (the CEO page's Sim tab; kept after its students are deleted). */
+  /** A simulation's scoreboard as it ended (the Owner page's Sim tab; kept after its students are deleted). */
   simReports: defineTable({ simId: v.id("sims"), report: v.any() }).index("by_sim", ["simId"]),
 
   /** A running simulation's steps: each student's pace and what he is doing, one reading of the class a minute. */

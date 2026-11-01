@@ -40,7 +40,7 @@ async function masterWork(ctx: MutationCtx, student: Doc<"students">, unitId: Id
   return { unit, book: asMaster(book), progress, m: copy(masterState(progress)) };
 }
 const teachWork = masterWork;
-/** A draft older than this was a level left half-marked for a long time: its time isn't kept (the CEO page). */
+/** A draft older than this was a level left half-marked for a long time: its time isn't kept (the Owner page). */
 const TOOK_KEEP_MS = 60 * 60_000;
 
 function copy(m: MState): MState {
@@ -225,7 +225,7 @@ export const correct = mutation({
     // A level marked at home stays one (⌂); the corrector's marks on it are her check of his working.
     m.lv[key] = { done: doneAt, fixed: now, by, got, ...(lv.home ? { home: lv.home, hc: now } : {}) };
     const pre = markBefore(m, book, l.n, now);
-    // How long it took to correct (the CEO page's Correction minutes): from the draft's first mark to this Save.
+    // How long it took to correct (the Owner page's Correction minutes): from the draft's first mark to this Save.
     const draft = again
       ? null
       : (await ctx.db.query("drafts").withIndex("by_student", (q) => q.eq("studentId", student._id)).collect()).find(

@@ -1,4 +1,4 @@
-// One student's whole sheet (31 Oct 2026): Progress → his name, or a name on the CEO page. Everything about him on one
+// One student's whole sheet (31 Oct 2026): Progress → his name, or a name on the Owner page. Everything about him on one
 // page (src/studentReport.ts builds it), and "Share with parents": the same as a Tamil-first image for WhatsApp, with
 // the owner's switches (marks; rank, off unless he turns it on; a note that is never saved).
 

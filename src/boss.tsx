@@ -1,15 +1,15 @@
-// The CEO page (owner only, 31 Oct 2026, his voice note: "a dashboard that shows everything, I want to think like a
-// CEO"). Built around his decisions, not every number:
+// The Owner page (owner only, 31 Oct 2026, his voice note: "a dashboard that shows everything, I want to think like a
+// Owner"). Built around his decisions, not every number:
 // - Now: is the class OK, what waits for each room in minutes of work, who has no work and why (the board, live).
 // - Today: how the day went: who came, the idle minutes (the centre's headline number), the work, each person.
 // - Team: does a room need another person, how many students the team can take, Fighter vs Master.
 // - Business: money, who comes and who quietly stopped, are they learning, which books are missing.
 // - Sim: the simulation (1 Nov 2026): each teacher's numbers while they practise (src/simTab.tsx).
-// Numbers from convex/ceo.ts (read once and every 5 minutes while open), arithmetic in convex/lib/ceo.ts.
+// Numbers from convex/boss.ts (read once and every 5 minutes while open), arithmetic in convex/lib/boss.ts.
 
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
-import { BUSY_OK, moneyOf, ROOMS, verdictOf, withOneMore, type Digest, type Load, type RoomKey } from "../convex/lib/ceo";
+import { BUSY_OK, moneyOf, ROOMS, verdictOf, withOneMore, type Digest, type Load, type RoomKey } from "../convex/lib/boss";
 import { slClock } from "../convex/lib/day";
 import { errorText, fetchOnce, mutate } from "./backend";
 import {
@@ -33,13 +33,13 @@ import {
   type Overview,
   type RoomNow,
   type Tone,
-} from "./ceoData";
+} from "./bossData";
 import type { View } from "./derive";
 import { hardQuestions } from "./evalFocusData";
 import { unitNo } from "./focusData";
 import { ATTENDANCE_SINCE } from "./stats";
 import { act, stageName, type Board, type Stage } from "./store";
-import { Bars, Dot, Meter, Names, Tile } from "./ceoKit";
+import { Bars, Dot, Meter, Names, Tile } from "./bossKit";
 import { SimTab } from "./simTab";
 import { StudentSheet } from "./studentSheet";
 import { Empty } from "./ui";
@@ -54,13 +54,13 @@ const TABS: { id: Tab; name: string }[] = [
   { id: "sim", name: "Sim" },
 ];
 const REFRESH_MS = 5 * 60_000;
-/** Minutes of work one person gives an hour without the queue growing (convex/lib/ceo.ts BUSY_OK). */
+/** Minutes of work one person gives an hour without the queue growing (convex/lib/boss.ts BUSY_OK). */
 const BUSY_MIN = Math.round(BUSY_OK * 60);
 
 function useTab(): [Tab, (t: Tab) => void] {
   const [t, setT] = useState<Tab>(() => {
     try {
-      const x = localStorage.getItem("aristora.ceoTab") as Tab | null;
+      const x = localStorage.getItem("aristora.bossTab") as Tab | null;
       if (x && TABS.some((y) => y.id === x)) return x;
     } catch {
       /* private mode */
@@ -72,7 +72,7 @@ function useTab(): [Tab, (t: Tab) => void] {
     (x: Tab) => {
       setT(x);
       try {
-        localStorage.setItem("aristora.ceoTab", x);
+        localStorage.setItem("aristora.bossTab", x);
       } catch {
         /* private mode */
       }
@@ -89,7 +89,7 @@ function useOverview() {
     busy.current = true;
     set((x) => ({ ...x, busy: true }));
     try {
-      const data = await fetchOnce(api.ceo.overview, {});
+      const data = await fetchOnce(api.boss.overview, {});
       set({ data, at: Date.now(), busy: false });
     } catch (e) {
       set((x) => ({ ...x, error: errorText(e), busy: false }));
@@ -107,7 +107,7 @@ function useOverview() {
   return { ...s, reload: load };
 }
 
-export function CeoPage(props: { board: Board; views: View[]; now: number }) {
+export function BossPage(props: { board: Board; views: View[]; now: number }) {
   const [tab, setTab] = useTab();
   const o = useOverview();
   const [student, setStudent] = useState<string | null>(null);
@@ -116,8 +116,8 @@ export function CeoPage(props: { board: Board; views: View[]; now: number }) {
   const ago = o.at ? Math.max(0, Math.round((props.now - o.at) / 60_000)) : null;
 
   return (
-    <main class="page ceo">
-      <div class="segc plain ceo-tabs" role="group" aria-label="CEO page">
+    <main class="page boss">
+      <div class="segc plain boss-tabs" role="group" aria-label="Owner page">
         {TABS.map((t) => (
           <button
             key={t.id}
@@ -151,9 +151,9 @@ export function CeoPage(props: { board: Board; views: View[]; now: number }) {
       )}
 
       {tab !== "sim" && (
-        <p class="ceo-upd">
+        <p class="boss-upd">
           {o.busy ? "Updating…" : ago === null ? "" : ago === 0 ? "Updated just now" : `Updated ${ago} min ago`}
-          <button type="button" class="ceo-link" disabled={o.busy} onClick={() => void o.reload()}>
+          <button type="button" class="boss-link" disabled={o.busy} onClick={() => void o.reload()}>
             Refresh
           </button>
         </p>
@@ -186,7 +186,7 @@ function NowTab(props: { board: Board; views: View[]; now: number; load: Load | 
   return (
     <>
       <Advice n={n} />
-      <div class="ceo-tiles three">
+      <div class="boss-tiles three">
         <Tile v={n.here} k="in class" sub={[n.stages.master ? `${n.stages.master} Master` : null, n.stages.fighter ? `${n.stages.fighter} Fighter` : null].filter(Boolean).join(" · ") || undefined} />
         <Tile v={n.noWork.length} k="no work" tone={n.noWork.length ? "red" : "green"} sub={longest ? `longest ${longest.min} min` : "everyone busy"} />
         <Tile v={n.soon} k="running out" tone={n.soon ? "amber" : undefined} sub="soon" />
@@ -195,7 +195,7 @@ function NowTab(props: { board: Board; views: View[]; now: number; load: Load | 
         <RoomCard key={r} x={n.rooms[r]} />
       ))}
       {n.noWork.length > 0 && (
-        <section class="ceo-card">
+        <section class="boss-card">
           <h3>No work now</h3>
           <Names
             onOpen={props.onOpen}
@@ -209,10 +209,10 @@ function NowTab(props: { board: Board; views: View[]; now: number; load: Load | 
         </section>
       )}
       {hard.length > 0 && (
-        <section class="ceo-card" aria-label="Questions lost by many students now">
+        <section class="boss-card" aria-label="Questions lost by many students now">
           <h3>Lost by many now</h3>
           {hard.map((h) => (
-            <p key={h.key} class="ceo-mix">
+            <p key={h.key} class="boss-mix">
               <b>{h.label}</b> · Grade {h.grade} · unit {unitNo(h.code)}{" "}
               <span lang="ta">{h.ta}</span>: {h.n} students{h.theory ? ` (${h.theory} with Theory)` : ""}
             </p>
@@ -220,12 +220,12 @@ function NowTab(props: { board: Board; views: View[]; now: number; load: Load | 
           <p class="muted small">One question that many lose: teach it once in Theory, or check how the book asks it.</p>
         </section>
       )}
-      <p class="ceo-mix">
+      <p class="boss-mix">
         Grades here: {n.grades.map((g) => `${g.grade} (${g.n})`).join(" · ")}
         {n.rooms.evaluation.inRoom + n.rooms.theory.inRoom > 0 && ` · in rooms ${n.rooms.evaluation.inRoom + n.rooms.theory.inRoom}`}
       </p>
       {live && (
-        <p class="ceo-mix">
+        <p class="boss-mix">
           Today so far: {plural(live.d.rooms.correction.levels, "level")} corrected · {live.d.rooms.evaluation.qs} explained ·{" "}
           {plural(live.d.rooms.theory.lessons, "lesson")} · idle {minWords(live.d.idle.total)}
         </p>
@@ -238,16 +238,16 @@ function Advice(props: { n: NowData }) {
   const lines = props.n.advice;
   if (!lines.length) {
     return (
-      <p class="ceo-say t-green">
+      <p class="boss-say t-green">
         <Dot tone="green" label="good" />
         Everyone has work and nothing waits long.
       </p>
     );
   }
   return (
-    <div class="ceo-says">
+    <div class="boss-says">
       {lines.map((l, i) => (
-        <p key={i} class={`ceo-say t-${l.tone}`}>
+        <p key={i} class={`boss-say t-${l.tone}`}>
           <Dot tone={l.tone} label={l.tone === "red" ? "urgent" : "watch"} />
           {l.text}
         </p>
@@ -267,11 +267,11 @@ function RoomCard(props: { x: RoomNow }) {
   const each =
     x.room === "correction" ? `${GUESS.perLevel} min a level` : x.room === "evaluation" ? `${GUESS.perQuestion} min a question` : `${GUESS.lesson} min a lesson`;
   return (
-    <section class={`ceo-card ceo-room r-${x.room}`} aria-label={`${ROOM_NAME[x.room]}: ${what}`}>
+    <section class={`boss-card boss-room r-${x.room}`} aria-label={`${ROOM_NAME[x.room]}: ${what}`}>
       <header>
         <Dot tone={x.tone} label={x.tone} />
         <h3>{ROOM_NAME[x.room]}</h3>
-        <b class="ceo-rn">{x.items ? what : "nothing waiting"}</b>
+        <b class="boss-rn">{x.items ? what : "nothing waiting"}</b>
       </header>
       {x.items > 0 && (
         <p>
@@ -279,7 +279,7 @@ function RoomCard(props: { x: RoomNow }) {
           {!x.measured && <small> (guess: {each})</small>}
         </p>
       )}
-      <p class="ceo-sub">
+      <p class="boss-sub">
         {[
           x.oldest !== null ? `oldest waited ${Math.round(x.oldest / 60_000)} min` : null,
           x.red ? `${x.red} with no work until then` : null,
@@ -311,13 +311,13 @@ function TodayTab(props: { o: Overview; rows: DayRow[] }) {
   const hours = d.studentMin / 60;
   return (
     <>
-      <h2 class="ceo-h">
+      <h2 class="boss-h">
         {row.day === o.today ? "Today" : "Last class"} · {dayWords(row.day)}
         <small>
           {slClock(d.start)}–{row.open ? "now" : slClock(d.end)}
         </small>
       </h2>
-      <section class={`ceo-card ceo-hero t-${idleTone(idle)}`}>
+      <section class={`boss-card boss-hero t-${idleTone(idle)}`}>
         <span>Idle minutes per student-hour</span>
         <b>{idle ?? "–"}</b>
         <small>
@@ -325,7 +325,7 @@ function TodayTab(props: { o: Overview; rows: DayRow[] }) {
           {usualIdle !== null && ` · usual ${usualIdle}`}. Under 3 is good; 6 or more costs you students.
         </small>
         {d.idle.total > 0 && (
-          <small class="ceo-why">
+          <small class="boss-why">
             Waiting for:{" "}
             {ROOMS.filter((r) => d.idle[r] >= 0.5)
               .map((r) => `${ROOM_NAME[r]} ${minWords(d.idle[r])}`)
@@ -333,7 +333,7 @@ function TodayTab(props: { o: Overview; rows: DayRow[] }) {
           </small>
         )}
       </section>
-      <div class="ceo-tiles">
+      <div class="boss-tiles">
         <Tile v={row.came} k="came" sub={usualCame !== null ? `usual ${usualCame}` : undefined} />
         <Tile v={one(hours)} k="student-hours" sub={row.came ? `~${minWords(d.studentMin / row.came)} each` : undefined} />
         <Tile v={d.peak} k="most at once" />
@@ -350,7 +350,7 @@ function TodayTab(props: { o: Overview; rows: DayRow[] }) {
         {d.lost > 0 && <Tile v={d.lost} k="never reached a room" tone="amber" />}
       </div>
 
-      <section class="ceo-card">
+      <section class="boss-card">
         <h3>How busy each room was</h3>
         {ROOMS.map((r) => {
           const people = Math.max(1, d.rooms[r].people);
@@ -364,19 +364,19 @@ function TodayTab(props: { o: Overview; rows: DayRow[] }) {
             />
           );
         })}
-        <p class="ceo-note">Share of the class time someone was working there. Over 85% the queue grows: students sit idle.</p>
+        <p class="boss-note">Share of the class time someone was working there. Over 85% the queue grows: students sit idle.</p>
       </section>
 
       {d.line.length > 1 && <ClassLine d={d} />}
 
       {d.people.length > 0 && (
-        <section class="ceo-card">
+        <section class="boss-card">
           <h3>Each person</h3>
-          <ul class="ceo-people">
+          <ul class="boss-people">
             {d.people.map((p) => (
               <li key={`${p.name}:${p.room}`}>
                 <b>{p.name}</b>
-                <span class={`ceo-tag r-${p.room}`}>{ROOM_NAME[p.room]}</span>
+                <span class={`boss-tag r-${p.room}`}>{ROOM_NAME[p.room]}</span>
                 <small>{personWords(p)}</small>
               </li>
             ))}
@@ -412,11 +412,11 @@ function ClassLine(props: { d: Digest }) {
     { k: "Levels waiting", v: line.map((p) => p.queue), tone: "amber", unit: "levels waiting" },
   ];
   return (
-    <section class="ceo-card">
+    <section class="boss-card">
       <h3>The class, every 15 minutes</h3>
       {rows.map((r, k) => (
-        <div key={r.k} class="ceo-lrow">
-          <span class="ceo-lk">
+        <div key={r.k} class="boss-lrow">
+          <span class="boss-lk">
             {r.k} <small>most {Math.max(0, ...r.v)}</small>
           </span>
           <Bars
@@ -429,7 +429,7 @@ function ClassLine(props: { d: Digest }) {
           />
         </div>
       ))}
-      <p class="ceo-read">{sel !== null && sel < line.length ? `${times[sel]}: ${rows.map((r) => `${r.v[sel]} ${r.unit}`).join(" · ")}` : "Tap a bar to read that moment."}</p>
+      <p class="boss-read">{sel !== null && sel < line.length ? `${times[sel]}: ${rows.map((r) => `${r.v[sel]} ${r.unit}`).join(" · ")}` : "Tap a bar to read that moment."}</p>
     </section>
   );
 }
@@ -439,9 +439,9 @@ function History(props: { rows: DayRow[] }) {
   if (rows.length < 2) return null;
   const idle = rows.map((r) => idleRate(r.d) ?? 0);
   return (
-    <section class="ceo-card">
+    <section class="boss-card">
       <h3>Last {rows.length} class days</h3>
-      <span class="ceo-lk">Idle minutes per student-hour</span>
+      <span class="boss-lk">Idle minutes per student-hour</span>
       <Bars
         values={idle}
         tones={idle.map((x) => idleTone(x))}
@@ -449,7 +449,7 @@ function History(props: { rows: DayRow[] }) {
         hint="Tap a day to read it."
         marks={rows.map((r, i) => (i === 0 || i === rows.length - 1 ? dayWords(r.day).slice(4) : ""))}
       />
-      <table class="ceo-table">
+      <table class="boss-table">
         <thead>
           <tr>
             <th>Day</th>
@@ -490,10 +490,10 @@ function TeamTab(props: { o: Overview; rows: DayRow[]; load: Load }) {
   const money = moneyOf(o.money, { students: o.students.length, coming: o.students.length - away, away, people: l.people });
   return (
     <>
-      <p class={`ceo-sure s-${l.sure}`}>
+      <p class={`boss-sure s-${l.sure}`}>
         {SURE_WORDS[l.sure]} Based on {l.classes} class{l.classes === 1 ? "" : "es"}, {l.hours} student-hours.
       </p>
-      <section class="ceo-card ceo-cap">
+      <section class="boss-card boss-cap">
         <span>Your team can carry</span>
         <b>{l.limit ? `~${l.limit.n} students at once` : "–"}</b>
         {l.limit && (
@@ -508,9 +508,9 @@ function TeamTab(props: { o: Overview; rows: DayRow[]; load: Load }) {
         <Verdict key={r} l={l} r={r} money={money} />
       ))}
       <StageTable l={l} />
-      <section class="ceo-card">
+      <section class="boss-card">
         <h3>Speeds</h3>
-        <ul class="ceo-facts">
+        <ul class="boss-facts">
           <li>
             A level takes <b>{l.perLevel !== null ? `${l.perLevel} min` : "–"}</b> to correct
             {props.rows.length > 0 && <small> (timed from the first mark to Save since 31 Oct; untimed levels count {GUESS.perLevel} min)</small>}
@@ -542,7 +542,7 @@ function Verdict(props: { l: Load; r: RoomKey; money: ReturnType<typeof moneyOf>
   const need = l.need[r];
   const people = Math.max(1, l.people[r]);
   return (
-    <section class={`ceo-card ceo-verdict t-${v.tone}`} aria-label={`${ROOM_NAME[r]}: ${v.head}`}>
+    <section class={`boss-card boss-verdict t-${v.tone}`} aria-label={`${ROOM_NAME[r]}: ${v.head}`}>
       <header>
         <Dot tone={v.tone} label={v.tone} />
         <h3>{ROOM_NAME[r]}</h3>
@@ -550,13 +550,13 @@ function Verdict(props: { l: Load; r: RoomKey; money: ReturnType<typeof moneyOf>
       </header>
       {v.why && <p>{v.why}.</p>}
       {need !== null && (
-        <p class="ceo-sub">
+        <p class="boss-sub">
           Each student-hour needs {need} min here: {people} {people === 1 ? "person" : "people"} × {BUSY_MIN} busy min an hour ÷ {need} = ~{l.cap[r]}{" "}
           students at once.
         </p>
       )}
       {more && l.limit && need !== null && (l.limit.room === r || v.tone === "red" || v.tone === "amber") && (
-        <p class="ceo-sub ceo-plus">
+        <p class="boss-sub boss-plus">
           {l.limit.room === r
             ? `One more person here: the team goes from ~${l.limit.n} to ~${more.n} students at once${more.next !== r ? ` (then ${ROOM_NAME[more.next]} is the limit)` : ""}.`
             : `One more person here takes the waiting away, but the team stays at ~${l.limit.n} at once (the limit is ${ROOM_NAME[l.limit.room]}).`}
@@ -574,9 +574,9 @@ function StageTable(props: { l: Load }) {
   const cell = (x: number | null) => (x === null ? "–" : x);
   const heavier = f.total !== null && m.total !== null && f.hours >= 2 && m.hours >= 2 ? (f.total > m.total ? "Fighter" : "Master") : null;
   return (
-    <section class="ceo-card">
+    <section class="boss-card">
       <h3>Fighter vs Master</h3>
-      <table class="ceo-table">
+      <table class="boss-table">
         <thead>
           <tr>
             <th>Teacher min per student-hour</th>
@@ -609,7 +609,7 @@ function StageTable(props: { l: Load }) {
           </tr>
         </tbody>
       </table>
-      <p class="ceo-note">
+      <p class="boss-note">
         {heavier
           ? `${heavier} costs more teacher time: ${Math.round((Math.max(f.total!, m.total!) / Math.max(0.1, Math.min(f.total!, m.total!))) * 10) / 10}× the other per hour.`
           : "Not enough of both yet to compare (2 student-hours of each). Only one theory book exists so far."}
@@ -636,16 +636,16 @@ function BusinessTab(props: { o: Overview; load: Load; onOpen: (id: string) => v
     <>
       <MoneyCard o={o} money={money} away={away} people={load.people} onSaved={props.onSaved} />
 
-      <section class="ceo-card">
+      <section class="boss-card">
         <h3>
           Students <small>{o.demo ? `(${o.demo} demo not counted)` : ""}</small>
         </h3>
-        <div class="ceo-tiles three">
+        <div class="boss-tiles three">
           <Tile v={o.students.length} k="students" />
           <Tile v={signed(o.added, "+")} k="joined this month" tone={o.added ? "green" : undefined} />
           <Tile v={signed(o.left, "−")} k="left this month" tone={o.left ? "red" : undefined} />
         </div>
-        <table class="ceo-table ceo-mx">
+        <table class="boss-table boss-mx">
           <thead>
             <tr>
               <th>Grade</th>
@@ -673,9 +673,9 @@ function BusinessTab(props: { o: Overview; load: Load; onOpen: (id: string) => v
         </table>
       </section>
 
-      <section class="ceo-card">
+      <section class="boss-card">
         <h3>Attendance</h3>
-        <div class="ceo-tiles three">
+        <div class="boss-tiles three">
           <Tile v={week} k="came this week" sub={o.students.length ? `${Math.round((week / o.students.length) * 100)}% of all` : undefined} />
           <Tile
             v={o.students.length ? one(o.students.reduce((a, s) => a + s.days28, 0) / o.students.length / 4) : "–"}
@@ -684,7 +684,7 @@ function BusinessTab(props: { o: Overview; load: Load; onOpen: (id: string) => v
           />
           <Tile v={risks.length} k="slipping" tone={away ? "red" : risks.length ? "amber" : "green"} sub={`${away} gone 2+ weeks`} />
         </div>
-        <span class="ceo-lk">Students who came, the last 14 days</span>
+        <span class="boss-lk">Students who came, the last 14 days</span>
         <Bars
           values={bars.map((b) => b.came)}
           words={(i) => `${dayWords(bars[i].day)}: ${bars[i].came} came`}
@@ -693,9 +693,9 @@ function BusinessTab(props: { o: Overview; load: Load; onOpen: (id: string) => v
         />
       </section>
 
-      <section class="ceo-card">
+      <section class="boss-card">
         <h3>Quietly leaving</h3>
-        <p class="ceo-note">Each one is a fee walking away. Call the parents this week. (Attendance counts from 28 Oct.)</p>
+        <p class="boss-note">Each one is a fee walking away. Call the parents this week. (Attendance counts from 28 Oct.)</p>
         <Names
           onOpen={props.onOpen}
           empty="Nobody: everyone came in the last week."
@@ -703,19 +703,19 @@ function BusinessTab(props: { o: Overview; load: Load; onOpen: (id: string) => v
         />
       </section>
 
-      <section class="ceo-card">
+      <section class="boss-card">
         <h3>Learning</h3>
-        <div class="ceo-tiles three">
+        <div class="boss-tiles three">
           <Tile v={w.levels} k="levels this week" sub={`last week ${p.levels}`} tone={w.levels < p.levels ? "amber" : undefined} />
           <Tile v={wPct !== null ? `${wPct}%` : "–"} k="marks this week" sub={pPct !== null ? `last week ${pPct}%` : "no marks last week"} />
           <Tile v={o.learning.finishedMonth} k="units finished" sub="this month" />
         </div>
         {(w.home > 0 || p.home > 0) && (
-          <p class="ceo-mix">
+          <p class="boss-mix">
             Levels checked at home (family app): {w.home} this week, {p.home} last week.
           </p>
         )}
-        <span class="ceo-lk">Below 50% in the last 2 weeks</span>
+        <span class="boss-lk">Below 50% in the last 2 weeks</span>
         <Names
           onOpen={props.onOpen}
           empty="Nobody below 50%."
@@ -723,12 +723,12 @@ function BusinessTab(props: { o: Overview; load: Load; onOpen: (id: string) => v
         />
       </section>
 
-      <section class="ceo-card">
+      <section class="boss-card">
         <h3>Books</h3>
         {o.books.soon.length > 0 && (
-          <div class="ceo-says">
+          <div class="boss-says">
             {o.books.soon.map((b) => (
-              <p key={`${b.grade}${b.code}`} class="ceo-say t-amber">
+              <p key={`${b.grade}${b.code}`} class="boss-say t-amber">
                 <Dot tone="amber" label="soon" />
                 Grade {b.grade} Unit {Number(b.code.slice(1))} ({b.en}): no workbook yet, {b.students.length} student{b.students.length === 1 ? "" : "s"} will need it soon ({b.students.slice(0, 4).join(", ")}
                 {b.students.length > 4 ? "…" : ""}).
@@ -736,7 +736,7 @@ function BusinessTab(props: { o: Overview; load: Load; onOpen: (id: string) => v
             ))}
           </div>
         )}
-        <table class="ceo-table">
+        <table class="boss-table">
           <thead>
             <tr>
               <th>Grade</th>
@@ -760,12 +760,12 @@ function BusinessTab(props: { o: Overview; load: Load; onOpen: (id: string) => v
             ))}
           </tbody>
         </table>
-        <p class="ceo-note">A key makes a level about a minute to correct instead of 3, and lets the family app mark it at home.</p>
+        <p class="boss-note">A key makes a level about a minute to correct instead of 3, and lets the family app mark it at home.</p>
       </section>
 
-      <section class="ceo-card">
+      <section class="boss-card">
         <h3>Family app</h3>
-        <p class="ceo-mix">
+        <p class="boss-mix">
           {o.family.students} of {o.students.length} students have it on a family phone ({o.family.phones} phone{o.family.phones === 1 ? "" : "s"}).
         </p>
       </section>
@@ -783,7 +783,7 @@ function MoneyCard(props: { o: Overview; money: ReturnType<typeof moneyOf>; away
   const num = (s: string) => Number(s.replace(/[^\d]/g, "") || "0");
   const save = async () => {
     setSaving(true);
-    const ok = await act(() => mutate(api.ceo.setMoney, { fee: num(fee), corrector: num(cor), teacher: num(tea) }));
+    const ok = await act(() => mutate(api.boss.setMoney, { fee: num(fee), corrector: num(cor), teacher: num(tea) }));
     setSaving(false);
     if (ok) {
       setEdit(false);
@@ -794,9 +794,9 @@ function MoneyCard(props: { o: Overview; money: ReturnType<typeof moneyOf>; away
   const staffed = ROOMS.some((r) => props.people[r] > 0);
   if (edit || !money) {
     return (
-      <section class="ceo-card ceo-money">
+      <section class="boss-card boss-money">
         <h3>Money</h3>
-        <p class="ceo-note">Three numbers, once: then this page answers in rupees. Only you see them.</p>
+        <p class="boss-note">Three numbers, once: then this page answers in rupees. Only you see them.</p>
         <label>
           <span>Average monthly fee per student</span>
           <input inputMode="numeric" value={fee} placeholder="2500" onInput={(e) => setFee((e.target as HTMLInputElement).value)} />
@@ -823,14 +823,14 @@ function MoneyCard(props: { o: Overview; money: ReturnType<typeof moneyOf>; away
     );
   }
   return (
-    <section class="ceo-card ceo-money">
+    <section class="boss-card boss-money">
       <h3>
         Money <small>a month</small>
-        <button type="button" class="ceo-link" onClick={() => setEdit(true)}>
+        <button type="button" class="boss-link" onClick={() => setEdit(true)}>
           Change
         </button>
       </h3>
-      <div class="ceo-tiles money">
+      <div class="boss-tiles money">
         <Tile v={rs(money.coming)} k="fees from students coming" sub={`${o.students.length - props.away} × ${rs(o.money!.fee)}`} />
         {staffed ? (
           <>
@@ -843,12 +843,12 @@ function MoneyCard(props: { o: Overview; money: ReturnType<typeof moneyOf>; away
         )}
       </div>
       {props.away > 0 && (
-        <p class="ceo-say t-red">
+        <p class="boss-say t-red">
           <Dot tone="red" label="urgent" />
           {rs(money.atRisk)} a month at risk: {props.away} student{props.away === 1 ? "" : "s"} not seen for 2 weeks.
         </p>
       )}
-      <p class="ceo-note">
+      <p class="boss-note">
         All {o.students.length} students paying = {rs(money.income)}. Team = the usual people in each room on the last class days × their pay.
       </p>
     </section>
