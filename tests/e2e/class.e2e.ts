@@ -5,7 +5,7 @@ import { mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { strToU8, zipSync } from "fflate";
 import { afterAll, beforeAll, expect, test } from "vitest";
-import { api } from "../../convex/_generated/api";
+import { api, internal } from "../../convex/_generated/api";
 import { normalizeCode, secretHash } from "../../convex/lib/auth";
 import { KNOWN_WORKBOOKS, outOf } from "../../convex/lib/book";
 import { digestOf, type DCall, type DEvent } from "../../convex/lib/ceo";
@@ -13,6 +13,7 @@ import { readWorkbookHtml } from "../../src/workbookFile";
 import U01_BOOK from "../fixtures/workbook-g8-u01.html?raw";
 import TUTE_BOOK from "../fixtures/tute-skeleton.html?raw";
 import TUTE_JSON from "../fixtures/tute-skeleton.json?raw";
+import { makeCases } from "../cases";
 import { addPerson, OWNER_TOKEN } from "../helpers";
 import { makeBackend, playwright, serveDist } from "./harness";
 
@@ -2590,45 +2591,149 @@ test("CEO page: now, today, team, business, money; one student's sheet for his p
   expect(problems, problems.join("\n")).toEqual([]);
 });
 
-test("Test class: a grade copied and the extra test students; only a phone showing the test class sees them, never the class", async () => {
+/** The simulation's steps, by hand (the run-throughs make it `manual`: no steps of its own). */
+async function simStep(backend: ReturnType<typeof makeBackend>, n = 1) {
+  const play = await backend.t.run(async (ctx) => (await ctx.db.query("simPlay").collect())[0]);
+  for (let i = 0; i < n; i++) await backend.t.mutation(internal.sim.tick, { simId: play.simId, chain: play.chain, manual: true });
+  await backend.push();
+}
+
+test("Simulation: the owner starts it, a teacher joins from the banner, the app sends whom she calls, the CEO page shows her numbers", async () => {
+  const backend = await newClass();
+  const O = await phone(backend, "evaluation");
+  const NILA = "nila-eval-token-0123456789abcdefghijklmnopqrstuvw";
+  await addPerson(backend.t, { name: "Nila", token: NILA, tabs: ["evaluation", "theory"] });
+  const N = await phone(backend, "evaluation", PHONE, NILA);
+
+  // Settings → Students → Simulation (owner): Hard, 10 students, 30 minutes.
+  await O.getByRole("button", { name: "Settings" }).click();
+  const sim = O.locator("section.sim");
+  await contains(sim, "Books it uses: Grade 7 (1 workbook) · Grade 11 (1 theory book).");
+  await sim.getByRole("button", { name: "Hard", exact: true }).click();
+  await contains(sim.locator(".sim-words").first(), "Theory books and workbooks, every grade");
+  await sim.getByRole("button", { name: "10 students", exact: true }).click();
+  await sim.getByRole("button", { name: "30 minutes", exact: true }).click();
+  await sim.scrollIntoViewIfNeeded();
+  await shot(O, "s01-sim-settings");
+  await sim.getByRole("button", { name: "Start: 10 students · Hard · 30 min" }).click();
+  await contains(O.locator(".toast"), "Simulation started: 10 students (Grade 7, 11). This phone shows it now.");
+  // The run-through takes the steps itself.
+  await backend.t.run(async (ctx) => {
+    for (const x of await ctx.db.query("sims").collect()) await ctx.db.patch(x._id, { manual: true });
+  });
+  await visible(O.locator(".app.test-mode"));
+  await contains(O.locator(".top-stat .clock"), "SIM");
+  await contains(sim.locator(".sim-now"), "Running · Hard · 10 students");
+  await count(O.locator(".plain-list .demo-tag", { hasText: "Sim" }), await O.locator(".plain-list > li").count());
+  await shot(O, "s02-sim-running");
+  expect(await O.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+
+  // Nila's phone shows the class: the banner, one tap and she is in it.
+  await contains(N.locator(".sim-banner"), "Simulation on: Hard · 10 students");
+  await shot(N, "s03-join-banner");
+  await N.locator(".sim-banner").click();
+  await visible(N.locator(".app.test-mode"));
+  await count(N.locator(".sim-banner"), 0);
+  await says(N.locator(".evx-foot .sc-lbl"), "Practice"); // drawn in capitals: read as written
+
+  // Her page offers the most urgent; she calls them.
+  await visible(N.locator(".evx-sp.s-sug"));
+  if ((await N.locator(".evx-sp.s-sug.on").count()) === 0) await N.locator(".evx-sp.s-sug").first().click();
+  await until(async () => /Call [1-9]/.test(await evCall(N).innerText()), "someone to call");
+  await evCall(N).click();
+  const called = await backend.t.run(async (ctx) => (await ctx.db.query("calls").collect()).filter((c) => c.status === "requested"));
+  expect(called.length).toBeGreaterThan(0);
+  expect(called.every((c) => c.test && c.teacher === "Nila")).toBe(true);
+  const names = await backend.t.run(async (ctx) => {
+    const out: string[] = [];
+    for (const c of called) out.push((await ctx.db.get(c.studentId))!.name);
+    return out;
+  });
+  // The app plays Correction: it sends them a little later (here: their calls made a minute ago, one step).
+  await backend.t.run(async (ctx) => {
+    for (const c of called) await ctx.db.patch(c._id, { createdAt: c.createdAt - 60_000 });
+  });
+  await simStep(backend);
+  for (const n of names) await until(async () => /\bs-walk\b/.test((await evPill(N, n).getAttribute("class")) ?? ""), `${n} on the way`);
+  await shot(N, "s04-sent-by-the-app");
+  await evArrive(N, names);
+  // Explained, question by question, for everyone with her; then Done.
+  for (let i = 0; i < 40 && (await N.locator(".evx-sp.s-done").count()) < names.length; i++) {
+    await N.locator(".evx-x").click();
+    await N.waitForTimeout(450);
+  }
+  await contains(evDone(N), `Done ${names.length}`);
+  await evDone(N).click();
+  await contains(N.locator(".toast"), "back to work");
+  await simStep(backend, 2);
+
+  // The CEO page → Sim: Nila's numbers, where the work waits, what happened.
+  await O.getByRole("button", { name: /^CEO/ }).click();
+  await O.locator(".ceo-tabs").getByRole("button", { name: /^Simulation/ }).click();
+  const t = O.locator(".sim-t", { hasText: "Nila" });
+  await contains(t, "Evaluation");
+  await contains(t, "explained");
+  await contains(t, `Called ${names.length}`);
+  await contains(O.locator(".sim-head"), "Simulation · Hard · 10 students");
+  await visible(O.locator(".sim-feed li", { hasText: "Nila" }));
+  await shot(O, "s05-ceo-sim");
+  await shot(O, "s05-ceo-sim-full", true);
+  for (const width of [360, 320]) {
+    const small = await phone(backend, "evaluation", { ...PHONE, viewport: { width, height: 740 } });
+    await small.getByRole("button", { name: /^CEO/ }).click();
+    await small.locator(".ceo-tabs").getByRole("button", { name: /^Simulation/ }).click();
+    await visible(small.locator(".sim-t", { hasText: "Nila" }));
+    expect(await small.evaluate(() => document.documentElement.scrollWidth), `Sim tab at ${width} px`).toBeLessThanOrEqual(width);
+    expect(await topFits(small), `top bar at ${width} px`).toBe(true);
+    await shot(small, `s06-ceo-sim-${width}px`, true);
+    await small.context().close();
+  }
+
+  // End now (the CEO page): everyone goes home; the scoreboard stays. Nila's phone: back to the class.
+  await O.locator(".sim-head").getByRole("button", { name: "End now" }).click();
+  await O.locator(".sheet").getByRole("button", { name: "End it" }).click();
+  await contains(O.locator(".toast"), "The simulation ended.");
+  await contains(O.locator(".sim-head .sim-st"), "Ended");
+  await visible(O.locator(".sim-head").getByRole("button", { name: "Start another simulation" }));
+  await contains(N.locator(".sim-banner.over"), "The simulation is over.");
+  await N.locator(".sim-banner.over").click();
+  await count(N.locator(".app.test-mode"), 0);
+  const left = await backend.t.run(async (ctx) => (await ctx.db.query("students").collect()).filter((x) => x.test && x.present).length);
+  expect(left).toBe(0);
+  await N.context().close();
+  expect(problems, problems.join("\n")).toEqual([]);
+});
+
+test("Theory and Evaluation in every situation (the old test class's students, a fixture); only a phone showing the simulation sees them", async () => {
   const backend = await newClass();
   const O = await phone(backend, "evaluation");
   await O.getByRole("button", { name: "Settings" }).click();
   await O.getByRole("button", { name: "Load demo students (three grades)" }).click();
   await visible(O.getByText(/^14 demo students loaded/));
-  // They are the real class here (the test class copies real students).
+  // The real class here; the fixture adds a test student for every situation, two in the owner's Evaluation room.
   await backend.t.run(async (ctx) => {
     for (const x of await ctx.db.query("students").collect()) await ctx.db.patch(x._id, { demo: false });
+    const owner = (await ctx.db.query("users").collect()).find((u) => u.role === "owner")!;
+    await makeCases(ctx, owner);
   });
   await backend.push();
   const NILA = "nila-eval-token-0123456789abcdefghijklmnopqrstuvw";
   await addPerson(backend.t, { name: "Nila", token: NILA, tabs: ["evaluation", "theory"] });
   const N = await phone(backend, "evaluation", PHONE, NILA);
 
-  // Settings → Students → Grade 7 → Test class: copy its 3 students. This phone shows the test class now: TEST in
-  // the top bar, only the copies in the list (with the Test tag).
-  await O.getByRole("button", { name: /^Grade 7\b/ }).click();
-  const tcl = O.locator(".tcl");
-  await contains(tcl.getByRole("button", { name: /^Copy Grade 7/ }), "Copy Grade 7's 3 students");
-  await tcl.getByRole("button", { name: /^Copy Grade 7/ }).click();
-  await contains(O.locator(".toast"), "3 test students: copies of Grade 7. This phone shows the test class now.");
+  // This phone shows the simulation's class (Settings → Account): SIM in the top bar.
+  await O.getByRole("button", { name: "Account", exact: true }).click();
+  await O.locator(".sim-switch").getByRole("button", { name: /^Simulation/ }).click();
   await visible(O.locator(".app.test-mode"));
-  await contains(O.locator(".top-stat .clock"), "TEST");
-  await count(O.locator(".plain-list > li"), 3);
-  for (const n of ["Malik test", "Priya test", "Vimal test"]) await visible(O.locator(".plain-list .st-who", { hasText: n }));
-  await count(O.locator(".plain-list .demo-tag", { hasText: "Test" }), 3);
-  await visible(O.locator(".tcl-note"));
-  // The extra test students, one for each situation (their notes say which).
-  await O.locator(".tcl").getByRole("button", { name: "Add the extra test students (every case)" }).click();
-  await contains(O.locator(".toast"), "32 extra test students, one for every case.");
-  await contains(O.locator(".tcl-switch .segc-b.tclb"), "Test class (35)");
+  await contains(O.locator(".top-stat .clock"), "SIM");
+  await contains(O.locator(".sim-switch .segc-b.simb"), "Simulation (32)");
+  await O.getByRole("button", { name: "Students", exact: true }).click();
   await O.getByRole("button", { name: /^Grade 11\b/ }).click();
   await visible(O.locator(".tcl-case", { hasText: "Theory: needs section D, no work for 6 min" }));
   await shot(O, "x01-test-class-settings");
   await O.getByRole("button", { name: "Back to the class" }).click();
 
-  // Evaluation, in the test class: two of them are in her room already (one with her, one called), so the 7 who lost
-  // Q2 get 4 ticks: room for 4.
+  // Evaluation: two of them are in her room already (one with her, one called), so the 7 who lost Q2 get 4 ticks.
   await visible(evPill(O, "In Eval D").and(O.locator(".s-in")));
   await visible(evPill(O, "Eval called").and(O.locator(".s-call")));
   await evPick(O, { grade: "7", stage: "Master", unit: "8", group: "2" });
@@ -2636,7 +2741,7 @@ test("Test class: a grade copied and the extra test students; only a phone showi
   await count(O.locator(".evx-sp.s-sug.on"), 4);
   await contains(evCall(O), "Call 4"); // room for 4 (with someone with her the line says when she is free instead)
   await shot(O, "x02-test-class-evaluation");
-  // Theory, in the test class: D first (Starving D has waited 25 minutes), held students listed but not ticked.
+  // Theory: D first (Starving D has waited 25 minutes), held students listed but not ticked.
   await tab(O, "Theory").click();
   await evPick(O, { grade: "11", stage: "Fighter", unit: "13", group: "D" });
   await until(async () => (await namesOf(O.locator(".evx-sp.s-sug")))[0] === "Starving D", "Starving D first");
@@ -2653,7 +2758,7 @@ test("Test class: a grade copied and the extra test students; only a phone showi
   await N.getByRole("button", { name: "Settings" }).click();
   await N.getByRole("button", { name: "Account", exact: true }).click();
   await shot(N, "x04-test-class-switch");
-  await N.locator(".tcl-switch").getByRole("button", { name: /^Test class/ }).click();
+  await N.locator(".sim-switch").getByRole("button", { name: /^Simulation/ }).click();
   await visible(N.locator(".app.test-mode"));
   await N.getByRole("button", { name: "Back to the class" }).click();
   // In her own room (empty), the 7 who lost Q2: 6 ticked, never more (his number).
@@ -2677,11 +2782,11 @@ test("Test class: a grade copied and the extra test students; only a phone showi
   await evPick(O, { grade: "7", stage: "Master", unit: "8" });
   await visible(O.locator(".evx-qg").filter({ hasText: "×7" }));
 
-  // The owner deletes them: only test students go; this phone shows the class again.
+  // The owner deletes them (Settings → Students → Simulation): only test students go; this phone shows the class again.
   await O.getByRole("button", { name: "Settings" }).click();
-  await O.locator(".tcl").getByRole("button", { name: "Delete the 35 test students" }).click();
-  await O.locator(".sheet").getByRole("button", { name: "Delete test students" }).click();
-  await contains(O.locator(".toast"), "Deleted 35 test students. This phone shows the class again.");
+  await O.locator("section.sim").getByRole("button", { name: "Delete the 32 made-up students" }).click();
+  await O.locator(".sheet").getByRole("button", { name: "Delete them" }).click();
+  await contains(O.locator(".toast"), "Deleted 32 made-up students. This phone shows the class again.");
   await count(O.locator(".app.test-mode"), 0);
   const left = await backend.t.run(async (ctx) => (await ctx.db.query("students").collect()).map((x) => ({ name: x.name, test: !!x.test })));
   expect(left.filter((x) => x.test)).toEqual([]);

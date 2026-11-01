@@ -22,7 +22,6 @@ import {
   currentRole,
   may,
   now,
-  setTestMode,
   signOutHere,
   stageName,
   testMode,
@@ -36,6 +35,7 @@ import {
 import { ATTENDANCE_SINCE, AWAY_DAYS, daysAway, studentStats } from "./stats";
 import { UploadBooks } from "./upload";
 import { FamilySheet, PhoneAnswers } from "./familySheet";
+import { SimPanel, SimSwitch } from "./sim";
 import { GRADES, GradeRow, Sheet, STATE_WORDS, useGrade } from "./ui";
 
 type Tab = "students" | "books" | "people" | "alerts" | "reports" | "history" | "account";
@@ -124,8 +124,8 @@ function Students(props: { views: View[] }) {
       {may("reports") && !testing && <StudentNumbers views={props.views} removed={archived ?? []} now={t} />}
       {testing && (
         <p class="tcl-note">
-          <b>The test class.</b> These are test students: only a phone showing the test class sees them. New real students are
-          added from the class (the switch below).
+          <b>The simulation.</b> These are made-up students: only a phone showing the simulation sees them. New real students
+          are added from the class (the switch below).
         </p>
       )}
 
@@ -171,7 +171,7 @@ function Students(props: { views: View[] }) {
                 <span class="st-who">
                   <span>
                     {v.s.name}
-                    {v.s.demo && <span class="demo-tag">{v.s.test ? "Test" : "Demo"}</span>}
+                    {v.s.demo && <span class="demo-tag">{v.s.test ? "Sim" : "Demo"}</span>}
                   </span>
                   <small>
                     {typeof v.s.index === "number" ? `#${v.s.index} · ` : ""}Term {v.s.term ?? "?"} · {stageName(v.stage as Stage)}
@@ -233,7 +233,7 @@ function Students(props: { views: View[] }) {
         </>
       )}
 
-      {may("owner") && <TestClass grade={grade} />}
+      {may("owner") && <SimPanel />}
       {may("owner") && !testing && <Demo views={props.views} hasDemo={hasDemo} onDelete={() => setConfirmDemo(true)} />}
 
       {editing && (
@@ -354,106 +354,6 @@ function StudentNumbers(props: { views: View[]; removed: Removed[]; now: number 
         </Sheet>
       )}
     </>
-  );
-}
-
-/** This phone shows the class or the test class (test students only). Anyone can switch; it stays on this phone. */
-export function TestSwitch(props: { tests: number }) {
-  const on = testMode();
-  return (
-    <div class="segc tcl-switch" role="group" aria-label="This phone shows">
-      <button type="button" class={`segc-b${on ? "" : " on"}`} aria-pressed={!on} onClick={() => setTestMode(false)}>
-        The class
-      </button>
-      <button type="button" class={`segc-b tclb${on ? " on" : ""}`} aria-pressed={on} onClick={() => setTestMode(true)}>
-        Test class{props.tests ? ` (${props.tests})` : ""}
-      </button>
-    </div>
-  );
-}
-
-type TestInfo = { real: Record<string, number>; copies: Record<string, number>; cases: number; tests: number };
-
-/**
- * Owner only (31 Oct 2026, his voice note): the test class. Copy a grade's real students (the same books and levels,
- * "Dilrash R test"), add the extra test students (one for every situation of the Theory and Evaluation pages), switch
- * this phone, delete them. Only a phone showing the test class sees them; they never count anywhere.
- */
-function TestClass(props: { grade: number }) {
-  const info = useQuery<TestInfo>(api.demo.testInfo, {});
-  const [busy, setBusy] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const g = props.grade;
-  const real = info?.real[String(g)] ?? 0;
-  const copies = info?.copies[String(g)] ?? 0;
-  const tests = info?.tests ?? 0;
-  const make = async (run: () => Promise<number>, words: (n: number) => string) => {
-    setBusy(true);
-    const n = await act(run);
-    setBusy(false);
-    if (n === undefined) return;
-    setTestMode(true);
-    toast(`${words(n)} This phone shows the test class now.`);
-  };
-  return (
-    <section class="tcl" aria-label="The test class">
-      <h3 class="block-title">Test class</h3>
-      <p class="muted small">
-        Test students to try the Theory and Evaluation pages: only a phone showing the test class sees them (the top bar says
-        TEST), and they never count in reports, numbers or the CEO page. The real class never sees them.
-      </p>
-      <TestSwitch tests={tests} />
-      <button
-        type="button"
-        class="btn ghost wide"
-        disabled={busy || real === 0}
-        onClick={() => void make(() => mutate(api.demo.copyGrade, { grade: g, by: currentRole() }), (n) => `${n} test students: copies of Grade ${g}.`)}
-      >
-        {real === 0 ? `No Grade ${g} students to copy` : copies ? `Copy Grade ${g} again (${real}: they start over)` : `Copy Grade ${g}'s ${real} students`}
-      </button>
-      <button
-        type="button"
-        class="btn ghost wide"
-        disabled={busy}
-        onClick={() => void make(() => mutate(api.demo.cases, { by: currentRole() }), (n) => `${n} extra test students, one for every case.`)}
-      >
-        {info?.cases ? `The extra test students again (${info.cases}: they start over)` : "Add the extra test students (every case)"}
-      </button>
-      {tests > 0 && (
-        <button type="button" class="link-btn danger tcl-del" disabled={busy} onClick={() => setDeleting(true)}>
-          Delete the {tests} test students
-        </button>
-      )}
-      {deleting && (
-        <Sheet
-          title="Delete the test students?"
-          sub="Only test students go, with their marks and calls. Your real students stay."
-          onClose={() => setDeleting(false)}
-          foot={
-            <div class="row-actions">
-              <button type="button" class="btn ghost" onClick={() => setDeleting(false)}>
-                Keep them
-              </button>
-              <button
-                type="button"
-                class="btn primary"
-                onClick={async () => {
-                  const n = await act(() => mutate(api.demo.remove, { test: true, by: currentRole() }));
-                  setDeleting(false);
-                  if (n === undefined) return;
-                  setTestMode(false);
-                  toast(`Deleted ${n} test students. This phone shows the class again.`);
-                }}
-              >
-                Delete test students
-              </button>
-            </div>
-          }
-        >
-          <p class="muted">Copying a grade again, or the extra test students again, starts them over without deleting.</p>
-        </Sheet>
-      )}
-    </section>
   );
 }
 
@@ -1011,6 +911,16 @@ function describe(e: Doc<"events">): string {
       return `${v} extra test students made (the test class)`;
     case "test-remove":
       return `${v} test students deleted`;
+    case "sim-start": {
+      const [level, n, min] = v.split(" ");
+      return `started a simulation: ${level}, ${n} students, ${min} min`;
+    }
+    case "sim-add":
+      return `${v} more students in the simulation`;
+    case "sim-level":
+      return `the simulation is now ${v}`;
+    case "sim-end":
+      return v === "time" ? "the simulation's time was up" : "ended the simulation";
     case "owner-setup":
       return "set up the owner account";
     case "sign-in":
@@ -1117,9 +1027,11 @@ function Account() {
       </div>
       {(tests > 0 || testMode()) && (
         <>
-          <h3 class="block-title">Test class</h3>
-          <p class="muted small">The owner made test students to try the pages. Only a phone showing the test class sees them.</p>
-          <TestSwitch tests={tests} />
+          <h3 class="block-title">Simulation</h3>
+          <p class="muted small">
+            Practice with made-up students (the owner starts it). Only a phone showing the simulation sees them; nothing counts.
+          </p>
+          <SimSwitch tests={tests} />
         </>
       )}
       <button type="button" class="btn ghost wide" onClick={() => setPin(true)}>

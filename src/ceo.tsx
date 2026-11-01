@@ -4,6 +4,7 @@
 // - Today: how the day went: who came, the idle minutes (the centre's headline number), the work, each person.
 // - Team: does a room need another person, how many students the team can take, Fighter vs Master.
 // - Business: money, who comes and who quietly stopped, are they learning, which books are missing.
+// - Sim: the simulation (1 Nov 2026): each teacher's numbers while they practise (src/simTab.tsx).
 // Numbers from convex/ceo.ts (read once and every 5 minutes while open), arithmetic in convex/lib/ceo.ts.
 
 import { useEffect, useRef, useState } from "preact/hooks";
@@ -13,7 +14,6 @@ import { slClock } from "../convex/lib/day";
 import { errorText, fetchOnce, mutate } from "./backend";
 import {
   attendanceBars,
-  busyTone,
   cameWeek,
   classDays,
   dayWords,
@@ -39,15 +39,19 @@ import { hardQuestions } from "./evalFocusData";
 import { unitNo } from "./focusData";
 import { ATTENDANCE_SINCE } from "./stats";
 import { act, stageName, type Board, type Stage } from "./store";
+import { Bars, Dot, Meter, Names, Tile } from "./ceoKit";
+import { SimTab } from "./simTab";
 import { StudentSheet } from "./studentSheet";
 import { Empty } from "./ui";
 
-type Tab = "now" | "today" | "team" | "business";
+type Tab = "now" | "today" | "team" | "business" | "sim";
 const TABS: { id: Tab; name: string }[] = [
   { id: "now", name: "Now" },
   { id: "today", name: "Today" },
   { id: "team", name: "Team" },
   { id: "business", name: "Business" },
+  // The simulation (1 Nov 2026): each teacher's numbers while they practise.
+  { id: "sim", name: "Sim" },
 ];
 const REFRESH_MS = 5 * 60_000;
 /** Minutes of work one person gives an hour without the queue growing (convex/lib/ceo.ts BUSY_OK). */
@@ -115,13 +119,22 @@ export function CeoPage(props: { board: Board; views: View[]; now: number }) {
     <main class="page ceo">
       <div class="segc plain ceo-tabs" role="group" aria-label="CEO page">
         {TABS.map((t) => (
-          <button key={t.id} type="button" class={`segc-b${tab === t.id ? " on" : ""}`} aria-pressed={tab === t.id} onClick={() => setTab(t.id)}>
+          <button
+            key={t.id}
+            type="button"
+            class={`segc-b${tab === t.id ? " on" : ""}${t.id === "sim" && props.board.sim?.status === "running" ? " sim-on" : ""}`}
+            aria-pressed={tab === t.id}
+            aria-label={t.id === "sim" ? `Simulation${props.board.sim?.status === "running" ? ", running" : ""}` : undefined}
+            onClick={() => setTab(t.id)}
+          >
             {t.name}
           </button>
         ))}
       </div>
 
-      {tab === "now" ? (
+      {tab === "sim" ? (
+        <SimTab board={props.board} now={props.now} onOpen={setStudent} />
+      ) : tab === "now" ? (
         <NowTab board={props.board} views={props.views} now={props.now} load={load} rows={rows} onOpen={setStudent} />
       ) : !o.data ? (
         o.error ? (
@@ -137,107 +150,16 @@ export function CeoPage(props: { board: Board; views: View[]; now: number }) {
         <BusinessTab o={o.data} load={load!} onOpen={setStudent} onSaved={() => void o.reload()} />
       )}
 
-      <p class="ceo-upd">
-        {o.busy ? "Updating…" : ago === null ? "" : ago === 0 ? "Updated just now" : `Updated ${ago} min ago`}
-        <button type="button" class="ceo-link" disabled={o.busy} onClick={() => void o.reload()}>
-          Refresh
-        </button>
-      </p>
+      {tab !== "sim" && (
+        <p class="ceo-upd">
+          {o.busy ? "Updating…" : ago === null ? "" : ago === 0 ? "Updated just now" : `Updated ${ago} min ago`}
+          <button type="button" class="ceo-link" disabled={o.busy} onClick={() => void o.reload()}>
+            Refresh
+          </button>
+        </p>
+      )}
       {student && <StudentSheet studentId={student} onClose={() => setStudent(null)} />}
     </main>
-  );
-}
-
-// ---------------------------------------------------------------- pieces
-
-function Tile(props: { v: string | number; k: string; sub?: string; tone?: Tone }) {
-  return (
-    <div class={`ceo-tile${props.tone ? ` t-${props.tone}` : ""}`}>
-      <b>{props.v}</b>
-      <span>{props.k}</span>
-      {props.sub && <small>{props.sub}</small>}
-    </div>
-  );
-}
-
-function Dot(props: { tone: Tone; label: string }) {
-  return <i class={`ceo-dot t-${props.tone}`} role="img" aria-label={props.label} />;
-}
-
-/** A share of the class time as a bar: green under 65%, amber to 85%, red above. */
-function Meter(props: { label: string; share: number | null; words: string }) {
-  const t = busyTone(props.share);
-  return (
-    <div class="ceo-meter">
-      <span class="ceo-ml">{props.label}</span>
-      <span class="ceo-mb" aria-hidden="true">
-        <i class={`t-${t}`} style={{ width: `${Math.min(100, Math.round((props.share ?? 0) * 100))}%` }} />
-      </span>
-      <span class="ceo-mv">{props.share === null ? "–" : `${Math.round(props.share * 100)}%`}</span>
-      <small class="ceo-mw">{props.words}</small>
-    </div>
-  );
-}
-
-/**
- * Columns with a value each; tap one to read it (a phone's hover). `sel`/`onPick` share one reading between several
- * rows on the same time line (then the parent shows the words); without them it reads itself on the line below.
- */
-function Bars(props: {
-  values: number[];
-  tones?: (Tone | "plain")[];
-  words: (i: number) => string;
-  hint?: string;
-  max?: number;
-  marks?: string[];
-  sel?: number | null;
-  onPick?: (i: number | null) => void;
-}) {
-  const [own, setOwn] = useState<number | null>(null);
-  const sel = props.onPick ? (props.sel ?? null) : own;
-  const setSel = props.onPick ?? setOwn;
-  const max = Math.max(1, props.max ?? 0, ...props.values);
-  return (
-    <div class="ceo-bars">
-      <div class="ceo-plot">
-        {props.values.map((v, i) => (
-          <button
-            key={i}
-            type="button"
-            class={`ceo-col${sel === i ? " sel" : ""}`}
-            aria-label={props.words(i)}
-            onClick={() => setSel(sel === i ? null : i)}
-          >
-            <i class={`t-${props.tones?.[i] ?? "plain"}`} style={{ height: `${v > 0 ? Math.max(4, (v / max) * 100) : 0}%` }} />
-          </button>
-        ))}
-      </div>
-      {props.marks && (
-        <div class="ceo-xm" aria-hidden="true">
-          {props.marks.map((m, i) => (
-            <span key={i}>{m}</span>
-          ))}
-        </div>
-      )}
-      {!props.onPick && <p class="ceo-read">{sel !== null && sel < props.values.length ? props.words(sel) : (props.hint ?? "")}</p>}
-    </div>
-  );
-}
-
-function Names(props: { items: { id: string; name: string; right: string; tone?: Tone }[]; onOpen: (id: string) => void; empty?: string }) {
-  if (!props.items.length) return props.empty ? <p class="muted small">{props.empty}</p> : null;
-  return (
-    <ul class="ceo-names">
-      {props.items.map((x) => (
-        <li key={x.id}>
-          <button type="button" class="ceo-nm" onClick={() => props.onOpen(x.id)}>
-            {x.tone && <Dot tone={x.tone} label={x.tone === "red" ? "urgent" : "watch"} />}
-            <b>{x.name}</b>
-            <span>{x.right}</span>
-          </button>
-        </li>
-      ))}
-    </ul>
   );
 }
 

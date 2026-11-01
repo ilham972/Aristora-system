@@ -288,11 +288,11 @@ async function closeIdle(
   await ctx.db.patch(s._id, { idleSince: undefined, idleReason: undefined, idleMs: s.idleMs + ms });
   if (ms > 0) {
     await log(ctx, session, until, { kind: "idle", studentId: s._id, name: s.name, ms, value: s.idleReason });
-    // The rooms' scores: a wait counts for each room he was waiting for ("theory+evaluation": both). Never a test
-    // student's (the test class doesn't count).
-    for (const room of s.test ? [] : STAT_ROOMS) {
+    // The rooms' scores: a wait counts for each room he was waiting for ("theory+evaluation": both). A test student's
+    // (the simulation) counts in the simulation's practice score, never the class's.
+    for (const room of STAT_ROOMS) {
       if (!(s.idleReason ?? "").split("+").includes(room)) continue;
-      await addStats(ctx, session, room, { waitMs: ms }, { maxWaitMs: ms });
+      await roomStats(ctx, s, session, room, { waitMs: ms }, { maxWaitMs: ms });
     }
   }
 }
@@ -320,6 +320,40 @@ export async function addStats(
   for (const [k, n] of Object.entries(max)) mine[k] = Math.max(mine[k] ?? 0, n);
   all[room] = mine;
   await ctx.db.patch(session._id, { stats: all });
+}
+
+/**
+ * A room's score for this student: the class's (session.stats), or, for a test student, the running simulation's
+ * practice score (sims.stats: the Theory and Evaluation pages in the simulation show it). The class never counts them.
+ */
+export async function roomStats(
+  ctx: MutationCtx,
+  s: Doc<"students">,
+  session: Doc<"sessions"> | null,
+  room: string,
+  add: Record<string, number>,
+  max: Record<string, number> = {},
+) {
+  if (!s.test) return await addStats(ctx, session, room, add, max);
+  const sim = await ctx.db.query("sims").withIndex("by_status", (q) => q.eq("status", "running")).first();
+  if (!sim) return;
+  const all = { ...(sim.stats ?? {}) };
+  const mine = { ...(all[room] ?? {}) };
+  for (const [k, n] of Object.entries(add)) if (n) mine[k] = (mine[k] ?? 0) + n;
+  for (const [k, n] of Object.entries(max)) mine[k] = Math.max(mine[k] ?? 0, n);
+  all[room] = mine;
+  await ctx.db.patch(sim._id, { stats: all });
+}
+
+/** A student and everything of his: calls, books, visits, books given, Correction's drafts and claims. */
+export async function wipeStudent(ctx: MutationCtx, s: Doc<"students">) {
+  for (const c of await ctx.db.query("calls").withIndex("by_student_status", (q) => q.eq("studentId", s._id)).collect()) await ctx.db.delete(c._id);
+  for (const p of await ctx.db.query("progress").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) await ctx.db.delete(p._id);
+  for (const a of await ctx.db.query("attendance").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) await ctx.db.delete(a._id);
+  for (const h of await ctx.db.query("handouts").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) await ctx.db.delete(h._id);
+  for (const d of await ctx.db.query("drafts").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) await ctx.db.delete(d._id);
+  for (const c of await ctx.db.query("claims").withIndex("by_paper", (q) => q.eq("studentId", s._id)).collect()) await ctx.db.delete(c._id);
+  await ctx.db.delete(s._id);
 }
 
 /**

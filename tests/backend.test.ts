@@ -6,6 +6,7 @@ import schema from "../convex/schema";
 import { fighter, type FighterData, type MasterData } from "../convex/lib/book";
 import { computeMaster, type MState } from "../convex/lib/master";
 import { computeStatus } from "../convex/lib/status";
+import { makeCases } from "./cases";
 import { addPerson, asOwner, asPhone } from "./helpers";
 
 const modules = import.meta.glob("../convex/**/*.ts");
@@ -59,6 +60,13 @@ async function student(t: T, id: Id<"students">) {
 }
 async function state(t: T) {
   return await t.query(api.state.get, {});
+}
+/** The old test class's extra test students (now a fixture), in the owner's Evaluation room. */
+async function cases(t: T) {
+  return await t.run(async (ctx) => {
+    const owner = (await ctx.db.query("users").collect()).find((u) => u.role === "owner")!;
+    return await makeCases(ctx, owner);
+  });
 }
 function advance(min: number) {
   vi.setSystemTime(Date.now() + min * MIN);
@@ -586,51 +594,11 @@ describe("demo students", () => {
   });
 });
 
-describe("the test class (31 Oct 2026): test students only phones in test mode see", () => {
-  test("a grade copied: the same book, levels and books given, signed in; copying again starts over", async () => {
-    const t = await setup();
-    const malik = await addMaster(t, "Malik R");
-    const items = Array.from({ length: 10 }, (_, i) => ({ q: i + 1, got: i + 1 === 4 ? 0 : 2 }));
-    await t.mutation(api.workbook.correct, { studentId: malik, level: 1, items, by: "correction" });
-    await t.mutation(api.workbook.levelDone, { studentId: malik, level: 2, by: "correction" });
-    const u09 = await unitId(t, "G7-U09");
-    await t.mutation(api.students.setGiven, { id: malik, unitId: u09, stage: "master", given: true });
-    await t.mutation(api.students.setPresent, { id: malik, present: false }); // he went home: his copy is in class anyway
-    await addIn(t, "Nila"); // Grade 11: not copied
-    expect(await t.mutation(api.demo.copyGrade, { grade: 7 })).toBe(1);
-
-    // The real class never sees the test class (only how many there are).
-    const real = await state(t);
-    expect(real.students.map((s) => s.name).sort()).toEqual(["Malik R", "Nila"]);
-    expect(real.tests).toBe(1);
-    // The test class: the copy only, signed in, on Malik's book with Malik's levels and his books given.
-    const st = await t.query(api.state.get, { test: true });
-    expect(st.students.map((s) => s.name)).toEqual(["Malik R test"]);
-    const copy = st.students[0];
-    expect(copy).toMatchObject({ test: true, demo: true, copyOf: malik, present: true, grade: 7, stage: "master", unitId: await unitId(t, "G7-U08") });
-    expect(st.progress[copy._id].m).toEqual(real.progress[malik].m);
-    expect(st.given[copy._id]).toEqual([{ unitId: u09, stage: "master", work: true, done: false }]);
-    expect(st.session).not.toBeNull();
-    expect(await t.query(api.demo.testInfo, {})).toEqual({ real: { "7": 1, "11": 1 }, copies: { "7": 1 }, cases: 0, tests: 1 });
-
-    // His copy explained (a test); copying again starts over from the real Malik.
-    await t.run(async (ctx) => {
-      const p = (await ctx.db.query("progress").withIndex("by_student", (q) => q.eq("studentId", copy._id)).collect())[0];
-      await ctx.db.patch(p._id, { m: { q: {}, lv: {} } });
-    });
-    expect(await t.mutation(api.demo.copyGrade, { grade: 7 })).toBe(1);
-    const again = await t.query(api.state.get, { test: true });
-    expect(again.students).toHaveLength(1);
-    expect(again.students[0]._id).not.toBe(copy._id);
-    expect(again.progress[again.students[0]._id].m).toEqual(real.progress[malik].m);
-    expect((await student(t, malik)).m.lv["2"]?.done).toBeDefined(); // the real Malik untouched
-    await expect(t.mutation(api.demo.copyGrade, { grade: 9 })).rejects.toThrow(/No Grade 9 students/);
-  });
-
+describe("test students (the simulation's class; the old test class's cases as a fixture): only phones showing the simulation see them", () => {
   test("the extra test students: one for each situation; their calls never count; deleting them leaves the class", async () => {
     const t = await setup();
     await addIn(t, "Real R");
-    expect(await t.mutation(api.demo.cases, {})).toBe(32); // 13 theory-book + 19 workbook (no grade with two workbooks here)
+    expect(await cases(t)).toBe(32); // 13 theory-book + 19 workbook (no grade with two workbooks here)
     const st = await t.query(api.state.get, { test: true });
     expect(st.students).toHaveLength(32);
     const by = (name: string) => st.students.find((s) => s.name === name)!;
@@ -708,7 +676,7 @@ describe("the test class (31 Oct 2026): test students only phones in test mode s
       ];
       await ctx.db.patch(b._id, { data: { kind: "fighter", sections } });
     });
-    expect(await t.mutation(api.demo.cases, {})).toBe(13 + 19);
+    expect(await cases(t)).toBe(13 + 19);
     const st = await t.query(api.state.get, { test: true });
     const by = (name: string) => st.students.find((s) => s.name === name)!;
     const book = (await t.run(async (ctx) => (await ctx.db.query("books").collect()).find((b) => b.stage === "fighter")!.data)) as FighterData;
@@ -727,11 +695,10 @@ describe("the test class (31 Oct 2026): test students only phones in test mode s
     await t.mutation(api.setup.ensure, {});
     await addPerson(raw, { name: "Nila", token: "nila-token-0123456789abcdefghijklmnopqrstuvwxyz", tabs: ["evaluation"], can: ["students"] });
     const nila = asPhone(raw, "nila-token-0123456789abcdefghijklmnopqrstuvwxyz");
-    await expect(nila.mutation(api.demo.cases, {})).rejects.toThrow(/owner/);
-    await expect(nila.mutation(api.demo.copyGrade, { grade: 7 })).rejects.toThrow(/owner/);
+    await expect(nila.mutation(api.sim.start, { level: "easy", count: 5, minutes: 20, manual: true })).rejects.toThrow(/owner/);
     await expect(nila.mutation(api.demo.remove, { test: true })).rejects.toThrow(/owner/);
-    await expect(nila.query(api.demo.testInfo, {})).rejects.toThrow(/owner/);
-    await t.mutation(api.demo.cases, {});
+    await expect(nila.query(api.sim.status, {})).rejects.toThrow(/owner/);
+    await cases(t);
     // 32 test students don't fill the class list: a teacher can still add real students.
     await nila.mutation(api.students.add, { name: "New R", grade: 7 });
     expect((await t.query(api.state.get, {})).students.map((s) => s.name)).toEqual(["New R"]);

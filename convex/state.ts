@@ -3,6 +3,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { query } from "./_generated/server";
 import { viewer } from "./lib/auth";
 import { givenWork, mayBeOpen, openWork } from "./lib/backend";
+import { recentSim, simInfo } from "./sim";
 
 /**
  * Everything the phones need, live: the students, each one's work in his current book,
@@ -11,9 +12,11 @@ import { givenWork, mayBeOpen, openWork } from "./lib/backend";
  * in, marks to explain, questions for Theory), so Evaluation, Theory and Correction see every book; `given` = the
  * books given to him (not his book now): whether each still has work (then he is not "out of work") and whether it is
  * finished (Correction's row of his books leaves it out).
- * Two classes share the server (31 Oct 2026): the real class, and the test class (test students) that only a phone in
- * test mode sees (`test`). Each phone gets its own class's students and their calls; `tests` = how many test students
- * there are (so a real-class phone can offer the switch).
+ * Two classes share the server (31 Oct 2026): the real class, and the simulation's made-up students (test students,
+ * 1 Nov 2026) that only a phone showing the simulation sees (`test`). Each phone gets its own class's students and their
+ * calls; `tests` = how many test students there are (so a real-class phone can offer the switch); `sim` = the
+ * simulation running or just ended (the Join banner, SIM in the top bar). A phone showing the simulation gets its
+ * practice score as the session's `stats` (the Theory and Evaluation pages' score line).
  */
 export const get = query({
   args: { token: v.optional(v.string()), test: v.optional(v.boolean()) },
@@ -84,6 +87,7 @@ export const get = query({
     }
     const session = await ctx.db.query("sessions").withIndex("by_open", (q) => q.eq("open", true)).first();
     const legacy = students.some((s) => !s.stage);
+    const sim = await recentSim(ctx, Date.now());
     return {
       students,
       progress,
@@ -92,12 +96,18 @@ export const get = query({
       given,
       calls: [...requested, ...sent],
       session: session
-        ? { _id: session._id, startedAt: session.startedAt, lastActivityAt: session.lastActivityAt, stats: session.stats ?? {} }
+        ? {
+            _id: session._id,
+            startedAt: session.startedAt,
+            lastActivityAt: session.lastActivityAt,
+            stats: (test ? sim?.stats : session.stats) ?? {},
+          }
         : null,
       /** Data from before grades and stages: the phone runs setup.ensure first. */
       legacy,
-      /** Test students in the test class (any phone may switch to it: Settings). */
+      /** Test students: the simulation's (any phone may switch to it: Settings, or the Join banner). */
       tests,
+      sim: sim ? simInfo(sim) : null,
     };
   },
 });

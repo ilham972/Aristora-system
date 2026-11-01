@@ -6640,6 +6640,14 @@ body.locked.tp-padded .toasts {
   flex: 1 1 0;
   min-width: 0;
   padding: 0 4px;
+  /* Five tabs since the simulation (1 Nov 2026): the condensed face keeps "Business" whole at 320 px. */
+  font-family: var(--cond);
+  white-space: nowrap;
+}
+@media (max-width: 345px) {
+  .ceo-tabs .segc-b {
+    padding: 0 2px;
+  }
 }
 .ceo-card {
   background: var(--card);
@@ -8043,8 +8051,8 @@ body.locked.evx-on .toasts {
   }
 }
 
-/* ---- The test class (31 Oct 2026): a phone showing the test students says so everywhere: a striped top bar and TEST
-   where the class clock is. The switch and the test students' notes in Settings → Students. ---- */
+/* ---- The simulation's phone (the test class of 31 Oct 2026 before it): a phone showing the made-up students says so
+   everywhere: a striped top bar and SIM where the class clock is. The fixture's notes in Settings → Students. ---- */
 .app.test-mode .top {
   background: repeating-linear-gradient(135deg, #ffe0ec 0 10px, #fff6f9 10px 20px);
   border-bottom-color: #d6336c;
@@ -8054,18 +8062,6 @@ body.locked.evx-on .toasts {
   font-size: 15px;
   font-weight: 800;
   letter-spacing: 0.08em;
-}
-.tcl {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.tcl-switch {
-  align-self: flex-start;
-}
-.segc-b.tclb.on {
-  background: #d6336c;
-  color: #fff;
 }
 .tcl-note {
   margin: 0;
@@ -8077,9 +8073,6 @@ body.locked.evx-on .toasts {
 }
 .tcl-case {
   color: #a61e4d;
-}
-.tcl-del {
-  align-self: flex-start;
 }
 /* The room box's line never hides Clear: the words shorten (…), the button keeps its place. */
 .evx-bh > span {
@@ -8094,9 +8087,6 @@ body.locked.evx-on .toasts {
 /* Under the pad (it sticks 24 px above the tabs): the page's ground, so nothing shows through under the big button. */
 .fc-pad.evx-pad {
   box-shadow: 0 24px 0 0 var(--ground);
-}
-.tcl-switch .segc-b {
-  white-space: nowrap;
 }
 
 /* ---------------------------------------------------------------- A question as printed (src/bookQuestion.tsx)
@@ -8269,4 +8259,300 @@ body.locked.evx-on .toasts {
 }
 .fc-teachq {
   margin: 0 0 4px;
+}
+
+/* ---- The simulation (1 Nov 2026, his voice note; src/sim.tsx, src/simTab.tsx): the owner's controls in Settings →
+   Students and on the CEO page's Sim tab, this phone's switch, the Join banner, the scoreboard. The simulation's colour
+   is the old test class's pink (a phone in it still has the striped top bar, now with SIM). ---- */
+.sim {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sim-ctl {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.sim-lbl {
+  font: 700 12.5px/1.2 var(--font);
+  color: var(--ink-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.sim-lv {
+  display: flex;
+  width: 100%;
+}
+.sim-lv .segc-b {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 4px;
+}
+.sim-words {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--ink-2);
+  line-height: 1.35;
+}
+.sim-warn {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--amber-soft);
+  color: var(--amber-ink);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+/* Students and minutes: one row of numbers, every one in the same place. */
+.sim-pills {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+}
+.sim-pills.n4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.sim-pill {
+  height: 40px;
+  min-width: 0;
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  font: 700 16px/1 var(--cond);
+  color: var(--ink);
+}
+.sim-pill.on {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
+}
+.sim-go {
+  margin-top: 2px;
+}
+.sim-now {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.35;
+}
+.sim-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: #d6336c;
+  box-shadow: 0 0 0 3px #ffe0ec;
+  vertical-align: 0;
+}
+.sim-run {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.sim-run .btn {
+  width: 100%;
+}
+.btn.ghost.sim-end {
+  color: var(--red-ink);
+  border-color: var(--red);
+}
+.sim-switch {
+  align-self: flex-start;
+}
+.sim-switch .segc-b {
+  white-space: nowrap;
+}
+.segc.plain .segc-b.simb.on {
+  background: #d6336c;
+  color: #fff;
+}
+.sim-del {
+  align-self: flex-start;
+}
+.sim-last {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+/* A teacher's phone on the class while the simulation runs: one tap to join. And back to the class when it is over. */
+.sim-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: calc(100% - 24px);
+  margin: 10px 12px 0;
+  min-height: 46px;
+  padding: 8px 14px;
+  border: 1.5px solid #d6336c;
+  border-radius: 12px;
+  background: #fff0f5;
+  color: #a61e4d;
+  font-weight: 700;
+  font-size: 15px;
+  text-align: left;
+  animation: rise 0.22s ease-out both;
+}
+.sim-banner span {
+  min-width: 0;
+}
+.sim-banner b {
+  flex: none;
+  padding: 6px 12px;
+  border-radius: 10px;
+  background: #d6336c;
+  color: #fff;
+}
+.sim-banner.over {
+  border-color: var(--line);
+  background: var(--card);
+  color: var(--ink-2);
+}
+.sim-banner.over b {
+  background: var(--ink);
+}
+/* The CEO page: the Sim tab has a dot while a simulation runs. */
+.ceo-tabs .segc-b.sim-on::after {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-left: 4px;
+  border-radius: 50%;
+  background: #d6336c;
+  vertical-align: 2px;
+}
+.ceo-tabs .segc-b.sim-on.on::after {
+  background: #fff;
+}
+.sim-head h3 {
+  flex-wrap: wrap;
+}
+.sim-st {
+  margin-left: auto;
+  color: var(--ink-3) !important;
+}
+.sim-st.on {
+  color: #c2255c !important;
+}
+/* Each teacher: her name and room, what she did, her calls, her Arrived taps, how busy. */
+.sim-t {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border-left: 4px solid var(--ink-3);
+  background: var(--ground);
+}
+.sim-t.r-evaluation {
+  border-left-color: var(--evaluation);
+}
+.sim-t.r-theory {
+  border-left-color: var(--theory);
+}
+.sim-t p {
+  margin: 0;
+}
+.sim-tn {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.sim-tn b {
+  font-size: 16px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sim-room {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font: 700 12px/1.4 var(--font);
+  background: var(--card);
+}
+.sim-room.r-evaluation {
+  color: var(--evaluation-ink);
+}
+.sim-room.r-theory {
+  color: var(--theory-ink);
+}
+/* Where the work waits now: one line per room, an arrow when it grew or shrank over 5 minutes. */
+.sim-q {
+  display: flex !important;
+  align-items: baseline;
+  gap: 8px;
+}
+.sim-q b {
+  flex: none;
+  width: 92px;
+}
+.sim-q span {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.sim-q.r-evaluation b {
+  color: var(--evaluation-ink);
+}
+.sim-q.r-theory b {
+  color: var(--theory-ink);
+}
+.sim-tr {
+  flex: none;
+  font-style: normal;
+  font-weight: 800;
+}
+.sim-tr.up {
+  color: var(--red-ink);
+}
+.sim-tr.down {
+  color: var(--green-ink);
+}
+/* What is happening: the time, then the line; a coloured edge when it matters. */
+.sim-feed {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  max-height: 420px;
+  overflow-y: auto;
+}
+.sim-feed li {
+  display: flex;
+  gap: 8px;
+  padding: 6px 0 6px 8px;
+  border-left: 3px solid transparent;
+  border-bottom: 1px solid var(--line-2);
+  font-size: 13.5px;
+  line-height: 1.35;
+  color: var(--ink);
+}
+.sim-feed li.t-red {
+  border-left-color: var(--red);
+}
+.sim-feed li.t-amber {
+  border-left-color: var(--amber);
+}
+.sim-feed li.t-green {
+  border-left-color: var(--green);
+}
+.sim-feed time {
+  flex: none;
+  width: 58px;
+  color: var(--ink-3);
+  font: 700 12.5px/1.35 var(--cond);
+}
+.sim-feed span {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+.sim-past td,
+.sim-past th {
+  white-space: nowrap;
 }

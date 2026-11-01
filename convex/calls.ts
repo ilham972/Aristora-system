@@ -3,7 +3,6 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx } from "./_generated/server";
 import {
   activeCalls,
-  addStats,
   bookFor,
   cleanBy,
   currentSession,
@@ -14,6 +13,7 @@ import {
   placeOf,
   progressFor,
   refresh,
+  roomStats,
   touch,
 } from "./lib/backend";
 import { fighter } from "./lib/book";
@@ -119,6 +119,7 @@ export const create = mutation({
         teacherId: me._id,
         teacher: me.name,
         ...(s.test ? { test: true } : {}),
+        ...(dry ? {} : { ahead: true }),
         createdAt: now,
         sessionId: session?._id,
       });
@@ -130,8 +131,8 @@ export const create = mutation({
         value: `${args.room}${args.kind !== args.room ? "/" + args.kind : ""}${pull ? "/pull" : ""}`,
       });
       created.push({ studentId: id, callId, pull, bumped });
-      // The test class never counts in the room's score.
-      if (!s.test) await addStats(ctx, session, args.room, { calls: 1, ahead: dry ? 0 : 1 });
+      // The simulation's students count in its practice score, never the class's.
+      await roomStats(ctx, s, session, args.room, { calls: 1, ahead: dry ? 0 : 1 });
     }
     await touch(ctx, session, now);
     return { created, rejected };
@@ -343,7 +344,8 @@ export const finish = mutation({
     const by = cleanBy(args.by);
     const session = await currentSession(ctx, now);
     let done = 0;
-    let lesson = false;
+    // One Done on the Theory page = one lesson: the class's, or the simulation's (a test student's).
+    let lesson: Doc<"students"> | null = null;
     for (const item of args.items) {
       const c = await ctx.db.get(item.callId);
       if (!c || (c.status !== "sent" && c.status !== "requested")) continue;
@@ -352,8 +354,8 @@ export const finish = mutation({
       const s = await ctx.db.get(c.studentId);
       if (!s) continue;
       const { value, n } = await record(ctx, c, s, item, now, session, by);
-      if (!s.test) await addStats(ctx, session, c.room, { done: 1, qs: n });
-      if (c.room === "theory" && !s.test) lesson = true;
+      await roomStats(ctx, s, session, c.room, { done: 1, qs: n });
+      if (c.room === "theory") lesson = s;
 
       await ctx.db.patch(c._id, { status: "done", sentAt: c.sentAt ?? c.createdAt, endedAt: now });
       await ctx.db.patch(s._id, {
@@ -386,7 +388,7 @@ export const finish = mutation({
       done++;
     }
     // One Done (or Send back) on the Theory page = one lesson, however many students it sent back.
-    if (lesson) await addStats(ctx, session, "theory", { lessons: 1 });
+    if (lesson) await roomStats(ctx, lesson, session, "theory", { lessons: 1 });
     await touch(ctx, session, now);
     return { done };
   },
@@ -428,11 +430,12 @@ export const keep = mutation({
     if (waiting === 0) fail(`${s.name} has nothing to explain in ${next.unit.code}.`);
 
     const { value, n } = await record(ctx, c, s, args.item, now, session, by);
-    if (!s.test) await addStats(ctx, session, "evaluation", { done: 1, qs: n });
+    await roomStats(ctx, s, session, "evaluation", { done: 1, qs: n });
     await ctx.db.patch(c._id, { status: "done", sentAt: c.sentAt ?? c.createdAt, endedAt: now });
     const unit = c.unitId ? await ctx.db.get(c.unitId) : null;
     await log(ctx, session, now, { kind: "done-evaluation", by, studentId: s._id, name: s.name, unit: unit?.key, value, ms: now - (c.sentAt ?? c.createdAt) });
 
+    const dry = (await dryOf(ctx, s)).dry;
     const callId = await ctx.db.insert("calls", {
       studentId: s._id,
       room: "evaluation",
@@ -443,13 +446,14 @@ export const keep = mutation({
       stage: args.stage,
       ...(c.teacherId ? { teacherId: c.teacherId, teacher: c.teacher } : {}),
       ...(s.test ? { test: true } : {}),
+      ...(dry ? {} : { ahead: true }),
       createdAt: now,
       sentAt: now,
       sessionId: session?._id,
     });
     await ctx.db.patch(s._id, { room: "evaluation", lastActivityAt: now, lastSeenAt: now, seen: { ...s.seen, evaluation: now } });
     await log(ctx, session, now, { kind: "keep", by, studentId: s._id, name: s.name, unit: next.unit.key, value: next.unit.code });
-    if (!s.test) await addStats(ctx, session, "evaluation", { calls: 1, ahead: (await dryOf(ctx, s)).dry ? 0 : 1 });
+    await roomStats(ctx, s, session, "evaluation", { calls: 1, ahead: dry ? 0 : 1 });
     await refresh(ctx, s._id, now, session);
     await touch(ctx, session, now);
     return { callId };

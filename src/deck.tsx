@@ -3,6 +3,7 @@
 
 import type { Score } from "./score";
 import { cheerOf } from "./score";
+import { testMode } from "./store";
 import type { HeatCount } from "./theoryFocusData";
 
 /** The red / orange / yellow numbers (only the ones that aren't 0). */
@@ -77,7 +78,7 @@ export function TodayStrip(props: { s: Score; room: "theory" | "evaluation"; inC
   return (
     <section class={`sc${props.compact ? " sc-thin" : ""}`} aria-label="Today">
       <div class="sc-cells">
-        <span class="sc-lbl">Today</span>
+        <span class="sc-lbl">{testMode() ? "Practice" : "Today"}</span>
         {cells.map((c) => (
           <span key={c.label} class={`sc-c${c.tone ? ` ${c.tone}` : ""}`} title={c.title}>
             <b>{c.n}</b>

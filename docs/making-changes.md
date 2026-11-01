@@ -173,11 +173,24 @@ EOF
 - A list re-ranked every 10 s moves under the finger: keep the buttons in one fixed order and show the rank with a
   tag (Theory's pills + "Next"); keep what the teacher touched (her ticks, her pick).
 - Demo marks share one time (the right answers 30 min ago): demo paces are null, so the class pace is 4 min.
-- **Two classes on one server** (31 Oct 2026): test students (`students.test`) are the test class: `state.get` and
-  `progress.board` send one class (`test`), never both. Anything new that counts or lists students across the school
-  must skip test students (`s.test`: the rooms' scores, the report, Theory's lesson times use `calls.test`; demo is set
-  on them too, so "demo never counts" places already skip them). They share the session: never let a test-mode phone
-  end it (End the session is hidden there).
+- **Two classes on one server** (31 Oct 2026; since 1 Nov the simulation's made-up students): test students
+  (`students.test`): `state.get` and `progress.board` send one class (`test`), never both. Anything new that counts or
+  lists students across the school must skip test students (`s.test`: the report, Theory's lesson times use
+  `calls.test`; demo is set on them too, so "demo never counts" places already skip them). A room's score goes through
+  `roomStats` (a test student's into the running simulation's `sims.stats`), never `addStats` straight. They share the
+  session: never let a simulation phone end it (End the session is hidden there); the simulation closes a class only it
+  used when it ends.
+- **The simulation's steps** (`convex/sim.ts`): a handler that schedules `internal.sim.tick` needs its return type
+  written out (`handler: async (ctx, args): Promise<…> =>`): its type depends on this file's through the generated API (a
+  cycle: "implicitly has type any"). The steps never `touch` the session every 5 s (every phone redraws on a session
+  change): once a minute, with the reading. Tests: `start` with `manual: true` (no steps scheduled; a scheduled timer
+  in convex-test is a real one), the steps by hand with `raw.mutation(internal.sim.tick, {simId, chain, manual: true})`
+  on the RAW backend (the `asOwner` proxy adds `token`, which an internal function refuses), the clock moved with
+  `vi.setSystemTime`. The run-through starts it from the phone (not manual: one real step may come after 5 s), so it sets
+  `manual` on the `sims` row at once and takes the steps with `simStep`. One student's step throwing never stops the
+  others (try/catch per student; validate before writing).
+- innerText of a **flex row** with element children puts a line break around each child (`<b>Running</b> · Hard` reads
+  "Running\n· Hard"): a line the e2e reads with `contains` is a plain block with inline children (`.sim-now`).
 - The Theory and Evaluation pages are the same one-screen pieces (`.evx-*`, `src/roomkit.tsx`); Theory's colours come
   from `.tpx-page`. Change a shared piece and look at BOTH pages' shots. The e2e `ev*` helpers drive both pages.
 - Demo work is dated 30–70 min back: just after Sri Lanka midnight it is "yesterday" and "today" checks fail. The
