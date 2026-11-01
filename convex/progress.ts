@@ -91,6 +91,59 @@ export const board = query({
   },
 });
 
+/**
+ * One book's race (1 Nov 2026, his ask: from a student's paper on Correction, the whole class's progress in that book,
+ * to compare and to share in the WhatsApp group): every student who has worked in it or is on it now, how far, how
+ * well, what he did today. Correction, Theory and Evaluation (the Progress page itself is Reports). Read-only.
+ */
+export const book = query({
+  args: { token: v.optional(v.string()), unitId: v.id("units"), stage: v.union(v.literal("fighter"), v.literal("master")), test: v.optional(v.boolean()) },
+  handler: async (ctx, args) => {
+    await viewer(ctx, args.token, "correction", "evaluation", "theory", "reports");
+    const unit = await ctx.db.get(args.unitId);
+    if (!unit) return null;
+    const doc = (await ctx.db.query("books").collect()).find((b) => b.unitId === args.unitId && b.stage === args.stage);
+    if (!doc) return null;
+    const now = Date.now();
+    const today = slDay(now);
+    const came = new Set((await ctx.db.query("attendance").withIndex("by_day", (q) => q.eq("day", today)).collect()).map((x) => x.studentId));
+    const students = (await ctx.db.query("students").withIndex("by_archived", (q) => q.eq("archived", false)).collect()).filter(
+      (s) => !!s.test === !!args.test,
+    );
+    const rows = [];
+    for (const s of students) {
+      const current = s.unitId === args.unitId && s.stage === args.stage;
+      const p = await ctx.db
+        .query("progress")
+        .withIndex("by_student_unit_stage", (q) => q.eq("studentId", s._id).eq("unitId", args.unitId).eq("stage", args.stage))
+        .first();
+      if (!p && !current) continue;
+      const visits = await ctx.db.query("attendance").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect();
+      const visitDays = new Set(visits.map((x) => x.day));
+      const cell: Cell = {};
+      if (p && doc.data.kind === "master") {
+        const m = masterState(p);
+        const lastT = Math.max(p.updatedAt, ...Object.values(m.lv).map((l) => l?.fixed ?? l?.done ?? 0));
+        cell.m = summarizeMaster(m, doc.data, today, daysBetween(visitDays, slDay(p.startedAt), current ? today : slDay(lastT)));
+      } else if (p && doc.data.kind === "fighter") {
+        cell.f = summarizeFighter(p.marks as Marks, fighter(doc.data), today, daysBetween(visitDays, slDay(p.startedAt), current ? today : slDay(p.updatedAt)));
+      }
+      rows.push({ _id: s._id, name: s.name, grade: s.grade ?? null, present: s.present, cameToday: came.has(s._id), current, cells: { [args.unitId]: cell } });
+    }
+    rows.sort((a, b) => a.name.localeCompare(b.name));
+    return {
+      today,
+      stage: args.stage,
+      unit: { _id: unit._id, code: unit.code, en: unit.en, ta: unit.ta, grade: unit.grade },
+      size:
+        doc.data.kind === "master"
+          ? { levels: doc.data.levels.length, solo: 0 }
+          : { levels: 0, solo: doc.data.sections.reduce((a, x) => a + x.solo.length, 0) },
+      students: rows,
+    };
+  },
+});
+
 /** One unit of one student, for Correction's unit sheet: how far, how well, and what still waits for the teachers. */
 export type UnitCell = {
   unitId: Id<"units">;

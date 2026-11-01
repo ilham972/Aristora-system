@@ -9,6 +9,7 @@ import { computeMaster, levelWaits, teachState, type MState } from "../convex/li
 import { OL_TOPICS, olNumber, SYLLABUS } from "../convex/lib/syllabus";
 import schema from "../convex/schema";
 import { addPerson, asOwner, asPhone } from "./helpers";
+import { bookRace, raceTotals } from "../src/progressData";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 const MIN = 60_000;
@@ -361,6 +362,37 @@ describe("Fighter marks save live on any theory book of his (1 Nov 2026)", () =>
     // A theory book he never had: refused, nothing made up.
     const g7u08 = await unitId(t, "G7-U08");
     await expect(t.mutation(api.marks.set, { studentId: id, unitId: g7u08, q: 1, s: "right" })).rejects.toThrow(/no theory book|no work/);
+  });
+});
+
+describe("one book's race: Correction's race button (1 Nov 2026)", () => {
+  test("everyone who has worked in the book or is on it, ranked furthest first; others left out; a Correction teacher may read it", async () => {
+    const t = await setup();
+    const g11u13 = await unitId(t, "G11-U13");
+    const add = async (name: string) => await t.mutation(api.students.add, { name, grade: 11, term: 2, stage: "fighter", unitId: g11u13 });
+    const a = await add("Ahamed");
+    const b = await add("Banu");
+    await add("Chitra");
+    const teach = [1, 2, 3, 4, 9, 10, 11].map((q) => ({ q, s: "taught" as const }));
+    await t.mutation(api.marks.setMany, { studentId: a, items: [...teach, ...[5, 6, 7, 8, 12].map((q) => ({ q, s: "right" as const }))] });
+    await t.mutation(api.marks.setMany, { studentId: b, items: [...teach, ...[5, 6].map((q) => ({ q, s: "right" as const }))] });
+    // Malik is on a workbook of another grade: not in this book's race.
+    await addMaster(t, "Malik");
+    const raw = await t.query(api.progress.book, { unitId: g11u13, stage: "fighter" });
+    const race = bookRace(raw!);
+    expect(race.map((r) => [r.rank, r.s.name, r.done])).toEqual([
+      [1, "Ahamed", 5],
+      [2, "Banu", 2],
+      [3, "Chitra", 0],
+    ]);
+    expect(raw!.size.solo).toBe(race[0].of);
+    expect(raceTotals(race)).toMatchObject({ n: 3, today: 7, finished: 0 });
+    // A Correction teacher (no Reports) reads it; an empty book of another unit is null.
+    const token = "kavi-correction-phone-0123456789abcdefghijklmnop";
+    await addPerson(t, { name: "Kavi", token, tabs: ["correction"] });
+    const k = asPhone(t, token);
+    expect((await k.query(api.progress.book, { unitId: g11u13, stage: "fighter" }))!.students).toHaveLength(3);
+    expect(await t.query(api.progress.book, { unitId: g11u13, stage: "master" })).toBeNull();
   });
 });
 

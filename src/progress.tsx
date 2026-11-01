@@ -231,7 +231,7 @@ function RaceRow(props: { r: LaneRow; onOpen: (id: string) => void }) {
 }
 
 /** Workbook: a block per level (marks colour, waiting hatched, the level he is on outlined). Theory book: a fill. */
-function RaceBar(props: { r: LaneRow }) {
+export function RaceBar(props: { r: Pick<LaneRow, "kind" | "m" | "done" | "of"> }) {
   const { r } = props;
   if (r.kind === "m" && r.m) {
     const waiting = new Set(r.m.waiting);

@@ -217,3 +217,41 @@ export function dayTotals(b: PBoard): { came: number; of: number; levels: number
   }
   return { came: b.students.filter((s) => s.cameToday).length, of: b.students.length, levels, questions };
 }
+
+// ---- One book's race (1 Nov 2026, his ask: Correction's race button, every student in the book his paper is on) ----
+
+export type BookBoard = NonNullable<FunctionReturnType<typeof api.progress.book>>;
+export type BookStudent = BookBoard["students"][number];
+export type RaceRow = Omit<LaneRow, "s"> & { s: BookStudent };
+
+/** Every student in the book, ranked like a Progress lane (furthest first; equal places share a rank). */
+export function bookRace(b: BookBoard): RaceRow[] {
+  const id = b.unit._id as string;
+  const rows: RaceRow[] = b.students.map((s) => {
+    const cell = s.cells[id];
+    if (b.stage === "master") {
+      const m = cell?.m;
+      return m
+        ? { s, rank: null, kind: "m", done: m.done, of: m.levels, pct: m.pct, today: m.today, pace: pace(m.done, m.days), m }
+        : { s, rank: null, kind: "m", done: 0, of: b.size.levels, pct: null, today: 0, pace: null };
+    }
+    const f = cell?.f;
+    return f
+      ? { s, rank: null, kind: "f", done: f.done, of: f.total, pct: f.total ? Math.round((f.done / f.total) * 100) : 0, today: f.today, pace: pace(f.done, f.days), f }
+      : { s, rank: null, kind: "f", done: 0, of: b.size.solo, pct: 0, today: 0, pace: null };
+  });
+  const score = (r: RaceRow) => (r.kind === "m" ? [r.done, r.pct ?? -1, r.pace ?? 0] : [r.done, r.pace ?? 0]);
+  const rk = ranks(rows.map(score));
+  rows.forEach((r, i) => (r.rank = rk[i]));
+  return rows.sort((a, b) => (a.rank ?? 1e9) - (b.rank ?? 1e9) || a.s.name.localeCompare(b.s.name));
+}
+
+/** The book's day: who came today, steps done today, who finished it. */
+export function raceTotals(rows: readonly RaceRow[]): { n: number; came: number; today: number; finished: number } {
+  return {
+    n: rows.length,
+    came: rows.filter((r) => r.s.cameToday).length,
+    today: rows.reduce((a, r) => a + r.today, 0),
+    finished: rows.filter((r) => (r.m?.finished ?? r.f?.finished) === true).length,
+  };
+}

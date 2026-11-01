@@ -1620,6 +1620,23 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
   await tap(F.locator(".fc-strip").getByRole("button", { name: "Q19: right" }));
   await contains(F.locator(".fc-now"), "Saved: ✓ right.");
   await shot(F, "f13b-focus-theory-saved");
+  // The class in this book (1 Nov 2026, his ask): everyone's race on one screen, Nila highlighted; Share for the group.
+  await tap(F.getByRole("button", { name: /^The class in this book/ }));
+  await visible(F.locator(".br-row.me", { hasText: "Nila" }));
+  await count(F.locator(".br-row.me"), 1);
+  await contains(F.locator(".br-me"), "Nila is");
+  await contains(F.locator(".br-sheet .sheet-foot .btn.primary"), "Share to the group");
+  expect(
+    await F.locator(".br-sheet .sheet-body").evaluate((el) => el.scrollHeight <= el.clientHeight + 1),
+    "the whole class in one shot",
+  ).toBe(true);
+  await shot(F, "f13d-focus-book-race");
+  // The image for the group (Save = the same file Share sends): a 1080 × 1350 PNG, nobody highlighted.
+  const [raceDl] = await Promise.all([F.waitForEvent("download"), F.locator(".br-sheet .sheet-foot").getByRole("button", { name: "Save" }).click()]);
+  expect(raceDl.suggestedFilename()).toMatch(/^ARISTORA-TheoryBook-G11-U13-\d{4}-\d\d-\d\d\.png$/);
+  await raceDl.saveAs(join(SHOTS, "f13e-race-image.png"));
+  await F.keyboard.press("Escape");
+  await count(F.locator(".br-sheet"), 0);
   await tap(name("Kumar"));
   // Marked on the wrong student? Take back puts them as they were.
   await savedSheet();

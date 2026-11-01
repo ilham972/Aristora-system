@@ -8567,3 +8567,94 @@ body.locked.evx-on .toasts {
 .sim-past th {
   white-space: nowrap;
 }
+
+/* ---- One book's race (1 Nov 2026, his ask; src/bookRace.tsx): Correction's race button beside the home icon opens
+   every student in the open book on ONE screen (rows shrink with the class: --n), the student of the paper
+   highlighted; Share = an image for the group with nobody highlighted (src/racePoster.ts). ---- */
+.fc-racebtn {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  padding-left: 0;
+  padding-right: 0;
+}
+.br-sheet .sheet-body {
+  overscroll-behavior: contain;
+}
+.br-me {
+  margin: 0 0 6px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--line-2);
+  font-size: 13px;
+  line-height: 1.3;
+  color: var(--ink-2);
+}
+.br-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.br-row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 30% 44px 34px;
+  align-items: center;
+  column-gap: 8px;
+  height: clamp(26px, calc((100dvh - 250px) / var(--n, 10)), 44px);
+  padding: 0 6px;
+  border-top: 1px solid var(--line-2);
+}
+.br-row:first-child {
+  border-top-color: transparent;
+}
+.br-row .rk {
+  grid-area: auto;
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
+}
+.br-nm {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  overflow: hidden;
+  font: 700 15px/1.1 var(--cond);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.br-here {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+}
+.br-bar .rbar,
+.br-bar .fbar {
+  height: 9px;
+}
+.br-n {
+  text-align: right;
+  font: 800 13px/1 var(--font);
+  font-variant-numeric: tabular-nums;
+}
+.br-t {
+  text-align: right;
+  font: 700 11.5px/1 var(--font);
+  color: var(--ink-2);
+}
+.br-t em {
+  font-style: normal;
+  color: var(--green-ink);
+}
+/* The student of the open paper: navy ring and a soft fill, so she sees at once where he stands. */
+.br-row.me {
+  border-radius: 9px;
+  border-top-color: transparent;
+  background: var(--card);
+  box-shadow: inset 0 0 0 2px var(--ink);
+}
+.br-row.me + .br-row {
+  border-top-color: transparent;
+}

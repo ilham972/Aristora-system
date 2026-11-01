@@ -77,3 +77,18 @@ describe("the Progress numbers", () => {
     await expect(raw.query(api.progress.board, { grade: 8 })).rejects.toThrow();
   });
 });
+
+describe("the race image's pages (1 Nov 2026)", () => {
+  test("a class fits one 1080 × 1350 image with bigger rows when small; a big one goes on to a second", async () => {
+    const { racePages } = await import("../src/racePoster");
+    const one = racePages(12);
+    expect(one).toHaveLength(1);
+    expect(one[0].rows).toBe(12);
+    expect(one[0].rowH).toBeGreaterThanOrEqual(46);
+    expect(racePages(3)[0].rowH).toBe(78);
+    const big = racePages(40);
+    expect(big.length).toBeGreaterThan(1);
+    expect(big.reduce((a, p) => a + p.rows, 0)).toBe(40);
+    expect(big.every((p) => p.rowH >= 46)).toBe(true);
+  });
+});

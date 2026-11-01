@@ -84,6 +84,7 @@ import {
   type Pill,
   booksOf,
 } from "./focusData";
+import { BookRaceSheet } from "./bookRace";
 import { dropDraft, flushFocus, queueDraft, setFighterMark } from "./focusSave";
 import { AttendanceSheet } from "./attendance";
 import { gradesOf } from "./grades";
@@ -1483,7 +1484,11 @@ function PaperView(props: { v: View; paper: Paper; drafts: Draft[] | undefined; 
 function PaperHead(props: { v: View; later?: () => void; onUnit: () => void; onCard: () => void }) {
   const { v } = props;
   const [busy, setBusy] = useState(false);
+  const [race, setRace] = useState(false);
   const away = v.where === "absent";
+  // The whole class in this book (1 Nov 2026, his ask): its race, him highlighted, Share for the group.
+  const raceBook = bookId(v);
+  const raceStage = v.stage === "fighter" || v.stage === "master" ? v.stage : null;
   // He went home (1 Nov 2026, his ask: no more + → find him → sign out): one tap, here beside Marks. His paper stays
   // open with "Signed out … Sign him in", so a wrong tap is undone in one tap too. Pale (never gone) when he is out.
   const goHome = async () => {
@@ -1504,6 +1509,19 @@ function PaperHead(props: { v: View; later?: () => void; onUnit: () => void; onC
               Later
             </button>
           )}
+          <button
+            type="button"
+            class="btn ghost small fc-racebtn"
+            aria-label={`The class in this book: everyone's progress, ${v.s.name} highlighted`}
+            disabled={!raceBook || !raceStage}
+            onClick={() => setRace(true)}
+          >
+            <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3.5 20.5h17" />
+              <path d="M9 20.5V8.5h6v12" />
+              <path d="M3.5 20.5v-7h5.5M15 20.5v-4.5h5.5v4.5" />
+            </svg>
+          </button>
           <button
             type="button"
             class="btn ghost small fc-gohome"
@@ -1528,6 +1546,7 @@ function PaperHead(props: { v: View; later?: () => void; onUnit: () => void; onC
       </header>
       <BookRow v={v.home ?? v} open={bookId(v)} openStage={v.stage} onUnits={props.onUnit} />
       {v.where === "absent" && <SignedOut v={v} />}
+      {race && raceBook && raceStage && <BookRaceSheet unitId={raceBook} stage={raceStage} studentId={v.s._id} onClose={() => setRace(false)} />}
     </>
   );
 }
