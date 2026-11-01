@@ -225,7 +225,7 @@ export function ClassPage(props: { board: Board; views: View[]; now: number; job
       {job !== "theory" && <GoneHome role={job} views={inGrade(props.views, grade)} now={now} />}
 
       {canCorrect && session && testMode() && (
-        <p class="muted end-wrap">The test class: End the session is on the real class's phones only (it signs everyone out).</p>
+        <p class="muted end-wrap">The simulation: End the session is on the real class's phones only (it signs everyone out).</p>
       )}
       {canCorrect && session && !testMode() && (
         <div class="end-wrap">

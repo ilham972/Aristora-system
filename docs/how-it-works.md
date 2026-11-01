@@ -7,7 +7,7 @@ The technical memory of the app, kept with the code and updated in the same comm
   now": the one Correction last opened). **He works on several books at once** (`ce6fe9d`): every book with
   something waiting reaches the rooms (below, "Several books").
 - `back` remembers where to return after Exam Sprint.
-- `present` is set in Attendance (or by demo load, or the test class); `lastInAt` = his last arrival (home time = +2 h on the
+- `present` is set in Attendance (or by demo load, or the simulation's steps); `lastInAt` = his last arrival (home time = +2 h on the
   Theory page); `archivedAt` = when he was removed (for "removed this month").
 - `room` is set while he is with Theory or Evaluation.
 - `idleSince`/`idleMs` count out-of-work time; `idleReason` = what he waits for (`correction`, `evaluation`,
@@ -454,7 +454,7 @@ when on), a note (never saved, wraps to 4 lines). Share = the phone's share shee
 
 **The CEO page (owner only, 31 Oct 2026, his voice note: "I want to think like a CEO").** A gauge icon in the top bar
 after Progress (`ceo-btn`, owner only: per-teacher numbers and money). Built around his decisions, not every number.
-Four tabs (`aristora.ceoTab`):
+Five tabs (`aristora.ceoTab`; the fifth, **Sim**, is the simulation's scoreboard: below, "The simulation"):
 - **Now** (from the board every phone already has, no extra reads; `nowOf` in `src/ceoData.ts`): up to 3 advice lines
   (`adviceOf`: who has no work and which room can free them, Correction behind → "Evaluation is free: she can correct",
   Theory lessons waiting while Evaluation is free → Teach, a walk that never arrived, calls not sent); tiles in class /
@@ -493,31 +493,76 @@ Four tabs (`aristora.ceoTab`):
   ended before digests existed are read again by `ceo.overview` (owner only, `fetchOnce` on opening and every 5 minutes
   while on screen, never a live query). Demo students never count.
 
-**The test class (31 Oct 2026, his voice note: "create demo students accounts for test ... dilrash test ... same stage,
-unit and levels ... and add extra demo accounts").** Test students are a class of their own on the same server
-(`students.test`, with `demo` too): **only a phone showing the test class sees them** (`state.get({test})` sends a
-phone one class's students and their calls; `progress.board({test})` too); the real class never sees them, and they
-never count (reports `buildReport`, the CEO page, the Students numbers, the rooms' scores: `addStats` skips test
-students, `calls.lessons` skips test calls `calls.test`, the 120 limit counts real students only). Owner only
-(Settings → Students → **Test class**, `demo.ts`):
-- **Copy Grade N's students** (`demo.copyGrade`): every real student of the grade (the Students page's grade row) as
-  "Dilrash R test" (`testName`, `copyOf`): the same grade, term, stage, book now, every book's levels and marks
-  (`progress` rows copied), books given (`handouts`), signed in now; again = they start over from the real ones.
-- **Add the extra test students** (`demo.cases`): one for every situation of the Theory and Evaluation pages, named by
-  it, with a note in the list (`testCase`): Grade 11 Unit 13's theory book, built from the book the unit has
-  (`fighterCases`: the pilot's letters and numbers here; a topic tute that replaced it gives its own, and a case its
-  ladder is too small for is left out): No work D, Starving D (25 min: D first), Soon D, Later D, Seen D (Theory had him
-  today), In Eval D (in the maker's Evaluation room), Eval called (called by her), Home soon (goes home in 5 min), No
-  work C, Ready 20, Fresh 21 (not ready), Stuck 19, Stopped C; Grade 7 workbook: Lost 4·9
-  a/b/c (one pill), Lost 13 a/b, Lost 13·17 (Q13 with others, Q17 alone), Crowd 1–7 (Q2: 6 at most), All done 51 (no
-  work), Theory 13·17, Theory 13 (Q13 ×2), Whole unit, Couldn't 4 (? on Q4, no work), Gone home (a level to correct);
-  and Two books (two workbooks of one grade, Grade 8 first) when a grade has two. Again = they start over.
-- **This phone shows: The class | Test class (N)** (`TestSwitch`, also in Settings → Account for any teacher while test
-  students exist; `aristora.testClass` on the phone, `setTestMode` starts the board again). A phone in the test class:
-  a striped pink top bar and **TEST** where the class clock is; the Students list shows test students (no Add form);
-  End the session is hidden (it would sign everyone out). **Delete the test students** (`demo.remove({test})`: them and
-  their calls, books, visits, books given, drafts and claims). They share the class's session: making them starts one
-  if none is open (a class only test students used has an empty report and isn't listed in Reports).
+**The simulation (1 Nov 2026, his voice note: "upgrade the test feature ... like a simulation ... the correction will
+happen automatically ... easy, medium and hard ... set the students count ... I want to see the performance of each
+teacher in the CEO dashboard").** Practice for the Theory and Evaluation teachers before a real class. It replaced the
+test class of 31 Oct (copy a grade, the extra test students: his words "remove that test feature"; the extra test
+students live on as a test fixture, `tests/cases.ts` `makeCases`). Server `convex/sim.ts`, pure rules
+`convex/lib/sim.ts`, phones `src/sim.tsx` (controls, switch, banner) and `src/simTab.tsx` (the CEO page's Sim tab).
+- **Start** (owner: Settings → Students → **Simulation**, or the CEO page → Sim): **Easy / Medium / Hard**, **students**
+  5–30, **minutes** 20–60 (the phone remembers the last choice: `aristora.simLevel/Count/Minutes`). The books it uses are
+  listed ("Grade 7 (1 workbook) · Grade 11 (1 theory book)"); a real class signed in = an amber line (it never mixes, but
+  practise after the class). Start (`sim.start`): the last simulation's made-up students go, new ones are made (test
+  students: `test` + `demo`, the class only phones showing the simulation see; nothing counts), spread by `planSim` over
+  the grades with the most books and over their books (each book someone before any has two), theory-book students as
+  the level says when the app has a theory book. This phone switches to the simulation.
+- **The levels** (`PLANS`): Easy = workbooks only, 2 grades, a level every 9–14 min, 1 question in 10 loses marks, all
+  in from the start. Medium = 25% theory-book students, 3 grades, 6–10 min, 1 in 5, a few late, a few leave. Hard = 40%
+  theory books, every grade, 4–7 min, 1 in 3, a third late (first 10 min), some go home early (their home time is set
+  so the pages don't tick them), half of the workbook students one or two levels from the end of their unit (they run
+  out of work soon: the pressure on Evaluation). Each student has his own speed (×0.75–1.3) and care (×0.6–1.5); each
+  book has 1–3 hard questions many lose (the same mistake by many, as in a class). Times are compressed (a real level is
+  ~30 min) so a 30-minute practice has a class's worth of work.
+- **Where they start** (`masterStart`, `fighterStart`): a workbook student on a level, the levels before it done (the
+  last one or two corrected a few minutes ago by the app; their lost marks waiting for Evaluation and "?"s for Theory
+  when he starts with work waiting, else already explained), the earlier ones done on paper before the app. A
+  theory-book student: Theory taught the sections before his next one, he did their questions (one or two wrong when he
+  starts with work waiting), all of them (he needs Theory now) or all but 1–3.
+- **The steps** (`sim.tick`, every 5 s, scheduled; the tests take them by hand: `manual`): each student arrives at his
+  time (signed in, a visit), works on his level or question at his pace (time with a teacher or walking doesn't count),
+  hands a level in (`level-done`), answers a theory-book question (marked at once: right / wrong / slip; a redo after
+  Evaluation is mostly right). **The app plays Correction** (history `who` = "Simulation", `by` = correction): it corrects
+  each level 30–90 s after it was handed in, unless a person has his book open on the Correction page (a corrector can
+  practise too: one corrector per book) (`markLevel`: marks lost at the level's rate, some "?": 0 and straight to
+  Theory; lost marks to Evaluation), sends a called student 8–25 s after the call (Sent: he walks), and when nobody taps
+  Arrived for 3 minutes says he reached the room (Correction's Reached; the CEO page counts it as her missed Arrived). A
+  finished book: the next workbook of his grade (a theory book: its own unit's workbook first), else he goes home. One
+  reading of the class a minute (`SimSample`: in class, no work, questions and students for Evaluation, students for
+  Theory, with a teacher, levels for Correction), two hours kept. One student's trouble never stops the others (his step
+  is tried again). The class (session) is touched once a minute, not every step (every phone redraws on it).
+- **While it runs** (owner): its clock, Easy / Medium / Hard **from now on** (`sim.setLevel`: the pace and mistakes of
+  what they do next), **+5 students** (`sim.add`, 40 at most, they walk in now), **End now** (`sim.end`). Its time up
+  ends it too. The end: open calls close, everyone goes home (idle minutes closed), the scoreboard is kept on the
+  simulation (`simReports`, its own table: every phone reads the `sims` row, which keeps only a small `summary`); a class
+  only the simulation used is closed (else a real class later the same day would
+  carry its clock and its report).
+- **Teachers' phones**: a phone showing the class while a simulation runs gets a pink banner **"Simulation on: Hard ·
+  10 students · Join"** (one tap: this phone shows the simulation); a phone in the simulation once it is over: **"The
+  simulation is over · Back to the class"**. Settings → Account → **This phone shows: The class | Simulation (N)** (any
+  teacher, while made-up students exist). A phone in the simulation: the striped pink top bar with **SIM** where the class
+  clock is; the score line under Theory and Evaluation says **Practice** and shows the simulation's own score
+  (`sims.stats`: `roomStats` in `convex/lib/backend.ts` sends a test student's calls, Done, lessons, questions and waits
+  there, never to the class's). A phone in a running simulation checks every 45 s that its steps still go
+  (`sim.nudge`: no step for 30 s = a new chain of steps; the old one stops itself), and so does the CEO page.
+- **The CEO page → Sim** (owner; `sim.board` read every 15 s while open, `fetchOnce`, never a live query): the
+  simulation and its controls; the headline **idle minutes per student-hour** (under 3 good, 6+ the team can't carry
+  this load; waiting for Evaluation / Theory / Correction); **No work now** (names, minutes, what for: tap = his sheet);
+  **Where the work waits** (questions and students for Evaluation, students for Theory, levels for the app; ↑/↓ = grew or
+  shrank over 5 minutes); **Did each room keep up?** (after 10 minutes and at the end: idle minutes an hour waiting for
+  that room, 6+ "needs another person at this load", 3–6 near the limit, else kept up: `roomLoad`); **Each teacher**
+  (per person and room, `simBoard`: questions explained or lessons and questions taught, students, sent to Theory; calls
+  and how many before he ran out of work (`calls.ahead`, set by `calls.create` / `keep` on every call since 1 Nov);
+  minutes a student; Arrived tapped / forgotten / seconds from Sent; busy share as a meter); **Minute by minute** (no
+  work, questions for Evaluation, students for Theory: tap a minute); **The app as Correction** (levels corrected,
+  answers marked, students sent, Arrived it had to say); **What is happening** (the last 60 lines, newest first, in plain
+  words: `feedText`; red = someone sat 5+ minutes with no work); **Before** (`sim.past`, read once: the earlier
+  simulations' level, students, idle an hour, explained, taught: where the idle minutes start to climb is what the team
+  can carry). A dot on the Sim tab while one runs.
+- **Delete the N made-up students** (Settings → Students → Simulation, when none runs; `demo.remove({test})`, refused
+  while one runs): they go with their marks, calls, visits; the scoreboards stay. Starting another replaces them anyway.
+- Two classes on one server, as before: `state.get({test})` sends a phone one class (the simulation's made-up students,
+  or the real class) and `sim` (the simulation running or ended in the last 12 hours); `tests` = how many made-up
+  students. End the session is hidden in the simulation.
 
 **Moving a student.** Class → his name → Move: the usual next step in one tap (next unit, Master from the first unit,
 next workbook, Legend, Exam Sprint, back after the sprint, next term, up a grade), or pick grade, term, stage and
@@ -582,7 +627,8 @@ on the family phone, taps **Check** once per level and sees ✓ / ✗ at once; t
 - Workbook permissions: `correct`, `uncorrect`, `levelDone`, `toTheory`, `reteach`, and Correction's drafts
   (`focus.drafts`/`mark`/`drop`) = Correction or Evaluation; `explain` = Evaluation; `taught` = Theory or Evaluation.
   `calls.lessons` = Theory; `calls.keep` = Evaluation.
-- Owner-only: People (user management), demo students, the test class, and the account lines of the history (sign-ins, PINs,
+- Owner-only: People (user management), demo students, the simulation (start, +5, level, End, delete its students; the
+  steps' nudge is any signed-in phone), and the account lines of the history (sign-ins, PINs,
   links, people changes).
 - The permission names are `Perm` in `convex/lib/auth.ts`: jobs, extras, `"owner"`, `"any"`.
 

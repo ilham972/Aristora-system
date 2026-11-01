@@ -8,6 +8,7 @@ import { fighter, type Fighter, type MasterData } from "../convex/lib/book";
 import { EMPTY_MASTER, type MState } from "../convex/lib/master";
 import { computeStatus, type Mark, type Marks, type Status } from "../convex/lib/status";
 import { SIGNED_OUT } from "../convex/lib/auth";
+import type { SimInfo } from "../convex/sim";
 import { errorText, mutate, phoneToken, savePhoneToken, subscribe, watchLink, type Link } from "./backend";
 
 export type Student = Doc<"students">;
@@ -28,8 +29,10 @@ export type Board = {
   /** stats[room][key]: each room's score for this class (src/score.ts); missing on an old server. */
   session: { _id: Id<"sessions">; startedAt: number; lastActivityAt: number; stats?: Record<string, Record<string, number>> } | null;
   legacy: boolean;
-  /** How many test students there are (the test class: a phone in test mode sees only them); missing on an old server. */
+  /** How many test students there are (the simulation's: a phone showing it sees only them); missing on an old server. */
   tests?: number;
+  /** The simulation running or just ended (the Join banner, SIM in the top bar); missing on an old server. */
+  sim?: SimInfo | null;
 };
 export type Role = "correction" | "theory" | "evaluation";
 export type Extra = "students" | "books" | "reports";
@@ -72,8 +75,9 @@ let me: MeState | undefined;
 let stopMe: (() => void) | null = null;
 let stopBoard: (() => void) | null = null;
 
-// ---- The test class (31 Oct 2026): a phone in test mode sees only the test students, a phone in the class only the
-// real ones. Each phone chooses (Settings); the choice stays on the phone.
+// ---- The simulation (1 Nov 2026; the test class of 31 Oct before it): a phone showing it sees only the simulation's
+// made-up students (test students), a phone in the class only the real ones. Each phone chooses (Settings, or the Join
+// banner); the choice stays on the phone.
 const TEST_KEY = "aristora.testClass";
 let test = (() => {
   try {
@@ -83,12 +87,12 @@ let test = (() => {
   }
 })();
 
-/** This phone shows the test class (test students only). */
+/** This phone shows the simulation (test students only). */
 export function testMode(): boolean {
   return test;
 }
 
-/** Switch this phone between the class and the test class: its board starts again with the other class. */
+/** Switch this phone between the class and the simulation: its board starts again with the other class. */
 export function setTestMode(on: boolean) {
   if (on === test) return;
   test = on;

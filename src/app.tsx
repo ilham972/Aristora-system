@@ -8,6 +8,7 @@ import { Focus } from "./focus";
 import { EvaluationPage } from "./evalFocus";
 import { TheoryTab } from "./theoryFocus";
 import { CeoPage } from "./ceo";
+import { SimBanner } from "./sim";
 import { Progress } from "./progress";
 import { Settings } from "./settings";
 import { alertsState, armAlerts, listenForTaps, ring, useAlertsState, type AlertKind } from "./sound";
@@ -318,6 +319,7 @@ export function App() {
         </header>
         <LinkBanner link={link} />
       </div>
+      <SimBanner sim={board.sim} />
       {alerts.needTap && (
         <button type="button" class="sound-banner" onClick={armAlerts}>
           <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
@@ -440,8 +442,8 @@ function SlowLoad() {
  */
 function TopStat(props: { inClass: number; clock: string | null; test?: boolean; link: Link; onTap?: () => void }) {
   const { inClass, clock } = props;
-  // The test class (Settings): TEST where the clock is, so nobody mistakes it for the real class.
-  const words = props.test ? `The test class: ${inClass} test students in class` : `${inClass} in class, ${clock ? `class time ${clock}` : "no class now"}`;
+  // The simulation (Settings): SIM where the clock is, so nobody mistakes it for the real class.
+  const words = props.test ? `The simulation: ${inClass} made-up students in class` : `${inClass} in class, ${clock ? `class time ${clock}` : "no class now"}`;
   const inside = (
     <>
       <svg
@@ -465,7 +467,7 @@ function TopStat(props: { inClass: number; clock: string | null; test?: boolean;
       </b>
       <i class="ts-sep" aria-hidden="true" />
       <span class={`clock${props.test ? " ts-test" : clock ? "" : " off"}`} aria-hidden="true">
-        {props.test ? "TEST" : (clock ?? "No class")}
+        {props.test ? "SIM" : (clock ?? "No class")}
       </span>
       <LinkDot link={props.link} />
     </>

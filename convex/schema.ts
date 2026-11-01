@@ -106,6 +106,34 @@ export const draftMark = v.object({
   p: v.optional(v.array(v.number())),
   dkp: v.optional(v.array(v.string())),
 });
+/** The simulation's levels (convex/lib/sim.ts PLANS). */
+export const simLevel = v.union(v.literal("easy"), v.literal("medium"), v.literal("hard"));
+/**
+ * One simulated student's steps: his pace (speed) and mistakes (care), when he arrives and goes home, whether he came
+ * and went, and the level (workbook) or question (theory book) he works on until when.
+ */
+export const simKid = v.object({
+  id: v.id("students"),
+  speed: v.number(),
+  care: v.number(),
+  inAt: v.number(),
+  outAt: v.optional(v.number()),
+  came: v.boolean(),
+  home: v.boolean(),
+  doing: v.optional(v.number()),
+  until: v.optional(v.number()),
+});
+/** One reading of the simulated class (convex/lib/sim.ts SimSample). */
+export const simSample = v.object({
+  t: v.number(),
+  n: v.number(),
+  idle: v.number(),
+  eq: v.number(),
+  es: v.number(),
+  ts: v.number(),
+  room: v.number(),
+  cq: v.number(),
+});
 /** One question of a workbook's answer key (convex/lib/key.ts): a short answer, or its parts' answers and marks. */
 export const keyAnswer = v.object({
   q: v.number(),
@@ -204,10 +232,10 @@ export default defineSchema({
     /** His index number (1001, 1002…, never reused): he types it with his code in the family app. Not secret. */
     index: v.optional(v.number()),
     /**
-     * A test student (31 Oct 2026): the test class, a class of its own. Only phones in test mode see test students
-     * (state.get `test`); the real class never does, and they never count (demo is set too). copyOf = the real student
-     * he copies (his grade, stage, books, levels and books given, as they were when copied); testCase = what an extra
-     * test student is for ("Theory: needs D, no work 6 min").
+     * A test student: the simulation's made-up students (1 Nov 2026; before it, the test class of 31 Oct), a class of
+     * its own. Only phones showing the simulation see test students (state.get `test`); the real class never does, and
+     * they never count (demo is set too). copyOf / testCase: the old test class's copies and cases (no longer made; the
+     * tests still build the cases as fixtures).
      */
     test: v.optional(v.boolean()),
     copyOf: v.optional(v.id("students")),
@@ -322,8 +350,10 @@ export default defineSchema({
     teacher: v.optional(v.string()),
     /** This theory call cancelled the Evaluation call of this teacher (her phone says "Theory took Kumar first"). */
     bumpedFrom: v.optional(v.id("users")),
-    /** A call for a test student (the test class): never in a room's score, nor in Theory's lesson times. */
+    /** A call for a test student (the simulation): never in a room's score, nor in Theory's lesson times. */
     test: v.optional(v.boolean()),
+    /** Called while he still had work (the teacher saw it coming): each teacher's "ahead" on the CEO page. */
+    ahead: v.optional(v.boolean()),
     endedAt: v.optional(v.number()),
     sessionId: v.optional(v.id("sessions")),
   })
@@ -451,4 +481,61 @@ export default defineSchema({
 
   /** Small settings: the data version (for one-time updates). */
   meta: defineTable({ key: v.string(), value: v.any() }).index("by_key", ["key"]),
+
+  /**
+   * The simulation (1 Nov 2026, his voice note): made-up students (test students, the class only phones showing the
+   * simulation see) work through the books in the app; the app plays Correction; Theory and Evaluation practise. One
+   * runs at a time. Phones read this row (state.get: the Join banner, SIM in the top bar, the practice score `stats`);
+   * the steps' own state is in simPlay, which only the steps and the owner read.
+   */
+  sims: defineTable({
+    status: v.union(v.literal("running"), v.literal("ended")),
+    level: simLevel,
+    /** Students in it ("+5" adds). */
+    count: v.number(),
+    minutes: v.number(),
+    startedAt: v.number(),
+    endsAt: v.number(),
+    endedAt: v.optional(v.number()),
+    /** How it ended: "time" (its minutes were up) or "owner" (End now). */
+    how: v.optional(v.string()),
+    /** Who started it. */
+    by: v.optional(v.string()),
+    seed: v.number(),
+    /** The tests take the steps themselves (no steps scheduled). */
+    manual: v.optional(v.boolean()),
+    /** The rooms' practice score (like session.stats, for the test class): the Theory and Evaluation pages show it. */
+    stats: v.optional(v.record(v.string(), v.record(v.string(), v.number()))),
+    /**
+     * As it ended, in a few numbers (the CEO page's "Before"). The whole scoreboard is in simReports: every phone reads
+     * this row on each change of the class, so it stays small.
+     */
+    summary: v.optional(
+      v.object({
+        minutes: v.number(),
+        rate: v.union(v.number(), v.null()),
+        idle: v.number(),
+        explained: v.number(),
+        taught: v.number(),
+        teachers: v.array(v.string()),
+      }),
+    ),
+  })
+    .index("by_status", ["status"])
+    .index("by_startedAt", ["startedAt"]),
+
+  /** A simulation's scoreboard as it ended (the CEO page's Sim tab; kept after its students are deleted). */
+  simReports: defineTable({ simId: v.id("sims"), report: v.any() }).index("by_sim", ["simId"]),
+
+  /** A running simulation's steps: each student's pace and what he is doing, one reading of the class a minute. */
+  simPlay: defineTable({
+    simId: v.id("sims"),
+    /** The chain of steps that may run (a phone starting stalled steps again starts a new chain; the old one stops). */
+    chain: v.string(),
+    tickAt: v.number(),
+    ticks: v.number(),
+    kids: v.array(simKid),
+    samples: v.array(simSample),
+    sampledAt: v.optional(v.number()),
+  }).index("by_sim", ["simId"]),
 });
