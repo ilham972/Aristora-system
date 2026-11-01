@@ -1,9 +1,10 @@
-// Fighter: the circles of a theory book. Every change goes to the student's work in his current book.
+// Fighter: the circles of a theory book. Every change goes to the book the phone names (his book now when none is named;
+// another theory book of his never moves him).
 
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import { mutation, type MutationCtx } from "./_generated/server";
-import { asFighter, cleanBy, currentSession, fail, getStudent, log, refresh, touch, workPlace } from "./lib/backend";
+import { asFighter, cleanBy, currentSession, fail, fighterPlace, getStudent, log, refresh, touch } from "./lib/backend";
 import type { Fighter } from "./lib/book";
 import { SOLO_STATES, TEACH_STATES, type Mark, type MarkState } from "./lib/status";
 import { markState, markValue } from "./schema";
@@ -20,9 +21,9 @@ function checkState(book: Fighter, q: number, s: MarkState) {
   }
 }
 
-/** The student's theory book and his circles in it, ready to change. */
+/** One of his theory books (his book now, or another he has work in) and his circles in it, ready to change. */
 async function fighterWork(ctx: MutationCtx, student: Doc<"students">, unitId: Doc<"units">["_id"] | undefined, now: number) {
-  const { unit, book, progress } = await workPlace(ctx, student, "fighter", unitId, now);
+  const { unit, book, progress } = await fighterPlace(ctx, student, unitId, now);
   return { unit, book: asFighter(book), progress };
 }
 

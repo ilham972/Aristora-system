@@ -48,3 +48,16 @@ describe("tap cycles", () => {
     expect(taps("evaluation", 1, null, 1)).toEqual([undefined]);
   });
 });
+
+describe("instant marks per theory book (1 Nov 2026)", () => {
+  test("a tap on one of his theory books shows at once on that book only, and goes once saved", async () => {
+    const { bookMarks, putOverlay, dropOverlay } = await import("../src/store");
+    const tok = putOverlay("stu-1", 5, { s: "right", t: 1 }, "unit-A");
+    expect(bookMarks("stu-1", "unit-A", {})["5"]?.s).toBe("right");
+    expect(bookMarks("stu-1", "unit-B", {})["5"]).toBeUndefined();
+    const saved = { "6": { s: "wrong" as const, n: 1, t: 1 } };
+    expect(bookMarks("stu-1", "unit-B", saved)).toBe(saved);
+    dropOverlay("stu-1", 5, tok);
+    expect(bookMarks("stu-1", "unit-A", {})).toEqual({});
+  });
+});

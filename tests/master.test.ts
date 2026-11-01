@@ -336,6 +336,34 @@ describe("Master: Theory comes after Correction and Evaluation", () => {
   });
 });
 
+describe("Fighter marks save live on any theory book of his (1 Nov 2026)", () => {
+  test("a theory book that isn't his book now: each mark is saved, he isn't moved; a book he has no work in is refused", async () => {
+    const t = await setup();
+    const g11u13 = await unitId(t, "G11-U13");
+    const id = await t.mutation(api.students.add, { name: "Ahamed", grade: 11, term: 2, stage: "fighter", unitId: g11u13 });
+    await t.mutation(api.marks.setMany, { studentId: id, items: [1, 2, 3, 4].map((q) => ({ q, s: "taught" as const })) });
+    // He goes on to the workbook (a topic tute's two books), his theory book still has work: Correction marks it.
+    await t.mutation(api.students.move, { id, grade: 11, term: 2, stage: "master", unitId: g11u13 });
+    await t.mutation(api.marks.setMany, { studentId: id, unitId: g11u13, items: [{ q: 5, s: "right" }, { q: 6, s: "wrong" }] });
+    await t.mutation(api.marks.set, { studentId: id, unitId: g11u13, q: 7, s: "slip" });
+    const fighterMarks = await t.run(async (ctx) => {
+      const p = await ctx.db
+        .query("progress")
+        .withIndex("by_student_unit_stage", (q) => q.eq("studentId", id).eq("unitId", g11u13).eq("stage", "fighter"))
+        .first();
+      return p!.marks as Record<string, { s: string }>;
+    });
+    expect([5, 6, 7].map((q) => fighterMarks[String(q)]?.s)).toEqual(["right", "wrong", "slip"]);
+    const s = await t.run((ctx) => ctx.db.get(id));
+    expect([s?.stage, s?.unitId]).toEqual(["master", g11u13]);
+    // Without the book named, the mark goes to his book now (a workbook): refused as before.
+    await expect(t.mutation(api.marks.set, { studentId: id, q: 8, s: "right" })).rejects.toThrow(/not in Fighter now/);
+    // A theory book he never had: refused, nothing made up.
+    const g7u08 = await unitId(t, "G7-U08");
+    await expect(t.mutation(api.marks.set, { studentId: id, unitId: g7u08, q: 1, s: "right" })).rejects.toThrow(/no theory book|no work/);
+  });
+});
+
 describe("moving students between units and stages", () => {
   test("next stage keeps the old work; Exam Sprint remembers where he was; wrong grade refused", async () => {
     const t = await setup();

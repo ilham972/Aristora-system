@@ -98,25 +98,28 @@ const fighterJobs = new Map<string, FighterJob>();
  * when the taps on that student stop. `saved` = the question's mark on the server before this burst.
  */
 export function setFighterMark(studentId: string, unitId: string, q: number, s: MarkState | null, saved: Mark | null) {
-  let job = fighterJobs.get(studentId);
+  // One job per student AND book: two theory books of his never mix (1 Nov 2026).
+  const key = `${studentId}:${unitId}`;
+  let job = fighterJobs.get(key);
   if (!job) {
     job = { studentId, unitId, base: new Map(), next: new Map(), tokens: new Map(), timer: null };
-    fighterJobs.set(studentId, job);
+    fighterJobs.set(key, job);
   }
   if (!job.base.has(q)) job.base.set(q, saved);
   const base = job.base.get(q) ?? null;
   const n = (base?.n ?? 0) + (s === "wrong" && base?.s !== "wrong" ? 1 : 0);
   const mark: Mark | null = s === null ? null : n ? { s, n, t: now() } : { s, t: now() };
   job.next.set(q, s);
-  job.tokens.set(q, putOverlay(studentId, q, mark));
+  job.tokens.set(q, putOverlay(studentId, q, mark, unitId));
   if (job.timer) clearTimeout(job.timer);
-  job.timer = setTimeout(() => void commitFighter(studentId), SAVE_AFTER_MS);
+  job.timer = setTimeout(() => void commitFighter(key), SAVE_AFTER_MS);
 }
 
-async function commitFighter(studentId: string): Promise<boolean> {
-  const job = fighterJobs.get(studentId);
+async function commitFighter(key: string): Promise<boolean> {
+  const job = fighterJobs.get(key);
   if (!job) return true;
-  fighterJobs.delete(studentId);
+  fighterJobs.delete(key);
+  const studentId = job.studentId;
   if (job.timer) clearTimeout(job.timer);
   const items = [...job.next].filter(([q, s]) => (job.base.get(q)?.s ?? null) !== s).map(([q, s]) => ({ q, s }));
   const drop = () => {
@@ -145,7 +148,7 @@ export async function flushFocus(): Promise<boolean> {
 
 /** Something not sent yet for this student (the phone shows it already). */
 export function focusUnsaved(studentId: string): boolean {
-  if (fighterJobs.has(studentId)) return true;
+  for (const job of fighterJobs.values()) if (job.studentId === studentId) return true;
   for (const job of draftJobs.values()) if (job.studentId === studentId) return true;
   return false;
 }

@@ -1608,6 +1608,14 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
     return m["19"]?.s === "right" && m["20"]?.s === "wrong" && m["21"]?.s === "slip";
   }, "Nila's marks saved");
   expect((await nila())["20"]?.n).toBe(1);
+  // Back to Nila (1 Nov 2026, his report: marks looked lost after switching students): every saved mark shows in the
+  // strip and on the card; the slip waits for his redo (faint).
+  await tap(name("Nila"));
+  await until(async () => JSON.stringify(await marksOn(["19", "20", "21", "22"])) === JSON.stringify(["✓", "✗", "", ""]), "Nila's saved marks shown");
+  await tap(F.locator(".fc-strip").getByRole("button", { name: "Q19: right" }));
+  await contains(F.locator(".fc-now"), "Saved: ✓ right.");
+  await shot(F, "f13b-focus-theory-saved");
+  await tap(name("Kumar"));
   // Marked on the wrong student? Take back puts them as they were.
   await savedSheet();
   await contains(F.locator(".fc-sv").first(), "Nila · Q19–Q21 · 3 marks");

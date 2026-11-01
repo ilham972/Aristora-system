@@ -97,7 +97,6 @@ import { bookDocAt,
   currentRole,
   may,
   now as serverNow,
-  savedMarks,
   stageName,
   STAGES,
   toast,
@@ -2437,13 +2436,16 @@ function FighterStrip(props: { v: View; paper: FighterPaper; at: number }) {
   const { v, paper, at } = props;
   const qs = paper.qs;
   const f = v.f!;
+  const redo = new Set(v.st?.doable ?? []);
   return (
     <HRow as="ol" class="fc-strip" label="His questions" list={v.s._id} at={at}>
       {qs.map((q, i) => {
         const s = v.marks[String(q)]?.s;
-        // Only what this paper changed counts as marked here (a redo still shows how it was, faintly).
         const mine = q in paper.base && (paper.base[q]?.s ?? null) !== (s ?? null);
-        const cls = s && mine ? ` s-${s}` : s ? ` was` : "";
+        // Every saved mark shows in colour, from any phone or an earlier visit (1 Nov 2026: after she switched students
+        // and came back, his marks looked lost). A question he must redo shows how it was, faintly, until marked again.
+        const solid = !!s && (mine || (!redo.has(q) && f.typeOf(q) === "solo"));
+        const cls = solid ? ` s-${s}` : s ? ` was` : "";
         const sec = f.sectionOf(q);
         const starts = i === 0 || f.sectionOf(qs[i - 1]).id !== sec.id;
         return (
@@ -2461,7 +2463,7 @@ function FighterStrip(props: { v: View; paper: FighterPaper; at: number }) {
               onClick={() => setPaper({ ...paper, at: i })}
             >
               <small>{f.shortLabel(q)}</small>
-              <b>{s && mine ? STATE_SIGN[s] : ""}</b>
+              <b>{solid ? STATE_SIGN[s!] : ""}</b>
             </button>
           </li>
         );
@@ -2477,9 +2479,12 @@ function FighterCard(props: { v: View; paper: FighterPaper; i: number; lock: { c
   const label = f.shortLabel(q);
   const sec = f.sectionOf(q);
   const shown = v.marks[String(q)]?.s ?? null;
-  const onServer = savedMarks(v.s)[String(q)] ?? null;
+  // This book's saved circle (his book now or another theory book of his): what a tap starts from.
+  const onServer = (v.saved ?? {})[String(q)] ?? null;
   const before = q in paper.base ? paper.base[q] : onServer;
   const mine = q in paper.base && (before?.s ?? null) !== shown;
+  // Marked before (another student in between, another phone, an earlier class): it is saved; say so.
+  const kept = !mine && !!shown && f.typeOf(q) === "solo" && !(v.st?.doable ?? []).includes(q);
   const redo = before?.s === "slip" ? "Redo: he slipped before." : before?.s === "explained" ? "Redo after Evaluation explained it." : "";
 
   const give = (s: MarkState) => {
@@ -2535,6 +2540,11 @@ function FighterCard(props: { v: View; paper: FighterPaper; i: number; lock: { c
                 {teach && (
                   <p class="muted small fc-teachq">
                     Teacher question (Theory teaches it): {shown === "taught" ? "taught" : shown === "skip" ? "skipped" : "not taught yet"}.
+                  </p>
+                )}
+                {kept && (
+                  <p class={`fc-now s-${shown}`}>
+                    Saved: {STATE_SIGN[shown!]} {STATE_WORD[shown!]}.
                   </p>
                 )}
                 {closed && <p class="muted small">Section {sec.badge || sec.id}'s teacher questions aren't taught yet. Mark it only if he did it.</p>}

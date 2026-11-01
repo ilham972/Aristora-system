@@ -314,7 +314,8 @@ export function currentRole(): Role {
 
 // ---- Instant marks: show the tap at once, then let the server confirm. ----
 
-type Pending = { mark: Mark | null; token: number };
+/** `unit`: the theory book it belongs to (missing = his book now: the Class board's taps). */
+type Pending = { mark: Mark | null; token: number; unit?: string };
 const overlay = new Map<string, Map<number, Pending>>();
 let tokens = 0;
 const statusCache = new WeakMap<object, Status>();
@@ -323,14 +324,21 @@ const NO_MARKS: Marks = {};
 /** His circles in his theory book, with taps not saved yet shown at once. */
 export function marksOf(s: Student): Marks {
   const base = (s.stage === "fighter" ? progressOf(s)?.marks : undefined) ?? NO_MARKS;
-  const o = overlay.get(s._id);
+  return s.stage === "fighter" ? bookMarks(s._id, s.unitId ?? null, base) : base;
+}
+
+/** One theory book's circles (`base` = what the server has) with taps not saved yet shown at once. */
+export function bookMarks(studentId: string, unitId: string | null, base: Marks): Marks {
+  const o = overlay.get(studentId);
   if (!o || o.size === 0) return base;
-  const m: Marks = { ...base };
+  let m: Marks | null = null;
   for (const [q, p] of o) {
+    if (p.unit && p.unit !== unitId) continue;
+    m ??= { ...base };
     if (p.mark === null) delete m[String(q)];
     else m[String(q)] = p.mark;
   }
-  return m;
+  return m ?? base;
 }
 
 /** Saved circle states only (what a burst of taps starts from). */
@@ -439,14 +447,14 @@ export async function setExplained(s: Student, qs: number[], on: boolean, unitId
 }
 
 /** Show a circle's new state at once, before the server confirms. Returns a token. */
-export function putOverlay(studentId: string, q: number, mark: Mark | null): number {
+export function putOverlay(studentId: string, q: number, mark: Mark | null, unit?: string): number {
   let o = overlay.get(studentId);
   if (!o) {
     o = new Map();
     overlay.set(studentId, o);
   }
   const token = ++tokens;
-  o.set(q, { mark, token });
+  o.set(q, unit ? { mark, token, unit } : { mark, token });
   emit();
   return token;
 }

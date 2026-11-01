@@ -423,7 +423,7 @@ two errors: marks on the wrong question and on the wrong student. Meant for the 
   showed nothing): **the whole book** in the strip, section by section (the letter above each section's first box,
   teacher questions with a double ring `.fc-tq`), opening at the first question he can do (`fighterQueue`), else his
   first solo one not right; every question with its answer (the theory book's key) and "Show the question"; ✗ / ↻ /
-  big ✓ (`setFighterMark` → `marks.setMany`), then the next solo question (`nextSolo`). A question of a section whose
+  big ✓ (`setFighterMark` → `marks.setMany`), then the next solo question (`nextSolo`). **Every tap is saved live** (0.9 s after the last tap on that student and book, at once on another name, Stop or the phone hidden; no Save button, Done at the end only closes the paper). 1 Nov 2026, his report "Fighter marks not saving": marks on a theory book that wasn't his book now (a tute's theory book while he is on its workbook, a book given) were refused and vanished; now `fighterPlace` takes any theory book he has work in (never moves him), and the phone's instant marks are kept per book. Coming back to a student shows every saved mark in colour (the strip) and "Saved: ✓ right" on the card; only a question he must redo (slip, explained) shows faintly. A question of a section whose
   teacher questions aren't taught: marked only if he did it (a line says so). A teacher question: its answer and
   "Teacher question (Theory teaches it): taught / skipped / not taught yet"; ✗ ↻ pale, the big button = Next question.
 - **Take back** (last 5 saves on this phone, `aristora.focus.saved`): a level → `workbook.uncorrect` (as before; its

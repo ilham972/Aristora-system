@@ -161,6 +161,27 @@ export async function masterPlace(
 }
 
 /**
+ * A theory book of his to mark: his book now, or another theory book he has work in (a topic tute's theory book while
+ * he is on its workbook, a book given to him). 1 Nov 2026, his report "Fighter marks are not saving": every mark on a
+ * theory book that wasn't his book now was refused ("not in Fighter now") and vanished from the phone. Never moves him.
+ */
+export async function fighterPlace(
+  ctx: MutationCtx,
+  student: Doc<"students">,
+  unitId: Id<"units"> | undefined,
+  now: number,
+): Promise<{ unit: Doc<"units">; book: Doc<"books">; progress: Doc<"progress"> }> {
+  if (!unitId || (unitId === student.unitId && student.stage === "fighter")) return await workPlace(ctx, student, "fighter", unitId, now);
+  const unit = await ctx.db.get(unitId);
+  if (!unit) fail("That unit no longer exists.");
+  const book = await bookFor(ctx, unit._id, "fighter");
+  if (!book) fail(`${unit.key} has no theory book in the app.`);
+  const progress = await progressFor(ctx, student._id, unit._id, "fighter");
+  if (!progress) fail(`${student.name} has no work in ${unit.key}'s theory book.`);
+  return { unit, book, progress };
+}
+
+/**
  * One corrector per book (31 Oct 2026): another corrector has this book open on the Correction page and her phone spoke
  * in the last minute. Marks from anyone else would cross hers: refused, with her name (ask her for it).
  */

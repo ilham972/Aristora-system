@@ -20,11 +20,13 @@ import {
 } from "../convex/lib/status";
 import {
   bookDocAt,
+  bookMarks,
   fighterOf,
   marksOf,
   masterOf,
   masterStateIn,
   masterStateOf,
+  savedMarks,
   stageName,
   statusOf,
   unitOf,
@@ -48,6 +50,8 @@ export type View = {
   f: Fighter | null;
   st: Status | null;
   marks: Marks;
+  /** Fighter: his circles as the server has them (`marks` = these + taps not sent yet). Missing = none. */
+  saved?: Marks;
   /** Master: his workbook, where he stands, his levels and marks. */
   mb: MasterData | null;
   ms: MStatus | null;
@@ -107,9 +111,11 @@ function bookView(home: View, p: Progress): View | null {
   const base = { ...home, unit, stage: p.stage as Stage, home, others: [], tag: tagOf(home.s, unit), key: `${home.s._id}:${p.unitId}:${p.stage}` };
   if (doc.data.kind === "fighter" && p.stage === "fighter") {
     const f = fighter(doc.data);
-    const marks = (p.marks ?? {}) as Marks;
+    const saved = (p.marks ?? {}) as Marks;
+    // Correction's taps on this book show at once, like on his book now (1 Nov 2026).
+    const marks = bookMarks(home.s._id, p.unitId, saved);
     const st = computeStatus(marks, f);
-    return { ...base, kind: "fighter", f, st, marks, mb: null, ms: null, mm: EMPTY_MASTER, pending: st.pending };
+    return { ...base, kind: "fighter", f, st, marks, saved, mb: null, ms: null, mm: EMPTY_MASTER, pending: st.pending };
   }
   if (doc.data.kind === "master" && p.stage === "master") {
     const mm = masterStateIn(home.s, p);
@@ -176,6 +182,7 @@ export function buildViews(board: Board, now: number): View[] {
     const mb = stage === "master" ? masterOf(s) : null;
     const st = f ? statusOf(s) : null;
     const marks = f ? marksOf(s) : {};
+    const saved = f ? savedMarks(s) : undefined;
     const mm = masterStateOf(s);
     const ms = mb ? computeMaster(mm, mb) : null;
     const kind: Kind = st ? "fighter" : ms ? "master" : "none";
@@ -271,6 +278,7 @@ export function buildViews(board: Board, now: number): View[] {
       f,
       st,
       marks,
+      saved,
       mb,
       ms,
       mm,
