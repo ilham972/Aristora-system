@@ -181,6 +181,27 @@ describe("saving a tute", () => {
     expect((await doc("master"))!.qCount).toBe(3);
   });
 
+  test("a tute's two books travel together: the twin's row (on a move, or one tap on Correction) and on the board", async () => {
+    const [r] = read() as ReadTute[];
+    await t.mutation(api.catalog.saveTute, args(r));
+    expect([(await doc("fighter"))!.tute, (await doc("master"))!.tute]).toEqual([true, true]);
+    const id = await t.mutation(api.students.add, { name: "Aqeeth", grade: 11, term: 3, stage: "fighter", unitId });
+    await t.mutation(api.students.setPresent, { id, present: true });
+    const rows = async () =>
+      (await raw.run(async (ctx) => await ctx.db.query("progress").withIndex("by_student", (q) => q.eq("studentId", id)).collect())).map((p) => p.stage).sort();
+    const twinOnBoard = async () => ((await t.query(api.state.get, {})) as any).more[id]?.map((p: { stage: string }) => p.stage) ?? [];
+    expect(await rows()).toEqual(["fighter"]);
+    expect(await twinOnBoard()).toEqual([]);
+    expect(await t.mutation(api.students.openTwin, { id, unitId, stage: "master" })).toBe(true);
+    expect(await rows()).toEqual(["fighter", "master"]);
+    expect(await twinOnBoard()).toEqual(["master"]); // nothing waiting in it, still on the board: Correction opens it
+    // A move onto the papers makes the ladder his twin (both rows already there); a school unit's books never pair.
+    await t.mutation(api.students.move, { id, grade: 11, term: 3, stage: "master", unitId });
+    expect(await twinOnBoard()).toEqual(["fighter"]);
+    const g11u1 = await raw.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G11-U01")).first())!._id);
+    await expect(t.mutation(api.students.openTwin, { id, unitId: g11u1, stage: "master" })).rejects.toThrow(/isn't his topic now/);
+  });
+
   test("refused: papers overlapping the ladder, a part that isn't an essay part, missing marks", async () => {
     const [r] = read() as ReadTute[];
     const a = args(r);

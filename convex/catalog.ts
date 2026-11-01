@@ -235,7 +235,7 @@ async function saveTuteBook(
   } else if (oldKey) await ctx.db.delete(oldKey._id);
   const same = !!old && bookShape(old.data) === bookShape(data);
   if (old && !same && old.qCount) await dropQuestions(ctx, unitId, stage);
-  const fields = { data, title, updatedAt: now, keyCount: key ? key.length : undefined, ...(same ? {} : { qCount: undefined }) };
+  const fields = { data, title, updatedAt: now, keyCount: key ? key.length : undefined, tute: true, ...(same ? {} : { qCount: undefined }) };
   if (old) await ctx.db.patch(old._id, fields);
   else await ctx.db.insert("books", { unitId, stage, ...fields });
 }

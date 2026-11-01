@@ -374,13 +374,19 @@ export type BookPill = { unitId: string; stage: "fighter" | "master"; now: boole
  * finished, and any other book with a level handed in. One fixed order (unit number, theory book first), so nothing
  * moves under the finger. `no` = a unit's number.
  */
-export function booksOf(v: View, no: (unitId: string) => number): BookPill[] {
+export function booksOf(v: View, no: (unitId: string) => number, tute?: (unitId: string, stage: "fighter" | "master") => boolean): BookPill[] {
   const out = new Map<string, BookPill>();
   const put = (unitId: string, stage: "fighter" | "master", now: boolean, waiting: number) => {
     const had = out.get(`${unitId}:${stage}`);
     out.set(`${unitId}:${stage}`, { unitId, stage, now: now || !!had?.now, waiting: Math.max(waiting, had?.waiting ?? 0) });
   };
-  if (v.unit && (v.stage === "fighter" || v.stage === "master")) put(v.unit._id, v.stage, true, v.ms?.waiting.length ?? 0);
+  if (v.unit && (v.stage === "fighter" || v.stage === "master")) {
+    put(v.unit._id, v.stage, true, v.ms?.waiting.length ?? 0);
+    // A topic tute is one printed book: its other book (the ladder / the past papers) always sits beside it.
+    const twin = v.stage === "fighter" ? "master" : "fighter";
+    const tv = v.others.find((b) => b.unit?._id === v.unit!._id && b.stage === twin);
+    if (tv || tute?.(v.unit._id, v.stage)) put(v.unit._id, twin, false, tv?.ms?.waiting.length ?? 0);
+  }
   for (const g of v.given) if (!g.done) put(g.unitId, g.stage, false, 0);
   for (const b of v.others) if (b.unit && b.stage === "master" && b.ms?.waiting.length) put(b.unit._id, "master", false, b.ms.waiting.length);
   return [...out.values()].sort((a, b) => no(a.unitId) - no(b.unitId) || Number(a.stage === "master") - Number(b.stage === "master"));
@@ -394,11 +400,13 @@ export function bookId(v: View): string | undefined {
 }
 
 /** The view a paper is on: his book now, or one of his other books (null: he left, or that book has nothing now). */
-export function viewOfPaper(views: readonly View[], p: { studentId: string; unitId: string | null }): View | null {
+export function viewOfPaper(views: readonly View[], p: { studentId: string; unitId: string | null; kind?: string }): View | null {
   const v = views.find((x) => x.s._id === p.studentId);
   if (!v) return null;
-  if (!p.unitId || bookId(v) === p.unitId) return v;
-  return v.others.find((b) => bookId(b) === p.unitId) ?? null;
+  if (!p.unitId) return v;
+  // A topic tute's two books share their unit: a paper of one never lands on the other (its kind says which).
+  const stage = p.kind === "fighter" ? "fighter" : p.kind === "master" || p.kind === "over" || p.kind === "level" ? "master" : null;
+  return [v, ...v.others].find((b) => bookId(b) === p.unitId && (!stage || b.stage === stage)) ?? null;
 }
 
 /**

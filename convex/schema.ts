@@ -139,6 +139,8 @@ export default defineSchema({
     keyCount: v.optional(v.number()),
     /** How many of its questions are in `questions` (read from the uploaded book.html); missing = none. */
     qCount: v.optional(v.number()),
+    /** One of a topic tute's two books (one printed book: the ladder + the past papers): the other stage is its twin. */
+    tute: v.optional(v.boolean()),
   }).index("by_unit_stage", ["unitId", "stage"]),
 
   /** A book's answer key, read only when a teacher opens a question. Teachers only, never in the code.

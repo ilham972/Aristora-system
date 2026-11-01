@@ -371,6 +371,11 @@ two errors: marks on the wrong question and on the wrong student. Meant for the 
   correct (`bookToOpen`: book now, else a book with a level handed in, else one marked at home); his books row opens a
   book of his the same way (a book he hasn't started still moves him, as before). His paper never jumps to another
   book by itself: if its book has nothing more, it closes ("that book has nothing more to correct now").
+  **A topic tute's two books go together** (1 Nov 2026, his ask: "master and fighter answers when I switch"): both
+  books saved by a tute upload carry `books.tute`; his books row always shows the twin of his book now (`booksOf`),
+  the board sends the twin's row even with nothing waiting (`state.get`), a move onto a tute book makes both rows,
+  and a tap opens the twin without moving him (no row yet: `students.openTwin` makes it, then it opens). A paper
+  finds its book by unit AND stage (`viewOfPaper`: the two books share their unit).
   **One corrector per book:** the open book is claimed (`claims` table, `convex/focus.ts`: `claim`, `release`;
   `src/focus.tsx` `holdFor`/`claimBook`); her phone says "still here" every 20 s while the page is on screen
   (`stillHere`, `CLAIM_PING_MS`); a minute of silence (phone locked, other tab) and anyone can take it ("Nisha's phone
@@ -413,8 +418,13 @@ two errors: marks on the wrong question and on the wrong student. Meant for the 
   table and one tap on (`nextBook`: the term's next workbook, else Legend, as Move). Summary: total, "?", lost
   marks → Evaluation | Theory (Evaluation unless picked), "Save <name> · 14 / 20"; no Undo toast.
 - **Drafts** (`convex/focus.ts`, table `drafts`): every mark on the server 0.9 s after the last tap; any phone resumes;
-  counts nowhere until Save. Theory book: doable questions in book order (`fighterQueue`), ✗ / ↻ / big ✓
-  (`setFighterMark` → `marks.setMany`); no key ("Check his answer in the notebook").
+  counts nowhere until Save. Theory book (1 Nov 2026, his screenshot: a book whose section A waited for Theory
+  showed nothing): **the whole book** in the strip, section by section (the letter above each section's first box,
+  teacher questions with a double ring `.fc-tq`), opening at the first question he can do (`fighterQueue`), else his
+  first solo one not right; every question with its answer (the theory book's key) and "Show the question"; ✗ / ↻ /
+  big ✓ (`setFighterMark` → `marks.setMany`), then the next solo question (`nextSolo`). A question of a section whose
+  teacher questions aren't taught: marked only if he did it (a line says so). A teacher question: its answer and
+  "Teacher question (Theory teaches it): taught / skipped / not taught yet"; ✗ ↻ pale, the big button = Next question.
 - **Take back** (last 5 saves on this phone, `aristora.focus.saved`): a level → `workbook.uncorrect` (as before; its
   `level-marks` event deleted; refused after 30 min, if corrected again, or once explained / sent / taught; its marks
   wait 10 min for the right name); theory marks → `marks.restoreMany` (refused if changed since).

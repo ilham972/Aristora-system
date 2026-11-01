@@ -141,7 +141,12 @@ export const move = mutation({
       patch.back = undefined;
     }
     await ctx.db.patch(s._id, { ...patch, lastActivityAt: now });
-    if (unit && (args.stage === "fighter" || args.stage === "master")) await ensureProgress(ctx, s._id, unit._id, args.stage, now);
+    if (unit && (args.stage === "fighter" || args.stage === "master")) {
+      await ensureProgress(ctx, s._id, unit._id, args.stage, now);
+      // A topic tute is one printed book: its other book (ladder / past papers) comes with it, ready to correct.
+      const twin = args.stage === "fighter" ? "master" : "fighter";
+      if ((await bookFor(ctx, unit._id, args.stage))?.tute && (await bookFor(ctx, unit._id, twin))) await ensureProgress(ctx, s._id, unit._id, twin, now);
+    }
     const session = await currentSession(ctx, now);
     await log(ctx, session, now, {
       kind: "move",
@@ -192,6 +197,24 @@ export const setGiven = mutation({
       unit: unit.key,
       value: `${unit.key} ${args.stage === "fighter" ? "theory book" : "workbook"}`,
     });
+    return true;
+  },
+});
+
+/**
+ * The other book of his topic tute, ready on Correction without moving him (a student moved onto the tute before its
+ * twin had a row): its progress row, nothing else.
+ */
+export const openTwin = mutation({
+  args: { token: v.optional(v.string()), id: v.id("students"), unitId: v.id("units"), stage: bookStage, by: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["correction"], args.by);
+    const s = await getStudent(ctx, args.id);
+    const twin = args.stage === "fighter" ? "master" : "fighter";
+    if (s.unitId !== args.unitId) fail("That book isn't his topic now.");
+    const book = await bookFor(ctx, args.unitId, args.stage);
+    if (!book?.tute || !(await bookFor(ctx, args.unitId, twin))) fail("Only a topic tute's two books go together.");
+    await ensureProgress(ctx, s._id, args.unitId, args.stage, Date.now());
     return true;
   },
 });

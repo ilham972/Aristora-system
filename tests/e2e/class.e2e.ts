@@ -1580,14 +1580,24 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
   await textsAre(F.locator(".fc-bk.on i"), ["13"]);
   await contains(F.locator(".fc-qn"), "19");
   await contains(F.locator(".fc-qmeta"), "Section C · Forming the equation");
-  await textsAre(F.locator(".fc-strip .fc-sq small"), ["19", "20", "21", "22"]);
+  // The whole book in the strip (1 Nov 2026: a section waiting for Theory showed nothing), open at the first he can do.
+  await count(F.locator(".fc-strip .fc-sq"), 61);
+  await textsAre(F.locator(".fc-strip .fc-sq.on small"), ["19"]);
   await shot(F, "f13-focus-theory-book");
   await tap(F.getByRole("button", { name: "Q19: right" }));
   await contains(F.locator(".fc-qn"), "20");
   await tap(F.getByRole("button", { name: "Q20: wrong" }));
   await tap(F.getByRole("button", { name: "Q21: slip" }));
   await contains(F.locator(".fc-qn"), "22");
-  await textsAre(F.locator(".fc-strip .fc-sq b"), ["✓", "✗", "↻", ""]);
+  const marksOn = (ns: string[]) =>
+    F.evaluate(
+      (ns) =>
+        [...document.querySelectorAll(".fc-strip .fc-sq")]
+          .filter((b) => ns.includes(b.querySelector("small")?.textContent ?? ""))
+          .map((b) => b.querySelector("b")?.textContent ?? ""),
+      ns,
+    );
+  await until(async () => JSON.stringify(await marksOn(["19", "20", "21", "22"])) === JSON.stringify(["✓", "✗", "↻", ""]), "Q19–Q22 marked");
   // His notebook ends at Q21: tap the next name. The marks reach the server like the Class rows' taps.
   await tap(name("Kumar"));
   const nila = async () => (await marksOf(backend, "Nila")).marks;
@@ -2715,12 +2725,13 @@ test("Topic tute: one zip = the unit's theory book and workbook, both answer key
   ]);
   await shot(C, "t02-books-grade11", true);
 
-  // A Grade 11 student on the new theory book, its teacher question taught: Correction shows Q2 with its answer and,
-  // one tap away, the question as printed (drawn apart from the app, fitted to the phone).
+  // A Grade 11 student on the new theory book, nothing taught yet (his screenshot, 1 Nov: "That's every question he
+  // can do now" and nothing to see): Correction shows the whole book by section, every question with its answer; Q2
+  // opens (his first not right), its section's teacher question not taught yet.
   const kumar = await backend.t.run(async (ctx) => {
     const s = (await ctx.db.query("students").collect()).find((x) => x.grade === 11 && x.present && x.stage === "fighter")!;
     const p = (await ctx.db.query("progress").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()).find((x) => x.stage === "fighter")!;
-    await ctx.db.patch(p._id, { marks: { "1": { s: "taught", t: Date.now() - 60_000 } } });
+    await ctx.db.patch(p._id, { marks: {} });
     return s.name;
   });
   await backend.push();
@@ -2729,6 +2740,24 @@ test("Topic tute: one zip = the unit's theory book and workbook, both answer key
   await C.locator(".fc-nm", { hasText: new RegExp(`^${kumar}`) }).first().click();
   const card = C.locator(".fc-card.fighter");
   await contains(card.locator(".fc-qmeta"), "Section A · First part");
+  await contains(card, "Section A's teacher questions aren't taught yet");
+  await contains(card.locator(".ev-key"), "A1 B2");
+  await textsAre(C.locator(".fc-strip .fc-sq small"), ["1", "2", "3", "4", "5"]);
+  expect(await C.locator(".fc-strip .fc-secl").allTextContents()).toEqual(["A", "B"]);
+  // Q1, the teacher question: its answer, and the pad stays in place but marks nothing (Theory teaches it).
+  await C.locator(".fc-strip .fc-sq").first().click();
+  await contains(card, "Teacher question (Theory teaches it): not taught yet.");
+  await contains(card.locator(".ev-key"), "**4**".replace(/\*/g, ""));
+  expect(await C.locator(".fc-pad .fc-n.wrong").isDisabled()).toBe(true);
+  await shot(C, "t03a-correction-teacher-question");
+  // Its other book (the past papers) sits beside it; one tap opens it with its answers, and he stays on the ladder.
+  await C.locator(".fc-bk", { has: C.locator("b.st-master") }).click();
+  await contains(C.locator(".fc-card").first(), "முதல் விடை");
+  await shot(C, "t03b-correction-tute-papers");
+  expect(await backend.t.run(async (ctx) => (await ctx.db.query("students").collect()).find((x) => x.name === kumar)!.stage)).toBe("fighter");
+  await C.locator(".fc-bk", { has: C.locator("b.st-fighter") }).click();
+  await visible(C.locator(".fc-card.fighter"));
+  await C.locator(".fc-strip .fc-sq").nth(1).click();
   await contains(card.locator(".ev-key"), "A1 B2");
   const toggle = card.getByRole("button", { name: "Show the question" });
   await toggle.click();

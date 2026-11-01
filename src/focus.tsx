@@ -25,7 +25,7 @@ import type { ComponentChildren } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
-import { PART_NAME, partOf, type MasterLevel } from "../convex/lib/book";
+import { type Fighter, PART_NAME, partOf, type MasterLevel } from "../convex/lib/book";
 import { homeToCheck, levelWaits, teachState, type TeachState } from "../convex/lib/master";
 import { slClock, slDate, slDay } from "../convex/lib/day";
 import { claimLive, CLAIM_PING_MS, type Claim } from "../convex/lib/claims";
@@ -89,7 +89,7 @@ import { MasterBook, TheorySheet } from "./master";
 import { QuestionToggle } from "./bookQuestion";
 import { AnswerKey } from "./roomkit";
 import { MoveSheet } from "./move";
-import {
+import { bookDocAt,
   act,
   allUnits,
   clearToasts,
@@ -422,7 +422,16 @@ function paperAt(v: View, l: MasterLevel): MasterPaper {
 
 /** What opens for a student: his theory book, his workbook at the right level, the unit's marks, or choose a unit. */
 function paperFor(v: View, now: number): Paper {
-  if (v.kind === "fighter") return { kind: "fighter", studentId: v.s._id, unitId: bookId(v)!, qs: fighterQueue(v), at: 0, base: {} };
+  if (v.kind === "fighter") {
+    // The whole book, section by section (his ask, 1 Nov 2026: a book whose section waits for Theory showed nothing):
+    // every question with its answer; it opens at the first one he can do, else the first of his not right yet.
+    const all = v.f!.all;
+    const doable = fighterQueue(v);
+    const first = doable.length
+      ? all.indexOf(doable[0])
+      : all.findIndex((q) => v.f!.typeOf(q) === "solo" && v.marks[String(q)]?.s !== "right");
+    return { kind: "fighter", studentId: v.s._id, unitId: bookId(v)!, qs: all, at: Math.max(0, first), base: {} };
+  }
   if (v.kind !== "master") return { kind: "none", studentId: v.s._id, unitId: v.s.unitId ?? null, stage: v.stage };
   const fits = carryLevel(carry, v, now);
   if (fits && carry) {
@@ -603,6 +612,23 @@ async function moveTo(v: View, stage: Stage, u: Unit): Promise<boolean> {
       : `${v.s.name}: ${stageName(stage)}, ${ol ? `OL ${u.ta || u.en}` : `Grade ${u.grade}, Term ${t}`}.`,
   );
   return true;
+}
+
+/**
+ * The other book of his topic tute when it has no row yet (he was moved onto the tute before): the row is made, and its
+ * paper opens as soon as the board brings it (he is not moved).
+ */
+async function openTwin(v: View, stage: "fighter" | "master"): Promise<void> {
+  const unitId = v.s.unitId;
+  if (!unitId) return;
+  const ok = await act(() => mutate(api.students.openTwin, { id: v.s._id, unitId: unitId as Id<"units">, stage, by: currentRole() }));
+  if (!ok) return;
+  for (let k = 0; k < 40; k++) {
+    const me = latestViews.find((x) => x.s._id === v.s._id);
+    const tv = me && [me, ...me.others].find((x) => bookId(x) === unitId && x.stage === stage);
+    if (tv) return openBook(tv, serverNow());
+    await new Promise((r) => setTimeout(r, 100));
+  }
 }
 
 /** Take a saved level back (after the corrector confirmed): it goes back to how it was; its marks wait for the right student. */
@@ -1474,7 +1500,7 @@ function PaperHead(props: { v: View; later?: () => void; onUnit: () => void; onC
           </button>
         </div>
       </header>
-      <BookRow v={v.home ?? v} open={bookId(v)} onUnits={props.onUnit} />
+      <BookRow v={v.home ?? v} open={bookId(v)} openStage={v.stage} onUnits={props.onUnit} />
       {v.where === "absent" && <SignedOut v={v} />}
     </>
   );
@@ -1486,9 +1512,13 @@ function PaperHead(props: { v: View; later?: () => void; onUnit: () => void; onC
  * (no dialog). The book button first, like + on the names row, opens all the units of his grade (Move him, Books
  * given).
  */
-function BookRow(props: { v: View; open: string | undefined; onUnits: () => void }) {
+function BookRow(props: { v: View; open: string | undefined; openStage: string | null; onUnits: () => void }) {
   const { v } = props;
-  const books = booksOf(v, (id) => unitNo(unitOf(id)?.code ?? ""));
+  const books = booksOf(
+    v,
+    (id) => unitNo(unitOf(id)?.code ?? ""),
+    (id, st) => !!bookDocAt(id, st)?.tute,
+  );
   return (
     <div class="fc-bookrow">
       <button type="button" class="fc-units" aria-label={`${v.s.name}: all units (move him, books given)`} onClick={props.onUnits}>
@@ -1505,7 +1535,7 @@ function BookRow(props: { v: View; open: string | undefined; onUnits: () => void
             const u = unitOf(b.unitId);
             if (!u) return null;
             const name = `${b.stage === "fighter" ? "Theory book" : "Workbook"} ${unitNo(u.code)} ${u.ta || u.en}`;
-            const on = b.unitId === props.open;
+            const on = b.unitId === props.open && b.stage === props.openStage;
             // One of his books with a view (his book now, or one with something waiting): opens it here, he stays
             // where he is. A book he hasn't started (given, nothing waiting): he moves to it, as before.
             const bv = [v, ...v.others].find((x) => bookId(x) === b.unitId && x.stage === b.stage);
@@ -1520,6 +1550,7 @@ function BookRow(props: { v: View; open: string | undefined; onUnits: () => void
                 onClick={() => {
                   if (on) return;
                   if (bv) openBook(bv, serverNow());
+                  else if (b.unitId === v.s.unitId && b.stage !== v.stage) void openTwin(v, b.stage);
                   else void moveTo(v, b.stage, u);
                 }}
               >
@@ -2413,11 +2444,18 @@ function FighterStrip(props: { v: View; paper: FighterPaper; at: number }) {
         // Only what this paper changed counts as marked here (a redo still shows how it was, faintly).
         const mine = q in paper.base && (paper.base[q]?.s ?? null) !== (s ?? null);
         const cls = s && mine ? ` s-${s}` : s ? ` was` : "";
+        const sec = f.sectionOf(q);
+        const starts = i === 0 || f.sectionOf(qs[i - 1]).id !== sec.id;
         return (
           <li key={q}>
+            {starts && (
+              <em class="fc-secl" aria-hidden="true">
+                {sec.badge || sec.id}
+              </em>
+            )}
             <button
               type="button"
-              class={`fc-sq${cls}${i === at ? " on" : ""}`}
+              class={`fc-sq${cls}${i === at ? " on" : ""}${f.typeOf(q) === "teach" ? " fc-tq" : ""}`}
               aria-current={i === at ? "step" : undefined}
               aria-label={`${f.longLabel(q)}: ${s ? STATE_WORD[s] : "not marked"}`}
               onClick={() => setPaper({ ...paper, at: i })}
@@ -2448,7 +2486,7 @@ function FighterCard(props: { v: View; paper: FighterPaper; i: number; lock: { c
     if (Date.now() < lock.current) return;
     lock.current = Date.now() + TAP_GUARD_MS;
     setFighterMark(paper.studentId, paper.unitId, q, s, onServer);
-    setPaper({ ...paper, base: q in paper.base ? paper.base : { ...paper.base, [q]: onServer }, at: i + 1 });
+    setPaper({ ...paper, base: q in paper.base ? paper.base : { ...paper.base, [q]: onServer }, at: nextSolo(f, paper.qs, i) });
   };
   const undoMine = () => {
     if (!(q in paper.base)) return;
@@ -2456,6 +2494,10 @@ function FighterCard(props: { v: View; paper: FighterPaper; i: number; lock: { c
     setPaper({ ...paper });
   };
   const where = sec.kind === "ladder" ? `Section ${sec.badge || sec.id} · ${sec.title}` : sec.kind === "past" ? "Past papers" : "Final challenge";
+  const teach = f.typeOf(q) === "teach";
+  // A section still closed (its teacher questions not taught): he may have done it anyway; she can still mark it.
+  const taughtQ = (x: number) => ["taught", "skip"].includes(v.marks[String(x)]?.s ?? "");
+  const closed = !teach && sec.kind === "ladder" && !sec.teach.every(taughtQ) && !shown;
 
   return (
     <>
@@ -2490,6 +2532,12 @@ function FighterCard(props: { v: View; paper: FighterPaper; i: number; lock: { c
               </p>
             ) : (
               <>
+                {teach && (
+                  <p class="muted small fc-teachq">
+                    Teacher question (Theory teaches it): {shown === "taught" ? "taught" : shown === "skip" ? "skipped" : "not taught yet"}.
+                  </p>
+                )}
+                {closed && <p class="muted small">Section {sec.badge || sec.id}'s teacher questions aren't taught yet. Mark it only if he did it.</p>}
                 {redo && <p class="muted small">{redo}</p>}
                 {bookId(v) ? <AnswerKey unitId={bookId(v)!} q={q} stage="fighter" /> : <p class="muted small">Check his answer in the notebook.</p>}
               </>
@@ -2506,6 +2554,7 @@ function FighterCard(props: { v: View; paper: FighterPaper; i: number; lock: { c
             type="button"
             class={`fc-n wrong${mine && shown === "wrong" ? " on" : ""}`}
             aria-label={`${f.longLabel(q)}: wrong`}
+            disabled={teach}
             onClick={() => give("wrong")}
           >
             <b>✗</b>
@@ -2515,17 +2564,31 @@ function FighterCard(props: { v: View; paper: FighterPaper; i: number; lock: { c
             type="button"
             class={`fc-n slip${mine && shown === "slip" ? " on" : ""}`}
             aria-label={`${f.longLabel(q)}: slip`}
+            disabled={teach}
             onClick={() => give("slip")}
           >
             <b>↻</b>
             <small>slip</small>
           </button>
         </div>
-        <button type="button" class="fc-go full" aria-label={`${f.longLabel(q)}: right`} onClick={() => give("right")}>
-          <span aria-hidden="true">✓</span>
-          <b>Right</b>
-        </button>
+        {teach ? (
+          // A teacher question is Theory's: the big button only goes on to his next question.
+          <button type="button" class="fc-go full" onClick={() => setPaper({ ...paper, at: nextSolo(f, paper.qs, i) })}>
+            <b>Next question ›</b>
+          </button>
+        ) : (
+          <button type="button" class="fc-go full" aria-label={`${f.longLabel(q)}: right`} onClick={() => give("right")}>
+            <span aria-hidden="true">✓</span>
+            <b>Right</b>
+          </button>
+        )}
       </div>
     </>
   );
+}
+
+/** The next question Correction marks after the i-th (teacher questions are Theory's), or the end of the paper. */
+function nextSolo(f: Fighter, qs: readonly number[], i: number): number {
+  for (let k = i + 1; k < qs.length; k++) if (f.typeOf(qs[k]) === "solo") return k;
+  return qs.length;
 }

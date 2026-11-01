@@ -55,10 +55,12 @@ export const get = query({
       if (!s.present) continue;
       for (const p of await ctx.db.query("progress").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) {
         if (p.unitId === s.unitId && p.stage === s.stage) continue;
+        // The other book of his topic tute (one printed book: the ladder + the past papers) always comes along.
+        const twin = p.unitId === s.unitId && !!(await bookOf(p.unitId, p.stage))?.tute;
         const inRoom = called.has(`${s._id}:${p.unitId}:${p.stage}`);
-        if (!inRoom && !mayBeOpen(p)) continue;
+        if (!twin && !inRoom && !mayBeOpen(p)) continue;
         const b = await bookOf(p.unitId, p.stage);
-        if (!b || (!inRoom && !openWork(b, p))) continue;
+        if (!b || (!twin && !inRoom && !openWork(b, p))) continue;
         (more[s._id] ??= []).push(p);
         books[`${p.unitId}:${p.stage}`] = b;
       }
