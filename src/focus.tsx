@@ -49,6 +49,10 @@ import {
   draftOf,
   extendQueue,
   fighterQueue,
+  sectionLook,
+  sectionMark,
+  sectionQs,
+  sectionStart,
   focusGrade,
   focusNeeds,
   focusPills,
@@ -1478,6 +1482,16 @@ function PaperView(props: { v: View; paper: Paper; drafts: Draft[] | undefined; 
  */
 function PaperHead(props: { v: View; later?: () => void; onUnit: () => void; onCard: () => void }) {
   const { v } = props;
+  const [busy, setBusy] = useState(false);
+  const away = v.where === "absent";
+  // He went home (1 Nov 2026, his ask: no more + → find him → sign out): one tap, here beside Marks. His paper stays
+  // open with "Signed out … Sign him in", so a wrong tap is undone in one tap too. Pale (never gone) when he is out.
+  const goHome = async () => {
+    setBusy(true);
+    const ok = await act(() => mutate(api.students.setPresent, { id: v.s._id, present: false, by: "attendance" }));
+    setBusy(false);
+    if (ok !== undefined) toast(`${v.s.name} went home, ${slClock(serverNow())}.`);
+  };
   return (
     <>
       <header class="fc-head">
@@ -1490,6 +1504,19 @@ function PaperHead(props: { v: View; later?: () => void; onUnit: () => void; onC
               Later
             </button>
           )}
+          <button
+            type="button"
+            class="btn ghost small fc-gohome"
+            aria-label={away ? `${v.s.name} is signed out` : `${v.s.name} went home: sign him out`}
+            disabled={away || busy}
+            onClick={() => void goHome()}
+          >
+            <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3.5 11 12 4l8.5 7" />
+              <path d="M6 9.5V20h12V9.5" />
+              <path d="M10 20v-5.5h4V20" />
+            </svg>
+          </button>
           <button type="button" class="btn ghost small fc-cardbtn" aria-label={`${v.s.name}: his marks and buttons`} onClick={props.onCard}>
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
               <rect x="3.5" y="4" width="17" height="16" rx="2.5" />
@@ -2397,6 +2424,7 @@ function FighterPaperView(props: { v: View; paper: FighterPaper; head: Component
   return (
     <div class="fc-paper">
       {props.head}
+      <FighterSecBar v={v} paper={paper} at={at} />
       <FighterStrip v={v} paper={paper} at={at} />
       {at < qs.length ? (
         <FighterCard key={qs[at]} v={v} paper={paper} i={at} lock={lock} />
@@ -2431,30 +2459,74 @@ function FighterPaperView(props: { v: View; paper: FighterPaper; head: Component
   );
 }
 
-/** His questions as small boxes (a window around the one on screen): each mark, where he is. */
+/**
+ * His theory book's sections in one row (1 Nov 2026, his ask: the whole book in one row needed too much scrolling),
+ * like a workbook's level bar: done green, mixed amber, the one he is on outlined, the open one ringed; a violet dot =
+ * wrong answers waiting for Evaluation, a blue dot = its teacher questions not taught yet. A tap opens that section.
+ */
+function FighterSecBar(props: { v: View; paper: FighterPaper; at: number }) {
+  const { v, paper, at } = props;
+  const f = v.f!;
+  const doable = v.st?.doable ?? [];
+  const pending = v.st?.pending ?? [];
+  const open = sectionQs(f, paper.qs, at).sec?.id ?? null;
+  const shown = f.sections.filter((sec) => paper.qs.some((q) => f.sectionOf(q).id === sec.id));
+  return (
+    <HRow class="fc-lvbar fc-secbar" label="Sections" list={`${v.s._id}:${bookId(v)}`} at={open}>
+      {shown.map((sec, i) => {
+        const k = sectionLook(sec, v.marks, doable, pending);
+        const cls = k.look === "done" ? "fixed" : k.look === "mixed" ? "fixed mid" : k.look === "current" ? "current" : "";
+        const dot = k.eval ? " w-eval" : k.theory ? " w-theory" : "";
+        const on = sec.id === open;
+        const name = sec.kind === "ladder" ? `Section ${sectionMark(sec)}` : sec.title;
+        const words =
+          k.look === "done"
+            ? "all right"
+            : k.look === "mixed"
+              ? `${k.right} of ${k.solo} right`
+              : k.look === "current"
+                ? "he is on it"
+                : "not marked yet";
+        return (
+          <button
+            key={sec.id}
+            type="button"
+            class={`fc-lb ${cls}${dot}${on ? " on" : ""}${i > 0 && sec.kind !== "ladder" && shown[i - 1].kind === "ladder" ? " gap" : ""}`}
+            aria-pressed={on}
+            aria-label={`${name}: ${words}${k.eval ? `, ${k.eval} waiting for Evaluation` : ""}${k.theory ? ", theory not taught yet" : ""}`}
+            onClick={() => {
+              if (on) return;
+              const i2 = sectionStart(f, sec, paper.qs, v.marks, doable);
+              if (i2 >= 0) setPaper({ ...paper, at: i2 });
+            }}
+          >
+            {sectionMark(sec)}
+          </button>
+        );
+      })}
+    </HRow>
+  );
+}
+
+/** The open section's questions as small boxes: each mark, the one on screen ringed; teacher questions blue. */
 function FighterStrip(props: { v: View; paper: FighterPaper; at: number }) {
   const { v, paper, at } = props;
   const qs = paper.qs;
   const f = v.f!;
   const redo = new Set(v.st?.doable ?? []);
+  const open = sectionQs(f, qs, at).sec?.id;
   return (
-    <HRow as="ol" class="fc-strip" label="His questions" list={v.s._id} at={at}>
+    <HRow as="ol" class="fc-strip" label="His questions" list={`${v.s._id}:${open}`} at={at}>
       {qs.map((q, i) => {
+        if (f.sectionOf(q).id !== open) return null;
         const s = v.marks[String(q)]?.s;
         const mine = q in paper.base && (paper.base[q]?.s ?? null) !== (s ?? null);
         // Every saved mark shows in colour, from any phone or an earlier visit (1 Nov 2026: after she switched students
         // and came back, his marks looked lost). A question he must redo shows how it was, faintly, until marked again.
         const solid = !!s && (mine || (!redo.has(q) && f.typeOf(q) === "solo"));
         const cls = solid ? ` s-${s}` : s ? ` was` : "";
-        const sec = f.sectionOf(q);
-        const starts = i === 0 || f.sectionOf(qs[i - 1]).id !== sec.id;
         return (
           <li key={q}>
-            {starts && (
-              <em class="fc-secl" aria-hidden="true">
-                {sec.badge || sec.id}
-              </em>
-            )}
             <button
               type="button"
               class={`fc-sq${cls}${i === at ? " on" : ""}${f.typeOf(q) === "teach" ? " fc-tq" : ""}`}

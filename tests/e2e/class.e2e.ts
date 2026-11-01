@@ -1582,9 +1582,14 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
   await textsAre(F.locator(".fc-bk.on i"), ["13"]);
   await contains(F.locator(".fc-qn"), "19");
   await contains(F.locator(".fc-qmeta"), "Section C · Forming the equation");
-  // The whole book in the strip (1 Nov 2026: a section waiting for Theory showed nothing), open at the first he can do.
-  await count(F.locator(".fc-strip .fc-sq"), 61);
+  // The whole book in two rows (1 Nov 2026, his ask): the sections (A–F, P, ★) like the level bar, then the open
+  // section's questions only (C: Q15–Q22, teacher questions blue), open at the first he can do.
+  await textsAre(F.locator(".fc-secbar .fc-lb"), ["A", "B", "C", "D", "E", "F", "P", "★"]);
+  await textsAre(F.locator(".fc-secbar .fc-lb.on"), ["C"]);
+  await textsAre(F.locator(".fc-strip .fc-sq small"), ["15", "16", "17", "18", "19", "20", "21", "22"]);
+  await count(F.locator(".fc-strip .fc-sq.fc-tq"), 3);
   await textsAre(F.locator(".fc-strip .fc-sq.on small"), ["19"]);
+  expect(await F.locator(".fc-strip").evaluate((el) => el.scrollWidth <= el.clientWidth + 1), "one section fits without scrolling").toBe(true);
   await shot(F, "f13-focus-theory-book");
   await tap(F.getByRole("button", { name: "Q19: right" }));
   await contains(F.locator(".fc-qn"), "20");
@@ -1627,6 +1632,15 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
     const m = await nila();
     return !m["19"] && !m["20"] && !m["21"];
   }, "Nila's marks back as they were");
+  // He went home: the home icon beside Marks (1 Nov 2026, his ask), one tap; his paper keeps "Sign him in" (the undo).
+  await tap(name("Kumar"));
+  await tap(F.getByRole("button", { name: /went home: sign him out$/ }));
+  await contains(F.locator(".toast"), "went home");
+  await visible(F.locator(".fc-out"));
+  expect(await F.locator(".fc-gohome").isDisabled()).toBe(true);
+  await shot(F, "f13c-focus-went-home");
+  await tap(F.locator(".fc-out").getByRole("button", { name: "Sign him in" }));
+  await until(async () => !(await F.locator(".fc-gohome").isDisabled()), "Kumar signed in again");
   await F.context().close();
 
   // The smallest phone (320 px): Vimal's last level. Q56 in two parts: he left part ii blank (? on that part only).
@@ -2856,8 +2870,13 @@ test("Topic tute: one zip = the unit's theory book and workbook, both answer key
   await contains(card.locator(".fc-qmeta"), "Section A · First part");
   await contains(card, "Section A's teacher questions aren't taught yet");
   await contains(card.locator(".ev-key"), "A1 B2");
-  await textsAre(C.locator(".fc-strip .fc-sq small"), ["1", "2", "3", "4", "5"]);
-  expect(await C.locator(".fc-strip .fc-secl").allTextContents()).toEqual(["A", "B"]);
+  await textsAre(C.locator(".fc-secbar .fc-lb"), ["A", "B"]);
+  await textsAre(C.locator(".fc-strip .fc-sq small"), ["1", "2"]);
+  // Section B: one tap opens its first question (its teacher question not taught: Q4, the first he can do, or Q3).
+  await C.locator(".fc-secbar").getByRole("button", { name: /^Section B/ }).click();
+  await textsAre(C.locator(".fc-strip .fc-sq small"), ["3", "4", "5"]);
+  await C.locator(".fc-secbar").getByRole("button", { name: /^Section A/ }).click();
+  await textsAre(C.locator(".fc-strip .fc-sq small"), ["1", "2"]);
   // Q1, the teacher question: its answer, and the pad stays in place but marks nothing (Theory teaches it).
   await C.locator(".fc-strip .fc-sq").first().click();
   await contains(card, "Teacher question (Theory teaches it): not taught yet.");

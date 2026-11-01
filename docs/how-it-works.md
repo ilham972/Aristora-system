@@ -387,7 +387,7 @@ two errors: marks on the wrong question and on the wrong student. Meant for the 
   refuses marks and saves on a book someone else holds live (`mustHoldBook` in `focus.mark` and `workbook.correct`).
   Drafts of his other books are never wiped by marks on one book (only drafts of corrected levels; others after 2
   days). Not covered: the Class page's correct sheet doesn't claim (it is refused while someone holds the book).
-- **His paper:** name huge; **Later** (`workbook.levelDone`); **Marks** = Class's `Book` in a sheet; signed out (gone
+- **His paper:** name huge; **Later** (`workbook.levelDone`); **home icon** (`.fc-gohome`, left of Marks, 1 Nov 2026, his ask: signing out took + → find him → sign out): one tap = `students.setPresent` false (`by: "attendance"`), toast "Raj went home, 8:42 pm.", his name leaves the names row (unless a level waits), his paper stays with **Sign him in** (the undo); pale while he is signed out; **Marks** = Class's `Book` in a sheet; signed out (gone
   home, or never signed in): an amber line "Signed out: Evaluation and Theory don't see him" + **Sign him in**
   (`SignedOut`). **His books in one line** under his name (`BookRow`, `e34a29c`, another chat): a book button first
   (`.fc-units`, like + on the names row) opens the units sheet; then his books (`booksOf`: his book now dark, every
@@ -420,8 +420,13 @@ two errors: marks on the wrong question and on the wrong student. Meant for the 
   marks → Evaluation | Theory (Evaluation unless picked), "Save <name> · 14 / 20"; no Undo toast.
 - **Drafts** (`convex/focus.ts`, table `drafts`): every mark on the server 0.9 s after the last tap; any phone resumes;
   counts nowhere until Save. Theory book (1 Nov 2026, his screenshot: a book whose section A waited for Theory
-  showed nothing): **the whole book** in the strip, section by section (the letter above each section's first box,
-  teacher questions with a double ring `.fc-tq`), opening at the first question he can do (`fighterQueue`), else his
+  showed nothing): **the whole book in two rows** (1 Nov 2026, his ask: one row of 61 needed too much scrolling), like
+  a workbook: row 1 = its sections (`FighterSecBar`, the level bar's buttons `.fc-lvbar.fc-secbar`: A–F, P = past papers,
+  ★ = final challenge; `sectionLook`: all right green, all marked amber, the one he is on outlined, the open one
+  ringed; violet dot = wrong ones waiting for Evaluation, blue dot = teacher questions not taught; a tap =
+  `sectionStart`: the first he can do there, else the first not right), row 2 = the open section's questions only
+  (`sectionQs`; teacher questions double-ringed AND filled blue `.fc-tq`); marking the last of a section moves both rows
+  to the next by itself (`nextSolo`). Opening at the first question he can do (`fighterQueue`), else his
   first solo one not right; every question with its answer (the theory book's key) and "Show the question"; ✗ / ↻ /
   big ✓ (`setFighterMark` → `marks.setMany`), then the next solo question (`nextSolo`). **Every tap is saved live** (0.9 s after the last tap on that student and book, at once on another name, Stop or the phone hidden; no Save button, Done at the end only closes the paper). 1 Nov 2026, his report "Fighter marks not saving": marks on a theory book that wasn't his book now (a tute's theory book while he is on its workbook, a book given) were refused and vanished; now `fighterPlace` takes any theory book he has work in (never moves him), and the phone's instant marks are kept per book. Coming back to a student shows every saved mark in colour (the strip) and "Saved: ✓ right" on the card; only a question he must redo (slip, explained) shows faintly. A question of a section whose
   teacher questions aren't taught: marked only if he did it (a line says so). A teacher question: its answer and

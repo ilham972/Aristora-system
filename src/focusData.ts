@@ -13,7 +13,7 @@
 // mark (a level marked to the end saves itself); the level opens by itself (a draft, else the oldest handed in, else
 // the one he is on) and the next level opens after each save; any level can be opened from the level bar.
 
-import { levelOutOf, type MasterLevel } from "../convex/lib/book";
+import { levelOutOf, type Fighter, type MasterLevel, type SectionData } from "../convex/lib/book";
 import { heldBy, type Claim } from "../convex/lib/claims";
 import type { KeyAnswer, KeyPart } from "../convex/lib/key";
 import { homeToCheck, type MLevel, type MQ, type MState } from "../convex/lib/master";
@@ -244,6 +244,52 @@ export function extendQueue(qs: number[], doable: number[]): number[] {
   const last = qs.length ? qs[qs.length - 1] : 0;
   const extra = doable.filter((q) => q > last && !qs.includes(q));
   return extra.length ? [...qs, ...extra] : qs;
+}
+
+// ---- A theory book in two rows (1 Nov 2026, his ask: the whole book in one row scrolled too far) ----
+// Row 1 = the sections (A B C D E F, P = past papers, ★ = the final challenge), like a workbook's level bar;
+// row 2 = the open section's questions only.
+
+/** The letter a section shows on its button. */
+export function sectionMark(sec: SectionData): string {
+  return sec.kind === "ladder" ? sec.badge || sec.id : sec.kind === "past" ? sec.id : "★";
+}
+
+export type SecLook = "done" | "mixed" | "current" | "later";
+
+/**
+ * How a section of his theory book stands: every ladder question right = done (green), all marked with some not right
+ * = mixed (amber), a question he can do now = current (outlined), else later (grey). `eval` = his wrong ones waiting
+ * for Evaluation (a violet dot), `theory` = its teacher questions not all taught (a blue dot).
+ */
+export function sectionLook(
+  sec: SectionData,
+  marks: Readonly<Record<string, { s: string } | undefined>>,
+  doable: readonly number[],
+  pending: readonly number[],
+): { look: SecLook; right: number; solo: number; eval: number; theory: boolean } {
+  const solo = sec.solo;
+  const right = solo.filter((q) => marks[String(q)]?.s === "right").length;
+  const marked = solo.filter((q) => !!marks[String(q)]?.s).length;
+  const doing = solo.some((q) => doable.includes(q));
+  const look: SecLook = doing ? "current" : solo.length > 0 && marked === solo.length ? (right === solo.length ? "done" : "mixed") : "later";
+  const theory = sec.teach.length > 0 && !sec.teach.every((q) => ["taught", "skip"].includes(marks[String(q)]?.s ?? ""));
+  return { look, right, solo: solo.length, eval: solo.filter((q) => pending.includes(q)).length, theory };
+}
+
+/** The open question's section, and that section's questions out of the paper's (in book order). */
+export function sectionQs(f: Fighter, qs: readonly number[], at: number): { sec: SectionData | null; list: number[] } {
+  if (qs.length === 0) return { sec: null, list: [] };
+  const sec = f.sectionOf(qs[Math.min(at, qs.length - 1)]);
+  return { sec, list: qs.filter((q) => f.sectionOf(q).id === sec.id) };
+}
+
+/** Where a tap on a section opens: the first question he can do there, else the first not right, else its first. */
+export function sectionStart(f: Fighter, sec: SectionData, qs: readonly number[], marks: Readonly<Record<string, { s: string } | undefined>>, doable: readonly number[]): number {
+  const mine = qs.filter((q) => f.sectionOf(q).id === sec.id);
+  const pick =
+    mine.find((q) => doable.includes(q)) ?? mine.find((q) => f.typeOf(q) === "solo" && marks[String(q)]?.s !== "right") ?? mine[0];
+  return pick === undefined ? -1 : qs.indexOf(pick);
 }
 
 // ---- Workbook drafts (convex/focus.ts): a level marked part of the way ----

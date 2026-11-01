@@ -3640,6 +3640,17 @@ body.locked.fc-marking .toasts {
   align-items: center;
   gap: 5px;
 }
+/* He went home: one tap beside Marks (1 Nov 2026). Icon only; pale while he is signed out (stays in its place). */
+.fc-gohome {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  padding-left: 0;
+  padding-right: 0;
+}
+.fc-gohome:disabled {
+  opacity: 0.35;
+}
 
 /* The level bar: every level of his workbook, a small button each (corrected levels by their marks, handed in
    amber, the one he is on outlined, done before the app pale); the open one ringed. */
@@ -8238,24 +8249,24 @@ body.locked.evx-on .toasts {
   margin-top: 8px;
 }
 
-/* Correction's theory-book strip shows the whole book (1 Nov 2026): a section's letter above its first box, teacher
-   questions (Theory's) with a double ring, as on the book's contents page. */
+/* Correction's theory book in two rows (1 Nov 2026, his ask): the sections (.fc-secbar, the level bar's buttons) and
+   the open section's questions. Teacher questions (Theory's, nothing to correct) with a double ring AND filled blue,
+   as on the book's contents page. */
 .fc-strip li {
   position: relative;
 }
-.fc-secl {
-  position: absolute;
-  top: -1px;
-  left: 2px;
-  z-index: 1;
-  font: 800 9px/1 var(--font);
-  font-style: normal;
-  color: var(--theory-ink);
-  pointer-events: none;
+.fc-secbar .fc-lb {
+  flex-basis: 34px;
 }
 .fc-sq.fc-tq {
   border-style: double;
   border-width: 3px;
+  border-color: var(--theory);
+  background: var(--theory-soft);
+  color: var(--theory-ink);
+}
+.fc-sq.fc-tq small {
+  color: var(--theory-ink);
 }
 .fc-teachq {
   margin: 0 0 4px;

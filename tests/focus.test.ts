@@ -40,6 +40,10 @@ import {
   booksOf,
   type Carry,
   type Draft,
+  sectionLook,
+  sectionMark,
+  sectionQs,
+  sectionStart,
 } from "../src/focusData";
 import { asView } from "./views";
 
@@ -373,5 +377,36 @@ describe("his books in one line on the paper (several books at once)", () => {
     ]);
     // Nothing given, no unit: an empty row (the book button still opens his units).
     expect(booksOf(asView({ s: { _id: "Zainab" }, unit: null, stage: "legend" }), no)).toEqual([]);
+  });
+});
+
+describe("a theory book in two rows: sections, then the open section's questions (1 Nov 2026)", () => {
+  const f = fighter(PILOT_FIGHTER);
+  const C = f.sectionById("C")!;
+  test("the letters: A–F, P for the past papers, ★ for the final challenge", () => {
+    expect(f.sections.map(sectionMark)).toEqual(["A", "B", "C", "D", "E", "F", "P", "★"]);
+  });
+  test("the open question's section and only its questions", () => {
+    const at = f.all.indexOf(19);
+    expect(sectionQs(f, f.all, at)).toEqual({ sec: C, list: [15, 16, 17, 18, 19, 20, 21, 22] });
+    expect(sectionQs(f, f.all, f.all.length).sec?.id).toBe("X");
+    expect(sectionQs(f, [], 0)).toEqual({ sec: null, list: [] });
+  });
+  test("how a section stands: later, current, mixed, done; dots for Evaluation and untaught theory", () => {
+    const m = (o: Record<number, string>) => Object.fromEntries(Object.entries(o).map(([q, s]) => [q, { s }]));
+    expect(sectionLook(C, {}, [], [])).toMatchObject({ look: "later", theory: true, eval: 0 });
+    const taught = { 15: "taught", 16: "taught", 17: "skip" };
+    expect(sectionLook(C, m(taught), [18], [])).toMatchObject({ look: "current", theory: false });
+    const allRight = m({ ...taught, 18: "right", 19: "right", 20: "right", 21: "right", 22: "right" });
+    expect(sectionLook(C, allRight, [], [])).toMatchObject({ look: "done", right: 5, solo: 5 });
+    const oneWrong = m({ ...taught, 18: "right", 19: "right", 20: "wrong", 21: "right", 22: "right" });
+    expect(sectionLook(C, oneWrong, [], [20])).toMatchObject({ look: "mixed", right: 4, eval: 1 });
+  });
+  test("a tap on a section opens the first he can do there, else the first not right, else its first", () => {
+    const at = (q: number) => f.all.indexOf(q);
+    expect(sectionStart(f, C, f.all, {}, [19, 30])).toBe(at(19));
+    expect(sectionStart(f, C, f.all, { 18: { s: "right" } }, [])).toBe(at(19));
+    expect(sectionStart(f, C, f.all, {}, [])).toBe(at(18));
+    expect(sectionStart(f, C, [1, 2, 3], {}, [])).toBe(-1);
   });
 });
