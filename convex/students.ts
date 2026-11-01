@@ -213,7 +213,9 @@ export const openTwin = mutation({
     const twin = args.stage === "fighter" ? "master" : "fighter";
     if (s.unitId !== args.unitId) fail("That book isn't his topic now.");
     const book = await bookFor(ctx, args.unitId, args.stage);
-    if (!book?.tute || !(await bookFor(ctx, args.unitId, twin))) fail("Only a topic tute's two books go together.");
+    const other = await bookFor(ctx, args.unitId, twin);
+    if (!book || !other) fail("This unit doesn't have that book in the app.");
+    if (!book.tute && !other.tute) fail("Only a topic tute's two books go together: open it from his units sheet.");
     await ensureProgress(ctx, s._id, args.unitId, args.stage, Date.now());
     return true;
   },

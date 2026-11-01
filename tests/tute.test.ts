@@ -202,6 +202,24 @@ describe("saving a tute", () => {
     await expect(t.mutation(api.students.openTwin, { id, unitId: g11u1, stage: "master" })).rejects.toThrow(/isn't his topic now/);
   });
 
+  test("a tute uploaded before the twin mark (his Simultaneous equations): the data step marks both books; its papers open", async () => {
+    const [r] = read() as ReadTute[];
+    await t.mutation(api.catalog.saveTute, args(r));
+    await raw.run(async (ctx) => {
+      for (const b of await ctx.db.query("books").withIndex("by_unit_stage", (q) => q.eq("unitId", unitId)).collect()) await ctx.db.patch(b._id, { tute: undefined });
+      const meta = (await ctx.db.query("meta").withIndex("by_key", (q) => q.eq("key", "data")).first())!;
+      await ctx.db.patch(meta._id, { value: 3 });
+    });
+    const id = await t.mutation(api.students.add, { name: "Miha", grade: 11, term: 3, stage: "fighter", unitId });
+    await expect(t.mutation(api.students.openTwin, { id, unitId, stage: "master" })).rejects.toThrow(/Only a topic tute's two books/);
+    expect((await t.mutation(api.setup.ensure, {})).changed).toBe(true);
+    expect([(await doc("fighter"))!.tute, (await doc("master"))!.tute]).toEqual([true, true]);
+    expect(await t.mutation(api.students.openTwin, { id, unitId, stage: "master" })).toBe(true);
+    // A school workbook (starts at question 1) is never taken for a tute.
+    const books = await raw.run(async (ctx) => await ctx.db.query("books").collect());
+    expect(books.filter((b) => b.tute).map((b) => b.unitId)).toEqual([unitId, unitId]);
+  });
+
   test("refused: papers overlapping the ladder, a part that isn't an essay part, missing marks", async () => {
     const [r] = read() as ReadTute[];
     const a = args(r);

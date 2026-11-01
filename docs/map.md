@@ -104,7 +104,7 @@ The technical memory of the app, kept with the code and updated in the same comm
 | `lib/family.ts`, `lib/phone.ts` | his Worlds (`worldsOf`, `levelStates`, `weekXp`, `streakOf`); home marking from the key (`phoneKey`, `markQuestion`, `boxCount`, `wantWords`, `allPhone`, `phoneShare`) |
 | `catalog.ts` | `units`, `books` (+`keyCount`, `qCount`), `key` (+`stage`), `question`, `bookCss`, `saveWorkbook` (+`key`; drops the questions when the book's numbers change), `saveTute` (a topic tute: both books + both keys, `saveTuteBook`, `bookShape`), `saveQuestions`, `renameUnit` |
 | `sessions.ts` | `end` (End the session) |
-| `setup.ts` | `ensure()`: one-time data updates; `DATA_VERSION` (3: step 4 gives the family app's index numbers, step 5 seeds the 53 OL topics once) |
+| `setup.ts` | `ensure()`: one-time data updates; `DATA_VERSION` (4: step 4 gives the family app's index numbers, step 5 seeds the 53 OL topics once, step 6 marks tutes uploaded before `books.tute`) |
 | `demo.ts` | owner only: `load` (14 students: 10 G11 Fighter, Malik/Priya/Vimal G7 Master, Zainab G9 Legend; the 13 in class get visits; Keerthi is not in; only into an empty real class), `remove` (`test`: the test students, else the demo ones; `wipe`: calls, progress, visits, handouts, drafts, claims); the test class: `testInfo` (query: real students per grade, copies, cases), `copyGrade` (`testName`, `copyOf`), `cases` (`fighterCases` (from the unit's own theory book), `M_CASES`, `caseMaster`, `twoWorkbooks`: the extra test students), `TEST_CAP` 120 |
 | `clock.ts` | `ping` (server time, public) |
 

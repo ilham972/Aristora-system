@@ -375,7 +375,8 @@ two errors: marks on the wrong question and on the wrong student. Meant for the 
   books saved by a tute upload carry `books.tute`; his books row always shows the twin of his book now (`booksOf`),
   the board sends the twin's row even with nothing waiting (`state.get`), a move onto a tute book makes both rows,
   and a tap opens the twin without moving him (no row yet: `students.openTwin` makes it, then it opens). A paper
-  finds its book by unit AND stage (`viewOfPaper`: the two books share their unit).
+  finds its book by unit AND stage (`viewOfPaper`: the two books share their unit). Tutes uploaded before the mark got it
+  from data step 6 (`DATA_VERSION` 4: a workbook starting after question 1 + a theory book in its unit).
   **One corrector per book:** the open book is claimed (`claims` table, `convex/focus.ts`: `claim`, `release`;
   `src/focus.tsx` `holdFor`/`claimBook`); her phone says "still here" every 20 s while the page is on screen
   (`stillHere`, `CLAIM_PING_MS`); a minute of silence (phone locked, other tab) and anyone can take it ("Nisha's phone

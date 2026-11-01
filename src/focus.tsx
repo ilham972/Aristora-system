@@ -1550,7 +1550,7 @@ function BookRow(props: { v: View; open: string | undefined; openStage: string |
                 onClick={() => {
                   if (on) return;
                   if (bv) openBook(bv, serverNow());
-                  else if (b.unitId === v.s.unitId && b.stage !== v.stage) void openTwin(v, b.stage);
+                  else if (b.unitId === v.s.unitId && b.stage !== v.stage && bookDocAt(b.unitId, v.stage ?? "")?.tute) void openTwin(v, b.stage);
                   else void moveTo(v, b.stage, u);
                 }}
               >

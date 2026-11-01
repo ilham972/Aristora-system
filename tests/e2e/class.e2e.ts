@@ -240,7 +240,8 @@ async function evCallOnly(p: Page, names: string[]) {
 async function evArrive(p: Page, names: string[]) {
   for (const n of names) await until(async () => /\bs-(walk|call)\b/.test((await evPill(p, n).getAttribute("class")) ?? ""), `${n} on the way`);
   await evArrived(p).click();
-  for (const n of names) await until(async () => /\bs-(in|done|th)\b/.test((await evPill(p, n).getAttribute("class")) ?? ""), `${n} is with her`);
+  // 12 s: with every run-through's phones on one machine, an Arrived can take longer than the usual 6 s to come back.
+  for (const n of names) await until(async () => /\bs-(in|done|th)\b/.test((await evPill(p, n).getAttribute("class")) ?? ""), `${n} is with her`, 12_000);
 }
 /** His file (his pill in her room tapped): a sheet. */
 async function evFile(p: Page, name: string): Promise<L> {

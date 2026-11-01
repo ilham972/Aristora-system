@@ -7,7 +7,7 @@ import { actor } from "./lib/auth";
 import { giveIndex } from "./lib/family";
 
 /** Bump when ensure() has new one-time work to do. */
-export const DATA_VERSION = 3;
+export const DATA_VERSION = 4;
 
 /**
  * One-time data updates, safe to run any number of times (every phone calls it when the app opens):
@@ -92,6 +92,17 @@ export const ensure = mutation({
     //    (removed ones too: a number is never reused). Demo and test students have none.
     const unnumbered = (await ctx.db.query("students").collect()).filter((s) => !s.demo && !s.test && typeof s.index !== "number");
     for (const s of unnumbered.sort((a, b) => a._creationTime - b._creationTime)) await giveIndex(ctx, s);
+
+    // 6. Topic tutes uploaded before `books.tute` (version 4, 1 Nov 2026, his screenshot: the past papers of his
+    //    Simultaneous equations tute wouldn't open beside its ladder): a tute's workbook goes on from its ladder (its
+    //    first question is after 1) and its unit has the theory book: both are marked as the tute's two books.
+    for (const b of await ctx.db.query("books").collect()) {
+      if (b.stage !== "master" || b.data.kind !== "master" || b.tute || (b.data.parts[0]?.from ?? 1) <= 1) continue;
+      const f = await bookFor(ctx, b.unitId, "fighter");
+      if (!f) continue;
+      await ctx.db.patch(b._id, { tute: true });
+      if (!f.tute) await ctx.db.patch(f._id, { tute: true });
+    }
 
     if (meta) await ctx.db.patch(meta._id, { value: DATA_VERSION });
     else await ctx.db.insert("meta", { key: "data", value: DATA_VERSION });
