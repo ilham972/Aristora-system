@@ -7,7 +7,7 @@ import { query } from "./_generated/server";
 import { viewer } from "./lib/auth";
 import { masterState } from "./lib/backend";
 import { bookTotal, fighter } from "./lib/book";
-import { computeMaster } from "./lib/master";
+import { computeMaster, homeToCheck } from "./lib/master";
 import { slDay } from "./lib/day";
 import { daysBetween, summarizeFighter, summarizeMaster, type Cell } from "./lib/progress";
 import { computeStatus, type Marks } from "./lib/status";
@@ -132,13 +132,21 @@ export const book = query({
       const marks: Record<string, string> = {};
       const mq: Record<string, { got?: number; max?: number; dk?: boolean; x?: boolean; th?: boolean; tt?: boolean }> = {};
       const lv: Record<string, { done?: boolean; fixed?: boolean; pre?: boolean }> = {};
+      // What waits for the corrector in this book (2 Nov 2026, his ask: "am I missing anything?"): levels handed in
+      // and not corrected (since when), and levels marked at home by his phone, not checked yet.
+      const waits: { n: number; at: number; home?: true }[] = [];
       if (p && doc.data.kind === "fighter") for (const [k, mk] of Object.entries(p.marks)) marks[k] = mk.s;
       if (p && doc.data.kind === "master") {
         const m = masterState(p);
         for (const [k, r] of Object.entries(m.q)) mq[k] = { got: r.got, max: r.max, dk: r.dk || undefined, x: !!r.x || undefined, th: !!r.th || undefined, tt: !!r.tt || undefined };
-        for (const [k, l] of Object.entries(m.lv)) if (l) lv[k] = { done: !!l.done || undefined, fixed: !!l.fixed || undefined, pre: !!l.pre || undefined };
+        for (const [k, l] of Object.entries(m.lv)) {
+          if (!l) continue;
+          lv[k] = { done: !!l.done || undefined, fixed: !!l.fixed || undefined, pre: !!l.pre || undefined };
+          if (l.done && !l.fixed) waits.push({ n: Number(k), at: l.done });
+          else if (homeToCheck(l)) waits.push({ n: Number(k), at: l.home!, home: true });
+        }
       }
-      rows.push({ _id: s._id, name: s.name, grade: s.grade ?? null, present: s.present, cameToday: came.has(s._id), current, cells: { [args.unitId]: cell }, marks, mq, lv });
+      rows.push({ _id: s._id, name: s.name, grade: s.grade ?? null, present: s.present, cameToday: came.has(s._id), current, cells: { [args.unitId]: cell }, marks, mq, lv, waits });
     }
     rows.sort((a, b) => a.name.localeCompare(b.name));
     return {

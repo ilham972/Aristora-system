@@ -317,6 +317,62 @@ async function refreshOut(ctx: Parameters<typeof refresh>[0], id: Parameters<typ
   await refresh(ctx, id, now, session);
 }
 
+type Sessionish = Awaited<ReturnType<typeof currentSession>>;
+
+/**
+ * One student in or out (the body of setPresent, shared with setPresentMany). In: the first sign-in starts the session
+ * (read him after it: a class left open since yesterday has just signed everyone out). Out: his calls end; `undo`
+ * within UNDO_IN_MS deletes the visit, as if he never came. Returns what changed.
+ */
+async function presentOne(
+  ctx: Parameters<typeof refresh>[0],
+  id: Id<"students">,
+  present: boolean,
+  undo: boolean,
+  by: string | undefined,
+  now: number,
+  session: Sessionish,
+): Promise<"in" | "out" | "undone" | "same"> {
+  const s = await getStudent(ctx, id);
+  if (present) {
+    let changed = false;
+    if (!s.present) {
+      await ctx.db.patch(s._id, { present: true, lastActivityAt: now, lastInAt: now });
+      await startVisit(ctx, s._id, now, session!);
+      await log(ctx, session, now, { kind: "in", by, studentId: s._id, name: s.name });
+      changed = true;
+    }
+    await refresh(ctx, s._id, now, session);
+    return changed ? "in" : "same";
+  }
+  for (const c of await activeCalls(ctx, s._id)) {
+    await ctx.db.patch(c._id, { status: c.status === "sent" ? "done" : "cancelled", endedAt: now });
+  }
+  if (!s.present) {
+    await refreshOut(ctx, s._id, now, session);
+    return "same";
+  }
+  const visit = await lastVisit(ctx, s._id);
+  if (undo && visit && visit.outAt === undefined && now - visit.inAt <= UNDO_IN_MS) {
+    // Tapped by mistake: he was never here. No visit, no idle time, his last arrival as before.
+    await ctx.db.delete(visit._id);
+    const before = await lastVisit(ctx, s._id);
+    await ctx.db.patch(s._id, {
+      present: false,
+      room: undefined,
+      idleSince: undefined,
+      idleReason: undefined,
+      lastInAt: before?.inAt,
+    });
+    await log(ctx, session, now, { kind: "in-undo", by, studentId: s._id, name: s.name });
+    return "undone";
+  }
+  await endVisit(ctx, s._id, now);
+  await log(ctx, session, now, { kind: "out", by, studentId: s._id, name: s.name });
+  await refreshOut(ctx, s._id, now, session);
+  return "out";
+}
+
 /**
  * Attendance: tap in when he arrives (the time goes in the register), tap out when he leaves.
  * The first tap-in starts the session. `undo` takes back a sign-in tapped by mistake: the visit is deleted,
@@ -336,48 +392,48 @@ export const setPresent = mutation({
     const first = await getStudent(ctx, args.id);
     if (first.archived) fail(`${first.name} was removed from the class.`);
     const by = cleanBy(args.by);
-    if (args.present) {
-      const session = await ensureSession(ctx, now, by);
-      // Read him after the session check: a class left open since yesterday has just signed everyone out.
-      const s = await getStudent(ctx, args.id);
-      if (!s.present) {
-        await ctx.db.patch(s._id, { present: true, lastActivityAt: now, lastInAt: now });
-        await startVisit(ctx, s._id, now, session);
-        await log(ctx, session, now, { kind: "in", by, studentId: s._id, name: s.name });
-      }
-      await refresh(ctx, s._id, now, session);
-      await touch(ctx, session, now);
-      return true;
-    }
-    const session = await currentSession(ctx, now);
-    const s = await getStudent(ctx, args.id);
-    for (const c of await activeCalls(ctx, s._id)) {
-      await ctx.db.patch(c._id, { status: c.status === "sent" ? "done" : "cancelled", endedAt: now });
-    }
-    if (!s.present) {
-      await refreshOut(ctx, s._id, now, session);
-      return true;
-    }
-    const visit = await lastVisit(ctx, s._id);
-    if (args.undo && visit && visit.outAt === undefined && now - visit.inAt <= UNDO_IN_MS) {
-      // Tapped by mistake: he was never here. No visit, no idle time, his last arrival as before.
-      await ctx.db.delete(visit._id);
-      const before = await lastVisit(ctx, s._id);
-      await ctx.db.patch(s._id, {
-        present: false,
-        room: undefined,
-        idleSince: undefined,
-        idleReason: undefined,
-        lastInAt: before?.inAt,
-      });
-      await log(ctx, session, now, { kind: "in-undo", by, studentId: s._id, name: s.name });
-      await touch(ctx, session, now);
-      return true;
-    }
-    await endVisit(ctx, s._id, now);
-    await log(ctx, session, now, { kind: "out", by, studentId: s._id, name: s.name });
-    await refreshOut(ctx, s._id, now, session);
+    const session = args.present ? await ensureSession(ctx, now, by) : await currentSession(ctx, now);
+    await presentOne(ctx, args.id, args.present, !!args.undo, by, now, session);
     await touch(ctx, session, now);
     return true;
+  },
+});
+
+/** At most this many in one tap (the class is capped at 120 students). */
+export const MANY_MAX = 200;
+
+/**
+ * Several students in or out at once (2 Nov 2026, his ask): Attendance's "Sign in" list (the ones she left ticked) and
+ * "Sign out all" for one grade. Each is exactly one setPresent; removed students and ones already so are skipped.
+ * `undo` takes back a "Sign in" of several (its toast's Undo). Returns how many changed.
+ */
+export const setPresentMany = mutation({
+  args: {
+    token: v.optional(v.string()),
+    ids: v.array(v.id("students")),
+    present: v.boolean(),
+    undo: v.optional(v.boolean()),
+    by: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["correction"], args.by);
+    if (args.ids.length > MANY_MAX) fail(`At most ${MANY_MAX} students at once.`);
+    const now = Date.now();
+    const by = cleanBy(args.by);
+    const ids = [...new Set(args.ids)];
+    // The session first, then read them: a class left open since yesterday has just signed everyone out.
+    const session = args.present ? await ensureSession(ctx, now, by) : await currentSession(ctx, now);
+    const live: Id<"students">[] = [];
+    for (const id of ids) {
+      const s = await ctx.db.get(id);
+      if (s && !s.archived && s.present !== args.present) live.push(id);
+    }
+    let changed = 0;
+    for (const id of live) {
+      const r = await presentOne(ctx, id, args.present, !!args.undo, by, now, session);
+      if (r !== "same") changed++;
+    }
+    await touch(ctx, session, now);
+    return { changed };
   },
 });

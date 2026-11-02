@@ -1315,8 +1315,14 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
   await visible(F.locator(".fc-lb.fixed.on, .fc-lb.current.on", { hasText: "2" }));
   await says(F.locator(".fc-lvline"), "Level 2 · Q11–20");
   await contains(F.locator(".fc-qn"), "11");
-  await contains(F.locator(".fc-ans"), "A11");
-  await contains(F.locator(".fc-qmeta"), "Part I · 2 marks");
+  await contains(F.locator(".fc-ans .ka-h"), "A11");
+  await contains(F.locator(".fc-qmeta"), "2 marks");
+  expect(await F.locator(".fc-card").getAttribute("aria-label")).toBe("Question 11, Part I, 2 marks");
+  // The answer is the big thing (2 Nov 2026, his ask): one line, far bigger than the question's number; no pale
+  // "No question text" line under it.
+  const big = await F.locator(".fc-ans .ka").evaluate((e) => parseFloat(getComputedStyle(e).fontSize));
+  expect(big).toBeGreaterThanOrEqual(56);
+  await count(F.locator(".fc-card .bq-btn, .fc-card .fc-qdoc"), 0);
   await shot(F, "f02-focus-question");
   // Full marks is the big button; the next question comes by itself.
   await tap(F.locator(".fc-go"));
@@ -1357,6 +1363,15 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
   await contains(F.locator(".fc-qn"), "21");
   await visible(F.locator(".fc-lb.fixed", { hasText: "2" }));
 
+  // The sheet button (a bar chart, 2 Nov 2026): what waits for her in this book, with how long; one tap opens it.
+  await tap(F.getByRole("button", { name: /^This book's questions/ }));
+  await namesAre(F.locator(".br-todo .br-ck b"), ["Malik", "Vimal"]);
+  await contains(F.locator(".br-todo .br-ck-h"), "To correct · 2");
+  await shot(F, "f06f-sheet-to-correct");
+  await tap(F.locator(".br-todo .br-ck", { hasText: "Malik" }));
+  await count(F.locator(".br-sheet"), 0);
+  await says(F.locator(".fc-lvline"), "Level 3 · Q21–30");
+  await contains(F.locator(".fc-name"), "Malik");
   // Malik: his paper opens at once at the level he handed in (L3, the oldest); every question full; Save.
   await tap(name("Malik"));
   await count(F.locator(".toast"), 0);
@@ -1438,7 +1453,7 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
   await tap(F.getByRole("button", { name: /^Grade 8\b/ }));
   await textsAre(F.locator(".fc-nm"), ["Nimal"]);
   await tap(name("Nimal"));
-  await contains(F.locator(".fc-nokey"), "No answer key for this workbook yet");
+  await contains(F.locator(".fc-card .fc-anote"), "No answer key for this workbook yet");
   await tap(F.locator(".fc-go"));
   await contains(F.locator(".fc-qn"), "2");
   await evCallOnly(E, ["Malik"]);
@@ -1689,7 +1704,10 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
   const pinned = async () => (await S.locator(".fc-stick").boundingBox())!;
   expect((await pinned()).y).toBeGreaterThanOrEqual(topH - 1);
   expect((await S.locator(".fc-nm.on", { hasText: "Vimal" }).boundingBox())!.y).toBeGreaterThanOrEqual(topH - 1);
-  await textsAre(S.locator(".fc-part .fc-pt em"), ["i)", "ii)"]);
+  await textsAre(S.locator(".fc-part .fc-pl"), ["i", "ii"]);
+  // Each part: its answer big (the working small above it), its marks in one row under it.
+  await textsAre(S.locator(".fc-part .ka-h"), ["B56", "C56"]);
+  await textsAre(S.locator(".fc-part .ka-w"), ["work →"]);
   await says(S.locator(".fc-go"), "4 / 4");
   // The parts give the marks: no number row, just "?" (the whole question) and the big button; the parts, the name and
   // the strip on screen above the pad (the tap on the name already turned the alerts banner off).
@@ -1808,6 +1826,100 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
   expect((await marksOf(backend, "Malik")).present).toBe(true);
   await M.context().close();
   await E.context().close();
+  expect(problems, problems.join("\n")).toEqual([]);
+});
+
+test("Attendance: sign in all / sign out all for one grade (Correction's +), everyone for the whole class (the count), Undo", async () => {
+  const backend = await newClass();
+  const F = await phone(backend, "focus");
+  await F.getByRole("button", { name: "Settings" }).click();
+  await F.getByRole("button", { name: "Load demo students (three grades)" }).click();
+  await visible(F.getByText(/^14 demo students loaded/));
+  await F.getByRole("button", { name: "Back to the class" }).click();
+  const att = F.locator(".sheet-wrap.fullpage");
+  const ask = F.locator(".sheet-wrap:not(.fullpage)");
+  const many = F.locator(".sheet-wrap.att-many");
+  const present = async (names: string[]) => Promise.all(names.map(async (n) => (await marksOf(backend, n)).present));
+  const G11 = ["Ahamed", "Dilan", "Fathima", "Keerthi", "Kumar", "Nila", "Rizwan", "Sana", "Tharun", "Yasmin"];
+
+  // Grade 11 from +: 9 of 10 here. At the bottom: Sign in all (Keerthi) and Sign out all (9).
+  await F.getByRole("button", { name: /^Grade 11\b/ }).click();
+  await F.getByRole("button", { name: "Attendance: Grade 11" }).click();
+  await contains(att.locator(".sheet-title h2"), "Attendance · Grade 11");
+  await visible(att.getByRole("button", { name: "Sign in all: 1 not here" }));
+  // Sign out all: a sheet asks, naming them. Nine go home; the class goes on (Grade 7 stays in).
+  await att.getByRole("button", { name: "Sign out all: 9 here" }).click();
+  await contains(ask.locator("h2"), "Sign out Grade 11?");
+  await contains(ask.locator(".sheet-title p"), "9 students go home now.");
+  await contains(ask.locator(".atm-names"), "Ahamed, Dilan, Fathima");
+  await shot(F, "a01-attendance-sign-out-grade");
+  await ask.getByRole("button", { name: "Sign out 9" }).click();
+  await contains(F.locator(".toast"), "9 students signed out");
+  await until(async () => (await present(G11)).every((p) => !p), "Grade 11 went home");
+  expect((await present(["Malik", "Priya", "Vimal", "Zainab"])).every(Boolean)).toBe(true);
+  await contains(att.locator(".attendance .summary"), "Grade 11: 0 of 10 here");
+  expect(await backend.t.run(async (ctx) => (await ctx.db.query("sessions").collect()).filter((s) => s.open).length)).toBe(1);
+
+  // Sign in all: a list with everyone ticked but those who went home today (Keerthi only). She ticks two more: 3.
+  await att.getByRole("button", { name: "Sign in all: 10 not here" }).click();
+  await contains(many.locator("h2"), "Sign in Grade 11");
+  await contains(many.locator(".sheet-title p"), "Untick anyone who isn't in the hall.");
+  await textsAre(many.locator(".atm.on .ap-n"), ["Keerthi"]);
+  await count(many.locator(".atm-h"), 0); // one grade: no grade headings
+  await many.getByRole("button", { name: /^Ahamed:/ }).click();
+  await many.getByRole("button", { name: /^Dilan:/ }).click();
+  await textsAre(many.locator(".atm.on .ap-n"), ["Ahamed", "Dilan", "Keerthi"]);
+  await shot(F, "a02-attendance-sign-in-list");
+  await many.getByRole("button", { name: "Sign in 3" }).click();
+  await count(many, 0);
+  await contains(F.locator(".toast"), "3 students signed in, ");
+  await until(async () => (await present(["Ahamed", "Dilan", "Keerthi"])).every(Boolean), "three signed in");
+  // A wrong list: Undo takes all three back, as if they never came.
+  await F.locator(".toast").getByRole("button", { name: "Undo" }).click();
+  await contains(F.locator(".toast"), "Sign-in taken back for 3 students.");
+  await until(async () => (await present(["Ahamed", "Dilan", "Keerthi"])).every((p) => !p), "taken back");
+  const keerthiVisits = await backend.t.run(async (ctx) => {
+    const k = (await ctx.db.query("students").collect()).find((s) => s.name === "Keerthi")!;
+    return (await ctx.db.query("attendance").withIndex("by_student", (q) => q.eq("studentId", k._id)).collect()).length;
+  });
+  expect(keerthiVisits).toBe(0);
+  await att.getByRole("button", { name: "Close" }).click();
+  await count(att, 0);
+
+  // The count by the clock: the whole class. Sign in everyone = the list by grade (Tick all per grade).
+  await F.locator(".top-stat").click();
+  await contains(att.locator(".sheet-title h2"), "Attendance");
+  await att.getByRole("button", { name: "Sign in everyone: 10 not here" }).click();
+  await textsAre(many.locator(".atm-h b"), ["Grade 11"]);
+  await contains(many.locator(".atm-h"), "1 of 10");
+  await many.getByRole("button", { name: "Tick all" }).click();
+  await contains(many.locator(".atm-h"), "10 of 10");
+  await many.getByRole("button", { name: "Sign in 10" }).click();
+  await until(async () => (await present(G11)).every(Boolean), "all of Grade 11 in");
+  // Sign out everyone = End the session: everyone out, the class closed with its report.
+  await att.getByRole("button", { name: "Sign out everyone: 14 here" }).click();
+  await contains(ask.locator("h2"), "Sign out everyone and end the class?");
+  await contains(ask.locator(".sheet-title p"), "14 students go home now, open calls close, and today's report is saved.");
+  await shot(F, "a03-attendance-sign-out-everyone");
+  await ask.getByRole("button", { name: "Sign out everyone" }).click();
+  await contains(F.locator(".toast"), "Class ended: everyone signed out.");
+  const sessions = await backend.t.run(async (ctx) => (await ctx.db.query("sessions").collect()).map((s) => ({ open: s.open, report: !!s.report })));
+  expect(sessions.at(-1)).toEqual({ open: false, report: true });
+  expect(await backend.t.run(async (ctx) => (await ctx.db.query("students").collect()).filter((s) => s.present).length)).toBe(0);
+  await visible(att.getByRole("button", { name: /^Sign in everyone/ }));
+  expect(await att.getByRole("button", { name: /^Sign out everyone/ }).isDisabled()).toBe(true);
+  await F.context().close();
+
+  // The smallest phone: the two buttons side by side, nothing sideways.
+  const S = await phone(backend, "focus", { ...PHONE, viewport: { width: 320, height: 568 } });
+  await S.locator(".top-stat").click();
+  const foot = S.locator(".sheet-wrap.fullpage .att-all");
+  await visible(foot);
+  const boxes = await foot.locator(".btn").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
+  expect(new Set(boxes).size).toBe(1);
+  expect(await S.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(S, "a04-attendance-320");
+  await S.context().close();
   expect(problems, problems.join("\n")).toEqual([]);
 });
 
@@ -1985,6 +2097,9 @@ test("Theory: one screen like Evaluation: grade, stage, unit and lesson rows; he
   await evCallOnly(T, ["Nila"]);
   await hears(C, "Nila, go to Owner in Theory.");
   await C.locator(".call-strip.theory").getByRole("button", { name: /^Sent/ }).click();
+  // Her phone must show Nila walking (Sent reached it) before Arrived: an Arrived tapped while Nila was still only
+  // called took Dilan alone (a race in the test, seen 2 Nov 2026 under load).
+  await until(async () => /\bs-walk\b/.test((await evPill(T, "Nila").getAttribute("class")) ?? ""), "Nila on her way");
   await evArrive(T, ["Dilan", "Nila"]);
   for (const q of ["23", "24", "25", "26"]) {
     await contains(T.locator(".evx-card .fc-qn"), q);
@@ -2898,7 +3013,7 @@ test("Topic tute: one zip = the unit's theory book and workbook, both answer key
   const card = C.locator(".fc-card.fighter");
   await contains(card.locator(".fc-qmeta"), "Section A · First part");
   await contains(card, "Section A's teacher questions aren't taught yet");
-  await contains(card.locator(".ev-key"), "A1 B2");
+  await contains(card.locator(".fc-ans .ka-h"), "A1 B2");
   await textsAre(C.locator(".fc-secbar .fc-lb"), ["A", "B"]);
   await textsAre(C.locator(".fc-strip .fc-sq small"), ["1", "2"]);
   // Section B: one tap opens its first question (its teacher question not taught: Q4, the first he can do, or Q3).
@@ -2909,7 +3024,8 @@ test("Topic tute: one zip = the unit's theory book and workbook, both answer key
   // Q1, the teacher question: its answer, and the pad stays in place but marks nothing (Theory teaches it).
   await C.locator(".fc-strip .fc-sq").first().click();
   await contains(card, "Teacher question (Theory teaches it): not taught yet.");
-  await contains(card.locator(".ev-key"), "**4**".replace(/\*/g, ""));
+  await textsAre(card.locator(".fc-ans .fc-pl"), ["i", "ii"]);
+  await textsAre(card.locator(".fc-ans .ka-h"), ["3", "4"]);
   expect(await C.locator(".fc-pad .fc-n.wrong").isDisabled()).toBe(true);
   await shot(C, "t03a-correction-teacher-question");
   // Its other book (the past papers) sits beside it; one tap opens it with its answers, and he stays on the ladder.
@@ -2920,8 +3036,8 @@ test("Topic tute: one zip = the unit's theory book and workbook, both answer key
   await C.locator(".fc-bk", { has: C.locator("b.st-fighter") }).click();
   await visible(C.locator(".fc-card.fighter"));
   await C.locator(".fc-strip .fc-sq").nth(1).click();
-  await contains(card.locator(".ev-key"), "A1 B2");
-  const toggle = card.getByRole("button", { name: "Show the question" });
+  await contains(card.locator(".fc-ans .ka-h"), "A1 B2");
+  const toggle = card.getByRole("button", { name: /^Show .+ as printed$/ });
   await toggle.click();
   await until(
     async () => (await card.locator(".bq-view").evaluate((el) => el.shadowRoot?.querySelector(".qv .qs")?.textContent ?? "")).includes("மாதிரி வினா இரண்டு"),

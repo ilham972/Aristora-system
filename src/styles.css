@@ -2697,6 +2697,54 @@ p.small {
 .ap.left .ap-t {
   color: var(--ink-3);
 }
+/* Sign in / out several (2 Nov 2026): two buttons at the bottom of Attendance, each with how many it would take. */
+.att-all .btn {
+  gap: 8px;
+  padding: 0 12px;
+  line-height: 1.15;
+}
+.att-all .btn small {
+  min-width: 24px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--line-2);
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ink);
+}
+/* The list to sign in: every name ticked (green with ✓); she unticks whoever isn't in the hall. */
+.atm-g + .atm-g {
+  margin-top: 6px;
+}
+.atm-h {
+  margin: 0 0 8px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 15px;
+}
+.atm-h span {
+  color: var(--ink-3);
+  font-weight: 700;
+}
+.atm-h .link-btn {
+  margin-left: auto;
+  font-size: 14px;
+}
+.ap.atm {
+  border-style: dashed;
+  color: var(--ink-2);
+}
+.ap.atm.on {
+  border-style: solid;
+  border-color: var(--green);
+  background: var(--green-soft);
+  color: var(--green-ink);
+}
+.atm-names {
+  font-weight: 700;
+  color: var(--ink);
+}
 .gone {
   display: flex;
   flex-direction: column;
@@ -4175,25 +4223,70 @@ body.locked.fc-marking .toasts {
     animation: none;
   }
 }
+/* The card's top line (2 Nov 2026, his ask: the answer gets the room): the question's number as a dark pill, its marks,
+   then ‹ back and the printed question's icon. Evaluation's and Theory's cards keep their big .fc-q number below. */
 .fc-qhead {
-  min-height: 30px;
+  min-height: 36px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
 }
-.fc-back {
-  padding: 4px 10px 4px 0;
-  border: 0;
-  background: none;
+.fc-qhead .fc-qn {
+  flex: none;
+  display: inline-flex;
+  align-items: baseline;
+  padding: 3px 11px 4px;
+  border-radius: 10px;
+  background: var(--ink);
+  color: #fff;
+  font: 700 27px/1.05 var(--cond);
+  letter-spacing: -0.3px;
+}
+.fc-qhead .fc-qn small {
+  margin-right: 1px;
+  font-size: 1em;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.62);
+}
+.fc-qmeta {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+.fc-qtools {
+  flex: none;
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+.fc-back,
+.fc-qdoc {
+  height: 36px;
+  min-width: 36px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
   font: 700 15px/1 var(--font);
   color: var(--ink-2);
 }
-.fc-qmeta {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ink-3);
+.fc-qdoc {
+  padding: 0;
 }
+.fc-qdoc.on {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
+}
+/* What Evaluation's and Theory's cards still use (a big number beside the answer). */
 .fc-q {
   display: flex;
   align-items: flex-start;
@@ -4222,58 +4315,135 @@ body.locked.fc-marking .toasts {
 .fc-a b {
   font-size: 23px;
 }
-.fc-parts {
+
+/* ---- The answer, big (src/bigAnswer.tsx): the final answer as large as fits (64 px on one line down to 32, then two
+   or three lines), never split beside = + − ×; fractions stacked; the working small above it. ---- */
+.fc-paper .fc-ans {
+  margin-top: 6px;
+  padding: 0;
+  font-size: 15px;
+  line-height: 1.3;
+  overflow-wrap: normal;
+}
+.ka {
+  min-width: 0;
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 64px;
+  font-weight: 800;
+  line-height: 1.12;
+}
+.ka-h {
+  margin: 0;
+  letter-spacing: -0.01em;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.ka.ka-tight .ka-h {
+  overflow-wrap: anywhere;
+}
+.ka-w {
+  margin: 0 0 2px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+/* A plain word inside the answer's line ("x =" before 3): small beside the answer. */
+.ka-s {
+  font-size: max(15px, 0.42em);
+  font-weight: 600;
+  color: var(--ink-2);
+}
+/* A fraction stacked as he writes it. */
+.ka-f {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+  vertical-align: middle;
+  margin: 0 0.08em;
+  font-size: 0.64em;
+  line-height: 1.04;
+  text-align: center;
+}
+.ka-w .ka-f,
+.ka-s .ka-f {
+  font-size: 0.82em;
+}
+.ka-f i {
+  padding: 0 0.12em;
+  font-style: normal;
+}
+.ka-f i:first-child {
+  border-bottom: max(1.5px, 0.07em) solid currentColor;
+}
+.ka sup {
+  font-size: 0.55em;
+  line-height: 0;
+}
+/* In place of the answer: loading, no key, not in the key. */
+.fc-anote {
+  margin: 8px 0 0;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: var(--ground);
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+.fc-card.fighter > .fc-anote,
+.fc-card.fighter > .fc-now {
+  margin: 6px 0 0;
+}
+/* Parts: the part's name in a small chip, its answer big beside it, its marks in one row under it. */
+.fc-paper .fc-parts {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 8px;
 }
-.fc-card.with-parts .fc-qn {
-  font-size: 46px;
+.fc-paper .fc-part {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 8px 10px;
+  padding: 10px 0 2px;
 }
-.fc-card.with-parts .fc-parts {
-  margin-top: 8px;
-  padding-top: 8px;
+.fc-paper .fc-part + .fc-part {
   border-top: 1px solid var(--line-2);
 }
-.fc-part {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 10px;
-}
-.fc-pt {
-  flex: 1 1 130px;
-  min-width: 0;
-  font-size: 17px;
-}
-.fc-pt em {
+.fc-pl {
+  min-width: 34px;
+  margin-top: 2px;
+  padding: 5px 6px;
+  border-radius: 8px;
+  background: var(--ground);
+  font: 700 16px/1 var(--cond);
   font-style: normal;
-  font-weight: 700;
-  color: var(--ink-3);
+  text-align: center;
+  color: var(--ink-2);
 }
-.fc-pt small {
-  font-size: 13px;
-  color: var(--ink-3);
+.fc-part > .ka {
+  grid-column: 2;
 }
 .fc-pm {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 4px;
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(var(--n, 4), minmax(0, 1fr));
+  gap: 6px;
+  max-width: calc(var(--n, 4) * 72px);
 }
 .fc-pb {
-  min-width: 40px;
-  height: 40px;
-  padding: 0 8px;
+  min-width: 0;
+  height: 44px;
+  padding: 0;
   border-radius: 10px;
   border: 1.5px solid var(--line);
   background: var(--card);
-  font: 700 16px/1 var(--font);
-}
-.fc-pm.many .fc-pb {
-  min-width: 34px;
-  height: 36px;
-  padding: 0 4px;
-  font-size: 15px;
+  font: 700 18px/1 var(--font);
+  color: var(--ink);
 }
 .fc-pb.on {
   border-color: var(--ink);
@@ -4298,8 +4468,9 @@ body.locked.fc-marking .toasts {
   background: var(--theory);
   color: #fff;
 }
-.fc-part.blank .fc-pt {
+.fc-part.blank > .ka {
   color: var(--theory-ink);
+  opacity: 0.7;
 }
 /* A Part II question without part marks: "a part left blank" goes with the marks he got. */
 .fc-pblank {
@@ -4559,23 +4730,18 @@ body.locked.fc-marking .toasts {
     padding: 4px 12px 10px;
   }
   .fc-qhead {
-    min-height: 24px;
+    min-height: 32px;
   }
-  .fc-qn {
-    font-size: 48px;
+  .fc-qhead .fc-qn {
+    font-size: 24px;
   }
-  .fc-card.with-parts .fc-qn {
-    font-size: 38px;
-  }
-  .fc-ans {
-    font-size: 17px;
-  }
-  .fc-pt {
-    font-size: 15.5px;
+  .fc-back,
+  .fc-qdoc {
+    height: 32px;
+    min-width: 32px;
   }
   .fc-pb {
-    min-width: 36px;
-    height: 36px;
+    height: 38px;
   }
   .fc-pad {
     padding-top: 6px;
@@ -8630,7 +8796,7 @@ body.locked.evx-on .toasts {
   grid-template-columns: 20px 66px minmax(0, 1fr) 38px;
   align-items: center;
   column-gap: 5px;
-  height: clamp(22px, calc((100dvh - 330px) / var(--n, 10)), 36px);
+  height: var(--rh, clamp(22px, calc((100dvh - 520px) / var(--n, 10)), 36px));
   padding: 0 3px;
   border-radius: 7px;
 }
@@ -8693,14 +8859,94 @@ body.locked.evx-on .toasts {
 }
 .br-head .br-qs i {
   overflow: hidden;
+  white-space: nowrap;
   text-align: center;
   font: 700 9.5px/18px var(--font);
   color: var(--ink-3);
 }
 .br-head .br-qs i.g {
-  overflow: visible;
   font-size: 11px;
   color: var(--ink-2);
+}
+/* A level too narrow for its number: smaller, else left out (never run into the next: "9101112"). */
+.br-head .br-qs i.tiny {
+  font-size: 8px;
+  letter-spacing: -0.4px;
+}
+.br-head .br-qs i.hide {
+  color: transparent;
+}
+/* A question most of them lost marks on (zoomed in): its number in red. */
+.br-head .br-qs i.hot {
+  color: var(--red-ink);
+  font-weight: 800;
+}
+/* For the corrector, above the squares: what waits for her ("To correct"), and the questions most of them lost marks
+   on (check the key and the marking). One line each that scrolls sideways; one tap opens / zooms. */
+.br-check {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 1px 0 6px;
+}
+.br-ck-h {
+  flex: none;
+  padding-right: 2px;
+  font: 800 12.5px/1 var(--font);
+  color: var(--ink);
+}
+.br-todo .br-ck-h {
+  color: var(--amber-ink);
+}
+.br-todo.ok .br-ck-h {
+  color: var(--green-ink);
+}
+.br-hard .br-ck-h {
+  color: var(--red-ink);
+}
+.br-ck {
+  flex: none;
+  height: 30px;
+  padding: 0 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  border: 1.5px solid var(--amber);
+  background: var(--amber-soft);
+  color: var(--ink);
+  font: 600 12.5px/1 var(--font);
+}
+.br-ck b {
+  font-weight: 800;
+}
+.br-ck small {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--amber-ink);
+}
+.br-ck.home {
+  border-color: var(--theory);
+  background: var(--theory-soft);
+}
+.br-ck.home small {
+  color: var(--theory-ink);
+}
+.br-hard .br-ck {
+  border-color: var(--red);
+  background: var(--red-soft);
+}
+.br-hard .br-ck small {
+  color: var(--red-ink);
+}
+.br-hard .br-ck.on {
+  background: var(--red);
+  color: #fff;
+}
+.br-hard .br-ck.on small {
+  color: #fff;
 }
 .br-head .br-qs i.t {
   color: var(--theory-ink);
@@ -8780,6 +9026,6 @@ body.locked.evx-on .toasts {
   background: #1d3b8f;
 }
 .q-handed {
-  background: #ffe2a8;
-  box-shadow: inset 0 0 0 1.5px #f29f05;
+  background: repeating-linear-gradient(135deg, #fff6e0 0 2px, #f6b73c 2px 3.5px);
+  box-shadow: inset 0 0 0 1px #d98a00;
 }

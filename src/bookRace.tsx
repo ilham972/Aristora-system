@@ -1,21 +1,34 @@
-// One book's question sheet (2 Nov 2026, his ask; first built 1 Nov as a race): Correction's sheet button, left of the
-// home icon on a student's paper. The corrector checks her own work: every student in that book against every question,
-// each square by its state (right, wrong, slip, explained, left out, not done, theory taught or not; a workbook's full,
-// part, no marks, ?, handed in), the whole book on ONE screen or one section / level zoomed in. The student whose paper
-// is open is ringed. Share = the same sheet as a plain image for the class WhatsApp group (src/racePoster.ts): nobody
-// ringed, and the names she taps are blurred there (never the first three) so nobody is put down.
+// One book's question sheet (2 Nov 2026, his ask; first built 1 Nov as a race): Correction's sheet button (a bar-chart
+// icon), left of the home icon on a student's paper. The corrector checks her own work:
+// - "To correct": every level handed in and not corrected yet in this book (and levels marked at home, to check),
+//   oldest first, with how long each has waited; one tap opens it. Nothing waiting says so ("am I missing anything?").
+// - "Check": questions most of them lost marks on (a hard question, or a wrong key or marking; "am I correcting
+//   properly?"); one tap zooms to its level or section.
+// - Every student in that book against every question, each square by its state (right, wrong, slip, explained, left
+//   out, not done, theory taught or not; a workbook's full, part, no marks, ?, handed in), the whole book on ONE screen
+//   or one section / level zoomed in. The student whose paper is open is ringed.
+// Share = the same sheet as a plain image for the class WhatsApp group (src/racePoster.ts): nobody ringed, and the names
+// she taps are blurred there (never the first three) so nobody is put down.
 
-import { useEffect, useMemo, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
+import { fmtMin } from "./derive";
 import { useQuery } from "./live";
 import { saveFiles, shareFiles } from "./poster";
-import { blurPick, mayBlur, QSTATE_WORDS, raceTotals, sheetOf, type BookBoard, type SheetRow } from "./progressData";
+import { blurPick, lostMost, mayBlur, QSTATE_WORDS, raceTotals, sheetOf, waitsOf, type BookBoard, type SheetRow } from "./progressData";
 import { bookTitle, drawSheet, sheetFile } from "./racePoster";
-import { testMode, toast } from "./store";
+import { now as serverNow, testMode, toast } from "./store";
 import { Sheet } from "./ui";
 
-export function BookRaceSheet(props: { unitId: string; stage: "fighter" | "master"; studentId: string; onClose: () => void }) {
+export function BookRaceSheet(props: {
+  unitId: string;
+  stage: "fighter" | "master";
+  studentId: string;
+  onClose: () => void;
+  /** Open this student's level of this workbook (a level waiting for her). */
+  onOpen?: (studentId: string, level: number) => void;
+}) {
   const args = { unitId: props.unitId as Id<"units">, stage: props.stage, ...(testMode() ? { test: true } : {}) };
   const data = useQuery<BookBoard | null>(api.progress.book, args);
   const sh = useMemo(() => (data ? sheetOf(data) : null), [data]);
@@ -23,6 +36,9 @@ export function BookRaceSheet(props: { unitId: string; stage: "fighter" | "maste
   const [blurred, setBlurred] = useState<Set<string>>(new Set());
   const [file, setFile] = useState<File | null>(null);
   const [failed, setFailed] = useState(false);
+  const head = useRef<HTMLSpanElement>(null);
+  const grid = useRef<HTMLDivElement>(null);
+  const [rowH, setRowH] = useState<number | null>(null);
 
   // The image is made ahead (and again after each blur tap), so Share works on the first tap: phones only share right
   // after one.
@@ -44,6 +60,26 @@ export function BookRaceSheet(props: { unitId: string; stage: "fighter" | "maste
     };
   }, [sig]);
 
+  // A level or section too narrow for its number (a workbook's Part II levels of two or three questions): smaller, or
+  // left out, never run into its neighbours ("9101112").
+  useLayoutEffect(() => {
+    for (const el of head.current?.querySelectorAll<HTMLElement>("i") ?? []) {
+      el.classList.remove("tiny", "hide");
+      if (el.scrollWidth > el.clientWidth + 0.5) el.classList.add("tiny");
+      if (el.scrollWidth > el.clientWidth + 0.5) el.classList.add("hide");
+    }
+    // The whole class on one screen: the rows share what the rest of the sheet leaves (22 to 36 px each).
+    const g = grid.current;
+    const body = g?.closest<HTMLElement>(".sheet-body");
+    const rows = g?.querySelector<HTMLElement>(".br-rows");
+    if (!g || !body || !rows || !body.firstElementChild || !body.lastElementChild) return;
+    const cs = getComputedStyle(body);
+    const content = body.lastElementChild.getBoundingClientRect().bottom - body.firstElementChild.getBoundingClientRect().top;
+    const other = content - rows.getBoundingClientRect().height + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+    const h = Math.max(22, Math.min(36, Math.floor((body.clientHeight - other - 2) / Math.max(1, sh?.rows.length ?? 1))));
+    if (h !== rowH) setRowH(h);
+  });
+
   if (data === undefined || data === null || !sh) {
     return (
       <Sheet title="This book's questions" onClose={props.onClose} full cls="br-sheet">
@@ -53,6 +89,10 @@ export function BookRaceSheet(props: { unitId: string; stage: "fighter" | "maste
   }
   const t = raceTotals(sh.rows);
   const title = bookTitle(data);
+  const master = data.stage === "master";
+  const waits = master ? waitsOf(data) : [];
+  const hard = lostMost(sh);
+  const now = serverNow();
   const share = async () => {
     if (!file) return;
     const r = await shareFiles([file], `${title.ta} · ${title.en}`);
@@ -69,14 +109,16 @@ export function BookRaceSheet(props: { unitId: string; stage: "fighter" | "maste
     setBlurred(next);
   };
   const pick = (how: "last3" | "allButTop3" | "none") => setBlurred(blurPick(sh.rows, how));
+  const groupName = (id: string) => (master ? `Level ${id}` : `Section ${sh.groups.find((g) => g.id === id)?.label ?? id}`);
 
   // The columns shown: the whole book, or one section / level.
   const idx = sh.cols.map((c, i) => i).filter((i) => !zoom || sh.cols[i].group === zoom);
   const n = Math.max(1, sh.rows.length);
+  const hot = new Set(hard.map((h) => h.i));
   return (
     <Sheet
       title={<span lang="ta">{title.ta}</span>}
-      sub={`${title.en} · ${t.n} students · ${t.came} came today · +${t.today} today`}
+      sub={`${title.en} · ${t.n} student${t.n === 1 ? "" : "s"} · ${t.came} came today`}
       onClose={props.onClose}
       full
       cls="br-sheet"
@@ -91,7 +133,54 @@ export function BookRaceSheet(props: { unitId: string; stage: "fighter" | "maste
         </div>
       }
     >
-      <div class="br-zoom" role="group" aria-label={data.stage === "master" ? "Levels" : "Sections"}>
+      {master && (
+        <div class={`br-check br-todo${waits.length ? "" : " ok"}`} role="group" aria-label="Levels waiting for you">
+          {waits.length === 0 ? (
+            <span class="br-ck-h">✓ Nothing waits for you in this book</span>
+          ) : (
+            <>
+              <span class="br-ck-h">To correct · {waits.length}</span>
+              {waits.map((w) => (
+                <button
+                  key={`${w.s._id}:${w.n}`}
+                  type="button"
+                  class={`br-ck${w.home ? " home" : ""}`}
+                  aria-label={`${w.s.name}, Level ${w.n}: ${w.home ? "marked at home, to check" : `handed in ${fmtMin(now - w.at)} ago`}. Open it.`}
+                  disabled={!props.onOpen}
+                  onClick={() => {
+                    props.onOpen?.(w.s._id, w.n);
+                    props.onClose();
+                  }}
+                >
+                  <b>{w.s.name}</b> L{w.n}
+                  <small>{w.home ? "⌂ check" : fmtMin(now - w.at)}</small>
+                </button>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+      {hard.length > 0 && (
+        <div class="br-check br-hard" role="group" aria-label="Questions most of them lost marks on">
+          <span class="br-ck-h">Most lost marks</span>
+          {hard.map((h) => (
+            <button
+              key={h.i}
+              type="button"
+              class={`br-ck${zoom === h.group ? " on" : ""}`}
+              aria-label={`${/^\d+$/.test(h.label) ? `Q${h.label}` : h.label}: ${h.lost} of ${h.of} lost marks. Show ${groupName(h.group)}.`}
+              onClick={() => setZoom(h.group)}
+            >
+              <b>{/^\d+$/.test(h.label) && h.label.length < 4 ? `Q${h.label}` : h.label}</b>
+              <small>
+                {h.lost}/{h.of}
+              </small>
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div class="br-zoom" role="group" aria-label={master ? "Levels" : "Sections"}>
         <button type="button" class={`br-z${zoom === null ? " on" : ""}`} aria-pressed={zoom === null} onClick={() => setZoom(null)}>
           All
         </button>
@@ -101,7 +190,7 @@ export function BookRaceSheet(props: { unitId: string; stage: "fighter" | "maste
             type="button"
             class={`br-z${zoom === gr.id ? " on" : ""}`}
             aria-pressed={zoom === gr.id}
-            aria-label={data.stage === "master" ? `Level ${gr.label}` : `Section ${gr.label}`}
+            aria-label={master ? `Level ${gr.label}` : `Section ${gr.label}`}
             onClick={() => setZoom(zoom === gr.id ? null : gr.id)}
           >
             {gr.label}
@@ -109,14 +198,14 @@ export function BookRaceSheet(props: { unitId: string; stage: "fighter" | "maste
         ))}
       </div>
 
-      <div class="br-grid" style={{ "--n": String(n), "--c": String(idx.length) }}>
+      <div class="br-grid" ref={grid} style={{ "--n": String(n), "--c": String(idx.length), ...(rowH ? { "--rh": `${rowH}px` } : {}) }}>
         <div class="br-r br-head" aria-hidden="true">
           <span />
           <span />
-          <span class="br-qs">
+          <span class="br-qs" ref={head}>
             {zoom
               ? idx.map((i) => (
-                  <i key={i} class={sh.cols[i].teach ? "t" : ""}>
+                  <i key={i} class={`${sh.cols[i].teach ? "t" : ""}${hot.has(i) ? " hot" : ""}`}>
                     {sh.cols[i].label}
                   </i>
                 ))
@@ -185,7 +274,7 @@ export function BookRaceSheet(props: { unitId: string; stage: "fighter" | "maste
           None
         </button>
       </div>
-      <p class="muted small br-hint">Tap a name to blur it on the shared image. The first three always show; nobody is ringed there.</p>
+      <p class="muted small br-hint">Tap a name to blur it on the image. The first three always show; nobody is ringed.</p>
     </Sheet>
   );
 }

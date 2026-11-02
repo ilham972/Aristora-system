@@ -13,7 +13,7 @@ const HEAD = 196;
 const GROUP_H = 36;
 const ROW = 50;
 const NAME_W = 290;
-const NUM_W = 150;
+const NUM_W = 176;
 
 /** Each state's square: fill, and a border for the ones that are mostly white. */
 export const QSTATE_FILL: Record<QState, { fill: string; line?: string }> = {
@@ -52,6 +52,13 @@ export function sheetHeight(n: number, legendLines: number): number {
   return HEAD + GROUP_H + n * ROW + 24 + legendLines * 40 + 40;
 }
 
+/** The words on the image (the corrector's "to correct" is her business; the group sees "Handed in"). */
+const IMAGE_WORDS: Partial<Record<QState, string>> = { handed: "Handed in" };
+const wordOf = (st: QState) => IMAGE_WORDS[st] ?? QSTATE_WORDS[st];
+
+/** A small gap between levels (or sections) instead of lines through the whole table. */
+const GROUP_GAP = 5;
+
 export async function drawSheet(b: BookBoard, sh: QSheet, blurred: ReadonlySet<string>): Promise<HTMLCanvasElement> {
   const cv = document.createElement("canvas");
   const probe = cv.getContext("2d")!;
@@ -64,35 +71,50 @@ export async function drawSheet(b: BookBoard, sh: QSheet, blurred: ReadonlySet<s
   header(g, b, sh);
   const gx = PAD + NAME_W;
   const gw = W - PAD - NUM_W - gx;
-  const cw = gw / Math.max(1, sh.cols.length);
-  // Section (or level) letters over their columns.
+  const gaps = Math.max(0, sh.groups.length - 1) * GROUP_GAP;
+  const cw = (gw - gaps) / Math.max(1, sh.cols.length);
+  // Where each column starts: its group's gap pushes it right.
+  const xs: number[] = [];
+  let k = 0;
+  sh.groups.forEach((gr, gi) => {
+    for (let j = 0; j < gr.cols; j++, k++) xs.push(gx + k * cw + gi * GROUP_GAP);
+  });
+  // Level (or section) names over their columns, all one size: the biggest at which each fits its own columns (a
+  // workbook's Part II levels are two or three questions wide); one that can't fit even small is left out.
   let y = HEAD;
+  const spans: { mid: number; span: number; label: string }[] = [];
   let at = 0;
   for (const gr of sh.groups) {
-    const x = gx + at * cw;
-    text(g, gr.label, x + (gr.cols * cw) / 2, y + 26, "800 22px", "#4c5770", "center");
-    if (at) {
-      g.fillStyle = "#c9d0dc";
-      g.fillRect(x - 1, y + 6, 2, GROUP_H + sh.rows.length * ROW - 6);
-    }
+    const x0 = xs[at] ?? gx;
+    spans.push({ mid: x0 + (gr.cols * cw) / 2, span: gr.cols * cw + GROUP_GAP - 2, label: gr.label });
     at += gr.cols;
   }
+  // (A label too wide even at the smallest size is left out, and doesn't make the others small.)
+  const fitsAt = (sp: (typeof spans)[number], px: number) => width(g, sp.label, `800 ${px}px`) <= sp.span;
+  const size = [22, 19, 16, 14].find((px) => spans.every((sp) => fitsAt(sp, px) || !fitsAt(sp, 14))) ?? 14;
+  for (const sp of spans) {
+    if (width(g, sp.label, `800 ${size}px`) <= sp.span) text(g, sp.label, sp.mid, y + 26, `800 ${size}px`, "#4c5770", "center");
+  }
+  // The number columns' names.
+  const master = b.stage === "master";
+  text(g, master ? "levels" : "questions", W - PAD - 76, y + 26, "700 17px", "#8790a6", "right");
+  text(g, master ? "marks" : "today", W - PAD, y + 26, "700 17px", "#8790a6", "right");
   y += GROUP_H;
-  sh.rows.forEach((r, k) => {
-    const ry = y + k * ROW;
-    if (k % 2 === 1) {
+  sh.rows.forEach((r, k2) => {
+    const ry = y + k2 * ROW;
+    if (k2 % 2 === 1) {
       g.fillStyle = "#f6f7fa";
       g.fillRect(PAD - 10, ry, W - 2 * PAD + 20, ROW);
     }
-    row(g, r, ry, gx, cw, blurred.has(r.s._id));
+    row(g, r, ry, xs, cw, blurred.has(r.s._id));
   });
   y += sh.rows.length * ROW + 24;
   for (const line of legend) {
     let x = PAD;
     for (const st of line) {
       square(g, st, x, y + 6, 22, 22);
-      text(g, QSTATE_WORDS[st], x + 30, y + 25, "600 21px", "#4c5770");
-      x += 30 + width(g, QSTATE_WORDS[st], "600 21px") + 28;
+      text(g, wordOf(st), x + 30, y + 25, "600 21px", "#4c5770");
+      x += 30 + width(g, wordOf(st), "600 21px") + 28;
     }
     y += 40;
   }
@@ -104,8 +126,11 @@ function header(g: G, b: BookBoard, sh: QSheet) {
   const tot = raceTotals(sh.rows);
   text(g, t.ta, PAD, 74, "800 50px", "#16213e", "left", W - 2 * PAD);
   text(g, `${t.en} · ${posterDate(b.today).split(" · ").pop()}`, PAD, 116, "600 26px", "#4c5770", "left", W - 2 * PAD);
-  const step = b.stage === "master" ? "levels done today" : "right today";
-  const parts = [`${tot.came} of ${tot.n} came today`, `+${tot.today} ${step}`, `${tot.finished} finished the book`];
+  // The class's day in one line: only numbers worth saying (no "0 finished the book").
+  const step = b.stage === "master" ? (tot.today === 1 ? "level done today" : "levels done today") : tot.today === 1 ? "question right today" : "questions right today";
+  const parts = [`${tot.came} of ${tot.n} came today`];
+  if (tot.today > 0) parts.push(`${tot.today} ${step}`);
+  if (tot.finished > 0) parts.push(`${tot.finished} finished the book`);
   text(g, parts.join("   ·   "), PAD, 160, "700 25px", tot.today ? "#149a48" : "#16213e", "left", W - 2 * PAD);
   g.fillStyle = "#e3e7ee";
   g.fillRect(PAD, HEAD - 12, W - 2 * PAD, 2);
@@ -124,7 +149,7 @@ function square(g: G, st: QState, x: number, y: number, w: number, h: number) {
   }
 }
 
-function row(g: G, r: SheetRow, ry: number, gx: number, cw: number, blur: boolean) {
+function row(g: G, r: SheetRow, ry: number, xs: number[], cw: number, blur: boolean) {
   const mid = ry + ROW / 2;
   if (r.rank !== null) {
     const fill = r.rank === 1 ? "#f2c200" : r.rank === 2 ? "#c3cad6" : r.rank === 3 ? "#d99a5b" : "#e4e8ef";
@@ -139,11 +164,16 @@ function row(g: G, r: SheetRow, ry: number, gx: number, cw: number, blur: boolea
   else text(g, r.s.name, nx, mid + 9, "700 26px", "#16213e", "left", NAME_W - 60);
   const gap = cw >= 8 ? 2 : 1;
   const h = ROW - 16;
-  r.cells.forEach((st, i) => square(g, st, gx + i * cw + gap / 2, ry + 8, Math.max(2, cw - gap), h));
+  r.cells.forEach((st, i) => square(g, st, xs[i] + gap / 2, ry + 8, Math.max(2, cw - gap), h));
   const nxr = W - PAD;
-  text(g, `${r.done}/${r.of}`, nxr - 64, mid + 9, "800 24px", "#16213e", "right");
-  if (r.today > 0) text(g, `+${r.today}`, nxr, mid + 9, "800 21px", "#149a48", "right");
-  else if (r.kind === "m" && r.pct !== null) text(g, `${r.pct}%`, nxr, mid + 9, "800 21px", pctColor(r.pct), "right");
+  text(g, `${r.done}/${r.of}`, nxr - 76, mid + 9, "800 24px", "#16213e", "right");
+  // One meaning per column: a workbook's marks so far (– before his first corrected level), a theory book's today.
+  if (r.kind === "m") {
+    if (r.pct !== null) text(g, `${r.pct}%`, nxr, mid + 9, "800 21px", pctColor(r.pct), "right");
+    else text(g, "–", nxr, mid + 9, "800 21px", "#b0b7c6", "right");
+  } else if (r.today > 0) {
+    text(g, `+${r.today}`, nxr, mid + 9, "800 21px", "#149a48", "right");
+  }
 }
 
 /**
@@ -178,7 +208,7 @@ function legendLines(g: G, used: readonly QState[]): QState[][] {
   let line: QState[] = [];
   let x = PAD;
   for (const st of used) {
-    const w = 30 + width(g, QSTATE_WORDS[st], "600 21px") + 28;
+    const w = 30 + width(g, wordOf(st), "600 21px") + 28;
     if (line.length && x + w > W - PAD) {
       lines.push(line);
       line = [];

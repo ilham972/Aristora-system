@@ -181,7 +181,7 @@ function drawPage(b: PBoard, page: PosterPage, i: number, n: number, opts: Poste
     if (k) y += LANE_GAP;
     y = laneBlock(g, blk, y, opts);
   });
-  footer(g, b, i, n);
+  footer(g, b, i, n, opts);
   return cv;
 }
 
@@ -213,10 +213,9 @@ function totals(g: G, b: PBoard, y: number): number {
   g.fillStyle = C.line;
   g.fillRect(0, y + TOTALS - 2, W, 2);
   const t = dayTotals(b);
-  const cols: [string, string, string][] = [
-    [`${t.came} / ${t.of}`, "இன்று வந்தவர்கள்", "Came today"],
-    [String(t.levels), "இன்று முடித்த Levels", "Levels finished today"],
-  ];
+  // Only numbers worth saying (2 Nov 2026: "0 Levels finished today" on a grade on theory books said nothing).
+  const cols: [string, string, string][] = [[`${t.came} / ${t.of}`, "இன்று வந்தவர்கள்", "Came today"]];
+  if (t.levels > 0) cols.push([String(t.levels), "இன்று முடித்த Levels", "Levels finished today"]);
   if (t.questions > 0) cols.push([String(t.questions), "இன்று சரியான வினாக்கள்", "Questions right today"]);
   const cw = W / cols.length;
   cols.forEach(([v, ta, en], k) => {
@@ -248,7 +247,13 @@ function laneBlock(g: G, blk: PageBlock, y: number, opts: PosterOpts): number {
   const title = lane.unit ? `${lane.unit.code} · ${lane.unit.en}` : stage ? stageName(stage) : "No stage yet";
   text(g, title, 60 + cw + 18, y + 52, "800 34px", C.ink, "left", w - cw - 70);
   const ta = lane.unit ? `அலகு ${Number(lane.unit.code.slice(1))} · ${lane.unit.ta}` : (lane.note ?? "");
-  text(g, `${ta}${cont ? " · தொடர்ச்சி / cont." : ""}`, 60, y + 92, "600 26px", C.ink2, "left", w - 60);
+  const cols = columnsOf(lane, opts);
+  text(g, `${ta}${cont ? " · தொடர்ச்சி / cont." : ""}`, 60, y + 92, "600 26px", C.ink2, "left", cols ? NUM_X - 80 : w - 60);
+  // The number columns' names, once per unit (2 Nov 2026: "Levels" and "+3 இன்று" were on every row).
+  if (cols) {
+    text(g, cols[0], NUM_X, y + 92, "700 19px", C.ink3);
+    if (cols[1]) text(g, cols[1], W - 56, y + 92, "700 19px", C.ink3, "right");
+  }
 
   rows.forEach((r, k) => {
     const ry = y + LANE_HEAD + k * ROW;
@@ -312,20 +317,71 @@ function row(g: G, r: LaneRow, ry: number, opts: PosterOpts) {
   }
 
   if (r.kind !== "none") {
-    text(g, `${r.done} / ${r.of}`, 792, mid + 3, "800 31px", C.ink);
-    text(g, r.kind === "m" ? "Levels" : "வினாக்கள் · Q", 792, mid + 27, "600 18px", C.ink3);
-    if (opts.marks && r.pct !== null) {
-      text(g, `${r.pct}%`, W - 56, mid + 3, "800 31px", r.kind === "m" ? pctColor(r.pct) : C.blue, "right");
+    text(g, `${r.done} / ${r.of}`, NUM_X, mid + 11, "800 31px", C.ink);
+    // One meaning per column (2 Nov 2026: a theory book's "76%" was how far, a workbook's "93%" its marks): a
+    // workbook's marks so far, else what he did today.
+    if (r.kind === "m" && opts.marks) {
+      if (r.pct !== null) text(g, `${r.pct}%`, W - 56, mid + 11, "800 31px", pctColor(r.pct), "right");
+      else text(g, "–", W - 56, mid + 11, "800 31px", C.ink3, "right");
+    } else if (r.today > 0) {
+      text(g, `+${r.today}`, W - 56, mid + 11, "800 29px", C.green, "right");
     }
-    if (r.today > 0) text(g, `+${r.today} இன்று`, W - 56, mid + 27, "700 19px", C.green, "right");
   }
 }
 
-function footer(g: G, b: PBoard, i: number, n: number) {
+/** Where the numbers start. */
+const NUM_X = 792;
+
+/** The number columns' names for a unit: [how far, second column] (null: nothing measured). */
+function columnsOf(lane: Lane, opts: PosterOpts): [string, string] | null {
+  if (!lane.rows.some((r) => r.kind !== "none")) return null;
+  const master = lane.rows.some((r) => r.kind === "m");
+  const today = lane.rows.some((r) => r.today > 0) ? "Today" : "";
+  if (master) return ["Levels", opts.marks ? "Marks" : today];
+  return ["Questions", today];
+}
+
+/**
+ * The foot: what the level blocks' colours mean (2 Nov 2026: it repeated the header's name, grade and date), and the
+ * page number when there are more.
+ */
+function footer(g: G, b: PBoard, i: number, n: number, opts: PosterOpts) {
   g.fillStyle = C.line;
   g.fillRect(34, H - FOOT, W - 68, 2);
-  text(g, `ARISTORA · தரம் ${b.grade} · ${posterDate(b.today)}`, 40, H - 30, "600 22px", C.ink3, "left", W - 200);
-  if (n > 1) text(g, `${i + 1} / ${n}`, W - 40, H - 30, "700 22px", C.ink3, "right");
+  const workbooks = b.students.some((s) => s.stage === "master");
+  let x = 40;
+  const y = H - 30;
+  const key = (fill: string | CanvasPattern, ring: boolean, words: string) => {
+    g.fillStyle = fill;
+    rr(g, x, y - 20, 26, 22, 5);
+    g.fill();
+    if (ring) {
+      g.strokeStyle = C.navy;
+      g.lineWidth = 3;
+      rr(g, x + 1.5, y - 18.5, 23, 19, 4);
+      g.stroke();
+    }
+    text(g, words, x + 34, y - 1, "600 20px", C.ink2);
+    x += 34 + width(g, words, "600 20px") + 26;
+  };
+  const theory = b.students.some((s) => s.stage === "fighter");
+  if (workbooks) {
+    if (opts.marks) {
+      key(C.green, false, "80%+");
+      key(C.amber, false, "50–79%");
+      key(C.red, false, "< 50%");
+    } else {
+      key(C.green, false, "Done");
+    }
+    key(hatch(g), false, "Handed in");
+    key(C.grey, true, "On it now");
+  }
+  // A theory book's bar and its +N, when there is room after the workbook's colours.
+  if (theory && x + 420 <= W - 100) {
+    key(C.blue, false, "How far in the book");
+    text(g, "+N right today", x, y - 1, "700 20px", C.green);
+  }
+  if (n > 1) text(g, `${i + 1} / ${n}`, W - 40, y, "700 22px", C.ink3, "right");
 }
 
 /** The pages as PNG files, named for the grade and the day. */

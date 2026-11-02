@@ -88,6 +88,37 @@ export function BookQuestion(props: { unitId: string; stage: Stage; q: number })
 
 let shownHere = false; // stays open from one question to the next on this phone (until the page reloads)
 
+/** Correction's card (2 Nov 2026): the switch is a small icon in the card's top line, and only when the book's
+ *  questions are in the app (no pale "No question text" line taking the answer's room). Same open state as below. */
+export function useQuestionShown(unitId: string | null | undefined, stage: Stage) {
+  const [open, setOpen] = useState(shownHere);
+  const has = !!unitId && (bookDocAt(unitId, stage)?.qCount ?? 0) > 0;
+  const flip = () => {
+    shownHere = !open;
+    setOpen(!open);
+  };
+  return { has, open: open && has, flip };
+}
+
+export function QuestionIcon(props: { q: string; shown: ReturnType<typeof useQuestionShown> }) {
+  const { has, open, flip } = props.shown;
+  if (!has) return null;
+  return (
+    <button
+      type="button"
+      class={`fc-qdoc${open ? " on" : ""}`}
+      aria-expanded={open}
+      aria-label={open ? `Hide ${props.q} as printed` : `Show ${props.q} as printed`}
+      onClick={flip}
+    >
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6 3h9l4 4v14H6z" />
+        <path d="M9 12h7M9 16h5" />
+      </svg>
+    </button>
+  );
+}
+
 /** "Show the question" under a question card: always in the same place, pale when the book has no questions in the
  *  app yet (the owner re-uploads its zip). */
 export function QuestionToggle(props: { unitId: string | null | undefined; stage: Stage; q: number }) {

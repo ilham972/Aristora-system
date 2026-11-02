@@ -387,3 +387,43 @@ export function blurPick(rows: readonly { s: { _id: string }; rank: number | nul
   if (how === "allButTop3") return new Set(ok.map((r) => r.s._id));
   return new Set(ok.slice(-3).map((r) => r.s._id));
 }
+
+// ---- For the corrector (2 Nov 2026, his ask: "am I correcting properly? am I missing anything?") ----
+
+/** A level waiting for the corrector in this book: handed in (since `at`), or marked at home and not checked. */
+export type Wait = { s: BookStudent; n: number; at: number; home: boolean };
+
+/** Everything waiting for the corrector in this book, oldest first. */
+export function waitsOf(b: BookBoard): Wait[] {
+  const out: Wait[] = [];
+  for (const s of b.students) for (const w of s.waits ?? []) out.push({ s, n: w.n, at: w.at, home: !!w.home });
+  return out.sort((x, y) => x.at - y.at || x.s.name.localeCompare(y.s.name));
+}
+
+/** Squares that count as marked, and the marked ones that lost marks (teacher questions never count). */
+const MARKED = new Set<QState>(["full", "part", "zero", "blank", "explained", "taught", "right", "wrong", "slip"]);
+const LOST = new Set<QState>(["part", "zero", "blank", "explained", "taught", "wrong", "slip"]);
+
+/** A question most of the class lost marks on. */
+export type HardQ = { i: number; q: number; label: string; group: string; lost: number; of: number };
+
+/**
+ * Questions where at least half of those marked lost marks (at least `min` marked): a hard question, or a wrong key or
+ * marking. The worst first, at most `max`.
+ */
+export function lostMost(sh: QSheet, min = 3, max = 5): HardQ[] {
+  const out: HardQ[] = [];
+  sh.cols.forEach((c, i) => {
+    if (c.teach) return;
+    let of = 0;
+    let lost = 0;
+    for (const r of sh.rows) {
+      const st = r.cells[i];
+      if (!MARKED.has(st)) continue;
+      of++;
+      if (LOST.has(st)) lost++;
+    }
+    if (of >= min && lost * 2 >= of) out.push({ i, q: c.q, label: c.label, group: c.group, lost, of });
+  });
+  return out.sort((a, b) => b.lost / b.of - a.lost / a.of || b.lost - a.lost || a.q - b.q).slice(0, max);
+}

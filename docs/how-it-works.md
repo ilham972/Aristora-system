@@ -32,7 +32,16 @@ here, green = here (✓ + arrival time), grey dashed = went home today. Tap whit
 (deletes the visit; `setPresent` `undo`, 5 min). Tap green → "Sign out: going home" / Keep (within 5 min also
 "Signed in by mistake? Take it back"; a sheet over the sheet). Calls strip there too. Every visit = a row in
 `attendance` (`day`, `inAt`, `outAt`, `sessionId`), closed by sign-out, End the session, a class left open, or
-removing the student. **No "sign in everyone"** (it would fake attendance and idle numbers). Class, Theory and
+removing the student. **Several at once (2 Nov 2026, his ask; he overruled the old "no sign in everyone" after the
+warning):** at the bottom, **Sign in all** / **Sign out all** for that grade (from +) or **Sign in everyone** / **Sign
+out everyone** (from the count), each with how many. Sign in = `SignInMany`: a list with every name not in ticked
+(those gone home today not ticked; per grade "Tick all / Untick all" in the whole-class list), she unticks whoever
+isn't in the hall, "Sign in 12" = `students.setPresentMany` (each exactly one `setPresent`: a real visit; removed and
+already-in skipped; at most 200), toast with **Undo** (`undo`: as if they never came). Sign out all (a grade) = a
+sheet naming them, then `setPresentMany` false (visits close, calls end, the class goes on). **Sign out everyone =
+End the session** (`sessions.end`: the report is saved), except on a simulation phone (its students only). The risk
+he accepted: a name ticked who isn't there hides a student who stopped coming and turns red on Theory/Evaluation;
+the list (not one blind tap) is the guard. Class, Theory and
 Evaluation show **only signed-in students** ("Nobody is signed in yet"); gone-home students with levels to correct
 stay at the bottom of Class and Evaluation ("Correct L3").
 
@@ -199,7 +208,8 @@ takes the old ones away; the server refuses anything that runs, loads or posts: 
 tables `questions` (unit, stage, q, html) and `bookCss`, `books.qCount`; gone when a re-upload changes the book's
 questions (`bookShape`). Read one at a time (`catalog.question`, `catalog.bookCss`) under Correction's, Evaluation's
 and Theory's question card: **Show the question** (`QuestionToggle`, `src/bookQuestion.tsx`; always there, pale with
-no text in the app; stays open from question to question) draws it in a **shadow root** (the book's `.qn .band .sq`
+no text in the app; on Correction's card since 2 Nov 2026 a small page icon in the card's top line, only when the book
+has its questions: `useQuestionShown` + `QuestionIcon`; stays open from question to question) draws it in a **shadow root** (the book's `.qn .band .sq`
 never meet the app's), cleaned again (`safeFragment`), figures and tables wider than the phone zoomed down, working
 space hidden. Books page **Q** = every book has its questions. Old zips: upload them again once (no new chat).
 
@@ -387,7 +397,7 @@ two errors: marks on the wrong question and on the wrong student. Meant for the 
   refuses marks and saves on a book someone else holds live (`mustHoldBook` in `focus.mark` and `workbook.correct`).
   Drafts of his other books are never wiped by marks on one book (only drafts of corrected levels; others after 2
   days). Not covered: the Class page's correct sheet doesn't claim (it is refused while someone holds the book).
-- **His paper:** name huge; **Later** (`workbook.levelDone`); **question-sheet button** (`.fc-racebtn`, left of the home icon; 1 Nov 2026 a race, rebuilt 2 Nov 2026 on his words: it is for the corrector to check her work, not a leaderboard): `BookRaceSheet` in `src/bookRace.tsx`, query `progress.book` (every student who has worked in the book or is on it; Correction / Theory / Evaluation / Reports; per-question states + the book's sections or levels, never its content). Every student (furthest first, `bookRace`) against every question (`sheetOf`): theory book right / wrong / slip / explained / knew it / **left out** (unmarked while a later one is marked) / not done, teacher questions taught / skipped / not taught; workbook full / part / no marks / ? / explained / taught / handed in / before the app / not done. ONE screen (rows shrink: `--n`), chips All or one section / level zoomed with question numbers, a legend of the states shown, the paper's student ringed. **Blur**: tap a name, or Last 3 / All but top 3 / None (`blurPick`; never ranks 1–3, `mayBlur`); blurred on the phone too. **Share to the group** / Save = one white 1080-wide PNG (`src/racePoster.ts` `drawSheet`: English except the unit's Tamil name, no logo bands, the whole book, nobody ringed, chosen names smudged by down-and-up scaling (iOS 15 has no canvas filter), height grows with the class); **home icon** (`.fc-gohome`, left of Marks, 1 Nov 2026, his ask: signing out took + → find him → sign out): one tap = `students.setPresent` false (`by: "attendance"`), toast "Raj went home, 8:42 pm.", his name leaves the names row (unless a level waits), his paper stays with **Sign him in** (the undo); pale while he is signed out; **Marks** = Class's `Book` in a sheet; signed out (gone
+- **His paper:** name huge; **Later** (`workbook.levelDone`); **question-sheet button** (`.fc-racebtn`, a bar chart on its side since 2 Nov 2026 (his ask: a stats icon, not a grid), left of the home icon; 1 Nov 2026 a race, rebuilt 2 Nov 2026 on his words: it is for the corrector to check her work, not a leaderboard): `BookRaceSheet` in `src/bookRace.tsx`, query `progress.book` (every student who has worked in the book or is on it; Correction / Theory / Evaluation / Reports; per-question states + the book's sections or levels, never its content; `waits` = his levels handed in and not corrected, and marked at home not checked). On top, for her (2 Nov 2026, his words "am I correcting properly? am I missing anything?"): **To correct · N** (workbook: `waitsOf`, oldest first, "Malik L3 6 min" / "⌂ check"; one tap = `openWaiting` → his level opens; none = "✓ Nothing waits for you in this book") and **Most lost marks** (`lostMost`: questions where half or more of at least 3 marked lost marks: a hard question or a wrong key/marking; tap = zoom to its level, its number red). Level numbers too narrow for their columns shrink or hide (never "9101112"). Every student (furthest first, `bookRace`) against every question (`sheetOf`): theory book right / wrong / slip / explained / knew it / **left out** (unmarked while a later one is marked) / not done, teacher questions taught / skipped / not taught; workbook full / part / no marks / ? / explained / taught / handed in / before the app / not done. ONE screen (rows shrink: `--n`), chips All or one section / level zoomed with question numbers, a legend of the states shown, the paper's student ringed. **Blur**: tap a name, or Last 3 / All but top 3 / None (`blurPick`; never ranks 1–3, `mayBlur`); blurred on the phone too. **Share to the group** / Save = one white 1080-wide PNG (`src/racePoster.ts` `drawSheet`: English except the unit's Tamil name, no logo bands, the whole book, nobody ringed, chosen names smudged by down-and-up scaling (iOS 15 has no canvas filter), height grows with the class; since 2 Nov 2026: a small gap between levels instead of lines through the table, level numbers only where they fit, column names once ("levels" "marks" / "questions" "today"), one meaning per column (a workbook's marks %, "–" before any correction; a theory book's +N today), no "0 finished", the group sees "Handed in" (not "to correct")); **home icon** (`.fc-gohome`, left of Marks, 1 Nov 2026, his ask: signing out took + → find him → sign out): one tap = `students.setPresent` false (`by: "attendance"`), toast "Raj went home, 8:42 pm.", his name leaves the names row (unless a level waits), his paper stays with **Sign him in** (the undo); pale while he is signed out; **Marks** = Class's `Book` in a sheet; signed out (gone
   home, or never signed in): an amber line "Signed out: Evaluation and Theory don't see him" + **Sign him in**
   (`SignedOut`). **His books in one line** under his name (`BookRow`, `e34a29c`, another chat): a book button first
   (`.fc-units`, like + on the names row) opens the units sheet; then his books (`booksOf`: his book now dark, every
@@ -407,7 +417,15 @@ two errors: marks on the wrong question and on the wrong student. Meant for the 
   Theory (`levelWaits`). The level opens by itself (`autoLevel`: his draft, else the oldest handed in, else his
   level); a corrected one opens to check or change (`remark`: "Save changes", "Back to Level N").
 - One question on screen; the strip above it (`Strip`, theory book `FighterStrip`: every question, one line, the
-  open one in the middle): number, the key's answer, one tap: the big button gives what is shown (full by default;
+  open one in the middle). **The card (2 Nov 2026, his ask: correctors were slow because the answer was small text
+  beside a huge number, wrapped, under notes):** one top line (`CardHead`): the number as a dark pill "Q21", its marks,
+  ‹ back, the printed question's icon; then **the answer, big** (`BigAnswer` in `src/bigAnswer.tsx`, rules in
+  `src/answerText.ts`): the largest size that fits (64 px on one line down to 32, then 2–3 lines; `fitAnswer`), never
+  broken beside = + − × ÷ (`glue`), fractions stacked as written (`mathPieces`: "3/4", "2 3/4", "(x + 1)/2"; units
+  like km/h stay), powers raised; a key "working = **answer**" shows the working small above the answer
+  (`shownLines`), " / " = a line break; parts: the part's name in a chip, its answer big, its mark buttons in one
+  full row under it (the same place on every part). No key / not in the key / loading: one line where the answer
+  goes (`.fc-anote`); "Clear marks" is in the level line, the resumed note one line. Then one tap: the big button gives what is shown (full by default;
   NEVER "untouched = full"), a number gives that, "? blank" = dk; key parts: each part's marks or ? for that part
   (`dkp`); no key parts: a "part blank" toggle. Next by itself; taps within 350 ms ignored, Save lights after 700 ms.
   On a corrected level each lost question's box has **E** or **T** on its corner (`teachState`: hollow = waiting for
@@ -442,7 +460,11 @@ two errors: marks on the wrong question and on the wrong student. Meant for the 
 green dot = came today, "3/8", marks %, level blocks or a fill bar, "+3 today", "3/day"). **Term** = students × the
 term's units (furthest book per square; tap for details). Pace = per class day he came. **Share poster** (his call:
 marks and ranking, after my warning; switches Marks %, Ranking, Only who came today): 1080 × 1350 PNGs, Tamil first;
-Share = the phone's share sheet (WhatsApp), Save downloads.
+Share = the phone's share sheet (WhatsApp), Save downloads. Audit 2 Nov 2026 (his "wrong text, something repeated"):
+the column names sit once in each unit's header ("Levels" "Marks" / "வினாக்கள் · Q" "இன்று · Today"), not under every
+row; a theory book's blue "76%" (how far, read as a score) is gone: its second column is +N today; a workbook's is
+its marks; zero day-totals are left out; the foot is the level colours' key (80%+, 50–79%, < 50%, Handed in, On it now)
+instead of the header's name and date again.
 
 **One student's sheet (31 Oct 2026, his ask: "the individual progress sheet I share on WhatsApp to the parents").**
 Progress → tap any name (Units race or Term grid; also the names on the Owner page) → `StudentSheet`

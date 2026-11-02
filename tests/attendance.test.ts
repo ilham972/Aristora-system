@@ -209,6 +209,69 @@ describe("attendance", () => {
     expect(last).toMatchObject({ who: "Rimas", by: "attendance", name: "Chamath P" });
   });
 
+  test("several at once (2 Nov 2026): each a real visit; already in, removed and twice-listed are skipped; Undo takes the sign-in back", async () => {
+    const t = await setup();
+    const a = await addStudent(t, "Ahamed R");
+    const b = await addStudent(t, "Bilal K");
+    const c = await addStudent(t, "Chamath P");
+    const gone = await addStudent(t, "Dinesh S");
+    await t.mutation(api.students.setArchived, { id: gone, archived: true });
+    await signIn(t, a);
+    advance(3);
+    const r = await t.mutation(api.students.setPresentMany, { ids: [a, b, c, c, gone], present: true, by: "attendance" });
+    expect(r).toEqual({ changed: 2 }); // Ahamed was in already; Chamath once; Dinesh was removed
+    for (const id of [b, c]) {
+      expect(await visits(t, id)).toEqual([expect.objectContaining({ day: TODAY, inAt: at(START + 3 * MIN) })]);
+      expect(await studentDoc(t, id)).toMatchObject({ present: true, lastInAt: at(START + 3 * MIN) });
+    }
+    expect(await visits(t, a)).toHaveLength(1); // his visit from before, untouched
+    expect((await studentDoc(t, gone)).present).toBe(false);
+    const ins = await t.run(async (ctx) => (await ctx.db.query("events").collect()).filter((e) => e.kind === "in").map((e) => e.name));
+    expect(ins).toEqual(["Ahamed R", "Bilal K", "Chamath P"]);
+
+    // Undo (the toast, a minute later): as if they never came. Ahamed, signed in on his own before, stays.
+    advance(1);
+    expect(await t.mutation(api.students.setPresentMany, { ids: [b, c], present: false, undo: true, by: "attendance" })).toEqual({ changed: 2 });
+    expect(await visits(t, b)).toEqual([]);
+    expect((await studentDoc(t, c)).present).toBe(false);
+    expect((await studentDoc(t, c)).lastInAt).toBeUndefined();
+    expect((await studentDoc(t, a)).present).toBe(true);
+  });
+
+  test("sign out a whole grade: their visits close and their calls end; the others stay; the session goes on", async () => {
+    const t = await setup();
+    const a = await addStudent(t, "Ahamed R", 8);
+    const b = await addStudent(t, "Bilal K", 8);
+    const c = await addStudent(t, "Chamath P", 9);
+    await t.mutation(api.students.setPresentMany, { ids: [a, b, c], present: true, by: "attendance" });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("calls", { studentId: a, room: "theory", kind: "theory", status: "requested", group: "g", createdAt: Date.now() });
+    });
+    advance(50);
+    expect(await t.mutation(api.students.setPresentMany, { ids: [a, b], present: false, by: "attendance" })).toEqual({ changed: 2 });
+    for (const id of [a, b]) {
+      expect(await visits(t, id)).toEqual([expect.objectContaining({ inAt: at(START), outAt: at(START + 50 * MIN) })]);
+      expect((await studentDoc(t, id)).present).toBe(false);
+    }
+    expect((await studentDoc(t, c)).present).toBe(true);
+    const call = await t.run(async (ctx) => (await ctx.db.query("calls").collect())[0]);
+    expect(call.status).toBe("cancelled");
+    expect(await t.run(async (ctx) => (await ctx.db.query("sessions").collect()).map((s) => s.open))).toEqual([true]);
+    // Out again: nothing changes (no second visit end).
+    expect(await t.mutation(api.students.setPresentMany, { ids: [a, b], present: false, by: "attendance" })).toEqual({ changed: 0 });
+  });
+
+  test("several at once needs the Correction tab, and at most 200 in one go", async () => {
+    const t = await setup();
+    const a = await addStudent(t, "Ahamed R");
+    await addPerson(t, { name: "Theo", token: tok(2), tabs: ["theory"] });
+    await expect(asPhone(t, tok(2)).mutation(api.students.setPresentMany, { ids: [a], present: true, by: "attendance" })).rejects.toThrow(
+      /needs the Correction tab/,
+    );
+    await expect(t.mutation(api.students.setPresentMany, { ids: Array(201).fill(a), present: true, by: "attendance" })).rejects.toThrow(/At most 200/);
+    expect((await studentDoc(t, a)).present).toBe(false);
+  });
+
   test("demo students in class have a visit; deleting the demo deletes their visits", async () => {
     const t = await setup();
     await t.mutation(api.demo.load, {});

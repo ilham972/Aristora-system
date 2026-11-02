@@ -404,6 +404,38 @@ describe("one book's race: Correction's race button (1 Nov 2026)", () => {
   });
 });
 
+describe("the question sheet for the corrector (2 Nov 2026): what waits for her, and what most of them lost", () => {
+  test("levels handed in and not corrected, oldest first, with when; corrected ones leave the list; most-lost questions", async () => {
+    const t = await setup();
+    const u08 = await unitId(t, "G7-U08");
+    const malik = await addMaster(t, "Malik");
+    const priya = await addMaster(t, "Priya");
+    const vimal = await addMaster(t, "Vimal");
+    await t.mutation(api.workbook.levelDone, { studentId: malik, level: 1 });
+    advance(5);
+    await t.mutation(api.workbook.levelDone, { studentId: priya, level: 1 });
+    advance(5);
+    await t.mutation(api.workbook.levelDone, { studentId: malik, level: 2 });
+    await t.mutation(api.workbook.levelDone, { studentId: vimal, level: 1 });
+    const { waitsOf, lostMost } = await import("../src/progressData");
+    let raw = (await t.query(api.progress.book, { unitId: u08, stage: "master" }))!;
+    expect(waitsOf(raw).map((w) => `${w.s.name} L${w.n}`)).toEqual(["Malik L1", "Priya L1", "Malik L2", "Vimal L1"]);
+    expect(waitsOf(raw)[0].at).toBeCloseTo(START, -3);
+    expect(waitsOf(raw)[1].at - waitsOf(raw)[0].at).toBeCloseTo(5 * MIN, -3);
+    // Corrected: off the list. Q4 lost by all three (Malik, Priya, Vimal), Q7 by one: only Q4 is "most lost".
+    advance(2);
+    await t.mutation(api.workbook.correct, { studentId: malik, level: 1, items: items(G7U08, 1, [4, 7]) });
+    await t.mutation(api.workbook.correct, { studentId: priya, level: 1, items: items(G7U08, 1, [4]) });
+    await t.mutation(api.workbook.correct, { studentId: vimal, level: 1, items: items(G7U08, 1, [4]) });
+    raw = (await t.query(api.progress.book, { unitId: u08, stage: "master" }))!;
+    expect(waitsOf(raw).map((w) => `${w.s.name} L${w.n}`)).toEqual(["Malik L2"]);
+    const sh = sheetOf(raw);
+    expect(lostMost(sh).map((h) => `${h.q} ${h.lost}/${h.of}`)).toEqual(["4 3/3"]);
+    // Fewer than three marked: not enough to say.
+    expect(lostMost(sh, 4)).toEqual([]);
+  });
+});
+
 describe("moving students between units and stages", () => {
   test("next stage keeps the old work; Exam Sprint remembers where he was; wrong grade refused", async () => {
     const t = await setup();

@@ -15,9 +15,9 @@ import type {
 } from "convex/server";
 import type * as attendance from "../attendance.js";
 import type * as auth from "../auth.js";
+import type * as boss from "../boss.js";
 import type * as calls from "../calls.js";
 import type * as catalog from "../catalog.js";
-import type * as boss from "../boss.js";
 import type * as clock from "../clock.js";
 import type * as demo from "../demo.js";
 import type * as families from "../families.js";
@@ -61,9 +61,9 @@ import type * as workbook from "../workbook.js";
 declare const fullApi: ApiFromModules<{
   attendance: typeof attendance;
   auth: typeof auth;
+  boss: typeof boss;
   calls: typeof calls;
   catalog: typeof catalog;
-  boss: typeof boss;
   clock: typeof clock;
   demo: typeof demo;
   families: typeof families;

@@ -29,7 +29,7 @@ import { type Fighter, PART_NAME, partOf, type MasterLevel } from "../convex/lib
 import { homeToCheck, levelWaits, teachState, type TeachState } from "../convex/lib/master";
 import { slClock, slDate, slDay } from "../convex/lib/day";
 import { claimLive, CLAIM_PING_MS, type Claim } from "../convex/lib/claims";
-import { boldRuns, type KeyAnswer } from "../convex/lib/key";
+import type { KeyAnswer } from "../convex/lib/key";
 import type { Mark, MarkState } from "../convex/lib/status";
 import { OL, OL_PARTS, olNumber, termOf } from "../convex/lib/syllabus";
 import { errorText, mutate } from "./backend";
@@ -91,8 +91,8 @@ import { gradesOf } from "./grades";
 import { HRow } from "./hrow";
 import { useQuery } from "./live";
 import { MasterBook, TheorySheet } from "./master";
-import { QuestionToggle } from "./bookQuestion";
-import { AnswerKey } from "./roomkit";
+import { BookQuestion, QuestionIcon, useQuestionShown } from "./bookQuestion";
+import { BigAnswer } from "./bigAnswer";
 import { MoveSheet } from "./move";
 import { bookDocAt,
   act,
@@ -597,6 +597,17 @@ function openLevel(v: View, n: number) {
   if (openPaper?.kind === "master" && openPaper.studentId === v.s._id && openPaper.level === n) return;
   leave();
   setPaper(paperAt(v, l));
+}
+
+/** From the question sheet's "To correct": open that student's level of this workbook (his book now or another of his). */
+function openWaiting(studentId: string, unitId: string, n: number) {
+  const me = latestViews.find((x) => x.s._id === studentId);
+  const tv = me && [me, ...me.others].find((x) => bookId(x) === unitId && x.stage === "master");
+  if (!tv) {
+    toast("His paper isn't open here: tap his name.");
+    return;
+  }
+  openLevel(tv, n);
 }
 
 /** Move him to another stage or unit (his paper is from there): the page opens it as soon as the board shows it. */
@@ -1516,9 +1527,10 @@ function PaperHead(props: { v: View; later?: () => void; onUnit: () => void; onC
             disabled={!raceBook || !raceStage}
             onClick={() => setRace(true)}
           >
-            <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3.5" y="4" width="17" height="16" rx="2" />
-              <path d="M3.5 9.3h17M3.5 14.7h17M9.2 4v16M14.8 4v16" />
+            {/* A bar chart on its side (2 Nov 2026, his ask: a stats icon, not a grid): each student a bar in the book. */}
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 3.5v17h16.5" stroke-width="2" />
+              <path d="M8 7.5h9.5M8 12h5.5M8 16.5h11" stroke-width="3" />
             </svg>
           </button>
           <button
@@ -1545,7 +1557,15 @@ function PaperHead(props: { v: View; later?: () => void; onUnit: () => void; onC
       </header>
       <BookRow v={v.home ?? v} open={bookId(v)} openStage={v.stage} onUnits={props.onUnit} />
       {v.where === "absent" && <SignedOut v={v} />}
-      {race && raceBook && raceStage && <BookRaceSheet unitId={raceBook} stage={raceStage} studentId={v.s._id} onClose={() => setRace(false)} />}
+      {race && raceBook && raceStage && (
+        <BookRaceSheet
+          unitId={raceBook}
+          stage={raceStage}
+          studentId={v.s._id}
+          onClose={() => setRace(false)}
+          onOpen={raceStage === "master" ? (id, n) => openWaiting(id, raceBook, n) : undefined}
+        />
+      )}
     </>
   );
 }
@@ -1687,7 +1707,7 @@ function LevelBar(props: { v: View; open: number | null; drafts: Draft[] | undef
 }
 
 /** Under the bar: the open level, its questions, and where it stands. */
-function LevelLine(props: { v: View; l: MasterLevel; look: LevelLook; now: number; remark: boolean }) {
+function LevelLine(props: { v: View; l: MasterLevel; look: LevelLook; now: number; remark: boolean; onClear?: () => void }) {
   const { v, l, look, now } = props;
   const lv = v.mm.lv[String(l.n)];
   const part = partOf(v.mb!, l.from)?.id;
@@ -1709,6 +1729,15 @@ function LevelLine(props: { v: View; l: MasterLevel; look: LevelLook; now: numbe
     <p class={`fc-lvline ${props.remark ? "fixed" : look}`}>
       <b>Level {l.n}</b> · Q{l.from}–{l.to}
       {part ? ` · ${PART_NAME[part]}` : ""} · {state}
+      {/* Marks on the wrong student or level: here, out of the card's way (2 Nov 2026). */}
+      {props.onClear && (
+        <>
+          {" · "}
+          <button type="button" class="link-btn fc-clear" onClick={props.onClear}>
+            Clear marks
+          </button>
+        </>
+      )}
     </p>
   );
 }
@@ -1755,7 +1784,14 @@ function MasterPaperView(props: {
     <div class="fc-paper">
       {props.head(canLater ? () => void later() : undefined)}
       <LevelBar v={v} open={level.n} drafts={props.drafts} onPick={(n) => openLevel(v, n)} />
-      <LevelLine v={v} l={level} look={look} now={now} remark={!!paper.remark} />
+      <LevelLine
+        v={v}
+        l={level}
+        look={look}
+        now={now}
+        remark={!!paper.remark}
+        onClear={marks > 0 && !paper.resumed && !paper.remark ? () => setClearing(true) : undefined}
+      />
       {fixedNow !== undefined && (
         <p class="fc-warn" role="alert">
           Level {level.n} was corrected meanwhile ({v.mm.lv[String(level.n)]?.got ?? 0} / {level.max}). Saving replaces those marks.
@@ -1865,10 +1901,6 @@ function NoBookView(props: { v: View; head: ComponentChildren; onUnit: () => voi
   );
 }
 
-function KeyText(props: { text: string }) {
-  return <>{boldRuns(props.text).map(([s, b], i) => (b ? <b key={i}>{s}</b> : s))}</>;
-}
-
 /**
  * The question on screen (or the level's marks) stays in view between the pinned names and the pad: on a short phone
  * the paper scrolls by itself, just enough and never past the card's top. A new paper starts from the top.
@@ -1919,19 +1951,18 @@ function Marking(props: {
   }
   const answers = new Map((keyQ?.answers ?? []).map((a) => [a.q, a]));
   const go = (i: number) => setPaper({ ...paper, at: i });
-  const marked = qs.filter((q) => paper.given[q]);
   return (
     <>
       <Strip qs={qs} each={each} given={paper.given} at={at} onGo={go} teach={fixedLevel ? (q) => teachState(v.mm.q[String(q)]) : undefined} />
       {paper.resumed && !paper.carriedFrom && !paper.remark && (
+        // One short line (2 Nov 2026: notes took the answer's room): the boxes above show which.
         <p class="fc-resumed">
-          {paper.resumed.count} already marked ({slClock(paper.resumed.at)}): tap a box above to check one.{" "}
+          {paper.resumed.count} already marked ({slClock(paper.resumed.at)}) ·{" "}
           <button type="button" class="link-btn" onClick={props.onClear}>
             Clear them
           </button>
         </p>
       )}
-      {keyQ === null && <p class="fc-nokey">No answer key for this workbook yet: check each answer yourself.</p>}
       {at < qs.length ? (
         <QuestionCard
           key={qs[at]}
@@ -1947,11 +1978,6 @@ function Marking(props: {
         />
       ) : (
         <Summary key={`sum${level.n}`} v={v} paper={paper} level={level} each={each} qs={qs} lock={lock} />
-      )}
-      {marked.length > 0 && !paper.resumed && !paper.remark && at < qs.length && (
-        <button type="button" class="link-btn fc-clear" onClick={props.onClear}>
-          Clear these marks
-        </button>
       )}
     </>
   );
@@ -2028,6 +2054,35 @@ function TeachLine(props: { v: View; level: number; q: number }) {
 /** A Part II question: its parts' names (i, ii, ...). */
 const isPartTwo = (v: View, q: number) => (partOf(v.mb!, q)?.id ?? "").startsWith("II");
 
+/**
+ * The card's top line (2 Nov 2026, his ask: the answer gets the room): the question's number as a dark pill, its marks,
+ * then ‹ back and the printed question's icon (only when the book's questions are in the app).
+ */
+function CardHead(props: {
+  label: string;
+  n: ComponentChildren;
+  meta: string;
+  back: { label: string; short: string; go: () => void } | null;
+  shown: ReturnType<typeof useQuestionShown>;
+}) {
+  return (
+    <div class="fc-qhead">
+      <span class="fc-qn" aria-hidden="true">
+        {props.n}
+      </span>
+      <span class="fc-qmeta">{props.meta}</span>
+      <span class="fc-qtools">
+        {props.back && (
+          <button type="button" class="fc-back" aria-label={`Back to ${props.back.label}`} onClick={props.back.go}>
+            ‹ {props.back.short}
+          </button>
+        )}
+        <QuestionIcon q={props.label} shown={props.shown} />
+      </span>
+    </div>
+  );
+}
+
 function QuestionCard(props: {
   v: View;
   paper: MasterPaper;
@@ -2097,6 +2152,7 @@ function QuestionCard(props: {
     });
   };
   const tone = offer.dk ? "dk" : offer.g === max ? "full" : offer.g === 0 ? "zero" : "part";
+  const shown = useQuestionShown(bookId(v), "master");
   const blank = (
     <button
       type="button"
@@ -2111,62 +2167,48 @@ function QuestionCard(props: {
 
   return (
     <>
-      <section class={`fc-card${parts ? " with-parts" : ""}`} aria-label={`Question ${q}`}>
-        <div class="fc-qhead">
-          {i > 0 ? (
-            <button type="button" class="fc-back" aria-label={`Back to Q${qs[i - 1]}`} onClick={() => setPaper({ ...paper, at: i - 1 })}>
-              ‹ Q{qs[i - 1]}
-            </button>
-          ) : (
-            <span />
-          )}
-          <span class="fc-qmeta">
-            {part ? PART_NAME[part] : ""} · {max} mark{max === 1 ? "" : "s"}
-          </span>
-        </div>
+      <section class={`fc-card${parts ? " with-parts" : ""}`} aria-label={`Question ${q}${part ? `, ${PART_NAME[part]}` : ""}, ${max} marks`}>
+        <CardHead
+          label={`Q${q}`}
+          n={<><small>Q</small>{q}</>}
+          meta={`${max} mark${max === 1 ? "" : "s"}${parts ? ` · ${parts.length} parts` : ""}`}
+          back={i > 0 ? { label: `Q${qs[i - 1]}`, short: String(qs[i - 1]), go: () => setPaper({ ...paper, at: i - 1 }) } : null}
+          shown={shown}
+        />
         <TeachLine v={v} level={paper.level} q={q} />
-        <div class="fc-q">
-          <span class="fc-qn" aria-hidden="true">
-            <small>Q</small>
-            {q}
-          </span>
-          {!parts && (
-            <div class="fc-ans">
-              {props.keyLoading ? (
-                <span class="muted">Loading the answer…</span>
-              ) : props.noKey ? null : !k ? (
-                <span class="muted">No answer in the key.</span>
-              ) : k.parts?.length ? (
-                <ul class="fc-parts">
-                  {k.parts.map((p, j) => (
-                    <li key={j} class="fc-part">
-                      <span class="fc-pt">
-                        <em>{p.p})</em> <KeyText text={p.a} />
-                        {p.m ? <small> ({p.m})</small> : null}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p class="fc-a">
-                  <KeyText text={k.a ?? ""} />
-                </p>
-              )}
-            </div>
-          )}
-        </div>
+        {!parts && (
+          <div class="fc-ans">
+            {props.keyLoading ? (
+              <p class="fc-anote">Loading the answer…</p>
+            ) : props.noKey ? (
+              <p class="fc-anote">No answer key for this workbook yet: check his answer yourself.</p>
+            ) : !k ? (
+              <p class="fc-anote">This question isn't in the answer key: check his answer yourself.</p>
+            ) : k.parts?.length ? (
+              <ul class="fc-parts">
+                {k.parts.map((p, j) => (
+                  <li key={j} class="fc-part">
+                    <em class="fc-pl">{p.p}</em>
+                    <BigAnswer text={p.a} max={44} maxH={110} />
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <BigAnswer text={k.a ?? ""} />
+            )}
+          </div>
+        )}
         {parts && (
-          // Each part with its marks, full width: he taps only a part that lost marks (or ? when he left it blank);
-          // the big button adds up.
+          // Each part: its answer big, then its marks in one row under it (the same place on every part). He taps only
+          // a part that lost marks (or ? when he left it blank); the big button adds up.
           <ul class="fc-parts">
             {parts.map((p, j) => {
               const isBlank = blanks.includes(p.p);
               return (
                 <li key={j} class={`fc-part${isBlank ? " blank" : ""}`}>
-                  <span class="fc-pt">
-                    <em>{p.p})</em> <KeyText text={p.a} />
-                  </span>
-                  <span class={`fc-pm${p.m! >= 4 ? " many" : ""}`} role="group" aria-label={`Part ${p.p}, out of ${p.m}`}>
+                  <em class="fc-pl">{p.p}</em>
+                  <BigAnswer text={p.a} max={44} maxH={110} />
+                  <span class="fc-pm" style={{ "--n": String(p.m! + 2) }} role="group" aria-label={`Part ${p.p}, out of ${p.m}`}>
                     <button
                       type="button"
                       class={`fc-pb dk${isBlank ? " on" : ""}`}
@@ -2197,7 +2239,7 @@ function QuestionCard(props: {
             })}
           </ul>
         )}
-        <QuestionToggle unitId={bookId(v)} stage="master" q={q} />
+        {shown.open && <BookQuestion unitId={bookId(v)!} stage="master" q={q} />}
       </section>
 
       <div class="fc-pad">
@@ -2593,59 +2635,43 @@ function FighterCard(props: { v: View; paper: FighterPaper; i: number; lock: { c
   // A section still closed (its teacher questions not taught): he may have done it anyway; she can still mark it.
   const taughtQ = (x: number) => ["taught", "skip"].includes(v.marks[String(x)]?.s ?? "");
   const closed = !teach && sec.kind === "ladder" && !sec.teach.every(taughtQ) && !shown;
+  const printed = useQuestionShown(bookId(v), "fighter");
 
   return (
     <>
       <section class="fc-card fighter" aria-label={f.longLabel(q)}>
-        <div class="fc-qhead">
-          {i > 0 ? (
-            <button
-              type="button"
-              class="fc-back"
-              aria-label={`Back to ${f.longLabel(paper.qs[i - 1])}`}
-              onClick={() => setPaper({ ...paper, at: i - 1 })}
-            >
-              ‹ {qLabel(f, paper.qs[i - 1])}
+        <CardHead
+          label={f.longLabel(q)}
+          n={label === String(q) ? <><small>Q</small>{label}</> : label}
+          meta={sec.kind === "past" && label !== String(q) ? `${where} · Q${q}` : where}
+          back={i > 0 ? { label: f.longLabel(paper.qs[i - 1]), short: qLabel(f, paper.qs[i - 1]), go: () => setPaper({ ...paper, at: i - 1 }) } : null}
+          shown={printed}
+        />
+        {/* One short line at most about this question (what she did, or why it is special), then the answer, big. */}
+        {mine && shown ? (
+          <p class={`fc-now s-${shown}`}>
+            Marked {STATE_SIGN[shown]} {STATE_WORD[shown]}.{" "}
+            <button type="button" class="link-btn" onClick={undoMine}>
+              Undo
             </button>
-          ) : (
-            <span />
-          )}
-          <span class="fc-qmeta">{where}</span>
+          </p>
+        ) : kept ? (
+          <p class={`fc-now s-${shown}`}>
+            Saved: {STATE_SIGN[shown!]} {STATE_WORD[shown!]}.
+          </p>
+        ) : teach ? (
+          <p class="fc-anote fc-teachq">
+            Teacher question (Theory teaches it): {shown === "taught" ? "taught" : shown === "skip" ? "skipped" : "not taught yet"}.
+          </p>
+        ) : closed ? (
+          <p class="fc-anote">Section {sec.badge || sec.id}'s teacher questions aren't taught yet. Mark it only if he did it.</p>
+        ) : redo ? (
+          <p class="fc-anote">{redo}</p>
+        ) : null}
+        <div class="fc-ans">
+          <FighterAnswer unitId={bookId(v)} q={q} />
         </div>
-        <div class="fc-q">
-          <span class="fc-qn" aria-hidden="true">
-            {label === String(q) ? <small>Q</small> : null}
-            {label}
-          </span>
-          <div class="fc-ans">
-            {mine && shown ? (
-              <p class={`fc-now s-${shown}`}>
-                Marked {STATE_SIGN[shown]} {STATE_WORD[shown]}.{" "}
-                <button type="button" class="link-btn" onClick={undoMine}>
-                  Undo
-                </button>
-              </p>
-            ) : (
-              <>
-                {teach && (
-                  <p class="muted small fc-teachq">
-                    Teacher question (Theory teaches it): {shown === "taught" ? "taught" : shown === "skip" ? "skipped" : "not taught yet"}.
-                  </p>
-                )}
-                {kept && (
-                  <p class={`fc-now s-${shown}`}>
-                    Saved: {STATE_SIGN[shown!]} {STATE_WORD[shown!]}.
-                  </p>
-                )}
-                {closed && <p class="muted small">Section {sec.badge || sec.id}'s teacher questions aren't taught yet. Mark it only if he did it.</p>}
-                {redo && <p class="muted small">{redo}</p>}
-                {bookId(v) ? <AnswerKey unitId={bookId(v)!} q={q} stage="fighter" /> : <p class="muted small">Check his answer in the notebook.</p>}
-              </>
-            )}
-            {sec.kind === "past" && <p class="muted small">{f.longLabel(q)}</p>}
-          </div>
-        </div>
-        <QuestionToggle unitId={bookId(v)} stage="fighter" q={q} />
+        {printed.open && <BookQuestion unitId={bookId(v)!} stage="fighter" q={q} />}
       </section>
 
       <div class="fc-pad">
@@ -2684,6 +2710,33 @@ function FighterCard(props: { v: View; paper: FighterPaper; i: number; lock: { c
         )}
       </div>
     </>
+  );
+}
+
+/** A theory book's answer, big: its key comes with a topic tute; a book without one sends her to his notebook. */
+function FighterAnswer(props: { unitId: string | null | undefined; q: number }) {
+  if (!props.unitId || !bookDocAt(props.unitId, "fighter")?.keyCount) {
+    return <p class="fc-anote">No answer key for this book: check his answer in the notebook.</p>;
+  }
+  return <FighterKey unitId={props.unitId} q={props.q} />;
+}
+
+function FighterKey(props: { unitId: string; q: number }) {
+  const keyQ = useQuery<{ answers: KeyAnswer[] } | null>(api.catalog.key, { unitId: props.unitId as Id<"units">, stage: "fighter" });
+  if (keyQ === undefined) return <p class="fc-anote">Loading the answer…</p>;
+  const k = keyQ?.answers.find((a) => a.q === props.q);
+  if (!k) return <p class="fc-anote">This question isn't in the answer key: check his answer in the notebook.</p>;
+  return k.parts?.length ? (
+    <ul class="fc-parts">
+      {k.parts.map((p, j) => (
+        <li key={j} class="fc-part">
+          <em class="fc-pl">{p.p}</em>
+          <BigAnswer text={p.a} max={44} maxH={110} />
+        </li>
+      ))}
+    </ul>
+  ) : (
+    <BigAnswer text={k.a ?? ""} />
   );
 }
 
