@@ -35,13 +35,17 @@ export type Board = {
   sim?: SimInfo | null;
 };
 export type Role = "correction" | "theory" | "evaluation";
+/** A person's jobs (Settings → People): the three pages, and Manager (3 Nov 2026: the hall and every room). */
+export type Job = Role | "manager";
+/** What a tap is recorded as (`by`): the page's job, or the Manager page. */
+export type By = Role | "manager";
 export type Extra = "students" | "books" | "reports";
 /** This phone's person, as the server tells it. */
 export type Me = {
   _id: Id<"users">;
   name: string;
   role: "owner" | "teacher";
-  tabs: Role[];
+  tabs: Job[];
   can: Extra[];
   hasPin: boolean;
   deviceId: Id<"devices">;
@@ -60,7 +64,7 @@ let board: Board | null = null;
 let boardError: string | null = null;
 let link: Link = { connected: false, everConnected: false, sending: 0 };
 let offset = 0;
-let role: Role = "correction";
+let role: By = "correction";
 const listeners = new Set<() => void>();
 
 function emit() {
@@ -229,7 +233,7 @@ export function currentMe(): Me | null {
 }
 
 /** Owner, or has this permission (tabs and extras). */
-export function may(what: Role | Extra | "owner"): boolean {
+export function may(what: Job | Extra | "owner"): boolean {
   const u = me?.user;
   if (!u) return false;
   if (u.role === "owner") return true;
@@ -305,10 +309,11 @@ export function useTick(ms: number): number {
   return now();
 }
 
-export function setRole(r: Role) {
+export function setRole(r: By) {
   role = r;
 }
-export function currentRole(): Role {
+/** The job this phone's taps are recorded as: the page it is on (the Manager page: "manager"). */
+export function currentRole(): By {
   return role;
 }
 

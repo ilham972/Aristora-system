@@ -1,48 +1,56 @@
-// The Manager page (2 Nov 2026, his voice note: "one person runs the entire app and system"; the owner's first bottom
-// tab). Theory and Evaluation teachers have no phone: he sends each group to a teacher himself, says each student's
-// question numbers as they go, and taps Back when they return. Rules in src/managerData.ts.
-// - Teachers: one card each. Busy: who is with her, how long, about how long is left; Back (= everything explained or
-//   taught); tap a student for "not everything". Free: her next group is in Do now with her name.
-// - Correction: levels to correct, the oldest; red = no work until it is corrected.
-// - Do now: the groups to send, worst first: names big, each with his question numbers. Send / Not now.
-// - Waiting on purpose (the hold rule: his pick, 20 minutes at most): who and why; Send now.
-// - Can't solve, Check on, on paper, and the same question explained more than once today.
+// The Manager page (2 Nov 2026; rebuilt 3 Nov 2026, his voice note: "rooms of the teachers and the hall as
+// rectangles", "the manager can send anyone to any place", "everything in one view, no scrolling cards"). Rules in
+// src/managerData.ts. One screen:
+// - Three numbers to bring down: levels to correct · students to explain to · students to teach (red = no work).
+//   Tap one: the hall lights who it is.
+// - A room per teacher (fixed places, by name), coloured by what she is doing now. Her students as pills: called by
+//   her phone (dotted), on his way (dashed: her phone calls her until she taps Arrived), with her (solid). Free: the
+//   group the page suggests for her; one tap on the room sends it. Free while work waits: amber at 2 min, red at 5.
+// - The hall: everyone else, A–Z, never moving. Outline red = no work, orange = should go now, yellow = waiting on
+//   purpose; a dot = no teacher yet today (1 h here); dashed = quiet (no mark for a while).
+// - Tap a student, then tap a room: he goes there (or drag him onto it). His strip at the bottom: what he is doing,
+//   his day as a bar, a button per teacher who can take him.
 
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { slClock, slDay } from "../convex/lib/day";
+import type { Day, SegKind } from "../convex/lib/timeline";
 import { joinNames } from "./announce";
-import { mutate } from "./backend";
+import { fetchOnce, mutate } from "./backend";
 import type { View } from "./derive";
-import type { Decision, EvalHere } from "./evalFocusData";
 import { useQuery } from "./live";
 import {
-  backAll,
-  backEval,
-  backTheory,
-  bookWords,
-  JOB_WORDS,
+  callFor,
+  canTake,
+  KIND_WORDS,
   managerPlan,
-  qsWords,
-  SNOOZE_MS,
-  type Held,
+  needOf,
+  pillWords,
+  shortNames,
+  type HallPill,
   type Job,
-  type PersonCard,
+  type ManagerPlan,
+  type Room,
+  type RoomPill,
   type SendTask,
   type Teacher,
+  type TaskKind,
 } from "./managerData";
 import { MoveSheet } from "./move";
 import { act, type Board, toast } from "./store";
-import { lessonLength, mShort, type RoomLesson, type RoomStudent } from "./theoryFocusData";
+import { lessonLength, mShort, STAY_MS } from "./theoryFocusData";
 import { tone } from "./tones";
-import { Sheet } from "./ui";
 
 /** The manager's taps go in the history as his. */
 const BY = "manager";
-type TeamRow = { _id: string; name: string; tabs: string[] };
+type TeamRow = { _id: string; name: string; tabs: string[]; lastEnd: number | null };
+type Focus = "correct" | "explain" | "teach" | null;
+type Sel = { id: string; call?: string } | null;
 
-/** Teachers he marked "not teaching today": this phone, today only. */
+const jobsOf = (tabs: string[]): Job[] => (["evaluation", "theory"] as const).filter((j) => tabs.includes(j));
+
+/** Teachers marked "not here today": this phone, today only. */
 function useAway(now: number): [Set<string>, (id: string, away: boolean) => void] {
   const day = slDay(now);
   const read = (): Set<string> => {
@@ -71,45 +79,75 @@ function useAway(now: number): [Set<string>, (id: string, away: boolean) => void
   return [ids, set];
 }
 
-/** "Raj, Zara +2": a group's names, short. */
-const shortNames = (names: string[]) => (names.length <= 3 ? joinNames(names) : `${names.slice(0, 2).join(", ")} +${names.length - 2}`);
-const jobsOf = (tabs: string[]): Job[] => (["evaluation", "theory"] as const).filter((j) => tabs.includes(j));
-const unitTa = (t: Pick<SendTask, "unit">) => t.unit?.ta ?? "";
+/** The page fills the screen between what is above it and the bottom tabs: the hall scrolls inside, not the page. */
+function useFill() {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const fit = () => {
+      const tabs = document.querySelector(".tabs")?.getBoundingClientRect().height ?? 0;
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      el.style.height = `${Math.max(360, window.innerHeight - top - tabs)}px`;
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(fit);
+    ro?.observe(document.body);
+    return () => {
+      window.removeEventListener("resize", fit);
+      ro?.disconnect();
+    };
+  }, []);
+  return ref;
+}
 
 export function ManagerPage(props: { board: Board; views: View[]; now: number }) {
   const { board, views, now } = props;
   const rows = useQuery<TeamRow[]>(api.people.team, {});
   const recent = useQuery<{ ms: number[] }>(api.calls.lessons, {});
   const [away, setAway] = useAway(now);
-  const [snoozed, setSnoozed] = useState<Record<string, number>>({});
+  const [sel, setSel] = useState<Sel>(null);
+  const [focus, setFocus] = useState<Focus>(null);
   const [busy, setBusy] = useState(false);
-  const [sheet, setSheet] = useState<{ teacher: string; key: string } | null>(null);
   const [moving, setMoving] = useState<View | null>(null);
-  const team: Teacher[] = (rows ?? []).map((r) => ({ id: r._id, name: r.name, jobs: jobsOf(r.tabs) }));
-  const lessonMs = lessonLength(recent?.ms);
-  const quietSet = new Set(Object.entries(snoozed).filter(([, until]) => until > now).map(([k]) => k));
-  const plan = managerPlan(board, views, now, team, { lessonMs, snoozed: quietSet, away });
+  const fill = useFill();
+  // The page is one screen: the app's bottom spare space goes (the hall scrolls inside).
+  useEffect(() => {
+    document.body.classList.add("mg2-on");
+    return () => document.body.classList.remove("mg2-on");
+  }, []);
+  const team: Teacher[] = (rows ?? []).map((r) => ({ id: r._id, name: r.name, jobs: jobsOf(r.tabs), lastEnd: r.lastEnd }));
+  const plan = managerPlan(board, views, now, team, { lessonMs: lessonLength(recent?.ms), away });
   const inClass = views.filter((v) => v.where !== "absent");
 
-  /** Send a group: they go to her now (he tells each his numbers). Undo for 2 minutes. */
-  const send = async (t: SendTask) => {
-    if (!t.to) {
-      toast("Nobody can take them now. Tap a teacher's card when she is free, or add one in Settings → People.", "error");
+  // The student he tapped: in the hall, or a pill in a room (its call).
+  const hallSel = sel && !sel.call ? plan.hall.find((p) => p.v.s._id === sel.id) : undefined;
+  const roomSel = sel?.call ? findPill(plan, sel.call) : undefined;
+  useEffect(() => {
+    if (sel && !hallSel && !roomSel) setSel(null); // he went home, or into a room: the strip closes
+  });
+
+  /** Send these students to her: they walk there, her phone calls her until she taps Arrived. Undo for 2 minutes. */
+  const send = async (who: View[], t: Teacher, kind: TaskKind) => {
+    const call = callFor(t, kind);
+    if (!call) {
+      const job = kind === "theory" ? "Theory or Evaluation" : "Evaluation";
+      toast(`${t.name} doesn't do ${KIND_WORDS[kind]}. Settings → People → ${t.name} → tick ${job}.`, "error");
       return;
     }
-    const to = t.to;
     setBusy(true);
-    const books = t.who.flatMap((w) =>
-      w.v.unit && (w.v.stage === "fighter" || w.v.stage === "master") ? [{ studentId: w.v.s._id, unitId: w.v.unit._id, stage: w.v.stage }] : [],
-    );
+    const books = call.visit
+      ? undefined
+      : who.flatMap((v) => (v.unit && (v.stage === "fighter" || v.stage === "master") ? [{ studentId: v.s._id, unitId: v.unit._id, stage: v.stage }] : []));
     const res = await act(() =>
       mutate(api.calls.create, {
-        studentIds: t.who.map((w) => w.v.s._id),
-        room: t.job,
-        kind: t.job,
-        books,
-        teacherId: to.id as Id<"users">,
-        here: true,
+        studentIds: who.map((v) => v.s._id),
+        room: call.room,
+        kind: call.kind,
+        ...(books ? { books } : {}),
+        ...(call.visit ? { visit: true } : {}),
+        teacherId: t.id as Id<"users">,
         by: BY,
       }),
     );
@@ -119,460 +157,521 @@ export function ManagerPage(props: { board: Board; views: View[]; now: number })
     const ids = res.created.map((c) => c.callId);
     if (!ids.length) return;
     tone("call");
-    const sent = t.who.filter((w) => res.created.some((c) => c.studentId === w.v.s._id)).map((w) => w.v.s.name);
-    toast(`${joinNames(sent)} → ${to.name}.`, "info", () => {
-      void act(() => mutate(api.calls.unsend, { callIds: ids, by: BY })).then((r) => r && toast("Taken back: they stay in the hall."));
+    // (He may have tapped someone else meanwhile: only the strip of a student who went closes.)
+    setSel((s) => (s && who.some((v) => v.s._id === s.id) ? null : s));
+    const names = who.filter((v) => res.created.some((c) => c.studentId === v.s._id)).map((v) => v.s.name);
+    toast(`${joinNames(names)} → ${t.name}${kind === "visit" ? " (check-in)" : ""}.`, "info", () => {
+      void act(() => mutate(api.calls.unsend, { callIds: ids, by: BY })).then((r) => r && toast("Taken back: back in the hall."));
     });
   };
-
-  /** "Send now" on someone held: the group he would go in, now. */
-  const sendNow = async (h: Held) => {
-    const forced = managerPlan(board, views, now, team, { lessonMs, away, force: new Set([h.v.key]) });
-    const t = forced.tasks.find((x) => x.who.some((w) => w.v.s._id === h.v.s._id));
-    if (t) await send(t);
-    else toast(`${h.v.s.name} can't be sent now.`, "error");
+  const sendTask = (t: SendTask) => (t.to ? send(t.who.map((w) => w.v), t.to, t.kind) : undefined);
+  /** One student to one room: what he needs now decides what for (lost marks, theory, else a check-in). */
+  const sendOne = (v: View, r: Room) => {
+    const need = needOf(v);
+    void send([need.v], r.t, need.kind);
   };
 
-  /** Back: everything explained / taught, all back to work. */
-  const back = async (p: PersonCard) => {
-    const items = backAll(p);
-    if (!items.length) return;
-    setBusy(true);
-    const res = await act(() => mutate(api.calls.finish, { items: items.map((i) => ({ ...i, callId: i.callId as Id<"calls"> })), by: BY }));
-    setBusy(false);
-    if (!res) return;
-    tone("done");
-    const names = [...p.evalHere.map((h) => h.v.s.name), ...p.theory.flatMap((l) => l.here.map((st) => st.v.s.name))];
-    toast(`${joinNames(names)}: back to work.`);
+  /** Tap a room: the student he tapped goes there; else (free) the group the page suggests. */
+  const tapRoom = (r: Room) => {
+    if (hallSel) return sendOne(hallSel.v, r);
+    if (r.free && r.suggest && !busy) void sendTask(r.suggest);
   };
 
-  /** Not here today: one tap, with Undo on the message (2 Nov 2026: he tapped it by mistake and she was gone). */
   const markAway = (t: Teacher) => {
     setAway(t.id, true);
     toast(`${t.name}: not here today.`, "info", () => setAway(t.id, false));
   };
 
-  /** Called by a teacher's own phone and not with her yet: not now. */
-  const cancel = async (ids: string[]) => {
-    await act(() => mutate(api.calls.cancel, { callIds: ids as Id<"calls">[], by: "correction" }));
+  // ---- Drag a hall student onto a room (hold him, then move): the same as tap him, tap the room ----
+  const drag = useRef<{ id: string; x: number; y: number; timer: number; on: boolean; pid: number; el: HTMLElement } | null>(null);
+  const [ghost, setGhost] = useState<{ name: string; x: number; y: number; over: string | null } | null>(null);
+  // The click that follows a drop on the same hall pill is not a tap.
+  const dragged = useRef<{ id: string; at: number } | null>(null);
+  const roomAt = (x: number, y: number) => (document.elementFromPoint(x, y)?.closest("[data-room]") as HTMLElement | null)?.dataset.room ?? null;
+  const noScroll = (e: TouchEvent) => e.preventDefault();
+  const endDrag = () => {
+    const d = drag.current;
+    if (d) window.clearTimeout(d.timer);
+    drag.current = null;
+    document.removeEventListener("touchmove", noScroll);
+    setGhost(null);
   };
-
-  const open = sheet ? plan.people.find((p) => p.t.id === sheet.teacher) : undefined;
-  const openEval = open?.evalHere.find((h) => h.v.key === sheet?.key);
-  const openTheory = open?.theory.flatMap((l) => l.here.map((st) => ({ l, st }))).find((x) => x.st.v.key === sheet?.key);
+  const onDown = (e: PointerEvent, p: HallPill) => {
+    if (e.button !== 0 || busy) return;
+    const el = e.currentTarget as HTMLElement;
+    const d = { id: p.v.s._id, x: e.clientX, y: e.clientY, on: false, pid: e.pointerId, el, timer: 0 };
+    d.timer = window.setTimeout(() => {
+      if (drag.current !== d) return;
+      d.on = true;
+      try {
+        el.setPointerCapture(d.pid);
+      } catch {
+        /* the finger already left */
+      }
+      document.addEventListener("touchmove", noScroll, { passive: false });
+      navigator.vibrate?.(25);
+      setGhost({ name: p.v.s.name, x: d.x, y: d.y, over: null });
+    }, 220);
+    drag.current = d;
+  };
+  const onMove = (e: PointerEvent) => {
+    const d = drag.current;
+    if (!d) return;
+    if (!d.on) {
+      if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 10) endDrag(); // a scroll, not a hold
+      return;
+    }
+    setGhost((g) => (g ? { ...g, x: e.clientX, y: e.clientY, over: roomAt(e.clientX, e.clientY) } : g));
+  };
+  const onUp = (e: PointerEvent) => {
+    const d = drag.current;
+    if (!d) return;
+    if (d.on) {
+      dragged.current = { id: d.id, at: Date.now() };
+      const id = roomAt(e.clientX, e.clientY);
+      const r = plan.rooms.find((x) => x.t.id === id);
+      const p = plan.hall.find((x) => x.v.s._id === d.id);
+      if (r && p) sendOne(p.v, r);
+    }
+    endDrag();
+  };
+  useEffect(() => endDrag, []);
 
   if (inClass.length === 0) {
     return (
-      <div class="mg-page">
-        <p class="mg-empty">Nobody is signed in yet. Sign students in from the count at the top.</p>
+      <div class="mg2" ref={fill}>
+        <p class="mg2-empty">Nobody is signed in yet. Sign students in from the count at the top.</p>
       </div>
     );
   }
 
-  const awayList = team.filter((t) => away.has(t.id) && !plan.people.some((p) => p.t.id === t.id));
-  // A card for each group someone can take (now, or next when she is free); the rest in one line, until a teacher frees.
-  const toDo = plan.tasks.filter((t) => t.to);
-  const later = plan.tasks.filter((t) => !t.to);
+  const lit = focus ? new Set(plan.counts[focus].ids) : null;
+  const pick = (id: string, call?: string) => {
+    const dr = dragged.current;
+    if (!call && dr && dr.id === id && Date.now() - dr.at < 400) return; // the click after a drop
+    tone("tick");
+    setSel((s) => (s && s.id === id && s.call === call ? null : { id, call }));
+  };
+  // While a student is picked, the rooms that can take him light up (what he goes for decides).
+  const need = hallSel ? needOf(hallSel.v) : null;
 
   return (
-    <div class="mg-page">
-      <section class="mg-people" aria-label="Teachers">
-        {plan.people.map((p) => (
-          <PersonBox
-            key={p.t.id}
-            p={p}
+    <div class={`mg2${ghost ? " dragging" : ""}`} ref={fill}>
+      <div class="mg2-counts" role="group" aria-label="What waits">
+        {(
+          [
+            ["correct", "to correct", plan.counts.correct],
+            ["explain", "to explain", plan.counts.explain],
+            ["teach", "to teach", plan.counts.teach],
+          ] as const
+        ).map(([k, word, c]) => (
+          <button
+            key={k}
+            type="button"
+            class={`mg2-n n-${k}${c.n === 0 ? " zero" : ""}${focus === k ? " on" : ""}${c.red ? " red" : ""}`}
+            aria-pressed={focus === k}
+            aria-label={`${c.n} ${word}${c.red ? `, ${c.red} with no work` : ""}`}
+            onClick={() => setFocus(focus === k ? null : k)}
+          >
+            <b>{c.n}</b>
+            <span>{word}</span>
+            {c.red > 0 && <small>{c.red} no work</small>}
+          </button>
+        ))}
+      </div>
+
+      <div class={`mg2-rooms n${Math.min(plan.rooms.length, 4)}`}>
+        {plan.rooms.map((r) => (
+          <RoomBox
+            key={r.t.id}
+            r={r}
             now={now}
-            busy={busy}
-            onBack={() => void back(p)}
-            onOpen={(key) => setSheet({ teacher: p.t.id, key })}
-            onAway={(a) => (a ? markAway(p.t) : setAway(p.t.id, false))}
-            onCancel={(ids) => void cancel(ids)}
+            target={!!need && canTake(r.t, need.kind)}
+            over={ghost?.over === r.t.id}
+            selCall={sel?.call}
+            onTap={() => tapRoom(r)}
+            onPill={(p) => pick(p.v.s._id, p.key)}
+            onAway={() => markAway(r.t)}
           />
         ))}
-        {/* Not here today: her card shrinks in the same place, one tap brings it back. */}
-        {awayList.map((t) => (
-          <div key={t.id} class="mg-person mg-off">
-            <span class={`mg-dot ${t.jobs[0] ?? "evaluation"}`} aria-hidden="true" />
-            <b class="mg-pn">{t.name}</b>
-            <span class="mg-pj">not here today</span>
-            <button type="button" class="btn ghost small" onClick={() => setAway(t.id, false)}>
-              Bring back
-            </button>
-          </div>
-        ))}
-        {plan.noTeachers && team.length === 0 && rows !== undefined && (
-          <p class="mg-note">No Theory or Evaluation teacher yet: Settings → People → Add a teacher (her phone isn't needed).</p>
+        {plan.rooms.length === 0 && (
+          <p class="mg2-note">
+            {rows === undefined ? "Loading the teachers…" : "No Theory or Evaluation teacher: Settings → People → tick Theory or Evaluation for her."}
+          </p>
         )}
-        <CorrectionBox c={plan.correction} now={now} />
-      </section>
-
-      <h2 class="mg-h">Do now{toDo.length ? ` · ${toDo.length}` : ""}</h2>
-      {toDo.length === 0 ? (
-        <p class="mg-none">
-          {later.length
-            ? "Nobody can take a group now."
-            : plan.held.length
-              ? "Nothing to send yet: the groups below are filling."
-              : "Nothing to send. Everyone has work."}
-        </p>
-      ) : (
-        toDo.map((t) => (
-          <TaskCard key={t.key} t={t} now={now} busy={busy} onSend={() => void send(t)} onSnooze={() => setSnoozed({ ...snoozed, [t.key]: now + SNOOZE_MS })} />
-        ))
-      )}
-      {later.length > 0 && (
-        <div class="mg-later">
-          <b>Also waiting</b> (after these):{" "}
-          {later.map((t, i) => (
-            <span key={t.key} class={`h-${t.heat}`}>
-              {i ? " · " : ""}
-              {joinNames(t.who.map((w) => w.v.s.name))} <i>{JOB_WORDS[t.job]}{t.section ? ` ${t.section}` : ""}</i>
-            </span>
+      </div>
+      {plan.away.length > 0 && (
+        <div class="mg2-away">
+          {plan.away.map((t) => (
+            <button key={t.id} type="button" class="mg2-off" onClick={() => setAway(t.id, false)}>
+              {t.name} <span>not here</span> <b>Bring back</b>
+            </button>
           ))}
         </div>
       )}
 
-      {plan.held.length > 0 && (
-        <>
-          <h2 class="mg-h">Waiting on purpose</h2>
-          <p class="mg-sub">They keep working while others reach the same question: one explanation for all (20 min at most).</p>
-          {plan.held.map((h) => (
-            <div key={h.key} class={`mg-held j-${h.job}`}>
-              <div class="mg-held-l">
-                <span class="mg-nm">{h.v.s.name}</span>
-                <span class="mg-qs">
-                  {h.qs.map((q) => (
-                    <i key={q}>{q}</i>
-                  ))}
-                </span>
-                <span class="mg-why">
-                  {h.why}
-                  {h.sendBy ? ` · goes by ${slClock(h.sendBy)}` : ""}
-                </span>
-              </div>
-              <button type="button" class="btn ghost small" disabled={busy} onClick={() => void sendNow(h)}>
-                Send now
-              </button>
-            </div>
+      <section class="mg2-hall" aria-label="The hall">
+        <div class="mg2-hh">
+          <b>Hall</b>
+          <span class="mg2-hn">{plan.hall.length}</span>
+          <span class="mg2-legend" aria-hidden="true">
+            <i class="lg h-red" />
+            no work <i class="lg h-orange" />
+            send <i class="lg h-yellow" />
+            waits <i class="lg-dot" />
+            no teacher yet
+          </span>
+        </div>
+        <div class="mg2-hp" onPointerMove={(e) => onMove(e as unknown as PointerEvent)} onPointerUp={(e) => onUp(e as unknown as PointerEvent)} onPointerCancel={endDrag}>
+          {plan.hall.map((p) => (
+            <button
+              key={p.v.s._id}
+              type="button"
+              data-name={p.v.s.name}
+              class={`mg2-p${p.heat ? ` h-${p.heat}` : ""}${p.noTeacher ? " nt" : ""}${p.quiet ? " qt" : ""}${p.offApp ? " off" : ""}${p.finished ? " fin" : ""}${sel && !sel.call && sel.id === p.v.s._id ? " on" : ""}${lit && !lit.has(p.v.s._id) ? " dim" : ""}`}
+              aria-pressed={!!sel && !sel.call && sel.id === p.v.s._id}
+              aria-label={`${p.v.s.name}: ${hallWords(p, now)}`}
+              onPointerDown={(e) => onDown(e as unknown as PointerEvent, p)}
+              onClick={() => pick(p.v.s._id)}
+            >
+              {p.v.s.name}
+              {p.heat === "red" && p.v.idleMs !== undefined && p.v.idleMs >= 60_000 && <small>{mShort(p.v.idleMs)}</small>}
+            </button>
           ))}
-        </>
-      )}
+          {plan.hall.length === 0 && <p class="mg2-note">Everyone is with a teacher or on the way.</p>}
+        </div>
+      </section>
 
-      {(plan.stuck.length > 0 || plan.quiet.length > 0) && (
-        <>
-          <h2 class="mg-h">You decide</h2>
-          {plan.stuck.map((s) => (
-            <div key={s.key} class="mg-stuck">
-              <span>
-                {s.v && s.key !== "s:nobody" && <b>{s.v.s.name} </b>}
-                {s.why}
-              </span>
-              {s.move && (
-                <button type="button" class="btn small" onClick={() => setMoving(s.v)}>
-                  Move
-                </button>
-              )}
-            </div>
-          ))}
-          {plan.quiet.map((v) => (
-            <div key={v.key} class="mg-quiet">
-              <b>{v.s.name}</b> no mark for {mShort(v.quietMs ?? 0)}: go and check on him
-            </div>
-          ))}
-        </>
+      {hallSel && (
+        <HallStrip
+          p={hallSel}
+          plan={plan}
+          now={now}
+          busy={busy}
+          onSend={(r) => sendOne(hallSel.v, r)}
+          onMove={() => setMoving(hallSel.v)}
+          onClose={() => setSel(null)}
+        />
       )}
-
-      {plan.offApp.length > 0 && <p class="mg-foot">On paper (not in the app): {joinNames(plan.offApp.map((v) => v.s.name))}</p>}
-      {plan.repeats.length > 0 && (
-        <p class="mg-foot">
-          Explained more than once today:{" "}
-          {plan.repeats.slice(0, 5).map((r, i) => (
-            <span key={r.key}>
-              {i ? " · " : ""}
-              <b>{r.label}</b> ×{r.times}
-            </span>
-          ))}
-        </p>
+      {roomSel && (
+        <RoomStrip
+          r={roomSel.r}
+          p={roomSel.p}
+          now={now}
+          busy={busy}
+          setBusy={setBusy}
+          // The answer comes a moment later: if he tapped someone else meanwhile, that strip stays.
+          onClose={() => setSel((s) => (s?.call === roomSel.p.key ? null : s))}
+        />
       )}
-
-      {open && openEval && <EvalBack h={openEval} who={open.t.name} busy={busy} setBusy={setBusy} onClose={() => setSheet(null)} />}
-      {open && openTheory && (
-        <TheoryBack l={openTheory.l} st={openTheory.st} who={open.t.name} busy={busy} setBusy={setBusy} onClose={() => setSheet(null)} />
+      {ghost && (
+        <div class="mg2-ghost" style={{ left: `${ghost.x}px`, top: `${ghost.y}px` }} aria-hidden="true">
+          {ghost.name}
+        </div>
       )}
       {moving && <MoveSheet v={moving} onClose={() => setMoving(null)} />}
     </div>
   );
 }
 
-// ---------------- Pieces ----------------
+function findPill(plan: ManagerPlan, call: string): { r: Room; p: RoomPill } | undefined {
+  for (const r of plan.rooms) {
+    const p = r.pills.find((x) => x.key === call);
+    if (p) return { r, p };
+  }
+  return undefined;
+}
 
-function PersonBox(props: {
-  p: PersonCard;
+/** A hall student in a few words, for a screen reader and his strip. */
+function hallWords(p: HallPill, now: number): string {
+  const bits: string[] = [];
+  if (p.heat === "red") bits.push(p.v.idleMs !== undefined && p.v.idleMs >= 60_000 ? `no work ${mShort(p.v.idleMs)}` : "no work");
+  else if (p.heat === "orange") bits.push(`send now: ${p.task?.who.find((w) => w.v.s._id === p.v.s._id)?.why ?? ""}`);
+  else if (p.held) bits.push(p.held.why);
+  if (p.noTeacher) bits.push(`no teacher yet, here ${mShort(now - (p.v.s.lastInAt ?? now))}`);
+  if (p.quiet) bits.push(`no mark for ${mShort(p.v.quietMs ?? 0)}`);
+  if (p.offApp) bits.push("on paper");
+  if (p.finished) bits.push("finished his book");
+  return bits.join(" · ") || p.v.line;
+}
+
+// ---------------- A teacher's room ----------------
+
+function roomState(r: Room, now: number): string {
+  if (r.free) return r.freeSince === null || now - r.freeSince < 60_000 ? "free" : `free ${mShort(now - r.freeSince)}`;
+  if (r.since === null) return r.pills.some((p) => p.state === "walking") ? "coming" : "called";
+  const spent = now - r.since;
+  const left = r.over ? "over" : r.leftMs ? `~${mShort(Math.max(60_000, r.leftMs))} left` : "";
+  return [spent >= 60_000 ? mShort(spent) : "", left].filter(Boolean).join(" · ") || "now";
+}
+
+/** "Theory D · no work", "Evaluation · 2", "Check-in · 3": what the suggested group is for (the names follow). */
+function sugWords(t: SendTask): string {
+  const what = `${KIND_WORDS[t.kind]}${t.section ? ` ${t.section}` : ""}`;
+  if (t.who.some((w) => w.red)) return `${what} · no work`;
+  if (t.ahead) return `${what} · ahead`;
+  return t.who.length > 1 ? `${what} · ${t.who.length}` : what;
+}
+
+/** "Theory D", "Evaluation", "Check-in": what she is doing (her room's colour). */
+function doingWords(r: Room): string {
+  if (!r.doing) return "";
+  if (r.doing !== "theory") return KIND_WORDS[r.doing];
+  const sec = r.pills.find((p) => p.state === "here" && p.kind === "theory")?.rc.c.section;
+  return sec && sec !== "R" ? `Theory ${sec}` : "Theory";
+}
+
+function RoomBox(props: {
+  r: Room;
   now: number;
-  busy: boolean;
-  onBack: () => void;
-  onOpen: (key: string) => void;
-  onAway: (away: boolean) => void;
-  onCancel: (ids: string[]) => void;
+  target: boolean;
+  over: boolean;
+  selCall?: string;
+  onTap: () => void;
+  onPill: (p: RoomPill) => void;
+  onAway: () => void;
 }) {
-  const { p, now } = props;
-  const jobs = p.t.jobs.map((j) => JOB_WORDS[j]).join(" · ");
-  const withHer: { key: string; name: string; qs: string[]; job: Job }[] = [
-    ...p.evalHere.map((h) => ({
-      key: h.v.key,
-      name: h.v.s.name,
-      qs: h.kind === "theory" ? ["theory"] : h.qs.map((q) => String(q)),
-      job: "evaluation" as Job,
-    })),
-    ...p.theory.flatMap((l) =>
-      l.here.map((st) => ({
-        key: st.v.key,
-        name: st.v.s.name,
-        qs: l.section ? [l.section.id] : [...st.qs.map(String), ...(st.whole ? ["All"] : [])],
-        job: "theory" as Job,
-      })),
-    ),
-  ];
-  const free = withHer.length === 0 && p.coming.length === 0;
-  const spent = p.since !== null ? now - p.since : 0;
+  const { r, now } = props;
+  const cls = [
+    "mg2-room",
+    `d-${r.doing ?? (r.free ? "free" : "coming")}`,
+    r.alarm ? `a-${r.alarm}` : "",
+    props.target ? "target" : "",
+    props.over ? "over" : "",
+    r.away ? "away" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const sug = r.free ? r.suggest : null;
   return (
-    <div class={`mg-person${free ? " free" : ""}${p.over ? " over" : ""}${p.away ? " away" : ""}`}>
-      <div class="mg-ph">
-        <span class={`mg-dot ${p.t.jobs[0] ?? "evaluation"}`} aria-hidden="true" />
-        <b class="mg-pn">{p.t.name}</b>
-        <span class="mg-pj">{jobs}</span>
-        <span class="mg-pt">
-          {free
-            ? "free"
-            : p.since !== null
-              ? [spent >= 60_000 ? mShort(spent) : "", p.leftMs ? `~${mShort(Math.max(60_000, p.leftMs))} left` : p.over ? "over" : ""].filter(Boolean).join(" · ") || "now"
-              : "called"}
-        </span>
+    <div
+      class={cls}
+      data-room={r.t.id}
+      role="button"
+      tabIndex={0}
+      aria-label={`${r.t.name}: ${roomState(r, now)}${sug ? `, suggested ${joinNames(sug.who.map((w) => w.v.s.name))}` : ""}`}
+      onClick={props.onTap}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") props.onTap();
+      }}
+    >
+      <div class="mg2-rh">
+        <b>{r.t.name}</b>
+        <span>{roomState(r, now)}</span>
       </div>
-      {withHer.length > 0 && (
-        <div class="mg-with">
-          {withHer.map((w) => (
-            <button key={w.key} type="button" class={`mg-sp j-${w.job}`} onClick={() => props.onOpen(w.key)} aria-label={`${w.name}: not everything done?`}>
-              <b>{w.name}</b>
-              <span>{w.qs.join(" ")}</span>
+      {r.doing && <div class="mg2-rd">{doingWords(r)}</div>}
+      {r.pills.length > 0 && (
+        <div class="mg2-rp">
+          {r.pills.map((p) => (
+            <button
+              key={p.key}
+              type="button"
+              data-name={p.v.s.name}
+              class={`mg2-sp s-${p.state} mk-${p.kind}${p.late ? " late" : ""}${props.selCall === p.key ? " on" : ""}`}
+              aria-label={`${p.v.s.name}: ${pillWords(p)}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                props.onPill(p);
+              }}
+            >
+              {p.v.s.name}
             </button>
           ))}
         </div>
       )}
-      {p.coming.length > 0 && (
-        <div class="mg-coming">
-          Called from her phone: {joinNames(p.coming.map((rc) => rc.v?.s.name ?? "?"))}{" "}
-          <button type="button" class="mg-link" onClick={() => props.onCancel(p.coming.map((rc) => rc.c._id))}>
-            Cancel
-          </button>
+      {sug && (
+        <div class={`mg2-sug h-${sug.heat} mk-${sug.kind}`}>
+          <span class="mg2-sw">{sugWords(sug)}</span>
+          <span class="mg2-sn">→ {shortNames(sug.who.map((w) => w.v.s.name))}</span>
         </div>
       )}
-      {withHer.length > 0 ? (
-        <div class="mg-pacts">
-          <button type="button" class="btn mg-back" disabled={props.busy} onClick={props.onBack}>
-            Back ✓ {withHer.length > 1 ? `all ${withHer.length}` : ""}
-          </button>
-        </div>
-      ) : (
-        !p.away && (
-          <div class="mg-pnext">
-            <span>{p.next ? `Next: ${shortNames(p.next.who.map((w) => w.v.s.name))}` : "Nothing for her yet"}</span>
-            <button type="button" class="mg-link" onClick={() => props.onAway(true)}>
-              Not here today
-            </button>
-          </div>
-        )
-      )}
-    </div>
-  );
-}
-
-function CorrectionBox(props: { c: ReturnType<typeof managerPlan>["correction"]; now: number }) {
-  const { c, now } = props;
-  return (
-    <div class={`mg-person mg-corr${c.red.length ? " red" : ""}`}>
-      <div class="mg-ph">
-        <span class="mg-dot correction" aria-hidden="true" />
-        <b class="mg-pn">Correction</b>
-        <span class="mg-pt">{c.levels ? `${c.levels} to correct` : "nothing waits"}</span>
-      </div>
-      {c.oldest && (
-        <div class="mg-cl">
-          Oldest: <b>{c.oldest.v.s.name}</b> L{c.oldest.n} · {mShort(now - c.oldest.since)}
-        </div>
-      )}
-      {c.red.map((w) => (
-        <div key={`${w.v.key}:${w.n}`} class="mg-cl mg-red">
-          <b>{w.v.s.name}</b> has no work until L{w.n} is corrected · {mShort(now - w.since)}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function TaskCard(props: { t: SendTask; now: number; busy: boolean; onSend: () => void; onSnooze: () => void }) {
-  const { t } = props;
-  const shared = new Set(t.shared.map((s) => s.q));
-  const v0 = t.who[0].v;
-  const head = `${t.to?.name ?? ""}${t.swap ? ` (does ${JOB_WORDS[t.job]})` : ""}`;
-  return (
-    <div class={`mg-task h-${t.heat} j-${t.job}`}>
-      <div class="mg-th">
-        <span class="mg-job">{JOB_WORDS[t.job]}</span>
-        <span class="mg-why">{t.why}</span>
-      </div>
-      <div class="mg-book">
-        {bookWords(t.unit, v0)}
-        {t.section ? ` · ${t.section} ${t.sectionTitle ?? ""}` : ` ${unitTa(t)}`}
-      </div>
-      <ul class="mg-who">
-        {t.who.map((w) => (
-          <li key={w.v.key} class={w.red ? "red" : ""}>
-            <b class="mg-nm">{w.v.s.name}</b>
-            <span class="mg-qs">
-              {qsWords(t, w).map((q, i) => (
-                <i key={`${q}${i}`} class={shared.has(w.qs[i]) ? "sh" : ""}>
-                  {q}
-                </i>
-              ))}
-            </span>
-          </li>
-        ))}
-      </ul>
-      <div class="mg-acts">
-        <button type="button" class="btn ghost small" onClick={props.onSnooze}>
-          Not now
+      {r.free && !sug && <div class="mg2-sug none">nothing for her now</div>}
+      {r.free && !r.away && (
+        <button
+          type="button"
+          class="mg2-gone"
+          onClick={(e) => {
+            e.stopPropagation();
+            props.onAway();
+          }}
+        >
+          not here
         </button>
-        {t.freeIn > 0 ? (
-          // She is busy: this group is her next one. Sending now = they wait with her (call ahead).
-          <button type="button" class={`btn ghost mg-send next ${t.job}`} disabled={props.busy || !t.to} onClick={props.onSend}>
-            Next for {head}
-            <small>free ~{mShort(Math.max(60_000, t.freeIn))}</small>
-          </button>
-        ) : (
-          <button type="button" class={`btn mg-send ${t.job}`} disabled={props.busy || !t.to} onClick={props.onSend}>
-            Send to {head}
-          </button>
-        )}
+      )}
+    </div>
+  );
+}
+
+// ---------------- His strip (the student he tapped) ----------------
+
+const SEG_WORDS: Record<SegKind, string> = {
+  work: "working",
+  idle: "no work",
+  walk: "walking",
+  theory: "Theory",
+  evaluation: "Evaluation",
+  visit: "check-in",
+};
+
+/** His day as a bar: from his sign-in to his usual home time (2 h), what each part was. Read once, then every 30 s. */
+function DayBar(props: { v: View; now: number }) {
+  const { v } = props;
+  const [day, setDay] = useState<Day | null>(null);
+  useEffect(() => {
+    let live = true;
+    const load = () =>
+      void fetchOnce(api.manager.day, { studentId: v.s._id })
+        .then((d) => {
+          if (live) setDay(d);
+        })
+        .catch(() => undefined);
+    load();
+    const id = window.setInterval(load, 30_000);
+    return () => {
+      live = false;
+      window.clearInterval(id);
+    };
+  }, [v.s._id]);
+  if (!day || day.from === null) return <div class="mg2-day wait" />;
+  const from = day.from;
+  const end = Math.max(props.now, from + STAY_MS);
+  const span = Math.max(1, end - from);
+  const pct = (t: number) => `${(((t - from) / span) * 100).toFixed(2)}%`;
+  return (
+    <div class="mg2-dayw">
+      <div class="mg2-day" role="img" aria-label={`His day: ${day.segs.map((s) => `${SEG_WORDS[s.kind]} ${mShort(s.to - s.from)}`).join(", ")}`}>
+        {day.segs.map((s) => (
+          <i key={s.from} class={`g-${s.kind}`} style={{ left: pct(s.from), width: `${(((s.to - s.from) / span) * 100).toFixed(2)}%` }} />
+        ))}
+        <b class="mg2-now" style={{ left: pct(Math.min(props.now, end)) }} />
+      </div>
+      <div class="mg2-dayl">
+        <span>{slClock(from, false)}</span>
+        <span class="mg2-dayt">
+          {day.contacts ? `teachers ${mShort(day.teacherMs)} (${day.contacts}×)` : "no teacher yet"}
+          {day.idleMs >= 60_000 ? ` · no work ${mShort(day.idleMs)}` : ""}
+        </span>
+        <span>home {slClock(from + STAY_MS, false)}</span>
       </div>
     </div>
   );
 }
 
-// ---------------- Back, not everything ----------------
-
-const EVAL_STEP: Record<string, Decision> = { x: "th", th: "skip", skip: "x" };
-const EVAL_MARK: Record<Decision, string> = { x: "✓", th: "T", skip: "–" };
-
-function EvalBack(props: { h: EvalHere; who: string; busy: boolean; setBusy: (b: boolean) => void; onClose: () => void }) {
-  const { h } = props;
-  const [dec, setDec] = useState<Record<number, Decision>>({});
-  const pick = (q: number): Decision => dec[q] ?? "x";
-  const save = async (nothing: boolean) => {
-    props.setBusy(true);
-    const { item, theoryQs } = nothing ? { item: { callId: h.rc.c._id, explained: [] as number[] }, theoryQs: [] as number[] } : backEval(h, dec);
-    let ok = true;
-    if (theoryQs.length) {
-      ok = !!(await act(() =>
-        mutate(api.workbook.toTheory, { studentId: h.v.s._id, unitId: h.v.unit?._id ?? h.v.s.unitId!, qs: theoryQs, on: true, by: BY }),
-      ));
-    }
-    const res = ok ? await act(() => mutate(api.calls.finish, { items: [{ ...item, callId: item.callId as Id<"calls"> }], by: BY })) : undefined;
-    props.setBusy(false);
-    if (!res) return;
-    tone("done");
-    toast(`${h.v.s.name}: back to work.`);
-    props.onClose();
-  };
+function HallStrip(props: {
+  p: HallPill;
+  plan: ManagerPlan;
+  now: number;
+  busy: boolean;
+  onSend: (r: Room) => void;
+  onMove: () => void;
+  onClose: () => void;
+}) {
+  const { p, plan, now } = props;
+  const need = needOf(p.v);
+  const suggested = p.task?.to?.id;
+  const rooms = plan.rooms.filter((r) => !r.away && canTake(r.t, need.kind));
+  const why = hallWords(p, now);
   return (
-    <Sheet
-      title={`${h.v.s.name} with ${props.who}`}
-      sub="Tap a question: ✓ explained → T needs Theory → – not now (stays waiting)."
-      onClose={props.onClose}
-      foot={
-        <div class="row-actions">
-          <button type="button" class="btn ghost" disabled={props.busy} onClick={() => void save(true)}>
-            Nothing explained
+    <section class="mg2-strip" aria-label={p.v.s.name}>
+      <div class="mg2-sh">
+        <b>{p.v.s.name}</b>
+        <span class="mg2-sl">{p.v.line}</span>
+        <button type="button" class="mg2-x" aria-label="Close" onClick={props.onClose}>
+          ×
+        </button>
+      </div>
+      {why !== p.v.line && <p class={`mg2-why${p.heat ? ` h-${p.heat}` : ""}`}>{why}</p>}
+      <DayBar v={p.v} now={now} />
+      <div class="mg2-acts">
+        {p.finished && (
+          <button type="button" class="btn small" onClick={props.onMove}>
+            Move him on
           </button>
-          <button type="button" class="btn evaluation" disabled={props.busy} onClick={() => void save(false)}>
-            Back to work
-          </button>
-        </div>
-      }
-    >
-      <div class="mg-decs">
-        {h.qs.length === 0 && <p class="muted">No questions left to explain in this book.</p>}
-        {h.qs.map((q) => (
-          <button key={q} type="button" class={`mg-dec d-${pick(q)}`} onClick={() => setDec({ ...dec, [q]: EVAL_STEP[pick(q)] })}>
-            <b>{q}</b>
-            <span>{EVAL_MARK[pick(q)]}</span>
+        )}
+        {rooms.map((r) => (
+          <button
+            key={r.t.id}
+            type="button"
+            class={`btn small mg2-to mk-${need.kind}${r.t.id === suggested ? " best" : " ghost"}`}
+            disabled={props.busy}
+            onClick={() => props.onSend(r)}
+          >
+            <b>→ {r.t.name}</b>
+            <small>{r.free ? KIND_WORDS[need.kind] : `busy · ${roomState(r, now)}`}</small>
           </button>
         ))}
+        {rooms.length === 0 && <span class="mg2-note">Nobody here does {KIND_WORDS[need.kind]}.</span>}
       </div>
-    </Sheet>
+    </section>
   );
 }
 
-function TheoryBack(props: { l: RoomLesson; st: RoomStudent; who: string; busy: boolean; setBusy: (b: boolean) => void; onClose: () => void }) {
-  const { l, st } = props;
-  const qs = l.section ? st.teach : st.qs;
-  const [off, setOff] = useState<Set<number>>(new Set());
-  const [wholeOff, setWholeOff] = useState(false);
-  const save = async (nothing: boolean) => {
+function RoomStrip(props: { r: Room; p: RoomPill; now: number; busy: boolean; setBusy: (b: boolean) => void; onClose: () => void }) {
+  const { r, p, now } = props;
+  const [sure, setSure] = useState(false);
+  const c = p.rc.c;
+  const run = async (fn: () => Promise<unknown>, done: string) => {
     props.setBusy(true);
-    const taught = new Set(nothing ? [] : qs.filter((q) => !off.has(q)));
-    const { item, workbookTaught } = nothing
-      ? { item: { callId: st.rc.c._id as string, taught: [] as number[], skip: [] as number[] }, workbookTaught: [] as number[] }
-      : backTheory(l, st.v, st.rc.c._id, taught, !wholeOff);
-    let ok = true;
-    if (workbookTaught.length) {
-      ok = !!(await act(() =>
-        mutate(api.workbook.taught, { studentId: st.v.s._id, unitId: st.v.unit?._id ?? st.v.s.unitId!, qs: workbookTaught, on: true, by: BY }),
-      ));
-    }
-    const res = ok ? await act(() => mutate(api.calls.finish, { items: [{ ...item, callId: item.callId as Id<"calls"> }], by: BY })) : undefined;
+    const res = await act(fn);
     props.setBusy(false);
-    if (!res) return;
-    tone("done");
-    toast(`${st.v.s.name}: back to work.`);
+    if (res === undefined) return;
+    tone("tick");
+    toast(done);
     props.onClose();
   };
-  const flip = (q: number) => {
-    const next = new Set(off);
-    if (next.has(q)) next.delete(q);
-    else next.add(q);
-    setOff(next);
-  };
+  const name = p.v.s.name;
+  const undo = !!c.byManager && c.sentAt !== undefined && now - c.sentAt < 2 * 60_000 && p.state === "walking";
   return (
-    <Sheet
-      title={`${st.v.s.name} with ${props.who}`}
-      sub="Tap what wasn't taught: it stays his, the lesson comes back."
-      onClose={props.onClose}
-      foot={
-        <div class="row-actions">
-          <button type="button" class="btn ghost" disabled={props.busy} onClick={() => void save(true)}>
-            Nothing taught
-          </button>
-          <button type="button" class="btn theory" disabled={props.busy} onClick={() => void save(false)}>
-            Back to work
-          </button>
-        </div>
-      }
-    >
-      <div class="mg-decs">
-        {qs.map((q) => (
-          <button key={q} type="button" class={`mg-dec ${off.has(q) ? "d-skip" : "d-x"}`} onClick={() => flip(q)}>
-            <b>{q}</b>
-            <span>{off.has(q) ? "–" : "✓"}</span>
-          </button>
-        ))}
-        {st.whole && (
-          <button type="button" class={`mg-dec ${wholeOff ? "d-skip" : "d-x"}`} onClick={() => setWholeOff(!wholeOff)}>
-            <b>All</b>
-            <span>{wholeOff ? "–" : "✓"}</span>
+    <section class="mg2-strip" aria-label={name}>
+      <div class="mg2-sh">
+        <b>{name}</b>
+        <span class="mg2-sl">
+          {p.state === "called" ? `called by ${r.t.name}` : p.state === "walking" ? `on his way to ${r.t.name}` : `with ${r.t.name}`} · {pillWords(p)}
+        </span>
+        <button type="button" class="mg2-x" aria-label="Close" onClick={props.onClose}>
+          ×
+        </button>
+      </div>
+      {p.state === "walking" && p.late && <p class="mg2-why h-red">{r.t.name} hasn't tapped Arrived. Is he there? Tell her.</p>}
+      <DayBar v={p.v} now={now} />
+      <div class="mg2-acts">
+        {p.state === "called" && (
+          <>
+            <button type="button" class="btn small" disabled={props.busy} onClick={() => void run(() => mutate(api.calls.send, { callIds: [c._id], by: BY }), `${name} → ${r.t.name}.`)}>
+              Send now
+            </button>
+            <button type="button" class="btn small ghost" disabled={props.busy} onClick={() => void run(() => mutate(api.calls.decline, { callId: c._id, by: BY }), `${name}: not now.`)}>
+              Not now
+            </button>
+          </>
+        )}
+        {p.state === "walking" && (
+          <button type="button" class="btn small" disabled={props.busy} onClick={() => void run(() => mutate(api.calls.arrive, { callIds: [c._id], by: BY }), `${name} is with ${r.t.name}.`)}>
+            He's with her
           </button>
         )}
+        {undo && (
+          <button type="button" class="btn small ghost" disabled={props.busy} onClick={() => void run(() => mutate(api.calls.unsend, { callIds: [c._id], by: BY }), `Taken back: ${name} is in the hall.`)}>
+            Undo
+          </button>
+        )}
+        {p.state === "walking" && !undo && (
+          <button type="button" class="btn small ghost" disabled={props.busy} onClick={() => void run(() => mutate(api.calls.cancel, { callIds: [c._id], by: BY }), `${name}: back in the hall.`)}>
+            Back to the hall
+          </button>
+        )}
+        {p.state === "here" &&
+          (sure ? (
+            <button type="button" class="btn small danger" disabled={props.busy} onClick={() => void run(() => mutate(api.calls.release, { studentId: p.v.s._id, by: BY }), `${name}: back in the hall.`)}>
+              Yes: back, nothing marked
+            </button>
+          ) : (
+            <button type="button" class="btn small ghost" onClick={() => setSure(true)}>
+              Back to the hall
+            </button>
+          ))}
+        {p.state === "here" && <span class="mg2-note">{r.t.name} taps Done on her phone.</span>}
       </div>
-    </Sheet>
+    </section>
   );
 }

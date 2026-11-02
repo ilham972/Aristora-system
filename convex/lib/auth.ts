@@ -9,12 +9,12 @@ import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { fail, rememberActor } from "./backend";
 import { sha256Hex } from "./sha256";
 
-export type Tab = "correction" | "theory" | "evaluation";
+export type Tab = "correction" | "theory" | "evaluation" | "manager";
 export type Extra = "students" | "books" | "reports";
 /** "any" = any signed-in person; "owner" = the owner only. */
 export type Perm = Tab | Extra | "owner" | "any";
 
-export const TABS: Tab[] = ["correction", "theory", "evaluation"];
+export const TABS: Tab[] = ["correction", "theory", "evaluation", "manager"];
 export const EXTRAS: Extra[] = ["students", "books", "reports"];
 
 /** The exact words every signed-out request fails with (the phones look for them). */
@@ -31,6 +31,7 @@ const PERM_WORDS: Record<Exclude<Perm, "any">, string> = {
   correction: "the Correction tab",
   theory: "the Theory tab",
   evaluation: "the Evaluation tab",
+  manager: "the Manager tab",
   students: "Students (add, rename, remove)",
   books: "Books",
   reports: "Reports and History",

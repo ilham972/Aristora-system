@@ -171,6 +171,8 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
   // Arrived counts only those Correction sent (walking): a student called but never sent is never marked here by
   // mistake (1 Nov 2026). One who comes before he is sent: tap his name, then Arrived.
   const sentOnes = items.filter((it) => it.state === "walking");
+  // The manager's check-ins with nothing to explain (3 Nov 2026).
+  const checkIns = items.filter((it) => it.h.rc.c.visit && it.h.qs.length === 0);
   // When she is free, at her pace (learnt on this phone), and whether to call the next ones now (1 Nov 2026).
   const freeMs = live
     ? freeIn({ open: roomQs.filter((x) => undecided(x, dec).length > 0).length, coming: walkers.reduce((n, it) => n + it.h.qs.length, 0), pace: evalPaceMs() })
@@ -565,6 +567,9 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
               </>
             ) : room.here.some((h) => h.kind === "theory") ? (
               "Teaching theory: tap his name, then Done: taught."
+            ) : checkIns.length ? (
+              // The manager sent him for a check-in (3 Nov 2026): nothing waits, he hasn't seen a teacher today.
+              `Check-in: ${joinNames(checkIns.map((it) => it.name))}. Look at ${checkIns.length === 1 ? "his book with him" : "their books with them"}: how is it going? Then Done.`
             ) : items.length ? (
               "Nothing left to explain to your room: Done sends them back."
             ) : (

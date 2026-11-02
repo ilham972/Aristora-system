@@ -50,6 +50,16 @@ export function lostPhrase(calls: Called[]): string {
     .join(" ");
 }
 
+/**
+ * A teacher's phone, when the manager sends her students (3 Nov 2026): "Raj is coming to you." Said again every 30 s
+ * until she taps Arrived. `open`: they are for her other page ("Raj is coming to you. Open Evaluation.").
+ */
+export function comingPhrase(names: string[], open?: RoomName): string {
+  const who = joinNames(names);
+  if (!who) return "";
+  return `${who} ${names.length === 1 ? "is" : "are"} coming to you.${open ? ` Open ${ROOM_WORD[open]}.` : ""}`;
+}
+
 /** Evaluation's phone, when Theory takes a student straight from the evaluation room. */
 export function pullPhrase(names: string[]): string {
   const who = joinNames(names);

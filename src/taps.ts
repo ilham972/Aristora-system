@@ -104,7 +104,9 @@ function schedule(b: Burst) {
 
 /** One tap on one circle. Returns false if this teacher can't change it. */
 export function tap(student: Student, q: number): boolean {
-  const role = currentRole();
+  // The Manager page doesn't tap circles; if it ever does, it taps as Correction does.
+  const by = currentRole();
+  const role: Role = by === "manager" ? "correction" : by;
   const book = fighterOf(student);
   if (!book || !book.isQuestion(q)) return false;
   const b = burstFor(student);

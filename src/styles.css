@@ -386,6 +386,13 @@ button.top-stat:active {
   background: var(--amber);
   color: #3d2600;
 }
+/* The manager sent students to her for this page (3 Nov 2026): the room's colour, not red. */
+.tab-badge.tb-coming.evaluation {
+  background: var(--evaluation);
+}
+.tab-badge.tb-coming.theory {
+  background: var(--theory);
+}
 .tab.evaluation.on {
   color: var(--evaluation);
 }
@@ -9030,7 +9037,9 @@ body.locked.evx-on .toasts {
   box-shadow: inset 0 0 0 1px #d98a00;
 }
 
-/* ---------- The Manager page (2 Nov 2026, his ask: one person runs the class; src/manager.tsx) ---------- */
+
+/* ---------- The Manager page (3 Nov 2026, his voice note: the hall and the rooms as rectangles, one screen;
+   src/manager.tsx). The room look is the Theory and Evaluation pages' room box; pills like theirs. ---------- */
 .tabs.n4 .tab {
   font-size: 14px;
 }
@@ -9043,446 +9052,617 @@ body.locked.evx-on .toasts {
   border-radius: 3px;
   transform: rotate(45deg) scale(0.88);
 }
-.mg-page {
-  padding: 12px 12px calc(var(--tabs) + 28px);
+body.mg2-on .app {
+  padding-bottom: calc(var(--tabs) + env(safe-area-inset-bottom));
+}
+.mg2 {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  max-width: 760px;
-  margin: 0 auto;
+  gap: 8px;
+  padding: 8px 10px 8px;
+  overflow: hidden;
+  position: relative;
 }
-.mg-empty,
-.mg-none {
-  margin: 4px 2px;
+.mg2-empty {
+  margin: 40px 8px;
+  text-align: center;
   color: var(--ink-2);
 }
-.mg-empty {
-  margin-top: 40px;
-  text-align: center;
-}
-.mg-note,
-.mg-sub {
-  margin: -4px 2px 0;
+.mg2-note {
+  margin: 4px 2px;
   font-size: 13px;
   color: var(--ink-3);
 }
-.mg-people {
+
+/* The three numbers */
+.mg2-counts {
+  flex: none;
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 8px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
 }
-@media (min-width: 560px) {
-  .mg-people {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-.mg-person {
-  background: var(--card);
+.mg2-n {
   border: 1.5px solid var(--line);
-  border-radius: 14px;
-  padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  border-radius: 12px;
+  background: var(--card);
+  padding: 4px 6px 5px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 6px;
+  align-items: center;
+  text-align: left;
+  font: inherit;
+  color: var(--ink);
   min-width: 0;
 }
-.mg-person.free {
-  border-left: 5px solid var(--green);
+.mg2-n b {
+  grid-row: 1 / 3;
+  font-size: 24px;
+  line-height: 1;
+  font-weight: 800;
 }
-.mg-person.over {
+.mg2-n span {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mg2-n small {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--red-ink);
+  white-space: nowrap;
+}
+.mg2-n.zero b {
+  color: var(--green-ink);
+}
+.mg2-n.red {
+  border-color: var(--red);
+}
+.mg2-n.red b {
+  color: var(--red-ink);
+}
+.mg2-n.on {
+  background: var(--ink);
+  border-color: var(--ink);
+}
+.mg2-n.on b,
+.mg2-n.on span,
+.mg2-n.on small {
+  color: #fff;
+}
+
+/* The rooms: one row, fixed places */
+.mg2-rooms {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+.mg2-rooms.n1 {
+  grid-template-columns: 1fr;
+}
+.mg2-rooms.n3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+.mg2-rooms.n4 {
+  grid-template-columns: repeat(2, 1fr);
+}
+.mg2-room {
+  position: relative;
+  min-width: 0;
+  min-height: 84px;
+  padding: 6px 8px 7px;
+  border-radius: 14px;
+  border: 2px solid var(--line);
+  background: var(--card);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.mg2-room.d-evaluation,
+.mg2-room.d-visit {
+  border-color: var(--evaluation);
+}
+.mg2-room.d-theory {
+  border-color: var(--theory);
+}
+.mg2-room.d-coming {
+  border-style: dashed;
+  border-color: var(--ink-3);
+}
+.mg2-room.d-free {
+  border-color: var(--green);
+}
+/* Free while work waits for her: amber at 2 minutes, red at 5 (3 Nov 2026: "teachers rest silently"). */
+.mg2-room.a-amber {
   border-color: var(--amber);
   background: var(--amber-soft);
 }
-.mg-person.away {
-  border-style: dashed;
-}
-.mg-person.mg-off {
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 8px 6px 12px;
-  border-style: dashed;
-  background: transparent;
-}
-.mg-off .mg-pn {
-  color: var(--ink-2);
-}
-.mg-off .mg-pj {
-  flex: 1;
-}
-.mg-person.mg-corr.red {
+.mg2-room.a-red {
   border-color: var(--red);
+  background: var(--red-soft);
+  animation: mg2-knock 1.6s ease-in-out infinite;
 }
-.mg-ph {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
+@keyframes mg2-knock {
+  50% {
+    box-shadow: 0 0 0 4px rgba(220, 35, 56, 0.25);
+  }
 }
-.mg-dot {
-  flex: none;
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  background: var(--evaluation);
+.mg2-room.away {
+  border-style: dashed;
+  opacity: 0.8;
 }
-.mg-dot.theory {
-  background: var(--theory);
+/* A student is picked: the rooms that can take him light up; the one under the finger fills. */
+.mg2-room.target {
+  box-shadow: 0 0 0 3px var(--ink);
 }
-.mg-dot.correction {
-  border-radius: 3px;
+.mg2-room.over {
   background: var(--ink);
 }
-.mg-pn {
-  font-size: 17px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.mg2-room.over * {
+  color: #fff !important;
 }
-.mg-pj {
-  font-size: 13px;
-  color: var(--ink-3);
-  white-space: nowrap;
-}
-.mg-pt {
-  margin-left: auto;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--ink-2);
-  white-space: nowrap;
-}
-.mg-person.free .mg-pt {
-  color: var(--green-ink);
-}
-.mg-person.over .mg-pt {
-  color: var(--amber-ink);
-}
-.mg-with {
+.mg2-rh {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.mg-sp {
-  border: 0;
-  border-radius: 10px;
-  padding: 6px 10px;
-  display: inline-flex;
   align-items: baseline;
   gap: 6px;
-  background: var(--evaluation-soft);
-  color: var(--evaluation-ink);
-  font: inherit;
-  font-size: 15px;
-  max-width: 100%;
+  min-width: 0;
 }
-.mg-sp.j-theory {
-  background: var(--theory-soft);
+.mg2-rh b {
+  font-size: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.mg2-rh span {
+  margin-left: auto;
+  flex: none;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.mg2-room.d-free .mg2-rh span {
+  color: var(--green-ink);
+}
+.mg2-room.a-amber .mg2-rh span {
+  color: var(--amber-ink);
+}
+.mg2-room.a-red .mg2-rh span {
+  color: var(--red-ink);
+}
+.mg2-rd {
+  margin-top: -3px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--evaluation-ink);
+}
+.mg2-room.d-theory .mg2-rd {
   color: var(--theory-ink);
 }
-.mg-sp span {
-  font-size: 13px;
-  font-weight: 700;
-}
-.mg-pacts {
+.mg2-rp {
   display: flex;
-  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 4px;
 }
-.mg-pacts:empty {
-  display: none;
+.mg2-sp {
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1.5px solid var(--evaluation);
+  background: var(--evaluation);
+  color: #fff;
+  font: 700 13px/1 var(--font);
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.btn.mg-back {
-  background: var(--green);
-  min-width: 132px;
+.mg2-sp.mk-theory {
+  border-color: var(--theory);
+  background: var(--theory);
 }
-.mg-link {
+.mg2-sp.s-walking {
+  border-style: dashed;
+  background: var(--card);
+  color: var(--evaluation-ink);
+}
+.mg2-sp.s-walking.mk-theory {
+  color: var(--theory-ink);
+}
+.mg2-sp.s-called {
+  border-style: dotted;
+  background: var(--card);
+  color: var(--evaluation-ink);
+}
+.mg2-sp.s-called.mk-theory {
+  color: var(--theory-ink);
+}
+.mg2-sp.late {
+  border-color: var(--red);
+  color: var(--red-ink);
+  background: var(--red-soft);
+}
+.mg2-sp.on {
+  box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--ink);
+}
+.mg2-sug {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 7px 5px;
+  border-radius: 9px;
+  background: var(--ground);
+  min-width: 0;
+}
+.mg2-sug.none {
+  background: none;
+  padding: 0;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.mg2-sw {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mg2-sug.h-red .mg2-sw {
+  color: var(--red-ink);
+}
+.mg2-sn {
+  font-size: 15px;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mg2-gone {
+  position: absolute;
+  right: 6px;
+  bottom: 2px;
   border: 0;
   background: none;
-  padding: 4px 2px;
-  font: inherit;
-  font-size: 14px;
-  color: var(--ink-2);
+  padding: 2px;
+  font: 600 11px/1 var(--font);
+  color: var(--ink-3);
   text-decoration: underline;
-  text-underline-offset: 3px;
+  text-underline-offset: 2px;
 }
-.mg-coming {
-  font-size: 14px;
-  color: var(--ink-2);
+.mg2-sug + .mg2-gone {
+  position: static;
+  align-self: flex-end;
+  margin-top: -2px;
 }
-.mg-pnext {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: -4px;
-  font-size: 14px;
-  color: var(--ink-2);
-}
-.mg-pnext > span {
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.mg-pnext .mg-link {
+.mg2-away {
   flex: none;
-  font-size: 13px;
-  color: var(--ink-3);
-}
-.mg-later {
-  padding: 8px 12px;
-  border-radius: 12px;
-  border: 1.5px dashed var(--line);
-  font-size: 14px;
-  color: var(--ink-2);
-}
-.mg-later i {
-  font-style: normal;
-  font-size: 12px;
-  color: var(--ink-3);
-}
-.mg-later .h-red {
-  color: var(--red-ink);
-}
-.mg-cl {
-  font-size: 14px;
-  color: var(--ink-2);
-}
-.mg-cl.mg-red {
-  color: var(--red-ink);
-}
-.mg-h {
-  margin: 10px 2px 0;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ink-3);
-}
-.mg-task {
-  background: var(--card);
-  border: 1.5px solid var(--line);
-  border-left: 6px solid var(--yellow);
-  border-radius: 14px;
-  padding: 10px 12px 12px;
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   gap: 6px;
-  animation: rise 0.25s ease-out;
+  margin-top: -2px;
 }
-.mg-task.h-orange {
-  border-left-color: var(--amber);
-}
-.mg-task.h-red {
-  border-left-color: var(--red);
-  background: var(--red-soft);
-}
-.mg-th {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-.mg-job {
-  flex: none;
-  font-size: 12px;
-  font-weight: 700;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--evaluation-soft);
-  color: var(--evaluation-ink);
-}
-.mg-task.j-theory .mg-job {
-  background: var(--theory-soft);
-  color: var(--theory-ink);
-}
-.mg-why {
-  font-size: 15px;
-  font-weight: 700;
-  min-width: 0;
-}
-.mg-task.h-red .mg-why {
-  color: var(--red-ink);
-}
-.mg-book {
-  font-size: 13px;
-  color: var(--ink-3);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.mg-who {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.mg-who li {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-.mg-nm {
-  font-size: 20px;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.mg-who li.red .mg-nm {
-  color: var(--red-ink);
-}
-.mg-qs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-left: auto;
-}
-.mg-qs i {
-  font-style: normal;
-  font-weight: 700;
-  font-size: 17px;
-  min-width: 30px;
-  height: 30px;
-  padding: 0 6px;
-  border-radius: 8px;
-  display: inline-grid;
-  place-items: center;
-  border: 1.5px solid var(--line);
-  background: var(--card);
-}
-.mg-qs i.sh {
-  background: var(--evaluation);
-  border-color: var(--evaluation);
-  color: #fff;
-}
-.mg-task.j-theory .mg-qs i.sh {
-  background: var(--theory);
-  border-color: var(--theory);
-}
-.mg-acts {
-  display: flex;
-  gap: 8px;
-  margin-top: 4px;
-}
-.btn.mg-send {
-  flex: 1;
-  min-width: 0;
-  flex-direction: column;
-  gap: 0;
-  line-height: 1.15;
-}
-.btn.ghost.mg-send.next {
-  color: var(--evaluation-ink);
-  border-color: var(--evaluation);
-}
-.btn.ghost.mg-send.next.theory {
-  color: var(--theory-ink);
-  border-color: var(--theory);
-}
-.btn.mg-send small {
-  font-size: 12px;
-  font-weight: 600;
-  opacity: 0.85;
-}
-.mg-held {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
+.mg2-off {
   border: 1.5px dashed var(--line);
-  border-radius: 12px;
-  background: var(--card);
-}
-.mg-held-l {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 8px;
-  min-width: 0;
-  flex: 1;
-}
-.mg-held .mg-nm {
-  font-size: 17px;
-}
-.mg-held .mg-qs {
-  margin-left: 0;
-}
-.mg-held .mg-qs i {
-  font-size: 14px;
-  min-width: 24px;
-  height: 24px;
-}
-.mg-held .mg-why {
-  flex-basis: 100%;
-  font-size: 13px;
-  font-weight: 500;
+  border-radius: 999px;
+  background: transparent;
+  padding: 4px 10px;
+  font: 700 13px/1.2 var(--font);
   color: var(--ink-2);
 }
-.mg-stuck,
-.mg-quiet {
+.mg2-off span {
+  font-weight: 500;
+  color: var(--ink-3);
+}
+.mg2-off b {
+  margin-left: 4px;
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* The hall: the big rectangle; pills A-Z, never moving */
+.mg2-hall {
+  flex: 1 1 auto;
+  min-height: 90px;
+  display: flex;
+  flex-direction: column;
+  border: 2px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+  overflow: hidden;
+}
+.mg2-hh {
+  flex: none;
   display: flex;
   align-items: center;
-  gap: 8px;
-  justify-content: space-between;
-  padding: 10px 12px;
-  border-radius: 12px;
-  font-size: 15px;
+  gap: 6px;
+  padding: 5px 10px 3px;
+  min-width: 0;
 }
-.mg-stuck {
+.mg2-hh b {
+  font-size: 14px;
+}
+.mg2-hn {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-3);
+}
+.mg2-legend {
+  margin-left: auto;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.mg2-legend .lg {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  border: 2px solid;
+  margin: 0 2px 0 5px;
+  vertical-align: -1px;
+}
+.mg2-legend .lg.h-red {
+  border-color: var(--red);
+}
+.mg2-legend .lg.h-orange {
+  border-color: var(--amber);
+}
+.mg2-legend .lg.h-yellow {
+  border-color: var(--yellow);
+}
+.mg2-legend .lg-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--evaluation);
+  margin: 0 3px 0 6px;
+  vertical-align: 1px;
+}
+.mg2-hp {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 5px;
+  padding: 2px 8px 10px;
+}
+.mg2-p {
+  position: relative;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  font: 700 14px/1 var(--font);
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.mg2-p small {
+  font-size: 11px;
+  font-weight: 800;
+}
+.mg2-p.h-red {
+  border: 2.5px solid var(--red);
   background: var(--red-soft);
   color: var(--red-ink);
 }
-.mg-quiet {
-  background: var(--yellow-soft);
-  color: var(--yellow-ink);
+.mg2-p.h-orange {
+  border: 2.5px solid var(--amber);
 }
-.mg-foot {
-  margin: 2px;
-  font-size: 13px;
+.mg2-p.h-yellow {
+  border: 2.5px solid var(--yellow);
+}
+/* No Theory or Evaluation teacher yet today (an hour here): a dot, his premium feeling. */
+.mg2-p.nt::after {
+  content: "";
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--evaluation);
+  box-shadow: 0 0 0 2px var(--card);
+}
+.mg2-p.qt {
+  border-style: dashed;
+}
+.mg2-p.off {
   color: var(--ink-3);
+  background: var(--ground);
 }
-.mg-decs {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
-  gap: 8px;
-}
-.mg-dec {
-  border: 1.5px solid var(--line);
-  border-radius: 12px;
-  background: var(--card);
-  min-height: 64px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  font: inherit;
-}
-.mg-dec b {
-  font-size: 20px;
-}
-.mg-dec span {
-  font-size: 15px;
-  font-weight: 700;
-}
-.mg-dec.d-x {
-  border-color: var(--green);
+.mg2-p.fin {
   background: var(--green-soft);
   color: var(--green-ink);
 }
-.mg-dec.d-th {
-  border-color: var(--theory);
-  background: var(--theory-soft);
-  color: var(--theory-ink);
+.mg2-p.on {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
 }
-.mg-dec.d-skip {
+.mg2-p.dim {
+  opacity: 0.28;
+}
+.mg2.dragging .mg2-p {
+  touch-action: none;
+}
+.mg2-ghost {
+  position: fixed;
+  z-index: 60;
+  transform: translate(-50%, -130%);
+  pointer-events: none;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #fff;
+  font: 800 15px/1 var(--font);
+  box-shadow: 0 6px 18px rgba(22, 33, 62, 0.35);
+}
+
+/* His strip: what he is doing, his day, where to send him */
+.mg2-strip {
+  flex: none;
+  border: 2px solid var(--ink);
+  border-radius: 16px;
+  background: var(--card);
+  padding: 7px 10px 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  animation: rise 0.2s ease-out;
+}
+.mg2-sh {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.mg2-sh b {
+  font-size: 19px;
+  flex: none;
+}
+.mg2-sl {
+  min-width: 0;
+  font-size: 13px;
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mg2-x {
+  margin-left: auto;
+  flex: none;
+  border: 0;
+  background: none;
+  font-size: 22px;
+  line-height: 1;
+  padding: 0 2px;
   color: var(--ink-3);
 }
+.mg2-why {
+  margin: -2px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+.mg2-why.h-red {
+  color: var(--red-ink);
+}
+.mg2-why.h-orange {
+  color: var(--amber-ink);
+}
+.mg2-dayw {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mg2-day {
+  position: relative;
+  height: 14px;
+  border-radius: 7px;
+  background: repeating-linear-gradient(90deg, var(--line-2) 0 4px, var(--card) 4px 7px);
+  overflow: hidden;
+}
+.mg2-day.wait {
+  opacity: 0.5;
+}
+.mg2-day i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+.mg2-day .g-work {
+  background: var(--green);
+}
+.mg2-day .g-idle {
+  background: var(--red);
+}
+.mg2-day .g-walk {
+  background: var(--ink-3);
+}
+.mg2-day .g-theory {
+  background: var(--theory);
+}
+.mg2-day .g-evaluation,
+.mg2-day .g-visit {
+  background: var(--evaluation);
+}
+.mg2-now {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--ink);
+}
+.mg2-dayl {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+.mg2-dayt {
+  color: var(--ink-2);
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.mg2-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.btn.small.mg2-to {
+  flex-direction: column;
+  gap: 0;
+  line-height: 1.1;
+  min-height: 42px;
+}
+.btn.small.mg2-to small {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.85;
+}
+.btn.small.mg2-to.best.mk-evaluation,
+.btn.small.mg2-to.best.mk-visit {
+  background: var(--evaluation);
+}
+.btn.small.mg2-to.best.mk-theory {
+  background: var(--theory);
+}
 @media (prefers-reduced-motion: reduce) {
-  .mg-task {
+  .mg2-room.a-red,
+  .mg2-strip {
     animation: none;
   }
 }

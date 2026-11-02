@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { callPhrase, lostPhrase, pullPhrase, type RoomName } from "./announce";
+import { callPhrase, comingPhrase, lostPhrase, pullPhrase, type RoomName } from "./announce";
 import { AttendanceSheet } from "./attendance";
 import type { Link } from "./backend";
 import { ClassPage } from "./correction";
@@ -90,7 +90,8 @@ export function App() {
   const user = me?.user ?? null;
   // Correction, Theory and Evaluation for those jobs (the bottom bar); Class for everyone (the top bar).
   const jobs = JOBS.filter((j) => !user || user.role === "owner" || user.tabs.includes(j));
-  const tabs = TABS.filter((t) => (t.id === "manager" ? user?.role === "owner" : jobs.includes(t.id)));
+  // The Manager page: the owner, and whoever has the Manager job (Settings → People, 3 Nov 2026).
+  const tabs = TABS.filter((t) => (t.id === "manager" ? user?.role === "owner" || !!user?.tabs.includes("manager") : jobs.includes(t.id)));
   const tab: TabId = tabs.some((t) => t.id === chosen) ? chosen : (tabs[0]?.id ?? "theory");
   // Correction (marking papers, and signing students in with its +) is Correction's job; Progress needs Reports.
   const canCorrect = may("correction");
@@ -121,7 +122,8 @@ export function App() {
   // The manager is in the hall like Correction: he hears what Correction hears (a level waits and someone has no work).
   const role: Role = base === "class" ? classJob : tab === "manager" ? "correction" : tab;
 
-  setRole(role);
+  // Taps on the Manager page are recorded as the manager's ("by the manager" in the history).
+  setRole(base === "board" && tab === "manager" ? "manager" : role);
   useEffect(() => {
     try {
       localStorage.setItem("aristora.role", base === "class" ? "class" : tab === "correction" ? "focus" : tab);
@@ -206,6 +208,9 @@ export function App() {
   // until then.
   const papers = views.reduce((a, v) => a + waitingAll(v), 0);
   const papersRed = views.some((v) => v.where === "hall" && v.noWork && !!v.ms?.needs.includes("correction"));
+  // Students the manager sent to this teacher, still on their way to her (her Arrived not tapped yet), per room.
+  const myId = user?._id;
+  const comingTo = (room: "theory" | "evaluation") => board.calls.filter((c) => c.byManager && c.teacherId === myId && c.room === room && isWalking(c)).length;
   // Class's count: students in the hall with no work right now (red), for whoever looks.
   const idleNow = views.filter((v) => v.where === "hall" && v.tone === "red").length;
 
@@ -364,7 +369,9 @@ export function App() {
             // A number: something waits for that page's job while this phone is busy elsewhere. Theory, Evaluation:
             // students with no work (red). Correction: papers handed in (amber; red when someone has no work until then).
             const away = tab !== r.id || shown !== "board";
-            const badge = !away ? 0 : r.id === "manager" ? idleNow : r.id === "theory" ? theoryRed : r.id === "evaluation" ? evalRed : papers;
+            // The manager sent students to her for this page (3 Nov 2026): they come first, in the room's colour.
+            const coming = !away || (r.id !== "theory" && r.id !== "evaluation") ? 0 : comingTo(r.id);
+            const badge = !away ? 0 : coming || (r.id === "manager" ? idleNow : r.id === "theory" ? theoryRed : r.id === "evaluation" ? evalRed : papers);
             const amber = r.id === "correction" && !papersRed;
             return (
               <button
@@ -372,7 +379,7 @@ export function App() {
                 type="button"
                 class={`tab ${r.id}${tab === r.id && shown === "board" ? " on" : ""}`}
                 aria-current={tab === r.id && shown === "board" ? "page" : undefined}
-                aria-label={`${r.label}${badge ? `, ${badge} ${r.id === "correction" ? "waiting" : "with no work"}` : ""}`}
+                aria-label={`${r.label}${badge ? `, ${badge} ${coming ? "coming to you" : r.id === "correction" ? "waiting" : "with no work"}` : ""}`}
                 onClick={() => {
                   setTab(r.id);
                   setBackTo("board");
@@ -381,7 +388,7 @@ export function App() {
               >
                 <span class="tab-mark" aria-hidden="true" />
                 <span>{r.label}</span>
-                {badge > 0 && <span class={`tab-badge${amber ? " tb-amber" : ""}`}>{badge}</span>}
+                {badge > 0 && <span class={`tab-badge${coming ? ` tb-coming ${r.id}` : amber ? " tb-amber" : ""}`}>{badge}</span>}
               </button>
             );
           })}
@@ -524,12 +531,20 @@ function LinkBanner(props: { link: Link }) {
 
 const REPEAT_MS = 30_000;
 
-type AlertItem = { key: string; kind: AlertKind; name: string; room: RoomName; repeat: boolean; teacher?: string };
+type AlertItem = { key: string; kind: AlertKind; name: string; room: RoomName; repeat: boolean; teacher?: string; open?: RoomName };
 
 /** What this phone's job should hear about right now. */
 function alertItems(role: Role, board: Board, views: View[], now: number): AlertItem[] {
   const nameOf = new Map(views.map((v) => [v.s._id as string, v.s.name]));
   const items: AlertItem[] = [];
+  const me = currentMe()?._id;
+  if (role === "theory" || role === "evaluation") {
+    // The manager sent a student to her (3 Nov 2026): her phone says so every 30 s until she taps Arrived (on the
+    // page of that room: "Open Evaluation" when she is on the other one).
+    for (const c of board.calls)
+      if (c.byManager && c.teacherId === me && isWalking(c))
+        items.push({ key: `coming:${c._id}`, kind: "coming", name: nameOf.get(c.studentId) ?? "", room: c.room, repeat: true, open: c.room !== role ? c.room : undefined });
+  }
   if (role === "correction") {
     for (const c of board.calls)
       if (c.status === "requested" && !c.pull)
@@ -551,7 +566,6 @@ function alertItems(role: Role, board: Board, views: View[], now: number): Alert
       if (m.urgency === "red" && !m.blockedBy && !items.some((x) => x.key === `red:${m.v.s._id}`))
         items.push({ key: `red:${m.v.s._id}`, kind: "red", name: m.v.s.name, room: "evaluation", repeat: false });
     // Theory wants a student who is with an Evaluation teacher: only she hears it (each teacher has her own room).
-    const me = currentMe()?._id;
     const mine = (studentId: string) =>
       board.calls.some((e) => e.studentId === studentId && e.room === "evaluation" && e.status === "sent" && (!e.teacherId || e.teacherId === me));
     for (const c of board.calls)
@@ -562,6 +576,8 @@ function alertItems(role: Role, board: Board, views: View[], now: number): Alert
 }
 
 function sayFor(items: AlertItem[]): { kind: AlertKind; words?: string } | null {
+  const coming = items.filter((i) => i.kind === "coming");
+  if (coming.length) return { kind: "coming", words: comingPhrase(coming.map((c) => c.name), coming.find((c) => c.open)?.open) };
   const calls = items.filter((i) => i.kind === "call");
   if (calls.length) return { kind: "call", words: callPhrase(calls) };
   const lost = items.filter((i) => i.kind === "lost");

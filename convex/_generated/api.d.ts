@@ -40,6 +40,8 @@ import type * as lib_sha256 from "../lib/sha256.js";
 import type * as lib_sim from "../lib/sim.js";
 import type * as lib_status from "../lib/status.js";
 import type * as lib_syllabus from "../lib/syllabus.js";
+import type * as lib_timeline from "../lib/timeline.js";
+import type * as manager from "../manager.js";
 import type * as marks from "../marks.js";
 import type * as people from "../people.js";
 import type * as progress from "../progress.js";
@@ -86,6 +88,8 @@ declare const fullApi: ApiFromModules<{
   "lib/sim": typeof lib_sim;
   "lib/status": typeof lib_status;
   "lib/syllabus": typeof lib_syllabus;
+  "lib/timeline": typeof lib_timeline;
+  manager: typeof manager;
   marks: typeof marks;
   people: typeof people;
   progress: typeof progress;

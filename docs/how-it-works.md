@@ -17,7 +17,7 @@ The technical memory of the app, kept with the code and updated in the same comm
 - Top bar, left: **Class** (list icon, everyone; red corner badge = in the hall with no work), Progress (owner +
   Reports). Right: `TopStat`, one capsule = people icon + how many in class, the class clock, the link dot (a tap
   opens Attendance for Correction and the owner), then Settings. No logo, no titles. ≤400 / ≤345 px rules; `topFits()`.
-- Bottom tabs, for the jobs the person has (the owner: **Manager** first, a diamond mark, since 2 Nov 2026: below,
+- Bottom tabs, for the jobs the person has (**Manager** first, a diamond mark: the owner and the Manager job, below,
   "The Manager page"): **Correction** (square mark; its count = papers handed in, amber, red when
   someone has no work until marked; the code calls the page `Focus` and stores the role as "focus"), **Theory**,
   **Evaluation** (red count = students with no work waiting for that job). A badge shows only while the phone is
@@ -480,51 +480,71 @@ how far, ✓, ring = now), this week, optional rank, optional note, footer. Swit
 when on), a note (never saved, wraps to 4 lines). Share = the phone's share sheet (`shareFiles`), Save downloads
 `ARISTORA-<name>-<day>.png`.
 
-**The Manager page (owner only, 2 Nov 2026, his voice note: "one person runs the entire app and system").** The
-teachers' own Theory and Evaluation pages failed in class (he: they didn't look at the phone, the calls came one by one,
-too many buttons), so Theory and Evaluation teachers have NO phone: one manager (the owner) sends each group to a
-teacher himself, says each student's question numbers as they go (his pick), and taps Back when they return. Correctors
-keep their Correction page. The owner's **first bottom tab, "Manager"** (a diamond mark; its count = students in the
-hall with no work; the phone hears what Correction hears). Page `src/manager.tsx` `ManagerPage`; rules, pure and
-tested, `src/managerData.ts` `managerPlan` (`tests/manager.test.ts`, the run-through "Manager: …").
-- **Teachers** (`people.team`, owner only: active teachers with Theory or Evaluation): one card each. Free (green
-  edge): "Next: Raj, Zara +2" (her group in Do now) and **Not here today** (this phone, today only:
-  `aristora.mgr.away`; the message has **Undo**, and her card shrinks in the same place to a dashed row with **Bring
-  back**: his first class, he tapped it by mistake and couldn't find her at the bottom of the page). Busy: who is with her as pills ("Vimal 22 51"; Theory: the section or
-  the questions), the minutes and about how long is left (each question once × 3 min, `Q_MS`; a lesson its usual
-  length, `calls.lessons`), amber when over; **Back ✓** = everything explained / taught, all back to work
-  (`backAll` → `calls.finish`). Tap a pill = "not everything" (`EvalBack`: each question ✓ explained → T needs Theory
-  → – not now; `TheoryBack`: ✓ taught / – not reached; "Nothing explained / taught"). A teacher marked away who still
-  has students keeps her card until Back. Calls made from a teacher's own phone (not sent yet) show with Cancel.
-- **Correction** card: levels to correct, the oldest; red lines = a student with no work until his level is corrected.
-- **Do now**: the groups to send, worst first (`order`: red, then the most with no work, the biggest, Theory before
-  Evaluation). A card = Evaluation/Theory, why now ("3 lost Q3", "Vimal: no work", "Dilan stuck on Q18"), the book
-  (grade, unit, Tamil; a theory book's section), the names BIG each with his question numbers (shared ones filled),
-  **Send to Shanthi** (her job; "(does Theory)" = his swap: a free teacher of the other job takes it) or, when she is
-  busy, **Next for Meena · free ~12m** (ghost: sending now = they wait with her). **Not now** hides a card 5 min.
-  Groups nobody can take yet: one line "Also waiting (after these)". **Send** = `calls.create` with `teacherId` (the
-  teacher) and `here: true` (owner only): the calls are sent and arrived at once (no walk, no Arrived, nothing for
-  Correction to send or say), the student's room is set; toast "Vimal and Malik → Shanthi." with **Undo** for 2 min
-  (`calls.unsend`, owner only). One group per book (6 at most); each student brings ALL his waiting questions of that
-  book; a student is in one group only (the most urgent).
-- **The hold rule (his pick, 2 Nov 2026: "Hold, 20 min max")** (`holdOf`, Evaluation's lost marks and wrong answers):
-  he keeps working while others who will lose the same question catch up, so it is explained once. He goes now when
-  any one is true: no work (red) · stuck or a section stopped (red) · 3 have the same question (`GROUP_N`) · his first
-  question waited 20 min (`HOLD_MS`) · he goes home within 20 min · nobody else in class is coming to his questions
-  ("nobody else coming": another unit, grade, or everyone already past it). Who is coming (`followersOf`): same book,
-  in class, hasn't done that question: a workbook level handed in and not corrected (eta 0, "L1 to correct"), or the
-  level he is on (or before it) at his own pace (`levelPaceOf`: the middle of the gaps between his hand-ins today,
-  else 30 min); a theory-book question he can do now at his pace; not one who goes home first. When one goes, those of
-  his book who share a question go with him ("with Raj: Q3"). **Theory**: a workbook's questions wait for more too
-  (`WAIT_MS` 20 min unless no work or 3 need the same one); sections go when the Theory page's plan says (no work, or
-  out before a lesson could end); a free teacher with nothing gets a section **ahead**. **Theory first**: a
-  theory-book student with no work who needs a section goes to that lesson; his wrong answers wait ("Theory D first:
-  it gives work"). **Waiting on purpose**: who is held, his numbers, why ("Zara hands in L1 ~5m"), "goes by 5:10";
-  **Send now** = the group he would go in, now.
-- **You decide**: finished his workbook/theory book with nothing else given → **Move** (`MoveSheet`); nobody to
-  send to; "no mark for 19m: go and check on him" (quiet). Then "On paper (not in the app)" (Legend, Exam Sprint, no
-  book) and **Explained more than once today** (`repeatsOf`: the same book's question explained or taught at times 3+
-  min apart: what holding is meant to save; his "pending levels" idea measured as what he fears).
+**The Manager page (2 Nov 2026; rebuilt 3 Nov 2026, his voice note: "teachers silently take rest", "the manager can
+send anyone to any place", "rooms of the teachers and the hall as rectangles", "everything in one view").** The
+teachers keep their own pages (Call, Arrived, Done: his experiment showed they work); the manager is extra: he sees
+the hall and every teacher's room on ONE screen (no cards, no question numbers, no Back buttons) and sends any
+student to any teacher, above all when a teacher sits free while students wait. Who: the owner, and whoever has the
+**Manager job** (Settings → People → tick Manager; his pick: its own tick, e.g. the corrector he hired who also
+manages; his tabs are then Manager + Correction). The first bottom tab (diamond mark; count = students in the hall
+with no work); the phone hears what Correction hears; taps are recorded `by: "manager"`. Page `src/manager.tsx`
+`ManagerPage`; rules, pure and tested, `src/managerData.ts` `managerPlan` (`tests/manager.test.ts`, the run-through
+"Manager: …").
+- **The three numbers** (`.mg2-counts`): levels **to correct** · students **to explain** · students **to teach**, each
+  with "N no work" in red. Tap one: the hall dims everyone else (`counts.*.ids`).
+- **A room per teacher** (`people.team`: active teachers with Theory or Evaluation, by name; fixed places), coloured by
+  what she is doing now (blue Theory, violet Evaluation/check-in; `doing`): her students as pills (her calls only, both
+  rooms): **called** by her phone (dotted; the manager taps him → Send now / Not now), **on his way** (dashed; red
+  after 3 min = she hasn't tapped Arrived), **with her** (solid); "12m · ~3m left" (each question once × 3 min, a
+  lesson its usual length, `calls.lessons`), "over". **Free**: green, "free 6m" (since her last Done today,
+  `people.team` `lastEnd`, else the class's start), and the group the page suggests for her ("Evaluation · no work /
+  → Vimal, Malik"); **one tap on the room sends it**. Free while there is work for her: **amber at 2 min, red at 5**
+  (`FREE_AMBER_MS`, `FREE_RED_MS`; his "teachers rest silently"). "not here" (today, this phone, Undo on the message)
+  → a dashed chip **Bring back**.
+- **The hall** (`.mg2-hall`, the big rectangle; scrolls inside, the page never does): everyone not called and not in a
+  room, A–Z, never moving. Outline **red** = no work (his minutes), **orange** = should go now (in a due group),
+  **yellow** = waiting on purpose; a violet **dot** = no Theory or Evaluation teacher yet today after an hour here
+  (`noTeacherYet`, `NO_TEACHER_MS`, from `students.seen`; his "premium feeling"); dashed = quiet; grey = on paper;
+  green = finished his book (Move him on).
+- **Sending** (`calls.create` with `teacherId`, manager only): **tap a student, tap a room**; or **hold him and drag**
+  him onto a room (pointer events, 220 ms hold, the page doesn't scroll while dragging; a ghost follows the finger);
+  or one tap on a free room (its suggestion). What he goes for decides the call (`needOf`, `callFor`): a theory-book
+  student with no work who needs a lesson → Theory; lost marks / wrong answers → Evaluation; theory waiting →
+  Theory; nothing waits → a **check-in** (`visit`: the evaluation room; she looks at his book; on paper too). A room
+  takes only what her jobs allow (Evaluation and check-ins: the Evaluation job; Theory: the Theory job, else an
+  Evaluation teacher teaches it in her room, kind theory); the server checks it too ("Fathima doesn't do
+  Evaluation. Settings → People → Fathima → tick Evaluation."). He walks there at once (sent, walking,
+  `byManager`); toast "Vimal and Malik → Shanthi." with **Undo** for 2 min (`calls.unsend`, his own sends only).
+  Never while a teacher has called him ("…: send him there") or has him.
+- **Her phone** (his pick: "call her until Arrived"): a manager's send says "Vimal and Malik are coming to you." (alert
+  kind `coming`, its own chime, `comingPhrase`) every 30 s until she taps **Arrived** (on her other page: "… Open
+  Evaluation."; that tab's badge in the room's colour, `tb-coming`). Then she works as usual and taps Done. A
+  check-in on her Evaluation page: "Check-in: Priya. Look at his book with him: how is it going? Then Done."
+  (history: "check-in finished").
+- **His strip** (tap a student; `.mg2-strip`, at the bottom): name, what he is doing (`v.line`), why ("waits for Zara
+  (hands in L1 ~5m)", "no teacher yet, here 1h 12m"), **his day** as a bar from sign-in to home time (2 h):
+  working green, no work red, walking grey, Theory blue, Evaluation/check-in violet ("teachers 12m (2×) · no work
+  6m"; `manager.day`, read once and every 30 s; `convex/lib/timeline.ts` `dayOf`), and a button per teacher who can
+  take him (the suggested one filled; "busy · ~6m left"). A pill in a room: **He's with her** (Arrived for her: her
+  phone may be off), **Back to the hall** (walking: cancel; with her: `calls.release` after "Yes: back, nothing
+  marked"), **Undo**.
+- **Suggestions** (`managerPlan`): the hold rule groups (below) go to free teachers who can take them, worst first
+  (red, the most with no work, the biggest, Theory before Evaluation), Theory to a Theory teacher first. A free teacher
+  with nothing due gets **those held for a group** ("Nila is free: no need to wait": holding only saves teacher
+  minutes, and hers are free), then a section **ahead**, then **check-ins**: the quiet first, then those with no
+  teacher yet, the longest here first, 3 at most (`CHECKIN_N`; never one with something waiting).
+- **The hold rule** (his pick, 2 Nov 2026: "Hold, 20 min max"; `holdOf`): he keeps working while others who will lose
+  the same question catch up, so it is explained once. He goes now when any one is true: no work (red) · stuck or a
+  section stopped (red) · 3 have the same question (`GROUP_N`) · his first question waited 20 min (`HOLD_MS`) · he
+  goes home within 20 min · nobody else in class is coming to his questions. Who is coming (`followersOf`): same book,
+  in class, hasn't done that question: a level handed in and not corrected (now), or the level he is on (or before
+  it) at his own pace (`levelPaceOf`: the middle of the gaps between his hand-ins today, else 30 min); a theory-book
+  question he can do now at his pace; not one who goes home first. When one goes, those of his book who share a
+  question go with him. Theory: a workbook's questions wait for more too (20 min); **Theory first**: a theory-book
+  student with no work who needs a section goes to that lesson; his wrong answers wait.
+- The manager's server powers (`manager` in `actor`): `calls.create` for any teacher, `unsend`, and Correction's hall
+  taps (`send`, `decline`, `undoDecline`, `cancel`, `arrive`, `unarrive`, `release`); reads `people.team`,
+  `calls.lessons`, `manager.day`.
 
 **The Owner page (owner only, 31 Oct 2026, his voice note: "I want to think like a Owner").** A gauge icon in the top bar
 after Progress (`boss-btn`, owner only: per-teacher numbers and money). Built around his decisions, not every number.
@@ -690,8 +710,8 @@ on the family phone, taps **Check** once per level and sees ✓ / ✗ at once; t
 
 **Who.**
 - One owner and teachers.
-- Teachers get jobs (`correction`, `theory`, `evaluation`; People shows them as "Jobs" with what each opens) and
-  extras:
+- Teachers get jobs (`correction`, `theory`, `evaluation`, `manager` (3 Nov 2026: the Manager page); People shows
+  them as "Jobs" with what each opens) and extras:
   - `students`: add, rename, remove;
   - `books`: workbooks (typing and uploading) and unit names;
   - `reports`: Reports, History, the Students page numbers, and **Progress** (page and poster).
@@ -700,7 +720,9 @@ on the family phone, taps **Check** once per level and sees ✓ / ✗ at once; t
   the session. `progress.student` (the unit sheet's numbers) = Correction, Evaluation or Theory.
 - Workbook permissions: `correct`, `uncorrect`, `levelDone`, `toTheory`, `reteach`, and Correction's drafts
   (`focus.drafts`/`mark`/`drop`) = Correction or Evaluation; `explain` = Evaluation; `taught` = Theory or Evaluation.
-  `calls.lessons` = Theory; `calls.keep` = Evaluation.
+  `calls.lessons` = Theory or Manager; `calls.keep` = Evaluation. Manager job = the Manager page: `calls.create` for any
+  teacher (`teacherId`, `visit`), `unsend`, Correction's hall taps on calls (`send`, `decline`, `undoDecline`,
+  `cancel`, `arrive`, `unarrive`, `release`), `people.team`, `manager.day`.
 - Owner-only: People (user management), demo students, the simulation (start, +5, level, End, delete its students; the
   steps' nudge is any signed-in phone), and the account lines of the history (sign-ins, PINs,
   links, people changes).

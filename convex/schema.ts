@@ -32,7 +32,8 @@ export const partId = v.union(
 );
 
 /** The three working tabs (rooms) a teacher can be allowed. */
-export const tab = v.union(v.literal("correction"), v.literal("theory"), v.literal("evaluation"));
+/** The jobs (bottom tabs). Manager (3 Nov 2026): the hall and every room, sending students to any teacher. */
+export const tab = v.union(v.literal("correction"), v.literal("theory"), v.literal("evaluation"), v.literal("manager"));
 /** Extra permissions beyond the tabs. */
 export const extra = v.union(v.literal("students"), v.literal("books"), v.literal("reports"));
 
@@ -354,11 +355,20 @@ export default defineSchema({
     test: v.optional(v.boolean()),
     /** Called while he still had work (the teacher saw it coming): each teacher's "ahead" on the Owner page. */
     ahead: v.optional(v.boolean()),
+    /**
+     * The manager sent him to this teacher (3 Nov 2026): she didn't call him. Her phone says "Raj is coming to you"
+     * until she taps Arrived.
+     */
+    byManager: v.optional(v.boolean()),
+    /** A check-in (3 Nov 2026): nothing waits for a teacher, the manager wants a teacher to see him (no teacher yet). */
+    visit: v.optional(v.boolean()),
     endedAt: v.optional(v.number()),
     sessionId: v.optional(v.id("sessions")),
   })
     .index("by_status", ["status"])
     .index("by_student_status", ["studentId", "status"])
+    // One student's calls today (the Manager page's day, 3 Nov 2026).
+    .index("by_student_at", ["studentId", "createdAt"])
     .index("by_session", ["sessionId"]),
 
   sessions: defineTable({
@@ -397,7 +407,9 @@ export default defineSchema({
     who: v.optional(v.string()),
   })
     .index("by_at", ["at"])
-    .index("by_session", ["sessionId"]),
+    .index("by_session", ["sessionId"])
+    // One student's day on the Manager page (3 Nov 2026).
+    .index("by_student", ["studentId", "at"]),
 
   /** People who can sign in: the owner and teachers. (Parents and students: a later, separate site.) */
   users: defineTable({

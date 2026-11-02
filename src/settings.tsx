@@ -28,6 +28,7 @@ import {
   toast,
   useStore,
   type Extra,
+  type Job,
   type Role,
   type Stage,
   type Unit,
@@ -791,6 +792,7 @@ function describe(e: Doc<"events">): string {
     case "in-undo":
       return "sign-in taken back (tapped by mistake)";
     case "call": {
+      if (v.endsWith("/check-in")) return "sent by the manager for a check-in (Evaluation)";
       const [room, kind, pull] = v.split("/");
       const forTheory = kind === "theory" ? " for theory" : "";
       return `called to ${ROOM_WORD[room] ?? room}${forTheory}${pull || kind === "pull" ? ", straight from Evaluation" : ""}`;
@@ -815,13 +817,14 @@ function describe(e: Doc<"events">): string {
       return `theory finished, section ${m[1]}: ${taught}${m[3] ? `, may skip ${m[3].split(",").join(", ")}` : ""}`;
     }
     case "done-evaluation": {
+      if (v === "check-in") return "check-in finished";
       const m = /^explained ([\d,-]+)(?:; re-teach (\w+))?/.exec(v);
       if (!m) return "evaluation finished";
       const what = m[1] === "-" ? "nothing explained" : `explained ${m[1].split(",").map(Number).map(qName).join(", ")}`;
       return `evaluation finished: ${what}${m[2] ? `, section ${m[2]} sent back to Theory` : ""}`;
     }
     case "back-to-hall":
-      return "back in the hall (closed by Correction)";
+      return e.by === "manager" ? "back in the hall (closed by the manager)" : "back in the hall (closed by Correction)";
     case "skip-section":
       return `skips section ${v} theory`;
     case "idle":
@@ -978,13 +981,14 @@ function History() {
   );
 }
 
-const TAB_NAMES: Record<Role, string> = { correction: "Correction", theory: "Theory", evaluation: "Evaluation" };
+const TAB_NAMES: Record<Job, string> = { correction: "Correction", theory: "Theory", evaluation: "Evaluation", manager: "Manager" };
 const EXTRA_NAMES: Record<Extra, string> = { students: "Students", books: "Books", reports: "Reports and History" };
 /** What each job opens (everyone has Class, at the top). */
-const TAB_HELP: Record<Role, string> = {
+const TAB_HELP: Record<Job, string> = {
   correction: "the Correction page at the top (marking papers, + to sign students in), sending students to the rooms",
   theory: "the Theory page (bottom)",
   evaluation: "the Evaluation page (bottom)",
+  manager: "the Manager page (bottom): the hall and every teacher's room; sends any student to any teacher",
 };
 const EXTRA_HELP: Record<Extra, string> = {
   students: "add, rename, remove students",
@@ -992,7 +996,7 @@ const EXTRA_HELP: Record<Extra, string> = {
   reports: "end-of-class reports and the history",
 };
 
-function canWords(p: { role: string; tabs: Role[]; can: Extra[] }): string {
+function canWords(p: { role: string; tabs: Job[]; can: Extra[] }): string {
   if (p.role === "owner") return "Owner: everything";
   const tabs = p.tabs.map((t) => TAB_NAMES[t]).join(", ");
   return p.can.length ? `${tabs} · also ${p.can.map((c) => EXTRA_NAMES[c]).join(", ")}` : tabs;
@@ -1078,7 +1082,7 @@ type Person = {
   _id: Id<"users">;
   name: string;
   role: "owner" | "teacher";
-  tabs: Role[];
+  tabs: Job[];
   can: Extra[];
   hasPin: boolean;
   lockedUntil: number | null;
@@ -1154,7 +1158,7 @@ function PersonSheet(props: { person?: Person; onClose: () => void; onAdded?: (i
   const p = props.person;
   const owner = p?.role === "owner";
   const [name, setName] = useState(p?.name ?? "");
-  const [tabs, setTabs] = useState<Role[]>(p?.tabs ?? ["correction"]);
+  const [tabs, setTabs] = useState<Job[]>(p?.tabs ?? ["correction"]);
   const [can, setCan] = useState<Extra[]>(p?.can ?? ["reports"]);
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -1207,7 +1211,7 @@ function PersonSheet(props: { person?: Person; onClose: () => void; onAdded?: (i
         <>
           <h3 class="block-title">Jobs</h3>
           <div class="perm-list">
-            {(Object.keys(TAB_NAMES) as Role[]).map((t) => (
+            {(Object.keys(TAB_NAMES) as Job[]).map((t) => (
               <label key={t} class="perm">
                 <input type="checkbox" checked={tabs.includes(t)} onChange={() => setTabs(toggle(tabs, t))} />
                 <span>

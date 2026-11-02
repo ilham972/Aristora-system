@@ -67,7 +67,7 @@ describe("owner setup", () => {
     // lower case, spaces, O for 0
     await t.mutation(api.auth.setupOwner, { code: " test co de 1234 abcd wxyz ", name: "Ilham", pin: "482913", token: tok(1), label: "iPhone" });
     const me = await t.query(api.auth.me, { token: tok(1) });
-    expect(me.user).toMatchObject({ name: "Ilham", role: "owner", tabs: ["correction", "theory", "evaluation"], hasPin: true });
+    expect(me.user).toMatchObject({ name: "Ilham", role: "owner", tabs: ["correction", "theory", "evaluation", "manager"], hasPin: true });
     expect(me.setupDone).toBe(true);
     await expect(t.mutation(api.auth.setupOwner, { code: TEST_CODE, name: "Someone", pin: "482913", token: tok(2) })).rejects.toThrow(
       /already set up/,
@@ -157,7 +157,7 @@ describe("permissions", () => {
     await expect(owner.mutation(api.people.update, { id: ownerId as Id<"users">, tabs: ["theory"] })).rejects.toThrow(/always do everything/);
     await expect(owner.mutation(api.people.remove, { id: ownerId as Id<"users"> })).rejects.toThrow(/can't be removed/);
     await expect(owner.mutation(api.people.add, { name: "rimas", tabs: ["theory"], can: [] })).rejects.toThrow(/already a rimas/);
-    await expect(owner.mutation(api.people.add, { name: "Kavi", tabs: [], can: [] })).rejects.toThrow(/at least one tab/);
+    await expect(owner.mutation(api.people.add, { name: "Kavi", tabs: [], can: [] })).rejects.toThrow(/at least one job/);
   });
 
   test("only the room's teacher can finish its calls", async () => {

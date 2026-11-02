@@ -6,6 +6,7 @@ import type { Id } from "./_generated/dataModel";
 import { mutation, query, type QueryCtx } from "./_generated/server";
 import { actor, LINK_MS, nameKey, viewer } from "./lib/auth";
 import { cleanName, fail, log } from "./lib/backend";
+import { slDay } from "./lib/day";
 import { extra, tab } from "./schema";
 
 const token = v.optional(v.string());
@@ -52,17 +53,30 @@ export const list = query({
 });
 
 /**
- * The Manager page (2 Nov 2026): the teachers he can send students to, with their jobs. Owner only. No phones, links
- * or PINs: just who teaches what.
+ * The Manager page (2 Nov 2026; any manager since 3 Nov): the teachers he can send students to, with their jobs and
+ * when their last student went back today (her room has been free since then). No phones, links or PINs.
  */
 export const team = query({
   args: { token },
   handler: async (ctx, args) => {
-    await viewer(ctx, args.token, "owner");
+    await viewer(ctx, args.token, "manager");
+    const now = Date.now();
+    const today = slDay(now);
     const users = await ctx.db.query("users").collect();
+    // Her newest finished call today (the newest 300 finished calls are plenty for one day).
+    const done = await ctx.db
+      .query("calls")
+      .withIndex("by_status", (q) => q.eq("status", "done"))
+      .order("desc")
+      .take(300);
+    const lastEnd = new Map<string, number>();
+    for (const c of done) {
+      if (!c.teacherId || c.test || c.endedAt === undefined || slDay(c.endedAt) !== today) continue;
+      lastEnd.set(c.teacherId, Math.max(lastEnd.get(c.teacherId) ?? 0, c.endedAt));
+    }
     return users
       .filter((u) => u.active && u.role === "teacher" && (u.tabs.includes("theory") || u.tabs.includes("evaluation")))
-      .map((u) => ({ _id: u._id, name: u.name, tabs: u.tabs }))
+      .map((u) => ({ _id: u._id, name: u.name, tabs: u.tabs, lastEnd: lastEnd.get(u._id) ?? null }))
       .sort((a, b) => a.name.localeCompare(b.name));
   },
 });
@@ -83,7 +97,7 @@ export const add = mutation({
     await actor(ctx, args.token, ["owner"]);
     const now = Date.now();
     const name = cleanName(args.name);
-    if (args.tabs.length === 0) fail("Tick at least one tab: Correction, Theory or Evaluation.");
+    if (args.tabs.length === 0) fail("Tick at least one job: Correction, Theory, Evaluation or Manager.");
     await nameFree(ctx, name);
     const count = (await ctx.db.query("users").collect()).filter((u) => u.active).length;
     if (count >= 30) fail("That's 30 people already. Remove someone first.");
@@ -117,7 +131,7 @@ export const update = mutation({
     }
     if (u.role === "owner" && (args.tabs !== undefined || args.can !== undefined)) fail("The owner can always do everything.");
     if (args.tabs !== undefined) {
-      if (args.tabs.length === 0) fail("Tick at least one tab: Correction, Theory or Evaluation.");
+      if (args.tabs.length === 0) fail("Tick at least one job: Correction, Theory, Evaluation or Manager.");
       patch.tabs = [...new Set(args.tabs)];
     }
     if (args.can !== undefined) patch.can = [...new Set(args.can)];

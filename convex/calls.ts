@@ -39,26 +39,34 @@ export const create = mutation({
     /** The book each student is called for (he works on several at once); default: his book now. */
     books: v.optional(v.array(v.object({ studentId: v.id("students"), unitId: v.id("units"), stage: bookStage }))),
     /**
-     * The Manager page (owner, 2 Nov 2026): the teacher he sends them to (her phone may be off). Default: whoever calls.
+     * The Manager page (3 Nov 2026): the manager sends them to this teacher. They go at once (sent, walking), and her
+     * phone says "Raj is coming to you" until she taps Arrived. Default: the teacher who calls.
      */
     teacherId: v.optional(v.id("users")),
-    /** The Manager page: he sent them himself, they are with her now (no walk, no Arrived, nothing for Correction). */
-    here: v.optional(v.boolean()),
+    /** With teacherId: a check-in (nothing waits for a teacher; she sees his book). The evaluation room only. */
+    visit: v.optional(v.boolean()),
     by: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const me = await actor(ctx, args.token, [args.room], args.by);
+    // A teacher calls for her own room (her job); the manager sends for any teacher.
+    const me = await actor(ctx, args.token, args.teacherId ? ["manager"] : [args.room], args.by);
     const now = Date.now();
     const by = cleanBy(args.by);
-    // Sending for another teacher, or straight into her room: the manager's (the owner's) only.
-    if ((args.teacherId || args.here) && !allowed(me, "owner")) fail("Only the owner can send students for a teacher.");
+    const manager = !!args.teacherId;
+    const visit = manager && !!args.visit;
+    if (args.visit && !manager) fail("Only the manager sends a student for a check-in.");
+    if (visit && (args.room !== "evaluation" || args.kind !== "evaluation")) fail("A check-in is in the evaluation room.");
     let teacher: Doc<"users"> = me;
     if (args.teacherId) {
       const t = await ctx.db.get(args.teacherId);
       if (!t || !t.active) fail("That teacher was removed. Pick another.");
+      // Her phone must show him: she needs that room's job (Settings → People).
+      if (!allowed(t, args.room)) {
+        const job = args.room === "theory" ? "Theory" : "Evaluation";
+        fail(`${t.name} doesn't do ${job}. Settings → People → ${t.name} → tick ${job}.`);
+      }
       teacher = t;
     }
-    const here = !!args.here;
     const ids = [...new Set(args.studentIds)];
     if (ids.length === 0) fail("Pick at least one student.");
     if (ids.length > 20) fail("That's too many at once.");
@@ -78,12 +86,15 @@ export const create = mutation({
       if (!s.present) { reject("isn't signed in. Ask Correction to sign them in first"); continue; }
       const target = args.books?.find((b) => b.studentId === id);
       const place = target ? await bookPlace(ctx, s, target.unitId, target.stage) : await placeOf(ctx, s);
-      if (!place.book || !place.unit) { reject(target ? "has no book in the app for that unit" : "has no book in the app for this stage"); continue; }
-      if (target && !place.progress) { reject(`has no work in ${place.unit.code} yet`); continue; }
+      // A check-in needs no book in the app (Legend, Exam Sprint on paper: she looks at his paper).
+      if (!visit && (!place.book || !place.unit)) { reject(target ? "has no book in the app for that unit" : "has no book in the app for this stage"); continue; }
+      if (!visit && target && !place.progress) { reject(`has no work in ${place.unit!.code} yet`); continue; }
       let section: string | undefined;
       // Called while he still had work (in any of his books): the teacher saw it coming (the room's "ahead" score).
       const dry = (await dryOf(ctx, s)).dry;
-      if (place.book.data.kind === "fighter") {
+      if (visit || !place.book) {
+        // A check-in: nothing has to wait for her; whatever she explains still counts.
+      } else if (place.book.data.kind === "fighter") {
         const status = computeStatus(place.progress?.marks ?? {}, fighter(place.book.data));
         if (args.kind === "theory" && !status.nextTheory) { reject("has no theory left"); continue; }
         if (args.kind === "evaluation" && status.pending.length === 0) { reject("has no wrong answers waiting"); continue; }
@@ -100,13 +111,20 @@ export const create = mutation({
       let bumped = false;
       let bumpedFrom: Id<"users"> | undefined;
       const whose = (c: Doc<"calls">) => (c.teacher ? ` (${c.teacher})` : "");
-      if (here && (active.length > 0 || s.room)) {
-        // The manager sends him straight there: never while another call or room has him.
+      if (manager && (active.length > 0 || s.room)) {
+        // The manager sends him now: never while a teacher has called him or has him (her call stays: send it).
         const c = active[0];
-        reject(c ? `is already with ${c.room === "theory" ? "Theory" : "Evaluation"}${whose(c)}` : `is in ${s.room === "theory" ? "Theory" : "Evaluation"}`);
+        const where = (r: string) => (r === "theory" ? "Theory" : "Evaluation");
+        reject(
+          c
+            ? c.status === "requested"
+              ? `is already called to ${where(c.room)}${whose(c)}: send him there`
+              : `is already with ${where(c.room)}${whose(c)}`
+            : `is in ${where(s.room!)}`,
+        );
         continue;
       }
-      if (here) {
+      if (manager) {
         // nothing to bump or pull: checked above
       } else if (args.room === "theory") {
         const theory = active.find((c) => c.room === "theory");
@@ -131,17 +149,18 @@ export const create = mutation({
         studentId: id,
         room: args.room,
         kind: args.kind,
-        status: here ? "sent" : "requested",
+        status: "requested",
         group,
         section,
-        unitId: place.unit._id,
-        stage: place.book.stage,
+        unitId: place.unit?._id,
+        stage: place.book?.stage,
         pull: pull || undefined,
         bumped: bumped || undefined,
         ...(bumpedFrom ? { bumpedFrom } : {}),
         teacherId: teacher._id,
         teacher: teacher.name,
-        ...(here ? { sentAt: now, arrivedAt: now } : {}),
+        ...(manager ? { byManager: true } : {}),
+        ...(visit ? { visit: true } : {}),
         ...(s.test ? { test: true } : {}),
         ...(dry ? {} : { ahead: true }),
         createdAt: now,
@@ -152,13 +171,12 @@ export const create = mutation({
         by,
         studentId: id,
         name: s.name,
-        value: `${args.room}${args.kind !== args.room ? "/" + args.kind : ""}${pull ? "/pull" : ""}`,
+        value: `${args.room}${args.kind !== args.room ? "/" + args.kind : ""}${pull ? "/pull" : ""}${visit ? "/check-in" : ""}`,
       });
-      if (here) {
-        // With her now: he left the hall (his out-of-work clock stops), the lesson's minutes start.
-        await ctx.db.patch(s._id, { room: args.room });
-        await log(ctx, session, now, { kind: "sent", by, studentId: id, name: s.name, value: args.room });
-        await refresh(ctx, s._id, now, session);
+      if (manager) {
+        // The manager sends him now: he walks to her, her phone calls her until she taps Arrived.
+        const c = await ctx.db.get(callId);
+        if (c) await sendNow(ctx, c, now, session, by);
       }
       created.push({ studentId: id, callId, pull, bumped });
       // The simulation's students count in its practice score, never the class's.
@@ -192,7 +210,7 @@ async function sendNow(ctx: MutationCtx, c: Doc<"calls">, now: number, session: 
 export const send = mutation({
   args: { token: v.optional(v.string()), callIds: v.array(v.id("calls")), by: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    await actor(ctx, args.token, ["correction"], args.by);
+    await actor(ctx, args.token, ["correction", "manager"], args.by);
     const now = Date.now();
     const by = cleanBy(args.by);
     const session = await currentSession(ctx, now);
@@ -219,7 +237,7 @@ export const send = mutation({
 export const decline = mutation({
   args: { token: v.optional(v.string()), callId: v.id("calls"), by: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    await actor(ctx, args.token, ["correction"], args.by);
+    await actor(ctx, args.token, ["correction", "manager"], args.by);
     const now = Date.now();
     const c = await ctx.db.get(args.callId);
     if (!c || c.status !== "requested") return false;
@@ -236,7 +254,7 @@ export const decline = mutation({
 export const undoDecline = mutation({
   args: { token: v.optional(v.string()), callId: v.id("calls"), by: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    await actor(ctx, args.token, ["correction"], args.by);
+    await actor(ctx, args.token, ["correction", "manager"], args.by);
     const now = Date.now();
     const c = await ctx.db.get(args.callId);
     if (!c || c.status !== "declined") return false;
@@ -261,7 +279,7 @@ const walking = (c: Doc<"calls">) => c.status === "sent" && !!c.walk && c.arrive
 export const cancel = mutation({
   args: { token: v.optional(v.string()), callIds: v.array(v.id("calls")), by: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    await actor(ctx, args.token, ["correction", "theory", "evaluation"], args.by);
+    await actor(ctx, args.token, ["correction", "theory", "evaluation", "manager"], args.by);
     const now = Date.now();
     const session = await currentSession(ctx, now);
     for (const id of args.callIds) {
@@ -299,7 +317,7 @@ export const UNDO_ARRIVE_MS = 2 * 60_000;
 export const arrive = mutation({
   args: { token: v.optional(v.string()), callIds: v.array(v.id("calls")), by: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    const user = await actor(ctx, args.token, ["theory", "evaluation", "correction"], args.by);
+    const user = await actor(ctx, args.token, ["theory", "evaluation", "correction", "manager"], args.by);
     const now = Date.now();
     const by = cleanBy(args.by);
     const session = await currentSession(ctx, now);
@@ -308,7 +326,9 @@ export const arrive = mutation({
     for (const id of args.callIds) {
       const c = await ctx.db.get(id);
       if (!c || (c.status !== "requested" && c.status !== "sent")) continue;
-      if (!allowed(user, c.room) && !allowed(user, "correction")) fail(`Only ${c.room === "theory" ? "Theory" : "Evaluation"} or Correction can say he is there.`);
+      if (!allowed(user, c.room) && !allowed(user, "correction") && !allowed(user, "manager")) {
+        fail(`Only ${c.room === "theory" ? "Theory" : "Evaluation"}, Correction or the manager can say he is there.`);
+      }
       const s = await ctx.db.get(c.studentId);
       if (!s) continue;
       if (c.status === "requested") {
@@ -331,11 +351,11 @@ export const arrive = mutation({
 export const unarrive = mutation({
   args: { token: v.optional(v.string()), callId: v.id("calls"), by: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    const user = await actor(ctx, args.token, ["theory", "evaluation", "correction"], args.by);
+    const user = await actor(ctx, args.token, ["theory", "evaluation", "correction", "manager"], args.by);
     const now = Date.now();
     const c = await ctx.db.get(args.callId);
     if (!c || c.status !== "sent" || c.arrivedAt === undefined) return false;
-    if (!allowed(user, c.room) && !allowed(user, "correction")) fail("Only the room's teacher or Correction can take that back.");
+    if (!allowed(user, c.room) && !allowed(user, "correction") && !allowed(user, "manager")) fail("Only the room's teacher, Correction or the manager can take that back.");
     if (now - c.arrivedAt > UNDO_ARRIVE_MS) fail("Too late to take that back.");
     await ctx.db.patch(c._id, { arrivedAt: undefined });
     const session = await currentSession(ctx, now);
@@ -351,18 +371,18 @@ export const UNDO_SEND_MS = 2 * 60_000;
 
 /**
  * The Manager page: Send by mistake. Just after, the calls end as if never made and the students are back in the
- * hall. Owner only (the manager).
+ * hall. The manager's own sends only.
  */
 export const unsend = mutation({
   args: { token: v.optional(v.string()), callIds: v.array(v.id("calls")), by: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    await actor(ctx, args.token, ["owner"], args.by);
+    await actor(ctx, args.token, ["manager"], args.by);
     const now = Date.now();
     const session = await currentSession(ctx, now);
     let n = 0;
     for (const id of args.callIds) {
       const c = await ctx.db.get(id);
-      if (!c || c.status !== "sent" || c.sentAt === undefined) continue;
+      if (!c || !c.byManager || c.status !== "sent" || c.sentAt === undefined) continue;
       if (now - c.sentAt > UNDO_SEND_MS) fail("Too late to take that back. Tap Back when they return.");
       await ctx.db.patch(c._id, { status: "cancelled", endedAt: now });
       const s = await ctx.db.get(c.studentId);
@@ -536,7 +556,9 @@ async function record(
   by: string | undefined,
 ): Promise<{ value: string; n: number }> {
   const r = await recordInBook(ctx, c, s, item, now, session, by);
-  return typeof r === "string" ? { value: r, n: 0 } : r;
+  const out = typeof r === "string" ? { value: r, n: 0 } : r;
+  // A check-in (the manager's): whatever she explained counts; nothing explained = just the check-in.
+  return c.visit && out.n === 0 ? { value: "check-in", n: 0 } : out;
 }
 
 async function recordInBook(
@@ -643,7 +665,7 @@ async function recordInBook(
 export const release = mutation({
   args: { token: v.optional(v.string()), studentId: v.id("students"), by: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    await actor(ctx, args.token, ["correction"], args.by);
+    await actor(ctx, args.token, ["correction", "manager"], args.by);
     const now = Date.now();
     const s = await ctx.db.get(args.studentId);
     if (!s) fail("That student no longer exists.");
@@ -666,7 +688,8 @@ export const release = mutation({
 export const lessons = query({
   args: { token: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    await viewer(ctx, args.token, "theory");
+    // Theory's forecasts, and the Manager page's "about how long is left" (3 Nov 2026).
+    await viewer(ctx, args.token, "theory", "manager");
     const recent = await ctx.db
       .query("calls")
       .withIndex("by_status", (q) => q.eq("status", "done"))

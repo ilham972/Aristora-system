@@ -3127,113 +3127,145 @@ test("OL: the O/L books by paper part; a tute filed under its topic; a Grade 11 
   expect(problems.filter((x) => !x.includes("warning]"))).toEqual([]);
 });
 
-test("Manager: one person runs the class: who to send where (the hold rule), Send to a teacher with no phone, Back, Undo, not everything", async () => {
+test("Manager: the hall and every room on one screen; send any student to any teacher (one tap, tap-tap, drag); her phone calls her until Arrived; his day; check-ins", async () => {
   const backend = await newClass();
-  await addPerson(backend.t, { name: "Shanthi", token: "shanthi-phone-token-0123456789abcdefghijklmnopq", tabs: ["evaluation"] });
+  const SHANTHI = "shanthi-phone-token-0123456789abcdefghijklmnopq";
+  const KAVI = "kavi-phone-token-0123456789abcdefghijklmnopqrstu";
+  await addPerson(backend.t, { name: "Shanthi", token: SHANTHI, tabs: ["evaluation"] });
   await addPerson(backend.t, { name: "Meena", token: "meena-phone-token-0123456789abcdefghijklmnopqrs", tabs: ["theory"] });
-  const M = await phone(backend, "manager");
-  await M.getByRole("button", { name: "Settings" }).click();
-  await M.getByRole("button", { name: "Load demo students (three grades)" }).click();
-  await visible(M.getByText(/^14 demo students loaded/));
-  await M.getByRole("button", { name: "Back to the class" }).click();
+  // The corrector who also manages (his hire, 3 Nov 2026): the Manager job ticked in People.
+  await addPerson(backend.t, { name: "Kavi", token: KAVI, tabs: ["correction", "manager"] });
+  await backend.t.mutation(api.setup.ensure, { token: OWNER_TOKEN });
+  await backend.t.mutation(api.demo.load, { token: OWNER_TOKEN });
+  const M = await phone(backend, "manager", PHONE, KAVI);
+  const S = await phone(backend, "evaluation", PHONE, SHANTHI);
+  const room = (name: string) => M.locator(".mg2-room", { has: M.locator(".mg2-rh b", { hasText: name }) });
+  const hall = (name: string) => M.locator(`.mg2-p[data-name="${name}"]`);
+  const inRoom = (r: string, name: string) => room(r).locator(`.mg2-sp[data-name="${name}"]`);
 
-  // The owner's first bottom tab, open (no count on it while it is open); four tabs in one row.
-  await visible(M.locator(".tabs .tab.manager.on"));
-  expect(await M.locator(".tabs .tab").first().getAttribute("class")).toContain("manager");
-  await count(M.locator(".tabs .tab.manager .tab-badge"), 0);
-  // Teachers (no phones): both free, each with her next group; Correction: Vimal has nothing to do until L8.
-  const person = (name: string) => M.locator(".mg-person", { has: M.locator(".mg-pn", { hasText: name }) });
-  await namesAre(M.locator(".mg-person:not(.mg-corr) .mg-pn"), ["Meena", "Shanthi"]);
-  await contains(person("Meena").locator(".mg-pt"), "free");
-  await contains(person("Meena").locator(".mg-pnext"), "Next: Fathima");
-  // Not here today by mistake (his first class with it): Undo on the message; or her card, shrunk in the same place:
-  // Bring back.
-  await person("Meena").getByRole("button", { name: "Not here today" }).click();
-  await contains(M.locator(".toast"), "Meena: not here today.");
-  await count(M.locator(".mg-off", { hasText: "Meena" }), 1);
-  await M.locator(".toast").getByRole("button", { name: "Undo" }).click();
-  await count(M.locator(".mg-off"), 0);
-  await contains(person("Meena").locator(".mg-pt"), "free");
-  await person("Meena").getByRole("button", { name: "Not here today" }).click();
-  await contains(M.locator(".mg-off", { hasText: "Meena" }), "not here today");
-  await shot(M, "m00b-manager-not-here");
-  await M.locator(".mg-off", { hasText: "Meena" }).getByRole("button", { name: "Bring back" }).click();
-  await contains(person("Meena").locator(".mg-pt"), "free");
-  await contains(M.locator(".mg-corr .mg-pt"), "2 to correct");
-  await contains(M.locator(".mg-corr .mg-red"), "Vimal has no work until L8 is corrected");
+  // Her tabs: Manager (first) and Correction; no Theory or Evaluation page (she manages and corrects).
+  await textsAre(M.locator(".tabs .tab > span:nth-child(2)"), ["Manager", "Correction"]);
+  // The three numbers to bring down; a room per teacher (A–Z, both free); the hall A–Z, coloured by what waits.
+  await textsAre(M.locator(".mg2-n span"), ["to correct", "to explain", "to teach"]);
+  await contains(M.locator(".mg2-n.n-correct b"), "2"); // Malik's L3, Vimal's L8
+  await textsAre(M.locator(".mg2-room .mg2-rh b"), ["Meena", "Shanthi"]);
+  await contains(room("Shanthi").locator(".mg2-rh span"), "free");
+  await contains(room("Shanthi").locator(".mg2-sug"), "Evaluation · no work");
+  await contains(room("Shanthi").locator(".mg2-sn"), "→ Vimal, Malik");
+  await contains(room("Meena").locator(".mg2-sw"), "Theory D · no work");
+  await textsAre(M.locator(".mg2-p"), ["Ahamed", "Dilan", "Fathima", "Kumar", "Malik", "Nila", "Priya", "Rizwan", "Sana", "Tharun", "Vimal", "Yasmin", "Zainab"]);
+  for (const n of ["Fathima", "Rizwan", "Vimal"]) expect(await hall(n).getAttribute("class")).toContain("h-red");
+  expect(await hall("Zainab").getAttribute("class")).toContain("off"); // on paper (Legend)
+  // One screen: nothing scrolls, sideways or down (the hall scrolls inside itself when the class is big).
+  const oneScreen = (p: Page) =>
+    p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth && document.documentElement.scrollHeight <= window.innerHeight + 1);
+  expect(await oneScreen(M)).toBe(true);
+  await shot(M, "m11-manager");
 
-  // Do now, worst first: Theory's D (Fathima has no work: theory gives her work, her wrong answer waits) for Meena,
-  // then the workbook group with Vimal (no work) and Malik (waited 40 min) for Shanthi: each name with his question
-  // numbers, said aloud as they go.
-  const task = (who: string) => M.locator(".mg-task", { has: M.locator(".mg-nm", { hasText: who }) });
-  await until(async () => (await M.locator(".mg-task").count()) >= 2, "two groups");
-  const first = M.locator(".mg-task").first();
-  expect(await first.getAttribute("class")).toContain("j-theory");
-  await namesAre(first.locator(".mg-nm"), ["Fathima", "Ahamed", "Dilan", "Nila"]);
-  await contains(first.locator(".mg-send"), "Send to Meena");
-  await contains(M.locator(".mg-held", { hasText: "Fathima" }), "Theory D first: it gives work");
-  const wbTask = task("Vimal");
-  await contains(wbTask.locator(".mg-why"), "Vimal: no work");
-  await textsAre(wbTask.locator(".mg-nm"), ["Vimal", "Malik"]);
-  await textsAre(wbTask.locator("li").nth(1).locator(".mg-qs i"), ["4", "13", "17"]);
-  await contains(wbTask.locator(".mg-send"), "Send to Shanthi");
-  // Only groups someone can take get a card; the rest wait in one line until a teacher frees.
-  expect(await M.locator(".mg-send:disabled").count()).toBe(0);
-  expect(await M.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await shot(M, "m01-manager");
+  // A number lights who it is: "to correct" = Malik and Vimal; again = all.
+  await M.locator(".mg2-n.n-correct").click();
+  await namesAre(M.locator(".mg2-p:not(.dim)"), ["Malik", "Vimal"]);
+  await M.locator(".mg2-n.n-correct").click();
+  await count(M.locator(".mg2-p.dim"), 0);
 
-  // Send: they go to Shanthi now (no Correction, no Arrived); her card: who, their numbers, Back. Undo takes it back.
-  await wbTask.locator(".mg-send").click();
+  // One tap on a free room sends what it suggests: Vimal and Malik walk to Shanthi (dashed); Undo; again.
+  await room("Shanthi").click();
   await contains(M.locator(".toast"), "Vimal and Malik → Shanthi.");
-  await textsAre(person("Shanthi").locator(".mg-sp b"), ["Vimal", "Malik"]);
-  await contains(person("Shanthi").locator(".mg-back"), "Back ✓ all 2");
-  expect((await marksOf(backend, "Vimal")).room).toBe("evaluation");
+  await textsAre(room("Shanthi").locator(".mg2-sp.s-walking"), ["Vimal", "Malik"]);
+  await count(hall("Vimal"), 0);
+  // Her phone calls her until she taps Arrived (they are on their way to her, she didn't call them).
+  await hears(S, "Vimal and Malik are coming to you.");
+  await visible(S.locator('.evx-sp.s-walk[data-name="Vimal"]'));
   await M.locator(".toast").getByRole("button", { name: "Undo" }).click();
   await contains(M.locator(".toast"), "Taken back");
-  await contains(person("Shanthi").locator(".mg-pt"), "free");
-  expect((await marksOf(backend, "Vimal")).room).toBeUndefined();
+  await count(room("Shanthi").locator(".mg2-sp"), 0);
+  await visible(hall("Vimal"));
+  await room("Shanthi").click();
+  await textsAre(room("Shanthi").locator(".mg2-sp.s-walking"), ["Vimal", "Malik"]);
+  await contains(evArrived(S), "Arrived 2");
+  await evArrived(S).click();
+  await textsAre(room("Shanthi").locator(".mg2-sp.s-here"), ["Vimal", "Malik"]);
+  await contains(room("Shanthi").locator(".mg2-rd"), "Evaluation");
 
-  // Again; not everything for Malik: Q4 needs Theory, Q13 not now (stays waiting), Q17 explained.
-  await task("Vimal").locator(".mg-send").click();
-  await textsAre(person("Shanthi").locator(".mg-sp b"), ["Vimal", "Malik"]);
-  await shot(M, "m02-manager-busy");
-  await person("Shanthi").locator(".mg-sp", { hasText: "Malik" }).click();
-  const sheet = M.locator(".sheet", { has: M.locator(".sheet-title", { hasText: "Malik with Shanthi" }) });
-  await visible(sheet);
-  await sheet.locator(".mg-dec", { hasText: "4" }).first().click();
-  await sheet.locator(".mg-dec", { hasText: "13" }).click();
-  await sheet.locator(".mg-dec", { hasText: "13" }).click();
-  await textsAre(sheet.locator(".mg-dec span"), ["T", "–", "✓"]);
-  await shot(M, "m03-manager-not-all");
-  await sheet.getByRole("button", { name: "Back to work" }).click();
-  await contains(M.locator(".toast"), "Malik: back to work.");
-  const malik = (await marksOf(backend, "Malik")).m!;
-  expect(!!malik.q["4"].th).toBe(true);
-  expect(malik.q["13"].x).toBeUndefined();
-  expect(!!malik.q["17"].x).toBe(true);
-  await textsAre(person("Shanthi").locator(".mg-sp b"), ["Vimal"]);
-  await person("Shanthi").locator(".mg-back").click();
-  await contains(M.locator(".toast"), "Vimal: back to work.");
-  const vimal = (await marksOf(backend, "Vimal")).m!;
-  expect([!!vimal.q["22"].x, !!vimal.q["51"].x]).toEqual([true, true]);
+  // Drag: hold Rizwan (no work, needs Theory C), move him onto Meena's room.
+  const from = (await hall("Rizwan").boundingBox())!;
+  const to = (await room("Meena").boundingBox())!;
+  await M.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await M.mouse.down();
+  await M.waitForTimeout(350);
+  await visible(M.locator(".mg2-ghost", { hasText: "Rizwan" }));
+  await M.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
+  expect(await room("Meena").getAttribute("class")).toContain("over");
+  await M.mouse.up();
+  await contains(M.locator(".toast"), "Rizwan → Meena.");
+  await visible(inRoom("Meena", "Rizwan").and(M.locator(".s-walking")));
+  // Meena has no phone today: tap him in her room, "He's with her".
+  await inRoom("Meena", "Rizwan").click();
+  await contains(M.locator(".mg2-strip .mg2-sl"), "on his way to Meena");
+  await M.locator(".mg2-strip").getByRole("button", { name: "He's with her" }).click();
+  await visible(inRoom("Meena", "Rizwan").and(M.locator(".s-here")));
+  await contains(room("Meena").locator(".mg2-rd"), "Theory C");
 
-  // Theory's group to Meena, then Back: all four taught D.
-  await M.locator(".mg-task.j-theory").first().locator(".mg-send").click();
-  await namesAre(person("Meena").locator(".mg-sp b"), ["Fathima", "Ahamed", "Dilan", "Nila"]);
-  await person("Meena").locator(".mg-back").click();
-  await contains(M.locator(".toast"), "back to work");
-  const ahamed = await marksOf(backend, "Ahamed");
-  expect(Object.values(ahamed.marks).filter((m) => m?.s === "taught").length).toBeGreaterThan(9);
+  // Tap-tap with his strip: Priya has nothing waiting: a check-in. Only Shanthi can take one (Meena: Theory only).
+  // (Right after "He's with her": the answer arriving a moment later must not close Priya's strip.)
+  await hall("Priya").click();
+  const strip = M.locator(".mg2-strip");
+  await contains(strip.locator(".mg2-sh b"), "Priya");
+  await until(async () => (await strip.locator(".mg2-day i").count()) > 0, "her day as a bar");
+  await contains(strip.locator(".mg2-dayt"), "no teacher yet");
+  await textsAre(strip.locator(".mg2-to b"), ["→ Shanthi"]);
+  await contains(strip.locator(".mg2-to small"), "busy · ~14m left"); // Vimal's 2 questions + Malik's 3, ~3 min each
+  await shot(M, "m12-manager-strip");
+  await strip.locator(".mg2-to").click();
+  await contains(M.locator(".toast"), "Priya → Shanthi (check-in).");
 
-  // Small phones: four tabs in one row, no word cut, nothing sideways.
+  // Shanthi's phone: Done for Vimal and Malik (all explained); Priya's check-in: Arrived, the hint, Done.
+  const ids = await backend.t.run(async (ctx) => {
+    const calls = (await ctx.db.query("calls").collect()).filter((c) => c.status === "sent" && c.teacher === "Shanthi");
+    const names = new Map((await ctx.db.query("students").collect()).map((s) => [s._id as string, s.name]));
+    return calls.map((c) => ({ id: c._id, name: names.get(c.studentId)!, visit: !!c.visit }));
+  });
+  await backend.t.mutation(api.calls.finish, { token: SHANTHI, items: ids.filter((x) => !x.visit).map((x) => ({ callId: x.id, explained: [] })) });
+  await backend.push();
+  await until(async () => (await room("Shanthi").locator(".mg2-sp").count()) === 1, "only Priya left with Shanthi");
+  await evArrived(S).click();
+  await contains(S.locator(".evx-hint"), "Check-in: Priya. Look at his book with him: how is it going? Then Done.");
+  await shot(S, "m13-teacher-check-in");
+  await evDone(S).click();
+  await until(async () => (await room("Shanthi").locator(".mg2-sp").count()) === 0, "Shanthi free");
+  const priya = await marksOf(backend, "Priya");
+  expect(priya.seen?.evaluation).toBeGreaterThan(0);
+
+  // A teacher free 6 minutes while work waits for her: her room goes red (the class began an hour ago).
+  await backend.t.run(async (ctx) => {
+    for (const c of await ctx.db.query("calls").collect()) if (c.teacher === "Shanthi" && c.endedAt) await ctx.db.patch(c._id, { endedAt: Date.now() - 6 * 60_000 });
+    for (const x of await ctx.db.query("sessions").collect()) if (x.open) await ctx.db.patch(x._id, { startedAt: Date.now() - 60 * 60_000 });
+  });
+  await backend.push();
+  await until(async () => ((await room("Shanthi").getAttribute("class")) ?? "").includes("a-red"), "Shanthi's room red");
+  await shot(M, "m14-manager-free-red");
+
+  // She forgot Done: tap him in her room, Back to the hall (twice: nothing gets marked).
+  await inRoom("Meena", "Rizwan").click();
+  await M.locator(".mg2-strip").getByRole("button", { name: "Back to the hall" }).click();
+  await M.locator(".mg2-strip").getByRole("button", { name: "Yes: back, nothing marked" }).click();
+  await visible(hall("Rizwan"));
+  await contains(M.locator(".toast"), "Rizwan: back in the hall.");
+
+  // Not here today: Undo on the message; or the dashed chip, Bring back.
+  await room("Meena").getByRole("button", { name: "not here" }).click();
+  await contains(M.locator(".toast"), "Meena: not here today.");
+  await visible(M.locator(".mg2-off", { hasText: "Meena" }));
+  await M.locator(".mg2-off", { hasText: "Meena" }).click();
+  await visible(room("Meena"));
+
+  // Small phones: one screen, nothing sideways, the tabs in one row.
   for (const width of [360, 320]) {
-    const S = await phone(backend, "manager", { ...PHONE, viewport: { width, height: 740 } });
-    await visible(S.locator(".mg-person").first());
-    expect(await S.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    expect(new Set(await S.locator(".tabs .tab").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)))).size).toBe(1);
-    expect(await S.locator(".tabs .tab span:not(.tab-mark):not(.tab-badge)").evaluateAll((els) => els.every((e) => e.scrollWidth <= e.clientWidth + 1))).toBe(true);
-    await shot(S, `m04-manager-${width}`);
-    await S.context().close();
+    const P = await phone(backend, "manager", { ...PHONE, viewport: { width, height: 640 } }, KAVI);
+    await visible(P.locator(".mg2-room").first());
+    expect(await oneScreen(P)).toBe(true);
+    await shot(P, `m15-manager-${width}`);
+    await P.context().close();
   }
-  expect(problems.filter((p) => p.startsWith("[manager"))).toEqual([]);
+  expect(problems.filter((p) => p.startsWith("[manager") || p.startsWith("[evaluation"))).toEqual([]);
 });
