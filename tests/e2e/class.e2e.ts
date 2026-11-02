@@ -3146,6 +3146,19 @@ test("Manager: one person runs the class: who to send where (the hold rule), Sen
   await namesAre(M.locator(".mg-person:not(.mg-corr) .mg-pn"), ["Meena", "Shanthi"]);
   await contains(person("Meena").locator(".mg-pt"), "free");
   await contains(person("Meena").locator(".mg-pnext"), "Next: Fathima");
+  // Not here today by mistake (his first class with it): Undo on the message; or her card, shrunk in the same place:
+  // Bring back.
+  await person("Meena").getByRole("button", { name: "Not here today" }).click();
+  await contains(M.locator(".toast"), "Meena: not here today.");
+  await count(M.locator(".mg-off", { hasText: "Meena" }), 1);
+  await M.locator(".toast").getByRole("button", { name: "Undo" }).click();
+  await count(M.locator(".mg-off"), 0);
+  await contains(person("Meena").locator(".mg-pt"), "free");
+  await person("Meena").getByRole("button", { name: "Not here today" }).click();
+  await contains(M.locator(".mg-off", { hasText: "Meena" }), "not here today");
+  await shot(M, "m00b-manager-not-here");
+  await M.locator(".mg-off", { hasText: "Meena" }).getByRole("button", { name: "Bring back" }).click();
+  await contains(person("Meena").locator(".mg-pt"), "free");
   await contains(M.locator(".mg-corr .mg-pt"), "2 to correct");
   await contains(M.locator(".mg-corr .mg-red"), "Vimal has no work until L8 is corrected");
 

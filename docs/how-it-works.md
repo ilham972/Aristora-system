@@ -489,7 +489,8 @@ hall with no work; the phone hears what Correction hears). Page `src/manager.tsx
 tested, `src/managerData.ts` `managerPlan` (`tests/manager.test.ts`, the run-through "Manager: …").
 - **Teachers** (`people.team`, owner only: active teachers with Theory or Evaluation): one card each. Free (green
   edge): "Next: Raj, Zara +2" (her group in Do now) and **Not here today** (this phone, today only:
-  `aristora.mgr.away`; "bring back" at the end). Busy: who is with her as pills ("Vimal 22 51"; Theory: the section or
+  `aristora.mgr.away`; the message has **Undo**, and her card shrinks in the same place to a dashed row with **Bring
+  back**: his first class, he tapped it by mistake and couldn't find her at the bottom of the page). Busy: who is with her as pills ("Vimal 22 51"; Theory: the section or
   the questions), the minutes and about how long is left (each question once × 3 min, `Q_MS`; a lesson its usual
   length, `calls.lessons`), amber when over; **Back ✓** = everything explained / taught, all back to work
   (`backAll` → `calls.finish`). Tap a pill = "not everything" (`EvalBack`: each question ✓ explained → T needs Theory

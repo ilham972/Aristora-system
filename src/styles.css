@@ -9096,6 +9096,20 @@ body.locked.evx-on .toasts {
 .mg-person.away {
   border-style: dashed;
 }
+.mg-person.mg-off {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 12px;
+  border-style: dashed;
+  background: transparent;
+}
+.mg-off .mg-pn {
+  color: var(--ink-2);
+}
+.mg-off .mg-pj {
+  flex: 1;
+}
 .mg-person.mg-corr.red {
   border-color: var(--red);
 }

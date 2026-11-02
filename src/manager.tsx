@@ -55,17 +55,19 @@ function useAway(now: number): [Set<string>, (id: string, away: boolean) => void
   };
   const [ids, setIds] = useState<Set<string>>(read);
   useEffect(() => setIds(read()), [day]);
-  const set = (id: string, away: boolean) => {
-    const next = new Set(ids);
-    if (away) next.add(id);
-    else next.delete(id);
-    setIds(next);
-    try {
-      localStorage.setItem("aristora.mgr.away", JSON.stringify({ day, ids: [...next] }));
-    } catch {
-      /* private mode: this visit only */
-    }
-  };
+  // From the latest list, never a stale one (Undo runs seconds later, from an older screen).
+  const set = (id: string, away: boolean) =>
+    setIds((prev) => {
+      const next = new Set(prev);
+      if (away) next.add(id);
+      else next.delete(id);
+      try {
+        localStorage.setItem("aristora.mgr.away", JSON.stringify({ day, ids: [...next] }));
+      } catch {
+        /* private mode: this visit only */
+      }
+      return next;
+    });
   return [ids, set];
 }
 
@@ -144,6 +146,12 @@ export function ManagerPage(props: { board: Board; views: View[]; now: number })
     toast(`${joinNames(names)}: back to work.`);
   };
 
+  /** Not here today: one tap, with Undo on the message (2 Nov 2026: he tapped it by mistake and she was gone). */
+  const markAway = (t: Teacher) => {
+    setAway(t.id, true);
+    toast(`${t.name}: not here today.`, "info", () => setAway(t.id, false));
+  };
+
   /** Called by a teacher's own phone and not with her yet: not now. */
   const cancel = async (ids: string[]) => {
     await act(() => mutate(api.calls.cancel, { callIds: ids as Id<"calls">[], by: "correction" }));
@@ -170,7 +178,27 @@ export function ManagerPage(props: { board: Board; views: View[]; now: number })
     <div class="mg-page">
       <section class="mg-people" aria-label="Teachers">
         {plan.people.map((p) => (
-          <PersonBox key={p.t.id} p={p} now={now} busy={busy} onBack={() => void back(p)} onOpen={(key) => setSheet({ teacher: p.t.id, key })} onAway={(a) => setAway(p.t.id, a)} onCancel={(ids) => void cancel(ids)} />
+          <PersonBox
+            key={p.t.id}
+            p={p}
+            now={now}
+            busy={busy}
+            onBack={() => void back(p)}
+            onOpen={(key) => setSheet({ teacher: p.t.id, key })}
+            onAway={(a) => (a ? markAway(p.t) : setAway(p.t.id, false))}
+            onCancel={(ids) => void cancel(ids)}
+          />
+        ))}
+        {/* Not here today: her card shrinks in the same place, one tap brings it back. */}
+        {awayList.map((t) => (
+          <div key={t.id} class="mg-person mg-off">
+            <span class={`mg-dot ${t.jobs[0] ?? "evaluation"}`} aria-hidden="true" />
+            <b class="mg-pn">{t.name}</b>
+            <span class="mg-pj">not here today</span>
+            <button type="button" class="btn ghost small" onClick={() => setAway(t.id, false)}>
+              Bring back
+            </button>
+          </div>
         ))}
         {plan.noTeachers && team.length === 0 && rows !== undefined && (
           <p class="mg-note">No Theory or Evaluation teacher yet: Settings → People → Add a teacher (her phone isn't needed).</p>
@@ -262,19 +290,6 @@ export function ManagerPage(props: { board: Board; views: View[]; now: number })
             <span key={r.key}>
               {i ? " · " : ""}
               <b>{r.label}</b> ×{r.times}
-            </span>
-          ))}
-        </p>
-      )}
-      {awayList.length > 0 && (
-        <p class="mg-foot">
-          Not teaching today:{" "}
-          {awayList.map((t, i) => (
-            <span key={t.id}>
-              {i ? ", " : ""}
-              <button type="button" class="mg-link" onClick={() => setAway(t.id, false)}>
-                {t.name} (bring back)
-              </button>
             </span>
           ))}
         </p>
