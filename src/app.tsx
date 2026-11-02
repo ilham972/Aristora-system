@@ -8,6 +8,7 @@ import { Focus } from "./focus";
 import { EvaluationPage } from "./evalFocus";
 import { TheoryTab } from "./theoryFocus";
 import { BossPage } from "./boss";
+import { ManagerPage } from "./manager";
 import { SimBanner } from "./sim";
 import { Progress } from "./progress";
 import { Settings } from "./settings";
@@ -22,10 +23,12 @@ import { Sheet, Toasts } from "./ui";
  * Theory and Evaluation, for the jobs this person has. The whole class (Class) is an icon in the top bar, for
  * everyone, with Progress. A phone with none of the jobs has no bottom bar: Class is its home.
  */
-type TabId = "correction" | "theory" | "evaluation";
+type TabId = "manager" | "correction" | "theory" | "evaluation";
 type Page = "board" | "class" | "settings" | "progress" | "boss";
 
 const TABS: { id: TabId; label: string }[] = [
+  // The Manager page (2 Nov 2026, his ask): the owner runs the whole class from one phone. Owner only, first.
+  { id: "manager", label: "Manager" },
   { id: "correction", label: "Correction" },
   { id: "theory", label: "Theory" },
   { id: "evaluation", label: "Evaluation" },
@@ -39,7 +42,7 @@ const JOBS: Role[] = ["correction", "theory", "evaluation"];
 function loadStart(): { tab: TabId; page: Page } {
   try {
     const r = localStorage.getItem("aristora.role");
-    if (r === "theory" || r === "evaluation") return { tab: r, page: "board" };
+    if (r === "theory" || r === "evaluation" || r === "manager") return { tab: r, page: "board" };
     if (r === "focus") return { tab: "correction", page: "board" };
     if (r === "class" || r === "correction") return { tab: "theory", page: "class" };
   } catch {
@@ -87,7 +90,7 @@ export function App() {
   const user = me?.user ?? null;
   // Correction, Theory and Evaluation for those jobs (the bottom bar); Class for everyone (the top bar).
   const jobs = JOBS.filter((j) => !user || user.role === "owner" || user.tabs.includes(j));
-  const tabs = TABS.filter((t) => jobs.includes(t.id));
+  const tabs = TABS.filter((t) => (t.id === "manager" ? user?.role === "owner" : jobs.includes(t.id)));
   const tab: TabId = tabs.some((t) => t.id === chosen) ? chosen : (tabs[0]?.id ?? "theory");
   // Correction (marking papers, and signing students in with its +) is Correction's job; Progress needs Reports.
   const canCorrect = may("correction");
@@ -115,7 +118,8 @@ export function App() {
   };
   // The job decides the taps, what the phone hears and the `by` the server records. Class: the job done last.
   const classJob: Role = lastJob && jobs.includes(lastJob) ? lastJob : (jobs[0] ?? "correction");
-  const role: Role = base === "class" ? classJob : tab;
+  // The manager is in the hall like Correction: he hears what Correction hears (a level waits and someone has no work).
+  const role: Role = base === "class" ? classJob : tab === "manager" ? "correction" : tab;
 
   setRole(role);
   useEffect(() => {
@@ -124,7 +128,7 @@ export function App() {
     } catch {
       /* private mode */
     }
-    const job: Role | null = base === "class" ? null : tab;
+    const job: Role | null = base === "class" || tab === "manager" ? null : tab;
     if (job && job !== lastJob) {
       setLastJob(job);
       try {
@@ -344,6 +348,8 @@ export function App() {
         <Progress board={board} now={now} />
       ) : shown === "boss" ? (
         <BossPage board={board} views={views} now={now} />
+      ) : tab === "manager" ? (
+        <ManagerPage board={board} views={views} now={now} />
       ) : tab === "correction" ? (
         <Focus board={board} views={views} now={now} />
       ) : tab === "evaluation" ? (
@@ -357,8 +363,8 @@ export function App() {
           {tabs.map((r) => {
             // A number: something waits for that page's job while this phone is busy elsewhere. Theory, Evaluation:
             // students with no work (red). Correction: papers handed in (amber; red when someone has no work until then).
-            const away = role !== r.id || shown !== "board";
-            const badge = !away ? 0 : r.id === "theory" ? theoryRed : r.id === "evaluation" ? evalRed : papers;
+            const away = tab !== r.id || shown !== "board";
+            const badge = !away ? 0 : r.id === "manager" ? idleNow : r.id === "theory" ? theoryRed : r.id === "evaluation" ? evalRed : papers;
             const amber = r.id === "correction" && !papersRed;
             return (
               <button

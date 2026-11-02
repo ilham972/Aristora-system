@@ -51,6 +51,22 @@ export const list = query({
   },
 });
 
+/**
+ * The Manager page (2 Nov 2026): the teachers he can send students to, with their jobs. Owner only. No phones, links
+ * or PINs: just who teaches what.
+ */
+export const team = query({
+  args: { token },
+  handler: async (ctx, args) => {
+    await viewer(ctx, args.token, "owner");
+    const users = await ctx.db.query("users").collect();
+    return users
+      .filter((u) => u.active && u.role === "teacher" && (u.tabs.includes("theory") || u.tabs.includes("evaluation")))
+      .map((u) => ({ _id: u._id, name: u.name, tabs: u.tabs }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  },
+});
+
 async function nameFree(ctx: QueryCtx, name: string, except?: Id<"users">) {
   const same = await ctx.db
     .query("users")

@@ -38,12 +38,27 @@ export const create = mutation({
     kind: room,
     /** The book each student is called for (he works on several at once); default: his book now. */
     books: v.optional(v.array(v.object({ studentId: v.id("students"), unitId: v.id("units"), stage: bookStage }))),
+    /**
+     * The Manager page (owner, 2 Nov 2026): the teacher he sends them to (her phone may be off). Default: whoever calls.
+     */
+    teacherId: v.optional(v.id("users")),
+    /** The Manager page: he sent them himself, they are with her now (no walk, no Arrived, nothing for Correction). */
+    here: v.optional(v.boolean()),
     by: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const me = await actor(ctx, args.token, [args.room], args.by);
     const now = Date.now();
     const by = cleanBy(args.by);
+    // Sending for another teacher, or straight into her room: the manager's (the owner's) only.
+    if ((args.teacherId || args.here) && !allowed(me, "owner")) fail("Only the owner can send students for a teacher.");
+    let teacher: Doc<"users"> = me;
+    if (args.teacherId) {
+      const t = await ctx.db.get(args.teacherId);
+      if (!t || !t.active) fail("That teacher was removed. Pick another.");
+      teacher = t;
+    }
+    const here = !!args.here;
     const ids = [...new Set(args.studentIds)];
     if (ids.length === 0) fail("Pick at least one student.");
     if (ids.length > 20) fail("That's too many at once.");
@@ -85,7 +100,15 @@ export const create = mutation({
       let bumped = false;
       let bumpedFrom: Id<"users"> | undefined;
       const whose = (c: Doc<"calls">) => (c.teacher ? ` (${c.teacher})` : "");
-      if (args.room === "theory") {
+      if (here && (active.length > 0 || s.room)) {
+        // The manager sends him straight there: never while another call or room has him.
+        const c = active[0];
+        reject(c ? `is already with ${c.room === "theory" ? "Theory" : "Evaluation"}${whose(c)}` : `is in ${s.room === "theory" ? "Theory" : "Evaluation"}`);
+        continue;
+      }
+      if (here) {
+        // nothing to bump or pull: checked above
+      } else if (args.room === "theory") {
         const theory = active.find((c) => c.room === "theory");
         if (theory) { reject(`is already called to Theory${whose(theory)}`); continue; }
         if (active.some((c) => c.kind === "theory")) { reject("is already getting theory in Evaluation"); continue; }
@@ -108,7 +131,7 @@ export const create = mutation({
         studentId: id,
         room: args.room,
         kind: args.kind,
-        status: "requested",
+        status: here ? "sent" : "requested",
         group,
         section,
         unitId: place.unit._id,
@@ -116,8 +139,9 @@ export const create = mutation({
         pull: pull || undefined,
         bumped: bumped || undefined,
         ...(bumpedFrom ? { bumpedFrom } : {}),
-        teacherId: me._id,
-        teacher: me.name,
+        teacherId: teacher._id,
+        teacher: teacher.name,
+        ...(here ? { sentAt: now, arrivedAt: now } : {}),
         ...(s.test ? { test: true } : {}),
         ...(dry ? {} : { ahead: true }),
         createdAt: now,
@@ -130,6 +154,12 @@ export const create = mutation({
         name: s.name,
         value: `${args.room}${args.kind !== args.room ? "/" + args.kind : ""}${pull ? "/pull" : ""}`,
       });
+      if (here) {
+        // With her now: he left the hall (his out-of-work clock stops), the lesson's minutes start.
+        await ctx.db.patch(s._id, { room: args.room });
+        await log(ctx, session, now, { kind: "sent", by, studentId: id, name: s.name, value: args.room });
+        await refresh(ctx, s._id, now, session);
+      }
       created.push({ studentId: id, callId, pull, bumped });
       // The simulation's students count in its practice score, never the class's.
       await roomStats(ctx, s, session, args.room, { calls: 1, ahead: dry ? 0 : 1 });
@@ -313,6 +343,36 @@ export const unarrive = mutation({
     await log(ctx, session, now, { kind: "arrived-undo", by: cleanBy(args.by), studentId: c.studentId, name: s?.name, value: c.room });
     await touch(ctx, session, now);
     return true;
+  },
+});
+
+/** The manager's Send can be taken back this soon after (a tap on the wrong group). */
+export const UNDO_SEND_MS = 2 * 60_000;
+
+/**
+ * The Manager page: Send by mistake. Just after, the calls end as if never made and the students are back in the
+ * hall. Owner only (the manager).
+ */
+export const unsend = mutation({
+  args: { token: v.optional(v.string()), callIds: v.array(v.id("calls")), by: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["owner"], args.by);
+    const now = Date.now();
+    const session = await currentSession(ctx, now);
+    let n = 0;
+    for (const id of args.callIds) {
+      const c = await ctx.db.get(id);
+      if (!c || c.status !== "sent" || c.sentAt === undefined) continue;
+      if (now - c.sentAt > UNDO_SEND_MS) fail("Too late to take that back. Tap Back when they return.");
+      await ctx.db.patch(c._id, { status: "cancelled", endedAt: now });
+      const s = await ctx.db.get(c.studentId);
+      if (s && s.room === c.room) await ctx.db.patch(s._id, { room: undefined, lastActivityAt: now });
+      if (s) await refresh(ctx, s._id, now, session);
+      await log(ctx, session, now, { kind: "cancel", by: cleanBy(args.by), studentId: c.studentId, name: s?.name, value: c.room });
+      n++;
+    }
+    await touch(ctx, session, now);
+    return { undone: n };
   },
 });
 
