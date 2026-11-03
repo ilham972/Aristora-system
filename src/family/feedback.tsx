@@ -15,12 +15,13 @@ const FACES: { mood: number; face: string; ta: string }[] = [
   { mood: 5, face: "😍", ta: "மிக நன்று" },
 ];
 
-const TOPICS: { id: "class" | "teachers" | "questions" | "app" | "other"; ta: string }[] = [
-  { id: "class", ta: "வகுப்பு" },
-  { id: "teachers", ta: "ஆசிரியர்கள்" },
-  { id: "questions", ta: "கேள்விகள்" },
-  { id: "app", ta: "App" },
-  { id: "other", ta: "வேறு" },
+/** What it is about: short labels, English (the questions he answers are Tamil: honest answers come in his own words). */
+const TOPICS: { id: "class" | "teachers" | "questions" | "app" | "other"; name: string }[] = [
+  { id: "class", name: "Class" },
+  { id: "teachers", name: "Teachers" },
+  { id: "questions", name: "Questions" },
+  { id: "app", name: "App" },
+  { id: "other", name: "Other" },
 ];
 
 /** As the server allows (convex/family.ts FEEDBACK_TEXT_MAX). */
@@ -68,14 +69,14 @@ export function FeedbackSheet(props: { grade: number | null; onClose: () => void
       <Sheet title="நன்றி!" onClose={props.onClose} class="f-fb-done">
         <div class="f-thanks rise">
           <OwlBadge mood="cheer" class="mid" />
-          <b>நன்றி! உன் கருத்தைப் படிப்போம்.</b>
-          <small>Thank you: we read every one.</small>
+          <b>உன் கருத்தைப் படிப்போம்.</b>
+          <small>ஒவ்வொன்றையும் நாங்கள் படிக்கிறோம்.</small>
         </div>
       </Sheet>
     );
   }
   return (
-    <Sheet title="ARISTORA க்குச் சொல்" sub="உன் கருத்து எங்களை மேம்படுத்தும். · Tell us: it makes ARISTORA better." onClose={props.onClose} class="f-fb">
+    <Sheet title="Tell ARISTORA" sub="உன் கருத்து எங்களை மேம்படுத்தும்." onClose={props.onClose} class="f-fb">
       <p class="f-fb-q">எப்படி இருக்கிறது?</p>
       <div class="f-faces" role="radiogroup" aria-label="How is it?">
         {FACES.map((f) => (
@@ -100,7 +101,7 @@ export function FeedbackSheet(props: { grade: number | null; onClose: () => void
       <div class="f-topics" role="group" aria-label="About">
         {TOPICS.map((t) => (
           <button key={t.id} type="button" class={`f-chip-b${topic === t.id ? " on" : ""}`} aria-pressed={topic === t.id} onClick={() => setTopic(topic === t.id ? null : t.id)}>
-            {t.ta}
+            {t.name}
           </button>
         ))}
       </div>
@@ -119,7 +120,7 @@ export function FeedbackSheet(props: { grade: number | null; onClose: () => void
       <button type="button" class="f-row f-named" aria-pressed={named} onClick={() => setNamed(!named)}>
         <span class="f-named-w">
           <b>என் பெயருடன் அனுப்பு</b>
-          <small>{named ? "உன் பெயரும் போகும். · With your name." : `உன் பெயர் காட்டப்படாது: ${props.grade ? `Grade ${props.grade}` : "உன் Grade"} மட்டும். · Without your name.`}</small>
+          <small>{named ? "உன் பெயரும் போகும்." : `உன் பெயர் போகாது: ${props.grade ? `Grade ${props.grade}` : "உன் Grade"} மட்டும்.`}</small>
         </span>
         <span class={`f-switch${named ? " on" : ""}`} aria-hidden="true" />
       </button>
@@ -129,7 +130,7 @@ export function FeedbackSheet(props: { grade: number | null; onClose: () => void
         </p>
       )}
       <button type="button" class="f-btn go big" disabled={!ready || busy} onClick={() => void send()}>
-        {busy ? "…" : "அனுப்பு"}
+        {busy ? "…" : "Send"}
       </button>
       {!ready && <p class="f-muted small f-center-t">ஒரு முகத்தைத் தொடு அல்லது சில வார்த்தைகள் எழுது.</p>}
     </Sheet>

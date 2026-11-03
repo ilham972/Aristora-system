@@ -9,8 +9,8 @@ import { MAX_ACCOUNTS, query, type Account } from "./net";
 import { setSoundOn, soundOn } from "./sound";
 import { Avatar, firstName, Flame, Gem, Icon, Medal, OwlBadge, Tag, TROPHY_ORDER, Waiting } from "./ui";
 
-/** Monday first, as the week starts (Sri Lanka): திங்கள், செவ்வாய், புதன், வியாழன், வெள்ளி, சனி, ஞாயிறு. */
-const DAYS = ["தி", "செ", "பு", "வி", "வெ", "ச", "ஞா"];
+/** Monday first, as the week starts (Sri Lanka): M T W T F S S, the letters every calendar uses. */
+const DAYS = ["M", "T", "W", "T", "F", "S", "S"];
 
 /** Today's place in the week, Monday = 0, Sri Lanka time. */
 function todayIndex(now: number): number {
@@ -45,7 +45,7 @@ export function Kids(props: { list: Account[]; current: Account | null; onSwitch
         ))}
       </ul>
       <button type="button" class="f-btn ghost f-add" disabled={props.list.length >= MAX_ACCOUNTS} onClick={props.onAdd}>
-        <Icon name="plus" size={18} /> இன்னொரு பிள்ளையைச் சேர்
+        <Icon name="plus" size={18} /> Add a child
       </button>
       {cur &&
         (sure ? (
@@ -55,16 +55,16 @@ export function Kids(props: { list: Account[]; current: Account | null; onSwitch
             </p>
             <div class="f-sure-b">
               <button type="button" class="f-btn danger" onClick={props.onSignOut}>
-                ஆம், வெளியேறு
+                Sign out
               </button>
               <button type="button" class="f-btn ghost" onClick={() => setSure(false)}>
-                வேண்டாம்
+                No
               </button>
             </div>
           </div>
         ) : (
           <button type="button" class="f-link danger" onClick={() => setSure(true)}>
-            <Icon name="out" size={18} /> {firstName(cur.name)}: வெளியேறு
+            <Icon name="out" size={18} /> Sign out {firstName(cur.name)}
           </button>
         ))}
     </div>
@@ -77,7 +77,7 @@ function XpBars(props: { xp: number[]; total: number; today: number }) {
   return (
     <section class="f-chart f-card rise" aria-label="XP this week">
       <h2 class="f-h2">
-        XP இந்த வாரம்
+        XP this week
         <span class="f-chart-t">
           <Gem size={16} /> {props.total}
         </span>
@@ -86,7 +86,7 @@ function XpBars(props: { xp: number[]; total: number; today: number }) {
         {DAYS.map((d, i) => {
           const v = props.xp[i] ?? 0;
           return (
-            <div key={d} class={`f-bar${i === props.today ? " today" : ""}${i > props.today ? " later" : ""}`}>
+            <div key={i} class={`f-bar${i === props.today ? " today" : ""}${i > props.today ? " later" : ""}`}>
               <small class="f-bar-v">{v > 0 ? v : ""}</small>
               <i style={{ height: `${Math.max(v > 0 ? 8 : 4, Math.round((v / top) * 104))}px`, animationDelay: `${i * 50}ms` }} />
               <small class="f-bar-d">{d}</small>
@@ -137,19 +137,19 @@ export function MeTab(props: {
         {props.top}
         <div class="f-hero-in">
           <div class="f-hero-w">
-            <p class="f-kicker">தொடர் · Streak</p>
+            <p class="f-kicker">Streak</p>
             <p class={`f-streaknum${s.today ? " lit" : ""}`}>
               <Flame lit={s.today} size={44} />
               <b>{s.days}</b>
             </p>
-            <p class="f-hsub">{s.today ? "நாள் தொடர் · இன்று முடிந்தது ✓" : s.days > 0 ? "நாள் தொடர் · இன்று ஒரு Level செய்!" : "இன்று ஒரு Level செய்து தொடங்கு"}</p>
-            {best && <Tag tone="yellow">PERSONAL BEST</Tag>}
+            <p class="f-hsub">{s.today ? `${s.days === 1 ? "day" : "days"} in a row · today ✓` : s.days > 0 ? "இன்று ஒரு Level செய்: தீ அணையாமல் பார்!" : "இன்று ஒரு Level செய்து தொடங்கு!"}</p>
+            {best && <Tag tone="gold">PERSONAL BEST</Tag>}
           </div>
           <OwlBadge mood={s.today ? "cheer" : "sleep"} class="hero" />
         </div>
-        <div class="f-weekdots" aria-label="இந்த வாரம் · This week">
+        <div class="f-weekdots" aria-label="This week">
           {DAYS.map((d, i) => (
-            <span key={d} class={`f-wdot${week[i] ? " lit" : ""}${i === today ? " today" : ""}${i > today ? " later" : ""}`}>
+            <span key={i} class={`f-wdot${week[i] ? " lit" : ""}${i === today ? " today" : ""}${i > today ? " later" : ""}`}>
               <i>{week[i] ? <Flame lit size={18} /> : i < today ? "·" : ""}</i>
               <small>{d}</small>
             </span>
@@ -167,12 +167,12 @@ export function MeTab(props: {
         <div>
           <Gem size={22} />
           <b>{(me.total ?? me.xp).toLocaleString("en")}</b>
-          <small>மொத்த XP</small>
+          <small>Total XP</small>
         </div>
         <div>
           <Flame lit size={22} />
           <b>{me.best ?? s.days}</b>
-          <small>நீண்ட தொடர்</small>
+          <small>Best streak</small>
         </div>
         <div>
           <Icon name="check" size={22} />
@@ -183,11 +183,11 @@ export function MeTab(props: {
       {me.dayXp && <XpBars xp={me.dayXp} total={me.xp} today={today} />}
       {b?.me && (
         <button type="button" class="f-racecard f-card rise" onClick={props.onRace}>
-          <span class="f-race-rank">#{b.me.rank}</span>
+          <span class={`f-race-rank${b.me.rank === 1 && b.me.xp > 0 ? " r1" : ""}`}>#{b.me.rank}</span>
           <span class="f-racecard-w">
-            <b>போட்டியில் {b.me.rank === 1 && b.me.xp > 0 ? "முதலிடம்!" : `${b.me.rank} ஆம் இடம்`}</b>
+            <b>{b.me.rank === 1 && b.me.xp > 0 ? "#1 in the race!" : `#${b.me.rank} in the race`}</b>
             <small>
-              {pass?.above && pass.gap > 0 ? `இன்னும் ${pass.gap} XP: #${pass.above.rank}` : `${b.count} பேர்`} · முடிய {endsIn(b.since, Date.now())}
+              {pass?.above && pass.gap > 0 ? `${pass.gap} XP to #${pass.above.rank}` : `${b.count} in the race`} · ends in {endsIn(b.since, Date.now())}
             </small>
           </span>
           <Icon name="next" size={20} />
@@ -195,7 +195,7 @@ export function MeTab(props: {
       )}
       <section class="f-cups f-card rise">
         <h2 class="f-h2">
-          கோப்பைகள் <small>
+          Trophies <small>
             {won.length}/{TROPHY_ORDER.length}
           </small>
         </h2>
@@ -206,7 +206,7 @@ export function MeTab(props: {
         </div>
       </section>
       <section class="f-set f-card rise">
-        <h2 class="f-h2">இந்த phone இல்</h2>
+        <h2 class="f-h2">On this phone</h2>
         <Kids list={props.list} current={props.current} onSwitch={props.onSwitch} onAdd={props.onAdd} onSignOut={props.onSignOut} />
         <button
           type="button"
@@ -218,7 +218,7 @@ export function MeTab(props: {
           }}
         >
           <Icon name={on ? "sound" : "mute"} />
-          <span>ஒலி · Sound</span>
+          <span>Sound</span>
           <span class={`f-switch${on ? " on" : ""}`} aria-hidden="true" />
         </button>
       </section>

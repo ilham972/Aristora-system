@@ -1,45 +1,73 @@
-/* The family app's look (3 Nov 2026, his voice notes and the pictures he liked): light, ARISTORA's purple, our owl in a
-   light purple (with moods), gold for what he wins and for "start", pink for labels, a flame for the days he keeps.
-   For every grade, 6 to 11: calm and clean, game-like in its moments (the map, the reveal), never childish. No green:
-   a right answer is blue, a wrong one rose.
-   One display face for numbers and game words (Barlow 800, Latin only); Tamil is the phone's own font.
-   Motion: things rise, pop and press down like buttons; everything stops for "reduce motion". */
+/* The family app's look (3 Nov 2026, his voice notes; the palette rebuilt 4 Nov 2026 after his review: "the yellow
+   behind the purple owl is not beautiful", "think like a colour-palette designer").
+   - Big surfaces are only ARISTORA's violet, white and a pale lavender page. Every other colour is small and has ONE
+     meaning, the same on every screen:
+       violet = the app itself (headers, buttons, progress)    gold  = START and what he wins (trophies, crown, best)
+       orange flame = days in a row                             pink gem = XP (and nothing else)
+       blue = right (✓, the days he came)                       rose = wrong (✗) and signing out
+     Violet and gold are a classic pair only when the gold is small and deep (a coin, a crown); a big flat yellow
+     behind a violet owl made them fight (the old turning sun-burst, gone). No green anywhere.
+   - The owl: white on violet (the logo's own white owl), light violet on white. A soft glow behind it, never a burst.
+   - Tappable things press down (a 3D edge); cards that are not buttons lie flat with a soft shadow.
+   - One font for both scripts (Baloo Thambi 2: fonts/font.css). Words: English for the app's chrome and game words,
+     Tamil for the owl's voice and every sentence (docs/how-it-works.md, "Words").
+   - Motion: only transform and opacity (smooth on a Redmi), a few loops (the owl in the header, START's halo);
+     everything stops for "reduce motion". For every grade, 6 to 11: game-like in its moments, never childish. */
 
 :root {
+  /* Violet: ARISTORA */
   --brand: #6c5ce7;
   --brand-2: #5a49d6;
   --brand-3: #4636b8;
-  --brand-soft: #eeebff;
-  --brand-mid: #c9c0ff;
-  --lav: #e4dfff;
-  --bg: #f5f4fc;
+  --brand-deep: #2f2380;
+  --brand-soft: #efecff;
+  --brand-mid: #cbc3ff;
+  --lav: #e6e1ff;
+  /* The page and its ink (a violet-tinted grey, never a dead grey) */
+  --bg: #f6f5fd;
   --card: #fff;
-  --ink: #1d1b38;
-  --ink2: #625e88;
-  --ink3: #a09cc0;
-  --line: #ebe8f6;
-  --line-2: #dcd8ef;
-  --yellow: #ffc93c;
-  --yellow-3d: #e8a40e;
-  --yellow-soft: #fff4cc;
-  --yellow-ink: #7a5200;
-  --pink: #f7609f;
-  --pink-soft: #ffe2f0;
-  --pink-ink: #b0306f;
+  --ink: #1c1a3a;
+  --ink2: #5f5b86;
+  --ink3: #9d99bf;
+  --line: #ece9f7;
+  --line-2: #ddd9f0;
+  /* Gold: START and what he wins. Small, with depth: a highlight, the body, a darker edge. */
+  --gold: #ffc23d;
+  --gold-hi: #ffdf86;
+  --gold-3d: #e09400;
+  --gold-soft: #fff5d9;
+  --gold-ink: #6b4500;
+  /* The flame: days in a row */
   --flame: #ff7a2f;
-  --right: #2b8cf0;
-  --right-soft: #e1efff;
-  --wrong: #f0506e;
-  --wrong-soft: #ffe3e9;
+  --flame-2: #ff5a1f;
+  --flame-soft: #fff1e7;
+  --flame-ink: #c8460f;
+  /* The gem: XP */
+  --gem: #ff58a6;
+  --gem-2: #e33a86;
+  --gem-hi: #ffc6e0;
+  --gem-soft: #ffe8f3;
+  --gem-ink: #b02a69;
+  /* Right, wrong, part */
+  --right: #1e8cf5;
+  --right-soft: #e3f0ff;
+  --right-ink: #0f63bd;
+  --wrong: #f24a6c;
+  --wrong-soft: #ffe6ec;
+  --wrong-ink: #c42c4d;
   --part: #f29b1d;
-  --owl-body: #b3a4ff;
-  --owl-wing: #9f8cfa;
+  --part-soft: #fff1dc;
+  /* The owl on white (the header's owl is white: .f-hero .f-owl) */
+  --owl-body: #b8acff;
+  --owl-wing: #a191fb;
   --owl-face: #2b2270;
   --owl-cap: #1d1848;
-  --display: "Barlow", system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Tamil", sans-serif;
-  --text: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Tamil", "Latha", "Tamil Sangam MN", sans-serif;
+  --display: "Baloo Thambi 2", system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Tamil", sans-serif;
+  --text: "Baloo Thambi 2", system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Tamil", "Latha", "Tamil Sangam MN", sans-serif;
   --cond: var(--display);
   --shadow: 0 1px 2px rgba(40, 30, 110, 0.05), 0 10px 26px -14px rgba(40, 30, 110, 0.22);
+  --shadow-up: 0 2px 6px rgba(40, 30, 110, 0.06), 0 18px 36px -18px rgba(40, 30, 110, 0.4);
+  --spring: cubic-bezier(0.2, 0.9, 0.3, 1.35);
   --pad-h: 254px;
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-t: env(safe-area-inset-top, 0px);
@@ -52,7 +80,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font: 16px/1.42 var(--text);
+  font: 500 16px/1.42 var(--text);
   -webkit-tap-highlight-color: transparent;
   -webkit-font-smoothing: antialiased;
   overscroll-behavior-y: none;
@@ -101,16 +129,21 @@ p {
 
 /* ---------- Words and small pieces ---------- */
 .f-kicker {
-  font: 800 12px/1.25 var(--display);
-  letter-spacing: 0.08em;
+  font: 700 12.5px/1.25 var(--display);
+  letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--ink3);
 }
 .f-title {
-  font: 800 clamp(23px, 7vw, 29px) / 1.14 var(--display);
-  letter-spacing: -0.005em;
-  margin: 5px 0 2px;
+  font: 800 clamp(24px, 7.4vw, 30px) / 1.12 var(--display);
+  margin: 4px 0 0;
   overflow-wrap: anywhere;
+}
+.f-title.long {
+  font-size: clamp(20px, 6.1vw, 26px);
+}
+.f-title.longer {
+  font-size: clamp(18px, 5.2vw, 22px);
 }
 .f-h1 {
   font: 800 28px/1.15 var(--display);
@@ -120,11 +153,11 @@ p {
   display: flex;
   align-items: center;
   gap: 8px;
-  font: 800 18px/1.2 var(--display);
+  font: 800 18.5px/1.2 var(--display);
   margin: 0 0 12px;
 }
 .f-h2 small {
-  font: 600 12.5px var(--text);
+  font: 700 12.5px var(--text);
   color: var(--ink3);
   margin-left: auto;
 }
@@ -171,8 +204,8 @@ p {
   margin: 14px 16px 0;
   padding: 12px 14px;
   border-radius: 16px;
-  background: var(--yellow-soft);
-  color: var(--yellow-ink);
+  background: var(--gold-soft);
+  color: var(--gold-ink);
   font-size: 14px;
 }
 .f-note.lock {
@@ -180,7 +213,7 @@ p {
   color: var(--ink2);
 }
 .f-err {
-  color: #c2304f;
+  color: var(--wrong-ink);
   background: var(--wrong-soft);
   border-radius: 12px;
   padding: 9px 12px;
@@ -202,22 +235,23 @@ p {
   margin: 14px 16px 0;
 }
 
-/* The flame (days in a row), the gem (XP) */
+/* The flame (days in a row): orange outside, gold inside; grey until today's Level. The gem (XP): pink facets. */
 .f-flame {
   display: block;
   flex: none;
+  overflow: visible;
 }
 .f-flame-o {
   fill: var(--flame);
 }
 .f-flame-i {
-  fill: var(--yellow);
+  fill: var(--gold);
 }
 .f-flame.out .f-flame-o {
-  fill: #cdc9e2;
+  fill: #cfcbe4;
 }
 .f-flame.out .f-flame-i {
-  fill: #eeecf7;
+  fill: #efedf8;
 }
 .f-hero .f-flame.out .f-flame-o {
   fill: rgba(255, 255, 255, 0.5);
@@ -230,39 +264,41 @@ p {
   flex: none;
 }
 .f-gem-a {
-  fill: #ff8cc6;
+  fill: var(--gem);
 }
 .f-gem-b {
-  fill: #ee4f9b;
+  fill: var(--gem-2);
 }
 .f-gem-c {
-  fill: #ffc4e1;
+  fill: var(--gem-hi);
 }
 
-/* Labels: a slanted tag ("STAGE 4", "PERSONAL BEST"); dashes for progress */
+/* Labels: a pill ("STAGE 4" on a header: glass; "PERSONAL BEST", "7 IN A ROW": gold, a little tilt for a win) */
 .f-tag {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font: 800 12px/1 var(--display);
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  padding: 7px 10px 6px;
-  border-radius: 9px;
-  transform: rotate(-4deg);
-  box-shadow: 0 3px 0 rgba(29, 27, 56, 0.14);
+  padding: 6px 11px 5px;
+  border-radius: 999px;
   white-space: nowrap;
 }
-.f-tag.pink {
-  background: var(--pink);
+.f-tag.glass {
+  background: rgba(255, 255, 255, 0.18);
   color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
 }
-.f-tag.yellow {
-  background: var(--yellow);
-  color: var(--ink);
-  transform: rotate(3deg);
+.f-tag.gold {
+  background: linear-gradient(180deg, var(--gold-hi), var(--gold) 70%);
+  color: var(--gold-ink);
+  box-shadow: 0 3px 0 var(--gold-3d);
+  transform: rotate(-3deg);
 }
-.f-tag.white {
-  background: #fff;
-  color: var(--brand);
+.f-tag.violet {
+  background: var(--brand-soft);
+  color: var(--brand-2);
 }
 .f-dashes {
   display: flex;
@@ -276,10 +312,10 @@ p {
   max-width: 18px;
   height: 6px;
   border-radius: 99px;
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.26);
 }
 .f-dashes i.on {
-  background: var(--yellow);
+  background: #fff;
 }
 .f-card .f-dashes i {
   background: var(--line);
@@ -359,7 +395,39 @@ p {
   fill: var(--owl-cap);
 }
 .f-owl .owl-cap .owl-tassel .owl-white {
-  fill: var(--yellow);
+  fill: var(--gold);
+}
+/* On violet (a header, today's class): the logo's own white owl. */
+.f-hero .f-owl .owl .owl-white,
+.f-today .f-owl .owl .owl-white {
+  fill: #fff;
+}
+.f-hero .f-owl .owl-wing-l .owl-white,
+.f-hero .f-owl .owl-wing-r .owl-white,
+.f-today .f-owl .owl-wing-l .owl-white,
+.f-today .f-owl .owl-wing-r .owl-white {
+  fill: #e4dfff;
+}
+.f-hero .f-owl .owl-cap .owl-white,
+.f-today .f-owl .owl-cap .owl-white {
+  fill: var(--owl-cap);
+}
+.f-hero .f-owl .owl-cap .owl-tassel .owl-white,
+.f-today .f-owl .owl-cap .owl-tassel .owl-white {
+  fill: var(--gold);
+}
+/* A small owl stands still (only its mood moves): many living owls at once cost a phone its smoothness. */
+.f-owl.still .owl,
+.f-owl.still .owl-head,
+.f-owl.still .owl-body,
+.f-owl.still .owl-pupil-l,
+.f-owl.still .owl-pupil-r,
+.f-owl.still .owl-lid,
+.f-owl.still .owl-tassel,
+.f-owl.still .owl-wing-l,
+.f-owl.still .owl-wing-r,
+.f-owl.still .owl-cap {
+  animation: none;
 }
 .f-owl .om {
   fill: none;
@@ -375,7 +443,7 @@ p {
   stroke-width: 18;
 }
 .f-owl .om-spark {
-  fill: var(--yellow);
+  fill: var(--gold);
   stroke: none;
   transform-box: fill-box;
   transform-origin: center;
@@ -385,7 +453,7 @@ p {
   animation-delay: 0.5s;
 }
 .f-owl .om-q {
-  fill: var(--pink);
+  fill: var(--gem);
   stroke: none;
   font: 800 160px var(--display);
   transform-box: fill-box;
@@ -469,7 +537,8 @@ p {
   animation: f-wave 1.7s ease-in-out infinite;
 }
 
-/* The owl on its yellow burst (a header's picture) */
+/* The owl in a header or a moment: on a soft glow (white on violet, lavender on white), a shadow under its feet.
+   Nothing turns behind it (the old yellow sun-burst fought the violet owl). */
 .f-owlbadge {
   position: relative;
   display: grid;
@@ -478,32 +547,46 @@ p {
   width: 104px;
   aspect-ratio: 1;
 }
+.f-owlbadge::before {
+  content: "";
+  position: absolute;
+  inset: 4%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--brand-soft) 0%, rgba(239, 236, 255, 0.85) 55%, rgba(239, 236, 255, 0) 100%);
+}
+.f-owlbadge::after {
+  content: "";
+  position: absolute;
+  left: 30%;
+  right: 30%;
+  bottom: 9%;
+  height: 7%;
+  border-radius: 50%;
+  background: rgba(40, 30, 110, 0.14);
+}
+.f-hero .f-owlbadge::before {
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.1) 60%, rgba(255, 255, 255, 0) 100%);
+}
+.f-hero .f-owlbadge::after {
+  background: rgba(20, 10, 80, 0.22);
+}
 .f-owlbadge .f-owl {
   position: relative;
-  width: 68%;
-  margin-top: 4%;
-}
-.f-burst {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  animation: f-spin 48s linear infinite;
-}
-.f-burst polygon {
-  fill: var(--yellow);
+  z-index: 1;
+  width: 66%;
+  margin-top: -2%;
 }
 .f-owlbadge.hero {
   width: 112px;
 }
 .f-owlbadge.big {
-  width: 158px;
+  width: 150px;
 }
 .f-owlbadge.mid {
   width: 98px;
 }
 .f-owlbadge.greet {
-  width: 78px;
+  width: 76px;
 }
 
 /* The owl saying something */
@@ -532,14 +615,15 @@ p {
 /* ---------- Buttons: they press down ---------- */
 .f-btn {
   --edge: var(--brand-3);
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   min-height: 48px;
-  padding: 0 22px;
+  padding: 2px 22px 0;
   border-radius: 16px;
-  font: 800 16px/1.1 var(--display);
+  font: 800 16.5px/1.1 var(--display);
   letter-spacing: 0.02em;
   text-align: center;
   transition:
@@ -560,17 +644,18 @@ p {
 .f-btn.big {
   width: 100%;
   min-height: 56px;
-  font-size: 18px;
+  font-size: 18.5px;
   border-radius: 18px;
 }
 .f-btn.go {
-  background: var(--brand);
+  background: linear-gradient(180deg, #7a6bf0, var(--brand) 60%);
   color: #fff;
 }
 .f-btn.gold {
-  --edge: var(--yellow-3d);
-  background: var(--yellow);
-  color: var(--ink);
+  --edge: var(--gold-3d);
+  background: linear-gradient(180deg, var(--gold-hi), var(--gold) 55%);
+  color: var(--gold-ink);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 .f-btn.white {
   --edge: rgba(29, 27, 56, 0.16);
@@ -594,6 +679,22 @@ p {
   --edge: #c23452;
   background: var(--wrong);
   color: #fff;
+}
+/* A button that waits for him (START, Continue): a soft light passes over it now and then. */
+.f-btn.shine {
+  overflow: hidden;
+}
+.f-btn.shine::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 46%;
+  background: linear-gradient(100deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.55) 50%, rgba(255, 255, 255, 0) 100%);
+  transform: translateX(-120%) skewX(-18deg);
+  animation: f-shine 3.6s 1s ease-in-out infinite;
+  pointer-events: none;
 }
 .f-round {
   display: grid;
@@ -621,41 +722,52 @@ p {
   color: var(--brand);
 }
 .f-link.danger {
-  color: #d23a5a;
+  color: var(--wrong-ink);
 }
 
 /* ---------- The top: who is on screen, the flame, XP, Feedback ---------- */
 .f-head {
   padding: calc(var(--safe-t) + 10px) 16px 2px;
 }
+/* A header: ARISTORA's violet, lit from the top right, deeper at the bottom left; two faint rings for depth. */
 .f-hero {
   position: relative;
   overflow: hidden;
   color: #fff;
   background:
-    radial-gradient(90% 70% at 100% 0%, rgba(160, 145, 255, 0.55), transparent 60%),
-    radial-gradient(70% 60% at 0% 100%, rgba(70, 50, 200, 0.5), transparent 70%),
-    linear-gradient(165deg, #7666f2, #5847d6);
+    radial-gradient(110% 80% at 100% 0%, rgba(178, 160, 255, 0.6), transparent 58%),
+    radial-gradient(80% 70% at 0% 100%, rgba(52, 34, 170, 0.55), transparent 72%),
+    linear-gradient(165deg, #7767f2 0%, #6150e2 52%, #5040cf 100%);
   border-radius: 0 0 30px 30px;
   padding: calc(var(--safe-t) + 10px) 16px 22px;
 }
-.f-hero::before {
+.f-hero::before,
+.f-hero::after {
   content: "";
   position: absolute;
-  width: 240px;
-  height: 240px;
-  right: -90px;
-  bottom: -130px;
   border-radius: 50%;
-  border: 34px solid rgba(255, 255, 255, 0.06);
   pointer-events: none;
+}
+.f-hero::before {
+  width: 260px;
+  height: 260px;
+  right: -96px;
+  bottom: -150px;
+  border: 36px solid rgba(255, 255, 255, 0.055);
+}
+.f-hero::after {
+  width: 120px;
+  height: 120px;
+  left: -50px;
+  top: 30px;
+  border: 18px solid rgba(255, 255, 255, 0.04);
 }
 .f-hero.race,
 .f-hero.me {
   padding-bottom: 46px;
 }
 .f-hero .f-kicker {
-  color: rgba(255, 255, 255, 0.72);
+  color: rgba(255, 255, 255, 0.74);
 }
 .f-hero-in {
   position: relative;
@@ -672,8 +784,9 @@ p {
   margin-top: 10px;
 }
 .f-hsub {
-  font-size: 13.5px;
-  color: rgba(255, 255, 255, 0.78);
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
   overflow-wrap: anywhere;
 }
 .f-hero-foot {
@@ -691,7 +804,7 @@ p {
   min-width: 0;
 }
 .f-hprog small {
-  font: 800 12px var(--display);
+  font: 700 12.5px var(--display);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.78);
@@ -738,10 +851,11 @@ p {
   place-items: center;
   width: 19px;
   height: 19px;
+  padding-top: 1px;
   border-radius: 50%;
   background: var(--brand);
   color: #fff;
-  font: 800 11px var(--display);
+  font: 800 11.5px/1 var(--display);
 }
 .f-pill {
   display: inline-flex;
@@ -758,10 +872,18 @@ p {
   font-variant-numeric: tabular-nums;
 }
 .f-pill.fire.lit {
-  color: #e2601a;
+  color: var(--flame-ink);
 }
 .f-pill.fire.pop {
-  animation: f-pop 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.4) both;
+  animation: f-pop 0.6s var(--spring) both;
+}
+/* Back from a Level: the XP (or the flame) he just won makes its pill jump. */
+.f-pill.grew {
+  animation: f-bump 0.5s var(--spring) both;
+}
+.f-pill.grew .f-gem,
+.f-pill.grew .f-flame {
+  animation: f-tabpop 0.6s var(--spring) both;
 }
 .f-fbb {
   display: grid;
@@ -778,7 +900,7 @@ p {
   flex: none;
   font-size: 11.5px;
   font-weight: 700;
-  color: #c2304f;
+  color: var(--wrong-ink);
   background: var(--wrong-soft);
   border-radius: 999px;
   padding: 4px 8px;
@@ -797,8 +919,8 @@ p {
   color: rgba(255, 255, 255, 0.7);
 }
 .f-hero .f-caret.many {
-  background: var(--yellow);
-  color: var(--ink);
+  background: #fff;
+  color: var(--brand-2);
 }
 .f-hero .f-off {
   background: rgba(255, 255, 255, 0.9);
@@ -841,16 +963,20 @@ p {
   opacity: 0;
   overflow: hidden;
   white-space: nowrap;
-  font-size: 13.5px;
-  font-weight: 700;
+  font: 700 14.5px/1 var(--display);
+  padding-top: 2px;
   transition:
     max-width 0.32s ease,
     opacity 0.2s ease;
 }
 .f-tab.on {
   flex-grow: 2.1;
-  background: var(--brand);
+  background: linear-gradient(180deg, #7a6bf0, var(--brand) 70%);
   color: #fff;
+  box-shadow: 0 6px 14px -8px rgba(76, 60, 210, 0.9);
+}
+.f-tab.on .f-ic {
+  animation: f-tabpop 0.42s var(--spring) both;
 }
 .f-tab.on span {
   max-width: 96px;
@@ -879,8 +1005,8 @@ p {
   border-radius: 26px;
   color: #fff;
   background:
-    radial-gradient(80% 90% at 100% 0%, rgba(255, 140, 198, 0.55), transparent 60%),
-    linear-gradient(140deg, #8a7aff, #6c5ce7 55%, #5444d2);
+    radial-gradient(90% 90% at 100% 0%, rgba(190, 175, 255, 0.55), transparent 60%),
+    linear-gradient(140deg, #8576fb, #6c5ce7 55%, #5141d0);
   box-shadow: 0 16px 30px -16px rgba(84, 68, 210, 0.75);
 }
 .f-today::after {
@@ -905,17 +1031,17 @@ p {
 .f-today-l {
   display: flex;
   align-items: center;
-  gap: 7px;
-  font-weight: 700;
-  font-size: 14.5px;
+  gap: 8px;
+  font: 800 16px/1.2 var(--display);
 }
 .f-today-n {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.78);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
 }
 .f-today-t {
   margin-top: 12px;
-  font: 800 21px/1.2 var(--display);
+  font: 800 22px/1.2 var(--display);
   overflow-wrap: anywhere;
 }
 .f-today-p {
@@ -924,7 +1050,7 @@ p {
   margin-top: 8px;
 }
 .f-today-p small {
-  font: 800 12px var(--display);
+  font: 700 12.5px var(--display);
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.8);
@@ -953,12 +1079,22 @@ p {
 .f-today-go:active {
   transform: translateY(3px);
 }
+/* In class now: a dot with a ring that grows and fades (transform and opacity only). */
 .f-livedot {
+  position: relative;
+  flex: none;
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: #ff7a9a;
-  animation: f-pulse 1.4s ease-out infinite;
+  background: #fff;
+}
+.f-livedot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: #fff;
+  animation: f-ping 1.5s ease-out infinite;
 }
 .f-goal {
   display: flex;
@@ -966,7 +1102,7 @@ p {
   gap: 12px;
 }
 .f-goal.lit {
-  background: linear-gradient(120deg, #fff, #fff8e3);
+  background: linear-gradient(120deg, #fff 40%, var(--flame-soft));
 }
 .f-goal-w {
   flex: 1;
@@ -975,7 +1111,7 @@ p {
   gap: 2px;
 }
 .f-goal-t {
-  font: 800 20px/1.2 var(--display);
+  font: 800 22px/1.15 var(--display);
   margin-top: 4px;
 }
 .f-goal-t small {
@@ -994,9 +1130,13 @@ p {
   align-items: center;
   gap: 6px;
   margin-top: 8px;
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 600;
+  line-height: 1.3;
   color: var(--ink2);
+}
+.f-goal.lit .f-goal-f {
+  color: var(--flame-ink);
 }
 .f-goal-b {
   flex: none;
@@ -1023,11 +1163,11 @@ p {
     transform 0.1s ease;
 }
 .f-wd small {
-  font-size: 11.5px;
-  font-weight: 700;
+  font: 800 12px/1 var(--display);
+  letter-spacing: 0.04em;
 }
 .f-wd b {
-  font: 800 17px/1 var(--display);
+  font: 800 18px/1 var(--display);
   color: var(--ink2);
 }
 .f-wd.open b {
@@ -1061,7 +1201,7 @@ p {
   box-shadow: inset 0 0 0 1.6px rgba(255, 255, 255, 0.8);
 }
 .f-wd.sel.came .f-wd-dot {
-  background: #a9d4ff;
+  background: #bfe0ff;
 }
 .f-dayhours {
   display: flex;
@@ -1079,7 +1219,7 @@ p {
 }
 .f-usual {
   font-size: 10.5px;
-  padding: 5px 7px 4px;
+  padding: 4px 8px 3px;
 }
 .f-legend {
   display: flex;
@@ -1135,7 +1275,7 @@ p {
 .f-tlt {
   padding-top: 5px;
   text-align: right;
-  font: 800 12px var(--display);
+  font: 700 12.5px var(--display);
   color: var(--ink3);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -1155,12 +1295,12 @@ p {
   color: var(--ink2);
 }
 .f-tli.k-room .f-tld {
-  background: var(--pink-soft);
-  color: var(--pink-ink);
+  background: var(--brand);
+  color: #fff;
 }
 .f-tli.h-home .f-tld {
-  background: var(--yellow-soft);
-  color: var(--yellow-ink);
+  background: var(--gold-soft);
+  color: var(--gold-ink);
 }
 .f-tli.h-handed .f-tld {
   background: var(--lav);
@@ -1173,8 +1313,9 @@ p {
   padding-top: 3px;
 }
 .f-tlw b {
-  font-size: 14.5px;
+  font-size: 15px;
   font-weight: 700;
+  line-height: 1.3;
 }
 .f-tlw small {
   font-size: 12.5px;
@@ -1232,11 +1373,12 @@ p {
   color: var(--brand);
 }
 .f-rc-d small {
-  font-size: 11.5px;
-  font-weight: 700;
+  font: 800 11.5px/1 var(--display);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 .f-rc-d b {
-  font: 800 19px/1 var(--display);
+  font: 800 20px/1 var(--display);
 }
 .f-rc-w {
   flex: 1;
@@ -1291,22 +1433,24 @@ p {
   color: #fff;
   margin-bottom: 4px;
 }
+/* Each World its own shade of the violet family (indigo, violet, purple): one family, three moods. */
 .f-world:nth-child(3n + 2) .f-wno {
-  --c: var(--pink);
-  --c3: #c93d7c;
+  --c: #8b5cf6;
+  --c3: #6d3fd8;
 }
 .f-world:nth-child(3n + 3) .f-wno {
-  --c: #f29b1d;
-  --c3: #c47908;
+  --c: #4f63e6;
+  --c3: #3446c2;
 }
 .f-wno small {
-  font: 800 9px/1 var(--display);
+  font: 800 9.5px/1 var(--display);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   opacity: 0.85;
 }
 .f-wno b {
-  font: 800 23px/1 var(--display);
+  font: 800 25px/1 var(--display);
+  margin-top: 1px;
 }
 .f-wname {
   flex: 1;
@@ -1315,8 +1459,9 @@ p {
   gap: 1px;
 }
 .f-wname b {
-  font-size: 16.5px;
+  font-size: 17px;
   font-weight: 800;
+  line-height: 1.25;
   overflow-wrap: anywhere;
 }
 .f-wname small {
@@ -1338,13 +1483,18 @@ p {
 }
 .f-world.won .f-wdone {
   background:
-    radial-gradient(closest-side, var(--yellow-soft) 76%, transparent 78%),
-    conic-gradient(var(--yellow) 100%, var(--line) 0);
-  color: var(--yellow-ink);
+    radial-gradient(closest-side, var(--gold-soft) 76%, transparent 78%),
+    conic-gradient(var(--gold) 100%, var(--line) 0);
+  color: var(--gold-ink);
 }
 .f-roadbox {
   position: relative;
   margin: 0 16px;
+}
+/* A long map: the phone draws a World's road and Stages only when they come near the screen (its height is set, so
+   nothing jumps; its banner stays drawn, so its name is always there). */
+.f-world .f-roadbox {
+  content-visibility: auto;
 }
 .f-road {
   position: absolute;
@@ -1361,7 +1511,7 @@ p {
   stroke-width: 28;
 }
 .f-road-done {
-  stroke: var(--brand-mid);
+  stroke: #a597ff;
   stroke-width: 28;
 }
 .f-road-mid {
@@ -1408,7 +1558,8 @@ p {
   border-radius: 50%;
 }
 .f-node-c b {
-  font: 800 26px/1 var(--display);
+  font: 800 27px/1 var(--display);
+  padding-top: 3px;
 }
 .f-node.s-done {
   --edge: var(--brand-3);
@@ -1437,21 +1588,27 @@ p {
 .f-node.s-soon:active {
   transform: translate(-50%, -50%);
 }
+/* His Stage or Level now: a gold coin (a highlight on top, a darker edge below) with a halo that breathes out. */
 .f-node.s-now,
 .f-lv.play {
-  --edge: var(--yellow-3d);
+  --edge: var(--gold-3d);
   width: 84px;
   height: 84px;
-  background: var(--yellow);
+  background: radial-gradient(circle at 50% 28%, var(--gold-hi) 0%, var(--gold) 52%, #f7ac17 100%);
   color: #fff;
   z-index: 2;
 }
+.f-node.s-now .f-node-c .f-ic,
+.f-lv.play .f-node-c b {
+  filter: drop-shadow(0 2px 0 rgba(170, 100, 0, 0.45));
+}
 .f-node-ring {
   position: absolute;
-  inset: -11px;
+  inset: -4px;
   border-radius: 50%;
-  border: 3px dashed var(--yellow);
-  animation: f-spin 14s linear infinite;
+  border: 4px solid var(--gold);
+  opacity: 0;
+  animation: f-halo 2.2s ease-out infinite;
   pointer-events: none;
 }
 .f-start {
@@ -1459,11 +1616,11 @@ p {
   left: 0;
   bottom: 60px;
   z-index: 3;
-  padding: 9px 14px 8px;
+  padding: 10px 14px 7px;
   border-radius: 12px;
   background: #fff;
   color: var(--brand);
-  font: 800 14px/1 var(--display);
+  font: 800 15px/1 var(--display);
   letter-spacing: 0.12em;
   box-shadow: 0 4px 0 var(--line-2);
   white-space: nowrap;
@@ -1500,7 +1657,7 @@ p {
   text-align: right;
 }
 .f-cap small {
-  font: 800 11px/1.2 var(--display);
+  font: 800 11.5px/1.2 var(--display);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--ink3);
@@ -1510,13 +1667,13 @@ p {
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 700;
   line-height: 1.25;
   color: var(--ink);
 }
 .f-node.s-now + .f-cap small {
-  color: var(--yellow-3d);
+  color: #d98a00;
 }
 /* Beside his Stage now: clear of its turning ring. */
 .f-nodewrap.r .f-node.s-now + .f-cap {
@@ -1548,11 +1705,11 @@ p {
   transform: rotate(-45deg);
 }
 .f-chest.won {
-  background: var(--yellow);
+  background: radial-gradient(circle at 50% 30%, var(--gold-hi), var(--gold) 60%);
   color: #fff;
   box-shadow:
-    0 5px 0 var(--yellow-3d),
-    0 0 0 8px rgba(255, 201, 60, 0.25);
+    0 5px 0 var(--gold-3d),
+    0 0 0 8px rgba(255, 194, 61, 0.25);
 }
 
 /* Inside a Stage: its Levels */
@@ -1570,7 +1727,7 @@ p {
   height: 64px;
 }
 .f-lv .f-node-c b {
-  font-size: 23px;
+  font-size: 24px;
 }
 .f-lv.s-done,
 .f-lv.s-check {
@@ -1596,8 +1753,7 @@ p {
     0 6px 0 var(--edge);
 }
 .f-lv.play .f-node-c b {
-  font-size: 30px;
-  text-shadow: 0 2px 0 rgba(176, 120, 0, 0.35);
+  font-size: 32px;
 }
 .f-lv.shut {
   filter: grayscale(0.5);
@@ -1613,10 +1769,10 @@ p {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: var(--yellow);
+  background: var(--gold);
   color: #fff;
   font-size: 13px;
-  box-shadow: 0 2px 0 var(--yellow-3d);
+  box-shadow: 0 2px 0 var(--gold-3d);
 }
 .f-lv-tag {
   position: absolute;
@@ -1632,20 +1788,20 @@ p {
   box-shadow: 0 2px 6px rgba(40, 30, 110, 0.25);
 }
 .f-lv-tag.home {
-  color: var(--yellow-ink);
-  background: var(--yellow-soft);
+  color: var(--gold-ink);
+  background: var(--gold-soft);
 }
 /* His XP beside the Level (on the roomier side: below it, the next Level's START would cover it). */
 .f-lv-xp {
   position: absolute;
   top: 0;
   transform: translateY(-50%);
-  padding: 3px 8px;
+  padding: 4px 9px 2px;
   border-radius: 999px;
   background: #fff;
   box-shadow: var(--shadow);
-  font: 800 12px var(--display);
-  color: var(--brand-2);
+  font: 800 12.5px var(--display);
+  color: var(--gem-ink);
   white-space: nowrap;
 }
 .f-lvwrap.r .f-lv-xp {
@@ -1688,9 +1844,24 @@ p {
   top: 0;
   bottom: 0;
   min-width: 16px;
+  overflow: hidden;
   border-radius: 999px;
-  background: linear-gradient(90deg, var(--brand), #8e80ff);
+  background: linear-gradient(90deg, var(--brand), #9284ff);
   transition: width 0.4s cubic-bezier(0.3, 0.9, 0.3, 1.1);
+}
+/* Each answer typed: a light runs along the bar once. */
+.f-pbar i b {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 60%;
+  background: linear-gradient(100deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0));
+  transform: translateX(-110%);
+  animation: f-sweep 0.7s ease-out both;
+}
+.f-pbar.full i {
+  background: linear-gradient(90deg, #f7ac17, var(--gold));
 }
 .f-pbar i::after {
   content: "";
@@ -1706,14 +1877,18 @@ p {
   position: absolute;
   right: -4px;
   top: 50%;
-  transform: translateY(-50%) rotate(4deg);
-  padding: 4px 7px 3px;
-  border-radius: 8px;
-  background: var(--yellow);
-  color: var(--ink);
-  font: 800 11.5px/1 var(--display);
-  box-shadow: 0 2px 0 var(--yellow-3d);
-  font-variant-numeric: tabular-nums;
+  transform: translateY(-50%);
+  padding: 5px 8px 3px;
+  border-radius: 9px;
+  background: #fff;
+  color: var(--brand-2);
+  font: 800 12px/1 var(--display);
+  box-shadow: 0 2px 6px rgba(40, 30, 110, 0.2);
+}
+.f-pbar.full .f-ptag {
+  background: var(--gold);
+  color: var(--gold-ink);
+  box-shadow: 0 2px 0 var(--gold-3d);
 }
 .f-qmode {
   position: relative;
@@ -1765,11 +1940,12 @@ p {
   margin: 12px 0 8px;
 }
 .f-checkpill {
-  padding: 9px 16px 8px;
+  padding: 10px 18px 7px;
   border-radius: 999px;
   background: var(--brand);
   color: #fff;
-  font: 800 14px/1 var(--display);
+  font: 800 15px/1 var(--display);
+  letter-spacing: 0.02em;
   box-shadow: 0 3px 0 var(--brand-3);
   transition: transform 0.08s ease;
 }
@@ -1792,11 +1968,11 @@ p {
   flex: none;
   min-width: 38px;
   height: 34px;
-  padding: 0 8px;
+  padding: 2px 8px 0;
   border-radius: 12px;
   background: #fff;
   color: var(--ink2);
-  font: 800 14px/1 var(--display);
+  font: 800 14.5px/1 var(--display);
   box-shadow: inset 0 0 0 2px var(--line);
   transition: transform 0.12s ease;
 }
@@ -1806,13 +1982,13 @@ p {
   box-shadow: none;
 }
 .f-qchip.part {
-  background: var(--yellow-soft);
-  color: var(--yellow-ink);
+  background: var(--part-soft);
+  color: #a45d00;
   box-shadow: none;
 }
 .f-qchip.teacher {
-  background: var(--pink-soft);
-  color: var(--pink-ink);
+  background: var(--line);
+  color: var(--ink2);
   box-shadow: none;
 }
 .f-qchip.on {
@@ -1823,6 +1999,10 @@ p {
 .f-qcard {
   margin: 4px 0 0;
 }
+/* The next question slides in from the side, like turning a page. */
+.f-qcard.slide {
+  animation: f-slide 0.32s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
 .f-qhead {
   display: flex;
   align-items: center;
@@ -1830,18 +2010,19 @@ p {
   gap: 10px;
 }
 .f-qn {
-  font: 800 30px/1 var(--display);
+  font: 800 32px/1 var(--display);
   color: var(--ink);
+  padding-top: 3px;
 }
 .f-xpchip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 5px 10px;
+  padding: 6px 10px 4px;
   border-radius: 999px;
-  background: var(--pink-soft);
-  color: var(--pink-ink);
-  font: 800 13px/1 var(--display);
+  background: var(--gem-soft);
+  color: var(--gem-ink);
+  font: 800 13.5px/1 var(--display);
 }
 .f-part {
   display: flex;
@@ -1891,12 +2072,16 @@ p {
   color: var(--ink3);
 }
 .f-bval {
-  font: 800 22px/1.15 var(--display);
+  font: 800 24px/1.15 var(--display);
   color: var(--ink);
   overflow-wrap: anywhere;
 }
 .f-bval.empty {
   color: var(--line-2);
+}
+/* Each key: the answer gives a small push. */
+.f-bval.typed {
+  animation: f-type 0.16s ease-out both;
 }
 .f-box.on .f-bval.empty {
   color: var(--brand-mid);
@@ -1906,10 +2091,10 @@ p {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 12px;
+  padding: 8px 12px 6px;
   border-radius: 12px;
-  background: var(--pink-soft);
-  color: var(--pink-ink);
+  background: var(--brand-soft);
+  color: var(--brand-2);
   font-size: 14px;
   font-weight: 600;
 }
@@ -1921,6 +2106,7 @@ p {
   font-size: 13px;
   color: var(--ink3);
 }
+/* The pad: solid (a blur behind it costs a cheap phone its smoothness while he types). */
 .f-padkeys {
   position: fixed;
   z-index: 10;
@@ -1932,19 +2118,18 @@ p {
   grid-template-columns: repeat(4, 1fr);
   gap: 8px;
   padding: 12px 12px calc(12px + var(--safe-b));
-  background: rgba(245, 244, 252, 0.94);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
+  background: #efedfa;
   box-shadow: 0 -10px 24px -18px rgba(40, 30, 110, 0.5);
   border-radius: 24px 24px 0 0;
 }
 .f-key {
   --edge: var(--line-2);
   height: 50px;
+  padding-top: 3px;
   border-radius: 14px;
   background: #fff;
   color: var(--ink);
-  font: 800 22px/1 var(--display);
+  font: 800 24px/1 var(--display);
   box-shadow: 0 4px 0 var(--edge);
   transition:
     transform 0.06s ease,
@@ -1962,7 +2147,7 @@ p {
 .f-key.del {
   --edge: #f4bfcb;
   background: var(--wrong-soft);
-  color: #d23a5a;
+  color: var(--wrong-ink);
 }
 .f-key.next {
   --edge: var(--brand-3);
@@ -1971,7 +2156,7 @@ p {
 }
 .f-padkeys.x .f-key {
   height: 44px;
-  font-size: 19px;
+  font-size: 20px;
 }
 .f-review {
   display: flex;
@@ -1994,14 +2179,13 @@ p {
   font-size: 15px;
 }
 .f-sum b {
-  font-family: var(--display);
-  font-size: 18px;
+  font: 800 19px var(--display);
 }
 .f-sum .warn {
-  color: #c25f00;
+  color: #b85c00;
 }
 .f-sum .teach {
-  color: var(--pink-ink);
+  color: var(--brand-2);
 }
 
 /* ---------- The reveal ---------- */
@@ -2009,8 +2193,8 @@ p {
   overflow-x: hidden;
   overflow-x: clip;
   min-height: 100vh;
-  padding: calc(var(--safe-t) + 16px) 16px calc(28px + var(--safe-b));
-  background: radial-gradient(130% 60% at 50% 0%, #e8e3ff 0%, var(--bg) 62%);
+  padding: calc(var(--safe-t) + 16px) 16px 0;
+  background: radial-gradient(130% 55% at 50% 0%, #e7e2ff 0%, var(--bg) 62%);
 }
 .f-score {
   position: relative;
@@ -2018,31 +2202,84 @@ p {
   flex-direction: column;
   align-items: center;
   text-align: center;
-  margin-top: 8px;
+  margin-top: 6px;
 }
-.f-score .f-owlbadge {
-  animation: f-pop 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+/* The owl in a ring that fills as his marks come in (gold when every mark is his). */
+.f-ring {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 148px;
+  height: 148px;
+  margin-top: 10px;
+  animation: f-pop 0.6s var(--spring) both;
 }
-.f-score.glow .f-owlbadge::before {
+.f-ring::before {
   content: "";
   position: absolute;
-  inset: -18%;
+  inset: 14px;
   border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(255, 201, 60, 0.45), transparent);
+  background: #fff;
+  box-shadow: 0 14px 30px -16px rgba(60, 40, 170, 0.55);
+}
+.f-ring svg.f-ring-s {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.f-ring-t,
+.f-ring-p {
+  fill: none;
+  stroke-width: 9;
+}
+.f-ring-t {
+  stroke: var(--lav);
+}
+.f-ring-p {
+  stroke: var(--brand);
+  stroke-linecap: round;
+  transition:
+    stroke-dashoffset 0.38s cubic-bezier(0.3, 0.9, 0.3, 1),
+    stroke 0.3s ease;
+}
+.f-ring.full .f-ring-p {
+  stroke: var(--gold);
+}
+.f-ring .f-owl {
+  position: relative;
+  width: 84px;
+  margin-top: -4px;
+}
+.f-score.glow .f-ring::after {
+  content: "";
+  position: absolute;
+  inset: -16%;
+  z-index: -1;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255, 194, 61, 0.42), transparent);
   animation: f-fade 0.6s ease both;
 }
 .f-cheer {
-  font: 800 30px/1.15 var(--display);
+  font: 800 32px/1.15 var(--display);
   color: var(--brand-2);
-  margin-top: 6px;
+  margin-top: 8px;
+}
+.f-score.done .f-cheer {
+  animation: f-pop 0.5s var(--spring) both;
 }
 .f-big {
-  margin-top: 2px;
-  font-variant-numeric: tabular-nums;
+  margin-top: 0;
 }
 .f-big b {
-  font: 800 64px/1 var(--display);
+  display: inline-block;
+  font: 800 62px/1 var(--display);
   color: var(--ink);
+}
+/* Each mark that comes in: the score jumps a little. */
+.f-big b.bump {
+  animation: f-bump 0.3s var(--spring) both;
 }
 .f-big small {
   font: 800 26px/1 var(--display);
@@ -2056,7 +2293,7 @@ p {
   margin-top: 4px;
 }
 .f-run {
-  animation: f-pop 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.4) both;
+  animation: f-pop 0.35s var(--spring) both;
 }
 .f-gain {
   display: flex;
@@ -2069,13 +2306,16 @@ p {
   min-height: 44px;
 }
 .f-gain .f-pill {
-  height: 40px;
-  padding: 0 14px 0 11px;
-  font-size: 17px;
+  height: 42px;
+  padding: 2px 15px 0 11px;
+  font-size: 18px;
+}
+.f-gain .f-pill.gem {
+  color: var(--gem-ink);
 }
 .f-pb {
   margin-top: 12px;
-  animation: f-pop 0.5s 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.4) both;
+  animation: f-pop 0.5s 0.3s var(--spring) both;
 }
 .f-score .f-teach {
   margin-top: 12px;
@@ -2083,7 +2323,7 @@ p {
 .f-confetti {
   position: absolute;
   left: 50%;
-  top: 74px;
+  top: 78px;
   z-index: 2;
   width: 0;
   height: 0;
@@ -2100,28 +2340,29 @@ p {
   animation: f-confetti 1.3s var(--t) cubic-bezier(0.15, 0.7, 0.3, 1) both;
 }
 .f-confetti i.c0 {
-  background: var(--yellow);
+  background: var(--gold);
 }
 .f-confetti i.c1 {
-  background: var(--pink);
+  background: var(--gem);
 }
 .f-confetti i.c2 {
   background: var(--brand);
 }
 .f-confetti i.c3 {
-  background: #4fc3f7;
+  background: var(--right);
   border-radius: 50%;
   width: 9px;
   height: 9px;
 }
+/* Today's flame: the flame, the number rolling from yesterday's to today's, the owl's word. */
 .f-streakup {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   margin-top: 16px;
-  padding: 12px 14px;
-  border-radius: 18px;
-  background: linear-gradient(100deg, #fff0e3, #fff);
+  padding: 14px 16px;
+  border-radius: 22px;
+  background: linear-gradient(110deg, var(--flame-soft), #fff 70%);
   box-shadow: var(--shadow);
 }
 .f-streakup .f-flame {
@@ -2130,26 +2371,54 @@ p {
 .f-streakup div {
   display: grid;
   gap: 2px;
+  min-width: 0;
 }
 .f-streakup b {
-  font: 800 18px var(--display);
-  color: #d2561a;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font: 800 30px/1 var(--display);
+  color: var(--flame-ink);
+}
+.f-streakup b em {
+  font: 800 13px/1 var(--display);
+  font-style: normal;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 .f-streakup small {
-  font-size: 13px;
+  font-size: 13.5px;
+  font-weight: 600;
   color: var(--ink2);
+}
+.f-roll {
+  display: inline-block;
+  height: 1em;
+  overflow: hidden;
+  line-height: 1;
+}
+.f-roll > span {
+  display: flex;
+  flex-direction: column;
+  animation: f-rollup 0.6s 0.7s var(--spring) both;
+}
+.f-roll i {
+  display: block;
+  height: 1em;
+  font-style: normal;
 }
 .f-newcup {
   margin-top: 14px;
   padding: 16px;
   border-radius: 22px;
-  background: #fff;
+  background: linear-gradient(180deg, var(--gold-soft), #fff 60%);
   box-shadow: var(--shadow);
   text-align: center;
 }
 .f-newcup h2 {
-  font: 800 19px var(--display);
-  color: var(--yellow-ink);
+  font: 800 15px var(--display);
+  letter-spacing: 0.1em;
+  color: #b37400;
   margin-bottom: 10px;
 }
 .f-res {
@@ -2172,7 +2441,7 @@ p {
   transform: translateY(10px) scale(0.97);
   transition:
     opacity 0.28s ease,
-    transform 0.32s cubic-bezier(0.2, 0.9, 0.3, 1.3);
+    transform 0.32s var(--spring);
 }
 .f-rrow.in {
   opacity: 1;
@@ -2185,12 +2454,13 @@ p {
   --c: var(--wrong);
 }
 .f-rrow.teach {
-  --c: var(--pink);
+  --c: var(--brand-mid);
 }
 .f-rq {
   flex: none;
   width: 42px;
-  font: 800 16px var(--display);
+  font: 800 17px var(--display);
+  padding-top: 2px;
 }
 .f-rmarks {
   flex: 1;
@@ -2208,36 +2478,53 @@ p {
   font-weight: 800;
   font-size: 14px;
 }
+.f-rrow.in .f-rmarks i {
+  animation: f-pop 0.34s var(--spring) both;
+}
 .f-rmarks i.y {
   background: var(--right-soft);
-  color: #1769c4;
+  color: var(--right-ink);
 }
 .f-rmarks i.n {
   background: var(--wrong-soft);
-  color: #d23a5a;
+  color: var(--wrong-ink);
 }
 .f-rmarks i.t {
-  background: var(--pink-soft);
-  color: var(--pink-ink);
+  background: var(--brand-soft);
+  color: var(--brand-2);
 }
 .f-rgot {
   flex: none;
-  font: 800 14px var(--display);
+  font: 800 15px var(--display);
   color: var(--ink2);
 }
 .f-tip {
   margin-top: 16px;
   text-align: center;
-  font-size: 13px;
+  font-size: 13.5px;
   color: var(--ink2);
 }
+/* What next: always in reach at the bottom once the reveal is done. */
 .f-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
   display: grid;
   gap: 8px;
-  margin-top: 14px;
+  margin: 14px -16px 0;
+  padding: 18px 16px calc(14px + var(--safe-b));
+  background: linear-gradient(180deg, rgba(246, 245, 253, 0) 0%, var(--bg) 26%);
 }
 .f-actions .f-btn {
   width: 100%;
+}
+.f-actions.two {
+  grid-template-columns: 64px 1fr;
+}
+.f-act-map {
+  min-height: 56px;
+  padding: 0;
+  border-radius: 18px;
 }
 
 /* ---------- The race ---------- */
@@ -2278,34 +2565,37 @@ p {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  font: 800 13px var(--display);
-  color: var(--ink2);
+  font: 800 13.5px var(--display);
+  color: var(--gem-ink);
 }
+/* Gold, silver, bronze: the colours every child already knows. */
 .f-pod-col {
   display: grid;
   place-items: center;
   width: 100%;
   margin-top: 6px;
+  padding-top: 4px;
   border-radius: 14px 14px 0 0;
-  font: 800 24px/1 var(--display);
+  font: 800 26px/1 var(--display);
   color: #fff;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.14);
 }
 .f-pod.p1 .f-pod-col {
   height: 92px;
-  background: linear-gradient(180deg, var(--yellow), #f5b21c);
+  background: linear-gradient(180deg, var(--gold-hi), var(--gold) 40%, #f2a20f);
 }
 .f-pod.p2 .f-pod-col {
   height: 70px;
-  background: linear-gradient(180deg, #b7acf7, #9d90ee);
+  background: linear-gradient(180deg, #e3e1ef, #bdb9d4);
 }
 .f-pod.p3 .f-pod-col {
   height: 54px;
-  background: linear-gradient(180deg, #ffa9cf, #f07fb3);
+  background: linear-gradient(180deg, #f6c7a4, #dc9467);
 }
 .f-pod.me .f-ava {
   box-shadow:
-    0 0 0 3px var(--yellow),
-    0 0 0 6px rgba(255, 201, 60, 0.3);
+    0 0 0 3px var(--brand),
+    0 0 0 6px rgba(108, 92, 231, 0.25);
 }
 .f-crown {
   position: absolute;
@@ -2313,18 +2603,21 @@ p {
   animation: f-bob 2s ease-in-out infinite;
 }
 .f-crown path {
-  fill: var(--yellow);
+  fill: var(--gold);
+  stroke: var(--gold-3d);
+  stroke-width: 1.2;
+  stroke-linejoin: round;
 }
 .f-pod.p1 {
   padding-top: 16px;
 }
 .f-pass {
   margin: 12px 16px 0;
-  padding: 12px 14px;
+  padding: 12px 14px 10px;
   border-radius: 16px;
-  background: var(--yellow-soft);
-  color: var(--yellow-ink);
-  font-size: 14px;
+  background: var(--gem-soft);
+  color: var(--gem-ink);
+  font-size: 14.5px;
   font-weight: 600;
 }
 .f-pass.top {
@@ -2356,8 +2649,9 @@ p {
   flex: none;
   width: 24px;
   text-align: center;
-  font: 800 16px var(--display);
+  font: 800 17px var(--display);
   color: var(--ink3);
+  padding-top: 2px;
 }
 .f-bname {
   flex: 1;
@@ -2372,16 +2666,16 @@ p {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font: 800 15px var(--display);
-  color: var(--brand-2);
+  font: 800 15.5px var(--display);
+  color: var(--gem-ink);
 }
+/* His own row: violet, so his eye finds it at once (gold is for the winners). */
 .f-brow.me {
-  background: var(--yellow);
-  box-shadow: 0 3px 0 var(--yellow-3d);
+  background: var(--brand-soft);
+  box-shadow: inset 0 0 0 2px var(--brand);
 }
-.f-brow.me .f-rank,
-.f-brow.me .f-bxp {
-  color: var(--ink);
+.f-brow.me .f-rank {
+  color: var(--brand-2);
 }
 
 /* ---------- Me ---------- */
@@ -2392,8 +2686,8 @@ p {
   margin: 4px 0 2px;
 }
 .f-streaknum b {
-  font: 800 64px/0.95 var(--display);
-  letter-spacing: -0.02em;
+  font: 800 68px/0.9 var(--display);
+  padding-top: 8px;
 }
 .f-streaknum.lit .f-flame {
   animation: f-flare 1.3s ease-in-out infinite alternate;
@@ -2423,6 +2717,9 @@ p {
   font-weight: 800;
 }
 .f-wdot.lit i {
+  animation: f-pop 0.45s var(--spring) both;
+}
+.f-wdot.lit i {
   background: #fff;
   box-shadow: 0 3px 0 rgba(29, 27, 56, 0.2);
 }
@@ -2434,8 +2731,8 @@ p {
   background: rgba(255, 255, 255, 0.07);
 }
 .f-wdot small {
-  font-size: 11.5px;
-  font-weight: 700;
+  font: 800 12px/1 var(--display);
+  letter-spacing: 0.04em;
   color: rgba(255, 255, 255, 0.78);
 }
 .f-profile {
@@ -2449,7 +2746,7 @@ p {
   gap: 2px;
 }
 .f-pname {
-  font: 800 19px/1.2 var(--display);
+  font: 800 20px/1.2 var(--display);
 }
 .f-profile-w small {
   font-size: 13px;
@@ -2476,11 +2773,12 @@ p {
   color: var(--brand);
 }
 .f-stats b {
-  font: 800 22px/1.1 var(--display);
+  font: 800 24px/1.1 var(--display);
+  padding-top: 2px;
 }
 .f-stats small {
-  font-size: 11.5px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
   color: var(--ink2);
 }
 .f-chart-t {
@@ -2488,11 +2786,11 @@ p {
   align-items: center;
   gap: 4px;
   margin-left: auto;
-  padding: 4px 10px;
+  padding: 5px 10px 3px;
   border-radius: 999px;
-  background: var(--pink-soft);
-  color: var(--pink-ink);
-  font-size: 14px;
+  background: var(--gem-soft);
+  color: var(--gem-ink);
+  font-size: 14.5px;
 }
 .f-bars {
   display: grid;
@@ -2518,19 +2816,19 @@ p {
   animation: f-grow 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.1) both;
 }
 .f-bar.today i {
-  background: linear-gradient(180deg, #8e80ff, var(--brand));
+  background: linear-gradient(180deg, #9284ff, var(--brand));
 }
 .f-bar.later i {
   background: var(--line);
 }
 .f-bar-v {
   min-height: 14px;
-  font: 800 11.5px var(--display);
+  font: 800 12px var(--display);
   color: var(--brand-2);
 }
 .f-bar-d {
-  font-size: 11.5px;
-  font-weight: 700;
+  font: 800 12px/1 var(--display);
+  letter-spacing: 0.04em;
   color: var(--ink3);
 }
 .f-bar.today .f-bar-d {
@@ -2550,11 +2848,17 @@ p {
   flex: none;
   width: 50px;
   height: 50px;
+  padding-top: 3px;
   border-radius: 50%;
-  background: var(--yellow);
-  color: var(--ink);
-  font: 800 18px var(--display);
-  box-shadow: 0 3px 0 var(--yellow-3d);
+  background: var(--brand);
+  color: #fff;
+  font: 800 19px/1 var(--display);
+  box-shadow: 0 3px 0 var(--brand-3);
+}
+.f-race-rank.r1 {
+  background: radial-gradient(circle at 50% 30%, var(--gold-hi), var(--gold) 60%);
+  color: var(--gold-ink);
+  box-shadow: 0 3px 0 var(--gold-3d);
 }
 .f-racecard-w {
   flex: 1;
@@ -2563,7 +2867,8 @@ p {
   gap: 2px;
 }
 .f-racecard-w b {
-  font-size: 15px;
+  font-size: 16px;
+  font-weight: 800;
   color: var(--ink);
 }
 .f-racecard-w small {
@@ -2601,22 +2906,33 @@ p {
   margin-bottom: 4px;
 }
 .f-medal-c b {
-  font: 800 20px/1 var(--display);
+  font: 800 21px/1 var(--display);
+  padding-top: 3px;
 }
 .f-medal-c b.long {
-  font-size: 16px;
+  font-size: 17px;
 }
 .f-medal.won .f-medal-c {
-  background: radial-gradient(circle at 35% 30%, #ffe28a, var(--yellow) 55%, #f3ad16);
+  overflow: hidden;
+  background: radial-gradient(circle at 35% 30%, var(--gold-hi), var(--gold) 55%, #f3a612);
   color: #fff;
   text-shadow: 0 2px 0 rgba(176, 110, 0, 0.45);
-  box-shadow: 0 4px 0 var(--yellow-3d);
+  box-shadow: 0 4px 0 var(--gold-3d);
 }
 .f-medal.fresh .f-medal-c {
-  animation: f-pop 0.7s 0.2s cubic-bezier(0.2, 0.9, 0.3, 1.4) both;
+  animation: f-pop 0.7s 0.2s var(--spring) both;
   box-shadow:
-    0 4px 0 var(--yellow-3d),
-    0 0 0 8px rgba(255, 201, 60, 0.25);
+    0 4px 0 var(--gold-3d),
+    0 0 0 8px rgba(255, 194, 61, 0.25);
+}
+/* A trophy just won: a light passes across it. */
+.f-medal.fresh .f-medal-c::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, rgba(255, 255, 255, 0) 30%, rgba(255, 255, 255, 0.75) 50%, rgba(255, 255, 255, 0) 70%);
+  transform: translateX(-100%);
+  animation: f-sweep 0.9s 0.8s ease-out both;
 }
 .f-medal-lock {
   position: absolute;
@@ -2632,8 +2948,8 @@ p {
   box-shadow: 0 1px 4px rgba(40, 30, 110, 0.2);
 }
 .f-medal-n {
-  font-size: 12.5px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 800;
   line-height: 1.25;
 }
 .f-medal:not(.won) .f-medal-n {
@@ -2705,7 +3021,7 @@ p {
 }
 .f-sure p {
   font-size: 14px;
-  color: #8f2440;
+  color: var(--wrong-ink);
 }
 .f-sure-b {
   display: grid;
@@ -2796,7 +3112,8 @@ p {
   gap: 10px;
 }
 .f-sheet-h b {
-  font: 800 20px/1.2 var(--display);
+  font: 800 21px/1.2 var(--display);
+  padding-top: 2px;
 }
 .f-x {
   display: grid;
@@ -2840,9 +3157,9 @@ p {
     background 0.15s ease;
 }
 .f-face.on {
-  background: var(--yellow-soft);
-  box-shadow: inset 0 0 0 2.5px var(--yellow);
-  transform: scale(1.08);
+  background: var(--brand-soft);
+  box-shadow: inset 0 0 0 2.5px var(--brand);
+  transform: scale(1.1);
 }
 .f-topics {
   display: flex;
@@ -2850,10 +3167,10 @@ p {
   gap: 8px;
 }
 .f-chip-b {
-  padding: 9px 14px;
+  padding: 9px 15px 7px;
   border-radius: 999px;
   background: var(--bg);
-  font-size: 14px;
+  font-size: 14.5px;
   font-weight: 700;
   color: var(--ink2);
 }
@@ -2964,12 +3281,12 @@ p {
 }
 .f-form input {
   width: 100%;
-  height: 54px;
-  padding: 0 14px;
+  height: 56px;
+  padding: 4px 14px 0;
   border-radius: 15px;
   border: 2px solid var(--line-2);
   background: var(--bg);
-  font: 800 24px/1 var(--display);
+  font: 800 26px/1 var(--display);
   letter-spacing: 0.14em;
   outline: none;
   transition:
@@ -3005,7 +3322,7 @@ p {
   animation: f-toast 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
 }
 .f-toast.bad {
-  background: #d23a5a;
+  background: var(--wrong-ink);
 }
 
 /* ---------- Motion ---------- */
@@ -3065,17 +3382,86 @@ p {
     transform: translate(-50%, -5px);
   }
 }
-@keyframes f-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@keyframes f-pulse {
+/* START's halo: a ring that grows out of the coin and fades. */
+@keyframes f-halo {
   0% {
-    box-shadow: 0 0 0 0 rgba(255, 122, 154, 0.7);
+    opacity: 0.75;
+    transform: scale(1);
   }
   100% {
-    box-shadow: 0 0 0 10px rgba(255, 122, 154, 0);
+    opacity: 0;
+    transform: scale(1.38);
+  }
+}
+/* In class now: the dot's ring. */
+@keyframes f-ping {
+  0% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.6);
+  }
+}
+/* A light passing over a button that waits for him (most of the loop it waits off to the left). */
+@keyframes f-shine {
+  0%,
+  55% {
+    transform: translateX(-120%) skewX(-18deg);
+  }
+  85%,
+  100% {
+    transform: translateX(260%) skewX(-18deg);
+  }
+}
+/* A light running once along the progress bar or across a new trophy. */
+@keyframes f-sweep {
+  to {
+    transform: translateX(230%);
+  }
+}
+/* The tab he picked: its icon hops. */
+@keyframes f-tabpop {
+  0% {
+    transform: scale(0.7);
+  }
+  60% {
+    transform: scale(1.18) translateY(-1px);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes f-bump {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.12);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes f-slide {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+}
+@keyframes f-type {
+  from {
+    transform: scale(0.88);
+  }
+}
+/* His days in a row: yesterday's number rolls up and today's comes in. */
+@keyframes f-rollup {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-50%);
   }
 }
 @keyframes f-blink {

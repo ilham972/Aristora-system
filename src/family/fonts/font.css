@@ -1,0 +1,12 @@
+/* The family app's one font (4 Nov 2026): Baloo Thambi 2, drawn for Tamil and Latin together, so a Tamil word and an
+   English one in the same line share one height, weight and rhythm (the phone's own Tamil fonts differ on every phone:
+   Tamil Sangam MN on iPhones). One variable file, weights 500–800, cut to Tamil + Latin + the signs the app uses
+   (~57 KB; fetched once and kept by the service worker). The cut: docs/making-changes.md, "The family app's font".
+   Licence: OFL.txt beside it. */
+@font-face {
+  font-family: "Baloo Thambi 2";
+  font-style: normal;
+  font-weight: 500 800;
+  font-display: swap;
+  src: url("./baloo-thambi-2.woff2") format("woff2");
+}

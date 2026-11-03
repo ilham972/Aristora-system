@@ -11,12 +11,12 @@ export type Board = { since: number; top: BoardRow[]; me: BoardRow | null; count
 
 const WEEK_MS = 7 * 24 * 60 * 60_000;
 
-/** "4 நாள் 6 மணி" until Monday 00:00 (Sri Lanka). */
+/** "4d 6h" until Monday 00:00 (Sri Lanka). */
 export function endsIn(since: number, now: number): string {
   const left = Math.max(0, since + WEEK_MS - now);
   const d = Math.floor(left / 86_400_000);
   const h = Math.floor((left % 86_400_000) / 3_600_000);
-  return d > 0 ? `${d} நாள் ${h} மணி` : h > 0 ? `${h} மணி` : `${Math.max(1, Math.ceil(left / 60_000))} நிமிடம்`;
+  return d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h` : `${Math.max(1, Math.ceil(left / 60_000))} min`;
 }
 
 /** Who he passes next: the row above him (or the last of the top ten, from below it), and the XP it takes. */
@@ -32,7 +32,7 @@ function Podium(props: { rows: BoardRow[] }) {
   // 2nd, 1st, 3rd: the winner in the middle, highest.
   const order = [props.rows[1], props.rows[0], props.rows[2]];
   return (
-    <div class="f-podium" aria-label="முதல் மூவர் · The top three">
+    <div class="f-podium" aria-label="The top three">
       {order.map((r, i) =>
         r ? (
           <div key={r.name} class={`f-pod p${Math.min(r.rank, 3)}${r.me ? " me" : ""}`} style={{ animationDelay: `${[140, 0, 260][i]}ms` }}>
@@ -42,7 +42,7 @@ function Podium(props: { rows: BoardRow[] }) {
               </svg>
             )}
             <Avatar name={r.name} size="l" />
-            <b class="f-pod-n">{r.me ? "நீ" : firstName(r.name)}</b>
+            <b class="f-pod-n">{r.me ? "You" : firstName(r.name)}</b>
             <span class="f-pod-xp">
               <Gem size={13} />
               {r.xp}
@@ -63,7 +63,7 @@ function Row(props: { r: BoardRow; i: number }) {
     <li class={`f-brow rise${r.me ? " me" : ""}`} style={{ animationDelay: `${props.i * 45}ms` }}>
       <span class="f-rank">{r.rank}</span>
       <Avatar name={r.name} size="s" />
-      <b class="f-bname">{r.me ? `${r.name} (நீ)` : r.name}</b>
+      <b class="f-bname">{r.me ? `${r.name} · You` : r.name}</b>
       <span class="f-bxp">
         <Gem size={14} />
         {r.xp}
@@ -93,9 +93,9 @@ export function BoardTab(props: { top: ComponentChildren; me: FamilyMe | null })
         {props.top}
         <div class="f-hero-in">
           <div class="f-hero-w">
-            <p class="f-kicker">இந்த வாரம்{props.me?.grade ? ` · Grade ${props.me.grade}` : ""}</p>
-            <h1 class="f-title">போட்டி</h1>
-            <p class="f-hsub">{b ? `முடிய ${endsIn(b.since, Date.now())}` : "…"}</p>
+            <p class="f-kicker">This week{props.me?.grade ? ` · Grade ${props.me.grade}` : ""}</p>
+            <h1 class="f-title">Race</h1>
+            <p class="f-hsub">{b ? `Ends in ${endsIn(b.since, Date.now())}` : "…"}</p>
           </div>
           <OwlBadge mood={first ? "cheer" : "happy"} class="hero" />
         </div>
@@ -125,7 +125,7 @@ export function BoardTab(props: { top: ComponentChildren; me: FamilyMe | null })
               <Row r={mine} i={0} />
             </ol>
           )}
-          <p class="f-muted small f-center-t f-pad-x">திங்கள் காலை எல்லோரும் 0 இலிருந்து · Everyone starts at 0 on Monday</p>
+          <p class="f-muted small f-center-t f-pad-x">திங்கள் காலை எல்லோரும் 0 இலிருந்து தொடங்குவார்கள்.</p>
         </>
       )}
     </>

@@ -138,7 +138,7 @@ test("the family app: join, a level on the pad, Check once, the reveal, XP and t
   const F = await open(backend, `${site.url}/f/#join=${code}`); // as the family link: app.aristora.org/f/#join=…
   await contains(F.locator(".f-h1"), "Hana");
   await shot(F, "fam00-join");
-  await F.getByRole("button", { name: "தொடங்கு" }).click();
+  await F.getByRole("button", { name: "START" }).click();
   await goalIs(F, "Level 1");
   expect(await F.evaluate(() => location.hash)).toBe(""); // the code leaves the address bar
   await noSideScroll(F);
@@ -175,19 +175,19 @@ test("the family app: join, a level on the pad, Check once, the reveal, XP and t
   await contains(F.locator(".f-review"), "சரிபார்க்கவா");
   await noSideScroll(F);
   await shot(F, "fam03-review");
-  await F.locator(".f-review").getByRole("button", { name: "சரிபார் ✓" }).click();
+  await F.locator(".f-review").getByRole("button", { name: "Check ✓" }).click();
 
   // The reveal: 18 of 20, Q8 wrong, +18 XP, a 1-day streak.
   await contains(F.locator(".f-big"), "18");
   await contains(F.locator(".f-big"), "/ 20");
   await until(async () => (await F.locator(".f-rrow.bad").allInnerTexts()).join() .includes("Q8"), "Q8 wrong");
   await contains(F.locator(".f-gain"), "+18 XP");
-  await contains(F.locator(".f-gain"), "1 நாள்");
+  await contains(F.locator(".f-gain"), "1 day");
   await noSideScroll(F);
   await shot(F, "fam04-result");
 
   // Next level from the reveal: Level 2 (Q20 is a name: the teacher marks it).
-  await F.getByRole("button", { name: /அடுத்த Level 2/ }).click();
+  await F.getByRole("button", { name: /Next: Level 2/ }).click();
   await contains(F.locator(".f-qn"), "Q11");
   for (const a of [["3", "3"], ["3", "6"], ["3", "9"], ["4", "2"], ["4", "5"], ["4", "8"]]) await type(F, a);
   for (const k of ["1", "7", "n", "-", "1"]) await F.locator(".f-padkeys").getByRole("button", { name: k, exact: true }).click();
@@ -198,7 +198,7 @@ test("the family app: join, a level on the pad, Check once, the reveal, XP and t
   await contains(F.locator(".f-teach"), "ஆசிரியர்");
   await F.locator(".f-padkeys .f-key.next").click();
   await contains(F.locator(".f-review"), "ஆசிரியர் திருத்துவார்");
-  await F.locator(".f-review").getByRole("button", { name: "சரிபார் ✓" }).click();
+  await F.locator(".f-review").getByRole("button", { name: "Check ✓" }).click();
   await contains(F.locator(".f-big"), "18");
   await contains(F.locator(".f-big"), "/ 18");
   await visible(F.locator(".f-rrow.teach"));
@@ -274,7 +274,7 @@ test("the family app: join, a level on the pad, Check once, the reveal, XP and t
   // Stage shows Level 1 checked (done), Level 2 still ⌂.
   await F.reload();
   await tabTo(F, /Home/);
-  await contains(F.locator(".f-today"), "இப்போது வகுப்பில்");
+  await contains(F.locator(".f-today"), "In class now");
   await contains(F.locator(".f-tl"), "வகுப்புக்கு வந்தாய்");
   await contains(F.locator(".f-tl"), "வீட்டில், phone இல்");
   expect(await F.locator(".f-tl .f-tli.h-home").count()).toBe(2);
@@ -330,12 +330,12 @@ test("index and code: the Family sheet shows them (the code made on the phone); 
   await visible(P.locator(".f-form"));
   await P.getByLabel(/Index/).fill("1001");
   await P.getByLabel("Code").fill(code === "0001" ? "0002" : "0001");
-  await P.getByRole("button", { name: "உள்நுழை" }).click();
+  await P.getByRole("button", { name: "Sign in" }).click();
   await contains(P.locator(".f-err"), "தவறு");
   await noSideScroll(P);
   await shot(P, "fam11-signin-wrong");
   await P.getByLabel("Code").fill(code);
-  await P.getByRole("button", { name: "உள்நுழை" }).click();
+  await P.getByRole("button", { name: "Sign in" }).click();
   await goalIs(P, "Level 1");
   await shot(P, "fam12-signed-in");
 
@@ -383,9 +383,9 @@ test("the new look: class hours and Home, the map, the questions as printed, fee
   const P = await open(backend, `${site.url}/f/`, size(360, 780));
   await P.getByLabel(/Index/).fill("1001");
   await P.getByLabel("Code").fill("4719");
-  await P.getByRole("button", { name: "உள்நுழை" }).click();
+  await P.getByRole("button", { name: "Sign in" }).click();
   await goalIs(P, "Level 1");
-  await contains(P.locator(".f-today"), "இப்போது வகுப்பு நடக்கிறது");
+  await contains(P.locator(".f-today"), "Class is on now");
   await visible(P.locator(".f-weekstrip .f-wd.today.open"));
   await contains(P.locator(".f-dayhours"), "12:01 AM – 11:59 PM");
   await noSideScroll(P);
@@ -420,11 +420,11 @@ test("the new look: class hours and Home, the map, the questions as printed, fee
   await P.getByRole("button", { name: /Feedback/ }).click();
   await visible(P.locator(".f-sheet.f-fb"));
   await P.getByRole("radio", { name: "மிக நன்று", exact: true }).click();
-  await P.getByRole("button", { name: "வகுப்பு", exact: true }).click();
+  await P.getByRole("button", { name: "Class", exact: true }).click();
   await P.locator(".f-fb-text textarea").fill("Theory class was great today");
   await noSideScroll(P);
   await shot(P, "fam15-feedback");
-  await P.getByRole("button", { name: "அனுப்பு", exact: true }).click();
+  await P.getByRole("button", { name: "Send", exact: true }).click();
   await visible(P.locator(".f-thanks"));
   await until(async () => (await P.locator(".f-sheet").count()) === 0, "the sheet closes");
   await P.getByRole("button", { name: /Feedback/ }).click();
@@ -432,7 +432,7 @@ test("the new look: class hours and Home, the map, the questions as printed, fee
   await P.locator(".f-fb-text textarea").fill("Evaluation was too fast");
   await P.locator(".f-named").click();
   await contains(P.locator(".f-named"), "Grade 8");
-  await P.getByRole("button", { name: "அனுப்பு", exact: true }).click();
+  await P.getByRole("button", { name: "Send", exact: true }).click();
   await visible(P.locator(".f-thanks"));
   const rows = await t.run(async (ctx) => await ctx.db.query("familyFeedback").collect());
   expect(rows.map((r) => [r.mood, r.name ?? null, r.text])).toEqual([
@@ -454,11 +454,11 @@ test("the new look: class hours and Home, the map, the questions as printed, fee
   await shot(P, "fam17-me");
 
   // Her brother on the same phone: + another child (his index and code); the top bar says who is on screen.
-  await P.getByRole("button", { name: /இன்னொரு பிள்ளையைச் சேர்/ }).click();
-  await contains(P.locator(".f-h1"), "இன்னொரு பிள்ளை");
+  await P.getByRole("button", { name: /Add a child/ }).click();
+  await contains(P.locator(".f-h1"), "Add a child");
   await P.getByLabel(/Index/).fill("1002");
   await P.getByLabel("Code").fill("5820");
-  await P.getByRole("button", { name: "உள்நுழை" }).click();
+  await P.getByRole("button", { name: "Sign in" }).click();
   await contains(P.locator(".f-who"), "Bilal");
   await contains(P.locator(".f-caret.many"), "2");
   await goalIs(P, "Level 1");
@@ -474,8 +474,8 @@ test("the new look: class hours and Home, the map, the questions as printed, fee
   await P.locator(".f-sheet .f-kid", { hasText: "Bilal M" }).click();
   await contains(P.locator(".f-who"), "Bilal");
   await tabTo(P, /Me$/);
-  await P.getByRole("button", { name: /Bilal: வெளியேறு/ }).click();
-  await P.getByRole("button", { name: "ஆம், வெளியேறு", exact: true }).click();
+  await P.getByRole("button", { name: /Sign out Bilal/ }).click();
+  await P.locator(".f-sure").getByRole("button", { name: "Sign out", exact: true }).click();
   await contains(P.locator(".f-who"), "Hana");
   await until(async () => (await P.locator(".f-caret.many").count()) === 0, "one child left");
   const bilalPhones = await t.run(async (ctx) => await ctx.db.query("familyDevices").withIndex("by_student", (q) => q.eq("studentId", bilal)).collect());
@@ -520,7 +520,7 @@ test("the new look: class hours and Home, the map, the questions as printed, fee
   const S = await open(backend, `${site.url}/f/`, size(320, 568));
   await S.getByLabel(/Index/).fill("1001");
   await S.getByLabel("Code").fill("4719");
-  await S.getByRole("button", { name: "உள்நுழை" }).click();
+  await S.getByRole("button", { name: "Sign in" }).click();
   await goalIs(S, "Level 1");
   await noSideScroll(S);
   await shot(S, "fam21-home-320");
@@ -614,12 +614,12 @@ test("the O/L map: the owner ticks Grade 11 for the O/L syllabus and gives today
   const P = await open(backend, `${site.url}/f/`, size(360, 780));
   await P.getByLabel(/Index/).fill("1001");
   await P.getByLabel("Code").fill("4719");
-  await P.getByRole("button", { name: "உள்நுழை" }).click();
+  await P.getByRole("button", { name: "Sign in" }).click();
   await goalIs(P, "Level 1");
   await contains(P.locator(".f-goal"), cons.ta);
   await tabTo(P, /Learn/);
   await contains(P.locator(".f-hero .f-title"), cons.ta);
-  await contains(P.locator(".f-hero .f-kicker"), "பகுதி 2B");
+  await contains(P.locator(".f-hero .f-kicker"), "PART 2B"); // the kicker in English letters; the banner below in Tamil
   await until(async () => (await P.locator(".f-wbanner").count()) === 4, "four Worlds: the paper parts");
   await contains(P.locator(".f-wbanner").first(), "பகுதி 1A");
   await contains(P.locator(".f-wbanner").nth(3), "பகுதி 2B");

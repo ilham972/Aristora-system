@@ -14,7 +14,7 @@ import type { FamilyMe } from "../../convex/family";
 import type { World, WorldLevel } from "../../convex/lib/family";
 import { nextPlay } from "./play";
 import { buzz, sound } from "./sound";
-import { Dashes, Flame, Gem, Icon, Owl, OwlBadge, OwlSays, PART_TA, Tag, TERM_TA, toast, Waiting, type Mood } from "./ui";
+import { Dashes, Flame, Gem, Icon, Owl, OwlBadge, OwlSays, PART_TA, Tag, TERM_TA, titleSize, toast, Waiting, type Mood } from "./ui";
 
 // ---- The road: a smooth line through the stops (x in % of the width, y in px) ----
 
@@ -45,7 +45,11 @@ function Road(props: { pts: { x: number; y: number }[]; height: number; reached:
 
 // ---- The syllabus map ----
 
-export type WorldGroup = { key: string; no: number; name: string; stages: World[] };
+/** A World: its key, its number, its name (Tamil, the banner on the map) and `en` (English, a header's kicker). */
+export type WorldGroup = { key: string; no: number; name: string; en: string; stages: World[] };
+
+/** The O/L map's paper parts in English letters (a kicker): its `term` 1–4. */
+const PART_EN: Record<number, string> = { 1: "Part 1A", 2: "Part 1B", 3: "Part 2A", 4: "Part 2B" };
 
 /**
  * The Worlds: his map's units grouped by term (terms 1–3 in order, then any extra book), or by paper part on the O/L
@@ -58,10 +62,14 @@ export function worldGroups(me: FamilyMe): WorldGroup[] {
     key: `t${term}`,
     no: i + 1,
     name: (me.ol ? PART_TA[term] : TERM_TA[term]) ?? `World ${i + 1}`,
+    en: (me.ol ? PART_EN[term] : term ? `Term ${term}` : "Extra") ?? "",
     stages: main.filter((w) => (w.term ?? 0) === term),
   }));
   const other = me.worlds.filter((w) => w.other);
-  if (other.length) out.push({ key: "other", no: out.length + 1, name: me.ol ? (me.grade ? `Grade ${me.grade}` : "பாடசாலை") : "O/L", stages: other });
+  if (other.length) {
+    const own = me.ol ? (me.grade ? `Grade ${me.grade}` : "") : "O/L";
+    out.push({ key: "other", no: out.length + 1, name: own || "பாடசாலை", en: own || "School", stages: other });
+  }
   return out;
 }
 
@@ -76,6 +84,10 @@ function stateOf(w: World, focus: World | null): NodeState {
   if (w.allDone) return "done";
   return w.open ? "open" : "lock";
 }
+
+/** A header's kicker: "WORLD 1 · TERM 2", "WORLD 3 · PART 2A", "WORLD 5 · O/L" (English letters only: a kicker is
+ *  spaced out, and spaced Tamil reads badly). The World's Tamil name is its banner on the map. */
+const worldWords = (g: WorldGroup | undefined) => `World ${g?.no ?? 1}${g?.en ? ` · ${g.en}` : ""}`;
 
 /** Where the i-th Stage of a World sits: swinging well left and right (so START over his Stage never covers the one
  *  before it), a little differently in each World. */
@@ -122,7 +134,7 @@ function StageNode(props: { w: World; st: NodeState; at: { x: number; y: number 
       <span class="f-cap">
         <small>
           Stage {w.no}
-          {st === "soon" ? " · விரைவில்" : st === "open" || st === "now" ? ` · ${done}/${w.levels.length}` : ""}
+          {st === "soon" ? " · soon" : st === "open" || st === "now" ? ` · ${done}/${w.levels.length}` : ""}
         </small>
         <b>{w.ta}</b>
       </span>
@@ -160,7 +172,7 @@ function WorldMap(props: { g: WorldGroup; focus: World | null; onStage: (unitId:
         <span class="f-wname">
           <b>{g.name}</b>
           <small>
-            {n} Stages{books < n ? ` · ${books} app இல்` : ""}
+            {n} Stages{books < n ? ` · ${books} ready` : ""}
           </small>
         </span>
         <span class="f-wdone" style={{ "--p": String(books ? Math.round((finished / books) * 100) : 0) }}>
@@ -172,7 +184,7 @@ function WorldMap(props: { g: WorldGroup; focus: World | null; onStage: (unitId:
         {g.stages.map((w, i) => (
           <StageNode key={w.unitId} w={w} st={states[i]} at={pts[i]} onOpen={() => props.onStage(w.unitId)} />
         ))}
-        <span class={`f-chest${allDone ? " won" : ""}`} style={{ left: `${chest.x}%`, top: `${chest.y}px` }} aria-label={allDone ? `World ${g.no}: வென்றாய்` : undefined}>
+        <span class={`f-chest${allDone ? " won" : ""}`} style={{ left: `${chest.x}%`, top: `${chest.y}px` }} aria-label={allDone ? `World ${g.no}: won` : undefined}>
           <Icon name="trophy" size={26} />
         </span>
       </div>
@@ -216,12 +228,10 @@ export function LearnTab(props: { top: ComponentChildren; me: FamilyMe | null; o
         {focus ? (
           <div class="f-hero-in">
             <div class="f-hero-w">
-              <p class="f-kicker">
-                World {g?.no ?? 1} · {g?.name ?? ""}
-              </p>
-              <h1 class="f-title">{focus.ta}</h1>
+              <p class="f-kicker">{worldWords(g)}</p>
+              <h1 class={`f-title${titleSize(focus.ta)}`}>{focus.ta}</h1>
               <p class="f-hsub">{focus.en}</p>
-              <Tag tone="pink">Stage {focus.no}</Tag>
+              <Tag tone="glass">Stage {focus.no}</Tag>
             </div>
             <OwlBadge mood={focus.allDone ? "cheer" : "happy"} class="hero" />
             <div class="f-hero-foot">
@@ -232,7 +242,7 @@ export function LearnTab(props: { top: ComponentChildren; me: FamilyMe | null; o
                 </small>
               </span>
               {next ? (
-                <button type="button" class="f-btn gold f-cont" onClick={props.onPlay}>
+                <button type="button" class={`f-btn gold f-cont${me.streak.today ? "" : " shine"}`} onClick={props.onPlay}>
                   Level {next.n} <Icon name="play" size={15} class="fill" />
                 </button>
               ) : (
@@ -246,7 +256,7 @@ export function LearnTab(props: { top: ComponentChildren; me: FamilyMe | null; o
           <div class="f-hero-in">
             <div class="f-hero-w">
               <p class="f-kicker">{me.ol ? "O/L" : me.grade ? `Grade ${me.grade}` : "ARISTORA"}</p>
-              <h1 class="f-title">உன் பாடத்திட்டம்</h1>
+              <h1 class="f-title">Your syllabus</h1>
               <p class="f-hsub">{me.ol ? "ஒவ்வொரு பகுதியும் ஒரு World." : "ஒவ்வொரு தவணையும் ஒரு World."}</p>
             </div>
             <OwlBadge mood="wave" class="hero" />
@@ -269,11 +279,11 @@ export function LearnTab(props: { top: ComponentChildren; me: FamilyMe | null; o
 // ---- Inside a Stage: its Levels ----
 
 const STATE_WORDS: Record<WorldLevel["s"], string> = {
-  done: "முடிந்தது",
+  done: "Done ✓",
   check: "phone சரிபார்த்தது: ஆசிரியர் உன் தாளைப் பார்ப்பார்",
   class: "ஆசிரியரிடம் உள்ளது",
   pre: "app க்கு முன் முடித்தது",
-  play: "இப்போது இது",
+  play: "Now",
   later: "முந்தைய Level ஐ முடி",
 };
 
@@ -327,12 +337,10 @@ export function StageScreen(props: { me: FamilyMe; world: World; onBack: () => v
         </div>
         <div class="f-hero-in">
           <div class="f-hero-w">
-            <p class="f-kicker">
-              World {g?.no ?? 1} · {g?.name ?? ""}
-            </p>
-            <h1 class="f-title">{w.ta}</h1>
+            <p class="f-kicker">{worldWords(g)}</p>
+            <h1 class={`f-title${titleSize(w.ta)}`}>{w.ta}</h1>
             <p class="f-hsub">{w.en}</p>
-            <Tag tone="pink">Stage {w.no}</Tag>
+            <Tag tone="glass">Stage {w.no}</Tag>
           </div>
           <OwlBadge mood={!w.book ? "sleep" : w.allDone ? "cheer" : "happy"} class="hero" />
           {w.book && (
@@ -350,8 +358,7 @@ export function StageScreen(props: { me: FamilyMe; world: World; onBack: () => v
       {!w.book ? (
         <div class="f-center f-pad">
           <Owl mood="sleep" class="mid" />
-          <p class="f-lead">இந்த Stage விரைவில் app இல் வரும்.</p>
-          <p class="f-muted small">Coming soon: till then, do it in class.</p>
+          <p class="f-lead">இந்த Stage விரைவில் app இல் வரும். அதுவரை வகுப்பில் செய்.</p>
         </div>
       ) : (
         <>

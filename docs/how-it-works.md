@@ -831,24 +831,36 @@ Levels done at home made a pile for the corrector in class. Now the student does
 in the family app on the family phone, taps **Check** once per level and sees ✓ / ✗ at once; the class sees his marks
 before he walks in. Since 3 Nov 2026 it is also **the institute's student app** (his voice note: "this is also the
 learning app of our education institute"): one profile, his class times, what he did in class each day, his progress.
-- Its own small bundle (`src/family/`, ~44 KB over the wire for code, style and page on 3 Nov 2026; `scripts/build.mjs`
-  stops the build over 50 KB), one font (Barlow 800, Latin only, ~22 KB, kept by the service worker, not in the
-  budget: numbers and game words; Tamil is the phone's own), no client library (Convex's plain HTTP API,
-  `src/family/net.ts`). It lives under `/f/` on both addresses; family links are app.aristora.org/f/#join=…, and
-  app.aristora.org/ redirects to /f/ (`vercel.json`, a redirect: a rewrite of "/" never runs, Vercel serves index.html
-  first). A service worker under /f/ only (cache `aristora-family-3`): it opens with no signal after the first visit.
-- **Its look** (his voice notes and the two pictures he liked, 3 Nov 2026): for every grade, 6 to 11 (his words: a
-  night sky is fine for Grade 7, silly for Grade 11), so light and calm: ARISTORA's purple (`--brand` #6C5CE7) on a
-  pale lavender page, white cards, purple headers with rounded bottoms, **gold** for what he wins and for START, pink
-  slanted labels ("STAGE 3", "PERSONAL BEST"), a **flame** for each day in a row (no lamp: he didn't want a religious
-  sign), a pink gem for XP. ✓ blue, ✗ rose: **no green anywhere**. Buttons press down (a 3D edge); things rise and pop;
-  "reduce motion" stops it all. Inspiration for the motion and the habit loop (a goal a day, the flame, the reveal,
-  the race), never copied: ARISTORA's own owl, colours and words.
+- Its own small bundle (`src/family/`, ~45 KB over the wire for code, style and page on 4 Nov 2026; `scripts/build.mjs`
+  stops the build over 50 KB), **one font for Tamil and English** (Baloo Thambi 2, weights 500–800, one variable file
+  cut to Tamil + Latin, ~57 KB: `src/family/fonts/`, preloaded by the page, kept by the service worker, not in the
+  budget; 4 Nov 2026: the phone's own Tamil fonts differ on every phone, Tamil Sangam MN on iPhones, and never matched
+  the English words beside them), no client library (Convex's plain HTTP API, `src/family/net.ts`). It lives under
+  `/f/` on both addresses; family links are app.aristora.org/f/#join=…, and app.aristora.org/ redirects to /f/
+  (`vercel.json`, a redirect: a rewrite of "/" never runs, Vercel serves index.html first). A service worker under /f/
+  only (cache `aristora-family-4`): it opens with no signal after the first visit.
+- **Its look** (his voice notes and the two pictures he liked, 3 Nov 2026; the palette rebuilt 4 Nov 2026 after his
+  review: "the yellow behind the purple owl is not beautiful"): for every grade, 6 to 11 (his words: a night sky is
+  fine for Grade 7, silly for Grade 11), so light and calm. **Big surfaces are only ARISTORA's violet** (`--brand`
+  #6C5CE7: headers with rounded bottoms, buttons, progress), white cards and a pale lavender page. **Every other colour
+  is small and has one meaning on every screen**: gold = START and what he wins (trophies, the crown, PERSONAL BEST; a
+  coin with a highlight and a darker edge, never a big flat yellow), the orange **flame** = days in a row (no lamp:
+  he didn't want a religious sign), the pink **gem** = XP (nothing else is pink), blue = right (✓, the days he came),
+  rose = wrong (✗, signing out). **No green anywhere.** Each World on the map is its own shade of violet (violet,
+  purple, indigo); the race's podium is gold, silver, bronze; his own row is violet. Tappable things press down (a 3D
+  edge); cards that are not buttons lie flat. Motion: transform and opacity only (smooth on a cheap phone); things
+  rise, pop and press; the next question slides in; a light passes over a waiting START; START's coin breathes out a
+  halo; the progress bar flashes as he types; XP and the flame jump in the top row when they grow; "reduce motion"
+  stops it all. Inspiration for the motion and the habit loop (a goal a day, the flame, the reveal, the race), never
+  copied: ARISTORA's own owl, colours and words.
 - **The owl** is ARISTORA's logo, the loading page's own drawing (`Owl`/`keepOwl`: the app keeps the splash's SVG, no
-  extra bytes), coloured light purple with a dark cap and a gold tassel, still living (blinks, looks, tilts, breathes),
-  with **moods** (`Mood`): happy and cheering (eyes closed in a smile; cheering hops with gold sparkles), thinking (one
-  brow up, a "?"), sad (lids low), asleep (eyes shut, z z: Me shows it asleep until he does a Level today), waving
-  (hello). On a turning gold burst in headers (`OwlBadge`); speaking in a bubble on the map (`OwlSays`).
+  extra bytes): **white on violet** (headers, today's class: the logo's own white owl), light violet on white, with a
+  dark cap and a gold tassel, living (blinks, looks, tilts, breathes), with **moods** (`Mood`): happy and cheering (eyes
+  closed in a smile; cheering hops with gold sparkles), thinking (one brow up, a "?"), sad (lids low), asleep (eyes
+  shut, z z: Me shows it asleep until he does a Level today), waving (hello). In headers on a soft glow with a shadow
+  under its feet (`OwlBadge`; the turning yellow burst is gone, 4 Nov 2026); speaking in a bubble on the map
+  (`OwlSays`). Small owls stand still and only their mood moves (`still`: the bubble, today's class, the timeline,
+  "loading"), so at most one or two owls live on a screen (each living owl is eight SVG animations).
 - **The loading page = the class system's living owl** (his ask: "the same exact loading page"): one copy,
   `public/splash.html`, put into both pages by the build at `%SPLASH%` (each its own "still loading" words; Tamil
   first here), styles `src/splash.css`, gone with `hideSplash()` once there is something real to show (at least 1.2 s
@@ -856,18 +868,29 @@ learning app of our education institute"): one profile, his class times, what he
 - **Sounds** (`sound.ts`, made on the phone, no files): a tap, a key click, a bell for each right answer that climbs a
   step with each one in a row, a soft low note for a wrong one, a fanfare for a Level (a brighter one for every mark),
   a trophy, a Stage opening, the flame of a new day, feedback sent. On unless Me → Sound is off.
-- Words: Tamil first, a few game words, no school words: a school term = a **World** (World 1 · முதலாம் தவணை), a
-  unit = a **Stage**, its workbook's levels = **Levels**, marks = **XP** (1 mark = 1 XP), days in a row = his flame.
-  Only the level he is on can be played (the first with no record): the paper book is the truth.
+- **Words** (his ask, 4 Nov 2026: "a mix of both; some places English is appropriate, M for Monday"): **English for
+  the app's chrome and game words**: the tabs (Home, Learn, Race, Me), buttons (START, Check, Next, Send, Sign in,
+  Back), days and times (M T W T F S S, Wed · 4 Nov, 3:30 PM, in 2 h 10 min, ends in 4d 6h), labels (Today's goal,
+  Class week, XP this week, Trophies, Total XP, Best streak) and game words (World, Stage, Level, XP, IN A ROW, NEW
+  TROPHY, PERSONAL BEST, a trophy's name). **Tamil for the owl's voice and every sentence**: the greeting, praise in
+  the reveal (அருமை!), nudges (இன்று ஒரு Level செய்து தீயை மூட்டு!), what happened and what to do (errors, locked,
+  soon, the timeline of a day), the feedback questions, how to win a trophy, and the syllabus itself (unit names, term
+  names). **Never the same words twice** in two languages on one screen (the old "Tamil · English" pairs are gone). A
+  spaced-out kicker is English only ("WORLD 1 · TERM 1"; spaced Tamil reads badly); a header title gets a smaller size
+  when its longest word is long (`titleSize`: a Tamil word never breaks in the middle). No school words: a school term
+  = a **World** (its banner on the map: முதலாம் தவணை), a unit = a **Stage**, its workbook's levels = **Levels**, marks
+  = **XP** (1 mark = 1 XP), days in a row = his flame. Only the level he is on can be played (the first with no
+  record): the paper book is the truth.
 - **Screens.** On every tab the top row: who is on screen (his letter on his colour, his name, ▾ or how many children;
   tap = the children on this phone), his flame (days in a row; lit once he did a Level today; tap = Me), his XP ever
-  (tap = the race), **Feedback** (💬). A floating bottom bar: **முகப்பு** Home, **கற்க** Learn, **போட்டி** Race,
-  **நான்** Me (the one on screen a purple pill with its name).
-  - **Home** (`home.tsx`, the institute's side): the date and hello; **today's class** (`TodayCard`: in class now
-    "since 3:12 PM", the class on now, today's hours with "in 2 h 10 min", or the next class: one of his usual days
-    first), with his Stage in class and how far he is; **today's goal** (`GoalCard`: his Level now and START, and
-    "do one today: 6 days in a row!"); **his class week** (Monday to Sunday: the class days from the centre's hours, a
-    blue dot on the days he came, a ring on his usual days; tap a day); **that day hour by hour** (`Timeline`,
+  (tap = the race), **Feedback** (💬); XP and the flame jump once when they grew (back from a Level). A floating bottom
+  bar: **Home**, **Learn**, **Race**, **Me** (the one on screen a violet pill with its name; its icon hops).
+  - **Home** (`home.tsx`, the institute's side): the date ("WED · 4 NOV") and வணக்கம்; **today's class** (`TodayCard`:
+    "In class now · since 3:12 PM", "Class is on now · till 6:30 PM", "Today 3:30 PM – 6:30 PM · in 2 h 10 min", or
+    "Next class: Tomorrow / Thu": one of his usual days first), with his Stage in class and how far he is; **today's
+    goal** (`GoalCard`: his Level now and START, and "இன்று ஒரு Level செய்தால் 6 நாள் தொடர்!"); **his class week**
+    (M T W T F S S: the class days from the centre's hours, a blue dot on the days he came, a ring on his usual days,
+    "Your day"; tap a day); **that day hour by hour** (`Timeline`,
     `family.day`: signed in, Theory or Evaluation with whom and the questions taught or explained, a Level marked in
     class, handed in, or checked at home (⌂), signed out); **his last classes** (`family.classes.recent`: when, how
     many Levels, with whom; tap = that day). Never his waiting time in the hall.
@@ -875,36 +898,45 @@ learning app of our education institute"): one profile, his class times, what he
     a purple header with his Stage now (World and term, its Tamil and English names, "STAGE 3", dashes for its Levels
     done, **Continue** = his Level now in one tap); the owl's word for today (keep the flame, how close the Stage is);
     then every World of his grade: a banner (World number, the term's name, Stages done) over a winding lavender road
-    with a dashed middle (purple up to where he is), its Stages as round stops with their names beside them: done =
-    purple ✓, **his Stage now** = the big gold star with a turning ring and **START**, opened = its progress as a
-    ring, locked = 🔒 (tap: why), a unit whose workbook is not in the app yet = dashed, "விரைவில்" (soon); a trophy at
-    each World's end (gold when every Stage is done). `worldGroups` groups `me.worlds` by `term` (by paper part on
-    the O/L map, `me.ol`), then the `other` Stages as one more World.
+    with a dashed middle (violet up to where he is), its Stages as round stops with their names beside them: done =
+    violet ✓, **his Stage now** = the big gold coin with a star, a halo breathing out of it and **START**, opened =
+    its progress as a ring, locked = 🔒 (tap: why), a unit whose workbook is not in the app yet = dashed, "soon"; a
+    trophy at each World's end (gold when every Stage is done). `worldGroups` groups `me.worlds` by `term` (by paper
+    part on the O/L map, `me.ol`), then the `other` Stages as one more World; each World has its Tamil name (the
+    banner) and an English one for a header's kicker (`en`: "Term 2", "Part 1A", "O/L"). A World's road is drawn
+    only when it comes near the screen (`content-visibility` on `.f-roadbox`: a long map stays smooth).
   - **A Stage** (`StageScreen`): its header (World, names, "STAGE n", dashes) and its Levels on a smaller road: done =
     purple with the XP won under it (★ for every mark; ⌂ = checked at home, waiting for the corrector's look), with
     the teacher = pale with a clock, done before the app = pale ✓, **his Level now** = the gold one with START, later =
     🔒; a trophy at the end. A Stage the phone can't mark yet, or locked, says so.
-  - **A Level**: ✕, a progress bar (answers typed, a gold "3/9"), the question switch, "Stage 3 · Level 4", Check;
+  - **A Level**: ✕, a progress bar (answers typed, "3/9"; a light runs along it at each answer; gold when every box has
+    one), the question switch, "Stage 3 · Level 4", Check; the next question slides in, each key gives the answer a
+    small push;
     the question strip, one question at a time, his own pad (numbers, or the n pad), Check once (review first).
     **The question switch** (👁, his voice note: a new student has no workbook yet): off = only the boxes (paper in
     hand); on = each question as printed above its boxes (`family.questions`: the level's questions and the book's CSS
     once per Stage, kept with the level for no signal; drawn in a shadow root by `src/questionView.ts`, shared with the
     teachers' "Show the question"). Kept per child. Pale when the Stage's questions are not in the app yet (Books page
     **Q**: upload the unit's zip again). A question missing from the zip says so; the answers never come.
-  - **The reveal** (`Result`): the thinking owl, then his answers one question at a time (a bell climbing for each right
-    one in a row, a low note for a wrong one), the score counting up, "5 தொடர்ச்சியாக சரி!" (in a row), then the
-    owl's mood by the score, confetti, +XP, the flame (it lights with its sound if this was today's first Level),
-    PERSONAL BEST, every trophy this level just won ("புதிய கோப்பை!"), each question ✓ ✗ ✍, the next Level or the
-    Stage. A tap shows it all at once (and tests and "reduce motion" skip the wait).
-  - **The race** (`family.board`): this week in his grade (first name and initial), the top three on a podium (crown on
-    the first), the rest as rows, his row always (gold), "இன்னும் 12 XP எடுத்தால் Bilal ஐ முந்துவாய்!" (to pass the one
-    above), when the week ends ("முடிய 4 நாள் 6 மணி"). Leagues: not built (next week; his call, 3 Nov 2026).
-  - **Me**: a purple header with his flame as a big number (PERSONAL BEST when it is his best), the owl (asleep until
+  - **The reveal** (`Result`): the thinking owl inside a **ring that fills as his marks come in** (gold when every mark is
+    his), then his answers one question at a time (a bell climbing for each right one in a row, a low note for a wrong
+    one; each ✓ ✗ pops), the score jumping up with each mark, "5 IN A ROW!", then the owl's mood and its word by the
+    score (அருமை!), confetti, +XP, the flame (it lights with its sound if this was today's first Level: a card where
+    **yesterday's number rolls up to today's**, "1 day streak", and the owl's word), PERSONAL BEST, every trophy this
+    level just won ("NEW TROPHY!", a light passing over it), each question ✓ ✗ ✍; **what next stays at the bottom**
+    (sticky): the map button and "Next: Level 4" side by side, or the Stage. A tap shows it all at once (and tests
+    and "reduce motion" skip the wait).
+  - **The race** (`family.board`): this week in his grade (first name and initial), the top three on a podium (gold,
+    silver, bronze; a crown on the first; "You"), the rest as rows, his row always (violet), "இன்னும் 12 XP எடுத்தால்
+    Bilal ஐ முந்துவாய்!" (to pass the one above), when the week ends ("Ends in 4d 6h"). Leagues: not built (next week;
+    his call, 3 Nov 2026).
+  - **Me**: a violet header with his flame as a big number (PERSONAL BEST when it is his best), the owl (asleep until
     today's Level), this week as seven circles (a flame on each day with a Level; today ringed); his name, grade and
     index; XP ever, his longest run, Levels done; **XP this week** as bars per day (`me.dayXp`); his place in the race;
-    the **trophies** (`trophiesOf`, server: his first Level, 3 / 7 / 30 days in a row (his best run), a Level with
-    every mark, five of them, a whole Stage (one Level of it in the app at least), 100 and 300 XP in one week; won
-    ones gold, the rest pale with a lock and how to win them); this phone: the children, the sound.
+    the **trophies** (`trophiesOf`, server; names in English, how to win in Tamil: First Level, 3- / 7- / 30-day streak
+    (his best run), Perfect (a Level with every mark), 5 × Perfect, Stage clear (one Level of it in the app at least),
+    100 and 300 XP week; won ones gold, the rest pale with a lock and how to win them); On this phone: the children,
+    Sound.
 - **The O/L map** (4 Nov 2026, his ask: "who will see the O level syllabus, and who will see the Grade 11 syllabus?";
   his answers: "I tick them", topics "one by one", and "now I want to show specific unit today ... that's what I
   taught lastly"). The O/L topics are their own grade (OL = 12, `term` = the paper part), so before this no phone
@@ -915,7 +947,7 @@ learning app of our education institute"): one profile, his class times, what he
     **All** / **None**, then each student with a tick, his index and his book now; saved as you tap), or his
     **Family** sheet (the **O/L map** tick under Open every Stage).
   - **A ticked student's phone** (`worldsOf`, `olMapOn`): the 53 O/L topics instead of his grade's terms; each paper part
-    a World (World 1 · பகுதி 1A … World 4 · பகுதி 2B, `PART_TA`), each topic a Stage numbered as on his sheet
+    a World (World 1 · பகுதி 1A … World 4 · பகுதி 2B, `PART_TA`; the kicker "WORLD 1 · PART 1A"), each topic a Stage numbered as on his sheet
     (`olNumber`: Paper I A 01–34, I B 01–07, Paper II 01–12), topics without a workbook "soon". Stages open as on a
     grade's map (his topic now, books given, levels done, the next after a finished one, Open every Stage) and **the
     first topic in the app opens by itself** (the chain starts open: the class may not have put him on an O/L book
@@ -948,8 +980,9 @@ learning app of our education institute"): one profile, his class times, what he
   stops on the server; the next child is on screen; the last → the sign-in). The same child twice (his link, then his
   code): the newer stays, the older is signed out (`me.index`). A child signed out by the class leaves the list by
   himself. Up to 6. A phone from before (one key at `aristora.family.token`) becomes the first child with all it kept.
-- **Feedback** (his voice note: "the most important feature: get the feedback and improve us"; `FeedbackSheet`): a face
-  (😞🙁😐🙂😍 = 1–5), what about (வகுப்பு / ஆசிரியர்கள் / கேள்விகள் / App / வேறு), up to 600 letters; **with his
+- **Feedback** (his voice note: "the most important feature: get the feedback and improve us"; `FeedbackSheet`, "Tell
+  ARISTORA"): எப்படி இருக்கிறது? a face (😞🙁😐🙂😍 = 1–5), எதைப் பற்றி? (Class / Teachers / Questions / App / Other),
+  up to 600 letters, Send; **with his
   name** by default, one switch sends it **without** (then only his grade is kept and no history line is written: his
   answer, 3 Nov 2026, "he chooses"). A face or words is enough; 5 a day from one phone. Read in the teachers' app:
   **Settings → Feedback** by the owner and anyone with the **Feedback** permission (Settings → People → Also; his

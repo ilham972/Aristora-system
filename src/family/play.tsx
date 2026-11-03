@@ -13,7 +13,7 @@ import type { Box } from "../../convex/lib/phone";
 import { drawQuestion } from "../questionView";
 import { keep, mutation, NetError, query } from "./net";
 import { buzz, sound } from "./sound";
-import { Flame, Gem, Icon, Medal, Owl, OwlBadge, pretty, problemWords, Tag, toast, Waiting, type Mood } from "./ui";
+import { Flame, Gem, Icon, Medal, Owl, OwlBadge, pretty, problemWords, Roll, Tag, toast, Waiting, type Mood } from "./ui";
 
 export type Checked = {
   results: FamilyResult[];
@@ -221,8 +221,8 @@ export function Play(props: {
         <button type="button" class="f-round" aria-label="Back" onClick={props.onBack}>
           <Icon name="close" size={20} />
         </button>
-        <div class="f-pbar" aria-label={`${done} of ${all.length} answered`}>
-          <i style={{ width: `${Math.round((done / Math.max(1, all.length)) * 100)}%` }} />
+        <div class={`f-pbar${all.length > 0 && done === all.length ? " full" : ""}`} aria-label={`${done} of ${all.length} answered`}>
+          <i style={{ width: `${Math.round((done / Math.max(1, all.length)) * 100)}%` }}>{done > 0 && <b key={done} />}</i>
           <span class="f-ptag">
             {done}/{all.length}
           </span>
@@ -231,7 +231,7 @@ export function Play(props: {
           type="button"
           class={`f-qmode${showQ ? " on" : ""}${props.world.q ? "" : " pale"}`}
           aria-pressed={showQ}
-          aria-label="கேள்விகளைக் காட்டு · Show the questions"
+          aria-label="Show the questions"
           onClick={flipQ}
         >
           <Icon name="eye" size={16} />
@@ -243,7 +243,7 @@ export function Play(props: {
           Stage {form.no} · Level {form.n}
         </p>
         <button type="button" class="f-checkpill" onClick={() => setReview(true)}>
-          சரிபார்
+          Check
         </button>
       </div>
       <div class="f-strip" ref={strip}>
@@ -282,16 +282,16 @@ export function Play(props: {
               </li>
             )}
           </ul>
-          <p class="f-muted small">சரிபார்த்த பின் மாற்ற முடியாது. · After Check you can't change them.</p>
-          <button type="button" class="f-btn gold big" disabled={busy} onClick={() => void check()}>
-            {busy ? "…" : "சரிபார் ✓"}
+          <p class="f-muted small">Check செய்த பின் விடைகளை மாற்ற முடியாது.</p>
+          <button type="button" class="f-btn gold big shine" disabled={busy} onClick={() => void check()}>
+            {busy ? "…" : "Check ✓"}
           </button>
           <button type="button" class="f-btn ghost" onClick={() => setReview(false)}>
-            இன்னும் பார்க்க
+            Look again
           </button>
         </section>
       ) : (
-        <section class="f-card f-qcard rise" key={q.q} ref={card}>
+        <section class="f-card f-qcard slide" key={q.q} ref={card}>
           <div class="f-qhead">
             <b class="f-qn">Q{q.q}</b>
             <span class="f-xpchip">
@@ -325,7 +325,9 @@ export function Play(props: {
                           aria-label={`${b.l ?? ""} answer ${i + 1}`}
                         >
                           {b.l && <span class="f-blabel">{pretty(b.l)}</span>}
-                          <span class={v ? "f-bval" : "f-bval empty"}>{v ? pretty(v) : "?"}</span>
+                          <span key={at.bi === i ? v.length : 0} class={v ? `f-bval${at.bi === i ? " typed" : ""}` : "f-bval empty"}>
+                            {v ? pretty(v) : "?"}
+                          </span>
                         </button>
                       );
                     })}
@@ -352,7 +354,7 @@ function Oops(props: { text: string; onBack: () => void }) {
       <Owl mood="sad" class="mid" />
       <p class="f-lead">{props.text}</p>
       <button type="button" class="f-btn go" onClick={props.onBack}>
-        பின் செல்
+        Back
       </button>
     </div>
   );
@@ -381,6 +383,10 @@ const kindOf = (r: FamilyResult): RowKind => (r.got === null ? "teach" : r.got =
 const instant = () =>
   (typeof navigator !== "undefined" && navigator.webdriver === true) ||
   (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches);
+
+/** The score ring round the owl: its radius and length. */
+const RING_R = 54;
+const RING_C = Math.round(2 * Math.PI * RING_R * 100) / 100;
 
 /** Confetti from behind the owl: more for a better level. */
 function Confetti(props: { n: number }) {
@@ -462,27 +468,40 @@ export function Result(props: {
     return () => ts.forEach((x) => window.clearTimeout(x));
   }, [done]);
 
+  // The owl's words (Tamil: its voice), by the score.
   const cheer = pct >= 1 ? "எல்லாம் சரி!" : pct >= 0.9 ? "அருமை!" : pct >= 0.7 ? "நன்று!" : pct >= 0.5 ? "நல்ல முயற்சி!" : "தொடர்ந்து முயற்சி செய்!";
   const mood: Mood = !done ? "think" : pct >= 0.9 ? "cheer" : pct >= 0.5 ? "happy" : "wave";
   const next = nextPlay(props.me);
   const nextHere = next && next.world.unitId === props.world.unitId && next.n !== form.n ? next : null;
+  // The ring round the owl fills as his marks come in.
+  const ringK = res.phoneMax ? (done ? res.got : score) / res.phoneMax : 0;
   return (
     <div class={`f-result${done ? " done" : ""}`} onClick={() => !done && setShown(rows.length)}>
       <p class="f-kicker f-center-t">
         Stage {form.no} · Level {form.n}
       </p>
-      <section class={`f-score${done && pct >= 0.7 ? " glow" : ""}`}>
+      <section class={`f-score${done ? " done" : ""}${done && pct >= 0.7 ? " glow" : ""}`}>
         {done && pct >= 0.7 && <Confetti n={pct >= 0.9 ? 18 : 12} />}
-        <OwlBadge mood={mood} class="big" />
-        <h1 class="f-cheer">{done ? cheer : "பார்ப்போம்…"}</h1>
+        <div class={`f-ring${done && pct >= 1 ? " full" : ""}`}>
+          <svg class="f-ring-s" viewBox="0 0 120 120" aria-hidden="true">
+            <circle class="f-ring-t" cx="60" cy="60" r={RING_R} />
+            <circle class="f-ring-p" cx="60" cy="60" r={RING_R} stroke-dasharray={RING_C} stroke-dashoffset={RING_C * (1 - Math.min(1, ringK))} />
+          </svg>
+          <Owl mood={mood} />
+        </div>
+        <h1 class="f-cheer" key={done ? "done" : "wait"}>
+          {done ? cheer : "பார்ப்போம்…"}
+        </h1>
         <p class="f-big">
-          <b>{done ? res.got : score}</b>
+          <b key={done ? "done" : score} class={score > 0 || done ? "bump" : ""}>
+            {done ? res.got : score}
+          </b>
           <small> / {res.phoneMax}</small>
         </p>
         <div class="f-runbox">
           {(done ? topRun : runNow) >= 2 && (
-            <Tag tone="yellow" class="f-run" key={done ? "top" : runNow}>
-              {done ? topRun : runNow} தொடர்ச்சியாக சரி!
+            <Tag tone="gold" class="f-run" key={done ? "top" : runNow}>
+              {done ? topRun : runNow} in a row!
             </Tag>
           )}
         </div>
@@ -492,14 +511,14 @@ export function Result(props: {
               <Gem size={17} /> +{res.got} XP
             </span>
             <span class={`f-pill fire${res.streak.today ? " lit" : ""}${lit ? " pop" : ""}`}>
-              <Flame lit={res.streak.today} size={17} /> {res.streak.days} நாள்
+              <Flame lit={res.streak.today} size={17} /> {res.streak.days} {res.streak.days === 1 ? "day" : "days"}
             </span>
           </p>
         ) : (
           <p class="f-gain wait" aria-hidden="true" />
         )}
         {done && best && (
-          <Tag tone="pink" class="f-pb">
+          <Tag tone="gold" class="f-pb">
             PERSONAL BEST
           </Tag>
         )}
@@ -511,16 +530,19 @@ export function Result(props: {
       </section>
       {done && lit && (
         <section class="f-streakup rise">
-          <Flame lit size={34} />
+          <Flame lit size={44} />
           <div>
-            <b>{res.streak.days === 1 ? "தீ மூண்டது!" : `${res.streak.days} நாள் தொடர்!`}</b>
-            <small>{res.streak.days === 1 ? "நாளையும் ஒரு Level செய்து இதை வளர்." : "நாளையும் வா: தீ அணையாமல் பார்."}</small>
+            <b>
+              <Roll from={before.days} to={res.streak.days} />
+              <em>{res.streak.days === 1 ? "day streak" : "days in a row"}</em>
+            </b>
+            <small>{res.streak.days === 1 ? "தீ மூண்டது! நாளையும் ஒரு Level செய்து இதை வளர்." : "நாளையும் வா: தீ அணையாமல் பார்."}</small>
           </div>
         </section>
       )}
       {done && fresh.length > 0 && (
         <section class="f-newcup rise">
-          <h2>புதிய கோப்பை!</h2>
+          <h2>NEW TROPHY!</h2>
           <div class="f-medals">
             {fresh.map((t) => (
               <Medal key={t} t={t} won fresh />
@@ -562,15 +584,21 @@ export function Result(props: {
       {done && (
         <>
           <p class="f-tip rise">✎ உன் தாளிலும் ✓ ✗ போடு. தவறியவற்றை வகுப்பில் விளக்குவார்கள்.</p>
-          <div class="f-actions rise">
-            {nextHere && (
-              <button type="button" class="f-btn gold big" onClick={() => props.onNext(nextHere.n)}>
-                அடுத்த Level {nextHere.n} <Icon name="play" size={16} class="fill" />
+          <div class={`f-actions rise${nextHere ? " two" : ""}`}>
+            {nextHere ? (
+              <>
+                <button type="button" class="f-btn ghost f-act-map" aria-label={`Stage ${form.no}`} onClick={props.onStage}>
+                  <Icon name="map" size={22} />
+                </button>
+                <button type="button" class="f-btn gold big shine" onClick={() => props.onNext(nextHere.n)}>
+                  Next: Level {nextHere.n} <Icon name="play" size={16} class="fill" />
+                </button>
+              </>
+            ) : (
+              <button type="button" class="f-btn go big" onClick={props.onStage}>
+                <Icon name="map" size={19} /> Stage {form.no}
               </button>
             )}
-            <button type="button" class={`f-btn ${nextHere ? "ghost" : "go big"}`} onClick={props.onStage}>
-              <Icon name="map" size={19} /> Stage {form.no}
-            </button>
           </div>
         </>
       )}

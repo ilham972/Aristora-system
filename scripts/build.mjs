@@ -66,8 +66,8 @@ const fam = await build({
   outdir: "dist/f/assets",
   entryNames: "[name]-[hash]",
   assetNames: "[name]-[hash]",
-  // One display face for numbers and game words (Barlow 800, Latin only, ~22 KB, fetched once and kept by the
-  // service worker; not counted in the budget); Tamil stays the phone's own font.
+  // One font for Tamil and English together (Baloo Thambi 2, weights 500–800, ~57 KB: src/family/fonts/; preloaded,
+  // fetched once and kept by the service worker; not counted in the budget).
   loader: { ".woff2": "file", ".woff": "file" },
   jsx: "automatic",
   jsxImportSource: "preact",
@@ -79,9 +79,11 @@ const fam = await build({
 const famOut = Object.keys(fam.metafile.outputs);
 const famJs = famOut.find((f) => f.endsWith(".js"));
 const famCss = famOut.find((f) => f.endsWith(".css"));
-if (!famJs || !famCss) throw new Error("Build did not produce the family app's JS and CSS");
+const famFont = famOut.find((f) => f.endsWith(".woff2"));
+if (!famJs || !famCss || !famFont) throw new Error("Build did not produce the family app's JS, CSS and font");
 const famHtml = (await readFile("public/family/index.html", "utf8"))
-  .replace("%SPLASH%", () => splashSaying("இன்னும் வருகிறது… இந்த phone இல் data அல்லது Wi-Fi உள்ளதா பார். · Still loading: check the phone's data or Wi-Fi."))
+  .replace("%SPLASH%", () => splashSaying("இன்னும் வருகிறது… இந்த phone இல் data அல்லது Wi-Fi உள்ளதா பார்."))
+  .replace("%FONT%", `/f/assets/${basename(famFont)}`)
   .replace("%CSS%", `/f/assets/${basename(famCss)}`)
   .replace("%JS%", `/f/assets/${basename(famJs)}`);
 await writeFile("dist/f/index.html", famHtml);

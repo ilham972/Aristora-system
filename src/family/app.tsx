@@ -1,13 +1,15 @@
 // The family app (app.aristora.org): the institute's student app and its learning game in one (3 Nov 2026, his voice
 // notes and two pictures he liked).
-// - Home (முகப்பு): today's class, his class week (the centre's hours, his usual days), what he did each day in class
-//   and at home, his recent classes.
-// - Learn (கற்க): the whole syllabus of his grade as a map: each term a World, each unit a Stage, each Stage's Levels
-//   inside it. He does a Level on paper, types the answers, Check once: ✓ and ✗ at once (the server marks).
-// - Race (போட்டி): this week's XP in his grade. Me (நான்): his streak, his week, XP, trophies, this phone's children.
+// - Home: today's class, his class week (the centre's hours, his usual days), what he did each day in class and at
+//   home, his recent classes.
+// - Learn: the whole syllabus of his grade as a map: each term a World, each unit a Stage, each Stage's Levels inside
+//   it. He does a Level on paper, types the answers, Check once: ✓ and ✗ at once (the server marks).
+// - Race: this week's XP in his grade. Me: his streak, his week, XP, trophies, this phone's children.
 // - The top row everywhere: who is on screen (tap: switch, add, sign out), the flame (days in a row), XP, Feedback.
-// - Its look: light, ARISTORA's purple, our owl (light purple, with moods), gold for what he wins. Words: Tamil first,
-//   a few game words (World, Stage, Level, XP); no school words on his screens (book, unit, marks).
+// - Its look: light, ARISTORA's violet, our owl (white on violet, with moods), gold for what he wins. Words (4 Nov
+//   2026, his ask "a mix of both"): English for the app's chrome and game words (tabs, buttons, days, times, World,
+//   Stage, Level, XP), Tamil for the owl's voice and every sentence; never the same words twice in two languages. No
+//   school words on his screens (book, unit, marks).
 
 import type { ComponentChildren } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
@@ -101,7 +103,7 @@ export function App() {
   useEffect(() => {
     if (!ready) return; // the loading owl's navy until then
     const light = screen.k === "level" || screen.k === "result" || screen.k === "signin" || screen.k === "add" || screen.k === "join" || (screen.k === "main" && tab === "home");
-    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", light ? "#f5f4fc" : "#6c5ce7");
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", light ? "#f6f5fd" : "#7767f2");
   }, [ready, screen.k, tab]);
 
   /** Keeps this child's phone signed in (once a day is enough). */
@@ -130,7 +132,7 @@ export function App() {
       const opened = before ? m.worlds.filter((w) => w.open && w.book && !before.worlds.find((x) => x.unitId === w.unitId)?.open) : [];
       if (opened.length) {
         sound("unlock");
-        toast(`புதிய Stage திறந்தது: ${opened[0].no} · ${opened[0].ta}`);
+        toast(`Stage ${opened[0].no} unlocked! ${opened[0].ta}`);
       }
       setMe(m);
       setAcc(current());
@@ -386,7 +388,7 @@ export function App() {
     <div class={`f-app s-${screen.k}`} onPointerDown={armSound}>
       {body}
       {sheet === "kids" && (
-        <Sheet title="இந்த phone இல்" sub="மாற்ற ஒருவரைத் தொடு · Tap a child to switch" onClose={closeSheet}>
+        <Sheet title="On this phone" sub="மாற்ற ஒருவரைத் தொடு." onClose={closeSheet}>
           <Kids list={accounts()} current={acc} onSwitch={switchKid} onAdd={addKid} onSignOut={() => void signOut()} />
         </Sheet>
       )}
@@ -402,10 +404,25 @@ function Missing(props: { onBack: () => void }) {
       <Owl mood="think" class="mid" />
       <p class="f-lead">இது இப்போது இல்லை.</p>
       <button type="button" class="f-btn go" onClick={props.onBack}>
-        முகப்பு
+        Home
       </button>
     </div>
   );
+}
+
+/** The last XP and flame each child's top row showed: when they grow (back from a Level), the pill jumps once. */
+const shown = new Map<string, number>();
+function useGrew(key: string, v: number): boolean {
+  const [grew, setGrew] = useState(false);
+  useEffect(() => {
+    const before = shown.get(key);
+    shown.set(key, v);
+    if (before === undefined || v <= before) return;
+    setGrew(true);
+    const id = window.setTimeout(() => setGrew(false), 900);
+    return () => window.clearTimeout(id);
+  }, [key, v]);
+  return grew;
 }
 
 /** Who is on screen, his flame, his XP, and Feedback: at the top of every tab. */
@@ -413,6 +430,9 @@ function TopRow(props: { me: FamilyMe | null; acc: Account | null; offline: bool
   const me = props.me;
   const name = me?.name ?? props.acc?.name ?? "";
   const kids = accounts().length;
+  const id = props.acc?.id ?? "";
+  const xpGrew = useGrew(`${id}.xp`, me?.total ?? 0);
+  const fireGrew = useGrew(`${id}.fire`, me?.streak.days ?? 0);
   return (
     <div class="f-toprow">
       <button type="button" class="f-who" aria-label={`${name}: the children on this phone`} onClick={props.onKids}>
@@ -424,15 +444,15 @@ function TopRow(props: { me: FamilyMe | null; acc: Account | null; offline: bool
       </button>
       {props.offline && (
         <span class="f-off" title="No internet">
-          இணையம் இல்லை
+          Offline
         </span>
       )}
       <span class="f-sp" />
-      <button type="button" class={`f-pill fire${me?.streak.today ? " lit" : ""}`} aria-label={`${me?.streak.days ?? 0} days in a row`} onClick={() => props.onTab("me")}>
+      <button type="button" class={`f-pill fire${me?.streak.today ? " lit" : ""}${fireGrew ? " grew" : ""}`} aria-label={`${me?.streak.days ?? 0} days in a row`} onClick={() => props.onTab("me")}>
         <Flame lit={!!me?.streak.today} />
         {me?.streak.days ?? 0}
       </button>
-      <button type="button" class="f-pill gem" aria-label={`${me?.total ?? 0} XP`} onClick={() => props.onTab("race")}>
+      <button type="button" class={`f-pill gem${xpGrew ? " grew" : ""}`} aria-label={`${me?.total ?? 0} XP`} onClick={() => props.onTab("race")}>
         <Gem />
         {(me?.total ?? 0).toLocaleString("en")}
       </button>
@@ -443,11 +463,12 @@ function TopRow(props: { me: FamilyMe | null; acc: Account | null; offline: bool
   );
 }
 
-const TABS: { id: Tab; icon: IconName; ta: string; en: string }[] = [
-  { id: "home", icon: "home", ta: "முகப்பு", en: "Home" },
-  { id: "learn", icon: "map", ta: "கற்க", en: "Learn" },
-  { id: "race", icon: "trophy", ta: "போட்டி", en: "Race" },
-  { id: "me", icon: "user", ta: "நான்", en: "Me" },
+/** The tabs: English, short, the words every phone already uses. */
+const TABS: { id: Tab; icon: IconName; name: string }[] = [
+  { id: "home", icon: "home", name: "Home" },
+  { id: "learn", icon: "map", name: "Learn" },
+  { id: "race", icon: "trophy", name: "Race" },
+  { id: "me", icon: "user", name: "Me" },
 ];
 
 function BottomBar(props: { tab: Tab; onTab: (t: Tab) => void }) {
@@ -459,11 +480,11 @@ function BottomBar(props: { tab: Tab; onTab: (t: Tab) => void }) {
           type="button"
           class={`f-tab${props.tab === t.id ? " on" : ""}`}
           aria-pressed={props.tab === t.id}
-          aria-label={`${t.ta} · ${t.en}`}
+          aria-label={t.name}
           onClick={() => props.onTab(t.id)}
         >
           <Icon name={t.icon} size={22} />
-          <span>{t.ta}</span>
+          <span>{t.name}</span>
         </button>
       ))}
     </nav>
@@ -504,12 +525,12 @@ function SignIn(props: { add: boolean; why?: string; onBack: () => void; onIn: (
       )}
       <div class="f-center f-pad">
         <Owl mood="wave" class="big" />
-        <h1 class="f-h1">{props.add ? "இன்னொரு பிள்ளை" : "ARISTORA"}</h1>
-        {props.add ? <p class="f-muted">அவரின் index எண்ணும் code உம் · His index number and code</p> : <p class="f-muted">வகுப்பும் கற்றலும், ஒரே இடத்தில்.</p>}
+        <h1 class="f-h1">{props.add ? "Add a child" : "ARISTORA"}</h1>
+        {props.add ? <p class="f-muted">அவரின் index எண்ணும் code உம்.</p> : <p class="f-muted">வகுப்பும் கற்றலும், ஒரே இடத்தில்.</p>}
         {props.why && <p class="f-muted">{props.why}</p>}
         <form class="f-form" onSubmit={(e) => void go(e)}>
           <label>
-            <span>Index எண் · Index number</span>
+            <span>Index number</span>
             <input
               inputMode="numeric"
               autoComplete="username"
@@ -534,10 +555,10 @@ function SignIn(props: { add: boolean; why?: string; onBack: () => void; onIn: (
             </p>
           )}
           <button type="submit" class="f-btn go big" disabled={busy || index.length < 4 || code.length !== 4}>
-            {busy ? "…" : "உள்நுழை"}
+            {busy ? "…" : "Sign in"}
           </button>
         </form>
-        <p class="f-muted small">மறந்துவிட்டாயா? வகுப்பில் கேள்: மீண்டும் அனுப்புவோம். · Forgot them? Ask the class.</p>
+        <p class="f-muted small">மறந்துவிட்டாயா? வகுப்பில் கேள்: மீண்டும் அனுப்புவோம்.</p>
       </div>
     </div>
   );
@@ -572,9 +593,8 @@ function Join(props: { code: string; onReady: () => void; onIn: (token: string, 
         <>
           <h1 class="f-h1">வணக்கம், {firstName(state.name)}!</h1>
           <p class="f-lead">ஒவ்வொரு Level ஐயும் உன் தாளில் செய்து முடித்ததும், விடைகளை இங்கே போடு. உடனே ✓ ✗ தெரியும்.</p>
-          <p class="f-muted small">Do each Level on paper, then type the answers here: ✓ and ✗ at once.</p>
-          <button type="button" class="f-btn go big" disabled={busy} onClick={() => void start()}>
-            தொடங்கு
+          <button type="button" class="f-btn gold big shine" disabled={busy} onClick={() => void start()}>
+            START
           </button>
         </>
       ) : (
@@ -583,7 +603,7 @@ function Join(props: { code: string; onReady: () => void; onIn: (token: string, 
           <p class="f-lead">{state.problem}</p>
           {current() && (
             <button type="button" class="f-btn ghost" onClick={() => location.replace(location.pathname)}>
-              பின் செல்
+              Back
             </button>
           )}
         </>

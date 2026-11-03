@@ -15,8 +15,9 @@ import { Dashes, firstName, Flame, Icon, Owl, OwlBadge, problemWords, Tag, type 
 
 const SL = 330 * 60_000;
 const DAY = 86_400_000;
-const DAY_TA = ["திங்கள்", "செவ்வாய்", "புதன்", "வியாழன்", "வெள்ளி", "சனி", "ஞாயிறு"];
-const DAY_S = ["தி", "செ", "பு", "வி", "வெ", "ச", "ஞா"];
+/** Days and times in English, as every phone and calendar shows them (his ask, 4 Nov 2026: "M for Monday"). */
+export const DAY_EN = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+export const DAY_S = ["M", "T", "W", "T", "F", "S", "S"];
 const MONTH = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /** Sri Lanka now: the date ("2026-11-03"), minutes after midnight, the weekday (Monday = 0). */
@@ -37,11 +38,11 @@ export function clock(min: number): string {
 }
 /** A moment → its time of day in Sri Lanka. */
 const timeOf = (t: number) => clock(Math.floor(((((t + SL) % DAY) + DAY) % DAY) / 60_000));
-/** "2 மணி 10 நிமிடம்" */
+/** "2 h 10 min" */
 function span(mins: number): string {
   const h = Math.floor(mins / 60);
   const m = mins % 60;
-  return h > 0 ? `${h} மணி${m ? ` ${m} நிமிடம்` : ""}` : `${Math.max(1, m)} நிமிடம்`;
+  return h > 0 ? `${h} h${m ? ` ${m} min` : ""}` : `${Math.max(1, m)} min`;
 }
 
 // ---- Today's class ----
@@ -57,17 +58,17 @@ function TodayCard(props: { cls: FamilyClasses | null; me: FamilyMe | null; now:
   let note: string | null = null;
   if (cls?.inClass) {
     live = true;
-    line = "இப்போது வகுப்பில்";
-    note = `${timeOf(cls.inClass)} முதல்${h ? ` · ${clock(h.to)} வரை` : ""}`;
+    line = "In class now";
+    note = `since ${timeOf(cls.inClass)}${h ? ` · till ${clock(h.to)}` : ""}`;
   } else if (came?.inAt) {
-    line = "இன்றைய வகுப்பு முடிந்தது";
+    line = "Today's class ✓";
     note = `${timeOf(came.inAt)} – ${came.outAt ? timeOf(came.outAt) : "…"}`;
   } else if (h && t.min < h.from) {
-    line = `இன்று ${clock(h.from)} – ${clock(h.to)}`;
-    note = `இன்னும் ${span(h.from - t.min)}`;
+    line = `Today ${clock(h.from)} – ${clock(h.to)}`;
+    note = `in ${span(h.from - t.min)}`;
   } else if (h && t.min < h.to) {
-    line = "இப்போது வகுப்பு நடக்கிறது";
-    note = `${clock(h.to)} வரை`;
+    line = "Class is on now";
+    note = `till ${clock(h.to)}`;
   } else if (cls) {
     // The next class: one of his usual days first, else any day the class is open.
     const usual = cls.usual ?? [];
@@ -76,7 +77,7 @@ function TodayCard(props: { cls: FamilyClasses | null; me: FamilyMe | null; now:
         const wd = (t.wd + k) % 7;
         const x = hours[wd];
         if (x && (!pass || usual.includes(wd))) {
-          line = `அடுத்த வகுப்பு: ${k === 1 ? "நாளை" : DAY_TA[wd]}`;
+          line = `Next class: ${k === 1 ? "Tomorrow" : DAY_EN[wd]}`;
           note = `${clock(x.from)} – ${clock(x.to)}`;
         }
       }
@@ -87,7 +88,7 @@ function TodayCard(props: { cls: FamilyClasses | null; me: FamilyMe | null; now:
   const w = me?.worlds.find((x) => x.now) ?? null;
   const inClassToday = (props.today ?? []).filter((x) => x.k === "level" && x.how !== "home").length;
   return (
-    <section class={`f-today rise${live ? " live" : ""}`} aria-label="இன்றைய வகுப்பு · Today's class">
+    <section class={`f-today rise${live ? " live" : ""}`} aria-label="Today's class">
       <div class="f-today-w">
         <p class="f-today-l">
           {live && <i class="f-livedot" aria-hidden="true" />}
@@ -102,15 +103,15 @@ function TodayCard(props: { cls: FamilyClasses | null; me: FamilyMe | null; now:
               <small>
                 Stage {w.no}
                 {w.book ? ` · ${levelsDone(w)}/${w.levels.length}` : ""}
-                {inClassToday ? ` · இன்று ${inClassToday} Level${inClassToday > 1 ? "s" : ""}` : ""}
+                {inClassToday ? ` · ${inClassToday} Level${inClassToday > 1 ? "s" : ""} today` : ""}
               </small>
             </span>
           </>
         ) : (
-          <b class="f-today-t">ARISTORA வகுப்பு</b>
+          <b class="f-today-t">ARISTORA class</b>
         )}
       </div>
-      <Owl mood={live ? "happy" : "idle"} class="today" />
+      <Owl mood={live ? "happy" : "idle"} class="today" still />
       {w?.book && (
         <button type="button" class="f-today-go" aria-label={`Stage ${w.no}`} onClick={() => props.onStage(w.unitId)}>
           <Icon name="play" size={20} class="fill" />
@@ -130,7 +131,7 @@ function GoalCard(props: { me: FamilyMe | null; onPlay: () => void; onLearn: () 
   return (
     <section class={`f-goal f-card rise${s.today ? " lit" : ""}`}>
       <div class="f-goal-w">
-        <p class="f-kicker">இன்றைய இலக்கு · Today</p>
+        <p class="f-kicker">Today's goal</p>
         {next ? (
           <>
             <b class="f-goal-t">
@@ -151,12 +152,12 @@ function GoalCard(props: { me: FamilyMe | null; onPlay: () => void; onLearn: () 
         </p>
       </div>
       {next ? (
-        <button type="button" class="f-btn gold f-goal-b" onClick={props.onPlay}>
+        <button type="button" class={`f-btn gold f-goal-b${s.today ? "" : " shine"}`} onClick={props.onPlay}>
           START
         </button>
       ) : (
         <button type="button" class="f-btn ghost f-goal-b" onClick={props.onLearn}>
-          கற்க
+          Learn
         </button>
       )}
     </section>
@@ -182,7 +183,7 @@ function itemLook(x: DayItem): { icon: IconName; b: string; s: string } {
       ? { icon: "home", b: `Level ${x.n}${xp}`, s: `Stage ${x.no} · வீட்டில், phone இல்` }
       : { icon: "check", b: `Level ${x.n}${xp}`, s: `Stage ${x.no} · வகுப்பில் திருத்தப்பட்டது` };
   }
-  return x.k === "in" ? { icon: "in", b: "வகுப்புக்கு வந்தாய்", s: "Signed in" } : { icon: "out", b: "வகுப்பிலிருந்து சென்றாய்", s: "Signed out" };
+  return x.k === "in" ? { icon: "in", b: "வகுப்புக்கு வந்தாய்", s: "" } : { icon: "out", b: "வகுப்பிலிருந்து சென்றாய்", s: "" };
 }
 
 function Timeline(props: { items: DayItem[] | undefined; err: string | null }) {
@@ -192,8 +193,8 @@ function Timeline(props: { items: DayItem[] | undefined; err: string | null }) {
   if (props.items.length === 0) {
     return (
       <div class="f-tl-none">
-        <Owl mood="sleep" class="tiny" />
-        <small>இந்த நாள் எதுவும் இல்லை · Nothing this day</small>
+        <Owl mood="sleep" class="tiny" still />
+        <small>இந்த நாள் எதுவும் இல்லை</small>
       </div>
     );
   }
@@ -227,7 +228,7 @@ function Recent(props: { list: ClassDay[]; sel: string; onSel: (day: string) => 
           <li key={c.day}>
             <button type="button" class={`f-rc${props.sel === c.day ? " on" : ""}`} onClick={() => props.onSel(c.day)}>
               <span class="f-rc-d">
-                <small>{DAY_S[p.wd]}</small>
+                <small>{DAY_EN[p.wd]}</small>
                 <b>{p.date}</b>
               </span>
               <span class="f-rc-w">
@@ -235,7 +236,7 @@ function Recent(props: { list: ClassDay[]; sel: string; onSel: (day: string) => 
                   {timeOf(c.inAt)} – {c.outAt ? timeOf(c.outAt) : "…"}
                 </b>
                 <small>
-                  {c.levels ? `${c.levels} Level${c.levels > 1 ? "s" : ""}` : "Level இல்லை"}
+                  {c.levels ? `${c.levels} Level${c.levels > 1 ? "s" : ""}` : "No Levels"}
                   {c.teachers.length ? ` · ${c.teachers.join(", ")}` : ""}
                 </small>
               </span>
@@ -310,7 +311,7 @@ export function HomeTab(props: { top: ComponentChildren; me: FamilyMe | null; on
         <div class="f-greet rise">
           <div>
             <p class="f-kicker">
-              {DAY_TA[t.wd]} · {tp.date} {tp.month}
+              {DAY_EN[t.wd]} · {tp.date} {tp.month}
             </p>
             <h1 class="f-title">வணக்கம்{name ? `, ${firstName(name)}` : ""}!</h1>
           </div>
@@ -319,9 +320,9 @@ export function HomeTab(props: { top: ComponentChildren; me: FamilyMe | null; on
       </header>
       <TodayCard cls={cls} me={me} now={now} today={days[t.day]} onStage={props.onStage} />
       <GoalCard me={me} onPlay={props.onPlay} onLearn={props.onLearn} />
-      <section class="f-sched f-card rise" aria-label="வகுப்பு வாரம் · Class week">
+      <section class="f-sched f-card rise" aria-label="Class week">
         <h2 class="f-h2">
-          <Icon name="cal" size={19} /> வகுப்பு வாரம் <small>Class week</small>
+          <Icon name="cal" size={19} /> Class week
         </h2>
         <div class="f-weekstrip" role="group">
           {week.map((day, i) => {
@@ -332,7 +333,7 @@ export function HomeTab(props: { top: ComponentChildren; me: FamilyMe | null; on
                 key={day}
                 class={`f-wd${day === t.day ? " today" : ""}${day === sel ? " sel" : ""}${came ? " came" : ""}${hours[i] ? " open" : ""}${usual.includes(i) ? " usual" : ""}`}
                 aria-pressed={day === sel}
-                aria-label={`${DAY_TA[i]} ${partsOf(day).date}`}
+                aria-label={`${DAY_EN[i]} ${partsOf(day).date}`}
                 onClick={() => pick(day)}
               >
                 <small>{DAY_S[i]}</small>
@@ -344,31 +345,31 @@ export function HomeTab(props: { top: ComponentChildren; me: FamilyMe | null; on
         </div>
         <p class="f-dayhours">
           <b>
-            {sel === t.day ? "இன்று" : `${DAY_TA[sp.wd]} ${sp.date} ${sp.month}`}
+            {sel === t.day ? "Today" : `${DAY_EN[sp.wd]} ${sp.date} ${sp.month}`}
           </b>
           {sh ? (
             <span>
-              வகுப்பு {clock(sh.from)} – {clock(sh.to)}
-              {usual.includes(sp.wd) && <Tag tone="yellow" class="f-usual">உன் நாள்</Tag>}
+              Class {clock(sh.from)} – {clock(sh.to)}
+              {usual.includes(sp.wd) && <Tag tone="violet" class="f-usual">Your day</Tag>}
             </span>
           ) : (
-            <span class="f-muted">வகுப்பு இல்லை</span>
+            <span class="f-muted">No class</span>
           )}
         </p>
         {!future && <Timeline items={days[sel]} err={err} />}
         <p class="f-legend" aria-hidden="true">
           <span>
-            <i class="came" /> வந்த நாள்
+            <i class="came" /> You came
           </span>
           <span>
-            <i class="usual" /> உன் வழக்கமான நாள்
+            <i class="usual" /> Your usual day
           </span>
         </p>
       </section>
       {recent.length > 0 && (
         <section class="f-recentbox rise">
           <h2 class="f-h2 out">
-            <Icon name="clock" size={19} /> கடந்த வகுப்புகள் <small>Last classes</small>
+            <Icon name="clock" size={19} /> Last classes
           </h2>
           <Recent
             list={recent}

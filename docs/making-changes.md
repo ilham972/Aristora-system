@@ -227,9 +227,28 @@ EOF
   two owls must never share a clipPath id. Colours: `--owl-*` in `:root`.
 - **No green in the family app** (his ask): ✓ is blue (`--right`), avatars use `hueOf`'s palette. Its words for
   students: a term is a World, a unit is a Stage (teachers' screens say "Open every Stage" too), levels are Levels.
-- **Look at the family app without npm**: esbuild is in `/opt/npm-tools`; Preact's source and Barlow can come from
-  GitHub (git clone works when the npm registry doesn't); a fake `window.__ARISTORA_TEST_BACKEND__` answers its calls.
-  The GitHub check is still the judge (typecheck, tests, the real build).
+- **The family app's colours each have one meaning** (4 Nov 2026, `:root` of `family.css`): violet = the app, gold =
+  START and wins, flame = days in a row, gem pink = XP, blue = right, rose = wrong. A new piece picks the colour of its
+  meaning; never a big flat gold or pink surface, never gold behind the owl (that fight was his complaint). The owl is
+  white inside `.f-hero` and `.f-today` (violet), light violet elsewhere.
+- **The family app's words** (4 Nov 2026): English for chrome and game words (tabs, buttons, days M T W T F S S, times,
+  labels, World/Stage/Level/XP), Tamil for the owl's voice and every sentence; never one thing in both languages. No
+  letter-spacing on Tamil (kickers are English only). The run-through finds buttons by these words: change both.
+- **The family app's font** (`src/family/fonts/baloo-thambi-2.woff2`, OFL): Baloo Thambi 2 from `google/fonts`
+  (`ofl/baloothambi2/BalooThambi2[wght].ttf`; clone with `--filter=blob:none --no-checkout --depth 1` and a sparse
+  checkout of that folder, the whole repo is gigabytes), cut with fontTools: `fonttools varLib.instancer F wght=500:800`
+  then `pyftsubset` with `--unicodes="U+0020-007E,U+00A0,U+00B2-00B3,U+00B7,U+00D7,U+0B80-0BFF,U+200B-200D,U+2013-2014,
+  U+2018-201D,U+2022,U+2026,U+2212,U+25CC" --layout-features="ccmp,locl,akhn,rphf,pref,blwf,half,pstf,abvf,pres,abvs,
+  blws,psts,haln,cjct,nukt,init,calt,liga,rlig,kern,dist,mark,mkmk,abvm,blwm,tnum" --flavor=woff2` (~57 KB; Tamil's
+  shaping needs the layout features). A sign it lacks (✓ ✗ ✍ ⌫ →) falls back to the phone's font. Weights 500–800
+  only: use 500 for body, 700 bold, 800 display. The page preloads it (`%FONT%`, filled by `scripts/build.mjs`).
+- **Motion in the family app is transform and opacity only** (no animated box-shadow, blur or layout): a cheap Redmi
+  stays smooth. A small owl is `still` (only its mood moves): a living owl is eight SVG animations repainted on the
+  main thread. Loops only where the eye should go (the header's owl, START's halo, a waiting START's light).
+- **Look at the family app**: `npm ci` works here now (4 Nov 2026), so `npm run build` and the run-throughs run as on
+  GitHub (`SHOTS=<scratchpad>/shots npx vitest run -c vitest.e2e.config.ts tests/e2e/family.e2e.ts`, ~45 s; `fam*`
+  shots at 360 and 320 px). Without packages: esbuild is in `/opt/npm-tools`, Preact's source can come from GitHub,
+  and a fake `window.__ARISTORA_TEST_BACKEND__` answers its calls. The GitHub check is still the judge.
 - **A new extra permission** (like `feedback`): `convex/schema.ts` `extra`, `convex/lib/auth.ts` (`Extra`, `EXTRAS`,
   `PERM_WORDS`), `src/store.ts` `Extra`, `src/settings.tsx` `EXTRA_NAMES`/`EXTRA_HELP` (typecheck refuses until all
   are there). The owner gets it by himself (`EXTRAS`).

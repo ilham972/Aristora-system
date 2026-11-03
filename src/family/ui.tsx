@@ -1,6 +1,6 @@
-// The family app's small shared pieces: its icons (drawn here, the same on every phone), the owl and its moods, the
-// flame (days in a row) and the gem (XP), the sparkles and the yellow burst, the toast, the bottom sheet, the count-up,
-// the trophies' names, and a few words.
+// The family app's small shared pieces: its icons (drawn here, the same on every phone), the owl and its moods (on a
+// soft glow in headers), the flame (days in a row) and the gem (XP), the toast, the bottom sheet, the count-up and the
+// rolling number, the trophies' names, and a few words.
 
 import type { ComponentChildren } from "preact";
 import { useEffect, useState } from "preact/hooks";
@@ -103,31 +103,6 @@ export function Gem(props: { size?: number }) {
   );
 }
 
-/** A small four-pointed sparkle (decoration). */
-export function Sparkle(props: { class?: string; size?: number }) {
-  const n = props.size ?? 14;
-  return (
-    <svg class={`f-sparkle ${props.class ?? ""}`} viewBox="0 0 24 24" width={n} height={n} aria-hidden="true">
-      <path d="M12 1.5Q12.9 11.1 22.5 12 12.9 12.9 12 22.5 11.1 12.9 1.5 12 11.1 11.1 12 1.5z" />
-    </svg>
-  );
-}
-
-/** The yellow sun-burst behind the owl in a header (slowly turning). */
-export function Burst(props: { class?: string }) {
-  const pts: string[] = [];
-  for (let i = 0; i < 28; i++) {
-    const r = i % 2 ? 37 : 50;
-    const a = (Math.PI * i) / 14;
-    pts.push(`${(50 + r * Math.cos(a)).toFixed(1)},${(50 + r * Math.sin(a)).toFixed(1)}`);
-  }
-  return (
-    <svg class={`f-burst ${props.class ?? ""}`} viewBox="0 0 100 100" aria-hidden="true">
-      <polygon points={pts.join(" ")} />
-    </svg>
-  );
-}
-
 // ---- The owl: the loading page's own drawing (public/splash.html), kept when the app starts, in our light purple,
 // with moods. Mood marks drawn inside the head turn with it; the rest sit around it. ----
 
@@ -172,17 +147,18 @@ function owlFor(mood: Mood, id: number): string {
     .replace(/<\/svg>\s*$/, `${ROUND[mood]}</svg>`);
 }
 
-export function Owl(props: { mood?: Mood; class?: string }) {
+/** The owl. `still`: only its mood moves (small owls; a few living owls at once is what a cheap phone can afford). */
+export function Owl(props: { mood?: Mood; class?: string; still?: boolean }) {
   const [id] = useState(() => ++owlSeq);
-  if (!owlSvg) return <img class={`f-owl-img ${props.class ?? ""}`} src="/icon.svg" alt="" />;
-  return <span class={`f-owl ${props.class ?? ""}`} aria-hidden="true" dangerouslySetInnerHTML={{ __html: owlFor(props.mood ?? "idle", id) }} />;
+  const cls = `${props.class ?? ""}${props.still ? " still" : ""}`;
+  if (!owlSvg) return <img class={`f-owl-img ${cls}`} src="/icon.svg" alt="" />;
+  return <span class={`f-owl ${cls}`} aria-hidden="true" dangerouslySetInnerHTML={{ __html: owlFor(props.mood ?? "idle", id) }} />;
 }
 
-/** The owl on its yellow burst (a header's illustration). */
+/** The owl on a soft glow (a header's picture, a moment): white on violet, light violet on white. */
 export function OwlBadge(props: { mood?: Mood; class?: string }) {
   return (
     <span class={`f-owlbadge ${props.class ?? ""}`}>
-      <Burst />
       <Owl mood={props.mood} />
     </span>
   );
@@ -192,7 +168,7 @@ export function OwlBadge(props: { mood?: Mood; class?: string }) {
 export function OwlSays(props: { mood?: Mood; children: ComponentChildren; class?: string }) {
   return (
     <div class={`f-owlsays ${props.class ?? ""}`}>
-      <Owl mood={props.mood ?? "happy"} class="say" />
+      <Owl mood={props.mood ?? "happy"} class="say" still />
       <p class="f-bubble">{props.children}</p>
     </div>
   );
@@ -202,7 +178,7 @@ export function OwlSays(props: { mood?: Mood; children: ComponentChildren; class
 export function Waiting() {
   return (
     <div class="f-center">
-      <Owl mood="think" class="mid" />
+      <Owl mood="think" class="mid" still />
     </div>
   );
 }
@@ -225,9 +201,16 @@ export function Avatar(props: { name: string; size?: "s" | "m" | "l" }) {
   );
 }
 
-/** A small slanted label ("STAGE 4", "PERSONAL BEST"). */
-export function Tag(props: { children: ComponentChildren; tone?: "pink" | "yellow" | "white"; class?: string }) {
-  return <span class={`f-tag ${props.tone ?? "pink"} ${props.class ?? ""}`}>{props.children}</span>;
+/** A header's title size by its longest word (a Tamil word never breaks in the middle: a long one gets a smaller
+ *  size instead). Counted in characters, as Tamil letters with their marks take two or three. */
+export function titleSize(text: string): string {
+  const longest = Math.max(0, ...text.split(/\s+/).map((w) => [...w].length));
+  return longest > 15 ? " longer" : longest > 9 ? " long" : "";
+}
+
+/** A small label: "STAGE 4" on a header (glass), a win ("PERSONAL BEST", "7 IN A ROW": gold), a note (violet). */
+export function Tag(props: { children: ComponentChildren; tone?: "glass" | "gold" | "violet"; class?: string }) {
+  return <span class={`f-tag ${props.tone ?? "violet"} ${props.class ?? ""}`}>{props.children}</span>;
 }
 
 /** Dashes for progress (the header's "3 of 8"). */
@@ -285,6 +268,19 @@ export function Sheet(props: { title: string; sub?: string; onClose: () => void;
   );
 }
 
+/** A number that rolls from one value to the next (his days in a row, yesterday's → today's). */
+export function Roll(props: { from: number; to: number }) {
+  if (props.from === props.to) return <span>{props.to}</span>;
+  return (
+    <span class="f-roll" aria-label={String(props.to)}>
+      <span aria-hidden="true">
+        <i>{props.from}</i>
+        <i>{props.to}</i>
+      </span>
+    </span>
+  );
+}
+
 /** A number that counts up from 0 (the reveal). */
 export function useCount(to: number, ms = 900, delay = 0): number {
   const [n, setN] = useState(0);
@@ -303,18 +299,19 @@ export function useCount(to: number, ms = 900, delay = 0): number {
   return n;
 }
 
-// ---- Trophies: their names, pictures and how to win them (the rules: convex/lib/family.ts trophiesOf) ----
+// ---- Trophies: their names (game words: English), pictures, and how to win them (a sentence: Tamil). The rules:
+// convex/lib/family.ts trophiesOf ----
 
-export const TROPHY: Record<Trophy, { glyph: string; ta: string; how: string }> = {
-  first: { glyph: "1", ta: "முதல் Level", how: "ஒரு Level முடி" },
-  streak3: { glyph: "3", ta: "3 நாள் தொடர்", how: "3 நாள் தொடர்ந்து ஒரு Level" },
-  streak7: { glyph: "7", ta: "7 நாள் தொடர்", how: "ஒரு வாரம் முழுதும்" },
-  streak30: { glyph: "30", ta: "30 நாள் தொடர்", how: "ஒரு மாதம் முழுதும்" },
-  perfect: { glyph: "✓", ta: "எல்லாம் சரி", how: "ஒரு Level இல் எல்லா XP உம்" },
-  perfect5: { glyph: "5✓", ta: "5 முறை எல்லாம் சரி", how: "5 Levels இல் எல்லா XP உம்" },
-  world: { glyph: "★", ta: "Stage வெற்றி", how: "ஒரு Stage முழுதும் முடி" },
-  xp100: { glyph: "100", ta: "100 XP வாரம்", how: "ஒரு வாரத்தில் 100 XP" },
-  xp300: { glyph: "300", ta: "300 XP வாரம்", how: "ஒரு வாரத்தில் 300 XP" },
+export const TROPHY: Record<Trophy, { glyph: string; name: string; how: string }> = {
+  first: { glyph: "1", name: "First Level", how: "ஒரு Level முடி" },
+  streak3: { glyph: "3", name: "3-day streak", how: "3 நாள் தொடர்ந்து ஒரு Level" },
+  streak7: { glyph: "7", name: "7-day streak", how: "ஒரு வாரம் முழுதும்" },
+  streak30: { glyph: "30", name: "30-day streak", how: "ஒரு மாதம் முழுதும்" },
+  perfect: { glyph: "✓", name: "Perfect", how: "ஒரு Level இல் எல்லா XP உம்" },
+  perfect5: { glyph: "5✓", name: "5 × Perfect", how: "5 Levels இல் எல்லா XP உம்" },
+  world: { glyph: "★", name: "Stage clear", how: "ஒரு Stage முழுதும் முடி" },
+  xp100: { glyph: "100", name: "100 XP week", how: "ஒரு வாரத்தில் 100 XP" },
+  xp300: { glyph: "300", name: "300 XP week", how: "ஒரு வாரத்தில் 300 XP" },
 };
 
 /** In the server's order (TROPHIES): the Record above lists every one. */
@@ -333,7 +330,7 @@ export function Medal(props: { t: Trophy; won: boolean; fresh?: boolean }) {
           </i>
         )}
       </span>
-      <b class="f-medal-n">{x.ta}</b>
+      <b class="f-medal-n">{x.name}</b>
       <small class="f-medal-h">{x.how}</small>
     </div>
   );
