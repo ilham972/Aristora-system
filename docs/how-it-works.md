@@ -185,8 +185,8 @@ key"). The reader checks numbers, each question's marks and the grade. Own table
 sites. Final answer bold from `**…**`, never HTML; Books page K pill. A re-upload without a key keeps it.
 **One key per book** (`keys.stage`; a row without one = the workbook's, as before): `catalog.key {stage}`,
 `keyRow(ctx, unit, stage)` (the family app reads the workbook's). A theory book's key (topic tutes) shows on
-Correction's Fighter card, Evaluation (`AnswerKey stage`) and Theory's teacher questions; without one: "Check his
-answer in his notebook" (no fetch). Books page **K** = every book of the unit in the app has its key.
+Correction's Fighter card, Evaluation and Theory's teacher questions (`CardAnswer stage` in `src/qcard.tsx`); without
+one: "Check his answer in his notebook" (no fetch). Books page **K** = every book of the unit in the app has its key.
 
 **OL: the O/L books (1 Nov 2026, his O/L tracker sheet).** A "grade" of books, not of students: grade 12 shown as
 **OL** (`OL`, `gradeName`, `gradeWords`), its 53 topics seeded once from his sheet (`setup.ensure` step 4,
@@ -212,9 +212,9 @@ sheets; the printed number = the card's `qn`; footers and side tabs out) and the
 takes the old ones away; the server refuses anything that runs, loads or posts: `unsafeHtml`/`unsafeCss`). Own
 tables `questions` (unit, stage, q, html) and `bookCss`, `books.qCount`; gone when a re-upload changes the book's
 questions (`bookShape`). Read one at a time (`catalog.question`, `catalog.bookCss`) under Correction's, Evaluation's
-and Theory's question card: **Show the question** (`QuestionToggle`, `src/bookQuestion.tsx`; always there, pale with
-no text in the app; on Correction's card since 2 Nov 2026 a small page icon in the card's top line, only when the book
-has its questions: `useQuestionShown` + `QuestionIcon`; stays open from question to question) draws it in a **shadow root** (the book's `.qn .band .sq`
+and Theory's question card: a small page icon in the card's top line (Correction since 2 Nov 2026, Evaluation and
+Theory since 3 Nov), only when the book has its questions (`useQuestionShown` + `QuestionIcon`, `src/bookQuestion.tsx`;
+stays open from question to question); teaching mode shows it big (below). It draws it in a **shadow root** (the book's `.qn .band .sq`
 never meet the app's), cleaned again (`safeFragment`), figures and tables wider than the phone zoomed down, working
 space hidden. Books page **Q** = every book has its questions. Old zips: upload them again once (no new chat).
 
@@ -248,9 +248,12 @@ shared `src/roomkit.tsx`) in Theory's blue (`.tpx-page`).
 - **What to teach** (`theorySquares`): Correction's squares, each question ONCE for everyone with her who needs it
   ("D·23 ×2"): one lesson after another (the most students first); a section's teach questions in book order (they
   build on each other), a workbook's the most shared first, the whole unit last. Nobody here yet: those on the way;
-  nobody called: the picked lesson's (to prepare). One at a time (`.fc-card`): the section's letter and Tamil title, or
-  the unit; who needs it (workbook: "Malik 0/2 · Evaluation 12m" = what he got and who sent it); the answer
-  (`AnswerKey`, workbooks). **Fixed at the bottom** (`.fc-pad`): **Not reached** and the big **✓ Taught** ("for 2"):
+  nobody called: the picked lesson's (to prepare). One at a time, **Correction's card** (3 Nov 2026, his ask;
+  `CardHead` in `src/qcard.tsx`): one top line = the number as a dark pill, the section's letter and Tamil title or the
+  unit (`.tpx-what`), teaching mode's whiteboard icon and the printed question's icon; under it who needs it
+  (workbook: "Malik 0/2 · Evaluation 12m" = what he got and who sent it); then **the answer big** (`CardAnswer`:
+  a workbook's key, a theory book's when its key is in the app; else "The teacher's question of his book: teach it,
+  then the next."). **Fixed at the bottom** (`.fc-pad`): **Not reached** and the big **✓ Taught** ("for 2"):
   one tap = that decision for everyone with her who needs it (tap again = undo), then the next open question. Arrived
   opens the first open question (on both pages). The rows keep the picked pill in view when they re-rank.
 - **Done** (`theoryFinish`): a section: the teach questions marked Taught (`calls.finish` `taught`; Not reached stay his,
@@ -313,8 +316,10 @@ shared `src/roomkit.tsx`) in Theory's blue (`.tpx-page`).
 - **The questions** (`sessionQs`): Correction's squares (`.fc-strip .fc-sq`): each question ONCE for everyone with her
   who has it, the most shared first (×2); one per BOOK (key `bookKey:q`: a unit's theory book and its workbook each
   keep their own Q22; with both on screen the theory book's squares carry the section letter, "C·22"); before anyone comes, the picked group's (to prepare). One question at a
-  time like Correction's card (`.fc-card`, `.fc-qn`): who has it with his marks ("Vimal 0/2"), the answer (`EvalKey`:
-  `catalog.key` while open; theory books: "Check his answer in his notebook."). **Fixed at the bottom** (Correction's
+  time, **Correction's card** (3 Nov 2026, his ask; `CardHead` in `src/qcard.tsx`): one top line = the number as a
+  dark pill, who has it with his marks ("Vimal 0/2", `.fc-qmeta.evx-who`, two lines at most), teaching mode's
+  whiteboard icon and the printed question's icon; then **the answer big** (`CardAnswer`: `catalog.key` while open,
+  fitted like Correction's; theory books without a key: "Check his answer in his notebook."). **Fixed at the bottom** (Correction's
   pad, `.fc-pad`): **→ Theory** and **Not now** side by side, the big **✓ Explained** ("for 2"): one tap = that
   decision for everyone with her who has it (tap again = undo), then the next open question. Pale until someone
   arrived. Squares: ✓ explained, T Theory, – not now, amber = some done.
@@ -325,6 +330,21 @@ shared `src/roomkit.tsx`) in Theory's blue (`.tpx-page`).
   (`reteach`); workbook → `workbook.toTheory` first.
 - At the end: today's score (`TodayStrip compact`) and who went home with levels to correct (`GoneHome`). Toasts sit
   above the pad (`body.evx-on`).
+
+**Teaching mode (Theory and Evaluation, 3 Nov 2026, his ask: teach from the whiteboard looking at the phone instead
+of walking to his book; `TeachMode` in `src/qcard.tsx`).** The whiteboard icon on the card's top line (`.fc-tmb`, in
+the room's colour) opens the question full screen (`.tm`, z-index 40: over the top bar and the tabs, under sheets and
+toasts): on top the book (`LessonName`: grade, unit, Tamil; a theory book's section: "13·D" and its Tamil title) and
+Done N when everyone with her is decided (sends them back like the page's Done; with nobody left it closes); the
+page's own squares; the card: the number pill and who has it, **the question as printed** (`PrintedQuestion`, the
+shadow root zoomed ×1.25, ×1.12 under 340 px; a book without its questions in the app: "look at his book", and the
+owner uploads its zip again), **the answer big** (up to 72 px), the page's notes; at the bottom **the page's own
+buttons** (Explained / → Theory / Not now; Taught / Not reached): a tap = the same decision for everyone with her, then
+the next question, so nothing has to be tapped twice (his first idea, a Next button only, would have left every
+question undecided and Done dark). Nobody with her yet (getting ready): only **Next question ›** (the next square;
+none with one square). The page's card and pad step aside while it is open; the phone's Back closes it (one history
+step, `popstate`), so does ×; it closes by itself when nothing is on her screen. Not on Correction (his call: the book
+is in her hand, and a corrector who teaches makes the queue longer).
 
 **The rows show her room's book (Theory and Evaluation, 31 Oct 2026, his screenshot).** The bug: Raza and Umair
 (Grade 9 fractions) were with Evaluation, but the rows said Grade 8 unit 1, Grade 9 was pale and could not be tapped,

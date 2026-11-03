@@ -1,0 +1,216 @@
+// The question card's pieces, shared by Correction, Evaluation and Theory (3 Nov 2026, his ask: Evaluation's and
+// Theory's cards like Correction's), and teaching mode: the question as printed and its answer, full screen, so a
+// teacher teaches from the whiteboard looking at her phone instead of walking to his book.
+// - CardHead: one top line: the question's number as a dark pill, a short line (marks, who, the section), then the
+//   tools: ‹ back (Correction), teaching mode, the printed question's icon.
+// - CardAnswer: the answer from the key, big (src/bigAnswer.tsx), fetched while it is open; a note in its place when
+//   there is none.
+// - TeachButton / TeachMode / PrintedQuestion: the full-screen view and what it shows. The page keeps its state: the
+//   view shows the page's own squares and buttons (Explained / Taught = the next question, as on the page).
+
+import type { ComponentChildren } from "preact";
+import { useEffect, useRef } from "preact/hooks";
+import { api } from "../convex/_generated/api";
+import type { Id } from "../convex/_generated/dataModel";
+import type { KeyAnswer } from "../convex/lib/key";
+import { BigAnswer } from "./bigAnswer";
+import { BookQuestion, QuestionIcon, type useQuestionShown } from "./bookQuestion";
+import { useQuery } from "./live";
+import { bookDocAt } from "./store";
+
+type Stage = "fighter" | "master";
+
+/**
+ * The card's top line (2 Nov 2026, his ask: the answer gets the room): the number as a dark pill, a short line, then
+ * ‹ back, teaching mode and the printed question's icon (only when the book's questions are in the app).
+ */
+export function CardHead(props: {
+  label: string;
+  n: ComponentChildren;
+  meta: ComponentChildren;
+  /** Extra class on the short line ("evx-who": the names may take two lines). */
+  metaCls?: string;
+  back?: { label: string; short: string; go: () => void } | null;
+  shown?: ReturnType<typeof useQuestionShown>;
+  onTeach?: () => void;
+}) {
+  return (
+    <div class="fc-qhead">
+      <span class="fc-qn" aria-hidden="true">
+        {props.n}
+      </span>
+      <span class={`fc-qmeta${props.metaCls ? ` ${props.metaCls}` : ""}`}>{props.meta}</span>
+      <span class="fc-qtools">
+        {props.back && (
+          <button type="button" class="fc-back" aria-label={`Back to ${props.back.label}`} onClick={props.back.go}>
+            ‹ {props.back.short}
+          </button>
+        )}
+        {props.onTeach && <TeachButton q={props.label} onOpen={props.onTeach} />}
+        {props.shown && <QuestionIcon q={props.label} shown={props.shown} />}
+      </span>
+    </div>
+  );
+}
+
+/** The question's number as Correction's pill shows it: "Q" small, then the number; a book's own label ("2016") as is. */
+export function QPill(props: { label: string }) {
+  const m = /^Q(\d+)$/.exec(props.label);
+  return m ? (
+    <>
+      <small>Q</small>
+      {m[1]}
+    </>
+  ) : (
+    <>{props.label}</>
+  );
+}
+
+/**
+ * One question's answer, big, from its book's key (teachers only; fetched while the card is open). A theory book
+ * without a key: `noKey` (Evaluation: check his notebook; "" = nothing, when a note above already says it), nothing
+ * fetched.
+ */
+export function CardAnswer(props: { unitId: string; q: number; stage: Stage; noKey?: string; max?: number; maxH?: number; hasKey?: boolean }) {
+  if (props.stage === "fighter" && !(props.hasKey ?? !!bookDocAt(props.unitId, "fighter")?.keyCount)) {
+    return props.noKey === "" ? null : <p class="fc-anote">{props.noKey ?? "Check his answer in his notebook."}</p>;
+  }
+  return <KeyFetch {...props} />;
+}
+
+function KeyFetch(props: { unitId: string; q: number; stage: Stage; noKey?: string; max?: number; maxH?: number; hasKey?: boolean }) {
+  const keyQ = useQuery<{ answers: KeyAnswer[] } | null>(api.catalog.key, { unitId: props.unitId as Id<"units">, stage: props.stage });
+  if (keyQ === undefined) return <p class="fc-anote">Loading the answer…</p>;
+  const k = keyQ?.answers.find((a) => a.q === props.q);
+  if (!k) {
+    const words =
+      keyQ === null
+        ? props.stage === "fighter"
+          ? (props.noKey ?? "Check his answer in his notebook.")
+          : "No answer key for this workbook yet."
+        : "This question isn't in the answer key.";
+    return <p class="fc-anote">{words}</p>;
+  }
+  return k.parts?.length ? (
+    <ul class="fc-parts">
+      {k.parts.map((p, j) => (
+        <li key={j} class="fc-part">
+          <em class="fc-pl">{p.p}</em>
+          <BigAnswer text={p.a} max={Math.round((props.max ?? 64) * 0.7)} maxH={Math.round((props.maxH ?? 150) * 0.75)} />
+        </li>
+      ))}
+    </ul>
+  ) : (
+    <BigAnswer text={k.a ?? ""} max={props.max} maxH={props.maxH} />
+  );
+}
+
+/** Teaching mode's button on a card: a whiteboard on its stand. */
+export function TeachButton(props: { q: string; onOpen: () => void }) {
+  return (
+    <button type="button" class="fc-tmb" aria-label={`Teaching mode: ${props.q} and its answer, full screen`} onClick={props.onOpen}>
+      <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3.5" width="18" height="12" rx="1.6" />
+        <path d="M8.5 21l3.5-5.5 3.5 5.5" />
+        <path d="M7 8h7M7 11.2h4.5" />
+      </svg>
+    </button>
+  );
+}
+
+/** The question as printed, big, in teaching mode; a note when the book's questions aren't in the app. */
+export function PrintedQuestion(props: { unitId: string | null | undefined; stage: Stage; q: number; inApp?: boolean }) {
+  const has = !!props.unitId && (props.inApp ?? (bookDocAt(props.unitId, props.stage)?.qCount ?? 0) > 0);
+  if (!has) {
+    return (
+      <p class="fc-anote tm-noq">
+        This book's questions aren't in the app yet: look at his book. <small>(Settings → Books: upload its zip again.)</small>
+      </p>
+    );
+  }
+  return (
+    <div class="tm-q">
+      <BookQuestion unitId={props.unitId!} stage={props.stage} q={props.q} />
+    </div>
+  );
+}
+
+/**
+ * Teaching mode: the whole screen (over the top bar and the tabs) until she closes it. The book on top (a theory
+ * book's section: its letter and Tamil title), the page's squares, then the card (the question as printed, the answer
+ * big) and the page's own buttons at the bottom. The phone's Back button closes it (Android). Done appears when
+ * everyone with her is decided.
+ */
+export function TeachMode(props: {
+  room: "evaluation" | "theory";
+  title: ComponentChildren;
+  /** What changes when another question opens: the card scrolls back to its top. */
+  at: string;
+  strip: ComponentChildren;
+  pad: ComponentChildren;
+  done?: { n: number; busy: boolean; onDone: () => void } | null;
+  onClose: () => void;
+  children: ComponentChildren;
+}) {
+  const close = useRef(props.onClose);
+  close.current = props.onClose;
+  const body = useRef<HTMLDivElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+
+  // The phone's Back button closes it: one history step while it is open, taken back when it closes another way.
+  useEffect(() => {
+    const prev = document.activeElement as HTMLElement | null;
+    const mark = `tm${Date.now()}`;
+    let popped = false;
+    try {
+      history.pushState({ ...(history.state ?? {}), tm: mark }, "");
+    } catch {
+      /* no history here */
+    }
+    const onPop = () => {
+      popped = true;
+      close.current();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close.current();
+    };
+    window.addEventListener("popstate", onPop);
+    document.addEventListener("keydown", onKey);
+    document.body.classList.add("tm-on");
+    panel.current?.focus();
+    return () => {
+      window.removeEventListener("popstate", onPop);
+      document.removeEventListener("keydown", onKey);
+      document.body.classList.remove("tm-on");
+      if (!popped && (history.state as { tm?: string } | null)?.tm === mark) history.back();
+      prev?.focus?.();
+    };
+  }, []);
+  useEffect(() => {
+    body.current?.scrollTo?.(0, 0);
+  }, [props.at]);
+
+  const d = props.done;
+  return (
+    <div class={`tm tm-${props.room}`} role="dialog" aria-modal="true" aria-label="Teaching mode" tabIndex={-1} ref={panel}>
+      <div class="tm-top">
+        <p class="tm-title">{props.title}</p>
+        {d && d.n > 0 && (
+          <button type="button" class="btn tm-done" disabled={d.busy} onClick={d.onDone}>
+            Done {d.n}
+          </button>
+        )}
+        <button type="button" class="icon-btn tm-x" aria-label="Close teaching mode" onClick={() => close.current()}>
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+            <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" />
+          </svg>
+        </button>
+      </div>
+      <div class="tm-strip">{props.strip}</div>
+      <div class="tm-body" ref={body}>
+        {props.children}
+        {props.pad}
+      </div>
+    </div>
+  );
+}

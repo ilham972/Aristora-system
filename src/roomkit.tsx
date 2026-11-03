@@ -7,20 +7,14 @@
 //   = no work now); pale at 0 (her room's stage never). BackToRoom: while she looks at another book, one tap shows
 //   her room's again. useHeld: a row in urgency order that holds still while she touches it.
 // - LessonName: a book the way he wants it: the grade as a small number, the unit number, the Tamil name.
-// - AnswerKey: one workbook question's answer (teachers only), fetched while it is open.
 // - LockIcon: her room is in use. usePinned: the pinned rows' height (toasts sit above the pad, never over it).
 
 import { gradeName, gradeWords } from "../convex/lib/syllabus";
 import { useEffect, useRef, useState } from "preact/hooks";
-import { api } from "../convex/_generated/api";
-import type { Id } from "../convex/_generated/dataModel";
 import type { SectionData } from "../convex/lib/book";
-import type { KeyAnswer } from "../convex/lib/key";
 import { heatWords } from "./deck";
 import { unitNo } from "./focusData";
-import { useQuery } from "./live";
-import { KeyLine } from "./master";
-import { bookDocAt, type Unit } from "./store";
+import type { Unit } from "./store";
 import { HOLD_MS, holdOrder, type HeatCount, type LessonKind, type PillOrder } from "./theoryFocusData";
 
 /**
@@ -170,31 +164,6 @@ export function LessonName(props: { unit: Unit | null; section: SectionData | nu
         {ta}
       </span>
     </>
-  );
-}
-
-/** The answer for one question (teachers only), fetched while it is open: the workbook's key, or the theory book's
- *  (a topic tute brings both). A theory book without a key asks for the notebook, without fetching anything. */
-export function AnswerKey(props: { unitId: string; q: number; stage?: "fighter" | "master" }) {
-  const stage = props.stage ?? "master";
-  const none = stage === "fighter" && !bookDocAt(props.unitId, "fighter")?.keyCount;
-  if (none) return <p class="muted small">Check his answer in his notebook.</p>;
-  return <KeyFetch unitId={props.unitId} q={props.q} stage={stage} />;
-}
-
-function KeyFetch(props: { unitId: string; q: number; stage: "fighter" | "master" }) {
-  const keyQ = useQuery<{ answers: KeyAnswer[] } | null>(api.catalog.key, { unitId: props.unitId as Id<"units">, stage: props.stage });
-  const k = keyQ?.answers.find((a) => a.q === props.q);
-  if (keyQ === undefined) return <p class="muted small">Loading the answer…</p>;
-  if (!k) {
-    const words = keyQ === null ? (props.stage === "fighter" ? "Check his answer in his notebook." : "No answer key for this workbook yet.") : "No answer for this question in the key.";
-    return <p class="muted small">{words}</p>;
-  }
-  return (
-    <div class="ev-key">
-      <small>Answer</small>
-      <KeyLine k={k} />
-    </div>
   );
 }
 

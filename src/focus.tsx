@@ -91,7 +91,8 @@ import { gradesOf } from "./grades";
 import { HRow } from "./hrow";
 import { useQuery } from "./live";
 import { MasterBook, TheorySheet } from "./master";
-import { BookQuestion, QuestionIcon, useQuestionShown } from "./bookQuestion";
+import { BookQuestion, useQuestionShown } from "./bookQuestion";
+import { CardHead } from "./qcard";
 import { BigAnswer } from "./bigAnswer";
 import { MoveSheet } from "./move";
 import { bookDocAt,
@@ -2062,35 +2063,6 @@ function TeachLine(props: { v: View; level: number; q: number }) {
 
 /** A Part II question: its parts' names (i, ii, ...). */
 const isPartTwo = (v: View, q: number) => (partOf(v.mb!, q)?.id ?? "").startsWith("II");
-
-/**
- * The card's top line (2 Nov 2026, his ask: the answer gets the room): the question's number as a dark pill, its marks,
- * then ‹ back and the printed question's icon (only when the book's questions are in the app).
- */
-function CardHead(props: {
-  label: string;
-  n: ComponentChildren;
-  meta: string;
-  back: { label: string; short: string; go: () => void } | null;
-  shown: ReturnType<typeof useQuestionShown>;
-}) {
-  return (
-    <div class="fc-qhead">
-      <span class="fc-qn" aria-hidden="true">
-        {props.n}
-      </span>
-      <span class="fc-qmeta">{props.meta}</span>
-      <span class="fc-qtools">
-        {props.back && (
-          <button type="button" class="fc-back" aria-label={`Back to ${props.back.label}`} onClick={props.back.go}>
-            ‹ {props.back.short}
-          </button>
-        )}
-        <QuestionIcon q={props.label} shown={props.shown} />
-      </span>
-    </div>
-  );
-}
 
 function QuestionCard(props: {
   v: View;

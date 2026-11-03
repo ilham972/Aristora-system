@@ -53,8 +53,9 @@ import { HRow } from "./hrow";
 import { MasterStrip } from "./master";
 import { useRoomDecisions } from "./roomDecisions";
 import { callAhead, evalPaceMs, freeIn, noteExplained, noteStart } from "./evalPace";
-import { AnswerKey, BackToRoom, GradeRow, KindBar, LockIcon, useHeld, usePinned } from "./roomkit";
-import { QuestionToggle } from "./bookQuestion";
+import { BackToRoom, GradeRow, KindBar, LockIcon, useHeld, usePinned } from "./roomkit";
+import { BookQuestion, useQuestionShown } from "./bookQuestion";
+import { CardAnswer, CardHead, PrintedQuestion, QPill, TeachMode } from "./qcard";
 import { scoreOf } from "./score";
 import { act, clearToasts, currentMe, currentRole, toast, type Board } from "./store";
 import { flushTaps } from "./taps";
@@ -118,6 +119,8 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
   const [at, setAt] = useState<string | null>(null);
   const [fileId, setFileId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Teaching mode (3 Nov 2026): the question as printed and its answer, full screen, with this page's own buttons.
+  const [teaching, setTeaching] = useState(false);
   // The pinned rows' height (the page ends where the pad sticks); toasts sit above the pad.
   const stick = usePinned("evx");
   useEffect(() => {
@@ -240,6 +243,12 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
   const canDecide = live && !!sq && sq.who.length > 0 && !busy;
   // Before anyone is called: who among those offered has the question on screen.
   const preview = sq && sq.who.length === 0 ? offers.filter((o) => o.v.pending.includes(sq.q) && o.v.unit?._id === sq.v.unit?._id).map((o) => o.v) : [];
+  // The book the question on her screen is from; its printed question under the card (the icon in its top line).
+  const sqStage: "fighter" | "master" = sq?.v.ms ? "master" : "fighter";
+  const printed = useQuestionShown(sq?.v.unit?._id, sqStage);
+  useEffect(() => {
+    if (teaching && !sq) setTeaching(false); // nothing on her screen any more: back to the page
+  }, [teaching, !!sq]);
 
   /** One tap: for everyone with her who has this question (tap the same again: undone); then the next question. */
   const choose = (d: Decision) => {
@@ -260,8 +269,8 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
   };
 
   /** Send students back (Done), or to Theory when Theory wants him now. `all`: what she didn't decide = explained. */
-  const finish = async (hs: EvalHere[], how: "decided" | "all" | "nothing") => {
-    if (hs.length === 0) return;
+  const finish = async (hs: EvalHere[], how: "decided" | "all" | "nothing"): Promise<boolean> => {
+    if (hs.length === 0) return false;
     setBusy(true);
     await flushTaps();
     let ok = true;
@@ -283,7 +292,7 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
     }
     const res = ok ? await act(() => mutate(api.calls.finish, { items: out, by: currentRole() })) : undefined;
     setBusy(false);
-    if (!res) return;
+    if (!res) return false;
     const rest = { ...dec };
     for (const h of hs) delete rest[h.v.key];
     setDec(rest);
@@ -292,6 +301,7 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
     tone(how === "nothing" ? "tick" : "done");
     const names = joinNames(hs.map((h) => h.v.s.name));
     toast(hs.length === 1 && hs[0].v.pulled ? `${names} goes to Theory now.` : how === "nothing" ? `${names} back to work.` : `Saved: ${names} back to work.`);
+    return true;
   };
 
   /** Done with this book, and he stays for his next one (no walk back to the hall). */
@@ -359,6 +369,158 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
   const late = items.some((it) => it.late);
   const n = sq?.who.length ?? 0;
   const theoryOk = !!sq && (!!sq.v.f || !!sq.v.ms);
+
+  // ---- The questions as squares, the open question's card and the buttons: on the page, or in teaching mode ----
+  const decidable = live && !!sq && sq.who.length > 0;
+  /** Teaching mode's Next while nobody is with her yet: the next square (after the last, the first). */
+  const nextSq = () => {
+    if (!sq || qs.length < 2) return;
+    const to = qs[(qs.findIndex((x) => x.key === sq.key) + 1) % qs.length];
+    setAt(to.key);
+    if (onRoom && !inBook(to)) follow(); // another book of her room's: the rows go with it
+  };
+  const strip = () =>
+    qs.length > 0 ? (
+      <HRow as="ol" class="fc-strip evx-strip" label="The questions to explain" list={qs.map((x) => x.key).join(",")} at={sq?.key}>
+        {qs.map((x) => {
+          const st = squareOf(x, dec);
+          return (
+            <li key={x.key}>
+              <button
+                type="button"
+                class={`fc-sq${st.cls}${x.key === sq?.key ? " on" : ""}`}
+                aria-current={x.key === sq?.key ? "step" : undefined}
+                aria-label={`${qLabel(x.v, x.q)}: ${x.who.length ? `${x.who.length} with you` : "to prepare"}${st.words ? `, ${st.words}` : ""}`}
+                onClick={() => {
+                  setAt(x.key);
+                  if (onRoom && !inBook(x)) follow(); // another book of her room's: the rows go with it
+                }}
+              >
+                <small>
+                  {tag(x)}
+                  {short(x.v, x.q)}
+                </small>
+                <b>{st.sign || (x.who.length > 1 ? `×${x.who.length}` : "")}</b>
+              </button>
+            </li>
+          );
+        })}
+      </HRow>
+    ) : (
+      <p class="muted small evx-hint">
+        {browsing ? (
+          <>
+            Not your room's book. <BackToRoom onBack={() => follow()} />
+          </>
+        ) : room.here.some((h) => h.kind === "theory") ? (
+          "Teaching theory: tap his name, then Done: taught."
+        ) : checkIns.length ? (
+          // The manager sent him for a check-in (3 Nov 2026): nothing waits, he hasn't seen a teacher today.
+          `Check-in: ${joinNames(checkIns.map((it) => it.name))}. Look at ${checkIns.length === 1 ? "his book with him" : "their books with them"}: how is it going? Then Done.`
+        ) : items.length ? (
+          "Nothing left to explain to your room: Done sends them back."
+        ) : (
+          "Pick the questions above, then Call: they open here, one at a time."
+        )}
+      </p>
+    );
+  // Who has it: with her (✓ once explained), else those the page offers for it.
+  const who = !sq
+    ? null
+    : sq.who.length === 0
+      ? preview.length
+        ? preview.map((v) => (
+            <span key={v.key}>
+              {v.s.name} <small>{lostWords(v, sq.q)}</small>
+            </span>
+          ))
+        : "Nobody with you has it."
+      : sq.who.map((h) => {
+          const d = (dec[h.v.key] ?? {})[sq.q];
+          return (
+            <span key={h.v.key} class={d ? `d d-${d}` : ""}>
+              {h.v.s.name} <small>{lostWords(h.v, sq.q)}</small>
+            </span>
+          );
+        });
+  /** The answer, big (bigger in teaching mode). */
+  const answer = (big: boolean) =>
+    sq?.v.unit ? (
+      <CardAnswer unitId={sq.v.unit._id} q={sq.q} stage={sqStage} max={big ? 72 : undefined} maxH={big ? 210 : undefined} />
+    ) : (
+      <p class="fc-anote">Check his answer in his notebook.</p>
+    );
+  const notes = sq && (
+    <>
+      {sameMistake && sq.who.length === 0 && group && (
+        <p class="evx-tl">
+          <span>
+            {group.cands.length} lost {group.qs.map((q) => qLabel(sq.v, q)).join(" ")}: teach it once in Theory?
+          </span>
+          <button type="button" class="btn small theory" disabled={busy} onClick={() => void toTheoryAll()}>
+            All {group.cands.length} to Theory
+          </button>
+        </p>
+      )}
+      {(!live || sq.who.length === 0) && (
+        <p class="muted small evx-note">
+          {sq.who.length > 0 ? "Tap Arrived when they come in." : "Call them, then Arrived when they come in."}
+          {browsing && (
+            <>
+              {" "}
+              <BackToRoom onBack={() => follow()} />
+            </>
+          )}
+        </p>
+      )}
+    </>
+  );
+  const pad = (layer: boolean) =>
+    // Teaching mode while nobody is with her, one question only: nothing to tap.
+    layer && !decidable && qs.length < 2 ? null : (
+      <div class="fc-pad evx-pad">
+        {/* Teaching mode while nobody is with her yet: nothing to decide, only Next. */}
+        {(!layer || decidable) && (
+          <div class="fc-row2">
+            <button
+              type="button"
+              class={`fc-n evx-b th${allAre("th") ? " on" : ""}`}
+              disabled={!canDecide || !theoryOk}
+              aria-pressed={allAre("th")}
+              onClick={() => choose("th")}
+            >
+              <b aria-hidden="true">→</b>
+              <small>Theory</small>
+            </button>
+            <button type="button" class={`fc-n evx-b skip${allAre("skip") ? " on" : ""}`} disabled={!canDecide} aria-pressed={allAre("skip")} onClick={() => choose("skip")}>
+              <small>Not now</small>
+            </button>
+          </div>
+        )}
+        {layer && !decidable ? (
+          // Teaching mode while nobody is with her yet (getting ready): the big button goes on to the next square.
+          <button type="button" class="fc-go evx-x tm-next" onClick={nextSq}>
+            <b>Next question ›</b>
+          </button>
+        ) : (
+          <button type="button" class={`fc-go evx-x${allAre("x") ? " on" : ""}`} disabled={!canDecide} aria-pressed={allAre("x")} onClick={() => choose("x")}>
+            <span aria-hidden="true">✓</span>
+            <b>Explained</b>
+            {n > 1 && <small>for {n}</small>}
+          </button>
+        )}
+      </div>
+    );
+  const section = sq?.v.f && sq.v.f.isQuestion(sq.q) ? sq.v.f.sectionOf(sq.q) : null;
+  const openTeach = () => {
+    clearToasts();
+    setTeaching(true);
+  };
+  /** Done from teaching mode: everyone decided goes back; with nobody left with her, the view closes. */
+  const doneFromTeach = async () => {
+    const all = done.length >= room.here.length;
+    if ((await finish(done, "decided")) && all) setTeaching(false);
+  };
 
   return (
     <main class="page ev-page evx-page">
@@ -533,143 +695,48 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
           </div>
         </section>
 
-        {qs.length > 0 ? (
-          <HRow as="ol" class="fc-strip evx-strip" label="The questions to explain" list={qs.map((x) => x.key).join(",")} at={sq?.key}>
-            {qs.map((x) => {
-              const st = squareOf(x, dec);
-              return (
-                <li key={x.key}>
-                  <button
-                    type="button"
-                    class={`fc-sq${st.cls}${x.key === sq?.key ? " on" : ""}`}
-                    aria-current={x.key === sq?.key ? "step" : undefined}
-                    aria-label={`${qLabel(x.v, x.q)}: ${x.who.length ? `${x.who.length} with you` : "to prepare"}${st.words ? `, ${st.words}` : ""}`}
-                    onClick={() => {
-                      setAt(x.key);
-                      if (onRoom && !inBook(x)) follow(); // another book of her room's: the rows go with it
-                    }}
-                  >
-                    <small>
-                      {tag(x)}
-                      {short(x.v, x.q)}
-                    </small>
-                    <b>{st.sign || (x.who.length > 1 ? `×${x.who.length}` : "")}</b>
-                  </button>
-                </li>
-              );
-            })}
-          </HRow>
-        ) : (
-          <p class="muted small evx-hint">
-            {browsing ? (
-              <>
-                Not your room's book. <BackToRoom onBack={() => follow()} />
-              </>
-            ) : room.here.some((h) => h.kind === "theory") ? (
-              "Teaching theory: tap his name, then Done: taught."
-            ) : checkIns.length ? (
-              // The manager sent him for a check-in (3 Nov 2026): nothing waits, he hasn't seen a teacher today.
-              `Check-in: ${joinNames(checkIns.map((it) => it.name))}. Look at ${checkIns.length === 1 ? "his book with him" : "their books with them"}: how is it going? Then Done.`
-            ) : items.length ? (
-              "Nothing left to explain to your room: Done sends them back."
-            ) : (
-              "Pick the questions above, then Call: they open here, one at a time."
-            )}
-          </p>
-        )}
-
-        {sq && (
+        {!teaching && strip()}
+        {sq && !teaching && (
           <section class="fc-card evx-card" key={sq.key} aria-label={`${qLabel(sq.v, sq.q)} and its answer`}>
-            <div class="fc-q">
-              <span class={`fc-qn${/^Q\d+$/.test(qLabel(sq.v, sq.q)) ? "" : " evx-yr"}`}>
-                {/^Q\d+$/.test(qLabel(sq.v, sq.q)) ? (
-                  <>
-                    <small>Q</small>
-                    {sq.q}
-                  </>
-                ) : (
-                  qLabel(sq.v, sq.q)
-                )}
-              </span>
-              <div class="fc-ans">
-                <p class="evx-who">
-                  {sq.who.length === 0
-                    ? preview.length
-                      ? preview.map((v) => (
-                          <span key={v.key}>
-                            {v.s.name} <small>{lostWords(v, sq.q)}</small>
-                          </span>
-                        ))
-                      : "Nobody with you has it."
-                    : sq.who.map((h) => {
-                        const d = (dec[h.v.key] ?? {})[sq.q];
-                        return (
-                          <span key={h.v.key} class={d ? `d d-${d}` : ""}>
-                            {h.v.s.name} <small>{lostWords(h.v, sq.q)}</small>
-                          </span>
-                        );
-                      })}
-                </p>
-                {sq.v.unit ? (
-                  <AnswerKey unitId={sq.v.unit._id} q={sq.q} stage={sq.v.ms ? "master" : "fighter"} />
-                ) : (
-                  <p class="muted small">Check his answer in his notebook.</p>
-                )}
-                {sameMistake && sq.who.length === 0 && group && (
-                  <p class="evx-tl">
-                    <span>
-                      {group.cands.length} lost {group.qs.map((q) => qLabel(sq.v, q)).join(" ")}: teach it once in Theory?
-                    </span>
-                    <button type="button" class="btn small theory" disabled={busy} onClick={() => void toTheoryAll()}>
-                      All {group.cands.length} to Theory
-                    </button>
-                  </p>
-                )}
-                <QuestionToggle unitId={sq.v.unit?._id} stage={sq.v.ms ? "master" : "fighter"} q={sq.q} />
-                {(!live || sq.who.length === 0) && (
-                  <p class="muted small">
-                    {sq.who.length > 0 ? "Tap Arrived when they come in." : "Call them, then Arrived when they come in."}
-                    {browsing && (
-                      <>
-                        {" "}
-                        <BackToRoom onBack={() => follow()} />
-                      </>
-                    )}
-                  </p>
-                )}
-              </div>
-            </div>
+            <CardHead
+              label={qLabel(sq.v, sq.q)}
+              n={<QPill label={qLabel(sq.v, sq.q)} />}
+              meta={who}
+              metaCls="evx-who"
+              shown={printed}
+              onTeach={openTeach}
+            />
+            <div class="fc-ans">{answer(false)}</div>
+            {printed.open && sq.v.unit && <BookQuestion unitId={sq.v.unit._id} stage={sqStage} q={sq.q} />}
+            {notes}
           </section>
         )}
-
-        <div class="fc-pad evx-pad">
-          <div class="fc-row2">
-            <button
-              type="button"
-              class={`fc-n evx-b th${allAre("th") ? " on" : ""}`}
-              disabled={!canDecide || !theoryOk}
-              aria-pressed={allAre("th")}
-              onClick={() => choose("th")}
-            >
-              <b aria-hidden="true">→</b>
-              <small>Theory</small>
-            </button>
-            <button type="button" class={`fc-n evx-b skip${allAre("skip") ? " on" : ""}`} disabled={!canDecide} aria-pressed={allAre("skip")} onClick={() => choose("skip")}>
-              <small>Not now</small>
-            </button>
-          </div>
-          <button type="button" class={`fc-go evx-x${allAre("x") ? " on" : ""}`} disabled={!canDecide} aria-pressed={allAre("x")} onClick={() => choose("x")}>
-            <span aria-hidden="true">✓</span>
-            <b>Explained</b>
-            {n > 1 && <small>for {n}</small>}
-          </button>
-        </div>
+        {!teaching && pad(false)}
       </div>
 
       <div class="evx-foot">
         <TodayStrip s={score} room="evaluation" inClass={inClass.length} compact />
         <GoneHome role="evaluation" views={all} now={now} />
       </div>
+
+      {teaching && sq && (
+        <TeachMode
+          room="evaluation"
+          title={<LessonName unit={sq.v.unit} section={section} kind={section ? "section" : "workbook"} />}
+          at={sq.key}
+          strip={strip()}
+          pad={pad(true)}
+          done={{ n: done.length, busy, onDone: () => void doneFromTeach() }}
+          onClose={() => setTeaching(false)}
+        >
+          <section class="fc-card evx-card tm-card" key={sq.key} aria-label={`${qLabel(sq.v, sq.q)} and its answer`}>
+            <CardHead label={qLabel(sq.v, sq.q)} n={<QPill label={qLabel(sq.v, sq.q)} />} meta={who} metaCls="evx-who" />
+            <PrintedQuestion unitId={sq.v.unit?._id} stage={sqStage} q={sq.q} />
+            <div class="fc-ans">{answer(true)}</div>
+            {notes}
+          </section>
+        </TeachMode>
+      )}
 
       {file && (
         <EvalFileSheet

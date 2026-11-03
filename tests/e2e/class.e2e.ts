@@ -2109,12 +2109,28 @@ test("Theory: one screen like Evaluation: grade, stage, unit and lesson rows; he
   // called took Dilan alone (a race in the test, seen 2 Nov 2026 under load).
   await until(async () => /\bs-walk\b/.test((await evPill(T, "Nila").getAttribute("class")) ?? ""), "Nila on her way");
   await evArrive(T, ["Dilan", "Nila"]);
+  // Teaching mode (3 Nov 2026): the lesson full screen: the unit and its section on top (Tamil), the squares, the
+  // question (this pilot book has none in the app: the note), Taught for both = the next question by itself; Done in the
+  // view sends them back and closes it.
+  await T.locator(".evx-card .fc-tmb").click();
+  const tm = T.locator(".tm");
+  await visible(tm);
+  await contains(tm.locator(".tm-title .tp-ln-n"), "13·D");
+  expect(await tm.locator(".tm-title .tp-ln-t").textContent()).toMatch(/^[^A-Za-z]+$/);
+  await textsAre(tm.locator(".fc-strip .fc-sq small"), ["D·23", "D·24", "D·25", "D·26"]);
+  await contains(tm.locator(".fc-qmeta.evx-who"), "Dilan");
+  await contains(tm.locator(".fc-qmeta.evx-who"), "Nila");
+  await visible(tm.locator(".tm-noq"));
+  await contains(tm.locator(".evx-x"), "for 2");
+  expect(await T.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(T, "t10-teaching-mode");
   for (const q of ["23", "24", "25", "26"]) {
-    await contains(T.locator(".evx-card .fc-qn"), q);
-    await T.locator(".evx-x").click();
+    await contains(tm.locator(".fc-qn"), q);
+    await tm.locator(".evx-x").click();
   }
-  await contains(evDone(T), "Done 2");
-  await evDone(T).click();
+  await contains(tm.locator(".tm-done"), "Done 2");
+  await tm.locator(".tm-done").click();
+  await count(T.locator(".tm"), 0);
   await until(async () => (await marks("Nila"))["26"]?.s === "taught", "Nila taught Q23-26");
   await until(async () => (await marks("Dilan"))["26"]?.s === "taught", "Dilan taught Q23-26");
 
@@ -2157,7 +2173,7 @@ test("Theory: one screen like Evaluation: grade, stage, unit and lesson rows; he
   await until(async () => (await onGrade()) === "7", "back to her room's grade");
   await textsAre(T.locator(".evx-strip .fc-sq small"), ["13", "17"]);
   await contains(T.locator(".evx-who"), "Malik 0/2 · Evaluation");
-  await visible(T.locator(".evx-card .muted", { hasText: "No answer key for this workbook yet." }));
+  await visible(T.locator(".evx-card .fc-anote", { hasText: "No answer key for this workbook yet." }));
   const mf = await evFile(T, "Malik");
   await contains(mf.locator(".tpx-fq"), "Q17");
   await visible(mf.locator(".tp-fx .mtrack"));
@@ -2368,14 +2384,38 @@ test("Evaluation: one screen: grade, stage, unit and questions the most urgent f
   await hears(C, "Vimal, go to Owner in Evaluation.");
   await C.locator(".call-strip.evaluation").getByRole("button", { name: "Sent" }).click();
   await evArrive(E, ["Vimal"]);
-  // His questions one at a time with his marks and the key's answer: Q22 explained, Q51 needs theory.
+  // His questions one at a time with his marks and the key's answer, big as on Correction's card (3 Nov 2026): the
+  // number a dark pill in the top line with who has it, then the answer.
   await textsAre(E.locator(".evx-strip .fc-sq small"), ["22", "51"]);
-  await contains(E.locator(".evx-card .fc-qn"), "22");
-  await contains(E.locator(".evx-who"), "Vimal 0/");
-  await contains(E.locator(".evx-card .ev-key"), "−3");
-  await E.locator(".evx-x").click();
+  await contains(E.locator(".evx-card .fc-qhead .fc-qn"), "22");
+  await contains(E.locator(".evx-card .fc-qhead .evx-who"), "Vimal 0/");
+  await contains(E.locator(".evx-card .fc-ans .ka-h"), "−3");
+  await count(E.locator(".evx-card .fc-qdoc"), 0); // the printed question is an icon, only when the book has its questions
+  // Teaching mode (3 Nov 2026, his ask: teach from the whiteboard looking at the phone): the whole screen; the book on
+  // top, the squares, the question (this demo workbook has none in the app: the note says so), the answer big, and the
+  // page's own buttons: Explained = the next question, → Theory; Done appears; the phone's Back closes it.
+  await E.locator(".evx-card .fc-tmb").click();
+  const tm = E.locator(".tm");
+  await visible(tm);
+  await contains(tm.locator(".tm-title .tp-ln-n"), "8");
+  await textsAre(tm.locator(".fc-strip .fc-sq small"), ["22", "51"]);
+  await contains(tm.locator(".fc-qn"), "22");
+  await contains(tm.locator(".fc-qmeta.evx-who"), "Vimal");
+  await visible(tm.locator(".tm-noq"));
+  await contains(tm.locator(".fc-ans .ka-h"), "−3");
+  const tmBox = (await tm.boundingBox())!;
+  expect(tmBox.y).toBe(0);
+  expect(tmBox.height).toBeGreaterThanOrEqual(843); // over the top bar and the tabs
+  await count(E.locator(".evx-card"), 1); // the page's card steps aside while the view is open
+  expect(await E.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(E, "e08-teaching-mode");
+  await tm.locator(".evx-x").click();
+  await contains(tm.locator(".fc-qn"), "51");
+  await tm.locator(".evx-b.th").click();
+  await contains(tm.locator(".tm-done"), "Done 1");
+  await E.goBack({ waitUntil: "commit" }); // Android's Back button
+  await count(E.locator(".tm"), 0);
   await contains(E.locator(".evx-card .fc-qn"), "51");
-  await E.locator(".evx-b.th").click();
   await textsAre(E.locator(".evx-strip .fc-sq.s-explained small"), ["22"]);
   await count(E.locator(".evx-strip .fc-sq.dk"), 1);
   // His file (his pill): what was decided, his unit, his day; Done sends him back.
@@ -2449,6 +2489,20 @@ test("Evaluation: one screen: grade, stage, unit and questions the most urgent f
   expect(big!.y + big!.height).toBeLessThanOrEqual(568 - 66 + 1);
   expect(await topFits(S), "the top bar fits at 320 px").toBe(true);
   await shot(S, "e04-evaluation-320");
+  // Teaching mode on the smallest phone before anyone is with her (getting ready): the big button goes on to the next
+  // square; × closes it.
+  await S.locator(".evx-card .fc-tmb").click();
+  const stm = S.locator(".tm");
+  await visible(stm.locator(".tm-next"));
+  const firstQ = await stm.locator(".fc-qn").innerText();
+  await stm.locator(".tm-next").click();
+  await until(async () => (await stm.locator(".fc-qn").innerText()) !== firstQ, "the next square");
+  expect(await S.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  const nextBox = (await stm.locator(".tm-next").boundingBox())!;
+  expect(nextBox.y + nextBox.height).toBeLessThanOrEqual(568 + 1);
+  await shot(S, "e09-teaching-mode-320");
+  await stm.locator(".tm-x").click();
+  await count(S.locator(".tm"), 0);
   await evFile(S, "Dilan");
   expect(await S.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await shot(S, "e05-evaluation-file-320");
@@ -3064,6 +3118,28 @@ test("Topic tute: one zip = the unit's theory book and workbook, both answer key
 
   // Class's view of the opened question stays unstyled by the book (its CSS lives only in the shadow root).
   expect(await C.locator(".fc-qn").first().evaluate((el) => getComputedStyle(el).backgroundColor)).not.toBe("rgb(17, 17, 17)");
+
+  // Theory teaches section A from teaching mode (3 Nov 2026): its teacher question as printed, larger than on the card
+  // and still inside the phone, then its answer big.
+  const T = await phone(backend, "theory");
+  await evPick(T, { grade: "11", stage: "Fighter", unit: "13", group: "A" });
+  await contains(T.locator(".evx-card .fc-qn"), "1");
+  await T.locator(".evx-card .fc-tmb").click();
+  const tq = T.locator(".tm .tm-q .bq-view");
+  await until(
+    async () => (await tq.evaluate((el) => el.shadowRoot?.querySelector(".qv")?.textContent ?? "")).trim().length > 0,
+    "the printed question in teaching mode",
+  );
+  const big = await tq.evaluate((el) => {
+    const box = el.shadowRoot!.querySelector(".qv") as HTMLElement;
+    return { zoom: Number(getComputedStyle(el).zoom), fits: box.scrollWidth <= box.clientWidth + 1, right: el.getBoundingClientRect().right };
+  });
+  expect(big.zoom).toBeGreaterThan(1);
+  expect(big.fits).toBe(true);
+  expect(big.right).toBeLessThanOrEqual(390);
+  await textsAre(T.locator(".tm .fc-ans .ka-h"), ["3", "4"]);
+  expect(await T.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(T, "t11-teaching-mode-printed");
   expect(problems.filter((x) => !x.includes("[focus warning]"))).toEqual([]);
 });
 

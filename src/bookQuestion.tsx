@@ -1,4 +1,5 @@
-// One printed question, as the book draws it (teachers only), under Correction's and Evaluation's question card.
+// One printed question, as the book draws it (teachers only), under Correction's, Evaluation's and Theory's question
+// card (its icon in the card's top line), and big in teaching mode (src/qcard.tsx).
 // - Fetched while open: the question (catalog.question) and its book's CSS (catalog.bookCss, once per book).
 // - Drawn by src/questionView.ts (shared with the family app): a shadow root, cleaned again, figures fitted.
 
@@ -31,11 +32,12 @@ export function BookQuestion(props: { unitId: string; stage: Stage; q: number })
 
 let shownHere = false; // stays open from one question to the next on this phone (until the page reloads)
 
-/** Correction's card (2 Nov 2026): the switch is a small icon in the card's top line, and only when the book's
- *  questions are in the app (no pale "No question text" line taking the answer's room). Same open state as below. */
-export function useQuestionShown(unitId: string | null | undefined, stage: Stage) {
+/** The switch is a small icon in the card's top line (Correction 2 Nov 2026, Evaluation and Theory 3 Nov), and only when
+ *  the book's questions are in the app (no pale "No question text" line taking the answer's room). */
+export function useQuestionShown(unitId: string | null | undefined, stage: Stage, inApp?: boolean) {
   const [open, setOpen] = useState(shownHere);
-  const has = !!unitId && (bookDocAt(unitId, stage)?.qCount ?? 0) > 0;
+  // `inApp`: the page knows (a book nobody in class is on isn't on the board: the whole-class lesson).
+  const has = !!unitId && (inApp ?? (bookDocAt(unitId, stage)?.qCount ?? 0) > 0);
   const flip = () => {
     shownHere = !open;
     setOpen(!open);
@@ -59,28 +61,5 @@ export function QuestionIcon(props: { q: string; shown: ReturnType<typeof useQue
         <path d="M9 12h7M9 16h5" />
       </svg>
     </button>
-  );
-}
-
-/** "Show the question" under a question card: always in the same place, pale when the book has no questions in the
- *  app yet (the owner re-uploads its zip). */
-export function QuestionToggle(props: { unitId: string | null | undefined; stage: Stage; q: number }) {
-  const [open, setOpen] = useState(shownHere);
-  const has = !!props.unitId && (bookDocAt(props.unitId, props.stage)?.qCount ?? 0) > 0;
-  const flip = () => {
-    shownHere = !open;
-    setOpen(!open);
-  };
-  return (
-    <div class="bq">
-      <button type="button" class={`bq-btn${open && has ? " on" : ""}`} disabled={!has} aria-expanded={open && has} onClick={flip}>
-        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M6 3h9l4 4v14H6z" />
-          <path d="M9 12h7M9 16h5" />
-        </svg>
-        {!has ? "No question text in the app" : open ? "Hide the question" : "Show the question"}
-      </button>
-      {open && has && <BookQuestion unitId={props.unitId!} stage={props.stage} q={props.q} />}
-    </div>
   );
 }

@@ -4282,7 +4282,8 @@ body.locked.fc-marking .toasts {
   }
 }
 /* The card's top line (2 Nov 2026, his ask: the answer gets the room): the question's number as a dark pill, its marks,
-   then ‹ back and the printed question's icon. Evaluation's and Theory's cards keep their big .fc-q number below. */
+   then ‹ back, teaching mode and the printed question's icon. Evaluation's and Theory's cards too since 3 Nov 2026
+   (src/qcard.tsx). */
 .fc-qhead {
   min-height: 36px;
   display: flex;
@@ -4323,7 +4324,8 @@ body.locked.fc-marking .toasts {
   margin-left: auto;
 }
 .fc-back,
-.fc-qdoc {
+.fc-qdoc,
+.fc-tmb {
   height: 36px;
   min-width: 36px;
   padding: 0 10px;
@@ -4336,31 +4338,19 @@ body.locked.fc-marking .toasts {
   font: 700 15px/1 var(--font);
   color: var(--ink-2);
 }
-.fc-qdoc {
+.fc-qdoc,
+.fc-tmb {
   padding: 0;
+}
+/* Teaching mode's button (a whiteboard): in the room's colour, so she finds it at a glance. */
+.fc-tmb {
+  border-color: var(--room-ink, var(--ink-2));
+  color: var(--room-ink, var(--ink-2));
 }
 .fc-qdoc.on {
   border-color: var(--ink);
   background: var(--ink);
   color: #fff;
-}
-/* What Evaluation's and Theory's cards still use (a big number beside the answer). */
-.fc-q {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-}
-.fc-qn {
-  flex: none;
-  display: inline-flex;
-  align-items: baseline;
-  font: 700 58px/0.9 var(--cond);
-  letter-spacing: -1px;
-}
-.fc-qn small {
-  margin-right: 2px;
-  font-size: 22px;
-  color: var(--ink-3);
 }
 .fc-ans {
   flex: 1 1 0;
@@ -4370,13 +4360,11 @@ body.locked.fc-marking .toasts {
   line-height: 1.3;
   overflow-wrap: anywhere;
 }
-.fc-a b {
-  font-size: 23px;
-}
 
 /* ---- The answer, big (src/bigAnswer.tsx): the final answer as large as fits (64 px on one line down to 32, then two
    or three lines), never split beside = + − ×; fractions stacked; the working small above it. ---- */
-.fc-paper .fc-ans {
+.fc-paper .fc-ans,
+.evx-card .fc-ans {
   margin-top: 6px;
   padding: 0;
   font-size: 15px;
@@ -4455,21 +4443,24 @@ body.locked.fc-marking .toasts {
   margin: 6px 0 0;
 }
 /* Parts: the part's name in a small chip, its answer big beside it, its marks in one row under it. */
-.fc-paper .fc-parts {
+.fc-paper .fc-parts,
+.evx-card .fc-parts {
   margin: 4px 0 0;
   padding: 0;
   list-style: none;
   display: flex;
   flex-direction: column;
 }
-.fc-paper .fc-part {
+.fc-paper .fc-part,
+.evx-card .fc-part {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: start;
   gap: 8px 10px;
   padding: 10px 0 2px;
 }
-.fc-paper .fc-part + .fc-part {
+.fc-paper .fc-part + .fc-part,
+.evx-card .fc-part + .fc-part {
   border-top: 1px solid var(--line-2);
 }
 .fc-pl {
@@ -4794,7 +4785,8 @@ body.locked.fc-marking .toasts {
     font-size: 24px;
   }
   .fc-back,
-  .fc-qdoc {
+  .fc-qdoc,
+  .fc-tmb {
     height: 32px;
     min-width: 32px;
   }
@@ -5208,21 +5200,6 @@ body.locked.fc-marking .toasts {
   font-size: 15px;
   font-weight: 700;
   color: var(--red-ink);
-}
-.ev-key {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-size: 15px;
-}
-.ev-key > small {
-  font: 700 11px/1.2 var(--font);
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--ink-3);
-}
-.ev-key.muted {
-  font-size: 13px;
 }
 .ev-q-acts {
   display: flex;
@@ -7696,9 +7673,6 @@ body.evx-on .toasts {
 .evx-hint {
   margin: 2px 4px;
 }
-.fc-qn.evx-yr {
-  font-size: 34px;
-}
 .evx-who {
   margin: 0 0 6px;
   display: flex;
@@ -7960,35 +7934,8 @@ body.locked.evx-on .toasts {
 }
 
 /* ---------------------------------------------------------------- A question as printed (src/bookQuestion.tsx)
-   Under Correction's, Evaluation's and Theory's question card: one button always in the same place (pale when the
-   book has no question text in the app), the printed question under it in its own shadow root. */
-.bq {
-  margin-top: 10px;
-}
-.bq-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  min-height: 36px;
-  padding: 6px 10px;
-  border: 1.5px dashed var(--line);
-  border-radius: 10px;
-  background: none;
-  color: var(--ink-2);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.bq-btn.on {
-  border-style: solid;
-  color: var(--ink);
-}
-.bq-btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
+   Under Correction's, Evaluation's and Theory's question card (its icon in the card's top line), in its own shadow
+   root; big in teaching mode (.tm-q). */
 .bq-view {
   margin-top: 8px;
   border: 1.5px solid var(--line-2);
@@ -9796,4 +9743,159 @@ body.mg2-on .app {
   margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* ---- Evaluation's and Theory's question card like Correction's (3 Nov 2026, his ask; src/qcard.tsx): the number as
+   a dark pill in one top line with who has it (Evaluation) or the lesson (Theory), then the answer big. ---- */
+.fc-qhead .fc-qmeta.evx-who {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 9px;
+  white-space: normal;
+  overflow: visible;
+  font-size: 14.5px;
+  line-height: 1.25;
+  color: var(--ink);
+}
+.fc-qhead .fc-qmeta.tpx-what {
+  margin: 0;
+  font-size: 14.5px;
+}
+.tpx-card > .evx-who {
+  margin: 4px 0 0;
+  font-size: 14px;
+}
+.evx-card > .bq-view {
+  margin-top: 10px;
+}
+.evx-note {
+  margin: 8px 0 0;
+}
+.evx-card > .fc-anote {
+  margin-top: 8px;
+}
+
+/* ---- Teaching mode (src/qcard.tsx, 3 Nov 2026, his ask: teach from the whiteboard looking at the phone, not walking
+   to his book): the whole screen, over the top bar and the tabs (under sheets and toasts). The book on top, the
+   squares, the question as printed (zoomed), the answer big, the page's own buttons at the bottom. ---- */
+body.tm-on {
+  overflow: hidden;
+}
+.tm {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 40;
+  max-width: 560px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  padding-top: env(safe-area-inset-top);
+  background: var(--ground);
+  outline: none;
+}
+.tm.tm-evaluation {
+  --room-ink: var(--evaluation-ink);
+}
+.tm.tm-theory {
+  --room-ink: var(--theory-ink);
+}
+.tm-top {
+  flex: none;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 2px 14px;
+  border-top: 4px solid var(--room-ink);
+}
+.tm-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 17px;
+  color: var(--ink);
+}
+.tm-title .tp-ln-g {
+  font-size: 13px;
+}
+.tm-title .tp-ln-n {
+  flex: none;
+  font: 700 19px/1 var(--cond);
+}
+.tm-title .tp-ln-t {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 700;
+}
+.tm-done {
+  flex: none;
+  height: 40px;
+  padding: 0 14px;
+  border-color: var(--green);
+  background: var(--green);
+  color: #fff;
+  font-weight: 800;
+}
+.tm-x {
+  flex: none;
+}
+.tm-strip {
+  flex: none;
+  padding: 0 12px;
+}
+.tm-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 6px 12px 0;
+}
+.tm .fc-pad {
+  position: sticky;
+  bottom: 0;
+  margin-top: auto;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  box-shadow: none;
+}
+.tm-card {
+  flex: none;
+}
+/* The question as printed, larger than on the card: she reads it at arm's length beside the board. */
+.tm-q .bq-view {
+  margin-top: 8px;
+  zoom: 1.25;
+}
+.tm-noq small {
+  display: block;
+  margin-top: 2px;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+.tm .fc-go.evx-x.tm-next {
+  background: var(--card);
+  border: 1.5px solid var(--room-ink);
+  color: var(--room-ink);
+}
+body.tm-on .toasts {
+  top: calc(env(safe-area-inset-top) + 104px);
+  bottom: auto;
+}
+@media (max-width: 340px) {
+  .tm-q .bq-view {
+    zoom: 1.12;
+  }
 }

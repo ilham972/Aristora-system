@@ -30,8 +30,9 @@ import { HRow } from "./hrow";
 import { useQuery } from "./live";
 import { MasterStrip } from "./master";
 import { useRoomDecisions } from "./roomDecisions";
-import { AnswerKey, BackToRoom, GradeRow, KindBar, LessonName, LockIcon, useHeld, usePinned } from "./roomkit";
-import { QuestionToggle } from "./bookQuestion";
+import { BackToRoom, GradeRow, KindBar, LessonName, LockIcon, useHeld, usePinned } from "./roomkit";
+import { BookQuestion, useQuestionShown } from "./bookQuestion";
+import { CardAnswer, CardHead, PrintedQuestion, QPill, TeachMode } from "./qcard";
 import { scoreOf } from "./score";
 import { act, bookDocAt, clearToasts, currentMe, currentRole, toast, type Board } from "./store";
 import { flushTaps } from "./taps";
@@ -142,6 +143,8 @@ export function TheoryTab(props: { board: Board; views: View[]; now: number }) {
   const [at, setAt] = useState<string | null>(null);
   const [fileId, setFileId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Teaching mode (3 Nov 2026): the question as printed and its answer, full screen, with this page's own buttons.
+  const [teaching, setTeaching] = useState(false);
   // The lessons row's order (held still while she touches it) and when she last touched it.
   const order = useRef<PillOrder | null>(null);
   const touched = useRef(0);
@@ -249,6 +252,12 @@ export function TheoryTab(props: { board: Board; views: View[]; now: number }) {
   const canDecide = live && withHer.length > 0 && !busy;
   // Before anyone is called: who among those offered needs this question.
   const preview = sq && sq.who.length === 0 ? offers.filter((m) => (sq.q === "whole" ? m.whole : sq.kind === "section" ? m.teach.includes(sq.q) : m.qs.includes(sq.q))) : [];
+  // Its book: a section's teacher question is the theory book's; its printed question under the card (the icon).
+  const sqStage: "fighter" | "master" = sq?.kind === "section" ? "fighter" : "master";
+  const printed = useQuestionShown(typeof sq?.q === "number" ? sq.unit?._id : null, sqStage);
+  useEffect(() => {
+    if (teaching && !sq) setTeaching(false); // nothing on her screen any more: back to the page
+  }, [teaching, !!sq]);
 
   /** One tap: for everyone with her who needs it (the same again: undone); then the next question to decide. */
   const choose = (d: TDecision) => {
@@ -275,9 +284,9 @@ export function TheoryTab(props: { board: Board; views: View[]; now: number }) {
   };
 
   /** Send students back (Done). `all`: what she didn't decide = taught; `nothing`: back without the lesson. */
-  const finish = async (list: RoomItem[], how: "decided" | "all" | "nothing") => {
+  const finish = async (list: RoomItem[], how: "decided" | "all" | "nothing"): Promise<boolean> => {
     const sts = list.filter((it) => it.state === "here" && it.st);
-    if (sts.length === 0) return;
+    if (sts.length === 0) return false;
     setBusy(true);
     await flushTaps();
     const out: { callId: Id<"calls">; taught?: number[]; skip?: number[] }[] = [];
@@ -302,7 +311,7 @@ export function TheoryTab(props: { board: Board; views: View[]; now: number }) {
     }
     const res = ok ? await act(() => mutate(api.calls.finish, { items: out, by: currentRole() })) : undefined;
     setBusy(false);
-    if (!res) return;
+    if (!res) return false;
     const rest = { ...dec };
     for (const it of sts) delete rest[itemKey(it)];
     setDec(rest);
@@ -313,6 +322,7 @@ export function TheoryTab(props: { board: Board; views: View[]; now: number }) {
     const names = joinNames(sts.map((it) => it.name));
     const stay = here.filter((it) => !sts.includes(it)).map((it) => it.name);
     toast(`${how === "nothing" ? `${names}: back to the hall, not taught.` : `Saved: ${names} back to work.`}${stay.length ? ` ${joinNames(stay)} ${stay.length === 1 ? "stays" : "stay"} with you.` : ""}`);
+    return true;
   };
 
   /** They came in: everyone on the way (Arrived beside her room), or one from his file. */
@@ -352,6 +362,151 @@ export function TheoryTab(props: { board: Board; views: View[]; now: number }) {
   const late = items.some((it) => it.late);
   const n = withHer.length;
   const stageWords = stage === "legend" ? "Legend" : stage === "section" ? "Fighter" : "Master";
+
+  // ---- What to teach as squares, the open question's card and the buttons: on the page, or in teaching mode ----
+  const decidable = live && withHer.length > 0;
+  /** Teaching mode's Next while nobody is with her yet: the next square (after the last, the first). */
+  const nextSq = () => {
+    if (!sq || sqs.length < 2) return;
+    const to = sqs[(sqs.findIndex((x) => x.key === sq.key) + 1) % sqs.length];
+    setAt(to.key);
+    if (onRoom && !inBook(to)) follow(); // another book of her room's: the rows go with it
+  };
+  const strip = () =>
+    sqs.length > 0 ? (
+      <HRow as="ol" class="fc-strip evx-strip" label="What to teach" list={sqs.map((x) => x.key).join(",")} at={sq?.key}>
+        {sqs.map((x) => {
+          const st = squareOf(x, dec);
+          return (
+            <li key={x.key}>
+              <button
+                type="button"
+                class={`fc-sq${st.cls}${x.key === sq?.key ? " on" : ""}`}
+                aria-current={x.key === sq?.key ? "step" : undefined}
+                aria-label={`${x.q === "whole" ? "The whole unit" : `Q${x.q}`}: ${x.who.length ? `${x.who.length} ${x.who.some((it) => it.state === "here") ? "with you" : "on the way"}` : "to prepare"}${st.words ? `, ${st.words}` : ""}`}
+                onClick={() => {
+                  setAt(x.key);
+                  if (onRoom && !inBook(x)) follow(); // another book of her room's: the rows go with it
+                }}
+              >
+                <small>
+                  {mixed && x.unit ? `${unitNo(x.unit.code)}·` : ""}
+                  {x.kind === "section" && x.section ? `${x.section.id}·` : ""}
+                  {qShort(x.q)}
+                </small>
+                <b>{st.sign || (x.who.length > 1 ? `×${x.who.length}` : "")}</b>
+              </button>
+            </li>
+          );
+        })}
+      </HRow>
+    ) : (
+      <p class="muted small evx-hint">
+        {browsing ? (
+          <>
+            Not your room's book. <BackToRoom onBack={() => follow()} />
+          </>
+        ) : items.length ? (
+          "Nothing left to teach to your room: Done sends them back."
+        ) : (
+          "Pick a lesson above, then Call: what to teach opens here, one at a time."
+        )}
+      </p>
+    );
+  // Who needs it: with her (✓ once taught), on the way, or those the lesson would call.
+  const who = !sq
+    ? null
+    : sq.who.length === 0
+      ? preview.length
+        ? preview.map((m) => (
+            <span key={m.v.key}>
+              {m.v.s.name} <small>{sq.kind === "workbook" ? qWords(m.v, sq.q, now) || memberWords(m) : memberWords(m)}</small>
+            </span>
+          ))
+        : "Nobody to teach it to yet."
+      : sq.who.map((it) => {
+          const d = decOf(dec, it)[String(sq.q)];
+          const v = it.st?.v ?? it.rc.v;
+          return (
+            <span key={it.rc.c._id} class={d ? `d d-${d === "t" ? "x" : "skip"}` : ""}>
+              {it.name} <small>{it.state !== "here" ? roomWords(it, now) : v && sq.kind === "workbook" ? qWords(v, sq.q, now) : ""}</small>
+            </span>
+          );
+        });
+  /** The lesson's name on the card: a section's letter and Tamil title, or the unit. */
+  const what = !sq ? null : sq.kind === "section" && sq.section ? (
+    <>
+      <b>{sq.section.id}</b> <span lang="ta">{sq.section.tamil}</span>
+    </>
+  ) : sq.q === "whole" ? (
+    "The whole unit again"
+  ) : (
+    <>
+      Unit {sq.unit ? unitNo(sq.unit.code) : "?"} <span lang="ta">{sq.unit?.ta}</span>
+    </>
+  );
+  /** The answer, big (bigger in teaching mode): a workbook's from its key; a theory book's when its key is in the app. */
+  const answer = (big: boolean) =>
+    !sq || typeof sq.q !== "number" || !sq.unit ? null : (
+      <div class="fc-ans">
+        <CardAnswer
+          unitId={sq.unit._id}
+          q={sq.q}
+          stage={sqStage}
+          // In teaching mode the printed question (or its note) is above: no second note.
+          noKey={big ? "" : "The teacher's question of his book: teach it, then the next."}
+          max={big ? 72 : undefined}
+          maxH={big ? 210 : undefined}
+        />
+      </div>
+    );
+  const note = sq && (!live || sq.who.length === 0) && (
+    <p class="muted small evx-note">
+      {sq.who.length > 0 ? "Tap Arrived when they come in." : "Call them, then Arrived when they come in."}
+      {browsing && (
+        <>
+          {" "}
+          <BackToRoom onBack={() => follow()} />
+        </>
+      )}
+    </p>
+  );
+  const pad = (layer: boolean) =>
+    // Teaching mode while nobody is with her, one question only: nothing to tap.
+    layer && !decidable && sqs.length < 2 ? null : (
+      <div class="fc-pad evx-pad tpx-pad">
+        {/* Teaching mode while nobody is with her yet: nothing to decide, only Next. */}
+        {(!layer || decidable) && (
+          <div class="fc-row2">
+            <button type="button" class={`fc-n evx-b skip${allAre("n") ? " on" : ""}`} disabled={!canDecide} aria-pressed={allAre("n")} onClick={() => choose("n")}>
+              <small>Not reached</small>
+            </button>
+          </div>
+        )}
+        {layer && !decidable ? (
+          // Teaching mode while nobody is with her yet (getting ready): the big button goes on to the next square.
+          <button type="button" class="fc-go evx-x tm-next" onClick={nextSq}>
+            <b>Next question ›</b>
+          </button>
+        ) : (
+          <button type="button" class={`fc-go evx-x${allAre("t") ? " on" : ""}`} disabled={!canDecide} aria-pressed={allAre("t")} onClick={() => choose("t")}>
+            <span aria-hidden="true">✓</span>
+            <b>Taught</b>
+            {n > 1 && <small>for {n}</small>}
+          </button>
+        )}
+      </div>
+    );
+  const sqLabel = !sq ? "" : sq.q === "whole" ? "The whole unit" : `Q${sq.q}`;
+  const openTeach = () => {
+    clearToasts();
+    setTeaching(true);
+  };
+  /** Done from teaching mode: everyone decided goes back; with nobody left with her, the view closes. */
+  const doneFromTeach = async () => {
+    const all = done.length >= here.length;
+    if ((await finish(done, "decided")) && all) setTeaching(false);
+  };
 
   return (
     <main class="page tp-page ev-page evx-page tpx-page">
@@ -467,134 +622,24 @@ export function TheoryTab(props: { board: Board; views: View[]; now: number }) {
           </div>
         </section>
 
-        {sqs.length > 0 ? (
-          <HRow as="ol" class="fc-strip evx-strip" label="What to teach" list={sqs.map((x) => x.key).join(",")} at={sq?.key}>
-            {sqs.map((x) => {
-              const st = squareOf(x, dec);
-              return (
-                <li key={x.key}>
-                  <button
-                    type="button"
-                    class={`fc-sq${st.cls}${x.key === sq?.key ? " on" : ""}`}
-                    aria-current={x.key === sq?.key ? "step" : undefined}
-                    aria-label={`${x.q === "whole" ? "The whole unit" : `Q${x.q}`}: ${x.who.length ? `${x.who.length} ${x.who.some((it) => it.state === "here") ? "with you" : "on the way"}` : "to prepare"}${st.words ? `, ${st.words}` : ""}`}
-                    onClick={() => {
-                      setAt(x.key);
-                      if (onRoom && !inBook(x)) follow(); // another book of her room's: the rows go with it
-                    }}
-                  >
-                    <small>
-                      {mixed && x.unit ? `${unitNo(x.unit.code)}·` : ""}
-                      {x.kind === "section" && x.section ? `${x.section.id}·` : ""}
-                      {qShort(x.q)}
-                    </small>
-                    <b>{st.sign || (x.who.length > 1 ? `×${x.who.length}` : "")}</b>
-                  </button>
-                </li>
-              );
-            })}
-          </HRow>
-        ) : (
-          <p class="muted small evx-hint">
-            {browsing ? (
-              <>
-                Not your room's book. <BackToRoom onBack={() => follow()} />
-              </>
-            ) : items.length ? (
-              "Nothing left to teach to your room: Done sends them back."
-            ) : (
-              "Pick a lesson above, then Call: what to teach opens here, one at a time."
-            )}
-          </p>
-        )}
-
-        {sq && (
-          <section class="fc-card evx-card tpx-card" key={sq.key} aria-label={`${sq.q === "whole" ? "The whole unit" : `Q${sq.q}`}: what to teach`}>
-            <div class="fc-q">
-              <span class={`fc-qn${sq.q === "whole" ? " evx-yr" : ""}`}>
-                {sq.q === "whole" ? (
-                  "All"
-                ) : (
-                  <>
-                    <small>Q</small>
-                    {sq.q}
-                  </>
-                )}
-              </span>
-              <div class="fc-ans">
-                <p class="tpx-what">
-                  {sq.kind === "section" && sq.section ? (
-                    <>
-                      <b>{sq.section.id}</b> <span lang="ta">{sq.section.tamil}</span>
-                    </>
-                  ) : sq.q === "whole" ? (
-                    "The whole unit again"
-                  ) : (
-                    <>
-                      Unit {sq.unit ? unitNo(sq.unit.code) : "?"} <span lang="ta">{sq.unit?.ta}</span>
-                    </>
-                  )}
-                </p>
-                <p class="evx-who">
-                  {sq.who.length === 0
-                    ? preview.length
-                      ? preview.map((m) => (
-                          <span key={m.v.key}>
-                            {m.v.s.name} <small>{sq.kind === "workbook" ? qWords(m.v, sq.q, now) || memberWords(m) : memberWords(m)}</small>
-                          </span>
-                        ))
-                      : "Nobody to teach it to yet."
-                    : sq.who.map((it) => {
-                        const d = decOf(dec, it)[String(sq.q)];
-                        const v = it.st?.v ?? it.rc.v;
-                        return (
-                          <span key={it.rc.c._id} class={d ? `d d-${d === "t" ? "x" : "skip"}` : ""}>
-                            {it.name} <small>{it.state !== "here" ? roomWords(it, now) : v && sq.kind === "workbook" ? qWords(v, sq.q, now) : ""}</small>
-                          </span>
-                        );
-                      })}
-                </p>
-                {sq.kind === "workbook" && typeof sq.q === "number" && sq.unit ? (
-                  <AnswerKey unitId={sq.unit._id} q={sq.q} />
-                ) : sq.kind === "section" ? (
-                  <>
-                    <p class="muted small">The teacher's question of his book: teach it, then the next.</p>
-                    {typeof sq.q === "number" && sq.unit && !!bookDocAt(sq.unit._id, "fighter")?.keyCount && (
-                      <AnswerKey unitId={sq.unit._id} q={sq.q} stage="fighter" />
-                    )}
-                  </>
-                ) : null}
-                {typeof sq.q === "number" && sq.unit && (
-                  <QuestionToggle unitId={sq.unit._id} stage={sq.kind === "section" ? "fighter" : "master"} q={sq.q} />
-                )}
-                {(!live || sq.who.length === 0) && (
-                  <p class="muted small">
-                    {sq.who.length > 0 ? "Tap Arrived when they come in." : "Call them, then Arrived when they come in."}
-                    {browsing && (
-                      <>
-                        {" "}
-                        <BackToRoom onBack={() => follow()} />
-                      </>
-                    )}
-                  </p>
-                )}
-              </div>
-            </div>
+        {!teaching && strip()}
+        {sq && !teaching && (
+          <section class="fc-card evx-card tpx-card" key={sq.key} aria-label={`${sqLabel}: what to teach`}>
+            <CardHead
+              label={sqLabel}
+              n={sq.q === "whole" ? "All" : <QPill label={sqLabel} />}
+              meta={what}
+              metaCls="tpx-what"
+              shown={typeof sq.q === "number" ? printed : undefined}
+              onTeach={typeof sq.q === "number" ? openTeach : undefined}
+            />
+            <p class="evx-who">{who}</p>
+            {answer(false)}
+            {printed.open && typeof sq.q === "number" && sq.unit && <BookQuestion unitId={sq.unit._id} stage={sqStage} q={sq.q} />}
+            {note}
           </section>
         )}
-
-        <div class="fc-pad evx-pad tpx-pad">
-          <div class="fc-row2">
-            <button type="button" class={`fc-n evx-b skip${allAre("n") ? " on" : ""}`} disabled={!canDecide} aria-pressed={allAre("n")} onClick={() => choose("n")}>
-              <small>Not reached</small>
-            </button>
-          </div>
-          <button type="button" class={`fc-go evx-x${allAre("t") ? " on" : ""}`} disabled={!canDecide} aria-pressed={allAre("t")} onClick={() => choose("t")}>
-            <span aria-hidden="true">✓</span>
-            <b>Taught</b>
-            {n > 1 && <small>for {n}</small>}
-          </button>
-        </div>
+        {!teaching && pad(false)}
       </div>
 
       <div class="evx-foot">
@@ -605,6 +650,29 @@ export function TheoryTab(props: { board: Board; views: View[]; now: number }) {
         )}
         <TodayStrip s={score} room="theory" inClass={inClass.length} compact />
       </div>
+
+      {teaching && sq && (
+        <TeachMode
+          room="theory"
+          title={<LessonName unit={sq.unit} section={sq.section} kind={sq.kind} />}
+          at={sq.key}
+          strip={strip()}
+          pad={pad(true)}
+          done={{ n: done.length, busy, onDone: () => void doneFromTeach() }}
+          onClose={() => setTeaching(false)}
+        >
+          <section class="fc-card evx-card tpx-card tm-card" key={sq.key} aria-label={`${sqLabel}: what to teach`}>
+            <CardHead label={sqLabel} n={sq.q === "whole" ? "All" : <QPill label={sqLabel} />} meta={who} metaCls="evx-who" />
+            {typeof sq.q === "number" ? (
+              <PrintedQuestion unitId={sq.unit?._id} stage={sqStage} q={sq.q} />
+            ) : (
+              <p class="fc-anote">The whole unit again: teach it from his book.</p>
+            )}
+            {answer(true)}
+            {note}
+          </section>
+        </TeachMode>
+      )}
 
       {file && (
         <TheoryFileSheet
