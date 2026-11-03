@@ -5602,6 +5602,20 @@ body.locked.fc-marking .toasts {
   --tabs: 0px;
   padding-bottom: calc(env(safe-area-inset-bottom) + 24px);
 }
+/* Four icons on the left (the owner, 3 Nov 2026: the whole-class whiteboard): the smallest phones' sizes up to 400 px. */
+@media (max-width: 400px) {
+  .top-left.many {
+    gap: 3px;
+  }
+  .top-left.many .att-btn {
+    gap: 2px;
+    padding: 0 5px;
+  }
+  .top-left.many .att-btn svg {
+    width: 19px;
+    height: 19px;
+  }
+}
 /* The smallest phones (320 px): the buttons, the clock and Settings still fit. */
 @media (max-width: 345px) {
   .top {
@@ -9937,7 +9951,7 @@ body.tm-on {
   font-weight: 600;
   color: var(--ink-3);
 }
-.tm .fc-go.evx-x.tm-next {
+.evx-page .fc-go.evx-x.tm-next {
   background: var(--card);
   border: 1.5px solid var(--room-ink);
   color: var(--room-ink);
@@ -9950,4 +9964,40 @@ body.tm-on .toasts {
   .tm-q .bq-view {
     zoom: 1.12;
   }
+}
+
+/* ---- The whole-class lesson (src/wholeClass.tsx, 3 Nov 2026): the Theory page's look; everyone here in that grade in
+   the box (more rows than a room), those with nothing to save pale and dashed; the squares, the card, ✓ Taught. ---- */
+.wc-room .evx-box {
+  border-color: var(--theory);
+}
+.wc-room .evx-pills {
+  max-height: 142px;
+}
+.evx-sp.s-sug.wc-no {
+  opacity: 0.38;
+  border-style: dashed;
+}
+/* This lesson is done for him already: pale green (the box's line counts them; no word on every pill). */
+.evx-sp.s-sug.wc-done {
+  opacity: 0.62;
+  border-color: var(--green);
+  color: var(--green-ink);
+}
+.evx-sp.s-sug.wc-done.on {
+  opacity: 1;
+}
+/* Short phones: two rows of names, then they scroll inside the box (the squares and the card come sooner). */
+@media (max-height: 720px) {
+  .wc-room .evx-pills {
+    max-height: 72px;
+  }
+}
+.evx-page .fc-go.evx-x.tm-next.wc-done {
+  border-color: var(--theory);
+}
+.tm-title .tm-lv {
+  flex: none;
+  font: 700 17px/1 var(--cond);
+  color: var(--ink-2);
 }

@@ -82,6 +82,14 @@ EOF
 
 ## Gotchas learned the hard way
 
+- **A pick the page makes from live data must hold once it is on screen.** The whole-class page opened "the level with
+  the most waiting"; the first Taught changed the counts and the lesson jumped to another level mid-teaching (3 Nov
+  2026, caught by the run-through). Freeze the page's pick once shown (`lessonKey` set by an effect), and freeze a
+  page-ticked list at the first action (`ticks` per lesson), or both re-decide after every tap.
+- **Theory and Evaluation work counts only what the digest knows** (`digestOf`: room calls, and since 3 Nov 2026 `board`
+  events). A new way for a teacher to work (anything not a call) must leave events the digest turns into spans, or her
+  card shows her "free while students waited" during that work.
+
 - **Vercel serves a file before any rewrite.** "/" is `index.html` (a file), so the first family app rule (rewrite "/"
   on app.aristora.org → `/f/index.html`) never ran: app.aristora.org showed the teachers' sign-in (`8ee3b16`, his
   screenshot of 1 Nov). Send a host to another page with a **redirect** (redirects run before files), and give links

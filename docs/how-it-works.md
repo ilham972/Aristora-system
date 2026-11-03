@@ -372,6 +372,36 @@ none with one square). The page's card and pad step aside while it is open; the 
 step, `popstate`), so does ×; it closes by itself when nothing is on her screen. Not on Correction (his call: the book
 is in her hand, and a corrector who teaches makes the queue longer).
 
+**Whole class (3 Nov 2026, his ask: "if I am going to teach Grade 10 all students"; `src/wholeClass.tsx`
+`WholeClassPage`, rules `src/wholeClassData.ts`, server `convex/teach.ts`).** The top bar's whiteboard (`.teach-btn`,
+`page === "teach"`; Theory or Evaluation teachers and the owner: `canTeach`), a page like Theory's: nobody is called,
+everyone stays at his desk, she teaches at the board.
+- **Rows:** grades 6–11 and OL with how many are here (every grade can be tapped: `GradeRow open`); Fighter / Master =
+  the grade's theory books / workbooks in the app (pale when none: `KindBar` `open`); the units with that book in the
+  app (how many here are on each); its **sections with teacher questions** (theory book) or its **levels** (workbook),
+  each with how many here it is for. The page opens on the grade most are in (then what she picked last, kept on the
+  phone: `aristora.wholeClass`), the stage most of them are on, the unit most are on, the first section someone still
+  needs / the level with the most waiting; that pick **holds once on screen** (a level "with the most waiting" changes
+  after every tap: it jumped away mid-lesson in the first run-through).
+- **Who** (his pick when asked: only those on that book count): everyone here in that grade (OL: 10 and 11) as pills
+  (`teach.roster`, live). **Ticked by the page** = it is his book now (or given) and the section isn't all taught for
+  him / something of that level waits for him (lost marks waiting for Evaluation or Theory). Pale green = done already
+  (the line counts them: "6 ticked · 3 taught · 9 here"; no word on every pill); pale dashed = nothing to save for him
+  (no book, or nothing of that level waits); a word only where he isn't on this book ("on 14"). She can tick anyone who
+  has the book (one who moved on, a new joiner put on an earlier unit is on his own unit: nothing taught before he
+  came counts for him, marks are per student); a tap on one without it says he can listen, nothing is saved. Clear ↔
+  Page's pick. The first Taught keeps whoever is ticked for the rest of that lesson.
+- **The lesson:** Correction's squares (×N = for how many ticked; ✓ = done for them), the card (the dark pill, the
+  section or level, the answer big from the key, the printed question's icon and teaching mode: `TeachMode`), and the
+  big **✓ Taught for N**: saved at once (`teach.taught`) for each ticked student it changes something for, then the
+  next open question; the toast's **Undo** puts back exactly what that tap changed (`teach.untaught`: a "skip" stays a
+  skip). Nothing left on a question: **Next question ›**. What it saves: a theory book's teacher question = taught (the
+  section's own questions open for him, as after a Theory lesson); a workbook question waiting for Theory = taught,
+  waiting for Evaluation = explained. Each changed student: a `board` history line ("Q23 taught at the board (whole
+  class)"), seen by that room today (no "no teacher yet" dot), her score +1 question; the page's first tap of a lesson
+  (`lesson`: another lesson, or 12 min since her last tap) +1 lesson and the students taught (Theory) / seen
+  (Evaluation). Her taps count as Theory when she has it, else Evaluation.
+
 **The rows show her room's book (Theory and Evaluation, 31 Oct 2026, his screenshot).** The bug: Raza and Umair
 (Grade 9 fractions) were with Evaluation, but the rows said Grade 8 unit 1, Grade 9 was pale and could not be tapped,
 and the room box offered Grade 8 students next to them. The rows were built only from who WAITS (`candidates`,
@@ -639,7 +669,9 @@ performance, not now; arrived time and went time, all done by the manager").** S
   with only Manager). History: "Nila arrived 4:30 PM" (`duty` events, `who` = the manager).
 - **Her numbers** (per class, inside her stay; the class going on read again, ended classes from their report
   `report.digest`, v 1, optional fields, so older classes simply have none): **here**; **working** (a Theory or
-  Evaluation teacher: from a student called to her (walking, with her) to Done, overlaps once; a corrector: each level
+  Evaluation teacher: from a student called to her (walking, with her) to Done, overlaps once, and her whole-class
+  lessons at the board (`board` events: each Taught tap = the time since her previous one, at most 12 min, the first of
+  a run 4 min, `BOARD_*`; a run on one unit = one lesson, students shared); a corrector: each level
   / answer and the 3 minutes after it, the walk to the next paper); **free** = here − working; **free while work waited**
   (the yellow number): free while a student sat with no work waiting for one of HER jobs (Evaluation for an Evaluation
   teacher, Theory for a Theory teacher; a student called by anyone is not waiting), after the first 2 minutes of each

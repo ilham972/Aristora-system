@@ -51,6 +51,7 @@ import type * as setup from "../setup.js";
 import type * as sim from "../sim.js";
 import type * as state from "../state.js";
 import type * as students from "../students.js";
+import type * as teach from "../teach.js";
 import type * as workbook from "../workbook.js";
 
 /**
@@ -100,6 +101,7 @@ declare const fullApi: ApiFromModules<{
   sim: typeof sim;
   state: typeof state;
   students: typeof students;
+  teach: typeof teach;
   workbook: typeof workbook;
 }>;
 export declare const api: FilterApi<

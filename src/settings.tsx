@@ -975,6 +975,10 @@ function describe(e: Doc<"events">): string {
       return `taken back from Theory: ${v}`;
     case "taught":
       return `${v} taught by Theory`;
+    case "board":
+      return `${qName(e.q ?? 0)} ${v === "explained" ? "explained" : "taught"} at the board (whole class)`;
+    case "board-undo":
+      return `${qName(e.q ?? 0)} at the board, undone`;
     case "untaught":
       return `${v} taught, undone`;
     case "move":

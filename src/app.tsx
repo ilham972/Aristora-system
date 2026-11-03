@@ -12,6 +12,7 @@ import { ManagerPage } from "./manager";
 import { SimBanner } from "./sim";
 import { Progress } from "./progress";
 import { Settings } from "./settings";
+import { WholeClassPage } from "./wholeClass";
 import { useFeedbackNew } from "./feedbackList";
 import { alertsState, armAlerts, listenForTaps, ring, useAlertsState, type AlertKind } from "./sound";
 import { clearHash, PinSheet, pinAsked, readHash, SignIn, stopAskingPin, type Hash } from "./signin";
@@ -26,7 +27,7 @@ import { Sheet, Toasts } from "./ui";
  * icon) and Progress are in the top bar.
  */
 type TabId = "class" | "correction" | "theory" | "evaluation";
-type Page = "board" | "register" | "settings" | "progress" | "boss";
+type Page = "board" | "register" | "settings" | "progress" | "boss" | "teach";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "class", label: "Class" },
@@ -123,12 +124,14 @@ export function App() {
   // Correction (marking papers, and signing students in with its +) is Correction's job; Progress needs Reports.
   const canCorrect = may("correction");
   const canProgress = may("reports");
+  // The whole-class lesson (3 Nov 2026): whoever teaches (Theory, Evaluation) and the owner.
+  const canTeach = may("theory") || may("evaluation");
   // The Owner page: the owner only (it shows each teacher's own numbers and his money).
   const isOwner = user?.role === "owner";
-  const shown: Page = (page === "progress" && !canProgress) || (page === "boss" && !isOwner) ? backTo : page;
+  const shown: Page = (page === "progress" && !canProgress) || (page === "boss" && !isOwner) || (page === "teach" && !canTeach) ? backTo : page;
   const base: Home = shown === "register" || shown === "board" ? shown : backTo;
   /** Open a page from the top bar; the same button again goes back. */
-  const toggle = (p: "settings" | "progress" | "boss") => {
+  const toggle = (p: "settings" | "progress" | "boss" | "teach") => {
     if (shown === p) {
       setPage(backTo);
       return;
@@ -246,11 +249,12 @@ export function App() {
     <div
       class={`app${testMode() ? " test-mode" : ""}`}
       data-role={role}
-      data-tab={shown === "register" ? "register" : tab === "class" ? "hall" : tab === "correction" ? "focus" : tab}
+      data-tab={shown === "register" ? "register" : shown === "teach" ? "theory" : tab === "class" ? "hall" : tab === "correction" ? "focus" : tab}
     >
       <div class="top-wrap" ref={topRef}>
         <header class="top">
-          <div class="top-left">
+          {/* Four icons (the owner: Register, Progress, Owner, Whole class): a little tighter on phones, so the clock fits. */}
+          <div class={`top-left${1 + (canProgress ? 1 : 0) + (isOwner ? 1 : 0) + (canTeach ? 1 : 0) >= 4 ? " many" : ""}`}>
             <button
               type="button"
               class={`att-btn class-btn${shown === "register" ? " on" : ""}`}
@@ -322,6 +326,31 @@ export function App() {
                 </svg>
               </button>
             )}
+            {canTeach && (
+              <button
+                type="button"
+                class={`att-btn teach-btn${shown === "teach" ? " on" : ""}`}
+                aria-pressed={shown === "teach"}
+                aria-label="Whole class: teach any book's lesson to everyone here"
+                onClick={() => toggle("teach")}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  width="21"
+                  height="21"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect x="3" y="3.5" width="18" height="12" rx="1.6" />
+                  <path d="M8.5 21l3.5-5.5 3.5 5.5" />
+                  <path d="M7 8h7M7 11.2h4.5" />
+                </svg>
+              </button>
+            )}
           </div>
           <div class="top-meta">
             <TopStat
@@ -381,6 +410,8 @@ export function App() {
         <Progress board={board} now={now} />
       ) : shown === "boss" ? (
         <BossPage board={board} views={views} now={now} />
+      ) : shown === "teach" ? (
+        <WholeClassPage views={views} />
       ) : tab === "class" ? (
         <ManagerPage board={board} views={views} now={now} canManage={isManager} meId={user._id} />
       ) : tab === "correction" ? (

@@ -26,6 +26,13 @@ export const CHECK_MS = 60_000;
 /** A theory-book answer: the time since her previous mark, at most this; the first of a run this much. */
 export const MARK_MAX_MS = 90_000;
 export const MARK_FIRST_MS = 30_000;
+/**
+ * A whole-class lesson at the board (3 Nov 2026, convex/teach.ts): each Taught tap is her work since her previous tap
+ * at the board, at most BOARD_MAX_MS (a longer gap: she stopped; the first of a run counts BOARD_FIRST_MS). A run on
+ * one unit is one lesson.
+ */
+export const BOARD_MAX_MS = 12 * 60_000;
+export const BOARD_FIRST_MS = 4 * 60_000;
 /** A room visit longer than this was a forgotten Done: it counts this much. */
 export const VISIT_MAX_MS = 45 * 60_000;
 /** A person can keep this share of the hour busy without the queue growing (walking, breaks, slack). */
@@ -373,8 +380,32 @@ export function digestOf(input: {
     return x;
   };
   const lastMark = new Map<string, number>();
+  // Her last tap at the board: when, where its span starts (one tap = one event per student, all at that moment), the unit.
+  const lastBoard = new Map<string, { at: number; s: number; unit?: string }>();
   for (const e of events) {
     if (!e.studentId) continue;
+    if (e.kind === "board") {
+      const room: RoomKey = e.by === "evaluation" ? "evaluation" : "theory";
+      const name = e.who ?? (room === "theory" ? "Theory" : "Evaluation");
+      const x = person(name);
+      let tap = lastBoard.get(name);
+      if (!tap || tap.at !== e.at) {
+        const run = !!tap && e.at - tap.at <= BOARD_MAX_MS && tap.unit === e.unit;
+        tap = { at: e.at, s: e.at - (run ? e.at - tap!.at : BOARD_FIRST_MS), unit: e.unit };
+        lastBoard.set(name, tap);
+        if (!run && room === "theory") {
+          d.rooms.theory.lessons++;
+          x.p.lessons++;
+        }
+      }
+      x.spans[room].push({ s: tap.s, e: e.at, id: e.studentId });
+      if (room === "evaluation") d.rooms.evaluation.qs++;
+      continue;
+    }
+    if (e.kind === "board-undo") {
+      if (e.by === "evaluation") d.rooms.evaluation.qs = Math.max(0, d.rooms.evaluation.qs - 1);
+      continue;
+    }
     const who = e.who ?? "Correction";
     if (e.kind === "level-done") {
       cor.handedIn++;

@@ -23,7 +23,8 @@ import { HOLD_MS, holdOrder, type HeatCount, type LessonKind, type PillOrder } f
  */
 export function KindBar<T extends string>(props: {
   value: T;
-  items: { id: T; label: string; c: HeatCount; room?: boolean; rank?: number }[];
+  /** `open`: it can be tapped even with nobody waiting (the whole-class lesson: a book in the app). */
+  items: { id: T; label: string; c: HeatCount; room?: boolean; rank?: number; open?: boolean }[];
   /** Their fixed places (Fighter, Master, Legend); without it, as given. */
   order?: readonly T[];
   onPick: (k: T) => void;
@@ -40,7 +41,7 @@ export function KindBar<T extends string>(props: {
             type="button"
             class={`tp-kind${on ? " on" : ""}${it.rank && it.rank <= 3 ? ` pri${it.rank}` : ""}`}
             aria-pressed={on}
-            disabled={!on && it.c.total === 0 && !it.room}
+            disabled={!on && it.c.total === 0 && !it.room && !it.open}
             aria-label={`${it.label}: ${it.c.total}, ${heatWords(it.c)}${it.rank && it.rank <= 3 ? `, most urgent ${RANK_WORDS[it.rank - 1]}` : ""}${it.room ? ", your room" : ""}`}
             onClick={() => props.onPick(it.id)}
           >
@@ -92,7 +93,13 @@ export function usePinned(key: unknown) {
  * Grades 6 to 11 in ONE row (his rule), the most urgent first; a grade with nobody waiting is pale, unless her room
  * has a book there (`room`: a dot in her room's colour, and she can tap it).
  */
-export function GradeRow(props: { rows: { grade: number; c: HeatCount; room?: boolean; rank?: number }[]; value: number | null; onPick: (g: number) => void }) {
+export function GradeRow(props: {
+  rows: { grade: number; c: HeatCount; room?: boolean; rank?: number }[];
+  value: number | null;
+  onPick: (g: number) => void;
+  /** Every grade can be tapped (the whole-class lesson: she may teach any grade's book). */
+  open?: boolean;
+}) {
   return (
     <nav class="evx-grades" aria-label="Grades 6 to 11 and OL; the most urgent outlined red, then orange, then yellow">
       {[...props.rows]
@@ -106,7 +113,7 @@ export function GradeRow(props: { rows: { grade: number; c: HeatCount; room?: bo
               type="button"
               class={`evx-g${on ? " on" : ""}${pri ? ` pri${pri}` : ""}`}
               aria-pressed={on}
-              disabled={!on && r.c.total === 0 && !r.room}
+              disabled={!on && r.c.total === 0 && !r.room && !props.open}
               aria-label={`${gradeWords(r.grade)}: ${r.c.total}, ${heatWords(r.c)}${pri ? `, most urgent ${RANK_WORDS[pri - 1]}` : ""}${r.room ? ", your room" : ""}`}
               onClick={() => props.onPick(r.grade)}
             >

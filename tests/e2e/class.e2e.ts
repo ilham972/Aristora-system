@@ -3716,3 +3716,122 @@ test("Teacher card: a real day (working, free, free while students waited, the o
     await S.context().close();
   }
 });
+
+test("Whole class: the top bar's whiteboard; any grade, book, section or level; ticked = saved for them; Taught for all at once, Undo; teaching mode; a corrector doesn't see it", async () => {
+  const backend = await newClass();
+  const C = await phone(backend, "correction");
+  await C.getByRole("button", { name: "Settings" }).click();
+  await C.getByRole("button", { name: "Load demo students (three grades)" }).click();
+  await visible(C.getByText(/^14 demo students loaded/));
+  await C.getByRole("button", { name: "Back to the class" }).click();
+  const T = await phone(backend, "theory");
+  const marks = async (name: string) => (await marksOf(backend, name)).marks;
+
+  // The top bar's whiteboard opens it: every grade can be tapped (6–11 and OL in one row); Grade 11 opens (most are in
+  // it), Fighter, unit 13, and the first section someone still needs (B: Tharun).
+  await T.getByRole("button", { name: /^Whole class/ }).click();
+  const W = T.locator(".wc-page");
+  await visible(W);
+  await until(async () => JSON.stringify(await W.locator(".evx-g b").allTextContents()) === '["6","7","8","9","10","11","OL"]', "the grades");
+  await count(W.locator(".evx-g:disabled"), 0);
+  expect(new Set(await W.locator(".evx-g").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)))).size).toBe(1);
+  await until(async () => (await W.locator(".evx-g.on b").textContent()) === "11", "Grade 11");
+  await contains(W.locator(".tp-kind.on"), "Fighter");
+  await textsAre(W.locator(".evx-u .tp-ln-n"), ["13"]);
+  await until(async () => (await W.locator(".evx-qg b").allTextContents()).join(",") === "A,B,C,D,E,F", "the sections with teacher questions");
+  await until(async () => (await W.locator(".evx-qg.on b").textContent()) === "B", "B: the first someone needs");
+  expect(await namesOf(W.locator(".evx-sp.on"))).toEqual(["Tharun"]);
+
+  // Section D: all nine here are listed; the six who still need D are ticked, the three taught show it.
+  await W.locator(".evx-qg").filter({ has: T.locator("b").getByText("D", { exact: true }) }).click();
+  await until(async () => (await namesOf(W.locator(".evx-sp"))).length === 9, "everyone here in Grade 11");
+  expect(await namesOf(W.locator(".evx-sp.on"))).toEqual(["Ahamed", "Dilan", "Fathima", "Nila", "Rizwan", "Tharun"]);
+  // The three taught already: pale green, counted once in the box's line (no "taught" on every pill).
+  expect(await namesOf(W.locator(".evx-sp.wc-done"))).toEqual(["Kumar", "Sana", "Yasmin"]);
+  await count(W.locator(".evx-sp small"), 0);
+  await contains(W.locator(".evx-bh"), "6 ticked");
+  await contains(W.locator(".evx-bh"), "3 taught");
+  await textsAre(W.locator(".evx-strip .fc-sq small"), ["D·23", "D·24", "D·25", "D·26"]);
+  await contains(W.locator(".evx-card .fc-qhead .fc-qn"), "23");
+  await contains(W.locator(".evx-x"), "for 6");
+  expect(await T.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(T, "wc01-whole-class");
+
+  // Tharun isn't ready (he hasn't done C): untick him. Taught Q23 for five at once; Q24 opens by itself.
+  await W.locator(".evx-sp", { hasText: "Tharun" }).click();
+  await contains(W.locator(".evx-x"), "for 5");
+  await W.locator(".evx-x").click();
+  await contains(T.locator(".toast"), "Q23 taught for 5.");
+  await contains(W.locator(".evx-card .fc-qn"), "24");
+  await until(async () => (await marks("Ahamed"))["23"]?.s === "taught" && (await marks("Rizwan"))["23"]?.s === "taught", "Q23 taught for five");
+  expect((await marks("Tharun"))["23"]).toBeUndefined();
+  expect((await marks("Kumar"))["23"]?.s).toBe("taught"); // he had it already
+  // Undo (a wrong tap): Q23 as it was, the card back on it.
+  await T.locator(".toast").getByRole("button", { name: "Undo" }).click();
+  await until(async () => (await marks("Ahamed"))["23"] === undefined, "Q23 undone");
+  await contains(W.locator(".evx-card .fc-qn"), "23");
+  // Teaching mode: the book on top (13·D, Tamil), the squares, Taught for 5 inside; it saves and goes on.
+  await W.locator(".evx-card .fc-tmb").click();
+  const tm = T.locator(".tm");
+  await visible(tm);
+  await contains(tm.locator(".tm-title .tp-ln-n"), "13·D");
+  await textsAre(tm.locator(".fc-strip .fc-sq small"), ["D·23", "D·24", "D·25", "D·26"]);
+  await contains(tm.locator(".evx-x"), "for 5");
+  await shot(T, "wc02-teaching-mode");
+  for (const q of ["23", "24", "25", "26"]) {
+    await contains(tm.locator(".fc-qn"), q);
+    await tm.locator(".evx-x").click();
+    await contains(T.locator(".toast"), `Q${q} taught for 5.`);
+  }
+  // All four taught: every square ✓, the big button only goes on.
+  await count(tm.locator(".fc-strip .fc-sq.dk"), 4);
+  await visible(tm.locator(".tm-next"));
+  await tm.locator(".tm-x").click();
+  await count(T.locator(".tm"), 0);
+  await until(async () => (await marks("Nila"))["26"]?.s === "taught", "Nila taught D");
+  const nila = await marks("Nila");
+  expect([nila["23"]?.s, nila["24"]?.s, nila["25"]?.s, nila["26"]?.s]).toEqual(["taught", "taught", "taught", "taught"]);
+  // Her score: one lesson (the Undo and the rest are the same lesson), five students, the questions.
+  const st = await backend.t.run(async (ctx) => (await ctx.db.query("sessions").withIndex("by_open", (q) => q.eq("open", true)).first())!.stats ?? {});
+  expect(st.theory).toMatchObject({ lessons: 1, done: 5, qs: 20 });
+  // The history says where it happened.
+  const ev = await backend.t.run(async (ctx) => (await ctx.db.query("events").collect()).filter((e) => e.kind === "board").length);
+  expect(ev).toBe(25); // 5 for Q23, undone, then 4 × 5
+
+  // Grade 7: its workbook (they are all on Master); the level with the most waiting (L2: Malik's Q13 and Q17). Priya and
+  // Vimal have nothing of L2 waiting: pale, nothing saved for them; a tap says why.
+  await W.locator(".evx-g").filter({ has: T.locator("b", { hasText: /^7$/ }) }).click();
+  await until(async () => (await W.locator(".tp-kind.on").textContent())?.startsWith("Master") ?? false, "Master");
+  await until(async () => (await W.locator(".evx-qg.on b").textContent()) === "L2", "Level 2");
+  await textsAre(W.locator(".evx-qg b"), ["L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8"]);
+  expect(await namesOf(W.locator(".evx-sp.on"))).toEqual(["Malik"]);
+  expect(await namesOf(W.locator(".evx-sp.wc-no"))).toEqual(["Priya", "Vimal"]);
+  await W.locator(".evx-sp", { hasText: "Priya" }).click();
+  await contains(T.locator(".toast"), "Priya has nothing of this level waiting");
+  await contains(W.locator(".evx-card .fc-qn"), "13");
+  await W.locator(".evx-x").click();
+  await contains(W.locator(".evx-card .fc-qn"), "17");
+  await until(async () => (await marksOf(backend, "Malik")).m!.q["13"]?.x !== undefined, "Malik's Q13 explained at the board");
+  await shot(T, "wc03-workbook-level");
+
+  // The smallest phone: the owner's four top icons and the clock fit; the grades in one row; the big button on screen.
+  const S = await phone(backend, "theory", { ...PHONE, viewport: { width: 320, height: 568 } });
+  await visible(S.getByRole("button", { name: /^Whole class/ }));
+  expect(await topFits(S), "the owner's top bar fits at 320 px").toBe(true);
+  await S.getByRole("button", { name: /^Whole class/ }).click();
+  await visible(S.locator(".wc-page .evx-x"));
+  expect(await S.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  expect(new Set(await S.locator(".wc-page .evx-g").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)))).size).toBe(1);
+  const big = await S.locator(".wc-page .evx-x").boundingBox();
+  expect(big!.y + big!.height).toBeLessThanOrEqual(568 - 66 + 1);
+  await shot(S, "wc04-whole-class-320");
+  await S.context().close();
+
+  // A corrector (Correction only) has no whiteboard in her top bar.
+  await addPerson(backend.t, { name: "Kavi", token: "kavi-phone-token-0123456789abcdefghijklmnopqrstuvwx", tabs: ["correction"] });
+  const K = await phone(backend, "focus", PHONE, "kavi-phone-token-0123456789abcdefghijklmnopqrstuvwx");
+  await visible(K.locator(".top-left .class-btn"));
+  await count(K.getByRole("button", { name: /^Whole class/ }), 0);
+  await K.context().close();
+  expect(problems, problems.join("\n")).toEqual([]);
+});
