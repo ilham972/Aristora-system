@@ -311,20 +311,6 @@ export function useTick(ms: number): number {
   return now();
 }
 
-// ---- A page opened from inside another page (3 Nov 2026: the Correction page's Manager button opens the Manager
-// page; the bottom tab Correction goes back) ----
-export type InnerPage = "manager";
-const pageListeners = new Set<(p: InnerPage) => void>();
-export function openPage(p: InnerPage) {
-  for (const l of pageListeners) l(p);
-}
-export function onOpenPage(l: (p: InnerPage) => void): () => void {
-  pageListeners.add(l);
-  return () => {
-    pageListeners.delete(l);
-  };
-}
-
 export function setRole(r: By) {
   role = r;
 }

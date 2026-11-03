@@ -10,8 +10,6 @@ import { slDay } from "./lib/day";
 import { extra, tab } from "./schema";
 
 const token = v.optional(v.string());
-/** The Manager page opens from the Correction page (3 Nov 2026): a manager needs the Correction job too. */
-const MANAGER_NEEDS = "The Manager button is on the Correction page: tick Correction too.";
 
 /** Everyone, with their phones and their newest sign-in link. */
 export const list = query({
@@ -55,13 +53,14 @@ export const list = query({
 });
 
 /**
- * The Manager page (2 Nov 2026; any manager since 3 Nov): the teachers he can send students to, with their jobs and
- * when their last student went back today (her room has been free since then). No phones, links or PINs.
+ * The Class tab (the Manager page until 3 Nov 2026; everyone sees it since, only managers act on it): every teacher with
+ * a job, with her jobs, when her last student went back today (her room has been free since then) and her stay today
+ * (arrived / went, marked by the manager). The owner only on the days he teaches. No phones, links or PINs.
  */
 export const team = query({
   args: { token },
   handler: async (ctx, args) => {
-    await viewer(ctx, args.token, "manager");
+    await viewer(ctx, args.token, "any");
     const now = Date.now();
     const today = slDay(now);
     const users = await ctx.db.query("users").collect();
@@ -76,15 +75,23 @@ export const team = query({
       if (!c.teacherId || c.test || c.endedAt === undefined || slDay(c.endedAt) !== today) continue;
       lastEnd.set(c.teacherId, Math.max(lastEnd.get(c.teacherId) ?? 0, c.endedAt));
     }
-    // The teachers, and the owner on the days he teaches (his switch: he can do both Theory and Evaluation).
+    // Her stay today: the open one, else her last (went).
+    const stays = await ctx.db.query("duty").withIndex("by_day", (q) => q.eq("day", today)).collect();
+    const stayOf = (id: string) => {
+      const mine = stays.filter((s) => s.userId === id).sort((a, b) => b.inAt - a.inAt);
+      const s = mine.find((x) => x.outAt === undefined) ?? mine[0];
+      return s ? { id: s._id, inAt: s.inAt, outAt: s.outAt ?? null, editedAt: s.editedAt } : null;
+    };
+    // The teachers with a job, and the owner on the days he teaches (his switch: he can do both Theory and Evaluation).
     return users
-      .filter((u) => u.active && (u.role === "teacher" ? u.tabs.includes("theory") || u.tabs.includes("evaluation") : !!u.teaching))
+      .filter((u) => u.active && (u.role === "teacher" ? u.tabs.some((t) => t !== "manager") : !!u.teaching))
       .map((u) => ({
         _id: u._id,
         name: u.name,
         role: u.role,
         tabs: u.role === "owner" ? (["theory", "evaluation"] as typeof u.tabs) : u.tabs,
         lastEnd: lastEnd.get(u._id) ?? null,
+        stay: u.role === "owner" ? null : stayOf(u._id),
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
   },
@@ -118,7 +125,6 @@ export const add = mutation({
     const now = Date.now();
     const name = cleanName(args.name);
     if (args.tabs.length === 0) fail("Tick at least one job: Correction, Theory, Evaluation or Manager.");
-    if (args.tabs.includes("manager") && !args.tabs.includes("correction")) fail(MANAGER_NEEDS);
     await nameFree(ctx, name);
     const count = (await ctx.db.query("users").collect()).filter((u) => u.active).length;
     if (count >= 30) fail("That's 30 people already. Remove someone first.");
@@ -153,7 +159,6 @@ export const update = mutation({
     if (u.role === "owner" && (args.tabs !== undefined || args.can !== undefined)) fail("The owner can always do everything.");
     if (args.tabs !== undefined) {
       if (args.tabs.length === 0) fail("Tick at least one job: Correction, Theory, Evaluation or Manager.");
-      if (args.tabs.includes("manager") && !args.tabs.includes("correction")) fail(MANAGER_NEEDS);
       patch.tabs = [...new Set(args.tabs)];
     }
     if (args.can !== undefined) patch.can = [...new Set(args.can)];

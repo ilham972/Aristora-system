@@ -161,17 +161,19 @@ describe("The manager sends students to a teacher", () => {
   });
 });
 
-describe("The owner teaches today (his switch), and the Manager job needs Correction", () => {
+describe("The owner teaches today (his switch), and the Manager job", () => {
   test("on: his room (Theory and Evaluation), the manager sends him students; off: gone; his only", async () => {
     const { t, kavi } = await setup();
     const me = async () => (await t.query(api.auth.me, {})).user!;
     expect((await me()).teaching).toBe(false);
-    expect((await kavi.query(api.people.team, {})).map((u) => u.name)).toEqual(["Fathima", "Nila"]);
+    expect((await kavi.query(api.people.team, {})).map((u) => u.name)).toEqual(["Corrector", "Fathima", "Kavi", "Nila"]);
     await t.mutation(api.people.setTeaching, { on: true });
     expect((await me()).teaching).toBe(true);
     const team = await kavi.query(api.people.team, {});
     expect(team.map((u) => [u.name, u.role, u.tabs])).toEqual([
+      ["Corrector", "teacher", ["correction"]],
       ["Fathima", "teacher", ["theory"]],
+      ["Kavi", "teacher", ["correction", "manager"]],
       ["Nila", "teacher", ["evaluation", "theory"]],
       ["Owner", "owner", ["theory", "evaluation"]],
     ]);
@@ -180,35 +182,39 @@ describe("The owner teaches today (his switch), and the Manager job needs Correc
     const res = await kavi.mutation(api.calls.create, { studentIds: [id], room: "evaluation", kind: "evaluation", teacherId: owner._id });
     expect(res.created).toHaveLength(1);
     await t.mutation(api.people.setTeaching, { on: false });
-    expect((await kavi.query(api.people.team, {})).map((u) => u.name)).toEqual(["Fathima", "Nila"]);
+    expect((await kavi.query(api.people.team, {})).map((u) => u.name)).toEqual(["Corrector", "Fathima", "Kavi", "Nila"]);
     await expect(kavi.mutation(api.people.setTeaching, { on: true })).rejects.toThrow();
   });
 
-  test("Manager without Correction is refused (the button is on the Correction page)", async () => {
+  test("Manager with any job, or alone (the Class tab is in the bottom bar since 3 Nov 2026: no Correction needed)", async () => {
     const { t, nila } = await setup();
-    await expect(t.mutation(api.people.add, { name: "Rani", tabs: ["manager"], can: [] })).rejects.toThrow(/tick Correction too/);
-    await expect(t.mutation(api.people.update, { id: nila, tabs: ["evaluation", "manager"] })).rejects.toThrow(/tick Correction too/);
-    await t.mutation(api.people.update, { id: nila, tabs: ["evaluation", "correction", "manager"] });
+    await t.mutation(api.people.add, { name: "Rani", tabs: ["manager"], can: [] });
+    await t.mutation(api.people.update, { id: nila, tabs: ["evaluation", "manager"] });
+    const u = await t.run(async (ctx) => (await ctx.db.get(nila))!);
+    expect(u.tabs).toEqual(["evaluation", "manager"]);
   });
 });
 
-describe("The teachers he can send to, and one student's day", () => {
-  test("active teachers with Theory or Evaluation; when her last student went back today; managers only", async () => {
+describe("The teachers on the Class tab, and one student's day", () => {
+  test("active teachers with a job; when her last student went back today; everyone may read it (3 Nov 2026)", async () => {
     const { t, nila, kavi } = await setup();
-    expect((await kavi.query(api.people.team, {})).map((u) => [u.name, u.tabs, u.lastEnd])).toEqual([
-      ["Fathima", ["theory"], null],
-      ["Nila", ["evaluation", "theory"], null],
+    expect((await kavi.query(api.people.team, {})).map((u) => [u.name, u.tabs, u.lastEnd, u.stay])).toEqual([
+      ["Corrector", ["correction"], null, null],
+      ["Fathima", ["theory"], null, null],
+      ["Kavi", ["correction", "manager"], null, null],
+      ["Nila", ["evaluation", "theory"], null, null],
     ]);
     const a = await student(t, "Ahamed");
     const res = await kavi.mutation(api.calls.create, { studentIds: [a], room: "evaluation", kind: "evaluation", teacherId: nila });
     advance(5);
     await asPhone(t, NILA_TOKEN).mutation(api.calls.finish, { items: [{ callId: res.created[0].callId, explained: [5] }] });
     expect((await kavi.query(api.people.team, {})).find((u) => u.name === "Nila")?.lastEnd).toBe(Date.now());
-    await expect(asPhone(t, NILA_TOKEN).query(api.people.team, {})).rejects.toThrow();
-    await expect(asPhone(t, CORR_TOKEN).query(api.people.team, {})).rejects.toThrow();
+    // The Class tab is everyone's (3 Nov 2026): the teachers read it too; only managers act.
+    expect((await asPhone(t, NILA_TOKEN).query(api.people.team, {})).length).toBe(4);
+    expect((await asPhone(t, CORR_TOKEN).query(api.people.team, {})).length).toBe(4);
   });
 
-  test("his day: working, no work, walking, with Nila; managers only", async () => {
+  test("his day: working, no work, walking, with Nila; anyone may read it (the Class tab)", async () => {
     const { t, nila, kavi } = await setup();
     const a = await student(t, "Ahamed");
     // He works 10 minutes, the last 6 with no work (out of work clock), then goes to Nila for 4 minutes.
@@ -229,6 +235,6 @@ describe("The teachers he can send to, and one student's day", () => {
       ["work", ""],
     ]);
     expect([d.contacts, d.teacherMs / MIN, d.walkMs / MIN]).toEqual([1, 4, 1]);
-    await expect(asPhone(t, NILA_TOKEN).query(api.manager.day, { studentId: a })).rejects.toThrow();
+    expect((await asPhone(t, NILA_TOKEN).query(api.manager.day, { studentId: a })).contacts).toBe(1);
   });
 });

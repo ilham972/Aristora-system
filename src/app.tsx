@@ -16,20 +16,20 @@ import { useFeedbackNew } from "./feedbackList";
 import { alertsState, armAlerts, listenForTaps, ring, useAlertsState, type AlertKind } from "./sound";
 import { clearHash, PinSheet, pinAsked, readHash, SignIn, stopAskingPin, type Hash } from "./signin";
 import { hideSplash } from "./splash";
-import { currentMe, may, onOpenPage, setRole, signOutHere, testMode, useStore, useTick, type Board, type Role } from "./store";
+import { currentMe, may, setRole, signOutHere, testMode, useStore, useTick, type Board, type Role } from "./store";
 import { Sheet, Toasts } from "./ui";
 
 /**
- * The bottom bar (30 Oct 2026, his call): each job's own page, Correction (marking papers; the code calls it Focus),
- * Theory and Evaluation, for the jobs this person has. The whole class (Class) is an icon in the top bar, for
- * everyone, with Progress. A phone with none of the jobs has no bottom bar: Class is its home.
+ * The bottom bar (30 Oct 2026, his call): the Class tab for everyone (3 Nov 2026: the hall and every teacher's room,
+ * the Manager page before; only managers act on it), then each job's own page, Correction (marking papers; the code
+ * calls it Focus), Theory and Evaluation, for the jobs this person has. Everyone's register (the Register: a list
+ * icon) and Progress are in the top bar.
  */
-type TabId = "correction" | "theory" | "evaluation";
-// The Manager page (3 Nov 2026, his call): not a bottom tab (a new hire shown as "Manager" to senior teachers is not
-// healthy); a button on the Correction page opens it, the Correction tab goes back.
-type Page = "board" | "class" | "settings" | "progress" | "boss" | "manager";
+type TabId = "class" | "correction" | "theory" | "evaluation";
+type Page = "board" | "register" | "settings" | "progress" | "boss";
 
 const TABS: { id: TabId; label: string }[] = [
+  { id: "class", label: "Class" },
   { id: "correction", label: "Correction" },
   { id: "theory", label: "Theory" },
   { id: "evaluation", label: "Evaluation" },
@@ -37,24 +37,46 @@ const TABS: { id: TabId; label: string }[] = [
 const JOBS: Role[] = ["correction", "theory", "evaluation"];
 
 /**
- * Where this phone was: Correction ("focus"), Theory or Evaluation (the bottom bar), or Class. "correction" meant the
- * Class tab (before 29 Oct 2026), now the Class page.
+ * Where this phone was: the Class tab ("hall"), Correction ("focus"), Theory or Evaluation, or the Register ("class":
+ * it was called Class until 3 Nov 2026; "correction" meant it before 29 Oct 2026). Nothing kept: her first job's tab.
  */
-function loadStart(): { tab: TabId; page: Page } {
+function loadStart(): { tab: TabId | null; page: Page } {
   try {
     const r = localStorage.getItem("aristora.role");
     if (r === "theory" || r === "evaluation") return { tab: r, page: "board" };
-    // ("manager": the Manager tab of 2–3 Nov 2026; it is inside the Correction page now.)
-    if (r === "focus" || r === "manager") return { tab: "correction", page: "board" };
-    if (r === "class" || r === "correction") return { tab: "theory", page: "class" };
+    if (r === "focus") return { tab: "correction", page: "board" };
+    // ("manager": the Manager tab of 2–3 Nov 2026, now the Class tab.)
+    if (r === "hall" || r === "manager") return { tab: "class", page: "board" };
+    if (r === "class" || r === "correction") return { tab: null, page: "register" };
   } catch {
     /* private mode */
   }
-  return { tab: "theory", page: "board" };
+  return { tab: null, page: "board" };
 }
 
-/** The pages a top-bar page goes back to: the bottom tab, or Class. */
-type Home = "board" | "class";
+/** The pages a top-bar page goes back to: the bottom tab, or the Register. */
+type Home = "board" | "register";
+
+/** The Class tab's mark: the centre from above, the rooms and the hall (the Manager button's icon until 3 Nov 2026). */
+function ClassMark() {
+  return (
+    <svg
+      class="tab-plan"
+      viewBox="0 0 24 24"
+      width="19"
+      height="19"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2.3"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <rect x="3" y="3.5" width="18" height="17" rx="2.5" />
+      <path d="M3 10.5h18M12 3.5v7" />
+    </svg>
+  );
+}
 
 /** The job this phone did last (Correction, Theory or Evaluation): the Class page's taps follow it. */
 function loadJob(): Role | null {
@@ -70,11 +92,11 @@ function loadJob(): Role | null {
 export function App() {
   const { board, boardError, link, me } = useStore();
   const [start] = useState(loadStart);
-  const [chosen, setTab] = useState<TabId>(start.tab);
+  const [chosen, setTab] = useState<TabId | null>(start.tab);
   const [page, setPage] = useState<Page>(start.page);
   const [lastJob, setLastJob] = useState<Role | null>(loadJob);
-  // Settings and Progress go back to the page they were opened from: Class or the bottom tab.
-  const [backTo, setBackTo] = useState<Home>(start.page === "class" ? "class" : "board");
+  // Settings and Progress go back to the page they were opened from: the Register or the bottom tab.
+  const [backTo, setBackTo] = useState<Home>(start.page === "register" ? "register" : "board");
   // The address bar can hold a sign-in link (#join=...) or the setup code (#setup=...).
   const [, setHashSeen] = useState(0);
   const hash: Hash = readHash();
@@ -83,58 +105,57 @@ export function App() {
     setHashSeen((n) => n + 1);
   };
   const [pinClosedFor, setPinClosedFor] = useState<string | null>(null);
-  // Attendance: a full page over any page (from the count by the clock, or Class when nobody is in yet).
+  // Attendance: a full page over any page (from the count by the clock, or the Register when nobody is in yet).
   const [attOpen, setAttOpen] = useState(false);
   const now = useTick(10_000);
   const alerts = useAlertsState();
   const topRef = useRef<HTMLDivElement>(null);
   const loaded = !!board;
   const user = me?.user ?? null;
-  // Correction, Theory and Evaluation for those jobs (the bottom bar); Class for everyone (the top bar).
+  // The Class tab for everyone, then Correction, Theory and Evaluation for those jobs (the bottom bar).
   const jobs = JOBS.filter((j) => !user || user.role === "owner" || user.tabs.includes(j));
-  const tabs = TABS.filter((t) => jobs.includes(t.id));
-  // The Manager page: the owner, and whoever has the Manager job (Settings → People), from the Correction page.
+  const tabs = TABS.filter((t) => t.id === "class" || jobs.includes(t.id));
+  // The Class tab's powers (send students, mark teachers arrived): the owner, and whoever has the Manager job.
   const isManager = user?.role === "owner" || !!user?.tabs.includes("manager");
-  const tab: TabId = tabs.some((t) => t.id === chosen) ? chosen : (tabs[0]?.id ?? "theory");
+  // Nothing kept on this phone: the managers start on the Class tab, the others on their first job's page.
+  const first: TabId = isManager ? "class" : (tabs.find((t) => t.id !== "class")?.id ?? "class");
+  const tab: TabId = chosen && tabs.some((t) => t.id === chosen) ? chosen : first;
   // Correction (marking papers, and signing students in with its +) is Correction's job; Progress needs Reports.
   const canCorrect = may("correction");
   const canProgress = may("reports");
   // The Owner page: the owner only (it shows each teacher's own numbers and his money).
   const isOwner = user?.role === "owner";
-  // Home: the bottom tab, else Class.
-  const home: Home = tabs.length ? "board" : "class";
-  const wanted: Page = page === "board" && !tabs.length ? home : page;
-  const shown: Page =
-    (wanted === "progress" && !canProgress) || (wanted === "boss" && !isOwner) || (wanted === "manager" && !isManager) ? backTo : wanted;
-  const base: Home = shown === "class" || shown === "board" ? shown : backTo;
+  const shown: Page = (page === "progress" && !canProgress) || (page === "boss" && !isOwner) ? backTo : page;
+  const base: Home = shown === "register" || shown === "board" ? shown : backTo;
   /** Open a page from the top bar; the same button again goes back. */
   const toggle = (p: "settings" | "progress" | "boss") => {
     if (shown === p) {
       setPage(backTo);
       return;
     }
-    if (shown === "board" || shown === "class") setBackTo(shown);
+    if (shown === "board" || shown === "register") setBackTo(shown);
     setPage(p);
   };
-  /** Class from the top bar: it just opens. */
-  const goClass = () => {
-    setBackTo("class");
-    setPage("class");
+  /** The Register from the top bar: it just opens. */
+  const goRegister = () => {
+    setBackTo("register");
+    setPage("register");
   };
-  // The job decides the taps, what the phone hears and the `by` the server records. Class: the job done last.
+  // The job decides the taps, what the phone hears and the `by` the server records. The Register and the Class tab:
+  // the job done last.
   const classJob: Role = lastJob && jobs.includes(lastJob) ? lastJob : (jobs[0] ?? "correction");
-  // The Manager page is inside the Correction page: it hears what Correction hears.
-  const role: Role = base === "class" ? classJob : tab;
+  const onClassTab = shown === "board" && tab === "class";
+  const role: Role = base === "register" || tab === "class" ? classJob : tab;
 
-  // Taps on the Manager page are recorded as the manager's ("by the manager" in the history).
-  setRole(shown === "manager" ? "manager" : role);
+  // A manager's taps on the Class tab are recorded as the manager's ("by the manager" in the history).
+  setRole(onClassTab && isManager ? "manager" : role);
   useEffect(() => {
     try {
-      localStorage.setItem("aristora.role", base === "class" ? "class" : tab === "correction" ? "focus" : tab);
+      localStorage.setItem("aristora.role", base === "register" ? "class" : tab === "correction" ? "focus" : tab === "class" ? "hall" : tab);
     } catch {
       /* private mode */
     }
-    const job: Role | null = base === "class" ? null : tab;
+    const job: Role | null = base === "register" || tab === "class" ? null : tab;
     if (job && job !== lastJob) {
       setLastJob(job);
       try {
@@ -146,16 +167,6 @@ export function App() {
   }, [tab, base]);
   // Phones only allow sound after a tap: every tap turns alerts (back) on where needed.
   useEffect(() => listenForTaps(), []);
-  // The Correction page's Manager button opens the Manager page (the Correction tab comes back to it).
-  useEffect(
-    () =>
-      onOpenPage((p) => {
-        setTab("correction");
-        setBackTo("board");
-        setPage(p);
-      }),
-    [],
-  );
   useEffect(() => {
     const seen = () => setHashSeen((n) => n + 1);
     window.addEventListener("hashchange", seen);
@@ -228,24 +239,24 @@ export function App() {
   // Students the manager sent to this teacher, still on their way to her (her Arrived not tapped yet), per room.
   const myId = user?._id;
   const comingTo = (room: "theory" | "evaluation") => board.calls.filter((c) => c.byManager && c.teacherId === myId && c.room === room && isWalking(c)).length;
-  // Class's count: students in the hall with no work right now (red), for whoever looks.
+  // The Class tab's count: students in the hall with no work right now (red), for whoever looks.
   const idleNow = views.filter((v) => v.where === "hall" && v.tone === "red").length;
 
   return (
     <div
-      class={`app${tabs.length ? "" : " no-tabs"}${testMode() ? " test-mode" : ""}`}
+      class={`app${testMode() ? " test-mode" : ""}`}
       data-role={role}
-      data-tab={shown === "class" ? "class" : shown === "manager" ? "manager" : tab === "correction" ? "focus" : tab}
+      data-tab={shown === "register" ? "register" : tab === "class" ? "hall" : tab === "correction" ? "focus" : tab}
     >
       <div class="top-wrap" ref={topRef}>
         <header class="top">
           <div class="top-left">
             <button
               type="button"
-              class={`att-btn class-btn${shown === "class" ? " on" : ""}`}
-              aria-pressed={shown === "class"}
-              aria-label={`Class: the whole class${idleNow ? `, ${idleNow} with no work` : ""}`}
-              onClick={goClass}
+              class={`att-btn class-btn${shown === "register" ? " on" : ""}`}
+              aria-pressed={shown === "register"}
+              aria-label="Register: everyone in class, row by row"
+              onClick={goRegister}
             >
               <svg
                 viewBox="0 0 24 24"
@@ -262,11 +273,6 @@ export function App() {
                 <circle cx="5" cy="18" r="1.9" />
                 <path d="M10 6h10M10 12h10M10 18h7" />
               </svg>
-              {idleNow > 0 && (
-                <b class="att-n red" aria-hidden="true">
-                  {idleNow}
-                </b>
-              )}
             </button>
             {canProgress && (
               <button
@@ -369,14 +375,14 @@ export function App() {
 
       {shown === "settings" ? (
         <Settings views={views} onClose={() => setPage(backTo)} start={fbNew > 0 ? "feedback" : undefined} fbNew={fbNew} />
-      ) : shown === "class" ? (
+      ) : shown === "register" ? (
         <ClassPage board={board} views={views} now={now} job={role} onAttendance={() => setAttOpen(true)} />
       ) : shown === "progress" ? (
         <Progress board={board} now={now} />
       ) : shown === "boss" ? (
         <BossPage board={board} views={views} now={now} />
-      ) : shown === "manager" ? (
-        <ManagerPage board={board} views={views} now={now} />
+      ) : tab === "class" ? (
+        <ManagerPage board={board} views={views} now={now} canManage={isManager} meId={user._id} />
       ) : tab === "correction" ? (
         <Focus board={board} views={views} now={now} />
       ) : tab === "evaluation" ? (
@@ -385,39 +391,39 @@ export function App() {
         <TheoryTab board={board} views={views} now={now} />
       )}
 
-      {tabs.length > 0 && (
-        <nav class={`tabs n${tabs.length}`} aria-label="Choose your page">
-          {tabs.map((r) => {
-            // A number: something waits for that page's job while this phone is busy elsewhere. Theory, Evaluation:
-            // students with no work (red). Correction: papers handed in (amber; red when someone has no work until then).
-            // (The Manager page is inside the Correction page: Correction stays lit there; its tab goes back.)
-            const here = tab === r.id && (shown === "board" || (shown === "manager" && r.id === "correction"));
-            const away = !here;
-            // The manager sent students to her for this page (3 Nov 2026): they come first, in the room's colour.
-            const coming = !away || (r.id !== "theory" && r.id !== "evaluation") ? 0 : comingTo(r.id);
-            const badge = !away ? 0 : coming || (r.id === "theory" ? theoryRed : r.id === "evaluation" ? evalRed : papers);
-            const amber = r.id === "correction" && !papersRed;
-            return (
-              <button
-                key={r.id}
-                type="button"
-                class={`tab ${r.id}${here ? " on" : ""}`}
-                aria-current={here ? "page" : undefined}
-                aria-label={`${r.label}${badge ? `, ${badge} ${coming ? "coming to you" : r.id === "correction" ? "waiting" : "with no work"}` : ""}`}
-                onClick={() => {
-                  setTab(r.id);
-                  setBackTo("board");
-                  setPage("board");
-                }}
-              >
-                <span class="tab-mark" aria-hidden="true" />
-                <span>{r.label}</span>
-                {badge > 0 && <span class={`tab-badge${coming ? ` tb-coming ${r.id}` : amber ? " tb-amber" : ""}`}>{badge}</span>}
-              </button>
-            );
-          })}
-        </nav>
-      )}
+      <nav class={`tabs n${tabs.length}`} aria-label="Choose your page">
+        {tabs.map((r) => {
+          // A number: something waits for that page's job while this phone is busy elsewhere. Class: students in the
+          // hall with no work (red). Theory, Evaluation: students with no work (red). Correction: papers handed in
+          // (amber; red when someone has no work until then).
+          const here = tab === r.id && shown === "board";
+          const away = !here;
+          // The manager sent students to her for this page (3 Nov 2026): they come first, in the room's colour.
+          const coming = !away || (r.id !== "theory" && r.id !== "evaluation") ? 0 : comingTo(r.id);
+          const badge = !away
+            ? 0
+            : coming || (r.id === "class" ? idleNow : r.id === "theory" ? theoryRed : r.id === "evaluation" ? evalRed : papers);
+          const amber = r.id === "correction" && !papersRed;
+          return (
+            <button
+              key={r.id}
+              type="button"
+              class={`tab ${r.id}${here ? " on" : ""}`}
+              aria-current={here ? "page" : undefined}
+              aria-label={`${r.label}${badge ? `, ${badge} ${coming ? "coming to you" : r.id === "correction" ? "waiting" : "with no work"}` : ""}`}
+              onClick={() => {
+                setTab(r.id);
+                setBackTo("board");
+                setPage("board");
+              }}
+            >
+              {r.id === "class" ? <ClassMark /> : <span class="tab-mark" aria-hidden="true" />}
+              <span>{r.label}</span>
+              {badge > 0 && <span class={`tab-badge${coming ? ` tb-coming ${r.id}` : amber ? " tb-amber" : ""}`}>{badge}</span>}
+            </button>
+          );
+        })}
+      </nav>
       {attOpen && canCorrect && <AttendanceSheet board={board} views={views} now={now} onClose={() => setAttOpen(false)} />}
       <Toasts />
       <Alerts role={role} board={board} views={views} now={now} live={link.connected} />

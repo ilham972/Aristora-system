@@ -397,7 +397,12 @@ function personWords(p: Digest["people"][number]): string {
   if (p.marks) bits.push(`${p.marks} answers`);
   if (p.lessons) bits.push(`${p.lessons} lesson${p.lessons === 1 ? "" : "s"}`);
   if (p.visits && !p.lessons) bits.push(`${p.visits} student${p.visits === 1 ? "" : "s"} seen`);
-  return `${busy} busy · ${bits.join(" · ")}`;
+  // Her stay (3 Nov 2026: the manager marks arrived / went): here, free, free while work waited for her.
+  if (p.hereMin !== undefined) {
+    const free = p.freeMin !== undefined ? ` · free ${minWords(p.freeMin)}${p.missedMin ? ` (${minWords(p.missedMin)} while work waited)` : ""}` : "";
+    bits.push(`here ${minWords(p.hereMin)}${free}`);
+  }
+  return [`${busy} busy`, ...bits].join(" · ");
 }
 
 /** The class every 15 minutes, three small charts on one time line (never two scales on one chart). */

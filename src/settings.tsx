@@ -706,7 +706,7 @@ function Alerts(props: { views: View[] }) {
         </span>
       </label>
       <p class="note">
-        Alerts follow the page that is open. Correction hears calls (and Class, on a Correction phone). Theory and Evaluation hear a knock when a student runs out of
+        Alerts follow the page that is open. Correction hears calls (and the Class tab and the Register, on a Correction phone). Theory and Evaluation hear a knock when a student runs out of
         work, and Evaluation hears "Theory wants Kumar now".
       </p>
 
@@ -795,7 +795,13 @@ function describe(e: Doc<"events">): string {
     case "in":
       return "signed in";
     case "teaching":
-      return v === "on" ? "teaching today: on (his room on the Manager page)" : "teaching today: off";
+      return v === "on" ? "teaching today: on (his room on the Class tab)" : "teaching today: off";
+    case "duty": {
+      // A teacher's stay, marked by the manager (3 Nov 2026): "in 3:05", "out 5:40", "in 3:00 (moved)", "in taken back".
+      if (v.endsWith("taken back")) return v.startsWith("in") ? "arrival taken back (tapped by mistake)" : "went taken back: here again";
+      const [what, ...rest] = v.split(" ");
+      return `${what === "in" ? "arrived" : "went"} ${rest.join(" ")}`.trim();
+    }
     case "out":
       return "signed out";
     case "in-undo":
@@ -992,12 +998,12 @@ function History() {
 
 const TAB_NAMES: Record<Job, string> = { correction: "Correction", theory: "Theory", evaluation: "Evaluation", manager: "Manager" };
 const EXTRA_NAMES: Record<Extra, string> = { students: "Students", books: "Books", reports: "Reports and History", feedback: "Feedback" };
-/** What each job opens (everyone has Class, at the top). */
+/** What each job opens (everyone has the Class tab and the Register). */
 const TAB_HELP: Record<Job, string> = {
-  correction: "the Correction page at the top (marking papers, + to sign students in), sending students to the rooms",
+  correction: "the Correction page (marking papers, + to sign students in), sending students to the rooms",
   theory: "the Theory page (bottom)",
   evaluation: "the Evaluation page (bottom)",
-  manager: "a button on the Correction page (with Correction): the hall and every teacher's room; sends any student to any teacher",
+  manager: "the Class tab's powers: sends any student to any teacher, marks teachers arrived and went, sees every teacher's card",
 };
 const EXTRA_HELP: Record<Extra, string> = {
   students: "add, rename, remove students",
@@ -1028,7 +1034,7 @@ function untilWords(t: number): string {
 
 /** This phone: who is signed in, the PIN, signing out, and what the sign-in protects. */
 /**
- * The owner teaches today, or not (3 Nov 2026, his ask: "only for me"). On: his room on the Manager page, the manager
+ * The owner teaches today, or not (3 Nov 2026, his ask: "only for me"). On: his room on the Class tab, the manager
  * can send him students (his phone calls him). Off: no room (he went out).
  */
 function TeachingSwitch(props: { on: boolean }) {
@@ -1038,12 +1044,12 @@ function TeachingSwitch(props: { on: boolean }) {
     setBusy(true);
     const r = await act(() => mutate(api.people.setTeaching, { on }));
     setBusy(false);
-    if (r !== undefined) toast(on ? "You teach today: your room is on the Manager page." : "You don't teach now: your room is gone.");
+    if (r !== undefined) toast(on ? "You teach today: your room is on the Class tab." : "You don't teach now: your room is gone.");
   };
   return (
     <>
       <h3 class="block-title">Teaching</h3>
-      <p class="muted small">On: your own room on the Manager page; the manager can send students to you. Off when you go out.</p>
+      <p class="muted small">On: your own room on the Class tab; the manager can send students to you. Off when you go out.</p>
       <div class="segc plain teach-switch" role="group" aria-label="Do you teach now?">
         <button type="button" class={`segc-b${props.on ? "" : " on"}`} aria-pressed={!props.on} disabled={busy} onClick={() => void set(false)}>
           Not teaching
@@ -1256,13 +1262,7 @@ function PersonSheet(props: { person?: Person; onClose: () => void; onAdded?: (i
                 <input
                   type="checkbox"
                   checked={tabs.includes(t)}
-                  onChange={() => {
-                    // The Manager button is on the Correction page: Manager brings Correction, and no Correction, no Manager.
-                    let next = toggle(tabs, t);
-                    if (t === "manager" && next.includes("manager") && !next.includes("correction")) next = [...next, "correction"];
-                    if (t === "correction" && !next.includes("correction")) next = next.filter((x) => x !== "manager");
-                    setTabs(next);
-                  }}
+                  onChange={() => setTabs(toggle(tabs, t))}
                 />
                 <span>
                   {TAB_NAMES[t]}

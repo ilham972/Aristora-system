@@ -311,6 +311,27 @@ export default defineSchema({
     .index("by_student", ["studentId", "inAt"])
     .index("by_day", ["day", "inAt"]),
 
+  /**
+   * A teacher's stay at the centre (3 Nov 2026, his ask: "arrived time and went time, all done by manager"): one row per
+   * stay, marked by the manager (or the owner) on the Class tab. Closed by Went, by End the session, or by a class
+   * left open. Her numbers (her card: working, free, free while students waited) count only inside it.
+   */
+  duty: defineTable({
+    userId: v.id("users"),
+    /** The day in Sri Lanka: "2026-11-03". */
+    day: v.string(),
+    inAt: v.number(),
+    /** Went (or the class ended). Missing while she is here. */
+    outAt: v.optional(v.number()),
+    /** Who marked her arrived / went (the manager's or the owner's name). */
+    inBy: v.optional(v.string()),
+    outBy: v.optional(v.string()),
+    /** When the row last changed (Undo works for 5 minutes after a mark). */
+    editedAt: v.number(),
+  })
+    .index("by_user", ["userId", "inAt"])
+    .index("by_day", ["day", "inAt"]),
+
   /** One student's work in one book: theory-book circles (Fighter) or workbook levels and marks (Master). */
   progress: defineTable({
     studentId: v.id("students"),

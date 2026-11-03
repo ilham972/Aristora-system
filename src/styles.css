@@ -396,6 +396,22 @@ button.top-stat:active {
 .tab.evaluation.on {
   color: var(--evaluation);
 }
+/* The Class tab (3 Nov 2026): first, everyone's; the centre from above as its mark. Four tabs: smaller words. */
+.tab-plan {
+  display: block;
+}
+.tab.on .tab-plan {
+  stroke-width: 2.8;
+}
+.tabs.n4 .tab {
+  font-size: 14px;
+}
+@media (max-width: 345px) {
+  .tabs.n4 .tab {
+    font-size: 12.5px;
+    letter-spacing: -0.1px;
+  }
+}
 .tab.on::before {
   content: "";
   position: absolute;
@@ -3577,8 +3593,8 @@ body.locked.fc-marking .toasts {
   align-items: center;
   gap: 6px;
 }
-/* (3 Nov 2026, his call: no big name here, it is dark in the names row) The Manager button (managers) and the book
-   button on the left; Later, the sheet, went home, Marks on the right. */
+/* (3 Nov 2026, his call: no big name here, it is dark in the names row) The book button on the left (the Manager
+   button left for the bottom bar's Class tab the same day); Later, the sheet, went home, Marks on the right. */
 .fc-head-tools {
   flex: none;
   display: flex;
@@ -3589,38 +3605,12 @@ body.locked.fc-marking .toasts {
 .fc-head .fc-units {
   height: 38px;
 }
-.fc-mgr {
-  position: relative;
-  display: inline-grid;
-  place-items: center;
-  width: 42px;
-  padding-left: 0;
-  padding-right: 0;
-  border-color: var(--ink);
-  color: var(--ink);
-}
-.fc-mgr-n {
-  position: absolute;
-  top: -7px;
-  right: -7px;
-  min-width: 19px;
-  height: 19px;
-  padding: 0 5px;
-  border-radius: 999px;
-  display: grid;
-  place-items: center;
-  background: var(--red);
-  color: #fff;
-  font: 700 11.5px/1 var(--font);
-  font-style: normal;
-}
 @media (max-width: 345px) {
   .fc-head,
   .fc-head-tools,
   .fc-head-acts {
     gap: 4px;
   }
-  .fc-mgr,
   .fc-head .fc-gohome,
   .fc-head .fc-racebtn {
     width: 34px;
@@ -8867,19 +8857,20 @@ body.mg2-on .app {
 .mg2-room.d-free {
   border-color: var(--green);
 }
-/* Free while work waits for her: amber at 2 minutes, red at 5 (3 Nov 2026: "teachers rest silently"). */
+/* Free while work waits for her: yellow at 2 minutes, amber at 5 (3 Nov 2026: "teachers rest silently"). Never red:
+   every teacher sees the Class tab, and red says she is doing wrong (his rule the same day). */
+.mg2-room.a-yellow {
+  border-color: var(--yellow);
+  background: var(--yellow-soft);
+}
 .mg2-room.a-amber {
   border-color: var(--amber);
   background: var(--amber-soft);
-}
-.mg2-room.a-red {
-  border-color: var(--red);
-  background: var(--red-soft);
   animation: mg2-knock 1.6s ease-in-out infinite;
 }
 @keyframes mg2-knock {
   50% {
-    box-shadow: 0 0 0 4px rgba(220, 35, 56, 0.25);
+    box-shadow: 0 0 0 4px rgba(242, 159, 5, 0.3);
   }
 }
 .mg2-room.away {
@@ -8902,12 +8893,25 @@ body.mg2-on .app {
   gap: 6px;
   min-width: 0;
 }
-.mg2-rh b {
-  font-size: 16px;
+.mg2-rn {
+  border: 0;
+  background: none;
+  padding: 2px 0;
+  margin: -2px 0;
+  font: 700 16px/1.2 var(--font);
+  color: var(--ink);
+  text-align: left;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+/* Her own room: her name underlined (her card). */
+.mg2-room.mine .mg2-rn {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
 }
 .mg2-rh span {
   margin-left: auto;
@@ -8920,11 +8924,11 @@ body.mg2-on .app {
 .mg2-room.d-free .mg2-rh span {
   color: var(--green-ink);
 }
+.mg2-room.a-yellow .mg2-rh span {
+  color: var(--yellow-ink);
+}
 .mg2-room.a-amber .mg2-rh span {
   color: var(--amber-ink);
-}
-.mg2-room.a-red .mg2-rh span {
-  color: var(--red-ink);
 }
 .mg2-rd {
   margin-top: -3px;
@@ -8939,7 +8943,7 @@ body.mg2-on .app {
   margin-top: -3px;
   font-size: 12px;
   font-weight: 800;
-  color: var(--red-ink);
+  color: var(--amber-ink);
 }
 .mg2-rp {
   display: flex;
@@ -8980,9 +8984,9 @@ body.mg2-on .app {
   color: var(--theory-ink);
 }
 .mg2-sp.late {
-  border-color: var(--red);
-  color: var(--red-ink);
-  background: var(--red-soft);
+  border-color: var(--amber);
+  color: var(--amber-ink);
+  background: var(--amber-soft);
 }
 .mg2-sp.on {
   box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--ink);
@@ -9012,7 +9016,7 @@ body.mg2-on .app {
   text-overflow: ellipsis;
 }
 .mg2-sug.h-red .mg2-sw {
-  color: var(--red-ink);
+  color: var(--amber-ink);
 }
 .mg2-sn {
   font-size: 15px;
@@ -9021,29 +9025,36 @@ body.mg2-on .app {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.mg2-gone {
-  position: absolute;
-  right: 6px;
-  bottom: 2px;
-  border: 0;
-  background: none;
-  padding: 2px;
-  font: 600 11px/1 var(--font);
-  color: var(--ink-3);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-.mg2-sug + .mg2-gone {
-  position: static;
-  align-self: flex-end;
-  margin-top: -2px;
-}
-.mg2-away {
+/* The team line (3 Nov 2026): the correctors here (a pen), everyone not marked here or gone (dashed). Tap: her card. */
+.mg2-team {
   flex: none;
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   margin-top: -2px;
+}
+.mg2-desk {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  padding: 4px 10px;
+  font: 700 13px/1.2 var(--font);
+  color: var(--ink);
+}
+.mg2-desk svg {
+  color: var(--ink-3);
+}
+.mg2-desk.me,
+.mg2-off.me {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+.mg2-off:disabled {
+  opacity: 0.7;
 }
 .mg2-off {
   border: 1.5px dashed var(--line);
@@ -9264,6 +9275,9 @@ body.mg2-on .app {
   font-weight: 700;
   color: var(--ink-2);
 }
+.mg2-why.h-amber {
+  color: var(--amber-ink);
+}
 .mg2-why.h-red,
 .mg2-why.mg2-busy {
   color: var(--red-ink);
@@ -9356,9 +9370,303 @@ body.mg2-on .app {
   background: var(--theory);
 }
 @media (prefers-reduced-motion: reduce) {
-  .mg2-room.a-red,
+  .mg2-room.a-amber,
   .mg2-strip {
     animation: none;
+  }
+}
+
+/* ---------- A teacher's card (3 Nov 2026, his ask: her own work, free time, against the others; no red: yellow
+   warns, green is good; src/teacherCard.tsx). A sheet from the bottom, one screen. ---------- */
+.tcard .sheet-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.tc-note {
+  margin: 4px 0;
+  color: var(--ink-2);
+  font-size: 15px;
+}
+.tc-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.tc-tile {
+  min-width: 0;
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  padding: 8px 8px 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.tc-tile b {
+  font: 800 23px/1.05 var(--cond);
+  color: var(--ink);
+  white-space: nowrap;
+}
+.tc-tile span {
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--ink-2);
+}
+.tc-tile small {
+  margin-top: auto;
+  padding-top: 3px;
+  font-size: 11.5px;
+  line-height: 1.2;
+  color: var(--ink-3);
+}
+.tc-tile.t-good {
+  border-color: var(--green);
+  background: var(--green-soft);
+}
+.tc-tile.t-good b {
+  color: var(--green-ink);
+}
+.tc-tile.t-warn {
+  border-color: var(--yellow);
+  background: var(--yellow-soft);
+}
+.tc-tile.t-warn b {
+  color: var(--yellow-ink);
+}
+.tc-done {
+  margin: -4px 2px 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+/* Her stay as a bar: working green, free pale, free while work waited yellow. */
+.tc-track {
+  position: relative;
+  height: 16px;
+  border-radius: 8px;
+  background: var(--card);
+  box-shadow: inset 0 0 0 1.5px var(--line);
+  overflow: hidden;
+}
+.tc-track i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+.tc-track .k-w,
+.tc-legend .k-w {
+  background: var(--green);
+}
+.tc-track .k-f,
+.tc-legend .k-f {
+  background: #b9c2d0;
+}
+.tc-track .k-m,
+.tc-legend .k-m {
+  background: var(--yellow);
+}
+.tc-bl {
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+.tc-legend {
+  flex: 1;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tc-legend i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  margin: 0 2px 0 6px;
+}
+.tc-cmp h3,
+.tc-week h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 800;
+}
+.tc-cmp h3 small,
+.tc-week h3 small {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+.tc-row + .tc-row {
+  margin-top: 8px;
+}
+.tc-k {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink-2);
+  margin-bottom: 3px;
+}
+.tc-b {
+  display: grid;
+  grid-template-columns: 52px 1fr 56px;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+}
+.tc-b + .tc-b {
+  margin-top: 3px;
+}
+.tc-bn {
+  color: var(--ink-3);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tc-bt {
+  height: 10px;
+  border-radius: 5px;
+  background: var(--line-2);
+  overflow: hidden;
+}
+.tc-bt i {
+  display: block;
+  height: 100%;
+  border-radius: 5px;
+  background: #aab3c3;
+}
+.tc-b b {
+  text-align: right;
+  font-weight: 800;
+}
+.tc-b.me .tc-bn {
+  color: var(--ink);
+  font-weight: 800;
+}
+.tc-b.me .tc-bt i {
+  background: var(--ink-2);
+}
+.tc-pair.t-good .tc-b.me .tc-bt i {
+  background: var(--green);
+}
+.tc-pair.t-good .tc-b.me b {
+  color: var(--green-ink);
+}
+.tc-pair.t-warn .tc-b.me .tc-bt i {
+  background: var(--yellow);
+}
+.tc-pair.t-warn .tc-b.me b {
+  color: var(--yellow-ink);
+}
+/* Her week: a column a class day, working % its height; the day's letter yellow when work waited while she was free. */
+.tc-days {
+  display: flex;
+  gap: 6px;
+  align-items: flex-end;
+}
+.tc-day {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.tc-dcol {
+  width: 100%;
+  max-width: 34px;
+  height: 44px;
+  border-radius: 6px;
+  background: var(--line-2);
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+}
+.tc-dcol i {
+  width: 100%;
+  background: #aab3c3;
+}
+.tc-day.now .tc-dcol i {
+  background: var(--ink-2);
+}
+.tc-dcol i.none {
+  background: transparent;
+}
+.tc-day b {
+  font-size: 11.5px;
+  font-weight: 800;
+}
+.tc-day small {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-3);
+  padding: 0 4px;
+  border-radius: 4px;
+}
+.tc-day small.warn {
+  background: var(--yellow-soft);
+  color: var(--yellow-ink);
+}
+/* The manager's part: Arrived / Went now or a few minutes ago; the arrival moved. Four buttons a row, any phone. */
+.tc-ctl {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+}
+.tc-cr {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
+}
+.tc-cr + .tc-ck {
+  margin-top: 4px;
+}
+.tc-ck {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ink-2);
+}
+.tc-cr .btn.small {
+  padding: 0 4px;
+  min-height: 38px;
+  white-space: nowrap;
+  min-width: 0;
+}
+/* Small or short phones (320 px, an iPhone 7): the card stays one screen. */
+@media (max-width: 345px), (max-height: 700px) {
+  .tcard .sheet-body {
+    gap: 9px;
+    padding-top: 10px;
+    padding-bottom: 12px;
+  }
+  .tc-tile {
+    padding: 6px 6px 5px;
+  }
+  .tc-tile b {
+    font-size: 21px;
+  }
+  .tc-tile span {
+    font-size: 11.5px;
+  }
+  .tc-tile small {
+    font-size: 10.5px;
+  }
+  .tc-dcol {
+    height: 30px;
+  }
+  .tc-row + .tc-row {
+    margin-top: 5px;
+  }
+  .tc-cmp h3,
+  .tc-week h3 {
+    margin-bottom: 4px;
   }
 }
 

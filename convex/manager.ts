@@ -1,5 +1,5 @@
-// The Manager page's own reads (3 Nov 2026). The page itself runs on the live board (state.get) and the team
-// (people.team); this is what only the manager needs, read once when he taps a student.
+// The Class tab's own reads (the Manager page until 3 Nov 2026). The page itself runs on the live board (state.get) and
+// the team (people.team); this is read once when someone taps a student (everyone sees the Class tab; managers act).
 
 import { v } from "convex/values";
 import { query } from "./_generated/server";
@@ -12,7 +12,7 @@ import { dayOf, type DayCall } from "./lib/timeline";
 export const day = query({
   args: { token: v.optional(v.string()), studentId: v.id("students") },
   handler: async (ctx, args) => {
-    await viewer(ctx, args.token, "manager");
+    await viewer(ctx, args.token, "any");
     const now = Date.now();
     const s = await ctx.db.get(args.studentId);
     if (!s) fail("That student no longer exists.");

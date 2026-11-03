@@ -10,7 +10,7 @@ import {
   callFor,
   canTake,
   FREE_AMBER_MS,
-  FREE_RED_MS,
+  FREE_YELLOW_MS,
   followersOf,
   GROUP_N,
   HOLD_MS,
@@ -307,29 +307,31 @@ describe("A room per teacher, and what the page suggests for a free one", () => 
     expect(needOf(views[0]).kind).toBe("visit");
   });
 
-  test("free while there is work for her: amber at 2 minutes, red at 5; free with nothing: no alarm", () => {
+  test("free while there is work for her: yellow at 2 minutes, amber at 5 (never red); free with nothing: no alarm", () => {
     const raj = wb("Raj", { fixed: 1, lost: [3], lostAgo: 2 });
     const at = (freeFor: number) =>
       plan([raj], [], { team: [{ ...NILA, lastEnd: NOW - freeFor }] }).rooms[0];
-    expect(at(FREE_AMBER_MS - MIN).alarm).toBeNull();
+    expect(at(FREE_YELLOW_MS - MIN).alarm).toBeNull();
+    expect(at(FREE_YELLOW_MS).alarm).toBe("yellow");
     expect(at(FREE_AMBER_MS).alarm).toBe("amber");
-    expect(at(FREE_RED_MS).alarm).toBe("red");
-    // Never had anyone today: free since the class began (an hour): red.
-    expect(plan([raj], [], { team: [NILA] }).rooms[0].alarm).toBe("red");
+    // Never had anyone today: free since the class began (an hour): amber.
+    expect(plan([raj], [], { team: [NILA] }).rooms[0].alarm).toBe("amber");
+    // Marked arrived 3 minutes ago (3 Nov 2026): free since she came, not since the class began.
+    expect(plan([raj], [], { team: [{ ...NILA, inAt: NOW - 3 * MIN }] }).rooms[0]).toMatchObject({ freeSince: NOW - 3 * MIN, alarm: "yellow" });
     expect(plan([wb("Sana", { inAgo: 20 })], [], { team: [{ ...NILA, lastEnd: NOW - 30 * MIN }] }).rooms[0]).toMatchObject({ suggest: null, alarm: null });
   });
 
-  test("over her time while students sit with no work: red, and what to tell her; over with nobody idle: amber", () => {
+  test("over her time while students sit with no work: amber, and what to tell her; over with nobody idle: yellow", () => {
     const late = withHer(NILA, "Xavier", 40); // one question, 40 minutes: over
     const malik = wb("Malik", { fixed: 7, lostAgo: 1, handed: 1 }); // no work (every level handed in)
     const p = plan([late.v, malik], [late.call], { team: [NILA] });
     expect(p.starving).toBe(1);
-    expect(p.rooms[0]).toMatchObject({ over: true, alarm: "red", note: "1 has no work: finish now" });
+    expect(p.rooms[0]).toMatchObject({ over: true, alarm: "amber", note: "1 has no work: finish now" });
     const calm = plan([late.v, wb("Priya", { fixed: 1 })], [late.call], { team: [NILA] });
-    expect(calm.rooms[0]).toMatchObject({ over: true, alarm: "amber", note: null });
+    expect(calm.rooms[0]).toMatchObject({ over: true, alarm: "yellow", note: null });
   });
 
-  test("not here today: no room (Bring back); still a room while someone is with her", () => {
+  test("not marked here: no room (a chip; the manager marks her arrived); still a room while someone is with her", () => {
     const p = plan([wb("Raj")], [], { away: ["meena"] });
     expect(p.rooms.map((r) => r.t.name)).toEqual(["Nila"]);
     expect(p.away.map((t) => t.name)).toEqual(["Meena"]);

@@ -1,4 +1,4 @@
-// The Manager page's rules (2 Nov 2026; rebuilt 3 Nov 2026, his voice note: "the manager can send anyone to any
+// The Class tab's rules (the Manager page's: 2 Nov 2026; rebuilt 3 Nov 2026, his voice note: "the manager can send anyone to any
 // place", "rooms of the teachers and the hall as rectangles"). The teachers use their own phones (Call, Arrived,
 // Done); the manager sees the hall and every teacher's room on one screen and sends students to any teacher, above
 // all when a teacher sits free while students wait. Pure and tested (tests/manager.test.ts); the page is
@@ -38,9 +38,12 @@ export const LEVEL_MS = 30 * 60_000;
 export const Q_MS = 3 * 60_000;
 /** In class this long and no Theory or Evaluation teacher has seen him today: "no teacher yet" (his premium feeling). */
 export const NO_TEACHER_MS = 60 * 60_000;
-/** A teacher free this long while there is work for her: amber, then red (3 Nov 2026: "teachers rest silently"). */
-export const FREE_AMBER_MS = 2 * 60_000;
-export const FREE_RED_MS = 5 * 60_000;
+/**
+ * A teacher free this long while there is work for her: yellow, then amber (3 Nov 2026: "teachers rest silently"). Never
+ * red (his rule the same day, now that every teacher sees the Class tab: red says she is doing wrong).
+ */
+export const FREE_YELLOW_MS = 2 * 60_000;
+export const FREE_AMBER_MS = 5 * 60_000;
 /** Check-ins one free teacher is offered at once. */
 export const CHECKIN_N = 3;
 
@@ -51,10 +54,11 @@ export type TaskKind = "evaluation" | "theory" | "visit";
 export const KIND_WORDS: Record<TaskKind, string> = { evaluation: "Evaluation", theory: "Theory", visit: "Check-in" };
 
 /**
- * A teacher the manager can send students to: her jobs, and when her last student went back today. `owner`: the owner
- * on the days he teaches (his switch in Settings, not the manager's "not here").
+ * A teacher the manager can send students to: her jobs, when her last student went back today, and when she arrived
+ * (marked by the manager; her room is free since then at the earliest). `owner`: the owner on the days he teaches (his
+ * switch in Settings, never marked here or not).
  */
-export type Teacher = { id: string; name: string; jobs: Job[]; lastEnd?: number | null; owner?: boolean };
+export type Teacher = { id: string; name: string; jobs: Job[]; lastEnd?: number | null; inAt?: number | null; owner?: boolean };
 
 export type Heat = "red" | "orange" | "yellow";
 
@@ -107,12 +111,12 @@ export type RoomPill = {
   ms: number;
 };
 
-export type Alarm = "amber" | "red" | null;
+export type Alarm = "yellow" | "amber" | null;
 
-/** A teacher's room on the Manager page. */
+/** A teacher's room on the Class tab. */
 export type Room = {
   t: Teacher;
-  /** Not here today (the manager's switch), but students are still with her. */
+  /** Not marked here (the manager marks her arrived), but students are still with her. */
   away: boolean;
   pills: RoomPill[];
   /** What she is doing now (the room's colour); null = nobody with her. */
@@ -126,8 +130,8 @@ export type Room = {
   leftMs: number | null;
   over: boolean;
   /**
-   * Free while there is work for her: amber 2 min, red 5 min. Over her time: amber; red while students in the hall
-   * have no work (3 Nov 2026: Zuhar 49 min with two while seven sat 61 min).
+   * Free while there is work for her: yellow 2 min, amber 5 min. Over her time: yellow; amber while students in the
+   * hall have no work (3 Nov 2026: Zuhar 49 min with two while seven sat 61 min). Never red: every teacher sees it.
    */
   alarm: Alarm;
   /** What the manager tells her, when it matters: "7 have no work: finish now". */
@@ -155,7 +159,7 @@ export type HallPill = {
 export type Count = { n: number; red: number; ids: string[] };
 export type ManagerPlan = {
   rooms: Room[];
-  /** Marked not here today, nobody with them (Bring back). */
+  /** Not marked here (or went), nobody with them: a chip each (the manager marks her arrived from her card). */
   away: Teacher[];
   hall: HallPill[];
   /** To correct (levels), to explain and to teach (students): the manager's three numbers to bring down. */
@@ -169,7 +173,7 @@ export type ManagerPlan = {
 
 export type PlanOpts = {
   lessonMs: number;
-  /** Teachers the manager marked "not here today". */
+  /** Teachers not marked here now (the manager marks arrived and went; the owner teaching never is). */
   away?: ReadonlySet<string>;
 };
 
@@ -453,17 +457,18 @@ function roomOf(t: Teacher, board: Board, views: View[], now: number, lessonMs: 
   }
   const free = pills.length === 0;
   const lastEnd = t.lastEnd && slDay(t.lastEnd) === slDay(now) ? t.lastEnd : 0;
+  const arrived = t.inAt && slDay(t.inAt) === slDay(now) ? t.inAt : 0;
   return {
     t,
     away,
     pills,
     doing,
     free,
-    freeSince: free ? Math.max(lastEnd, started) : null,
+    freeSince: free ? Math.max(lastEnd, arrived, started) : null,
     since,
     leftMs,
     over,
-    alarm: over ? "amber" : null,
+    alarm: over ? "yellow" : null,
     note: null,
     suggest: null,
   };
@@ -613,17 +618,17 @@ export function managerPlan(board: Board, views: View[], now: number, team: read
     r.suggest = t;
     tasks.push(t);
   }
-  // A teacher free while there is work for her: amber at 2 minutes, red at 5 (the work she could be doing waits).
+  // A teacher free while there is work for her: yellow at 2 minutes, amber at 5 (the work she could be doing waits).
   for (const r of freeRooms) {
     if (!r.suggest || r.freeSince === null) continue;
     const ms = now - r.freeSince;
-    r.alarm = ms >= FREE_RED_MS ? "red" : ms >= FREE_AMBER_MS ? "amber" : null;
+    r.alarm = ms >= FREE_AMBER_MS ? "amber" : ms >= FREE_YELLOW_MS ? "yellow" : null;
   }
-  // Over her time while students sit with no work: red, and what to tell her (a visit = the question that stops him).
+  // Over her time while students sit with no work: amber, and what to tell her (a visit = the question that stops him).
   const starving = inClass.filter((v) => v.where === "hall" && v.noWork && v.calls.length === 0).length;
   for (const r of rooms) {
     if (!r.over || !starving) continue;
-    r.alarm = "red";
+    r.alarm = "amber";
     r.note = `${starving} ${starving === 1 ? "has" : "have"} no work: finish now`;
   }
 

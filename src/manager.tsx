@@ -1,20 +1,25 @@
-// The Manager page (2 Nov 2026; rebuilt 3 Nov 2026, his voice note: "rooms of the teachers and the hall as
-// rectangles", "the manager can send anyone to any place", "everything in one view, no scrolling cards"). Rules in
-// src/managerData.ts. One screen:
+// The Class tab (3 Nov 2026, his call: the Manager page moves to the bottom bar for everyone, named Class; the Manager
+// page of 2–3 Nov before: "rooms of the teachers and the hall as rectangles", "the manager can send anyone to any
+// place", "everything in one view, no scrolling cards"). Every teacher sees it ("they want to know how many students
+// stay without work in the hall"); only managers (the Manager job, the owner) act on it. Rules in src/managerData.ts.
+// One screen:
 // - Three numbers to bring down: levels to correct · students to explain to · students to teach (red = no work).
 //   Tap one: the hall lights who it is.
-// - A room per teacher (fixed places, by name), coloured by what she is doing now. Her students as pills: called by
-//   her phone (dotted), on his way (dashed: her phone calls her until she taps Arrived), with her (solid). Free: the
-//   group the page suggests for her; one tap on the room sends it. Free while work waits: amber at 2 min, red at 5.
+// - A room per teacher marked here (fixed places, by name), coloured by what she is doing now. Her students as pills:
+//   called by her phone (dotted), on his way (dashed: her phone calls her until she taps Arrived), with her (solid).
+//   Free: the group the page suggests for her (her name on them: nobody can think "the other one takes him"); a
+//   manager's tap on the room sends it. Free while work waits: yellow at 2 min, amber at 5. Never red for a teacher.
+// - The team line: the correctors here, and everyone not marked here yet (or gone). Tap a name: her card
+//   (src/teacherCard.tsx; her own only, the manager everyone's, with Arrived / Went).
 // - The hall: everyone else, A–Z, never moving. Outline red = no work, orange = should go now, yellow = waiting on
 //   purpose; a dot = no teacher yet today (1 h here); dashed = quiet (no mark for a while).
-// - Tap a student, then tap a room: he goes there (or drag him onto it). His strip at the bottom: what he is doing,
-//   his day as a bar, a button per teacher who can take him.
+// - Tap a student: his strip at the bottom (what he is doing, his day as a bar); a manager's has a button per teacher
+//   who can take him (or tap a room, or drag him onto it).
 
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
-import { slClock, slDay } from "../convex/lib/day";
+import { slClock } from "../convex/lib/day";
 import type { Day, SegKind } from "../convex/lib/timeline";
 import { joinNames } from "./announce";
 import { fetchOnce, mutate } from "./backend";
@@ -41,44 +46,20 @@ import { StageUnitSheet } from "./focus";
 import { MoveSheet } from "./move";
 import { act, type Board, toast } from "./store";
 import { lessonLength, mShort, STAY_MS } from "./theoryFocusData";
+import { TeacherCard } from "./teacherCard";
 import { tone } from "./tones";
 
 /** The manager's taps go in the history as his. */
 const BY = "manager";
-type TeamRow = { _id: string; name: string; role?: string; tabs: string[]; lastEnd: number | null };
+/** Her stay today (marked by the manager): open while outAt is null. */
+export type Stay = { id: string; inAt: number; outAt: number | null; editedAt: number };
+export type TeamRow = { _id: string; name: string; role?: string; tabs: string[]; lastEnd: number | null; stay: Stay | null };
 type Focus = "correct" | "explain" | "teach" | null;
 type Sel = { id: string; call?: string } | null;
 
 const jobsOf = (tabs: string[]): Job[] => (["evaluation", "theory"] as const).filter((j) => tabs.includes(j));
-
-/** Teachers marked "not here today": this phone, today only. */
-function useAway(now: number): [Set<string>, (id: string, away: boolean) => void] {
-  const day = slDay(now);
-  const read = (): Set<string> => {
-    try {
-      const raw = JSON.parse(localStorage.getItem("aristora.mgr.away") ?? "null") as { day: string; ids: string[] } | null;
-      return new Set(raw && raw.day === day ? raw.ids : []);
-    } catch {
-      return new Set();
-    }
-  };
-  const [ids, setIds] = useState<Set<string>>(read);
-  useEffect(() => setIds(read()), [day]);
-  // From the latest list, never a stale one (Undo runs seconds later, from an older screen).
-  const set = (id: string, away: boolean) =>
-    setIds((prev) => {
-      const next = new Set(prev);
-      if (away) next.add(id);
-      else next.delete(id);
-      try {
-        localStorage.setItem("aristora.mgr.away", JSON.stringify({ day, ids: [...next] }));
-      } catch {
-        /* private mode: this visit only */
-      }
-      return next;
-    });
-  return [ids, set];
-}
+/** Marked here now (the owner on his teaching days always is). */
+const isHere = (r: TeamRow) => r.role === "owner" || (!!r.stay && r.stay.outAt === null);
 
 /** The page fills the screen between what is above it and the bottom tabs: the hall scrolls inside, not the page. */
 function useFill() {
@@ -103,12 +84,14 @@ function useFill() {
   return ref;
 }
 
-export function ManagerPage(props: { board: Board; views: View[]; now: number }) {
-  const { board, views, now } = props;
+export function ManagerPage(props: { board: Board; views: View[]; now: number; canManage: boolean; meId: string }) {
+  const { board, views, now, canManage } = props;
   const rows = useQuery<TeamRow[]>(api.people.team, {});
   const recent = useQuery<{ ms: number[] }>(api.calls.lessons, {});
-  const [away, setAway] = useAway(now);
   const [sel, setSel] = useState<Sel>(null);
+  // A teacher's card (hers, or anyone's for a manager), or another teacher's strip (what she is doing now).
+  const [card, setCard] = useState<TeamRow | null>(null);
+  const [look, setLook] = useState<string | null>(null);
   const [focus, setFocus] = useState<Focus>(null);
   const [busy, setBusy] = useState(false);
   const [moving, setMoving] = useState<View | null>(null);
@@ -119,9 +102,33 @@ export function ManagerPage(props: { board: Board; views: View[]; now: number })
     document.body.classList.add("mg2-on");
     return () => document.body.classList.remove("mg2-on");
   }, []);
-  const team: Teacher[] = (rows ?? []).map((r) => ({ id: r._id, name: r.name, jobs: jobsOf(r.tabs), lastEnd: r.lastEnd, owner: r.role === "owner" }));
+  // Rooms: the Theory and Evaluation teachers (and the owner teaching). Correctors sit at the team line.
+  const roomRows = (rows ?? []).filter((r) => jobsOf(r.tabs).length > 0);
+  const team: Teacher[] = roomRows.map((r) => ({
+    id: r._id,
+    name: r.name,
+    jobs: jobsOf(r.tabs),
+    lastEnd: r.lastEnd,
+    inAt: r.stay && r.stay.outAt === null ? r.stay.inAt : null,
+    owner: r.role === "owner",
+  }));
+  const away = new Set(roomRows.filter((r) => !isHere(r)).map((r) => r._id));
   const plan = managerPlan(board, views, now, team, { lessonMs: lessonLength(recent?.ms), away });
   const inClass = views.filter((v) => v.where !== "absent");
+  const rowOf = (id: string) => (rows ?? []).find((r) => r._id === id) ?? null;
+  // The team line: correctors here (her desk), then everyone not marked here (or gone), A–Z.
+  const desks = (rows ?? []).filter((r) => jobsOf(r.tabs).length === 0 && r.role !== "owner" && isHere(r));
+  const outIds = new Set(plan.away.map((t) => t.id));
+  const out = (rows ?? []).filter((r) => r.role !== "owner" && !isHere(r) && (outIds.has(r._id) || jobsOf(r.tabs).length === 0));
+  /** A teacher tapped: her card (hers; anyone's for a manager), else what she is doing now. */
+  const openTeacher = (id: string) => {
+    const r = rowOf(id);
+    if (!r) return;
+    tone("tick");
+    setSel(null);
+    if (r.role !== "owner" && (canManage || r._id === props.meId)) setCard(r);
+    else setLook((x) => (x === id ? null : id));
+  };
 
   // The student he tapped: in the hall, or a pill in a room (its call).
   const hallSel = sel && !sel.call ? plan.hall.find((p) => p.v.s._id === sel.id) : undefined;
@@ -173,15 +180,15 @@ export function ManagerPage(props: { board: Board; views: View[]; now: number })
     void send([need.v], r.t, need.kind);
   };
 
-  /** Tap a room: the student he tapped goes there; else (free) the group the page suggests. */
+  /**
+   * Tap a room. The manager: the student he tapped goes there; else (free) the group the page suggests; else her card.
+   * Everyone else: her card (her own) or what she is doing.
+   */
   const tapRoom = (r: Room) => {
+    if (!canManage) return openTeacher(r.t.id);
     if (hallSel) return sendOne(hallSel.v, r);
-    if (r.free && r.suggest && !busy) void sendTask(r.suggest);
-  };
-
-  const markAway = (t: Teacher) => {
-    setAway(t.id, true);
-    toast(`${t.name}: not here today.`, "info", () => setAway(t.id, false));
+    if (r.free && r.suggest && !busy) return void sendTask(r.suggest);
+    openTeacher(r.t.id);
   };
 
   // ---- Drag a hall student onto a room (hold him, then move): the same as tap him, tap the room ----
@@ -199,7 +206,7 @@ export function ManagerPage(props: { board: Board; views: View[]; now: number })
     setGhost(null);
   };
   const onDown = (e: PointerEvent, p: HallPill) => {
-    if (e.button !== 0 || busy) return;
+    if (!canManage || e.button !== 0 || busy) return;
     const el = e.currentTarget as HTMLElement;
     const d = { id: p.v.s._id, x: e.clientX, y: e.clientY, on: false, pid: e.pointerId, el, timer: 0 };
     d.timer = window.setTimeout(() => {
@@ -252,10 +259,13 @@ export function ManagerPage(props: { board: Board; views: View[]; now: number })
     const dr = dragged.current;
     if (!call && dr && dr.id === id && Date.now() - dr.at < 400) return; // the click after a drop
     tone("tick");
+    setLook(null);
     setSel((s) => (s && s.id === id && s.call === call ? null : { id, call }));
   };
-  // While a student is picked, the rooms that can take him light up (what he goes for decides).
-  const need = hallSel ? needOf(hallSel.v) : null;
+  // While a student is picked, the rooms that can take him light up (what he goes for decides): the manager's only.
+  const need = hallSel && canManage ? needOf(hallSel.v) : null;
+  const looked = look ? (plan.rooms.find((r) => r.t.id === look) ?? null) : null;
+  const lookRow = look ? rowOf(look) : null;
 
   return (
     <div class={`mg2${ghost ? " dragging" : ""}`} ref={fill}>
@@ -288,25 +298,53 @@ export function ManagerPage(props: { board: Board; views: View[]; now: number })
             key={r.t.id}
             r={r}
             now={now}
+            mine={r.t.id === props.meId}
             target={!!need && canTake(r.t, need.kind)}
             over={ghost?.over === r.t.id}
             selCall={sel?.call}
             onTap={() => tapRoom(r)}
+            onName={() => openTeacher(r.t.id)}
             onPill={(p) => pick(p.v.s._id, p.key)}
-            onAway={() => markAway(r.t)}
           />
         ))}
         {plan.rooms.length === 0 && (
           <p class="mg2-note">
-            {rows === undefined ? "Loading the teachers…" : "No Theory or Evaluation teacher: Settings → People → tick Theory or Evaluation for her."}
+            {rows === undefined
+              ? "Loading the teachers…"
+              : roomRows.length === 0
+                ? "No Theory or Evaluation teacher: Settings → People → tick Theory or Evaluation for her."
+                : canManage
+                  ? "Nobody is marked here yet: tap a name below when she comes."
+                  : "No teacher is marked here yet."}
           </p>
         )}
       </div>
-      {plan.away.length > 0 && (
-        <div class="mg2-away">
-          {plan.away.map((t) => (
-            <button key={t.id} type="button" class="mg2-off" onClick={() => setAway(t.id, false)}>
-              {t.name} <span>not here</span> <b>Bring back</b>
+      {(desks.length > 0 || out.length > 0) && (
+        <div class="mg2-team" role="group" aria-label="Teachers">
+          {desks.map((r) => (
+            <button
+              key={r._id}
+              type="button"
+              class={`mg2-desk${r._id === props.meId ? " me" : ""}`}
+              aria-label={`${r.name}: Correction, here since ${slClock(r.stay!.inAt)}`}
+              onClick={() => openTeacher(r._id)}
+            >
+              <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 20h4L19 9l-4-4L4 16z" />
+              </svg>
+              {r.name}
+            </button>
+          ))}
+          {out.map((r) => (
+            <button
+              key={r._id}
+              type="button"
+              class={`mg2-off${r._id === props.meId ? " me" : ""}`}
+              disabled={!canManage && r._id !== props.meId}
+              onClick={() => openTeacher(r._id)}
+            >
+              {r.name} <span>{r.stay?.outAt ? `went ${slClock(r.stay.outAt, false)}` : "not here"}</span>
+              {canManage && !r.stay?.outAt && <b>Arrived?</b>}
             </button>
           ))}
         </div>
@@ -350,6 +388,7 @@ export function ManagerPage(props: { board: Board; views: View[]; now: number })
           plan={plan}
           now={now}
           busy={busy}
+          canManage={canManage}
           onSend={(r) => sendOne(hallSel.v, r)}
           onMove={() => setMoving(hallSel.v)}
           onGive={() => setGiving(hallSel.v.home ?? hallSel.v)}
@@ -362,6 +401,7 @@ export function ManagerPage(props: { board: Board; views: View[]; now: number })
           p={roomSel.p}
           now={now}
           busy={busy}
+          canManage={canManage}
           setBusy={setBusy}
           // The answer comes a moment later: if he tapped someone else meanwhile, that strip stays.
           onClose={() => setSel((s) => (s?.call === roomSel.p.key ? null : s))}
@@ -372,8 +412,18 @@ export function ManagerPage(props: { board: Board; views: View[]; now: number })
           {ghost.name}
         </div>
       )}
+      {!sel && lookRow && <TeacherStrip row={lookRow} r={looked} now={now} onClose={() => setLook(null)} />}
       {moving && <MoveSheet v={moving} onClose={() => setMoving(null)} />}
       {giving && <StageUnitSheet v={giving} mode="given" onClose={() => setGiving(null)} />}
+      {card && (
+        <TeacherCard
+          userId={card._id}
+          name={card.name}
+          canManage={canManage}
+          stay={rowOf(card._id)?.stay ?? null}
+          onClose={() => setCard(null)}
+        />
+      )}
     </div>
   );
 }
@@ -428,12 +478,14 @@ function doingWords(r: Room): string {
 function RoomBox(props: {
   r: Room;
   now: number;
+  /** This phone's own room (her name underlined: her card). */
+  mine: boolean;
   target: boolean;
   over: boolean;
   selCall?: string;
   onTap: () => void;
+  onName: () => void;
   onPill: (p: RoomPill) => void;
-  onAway: () => void;
 }) {
   const { r, now } = props;
   const cls = [
@@ -443,6 +495,7 @@ function RoomBox(props: {
     props.target ? "target" : "",
     props.over ? "over" : "",
     r.away ? "away" : "",
+    props.mine ? "mine" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -460,7 +513,17 @@ function RoomBox(props: {
       }}
     >
       <div class="mg2-rh">
-        <b>{r.t.name}</b>
+        <button
+          type="button"
+          class="mg2-rn"
+          aria-label={`${r.t.name}${props.mine ? ": your card" : ""}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            props.onName();
+          }}
+        >
+          {r.t.name}
+        </button>
         <span>{roomState(r, now)}</span>
       </div>
       {r.doing && <div class="mg2-rd">{doingWords(r)}</div>}
@@ -491,18 +554,6 @@ function RoomBox(props: {
         </div>
       )}
       {r.free && !sug && <div class="mg2-sug none">nothing for her now</div>}
-      {r.free && !r.away && !r.t.owner && (
-        <button
-          type="button"
-          class="mg2-gone"
-          onClick={(e) => {
-            e.stopPropagation();
-            props.onAway();
-          }}
-        >
-          not here
-        </button>
-      )}
     </div>
   );
 }
@@ -567,6 +618,8 @@ function HallStrip(props: {
   plan: ManagerPlan;
   now: number;
   busy: boolean;
+  /** The manager: a button per teacher who can take him, Give a book, Move him on. Everyone else only looks. */
+  canManage: boolean;
   onSend: (r: Room) => void;
   onMove: () => void;
   onGive: () => void;
@@ -590,9 +643,10 @@ function HallStrip(props: {
       </div>
       {why !== p.v.line && <p class={`mg2-why${p.heat ? ` h-${p.heat}` : ""}`}>{why}</p>}
       <DayBar v={p.v} now={now} />
-      {p.heat === "red" && allBusy && (
+      {props.canManage && p.heat === "red" && allBusy && (
         <p class="mg2-why mg2-busy">Every teacher is busy: give him a book; he works on it until one is free.</p>
       )}
+      {props.canManage && (
       <div class="mg2-acts">
         {p.finished && (
           <button type="button" class="btn small" onClick={props.onMove}>
@@ -618,11 +672,21 @@ function HallStrip(props: {
         ))}
         {rooms.length === 0 && <span class="mg2-note">Nobody here does {KIND_WORDS[need.kind]}.</span>}
       </div>
+      )}
     </section>
   );
 }
 
-function RoomStrip(props: { r: Room; p: RoomPill; now: number; busy: boolean; setBusy: (b: boolean) => void; onClose: () => void }) {
+function RoomStrip(props: {
+  r: Room;
+  p: RoomPill;
+  now: number;
+  busy: boolean;
+  /** The manager: Send now, He's with her, Back to the hall, Undo. Everyone else only looks. */
+  canManage: boolean;
+  setBusy: (b: boolean) => void;
+  onClose: () => void;
+}) {
   const { r, p, now } = props;
   const [sure, setSure] = useState(false);
   const c = p.rc.c;
@@ -648,8 +712,9 @@ function RoomStrip(props: { r: Room; p: RoomPill; now: number; busy: boolean; se
           ×
         </button>
       </div>
-      {p.state === "walking" && p.late && <p class="mg2-why h-red">{r.t.name} hasn't tapped Arrived. Is he there? Tell her.</p>}
+      {p.state === "walking" && p.late && <p class="mg2-why h-amber">{r.t.name} hasn't tapped Arrived. Is he there? Tell her.</p>}
       <DayBar v={p.v} now={now} />
+      {props.canManage && (
       <div class="mg2-acts">
         {p.state === "called" && (
           <>
@@ -688,6 +753,37 @@ function RoomStrip(props: { r: Room; p: RoomPill; now: number; busy: boolean; se
           ))}
         {p.state === "here" && <span class="mg2-note">{r.t.name} taps Done on her phone.</span>}
       </div>
+      )}
+    </section>
+  );
+}
+
+/**
+ * Another teacher tapped (3 Nov 2026, his ask: "when they press any teacher they can see what's going on"): what she is
+ * doing now, since when she is here, her students. Never her numbers (her card is hers and the manager's).
+ */
+function TeacherStrip(props: { row: TeamRow; r: Room | null; now: number; onClose: () => void }) {
+  const { row, r, now } = props;
+  const here = row.role === "owner" ? null : row.stay;
+  const since = here ? (here.outAt === null ? `here since ${slClock(here.inAt, false)}` : `went ${slClock(here.outAt, false)}`) : row.role === "owner" ? "" : "not marked here";
+  const doing = r ? [doingWords(r), roomState(r, now)].filter(Boolean).join(" · ") : jobsOf(row.tabs).length ? "" : "Correction";
+  return (
+    <section class="mg2-strip" aria-label={row.name}>
+      <div class="mg2-sh">
+        <b>{row.name}</b>
+        <span class="mg2-sl">{[since, doing].filter(Boolean).join(" · ")}</span>
+        <button type="button" class="mg2-x" aria-label="Close" onClick={props.onClose}>
+          ×
+        </button>
+      </div>
+      {r && r.pills.length > 0 && (
+        <p class="mg2-why">{r.pills.map((p) => `${p.v.s.name}: ${pillWords(p)}`).join(" · ")}</p>
+      )}
+      {r?.free && r.suggest && (
+        <p class="mg2-why">
+          For {row.name} now: {joinNames(r.suggest.who.map((w) => w.v.s.name))}
+        </p>
+      )}
     </section>
   );
 }

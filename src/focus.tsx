@@ -102,7 +102,6 @@ import { bookDocAt,
   currentRole,
   may,
   now as serverNow,
-  openPage,
   stageName,
   STAGES,
   toast,
@@ -778,8 +777,6 @@ export function Focus(props: { board: Board; views: View[]; now: number }) {
   const grades = gradesOf(pills.map((p) => p.v));
   const [grade, setGrade] = useFocusGrade(grades, gradesOf(views));
   const shown = pills.filter((p) => p.v.s.grade === grade);
-  // In the hall with no work (the Manager button's count, like the Class icon's).
-  const idle = views.filter((x) => x.where === "hall" && x.tone === "red").length;
   const main = paper ? (views.find((x) => x.s._id === paper.studentId) ?? null) : null;
   const v = paper ? (paper.kind === "wait" ? main : viewOfPaper(views, paper)) : null;
   // His paper opened from elsewhere (Saved, a level from his card): his grade's names show, his own one dark.
@@ -892,19 +889,9 @@ export function Focus(props: { board: Board; views: View[]; now: number }) {
             </div>
           )}
           {paper && v ? (
-            <PaperView key={`${paper.studentId}`} v={v} paper={paper} drafts={drafts} now={now} idle={idle} onSheet={setSheet} />
+            <PaperView key={`${paper.studentId}`} v={v} paper={paper} drafts={drafts} now={now} onSheet={setSheet} />
           ) : (
-            <>
-              {/* No paper open: the Manager button keeps its place (managers only). */}
-              {may("manager") && (
-                <div class="fc-head">
-                  <div class="fc-head-tools">
-                    <ManagerButton idle={idle} />
-                  </div>
-                </div>
-              )}
-              {shown.length > 0 && <p class="fc-hint">Tap the name on the paper.</p>}
-            </>
+            shown.length > 0 && <p class="fc-hint">Tap the name on the paper.</p>
           )}
           {!paper && (
             <p class="muted small fc-help">
@@ -1484,10 +1471,10 @@ function SavedSheet(props: { now: number; onClose: () => void }) {
 
 // ---- One paper ----
 
-function PaperView(props: { v: View; paper: Paper; drafts: Draft[] | undefined; now: number; idle: number; onSheet: (s: SheetName) => void }) {
+function PaperView(props: { v: View; paper: Paper; drafts: Draft[] | undefined; now: number; onSheet: (s: SheetName) => void }) {
   const { v, paper, now } = props;
   const head = (later?: () => void) => (
-    <PaperHead v={v} later={later} idle={props.idle} onUnit={() => props.onSheet("unit")} onCard={() => props.onSheet("card")} />
+    <PaperHead v={v} later={later} onUnit={() => props.onSheet("unit")} onCard={() => props.onSheet("card")} />
   );
   if (paper.kind === "fighter" && v.kind === "fighter") return <FighterPaperView v={v} paper={paper} head={head()} />;
   if (paper.kind === "master" && v.kind === "master") return <MasterPaperView v={v} paper={paper} drafts={props.drafts} now={now} head={head} />;
@@ -1504,35 +1491,12 @@ function PaperView(props: { v: View; paper: Paper; drafts: Draft[] | undefined; 
 }
 
 /**
- * The Manager page's door (3 Nov 2026, his call): on the Correction page, for managers only (the owner and the Manager
- * job), never a bottom tab. Its count: students in the hall with no work.
+ * The paper's top (3 Nov 2026, his call: his name is already dark in the names row, so not again here): the book button
+ * (all his units: move him, books given); then Later, the question sheet, went home and his card; then his books in
+ * one line (tap one to correct it). Later (a level he hasn't handed in yet): handed in, correct it later (the waiting
+ * clock starts). (The Manager button that stood first moved to the bottom bar as the Class tab, 3 Nov 2026.)
  */
-function ManagerButton(props: { idle: number }) {
-  if (!may("manager")) return null;
-  return (
-    <button
-      type="button"
-      class="btn ghost small fc-mgr"
-      aria-label={`Manager: the hall and every room${props.idle ? `, ${props.idle} with no work` : ""}`}
-      onClick={() => openPage("manager")}
-    >
-      {/* The centre from above: two rooms and the hall. */}
-      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="3" y="3.5" width="18" height="17" rx="2.5" />
-        <path d="M3 10.5h18M12 3.5v7" />
-      </svg>
-      {props.idle > 0 && <em class="fc-mgr-n">{props.idle}</em>}
-    </button>
-  );
-}
-
-/**
- * The paper's top (3 Nov 2026, his call: his name is already dark in the names row, so not again here): the Manager
- * button (managers), the book button (all his units: move him, books given); then Later, the question sheet, went home
- * and his card; then his books in one line (tap one to correct it). Later (a level he hasn't handed in yet): handed in,
- * correct it later (the waiting clock starts).
- */
-function PaperHead(props: { v: View; later?: () => void; idle: number; onUnit: () => void; onCard: () => void }) {
+function PaperHead(props: { v: View; later?: () => void; onUnit: () => void; onCard: () => void }) {
   const { v } = props;
   const [busy, setBusy] = useState(false);
   const [race, setRace] = useState(false);
@@ -1552,7 +1516,6 @@ function PaperHead(props: { v: View; later?: () => void; idle: number; onUnit: (
     <>
       <header class="fc-head" aria-label={`${v.s.name}'s paper`}>
         <div class="fc-head-tools">
-          <ManagerButton idle={props.idle} />
           <UnitsButton v={v} onUnits={props.onUnit} />
         </div>
         <div class="fc-head-acts">

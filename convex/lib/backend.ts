@@ -298,6 +298,16 @@ export async function endVisit(ctx: MutationCtx, studentId: Id<"students">, at: 
   if (v && v.outAt === undefined) await ctx.db.patch(v._id, { outAt: Math.max(at, v.inAt) });
 }
 
+/** Close the teachers' stays still open on these days at `at` (never before she arrived). */
+export async function endStays(ctx: MutationCtx, days: string[], at: number): Promise<void> {
+  for (const day of new Set(days)) {
+    const rows = await ctx.db.query("duty").withIndex("by_day", (q) => q.eq("day", day)).collect();
+    for (const r of rows) {
+      if (r.outAt === undefined) await ctx.db.patch(r._id, { outAt: Math.max(at, r.inAt), outBy: "class end", editedAt: at });
+    }
+  }
+}
+
 async function closeIdle(
   ctx: MutationCtx,
   s: Doc<"students">,
@@ -503,6 +513,8 @@ export async function closeSession(
     if (s.present) await endVisit(ctx, s._id, endAt);
     await ctx.db.patch(s._id, { present: false, room: undefined, idleSince: undefined, idleMs: 0 });
   }
+  // Every teacher still marked here goes with the class (3 Nov 2026): a forgotten "went" never runs on.
+  await endStays(ctx, [slDay(session.startedAt), slDay(endAt)], endAt);
 
   const report = await buildReport(ctx, session, endAt);
   await ctx.db.patch(session._id, { open: false, endedAt: endAt, lastActivityAt: endAt, report });
@@ -536,6 +548,7 @@ export async function readDigest(
   session: Doc<"sessions">,
   end: number,
   got?: { events: Doc<"events">[]; calls: Doc<"calls">[] },
+  opts?: { segs?: boolean },
 ): Promise<Digest> {
   const events =
     got?.events ??
@@ -543,18 +556,35 @@ export async function readDigest(
   const calls = got?.calls ?? (await ctx.db.query("calls").withIndex("by_session", (q) => q.eq("sessionId", session._id)).collect());
   const days = new Set([slDay(session.startedAt), slDay(end)]);
   const visits: Doc<"attendance">[] = [];
-  for (const day of days) visits.push(...(await ctx.db.query("attendance").withIndex("by_day", (q) => q.eq("day", day)).collect()));
+  const stays: Doc<"duty">[] = [];
+  for (const day of days) {
+    visits.push(...(await ctx.db.query("attendance").withIndex("by_day", (q) => q.eq("day", day)).collect()));
+    stays.push(...(await ctx.db.query("duty").withIndex("by_day", (q) => q.eq("day", day)).collect()));
+  }
   const students = await ctx.db.query("students").collect();
+  // The class going on: a student out of work right now waits too (his wait is logged when it ends).
+  const waitsNow = session.open
+    ? students
+        .filter((s) => s.idleSince !== undefined && s.idleSince < end)
+        .map((s) => ({ at: end, kind: "idle", studentId: s._id as string, ms: end - s.idleSince!, value: s.idleReason }))
+    : [];
+  // The teachers (not the owner: he manages and teaches some days; never in the teachers' numbers).
+  const team = (await ctx.db.query("users").collect())
+    .filter((u) => u.role === "teacher")
+    .map((u) => ({ id: u._id as string, name: u.name, jobs: u.tabs }));
   return digestOf({
     start: session.startedAt,
     end,
-    events: events.map((e) => ({ ...e, studentId: e.studentId as string | undefined })),
+    events: [...events.map((e) => ({ ...e, studentId: e.studentId as string | undefined })), ...waitsNow],
     calls: calls.map((c) => ({ ...c, studentId: c.studentId as string })),
     visits: visits
       .filter((x) => x.inAt < end && (x.outAt ?? end) > session.startedAt)
       .map((x) => ({ studentId: x.studentId as string, inAt: x.inAt, outAt: x.outAt })),
     students: students.map((x) => ({ _id: x._id as string, stage: x.stage, demo: x.demo })),
     stats: session.stats,
+    team,
+    stays: stays.map((x) => ({ userId: x.userId as string, inAt: x.inAt, outAt: x.outAt })),
+    segs: opts?.segs,
   });
 }
 

@@ -20,6 +20,7 @@ import type * as calls from "../calls.js";
 import type * as catalog from "../catalog.js";
 import type * as clock from "../clock.js";
 import type * as demo from "../demo.js";
+import type * as duty from "../duty.js";
 import type * as families from "../families.js";
 import type * as family from "../family.js";
 import type * as focus from "../focus.js";
@@ -68,6 +69,7 @@ declare const fullApi: ApiFromModules<{
   catalog: typeof catalog;
   clock: typeof clock;
   demo: typeof demo;
+  duty: typeof duty;
   families: typeof families;
   family: typeof family;
   focus: typeof focus;

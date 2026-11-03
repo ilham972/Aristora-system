@@ -13,18 +13,22 @@ The technical memory of the app, kept with the code and updated in the same comm
 - `idleSince`/`idleMs` count out-of-work time; `idleReason` = what he waits for (`correction`, `evaluation`,
   `theory`, joined with +).
 
-**Top bar and tabs (`c360fa3`; Correction moved to the bottom bar in `0e4446b`, his call).**
-- Top bar, left: **Class** (list icon, everyone; red corner badge = in the hall with no work), Progress (owner +
-  Reports). Right: `TopStat`, one capsule = people icon + how many in class, the class clock, the link dot (a tap
-  opens Attendance for Correction and the owner), then Settings. No logo, no titles. ≤400 / ≤345 px rules; `topFits()`.
-- Bottom tabs, for the jobs the person has (no Manager tab since 3 Nov 2026: its button is on the Correction page,
-  below, "The Manager page"): **Correction** (square mark; its count = papers handed in, amber, red when
-  someone has no work until marked; the code calls the page `Focus` and stores the role as "focus"), **Theory**,
-  **Evaluation** (red count = students with no work waiting for that job). A badge shows only while the phone is
-  elsewhere. A Correction-only phone has one tab; no job at all = no bottom bar (`.app.no-tabs`). Home: the bottom
-  tab, else Class. Class just opens (`goClass`); Settings/Progress go back to `backTo`.
-- The job decides the taps, the alerts and `by`: the bottom tab = that job; Class (and pages opened from it) = the job
-  this phone used last (`aristora.job`), else the person's first.
+**Top bar and tabs (`c360fa3`; Correction moved to the bottom bar in `0e4446b`, his call; the Class tab 3 Nov 2026).**
+- Top bar, left: the **Register** (list icon, everyone; it was called Class until 3 Nov 2026, no badge since: its
+  count moved to the Class tab), Progress (owner + Reports). Right: `TopStat`, one capsule = people icon + how many in
+  class, the class clock, the link dot (a tap opens Attendance for Correction and the owner), then Settings. No logo,
+  no titles. ≤400 / ≤345 px rules; `topFits()`.
+- Bottom tabs: **Class** first, for everyone (3 Nov 2026, his call: the Manager page moved here from its button on the
+  Correction page, named Class so nobody is shown as "Manager"; the floor-plan icon `ClassMark`; its red count = in the
+  hall with no work; below, "The Class tab"), then the jobs the person has: **Correction** (square mark; its count =
+  papers handed in, amber, red when someone has no work until marked; the code calls the page `Focus` and stores the
+  role as "focus"), **Theory**, **Evaluation** (red count = students with no work waiting for that job). A badge shows
+  only while the phone is elsewhere. Four tabs fit a 320 px phone (14 px words, 12.5 px at ≤345). Where a phone opens:
+  what it showed last (`aristora.role`: "hall" = the Class tab, "focus", "theory", "evaluation", "class" = the
+  Register); nothing kept: a manager (or the owner) on the Class tab, everyone else on her first job's tab. The Register
+  just opens (`goRegister`); Settings/Progress go back to `backTo`.
+- The job decides the taps, the alerts and `by`: the bottom tab = that job; the Register and the Class tab = the job
+  this phone used last (`aristora.job`), else the person's first; a manager's taps on the Class tab are `by: "manager"`.
 
 **Attendance** (a full-page sheet since `3bce3bd`, `AttendanceSheet`; owner + Correction job): from Correction's +
 (the grade picked there, no grade row: `only`), the count by the clock or Class's "Sign students in" (grades 6–11
@@ -46,7 +50,7 @@ the list (not one blind tap) is the guard. Class, Theory and
 Evaluation show **only signed-in students** ("Nobody is signed in yet"); gone-home students with levels to correct
 stay at the bottom of Class and Evaluation ("Correct L3").
 
-**Class page (top bar icon, everyone's view, `c360fa3`).** `src/correction.tsx` `ClassPage`.
+**The Register (top bar list icon, everyone's view, `c360fa3`; called the Class page until 3 Nov 2026).** `src/correction.tsx` `ClassPage`.
 - Calls strips (Correction job), then the control panel: grade pills; stage tiles (All/Fighter/Master/Legend…,
   only stages present; red no work / orange running out / yellow quiet); unit pills (only units in use, one grade
   at a time, with counts); status chips = the old summary, now filters (in class / with no work / levels to correct
@@ -397,11 +401,10 @@ two errors: marks on the wrong question and on the wrong student. Meant for the 
   closes, her marks go with the book: they are server drafts) / **Keep it** ("Nisha keeps Raj's Unit 8"). The server
   refuses marks and saves on a book someone else holds live (`mustHoldBook` in `focus.mark` and `workbook.correct`).
   Drafts of his other books are never wiped by marks on one book (only drafts of corrected levels; others after 2
-  days). Not covered: the Class page's correct sheet doesn't claim (it is refused while someone holds the book).
+  days). Not covered: the Register's correct sheet doesn't claim (it is refused while someone holds the book).
 - **His paper:** (3 Nov 2026, his call: no big name: his is dark in the names row) the top row starts with the
-  **Manager button** (`ManagerButton`, managers only: the floor-plan icon, red count = students in the hall with no
-  work; `openPage("manager")`; with no paper open it keeps its place) and the **book button** (`UnitsButton`, moved up
-  from the books row: all his units, Move him / Books given); then **Later** (`workbook.levelDone`); **question-sheet button** (`.fc-racebtn`, a bar chart on its side since 2 Nov 2026 (his ask: a stats icon, not a grid), left of the home icon; 1 Nov 2026 a race, rebuilt 2 Nov 2026 on his words: it is for the corrector to check her work, not a leaderboard): `BookRaceSheet` in `src/bookRace.tsx`, query `progress.book` (every student who has worked in the book or is on it; Correction / Theory / Evaluation / Reports; per-question states + the book's sections or levels, never its content; `waits` = his levels handed in and not corrected, and marked at home not checked). On top, for her (2 Nov 2026, his words "am I correcting properly? am I missing anything?"): **To correct · N** (workbook: `waitsOf`, oldest first, "Malik L3 6 min" / "⌂ check"; one tap = `openWaiting` → his level opens; none = "✓ Nothing waits for you in this book") and **Most lost marks** (`lostMost`: questions where half or more of at least 3 marked lost marks: a hard question or a wrong key/marking; tap = zoom to its level, its number red). Level numbers too narrow for their columns shrink or hide (never "9101112"). Every student (furthest first, `bookRace`) against every question (`sheetOf`): theory book right / wrong / slip / explained / knew it / **left out** (unmarked while a later one is marked) / not done, teacher questions taught / skipped / not taught; workbook full / part / no marks / ? / explained / taught / handed in / before the app / not done. ONE screen (rows shrink: `--n`), chips All or one section / level zoomed with question numbers, a legend of the states shown, the paper's student ringed. **Blur**: tap a name, or Last 3 / All but top 3 / None (`blurPick`; never ranks 1–3, `mayBlur`); blurred on the phone too. **Share to the group** / Save = one white 1080-wide PNG (`src/racePoster.ts` `drawSheet`: English except the unit's Tamil name, no logo bands, the whole book, nobody ringed, chosen names smudged by down-and-up scaling (iOS 15 has no canvas filter), height grows with the class; since 2 Nov 2026: a small gap between levels instead of lines through the table, level numbers only where they fit, column names once ("levels" "marks" / "questions" "today"), one meaning per column (a workbook's marks %, "–" before any correction; a theory book's +N today), no "0 finished", the group sees "Handed in" (not "to correct")); **home icon** (`.fc-gohome`, left of Marks, 1 Nov 2026, his ask: signing out took + → find him → sign out): one tap = `students.setPresent` false (`by: "attendance"`), toast "Raj went home, 8:42 pm.", his name leaves the names row (unless a level waits), his paper stays with **Sign him in** (the undo); pale while he is signed out; **Marks** = Class's `Book` in a sheet; signed out (gone
+  **book button** (`UnitsButton`, moved up from the books row: all his units, Move him / Books given; the Manager
+  button that stood before it left for the bottom bar's Class tab the same day); then **Later** (`workbook.levelDone`); **question-sheet button** (`.fc-racebtn`, a bar chart on its side since 2 Nov 2026 (his ask: a stats icon, not a grid), left of the home icon; 1 Nov 2026 a race, rebuilt 2 Nov 2026 on his words: it is for the corrector to check her work, not a leaderboard): `BookRaceSheet` in `src/bookRace.tsx`, query `progress.book` (every student who has worked in the book or is on it; Correction / Theory / Evaluation / Reports; per-question states + the book's sections or levels, never its content; `waits` = his levels handed in and not corrected, and marked at home not checked). On top, for her (2 Nov 2026, his words "am I correcting properly? am I missing anything?"): **To correct · N** (workbook: `waitsOf`, oldest first, "Malik L3 6 min" / "⌂ check"; one tap = `openWaiting` → his level opens; none = "✓ Nothing waits for you in this book") and **Most lost marks** (`lostMost`: questions where half or more of at least 3 marked lost marks: a hard question or a wrong key/marking; tap = zoom to its level, its number red). Level numbers too narrow for their columns shrink or hide (never "9101112"). Every student (furthest first, `bookRace`) against every question (`sheetOf`): theory book right / wrong / slip / explained / knew it / **left out** (unmarked while a later one is marked) / not done, teacher questions taught / skipped / not taught; workbook full / part / no marks / ? / explained / taught / handed in / before the app / not done. ONE screen (rows shrink: `--n`), chips All or one section / level zoomed with question numbers, a legend of the states shown, the paper's student ringed. **Blur**: tap a name, or Last 3 / All but top 3 / None (`blurPick`; never ranks 1–3, `mayBlur`); blurred on the phone too. **Share to the group** / Save = one white 1080-wide PNG (`src/racePoster.ts` `drawSheet`: English except the unit's Tamil name, no logo bands, the whole book, nobody ringed, chosen names smudged by down-and-up scaling (iOS 15 has no canvas filter), height grows with the class; since 2 Nov 2026: a small gap between levels instead of lines through the table, level numbers only where they fit, column names once ("levels" "marks" / "questions" "today"), one meaning per column (a workbook's marks %, "–" before any correction; a theory book's +N today), no "0 finished", the group sees "Handed in" (not "to correct")); **home icon** (`.fc-gohome`, left of Marks, 1 Nov 2026, his ask: signing out took + → find him → sign out): one tap = `students.setPresent` false (`by: "attendance"`), toast "Raj went home, 8:42 pm.", his name leaves the names row (unless a level waits), his paper stays with **Sign him in** (the undo); pale while he is signed out; **Marks** = Class's `Book` in a sheet; signed out (gone
   home, or never signed in): an amber line "Signed out: Evaluation and Theory don't see him" + **Sign him in**
   (`SignedOut`). **His books in one line** under his name (`BookRow`, `e34a29c`, another chat): a book button first
   (`.fc-units`, like + on the names row) opens the units sheet; then his books (`booksOf`: his book now dark, every
@@ -483,34 +486,48 @@ how far, ✓, ring = now), this week, optional rank, optional note, footer. Swit
 when on), a note (never saved, wraps to 4 lines). Share = the phone's share sheet (`shareFiles`), Save downloads
 `ARISTORA-<name>-<day>.png`.
 
-**The Manager page (2 Nov 2026; rebuilt 3 Nov 2026, his voice note: "teachers silently take rest", "the manager can
-send anyone to any place", "rooms of the teachers and the hall as rectangles", "everything in one view").** The
-teachers keep their own pages (Call, Arrived, Done: his experiment showed they work); the manager is extra: he sees
-the hall and every teacher's room on ONE screen (no cards, no question numbers, no Back buttons) and sends any
-student to any teacher, above all when a teacher sits free while students wait. Who: the owner, and whoever has the
-**Manager job** (Settings → People → tick Manager; it brings Correction: the button is on the Correction page; the
-server refuses Manager without Correction). **Not a bottom tab** (3 Nov 2026, his call: a new hire shown as
-"Manager" to senior teachers is not healthy): the **Manager button** on the Correction page opens it (a page:
-`page === "manager"`, `openPage`/`onOpenPage` in `src/store.ts`); the Correction tab stays lit and goes back (no back
-button). The phone hears what Correction hears; taps are recorded `by: "manager"`. Page `src/manager.tsx`
-`ManagerPage`; rules, pure and tested, `src/managerData.ts` `managerPlan` (`tests/manager.test.ts`, the run-through
-"Manager: …").
+**The Class tab (3 Nov 2026, his voice note: "2 teachers not taking any students: each thinks the other will take
+him"; "make the manager page the Class tab in the bottom bar; the other teachers can see it, they can't drag and drop;
+they want to know how many students stay without work in the hall"). It was the Manager page (2 Nov 2026; rebuilt 3
+Nov: "teachers silently take rest", "the manager can send anyone to any place", "rooms of the teachers and the hall as
+rectangles", "everything in one view"), opened by a button on the Correction page until the same day.** The teachers
+keep their own pages (Call, Arrived, Done); the Class tab shows the hall and every teacher's room on ONE screen (no
+cards, no question numbers, no Back buttons). **Everyone** sees it; only **managers** act (`canManage`: the owner and
+the **Manager job**, Settings → People → tick Manager; any other job or none: it no longer needs Correction): send any
+student to any teacher, mark teachers arrived / went, read every teacher's card. A teacher taps a student: his strip,
+his day, no buttons; no drag; her own name (underlined): her card; another teacher's room: what she is doing
+(`TeacherStrip`: here since, doing, her students, the students the page suggests for her), never her numbers. The
+suggestion on a free room names its students: the cure for "she will take him" (both teachers see whose they are).
+The phone hears what its last job hears; a manager's taps are recorded `by: "manager"`. Page `src/manager.tsx`
+`ManagerPage` (`canManage`, `meId`); rules, pure and tested, `src/managerData.ts` `managerPlan`
+(`tests/manager.test.ts`, the run-throughs "Class tab: …" and "Teacher card: …").
+- **Who is here** (3 Nov 2026, his ask: "arrived time and went time, all done by manager"): a teacher has a room only
+  while the manager has marked her here (`people.team` `stay`; `isHere`; the owner teaching always is); until then,
+  and after she went, a dashed chip on the **team line** ("Nila not here Arrived?" for the manager, "went 5:40 PM").
+  A room with students still shows. The correctors here sit on the team line too (a pen chip each). Tap any name:
+  her card (below). Free since = her last Done today, else her arrival, else the class's start. (The old "not here"
+  link on a room, remembered on one phone only, is gone.)
 - **The owner teaches** (3 Nov 2026, his ask: "only for me"): Settings → Account → **Not teaching / I'm teaching**
   (`TeachingSwitch`, `people.setTeaching`, owner only; `users.teaching`; history "teaching today: on"). On: his room
-  on the Manager page (Theory and Evaluation; no "not here" link: his switch), the manager sends him students and his
-  phone calls him on any page ("Kumar is coming to you. Open Evaluation."). Off when he goes out: the room goes.
+  on the Class tab (Theory and Evaluation; never marked arrived: his switch), the manager sends him students and his
+  phone calls him on any page ("Kumar is coming to you. Open Evaluation."). Off when he goes out: the room goes. He is
+  never on the team line, never has a card, never in the teachers' numbers ("not including me").
 - **The three numbers** (`.mg2-counts`): levels **to correct** · students **to explain** · students **to teach**, each
   with "N no work" in red. Tap one: the hall dims everyone else (`counts.*.ids`).
-- **A room per teacher** (`people.team`: active teachers with Theory or Evaluation, by name; fixed places), coloured by
-  what she is doing now (blue Theory, violet Evaluation/check-in; `doing`): her students as pills (her calls only, both
-  rooms): **called** by her phone (dotted; the manager taps him → Send now / Not now), **on his way** (dashed; red
-  after 3 min = she hasn't tapped Arrived), **with her** (solid); "12m · ~3m left" (each question once × 3 min, a
-  lesson its usual length, `calls.lessons`), "over" (amber; **red** while students in the hall have no work, with
-  "7 have no work: finish now": 3 Nov 2026, Zuhar 49 min with two while seven sat 61 min). **Free**: green, "free 6m" (since her last Done today,
-  `people.team` `lastEnd`, else the class's start), and the group the page suggests for her ("Evaluation · no work /
-  → Vimal, Malik"); **one tap on the room sends it**. Free while there is work for her: **amber at 2 min, red at 5**
-  (`FREE_AMBER_MS`, `FREE_RED_MS`; his "teachers rest silently"). "not here" (today, this phone, Undo on the message)
-  → a dashed chip **Bring back**.
+- **A room per teacher here** (`people.team`: active teachers with Theory or Evaluation marked here, by name; fixed
+  places), coloured by what she is doing now (blue Theory, violet Evaluation/check-in; `doing`): her students as pills
+  (her calls only, both rooms): **called** by her phone (dotted; the manager taps him → Send now / Not now), **on his
+  way** (dashed; amber after 3 min = she hasn't tapped Arrived), **with her** (solid); "12m · ~3m left" (each question
+  once × 3 min, a lesson its usual length, `calls.lessons`), "over" (yellow; amber while students in the hall have no
+  work, with "7 have no work: finish now": 3 Nov 2026, Zuhar 49 min with two while seven sat 61 min). **Free**: green, "free 6m" (since her last Done today,
+  `people.team` `lastEnd`, else her arrival, else the class's start), and the group the page suggests for her
+  ("Evaluation · no work / → Vimal, Malik"); **a manager's tap on the room sends it** (no suggestion, no student
+  picked: her card). Free while there is work for her: **yellow at 2 min, amber at 5** (`FREE_YELLOW_MS`,
+  `FREE_AMBER_MS`; his "teachers rest silently"); over her time: yellow, **amber** (knocking) while students in the hall
+  have no work. **Never red for a teacher** (3 Nov 2026, his rule now that every teacher sees it: "red says they are
+  doing wrong"): rooms, a late walk ("not taken", amber), the room's notes and its suggestion's words are yellow or
+  amber. Students with no work stay red (the same red as every page: one student, one colour). The name in the room's
+  head is its own button (`.mg2-rn`): her card / what she does.
 - **The hall** (`.mg2-hall`, the big rectangle; scrolls inside, the page never does): everyone not called and not in a
   room, A–Z, never moving. Outline **red** = no work (his minutes), **orange** = should go now (in a due group),
   **yellow** = waiting on purpose; a violet **dot** = no Theory or Evaluation teacher yet today after an hour here
@@ -531,11 +548,11 @@ button). The phone hears what Correction hears; taps are recorded `by: "manager"
   Evaluation."; that tab's badge in the room's colour, `tb-coming`). Then she works as usual and taps Done. A
   check-in on her Evaluation page: "Check-in: Priya. Look at his book with him: how is it going? Then Done."
   (history: "check-in finished").
-- **His strip** (tap a student; `.mg2-strip`, at the bottom): name, what he is doing (`v.line`), why ("waits for Zara
-  (hands in L1 ~5m)", "no teacher yet, here 1h 12m"), **his day** as a bar from sign-in to home time (2 h):
+- **His strip** (tap a student; `.mg2-strip`, at the bottom; everyone): name, what he is doing (`v.line`), why ("waits
+  for Zara (hands in L1 ~5m)", "no teacher yet, here 1h 12m"), **his day** as a bar from sign-in to home time (2 h):
   working green, no work red, walking grey, Theory blue, Evaluation/check-in violet ("teachers 12m (2×) · no work
-  6m"; `manager.day`, read once and every 30 s; `convex/lib/timeline.ts` `dayOf`), and a button per teacher who can
-  take him (the suggested one filled; "busy · ~6m left"). No work (red) or finished: **Give a book** (the unit sheet
+  6m"; `manager.day`, read once and every 30 s; `convex/lib/timeline.ts` `dayOf`), and (the manager's only) a button
+  per teacher who can take him (the suggested one filled; "busy · ~6m left"). No work (red) or finished: **Give a book** (the unit sheet
   in Books given mode, `StageUnitSheet mode="given"`): when every teacher is busy it is the first button, with "Every
   teacher is busy: give him a book; he works on it until one is free." (3 Nov 2026: 7 sat 61 min while both teachers
   explained). A pill in a room: **He's with her** (Arrived for her: her
@@ -555,9 +572,51 @@ button). The phone hears what Correction hears; taps are recorded `by: "manager"
   question he can do now at his pace; not one who goes home first. When one goes, those of his book who share a
   question go with him. Theory: a workbook's questions wait for more too (20 min); **Theory first**: a theory-book
   student with no work who needs a section goes to that lesson; his wrong answers wait.
-- The manager's server powers (`manager` in `actor`): `calls.create` for any teacher, `unsend`, and Correction's hall
-  taps (`send`, `decline`, `undoDecline`, `cancel`, `arrive`, `unarrive`, `release`); reads `people.team`,
-  `calls.lessons`, `manager.day`.
+- The manager's server powers (`manager` in `actor`): `calls.create` for any teacher, `unsend`, Correction's hall taps
+  (`send`, `decline`, `undoDecline`, `cancel`, `arrive`, `unarrive`, `release`), `duty.mark` / `move` / `undo`, and
+  any teacher's `duty.card`. Everyone signed in reads `people.team` and `manager.day` (the Class tab is everyone's).
+
+**Teachers' stays and cards (3 Nov 2026, his voice note: "make a dashboard for them; it feels like their own, but it
+makes them feel guilty if they don't work; don't use red, that tells them they are wrong: yellow for warnings, green;
+show their own work, free time, how much better than the other teachers, not including me; later I pay by
+performance, not now; arrived time and went time, all done by the manager").** Server `convex/duty.ts`, numbers
+`convex/lib/boss.ts` (`digestOf` with `team` + `stays`), phone `src/teacherCard.tsx` (`TeacherCard`, `StayControls`).
+- **Arrived / went** (`duty` table: one row per stay, `userId`, `day`, `inAt`, `outAt`, `inBy`/`outBy`, `editedAt`):
+  the manager or the owner, on her card: **Arrived** now / 5 / 15 / 30 min ago (`duty.mark` `here`, `ago` ≤ 120;
+  twice is refused: "Nila is here since 4:30 PM."; back after she went: not before she went); when she is here:
+  **Went** now / 5 / 15 / 30 min ago, and "She came at 4:30: earlier or later?" −10 / −5 / +5 / +10 min (`duty.move`:
+  today only, never after she went or now, never into an earlier stay). **Undo** on the message for 5 minutes
+  (`duty.undo`: the arrival goes; Went taken back = here again). **End the session** (and a class closed as stale)
+  closes every stay still open at the class's end (`endStays` in `closeSession`, `outBy: "class end"`): a forgotten
+  Went never runs on. A stay left open on an earlier day with no class to close it counts nothing (`outBy:
+  "unknown"`, closed where it began, when she is marked again). Only a teacher with a job (not the owner, not someone
+  with only Manager). History: "Nila arrived 4:30 PM" (`duty` events, `who` = the manager).
+- **Her numbers** (per class, inside her stay; the class going on read again, ended classes from their report
+  `report.digest`, v 1, optional fields, so older classes simply have none): **here**; **working** (a Theory or
+  Evaluation teacher: from a student called to her (walking, with her) to Done, overlaps once; a corrector: each level
+  / answer and the 3 minutes after it, the walk to the next paper); **free** = here − working; **free while work waited**
+  (the yellow number): free while a student sat with no work waiting for one of HER jobs (Evaluation for an Evaluation
+  teacher, Theory for a Theory teacher; a student called by anyone is not waiting), after the first 2 minutes of each
+  free stretch (the Class tab's yellow); a corrector: free while papers waited (handed in, not corrected) or a student
+  waited for Correction. The class going on counts the students out of work right now too (`readDigest`'s `waitsNow`).
+  A manager's managing isn't measured: no free numbers for her (her correcting shows). The owner is never in it.
+  Worked but not marked here: her work counts, no stay numbers. Demo students never count.
+- **Her card** (tap her name on the Class tab: her room's name, her desk or her chip; `duty.card`, `fetchOnce` on
+  opening and every minute while open, never live): **hers only** (his pick, 3 Nov 2026: "her own + the others'
+  average"); the manager and the owner read anyone's. Title "Shanthi: your day" (hers) or her name; "Arrived 4:38 PM ·
+  here 1h 20m" / "Went …" / "Not marked here". Three tiles: a room teacher **working** (green when at or above the
+  others, yellow 10 points below) · **free** (never coloured) · **free while students waited** (green at 0 or no more
+  than the others, else yellow); a corrector: levels corrected · free · free while papers waited, "papers waited N on
+  average"; a manager: correcting · levels, "managing isn't counted". "5 students seen · 2 lessons". Her stay as a bar
+  (working green, free grey, free while work waited yellow; `segs`). **You and the others**: today, the others'
+  average (same work: room teachers with room teachers, correctors with correctors; 15+ minutes here; never the owner
+  or a manager): working % and free while students waited (correctors: levels an hour), you vs others as two bars.
+  **This week**: a column a class day (working % its height; the day's letter yellow when work waited while she was
+  free), "working 62% · others 49% · free while waited 22m". The manager's part at the bottom (above). No red anywhere
+  on it. One screen at 390 / 360 / 320 px (`@media (max-width: 345px), (max-height: 700px)` tightens it).
+- Not built (his "pay by performance later"): pay from these numbers. Before money depends on them: a month of them, the
+  manager marking every day, and the rule that pays for "free while students waited" falling (a slow teacher looks
+  busy, so busy minutes alone must never be paid).
 
 **The Owner page (owner only, 31 Oct 2026, his voice note: "I want to think like a Owner").** A gauge icon in the top bar
 after Progress (`boss-btn`, owner only: per-teacher numbers and money). Built around his decisions, not every number.
@@ -573,7 +632,7 @@ Five tabs (`aristora.bossTab`; the fifth, **Sim**, is the simulation's scoreboar
   bad; the usual = the middle of the earlier days; what they waited for), tiles (came, student-hours, most at once,
   levels corrected/handed in/%, explained, lessons, answers marked, wait for Correction, walks that never arrived), each
   room's busy share as a meter (over 85% = the queue grows), the class every 15 minutes as three small bar rows on one
-  time line (in class / no work / levels waiting; tap = one reading for that moment), each person (room, minutes busy,
+  time line (in class / no work / levels waiting; tap = one reading for that moment), each person (room, minutes busy, here / free / free while work waited since 3 Nov 2026,
   levels with minutes each, lessons, students), the last class days (idle bars + table).
 - **Team** (the last 10 finished class days, `loadOf`): how sure (none / early < 3 classes or 15 student-hours / fair /
   good ≥ 8), what the team can carry (students at once at 80% busy, the limit room, students a day = at once × class
@@ -783,21 +842,24 @@ before he walks in.
 
 **Who.**
 - One owner and teachers.
-- Teachers get jobs (`correction`, `theory`, `evaluation`, `manager` (3 Nov 2026: the Manager page, its button on the
-  Correction page: Manager needs Correction); People shows them as "Jobs" with what each opens) and extras:
+- Teachers get jobs (`correction`, `theory`, `evaluation`, `manager` (3 Nov 2026: the Class tab's powers: send any
+  student to any teacher, mark teachers arrived / went, every teacher's card; with any job or alone); People shows them
+  as "Jobs" with what each opens) and extras:
   - `students`: add, rename, remove;
   - `books`: workbooks (typing and uploading) and unit names;
   - `reports`: Reports, History, the Students page numbers, and **Progress** (page and poster);
   - `feedback` (3 Nov 2026, his answer "me and selected people"): Settings → Feedback, what students send from the
     family app, and its count on the Settings gear (`families.feedback`, `feedbackNew`, `feedbackSeen`).
-- Everyone signed in sees Class. Correction job = the Correction page and Attendance (`setPresent`, `attendance.day`;
+- Everyone signed in sees the Class tab and the Register, reads `people.team` and `manager.day`, and her own card
+  (`duty.card`). Correction job = the Correction page and Attendance (`setPresent`, `attendance.day`;
   `by: "attendance"`), Books given (`students.setGiven`), sending called students, Going home, Back in the hall, End
   the session. `progress.student` (the unit sheet's numbers) = Correction, Evaluation or Theory.
 - Workbook permissions: `correct`, `uncorrect`, `levelDone`, `toTheory`, `reteach`, and Correction's drafts
   (`focus.drafts`/`mark`/`drop`) = Correction or Evaluation; `explain` = Evaluation; `taught` = Theory or Evaluation.
-  `calls.lessons` = Theory or Manager; `calls.keep` = Evaluation. Manager job = the Manager page: `calls.create` for any
-  teacher (`teacherId`, `visit`), `unsend`, Correction's hall taps on calls (`send`, `decline`, `undoDecline`,
-  `cancel`, `arrive`, `unarrive`, `release`), `people.team`, `manager.day`. The owner's own switch: `people.setTeaching`.
+  `calls.lessons` = Theory or Manager; `calls.keep` = Evaluation. Manager job = the Class tab's powers: `calls.create`
+  for any teacher (`teacherId`, `visit`), `unsend`, Correction's hall taps on calls (`send`, `decline`, `undoDecline`,
+  `cancel`, `arrive`, `unarrive`, `release`), `duty.mark` / `move` / `undo`, any teacher's `duty.card`. The owner's own
+  switch: `people.setTeaching`.
 - Owner-only: People (user management), demo students, the simulation (start, +5, level, End, delete its students; the
   steps' nudge is any signed-in phone), and the account lines of the history (sign-ins, PINs,
   links, people changes).

@@ -84,7 +84,36 @@ export type PersonDay = {
   visits: number;
   lessons: number;
   students: number;
+  /**
+   * Her stay (3 Nov 2026, the teachers' cards; only when the class was read with the team and its arrivals): who she is,
+   * her jobs then, arrived / went inside this class, minutes here, free (here, not with a student, nobody called), and
+   * free while work waited for her: a student with no work waiting for her job, or (a corrector) papers waiting; the
+   * first minutes of each free stretch don't count (a pause between students). A manager's managing isn't measured:
+   * no free minutes for her. Old classes don't have these.
+   */
+  id?: string;
+  jobs?: string[];
+  inAt?: number;
+  outAt?: number;
+  hereMin?: number;
+  workMin?: number;
+  freeMin?: number;
+  missedMin?: number;
+  /** Levels she corrected: minutes they had waited since handed in, how many. */
+  waitMin?: number;
+  waits?: number;
+  /** Her stay as a bar (only when asked: her card): with students / correcting, free, free while work waited. */
+  segs?: TSeg[];
 };
+/** A part of a teacher's stay: w = working (or a student called to her), f = free, m = free while work waited for her. */
+export type TSeg = { s: number; e: number; k: "w" | "f" | "m" };
+/** A teacher, for her stay's numbers: her id, name and jobs (the users row). */
+export type TeamMember = { id: string; name: string; jobs: readonly string[] };
+/** A stay at the centre (the duty table). */
+export type DStay = { userId: string; inAt: number; outAt?: number };
+/** A pause this long after a student (or a corrected level) is not "free while work waited" yet (the Class tab's yellow). */
+export const GRACE_MS = 2 * 60_000;
+export const GRACE_COR_MS = 3 * 60_000;
 export type Digest = {
   v: 1;
   day: string;
@@ -189,6 +218,58 @@ export function shareOut(spans: Span[]): { total: number; per: Map<string, numbe
   return { total, per };
 }
 
+// ---- stretches of time: [from, to) pairs, sorted and joined
+
+export type Iv = [number, number];
+
+/** Sorted, overlaps joined, empty ones gone. */
+export function joinIv(xs: readonly Iv[]): Iv[] {
+  const ys = xs.filter(([a, b]) => b > a).sort((p, q) => p[0] - q[0]);
+  const out: Iv[] = [];
+  for (const [a, b] of ys) {
+    const last = out[out.length - 1];
+    if (last && a <= last[1]) last[1] = Math.max(last[1], b);
+    else out.push([a, b]);
+  }
+  return out;
+}
+
+/** What of `a` is not in `b`. */
+export function minusIv(a: readonly Iv[], b: readonly Iv[]): Iv[] {
+  const bs = joinIv(b);
+  const out: Iv[] = [];
+  for (const [s0, e] of joinIv(a)) {
+    let s = s0;
+    for (const [bs0, be] of bs) {
+      if (be <= s || bs0 >= e) continue;
+      if (bs0 > s) out.push([s, bs0]);
+      s = Math.max(s, be);
+      if (s >= e) break;
+    }
+    if (s < e) out.push([s, e]);
+  }
+  return out;
+}
+
+/** What is in both. */
+export function bothIv(a: readonly Iv[], b: readonly Iv[]): Iv[] {
+  const as = joinIv(a);
+  const bs = joinIv(b);
+  const out: Iv[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < as.length && j < bs.length) {
+    const s = Math.max(as[i][0], bs[j][0]);
+    const e = Math.min(as[i][1], bs[j][1]);
+    if (e > s) out.push([s, e]);
+    if (as[i][1] < bs[j][1]) i++;
+    else j++;
+  }
+  return out;
+}
+
+export const lengthIv = (xs: readonly Iv[]) => xs.reduce((a, [s, e]) => a + (e - s), 0);
+
 function stageKey(s: string | undefined): StageKey {
   return s === "fighter" ? "fighter" : s === "master" ? "master" : "other";
 }
@@ -207,6 +288,11 @@ export function digestOf(input: {
   visits: DVisit[];
   students: DStudent[];
   stats?: DStats;
+  /** The teachers and their stays (3 Nov 2026): each one's here / free / free while work waited. */
+  team?: readonly TeamMember[];
+  stays?: readonly DStay[];
+  /** Also each teacher's stay as a bar (her card). */
+  segs?: boolean;
 }): Digest {
   const { start, end } = input;
   const d = emptyDigest(start, end);
@@ -253,6 +339,8 @@ export function digestOf(input: {
 
   // ---- idle: out of work, by what he waited for
   const idleSpans: Span[] = [];
+  // (Each wait with what it was for: the teachers' "free while a student waited for her".)
+  const idleWhy: { id: string; s: number; e: number; why: RoomKey[] }[] = [];
   for (const e of events) {
     if (e.kind !== "idle" || !e.ms || !e.studentId) continue;
     const s = Math.max(e.at - e.ms, start);
@@ -263,6 +351,7 @@ export function digestOf(input: {
     d.idle.total += min;
     d.stages[stageOf(e.studentId)].idleMin += min;
     const why = (e.value ?? "").split("+").filter((r): r is RoomKey => (ROOMS as readonly string[]).includes(r));
+    idleWhy.push({ id: e.studentId, s, e: t, why });
     if (!why.length) d.idle.other += min;
     for (const r of why) d.idle[r] += min / why.length;
   }
@@ -317,6 +406,10 @@ export function digestOf(input: {
       if (from !== undefined && from < e.at) queue.push({ s: Math.max(from, start), e: e.at, id: k });
       handed.delete(k);
       const x = person(who);
+      if (e.ms !== undefined && e.at - e.ms >= start) {
+        x.p.waitMin = (x.p.waitMin ?? 0) + e.ms / MIN;
+        x.p.waits = (x.p.waits ?? 0) + 1;
+      }
       x.p.levels++;
       x.spans.correction.push({ s: e.at - ms, e: e.at, id: e.studentId });
       lastMark.set(who, e.at);
@@ -390,7 +483,100 @@ export function digestOf(input: {
     p.students = new Set([...seen].map((k) => k.split(":")[1])).size;
     p.room = ROOMS.reduce((a, r) => (p.min[r] > p.min[a] ? r : a), ROOMS[0]);
     if (p.min[p.room] > 0) d.rooms[p.room].people++;
+    if (p.waitMin !== undefined) p.waitMin = round1(p.waitMin);
     d.people.push(p);
+  }
+
+  // ---- each teacher's stay (3 Nov 2026, her card): here, working, free, free while work waited for her
+  if (input.team && input.stays) {
+    // A student called by anyone is taken: he waits for nobody else meanwhile.
+    const calledOf = new Map<string, Iv[]>();
+    for (const c of calls) {
+      const e = Math.min(c.endedAt ?? end, end, c.createdAt + VISIT_MAX_MS);
+      (calledOf.get(c.studentId) ?? calledOf.set(c.studentId, []).get(c.studentId)!).push([c.createdAt, e]);
+    }
+    const waitsFor = (job: RoomKey): Iv[] => {
+      const his = new Map<string, Iv[]>();
+      for (const w of idleWhy) if (w.why.includes(job)) (his.get(w.id) ?? his.set(w.id, []).get(w.id)!).push([w.s, w.e]);
+      const out: Iv[] = [];
+      for (const [id, xs] of his) out.push(...minusIv(xs, calledOf.get(id) ?? []));
+      return joinIv(out);
+    };
+    const waiting: Record<RoomKey, Iv[]> = {
+      theory: waitsFor("theory"),
+      evaluation: waitsFor("evaluation"),
+      // A corrector's work waits as papers handed in, and as students with no work until she marks.
+      correction: joinIv([...waitsFor("correction"), ...queue.map((q): Iv => [q.s, q.e])]),
+    };
+    const byName = new Map(d.people.map((p) => [p.name, p]));
+    for (const t of input.team) {
+      const stay = joinIv(
+        input.stays.filter((x) => x.userId === t.id).map((x): Iv => [Math.max(x.inAt, start), Math.min(x.outAt ?? end, end)]),
+      );
+      let p = byName.get(t.name);
+      if (!stay.length && !p) continue; // not here in this class, nothing done
+      const roomJobs = t.jobs.filter((j): j is RoomKey => j === "theory" || j === "evaluation");
+      if (!p) {
+        p = {
+          name: t.name,
+          room: roomJobs.includes("evaluation") ? "evaluation" : (roomJobs[0] ?? "correction"),
+          min: { correction: 0, evaluation: 0, theory: 0 },
+          levels: 0,
+          checks: 0,
+          marks: 0,
+          visits: 0,
+          lessons: 0,
+          students: 0,
+        };
+        d.people.push(p);
+        byName.set(t.name, p);
+      }
+      p.id = t.id;
+      p.jobs = [...t.jobs];
+      // Worked but nobody marked her here: no stay numbers (her card says so).
+      if (!stay.length) continue;
+      const spans = people.get(t.name)?.spans;
+      const work: Iv[] = spans ? ROOMS.flatMap((r) => spans[r].map((x): Iv => [x.s, x.e])) : [];
+      let busy: Iv[];
+      let grace: number;
+      let waits: Iv[];
+      if (roomJobs.length) {
+        // A student called to her, on his way or with her: she is not free.
+        const mine: Iv[] = calls
+          .filter((c) => c.teacher === t.name)
+          .map((c): Iv => [c.createdAt, Math.min(c.endedAt ?? end, end, c.createdAt + VISIT_MAX_MS)]);
+        busy = joinIv([...work, ...mine]);
+        grace = GRACE_MS;
+        waits = joinIv(roomJobs.flatMap((j) => waiting[j]));
+      } else {
+        // A corrector: the walk to the next paper is work; free = no paper corrected for over 3 minutes.
+        busy = joinIv(work.map(([s, e]): Iv => [s, e + GRACE_COR_MS]));
+        grace = 0;
+        waits = t.jobs.includes("correction") ? waiting.correction : [];
+      }
+      const here = lengthIv(stay);
+      const inStay = bothIv(busy, stay);
+      p.inAt = stay[0][0];
+      const last = stay[stay.length - 1][1];
+      p.outAt = last < end - 1_000 ? last : undefined;
+      p.hereMin = round1(here / MIN);
+      p.workMin = round1(lengthIv(inStay) / MIN);
+      // A manager's managing isn't measured: her free minutes would be her managing.
+      if (t.jobs.includes("manager")) continue;
+      const free = minusIv(stay, busy);
+      const open = free.map(([s, e]): Iv => [s + grace, e]).filter(([s, e]) => e > s);
+      const missed = bothIv(open, waits);
+      p.freeMin = round1(lengthIv(free) / MIN);
+      p.missedMin = round1(lengthIv(missed) / MIN);
+      if (input.segs) {
+        const segs: TSeg[] = [
+          ...inStay.map(([s, e]): TSeg => ({ s, e, k: "w" })),
+          ...missed.map(([s, e]): TSeg => ({ s, e, k: "m" })),
+          ...minusIv(free, missed).map(([s, e]): TSeg => ({ s, e, k: "f" })),
+        ];
+        p.segs = segs.sort((a, b) => a.s - b.s);
+      }
+    }
   }
   d.people.sort((a, b) => ROOMS.indexOf(a.room) - ROOMS.indexOf(b.room) || b.min[b.room] - a.min[a.room]);
 
@@ -448,6 +634,12 @@ export function sumDigests(ds: Digest[]): Digest | null {
       }
       for (const r of ROOMS) same.min[r] = round1(same.min[r] + p.min[r]);
       for (const f of ["levels", "checks", "marks", "visits", "lessons", "students"] as const) same[f] += p[f];
+      // Her stays (only classes read with them): summed where both have them.
+      for (const f of ["hereMin", "workMin", "freeMin", "missedMin", "waitMin", "waits"] as const) {
+        if (p[f] === undefined) continue;
+        same[f] = round1((same[f] ?? 0) + p[f]);
+      }
+      same.segs = undefined;
       same.room = ROOMS.reduce((a, r) => (same.min[r] > same.min[a] ? r : a), ROOMS[0]);
     }
     out.line.push(...x.line);

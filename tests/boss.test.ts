@@ -382,3 +382,99 @@ describe("the server side", () => {
     await expect(asPhone(t, NILA).query(api.progress.report, { studentId: malik.id })).rejects.toThrow();
   });
 });
+
+// ---------------------------------------------------------------- the teachers' stays (3 Nov 2026, their cards)
+
+describe("stretches of time", () => {
+  test("join, take away, both, length", async () => {
+    const { joinIv, minusIv, bothIv, lengthIv } = await import("../convex/lib/boss");
+    expect(joinIv([[5, 9], [0, 3], [2, 4], [9, 10], [7, 7]])).toEqual([[0, 4], [5, 10]]);
+    expect(minusIv([[0, 10]], [[2, 3], [5, 7], [9, 12]])).toEqual([[0, 2], [3, 5], [7, 9]]);
+    expect(minusIv([[0, 10]], [[-5, 20]])).toEqual([]);
+    expect(bothIv([[0, 5], [8, 12]], [[3, 9], [11, 20]])).toEqual([[3, 5], [8, 9], [11, 12]]);
+    expect(lengthIv([[0, 2], [5, 9]])).toBe(6);
+  });
+});
+
+describe("digestOf: each teacher's stay (here, working, free, free while work waited for her)", () => {
+  const team = [
+    { id: "u-nila", name: "Nila", jobs: ["evaluation"] },
+    { id: "u-shan", name: "Shanthi", jobs: ["evaluation", "theory"] },
+    { id: "u-fat", name: "Fathima", jobs: ["theory"] },
+    { id: "u-kavi", name: "Kavi", jobs: ["correction"] },
+    { id: "u-mgr", name: "Rani", jobs: ["correction", "manager"] },
+    { id: "u-away", name: "Away", jobs: ["evaluation"] },
+  ];
+  const stays = [
+    { userId: "u-nila", inAt: min(0) },
+    { userId: "u-shan", inAt: min(10), outAt: min(50) },
+    { userId: "u-fat", inAt: min(0) },
+    { userId: "u-kavi", inAt: min(0) },
+    { userId: "u-mgr", inAt: min(0) },
+  ];
+  const students = [{ _id: "s1", stage: "fighter" }, { _id: "s2", stage: "master" }];
+  const visits = [
+    { studentId: "s1", inAt: min(0), outAt: min(60) },
+    { studentId: "s2", inAt: min(0), outAt: min(60) },
+  ];
+  const events: DEvent[] = [
+    // s1 sits with no work 10 → 30, waiting for Evaluation. Shanthi calls him at 25 (he is taken from then).
+    { at: min(30), kind: "idle", studentId: "s1", ms: 20 * 60_000, value: "evaluation" },
+    { at: min(36), kind: "done-evaluation", studentId: "s1", who: "Shanthi" },
+    // s2 hands Level 1 in at 20; Kavi corrects it 40 → 42 (timed), and a theory-book answer at 44.
+    { at: min(20), kind: "level-done", studentId: "s2", unit: "G8-U01", value: "1" },
+    { at: min(42), kind: "level-marks", studentId: "s2", unit: "G8-U01", value: "1 8/10", ms: 22 * 60_000, took: 2 * 60_000, who: "Kavi" },
+    { at: min(44), kind: "mark", studentId: "s1", value: "right", who: "Kavi" },
+  ];
+  const calls: DCall[] = [
+    { studentId: "s1", room: "evaluation", kind: "evaluation", status: "done", group: "g1", createdAt: min(25), sentAt: min(25), arrivedAt: min(28), endedAt: min(36), teacher: "Shanthi" },
+  ];
+  const d = digestOf({ start: min(0), end: min(60), events, calls, visits, students, team, stays, segs: true });
+  const p = (name: string) => d.people.find((x) => x.name === name)!;
+
+  test("a room teacher free while a student waited for her job: after the first 2 minutes of each free stretch", () => {
+    // Nila (Evaluation), here 0 → 60, never with anyone: free 60; s1 waited for Evaluation 10 → 25 (then taken).
+    expect(p("Nila")).toMatchObject({ id: "u-nila", hereMin: 60, workMin: 0, freeMin: 60, missedMin: 15, inAt: min(0) });
+    expect(p("Nila").outAt).toBeUndefined();
+  });
+
+  test("busy from her call (he walks to her) to Done; her stay ends when she went", () => {
+    // Shanthi here 10 → 50: busy 25 → 36 (11); free 10 → 25 and 36 → 50 = 29. Missed: 12 → 25 = 13 (2 min grace).
+    expect(p("Shanthi")).toMatchObject({ hereMin: 40, workMin: 11, freeMin: 29, missedMin: 13, outAt: min(50) });
+    expect(p("Shanthi").segs!.map((x) => [x.k, (x.s - min(0)) / 60_000, (x.e - min(0)) / 60_000])).toEqual([
+      ["f", 10, 12],
+      ["m", 12, 25],
+      ["w", 25, 36],
+      ["f", 36, 50],
+    ]);
+  });
+
+  test("a student waiting for Evaluation is not a Theory teacher's: Fathima free, nothing missed", () => {
+    expect(p("Fathima")).toMatchObject({ hereMin: 60, freeMin: 60, missedMin: 0, workMin: 0, room: "theory" });
+  });
+
+  test("a corrector: the walk to the next paper is work (3 min); free while papers waited", () => {
+    // Kavi: busy 40 → 45 (the level and its walk) and 43.5 → 47 (the answer: 30 s and its walk): 40 → 47 = 7.
+    // Papers waited 20 → 42 (Level 1): free 0 → 40 inside it = 20 → 40 = 20 missed.
+    expect(p("Kavi")).toMatchObject({ hereMin: 60, workMin: 7, freeMin: 53, missedMin: 20, levels: 1, waits: 1, waitMin: 22 });
+  });
+
+  test("a manager's managing isn't measured: no free minutes for her; the owner and the absent never count", () => {
+    expect(p("Rani")).toMatchObject({ hereMin: 60, workMin: 0 });
+    expect(p("Rani").freeMin).toBeUndefined();
+    expect(p("Rani").missedMin).toBeUndefined();
+    expect(d.people.find((x) => x.name === "Away")).toBeUndefined();
+  });
+
+  test("worked but nobody marked her here: her work counts, no stay numbers", () => {
+    const x = digestOf({ start: min(0), end: min(60), events, calls, visits, students, team, stays: [] });
+    expect(x.people.find((q) => q.name === "Shanthi")).toMatchObject({ id: "u-shan", visits: 1 });
+    expect(x.people.find((q) => q.name === "Shanthi")!.hereMin).toBeUndefined();
+    expect(x.people.find((q) => q.name === "Nila")).toBeUndefined();
+  });
+
+  test("two classes in a day: the stays add up", () => {
+    const sum = sumDigests([d, d])!;
+    expect(sum.people.find((x) => x.name === "Nila")).toMatchObject({ hereMin: 120, freeMin: 120, missedMin: 30 });
+  });
+});

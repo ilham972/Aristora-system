@@ -168,9 +168,12 @@ const hears = async (p: Page, words: string) => {
 };
 const row = (p: Page, name: string) => p.locator(".reg-row", { has: p.locator(".reg-n", { hasText: name }) });
 const circle = (r: L, q: number) => r.locator(".reg-act").getByRole("button", { name: new RegExp(`^Q${q}\\b`) });
-/** The bottom bar's tabs (Correction, Theory, Evaluation: since 30 Oct 2026 Correction is a tab too); Class is the icon at the top. */
-const tab = (p: Page, name: "Class" | "Correction" | "Theory" | "Evaluation") =>
-  name === "Class" ? p.locator(".top .class-btn") : p.locator(`.tabs .tab.${name.toLowerCase()}`);
+/**
+ * The bottom bar's tabs: Class (everyone's since 3 Nov 2026: the hall and the rooms, the Manager page before),
+ * Correction, Theory, Evaluation. The Register (everyone's rows; it was called Class) is the list icon at the top.
+ */
+const tab = (p: Page, name: "Register" | "Class" | "Correction" | "Theory" | "Evaluation") =>
+  name === "Register" ? p.locator(".top .class-btn") : p.locator(`.tabs .tab.${name.toLowerCase()}`);
 /** The names on these pills (or rows), as data-name says. */
 const namesOf = (l: L) => l.evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.name ?? ""));
 /**
@@ -354,7 +357,7 @@ test("the register: a whole class on three phones", async () => {
 
   // Theory teaches on the Class tab's rows (Theory's "All" lives there now): Fathima the whole section (one tap on D),
   // Ahamed only 23 and 24, Nila nothing yet. Then the Theory page sends everyone back, keeping only those taps.
-  await tab(T, "Class").click();
+  await tab(T, "Register").click();
   await row(T, "Fathima").getByRole("button", { name: "Section D: mark all theory taught" }).click();
   await circle(row(T, "Ahamed"), 23).click();
   await circle(row(T, "Ahamed"), 24).click();
@@ -480,7 +483,7 @@ test("the register: a whole class on three phones", async () => {
   await contains(keerthi, "✓");
   await contains(A.locator(".attendance .summary"), "Grade 11: 10 of 10 here");
   expect(await visitsOf("Keerthi")).toHaveLength(1);
-  await tab(T, "Class").click();
+  await tab(T, "Register").click();
   await visible(row(T, "Keerthi")); // Theory sees her at once
   await tab(T, "Theory").click();
   await shot(C, "r10a-attendance"); // the page (a full-page picture would draw the sheet half-way down)
@@ -593,7 +596,7 @@ test("Master: workbook levels corrected, lost marks explained, re-teach, Exam Sp
   await C.getByRole("button", { name: /^All grades:/ }).click();
   await count(C.locator(".reg-row"), 13);
   // Theory, on the Class tab (its rows are Theory's), looks at Grade 11 only (the phone remembers it).
-  await tab(T, "Class").click();
+  await tab(T, "Register").click();
   await T.getByRole("button", { name: /^Grade 11:/ }).click();
   await count(T.locator(".reg-row"), 9); // Keerthi isn't signed in
 
@@ -657,13 +660,13 @@ test("Master: workbook levels corrected, lost marks explained, re-teach, Exam Sp
   await C.getByRole("button", { name: "Handed in: correct later" }).click();
   await contains(C.locator(".toast"), "Priya: Level 2 handed in");
   await count(C.locator(".fc-paper"), 0);
-  await tab(C, "Class").click(); // back to the class
+  await tab(C, "Register").click(); // back to the class
   await contains(tab(C, "Correction").locator(".tab-badge"), "2"); // two papers wait: Priya's L2 and Vimal's L8
   await textsAre(row(C, "Priya").locator(".mk b"), ["L2", "3"]);
   expect((await marksOf(backend, "Priya")).m!.lv["2"]?.done).toBeGreaterThan(0);
 
   // Evaluation, on the Class page (her taps on its rows): Malik's lost marks are red circles; tap Q24 when it's explained.
-  await tab(E, "Class").click();
+  await tab(E, "Register").click();
   const em = row(E, "Malik");
   await textsAre(em.locator(".reg-act .q"), ["4", "13", "17", "24"]);
   await shot(E, "m03-evaluation-lost-marks", true);
@@ -765,7 +768,7 @@ test("Master: workbook levels corrected, lost marks explained, re-teach, Exam Sp
   expect(mt.q["13"]?.tt).toBeDefined();
   expect([mt.q["17"]?.th !== undefined, mt.q["17"]?.tt]).toEqual([true, undefined]);
   await count(T.locator(".evx-sp:not(.s-sug)"), 0); // her room is empty: Theory's phone sees him gone
-  await tab(T, "Class").click();
+  await tab(T, "Register").click();
   await textsAre(tm.locator(".reg-act .q"), ["13", "17"]); // Q13 just taught (tap to undo), Q17 still to teach
   await tab(T, "Theory").click();
   await evPick(T, { grade: "7", stage: "Master", unit: "8", group: "17" });
@@ -1123,12 +1126,12 @@ test("accounts: the owner sets up, adds a teacher, her phone signs in with the l
     await R.locator(".sheet").getByRole("button", { name: "Save PIN" }).click();
     await contains(R.locator(".toast"), "PIN saved");
     expect(new URL(R.url()).hash).toBe("");
-    // Her job is Correction: the bottom bar has only Correction (Theory and Evaluation are the teachers' pages); Class
-    // at the top; she starts on Correction, though the phone last showed Theory.
+    // Her job is Correction: the bottom bar has the Class tab (everyone's) and Correction (Theory and Evaluation are the
+    // teachers' pages); the Register at the top; she starts on Correction, though the phone last showed Theory.
     await visible(tab(R, "Correction")); // marks papers, + takes attendance
-    await visible(R.getByRole("button", { name: /^Class/ })); // and sees the whole class
+    await visible(R.getByRole("button", { name: /^Register/ })); // and sees everyone's rows
     await visible(R.getByRole("button", { name: /in class.*\. Attendance$/ })); // the count by the clock: Attendance too
-    await textsAre(R.locator(".tabs .tab > span:nth-child(2)"), ["Correction"]);
+    await textsAre(R.locator(".tabs .tab > span:nth-child(2)"), ["Class", "Correction"]);
     expect(await tab(R, "Correction").getAttribute("aria-current")).toBe("page");
     await R.getByRole("button", { name: "Settings" }).click();
     await textsAre(R.locator(".seg button"), ["Alerts", "Reports", "History", "Account"]); // no People: owner only
@@ -1156,7 +1159,7 @@ test("accounts: the owner sets up, adds a teacher, her phone signs in with the l
     await R.getByLabel("PIN (6 digits)").fill("583920");
     await R.getByRole("button", { name: "Sign in", exact: true }).click();
     await visible(tab(R, "Correction"));
-    await textsAre(R.locator(".tabs .tab > span:nth-child(2)"), ["Correction"]);
+    await textsAre(R.locator(".tabs .tab > span:nth-child(2)"), ["Class", "Correction"]);
 
     // The history names who did each thing.
     await O.locator(".sheet").getByRole("button", { name: "Close" }).click();
@@ -1220,9 +1223,9 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
   await F.getByRole("button", { name: "Load demo students (three grades)" }).click();
   await visible(F.getByText(/^14 demo students loaded/));
   await F.getByRole("button", { name: "Back to the class" }).click();
-  // Correction is a bottom tab (it was at the top, and was "Focus"), first of the jobs (the Manager page is a button on
-  // it since 3 Nov 2026, not a tab); Class is at the top. The phone opens on Correction.
-  await textsAre(F.locator(".tabs .tab > span:nth-child(2)"), ["Correction", "Theory", "Evaluation"]);
+  // Correction is a bottom tab (it was at the top, and was "Focus"), first of the jobs after the Class tab (everyone's
+  // since 3 Nov 2026); the Register is at the top. The phone opens on Correction.
+  await textsAre(F.locator(".tabs .tab > span:nth-child(2)"), ["Class", "Correction", "Theory", "Evaluation"]);
   expect(await tab(F, "Correction").getAttribute("aria-current")).toBe("page");
   await count(F.locator(".tabs .tab.on"), 1);
   await count(F.locator(".top .focus-btn"), 0);
@@ -1308,11 +1311,12 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
 
   // Priya: her paper opens under the names at the level she is on (L2). The names stay; hers is dark.
   await tap(name("Priya"));
-  // No big name on the paper (3 Nov 2026, his call): hers is dark in the names row; the top row starts with the
-  // Manager button (the owner manages) and the book button.
+  // No big name on the paper (3 Nov 2026, his call): hers is dark in the names row; the top row starts with the book
+  // button (the Manager button left for the bottom bar's Class tab the same day).
   await count(F.locator(".fc-name"), 0);
   await visible(F.locator(".fc-nm.on", { hasText: "Priya" }));
-  await visible(F.locator(".fc-head .fc-mgr + .fc-units"));
+  await visible(F.locator(".fc-head .fc-head-tools > .fc-units:first-child"));
+  await count(F.locator(".fc-mgr"), 0);
   await textsAre(F.locator(".fc-bk.on i"), ["8"]); // her book now, dark, in the row of her books
   await visible(F.locator(".fc-nm.on", { hasText: "Priya" }));
   await textsAre(F.locator(".fc-lvbar .fc-lb"), ["1", "2", "3", "4", "5", "6", "7", "8"]);
@@ -1466,7 +1470,7 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
   await count(F.locator(".call-strip"), 0); // sent: on the paper's page his 3-minute walk shows no strip (Class shows it)
   await contains(F.locator(".fc-qn"), "2"); // still on his paper, at the same question
   // Switching pages keeps the open paper.
-  await tab(F, "Class").click();
+  await tab(F, "Register").click();
   await visible(row(F, "Priya"));
   await textsAre(row(F, "Priya").locator(".mk b"), ["L4"]); // Class sees Focus's saves
   await tab(F, "Correction").click();
@@ -2059,7 +2063,7 @@ test("Theory: one screen like Evaluation: grade, stage, unit and lesson rows; he
   await count(T.locator(".evx-sp.s-done"), 2);
   await contains(evDone(T), "Done 2");
   // Her taps stay on her phone until Done (the audit, 31 Oct 2026): another page in between keeps them.
-  await tab(T, "Class").click();
+  await tab(T, "Register").click();
   await visible(T.locator(".reg-row").first());
   await tab(T, "Theory").click();
   await contains(evDone(T), "Done 2");
@@ -2190,7 +2194,7 @@ test("Theory: one screen like Evaluation: grade, stage, unit and lesson rows; he
   await E.context().close();
 
   // Theory's "All" is the Class tab now: every student, ◎ circles and section letters, his book and Move.
-  await tab(T, "Class").click();
+  await tab(T, "Register").click();
   await visible(row(T, "Dilan").getByRole("button", { name: "Section D: mark all theory taught" }));
   await row(T, "Dilan").locator(".reg-name").click();
   await visible(row(T, "Dilan").getByRole("button", { name: "Move: unit or stage" }));
@@ -2341,7 +2345,7 @@ test("Evaluation: one screen: grade, stage, unit and questions the most urgent f
   await count(E.locator(".evx-sp.s-done"), 2);
   await contains(evDone(E), "Done 2");
   // Her taps stay on her phone until Done (the audit, 31 Oct 2026): another page, or the page loaded again, lost them.
-  await tab(E, "Class").click();
+  await tab(E, "Register").click();
   await visible(E.locator(".reg-row").first());
   await tab(E, "Evaluation").click();
   await contains(evDone(E), "Done 2");
@@ -3131,7 +3135,7 @@ test("OL: the O/L books by paper part; a tute filed under its topic; a Grade 11 
   expect(problems.filter((x) => !x.includes("warning]"))).toEqual([]);
 });
 
-test("Manager: the hall and every room on one screen; send any student to any teacher (one tap, tap-tap, drag); her phone calls her until Arrived; his day; check-ins", async () => {
+test("Class tab: everyone's, the manager acts (arrived / went, send any student: one tap, tap-tap, drag); her phone calls her until Arrived; his day; check-ins; each teacher's card", async () => {
   const backend = await newClass();
   const SHANTHI = "shanthi-phone-token-0123456789abcdefghijklmnopq";
   const KAVI = "kavi-phone-token-0123456789abcdefghijklmnopqrstu";
@@ -3141,21 +3145,55 @@ test("Manager: the hall and every room on one screen; send any student to any te
   await addPerson(backend.t, { name: "Kavi", token: KAVI, tabs: ["correction", "manager"] });
   await backend.t.mutation(api.setup.ensure, { token: OWNER_TOKEN });
   await backend.t.mutation(api.demo.load, { token: OWNER_TOKEN });
+  // Real students (demo students never count in anyone's numbers: the teachers' cards below read them).
+  await backend.t.run(async (ctx) => {
+    for (const x of await ctx.db.query("students").collect()) await ctx.db.patch(x._id, { demo: false });
+  });
   const M = await phone(backend, "focus", PHONE, KAVI);
   const S = await phone(backend, "evaluation", PHONE, SHANTHI);
-  const room = (name: string) => M.locator(".mg2-room", { has: M.locator(".mg2-rh b", { hasText: name }) });
+  const room = (name: string) => M.locator(".mg2-room", { has: M.locator(".mg2-rn", { hasText: name }) });
   const hall = (name: string) => M.locator(`.mg2-p[data-name="${name}"]`);
   const inRoom = (r: string, name: string) => room(r).locator(`.mg2-sp[data-name="${name}"]`);
+  const card = (p: Page) => p.locator(".sheet-wrap.tcard .sheet");
 
-  // Her one tab: Correction (3 Nov 2026, his call: no Manager tab: the senior teachers mustn't feel below a new hire).
-  // The Manager button is on the Correction page (managers only); its count = students in the hall with no work.
-  await textsAre(M.locator(".tabs .tab > span:nth-child(2)"), ["Correction"]);
-  await visible(M.locator(".fc-mgr .fc-mgr-n"));
-  await M.locator(".fc-mgr").click();
+  // The Class tab is first in the bottom bar, for everyone (3 Nov 2026, his call: the Manager page moves there; named
+  // Class, nobody is shown as "Manager"); no Manager button on the Correction page any more.
+  await textsAre(M.locator(".tabs .tab > span:nth-child(2)"), ["Class", "Correction"]);
+  await textsAre(S.locator(".tabs .tab > span:nth-child(2)"), ["Class", "Evaluation"]);
+  await count(M.locator(".fc-mgr"), 0);
+  // Its count while she is elsewhere: students in the hall with no work (the Register's icon has none any more).
+  await visible(tab(M, "Class").locator(".tab-badge"));
+  await count(M.locator(".top .class-btn .att-n"), 0);
+  await tab(M, "Class").click();
+  expect(await tab(M, "Class").getAttribute("aria-current")).toBe("page");
+
+  // Nobody marked here yet: no rooms; the team line names them. The manager marks each arrived from her card.
+  await contains(M.locator(".mg2-rooms .mg2-note"), "Nobody is marked here yet");
+  await count(M.locator(".mg2-off"), 3);
+  for (const n of ["Kavi", "Meena", "Shanthi"]) await contains(M.locator(".mg2-off", { hasText: n }), "not here");
+  await M.locator(".mg2-off", { hasText: "Shanthi" }).click();
+  await visible(card(M));
+  await contains(card(M).locator(".sheet-title p"), "Not marked here: tap Arrived when she comes.");
+  await shot(M, "m10-class-arrived");
+  await card(M).locator(".tc-ctl").getByRole("button", { name: "Now" }).click();
+  await contains(M.locator(".toast"), "Shanthi arrived ");
+  await contains(card(M).locator(".sheet-title p"), "Arrived ");
+  await card(M).getByRole("button", { name: "Close" }).click();
+  await M.locator(".mg2-off", { hasText: "Meena" }).click();
+  await card(M).locator(".tc-ctl").getByRole("button", { name: "15m ago" }).click();
+  await contains(M.locator(".toast"), "Meena arrived ");
+  await card(M).getByRole("button", { name: "Close" }).click();
+  // Her own: Kavi marks herself (a corrector: her desk on the team line, a pen).
+  await M.locator(".mg2-off", { hasText: "Kavi" }).click();
+  await card(M).locator(".tc-ctl").getByRole("button", { name: "Now" }).click();
+  await card(M).getByRole("button", { name: "Close" }).click();
+  await textsAre(M.locator(".mg2-desk"), ["Kavi"]);
+  await count(M.locator(".mg2-off"), 0);
+
   // The three numbers to bring down; a room per teacher (A–Z, both free); the hall A–Z, coloured by what waits.
   await textsAre(M.locator(".mg2-n span"), ["to correct", "to explain", "to teach"]);
   await contains(M.locator(".mg2-n.n-correct b"), "2"); // Malik's L3, Vimal's L8
-  await textsAre(M.locator(".mg2-room .mg2-rh b"), ["Meena", "Shanthi"]);
+  await textsAre(M.locator(".mg2-room .mg2-rn"), ["Meena", "Shanthi"]);
   await contains(room("Shanthi").locator(".mg2-rh span"), "free");
   await contains(room("Shanthi").locator(".mg2-sug"), "Evaluation · no work");
   await contains(room("Shanthi").locator(".mg2-sn"), "→ Vimal, Malik");
@@ -3225,6 +3263,45 @@ test("Manager: the hall and every room on one screen; send any student to any te
   await units.getByRole("button", { name: "Close" }).click();
   await hall("Fathima").click(); // her strip closes
 
+  // A teacher sees the same tab (his ask: "how many students stay without work in the hall") but can't send anyone:
+  // no drag, no buttons on a student's strip; her own name opens her card; another teacher's room says what she does.
+  // (The class began an hour ago and the teachers came 40 minutes ago: enough of a day to compare with the others.)
+  await backend.t.run(async (ctx) => {
+    for (const x of await ctx.db.query("sessions").collect()) if (x.open) await ctx.db.patch(x._id, { startedAt: Date.now() - 60 * 60_000 });
+    for (const d of await ctx.db.query("duty").collect()) await ctx.db.patch(d._id, { inAt: Date.now() - 40 * 60_000 });
+  });
+  await backend.push();
+  await tab(S, "Class").click();
+  const sRoom = (name: string) => S.locator(".mg2-room", { has: S.locator(".mg2-rn", { hasText: name }) });
+  await textsAre(S.locator(".mg2-room .mg2-rn"), ["Meena", "Shanthi"]);
+  expect(await sRoom("Shanthi").getAttribute("class")).toContain("mine");
+  await S.locator('.mg2-p[data-name="Priya"]').click();
+  await contains(S.locator(".mg2-strip .mg2-sh b"), "Priya");
+  await count(S.locator(".mg2-strip .mg2-acts"), 0);
+  await sRoom("Meena").click();
+  await contains(S.locator(".mg2-strip .mg2-sl"), "here since");
+  await contains(S.locator(".mg2-strip .mg2-why"), "Rizwan: Theory");
+  await count(card(S), 0);
+  await sRoom("Shanthi").locator(".mg2-rn").click();
+  await visible(card(S));
+  await contains(card(S).locator(".sheet-title h2"), "Shanthi: your day");
+  await count(card(S).locator(".tc-ctl"), 0); // the manager marks arrived / went, not her
+  await until(async () => (await card(S).locator(".tc-tile").count()) === 3, "her three numbers");
+  await textsAre(card(S).locator(".tc-tile span"), ["working", "free", "free while students waited"]);
+  await visible(card(S).locator(".tc-track i.k-w"));
+  await contains(card(S).locator(".tc-cmp h3"), "You and the others");
+  expect(await oneScreen(S)).toBe(true);
+  await shot(S, "m16-teacher-card");
+  await card(S).getByRole("button", { name: "Close" }).click();
+  // Never red for a teacher (his rule): nothing on her Class tab is drawn in red but the students with no work.
+  const reds = await S.evaluate(() =>
+    [...document.querySelectorAll(".mg2-room *, .mg2-room, .mg2-team *")].filter((e) => {
+      const c = getComputedStyle(e);
+      return [c.color, c.borderColor, c.backgroundColor].some((x) => x === "rgb(220, 35, 56)" || x === "rgb(163, 17, 42)");
+    }).length,
+  );
+  expect(reds).toBe(0);
+
   // Tap-tap with his strip: Priya has nothing waiting: a check-in. Only Shanthi can take one (Meena: Theory only).
   // (Right after "He's with her": the answer arriving a moment later must not close Priya's strip.)
   await hall("Priya").click();
@@ -3247,6 +3324,7 @@ test("Manager: the hall and every room on one screen; send any student to any te
   await backend.t.mutation(api.calls.finish, { token: SHANTHI, items: ids.filter((x) => !x.visit).map((x) => ({ callId: x.id, explained: [] })) });
   await backend.push();
   await until(async () => (await room("Shanthi").locator(".mg2-sp").count()) === 1, "only Priya left with Shanthi");
+  await tab(S, "Evaluation").click();
   await evArrived(S).click();
   await contains(S.locator(".evx-hint"), "Check-in: Priya. Look at his book with him: how is it going? Then Done.");
   await shot(S, "m13-teacher-check-in");
@@ -3255,14 +3333,25 @@ test("Manager: the hall and every room on one screen; send any student to any te
   const priya = await marksOf(backend, "Priya");
   expect(priya.seen?.evaluation).toBeGreaterThan(0);
 
-  // A teacher free 6 minutes while work waits for her: her room goes red (the class began an hour ago).
+  // A teacher free 6 minutes while work waits for her: her room goes amber (never red), knocking.
   await backend.t.run(async (ctx) => {
     for (const c of await ctx.db.query("calls").collect()) if (c.teacher === "Shanthi" && c.endedAt) await ctx.db.patch(c._id, { endedAt: Date.now() - 6 * 60_000 });
     for (const x of await ctx.db.query("sessions").collect()) if (x.open) await ctx.db.patch(x._id, { startedAt: Date.now() - 60 * 60_000 });
+    for (const d of await ctx.db.query("duty").collect()) await ctx.db.patch(d._id, { inAt: Date.now() - 60 * 60_000 });
   });
   await backend.push();
-  await until(async () => ((await room("Shanthi").getAttribute("class")) ?? "").includes("a-red"), "Shanthi's room red");
-  await shot(M, "m14-manager-free-red");
+  await until(async () => ((await room("Shanthi").getAttribute("class")) ?? "").includes("a-amber"), "Shanthi's room amber");
+  await shot(M, "m14-manager-free-amber");
+
+  // The manager reads anyone's card: Shanthi's, with Went and her arrival moved; her numbers (free while students
+  // waited: yellow, never red).
+  await room("Shanthi").locator(".mg2-rn").click();
+  await visible(card(M));
+  await contains(card(M).locator(".sheet-title h2"), "Shanthi");
+  await visible(card(M).locator(".tc-ctl").getByRole("button", { name: "5 minutes earlier" }));
+  await until(async () => (await card(M).locator(".tc-tile").count()) === 3, "her three numbers");
+  await shot(M, "m17-manager-card");
+  await card(M).getByRole("button", { name: "Close" }).click();
 
   // She forgot Done: tap him in her room, Back to the hall (twice: nothing gets marked).
   await inRoom("Meena", "Rizwan").click();
@@ -3271,29 +3360,32 @@ test("Manager: the hall and every room on one screen; send any student to any te
   await visible(hall("Rizwan"));
   await contains(M.locator(".toast"), "Rizwan: back in the hall.");
 
-  // Not here today: Undo on the message; or the dashed chip, Bring back.
-  await room("Meena").getByRole("button", { name: "not here" }).click();
-  await contains(M.locator(".toast"), "Meena: not here today.");
-  await visible(M.locator(".mg2-off", { hasText: "Meena" }));
-  await M.locator(".mg2-off", { hasText: "Meena" }).click();
+  // Meena went home: her card, Went now (Undo on the message: here again); then went for good.
+  await room("Meena").locator(".mg2-rn").click();
+  await card(M).locator(".tc-ctl").getByRole("button", { name: "Now" }).click();
+  await contains(M.locator(".toast"), "Meena went ");
+  await card(M).getByRole("button", { name: "Close" }).click();
+  await count(room("Meena"), 0);
+  await contains(M.locator(".mg2-off", { hasText: "Meena" }), "went");
+  await M.locator(".toast").getByRole("button", { name: "Undo" }).click();
   await visible(room("Meena"));
 
-  // The Correction tab goes back to the Correction page (no back button on the Manager page).
+  // The Correction tab: the Correction page, no Manager button; the Class tab comes back to the hall.
   await tab(M, "Correction").click();
   await visible(M.locator(".fc-namerow"));
   await count(M.locator(".mg2"), 0);
-  await M.locator(".fc-mgr").click();
+  await tab(M, "Class").click();
   await visible(M.locator(".mg2-room").first());
 
-  // The owner teaches today (his switch in Settings → Account, his only): his room on the Manager page; a student
-  // sent to him calls his phone on any page ("Open Evaluation" on the Correction page). Off: the room goes.
+  // The owner teaches today (his switch in Settings → Account, his only): his room on the Class tab; a student sent to
+  // him calls his phone on any page ("Open Evaluation" on the Correction page). Off: the room goes. Never on the team
+  // line, never a card.
   const O = await phone(backend, "focus");
   await O.getByRole("button", { name: "Settings" }).click();
   await O.getByRole("button", { name: "Account", exact: true }).click();
   await O.locator(".teach-switch").getByRole("button", { name: "I'm teaching" }).click();
   await contains(O.locator(".toast"), "You teach today");
   await visible(room("Owner"));
-  await count(room("Owner").getByRole("button", { name: "not here" }), 0);
   await O.getByRole("button", { name: "Settings" }).click(); // back to his Correction page
   await hall("Kumar").click();
   await room("Owner").click();
@@ -3304,16 +3396,134 @@ test("Manager: the hall and every room on one screen; send any student to any te
   await O.getByRole("button", { name: "Account", exact: true }).click();
   await O.locator(".teach-switch").getByRole("button", { name: "Not teaching" }).click();
   await count(room("Owner"), 0);
+  // The owner's own phone: four tabs in one row.
+  await textsAre(O.locator(".tabs .tab > span:nth-child(2)"), ["Class", "Correction", "Theory", "Evaluation"]);
   await O.context().close();
 
-  // Small phones: one screen, nothing sideways, the tabs in one row.
+  // Small phones: one screen, nothing sideways, the tabs in one row (the owner's four too).
   for (const width of [360, 320]) {
-    const P = await phone(backend, "focus", { ...PHONE, viewport: { width, height: 640 } }, KAVI);
-    await P.locator(".fc-mgr").click();
+    const P = await phone(backend, "hall", { ...PHONE, viewport: { width, height: 640 } }, KAVI);
     await visible(P.locator(".mg2-room").first());
     expect(await oneScreen(P)).toBe(true);
     await shot(P, `m15-manager-${width}`);
     await P.context().close();
+    const Q = await phone(backend, "hall", { ...PHONE, viewport: { width, height: 640 } });
+    await visible(Q.locator(".mg2-room").first());
+    expect(await oneScreen(Q)).toBe(true);
+    const tabsFit = await Q.evaluate(() =>
+      [...document.querySelectorAll(".tabs .tab > span:nth-child(2)")].every((e) => e.scrollWidth <= e.clientWidth + 1),
+    );
+    expect(tabsFit).toBe(true);
+    await shot(Q, `m15b-owner-tabs-${width}`);
+    await Q.context().close();
   }
-  expect(problems.filter((p) => p.startsWith("[manager") || p.startsWith("[evaluation"))).toEqual([]);
+  expect(problems.filter((p) => p.startsWith("[hall") || p.startsWith("[focus") || p.startsWith("[evaluation"))).toEqual([]);
+});
+
+test("Teacher card: a real day (working, free, free while students waited, the others, her week) on one screen; her own only", async () => {
+  const backend = await newClass();
+  const SHANTHI = "shanthi-phone-token-0123456789abcdefghijklmnopq";
+  const KAVI = "kavi-phone-token-0123456789abcdefghijklmnopqrstu";
+  await addPerson(backend.t, { name: "Shanthi", token: SHANTHI, tabs: ["evaluation"] });
+  await addPerson(backend.t, { name: "Meena", token: "meena-phone-token-0123456789abcdefghijklmnopqrs", tabs: ["theory"] });
+  await addPerson(backend.t, { name: "Kavi", token: KAVI, tabs: ["correction", "manager"] });
+  await backend.t.mutation(api.setup.ensure, { token: OWNER_TOKEN });
+  await backend.t.mutation(api.demo.load, { token: OWNER_TOKEN });
+  const MIN = 60_000;
+  // An hour and a half of class: Shanthi here 80 minutes, five students explained; Meena two lessons. While Shanthi
+  // sat free (50 → 40 minutes ago) Malik waited for Evaluation with no work. Two earlier class days kept in reports.
+  await backend.t.run(async (ctx) => {
+    const now = Date.now();
+    const at = (m: number) => now - m * MIN;
+    const users = await ctx.db.query("users").collect();
+    const id = (n: string) => users.find((u) => u.name === n)!._id;
+    const students = await ctx.db.query("students").collect();
+    for (const x of students) await ctx.db.patch(x._id, { demo: false, idleSince: undefined, idleReason: undefined });
+    const sid = (n: string) => students.find((x) => x.name === n)!._id;
+    const session = (await ctx.db.query("sessions").collect()).find((x) => x.open)!;
+    await ctx.db.patch(session._id, { startedAt: at(90) });
+    for (const x of await ctx.db.query("attendance").collect()) await ctx.db.patch(x._id, { inAt: at(90) });
+    const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Colombo" }).format(new Date(now));
+    await ctx.db.insert("duty", { userId: id("Shanthi"), day, inAt: at(80), inBy: "Kavi", editedAt: at(80) });
+    await ctx.db.insert("duty", { userId: id("Meena"), day, inAt: at(85), inBy: "Kavi", editedAt: at(85) });
+    const visit = async (who: string, student: string, kind: "evaluation" | "theory", from: number, to: number, group: string) =>
+      ctx.db.insert("calls", {
+        studentId: sid(student),
+        room: kind,
+        kind,
+        status: "done",
+        group,
+        createdAt: at(from + 1),
+        sentAt: at(from + 1),
+        walk: true,
+        arrivedAt: at(from),
+        endedAt: at(to),
+        teacherId: id(who),
+        teacher: who,
+        sessionId: session._id,
+      });
+    await visit("Shanthi", "Vimal", "evaluation", 74, 68, "e1");
+    await visit("Shanthi", "Sana", "evaluation", 62, 52, "e2");
+    await visit("Shanthi", "Nila", "evaluation", 39, 31, "e3");
+    await visit("Shanthi", "Kumar", "evaluation", 25, 18, "e4");
+    await visit("Shanthi", "Priya", "evaluation", 12, 6, "e5");
+    await visit("Meena", "Rizwan", "theory", 70, 50, "t1");
+    await visit("Meena", "Fathima", "theory", 70, 50, "t1");
+    await visit("Meena", "Dilan", "theory", 30, 12, "t2");
+    await ctx.db.insert("events", { at: at(40), sessionId: session._id, kind: "idle", studentId: sid("Malik"), name: "Malik", ms: 10 * MIN, value: "evaluation" });
+    // Two earlier class days (kept in their reports).
+    for (const [ago, here, work, missed] of [
+      [2, 120, 70, 12],
+      [1, 110, 80, 0],
+    ] as const) {
+      const start = now - ago * 24 * 60 * MIN;
+      const d = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Colombo" }).format(new Date(start));
+      const person = (name: string, uid: string, jobs: string[], room: string, h: number, w: number, m: number) => ({
+        name, id: uid, jobs, room, min: { correction: 0, evaluation: room === "evaluation" ? w : 0, theory: room === "theory" ? w : 0 },
+        levels: 0, checks: 0, marks: 0, visits: 6, lessons: room === "theory" ? 3 : 0, students: 6, hereMin: h, workMin: w, freeMin: h - w, missedMin: m,
+      });
+      await ctx.db.insert("sessions", {
+        open: false,
+        startedAt: start,
+        endedAt: start + 2 * 60 * MIN,
+        lastActivityAt: start + 2 * 60 * MIN,
+        report: {
+          digest: {
+            v: 1,
+            day: d,
+            people: [
+              person("Shanthi", id("Shanthi"), ["evaluation"], "evaluation", here, work, missed),
+              person("Meena", id("Meena"), ["theory"], "theory", 120, 60, 20),
+            ],
+          },
+        },
+      });
+    }
+  });
+  await backend.push();
+  for (const width of [390, 360, 320]) {
+    const S = await phone(backend, "hall", { ...PHONE, viewport: { width, height: width === 390 ? 844 : 640 } }, SHANTHI);
+    const mine = S.locator(".mg2-room.mine .mg2-rn");
+    await visible(mine);
+    await mine.click();
+    const c = S.locator(".sheet-wrap.tcard .sheet");
+    await contains(c.locator(".sheet-title h2"), "Shanthi: your day");
+    await until(async () => (await c.locator(".tc-tile").count()) === 3, "three numbers");
+    // Working: from each call (he walks to her) to Done: 7 + 11 + 9 + 8 + 7 = 42; free 80 − 42 = 38; Malik waited for
+    // Evaluation 50 → 40 minutes ago while she sat free from 52 (after her first 2 free minutes): 10.
+    await until(async () => (await c.locator(".tc-tile b").allInnerTexts()).join() !== "", "numbers");
+    expect(await c.locator(".tc-tile b").allInnerTexts()).toEqual(["42m", "38m", "10m"]);
+    await contains(c.locator(".tc-tile.t-warn span"), "free while students waited");
+    await contains(c.locator(".tc-done"), "5 students seen");
+    await count(c.locator(".tc-days .tc-day"), 3);
+    expect(await S.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await shot(S, `m18-card-real-${width}`);
+    // One screen: the card's body never scrolls.
+    const [sh, ch, sheetH, vh] = await c.locator(".sheet-body").evaluate((e) => [e.scrollHeight, e.clientHeight, e.parentElement!.getBoundingClientRect().height, window.innerHeight]);
+    console.log("CARD", width, sh, ch, sheetH, vh);
+    expect(sh).toBeLessThanOrEqual(ch + 1);
+    // Meena's room: what she is doing, never her card.
+    await S.locator(".mg2-room", { has: S.locator(".mg2-rn", { hasText: "Meena" }) }).locator(".mg2-rn").click({ force: true }).catch(() => undefined);
+    await S.context().close();
+  }
 });
