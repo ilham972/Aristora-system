@@ -95,7 +95,8 @@ chips for other books ("U08 Eval 2"). Absent students: book now only.
   and its past papers + final challenge the unit's Master book (one part IIA/IIB, **one paper = one level of 10
   marks**, numbers as printed and going on from the ladder: Sets 1–55 + 56–66; `checkMaster` lets a workbook start
   after 1: `firstQuestion`). Both with their keys (`catalog.saveTute`). It replaces the unit's books (the pilot
-  G11-U13 too: marks on questions no longer in the book are ignored by `computeStatus`).
+  G11-U13 too: marks on questions no longer in the book are ignored by `computeStatus`). **Since 3 Nov 2026 every
+  tute goes to OL** (see OL below): the upload never files one under a school grade again.
 - Taps (Class rows and the opened book):
   - Correction on solo circles: once ✓ right, twice ✗ wrong, three times ↻ slip. Taps save 0.9 s after the
     last tap, and the toast has Undo.
@@ -202,8 +203,33 @@ line (no extra height: a grade still fits one screen) shows the four parts; ther
 has **Give him every OL workbook in the app** (`giveAllOl`: only books in the app, because a given book with nothing
 in the app counts as work and 53 of them would hide him from "out of work"; tap again after new books come). Theory
 and Evaluation group OL books under an **OL** grade pill (`EVAL_GRADES`/`THEORY_GRADES` + 12; seven fit 320 px). Not
-yet: OL in Progress (his OL books are not in his grade's race) and in Class → Move's own picker (Correction's units
-sheet moves him).
+yet: OL in Progress (his OL books are not in his grade's race), in the family app (`worldsOf` = his grade's workbooks
+only) and in Class → Move's own picker (Correction's units sheet moves him).
+
+**Every O/L tute is an OL book (3 Nov 2026, his Constructions stuck on Grade 11).** The essay engine (ol-essay skill
+§14, `Tute.app_book()`) still writes `"grade": 11` and a Grade 11 unit number, and refuses any other grade; the app's
+upload filed every tute under that school unit, whatever grade the Books page showed, and nothing could take a book
+off a unit. Now:
+- **The upload files a school-grade tute under OL** (`tuteRow` in `src/upload.tsx`): the OL topics of its papers' part
+  (`olChoices`: IIA or IIB, six each) as chips (`OlPicks`), the one whose names fit preselected (`olMatch`: English
+  whole words, "Sets" in "Sets and probability"; Tamil endings, "அமைப்பு" in "அமைப்புகள்"; scores summed, a tie = no
+  pick). Nothing fits, or two fit as well: the row is **pick** ("Which OL topic is it? Tap it below") and isn't saved
+  until he taps one. A tap wins over the match; a topic of another part is never taken. A file that says `"OL"` goes
+  to its code, no chips. Rows show his sheet's number: "OL · 08 Constructions · topic tute".
+- **The same tute left on its school unit by an older upload** (the file's own grade + unit, a tute workbook of the same
+  part and title) is moved first (`moveFrom`: "↪ Takes it off Grade 11 · U23 Constructions: its students' work comes
+  too."), then the file is saved over it as any re-upload.
+- **`catalog.moveTute({unitId, toUnitId})`** (Books permission): a tute from any unit to an OL topic of its part, with
+  everything: both books (`tute` kept), keys, printed questions, CSS, and every student's work (progress rows,
+  `students.unitId` and `back.unitId`, handouts, drafts, calls; claims dropped: the corrector's phone claims again). His
+  grade and term stay. The OL topic has the tute already: its books stay, the other copy goes. Refused before anything
+  changes: target not OL, another part, the target holding a non-tute book, no tute on the source, or a student with
+  work in both copies (names). History `book-move`. Returns `{students (real ones), kept}`.
+- **Books page → a unit's sheet** (`MoveTute` in `src/settings.tsx`): a school unit holding a tute opens with "This is
+  an O/L tute: move it to OL" (chips, its topic preselected, Move → "Yes: move it to OL · 12 …"); an OL topic holding
+  one has "Wrong topic? Move this tute" under its theory book (a wrong tap is never for good). An OL sheet's title is its
+  sheet number ("OL · 12").
+- A school unit's term-test workbook that a tute upload had replaced before is gone for good: upload its zip again.
 
 **Questions as printed (31 Oct 2026).** Every upload also cuts each question card out of the zip's book.html
 (`src/bookQuestions.ts`: tutes `qq` = Fighter, `pq` = Master; workbooks `si`/`pq` per unit, split at the marks

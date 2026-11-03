@@ -1,15 +1,17 @@
 // Settings → Books → Upload workbooks: the unit zips (or book.html files) from the workbook chats go straight into
 // the app. This phone reads each book's parts, levels and marks (src/workbookFile.ts), its answer key and its printed
 // questions (src/bookQuestions.ts), the owner checks the list, and one tap saves them. No typing, no chat, no deploy.
-// A topic tute's zip (ol-essay, with tute.json) is TWO books of its unit: the ladder = the theory book (Fighter), the
-// past papers = the workbook (Master), each with its answers and questions.
+// A topic tute's zip (ol-essay, with tute.json) is TWO books of its OL topic: the ladder = the theory book (Fighter),
+// the past papers = the workbook (Master), each with its answers and questions. Every O/L tute is an OL book (his rule,
+// 3 Nov 2026): the essay engine still writes "grade": 11, so the tute's paper part and name find its OL topic, he can
+// pick another topic of that part, and a copy an older upload left on the Grade 11 unit moves over with its students.
 
 import { useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { bookTotal, fighter, PART_NAME } from "../convex/lib/book";
 import { QUESTIONS_BATCH_MAX } from "../convex/lib/questions";
-import { gradeWords, OL, OL_PARTS } from "../convex/lib/syllabus";
+import { gradeWords, OL, OL_PARTS, olNumber } from "../convex/lib/syllabus";
 import { mutate } from "./backend";
 import { act, currentRole, toast, type Unit } from "./store";
 import { Sheet } from "./ui";
@@ -23,6 +25,8 @@ type InApp = {
   questions?: number | null;
   keyCount: number | null;
   qCount?: number | null;
+  title?: string | null;
+  tute?: boolean;
 };
 
 type Row = {
@@ -30,8 +34,8 @@ type Row = {
   file: string;
   title: string;
   detail: string;
-  /** "new" / "replace" / "same" / "skip" / "bad" */
-  state: "new" | "replace" | "same" | "skip" | "bad";
+  /** "new" / "replace" / "same" / "skip" / "bad"; "pick" = an O/L tute whose OL topic he still has to tap */
+  state: "new" | "replace" | "same" | "skip" | "bad" | "pick";
   words: string;
   /** What happens to the answer key, and whether it is a good thing ("yes") or worth a look ("no"). */
   keyLine?: { words: string; ok: boolean };
@@ -40,6 +44,10 @@ type Row = {
   unit?: Unit;
   book?: ReadWorkbook;
   tute?: ReadTute;
+  /** An O/L tute: the OL topics of its paper part, to pick where it goes. */
+  choices?: Unit[];
+  /** The school unit an older upload filed this tute under: saving moves it here first, with its students' work. */
+  moveFrom?: Unit;
 };
 
 /** "✓ Answer key: all 73 questions" / "…: 70 of 73 questions". */
@@ -47,15 +55,64 @@ function countWords(n: number, of: number): string {
   return n === of ? `all ${of}` : `${n} of ${of}`;
 }
 
-/** The row of a topic tute: its two books against what the unit has in the app. */
-function tuteRow(t: ReadTute, i: number, units: Unit[], books: InApp[]): Row {
-  const unit = units.find((u) => u.grade === t.grade && u.code === t.code);
-  const title = `${t.grade === OL ? "OL" : `G${t.grade ?? "?"}`} · ${t.code} ${unit?.en ?? t.en ?? ""} · topic tute`.trim();
-  if (t.problems.length) return { key: `bad${i}`, file: t.file, title, detail: "", state: "bad", words: t.problems.join(" ") };
-  if (!unit) return { key: `bad${i}`, file: t.file, title, detail: "", state: "bad", words: `${gradeWords(t.grade)} has no unit ${t.code} in the app.` };
-  if (unit.grade === OL && OL_PARTS[unit.term]?.id !== t.part) {
-    const words = `${unit.en} is in ${OL_PARTS[unit.term]?.en ?? "another part"}; this tute's papers say ${PART_NAME[t.part]}.`;
-    return { key: `bad${i}`, file: t.file, title, detail: "", state: "bad", words };
+/** An OL topic's number as on his tracker sheet: "08". */
+export function olNo(u: Unit, units: Unit[]): string {
+  return String(olNumber(u, units)).padStart(2, "0");
+}
+
+/** A name for matching: lower case, its words (Tamil vowel signs kept) between single spaces. */
+function nameKey(s: string): string {
+  return ` ${s.toLowerCase().split(/[^\p{L}\p{M}\p{N}]+/u).filter(Boolean).join(" ")} `;
+}
+
+/** How alike two names are: 3 the same, 2 one inside the other ("Sets" in "Sets and probability"; Tamil endings:
+ *  "அமைப்பு" in "அமைப்புகள்"), else 0. */
+function nameScore(a: string, b: string): number {
+  const x = nameKey(a);
+  const y = nameKey(b);
+  if (!x.trim() || !y.trim()) return 0;
+  if (x === y) return 3;
+  if (x.includes(y) || y.includes(x)) return 2;
+  const cx = x.replace(/ /g, "");
+  const cy = y.replace(/ /g, "");
+  const [short, long] = cx.length <= cy.length ? [cx, cy] : [cy, cx];
+  return /[஀-௿]/.test(short) && short.length >= 4 && long.includes(short) ? 2 : 0;
+}
+
+/** The OL topics of one paper part, in his sheet's order. */
+export function olChoices(units: Unit[], part: string | undefined): Unit[] {
+  return units.filter((u) => u.grade === OL && OL_PARTS[u.term]?.id === part).sort((a, b) => a.order - b.order);
+}
+
+/** The OL topic an O/L tute belongs to, by its names (English and Tamil); null when none or two fit as well. */
+export function olMatch(names: (string | null | undefined)[], choices: Unit[]): Unit | null {
+  const ns = [...new Set(names.filter((x): x is string => !!x?.trim()))];
+  let best: Unit | null = null;
+  let top = 0;
+  let tie = false;
+  for (const u of choices) {
+    const score = ns.reduce((a, n) => a + nameScore(n, u.en) + nameScore(n, u.ta), 0);
+    if (score > top) [best, top, tie] = [u, score, false];
+    else if (score > 0 && score === top) tie = true;
+  }
+  return top > 0 && !tie ? best : null;
+}
+
+/** The row of a topic tute: its two books against what its OL topic has in the app. */
+function tuteRow(t: ReadTute, i: number, units: Unit[], books: InApp[], pick: string | undefined): Row {
+  // Filed under a school grade (every essay engine so far): its OL topic by part and name, or the one he tapped.
+  const school = t.grade !== OL;
+  const choices = school ? olChoices(units, t.part) : [];
+  const unit = school
+    ? (choices.find((u) => u._id === pick) ?? olMatch([t.en, t.ta, t.title], choices) ?? undefined)
+    : units.find((u) => u.grade === OL && u.code === t.code);
+  const title = `${unit ? `OL · ${olNo(unit, units)} ${unit.en}` : school ? (t.en ?? t.title ?? t.code) : `OL · ${t.code} ${t.en ?? ""}`.trim()} · topic tute`;
+  const bad = (words: string): Row => ({ key: `bad${i}`, file: t.file, title, detail: "", state: "bad", words });
+  if (t.problems.length) return bad(t.problems.join(" "));
+  if (school && !choices.length) return bad(`This tute's papers say ${PART_NAME[t.part] ?? (t.part || "no part")}: OL has no topic in that part.`);
+  if (!school && !unit) return bad(`${gradeWords(t.grade)} has no unit ${t.code} in the app.`);
+  if (unit && OL_PARTS[unit.term]?.id !== t.part) {
+    return bad(`${unit.en} is in ${OL_PARTS[unit.term]?.en ?? "another part"}; this tute's papers say ${PART_NAME[t.part]}.`);
   }
   const f = fighter(t.fighter);
   const teach = t.fighter.sections.reduce((a, s) => a + s.teach.length, 0);
@@ -64,6 +121,14 @@ function tuteRow(t: ReadTute, i: number, units: Unit[], books: InApp[]): Row {
   const detail =
     `Theory book: ${secs[0]}–${secs[secs.length - 1]}, ${f.all.length} questions (${teach} with the teacher) · ` +
     `Workbook: ${PART_NAME[p.id]} ${p.from}–${p.to}, ${t.master.levels.length} levels, ${bookTotal(t.master)} marks`;
+  if (!unit) {
+    return { key: `pick${i}`, file: t.file, title, detail, state: "pick", words: `Which OL topic is it? Tap it below (${OL_PARTS[choices[0].term].en}).`, choices, tute: t };
+  }
+  // The same tute uploaded before onto its Grade 11 (or 10) unit: it moves here first, with every student's work in it.
+  const from = school ? units.find((u) => u.grade === t.grade && u.code === t.code) : undefined;
+  const fromM = from ? books.find((b) => b.unitId === from._id && b.stage === "master" && b.tute) : undefined;
+  const sameTopic = !!fromM && fromM.master?.parts[0]?.id === t.part && (!fromM.title || !t.title || nameKey(fromM.title) === nameKey(t.title));
+  const moveFrom = sameTopic ? from : undefined;
   const inF = books.find((b) => b.unitId === unit._id && b.stage === "fighter");
   const inM = books.find((b) => b.unitId === unit._id && b.stage === "master");
   const had = [inF ? `theory book (${inF.questions ?? "?"} questions)` : "", inM?.master ? `workbook (${inM.master.levels.length} levels, ${inM.master.total} marks)` : ""].filter(Boolean);
@@ -80,7 +145,20 @@ function tuteRow(t: ReadTute, i: number, units: Unit[], books: InApp[]): Row {
     fq + mq && t.css
       ? { words: `✓ Questions as printed: ladder ${countWords(fq, f.all.length)} · past papers ${countWords(mq, t.master.levels.length)}`, ok: fq === f.all.length && mq === t.master.levels.length }
       : { words: "No printed questions found (book.html missing?)", ok: false };
-  return { key: unit._id, file: t.file, title, detail, state: had.length ? "replace" : "new", words, keyLine, qLine, unit, tute: t };
+  return {
+    key: unit._id,
+    file: t.file,
+    title,
+    detail,
+    state: had.length ? "replace" : "new",
+    words,
+    keyLine,
+    qLine,
+    unit,
+    tute: t,
+    ...(school ? { choices } : {}),
+    ...(moveFrom ? { moveFrom } : {}),
+  };
 }
 
 function describeBook(w: ReadWorkbook): string {
@@ -99,11 +177,12 @@ function sameAsApp(w: ReadWorkbook, m: NonNullable<InApp["master"]>): boolean {
   );
 }
 
-/** Turn what was read into one row per unit, against the units and workbooks already in the app. */
-export function uploadRows(found: ReturnType<typeof readWorkbookFiles>, units: Unit[], books: InApp[]): Row[] {
+/** Turn what was read into one row per unit, against the units and workbooks already in the app. picks: the OL topic he
+ *  tapped for an O/L tute (by the file's place in the list). */
+export function uploadRows(found: ReturnType<typeof readWorkbookFiles>, units: Unit[], books: InApp[], picks: Record<number, string> = {}): Row[] {
   const rows: Row[] = found.map((f, i): Row => {
     if ("problem" in f) return { key: `bad${i}`, file: f.file, title: f.file, detail: "", state: "bad", words: f.problem };
-    if ("kind" in f) return tuteRow(f, i, units, books);
+    if ("kind" in f) return tuteRow(f, i, units, books, picks[i]);
     const unit = units.find((u) => u.grade === f.grade && u.code === f.code);
     const title = `G${f.grade ?? "?"} · ${f.code} ${unit?.en ?? f.en ?? ""}`.trim();
     if (f.problems.length) return { key: `bad${i}`, file: f.file, title, detail: "", state: "bad", words: f.problems.join(" ") };
@@ -177,10 +256,36 @@ async function saveQuestions(unitId: Id<"units">, stage: "fighter" | "master", q
   return true;
 }
 
+/** The OL topics of one paper part as chips: where an O/L tute goes (the upload list, a unit's sheet). */
+export function OlPicks(props: { choices: Unit[]; units: Unit[]; value: string | null; onPick: (unitId: string) => void }) {
+  const part = OL_PARTS[props.choices[0]?.term ?? 0];
+  return (
+    <div class="ol-picks" role="group" aria-label={`OL topics: ${part?.en ?? ""}`}>
+      <small class="ol-picks-l">OL · {part?.en}</small>
+      {props.choices.map((u) => (
+        <button type="button" key={u._id} class={`ol-pick${u._id === props.value ? " on" : ""}`} aria-pressed={u._id === props.value} onClick={() => props.onPick(u._id)}>
+          <b>{olNo(u, props.units)}</b> {u.en}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** "with 3 students' work" (nobody: ""). */
+export function studentsWork(n: number): string {
+  return n === 0 ? "" : n === 1 ? "with 1 student's work" : `with ${n} students' work`;
+}
+
 export function UploadBooks(props: { units: Unit[]; books: InApp[]; onSaved: (grade: number) => void }) {
-  const [rows, setRows] = useState<Row[] | null>(null);
+  const [found, setFound] = useState<ReturnType<typeof readWorkbookFiles> | null>(null);
+  const [picks, setPicks] = useState<Record<number, string>>({});
   const [reading, setReading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const rows = found ? uploadRows(found, props.units, props.books, picks) : null;
+  const close = () => {
+    setFound(null);
+    setPicks({});
+  };
 
   const pick = async (e: Event) => {
     const input = e.currentTarget as HTMLInputElement;
@@ -190,7 +295,8 @@ export function UploadBooks(props: { units: Unit[]; books: InApp[]; onSaved: (gr
     setReading(true);
     try {
       const read = await Promise.all(files.map(async (f) => ({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) })));
-      setRows(uploadRows(readWorkbookFiles(read), props.units, props.books));
+      setPicks({});
+      setFound(readWorkbookFiles(read));
     } catch {
       toast("Couldn't read those files on this phone. Try again, or from a computer.", "error");
     } finally {
@@ -202,10 +308,17 @@ export function UploadBooks(props: { units: Unit[]; books: InApp[]; onSaved: (gr
   const save = async () => {
     setSaving(true);
     let saved = 0;
+    const moved: string[] = [];
     for (const r of ready) {
       const unitId = r.unit!._id as Id<"units">;
       if (r.tute) {
         const t = r.tute;
+        if (r.moveFrom) {
+          const from = r.moveFrom;
+          const m = await act(() => mutate(api.catalog.moveTute, { unitId: from._id, toUnitId: unitId, by: currentRole() }));
+          if (!m) break;
+          moved.push(`${gradeWords(from.grade)} · ${from.code} ${from.en}${m.students ? `, ${studentsWork(m.students)}` : ""}`);
+        }
         const ok =
           (await act(() =>
             mutate(api.catalog.saveTute, {
@@ -243,16 +356,17 @@ export function UploadBooks(props: { units: Unit[]; books: InApp[]; onSaved: (gr
     if (saved > 0) {
       const keys = ready.slice(0, saved).filter((r) => r.book?.key?.length || r.tute?.masterKey?.length).length;
       const withKeys = keys === 0 ? "" : saved === 1 ? " with its answer key" : keys === saved ? ", all with answer keys" : `, ${keys} with answer keys`;
+      const off = moved.length ? ` Taken off ${moved.join("; ")}.` : "";
       toast(
         saved === 1 && ready[0].tute
-          ? `Saved ${ready[0].title}: its theory book and workbook${ready[0].tute.fighterKey || ready[0].tute.masterKey ? ", with their answer keys" : ""}. Students on them see them now.`
+          ? `Saved ${ready[0].title}: its theory book and workbook${ready[0].tute.fighterKey || ready[0].tute.masterKey ? ", with their answer keys" : ""}.${off || " Students on them see them now."}`
           : saved === 1
             ? `Saved ${ready[0].title}${withKeys}. Students on it see the new levels now.`
-            : `Saved ${howMany(ready.slice(0, saved))}${withKeys}. Students on them see the new levels now.`,
+            : `Saved ${howMany(ready.slice(0, saved))}${withKeys}.${off || " Students on them see the new levels now."}`,
       );
       props.onSaved(ready[0].unit!.grade);
     }
-    if (saved === ready.length) setRows(null);
+    if (saved === ready.length) close();
   };
 
   return (
@@ -266,17 +380,17 @@ export function UploadBooks(props: { units: Unit[]; books: InApp[]; onSaved: (gr
       </label>
       <p class="muted">
         Pick the unit zips from the workbook and essay chats, one or many at once. The app reads the levels, marks, answer keys and the
-        printed questions; an essay tute becomes the unit's theory book and workbook. You check them, then save.
+        printed questions; an O/L essay tute goes to its OL topic as a theory book and a workbook. You check them, then save.
       </p>
 
       {rows && (
         <Sheet
           title={`${howMany(rows)} found`}
           sub="Check the list. Nothing is saved until you tap Save."
-          onClose={() => setRows(null)}
+          onClose={close}
           foot={
             <div class="row-actions">
-              <button type="button" class="btn ghost" onClick={() => setRows(null)}>
+              <button type="button" class="btn ghost" onClick={close}>
                 Cancel
               </button>
               <button type="button" class="btn primary" disabled={saving || ready.length === 0} onClick={() => void save()}>
@@ -286,13 +400,21 @@ export function UploadBooks(props: { units: Unit[]; books: InApp[]; onSaved: (gr
           }
         >
           <ul class="up-list">
-            {rows.map((r) => (
-              <li key={r.key + r.file} class={`up-${r.state}`}>
+            {rows.map((r, i) => (
+              <li key={`${i}:${r.file}`} class={`up-${r.state}`}>
                 <b>{r.title}</b>
                 {r.detail && <small>{r.detail}</small>}
                 <span class="up-state">{r.words}</span>
+                {r.moveFrom && r.state !== "skip" && (
+                  <small class="up-key ok">
+                    ↪ Takes it off {gradeWords(r.moveFrom.grade)} · {r.moveFrom.code} {r.moveFrom.en}: its students' work comes too.
+                  </small>
+                )}
                 {r.keyLine && r.state !== "bad" && r.state !== "skip" && <small class={`up-key${r.keyLine.ok ? " ok" : ""}`}>{r.keyLine.words}</small>}
                 {r.qLine && r.state !== "bad" && r.state !== "skip" && <small class={`up-key${r.qLine.ok ? " ok" : ""}`}>{r.qLine.words}</small>}
+                {r.choices && r.state !== "bad" && (
+                  <OlPicks choices={r.choices} units={props.units} value={r.unit?._id ?? null} onPick={(id) => setPicks({ ...picks, [i]: id })} />
+                )}
                 {r.state === "bad" && <small class="up-file">{r.file}</small>}
               </li>
             ))}

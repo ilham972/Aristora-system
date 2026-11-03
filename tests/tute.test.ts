@@ -7,11 +7,12 @@ import { convexTest } from "convex-test";
 import { strToU8, zipSync } from "fflate";
 import { beforeEach, describe, expect, test } from "vitest";
 import { api } from "../convex/_generated/api";
+import type { Doc, Id } from "../convex/_generated/dataModel";
 import { checkMaster, type MasterData } from "../convex/lib/book";
 import { cleanHtml, unsafeCss, unsafeHtml } from "../convex/lib/questions";
 import schema from "../convex/schema";
 import { bookCssOf, tuteQuestions } from "../src/bookQuestions";
-import { uploadRows } from "../src/upload";
+import { olNo, uploadRows } from "../src/upload";
 import { readWorkbookFiles, type ReadTute } from "../src/workbookFile";
 import { addPerson, asOwner, asPhone } from "./helpers";
 import HTML from "./fixtures/tute-skeleton.html?raw";
@@ -67,15 +68,19 @@ describe("reading a tute's zip", () => {
     expect(unsafeCss(t.css)).toBe("");
   });
 
-  test("the upload list says what it brings and replaces", () => {
-    const units = [{ _id: "u24", grade: 11, code: "U24", en: "Sets", ta: "தொடைகள்", term: 3, order: 1, key: "G11-U24" }] as never[];
-    const [row] = uploadRows(read(), units, []);
-    expect(row).toMatchObject({ state: "new", words: "New: theory book + workbook", title: "G11 · U24 Sets · topic tute" });
+  test("the upload list says what it brings and replaces (a Grade 11 tute goes to its OL topic)", () => {
+    const units = [
+      { _id: "u24", grade: 11, code: "U24", en: "Sets", ta: "தொடைகள்", term: 3, order: 24, key: "G11-U24" },
+      { _id: "o53", grade: 12, code: "U53", en: "Sets and probability", ta: "தொடைகளும் நிகழ்தகவும்", term: 4, order: 53, key: "OL-U53" },
+    ] as never[];
+    const sets = edit((j) => (j.unit.en = "Sets"));
+    const [row] = uploadRows(read(sets), units, []);
+    expect(row).toMatchObject({ state: "new", words: "New: theory book + workbook", title: "OL · 01 Sets and probability · topic tute" });
     expect(row.detail).toBe("Theory book: A–B, 5 questions (2 with the teacher) · Workbook: Paper II B 6–8, 3 levels, 30 marks");
     expect(row.keyLine).toEqual({ words: "✓ Answer keys: ladder all 5 · past papers all 3", ok: true });
     expect(row.qLine).toEqual({ words: "✓ Questions as printed: ladder all 5 · past papers all 3", ok: true });
-    const inApp = [{ unitId: "u24", stage: "master" as const, master: { parts: [], levels: [{ n: 1, from: 1, to: 9, max: 20 }], total: 20, marksKnown: 0 }, keyCount: 9 }];
-    expect(uploadRows(read(), units, inApp)[0]).toMatchObject({ state: "replace", words: "Replaces the workbook (1 levels, 20 marks) in the app" });
+    const inApp = [{ unitId: "o53", stage: "master" as const, master: { parts: [], levels: [{ n: 1, from: 1, to: 9, max: 20 }], total: 20, marksKnown: 0 }, keyCount: 9 }];
+    expect(uploadRows(read(sets), units, inApp)[0]).toMatchObject({ state: "replace", words: "Replaces the workbook (1 levels, 20 marks) in the app" });
   });
 
   test("a wrong tute is refused with the reason, nothing silently dropped", () => {
@@ -266,7 +271,8 @@ describe("OL: the O/L books by paper part, for any student", () => {
     const [r] = read(olTute()) as ReadTute[];
     expect([r.grade, r.code, r.problems]).toEqual([12, "U44", []]);
     const [row] = uploadRows([r], units as never[], []);
-    expect(row).toMatchObject({ state: "new", title: "OL · U44 Simultaneous equations · topic tute" });
+    expect(row).toMatchObject({ state: "new", title: "OL · 03 Simultaneous equations · topic tute" });
+    expect(row.choices).toBeUndefined(); // a file that says OL needs no picking
     const [wrong] = uploadRows(read(olTute("IIB")), units as never[], []);
     expect(wrong).toMatchObject({ state: "bad", words: "Simultaneous equations is in Paper II · Part A; this tute's papers say Paper II B." });
     const u = await olUnit("U44");
@@ -309,5 +315,215 @@ describe("OL: the O/L books by paper part, for any student", () => {
     await expect(t.mutation(api.students.setGiven, { id: g8, unitId: u44._id, stage: "master", given: true })).rejects.toThrow(/Grade 10 and 11/);
     await expect(t.mutation(api.students.move, { id: g8, grade: 8, term: 2, stage: "master", unitId: u44._id })).rejects.toThrow(/Grade 10 and 11/);
     await expect(t.mutation(api.students.giveAllOl, { id: g8, stage: "master", given: true })).rejects.toThrow(/Grade 10 and 11/);
+  });
+});
+
+describe("An O/L tute belongs in OL (his Constructions on Grade 11, 3 Nov 2026)", () => {
+  let raw: ReturnType<typeof fresh>;
+  let t: Awaited<ReturnType<typeof asOwner>>;
+  let units: Doc<"units">[];
+  const unit = (key: string) => units.find((u) => u.key === key)!;
+  /** The FAKE tute as the essay engine files it: a Grade 11 unit (its number and names) and its paper part. */
+  const tuteAs = (en: string, ta: string, part = "IIB", no = 23) =>
+    edit((j) => {
+      j.unit = { no, code: `U${String(no).padStart(2, "0")}`, en, ta };
+      j.title = ta;
+      j.master.part = part;
+    });
+  const readAs = (en: string, ta: string, part = "IIB") => (read(tuteAs(en, ta, part)) as ReadTute[])[0];
+  /** What an upload saves: both books with their keys, then each book's printed questions. */
+  const save = async (unitId: Id<"units">, r: ReadTute) => {
+    await t.mutation(api.catalog.saveTute, {
+      unitId,
+      ...(r.title ? { title: r.title } : {}),
+      fighter: { sections: r.fighter.sections.map((x) => ({ id: x.id, title: x.title, tamil: x.tamil, teach: x.teach, solo: x.solo })) },
+      master: { part: r.part, levels: r.master.levels.map((l) => ({ from: l.from, to: l.to, max: l.max })), marks: r.master.marks! },
+      fighterKey: r.fighterKey!,
+      masterKey: r.masterKey!,
+    });
+    for (const stage of ["fighter", "master"] as const) {
+      await t.mutation(api.catalog.saveQuestions, { unitId, stage, first: true, css: r.css, items: [...r.questions[stage]].map(([q, html]) => ({ q, html })) });
+    }
+  };
+  const move = (from: Id<"units">, to: Id<"units">) => t.mutation(api.catalog.moveTute, { unitId: from, toUnitId: to });
+  const booksOn = async (unitId: Id<"units">) =>
+    await raw.run(async (ctx) => ({
+      books: (await ctx.db.query("books").withIndex("by_unit_stage", (q) => q.eq("unitId", unitId)).collect()).map((b) => [b.stage, b.tute, b.keyCount, b.qCount]),
+      keys: (await ctx.db.query("keys").withIndex("by_unit", (q) => q.eq("unitId", unitId)).collect()).length,
+      questions: (await ctx.db.query("questions").withIndex("by_book", (q) => q.eq("unitId", unitId)).collect()).length,
+      css: (await ctx.db.query("bookCss").withIndex("by_book", (q) => q.eq("unitId", unitId)).collect()).length,
+    }));
+  const EMPTY = { books: [], keys: 0, questions: 0, css: 0 };
+  /** A student's row in a book, made or changed (students.add already made an empty one for his unit). */
+  const put = async (studentId: Id<"students">, unitId: Id<"units">, stage: "fighter" | "master", fields: Partial<Doc<"progress">>) =>
+    await raw.run(async (ctx) => {
+      const now = Date.now();
+      const p = await ctx.db
+        .query("progress")
+        .withIndex("by_student_unit_stage", (q) => q.eq("studentId", studentId).eq("unitId", unitId).eq("stage", stage))
+        .first();
+      if (p) await ctx.db.patch(p._id, fields);
+      else await ctx.db.insert("progress", { studentId, unitId, stage, marks: {}, startedAt: now, updatedAt: now, ...fields });
+    });
+  const RIGHT = { "2": { s: "right" as const, t: 1 } };
+
+  beforeEach(async () => {
+    raw = fresh();
+    t = await asOwner(raw);
+    await t.mutation(api.setup.ensure, {});
+    units = await t.query(api.catalog.units, {});
+  });
+
+  test("the upload files a Grade 11 tute under its OL topic: its part, then its name; or the topic he taps", () => {
+    const row = (en: string, ta: string, part = "IIB", picks: Record<number, string> = {}) => uploadRows(read(tuteAs(en, ta, part)), units as never[], [], picks)[0];
+    const c = row("Constructions", "அமைப்புகள்");
+    expect(c).toMatchObject({ state: "new", words: "New: theory book + workbook", title: "OL · 08 Constructions · topic tute" });
+    expect(c.unit!.key).toBe("OL-U49");
+    expect(c.choices!.map((u) => `${olNo(u, units as never[])} ${u.en}`)).toEqual([
+      "07 Arithmetic and geometric progressions",
+      "08 Constructions",
+      "09 Volume and logarithms",
+      "10 Theorems on rectilinear plane figures",
+      "11 Circle theorems",
+      "12 Sets and probability",
+    ]);
+    // English inside a longer name, Tamil endings; the Tamil name settles "Equations" (two Paper II A topics in English).
+    expect(row("Sets", "தொடைகள்").unit!.key).toBe("OL-U53");
+    expect(row("Probability", "நிகழ்தகவு").unit!.key).toBe("OL-U53");
+    expect(row("Geometric progressions", "பெருக்கல் விருத்தி").unit!.key).toBe("OL-U48");
+    expect(row("Equations", "இருபடிச் சமன்பாடுகள்", "IIA").unit!.key).toBe("OL-U45");
+    expect(row("Trigonometry", "திரிகோணகணிதம்", "IIA").unit!.key).toBe("OL-U47"); // Paper II A's, never Paper I A's
+    // Nothing fits, or two fit as well: he taps it, and nothing is saved until he does.
+    const tie = row("Equations", "", "IIA");
+    expect(tie).toMatchObject({ state: "pick", title: "Equations · topic tute", words: "Which OL topic is it? Tap it below (Paper II · Part A)." });
+    expect(tie.unit).toBeUndefined();
+    expect(row("Volume of solids", "திண்மங்களின் கனவளவு").state).toBe("pick");
+    const u44 = unit("OL-U44")._id;
+    expect(row("Equations", "", "IIA", { 0: u44 })).toMatchObject({ state: "new", title: "OL · 03 Simultaneous equations · topic tute" });
+    // His tap wins over a match; a topic of another part is never taken.
+    expect(row("Constructions", "அமைப்புகள்", "IIB", { 0: unit("OL-U53")._id }).unit!.key).toBe("OL-U53");
+    expect(row("Constructions", "அமைப்புகள்", "IIB", { 0: u44 }).unit!.key).toBe("OL-U49");
+  });
+
+  test("the same tute left on its Grade 11 unit by an older upload: saving moves it over first; another topic's is left alone", async () => {
+    const r = readAs("Constructions", "அமைப்புகள்");
+    await save(unit("G11-U23")._id, r);
+    const books = await t.query(api.catalog.books, {});
+    const [row] = uploadRows([r], units as never[], books as never[]);
+    expect(row).toMatchObject({ state: "new", title: "OL · 08 Constructions · topic tute" });
+    expect(row.moveFrom?.key).toBe("G11-U23");
+    const other = (read(edit((j) => {
+      j.unit = { no: 23, code: "U23", en: "Constructions", ta: "அமைப்புகள்" };
+      j.title = "வேறு தலைப்பு";
+    })) as ReadTute[])[0];
+    expect(uploadRows([other], units as never[], books as never[])[0].moveFrom).toBeUndefined();
+  });
+
+  test("moving it: both books, keys, questions and every student's work go to the OL topic; the Grade 11 unit is left with no book", async () => {
+    const g = unit("G11-U23")._id;
+    const ol = unit("OL-U49")._id;
+    await save(g, readAs("Constructions", "அமைப்புகள்"));
+    const aqeeth = await t.mutation(api.students.add, { name: "Aqeeth", grade: 11, term: 3, stage: "fighter", unitId: g });
+    const nila = await t.mutation(api.students.add, { name: "Nila", grade: 11, term: 1, stage: "master", unitId: unit("G11-U01")._id });
+    const ravi = await t.mutation(api.students.add, { name: "Ravi", grade: 11, term: 1, stage: "master", unitId: unit("G11-U01")._id });
+    await t.mutation(api.students.setGiven, { id: nila, unitId: g, stage: "master", given: true });
+    await put(aqeeth, g, "fighter", { marks: RIGHT });
+    await put(nila, g, "master", { m: { q: { "6": { got: 7, max: 10, lost: true, t: 1 } }, lv: { "1": { done: 1, fixed: 1, got: 7 } } } });
+    const call = await raw.run(async (ctx) => {
+      const now = Date.now();
+      // Ravi goes back onto it after Exam Sprint; a draft of Nila's level 2; a corrector holds her paper; Theory called Aqeeth.
+      await ctx.db.patch(ravi, { stage: "sprint", back: { stage: "fighter", unitId: g, term: 3 } });
+      await ctx.db.insert("drafts", { studentId: nila, unitId: g, level: 2, q: { "7": { g: 5 } }, updatedAt: now });
+      const owner = (await ctx.db.query("users").first())!;
+      await ctx.db.insert("claims", { studentId: nila, unitId: g, userId: owner._id, name: "Owner", at: now, seenAt: now });
+      return await ctx.db.insert("calls", { studentId: aqeeth, room: "theory", kind: "theory", status: "requested", group: "A", section: "A", unitId: g, stage: "fighter", createdAt: now });
+    });
+
+    expect(await move(g, ol)).toEqual({ students: 3, kept: false });
+    expect(await booksOn(g)).toEqual(EMPTY);
+    const on = await booksOn(ol);
+    expect([on.books.map((b) => b.join(" ")).sort(), on.keys, on.questions, on.css]).toEqual([["fighter true 5 5", "master true 3 3"], 2, 8, 2]);
+    expect((await t.query(api.catalog.key, { unitId: ol, stage: "fighter" }))!.answers).toHaveLength(5);
+    expect((await t.query(api.catalog.question, { unitId: ol, stage: "master", q: 7 }))!.html).toContain('<span class="qn">7</span>');
+    const after = await raw.run(async (ctx) => {
+      const rows = await ctx.db.query("progress").collect();
+      const a = (await ctx.db.get(aqeeth))!;
+      return {
+        aqeeth: [a.unitId, a.grade, a.term, a.stage],
+        ravi: (await ctx.db.get(ravi))!.back,
+        left: rows.filter((p) => p.unitId === g).length,
+        marks: rows.find((p) => p.studentId === aqeeth && p.unitId === ol)?.marks,
+        levels: rows.find((p) => p.studentId === nila && p.unitId === ol)?.m?.lv,
+        given: (await ctx.db.query("handouts").collect()).map((h) => [h.unitId, h.stage]),
+        drafts: (await ctx.db.query("drafts").collect()).map((d) => d.unitId),
+        claims: (await ctx.db.query("claims").collect()).length,
+        call: (await ctx.db.get(call))!.unitId,
+        line: (await ctx.db.query("events").collect()).filter((e) => e.kind === "book-move").map((e) => e.value),
+      };
+    });
+    expect(after.aqeeth).toEqual([ol, 11, 3, "fighter"]); // his grade and term stay
+    expect(after.ravi).toEqual({ stage: "fighter", unitId: ol, term: 3 });
+    expect(after.left).toBe(0);
+    expect(after.marks).toEqual(RIGHT);
+    expect(after.levels).toEqual({ "1": { done: 1, fixed: 1, got: 7 } });
+    expect(after.given).toEqual([[ol, "master"]]);
+    expect(after.drafts).toEqual([ol]);
+    expect(after.claims).toBe(0); // the corrector's phone takes the paper again on its next ping
+    expect(after.call).toBe(ol);
+    expect(after.line).toEqual(["G11-U23 Constructions → OL-U49 Constructions, 3 students' work"]);
+    // The class board puts him on the OL book.
+    const board = (await t.query(api.state.get, {})) as { students: { _id: string; unitId?: string }[] };
+    expect(board.students.find((s) => s._id === aqeeth)?.unitId).toBe(ol);
+    // Done: nothing is left on Grade 11 to move.
+    await expect(move(g, ol)).rejects.toThrow("Grade 11 · Constructions has no O/L tute in the app.");
+  });
+
+  test("refused, nothing changed: a school unit or another part as target, an OL topic with another book, a school workbook, someone without Books", async () => {
+    const g = unit("G11-U23")._id;
+    await save(g, readAs("Constructions", "அமைப்புகள்"));
+    await expect(move(g, unit("G11-U24")._id)).rejects.toThrow("An O/L tute moves to an OL topic.");
+    await expect(move(g, unit("OL-U44")._id)).rejects.toThrow("Simultaneous equations is in Paper II · Part A; the tute's papers say Paper II B.");
+    const typed = { kind: "master" as const, parts: [{ id: "IIB" as const, from: 1, to: 1, kind: "cards" as const }], levels: [{ n: 1, from: 1, to: 1, max: 10 }], marks: { "1": 10 } };
+    await raw.run(async (ctx) => {
+      await ctx.db.insert("books", { unitId: unit("OL-U50")._id, stage: "master", data: typed, updatedAt: 1 });
+      await ctx.db.insert("books", { unitId: unit("G11-U22")._id, stage: "master", data: typed, updatedAt: 1 });
+    });
+    await expect(move(g, unit("OL-U50")._id)).rejects.toThrow("Volume and logarithms has another book in the app. Nothing moved.");
+    await expect(move(unit("G11-U22")._id, unit("OL-U49")._id)).rejects.toThrow("Grade 11 · Tangents has no O/L tute in the app.");
+    const KALA = "kala-phone-token-0123456789abcdefghijklmnopqrstuvwx";
+    await addPerson(raw, { name: "Kala", token: KALA, tabs: ["correction"] });
+    await expect(asPhone(raw, KALA).mutation(api.catalog.moveTute, { unitId: g, toUnitId: unit("OL-U49")._id })).rejects.toThrow();
+    expect((await booksOn(g)).books).toHaveLength(2);
+    expect(await booksOn(unit("OL-U49")._id)).toEqual(EMPTY);
+  });
+
+  test("the OL topic has it already: its copy stays, the Grade 11 copy goes, the students come; work in both copies stops it", async () => {
+    const g = unit("G11-U24")._id;
+    const ol = unit("OL-U53")._id;
+    const r = readAs("Sets", "தொடைகள்");
+    await save(g, r);
+    await save(ol, r);
+    const idsOn = async (u: Id<"units">) => (await raw.run(async (ctx) => await ctx.db.query("books").withIndex("by_unit_stage", (q) => q.eq("unitId", u)).collect())).map((b) => b._id).sort();
+    const olBooks = await idsOn(ol);
+    const aqeeth = await t.mutation(api.students.add, { name: "Aqeeth", grade: 11, term: 3, stage: "fighter", unitId: g });
+    const banu = await t.mutation(api.students.add, { name: "Banu", grade: 11, term: 3, stage: "fighter", unitId: g });
+    await raw.run(async (ctx) => await ctx.db.patch(banu, { unitId: ol }));
+    await put(aqeeth, g, "fighter", { marks: RIGHT });
+    await put(aqeeth, ol, "fighter", { marks: {} }); // an empty row on the OL copy
+    await put(banu, g, "fighter", { marks: RIGHT });
+    await put(banu, ol, "fighter", { marks: { "4": { s: "wrong", t: 2 } } });
+    await expect(move(g, ol)).rejects.toThrow("Banu already worked in Sets and probability too. Nothing moved.");
+    expect((await booksOn(g)).books).toHaveLength(2);
+    // Banu's Grade 11 marks were a mistake (taken off there): now it moves.
+    await put(banu, g, "fighter", { marks: {} });
+    expect(await move(g, ol)).toEqual({ students: 2, kept: true });
+    expect(await booksOn(g)).toEqual(EMPTY);
+    expect(await idsOn(ol)).toEqual(olBooks);
+    const rows = await raw.run(async (ctx) => (await ctx.db.query("progress").collect()).filter((p) => p.stage === "fighter").map((p) => [p.studentId, p.unitId, Object.keys(p.marks).join()]));
+    expect(rows.sort()).toEqual([[aqeeth, ol, "2"], [banu, ol, "4"]].sort());
+    // A wrong tap on the OL side is never for good: it moves on to another topic of its part.
+    expect(await move(ol, unit("OL-U48")._id)).toEqual({ students: 2, kept: false });
+    expect((await booksOn(unit("OL-U48")._id)).books).toHaveLength(2);
+    await expect(move(unit("OL-U48")._id, unit("OL-U48")._id)).rejects.toThrow("It is in Arithmetic and geometric progressions already.");
   });
 });

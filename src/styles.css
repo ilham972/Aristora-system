@@ -2914,6 +2914,58 @@ button.stat:disabled {
 .up-file {
   word-break: break-all;
 }
+/* An O/L tute's OL topic (3 Nov 2026): the topics of its paper part as chips, wrapping (the upload list, a unit's sheet). */
+.up-pick {
+  border-color: var(--amber) !important;
+}
+.up-pick .up-state {
+  color: var(--amber-ink);
+}
+.ol-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.ol-picks-l {
+  flex-basis: 100%;
+  color: var(--ink-3) !important;
+}
+.ol-pick {
+  min-height: 34px;
+  max-width: 100%;
+  padding: 4px 11px;
+  border-radius: 999px;
+  border: 1.5px solid var(--line-2);
+  background: var(--card);
+  font-size: 14px;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.ol-pick b {
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.ol-pick.on {
+  border-color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink);
+  font-weight: 700;
+}
+.ol-pick.on b {
+  color: var(--ink);
+}
+.ol-move {
+  margin-bottom: 16px;
+}
+.ol-move p {
+  margin: 4px 0 0;
+}
+.ol-move > .btn {
+  margin-top: 12px;
+}
+.ol-move-q {
+  margin-top: 10px;
+}
 
 /* ============ Progress (top bar → Progress): Units race, Term grid, poster ============ */
 .progress {

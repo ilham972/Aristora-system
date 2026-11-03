@@ -34,7 +34,7 @@ import {
   type Unit,
 } from "./store";
 import { ATTENDANCE_SINCE, AWAY_DAYS, daysAway, studentStats } from "./stats";
-import { UploadBooks } from "./upload";
+import { OlPicks, olChoices, olMatch, olNo, studentsWork, UploadBooks } from "./upload";
 import { FamilySheet, PhoneAnswers } from "./familySheet";
 import { FeedbackList } from "./feedbackList";
 import { SimPanel, SimSwitch } from "./sim";
@@ -406,6 +406,8 @@ type BookRow = {
   questions: number | null;
   keyCount: number | null;
   qCount: number | null;
+  /** One of a topic tute's two books. */
+  tute: boolean;
 };
 
 /** The syllabus by grade, which units have their books in the app, and setting up a workbook. */
@@ -488,15 +490,79 @@ function Books() {
           </div>
         );
       })}
-      {open && <UnitSheet unit={open} book={bookOf(open, "master")} fighter={bookOf(open, "fighter")} onClose={() => setOpen(null)} />}
+      {open && (
+        <UnitSheet unit={open} units={units} book={bookOf(open, "master")} fighter={bookOf(open, "fighter")} onClose={() => setOpen(null)} onMoved={setGrade} />
+      )}
     </div>
   );
 }
 
 type LevelRow = { to: string; max: string };
 
+/**
+ * An O/L tute on this unit (3 Nov 2026, his Constructions on Grade 11): a school unit's tute belongs in OL, so the sheet
+ * offers its OL topic (its paper part, matched by name) and moves it there with every student's work in it. On an OL
+ * topic, "Wrong topic?" moves it to another of the part (a wrong tap is never for good).
+ */
+function MoveTute(props: { unit: Unit; units: Unit[]; book: BookRow; fighter?: BookRow; onDone: () => void }) {
+  const { unit, units, book } = props;
+  const school = unit.grade !== OL;
+  const choices = olChoices(units, book.master?.parts[0]?.id).filter((u) => u._id !== unit._id);
+  const [open, setOpen] = useState(school);
+  const [pick, setPick] = useState<string | null>(null);
+  const [sure, setSure] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const target = choices.find((u) => u._id === pick) ?? (school ? olMatch([unit.en, unit.ta, book.title, props.fighter?.title], choices) : null);
+  const name = target ? `OL · ${olNo(target, units)} ${target.en}` : "";
+  const move = async () => {
+    if (!target) return;
+    setBusy(true);
+    const r = await act(() => mutate(api.catalog.moveTute, { unitId: unit._id, toUnitId: target._id, by: currentRole() }));
+    setBusy(false);
+    if (!r) return setSure(false);
+    const where = school ? `${gradeWords(unit.grade)} · ${unit.code}` : `OL · ${olNo(unit, units)} ${unit.en}`;
+    toast(`Moved to ${name}: both books${r.students ? `, ${studentsWork(r.students)}` : ""}. ${where} has no book now.`);
+    props.onDone();
+  };
+  if (!choices.length) return null;
+  if (!open) {
+    return (
+      <button type="button" class="btn ghost small ol-move-q" onClick={() => setOpen(true)}>
+        Wrong topic? Move this tute
+      </button>
+    );
+  }
+  return (
+    <div class="ol-move">
+      <h3 class="block-title">{school ? "This is an O/L tute: move it to OL" : "Move this tute to another topic"}</h3>
+      <p class="muted">
+        {school ? `Its books are an O/L essay tute, not ${gradeWords(unit.grade)} work. ` : ""}Both books, their answer keys, the printed
+        questions and every student's work in it go to the topic you tap. This {school ? "unit" : "topic"} is left with no book.
+      </p>
+      <OlPicks
+        choices={choices}
+        units={units}
+        value={target?._id ?? null}
+        onPick={(id) => {
+          setPick(id);
+          setSure(false);
+        }}
+      />
+      {sure && target ? (
+        <button type="button" class="btn primary wide" disabled={busy} onClick={() => void move()}>
+          {busy ? "Moving…" : `Yes: move it to ${name}`}
+        </button>
+      ) : (
+        <button type="button" class="btn primary wide" disabled={!target} onClick={() => setSure(true)}>
+          {target ? `Move to ${name}` : "Tap its OL topic first"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** One unit: its names, and its workbook copied from the contents page and the marks table. */
-function UnitSheet(props: { unit: Unit; book?: BookRow; fighter?: BookRow; onClose: () => void }) {
+function UnitSheet(props: { unit: Unit; units: Unit[]; book?: BookRow; fighter?: BookRow; onClose: () => void; onMoved: (grade: number) => void }) {
   const { unit } = props;
   const plan = partsForGrade(unit.grade);
   const m = props.book?.master;
@@ -547,8 +613,23 @@ function UnitSheet(props: { unit: Unit; book?: BookRow; fighter?: BookRow; onClo
     }
   };
 
+  // A tute on this unit: on a school unit, moving it to OL comes first; on an OL topic, "Wrong topic?" sits below its book.
+  const moveTute = props.book?.tute ? (
+    <MoveTute
+      unit={unit}
+      units={props.units}
+      book={props.book}
+      fighter={props.fighter}
+      onDone={() => {
+        props.onClose();
+        props.onMoved(OL);
+      }}
+    />
+  ) : null;
+
   return (
-    <Sheet title={`${gradeWords(unit.grade)} · ${unit.code}`} sub={`${unit.en} · ${unit.ta}`} onClose={props.onClose}>
+    <Sheet title={unit.grade === OL ? `OL · ${olNo(unit, props.units)}` : `${gradeWords(unit.grade)} · ${unit.code}`} sub={`${unit.en} · ${unit.ta}`} onClose={props.onClose}>
+      {unit.grade !== OL && moveTute}
       <h3 class="block-title">Names</h3>
       <div class="add-row">
         <input value={en} maxLength={80} aria-label="English name" onInput={(e) => setEn((e.target as HTMLInputElement).value)} />
@@ -564,7 +645,9 @@ function UnitSheet(props: { unit: Unit; book?: BookRow; fighter?: BookRow; onClo
       <p class="muted">
         {props.fighter
           ? `In the app${props.fighter.title ? `: ${props.fighter.title}` : ""}, ${props.fighter.questions} questions.`
-          : "Not in the app yet. An essay tute's source zip brings it (Upload workbooks above)."}
+          : unit.grade === OL
+            ? "Not in the app yet. Its O/L essay tute's zip brings it (Upload workbooks above)."
+            : "Not in the app yet."}
       </p>
       {props.fighter && (
         <p class={`small key-note${props.fighter.keyCount ? " ok" : ""}`}>
@@ -572,6 +655,7 @@ function UnitSheet(props: { unit: Unit; book?: BookRow; fighter?: BookRow; onClo
           {props.fighter.qCount ? ` ✓ Questions as printed: ${props.fighter.qCount}.` : ""}
         </p>
       )}
+      {unit.grade === OL && moveTute}
 
       <h3 class="block-title">Workbook (Master)</h3>
       <p class="muted">Copy it from the workbook's contents page and its marks table (புள்ளி அட்டவணை).</p>
@@ -897,6 +981,8 @@ function describe(e: Doc<"events">): string {
       return `moved: ${v}`;
     case "book-save":
       return `workbook saved: ${v}`;
+    case "book-move":
+      return `O/L tute moved: ${v}`;
     case "book-given":
       return `book given: ${v}`;
     case "keep":

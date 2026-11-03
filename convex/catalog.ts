@@ -1,8 +1,8 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
-import { bookFor, cleanBy, currentSession, fail, keyRow, log, touch } from "./lib/backend";
+import { bookFor, cleanBy, currentSession, fail, keyRow, log, progressFor, touch } from "./lib/backend";
 import {
   bookTotal,
   checkFighter,
@@ -57,6 +57,8 @@ export const books = query({
       questions: b.data.kind === "fighter" ? b.data.sections.reduce((a, s) => a + s.teach.length + s.solo.length, 0) : null,
       keyCount: b.keyCount ?? null,
       qCount: b.qCount ?? null,
+      /** One of a topic tute's two books (the Books page offers to move a school unit's tute to OL). */
+      tute: b.tute ?? false,
       updatedAt: b.updatedAt,
     }));
   },
@@ -318,6 +320,137 @@ export const saveTute = mutation({
     });
     await touch(ctx, session, now);
     return true;
+  },
+});
+
+/** Anything a student did in a book: circles, levels, marks, a whole-unit re-teach. */
+function hasWork(p: Doc<"progress">): boolean {
+  if (Object.keys(p.marks ?? {}).length) return true;
+  const m = p.m;
+  return !!m && (Object.keys(m.q ?? {}).length > 0 || Object.keys(m.lv ?? {}).length > 0 || !!m.reteach);
+}
+
+/**
+ * An O/L essay tute filed under a school unit moves to its OL topic (3 Nov 2026, his Constructions: the essay engine
+ * writes "grade": 11, so every tute uploaded before this landed on a Grade 11 unit and nothing could take it off); one
+ * on the wrong OL topic moves to the right one the same way. Everything on it goes too: both books, their answer keys,
+ * the printed questions, and every student's work in it (circles, levels, marks, books given, drafts, calls). The unit
+ * it leaves has no book. When the OL topic has the tute already (uploaded there too), its books stay and the other copy
+ * goes; the students' work still moves. Refused before anything changes when a student has work in both copies.
+ */
+export const moveTute = mutation({
+  args: { token: v.optional(v.string()), unitId: v.id("units"), toUnitId: v.id("units"), by: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["books"]);
+    const now = Date.now();
+    const from = await ctx.db.get(args.unitId);
+    const to = await ctx.db.get(args.toUnitId);
+    if (!from || !to) fail("That unit no longer exists.");
+    if (to.grade !== OL) fail("An O/L tute moves to an OL topic.");
+    if (from._id === to._id) fail(`It is in ${to.en} already.`);
+    const fromBooks = await ctx.db.query("books").withIndex("by_unit_stage", (q) => q.eq("unitId", from._id)).collect();
+    const master = fromBooks.find((b) => b.stage === "master");
+    const mdata = master?.data;
+    if (!master?.tute || mdata?.kind !== "master") fail(`${gradeWords(from.grade)} · ${from.en} has no O/L tute in the app.`);
+    const part = mdata.parts[0]?.id;
+    if (OL_PARTS[to.term]?.id !== part) {
+      fail(`${to.en} is in ${OL_PARTS[to.term]?.en ?? "another part"}; the tute's papers say ${PART_NAME[part] ?? part}.`);
+    }
+    const toBooks = await ctx.db.query("books").withIndex("by_unit_stage", (q) => q.eq("unitId", to._id)).collect();
+    if (toBooks.some((b) => !b.tute)) fail(`${to.en} has another book in the app. Nothing moved.`);
+    const keep = toBooks.length > 0;
+
+    // Every student's work in it (removed and practice students too), all checked before anything changes.
+    type Plan = {
+      s: Doc<"students">;
+      move: Doc<"progress">[];
+      drop: Doc<"progress">[];
+      handouts: Doc<"handouts">[];
+      drafts: Doc<"drafts">[];
+    };
+    const plans: Plan[] = [];
+    const clash: string[] = [];
+    // Books given and drafts on either unit, read once for the whole class (small tables, no unit index).
+    const near = (u: Id<"units">) => u === from._id || u === to._id;
+    const allHandouts = (await ctx.db.query("handouts").collect()).filter((h) => near(h.unitId));
+    const allDrafts = (await ctx.db.query("drafts").collect()).filter((d) => near(d.unitId));
+    for (const s of await ctx.db.query("students").collect()) {
+      const plan: Plan = { s, move: [], drop: [], handouts: [], drafts: [] };
+      for (const stage of ["fighter", "master"] as const) {
+        const p = await progressFor(ctx, s._id, from._id, stage);
+        if (!p) continue;
+        const there = await progressFor(ctx, s._id, to._id, stage);
+        if (!there) plan.move.push(p);
+        else if (!hasWork(there)) {
+          plan.drop.push(there);
+          plan.move.push(p);
+        } else if (!hasWork(p)) plan.drop.push(p);
+        else clash.push(s.name);
+      }
+      plan.handouts = allHandouts.filter((h) => h.studentId === s._id);
+      plan.drafts = allDrafts.filter((d) => d.studentId === s._id);
+      const onIt = s.unitId === from._id || s.back?.unitId === from._id;
+      if (onIt || plan.move.length || plan.drop.length || plan.handouts.some((h) => h.unitId === from._id) || plan.drafts.some((d) => d.unitId === from._id)) {
+        plans.push(plan);
+      }
+    }
+    if (clash.length) {
+      const names = [...new Set(clash)];
+      fail(`${names.slice(0, 3).join(", ")}${names.length > 3 ? ` and ${names.length - 3} more` : ""} already worked in ${to.en} too. Nothing moved.`);
+    }
+
+    // The books, their keys, questions and style.
+    const keys = await ctx.db.query("keys").withIndex("by_unit", (q) => q.eq("unitId", from._id)).collect();
+    const qs = await ctx.db.query("questions").withIndex("by_book", (q) => q.eq("unitId", from._id)).collect();
+    const css = await ctx.db.query("bookCss").withIndex("by_book", (q) => q.eq("unitId", from._id)).collect();
+    const ids = [...fromBooks.map((r) => r._id), ...keys.map((r) => r._id), ...qs.map((r) => r._id), ...css.map((r) => r._id)];
+    if (keep) for (const id of ids) await ctx.db.delete(id);
+    else {
+      for (const r of fromBooks) await ctx.db.patch(r._id, { unitId: to._id });
+      for (const r of keys) await ctx.db.patch(r._id, { unitId: to._id });
+      for (const r of qs) await ctx.db.patch(r._id, { unitId: to._id });
+      for (const r of css) await ctx.db.patch(r._id, { unitId: to._id });
+    }
+
+    // The students: their place, their work, the books given, drafts, a paper someone holds, calls.
+    const moved = new Set<Id<"students">>();
+    for (const p of plans) {
+      const s = p.s;
+      for (const row of p.drop) await ctx.db.delete(row._id);
+      for (const row of p.move) await ctx.db.patch(row._id, { unitId: to._id });
+      for (const h of p.handouts) {
+        if (h.unitId !== from._id) continue;
+        if (p.handouts.some((x) => x.unitId === to._id && x.stage === h.stage)) await ctx.db.delete(h._id);
+        else await ctx.db.patch(h._id, { unitId: to._id });
+      }
+      for (const d of p.drafts) {
+        if (d.unitId !== from._id) continue;
+        if (p.drafts.some((x) => x.unitId === to._id && x.level === d.level)) await ctx.db.delete(d._id);
+        else await ctx.db.patch(d._id, { unitId: to._id });
+      }
+      for (const c of await ctx.db.query("claims").withIndex("by_paper", (q) => q.eq("studentId", s._id).eq("unitId", from._id)).collect()) {
+        await ctx.db.delete(c._id);
+      }
+      for (const c of await ctx.db.query("calls").withIndex("by_student_at", (q) => q.eq("studentId", s._id)).collect()) {
+        if (c.unitId === from._id) await ctx.db.patch(c._id, { unitId: to._id });
+      }
+      const patch: Partial<Doc<"students">> = {};
+      if (s.unitId === from._id) patch.unitId = to._id;
+      if (s.back?.unitId === from._id) patch.back = { ...s.back, unitId: to._id };
+      if (Object.keys(patch).length) await ctx.db.patch(s._id, patch);
+      if (!s.test && !s.demo) moved.add(s._id);
+    }
+
+    const session = await currentSession(ctx, now);
+    const n = moved.size;
+    await log(ctx, session, now, {
+      kind: "book-move",
+      by: cleanBy(args.by),
+      unit: to.key,
+      value: `${from.key} ${from.en} → ${to.key} ${to.en}${keep ? " (its copy there kept)" : ""}, ${n} student${n === 1 ? "" : "s"}' work`,
+    });
+    await touch(ctx, session, now);
+    return { students: n, kept: keep };
   },
 });
 

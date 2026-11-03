@@ -9,7 +9,7 @@ import { api, internal } from "../../convex/_generated/api";
 import { normalizeCode, secretHash } from "../../convex/lib/auth";
 import { KNOWN_WORKBOOKS, outOf } from "../../convex/lib/book";
 import { digestOf, type DCall, type DEvent } from "../../convex/lib/boss";
-import { readWorkbookHtml } from "../../src/workbookFile";
+import { readWorkbookFiles, readWorkbookHtml, type ReadTute } from "../../src/workbookFile";
 import U01_BOOK from "../fixtures/workbook-g8-u01.html?raw";
 import TUTE_BOOK from "../fixtures/tute-skeleton.html?raw";
 import TUTE_JSON from "../fixtures/tute-skeleton.json?raw";
@@ -3029,27 +3029,29 @@ test("Topic tute: one zip = the unit's theory book and workbook, both answer key
   await C.getByRole("button", { name: "Load demo students (three grades)" }).click();
   await visible(C.getByText(/^14 demo students loaded/));
 
-  // The FAKE tute, filed under G11 U13 (where the demo's Grade 11 class works on the pilot theory book).
+  // The FAKE tute as the essay engine files it (under Grade 11's Constructions, U23): the upload puts it in OL (3 Nov
+  // 2026, his rule: an O/L tute is an OL book), on its topic of Paper II B by name, even with Grade 11 picked on the page.
   const json = JSON.parse(TUTE_JSON);
-  json.unit = { ...json.unit, no: 13, code: "U13" };
+  json.unit = { no: 23, code: "U23", en: "Constructions", ta: "அமைப்புகள்" };
   const zip = Buffer.from(zipSync({ "book.html": strToU8(TUTE_BOOK), "tute.json": strToU8(JSON.stringify(json)), "content.py": strToU8("") }));
   await C.getByRole("button", { name: "Books", exact: true }).click();
   await C.getByRole("button", { name: /^Grade 11\b/ }).click();
-  await C.locator(".upload-btn input[type=file]").setInputFiles([{ name: "Sample_tute_source.zip", mimeType: "application/zip", buffer: zip }]);
+  await C.locator(".upload-btn input[type=file]").setInputFiles([{ name: "Constructions_tute_source.zip", mimeType: "application/zip", buffer: zip }]);
   const up = C.locator(".sheet");
-  await contains(up.locator(".up-replace"), "G11 · U13 Equations · topic tute");
-  await contains(up.locator(".up-replace"), "Theory book: A–B, 5 questions (2 with the teacher) · Workbook: Paper II B 6–8, 3 levels, 30 marks");
-  await contains(up.locator(".up-replace .up-state"), "Replaces the theory book (61 questions) in the app");
-  await contains(up.locator(".up-replace"), "✓ Answer keys: ladder all 5 · past papers all 3");
-  await contains(up.locator(".up-replace"), "✓ Questions as printed: ladder all 5 · past papers all 3");
+  await contains(up.locator(".up-new"), "OL · 08 Constructions · topic tute");
+  await contains(up.locator(".up-new"), "Theory book: A–B, 5 questions (2 with the teacher) · Workbook: Paper II B 6–8, 3 levels, 30 marks");
+  await contains(up.locator(".up-new .up-state"), "New: theory book + workbook");
+  await contains(up.locator(".up-new"), "✓ Answer keys: ladder all 5 · past papers all 3");
+  await contains(up.locator(".up-new"), "✓ Questions as printed: ladder all 5 · past papers all 3");
+  await textsAre(up.locator(".ol-pick.on"), ["08 Constructions"]);
   await shot(C, "t01-upload-tute");
   await contains(up.locator("h2"), "1 tute found");
   await up.getByRole("button", { name: "Save 1 tute" }).click();
-  await contains(C.locator(".toast"), "Saved G11 · U13 Equations · topic tute: its theory book and workbook, with their answer keys");
-  const u13 = C.locator(".unit-list li", { hasText: "U13" });
-  await textsAre(u13.locator("i.has"), ["F", "M", "K", "Q"]);
+  await contains(C.locator(".toast"), "Saved OL · 08 Constructions · topic tute: its theory book and workbook, with their answer keys");
+  const u49 = C.locator(".unit-list li", { hasText: "Constructions" }); // the page went to OL by itself
+  await textsAre(u49.locator("i.has"), ["F", "M", "K", "Q"]);
   const counts = await backend.t.run(async (ctx) => {
-    const u = (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G11-U13")).first())!;
+    const u = (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "OL-U49")).first())!;
     const books = await ctx.db.query("books").withIndex("by_unit_stage", (q) => q.eq("unitId", u._id)).collect();
     return books.map((b) => [b.stage, b.keyCount, b.qCount]).sort();
   });
@@ -3057,17 +3059,17 @@ test("Topic tute: one zip = the unit's theory book and workbook, both answer key
     ["fighter", 5, 5],
     ["master", 3, 3],
   ]);
-  await shot(C, "t02-books-grade11", true);
+  await shot(C, "t02-books-ol", true);
 
-  // A Grade 11 student on the new theory book, nothing taught yet (his screenshot, 1 Nov: "That's every question he
-  // can do now" and nothing to see): Correction shows the whole book by section, every question with its answer; Q2
-  // opens (his first not right), its section's teacher question not taught yet.
-  const kumar = await backend.t.run(async (ctx) => {
+  // A Grade 11 student moved onto its theory book (as Correction's units sheet → OL books does), nothing taught yet (his
+  // screenshot, 1 Nov: "That's every question he can do now" and nothing to see): Correction shows the whole book by
+  // section, every question with its answer; Q2 opens (his first not right), its section's teacher question not taught.
+  const { kumar, kumarId, ol49 } = await backend.t.run(async (ctx) => {
     const s = (await ctx.db.query("students").collect()).find((x) => x.grade === 11 && x.present && x.stage === "fighter")!;
-    const p = (await ctx.db.query("progress").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()).find((x) => x.stage === "fighter")!;
-    await ctx.db.patch(p._id, { marks: {} });
-    return s.name;
+    const u = (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "OL-U49")).first())!;
+    return { kumar: s.name, kumarId: s._id, ol49: u._id };
   });
+  await backend.t.mutation(api.students.move, { token: OWNER_TOKEN, id: kumarId, grade: 12, term: 4, stage: "fighter", unitId: ol49 });
   await backend.push();
   await C.getByRole("button", { name: "Back to the class" }).click();
   await C.locator(".fc-grades").getByRole("button", { name: /^Grade 11\b|^11\b/ }).first().click();
@@ -3122,7 +3124,7 @@ test("Topic tute: one zip = the unit's theory book and workbook, both answer key
   // Theory teaches section A from teaching mode (3 Nov 2026): its teacher question as printed, larger than on the card
   // and still inside the phone, then its answer big.
   const T = await phone(backend, "theory");
-  await evPick(T, { grade: "11", stage: "Fighter", unit: "13", group: "A" });
+  await evPick(T, { grade: "OL", stage: "Fighter", unit: "49", group: "A" });
   await contains(T.locator(".evx-card .fc-qn"), "1");
   await T.locator(".evx-card .fc-tmb").click();
   const tq = T.locator(".tm .tm-q .bq-view");
@@ -3168,9 +3170,9 @@ test("OL: the O/L books by paper part; a tute filed under its topic; a Grade 11 
   json.master.part = "IIA";
   const zip = Buffer.from(zipSync({ "book.html": strToU8(TUTE_BOOK), "tute.json": strToU8(JSON.stringify(json)), "content.py": strToU8("") }));
   await C.locator(".upload-btn input[type=file]").setInputFiles([{ name: "Simultaneous_tute_source.zip", mimeType: "application/zip", buffer: zip }]);
-  await contains(C.locator(".sheet .up-new"), "OL · U44 Simultaneous equations · topic tute");
+  await contains(C.locator(".sheet .up-new"), "OL · 03 Simultaneous equations · topic tute");
   await C.locator(".sheet").getByRole("button", { name: "Save 1 tute" }).click();
-  await contains(C.locator(".toast"), "Saved OL · U44 Simultaneous equations · topic tute");
+  await contains(C.locator(".toast"), "Saved OL · 03 Simultaneous equations · topic tute");
   await textsAre(u44.locator("i.has"), ["F", "M", "K", "Q"]);
   await shot(C, "o01-books-ol");
   const narrow = await phone(backend, "focus", { ...PHONE, viewport: { width: 320, height: 640 } });
@@ -3208,6 +3210,117 @@ test("OL: the O/L books by paper part; a tute filed under its topic; a Grade 11 
     return [st.grade, st.stage, u.key];
   });
   expect(s).toEqual([11, "master", "OL-U44"]);
+  expect(problems.filter((x) => !x.includes("warning]"))).toEqual([]);
+});
+
+test("OL: a tute an older upload left on Grade 11 goes to OL with its students: by uploading it again, or Move on its sheet", async () => {
+  const backend = await newClass();
+  const C = await phone(backend, "focus");
+  await C.getByRole("button", { name: "Settings" }).click();
+  await C.getByRole("button", { name: "Load demo students (three grades)" }).click();
+  await visible(C.getByText(/^14 demo students loaded/));
+
+  // His situation (3 Nov 2026): the essay engine writes "grade": 11, so his Constructions and Sets tutes sat on Grade
+  // 11's U23 and U24, a student worked in one of them, and nothing could take them off.
+  const zipOf = (no: number, en: string, ta: string) => {
+    const json = JSON.parse(TUTE_JSON);
+    json.unit = { no, code: `U${no}`, en, ta };
+    json.title = ta;
+    return zipSync({ "book.html": strToU8(TUTE_BOOK), "tute.json": strToU8(JSON.stringify(json)), "content.py": strToU8("") });
+  };
+  const unitOf = async (key: string) => await backend.t.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", key)).first())!._id);
+  const oldUpload = async (no: number, en: string, ta: string) => {
+    const [r] = readWorkbookFiles([{ name: `${en}_tute_source.zip`, bytes: zipOf(no, en, ta) }]) as ReadTute[];
+    const unitId = await unitOf(`G11-U${no}`);
+    await backend.t.mutation(api.catalog.saveTute, {
+      token: OWNER_TOKEN,
+      unitId,
+      title: r.title!,
+      fighter: { sections: r.fighter.sections.map((x) => ({ id: x.id, title: x.title, tamil: x.tamil, teach: x.teach, solo: x.solo })) },
+      master: { part: r.part, levels: r.master.levels.map((l) => ({ from: l.from, to: l.to, max: l.max })), marks: r.master.marks! },
+      fighterKey: r.fighterKey!,
+      masterKey: r.masterKey!,
+    });
+    for (const stage of ["fighter", "master"] as const) {
+      await backend.t.mutation(api.catalog.saveQuestions, { token: OWNER_TOKEN, unitId, stage, first: true, css: r.css, items: [...r.questions[stage]].map(([q, html]) => ({ q, html })) });
+    }
+    return unitId;
+  };
+  const g23 = await oldUpload(23, "Constructions", "அமைப்புகள்");
+  await oldUpload(24, "Sets", "தொடைகள்");
+  const kumar = await backend.t.run(async (ctx) => (await ctx.db.query("students").collect()).find((x) => x.grade === 11 && x.present && x.stage === "fighter")!);
+  await backend.t.mutation(api.students.move, { token: OWNER_TOKEN, id: kumar._id, grade: 11, term: 3, stage: "fighter", unitId: g23 });
+  await backend.t.run(async (ctx) => {
+    const now = Date.now();
+    const marks = { "2": { s: "right" as const, t: now } };
+    const p = await ctx.db
+      .query("progress")
+      .withIndex("by_student_unit_stage", (q) => q.eq("studentId", kumar._id).eq("unitId", g23).eq("stage", "fighter"))
+      .first();
+    if (p) await ctx.db.patch(p._id, { marks });
+    else await ctx.db.insert("progress", { studentId: kumar._id, unitId: g23, stage: "fighter", marks, startedAt: now, updatedAt: now });
+  });
+  await backend.push();
+
+  // 1. He uploads the zip again with OL picked: it goes to OL · 08 Constructions and takes the Grade 11 copy off, with
+  //    his student's work.
+  await C.getByRole("button", { name: "Books", exact: true }).click();
+  await C.locator(".grade-row").getByRole("button", { name: /^OL\b/ }).click();
+  await C.locator(".upload-btn input[type=file]").setInputFiles([
+    { name: "Constructions_tute_source.zip", mimeType: "application/zip", buffer: Buffer.from(zipOf(23, "Constructions", "அமைப்புகள்")) },
+  ]);
+  const up = C.locator(".sheet .up-new");
+  await contains(up, "OL · 08 Constructions · topic tute");
+  await contains(up.locator(".up-state"), "New: theory book + workbook");
+  await contains(up, "↪ Takes it off Grade 11 · U23 Constructions: its students' work comes too.");
+  await textsAre(up.locator(".ol-pick"), [
+    "07 Arithmetic and geometric progressions",
+    "08 Constructions",
+    "09 Volume and logarithms",
+    "10 Theorems on rectilinear plane figures",
+    "11 Circle theorems",
+    "12 Sets and probability",
+  ]);
+  await textsAre(up.locator(".ol-pick.on"), ["08 Constructions"]);
+  expect(await C.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(C, "o11-upload-moves-off-grade11");
+  await C.locator(".sheet").getByRole("button", { name: "Save 1 tute" }).click();
+  await contains(C.locator(".toast"), "Saved OL · 08 Constructions · topic tute: its theory book and workbook, with their answer keys. Taken off Grade 11 · U23 Constructions.");
+  await textsAre(C.locator(".unit-list li", { hasText: "Constructions" }).locator("i.has"), ["F", "M", "K", "Q"]);
+  const after = await backend.t.run(async (ctx) => {
+    const s = (await ctx.db.get(kumar._id))!;
+    const u = (await ctx.db.get(s.unitId!))!;
+    const rows = await ctx.db.query("progress").withIndex("by_student", (q) => q.eq("studentId", kumar._id)).collect();
+    const left = await ctx.db.query("books").withIndex("by_unit_stage", (q) => q.eq("unitId", g23)).collect();
+    return { at: [u.key, s.grade, s.stage], mark: rows.find((p) => p.unitId === s.unitId && p.stage === "fighter")?.marks["2"]?.s, left: left.length };
+  });
+  expect(after).toEqual({ at: ["OL-U49", 11, "fighter"], mark: "right", left: 0 });
+
+  // 2. Or on the unit's own sheet (a 320 px phone): Grade 11 → U24 Sets → Move to OL, its topic picked by name, two taps.
+  const N = await phone(backend, "focus", { ...PHONE, viewport: { width: 320, height: 640 } });
+  await N.getByRole("button", { name: "Settings" }).click();
+  await N.getByRole("button", { name: "Books", exact: true }).click();
+  await N.getByRole("button", { name: /^Grade 11\b/ }).click();
+  await N.locator(".unit-list li", { hasText: "U24" }).getByRole("button").click();
+  const sheet = N.locator(".sheet");
+  await says(sheet.locator(".ol-move .block-title"), "This is an O/L tute: move it to OL");
+  await textsAre(sheet.locator(".ol-pick.on"), ["12 Sets and probability"]);
+  expect(await N.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(N, "o12-unit-sheet-move-320");
+  await sheet.getByRole("button", { name: "Move to OL · 12 Sets and probability" }).click();
+  await sheet.getByRole("button", { name: "Yes: move it to OL · 12 Sets and probability" }).click();
+  await contains(N.locator(".toast"), "Moved to OL · 12 Sets and probability: both books. Grade 11 · U24 has no book now.");
+  const sets = N.locator(".unit-list li", { hasText: "Sets and probability" }); // the page went to OL
+  await textsAre(sets.locator("i.has"), ["F", "M", "K", "Q"]);
+  // On OL, a wrong topic is never for good: its sheet offers to move it on.
+  await sets.getByRole("button").click();
+  await visible(N.locator(".sheet").getByRole("button", { name: "Wrong topic? Move this tute" }));
+  await shot(N, "o13-ol-sheet-wrong-topic-320");
+  await N.locator(".sheet").getByRole("button", { name: "Close" }).click();
+  // Grade 11's Constructions and Sets have no book left.
+  await N.getByRole("button", { name: /^Grade 11\b/ }).click();
+  await textsAre(N.locator(".unit-list li", { hasText: "U23" }).locator("i.has"), []);
+  await textsAre(N.locator(".unit-list li", { hasText: "U24" }).locator("i.has"), []);
   expect(problems.filter((x) => !x.includes("warning]"))).toEqual([]);
 });
 
