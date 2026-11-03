@@ -250,6 +250,13 @@ EOF
 - **Motion in the family app is transform and opacity only** (no animated box-shadow, blur or layout): a cheap Redmi
   stays smooth. A small owl is `still` (only its mood moves): a living owl is eight SVG animations repainted on the
   main thread. Loops only where the eye should go (the header's owl, START's halo, a waiting START's light).
+- **The owl lab** (4 Nov 2026): to judge a mood, bundle a tiny page that renders every mood (`Owl mood=…` from
+  `src/family/owl.tsx`, the family CSS, `public/splash.html` for `keepOwl`) with the repo's esbuild (`format: "iife"`,
+  `nodePaths` = the repo's node_modules: a module script won't load over file://), then in Playwright pause every
+  animation at a time (`document.getAnimations().forEach(a => { a.pause(); a.currentTime = ms })`) and screenshot.
+  Marks are in the drawing's coordinates (eyes 559,603 / 703,603; beak tip 629,708; shoulders 618,722 / 644,722);
+  a mark that animates sits in `at(x, y, …)` so it turns or scales around its own anchor. Over the budget? It was 50 KB
+  until the owl's acting (56 since): weigh what a feature is worth before raising it again.
 - **Look at the family app**: `npm ci` works here now (4 Nov 2026), so `npm run build` and the run-throughs run as on
   GitHub (`SHOTS=<scratchpad>/shots npx vitest run -c vitest.e2e.config.ts tests/e2e/family.e2e.ts`, ~45 s; `fam*`
   shots at 360 and 320 px). Without packages: esbuild is in `/opt/npm-tools`, Preact's source can come from GitHub,

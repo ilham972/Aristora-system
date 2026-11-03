@@ -16,7 +16,7 @@ import type { Box } from "../../convex/lib/phone";
 import { drawQuestion } from "../questionView";
 import { keep, mutation, NetError, query } from "./net";
 import { buzz, sound } from "./sound";
-import { Flame, Gem, Icon, Medal, Owl, OwlBadge, pretty, problemWords, Roll, Tag, toast, Waiting, type Mood } from "./ui";
+import { Flame, Gem, Icon, Medal, Owl, OwlBadge, pretty, problemWords, Roll, Tag, toast, useOwlTap, Waiting, type Mood } from "./ui";
 
 export type Checked = {
   results: FamilyResult[];
@@ -395,7 +395,7 @@ export function Play(props: {
 function Oops(props: { text: string; onBack: () => void }) {
   return (
     <div class="f-center f-pad">
-      <Owl mood="sad" class="mid" />
+      <Owl mood="dizzy" class="mid" />
       <p class="f-lead">{props.text}</p>
       <button type="button" class="f-btn go" onClick={props.onBack}>
         Back
@@ -514,7 +514,16 @@ export function Result(props: {
 
   // The owl's words (Tamil: its voice), by the score.
   const cheer = pct >= 1 ? "எல்லாம் சரி!" : pct >= 0.9 ? "அருமை!" : pct >= 0.7 ? "நன்று!" : pct >= 0.5 ? "நல்ல முயற்சி!" : "தொடர்ந்து முயற்சி செய்!";
-  const mood: Mood = !done ? "think" : pct >= 0.9 ? "cheer" : pct >= 0.5 ? "happy" : "wave";
+  // The owl acts the score (stars for every mark, a party, a happy hop, a headband to keep going), then flexes a medal
+  // when a trophy comes; tap it for more.
+  const [medal, setMedal] = useState(false);
+  useEffect(() => {
+    if (!done || !fresh.length) return;
+    const id = window.setTimeout(() => setMedal(true), instant() ? 0 : 1400);
+    return () => window.clearTimeout(id);
+  }, [done]);
+  const mood: Mood = !done ? "think" : medal ? "champ" : pct >= 1 ? "star" : pct >= 0.9 ? "party" : pct >= 0.7 ? "cheer" : "strong";
+  const [owlMood, tapOwl] = useOwlTap(mood);
   const next = nextPlay(props.me);
   const nextHere = next && next.world.unitId === props.world.unitId && next.n !== form.n ? next : null;
   // The ring round the owl fills as his marks come in.
@@ -531,7 +540,16 @@ export function Result(props: {
             <circle class="f-ring-t" cx="60" cy="60" r={RING_R} />
             <circle class="f-ring-p" cx="60" cy="60" r={RING_R} stroke-dasharray={RING_C} stroke-dashoffset={RING_C * (1 - Math.min(1, ringK))} />
           </svg>
-          <Owl mood={mood} />
+          <span
+            class="tap"
+            onClick={(e) => {
+              if (!done) return;
+              e.stopPropagation();
+              tapOwl();
+            }}
+          >
+            <Owl mood={owlMood} key={owlMood} />
+          </span>
         </div>
         <h1 class="f-cheer" key={done ? "done" : "wait"}>
           {done ? cheer : "பார்ப்போம்…"}

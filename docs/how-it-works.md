@@ -831,8 +831,8 @@ Levels done at home made a pile for the corrector in class. Now the student does
 in the family app on the family phone, taps **Check** once per level and sees ✓ / ✗ at once; the class sees his marks
 before he walks in. Since 3 Nov 2026 it is also **the institute's student app** (his voice note: "this is also the
 learning app of our education institute"): one profile, his class times, what he did in class each day, his progress.
-- Its own small bundle (`src/family/`, ~45 KB over the wire for code, style and page on 4 Nov 2026; `scripts/build.mjs`
-  stops the build over 50 KB), **one font for Tamil and English** (Baloo Thambi 2, weights 500–800, one variable file
+- Its own small bundle (`src/family/`, ~52 KB over the wire for code, style and page on 4 Nov 2026; `scripts/build.mjs`
+  stops the build over 56 KB: 50 until the owl's acting, ~6 KB), **one font for Tamil and English** (Baloo Thambi 2, weights 500–800, one variable file
   cut to Tamil + Latin, ~57 KB: `src/family/fonts/`, preloaded by the page, kept by the service worker, not in the
   budget; 4 Nov 2026: the phone's own Tamil fonts differ on every phone, Tamil Sangam MN on iPhones, and never matched
   the English words beside them), no client library (Convex's plain HTTP API, `src/family/net.ts`). It lives under
@@ -853,21 +853,51 @@ learning app of our education institute"): one profile, his class times, what he
   halo; the progress bar flashes as he types; XP and the flame jump in the top row when they grow; "reduce motion"
   stops it all. Inspiration for the motion and the habit loop (a goal a day, the flame, the reveal, the race), never
   copied: ARISTORA's own owl, colours and words.
-- **The owl** is ARISTORA's logo, the loading page's own drawing (`Owl`/`keepOwl`: the app keeps the splash's SVG, no
-  extra bytes): **white on violet** (headers, today's class: the logo's own white owl), light violet on white, with a
-  dark cap and a gold tassel, living (blinks, looks, tilts, breathes), with **moods** (`Mood`): happy and cheering (eyes
-  closed in a smile; cheering hops with gold sparkles), thinking (one brow up, a "?"), sad (lids low), asleep (eyes
-  shut, z z: Me shows it asleep until he does a Level today), waving (hello). In headers on a soft glow with a shadow
-  under its feet (`OwlBadge`; the turning yellow burst is gone, 4 Nov 2026); speaking in a bubble on the map
+- **The owl** is ARISTORA's logo, the loading page's own drawing (`Owl`/`keepOwl` in `owl.tsx`: the app keeps the
+  splash's SVG, no extra bytes): **white on violet** (headers, today's class: the logo's own white owl), light violet
+  on white, with a dark cap and a gold tassel, living (blinks, looks, tilts, breathes). In headers on a soft glow with
+  a shadow under its feet (`OwlBadge`; the turning yellow burst is gone, 4 Nov 2026); speaking in a bubble on the map
   (`OwlSays`). Small owls stand still and only their mood moves (`still`: the bubble, today's class, the timeline,
   "loading"), so at most one or two owls live on a screen (each living owl is eight SVG animations).
-- **The loading page = the class system's living owl** (his ask: "the same exact loading page"): one copy,
-  `public/splash.html`, put into both pages by the build at `%SPLASH%` (each its own "still loading" words; Tamil
-  first here), styles `src/splash.css`, gone with `hideSplash()` once there is something real to show (at least 1.2 s
-  from the start so it doesn't flash). No spinner anywhere: while something loads, the thinking owl.
+- **The owl acts with its whole body** (4 Nov 2026, his ask: "more emotions from the whole body... funny, so they never
+  forget it and talk about it in class"; inspiration for the acting only, ARISTORA's own drawing). A mood (`Mood`,
+  `owl.tsx` + `owl.css`) = marks drawn into the owl (inside the head they turn with it: `HEAD`; around it: `ROUND`) +
+  motion: the whole owl squashes, stretches, bounces, leans and shakes (the `<svg>` itself), its head, wings, pupils,
+  lids and cap move around their own pivots. The moods: **happy** and **cheer** (eyes closed in a smile, a hop, gold
+  sparkles), **think** (a brow, "?"), **sad**, **sleep** (z z), **wave**, **love** (heart eyes beating, a blush, hearts
+  rising, swaying), **star** (gold star eyes turning, "wow", stretching tall), **dizzy** (spiral eyes, a wobbling head,
+  stars going round), **cry** (lids low, tears falling, sobbing), **laugh** (eyes squeezed > <, beak wide open,
+  shaking), **kiss** (lips puckering, a heart floating off, leaning in), **shock** (huge eyes, tiny pupils, "O", a jump,
+  the cap pops, "!"), **shy** (looking away, blushing, wing-tips over its beak), **cool** (sunglasses slide down, a
+  smirk), **champ** (a gold medal swinging, wings out), **party** (a horn unrolling, confetti, bouncing), **grumpy**
+  (brows down, wings crossed, steam, a tapping foot), **strong** (a headband with flying tails, a wing pumping,
+  sweat), **sneeze** (a breath in, ACHOO, the cap flies off and lands, feathers), **fly** (wings flapping).
+  **The moments:** Home waves (happy once today's Level is done; **grumpy after 6 PM with a flame to keep and no Level
+  yet**, `flameAtRisk`, also the map's coach); a finished Stage = champ; the reveal thinks, then acts the score (every
+  mark = star, 90% = party, 70% = cheer, below = strong: a headband to keep going), then champ with a medal when a
+  trophy comes; #1 in the race = cool, racing = strong; Me = cheer when today is done, **cry when the flame went out**
+  (0 days after a run), else asleep; feedback sent = kiss; a new student's link = love; an error = dizzy.
+  **Tap an owl** (headers, the coach, the reveal once done): a random reaction for 2.6 s (laugh, shy, kiss, love,
+  shock, cool, star, party, sneeze; each its own sound), **five taps within 2 s: dizzy** (`useOwlTap`).
+- **The owl's surprise visits** (4 Nov 2026, his ask: "the bird comes in an unpredictable way and does funny stuff,
+  like pooping"; `surprise.tsx`): it peeks in from the side (shy), naps on the bottom bar (tap: it jumps awake), sneezes
+  its cap off, flies across, or flies over and drops a **white splat on the glass** (tap it: wiped off, else gone in 9
+  s). **Only on Home, Learn, Race and Me**, never in a Level or the reveal (my call, told him: a gag while he types an
+  answer from his paper costs a wrong answer), never over a sheet; the first after 25–45 s, then every 1.5–3 min, at
+  most 4 a visit; the splat 2 in 11. **Me → Owl surprises** turns them off (one switch for the phone, like Sound: a
+  parent who doesn't like the joke); off for "reduce motion" and in tests.
+- **The loading page** (his ask, 3 Nov: "the same exact loading page"; 4 Nov: "dark purple and a static logo, I don't
+  like it; first impression is the best impression"): one owl drawing, `public/splash.html`, put into both pages by
+  the build at `%SPLASH%` (each its own "still loading" words; Tamil here), styles `src/splash.css` (the teachers'
+  navy) and, for this app, `owl.css` (**our light lavender, the light violet owl falling in from above the screen,
+  squashing as it lands, bouncing, then waving**; the bar colour `#ece7ff`), gone with `hideSplash()` once there is
+  something real to show (at least 1.2 s from the start so it doesn't flash). No spinner anywhere: while something
+  loads, the thinking owl.
 - **Sounds** (`sound.ts`, made on the phone, no files): a tap, a key click, a bell for each right answer that climbs a
   step with each one in a row, a soft low note for a wrong one, a fanfare for a Level (a brighter one for every mark),
-  a trophy, a Stage opening, the flame of a new day, feedback sent. On unless Me → Sound is off.
+  a trophy, a Stage opening, the flame of a new day, feedback sent; the owl's own cartoon noises (a giggle, a boing,
+  ACHOO, a kiss, a party toot, a dizzy warble, a splat, a wipe's squeak, a whoosh, a tweet). On unless Me → Sound is
+  off.
 - **Words** (his ask, 4 Nov 2026: "a mix of both; some places English is appropriate, M for Monday"): **English for
   the app's chrome and game words**: the tabs (Home, Learn, Race, Me), buttons (START, Check, Next, Send, Sign in,
   Back), days and times (M T W T F S S, Wed · 4 Nov, 3:30 PM, in 2 h 10 min, ends in 4d 6h), labels (Today's goal,

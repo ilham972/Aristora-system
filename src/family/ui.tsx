@@ -6,6 +6,7 @@ import type { ComponentChildren } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import type { Trophy } from "../../convex/lib/family";
 import { NetError } from "./net";
+import { Owl } from "./owl";
 
 /** The centre's name, in one place (the app may serve other centres one day; not now). */
 export const BRAND = "ARISTORA";
@@ -103,76 +104,9 @@ export function Gem(props: { size?: number }) {
   );
 }
 
-// ---- The owl: the loading page's own drawing (public/splash.html), kept when the app starts, in our light purple,
-// with moods. Mood marks drawn inside the head turn with it; the rest sit around it. ----
+// ---- The owl lives in owl.tsx (its moods, its marks, tap reactions); its pieces are re-exported here. ----
 
-let owlSvg = "";
-
-/** Keeps the splash's owl before it goes, so the app can show the same living owl (no extra bytes). */
-export function keepOwl(): void {
-  owlSvg = document.querySelector("#splash .owl")?.outerHTML ?? "";
-}
-
-export type Mood = "idle" | "happy" | "cheer" | "think" | "sad" | "sleep" | "wave";
-
-const SMILE = '<path class="om om-smile" d="M523 618Q559 562 595 618M667 618Q703 562 739 618"/>';
-const HEAD: Record<Mood, string> = {
-  idle: "",
-  happy: SMILE,
-  cheer: SMILE,
-  think: '<path class="om om-brow" d="M666 521Q705 491 750 519"/>',
-  sad: '<path class="om om-brow" d="M500 552L598 530M762 552L664 530"/>',
-  sleep: "",
-  wave: "",
-};
-const star = (x: number, y: number, s: number) => `<path class="om om-spark" d="M${x} ${y - s}Q${x} ${y} ${x + s} ${y} ${x} ${y} ${x} ${y + s} ${x} ${y} ${x - s} ${y} ${x} ${y} ${x} ${y - s}Z"/>`;
-const ROUND: Record<Mood, string> = {
-  idle: "",
-  happy: "",
-  cheer: star(372, 468, 46) + star(888, 410, 38) + star(452, 292, 28) + star(830, 262, 24),
-  think: '<text class="om om-q" x="812" y="352">?</text>',
-  sad: "",
-  sleep: '<text class="om om-z" x="772" y="438">z</text><text class="om om-z z2" x="842" y="356">z</text>',
-  wave: "",
-};
-
-/** Each owl on screen gets its own eye-socket ids (two owls must never point at each other's). */
-let owlSeq = 0;
-
-function owlFor(mood: Mood, id: number): string {
-  return owlSvg
-    .replace(/owl-sock-([lr])/g, `owl-sock-$1-${id}`)
-    .replace('class="owl"', `class="owl mood-${mood}"`)
-    .replace('<g class="owl-cap">', `${HEAD[mood]}<g class="owl-cap">`)
-    .replace(/<\/svg>\s*$/, `${ROUND[mood]}</svg>`);
-}
-
-/** The owl. `still`: only its mood moves (small owls; a few living owls at once is what a cheap phone can afford). */
-export function Owl(props: { mood?: Mood; class?: string; still?: boolean }) {
-  const [id] = useState(() => ++owlSeq);
-  const cls = `${props.class ?? ""}${props.still ? " still" : ""}`;
-  if (!owlSvg) return <img class={`f-owl-img ${cls}`} src="/icon.svg" alt="" />;
-  return <span class={`f-owl ${cls}`} aria-hidden="true" dangerouslySetInnerHTML={{ __html: owlFor(props.mood ?? "idle", id) }} />;
-}
-
-/** The owl on a soft glow (a header's picture, a moment): white on violet, light violet on white. */
-export function OwlBadge(props: { mood?: Mood; class?: string }) {
-  return (
-    <span class={`f-owlbadge ${props.class ?? ""}`}>
-      <Owl mood={props.mood} />
-    </span>
-  );
-}
-
-/** The owl saying something (a speech bubble beside it). */
-export function OwlSays(props: { mood?: Mood; children: ComponentChildren; class?: string }) {
-  return (
-    <div class={`f-owlsays ${props.class ?? ""}`}>
-      <Owl mood={props.mood ?? "happy"} class="say" still />
-      <p class="f-bubble">{props.children}</p>
-    </div>
-  );
-}
+export { flameAtRisk, keepOwl, Owl, OwlBadge, OwlSays, useOwlTap, type Mood } from "./owl";
 
 /** While something loads inside the app: the owl, no spinner. */
 export function Waiting() {

@@ -97,7 +97,7 @@ export function BoardTab(props: { top: ComponentChildren; me: FamilyMe | null })
             <h1 class="f-title">Race</h1>
             <p class="f-hsub">{b ? `Ends in ${endsIn(b.since, Date.now())}` : "…"}</p>
           </div>
-          <OwlBadge mood={first ? "cheer" : "happy"} class="hero" />
+          <OwlBadge mood={first ? "cool" : mine && mine.xp > 0 ? "strong" : "happy"} class="hero" />
         </div>
       </header>
       <section class="f-race f-card rise">

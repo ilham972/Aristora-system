@@ -2,6 +2,7 @@
 import "./fonts/font.css";
 import "../splash.css";
 import "./family.css";
+import "./owl.css";
 import { render } from "preact";
 import { App } from "./app";
 import { keepOwl } from "./ui";

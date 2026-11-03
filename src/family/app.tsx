@@ -43,6 +43,7 @@ import {
 } from "./net";
 import { nextPlay, Play, Result, type Checked } from "./play";
 import { armSound, buzz, sound } from "./sound";
+import { Surprises } from "./surprise";
 import { Avatar, Flame, firstName, Gem, Icon, Owl, problemWords, Sheet, toast, Toast, type IconName } from "./ui";
 
 export type Tab = "home" | "learn" | "race" | "me";
@@ -381,6 +382,7 @@ export function App() {
           )}
         </main>
         <BottomBar tab={tab} onTab={pickTab} />
+        <Surprises active={sheet === null} />
       </>
     );
   }
@@ -401,7 +403,7 @@ export function App() {
 function Missing(props: { onBack: () => void }) {
   return (
     <div class="f-center f-pad">
-      <Owl mood="think" class="mid" />
+      <Owl mood="dizzy" class="mid" />
       <p class="f-lead">இது இப்போது இல்லை.</p>
       <button type="button" class="f-btn go" onClick={props.onBack}>
         Home
@@ -588,7 +590,7 @@ function Join(props: { code: string; onReady: () => void; onIn: (token: string, 
   if (!state) return null;
   return (
     <div class="f-center f-pad">
-      <Owl mood={state.name ? "wave" : "sad"} class="big" />
+      <Owl mood={state.name ? "love" : "dizzy"} class="big" />
       {state.name ? (
         <>
           <h1 class="f-h1">வணக்கம், {firstName(state.name)}!</h1>

@@ -7,7 +7,8 @@ import type { FamilyMe } from "../../convex/family";
 import { endsIn, passOf, type Board } from "./board";
 import { MAX_ACCOUNTS, query, type Account } from "./net";
 import { setSoundOn, soundOn } from "./sound";
-import { Avatar, firstName, Flame, Gem, Icon, Medal, OwlBadge, Tag, TROPHY_ORDER, Waiting } from "./ui";
+import { setSurprisesOn, surprisesOn } from "./surprise";
+import { Avatar, firstName, Flame, flameAtRisk, Gem, Icon, Medal, OwlBadge, Tag, TROPHY_ORDER, Waiting } from "./ui";
 
 /** Monday first, as the week starts (Sri Lanka): M T W T F S S, the letters every calendar uses. */
 const DAYS = ["M", "T", "W", "T", "F", "S", "S"];
@@ -110,6 +111,7 @@ export function MeTab(props: {
 }) {
   const me = props.me;
   const [on, setOn] = useState(soundOn());
+  const [gags, setGags] = useState(surprisesOn());
   const [b, setB] = useState<Board | null>(null);
   useEffect(() => {
     query("family:board")
@@ -145,7 +147,7 @@ export function MeTab(props: {
             <p class="f-hsub">{s.today ? `${s.days === 1 ? "day" : "days"} in a row · today ✓` : s.days > 0 ? "இன்று ஒரு Level செய்: தீ அணையாமல் பார்!" : "இன்று ஒரு Level செய்து தொடங்கு!"}</p>
             {best && <Tag tone="gold">PERSONAL BEST</Tag>}
           </div>
-          <OwlBadge mood={s.today ? "cheer" : "sleep"} class="hero" />
+          <OwlBadge mood={s.today ? "cheer" : s.days === 0 && (me.best ?? 0) > 0 ? "cry" : flameAtRisk(s) ? "grumpy" : "sleep"} class="hero" />
         </div>
         <div class="f-weekdots" aria-label="This week">
           {DAYS.map((d, i) => (
@@ -220,6 +222,19 @@ export function MeTab(props: {
           <Icon name={on ? "sound" : "mute"} />
           <span>Sound</span>
           <span class={`f-switch${on ? " on" : ""}`} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          class="f-row"
+          aria-pressed={gags}
+          onClick={() => {
+            setSurprisesOn(!gags);
+            setGags(!gags);
+          }}
+        >
+          <Icon name="star" />
+          <span>Owl surprises</span>
+          <span class={`f-switch${gags ? " on" : ""}`} aria-hidden="true" />
         </button>
       </section>
     </>

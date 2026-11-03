@@ -14,7 +14,7 @@ import type { FamilyMe } from "../../convex/family";
 import type { World, WorldLevel } from "../../convex/lib/family";
 import { nextPlay } from "./play";
 import { buzz, sound } from "./sound";
-import { Dashes, Flame, Gem, Icon, Owl, OwlBadge, OwlSays, PART_TA, Tag, TERM_TA, titleSize, toast, Waiting, type Mood } from "./ui";
+import { Dashes, Flame, flameAtRisk, Gem, Icon, Owl, OwlBadge, OwlSays, PART_TA, Tag, TERM_TA, titleSize, toast, Waiting, type Mood } from "./ui";
 
 // ---- The road: a smooth line through the stops (x in % of the width, y in px) ----
 
@@ -196,7 +196,7 @@ function WorldMap(props: { g: WorldGroup; focus: World | null; onStage: (unitId:
 function coachWords(me: FamilyMe, focus: World | null, n: number | null): { mood: Mood; text: string } {
   if (!me.streak.today && n !== null) {
     return me.streak.days > 0
-      ? { mood: "wave", text: `இன்று ஒரு Level செய்தால் ${me.streak.days + 1} நாள் தொடர்! தீயை அணைய விடாதே.` }
+      ? { mood: flameAtRisk(me.streak) ? "grumpy" : "wave", text: `இன்று ஒரு Level செய்தால் ${me.streak.days + 1} நாள் தொடர்! தீயை அணைய விடாதே.` }
       : { mood: "wave", text: "இன்று ஒரு Level செய்து உன் தீயை மூட்டு!" };
   }
   if (focus && n !== null) {
@@ -233,7 +233,7 @@ export function LearnTab(props: { top: ComponentChildren; me: FamilyMe | null; o
               <p class="f-hsub">{focus.en}</p>
               <Tag tone="glass">Stage {focus.no}</Tag>
             </div>
-            <OwlBadge mood={focus.allDone ? "cheer" : "happy"} class="hero" />
+            <OwlBadge mood={focus.allDone ? "champ" : "happy"} class="hero" />
             <div class="f-hero-foot">
               <span class="f-hprog">
                 <Dashes done={levelsDone(focus)} of={focus.levels.length} />
@@ -342,7 +342,7 @@ export function StageScreen(props: { me: FamilyMe; world: World; onBack: () => v
             <p class="f-hsub">{w.en}</p>
             <Tag tone="glass">Stage {w.no}</Tag>
           </div>
-          <OwlBadge mood={!w.book ? "sleep" : w.allDone ? "cheer" : "happy"} class="hero" />
+          <OwlBadge mood={!w.book ? "sleep" : w.allDone ? "champ" : "happy"} class="hero" />
           {w.book && (
             <div class="f-hero-foot">
               <span class="f-hprog">

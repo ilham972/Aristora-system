@@ -68,7 +68,7 @@ export function FeedbackSheet(props: { grade: number | null; onClose: () => void
     return (
       <Sheet title="நன்றி!" onClose={props.onClose} class="f-fb-done">
         <div class="f-thanks rise">
-          <OwlBadge mood="cheer" class="mid" />
+          <OwlBadge mood="kiss" class="mid" />
           <b>உன் கருத்தைப் படிப்போம்.</b>
           <small>ஒவ்வொன்றையும் நாங்கள் படிக்கிறோம்.</small>
         </div>

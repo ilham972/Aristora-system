@@ -11,7 +11,7 @@ import { levelsDone } from "./map";
 import { keep, query } from "./net";
 import { nextPlay } from "./play";
 import { buzz, sound } from "./sound";
-import { Dashes, firstName, Flame, Icon, Owl, OwlBadge, problemWords, Tag, type IconName } from "./ui";
+import { Dashes, firstName, Flame, flameAtRisk, Icon, Owl, OwlBadge, problemWords, Tag, type IconName } from "./ui";
 
 const SL = 330 * 60_000;
 const DAY = 86_400_000;
@@ -315,7 +315,7 @@ export function HomeTab(props: { top: ComponentChildren; me: FamilyMe | null; on
             </p>
             <h1 class="f-title">வணக்கம்{name ? `, ${firstName(name)}` : ""}!</h1>
           </div>
-          <OwlBadge mood="wave" class="greet" />
+          <OwlBadge mood={flameAtRisk(me?.streak) ? "grumpy" : me?.streak.today ? "happy" : "wave"} class="greet" />
         </div>
       </header>
       <TodayCard cls={cls} me={me} now={now} today={days[t.day]} onStage={props.onStage} />

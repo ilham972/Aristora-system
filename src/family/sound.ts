@@ -3,7 +3,30 @@
 // climbs higher with every one in a row, a soft low note for a wrong one, a fanfare for a finished Level, a brighter
 // one for every mark, a trophy, a new Stage opening, the flame of a new day. On unless turned off (Profile → Sound).
 
-export type Tone = "tap" | "key" | "pop" | "start" | "right" | "wrong" | "level" | "perfect" | "trophy" | "unlock" | "streak" | "send";
+export type Tone =
+  | "tap"
+  | "key"
+  | "pop"
+  | "start"
+  | "right"
+  | "wrong"
+  | "level"
+  | "perfect"
+  | "trophy"
+  | "unlock"
+  | "streak"
+  | "send"
+  // 4 Nov 2026: the owl's own (a tap's reaction, its surprise visits)
+  | "giggle"
+  | "boing"
+  | "achoo"
+  | "kiss"
+  | "toot"
+  | "dizzy"
+  | "splat"
+  | "squeak"
+  | "whoosh"
+  | "tweet";
 const KEY = "aristora.family.sound";
 
 export function soundOn(): boolean {
@@ -144,6 +167,27 @@ export function sound(kind: Tone, step = 0) {
         ],
         0.13,
       );
+    // The owl: little cartoon noises, quieter than the learning sounds.
+    case "giggle":
+      return play([0, 1, 2, 3].map((i) => ({ f: 1150 + i * 140, to: 1500 + i * 160, at: i * 0.085, len: 0.07, wave: "triangle" as const })), 0.08);
+    case "boing":
+      return play([{ f: 160, to: 620, at: 0, len: 0.22 }, { f: 620, to: 300, at: 0.2, len: 0.22 }], 0.14);
+    case "achoo":
+      return play([{ f: 420, to: 640, at: 0, len: 0.4, wave: "triangle", vol: 0.5 }, { f: 1100, to: 260, at: 0.46, len: 0.26, wave: "sawtooth", vol: 0.45 }], 0.11);
+    case "kiss":
+      return play([{ f: 900, to: 2400, at: 0, len: 0.09 }, { f: 1568, at: 0.12, len: 0.4, bell: true, vol: 0.6 }], 0.1);
+    case "toot":
+      return play([{ f: 392, at: 0, len: 0.12, wave: "square", vol: 0.35 }, { f: 523, at: 0.12, len: 0.32, wave: "square", vol: 0.35 }], 0.09);
+    case "dizzy":
+      return play([0, 1, 2, 3, 4].map((i) => ({ f: i % 2 ? 1300 : 900, to: i % 2 ? 900 : 1300, at: i * 0.11, len: 0.11, wave: "triangle" as const })), 0.08);
+    case "splat":
+      return play([{ f: 140, to: 45, at: 0, len: 0.2 }, { f: 1300, to: 180, at: 0, len: 0.09, wave: "sawtooth", vol: 0.35 }], 0.16);
+    case "squeak":
+      return play([{ f: 1700, to: 2700, at: 0, len: 0.12 }, { f: 2700, to: 2100, at: 0.12, len: 0.1 }], 0.08);
+    case "whoosh":
+      return play([{ f: 220, to: 900, at: 0, len: 0.32, wave: "triangle", vol: 0.5 }, { f: 900, to: 300, at: 0.3, len: 0.25, wave: "triangle", vol: 0.3 }], 0.09);
+    case "tweet":
+      return play([{ f: 2200, to: 2900, at: 0, len: 0.07 }, { f: 2300, to: 3100, at: 0.12, len: 0.08 }], 0.07);
   }
 }
 

@@ -55,7 +55,8 @@ console.log(`Built dist/ for ${url}: ${basename(js)} ${kb(js)} KB, ${basename(cs
 
 // ---- The family app (app.aristora.org; also /f/ here): its own small bundle, nothing of the teachers' app. ----
 // Students open it on any phone and any signal: it must stay light. Over the budget, the build stops.
-const FAMILY_BUDGET_KB = 50;
+// 4 Nov 2026: 50 → 56 KB for the owl's acting (its whole-body moods, tap reactions and surprise visits, ~6 KB).
+const FAMILY_BUDGET_KB = 56;
 await mkdir("dist/f/assets", { recursive: true });
 const fam = await build({
   entryPoints: { fam: "src/family/main.tsx" },
