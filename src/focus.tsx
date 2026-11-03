@@ -102,6 +102,7 @@ import { bookDocAt,
   currentRole,
   may,
   now as serverNow,
+  openPage,
   stageName,
   STAGES,
   toast,
@@ -777,6 +778,8 @@ export function Focus(props: { board: Board; views: View[]; now: number }) {
   const grades = gradesOf(pills.map((p) => p.v));
   const [grade, setGrade] = useFocusGrade(grades, gradesOf(views));
   const shown = pills.filter((p) => p.v.s.grade === grade);
+  // In the hall with no work (the Manager button's count, like the Class icon's).
+  const idle = views.filter((x) => x.where === "hall" && x.tone === "red").length;
   const main = paper ? (views.find((x) => x.s._id === paper.studentId) ?? null) : null;
   const v = paper ? (paper.kind === "wait" ? main : viewOfPaper(views, paper)) : null;
   // His paper opened from elsewhere (Saved, a level from his card): his grade's names show, his own one dark.
@@ -889,10 +892,20 @@ export function Focus(props: { board: Board; views: View[]; now: number }) {
             </div>
           )}
           {paper && v ? (
-            <PaperView key={`${paper.studentId}`} v={v} paper={paper} drafts={drafts} now={now} onSheet={setSheet} />
-          ) : shown.length > 0 ? (
-            <p class="fc-hint">Tap the name on the paper.</p>
-          ) : null}
+            <PaperView key={`${paper.studentId}`} v={v} paper={paper} drafts={drafts} now={now} idle={idle} onSheet={setSheet} />
+          ) : (
+            <>
+              {/* No paper open: the Manager button keeps its place (managers only). */}
+              {may("manager") && (
+                <div class="fc-head">
+                  <div class="fc-head-tools">
+                    <ManagerButton idle={idle} />
+                  </div>
+                </div>
+              )}
+              {shown.length > 0 && <p class="fc-hint">Tap the name on the paper.</p>}
+            </>
+          )}
           {!paper && (
             <p class="muted small fc-help">
               Tap a name: his paper opens at the level to correct. One tap for each question (the big green button is full
@@ -1201,12 +1214,13 @@ type StudentUnits = { cells: UnitCell[]; given: { unitId: string; stage: "fighte
  * waiting for Evaluation, blue = waiting for Theory, ✓ = the book was given to him. "Move him" (one tap moves him
  * and closes) or "Books given" (each tap gives or takes back that unit's book; the sheet stays open).
  */
-function StageUnitSheet(props: { v: View; onClose: () => void }) {
+export function StageUnitSheet(props: { v: View; onClose: () => void; mode?: "move" | "given" }) {
   const { v } = props;
   const books = useQuery<BookInfo[]>(api.catalog.books, {});
   const mine = useQuery<StudentUnits>(api.progress.student, { studentId: v.s._id });
   const [stage, setStage] = useState<"fighter" | "master">(v.stage === "fighter" ? "fighter" : "master");
-  const [mode, setMode] = useState<"move" | "given">("move");
+  // The Manager page opens it to give a book (3 Nov 2026: he works on it while he waits for a teacher).
+  const [mode, setMode] = useState<"move" | "given">(props.mode ?? "move");
   const [busy, setBusy] = useState(false);
   // Taps not answered yet: the pill shows the new state at once.
   const [flip, setFlip] = useState<Record<string, boolean>>({});
@@ -1470,9 +1484,11 @@ function SavedSheet(props: { now: number; onClose: () => void }) {
 
 // ---- One paper ----
 
-function PaperView(props: { v: View; paper: Paper; drafts: Draft[] | undefined; now: number; onSheet: (s: SheetName) => void }) {
+function PaperView(props: { v: View; paper: Paper; drafts: Draft[] | undefined; now: number; idle: number; onSheet: (s: SheetName) => void }) {
   const { v, paper, now } = props;
-  const head = (later?: () => void) => <PaperHead v={v} later={later} onUnit={() => props.onSheet("unit")} onCard={() => props.onSheet("card")} />;
+  const head = (later?: () => void) => (
+    <PaperHead v={v} later={later} idle={props.idle} onUnit={() => props.onSheet("unit")} onCard={() => props.onSheet("card")} />
+  );
   if (paper.kind === "fighter" && v.kind === "fighter") return <FighterPaperView v={v} paper={paper} head={head()} />;
   if (paper.kind === "master" && v.kind === "master") return <MasterPaperView v={v} paper={paper} drafts={props.drafts} now={now} head={head} />;
   if (paper.kind === "over" && v.kind === "master") return <OverView v={v} drafts={props.drafts} head={head()} />;
@@ -1488,11 +1504,35 @@ function PaperView(props: { v: View; paper: Paper; drafts: Draft[] | undefined; 
 }
 
 /**
- * The paper's top: whose it is (huge); his card (marks table and buttons); then his books in one line (tap one to
- * correct it). A workbook level he hasn't handed in yet also has Later: handed in, correct it later (the waiting
- * clock starts).
+ * The Manager page's door (3 Nov 2026, his call): on the Correction page, for managers only (the owner and the Manager
+ * job), never a bottom tab. Its count: students in the hall with no work.
  */
-function PaperHead(props: { v: View; later?: () => void; onUnit: () => void; onCard: () => void }) {
+function ManagerButton(props: { idle: number }) {
+  if (!may("manager")) return null;
+  return (
+    <button
+      type="button"
+      class="btn ghost small fc-mgr"
+      aria-label={`Manager: the hall and every room${props.idle ? `, ${props.idle} with no work` : ""}`}
+      onClick={() => openPage("manager")}
+    >
+      {/* The centre from above: two rooms and the hall. */}
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3.5" width="18" height="17" rx="2.5" />
+        <path d="M3 10.5h18M12 3.5v7" />
+      </svg>
+      {props.idle > 0 && <em class="fc-mgr-n">{props.idle}</em>}
+    </button>
+  );
+}
+
+/**
+ * The paper's top (3 Nov 2026, his call: his name is already dark in the names row, so not again here): the Manager
+ * button (managers), the book button (all his units: move him, books given); then Later, the question sheet, went home
+ * and his card; then his books in one line (tap one to correct it). Later (a level he hasn't handed in yet): handed in,
+ * correct it later (the waiting clock starts).
+ */
+function PaperHead(props: { v: View; later?: () => void; idle: number; onUnit: () => void; onCard: () => void }) {
   const { v } = props;
   const [busy, setBusy] = useState(false);
   const [race, setRace] = useState(false);
@@ -1510,9 +1550,10 @@ function PaperHead(props: { v: View; later?: () => void; onUnit: () => void; onC
   };
   return (
     <>
-      <header class="fc-head">
-        <div class="fc-who">
-          <h2 class="fc-name">{v.s.name}</h2>
+      <header class="fc-head" aria-label={`${v.s.name}'s paper`}>
+        <div class="fc-head-tools">
+          <ManagerButton idle={props.idle} />
+          <UnitsButton v={v} onUnits={props.onUnit} />
         </div>
         <div class="fc-head-acts">
           {props.later && (
@@ -1551,11 +1592,11 @@ function PaperHead(props: { v: View; later?: () => void; onUnit: () => void; onC
               <rect x="3.5" y="4" width="17" height="16" rx="2.5" />
               <path d="M3.5 9.5h17M9.5 9.5V20" />
             </svg>
-            Marks
+            <span class="fc-cardw">Marks</span>
           </button>
         </div>
       </header>
-      <BookRow v={v.home ?? v} open={bookId(v)} openStage={v.stage} onUnits={props.onUnit} />
+      <BookRow v={v.home ?? v} open={bookId(v)} openStage={v.stage} />
       {v.where === "absent" && <SignedOut v={v} />}
       {race && raceBook && raceStage && (
         <BookRaceSheet
@@ -1570,13 +1611,24 @@ function PaperHead(props: { v: View; later?: () => void; onUnit: () => void; onC
   );
 }
 
+/** The book button: all the units of his grade (move him, books given). In the paper's top row since 3 Nov 2026. */
+function UnitsButton(props: { v: View; onUnits: () => void }) {
+  return (
+    <button type="button" class="fc-units" aria-label={`${props.v.s.name}: all units (move him, books given)`} onClick={props.onUnits}>
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5z" />
+        <path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19" />
+      </svg>
+    </button>
+  );
+}
+
 /**
  * His books in ONE line that scrolls sideways (30 Oct 2026): his book now (dark), every book given to him that he
  * hasn't finished, any other book with a level handed in (amber count). A tap switches his paper to that book at once
- * (no dialog). The book button first, like + on the names row, opens all the units of his grade (Move him, Books
- * given).
+ * (no dialog). The book button (all his grade's units: Move him, Books given) is in the row above since 3 Nov 2026.
  */
-function BookRow(props: { v: View; open: string | undefined; openStage: string | null; onUnits: () => void }) {
+function BookRow(props: { v: View; open: string | undefined; openStage: string | null }) {
   const { v } = props;
   const books = booksOf(
     v,
@@ -1585,14 +1637,8 @@ function BookRow(props: { v: View; open: string | undefined; openStage: string |
   );
   return (
     <div class="fc-bookrow">
-      <button type="button" class="fc-units" aria-label={`${v.s.name}: all units (move him, books given)`} onClick={props.onUnits}>
-        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5z" />
-          <path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19" />
-        </svg>
-      </button>
       {books.length === 0 ? (
-        <p class="fc-none">No book yet: tap the book to choose his unit.</p>
+        <p class="fc-none">No book yet: tap the book above to choose his unit.</p>
       ) : (
         <HRow as="nav" class="fc-books" label={`${v.s.name}'s books: tap one to correct it`} list={v.s._id} at={props.open}>
           {books.map((b) => {

@@ -37,6 +37,7 @@ import {
   type Teacher,
   type TaskKind,
 } from "./managerData";
+import { StageUnitSheet } from "./focus";
 import { MoveSheet } from "./move";
 import { act, type Board, toast } from "./store";
 import { lessonLength, mShort, STAY_MS } from "./theoryFocusData";
@@ -44,7 +45,7 @@ import { tone } from "./tones";
 
 /** The manager's taps go in the history as his. */
 const BY = "manager";
-type TeamRow = { _id: string; name: string; tabs: string[]; lastEnd: number | null };
+type TeamRow = { _id: string; name: string; role?: string; tabs: string[]; lastEnd: number | null };
 type Focus = "correct" | "explain" | "teach" | null;
 type Sel = { id: string; call?: string } | null;
 
@@ -111,13 +112,14 @@ export function ManagerPage(props: { board: Board; views: View[]; now: number })
   const [focus, setFocus] = useState<Focus>(null);
   const [busy, setBusy] = useState(false);
   const [moving, setMoving] = useState<View | null>(null);
+  const [giving, setGiving] = useState<View | null>(null);
   const fill = useFill();
   // The page is one screen: the app's bottom spare space goes (the hall scrolls inside).
   useEffect(() => {
     document.body.classList.add("mg2-on");
     return () => document.body.classList.remove("mg2-on");
   }, []);
-  const team: Teacher[] = (rows ?? []).map((r) => ({ id: r._id, name: r.name, jobs: jobsOf(r.tabs), lastEnd: r.lastEnd }));
+  const team: Teacher[] = (rows ?? []).map((r) => ({ id: r._id, name: r.name, jobs: jobsOf(r.tabs), lastEnd: r.lastEnd, owner: r.role === "owner" }));
   const plan = managerPlan(board, views, now, team, { lessonMs: lessonLength(recent?.ms), away });
   const inClass = views.filter((v) => v.where !== "absent");
 
@@ -350,6 +352,7 @@ export function ManagerPage(props: { board: Board; views: View[]; now: number })
           busy={busy}
           onSend={(r) => sendOne(hallSel.v, r)}
           onMove={() => setMoving(hallSel.v)}
+          onGive={() => setGiving(hallSel.v.home ?? hallSel.v)}
           onClose={() => setSel(null)}
         />
       )}
@@ -370,6 +373,7 @@ export function ManagerPage(props: { board: Board; views: View[]; now: number })
         </div>
       )}
       {moving && <MoveSheet v={moving} onClose={() => setMoving(null)} />}
+      {giving && <StageUnitSheet v={giving} mode="given" onClose={() => setGiving(null)} />}
     </div>
   );
 }
@@ -460,6 +464,7 @@ function RoomBox(props: {
         <span>{roomState(r, now)}</span>
       </div>
       {r.doing && <div class="mg2-rd">{doingWords(r)}</div>}
+      {r.note && <div class="mg2-note-r">{r.note}</div>}
       {r.pills.length > 0 && (
         <div class="mg2-rp">
           {r.pills.map((p) => (
@@ -486,7 +491,7 @@ function RoomBox(props: {
         </div>
       )}
       {r.free && !sug && <div class="mg2-sug none">nothing for her now</div>}
-      {r.free && !r.away && (
+      {r.free && !r.away && !r.t.owner && (
         <button
           type="button"
           class="mg2-gone"
@@ -564,9 +569,12 @@ function HallStrip(props: {
   busy: boolean;
   onSend: (r: Room) => void;
   onMove: () => void;
+  onGive: () => void;
   onClose: () => void;
 }) {
   const { p, plan, now } = props;
+  // Every teacher who could take him is busy: he needn't sit. Another book, and he works until one is free.
+  const allBusy = plan.rooms.every((r) => r.away || !r.free);
   const need = needOf(p.v);
   const suggested = p.task?.to?.id;
   const rooms = plan.rooms.filter((r) => !r.away && canTake(r.t, need.kind));
@@ -582,10 +590,18 @@ function HallStrip(props: {
       </div>
       {why !== p.v.line && <p class={`mg2-why${p.heat ? ` h-${p.heat}` : ""}`}>{why}</p>}
       <DayBar v={p.v} now={now} />
+      {p.heat === "red" && allBusy && (
+        <p class="mg2-why mg2-busy">Every teacher is busy: give him a book; he works on it until one is free.</p>
+      )}
       <div class="mg2-acts">
         {p.finished && (
           <button type="button" class="btn small" onClick={props.onMove}>
             Move him on
+          </button>
+        )}
+        {(p.heat === "red" || p.finished) && (
+          <button type="button" class={`btn small mg2-give${p.heat === "red" && allBusy ? "" : " ghost"}`} onClick={props.onGive}>
+            Give a book
           </button>
         )}
         {rooms.map((r) => (

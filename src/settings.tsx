@@ -787,6 +787,8 @@ function describe(e: Doc<"events">): string {
       return `${qName(e.q ?? 0)} mark undone`;
     case "in":
       return "signed in";
+    case "teaching":
+      return v === "on" ? "teaching today: on (his room on the Manager page)" : "teaching today: off";
     case "out":
       return "signed out";
     case "in-undo":
@@ -988,7 +990,7 @@ const TAB_HELP: Record<Job, string> = {
   correction: "the Correction page at the top (marking papers, + to sign students in), sending students to the rooms",
   theory: "the Theory page (bottom)",
   evaluation: "the Evaluation page (bottom)",
-  manager: "the Manager page (bottom): the hall and every teacher's room; sends any student to any teacher",
+  manager: "a button on the Correction page (with Correction): the hall and every teacher's room; sends any student to any teacher",
 };
 const EXTRA_HELP: Record<Extra, string> = {
   students: "add, rename, remove students",
@@ -1017,6 +1019,35 @@ function untilWords(t: number): string {
 }
 
 /** This phone: who is signed in, the PIN, signing out, and what the sign-in protects. */
+/**
+ * The owner teaches today, or not (3 Nov 2026, his ask: "only for me"). On: his room on the Manager page, the manager
+ * can send him students (his phone calls him). Off: no room (he went out).
+ */
+function TeachingSwitch(props: { on: boolean }) {
+  const [busy, setBusy] = useState(false);
+  const set = async (on: boolean) => {
+    if (on === props.on) return;
+    setBusy(true);
+    const r = await act(() => mutate(api.people.setTeaching, { on }));
+    setBusy(false);
+    if (r !== undefined) toast(on ? "You teach today: your room is on the Manager page." : "You don't teach now: your room is gone.");
+  };
+  return (
+    <>
+      <h3 class="block-title">Teaching</h3>
+      <p class="muted small">On: your own room on the Manager page; the manager can send students to you. Off when you go out.</p>
+      <div class="segc plain teach-switch" role="group" aria-label="Do you teach now?">
+        <button type="button" class={`segc-b${props.on ? "" : " on"}`} aria-pressed={!props.on} disabled={busy} onClick={() => void set(false)}>
+          Not teaching
+        </button>
+        <button type="button" class={`segc-b${props.on ? " on" : ""}`} aria-pressed={props.on} disabled={busy} onClick={() => void set(true)}>
+          I'm teaching
+        </button>
+      </div>
+    </>
+  );
+}
+
 function Account() {
   const me = currentMe();
   const tests = useStore().board?.tests ?? 0;
@@ -1029,6 +1060,7 @@ function Account() {
         <span class="acct-name">{me.name}</span>
         <span class="muted">{canWords(me)}</span>
       </div>
+      {me.role === "owner" && <TeachingSwitch on={!!me.teaching} />}
       {(tests > 0 || testMode()) && (
         <>
           <h3 class="block-title">Simulation</h3>
@@ -1213,7 +1245,17 @@ function PersonSheet(props: { person?: Person; onClose: () => void; onAdded?: (i
           <div class="perm-list">
             {(Object.keys(TAB_NAMES) as Job[]).map((t) => (
               <label key={t} class="perm">
-                <input type="checkbox" checked={tabs.includes(t)} onChange={() => setTabs(toggle(tabs, t))} />
+                <input
+                  type="checkbox"
+                  checked={tabs.includes(t)}
+                  onChange={() => {
+                    // The Manager button is on the Correction page: Manager brings Correction, and no Correction, no Manager.
+                    let next = toggle(tabs, t);
+                    if (t === "manager" && next.includes("manager") && !next.includes("correction")) next = [...next, "correction"];
+                    if (t === "correction" && !next.includes("correction")) next = next.filter((x) => x !== "manager");
+                    setTabs(next);
+                  }}
+                />
                 <span>
                   {TAB_NAMES[t]}
                   <small>{TAB_HELP[t]}</small>

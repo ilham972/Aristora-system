@@ -3577,6 +3577,67 @@ body.locked.fc-marking .toasts {
   align-items: center;
   gap: 6px;
 }
+/* (3 Nov 2026, his call: no big name here, it is dark in the names row) The Manager button (managers) and the book
+   button on the left; Later, the sheet, went home, Marks on the right. */
+.fc-head-tools {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: auto;
+}
+.fc-head .fc-units {
+  height: 38px;
+}
+.fc-mgr {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 42px;
+  padding-left: 0;
+  padding-right: 0;
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.fc-mgr-n {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--red);
+  color: #fff;
+  font: 700 11.5px/1 var(--font);
+  font-style: normal;
+}
+@media (max-width: 345px) {
+  .fc-head,
+  .fc-head-tools,
+  .fc-head-acts {
+    gap: 4px;
+  }
+  .fc-mgr,
+  .fc-head .fc-gohome,
+  .fc-head .fc-racebtn {
+    width: 34px;
+  }
+  .fc-head .fc-units {
+    width: 34px;
+  }
+  .fc-head .btn.small.fc-later {
+    padding: 0 8px;
+  }
+  .fc-head .fc-cardbtn {
+    padding: 0 9px;
+  }
+  .fc-cardw {
+    display: none;
+  }
+}
 .fc-who {
   flex: 1 1 auto;
   min-width: 0;
@@ -8542,8 +8603,12 @@ body.locked.evx-on .toasts {
   color: var(--red-ink);
   border-color: var(--red);
 }
-.sim-switch {
+.sim-switch,
+.teach-switch {
   align-self: flex-start;
+}
+.teach-switch .segc-b {
+  white-space: nowrap;
 }
 .sim-switch .segc-b {
   white-space: nowrap;
@@ -9040,18 +9105,6 @@ body.locked.evx-on .toasts {
 
 /* ---------- The Manager page (3 Nov 2026, his voice note: the hall and the rooms as rectangles, one screen;
    src/manager.tsx). The room look is the Theory and Evaluation pages' room box; pills like theirs. ---------- */
-.tabs.n4 .tab {
-  font-size: 14px;
-}
-@media (max-width: 345px) {
-  .tabs.n4 .tab {
-    font-size: 12.5px;
-  }
-}
-.tab.manager .tab-mark {
-  border-radius: 3px;
-  transform: rotate(45deg) scale(0.88);
-}
 body.mg2-on .app {
   padding-bottom: calc(var(--tabs) + env(safe-area-inset-bottom));
 }
@@ -9246,6 +9299,12 @@ body.mg2-on .app {
 }
 .mg2-room.d-theory .mg2-rd {
   color: var(--theory-ink);
+}
+.mg2-note-r {
+  margin-top: -3px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--red-ink);
 }
 .mg2-rp {
   display: flex;
@@ -9570,7 +9629,8 @@ body.mg2-on .app {
   font-weight: 700;
   color: var(--ink-2);
 }
-.mg2-why.h-red {
+.mg2-why.h-red,
+.mg2-why.mg2-busy {
   color: var(--red-ink);
 }
 .mg2-why.h-orange {

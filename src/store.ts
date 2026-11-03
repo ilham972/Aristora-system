@@ -48,6 +48,8 @@ export type Me = {
   tabs: Job[];
   can: Extra[];
   hasPin: boolean;
+  /** The owner teaches today (his switch in Settings → Account): his room on the Manager page. */
+  teaching?: boolean;
   deviceId: Id<"devices">;
 };
 export type MeState = { user: Me | null; setupDone: boolean };
@@ -307,6 +309,20 @@ export function useTick(ms: number): number {
     return () => clearInterval(id);
   }, [ms]);
   return now();
+}
+
+// ---- A page opened from inside another page (3 Nov 2026: the Correction page's Manager button opens the Manager
+// page; the bottom tab Correction goes back) ----
+export type InnerPage = "manager";
+const pageListeners = new Set<(p: InnerPage) => void>();
+export function openPage(p: InnerPage) {
+  for (const l of pageListeners) l(p);
+}
+export function onOpenPage(l: (p: InnerPage) => void): () => void {
+  pageListeners.add(l);
+  return () => {
+    pageListeners.delete(l);
+  };
 }
 
 export function setRole(r: By) {

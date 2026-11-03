@@ -10,6 +10,8 @@ import { slDay } from "./lib/day";
 import { extra, tab } from "./schema";
 
 const token = v.optional(v.string());
+/** The Manager page opens from the Correction page (3 Nov 2026): a manager needs the Correction job too. */
+const MANAGER_NEEDS = "The Manager button is on the Correction page: tick Correction too.";
 
 /** Everyone, with their phones and their newest sign-in link. */
 export const list = query({
@@ -74,10 +76,28 @@ export const team = query({
       if (!c.teacherId || c.test || c.endedAt === undefined || slDay(c.endedAt) !== today) continue;
       lastEnd.set(c.teacherId, Math.max(lastEnd.get(c.teacherId) ?? 0, c.endedAt));
     }
+    // The teachers, and the owner on the days he teaches (his switch: he can do both Theory and Evaluation).
     return users
-      .filter((u) => u.active && u.role === "teacher" && (u.tabs.includes("theory") || u.tabs.includes("evaluation")))
-      .map((u) => ({ _id: u._id, name: u.name, tabs: u.tabs, lastEnd: lastEnd.get(u._id) ?? null }))
+      .filter((u) => u.active && (u.role === "teacher" ? u.tabs.includes("theory") || u.tabs.includes("evaluation") : !!u.teaching))
+      .map((u) => ({
+        _id: u._id,
+        name: u.name,
+        role: u.role,
+        tabs: u.role === "owner" ? (["theory", "evaluation"] as typeof u.tabs) : u.tabs,
+        lastEnd: lastEnd.get(u._id) ?? null,
+      }))
       .sort((a, b) => a.name.localeCompare(b.name));
+  },
+});
+
+/** The owner: "I'm teaching today" on or off (Settings → Account, 3 Nov 2026). Only for him, about himself. */
+export const setTeaching = mutation({
+  args: { token, on: v.boolean() },
+  handler: async (ctx, args) => {
+    const me = await actor(ctx, args.token, ["owner"]);
+    await ctx.db.patch(me._id, { teaching: args.on || undefined });
+    await log(ctx, null, Date.now(), { kind: "teaching", value: args.on ? "on" : "off" });
+    return args.on;
   },
 });
 
@@ -98,6 +118,7 @@ export const add = mutation({
     const now = Date.now();
     const name = cleanName(args.name);
     if (args.tabs.length === 0) fail("Tick at least one job: Correction, Theory, Evaluation or Manager.");
+    if (args.tabs.includes("manager") && !args.tabs.includes("correction")) fail(MANAGER_NEEDS);
     await nameFree(ctx, name);
     const count = (await ctx.db.query("users").collect()).filter((u) => u.active).length;
     if (count >= 30) fail("That's 30 people already. Remove someone first.");
@@ -132,6 +153,7 @@ export const update = mutation({
     if (u.role === "owner" && (args.tabs !== undefined || args.can !== undefined)) fail("The owner can always do everything.");
     if (args.tabs !== undefined) {
       if (args.tabs.length === 0) fail("Tick at least one job: Correction, Theory, Evaluation or Manager.");
+      if (args.tabs.includes("manager") && !args.tabs.includes("correction")) fail(MANAGER_NEEDS);
       patch.tabs = [...new Set(args.tabs)];
     }
     if (args.can !== undefined) patch.can = [...new Set(args.can)];

@@ -1220,9 +1220,9 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
   await F.getByRole("button", { name: "Load demo students (three grades)" }).click();
   await visible(F.getByText(/^14 demo students loaded/));
   await F.getByRole("button", { name: "Back to the class" }).click();
-  // Correction is a bottom tab (it was at the top, and was "Focus"), first of the jobs (the owner's Manager tab before
-  // them since 2 Nov 2026); Class is at the top. The phone opens on Correction.
-  await textsAre(F.locator(".tabs .tab > span:nth-child(2)"), ["Manager", "Correction", "Theory", "Evaluation"]);
+  // Correction is a bottom tab (it was at the top, and was "Focus"), first of the jobs (the Manager page is a button on
+  // it since 3 Nov 2026, not a tab); Class is at the top. The phone opens on Correction.
+  await textsAre(F.locator(".tabs .tab > span:nth-child(2)"), ["Correction", "Theory", "Evaluation"]);
   expect(await tab(F, "Correction").getAttribute("aria-current")).toBe("page");
   await count(F.locator(".tabs .tab.on"), 1);
   await count(F.locator(".top .focus-btn"), 0);
@@ -1308,7 +1308,11 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
 
   // Priya: her paper opens under the names at the level she is on (L2). The names stay; hers is dark.
   await tap(name("Priya"));
-  await contains(F.locator(".fc-name"), "Priya");
+  // No big name on the paper (3 Nov 2026, his call): hers is dark in the names row; the top row starts with the
+  // Manager button (the owner manages) and the book button.
+  await count(F.locator(".fc-name"), 0);
+  await visible(F.locator(".fc-nm.on", { hasText: "Priya" }));
+  await visible(F.locator(".fc-head .fc-mgr + .fc-units"));
   await textsAre(F.locator(".fc-bk.on i"), ["8"]); // her book now, dark, in the row of her books
   await visible(F.locator(".fc-nm.on", { hasText: "Priya" }));
   await textsAre(F.locator(".fc-lvbar .fc-lb"), ["1", "2", "3", "4", "5", "6", "7", "8"]);
@@ -1371,7 +1375,7 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
   await tap(F.locator(".br-todo .br-ck", { hasText: "Malik" }));
   await count(F.locator(".br-sheet"), 0);
   await says(F.locator(".fc-lvline"), "Level 3 · Q21–30");
-  await contains(F.locator(".fc-name"), "Malik");
+  await visible(F.locator(".fc-nm.on", { hasText: "Malik" }));
   // Malik: his paper opens at once at the level he handed in (L3, the oldest); every question full; Save.
   await tap(name("Malik"));
   await count(F.locator(".toast"), 0);
@@ -1466,7 +1470,7 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
   await visible(row(F, "Priya"));
   await textsAre(row(F, "Priya").locator(".mk b"), ["L4"]); // Class sees Focus's saves
   await tab(F, "Correction").click();
-  await contains(F.locator(".fc-name"), "Nimal");
+  await visible(F.locator(".fc-nm.on", { hasText: "Nimal" }));
   await contains(F.locator(".fc-qn"), "2");
   // No Stop: tapping another name keeps every mark (on the server, for any phone); his paper opens again where it stopped.
   await tap(F.getByRole("button", { name: "Q2: 0 of 2" }));
@@ -3137,14 +3141,17 @@ test("Manager: the hall and every room on one screen; send any student to any te
   await addPerson(backend.t, { name: "Kavi", token: KAVI, tabs: ["correction", "manager"] });
   await backend.t.mutation(api.setup.ensure, { token: OWNER_TOKEN });
   await backend.t.mutation(api.demo.load, { token: OWNER_TOKEN });
-  const M = await phone(backend, "manager", PHONE, KAVI);
+  const M = await phone(backend, "focus", PHONE, KAVI);
   const S = await phone(backend, "evaluation", PHONE, SHANTHI);
   const room = (name: string) => M.locator(".mg2-room", { has: M.locator(".mg2-rh b", { hasText: name }) });
   const hall = (name: string) => M.locator(`.mg2-p[data-name="${name}"]`);
   const inRoom = (r: string, name: string) => room(r).locator(`.mg2-sp[data-name="${name}"]`);
 
-  // Her tabs: Manager (first) and Correction; no Theory or Evaluation page (she manages and corrects).
-  await textsAre(M.locator(".tabs .tab > span:nth-child(2)"), ["Manager", "Correction"]);
+  // Her one tab: Correction (3 Nov 2026, his call: no Manager tab: the senior teachers mustn't feel below a new hire).
+  // The Manager button is on the Correction page (managers only); its count = students in the hall with no work.
+  await textsAre(M.locator(".tabs .tab > span:nth-child(2)"), ["Correction"]);
+  await visible(M.locator(".fc-mgr .fc-mgr-n"));
+  await M.locator(".fc-mgr").click();
   // The three numbers to bring down; a room per teacher (A–Z, both free); the hall A–Z, coloured by what waits.
   await textsAre(M.locator(".mg2-n span"), ["to correct", "to explain", "to teach"]);
   await contains(M.locator(".mg2-n.n-correct b"), "2"); // Malik's L3, Vimal's L8
@@ -3206,6 +3213,18 @@ test("Manager: the hall and every room on one screen; send any student to any te
   await visible(inRoom("Meena", "Rizwan").and(M.locator(".s-here")));
   await contains(room("Meena").locator(".mg2-rd"), "Theory C");
 
+  // Both teachers busy and Fathima has no work: she needn't sit. Give a book (Books given): the unit sheet opens there.
+  await contains(M.locator(".toast"), "Rizwan is with Meena.");
+  await hall("Fathima").click();
+  await contains(M.locator(".mg2-strip .mg2-busy"), "Every teacher is busy: give him a book");
+  await M.locator(".mg2-strip").getByRole("button", { name: "Give a book" }).click();
+  const units = M.locator(".sheet", { has: M.locator(".sheet-title", { hasText: "Fathima: units" }) });
+  await visible(units);
+  expect(await units.locator(".su-modes .segc-b.on").textContent()).toMatch(/given/i);
+  await shot(M, "m12b-manager-give-book");
+  await units.getByRole("button", { name: "Close" }).click();
+  await hall("Fathima").click(); // her strip closes
+
   // Tap-tap with his strip: Priya has nothing waiting: a check-in. Only Shanthi can take one (Meena: Theory only).
   // (Right after "He's with her": the answer arriving a moment later must not close Priya's strip.)
   await hall("Priya").click();
@@ -3259,9 +3278,38 @@ test("Manager: the hall and every room on one screen; send any student to any te
   await M.locator(".mg2-off", { hasText: "Meena" }).click();
   await visible(room("Meena"));
 
+  // The Correction tab goes back to the Correction page (no back button on the Manager page).
+  await tab(M, "Correction").click();
+  await visible(M.locator(".fc-namerow"));
+  await count(M.locator(".mg2"), 0);
+  await M.locator(".fc-mgr").click();
+  await visible(M.locator(".mg2-room").first());
+
+  // The owner teaches today (his switch in Settings → Account, his only): his room on the Manager page; a student
+  // sent to him calls his phone on any page ("Open Evaluation" on the Correction page). Off: the room goes.
+  const O = await phone(backend, "focus");
+  await O.getByRole("button", { name: "Settings" }).click();
+  await O.getByRole("button", { name: "Account", exact: true }).click();
+  await O.locator(".teach-switch").getByRole("button", { name: "I'm teaching" }).click();
+  await contains(O.locator(".toast"), "You teach today");
+  await visible(room("Owner"));
+  await count(room("Owner").getByRole("button", { name: "not here" }), 0);
+  await O.getByRole("button", { name: "Settings" }).click(); // back to his Correction page
+  await hall("Kumar").click();
+  await room("Owner").click();
+  await contains(M.locator(".toast"), "Kumar → Owner.");
+  await hears(O, "Kumar is coming to you. Open Evaluation.");
+  await M.locator(".toast").getByRole("button", { name: "Undo" }).click();
+  await O.getByRole("button", { name: "Settings" }).click();
+  await O.getByRole("button", { name: "Account", exact: true }).click();
+  await O.locator(".teach-switch").getByRole("button", { name: "Not teaching" }).click();
+  await count(room("Owner"), 0);
+  await O.context().close();
+
   // Small phones: one screen, nothing sideways, the tabs in one row.
   for (const width of [360, 320]) {
-    const P = await phone(backend, "manager", { ...PHONE, viewport: { width, height: 640 } }, KAVI);
+    const P = await phone(backend, "focus", { ...PHONE, viewport: { width, height: 640 } }, KAVI);
+    await P.locator(".fc-mgr").click();
     await visible(P.locator(".mg2-room").first());
     expect(await oneScreen(P)).toBe(true);
     await shot(P, `m15-manager-${width}`);

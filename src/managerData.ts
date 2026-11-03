@@ -50,8 +50,11 @@ export type Job = "evaluation" | "theory";
 export type TaskKind = "evaluation" | "theory" | "visit";
 export const KIND_WORDS: Record<TaskKind, string> = { evaluation: "Evaluation", theory: "Theory", visit: "Check-in" };
 
-/** A teacher the manager can send students to: her jobs, and when her last student went back today. */
-export type Teacher = { id: string; name: string; jobs: Job[]; lastEnd?: number | null };
+/**
+ * A teacher the manager can send students to: her jobs, and when her last student went back today. `owner`: the owner
+ * on the days he teaches (his switch in Settings, not the manager's "not here").
+ */
+export type Teacher = { id: string; name: string; jobs: Job[]; lastEnd?: number | null; owner?: boolean };
 
 export type Heat = "red" | "orange" | "yellow";
 
@@ -122,8 +125,13 @@ export type Room = {
   since: number | null;
   leftMs: number | null;
   over: boolean;
-  /** Free while there is work for her: amber 2 min, red 5 min. Over: amber. */
+  /**
+   * Free while there is work for her: amber 2 min, red 5 min. Over her time: amber; red while students in the hall
+   * have no work (3 Nov 2026: Zuhar 49 min with two while seven sat 61 min).
+   */
   alarm: Alarm;
+  /** What the manager tells her, when it matters: "7 have no work: finish now". */
+  note: string | null;
   /** The group the page suggests for her (free rooms only): one tap sends it. */
   suggest: SendTask | null;
 };
@@ -155,6 +163,8 @@ export type ManagerPlan = {
   tasks: SendTask[];
   held: Held[];
   noTeachers: boolean;
+  /** Students in the hall with no work now (not called anywhere). */
+  starving: number;
 };
 
 export type PlanOpts = {
@@ -454,6 +464,7 @@ function roomOf(t: Teacher, board: Board, views: View[], now: number, lessonMs: 
     leftMs,
     over,
     alarm: over ? "amber" : null,
+    note: null,
     suggest: null,
   };
 }
@@ -608,6 +619,13 @@ export function managerPlan(board: Board, views: View[], now: number, team: read
     const ms = now - r.freeSince;
     r.alarm = ms >= FREE_RED_MS ? "red" : ms >= FREE_AMBER_MS ? "amber" : null;
   }
+  // Over her time while students sit with no work: red, and what to tell her (a visit = the question that stops him).
+  const starving = inClass.filter((v) => v.where === "hall" && v.noWork && v.calls.length === 0).length;
+  for (const r of rooms) {
+    if (!r.over || !starving) continue;
+    r.alarm = "red";
+    r.note = `${starving} ${starving === 1 ? "has" : "have"} no work: finish now`;
+  }
 
   // The hall: everyone not called and not in a room, A–Z (the views are), coloured by what waits.
   const taskOf = new Map<string, SendTask>();
@@ -659,6 +677,7 @@ export function managerPlan(board: Board, views: View[], now: number, team: read
     tasks: tasks.sort(order),
     held: held.sort((a, b) => (a.sendBy ?? Infinity) - (b.sendBy ?? Infinity)),
     noTeachers: rooms.filter((r) => !r.away).length === 0,
+    starving,
   };
 }
 

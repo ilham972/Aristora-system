@@ -161,6 +161,37 @@ describe("The manager sends students to a teacher", () => {
   });
 });
 
+describe("The owner teaches today (his switch), and the Manager job needs Correction", () => {
+  test("on: his room (Theory and Evaluation), the manager sends him students; off: gone; his only", async () => {
+    const { t, kavi } = await setup();
+    const me = async () => (await t.query(api.auth.me, {})).user!;
+    expect((await me()).teaching).toBe(false);
+    expect((await kavi.query(api.people.team, {})).map((u) => u.name)).toEqual(["Fathima", "Nila"]);
+    await t.mutation(api.people.setTeaching, { on: true });
+    expect((await me()).teaching).toBe(true);
+    const team = await kavi.query(api.people.team, {});
+    expect(team.map((u) => [u.name, u.role, u.tabs])).toEqual([
+      ["Fathima", "teacher", ["theory"]],
+      ["Nila", "teacher", ["evaluation", "theory"]],
+      ["Owner", "owner", ["theory", "evaluation"]],
+    ]);
+    const owner = team.find((u) => u.role === "owner")!;
+    const id = await student(t, "Ahamed");
+    const res = await kavi.mutation(api.calls.create, { studentIds: [id], room: "evaluation", kind: "evaluation", teacherId: owner._id });
+    expect(res.created).toHaveLength(1);
+    await t.mutation(api.people.setTeaching, { on: false });
+    expect((await kavi.query(api.people.team, {})).map((u) => u.name)).toEqual(["Fathima", "Nila"]);
+    await expect(kavi.mutation(api.people.setTeaching, { on: true })).rejects.toThrow();
+  });
+
+  test("Manager without Correction is refused (the button is on the Correction page)", async () => {
+    const { t, nila } = await setup();
+    await expect(t.mutation(api.people.add, { name: "Rani", tabs: ["manager"], can: [] })).rejects.toThrow(/tick Correction too/);
+    await expect(t.mutation(api.people.update, { id: nila, tabs: ["evaluation", "manager"] })).rejects.toThrow(/tick Correction too/);
+    await t.mutation(api.people.update, { id: nila, tabs: ["evaluation", "correction", "manager"] });
+  });
+});
+
 describe("The teachers he can send to, and one student's day", () => {
   test("active teachers with Theory or Evaluation; when her last student went back today; managers only", async () => {
     const { t, nila, kavi } = await setup();

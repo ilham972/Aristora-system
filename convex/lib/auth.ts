@@ -139,6 +139,7 @@ export function publicUser(user: Doc<"users">) {
     name: user.name,
     role: user.role,
     tabs: user.role === "owner" ? TABS : user.tabs,
+    teaching: user.role === "owner" && !!user.teaching,
     can: user.role === "owner" ? EXTRAS : user.can,
     hasPin: !!user.pinHash,
   };

@@ -419,6 +419,11 @@ export default defineSchema({
     role: v.union(v.literal("owner"), v.literal("teacher")),
     tabs: v.array(tab),
     can: v.array(extra),
+    /**
+     * The owner teaches today (3 Nov 2026, his switch in Settings → Account): his room shows on the Manager page and
+     * the manager can send him students. Owner only.
+     */
+    teaching: v.optional(v.boolean()),
     /** SHA-256 of the PIN with this user's id; the PIN itself is never stored. */
     pinHash: v.optional(v.string()),
     /** Wrong PINs in a row, and the lock they caused. */

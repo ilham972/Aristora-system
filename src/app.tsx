@@ -15,7 +15,7 @@ import { Settings } from "./settings";
 import { alertsState, armAlerts, listenForTaps, ring, useAlertsState, type AlertKind } from "./sound";
 import { clearHash, PinSheet, pinAsked, readHash, SignIn, stopAskingPin, type Hash } from "./signin";
 import { hideSplash } from "./splash";
-import { currentMe, may, setRole, signOutHere, testMode, useStore, useTick, type Board, type Role } from "./store";
+import { currentMe, may, onOpenPage, setRole, signOutHere, testMode, useStore, useTick, type Board, type Role } from "./store";
 import { Sheet, Toasts } from "./ui";
 
 /**
@@ -23,12 +23,12 @@ import { Sheet, Toasts } from "./ui";
  * Theory and Evaluation, for the jobs this person has. The whole class (Class) is an icon in the top bar, for
  * everyone, with Progress. A phone with none of the jobs has no bottom bar: Class is its home.
  */
-type TabId = "manager" | "correction" | "theory" | "evaluation";
-type Page = "board" | "class" | "settings" | "progress" | "boss";
+type TabId = "correction" | "theory" | "evaluation";
+// The Manager page (3 Nov 2026, his call): not a bottom tab (a new hire shown as "Manager" to senior teachers is not
+// healthy); a button on the Correction page opens it, the Correction tab goes back.
+type Page = "board" | "class" | "settings" | "progress" | "boss" | "manager";
 
 const TABS: { id: TabId; label: string }[] = [
-  // The Manager page (2 Nov 2026, his ask): the owner runs the whole class from one phone. Owner only, first.
-  { id: "manager", label: "Manager" },
   { id: "correction", label: "Correction" },
   { id: "theory", label: "Theory" },
   { id: "evaluation", label: "Evaluation" },
@@ -42,8 +42,9 @@ const JOBS: Role[] = ["correction", "theory", "evaluation"];
 function loadStart(): { tab: TabId; page: Page } {
   try {
     const r = localStorage.getItem("aristora.role");
-    if (r === "theory" || r === "evaluation" || r === "manager") return { tab: r, page: "board" };
-    if (r === "focus") return { tab: "correction", page: "board" };
+    if (r === "theory" || r === "evaluation") return { tab: r, page: "board" };
+    // ("manager": the Manager tab of 2–3 Nov 2026; it is inside the Correction page now.)
+    if (r === "focus" || r === "manager") return { tab: "correction", page: "board" };
     if (r === "class" || r === "correction") return { tab: "theory", page: "class" };
   } catch {
     /* private mode */
@@ -90,8 +91,9 @@ export function App() {
   const user = me?.user ?? null;
   // Correction, Theory and Evaluation for those jobs (the bottom bar); Class for everyone (the top bar).
   const jobs = JOBS.filter((j) => !user || user.role === "owner" || user.tabs.includes(j));
-  // The Manager page: the owner, and whoever has the Manager job (Settings → People, 3 Nov 2026).
-  const tabs = TABS.filter((t) => (t.id === "manager" ? user?.role === "owner" || !!user?.tabs.includes("manager") : jobs.includes(t.id)));
+  const tabs = TABS.filter((t) => jobs.includes(t.id));
+  // The Manager page: the owner, and whoever has the Manager job (Settings → People), from the Correction page.
+  const isManager = user?.role === "owner" || !!user?.tabs.includes("manager");
   const tab: TabId = tabs.some((t) => t.id === chosen) ? chosen : (tabs[0]?.id ?? "theory");
   // Correction (marking papers, and signing students in with its +) is Correction's job; Progress needs Reports.
   const canCorrect = may("correction");
@@ -101,7 +103,8 @@ export function App() {
   // Home: the bottom tab, else Class.
   const home: Home = tabs.length ? "board" : "class";
   const wanted: Page = page === "board" && !tabs.length ? home : page;
-  const shown: Page = (wanted === "progress" && !canProgress) || (wanted === "boss" && !isOwner) ? backTo : wanted;
+  const shown: Page =
+    (wanted === "progress" && !canProgress) || (wanted === "boss" && !isOwner) || (wanted === "manager" && !isManager) ? backTo : wanted;
   const base: Home = shown === "class" || shown === "board" ? shown : backTo;
   /** Open a page from the top bar; the same button again goes back. */
   const toggle = (p: "settings" | "progress" | "boss") => {
@@ -119,18 +122,18 @@ export function App() {
   };
   // The job decides the taps, what the phone hears and the `by` the server records. Class: the job done last.
   const classJob: Role = lastJob && jobs.includes(lastJob) ? lastJob : (jobs[0] ?? "correction");
-  // The manager is in the hall like Correction: he hears what Correction hears (a level waits and someone has no work).
-  const role: Role = base === "class" ? classJob : tab === "manager" ? "correction" : tab;
+  // The Manager page is inside the Correction page: it hears what Correction hears.
+  const role: Role = base === "class" ? classJob : tab;
 
   // Taps on the Manager page are recorded as the manager's ("by the manager" in the history).
-  setRole(base === "board" && tab === "manager" ? "manager" : role);
+  setRole(shown === "manager" ? "manager" : role);
   useEffect(() => {
     try {
       localStorage.setItem("aristora.role", base === "class" ? "class" : tab === "correction" ? "focus" : tab);
     } catch {
       /* private mode */
     }
-    const job: Role | null = base === "class" || tab === "manager" ? null : tab;
+    const job: Role | null = base === "class" ? null : tab;
     if (job && job !== lastJob) {
       setLastJob(job);
       try {
@@ -142,6 +145,16 @@ export function App() {
   }, [tab, base]);
   // Phones only allow sound after a tap: every tap turns alerts (back) on where needed.
   useEffect(() => listenForTaps(), []);
+  // The Correction page's Manager button opens the Manager page (the Correction tab comes back to it).
+  useEffect(
+    () =>
+      onOpenPage((p) => {
+        setTab("correction");
+        setBackTo("board");
+        setPage(p);
+      }),
+    [],
+  );
   useEffect(() => {
     const seen = () => setHashSeen((n) => n + 1);
     window.addEventListener("hashchange", seen);
@@ -218,7 +231,7 @@ export function App() {
     <div
       class={`app${tabs.length ? "" : " no-tabs"}${testMode() ? " test-mode" : ""}`}
       data-role={role}
-      data-tab={shown === "class" ? "class" : tab === "correction" ? "focus" : tab}
+      data-tab={shown === "class" ? "class" : shown === "manager" ? "manager" : tab === "correction" ? "focus" : tab}
     >
       <div class="top-wrap" ref={topRef}>
         <header class="top">
@@ -353,7 +366,7 @@ export function App() {
         <Progress board={board} now={now} />
       ) : shown === "boss" ? (
         <BossPage board={board} views={views} now={now} />
-      ) : tab === "manager" ? (
+      ) : shown === "manager" ? (
         <ManagerPage board={board} views={views} now={now} />
       ) : tab === "correction" ? (
         <Focus board={board} views={views} now={now} />
@@ -368,17 +381,19 @@ export function App() {
           {tabs.map((r) => {
             // A number: something waits for that page's job while this phone is busy elsewhere. Theory, Evaluation:
             // students with no work (red). Correction: papers handed in (amber; red when someone has no work until then).
-            const away = tab !== r.id || shown !== "board";
+            // (The Manager page is inside the Correction page: Correction stays lit there; its tab goes back.)
+            const here = tab === r.id && (shown === "board" || (shown === "manager" && r.id === "correction"));
+            const away = !here;
             // The manager sent students to her for this page (3 Nov 2026): they come first, in the room's colour.
             const coming = !away || (r.id !== "theory" && r.id !== "evaluation") ? 0 : comingTo(r.id);
-            const badge = !away ? 0 : coming || (r.id === "manager" ? idleNow : r.id === "theory" ? theoryRed : r.id === "evaluation" ? evalRed : papers);
+            const badge = !away ? 0 : coming || (r.id === "theory" ? theoryRed : r.id === "evaluation" ? evalRed : papers);
             const amber = r.id === "correction" && !papersRed;
             return (
               <button
                 key={r.id}
                 type="button"
-                class={`tab ${r.id}${tab === r.id && shown === "board" ? " on" : ""}`}
-                aria-current={tab === r.id && shown === "board" ? "page" : undefined}
+                class={`tab ${r.id}${here ? " on" : ""}`}
+                aria-current={here ? "page" : undefined}
                 aria-label={`${r.label}${badge ? `, ${badge} ${coming ? "coming to you" : r.id === "correction" ? "waiting" : "with no work"}` : ""}`}
                 onClick={() => {
                   setTab(r.id);
@@ -538,13 +553,11 @@ function alertItems(role: Role, board: Board, views: View[], now: number): Alert
   const nameOf = new Map(views.map((v) => [v.s._id as string, v.s.name]));
   const items: AlertItem[] = [];
   const me = currentMe()?._id;
-  if (role === "theory" || role === "evaluation") {
-    // The manager sent a student to her (3 Nov 2026): her phone says so every 30 s until she taps Arrived (on the
-    // page of that room: "Open Evaluation" when she is on the other one).
-    for (const c of board.calls)
-      if (c.byManager && c.teacherId === me && isWalking(c))
-        items.push({ key: `coming:${c._id}`, kind: "coming", name: nameOf.get(c.studentId) ?? "", room: c.room, repeat: true, open: c.room !== role ? c.room : undefined });
-  }
+  // The manager sent a student to her (3 Nov 2026): her phone says so every 30 s until she taps Arrived, on any page
+  // (the owner teaching from the Correction page too): "Open Evaluation" when she isn't on that room's page.
+  for (const c of board.calls)
+    if (c.byManager && c.teacherId === me && isWalking(c))
+      items.push({ key: `coming:${c._id}`, kind: "coming", name: nameOf.get(c.studentId) ?? "", room: c.room, repeat: true, open: c.room !== role ? c.room : undefined });
   if (role === "correction") {
     for (const c of board.calls)
       if (c.status === "requested" && !c.pull)

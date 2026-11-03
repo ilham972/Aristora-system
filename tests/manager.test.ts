@@ -319,6 +319,16 @@ describe("A room per teacher, and what the page suggests for a free one", () => 
     expect(plan([wb("Sana", { inAgo: 20 })], [], { team: [{ ...NILA, lastEnd: NOW - 30 * MIN }] }).rooms[0]).toMatchObject({ suggest: null, alarm: null });
   });
 
+  test("over her time while students sit with no work: red, and what to tell her; over with nobody idle: amber", () => {
+    const late = withHer(NILA, "Xavier", 40); // one question, 40 minutes: over
+    const malik = wb("Malik", { fixed: 7, lostAgo: 1, handed: 1 }); // no work (every level handed in)
+    const p = plan([late.v, malik], [late.call], { team: [NILA] });
+    expect(p.starving).toBe(1);
+    expect(p.rooms[0]).toMatchObject({ over: true, alarm: "red", note: "1 has no work: finish now" });
+    const calm = plan([late.v, wb("Priya", { fixed: 1 })], [late.call], { team: [NILA] });
+    expect(calm.rooms[0]).toMatchObject({ over: true, alarm: "amber", note: null });
+  });
+
   test("not here today: no room (Bring back); still a room while someone is with her", () => {
     const p = plan([wb("Raj")], [], { away: ["meena"] });
     expect(p.rooms.map((r) => r.t.name)).toEqual(["Nila"]);
