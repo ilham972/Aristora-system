@@ -1,8 +1,9 @@
 // The family app (app.aristora.org): a student and his family, on their own phone, see only him.
 //   peek / join  -> open the WhatsApp link (one use, 7 days): this phone is his family's from now on.
 //   signIn       -> or type his index number and 4-digit code (5 wrong in a row: locked 15 minutes).
-//   me           -> the whole syllabus of his grade (each unit a Stage, grouped by term: the phone's Worlds), each
-//                   Stage's levels, XP this week and ever, his streak, his week, his trophies.
+//   me           -> the whole syllabus of his grade (each unit a Stage, grouped by term: the phone's Worlds), or the
+//                   O/L syllabus when the teachers ticked him for it (by paper part; 4 Nov 2026), then the other
+//                   syllabus's books he has; each Stage's levels, XP this week and ever, his streak, his week, trophies.
 //   level        -> the level he is on: each question's boxes (numbers, or answers in n), never the answers.
 //   check        -> his typed answers for a whole level, once: the server marks them with the answer key and saves the
 //                   level as marked at home (⌂). Evaluation and Theory see his lost marks at once; the corrector looks
@@ -42,6 +43,7 @@ import {
   levelDays,
   levelsSince,
   masterRows,
+  olMapOn,
   streakOf,
   trophiesOf,
   weekDayXp,
@@ -197,7 +199,15 @@ export type FamilyMe = {
   levelsDone: number;
   levelsWeek: number;
   trophies: Trophy[];
-  /** Every unit of his grade, in book order (the phone groups them by term: its Worlds). */
+  /**
+   * His map is the O/L syllabus (Settings → Students → O/L map, 4 Nov 2026): the phone names its Worlds by paper part
+   * (Paper I A … II B) instead of by term.
+   */
+  ol: boolean;
+  /**
+   * Every unit of his map, in book order (the phone groups them by term, or by paper part on the O/L map: its Worlds),
+   * then the other syllabus's books he has (`other`: one more World).
+   */
   worlds: World[];
 };
 
@@ -223,6 +233,7 @@ export const me = query({
       levelsDone: levelsSince(rows, 0),
       levelsWeek: levelsSince(rows, slWeekStart(now)),
       trophies: trophiesOf(rows, worlds),
+      ol: olMapOn(s),
       worlds,
     };
   },
@@ -231,7 +242,7 @@ export const me = query({
 /** The World, its workbook and his level, when he may play it now (else a reason, in plain words). */
 async function playable(ctx: QueryCtx, s: Doc<"students">, unitId: Id<"units">, n: number) {
   const world = (await worldsOf(ctx, s)).find((w) => w.unitId === unitId);
-  if (!world) fail("This Stage is not in your grade.");
+  if (!world) fail("This Stage is not on your map.");
   if (!world.open) fail("This Stage is locked. Finish the Stage before it.");
   const book = await bookFor(ctx, unitId, "master");
   if (!book) fail("This Stage has no levels yet.");
@@ -397,7 +408,7 @@ export const questions = query({
   handler: async (ctx, args): Promise<FamilyQuestions> => {
     const s = await familyViewer(ctx, args.token);
     const world = (await worldsOf(ctx, s)).find((w) => w.unitId === args.unitId);
-    if (!world) fail("This Stage is not in your grade.");
+    if (!world) fail("This Stage is not on your map.");
     if (!world.open) fail("This Stage is locked. Finish the Stage before it.");
     const book = await bookFor(ctx, args.unitId, "master");
     if (!book) fail("This Stage has no levels yet.");

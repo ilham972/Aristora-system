@@ -255,6 +255,103 @@ describe("the family app on the server", () => {
     expect((await worlds())[1][1]).toBe(true);
   });
 
+  test("the O/L map: ticked Grade 10–11 students see the O/L topics by paper part; today's topic opens for the ticked; the other syllabus follows", async () => {
+    const olUnits = (await raw.run(async (ctx) => await ctx.db.query("units").withIndex("by_grade", (q) => q.eq("grade", 12)).collect())).sort(
+      (a, b) => a.term - b.term || a.order - b.order,
+    );
+    expect(olUnits).toHaveLength(53);
+    const sq = olUnits[0]; // Paper I A, 01 on his sheet
+    const cons = olUnits.find((u) => u.term === 4 && u.en === "Constructions")!; // Paper II B: 08 on his sheet
+    // Two O/L workbooks (skeletons, fake key): the first topic with a key, Constructions without one.
+    const olBook = async (unitId: Id<"units">, key: boolean) =>
+      await t.mutation(api.catalog.saveWorkbook, {
+        unitId,
+        parts: [{ id: "IA", to: 10, each: 2 }],
+        levels: [
+          { to: 5, max: 10 },
+          { to: 10, max: 10 },
+        ],
+        replace: true,
+        ...(key ? { key: Array.from({ length: 10 }, (_, i) => ({ q: i + 1, a: String((i + 1) * 3) })) } : {}),
+      });
+    await olBook(sq._id, true);
+    await olBook(cons._id, false);
+    const nila = await t.mutation(api.students.add, { name: "Nila S", grade: 11, term: 3 });
+    const ravi = await t.mutation(api.students.add, { name: "Ravi T", grade: 10, term: 3 });
+    await joinAs(nila, FAM);
+
+    // Not ticked: his grade's map (Grade 11 has no workbook yet: every Stage "soon"), no O/L topic on it.
+    let me = await fam().query(api.family.me, {});
+    expect(me.ol).toBe(false);
+    expect(me.worlds.length).toBeGreaterThan(0);
+    expect(me.worlds.every((w) => !w.book && !w.other)).toBe(true);
+    await expect(fam().query(api.family.level, { unitId: sq._id, n: 1 })).rejects.toThrow(/not on your map/);
+
+    // Who ticks: the owner or a Students teacher; Grade 10 and 11 only (all checked first); never a family phone.
+    await addPerson(raw, { name: "Corrector", token: "corrector-token-0123456789abcdefghijklmnopqrstu", tabs: ["correction"] });
+    await expect(
+      asPhone(raw, "corrector-token-0123456789abcdefghijklmnopqrstu").mutation(api.families.setOlMap, { studentIds: [nila], on: true }),
+    ).rejects.toThrow(/Students/);
+    await expect(t.mutation(api.families.setOlMap, { studentIds: [nila, hana], on: true })).rejects.toThrow(/Grade 10 and 11/);
+    expect((await t.query(api.families.phones, { studentId: nila })).olMap).toBe(false);
+    await expect(fam().mutation(api.families.setOlMap, { studentIds: [nila], on: true })).rejects.toThrow(SIGNED_OUT);
+    expect(await t.mutation(api.families.setOlMap, { studentIds: [nila, ravi], on: true })).toBe(2);
+    expect(await t.mutation(api.families.setOlMap, { studentIds: [nila], on: true })).toBe(0);
+    expect((await t.query(api.families.phones, { studentId: nila })).olMap).toBe(true);
+    const hist = await raw.run(async (ctx) => await ctx.db.query("events").collect());
+    expect(hist.filter((e) => e.kind === "ol-map").map((e) => [e.name, e.value])).toEqual([
+      ["Nila S", "on"],
+      ["Ravi T", "on"],
+    ]);
+
+    // Ticked: the O/L syllabus by paper part (each part a World), numbered as on his sheet; the first topic in the app
+    // is open to start (his answer: one by one), the next one shut.
+    me = await fam().query(api.family.me, {});
+    expect(me.ol).toBe(true);
+    expect(me.worlds).toHaveLength(53);
+    expect([...new Set(me.worlds.map((w) => w.term))]).toEqual([1, 2, 3, 4]);
+    expect(me.worlds.filter((w) => w.book).map((w) => [w.no, w.ta, w.open, w.phone])).toEqual([
+      [1, sq.ta, true, true],
+      [8, cons.ta, false, false],
+    ]);
+    expect((await fam().query(api.family.level, { unitId: sq._id, n: 1 })).qs).toHaveLength(5);
+    await expect(fam().query(api.family.questions, { unitId: cons._id, n: 1 })).rejects.toThrow(/locked/);
+
+    // Today's topic (his words: "the unit I taught lastly"): given to the ticked in one tap, as Books given. Checked
+    // first (a Grade 8 student refuses it for everyone), only a book in the app, and only once each.
+    await expect(t.mutation(api.students.giveMany, { ids: [nila, hana], unitId: cons._id, stage: "master", given: true })).rejects.toThrow(/Grade 10 and 11/);
+    await expect(t.mutation(api.students.giveMany, { ids: [nila], unitId: olUnits[2]._id, stage: "master", given: true })).rejects.toThrow(/in the app/);
+    expect(await t.mutation(api.students.giveMany, { ids: [nila, ravi], unitId: cons._id, stage: "master", given: true })).toBe(2);
+    expect(await t.mutation(api.students.giveMany, { ids: [nila, ravi], unitId: cons._id, stage: "master", given: true })).toBe(0);
+    const c = (await fam().query(api.family.me, {})).worlds.find((w) => w.unitId === cons._id)!;
+    expect([c.open, (c.given ?? 0) > 0]).toEqual([true, true]);
+    expect((await fam().query(api.family.me, {})).worlds.find((w) => w.unitId === sq._id)!.given).toBeUndefined();
+    // The sheet's list: the O/L topics with a workbook, in his sheet's order, and who in each grade has each.
+    const topics = await t.query(api.families.olTopics, { grade: 11 });
+    expect(topics.topics.map((x) => [x.no, x.part, x.levels, x.phone])).toEqual([
+      [1, 1, 2, true],
+      [8, 4, 2, false],
+    ]);
+    expect(topics.given).toEqual({ [cons._id]: [nila] });
+    expect((await t.query(api.families.olTopics, { grade: 10 })).given).toEqual({ [cons._id]: [ravi] });
+    await expect(asPhone(raw, "corrector-token-0123456789abcdefghijklmnopqrstu").query(api.families.olTopics, { grade: 11 })).rejects.toThrow(/Students/);
+    // Taken back: shut again on his phone (the first topic stays open).
+    expect(await t.mutation(api.students.giveMany, { ids: [nila], unitId: cons._id, stage: "master", given: false })).toBe(1);
+    expect((await fam().query(api.family.me, {})).worlds.find((w) => w.unitId === cons._id)!.open).toBe(false);
+
+    // A level of the first topic checked at home, then unticked: his grade's map again, and the O/L book he started
+    // follows as one more World (open, with his level), so nothing he did is hidden.
+    await fam().mutation(api.family.check, { unitId: sq._id, n: 1, typed: [1, 2, 3, 4, 5].map((q) => ({ q, a: [String(q * 3)] })) });
+    expect(await t.mutation(api.families.setOlMap, { studentIds: [nila], on: false })).toBe(1);
+    me = await fam().query(api.family.me, {});
+    expect(me.ol).toBe(false);
+    expect(me.worlds.filter((w) => w.other).map((w) => [w.no, w.open, w.levels[0].s, w.levels[0].got])).toEqual([[1, true, "check", 10]]);
+    expect(me.worlds.filter((w) => !w.other).every((w) => !w.book)).toBe(true);
+    // Moved up to the O/L map again: his grade's book he is on would follow too, but Grade 11 has none (nothing extra).
+    await t.mutation(api.families.setOlMap, { studentIds: [nila], on: true });
+    expect((await fam().query(api.family.me, {})).worlds.filter((w) => w.other)).toEqual([]);
+  });
+
   test("a level on the phone: its boxes, never its answers", async () => {
     await joinAs(hana, FAM);
     const lv = await fam().query(api.family.level, { unitId: u01, n: 1 });

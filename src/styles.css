@@ -6448,6 +6448,128 @@ body.locked.tp-padded .toasts {
   display: grid;
   gap: 2px;
 }
+/* Settings → Students → O/L map (4 Nov 2026): the line above a Grade 10/11 list, the tag on a ticked name, the sheet */
+.olm-line {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 10px 0 2px;
+  padding: 10px 14px;
+  min-height: 56px;
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--ink);
+  text-align: left;
+  font: inherit;
+}
+.olm-line > span {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+.olm-line b {
+  font-size: 16px;
+}
+.olm-line small {
+  font-size: 13px;
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.olm-line svg {
+  flex: none;
+  color: var(--ink-3);
+}
+.ol-tag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 0 6px;
+  border-radius: 6px;
+  border: 1.5px solid var(--ink);
+  color: var(--ink);
+  font: 700 11px/1.5 var(--font);
+  vertical-align: middle;
+}
+.olm-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.olm-top b {
+  flex: 1;
+  font-size: 17px;
+}
+.olm-top .btn {
+  min-width: 64px;
+}
+.olm-how {
+  margin: -4px 0 8px;
+}
+.olm-topics > li,
+.olm-kids > li {
+  flex-wrap: nowrap;
+}
+.olm-topics > li.on {
+  background: var(--ground);
+}
+.olm-topics .btn {
+  flex: none;
+  min-width: 88px;
+  padding: 0 10px;
+}
+.olm-tn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+.olm-tn > b {
+  flex: none;
+  font: 700 20px/1 var(--cond);
+}
+.olm-tn > span {
+  display: grid;
+  min-width: 0;
+}
+.olm-tt,
+.olm-tn small {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.olm-tn small,
+.olm-kid small {
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.olm-kid {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  min-width: 0;
+}
+.olm-kid input {
+  width: 22px;
+  height: 22px;
+  flex: none;
+}
+.olm-kid > span {
+  display: grid;
+  min-width: 0;
+}
+.olm-kid small {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .phone-ans {
   margin-top: 6px;
 }

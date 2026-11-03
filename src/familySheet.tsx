@@ -5,6 +5,8 @@
 // - The family phones signed in, and Sign out (a lost phone, a link sent to the wrong number).
 // - Open every Stage (a unit: the family app's Stage; a term is its World): off = Stages open in order (his unit now,
 //   books given, and the next when one is done).
+// - O/L map (Grade 10 and 11, 4 Nov 2026): his phone shows the O/L syllabus by paper part instead of his grade's terms
+//   (the same tick as Settings → Students → O/L map).
 
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
@@ -45,6 +47,7 @@ type Phones = {
   phones: { label: string; since: number; lastSeenAt: number }[];
   linkUntil: number | null;
   openAll: boolean;
+  olMap: boolean;
   index: number | null;
   code: string | null;
   locked: boolean;
@@ -187,6 +190,22 @@ export function FamilySheet(props: { v: View; onClose: () => void }) {
           <small class="muted">Off: his unit now, the books given, and the next Stage once he finishes one.</small>
         </span>
       </label>
+      {(s.grade === 10 || s.grade === 11) && !none && (
+        <label class="fam-open">
+          <input
+            type="checkbox"
+            checked={!!info?.olMap}
+            disabled={!info}
+            onChange={(e) =>
+              void act(() => mutate(api.families.setOlMap, { studentIds: [s._id], on: (e.target as HTMLInputElement).checked, by: currentRole() }))
+            }
+          />
+          <span>
+            <b>O/L map</b>
+            <small class="muted">His phone shows the O/L syllabus (Paper 1A, 1B, 2A, 2B) instead of Grade {s.grade}'s terms.</small>
+          </span>
+        </label>
+      )}
     </Sheet>
   );
 }

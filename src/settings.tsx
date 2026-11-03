@@ -36,6 +36,7 @@ import {
 import { ATTENDANCE_SINCE, AWAY_DAYS, daysAway, studentStats } from "./stats";
 import { OlPicks, olChoices, olMatch, olNo, studentsWork, UploadBooks } from "./upload";
 import { FamilySheet, PhoneAnswers } from "./familySheet";
+import { olMapList, OlMapSheet } from "./olMap";
 import { FeedbackList } from "./feedbackList";
 import { ClassHours } from "./classHours";
 import { SimPanel, SimSwitch } from "./sim";
@@ -109,6 +110,7 @@ function Students(props: { views: View[] }) {
   const [editing, setEditing] = useState<{ id: Id<"students">; name: string } | null>(null);
   const [moving, setMoving] = useState<string | null>(null);
   const [family, setFamily] = useState<string | null>(null);
+  const [olSheet, setOlSheet] = useState(false);
   const [confirmDemo, setConfirmDemo] = useState(false);
   // This phone's class (the class, or the test class): its removed students only.
   const archived = useQuery<Removed[]>(api.state.archived, {})?.filter((a) => !!a.test === testMode());
@@ -119,6 +121,9 @@ function Students(props: { views: View[] }) {
   const ofGrade = (g: number) => props.views.filter((v) => v.s.grade === g);
   const list = ofGrade(grade);
   const removedHere = (archived ?? []).filter((a) => a.grade === grade);
+  // The O/L map on the family app (4 Nov 2026): Grade 10 and 11 only.
+  const olGrade = grade === 10 || grade === 11;
+  const olList = olGrade ? olMapList(props.views, grade) : [];
 
   const add = async (e: Event) => {
     e.preventDefault();
@@ -169,6 +174,19 @@ function Students(props: { views: View[] }) {
         }}
       />
 
+      {olGrade && !testing && (
+        <button type="button" class="olm-line" onClick={() => setOlSheet(true)}>
+          <span>
+            <b>O/L map on the phone</b>
+            <small>
+              {olList.filter((v) => v.s.olMap).length} of {olList.length} see the O/L syllabus · today's topic
+            </small>
+          </span>
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+            <path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+      )}
       <h3 class="list-title">
         Grade {grade} · {list.length === 1 ? "1 student" : `${list.length} students`}
       </h3>
@@ -184,6 +202,7 @@ function Students(props: { views: View[] }) {
                   <span>
                     {v.s.name}
                     {v.s.demo && <span class="demo-tag">{v.s.test ? "Sim" : "Demo"}</span>}
+                    {olGrade && v.s.olMap && !v.s.demo && <span class="ol-tag">O/L</span>}
                   </span>
                   <small>
                     {typeof v.s.index === "number" ? `#${v.s.index} · ` : ""}Term {v.s.term ?? "?"} · {stageName(v.stage as Stage)}
@@ -219,6 +238,7 @@ function Students(props: { views: View[] }) {
         </ul>
       )}
       {moveView && <MoveSheet v={moveView} onClose={() => setMoving(null)} />}
+      {olSheet && olGrade && <OlMapSheet grade={grade} views={props.views} onClose={() => setOlSheet(false)} />}
       {family && props.views.some((v) => v.s._id === family) && (
         <FamilySheet v={props.views.find((v) => v.s._id === family)!} onClose={() => setFamily(null)} />
       )}
@@ -954,6 +974,8 @@ function describe(e: Doc<"events">): string {
       return `family phones signed out (${v})`;
     case "open-all":
       return v === "on" ? "every Stage opened in the family app" : "Stages open in order again (family app)";
+    case "ol-map":
+      return v === "on" ? "O/L map on in the family app" : "his grade's map again (family app)";
     case "level-undo":
       return `Level ${v}: "handed in" undone`;
     case "level-marks":

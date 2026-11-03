@@ -202,6 +202,63 @@ export const setGiven = mutation({
 });
 
 /**
+ * One workbook given to many students at once, or taken back from them (Settings → Students → O/L map, 4 Nov 2026: his
+ * words, "now I want to show specific unit today ... that's what I taught lastly"): Books given for each, as on
+ * Correction, so it opens on their phones and the class sees they have it. Only a book that is in the app (a given book
+ * with nothing in the app would count as work for good). Returns how many changed.
+ */
+export const giveMany = mutation({
+  args: {
+    token: v.optional(v.string()),
+    ids: v.array(v.id("students")),
+    unitId: v.id("units"),
+    stage: bookStage,
+    given: v.boolean(),
+    by: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["students", "correction"], args.by);
+    if (args.ids.length > MANY_MAX) fail(`At most ${MANY_MAX} students at once.`);
+    const now = Date.now();
+    const unit = await ctx.db.get(args.unitId);
+    if (!unit) fail("That unit no longer exists.");
+    if (args.given && !(await bookFor(ctx, unit._id, args.stage))) fail(`${unit.code} has no ${args.stage === "fighter" ? "theory book" : "workbook"} in the app yet.`);
+    // Every student checked first: one wrong grade and nobody gets it.
+    const list: Doc<"students">[] = [];
+    for (const id of new Set(args.ids)) {
+      const s = await getStudent(ctx, id);
+      if (args.given) {
+        if (unit.grade === OL) {
+          if (s.grade !== 10 && s.grade !== 11) fail(`${s.name} is in Grade ${s.grade ?? "?"}: OL books are for Grade 10 and 11 students.`);
+        } else if (s.grade !== unit.grade) fail(`${unit.code} is a Grade ${unit.grade} unit, not for ${s.name} (Grade ${s.grade ?? "?"}).`);
+      }
+      list.push(s);
+    }
+    const session = await currentSession(ctx, now);
+    let n = 0;
+    for (const s of list) {
+      const rows = (await ctx.db.query("handouts").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()).filter(
+        (h) => h.unitId === unit._id && h.stage === args.stage,
+      );
+      if (args.given === rows.length > 0) continue;
+      if (args.given) await ctx.db.insert("handouts", { studentId: s._id, unitId: unit._id, stage: args.stage, at: now, by: cleanBy(args.by) });
+      else for (const h of rows) await ctx.db.delete(h._id);
+      await refresh(ctx, s._id, now, session); // a book given = work: he may not be out of work any more
+      await log(ctx, session, now, {
+        kind: args.given ? "book-given" : "book-given-off",
+        by: cleanBy(args.by),
+        studentId: s._id,
+        name: s.name,
+        unit: unit.key,
+        value: `${unit.key} ${args.stage === "fighter" ? "theory book" : "workbook"}`,
+      });
+      n++;
+    }
+    return n;
+  },
+});
+
+/**
  * The other book of his topic tute, ready on Correction without moving him (a student moved onto the tute before its
  * twin had a row): its progress row, nothing else.
  */

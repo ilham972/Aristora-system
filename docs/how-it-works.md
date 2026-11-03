@@ -821,6 +821,8 @@ when a student runs out of work; Evaluation also hears pulls. One tap first (the
 (wake lock, or a silent video on old iPhones); a locked phone can't ring.
 
 **Settings → Students.** (+ **Family**: the family app, above.) The grade row (6–11; `aristora.lastGrade`) filters the list and is the new student's grade.
+On Grade 10 and 11 a line above the list, **O/L map on the phone** ("12 of 30 see the O/L syllabus"), opens the O/L map
+sheet (the family app, below); a ticked student's row says **O/L** by his name.
 Owner/Reports see: students now, added / removed this month, came in the last 7 days, not seen for 2+ weeks (tap →
 names: "call the parents"; from 28 Oct 2026, `ATTENDANCE_SINCE`; rows red at 14+ days). Removed listed per grade.
 
@@ -876,7 +878,8 @@ learning app of our education institute"): one profile, his class times, what he
     with a dashed middle (purple up to where he is), its Stages as round stops with their names beside them: done =
     purple ✓, **his Stage now** = the big gold star with a turning ring and **START**, opened = its progress as a
     ring, locked = 🔒 (tap: why), a unit whose workbook is not in the app yet = dashed, "விரைவில்" (soon); a trophy at
-    each World's end (gold when every Stage is done). `worldsByTerm` groups `me.worlds` by `term`.
+    each World's end (gold when every Stage is done). `worldGroups` groups `me.worlds` by `term` (by paper part on
+    the O/L map, `me.ol`), then the `other` Stages as one more World.
   - **A Stage** (`StageScreen`): its header (World, names, "STAGE n", dashes) and its Levels on a smaller road: done =
     purple with the XP won under it (★ for every mark; ⌂ = checked at home, waiting for the corrector's look), with
     the teacher = pale with a clock, done before the app = pale ✓, **his Level now** = the gold one with START, later =
@@ -902,6 +905,32 @@ learning app of our education institute"): one profile, his class times, what he
     the **trophies** (`trophiesOf`, server: his first Level, 3 / 7 / 30 days in a row (his best run), a Level with
     every mark, five of them, a whole Stage (one Level of it in the app at least), 100 and 300 XP in one week; won
     ones gold, the rest pale with a lock and how to win them); this phone: the children, the sound.
+- **The O/L map** (4 Nov 2026, his ask: "who will see the O level syllabus, and who will see the Grade 11 syllabus?";
+  his answers: "I tick them", topics "one by one", and "now I want to show specific unit today ... that's what I
+  taught lastly"). The O/L topics are their own grade (OL = 12, `term` = the paper part), so before this no phone
+  showed them and Grade 11 (no workbooks yet) showed three empty Worlds.
+  - **Who:** a tick per student (`students.olMap`, `families.setOlMap`: one or many at once, ≤200; the owner or a
+    teacher with Students; Grade 10 and 11 only, every student checked before any changes; history line `ol-map`).
+    Where: **Settings → Students → 10 or 11 → O/L map on the phone** (`OlMapSheet`, `src/olMap.tsx`: "12 of 30 ticked",
+    **All** / **None**, then each student with a tick, his index and his book now; saved as you tap), or his
+    **Family** sheet (the **O/L map** tick under Open every Stage).
+  - **A ticked student's phone** (`worldsOf`, `olMapOn`): the 53 O/L topics instead of his grade's terms; each paper part
+    a World (World 1 · பகுதி 1A … World 4 · பகுதி 2B, `PART_TA`), each topic a Stage numbered as on his sheet
+    (`olNumber`: Paper I A 01–34, I B 01–07, Paper II 01–12), topics without a workbook "soon". Stages open as on a
+    grade's map (his topic now, books given, levels done, the next after a finished one, Open every Stage) and **the
+    first topic in the app opens by itself** (the chain starts open: the class may not have put him on an O/L book
+    yet). The hero says O/L and "ஒவ்வொரு பகுதியும் ஒரு World." His race stays his grade's.
+  - **Today's topic** (the sheet's middle block, `families.olTopics`: the O/L topics with a workbook in the app, in his
+    sheet's order, with who in the grade has each given): **Give** = that workbook given to every ticked student who
+    hasn't it (`students.giveMany`: Books given for each, as on Correction, ≤200, all checked first (Grade 10/11 for an
+    O/L book, his grade for a school one), only a book in the app; each logged `book-given`, each one's idle clock
+    refreshed). It opens on their phones, and **Continue goes to it**: `nextPlay` takes his Stage now first, then the
+    **newest book given** (`World.given`), then the map's order (this holds on every map). "✓ Given" (all ticked have
+    it) = tap to take it back from them; the toast has Undo.
+  - **Nothing lost in between** (the `other` Stages, one more World at the end): an unticked Grade 10 or 11 student
+    still sees the O/L books he has (his book now, given, or levels done) as a World "O/L"; a ticked one sees his
+    grade's books he has the same way ("Grade 11"). Always open; only books with a workbook. So untick → tick → untick
+    never hides a level he did, and his trophies stay.
 - **Class hours** (Settings → Class hours, the owner; his answers, 3 Nov 2026: "you set the hours", then "different
   grades have different time schedules"): **each grade its own** (the grade row 6–11, its days with a time each, the
   number under a grade = its class days; Save saves that grade only; what he typed for another grade waits until he
@@ -937,7 +966,7 @@ learning app of our education institute"): one profile, his class times, what he
   a shortcut; the message carries the index and code too.
 - Settings → Students → his name → **Family** (`FamilySheet`): index and code, New code, Send it on WhatsApp; the
   family phones and Sign out; **Open every Stage** (else they open in order: his unit now, books given, levels done
-  there, the next after a finished one). Books → a workbook: how much the phone marks and exactly what it accepts per
+  there, the next after a finished one); Grade 10 and 11: **O/L map** (above). Books → a workbook: how much the phone marks and exactly what it accepts per
   question (`PhoneAnswers`, `families.answers`).
 - The server marks with the uploaded answer keys (`convex/lib/phone.ts`): numbers, several numbers, answers in n (same
   values for n = 1..7), labelled answers (x = 52), "also accepted" notes. Names, yes/no with a reason, "show that",

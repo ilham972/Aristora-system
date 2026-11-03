@@ -542,3 +542,107 @@ test("the new look: class hours and Home, the map, the questions as printed, fee
 
   expect(problems).toEqual([]);
 });
+
+test("the O/L map: the owner ticks Grade 11 for the O/L syllabus and gives today's topic; the phone shows the paper parts and goes to it", async () => {
+  const backend = makeBackend(modules);
+  const t = backend.t;
+  await addPerson(t, { name: "Owner", token: OWNER_TOKEN, role: "owner" });
+  const as = { token: OWNER_TOKEN };
+  await t.mutation(api.setup.ensure, as);
+  const ol = (await t.run(async (ctx) => await ctx.db.query("units").withIndex("by_grade", (q) => q.eq("grade", 12)).collect())).sort(
+    (a, b) => a.term - b.term || a.order - b.order,
+  );
+  const cons = ol.find((u) => u.term === 4 && u.en === "Constructions")!; // 08 on his sheet (Paper II B)
+  // Two O/L workbooks (skeletons with a fake key): the first topic (Paper I A, 01) and Constructions.
+  for (const u of [ol[0], cons]) {
+    await t.mutation(api.catalog.saveWorkbook, {
+      ...as,
+      unitId: u._id,
+      parts: [{ id: "IA", to: 10, each: 2 }],
+      levels: [
+        { to: 5, max: 10 },
+        { to: 10, max: 10 },
+      ],
+      replace: true,
+      key: Array.from({ length: 10 }, (_, i) => ({ q: i + 1, a: String((i + 1) * 3) })),
+    });
+  }
+  const nila = await t.mutation(api.students.add, { ...as, name: "Nila S", grade: 11, term: 3 });
+  const ravi = await t.mutation(api.students.add, { ...as, name: "Ravi T", grade: 11, term: 3 });
+  await t.mutation(api.families.setCode, { ...as, studentId: nila, code: "4719" });
+
+  // The owner: Settings → Students → 11 → "O/L map on the phone" (0 of 2) → All → Give Constructions.
+  const C = await open(backend, site.url, size(360, 780), () => {
+    if (sessionStorage.getItem("t")) return;
+    sessionStorage.setItem("t", "1");
+    localStorage.setItem("aristora.role", "focus");
+    localStorage.setItem("aristora.token", "owner-phone-token-0123456789abcdefghijklmnopqrstuv");
+  });
+  await C.getByRole("button", { name: /Settings/ }).click();
+  await C.getByRole("button", { name: /^Grade 11\b/ }).click();
+  await contains(C.locator(".olm-line small"), "0 of 2 see the O/L syllabus");
+  await C.locator(".olm-line").click();
+  await visible(C.locator(".olm-sheet"));
+  await contains(C.locator(".olm-top b"), "0 of 2 ticked");
+  await until(async () => (await C.locator(".olm-topics li").count()) === 2, "the two O/L topics with a workbook");
+  await contains(C.locator(".olm-topics li").first(), "Paper 1A");
+  await C.locator(".olm-top").getByRole("button", { name: "All", exact: true }).click();
+  await contains(C.locator(".olm-top b"), "2 of 2 ticked");
+  await until(async () => (await t.run(async (ctx) => [await ctx.db.get(nila), await ctx.db.get(ravi)])).every((s) => s?.olMap === true), "both ticked");
+  const row = C.locator(".olm-topics li", { hasText: cons.ta });
+  await row.getByRole("button", { name: /^Give/ }).click();
+  await contains(row.locator(".btn"), "✓ Given");
+  await contains(C.locator(".toast").last(), "open on 2 phones");
+  const given = await t.run(async (ctx) => await ctx.db.query("handouts").collect());
+  expect(given.filter((h) => h.unitId === cons._id && h.stage === "master").map((h) => h.studentId).sort()).toEqual([nila, ravi].sort());
+  await noSideScroll(C);
+  await shot(C, "fam24-ol-sheet");
+  // Ravi unticked there: his grade's map again. The list shows O/L on Nila only; her Family sheet has the tick on.
+  await C.locator(".olm-kid", { hasText: "Ravi T" }).locator("input").click();
+  await contains(C.locator(".olm-top b"), "1 of 2 ticked");
+  await until(async () => (await t.run(async (ctx) => await ctx.db.get(ravi)))?.olMap === undefined, "Ravi unticked");
+  await C.locator(".olm-sheet").getByRole("button", { name: "Close" }).click();
+  await contains(C.locator(".olm-line small"), "1 of 2");
+  await visible(C.locator(".settings-body > .plain-list li", { hasText: "Nila S" }).locator(".ol-tag"));
+  expect(await C.locator(".settings-body > .plain-list li", { hasText: "Ravi T" }).locator(".ol-tag").count()).toBe(0);
+  await noSideScroll(C);
+  await shot(C, "fam25-ol-students");
+  await C.locator(".settings-body > .plain-list li", { hasText: "Nila S" }).getByRole("button", { name: "Family" }).click();
+  await until(async () => await C.locator(".fam-open", { hasText: "O/L map" }).locator("input").isChecked(), "her O/L tick on the Family sheet");
+
+  // Nila's phone: the O/L map, each paper part a World; today's topic is the one to do (Continue → its Level 1).
+  const P = await open(backend, `${site.url}/f/`, size(360, 780));
+  await P.getByLabel(/Index/).fill("1001");
+  await P.getByLabel("Code").fill("4719");
+  await P.getByRole("button", { name: "உள்நுழை" }).click();
+  await goalIs(P, "Level 1");
+  await contains(P.locator(".f-goal"), cons.ta);
+  await tabTo(P, /Learn/);
+  await contains(P.locator(".f-hero .f-title"), cons.ta);
+  await contains(P.locator(".f-hero .f-kicker"), "பகுதி 2B");
+  await until(async () => (await P.locator(".f-wbanner").count()) === 4, "four Worlds: the paper parts");
+  await contains(P.locator(".f-wbanner").first(), "பகுதி 1A");
+  await contains(P.locator(".f-wbanner").nth(3), "பகுதி 2B");
+  await noSideScroll(P);
+  await shot(P, "fam26-ol-map");
+  await P.locator(".f-cont").click();
+  await contains(P.locator(".f-qn"), "Q1");
+  await noSideScroll(P);
+
+  // The smallest phone: the sheet fits 320 px.
+  const S = await open(backend, site.url, size(320, 568), () => {
+    if (sessionStorage.getItem("t")) return;
+    sessionStorage.setItem("t", "1");
+    localStorage.setItem("aristora.role", "focus");
+    localStorage.setItem("aristora.token", "owner-phone-token-0123456789abcdefghijklmnopqrstuv");
+  });
+  await S.getByRole("button", { name: /Settings/ }).click();
+  await S.getByRole("button", { name: /^Grade 11\b/ }).click();
+  await noSideScroll(S);
+  await S.locator(".olm-line").click();
+  await visible(S.locator(".olm-topics"));
+  await noSideScroll(S);
+  await shot(S, "fam27-ol-sheet-320");
+
+  expect(problems).toEqual([]);
+});

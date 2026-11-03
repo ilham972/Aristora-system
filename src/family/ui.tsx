@@ -27,6 +27,9 @@ export function problemWords(e: unknown): string {
 
 /** Tamil names of the school terms (each term is a World). */
 export const TERM_TA: Record<number, string> = { 0: "கூடுதல்", 1: "முதலாம் தவணை", 2: "இரண்டாம் தவணை", 3: "மூன்றாம் தவணை" };
+/** The O/L map's Worlds: its paper parts (an O/L topic's `term`), as OL_PARTS in convex/lib/syllabus.ts names them
+ *  (copied: that file would bring the whole syllabus into this small bundle). */
+export const PART_TA: Record<number, string> = { 1: "பகுதி 1A", 2: "பகுதி 1B", 3: "பகுதி 2A", 4: "பகுதி 2B" };
 
 // ---- Icons: one rounded stroke style, 24 × 24 ----
 

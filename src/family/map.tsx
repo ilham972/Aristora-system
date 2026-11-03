@@ -1,5 +1,7 @@
 // Learn: the whole syllabus of his grade as one map (his voice notes, 3 Nov 2026). Each school term is a World, each
-// unit a Stage on its winding road, each Stage's Levels inside it.
+// unit a Stage on its winding road, each Stage's Levels inside it. On the O/L map (4 Nov 2026: the teachers tick him in
+// Settings → Students → O/L map) each paper part is a World and each O/L topic a Stage. The books he has from the other
+// syllabus (an O/L book on a grade's map; his grade's books on the O/L map) come last, as one more World.
 // - At the top, the Stage he is on: its name, how far he is, and Continue (his Level now, one tap).
 // - A Stage he finished is purple with a ✓; the one he is on is the gold star with START; one the teachers opened shows
 //   how far he is in it; a locked one has a lock; one whose workbook is not in the app yet says "soon".
@@ -12,7 +14,7 @@ import type { FamilyMe } from "../../convex/family";
 import type { World, WorldLevel } from "../../convex/lib/family";
 import { nextPlay } from "./play";
 import { buzz, sound } from "./sound";
-import { Dashes, Flame, Gem, Icon, Owl, OwlBadge, OwlSays, Tag, TERM_TA, toast, Waiting, type Mood } from "./ui";
+import { Dashes, Flame, Gem, Icon, Owl, OwlBadge, OwlSays, PART_TA, Tag, TERM_TA, toast, Waiting, type Mood } from "./ui";
 
 // ---- The road: a smooth line through the stops (x in % of the width, y in px) ----
 
@@ -43,10 +45,24 @@ function Road(props: { pts: { x: number; y: number }[]; height: number; reached:
 
 // ---- The syllabus map ----
 
-/** The Worlds: his grade's units grouped by term (terms 1–3 in order, then any extra book). */
-export function worldsByTerm(me: FamilyMe): { term: number; no: number; stages: World[] }[] {
-  const terms = [...new Set(me.worlds.map((w) => w.term ?? 0))].sort((a, b) => (a || 9) - (b || 9));
-  return terms.map((term, i) => ({ term, no: i + 1, stages: me.worlds.filter((w) => (w.term ?? 0) === term) }));
+export type WorldGroup = { key: string; no: number; name: string; stages: World[] };
+
+/**
+ * The Worlds: his map's units grouped by term (terms 1–3 in order, then any extra book), or by paper part on the O/L
+ * map (Paper I A … II B); then the other syllabus's books he has, as one more World ("O/L", or his grade's).
+ */
+export function worldGroups(me: FamilyMe): WorldGroup[] {
+  const main = me.worlds.filter((w) => !w.other);
+  const terms = [...new Set(main.map((w) => w.term ?? 0))].sort((a, b) => (a || 9) - (b || 9));
+  const out: WorldGroup[] = terms.map((term, i) => ({
+    key: `t${term}`,
+    no: i + 1,
+    name: (me.ol ? PART_TA[term] : TERM_TA[term]) ?? `World ${i + 1}`,
+    stages: main.filter((w) => (w.term ?? 0) === term),
+  }));
+  const other = me.worlds.filter((w) => w.other);
+  if (other.length) out.push({ key: "other", no: out.length + 1, name: me.ol ? (me.grade ? `Grade ${me.grade}` : "பாடசாலை") : "O/L", stages: other });
+  return out;
 }
 
 /** A Stage's levels finished (handed in, marked, or done before the app). */
@@ -114,7 +130,7 @@ function StageNode(props: { w: World; st: NodeState; at: { x: number; y: number 
   );
 }
 
-function WorldMap(props: { g: { term: number; no: number; stages: World[] }; focus: World | null; onStage: (unitId: string) => void }) {
+function WorldMap(props: { g: WorldGroup; focus: World | null; onStage: (unitId: string) => void }) {
   const { g, focus } = props;
   const n = g.stages.length;
   const pts = g.stages.map((_, i) => stagePos(i, g.no));
@@ -142,7 +158,7 @@ function WorldMap(props: { g: { term: number; no: number; stages: World[] }; foc
           <b>{g.no}</b>
         </span>
         <span class="f-wname">
-          <b>{TERM_TA[g.term] ?? `World ${g.no}`}</b>
+          <b>{g.name}</b>
           <small>
             {n} Stages{books < n ? ` · ${books} app இல்` : ""}
           </small>
@@ -190,7 +206,7 @@ export function LearnTab(props: { top: ComponentChildren; me: FamilyMe | null; o
   }
   const next = nextPlay(me);
   const focus = next?.world ?? me.worlds.find((w) => w.now && w.book && w.open) ?? me.worlds.find((w) => w.book && w.open && !w.allDone) ?? null;
-  const groups = worldsByTerm(me);
+  const groups = worldGroups(me);
   const g = focus ? groups.find((x) => x.stages.includes(focus)) : undefined;
   const coach = coachWords(me, focus, next?.n ?? null);
   return (
@@ -201,7 +217,7 @@ export function LearnTab(props: { top: ComponentChildren; me: FamilyMe | null; o
           <div class="f-hero-in">
             <div class="f-hero-w">
               <p class="f-kicker">
-                World {g?.no ?? 1} · {TERM_TA[focus.term] ?? ""}
+                World {g?.no ?? 1} · {g?.name ?? ""}
               </p>
               <h1 class="f-title">{focus.ta}</h1>
               <p class="f-hsub">{focus.en}</p>
@@ -229,9 +245,9 @@ export function LearnTab(props: { top: ComponentChildren; me: FamilyMe | null; o
         ) : (
           <div class="f-hero-in">
             <div class="f-hero-w">
-              <p class="f-kicker">{me.grade ? `Grade ${me.grade}` : "ARISTORA"}</p>
+              <p class="f-kicker">{me.ol ? "O/L" : me.grade ? `Grade ${me.grade}` : "ARISTORA"}</p>
               <h1 class="f-title">உன் பாடத்திட்டம்</h1>
-              <p class="f-hsub">ஒவ்வொரு தவணையும் ஒரு World.</p>
+              <p class="f-hsub">{me.ol ? "ஒவ்வொரு பகுதியும் ஒரு World." : "ஒவ்வொரு தவணையும் ஒரு World."}</p>
             </div>
             <OwlBadge mood="wave" class="hero" />
           </div>
@@ -242,7 +258,7 @@ export function LearnTab(props: { top: ComponentChildren; me: FamilyMe | null; o
       </OwlSays>
       <div class="f-map">
         {groups.map((x) => (
-          <WorldMap key={x.term} g={x} focus={focus} onStage={props.onStage} />
+          <WorldMap key={x.key} g={x} focus={focus} onStage={props.onStage} />
         ))}
         {me.worlds.length === 0 && <p class="f-none">உன் பாடத்திட்டம் விரைவில் வரும்.</p>}
       </div>
@@ -267,7 +283,7 @@ const lvPos = (i: number) => ({ x: 50 + 24 * Math.sin(i * 1.6), y: LV_HEAD + i *
 
 export function StageScreen(props: { me: FamilyMe; world: World; onBack: () => void; onPlay: (n: number) => void }) {
   const { me, world: w } = props;
-  const groups = worldsByTerm(me);
+  const groups = worldGroups(me);
   const g = groups.find((x) => x.stages.some((s) => s.unitId === w.unitId));
   const n = w.levels.length;
   const done = levelsDone(w);
@@ -312,7 +328,7 @@ export function StageScreen(props: { me: FamilyMe; world: World; onBack: () => v
         <div class="f-hero-in">
           <div class="f-hero-w">
             <p class="f-kicker">
-              World {g?.no ?? 1} · {TERM_TA[w.term] ?? ""}
+              World {g?.no ?? 1} · {g?.name ?? ""}
             </p>
             <h1 class="f-title">{w.ta}</h1>
             <p class="f-hsub">{w.en}</p>

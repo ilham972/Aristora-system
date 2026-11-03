@@ -3,6 +3,9 @@
 //   phones      -> his family's phones and link (the Family sheet).
 //   signOutAll  -> every family phone of his signs out; an unused link stops working.
 //   setOpenAll  -> "Open every Stage" for him (else they open in order).
+//   setOlMap    -> the O/L map on his phone, for one student or many (Settings → Students → O/L map, 4 Nov 2026):
+//                  the O/L syllabus by paper part instead of his grade's terms. Grade 10 and 11 only.
+//   olTopics    -> the O/L map sheet: the O/L topics with a workbook in the app, and who in a grade has each given.
 //   setCode     -> his family app code (4 digits, made on the teacher's phone); with his index number he signs in.
 //   answers     -> what the phone accepts for each question of a workbook (teachers check it once per unit).
 //   feedback, feedbackNew, feedbackSeen -> what students send from the family app (Settings → Feedback, 3 Nov 2026).
@@ -16,6 +19,7 @@ import type { Doc } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import { actor, FAMILY_LINK_MS, viewer } from "./lib/auth";
 import { codeRow, giveIndex, gradeHoursOf, HOUR_GRADES, weakCode, type GradeHours } from "./lib/family";
+import { OL, olNumber } from "./lib/syllabus";
 import { asMaster, bookFor, cleanBy, fail, getStudent, keyRow, log } from "./lib/backend";
 import { allPhone, phoneKey, phoneShare, wantWords } from "./lib/phone";
 
@@ -48,7 +52,7 @@ export const makeLink = mutation({
   },
 });
 
-/** His family's phones (signed in), his unused link, and whether every Stage is open for him. */
+/** His family's phones (signed in), his unused link, whether every Stage is open for him, and his O/L map. */
 export const phones = query({
   args: { token, studentId: v.id("students") },
   handler: async (ctx, args) => {
@@ -68,6 +72,7 @@ export const phones = query({
       phones: devices.map((d) => ({ label: d.label, since: d.createdAt, lastSeenAt: d.lastSeenAt })),
       linkUntil: link?.expiresAt ?? null,
       openAll: !!s.openAll,
+      olMap: !!s.olMap,
       index: s.index ?? null,
       code: code?.code ?? null,
       locked: code?.lockedUntil !== undefined && code.lockedUntil > now,
@@ -113,6 +118,90 @@ export const setOpenAll = mutation({
     await ctx.db.patch(s._id, { openAll: args.on || undefined });
     await log(ctx, null, Date.now(), { kind: "open-all", by: cleanBy(args.by), studentId: s._id, name: s.name, value: args.on ? "on" : "off" });
     return true;
+  },
+});
+
+/** Students ticked or unticked in one tap (All / None for a grade): at most this many. */
+export const OL_MAP_MAX = 200;
+
+/**
+ * The O/L map on their phones (4 Nov 2026, his ask: "who will see the O level syllabus, and who will see the Grade 11
+ * syllabus?"): ticked = the family app shows the O/L syllabus by paper part instead of his grade's terms. One student
+ * (his Family sheet) or many (Settings → Students → O/L map: a tick, All, None). Grade 10 and 11 students only, as for
+ * O/L books. Returns how many changed.
+ */
+export const setOlMap = mutation({
+  args: { token, studentIds: v.array(v.id("students")), on: v.boolean(), by: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["owner", "students"], args.by);
+    if (args.studentIds.length > OL_MAP_MAX) fail(`At most ${OL_MAP_MAX} students at once.`);
+    const now = Date.now();
+    // Every student checked first: one wrong grade and nobody changes.
+    const list: Doc<"students">[] = [];
+    for (const id of new Set(args.studentIds)) {
+      const s = await getStudent(ctx, id);
+      if (args.on && s.grade !== 10 && s.grade !== 11) fail(`${s.name} is in Grade ${s.grade ?? "?"}: the O/L map is for Grade 10 and 11 students.`);
+      list.push(s);
+    }
+    let n = 0;
+    for (const s of list) {
+      if (!!s.olMap === args.on) continue;
+      await ctx.db.patch(s._id, { olMap: args.on || undefined });
+      await log(ctx, null, now, { kind: "ol-map", by: cleanBy(args.by), studentId: s._id, name: s.name, value: args.on ? "on" : "off" });
+      n++;
+    }
+    return n;
+  },
+});
+
+export type OlTopic = {
+  unitId: Doc<"units">["_id"];
+  /** Its number on his O/L sheet (Paper I A 01–34, I B 01–07, Paper II 01–12). */
+  no: number;
+  /** Its paper part: 1 = I A, 2 = I B, 3 = II A, 4 = II B. */
+  part: number;
+  ta: string;
+  en: string;
+  levels: number;
+  /** Its answer key is in the app: the phone marks it at home. */
+  phone: boolean;
+};
+
+/**
+ * The O/L map sheet (Settings → Students → O/L map): the O/L topics whose workbook is in the app, in his sheet's order
+ * (each can be given to the ticked students: it opens on their phones), and which students of this grade have each
+ * one given (Books given, from Correction or from here).
+ */
+export const olTopics = query({
+  args: { token, grade: v.number() },
+  handler: async (ctx, args): Promise<{ topics: OlTopic[]; given: Record<string, string[]> }> => {
+    await viewer(ctx, args.token, "owner", "students");
+    const units = (await ctx.db
+      .query("units")
+      .withIndex("by_grade", (q) => q.eq("grade", OL))
+      .collect()).sort((a, b) => a.term - b.term || a.order - b.order);
+    const topics: OlTopic[] = [];
+    for (const u of units) {
+      const book = await bookFor(ctx, u._id, "master");
+      if (!book || book.data.kind !== "master") continue;
+      topics.push({ unitId: u._id, no: olNumber(u, units), part: u.term, ta: u.ta, en: u.en, levels: book.data.levels.length, phone: (book.keyCount ?? 0) > 0 });
+    }
+    const ids = new Set(topics.map((x) => x.unitId as string));
+    const given: Record<string, string[]> = {};
+    if (ids.size === 0) return { topics, given };
+    const students = (await ctx.db
+      .query("students")
+      .withIndex("by_archived", (q) => q.eq("archived", false))
+      .collect()).filter((s) => s.grade === args.grade && !s.test);
+    for (const s of students) {
+      for (const h of await ctx.db
+        .query("handouts")
+        .withIndex("by_student", (q) => q.eq("studentId", s._id))
+        .collect()) {
+        if (h.stage === "master" && ids.has(h.unitId) && !(given[h.unitId] ??= []).includes(s._id)) given[h.unitId].push(s._id);
+      }
+    }
+    return { topics, given };
   },
 });
 

@@ -5,6 +5,11 @@
 // - A Stage (unit; the type is still called World here) is open when the teachers opened it for him (his unit now, a
 //   book given, levels done there), when the one before it is done (every level handed in or marked), or when "Open
 //   every Stage" is on for him.
+// - The O/L map (4 Nov 2026, his ask: "who will see the O level syllabus, and who will see the Grade 11 syllabus?"):
+//   a Grade 10 or 11 student the teachers ticked (Settings → Students → O/L map) sees the O/L syllabus instead: each
+//   paper part a World (Paper I A, I B, II A, II B), each O/L topic a Stage numbered as on his sheet, the first topic in
+//   the app open to start. The books he has from the other syllabus (O/L books on a grade's map, his grade's books on
+//   the O/L map: his book now, books given, books he started) follow as one more World, so nothing he does is hidden.
 // - Only the level he is on can be played (the first with no record): the paper book is the truth, level by level.
 
 import type { Doc, Id } from "../_generated/dataModel";
@@ -12,6 +17,7 @@ import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { MasterData } from "./book";
 import { DAY_MS, slDayNo, slWeekStart } from "./day";
 import { computeMaster, EMPTY_MASTER, type MState } from "./master";
+import { OL, olNumber } from "./syllabus";
 
 export type LevelState =
   /** Marked (in class, or at home and checked). */
@@ -50,7 +56,19 @@ export type World = {
   levels: WorldLevel[];
   /** Every level handed in or marked. */
   allDone: boolean;
+  /**
+   * From the other syllabus (an O/L book on his grade's map, or his grade's book on the O/L map): the phone puts these in
+   * one more World after the others. Only books he is on now, was given or started; always open.
+   */
+  other?: true;
+  /** When the teachers gave him this workbook (Books given): the newest comes first for the phone's Continue. */
+  given?: number;
 };
+
+/** His phone shows the O/L syllabus (Settings → Students → O/L map): Grade 10 and 11 students only. */
+export function olMapOn(s: Pick<Doc<"students">, "grade" | "olMap">): boolean {
+  return !!s.olMap && (s.grade === 10 || s.grade === 11);
+}
 
 /** "U08" → 8. */
 export function unitNumber(code: string): number {
@@ -82,40 +100,76 @@ function started(m: MState): boolean {
   return Object.values(m.lv).some((lv) => lv.done || lv.fixed || lv.pre);
 }
 
+/** A grade's units in book order; the O/L topics by paper part, each part in his sheet's order. */
+async function unitsOf(ctx: QueryCtx, grade: number): Promise<Doc<"units">[]> {
+  const list = await ctx.db
+    .query("units")
+    .withIndex("by_grade", (q) => q.eq("grade", grade))
+    .collect();
+  return list.sort((a, b) => (grade === OL ? a.term - b.term : 0) || a.order - b.order);
+}
+
 /**
- * The whole syllabus of his grade in book order, with what is open (3 Nov 2026, his ask: "put the whole syllabus").
- * A unit without a workbook is listed with no levels and never open; the "next opens when this one is done" chain
- * passes over it.
+ * The whole syllabus of his map, with what is open (3 Nov 2026, his ask: "put the whole syllabus"): his grade's, or the
+ * O/L syllabus when he is ticked for it (olMapOn). A unit without a workbook is listed with no levels and never open;
+ * the "next opens when this one is done" chain passes over it. Then the other syllabus's books he has (`other`).
  */
 export async function worldsOf(ctx: QueryCtx, student: Doc<"students">): Promise<World[]> {
   if (typeof student.grade !== "number") return [];
-  const units = await ctx.db
-    .query("units")
-    .withIndex("by_grade", (q) => q.eq("grade", student.grade!))
-    .collect();
+  const ol = olMapOn(student);
+  // O/L books are for Grade 10 and 11 students only (students.checkOl): no one else has an O/L side.
+  const olUnits = student.grade === 10 || student.grade === 11 ? await unitsOf(ctx, OL) : [];
+  const gradeUnits = await unitsOf(ctx, student.grade);
   const rows = await ctx.db
     .query("progress")
     .withIndex("by_student", (q) => q.eq("studentId", student._id))
     .collect();
-  const given = new Set(
-    (await ctx.db
-      .query("handouts")
-      .withIndex("by_student", (q) => q.eq("studentId", student._id))
-      .collect())
-      .filter((h) => h.stage === "master")
-      .map((h) => h.unitId as string),
-  );
-  const out: World[] = [];
-  let prevDone = false;
-  for (const unit of units.sort((a, b) => a.order - b.order)) {
+  // His workbooks given (the newest hand-out of each).
+  const given = new Map<string, number>();
+  for (const h of await ctx.db
+    .query("handouts")
+    .withIndex("by_student", (q) => q.eq("studentId", student._id))
+    .collect()) {
+    if (h.stage === "master") given.set(h.unitId, Math.max(given.get(h.unitId) ?? 0, h.at));
+  }
+  const workbook = async (unit: Doc<"units">) => {
     const book = await ctx.db
       .query("books")
       .withIndex("by_unit_stage", (q) => q.eq("unitId", unit._id).eq("stage", "master"))
       .first();
-    if (!book || book.data.kind !== "master") {
+    return book && book.data.kind === "master" ? { row: book, data: book.data } : null;
+  };
+  const stage = (unit: Doc<"units">, book: { row: Doc<"books">; data: MasterData }, open: boolean): World => {
+    const p = rows.find((r) => r.unitId === unit._id && r.stage === "master");
+    const m = p?.m ?? EMPTY_MASTER;
+    const at = given.get(unit._id);
+    return {
+      unitId: unit._id,
+      no: unit.grade === OL ? olNumber(unit, olUnits) : unitNumber(unit.code),
+      ta: unit.ta,
+      en: unit.en,
+      term: unit.term,
+      book: true,
+      open: open || !!student.openAll || student.unitId === unit._id || at !== undefined || started(m),
+      phone: (book.row.keyCount ?? 0) > 0,
+      now: student.unitId === unit._id,
+      q: (book.row.qCount ?? 0) > 0,
+      levels: levelStates(m, book.data),
+      allDone: allHandedIn(m, book.data),
+      ...(at !== undefined ? { given: at } : {}),
+    };
+  };
+
+  const out: World[] = [];
+  // The chain: a Stage opens when the one before it is done. The O/L map opens its first topic in the app by itself
+  // (his answer, 4 Nov 2026: "one by one"): the class may not have put him on any O/L book yet.
+  let prevDone = ol;
+  for (const unit of ol ? olUnits : gradeUnits) {
+    const book = await workbook(unit);
+    if (!book) {
       out.push({
         unitId: unit._id,
-        no: unitNumber(unit.code),
+        no: unit.grade === OL ? olNumber(unit, olUnits) : unitNumber(unit.code),
         ta: unit.ta,
         en: unit.en,
         term: unit.term,
@@ -129,26 +183,16 @@ export async function worldsOf(ctx: QueryCtx, student: Doc<"students">): Promise
       });
       continue;
     }
-    const p = rows.find((r) => r.unitId === unit._id && r.stage === "master");
-    const m = p?.m ?? EMPTY_MASTER;
-    const now = student.unitId === unit._id;
-    const open = !!student.openAll || now || given.has(unit._id) || started(m) || prevDone;
-    const allDone = allHandedIn(m, book.data);
-    out.push({
-      unitId: unit._id,
-      no: unitNumber(unit.code),
-      ta: unit.ta,
-      en: unit.en,
-      term: unit.term,
-      book: true,
-      open,
-      phone: (book.keyCount ?? 0) > 0,
-      now,
-      q: (book.qCount ?? 0) > 0,
-      levels: levelStates(m, book.data),
-      allDone,
-    });
-    prevDone = allDone;
+    const w = stage(unit, book, prevDone);
+    out.push(w);
+    prevDone = w.allDone;
+  }
+  // The other syllabus: only what he has there (his book now, a book given, levels done), always open.
+  for (const unit of ol ? gradeUnits : olUnits) {
+    const has = student.unitId === unit._id || given.has(unit._id) || rows.some((r) => r.unitId === unit._id && r.stage === "master" && r.m && started(r.m));
+    if (!has) continue;
+    const book = await workbook(unit);
+    if (book) out.push({ ...stage(unit, book, true), other: true });
   }
   return out;
 }

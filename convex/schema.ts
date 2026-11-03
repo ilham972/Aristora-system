@@ -238,6 +238,11 @@ export default defineSchema({
     archivedAt: v.optional(v.number()),
     /** The family app opens every Stage (unit) for him (else: his unit, books given, and the next after a finished one). */
     openAll: v.optional(v.boolean()),
+    /**
+     * The family app shows him the O/L syllabus (the O/L topics by paper part) instead of his grade's terms: Grade 10
+     * and 11 only (Settings → Students → O/L map, 4 Nov 2026). Unset = his grade's map.
+     */
+    olMap: v.optional(v.boolean()),
     /** His index number (1001, 1002…, never reused): he types it with his code in the family app. Not secret. */
     index: v.optional(v.number()),
     /**
