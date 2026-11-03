@@ -202,7 +202,10 @@ EOF
 - The Theory and Evaluation pages are the same one-screen pieces (`.evx-*`, `src/roomkit.tsx`); Theory's colours come
   from `.tpx-page`. Change a shared piece and look at BOTH pages' shots. The e2e `ev*` helpers drive both pages.
 - Demo work is dated 30–70 min back: just after Sri Lanka midnight it is "yesterday" and "today" checks fail. The
-  e2e guards them with `nearMidnight()` (Asia/Colombo hour < 2); don't "fix" a test that fails only then.
+  e2e guards them with `nearMidnight()` (Asia/Colombo hour < 2); don't "fix" a test that fails only then. Not guarded
+  yet (4 Nov 2026, 00:10 Sri Lanka, failing on main too): "Attendance: sign in all…" (Keerthi in the many-sheet),
+  "Class tab: everyone's…" and "Teacher card: a real day…" (her three numbers). Between 00:00 and 02:00, check the
+  same run-throughs on main (`ci/e2e-only`) before blaming your change.
 - `overflow-x: auto` clips vertically too: rings and lifts inside a one-line row need padding in the row (no
   `translateY` on the open level). Items in a no-wrap flex row shrink unless `flex: none`.
 - Playwright's click scrolls a covered element into view: check what must be on screen BEFORE such a click (the old
