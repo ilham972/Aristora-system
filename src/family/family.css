@@ -88,6 +88,13 @@ body {
 body.f-noscroll {
   overflow: hidden;
 }
+/* An app, not a web page (his ask, 4 Nov 2026): two fingers never zoom (two thumbs on the pad zoomed it to 1.5×, the
+   bottom bar off the screen); one finger still scrolls. With the page's user-scalable=no (Chrome) and main.tsx's stop
+   of Safari's own pinch (an iPhone ignores user-scalable=no). */
+html {
+  touch-action: manipulation;
+  touch-action: pan-x pan-y;
+}
 button,
 input,
 textarea {

@@ -254,6 +254,12 @@ EOF
   (`overflow-x: hidden; overflow-x: clip`: `.f-play`, `.f-result`), and the run-through checks every frame
   (`framesOf` in `family.e2e.ts`). To see what moves, record each frame in Playwright (`requestAnimationFrame`:
   `scrollWidth`, `innerHeight`, a fixed element's rect, `scrollY`).
+- **Fingers in a run-through**: Playwright's `tap()` is one finger. A pinch or a swipe needs real touch events over the
+  Chrome DevTools protocol (`Input.dispatchTouchEvent`, after `Emulation.setTouchEmulationEnabled` with
+  `maxTouchPoints: 5`, or a second finger never lands): `fingersOn` in `family.e2e.ts`. `Input.synthesizePinchGesture`
+  and `synthesizeScrollGesture` do nothing in this headless Chrome (a 5,000px page didn't move), so a test built on them
+  passes on broken code: make it fail on the old code first. A page zoomed by a pinch stays zoomed
+  (`Emulation.setPageScaleFactor` 1 resets it; `resetPageScaleFactor` doesn't).
 - **`scrollIntoView` scrolls every scroller up the chain, the page too**: a chip centred in its row also pulled the
   page up to the row, and the card's own smooth scroll took it back down (the same bounce, with the questions as
   printed). To move a row sideways, scroll the row (`row.scrollTo`); move the page only on purpose, in a layout effect

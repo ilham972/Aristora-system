@@ -179,7 +179,8 @@ The technical memory of the app, kept with the code and updated in the same comm
   Constructions, Ravi unticked, the O/L tags, her Family sheet tick; her phone: Continue on Constructions, four Worlds
   by paper part; the sheet at 320 px; shots `fam24`–`fam27`); **a level holds still** (every frame while → is tapped,
   `framesOf`: never wider than the phone, the pad's bottom on the screen's, the page moving once to the top with a new
-  tall question, `scrollDown`; shot `fam28`).
+  tall question, `scrollDown`; shot `fam28`); **an app, not a web page** (two fingers never zoom on Home, the map, a
+  Level's pad and question; one finger still scrolls the map and the strip: `fingersOn` (real touches), `zoomOf`).
 - `taps`, `announce`, `chime`, `sha256`. `helpers.ts`: `asOwner(t)`, `asPhone(t, token)`, `addPerson(t, {...})`,
   `OWNER_TOKEN`.
 - `e2e/class.e2e.ts`: the run-throughs on simulated phones (real functions, fake backend in `e2e/harness.ts`):

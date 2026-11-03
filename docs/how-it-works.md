@@ -839,6 +839,15 @@ learning app of our education institute"): one profile, his class times, what he
   `/f/` on both addresses; family links are app.aristora.org/f/#join=…, and app.aristora.org/ redirects to /f/
   (`vercel.json`, a redirect: a rewrite of "/" never runs, Vercel serves index.html first). A service worker under /f/
   only (cache `aristora-family-4`): it opens with no signal after the first visit.
+- **An app, not a web page** (his ask, 4 Nov 2026: "students want to feel like a native app, so don't zoom when we use
+  two fingers"): two fingers never zoom, on every screen, by three locks: the page's `maximum-scale=1,
+  user-scalable=no` (`public/family/index.html`: Chrome), `html { touch-action: pan-x pan-y }` (Chrome even when a
+  phone's "force enable zoom" overrides the page; iPhones from iOS 13), and Safari's own pinch stopped in `main.tsx`
+  (`gesturestart`/`gesturechange`: an iPhone ignores user-scalable=no since iOS 10; no listener that could slow
+  scrolling). One finger still scrolls every page, the map and the question strip; double tap never zoomed. Before,
+  two thumbs on the pad zoomed it to 1.5x and the bottom bar went off the screen. The cost: a printed question is
+  10 pt and its wide tables and diagrams are shrunk to fit (`questionView.ts`, down to 0.35x); they can no longer be
+  pinched bigger. Only Chrome is checked here (the run-through pinches with real touch events); an iPhone is not.
 - **Its look** (his voice notes and the two pictures he liked, 3 Nov 2026; the palette rebuilt 4 Nov 2026 after his
   review: "the yellow behind the purple owl is not beautiful"): for every grade, 6 to 11 (his words: a night sky is
   fine for Grade 7, silly for Grade 11), so light and calm. **Big surfaces are only ARISTORA's violet** (`--brand`

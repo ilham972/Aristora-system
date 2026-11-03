@@ -812,3 +812,83 @@ test("a level holds still: → never makes the page wider than the phone or move
   await noSideScroll(P);
   expect(problems).toEqual([]);
 });
+
+/** Real fingers on the glass (Chrome's own touch handling: a pinch, a swipe), not Playwright's taps. */
+async function fingersOn(p: Page) {
+  const cdp = await p.context().newCDPSession(p);
+  await cdp.send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
+  const touch = (type: string, pts: { x: number; y: number }[]) =>
+    cdp.send("Input.dispatchTouchEvent", { type, touchPoints: pts.map((q, id) => ({ x: q.x, y: q.y, id, radiusX: 4, radiusY: 4, force: 1 })) });
+  const move = async (from: { x: number; y: number }[], to: { x: number; y: number }[]) => {
+    await touch("touchStart", from);
+    for (let i = 1; i <= 12; i++) {
+      await touch("touchMove", from.map((f, j) => ({ x: f.x + ((to[j].x - f.x) * i) / 12, y: f.y + ((to[j].y - f.y) * i) / 12 })));
+      await new Promise((r) => setTimeout(r, 16));
+    }
+    await touch("touchEnd", []);
+    await p.waitForTimeout(400);
+  };
+  return {
+    /** Two fingers spread apart around (x, y): what zooms a web page. */
+    pinch: (x: number, y: number) => move([{ x: x - 30, y }, { x: x + 30, y }], [{ x: x - 90, y }, { x: x + 90, y }]),
+    /** One finger dragged across. */
+    swipe: (from: { x: number; y: number }, to: { x: number; y: number }) => move([from], [to]),
+  };
+}
+const zoomOf = (p: Page) => p.evaluate(() => window.visualViewport!.scale);
+
+test("an app, not a web page: two fingers never zoom (Home, the map, a Level's pad and question); one finger still scrolls", async () => {
+  // His ask (4 Nov 2026): "students want to feel like a native app, so don't zoom when we use two fingers". Before,
+  // two thumbs on the pad zoomed the page to 1.5x and pushed the bottom bar off the screen.
+  const backend = makeBackend(modules);
+  const t = backend.t;
+  await addPerson(t, { name: "Owner", token: OWNER_TOKEN, role: "owner" });
+  const as = { token: OWNER_TOKEN };
+  await t.mutation(api.setup.ensure, as);
+  const u01 = await t.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G8-U01")).first())!._id);
+  await t.mutation(api.catalog.saveWorkbook, {
+    ...as,
+    unitId: u01,
+    parts: BOOK.data.parts.map((p) => ({ id: p.id, to: p.to, ...(p.each ? { each: p.each } : {}) })),
+    levels: BOOK.data.levels.map((l) => ({ to: l.to, max: l.max })),
+    marks: BOOK.data.marks ?? {},
+    replace: true,
+    key: fakeKey(),
+  });
+  const hana = await t.mutation(api.students.add, { ...as, name: "Hana K", grade: 8, term: 1, stage: "master", unitId: u01 });
+  await t.mutation(api.families.setCode, { ...as, studentId: hana, code: "4719" });
+
+  const P = await open(backend, `${site.url}/f/`, size(360, 740));
+  await P.getByLabel(/Index/).fill("1001");
+  await P.getByLabel("Code").fill("4719");
+  await P.getByRole("button", { name: "Sign in" }).click();
+  await goalIs(P, "Level 1");
+  const f = await fingersOn(P);
+  await f.pinch(180, 400);
+  expect(await zoomOf(P)).toBe(1);
+
+  // The map: one finger scrolls it; two fingers still don't zoom.
+  await tabTo(P, /Learn/);
+  await visible(P.locator(".f-node.s-now"));
+  await f.swipe({ x: 180, y: 600 }, { x: 180, y: 200 });
+  expect(await P.evaluate(() => window.scrollY)).toBeGreaterThan(150);
+  await f.pinch(180, 400);
+  expect(await zoomOf(P)).toBe(1);
+  await P.evaluate(() => window.scrollTo(0, 0));
+
+  // A Level: two thumbs on the pad, two fingers on the question: no zoom. The question strip still slides sideways.
+  await P.locator(".f-node.s-now").click();
+  await playIs(P, "Level 1");
+  await P.locator(".f-lv.play").click();
+  await contains(P.locator(".f-qn"), "Q1");
+  await f.pinch(180, 620);
+  expect(await zoomOf(P)).toBe(1);
+  await f.pinch(180, 250);
+  expect(await zoomOf(P)).toBe(1);
+  const strip = (await P.locator(".f-strip").boundingBox())!;
+  const mid = strip.y + strip.height / 2;
+  await f.swipe({ x: strip.x + strip.width - 20, y: mid }, { x: strip.x + 20, y: mid });
+  expect(await P.locator(".f-strip").evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
+  await contains(P.locator(".f-qn"), "Q1"); // the fingers typed nothing and moved nothing
+  expect(problems).toEqual([]);
+});

@@ -7,6 +7,15 @@ import { render } from "preact";
 import { App } from "./app";
 import { keepOwl } from "./ui";
 
+// Two fingers never zoom (his ask, 4 Nov 2026: "students want to feel like a native app"). Chrome obeys the page's
+// user-scalable=no and the CSS touch-action; an iPhone ignores user-scalable=no (since iOS 10), so Safari's own pinch
+// gestures are stopped too. They exist only in Safari; nothing here touches scrolling.
+if ("GestureEvent" in window) {
+  const stop = (e: Event) => e.preventDefault();
+  document.addEventListener("gesturestart", stop, { passive: false });
+  document.addEventListener("gesturechange", stop, { passive: false });
+}
+
 // The living owl of the loading page is drawn again inside the app (the same drawing, no extra bytes).
 keepOwl();
 render(<App />, document.getElementById("app")!);
