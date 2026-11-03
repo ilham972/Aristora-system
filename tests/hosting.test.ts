@@ -16,6 +16,12 @@ describe("the two addresses", () => {
     expect(config.headers.length).toBeGreaterThan(0); // the CSP and security headers stay
   });
 
+  test("the family app's files (new names every version: code, style, its font) are kept a year by the phone", () => {
+    const rules = config.headers as { source: string; headers: { key: string; value: string }[] }[];
+    const fam = rules.find((r) => r.source === "/f/assets/(.*)");
+    expect(fam?.headers).toEqual([{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }]);
+  });
+
   test("the family app installs and works offline under /f/ only (the teachers' app never gets a service worker)", () => {
     const m = JSON.parse(MANIFEST) as { start_url: string; scope: string; id: string };
     expect([m.id, m.start_url, m.scope]).toEqual(["/f/", "/f/", "/f/"]);

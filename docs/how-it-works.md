@@ -687,23 +687,80 @@ when a student runs out of work; Evaluation also hears pulls. One tap first (the
 Owner/Reports see: students now, added / removed this month, came in the last 7 days, not seen for 2+ weeks (tap →
 names: "call the parents"; from 28 Oct 2026, `ATTENDANCE_SINCE`; rows red at 14+ days). Removed listed per grade.
 
-**The family app (app.aristora.org, `8ee3b16`, another chat, his voice note of 30 Oct).** Levels done at home
-made a pile for the corrector in class. Now the student does the level on paper, types its answers in the family app
-on the family phone, taps **Check** once per level and sees ✓ / ✗ at once; the class sees his marks before he walks in.
-- Its own tiny bundle (`src/family/`, ~16 KB over the wire; `scripts/build.mjs` stops the build over 50 KB), no fonts,
-  no client library (Convex's plain HTTP API, `src/family/net.ts`). It lives under `/f/` on both addresses; family
-  links are app.aristora.org/f/#join=…, and app.aristora.org/ redirects to /f/ (`vercel.json`, a redirect: a rewrite of
-  "/" never runs, Vercel serves index.html first). A service worker under /f/ only: it opens with no signal after the
-  first visit.
-- Words: Tamil first, no school words: a unit = a **World**, marks = **XP** (1 mark = 1 XP), his streak, this week's
-  board in his grade. Only the level he is on can be played (the first with no record): the paper book is the truth.
+**The family app (app.aristora.org, `8ee3b16`, another chat, his voice note of 30 Oct; the new look 3 Nov 2026).**
+Levels done at home made a pile for the corrector in class. Now the student does the level on paper, types its answers
+in the family app on the family phone, taps **Check** once per level and sees ✓ / ✗ at once; the class sees his marks
+before he walks in.
+- Its own small bundle (`src/family/`, 34 KB over the wire for code, style and page on 3 Nov 2026; `scripts/build.mjs` stops the build
+  over 50 KB), one small font (Barlow Semi Condensed 700, Latin only, for numbers and game words; Tamil is the phone's
+  own), no client library (Convex's plain HTTP API, `src/family/net.ts`). It lives under `/f/` on both addresses;
+  family links are app.aristora.org/f/#join=…, and app.aristora.org/ redirects to /f/ (`vercel.json`, a redirect: a
+  rewrite of "/" never runs, Vercel serves index.html first). A service worker under /f/ only (cache
+  `aristora-family-2`): it opens with no signal after the first visit.
+- **Its own look** (3 Nov 2026, his voice note: "we are unique", nothing like the language app he once compared the
+  business model to): ARISTORA's night (the owl's navy, the logo's violet and blue glows, stars), **gold** for what he
+  wins (XP ✦, finished Levels, trophies), a **lamp** for each day he keeps (a kuthuvilakku's flame), cyan ✓ and coral ✗.
+  No green anywhere. Things rise and pop, never slide sideways; "reduce motion" stops it all.
+- **The loading page = the class system's living owl** (his ask: "the same exact loading page"): one copy,
+  `public/splash.html`, put into both pages by the build at `%SPLASH%` (each its own "still loading" words; Tamil
+  first here), styles `src/splash.css`, gone with `hideSplash()` once there is something real to show (at least 1.2 s
+  from the start so it doesn't flash). No spinner anywhere: while a Level loads, the same owl (`Owl`: the app keeps
+  the splash's own drawing, no extra bytes).
+- Words: Tamil first, no school words: a unit = a **World**, marks = **XP** (1 mark = 1 XP), his lamp (days in a row),
+  this week's race in his grade. Only the level he is on can be played (the first with no record): the paper book is
+  the truth.
+- **Screens.** Top bar: who is on screen (his letter on his colour, his name, ▾ or how many children; tap = the
+  children on this phone), his lamp (days in a row; lit once he did a Level today; tap = Me), his XP this week (tap =
+  the race), and **Feedback** (💬). Bottom bar: **வரைபடம்** (the map), **போட்டி** (the race), **நான்** (Me).
+  - **The map** (his "a beautiful map, not a straight line, like a game"): each World of his grade a banner (its
+    number, Tamil name, done/all or 🔒) over a winding night road (`spot`: a sine sway, each World its own colour);
+    its Levels are stops: a finished Level is a **medal** (gold from 75% of its XP, silver from half, bronze below; its
+    ring = how much XP he won; ⌂ = checked at home, waiting for the corrector's look; ⏳ = with the teacher; ✓ pale =
+    done before the app); **his Level now** is the big violet stop with the owl perched on it and "தொடங்கு" (the World
+    he is on in class first, else the first open World the phone can mark); the rest wait; the road is gold up to
+    where he is; a cup at each World's end (gold with its XP when done). A locked World is dim (tap: why). The map
+    opens on his Level now; scrolled away, a gold "World 2 · Level 3" button brings it back. A lamp line on top until
+    he does a Level today ("இன்று ஒரு Level செய்தால் 6 நாள்!").
+  - **A Level**: the question strip, one question at a time, his own pad (numbers, or the n pad), Check once (review
+    first). **The question switch** (👁 at the top, his voice note: a new student has no workbook yet): off = only the
+    boxes (paper in hand); on = each question as printed above its boxes (`family.questions`: the level's questions
+    and the book's CSS once per World, kept with the level for no signal; drawn in a shadow root by
+    `src/questionView.ts`, shared with the teachers' "Show the question"). Kept per child. Pale when the World's
+    questions are not in the app yet (Books page **Q**: upload the unit's zip again). A question missing from the zip
+    says so; the answers never come.
+  - **The reveal**: the owl hops, gold sparks (more for a better level), the marks counting up, +XP, the lamp, every
+    trophy this level just won ("புதிய கோப்பை!"), each question ✓ ✗ ✍, the next Level or the map.
+  - **The race** (`family.board`): this week in his grade (first name and initial), the top three on a podium (crown on
+    the first), the rest as rows, his row always, "இன்னும் 12 XP எடுத்தால் Bilal ஐ முந்துவாய்!" (to pass the one
+    above), when the week ends ("முடிய 4 நாள் 6 மணி"). Leagues: not built (next; his call, 3 Nov 2026).
+  - **Me**: his name, grade and index; XP ever, his longest run, his trophies; this week's seven lamps (Monday first,
+    today ringed); the **trophies** (`trophiesOf`, server: his first Level, 3 / 7 / 30 days in a row (his best run), a
+    Level with every mark, five of them, a whole World (one Level of it in the app at least), 100 and 300 XP in one
+    week; won ones gold, the rest dark with a lock and how to win them); this phone: the children, the sound.
+- **Two children on one phone** (his ask: parents with two children). Each child = one family key (`familyDevices`
+  row); the phone keeps the list (`aristora.family.accounts`, the one on screen `aristora.family.current`) and sends
+  the key of the child on screen. Everything kept on the phone is kept per child (`keep()` = `aristora.family.<id>.…`:
+  his home screen, typed answers, a level's form and questions, the question switch). Add another = his index and
+  code (or his link); switch = tap a child (top bar, or Me); sign out = Me → "Bilal: வெளியேறு" → yes (the key stops on
+  the server; the next child is on screen; the last → the sign-in). The same child twice (his link, then his code):
+  the newer stays, the older is signed out (`me.index`). A child signed out by the class leaves the list by himself.
+  Up to 6. A phone from before (one key at `aristora.family.token`) becomes the first child with all it kept.
+- **Feedback** (his voice note: "the most important feature: get the feedback and improve us"; `FeedbackSheet`): a face
+  (😞🙁😐🙂😍 = 1–5), what about (வகுப்பு / ஆசிரியர்கள் / கேள்விகள் / App / வேறு), up to 600 letters; **with his
+  name** by default, one switch sends it **without** (then only his grade is kept and no history line is written: his
+  answer, 3 Nov 2026, "he chooses"). A face or words is enough; 5 a day from one phone. Read in the teachers' app:
+  **Settings → Feedback** by the owner and anyone with the **Feedback** permission (Settings → People → Also; his
+  answer: "me and selected people"); the Settings gear shows how many came since that person last read them, and
+  Settings opens on Feedback then. The page: the last 7 days (how many, the faces, the average), All / Unhappy / With
+  words, newest first, "New" since you last read; a named one shows his name and grade, else "A Grade 8 student".
 - Sign in (his answer, 1 Nov): his **index number** (1001, 1002…, never reused: `students.index`, given by
   `students.add` and the data step v2; demo and test students have none; on his Students row as #1001) and a
   **4-digit code** (`familyCodes`, made on the teacher's phone with secure random, never an easy one; only the owner
   and Students teachers read it, on his Family sheet; never on the class board). app.aristora.org asks for both
   (`family.signIn`, open): a wrong code or an unknown index answer the same; 5 wrong in a row lock it 15 minutes;
   New code replaces it and clears a lock. Why not the index alone: a classmate could Check his level with wrong
-  answers. The WhatsApp link (one use, 7 days) stays as a shortcut; the message carries the index and code too.
+  answers. Forgot them: the class sends them again (his Family sheet). The WhatsApp link (one use, 7 days) stays as
+  a shortcut; the message carries the index and code too.
 - Settings → Students → his name → **Family** (`FamilySheet`): index and code, New code, Send it on WhatsApp; the
   family phones and Sign out; **Open every World** (else they open in order: his unit now, books given, levels done
   there, the next after a finished one). Books → a workbook: how much the phone marks and exactly what it accepts per
@@ -717,7 +774,10 @@ on the family phone, taps **Check** once per level and sees ✓ / ✗ at once; t
   change a mark / mark what the phone left (that checks it too, `lv.hc`).
 - Family phones have their own tables (`familyLinks`, `familyDevices`: SHA-256 of code and token) and hash tag: they
   can never pass a teacher's check; every function in `convex/family.ts` checks the family phone. The teachers' side
-  (`convex/families.ts`) = the owner or a teacher with Students.
+  (`convex/families.ts`) = the owner or a teacher with Students (Feedback: the owner or a teacher with Feedback).
+- Later, not now (his words, 3 Nov 2026): the app may serve other centres one day (a SaaS); today it is only for
+  ARISTORA's own students (a sign-in comes from the class). The centre's name sits in one place (`BRAND`) and the
+  colours in `:root` of `family.css`.
 
 ## Accounts and security (built 2026-10-28)
 
@@ -727,7 +787,9 @@ on the family phone, taps **Check** once per level and sees ✓ / ✗ at once; t
   Correction page: Manager needs Correction); People shows them as "Jobs" with what each opens) and extras:
   - `students`: add, rename, remove;
   - `books`: workbooks (typing and uploading) and unit names;
-  - `reports`: Reports, History, the Students page numbers, and **Progress** (page and poster).
+  - `reports`: Reports, History, the Students page numbers, and **Progress** (page and poster);
+  - `feedback` (3 Nov 2026, his answer "me and selected people"): Settings → Feedback, what students send from the
+    family app, and its count on the Settings gear (`families.feedback`, `feedbackNew`, `feedbackSeen`).
 - Everyone signed in sees Class. Correction job = the Correction page and Attendance (`setPresent`, `attendance.day`;
   `by: "attendance"`), Books given (`students.setGiven`), sending called students, Going home, Back in the hall, End
   the session. `progress.student` (the unit sheet's numbers) = Correction, Evaluation or Theory.

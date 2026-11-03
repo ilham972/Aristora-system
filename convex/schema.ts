@@ -34,8 +34,16 @@ export const partId = v.union(
 /** The three working tabs (rooms) a teacher can be allowed. */
 /** The jobs (bottom tabs). Manager (3 Nov 2026): the hall and every room, sending students to any teacher. */
 export const tab = v.union(v.literal("correction"), v.literal("theory"), v.literal("evaluation"), v.literal("manager"));
-/** Extra permissions beyond the tabs. */
-export const extra = v.union(v.literal("students"), v.literal("books"), v.literal("reports"));
+/** Extra permissions beyond the tabs. Feedback (3 Nov 2026, his answer): reads what students send from the family app. */
+export const extra = v.union(v.literal("students"), v.literal("books"), v.literal("reports"), v.literal("feedback"));
+/** What a family app feedback is about (3 Nov 2026). */
+export const feedbackTopic = v.union(
+  v.literal("class"),
+  v.literal("teachers"),
+  v.literal("questions"),
+  v.literal("app"),
+  v.literal("other"),
+);
 
 export const fighterData = v.object({
   kind: v.literal("fighter"),
@@ -431,6 +439,8 @@ export default defineSchema({
     lockedUntil: v.optional(v.number()),
     active: v.boolean(),
     createdAt: v.number(),
+    /** Settings → Feedback: the newest feedback this person has seen (the count on the gear is what came after). */
+    feedbackSeenAt: v.optional(v.number()),
   }).index("by_name", ["nameKey"]),
 
   /** A signed-in phone. It keeps a random token; only the token's SHA-256 is stored here. */
@@ -492,9 +502,26 @@ export default defineSchema({
     createdAt: v.number(),
     lastSeenAt: v.number(),
     revokedAt: v.optional(v.number()),
+    /** Feedback sent from this phone today (Sri Lanka day number, count): a few a day at most. */
+    fbDay: v.optional(v.number()),
+    fbN: v.optional(v.number()),
   })
     .index("by_token", ["tokenHash"])
     .index("by_student", ["studentId"]),
+  /**
+   * Feedback from the family app (3 Nov 2026, his voice note): a face (1–5) and/or a few words, about the class, the
+   * teachers, the questions or the app. `studentId` and `name` only when he sent it with his name; without it, only his
+   * grade is kept. The owner and people with Feedback read it (Settings → Feedback).
+   */
+  familyFeedback: defineTable({
+    at: v.number(),
+    grade: v.optional(v.number()),
+    mood: v.optional(v.number()),
+    topic: v.optional(feedbackTopic),
+    text: v.optional(v.string()),
+    studentId: v.optional(v.id("students")),
+    name: v.optional(v.string()),
+  }).index("by_at", ["at"]),
 
   /** Small settings: the data version (for one-time updates). */
   meta: defineTable({ key: v.string(), value: v.any() }).index("by_key", ["key"]),

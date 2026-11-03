@@ -1,8 +1,10 @@
 // The family app's offline helper, scope /f/ only (the teachers' app has none and must never get one).
 // - The page: from the network when there is one (a new version shows at once), else the copy kept here.
-// - Its files (/f/assets/, new names every version) and the owl: kept once fetched, and fetched at install.
+// - Its files (/f/assets/, new names every version: code, style, its one font) and the owl: kept once fetched, and
+//   fetched at install.
 // - The server's answers (convex.cloud) are never touched.
-const CACHE = "aristora-family-1";
+// 2 (3 Nov 2026): the new look; the old copies go when this one starts.
+const CACHE = "aristora-family-2";
 const KEEP = (p) => p.startsWith("/f/assets/") || p === "/icon.svg" || p === "/family.webmanifest";
 
 self.addEventListener("install", (e) => {

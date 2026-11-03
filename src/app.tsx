@@ -12,6 +12,7 @@ import { ManagerPage } from "./manager";
 import { SimBanner } from "./sim";
 import { Progress } from "./progress";
 import { Settings } from "./settings";
+import { useFeedbackNew } from "./feedbackList";
 import { alertsState, armAlerts, listenForTaps, ring, useAlertsState, type AlertKind } from "./sound";
 import { clearHash, PinSheet, pinAsked, readHash, SignIn, stopAskingPin, type Hash } from "./signin";
 import { hideSplash } from "./splash";
@@ -176,6 +177,9 @@ export function App() {
     ro.observe(el);
     return () => ro.disconnect();
   }, [loaded]);
+  // Feedback from the family app not read yet (owner and people with Feedback): a count on the Settings gear. Before
+  // any early return (a hook).
+  const fbNew = useFeedbackNew(!!me?.user && may("feedback"));
 
   if (me === undefined) {
     return (
@@ -323,10 +327,15 @@ export function App() {
             />
             <button
               type="button"
-              class={`icon-btn${shown === "settings" ? " on" : ""}`}
-              aria-label="Settings"
+              class={`icon-btn has-n${shown === "settings" ? " on" : ""}`}
+              aria-label={fbNew > 0 ? `Settings, ${fbNew} new feedback` : "Settings"}
               onClick={() => toggle("settings")}
             >
+              {fbNew > 0 && (
+                <b class="gear-n" aria-hidden="true">
+                  {fbNew > 9 ? "9+" : fbNew}
+                </b>
+              )}
               <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
                 <path
                   d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm7.4-2.1.06-1.4-.06-1.4 2-1.6-2-3.4-2.4 1a7.6 7.6 0 0 0-2.4-1.4L14.2 2h-4.4l-.4 2.7a7.6 7.6 0 0 0-2.4 1.4l-2.4-1-2 3.4 2 1.6-.06 1.4.06 1.4-2 1.6 2 3.4 2.4-1a7.6 7.6 0 0 0 2.4 1.4l.4 2.7h4.4l.4-2.7a7.6 7.6 0 0 0 2.4-1.4l2.4 1 2-3.4-2-1.6Z"
@@ -359,7 +368,7 @@ export function App() {
       )}
 
       {shown === "settings" ? (
-        <Settings views={views} onClose={() => setPage(backTo)} />
+        <Settings views={views} onClose={() => setPage(backTo)} start={fbNew > 0 ? "feedback" : undefined} fbNew={fbNew} />
       ) : shown === "class" ? (
         <ClassPage board={board} views={views} now={now} job={role} onAttendance={() => setAttOpen(true)} />
       ) : shown === "progress" ? (

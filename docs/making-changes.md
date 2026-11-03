@@ -201,3 +201,20 @@ EOF
   "name y > 0" check passed while the name sat under the top bar).
 - A sheet over a sheet (sign out over Attendance): `body.locked` is counted (`openSheets`), never removed by the inner
   one. A toast can cover a sheet's title: Correction clears toasts when a sheet opens.
+- **The family app keeps everything per child** (3 Nov 2026: several children on one phone): use `keep()` from
+  `src/family/net.ts` (it prefixes the child's id), never `localStorage` straight; the sound switch is the one
+  phone-wide setting. A request answered after the parent switched child is dropped (`loadMe` checks `current()`).
+- **The loading owl has one copy**, `public/splash.html`; both pages hold `%SPLASH%` (the build fills it, with each
+  app's own "still loading" words). Change the owl there; its styles are `src/splash.css` (shared; `.splash-name` uses
+  `--cond` with a fallback). The family app draws the same owl again from the page (`keepOwl()` before it goes).
+- **The family bundle imports only small, import-free files from the teachers' side** (`src/questionView.ts`,
+  `src/splash.ts`) and TYPES from `convex/`. Anything that pulls `convex/_generated/api`, the store or `live.ts` would
+  blow its 50 KB budget.
+- **A new extra permission** (like `feedback`): `convex/schema.ts` `extra`, `convex/lib/auth.ts` (`Extra`, `EXTRAS`,
+  `PERM_WORDS`), `src/store.ts` `Extra`, `src/settings.tsx` `EXTRA_NAMES`/`EXTRA_HELP` (typecheck refuses until all
+  are there). The owner gets it by himself (`EXTRAS`).
+- **The map's road** (`src/family/map.tsx`): its SVG stretches only sideways (`preserveAspectRatio="none"`, x in % of
+  the width, y in px, `vector-effect: non-scaling-stroke` so the line keeps its width); the stops are HTML buttons at the
+  same (x %, y px). Change `spot` and both follow.
+- **A hook before any early return**: the teachers' `App` returns early while loading or signed out; the gear's
+  feedback count (`useFeedbackNew`) sits above those returns.

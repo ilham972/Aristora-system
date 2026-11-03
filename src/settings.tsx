@@ -36,10 +36,12 @@ import {
 import { ATTENDANCE_SINCE, AWAY_DAYS, daysAway, studentStats } from "./stats";
 import { UploadBooks } from "./upload";
 import { FamilySheet, PhoneAnswers } from "./familySheet";
+import { FeedbackList } from "./feedbackList";
 import { SimPanel, SimSwitch } from "./sim";
 import { GRADES, GradeRow, Sheet, STATE_WORDS, useGrade } from "./ui";
 
-type Tab = "students" | "books" | "people" | "alerts" | "reports" | "history" | "account";
+export type SettingsTab = "students" | "books" | "people" | "alerts" | "reports" | "history" | "feedback" | "account";
+type Tab = SettingsTab;
 
 const SETTINGS_TABS: [Tab, string, () => boolean][] = [
   ["students", "Students", () => may("students")],
@@ -48,12 +50,15 @@ const SETTINGS_TABS: [Tab, string, () => boolean][] = [
   ["alerts", "Alerts", () => true],
   ["reports", "Reports", () => may("reports")],
   ["history", "History", () => may("reports")],
+  // What students send from the family app (3 Nov 2026): the owner and people with Feedback (Settings → People).
+  ["feedback", "Feedback", () => may("feedback")],
   ["account", "Account", () => true],
 ];
 
-export function Settings(props: { views: View[]; onClose: () => void }) {
+/** `start`: the section to open on (Feedback when new feedback came); `fbNew` = its count on the Feedback button. */
+export function Settings(props: { views: View[]; onClose: () => void; start?: Tab; fbNew?: number }) {
   const shown = SETTINGS_TABS.filter(([, , ok]) => ok());
-  const [chosen, setTab] = useState<Tab>(shown[0][0]);
+  const [chosen, setTab] = useState<Tab>(props.start && shown.some(([id]) => id === props.start) ? props.start : shown[0][0]);
   const tab = shown.some(([id]) => id === chosen) ? chosen : shown[0][0];
   return (
     <main class="page settings">
@@ -61,6 +66,7 @@ export function Settings(props: { views: View[]; onClose: () => void }) {
         {shown.map(([id, label]) => (
           <button key={id} type="button" class={tab === id ? "on" : ""} aria-pressed={tab === id} onClick={() => setTab(id)}>
             {label}
+            {id === "feedback" && (props.fbNew ?? 0) > 0 && <b class="seg-n">{props.fbNew}</b>}
           </button>
         ))}
       </nav>
@@ -69,6 +75,7 @@ export function Settings(props: { views: View[]; onClose: () => void }) {
       {tab === "alerts" && <Alerts views={props.views} />}
       {tab === "reports" && <Reports />}
       {tab === "history" && <History />}
+      {tab === "feedback" && <FeedbackList />}
       {tab === "people" && <People />}
       {tab === "account" && <Account />}
       <button type="button" class="btn ghost wide" onClick={props.onClose}>
@@ -984,7 +991,7 @@ function History() {
 }
 
 const TAB_NAMES: Record<Job, string> = { correction: "Correction", theory: "Theory", evaluation: "Evaluation", manager: "Manager" };
-const EXTRA_NAMES: Record<Extra, string> = { students: "Students", books: "Books", reports: "Reports and History" };
+const EXTRA_NAMES: Record<Extra, string> = { students: "Students", books: "Books", reports: "Reports and History", feedback: "Feedback" };
 /** What each job opens (everyone has Class, at the top). */
 const TAB_HELP: Record<Job, string> = {
   correction: "the Correction page at the top (marking papers, + to sign students in), sending students to the rooms",
@@ -996,6 +1003,7 @@ const EXTRA_HELP: Record<Extra, string> = {
   students: "add, rename, remove students",
   books: "workbooks and unit names",
   reports: "end-of-class reports and the history",
+  feedback: "reads what students send from the family app",
 };
 
 function canWords(p: { role: string; tabs: Job[]; can: Extra[] }): string {

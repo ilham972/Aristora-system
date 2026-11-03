@@ -13,6 +13,10 @@ if (!url || (!looksRight && !process.env.ALLOW_LOCAL_CONVEX_URL)) {
   process.exit(1);
 }
 
+// The living owl while an app loads: one copy (public/splash.html) for both pages, so they stay the same exact owl.
+const splash = (await readFile("public/splash.html", "utf8")).replace(/<!--[\s\S]*?-->\s*/g, "").trim();
+const splashSaying = (slow) => splash.replace("%SLOW%", () => slow);
+
 await rm("dist", { recursive: true, force: true });
 await mkdir("dist/assets", { recursive: true });
 
@@ -40,6 +44,7 @@ const css = outputs.find((f) => f.endsWith(".css"));
 if (!js || !css) throw new Error("Build did not produce app JS and CSS");
 
 const html = (await readFile("public/index.html", "utf8"))
+  .replace("%SPLASH%", () => splashSaying("Still loading. Check that this phone has mobile data or Wi-Fi."))
   .replace("%CSS%", `/assets/${basename(css)}`)
   .replace("%JS%", `/assets/${basename(js)}`);
 await writeFile("dist/index.html", html);
@@ -61,6 +66,9 @@ const fam = await build({
   outdir: "dist/f/assets",
   entryNames: "[name]-[hash]",
   assetNames: "[name]-[hash]",
+  // One display face for numbers and game words (Barlow Semi Condensed 700, Latin only, ~10 KB, cached by the
+  // service worker); Tamil stays the phone's own font.
+  loader: { ".woff2": "file", ".woff": "file" },
   jsx: "automatic",
   jsxImportSource: "preact",
   define: { __CONVEX_URL__: JSON.stringify(url.replace(/\/$/, "")) },
@@ -73,6 +81,7 @@ const famJs = famOut.find((f) => f.endsWith(".js"));
 const famCss = famOut.find((f) => f.endsWith(".css"));
 if (!famJs || !famCss) throw new Error("Build did not produce the family app's JS and CSS");
 const famHtml = (await readFile("public/family/index.html", "utf8"))
+  .replace("%SPLASH%", () => splashSaying("இன்னும் வருகிறது… இந்த phone இல் data அல்லது Wi-Fi உள்ளதா பார். · Still loading: check the phone's data or Wi-Fi."))
   .replace("%CSS%", `/f/assets/${basename(famCss)}`)
   .replace("%JS%", `/f/assets/${basename(famJs)}`);
 await writeFile("dist/f/index.html", famHtml);

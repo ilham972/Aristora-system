@@ -1,6 +1,6 @@
 // Small game sounds for the family app, made with Web Audio (no files to download). On unless turned off (🔊).
 
-type Tone = "key" | "right" | "wrong" | "level" | "star";
+type Tone = "key" | "right" | "wrong" | "level" | "star" | "tab" | "pop" | "trophy";
 const KEY = "aristora.family.sound";
 
 export function soundOn(): boolean {
@@ -57,6 +57,18 @@ const NOTES: Record<Tone, [number, number, number, OscillatorType?][]> = {
     [1319, 0.16, 0.12],
     [1568, 0.24, 0.5],
   ],
+  tab: [[880, 0, 0.05, "triangle"]],
+  pop: [
+    [660, 0, 0.07],
+    [990, 0.05, 0.1],
+  ],
+  trophy: [
+    [523, 0, 0.12],
+    [784, 0.1, 0.12],
+    [1047, 0.2, 0.12],
+    [1319, 0.32, 0.14],
+    [1568, 0.46, 0.7],
+  ],
 };
 
 export function sound(kind: Tone) {
@@ -64,7 +76,7 @@ export function sound(kind: Tone) {
   try {
     const t0 = ctx.currentTime + 0.01;
     const out = ctx.createGain();
-    out.gain.value = kind === "key" ? 0.06 : 0.16;
+    out.gain.value = kind === "key" || kind === "tab" ? 0.06 : 0.16;
     out.connect(ctx.destination);
     for (const [f, start, len, type] of NOTES[kind]) {
       const o = ctx.createOscillator();

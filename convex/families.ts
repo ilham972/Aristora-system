@@ -5,9 +5,12 @@
 //   setOpenAll  -> "Open every World" for him (else they open in order).
 //   setCode     -> his family app code (4 digits, made on the teacher's phone); with his index number he signs in.
 //   answers     -> what the phone accepts for each question of a workbook (teachers check it once per unit).
-// Owner, or a teacher with Students. Family phones can't call any of these (viewer / actor).
+//   feedback, feedbackNew, feedbackSeen -> what students send from the family app (Settings → Feedback, 3 Nov 2026).
+// Owner, or a teacher with Students (Feedback: the owner, or a teacher with Feedback). Family phones can't call any of
+// these (viewer / actor).
 
 import { v } from "convex/values";
+import type { Doc } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import { actor, FAMILY_LINK_MS, viewer } from "./lib/auth";
 import { codeRow, giveIndex, weakCode } from "./lib/family";
@@ -161,3 +164,60 @@ export const setCode = mutation({
   },
 });
 
+
+export type FeedbackItem = {
+  id: string;
+  at: number;
+  grade: number | null;
+  /** His name, or null when he sent it without it. */
+  name: string | null;
+  mood: number | null;
+  topic: NonNullable<Doc<"familyFeedback">["topic"]> | null;
+  text: string | null;
+};
+
+/** The newest feedback first (the last 200), and the newest this person had seen before (the "new" line). */
+export const feedback = query({
+  args: { token },
+  handler: async (ctx, args): Promise<{ seenAt: number; items: FeedbackItem[] }> => {
+    const me = await viewer(ctx, args.token, "feedback");
+    const rows = await ctx.db.query("familyFeedback").withIndex("by_at").order("desc").take(200);
+    return {
+      seenAt: me.feedbackSeenAt ?? 0,
+      items: rows.map((r) => ({
+        id: r._id,
+        at: r.at,
+        grade: r.grade ?? null,
+        name: r.name ?? null,
+        mood: r.mood ?? null,
+        topic: r.topic ?? null,
+        text: r.text ?? null,
+      })),
+    };
+  },
+});
+
+/** How many came since this person last read them (the count on the Settings gear; 99 at most). */
+export const feedbackNew = query({
+  args: { token },
+  handler: async (ctx, args): Promise<number> => {
+    const me = await viewer(ctx, args.token, "feedback");
+    const since = me.feedbackSeenAt ?? 0;
+    const rows = await ctx.db
+      .query("familyFeedback")
+      .withIndex("by_at", (q) => q.gt("at", since))
+      .take(99);
+    return rows.length;
+  },
+});
+
+/** This person has read them up to `at` (never moves back). */
+export const feedbackSeen = mutation({
+  args: { token, at: v.number() },
+  handler: async (ctx, args) => {
+    const me = await actor(ctx, args.token, ["feedback"]);
+    const at = Math.min(args.at, Date.now());
+    if (at > (me.feedbackSeenAt ?? 0)) await ctx.db.patch(me._id, { feedbackSeenAt: at });
+    return true;
+  },
+});

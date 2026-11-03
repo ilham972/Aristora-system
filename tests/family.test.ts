@@ -328,6 +328,100 @@ describe("the family app on the server", () => {
     expect(me.xp).toBe(0);
     expect(me.streak).toEqual({ days: 0, today: false });
   });
+
+  test("his week, his best run of days, XP ever and his trophies", async () => {
+    await joinAs(hana, FAM);
+    const at = (iso: string) => new Date(iso).getTime();
+    const lv = (iso: string, got: number) => ({ done: at(iso), fixed: at(iso), got, by: "correction" });
+    const levels = {
+      "1": lv("2026-10-26T17:00:00+05:30", 20), // Monday: every mark of Level 1 (20)
+      "2": lv("2026-10-27T17:00:00+05:30", 10),
+      "3": lv("2026-10-28T09:00:00+05:30", 5), // today, a Wednesday
+      "4": lv("2026-10-01T17:00:00+05:30", 2), // an older run of four days
+      "5": lv("2026-10-02T17:00:00+05:30", 2),
+      "6": lv("2026-10-03T17:00:00+05:30", 2),
+      "7": lv("2026-10-04T17:00:00+05:30", 2),
+    };
+    await raw.run(async (ctx) => {
+      const p = await ctx.db.query("progress").withIndex("by_student", (q) => q.eq("studentId", hana)).first();
+      if (p) await ctx.db.patch(p._id, { m: { q: {}, lv: levels } });
+      else await ctx.db.insert("progress", { studentId: hana, unitId: u01, stage: "master", marks: {}, m: { q: {}, lv: levels }, startedAt: 0, updatedAt: 0 });
+    });
+    const me = await fam().query(api.family.me, {});
+    expect(me.week).toEqual([true, true, true, false, false, false, false]);
+    expect(me.streak).toEqual({ days: 3, today: true });
+    expect(me.best).toBe(4);
+    expect(me.xp).toBe(35);
+    expect(me.total).toBe(43);
+    expect(me.index).toBe(1001);
+    expect(me.trophies).toEqual(["first", "streak3", "perfect"]);
+  });
+
+  test("questions as printed for a student without his book: his open Worlds only, never the answers", async () => {
+    await joinAs(hana, FAM);
+    await raw.run(async (ctx) => {
+      for (const q of [1, 2, 3]) {
+        await ctx.db.insert("questions", { unitId: u01, stage: "master", q, html: `<div class="pq"><b class="qn">${q}</b> A made-up question.</div>` });
+      }
+      await ctx.db.insert("bookCss", { unitId: u01, stage: "master", css: ".qn { font-weight: 700; }", updatedAt: 0 });
+      const book = (await ctx.db.query("books").withIndex("by_unit_stage", (x) => x.eq("unitId", u01).eq("stage", "master")).first())!;
+      await ctx.db.patch(book._id, { qCount: 3 });
+    });
+    expect((await fam().query(api.family.me, {})).worlds.map((w) => w.q)).toEqual([true, false]);
+    const lv1 = await fam().query(api.family.questions, { unitId: u01, n: 1 });
+    expect(lv1.css).toBe(".qn { font-weight: 700; }");
+    expect(lv1.qs.map((x) => x.q)).toEqual([1, 2, 3]);
+    expect(Object.keys(lv1.qs[0]).sort()).toEqual(["html", "q"]);
+    expect((await fam().query(api.family.questions, { unitId: u01, n: 1, css: false })).css).toBeNull();
+    expect((await fam().query(api.family.questions, { unitId: u01, n: 2 })).qs).toEqual([]); // not in the app
+    await expect(fam().query(api.family.questions, { unitId: u02, n: 1 })).rejects.toThrow(/locked/);
+    await expect(fam().query(api.family.questions, { unitId: u01, n: 99 })).rejects.toThrow(/not in this World/);
+    await expect(raw.query(api.family.questions, { unitId: u01, n: 1 })).rejects.toThrow(FAMILY_SIGNED_OUT);
+  });
+
+  test("feedback: with his name or without it, a few a day, read by the owner and people with Feedback", async () => {
+    await joinAs(hana, FAM);
+    expect(await fam().mutation(api.family.feedback, { mood: 5, topic: "class", text: "  Theory was great today  ", named: true })).toBe(true);
+    vi.setSystemTime(new Date(Date.now() + 60_000));
+    await fam().mutation(api.family.feedback, { mood: 2, topic: "teachers", text: "too fast", named: false });
+    await expect(fam().mutation(api.family.feedback, { named: true })).rejects.toThrow(/face/);
+    await expect(fam().mutation(api.family.feedback, { mood: 7, named: true })).rejects.toThrow(/faces/);
+    await expect(fam().mutation(api.family.feedback, { text: "x".repeat(601), named: true })).rejects.toThrow(/600/);
+    // Without his name: only his grade; nothing ties it to him.
+    const rows = await raw.run(async (ctx) => await ctx.db.query("familyFeedback").collect());
+    expect(rows).toHaveLength(2);
+    const anon = rows.find((r) => r.mood === 2)!;
+    expect([anon.studentId, anon.name, anon.grade]).toEqual([undefined, undefined, 8]);
+    // The owner reads them, newest first.
+    const list = await t.query(api.families.feedback, {});
+    expect(list.items.map((i) => [i.name, i.grade, i.mood, i.topic, i.text])).toEqual([
+      [null, 8, 2, "teachers", "too fast"],
+      ["Hana K", 8, 5, "class", "Theory was great today"],
+    ]);
+    // A teacher reads them only with Feedback (Settings → People); each person has their own "new" count.
+    const NILA = "nila-phone-token-0123456789abcdefghijklmnopqrstuvwx";
+    const SARA = "sara-phone-token-0123456789abcdefghijklmnopqrstuvwx";
+    await addPerson(raw, { name: "Nila", token: NILA, tabs: ["theory"] });
+    await addPerson(raw, { name: "Sara", token: SARA, tabs: ["correction"], can: ["feedback"] });
+    await expect(asPhone(raw, NILA).query(api.families.feedback, {})).rejects.toThrow(/Feedback/);
+    await expect(asPhone(raw, NILA).query(api.families.feedbackNew, {})).rejects.toThrow(/Feedback/);
+    const sara = asPhone(raw, SARA);
+    expect((await sara.query(api.families.feedback, {})).items).toHaveLength(2);
+    expect(await sara.query(api.families.feedbackNew, {})).toBe(2);
+    await sara.mutation(api.families.feedbackSeen, { at: Date.now() });
+    expect(await sara.query(api.families.feedbackNew, {})).toBe(0);
+    expect((await sara.query(api.families.feedback, {})).seenAt).toBe(Date.now());
+    expect(await t.query(api.families.feedbackNew, {})).toBe(2);
+    // A family phone can't read them.
+    await expect(fam().query(api.families.feedback, {})).rejects.toThrow(SIGNED_OUT);
+    // Five a day from one phone, then tomorrow again.
+    vi.setSystemTime(new Date(Date.now() + 60_000));
+    for (let i = 0; i < 3; i++) await fam().mutation(api.family.feedback, { mood: 4, named: true });
+    await expect(fam().mutation(api.family.feedback, { mood: 4, named: true })).rejects.toThrow(/tomorrow/);
+    vi.setSystemTime(new Date("2026-10-29T09:00:00+05:30"));
+    expect(await fam().mutation(api.family.feedback, { mood: 4, named: true })).toBe(true);
+    expect(await sara.query(api.families.feedbackNew, {})).toBe(4);
+  });
 });
 
 describe("index numbers and codes (sign in without a link)", () => {

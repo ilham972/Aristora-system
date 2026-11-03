@@ -8,17 +8,38 @@
 //                   at his working in class and taps Checked (or changes a mark). What the phone can't mark (names,
 //                   reasons, drawings) waits for her.
 //   board        -> this week's XP in his grade (first name and initial only).
+//   questions    -> a level's questions as printed, for a student without his book (3 Nov 2026): his own book's pages,
+//                   only in a World open to him; never the answers (they are in another table).
+//   feedback     -> a few words to ARISTORA about the class, the teachers, the questions or the app (3 Nov 2026): with
+//                   his name, or without it (then nothing ties the words to him); read in Settings → Feedback.
 // Every function takes the family phone's token (familyViewer / familyActor); peek, join and signIn are open on
-// purpose (they are how a phone gets its token).
+// purpose (they are how a phone gets its token). A phone may hold several children (one token each): it sends the
+// token of the child on screen.
 
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type QueryCtx } from "./_generated/server";
-import { checkToken, familyActor, familyViewer, secretHash } from "./lib/auth";
+import { feedbackTopic } from "./schema";
+import { checkToken, familyActor, familyOf, familyViewer, FAMILY_SIGNED_OUT, secretHash } from "./lib/auth";
 import { asMaster, bookFor, currentSession, ensureProgress, fail, keyRow, log, masterState, refresh } from "./lib/backend";
 import { partOf } from "./lib/book";
-import { CODE_FAILS, CODE_LOCK_MS, codeRow, masterRows, streakOf, weekXp, worldsOf, xpSince, type World } from "./lib/family";
-import { slWeekStart } from "./lib/day";
+import {
+  bestStreak,
+  CODE_FAILS,
+  CODE_LOCK_MS,
+  codeRow,
+  levelDays,
+  masterRows,
+  streakOf,
+  trophiesOf,
+  weekDays,
+  weekXp,
+  worldsOf,
+  xpSince,
+  type Trophy,
+  type World,
+} from "./lib/family";
+import { slDayNo, slWeekStart } from "./lib/day";
 import { computeMaster, markBefore, type MQ, type MState } from "./lib/master";
 import { boxCount, formOf, INPUT_MAX, markQuestion, phoneKey, type FormQ } from "./lib/phone";
 import { ranks } from "./lib/progress";
@@ -146,24 +167,41 @@ export const signOut = mutation({
 export type FamilyMe = {
   name: string;
   grade: number | null;
+  /** His index number (not secret): a phone holding two children tells them apart by it. */
+  index: number | null;
+  /** XP this week (from Monday 00:00 in Sri Lanka). */
   xp: number;
+  /** XP ever (every level marked). */
+  total: number;
   streak: { days: number; today: boolean };
+  /** His longest run of days in a row, ever. */
+  best: number;
+  /** This week, Monday to Sunday: a level finished that day. */
+  week: boolean[];
+  trophies: Trophy[];
   worlds: World[];
 };
 
-/** His home screen. */
+/** His home screen (the map), his week and his trophies. */
 export const me = query({
   args: { token },
   handler: async (ctx, args): Promise<FamilyMe> => {
     const s = await familyViewer(ctx, args.token);
     const now = Date.now();
     const rows = await masterRows(ctx, s._id);
+    const worlds = await worldsOf(ctx, s);
+    const days = levelDays(rows);
     return {
       name: s.name,
       grade: s.grade ?? null,
+      index: s.index ?? null,
       xp: weekXp(rows, now),
+      total: xpSince(rows, 0),
       streak: streakOf(rows, now),
-      worlds: await worldsOf(ctx, s),
+      best: bestStreak(days),
+      week: weekDays(days, now),
+      trophies: trophiesOf(rows, worlds),
+      worlds,
     };
   },
 });
@@ -287,7 +325,9 @@ export const check = mutation({
     // In class with the app open: his "out of work" clock follows, as for any level.
     if (s.present) await refresh(ctx, s._id, now, await currentSession(ctx, now));
     const all = await masterRows(ctx, s._id);
-    return { results, got, phoneMax, max: l.max, teacher, xp: weekXp(all, now), streak: streakOf(all, now) };
+    // His trophies now (the phone shows the ones this level just earned).
+    const trophies = trophiesOf(all, await worldsOf(ctx, s));
+    return { results, got, phoneMax, max: l.max, teacher, xp: weekXp(all, now), streak: streakOf(all, now), trophies };
   },
 });
 
@@ -315,5 +355,92 @@ export const board = query({
       me: rows.find((r) => r.me) ?? null,
       count: rows.length,
     };
+  },
+});
+
+export type FamilyQuestions = {
+  /** The book's CSS (once per World: the phone asks without it after the first level). */
+  css: string | null;
+  /** The level's questions as printed (only those in the app). */
+  qs: { q: number; html: string }[];
+};
+
+/**
+ * A level's questions as printed (his voice note, 3 Nov 2026: new students have no book yet). His own book's pages:
+ * only a World open to him, never the answers (those live in `keys`, which this never reads). Shown in a shadow root
+ * after cleaning (src/questionView.ts); the server stored them clean (convex/lib/questions.ts).
+ */
+export const questions = query({
+  args: { token, unitId: v.id("units"), n: v.number(), css: v.optional(v.boolean()) },
+  handler: async (ctx, args): Promise<FamilyQuestions> => {
+    const s = await familyViewer(ctx, args.token);
+    const world = (await worldsOf(ctx, s)).find((w) => w.unitId === args.unitId);
+    if (!world) fail("This World is not in your grade.");
+    if (!world.open) fail("This World is locked. Finish the World before it.");
+    const book = await bookFor(ctx, args.unitId, "master");
+    if (!book) fail("This World has no levels yet.");
+    const level = asMaster(book).levels.find((l) => l.n === args.n);
+    if (!level) fail("That level is not in this World.");
+    const qs: FamilyQuestions["qs"] = [];
+    for (let q = level.from; q <= level.to; q++) {
+      const r = await ctx.db
+        .query("questions")
+        .withIndex("by_book", (x) => x.eq("unitId", args.unitId).eq("stage", "master").eq("q", q))
+        .first();
+      if (r) qs.push({ q, html: r.html });
+    }
+    let css: string | null = null;
+    if (args.css !== false) {
+      const row = await ctx.db
+        .query("bookCss")
+        .withIndex("by_book", (x) => x.eq("unitId", args.unitId).eq("stage", "master"))
+        .first();
+      css = row?.css ?? null;
+    }
+    return { css, qs };
+  },
+});
+
+/** Words per feedback, and how many one phone may send in a day (Sri Lanka day). */
+export const FEEDBACK_TEXT_MAX = 600;
+export const FEEDBACK_PER_DAY = 5;
+
+/**
+ * A few words to ARISTORA (his voice note, 3 Nov 2026: "the most important feature: get the feedback and improve us").
+ * A face (1 = very unhappy … 5 = very happy) and/or words, about the class, the teachers, the questions, the app or
+ * anything. With his name (the default), or without it: then only his grade is kept, and no history line is written.
+ * The owner and people with Feedback (Settings → People) read it in Settings → Feedback.
+ */
+export const feedback = mutation({
+  args: {
+    token,
+    mood: v.optional(v.number()),
+    topic: v.optional(feedbackTopic),
+    text: v.optional(v.string()),
+    named: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    const f = await familyOf(ctx, args.token);
+    if (!f) fail(FAMILY_SIGNED_OUT);
+    const { device, student: s } = f;
+    const now = Date.now();
+    const text = (args.text ?? "").trim();
+    if (text.length > FEEDBACK_TEXT_MAX) fail(`Please keep it under ${FEEDBACK_TEXT_MAX} letters.`);
+    if (args.mood !== undefined && !(Number.isInteger(args.mood) && args.mood >= 1 && args.mood <= 5)) fail("Pick one of the faces.");
+    if (args.mood === undefined && !text) fail("Pick a face or write a few words.");
+    // A few a day from one phone: enough to say anything, too few to flood the owner.
+    const day = slDayNo(now);
+    const sent = device.fbDay === day ? (device.fbN ?? 0) : 0;
+    if (sent >= FEEDBACK_PER_DAY) fail("Thank you! That's enough for today: send more tomorrow.");
+    await ctx.db.patch(device._id, { fbDay: day, fbN: sent + 1 });
+    await ctx.db.insert("familyFeedback", {
+      at: now,
+      ...(typeof s.grade === "number" ? { grade: s.grade } : {}),
+      ...(args.mood !== undefined ? { mood: args.mood } : {}),
+      ...(args.topic ? { topic: args.topic } : {}),
+      ...(text ? { text } : {}),
+      ...(args.named ? { studentId: s._id, name: s.name } : {}),
+    });
+    return true;
   },
 });
