@@ -1,21 +1,23 @@
-// The family app (app.aristora.org): the student does a level in his paper workbook, types the answers here, taps
-// Check once, and sees ✓ and ✗ at once with his XP, his lamp (days in a row) and his trophies. The phone never has
-// the answers: the server marks.
-// - Its own look (3 Nov 2026, his voice note: "we are unique"): ARISTORA's night, the owl, gold for what he won.
-// - Bottom bar: the map (வரைபடம்: his Worlds as a winding road), the race (போட்டி: this week's board), me (நான்: his
-//   week, trophies, the children on this phone). Top bar: who is on screen (tap: switch, add, sign out), his lamp,
-//   his XP this week, and Feedback (the most important button: what students think of the class).
-// - Words: Tamil first, a few game words in English (World, Level, XP). No school words (book, unit, marks).
-// - Light on purpose: no client library, one small bundle, one small font; the loading owl is the page's own.
+// The family app (app.aristora.org): the institute's student app and its learning game in one (3 Nov 2026, his voice
+// notes and two pictures he liked).
+// - Home (முகப்பு): today's class, his class week (the centre's hours, his usual days), what he did each day in class
+//   and at home, his recent classes.
+// - Learn (கற்க): the whole syllabus of his grade as a map: each term a World, each unit a Stage, each Stage's Levels
+//   inside it. He does a Level on paper, types the answers, Check once: ✓ and ✗ at once (the server marks).
+// - Race (போட்டி): this week's XP in his grade. Me (நான்): his streak, his week, XP, trophies, this phone's children.
+// - The top row everywhere: who is on screen (tap: switch, add, sign out), the flame (days in a row), XP, Feedback.
+// - Its look: light, ARISTORA's purple, our owl (light purple, with moods), gold for what he wins. Words: Tamil first,
+//   a few game words (World, Stage, Level, XP); no school words on his screens (book, unit, marks).
 
 import type { ComponentChildren } from "preact";
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import type { FamilyLevel, FamilyMe } from "../../convex/family";
 import type { Trophy, World } from "../../convex/lib/family";
 import { hideSplash } from "../splash";
 import { BoardTab } from "./board";
 import { FeedbackSheet } from "./feedback";
-import { MapTab } from "./map";
+import { HomeTab } from "./home";
+import { LearnTab, StageScreen } from "./map";
 import { Kids, MeTab } from "./me";
 import {
   accounts,
@@ -37,11 +39,11 @@ import {
   switchTo,
   type Account,
 } from "./net";
-import { Play, Result, type Checked } from "./play";
+import { nextPlay, Play, Result, type Checked } from "./play";
 import { armSound, buzz, sound } from "./sound";
-import { Avatar, firstName, Icon, Lamp, Owl, problemWords, Sheet, Spark, toast, Toast } from "./ui";
+import { Avatar, Flame, firstName, Gem, Icon, Owl, problemWords, Sheet, toast, Toast, type IconName } from "./ui";
 
-type Tab = "map" | "board" | "me";
+export type Tab = "home" | "learn" | "race" | "me";
 
 type Screen =
   | { k: "join"; code: string }
@@ -49,11 +51,22 @@ type Screen =
   /** Another child joins this phone (index and code); Back returns to the one before. */
   | { k: "add" }
   | { k: "main" }
-  | { k: "level"; world: World; n: number }
-  | { k: "result"; world: World; form: FamilyLevel; res: Checked; typed: Record<number, string[]>; before: Trophy[] };
+  | { k: "stage"; unitId: string }
+  | { k: "level"; unitId: string; n: number }
+  | {
+      k: "result";
+      unitId: string;
+      form: FamilyLevel;
+      res: Checked;
+      typed: Record<number, string[]>;
+      /** Before this level: his trophies and his streak (what this level just won shows). */
+      before: { trophies: Trophy[]; days: number; today: boolean; best: number };
+    };
 
-/** Screens above the main one: the phone's Back button returns from them. */
-const above = (s: Screen) => s.k === "level" || s.k === "result" || s.k === "add";
+/** How deep a screen is: Back steps up one at a time (the reveal and a Level go back to their Stage). */
+const depth = (s: Screen) => (s.k === "level" || s.k === "result" ? 2 : s.k === "stage" || s.k === "add" ? 1 : 0);
+const parent = (s: Screen): Screen =>
+  s.k === "level" || s.k === "result" ? { k: "stage", unitId: s.unitId } : s.k === "stage" ? { k: "main" } : s.k === "add" ? (current() ? { k: "main" } : { k: "signin" }) : s;
 
 function firstScreen(): Screen {
   const code = /[#&]join=([A-Za-z0-9_-]+)/.exec(location.hash)?.[1];
@@ -61,19 +74,35 @@ function firstScreen(): Screen {
   return current() ? { k: "main" } : { k: "signin" };
 }
 
+/** The Worlds a phone kept before 3 Nov 2026 lack `book`: every one it had was a workbook. */
+function fixWorlds(m: FamilyMe | null): FamilyMe | null {
+  if (!m) return m;
+  return { ...m, worlds: m.worlds.map((w) => (w.book === undefined ? { ...w, book: true } : w)) };
+}
+
 export function App() {
   const [screen, setScreen] = useState<Screen>(firstScreen);
   const [acc, setAcc] = useState<Account | null>(current);
-  const [me, setMe] = useState<FamilyMe | null>(() => keep<FamilyMe>("me"));
-  const [tab, setTab] = useState<Tab>("map");
+  const [me, setMe] = useState<FamilyMe | null>(() => fixWorlds(keep<FamilyMe>("me")));
+  const [tab, setTab] = useState<Tab>(() => keep<Tab>("tab") ?? "home");
   const [offline, setOffline] = useState(false);
   const [sheet, setSheet] = useState<null | "kids" | "feedback">(null);
   const [ready, setReady] = useState(false);
+  const screenRef = useRef(screen);
+  screenRef.current = screen;
+  const sheetRef = useRef(sheet);
+  sheetRef.current = sheet;
 
   // The living owl stays until there is something real to show (and at least a moment: src/splash.ts).
   useEffect(() => {
     if (ready) hideSplash();
   }, [ready]);
+  // The phone's bar takes the colour at the top of the screen: purple over a header, light over Home and a Level.
+  useEffect(() => {
+    if (!ready) return; // the loading owl's navy until then
+    const light = screen.k === "level" || screen.k === "result" || screen.k === "signin" || screen.k === "add" || screen.k === "join" || (screen.k === "main" && tab === "home");
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", light ? "#f5f4fc" : "#6c5ce7");
+  }, [ready, screen.k, tab]);
 
   /** Keeps this child's phone signed in (once a day is enough). */
   const hello = () => {
@@ -87,6 +116,7 @@ export function App() {
     try {
       const m = (await query("family:me")) as FamilyMe;
       if (current()?.id !== a.id) return; // another child is on screen now
+      const before = keep<FamilyMe>("me");
       keep("me", m);
       noteAccount(a.id, { name: m.name, grade: m.grade, index: m.index });
       // The same child twice on this phone (his link, then his code): the newer stays, the older is signed out.
@@ -95,6 +125,12 @@ export function App() {
         void mutationFor(twin.token, "family:signOut").catch(() => {});
         removeAccount(twin.id);
         switchTo(a.id);
+      }
+      // A Stage that opened since he last looked: its moment (the map shows it too).
+      const opened = before ? m.worlds.filter((w) => w.open && w.book && !before.worlds.find((x) => x.unitId === w.unitId)?.open) : [];
+      if (opened.length) {
+        sound("unlock");
+        toast(`புதிய Stage திறந்தது: ${opened[0].no} · ${opened[0].ta}`);
       }
       setMe(m);
       setAcc(current());
@@ -105,7 +141,7 @@ export function App() {
         // Signed out by the class (or unused for 120 days): he leaves this phone; the next child is on screen.
         const next = removeAccount(a.id);
         setAcc(next);
-        setMe(next ? keep<FamilyMe>("me") : null);
+        setMe(next ? fixWorlds(keep<FamilyMe>("me")) : null);
         if (next) {
           toast(`${firstName(a.name) || "இவர்"}: இந்த phone இலிருந்து வெளியேற்றப்பட்டார்.`, true);
           void loadMe();
@@ -125,38 +161,48 @@ export function App() {
     } else if (screen.k === "signin") setReady(true);
   }, []);
 
-  // The phone's Back button: closes a sheet, leaves a level, the reveal or adding a child.
+  // The phone's Back button: a sheet closes first, then one screen up (a Level → its Stage → the map).
   useEffect(() => {
     const back = () => {
-      setSheet(null);
-      setScreen((s) => (s.k === "add" ? (current() ? { k: "main" } : { k: "signin" }) : above(s) ? { k: "main" } : s));
+      if (sheetRef.current) return setSheet(null);
+      const up = parent(screenRef.current);
+      setScreen(up);
+      if (up.k === "main") void loadMe();
     };
     window.addEventListener("popstate", back);
     return () => window.removeEventListener("popstate", back);
   }, []);
-  const push = () => {
-    if (!history.state?.f) history.pushState({ f: 1 }, "");
-  };
+  /** To a screen: one history step per level of depth, so Back walks up the same way. */
   const go = (s: Screen) => {
-    if (above(s)) push();
+    const steps = depth(s) - depth(screenRef.current);
+    for (let i = 0; i < steps; i++) history.pushState({ f: depth(screenRef.current) + i + 1 }, "");
     setScreen(s);
     window.scrollTo(0, 0);
   };
-  const toMain = () => {
+  /** Up one screen (as the phone's Back). */
+  const up = () => {
     if (history.state?.f) history.back();
     else {
-      setSheet(null);
-      setScreen({ k: "main" });
+      setScreen(parent(screenRef.current));
+      window.scrollTo(0, 0);
     }
+  };
+  /** Straight to the main tabs from anywhere. */
+  const toMain = () => {
+    const d = depth(screenRef.current);
+    if (d > 0 && history.state?.f) history.go(-d);
+    else setScreen({ k: "main" });
+    window.scrollTo(0, 0);
     void loadMe();
   };
   const openSheet = (x: "kids" | "feedback") => {
     buzz();
-    push();
+    sound("pop");
+    history.pushState({ f: depth(screenRef.current), sheet: 1 }, "");
     setSheet(x);
   };
   const closeSheet = () => {
-    if (history.state?.f) history.back();
+    if (history.state?.sheet) history.back();
     else setSheet(null);
   };
 
@@ -165,9 +211,9 @@ export function App() {
     addAccount(t, name);
     setAcc(current());
     setMe(null);
-    setTab("map");
+    setTab("home");
     sound("level");
-    if (screen.k === "add") toMain();
+    if (screenRef.current.k === "add") toMain();
     else {
       setScreen({ k: "main" });
       void loadMe();
@@ -180,10 +226,9 @@ export function App() {
     sound("pop");
     switchTo(id);
     setAcc(current());
-    setMe(keep<FamilyMe>("me"));
-    setTab("map");
-    setSheet(null);
-    if (history.state?.f) history.back();
+    setMe(fixWorlds(keep<FamilyMe>("me")));
+    if (history.state?.sheet) history.back();
+    else setSheet(null);
     window.scrollTo(0, 0);
     void loadMe();
     hello();
@@ -191,8 +236,9 @@ export function App() {
 
   const addKid = () => {
     if (accounts().length >= MAX_ACCOUNTS) return toast(`ஒரு phone இல் ${MAX_ACCOUNTS} பிள்ளைகள் வரை.`);
+    if (history.state?.sheet) history.replaceState({ f: 1 }, "");
+    else history.pushState({ f: 1 }, "");
     setSheet(null);
-    push();
     setScreen({ k: "add" });
   };
 
@@ -207,15 +253,34 @@ export function App() {
     }
     const next = removeAccount(a.id);
     setAcc(next);
-    setMe(next ? keep<FamilyMe>("me") : null);
-    setSheet(null);
-    setTab("map");
-    if (history.state?.f) history.back();
+    setMe(next ? fixWorlds(keep<FamilyMe>("me")) : null);
+    if (history.state?.sheet) history.back();
+    else setSheet(null);
     if (next) {
       toast(`${firstName(a.name)} வெளியேறினார். இப்போது ${firstName(next.name)}.`);
       void loadMe();
     } else setScreen({ k: "signin" });
   };
+
+  const pickTab = (t: Tab) => {
+    if (t === tab) return;
+    buzz();
+    sound("tap");
+    setTab(t);
+    keep("tab", t);
+    window.scrollTo(0, 0);
+  };
+  const worldOf = (unitId: string): World | undefined => me?.worlds.find((w) => w.unitId === unitId);
+  /** His Level now, from anywhere (the Continue buttons). */
+  const playNow = () => {
+    const next = nextPlay(me);
+    if (!next) return toast("இப்போது phone இல் செய்ய Level இல்லை. உன் தாளை வகுப்பில் கொடு.");
+    sound("start");
+    go({ k: "level", unitId: next.world.unitId, n: next.n });
+  };
+  const top = (
+    <TopRow me={me} acc={acc} offline={offline} onKids={() => openSheet("kids")} onFeedback={() => openSheet("feedback")} onTab={pickTab} />
+  );
 
   let body: ComponentChildren;
   if (screen.k === "join") {
@@ -230,90 +295,126 @@ export function App() {
       />
     );
   } else if (screen.k === "signin" || screen.k === "add") {
-    body = <SignIn add={screen.k === "add"} why={screen.k === "signin" ? screen.why : undefined} onBack={toMain} onIn={signedIn} />;
+    body = <SignIn add={screen.k === "add"} why={screen.k === "signin" ? screen.why : undefined} onBack={up} onIn={signedIn} />;
+  } else if (screen.k === "stage") {
+    const w = worldOf(screen.unitId);
+    body = w ? (
+      <StageScreen
+        me={me!}
+        world={w}
+        onBack={up}
+        onPlay={(n) => {
+          sound("start");
+          go({ k: "level", unitId: w.unitId, n });
+        }}
+      />
+    ) : (
+      <Missing onBack={toMain} />
+    );
   } else if (screen.k === "level") {
-    body = (
+    const w = worldOf(screen.unitId);
+    body = w ? (
       <Play
-        world={screen.world}
+        key={`${w.unitId}.${screen.n}`}
+        world={w}
         n={screen.n}
-        onBack={toMain}
+        onBack={up}
         onChecked={(form, res, typed) => {
-          setScreen({ k: "result", world: screen.world, form, res, typed, before: me?.trophies ?? [] });
+          setScreen({
+            k: "result",
+            unitId: w.unitId,
+            form,
+            res,
+            typed,
+            before: { trophies: me?.trophies ?? [], days: me?.streak.days ?? 0, today: !!me?.streak.today, best: me?.best ?? 0 },
+          });
           window.scrollTo(0, 0);
           void loadMe();
         }}
       />
+    ) : (
+      <Missing onBack={toMain} />
     );
   } else if (screen.k === "result") {
-    body = (
+    const w = worldOf(screen.unitId);
+    body = w ? (
       <Result
-        world={screen.world}
+        world={w}
         form={screen.form}
         res={screen.res}
         typed={screen.typed}
         before={screen.before}
         me={me}
-        onHome={toMain}
-        onNext={(w, n) => {
-          setScreen({ k: "level", world: w, n });
+        onStage={up}
+        onNext={(n) => {
+          sound("start");
+          setScreen({ k: "level", unitId: w.unitId, n });
           window.scrollTo(0, 0);
         }}
       />
+    ) : (
+      <Missing onBack={toMain} />
     );
   } else {
     body = (
       <>
-        <TopBar me={me} acc={acc} offline={offline} onKids={() => openSheet("kids")} onFeedback={() => openSheet("feedback")} onTab={setTab} />
-        <main class="f-main" key={`${acc?.id ?? ""}.${tab}`}>
-          {tab === "map" ? (
-            <MapTab me={me} onPlay={(world, n) => go({ k: "level", world, n })} />
-          ) : tab === "board" ? (
-            <BoardTab me={me} />
+        <main class={`f-main t-${tab}`} key={`${acc?.id ?? ""}.${tab}`}>
+          {tab === "home" ? (
+            <HomeTab top={top} me={me} onPlay={playNow} onLearn={() => pickTab("learn")} onStage={(unitId) => go({ k: "stage", unitId })} />
+          ) : tab === "learn" ? (
+            <LearnTab top={top} me={me} onStage={(unitId) => go({ k: "stage", unitId })} onPlay={playNow} />
+          ) : tab === "race" ? (
+            <BoardTab top={top} me={me} />
           ) : (
-            <MeTab me={me} list={accounts()} current={acc} onSwitch={switchKid} onAdd={addKid} onSignOut={() => void signOut()} />
+            <MeTab
+              top={top}
+              me={me}
+              list={accounts()}
+              current={acc}
+              onSwitch={switchKid}
+              onAdd={addKid}
+              onSignOut={() => void signOut()}
+              onRace={() => pickTab("race")}
+            />
           )}
         </main>
-        <BottomBar
-          tab={tab}
-          onTab={(t) => {
-            if (t === tab) return;
-            buzz();
-            sound("tab");
-            setTab(t);
-            window.scrollTo(0, 0);
-          }}
-        />
-        {sheet === "kids" && (
-          <Sheet title="இந்த phone இல்" sub="மாற்ற ஒருவரைத் தொடு · Tap a child to switch" onClose={closeSheet}>
-            <Kids list={accounts()} current={acc} onSwitch={switchKid} onAdd={addKid} onSignOut={() => void signOut()} />
-          </Sheet>
-        )}
-        {sheet === "feedback" && <FeedbackSheet grade={me?.grade ?? acc?.grade ?? null} onClose={closeSheet} />}
+        <BottomBar tab={tab} onTab={pickTab} />
       </>
     );
   }
   return (
     <div class={`f-app s-${screen.k}`} onPointerDown={armSound}>
-      <span class="f-sky" aria-hidden="true" />
       {body}
+      {sheet === "kids" && (
+        <Sheet title="இந்த phone இல்" sub="மாற்ற ஒருவரைத் தொடு · Tap a child to switch" onClose={closeSheet}>
+          <Kids list={accounts()} current={acc} onSwitch={switchKid} onAdd={addKid} onSignOut={() => void signOut()} />
+        </Sheet>
+      )}
+      {sheet === "feedback" && <FeedbackSheet grade={me?.grade ?? acc?.grade ?? null} onClose={closeSheet} />}
       <Toast />
     </div>
   );
 }
 
-function TopBar(props: {
-  me: FamilyMe | null;
-  acc: Account | null;
-  offline: boolean;
-  onKids: () => void;
-  onFeedback: () => void;
-  onTab: (t: Tab) => void;
-}) {
+function Missing(props: { onBack: () => void }) {
+  return (
+    <div class="f-center f-pad">
+      <Owl mood="think" class="mid" />
+      <p class="f-lead">இது இப்போது இல்லை.</p>
+      <button type="button" class="f-btn go" onClick={props.onBack}>
+        முகப்பு
+      </button>
+    </div>
+  );
+}
+
+/** Who is on screen, his flame, his XP, and Feedback: at the top of every tab. */
+function TopRow(props: { me: FamilyMe | null; acc: Account | null; offline: boolean; onKids: () => void; onFeedback: () => void; onTab: (t: Tab) => void }) {
   const me = props.me;
   const name = me?.name ?? props.acc?.name ?? "";
   const kids = accounts().length;
   return (
-    <header class="f-top">
+    <div class="f-toprow">
       <button type="button" class="f-who" aria-label={`${name}: the children on this phone`} onClick={props.onKids}>
         <Avatar name={name || "?"} size="s" />
         <b class="f-name">{firstName(name)}</b>
@@ -327,33 +428,41 @@ function TopBar(props: {
         </span>
       )}
       <span class="f-sp" />
-      <button type="button" class={`f-stat lamp${me?.streak.today ? " lit" : ""}`} aria-label={`${me?.streak.days ?? 0} days in a row`} onClick={() => props.onTab("me")}>
-        <Lamp lit={!!me?.streak.today} />
+      <button type="button" class={`f-pill fire${me?.streak.today ? " lit" : ""}`} aria-label={`${me?.streak.days ?? 0} days in a row`} onClick={() => props.onTab("me")}>
+        <Flame lit={!!me?.streak.today} />
         {me?.streak.days ?? 0}
       </button>
-      <button type="button" class="f-stat xp" aria-label={`${me?.xp ?? 0} XP this week`} onClick={() => props.onTab("board")}>
-        <Spark />
-        {me?.xp ?? 0}
+      <button type="button" class="f-pill gem" aria-label={`${me?.total ?? 0} XP`} onClick={() => props.onTab("race")}>
+        <Gem />
+        {(me?.total ?? 0).toLocaleString("en")}
       </button>
       <button type="button" class="f-fbb" aria-label="Feedback: tell ARISTORA" onClick={props.onFeedback}>
-        <Icon name="chat" size={21} />
+        <Icon name="chat" size={20} />
       </button>
-    </header>
+    </div>
   );
 }
 
-const TABS: { id: Tab; icon: "map" | "board" | "me"; ta: string; en: string }[] = [
-  { id: "map", icon: "map", ta: "வரைபடம்", en: "Map" },
-  { id: "board", icon: "board", ta: "போட்டி", en: "Race" },
-  { id: "me", icon: "me", ta: "நான்", en: "Me" },
+const TABS: { id: Tab; icon: IconName; ta: string; en: string }[] = [
+  { id: "home", icon: "home", ta: "முகப்பு", en: "Home" },
+  { id: "learn", icon: "map", ta: "கற்க", en: "Learn" },
+  { id: "race", icon: "trophy", ta: "போட்டி", en: "Race" },
+  { id: "me", icon: "user", ta: "நான்", en: "Me" },
 ];
 
 function BottomBar(props: { tab: Tab; onTab: (t: Tab) => void }) {
   return (
     <nav class="f-tabs" aria-label="ARISTORA">
       {TABS.map((t) => (
-        <button key={t.id} type="button" class={`f-tab${props.tab === t.id ? " on" : ""}`} aria-pressed={props.tab === t.id} aria-label={`${t.ta} · ${t.en}`} onClick={() => props.onTab(t.id)}>
-          <Icon name={t.icon} size={24} />
+        <button
+          key={t.id}
+          type="button"
+          class={`f-tab${props.tab === t.id ? " on" : ""}`}
+          aria-pressed={props.tab === t.id}
+          aria-label={`${t.ta} · ${t.en}`}
+          onClick={() => props.onTab(t.id)}
+        >
+          <Icon name={t.icon} size={22} />
           <span>{t.ta}</span>
         </button>
       ))}
@@ -378,6 +487,7 @@ function SignIn(props: { add: boolean; why?: string; onBack: () => void; onIn: (
       const r = await signInIndex(Number(index), code, t);
       if (r.ok) return props.onIn(t, r.name);
       buzz(40);
+      sound("wrong");
       setErr(r.why === "locked" ? `பல தடவை தவறு. ${r.minutes} நிமிடம் கழித்து மீண்டும் முயற்சி செய்.` : "Index எண் அல்லது code தவறு. மீண்டும் பார்.");
     } catch (x) {
       setErr(problemWords(x));
@@ -388,14 +498,14 @@ function SignIn(props: { add: boolean; why?: string; onBack: () => void; onIn: (
   return (
     <div class="f-signin">
       {props.add && (
-        <button type="button" class="f-icon f-back" aria-label="Back" onClick={props.onBack}>
+        <button type="button" class="f-round f-back" aria-label="Back" onClick={props.onBack}>
           <Icon name="back" />
         </button>
       )}
       <div class="f-center f-pad">
-        <Owl class="big" />
+        <Owl mood="wave" class="big" />
         <h1 class="f-h1">{props.add ? "இன்னொரு பிள்ளை" : "ARISTORA"}</h1>
-        {props.add && <p class="f-muted">அவரின் index எண்ணும் code உம் · His index number and code</p>}
+        {props.add ? <p class="f-muted">அவரின் index எண்ணும் code உம் · His index number and code</p> : <p class="f-muted">வகுப்பும் கற்றலும், ஒரே இடத்தில்.</p>}
         {props.why && <p class="f-muted">{props.why}</p>}
         <form class="f-form" onSubmit={(e) => void go(e)}>
           <label>
@@ -457,7 +567,7 @@ function Join(props: { code: string; onReady: () => void; onIn: (token: string, 
   if (!state) return null;
   return (
     <div class="f-center f-pad">
-      <Owl class="big" />
+      <Owl mood={state.name ? "wave" : "sad"} class="big" />
       {state.name ? (
         <>
           <h1 class="f-h1">வணக்கம், {firstName(state.name)}!</h1>

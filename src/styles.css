@@ -10001,3 +10001,60 @@ body.tm-on .toasts {
   font: 700 17px/1 var(--cond);
   color: var(--ink-2);
 }
+
+/* ---------- Settings → Class hours (3 Nov 2026, src/classHours.tsx) ---------- */
+.plain-list.ch-list > li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+}
+.plain-list.ch-list > li.off .ch-times {
+  opacity: 0.4;
+}
+.ch-day {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-weight: 700;
+}
+.ch-day input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+}
+.ch-day span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ch-times {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+.ch-times input {
+  width: 104px;
+  height: 40px;
+  padding: 0 8px;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  font: 600 15px/1 var(--font);
+  color: var(--ink);
+}
+/* The phone's own time picker opens on a tap: its little clock icon only takes room. */
+.ch-times input::-webkit-calendar-picker-indicator {
+  display: none;
+}
+@media (max-width: 345px) {
+  .ch-times input {
+    width: 84px;
+    padding: 0 6px;
+    font-size: 14px;
+  }
+}

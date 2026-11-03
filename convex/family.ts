@@ -1,7 +1,8 @@
 // The family app (app.aristora.org): a student and his family, on their own phone, see only him.
 //   peek / join  -> open the WhatsApp link (one use, 7 days): this phone is his family's from now on.
 //   signIn       -> or type his index number and 4-digit code (5 wrong in a row: locked 15 minutes).
-//   me           -> his Worlds and levels, XP this week, his streak.
+//   me           -> the whole syllabus of his grade (each unit a Stage, grouped by term: the phone's Worlds), each
+//                   Stage's levels, XP this week and ever, his streak, his week, his trophies.
 //   level        -> the level he is on: each question's boxes (numbers, or answers in n), never the answers.
 //   check        -> his typed answers for a whole level, once: the server marks them with the answer key and saves the
 //                   level as marked at home (⌂). Evaluation and Theory see his lost marks at once; the corrector looks
@@ -9,9 +10,12 @@
 //                   reasons, drawings) waits for her.
 //   board        -> this week's XP in his grade (first name and initial only).
 //   questions    -> a level's questions as printed, for a student without his book (3 Nov 2026): his own book's pages,
-//                   only in a World open to him; never the answers (they are in another table).
+//                   only in a Stage open to him; never the answers (they are in another table).
 //   feedback     -> a few words to ARISTORA about the class, the teachers, the questions or the app (3 Nov 2026): with
 //                   his name, or without it (then nothing ties the words to him); read in Settings → Feedback.
+//   classes      -> his class side (3 Nov 2026): the centre's hours (Settings → Class hours), the days he usually
+//                   comes, this week, his last classes, in class now.
+//   day          -> one day of his (the last 60): sign-in, Theory and Evaluation, levels in class and at home, sign-out.
 // Every function takes the family phone's token (familyViewer / familyActor); peek, join and signIn are open on
 // purpose (they are how a phone gets its token). A phone may hold several children (one token each): it sends the
 // token of the child on screen.
@@ -26,12 +30,21 @@ import { partOf } from "./lib/book";
 import {
   bestStreak,
   CODE_FAILS,
+  dayNoOf,
+  hoursOf,
+  levelMoment,
+  unitNumber,
+  usualDays,
+  type DayItem,
+  type Hours,
   CODE_LOCK_MS,
   codeRow,
   levelDays,
+  levelsSince,
   masterRows,
   streakOf,
   trophiesOf,
+  weekDayXp,
   weekDays,
   weekXp,
   worldsOf,
@@ -39,7 +52,7 @@ import {
   type Trophy,
   type World,
 } from "./lib/family";
-import { slDayNo, slWeekStart } from "./lib/day";
+import { DAY_MS, SL_OFFSET_MS, slDay, slDayNo, slWeekStart } from "./lib/day";
 import { computeMaster, markBefore, type MQ, type MState } from "./lib/master";
 import { boxCount, formOf, INPUT_MAX, markQuestion, phoneKey, type FormQ } from "./lib/phone";
 import { ranks } from "./lib/progress";
@@ -178,7 +191,13 @@ export type FamilyMe = {
   best: number;
   /** This week, Monday to Sunday: a level finished that day. */
   week: boolean[];
+  /** This week, Monday to Sunday: the XP of each day. */
+  dayXp: number[];
+  /** Levels he finished, ever and this week. */
+  levelsDone: number;
+  levelsWeek: number;
   trophies: Trophy[];
+  /** Every unit of his grade, in book order (the phone groups them by term: its Worlds). */
   worlds: World[];
 };
 
@@ -200,6 +219,9 @@ export const me = query({
       streak: streakOf(rows, now),
       best: bestStreak(days),
       week: weekDays(days, now),
+      dayXp: weekDayXp(rows, now),
+      levelsDone: levelsSince(rows, 0),
+      levelsWeek: levelsSince(rows, slWeekStart(now)),
       trophies: trophiesOf(rows, worlds),
       worlds,
     };
@@ -209,20 +231,20 @@ export const me = query({
 /** The World, its workbook and his level, when he may play it now (else a reason, in plain words). */
 async function playable(ctx: QueryCtx, s: Doc<"students">, unitId: Id<"units">, n: number) {
   const world = (await worldsOf(ctx, s)).find((w) => w.unitId === unitId);
-  if (!world) fail("This World is not in your grade.");
-  if (!world.open) fail("This World is locked. Finish the World before it.");
+  if (!world) fail("This Stage is not in your grade.");
+  if (!world.open) fail("This Stage is locked. Finish the Stage before it.");
   const book = await bookFor(ctx, unitId, "master");
-  if (!book) fail("This World has no levels yet.");
+  if (!book) fail("This Stage has no levels yet.");
   const data = asMaster(book);
   const level = data.levels.find((l) => l.n === n);
-  if (!level) fail("That level is not in this World.");
+  if (!level) fail("That level is not in this Stage.");
   const st = world.levels.find((l) => l.n === n)!.s;
   if (st === "done" || st === "check") fail("This level is already marked.");
   if (st === "class") fail("This level is with your teacher.");
   if (st === "pre") fail("This level was done before the app.");
   if (st !== "play") fail("Do the levels in order: finish the level before it.");
   const key = await keyRow(ctx, unitId, "master");
-  if (!key) fail("This World can't be marked on the phone yet.");
+  if (!key) fail("This Stage can't be marked on the phone yet.");
   return { world, data, level, keys: phoneKey(key.answers, data) };
 }
 
@@ -375,12 +397,12 @@ export const questions = query({
   handler: async (ctx, args): Promise<FamilyQuestions> => {
     const s = await familyViewer(ctx, args.token);
     const world = (await worldsOf(ctx, s)).find((w) => w.unitId === args.unitId);
-    if (!world) fail("This World is not in your grade.");
-    if (!world.open) fail("This World is locked. Finish the World before it.");
+    if (!world) fail("This Stage is not in your grade.");
+    if (!world.open) fail("This Stage is locked. Finish the Stage before it.");
     const book = await bookFor(ctx, args.unitId, "master");
-    if (!book) fail("This World has no levels yet.");
+    if (!book) fail("This Stage has no levels yet.");
     const level = asMaster(book).levels.find((l) => l.n === args.n);
-    if (!level) fail("That level is not in this World.");
+    if (!level) fail("That level is not in this Stage.");
     const qs: FamilyQuestions["qs"] = [];
     for (let q = level.from; q <= level.to; q++) {
       const r = await ctx.db
@@ -442,5 +464,152 @@ export const feedback = mutation({
       ...(args.named ? { studentId: s._id, name: s.name } : {}),
     });
     return true;
+  },
+});
+
+// ---- His classes: the schedule, this week, recent classes, and one day's timeline (3 Nov 2026) ----
+
+export type ClassDay = { day: string; inAt: number; outAt: number | null; levels: number; teachers: string[] };
+
+export type FamilyClasses = {
+  /** The centre's hours, Monday first (Settings → Class hours; null = no class that day). */
+  hours: Hours;
+  /** The weekdays he usually comes (Monday = 0), from the last 4 weeks. */
+  usual: number[];
+  /** This week, Monday to Sunday: his first sign-in and last sign-out each day (null = he didn't come). */
+  week: { day: string; inAt: number | null; outAt: number | null }[];
+  /** His last 10 class days, newest first: when, how many levels, which teachers he sat with. */
+  recent: ClassDay[];
+  /** In class now: since when (null = not in class). */
+  inClass: number | null;
+};
+
+/** His schedule and his recent classes (the Home tab). */
+export const classes = query({
+  args: { token },
+  handler: async (ctx, args): Promise<FamilyClasses> => {
+    const s = await familyViewer(ctx, args.token);
+    const now = Date.now();
+    const today = slDayNo(now);
+    const since = (today - 60) * DAY_MS - SL_OFFSET_MS;
+    const visits = await ctx.db
+      .query("attendance")
+      .withIndex("by_student", (q) => q.eq("studentId", s._id).gte("inAt", since))
+      .collect();
+    const calls = (await ctx.db
+      .query("calls")
+      .withIndex("by_student_at", (q) => q.eq("studentId", s._id).gte("createdAt", since))
+      .collect()).filter((c) => c.arrivedAt !== undefined && !c.test);
+    const rows = await masterRows(ctx, s._id);
+    const byDay = new Map<string, { inAt: number; outAt: number | null }>();
+    for (const v of visits.sort((a, b) => a.inAt - b.inAt)) {
+      const d = byDay.get(v.day);
+      const out = v.outAt ?? null;
+      if (!d) byDay.set(v.day, { inAt: v.inAt, outAt: out });
+      else d.outAt = d.outAt === null || out === null ? null : Math.max(d.outAt, out);
+    }
+    const monday = slDayNo(slWeekStart(now));
+    const week = Array.from({ length: 7 }, (_, i) => {
+      const day = slDay((monday + i) * DAY_MS - SL_OFFSET_MS + 60_000);
+      const d = byDay.get(day);
+      return { day, inAt: d?.inAt ?? null, outAt: d?.outAt ?? null };
+    });
+    const recent: ClassDay[] = [...byDay.entries()]
+      .sort((a, b) => b[1].inAt - a[1].inAt)
+      .slice(0, 10)
+      .map(([day, d]) => {
+        const from = dayNoOf(day) * DAY_MS - SL_OFFSET_MS;
+        const to = from + DAY_MS;
+        let levels = 0;
+        for (const r of rows) {
+          for (const lv of Object.values(r.m?.lv ?? {})) {
+            const m = levelMoment(lv, from, to);
+            if (m && m.how !== "home") levels++;
+          }
+        }
+        const teachers = [...new Set(calls.filter((c) => c.arrivedAt! >= from && c.arrivedAt! < to && c.teacher).map((c) => c.teacher!))];
+        return { day, inAt: d.inAt, outAt: d.outAt, levels, teachers };
+      });
+    const open = s.present ? visits.filter((v) => v.outAt === undefined).sort((a, b) => b.inAt - a.inAt)[0] : undefined;
+    return {
+      hours: await hoursOf(ctx),
+      usual: usualDays([...byDay.keys()], now),
+      week,
+      recent,
+      inClass: open?.inAt ?? null,
+    };
+  },
+});
+
+/** One day of his (the last 60 days): sign-in, levels in class and at home, time with each teacher, sign-out. */
+export const day = query({
+  args: { token, day: v.string() },
+  handler: async (ctx, args): Promise<{ day: string; items: DayItem[] }> => {
+    const s = await familyViewer(ctx, args.token);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(args.day)) fail("That day isn't a date.");
+    const no = dayNoOf(args.day);
+    const today = slDayNo(Date.now());
+    if (!(no <= today && no > today - 60)) fail("Only the last 60 days.");
+    const from = no * DAY_MS - SL_OFFSET_MS;
+    const to = from + DAY_MS;
+    const items: DayItem[] = [];
+    const visits = await ctx.db
+      .query("attendance")
+      .withIndex("by_student", (q) => q.eq("studentId", s._id).gte("inAt", from).lt("inAt", to))
+      .collect();
+    for (const v of visits) {
+      items.push({ k: "in", at: v.inAt });
+      if (v.outAt !== undefined) items.push({ k: "out", at: v.outAt });
+    }
+    const rows = await masterRows(ctx, s._id);
+    const unitOf = new Map<string, { no: number; ta: string; max: Map<number, number> }>();
+    const unitInfo = async (unitId: Id<"units">) => {
+      const hit = unitOf.get(unitId);
+      if (hit) return hit;
+      const u = await ctx.db.get(unitId);
+      const book = await bookFor(ctx, unitId, "master");
+      const max = new Map<number, number>(book && book.data.kind === "master" ? book.data.levels.map((l) => [l.n, l.max] as [number, number]) : []);
+      const info = { no: u ? unitNumber(u.code) : 0, ta: u?.ta ?? "", max };
+      unitOf.set(unitId, info);
+      return info;
+    };
+    for (const r of rows) {
+      for (const [n, lv] of Object.entries(r.m?.lv ?? {})) {
+        const m = levelMoment(lv, from, to);
+        if (!m) continue;
+        const u = await unitInfo(r.unitId);
+        items.push({ k: "level", at: m.at, no: u.no, ta: u.ta, n: Number(n), how: m.how, got: m.got, max: u.max.get(Number(n)) ?? 0 });
+      }
+    }
+    const calls = (await ctx.db
+      .query("calls")
+      .withIndex("by_student_at", (q) => q.eq("studentId", s._id).gte("createdAt", from - 6 * 3_600_000).lt("createdAt", to))
+      .collect()).filter((c) => !c.test && c.arrivedAt !== undefined && c.arrivedAt >= from && c.arrivedAt < to);
+    for (const c of calls) {
+      const end = c.endedAt ?? null;
+      const until = (end ?? c.arrivedAt! + 2 * 3_600_000) + 60_000;
+      const row = c.unitId ? rows.find((r) => r.unitId === c.unitId) : undefined;
+      const qs = Object.entries(row?.m?.q ?? {})
+        .filter(([, x]) => {
+          const t = c.kind === "theory" ? x.tt : x.x;
+          return t !== undefined && t >= c.arrivedAt! && t <= until;
+        })
+        .map(([q]) => Number(q))
+        .sort((a, b) => a - b);
+      const u = c.unitId ? await unitInfo(c.unitId) : null;
+      items.push({
+        k: "room",
+        at: c.arrivedAt!,
+        to: end,
+        room: c.kind === "theory" ? "theory" : "evaluation",
+        teacher: c.teacher ?? null,
+        no: u?.no ?? null,
+        ta: u?.ta ?? null,
+        section: c.section ?? null,
+        qs,
+      });
+    }
+    items.sort((a, b) => a.at - b.at);
+    return { day: args.day, items };
   },
 });

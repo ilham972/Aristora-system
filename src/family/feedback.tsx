@@ -5,7 +5,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { mutation } from "./net";
 import { buzz, sound } from "./sound";
-import { Owl, problemWords, Sheet } from "./ui";
+import { OwlBadge, problemWords, Sheet } from "./ui";
 
 const FACES: { mood: number; face: string; ta: string }[] = [
   { mood: 1, face: "😞", ta: "மிக மோசம்" },
@@ -53,7 +53,7 @@ export function FeedbackSheet(props: { grade: number | null; onClose: () => void
         ...(text.trim() ? { text: text.trim() } : {}),
         named,
       });
-      sound("star");
+      sound("send");
       setSent(true);
     } catch (e) {
       buzz(40);
@@ -67,7 +67,7 @@ export function FeedbackSheet(props: { grade: number | null; onClose: () => void
     return (
       <Sheet title="நன்றி!" onClose={props.onClose} class="f-fb-done">
         <div class="f-thanks rise">
-          <Owl class="mid" />
+          <OwlBadge mood="cheer" class="mid" />
           <b>நன்றி! உன் கருத்தைப் படிப்போம்.</b>
           <small>Thank you: we read every one.</small>
         </div>
@@ -88,7 +88,7 @@ export function FeedbackSheet(props: { grade: number | null; onClose: () => void
             class={`f-face${mood === f.mood ? " on" : ""}`}
             onClick={() => {
               buzz();
-              sound("tab");
+              sound("tap");
               setMood(mood === f.mood ? null : f.mood);
             }}
           >

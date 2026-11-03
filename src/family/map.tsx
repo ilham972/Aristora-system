@@ -1,30 +1,21 @@
-// The map (his voice note, 3 Nov 2026: "a beautiful map, not a straight line, like a game"): every World of his grade
-// is a stretch of a night road winding down the screen, its Levels the stops on it. A Level he finished glows gold (its
-// ring = how much of its XP he won), his Level now carries the owl and "Start", the rest wait; a locked World is dim.
-// Only the Level he is on can be played (the paper is the truth, level by level: convex/lib/family.ts).
+// Learn: the whole syllabus of his grade as one map (his voice notes, 3 Nov 2026). Each school term is a World, each
+// unit a Stage on its winding road, each Stage's Levels inside it.
+// - At the top, the Stage he is on: its name, how far he is, and Continue (his Level now, one tap).
+// - A Stage he finished is purple with a ✓; the one he is on is the gold star with START; one the teachers opened shows
+//   how far he is in it; a locked one has a lock; one whose workbook is not in the app yet says "soon".
+// - Inside a Stage: its Levels on a smaller road. Only the Level he is on can be played (the paper is the truth, level
+//   by level: convex/lib/family.ts); the others say where they are (marked, with the teacher, done before the app).
 
-import { useEffect, useRef, useState } from "preact/hooks";
+import type { ComponentChildren } from "preact";
+import { useEffect } from "preact/hooks";
 import type { FamilyMe } from "../../convex/family";
 import type { World, WorldLevel } from "../../convex/lib/family";
+import { nextPlay } from "./play";
 import { buzz, sound } from "./sound";
-import { Icon, Lamp, Owl, toast } from "./ui";
+import { Dashes, Flame, Gem, Icon, Owl, OwlBadge, OwlSays, Tag, TERM_TA, toast, Waiting, type Mood } from "./ui";
 
-/** px between two Levels on the road. */
-const STEP = 96;
-/** px from a World's banner to its first Level (room for the owl and "Start" above it), and from its last Level to its cup. */
-const HEAD = 84;
-const TAIL = 92;
-/** How far the road swings left and right of the middle (% of the width). */
-const SWAY = 25;
-/** Each World its own colour (hue), in turn: violet, blue, cyan, rose, amber, indigo. */
-const HUES = [265, 224, 192, 336, 36, 248];
+// ---- The road: a smooth line through the stops (x in % of the width, y in px) ----
 
-/** Where the i-th stop of the w-th World sits: x in % of the width, y in px below the top of its road. */
-export function spot(i: number, w: number): { x: number; y: number } {
-  return { x: 50 + SWAY * Math.sin(i * 0.92 + w * 1.9), y: HEAD + i * STEP };
-}
-
-/** A smooth road through the stops (x in %, y in px: the SVG stretches only sideways). */
 function roadThrough(pts: { x: number; y: number }[]): string {
   if (pts.length === 0) return "";
   let d = `M${pts[0].x.toFixed(2)} ${pts[0].y}`;
@@ -37,6 +28,230 @@ function roadThrough(pts: { x: number; y: number }[]): string {
   return d;
 }
 
+/** The road under the stops: lavender, a dashed white middle, purple up to where he is. */
+function Road(props: { pts: { x: number; y: number }[]; height: number; reached: number }) {
+  const d = roadThrough(props.pts);
+  const r = props.reached > 0 ? roadThrough(props.pts.slice(0, props.reached + 1)) : "";
+  return (
+    <svg class="f-road" viewBox={`0 0 100 ${props.height}`} preserveAspectRatio="none" width="100%" height={props.height} aria-hidden="true">
+      <path class="f-road-bed" d={d} vector-effect="non-scaling-stroke" />
+      {r && <path class="f-road-done" d={r} vector-effect="non-scaling-stroke" />}
+      <path class="f-road-mid" d={d} vector-effect="non-scaling-stroke" />
+    </svg>
+  );
+}
+
+// ---- The syllabus map ----
+
+/** The Worlds: his grade's units grouped by term (terms 1–3 in order, then any extra book). */
+export function worldsByTerm(me: FamilyMe): { term: number; no: number; stages: World[] }[] {
+  const terms = [...new Set(me.worlds.map((w) => w.term ?? 0))].sort((a, b) => (a || 9) - (b || 9));
+  return terms.map((term, i) => ({ term, no: i + 1, stages: me.worlds.filter((w) => (w.term ?? 0) === term) }));
+}
+
+/** A Stage's levels finished (handed in, marked, or done before the app). */
+export const levelsDone = (w: World) => w.levels.filter((l) => l.s !== "play" && l.s !== "later").length;
+
+type NodeState = "done" | "now" | "open" | "lock" | "soon";
+
+function stateOf(w: World, focus: World | null): NodeState {
+  if (!w.book) return "soon";
+  if (focus && w.unitId === focus.unitId) return "now";
+  if (w.allDone) return "done";
+  return w.open ? "open" : "lock";
+}
+
+/** Where the i-th Stage of a World sits: swinging well left and right (so START over his Stage never covers the one
+ *  before it), a little differently in each World. */
+const STAGE_STEP = 132;
+const STAGE_HEAD = 104;
+const stagePos = (i: number, g: number) => ({ x: 50 + 25 * Math.sin(i * 1.6 + g * 1.7), y: STAGE_HEAD + i * STAGE_STEP });
+
+function StageNode(props: { w: World; st: NodeState; at: { x: number; y: number }; onOpen: () => void }) {
+  const { w, st, at } = props;
+  const done = levelsDone(w);
+  const pct = w.levels.length ? Math.round((done / w.levels.length) * 100) : 0;
+  const right = at.x < 50; // the words go to the roomier side
+  const tap = () => {
+    buzz();
+    if (st === "soon") return toast(`Stage ${w.no}: விரைவில் app இல் வரும்.`);
+    if (st === "lock") {
+      sound("wrong");
+      return toast("இது பூட்டப்பட்டுள்ளது: முன்னுள்ள Stage ஐ முடி, அல்லது வகுப்பில் கேள்.");
+    }
+    sound("pop");
+    props.onOpen();
+  };
+  return (
+    <div class={`f-nodewrap ${right ? "r" : "l"}`} style={{ left: `${at.x}%`, top: `${at.y}px`, "--room": String(Math.round(right ? 100 - at.x : at.x)) }}>
+      {st === "now" && (
+        <span class="f-start" aria-hidden="true">
+          START
+        </span>
+      )}
+      <button type="button" class={`f-node s-${st}`} style={{ "--p": String(pct) }} aria-label={`Stage ${w.no}: ${w.ta}`} onClick={tap}>
+        {st === "now" && <span class="f-node-ring" aria-hidden="true" />}
+        <span class="f-node-c">
+          {st === "done" ? (
+            <Icon name="check" size={30} />
+          ) : st === "lock" ? (
+            <Icon name="lock" size={24} />
+          ) : st === "now" ? (
+            <Icon name="star" size={34} class="fill" />
+          ) : (
+            <b>{w.no}</b>
+          )}
+        </span>
+      </button>
+      <span class="f-cap">
+        <small>
+          Stage {w.no}
+          {st === "soon" ? " · விரைவில்" : st === "open" || st === "now" ? ` · ${done}/${w.levels.length}` : ""}
+        </small>
+        <b>{w.ta}</b>
+      </span>
+    </div>
+  );
+}
+
+function WorldMap(props: { g: { term: number; no: number; stages: World[] }; focus: World | null; onStage: (unitId: string) => void }) {
+  const { g, focus } = props;
+  const n = g.stages.length;
+  const pts = g.stages.map((_, i) => stagePos(i, g.no));
+  const chest = { x: stagePos(n, g.no).x, y: (pts[n - 1]?.y ?? STAGE_HEAD) + STAGE_STEP - 10 };
+  const height = chest.y + 64;
+  const states = g.stages.map((w) => stateOf(w, focus));
+  const finished = g.stages.filter((w) => w.book && w.allDone).length;
+  const books = g.stages.filter((w) => w.book).length;
+  const allDone = books > 0 && finished === books;
+  // Purple road up to his Stage now (or past every Stage he finished).
+  const nowAt = states.indexOf("now");
+  let reached = nowAt;
+  if (reached < 0) {
+    reached = -1;
+    states.forEach((s, i) => {
+      if (s === "done") reached = i;
+    });
+    if (allDone) reached = n;
+  }
+  return (
+    <section class={`f-world${allDone ? " won" : ""}`} aria-label={`World ${g.no}`}>
+      <header class="f-wbanner">
+        <span class="f-wno">
+          <small>World</small>
+          <b>{g.no}</b>
+        </span>
+        <span class="f-wname">
+          <b>{TERM_TA[g.term] ?? `World ${g.no}`}</b>
+          <small>
+            {n} Stages{books < n ? ` · ${books} app இல்` : ""}
+          </small>
+        </span>
+        <span class="f-wdone" style={{ "--p": String(books ? Math.round((finished / books) * 100) : 0) }}>
+          {finished}/{books}
+        </span>
+      </header>
+      <div class="f-roadbox" style={{ height: `${height}px` }}>
+        <Road pts={[...pts, chest]} height={height} reached={reached} />
+        {g.stages.map((w, i) => (
+          <StageNode key={w.unitId} w={w} st={states[i]} at={pts[i]} onOpen={() => props.onStage(w.unitId)} />
+        ))}
+        <span class={`f-chest${allDone ? " won" : ""}`} style={{ left: `${chest.x}%`, top: `${chest.y}px` }} aria-label={allDone ? `World ${g.no}: வென்றாய்` : undefined}>
+          <Icon name="trophy" size={26} />
+        </span>
+      </div>
+    </section>
+  );
+}
+
+/** What the owl says on the map: today's flame first, then how close the Stage is. */
+function coachWords(me: FamilyMe, focus: World | null, n: number | null): { mood: Mood; text: string } {
+  if (!me.streak.today && n !== null) {
+    return me.streak.days > 0
+      ? { mood: "wave", text: `இன்று ஒரு Level செய்தால் ${me.streak.days + 1} நாள் தொடர்! தீயை அணைய விடாதே.` }
+      : { mood: "wave", text: "இன்று ஒரு Level செய்து உன் தீயை மூட்டு!" };
+  }
+  if (focus && n !== null) {
+    const left = focus.levels.length - levelsDone(focus);
+    return { mood: "happy", text: left <= 2 ? `இன்னும் ${left} Level: Stage ${focus.no} முடியப் போகிறது!` : `Stage ${focus.no}: ${left} Levels மீதம். தொடர்ந்து செல்!` };
+  }
+  return { mood: "sleep", text: "இப்போது phone இல் செய்ய Level இல்லை. உன் தாளை வகுப்பில் கொடு." };
+}
+
+export function LearnTab(props: { top: ComponentChildren; me: FamilyMe | null; onStage: (unitId: string) => void; onPlay: () => void }) {
+  const me = props.me;
+  if (!me) {
+    return (
+      <>
+        <header class="f-hero">{props.top}</header>
+        <Waiting />
+      </>
+    );
+  }
+  const next = nextPlay(me);
+  const focus = next?.world ?? me.worlds.find((w) => w.now && w.book && w.open) ?? me.worlds.find((w) => w.book && w.open && !w.allDone) ?? null;
+  const groups = worldsByTerm(me);
+  const g = focus ? groups.find((x) => x.stages.includes(focus)) : undefined;
+  const coach = coachWords(me, focus, next?.n ?? null);
+  return (
+    <>
+      <header class="f-hero">
+        {props.top}
+        {focus ? (
+          <div class="f-hero-in">
+            <div class="f-hero-w">
+              <p class="f-kicker">
+                World {g?.no ?? 1} · {TERM_TA[focus.term] ?? ""}
+              </p>
+              <h1 class="f-title">{focus.ta}</h1>
+              <p class="f-hsub">{focus.en}</p>
+              <Tag tone="pink">Stage {focus.no}</Tag>
+            </div>
+            <OwlBadge mood={focus.allDone ? "cheer" : "happy"} class="hero" />
+            <div class="f-hero-foot">
+              <span class="f-hprog">
+                <Dashes done={levelsDone(focus)} of={focus.levels.length} />
+                <small>
+                  {levelsDone(focus)} / {focus.levels.length} Levels
+                </small>
+              </span>
+              {next ? (
+                <button type="button" class="f-btn gold f-cont" onClick={props.onPlay}>
+                  Level {next.n} <Icon name="play" size={15} class="fill" />
+                </button>
+              ) : (
+                <button type="button" class="f-btn white f-cont" onClick={() => props.onStage(focus.unitId)}>
+                  Stage {focus.no} <Icon name="next" size={16} />
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div class="f-hero-in">
+            <div class="f-hero-w">
+              <p class="f-kicker">{me.grade ? `Grade ${me.grade}` : "ARISTORA"}</p>
+              <h1 class="f-title">உன் பாடத்திட்டம்</h1>
+              <p class="f-hsub">ஒவ்வொரு தவணையும் ஒரு World.</p>
+            </div>
+            <OwlBadge mood="wave" class="hero" />
+          </div>
+        )}
+      </header>
+      <OwlSays mood={coach.mood} class="f-coach rise">
+        {!me.streak.today && next && <Flame lit={false} size={16} />} {coach.text}
+      </OwlSays>
+      <div class="f-map">
+        {groups.map((x) => (
+          <WorldMap key={x.term} g={x} focus={focus} onStage={props.onStage} />
+        ))}
+        {me.worlds.length === 0 && <p class="f-none">உன் பாடத்திட்டம் விரைவில் வரும்.</p>}
+      </div>
+    </>
+  );
+}
+
+// ---- Inside a Stage: its Levels ----
+
 const STATE_WORDS: Record<WorldLevel["s"], string> = {
   done: "முடிந்தது",
   check: "phone சரிபார்த்தது: ஆசிரியர் உன் தாளைப் பார்ப்பார்",
@@ -46,154 +261,132 @@ const STATE_WORDS: Record<WorldLevel["s"], string> = {
   later: "முந்தைய Level ஐ முடி",
 };
 
-function LevelStop(props: { w: World; l: WorldLevel; at: { x: number; y: number }; onPlay: () => void; live: boolean; refLive?: (el: HTMLButtonElement | null) => void }) {
-  const { w, l } = props;
-  const pct = l.got !== undefined && l.max ? Math.round((l.got / l.max) * 100) : l.s === "pre" ? 100 : 0;
-  const tap = () => {
+const LV_STEP = 124;
+const LV_HEAD = 86;
+const lvPos = (i: number) => ({ x: 50 + 24 * Math.sin(i * 1.6), y: LV_HEAD + i * LV_STEP });
+
+export function StageScreen(props: { me: FamilyMe; world: World; onBack: () => void; onPlay: (n: number) => void }) {
+  const { me, world: w } = props;
+  const groups = worldsByTerm(me);
+  const g = groups.find((x) => x.stages.some((s) => s.unitId === w.unitId));
+  const n = w.levels.length;
+  const done = levelsDone(w);
+  const pts = w.levels.map((_, i) => lvPos(i));
+  const cup = { x: lvPos(n).x, y: (pts[n - 1]?.y ?? LV_HEAD) + LV_STEP - 6 };
+  const height = cup.y + 60;
+  const playIdx = w.levels.findIndex((l) => l.s === "play");
+  const reached = w.allDone ? n : playIdx >= 0 ? playIdx : done - 1;
+  const canPlay = w.book && w.open && w.phone;
+  useEffect(() => {
+    const el = document.querySelector(".f-lv.play");
+    if (el && el.getBoundingClientRect().top > window.innerHeight - 160) el.scrollIntoView({ block: "center" });
+  }, []);
+  const tap = (l: WorldLevel) => {
     buzz();
-    if (props.live) {
-      sound("pop");
-      return props.onPlay();
+    if (l.s === "play" && canPlay) return props.onPlay(l.n);
+    if (!w.open) {
+      sound("wrong");
+      return toast("இந்த Stage பூட்டப்பட்டுள்ளது.");
     }
-    if (!w.open) return toast("இந்த World பூட்டப்பட்டுள்ளது. முந்தைய World ஐ முடி.");
-    if (l.s === "play") return toast("இந்த World ஐ இன்னும் phone இல் சரிபார்க்க முடியாது. தாளை வகுப்பில் கொடு.");
+    if (l.s === "play") return toast("இந்த Stage ஐ இன்னும் phone இல் சரிபார்க்க முடியாது. தாளை வகுப்பில் கொடு.");
+    sound("tap");
     toast(`Level ${l.n}: ${l.got !== undefined ? `${l.got} / ${l.max} XP · ` : ""}${STATE_WORDS[l.s]}`);
   };
-  const face = l.s === "pre" ? <Icon name="check" size={22} /> : <b>{l.n}</b>;
-  // A finished Level is a medal: gold from 75% of its XP, silver from half, bronze below.
-  const medal = l.s === "done" || l.s === "check" ? (pct >= 75 ? " m-gold" : pct >= 50 ? " m-silver" : " m-bronze") : "";
   return (
-    <button
-      type="button"
-      ref={props.refLive}
-      class={`f-stop s-${l.s}${medal}${props.live ? " live" : ""}${w.open ? "" : " shut"}`}
-      style={{ left: `${props.at.x}%`, top: `${props.at.y}px`, "--p": String(pct) }}
-      aria-label={`Level ${l.n}: ${props.live ? "தொடங்கு" : STATE_WORDS[l.s]}`}
-      onClick={tap}
-    >
-      <span class="f-stop-ring" aria-hidden="true" />
-      <span class="f-stop-face">{face}</span>
-      {l.s === "check" && <i class="f-stop-tag home">⌂</i>}
-      {l.s === "class" && <i class="f-stop-tag wait">⏳</i>}
-      {props.live && props.refLive && (
-        <>
-          <span class="f-perch">
-            <Owl class="tiny" />
+    <div class="f-stage">
+      <header class="f-hero">
+        <div class="f-toprow">
+          <button type="button" class="f-round on-brand" aria-label="Back" onClick={props.onBack}>
+            <Icon name="back" size={20} />
+          </button>
+          <span class="f-sp" />
+          <span class={`f-pill fire${me.streak.today ? " lit" : ""}`}>
+            <Flame lit={me.streak.today} />
+            {me.streak.days}
           </span>
-          <span class="f-go">தொடங்கு</span>
-        </>
-      )}
-    </button>
-  );
-}
-
-function WorldRoad(props: { w: World; wi: number; onPlay: (n: number) => void; refLive?: (el: HTMLButtonElement | null) => void }) {
-  const { w, wi } = props;
-  const n = w.levels.length;
-  const stops = w.levels.map((_, i) => spot(i, wi));
-  const cup = { x: spot(n, wi).x, y: (stops[n - 1]?.y ?? HEAD) + TAIL };
-  const height = cup.y + 56;
-  const playIdx = w.levels.findIndex((l) => l.s === "play");
-  // The road is gold up to where he is: through every finished stop, and on to the cup when the World is done.
-  const reached = w.allDone ? n : playIdx >= 0 ? playIdx : w.levels.filter((l) => l.s !== "later").length - 1;
-  const all = [...stops, cup];
-  const done = w.levels.filter((l) => l.s !== "play" && l.s !== "later").length;
-  const xp = w.levels.reduce((s, l) => s + (l.got ?? 0), 0);
-  return (
-    <section class={`f-world${w.open ? "" : " shut"}${w.now ? " now" : ""}`} style={{ "--wh": String(HUES[wi % HUES.length]) }} aria-label={`World ${w.no}`}>
-      <header class="f-wb">
-        <span class="f-wb-no">
-          <small>World</small>
-          <b>{w.no}</b>
-        </span>
-        <span class="f-wb-name">{w.ta}</span>
-        <span class="f-wb-done">
-          {w.open ? (
-            <>
-              {done}/{n}
-            </>
-          ) : (
-            <Icon name="lock" size={17} />
+          <span class="f-pill gem">
+            <Gem />
+            {me.total.toLocaleString("en")}
+          </span>
+        </div>
+        <div class="f-hero-in">
+          <div class="f-hero-w">
+            <p class="f-kicker">
+              World {g?.no ?? 1} · {TERM_TA[w.term] ?? ""}
+            </p>
+            <h1 class="f-title">{w.ta}</h1>
+            <p class="f-hsub">{w.en}</p>
+            <Tag tone="pink">Stage {w.no}</Tag>
+          </div>
+          <OwlBadge mood={!w.book ? "sleep" : w.allDone ? "cheer" : "happy"} class="hero" />
+          {w.book && (
+            <div class="f-hero-foot">
+              <span class="f-hprog">
+                <Dashes done={done} of={n} />
+                <small>
+                  {done} / {n} Levels
+                </small>
+              </span>
+            </div>
           )}
-        </span>
+        </div>
       </header>
-      {w.open && !w.phone && <p class="f-soon">விரைவில் phone இல் · On the phone soon</p>}
-      <div class="f-road" style={{ height: `${height}px` }}>
-        <svg class="f-road-svg" viewBox={`0 0 100 ${height}`} preserveAspectRatio="none" width="100%" height={height} aria-hidden="true">
-          <path class="f-road-bed" d={roadThrough(all)} />
-          <path class="f-road-dots" d={roadThrough(all)} />
-          {reached > 0 && <path class="f-road-glow" d={roadThrough(all.slice(0, reached + 1))} />}
-          {reached > 0 && <path class="f-road-gold" d={roadThrough(all.slice(0, reached + 1))} />}
-        </svg>
-        {w.levels.map((l, i) => {
-          const live = l.s === "play" && w.open && w.phone;
-          return <LevelStop key={l.n} w={w} l={l} at={stops[i]} live={live} refLive={live ? props.refLive : undefined} onPlay={() => props.onPlay(l.n)} />;
-        })}
-        <span class={`f-cup${w.allDone ? " won" : ""}`} style={{ left: `${cup.x}%`, top: `${cup.y}px` }} aria-label={w.allDone ? "World முடிந்தது" : undefined}>
-          <Icon name="cup" size={26} />
-          {w.allDone && <small>{xp} XP</small>}
-        </span>
-      </div>
-    </section>
-  );
-}
-
-export function MapTab(props: { me: FamilyMe | null; onPlay: (w: World, n: number) => void }) {
-  const me = props.me;
-  const live = useRef<HTMLButtonElement | null>(null);
-  const [away, setAway] = useState(false);
-  const firstScroll = useRef(false);
-
-  // Opens on his Level now (the road above it is behind him), and offers a way back when he scrolls away.
-  useEffect(() => {
-    const el = live.current;
-    if (!el) return;
-    if (!firstScroll.current) {
-      firstScroll.current = true;
-      el.scrollIntoView({ block: "center" });
-    }
-    if (typeof IntersectionObserver !== "function") return;
-    const io = new IntersectionObserver(([e]) => setAway(!e.isIntersecting), { rootMargin: "-90px 0px -110px 0px" });
-    io.observe(el);
-    return () => io.disconnect();
-  }, [me]);
-
-  if (!me) return <p class="f-muted f-pad f-center-t">…</p>;
-  // His Level now: in the World he is on in class first, else the first open World the phone can mark.
-  const playable = (w: World) => w.open && w.phone && w.levels.some((l) => l.s === "play");
-  const liveWorld = me.worlds.find((w) => w.now && playable(w)) ?? me.worlds.find(playable);
-  const liveN = liveWorld?.levels.find((l) => l.s === "play")?.n;
-  return (
-    <div class="f-map">
-      <span class="f-moon" aria-hidden="true" />
-      {!me.streak.today && (
-        <p class="f-keep rise">
-          <Lamp size={20} />
-          {me.streak.days > 0 ? `இன்று ஒரு Level செய்தால் ${me.streak.days + 1} நாள்!` : "இன்று ஒரு Level செய்து விளக்கை ஏற்று!"}
-        </p>
-      )}
-      {!liveWorld && me.worlds.length > 0 && <p class="f-none rise">இப்போது phone இல் செய்ய Level இல்லை. உன் தாளை வகுப்பில் கொடு.</p>}
-      {me.worlds.map((w, wi) => (
-        <WorldRoad
-          key={w.unitId}
-          w={w}
-          wi={wi}
-          onPlay={(n) => props.onPlay(w, n)}
-          refLive={
-            w === liveWorld
-              ? (el) => {
-                  live.current = el;
-                }
-              : undefined
-          }
-        />
-      ))}
-      {me.worlds.length === 0 && <p class="f-none">உன் Worlds விரைவில் வரும்.</p>}
-      {away && liveWorld && liveN !== undefined && (
-        <button type="button" class="f-jump rise" onClick={() => live.current?.scrollIntoView({ behavior: "smooth", block: "center" })}>
-          <Icon name="play" size={16} />
-          World {liveWorld.no} · Level {liveN}
-        </button>
+      {!w.book ? (
+        <div class="f-center f-pad">
+          <Owl mood="sleep" class="mid" />
+          <p class="f-lead">இந்த Stage விரைவில் app இல் வரும்.</p>
+          <p class="f-muted small">Coming soon: till then, do it in class.</p>
+        </div>
+      ) : (
+        <>
+          {!w.open && <p class="f-note lock">இந்த Stage பூட்டப்பட்டுள்ளது: முன்னுள்ள Stage ஐ முடி, அல்லது வகுப்பில் கேள்.</p>}
+          {w.open && !w.phone && <p class="f-note">இந்த Stage விரைவில் phone இல்: இப்போது தாளை வகுப்பில் கொடு.</p>}
+          <div class="f-roadbox lv" style={{ height: `${height}px` }}>
+            <Road pts={[...pts, cup]} height={height} reached={reached} />
+            {w.levels.map((l, i) => {
+              const live = l.s === "play" && canPlay;
+              const pct = l.got !== undefined && l.max ? l.got / l.max : 0;
+              return (
+                <div key={l.n} class={`f-lvwrap ${pts[i].x < 50 ? "r" : "l"}`} style={{ left: `${pts[i].x}%`, top: `${pts[i].y}px` }}>
+                  {live && (
+                    <span class="f-start" aria-hidden="true">
+                      START
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    class={`f-lv s-${l.s}${live ? " play" : ""}${w.open ? "" : " shut"}${pct >= 1 ? " full" : ""}`}
+                    aria-label={`Level ${l.n}: ${live ? "START" : STATE_WORDS[l.s]}`}
+                    onClick={() => tap(l)}
+                  >
+                    {live && <span class="f-node-ring" aria-hidden="true" />}
+                    <span class="f-node-c">
+                      {l.s === "later" ? <Icon name="lock" size={20} /> : l.s === "pre" ? <Icon name="check" size={24} /> : <b>{l.n}</b>}
+                    </span>
+                    {l.s === "check" && (
+                      <i class="f-lv-tag home" title="phone இல் சரிபார்த்தது">
+                        <Icon name="home" size={12} />
+                      </i>
+                    )}
+                    {l.s === "class" && (
+                      <i class="f-lv-tag wait" title="ஆசிரியரிடம்">
+                        <Icon name="clock" size={12} />
+                      </i>
+                    )}
+                  </button>
+                  {l.got !== undefined && (
+                    <small class="f-lv-xp">
+                      {l.got}/{l.max}
+                    </small>
+                  )}
+                </div>
+              );
+            })}
+            <span class={`f-chest${w.allDone ? " won" : ""}`} style={{ left: `${cup.x}%`, top: `${cup.y}px` }}>
+              <Icon name="trophy" size={24} />
+            </span>
+          </div>
+        </>
       )}
     </div>
   );

@@ -1,5 +1,5 @@
 // The family app's entry: app.aristora.org (and /f/ on the class system's address, for testing).
-import "@fontsource/barlow-semi-condensed/latin-700.css";
+import "@fontsource/barlow/latin-800.css";
 import "../splash.css";
 import "./family.css";
 import { render } from "preact";

@@ -1,9 +1,10 @@
 // The family app on simulated phones (app.aristora.org = /f/ here), against the real functions:
-// a family link opens it; Level 1 and Level 2 are typed on the pads and checked once each; the reveal, XP, the lamp and
-// this week's race; then Correction on the class phone: ⌂ on her name and level, Checked, and a level with a question
-// the phone left to the corrector. The new look (3 Nov 2026): the map, two children on one phone, feedback read by
-// the owner, the questions as printed. Fake answers and made-up questions only (the repo is public); the book is the
-// U01 skeleton.
+// a family link opens it on Home; the map (each term a World, each unit a Stage), the Stage's Levels; Level 1 and
+// Level 2 typed on the pads and checked once each; the reveal, XP, the flame and this week's race; then Correction on
+// the class phone: ⌂ on her name and level, Checked, a level with a question the phone left to the corrector; and Home
+// with her in class, her day hour by hour. The new look (3 Nov 2026): the centre's class hours, two children on one
+// phone, feedback read by the owner, the questions as printed. Fake answers and made-up questions only (the repo is
+// public); the book is the U01 skeleton.
 
 import { mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
@@ -88,10 +89,23 @@ async function open(backend: ReturnType<typeof makeBackend>, url: string, sz = s
   return page;
 }
 
-/** The Level he can play now on the map (the stop with the owl) is this one. */
-async function liveIs(p: Page, level: string) {
-  await until(async () => ((await p.locator(".f-stop.live").first().getAttribute("aria-label")) ?? "").startsWith(`${level}:`), `${level} live on the map`);
+/** A tab of the bottom bar. */
+const tabTo = (p: Page, name: RegExp) => p.locator(".f-tabs").getByRole("button", { name }).click();
+
+/** Inside his Stage: the Level he can play now (the gold one with START) is this one. */
+async function playIs(p: Page, level: string) {
+  await until(async () => ((await p.locator(".f-lv.play").first().getAttribute("aria-label")) ?? "").startsWith(`${level}:`), `${level} to play in the Stage`);
 }
+
+/** From the main tabs: the map, his Stage now (the gold star), its Level to play. */
+async function stageNow(p: Page, level: string) {
+  await tabTo(p, /Learn/);
+  await p.locator(".f-node.s-now").click();
+  await playIs(p, level);
+}
+
+/** Home's goal for today names his Level now. */
+const goalIs = (p: Page, level: string) => contains(p.locator(".f-goal-t"), level);
 
 /** Type one answer on the pad (keys by their names), then → to the next box. */
 async function type(p: Page, keys: string[]) {
@@ -120,19 +134,27 @@ test("the family app: join, a level on the pad, Check once, the reveal, XP and t
   const code = "hana-family-link-0123456789ab";
   await t.mutation(api.families.makeLink, { ...as, studentId: hana, codeHash: secretHash("family-link", code) });
 
-  // The family link: hello, Start.
+  // The family link: hello, Start; Home with today's goal; the map; the Stage.
   const F = await open(backend, `${site.url}/f/#join=${code}`); // as the family link: app.aristora.org/f/#join=…
   await contains(F.locator(".f-h1"), "Hana");
   await shot(F, "fam00-join");
   await F.getByRole("button", { name: "தொடங்கு" }).click();
-  await liveIs(F, "Level 1");
-  await visible(F.locator('.f-world[aria-label="World 1"]'));
+  await goalIs(F, "Level 1");
   expect(await F.evaluate(() => location.hash)).toBe(""); // the code leaves the address bar
   await noSideScroll(F);
   await shot(F, "fam01-home");
+  await tabTo(F, /Learn/);
+  await visible(F.locator('.f-world[aria-label="World 1"]'));
+  await contains(F.locator(".f-hero .f-cont"), "Level 1");
+  await noSideScroll(F);
+  await shot(F, "fam01b-map");
+  await F.locator(".f-node.s-now").click();
+  await playIs(F, "Level 1");
+  await noSideScroll(F);
+  await shot(F, "fam01c-stage");
 
   // Level 1 on the pad: Q1–Q7 and Q9–Q10 right (Q3 with the answer also accepted, Q9 the other way round), Q8 wrong.
-  await F.locator(".f-stop.live").first().click();
+  await F.locator(".f-lv.play").click();
   await contains(F.locator(".f-qn"), "Q1");
   await type(F, ["3"]);
   await type(F, ["6"]);
@@ -180,15 +202,16 @@ test("the family app: join, a level on the pad, Check once, the reveal, XP and t
   await contains(F.locator(".f-big"), "18");
   await contains(F.locator(".f-big"), "/ 18");
   await visible(F.locator(".f-rrow.teach"));
-  await F.getByRole("button", { name: "வரைபடம்" }).click();
+  await F.getByRole("button", { name: /^Stage 1/ }).click();
 
-  // The map: Levels 1 and 2 marked at home (⌂), Level 3 next; XP this week 36; the lamp lit.
-  await liveIs(F, "Level 3");
-  await contains(F.locator(".f-stat.xp"), "36");
-  await visible(F.locator(".f-stat.lamp.lit"));
-  expect(await F.locator(".f-world").first().locator(".f-stop.s-check").count()).toBe(2);
-  await shot(F, "fam05-home-after");
-  await F.locator(".f-stat.xp").click(); // the XP opens the race
+  // The Stage: Levels 1 and 2 marked at home (⌂), Level 3 next; XP 36; the flame lit.
+  await playIs(F, "Level 3");
+  await contains(F.locator(".f-pill.gem"), "36");
+  await visible(F.locator(".f-pill.fire.lit"));
+  expect(await F.locator(".f-lv.s-check").count()).toBe(2);
+  await shot(F, "fam05-stage-after");
+  await F.getByRole("button", { name: "Back" }).click(); // to the map
+  await F.locator(".f-toprow .f-pill.gem").click(); // the XP opens the race
   await contains(F.locator(".f-pod.me"), "36");
   await contains(F.locator(".f-pass.top"), "முதலிடத்தில்");
   await noSideScroll(F);
@@ -210,10 +233,13 @@ test("the family app: join, a level on the pad, Check once, the reveal, XP and t
       localStorage.setItem("aristora.family.token", "family-phone-token-small-0123456789abcdefghijklmnop");
     }
   });
-  await liveIs(S, "Level 3");
+  await goalIs(S, "Level 3");
   await noSideScroll(S);
-  await shot(S, "fam07a-map-320");
-  await S.locator(".f-stop.live").first().click();
+  await shot(S, "fam07a-home-320");
+  await stageNow(S, "Level 3");
+  await noSideScroll(S);
+  await shot(S, "fam07b-stage-320");
+  await S.locator(".f-lv.play").click();
   await contains(S.locator(".f-qn"), "Q21");
   await noSideScroll(S);
   await shot(S, "fam07-level-320");
@@ -244,10 +270,19 @@ test("the family app: join, a level on the pad, Check once, the reveal, XP and t
   expect(await C.locator(".fc-hcheck").count()).toBe(0);
   await shot(C, "fam09-correction-home-q20");
 
-  // The family app shows Level 1 as checked (done), Level 2 still ⌂.
+  // The family app: Home shows her in class now and her day hour by hour (in, the two levels marked at home); the
+  // Stage shows Level 1 checked (done), Level 2 still ⌂.
   await F.reload();
-  await liveIs(F, "Level 3");
-  await until(async () => (await F.locator(".f-world").first().locator(".f-stop.s-check").count()) === 1, "Level 1 checked");
+  await tabTo(F, /Home/);
+  await contains(F.locator(".f-today"), "இப்போது வகுப்பில்");
+  await contains(F.locator(".f-tl"), "வகுப்புக்கு வந்தாய்");
+  await contains(F.locator(".f-tl"), "வீட்டில், phone இல்");
+  expect(await F.locator(".f-tl .f-tli.h-home").count()).toBe(2);
+  await noSideScroll(F);
+  await shot(F, "fam09b-home-in-class");
+  await stageNow(F, "Level 3");
+  await until(async () => (await F.locator(".f-lv.s-check").count()) === 1, "Level 1 checked");
+  expect(await F.locator(".f-lv.s-done").count()).toBe(1);
 
   expect(problems).toEqual([]);
 });
@@ -301,13 +336,13 @@ test("index and code: the Family sheet shows them (the code made on the phone); 
   await shot(P, "fam11-signin-wrong");
   await P.getByLabel("Code").fill(code);
   await P.getByRole("button", { name: "உள்நுழை" }).click();
-  await liveIs(P, "Level 1");
+  await goalIs(P, "Level 1");
   await shot(P, "fam12-signed-in");
 
   expect(problems).toEqual([]);
 });
 
-test("the new look: the map, the questions as printed, feedback the owner reads, two children on one phone, the race and Me", async () => {
+test("the new look: class hours and Home, the map, the questions as printed, feedback the owner reads, two children on one phone, the race and Me", async () => {
   const backend = makeBackend(modules);
   const t = backend.t;
   await addPerson(t, { name: "Owner", token: OWNER_TOKEN, role: "owner" });
@@ -341,19 +376,29 @@ test("the new look: the map, the questions as printed, feedback the owner reads,
   const bilal = await t.mutation(api.students.add, { ...as, name: "Bilal M", grade: 8, term: 1, stage: "master", unitId: u01 });
   await t.mutation(api.families.setCode, { ...as, studentId: hana, code: "4719" });
   await t.mutation(api.families.setCode, { ...as, studentId: bilal, code: "5820" });
+  // The centre's class hours (the owner, Settings → Class hours): open all day, every day, for this test.
+  await t.mutation(api.families.setClassHours, { ...as, hours: Array.from({ length: 7 }, () => ({ from: 1, to: 1439 })) });
 
-  // Hana signs in with her index and code: the map, the owl on Level 1.
+  // Hana signs in with her index and code: Home (the class is on now, her goal, her week), then the map.
   const P = await open(backend, `${site.url}/f/`, size(360, 780));
   await P.getByLabel(/Index/).fill("1001");
   await P.getByLabel("Code").fill("4719");
   await P.getByRole("button", { name: "உள்நுழை" }).click();
-  await liveIs(P, "Level 1");
-  await visible(P.locator(".f-stop.live .f-perch .owl"));
+  await goalIs(P, "Level 1");
+  await contains(P.locator(".f-today"), "இப்போது வகுப்பு நடக்கிறது");
+  await visible(P.locator(".f-weekstrip .f-wd.today.open"));
+  await contains(P.locator(".f-dayhours"), "12:01 AM – 11:59 PM");
   await noSideScroll(P);
-  await shot(P, "fam13-map");
+  await shot(P, "fam13-home");
+  await tabTo(P, /Learn/);
+  await visible(P.locator(".f-hero .f-owlbadge .owl")); // the loading page's own owl, drawn again
+  await noSideScroll(P);
+  await shot(P, "fam13b-map");
+  await P.locator(".f-node.s-now").click();
+  await playIs(P, "Level 1");
 
   // No workbook with her: the switch shows each question as printed above its boxes; it stays on for the next one.
-  await P.locator(".f-stop.live").first().click();
+  await P.locator(".f-lv.play").click();
   await contains(P.locator(".f-qn"), "Q1");
   expect(await P.locator(".f-paper").count()).toBe(0);
   await P.locator(".f-qmode").click();
@@ -366,8 +411,10 @@ test("the new look: the map, the questions as printed, feedback the owner reads,
   await until(async () => (await printed()).includes("made-up question number 2"), "Q2 as printed");
   await P.locator(".f-qmode").click(); // off: only the boxes
   await until(async () => (await P.locator(".f-paper").count()) === 0, "no question when off");
-  await P.getByRole("button", { name: "Back" }).click();
-  await liveIs(P, "Level 1");
+  await P.getByRole("button", { name: "Back" }).click(); // the Level → its Stage
+  await playIs(P, "Level 1");
+  await P.getByRole("button", { name: "Back" }).click(); // the Stage → the map
+  await visible(P.locator(".f-world"));
 
   // Feedback: a face, what about, a few words, with her name; then one without it.
   await P.getByRole("button", { name: /Feedback/ }).click();
@@ -395,11 +442,11 @@ test("the new look: the map, the questions as printed, feedback the owner reads,
 
   // The race and Me.
   await until(async () => (await P.locator(".f-sheet").count()) === 0, "the sheet closes");
-  await P.getByRole("button", { name: /Race/ }).click();
+  await tabTo(P, /Race/);
   await visible(P.locator(".f-race"));
   await noSideScroll(P);
   await shot(P, "fam16-race");
-  await P.getByRole("button", { name: /Me$/ }).click();
+  await tabTo(P, /Me$/);
   await contains(P.locator(".f-profile"), "Hana K");
   await contains(P.locator(".f-profile"), "#1001");
   expect(await P.locator(".f-medals.grid .f-medal").count()).toBe(9);
@@ -414,7 +461,7 @@ test("the new look: the map, the questions as printed, feedback the owner reads,
   await P.getByRole("button", { name: "உள்நுழை" }).click();
   await contains(P.locator(".f-who"), "Bilal");
   await contains(P.locator(".f-caret.many"), "2");
-  await liveIs(P, "Level 1");
+  await goalIs(P, "Level 1");
   await shot(P, "fam18-second-child");
   // Switch back to Hana from the top bar: her XP, her map.
   await P.locator(".f-who").click();
@@ -426,7 +473,7 @@ test("the new look: the map, the questions as printed, feedback the owner reads,
   await P.locator(".f-who").click();
   await P.locator(".f-sheet .f-kid", { hasText: "Bilal M" }).click();
   await contains(P.locator(".f-who"), "Bilal");
-  await P.getByRole("button", { name: /Me$/ }).click();
+  await tabTo(P, /Me$/);
   await P.getByRole("button", { name: /Bilal: வெளியேறு/ }).click();
   await P.getByRole("button", { name: "ஆம், வெளியேறு", exact: true }).click();
   await contains(P.locator(".f-who"), "Hana");
@@ -450,19 +497,36 @@ test("the new look: the map, the questions as printed, feedback the owner reads,
   await until(async () => (await C.locator(".gear-n").count()) === 0, "the count goes once read");
   await noSideScroll(C);
   await shot(C, "fam20-owner-feedback");
+  // Settings → Class hours: the hours set above, one row a day; Sunday off, saved, and the family app follows.
+  await C.getByRole("button", { name: "Class hours", exact: true }).click();
+  await until(async () => (await C.locator(".ch-list > li").count()) === 7, "seven days");
+  expect(await C.getByLabel("Monday starts").inputValue()).toBe("00:01");
+  expect(await C.getByLabel("Monday ends").inputValue()).toBe("23:59");
+  await C.locator(".ch-list > li").nth(6).locator('input[type="checkbox"]').click();
+  await C.getByRole("button", { name: "Save class hours" }).click();
+  await contains(C.locator(".toast").last(), "Class hours saved");
+  const saved = await t.query(api.families.classHours, as);
+  expect(saved[6]).toBe(null);
+  expect(saved[0]).toEqual({ from: 1, to: 1439 });
+  await noSideScroll(C);
+  await shot(C, "fam20b-class-hours");
 
-  // The smallest phone: the map, the race, Me and the feedback sheet fit 320 px.
+  // The smallest phone: Home, the map, the race, Me and the feedback sheet fit 320 px.
   const S = await open(backend, `${site.url}/f/`, size(320, 568));
   await S.getByLabel(/Index/).fill("1001");
   await S.getByLabel("Code").fill("4719");
   await S.getByRole("button", { name: "உள்நுழை" }).click();
-  await liveIs(S, "Level 1");
+  await goalIs(S, "Level 1");
   await noSideScroll(S);
-  await shot(S, "fam21-map-320");
-  await S.getByRole("button", { name: /Race/ }).click();
+  await shot(S, "fam21-home-320");
+  await tabTo(S, /Learn/);
+  await visible(S.locator(".f-world"));
+  await noSideScroll(S);
+  await shot(S, "fam21b-map-320");
+  await tabTo(S, /Race/);
   await visible(S.locator(".f-race"));
   await noSideScroll(S);
-  await S.getByRole("button", { name: /Me$/ }).click();
+  await tabTo(S, /Me$/);
   await visible(S.locator(".f-profile"));
   await noSideScroll(S);
   await shot(S, "fam22-me-320");

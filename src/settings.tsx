@@ -37,16 +37,19 @@ import { ATTENDANCE_SINCE, AWAY_DAYS, daysAway, studentStats } from "./stats";
 import { OlPicks, olChoices, olMatch, olNo, studentsWork, UploadBooks } from "./upload";
 import { FamilySheet, PhoneAnswers } from "./familySheet";
 import { FeedbackList } from "./feedbackList";
+import { ClassHours } from "./classHours";
 import { SimPanel, SimSwitch } from "./sim";
 import { GRADES, GradeRow, Sheet, STATE_WORDS, useGrade } from "./ui";
 
-export type SettingsTab = "students" | "books" | "people" | "alerts" | "reports" | "history" | "feedback" | "account";
+export type SettingsTab = "students" | "books" | "people" | "hours" | "alerts" | "reports" | "history" | "feedback" | "account";
 type Tab = SettingsTab;
 
 const SETTINGS_TABS: [Tab, string, () => boolean][] = [
   ["students", "Students", () => may("students")],
   ["books", "Books", () => may("books")],
   ["people", "People", () => may("owner")],
+  // When the class is open each weekday (3 Nov 2026): the family app's schedule.
+  ["hours", "Class hours", () => may("owner")],
   ["alerts", "Alerts", () => true],
   ["reports", "Reports", () => may("reports")],
   ["history", "History", () => may("reports")],
@@ -76,6 +79,7 @@ export function Settings(props: { views: View[]; onClose: () => void; start?: Ta
       {tab === "reports" && <Reports />}
       {tab === "history" && <History />}
       {tab === "feedback" && <FeedbackList />}
+      {tab === "hours" && <ClassHours />}
       {tab === "people" && <People />}
       {tab === "account" && <Account />}
       <button type="button" class="btn ghost wide" onClick={props.onClose}>
@@ -949,7 +953,7 @@ function describe(e: Doc<"events">): string {
     case "family-off":
       return `family phones signed out (${v})`;
     case "open-all":
-      return v === "on" ? "every World opened in the family app" : "Worlds open in order again (family app)";
+      return v === "on" ? "every Stage opened in the family app" : "Stages open in order again (family app)";
     case "level-undo":
       return `Level ${v}: "handed in" undone`;
     case "level-marks":

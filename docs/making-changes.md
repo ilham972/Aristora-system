@@ -218,6 +218,15 @@ EOF
 - **The family bundle imports only small, import-free files from the teachers' side** (`src/questionView.ts`,
   `src/splash.ts`) and TYPES from `convex/`. Anything that pulls `convex/_generated/api`, the store or `live.ts` would
   blow its 50 KB budget.
+- **The family app's owl is one drawing with moods** (`Owl mood=…` in `src/family/ui.tsx`): the marks are added into
+  the splash's SVG (`HEAD` inside the head so they turn with it, `ROUND` around it) and each mood's CSS stops or holds
+  the splash's own animations (`.f-owl .mood-*` in `family.css`). Every copy gets its own eye-socket ids (`owlSeq`):
+  two owls must never share a clipPath id. Colours: `--owl-*` in `:root`.
+- **No green in the family app** (his ask): ✓ is blue (`--right`), avatars use `hueOf`'s palette. Its words for
+  students: a term is a World, a unit is a Stage (teachers' screens say "Open every Stage" too), levels are Levels.
+- **Look at the family app without npm**: esbuild is in `/opt/npm-tools`; Preact's source and Barlow can come from
+  GitHub (git clone works when the npm registry doesn't); a fake `window.__ARISTORA_TEST_BACKEND__` answers its calls.
+  The GitHub check is still the judge (typecheck, tests, the real build).
 - **A new extra permission** (like `feedback`): `convex/schema.ts` `extra`, `convex/lib/auth.ts` (`Extra`, `EXTRAS`,
   `PERM_WORDS`), `src/store.ts` `Extra`, `src/settings.tsx` `EXTRA_NAMES`/`EXTRA_HELP` (typecheck refuses until all
   are there). The owner gets it by himself (`EXTRAS`).

@@ -3,8 +3,8 @@
 // - Its files (/f/assets/, new names every version: code, style, its one font) and the owl: kept once fetched, and
 //   fetched at install.
 // - The server's answers (convex.cloud) are never touched.
-// 2 (3 Nov 2026): the new look; the old copies go when this one starts.
-const CACHE = "aristora-family-2";
+// 3 (3 Nov 2026): the light purple look, Home and the whole syllabus; the old copies go when this one starts.
+const CACHE = "aristora-family-3";
 const KEEP = (p) => p.startsWith("/f/assets/") || p === "/icon.svg" || p === "/family.webmanifest";
 
 self.addEventListener("install", (e) => {

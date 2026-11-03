@@ -236,7 +236,7 @@ export default defineSchema({
     lastInAt: v.optional(v.number()),
     /** When he was removed from the class (for "left this month"). */
     archivedAt: v.optional(v.number()),
-    /** The family app opens every World for him (else: his unit, books given, and the next after a finished one). */
+    /** The family app opens every Stage (unit) for him (else: his unit, books given, and the next after a finished one). */
     openAll: v.optional(v.boolean()),
     /** His index number (1001, 1002…, never reused): he types it with his code in the family app. Not secret. */
     index: v.optional(v.number()),

@@ -1,8 +1,10 @@
 // A Level: one question at a time, his own pad, Check once; then the reveal.
 // - The phone never has the answers: the server marks (convex/family.ts check).
 // - Two ways to do it (his voice note, 3 Nov 2026): with his paper in hand he types only the answers; without it (a new
-//   student who has no workbook yet) the switch at the top shows each question as printed above its boxes. The
-//   switch is kept per child; pale when the World's questions are not in the app yet.
+//   student who has no workbook yet) the eye at the top shows each question as printed above its boxes. The switch is
+//   kept per child; pale when the Stage's questions are not in the app yet.
+// - The reveal: his answers come back one question at a time, a bell for each right one that climbs higher with every
+//   one in a row, then the score, the XP, the flame, a trophy if he won one. A tap shows everything at once.
 
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { FamilyLevel, FamilyMe, FamilyQuestions, FamilyResult } from "../../convex/family";
@@ -11,7 +13,7 @@ import type { Box } from "../../convex/lib/phone";
 import { drawQuestion } from "../questionView";
 import { keep, mutation, NetError, query } from "./net";
 import { buzz, sound } from "./sound";
-import { Icon, Lamp, Medal, Owl, pretty, problemWords, Spark, toast, useCount, Waiting } from "./ui";
+import { Flame, Gem, Icon, Medal, Owl, OwlBadge, pretty, problemWords, Tag, toast, Waiting, type Mood } from "./ui";
 
 export type Checked = {
   results: FamilyResult[];
@@ -61,7 +63,7 @@ function Pad(props: { box: Box | null; onKey: (k: string) => void; last: boolean
 
 // ---- The questions as printed ----
 
-/** Each World's book style, once per visit (it is large; a level's questions are kept with it for no signal). */
+/** Each Stage's book style, once per visit (it is large; a level's questions are kept with it for no signal). */
 const cssOf = new Map<string, string>();
 
 function useQuestions(world: World, n: number, on: boolean): { got: FamilyQuestions | null; failed: boolean } {
@@ -181,11 +183,13 @@ export function Play(props: {
   };
   const flipQ = () => {
     buzz();
-    if (!props.world.q) return toast("இந்த World இன் கேள்விகள் விரைவில் phone இல் வரும்.");
+    if (!props.world.q) return toast("இந்த Stage இன் கேள்விகள் விரைவில் phone இல் வரும்.");
+    sound("tap");
     keep("qmode", !qOn);
     setQOn(!qOn);
   };
   const empty = all.filter((x) => !val(x.qi, x.bi).trim()).length;
+  const done = all.length - empty;
   const teacherQs = form.qs.filter((x) => x.parts.some((p) => !p.boxes)).length;
 
   const check = async () => {
@@ -194,7 +198,8 @@ export function Play(props: {
       const res = (await mutation("family:check", {
         unitId: form.unitId,
         n: form.n,
-        typed: form.qs.map((x) => ({ q: x.q, a: (typed[x.q] ?? []).map((s) => s.trim()) })),
+        // A box he skipped is a gap in his list (or null, kept on the phone): it goes as "" (the server's ✗).
+        typed: form.qs.map((x) => ({ q: x.q, a: Array.from(typed[x.q] ?? [], (s) => (s ?? "").trim()) })),
       })) as Checked;
       keep(draftKey, null);
       keep(formKey, null);
@@ -211,15 +216,17 @@ export function Play(props: {
   const css = qs.got?.css ?? null;
   let bi = 0;
   return (
-    <div class={`f-play${showQ ? " withq" : ""}`}>
-      <header class="f-top play">
-        <button type="button" class="f-icon" aria-label="Back" onClick={props.onBack}>
-          <Icon name="close" />
+    <div class={`f-play${showQ ? " withq" : ""}${review ? " rev" : ""}${box?.k === "expr" ? " xpad" : ""}`}>
+      <header class="f-ptop">
+        <button type="button" class="f-round" aria-label="Back" onClick={props.onBack}>
+          <Icon name="close" size={20} />
         </button>
-        <b class="f-title">
-          <small>World {form.no}</small> Level {form.n}
-        </b>
-        <span class="f-sp" />
+        <div class="f-pbar" aria-label={`${done} of ${all.length} answered`}>
+          <i style={{ width: `${Math.round((done / Math.max(1, all.length)) * 100)}%` }} />
+          <span class="f-ptag">
+            {done}/{all.length}
+          </span>
+        </div>
         <button
           type="button"
           class={`f-qmode${showQ ? " on" : ""}${props.world.q ? "" : " pale"}`}
@@ -227,15 +234,17 @@ export function Play(props: {
           aria-label="கேள்விகளைக் காட்டு · Show the questions"
           onClick={flipQ}
         >
-          <Icon name="eye" size={17} />
+          <Icon name="eye" size={16} />
           <span class="f-knob" aria-hidden="true" />
         </button>
-        <button type="button" class="f-btn small go" onClick={() => setReview(true)}>
+      </header>
+      <div class="f-prow">
+        <p class="f-kicker">
+          Stage {form.no} · Level {form.n}
+        </p>
+        <button type="button" class="f-checkpill" onClick={() => setReview(true)}>
           சரிபார்
         </button>
-      </header>
-      <div class="f-prog" aria-hidden="true">
-        <i style={{ width: `${Math.round(((all.length - empty) / Math.max(1, all.length)) * 100)}%` }} />
       </div>
       <div class="f-strip" ref={strip}>
         {form.qs.map((x, qi) => (
@@ -244,6 +253,7 @@ export function Play(props: {
             key={x.q}
             class={`f-qchip ${filled(qi)}${qi === at.qi && !review ? " on" : ""}`}
             onClick={() => {
+              buzz();
               setReview(false);
               setAt({ qi, bi: 0 });
             }}
@@ -255,11 +265,11 @@ export function Play(props: {
 
       {review ? (
         <section class="f-card rise f-review">
-          <Owl class="mid" />
+          <OwlBadge mood="think" class="mid" />
           <h2 class="f-h2">Level {form.n} சரிபார்க்கவா?</h2>
           <ul class="f-sum">
             <li>
-              <b>{all.length - empty}</b> விடைகள் போட்டாய்
+              <b>{done}</b> விடைகள் போட்டாய்
             </li>
             {empty > 0 && (
               <li class="warn">
@@ -273,7 +283,7 @@ export function Play(props: {
             )}
           </ul>
           <p class="f-muted small">சரிபார்த்த பின் மாற்ற முடியாது. · After Check you can't change them.</p>
-          <button type="button" class="f-btn go big" disabled={busy} onClick={() => void check()}>
+          <button type="button" class="f-btn gold big" disabled={busy} onClick={() => void check()}>
             {busy ? "…" : "சரிபார் ✓"}
           </button>
           <button type="button" class="f-btn ghost" onClick={() => setReview(false)}>
@@ -281,12 +291,12 @@ export function Play(props: {
           </button>
         </section>
       ) : (
-        <section class="f-card rise" key={q.q} ref={card}>
+        <section class="f-card f-qcard rise" key={q.q} ref={card}>
           <div class="f-qhead">
             <b class="f-qn">Q{q.q}</b>
-            <small>
-              <Spark size={14} /> {q.max} XP
-            </small>
+            <span class="f-xpchip">
+              <Gem size={15} /> {q.max} XP
+            </span>
           </div>
           {showQ &&
             (printed && css !== null ? (
@@ -310,7 +320,7 @@ export function Play(props: {
                         <button
                           type="button"
                           key={i}
-                          class={`f-box${at.bi === i ? " on" : ""}${b.k === "expr" ? " x" : ""}`}
+                          class={`f-box${at.bi === i ? " on" : ""}${b.k === "expr" ? " x" : ""}${v ? " has" : ""}`}
                           onClick={() => setAt({ qi: at.qi, bi: i })}
                           aria-label={`${b.l ?? ""} answer ${i + 1}`}
                         >
@@ -321,7 +331,9 @@ export function Play(props: {
                     })}
                   </div>
                 ) : (
-                  <p class="f-teach">✍ இதை உன் ஆசிரியர் திருத்துவார்</p>
+                  <p class="f-teach">
+                    <Icon name="pen" size={16} /> இதை உன் ஆசிரியர் திருத்துவார்
+                  </p>
                 )}
               </div>
             );
@@ -337,7 +349,7 @@ export function Play(props: {
 function Oops(props: { text: string; onBack: () => void }) {
   return (
     <div class="f-center f-pad">
-      <Owl class="mid" />
+      <Owl mood="sad" class="mid" />
       <p class="f-lead">{props.text}</p>
       <button type="button" class="f-btn go" onClick={props.onBack}>
         பின் செல்
@@ -348,23 +360,35 @@ function Oops(props: { text: string; onBack: () => void }) {
 
 // ---- The reveal ----
 
-/** The level to play now: in his World now first, else the first open World the phone can mark. */
+/** The level to play now: in his Stage now first, else the first open Stage the phone can mark. */
 export function nextPlay(me: FamilyMe | null): { world: World; n: number } | null {
   if (!me) return null;
   const ws = [...me.worlds].sort((a, b) => Number(b.now) - Number(a.now));
   for (const w of ws) {
-    const l = w.open && w.phone ? w.levels.find((x) => x.s === "play") : undefined;
+    const l = w.book && w.open && w.phone ? w.levels.find((x) => x.s === "play") : undefined;
     if (l) return { world: w, n: l.n };
   }
   return null;
 }
 
-/** Sparks flying out behind the owl: more for a better level. */
-function Burst(props: { n: number }) {
+type RowKind = "ok" | "part" | "bad" | "teach";
+const kindOf = (r: FamilyResult): RowKind => (r.got === null ? "teach" : r.got === r.max ? "ok" : r.got > 0 ? "part" : "bad");
+
+/** No waiting in tests or for "reduce motion": everything at once. */
+const instant = () =>
+  (typeof navigator !== "undefined" && navigator.webdriver === true) ||
+  (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches);
+
+/** Confetti from behind the owl: more for a better level. */
+function Confetti(props: { n: number }) {
   return (
-    <span class="f-burst" aria-hidden="true">
+    <span class="f-confetti" aria-hidden="true">
       {Array.from({ length: props.n }, (_, i) => (
-        <i key={i} style={{ "--a": `${(360 / props.n) * i + (i % 2) * 9}deg`, "--d": `${92 + (i % 3) * 26}px`, "--t": `${(i % 4) * 70}ms` }} />
+        <i
+          key={i}
+          class={`c${i % 4}`}
+          style={{ "--a": `${(360 / props.n) * i + (i % 3) * 7}deg`, "--d": `${96 + (i % 4) * 22}px`, "--t": `${(i % 5) * 50}ms`, "--r": `${(i % 2 ? 1 : -1) * (160 + i * 23)}deg` }}
+        />
       ))}
     </span>
   );
@@ -375,101 +399,178 @@ export function Result(props: {
   form: FamilyLevel;
   res: Checked;
   typed: Record<number, string[]>;
-  before: Trophy[];
+  /** Before this level: his trophies and his streak. */
+  before: { trophies: Trophy[]; days: number; today: boolean; best: number };
   me: FamilyMe | null;
-  onHome: () => void;
-  onNext: (w: World, n: number) => void;
+  onStage: () => void;
+  onNext: (n: number) => void;
 }) {
-  const { res, form } = props;
+  const { res, form, before } = props;
+  const rows = res.results;
+  const [shown, setShown] = useState(() => (instant() ? rows.length : 0));
+  const done = shown >= rows.length;
   const pct = res.phoneMax ? res.got / res.phoneMax : 0;
-  const shown = useCount(res.got);
-  const fresh = (res.trophies ?? []).filter((t) => !props.before.includes(t));
+  const fresh = (res.trophies ?? []).filter((t) => !before.trophies.includes(t));
+  const lit = !before.today && res.streak.today;
+  const best = res.streak.days > before.best && res.streak.days > 1;
+
+  // Each answer's run of right ones (a question the teacher marks keeps the run going).
+  const runs = useMemo(() => {
+    let run = 0;
+    return rows.map((r) => {
+      const k = kindOf(r);
+      if (k === "ok") run++;
+      else if (k !== "teach") run = 0;
+      return run;
+    });
+  }, [rows]);
+  const topRun = Math.max(0, ...runs);
+  const runNow = shown > 0 ? runs[shown - 1] : 0;
+  const score = rows.slice(0, shown).reduce((s, r) => s + (r.got ?? 0), 0);
+
+  // One answer at a time, each with its sound; then the finale.
   useEffect(() => {
-    sound(fresh.length > 0 ? "trophy" : pct >= 0.9 ? "star" : "level");
-  }, []);
-  const cheer = pct >= 0.9 ? "அருமை!" : pct >= 0.7 ? "நன்று!" : pct >= 0.5 ? "நல்ல முயற்சி!" : "முயற்சி தொடரட்டும்!";
+    if (done) return;
+    const t = window.setTimeout(
+      () => {
+        const r = rows[shown];
+        const k = kindOf(r);
+        if (k === "ok") sound("right", runs[shown] - 1);
+        else if (k === "bad") sound("wrong");
+        else sound("pop");
+        if (k === "ok") buzz(6);
+        setShown(shown + 1);
+      },
+      shown === 0 ? 700 : 380,
+    );
+    return () => window.clearTimeout(t);
+  }, [shown]);
+  useEffect(() => {
+    if (!done) return;
+    const ts: number[] = [];
+    const later = (ms: number, f: () => void) => ts.push(window.setTimeout(f, ms));
+    later(instant() ? 0 : 250, () => sound(pct >= 1 ? "perfect" : "level"));
+    let at = 1300;
+    if (fresh.length) {
+      later(at, () => sound("trophy"));
+      at += 1300;
+    }
+    if (lit) later(at, () => sound("streak"));
+    return () => ts.forEach((x) => window.clearTimeout(x));
+  }, [done]);
+
+  const cheer = pct >= 1 ? "எல்லாம் சரி!" : pct >= 0.9 ? "அருமை!" : pct >= 0.7 ? "நன்று!" : pct >= 0.5 ? "நல்ல முயற்சி!" : "தொடர்ந்து முயற்சி செய்!";
+  const mood: Mood = !done ? "think" : pct >= 0.9 ? "cheer" : pct >= 0.5 ? "happy" : "wave";
   const next = nextPlay(props.me);
   const nextHere = next && next.world.unitId === props.world.unitId && next.n !== form.n ? next : null;
   return (
-    <div class="f-result">
-      <header class="f-top play">
-        <b class="f-title">
-          <small>World {form.no}</small> Level {form.n}
-        </b>
-      </header>
-      <main class="f-main">
-        <section class={`f-score rise${pct >= 0.7 ? " glow" : ""}`}>
-          {pct >= 0.5 && <Burst n={pct >= 0.9 ? 16 : 10} />}
-          <Owl class="big" />
-          <h1 class="f-cheer">{cheer}</h1>
-          <p class="f-big">
-            <b>{shown}</b>
-            <small> / {res.phoneMax}</small>
-          </p>
-          <p class="f-gain">
-            <span class="f-pill xp">
-              <Spark size={16} /> +{res.got} XP
-            </span>
-            <span class={`f-pill lamp${res.streak.today ? " lit" : ""}`}>
-              <Lamp lit={res.streak.today} size={16} /> {res.streak.days} நாள்
-            </span>
-          </p>
-          {res.teacher.length > 0 && <p class="f-teach">✍ {res.teacher.map((q) => `Q${q}`).join(", ")}: ஆசிரியர் திருத்துவார்</p>}
-        </section>
-        {fresh.length > 0 && (
-          <section class="f-newcup rise">
-            <h2>புதிய கோப்பை!</h2>
-            <div class="f-medals">
-              {fresh.map((t) => (
-                <Medal key={t} t={t} won fresh />
-              ))}
-            </div>
-          </section>
-        )}
-        <p class="f-tip">✎ உன் தாளில் ✓ ✗ போடு. தவறியவற்றை வகுப்பில் விளக்குவார்கள்.</p>
-        <ul class="f-res">
-          {res.results.map((r, i) => {
-            const fq = form.qs.find((x) => x.q === r.q);
-            const whole = r.got !== null;
-            const ok = whole && r.got === r.max;
-            return (
-              <li key={r.q} class={`f-rrow rise ${!whole ? "teach" : ok ? "ok" : r.got! > 0 ? "part" : "bad"}`} style={{ animationDelay: `${120 + i * 60}ms` }}>
-                <b class="f-rq">Q{r.q}</b>
-                <span class="f-rmarks">
-                  {r.ok.map((part, pi) =>
-                    part === null ? (
-                      <i key={pi} class="t">
-                        ✍
-                      </i>
-                    ) : (
-                      part.map((g, bi) => (
-                        <i
-                          key={`${pi}.${bi}`}
-                          class={g ? "y" : "n"}
-                          title={pretty((props.typed[r.q] ?? [])[fq ? fq.parts.slice(0, pi).reduce((s, p) => s + (p.boxes?.length ?? 0), 0) + bi : bi] ?? "")}
-                        >
-                          {g ? "✓" : "✗"}
-                        </i>
-                      ))
-                    ),
-                  )}
-                </span>
-                <small class="f-rgot">{whole ? `${r.got}/${r.max}` : `${r.phoneGot} + ✍`}</small>
-              </li>
-            );
-          })}
-        </ul>
-        <div class="f-actions">
-          {nextHere && (
-            <button type="button" class="f-btn go big" onClick={() => props.onNext(nextHere.world, nextHere.n)}>
-              அடுத்த Level {nextHere.n} ▶
-            </button>
+    <div class={`f-result${done ? " done" : ""}`} onClick={() => !done && setShown(rows.length)}>
+      <p class="f-kicker f-center-t">
+        Stage {form.no} · Level {form.n}
+      </p>
+      <section class={`f-score${done && pct >= 0.7 ? " glow" : ""}`}>
+        {done && pct >= 0.7 && <Confetti n={pct >= 0.9 ? 18 : 12} />}
+        <OwlBadge mood={mood} class="big" />
+        <h1 class="f-cheer">{done ? cheer : "பார்ப்போம்…"}</h1>
+        <p class="f-big">
+          <b>{done ? res.got : score}</b>
+          <small> / {res.phoneMax}</small>
+        </p>
+        <div class="f-runbox">
+          {(done ? topRun : runNow) >= 2 && (
+            <Tag tone="yellow" class="f-run" key={done ? "top" : runNow}>
+              {done ? topRun : runNow} தொடர்ச்சியாக சரி!
+            </Tag>
           )}
-          <button type="button" class={`f-btn ${nextHere ? "ghost" : "go big"}`} onClick={props.onHome}>
-            <Icon name="map" size={20} /> வரைபடம்
-          </button>
         </div>
-      </main>
+        {done ? (
+          <p class="f-gain rise">
+            <span class="f-pill gem">
+              <Gem size={17} /> +{res.got} XP
+            </span>
+            <span class={`f-pill fire${res.streak.today ? " lit" : ""}${lit ? " pop" : ""}`}>
+              <Flame lit={res.streak.today} size={17} /> {res.streak.days} நாள்
+            </span>
+          </p>
+        ) : (
+          <p class="f-gain wait" aria-hidden="true" />
+        )}
+        {done && best && (
+          <Tag tone="pink" class="f-pb">
+            PERSONAL BEST
+          </Tag>
+        )}
+        {res.teacher.length > 0 && (
+          <p class="f-teach">
+            <Icon name="pen" size={16} /> {res.teacher.map((q) => `Q${q}`).join(", ")}: ஆசிரியர் திருத்துவார்
+          </p>
+        )}
+      </section>
+      {done && lit && (
+        <section class="f-streakup rise">
+          <Flame lit size={34} />
+          <div>
+            <b>{res.streak.days === 1 ? "தீ மூண்டது!" : `${res.streak.days} நாள் தொடர்!`}</b>
+            <small>{res.streak.days === 1 ? "நாளையும் ஒரு Level செய்து இதை வளர்." : "நாளையும் வா: தீ அணையாமல் பார்."}</small>
+          </div>
+        </section>
+      )}
+      {done && fresh.length > 0 && (
+        <section class="f-newcup rise">
+          <h2>புதிய கோப்பை!</h2>
+          <div class="f-medals">
+            {fresh.map((t) => (
+              <Medal key={t} t={t} won fresh />
+            ))}
+          </div>
+        </section>
+      )}
+      <ul class="f-res">
+        {rows.map((r, i) => {
+          const fq = form.qs.find((x) => x.q === r.q);
+          const k = kindOf(r);
+          return (
+            <li key={r.q} class={`f-rrow ${k}${i < shown ? " in" : ""}`}>
+              <b class="f-rq">Q{r.q}</b>
+              <span class="f-rmarks">
+                {r.ok.map((part, pi) =>
+                  part === null ? (
+                    <i key={pi} class="t">
+                      ✍
+                    </i>
+                  ) : (
+                    part.map((g, bi) => (
+                      <i
+                        key={`${pi}.${bi}`}
+                        class={g ? "y" : "n"}
+                        title={pretty((props.typed[r.q] ?? [])[fq ? fq.parts.slice(0, pi).reduce((s, p) => s + (p.boxes?.length ?? 0), 0) + bi : bi] ?? "")}
+                      >
+                        {g ? "✓" : "✗"}
+                      </i>
+                    ))
+                  ),
+                )}
+              </span>
+              <small class="f-rgot">{r.got !== null ? `${r.got}/${r.max}` : `${r.phoneGot} + ✍`}</small>
+            </li>
+          );
+        })}
+      </ul>
+      {done && (
+        <>
+          <p class="f-tip rise">✎ உன் தாளிலும் ✓ ✗ போடு. தவறியவற்றை வகுப்பில் விளக்குவார்கள்.</p>
+          <div class="f-actions rise">
+            {nextHere && (
+              <button type="button" class="f-btn gold big" onClick={() => props.onNext(nextHere.n)}>
+                அடுத்த Level {nextHere.n} <Icon name="play" size={16} class="fill" />
+              </button>
+            )}
+            <button type="button" class={`f-btn ${nextHere ? "ghost" : "go big"}`} onClick={props.onStage}>
+              <Icon name="map" size={19} /> Stage {form.no}
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

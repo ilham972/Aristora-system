@@ -223,14 +223,20 @@ describe("the family app on the server", () => {
     await expect(fam().query(api.family.me, {})).rejects.toThrow(FAMILY_SIGNED_OUT);
   });
 
-  test("his Worlds: his unit is open, the next opens when it is done, given books and Open every World open them", async () => {
+  test("his Stages: his unit is open, the next opens when it is done, given books and Open every Stage open them", async () => {
     await joinAs(hana, FAM);
-    const worlds = async () => (await fam().query(api.family.me, {})).worlds.map((w) => [w.no, w.open, w.phone]);
+    const worlds = async () => (await fam().query(api.family.me, {})).worlds.filter((w) => w.book).map((w) => [w.no, w.open, w.phone]);
     expect(await worlds()).toEqual([
       [1, true, true],
       [2, false, false],
     ]);
     const me = await fam().query(api.family.me, {});
+    // The whole syllabus of his grade is on the map, by term; a unit with no workbook yet has nothing to play.
+    const units = await raw.run(async (ctx) => await ctx.db.query("units").withIndex("by_grade", (q) => q.eq("grade", 8)).collect());
+    expect(me.worlds).toHaveLength(units.length);
+    expect(me.worlds.map((w) => w.no).slice(0, 3)).toEqual([1, 2, 3]);
+    expect(new Set(me.worlds.map((w) => w.term))).toEqual(new Set(units.map((u) => u.term)));
+    expect(me.worlds[2]).toMatchObject({ no: 3, book: false, open: false, phone: false, levels: [], allDone: false });
     expect(me.worlds[0].levels[0]).toEqual({ n: 1, max: 20, s: "play" });
     expect(me.worlds[0].levels[1].s).toBe("later");
     await t.mutation(api.families.setOpenAll, { studentId: hana, on: true });
@@ -354,10 +360,12 @@ describe("the family app on the server", () => {
     expect(me.xp).toBe(35);
     expect(me.total).toBe(43);
     expect(me.index).toBe(1001);
+    expect(me.dayXp).toEqual([20, 10, 5, 0, 0, 0, 0]);
+    expect([me.levelsDone, me.levelsWeek]).toEqual([7, 3]);
     expect(me.trophies).toEqual(["first", "streak3", "perfect"]);
   });
 
-  test("questions as printed for a student without his book: his open Worlds only, never the answers", async () => {
+  test("questions as printed for a student without his book: his open Stages only, never the answers", async () => {
     await joinAs(hana, FAM);
     await raw.run(async (ctx) => {
       for (const q of [1, 2, 3]) {
@@ -367,7 +375,7 @@ describe("the family app on the server", () => {
       const book = (await ctx.db.query("books").withIndex("by_unit_stage", (x) => x.eq("unitId", u01).eq("stage", "master")).first())!;
       await ctx.db.patch(book._id, { qCount: 3 });
     });
-    expect((await fam().query(api.family.me, {})).worlds.map((w) => w.q)).toEqual([true, false]);
+    expect((await fam().query(api.family.me, {})).worlds.filter((w) => w.book).map((w) => w.q)).toEqual([true, false]);
     const lv1 = await fam().query(api.family.questions, { unitId: u01, n: 1 });
     expect(lv1.css).toBe(".qn { font-weight: 700; }");
     expect(lv1.qs.map((x) => x.q)).toEqual([1, 2, 3]);
@@ -375,8 +383,84 @@ describe("the family app on the server", () => {
     expect((await fam().query(api.family.questions, { unitId: u01, n: 1, css: false })).css).toBeNull();
     expect((await fam().query(api.family.questions, { unitId: u01, n: 2 })).qs).toEqual([]); // not in the app
     await expect(fam().query(api.family.questions, { unitId: u02, n: 1 })).rejects.toThrow(/locked/);
-    await expect(fam().query(api.family.questions, { unitId: u01, n: 99 })).rejects.toThrow(/not in this World/);
+    await expect(fam().query(api.family.questions, { unitId: u01, n: 99 })).rejects.toThrow(/not in this Stage/);
     await expect(raw.query(api.family.questions, { unitId: u01, n: 1 })).rejects.toThrow(FAMILY_SIGNED_OUT);
+  });
+
+  test("his classes: the hours the owner sets, his usual days, this week, recent classes and one day's timeline", async () => {
+    await joinAs(hana, FAM);
+    // The owner sets the class hours, Monday first; a family phone can't; a class must start before it ends.
+    const hours = [{ from: 930, to: 1170 }, null, { from: 930, to: 1170 }, null, null, { from: 480, to: 720 }, null];
+    await expect(fam().mutation(api.families.setClassHours, { hours })).rejects.toThrow(SIGNED_OUT);
+    await expect(t.mutation(api.families.setClassHours, { hours: [{ from: 600, to: 500 }, null, null, null, null, null, null] })).rejects.toThrow(/before/);
+    await t.mutation(api.families.setClassHours, { hours });
+    expect(await t.query(api.families.classHours, {})).toEqual(hours);
+    // Her class days: Mondays and Wednesdays for two weeks; today (Wednesday 28 Oct) she is in class since 2 PM.
+    const at = (iso: string) => new Date(iso).getTime();
+    await raw.run(async (ctx) => {
+      const days: [string, string, string | null][] = [
+        ["2026-10-19", "15:35", "18:10"],
+        ["2026-10-21", "15:40", "18:00"],
+        ["2026-10-26", "15:30", "18:05"],
+        ["2026-10-28", "14:00", null],
+      ];
+      for (const [day, i, o] of days) {
+        await ctx.db.insert("attendance", { studentId: hana, day, inAt: at(`${day}T${i}:00+05:30`), ...(o ? { outAt: at(`${day}T${o}:00+05:30`) } : {}) });
+      }
+      await ctx.db.patch(hana, { present: true });
+      // In class today: Level 1 handed in and marked (18 / 20), Q8 explained by Nila in Evaluation. Yesterday at home:
+      // Level 2 checked on the phone.
+      const lv = {
+        "1": { done: at("2026-10-28T14:30:00+05:30"), fixed: at("2026-10-28T14:50:00+05:30"), got: 18, by: "correction" },
+        "2": { done: at("2026-10-27T19:00:00+05:30"), fixed: at("2026-10-27T19:00:00+05:30"), home: at("2026-10-27T19:00:00+05:30"), got: 16, by: "home" },
+      };
+      const q = { "8": { got: 0, max: 2, lost: true, t: at("2026-10-28T14:50:00+05:30"), x: at("2026-10-28T14:56:00+05:30") } };
+      const p = await ctx.db.query("progress").withIndex("by_student", (x) => x.eq("studentId", hana)).first();
+      if (p) await ctx.db.patch(p._id, { m: { q, lv } });
+      else await ctx.db.insert("progress", { studentId: hana, unitId: u01, stage: "master", marks: {}, m: { q, lv }, startedAt: 0, updatedAt: 0 });
+      await ctx.db.insert("calls", {
+        studentId: hana,
+        room: "evaluation",
+        kind: "evaluation",
+        status: "done",
+        group: "test",
+        unitId: u01,
+        stage: "master",
+        createdAt: at("2026-10-28T14:51:00+05:30"),
+        sentAt: at("2026-10-28T14:51:00+05:30"),
+        arrivedAt: at("2026-10-28T14:52:00+05:30"),
+        endedAt: at("2026-10-28T14:58:00+05:30"),
+        teacher: "Nila",
+      });
+    });
+    const c = await fam().query(api.family.classes, {});
+    expect(c.hours).toEqual(hours);
+    expect(c.usual).toEqual([0, 2]); // Monday and Wednesday
+    expect(c.inClass).toBe(at("2026-10-28T14:00:00+05:30"));
+    expect(c.week.map((d) => [d.day, d.inAt !== null, d.outAt !== null])).toEqual([
+      ["2026-10-26", true, true],
+      ["2026-10-27", false, false],
+      ["2026-10-28", true, false],
+      ["2026-10-29", false, false],
+      ["2026-10-30", false, false],
+      ["2026-10-31", false, false],
+      ["2026-11-01", false, false],
+    ]);
+    expect(c.recent.map((d) => [d.day, d.levels, d.teachers])).toEqual([
+      ["2026-10-28", 1, ["Nila"]],
+      ["2026-10-26", 0, []],
+      ["2026-10-21", 0, []],
+      ["2026-10-19", 0, []],
+    ]);
+    // Today's timeline: in at 2 PM, Level 1 marked 18 / 20, with Nila in Evaluation (Q8 explained).
+    const d = await fam().query(api.family.day, { day: "2026-10-28" });
+    expect(d.items.map((x) => x.k)).toEqual(["in", "level", "room"]);
+    expect(d.items[1]).toMatchObject({ k: "level", no: 1, n: 1, how: "marked", got: 18, max: 20 });
+    expect(d.items[2]).toMatchObject({ k: "room", room: "evaluation", teacher: "Nila", no: 1, qs: [8] });
+    // Yesterday at home: Level 2 checked on the phone. Too old or not a date: refused.
+    expect((await fam().query(api.family.day, { day: "2026-10-27" })).items).toMatchObject([{ k: "level", n: 2, how: "home", got: 16 }]);
+    await expect(fam().query(api.family.day, { day: "2026-07-01" })).rejects.toThrow(/60 days/);
+    await expect(fam().query(api.family.day, { day: "yesterday" })).rejects.toThrow(/date/);
   });
 
   test("feedback: with his name or without it, a few a day, read by the owner and people with Feedback", async () => {

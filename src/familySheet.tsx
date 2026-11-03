@@ -3,7 +3,8 @@
 //   The code is made on this phone the first time the sheet opens; New code replaces it (and clears a lock).
 // - Send on WhatsApp: the address, his index and code, and a one-tap link (one use, 7 days).
 // - The family phones signed in, and Sign out (a lost phone, a link sent to the wrong number).
-// - Open every World: off = Worlds open in order (his unit now, books given, and the next when one is done).
+// - Open every Stage (a unit: the family app's Stage; a term is its World): off = Stages open in order (his unit now,
+//   books given, and the next when one is done).
 
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
@@ -171,7 +172,7 @@ export function FamilySheet(props: { v: View; onClose: () => void }) {
         </>
       )}
 
-      <h3 class="block-title">Worlds</h3>
+      <h3 class="block-title">Stages (units)</h3>
       <label class="fam-open">
         <input
           type="checkbox"
@@ -182,8 +183,8 @@ export function FamilySheet(props: { v: View; onClose: () => void }) {
           }
         />
         <span>
-          <b>Open every World</b>
-          <small class="muted">Off: his unit now, the books given, and the next World once he finishes one.</small>
+          <b>Open every Stage</b>
+          <small class="muted">Off: his unit now, the books given, and the next Stage once he finishes one.</small>
         </span>
       </label>
     </Sheet>

@@ -66,8 +66,8 @@ const fam = await build({
   outdir: "dist/f/assets",
   entryNames: "[name]-[hash]",
   assetNames: "[name]-[hash]",
-  // One display face for numbers and game words (Barlow Semi Condensed 700, Latin only, ~10 KB, cached by the
-  // service worker); Tamil stays the phone's own font.
+  // One display face for numbers and game words (Barlow 800, Latin only, ~22 KB, fetched once and kept by the
+  // service worker; not counted in the budget); Tamil stays the phone's own font.
   loader: { ".woff2": "file", ".woff": "file" },
   jsx: "automatic",
   jsxImportSource: "preact",

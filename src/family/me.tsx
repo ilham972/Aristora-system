@@ -1,11 +1,13 @@
-// Me: who is on screen, his XP ever and his longest run, this week's lamps (a day with a Level lights one), his
-// trophies (won and still to win), and this phone: the children on it (switch, add another, sign out) and the sound.
+// Me: his flame (days in a row) and his best, this week day by day, his XP this week as bars, his place in the race,
+// his trophies (won and still to win), and this phone: the children on it (switch, add another, sign out) and the sound.
 
-import { useState } from "preact/hooks";
+import type { ComponentChildren } from "preact";
+import { useEffect, useState } from "preact/hooks";
 import type { FamilyMe } from "../../convex/family";
-import { MAX_ACCOUNTS, type Account } from "./net";
+import { endsIn, passOf, type Board } from "./board";
+import { MAX_ACCOUNTS, query, type Account } from "./net";
 import { setSoundOn, soundOn } from "./sound";
-import { Avatar, firstName, Icon, Lamp, Medal, Spark, TROPHY_ORDER } from "./ui";
+import { Avatar, firstName, Flame, Gem, Icon, Medal, OwlBadge, Tag, TROPHY_ORDER, Waiting } from "./ui";
 
 /** Monday first, as the week starts (Sri Lanka): திங்கள், செவ்வாய், புதன், வியாழன், வெள்ளி, சனி, ஞாயிறு. */
 const DAYS = ["தி", "செ", "பு", "வி", "வெ", "ச", "ஞா"];
@@ -69,24 +71,92 @@ export function Kids(props: { list: Account[]; current: Account | null; onSwitch
   );
 }
 
+/** XP each day this week as bars (today's in purple), with the week's total. */
+function XpBars(props: { xp: number[]; total: number; today: number }) {
+  const top = Math.max(10, ...props.xp);
+  return (
+    <section class="f-chart f-card rise" aria-label="XP this week">
+      <h2 class="f-h2">
+        XP இந்த வாரம்
+        <span class="f-chart-t">
+          <Gem size={16} /> {props.total}
+        </span>
+      </h2>
+      <div class="f-bars">
+        {DAYS.map((d, i) => {
+          const v = props.xp[i] ?? 0;
+          return (
+            <div key={d} class={`f-bar${i === props.today ? " today" : ""}${i > props.today ? " later" : ""}`}>
+              <small class="f-bar-v">{v > 0 ? v : ""}</small>
+              <i style={{ height: `${Math.max(v > 0 ? 8 : 4, Math.round((v / top) * 104))}px`, animationDelay: `${i * 50}ms` }} />
+              <small class="f-bar-d">{d}</small>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 export function MeTab(props: {
+  top: ComponentChildren;
   me: FamilyMe | null;
   list: Account[];
   current: Account | null;
   onSwitch: (id: string) => void;
   onAdd: () => void;
   onSignOut: () => void;
+  onRace: () => void;
 }) {
   const me = props.me;
   const [on, setOn] = useState(soundOn());
-  if (!me) return <p class="f-muted f-pad f-center-t">…</p>;
-  // A copy kept before 3 Nov 2026 lacks the week and the trophies until the server answers.
+  const [b, setB] = useState<Board | null>(null);
+  useEffect(() => {
+    query("family:board")
+      .then((x) => setB(x as Board))
+      .catch(() => {});
+  }, []);
+  if (!me) {
+    return (
+      <>
+        <header class="f-hero">{props.top}</header>
+        <Waiting />
+      </>
+    );
+  }
+  // A copy kept before 3 Nov 2026 lacks some of these until the server answers.
   const week = me.week ?? [];
   const won = me.trophies ?? [];
   const today = todayIndex(Date.now());
+  const s = me.streak;
+  const best = s.days > 0 && s.days >= (me.best ?? 0);
+  const pass = b ? passOf(b) : null;
   return (
-    <div class="f-metab">
-      <section class="f-profile rise">
+    <>
+      <header class="f-hero me">
+        {props.top}
+        <div class="f-hero-in">
+          <div class="f-hero-w">
+            <p class="f-kicker">தொடர் · Streak</p>
+            <p class={`f-streaknum${s.today ? " lit" : ""}`}>
+              <Flame lit={s.today} size={44} />
+              <b>{s.days}</b>
+            </p>
+            <p class="f-hsub">{s.today ? "நாள் தொடர் · இன்று முடிந்தது ✓" : s.days > 0 ? "நாள் தொடர் · இன்று ஒரு Level செய்!" : "இன்று ஒரு Level செய்து தொடங்கு"}</p>
+            {best && <Tag tone="yellow">PERSONAL BEST</Tag>}
+          </div>
+          <OwlBadge mood={s.today ? "cheer" : "sleep"} class="hero" />
+        </div>
+        <div class="f-weekdots" aria-label="இந்த வாரம் · This week">
+          {DAYS.map((d, i) => (
+            <span key={d} class={`f-wdot${week[i] ? " lit" : ""}${i === today ? " today" : ""}${i > today ? " later" : ""}`}>
+              <i>{week[i] ? <Flame lit size={18} /> : i < today ? "·" : ""}</i>
+              <small>{d}</small>
+            </span>
+          ))}
+        </div>
+      </header>
+      <section class="f-profile f-card rise">
         <Avatar name={me.name} size="l" />
         <div class="f-profile-w">
           <b class="f-pname">{me.name}</b>
@@ -95,35 +165,35 @@ export function MeTab(props: {
       </section>
       <section class="f-stats rise">
         <div>
-          <Spark size={22} />
-          <b>{me.total ?? me.xp}</b>
+          <Gem size={22} />
+          <b>{(me.total ?? me.xp).toLocaleString("en")}</b>
           <small>மொத்த XP</small>
         </div>
         <div>
-          <Lamp lit size={22} />
-          <b>{me.best ?? me.streak.days}</b>
+          <Flame lit size={22} />
+          <b>{me.best ?? s.days}</b>
           <small>நீண்ட தொடர்</small>
         </div>
         <div>
-          <Icon name="cup" size={22} />
-          <b>{won.length}</b>
-          <small>கோப்பைகள்</small>
+          <Icon name="check" size={22} />
+          <b>{me.levelsDone ?? 0}</b>
+          <small>Levels</small>
         </div>
       </section>
-      <section class="f-week rise">
-        <h2 class="f-h2">
-          இந்த வாரம் <small>{me.streak.days} நாள் தொடர்</small>
-        </h2>
-        <div class="f-days">
-          {DAYS.map((d, i) => (
-            <span key={d} class={`f-day${week[i] ? " lit" : ""}${i === today ? " today" : ""}`}>
-              <Lamp lit={!!week[i]} size={24} />
-              <small>{d}</small>
-            </span>
-          ))}
-        </div>
-      </section>
-      <section class="f-cups rise">
+      {me.dayXp && <XpBars xp={me.dayXp} total={me.xp} today={today} />}
+      {b?.me && (
+        <button type="button" class="f-racecard f-card rise" onClick={props.onRace}>
+          <span class="f-race-rank">#{b.me.rank}</span>
+          <span class="f-racecard-w">
+            <b>போட்டியில் {b.me.rank === 1 && b.me.xp > 0 ? "முதலிடம்!" : `${b.me.rank} ஆம் இடம்`}</b>
+            <small>
+              {pass?.above && pass.gap > 0 ? `இன்னும் ${pass.gap} XP: #${pass.above.rank}` : `${b.count} பேர்`} · முடிய {endsIn(b.since, Date.now())}
+            </small>
+          </span>
+          <Icon name="next" size={20} />
+        </button>
+      )}
+      <section class="f-cups f-card rise">
         <h2 class="f-h2">
           கோப்பைகள் <small>
             {won.length}/{TROPHY_ORDER.length}
@@ -135,7 +205,7 @@ export function MeTab(props: {
           ))}
         </div>
       </section>
-      <section class="f-set rise">
+      <section class="f-set f-card rise">
         <h2 class="f-h2">இந்த phone இல்</h2>
         <Kids list={props.list} current={props.current} onSwitch={props.onSwitch} onAdd={props.onAdd} onSignOut={props.onSignOut} />
         <button
@@ -152,6 +222,6 @@ export function MeTab(props: {
           <span class={`f-switch${on ? " on" : ""}`} aria-hidden="true" />
         </button>
       </section>
-    </div>
+    </>
   );
 }

@@ -2,10 +2,12 @@
 //   makeLink    -> a family link for one student (Settings → Students → Family): sent on WhatsApp, one use, 7 days.
 //   phones      -> his family's phones and link (the Family sheet).
 //   signOutAll  -> every family phone of his signs out; an unused link stops working.
-//   setOpenAll  -> "Open every World" for him (else they open in order).
+//   setOpenAll  -> "Open every Stage" for him (else they open in order).
 //   setCode     -> his family app code (4 digits, made on the teacher's phone); with his index number he signs in.
 //   answers     -> what the phone accepts for each question of a workbook (teachers check it once per unit).
 //   feedback, feedbackNew, feedbackSeen -> what students send from the family app (Settings → Feedback, 3 Nov 2026).
+//   classHours, setClassHours -> the centre's class hours per weekday (Settings → Class hours, owner; 3 Nov 2026): the
+//                  family app's schedule.
 // Owner, or a teacher with Students (Feedback: the owner, or a teacher with Feedback). Family phones can't call any of
 // these (viewer / actor).
 
@@ -13,7 +15,7 @@ import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import { actor, FAMILY_LINK_MS, viewer } from "./lib/auth";
-import { codeRow, giveIndex, weakCode } from "./lib/family";
+import { codeRow, giveIndex, hoursOf, weakCode, type Hours } from "./lib/family";
 import { asMaster, bookFor, cleanBy, fail, getStudent, keyRow, log } from "./lib/backend";
 import { allPhone, phoneKey, phoneShare, wantWords } from "./lib/phone";
 
@@ -46,7 +48,7 @@ export const makeLink = mutation({
   },
 });
 
-/** His family's phones (signed in), his unused link, and whether every World is open for him. */
+/** His family's phones (signed in), his unused link, and whether every Stage is open for him. */
 export const phones = query({
   args: { token, studentId: v.id("students") },
   handler: async (ctx, args) => {
@@ -101,7 +103,7 @@ export const signOutAll = mutation({
   },
 });
 
-/** "Open every World" for him in the family app (else: in order, from where the teachers put him). */
+/** "Open every Stage" for him in the family app (else: in order, from where the teachers put him). */
 export const setOpenAll = mutation({
   args: { token, studentId: v.id("students"), on: v.boolean(), by: v.optional(v.string()) },
   handler: async (ctx, args) => {
@@ -218,6 +220,36 @@ export const feedbackSeen = mutation({
     const me = await actor(ctx, args.token, ["feedback"]);
     const at = Math.min(args.at, Date.now());
     if (at > (me.feedbackSeenAt ?? 0)) await ctx.db.patch(me._id, { feedbackSeenAt: at });
+    return true;
+  },
+});
+
+/** The centre's class hours, Monday first (minutes after midnight, Sri Lanka; null = no class that day). */
+export const classHours = query({
+  args: { token },
+  handler: async (ctx, args): Promise<Hours> => {
+    await viewer(ctx, args.token, "owner");
+    return await hoursOf(ctx);
+  },
+});
+
+/** The owner sets the class hours (his answer, 3 Nov 2026): the family app shows them as the class schedule. */
+export const setClassHours = mutation({
+  args: { token, hours: v.array(v.union(v.null(), v.object({ from: v.number(), to: v.number() }))) },
+  handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["owner"]);
+    if (args.hours.length !== 7) fail("Seven days, Monday first.");
+    for (const h of args.hours) {
+      if (h && !(Number.isInteger(h.from) && Number.isInteger(h.to) && h.from >= 0 && h.to <= 24 * 60 && h.from < h.to)) {
+        fail("Each day's class must start before it ends.");
+      }
+    }
+    const row = await ctx.db
+      .query("meta")
+      .withIndex("by_key", (q) => q.eq("key", "classHours"))
+      .first();
+    if (row) await ctx.db.patch(row._id, { value: args.hours });
+    else await ctx.db.insert("meta", { key: "classHours", value: args.hours });
     return true;
   },
 });

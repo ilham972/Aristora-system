@@ -1,14 +1,16 @@
-// The family app's view of one student: his Worlds (the workbooks of his grade), each level's state, his points this
-// week and his streak. The same numbers the teachers see: a level marked in class or at home is one level.
-// - No school words on his screens: a unit is a World, marks are XP (1 mark = 1 XP). The levels are the book's.
-// - A World is open when the teachers opened it for him (his unit now, a book given, levels done there), when the
-//   World before it is done (every level handed in or marked), or when "Open every World" is on for him.
+// The family app's view of one student: the whole syllabus of his grade (every unit, by term), each level's state, his
+// points and his streak. The same numbers the teachers see: a level marked in class or at home is one level.
+// - On his screens (3 Nov 2026, his voice note): a term is a World, a unit a Stage, its workbook's levels are Levels,
+//   marks are XP (1 mark = 1 XP). A unit with no workbook in the app yet is in the map too ("coming soon").
+// - A Stage (unit; the type is still called World here) is open when the teachers opened it for him (his unit now, a
+//   book given, levels done there), when the one before it is done (every level handed in or marked), or when "Open
+//   every Stage" is on for him.
 // - Only the level he is on can be played (the first with no record): the paper book is the truth, level by level.
 
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { MasterData } from "./book";
-import { slDayNo, slWeekStart } from "./day";
+import { DAY_MS, slDayNo, slWeekStart } from "./day";
 import { computeMaster, EMPTY_MASTER, type MState } from "./master";
 
 export type LevelState =
@@ -26,13 +28,17 @@ export type LevelState =
 
 export type WorldLevel = { n: number; max: number; got?: number; s: LevelState };
 
+/** One unit of his grade (the phone shows it as a Stage of its term's World). */
 export type World = {
   unitId: Id<"units">;
-  /** The unit's number: World 1 is U01. */
+  /** The unit's number: Stage 1 is U01. */
   no: number;
   ta: string;
   en: string;
+  /** Its school term (1–3; 0 = an extra book): the phone's World. */
   term: number;
+  /** Its workbook is in the app (else it is in the syllabus only: "coming soon", nothing to play). */
+  book: boolean;
   /** He can play it. */
   open: boolean;
   /** The phone can mark it (its answer key is in the app). */
@@ -76,7 +82,11 @@ function started(m: MState): boolean {
   return Object.values(m.lv).some((lv) => lv.done || lv.fixed || lv.pre);
 }
 
-/** His Worlds: the workbooks of his grade, in book order, with what is open. */
+/**
+ * The whole syllabus of his grade in book order, with what is open (3 Nov 2026, his ask: "put the whole syllabus").
+ * A unit without a workbook is listed with no levels and never open; the "next opens when this one is done" chain
+ * passes over it.
+ */
 export async function worldsOf(ctx: QueryCtx, student: Doc<"students">): Promise<World[]> {
   if (typeof student.grade !== "number") return [];
   const units = await ctx.db
@@ -102,7 +112,23 @@ export async function worldsOf(ctx: QueryCtx, student: Doc<"students">): Promise
       .query("books")
       .withIndex("by_unit_stage", (q) => q.eq("unitId", unit._id).eq("stage", "master"))
       .first();
-    if (!book || book.data.kind !== "master") continue;
+    if (!book || book.data.kind !== "master") {
+      out.push({
+        unitId: unit._id,
+        no: unitNumber(unit.code),
+        ta: unit.ta,
+        en: unit.en,
+        term: unit.term,
+        book: false,
+        open: false,
+        phone: false,
+        now: student.unitId === unit._id,
+        q: false,
+        levels: [],
+        allDone: false,
+      });
+      continue;
+    }
     const p = rows.find((r) => r.unitId === unit._id && r.stage === "master");
     const m = p?.m ?? EMPTY_MASTER;
     const now = student.unitId === unit._id;
@@ -114,6 +140,7 @@ export async function worldsOf(ctx: QueryCtx, student: Doc<"students">): Promise
       ta: unit.ta,
       en: unit.en,
       term: unit.term,
+      book: true,
       open,
       phone: (book.keyCount ?? 0) > 0,
       now,
@@ -201,6 +228,32 @@ export function weekDays(days: Set<number>, now: number): boolean[] {
   return Array.from({ length: 7 }, (_, i) => days.has(monday + i));
 }
 
+/** This week, Monday to Sunday: the XP of the levels he finished each day (the progress page's bars). */
+export function weekDayXp(rows: Doc<"progress">[], now: number): number[] {
+  const monday = slDayNo(slWeekStart(now));
+  const out = [0, 0, 0, 0, 0, 0, 0];
+  for (const r of rows) {
+    for (const lv of Object.values(r.m?.lv ?? {})) {
+      if (!lv.fixed) continue;
+      const d = slDayNo(lv.done ?? lv.fixed) - monday;
+      if (d >= 0 && d < 7) out[d] += lv.got ?? 0;
+    }
+  }
+  return out;
+}
+
+/** Levels he finished (handed in, or marked in class or at home; never "before the app") since a time. */
+export function levelsSince(rows: Doc<"progress">[], since: number): number {
+  let n = 0;
+  for (const r of rows) {
+    for (const lv of Object.values(r.m?.lv ?? {})) {
+      const t = lv.done ?? lv.fixed;
+      if (t !== undefined && !lv.pre && t >= since) n++;
+    }
+  }
+  return n;
+}
+
 /** His best week ever: the most XP he made between a Monday and the next. */
 export function bestWeekXp(rows: Doc<"progress">[]): number {
   const weeks = new Map<number, number>();
@@ -283,3 +336,79 @@ export async function codeRow(ctx: QueryCtx, studentId: Id<"students">): Promise
     .first();
 }
 
+
+// ---- His classes (3 Nov 2026, his voice note: the app is also the institute's student app: the class schedule,
+// today's class, what he did in class and at home). Built from what the class already records: attendance, calls to a
+// teacher, workbook levels. Never his waiting time (that is the centre's job, not his). ----
+
+/** The centre's class hours per weekday, Monday first: minutes after midnight (Sri Lanka), or null = no class. */
+export type Hours = ({ from: number; to: number } | null)[];
+export const NO_HOURS: Hours = [null, null, null, null, null, null, null];
+
+/** A day's number from its Sri Lanka date ("2026-11-03"). */
+export function dayNoOf(day: string): number {
+  return Math.floor(Date.parse(`${day}T00:00:00Z`) / DAY_MS);
+}
+
+/** Monday = 0 … Sunday = 6, for a day number. */
+export function weekdayOf(dayNo: number): number {
+  return (new Date(dayNo * DAY_MS).getUTCDay() + 6) % 7;
+}
+
+/** The weekdays he usually comes (Monday = 0): one he came on in at least 2 of the last 4 weeks. */
+export function usualDays(days: string[], now: number): number[] {
+  const today = slDayNo(now);
+  const weeks = new Map<number, Set<number>>();
+  for (const d of new Set(days)) {
+    const no = dayNoOf(d);
+    if (no > today || no <= today - 28) continue;
+    const wd = weekdayOf(no);
+    if (!weeks.has(wd)) weeks.set(wd, new Set());
+    weeks.get(wd)!.add(Math.floor((today - no) / 7));
+  }
+  return [...weeks.entries()]
+    .filter(([, w]) => w.size >= 2)
+    .map(([d]) => d)
+    .sort((a, b) => a - b);
+}
+
+/** One thing in his day, for the timeline (class and home). */
+export type DayItem =
+  | { k: "in" | "out"; at: number }
+  | { k: "level"; at: number; no: number; ta: string; n: number; how: "handed" | "marked" | "home"; got: number | null; max: number }
+  | {
+      k: "room";
+      at: number;
+      to: number | null;
+      room: "theory" | "evaluation";
+      teacher: string | null;
+      no: number | null;
+      ta: string | null;
+      section: string | null;
+      /** Questions explained (Evaluation) or taught (Theory) while he was with her. */
+      qs: number[];
+    };
+
+/** A level's moment in a day: marked at home, marked in class, or handed in (waiting for the corrector). */
+export function levelMoment(
+  lv: { done?: number; fixed?: number; got?: number; pre?: number; home?: number },
+  from: number,
+  to: number,
+): { at: number; how: "handed" | "marked" | "home"; got: number | null } | null {
+  if (lv.pre !== undefined) return null;
+  const inDay = (t: number | undefined): t is number => t !== undefined && t >= from && t < to;
+  if (inDay(lv.home)) return { at: lv.home, how: "home", got: lv.got ?? null };
+  if (inDay(lv.fixed)) return { at: lv.fixed, how: "marked", got: lv.got ?? null };
+  if (inDay(lv.done) && lv.fixed === undefined) return { at: lv.done, how: "handed", got: null };
+  return null;
+}
+
+/** The centre's class hours (owner: Settings → Class hours); none set = no class shown. */
+export async function hoursOf(ctx: QueryCtx): Promise<Hours> {
+  const row = await ctx.db
+    .query("meta")
+    .withIndex("by_key", (q) => q.eq("key", "classHours"))
+    .first();
+  const v = row?.value as Hours | undefined;
+  return Array.isArray(v) && v.length === 7 ? v : NO_HOURS;
+}
