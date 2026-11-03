@@ -9,7 +9,7 @@
 //   tapped the pad there and nothing happened). A level opens again on the question he left (kept per level).
 
 import { Fragment } from "preact";
-import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { FamilyLevel, FamilyMe, FamilyQuestions, FamilyResult } from "../../convex/family";
 import type { Trophy, World } from "../../convex/lib/family";
 import type { Box } from "../../convex/lib/phone";
@@ -150,7 +150,6 @@ export function Play(props: {
   const showQ = qOn && props.world.q;
   const qs = useQuestions(props.world, props.n, showQ);
   const strip = useRef<HTMLDivElement>(null);
-  const card = useRef<HTMLElement>(null);
 
   useEffect(() => {
     query("family:level", { unitId: props.world.unitId, n: props.n })
@@ -162,10 +161,26 @@ export function Play(props: {
         if (!form) setErr(problemWords(e));
       });
   }, [props.world.unitId, props.n]);
-  useEffect(() => {
-    strip.current?.querySelector(".on")?.scrollIntoView({ block: "nearest", inline: "center" });
-    if (showQ) card.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  // A new question (his report, 4 Nov 2026: after → the screen jumped up and came back down). Only the strip moves,
+  // sideways, to his chip: scrollIntoView moved the page too (up to the strip, then the card's smooth scroll back
+  // down). A new question is a new page: if he had scrolled down (a tall printed question), it starts at the top,
+  // set before the screen is drawn, so the only motion is the page sliding in from the side. (Its printed question
+  // is drawn a frame later: for that frame the page is shorter and the browser had already moved it part-way.)
+  const placedRow = useRef(false);
+  useLayoutEffect(() => {
+    const row = strip.current;
+    const chip = row?.querySelector<HTMLElement>(".f-qchip.on");
+    if (!row || !chip) return;
+    const r = chip.getBoundingClientRect();
+    const s = row.getBoundingClientRect();
+    row.scrollTo({ left: row.scrollLeft + r.left - s.left - (s.width - r.width) / 2, behavior: placedRow.current && !instant() ? "smooth" : "auto" });
+    if (placedRow.current && window.scrollY > 0) window.scrollTo(0, 0);
+    placedRow.current = true;
   }, [at.qi, !!form]);
+  // The review after his last → is a new page too.
+  useLayoutEffect(() => {
+    if (review && window.scrollY > 0) window.scrollTo(0, 0);
+  }, [review]);
   // His place on this level: checked against the level when it comes (it may have changed), then kept as he moves.
   useEffect(() => {
     if (!form) return;
@@ -326,7 +341,7 @@ export function Play(props: {
           </button>
         </section>
       ) : (
-        <section class="f-card f-qcard slide" key={q.q} ref={card}>
+        <section class="f-card f-qcard slide" key={q.q}>
           <div class="f-qhead">
             <b class="f-qn">Q{q.q}</b>
             <span class="f-xpchip">

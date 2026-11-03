@@ -247,6 +247,17 @@ EOF
   blws,psts,haln,cjct,nukt,init,calt,liga,rlig,kern,dist,mark,mkmk,abvm,blwm,tnum" --flavor=woff2` (~57 KB; Tamil's
   shaping needs the layout features). A sign it lacks (✓ ✗ ✍ ⌫ →) falls back to the phone's font. Weights 500–800
   only: use 500 for body, 700 bold, 800 display. The page preloads it (`%FONT%`, filled by `scripts/build.mjs`).
+- **Nothing may stick out past the phone's edge, not even for one frame** (4 Nov 2026, his report "the screen bounces
+  after →"): the next question slid in from 28px to the right, 12px past the edge; for ~130 ms Chrome on a phone made
+  its viewport bigger (393 × 780 → 405 × 804) and every fixed thing moved (the pad dropped 24px, then came back).
+  `noSideScroll` never saw it (it looks once, after the motion). A screen with sideways motion is clipped
+  (`overflow-x: hidden; overflow-x: clip`: `.f-play`, `.f-result`), and the run-through checks every frame
+  (`framesOf` in `family.e2e.ts`). To see what moves, record each frame in Playwright (`requestAnimationFrame`:
+  `scrollWidth`, `innerHeight`, a fixed element's rect, `scrollY`).
+- **`scrollIntoView` scrolls every scroller up the chain, the page too**: a chip centred in its row also pulled the
+  page up to the row, and the card's own smooth scroll took it back down (the same bounce, with the questions as
+  printed). To move a row sideways, scroll the row (`row.scrollTo`); move the page only on purpose, in a layout effect
+  (before the screen is drawn).
 - **Motion in the family app is transform and opacity only** (no animated box-shadow, blur or layout): a cheap Redmi
   stays smooth. A small owl is `still` (only its mood moves): a living owl is eight SVG animations repainted on the
   main thread. Loops only where the eye should go (the header's owl, START's halo, a waiting START's light).

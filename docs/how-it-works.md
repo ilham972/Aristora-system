@@ -943,6 +943,11 @@ learning app of our education institute"): one profile, his class times, what he
     one), the question switch, "Stage 3 · Level 4", Check; the next question slides in, each key gives the answer a
     small push;
     the question strip, one question at a time, his own pad (numbers, or the n pad), Check once (review first).
+    **The screen holds still on →** (his report, 4 Nov 2026: "the whole screen bounces up and comes back"): the slide
+    is clipped at the phone's edge (`.f-play`), so the page never gets wider than the phone and the pad never moves;
+    the strip glides sideways to his chip by itself (never the page); a new question, and the review after his last
+    →, is a new page: if he had scrolled down (a tall printed question), it starts at the top, set before the screen
+    is drawn. → to another box of the same question keeps his place.
     A box shows a unit after his number when the answer has one ("63 %", "? cm²", "? h" "? min": printed, never typed)
     and a ratio's ":" between its boxes. **A question only the teacher marks** (no box): "இதைத் தாளில் செய்: உன் ஆசிரியர்
     வகுப்பில் திருத்துவார்", every key pale but → (a tap says why: before 4 Nov 2026 the keys simply did nothing, and a

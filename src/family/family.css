@@ -1815,7 +1815,12 @@ p {
 }
 
 /* ---------- A level ---------- */
+/* Clipped sideways: the next question slides in from 28px to the right, 12px past the phone's edge. For those frames
+   Chrome on a phone made its viewport bigger (393 × 780 → 405 × 804) and the pad, fixed to the bottom, dropped 24px
+   and came back up on every → (his report, 4 Nov 2026). */
 .f-play {
+  overflow-x: hidden;
+  overflow-x: clip;
   min-height: 100vh;
   padding: calc(var(--safe-t) + 10px) 16px calc(var(--pad-h) + var(--safe-b) + 18px);
 }

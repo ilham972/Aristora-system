@@ -681,3 +681,134 @@ test("the O/L map: the owner ticks Grade 11 for the O/L syllabus and gives today
 
   expect(problems).toEqual([]);
 });
+
+/** Every frame while he taps →: how far the page sticks out past the phone, where the pad ends, the page's scroll. */
+async function framesOf(p: Page, act: () => Promise<void>) {
+  await p.evaluate(() => {
+    const w = window as unknown as { __f: { wide: number; pad: number; y: number }[]; __on: boolean };
+    w.__f = [];
+    w.__on = true;
+    const f = () => {
+      w.__f.push({
+        wide: document.documentElement.scrollWidth - window.visualViewport!.width,
+        pad: Math.round(document.querySelector(".f-padkeys")?.getBoundingClientRect().bottom ?? -1),
+        y: Math.round(window.scrollY),
+      });
+      if (w.__on) requestAnimationFrame(f);
+    };
+    requestAnimationFrame(f);
+  });
+  await p.waitForTimeout(50);
+  await act();
+  await p.waitForTimeout(600); // the slide (0.32 s) and the frames after it
+  const frames = await p.evaluate(() => {
+    const w = window as unknown as { __f: { wide: number; pad: number; y: number }[]; __on: boolean };
+    w.__on = false;
+    return w.__f;
+  });
+  return { frames, ys: frames.map((f) => f.y).filter((y, i, a) => i === 0 || y !== a[i - 1]) };
+}
+
+/** He scrolls down to his box under a tall printed question (drawn a moment after the question comes). */
+const scrollDown = (p: Page, what: string) =>
+  until(() => p.evaluate(() => (window.scrollTo(0, document.documentElement.scrollHeight), window.scrollY > 100)), `scrolled down to ${what}`);
+
+test("a level holds still: → never makes the page wider than the phone or moves the pad; a new question starts at the top", async () => {
+  // His report (4 Nov 2026): after → the screen bounced. The next question slid in 12px past the phone's edge, so
+  // Chrome made its viewport bigger for ~130 ms (the pad dropped 24px and came back); with the questions as printed,
+  // the page jumped up to the strip and slid back down to the card.
+  const backend = makeBackend(modules);
+  const t = backend.t;
+  await addPerson(t, { name: "Owner", token: OWNER_TOKEN, role: "owner" });
+  const as = { token: OWNER_TOKEN };
+  await t.mutation(api.setup.ensure, as);
+  const u01 = await t.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G8-U01")).first())!._id);
+  await t.mutation(api.catalog.saveWorkbook, {
+    ...as,
+    unitId: u01,
+    parts: BOOK.data.parts.map((p) => ({ id: p.id, to: p.to, ...(p.each ? { each: p.each } : {}) })),
+    levels: BOOK.data.levels.map((l) => ({ to: l.to, max: l.max })),
+    marks: BOOK.data.marks ?? {},
+    replace: true,
+    key: fakeKey(),
+  });
+  // Made-up questions as printed, each with a tall figure (taller than the space above the pad).
+  await t.run(async (ctx) => {
+    for (let q = 1; q <= 10; q++) {
+      await ctx.db.insert("questions", {
+        unitId: u01,
+        stage: "master",
+        q,
+        html: `<div class="pq"><span class="qn">${q}</span><div class="qt">A made-up question number ${q} with a figure.</div><div class="fig"></div></div>`,
+      });
+    }
+    await ctx.db.insert("bookCss", { unitId: u01, stage: "master", css: ".qn { font-weight: 700; } .fig { height: 420px; margin-top: 8px; background: #eee; }", updatedAt: 0 });
+    const book = (await ctx.db.query("books").withIndex("by_unit_stage", (x) => x.eq("unitId", u01).eq("stage", "master")).first())!;
+    await ctx.db.patch(book._id, { qCount: 10 });
+  });
+  const hana = await t.mutation(api.students.add, { ...as, name: "Hana K", grade: 8, term: 1, stage: "master", unitId: u01 });
+  await t.mutation(api.families.setCode, { ...as, studentId: hana, code: "4719" });
+
+  const P = await open(backend, `${site.url}/f/`, size(360, 640));
+  await P.getByLabel(/Index/).fill("1001");
+  await P.getByLabel("Code").fill("4719");
+  await P.getByRole("button", { name: "Sign in" }).click();
+  await stageNow(P, "Level 1");
+  await P.locator(".f-lv.play").click();
+  await contains(P.locator(".f-qn"), "Q1");
+  const key = (k: string) => P.locator(".f-padkeys").getByRole("button", { name: k, exact: true }).tap();
+  const next = () => P.locator(".f-padkeys .f-key.next").tap();
+
+  // Only the boxes: Q1 → Q2. The page never wider than the phone, the pad's bottom on the screen's bottom every frame.
+  await key("3");
+  const a = await framesOf(P, next);
+  await contains(P.locator(".f-qn"), "Q2");
+  expect(Math.max(...a.frames.map((f) => f.wide))).toBeLessThanOrEqual(0);
+  expect(new Set(a.frames.map((f) => f.pad))).toEqual(new Set([640]));
+  expect(a.ys).toEqual([0]);
+
+  // The questions as printed (tall): he scrolls down to his box, types, → . The page moves once, to the top, with Q3.
+  await P.locator(".f-qmode").tap();
+  await until(async () => (await P.locator(".f-paper").count()) === 1, "Q2 as printed");
+  await scrollDown(P, "Q2's box");
+  await key("6");
+  const b = await framesOf(P, next);
+  await contains(P.locator(".f-qn"), "Q3");
+  expect(Math.max(...b.frames.map((f) => f.wide))).toBeLessThanOrEqual(0);
+  expect(new Set(b.frames.map((f) => f.pad))).toEqual(new Set([640]));
+  expect(b.ys.length).toBe(2); // where he was, then the top: never up and back down again
+  expect(b.ys[1]).toBe(0);
+  await visible(P.locator(".f-qchip.on", { hasText: "3" }));
+  await noSideScroll(P);
+  await shot(P, "fam28-next-question-top-360");
+
+  // Q3–Q8, then Q9 (two boxes): he scrolls down to them; → to its second box keeps his place; → to Q10 = the top.
+  for (const ans of [["9"], ["1", "2"], ["1", "5"], ["1", "8"], ["n", "+", "1"], ["2", "4"]]) {
+    for (const k of ans) await key(k);
+    await next();
+  }
+  await contains(P.locator(".f-qn"), "Q9");
+  expect(await P.evaluate(() => window.scrollY)).toBe(0);
+  await scrollDown(P, "Q9's boxes");
+  const y9 = await P.evaluate(() => Math.round(window.scrollY));
+  await key("9");
+  await next(); // Q9's second box
+  await visible(P.locator(".f-box.on", { hasText: "?" }));
+  expect(await P.evaluate(() => Math.round(window.scrollY))).toBe(y9);
+  await key("1");
+  await key("0");
+  const c = await framesOf(P, next);
+  await contains(P.locator(".f-qn"), "Q10");
+  expect(c.ys).toEqual([y9, 0]);
+  expect(Math.max(...c.frames.map((f) => f.wide))).toBeLessThanOrEqual(0);
+
+  // His last → opens the review: a new page, at the top too.
+  await scrollDown(P, "Q10's box");
+  await key("3");
+  await key("0");
+  await next();
+  await contains(P.locator(".f-review"), "சரிபார்க்கவா");
+  expect(await P.evaluate(() => window.scrollY)).toBe(0);
+  await noSideScroll(P);
+  expect(problems).toEqual([]);
+});
