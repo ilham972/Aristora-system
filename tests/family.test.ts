@@ -387,14 +387,27 @@ describe("the family app on the server", () => {
     await expect(raw.query(api.family.questions, { unitId: u01, n: 1 })).rejects.toThrow(FAMILY_SIGNED_OUT);
   });
 
-  test("his classes: the hours the owner sets, his usual days, this week, recent classes and one day's timeline", async () => {
+  test("his classes: his grade's hours the owner sets, his usual days, this week, recent classes and one day's timeline", async () => {
     await joinAs(hana, FAM);
-    // The owner sets the class hours, Monday first; a family phone can't; a class must start before it ends.
+    // The first evening's one list of hours for every grade still counts for each grade until it gets its own.
+    const tuesdays = [null, { from: 1020, to: 1200 }, null, null, null, null, null];
+    await raw.run(async (ctx) => {
+      await ctx.db.insert("meta", { key: "classHours", value: tuesdays });
+    });
+    expect((await t.query(api.families.classHours, {}))["8"]).toEqual(tuesdays);
+    // The owner sets one grade's hours, Monday first; a family phone can't; a class must start before it ends; only
+    // the school grades.
     const hours = [{ from: 930, to: 1170 }, null, { from: 930, to: 1170 }, null, null, { from: 480, to: 720 }, null];
-    await expect(fam().mutation(api.families.setClassHours, { hours })).rejects.toThrow(SIGNED_OUT);
-    await expect(t.mutation(api.families.setClassHours, { hours: [{ from: 600, to: 500 }, null, null, null, null, null, null] })).rejects.toThrow(/before/);
-    await t.mutation(api.families.setClassHours, { hours });
-    expect(await t.query(api.families.classHours, {})).toEqual(hours);
+    await expect(fam().mutation(api.families.setClassHours, { grade: 8, hours })).rejects.toThrow(SIGNED_OUT);
+    await expect(
+      t.mutation(api.families.setClassHours, { grade: 8, hours: [{ from: 600, to: 500 }, null, null, null, null, null, null] }),
+    ).rejects.toThrow(/before/);
+    await expect(t.mutation(api.families.setClassHours, { grade: 5, hours })).rejects.toThrow(/per grade/);
+    await t.mutation(api.families.setClassHours, { grade: 8, hours });
+    const all = await t.query(api.families.classHours, {});
+    expect(all["8"]).toEqual(hours);
+    expect(all["11"]).toEqual(tuesdays); // the other grades keep theirs
+    expect(Object.keys(all).sort((a, b) => Number(a) - Number(b))).toEqual(["6", "7", "8", "9", "10", "11"]);
     // Her class days: Mondays and Wednesdays for two weeks; today (Wednesday 28 Oct) she is in class since 2 PM.
     const at = (iso: string) => new Date(iso).getTime();
     await raw.run(async (ctx) => {

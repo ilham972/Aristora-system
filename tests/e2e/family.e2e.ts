@@ -376,8 +376,8 @@ test("the new look: class hours and Home, the map, the questions as printed, fee
   const bilal = await t.mutation(api.students.add, { ...as, name: "Bilal M", grade: 8, term: 1, stage: "master", unitId: u01 });
   await t.mutation(api.families.setCode, { ...as, studentId: hana, code: "4719" });
   await t.mutation(api.families.setCode, { ...as, studentId: bilal, code: "5820" });
-  // The centre's class hours (the owner, Settings → Class hours): open all day, every day, for this test.
-  await t.mutation(api.families.setClassHours, { ...as, hours: Array.from({ length: 7 }, () => ({ from: 1, to: 1439 })) });
+  // Grade 8's class hours (the owner, Settings → Class hours; each grade its own): open all day, every day, here.
+  await t.mutation(api.families.setClassHours, { ...as, grade: 8, hours: Array.from({ length: 7 }, () => ({ from: 1, to: 1439 })) });
 
   // Hana signs in with her index and code: Home (the class is on now, her goal, her week), then the map.
   const P = await open(backend, `${site.url}/f/`, size(360, 780));
@@ -497,17 +497,22 @@ test("the new look: class hours and Home, the map, the questions as printed, fee
   await until(async () => (await C.locator(".gear-n").count()) === 0, "the count goes once read");
   await noSideScroll(C);
   await shot(C, "fam20-owner-feedback");
-  // Settings → Class hours: the hours set above, one row a day; Sunday off, saved, and the family app follows.
+  // Settings → Class hours: each grade its own; Grade 8's hours set above, one row a day; Sunday off, saved; Grade 7
+  // has none.
   await C.getByRole("button", { name: "Class hours", exact: true }).click();
+  const ch = C.locator(".settings-body.ch");
+  await ch.getByRole("button", { name: /^Grade 8\b/ }).click();
+  await contains(ch.getByRole("button", { name: /^Grade 8\b/ }), "7d");
   await until(async () => (await C.locator(".ch-list > li").count()) === 7, "seven days");
   expect(await C.getByLabel("Monday starts").inputValue()).toBe("00:01");
   expect(await C.getByLabel("Monday ends").inputValue()).toBe("23:59");
   await C.locator(".ch-list > li").nth(6).locator('input[type="checkbox"]').click();
-  await C.getByRole("button", { name: "Save class hours" }).click();
-  await contains(C.locator(".toast").last(), "Class hours saved");
+  await C.getByRole("button", { name: "Save Grade 8's hours" }).click();
+  await contains(C.locator(".toast").last(), "Grade 8's class hours saved");
   const saved = await t.query(api.families.classHours, as);
-  expect(saved[6]).toBe(null);
-  expect(saved[0]).toEqual({ from: 1, to: 1439 });
+  expect(saved["8"][6]).toBe(null);
+  expect(saved["8"][0]).toEqual({ from: 1, to: 1439 });
+  expect(saved["7"].every((d) => d === null)).toBe(true);
   await noSideScroll(C);
   await shot(C, "fam20b-class-hours");
 

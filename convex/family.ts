@@ -13,8 +13,8 @@
 //                   only in a Stage open to him; never the answers (they are in another table).
 //   feedback     -> a few words to ARISTORA about the class, the teachers, the questions or the app (3 Nov 2026): with
 //                   his name, or without it (then nothing ties the words to him); read in Settings → Feedback.
-//   classes      -> his class side (3 Nov 2026): the centre's hours (Settings → Class hours), the days he usually
-//                   comes, this week, his last classes, in class now.
+//   classes      -> his class side (3 Nov 2026): his grade's class hours (Settings → Class hours), the days he
+//                   usually comes, this week, his last classes, in class now.
 //   day          -> one day of his (the last 60): sign-in, Theory and Evaluation, levels in class and at home, sign-out.
 // Every function takes the family phone's token (familyViewer / familyActor); peek, join and signIn are open on
 // purpose (they are how a phone gets its token). A phone may hold several children (one token each): it sends the
@@ -472,7 +472,7 @@ export const feedback = mutation({
 export type ClassDay = { day: string; inAt: number; outAt: number | null; levels: number; teachers: string[] };
 
 export type FamilyClasses = {
-  /** The centre's hours, Monday first (Settings → Class hours; null = no class that day). */
+  /** His grade's class hours, Monday first (Settings → Class hours; null = no class that day). */
   hours: Hours;
   /** The weekdays he usually comes (Monday = 0), from the last 4 weeks. */
   usual: number[];
@@ -532,7 +532,7 @@ export const classes = query({
       });
     const open = s.present ? visits.filter((v) => v.outAt === undefined).sort((a, b) => b.inAt - a.inAt)[0] : undefined;
     return {
-      hours: await hoursOf(ctx),
+      hours: await hoursOf(ctx, s.grade),
       usual: usualDays([...byDay.keys()], now),
       week,
       recent,

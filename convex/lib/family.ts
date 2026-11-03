@@ -341,9 +341,15 @@ export async function codeRow(ctx: QueryCtx, studentId: Id<"students">): Promise
 // today's class, what he did in class and at home). Built from what the class already records: attendance, calls to a
 // teacher, workbook levels. Never his waiting time (that is the centre's job, not his). ----
 
-/** The centre's class hours per weekday, Monday first: minutes after midnight (Sri Lanka), or null = no class. */
+/** One grade's class hours per weekday, Monday first: minutes after midnight (Sri Lanka), or null = no class. */
 export type Hours = ({ from: number; to: number } | null)[];
 export const NO_HOURS: Hours = [null, null, null, null, null, null, null];
+/** The grades with class hours (OL students are in Grade 10 or 11). */
+export const HOUR_GRADES = [6, 7, 8, 9, 10, 11];
+/** Each grade its own hours (3 Nov 2026, his words: "different grades have different time schedules"), by "6"…"11". */
+export type GradeHours = Record<string, Hours>;
+
+const isHours = (v: unknown): v is Hours => Array.isArray(v) && v.length === 7;
 
 /** A day's number from its Sri Lanka date ("2026-11-03"). */
 export function dayNoOf(day: string): number {
@@ -403,12 +409,26 @@ export function levelMoment(
   return null;
 }
 
-/** The centre's class hours (owner: Settings → Class hours); none set = no class shown. */
-export async function hoursOf(ctx: QueryCtx): Promise<Hours> {
+/**
+ * Every grade's class hours (owner: Settings → Class hours; meta "classHours" = { "6": Hours, … }). The first evening
+ * they were one list for every grade: such a list still counts for each grade until that grade gets its own.
+ */
+export async function gradeHoursOf(ctx: QueryCtx): Promise<GradeHours> {
   const row = await ctx.db
     .query("meta")
     .withIndex("by_key", (q) => q.eq("key", "classHours"))
     .first();
-  const v = row?.value as Hours | undefined;
-  return Array.isArray(v) && v.length === 7 ? v : NO_HOURS;
+  const v = row?.value as unknown;
+  const out: GradeHours = {};
+  for (const g of HOUR_GRADES) {
+    const x = isHours(v) ? v : v && typeof v === "object" ? (v as Record<string, unknown>)[String(g)] : undefined;
+    out[String(g)] = isHours(x) ? x : NO_HOURS;
+  }
+  return out;
+}
+
+/** His grade's class hours; none set = no class shown. */
+export async function hoursOf(ctx: QueryCtx, grade: number | null | undefined): Promise<Hours> {
+  if (typeof grade !== "number") return NO_HOURS;
+  return (await gradeHoursOf(ctx))[String(grade)] ?? NO_HOURS;
 }

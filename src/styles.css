@@ -10002,7 +10002,10 @@ body.tm-on .toasts {
   color: var(--ink-2);
 }
 
-/* ---------- Settings → Class hours (3 Nov 2026, src/classHours.tsx) ---------- */
+/* ---------- Settings → Class hours (3 Nov 2026, src/classHours.tsx): each grade its own ---------- */
+.settings-body.ch .grade-row {
+  margin: 12px 0;
+}
 .plain-list.ch-list > li {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

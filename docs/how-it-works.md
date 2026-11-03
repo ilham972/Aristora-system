@@ -902,11 +902,15 @@ learning app of our education institute"): one profile, his class times, what he
     the **trophies** (`trophiesOf`, server: his first Level, 3 / 7 / 30 days in a row (his best run), a Level with
     every mark, five of them, a whole Stage (one Level of it in the app at least), 100 and 300 XP in one week; won
     ones gold, the rest pale with a lock and how to win them); this phone: the children, the sound.
-- **Class hours** (Settings → Class hours, the owner; his answer, 3 Nov 2026: "you set the hours"): when the class is
-  open each weekday (`families.setClassHours`, meta `classHours`: minutes after midnight, Sri Lanka). The family app's
-  Home shows them as his week and "next class". The days he usually comes are worked out from his attendance: a
-  weekday he came on in at least 2 of the last 4 weeks (`usualDays`); nothing to type. `family.classes` and
-  `family.day` read only what the class already records (attendance, calls to a teacher, workbook levels).
+- **Class hours** (Settings → Class hours, the owner; his answers, 3 Nov 2026: "you set the hours", then "different
+  grades have different time schedules"): **each grade its own** (the grade row 6–11, its days with a time each, the
+  number under a grade = its class days; Save saves that grade only; what he typed for another grade waits until he
+  saves it). `families.setClassHours({ grade, hours })`, meta `classHours` = `{ "6": [7 days], … }` (minutes after
+  midnight, Sri Lanka; null = no class). The first evening it was one list for every grade: such a list still counts
+  for each grade until that grade gets its own (`gradeHoursOf`). The family app's Home shows a student **his grade's**
+  hours as his week and "next class" (`hoursOf(ctx, grade)`). The days he usually comes are worked out from his
+  attendance: a weekday he came on in at least 2 of the last 4 weeks (`usualDays`); nothing to type. `family.classes`
+  and `family.day` read only what the class already records (attendance, calls to a teacher, workbook levels).
 - **Two children on one phone** (his ask: parents with two children). Each child = one family key (`familyDevices`
   row); the phone keeps the list (`aristora.family.accounts`, the one on screen `aristora.family.current`) and sends
   the key of the child on screen. Everything kept on the phone is kept per child (`keep()` = `aristora.family.<id>.…`:

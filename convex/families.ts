@@ -6,8 +6,8 @@
 //   setCode     -> his family app code (4 digits, made on the teacher's phone); with his index number he signs in.
 //   answers     -> what the phone accepts for each question of a workbook (teachers check it once per unit).
 //   feedback, feedbackNew, feedbackSeen -> what students send from the family app (Settings → Feedback, 3 Nov 2026).
-//   classHours, setClassHours -> the centre's class hours per weekday (Settings → Class hours, owner; 3 Nov 2026): the
-//                  family app's schedule.
+//   classHours, setClassHours -> each grade's class hours per weekday (Settings → Class hours, owner; 3 Nov 2026):
+//                  the family app's schedule (a student sees his grade's).
 // Owner, or a teacher with Students (Feedback: the owner, or a teacher with Feedback). Family phones can't call any of
 // these (viewer / actor).
 
@@ -15,7 +15,7 @@ import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import { actor, FAMILY_LINK_MS, viewer } from "./lib/auth";
-import { codeRow, giveIndex, hoursOf, weakCode, type Hours } from "./lib/family";
+import { codeRow, giveIndex, gradeHoursOf, HOUR_GRADES, weakCode, type GradeHours } from "./lib/family";
 import { asMaster, bookFor, cleanBy, fail, getStudent, keyRow, log } from "./lib/backend";
 import { allPhone, phoneKey, phoneShare, wantWords } from "./lib/phone";
 
@@ -224,32 +224,35 @@ export const feedbackSeen = mutation({
   },
 });
 
-/** The centre's class hours, Monday first (minutes after midnight, Sri Lanka; null = no class that day). */
+/** Every grade's class hours ("6"…"11"), Monday first (minutes after midnight, Sri Lanka; null = no class that day). */
 export const classHours = query({
   args: { token },
-  handler: async (ctx, args): Promise<Hours> => {
+  handler: async (ctx, args): Promise<GradeHours> => {
     await viewer(ctx, args.token, "owner");
-    return await hoursOf(ctx);
+    return await gradeHoursOf(ctx);
   },
 });
 
-/** The owner sets the class hours (his answer, 3 Nov 2026): the family app shows them as the class schedule. */
+/** The owner sets one grade's class hours (his answers, 3 Nov 2026: he sets them; each grade has its own times). */
 export const setClassHours = mutation({
-  args: { token, hours: v.array(v.union(v.null(), v.object({ from: v.number(), to: v.number() }))) },
+  args: { token, grade: v.number(), hours: v.array(v.union(v.null(), v.object({ from: v.number(), to: v.number() }))) },
   handler: async (ctx, args) => {
     await actor(ctx, args.token, ["owner"]);
+    if (!HOUR_GRADES.includes(args.grade)) fail("Class hours are per grade, 6 to 11.");
     if (args.hours.length !== 7) fail("Seven days, Monday first.");
     for (const h of args.hours) {
       if (h && !(Number.isInteger(h.from) && Number.isInteger(h.to) && h.from >= 0 && h.to <= 24 * 60 && h.from < h.to)) {
         fail("Each day's class must start before it ends.");
       }
     }
+    // The other grades keep theirs (a list kept for every grade the first evening becomes each grade's own).
+    const value = { ...(await gradeHoursOf(ctx)), [String(args.grade)]: args.hours };
     const row = await ctx.db
       .query("meta")
       .withIndex("by_key", (q) => q.eq("key", "classHours"))
       .first();
-    if (row) await ctx.db.patch(row._id, { value: args.hours });
-    else await ctx.db.insert("meta", { key: "classHours", value: args.hours });
+    if (row) await ctx.db.patch(row._id, { value });
+    else await ctx.db.insert("meta", { key: "classHours", value });
     return true;
   },
 });
