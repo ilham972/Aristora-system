@@ -913,6 +913,12 @@ learning app of our education institute"): one profile, his class times, what he
     one), the question switch, "Stage 3 · Level 4", Check; the next question slides in, each key gives the answer a
     small push;
     the question strip, one question at a time, his own pad (numbers, or the n pad), Check once (review first).
+    A box shows a unit after his number when the answer has one ("63 %", "? cm²", "? h" "? min": printed, never typed)
+    and a ratio's ":" between its boxes. **A question only the teacher marks** (no box): "இதைத் தாளில் செய்: உன் ஆசிரியர்
+    வகுப்பில் திருத்துவார்", every key pale but → (a tap says why: before 4 Nov 2026 the keys simply did nothing, and a
+    student thought the app was broken). **He comes back to where he left** (his ask, 4 Nov 2026): the question he was
+    on is kept per level on the phone (`spot.<unit>.<n>`, per child, cleared at Check) and the level opens there, its
+    chip in view; a level begun before that opens on his first empty box. His typed answers were already kept.
     **The question switch** (👁, his voice note: a new student has no workbook yet): off = only the boxes (paper in
     hand); on = each question as printed above its boxes (`family.questions`: the level's questions and the book's CSS
     once per Stage, kept with the level for no signal; drawn in a shadow root by `src/questionView.ts`, shared with the
@@ -1002,9 +1008,23 @@ learning app of our education institute"): one profile, his class times, what he
   there, the next after a finished one); Grade 10 and 11: **O/L map** (above). Books → a workbook: how much the phone marks and exactly what it accepts per
   question (`PhoneAnswers`, `families.answers`).
 - The server marks with the uploaded answer keys (`convex/lib/phone.ts`): numbers, several numbers, answers in n (same
-  values for n = 1..7), labelled answers (x = 52), "also accepted" notes. Names, yes/no with a reason, "show that",
-  drawings and anything unclear stay with the corrector (a wrong ✗ on a right answer is worse). The answers never reach
-  the phone (it gets only each answer's shape). A box he skipped goes as "" (✗).
+  values for n = 1..7), labelled answers (x = 52), "also accepted" notes. Since 4 Nov 2026 (his screenshot: "0.25 as a
+  percentage" was the teacher's, so whole Percentages Stages were): a number with its unit (25%, 45°, −3 °C, 12 cm,
+  24 cm², 250 ml; the unit inside the bold or just after it, "**25**%"), several units in order (2 h 30 min, 3 kg 250
+  g, 3 மணி 20 நிமிடம்), ratios in order (2 : 3, "**2** : **3**"), points as x then y ((2, 3), P(4, 0)) and one set of
+  numbers in any order ({1, 2, 3}, A = {…}). He types only the numbers. A one-letter unit needs a space ("5 m" = 5
+  metres; "5m" stays an answer in m: before, "5 m" was read as an answer in m and his 5 got ✗). Names, yes/no with a
+  reason, "show that", drawings, letters in a set, two sets, clock times with a.m./p.m. and anything unclear stay with
+  the corrector (a wrong ✗ on a right answer is worse). The answers never reach the phone (it gets only each answer's
+  shape, its unit and a ratio's ":"). A box he skipped goes as "" (✗). Settings → Books → a workbook → "See what the
+  phone accepts" lists each answer as the key writes it ("2 : 3", "1 h 45 min", "{3, 6, 9} (any order)").
+- **What he typed is kept** (4 Nov 2026, his idea: "show the wrong answer most students put"): every Check saves a row
+  in `familyAnswers` (student, unit, level, time; each question with boxes: his answers as typed and which boxes were
+  right). Nothing reads it yet; after a few weeks it gives each question's most common wrong answers (a hint after
+  Check, Evaluation's groups: next, ask him). It goes when the student is wiped (demo, practice) and moves with a tute
+  (`moveTute`). His chips idea (tap one of four for every answer) was turned down with him: guessing pays XP, the exam
+  gives a blank line, the answer would be on the screen, and chips hide the mistakes nobody predicted. Chips stay for
+  names only (next on the list).
 - A level checked at home is a marked level with ⌂ (`lv.home`): Evaluation and Theory see its lost marks at once.
   Correction: ⌂ on his name and the level; it opens with the phone's marks: **Checked** (`workbook.homeChecked`), or
   change a mark / mark what the phone left (that checks it too, `lv.hc`).

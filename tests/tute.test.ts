@@ -436,6 +436,8 @@ describe("An O/L tute belongs in OL (his Constructions on Grade 11, 3 Nov 2026)"
       await ctx.db.insert("drafts", { studentId: nila, unitId: g, level: 2, q: { "7": { g: 5 } }, updatedAt: now });
       const owner = (await ctx.db.query("users").first())!;
       await ctx.db.insert("claims", { studentId: nila, unitId: g, userId: owner._id, name: "Owner", at: now, seenAt: now });
+      // What Nila typed at home in its workbook.
+      await ctx.db.insert("familyAnswers", { studentId: nila, unitId: g, n: 1, at: now, qs: [{ q: 6, a: ["5"], ok: [[false]] }] });
       return await ctx.db.insert("calls", { studentId: aqeeth, room: "theory", kind: "theory", status: "requested", group: "A", section: "A", unitId: g, stage: "fighter", createdAt: now });
     });
 
@@ -456,6 +458,7 @@ describe("An O/L tute belongs in OL (his Constructions on Grade 11, 3 Nov 2026)"
         levels: rows.find((p) => p.studentId === nila && p.unitId === ol)?.m?.lv,
         given: (await ctx.db.query("handouts").collect()).map((h) => [h.unitId, h.stage]),
         drafts: (await ctx.db.query("drafts").collect()).map((d) => d.unitId),
+        typed: (await ctx.db.query("familyAnswers").collect()).map((d) => d.unitId),
         claims: (await ctx.db.query("claims").collect()).length,
         call: (await ctx.db.get(call))!.unitId,
         line: (await ctx.db.query("events").collect()).filter((e) => e.kind === "book-move").map((e) => e.value),
@@ -468,6 +471,7 @@ describe("An O/L tute belongs in OL (his Constructions on Grade 11, 3 Nov 2026)"
     expect(after.levels).toEqual({ "1": { done: 1, fixed: 1, got: 7 } });
     expect(after.given).toEqual([[ol, "master"]]);
     expect(after.drafts).toEqual([ol]);
+    expect(after.typed).toEqual([ol]);
     expect(after.claims).toBe(0); // the corrector's phone takes the paper again on its next ping
     expect(after.call).toBe(ol);
     expect(after.line).toEqual(["G11-U23 Constructions → OL-U49 Constructions, 3 students' work"]);

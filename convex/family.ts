@@ -327,6 +327,7 @@ export const check = mutation({
 
     const results: FamilyResult[] = [];
     const rows: Record<string, MQ> = {};
+    const answers: Doc<"familyAnswers">["qs"] = [];
     let got = 0;
     let phoneMax = 0;
     const teacher: number[] = [];
@@ -336,6 +337,7 @@ export const check = mutation({
       const a = (typed.get(q) ?? []).slice(0, boxCount(k));
       const r = markQuestion(k, a);
       results.push({ q, max: k.max, ok: r.ok, got: r.got, phoneGot: r.phoneGot });
+      if (boxCount(k)) answers.push({ q, a: Array.from({ length: boxCount(k) }, (_, i) => a[i] ?? ""), ok: r.ok });
       if (r.got === null) {
         teacher.push(q);
         continue;
@@ -348,6 +350,8 @@ export const check = mutation({
     m.lv[String(l.n)] = { done: now, fixed: now, by: "home", got, home: now };
     markBefore(m, data, l.n, now);
     await ctx.db.patch(progress._id, { m, updatedAt: now });
+    // What he typed, kept for the most common wrong answers per question (nothing reads it yet).
+    if (answers.length) await ctx.db.insert("familyAnswers", { studentId: s._id, unitId: unit._id, n: l.n, at: now, qs: answers });
     await log(ctx, null, now, {
       kind: "level-home",
       studentId: s._id,

@@ -2,9 +2,11 @@
 // the teachers see; uploaded with the workbook, nothing else to upload).
 // - The key is written for people ("x = **52**, y = **48**", "21 (22 also OK)", working before the **final answer**).
 //   This reads only what it is sure of: a number, several numbers, an answer in n (2n − 1, n², n(n + 1)/2), and
-//   labelled ones (x = 52, A = 18, i → 5n). Everything else stays with the corrector: names (of a pattern),
-//   yes/no with a reason, "show that", drawings, and anything unclear. A wrong ✗ on a right answer is worse than
-//   leaving a question to the teacher.
+//   labelled ones (x = 52, A = 18, i → 5n). Since 4 Nov 2026 also a number with its unit (25%, 45°, 12 cm, 24 cm²:
+//   he types the number, the unit is printed after his box), several units (2 h 30 min, 3 kg 250 g), ratios (2 : 3),
+//   points ((2, 3): x then y) and sets ({1, 2, 3}, any order). Everything else stays with the corrector: names (of a
+//   pattern), yes/no with a reason, "show that", drawings, and anything unclear. A wrong ✗ on a right answer is worse
+//   than leaving a question to the teacher.
 // - The answers stay on the server: a phone gets only the shape of each answer (how many boxes, a number or an
 //   answer in n), never the answer (`formOf`). Marking happens on the server (`markParts`).
 // - An answer in n is right when it gives the same value for n = 1 … 7 (n + n − 1 is as good as 2n − 1).
@@ -15,15 +17,22 @@ import type { KeyAnswer } from "./key";
 /** A fraction, always reduced, denominator > 0. */
 export type Rat = [number, number];
 
-/** What the phone shows for one answer box: a number pad, or a pad with the letter (n). */
-export type Box = { k: "num"; l?: string } | { k: "expr"; v: string; l?: string };
+/**
+ * What the phone shows for one answer box: a number pad, or a pad with the letter (n). l = a label in the box ("x =",
+ * "y"), u = a unit printed after his number ("%", "°", "cm²", "h"; never typed), j = a sign between this box and the
+ * one before it (":" of a ratio).
+ */
+export type Box = ({ k: "num" } | { k: "expr"; v: string }) & { l?: string; u?: string; j?: string };
 /** One part of a question on the phone: its label ("ii", "" for a short question), marks, boxes (null = teacher). */
 export type FormPart = { p: string; m: number; boxes: Box[] | null };
 /** One question on the phone: no answers in it. */
 export type FormQ = { q: number; max: number; parts: FormPart[] };
 
-/** One box with its answer (server only). t = the answer as the key writes it (for the teachers' list). */
-export type Want = { box: Box; t: string } & ({ ok: Rat[] } | { vals: Rat[] });
+/**
+ * One box with its answer (server only). t = the answer as the key writes it (for the teachers' list). An answer of
+ * several boxes ("2 : 3", "2 h 30 min") is listed once: its first box carries the words, the others are `cont`.
+ */
+export type Want = { box: Box; t: string; words?: string; cont?: true } & ({ ok: Rat[] } | { vals: Rat[] });
 export type KeyPart = { p: string; m: number; want: Want[] | null; anyOrder: boolean };
 export type KeyQ = { q: number; max: number; parts: KeyPart[] };
 
@@ -77,6 +86,9 @@ export function normalize(s: string): string {
     .replace(/²/g, "^2")
     .replace(/³/g, "^3")
     .replace(/(\d?)([½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞])/g, (_, d: string, f: string) => (d ? `${d} ${VULGAR[f]}` : VULGAR[f]))
+    .replace(/[º˚]/g, "°")
+    .replace(/°\s+C\b/g, "°C")
+    .replace(/∶/g, ":")
     .replace(/ /g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -256,14 +268,14 @@ const TAMIL = /[஀-௿]/;
 /** Answers that start with yes / no / true / false / "it comes" / "it doesn't": they need a reason (the teacher's). */
 const YES_NO = /^(ஆம்|இல்லை|வராது|வரும்|உண்மை|பொய்|சரி|தவறு|yes|no)\b|^(ஆம்|இல்லை|வராது|வரும்|உண்மை|பொய்)/i;
 
-/** Split at commas that are not inside brackets. */
+/** Split at commas that are not inside brackets or braces. */
 function topSplit(s: string, sep: string): string[] {
   const out: string[] = [];
   let depth = 0;
   let cur = "";
   for (const c of s) {
-    if (c === "(") depth++;
-    if (c === ")") depth = Math.max(0, depth - 1);
+    if (c === "(" || c === "{") depth++;
+    if (c === ")" || c === "}") depth = Math.max(0, depth - 1);
     if (c === sep && depth === 0) {
       out.push(cur);
       cur = "";
@@ -324,19 +336,138 @@ function wantOf(text: string, label: string | undefined, also: Rat[]): Want | nu
   return { box: { k: "expr", v: e.vars[0], ...(label ? { l: label } : {}) }, t, vals };
 }
 
+// ---- Units, ratios, points and sets (4 Nov 2026: "0.25 as a percentage" left whole Percentages Stages to the
+// teacher: "25%" was not a number, so the phone gave no box) ----
+
+/** A number as normalize() leaves it: 15, -40, 2.5, .5, 3/4, 2 1/3. */
+const NUM = String.raw`-?(?:\d+ \d+\/\d+|\d+\/\d+|\d*\.\d+|\d+)`;
+
+/**
+ * Units a key may write after a number (as normalize() leaves them: ² is ^2). The phone prints the unit after his box
+ * and he types only the number. A one-letter unit needs a space before it: "5 m" is 5 metres, "5m" stays an answer in m.
+ */
+const UNIT_WORDS = [
+  ...["%", "°C", "°", "mm^2", "cm^2", "m^2", "km^2", "mm^3", "cm^3", "m^3", "mm", "cm", "m", "km"],
+  ...["mg", "g", "kg", "ml", "mL", "l", "L", "ha"],
+  ...["h", "hr", "hrs", "hour", "hours", "min", "mins", "minute", "minutes", "s", "sec", "secs", "second", "seconds"],
+  ...["day", "days", "week", "weeks", "month", "months", "year", "years"],
+  ...["மணித்தியாலம்", "மணித்தியாலங்கள்", "மணி", "நிமிடம்", "நிமிடங்கள்", "செக்கன்", "செக்கன்கள்", "நாள்", "நாட்கள்"],
+  ...["கிழமை", "கிழமைகள்", "வாரம்", "வாரங்கள்", "மாதம்", "மாதங்கள்", "வருடம்", "வருடங்கள்", "ஆண்டு", "ஆண்டுகள்"],
+];
+const UNIT_RE = [...UNIT_WORDS]
+  .sort((a, b) => b.length - a.length)
+  .map((u) => u.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+  .join("|");
+/** One number and its unit at the start of a text ("2 h" of "2 h 30 min"). */
+const MEASURE = new RegExp(`^(${NUM})( ?)(${UNIT_RE})(?= |$)`);
+/** A unit just after a bold number ("**25**%", "**12** cm"). */
+const UNIT_AFTER = new RegExp(`^ ?(${UNIT_RE})(?![\\p{L}\\p{M}\\p{N}])`, "u");
+/** A point: (2, 3) or A(2, 3). */
+const POINT = new RegExp(`^(?:[A-Z] ?)?\\( ?(${NUM}) ?, ?(${NUM}) ?\\)$`);
+
+const showUnit = (u: string) => u.replace(/\^2/g, "²").replace(/\^3/g, "³");
+/** "25%", "45°", "12 cm": the sign sticks to the number, a word unit has a space. */
+const withUnit = (n: string, u: string) => (/^[%°]/.test(u) ? `${n}${u}` : `${n} ${u}`);
+
+/** Every number with its unit, covering the whole text ("2 h 30 min"), or null. */
+function measures(s: string): { n: string; u: string }[] | null {
+  const out: { n: string; u: string }[] = [];
+  let rest = s.trim();
+  while (rest) {
+    const m = MEASURE.exec(rest);
+    if (!m) return null;
+    if (!m[2] && /^[a-z]$/i.test(m[3])) return null; // "5m": an answer in m
+    out.push({ n: m[1], u: showUnit(m[3]) });
+    rest = rest.slice(m[0].length).trim();
+  }
+  return out.length ? out : null;
+}
+
+/**
+ * One written answer as boxes: "one" box (a number, with its unit or not, or an answer in n), several boxes in their
+ * order ("fixed": a ratio, a point, 2 h 30 min) or a "set" (any order).
+ */
+type Item = { want: Want[]; kind: "one" | "fixed" | "set" };
+
+/** Several boxes from one written answer: the first carries the words for the teachers' list. */
+function several(written: string, label: string | undefined, boxes: { r: Rat; t: string; l?: string; u?: string; j?: string }[], kind: Item["kind"]): Item {
+  return {
+    kind,
+    want: boxes.map((b, i) => {
+      const l = i === 0 && label ? (b.l ? `${label} ${b.l}` : label) : b.l;
+      const box: Box = { k: "num", ...(l ? { l } : {}), ...(b.u ? { u: b.u } : {}), ...(b.j ? { j: b.j } : {}) };
+      return i === 0 ? { box, t: b.t, ok: [b.r], words: `${label ? `${label} ` : ""}${written}` } : { box, t: b.t, ok: [b.r], cont: true as const };
+    }),
+  };
+}
+
+/** One answer as the key writes it (one item of a list), as boxes; null = the teacher marks it. */
+function itemOf(raw: string, label: string | undefined, also: Rat[]): Item | null {
+  const written = raw.trim();
+  const text = normalize(written);
+  const nums = (xs: string[]): Rat[] | null => {
+    const r = xs.map((x) => parseNum(x));
+    return r.every((x): x is Rat => x !== null) ? r : null;
+  };
+  // A set: {1, 2, 3}, its numbers in any order.
+  const set = /^\{(.*)\}$/.exec(text);
+  if (set) {
+    const xs = topSplit(set[1], ",");
+    const r = set[1].trim() ? nums(xs) : null;
+    return r ? several(written, label, r.map((x, i) => ({ r: x, t: xs[i] })), "set") : null;
+  }
+  // A point: (2, 3) or A(2, 3), x then y.
+  const pt = POINT.exec(text);
+  if (pt) {
+    const r = nums([pt[1], pt[2]]);
+    return r ? several(written, label, [{ r: r[0], t: pt[1], l: "x" }, { r: r[1], t: pt[2], l: "y" }], "fixed") : null;
+  }
+  // A ratio: 2 : 3 (: 5), in its order.
+  if (text.includes(":")) {
+    const xs = text.split(":").map((x) => x.trim());
+    const r = xs.length >= 2 ? nums(xs) : null;
+    return r ? several(written, label, r.map((x, i) => ({ r: x, t: xs[i], ...(i ? { j: ":" } : {}) })), "fixed") : null;
+  }
+  // A number with its unit (25%, 45°, 12 cm), or several (2 h 30 min, 3 kg 250 g).
+  for (const s of new Set([text, bare(text)])) {
+    const ms = measures(s);
+    const r = ms && nums(ms.map((m) => m.n));
+    if (!ms || !r) continue;
+    if (ms.length > 1) return several(written, label, ms.map((m, i) => ({ r: r[i], t: m.n, u: m.u })), "fixed");
+    const box: Box = { k: "num", ...(label ? { l: label } : {}), u: ms[0].u };
+    return { kind: "one", want: [{ box, t: s === text ? written : withUnit(ms[0].n, ms[0].u), ok: [r[0], ...also.filter((a) => !same(a, r[0]))] }] };
+  }
+  // One box as before: a number, or an answer in one letter.
+  const w = wantOf(written, label, also);
+  return w ? { kind: "one", want: [w] } : null;
+}
+
 /** "x = 52, y = 48", "A = 18, B = 7", "i → 4n − 3, ii → 5n": every item labelled with a letter or i, ii, iii. */
-function labelled(s: string): Want[] | null {
+function labelled(s: string): Item[] | null {
   const items = topSplit(s, ",");
   if (items.length < 1) return null;
-  const out: Want[] = [];
+  const out: Item[] = [];
   for (const it of items) {
     const m = /^([ivx]{1,4}|[A-Za-z])\s*(=|→|->)\s*(.+)$/.exec(it);
     if (!m) return null;
-    const w = wantOf(m[3], `${m[1]} ${m[2] === "=" ? "=" : "→"}`, []);
-    if (!w) return null;
-    out.push(w);
+    const item = itemOf(m[3], `${m[1]} ${m[2] === "=" ? "=" : "→"}`, []);
+    if (!item) return null;
+    out.push(item);
   }
   return out;
+}
+
+/**
+ * A part's boxes from its items, and whether they may come in any order: one set always; plain numbers of one unit
+ * when `free` (no labels, no ratio); never a ratio, a point or 2 h 30 min. Two sets, or a set with more: the teacher.
+ */
+function partOf(items: Item[], free: boolean): { want: Want[]; anyOrder: boolean } | null {
+  const want = items.flatMap((x) => x.want);
+  const sets = items.filter((x) => x.kind === "set").length;
+  if (!want.length || (sets && items.length > 1)) return null;
+  if (sets) return { want, anyOrder: want.length > 1 };
+  const loose = free && want.length > 1 && items.every((x) => x.kind === "one");
+  return { want, anyOrder: loose && want.every((w) => w.box.k === "num" && w.box.u === want[0].box.u) };
 }
 
 /** The boxes of one answer as the key writes it, or null: the teacher marks it. */
@@ -348,36 +479,53 @@ export function wantsOf(raw: string): { want: Want[]; anyOrder: boolean } | null
   if (text.includes("**")) {
     const runs = text.split("**");
     if (runs.length % 2 === 0) return null; // an unclosed bold
-    const out: Want[] = [];
-    let unlabelled = 0;
+    const items: Item[] = [];
+    let ratio = false;
     for (let i = 1; i < runs.length; i += 2) {
       const before = runs[i - 1];
       const lab = /(?:^|[\s,;:→])([A-Za-z])\s*=\s*$/.exec(before);
-      const items = topSplit(runs[i], ",");
-      for (const it of items) {
-        const w = wantOf(it, items.length === 1 && lab ? `${lab[1]} =` : undefined, []);
-        if (!w) return null;
-        if (!w.box.l) unlabelled++;
-        out.push(w);
+      const parts = topSplit(runs[i], ",");
+      for (const it of parts) {
+        const item = itemOf(it, parts.length === 1 && lab ? `${lab[1]} =` : undefined, []);
+        if (!item) return null;
+        items.push(item);
+      }
+      const last = items[items.length - 1];
+      const one = parts.length === 1 && last.kind === "one" && last.want[0].box.k === "num" ? last.want[0] : null;
+      if (!one) continue;
+      // "**2** : **3**": a ratio written as bold numbers, in its order.
+      if (i > 1 && before.trim() === ":") {
+        one.box.j = ":";
+        ratio = true;
+      }
+      // "**25**%", "**12** cm": the unit just after the bold number.
+      const u = UNIT_AFTER.exec(runs[i + 1] ?? "");
+      if (u && !one.box.u) {
+        one.box.u = showUnit(u[1]);
+        one.t = withUnit(one.t, one.box.u);
       }
     }
-    return out.length ? { want: out, anyOrder: unlabelled === out.length && out.length > 1 && out.every((w) => w.box.k === "num") } : null;
+    const unlabelled = items.every((x) => x.want.every((w) => !w.box.l));
+    return partOf(items, unlabelled && !ratio);
   }
-  // No bold: the whole text is the answer, and must look like one.
+  // No bold: the whole text is the answer, and must look like one. A point or a set first: notes() would take their
+  // brackets for a note.
+  const whole = itemOf(text, undefined, []);
+  if (whole && whole.kind !== "one") return partOf([whole], false);
   const { text: t, also } = notes(text);
   if (!t || t.includes(" · ") || t.includes(";")) return null;
   if (/=|→|->/.test(t)) {
     const l = labelled(t);
-    return l ? { want: l, anyOrder: false } : null;
+    return l ? partOf(l, false) : null;
   }
-  const items = topSplit(t, ",");
-  const out: Want[] = [];
-  for (const it of items) {
-    const w = wantOf(it, undefined, items.length === 1 ? also : []);
-    if (!w) return null;
-    out.push(w);
+  const parts = topSplit(t, ",");
+  const items: Item[] = [];
+  for (const it of parts) {
+    const item = itemOf(it, undefined, parts.length === 1 ? also : []);
+    if (!item) return null;
+    items.push(item);
   }
-  return { want: out, anyOrder: out.length > 1 && out.every((w) => w.box.k === "num") };
+  return partOf(items, true);
 }
 
 /**
@@ -500,8 +648,11 @@ export function markQuestion(k: KeyQ, typed: string[]): { ok: (boolean[] | null)
 export function wantWords(p: KeyPart): string {
   if (!p.want) return "teacher";
   const one = (w: Want) => {
+    if (w.words) return w.words; // "2 : 3", "(2, 3)", "2 h 30 min": its boxes listed once
     const also = "ok" in w && w.ok.length > 1 ? ` (or ${w.ok.slice(1).map(([n, d]) => (d === 1 ? String(n) : `${n}/${d}`)).join(", ")})` : "";
     return `${w.box.l ? `${w.box.l} ` : ""}${w.t}${also}`;
   };
-  return p.want.map(one).join(" · ") + (p.anyOrder ? " (any order)" : "");
+  // Answers apart with " · "; a bold ratio's numbers ("**2** : **3**") with their ":".
+  const shown = p.want.filter((w) => !w.cont);
+  return shown.map((w, i) => (i ? (w.box.j ? ` ${w.box.j} ` : " · ") : "") + one(w)).join("") + (p.anyOrder ? " (any order)" : "");
 }

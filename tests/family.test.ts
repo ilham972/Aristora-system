@@ -12,7 +12,8 @@ import { outOf } from "../convex/lib/book";
 import { slWeekStart } from "../convex/lib/day";
 import type { KeyAnswer } from "../convex/lib/key";
 import { computeMaster } from "../convex/lib/master";
-import { markPart, markQuestion, parseExpr, parseNum, phoneKey, phoneShare, wantsOf, type KeyPart } from "../convex/lib/phone";
+import { wipeStudent } from "../convex/lib/backend";
+import { markPart, markQuestion, parseExpr, parseNum, phoneKey, phoneShare, wantsOf, wantWords, type KeyPart } from "../convex/lib/phone";
 import schema from "../convex/schema";
 import { readWorkbookHtml } from "../src/workbookFile";
 import { addPerson, asOwner, asPhone } from "./helpers";
@@ -83,6 +84,41 @@ describe("what a phone can mark, read from the key", () => {
     ]) expect(wantsOf(raw), raw).toBeNull();
   });
 
+  test("units, ratios, points and sets: he types the numbers, the unit is printed after his box", () => {
+    const boxes = (raw: string) => wantsOf(raw)?.want.map((w) => w.box) ?? null;
+    expect(boxes("35%")).toEqual([{ k: "num", u: "%" }]);
+    expect(boxes("0.4 × 100 = **40%**")).toEqual([{ k: "num", u: "%" }]);
+    expect(boxes("0.4 × 100 = **40**%")).toEqual([{ k: "num", u: "%" }]);
+    expect(boxes("x = 35°, y = 55°")).toEqual([{ k: "num", l: "x =", u: "°" }, { k: "num", l: "y =", u: "°" }]);
+    expect(boxes("18 cm²")).toEqual([{ k: "num", u: "cm²" }]);
+    expect(boxes("7 m")).toEqual([{ k: "num", u: "m" }]); // 7 metres (it was an answer in m, and 7 was ✗)
+    expect(boxes("7m")).toEqual([{ k: "expr", v: "m" }]); // no space: still an answer in m
+    expect(boxes("−3 °C")).toEqual([{ k: "num", u: "°C" }]);
+    expect(boxes("12 சட்டகங்கள்")).toEqual([{ k: "num" }]); // a Tamil word after a number: as before
+    expect(boxes("1 h 45 min")).toEqual([{ k: "num", u: "h" }, { k: "num", u: "min" }]);
+    expect(boxes("2 kg 150 g")).toEqual([{ k: "num", u: "kg" }, { k: "num", u: "g" }]);
+    expect(boxes("3 மணி 20 நிமிடம்")).toEqual([{ k: "num", u: "மணி" }, { k: "num", u: "நிமிடம்" }]);
+    expect(boxes("4 : 7")).toEqual([{ k: "num" }, { k: "num", j: ":" }]);
+    expect(boxes("**4** : **7**")).toEqual([{ k: "num" }, { k: "num", j: ":" }]);
+    expect(boxes("(−1, 6)")).toEqual([{ k: "num", l: "x" }, { k: "num", l: "y" }]);
+    expect(boxes("P(4, 0)")).toEqual([{ k: "num", l: "x" }, { k: "num", l: "y" }]);
+    expect(boxes("{3, 6, 9}")).toEqual([{ k: "num" }, { k: "num" }, { k: "num" }]);
+    expect(wantsOf("A = {3, 6, 9}")!.anyOrder).toBe(true);
+    expect(wantsOf("4 : 7")!.anyOrder).toBe(false);
+    expect(wantsOf("12 cm, 15 cm")!.anyOrder).toBe(true);
+    expect(wantsOf("12 cm, 15 kg")!.anyOrder).toBe(false); // two units: each in its place
+    // The teachers' list shows each answer as the key writes it.
+    const words = (raw: string) => wantWords({ p: "", m: 2, ...wantsOf(raw)! });
+    expect(words("35%")).toBe("35%");
+    expect(words("0.4 × 100 = **40**%")).toBe("40%");
+    expect(words("**4** : **7**")).toBe("4 : 7");
+    expect(words("1 h 45 min")).toBe("1 h 45 min");
+    expect(words("P(4, 0)")).toBe("P(4, 0)");
+    expect(words("{3, 6, 9}")).toBe("{3, 6, 9} (any order)");
+    // Still the teacher's: letters in a set, two sets, a clock time with a.m., an empty set.
+    for (const raw of ["{p, q, r}", "A = {1, 2}, B = {3}", "10:30 a.m.", "{ }"]) expect(wantsOf(raw), raw).toBeNull();
+  });
+
   test("marking: all right = the part's marks; else its share; plain numbers in any order", () => {
     const part = (raw: string, m: number): KeyPart => ({ p: "", m, ...wantsOf(raw)! });
     expect(markPart(part("70, 85", 2), ["85", "70"])).toEqual({ ok: [true, true], got: 2 });
@@ -94,6 +130,14 @@ describe("what a phone can mark, read from the key", () => {
     expect(markPart(part("21 (22 உம் ஏற்கலாம்)", 2), ["22"])).toEqual({ ok: [true], got: 2 });
     expect(markPart(part("2 1/3", 2), ["7/3"])).toEqual({ ok: [true], got: 2 });
     expect(markPart(part("15", 2), [""])!.got).toBe(0);
+    expect(markPart(part("35%", 2), ["35"])).toEqual({ ok: [true], got: 2 }); // the % is printed: he types 35
+    expect(markPart(part("35%", 2), ["0.35"])).toEqual({ ok: [false], got: 0 });
+    expect(markPart(part("4 : 7", 2), ["7", "4"])).toEqual({ ok: [false, false], got: 0 }); // a ratio: in its order
+    expect(markPart(part("**4** : **7**", 2), ["7", "4"])!.got).toBe(0);
+    expect(markPart(part("(−1, 6)", 2), ["-1", "6"])).toEqual({ ok: [true, true], got: 2 });
+    expect(markPart(part("{3, 6, 9}", 3), ["9", "3", "6"])).toEqual({ ok: [true, true, true], got: 3 });
+    expect(markPart(part("1 h 45 min", 2), ["1", "45"])).toEqual({ ok: [true, true], got: 2 });
+    expect(markPart(part("7 m", 1), ["7"])).toEqual({ ok: [true], got: 1 });
   });
 
   test("a whole workbook: part marks must add up to the book's, else the teacher marks that question", () => {
@@ -359,7 +403,7 @@ describe("the family app on the server", () => {
     expect(lv.qs[8].parts[0].boxes).toEqual([{ k: "num" }, { k: "num" }]);
     expect(lv.qs[6].parts[0].boxes).toEqual([{ k: "expr", v: "n" }]);
     expect(lv.qs[9].parts[0].boxes).toBeNull(); // a name: the teacher marks it
-    expect(JSON.stringify(lv)).not.toMatch(/"(ok|vals|want|t)":/);
+    expect(JSON.stringify(lv)).not.toMatch(/"(ok|vals|want|t|words|cont)":/);
     await expect(fam().query(api.family.level, { unitId: u01, n: 2 })).rejects.toThrow(/in order/);
     await expect(fam().query(api.family.level, { unitId: u02, n: 1 })).rejects.toThrow(/locked/);
   });
@@ -388,6 +432,17 @@ describe("the family app on the server", () => {
     // The teachers' history names it.
     const line = await raw.run(async (ctx) => (await ctx.db.query("events").collect()).find((e) => e.kind === "level-home"));
     expect(line).toMatchObject({ name: "Hana K", unit: "G8-U01", value: "1 16/20" });
+    // What he typed is kept (his idea: the wrong answers most students put), with which boxes were right.
+    const typed = async () => await raw.run(async (ctx) => await ctx.db.query("familyAnswers").collect());
+    const saved = await typed();
+    expect(saved).toHaveLength(1);
+    expect(saved[0]).toMatchObject({ studentId: hana, unitId: u01, n: 1 });
+    expect(saved[0].qs.map((x) => x.q)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]); // Q10 is the teacher's: no boxes
+    expect(saved[0].qs.find((x) => x.q === 8)).toEqual({ q: 8, a: ["99"], ok: [[false]] });
+    expect(saved[0].qs.find((x) => x.q === 9)).toEqual({ q: 9, a: ["10", "9"], ok: [[true, true]] });
+    // It goes when the student goes.
+    await raw.run(async (ctx) => await wipeStudent(ctx, (await ctx.db.get(hana))!));
+    expect(await typed()).toHaveLength(0);
   });
 
   test("Correction checks it: Checked once she marked what the phone left; changing marks also checks it", async () => {

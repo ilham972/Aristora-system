@@ -212,6 +212,11 @@ EOF
   "name y > 0" check passed while the name sat under the top bar).
 - A sheet over a sheet (sign out over Attendance): `body.locked` is counted (`openSheets`), never removed by the inner
   one. A toast can cover a sheet's title: Correction clears toasts when a sheet opens.
+- **A key's answer shapes** (`convex/lib/phone.ts`, 4 Nov 2026): a new unit or shape goes in `UNIT_WORDS` (normalized
+  form: `cm^2`, longest first is automatic) with a test in `tests/family.test.ts`; a one-letter unit only with a space
+  before it (else "5m", an answer in m, breaks). `notes()` drops any bracket with a comma, so a whole-answer point or
+  set is read before it (`itemOf` on the whole text). Playwright won't click an `aria-disabled` key (the pale pad):
+  `click({ force: true })`, as a finger would.
 - **The family app keeps everything per child** (3 Nov 2026: several children on one phone): use `keep()` from
   `src/family/net.ts` (it prefixes the child's id), never `localStorage` straight; the sound switch is the one
   phone-wide setting. A request answered after the parent switched child is dropped (`loadMe` checks `current()`).

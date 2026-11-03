@@ -5,7 +5,10 @@
 //   kept per child; pale when the Stage's questions are not in the app yet.
 // - The reveal: his answers come back one question at a time, a bell for each right one that climbs higher with every
 //   one in a row, then the score, the XP, the flame, a trophy if he won one. A tap shows everything at once.
+// - A question only the teacher marks has no box: "do it on paper", the pad pale, → goes on (4 Nov 2026: a student
+//   tapped the pad there and nothing happened). A level opens again on the question he left (kept per level).
 
+import { Fragment } from "preact";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { FamilyLevel, FamilyMe, FamilyQuestions, FamilyResult } from "../../convex/family";
 import type { Trophy, World } from "../../convex/lib/family";
@@ -38,10 +41,26 @@ function boxesOf(form: FamilyLevel): { qi: number; bi: number; box: Box }[] {
   return out;
 }
 
+/**
+ * Where to open a level: the kept place if it still fits the level, else its first box. A level begun before places were
+ * kept (`typed` given): the first box he hasn't filled.
+ */
+export function spotIn(form: FamilyLevel, at: Spot, typed: Record<number, string[]> | null): Spot {
+  const all = boxesOf(form);
+  if (typed && Object.keys(typed).length) {
+    const gap = all.find((x) => !(typed[form.qs[x.qi].q]?.[x.bi] ?? "").trim());
+    if (gap) return { qi: gap.qi, bi: gap.bi };
+  }
+  if (at.qi < 0 || at.qi >= form.qs.length) return { qi: 0, bi: 0 };
+  const n = all.filter((x) => x.qi === at.qi).length;
+  return at.bi < 0 || (at.bi > 0 && at.bi >= n) ? { qi: at.qi, bi: 0 } : at;
+}
+
 const NUM_KEYS = ["7", "8", "9", "⌫", "4", "5", "6", "/", "1", "2", "3", "-", ".", "0", " ", "→"];
 const exprKeys = (v: string) => ["7", "8", "9", "⌫", "4", "5", "6", v, "1", "2", "3", "+", "0", "(", ")", "-", "*", "/", "^2", "→"];
 const KEY_LABEL: Record<string, string> = { "-": "−", "*": "×", "^2": "x²", " ": "␣", "⌫": "⌫", "→": "→" };
 
+/** His pad. On a question with no box (the teacher's) only → works: the other keys are pale. */
 function Pad(props: { box: Box | null; onKey: (k: string) => void; last: boolean }) {
   const keys = props.box?.k === "expr" ? exprKeys(props.box.v) : NUM_KEYS;
   return (
@@ -50,7 +69,8 @@ function Pad(props: { box: Box | null; onKey: (k: string) => void; last: boolean
         <button
           type="button"
           key={k}
-          class={`f-key${k === "→" ? " next" : ""}${k === "⌫" ? " del" : ""}${/^\d$/.test(k) ? "" : " op"}`}
+          aria-disabled={!props.box && k !== "→" ? "true" : undefined}
+          class={`f-key${k === "→" ? " next" : ""}${k === "⌫" ? " del" : ""}${/^\d$/.test(k) ? "" : " op"}${!props.box && k !== "→" ? " f-keyoff" : ""}`}
           aria-label={k === "→" ? (props.last ? "Done" : "Next") : k === "⌫" ? "Delete" : k === " " ? "Space" : k === "^2" ? "squared" : k}
           onClick={() => props.onKey(k)}
         >
@@ -116,9 +136,13 @@ export function Play(props: {
 }) {
   const formKey = `form.${props.world.unitId}.${props.n}`;
   const draftKey = `draft.${props.world.unitId}.${props.n}`;
+  const spotKey = `spot.${props.world.unitId}.${props.n}`;
   const [form, setForm] = useState<FamilyLevel | null>(() => keep<FamilyLevel>(formKey));
   const [typed, setTyped] = useState<Record<number, string[]>>(() => keep<Record<number, string[]>>(draftKey) ?? {});
-  const [at, setAt] = useState<Spot>({ qi: 0, bi: 0 });
+  // The question he left (his ask, 4 Nov 2026: "exactly that question want to focus and continue from that").
+  const [kept] = useState(() => keep<Spot>(spotKey));
+  const [at, setAt] = useState<Spot>(() => kept ?? { qi: 0, bi: 0 });
+  const placed = useRef(false);
   const [review, setReview] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -141,7 +165,17 @@ export function Play(props: {
   useEffect(() => {
     strip.current?.querySelector(".on")?.scrollIntoView({ block: "nearest", inline: "center" });
     if (showQ) card.current?.scrollIntoView({ block: "start", behavior: "smooth" });
-  }, [at.qi]);
+  }, [at.qi, !!form]);
+  // His place on this level: checked against the level when it comes (it may have changed), then kept as he moves.
+  useEffect(() => {
+    if (!form) return;
+    const fit = spotIn(form, at, kept || placed.current ? null : typed);
+    placed.current = true;
+    if (fit.qi !== at.qi || fit.bi !== at.bi) setAt(fit);
+  }, [form]);
+  useEffect(() => {
+    if (form) keep(spotKey, at);
+  }, [at.qi, at.bi, !!form]);
 
   const all = useMemo(() => (form ? boxesOf(form) : []), [form]);
   if (err) return <Oops text={err} onBack={props.onBack} />;
@@ -175,7 +209,7 @@ export function Play(props: {
     buzz(6);
     sound("key");
     if (k === "→") return goNext();
-    if (!box) return;
+    if (!box) return toast("இதைத் தாளில் செய்: உன் ஆசிரியர் வகுப்பில் திருத்துவார். → அடுத்த கேள்வி.");
     const cur = val(at.qi, at.bi);
     if (k === "⌫") return set(at.qi, at.bi, cur.endsWith("^2") ? cur.slice(0, -2) : cur.slice(0, -1));
     if (cur.length >= 30) return;
@@ -203,6 +237,7 @@ export function Play(props: {
       })) as Checked;
       keep(draftKey, null);
       keep(formKey, null);
+      keep(spotKey, null);
       keep(`qs.${form.unitId}.${form.n}`, null);
       props.onChecked(form, res, typed);
     } catch (e) {
@@ -317,24 +352,33 @@ export function Play(props: {
                       const i = bi++;
                       const v = val(at.qi, i);
                       return (
-                        <button
-                          type="button"
-                          key={i}
-                          class={`f-box${at.bi === i ? " on" : ""}${b.k === "expr" ? " x" : ""}${v ? " has" : ""}`}
-                          onClick={() => setAt({ qi: at.qi, bi: i })}
-                          aria-label={`${b.l ?? ""} answer ${i + 1}`}
-                        >
-                          {b.l && <span class="f-blabel">{pretty(b.l)}</span>}
-                          <span key={at.bi === i ? v.length : 0} class={v ? `f-bval${at.bi === i ? " typed" : ""}` : "f-bval empty"}>
-                            {v ? pretty(v) : "?"}
-                          </span>
-                        </button>
+                        <Fragment key={i}>
+                          {b.j && (
+                            <span class="f-bjoin" aria-hidden="true">
+                              {b.j}
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            class={`f-box${at.bi === i ? " on" : ""}${b.k === "expr" ? " x" : ""}${v ? " has" : ""}`}
+                            onClick={() => setAt({ qi: at.qi, bi: i })}
+                            aria-label={`${b.l ?? ""} answer ${i + 1}${b.u ? ` (${b.u})` : ""}`}
+                          >
+                            {b.l && <span class="f-blabel">{pretty(b.l)}</span>}
+                            <span class="f-bline">
+                              <span key={at.bi === i ? v.length : 0} class={v ? `f-bval${at.bi === i ? " typed" : ""}` : "f-bval empty"}>
+                                {v ? pretty(v) : "?"}
+                              </span>
+                              {b.u && <span class="f-bunit">{b.u}</span>}
+                            </span>
+                          </button>
+                        </Fragment>
                       );
                     })}
                   </div>
                 ) : (
                   <p class="f-teach">
-                    <Icon name="pen" size={16} /> இதை உன் ஆசிரியர் திருத்துவார்
+                    <Icon name="pen" size={16} /> இதைத் தாளில் செய்: உன் ஆசிரியர் வகுப்பில் திருத்துவார்
                   </p>
                 )}
               </div>

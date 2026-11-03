@@ -3649,3 +3649,25 @@ p {
     font-size: 24px;
   }
 }
+
+/* An answer box's unit after his number ("25 %", "12 cm"; printed, never typed) and a ratio's ":" between boxes (4 Nov
+   2026). The pad on a question only the teacher marks: every key pale but →. */
+.f-bline {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.f-bunit {
+  font: 800 15px/1 var(--display);
+  color: var(--ink3);
+  white-space: nowrap;
+}
+.f-bjoin {
+  align-self: center;
+  margin: 0 -2px;
+  font: 800 24px/1 var(--display);
+  color: var(--ink3);
+}
+.f-key.f-keyoff {
+  opacity: 0.35;
+}

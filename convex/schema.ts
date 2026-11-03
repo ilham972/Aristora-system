@@ -548,6 +548,21 @@ export default defineSchema({
     studentId: v.optional(v.id("students")),
     name: v.optional(v.string()),
   }).index("by_at", ["at"]),
+  /**
+   * What he typed at home, one row per Check (4 Nov 2026, his idea: "show the wrong answer most students put"): each
+   * question with boxes, his answers as typed and which boxes were right (per part; null = the teacher's part).
+   * Nothing reads it yet: after a few weeks it gives each question's most common wrong answers (a hint after Check,
+   * Evaluation's groups). It goes with the student (`wipeStudent`) and moves with a tute (`moveTute`).
+   */
+  familyAnswers: defineTable({
+    studentId: v.id("students"),
+    unitId: v.id("units"),
+    n: v.number(),
+    at: v.number(),
+    qs: v.array(v.object({ q: v.number(), a: v.array(v.string()), ok: v.array(v.union(v.array(v.boolean()), v.null())) })),
+  })
+    .index("by_unit", ["unitId", "at"])
+    .index("by_student", ["studentId", "at"]),
 
   /** Small settings: the data version (for one-time updates). */
   meta: defineTable({ key: v.string(), value: v.any() }).index("by_key", ["key"]),

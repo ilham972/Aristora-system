@@ -26,13 +26,18 @@ const modules = import.meta.glob("../../convex/**/*.ts");
 const SHOTS = process.env.SHOTS ?? resolve("test-results/shots");
 const size = (width: number, height: number) => ({ viewport: { width, height }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
 
-/** Fake answers in the shapes of his keys. Level 1 (Q1–10): the phone marks all; Level 2 (Q11–20): Q20 is a name. */
+/**
+ * Fake answers in the shapes of his keys. Level 1 (Q1–10): the phone marks all; Level 2 (Q11–20): Q20 is a name;
+ * Level 3 opens on a percentage (Q21: the % printed after the box), then a ratio (Q22) and a time (Q24).
+ */
 function fakeKey() {
   const out: { q: number; a?: string; parts?: { p: string; a: string; m: number }[] }[] = [];
+  const shapes: Record<number, string> = { 21: "63%", 22: "22 : 25", 24: "1 h 24 min" };
   for (let q = 1; q <= 52; q++) {
     const d = q % 10;
     const a =
-      d === 0 && q > 10 ? "சிறப்புப் பெயர்" : d === 9 ? `${q}, ${q + 1}` : d === 7 ? `${q}n − 1` : d === 3 ? `${q * 3} (${q * 3 + 1} உம் ஏற்கலாம்)` : String(q * 3);
+      shapes[q] ??
+      (d === 0 && q > 10 ? "சிறப்புப் பெயர்" : d === 9 ? `${q}, ${q + 1}` : d === 7 ? `${q}n − 1` : d === 3 ? `${q * 3} (${q * 3 + 1} உம் ஏற்கலாம்)` : String(q * 3));
     out.push({ q, a });
   }
   for (let q = 53; q <= 73; q++) out.push({ q, parts: [{ p: "i", a: `work = **${q}**`, m: outOf(BOOK.data, q)! }] });
@@ -189,13 +194,28 @@ test("the family app: join, a level on the pad, Check once, the reveal, XP and t
   // Next level from the reveal: Level 2 (Q20 is a name: the teacher marks it).
   await F.getByRole("button", { name: /Next: Level 2/ }).click();
   await contains(F.locator(".f-qn"), "Q11");
-  for (const a of [["3", "3"], ["3", "6"], ["3", "9"], ["4", "2"], ["4", "5"], ["4", "8"]]) await type(F, a);
+  for (const a of [["3", "3"], ["3", "6"], ["3", "9"]]) await type(F, a);
+  // She leaves after Q13 and comes back later: the level opens on Q14, where she left (his ask, 4 Nov 2026).
+  await contains(F.locator(".f-qn"), "Q14");
+  await F.getByRole("button", { name: "Back" }).click();
+  await playIs(F, "Level 2");
+  await F.locator(".f-lv.play").click();
+  await contains(F.locator(".f-qn"), "Q14");
+  await visible(F.locator(".f-qchip.on", { hasText: "14" }));
+  expect(await F.locator(".f-qchip.full").count()).toBe(3); // Q11–13 still typed
+  for (const a of [["4", "2"], ["4", "5"], ["4", "8"]]) await type(F, a);
   for (const k of ["1", "7", "n", "-", "1"]) await F.locator(".f-padkeys").getByRole("button", { name: k, exact: true }).click();
   await F.locator(".f-padkeys .f-key.next").click();
   await type(F, ["5", "4"]);
   await type(F, ["1", "9"]);
   await type(F, ["2", "0"]);
-  await contains(F.locator(".f-teach"), "ஆசிரியர்");
+  // Q20 is the teacher's: no box, the pad pale but → goes on; a key says why instead of doing nothing.
+  await contains(F.locator(".f-teach"), "தாளில்");
+  await visible(F.locator(".f-key.f-keyoff"));
+  await F.locator(".f-padkeys").getByRole("button", { name: "5", exact: true }).click({ force: true }); // aria-disabled, still a tap
+  await contains(F.locator(".f-toast"), "தாளில்");
+  await noSideScroll(F);
+  await shot(F, "fam03b-teacher-question");
   await F.locator(".f-padkeys .f-key.next").click();
   await contains(F.locator(".f-review"), "ஆசிரியர் திருத்துவார்");
   await F.locator(".f-review").getByRole("button", { name: "Check ✓" }).click();
@@ -241,8 +261,23 @@ test("the family app: join, a level on the pad, Check once, the reveal, XP and t
   await shot(S, "fam07b-stage-320");
   await S.locator(".f-lv.play").click();
   await contains(S.locator(".f-qn"), "Q21");
+  // A percentage: she types 63, the % is printed after her box.
+  await contains(S.locator(".f-box.on .f-bunit"), "%");
+  await S.locator(".f-padkeys").getByRole("button", { name: "6", exact: true }).click();
+  await S.locator(".f-padkeys").getByRole("button", { name: "3", exact: true }).click();
+  await contains(S.locator(".f-box.on .f-bval"), "63");
   await noSideScroll(S);
   await shot(S, "fam07-level-320");
+  // A ratio: two boxes with ":" between them; a time: hours and minutes.
+  await S.locator(".f-qchip", { hasText: "22" }).click();
+  await contains(S.locator(".f-bjoin"), ":");
+  expect(await S.locator(".f-qcard .f-box").count()).toBe(2);
+  await noSideScroll(S);
+  await shot(S, "fam07c-ratio-320");
+  await S.locator(".f-qchip", { hasText: "24" }).click();
+  await contains(S.locator(".f-qcard .f-box").nth(1).locator(".f-bunit"), "min");
+  await noSideScroll(S);
+  await shot(S, "fam07d-time-320");
 
   // Correction (the class phone): Hana is in; ⌂ on her name; Level 1 opens with the phone's marks: Checked.
   await t.mutation(api.students.setPresent, { ...as, id: hana, present: true });
