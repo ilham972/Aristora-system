@@ -10,9 +10,15 @@
 // - The answers stay on the server: a phone gets only the shape of each answer (how many boxes, a number or an
 //   answer in n), never the answer (`formOf`). Marking happens on the server (`markParts`).
 // - An answer in n is right when it gives the same value for n = 1 … 7 (n + n − 1 is as good as 2n − 1).
+// - Since 4 Nov 2026 the book engine may give each part's answer and its kind (answer-key.json version 2: `Ans`): then
+//   nothing is read from the key's words. Boxes inside the question's own blanks (fill), an option to tap (choose), ✓
+//   or ✗ per statement (tf), words to underline or circle (mark), cards to order, pairs to match, or a photo. A box the
+//   book marks `same` must be written the book's way (11/4 is not 2 3/4: the question tests the form). His founder's
+//   report that day: the guesser marked 11/4 right for "write 11/4 as a mixed number", any order right for "ascending
+//   order", and sent every ✓ / ✗ question to the teacher.
 
 import { outOf, type MasterData } from "./book";
-import type { KeyAnswer } from "./key";
+import type { Ans, BoxAns, KeyAnswer } from "./key";
 
 /** A fraction, always reduced, denominator > 0. */
 export type Rat = [number, number];
@@ -22,9 +28,21 @@ export type Rat = [number, number];
  * "y"), u = a unit printed after his number ("%", "°", "cm²", "h"; never typed), j = a sign between this box and the
  * one before it (":" of a ratio).
  */
-export type Box = ({ k: "num" } | { k: "expr"; v: string }) & { l?: string; u?: string; j?: string };
+export type Box = ({ k: "num" } | { k: "expr"; v: string } | { k: "pick" }) & { l?: string; u?: string; j?: string };
+/**
+ * How the phone shows a part whose kind the book gave (no answers in it): its boxes in the question's blanks, its
+ * options, statements or words tapped in the question, cards to order or pairs to match under it. A "pick" box is one
+ * of these taps: the phone sends "1" (an option's number, a card's number, ✓ = 1 and ✗ = 0, a marked word = 1).
+ */
+export type Ui =
+  | { k: "fill" }
+  | { k: "choose"; n: number; items?: string[] }
+  | { k: "tf"; n: number; items?: string[] }
+  | { k: "mark"; n: number; how: "line" | "ring"; items?: string[] }
+  | { k: "order"; items: string[] }
+  | { k: "match"; l: string[]; r: string[] };
 /** One part of a question on the phone: its label ("ii", "" for a short question), marks, boxes (null = teacher). */
-export type FormPart = { p: string; m: number; boxes: Box[] | null };
+export type FormPart = { p: string; m: number; boxes: Box[] | null; ui?: Ui };
 /** One question on the phone: no answers in it. */
 export type FormQ = { q: number; max: number; parts: FormPart[] };
 
@@ -32,9 +50,23 @@ export type FormQ = { q: number; max: number; parts: FormPart[] };
  * One box with its answer (server only). t = the answer as the key writes it (for the teachers' list). An answer of
  * several boxes ("2 : 3", "2 h 30 min") is listed once: its first box carries the words, the others are `cont`.
  */
-export type Want = { box: Box; t: string; words?: string; cont?: true } & ({ ok: Rat[] } | { vals: Rat[] });
-/** One part (server only); a = the key's words when the phone can't read them (the teachers' list shows them). */
-export type KeyPart = { p: string; m: number; want: Want[] | null; anyOrder: boolean; a?: string; fixed?: true };
+export type Want = { box: Box; t: string; words?: string; cont?: true; same?: string[] } & ({ ok: Rat[] } | { vals: Rat[] } | { pick: string });
+/**
+ * One part (server only); a = the key's words when the phone can't read them (the teachers' list shows them). A part
+ * of a kind the book gave: ui = how the phone shows it, rule = how it is marked ("all": every card in its place or
+ * nothing; "picks": right words marked less wrong ones; else a share per box), words = its answer for the teachers.
+ */
+export type KeyPart = {
+  p: string;
+  m: number;
+  want: Want[] | null;
+  anyOrder: boolean;
+  a?: string;
+  fixed?: true;
+  ui?: Ui;
+  rule?: "all" | "picks";
+  words?: string;
+};
 export type KeyQ = { q: number; max: number; parts: KeyPart[] };
 
 /** Where an answer in n is compared. */
@@ -110,6 +142,26 @@ export function parseNum(raw: string): Rat | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * How a number is written, for an answer the book wants written its way (`same`): 11/4, 2 3/4 and 2.75 are three
+ * forms; 6/8 is not 3/4; 0.50 and .5 are both 0.5 (a decimal's trailing zeros never count).
+ */
+export function formKey(raw: string): string {
+  const s = normalize(raw).replace(/\s*\/\s*/g, "/");
+  const m = /^(-)?\s?(?:(\d+) (\d+)\/(\d+)|(\d+)\/(\d+)|(\d*)\.(\d+)|(\d+))$/.exec(s);
+  if (!m) return s.replace(/\s+/g, "");
+  const sign = m[1] ? "-" : "";
+  if (m[2] !== undefined) return `m${sign}${Number(m[2])} ${Number(m[3])}/${Number(m[4])}`;
+  if (m[5] !== undefined) return `f${sign}${Number(m[5])}/${Number(m[6])}`;
+  if (m[8] !== undefined) return `d${sign}${Number(`${m[7] || "0"}.${m[8]}`)}`;
+  return `i${sign}${Number(m[9])}`;
+}
+
+/** How an answer in a letter is written (`same`): 5n is 5*n, but not n5, 2n + 3n or 3 + 5n − 3. */
+export function exprKey(raw: string): string {
+  return normalize(raw).replace(/\s+/g, "").replace(/\*/g, "").toLowerCase();
 }
 
 type Tok = { t: "num"; v: Rat } | { t: "var"; v: string } | { t: "op"; v: string };
@@ -581,9 +633,66 @@ export function wantsOf(raw: string): { want: Want[]; anyOrder: boolean } | null
   return partOf(items, true);
 }
 
+// ---- Answers whose kind the book gives (answer-key.json version 2, 4 Nov 2026) ----
+
+/** One box the book gives: a number (any of its accepted ones), or an answer in one letter; null = the phone can't. */
+function boxWant(b: BoxAns): Want | null {
+  const first = b.v[0];
+  const look = { ...(b.l ? { l: b.l } : {}), ...(b.u ? { u: showUnit(b.u) } : {}), ...(b.j ? { j: b.j } : {}) };
+  const t = b.u ? withUnit(first, showUnit(b.u)) : first;
+  const same = b.same ? { same: b.v.map(formKey) } : {};
+  const nums = b.v.map(parseNum);
+  if (nums.every((x) => x !== null)) return { box: { k: "num", ...look }, t, ok: nums as Rat[], ...same };
+  const e = parseExpr(first);
+  if (!e || e.vars.length !== 1 || b.v.some((x) => parseExpr(x)?.vars.join() !== e.vars[0])) return null;
+  const vals = valuesOf(e.fn);
+  if (!vals) return null;
+  return { box: { k: "expr", v: e.vars[0], ...look }, t, vals, ...(b.same ? { same: b.v.map(exprKey) } : {}) };
+}
+
+/** Why the phone can't take this box ("" = fine): it types numbers and answers in one letter, nothing else. */
+export function boxProblem(b: BoxAns): string {
+  return boxWant(b) ? "" : `a box answer the phone can't type ("${b.v[0]}"): a word needs choose, a drawing photo`;
+}
+
+const pickWants = (vals: string[]): Want[] => vals.map((v) => ({ box: { k: "pick" }, t: v, pick: v }));
+const tick = (x: boolean) => (x ? "✓" : "✗");
+
+/** A part of a kind the book gave, as the phone marks it (its answer never leaves the server: `formOf`). */
+function typedPart(t: Ans, p: string, m: number, a: string): KeyPart {
+  const base = { p, m, anyOrder: false };
+  switch (t.k) {
+    case "box":
+    case "fill": {
+      const want = t.b.map(boxWant);
+      if (want.some((w) => w === null)) return { ...base, want: null, a }; // refused at upload: never here
+      const w = want as Want[];
+      const words = w.map((x) => `${x.box.l ? `${x.box.l} ` : ""}${x.t}`).join(" · ") + (t.any ? " (any order)" : "") + (t.b.some((x) => x.same) ? " (written so)" : "");
+      return { ...base, want: w, anyOrder: !!t.any, words, ...(t.k === "fill" ? { ui: { k: "fill" as const } } : {}) };
+    }
+    case "choose":
+      return { ...base, want: pickWants([String(t.a)]), words: `(${t.a})${t.items ? ` ${t.items[t.a - 1]}` : ""}`, ui: { k: "choose", n: t.n, ...(t.items ? { items: t.items } : {}) } };
+    case "tf":
+      return { ...base, want: pickWants(t.a.map((x) => (x ? "1" : "0"))), words: t.a.map(tick).join(" "), ui: { k: "tf", n: t.a.length, ...(t.items ? { items: t.items } : {}) } };
+    case "mark": {
+      const how = t.how ?? "line";
+      const picked = [...t.a].sort((x, y) => x - y);
+      const words = `${how === "ring" ? "circle" : "underline"}: ${picked.map((i) => t.items?.[i - 1] ?? `#${i}`).join(", ")}`;
+      return { ...base, want: pickWants(Array.from({ length: t.n }, (_, i) => (t.a.includes(i + 1) ? "1" : "0"))), rule: "picks", words, ui: { k: "mark", n: t.n, how, ...(t.items ? { items: t.items } : {}) } };
+    }
+    case "order":
+      return { ...base, want: pickWants(t.a.map(String)), rule: "all", words: t.a.map((i) => t.items[i - 1]).join(", "), ui: { k: "order", items: t.items } };
+    case "match":
+      return { ...base, want: pickWants(t.a.map(String)), words: t.l.map((x, i) => `${x} → ${t.r[t.a[i] - 1]}`).join(" · "), ui: { k: "match", l: t.l, r: t.r } };
+    case "photo":
+      return { ...base, want: null, a };
+  }
+}
+
 /**
  * Every question of a workbook as the phone can mark it: each part with its marks and boxes (null = the teacher
  * marks that part). A question with no answer in the key, or whose marks can't be split by part, is the teacher's.
+ * A key that gives answer kinds (version 2) is never read for words: a part without a kind is the teacher's.
  */
 export function phoneKey(key: KeyAnswer[] | null, book: MasterData, fixes?: Map<string, string>): Map<number, KeyQ> {
   const out = new Map<number, KeyQ>();
@@ -592,6 +701,7 @@ export function phoneKey(key: KeyAnswer[] | null, book: MasterData, fixes?: Map<
     return out;
   }
   const byQ = new Map((key ?? []).map((k) => [k.q, k]));
+  const kinds = (key ?? []).some((k) => k.t !== undefined || k.parts?.some((p) => p.t !== undefined));
   const last = book.parts.length ? book.parts[book.parts.length - 1].to : 0;
   for (let q = 1; q <= last; q++) {
     const max = outOf(book, q);
@@ -602,7 +712,7 @@ export function phoneKey(key: KeyAnswer[] | null, book: MasterData, fixes?: Map<
       out.set(q, teacher);
       continue;
     }
-    const raw = k.parts?.length ? k.parts : [{ p: "", a: k.a ?? "", m: max }];
+    const raw = k.parts?.length ? k.parts : [{ p: "", a: k.a ?? "", m: max, t: k.t }];
     if (raw.some((p) => typeof p.m !== "number") || raw.reduce((s, p) => s + (p.m ?? 0), 0) !== max) {
       out.set(q, teacher);
       continue;
@@ -612,6 +722,8 @@ export function phoneKey(key: KeyAnswer[] | null, book: MasterData, fixes?: Map<
       max,
       parts: raw.map((p) => {
         if (p.m === 0) return { p: p.p, m: 0, want: [], anyOrder: false }; // nothing to mark: no boxes
+        if (p.t) return typedPart(p.t, p.p, p.m!, p.a);
+        if (kinds) return { p: p.p, m: p.m!, want: null, anyOrder: false, a: p.a };
         const w = wantsOf(p.a);
         return { p: p.p, m: p.m!, want: w?.want ?? null, anyOrder: w?.anyOrder ?? false, ...(w ? {} : { a: p.a }) };
       }),
@@ -629,14 +741,16 @@ export const FIX_TEACHER = "teacher";
  */
 function fixPart(p: KeyPart, fix: string | undefined): KeyPart {
   if (fix === undefined || p.m === 0) return p;
-  if (fix === FIX_TEACHER) return { p: p.p, m: p.m, want: null, anyOrder: false, fixed: true, a: p.a };
+  if (fix === FIX_TEACHER) return { p: p.p, m: p.m, want: null, anyOrder: false, fixed: true, a: p.a ?? p.words };
+  // A kind the book gave is the book's to change (a new upload): only "teacher" moves it.
+  if (p.words !== undefined) return p;
   const w = wantsOf(fix);
   return w ? { p: p.p, m: p.m, want: w.want, anyOrder: w.anyOrder, fixed: true } : p;
 }
 
 /** What the phone may see of a question: its parts' marks and boxes, never the answers. */
 export function formOf(k: KeyQ): FormQ {
-  return { q: k.q, max: k.max, parts: k.parts.map((p) => ({ p: p.p, m: p.m, boxes: p.want ? p.want.map((w) => w.box) : null })) };
+  return { q: k.q, max: k.max, parts: k.parts.map((p) => ({ p: p.p, m: p.m, boxes: p.want ? p.want.map((w) => w.box) : null, ...(p.ui ? { ui: p.ui } : {}) })) };
 }
 
 /** The phone marks every part of this question. */
@@ -658,14 +772,15 @@ export function phoneShare(keys: Map<number, KeyQ>): { questions: number; of: nu
 /** One typed answer against one box. */
 function right(w: Want, typed: string | undefined): boolean {
   if (typeof typed !== "string" || !typed.trim() || typed.length > INPUT_MAX) return false;
+  if ("pick" in w) return typed.trim() === w.pick;
   if ("ok" in w) {
     const v = parseNum(typed);
-    return !!v && w.ok.some((a) => same(a, v));
+    return !!v && w.ok.some((a) => same(a, v)) && (!w.same || w.same.includes(formKey(typed)));
   }
   const e = parseExpr(typed);
   if (!e || e.vars.some((x) => x !== (w.box as { v: string }).v)) return false;
   const vals = valuesOf(e.fn);
-  return !!vals && vals.every((x, i) => same(x, w.vals[i]));
+  return !!vals && vals.every((x, i) => same(x, w.vals[i])) && (!w.same || w.same.includes(exprKey(typed)));
 }
 
 /**
@@ -675,6 +790,8 @@ function right(w: Want, typed: string | undefined): boolean {
 export function markPart(part: KeyPart, typed: string[]): { ok: boolean[]; got: number } | null {
   if (!part.want) return null;
   const n = part.want.length;
+  // Words to mark: one he didn't tap is "not marked" (0), right or wrong like the others.
+  if (part.rule === "picks") typed = Array.from({ length: n }, (_, i) => (typed[i] ?? "").trim() || "0");
   let ok: boolean[];
   if (part.anyOrder) {
     const used = new Set<number>();
@@ -686,6 +803,15 @@ export function markPart(part: KeyPart, typed: string[]): { ok: boolean[]; got: 
     });
   } else ok = part.want.map((w, i) => right(w, typed[i]));
   const good = ok.filter(Boolean).length;
+  if (part.rule === "all") return { ok, got: good === n ? part.m : 0 };
+  if (part.rule === "picks") {
+    // The right ones he marked, less the wrong ones (marking everything gets nothing).
+    const want = part.want;
+    const should = want.filter((w) => "pick" in w && w.pick === "1").length;
+    const hits = want.filter((w, i) => "pick" in w && w.pick === "1" && typed[i] === "1").length;
+    const extra = want.filter((w, i) => "pick" in w && w.pick === "0" && typed[i] === "1").length;
+    return { ok, got: should ? Math.floor((part.m * Math.max(0, hits - extra)) / should) : 0 };
+  }
   return { ok, got: good === n ? part.m : Math.floor((part.m * good) / n) };
 }
 
@@ -718,6 +844,7 @@ export function markQuestion(k: KeyQ, typed: string[]): { ok: (boolean[] | null)
 /** The answer as the teachers' list shows it ("x = 52 · y = 48", "4n − 3"). Teachers only. */
 export function wantWords(p: KeyPart): string {
   if (!p.want) return "teacher";
+  if (p.words !== undefined) return p.words;
   const one = (w: Want) => {
     if (w.words) return w.words; // "2 : 3", "(2, 3)", "2 h 30 min": its boxes listed once
     const also = "ok" in w && w.ok.length > 1 ? ` (or ${w.ok.slice(1).map(([n, d]) => (d === 1 ? String(n) : `${n}/${d}`)).join(", ")})` : "";
@@ -726,4 +853,24 @@ export function wantWords(p: KeyPart): string {
   // Answers apart with " · "; a bold ratio's numbers ("**2** : **3**") with their ":".
   const shown = p.want.filter((w) => !w.cont);
   return shown.map((w, i) => (i ? (w.box.j ? ` ${w.box.j} ` : " · ") : "") + one(w)).join("") + (p.anyOrder ? " (any order)" : "");
+}
+
+/**
+ * What he typed, slot by slot, in words the teachers read (one entry a slot, so `ok` still lines up): ✓ / ✗, the
+ * option's number, a marked word, the card in each place, each pair. Boxes stay as typed.
+ */
+export function slotWords(k: KeyQ, typed: string[]): string[] {
+  const out: string[] = [];
+  for (const p of k.parts) {
+    const n = p.want?.length ?? 0;
+    const mine = Array.from({ length: n }, (_, i) => (typed[out.length + i] ?? "").trim());
+    const ui = p.ui;
+    if (!ui || ui.k === "fill") out.push(...mine);
+    else if (ui.k === "choose") out.push(...mine.map((x) => (x ? `(${x})${ui.items?.[Number(x) - 1] ? ` ${ui.items[Number(x) - 1]}` : ""}` : "")));
+    else if (ui.k === "tf") out.push(...mine.map((x) => (x === "1" ? "✓" : x === "0" ? "✗" : "")));
+    else if (ui.k === "mark") out.push(...mine.map((x, i) => (x === "1" ? (ui.items?.[i] ?? `#${i + 1}`) : "")));
+    else if (ui.k === "order") out.push(...mine.map((x) => ui.items[Number(x) - 1] ?? ""));
+    else out.push(...mine.map((x, i) => (x ? `${ui.l[i]} → ${ui.r[Number(x) - 1] ?? "?"}` : "")));
+  }
+  return out;
 }

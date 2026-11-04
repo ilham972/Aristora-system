@@ -65,7 +65,10 @@ console.log(`Built dist/ for ${url}: ${basename(js)} ${kb(js)} KB, ${basename(cs
 // the page (prefetch) so the service worker keeps them at install: they work with no signal like the rest. 60 → 62: what
 // the first screens show of it (faces in the race, the top row and the children; the birthday party on Home; the way to
 // the report and a certificate; the loader) and the split's own cost (two files compress a little less than one): 61.3.
-const FAMILY_BUDGET_KB = 62;
+// 62 → 66 the same evening: the answer kinds, the heart of the app (his voice note: "the most important place ... not
+// in the working condition"): the question's own blanks as boxes, options and ✓ / ✗ to tap, words to underline, cards
+// to order, pairs to match, the question in the app's font (they are the level screen: in the first load).
+const FAMILY_BUDGET_KB = 66;
 const FAMILY_LATER_KB = 16;
 await mkdir("dist/f/assets", { recursive: true });
 const fam = await build({

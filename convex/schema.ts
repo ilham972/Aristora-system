@@ -149,11 +149,35 @@ export const simSample = v.object({
   room: v.number(),
   cq: v.number(),
 });
+const boxAns = v.object({
+  v: v.array(v.string()),
+  same: v.optional(v.boolean()),
+  l: v.optional(v.string()),
+  u: v.optional(v.string()),
+  j: v.optional(v.string()),
+});
+/** A part's answer and the way he gives it, as the book engine writes it (convex/lib/key.ts `Ans`; key version 2). */
+export const ansKind = v.union(
+  v.object({ k: v.union(v.literal("box"), v.literal("fill")), b: v.array(boxAns), any: v.optional(v.boolean()) }),
+  v.object({ k: v.literal("choose"), n: v.number(), a: v.number(), items: v.optional(v.array(v.string())) }),
+  v.object({ k: v.literal("tf"), a: v.array(v.boolean()), items: v.optional(v.array(v.string())) }),
+  v.object({
+    k: v.literal("mark"),
+    n: v.number(),
+    a: v.array(v.number()),
+    how: v.optional(v.union(v.literal("line"), v.literal("ring"))),
+    items: v.optional(v.array(v.string())),
+  }),
+  v.object({ k: v.literal("order"), items: v.array(v.string()), a: v.array(v.number()) }),
+  v.object({ k: v.literal("match"), l: v.array(v.string()), r: v.array(v.string()), a: v.array(v.number()) }),
+  v.object({ k: v.literal("photo") }),
+);
 /** One question of a workbook's answer key (convex/lib/key.ts): a short answer, or its parts' answers and marks. */
 export const keyAnswer = v.object({
   q: v.number(),
   a: v.optional(v.string()),
-  parts: v.optional(v.array(v.object({ p: v.string(), a: v.string(), m: v.optional(v.number()) }))),
+  parts: v.optional(v.array(v.object({ p: v.string(), a: v.string(), m: v.optional(v.number()), t: v.optional(ansKind) }))),
+  t: v.optional(ansKind),
 });
 
 export default defineSchema({

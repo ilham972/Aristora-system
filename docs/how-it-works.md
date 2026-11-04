@@ -970,8 +970,7 @@ learning app of our education institute"): one profile, his class times, what he
     🔒; a trophy at the end. A Stage the phone can't mark yet, or locked, says so. **Every Level done: Certificate**
     (below the trophy).
   - **A Level**: ✕, a progress bar (answers typed, "3/9"; a light runs along it at each answer; gold when every box has
-    one), the question switch, "Stage 3 · Level 4", Check; the next question slides in, each key gives the answer a
-    small push;
+    one), "Stage 3 · Level 4", Check; the next question slides in, each key gives the answer a small push;
     the question strip, one question at a time, his own pad (numbers, or the n pad), Check once (review first).
     **The screen holds still on →** (his report, 4 Nov 2026: "the whole screen bounces up and comes back"): the slide
     is clipped at the phone's edge (`.f-play`), so the page never gets wider than the phone and the pad never moves;
@@ -980,15 +979,27 @@ learning app of our education institute"): one profile, his class times, what he
     is drawn. → to another box of the same question keeps his place.
     A box shows a unit after his number when the answer has one ("63 %", "? cm²", "? h" "? min": printed, never typed)
     and a ratio's ":" between its boxes. **A question only the teacher marks** (no box): "இதைத் தாளில் செய்: உன் ஆசிரியர்
-    வகுப்பில் திருத்துவார்", every key pale but → (a tap says why: before 4 Nov 2026 the keys simply did nothing, and a
-    student thought the app was broken). **He comes back to where he left** (his ask, 4 Nov 2026): the question he was
+    வகுப்பில் திருத்துவார்" and **no pad**: only → in its place (`NextBar`; 4 Nov 2026: before, a pale pad that did
+    nothing made a student think the app was broken). **He comes back to where he left** (his ask, 4 Nov 2026): the question he was
     on is kept per level on the phone (`spot.<unit>.<n>`, per child, cleared at Check) and the level opens there, its
     chip in view; a level begun before that opens on his first empty box. His typed answers were already kept.
-    **The question switch** (👁, his voice note: a new student has no workbook yet): off = only the boxes (paper in
-    hand); on = each question as printed above its boxes (`family.questions`: the level's questions and the book's CSS
-    once per Stage, kept with the level for no signal; drawn in a shadow root by `src/questionView.ts`, shared with the
-    teachers' "Show the question"). Kept per child. Pale when the Stage's questions are not in the app yet (Books page
-    **Q**: upload the unit's zip again). A question missing from the zip says so; the answers never come.
+    **The question, always** (his answer, 4 Nov 2026: "always show the question"; the eye switch of 3 Nov is gone): each
+    question as printed above its answers whenever the Stage's questions are in the app (`family.questions`: the
+    level's questions and the book's CSS once per Stage, kept with the level for no signal; drawn in a shadow root by
+    `src/questionView.ts`, shared with the teachers' "Show the question"). On the phone it wears the app's clothes
+    (`PAPER_CSS`, his ask "I want beautiful font for the questions"): Baloo Thambi 2 at 17 px (letters of maths stay
+    in italics), the printed number and marks hidden (the card says Q9 once: his screenshot showed it twice), the
+    source line small and pale. Without the Stage's questions (Books page **Q** not lit) only the answers show.
+    **The answer kinds** (his voice note, 4 Nov 2026: "we can't always rely on the keyboard"; `src/family/kinds.tsx`):
+    when the key gives a part's kind (version 2, below), the question itself takes the answer where the book marks it:
+    its **blanks are his boxes** (`data-fill`: tap one, the pad types in it; no box under the question), **options**
+    are tapped (`data-opt`), each statement's **bracket becomes ✓ and ✗** (`data-tick`), **words or numbers are
+    underlined or circled** with a tap (`data-mark`, a second tap undoes); **cards to order** (drag one onto another
+    or tap two) and **pairs to match** (left, then its partner; a pair wears one number) sit under it. A question
+    with nothing to type has no pad, only →. A question whose printed HTML lacks the slots (or no questions in the
+    app) shows the same options, ✓ / ✗ or words under it instead, and the boxes as before. His answers stay one list a
+    question (an option's number, "1" / "0" for ✓ / ✗ and marked words, each place's card number, each pair's right
+    side), so Check, the drafts and the reveal didn't change; the reveal shows marked words as one ✓ or ✗.
   - **The reveal** (`Result`): the thinking owl inside a **ring that fills as his marks come in** (gold when every mark is
     his), then his answers one question at a time (a bell climbing for each right one in a row, a low note for a wrong
     one; each ✓ ✗ pops), the score jumping up with each mark, "5 IN A ROW!", then the owl's mood and its word by the
@@ -1128,7 +1139,7 @@ learning app of our education institute"): one profile, his class times, what he
 - **Two children on one phone** (his ask: parents with two children). Each child = one family key (`familyDevices`
   row); the phone keeps the list (`aristora.family.accounts`, the one on screen `aristora.family.current`) and sends
   the key of the child on screen. Everything kept on the phone is kept per child (`keep()` = `aristora.family.<id>.…`:
-  his screens, typed answers, a level's form and questions, the question switch, the tab). Add another = his index
+  his screens, typed answers, a level's form and questions, the tab). Add another = his index
   and code (or his link); switch = tap a child (top row, or Me); sign out = Me → "Bilal: வெளியேறு" → yes (the key
   stops on the server; the next child is on screen; the last → the sign-in). The same child twice (his link, then his
   code): the newer stays, the older is signed out (`me.index`). A child signed out by the class leaves the list by
@@ -1163,8 +1174,20 @@ learning app of our education institute"): one profile, his class times, what he
   (with the photos from home to mark and new feedback: `families.askCount`, small rows only) and Settings opens on
   Students then (after Photos); its button shows the count. History lines: photo sent / OK / not accepted / removed,
   name asked / OK / not accepted, birthday added / cleared.
-- The server marks with the uploaded answer keys (`convex/lib/phone.ts`): numbers, several numbers, answers in n (same
-  values for n = 1..7), labelled answers (x = 52), "also accepted" notes. Since 4 Nov 2026 (his screenshot: "0.25 as a
+- **Answer kinds** (key version 2, 4 Nov 2026, his voice note and screenshot: Stage 10 was all photos, and the guesser
+  marked 11/4 right for "write 11/4 as a mixed number", 6/8 right for "simplify 6/8", a backwards order right for
+  "ascending order", every ✓ / ✗ question a photo): the book engine writes each part's answer and its kind (`t`:
+  box, fill, choose, tf, mark, order, match, photo; `convex/lib/key.ts` `Ans`, checked by `ansProblem` and the box
+  rules; refused at upload in plain words). Nothing is then read from the key's words: a part without a kind is the
+  teacher's. Marking (`typedPart`, `markPart`): a box = any of its accepted answers; `same` = written the book's way
+  (`formKey`: 11/4, 2 3/4 and 2.75 differ, 6/8 is not 3/4, 0.50 is 0.5; `exprKey` for answers in a letter); an option
+  all or nothing; ✓ / ✗ and pairs a share per right one; cards in order all or nothing; marked words = the right ones
+  he marked less the wrong ones (marking everything gets 0). The phone gets how to ask (`Ui`: the cards, the pairs'
+  sides, how many options), never the answers. Teachers read the answer and what he typed in words (`wantWords`,
+  `slotWords`: "✓ ✗ ✓", "underline: 23, 29", "−3, −1, 0, 2"). The upload also checks that the printed question has
+  as many slots as the key uses (`slotProblem`), else the zip is refused (the book and its key differ).
+- The server marks with the uploaded answer keys (`convex/lib/phone.ts`; a key without kinds, version 1): numbers,
+  several numbers, answers in n (same values for n = 1..7), labelled answers (x = 52), "also accepted" notes. Since 4 Nov 2026 (his screenshot: "0.25 as a
   percentage" was the teacher's, so whole Percentages Stages were): a number with its unit (25%, 45°, −3 °C, 12 cm,
   24 cm², 250 ml; the unit inside the bold or just after it, "**25**%"), several units in order (2 h 30 min, 3 kg 250
   g, 3 மணி 20 நிமிடம்), ratios in order (2 : 3, "**2** : **3**"), points as x then y ((2, 3), P(4, 0)) and one set of
@@ -1255,7 +1278,7 @@ learning app of our education institute"): one profile, his class times, what he
     changes): his new marks are kept beside the first ones (`MQ.rt`, `rg`: the unit's marks, Progress and the reports
     keep the first try); right = explained (`x`: Evaluation skips it, and its working photo is no longer owed); the marks
     he won back count as XP the day he won them (`xpItems`: never more than he lost, so a wrong first answer never pays).
-    With the question switch on, a ↻ question is printed too (`family.questions` adds the same pool; 4 Nov 2026 it said
+    A ↻ question is printed too (`family.questions` adds the same pool; 4 Nov 2026 it said
     "இந்தக் கேள்வி இன்னும் phone இல் இல்லை" because only the level's own questions came).
     The reveal: "↻ பழைய கேள்விகள் 1/2 · +2 XP" and the XP pill includes them. History: "old questions back on the
     phone (Q8): 1/1 right" (`retry-home`). A re-mark of the old level in class drops its `rt` (it may come back once
