@@ -1,0 +1,14 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90m/home/runner/work/Aristora-system/Aristora-system[39m
+
+ [2m[90m↓[39m[22m tests/e2e/class.e2e.ts [2m([22m[2m19 tests[22m[2m | [22m[33m19 skipped[39m[2m)[22m
+ [32m✓[39m tests/e2e/family.e2e.ts [2m([22m[2m12 tests[22m[2m | [22m[33m9 skipped[39m[2m)[22m[33m 26676[2mms[22m[39m
+   [33m[2m✓[22m[39m photos from home: a drawing photographed in the level, the working on a wrong answer, marked by a person he picks; the solution and her answer on his phone[33m 11146[2mms[22m[39m
+   [33m[2m✓[22m[39m answer kinds: the question's own blanks, an option, ✓ / ✗, words to underline, cards to order, pairs; Check marks them exactly[33m 10224[2mms[22m[39m
+   [33m[2m✓[22m[39m names and reasons: names to tap under the question; ஆம் / இல்லை and his own words; a wrong pick is 0, a right one waits for the teacher[33m 4967[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[2m | [22m[33m1 skipped[39m[90m (2)[39m
+[2m      Tests [22m [1m[32m3 passed[39m[22m[2m | [22m[33m28 skipped[39m[90m (31)[39m
+[2m   Start at [22m 23:42:50
+[2m   Duration [22m 28.36s[2m (tests 95%, import 3%, transform 2%)[22m
+
