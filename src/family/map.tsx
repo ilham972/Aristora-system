@@ -339,7 +339,7 @@ export function StageScreen(props: {
     toast(`Level ${l.n}: ${l.got !== undefined ? `${l.got} / ${l.max} XP · ` : ""}${STATE_WORDS[l.s]}`);
   };
   return (
-    <div class="f-stage">
+    <div class={`f-stage${stop && canPlay && playIdx >= 0 ? " stopped" : ""}`}>
       <header class="f-hero">
         <div class="f-toprow">
           <button type="button" class="f-round on-brand" aria-label="Back" onClick={props.onBack}>
@@ -406,7 +406,7 @@ export function StageScreen(props: {
                 <div key={l.n} class={`f-lvwrap ${pts[i].x < 50 ? "r" : "l"}`} style={{ left: `${pts[i].x}%`, top: `${pts[i].y}px` }}>
                   {live && (
                     <span class="f-start" aria-hidden="true">
-                      START
+                      {stop ? "📷" : "START"}
                     </span>
                   )}
                   <button
