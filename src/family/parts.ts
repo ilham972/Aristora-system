@@ -4,3 +4,5 @@
 export { MeTab } from "./me";
 export { ReportScreen } from "./profile";
 export { CertSheet } from "./cert";
+// The newer-version check (5 Nov 2026): not needed before the first screen, so here, out of the first load's budget.
+export { busyHere, watchUpdates } from "../appVersion";

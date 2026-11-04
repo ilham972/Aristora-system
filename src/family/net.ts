@@ -35,7 +35,21 @@ export function words(e: unknown): string {
   return uncaught ? uncaught[1] : m;
 }
 
+let sending = 0;
+/** A change or a photo on its way to the server: the update check never loads the page again under it. */
+export const sendingNow = () => sending > 0;
+
 export async function call(kind: "query" | "mutation", path: string, args: Record<string, unknown>): Promise<unknown> {
+  if (kind === "query") return ask(kind, path, args);
+  sending++;
+  try {
+    return await ask(kind, path, args);
+  } finally {
+    sending--;
+  }
+}
+
+async function ask(kind: "query" | "mutation", path: string, args: Record<string, unknown>): Promise<unknown> {
   if (testBackend) {
     try {
       return kind === "mutation" || !testBackend.query ? await testBackend.mutation(path, args) : await testBackend.query(path, args);
@@ -216,10 +230,13 @@ export async function uploadPhoto(blob: Blob): Promise<string> {
     }
   }
   let res: Response;
+  sending++;
   try {
     res = await fetch(url, { method: "POST", headers: { "Content-Type": blob.type || "image/jpeg" }, body: blob });
   } catch {
     throw new NetError("offline", true);
+  } finally {
+    sending--;
   }
   const j = (await res.json().catch(() => null)) as { storageId?: string } | null;
   if (!res.ok || !j?.storageId) throw new NetError("படம் போய்ச் சேரவில்லை. மீண்டும் அனுப்பு.");

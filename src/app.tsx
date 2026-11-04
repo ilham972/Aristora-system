@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { callPhrase, comingPhrase, lostPhrase, pullPhrase, type RoomName } from "./announce";
 import { AttendanceSheet } from "./attendance";
+import { busyHere, takeReopen, watchUpdates } from "./appVersion";
 import type { Link } from "./backend";
 import { ClassPage } from "./correction";
 import { buildViews, evalQueue, fmtClock, isWalking, liveSession, theoryGroups, theoryMembers, WALK_MS, waitingAll, type View } from "./derive";
@@ -95,8 +96,10 @@ function loadJob(): Role | null {
 export function App() {
   const { board, boardError, link, me } = useStore();
   const [start] = useState(loadStart);
+  // Loaded again by the upload sheet's Update (an older copy of the app was open): back on Settings → Books.
+  const [reopen, setReopen] = useState(() => (takeReopen() === "books" ? ("books" as const) : null));
   const [chosen, setTab] = useState<TabId | null>(start.tab);
-  const [page, setPage] = useState<Page>(start.page);
+  const [page, setPage] = useState<Page>(reopen ? "settings" : start.page);
   const [lastJob, setLastJob] = useState<Role | null>(loadJob);
   // Settings and Progress go back to the page they were opened from: the Register or the bottom tab.
   const [backTo, setBackTo] = useState<Home>(start.page === "register" ? "register" : "board");
@@ -177,6 +180,21 @@ export function App() {
     window.addEventListener("hashchange", seen);
     return () => window.removeEventListener("hashchange", seen);
   }, []);
+  // A page left open keeps its old code (5 Nov 2026: his upload refused by the copy open since the night before): each
+  // time it comes back to the screen it looks for a newer version. Back after half an hour with nothing to lose (no tap
+  // waiting to be sent, nothing typed, no sheet open), it loads it by itself; else the banner asks for one tap.
+  const [newer, setNewer] = useState(false);
+  const linkNow = useRef(link);
+  linkNow.current = link;
+  useEffect(
+    () =>
+      watchUpdates({
+        page: "/",
+        safe: () => linkNow.current.connected && linkNow.current.sending === 0 && !busyHere(),
+        onNewer: () => setNewer(true),
+      }),
+    [],
+  );
   // Sticky strips sit right under the header, whatever its height (it grows when offline).
   // The loading owl goes once there is a real screen to show: the class, the sign-in, or an error to read.
   const firstScreen = me === undefined ? !!boardError : !me.user || !!board || !!boardError;
@@ -397,6 +415,7 @@ export function App() {
           </div>
         </header>
         <LinkBanner link={link} />
+        {newer && link.connected && <UpdateBanner sending={link.sending} />}
       </div>
       <SimBanner sim={board.sim} />
       {alerts.needTap && (
@@ -418,8 +437,11 @@ export function App() {
       {shown === "settings" ? (
         <Settings
           views={views}
-          onClose={() => setPage(backTo)}
-          start={photos.n > 0 ? "photos" : asks > 0 ? "students" : fbNew > 0 ? "feedback" : undefined}
+          onClose={() => {
+            setReopen(null);
+            setPage(backTo);
+          }}
+          start={reopen ?? (photos.n > 0 ? "photos" : asks > 0 ? "students" : fbNew > 0 ? "feedback" : undefined)}
           fbNew={fbNew}
           phN={photos.n}
           phLate={photos.late}
@@ -608,6 +630,15 @@ function LinkBanner(props: { link: Link }) {
         ? "No internet. Your taps are kept on this phone and sent when it's back. Don't close this page."
         : "Can't reach the class board. Check the mobile data."}
     </div>
+  );
+}
+
+/** A newer version of the app is online (src/appVersion.ts): one tap loads it, once this phone's taps are sent. */
+function UpdateBanner(props: { sending: number }) {
+  return (
+    <button type="button" class="app-update" disabled={props.sending > 0} onClick={() => location.reload()}>
+      {props.sending > 0 ? "A new version of the app is ready. Sending your taps first…" : "A new version of the app is ready. Tap here to update."}
+    </button>
   );
 }
 

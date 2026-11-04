@@ -15,6 +15,7 @@ import { gradeWords, OL, OL_PARTS, olNumber } from "../convex/lib/syllabus";
 import { mutate } from "./backend";
 import { act, currentRole, toast, type Unit } from "./store";
 import { Sheet } from "./ui";
+import { newerOnline, updateNow } from "./appVersion";
 import { readWorkbookFiles, type ReadTute, type ReadWorkbook } from "./workbookFile";
 
 /** What the Books page knows about a unit's workbook already in the app. */
@@ -281,6 +282,9 @@ export function UploadBooks(props: { units: Unit[]; books: InApp[]; onSaved: (gr
   const [picks, setPicks] = useState<Record<number, string>>({});
   const [reading, setReading] = useState(false);
   const [saving, setSaving] = useState(false);
+  // A newer app is online than this copy (5 Nov 2026: last night's copy, still open, refused a zip the new app takes):
+  // its reader may be old, so nothing is saved from it; Update loads the new one and comes back here.
+  const [old, setOld] = useState(false);
   const rows = found ? uploadRows(found, props.units, props.books, picks) : null;
   const close = () => {
     setFound(null);
@@ -293,9 +297,11 @@ export function UploadBooks(props: { units: Unit[]; books: InApp[]; onSaved: (gr
     input.value = ""; // the same file can be picked again
     if (!files.length) return;
     setReading(true);
+    const fresh = newerOnline("/"); // while the files are read
     try {
       const read = await Promise.all(files.map(async (f) => ({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) })));
       setPicks({});
+      setOld(await fresh);
       setFound(readWorkbookFiles(read));
     } catch {
       toast("Couldn't read those files on this phone. Try again, or from a computer.", "error");
@@ -386,16 +392,26 @@ export function UploadBooks(props: { units: Unit[]; books: InApp[]; onSaved: (gr
       {rows && (
         <Sheet
           title={`${howMany(rows)} found`}
-          sub="Check the list. Nothing is saved until you tap Save."
+          sub={
+            old
+              ? "This phone has an older copy of the app. Tap Update the app: it comes back here, then upload again."
+              : "Check the list. Nothing is saved until you tap Save."
+          }
           onClose={close}
           foot={
             <div class="row-actions">
               <button type="button" class="btn ghost" onClick={close}>
                 Cancel
               </button>
-              <button type="button" class="btn primary" disabled={saving || ready.length === 0} onClick={() => void save()}>
-                {saving ? "Saving…" : ready.length === 0 ? "Nothing to save" : `Save ${howMany(ready)}`}
-              </button>
+              {old ? (
+                <button type="button" class="btn primary" onClick={() => updateNow("books")}>
+                  Update the app
+                </button>
+              ) : (
+                <button type="button" class="btn primary" disabled={saving || ready.length === 0} onClick={() => void save()}>
+                  {saving ? "Saving…" : ready.length === 0 ? "Nothing to save" : `Save ${howMany(ready)}`}
+                </button>
+              )}
             </div>
           }
         >

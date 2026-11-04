@@ -324,6 +324,26 @@ button.top-stat:active {
   font-size: 15px;
 }
 
+/* A newer version of the app is online (src/appVersion.ts): the whole bar is the button that loads it. */
+.app-update {
+  display: block;
+  width: calc(100% - 24px);
+  margin: 8px 12px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--ink);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  font-size: 15px;
+  text-align: left;
+}
+
+.app-update:disabled {
+  opacity: 0.7;
+}
+
 .page {
   padding: 14px 12px 0;
   display: flex;

@@ -441,6 +441,21 @@ rows rise in (`@keyframes rise`, 8 px up, never sideways); buttons press (scale)
 `public/index.html` ("Still loading…" after 8 s), `hideSplash()` (`src/splash.ts`, ≥1.2 s); `sh scripts/owl/make.sh`
 rebuilds icons + splash from `scripts/owl/owl.json` (animations: "Splash" in `styles.css`).
 
+**A phone with an old copy (5 Nov 2026, his "I can't upload this").** A page left open keeps the code it loaded,
+for days (the offline banner even says "Don't close this page"): his phone still had the night before's copy, whose
+upload reader didn't know reasons, and refused the U01 v5 zip the new app takes ("Question 62: an answer kind the app
+doesn't know"). `src/appVersion.ts`: a page names its code and style (`[name]-[hash]`), so `newerOnline(page)`
+compares the names this copy runs (`versionIn(document)`) with the page online (fetched with no cache; false whenever
+it can't tell). Each time the page comes back to the screen (`watchUpdates`): away at least a minute → it looks; a
+newer version → **the banner under the header** ("A new version of the app is ready. Tap here to update.", `UpdateBanner`
+in `app.tsx`, waits for unsent taps); away at least half an hour with nothing to lose (online, no tap waiting, nothing
+typed, no sheet open: `busyHere`) → it loads the new one by itself. Never while she is on the screen. **The upload
+sheet** looks too, while the zips are read: older → "This phone has an older copy of the app" and **Update the app**
+in place of Save (nothing is saved from an old reader); the page loads again on Settings → Books (`updateNow("books")`,
+`takeReopen`: a one-time note in sessionStorage). The family app the same, only after half an hour away and with no
+banner (its drafts and place are kept; `sendingNow` in `net.ts`: no Check or photo on its way); its check lives in its
+later parts (`parts.ts`), out of the first load's budget.
+
 **Correction page (ex-"Focus": `src/focus.tsx`; one page since `0e67580`, one-line rows since `3bce3bd`).** Kills his
 two errors: marks on the wrong question and on the wrong student. Meant for the paid corrector.
 - **Pinned under the top bar** (`.fc-stick`, with the calls): the names row and the grades; the paper scrolls under

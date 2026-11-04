@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 // One class on the register, acted out on three phones: Correction, Theory, Evaluation.
 
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { strToU8, zipSync } from "fflate";
 import { afterAll, beforeAll, expect, test } from "vitest";
@@ -3834,4 +3834,29 @@ test("Whole class: the top bar's whiteboard; any grade, book, section or level; 
   await count(K.getByRole("button", { name: /^Whole class/ }), 0);
   await K.context().close();
   expect(problems, problems.join("\n")).toEqual([]);
+});
+
+// Last in this file: it loads a page again (5 Nov 2026, his upload refused by the teachers' app open since the night
+// before). The page online names other code than this copy runs: a newer version went out while it was open.
+test("Update: an older copy of the app says so at the upload, and Update opens Settings → Books again", async () => {
+  const backend = await newClass();
+  const C = await phone(backend, "focus");
+  await C.getByRole("button", { name: "Settings" }).click();
+  await C.getByRole("button", { name: "Books", exact: true }).click();
+  const online = (await readFile(resolve("dist/index.html"), "utf8")).replace(/(<script type="module" src="[^"]+)"/, '$1?newer"');
+  await C.route(/\/$/, (r) => (r.request().resourceType() === "fetch" ? r.fulfill({ status: 200, contentType: "text/html", body: online }) : r.fallback()));
+  await C.locator(".upload-btn input[type=file]").setInputFiles([
+    { name: "G8_U01_Workbook_source_v5.zip", mimeType: "application/zip", buffer: Buffer.from(zipSync({ "book.html": strToU8(U01_BOOK) })) },
+  ]);
+  const up = C.locator(".sheet");
+  await contains(up, "This phone has an older copy of the app");
+  await count(up.getByRole("button", { name: /^Save/ }), 0);
+  await shot(C, "m08d-upload-older-copy");
+  await up.getByRole("button", { name: "Update the app" }).click();
+  // The page loads again and opens where he was: Settings → Books, ready to upload.
+  await visible(C.getByRole("button", { name: "Books", exact: true, pressed: true }));
+  await visible(C.locator(".upload-btn"));
+  await count(C.locator(".sheet"), 0);
+  await C.unroute(/\/$/);
+  await C.context().close();
 });

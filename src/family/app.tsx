@@ -43,6 +43,7 @@ import {
   query,
   randomKey,
   removeAccount,
+  sendingNow,
   signInIndex,
   switchTo,
   type Account,
@@ -112,6 +113,12 @@ export function App() {
   const [ready, setReady] = useState(false);
   // Me's profile parts: fetched right after the first screen (later.ts), so they are here (and kept) when he looks.
   const parts = useParts();
+  // A page left open keeps its old code (5 Nov 2026): back on the screen after half an hour, a newer version online
+  // and nothing on its way or typed, the app loads again by itself (src/appVersion.ts; his drafts and place are kept).
+  useEffect(
+    () => (parts ? parts.watchUpdates({ page: "/f/", checkAfter: 30 * 60_000, safe: () => !sendingNow() && !parts.busyHere() }) : undefined),
+    [parts],
+  );
   const screenRef = useRef(screen);
   screenRef.current = screen;
   const sheetRef = useRef(sheet);

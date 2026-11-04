@@ -82,6 +82,14 @@ EOF
 
 ## Gotchas learned the hard way
 
+- **A phone runs the copy it opened, not what you deployed** (5 Nov 2026: his upload of a new answer kind was refused
+  by the teachers' app open since before the deploy). Every new kind, button or rule reaches a page that was already
+  open only when it loads again: `src/appVersion.ts` does that (the banner, or by itself after 30 min away), and the
+  upload sheet says "older copy" with Update. A report like "the new thing isn't there" or "the app doesn't know"
+  right after a deploy: first ask him to close the app and open it again (square button, swipe it away). `versionIn`
+  reads the page's `script[type="module"][src]` and `link[rel="stylesheet"]`: a stylesheet or module script added at
+  run time must carry `data-later` (as `later.ts` does), or that copy always reads "newer" (the banner every time, a
+  reload after every half hour away).
 - **The family bundle is in two parts** (4 Nov 2026, the profile): what comes after the first screen (Me, the report,
   the photo editor, the certificate) is imported only through `src/family/later.ts` (`loadParts()`, `useParts()`), never
   straight: one plain `import` from a first-load file brings it back into the first load (the build prints both sizes;
