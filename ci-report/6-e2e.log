@@ -1,0 +1,11 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90m/home/runner/work/Aristora-system/Aristora-system[39m
+
+ [2m[90m↓[39m[22m tests/e2e/class.e2e.ts [2m([22m[2m19 tests[22m[2m | [22m[33m19 skipped[39m[2m)[22m
+ [2m[90m↓[39m[22m tests/e2e/family.e2e.ts [2m([22m[2m8 tests[22m[2m | [22m[33m8 skipped[39m[2m)[22m
+
+[2m Test Files [22m [33m2 skipped[39m[90m (2)[39m
+[2m      Tests [22m [33m27 skipped[39m[90m (27)[39m
+[2m   Start at [22m 10:23:47
+[2m   Duration [22m 1.66s[2m (import 55%, transform 45%, worker 1%)[22m
+

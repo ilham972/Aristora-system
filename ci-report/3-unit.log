@@ -1,0 +1,54 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90m/home/runner/work/Aristora-system/Aristora-system[39m
+
+ [32m✓[39m tests/master.test.ts [2m([22m[2m28 tests[22m[2m)[22m[33m 1384[2mms[22m[39m
+ [32m✓[39m tests/family.test.ts [2m([22m[2m25 tests[22m[2m)[22m[33m 1394[2mms[22m[39m
+ [32m✓[39m tests/theoryFocus.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 69[2mms[22m[39m
+ [32m✓[39m tests/backend.test.ts [2m([22m[2m37 tests[22m[2m)[22m[33m 2178[2mms[22m[39m
+ [32m✓[39m tests/evalFocus.test.ts [2m([22m[2m23 tests[22m[2m)[22m[32m 39[2mms[22m[39m
+ [32m✓[39m tests/tute.test.ts [2m([22m[2m20 tests[22m[2m)[22m[33m 1068[2mms[22m[39m
+ [32m✓[39m tests/boss.test.ts [2m([22m[2m31 tests[22m[2m)[22m[33m 405[2mms[22m[39m
+ [32m✓[39m tests/photos.test.ts [2m([22m[2m13 tests[22m[2m)[22m[33m 1578[2mms[22m[39m
+   [32m✓[39m photos from home [2m(10)[22m
+     [33m[2m✓[22m[39m his limit: two more levels after one that owes photos; the next waits until he sends them (or the owner turns it off)[33m 314[2mms[22m[39m
+ [32m✓[39m tests/focus.test.ts [2m([22m[2m25 tests[22m[2m)[22m[32m 43[2mms[22m[39m
+ [32m✓[39m tests/manager.test.ts [2m([22m[2m17 tests[22m[2m)[22m[32m 48[2mms[22m[39m
+ [32m✓[39m tests/auth.test.ts [2m([22m[2m11 tests[22m[2m)[22m[33m 635[2mms[22m[39m
+ [32m✓[39m tests/teach.test.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 386[2mms[22m[39m
+ [32m✓[39m tests/sim.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 2461[2mms[22m[39m
+   [32m✓[39m the rules (convex/lib/sim.ts) [2m(6)[22m
+     [33m[2m✓[22m[39m a level marked by the app: its marks add up, a ? is 0 and goes to Theory, the hard questions lose the most[33m 311[2mms[22m[39m
+   [32m✓[39m the simulation on the server (convex/sim.ts) [2m(6)[22m
+     [33m[2m✓[22m[39m the steps: students hand levels in, the app corrects them (as Correction, named Simulation), answers are marked[33m 849[2mms[22m[39m
+     [33m[2m✓[22m[39m +5 students, the level from now on; time up ends it; everyone goes home, the scoreboard is kept[33m 556[2mms[22m[39m
+ [32m✓[39m tests/attendance.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 615[2mms[22m[39m
+ [32m✓[39m tests/managerServer.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 853[2mms[22m[39m
+ [32m✓[39m tests/uncorrect.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 672[2mms[22m[39m
+ [32m✓[39m tests/answerKey.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 482[2mms[22m[39m
+ [32m✓[39m tests/duty.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 730[2mms[22m[39m
+ [32m✓[39m tests/workbookFile.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 155[2mms[22m[39m
+ [32m✓[39m tests/status.test.ts [2m([22m[2m17 tests[22m[2m)[22m[32m 22[2mms[22m[39m
+ [32m✓[39m tests/roomRows.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+ [32m✓[39m tests/drafts.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 370[2mms[22m[39m
+ [32m✓[39m tests/answerText.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 20[2mms[22m[39m
+ [32m✓[39m tests/stats.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m tests/progress.test.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 399[2mms[22m[39m
+ [32m✓[39m tests/timeline.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m tests/derive.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 39[2mms[22m[39m
+ [32m✓[39m tests/taps.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m tests/roomDecisions.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m tests/announce.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m tests/evalPace.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m tests/chime.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 167[2mms[22m[39m
+ [32m✓[39m tests/hosting.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m tests/hrow.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m tests/sha256.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 87[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m35 passed[39m[22m[90m (35)[39m
+[2m      Tests [22m [1m[32m421 passed[39m[22m[90m (421)[39m
+[2m   Start at [22m 10:23:13
+[2m   Duration [22m 10.65s[2m (tests 64%, transform 12%, import 12%, environment 11%, worker 1%)[22m
+
+[2m    Isolate [22m [33m35 workers spawned[39m[2m · ~229ms startup each (spawn + environment, per file)[22m
+[2m            [22m [2mat least ~2.44s faster with [22m[33misolate: false[39m[2m — reuses workers across files instead of one per file[22m
+
