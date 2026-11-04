@@ -1,0 +1,12 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90m/home/runner/work/Aristora-system/Aristora-system[39m
+
+ [2m[90m↓[39m[22m tests/e2e/class.e2e.ts [2m([22m[2m19 tests[22m[2m | [22m[33m19 skipped[39m[2m)[22m
+ [32m✓[39m tests/e2e/family.e2e.ts [2m([22m[2m11 tests[22m[2m | [22m[33m10 skipped[39m[2m)[22m[33m 10454[2mms[22m[39m
+   [33m[2m✓[22m[39m answer kinds: the question's own blanks, an option, ✓ / ✗, words to underline, cards to order, pairs; Check marks them exactly[33m 10116[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[2m | [22m[33m1 skipped[39m[90m (2)[39m
+[2m      Tests [22m [1m[32m1 passed[39m[22m[2m | [22m[33m29 skipped[39m[90m (30)[39m
+[2m   Start at [22m 16:01:05
+[2m   Duration [22m 12.24s[2m (tests 87%, import 7%, transform 6%)[22m
+
