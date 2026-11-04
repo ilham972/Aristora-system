@@ -1008,3 +1008,106 @@ test("photos from home: a drawing photographed in the level, the working on a wr
 
   expect(problems).toEqual([]);
 });
+
+test("a printed question opens full screen: two fingers zoom only it, one finger moves it, ✕ and Back close it; words can't be selected", async () => {
+  // His answers (4 Nov 2026): the app never zooms, so a printed question (10 pt, its tables and figures shrunk to fit)
+  // opens full screen to be zoomed; holding a finger on words selects nothing, the typing boxes still can.
+  const backend = makeBackend(modules);
+  const t = backend.t;
+  await addPerson(t, { name: "Owner", token: OWNER_TOKEN, role: "owner" });
+  const as = { token: OWNER_TOKEN };
+  await t.mutation(api.setup.ensure, as);
+  const u01 = await t.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G8-U01")).first())!._id);
+  await t.mutation(api.catalog.saveWorkbook, {
+    ...as,
+    unitId: u01,
+    parts: BOOK.data.parts.map((p) => ({ id: p.id, to: p.to, ...(p.each ? { each: p.each } : {}) })),
+    levels: BOOK.data.levels.map((l) => ({ to: l.to, max: l.max })),
+    marks: BOOK.data.marks ?? {},
+    replace: true,
+    key: fakeKey(),
+  });
+  // Made-up questions, each with a table far wider than a phone (shrunk to fit on the level).
+  const cells = Array.from({ length: 8 }, (_, i) => `<td>${i + 1}</td>`).join("");
+  await t.run(async (ctx) => {
+    for (let q = 1; q <= 10; q++) {
+      await ctx.db.insert("questions", {
+        unitId: u01,
+        stage: "master",
+        q,
+        html: `<div class="pq"><span class="qn">${q}</span><div class="qt">A made-up question number ${q}: read the table.</div><table class="tb"><tr><td>Made-up</td>${cells}</tr></table></div>`,
+      });
+    }
+    await ctx.db.insert("bookCss", {
+      unitId: u01,
+      stage: "master",
+      css: ".qn { font-weight: 700; margin-right: 6px; } .qt { display: inline; } .tb { width: 900px; margin-top: 8px; border-collapse: collapse; } .tb td { border: 1px solid #333; padding: 8px; font-size: 14pt; }",
+      updatedAt: 0,
+    });
+    const book = (await ctx.db.query("books").withIndex("by_unit_stage", (x) => x.eq("unitId", u01).eq("stage", "master")).first())!;
+    await ctx.db.patch(book._id, { qCount: 10 });
+  });
+  const hana = await t.mutation(api.students.add, { ...as, name: "Hana K", grade: 8, term: 1, stage: "master", unitId: u01 });
+  await t.mutation(api.families.setCode, { ...as, studentId: hana, code: "4719" });
+
+  const P = await open(backend, `${site.url}/f/`, size(360, 740));
+  const select = (l: L) => l.first().evaluate((el) => getComputedStyle(el).userSelect);
+  await visible(P.getByLabel(/Index/));
+  expect(await P.evaluate(() => getComputedStyle(document.body).userSelect)).toBe("none");
+  expect(await select(P.getByLabel(/Index/))).toBe("text");
+  expect(await select(P.getByLabel("Code"))).toBe("text");
+  await P.getByLabel(/Index/).fill("1001");
+  await P.getByLabel("Code").fill("4719");
+  await P.getByRole("button", { name: "Sign in" }).click();
+  await goalIs(P, "Level 1");
+  expect(await select(P.locator(".f-goal-t"))).toBe("none");
+  await stageNow(P, "Level 1");
+  await P.locator(".f-lv.play").click();
+  await contains(P.locator(".f-qn"), "Q1");
+  expect(await P.getByRole("button", { name: /^Zoom/ }).count()).toBe(0); // only with the question on screen
+  const headH = () => P.locator(".f-qhead").evaluate((el) => Math.round(el.getBoundingClientRect().height));
+  const h0 = await headH();
+
+  // The question on: the zoom button beside the XP (the row as tall as before), the question not selectable.
+  await P.locator(".f-qmode").click();
+  const inPaper = (sel: string) => P.locator(sel).evaluate((el) => el.shadowRoot?.querySelector(".qv")?.textContent ?? "");
+  await until(async () => (await inPaper(".f-paper")).includes("made-up question number 1"), "Q1 as printed");
+  await visible(P.getByRole("button", { name: "Zoom Q1" }));
+  expect(await headH()).toBe(h0);
+  expect(await P.locator(".f-paper").evaluate((el) => getComputedStyle(el.shadowRoot!.querySelector(".qv")!).userSelect)).toBe("none");
+
+  // Full screen: two fingers zoom the question (3x), never the app; one finger moves it.
+  await P.getByRole("button", { name: "Zoom Q1" }).click();
+  const Z = P.locator(".f-zoom");
+  await visible(Z);
+  await until(async () => (await inPaper(".f-zpaper")).includes("made-up question number 1"), "Q1 full screen");
+  await noSideScroll(P);
+  await shot(P, "fam29-question-zoom");
+  const scaleOf = () => P.locator(".f-zpaper").evaluate((el) => new DOMMatrix(getComputedStyle(el).transform).a);
+  const leftOf = () => P.locator(".f-zpaper").evaluate((el) => el.getBoundingClientRect().left);
+  expect(await scaleOf()).toBe(1);
+  const f = await fingersOn(P);
+  await f.pinch(180, 300);
+  expect(await scaleOf()).toBeGreaterThan(2);
+  expect(await zoomOf(P)).toBe(1);
+  const x0 = await leftOf();
+  await f.swipe({ x: 300, y: 420 }, { x: 120, y: 420 });
+  expect(await leftOf()).toBeLessThan(x0 - 100);
+  expect(await zoomOf(P)).toBe(1);
+  await noSideScroll(P);
+  await shot(P, "fam29b-question-zoomed");
+
+  // ✕ closes it on the same question; a tap on the paper opens it again; the phone's Back closes only it, then the
+  // next Back goes up to the Stage as before.
+  await Z.getByRole("button", { name: "Close" }).click();
+  await until(async () => (await Z.count()) === 0, "the zoom closed");
+  await contains(P.locator(".f-qn"), "Q1");
+  await P.locator(".f-paper").click();
+  await visible(Z);
+  await P.goBack();
+  await until(async () => (await Z.count()) === 0, "Back closed the zoom");
+  await contains(P.locator(".f-qn"), "Q1");
+  await P.goBack();
+  await playIs(P, "Level 1");
+  expect(problems).toEqual([]);
+});

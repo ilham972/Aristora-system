@@ -42,7 +42,7 @@ import {
   switchTo,
   type Account,
 } from "./net";
-import { nextPlay, Play, Result, type Checked } from "./play";
+import { nextPlay, Play, QuestionZoom, Result, type Checked, type Zoomed } from "./play";
 import { armSound, buzz, sound } from "./sound";
 import { Surprises } from "./surprise";
 import { Avatar, Flame, firstName, Gem, Icon, Owl, problemWords, Sheet, toast, Toast, type IconName } from "./ui";
@@ -92,7 +92,8 @@ export function App() {
   const [me, setMe] = useState<FamilyMe | null>(() => fixWorlds(keep<FamilyMe>("me")));
   const [tab, setTab] = useState<Tab>(() => keep<Tab>("tab") ?? "home");
   const [offline, setOffline] = useState(false);
-  const [sheet, setSheet] = useState<null | "kids" | "feedback">(null);
+  const [sheet, setSheet] = useState<null | "kids" | "feedback" | "zoom">(null);
+  const [zoomed, setZoomed] = useState<Zoomed | null>(null);
   const [ready, setReady] = useState(false);
   const screenRef = useRef(screen);
   screenRef.current = screen;
@@ -201,7 +202,7 @@ export function App() {
     window.scrollTo(0, 0);
     void loadMe();
   };
-  const openSheet = (x: "kids" | "feedback") => {
+  const openSheet = (x: "kids" | "feedback" | "zoom") => {
     buzz();
     sound("pop");
     history.pushState({ f: depth(screenRef.current), sheet: 1 }, "");
@@ -360,6 +361,10 @@ export function App() {
           window.scrollTo(0, 0);
           void loadMe();
         }}
+        onZoom={(z) => {
+          setZoomed(z);
+          openSheet("zoom"); // the phone's Back closes it first, like a sheet
+        }}
       />
     ) : (
       <Missing onBack={toMain} />
@@ -421,6 +426,7 @@ export function App() {
         </Sheet>
       )}
       {sheet === "feedback" && <FeedbackSheet grade={me?.grade ?? acc?.grade ?? null} onClose={closeSheet} />}
+      {sheet === "zoom" && zoomed && <QuestionZoom {...zoomed} onClose={closeSheet} />}
       <Toast />
     </div>
   );

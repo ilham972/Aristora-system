@@ -219,8 +219,11 @@ EOF
   (it may hold "/"): the e2e harness serves those addresses from its storage (`context.route`) and takes the family
   app's uploads through `__abUpload`. Playwright: `setInputFiles` on the hidden `.f-file` input is the camera. Two
   Checks in one test share a `Date`: order Checks by `_creationTime`, not `at`.
-- **The family bundle is at 56.0 of 56 KB** (4 Nov 2026, after the photos and the questions that come back; words
-  were shortened to fit): the next family feature needs room first (trim, or ask him to raise the budget again).
+- **The family bundle is at ~57.4 of 58 KB** (4 Nov 2026: 55.6 after the photos (+3.6 KB), 56.0 after the questions
+  that come back (words were shortened to fit), then the printed question full screen and no selection (+1.5 KB); the
+  budget went 56 → 58 for that, with no dead CSS to cut: every class the scan finds unnamed is built in the code). The
+  next family feature needs room: trim first (the owl's moods are ~6 KB), and weigh what it is worth before raising
+  the budget again (each KB ≈ 20 ms on slow 3G, first open only; the service worker keeps the files).
 - **XP is `xpItems`** (4 Nov 2026): every place that sums XP (the week, the race, the bars, the best week, ever) goes
   through it, so the marks won back on a second try count everywhere at once. Never sum `lv.got` by hand again.
 - **A key's answer shapes** (`convex/lib/phone.ts`, 4 Nov 2026): a new unit or shape goes in `UNIT_WORDS` (normalized
@@ -271,6 +274,13 @@ EOF
   and `synthesizeScrollGesture` do nothing in this headless Chrome (a 5,000px page didn't move), so a test built on them
   passes on broken code: make it fail on the old code first. A page zoomed by a pinch stays zoomed
   (`Emulation.setPageScaleFactor` 1 resets it; `resetPageScaleFactor` doesn't).
+- **Long-press can't be acted out here**: this headless Chrome never selects a word under a held finger (Android's
+  touch selection), even on a page that allows it, so the run-through checks the rule itself (`user-select` is `none`
+  on words and the printed question, `text` on the typing boxes). Never put `user-select: none` on `*` or on inputs:
+  an iPhone then can't type in the box.
+- **Our own gestures** (`QuestionZoom`): the element gets `touch-action: none` (the browser then sends every finger as
+  pointer events and does nothing itself), the fingers move a child by `transform` only, its layout size
+  (`offsetWidth`) is unchanged by the transform, and a `ResizeObserver` keeps it in bounds when the drawing grows.
 - **`scrollIntoView` scrolls every scroller up the chain, the page too**: a chip centred in its row also pulled the
   page up to the row, and the card's own smooth scroll took it back down (the same bounce, with the questions as
   printed). To move a row sideways, scroll the row (`row.scrollTo`); move the page only on purpose, in a layout effect
@@ -284,7 +294,7 @@ EOF
   animation at a time (`document.getAnimations().forEach(a => { a.pause(); a.currentTime = ms })`) and screenshot.
   Marks are in the drawing's coordinates (eyes 559,603 / 703,603; beak tip 629,708; shoulders 618,722 / 644,722);
   a mark that animates sits in `at(x, y, …)` so it turns or scales around its own anchor. Over the budget? It was 50 KB
-  until the owl's acting (56 since): weigh what a feature is worth before raising it again.
+  until the owl's acting, 56 until the photos and the zoomed question, 58 since: weigh what a feature is worth before raising it again.
 - **Look at the family app**: `npm ci` works here now (4 Nov 2026), so `npm run build` and the run-throughs run as on
   GitHub (`SHOTS=<scratchpad>/shots npx vitest run -c vitest.e2e.config.ts tests/e2e/family.e2e.ts`, ~45 s; `fam*`
   shots at 360 and 320 px). Without packages: esbuild is in `/opt/npm-tools`, Preact's source can come from GitHub,

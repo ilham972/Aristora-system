@@ -15,6 +15,10 @@ if ("GestureEvent" in window) {
   document.addEventListener("gesturestart", stop, { passive: false });
   document.addEventListener("gesturechange", stop, { passive: false });
 }
+// Holding a finger on a picture or a link opens no menu (an app has none); a typing box keeps its own.
+document.addEventListener("contextmenu", (e) => {
+  if (!(e.target instanceof Element && e.target.closest("input, textarea"))) e.preventDefault();
+});
 
 // The living owl of the loading page is drawn again inside the app (the same drawing, no extra bytes).
 keepOwl();

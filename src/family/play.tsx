@@ -122,15 +122,157 @@ function useQuestions(world: World, n: number, on: boolean): { got: FamilyQuesti
 }
 
 /** The app's paper on the book's page: rounded, a little air (after the book's own rules). */
-const PAPER_CSS = ".qv { border-radius: 14px; padding: 12px 10px 8px; }";
+const PAPER_CSS = ".qv { border-radius: 14px; padding: 12px 10px 8px; -webkit-user-select: none; user-select: none; }";
 
-function Paper(props: { html: string; css: string; q: number }) {
+/** A question as printed, on the level. A tap opens it full screen (`QuestionZoom`): the app itself never zooms. */
+function Paper(props: { html: string; css: string; q: number; onZoom: () => void }) {
   const host = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!host.current) return;
     return drawQuestion(host.current, props.html, props.css, PAPER_CSS);
   }, [props.html, props.css]);
-  return <div class="f-paper rise" ref={host} aria-label={`Q${props.q}`} />;
+  return <div class="f-paper rise" ref={host} aria-label={`Q${props.q}`} onClick={props.onZoom} />;
+}
+
+/** A printed question to open full screen. */
+export type Zoomed = { q: number; html: string; css: string };
+const ZOOM_AIR = 12;
+const ZOOM_MAX = 4;
+
+/**
+ * A printed question, full screen (his answer, 4 Nov 2026: two fingers never zoom the app, so its small text and its
+ * figures shrunk to fit open here). Two fingers zoom only the question (up to 4x), one finger moves it, a double tap
+ * zooms in (2.5x) or back, ✕ or the phone's Back closes it. The browser leaves the stage alone (`touch-action: none`);
+ * the fingers move the paper by transform only.
+ */
+export function QuestionZoom(props: Zoomed & { onClose: () => void }) {
+  const root = useRef<HTMLDivElement>(null);
+  const stage = useRef<HTMLDivElement>(null);
+  const paper = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    document.body.classList.add("f-noscroll");
+    return () => document.body.classList.remove("f-noscroll");
+  }, []);
+  useEffect(() => {
+    const st = stage.current;
+    const el = paper.current;
+    if (!st || !el) return;
+    const undraw = drawQuestion(el, props.html, props.css, PAPER_CSS);
+    type P = { x: number; y: number };
+    let s = 1;
+    let x = ZOOM_AIR;
+    let y = ZOOM_AIR;
+    const fingers = new Map<number, P>();
+    let pinch: { d: number; m: P; s: number; x: number; y: number } | null = null;
+    let last: P | null = null;
+    let first: P | null = null;
+    let moved = false;
+    let tap = { t: -1e9, x: 0, y: 0 };
+    const gap = (a: P, b: P) => Math.hypot(a.x - b.x, a.y - b.y);
+    // The paper stays on the stage: centred while it fits, else its edges no further in than the air.
+    const draw = (glide = false) => {
+      const w = el.offsetWidth * s;
+      const h = el.offsetHeight * s;
+      const sw = st.clientWidth;
+      const sh = st.clientHeight;
+      x = w + 2 * ZOOM_AIR <= sw ? (sw - w) / 2 : Math.min(ZOOM_AIR, Math.max(sw - w - ZOOM_AIR, x));
+      y = h + 2 * ZOOM_AIR <= sh ? (sh - h) / 2 : Math.min(ZOOM_AIR, Math.max(sh - h - ZOOM_AIR, y));
+      el.classList.toggle("glide", glide);
+      el.style.transform = `translate(${x}px, ${y}px) scale(${s})`;
+      root.current?.classList.toggle("zoomed", s > 1.02);
+    };
+    const at = (e: PointerEvent): P => {
+      const r = st.getBoundingClientRect();
+      return { x: e.clientX - r.left, y: e.clientY - r.top };
+    };
+    const startPinch = () => {
+      const [a, b] = [...fingers.values()];
+      pinch = { d: Math.max(1, gap(a, b)), m: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, s, x, y };
+    };
+    // The point under the fingers stays under them.
+    const zoomTo = (ns: number, from: P, to: P, s0: number, x0: number, y0: number) => {
+      s = Math.min(ZOOM_MAX, Math.max(1, ns));
+      x = to.x - ((from.x - x0) / s0) * s;
+      y = to.y - ((from.y - y0) / s0) * s;
+    };
+    const down = (e: PointerEvent) => {
+      const p = at(e);
+      if (fingers.size === 0) {
+        moved = false;
+        first = p;
+      }
+      fingers.set(e.pointerId, p);
+      last = p;
+      if (fingers.size === 2) {
+        moved = true;
+        startPinch();
+      }
+    };
+    const move = (e: PointerEvent) => {
+      if (!fingers.has(e.pointerId)) return;
+      const p = at(e);
+      fingers.set(e.pointerId, p);
+      if (fingers.size >= 2 && pinch) {
+        const [a, b] = [...fingers.values()];
+        zoomTo((pinch.s * gap(a, b)) / pinch.d, pinch.m, { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, pinch.s, pinch.x, pinch.y);
+      } else if (last) {
+        x += p.x - last.x;
+        y += p.y - last.y;
+        last = p;
+        if (first && gap(p, first) > 10) moved = true;
+      }
+      draw();
+    };
+    const up = (e: PointerEvent) => {
+      if (!fingers.delete(e.pointerId)) return;
+      if (fingers.size >= 2) return startPinch();
+      pinch = null;
+      if (fingers.size === 1) {
+        last = [...fingers.values()][0];
+        return;
+      }
+      last = null;
+      if (moved || e.type === "pointercancel") return;
+      const p = at(e);
+      const now = performance.now();
+      if (now - tap.t < 320 && gap(p, tap) < 30) {
+        tap.t = -1e9;
+        if (s > 1.02) s = 1;
+        else zoomTo(2.5, p, p, s, x, y);
+        draw(true);
+      } else tap = { t: now, x: p.x, y: p.y };
+    };
+    st.addEventListener("pointerdown", down);
+    st.addEventListener("pointermove", move);
+    st.addEventListener("pointerup", up);
+    st.addEventListener("pointercancel", up);
+    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(() => draw()) : null;
+    ro?.observe(st);
+    ro?.observe(el);
+    draw();
+    return () => {
+      undraw();
+      ro?.disconnect();
+      st.removeEventListener("pointerdown", down);
+      st.removeEventListener("pointermove", move);
+      st.removeEventListener("pointerup", up);
+      st.removeEventListener("pointercancel", up);
+    };
+  }, [props.html, props.css]);
+  return (
+    <div class="f-zoom" ref={root} role="dialog" aria-modal="true" aria-label={`Q${props.q}`}>
+      <div class="f-zstage" ref={stage}>
+        <div class="f-zpaper" ref={paper} />
+      </div>
+      <header class="f-ztop">
+        <b class="f-zq">Q{props.q}</b>
+        <button type="button" class="f-round" aria-label="Close" onClick={props.onClose}>
+          <Icon name="close" size={20} />
+        </button>
+      </header>
+      <p class="f-zhint">இரண்டு விரல்களால் பெரிதாக்கு</p>
+    </div>
+  );
 }
 
 // ---- A level ----
@@ -140,6 +282,7 @@ export function Play(props: {
   n: number;
   onBack: () => void;
   onChecked: (f: FamilyLevel, r: Checked, typed: Record<number, string[]>) => void;
+  onZoom: (z: Zoomed) => void;
 }) {
   const formKey = `form.${props.world.unitId}.${props.n}`;
   const draftKey = `draft.${props.world.unitId}.${props.n}`;
@@ -272,6 +415,9 @@ export function Play(props: {
 
   const printed = showQ ? qs.got?.qs.find((x) => x.q === q.q) : undefined;
   const css = qs.got?.css ?? null;
+  const zoom = () => {
+    if (printed && css !== null) props.onZoom({ q: q.q, html: printed.html, css });
+  };
   let bi = 0;
   return (
     <div class={`f-play${showQ ? " withq" : ""}${review ? " rev" : ""}${box?.k === "expr" ? " xpad" : ""}`}>
@@ -358,18 +504,25 @@ export function Play(props: {
         <section class="f-card f-qcard slide" key={q.q}>
           <div class="f-qhead">
             <b class="f-qn">Q{q.q}</b>
-            {q.re ? (
-              <span class="f-xpchip re">↻ +{q.rb} XP</span>
-            ) : (
-              <span class="f-xpchip">
-                <Gem size={15} /> {q.max} XP
-              </span>
-            )}
+            <span class="f-qtools">
+              {printed && css !== null && (
+                <button type="button" class="f-zoombtn" aria-label={`Zoom Q${q.q}`} onClick={zoom}>
+                  <Icon name="zoom" size={19} />
+                </button>
+              )}
+              {q.re ? (
+                <span class="f-xpchip re">↻ +{q.rb} XP</span>
+              ) : (
+                <span class="f-xpchip">
+                  <Gem size={15} /> {q.max} XP
+                </span>
+              )}
+            </span>
           </div>
           {q.re && <p class="f-again">Level {q.re} இல் தவறியது: மீண்டும் முயற்சி!</p>}
           {showQ &&
             (printed && css !== null ? (
-              <Paper html={printed.html} css={css} q={q.q} />
+              <Paper html={printed.html} css={css} q={q.q} onZoom={zoom} />
             ) : (
               <p class="f-paper-note">
                 {qs.failed ? "இணையம் இல்லை: கேள்வியைக் கொண்டுவர முடியவில்லை." : qs.got ? "இந்தக் கேள்வி இன்னும் phone இல் இல்லை." : "கேள்வி வருகிறது…"}

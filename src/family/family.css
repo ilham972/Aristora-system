@@ -95,6 +95,20 @@ html {
   touch-action: manipulation;
   touch-action: pan-x pan-y;
 }
+/* Holding a finger on words selects nothing (no blue handles, no Copy bar, no "Search" from a tap on a word), and on
+   an iPhone holding a picture or a link opens no menu (his answer, 4 Nov 2026); the typing boxes stay normal (an
+   iPhone can't type in a box that can't be selected). */
+body {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+input,
+textarea {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
 button,
 input,
 textarea {
@@ -2117,6 +2131,91 @@ p {
   margin-top: 10px;
   font-size: 13px;
   color: var(--ink3);
+}
+/* A printed question opens full screen: the button beside the XP (the row stays 35px tall), or a tap on the paper. */
+.f-qtools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.f-zoombtn {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--brand-soft);
+  color: var(--brand-2);
+  box-shadow: 0 2px 0 var(--brand-mid);
+  transition: transform 0.08s ease;
+}
+.f-zoombtn:active {
+  transform: translateY(2px);
+  box-shadow: none;
+}
+.f-paper {
+  cursor: zoom-in;
+}
+.f-zoom {
+  position: fixed;
+  z-index: 60;
+  inset: 0;
+  background: var(--bg);
+  animation: f-fade 0.2s ease both;
+}
+/* The browser leaves the stage alone: the fingers move only the paper (QuestionZoom). */
+.f-zstage {
+  position: absolute;
+  top: calc(var(--safe-t) + 62px);
+  bottom: 0;
+  left: max(0px, calc(50% - 260px));
+  right: max(0px, calc(50% - 260px));
+  overflow: hidden;
+  touch-action: none;
+}
+.f-zpaper {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: calc(100% - 24px);
+  transform-origin: 0 0;
+  will-change: transform;
+}
+.f-zpaper.glide {
+  transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+.f-ztop {
+  position: absolute;
+  top: 0;
+  left: max(0px, calc(50% - 260px));
+  right: max(0px, calc(50% - 260px));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: calc(var(--safe-t) + 11px) 16px 0;
+}
+.f-zq {
+  font: 800 26px/1 var(--display);
+  color: var(--ink);
+  padding-top: 3px;
+}
+.f-zhint {
+  position: absolute;
+  left: 50%;
+  bottom: calc(20px + var(--safe-b));
+  transform: translateX(-50%);
+  padding: 8px 14px 6px;
+  border-radius: 999px;
+  background: rgba(29, 27, 56, 0.72);
+  color: #fff;
+  font-size: 13.5px;
+  white-space: nowrap;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+.f-zoom.zoomed .f-zhint {
+  opacity: 0;
 }
 /* The pad: solid (a blur behind it costs a cheap phone its smoothness while he types). */
 .f-padkeys {

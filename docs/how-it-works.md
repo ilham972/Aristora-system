@@ -831,8 +831,8 @@ Levels done at home made a pile for the corrector in class. Now the student does
 in the family app on the family phone, taps **Check** once per level and sees ✓ / ✗ at once; the class sees his marks
 before he walks in. Since 3 Nov 2026 it is also **the institute's student app** (his voice note: "this is also the
 learning app of our education institute"): one profile, his class times, what he did in class each day, his progress.
-- Its own small bundle (`src/family/`, ~52 KB over the wire for code, style and page on 4 Nov 2026; `scripts/build.mjs`
-  stops the build over 56 KB: 50 until the owl's acting, ~6 KB), **one font for Tamil and English** (Baloo Thambi 2, weights 500–800, one variable file
+- Its own small bundle (`src/family/`, ~57 KB over the wire for code, style and page on 4 Nov 2026; `scripts/build.mjs`
+  stops the build over 58 KB: 50 until the owl's acting, ~6 KB; 56 until the photos and the zoomed question), **one font for Tamil and English** (Baloo Thambi 2, weights 500–800, one variable file
   cut to Tamil + Latin, ~57 KB: `src/family/fonts/`, preloaded by the page, kept by the service worker, not in the
   budget; 4 Nov 2026: the phone's own Tamil fonts differ on every phone, Tamil Sangam MN on iPhones, and never matched
   the English words beside them), no client library (Convex's plain HTTP API, `src/family/net.ts`). It lives under
@@ -845,9 +845,18 @@ learning app of our education institute"): one profile, his class times, what he
   phone's "force enable zoom" overrides the page; iPhones from iOS 13), and Safari's own pinch stopped in `main.tsx`
   (`gesturestart`/`gesturechange`: an iPhone ignores user-scalable=no since iOS 10; no listener that could slow
   scrolling). One finger still scrolls every page, the map and the question strip; double tap never zoomed. Before,
-  two thumbs on the pad zoomed it to 1.5x and the bottom bar went off the screen. The cost: a printed question is
-  10 pt and its wide tables and diagrams are shrunk to fit (`questionView.ts`, down to 0.35x); they can no longer be
-  pinched bigger. Only Chrome is checked here (the run-through pinches with real touch events); an iPhone is not.
+  two thumbs on the pad zoomed it to 1.5x and the bottom bar went off the screen. Only Chrome is checked here (the
+  run-through pinches with real touch events); an iPhone is not.
+  - **A printed question opens full screen** (his answer the same day: a printed question is 10 pt and its wide tables
+    and diagrams are shrunk to fit, down to 0.35x, so they could only be read by zooming): the 🔍 button beside the XP
+    (only while the question is on screen; the row stays as tall) or a tap on the paper opens `QuestionZoom`: two
+    fingers zoom only the question (1x to 4x, the point under the fingers stays under them), one finger moves it, a
+    double tap zooms to 2.5x or back, ✕ or the phone's Back closes it on the same question (it is a sheet in `App`:
+    `openSheet("zoom")`). A Tamil hint "இரண்டு விரல்களால் பெரிதாக்கு" until it is zoomed. The app itself still never zooms.
+  - **Holding a finger on words selects nothing** (his answer: no blue handles, no Copy bar; no "Search" from a tap
+    on a word either): `user-select: none` on the body and on the printed question; the typing boxes (sign-in,
+    feedback) stay `text` (an iPhone can't type into a box that can't be selected); holding a picture or a link opens
+    no menu (`-webkit-touch-callout: none`, `contextmenu` stopped in `main.tsx` outside typing boxes).
 - **Its look** (his voice notes and the two pictures he liked, 3 Nov 2026; the palette rebuilt 4 Nov 2026 after his
   review: "the yellow behind the purple owl is not beautiful"): for every grade, 6 to 11 (his words: a night sky is
   fine for Grade 7, silly for Grade 11), so light and calm. **Big surfaces are only ARISTORA's violet** (`--brand`
