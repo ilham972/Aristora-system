@@ -233,6 +233,26 @@ p {
   background: #efedf8;
   color: var(--ink2);
 }
+/* The photos he owes before the next level opens: the whole note is the button. */
+.f-stopnote {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: calc(100% - 32px);
+  border: 0;
+  text-align: left;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.f-stopnote > span {
+  flex: 1;
+  min-width: 0;
+}
+.f-stopgo {
+  flex: none;
+  font: 800 14px/1 var(--display);
+}
 .f-err {
   color: var(--wrong-ink);
   background: var(--wrong-soft);

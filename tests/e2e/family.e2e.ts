@@ -949,7 +949,9 @@ test("photos from home: a drawing photographed in the level, the working on a wr
   await contains(F.locator(".f-big"), "16");
   const q8 = F.locator(".f-bq", { has: F.locator(".f-rq", { hasText: "Q8" }) });
   const q10 = F.locator(".f-bq", { has: F.locator(".f-rq", { hasText: "Q10" }) });
-  await contains(q8.locator(".f-sol"), "24");
+  // Q8 comes back in Level 3: no solution to copy yet (his rule, 4 Nov 2026), a gold note instead.
+  await visible(q8.locator(".f-comesback"));
+  expect(await q8.locator(".f-sol").count()).toBe(0);
   await contains(q8.locator(".f-bq-typed"), "42");
   await visible(q10.locator(".f-ph-state.wait"));
   await contains(F.locator(".f-owebar"), "1 படங்கள்");
@@ -1030,6 +1032,36 @@ test("photos from home: a drawing photographed in the level, the working on a wr
   await F.getByRole("button", { name: "Back" }).click();
   await playIs(F, "Level 2");
   expect(await F.locator(".f-lv-dot").count()).toBe(0); // opened: no longer new
+
+  // A Check whose answer never reached the phone (his report, 4 Nov 2026: "This level is already marked", no summary,
+  // the next level shut and no word why). Level 2 typed on the pad, then marked on the server behind the phone's back:
+  // Check opens Level 2's book, not the same refusal forever.
+  await F.locator(".f-lv.play").click();
+  await contains(F.locator(".f-qn"), "Q11");
+  await type(F, ["5"]);
+  const famToken = await F.evaluate(() => (JSON.parse(localStorage.getItem("aristora.family.accounts") ?? "[]") as { token: string }[])[0].token);
+  const checkEmpty = async (n: number) => {
+    const lv = await t.query(api.family.level, { token: famToken, unitId: u01, n });
+    await t.mutation(api.family.check, { token: famToken, unitId: u01, n, typed: lv.qs.map((q) => ({ q: q.q, a: [] as string[] })) });
+  };
+  await checkEmpty(2);
+  await F.locator(".f-checkpill").click();
+  await F.locator(".f-review").getByRole("button", { name: "Check ✓" }).click();
+  await visible(F.locator(".f-bookscr"));
+  expect((await F.locator(".f-bookscr .f-kicker").innerText()).toLowerCase()).toContain("level 2");
+  await contains(F.locator(".f-toast"), "ஏற்கனவே");
+  // Levels 3 and 4 too (Level 2 still owes its photos): Level 5 waits, and the Stage says why, where he looks.
+  await checkEmpty(3);
+  await checkEmpty(4);
+  await F.getByRole("button", { name: "Back" }).click();
+  await playIs(F, "Level 5");
+  await contains(F.locator(".f-stopnote"), "Level 5");
+  await contains(F.locator(".f-stopnote"), "Level 2");
+  await noSideScroll(F);
+  await shot(F, "fam-ph08-photos-first");
+  await F.locator(".f-stopnote").click();
+  await visible(F.locator(".f-bookscr"));
+  expect((await F.locator(".f-bookscr .f-kicker").innerText()).toLowerCase()).toContain("level 2");
 
   expect(problems).toEqual([]);
 });

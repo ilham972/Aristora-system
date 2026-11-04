@@ -1110,6 +1110,12 @@ learning app of our education institute"): one profile, his class times, what he
     still to come back (`comesBack`: the `retryPool` test, and a level at least 2 after its own not handed in) the book
     shows "↻ … மீண்டும் வரும். தீர்வு அதன் பின்." (`back`, `.f-comesback`) instead of `sol`; after his second try
     (right or wrong), or once the book is finished without it, the solution shows. His working photo is still asked.
+  - **A level the server already has** (4 Nov 2026, his screenshot: Check said "This level is already marked", no
+    summary, the next level shut): the phone keeps a level while he types, so a Check whose answer was lost (the signal
+    dropped just after it) or a level a teacher marked in class kept showing the old level. Now, when opening the level
+    or at Check, "already marked" clears what the phone kept for it and opens its book (marked at home) with "Level n
+    ஏற்கனவே சரிபார்க்கப்பட்டது", or says the teacher marked it; any other refusal (photos first, levels in order) is said
+    instead of the old level (`Play`: `marked`, `gone`, `onMarked`).
   - **Photos he owes** (`familyAnswers.owe`, written at Check, with each part question's marks as at that Check:
     `pm` the teacher's share, `pg` the phone's; `partMarks` reads them, and for an older Check a question the phone now
     reads is the teacher's whole): `part` = a question with a part only a teacher can mark
@@ -1122,7 +1128,8 @@ learning app of our education institute"): one profile, his class times, what he
     retake is owed again (`owedOf`).
   - **His limit** (his rule: "without the explanation for a wrong question they can go 2 levels maximum"): once he has
     checked 2 more levels at home after the oldest level that still owes photos, the next level waits (`blockedBy`,
-    in `playable` and `me.blocked`): the Stage shows a 🔒 on START, Continue opens that level's book. It waits on HIM
+    in `playable` and `me.blocked`): the Stage says it above the road (`.f-stopnote`: "Level 5 திறக்க, முதலில் Stage 3 ·
+    Level 2 இன் 9 படங்களை அனுப்பு", a tap opens that level's book, in any Stage), START and Continue open that book too. It waits on HIM
     (photo sent), never on the teacher's reply. The Stage shows each level's owed count (📷 n) and a dot for her answers
     he hasn't opened (`nw`; `family.seen` when the book opens). Settings → Photos (the owner) turns "required" off
     (`photos.setRequired`, meta `photos.required`): then nothing waits; photos can still be sent.

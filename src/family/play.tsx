@@ -282,6 +282,8 @@ export function Play(props: {
   n: number;
   onBack: () => void;
   onChecked: (f: FamilyLevel, r: Checked, typed: Record<number, string[]>) => void;
+  /** The server has this level marked at home already (a Check whose answer never reached this phone): its book. */
+  onMarked: () => void;
   onZoom: (z: Zoomed) => void;
 }) {
   const formKey = `form.${props.world.unitId}.${props.n}`;
@@ -301,6 +303,20 @@ export function Play(props: {
   const qs = useQuestions(props.world, props.n, showQ);
   const strip = useRef<HTMLDivElement>(null);
 
+  // The server says this level is marked (his report, 4 Nov 2026: Check said "This level is already marked", no
+  // summary, no word on why the next level stayed shut): his first Check went through but its answer never reached
+  // the phone (the signal dropped), or a teacher marked it in class. What the phone kept for it is no use any more:
+  // a level marked at home opens its book (the marks, the solutions, the photos it asks for).
+  const marked = (e: unknown) => e instanceof NetError && !e.offline && /already marked|already has this level/.test(e.message);
+  const gone = () => {
+    keep(draftKey, null);
+    keep(formKey, null);
+    keep(spotKey, null);
+    keep(`qs.${props.world.unitId}.${props.n}`, null);
+    query("family:book", { unitId: props.world.unitId, n: props.n })
+      .then(() => props.onMarked())
+      .catch(() => setErr(`Level ${props.n} ஐ உன் ஆசிரியர் ஏற்கனவே திருத்திவிட்டார்.`));
+  };
   useEffect(() => {
     query("family:level", { unitId: props.world.unitId, n: props.n })
       .then((f) => {
@@ -308,7 +324,9 @@ export function Play(props: {
         setForm(f as FamilyLevel);
       })
       .catch((e) => {
-        if (!form) setErr(problemWords(e));
+        if (marked(e)) return gone();
+        // Refused now (the photos first, the levels in order): say why, never the old level kept on the phone.
+        if (!form || (e instanceof NetError && !e.offline)) setErr(problemWords(e));
       });
   }, [props.world.unitId, props.n]);
   // A new question (his report, 4 Nov 2026: after → the screen jumped up and came back down). Only the strip moves,
@@ -408,6 +426,7 @@ export function Play(props: {
       keep(`qs.${form.unitId}.${form.n}`, null);
       props.onChecked(form, res, typed);
     } catch (e) {
+      if (marked(e)) return gone();
       toast(e instanceof NetError && e.offline ? "இணையம் இல்லை. உன் விடைகள் இந்த phone இல் உள்ளன: இணையம் வந்ததும் மீண்டும் அழுத்து." : problemWords(e), true);
     } finally {
       setBusy(false);
