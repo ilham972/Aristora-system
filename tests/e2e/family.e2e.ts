@@ -892,3 +892,113 @@ test("an app, not a web page: two fingers never zoom (Home, the map, a Level's p
   await contains(P.locator(".f-qn"), "Q1"); // the fingers typed nothing and moved nothing
   expect(problems).toEqual([]);
 });
+
+/** A small made-up drawing on lined paper, as a phone camera would give it (PNG). */
+const PAPER_PNG = "iVBORw0KGgoAAAANSUhEUgAAAGAAAABICAIAAACGBWc0AAACGklEQVR42u2cPXLCMBCFzRuqXII6J0iVQ1DT5AY5CzdwQ+0bJEWqFEmbmjqp05LCM54MxmYlrVYr87ZgGH4k+WP36bFje3U6nRrGdIAICIiACIiACIiAlhrr188fUpiJFY0iS4yACIiACEgWm81ueOQudpnOEMfjgRl0IZxwcQdoXFZOCm318vFdfBFP2+f+Sdvtp165XQ0aMuWsuKZev9ESG1OgSEuFpqwYwWFxjZOoICO4peOEEfy7nlsU6bh0KJJEcFtcTgoN/umUZVSmJ912+4h5227fO2zLNZs66XRzbG+vURGdIoWGiugUYYQaez2WzghuXY8TZ4SKiqtIoaFGOpaMUHWb2UCMUKP0WM6Vqydt2VTOOlcuJ93/pGb7cb7p1h4S/v3+ceqth6+3oHnVGelnkHznmuESQSrTjqkMSLjKMzQzBy//ZCZGWQDJ6QgrSP4VdTHSBCT5AYdDDRIX+XfVk0gNkJxOBJqgQXQZoS46wwgzAq/7FwQ2xl+LTigjF076qpG9222bpvk9dLp+Yn5YLXudqkFXiytFlRM1W0WMYOMJ1elIxlQRIxhIT+7IKkYw+MOVI33+jywZPzqJIjXIyelfBqvF4ukkihEWc75uptWiinNQCvaqsOziSi+0ACft59xlywZ2wC5m3GZ20sCWAqpdeqKVG4vcsxSPiBf18opDAiIgAiKghvfuaHjvDpYYg4DC4w9skm3oaYrUiQAAAABJRU5ErkJggg==";
+
+test("photos from home: a drawing photographed in the level, the working on a wrong answer, marked by a person he picks; the solution and her answer on his phone", async () => {
+  const backend = makeBackend(modules);
+  const t = backend.t;
+  await addPerson(t, { name: "Owner", token: OWNER_TOKEN, role: "owner" });
+  const as = { token: OWNER_TOKEN };
+  await t.mutation(api.setup.ensure, as);
+  const u01 = await t.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G8-U01")).first())!._id);
+  // Level 1: Q8's key shows its working before the answer; Q10 is a name (the teacher marks it from a photo).
+  const key = fakeKey().map((k) => (k.q === 8 ? { q: 8, a: "8 × 3 = **24**" } : k.q === 10 ? { q: 10, a: "சிறப்புப் பெயர்" } : k));
+  await t.mutation(api.catalog.saveWorkbook, {
+    ...as,
+    unitId: u01,
+    parts: BOOK.data.parts.map((p) => ({ id: p.id, to: p.to, ...(p.each ? { each: p.each } : {}) })),
+    levels: BOOK.data.levels.map((l) => ({ to: l.to, max: l.max })),
+    marks: BOOK.data.marks ?? {},
+    replace: true,
+    key,
+  });
+  const hana = await t.mutation(api.students.add, { ...as, name: "Hana K", grade: 8, term: 1, stage: "master", unitId: u01 });
+  const code = "hana-photos-link-0123456789ab";
+  await t.mutation(api.families.makeLink, { ...as, studentId: hana, codeHash: secretHash("family-link", code) });
+  const NILA = "nila-photos-token-0123456789abcdefghijklmnopq";
+  await addPerson(t, { name: "Nila", token: NILA, tabs: [], can: ["photos"] });
+  const paper = { name: "paper.png", mimeType: "image/png", buffer: Buffer.from(PAPER_PNG, "base64") };
+
+  // Level 1 on the pad; at Q10 (a name: the teacher's) she photographs her paper.
+  const F = await open(backend, `${site.url}/f/#join=${code}`);
+  await contains(F.locator(".f-h1"), "Hana");
+  await F.getByRole("button", { name: "START" }).click();
+  await stageNow(F, "Level 1");
+  await F.locator(".f-lv.play").click();
+  await contains(F.locator(".f-qn"), "Q1");
+  for (const a of [["3"], ["6"], ["9"], ["1", "2"], ["1", "5"], ["1", "8"], ["7", "n", "-", "1"], ["4", "2"], ["9"], ["1", "0"]]) await type(F, a);
+  await contains(F.locator(".f-qn"), "Q10");
+  await contains(F.locator(".f-teach"), "படம் எடு");
+  await F.locator(".f-qcard .f-file").setInputFiles(paper);
+  await visible(F.locator(".f-qcard .f-thumb img"));
+  await noSideScroll(F);
+  await shot(F, "fam-ph01-camera");
+  await F.locator(".f-padkeys .f-key.next").click();
+  await F.locator(".f-review").getByRole("button", { name: "Check ✓" }).click();
+
+  // The reveal: 16 of 18 on the phone; below it the book: Q8 with the key's working and a camera for her working; the
+  // Q10 photo goes by itself.
+  await contains(F.locator(".f-big"), "16");
+  const q8 = F.locator(".f-bq", { has: F.locator(".f-rq", { hasText: "Q8" }) });
+  const q10 = F.locator(".f-bq", { has: F.locator(".f-rq", { hasText: "Q10" }) });
+  await contains(q8.locator(".f-sol"), "24");
+  await contains(q8.locator(".f-bq-typed"), "42");
+  await visible(q10.locator(".f-ph-state.wait"));
+  await contains(F.locator(".f-owebar"), "1 படங்கள்");
+  await q8.locator(".f-file").setInputFiles(paper);
+  await visible(q8.locator(".f-thumb img"));
+  await noSideScroll(F);
+  await shot(F, "fam-ph02-book");
+  await q8.getByRole("button", { name: /அனுப்பு/ }).click();
+  await visible(q8.locator(".f-ph-state.wait"));
+  expect(await F.locator(".f-owebar").count()).toBe(0);
+
+  // Nila (Photos only) on the teachers' app: the gear says 2; Settings opens on Photos. Q10: marks 2. Q8: why wrong.
+  const N = await open(backend, site.url, size(390, 844), () => {
+    if (sessionStorage.getItem("t")) return;
+    sessionStorage.setItem("t", "1");
+    localStorage.setItem("aristora.token", "nila-photos-token-0123456789abcdefghijklmnopq");
+  });
+  await contains(N.locator(".gear-n"), "2");
+  await N.getByRole("button", { name: /Settings/ }).click();
+  const item = N.locator(".phq-item");
+  await contains(item.locator(".phq-who"), "Q10");
+  await visible(item.locator(".phq-ph img"));
+  await until(async () => await item.locator(".phq-ph img").evaluate((i) => (i as HTMLImageElement).naturalWidth > 0), "the photo loaded");
+  await item.locator(".phq-m", { hasText: "2" }).click();
+  await item.locator(".phq-chip", { hasText: "Well done" }).click();
+  await shot(N, "fam-ph03-queue-part");
+  await item.getByRole("button", { name: /Save/ }).click();
+  await contains(item.locator(".phq-who"), "Q8");
+  await contains(item.locator(".phq-typed"), "42");
+  await contains(item.locator(".phq-key"), "24");
+  await item.locator(".phq-chip", { hasText: "Decimal point" }).click();
+  await N.locator(".phq-words input").fill("Count the places after the point");
+  await shot(N, "fam-ph04-queue-working");
+  await item.getByRole("button", { name: /Save/ }).click();
+  await contains(N.locator(".phq-sum"), "No photos waiting");
+  expect(await N.locator(".gear-n").count()).toBe(0);
+
+  // Hana: Level 1 has a dot on the Stage; its book has both answers, in Tamil, and Q10's marks.
+  await F.reload();
+  await stageNow(F, "Level 2");
+  await visible(F.locator(".f-lv-dot"));
+  await F.locator(".f-lv", { has: F.locator(".f-lv-dot") }).click();
+  await visible(F.locator(".f-bookscr"));
+  expect((await F.locator(".f-bookscr .f-kicker").innerText()).toLowerCase()).toContain("level 1");
+  await contains(q8.locator(".f-answer"), "தசமப் புள்ளி");
+  await contains(q8.locator(".f-answer-note"), "Count the places");
+  await contains(q10.locator(".f-answer"), "2/2");
+  await noSideScroll(F);
+  await shot(F, "fam-ph05-answers");
+  await F.setViewportSize({ width: 320, height: 640 });
+  await noSideScroll(F);
+  await shot(F, "fam-ph06-answers-320");
+  await F.getByRole("button", { name: "Back" }).click();
+  await playIs(F, "Level 2");
+  expect(await F.locator(".f-lv-dot").count()).toBe(0); // opened: no longer new
+
+  expect(problems).toEqual([]);
+});

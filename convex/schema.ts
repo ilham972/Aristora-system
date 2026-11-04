@@ -35,7 +35,7 @@ export const partId = v.union(
 /** The jobs (bottom tabs). Manager (3 Nov 2026): the hall and every room, sending students to any teacher. */
 export const tab = v.union(v.literal("correction"), v.literal("theory"), v.literal("evaluation"), v.literal("manager"));
 /** Extra permissions beyond the tabs. Feedback (3 Nov 2026, his answer): reads what students send from the family app. */
-export const extra = v.union(v.literal("students"), v.literal("books"), v.literal("reports"), v.literal("feedback"));
+export const extra = v.union(v.literal("students"), v.literal("books"), v.literal("reports"), v.literal("feedback"), v.literal("photos"));
 /** What a family app feedback is about (3 Nov 2026). */
 export const feedbackTopic = v.union(
   v.literal("class"),
@@ -531,6 +531,9 @@ export default defineSchema({
     /** Feedback sent from this phone today (Sri Lanka day number, count): a few a day at most. */
     fbDay: v.optional(v.number()),
     fbN: v.optional(v.number()),
+    /** Photo uploads asked for from this phone today (Sri Lanka day number, count): `PHOTO_URLS_PER_DAY` at most. */
+    phDay: v.optional(v.number()),
+    phN: v.optional(v.number()),
   })
     .index("by_token", ["tokenHash"])
     .index("by_student", ["studentId"]),
@@ -560,9 +563,50 @@ export default defineSchema({
     n: v.number(),
     at: v.number(),
     qs: v.array(v.object({ q: v.number(), a: v.array(v.string()), ok: v.array(v.union(v.array(v.boolean()), v.null())) })),
+    /**
+     * The photos this Check asks of him (4 Nov 2026): `part` = questions with a part only a teacher can mark (a
+     * drawing, a reason), `working` = questions he lost marks on (his working, to see why). Missing on Checks before.
+     */
+    owe: v.optional(v.object({ part: v.array(v.number()), working: v.array(v.number()) })),
   })
     .index("by_unit", ["unitId", "at"])
     .index("by_student", ["studentId", "at"]),
+  /**
+   * Photos from home (4 Nov 2026, his voice notes: "everything corrected at home"). One row per question and kind of a
+   * level checked at home: `part` = the part(s) the phone can't mark, marked from the photo by a person he picks (the
+   * Photos permission); `working` = his working on a wrong answer, answered with its cause (`why`). His rule: both are
+   * required, 2 levels at most without them (`OWE_LEVELS`; Settings → Photos can turn that off). The files live in
+   * Convex storage only until a day after marking (`photos.sweep`); a retake's files go at once.
+   */
+  homePhotos: defineTable({
+    studentId: v.id("students"),
+    unitId: v.id("units"),
+    n: v.number(),
+    q: v.number(),
+    kind: v.union(v.literal("part"), v.literal("working")),
+    /** 1–3 photos; empty once deleted (`gone`). */
+    files: v.array(v.id("_storage")),
+    /** Sent (the last time). */
+    at: v.number(),
+    state: v.union(v.literal("waiting"), v.literal("done"), v.literal("retake")),
+    doneAt: v.optional(v.number()),
+    /** Who marked it (her name) and her id. */
+    by: v.optional(v.string()),
+    byId: v.optional(v.id("users")),
+    /** A part: her marks for the part(s) the phone left. */
+    got: v.optional(v.number()),
+    /** The cause of a wrong answer, or a remark on a part (`WHY`); her own words (≤ `NOTE_MAX`). */
+    why: v.optional(v.string()),
+    note: v.optional(v.string()),
+    /** He opened her answer on his phone. */
+    seen: v.optional(v.number()),
+    /** Its files were deleted at. */
+    gone: v.optional(v.number()),
+  })
+    .index("by_student", ["studentId", "unitId", "n", "q"])
+    .index("by_state", ["state", "at"])
+    .index("by_done", ["doneAt"])
+    .index("by_unit", ["unitId"]),
 
   /** Small settings: the data version (for one-time updates). */
   meta: defineTable({ key: v.string(), value: v.any() }).index("by_key", ["key"]),

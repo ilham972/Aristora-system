@@ -8,6 +8,8 @@ declare const __CONVEX_URL__: string;
 type TestBackend = {
   mutation(name: string, args: unknown): Promise<unknown>;
   query?(name: string, args: unknown): Promise<unknown>;
+  /** Tests: keep a photo in the fake backend's storage (the real phone posts it to Convex). */
+  upload?(blob: Blob): Promise<string>;
 };
 const testBackend = (globalThis as { __ARISTORA_TEST_BACKEND__?: TestBackend }).__ARISTORA_TEST_BACKEND__;
 
@@ -197,6 +199,30 @@ export function removeAccount(id: string): Account | null {
 
 export const query = (path: string, args: Record<string, unknown> = {}) => call("query", path, { token: token() ?? undefined, ...args });
 export const mutation = (path: string, args: Record<string, unknown> = {}) => call("mutation", path, { token: token() ?? undefined, ...args });
+/** The child on screen: photos waiting on this phone are his (4 Nov 2026). */
+export const childId = () => currentId ?? "_";
+
+/** One photo into Convex storage (an address from `family:photoUrl`, then a plain POST): its storage id. */
+export async function uploadPhoto(blob: Blob): Promise<string> {
+  const url = (await mutation("family:photoUrl")) as string;
+  if (testBackend?.upload) {
+    try {
+      return await testBackend.upload(blob);
+    } catch (e) {
+      throw new NetError(words(e));
+    }
+  }
+  let res: Response;
+  try {
+    res = await fetch(url, { method: "POST", headers: { "Content-Type": blob.type || "image/jpeg" }, body: blob });
+  } catch {
+    throw new NetError("offline", true);
+  }
+  const j = (await res.json().catch(() => null)) as { storageId?: string } | null;
+  if (!res.ok || !j?.storageId) throw new NetError("படம் போய்ச் சேரவில்லை. மீண்டும் அனுப்பு.");
+  return j.storageId;
+}
+
 /** A mutation for one child, whoever is on screen (signing him out). */
 export const mutationFor = (t: string, path: string, args: Record<string, unknown> = {}) => call("mutation", path, { ...args, token: t });
 /** The two open calls (no token yet). */

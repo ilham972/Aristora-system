@@ -19,6 +19,7 @@ import { hideSplash } from "../splash";
 import { BoardTab } from "./board";
 import { FeedbackSheet } from "./feedback";
 import { HomeTab } from "./home";
+import { BookScreen } from "./book";
 import { LearnTab, StageScreen } from "./map";
 import { Kids, MeTab } from "./me";
 import {
@@ -56,6 +57,8 @@ type Screen =
   | { k: "main" }
   | { k: "stage"; unitId: string }
   | { k: "level"; unitId: string; n: number }
+  /** A level he checked at home: solutions, photos to send, the teacher's answers (4 Nov 2026). */
+  | { k: "book"; unitId: string; n: number }
   | {
       k: "result";
       unitId: string;
@@ -67,9 +70,9 @@ type Screen =
     };
 
 /** How deep a screen is: Back steps up one at a time (the reveal and a Level go back to their Stage). */
-const depth = (s: Screen) => (s.k === "level" || s.k === "result" ? 2 : s.k === "stage" || s.k === "add" ? 1 : 0);
+const depth = (s: Screen) => (s.k === "level" || s.k === "result" || s.k === "book" ? 2 : s.k === "stage" || s.k === "add" ? 1 : 0);
 const parent = (s: Screen): Screen =>
-  s.k === "level" || s.k === "result" ? { k: "stage", unitId: s.unitId } : s.k === "stage" ? { k: "main" } : s.k === "add" ? (current() ? { k: "main" } : { k: "signin" }) : s;
+  s.k === "level" || s.k === "result" || s.k === "book" ? { k: "stage", unitId: s.unitId } : s.k === "stage" ? { k: "main" } : s.k === "add" ? (current() ? { k: "main" } : { k: "signin" }) : s;
 
 function firstScreen(): Screen {
   const code = /[#&]join=([A-Za-z0-9_-]+)/.exec(location.hash)?.[1];
@@ -276,6 +279,11 @@ export function App() {
   const worldOf = (unitId: string): World | undefined => me?.worlds.find((w) => w.unitId === unitId);
   /** His Level now, from anywhere (the Continue buttons). */
   const playNow = () => {
+    // His limit (4 Nov 2026): photos owed for 2 levels: Continue opens that level's book.
+    if (me?.blocked) {
+      toast(`📷 முதலில் Stage ${me.blocked.no} · Level ${me.blocked.n} இன் படங்களை அனுப்பு.`);
+      return go({ k: "book", unitId: me.blocked.unitId, n: me.blocked.n });
+    }
     const next = nextPlay(me);
     if (!next) return toast("இப்போது phone இல் செய்ய Level இல்லை. உன் தாளை வகுப்பில் கொடு.");
     sound("start");
@@ -309,6 +317,24 @@ export function App() {
         onPlay={(n) => {
           sound("start");
           go({ k: "level", unitId: w.unitId, n });
+        }}
+        onBook={(n) => go({ k: "book", unitId: w.unitId, n })}
+      />
+    ) : (
+      <Missing onBack={toMain} />
+    );
+  } else if (screen.k === "book") {
+    const w = worldOf(screen.unitId);
+    body = w ? (
+      <BookScreen
+        key={`${w.unitId}.${screen.n}`}
+        unitId={w.unitId}
+        n={screen.n}
+        no={w.no}
+        title={w.ta}
+        onBack={() => {
+          up();
+          void loadMe();
         }}
       />
     ) : (

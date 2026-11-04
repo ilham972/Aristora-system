@@ -212,6 +212,15 @@ EOF
   "name y > 0" check passed while the name sat under the top bar).
 - A sheet over a sheet (sign out over Attendance): `body.locked` is counted (`openSheets`), never removed by the inner
   one. A toast can cover a sheet's title: Correction clears toasts when a sheet opens.
+- **Photos and file storage** (4 Nov 2026): a mutation that fails undoes its `ctx.storage.delete` too, so a refused
+  upload is left to the hourly sweep (never delete then `fail`). The sweep deletes only image files nobody references:
+  any other stored file (a voice note one day) must be referenced by a row before an hour passes, or kept out of the
+  sweep. convex-test can't return a Blob from `t.run` (send bytes); its `getUrl` ends with the file's base64 sha256
+  (it may hold "/"): the e2e harness serves those addresses from its storage (`context.route`) and takes the family
+  app's uploads through `__abUpload`. Playwright: `setInputFiles` on the hidden `.f-file` input is the camera. Two
+  Checks in one test share a `Date`: order Checks by `_creationTime`, not `at`.
+- **The family bundle is at 55.6 of 56 KB** (4 Nov 2026, after the photos: +3.6 KB): the next family feature needs
+  room (trim, or ask him to raise the budget again).
 - **A key's answer shapes** (`convex/lib/phone.ts`, 4 Nov 2026): a new unit or shape goes in `UNIT_WORDS` (normalized
   form: `cm^2`, longest first is automatic) with a test in `tests/family.test.ts`; a one-letter unit only with a space
   before it (else "5m", an answer in m, breaks). `notes()` drops any bracket with a comma, so a whole-answer point or

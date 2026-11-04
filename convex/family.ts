@@ -17,6 +17,12 @@
 //   classes      -> his class side (3 Nov 2026): his grade's class hours (Settings → Class hours), the days he
 //                   usually comes, this week, his last classes, in class now.
 //   day          -> one day of his (the last 60): sign-in, Theory and Evaluation, levels in class and at home, sign-out.
+//   book         -> a level he checked at home, question by question: marks, the key's working where he lost marks, his
+//                   photos and the teacher's answers (4 Nov 2026).
+//   photoUrl     -> an address to upload one photo to (a few dozen a day per phone).
+//   photoSend    -> attach 1–3 uploaded photos to a question: a part only a teacher can mark, or his working on a wrong
+//                   answer (his rule: both required; 2 levels at most without them).
+//   seen         -> he opened the teacher's answers on a level.
 // Every function takes the family phone's token (familyViewer / familyActor); peek, join and signIn are open on
 // purpose (they are how a phone gets its token). A phone may hold several children (one token each): it sends the
 // token of the child on screen.
@@ -55,8 +61,10 @@ import {
   type World,
 } from "./lib/family";
 import { DAY_MS, SL_OFFSET_MS, slDay, slDayNo, slWeekStart } from "./lib/day";
+import { bookOf, homeChecks, type LevelBook } from "./lib/homeWork";
 import { computeMaster, markBefore, type MQ, type MState } from "./lib/master";
 import { boxCount, formOf, INPUT_MAX, markQuestion, phoneKey, type FormQ } from "./lib/phone";
+import { blockedBy, PHOTO_BYTES, PHOTO_MAX, PHOTO_URLS_PER_DAY, type PhotoKind } from "./lib/photos";
 import { ranks } from "./lib/progress";
 
 const token = v.optional(v.string());
@@ -205,6 +213,11 @@ export type FamilyMe = {
    */
   ol: boolean;
   /**
+   * His limit (4 Nov 2026): the oldest level he checked at home that still owes photos, once he has checked 2 more since.
+   * The next level waits until he sends them (null: nothing waits).
+   */
+  blocked: { unitId: Id<"units">; no: number; n: number; owed: number } | null;
+  /**
    * Every unit of his map, in book order (the phone groups them by term, or by paper part on the O/L map: its Worlds),
    * then the other syllabus's books he has (`other`: one more World).
    */
@@ -220,6 +233,18 @@ export const me = query({
     const rows = await masterRows(ctx, s._id);
     const worlds = await worldsOf(ctx, s);
     const days = levelDays(rows);
+    // Each level's photos still owed (📷 on the Stage) and the teacher's answers he hasn't opened (a dot).
+    const home = await homeChecks(ctx, s._id);
+    for (const w of worlds) {
+      for (const l of w.levels) {
+        const owed = home.owed.get(`${w.unitId}:${l.n}`)?.length ?? 0;
+        const fresh = home.photos.filter((p) => p.unitId === w.unitId && p.n === l.n && p.state !== "waiting" && !p.seen).length;
+        if (owed) l.ph = owed;
+        if (fresh) l.nw = fresh;
+      }
+    }
+    const stop = blockedBy(home.checks);
+    const stopWorld = stop ? worlds.find((w) => w.unitId === stop.unitId) : undefined;
     return {
       name: s.name,
       grade: s.grade ?? null,
@@ -234,6 +259,7 @@ export const me = query({
       levelsWeek: levelsSince(rows, slWeekStart(now)),
       trophies: trophiesOf(rows, worlds),
       ol: olMapOn(s),
+      blocked: stop && stopWorld ? { unitId: stopWorld.unitId, no: stopWorld.no, n: stop.n, owed: stop.owed } : null,
       worlds,
     };
   },
@@ -241,7 +267,8 @@ export const me = query({
 
 /** The World, its workbook and his level, when he may play it now (else a reason, in plain words). */
 async function playable(ctx: QueryCtx, s: Doc<"students">, unitId: Id<"units">, n: number) {
-  const world = (await worldsOf(ctx, s)).find((w) => w.unitId === unitId);
+  const worlds = await worldsOf(ctx, s);
+  const world = worlds.find((w) => w.unitId === unitId);
   if (!world) fail("This Stage is not on your map.");
   if (!world.open) fail("This Stage is locked. Finish the Stage before it.");
   const book = await bookFor(ctx, unitId, "master");
@@ -256,6 +283,12 @@ async function playable(ctx: QueryCtx, s: Doc<"students">, unitId: Id<"units">, 
   if (st !== "play") fail("Do the levels in order: finish the level before it.");
   const key = await keyRow(ctx, unitId, "master");
   if (!key) fail("This Stage can't be marked on the phone yet.");
+  // His limit (his rule, 4 Nov 2026): 2 levels at most after one that still owes photos.
+  const stop = blockedBy((await homeChecks(ctx, s._id)).checks);
+  if (stop) {
+    const w = worlds.find((x) => x.unitId === stop.unitId);
+    fail(`முதலில் Stage ${w?.no ?? ""} · Level ${stop.n} இன் படங்களை அனுப்பு (${stop.owed}).`);
+  }
   return { world, data, level, keys: phoneKey(key.answers, data) };
 }
 
@@ -328,6 +361,8 @@ export const check = mutation({
     const results: FamilyResult[] = [];
     const rows: Record<string, MQ> = {};
     const answers: Doc<"familyAnswers">["qs"] = [];
+    // The photos this Check asks of him: the parts only a teacher can mark, his working on each wrong answer.
+    const wrong: number[] = [];
     let got = 0;
     let phoneMax = 0;
     const teacher: number[] = [];
@@ -342,6 +377,7 @@ export const check = mutation({
         teacher.push(q);
         continue;
       }
+      if (r.got < k.max) wrong.push(q);
       rows[String(q)] = { got: r.got, max: k.max, lost: r.got < k.max, t: now };
       got += r.got;
       phoneMax += k.max;
@@ -350,8 +386,8 @@ export const check = mutation({
     m.lv[String(l.n)] = { done: now, fixed: now, by: "home", got, home: now };
     markBefore(m, data, l.n, now);
     await ctx.db.patch(progress._id, { m, updatedAt: now });
-    // What he typed, kept for the most common wrong answers per question (nothing reads it yet).
-    if (answers.length) await ctx.db.insert("familyAnswers", { studentId: s._id, unitId: unit._id, n: l.n, at: now, qs: answers });
+    // What he typed (for the most common wrong answers per question) and the photos this Check asks of him.
+    await ctx.db.insert("familyAnswers", { studentId: s._id, unitId: unit._id, n: l.n, at: now, qs: answers, owe: { part: teacher, working: wrong } });
     await log(ctx, null, now, {
       kind: "level-home",
       studentId: s._id,
@@ -364,7 +400,99 @@ export const check = mutation({
     const all = await masterRows(ctx, s._id);
     // His trophies now (the phone shows the ones this level just earned).
     const trophies = trophiesOf(all, await worldsOf(ctx, s));
-    return { results, got, phoneMax, max: l.max, teacher, xp: weekXp(all, now), streak: streakOf(all, now), trophies };
+    // The level's book: the key's working on what he got wrong, and the photos it asks for.
+    const book = await bookOf(ctx, s, unit._id, l.n);
+    return { results, got, phoneMax, max: l.max, teacher, xp: weekXp(all, now), streak: streakOf(all, now), trophies, book };
+  },
+});
+
+// ---- His levels checked at home: the book, photos, the teacher's answers (4 Nov 2026) ----
+
+/** A level he checked at home, question by question (his marks, solutions where he lost marks, photos, answers). */
+export const book = query({
+  args: { token, unitId: v.id("units"), n: v.number() },
+  handler: async (ctx, args): Promise<LevelBook> => {
+    const s = await familyViewer(ctx, args.token);
+    const b = await bookOf(ctx, s, args.unitId, args.n);
+    if (!b) fail("This level isn't marked on the phone.");
+    return b;
+  },
+});
+
+/** An address to upload one photo to (the phone sends it there, then `photoSend`). */
+export const photoUrl = mutation({
+  args: { token },
+  handler: async (ctx, args): Promise<string> => {
+    const f = await familyOf(ctx, args.token);
+    if (!f) fail(FAMILY_SIGNED_OUT);
+    const day = slDayNo(Date.now());
+    const asked = f.device.phDay === day ? (f.device.phN ?? 0) : 0;
+    if (asked >= PHOTO_URLS_PER_DAY) fail("இன்றைக்கு போதுமான படங்கள் அனுப்பினாய். நாளை தொடர்.");
+    await ctx.db.patch(f.device._id, { phDay: day, phN: asked + 1 });
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
+/**
+ * 1–3 uploaded photos for one question of a level he checked at home: `part` = a part only a teacher can mark (not
+ * marked yet), `working` = his working on a question he lost marks on. Sending again replaces the photos until she
+ * has answered.
+ */
+export const photoSend = mutation({
+  args: {
+    token,
+    unitId: v.id("units"),
+    n: v.number(),
+    q: v.number(),
+    kind: v.union(v.literal("part"), v.literal("working")),
+    files: v.array(v.id("_storage")),
+  },
+  handler: async (ctx, args) => {
+    const s = await familyActor(ctx, args.token);
+    const now = Date.now();
+    if (args.files.length < 1 || args.files.length > PHOTO_MAX || new Set(args.files).size !== args.files.length) {
+      fail(`ஒரு கேள்விக்கு 1 முதல் ${PHOTO_MAX} படங்கள்.`);
+    }
+    const b = await bookOf(ctx, s, args.unitId, args.n);
+    const q = b?.qs.find((x) => x.q === args.q);
+    if (!b || !q) fail("This question isn't in a level you checked on the phone.");
+    const kind: PhotoKind = args.kind;
+    if (kind === "part" && (q.teach === 0 || q.got !== null)) fail("This question doesn't need a photo.");
+    if (kind === "working" && !(q.got !== null && q.got < q.max)) fail("This question doesn't need a photo.");
+    for (const id of args.files) {
+      const meta = await ctx.db.system.get(id);
+      if (!meta) fail("A photo didn't arrive. Take it again.");
+      // (Refused files are left to the hourly sweep: a delete here would be undone with the refusal.)
+      if (meta.size > PHOTO_BYTES || !(meta.contentType ?? "").startsWith("image/")) fail("That photo is too big. Take it again.");
+    }
+    const row = await ctx.db
+      .query("homePhotos")
+      .withIndex("by_student", (x) => x.eq("studentId", s._id).eq("unitId", args.unitId).eq("n", args.n).eq("q", args.q))
+      .filter((x) => x.eq(x.field("kind"), kind))
+      .first();
+    if (row?.state === "done") fail("உன் ஆசிரியர் ஏற்கனவே இதைப் பார்த்துவிட்டார்.");
+    if (row) {
+      for (const old of row.files) if (!args.files.includes(old)) await ctx.storage.delete(old);
+      await ctx.db.patch(row._id, { files: args.files, at: now, state: "waiting", why: undefined, note: undefined, seen: undefined, gone: undefined });
+    } else {
+      await ctx.db.insert("homePhotos", { studentId: s._id, unitId: args.unitId, n: args.n, q: args.q, kind, files: args.files, at: now, state: "waiting" });
+    }
+    return true;
+  },
+});
+
+/** He opened the teacher's answers on this level: they are no longer new. */
+export const seen = mutation({
+  args: { token, unitId: v.id("units"), n: v.number() },
+  handler: async (ctx, args) => {
+    const s = await familyActor(ctx, args.token);
+    const now = Date.now();
+    const rows = await ctx.db
+      .query("homePhotos")
+      .withIndex("by_student", (x) => x.eq("studentId", s._id).eq("unitId", args.unitId).eq("n", args.n))
+      .collect();
+    for (const r of rows) if (r.state !== "waiting" && !r.seen) await ctx.db.patch(r._id, { seen: now });
+    return true;
   },
 });
 

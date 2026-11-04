@@ -12,8 +12,10 @@ import { Fragment } from "preact";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { FamilyLevel, FamilyMe, FamilyQuestions, FamilyResult } from "../../convex/family";
 import type { Trophy, World } from "../../convex/lib/family";
+import type { LevelBook } from "../../convex/lib/homeWork";
 import type { Box } from "../../convex/lib/phone";
 import { drawQuestion } from "../questionView";
+import { Book, Taker } from "./book";
 import { keep, mutation, NetError, query } from "./net";
 import { buzz, sound } from "./sound";
 import { Flame, Gem, Icon, Medal, Owl, OwlBadge, pretty, problemWords, Roll, Tag, toast, useOwlTap, Waiting, type Mood } from "./ui";
@@ -27,6 +29,8 @@ export type Checked = {
   xp: number;
   streak: { days: number; today: boolean };
   trophies: Trophy[];
+  /** The level's book (4 Nov 2026): the key's working where he lost marks, the photos it asks for. */
+  book: LevelBook | null;
 };
 
 type Spot = { qi: number; bi: number };
@@ -224,7 +228,7 @@ export function Play(props: {
     buzz(6);
     sound("key");
     if (k === "→") return goNext();
-    if (!box) return toast("இதைத் தாளில் செய்: உன் ஆசிரியர் வகுப்பில் திருத்துவார். → அடுத்த கேள்வி.");
+    if (!box) return toast("இதைத் தாளில் செய்து படம் எடு (📷). → அடுத்த கேள்வி.");
     const cur = val(at.qi, at.bi);
     if (k === "⌫") return set(at.qi, at.bi, cur.endsWith("^2") ? cur.slice(0, -2) : cur.slice(0, -1));
     if (cur.length >= 30) return;
@@ -392,9 +396,12 @@ export function Play(props: {
                     })}
                   </div>
                 ) : (
-                  <p class="f-teach">
-                    <Icon name="pen" size={16} /> இதைத் தாளில் செய்: உன் ஆசிரியர் வகுப்பில் திருத்துவார்
-                  </p>
+                  <div class="f-teachq">
+                    <p class="f-teach">
+                      <Icon name="pen" size={16} /> இதைத் தாளில் செய்து படம் எடு: உன் ஆசிரியர் திருத்துவார்
+                    </p>
+                    <Taker unitId={props.world.unitId} n={props.n} q={q.q} kind="part" send={false} />
+                  </div>
                 )}
               </div>
             );
@@ -540,7 +547,8 @@ export function Result(props: {
   const mood: Mood = !done ? "think" : medal ? "champ" : pct >= 1 ? "star" : pct >= 0.9 ? "party" : pct >= 0.7 ? "cheer" : "strong";
   const [owlMood, tapOwl] = useOwlTap(mood);
   const next = nextPlay(props.me);
-  const nextHere = next && next.world.unitId === props.world.unitId && next.n !== form.n ? next : null;
+  // His limit (4 Nov 2026): with photos owed for 2 levels, Next waits; the book below says which.
+  const nextHere = next && !props.me?.blocked && next.world.unitId === props.world.unitId && next.n !== form.n ? next : null;
   // The ring round the owl fills as his marks come in.
   const ringK = res.phoneMax ? (done ? res.got : score) / res.phoneMax : 0;
   return (
@@ -660,7 +668,8 @@ export function Result(props: {
       </ul>
       {done && (
         <>
-          <p class="f-tip rise">✎ உன் தாளிலும் ✓ ✗ போடு. தவறியவற்றை வகுப்பில் விளக்குவார்கள்.</p>
+          <p class="f-tip rise">✎ உன் தாளிலும் ✓ ✗ போடு. தவறியவற்றின் தீர்வு கீழே.</p>
+          <Book unitId={props.world.unitId} n={form.n} initial={res.book} />
           <div class={`f-actions rise${nextHere ? " two" : ""}`}>
             {nextHere ? (
               <>

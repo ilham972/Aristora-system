@@ -32,7 +32,11 @@ export type LevelState =
   | "play"
   | "later";
 
-export type WorldLevel = { n: number; max: number; got?: number; s: LevelState };
+/**
+ * One level: its marks, its state; hm = marked at home (its book opens from the Stage), ph = photos it still owes, nw =
+ * the teacher's answers he hasn't opened (4 Nov 2026).
+ */
+export type WorldLevel = { n: number; max: number; got?: number; s: LevelState; ph?: number; nw?: number; hm?: true };
 
 /** One unit of his grade (the phone shows it as a Stage of its term's World). */
 export type World = {
@@ -80,7 +84,7 @@ export function levelStates(m: MState, book: MasterData): WorldLevel[] {
   return book.levels.map((l): WorldLevel => {
     const lv = m.lv[String(l.n)];
     const base = { n: l.n, max: l.max };
-    if (lv?.fixed) return { ...base, got: lv.got ?? 0, s: lv.home && !lv.hc ? "check" : "done" };
+    if (lv?.fixed) return { ...base, got: lv.got ?? 0, s: lv.home && !lv.hc ? "check" : "done", ...(lv.home ? { hm: true as const } : {}) };
     if (lv?.done) return { ...base, s: "class" };
     if (lv?.pre) return { ...base, s: "pre" };
     return { ...base, s: l.n === play ? "play" : "later" };

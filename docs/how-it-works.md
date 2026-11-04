@@ -1069,6 +1069,41 @@ learning app of our education institute"): one profile, his class times, what he
   (`moveTute`). His chips idea (tap one of four for every answer) was turned down with him: guessing pays XP, the exam
   gives a blank line, the answer would be on the screen, and chips hide the mistakes nobody predicted. Chips stay for
   names only (next on the list).
+- **Corrected at home: solutions and photos** (4 Nov 2026, his voice notes: "if the student done at home, everything
+  will be done at home"; `convex/lib/photos.ts` the rules, `convex/lib/homeWork.ts` the reads, `convex/photos.ts` the
+  teachers' side, `src/family/book.tsx`, `src/family/photos.ts`, `src/photoQueue.tsx`):
+  - **The level's book** (`family.book`, also returned by `check`): after Check, every question he lost marks on shows
+    the key's working (`sol`, `**` bold = the final answer; his decision: only the ones he got wrong, only after his
+    one Check) and what he typed (struck out). The reveal shows it under the rows; the Stage opens it again by tapping a
+    level marked at home (`hm`). The right ones need nothing and are not listed.
+  - **Photos he owes** (`familyAnswers.owe`, written at Check): `part` = a question with a part only a teacher can mark
+    (a name, a drawing, a reason): during the level its card has a camera ("இதைத் தாளில் செய்து படம் எடு"), the photos
+    are kept on the phone and go by themselves after Check; `working` = his working on each question he lost marks on
+    (his rule, against my warning about the load: required). 1–3 photos a question, shrunk on the phone to ~200 KB
+    (1280 px JPEG; drawing it again drops the camera's location), kept in IndexedDB per child until sent (no signal:
+    next time the book opens), uploaded to Convex storage (`family.photoUrl`, 80 a day a phone; `family.photoSend`:
+    images ≤ 900 KB; sending again replaces until she answers). Owed = not sent, not marked or explained in class; a
+    retake is owed again (`owedOf`).
+  - **His limit** (his rule: "without the explanation for a wrong question they can go 2 levels maximum"): once he has
+    checked 2 more levels at home after the oldest level that still owes photos, the next level waits (`blockedBy`,
+    in `playable` and `me.blocked`): the Stage shows a 🔒 on START, Continue opens that level's book. It waits on HIM
+    (photo sent), never on the teacher's reply. The Stage shows each level's owed count (📷 n) and a dot for her answers
+    he hasn't opened (`nw`; `family.seen` when the book opens). Settings → Photos (the owner) turns "required" off
+    (`photos.setRequired`, meta `photos.required`): then nothing waits; photos can still be sent.
+  - **Marking them** (Settings → Photos; the owner and the people he ticks **Photos**, Settings → People → Also; the
+    gear's count adds the photos waiting, red when one waited over a day; Settings opens on Photos then): one photo at a
+    time, oldest first (`photos.queue`, 20): who, Stage, level, Q, the photos (tap = full screen, tap again = 2×), the
+    key's answer, what he typed, "Show the question" (as printed, `photos.question`). A part: her marks for what the
+    phone left (0 … `teach`) + an optional remark; his working: one tap on why it was wrong (`WHY`: careless slip,
+    decimal point, sign, wrong method, copied it wrong, didn't finish, unit, needs the lesson again), her own words
+    optional. Retake (blurry / wrong page / cut off) asks him again and deletes the files at once. Her answer reaches
+    his book in Tamil (`WHY[..].ta`). The marks count at once (the level's `got`, XP; history "marked from his photo");
+    a lost question she answered with a cause counts as **explained** (`x`: Evaluation skips it in class), except
+    "needs the lesson again" (and "well done"). A part marked in class meanwhile only closes. Class still checks his
+    paper (⌂ Checked: his answer, "the class check is enough").
+  - **Nothing kept**: an hourly cron (`convex/crons.ts` → `photos.sweep`) deletes the files of photos marked a day ago
+    (the marks and her answer stay), of photos waiting on a level taken back in class or of a removed student, and
+    image uploads never attached after a day. A removed (wiped) student's photos go with him; a tute's move takes them.
 - A level checked at home is a marked level with ⌂ (`lv.home`): Evaluation and Theory see its lost marks at once.
   Correction: ⌂ on his name and the level; it opens with the phone's marks: **Checked** (`workbook.homeChecked`), or
   change a mark / mark what the phone left (that checks it too, `lv.hc`).
@@ -1091,7 +1126,10 @@ learning app of our education institute"): one profile, his class times, what he
   - `books`: workbooks (typing and uploading) and unit names;
   - `reports`: Reports, History, the Students page numbers, and **Progress** (page and poster);
   - `feedback` (3 Nov 2026, his answer "me and selected people"): Settings → Feedback, what students send from the
-    family app, and its count on the Settings gear (`families.feedback`, `feedbackNew`, `feedbackSeen`).
+    family app, and its count on the Settings gear (`families.feedback`, `feedbackNew`, `feedbackSeen`);
+  - `photos` (4 Nov 2026, his answer "people I pick"): Settings → Photos, marking the photos students send from home,
+    and its count on the gear (`photos.count`, `queue`, `question`, `mark`, `retake`, `required`); turning "photos
+    required" on or off is the owner's (`photos.setRequired`).
 - Everyone signed in sees the Class tab and the Register, reads `people.team` and `manager.day`, and her own card
   (`duty.card`). Correction job = the Correction page and Attendance (`setPresent`, `attendance.day`;
   `by: "attendance"`), Books given (`students.setGiven`), sending called students, Going home, Back in the hall, End

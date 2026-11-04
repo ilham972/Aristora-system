@@ -14,6 +14,7 @@ import { Progress } from "./progress";
 import { Settings } from "./settings";
 import { WholeClassPage } from "./wholeClass";
 import { useFeedbackNew } from "./feedbackList";
+import { usePhotosWaiting } from "./photoQueue";
 import { alertsState, armAlerts, listenForTaps, ring, useAlertsState, type AlertKind } from "./sound";
 import { clearHash, PinSheet, pinAsked, readHash, SignIn, stopAskingPin, type Hash } from "./signin";
 import { hideSplash } from "./splash";
@@ -194,6 +195,9 @@ export function App() {
   // Feedback from the family app not read yet (owner and people with Feedback): a count on the Settings gear. Before
   // any early return (a hook).
   const fbNew = useFeedbackNew(!!me?.user && may("feedback"));
+  // Photos from home waiting to be marked (4 Nov 2026; the owner and people with Photos): on the same gear, red when
+  // one waited over a day; Settings opens on Photos then.
+  const photos = usePhotosWaiting(!!me?.user && may("photos"));
 
   if (me === undefined) {
     return (
@@ -363,12 +367,16 @@ export function App() {
             <button
               type="button"
               class={`icon-btn has-n${shown === "settings" ? " on" : ""}`}
-              aria-label={fbNew > 0 ? `Settings, ${fbNew} new feedback` : "Settings"}
+              aria-label={
+                photos.n > 0 || fbNew > 0
+                  ? `Settings${photos.n > 0 ? `, ${photos.n} photos to mark` : ""}${fbNew > 0 ? `, ${fbNew} new feedback` : ""}`
+                  : "Settings"
+              }
               onClick={() => toggle("settings")}
             >
-              {fbNew > 0 && (
-                <b class="gear-n" aria-hidden="true">
-                  {fbNew > 9 ? "9+" : fbNew}
+              {photos.n + fbNew > 0 && (
+                <b class={`gear-n${photos.late ? " late" : ""}`} aria-hidden="true">
+                  {photos.n + fbNew > 9 ? "9+" : photos.n + fbNew}
                 </b>
               )}
               <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
@@ -403,7 +411,14 @@ export function App() {
       )}
 
       {shown === "settings" ? (
-        <Settings views={views} onClose={() => setPage(backTo)} start={fbNew > 0 ? "feedback" : undefined} fbNew={fbNew} />
+        <Settings
+          views={views}
+          onClose={() => setPage(backTo)}
+          start={photos.n > 0 ? "photos" : fbNew > 0 ? "feedback" : undefined}
+          fbNew={fbNew}
+          phN={photos.n}
+          phLate={photos.late}
+        />
       ) : shown === "register" ? (
         <ClassPage board={board} views={views} now={now} job={role} onAttendance={() => setAttOpen(true)} />
       ) : shown === "progress" ? (

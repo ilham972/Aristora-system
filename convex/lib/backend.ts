@@ -376,9 +376,13 @@ export async function roomStats(
   await ctx.db.patch(sim._id, { stats: all });
 }
 
-/** A student and everything of his: calls, books, visits, books given, Correction's drafts and claims, what he typed. */
+/** A student and everything of his: calls, books, visits, books given, Correction's drafts and claims, what he typed, his photos. */
 export async function wipeStudent(ctx: MutationCtx, s: Doc<"students">) {
   for (const a of await ctx.db.query("familyAnswers").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) await ctx.db.delete(a._id);
+  for (const p of await ctx.db.query("homePhotos").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) {
+    for (const f of p.files) await ctx.storage.delete(f).catch(() => undefined);
+    await ctx.db.delete(p._id);
+  }
   for (const c of await ctx.db.query("calls").withIndex("by_student_status", (q) => q.eq("studentId", s._id)).collect()) await ctx.db.delete(c._id);
   for (const p of await ctx.db.query("progress").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) await ctx.db.delete(p._id);
   for (const a of await ctx.db.query("attendance").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) await ctx.db.delete(a._id);

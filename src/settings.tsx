@@ -38,11 +38,13 @@ import { OlPicks, olChoices, olMatch, olNo, studentsWork, UploadBooks } from "./
 import { FamilySheet, PhoneAnswers } from "./familySheet";
 import { olMapList, OlMapSheet } from "./olMap";
 import { FeedbackList } from "./feedbackList";
+import { PhotoQueue } from "./photoQueue";
+import { RETAKE, WHY } from "../convex/lib/photos";
 import { ClassHours } from "./classHours";
 import { SimPanel, SimSwitch } from "./sim";
 import { GRADES, GradeRow, Sheet, STATE_WORDS, useGrade } from "./ui";
 
-export type SettingsTab = "students" | "books" | "people" | "hours" | "alerts" | "reports" | "history" | "feedback" | "account";
+export type SettingsTab = "students" | "books" | "people" | "hours" | "alerts" | "reports" | "history" | "feedback" | "photos" | "account";
 type Tab = SettingsTab;
 
 const SETTINGS_TABS: [Tab, string, () => boolean][] = [
@@ -56,11 +58,16 @@ const SETTINGS_TABS: [Tab, string, () => boolean][] = [
   ["history", "History", () => may("reports")],
   // What students send from the family app (3 Nov 2026): the owner and people with Feedback (Settings → People).
   ["feedback", "Feedback", () => may("feedback")],
+  // Photos from the family app (4 Nov 2026): the owner and people with Photos mark them from home.
+  ["photos", "Photos", () => may("photos")],
   ["account", "Account", () => true],
 ];
 
-/** `start`: the section to open on (Feedback when new feedback came); `fbNew` = its count on the Feedback button. */
-export function Settings(props: { views: View[]; onClose: () => void; start?: Tab; fbNew?: number }) {
+/**
+ * `start`: the section to open on (Photos when photos wait, Feedback when new feedback came); `fbNew` and `phN` = their
+ * counts on their buttons (`phLate`: a photo waited over a day).
+ */
+export function Settings(props: { views: View[]; onClose: () => void; start?: Tab; fbNew?: number; phN?: number; phLate?: boolean }) {
   const shown = SETTINGS_TABS.filter(([, , ok]) => ok());
   const [chosen, setTab] = useState<Tab>(props.start && shown.some(([id]) => id === props.start) ? props.start : shown[0][0]);
   const tab = shown.some(([id]) => id === chosen) ? chosen : shown[0][0];
@@ -71,6 +78,7 @@ export function Settings(props: { views: View[]; onClose: () => void; start?: Ta
           <button key={id} type="button" class={tab === id ? "on" : ""} aria-pressed={tab === id} onClick={() => setTab(id)}>
             {label}
             {id === "feedback" && (props.fbNew ?? 0) > 0 && <b class="seg-n">{props.fbNew}</b>}
+            {id === "photos" && (props.phN ?? 0) > 0 && <b class={`seg-n${props.phLate ? " late" : ""}`}>{props.phN}</b>}
           </button>
         ))}
       </nav>
@@ -80,6 +88,7 @@ export function Settings(props: { views: View[]; onClose: () => void; start?: Ta
       {tab === "reports" && <Reports />}
       {tab === "history" && <History />}
       {tab === "feedback" && <FeedbackList />}
+      {tab === "photos" && <PhotoQueue />}
       {tab === "hours" && <ClassHours />}
       {tab === "people" && <People />}
       {tab === "account" && <Account />}
@@ -976,6 +985,20 @@ function describe(e: Doc<"events">): string {
       return v === "on" ? "every Stage opened in the family app" : "Stages open in order again (family app)";
     case "ol-map":
       return v === "on" ? "O/L map on in the family app" : "his grade's map again (family app)";
+    case "photo-marked": {
+      const [n, marks] = v.split(" ");
+      return `Level ${n}${e.q ? ` Q${e.q}` : ""} marked from his photo: ${marks}`;
+    }
+    case "photo-why": {
+      const [n, why] = v.split(" ");
+      return `Level ${n}${e.q ? ` Q${e.q}` : ""}: his working seen (${(WHY as Record<string, { en: string }>)[why]?.en ?? why})`;
+    }
+    case "photo-retake": {
+      const [n, why] = v.split(" ");
+      return `Level ${n}${e.q ? ` Q${e.q}` : ""}: photo to take again (${(RETAKE as Record<string, { en: string }>)[why]?.en ?? why})`;
+    }
+    case "photos-required":
+      return v === "on" ? "photos from home required again (2 levels at most without)" : "photos from home no longer required";
     case "level-undo":
       return `Level ${v}: "handed in" undone`;
     case "level-marks":
@@ -1113,7 +1136,7 @@ function History() {
 }
 
 const TAB_NAMES: Record<Job, string> = { correction: "Correction", theory: "Theory", evaluation: "Evaluation", manager: "Manager" };
-const EXTRA_NAMES: Record<Extra, string> = { students: "Students", books: "Books", reports: "Reports and History", feedback: "Feedback" };
+const EXTRA_NAMES: Record<Extra, string> = { students: "Students", books: "Books", reports: "Reports and History", feedback: "Feedback", photos: "Photos" };
 /** What each job opens (everyone has the Class tab and the Register). */
 const TAB_HELP: Record<Job, string> = {
   correction: "the Correction page (marking papers, + to sign students in), sending students to the rooms",
@@ -1126,6 +1149,7 @@ const EXTRA_HELP: Record<Extra, string> = {
   books: "workbooks and unit names",
   reports: "end-of-class reports and the history",
   feedback: "reads what students send from the family app",
+  photos: "marks the photos students send from home (drawings, the working on wrong answers)",
 };
 
 function canWords(p: { role: string; tabs: Job[]; can: Extra[] }): string {

@@ -87,12 +87,36 @@ export function makeBackend(modules: Record<string, () => Promise<unknown>>) {
         }
       }),
     );
+    // Photos (4 Nov 2026): the family app's upload goes into convex-test's storage; the teachers' app shows a photo
+    // through the address storage.getUrl gives (served here from the same storage).
+    await context.exposeBinding("__abUpload", (_src, b64: string, type: string) =>
+      serial(async () => {
+        try {
+          const id = await t.run(async (ctx) => await ctx.storage.store(new Blob([Buffer.from(b64, "base64")], { type })));
+          return { value: id };
+        } catch (e) {
+          return { __error: String((e as Error).message ?? e) };
+        }
+      }),
+    );
+    await context.route("https://some-deployment.convex.cloud/api/storage/**", async (route) => {
+      // convex-test's address ends with the file's sha256 in base64 (it may hold "/" or "+").
+      const sha = decodeURIComponent(route.request().url().split("/api/storage/")[1] ?? "");
+      const file = await t.run(async (ctx) => {
+        const f = (await ctx.db.system.query("_storage").collect()).find((x) => x.sha256 === sha);
+        const blob = f ? await ctx.storage.get(f._id) : null;
+        return blob ? { type: blob.type || "image/jpeg", bytes: await blob.arrayBuffer() } : null;
+      });
+      if (!file) return route.fulfill({ status: 404, body: "" });
+      await route.fulfill({ status: 200, contentType: file.type, body: Buffer.from(file.bytes) });
+    });
     await context.addInitScript(() => {
       const w = window as unknown as Record<string, unknown> & {
         __abSubscribe(n: string, a: unknown, id: string): Promise<void>;
         __abUnsubscribe(id: string): Promise<void>;
         __abMutation(n: string, a: unknown): Promise<{ value?: unknown; __error?: string }>;
         __abQuery(n: string, a: unknown): Promise<{ value?: unknown; __error?: string }>;
+        __abUpload(b64: string, type: string): Promise<{ value?: string; __error?: string }>;
       };
       const cbs: Record<string, (v: unknown) => void> = {};
       const errs: Record<string, (e: unknown) => void> = {};
@@ -131,6 +155,14 @@ export function makeBackend(modules: Record<string, () => Promise<unknown>>) {
             e.data = r.__error;
             throw e;
           }
+          return r.value;
+        },
+        async upload(blob: Blob) {
+          const bytes = new Uint8Array(await blob.arrayBuffer());
+          let bin = "";
+          for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+          const r = await w.__abUpload(btoa(bin), blob.type);
+          if (!r || r.__error || !r.value) throw new Error(r?.__error ?? "upload failed");
           return r.value;
         },
       };

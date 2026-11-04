@@ -291,7 +291,7 @@ const LV_STEP = 124;
 const LV_HEAD = 86;
 const lvPos = (i: number) => ({ x: 50 + 24 * Math.sin(i * 1.6), y: LV_HEAD + i * LV_STEP });
 
-export function StageScreen(props: { me: FamilyMe; world: World; onBack: () => void; onPlay: (n: number) => void }) {
+export function StageScreen(props: { me: FamilyMe; world: World; onBack: () => void; onPlay: (n: number) => void; onBook: (n: number) => void }) {
   const { me, world: w } = props;
   const groups = worldGroups(me);
   const g = groups.find((x) => x.stages.some((s) => s.unitId === w.unitId));
@@ -307,9 +307,22 @@ export function StageScreen(props: { me: FamilyMe; world: World; onBack: () => v
     const el = document.querySelector(".f-lv.play");
     if (el && el.getBoundingClientRect().top > window.innerHeight - 160) el.scrollIntoView({ block: "center" });
   }, []);
+  // His limit (4 Nov 2026): 2 levels at most after one that still owes photos.
+  const stop = me.blocked;
   const tap = (l: WorldLevel) => {
     buzz();
+    if (l.s === "play" && canPlay && stop) {
+      sound("wrong");
+      toast(`📷 முதலில் Stage ${stop.no} · Level ${stop.n} இன் படங்களை அனுப்பு.`);
+      if (stop.unitId === w.unitId) props.onBook(stop.n);
+      return;
+    }
     if (l.s === "play" && canPlay) return props.onPlay(l.n);
+    // A level marked at home: its book (solutions, photos, the teacher's answers).
+    if (l.hm) {
+      sound("tap");
+      return props.onBook(l.n);
+    }
     if (!w.open) {
       sound("wrong");
       return toast("இந்த Stage பூட்டப்பட்டுள்ளது.");
@@ -379,16 +392,28 @@ export function StageScreen(props: { me: FamilyMe; world: World; onBack: () => v
                   <button
                     type="button"
                     class={`f-lv s-${l.s}${live ? " play" : ""}${w.open ? "" : " shut"}${pct >= 1 ? " full" : ""}`}
-                    aria-label={`Level ${l.n}: ${live ? "START" : STATE_WORDS[l.s]}`}
+                    aria-label={`Level ${l.n}: ${live ? (stop ? "photos first" : "START") : STATE_WORDS[l.s]}${l.ph ? `, ${l.ph} photos to send` : ""}`}
                     onClick={() => tap(l)}
                   >
                     {live && <span class="f-node-ring" aria-hidden="true" />}
                     <span class="f-node-c">
                       {l.s === "later" ? <Icon name="lock" size={20} /> : l.s === "pre" ? <Icon name="check" size={24} /> : <b>{l.n}</b>}
                     </span>
-                    {l.s === "check" && (
+                    {l.s === "check" && !l.ph && (
                       <i class="f-lv-tag home" title="phone இல் சரிபார்த்தது">
                         <Icon name="home" size={12} />
+                      </i>
+                    )}
+                    {!!l.ph && (
+                      <i class="f-lv-tag cam" title={`${l.ph} படங்கள் அனுப்ப வேண்டும்`}>
+                        <Icon name="camera" size={12} />
+                        {l.ph}
+                      </i>
+                    )}
+                    {!!l.nw && <i class="f-lv-dot" title="ஆசிரியரின் பதில்" />}
+                    {live && stop && (
+                      <i class="f-lv-tag stop" title="படங்கள் முதலில்">
+                        <Icon name="lock" size={12} />
                       </i>
                     )}
                     {l.s === "class" && (

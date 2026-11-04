@@ -411,8 +411,11 @@ export const moveTute = mutation({
       for (const r of qs) await ctx.db.patch(r._id, { unitId: to._id });
       for (const r of css) await ctx.db.patch(r._id, { unitId: to._id });
     }
-    // What students typed at home in it goes with the questions.
+    // What students typed at home in it, and their photos, go with the questions.
     for (const r of await ctx.db.query("familyAnswers").withIndex("by_unit", (q) => q.eq("unitId", from._id)).collect()) {
+      await ctx.db.patch(r._id, { unitId: to._id });
+    }
+    for (const r of await ctx.db.query("homePhotos").withIndex("by_unit", (q) => q.eq("unitId", from._id)).collect()) {
       await ctx.db.patch(r._id, { unitId: to._id });
     }
 

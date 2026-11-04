@@ -39,7 +39,7 @@ export type Role = "correction" | "theory" | "evaluation";
 export type Job = Role | "manager";
 /** What a tap is recorded as (`by`): the page's job, or the Manager page. */
 export type By = Role | "manager";
-export type Extra = "students" | "books" | "reports" | "feedback";
+export type Extra = "students" | "books" | "reports" | "feedback" | "photos";
 /** This phone's person, as the server tells it. */
 export type Me = {
   _id: Id<"users">;
