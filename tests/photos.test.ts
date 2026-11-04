@@ -212,6 +212,36 @@ describe("photos from home", () => {
     expect((await hanaM()).q["10"].got).toBe(2);
   });
 
+  test("a part keeps its marks as at his Check: a key read differently later never strands a photo", async () => {
+    await fam().mutation(api.family.check, { unitId: u01, n: 1, typed: LEVEL1 }); // Q10: the teacher's, 2 marks
+    // The phone learns to read Q10 afterwards (a key shape learned later, "ரூபா 350"): its photo is still owed and marked.
+    await t.mutation(api.catalog.saveWorkbook, {
+      unitId: u01,
+      parts: BOOK.data.parts.map((p) => ({ id: p.id, to: p.to, ...(p.each ? { each: p.each } : {}) })),
+      levels: BOOK.data.levels.map((l) => ({ to: l.to, max: l.max })),
+      marks: BOOK.data.marks ?? {},
+      replace: true,
+      key: fakeKey().map((k) => (k.q === 10 ? { q: 10, a: "30" } : k)),
+    });
+    const q10 = async () => (await fam().query(api.family.book, { unitId: u01, n: 1 })).qs.find((x) => x.q === 10)!;
+    expect(await q10()).toMatchObject({ teach: 2, owe: ["part"] });
+    await fam().mutation(api.family.photoSend, { unitId: u01, n: 1, q: 10, kind: "part", files: [await jpeg()] });
+    const [item] = (await picked().query(api.photos.queue, {})).filter((i) => i.q === 10);
+    expect(item).toMatchObject({ teach: 2, phoneGot: 0 });
+    await picked().mutation(api.photos.mark, { id: item.id, got: 2 });
+    expect((await hanaM()).q["10"]).toMatchObject({ got: 2, max: 2, lost: false });
+    // A Check from before the marks were kept (no pm/pg): the question is the teacher's whole.
+    await raw.run(async (ctx) => {
+      const row = (await ctx.db.query("familyAnswers").collect())[0];
+      await ctx.db.patch(row._id, { n: 2, owe: { part: [12], working: [] } });
+    });
+    const { partMarks } = await import("../convex/lib/photos");
+    const { phoneKey } = await import("../convex/lib/phone");
+    const k12 = phoneKey(fakeKey(), BOOK.data).get(12)!;
+    expect(partMarks({ part: [12] }, 12, k12, null)).toEqual({ teach: 2, phoneGot: 0 });
+    expect(partMarks({ part: [12], pm: [1], pg: [1] }, 12, k12, null)).toEqual({ teach: 1, phoneGot: 1 });
+  });
+
   test("questions that come back: wrong ones 2 levels later, one second try each; right = explained and the lost marks back as XP this week", async () => {
     await t.mutation(api.photos.setRequired, { on: false }); // (the photos limit is tested above)
     await fam().mutation(api.family.check, { unitId: u01, n: 1, typed: LEVEL1 }); // Q8 wrong

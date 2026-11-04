@@ -225,7 +225,8 @@ export const answers = query({
         q: k.q,
         max: k.max,
         phone: allPhone(k),
-        parts: k.parts.filter((p) => p.m > 0).map((p) => ({ p: p.p, m: p.m, words: wantWords(p), phone: p.want !== null })),
+        // A part the corrector marks shows the key's own words: the shape the phone couldn't read (4 Nov 2026).
+        parts: k.parts.filter((p) => p.m > 0).map((p) => ({ p: p.p, m: p.m, words: p.want ? wantWords(p) : (p.a ?? ""), phone: p.want !== null })),
       })),
     };
   },

@@ -1070,7 +1070,13 @@ learning app of our education institute"): one profile, his class times, what he
   reason, "show that", drawings, letters in a set, two sets, clock times with a.m./p.m. and anything unclear stay with
   the corrector (a wrong ✗ on a right answer is worse). The answers never reach the phone (it gets only each answer's
   shape, its unit and a ratio's ":"). A box he skipped goes as "" (✗). Settings → Books → a workbook → "See what the
-  phone accepts" lists each answer as the key writes it ("2 : 3", "1 h 45 min", "{3, 6, 9} (any order)").
+  phone accepts" lists each answer as the key writes it ("2 : 3", "1 h 45 min", "{3, 6, 9} (any order)"), and for a
+  part the corrector marks, the key's own words ("corrector: சிறப்புப் பெயர்"): the shape the phone couldn't read.
+  **Money** (4 Nov 2026, his screenshot from Grade 9 fractions: "ரூபா 550 இன் 7/11" asked for a photo while "ரூ 750 இன்
+  7/10" had a box; the keys copy each paper's word): ரூபா, ரூபாய், ரூ., Rs., LKR before the number, "/=" or "/-" after
+  it, and thousands commas are read (`money`, `bare`): "ரூ. 1,250" used to become two boxes (1 and 250) and his 1250 got
+  ✗. With money in the answer every thousands comma goes; without, only a number of two groups ("12,500"): "100,121,144"
+  stays three terms. A key read differently later never strands a photo already owed (`partMarks`, below).
 - **What he typed is kept** (4 Nov 2026, his idea: "show the wrong answer most students put"): every Check saves a row
   in `familyAnswers` (student, unit, level, time; each question with boxes: his answers as typed and which boxes were
   right). Nothing reads it yet; after a few weeks it gives each question's most common wrong answers (a hint after
@@ -1085,7 +1091,9 @@ learning app of our education institute"): one profile, his class times, what he
     the key's working (`sol`, `**` bold = the final answer; his decision: only the ones he got wrong, only after his
     one Check) and what he typed (struck out). The reveal shows it under the rows; the Stage opens it again by tapping a
     level marked at home (`hm`). The right ones need nothing and are not listed.
-  - **Photos he owes** (`familyAnswers.owe`, written at Check): `part` = a question with a part only a teacher can mark
+  - **Photos he owes** (`familyAnswers.owe`, written at Check, with each part question's marks as at that Check:
+    `pm` the teacher's share, `pg` the phone's; `partMarks` reads them, and for an older Check a question the phone now
+    reads is the teacher's whole): `part` = a question with a part only a teacher can mark
     (a name, a drawing, a reason): during the level its card has a camera ("இதைத் தாளில் செய்து படம் எடு"), the photos
     are kept on the phone and go by themselves after Check; `working` = his working on each question he lost marks on
     (his rule, against my warning about the load: required). 1–3 photos a question, shrunk on the phone to ~200 KB

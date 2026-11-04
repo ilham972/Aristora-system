@@ -20,7 +20,7 @@ import { asMaster, bookFor, fail, keyRow, log, masterState, progressFor } from "
 import { photosRequired, REQUIRED_KEY } from "./lib/homeWork";
 import type { MState } from "./lib/master";
 import { markQuestion, phoneKey, type KeyQ } from "./lib/phone";
-import { isRetake, isWhy, keyText, NOTE_MAX, ORPHAN_MS, PHOTO_KEEP_MS, PHOTO_LATE_MS } from "./lib/photos";
+import { isRetake, isWhy, keyText, NOTE_MAX, ORPHAN_MS, partMarks, PHOTO_KEEP_MS, PHOTO_LATE_MS } from "./lib/photos";
 
 const token = v.optional(v.string());
 
@@ -72,15 +72,20 @@ async function unitBits(ctx: Parameters<typeof keyRow>[0], unitId: Id<"units">):
   return { unit, keys: phoneKey(key?.answers ?? null, asMaster(book)), raw: new Map((key?.answers ?? []).map((a) => [a.q, a])) };
 }
 
-/** His latest typed answers for one question of a level checked at home. */
-async function typedOf(ctx: Parameters<typeof keyRow>[0], r: Doc<"homePhotos">): Promise<{ a: string[]; ok: (boolean[] | null)[] } | null> {
+/** His latest Check of that level: what he typed for the question, and the photos it asked (with the part's marks). */
+async function typedOf(
+  ctx: Parameters<typeof keyRow>[0],
+  r: Doc<"homePhotos">,
+): Promise<{ a: string[]; ok: (boolean[] | null)[]; owe: Doc<"familyAnswers">["owe"] } | null> {
   const rows = await ctx.db
     .query("familyAnswers")
     .withIndex("by_student", (x) => x.eq("studentId", r.studentId))
     .order("desc")
     .collect();
   const row = rows.find((x) => x.unitId === r.unitId && x.n === r.n);
-  return row?.qs.find((x) => x.q === r.q) ?? null;
+  if (!row) return null;
+  const e = row.qs.find((x) => x.q === r.q);
+  return { a: e?.a ?? [], ok: e?.ok ?? [], owe: row.owe };
 }
 
 /** The waiting photos, oldest first (20 at a time). */
@@ -122,11 +127,10 @@ export const queue = query({
         n: r.n,
         q: r.q,
         max: k.max,
-        teach: k.parts.filter((x) => !x.want).reduce((a, x) => a + x.m, 0),
-        phoneGot: t ? markQuestion(k, t.a).phoneGot : 0,
+        ...(r.kind === "part" ? partMarks(t?.owe, r.q, k, t?.a ?? null) : { teach: 0, phoneGot: t ? markQuestion(k, t.a).phoneGot : 0 }),
         key: keyText(u.raw.get(r.q)),
-        typed: t?.a ?? null,
-        ok: t?.ok ?? null,
+        typed: t && t.a.length ? t.a : null,
+        ok: t && t.a.length ? t.ok : null,
         got: mq ? (mq.got ?? null) : null,
         urls,
         hasQ,
@@ -192,11 +196,11 @@ export const mark = mutation({
         await ctx.db.patch(r._id, done);
         return { already: true };
       }
-      const teach = k.parts.filter((x) => !x.want).reduce((a, x) => a + x.m, 0);
+      const t = await typedOf(ctx, r);
+      const { teach, phoneGot } = partMarks(t?.owe, r.q, k, t?.a ?? null);
       const got = args.got;
       if (got === undefined || !Number.isInteger(got) || got < 0 || got > teach) fail(`Give 0 to ${teach} marks.`);
-      const t = await typedOf(ctx, r);
-      const total = (t ? markQuestion(k, t.a).phoneGot : 0) + got;
+      const total = phoneGot + got;
       const lost = total < k.max;
       m.q[String(r.q)] = { got: total, max: k.max, lost, t: now, ...(lost && explains(args.why) ? { x: now } : {}) };
       lv.got = (lv.got ?? 0) + total;

@@ -7,7 +7,7 @@ import type { QueryCtx } from "../_generated/server";
 import { asMaster, bookFor, keyRow, masterState } from "./backend";
 import { masterRows } from "./family";
 import { phoneKey } from "./phone";
-import { isRetake, isWhy, keyText, owedOf, RETAKE, WHY, type CheckDebt, type PhotoKind } from "./photos";
+import { isRetake, isWhy, keyText, owedOf, partMarks, RETAKE, WHY, type CheckDebt, type PhotoKind } from "./photos";
 
 /** Settings → Photos (the owner): photos required, 2 levels at most without them. On unless he turned it off. */
 export const REQUIRED_KEY = "photos.required";
@@ -151,7 +151,8 @@ export async function bookOf(
       q,
       max: k.max,
       got: mq ? (mq.got ?? (mq.lost ? 0 : k.max)) : null,
-      teach: k.parts.filter((p) => !p.want).reduce((a, p) => a + p.m, 0),
+      // A part left to the teacher at his Check keeps its share (`partMarks`), whatever the key reads today.
+      teach: row?.owe?.part.includes(q) && !mq ? partMarks(row.owe, q, k, typed?.a ?? null).teach : k.parts.filter((p) => !p.want).reduce((a, p) => a + p.m, 0),
       typed: typed?.a ?? null,
       ok: typed?.ok ?? null,
       sol: mq?.lost ? keyText(raw.get(q)) || null : null,

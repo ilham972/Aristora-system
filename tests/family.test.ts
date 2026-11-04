@@ -84,6 +84,28 @@ describe("what a phone can mark, read from the key", () => {
     ]) expect(wantsOf(raw), raw).toBeNull();
   });
 
+  test("money as the keys write it: ரூபா, ரூபாய், ரூ., Rs., LKR, /= and thousands commas", () => {
+    // His screenshot (4 Nov 2026): "ரூபா 550 இன் 7/11" asked for a photo while "ரூ 750 இன் 7/10" had a box.
+    const words = (raw: string) => wantsOf(raw)?.want.map((w) => w.t) ?? null;
+    for (const raw of ["ரூபா 350", "**ரூபா 350**", "ரூபாய் 350", "550 × 7/11 = **ரூபா 350**", "ரூ. 350/=", "Rs. 350/-", "350/=", "LKR 350", "ரூபா 350.00"]) {
+      expect(wantsOf(raw)?.want.length, raw).toBe(1);
+    }
+    expect(markPart({ p: "", m: 2, ...wantsOf("**ரூபா 350**")! }, ["350"])!.got).toBe(2);
+    // Thousands: one box, never two (his 1250 used to get ✗).
+    expect(words("ரூ. 1,250")).toEqual(["1250"]);
+    expect(words("Rs. 1,250,000/=")).toEqual(["1250000"]);
+    expect(words("**12,500**")).toEqual(["12500"]);
+    expect(markPart({ p: "", m: 2, ...wantsOf("ரூ. 1,250")! }, ["1250"])!.got).toBe(2);
+    // Lists stay lists: a comma and a space, short groups, or three groups with no money (terms of a pattern).
+    expect(words("70, 85")).toEqual(["70", "85"]);
+    expect(words("3,6,9")).toEqual(["3", "6", "9"]);
+    expect(words("100,121,144")).toEqual(["100", "121", "144"]);
+    expect(words("ரூ. 1,250, ரூ. 2,500")).toEqual(["1250", "2500"]);
+    // The teachers' list shows the key's own words for what the corrector marks (the shape the phone can't read).
+    const k = phoneKey([{ q: 1, a: "சிறப்புப் பெயர்" }], BOOK.data);
+    expect(k.get(1)!.parts[0]).toMatchObject({ want: null, a: "சிறப்புப் பெயர்" });
+  });
+
   test("units, ratios, points and sets: he types the numbers, the unit is printed after his box", () => {
     const boxes = (raw: string) => wantsOf(raw)?.want.map((w) => w.box) ?? null;
     expect(boxes("35%")).toEqual([{ k: "num", u: "%" }]);

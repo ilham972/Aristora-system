@@ -33,7 +33,8 @@ export type FormQ = { q: number; max: number; parts: FormPart[] };
  * several boxes ("2 : 3", "2 h 30 min") is listed once: its first box carries the words, the others are `cont`.
  */
 export type Want = { box: Box; t: string; words?: string; cont?: true } & ({ ok: Rat[] } | { vals: Rat[] });
-export type KeyPart = { p: string; m: number; want: Want[] | null; anyOrder: boolean };
+/** One part (server only); a = the key's words when the phone can't read them (the teachers' list shows them). */
+export type KeyPart = { p: string; m: number; want: Want[] | null; anyOrder: boolean; a?: string };
 export type KeyQ = { q: number; max: number; parts: KeyPart[] };
 
 /** Where an answer in n is compared. */
@@ -315,10 +316,10 @@ function notes(s: string): { text: string; also: Rat[] } {
   return { text, also };
 }
 
-/** "8 ஆவது" → "8", "ரூ. 81" → "81", "12 சட்டகங்கள்" → "12": a position or a unit around a number. */
+/** "8 ஆவது" → "8", "ரூ. 81" / "ரூபா 81" → "81", "12 சட்டகங்கள்" → "12": a position or a unit around a number. */
 function bare(s: string): string {
   return s
-    .replace(/^(ரூ\.?|Rs\.?)\s*/i, "")
+    .replace(/^(ரூபாய்|ரூபா|ரூ\.?|Rs\.?|LKR\.?)\s*/i, "")
     .replace(/\s*[஀-௿][஀-௿\s.]*$/, "")
     .trim();
 }
@@ -470,9 +471,22 @@ function partOf(items: Item[], free: boolean): { want: Want[]; anyOrder: boolean
   return { want, anyOrder: loose && want.every((w) => w.box.k === "num" && w.box.u === want[0].box.u) };
 }
 
+/**
+ * Money as Sri Lankan keys write it (4 Nov 2026, his screenshot: "ரூபா 550 இன் 7/11" asked for a photo while "ரூ 750 இன்
+ * 7/10" had a box): "/=" or "/-" after the rupees goes; thousands lose their commas ("ரூ. 1,250" was two boxes, 1 and
+ * 250, and his 1250 got ✗). With money in the answer every thousands comma goes; without, only a number of two groups
+ * ("12,500"): "100,121,144" may be three terms of a pattern written without spaces.
+ */
+function money(s: string): string {
+  const isMoney = /ரூ|Rs\.?\s?\d|LKR|\d\s*\/\s*[=-]/i.test(s);
+  const t = s.replace(/(\d)\s*\/\s*[=-](?=[\s*,;)]|$)/g, "$1");
+  const groups = isMoney ? /(^|[^\d.,])(\d{1,3}(?:,\d{3})+)(?!\d|,\d)/g : /(^|[^\d.,])(\d{1,3},\d{3})(?!\d|,\d)/g;
+  return t.replace(groups, (_, pre: string, n: string) => pre + n.replace(/,/g, ""));
+}
+
 /** The boxes of one answer as the key writes it, or null: the teacher marks it. */
 export function wantsOf(raw: string): { want: Want[]; anyOrder: boolean } | null {
-  const text = raw.replace(/\s+/g, " ").trim();
+  const text = money(raw.replace(/\s+/g, " ").trim());
   if (!text) return null;
   if (YES_NO.test(text.replace(/\*\*/g, "").trim())) return null;
   // The final answer in bold: only the bold runs count (the rest is working).
@@ -556,7 +570,7 @@ export function phoneKey(key: KeyAnswer[] | null, book: MasterData): Map<number,
       parts: raw.map((p) => {
         if (p.m === 0) return { p: p.p, m: 0, want: [], anyOrder: false }; // nothing to mark: no boxes
         const w = wantsOf(p.a);
-        return { p: p.p, m: p.m!, want: w?.want ?? null, anyOrder: w?.anyOrder ?? false };
+        return { p: p.p, m: p.m!, want: w?.want ?? null, anyOrder: w?.anyOrder ?? false, ...(w ? {} : { a: p.a }) };
       }),
     });
   }

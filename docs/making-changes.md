@@ -226,6 +226,12 @@ EOF
   the budget again (each KB ≈ 20 ms on slow 3G, first open only; the service worker keeps the files).
 - **XP is `xpItems`** (4 Nov 2026): every place that sums XP (the week, the race, the bars, the best week, ever) goes
   through it, so the marks won back on a second try count everywhere at once. Never sum `lv.got` by hand again.
+- **A comma is not always a list** (4 Nov 2026): "ரூ. 1,250" was split into two boxes. `money()` runs before any
+  `topSplit` in `wantsOf`; a new shape with commas inside one answer must be joined there first, with a test that a
+  list ("70, 85", "3,6,9", "100,121,144") stays a list.
+- **Changing how a key reads changes past Checks too**: the reader runs on every request, so a question the phone
+  could not read yesterday has a box today, also in levels already checked. Anything stored at Check (the photos owed)
+  keeps its own numbers (`owe.pm`/`pg`, `partMarks`); test the old-row fallback.
 - **A key's answer shapes** (`convex/lib/phone.ts`, 4 Nov 2026): a new unit or shape goes in `UNIT_WORDS` (normalized
   form: `cm^2`, longest first is automatic) with a test in `tests/family.test.ts`; a one-letter unit only with a space
   before it (else "5m", an answer in m, breaks). `notes()` drops any bracket with a comma, so a whole-answer point or

@@ -241,7 +241,7 @@ export function PhoneAnswers(props: { unitId: string }) {
                 {q.parts.map((p, i) => (
                   <span key={i} class={p.phone ? "pa-ok" : "pa-t"}>
                     {p.p ? `(${p.p}) ` : ""}
-                    {p.phone ? p.words : "corrector"}
+                    {p.phone ? p.words : `corrector${p.words ? `: ${p.words}` : ""}`}
                     {q.parts.length > 1 ? ` [${p.m}]` : ""}
                   </span>
                 ))}

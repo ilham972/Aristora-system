@@ -573,7 +573,15 @@ export default defineSchema({
      * The photos this Check asks of him (4 Nov 2026): `part` = questions with a part only a teacher can mark (a
      * drawing, a reason), `working` = questions he lost marks on (his working, to see why). Missing on Checks before.
      */
-    owe: v.optional(v.object({ part: v.array(v.number()), working: v.array(v.number()) })),
+    owe: v.optional(
+      v.object({
+        part: v.array(v.number()),
+        working: v.array(v.number()),
+        /** For each `part` question, as at his Check: the marks the teacher gives and the phone's marks on the rest. */
+        pm: v.optional(v.array(v.number())),
+        pg: v.optional(v.array(v.number())),
+      }),
+    ),
   })
     .index("by_unit", ["unitId", "at"])
     .index("by_student", ["studentId", "at"]),

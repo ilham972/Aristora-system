@@ -11,6 +11,7 @@
 
 import type { KeyAnswer } from "./key";
 import type { MQ } from "./master";
+import { markQuestion, type KeyQ } from "./phone";
 
 /** Photos for one question. */
 export const PHOTO_MAX = 3;
@@ -67,6 +68,24 @@ export function keyText(k: KeyAnswer | undefined): string {
   if (!k) return "";
   if (k.parts?.length) return k.parts.map((p) => `(${p.p}) ${p.a}`).join("\n");
   return k.a ?? "";
+}
+
+/**
+ * A part question's marks: the teacher's share and what the phone gave on the rest, as at his Check (stored since
+ * 4 Nov 2026). An older Check: worked out now; a question the phone reads now but couldn't then (a key shape learned
+ * later, "ரூபா 350") is the teacher's whole, so its photo is still marked and never strands him.
+ */
+export function partMarks(
+  owe: { part: number[]; pm?: number[]; pg?: number[] } | undefined,
+  q: number,
+  k: KeyQ,
+  typed: string[] | null,
+): { teach: number; phoneGot: number } {
+  const i = owe?.part.indexOf(q) ?? -1;
+  if (i >= 0 && owe?.pm?.[i] !== undefined && owe.pg?.[i] !== undefined) return { teach: owe.pm[i], phoneGot: owe.pg[i] };
+  const teach = k.parts.filter((p) => !p.want).reduce((a, p) => a + p.m, 0);
+  if (teach === 0) return { teach: k.max, phoneGot: 0 };
+  return { teach, phoneGot: typed ? markQuestion(k, typed).phoneGot : 0 };
 }
 
 /** One photo row, as the rules need it. */

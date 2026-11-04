@@ -373,6 +373,8 @@ export const check = mutation({
     const answers: Doc<"familyAnswers">["qs"] = [];
     // The photos this Check asks of him: the parts only a teacher can mark, his working on each wrong answer.
     const wrong: number[] = [];
+    const pm: number[] = [];
+    const pg: number[] = [];
     let got = 0;
     let phoneMax = 0;
     const teacher: number[] = [];
@@ -385,6 +387,8 @@ export const check = mutation({
       if (boxCount(k)) answers.push({ q, a: Array.from({ length: boxCount(k) }, (_, i) => a[i] ?? ""), ok: r.ok });
       if (r.got === null) {
         teacher.push(q);
+        pm.push(k.parts.filter((p) => !p.want).reduce((s, p) => s + p.m, 0));
+        pg.push(r.phoneGot);
         continue;
       }
       if (r.got < k.max) wrong.push(q);
@@ -410,7 +414,7 @@ export const check = mutation({
     markBefore(m, data, l.n, now);
     await ctx.db.patch(progress._id, { m, updatedAt: now });
     // What he typed (for the most common wrong answers per question) and the photos this Check asks of him.
-    await ctx.db.insert("familyAnswers", { studentId: s._id, unitId: unit._id, n: l.n, at: now, qs: answers, owe: { part: teacher, working: wrong } });
+    await ctx.db.insert("familyAnswers", { studentId: s._id, unitId: unit._id, n: l.n, at: now, qs: answers, owe: { part: teacher, working: wrong, pm, pg } });
     await log(ctx, null, now, {
       kind: "level-home",
       studentId: s._id,
