@@ -278,6 +278,12 @@ test("the family app: join, a level on the pad, Check once, the reveal, XP and t
   await contains(S.locator(".f-qcard .f-box").nth(1).locator(".f-bunit"), "min");
   await noSideScroll(S);
   await shot(S, "fam07d-time-320");
+  // Q8, wrong in Level 1, comes back at the end of Level 3 (his idea, 4 Nov 2026): the marks he lost are his to win back.
+  await S.locator(".f-qchip.re", { hasText: "8" }).click();
+  await contains(S.locator(".f-again"), "Level 1");
+  await contains(S.locator(".f-xpchip.re"), "+2 XP");
+  await noSideScroll(S);
+  await shot(S, "fam07e-again-320");
 
   // Correction (the class phone): Hana is in; ⌂ on her name; Level 1 opens with the phone's marks: Checked.
   await t.mutation(api.students.setPresent, { ...as, id: hana, present: true });

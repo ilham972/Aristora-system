@@ -3894,3 +3894,16 @@ p {
   background: var(--gem);
   box-shadow: 0 0 0 2.5px #fff;
 }
+/* Questions that come back 2 levels later (4 Nov 2026): ↻ on the chip and the card, the second try's line. */
+.f-qchip.re,
+.f-xpchip.re {
+  background: var(--gold-soft);
+  color: var(--gold-ink);
+}
+.f-again,
+.f-backres {
+  margin: 8px 0 0;
+  font-size: 14px;
+  color: var(--gold-ink);
+  text-align: center;
+}

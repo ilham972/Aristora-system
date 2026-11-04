@@ -31,6 +31,9 @@ export type Checked = {
   trophies: Trophy[];
   /** The level's book (4 Nov 2026): the key's working where he lost marks, the photos it asks for. */
   book: LevelBook | null;
+  /** The old questions that came back (his idea, 4 Nov 2026) and the marks he won back with them. */
+  retry: { q: number; max: number; got: number; from: number }[];
+  bonus: number;
 };
 
 type Spot = { qi: number; bi: number };
@@ -244,6 +247,7 @@ export function Play(props: {
   const empty = all.filter((x) => !val(x.qi, x.bi).trim()).length;
   const done = all.length - empty;
   const teacherQs = form.qs.filter((x) => x.parts.some((p) => !p.boxes)).length;
+  const backQs = form.qs.filter((x) => x.re).length;
 
   const check = async () => {
     setBusy(true);
@@ -305,14 +309,15 @@ export function Play(props: {
           <button
             type="button"
             key={x.q}
-            class={`f-qchip ${filled(qi)}${qi === at.qi && !review ? " on" : ""}`}
+            class={`f-qchip ${filled(qi)}${qi === at.qi && !review ? " on" : ""}${x.re ? " re" : ""}`}
+            aria-label={x.re ? `Q${x.q} again` : undefined}
             onClick={() => {
               buzz();
               setReview(false);
               setAt({ qi, bi: 0 });
             }}
           >
-            {x.q}
+            {x.re ? `↻${x.q}` : x.q}
           </button>
         ))}
       </div>
@@ -328,6 +333,11 @@ export function Play(props: {
             {empty > 0 && (
               <li class="warn">
                 <b>{empty}</b> காலியாக உள்ளன (அவை ✗)
+              </li>
+            )}
+            {backQs > 0 && (
+              <li>
+                <b>↻ {backQs}</b> பழைய கேள்விகள் மீண்டும்
               </li>
             )}
             {teacherQs > 0 && (
@@ -348,10 +358,15 @@ export function Play(props: {
         <section class="f-card f-qcard slide" key={q.q}>
           <div class="f-qhead">
             <b class="f-qn">Q{q.q}</b>
-            <span class="f-xpchip">
-              <Gem size={15} /> {q.max} XP
-            </span>
+            {q.re ? (
+              <span class="f-xpchip re">↻ +{q.rb} XP</span>
+            ) : (
+              <span class="f-xpchip">
+                <Gem size={15} /> {q.max} XP
+              </span>
+            )}
           </div>
+          {q.re && <p class="f-again">Level {q.re} இல் தவறியது: மீண்டும் முயற்சி!</p>}
           {showQ &&
             (printed && css !== null ? (
               <Paper html={printed.html} css={css} q={q.q} />
@@ -593,7 +608,7 @@ export function Result(props: {
         {done ? (
           <p class="f-gain rise">
             <span class="f-pill gem">
-              <Gem size={17} /> +{res.got} XP
+              <Gem size={17} /> +{res.got + (res.bonus ?? 0)} XP
             </span>
             <span class={`f-pill fire${res.streak.today ? " lit" : ""}${lit ? " pop" : ""}`}>
               <Flame lit={res.streak.today} size={17} /> {res.streak.days} {res.streak.days === 1 ? "day" : "days"}
@@ -634,6 +649,12 @@ export function Result(props: {
             ))}
           </div>
         </section>
+      )}
+      {done && (res.retry?.length ?? 0) > 0 && (
+        <p class="f-backres rise">
+          ↻ பழைய கேள்விகள் {res.retry.filter((r) => r.got >= r.max).length}/{res.retry.length}
+          {res.bonus > 0 && <b> · +{res.bonus} XP</b>}
+        </p>
       )}
       <ul class="f-res">
         {rows.map((r, i) => {

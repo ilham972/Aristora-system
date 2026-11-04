@@ -212,6 +212,35 @@ describe("photos from home", () => {
     expect((await hanaM()).q["10"].got).toBe(2);
   });
 
+  test("questions that come back: wrong ones 2 levels later, one second try each; right = explained and the lost marks back as XP this week", async () => {
+    await t.mutation(api.photos.setRequired, { on: false }); // (the photos limit is tested above)
+    await fam().mutation(api.family.check, { unitId: u01, n: 1, typed: LEVEL1 }); // Q8 wrong
+    expect((await level(2)).qs.some((q) => q.re)).toBe(false); // too soon
+    await checkEmpty(2); // Q11–19 wrong (empty)
+    const l3 = await level(3);
+    expect(l3.qs.filter((q) => q.re).map((q) => [q.q, q.re, q.rb])).toEqual([[8, 1, 2]]); // level 1 only (2 levels back)
+    expect(l3.qs.at(-1)!.q).toBe(8); // after the level's own questions
+    const xp = (await fam().query(api.family.me, {})).xp;
+    const typed = l3.qs.map((q) => ({ q: q.q, a: q.q === 8 ? ["24"] : [] as string[] }));
+    const r = await fam().mutation(api.family.check, { unitId: u01, n: 3, typed });
+    expect(r.retry).toEqual([{ q: 8, max: 2, got: 2, from: 1, ok: [[true]] }]);
+    expect(r.bonus).toBe(2);
+    const m = (await hanaM()).q["8"];
+    expect(m).toMatchObject({ got: 0, lost: true, rg: 2 }); // the first marks stay
+    expect(m.rt).toBeDefined();
+    expect(m.x).toBeDefined(); // right now: Evaluation needn't explain it
+    expect((await fam().query(api.family.me, {})).xp).toBe(xp + r.got + 2);
+    // Level 4: level 2's wrong ones come back (3 at most), never Q8 again.
+    const l4 = (await level(4)).qs.filter((q) => q.re).map((q) => q.q);
+    expect(l4).toEqual([11, 12, 13]);
+    await checkEmpty(4); // wrong again: no marks back, not explained, never back again
+    expect((await hanaM()).q["11"]).toMatchObject({ rg: 0 });
+    expect((await hanaM()).q["11"].x).toBeUndefined();
+    expect((await level(5)).qs.filter((q) => q.re).map((q) => q.q)).toEqual([14, 15, 16]);
+    const line = await raw.run(async (ctx) => (await ctx.db.query("events").collect()).filter((e) => e.kind === "retry-home").map((e) => e.value));
+    expect(line).toEqual(["8 1/1", "11,12,13 0/3"]);
+  });
+
   test("nothing kept: files go a day after marking; uploads never attached go after a day; removing a student takes his", async () => {
     await fam().mutation(api.family.check, { unitId: u01, n: 1, typed: LEVEL1 });
     const f = await jpeg();

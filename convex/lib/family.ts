@@ -15,6 +15,7 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { MasterData } from "./book";
+import { allPhone, boxCount, type KeyQ } from "./phone";
 import { DAY_MS, slDayNo, slWeekStart } from "./day";
 import { computeMaster, EMPTY_MASTER, type MState } from "./master";
 import { OL, olNumber } from "./syllabus";
@@ -89,6 +90,32 @@ export function levelStates(m: MState, book: MasterData): WorldLevel[] {
     if (lv?.pre) return { ...base, s: "pre" };
     return { ...base, s: l.n === play ? "play" : "later" };
   });
+}
+
+// ---- Questions that come back (4 Nov 2026, his idea: "even after explanation they will forget, so the same question
+// that they got wrong will come again in their path; if they do it correctly, bonus points") ----
+
+/** A wrong question comes back this many levels later... */
+export const RETRY_GAP = 2;
+/** ...at most this many in one level (the oldest first), so a level stays a level. */
+export const RETRY_PER_LEVEL = 3;
+
+/**
+ * The questions that come back in level n: ones he lost marks on (at home or in class) in a level at least 2 before
+ * it, of this book, that the phone can mark entirely and that haven't come back yet. One second chance each.
+ */
+export function retryPool(m: MState, book: MasterData, keys: Map<number, KeyQ>, n: number): { q: number; from: number; lost: number }[] {
+  const out: { q: number; from: number; lost: number }[] = [];
+  for (const l of book.levels) {
+    if (l.n > n - RETRY_GAP) break;
+    for (let q = l.from; q <= l.to && out.length < RETRY_PER_LEVEL; q++) {
+      const r = m.q[String(q)];
+      const k = keys.get(q);
+      if (!r?.lost || r.rt !== undefined || !k || !allPhone(k) || boxCount(k) === 0) continue;
+      out.push({ q, from: l.n, lost: Math.max(0, k.max - (r.got ?? 0)) });
+    }
+  }
+  return out;
 }
 
 /** Every level handed in, marked or done before the app. */
@@ -211,17 +238,24 @@ export async function masterRows(ctx: QueryCtx, studentId: Id<"students">): Prom
 }
 
 /**
- * XP since a time: the marks of every level he finished since then (handed in or marked at home; marked in class or
- * at home). A level counts in the week he did it, with the marks it has now (the corrector's check can change them).
+ * Every XP he won, and when: a level's marks when he finished it (handed in or marked at home; marked in class or at
+ * home; with the marks it has now: the corrector's check can change them), and the marks he won back when a wrong
+ * question came back (4 Nov 2026: counted the day he won them back, never more than he had lost).
  */
-export function xpSince(rows: Doc<"progress">[], since: number): number {
-  let xp = 0;
+export function xpItems(rows: Doc<"progress">[]): { t: number; xp: number }[] {
+  const out: { t: number; xp: number }[] = [];
   for (const r of rows) {
-    for (const lv of Object.values(r.m?.lv ?? {})) {
-      if (lv.fixed && (lv.done ?? lv.fixed) >= since) xp += lv.got ?? 0;
+    for (const lv of Object.values(r.m?.lv ?? {})) if (lv.fixed) out.push({ t: lv.done ?? lv.fixed, xp: lv.got ?? 0 });
+    for (const x of Object.values(r.m?.q ?? {})) {
+      if (x.rt !== undefined && (x.rg ?? 0) > (x.got ?? 0)) out.push({ t: x.rt, xp: (x.rg ?? 0) - (x.got ?? 0) });
     }
   }
-  return xp;
+  return out;
+}
+
+/** XP since a time (levels finished and marks won back since then). */
+export function xpSince(rows: Doc<"progress">[], since: number): number {
+  return xpItems(rows).reduce((a, i) => (i.t >= since ? a + i.xp : a), 0);
 }
 
 /** XP this week (Monday 00:00 in Sri Lanka). */
@@ -280,12 +314,9 @@ export function weekDays(days: Set<number>, now: number): boolean[] {
 export function weekDayXp(rows: Doc<"progress">[], now: number): number[] {
   const monday = slDayNo(slWeekStart(now));
   const out = [0, 0, 0, 0, 0, 0, 0];
-  for (const r of rows) {
-    for (const lv of Object.values(r.m?.lv ?? {})) {
-      if (!lv.fixed) continue;
-      const d = slDayNo(lv.done ?? lv.fixed) - monday;
-      if (d >= 0 && d < 7) out[d] += lv.got ?? 0;
-    }
+  for (const i of xpItems(rows)) {
+    const d = slDayNo(i.t) - monday;
+    if (d >= 0 && d < 7) out[d] += i.xp;
   }
   return out;
 }
@@ -305,12 +336,9 @@ export function levelsSince(rows: Doc<"progress">[], since: number): number {
 /** His best week ever: the most XP he made between a Monday and the next. */
 export function bestWeekXp(rows: Doc<"progress">[]): number {
   const weeks = new Map<number, number>();
-  for (const r of rows) {
-    for (const lv of Object.values(r.m?.lv ?? {})) {
-      if (!lv.fixed) continue;
-      const w = slWeekStart(lv.done ?? lv.fixed);
-      weeks.set(w, (weeks.get(w) ?? 0) + (lv.got ?? 0));
-    }
+  for (const i of xpItems(rows)) {
+    const w = slWeekStart(i.t);
+    weeks.set(w, (weeks.get(w) ?? 0) + i.xp);
   }
   return Math.max(0, ...weeks.values());
 }

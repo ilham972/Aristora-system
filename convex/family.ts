@@ -4,7 +4,8 @@
 //   me           -> the whole syllabus of his grade (each unit a Stage, grouped by term: the phone's Worlds), or the
 //                   O/L syllabus when the teachers ticked him for it (by paper part; 4 Nov 2026), then the other
 //                   syllabus's books he has; each Stage's levels, XP this week and ever, his streak, his week, trophies.
-//   level        -> the level he is on: each question's boxes (numbers, or answers in n), never the answers.
+//   level        -> the level he is on: each question's boxes (numbers, or answers in n), never the answers; then up to
+//                   3 questions he got wrong 2+ levels before, back for a second try (`re`, 4 Nov 2026).
 //   check        -> his typed answers for a whole level, once: the server marks them with the answer key and saves the
 //                   level as marked at home (⌂). Evaluation and Theory see his lost marks at once; the corrector looks
 //                   at his working in class and taps Checked (or changes a mark). What the phone can't mark (names,
@@ -32,7 +33,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type QueryCtx } from "./_generated/server";
 import { feedbackTopic } from "./schema";
 import { checkToken, familyActor, familyOf, familyViewer, FAMILY_SIGNED_OUT, secretHash } from "./lib/auth";
-import { asMaster, bookFor, currentSession, ensureProgress, fail, keyRow, log, masterState, refresh } from "./lib/backend";
+import { asMaster, bookFor, currentSession, ensureProgress, fail, keyRow, log, masterState, progressFor, refresh } from "./lib/backend";
 import { partOf } from "./lib/book";
 import {
   bestStreak,
@@ -50,6 +51,7 @@ import {
   levelsSince,
   masterRows,
   olMapOn,
+  retryPool,
   streakOf,
   trophiesOf,
   weekDayXp,
@@ -298,7 +300,8 @@ export type FamilyLevel = {
   ta: string;
   n: number;
   max: number;
-  qs: (FormQ & { part: string })[];
+  /** Its questions, then the ones that came back (`re` = the level he got it wrong in, `rb` = marks to win back). */
+  qs: (FormQ & { part: string; re?: number; rb?: number })[];
 };
 
 /** The level he is on, to answer on the phone: each question's boxes (never the answers). */
@@ -311,6 +314,11 @@ export const level = query({
     for (let q = l.from; q <= l.to; q++) {
       const k = keys.get(q);
       if (k) qs.push({ ...formOf(k), part: partOf(data, q)?.id ?? "" });
+    }
+    // The questions that come back (his idea, 4 Nov 2026): wrong 2+ levels ago, a second try now.
+    const p = await progressFor(ctx, s._id, world.unitId, "master");
+    for (const r of p ? retryPool(masterState(p), data, keys, l.n) : []) {
+      qs.push({ ...formOf(keys.get(r.q)!), part: partOf(data, r.q)?.id ?? "", re: r.from, rb: r.lost });
     }
     return { unitId: world.unitId, no: world.no, ta: world.ta, n: l.n, max: l.max, qs };
   },
@@ -357,6 +365,8 @@ export const check = mutation({
     const lv = m.lv[String(l.n)];
     if (lv?.fixed || lv?.done) fail("Your teacher already has this level.");
     if (computeMaster(m, data).current?.n !== l.n) fail("Do the levels in order: finish the level before it.");
+    // The questions that came back in this level (the same pool the phone was given), before anything changes.
+    const pool = retryPool(m, data, keys, l.n);
 
     const results: FamilyResult[] = [];
     const rows: Record<string, MQ> = {};
@@ -384,6 +394,19 @@ export const check = mutation({
     }
     Object.assign(m.q, rows);
     m.lv[String(l.n)] = { done: now, fixed: now, by: "home", got, home: now };
+    // The second tries: his new marks kept beside the first ones; right = no need to explain it in class; the marks he
+    // won back are XP this week (`xpItems`).
+    const retry: { q: number; max: number; got: number; from: number; ok: (boolean[] | null)[] }[] = [];
+    let bonus = 0;
+    for (const r of pool) {
+      const k = keys.get(r.q)!;
+      const res = markQuestion(k, (typed.get(r.q) ?? []).slice(0, boxCount(k)));
+      const again = res.got ?? 0;
+      const before = m.q[String(r.q)];
+      m.q[String(r.q)] = { ...before, rt: now, rg: again, ...(again >= k.max && !before.x ? { x: now } : {}) };
+      bonus += Math.max(0, again - (before.got ?? 0));
+      retry.push({ q: r.q, max: k.max, got: again, from: r.from, ok: res.ok });
+    }
     markBefore(m, data, l.n, now);
     await ctx.db.patch(progress._id, { m, updatedAt: now });
     // What he typed (for the most common wrong answers per question) and the photos this Check asks of him.
@@ -395,6 +418,10 @@ export const check = mutation({
       unit: unit.key,
       value: `${l.n} ${got}/${l.max}`,
     });
+    if (retry.length) {
+      const right = retry.filter((r) => r.got >= r.max).length;
+      await log(ctx, null, now, { kind: "retry-home", studentId: s._id, name: s.name, unit: unit.key, value: `${retry.map((r) => r.q).join(",")} ${right}/${retry.length}` });
+    }
     // In class with the app open: his "out of work" clock follows, as for any level.
     if (s.present) await refresh(ctx, s._id, now, await currentSession(ctx, now));
     const all = await masterRows(ctx, s._id);
@@ -402,7 +429,7 @@ export const check = mutation({
     const trophies = trophiesOf(all, await worldsOf(ctx, s));
     // The level's book: the key's working on what he got wrong, and the photos it asks for.
     const book = await bookOf(ctx, s, unit._id, l.n);
-    return { results, got, phoneMax, max: l.max, teacher, xp: weekXp(all, now), streak: streakOf(all, now), trophies, book };
+    return { results, got, phoneMax, max: l.max, teacher, xp: weekXp(all, now), streak: streakOf(all, now), trophies, book, retry, bonus };
   },
 });
 

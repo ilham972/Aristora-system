@@ -1101,6 +1101,17 @@ learning app of our education institute"): one profile, his class times, what he
     a lost question she answered with a cause counts as **explained** (`x`: Evaluation skips it in class), except
     "needs the lesson again" (and "well done"). A part marked in class meanwhile only closes. Class still checks his
     paper (⌂ Checked: his answer, "the class check is enough").
+  - **Questions that come back** (his idea: "even after explanation they will forget, so the same question will come
+    again in their path; if they do it correctly, bonus points"): a question he lost marks on (at home or in class) that
+    the phone can mark entirely comes back at the end of a level at least 2 later in the same book (`retryPool`:
+    `RETRY_GAP` 2, `RETRY_PER_LEVEL` 3, the oldest first, one second try each). The chip says ↻8, the card "Level 1 இல்
+    தவறியது" and "↻ +2 XP" (the marks he lost). At Check (`family.check`, the same pool computed before anything
+    changes): his new marks are kept beside the first ones (`MQ.rt`, `rg`: the unit's marks, Progress and the reports
+    keep the first try); right = explained (`x`: Evaluation skips it, and its working photo is no longer owed); the marks
+    he won back count as XP the day he won them (`xpItems`: never more than he lost, so a wrong first answer never pays).
+    The reveal: "↻ பழைய கேள்விகள் 1/2 · +2 XP" and the XP pill includes them. History: "old questions back on the
+    phone (Q8): 1/1 right" (`retry-home`). A re-mark of the old level in class drops its `rt` (it may come back once
+    more).
   - **Nothing kept**: an hourly cron (`convex/crons.ts` → `photos.sweep`) deletes the files of photos marked a day ago
     (the marks and her answer stay), of photos waiting on a level taken back in class or of a removed student, and
     image uploads never attached after a day. A removed (wiped) student's photos go with him; a tute's move takes them.

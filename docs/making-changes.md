@@ -219,8 +219,10 @@ EOF
   (it may hold "/"): the e2e harness serves those addresses from its storage (`context.route`) and takes the family
   app's uploads through `__abUpload`. Playwright: `setInputFiles` on the hidden `.f-file` input is the camera. Two
   Checks in one test share a `Date`: order Checks by `_creationTime`, not `at`.
-- **The family bundle is at 55.6 of 56 KB** (4 Nov 2026, after the photos: +3.6 KB): the next family feature needs
-  room (trim, or ask him to raise the budget again).
+- **The family bundle is at 56.0 of 56 KB** (4 Nov 2026, after the photos and the questions that come back; words
+  were shortened to fit): the next family feature needs room first (trim, or ask him to raise the budget again).
+- **XP is `xpItems`** (4 Nov 2026): every place that sums XP (the week, the race, the bars, the best week, ever) goes
+  through it, so the marks won back on a second try count everywhere at once. Never sum `lv.got` by hand again.
 - **A key's answer shapes** (`convex/lib/phone.ts`, 4 Nov 2026): a new unit or shape goes in `UNIT_WORDS` (normalized
   form: `cm^2`, longest first is automatic) with a test in `tests/family.test.ts`; a one-letter unit only with a space
   before it (else "5m", an answer in m, breaks). `notes()` drops any bracket with a comma, so a whole-answer point or

@@ -31,6 +31,9 @@ export interface MQ {
   tt?: number;
   dk?: boolean;
   dkp?: string[];
+  /** It came back on his phone 2 levels later (4 Nov 2026): answered again at rt, with rg marks. */
+  rt?: number;
+  rg?: number;
 }
 
 /** Waiting for Theory: sent there and not taught yet. */

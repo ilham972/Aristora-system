@@ -109,8 +109,8 @@ export function Taker(props: { unitId: string; n: number; q: number; kind: Kind;
 }
 
 const WHAT: Record<Kind, string> = {
-  working: "உன் வழிமுறையைப் படம் எடுத்து அனுப்பு: எங்கே தவறியது என்று ஆசிரியர் பார்ப்பார்.",
-  part: "இந்த விடையைப் படம் எடுத்து அனுப்பு: உன் ஆசிரியர் திருத்துவார்.",
+  working: "உன் வழிமுறையைப் படம் எடுத்து அனுப்பு.",
+  part: "உன் விடையைப் படம் எடுத்து அனுப்பு.",
 };
 
 function Question(props: { b: BookQ; unitId: string; n: number; onSent: () => void }) {

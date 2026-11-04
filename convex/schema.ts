@@ -90,6 +90,12 @@ export const masterState = v.object({
       dk: v.optional(v.boolean()),
       /** "?" on some parts only ("iii"): he left those blank; the parts he answered keep their marks (dk is set too). */
       dkp: v.optional(v.array(v.string())),
+      /**
+       * It came back 2 levels later on his phone (4 Nov 2026, his idea): rt = when he answered it again, rg = his marks
+       * then. The first marks stay as they were; the marks he won back count as XP that week.
+       */
+      rt: v.optional(v.number()),
+      rg: v.optional(v.number()),
     }),
   ),
   lv: v.record(
