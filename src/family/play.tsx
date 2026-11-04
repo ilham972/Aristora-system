@@ -1,8 +1,9 @@
 // A Level: one question at a time, his own pad, Check once; then the reveal.
 // - The phone never has the answers: the server marks (convex/family.ts check).
-// - Two ways to do it (his voice note, 3 Nov 2026): with his paper in hand he types only the answers; without it (a new
-//   student who has no workbook yet) the eye at the top shows each question as printed above its boxes. The switch is
-//   kept per child; pale when the Stage's questions are not in the app yet.
+// - The question is always on the screen when the Stage's questions are in the app (his answer, 4 Nov 2026: "always
+//   show the question"; the eye switch is gone), in the app's own font, its printed number hidden (Q9 once). His
+//   answer goes inside it where the book marks the place (kinds.tsx): the blanks are his boxes, options and ✓ / ✗ are
+//   tapped, words are underlined; cards to order and pairs to match sit under it. The pad shows only for boxes.
 // - The reveal: his answers come back one question at a time, a bell for each right one that climbs higher with every
 //   one in a row, then the score, the XP, the flame, a trophy if he won one. A tap shows everything at once.
 // - A question only the teacher marks has no box: "do it on paper", the pad pale, → goes on (4 Nov 2026: a student
@@ -16,6 +17,7 @@ import type { LevelBook } from "../../convex/lib/homeWork";
 import type { Box } from "../../convex/lib/phone";
 import { drawQuestion } from "../questionView";
 import { Book, Taker } from "./book";
+import { MatchPairs, OrderCards, paintSlots, PickBelow, slotRuns, slotsFit, tapOf, tapped, typing, type Live, type SlotRun } from "./kinds";
 import { keep, mutation, NetError, query } from "./net";
 import { buzz, sound } from "./sound";
 import { Flame, Gem, Icon, Medal, Owl, OwlBadge, pretty, problemWords, Roll, Tag, toast, useOwlTap, Waiting, type Mood } from "./ui";
@@ -88,6 +90,17 @@ function Pad(props: { box: Box | null; onKey: (k: string) => void; last: boolean
   );
 }
 
+/** A question with nothing to type (taps, cards, pairs, a photo): only → under it, where the pad's → always is. */
+function NextBar(props: { onNext: () => void; last: boolean }) {
+  return (
+    <div class="f-nextbar">
+      <button type="button" class="f-key next" aria-label={props.last ? "Done" : "Next"} onClick={props.onNext}>
+        →
+      </button>
+    </div>
+  );
+}
+
 // ---- The questions as printed ----
 
 /** Each Stage's book style, once per visit (it is large; a level's questions are kept with it for no signal). */
@@ -122,17 +135,67 @@ function useQuestions(world: World, n: number, on: boolean): { got: FamilyQuesti
   return { got, failed };
 }
 
-/** The app's paper on the book's page: rounded, a little air (after the book's own rules). */
-const PAPER_CSS = ".qv { border-radius: 14px; padding: 12px 10px 8px; -webkit-user-select: none; user-select: none; }";
+/**
+ * The app's paper on the book's page (after the book's own rules): rounded, a little air; the app's own font, larger
+ * (his ask, 4 Nov 2026: "I want beautiful font for the questions"), letters of maths in italics; the printed number
+ * hidden (the card says Q9 once); the book's slots as the app's boxes, options, ✓ / ✗ and words to tap.
+ */
+const PAPER_CSS = `.qv { border-radius: 14px; padding: 14px 12px 10px; -webkit-user-select: none; user-select: none; color: var(--ink, #1c1a3a);
+  font: 500 17px/1.6 "Baloo Thambi 2", "Noto Sans Tamil", system-ui, sans-serif; }
+.qv :not(svg):not(svg *):not(.mi):not(.mi *) { font-family: "Baloo Thambi 2", "Noto Sans Tamil", system-ui, sans-serif !important; }
+.qv .sit, .qv .qs, .qv .sq, .qv .lead, .qv .lead2, .qv .pq p, .qv .bl, .qv .rp, .qv .mcq, .qv table.gt td { font-size: 17px !important; line-height: 1.6 !important; }
+.qv .src { font-size: 12.5px !important; letter-spacing: 0 !important; color: var(--ink3, #9d99bf) !important; font-weight: 600 !important; }
+.qv .mi { font-family: "STIX Two Text", "Cambria Math", Georgia, serif; }
+.qv .frc { font-size: .9em; }
+.qv .qn, .qv .pm, .qv .mk { display: none !important; }
+.qv [data-fill] { display: inline-flex !important; align-items: center; justify-content: center; vertical-align: middle; box-sizing: border-box;
+  min-width: 2.3em !important; width: auto !important; height: 1.8em; margin: 0 .1em; padding: 0 .3em; border: 2px dashed var(--brand-mid, #cbc3ff) !important;
+  border-radius: 10px; background: var(--brand-soft, #efecff); color: var(--brand-2, #5a49d6); font: 800 1.05em/1 "Baloo Thambi 2", sans-serif !important; cursor: pointer; }
+.qv .frc [data-fill] { min-width: 1.75em !important; height: 1.45em; margin: 0 0 .12em; border-radius: 8px; }
+.qv [data-fill].fx-has { border-style: solid !important; background: #fff; }
+.qv [data-fill].fx-on { border: 2.5px solid var(--brand, #6c5ce7) !important; background: #fff; box-shadow: 0 0 0 4px var(--brand-soft, #efecff); }
+.qv [data-opt] { display: inline-flex; align-items: center; gap: .3em; margin: .15em 0; padding: .2em .7em; border-radius: 12px; cursor: pointer;
+  box-shadow: inset 0 0 0 2px var(--line-2, #ddd9f0); background: #fff; }
+.qv [data-opt].fx-on { box-shadow: inset 0 0 0 2.5px var(--brand, #6c5ce7); background: var(--brand-soft, #efecff); color: var(--brand-2, #5a49d6); }
+.qv .mcq { row-gap: 6px !important; column-gap: 10px !important; }
+.qv [data-tick] { display: inline-flex; gap: 6px; margin: 0 .2em; vertical-align: middle; }
+.qv .fx-tk { display: inline-flex; align-items: center; justify-content: center; width: 2.3em; height: 1.85em; border-radius: 10px; cursor: pointer;
+  box-shadow: inset 0 0 0 2px var(--line-2, #ddd9f0); background: #fff; color: var(--ink3, #9d99bf); font: 800 1em/1 "Baloo Thambi 2", sans-serif; }
+.qv .fx-tk.fx-on { box-shadow: inset 0 0 0 2.5px var(--brand, #6c5ce7); background: var(--brand-soft, #efecff); color: var(--brand-2, #5a49d6); }
+.qv [data-mark] { display: inline-block; min-width: 1.7em; margin: .1em 0; padding: .05em .3em 0; text-align: center; font-size: 1.12em;
+  cursor: pointer; border-bottom: 3px solid transparent; border-radius: 2px; }
+.qv [data-mark].fx-on { border-bottom-color: var(--brand, #6c5ce7); color: var(--brand-2, #5a49d6); }
+.qv [data-mark].fx-ring { border: 2px solid transparent; border-radius: 999px; padding: 0 .3em; }
+.qv [data-mark].fx-ring.fx-on { border-color: var(--brand, #6c5ce7); }`;
 
-/** A question as printed, on the level. A tap opens it full screen (`QuestionZoom`): the app itself never zooms. */
-function Paper(props: { html: string; css: string; q: number; onZoom: () => void }) {
+/**
+ * A question as printed, on the level. A tap opens it full screen (`QuestionZoom`): the app itself never zooms. With
+ * its slots live (his answers go in it), a tap answers instead and only 🔍 zooms.
+ */
+function Paper(props: { html: string; css: string; q: number; onZoom: () => void; live?: Live }) {
   const host = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!host.current) return;
     return drawQuestion(host.current, props.html, props.css, PAPER_CSS);
   }, [props.html, props.css]);
-  return <div class="f-paper rise" ref={host} aria-label={`Q${props.q}`} onClick={props.onZoom} />;
+  // After every change: his answers in the slots (the drawing above runs first).
+  useEffect(() => {
+    const root = host.current?.shadowRoot;
+    if (root && props.live) paintSlots(root, props.live);
+  });
+  const live = props.live && props.live.fit.size > 0 ? props.live : null;
+  return (
+    <div
+      class={`f-paper rise${live ? " live" : ""}`}
+      ref={host}
+      aria-label={`Q${props.q}`}
+      onClick={(e) => {
+        if (!live) return props.onZoom();
+        const t = tapOf(e, live);
+        if (t) live.onSlot(t.run, t.i, t.v);
+      }}
+    />
+  );
 }
 
 /** A printed question to open full screen. */
@@ -299,8 +362,8 @@ export function Play(props: {
   const [review, setReview] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [qOn, setQOn] = useState<boolean>(() => !!keep<boolean>("qmode"));
-  const showQ = qOn && props.world.q;
+  // The question is always shown when the Stage's questions are in the app (his answer, 4 Nov 2026).
+  const showQ = props.world.q;
   const qs = useQuestions(props.world, props.n, showQ);
   // A tute's teacher question (4 Nov 2026, his idea): done with the teacher → he types it; not yet → Learn (the worked
   // solution, a step a tap), then he does the same question himself. Kept per level, as his answers are.
@@ -381,16 +444,22 @@ export function Play(props: {
   const asking = !review && !!q.t && !how[q.q];
   const learning = !review && !!q.t && how[q.q] === "learn";
   const flat = all.findIndex((x) => x.qi === at.qi && x.bi === at.bi);
-  const box = flat >= 0 ? all[flat].box : null;
+  // The box he types in now: a tap's place (an option, ✓ / ✗, a card) is never typed into.
+  const box = flat >= 0 && typing(all[flat].box) ? all[flat].box : null;
   const val = (qi: number, bi: number) => typed[form.qs[qi].q]?.[bi] ?? "";
-  const set = (qi: number, bi: number, s: string) => {
+  /** Several of a question's answers at once (a tap changes a whole part: ✓ / ✗, the words marked, the cards). */
+  const setRun = (qi: number, from: number, vals: string[]) => {
     const qn = form.qs[qi].q;
     const arr = [...(typed[qn] ?? [])];
-    arr[bi] = s;
+    vals.forEach((v, k) => (arr[from + k] = v));
     const next = { ...typed, [qn]: arr };
     setTyped(next);
     keep(draftKey, next);
   };
+  const set = (qi: number, bi: number, s: string) => setRun(qi, bi, [s]);
+  /** Where a question starts: its first box to type in (or its first answer when it has none). */
+  const startOf = (qi: number) => Math.max(0, all.filter((x) => x.qi === qi).findIndex((x) => typing(x.box)));
+  const typesIn = (qi: number) => all.some((x) => x.qi === qi && typing(x.box));
   const boxesIn = (qi: number) => all.filter((x) => x.qi === qi).length;
   const filled = (qi: number) => {
     const n = boxesIn(qi);
@@ -399,26 +468,24 @@ export function Play(props: {
     return n === 0 ? "teacher" : f === n ? "full" : f > 0 ? "part" : "empty";
   };
   const goNext = () => {
-    if (flat >= 0 && flat + 1 < all.length && all[flat + 1].qi === at.qi) return setAt({ qi: at.qi, bi: at.bi + 1 });
-    if (at.qi + 1 < form.qs.length) return setAt({ qi: at.qi + 1, bi: 0 });
+    // The next box to type in this question, else the next question.
+    const next = flat >= 0 ? all.findIndex((x, i) => i > flat && x.qi === at.qi && typing(x.box)) : -1;
+    if (next >= 0) return setAt({ qi: at.qi, bi: all[next].bi });
+    if (at.qi + 1 < form.qs.length) return setAt({ qi: at.qi + 1, bi: startOf(at.qi + 1) });
     setReview(true);
   };
   const onKey = (k: string) => {
     buzz(6);
     sound("key");
     if (k === "→") return goNext();
-    if (!box) return toast("இதைத் தாளில் செய்து படம் எடு (📷). → அடுத்த கேள்வி.");
-    const cur = val(at.qi, at.bi);
-    if (k === "⌫") return set(at.qi, at.bi, cur.endsWith("^2") ? cur.slice(0, -2) : cur.slice(0, -1));
+    // A key while a tap's place is chosen: it goes to the question's first box.
+    const here = box ? at.bi : typesIn(at.qi) ? startOf(at.qi) : -1;
+    if (here < 0) return toast("இதைத் தாளில் செய்து படம் எடு (📷). → அடுத்த கேள்வி.");
+    if (here !== at.bi) setAt({ qi: at.qi, bi: here });
+    const cur = val(at.qi, here);
+    if (k === "⌫") return set(at.qi, here, cur.endsWith("^2") ? cur.slice(0, -2) : cur.slice(0, -1));
     if (cur.length >= 30) return;
-    set(at.qi, at.bi, cur + k);
-  };
-  const flipQ = () => {
-    buzz();
-    if (!props.world.q) return toast("இந்த Stage இன் கேள்விகள் விரைவில் phone இல் வரும்.");
-    sound("tap");
-    keep("qmode", !qOn);
-    setQOn(!qOn);
+    set(at.qi, here, cur + k);
   };
   const empty = all.filter((x) => !val(x.qi, x.bi).trim()).length;
   const done = all.length - empty;
@@ -454,9 +521,28 @@ export function Play(props: {
   const zoom = () => {
     if (printed && css !== null) props.onZoom({ q: q.q, html: printed.html, css });
   };
+  // The kinds the book gave this question: their places in the printed question, live; the rest under it.
+  const runs = slotRuns(q);
+  const fit = printed && css !== null ? slotsFit(runs, printed.html) : new Set<SlotRun["attr"]>();
+  const mine = typed[q.q] ?? [];
+  const tap = (run: SlotRun, i: number, v?: string) => {
+    if (run.attr === "b") {
+      buzz(5);
+      sound("tap");
+      return setAt({ qi: at.qi, bi: run.at + i });
+    }
+    const vals = tapped(run, mine, i, v);
+    if (!vals) return;
+    buzz(6);
+    sound(run.ui.k === "choose" ? "pop" : "tap");
+    setRun(at.qi, run.at, vals);
+  };
+  const live: Live = { runs, fit, vals: mine, cur: box ? at.bi : null, onSlot: tap };
+  const runAt = (from: number) => runs.find((r) => r.at === from);
+  const pad = !review && !asking && !learning && typesIn(at.qi);
   let bi = 0;
   return (
-    <div class={`f-play${showQ ? " withq" : ""}${review ? " rev" : ""}${box?.k === "expr" ? " xpad" : ""}`}>
+    <div class={`f-play${showQ ? " withq" : ""}${review ? " rev" : ""}${box?.k === "expr" ? " xpad" : ""}${!review && !pad ? " nopad" : ""}`}>
       <header class="f-ptop">
         <button type="button" class="f-round" aria-label="Back" onClick={props.onBack}>
           <Icon name="close" size={20} />
@@ -467,16 +553,6 @@ export function Play(props: {
             {done}/{all.length}
           </span>
         </div>
-        <button
-          type="button"
-          class={`f-qmode${showQ ? " on" : ""}${props.world.q ? "" : " pale"}`}
-          aria-pressed={showQ}
-          aria-label="Show the questions"
-          onClick={flipQ}
-        >
-          <Icon name="eye" size={16} />
-          <span class="f-knob" aria-hidden="true" />
-        </button>
       </header>
       <div class="f-prow">
         <p class="f-kicker">
@@ -496,7 +572,7 @@ export function Play(props: {
             onClick={() => {
               buzz();
               setReview(false);
-              setAt({ qi, bi: 0 });
+              setAt({ qi, bi: startOf(qi) });
             }}
           >
             {x.re ? `↻${x.q}` : x.q}
@@ -559,7 +635,7 @@ export function Play(props: {
           {q.t && <p class="f-tqtag">ஆசிரியர் கேள்வி · with your teacher</p>}
           {showQ &&
             (printed && css !== null ? (
-              <Paper html={printed.html} css={css} q={q.q} onZoom={zoom} />
+              <Paper html={printed.html} css={css} q={q.q} onZoom={zoom} live={live} />
             ) : (
               <p class="f-paper-note">
                 {qs.failed ? "இணையம் இல்லை: கேள்வியைக் கொண்டுவர முடியவில்லை." : qs.got ? "இந்தக் கேள்வி இன்னும் phone இல் இல்லை." : "கேள்வி வருகிறது…"}
@@ -580,6 +656,37 @@ export function Play(props: {
           ) : null}
           {!asking && !learning && q.parts.map((p, pi) => {
             if (p.boxes && p.boxes.length === 0) return null;
+            const from = bi;
+            const ui = p.ui;
+            // A kind answered inside the printed question: nothing under it. Cards, pairs and the rest go here.
+            if (ui && ui.k !== "fill" && ui.k !== "order" && ui.k !== "match") {
+              bi += p.boxes?.length ?? 0;
+              const run = runAt(from);
+              if (!run || fit.has(run.attr)) return null;
+              return (
+                <div class="f-part" key={pi}>
+                  {p.p && <span class="f-plabel">({p.p})</span>}
+                  <PickBelow run={run} vals={mine} onPick={(i, v) => tap(run, i, v)} />
+                </div>
+              );
+            }
+            if (ui?.k === "order" || ui?.k === "match") {
+              bi += p.boxes?.length ?? 0;
+              return (
+                <div class="f-part" key={pi}>
+                  {p.p && <span class="f-plabel">({p.p})</span>}
+                  {ui.k === "order" ? (
+                    <OrderCards items={ui.items} vals={mine} at={from} onSet={(v) => setRun(at.qi, from, v)} />
+                  ) : (
+                    <MatchPairs l={ui.l} r={ui.r} vals={mine} at={from} onSet={(v) => setRun(at.qi, from, v)} />
+                  )}
+                </div>
+              );
+            }
+            if (ui?.k === "fill" && fit.has("b")) {
+              bi += p.boxes?.length ?? 0;
+              return null;
+            }
             return (
               <div class="f-part" key={pi}>
                 {p.p && <span class="f-plabel">({p.p})</span>}
@@ -627,7 +734,8 @@ export function Play(props: {
         </section>
       )}
 
-      {!review && !asking && !learning && <Pad box={box} onKey={onKey} last={flat === all.length - 1} />}
+      {pad && <Pad box={box ?? all.find((x) => x.qi === at.qi && typing(x.box))?.box ?? null} onKey={onKey} last={flat === all.length - 1} />}
+      {!review && !asking && !learning && !pad && <NextBar onNext={goNext} last={at.qi === form.qs.length - 1} />}
     </div>
   );
 }
@@ -929,12 +1037,16 @@ export function Result(props: {
                     <i key={pi} class="t">
                       ✍
                     </i>
+                  ) : fq?.parts[pi]?.ui?.k === "mark" ? (
+                    <i key={pi} class={part.every(Boolean) ? "y" : "n"}>
+                      {part.every(Boolean) ? "✓" : "✗"}
+                    </i>
                   ) : (
                     part.map((g, bi) => (
                       <i
                         key={`${pi}.${bi}`}
                         class={g ? "y" : "n"}
-                        title={pretty((props.typed[r.q] ?? [])[fq ? fq.parts.slice(0, pi).reduce((s, p) => s + (p.boxes?.length ?? 0), 0) + bi : bi] ?? "")}
+                        title={fq?.parts[pi]?.ui && fq.parts[pi].ui!.k !== "fill" ? undefined : pretty((props.typed[r.q] ?? [])[fq ? fq.parts.slice(0, pi).reduce((s, p) => s + (p.boxes?.length ?? 0), 0) + bi : bi] ?? "")}
                       >
                         {g ? "✓" : "✗"}
                       </i>

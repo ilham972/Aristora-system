@@ -19,7 +19,7 @@ import { actor, viewer } from "./lib/auth";
 import { asMaster, bookFor, fail, keyRow, log, masterState, progressFor } from "./lib/backend";
 import { phoneKeyFor, photosRequired, REQUIRED_KEY } from "./lib/homeWork";
 import type { MState } from "./lib/master";
-import { markQuestion, type KeyQ } from "./lib/phone";
+import { markQuestion, slotWords, type KeyQ } from "./lib/phone";
 import { isRetake, isWhy, keyText, NOTE_MAX, ORPHAN_MS, partMarks, PHOTO_KEEP_MS, PHOTO_LATE_MS } from "./lib/photos";
 
 const token = v.optional(v.string());
@@ -129,7 +129,7 @@ export const queue = query({
         max: k.max,
         ...(r.kind === "part" ? partMarks(t?.owe, r.q, k, t?.a ?? null) : { teach: 0, phoneGot: t ? markQuestion(k, t.a).phoneGot : 0 }),
         key: keyText(u.raw.get(r.q)),
-        typed: t && t.a.length ? t.a : null,
+        typed: t && t.a.length ? slotWords(k, t.a) : null,
         ok: t && t.a.length ? t.ok : null,
         got: mq ? (mq.got ?? null) : null,
         urls,

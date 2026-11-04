@@ -58,8 +58,10 @@ console.log(`Built dist/ for ${url}: ${basename(js)} ${kb(js)} KB, ${basename(cs
 // 4 Nov 2026: 50 → 56 KB for the owl's acting (its whole-body moods, tap reactions and surprise visits, ~6 KB); 56 → 58
 // the same day: the photos from home (55.6) and a printed question full screen + no selection (~1.5 KB). No dead CSS
 // to cut (every class nobody names is built in the code: moods, states, places). 58 → 60 the same day: a tute's ladder
-// on the phone, teacher questions and Learn (58.7).
-const FAMILY_BUDGET_KB = 60;
+// on the phone, teacher questions and Learn (58.7). 60 → 64 the same evening: the answer kinds, the heart of the app
+// (his voice note: "the most important place ... not in the working condition"): the question's own blanks as boxes,
+// options and ✓ / ✗ to tap, words to underline, cards to order, pairs to match, the question in the app's font (~62).
+const FAMILY_BUDGET_KB = 64;
 await mkdir("dist/f/assets", { recursive: true });
 const fam = await build({
   entryPoints: { fam: "src/family/main.tsx" },

@@ -21,7 +21,7 @@ import {
   type MasterPart,
   type PartId,
 } from "../convex/lib/book";
-import { checkFighterKey, checkKey, type KeyAnswer } from "../convex/lib/key";
+import { checkFighterKey, checkKey, slotProblem, type Ans, type BoxAns, type KeyAnswer } from "../convex/lib/key";
 import { OL } from "../convex/lib/syllabus";
 import { tuteQuestions, workbookQuestions } from "./bookQuestions";
 
@@ -339,21 +339,23 @@ export function readKeyFile(text: string): KeyFile | string {
     return "The answer key file can't be read.";
   }
   const o = j as { kind?: unknown; version?: unknown; grade?: unknown; units?: unknown };
-  if (!o || typeof o !== "object" || o.kind !== "aristora-answer-key" || o.version !== 1 || !Array.isArray(o.units)) return bad;
+  // Version 2 (4 Nov 2026): each answer may carry its kind (`t`: boxes in the blanks, an option, ✓ / ✗, cards …).
+  if (!o || typeof o !== "object" || o.kind !== "aristora-answer-key" || (o.version !== 1 && o.version !== 2) || !Array.isArray(o.units)) return bad;
   const units: KeyFile["units"] = [];
   for (const u of o.units as { no?: unknown; questions?: unknown }[]) {
     if (typeof u?.no !== "number" || !Array.isArray(u.questions)) return bad;
     const answers: KeyAnswer[] = [];
     const marks = new Map<number, number>();
-    for (const x of u.questions as { q?: unknown; marks?: unknown; a?: unknown }[]) {
+    for (const x of u.questions as { q?: unknown; marks?: unknown; a?: unknown; t?: unknown }[]) {
       if (typeof x?.q !== "number") return bad;
       if (typeof x.marks === "number") marks.set(x.q, x.marks);
-      if (typeof x.a === "string") answers.push({ q: x.q, a: x.a });
+      if (typeof x.a === "string") answers.push({ q: x.q, a: x.a, ...kindOf(x.t) });
       else if (Array.isArray(x.a)) {
-        const parts = (x.a as { p?: unknown; a?: unknown; m?: unknown }[]).map((r) => ({
+        const parts = (x.a as { p?: unknown; a?: unknown; m?: unknown; t?: unknown }[]).map((r) => ({
           p: String(r?.p ?? ""),
           a: String(r?.a ?? ""),
           ...(typeof r?.m === "number" ? { m: r.m } : {}),
+          ...kindOf(r?.t),
         }));
         answers.push({ q: x.q, parts });
       } else return bad;
@@ -363,8 +365,32 @@ export function readKeyFile(text: string): KeyFile | string {
   return { grade: typeof o.grade === "number" ? o.grade : null, units };
 }
 
+/** An answer's kind, copied field by field (the server takes nothing else); checked with the key (`checkKey`). */
+function kindOf(t: unknown): { t?: Ans } {
+  if (!t || typeof t !== "object") return {};
+  const x = t as Record<string, unknown>;
+  const pick = (...names: string[]) => Object.fromEntries(names.filter((n) => x[n] !== undefined).map((n) => [n, x[n]]));
+  const boxes = (b: unknown) =>
+    Array.isArray(b) ? b.map((bx) => (bx && typeof bx === "object" ? (Object.fromEntries(["v", "same", "l", "u", "j"].filter((n) => (bx as Record<string, unknown>)[n] !== undefined).map((n) => [n, (bx as Record<string, unknown>)[n]])) as BoxAns) : (bx as BoxAns))) : b;
+  const fields: Record<string, string[]> = {
+    box: ["k", "any"],
+    fill: ["k", "any"],
+    choose: ["k", "n", "a", "items"],
+    tf: ["k", "a", "items"],
+    mark: ["k", "n", "a", "how", "items"],
+    order: ["k", "items", "a"],
+    match: ["k", "l", "r", "a"],
+    photo: ["k"],
+  };
+  const names = fields[String(x.k)];
+  if (!names) return { t: { k: String(x.k) } as unknown as Ans }; // refused by checkKey, in plain words
+  const out = pick(...names);
+  if (x.k === "box" || x.k === "fill") out.b = boxes(x.b);
+  return { t: out as Ans };
+}
+
 /** Put a unit's answers on the workbook read from the same zip, or say why they don't fit it. */
-function attachKey(w: ReadWorkbook, file: KeyFile): void {
+function attachKey(w: ReadWorkbook, file: KeyFile, cards?: Map<number, string>): void {
   const mine = file.units.find((u) => u.no === w.unitNo);
   if (!mine || mine.answers.length === 0) return;
   if (file.grade !== null && w.grade !== null && file.grade !== w.grade) {
@@ -382,6 +408,15 @@ function attachKey(w: ReadWorkbook, file: KeyFile): void {
   if (bad.length) {
     w.problems.push(...bad);
     return;
+  }
+  // The blanks, options, brackets and words the key's kinds use are in the printed question, as many as it needs.
+  for (const k of mine.answers) {
+    const html = cards?.get(k.q);
+    const wrong = html ? slotProblem(k, html) : "";
+    if (wrong) {
+      w.problems.push(`Question ${k.q}: ${wrong}`);
+      return;
+    }
   }
   w.key = [...mine.answers].sort((a, b) => a.q - b.q);
 }
@@ -430,11 +465,14 @@ export function readWorkbookFiles(files: { name: string; bytes: Uint8Array }[]):
       out.push(readTuteFile(tuteText, html, f.name));
       continue;
     }
+    // Each book's printed cards, to check its key's blanks and options against (even when its style is missing).
+    const cardsOf = new Map<ReadWorkbook, Map<number, string>>();
     const found = pages.flatMap((h) => {
       if (!HAS_SHEET.test(h)) return [];
       const books = readWorkbookHtml(h, f.name);
       const qs = workbookQuestions(h);
       books.forEach((w, i) => {
+        if (qs.units[i]?.size) cardsOf.set(w, qs.units[i]);
         if (qs.units[i]?.size && qs.css) {
           w.questions = qs.units[i];
           w.css = qs.css;
@@ -447,7 +485,7 @@ export function readWorkbookFiles(files: { name: string; bytes: Uint8Array }[]):
       const key = readKeyFile(keyText);
       for (const w of found) {
         if (typeof key === "string") w.problems.push(key);
-        else if (w.problems.length === 0) attachKey(w, key);
+        else if (w.problems.length === 0) attachKey(w, key, cardsOf.get(w));
       }
     }
     out.push(...found);

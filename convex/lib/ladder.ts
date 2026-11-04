@@ -54,7 +54,7 @@ export function ladderKeys(secs: SectionData[], answers: KeyAnswer[]): Map<numbe
     if (!qs.includes(k.q)) continue;
     const parts = k.parts?.length ? k.parts.map((p) => ({ ...p, m: 1 })) : null;
     marks[String(k.q)] = parts ? parts.length : 1;
-    fixed.push(parts ? { q: k.q, parts } : { q: k.q, a: k.a ?? "" });
+    fixed.push(parts ? { q: k.q, parts } : { q: k.q, a: k.a ?? "", ...(k.t ? { t: k.t } : {}) }); // a kind comes along
   }
   for (const q of qs) marks[String(q)] ??= 1;
   const first = Math.min(...qs);
