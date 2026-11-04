@@ -320,6 +320,7 @@ export function App() {
           go({ k: "level", unitId: w.unitId, n });
         }}
         onBook={(n) => go({ k: "book", unitId: w.unitId, n })}
+        onPhotos={(b) => go({ k: "book", unitId: b.unitId, n: b.n })}
       />
     ) : (
       <Missing onBack={toMain} />
@@ -343,6 +344,7 @@ export function App() {
     );
   } else if (screen.k === "level") {
     const w = worldOf(screen.unitId);
+    const lvN = screen.n;
     body = w ? (
       <Play
         key={`${w.unitId}.${screen.n}`}
@@ -358,6 +360,12 @@ export function App() {
             typed,
             before: { trophies: me?.trophies ?? [], days: me?.streak.days ?? 0, today: !!me?.streak.today, best: me?.best ?? 0 },
           });
+          window.scrollTo(0, 0);
+          void loadMe();
+        }}
+        onMarked={() => {
+          toast(`Level ${lvN} ஏற்கனவே சரிபார்க்கப்பட்டது: இதோ உன் விடைகள்.`);
+          setScreen({ k: "book", unitId: w.unitId, n: lvN });
           window.scrollTo(0, 0);
           void loadMe();
         }}

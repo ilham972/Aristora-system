@@ -291,7 +291,15 @@ const LV_STEP = 124;
 const LV_HEAD = 86;
 const lvPos = (i: number) => ({ x: 50 + 24 * Math.sin(i * 1.6), y: LV_HEAD + i * LV_STEP });
 
-export function StageScreen(props: { me: FamilyMe; world: World; onBack: () => void; onPlay: (n: number) => void; onBook: (n: number) => void }) {
+export function StageScreen(props: {
+  me: FamilyMe;
+  world: World;
+  onBack: () => void;
+  onPlay: (n: number) => void;
+  onBook: (n: number) => void;
+  /** The level whose photos he owes (his limit): its book, in this Stage or another. */
+  onPhotos: (b: NonNullable<FamilyMe["blocked"]>) => void;
+}) {
   const { me, world: w } = props;
   const groups = worldGroups(me);
   const g = groups.find((x) => x.stages.some((s) => s.unitId === w.unitId));
@@ -314,8 +322,7 @@ export function StageScreen(props: { me: FamilyMe; world: World; onBack: () => v
     if (l.s === "play" && canPlay && stop) {
       sound("wrong");
       toast(`📷 முதலில் Stage ${stop.no} · Level ${stop.n} இன் படங்களை அனுப்பு.`);
-      if (stop.unitId === w.unitId) props.onBook(stop.n);
-      return;
+      return props.onPhotos(stop);
     }
     if (l.s === "play" && canPlay) return props.onPlay(l.n);
     // A level marked at home: its book (solutions, photos, the teacher's answers).
@@ -332,7 +339,7 @@ export function StageScreen(props: { me: FamilyMe; world: World; onBack: () => v
     toast(`Level ${l.n}: ${l.got !== undefined ? `${l.got} / ${l.max} XP · ` : ""}${STATE_WORDS[l.s]}`);
   };
   return (
-    <div class="f-stage">
+    <div class={`f-stage${stop && canPlay && playIdx >= 0 ? " stopped" : ""}`}>
       <header class="f-hero">
         <div class="f-toprow">
           <button type="button" class="f-round on-brand" aria-label="Back" onClick={props.onBack}>
@@ -377,6 +384,19 @@ export function StageScreen(props: { me: FamilyMe; world: World; onBack: () => v
         <>
           {!w.open && <p class="f-note lock">இந்த Stage பூட்டப்பட்டுள்ளது: முன்னுள்ள Stage ஐ முடி, அல்லது வகுப்பில் கேள்.</p>}
           {w.open && !w.phone && <p class="f-note">இந்த Stage விரைவில் phone இல்: இப்போது தாளை வகுப்பில் கொடு.</p>}
+          {stop && canPlay && playIdx >= 0 && (
+            // Why the next level stays shut (his report, 4 Nov 2026: "not showing the reason"): said where he looks.
+            <button type="button" class="f-note f-stopnote" onClick={() => {
+              buzz();
+              props.onPhotos(stop);
+            }}>
+              <Icon name="camera" size={18} />
+              <span>
+                Level {w.levels[playIdx].n} திறக்க, முதலில் Stage {stop.no} · Level {stop.n} இன் <b>{stop.owed} படங்களை</b> அனுப்பு.
+              </span>
+              <b class="f-stopgo">அனுப்பு →</b>
+            </button>
+          )}
           <div class="f-roadbox lv" style={{ height: `${height}px` }}>
             <Road pts={[...pts, cup]} height={height} reached={reached} />
             {w.levels.map((l, i) => {
@@ -386,7 +406,7 @@ export function StageScreen(props: { me: FamilyMe; world: World; onBack: () => v
                 <div key={l.n} class={`f-lvwrap ${pts[i].x < 50 ? "r" : "l"}`} style={{ left: `${pts[i].x}%`, top: `${pts[i].y}px` }}>
                   {live && (
                     <span class="f-start" aria-hidden="true">
-                      START
+                      {stop ? "📷" : "START"}
                     </span>
                   )}
                   <button
