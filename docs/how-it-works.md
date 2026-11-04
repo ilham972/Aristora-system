@@ -1246,6 +1246,19 @@ learning app of our education institute"): one profile, his class times, what he
   now reads with other boxes goes to the teacher whole (a photo, `pm` = its marks), never ✗ for a box he didn't see;
   a question that came back but wasn't on his screen isn't marked (it comes back next time). Phones from before `b`
   are marked as before.
+- **The owner's Preview** (5 Nov 2026, his ask: check every question of a digitized unit "without answering the level
+  one"; his answers: **only the owner** ("that's me only"), **only looking**, never for students or other teachers: a
+  student must finish a level to see the next). Settings → Books → the unit → **Preview on the phone: every level open
+  (only you)** (`PhoneAnswers`, `may("owner")`; a unit with a key) opens the family app on the class system's own
+  address (`/f/#preview=<unit>`), which reads his teachers' sign-in from that address's storage (`aristora.token`):
+  every level listed, a tap = the real level screen (`Play` with `look`: the question, its boxes, names, ஆம் / இல்லை,
+  the pad), the pill says Preview, no Check, "Back to the class system" lands on Settings → Books (`takeReopen`).
+  Server: `convex/preview.ts` (`unit`, `level`, `questions`), queries only (nothing can be written), `viewer(…,
+  "owner")`, the same form as `family.level` without a student (no questions coming back, no locks; a change to one
+  goes to the other). The phone side sends nothing else while it is on (`lookWith` in `net.ts`: only these three reads
+  go out, with his token; what it keeps is under `look`, apart from any child). On app.aristora.org there is no
+  teachers' sign-in: the server says no. It lives in the family's later parts (`parts.ts`): its own file split the
+  level screen's code out of the first load (+1.2 KB). Tute ladders (n < 0) aren't in it yet.
 - **What he typed is kept** (4 Nov 2026, his idea: "show the wrong answer most students put"): every Check saves a row
   in `familyAnswers` (student, unit, level, time; each question with boxes: his answers as typed and which boxes were
   right). Nothing reads it yet; after a few weeks it gives each question's most common wrong answers (a hint after

@@ -1750,3 +1750,84 @@ test("Me, his profile: a camera photo made small with its bar, the OK, the race;
   await shot(S, "fam44b-stage-320");
   expect(problems).toEqual([]);
 });
+
+test("the owner's Preview: Settings → Books → a unit → every level open on the phone's own screen, look only; nobody else", async () => {
+  // 5 Nov 2026, his ask: check every question of a unit without doing its levels in order; his answers: only him, only
+  // looking. Made-up questions only.
+  const backend = makeBackend(modules);
+  const t = backend.t;
+  await addPerson(t, { name: "Owner", token: OWNER_TOKEN, role: "owner" });
+  const BOOKS = "books-teacher-token-preview-0123456789abcdefghij";
+  await addPerson(t, { name: "Mala", token: BOOKS, tabs: ["correction"], can: ["books"] });
+  const as = { token: OWNER_TOKEN };
+  await t.mutation(api.setup.ensure, as);
+  const u01 = await t.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G8-U01")).first())!._id);
+  const kinds: Record<number, Ans> = {
+    41: { k: "choose", n: 4, a: 3, items: ["Made-up name A", "Made-up name B", "Made-up name C", "Made-up name D"], below: true },
+    42: { k: "why", a: true },
+  };
+  await t.mutation(api.catalog.saveWorkbook, {
+    ...as,
+    unitId: u01,
+    parts: BOOK.data.parts.map((p) => ({ id: p.id, to: p.to, ...(p.each ? { each: p.each } : {}) })),
+    levels: BOOK.data.levels.map((l) => ({ to: l.to, max: l.max })),
+    marks: BOOK.data.marks ?? {},
+    replace: true,
+    key: fakeKey().map((k) => (kinds[k.q] ? { ...k, t: kinds[k.q] } : k)),
+  });
+  const card = (q: number, text: string) => `<div class="si" data-q="${q}" data-b="${q}.0"><span class="qn">${q}</span><div class="sit">${text}</div></div>`;
+  await t.run(async (ctx) => {
+    for (let q = 41; q <= 52; q++) await ctx.db.insert("questions", { unitId: u01, stage: "master", q, html: card(q, `A made-up question number ${q}`) });
+    await ctx.db.insert("bookCss", { unitId: u01, stage: "master", css: ".qn { font-weight: 700; }", updatedAt: 0 });
+  });
+
+  // The owner: Books → Grade 8 → U01 → Preview on the phone.
+  const O = await open(backend, site.url, size(390, 844), () => {
+    if (sessionStorage.getItem("t")) return;
+    sessionStorage.setItem("t", "1");
+    localStorage.setItem("aristora.token", "owner-phone-token-0123456789abcdefghijklmnopqrstuv");
+  });
+  await O.getByRole("button", { name: "Settings" }).click();
+  await O.getByRole("button", { name: "Books", exact: true }).click();
+  await O.getByRole("button", { name: /^Grade 8\b/ }).click();
+  await O.locator(".unit-list li", { hasText: "U01" }).getByRole("button").first().click();
+  await O.getByRole("link", { name: /^Preview on the phone/ }).click();
+  const says = (l: L, text: string) => until(async () => ((await l.first().textContent()) ?? "").includes(text), `"${text}" in ${l}`); // capitals in CSS
+  await says(O.locator(".f-look .f-kicker"), "Preview · only you");
+  await until(async () => (await O.locator(".f-look-levels button").count()) === BOOK.data.levels.length, "every level listed");
+  await shot(O, "fam49-preview-levels");
+
+  // Level 5 straight away (no level before it done): the level screen students get, Check off.
+  await O.locator(".f-look-levels button", { hasText: "Level 5" }).first().click();
+  await contains(O.locator(".f-qn"), "Q41");
+  await until(async () => (await O.locator(".f-pkn .f-pkb").count()) === 4, "Q41's four names under the question");
+  await says(O.locator(".f-checkpill"), "Preview");
+  expect(await O.getByRole("button", { name: "Check" }).count()).toBe(0);
+  await shot(O, "fam50-preview-level5");
+  await O.locator(".f-qchip", { hasText: "42" }).first().click();
+  await until(async () => (await O.locator(".f-pk.yn .f-pkb").count()) === 2, "Q42's ஆம் / இல்லை");
+  await visible(O.locator(".f-whyt"));
+  await noSideScroll(O);
+
+  // Back to the levels, then to the class system on Settings → Books.
+  await O.getByRole("button", { name: "Back" }).first().click();
+  await O.getByRole("button", { name: "Back to the class system" }).click();
+  await visible(O.getByRole("button", { name: "Books", exact: true, pressed: true }));
+  await O.context().close();
+
+  // Nobody else: a teacher with Books has no Preview, and the address alone says no.
+  const B = await open(backend, site.url, size(390, 844), () => {
+    if (sessionStorage.getItem("t")) return;
+    sessionStorage.setItem("t", "1");
+    localStorage.setItem("aristora.token", "books-teacher-token-preview-0123456789abcdefghij");
+  });
+  await B.getByRole("button", { name: "Settings" }).click();
+  await B.getByRole("button", { name: "Books", exact: true }).click();
+  await B.getByRole("button", { name: /^Grade 8\b/ }).click();
+  await B.locator(".unit-list li", { hasText: "U01" }).getByRole("button").first().click();
+  await visible(B.getByRole("button", { name: "See what the phone accepts" }));
+  expect(await B.getByRole("link", { name: /^Preview on the phone/ }).count()).toBe(0);
+  await B.goto(`${site.url}/f/#preview=${u01}`);
+  await contains(B.locator(".f-look [role=alert]"), "Preview is for the owner only.");
+  await B.context().close();
+});

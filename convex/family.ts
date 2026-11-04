@@ -423,6 +423,7 @@ export const level = query({
       return { unitId: world.unitId, no: world.no, ta: world.ta, n: args.n, d: -args.n, max: qs.reduce((a, q) => a + q.max, 0), qs };
     }
     const { world, data, level: l, keys } = await playable(ctx, s, args.unitId, args.n);
+    // The owner's Preview builds the same form without a student (convex/preview.ts): a change here goes there too.
     const qs: FamilyLevel["qs"] = [];
     for (let q = l.from; q <= l.to; q++) {
       const k = keys.get(q);

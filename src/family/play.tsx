@@ -349,6 +349,8 @@ export function Play(props: {
   /** The server has this level marked at home already (a Check whose answer never reached this phone): its book. */
   onMarked: () => void;
   onZoom: (z: Zoomed) => void;
+  /** The owner's Preview (5 Nov 2026, src/family/preview.tsx): the level as a student sees it, Check off. */
+  look?: true;
 }) {
   const formKey = `form.${props.world.unitId}.${props.n}`;
   const draftKey = `draft.${props.world.unitId}.${props.n}`;
@@ -558,9 +560,13 @@ export function Play(props: {
         <p class="f-kicker">
           Stage {form.no} · Level {form.d ?? form.n}
         </p>
-        <button type="button" class="f-checkpill" onClick={() => setReview(true)}>
-          Check
-        </button>
+        {props.look ? (
+          <span class="f-checkpill">Preview</span>
+        ) : (
+          <button type="button" class="f-checkpill" onClick={() => setReview(true)}>
+            Check
+          </button>
+        )}
       </div>
       <div class="f-strip" ref={strip}>
         {form.qs.map((x, qi) => (
@@ -604,10 +610,16 @@ export function Play(props: {
               </li>
             )}
           </ul>
-          <p class="f-muted small">Check செய்த பின் விடைகளை மாற்ற முடியாது.</p>
-          <button type="button" class="f-btn gold big shine" disabled={busy} onClick={() => void check()}>
-            {busy ? "…" : "Check ✓"}
-          </button>
+          {props.look ? (
+            <p class="f-muted small">Preview: Check is off. Nothing is sent or saved.</p>
+          ) : (
+            <>
+              <p class="f-muted small">Check செய்த பின் விடைகளை மாற்ற முடியாது.</p>
+              <button type="button" class="f-btn gold big shine" disabled={busy} onClick={() => void check()}>
+                {busy ? "…" : "Check ✓"}
+              </button>
+            </>
+          )}
           <button type="button" class="f-btn ghost" onClick={() => setReview(false)}>
             Look again
           </button>

@@ -5,6 +5,7 @@ import "./family.css";
 import "./owl.css";
 import { render } from "preact";
 import { App } from "./app";
+import { loadParts } from "./later";
 import { keepOwl } from "./ui";
 
 // Two fingers never zoom (his ask, 4 Nov 2026: "students want to feel like a native app"). Chrome obeys the page's
@@ -22,13 +23,19 @@ document.addEventListener("contextmenu", (e) => {
 
 // The living owl of the loading page is drawn again inside the app (the same drawing, no extra bytes).
 keepOwl();
-render(<App />, document.getElementById("app")!);
+// The owner's Preview of a Stage (5 Nov 2026, src/family/preview.tsx): opened from the class system on its own address
+// with his sign-in; it lives in the parts fetched after the first screen (its own file would split the level screen's
+// code out of the first load, +1.2 KB). Every other phone opens the app.
+const look = /^#preview=([a-z0-9]+)$/i.exec(location.hash);
+if (look) void loadParts().then((m) => m.startPreview(look[1], document.getElementById("app")!));
+else render(<App />, document.getElementById("app")!);
 
 // Opens with no signal after the first visit: the page from the network when there is one, else the copy kept on the
 // phone; the files (their names change with every version) are kept once fetched. Never in tests.
 if (
   "serviceWorker" in navigator &&
   location.pathname.startsWith("/f/") &&
+  !look &&
   !(globalThis as { __ARISTORA_TEST_BACKEND__?: unknown }).__ARISTORA_TEST_BACKEND__
 ) {
   window.addEventListener("load", () => void navigator.serviceWorker.register("/f/sw.js").catch(() => {}));

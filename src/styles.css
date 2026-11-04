@@ -6686,6 +6686,10 @@ body.locked.tp-padded .toasts {
 .phone-ans {
   margin-top: 6px;
 }
+.link-btn.phone-look {
+  display: block;
+  text-decoration: none;
+}
 .phone-ans-list {
   list-style: none;
   padding: 0;

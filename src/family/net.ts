@@ -39,7 +39,22 @@ let sending = 0;
 /** A change or a photo on its way to the server: the update check never loads the page again under it. */
 export const sendingNow = () => sending > 0;
 
+// The owner's Preview (5 Nov 2026, convex/preview.ts; src/family/preview.tsx): his teachers' sign-in on the class
+// system's address, and only these reads go out. Nothing else is ever sent (no Check, no photo, no seen), and what the
+// level screen keeps on the phone is kept apart from any child's.
+let look: string | null = null;
+const LOOK: Record<string, string> = { "family:level": "preview:level", "family:questions": "preview:questions", "preview:unit": "preview:unit" };
+/** Preview with this teachers' sign-in (the owner's). */
+export function lookWith(t: string): void {
+  look = t;
+}
+
 export async function call(kind: "query" | "mutation", path: string, args: Record<string, unknown>): Promise<unknown> {
+  if (look !== null) {
+    const to = kind === "query" ? LOOK[path] : undefined;
+    if (!to) throw new NetError("Preview: only looking, nothing is sent.");
+    return ask("query", to, { ...args, token: look });
+  }
   if (kind === "query") return ask(kind, path, args);
   sending++;
   try {
@@ -217,7 +232,7 @@ export function removeAccount(id: string): Account | null {
 export const query = (path: string, args: Record<string, unknown> = {}) => call("query", path, { token: token() ?? undefined, ...args });
 export const mutation = (path: string, args: Record<string, unknown> = {}) => call("mutation", path, { token: token() ?? undefined, ...args });
 /** The child on screen: photos waiting on this phone are his (4 Nov 2026). */
-export const childId = () => currentId ?? "_";
+export const childId = () => (look !== null ? "look" : (currentId ?? "_"));
 
 /** One photo into Convex storage (an address from `family:photoUrl`, then a plain POST): its storage id. */
 export async function uploadPhoto(blob: Blob): Promise<string> {
@@ -256,7 +271,7 @@ export const signInIndex = (index: number, code: string, t: string) =>
 
 /** Small things kept on this phone for the child on screen (his home screen, typed answers): never needed, only faster. */
 export function keep<T>(key: string, value?: T | null): T | null {
-  const k = `aristora.family.${currentId ?? "_"}.${key}`;
+  const k = `aristora.family.${look !== null ? "look" : (currentId ?? "_")}.${key}`;
   try {
     if (value === undefined) {
       const s = ls()?.getItem(k);

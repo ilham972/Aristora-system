@@ -90,6 +90,12 @@ EOF
   reads the page's `script[type="module"][src]` and `link[rel="stylesheet"]`: a stylesheet or module script added at
   run time must carry `data-later` (as `later.ts` does), or that copy always reads "newer" (the banner every time, a
   reload after every half hour away).
+- **A new lazy file in the family app costs the first load** (5 Nov 2026, the owner's Preview): a dynamic `import()`
+  of a file that imports first-load code (the level screen, `net.ts`, preact) makes esbuild split that shared code
+  into extra chunks, and the first load grew 1.2 KB (gzip works worse across files) though nothing was added to it.
+  A rare screen goes into the later parts (`parts.ts`, reached through `loadParts`), which already share that code.
+  Measure before CI: bundle `src/family/main.tsx` with `/opt/npm-tools/node_modules/.bin/esbuild --splitting --minify
+  --packages=external`, gzip `main.js` + the chunks it imports statically, compare with `git stash`.
 - **The family bundle is in two parts** (4 Nov 2026, the profile): what comes after the first screen (Me, the report,
   the photo editor, the certificate) is imported only through `src/family/later.ts` (`loadParts()`, `useParts()`), never
   straight: one plain `import` from a first-load file brings it back into the first load (the build prints both sizes;

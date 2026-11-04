@@ -51,6 +51,7 @@ import type * as manager from "../manager.js";
 import type * as marks from "../marks.js";
 import type * as people from "../people.js";
 import type * as photos from "../photos.js";
+import type * as preview from "../preview.js";
 import type * as progress from "../progress.js";
 import type * as sessions from "../sessions.js";
 import type * as setup from "../setup.js";
@@ -107,6 +108,7 @@ declare const fullApi: ApiFromModules<{
   marks: typeof marks;
   people: typeof people;
   photos: typeof photos;
+  preview: typeof preview;
   progress: typeof progress;
   sessions: typeof sessions;
   setup: typeof setup;

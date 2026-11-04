@@ -355,6 +355,12 @@ export function PhoneAnswers(props: { unitId: string }) {
       <button type="button" class="link-btn" aria-expanded={open} onClick={() => setOpen(!open)}>
         {open ? "Hide what the phone accepts" : "See what the phone accepts"}
       </button>
+      {/* The owner's Preview (5 Nov 2026, convex/preview.ts): the students' app on this address, every level open, look only. */}
+      {may("owner") && (
+        <a class="link-btn phone-look" href={`/f/#preview=${props.unitId}`}>
+          Preview on the phone: every level open (only you)
+        </a>
+      )}
       {open && (
         <>
           {corrector > 0 && (
