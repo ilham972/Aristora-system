@@ -12,6 +12,8 @@ import { wipeStudent } from "../convex/lib/backend";
 import { outOf } from "../convex/lib/book";
 import type { KeyAnswer } from "../convex/lib/key";
 import { computeMaster } from "../convex/lib/master";
+import { comesBack } from "../convex/lib/family";
+import type { KeyQ } from "../convex/lib/phone";
 import { blockedBy, owedOf, PHOTO_BYTES, PHOTO_URLS_PER_DAY, WHY } from "../convex/lib/photos";
 import schema from "../convex/schema";
 import { readWorkbookHtml } from "../src/workbookFile";
@@ -44,6 +46,24 @@ describe("the rules", () => {
     expect(owedOf(owe, [], { "8": { ...lost, x: 5 }, "10": { got: 2, max: 2, lost: false, t: 1 } }, true)).toEqual([]); // done in class
     expect(owedOf(owe, [], { "8": lost }, false)).toEqual([]);
     expect(owedOf(undefined, [], { "8": lost }, true)).toEqual([]); // a Check from before photos
+  });
+
+  test("comes back: lost, the phone's, not tried again, and a level 2 after its own still to do; then the solution shows", () => {
+    const book = { levels: [1, 2, 3, 4].map((n) => ({ n, from: n * 10 - 9, to: n * 10, max: 20 })) } as unknown as Parameters<typeof comesBack>[1];
+    const phoneQ = { q: 0, max: 2, parts: [{ want: [{}] }] } as unknown as KeyQ;
+    const teacherQ = { q: 0, max: 2, parts: [{ want: null }] } as unknown as KeyQ;
+    const keys = new Map<number, KeyQ>([[5, phoneQ], [6, teacherQ], [15, phoneQ], [35, phoneQ]]);
+    const lost = { got: 0, max: 2, lost: true, t: 1 };
+    const m = { q: { "5": lost, "6": lost, "15": lost, "35": lost }, lv: { "1": { fixed: 1 }, "2": { fixed: 1 } } } as Parameters<typeof comesBack>[0];
+    expect(comesBack(m, book, keys, 5)).toBe(true); // Level 3 still to do
+    expect(comesBack(m, book, keys, 6)).toBe(false); // the teacher's: never comes back
+    expect(comesBack(m, book, keys, 35)).toBe(false); // Level 4's: no Level 6
+    expect(comesBack({ ...m, q: { ...m.q, "5": { ...lost, rt: 2, rg: 2 } } }, book, keys, 5)).toBe(false); // tried again
+    expect(comesBack({ ...m, q: { ...m.q, "5": { ...lost, lost: false } } }, book, keys, 5)).toBe(false);
+    const handed = { ...m, lv: { ...m.lv, "3": { fixed: 1 }, "4": { done: 1 } } } as Parameters<typeof comesBack>[0];
+    expect(comesBack(handed, book, keys, 5)).toBe(false); // the book finished without it: shown
+    expect(comesBack(m, book, keys, 15)).toBe(true); // Level 2's: Level 4 still to do
+    expect(comesBack(handed, book, keys, 15)).toBe(false);
   });
 
   test("the limit: two more levels after one that owes; the third waits", () => {
@@ -99,8 +119,9 @@ describe("photos from home", () => {
   test("Check: the book shows the key's working only where he lost marks, and the photos it asks for", async () => {
     const r = await fam().mutation(api.family.check, { unitId: u01, n: 1, typed: LEVEL1 });
     const q = (n: number) => r.book!.qs.find((x) => x.q === n)!;
-    expect(q(8)).toMatchObject({ got: 0, sol: "8 × 3 = **24**", owe: ["working"], typed: ["42"] });
-    expect(q(1)).toMatchObject({ got: 2, sol: null, owe: [] }); // right: no solution
+    // Q8 is wrong and comes back in Level 3: no solution yet (he'd copy it there), his working still asked for.
+    expect(q(8)).toMatchObject({ got: 0, sol: null, back: true, owe: ["working"], typed: ["42"] });
+    expect(q(1)).toMatchObject({ got: 2, sol: null, back: false, owe: [] }); // right: no solution
     expect(q(10)).toMatchObject({ got: null, teach: 2, sol: null, owe: ["part"] });
     expect(await fam().query(api.family.book, { unitId: u01, n: 1 })).toEqual(r.book);
     await expect(fam().query(api.family.book, { unitId: u01, n: 2 })).rejects.toThrow(/isn't marked/);
@@ -288,11 +309,20 @@ describe("photos from home", () => {
     const l3 = await level(3);
     expect(l3.qs.filter((q) => q.re).map((q) => [q.q, q.re, q.rb])).toEqual([[8, 1, 2]]); // level 1 only (2 levels back)
     expect(l3.qs.at(-1)!.q).toBe(8); // after the level's own questions
+    // Its question as printed comes with Level 3's (it was "not in the phone yet"), and Level 1's book hides its solution.
+    await raw.run(async (ctx) => {
+      for (const q of [8, l3.qs[0].q]) await ctx.db.insert("questions", { unitId: u01, stage: "master", q, html: `<div class="pq">${q} A made-up question.</div>` });
+    });
+    expect((await fam().query(api.family.questions, { unitId: u01, n: 3, css: false })).qs.map((x) => x.q)).toEqual([l3.qs[0].q, 8]);
+    expect((await fam().query(api.family.questions, { unitId: u01, n: 2, css: false })).qs.map((x) => x.q)).toEqual([]);
+    expect((await fam().query(api.family.book, { unitId: u01, n: 1 })).qs.find((x) => x.q === 8)).toMatchObject({ sol: null, back: true });
     const xp = (await fam().query(api.family.me, {})).xp;
     const typed = l3.qs.map((q) => ({ q: q.q, a: q.q === 8 ? ["24"] : [] as string[] }));
     const r = await fam().mutation(api.family.check, { unitId: u01, n: 3, typed });
     expect(r.retry).toEqual([{ q: 8, max: 2, got: 2, from: 1, ok: [[true]] }]);
     expect(r.bonus).toBe(2);
+    // His second try is done: Level 1's book shows Q8's solution now.
+    expect((await fam().query(api.family.book, { unitId: u01, n: 1 })).qs.find((x) => x.q === 8)).toMatchObject({ sol: "8 × 3 = **24**", back: false });
     const m = (await hanaM()).q["8"];
     expect(m).toMatchObject({ got: 0, lost: true, rg: 2 }); // the first marks stay
     expect(m.rt).toBeDefined();

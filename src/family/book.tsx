@@ -128,6 +128,11 @@ function Question(props: { b: BookQ; unitId: string; n: number; onSent: () => vo
         </p>
       )}
       {b.sol && <Solution text={b.sol} />}
+      {b.back && (
+        <p class="f-ph-state f-comesback">
+          ↻ இந்தக் கேள்வி பின்னர் ஒரு Level இல் மீண்டும் வரும். தீர்வு அதன் பின்.
+        </p>
+      )}
       {b.photos.map((p, i) =>
         p.state === "waiting" ? (
           <p key={i} class="f-ph-state wait">
@@ -184,7 +189,7 @@ export function Book(props: { unitId: string; n: number; initial?: LevelBook | n
   }, [book]);
   if (err && !book) return <p class="f-note">{err}</p>;
   if (!book) return <p class="f-note">…</p>;
-  const qs = book.qs.filter((q) => q.sol || q.owe.length || q.photos.length);
+  const qs = book.qs.filter((q) => q.sol || q.back || q.owe.length || q.photos.length);
   const owed = book.qs.reduce((a, q) => a + q.owe.length, 0);
   return (
     <section class="f-book">

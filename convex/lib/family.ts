@@ -118,6 +118,23 @@ export function retryPool(m: MState, book: MasterData, keys: Map<number, KeyQ>, 
   return out;
 }
 
+/**
+ * A question he lost marks on that is still to come back (his rule, 4 Nov 2026: "they can go back to Level 1 and get
+ * the answer from there"): the same test as `retryPool`, and a level at least 2 after its own not handed in yet. Its
+ * solution stays hidden on the phone until his second try (or until the book is finished, if it never came back).
+ */
+export function comesBack(m: MState, book: MasterData, keys: Map<number, KeyQ>, q: number): boolean {
+  const r = m.q[String(q)];
+  const k = keys.get(q);
+  if (!r?.lost || r.rt !== undefined || !k || !allPhone(k) || boxCount(k) === 0) return false;
+  const own = book.levels.find((l) => q >= l.from && q <= l.to);
+  if (!own) return false;
+  return book.levels.some((l) => {
+    const lv = m.lv[String(l.n)];
+    return l.n >= own.n + RETRY_GAP && !(lv?.done || lv?.fixed || lv?.pre);
+  });
+}
+
 /** Every level handed in, marked or done before the app. */
 export function allHandedIn(m: MState, book: MasterData): boolean {
   return book.levels.length > 0 && book.levels.every((l) => {

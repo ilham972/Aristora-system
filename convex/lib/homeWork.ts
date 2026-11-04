@@ -5,7 +5,7 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
 import { asMaster, bookFor, keyRow, masterState } from "./backend";
-import { masterRows } from "./family";
+import { comesBack, masterRows } from "./family";
 import type { MasterData } from "./book";
 import type { KeyAnswer } from "./key";
 import { phoneKey, type KeyQ } from "./phone";
@@ -102,6 +102,8 @@ export type BookQ = {
   ok: (boolean[] | null)[] | null;
   /** The key's working (bold kept as `**`): only for a question he lost marks on, only after his Check. */
   sol: string | null;
+  /** He lost marks and it comes back in a later level (`comesBack`): no solution until his second try. */
+  back: boolean;
   photos: BookPhoto[];
   /** The photos he still has to send for it. */
   owe: PhotoKind[];
@@ -158,6 +160,7 @@ export async function bookOf(
     if (!k) continue;
     const mq = m.q[String(q)];
     const typed = row?.qs.find((x) => x.q === q);
+    const back = comesBack(m, data, keys, q);
     qs.push({
       q,
       max: k.max,
@@ -166,7 +169,8 @@ export async function bookOf(
       teach: row?.owe?.part.includes(q) && !mq ? partMarks(row.owe, q, k, typed?.a ?? null).teach : k.parts.filter((p) => !p.want).reduce((a, p) => a + p.m, 0),
       typed: typed?.a ?? null,
       ok: typed?.ok ?? null,
-      sol: mq?.lost ? keyText(raw.get(q)) || null : null,
+      sol: mq?.lost && !back ? keyText(raw.get(q)) || null : null,
+      back,
       photos: h.photos.filter((p) => p.unitId === unitId && p.n === n && p.q === q).map(photoView),
       owe: owed.filter((o) => o.q === q).map((o) => o.kind),
     });
