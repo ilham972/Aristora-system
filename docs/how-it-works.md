@@ -831,14 +831,23 @@ Levels done at home made a pile for the corrector in class. Now the student does
 in the family app on the family phone, taps **Check** once per level and sees ✓ / ✗ at once; the class sees his marks
 before he walks in. Since 3 Nov 2026 it is also **the institute's student app** (his voice note: "this is also the
 learning app of our education institute"): one profile, his class times, what he did in class each day, his progress.
-- Its own small bundle (`src/family/`, ~57 KB over the wire for code, style and page on 4 Nov 2026; `scripts/build.mjs`
-  stops the build over 60 KB: 50 until the owl's acting, ~6 KB; 56 until the photos and the zoomed question; 58 until a tute's ladder and Learn), **one font for Tamil and English** (Baloo Thambi 2, weights 500–800, one variable file
+- Its own small bundle (`src/family/`), **in two parts since the profile** (4 Nov 2026): the first load (the entry, the
+  chunk it imports, its style, its page: ~61 KB over the wire; `scripts/build.mjs` stops the build over 62 KB: 50 until
+  the owl's acting, ~6 KB; 56 until the photos and the zoomed question; 58 until a tute's ladder and Learn; 60 until the
+  profile's faces, birthday and the split) and, right after the first screen, **Me and its profile parts**
+  (`src/family/parts.ts`: Me, the report, the photo editor, the certificate, ~14 KB, budget 16 KB; their style is its
+  own file, `profile.css`, attached by `later.ts`: esbuild would copy a lazy file's CSS into the first load's). The
+  page names them (`<link rel="prefetch">`), so the service worker keeps them at install and they work with no signal;
+  the app fetches them right after the first screen (`useParts` in `App`). Import them only through `later.ts`
+  (`loadParts`, `useParts`), never straight, or they come back into the first load. What the first screens show of the
+  profile (faces, the birthday card, a finished Stage's certificate button) keeps its style in `family.css`.
+  **One font for Tamil and English** (Baloo Thambi 2, weights 500–800, one variable file
   cut to Tamil + Latin, ~57 KB: `src/family/fonts/`, preloaded by the page, kept by the service worker, not in the
   budget; 4 Nov 2026: the phone's own Tamil fonts differ on every phone, Tamil Sangam MN on iPhones, and never matched
   the English words beside them), no client library (Convex's plain HTTP API, `src/family/net.ts`). It lives under
   `/f/` on both addresses; family links are app.aristora.org/f/#join=…, and app.aristora.org/ redirects to /f/
   (`vercel.json`, a redirect: a rewrite of "/" never runs, Vercel serves index.html first). A service worker under /f/
-  only (cache `aristora-family-4`): it opens with no signal after the first visit.
+  only (cache `aristora-family-5`): it opens with no signal after the first visit.
 - **An app, not a web page** (his ask, 4 Nov 2026: "students want to feel like a native app, so don't zoom when we use
   two fingers"): two fingers never zoom, on every screen, by three locks: the page's `maximum-scale=1,
   user-scalable=no` (`public/family/index.html`: Chrome), `html { touch-action: pan-x pan-y }` (Chrome even when a
@@ -938,7 +947,9 @@ learning app of our education institute"): one profile, his class times, what he
     "Next class: Tomorrow / Thu": one of his usual days first), with his Stage in class and how far he is; **today's
     goal** (`GoalCard`: his Level now and START, and "இன்று ஒரு Level செய்தால் 6 நாள் தொடர்!"); **his class week**
     (M T W T F S S: the class days from the centre's hours, a blue dot on the days he came, a ring on his usual days,
-    "Your day"; tap a day); **that day hour by hour** (`Timeline`,
+    "Your day"; tap a day); **on his birthday** a card at the top (the cake in a gold ring, confetti, HAPPY BIRTHDAY,
+    the owl's wishes in Tamil, the party sound once that day; the header owl in its party mood: `BdayCard`);
+    **that day hour by hour** (`Timeline`,
     `family.day`: signed in, Theory or Evaluation with whom and the questions taught or explained, a Level marked in
     class, handed in, or checked at home (⌂), signed out); **his last classes** (`family.classes.recent`: when, how
     many Levels, with whom; tap = that day). Never his waiting time in the hall.
@@ -956,7 +967,8 @@ learning app of our education institute"): one profile, his class times, what he
   - **A Stage** (`StageScreen`): its header (World, names, "STAGE n", dashes) and its Levels on a smaller road: done =
     purple with the XP won under it (★ for every mark; ⌂ = checked at home, waiting for the corrector's look), with
     the teacher = pale with a clock, done before the app = pale ✓, **his Level now** = the gold one with START, later =
-    🔒; a trophy at the end. A Stage the phone can't mark yet, or locked, says so.
+    🔒; a trophy at the end. A Stage the phone can't mark yet, or locked, says so. **Every Level done: Certificate**
+    (below the trophy).
   - **A Level**: ✕, a progress bar (answers typed, "3/9"; a light runs along it at each answer; gold when every box has
     one), the question switch, "Stage 3 · Level 4", Check; the next question slides in, each key gives the answer a
     small push;
@@ -987,15 +999,77 @@ learning app of our education institute"): one profile, his class times, what he
     and "reduce motion" skip the wait).
   - **The race** (`family.board`): this week in his grade (first name and initial), the top three on a podium (gold,
     silver, bronze; a crown on the first; "You"), the rest as rows, his row always (violet), "இன்னும் 12 XP எடுத்தால்
-    Bilal ஐ முந்துவாய்!" (to pass the one above), when the week ends ("Ends in 4d 6h"). Leagues: not built (next week;
-    his call, 3 Nov 2026).
-  - **Me**: a violet header with his flame as a big number (PERSONAL BEST when it is his best), the owl (asleep until
-    today's Level), this week as seven circles (a flame on each day with a Level; today ringed); his name, grade and
-    index; XP ever, his longest run, Levels done; **XP this week** as bars per day (`me.dayXp`); his place in the race;
-    the **trophies** (`trophiesOf`, server; names in English, how to win in Tamil: First Level, 3- / 7- / 30-day streak
-    (his best run), Perfect (a Level with every mark), 5 × Perfect, Stage clear (one Level of it in the app at least),
-    100 and 300 XP week; won ones gold, the rest pale with a lock and how to win them); On this phone: the children,
-    Sound.
+    Bilal ஐ முந்துவாய்!" (to pass the one above), when the week ends ("Ends in 4d 6h"). **Faces** (4 Nov 2026,
+    his pick): a classmate's photo once the teachers said OK and his family shows it (`BoardRow.pic`), his own always on
+    his phone; 🎂 by a name on that student's birthday. Leagues: not built (next week; his call, 3 Nov 2026).
+  - **Me = his profile** (4 Nov 2026, his voice note: "a proper profile page for the students ... as simple as
+    possible"; `me.tsx`, one of the parts that come right after the first screen): a violet header with **his photo**
+    (88 px; tap = the camera or the gallery: his photo, below), his name (🎂 on his birthday), grade and index ("Photo ·
+    waiting for OK" while it waits); then his flame as the big number (PERSONAL BEST when it is his best), the owl
+    (asleep until today's Level; party on his birthday; cry when the flame went out), this week as seven circles. Below:
+    XP ever, his longest run, Levels done; a word from the teachers when they said no to his photo or his name (read
+    once: OK); **12 weeks** (`HeatMap`, his ask: "the heat map of how the student is doing at home and in the
+    classroom"): a column a week, Monday on top, a day darker for each Level he finished that day (at home ⌂ or in
+    class: the day he handed it in or the phone marked it; a tute's ladder section too), a blue dot = he came to class,
+    the days before his first day here a faint dot (never empty boxes: weeks he never had would tell him he is lazy);
+    tap a day = its Levels, ⌂, XP (counted as the race counts it: `xpItems`), in class; **See** = that day hour by hour
+    (Home's timeline, `family.day`, now the last 90 days). Not a year (a year on a phone is dots, and empty months
+    shame) and not app opens (they reward scrolling, not learning). **Class** (`ClassCard`): this month and last (days
+    he came, hours in class: sign-in to sign-out, 8 h at most a visit; never waiting time), the days he usually comes
+    (blue), his last class. **Report** (`ReportCard`): his questions in a child's words, **Right** (full marks, blue),
+    **Learned** (lost marks a teacher then explained in Evaluation or taught in Theory, violet), **To learn** (still
+    waiting, rose; never the word "wrong": his request was "how many wrong", my answer: the same numbers, and a mistake
+    becomes a win once explained, as the class works), his Stage now (its ring = his marks, its Levels), **See all**,
+    **Send on WhatsApp**. Then XP this week as bars per day (`me.dayXp`); his place in the race; the **trophies**
+    (`trophiesOf`, server; names in English, how to win in Tamil: First Level, 3- / 7- / 30-day streak (his best run),
+    Perfect (a Level with every mark), 5 × Perfect, Stage clear (one Level of it in the app at least), 100 and 300 XP
+    week; won ones gold, the rest pale with a lock and how to win them); **Your details**: Name (asked: below),
+    Birthday (once: below), Photo in the race (on/off), Remove photo; **On this phone**: the children, Sound, Owl
+    surprises. Opening Me asks the server again (what the teachers just said OK to shows at once).
+  - **The report** (Me → Report → See all; `ReportScreen`, a screen of its own, Back = Me): his name, grade, index and
+    photo; **This month / last month / the one before** (`family.profile.months`): class days, hours in class, Levels
+    (⌂ at home), XP, and that month's questions (Right / Learned / To learn); then **every Stage** he was given or has
+    Levels in, in map order (`stageLines`): its ring (his marks over its marked Levels; gold at 100%), its Levels
+    (dashes, done / all, ⌂ at home), its questions, "Given 28 Oct · Started 30 Oct · Finished 12 Nov", and
+    **Certificate** when every Level is done. **Send on WhatsApp** (fixed at the bottom; his pick) opens WhatsApp with
+    the chosen month as a message for his parents (`waText`: his name and grade, "Hana இன் November 2026 அறிக்கை",
+    class days and hours, Levels, XP, questions, each Stage with its % and Levels, app.aristora.org): the parent picks
+    the contact. Never a class ranking.
+  - **His photo** (his voice note: "they can upload their profiles ... we don't have enough space ... compress ... show
+    the progress bar"; `photo.tsx`; not the photos from home, below, which are his work): tap his photo on Me → the
+    phone's camera or gallery → a sheet: "Opening your photo" (a moving bar, the file's size) → the photo in a circle:
+    drag to move, the slider to zoom, ↻ to turn → **Use this photo** → one bar with both real steps: **Making it
+    small** (on the phone: a 288 px square, WebP, else JPEG, smaller until under 30 KB; the line under the bar shows
+    it, "6.1 MB → 18 KB") then **Sending** (the bytes as they go: an XMLHttpRequest with upload progress) → Done. A
+    12 MB camera photo leaves the phone as ~10–30 KB; the server keeps nothing over 45 KB (`photoProblem`: only JPEG or
+    WebP, checked by its first bytes). Space: 120 students × 2 photos × 30 KB = 7 MB of the free plan's 500 MB. The real
+    limit is the free plan's **1 GB a month of database reading**: the class's live state reads every student's row on
+    every tap, so the picture never sits on the student's row (only a pointer, `students.photo`); it is in
+    `profilePhotos`, read only by `family.photos` (by key, his own and his grade's approved ones) and the teachers'
+    asks and Family sheet. Each phone keeps pictures by key (`pics.ts`, the 40 newest): a picture comes from the server
+    once. **His own phone shows it at once; his classmates only after the teachers' OK** (his answer: "Also the race
+    (classmates)": every new photo waits for the OK). A new photo while one waits replaces it; the one in the race stays
+    until the new one's OK. 6 a day from one phone (`familyDevices.pfDay/pfN`; the photos from home count apart,
+    `phDay/phN`). His family can keep it out of the race (Me → Photo in the race: off; my escape hatch for a parent who
+    doesn't want a daughter's face in front of the class); Remove photo = his letter again. Teachers' class screens
+    (Correction, the Manager) don't show faces yet.
+  - **A new name** (his answer: "Class name, after your OK"; `NameSheet`): Me → Your details → Name → "First name and
+    initial" → Ask for this name. It changes **everywhere only after the teachers' OK** (the class's name is how the
+    hall and the race know him; a child renaming himself "KING" or a classmate's name would break both). Letters of any
+    script, 2–30, 3 words at most; never another student's name (as Rename); one ask at a time (a new one replaces it;
+    20 s between two); Cancel takes it back. OK = Rename (the same history line); No = his phone says so once.
+  - **His birthday** (his pick: "the owl throws him a party, his teachers see a 🎂"; `BdaySheet`): Me → Your details →
+    Birthday → day and month (no year) → Save, **once** (a change goes through a teacher: his Family sheet → Clear
+    birthday; so nobody gets a party every day). On the day (Sri Lanka, `isBirthday` in `convex/lib/day.ts`; born on 29
+    Feb = 28 Feb in a year without it): Home's party card, the owl's party mood on Home and Me, 🎂 by his name on Me, in
+    the race (my addition: classmates can wish him) and on the teachers' Correction names row, the Manager's hall and
+    Settings → Students.
+  - **A Stage's certificate** (his pick: "to share on WhatsApp status: free advertising"; `cert.tsx`): a 1080 × 1350
+    picture made on the phone (a canvas): ARISTORA's violet, the logo's owl (its own paths from /icon.svg drawn as
+    shapes, so the picture can always be saved), CERTIFICATE, "Stage 3 complete!", the Tamil name, his photo (or his
+    letter) in a gold ring with a star, his name, his % and Levels, the day he finished it, ARISTORA. **Share** (the
+    phone's share sheet: WhatsApp, status) or **Save**. From the report's finished Stages and a finished Stage's
+    screen.
 - **A topic tute's ladder on the phone** (4 Nov 2026, his ask: "fighter and master are both mixed ... the question
   numbers start from one for OL books"; the phone showed Constructions from Q53 only). An O/L tute is one printed book:
   the ladder (sections A–F, Q1–52 in Constructions), then the past papers (Q53 on). The app keeps its two books; the
@@ -1078,8 +1152,17 @@ learning app of our education institute"): one profile, his class times, what he
   a shortcut; the message carries the index and code too.
 - Settings → Students → his name → **Family** (`FamilySheet`): index and code, New code, Send it on WhatsApp; the
   family phones and Sign out; **Open every Stage** (else they open in order: his unit now, books given, levels done
-  there, the next after a finished one); Grade 10 and 11: **O/L map** (above). Books → a workbook: how much the phone marks and exactly what it accepts per
-  question (`PhoneAnswers`, `families.answers`).
+  there, the next after a finished one); Grade 10 and 11: **O/L map** (above); **Profile (family app)**: his photo,
+  whether it shows in the race, his birthday, a new photo or name waiting (OK / No here too), Remove photo, Clear
+  birthday (`families.profileOf`, `dropPhoto`, `clearBday`). Books → a workbook: how much the phone marks and exactly
+  what it accepts per question (`PhoneAnswers`, `families.answers`).
+- **Settings → Students → Waiting for your OK** (4 Nov 2026, `src/familyAsks.tsx`): at the top, only when something
+  waits: each ask with the student's name, grade and when, a photo's picture ("Photo for the race", or "A new photo
+  (the old one stays until OK)") or "Wants the name: …", **OK** / **No** (`families.asks`, `families.answer`). The
+  owner and teachers with Students answer (the same people who rename students). The Settings gear counts what waits
+  (with the photos from home to mark and new feedback: `families.askCount`, small rows only) and Settings opens on
+  Students then (after Photos); its button shows the count. History lines: photo sent / OK / not accepted / removed,
+  name asked / OK / not accepted, birthday added / cleared.
 - The server marks with the uploaded answer keys (`convex/lib/phone.ts`): numbers, several numbers, answers in n (same
   values for n = 1..7), labelled answers (x = 52), "also accepted" notes. Since 4 Nov 2026 (his screenshot: "0.25 as a
   percentage" was the teacher's, so whole Percentages Stages were): a number with its unit (25%, 45°, −3 °C, 12 cm,
@@ -1186,7 +1269,10 @@ learning app of our education institute"): one profile, his class times, what he
 - Family phones have their own tables (`familyLinks`, `familyDevices`: SHA-256 of code and token) and hash tag: they
   can never pass a teacher's check; every function in `convex/family.ts` checks the family phone. The teachers' side
   (`convex/families.ts`) = the owner or a teacher with Students (Feedback: the owner or a teacher with Feedback; Class
-  hours: the owner).
+  hours: the owner; students' asks, a photo for the race or a new name: the owner or Students). A profile photo goes
+  only to his own phone and, once the teachers said OK and his family shows it, to his grade's phones
+  (`family.photos` checks each picture: his, or an approved one of a classmate in his grade, not hidden, not removed);
+  it is an image address built from its checked type (`picUrl`), never a page or a script.
 - Later, not now (his words, 3 Nov 2026): the app may serve other centres one day (a SaaS); today it is only for
   ARISTORA's own students (a sign-in comes from the class). The centre's name sits in one place (`BRAND`) and the
   colours in `:root` of `family.css`. Gifts for winners: his idea, not built.

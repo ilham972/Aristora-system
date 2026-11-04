@@ -7,12 +7,16 @@
 //   books given, and the next when one is done).
 // - O/L map (Grade 10 and 11, 4 Nov 2026): his phone shows the O/L syllabus by paper part instead of his grade's terms
 //   (the same tick as Settings → Students → O/L map).
+// - His profile (4 Nov 2026): his photo (and a new one waiting: OK / No), shown in the race or not (his family's
+//   choice), his birthday (Clear: he adds it again), a new name he asked for (OK / No). Remove photo.
 
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
+import type { Id } from "../convex/_generated/dataModel";
 import { secretHash } from "../convex/lib/auth";
 import { weakCode } from "../convex/lib/family";
 import { slDate } from "../convex/lib/day";
+import { answerAsk } from "./familyAsks";
 import { mutate, randomKey } from "./backend";
 import type { View } from "./derive";
 import { useQuery } from "./live";
@@ -206,9 +210,110 @@ export function FamilySheet(props: { v: View; onClose: () => void }) {
           </span>
         </label>
       )}
+      {!none && <ProfileBlock v={props.v} />}
     </Sheet>
   );
 }
+
+type Profile = {
+  photo: string | null;
+  wait: { pic: string; id: Id<"familyAsks"> } | null;
+  hide: boolean;
+  bday: string | null;
+  nameAsk: { want: string; id: Id<"familyAsks"> } | null;
+};
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** His profile in the family app: his photo (and one waiting), his birthday, a name he asked for. */
+function ProfileBlock(props: { v: View }) {
+  const s = props.v.s;
+  const p = useQuery<Profile>(api.families.profileOf, { studentId: s._id });
+  if (!p) return null;
+  const first = s.name.split(" ")[0];
+  return (
+    <>
+      <h3 class="block-title">Profile (family app)</h3>
+      <div class="fam-prof">
+        {p.photo ? (
+          <img class="fa-pic fa-l" src={p.photo} alt={`${s.name}'s photo`} />
+        ) : (
+          <span class="fa-nm fa-l" aria-hidden="true">
+            {(s.name[0] ?? "?").toUpperCase()}
+          </span>
+        )}
+        <span class="fa-w">
+          <b>{s.name}</b>
+          <small>{p.photo ? (p.hide ? "The family keeps the photo out of the race." : "The photo shows in the race.") : "No photo yet."}</small>
+          <small>{p.bday ? `Birthday: ${Number(p.bday.slice(3))} ${MONTHS[Number(p.bday.slice(0, 2)) - 1]}` : "No birthday yet."}</small>
+        </span>
+      </div>
+      {p.wait && (
+        <div class="fam-prof fa-wait">
+          <img class="fa-pic fa-l" src={p.wait.pic} alt={`${s.name}'s new photo`} />
+          <span class="fa-w">
+            <b>A new photo</b>
+            <small>Waiting for your OK before classmates see it.</small>
+          </span>
+          <span class="fa-b">
+            <button type="button" class="btn small" onClick={() => void answerAsk({ id: p.wait!.id, kind: "photo", name: s.name, want: null }, true)}>
+              OK
+            </button>
+            <button type="button" class="btn small ghost" onClick={() => void answerAsk({ id: p.wait!.id, kind: "photo", name: s.name, want: null }, false)}>
+              No
+            </button>
+          </span>
+        </div>
+      )}
+      {p.nameAsk && (
+        <div class="fam-prof fa-wait">
+          <span class="fa-nm" aria-hidden="true">
+            Aa
+          </span>
+          <span class="fa-w">
+            <b>{p.nameAsk.want}</b>
+            <small>{first} asked for this name: it changes everywhere after OK.</small>
+          </span>
+          <span class="fa-b">
+            <button type="button" class="btn small" onClick={() => void answerAsk({ id: p.nameAsk!.id, kind: "name", name: s.name, want: p.nameAsk!.want }, true)}>
+              OK
+            </button>
+            <button type="button" class="btn small ghost" onClick={() => void answerAsk({ id: p.nameAsk!.id, kind: "name", name: s.name, want: p.nameAsk!.want }, false)}>
+              No
+            </button>
+          </span>
+        </div>
+      )}
+      <div class="fam-prof-b">
+        {(p.photo || p.wait) && (
+          <button
+            type="button"
+            class="link-btn danger"
+            onClick={async () => {
+              const r = await act(() => mutate(api.families.dropPhoto, { studentId: s._id, by: currentRole() }));
+              if (r) toast(`${first}'s photo is removed: the letter shows again.`);
+            }}
+          >
+            Remove photo
+          </button>
+        )}
+        {p.bday && (
+          <button
+            type="button"
+            class="link-btn"
+            onClick={async () => {
+              const r = await act(() => mutate(api.families.clearBday, { studentId: s._id, by: currentRole() }));
+              if (r) toast(`${first}'s birthday is cleared: it can be added again on the family phone.`);
+            }}
+          >
+            Clear birthday
+          </button>
+        )}
+      </div>
+    </>
+  );
+}
+
 
 type PhonePart = { p: string; m: number; words: string; phone: boolean; fixed: boolean };
 type PhoneList = {

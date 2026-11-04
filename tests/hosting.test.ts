@@ -22,6 +22,16 @@ describe("the two addresses", () => {
     expect(fam?.headers).toEqual([{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }]);
   });
 
+  test("pictures: the page's own (data: and blob:: the photo a student picks opens as a blob) and Convex's (photos from home); scripts only the site's", () => {
+    const rules = config.headers as { source: string; headers: { key: string; value: string }[] }[];
+    const csp = rules.find((r) => r.source === "/(.*)")!.headers.find((h) => h.key === "Content-Security-Policy")!.value;
+    const img = /img-src ([^;]+);/.exec(csp)![1].split(" ");
+    expect(img).toEqual(expect.arrayContaining(["'self'", "data:", "blob:"]));
+    expect(img.every((x) => ["'self'", "data:", "blob:", "https://*.convex.cloud"].includes(x))).toBe(true);
+    expect(csp).toContain("script-src 'self';");
+    expect(csp).toContain("object-src 'none'");
+  });
+
   test("the family app installs and works offline under /f/ only (the teachers' app never gets a service worker)", () => {
     const m = JSON.parse(MANIFEST) as { start_url: string; scope: string; id: string };
     expect([m.id, m.start_url, m.scope]).toEqual(["/f/", "/f/", "/f/"]);

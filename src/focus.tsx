@@ -27,7 +27,7 @@ import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { type Fighter, PART_NAME, partOf, type MasterLevel } from "../convex/lib/book";
 import { homeToCheck, levelWaits, teachState, type TeachState } from "../convex/lib/master";
-import { slClock, slDate, slDay } from "../convex/lib/day";
+import { isBirthday, slClock, slDate, slDay } from "../convex/lib/day";
 import { claimLive, CLAIM_PING_MS, type Claim } from "../convex/lib/claims";
 import type { KeyAnswer } from "../convex/lib/key";
 import type { Mark, MarkState } from "../convex/lib/status";
@@ -1098,6 +1098,12 @@ function NameBar(props: {
                 onClick={() => props.onPick(p.v)}
               >
                 {p.v.s.name}
+                {isBirthday(p.v.s.bday, props.now) && (
+                  <span class="bday-tag" aria-label="birthday today">
+                    {" "}
+                    🎂
+                  </span>
+                )}
                 {p.waiting > 1 && (
                   <i class="fc-nm-n" aria-hidden="true">
                     {p.waiting}

@@ -11,16 +11,20 @@
 //   feedback, feedbackNew, feedbackSeen -> what students send from the family app (Settings → Feedback, 3 Nov 2026).
 //   classHours, setClassHours -> each grade's class hours per weekday (Settings → Class hours, owner; 3 Nov 2026):
 //                  the family app's schedule (a student sees his grade's).
+//   asks, askCount, answer -> what students asked for in the family app (4 Nov 2026): a photo for the race, a new name;
+//                  Settings → Students → Waiting for your OK, its count on the gear. OK or No.
+//   profileOf, dropPhoto, clearBday -> his Family sheet: his photo (and one waiting), his birthday, a name he asked for.
 // Owner, or a teacher with Students (Feedback: the owner, or a teacher with Feedback). Family phones can't call any of
 // these (viewer / actor).
 
 import { v } from "convex/values";
-import type { Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import { actor, FAMILY_LINK_MS, viewer } from "./lib/auth";
 import { codeRow, giveIndex, gradeHoursOf, HOUR_GRADES, weakCode, type GradeHours } from "./lib/family";
+import { picUrl } from "./lib/profile";
 import { OL, olNumber } from "./lib/syllabus";
-import { asMaster, bookFor, cleanBy, fail, getStudent, keyRow, log } from "./lib/backend";
+import { asMaster, bookFor, cleanBy, cleanName, currentSession, fail, getStudent, keyRow, log } from "./lib/backend";
 import { outOf } from "./lib/book";
 import { phoneKeyFor } from "./lib/homeWork";
 import { allPhone, FIX_TEACHER, phoneShare, wantsOf, wantWords } from "./lib/phone";
@@ -385,6 +389,180 @@ export const setClassHours = mutation({
       .first();
     if (row) await ctx.db.patch(row._id, { value });
     else await ctx.db.insert("meta", { key: "classHours", value });
+    return true;
+  },
+});
+
+// ---- What students asked for in the family app (4 Nov 2026): a photo for the race, a new name ----
+
+/** One ask waiting for the OK: whose, what (the name he wants, or the picture), since when. */
+export type AskItem = {
+  id: Id<"familyAsks">;
+  studentId: Id<"students">;
+  /** His name now (the class's), and his grade. */
+  name: string;
+  grade: number | null;
+  kind: "photo" | "name";
+  at: number;
+  /** A name ask: the name he wants. */
+  want: string | null;
+  /** A photo ask: the picture (an image address). */
+  pic: string | null;
+  /** His photo now, if the teachers said OK to one before (to compare). */
+  had: boolean;
+};
+
+/** Asks shown at once, at most (a busy evening is a handful). */
+const ASKS_MAX = 30;
+
+/** The asks waiting for an OK, oldest first (the owner, or a teacher with Students). */
+export const asks = query({
+  args: { token },
+  handler: async (ctx, args): Promise<AskItem[]> => {
+    await viewer(ctx, args.token, "owner", "students");
+    const rows = (await ctx.db.query("familyAsks").withIndex("by_at").take(400)).filter((r) => r.no === undefined).slice(0, ASKS_MAX);
+    const out: AskItem[] = [];
+    for (const r of rows) {
+      const s = await ctx.db.get(r.studentId);
+      if (!s || s.archived) continue;
+      const p = r.photoId ? await ctx.db.get(r.photoId) : null;
+      if (r.kind === "photo" && !p) continue;
+      out.push({
+        id: r._id,
+        studentId: s._id,
+        name: s.name,
+        grade: s.grade ?? null,
+        kind: r.kind,
+        at: r.at,
+        want: r.kind === "name" ? (r.name ?? null) : null,
+        pic: p ? picUrl(p) : null,
+        had: !!s.photo,
+      });
+    }
+    return out;
+  },
+});
+
+/** How many asks wait for an OK (the Settings gear's count; 99 at most). Small rows only: no pictures read. */
+export const askCount = query({
+  args: { token },
+  handler: async (ctx, args): Promise<number> => {
+    await viewer(ctx, args.token, "owner", "students");
+    const rows = await ctx.db.query("familyAsks").withIndex("by_at").take(400);
+    return Math.min(99, rows.filter((r) => r.no === undefined).length);
+  },
+});
+
+/**
+ * OK or No to an ask. A photo: OK = his classmates see it in the race (the one before goes); No = it goes, and his phone
+ * says so once. A name: OK = his name changes everywhere, as Rename does (it must not be another student's); No = his
+ * phone says so once.
+ */
+export const answer = mutation({
+  args: { token, id: v.id("familyAsks"), yes: v.boolean(), by: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["owner", "students"], args.by);
+    const a = await ctx.db.get(args.id);
+    if (!a || a.no !== undefined) fail("This was already answered. Refresh the page.");
+    const s = await getStudent(ctx, a.studentId);
+    const now = Date.now();
+    const by = cleanBy(args.by);
+    if (a.kind === "photo") {
+      const p = a.photoId ? await ctx.db.get(a.photoId) : null;
+      // He took it back a moment ago: nothing to answer (the ask goes; the phone says so).
+      if (!p) {
+        await ctx.db.delete(a._id);
+        return false;
+      }
+      if (args.yes) {
+        if (s.photo && s.photo.id !== p._id && (await ctx.db.get(s.photo.id))) await ctx.db.delete(s.photo.id);
+        await ctx.db.patch(s._id, { photo: { id: p._id, at: now } });
+        await ctx.db.delete(a._id);
+      } else {
+        await ctx.db.delete(p._id);
+        await ctx.db.patch(a._id, { no: now, photoId: undefined });
+      }
+      await log(ctx, null, now, { kind: "family-photo", by, studentId: s._id, name: s.name, value: args.yes ? "ok" : "no" });
+      return true;
+    }
+    const want = a.name ?? "";
+    if (args.yes) {
+      const name = cleanName(want);
+      const all = await ctx.db
+        .query("students")
+        .withIndex("by_archived", (q) => q.eq("archived", false))
+        .collect();
+      if (all.some((o) => o._id !== s._id && o.name.toLowerCase() === name.toLowerCase())) {
+        fail(`"${name}" is already on the list. Tap No, or rename him yourself.`);
+      }
+      await ctx.db.patch(s._id, { name });
+      await ctx.db.delete(a._id);
+      // The same history line as Rename (the class's name changed), and the ask's own.
+      await log(ctx, await currentSession(ctx, now), now, { kind: "student-rename", by, studentId: s._id, name, value: s.name });
+    } else {
+      await ctx.db.patch(a._id, { no: now });
+    }
+    await log(ctx, null, now, { kind: "family-name", by, studentId: s._id, name: s.name, value: `${args.yes ? "ok" : "no"}:${want}` });
+    return true;
+  },
+});
+
+/** His Family sheet's profile: his photo (and one waiting), shown in the race or not, his birthday, a name he asked. */
+export const profileOf = query({
+  args: { token, studentId: v.id("students") },
+  handler: async (ctx, args) => {
+    await viewer(ctx, args.token, "owner", "students");
+    const s = await getStudent(ctx, args.studentId);
+    const rows = await ctx.db
+      .query("familyAsks")
+      .withIndex("by_student", (q) => q.eq("studentId", s._id))
+      .collect();
+    const photoAsk = rows.find((r) => r.kind === "photo" && r.no === undefined);
+    const nameAsk = rows.find((r) => r.kind === "name" && r.no === undefined);
+    const ok = s.photo ? await ctx.db.get(s.photo.id) : null;
+    const wait = photoAsk?.photoId ? await ctx.db.get(photoAsk.photoId) : null;
+    return {
+      photo: ok ? picUrl(ok) : null,
+      wait: wait ? { pic: picUrl(wait), id: photoAsk!._id } : null,
+      hide: !!s.photoHide,
+      bday: s.bday ?? null,
+      nameAsk: nameAsk ? { want: nameAsk.name ?? "", id: nameAsk._id } : null,
+    };
+  },
+});
+
+/** His photo off (the one the teachers said OK to, and any waiting): the race shows his letter again. */
+export const dropPhoto = mutation({
+  args: { token, studentId: v.id("students"), by: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["owner", "students"], args.by);
+    const s = await getStudent(ctx, args.studentId);
+    for (const r of await ctx.db
+      .query("familyAsks")
+      .withIndex("by_student", (q) => q.eq("studentId", s._id))
+      .collect()) {
+      if (r.kind !== "photo") continue;
+      if (r.photoId) await ctx.db.delete(r.photoId);
+      await ctx.db.delete(r._id);
+    }
+    if (s.photo) {
+      if (await ctx.db.get(s.photo.id)) await ctx.db.delete(s.photo.id);
+      await ctx.db.patch(s._id, { photo: undefined });
+    }
+    await log(ctx, null, Date.now(), { kind: "family-photo", by: cleanBy(args.by), studentId: s._id, name: s.name, value: "removed" });
+    return true;
+  },
+});
+
+/** His birthday off (a mistake, or he asked to change it): he can add it again on his phone. */
+export const clearBday = mutation({
+  args: { token, studentId: v.id("students"), by: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["owner", "students"], args.by);
+    const s = await getStudent(ctx, args.studentId);
+    if (!s.bday) return true;
+    await ctx.db.patch(s._id, { bday: undefined });
+    await log(ctx, null, Date.now(), { kind: "family-bday", by: cleanBy(args.by), studentId: s._id, name: s.name, value: "" });
     return true;
   },
 });

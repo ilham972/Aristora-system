@@ -4,7 +4,9 @@
 //   home, his recent classes.
 // - Learn: the whole syllabus of his grade as a map: each term a World, each unit a Stage, each Stage's Levels inside
 //   it. He does a Level on paper, types the answers, Check once: ✓ and ✗ at once (the server marks).
-// - Race: this week's XP in his grade. Me: his streak, his week, XP, trophies, this phone's children.
+// - Race: this week's XP in his grade (with the photos the teachers said OK to). Me: his profile (4 Nov 2026): his
+//   photo, name, birthday, his flame and week, his 12 weeks at home and in class, his class days, his report (each
+//   Stage; on WhatsApp), XP, trophies, this phone's children. A finished Stage has its certificate.
 // - The top row everywhere: who is on screen (tap: switch, add, sign out), the flame (days in a row), XP, Feedback.
 // - Its look: light, ARISTORA's violet, our owl (white on violet, with moods), gold for what he wins. Words (4 Nov
 //   2026, his ask "a mix of both"): English for the app's chrome and game words (tabs, buttons, days, times, World,
@@ -17,11 +19,14 @@ import type { FamilyLevel, FamilyMe } from "../../convex/family";
 import type { Trophy, World } from "../../convex/lib/family";
 import { hideSplash } from "../splash";
 import { BoardTab } from "./board";
+import type { CertData } from "./cert";
 import { FeedbackSheet } from "./feedback";
 import { HomeTab } from "./home";
 import { BookScreen } from "./book";
 import { LearnTab, StageScreen } from "./map";
-import { Kids, MeTab } from "./me";
+import { Kids } from "./kids";
+import { loadParts, pctOf, useParts } from "./later";
+import { picOf, usePics } from "./pics";
 import {
   accounts,
   addAccount,
@@ -45,7 +50,7 @@ import {
 import { nextPlay, Play, QuestionZoom, Result, type Checked, type Zoomed } from "./play";
 import { armSound, buzz, sound } from "./sound";
 import { Surprises } from "./surprise";
-import { Avatar, Flame, firstName, Gem, Icon, Owl, problemWords, Sheet, toast, Toast, type IconName } from "./ui";
+import { Avatar, Flame, firstName, Gem, Icon, Owl, problemWords, setSheetHost, Sheet, showSheet, toast, Toast, Waiting, type IconName, type SheetRender } from "./ui";
 
 export type Tab = "home" | "learn" | "race" | "me";
 
@@ -55,6 +60,8 @@ type Screen =
   /** Another child joins this phone (index and code); Back returns to the one before. */
   | { k: "add" }
   | { k: "main" }
+  /** Me → Report: his whole report (4 Nov 2026). */
+  | { k: "report" }
   | { k: "stage"; unitId: string }
   | { k: "level"; unitId: string; n: number }
   /** A level he checked at home: solutions, photos to send, the teacher's answers (4 Nov 2026). */
@@ -70,9 +77,17 @@ type Screen =
     };
 
 /** How deep a screen is: Back steps up one at a time (the reveal and a Level go back to their Stage). */
-const depth = (s: Screen) => (s.k === "level" || s.k === "result" || s.k === "book" ? 2 : s.k === "stage" || s.k === "add" ? 1 : 0);
+const depth = (s: Screen) => (s.k === "level" || s.k === "result" || s.k === "book" ? 2 : s.k === "stage" || s.k === "add" || s.k === "report" ? 1 : 0);
 const parent = (s: Screen): Screen =>
-  s.k === "level" || s.k === "result" || s.k === "book" ? { k: "stage", unitId: s.unitId } : s.k === "stage" ? { k: "main" } : s.k === "add" ? (current() ? { k: "main" } : { k: "signin" }) : s;
+  s.k === "level" || s.k === "result" || s.k === "book"
+    ? { k: "stage", unitId: s.unitId }
+    : s.k === "stage" || s.k === "report"
+      ? { k: "main" }
+      : s.k === "add"
+        ? current()
+          ? { k: "main" }
+          : { k: "signin" }
+        : s;
 
 function firstScreen(): Screen {
   const code = /[#&]join=([A-Za-z0-9_-]+)/.exec(location.hash)?.[1];
@@ -92,9 +107,11 @@ export function App() {
   const [me, setMe] = useState<FamilyMe | null>(() => fixWorlds(keep<FamilyMe>("me")));
   const [tab, setTab] = useState<Tab>(() => keep<Tab>("tab") ?? "home");
   const [offline, setOffline] = useState(false);
-  const [sheet, setSheet] = useState<null | "kids" | "feedback" | "zoom">(null);
+  const [sheet, setSheet] = useState<null | "kids" | "feedback" | "zoom" | { render: SheetRender }>(null);
   const [zoomed, setZoomed] = useState<Zoomed | null>(null);
   const [ready, setReady] = useState(false);
+  // Me's profile parts: fetched right after the first screen (later.ts), so they are here (and kept) when he looks.
+  const parts = useParts();
   const screenRef = useRef(screen);
   screenRef.current = screen;
   const sheetRef = useRef(sheet);
@@ -125,7 +142,7 @@ export function App() {
       if (current()?.id !== a.id) return; // another child is on screen now
       const before = keep<FamilyMe>("me");
       keep("me", m);
-      noteAccount(a.id, { name: m.name, grade: m.grade, index: m.index });
+      noteAccount(a.id, { name: m.name, grade: m.grade, index: m.index, pic: m.photo?.key ?? null });
       // The same child twice on this phone (his link, then his code): the newer stays, the older is signed out.
       const twin = m.index !== null ? accounts().find((x) => x.id !== a.id && x.index === m.index) : undefined;
       if (twin) {
@@ -202,12 +219,19 @@ export function App() {
     window.scrollTo(0, 0);
     void loadMe();
   };
-  const openSheet = (x: "kids" | "feedback" | "zoom") => {
+  const openSheet = (x: "kids" | "feedback" | "zoom" | { render: SheetRender }) => {
     buzz();
     sound("pop");
-    history.pushState({ f: depth(screenRef.current), sheet: 1 }, "");
+    // One sheet at a time: a sheet opened from a sheet takes its place (one Back closes it).
+    if (sheetRef.current && history.state?.sheet) history.replaceState({ f: depth(screenRef.current), sheet: 1 }, "");
+    else history.pushState({ f: depth(screenRef.current), sheet: 1 }, "");
     setSheet(x);
   };
+  // Any screen can open a sheet (Me's photo, name, birthday and days; a certificate): it is one of the app's sheets.
+  useEffect(() => {
+    setSheetHost((render) => openSheet({ render }));
+    return () => setSheetHost(null);
+  }, []);
   const closeSheet = () => {
     if (history.state?.sheet) history.back();
     else setSheet(null);
@@ -276,6 +300,8 @@ export function App() {
     setTab(t);
     keep("tab", t);
     window.scrollTo(0, 0);
+    // Me shows what the teachers may have just said OK to (his photo in the race, his new name): ask again.
+    if (t === "me") void loadMe();
   };
   const worldOf = (unitId: string): World | undefined => me?.worlds.find((w) => w.unitId === unitId);
   /** His Level now, from anywhere (the Continue buttons). */
@@ -293,6 +319,15 @@ export function App() {
   const top = (
     <TopRow me={me} acc={acc} offline={offline} onKids={() => openSheet("kids")} onFeedback={() => openSheet("feedback")} onTab={pickTab} />
   );
+  /** A finished Stage's certificate (the report, or the Stage's own screen). */
+  const certFor = (d: Omit<CertData, "name" | "pic">) => {
+    if (!me) return;
+    const data: CertData = { ...d, name: me.name, pic: picOf(me.photo?.key) };
+    void loadParts().then(
+      (m) => showSheet((close) => <m.CertSheet d={data} onClose={close} />),
+      (e) => toast(problemWords(e), true),
+    );
+  };
 
   let body: ComponentChildren;
   if (screen.k === "join") {
@@ -308,6 +343,19 @@ export function App() {
     );
   } else if (screen.k === "signin" || screen.k === "add") {
     body = <SignIn add={screen.k === "add"} why={screen.k === "signin" ? screen.why : undefined} onBack={up} onIn={signedIn} />;
+  } else if (screen.k === "report") {
+    body = me && parts ? (
+      <parts.ReportScreen
+        me={me}
+        pic={picOf(me.photo?.key)}
+        onBack={up}
+        onCert={(s) => certFor({ no: s.no, ta: s.ta, pct: pctOf(s), levels: s.levels, at: s.end ?? Date.now() })}
+      />
+    ) : me ? (
+      <Waiting />
+    ) : (
+      <Missing onBack={toMain} />
+    );
   } else if (screen.k === "stage") {
     const w = worldOf(screen.unitId);
     body = w ? (
@@ -318,6 +366,13 @@ export function App() {
         onPlay={(n) => {
           sound("start");
           go({ k: "level", unitId: w.unitId, n });
+        }}
+        onCert={() => {
+          const marked = w.levels.filter((l) => l.s === "done" || l.s === "check");
+          const max = marked.reduce((a, l) => a + l.max, 0);
+          const got = marked.reduce((a, l) => a + (l.got ?? 0), 0);
+          const kept = keep<{ stages?: { unitId: string; end: number | null }[] }>("profile")?.stages?.find((x) => x.unitId === w.unitId);
+          certFor({ no: w.no, ta: w.ta, pct: max ? Math.round((got / max) * 100) : null, levels: w.levels.length, at: kept?.end ?? Date.now() });
         }}
         onBook={(n) => go({ k: "book", unitId: w.unitId, n })}
         onPhotos={(b) => go({ k: "book", unitId: b.unitId, n: b.n })}
@@ -407,8 +462,13 @@ export function App() {
             <LearnTab top={top} me={me} onStage={(unitId) => go({ k: "stage", unitId })} onPlay={playNow} />
           ) : tab === "race" ? (
             <BoardTab top={top} me={me} />
+          ) : !parts ? (
+            <>
+              <header class="f-hero">{top}</header>
+              <Waiting />
+            </>
           ) : (
-            <MeTab
+            <parts.MeTab
               top={top}
               me={me}
               list={accounts()}
@@ -417,6 +477,8 @@ export function App() {
               onAdd={addKid}
               onSignOut={() => void signOut()}
               onRace={() => pickTab("race")}
+              onReport={() => go({ k: "report" })}
+              onChanged={() => void loadMe()}
             />
           )}
         </main>
@@ -435,6 +497,7 @@ export function App() {
       )}
       {sheet === "feedback" && <FeedbackSheet grade={me?.grade ?? acc?.grade ?? null} onClose={closeSheet} />}
       {sheet === "zoom" && zoomed && <QuestionZoom {...zoomed} onClose={closeSheet} />}
+      {sheet && typeof sheet === "object" && sheet.render(closeSheet)}
       <Toast />
     </div>
   );
@@ -474,11 +537,12 @@ function TopRow(props: { me: FamilyMe | null; acc: Account | null; offline: bool
   const kids = accounts().length;
   const id = props.acc?.id ?? "";
   const xpGrew = useGrew(`${id}.xp`, me?.total ?? 0);
+  usePics([me?.photo?.key]);
   const fireGrew = useGrew(`${id}.fire`, me?.streak.days ?? 0);
   return (
     <div class="f-toprow">
       <button type="button" class="f-who" aria-label={`${name}: the children on this phone`} onClick={props.onKids}>
-        <Avatar name={name || "?"} size="s" />
+        <Avatar name={name || "?"} size="s" pic={picOf(me?.photo?.key)} />
         <b class="f-name">{firstName(name)}</b>
         <span class={`f-caret${kids > 1 ? " many" : ""}`} aria-hidden="true">
           {kids > 1 ? kids : "▾"}

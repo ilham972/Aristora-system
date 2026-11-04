@@ -6448,6 +6448,99 @@ body.locked.tp-padded .toasts {
   display: grid;
   gap: 2px;
 }
+/* Settings → Students → Waiting for your OK (4 Nov 2026): students' asks from the family app (a photo for the race, a
+   new name), OK / No; the same rows on his Family sheet with his photo and birthday. 🎂 by a name on his birthday. */
+.fa-box {
+  margin: 4px 0 14px;
+  padding: 12px 14px 6px;
+  border-radius: 16px;
+  background: var(--evaluation-soft);
+}
+.fa-box .block-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 0;
+}
+.fa-n {
+  display: inline-grid;
+  place-items: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 7px;
+  border-radius: 99px;
+  background: var(--red);
+  color: #fff;
+  font-size: 13px;
+}
+.fa-list {
+  margin-top: 8px;
+}
+.fa-item,
+.fam-prof {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+}
+.fa-item + .fa-item {
+  border-top: 1px solid var(--line-2);
+}
+.fa-pic,
+.fa-nm {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--card);
+  box-shadow: 0 0 0 2px var(--card), 0 2px 6px rgba(22, 33, 62, 0.18);
+}
+.fa-nm {
+  display: grid;
+  place-items: center;
+  color: var(--evaluation-ink);
+  font-weight: 800;
+  font-size: 18px;
+}
+.fa-pic.fa-l,
+.fa-nm.fa-l {
+  width: 72px;
+  height: 72px;
+  font-size: 28px;
+}
+.fa-w {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.fa-w b {
+  overflow-wrap: anywhere;
+}
+.fa-w small {
+  font-size: 13px;
+}
+.fa-b {
+  flex: none;
+  display: flex;
+  gap: 6px;
+}
+.fam-prof.fa-wait {
+  margin-top: 6px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--evaluation-soft);
+}
+.fam-prof-b {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  padding: 4px 0 10px;
+}
+.bday-tag {
+  white-space: nowrap;
+}
 /* Settings → Students → O/L map (4 Nov 2026): the line above a Grade 10/11 list, the tag on a ticked name, the sheet */
 .olm-line {
   width: 100%;

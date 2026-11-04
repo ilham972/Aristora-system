@@ -1,14 +1,41 @@
-// Me: his flame (days in a row) and his best, this week day by day, his XP this week as bars, his place in the race,
-// his trophies (won and still to win), and this phone: the children on it (switch, add another, sign out) and the sound.
+// Me, his profile (4 Nov 2026, his voice note: "a proper profile page for the students"; one of the parts that come
+// right after the first screen: later.ts): his photo (tap to change:
+// made small on the phone, sent with a progress bar; his classmates see it after the teachers' OK), his name and grade,
+// his flame (days in a row) as the big number and this week; his XP, best run and Levels; his 12 weeks at home and in
+// class (one map); his class days and hours; his report (each Stage; on WhatsApp for his parents); XP this week; his
+// place in the race; his trophies; his details (a new name, asked; his birthday; his photo in the race or not); and
+// this phone: the children on it (switch, add another, sign out), the sound, the owl's surprises.
 
 import type { ComponentChildren } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import type { FamilyMe } from "../../convex/family";
+import { isBirthday } from "../../convex/lib/day";
 import { endsIn, passOf, type Board } from "./board";
-import { MAX_ACCOUNTS, query, type Account } from "./net";
-import { setSoundOn, soundOn } from "./sound";
+import { Kids, whoWords } from "./kids";
+import { bdayWords, useProfile } from "./later";
+import { mutation, query, type Account } from "./net";
+import { PhotoSheet } from "./photo";
+import { picOf, usePics } from "./pics";
+import { BdaySheet, ClassCard, DaySheet, HeatMap, NameSheet, ReportCard } from "./profile";
+import { setSoundOn, sound, soundOn } from "./sound";
 import { setSurprisesOn, surprisesOn } from "./surprise";
-import { Avatar, firstName, Flame, flameAtRisk, Gem, Icon, Medal, OwlBadge, Tag, TROPHY_ORDER, Waiting } from "./ui";
+import {
+  Avatar,
+  firstName,
+  Flame,
+  flameAtRisk,
+  Gem,
+  Icon,
+  Medal,
+  OwlBadge,
+  problemWords,
+  showSheet,
+  Tag,
+  titleSize,
+  toast,
+  TROPHY_ORDER,
+  Waiting,
+} from "./ui";
 
 /** Monday first, as the week starts (Sri Lanka): M T W T F S S, the letters every calendar uses. */
 const DAYS = ["M", "T", "W", "T", "F", "S", "S"];
@@ -18,57 +45,24 @@ function todayIndex(now: number): number {
   return (new Date(now + 330 * 60_000).getUTCDay() + 6) % 7;
 }
 
-const whoWords = (a: { grade?: number | null; index?: number | null }) =>
-  [a.grade ? `Grade ${a.grade}` : "", a.index ? `#${a.index}` : ""].filter(Boolean).join(" · ");
 
-/** The children on this phone: tap one to switch; add another; sign the one on screen out (after a second tap). */
-export function Kids(props: { list: Account[]; current: Account | null; onSwitch: (id: string) => void; onAdd: () => void; onSignOut: () => void }) {
-  const [sure, setSure] = useState(false);
-  const cur = props.current;
+/** Pick a photo: a label around a hidden file input (it opens the camera or the gallery on every phone). */
+function PickPhoto(props: { onFile: (f: File) => void; class?: string; label: string; children: ComponentChildren }) {
   return (
-    <div class="f-kids">
-      <ul class="f-kid-list">
-        {props.list.map((a) => (
-          <li key={a.id}>
-            <button type="button" class={`f-kid${a.id === cur?.id ? " on" : ""}`} aria-pressed={a.id === cur?.id} onClick={() => props.onSwitch(a.id)}>
-              <Avatar name={a.name || "?"} />
-              <span class="f-kid-w">
-                <b>{a.name || "…"}</b>
-                <small>{whoWords(a)}</small>
-              </span>
-              {a.id === cur?.id && (
-                <i class="f-kid-on">
-                  <Icon name="check" size={18} />
-                </i>
-              )}
-            </button>
-          </li>
-        ))}
-      </ul>
-      <button type="button" class="f-btn ghost f-add" disabled={props.list.length >= MAX_ACCOUNTS} onClick={props.onAdd}>
-        <Icon name="plus" size={18} /> Add a child
-      </button>
-      {cur &&
-        (sure ? (
-          <div class="f-sure rise" role="alertdialog" aria-label="Sign out">
-            <p>
-              {firstName(cur.name)} இந்த phone இலிருந்து வெளியேறவா? மீண்டும் வர index எண்ணும் code உம் வேண்டும்.
-            </p>
-            <div class="f-sure-b">
-              <button type="button" class="f-btn danger" onClick={props.onSignOut}>
-                Sign out
-              </button>
-              <button type="button" class="f-btn ghost" onClick={() => setSure(false)}>
-                No
-              </button>
-            </div>
-          </div>
-        ) : (
-          <button type="button" class="f-link danger" onClick={() => setSure(true)}>
-            <Icon name="out" size={18} /> Sign out {firstName(cur.name)}
-          </button>
-        ))}
-    </div>
+    <label class={props.class} aria-label={props.label}>
+      <input
+        type="file"
+        accept="image/*"
+        class="f-pickfile"
+        onChange={(e) => {
+          const el = e.currentTarget as HTMLInputElement;
+          const f = el.files?.[0];
+          el.value = "";
+          if (f) props.onFile(f);
+        }}
+      />
+      {props.children}
+    </label>
   );
 }
 
@@ -99,6 +93,18 @@ function XpBars(props: { xp: number[]; total: number; today: number }) {
   );
 }
 
+/** A word from the teachers (they said no to his photo or his name): read once, then OK. */
+function Told(props: { text: string; onOk: () => void }) {
+  return (
+    <div class="f-told rise" role="status">
+      <p>{props.text}</p>
+      <button type="button" class="f-btn ghost" onClick={props.onOk}>
+        OK
+      </button>
+    </div>
+  );
+}
+
 export function MeTab(props: {
   top: ComponentChildren;
   me: FamilyMe | null;
@@ -108,16 +114,23 @@ export function MeTab(props: {
   onAdd: () => void;
   onSignOut: () => void;
   onRace: () => void;
+  onReport: () => void;
+  /** His photo, name or birthday changed: the app asks the server again. */
+  onChanged: () => void;
 }) {
   const me = props.me;
+  const p = useProfile();
   const [on, setOn] = useState(soundOn());
   const [gags, setGags] = useState(surprisesOn());
+  const [race, setRace] = useState<boolean | null>(null);
+  const [sure, setSure] = useState(false);
   const [b, setB] = useState<Board | null>(null);
   useEffect(() => {
     query("family:board")
       .then((x) => setB(x as Board))
       .catch(() => {});
   }, []);
+  usePics([me?.photo?.key]);
   if (!me) {
     return (
       <>
@@ -133,10 +146,56 @@ export function MeTab(props: {
   const s = me.streak;
   const best = s.days > 0 && s.days >= (me.best ?? 0);
   const pass = b ? passOf(b) : null;
+  const pic = picOf(me.photo?.key);
+  const party = isBirthday(me.bday, Date.now());
+  const shown = race ?? !me.photoHide;
+  const act = async (fn: () => Promise<unknown>, done?: string) => {
+    try {
+      await fn();
+      if (done) toast(done);
+      props.onChanged();
+    } catch (e) {
+      toast(problemWords(e), true);
+    }
+  };
+  const openPhoto = (file: File) =>
+    showSheet((close) => (
+      <PhotoSheet
+        file={file}
+        onClose={close}
+        onDone={() => {
+          close();
+          toast("உன் photo வந்தது! ஆசிரியர் OK சொன்னதும் Race இல் தெரியும்.");
+          props.onChanged();
+        }}
+      />
+    ));
   return (
     <>
       <header class="f-hero me">
         {props.top}
+        <div class="f-me-id">
+          <PickPhoto class="f-me-pic" label={me.photo ? "Change your photo" : "Add your photo"} onFile={openPhoto}>
+            <Avatar name={me.name} pic={pic} size="xl" />
+            <i class="f-me-cam" aria-hidden="true">
+              <Icon name="camera" size={17} />
+            </i>
+          </PickPhoto>
+          <div class="f-me-w">
+            <b class={`f-me-name${titleSize(me.name)}`}>
+              {me.name}
+              {party && <span class="f-cake"> 🎂</span>}
+            </b>
+            <small>{whoWords(me)}</small>
+            {me.photo?.wait ? (
+              <Tag tone="glass" class="f-me-tag">
+                Photo · waiting for OK
+              </Tag>
+            ) : !me.photo ? (
+              <small class="f-me-add">📷 உன் photo ஐச் சேர்</small>
+            ) : null}
+          </div>
+        </div>
         <div class="f-hero-in">
           <div class="f-hero-w">
             <p class="f-kicker">Streak</p>
@@ -147,7 +206,7 @@ export function MeTab(props: {
             <p class="f-hsub">{s.today ? `${s.days === 1 ? "day" : "days"} in a row · today ✓` : s.days > 0 ? "இன்று ஒரு Level செய்: தீ அணையாமல் பார்!" : "இன்று ஒரு Level செய்து தொடங்கு!"}</p>
             {best && <Tag tone="gold">PERSONAL BEST</Tag>}
           </div>
-          <OwlBadge mood={s.today ? "cheer" : s.days === 0 && (me.best ?? 0) > 0 ? "cry" : flameAtRisk(s) ? "grumpy" : "sleep"} class="hero" />
+          <OwlBadge mood={party ? "party" : s.today ? "cheer" : s.days === 0 && (me.best ?? 0) > 0 ? "cry" : flameAtRisk(s) ? "grumpy" : "sleep"} class="hero" />
         </div>
         <div class="f-weekdots" aria-label="This week">
           {DAYS.map((d, i) => (
@@ -158,13 +217,6 @@ export function MeTab(props: {
           ))}
         </div>
       </header>
-      <section class="f-profile f-card rise">
-        <Avatar name={me.name} size="l" />
-        <div class="f-profile-w">
-          <b class="f-pname">{me.name}</b>
-          <small>{whoWords(me)}</small>
-        </div>
-      </section>
       <section class="f-stats rise">
         <div>
           <Gem size={22} />
@@ -182,6 +234,11 @@ export function MeTab(props: {
           <small>Levels</small>
         </div>
       </section>
+      {me.photoNo && <Told text="உன் photo ஐ ஆசிரியர் ஏற்கவில்லை. வேறு ஒன்றைத் தேர்ந்தெடு." onOk={() => void act(() => mutation("family:forget", { kind: "photo" }))} />}
+      {me.nameAsk?.no && <Told text={`"${me.nameAsk.name}": உன் ஆசிரியர் இந்தப் பெயரை ஏற்கவில்லை.`} onOk={() => void act(() => mutation("family:forget", { kind: "name" }))} />}
+      {p && <HeatMap p={p} onDay={(day) => showSheet((close) => <DaySheet day={day} onClose={close} />)} />}
+      {p && <ClassCard p={p} />}
+      {p && <ReportCard me={me} p={p} onOpen={props.onReport} />}
       {me.dayXp && <XpBars xp={me.dayXp} total={me.xp} today={today} />}
       {b?.me && (
         <button type="button" class="f-racecard f-card rise" onClick={props.onRace}>
@@ -206,6 +263,78 @@ export function MeTab(props: {
             <Medal key={t} t={t} won={won.includes(t)} />
           ))}
         </div>
+      </section>
+      <section class="f-set f-card rise" aria-label="Your details">
+        <h2 class="f-h2">Your details</h2>
+        <button type="button" class="f-row f-drow" onClick={() => showSheet((close) => <NameSheet me={me} onClose={close} onDone={() => (close(), props.onChanged())} />)}>
+          <Icon name="user" />
+          <span>
+            Name
+            <small>{me.nameAsk && !me.nameAsk.no ? `${me.nameAsk.name} · waiting for OK` : me.name}</small>
+          </span>
+          <Icon name="pen" size={18} />
+        </button>
+        <button
+          type="button"
+          class="f-row f-drow"
+          onClick={() => {
+            if (me.bday) {
+              sound("tap");
+              return toast("பிறந்தநாளை மாற்ற உன் ஆசிரியரிடம் கேள்.");
+            }
+            showSheet((close) => <BdaySheet onClose={close} onDone={() => (close(), props.onChanged())} />);
+          }}
+        >
+          <Icon name="cake" />
+          <span>
+            Birthday
+            <small>{me.bday ? bdayWords(me.bday) : "அன்று owl ஒரு party வைக்கும்!"}</small>
+          </span>
+          <Icon name={me.bday ? "lock" : "plus"} size={18} />
+        </button>
+        {me.photo && (
+          <button
+            type="button"
+            class="f-row"
+            aria-pressed={shown}
+            onClick={() => {
+              setRace(!shown);
+              void act(() => mutation("family:setRace", { show: !shown }));
+            }}
+          >
+            <Icon name="trophy" />
+            <span>
+              Photo in the race
+              <small>{shown ? "வகுப்பு நண்பர்கள் பார்ப்பார்கள்" : "உனக்கு மட்டும்"}</small>
+            </span>
+            <span class={`f-switch${shown ? " on" : ""}`} aria-hidden="true" />
+          </button>
+        )}
+        {me.photo &&
+          (sure ? (
+            <div class="f-sure rise" role="alertdialog" aria-label="Remove photo">
+              <p>உன் photo ஐ நீக்கவா? உன் எழுத்து மீண்டும் வரும்.</p>
+              <div class="f-sure-b">
+                <button
+                  type="button"
+                  class="f-btn danger"
+                  onClick={() => {
+                    setSure(false);
+                    void act(() => mutation("family:dropPhoto"), "நீக்கப்பட்டது.");
+                  }}
+                >
+                  Remove
+                </button>
+                <button type="button" class="f-btn ghost" onClick={() => setSure(false)}>
+                  No
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button type="button" class="f-link danger" onClick={() => setSure(true)}>
+              <Icon name="bin" size={18} /> Remove photo
+            </button>
+          ))}
       </section>
       <section class="f-set f-card rise">
         <h2 class="f-h2">On this phone</h2>

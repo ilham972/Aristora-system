@@ -5,7 +5,8 @@
 // - The server's answers (convex.cloud) are never touched.
 // 3 (3 Nov 2026): the light purple look, Home and the whole syllabus. 4 (4 Nov 2026): the new palette and its one
 // font for Tamil and English (preloaded by the page, so it is kept at install too); the old copies go when this starts.
-const CACHE = "aristora-family-4";
+// 5 (4 Nov 2026): Me's profile; its files come after the first screen, named in the page, so they are kept at install.
+const CACHE = "aristora-family-5";
 const KEEP = (p) => p.startsWith("/f/assets/") || p === "/icon.svg" || p === "/family.webmanifest";
 
 self.addEventListener("install", (e) => {

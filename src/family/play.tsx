@@ -730,7 +730,7 @@ const RING_R = 54;
 const RING_C = Math.round(2 * Math.PI * RING_R * 100) / 100;
 
 /** Confetti from behind the owl: more for a better level. */
-function Confetti(props: { n: number }) {
+export function Confetti(props: { n: number }) {
   return (
     <span class="f-confetti" aria-hidden="true">
       {Array.from({ length: props.n }, (_, i) => (

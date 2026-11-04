@@ -274,6 +274,20 @@ export default defineSchema({
     test: v.optional(v.boolean()),
     copyOf: v.optional(v.id("students")),
     testCase: v.optional(v.string()),
+    /**
+     * His birthday, day and month only ("11-04", no year: 4 Nov 2026). He adds it once in the family app (Me); a teacher
+     * can clear it (his Family sheet). On the day: the owl's party on his phone, 🎂 by his name in the race and on the
+     * teachers' screens.
+     */
+    bday: v.optional(v.string()),
+    /**
+     * His photo the teachers said OK to (4 Nov 2026): his family phone, his Family sheet and his classmates' race show
+     * it. Only the pointer lives here (every teacher's phone reads this row on every tap); the picture is in
+     * profilePhotos. A photo waiting for the OK is a familyAsks row.
+     */
+    photo: v.optional(v.object({ id: v.id("profilePhotos"), at: v.number() })),
+    /** His family turned his photo off for the race (Me → "Show it in the race"); his own phone still shows it. */
+    photoHide: v.optional(v.boolean()),
   })
     .index("by_archived", ["archived"])
     .index("by_index", ["index"]),
@@ -559,6 +573,9 @@ export default defineSchema({
     /** Photo uploads asked for from this phone today (Sri Lanka day number, count): `PHOTO_URLS_PER_DAY` at most. */
     phDay: v.optional(v.number()),
     phN: v.optional(v.number()),
+    /** Profile photos sent from this phone today (Sri Lanka day number, count): `PHOTOS_PER_DAY` at most. */
+    pfDay: v.optional(v.number()),
+    pfN: v.optional(v.number()),
   })
     .index("by_token", ["tokenHash"])
     .index("by_student", ["studentId"]),
@@ -640,6 +657,32 @@ export default defineSchema({
     .index("by_state", ["state", "at"])
     .index("by_done", ["doneAt"])
     .index("by_unit", ["unitId"]),
+  /**
+   * A student's photo (4 Nov 2026, his ask: "they can upload their profiles ... compress it"): square, made small on his
+   * phone (≤ 288 px, ~15–30 KB), base64. At most two per student: the one the teachers said OK to (students.photo) and
+   * one waiting (its familyAsks row). Read only by the photos' own queries, never by the class's live state.
+   */
+  profilePhotos: defineTable({
+    studentId: v.id("students"),
+    data: v.string(),
+    type: v.union(v.literal("image/jpeg"), v.literal("image/webp")),
+    at: v.number(),
+  }).index("by_student", ["studentId"]),
+  /**
+   * What a student asked the teachers for in the family app (4 Nov 2026, his answers: every new photo waits for his OK
+   * before classmates see it; a new name changes everywhere only after his OK): one row per student and kind. `no` =
+   * the teachers said no: his phone tells him once, then the row goes. Small rows only (the Settings gear counts them).
+   */
+  familyAsks: defineTable({
+    studentId: v.id("students"),
+    kind: v.union(v.literal("photo"), v.literal("name")),
+    at: v.number(),
+    name: v.optional(v.string()),
+    photoId: v.optional(v.id("profilePhotos")),
+    no: v.optional(v.number()),
+  })
+    .index("by_student", ["studentId"])
+    .index("by_at", ["at"]),
 
   /** Small settings: the data version (for one-time updates). */
   meta: defineTable({ key: v.string(), value: v.any() }).index("by_key", ["key"]),

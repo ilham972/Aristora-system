@@ -54,21 +54,31 @@ const kb = (f) => Math.round(result.metafile.outputs[f].bytes / 1024);
 console.log(`Built dist/ for ${url}: ${basename(js)} ${kb(js)} KB, ${basename(css)} ${kb(css)} KB`);
 
 // ---- The family app (app.aristora.org; also /f/ here): its own small bundle, nothing of the teachers' app. ----
-// Students open it on any phone and any signal: it must stay light. Over the budget, the build stops.
+// Students open it on any phone and any signal: its first load must stay light. Over the budget, the build stops.
 // 4 Nov 2026: 50 → 56 KB for the owl's acting (its whole-body moods, tap reactions and surprise visits, ~6 KB); 56 → 58
 // the same day: the photos from home (55.6) and a printed question full screen + no selection (~1.5 KB). No dead CSS
 // to cut (every class nobody names is built in the code: moods, states, places). 58 → 60 the same day: a tute's ladder
 // on the phone, teacher questions and Learn (58.7).
-const FAMILY_BUDGET_KB = 60;
+// 4 Nov 2026, the profile: split in two. The first load (the entry and the chunks it imports, its style, its page) has
+// this budget; Me and its profile parts (src/family/parts.ts: Me, the map of 12 weeks, the report, the photo editor,
+// the certificate; their style profile.css) come right after the first screen with their own budget, and are named in
+// the page (prefetch) so the service worker keeps them at install: they work with no signal like the rest. 60 → 62: what
+// the first screens show of it (faces in the race, the top row and the children; the birthday party on Home; the way to
+// the report and a certificate; the loader) and the split's own cost (two files compress a little less than one): 61.3.
+const FAMILY_BUDGET_KB = 62;
+const FAMILY_LATER_KB = 16;
 await mkdir("dist/f/assets", { recursive: true });
 const fam = await build({
-  entryPoints: { fam: "src/family/main.tsx" },
+  // profile.css: the style of the parts that come after the first screen (src/family/later.ts attaches it).
+  entryPoints: { fam: "src/family/main.tsx", later: "src/family/profile.css" },
   bundle: true,
   minify: true,
   format: "esm",
+  splitting: true,
   target: ["es2020"],
   outdir: "dist/f/assets",
   entryNames: "[name]-[hash]",
+  chunkNames: "[name]-[hash]",
   assetNames: "[name]-[hash]",
   // One font for Tamil and English together (Baloo Thambi 2, weights 500–800, ~57 KB: src/family/fonts/; preloaded,
   // fetched once and kept by the service worker; not counted in the budget).
@@ -80,23 +90,58 @@ const fam = await build({
   metafile: true,
   logLevel: "warning",
 });
-const famOut = Object.keys(fam.metafile.outputs);
-const famJs = famOut.find((f) => f.endsWith(".js"));
-const famCss = famOut.find((f) => f.endsWith(".css"));
-const famFont = famOut.find((f) => f.endsWith(".woff2"));
+const famOuts = fam.metafile.outputs;
+const famJs = Object.keys(famOuts).find((f) => famOuts[f].entryPoint === "src/family/main.tsx");
+const famCss = famJs && famOuts[famJs].cssBundle;
+const famFont = Object.keys(famOuts).find((f) => f.endsWith(".woff2"));
 if (!famJs || !famCss || !famFont) throw new Error("Build did not produce the family app's JS, CSS and font");
+/** Every JS file one reaches by import statements (what the browser must fetch before it runs). */
+const staticOf = (start) => {
+  const seen = new Set([start]);
+  const walk = (f) => {
+    for (const i of famOuts[f].imports) {
+      if (i.kind === "import-statement" && i.path.endsWith(".js") && !seen.has(i.path)) {
+        seen.add(i.path);
+        walk(i.path);
+      }
+    }
+  };
+  walk(start);
+  return seen;
+};
+const first = staticOf(famJs);
+const laterCss = Object.keys(famOuts).find((f) => famOuts[f].entryPoint === "src/family/profile.css");
+if (!laterCss) throw new Error("Build did not produce the family app's later style");
+const later = [...Object.keys(famOuts).filter((f) => f.endsWith(".js") && !first.has(f)), laterCss];
+const asset = (f) => `/f/assets/${basename(f)}`;
+const preload = [
+  ...[...first].filter((f) => f !== famJs).map((f) => `<link rel="modulepreload" href="${asset(f)}">`),
+  ...later.map((f) =>
+    f === laterCss ? `<link rel="prefetch" href="${asset(f)}" as="style" data-later>` : `<link rel="prefetch" href="${asset(f)}" as="script" crossorigin>`,
+  ),
+].join("\n");
 const famHtml = (await readFile("public/family/index.html", "utf8"))
   .replace("%SPLASH%", () => splashSaying("இன்னும் வருகிறது… இந்த phone இல் data அல்லது Wi-Fi உள்ளதா பார்."))
-  .replace("%FONT%", `/f/assets/${basename(famFont)}`)
-  .replace("%CSS%", `/f/assets/${basename(famCss)}`)
-  .replace("%JS%", `/f/assets/${basename(famJs)}`);
+  .replace("%FONT%", asset(famFont))
+  .replace("%CSS%", asset(famCss))
+  .replace("%PRELOAD%", () => preload)
+  .replace("%JS%", asset(famJs));
 await writeFile("dist/f/index.html", famHtml);
 await cp("public/family/sw.js", "dist/f/sw.js");
 await cp("public/family/family.webmanifest", "dist/family.webmanifest");
 const gz = async (f) => gzipSync(await readFile(f)).length;
-const wire = (await gz(famJs)) + (await gz(famCss)) + gzipSync(famHtml).length;
-console.log(`Built the family app: ${basename(famJs)} + ${basename(famCss)}, ${(wire / 1024).toFixed(1)} KB over the wire (budget ${FAMILY_BUDGET_KB} KB)`);
+let wire = (await gz(famCss)) + gzipSync(famHtml).length;
+for (const f of first) wire += await gz(f);
+let after = 0;
+for (const f of later) after += await gz(f);
+console.log(
+  `Built the family app: ${basename(famJs)} + ${basename(famCss)}, ${(wire / 1024).toFixed(1)} KB over the wire on the first load (budget ${FAMILY_BUDGET_KB} KB), ${(after / 1024).toFixed(1)} KB right after it (budget ${FAMILY_LATER_KB} KB)`,
+);
 if (wire > FAMILY_BUDGET_KB * 1024) {
-  console.error(`The family app is ${(wire / 1024).toFixed(1)} KB: over its ${FAMILY_BUDGET_KB} KB budget. Make it lighter before it ships.`);
+  console.error(`The family app's first load is ${(wire / 1024).toFixed(1)} KB: over its ${FAMILY_BUDGET_KB} KB budget. Make it lighter before it ships.`);
+  process.exit(1);
+}
+if (after > FAMILY_LATER_KB * 1024) {
+  console.error(`The family app's profile parts are ${(after / 1024).toFixed(1)} KB: over their ${FAMILY_LATER_KB} KB budget. Make them lighter before they ship.`);
   process.exit(1);
 }

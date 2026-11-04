@@ -491,8 +491,9 @@ test("the new look: class hours and Home, the map, the questions as printed, fee
   await noSideScroll(P);
   await shot(P, "fam16-race");
   await tabTo(P, /Me$/);
-  await contains(P.locator(".f-profile"), "Hana K");
-  await contains(P.locator(".f-profile"), "#1001");
+  // Her profile (4 Nov 2026): her name and index by her photo (her letter until she adds one).
+  await contains(P.locator(".f-me-id"), "Hana K");
+  await contains(P.locator(".f-me-id"), "#1001");
   expect(await P.locator(".f-medals.grid .f-medal").count()).toBe(9);
   await noSideScroll(P);
   await shot(P, "fam17-me");
@@ -576,7 +577,7 @@ test("the new look: class hours and Home, the map, the questions as printed, fee
   await visible(S.locator(".f-race"));
   await noSideScroll(S);
   await tabTo(S, /Me$/);
-  await visible(S.locator(".f-profile"));
+  await visible(S.locator(".f-me-id"));
   await noSideScroll(S);
   await shot(S, "fam22-me-320");
   await S.getByRole("button", { name: /Feedback/ }).click();
@@ -1254,5 +1255,291 @@ test("a tute's ladder on the phone: one road numbered as printed; a teacher ques
   await noSideScroll(S);
   await shot(S, "fam32-teacher-question-320");
 
+  expect(problems).toEqual([]);
+});
+
+test("Me, his profile: a camera photo made small with its bar, the OK, the race; a name asked; his birthday; the map of 12 weeks; the report; a certificate", async () => {
+  const backend = makeBackend(modules);
+  const t = backend.t;
+  await addPerson(t, { name: "Owner", token: OWNER_TOKEN, role: "owner" });
+  const as = { token: OWNER_TOKEN };
+  await t.mutation(api.setup.ensure, as);
+  const u01 = await t.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G8-U01")).first())!._id);
+  await t.mutation(api.catalog.saveWorkbook, {
+    ...as,
+    unitId: u01,
+    parts: BOOK.data.parts.map((p) => ({ id: p.id, to: p.to, ...(p.each ? { each: p.each } : {}) })),
+    levels: BOOK.data.levels.map((l) => ({ to: l.to, max: l.max })),
+    marks: BOOK.data.marks ?? {},
+    replace: true,
+    key: fakeKey(),
+  });
+  const hana = await t.mutation(api.students.add, { ...as, name: "Hana K", grade: 8, term: 1, stage: "master", unitId: u01 });
+  const bilal = await t.mutation(api.students.add, { ...as, name: "Bilal M", grade: 8, term: 1, stage: "master", unitId: u01 });
+  await t.mutation(api.families.setCode, { ...as, studentId: hana, code: "4719" });
+  await t.mutation(api.families.setCode, { ...as, studentId: bilal, code: "5820" });
+  // What the class recorded: two visits, Level 1 corrected in class yesterday (Q2 lost and explained, Q5 lost), Level 2
+  // marked at home today.
+  const H = 3_600_000;
+  const D = 24 * H;
+  const now = Date.now();
+  const [l1, l2] = BOOK.data.levels;
+  await t.run(async (ctx) => {
+    for (const back of [D, 8 * D]) {
+      const inAt = now - back - 2 * H;
+      await ctx.db.insert("attendance", { studentId: hana, day: new Date(inAt + 330 * 60_000).toISOString().slice(0, 10), inAt, outAt: inAt + 2 * H });
+    }
+    const q: Record<string, { got: number; max: number; lost: boolean; t: number; x?: number }> = {};
+    for (let n = l1.from; n <= l1.to; n++) q[String(n)] = { got: 2, max: 2, lost: false, t: now - D };
+    q["2"] = { got: 0, max: 2, lost: true, t: now - D, x: now - D + H };
+    q["5"] = { got: 1, max: 2, lost: true, t: now - D };
+    const m = {
+      q,
+      lv: {
+        [String(l1.n)]: { done: now - D - H, fixed: now - D, got: l1.max - 3 },
+        [String(l2.n)]: { done: now - H, fixed: now - H, got: l2.max - 2, by: "home", home: now - H },
+      },
+    };
+    const row = await ctx.db.query("progress").withIndex("by_student_unit_stage", (x) => x.eq("studentId", hana).eq("unitId", u01).eq("stage", "master")).first();
+    await ctx.db.patch(row!._id, { m });
+  });
+
+  // A camera-sized photo (3000 × 4000, made up in the browser: no real face, no file from anyone).
+  const P = await open(backend, `${site.url}/f/`, size(360, 780), () => {
+    // The upload waits a moment here, so the bar can be seen (the fake server answers at once).
+    const w = window as unknown as { __ARISTORA_TEST_BACKEND__: { mutation(n: string, a: unknown): Promise<unknown> } };
+    const real = w.__ARISTORA_TEST_BACKEND__.mutation;
+    w.__ARISTORA_TEST_BACKEND__.mutation = async (n, a) => {
+      if (n === "family:setPhoto") await new Promise((r) => setTimeout(r, 1200));
+      return await real(n, a);
+    };
+  });
+  const camera = await P.evaluate(async () => {
+    const c = document.createElement("canvas");
+    c.width = 3000;
+    c.height = 4000;
+    const g = c.getContext("2d")!;
+    const sky = g.createLinearGradient(0, 0, 0, 4000);
+    sky.addColorStop(0, "#8fb4e8");
+    sky.addColorStop(1, "#3a4fa0");
+    g.fillStyle = sky;
+    g.fillRect(0, 0, 3000, 4000);
+    g.fillStyle = "#e0ac8c";
+    g.beginPath();
+    g.ellipse(1500, 1750, 600, 760, 0, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = "#463c96";
+    g.fillRect(700, 2600, 1600, 1400);
+    // Grain, as a camera's: a photo that doesn't squeeze by itself.
+    const img = g.getImageData(0, 0, 3000, 4000);
+    let s = 7;
+    for (let i = 0; i < img.data.length; i += 4) {
+      s = (s * 1103515245 + 12345) & 0x7fffffff;
+      const n = (s % 41) - 20;
+      img.data[i] += n;
+      img.data[i + 1] += n;
+      img.data[i + 2] += n;
+    }
+    g.putImageData(img, 0, 0);
+    const b = await new Promise<Blob>((r) => c.toBlob((x) => r(x!), "image/jpeg", 0.95));
+    const u = await new Promise<string>((r) => {
+      const f = new FileReader();
+      f.onload = () => r(String(f.result));
+      f.readAsDataURL(b);
+    });
+    return u.slice(u.indexOf(",") + 1);
+  });
+  const cameraBytes = Buffer.from(camera, "base64");
+  expect(cameraBytes.length).toBeGreaterThan(1_000_000);
+  await P.getByLabel(/Index/).fill("1001");
+  await P.getByLabel("Code").fill("4719");
+  await P.getByRole("button", { name: "Sign in" }).click();
+  await goalIs(P, "Level 3");
+
+  // Me: her photo spot, the map of 12 weeks (yesterday in class, today at home), her class, her report.
+  await tabTo(P, /Me$/);
+  await contains(P.locator(".f-me-id"), "Hana K");
+  await visible(P.locator(".f-heatbox"));
+  await until(async () => (await P.locator(".f-heat .f-hc.h1").count()) >= 2, "two days with a Level on the map");
+  expect(await P.locator(".f-heat .f-hc.in").count()).toBe(2);
+  await contains(P.locator(".f-heat-sum"), "2 days with a Level · 2 in class");
+  await contains(P.locator(".f-hday"), "⌂ 1 at home");
+  await contains(P.locator(".f-qc .right"), String(l1.to - l1.from - 1));
+  await contains(P.locator(".f-qc .learned"), "1");
+  await contains(P.locator(".f-qc .tolearn"), "1");
+  await noSideScroll(P);
+  await shot(P, "fam30-me-profile");
+  await P.locator(".f-heatbox").scrollIntoViewIfNeeded();
+  await shot(P, "fam31-me-map");
+  // Yesterday on the map: its day, hour by hour.
+  const yesterday = P.locator(".f-heat button.f-hc.in.h1").last();
+  await yesterday.click();
+  await contains(P.locator(".f-hday"), "in class");
+  await P.locator(".f-hday-go").click();
+  await visible(P.locator(".f-sheet .f-tl"));
+  await contains(P.locator(".f-sheet .f-tl"), "வகுப்புக்கு வந்தாய்");
+  await shot(P, "fam32-me-day");
+  await P.locator(".f-sheet .f-x").click();
+  await until(async () => (await P.locator(".f-sheet").count()) === 0, "the day closes");
+
+  // Her photo: 3000 × 4000 in; moved and zoomed in the circle; made small on the phone; sent with the bar.
+  await P.locator(".f-me-pic input[type=file]").setInputFiles({ name: "camera.jpg", mimeType: "image/jpeg", buffer: cameraBytes });
+  // Opening 12 megapixels takes a moment (longer on a busy test machine): the bar says so meanwhile.
+  await P.locator(".f-photo-sheet .f-crop.live").waitFor({ state: "visible", timeout: 25_000 });
+  await shot(P, "fam33-photo-crop");
+  const place = () => P.locator(".f-crop-in").evaluate((el) => (el as HTMLElement).style.transform);
+  const centred = await place();
+  const box = (await P.locator(".f-crop").boundingBox())!;
+  await P.locator(".f-crop-zoom").evaluate((el) => {
+    (el as HTMLInputElement).value = "1.5";
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await P.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await P.mouse.down();
+  await P.mouse.move(box.x + box.width / 2 + 30, box.y + box.height / 2 + 40, { steps: 5 });
+  await P.mouse.up();
+  const moved = await place();
+  expect(moved).not.toBe(centred);
+  await shot(P, "fam33b-photo-moved");
+  await P.getByRole("button", { name: /Use this photo/ }).click();
+  await until(async () => (await P.locator(".f-prog").innerText()).includes("Sending"), "Sending", 25_000);
+  expect(await place()).toBe(moved); // the circle holds his framing while it goes
+  await contains(P.locator(".f-prog small"), "→");
+  await noSideScroll(P);
+  await shot(P, "fam34-photo-sending");
+  await until(async () => (await P.locator(".f-prog").count()) === 0 || (await P.locator(".f-prog").innerText()).includes("Done"), "Done", 25_000);
+  await until(async () => (await P.locator(".f-sheet").count()) === 0, "the photo sheet closes");
+  await visible(P.locator(".f-me-pic .f-ava.pic img"));
+  await contains(P.locator(".f-me-tag"), "WAITING FOR OK"); // a tag: capitals
+  await visible(P.locator(".f-who .f-ava.pic img"));
+  const [kept] = await t.run(async (ctx) => await ctx.db.query("profilePhotos").collect());
+  const bytes = (kept.data.length * 3) / 4;
+  expect(bytes).toBeLessThan(45_000);
+  expect(bytes).toBeGreaterThan(2_000);
+  expect(["image/webp", "image/jpeg"]).toContain(kept.type);
+  console.log(`[profile] a ${(cameraBytes.length / 1e6).toFixed(1)} MB photo was sent as ${(bytes / 1000).toFixed(0)} KB (${kept.type})`);
+  await shot(P, "fam35-me-photo");
+
+  // Her classmate's race: her letter until the OK.
+  const Q = await open(backend, `${site.url}/f/`, size(360, 780));
+  await Q.getByLabel(/Index/).fill("1002");
+  await Q.getByLabel("Code").fill("5820");
+  await Q.getByRole("button", { name: "Sign in" }).click();
+  await goalIs(Q, "Level 1");
+  await tabTo(Q, /Race/);
+  await visible(Q.locator(".f-pod", { hasText: "Hana" }));
+  expect(await Q.locator(".f-pod", { hasText: "Hana" }).locator("img").count()).toBe(0);
+
+  // She asks for a new name: it waits for the OK too.
+  await P.locator(".f-drow", { hasText: "Name" }).click();
+  await P.getByLabel("First name and initial").fill("Hana Fathima K");
+  await shot(P, "fam36-name-ask");
+  await P.getByRole("button", { name: "Ask for this name" }).click();
+  await until(async () => (await P.locator(".f-sheet").count()) === 0, "the name sheet closes");
+  await contains(P.locator(".f-drow", { hasText: "Name" }), "Hana Fathima K · waiting for OK");
+
+  // The owner: the gear counts 2; Settings opens on Students: her photo and her name, OK.
+  const C = await open(backend, site.url, size(360, 780), () => {
+    if (sessionStorage.getItem("t")) return;
+    sessionStorage.setItem("t", "1");
+    localStorage.setItem("aristora.role", "focus");
+    localStorage.setItem("aristora.token", "owner-phone-token-0123456789abcdefghijklmnopqrstuv");
+  });
+  await contains(C.locator(".gear-n"), "2");
+  await C.getByRole("button", { name: /Settings/ }).click();
+  await until(async () => (await C.locator(".fa-item").count()) === 2, "two asks waiting");
+  await visible(C.locator(".fa-item img.fa-pic"));
+  await noSideScroll(C);
+  await shot(C, "fam37-owner-asks");
+  await C.locator(".fa-item", { hasText: "Photo for the race" }).getByRole("button", { name: "OK" }).click();
+  await contains(C.locator(".toast").last(), "photo is in the race");
+  await C.locator(".fa-item", { hasText: "Hana Fathima K" }).getByRole("button", { name: "OK" }).click();
+  await contains(C.locator(".toast").last(), "is Hana Fathima K now");
+  await until(async () => (await C.locator(".gear-n").count()) === 0, "nothing waits");
+  expect((await t.run(async (ctx) => await ctx.db.get(hana)))!.name).toBe("Hana Fathima K");
+
+  // Her classmate's race now: her face.
+  await tabTo(Q, /Home/);
+  await tabTo(Q, /Race/);
+  await visible(Q.locator(".f-pod", { hasText: "Hana" }).locator("img"));
+  await noSideScroll(Q);
+  await shot(Q, "fam38-race-photo");
+
+  // Her birthday (today), once: Home's party, 🎂 in the race and on the teachers' list.
+  const today = new Date(Date.now() + 330 * 60_000);
+  await tabTo(P, /Home/);
+  await tabTo(P, /Me$/);
+  await contains(P.locator(".f-me-id"), "Hana Fathima K");
+  await P.locator(".f-drow", { hasText: "Birthday" }).click();
+  await P.locator(".f-sheet").getByLabel("Month", { exact: true }).selectOption(String(today.getUTCMonth() + 1));
+  await P.locator(".f-sheet").getByLabel("Day", { exact: true }).selectOption(String(today.getUTCDate()));
+  await P.getByRole("button", { name: "Save" }).click();
+  await until(async () => (await P.locator(".f-sheet").count()) === 0, "the birthday sheet closes");
+  await contains(P.locator(".f-me-name"), "🎂");
+  await tabTo(P, /Home/);
+  await visible(P.locator(".f-bdaycard"));
+  await noSideScroll(P);
+  await shot(P, "fam39-birthday");
+  await tabTo(Q, /Home/);
+  await tabTo(Q, /Race/);
+  await contains(Q.locator(".f-pod", { hasText: "Hana" }), "🎂");
+  await C.reload();
+  await C.getByRole("button", { name: /Settings/ }).click();
+  await contains(C.locator(".plain-list li", { hasText: "Hana Fathima K" }).first(), "🎂");
+
+  // Her report: this month, the questions, her Stage; the month on WhatsApp.
+  await tabTo(P, /Me$/);
+  await P.locator(".f-rep .f-h2-go").click();
+  await visible(P.locator(".f-report .f-sc"));
+  expect(await P.locator(".f-months button").count()).toBe(3);
+  await contains(P.locator(".f-mnum"), "Class days");
+  const wa = decodeURIComponent((await P.locator(".f-report .f-wa").getAttribute("href"))!.replace("https://wa.me/?text=", ""));
+  expect(wa).toContain("Hana Fathima K · Grade 8");
+  expect(wa).toContain("Levels: 2 (⌂ 1 at home)");
+  expect(wa).toContain("Stage 1");
+  await noSideScroll(P);
+  await shot(P, "fam40-report");
+
+  // Every Level of Stage 1 done: its certificate (a picture made on the phone, to share).
+  await t.run(async (ctx) => {
+    const row = (await ctx.db.query("progress").withIndex("by_student_unit_stage", (x) => x.eq("studentId", hana).eq("unitId", u01).eq("stage", "master")).first())!;
+    const lv: Record<string, { done: number; fixed: number; got: number }> = {};
+    for (const l of BOOK.data.levels) lv[String(l.n)] = { done: now - H, fixed: now - H, got: l.max - 1 };
+    await ctx.db.patch(row._id, { m: { ...row.m!, lv } });
+  });
+  await P.locator(".f-report .f-round").click();
+  await P.locator(".f-rep .f-h2-go").click();
+  await visible(P.locator(".f-sc.done .f-sc-cert"));
+  await P.locator(".f-sc.done .f-sc-cert").click();
+  await P.locator(".f-cert img").waitFor({ state: "visible", timeout: 25_000 });
+  const dims = await P.locator(".f-cert img").evaluate((i) => [(i as HTMLImageElement).naturalWidth, (i as HTMLImageElement).naturalHeight]);
+  expect(dims).toEqual([1080, 1350]);
+  await shot(P, "fam41-certificate");
+  await P.locator(".f-cert img").screenshot({ path: join(SHOTS, "fam42-certificate-picture.png") });
+
+  // The smallest phone: Me and the report fit 320 px.
+  const S = await open(backend, `${site.url}/f/`, size(320, 568));
+  await S.getByLabel(/Index/).fill("1001");
+  await S.getByLabel("Code").fill("4719");
+  await S.getByRole("button", { name: "Sign in" }).click();
+  await visible(S.locator(".f-bdaycard"));
+  await tabTo(S, /Me$/);
+  await visible(S.locator(".f-heatbox"));
+  await noSideScroll(S);
+  await shot(S, "fam43-me-320");
+  await S.locator(".f-heatbox").scrollIntoViewIfNeeded();
+  await shot(S, "fam43b-map-320");
+  await S.locator(".f-cls").scrollIntoViewIfNeeded();
+  await shot(S, "fam43c-class-report-320");
+  await S.locator(".f-set", { hasText: "Your details" }).scrollIntoViewIfNeeded();
+  await shot(S, "fam43d-details-320");
+  await S.locator(".f-rep .f-h2-go").click();
+  await visible(S.locator(".f-report .f-sc"));
+  await noSideScroll(S);
+  await shot(S, "fam44-report-320");
+  await S.locator(".f-report .f-sc").first().scrollIntoViewIfNeeded();
+  // Nothing in a Stage's card is wider than the card.
+  expect(await S.locator(".f-report .f-sc").first().evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await shot(S, "fam44b-stage-320");
   expect(problems).toEqual([]);
 });

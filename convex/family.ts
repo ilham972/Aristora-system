@@ -17,13 +17,21 @@
 //                   his name, or without it (then nothing ties the words to him); read in Settings → Feedback.
 //   classes      -> his class side (3 Nov 2026): his grade's class hours (Settings → Class hours), the days he
 //                   usually comes, this week, his last classes, in class now.
-//   day          -> one day of his (the last 60): sign-in, Theory and Evaluation, levels in class and at home, sign-out.
+//   day          -> one day of his (the last 90): sign-in, Theory and Evaluation, levels in class and at home, sign-out.
 //   book         -> a level he checked at home, question by question: marks, the key's working where he lost marks, his
 //                   photos and the teacher's answers (4 Nov 2026).
 //   photoUrl     -> an address to upload one photo to (a few dozen a day per phone).
 //   photoSend    -> attach 1–3 uploaded photos to a question: a part only a teacher can mark, or his working on a wrong
 //                   answer (his rule: both required; 2 levels at most without them).
 //   seen         -> he opened the teacher's answers on a level.
+//   profile      -> Me, his profile (4 Nov 2026): his 12 weeks at home and in class, his class days and hours by month,
+//                   his report (each Stage: Levels, marks, questions right / learned with a teacher / still to learn).
+//   photos       -> pictures by key: his own, and his classmates' the teachers said OK to (the race).
+//   setPhoto, dropPhoto, setRace -> his photo (made small on the phone; waits for the teachers' OK before classmates
+//                   see it), removing it, showing it in the race or not.
+//   askName      -> a new name: changes everywhere only once the teachers say OK (Settings → Students).
+//   forget       -> takes back an ask (or hides the teachers' "no" once he has read it).
+//   setBday      -> his birthday, day and month, once (a teacher can clear it): the owl's party, 🎂 for his teachers.
 // Every function takes the family phone's token (familyViewer / familyActor); peek, join and signIn are open on
 // purpose (they are how a phone gets its token). A phone may hold several children (one token each): it sends the
 // token of the child on screen.
@@ -33,7 +41,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { feedbackTopic } from "./schema";
 import { checkToken, familyActor, familyOf, familyViewer, FAMILY_SIGNED_OUT, secretHash } from "./lib/auth";
-import { asMaster, bookFor, currentSession, ensureProgress, fail, keyRow, log, masterState, progressFor, refresh } from "./lib/backend";
+import { asMaster, bookFor, cleanName, currentSession, ensureProgress, fail, keyRow, log, masterState, progressFor, refresh } from "./lib/backend";
 import { partOf } from "./lib/book";
 import {
   bestStreak,
@@ -63,12 +71,28 @@ import {
   type Trophy,
   type World,
 } from "./lib/family";
-import { DAY_MS, SL_OFFSET_MS, slDay, slDayNo, slWeekStart } from "./lib/day";
+import { DAY_MS, isBirthday, SL_OFFSET_MS, slDay, slDayNo, slWeekStart } from "./lib/day";
 import { bookOf, homeChecks, phoneKeyFor, type LevelBook } from "./lib/homeWork";
 import { computeMaster, markBefore, type MQ, type MState } from "./lib/master";
 import { boxCount, formOf, INPUT_MAX, markQuestion, type FormQ, type KeyQ } from "./lib/phone";
 import { blockedBy, keyText, PHOTO_BYTES, PHOTO_MAX, PHOTO_URLS_PER_DAY, type PhotoKind } from "./lib/photos";
 import { ladderOf, secQs } from "./lib/ladder";
+import {
+  askedName,
+  cleanBday,
+  HEAT_WEEKS,
+  heatDays,
+  monthLines,
+  monthStart,
+  photoProblem,
+  PHOTOS_PER_DAY,
+  picUrl,
+  stageLines,
+  type HeatDay,
+  type MonthLine,
+  type PhotoType,
+  type StageLine,
+} from "./lib/profile";
 import { ranks } from "./lib/progress";
 
 const token = v.optional(v.string());
@@ -226,7 +250,32 @@ export type FamilyMe = {
    * then the other syllabus's books he has (`other`: one more World).
    */
   worlds: World[];
+  /** His birthday, day and month ("11-04"), or null (4 Nov 2026: Me). */
+  bday: string | null;
+  /**
+   * The photo his phone shows (4 Nov 2026): the one waiting for the teachers' OK (`wait`), else the one they said OK
+   * to. `key` = the picture's own id (family.photos), new for every new picture: the phone keeps pictures by it.
+   */
+  photo: { key: string; wait: boolean } | null;
+  /** The teachers said no to the photo he sent: his phone says so once (family.forget). */
+  photoNo: boolean;
+  /** His photo is not shown in the race (Me → Show it in the race). */
+  photoHide: boolean;
+  /** The new name he asked for: waiting for the teachers' OK, or `no` = they said no (his phone says so once). */
+  nameAsk: { name: string; no: boolean } | null;
 };
+
+/** A "no" from the teachers is told for two weeks at most (then the row is as good as gone). */
+const ASK_NO_MS = 14 * DAY_MS;
+
+/** His asks to the teachers: a photo waiting for their OK, a new name (or their "no" to one, not yet read). */
+async function asksOf(ctx: QueryCtx, studentId: Id<"students">) {
+  const rows = await ctx.db
+    .query("familyAsks")
+    .withIndex("by_student", (q) => q.eq("studentId", studentId))
+    .collect();
+  return { photo: rows.find((r) => r.kind === "photo"), name: rows.find((r) => r.kind === "name") };
+}
 
 /** His home screen (the map), his week and his trophies. */
 export const me = query({
@@ -249,7 +298,15 @@ export const me = query({
     }
     const stop = blockedBy(home.checks);
     const stopWorld = stop ? worlds.find((w) => w.unitId === stop.unitId) : undefined;
+    const asks = await asksOf(ctx, s._id);
+    const told = (a: Doc<"familyAsks"> | undefined) => !!a && (a.no === undefined || now - a.no < ASK_NO_MS);
+    const waiting = asks.photo && asks.photo.no === undefined ? asks.photo.photoId : undefined;
     return {
+      bday: s.bday ?? null,
+      photo: waiting ? { key: waiting, wait: true } : s.photo ? { key: s.photo.id, wait: false } : null,
+      photoNo: told(asks.photo) && asks.photo!.no !== undefined,
+      photoHide: !!s.photoHide,
+      nameAsk: told(asks.name) && asks.name!.name ? { name: asks.name!.name, no: asks.name!.no !== undefined } : null,
       name: s.name,
       grade: s.grade ?? null,
       index: s.index ?? null,
@@ -663,7 +720,11 @@ export const seen = mutation({
   },
 });
 
-export type BoardRow = { name: string; xp: number; rank: number; me: boolean };
+/**
+ * A row of the race: first name and initial, XP this week, the rank. `pic` = his photo's key when the teachers said OK
+ * to it and his family shows it in the race (4 Nov 2026); `bday` = today is his birthday (🎂).
+ */
+export type BoardRow = { name: string; xp: number; rank: number; me: boolean; pic?: string; bday?: boolean };
 
 /** This week's XP in his grade: the first 10 and him (first name and initial only, as in class). */
 export const board = query({
@@ -676,11 +737,18 @@ export const board = query({
       .query("students")
       .withIndex("by_archived", (q) => q.eq("archived", false))
       .collect()).filter((x) => x.grade === me.grade && !!x.demo === !!me.demo);
-    const list: { id: Id<"students">; name: string; xp: number }[] = [];
-    for (const x of mates) list.push({ id: x._id, name: x.name, xp: xpSince(await xpRows(ctx, x._id), since) });
-    list.sort((a, b) => b.xp - a.xp || a.name.localeCompare(b.name));
+    const list: { s: Doc<"students">; xp: number }[] = [];
+    for (const x of mates) list.push({ s: x, xp: xpSince(await xpRows(ctx, x._id), since) });
+    list.sort((a, b) => b.xp - a.xp || a.s.name.localeCompare(b.s.name));
     const rk = ranks(list.map((x) => [x.xp]));
-    const rows: BoardRow[] = list.map((x, i) => ({ name: x.name, xp: x.xp, rank: rk[i], me: x.id === me._id }));
+    const rows: BoardRow[] = list.map((x, i) => ({
+      name: x.s.name,
+      xp: x.xp,
+      rank: rk[i],
+      me: x.s._id === me._id,
+      ...(x.s.photo && !x.s.photoHide ? { pic: x.s.photo.id as string } : {}),
+      ...(isBirthday(x.s.bday, now) ? { bday: true } : {}),
+    }));
     return {
       since,
       top: rows.filter((r) => r.xp > 0).slice(0, 10),
@@ -885,7 +953,10 @@ export const classes = query({
   },
 });
 
-/** One day of his (the last 60 days): sign-in, levels in class and at home, time with each teacher, sign-out. */
+/** How far back a day can be opened: Home's days and the profile's map of 12 weeks. */
+export const DAY_BACK = 90;
+
+/** One day of his (the last 90 days): sign-in, levels in class and at home, time with each teacher, sign-out. */
 export const day = query({
   args: { token, day: v.string() },
   handler: async (ctx, args): Promise<{ day: string; items: DayItem[] }> => {
@@ -893,7 +964,7 @@ export const day = query({
     if (!/^\d{4}-\d{2}-\d{2}$/.test(args.day)) fail("That day isn't a date.");
     const no = dayNoOf(args.day);
     const today = slDayNo(Date.now());
-    if (!(no <= today && no > today - 60)) fail("Only the last 60 days.");
+    if (!(no <= today && no > today - DAY_BACK)) fail(`Only the last ${DAY_BACK} days.`);
     const from = no * DAY_MS - SL_OFFSET_MS;
     const to = from + DAY_MS;
     const items: DayItem[] = [];
@@ -955,5 +1026,223 @@ export const day = query({
     }
     items.sort((a, b) => a.at - b.at);
     return { day: args.day, items };
+  },
+});
+
+// ---- Me, his profile (4 Nov 2026, his voice note: "a proper profile page for the students") ----
+
+export type FamilyProfile = {
+  /** Today (Sri Lanka day number): the map's 12 weeks end with this week. */
+  today: number;
+  /** His first day here (a visit to class or a Level), or null: the map leaves the days before it out. */
+  since: number | null;
+  /** The map: the days of the last 12 weeks with a Level finished (at home ⌂, in class) or a visit to class. */
+  days: HeatDay[];
+  /** This month and the two before: class days and hours, Levels, XP, questions (the report and WhatsApp). */
+  months: MonthLine[];
+  /** The weekdays he usually comes (Monday = 0), and his last day in class ("2026-11-03"). */
+  usual: number[];
+  last: string | null;
+  /** His report: each Stage he was given or has Levels in, in map order. */
+  stages: StageLine[];
+};
+
+/** His profile's numbers: the map, his months, his report. What the class already records; nothing typed by anyone. */
+export const profile = query({
+  args: { token },
+  handler: async (ctx, args): Promise<FamilyProfile> => {
+    const s = await familyViewer(ctx, args.token);
+    const now = Date.now();
+    const today = slDayNo(now);
+    // The map starts on a Monday, 12 weeks ago; the months reach back to the 1st of the month two months ago.
+    const monday = slDayNo(slWeekStart(now));
+    const mapFrom = monday - (HEAT_WEEKS - 1) * 7;
+    const old = monthLinesFrom(now);
+    const from = Math.min(mapFrom * DAY_MS - SL_OFFSET_MS, old);
+    const visits = await ctx.db
+      .query("attendance")
+      .withIndex("by_student", (q) => q.eq("studentId", s._id).gte("inAt", from))
+      .collect();
+    const first = await ctx.db
+      .query("attendance")
+      .withIndex("by_student", (q) => q.eq("studentId", s._id))
+      .first();
+    const rows = await xpRows(ctx, s._id);
+    let since = first ? slDayNo(first.inAt) : null;
+    for (const d of levelDays(rows)) since = since === null ? d : Math.min(since, d);
+    const dayList = [...new Set(visits.map((v) => v.day))].sort();
+    return {
+      today,
+      since,
+      days: heatDays(rows, visits, mapFrom),
+      months: monthLines(rows, visits, now),
+      usual: usualDays(dayList, now),
+      last: dayList.length ? dayList[dayList.length - 1] : null,
+      stages: stageLines(await worldsOf(ctx, s), rows),
+    };
+  },
+});
+
+/** The 1st of the month two months ago, 00:00 in Sri Lanka (the oldest of the profile's months). */
+function monthLinesFrom(now: number): number {
+  let t = monthStart(slDay(now).slice(0, 7));
+  for (let i = 0; i < 2; i++) t = monthStart(slDay(t - DAY_MS).slice(0, 7));
+  return t;
+}
+
+/** Pictures asked for at once, at most (the race shows ten and him). */
+const PHOTOS_AT_ONCE = 40;
+
+/**
+ * Pictures by key (a photo's id): his own (waiting or not), and his classmates' that the teachers said OK to and their
+ * families show in the race. Only his grade's (as the race); anything else is left out. The phone keeps each picture
+ * by its key, so a picture comes once.
+ */
+export const photos = query({
+  args: { token, keys: v.array(v.string()) },
+  handler: async (ctx, args): Promise<Record<string, string>> => {
+    const me = await familyViewer(ctx, args.token);
+    if (args.keys.length > PHOTOS_AT_ONCE) fail("Too many photos at once.");
+    const out: Record<string, string> = {};
+    for (const key of new Set(args.keys)) {
+      const id = ctx.db.normalizeId("profilePhotos", key);
+      const p = id ? await ctx.db.get(id) : null;
+      if (!p) continue;
+      if (p.studentId !== me._id) {
+        const s = await ctx.db.get(p.studentId);
+        if (!s || s.archived || s.grade !== me.grade || !!s.demo !== !!me.demo || s.photo?.id !== p._id || s.photoHide) continue;
+      }
+      out[key] = picUrl(p);
+    }
+    return out;
+  },
+});
+
+/** The phone of the student who sends this (for the photo count of the day). */
+async function deviceOf(ctx: QueryCtx, tok: string | undefined) {
+  return await ctx.db
+    .query("familyDevices")
+    .withIndex("by_token", (q) => q.eq("tokenHash", secretHash("family-token", tok ?? "")))
+    .first();
+}
+
+/**
+ * His new photo, made small on his phone (a square of 288 px, ~10–30 KB, base64): it waits for the teachers' OK
+ * (Settings → Students → Waiting for your OK) before his classmates see it; his own phone shows it at once. A photo
+ * still waiting is replaced. A few a day from one phone.
+ */
+export const setPhoto = mutation({
+  args: { token, data: v.string(), type: v.string() },
+  handler: async (ctx, args) => {
+    const s = await familyActor(ctx, args.token);
+    const why = photoProblem(args.data, args.type);
+    if (why) fail(why);
+    const now = Date.now();
+    const device = (await deviceOf(ctx, args.token))!;
+    const day = slDayNo(now);
+    const sent = device.pfDay === day ? (device.pfN ?? 0) : 0;
+    if (sent >= PHOTOS_PER_DAY) fail("That's enough photos for today. Try again tomorrow.");
+    await ctx.db.patch(device._id, { pfDay: day, pfN: sent + 1 });
+    const asks = await asksOf(ctx, s._id);
+    if (asks.photo) {
+      if (asks.photo.photoId && asks.photo.photoId !== s.photo?.id) await ctx.db.delete(asks.photo.photoId);
+      await ctx.db.delete(asks.photo._id);
+    }
+    const id = await ctx.db.insert("profilePhotos", { studentId: s._id, data: args.data, type: args.type as PhotoType, at: now });
+    await ctx.db.insert("familyAsks", { studentId: s._id, kind: "photo", at: now, photoId: id });
+    await log(ctx, null, now, { kind: "family-photo", studentId: s._id, name: s.name, value: "sent" });
+    return { key: id as string };
+  },
+});
+
+/** He removes his photo: the one the teachers said OK to and any waiting (his letter on his colour again). */
+export const dropPhoto = mutation({
+  args: { token },
+  handler: async (ctx, args) => {
+    const s = await familyActor(ctx, args.token);
+    const asks = await asksOf(ctx, s._id);
+    if (asks.photo) {
+      if (asks.photo.photoId) await ctx.db.delete(asks.photo.photoId);
+      await ctx.db.delete(asks.photo._id);
+    }
+    if (s.photo) {
+      if (await ctx.db.get(s.photo.id)) await ctx.db.delete(s.photo.id);
+      await ctx.db.patch(s._id, { photo: undefined });
+    }
+    await log(ctx, null, Date.now(), { kind: "family-photo", studentId: s._id, name: s.name, value: "removed" });
+    return true;
+  },
+});
+
+/** His photo in the race or not (his family's choice; his own phone and his teachers still see it). */
+export const setRace = mutation({
+  args: { token, show: v.boolean() },
+  handler: async (ctx, args) => {
+    const s = await familyActor(ctx, args.token);
+    if (!s.photoHide === args.show) return true;
+    await ctx.db.patch(s._id, { photoHide: args.show ? undefined : true });
+    return true;
+  },
+});
+
+/** Between two asks for a name, at least this long (the history isn't a chat). */
+const NAME_ASK_GAP_MS = 20_000;
+
+/**
+ * A new name he asks for (his answer, 4 Nov 2026: it changes everywhere only after the teachers' OK, because the class's
+ * name is how the hall and the race know him). One ask at a time; a new one replaces it.
+ */
+export const askName = mutation({
+  args: { token, name: v.string() },
+  handler: async (ctx, args) => {
+    const s = await familyActor(ctx, args.token);
+    const r = askedName(args.name);
+    if ("why" in r) fail(r.why);
+    const name = cleanName(r.name);
+    if (name.toLowerCase() === s.name.toLowerCase()) fail("That is your name now.");
+    const all = await ctx.db
+      .query("students")
+      .withIndex("by_archived", (q) => q.eq("archived", false))
+      .collect();
+    if (all.some((o) => o._id !== s._id && o.name.toLowerCase() === name.toLowerCase())) {
+      fail("Another student has this name. Add your initial.");
+    }
+    const now = Date.now();
+    const asks = await asksOf(ctx, s._id);
+    if (asks.name && asks.name.no === undefined && now - asks.name.at < NAME_ASK_GAP_MS) fail("Wait a moment, then ask again.");
+    if (asks.name) await ctx.db.patch(asks.name._id, { name, at: now, no: undefined });
+    else await ctx.db.insert("familyAsks", { studentId: s._id, kind: "name", at: now, name });
+    await log(ctx, null, now, { kind: "family-name", studentId: s._id, name: s.name, value: `asked:${name}` });
+    return true;
+  },
+});
+
+/** Takes back his ask (a photo waiting goes with it), or hides the teachers' "no" once he has read it. */
+export const forget = mutation({
+  args: { token, kind: v.union(v.literal("photo"), v.literal("name")) },
+  handler: async (ctx, args) => {
+    const s = await familyActor(ctx, args.token);
+    const a = (await asksOf(ctx, s._id))[args.kind];
+    if (!a) return true;
+    if (a.photoId && a.photoId !== s.photo?.id) await ctx.db.delete(a.photoId);
+    await ctx.db.delete(a._id);
+    return true;
+  },
+});
+
+/**
+ * His birthday, day and month ("11-04"; no year). Once: a mistake or a change goes through a teacher (his Family sheet
+ * → Clear), so nobody gets a party every day.
+ */
+export const setBday = mutation({
+  args: { token, bday: v.string() },
+  handler: async (ctx, args) => {
+    const s = await familyActor(ctx, args.token);
+    if (s.bday) fail("Your birthday is already in. To change it, ask your teacher.");
+    const bday = cleanBday(args.bday);
+    if (!bday) fail("Pick the day and the month.");
+    await ctx.db.patch(s._id, { bday });
+    await log(ctx, null, Date.now(), { kind: "family-bday", studentId: s._id, name: s.name, value: bday });
+    return true;
   },
 });

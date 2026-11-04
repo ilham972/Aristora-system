@@ -5,7 +5,7 @@ import type { Doc, Id } from "../convex/_generated/dataModel";
 import { secretHash } from "../convex/lib/auth";
 import { PART_NAME, partsForGrade, type PartId } from "../convex/lib/book";
 import type { MarkState } from "../convex/lib/status";
-import { slDate } from "../convex/lib/day";
+import { isBirthday, slDate } from "../convex/lib/day";
 import { termOf } from "../convex/lib/syllabus";
 import { mutate, randomKey } from "./backend";
 import { fmtMin, type View } from "./derive";
@@ -36,6 +36,7 @@ import {
 import { ATTENDANCE_SINCE, AWAY_DAYS, daysAway, studentStats } from "./stats";
 import { OlPicks, olChoices, olMatch, olNo, studentsWork, UploadBooks } from "./upload";
 import { FamilySheet, PhoneAnswers } from "./familySheet";
+import { FamilyAsks } from "./familyAsks";
 import { olMapList, OlMapSheet } from "./olMap";
 import { FeedbackList } from "./feedbackList";
 import { PhotoQueue } from "./photoQueue";
@@ -64,10 +65,10 @@ const SETTINGS_TABS: [Tab, string, () => boolean][] = [
 ];
 
 /**
- * `start`: the section to open on (Photos when photos wait, Feedback when new feedback came); `fbNew` and `phN` = their
- * counts on their buttons (`phLate`: a photo waited over a day).
+ * `start`: the section to open on (Photos when photos wait, Students when students' asks wait for an OK, Feedback when
+ * new feedback came); `fbNew`, `phN` and `asks` = their counts on their buttons (`phLate`: a photo waited over a day).
  */
-export function Settings(props: { views: View[]; onClose: () => void; start?: Tab; fbNew?: number; phN?: number; phLate?: boolean }) {
+export function Settings(props: { views: View[]; onClose: () => void; start?: Tab; fbNew?: number; phN?: number; phLate?: boolean; asks?: number }) {
   const shown = SETTINGS_TABS.filter(([, , ok]) => ok());
   const [chosen, setTab] = useState<Tab>(props.start && shown.some(([id]) => id === props.start) ? props.start : shown[0][0]);
   const tab = shown.some(([id]) => id === chosen) ? chosen : shown[0][0];
@@ -79,6 +80,7 @@ export function Settings(props: { views: View[]; onClose: () => void; start?: Ta
             {label}
             {id === "feedback" && (props.fbNew ?? 0) > 0 && <b class="seg-n">{props.fbNew}</b>}
             {id === "photos" && (props.phN ?? 0) > 0 && <b class={`seg-n${props.phLate ? " late" : ""}`}>{props.phN}</b>}
+            {id === "students" && (props.asks ?? 0) > 0 && <b class="seg-n">{props.asks}</b>}
           </button>
         ))}
       </nav>
@@ -147,6 +149,7 @@ function Students(props: { views: View[] }) {
 
   return (
     <div class="settings-body">
+      {!testing && <FamilyAsks />}
       {may("reports") && !testing && <StudentNumbers views={props.views} removed={archived ?? []} now={t} />}
       {testing && (
         <p class="tcl-note">
@@ -210,6 +213,7 @@ function Students(props: { views: View[] }) {
                 <span class="st-who">
                   <span>
                     {v.s.name}
+                    {isBirthday(v.s.bday, t) && <span class="bday-tag" title="Birthday today"> 🎂</span>}
                     {v.s.demo && <span class="demo-tag">{v.s.test ? "Sim" : "Demo"}</span>}
                     {olGrade && v.s.olMap && !v.s.demo && <span class="ol-tag">O/L</span>}
                   </span>
@@ -1011,6 +1015,21 @@ function describe(e: Doc<"events">): string {
     }
     case "photos-required":
       return v === "on" ? "photos from home required again (2 levels at most without)" : "photos from home no longer required";
+    case "family-photo":
+      return v === "sent"
+        ? "sent a photo from the family app (waits for an OK)"
+        : v === "ok"
+          ? "photo OK: it shows in the race"
+          : v === "no"
+            ? "photo not accepted"
+            : "photo removed";
+    case "family-name": {
+      const [what, ...rest] = v.split(":");
+      const name = rest.join(":");
+      return what === "asked" ? `asked for the name "${name}" (family app)` : what === "ok" ? `name OK: now "${name}"` : `name "${name}" not accepted`;
+    }
+    case "family-bday":
+      return v ? `birthday added: ${Number(v.slice(3))} ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][Number(v.slice(0, 2)) - 1]}` : "birthday cleared";
     case "level-undo":
       return `Level ${v}: "handed in" undone`;
     case "level-marks":

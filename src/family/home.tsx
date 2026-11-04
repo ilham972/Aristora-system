@@ -6,10 +6,11 @@
 import type { ComponentChildren } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import type { ClassDay, FamilyClasses, FamilyMe } from "../../convex/family";
+import { isBirthday } from "../../convex/lib/day";
 import type { DayItem } from "../../convex/lib/family";
 import { levelsDone } from "./map";
 import { keep, query } from "./net";
-import { nextPlay } from "./play";
+import { Confetti, nextPlay } from "./play";
 import { buzz, sound } from "./sound";
 import { Dashes, firstName, Flame, flameAtRisk, Icon, Owl, OwlBadge, problemWords, Tag, type IconName } from "./ui";
 
@@ -18,7 +19,7 @@ const DAY = 86_400_000;
 /** Days and times in English, as every phone and calendar shows them (his ask, 4 Nov 2026: "M for Monday"). */
 export const DAY_EN = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 export const DAY_S = ["M", "T", "W", "T", "F", "S", "S"];
-const MONTH = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+export const MONTH = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /** Sri Lanka now: the date ("2026-11-03"), minutes after midnight, the weekday (Monday = 0). */
 function slNow(now: number) {
@@ -26,7 +27,7 @@ function slNow(now: number) {
   return { day: d.toISOString().slice(0, 10), min: d.getUTCHours() * 60 + d.getUTCMinutes(), wd: (d.getUTCDay() + 6) % 7 };
 }
 /** "2026-11-03" → its weekday (Monday = 0), its day of the month, its month. */
-function partsOf(day: string) {
+export function partsOf(day: string) {
   const d = new Date(`${day}T00:00:00Z`);
   return { wd: (d.getUTCDay() + 6) % 7, date: d.getUTCDate(), month: MONTH[d.getUTCMonth()] };
 }
@@ -37,9 +38,9 @@ export function clock(min: number): string {
   return `${((h + 11) % 12) + 1}:${String(min % 60).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
 }
 /** A moment → its time of day in Sri Lanka. */
-const timeOf = (t: number) => clock(Math.floor(((((t + SL) % DAY) + DAY) % DAY) / 60_000));
+export const timeOf = (t: number) => clock(Math.floor(((((t + SL) % DAY) + DAY) % DAY) / 60_000));
 /** "2 h 10 min" */
-function span(mins: number): string {
+export function span(mins: number): string {
   const h = Math.floor(mins / 60);
   const m = mins % 60;
   return h > 0 ? `${h} h${m ? ` ${m} min` : ""}` : `${Math.max(1, m)} min`;
@@ -164,6 +165,32 @@ function GoalCard(props: { me: FamilyMe | null; onPlay: () => void; onLearn: () 
   );
 }
 
+// ---- His birthday (4 Nov 2026, his pick: "the owl throws him a party") ----
+
+/** On his birthday: confetti, the cake and the owl's wishes at the top of Home (the party sound once that day). */
+function BdayCard(props: { name: string }) {
+  useEffect(() => {
+    const k = `bday.${new Date(Date.now() + SL).toISOString().slice(0, 10)}`;
+    if (!keep(k)) {
+      keep(k, 1);
+      sound("toot");
+    }
+  }, []);
+  return (
+    <section class="f-bdaycard f-card rise" aria-label="Happy birthday">
+      <span class="f-bday-cake" aria-hidden="true">
+        🎂
+        <Confetti n={14} />
+      </span>
+      <div class="f-bday-w">
+        <Tag tone="gold">Happy birthday</Tag>
+        <b>இனிய பிறந்தநாள் வாழ்த்துகள், {firstName(props.name)}!</b>
+        <small>இன்று ஒரு Level செய்து கொண்டாடு!</small>
+      </div>
+    </section>
+  );
+}
+
 // ---- His class week and a day's timeline ----
 
 function itemLook(x: DayItem): { icon: IconName; b: string; s: string } {
@@ -186,7 +213,7 @@ function itemLook(x: DayItem): { icon: IconName; b: string; s: string } {
   return x.k === "in" ? { icon: "in", b: "வகுப்புக்கு வந்தாய்", s: "" } : { icon: "out", b: "வகுப்பிலிருந்து சென்றாய்", s: "" };
 }
 
-function Timeline(props: { items: DayItem[] | undefined; err: string | null }) {
+export function Timeline(props: { items: DayItem[] | undefined; err: string | null }) {
   if (props.items === undefined) {
     return props.err ? <p class="f-muted small f-center-t">{props.err}</p> : <p class="f-tl-wait">…</p>;
   }
@@ -295,6 +322,7 @@ export function HomeTab(props: { top: ComponentChildren; me: FamilyMe | null; on
   };
   const me = props.me;
   const name = me?.name ?? "";
+  const party = isBirthday(me?.bday, now);
   const tp = partsOf(t.day);
   const monday = addDays(t.day, -t.wd);
   const week = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
@@ -315,9 +343,10 @@ export function HomeTab(props: { top: ComponentChildren; me: FamilyMe | null; on
             </p>
             <h1 class="f-title">வணக்கம்{name ? `, ${firstName(name)}` : ""}!</h1>
           </div>
-          <OwlBadge mood={flameAtRisk(me?.streak) ? "grumpy" : me?.streak.today ? "happy" : "wave"} class="greet" />
+          <OwlBadge mood={party ? "party" : flameAtRisk(me?.streak) ? "grumpy" : me?.streak.today ? "happy" : "wave"} class="greet" />
         </div>
       </header>
+      {party && <BdayCard name={name} />}
       <TodayCard cls={cls} me={me} now={now} today={days[t.day]} onStage={props.onStage} />
       <GoalCard me={me} onPlay={props.onPlay} onLearn={props.onLearn} />
       <section class="f-sched f-card rise" aria-label="Class week">

@@ -299,6 +299,8 @@ export function StageScreen(props: {
   onBook: (n: number) => void;
   /** The level whose photos he owes (his limit): its book, in this Stage or another. */
   onPhotos: (b: NonNullable<FamilyMe["blocked"]>) => void;
+  /** Every Level done: the Stage's certificate (4 Nov 2026). */
+  onCert?: () => void;
 }) {
   const { me, world: w } = props;
   const groups = worldGroups(me);
@@ -454,6 +456,13 @@ export function StageScreen(props: {
               <Icon name="trophy" size={24} />
             </span>
           </div>
+          {w.allDone && props.onCert && (
+            <div class="f-pad-x f-stage-cert">
+              <button type="button" class="f-btn gold big" onClick={props.onCert}>
+                <Icon name="award" size={20} /> Certificate
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>

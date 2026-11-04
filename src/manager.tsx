@@ -19,7 +19,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
-import { slClock } from "../convex/lib/day";
+import { isBirthday, slClock } from "../convex/lib/day";
 import type { Day, SegKind } from "../convex/lib/timeline";
 import { joinNames } from "./announce";
 import { fetchOnce, mutate } from "./backend";
@@ -375,6 +375,7 @@ export function ManagerPage(props: { board: Board; views: View[]; now: number; c
               onClick={() => pick(p.v.s._id)}
             >
               {p.v.s.name}
+              {isBirthday(p.v.s.bday, now) && <span class="bday-tag"> 🎂</span>}
               {p.heat === "red" && p.v.idleMs !== undefined && p.v.idleMs >= 60_000 && <small>{mShort(p.v.idleMs)}</small>}
             </button>
           ))}

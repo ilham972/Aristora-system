@@ -4084,3 +4084,69 @@ p {
   opacity: 0.75;
   margin-left: 4px;
 }
+
+/* ---------- The profile on the first screens (4 Nov 2026): faces (the race, the top row, the children), his photo on
+   Me, the birthday party on Home, a finished Stage's certificate button. The rest of the profile's style comes with its
+   parts (profile.css). ---------- */
+.f-ava.xl {
+  width: 88px;
+  height: 88px;
+  font-size: 38px;
+  box-shadow:
+    0 0 0 4px #fff,
+    0 12px 24px -10px rgba(20, 10, 80, 0.55);
+}
+.f-ava.pic {
+  overflow: hidden;
+  background: #fff;
+}
+.f-ava.pic img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+.f-stage-cert {
+  padding-bottom: 24px;
+}
+/* His birthday on Home: the cake, confetti (kept inside the card: nothing past the phone's edge), the owl's wishes. */
+.f-bdaycard {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  overflow: hidden;
+  background: linear-gradient(160deg, #fff 30%, var(--gold-soft));
+}
+.f-bday-cake {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: #fff;
+  font-size: 34px;
+  box-shadow:
+    0 0 0 3px var(--gold),
+    0 5px 0 var(--gold-3d);
+}
+.f-bday-cake .f-confetti {
+  top: 50%;
+  left: 50%;
+}
+.f-bday-w {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+  justify-items: start;
+}
+.f-bday-w b {
+  font: 800 17px/1.3 var(--display);
+}
+.f-bday-w small {
+  font-size: 13.5px;
+  color: var(--ink2);
+}

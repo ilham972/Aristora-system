@@ -61,6 +61,12 @@ const PATHS = {
   camera: "M3.5 8h4l1.8-2.5h5.4L16.5 8h4v11h-17zM12 10.2a3.6 3.6 0 1 0 0 7.2 3.6 3.6 0 0 0 0-7.2z",
   bulb: "M9 17.5h6M10 20.5h4M12 3.5a5.5 5.5 0 0 0-3.3 9.9c.6.5.8 1.1.8 1.8v.3h5v-.3c0-.7.2-1.3.8-1.8A5.5 5.5 0 0 0 12 3.5z",
   zoom: "M10.5 4a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM15.3 15.3 20 20M10.5 7.8v5.4M7.8 10.5h5.4",
+  share: "M12 14.5v-11M7.5 8 12 3.5 16.5 8M5 12.5v7h14v-7",
+  save: "M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19.5h14",
+  cake: "M4.5 20h15v-6.5h-15zM4.5 16.2c2.5 1.3 3.5 1.3 5 0s2.5-1.3 5 0 3.5 1.3 5 0M8 13.5V10.5M12 13.5V10.5M16 13.5V10.5M8 7.5v.01M12 7v.01M16 7.5v.01",
+  award: "M12 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11zM8.8 13.5 7.5 20.5l4.5-2.5 4.5 2.5-1.3-7",
+  turn: "M5.5 11a6.5 6.5 0 1 1 1.9 4.6M5.5 5.5V11H11",
+  bin: "M5 7h14M9.5 7V4.5h5V7M7 7l1 13h8l1-13",
 } as const;
 export type IconName = keyof typeof PATHS;
 
@@ -130,13 +136,15 @@ export function hueOf(name: string): number {
   return HUES[h % HUES.length];
 }
 
-export function Avatar(props: { name: string; size?: "s" | "m" | "l" }) {
+/** His face when there is a photo (pics.ts), else his first letter on his own colour. */
+export function Avatar(props: { name: string; size?: "s" | "m" | "l" | "xl"; pic?: string | null }) {
   return (
-    <span class={`f-ava ${props.size ?? "m"}`} style={{ "--h": String(hueOf(props.name)) }} aria-hidden="true">
-      {(props.name.trim()[0] ?? "?").toUpperCase()}
+    <span class={`f-ava ${props.size ?? "m"}${props.pic ? " pic" : ""}`} style={{ "--h": String(hueOf(props.name)) }} aria-hidden="true">
+      {props.pic ? <img src={props.pic} alt="" decoding="async" /> : (props.name.trim()[0] ?? "?").toUpperCase()}
     </span>
   );
 }
+
 
 /** A header's title size by its longest word (a Tamil word never breaks in the middle: a long one gets a smaller
  *  size instead). Counted in characters, as Tamil letters with their marks take two or three. */
@@ -203,6 +211,19 @@ export function Sheet(props: { title: string; sub?: string; onClose: () => void;
       </section>
     </div>
   );
+}
+
+/**
+ * A sheet opened from anywhere (Me's photo, name, birthday and days; a certificate): the app shows it (one at a time)
+ * and the phone's Back closes it, as for its own sheets. `close` closes it.
+ */
+export type SheetRender = (close: () => void) => ComponentChildren;
+let sheetHost: ((r: SheetRender) => void) | null = null;
+export function setSheetHost(f: ((r: SheetRender) => void) | null) {
+  sheetHost = f;
+}
+export function showSheet(r: SheetRender) {
+  sheetHost?.(r);
 }
 
 /** A number that rolls from one value to the next (his days in a row, yesterday's → today's). */

@@ -11,7 +11,8 @@ type TestBackend = {
   /** Tests: keep a photo in the fake backend's storage (the real phone posts it to Convex). */
   upload?(blob: Blob): Promise<string>;
 };
-const testBackend = (globalThis as { __ARISTORA_TEST_BACKEND__?: TestBackend }).__ARISTORA_TEST_BACKEND__;
+/** The fake server in tests (never in the real app). */
+export const testBackend = (globalThis as { __ARISTORA_TEST_BACKEND__?: TestBackend }).__ARISTORA_TEST_BACKEND__;
 
 /** A failed call: `offline` = no answer from the server (no signal); else the server's words. */
 export class NetError extends Error {
@@ -26,7 +27,7 @@ export class NetError extends Error {
 /** The words a signed-out family phone gets (convex/lib/auth.ts FAMILY_SIGNED_OUT). */
 export const isSignedOut = (e: unknown) => e instanceof NetError && /signed out of ARISTORA/.test(e.message);
 
-function words(e: unknown): string {
+export function words(e: unknown): string {
   const data = (e as { data?: unknown })?.data;
   if (typeof data === "string") return data;
   const m = String((e as Error)?.message ?? e);
@@ -34,7 +35,7 @@ function words(e: unknown): string {
   return uncaught ? uncaught[1] : m;
 }
 
-async function call(kind: "query" | "mutation", path: string, args: Record<string, unknown>): Promise<unknown> {
+export async function call(kind: "query" | "mutation", path: string, args: Record<string, unknown>): Promise<unknown> {
   if (testBackend) {
     try {
       return kind === "mutation" || !testBackend.query ? await testBackend.mutation(path, args) : await testBackend.query(path, args);
@@ -81,6 +82,8 @@ export type Account = {
   name: string;
   grade?: number | null;
   index?: number | null;
+  /** His photo's key (pics.ts): the list of children shows his face. */
+  pic?: string | null;
 };
 
 const ACCOUNTS = "aristora.family.accounts";
@@ -173,9 +176,9 @@ export function switchTo(id: string): void {
 }
 
 /** What the server says about him now (his name, grade, index): kept for the list of children. */
-export function noteAccount(id: string, p: Partial<Pick<Account, "name" | "grade" | "index">>): void {
+export function noteAccount(id: string, p: Partial<Pick<Account, "name" | "grade" | "index" | "pic">>): void {
   const a = list.find((x) => x.id === id);
-  if (!a || (a.name === p.name && a.grade === p.grade && a.index === p.index)) return;
+  if (!a || (a.name === p.name && a.grade === p.grade && a.index === p.index && (a.pic ?? null) === (p.pic ?? null))) return;
   Object.assign(a, p);
   save();
 }

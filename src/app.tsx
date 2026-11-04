@@ -15,6 +15,7 @@ import { Settings } from "./settings";
 import { WholeClassPage } from "./wholeClass";
 import { useFeedbackNew } from "./feedbackList";
 import { usePhotosWaiting } from "./photoQueue";
+import { useAskCount } from "./familyAsks";
 import { alertsState, armAlerts, listenForTaps, ring, useAlertsState, type AlertKind } from "./sound";
 import { clearHash, PinSheet, pinAsked, readHash, SignIn, stopAskingPin, type Hash } from "./signin";
 import { hideSplash } from "./splash";
@@ -198,6 +199,10 @@ export function App() {
   // Photos from home waiting to be marked (4 Nov 2026; the owner and people with Photos): on the same gear, red when
   // one waited over a day; Settings opens on Photos then.
   const photos = usePhotosWaiting(!!me?.user && may("photos"));
+  // What students asked for in the family app (a photo for the race, a new name), waiting for an OK (owner and
+  // Students): on the same gear; Settings opens on Students then.
+  const asks = useAskCount(!!me?.user && may("students"));
+  const gearN = photos.n + fbNew + asks;
 
   if (me === undefined) {
     return (
@@ -368,15 +373,15 @@ export function App() {
               type="button"
               class={`icon-btn has-n${shown === "settings" ? " on" : ""}`}
               aria-label={
-                photos.n > 0 || fbNew > 0
-                  ? `Settings${photos.n > 0 ? `, ${photos.n} photos to mark` : ""}${fbNew > 0 ? `, ${fbNew} new feedback` : ""}`
+                gearN > 0
+                  ? `Settings${photos.n > 0 ? `, ${photos.n} photos to mark` : ""}${asks > 0 ? `, ${asks} waiting for your OK` : ""}${fbNew > 0 ? `, ${fbNew} new feedback` : ""}`
                   : "Settings"
               }
               onClick={() => toggle("settings")}
             >
-              {photos.n + fbNew > 0 && (
+              {gearN > 0 && (
                 <b class={`gear-n${photos.late ? " late" : ""}`} aria-hidden="true">
-                  {photos.n + fbNew > 9 ? "9+" : photos.n + fbNew}
+                  {gearN > 9 ? "9+" : gearN}
                 </b>
               )}
               <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
@@ -414,10 +419,11 @@ export function App() {
         <Settings
           views={views}
           onClose={() => setPage(backTo)}
-          start={photos.n > 0 ? "photos" : fbNew > 0 ? "feedback" : undefined}
+          start={photos.n > 0 ? "photos" : asks > 0 ? "students" : fbNew > 0 ? "feedback" : undefined}
           fbNew={fbNew}
           phN={photos.n}
           phLate={photos.late}
+          asks={asks}
         />
       ) : shown === "register" ? (
         <ClassPage board={board} views={views} now={now} job={role} onAttendance={() => setAttOpen(true)} />

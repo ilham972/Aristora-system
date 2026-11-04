@@ -82,6 +82,28 @@ EOF
 
 ## Gotchas learned the hard way
 
+- **The family bundle is in two parts** (4 Nov 2026, the profile): what comes after the first screen (Me, the report,
+  the photo editor, the certificate) is imported only through `src/family/later.ts` (`loadParts()`, `useParts()`), never
+  straight: one plain `import` from a first-load file brings it back into the first load (the build prints both sizes;
+  the first load's budget stops it). Its CSS is its own esbuild entry (`profile.css` → `later-*.css`), named in the page
+  (`link rel="prefetch" data-later`) and attached by `later.ts`: CSS imported by a lazily imported file is ALSO copied
+  into the entry's CSS (seen: the profile's rules twice). Anything a first-load screen shows (a face in the race, the
+  birthday card on Home) keeps its style in `family.css`, or it draws unstyled until the parts arrive.
+- **A page's security policy applies in the run-throughs** (the harness serves `vercel.json`'s headers): a picked photo
+  opened as `blob:` was blocked until `img-src` allowed `blob:` (4 Nov 2026). A console CSP error = a real bug.
+- **`innerText` applies `text-transform`**: a `Tag` is uppercase, so look for "WAITING FOR OK", not "waiting for OK".
+- **`getByLabel` matches parts of names, and a `<select>` inside a `<label>` is named with its chosen option too**: "Day"
+  matched every heat-map day ("Tuesday …") and never the select. Give such fields an `aria-label` and use
+  `{ exact: true }` inside the sheet.
+- **An effect keyed on a step re-runs when the step changes**: the photo circle re-centred itself the moment Use this
+  photo was tapped (`[src, step.k === "edit"]`). Key an effect on the data it sets up (`[src]`); the run-through checks
+  the circle's transform before and while sending (it fails on the old code).
+- **Two chats, one counter name**: home-work uploads and profile photos both called theirs `familyDevices.phDay/phN`
+  (one limit would have eaten the other). Profile photos count in `pfDay/pfN`; grep a field name before adding one.
+- **A class name another chat just added**: `.f-zoom` (the profile's slider) gave the printed question's full-screen
+  zoom 30 px of height after the merge; `.f-file` (theirs, `display: none`). After a rebase, grep every class you added
+  against the merged CSS (the profile's now: `.f-crop-zoom`, `.f-pickfile`).
+
 - **A pick the page makes from live data must hold once it is on screen.** The whole-class page opened "the level with
   the most waiting"; the first Taught changed the counts and the lesson jumped to another level mid-teaching (3 Nov
   2026, caught by the run-through). Freeze the page's pick once shown (`lessonKey` set by an effect), and freeze a

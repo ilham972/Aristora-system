@@ -1,10 +1,12 @@
 // This week's race: XP since Monday 00:00 in Sri Lanka, in his grade, first name and initial only. The top three on a
-// podium, then the rest; his own row always (gold); how much XP passes the one above him; when the week ends.
+// podium, then the rest; his own row always (gold); how much XP passes the one above him; when the week ends. Faces
+// (4 Nov 2026, his pick): the photos the teachers said OK to (his own always, on his phone); 🎂 on a birthday.
 
 import type { ComponentChildren } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import type { BoardRow, FamilyMe } from "../../convex/family";
 import { query } from "./net";
+import { picOf, usePics } from "./pics";
 import { Avatar, firstName, Gem, OwlBadge, problemWords, Waiting } from "./ui";
 
 export type Board = { since: number; top: BoardRow[]; me: BoardRow | null; count: number };
@@ -41,8 +43,11 @@ function Podium(props: { rows: BoardRow[] }) {
                 <path d="M3 8.5l4.5 4 4.5-7 4.5 7 4.5-4-2 10.5H5z" />
               </svg>
             )}
-            <Avatar name={r.name} size="l" />
-            <b class="f-pod-n">{r.me ? "You" : firstName(r.name)}</b>
+            <Avatar name={r.name} size="l" pic={picOf(r.pic)} />
+            <b class="f-pod-n">
+              {r.me ? "You" : firstName(r.name)}
+              {r.bday ? " 🎂" : ""}
+            </b>
             <span class="f-pod-xp">
               <Gem size={13} />
               {r.xp}
@@ -62,8 +67,11 @@ function Row(props: { r: BoardRow; i: number }) {
   return (
     <li class={`f-brow rise${r.me ? " me" : ""}`} style={{ animationDelay: `${props.i * 45}ms` }}>
       <span class="f-rank">{r.rank}</span>
-      <Avatar name={r.name} size="s" />
-      <b class="f-bname">{r.me ? `${r.name} · You` : r.name}</b>
+      <Avatar name={r.name} size="s" pic={picOf(r.pic)} />
+      <b class="f-bname">
+        {r.me ? `${r.name} · You` : r.name}
+        {r.bday ? " 🎂" : ""}
+      </b>
       <span class="f-bxp">
         <Gem size={14} />
         {r.xp}
@@ -80,10 +88,13 @@ export function BoardTab(props: { top: ComponentChildren; me: FamilyMe | null })
       .then((x) => setB(x as Board))
       .catch((e) => setErr(problemWords(e)));
   }, []);
-  const top = b?.top ?? [];
+  // His own row shows his own photo (even one waiting for the OK): it is his phone.
+  const own = (r: BoardRow): BoardRow => (r.me && props.me?.photo ? { ...r, pic: props.me.photo.key } : r);
+  const top = (b?.top ?? []).map(own);
   const podium = top.slice(0, 3);
   const rest = top.slice(3);
-  const mine = b?.me ?? null;
+  const mine = b?.me ? own(b.me) : null;
+  usePics([...top.map((r) => r.pic), mine?.pic]);
   const inTop = top.some((r) => r.me);
   const { above, gap } = b ? passOf(b) : { above: null, gap: 0 };
   const first = !!mine && mine.rank === 1 && mine.xp > 0;

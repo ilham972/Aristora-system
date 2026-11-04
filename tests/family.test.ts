@@ -660,7 +660,7 @@ describe("the family app on the server", () => {
     expect(d.items[2]).toMatchObject({ k: "room", room: "evaluation", teacher: "Nila", no: 1, qs: [8] });
     // Yesterday at home: Level 2 checked on the phone. Too old or not a date: refused.
     expect((await fam().query(api.family.day, { day: "2026-10-27" })).items).toMatchObject([{ k: "level", n: 2, how: "home", got: 16 }]);
-    await expect(fam().query(api.family.day, { day: "2026-07-01" })).rejects.toThrow(/60 days/);
+    await expect(fam().query(api.family.day, { day: "2026-07-01" })).rejects.toThrow(/90 days/);
     await expect(fam().query(api.family.day, { day: "yesterday" })).rejects.toThrow(/date/);
   });
 

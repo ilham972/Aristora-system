@@ -1,0 +1,826 @@
+/* ---------- Me, his profile (4 Nov 2026): his photo, his 12 weeks, his class, his report, his details ----------
+   Colours keep their one meaning: blue = he came to class (and right answers), violet = the app and what he learned
+   with a teacher, rose = still to learn (never "wrong" in words), gold = a certificate and a birthday (wins only). */
+.f-pickfile {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.f-me-id {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 16px;
+}
+.f-me-pic {
+  position: relative;
+  flex: none;
+  display: block;
+  border-radius: 50%;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.f-me-pic .f-ava {
+  transition: transform 0.12s ease;
+}
+.f-me-pic:active .f-ava {
+  transform: scale(0.95);
+}
+.f-me-cam {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #fff;
+  color: var(--brand);
+  box-shadow:
+    0 0 0 3px var(--brand-2),
+    0 3px 6px rgba(20, 10, 80, 0.3);
+}
+.f-me-w {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  justify-items: start;
+}
+.f-me-name {
+  font: 800 25px/1.12 var(--display);
+  overflow-wrap: anywhere;
+}
+.f-me-name.long {
+  font-size: 21px;
+}
+.f-me-name.longer {
+  font-size: 18px;
+}
+.f-me-w > small {
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.82);
+}
+.f-me-w .f-me-add {
+  margin-top: 2px;
+  font-size: 13px;
+  color: #fff;
+}
+.f-me-tag {
+  margin-top: 4px;
+  font-size: 10.5px;
+  padding: 5px 9px 4px;
+}
+.f-hero.me .f-hero-in {
+  margin-top: 18px;
+}
+.f-hero + .f-stats {
+  position: relative;
+  z-index: 1;
+  margin-top: -30px;
+}
+.f-told {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 16px 0;
+  padding: 12px 12px 12px 16px;
+  border-radius: 18px;
+  background: var(--wrong-soft);
+  color: var(--wrong-ink);
+}
+.f-told p {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.f-told .f-btn {
+  min-height: 40px;
+  padding: 2px 16px 0;
+  margin-bottom: 4px;
+}
+
+/* The map of 12 weeks: a column a week, Monday on top; a day darker for each Level, a blue dot = in class. */
+.f-heat {
+  display: grid;
+  grid-template-columns: 12px repeat(12, minmax(0, 1fr));
+  grid-template-rows: 14px repeat(7, auto);
+  gap: 4px;
+  align-items: center;
+}
+.f-heat-h {
+  margin-bottom: 2px;
+}
+.f-heat-sum {
+  margin: 0 0 12px 27px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink2);
+}
+.f-heat-mo {
+  align-self: end;
+  font: 800 10.5px/1 var(--display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink3);
+  white-space: nowrap;
+}
+.f-heat-d {
+  font: 800 10px/1 var(--display);
+  color: var(--ink3);
+  text-align: center;
+}
+.f-hc {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 6px;
+  background: var(--line);
+}
+button.f-hc {
+  -webkit-tap-highlight-color: transparent;
+}
+/* One Level a day (the goal) is already a clear violet; more, deeper. */
+.f-hc.h1 {
+  background: #b4a9ff;
+}
+.f-hc.h2 {
+  background: #8f81f8;
+}
+.f-hc.h3 {
+  background: var(--brand);
+}
+.f-hc.h4 {
+  background: var(--brand-3);
+}
+/* Before his first day here: a faint dot, never an empty box (empty weeks he never had would tell him he is lazy). */
+.f-hc.pre {
+  background: radial-gradient(circle, var(--line-2) 0 2px, transparent 2.5px);
+}
+.f-hc.later {
+  background: transparent;
+}
+.f-hc.today {
+  box-shadow: inset 0 0 0 2px var(--brand);
+}
+.f-hc.sel {
+  outline: 2.5px solid var(--ink);
+  outline-offset: 1.5px;
+}
+.f-hc.in > i {
+  position: absolute;
+  right: 12%;
+  bottom: 12%;
+  width: 36%;
+  height: 36%;
+  max-width: 8px;
+  max-height: 8px;
+  border-radius: 50%;
+  background: var(--right);
+  box-shadow: 0 0 0 1.5px #fff;
+}
+.f-heat-key {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 10px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--ink3);
+}
+.f-heat-key .f-hc {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  aspect-ratio: auto;
+  border-radius: 4px;
+}
+.f-heat-key .f-hc.in {
+  margin-left: 10px;
+}
+.f-heat-key .f-hc.in > i {
+  right: 1px;
+  bottom: 1px;
+  width: 6px;
+  height: 6px;
+}
+.f-hday {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px 10px 10px 14px;
+  border-radius: 16px;
+  background: var(--bg);
+}
+.f-hday-w {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+.f-hday-w b {
+  font-size: 15px;
+}
+.f-hday-w small {
+  font-size: 12.5px;
+  color: var(--ink2);
+}
+.f-hday-xp {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 9px 3px;
+  border-radius: 999px;
+  background: var(--gem-soft);
+  color: var(--gem-ink);
+  font: 800 13.5px var(--display);
+}
+.f-hday-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 8px 6px 12px;
+  border-radius: 12px;
+  background: #fff;
+  color: var(--brand);
+  font: 800 14px var(--display);
+  box-shadow: 0 3px 0 var(--line-2);
+}
+.f-hday-go:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--line-2);
+}
+.f-daysheet {
+  margin-top: 10px;
+}
+
+/* His class: this month and last (blue: the days he came), the days he usually comes, his last class. */
+.f-cls-m {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.f-cls-m > div {
+  display: grid;
+  gap: 2px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: var(--bg);
+}
+.f-cls-m > div.now {
+  background: var(--right-soft);
+}
+.f-cls-m small {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink2);
+}
+.f-cls-m b {
+  font: 800 30px/1 var(--display);
+  padding-top: 4px;
+}
+.f-cls-m .now b {
+  color: var(--right-ink);
+}
+.f-cls-m b i {
+  font-style: normal;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink2);
+}
+.f-cls-m span {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink2);
+}
+.f-cls-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.f-cls-row small {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink2);
+}
+.f-cls-row b {
+  font-size: 15px;
+}
+.f-cls-row.f-dayrow {
+  display: grid;
+  justify-content: stretch;
+  gap: 8px;
+}
+.f-cls-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+.f-cls-days i {
+  display: grid;
+  place-items: center;
+  height: 32px;
+  padding-top: 2px;
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--ink3);
+  font: 800 12.5px/1 var(--display);
+  font-style: normal;
+}
+.f-cls-days i.on {
+  background: var(--right);
+  color: #fff;
+}
+
+/* His report: the questions in a child's words, his Stages as rings. */
+.f-h2-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  padding: 4px 2px;
+  font: 800 14px var(--display);
+  color: var(--brand);
+}
+.f-qc {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.f-qc > span {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 10px 4px 8px;
+  border-radius: 16px;
+  text-align: center;
+}
+.f-qc b {
+  font: 800 26px/1 var(--display);
+  padding-top: 3px;
+}
+.f-qc small {
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.f-qc .right,
+.f-sc-q .right {
+  background: var(--right-soft);
+  color: var(--right-ink);
+}
+.f-qc .learned,
+.f-sc-q .learned {
+  background: var(--brand-soft);
+  color: var(--brand-2);
+}
+.f-qc .tolearn,
+.f-sc-q .tolearn {
+  background: var(--wrong-soft);
+  color: var(--wrong-ink);
+}
+.f-qc-say {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink2);
+}
+.f-sring {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+}
+.f-sring svg {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+}
+.f-sring circle {
+  fill: none;
+  stroke-width: 6;
+}
+.f-sring .bg {
+  stroke: var(--line);
+}
+.f-sring .fg {
+  stroke: var(--brand);
+  stroke-linecap: round;
+}
+.f-sring.full .fg {
+  stroke: var(--gold);
+}
+.f-sring b {
+  position: relative;
+  padding-top: 2px;
+  font: 800 13px/1 var(--display);
+}
+.f-srow {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 10px 10px 10px 8px;
+  border-radius: 18px;
+  background: var(--bg);
+  text-align: left;
+  color: var(--ink3);
+}
+.f-srow-w {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.f-srow-w > small,
+.f-sc-w small {
+  font: 800 11.5px/1.2 var(--display);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink3);
+}
+.f-srow-w > b {
+  overflow: hidden;
+  font-size: 15.5px;
+  color: var(--ink);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.f-srow-d {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.f-srow-d small {
+  font: 800 12px var(--display);
+  color: var(--ink2);
+}
+a.f-btn {
+  text-decoration: none;
+}
+.f-wa {
+  margin-top: 14px;
+}
+.f-report {
+  padding-bottom: calc(96px + var(--safe-b));
+}
+.f-report .f-hero {
+  padding-bottom: 46px;
+}
+.f-months {
+  position: relative;
+  display: flex;
+  gap: 6px;
+  margin-top: 16px;
+}
+.f-months button {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 6px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font: 800 13.5px/1 var(--display);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.f-months button.on {
+  background: #fff;
+  color: var(--brand);
+}
+.f-hero + .f-mnum {
+  position: relative;
+  z-index: 1;
+  margin-top: -30px;
+}
+.f-mnum {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px;
+}
+.f-mnum > div {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: var(--bg);
+}
+.f-mnum b {
+  padding-top: 2px;
+  font: 800 23px/1.1 var(--display);
+}
+.f-mnum small {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink2);
+}
+.f-rep-h {
+  margin: 22px 20px 0;
+}
+.f-sc-top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.f-sc-w {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+.f-sc-w b {
+  font: 800 18px/1.25 var(--display);
+  overflow-wrap: anywhere;
+}
+.f-sc-w span {
+  font-size: 13px;
+  color: var(--ink2);
+}
+.f-sc-lv {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+.f-sc-lv small {
+  font: 800 12.5px var(--display);
+  color: var(--ink2);
+}
+.f-sc-q {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.f-sc-q span {
+  padding: 5px 10px 3px;
+  border-radius: 999px;
+  font: 800 12.5px var(--display);
+}
+.f-sc-dates {
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: var(--ink3);
+}
+.f-sc-cert {
+  width: 100%;
+  margin-top: 12px;
+}
+.f-rep-foot {
+  position: fixed;
+  left: 50%;
+  bottom: 0;
+  z-index: 5;
+  width: min(100%, 520px);
+  transform: translateX(-50%);
+  padding: 14px 16px calc(10px + var(--safe-b));
+  background: linear-gradient(rgba(246, 245, 253, 0), var(--bg) 34%);
+}
+.f-rep-foot .f-wa {
+  width: 100%;
+  margin-top: 0;
+}
+
+/* His details: a new name (asked), his birthday, his photo in the race. */
+.f-row > span small {
+  display: block;
+  margin-top: 1px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink2);
+  overflow-wrap: anywhere;
+}
+.f-drow .f-ic:last-child {
+  color: var(--ink3);
+}
+.f-field {
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+}
+.f-field > span {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ink2);
+}
+.f-field input,
+.f-field select {
+  width: 100%;
+  min-height: 52px;
+  padding: 12px 14px 10px;
+  border-radius: 16px;
+  border: 2px solid var(--line-2);
+  background: var(--bg);
+  font-size: 17px;
+  font-weight: 700;
+  outline: none;
+}
+.f-field input:focus,
+.f-field select:focus {
+  border-color: var(--brand);
+  background: #fff;
+}
+.f-sheet .f-field ~ .f-btn.big,
+.f-sheet .f-bday ~ .f-btn.big {
+  margin-top: 16px;
+}
+.f-bday {
+  display: grid;
+  grid-template-columns: 1fr 1.7fr;
+  gap: 10px;
+}
+.f-ask {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--brand-soft);
+}
+.f-ask p {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.f-ask b {
+  font-size: 15.5px;
+}
+.f-ask small {
+  font-size: 12.5px;
+  color: var(--ink2);
+}
+.f-ask.no {
+  background: var(--wrong-soft);
+}
+.f-ask.no small {
+  color: var(--wrong-ink);
+}
+.f-ask .f-link {
+  padding: 8px 4px;
+}
+
+/* His photo: move it in the circle, zoom, turn; then the bar: making it small, sending. */
+.f-crop {
+  position: relative;
+  width: min(76vw, 300px);
+  aspect-ratio: 1;
+  margin: 16px auto 0;
+  overflow: hidden;
+  border-radius: 24px;
+  background: #1d1b38;
+  touch-action: none;
+}
+.f-crop.live {
+  cursor: grab;
+}
+.f-crop-in {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+.f-crop-img {
+  display: block;
+}
+.f-crop-ring {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle closest-side, transparent 97%, rgba(29, 27, 56, 0.58) 100%);
+}
+.f-crop-ring::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9);
+}
+.f-crop-wait,
+.f-cert-wait {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 45%;
+  background: linear-gradient(100deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.14) 50%, rgba(255, 255, 255, 0) 100%);
+  animation: f-prog-busy 1.2s ease-in-out infinite;
+}
+.f-crop-hint {
+  margin-top: 10px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--ink2);
+}
+.f-crop-tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 10px 0 14px;
+}
+.f-crop-zoom {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  accent-color: var(--brand);
+}
+.f-prog {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: var(--brand-soft);
+}
+.f-prog-w {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.f-prog-w b,
+.f-prog-w span {
+  font: 800 16px var(--display);
+  color: var(--brand-2);
+}
+.f-prog-w span {
+  font-variant-numeric: tabular-nums;
+}
+.f-prog-bar {
+  position: relative;
+  height: 12px;
+  margin-top: 8px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: #fff;
+}
+.f-prog-bar i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #8f81ff, var(--brand));
+  transform-origin: left;
+  transform: scaleX(0);
+  transition: transform 0.25s ease;
+}
+.f-prog-bar.busy i {
+  width: 40%;
+  transform: none;
+  animation: f-prog-busy 1.1s ease-in-out infinite;
+}
+.f-prog small {
+  display: block;
+  margin-top: 6px;
+  font: 700 12.5px var(--display);
+  color: var(--ink2);
+}
+@keyframes f-prog-busy {
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(260%);
+  }
+}
+
+/* A Stage's certificate: its picture, Share (WhatsApp from the phone's share sheet) and Save. */
+.f-cert {
+  position: relative;
+  width: min(100%, calc(52vh * 0.8));
+  aspect-ratio: 4 / 5;
+  margin: 14px auto 0;
+  overflow: hidden;
+  border-radius: 18px;
+  background: var(--brand);
+}
+.f-cert img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.f-cert .f-err {
+  margin: 16px;
+}
+.f-cert-b {
+  display: grid;
+  gap: 4px;
+  margin-top: 14px;
+}
+

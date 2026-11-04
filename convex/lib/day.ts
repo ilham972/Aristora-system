@@ -42,3 +42,16 @@ export function slWeekStart(t: number): number {
   const monday = day - ((new Date(day * DAY_MS).getUTCDay() + 6) % 7);
   return monday * DAY_MS - SL_OFFSET_MS;
 }
+
+/**
+ * Is today his birthday in Sri Lanka? `bday` = "MM-DD" (day and month only: the family app's Me, 4 Nov 2026). Born on
+ * 29 Feb: 28 Feb in a year without it. Both apps use it (the family app's party, the teachers' 🎂).
+ */
+export function isBirthday(bday: string | null | undefined, now: number): boolean {
+  if (!bday) return false;
+  const today = slDay(now).slice(5);
+  if (bday === today) return true;
+  const year = Number(slDay(now).slice(0, 4));
+  const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+  return bday === "02-29" && today === "02-28" && !leap;
+}
