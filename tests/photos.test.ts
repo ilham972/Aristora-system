@@ -33,6 +33,16 @@ function fakeKey(): KeyAnswer[] {
   for (let q = 53; q <= 73; q++) out.push({ q, parts: [{ p: "i", a: `**${q}**`, m: outOf(BOOK.data, q)! }] });
   return out;
 }
+/** A key with kinds (version 2): Level 1's boxes; Q10 = "is it true? give a reason" (its answer இல்லை). */
+function kindKey(): KeyAnswer[] {
+  return fakeKey().map((k) =>
+    k.q <= 9
+      ? { ...k, t: { k: "box" as const, b: [{ v: [k.q === 8 ? "24" : String(k.q * 3)] }] } }
+      : k.q === 10
+        ? { ...k, a: "இல்லை: a made-up reason", t: { k: "why" as const, a: false } }
+        : k,
+  );
+}
 /** Level 1 as Hana types it: all right but Q8 (the phone can't mark Q10). */
 const LEVEL1 = [1, 2, 3, 4, 5, 6, 7, 9].map((q) => ({ q, a: [String(q * 3)] })).concat([{ q: 8, a: ["42"] }]);
 
@@ -88,6 +98,15 @@ describe("photos from home", () => {
   const hanaM = async () =>
     (await raw.run(async (ctx) => (await ctx.db.query("progress").withIndex("by_student", (q) => q.eq("studentId", hana)).first())?.m))!;
   const level = (n: number) => fam().query(api.family.level, { unitId: u01, n });
+  const useKinds = async () =>
+    await t.mutation(api.catalog.saveWorkbook, {
+      unitId: u01,
+      parts: BOOK.data.parts.map((p) => ({ id: p.id, to: p.to, ...(p.each ? { each: p.each } : {}) })),
+      levels: BOOK.data.levels.map((l) => ({ to: l.to, max: l.max })),
+      marks: BOOK.data.marks ?? {},
+      replace: true,
+      key: kindKey(),
+    });
   const checkEmpty = async (n: number) => {
     const qs = (await level(n)).qs.map((q) => ({ q: q.q, a: [] as string[] }));
     return await fam().mutation(api.family.check, { unitId: u01, n, typed: qs });
@@ -211,6 +230,35 @@ describe("photos from home", () => {
     expect(await picked().query(api.photos.count, {})).toEqual({ n: 0, late: false });
     const lines = await raw.run(async (ctx) => (await ctx.db.query("events").collect()).filter((e) => e.kind.startsWith("photo")).map((e) => e.value));
     expect(lines).toEqual(["1 2/2", "1 point"]);
+  });
+
+  test("is it true? give a reason: no photo; a right ஆம் / இல்லை waits in the queue with his words, her marks reach him", async () => {
+    await useKinds();
+    const r = await fam().mutation(api.family.check, { unitId: u01, n: 1, typed: [...LEVEL1, { q: 10, a: ["0", "  a made-up reason  "] }] });
+    expect(r.teacher).toEqual([10]);
+    const q = (n: number) => r.book!.qs.find((x) => x.q === n)!;
+    expect(q(10)).toMatchObject({ got: null, teach: 2, owe: [], photos: [{ kind: "part", state: "waiting", said: true }] });
+    expect(q(8).owe).toEqual(["working"]); // a wrong box still asks for his working
+    expect((await fam().query(api.family.me, {})).worlds[0].levels[0]).toMatchObject({ ph: 1 }); // only Q8's photo is owed
+    const [item] = (await picked().query(api.photos.queue, {})).filter((i) => i.q === 10);
+    expect(item).toMatchObject({ kind: "part", said: true, urls: [], teach: 2, phoneGot: 0, reasons: [{ p: "", yes: "இல்லை", text: "a made-up reason" }] });
+    await expect(picked().mutation(api.photos.retake, { id: item.id, why: "blur" })).rejects.toThrow(/typed reason/);
+    await expect(fam().mutation(api.family.photoSend, { unitId: u01, n: 1, q: 10, kind: "part", files: [await jpeg()] })).rejects.toThrow(/doesn't need/);
+    await picked().mutation(api.photos.mark, { id: item.id, got: 1, why: "working" });
+    expect((await hanaM()).q["10"]).toMatchObject({ got: 1, max: 2, lost: true });
+    const book = await fam().query(api.family.book, { unitId: u01, n: 1 });
+    expect(book.qs.find((x) => x.q === 10)).toMatchObject({ got: 1, photos: [{ state: "done", got: 1, said: true, say: WHY.working.ta }] });
+  });
+
+  test("a wrong ஆம் / இல்லை: 0 at once, nothing for the teacher, no photo asked; his words kept, at most 300 letters", async () => {
+    await useKinds();
+    await expect(fam().mutation(api.family.check, { unitId: u01, n: 1, typed: [...LEVEL1, { q: 10, a: ["1", "a".repeat(301)] }] })).rejects.toThrow(/too long/);
+    const r = await fam().mutation(api.family.check, { unitId: u01, n: 1, typed: [...LEVEL1, { q: 10, a: ["1", "b".repeat(300)] }] });
+    expect(r.teacher).toEqual([]);
+    expect(r.book!.qs.find((x) => x.q === 10)).toMatchObject({ got: 0, owe: [], photos: [] });
+    expect(await picked().query(api.photos.queue, {})).toEqual([]); // Q8's working photo isn't sent yet
+    const kept = await raw.run(async (ctx) => (await ctx.db.query("familyAnswers").first())!.qs.find((x) => x.q === 10)!.a);
+    expect(kept).toEqual(["1", "b".repeat(300)]);
   });
 
   test("a retake: the files go at once and the photo is owed again; a part marked in class first only closes", async () => {

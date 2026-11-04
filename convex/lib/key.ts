@@ -20,22 +20,28 @@ export type BoxAns = { v: string[]; same?: boolean; l?: string; u?: string; j?: 
  * A part's answer and the way he gives it, written by the book engine where it knows them (never guessed from the
  * key's words). The slots it names are marked in the question's printed HTML, in printed order:
  * - box: boxes under the question; fill: the question's own blanks (`data-fill`); any = the boxes in any order;
- * - choose: one of the question's n options (`data-opt`), a = the right one (from 1);
+ * - choose: one of the question's n options (`data-opt`), a = the right one (from 1); below = options the paper
+ *   doesn't print (a pattern's name, 4 Nov 2026): the phone shows the n names (items) under the
+ *   question, he taps the one he wrote;
  * - tf: each statement's bracket (`data-tick`), a = true for ✓;
  * - mark: the n words or numbers to tap (`data-mark`), a = the ones to underline (how "line") or circle ("ring");
  * - order: cards to put in order (items as printed), a = their numbers in the right order;
  * - match: the i-th of l goes with the a[i]-th of r;
+ * - why: "is it true? give a reason" (4 Nov 2026, his rule): ஆம் / இல்லை (a = true for ஆம்), then his reason typed.
+ *   A wrong ஆம் / இல்லை = the part's 0 at once (no reason to read); a right one leaves the part to a teacher, who
+ *   reads his typed reason (no photo);
  * - photo: done on paper (a drawing, a construction, "show that"): the teacher marks his photo.
  * items (choose, tf, mark) = their words, for a phone that can't find the slots in the question. Everything counts
  * from 1, as printed: option (2), the 3rd card.
  */
 export type Ans =
   | { k: "box" | "fill"; b: BoxAns[]; any?: boolean }
-  | { k: "choose"; n: number; a: number; items?: string[] }
+  | { k: "choose"; n: number; a: number; items?: string[]; below?: true }
   | { k: "tf"; a: boolean[]; items?: string[] }
   | { k: "mark"; n: number; a: number[]; how?: "line" | "ring"; items?: string[] }
   | { k: "order"; items: string[]; a: number[] }
   | { k: "match"; l: string[]; r: string[]; a: number[] }
+  | { k: "why"; a: boolean }
   | { k: "photo" };
 
 /** One part of a Part II question: its label ("ii", "a iii"), the answer (**bold** = the final answer), its marks. */
@@ -75,8 +81,13 @@ export function ansProblem(t: unknown): string {
     case "choose": {
       const n = x.n as number;
       if (!Number.isInteger(n) || n < 2 || n > ANS_ITEMS_MAX || !Number.isInteger(x.a) || (x.a as number) < 1 || (x.a as number) > n) return "a choice without its right option";
+      if (x.below !== undefined && x.below !== true) return "a choice's options";
+      // Names the paper doesn't print: the phone shows their words, so they must come with it.
+      if (x.below) return isWords(x.items, n) ? "" : "names to choose without their words";
       return x.items === undefined || isWords(x.items, n) ? "" : "a choice's options";
     }
+    case "why":
+      return typeof x.a === "boolean" ? "" : "a yes / no without its answer";
     case "tf": {
       const a = x.a as unknown[];
       if (!Array.isArray(a) || a.length === 0 || a.length > ANS_ITEMS_MAX || !a.every((v) => typeof v === "boolean")) return "a ✓ / ✗ without its answers";
@@ -184,12 +195,12 @@ export function slotsIn(html: string): Slots {
   return { b: n("b"), o: n("o"), t: n("t"), m: n("m") };
 }
 
-/** How many slots of each kind its answer kinds use, part after part. */
+/** How many slots of each kind its answer kinds use, part after part (names under the question use none). */
 export function slotsWanted(k: KeyAnswer): Slots {
   const out: Slots = { b: 0, o: 0, t: 0, m: 0 };
   for (const t of [k.t, ...(k.parts ?? []).map((p) => p.t)]) {
     if (t?.k === "fill") out.b += t.b.length;
-    else if (t?.k === "choose") out.o += t.n;
+    else if (t?.k === "choose" && !t.below) out.o += t.n;
     else if (t?.k === "tf") out.t += t.a.length;
     else if (t?.k === "mark") out.m += t.n;
   }

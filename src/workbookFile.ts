@@ -375,11 +375,12 @@ function kindOf(t: unknown): { t?: Ans } {
   const fields: Record<string, string[]> = {
     box: ["k", "any"],
     fill: ["k", "any"],
-    choose: ["k", "n", "a", "items"],
+    choose: ["k", "n", "a", "items", "below"],
     tf: ["k", "a", "items"],
     mark: ["k", "n", "a", "how", "items"],
     order: ["k", "items", "a"],
     match: ["k", "l", "r", "a"],
+    why: ["k", "a"],
     photo: ["k"],
   };
   const names = fields[String(x.k)];

@@ -136,7 +136,7 @@ function Question(props: { b: BookQ; unitId: string; n: number; onSent: () => vo
       {b.photos.map((p, i) =>
         p.state === "waiting" ? (
           <p key={i} class="f-ph-state wait">
-            <Icon name="clock" size={14} /> படம் அனுப்பியாயிற்று: ஆசிரியர் பார்ப்பார்.
+            <Icon name="clock" size={14} /> {p.said ? "உன் காரணத்தை ஆசிரியர் வாசிப்பார்." : "படம் அனுப்பியாயிற்று: ஆசிரியர் பார்ப்பார்."}
           </p>
         ) : p.state === "retake" ? (
           <p key={i} class="f-ph-state redo">

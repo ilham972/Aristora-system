@@ -189,7 +189,7 @@ describe("what a phone can mark, read from the key", () => {
     expect(k.get(3)!.parts[0].want).toBeNull(); // not in the key
     expect(k.get(53)!.parts.map((p) => p.want !== null)).toEqual([true, false]);
     expect(k.get(54)!.parts).toEqual([{ p: "", m: outOf(BOOK.data, 54), want: null, anyOrder: false }]);
-    expect(markQuestion(k.get(53)!, ["7"])).toEqual({ ok: [[true], null], got: null, phoneGot: 1 });
+    expect(markQuestion(k.get(53)!, ["7"])).toEqual({ ok: [[true], null], got: null, phoneGot: 1, parts: [1, null] });
     expect(phoneShare(k)).toMatchObject({ questions: 1, of: 73, max: 230 });
   });
 });

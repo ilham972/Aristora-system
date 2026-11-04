@@ -4182,6 +4182,49 @@ p {
   text-align: center;
   font-size: 20px;
 }
+/* Names the paper doesn't print (4 Nov 2026): one a line, the whole name readable */
+.f-pk.f-pkn {
+  grid-template-columns: 1fr;
+}
+/* "Is it true? Give a reason": ஆம் / இல்லை, then his reason with his phone's own keyboard */
+.f-why {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.f-pk.yn {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.f-pk.yn .f-pkb {
+  text-align: center;
+}
+.f-whyt {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font: 700 14px/1.2 var(--display);
+  color: var(--ink3);
+}
+.f-whyt textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 88px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 14px;
+  background: #fff;
+  color: var(--ink);
+  font: 600 16px/1.4 var(--display);
+  box-shadow: inset 0 0 0 2px var(--line-2);
+  resize: vertical;
+}
+.f-whyt textarea:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 2.5px var(--brand);
+}
 .f-pk.marks {
   flex-direction: row;
   flex-wrap: wrap;

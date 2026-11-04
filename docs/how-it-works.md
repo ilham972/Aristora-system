@@ -1186,6 +1186,19 @@ learning app of our education institute"): one profile, his class times, what he
   sides, how many options), never the answers. Teachers read the answer and what he typed in words (`wantWords`,
   `slotWords`: "✓ ✗ ✓", "underline: 23, 29", "−3, −1, 0, 2"). The upload also checks that the printed question has
   as many slots as the key uses (`slotProblem`), else the zip is refused (the book and its key differ).
+  **Names and reasons** (4 Nov 2026, his screenshot: a digitized question asking a pattern's name still asked
+  for a photo; his answers: names as choices "build it now"; reasons: "first two buttons for yes or no, if
+  that's wrong don't need to check the reason ... give the box for typing, they write in Thanglish, teacher will read
+  the reason, but don't put the image upload option"): a **name** the paper doesn't print = choose with `below` and
+  its names (`items`): the phone shows them under the question, one a line (`.f-pkn`), he taps the one he wrote; no
+  printed slots are needed. **"Is it true? Give a reason"** = `why` (`a` = true for ஆம்): ஆம் / இல்லை to tap and a box
+  for his reason in his own words, typed with the phone's own keyboard (never the app's pad; ≤ 300 letters,
+  `REASON_MAX`). A wrong ஆம் / இல்லை = the part's 0 at once (nothing to read, and no working photo when that is the
+  question's only loss: `lostOutsideReasons`); a right one leaves the part to a teacher: the Check puts his typed reason
+  in Settings → Photos at once (a part row with no files, `said`), so he owes nothing and the level never waits for it;
+  she reads ஆம் / இல்லை and his words (`reasonsOf`) and gives the part's marks. A reason question never comes back
+  (`allPhone` / `phonePart`: the phone can't mark it alone) and its marks count as the teacher's in "See what the
+  phone accepts". A drawing and "show that" stay photos.
 - The server marks with the uploaded answer keys (`convex/lib/phone.ts`; a key without kinds, version 1): numbers,
   several numbers, answers in n (same values for n = 1..7), labelled answers (x = 52), "also accepted" notes. Since 4 Nov 2026 (his screenshot: "0.25 as a
   percentage" was the teacher's, so whole Percentages Stages were): a number with its unit (25%, 45°, −3 °C, 12 cm,
@@ -1223,8 +1236,8 @@ learning app of our education institute"): one profile, his class times, what he
   right). Nothing reads it yet; after a few weeks it gives each question's most common wrong answers (a hint after
   Check, Evaluation's groups: next, ask him). It goes when the student is wiped (demo, practice) and moves with a tute
   (`moveTute`). His chips idea (tap one of four for every answer) was turned down with him: guessing pays XP, the exam
-  gives a blank line, the answer would be on the screen, and chips hide the mistakes nobody predicted. Chips stay for
-  names only (next on the list).
+  gives a blank line, the answer would be on the screen, and chips hide the mistakes nobody predicted. Chips are for
+  names only (built 4 Nov 2026: choose `below`, above).
 - **Corrected at home: solutions and photos** (4 Nov 2026, his voice notes: "if the student done at home, everything
   will be done at home"; `convex/lib/photos.ts` the rules, `convex/lib/homeWork.ts` the reads, `convex/photos.ts` the
   teachers' side, `src/family/book.tsx`, `src/family/photos.ts`, `src/photoQueue.tsx`):
@@ -1245,8 +1258,10 @@ learning app of our education institute"): one profile, his class times, what he
   - **Photos he owes** (`familyAnswers.owe`, written at Check, with each part question's marks as at that Check:
     `pm` the teacher's share, `pg` the phone's; `partMarks` reads them, and for an older Check a question the phone now
     reads is the teacher's whole): `part` = a question with a part only a teacher can mark
-    (a name, a drawing, a reason): during the level its card has a camera ("இதைத் தாளில் செய்து படம் எடு"), the photos
-    are kept on the phone and go by themselves after Check; `working` = his working on each question he lost marks on
+    (a drawing; a name or a reason the key gives no kind): during the level its card has a camera ("இதைத் தாளில் செய்து
+    படம் எடு"), the photos are kept on the phone and go by themselves after Check. A typed reason (kind `why`) is never
+    a photo: when every part the question left is a reason, the Check itself puts its row in the queue (`said`,
+    `sayReason`), so nothing is owed for it; `working` = his working on each question he lost marks on
     (his rule, against my warning about the load: required). 1–3 photos a question, shrunk on the phone to ~200 KB
     (1280 px JPEG; drawing it again drops the camera's location), kept in IndexedDB per child until sent (no signal:
     next time the book opens), uploaded to Convex storage (`family.photoUrl`, 80 a day a phone; `family.photoSend`:
@@ -1262,7 +1277,9 @@ learning app of our education institute"): one profile, his class times, what he
   - **Marking them** (Settings → Photos; the owner and the people he ticks **Photos**, Settings → People → Also; the
     gear's count adds the photos waiting, red when one waited over a day; Settings opens on Photos then): one photo at a
     time, oldest first (`photos.queue`, 20): who, Stage, level, Q, the photos (tap = full screen, tap again = 2×), the
-    key's answer, what he typed, "Show the question" (as printed, `photos.question`). A part: her marks for what the
+    key's answer, what he typed, "Show the question" (as printed, `photos.question`). A typed reason ("Reason to read",
+    `said`) shows his ஆம் / இல்லை and his words instead of photos (`reasons`); its Retake stays pale in its place (no
+    photo to take again; the server refuses it too). A part: her marks for what the
     phone left (0 … `teach`) + an optional remark; his working: one tap on why it was wrong (`WHY`: careless slip,
     decimal point, sign, wrong method, copied it wrong, didn't finish, unit, needs the lesson again), her own words
     optional. Retake (blurry / wrong page / cut off) asks him again and deletes the files at once. Her answer reaches

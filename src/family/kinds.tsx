@@ -7,6 +7,8 @@
 //   = the right side's number. The server marks them (convex/lib/phone.ts).
 // - A question whose printed HTML doesn't have the slots (a book built before its key, or no questions in the app yet)
 //   shows the same choices under it instead (`PickBelow`, the boxes as before).
+// - Names the paper doesn't print (choose `below`, 4 Nov 2026: a pattern's name) are always under the
+//   question; "is it true? give a reason" (why) = ஆம் / இல்லை and his reason in his own words (`WhyBelow`).
 
 import { useRef, useState } from "preact/hooks";
 import type { Box, FormQ, Ui } from "../../convex/lib/phone";
@@ -18,11 +20,17 @@ const ATTR: Partial<Record<Ui["k"], Attr>> = { fill: "b", choose: "o", tf: "t", 
 /** Each kind of slot's attribute in the book's HTML (convex/lib/key.ts SLOT_ATTR: the engine's data-b is its own). */
 const NAME: Record<Attr, string> = { b: "fill", o: "opt", t: "tick", m: "mark" };
 
-/** One part's slots in the printed question: the kind of slot, how many, where its answers start in his list. */
-export type SlotRun = { attr: Attr; els: number; at: number; ui: Ui };
+/**
+ * One part's slots in the printed question: the kind of slot, how many, where its answers start in his list. below =
+ * names the paper doesn't print: always under the question, never one of its slots.
+ */
+export type SlotRun = { attr: Attr; els: number; at: number; ui: Ui; below?: true };
 
-/** A box he types into (not a tap). */
-export const typing = (b: Box) => b.k !== "pick";
+/** A box he types into with the app's pad (not a tap; not his reason either: that one takes his phone's keyboard). */
+export const typing = (b: Box) => b.k === "num" || b.k === "expr";
+
+/** His typed reason, at most (= `REASON_MAX` in convex/lib/phone.ts: the family bundle never imports the server's code). */
+export const REASON_LETTERS = 300;
 
 /** The slots a question asks of its printed HTML, part after part. */
 export function slotRuns(q: FormQ): SlotRun[] {
@@ -31,7 +39,8 @@ export function slotRuns(q: FormQ): SlotRun[] {
   for (const p of q.parts) {
     const n = p.boxes?.length ?? 0;
     const attr = p.ui ? ATTR[p.ui.k] : undefined;
-    if (attr && p.ui) out.push({ attr, els: p.ui.k === "choose" ? p.ui.n : n, at, ui: p.ui });
+    const below = p.ui?.k === "choose" && p.ui.below ? { below: true as const } : {};
+    if (attr && p.ui) out.push({ attr, els: p.ui.k === "choose" ? p.ui.n : n, at, ui: p.ui, ...below });
     at += n;
   }
   return out;
@@ -41,7 +50,7 @@ export function slotRuns(q: FormQ): SlotRun[] {
 export function slotsFit(runs: SlotRun[], html: string): Set<Attr> {
   const fit = new Set<Attr>();
   for (const a of ["b", "o", "t", "m"] as const) {
-    const want = runs.filter((r) => r.attr === a).reduce((s, r) => s + r.els, 0);
+    const want = runs.filter((r) => r.attr === a && !r.below).reduce((s, r) => s + r.els, 0);
     const has = (html.match(new RegExp(`\\sdata-${NAME[a]}(?=[\\s=>/])`, "g")) ?? []).length;
     if (want && has === want) fit.add(a);
   }
@@ -67,7 +76,7 @@ export function paintSlots(root: ShadowRoot, live: Live): void {
     const els = [...root.querySelectorAll<HTMLElement>(`[data-${NAME[a]}]`)];
     let k = 0;
     live.runs.forEach((r, ri) => {
-      if (r.attr !== a) return;
+      if (r.attr !== a || r.below) return;
       for (let i = 0; i < r.els; i++, k++) {
         const el = els[k];
         if (!el) return;
@@ -133,7 +142,7 @@ export function PickBelow(props: { run: SlotRun; vals: string[]; onPick: (i: num
   const v = (k: number) => props.vals[at + k] ?? "";
   if (ui.k === "choose") {
     return (
-      <div class="f-pk opts" role="group" aria-label="Options">
+      <div class={`f-pk opts${ui.below ? " f-pkn" : ""}`} role="group" aria-label={ui.below ? "Names" : "Options"}>
         {Array.from({ length: ui.n }, (_, i) => (
           <button type="button" key={i} class={`f-pkb${v(0) === String(i + 1) ? " on" : ""}`} onClick={() => props.onPick(i)}>
             <b>({i + 1})</b> {ui.items?.[i] ?? ""}
@@ -168,6 +177,47 @@ export function PickBelow(props: { run: SlotRun; vals: string[]; onPick: (i: num
           {ui.items?.[i] ?? `${i + 1}`}
         </button>
       ))}
+    </div>
+  );
+}
+
+/**
+ * "Is it true? Give a reason" (4 Nov 2026, his rule): ஆம் / இல்லை to tap, then his reason in his own words, typed with
+ * his phone's keyboard (Tamil or Thanglish), never a photo. His list gets two answers: "1" / "0", then the words. A
+ * wrong ஆம் / இல்லை is the part's 0 (nothing to read); a right one, a teacher reads the reason and gives its marks.
+ */
+export function WhyBelow(props: { vals: string[]; at: number; onSet: (v: string[]) => void }) {
+  const yes = props.vals[props.at] ?? "";
+  const why = props.vals[props.at + 1] ?? "";
+  return (
+    <div class="f-why">
+      <div class="f-pk yn" role="group" aria-label="ஆம் அல்லது இல்லை">
+        {(["1", "0"] as const).map((x) => (
+          <button
+            type="button"
+            key={x}
+            class={`f-pkb${yes === x ? " on" : ""}`}
+            aria-pressed={yes === x}
+            onClick={() => {
+              buzz(6);
+              sound("pop");
+              props.onSet([x, why]);
+            }}
+          >
+            {x === "1" ? "ஆம்" : "இல்லை"}
+          </button>
+        ))}
+      </div>
+      <label class="f-whyt">
+        <span>காரணம்</span>
+        <textarea
+          rows={3}
+          maxLength={REASON_LETTERS}
+          placeholder="தமிழில் அல்லது Thanglish இல் எழுது…"
+          value={why}
+          onInput={(e) => props.onSet([yes, (e.currentTarget as HTMLTextAreaElement).value])}
+        />
+      </label>
     </div>
   );
 }

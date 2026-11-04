@@ -9,9 +9,25 @@ import { strToU8, zipSync } from "fflate";
 import { describe, expect, test } from "vitest";
 import { outOf } from "../convex/lib/book";
 import { checkKey, slotProblem, slotsIn, type Ans, type KeyAnswer } from "../convex/lib/key";
-import { formKey, formOf, markPart, markQuestion, phoneKey, slotWords, wantWords } from "../convex/lib/phone";
+import {
+  allPhone,
+  formKey,
+  formOf,
+  lostOutsideReasons,
+  markPart,
+  markQuestion,
+  onlyReasons,
+  phoneKey,
+  phoneShare,
+  REASON_MAX,
+  reasonsOf,
+  slotWords,
+  teacherMarks,
+  wantWords,
+} from "../convex/lib/phone";
 import { readWorkbookFiles, readWorkbookHtml, type ReadWorkbook } from "../src/workbookFile";
 import U01 from "./fixtures/workbook-g8-u01.html?raw";
+import KINDS_TSX from "../src/family/kinds.tsx?raw";
 
 const FILE = "G8_U01_Workbook_source_v3.zip";
 const BOOK = readWorkbookHtml(U01, FILE)[0];
@@ -26,6 +42,11 @@ const KINDS: Record<number, Ans> = {
   6: { k: "match", l: ["½", "¼"], r: ["0.25", "0.5"], a: [2, 1] },
   7: { k: "box", b: [{ v: ["3/4"], same: true }] },
   8: { k: "photo" },
+  // Names the paper doesn't print (a pattern's name): chosen under the question. Made-up names.
+  11: { k: "choose", n: 4, a: 3, items: ["Made-up A", "Made-up B", "Made-up C", "Made-up D"], below: true },
+  // Is it true? Give a reason: Q12's answer is ஆம், Q13's இல்லை.
+  12: { k: "why", a: true },
+  13: { k: "why", a: false },
 };
 const key: KeyAnswer[] = Object.entries(KINDS).map(([q, t]) => ({ q: Number(q), a: `A${q}`, t }));
 const keys = phoneKey(key, BOOK.data);
@@ -106,6 +127,61 @@ describe("answers whose kind the book gives", () => {
     expect(checkKey([{ q: 53, t: { k: "photo" }, parts: [{ p: "i", a: "x", m: outOf(BOOK.data, 53)! }] }], BOOK.data)[0]).toContain("its answer kinds go on its parts");
   });
 
+  test("names the paper doesn't print: tapped under the question, no printed options needed; their words must come", () => {
+    expect(mark(11, ["3"]).got).toBe(2);
+    expect(mark(11, ["1"]).got).toBe(0);
+    expect(formOf(keys.get(11)!).parts[0].ui).toEqual({ k: "choose", n: 4, items: ["Made-up A", "Made-up B", "Made-up C", "Made-up D"], below: true });
+    expect(slotProblem(key.find((k) => k.q === 11)!, '<div class="si" data-q="11"></div>')).toBe(""); // nothing printed: fine
+    expect(slotWords(keys.get(11)!, ["3"])).toEqual(["(3) Made-up C"]);
+    expect(wantWords(keys.get(11)!.parts[0])).toBe("(3) Made-up C");
+    const bad = (t: unknown) => checkKey([{ q: 1, a: "x", t: t as Ans }], BOOK.data);
+    expect(bad({ k: "choose", n: 4, a: 1, below: true })).toEqual(["Question 1: names to choose without their words."]);
+    expect(bad({ k: "choose", n: 2, a: 1, items: ["a", "b"], below: "yes" })).toEqual(["Question 1: a choice's options."]);
+  });
+
+  test("is it true? give a reason: a wrong ஆம் / இல்லை is 0 at once; a right one leaves his typed reason to a teacher", () => {
+    expect(mark(12, ["0", "a made-up reason"])).toMatchObject({ got: 0, ok: [[false, false]], parts: [0] });
+    expect(mark(12, ["1", "a made-up reason"])).toMatchObject({ got: null, phoneGot: 0, ok: [null], parts: [null] });
+    expect(mark(13, ["0", ""])).toMatchObject({ got: null, parts: [null] }); // right, and no reason: she gives 0
+    expect(mark(13, ["", "words only"]).got).toBe(0); // no ஆம் / இல்லை: wrong
+    expect(formOf(keys.get(12)!).parts[0]).toEqual({ p: "", m: 2, boxes: [{ k: "pick" }, { k: "text" }], ui: { k: "why" } });
+    expect(JSON.stringify(formOf(keys.get(12)!))).not.toContain("pick\":\""); // the answer never reaches the phone
+    expect(slotWords(keys.get(12)!, ["1", "a made-up reason"])).toEqual(["ஆம்", "a made-up reason"]);
+    expect(wantWords(keys.get(12)!.parts[0])).toBe("ஆம் + his reason (a teacher reads it)");
+    expect(reasonsOf(keys.get(12)!, ["1", "  a made-up reason "])).toEqual([{ p: "", yes: "ஆம்", text: "a made-up reason" }]);
+    expect(reasonsOf(keys.get(12)!, ["0", "x"])).toEqual([]); // wrong: nothing to read
+    // Never the phone's whole question (so it never comes back), never counted as the phone's marks.
+    expect(allPhone(keys.get(12)!)).toBe(false);
+    expect(phoneShare(new Map([[12, keys.get(12)!]]))).toEqual({ questions: 0, of: 1, marks: 0, max: 2 });
+    expect(onlyReasons(keys.get(12)!, [null])).toBe(true);
+    expect(teacherMarks(keys.get(12)!, [null])).toBe(2);
+    expect(bad({ k: "why", a: "ஆம்" })).toEqual(["Question 1: a yes / no without its answer."]);
+    function bad(t: unknown) {
+      return checkKey([{ q: 1, a: "x", t: t as Ans }], BOOK.data);
+    }
+  });
+
+  test("a box and a reason in one question: the box is marked now, the reason waits; his working photo only for the box", () => {
+    const m = outOf(BOOK.data, 53)!;
+    const k = phoneKey(
+      [{ q: 53, parts: [{ p: "i", a: "**7**", m: 1, t: { k: "box", b: [{ v: ["7"] }] } }, { p: "ii", a: "இல்லை", m: m - 1, t: { k: "why", a: false } }] }],
+      BOOK.data,
+    ).get(53)!;
+    const right = markQuestion(k, ["7", "0", "a made-up reason"]);
+    expect(right).toMatchObject({ got: null, phoneGot: 1, parts: [1, null] });
+    expect(teacherMarks(k, right.parts)).toBe(m - 1);
+    expect(onlyReasons(k, right.parts)).toBe(true);
+    expect(reasonsOf(k, ["7", "0", "a made-up reason"])).toEqual([{ p: "ii", yes: "இல்லை", text: "a made-up reason" }]);
+    const both = markQuestion(k, ["8", "1", ""]);
+    expect(both).toMatchObject({ got: 0, parts: [0, 0] });
+    expect(lostOutsideReasons(k, both.parts)).toBe(true); // the box was wrong: his working is asked for
+    expect(lostOutsideReasons(k, markQuestion(k, ["7", "1", ""]).parts)).toBe(false); // only the reason's pick: no photo
+  });
+
+  test("the phone's reason box takes as many letters as the server keeps", () => {
+    expect(KINDS_TSX).toContain(`REASON_LETTERS = ${REASON_MAX};`);
+  });
+
   test("the slots in the printed question match the key", () => {
     // The engine's own data-b (its blocks) is never a slot.
     const card = '<div class="si" data-q="1" data-b="1.0"><span class="ab" data-fill="1"></span><span data-fill="2"></span><b data-opt>1</b></div>';
@@ -137,6 +213,16 @@ describe("reading a version 2 key from the zip", () => {
     expect(w.problems).toEqual([]);
     expect(w.key![4]).toEqual({ q: 5, a: "A5", t: { k: "order", items: ["2", "1"], a: [2, 1] } });
     expect(w.key![52].parts![0].t).toEqual({ k: "box", b: [{ v: ["7"], u: "cm" }] });
+  });
+
+  test("names and reasons come with their kind; names need no printed options", () => {
+    const w = v2((qs) => {
+      qs[10].t = { k: "choose", n: 4, a: 2, items: ["p", "q", "r", "s"], below: true, x: 1 };
+      qs[11].t = { k: "why", a: true, items: ["dropped"] };
+    });
+    expect(w.problems).toEqual([]);
+    expect(w.key![10].t).toEqual({ k: "choose", n: 4, a: 2, items: ["p", "q", "r", "s"], below: true });
+    expect(w.key![11].t).toEqual({ k: "why", a: true });
   });
 
   test("blanks the printed question doesn't have: refused (the book and its key differ)", () => {

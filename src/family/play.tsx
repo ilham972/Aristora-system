@@ -17,7 +17,7 @@ import type { LevelBook } from "../../convex/lib/homeWork";
 import type { Box } from "../../convex/lib/phone";
 import { drawQuestion } from "../questionView";
 import { Book, Taker } from "./book";
-import { MatchPairs, OrderCards, paintSlots, PickBelow, slotRuns, slotsFit, tapOf, tapped, typing, type Live, type SlotRun } from "./kinds";
+import { MatchPairs, OrderCards, paintSlots, PickBelow, slotRuns, slotsFit, tapOf, tapped, typing, WhyBelow, type Live, type SlotRun } from "./kinds";
 import { keep, mutation, NetError, query } from "./net";
 import { buzz, sound } from "./sound";
 import { Flame, Gem, Icon, Medal, Owl, OwlBadge, pretty, problemWords, Roll, Tag, toast, useOwlTap, Waiting, type Mood } from "./ui";
@@ -658,11 +658,12 @@ export function Play(props: {
             if (p.boxes && p.boxes.length === 0) return null;
             const from = bi;
             const ui = p.ui;
-            // A kind answered inside the printed question: nothing under it. Cards, pairs and the rest go here.
-            if (ui && ui.k !== "fill" && ui.k !== "order" && ui.k !== "match") {
+            // A kind answered inside the printed question: nothing under it. Cards, pairs, names the paper doesn't print,
+            // a reason and the rest go here.
+            if (ui && ui.k !== "fill" && ui.k !== "order" && ui.k !== "match" && ui.k !== "why") {
               bi += p.boxes?.length ?? 0;
               const run = runAt(from);
-              if (!run || fit.has(run.attr)) return null;
+              if (!run || (fit.has(run.attr) && !run.below)) return null;
               return (
                 <div class="f-part" key={pi}>
                   {p.p && <span class="f-plabel">({p.p})</span>}
@@ -680,6 +681,15 @@ export function Play(props: {
                   ) : (
                     <MatchPairs l={ui.l} r={ui.r} vals={mine} at={from} onSet={(v) => setRun(at.qi, from, v)} />
                   )}
+                </div>
+              );
+            }
+            if (ui?.k === "why") {
+              bi += p.boxes?.length ?? 0;
+              return (
+                <div class="f-part" key={pi}>
+                  {p.p && <span class="f-plabel">({p.p})</span>}
+                  <WhyBelow vals={mine} at={from} onSet={(v) => setRun(at.qi, from, v)} />
                 </div>
               );
             }
@@ -1037,7 +1047,7 @@ export function Result(props: {
                     <i key={pi} class="t">
                       ✍
                     </i>
-                  ) : fq?.parts[pi]?.ui?.k === "mark" ? (
+                  ) : fq?.parts[pi]?.ui?.k === "mark" || fq?.parts[pi]?.ui?.k === "why" ? (
                     <i key={pi} class={part.every(Boolean) ? "y" : "n"}>
                       {part.every(Boolean) ? "✓" : "✗"}
                     </i>

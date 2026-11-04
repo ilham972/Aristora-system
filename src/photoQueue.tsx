@@ -123,16 +123,29 @@ function Item(props: { it: PhotoItem; left: number }) {
             {it.unit.key.replace(/^G\d+-/, "")} {it.unit.en} · Level {it.n} · <b>Q{it.q}</b>
           </small>
         </div>
-        <span class={`phq-kind ${it.kind}`}>{part ? "To mark" : "Wrong answer"}</span>
+        <span class={`phq-kind ${it.kind}`}>{it.said ? "Reason to read" : part ? "To mark" : "Wrong answer"}</span>
       </header>
-      <div class={`phq-photos n${it.urls.length}`}>
-        {it.urls.map((u, i) => (
-          <button key={u} type="button" class="phq-ph" aria-label={`Photo ${i + 1}: bigger`} onClick={() => setBig(u)}>
-            <img src={u} alt={`Photo ${i + 1}`} loading="lazy" />
-          </button>
-        ))}
-        {it.urls.length === 0 && <p class="muted">The photo is gone.</p>}
-      </div>
+      {!it.said && (
+        <div class={`phq-photos n${it.urls.length}`}>
+          {it.urls.map((u, i) => (
+            <button key={u} type="button" class="phq-ph" aria-label={`Photo ${i + 1}: bigger`} onClick={() => setBig(u)}>
+              <img src={u} alt={`Photo ${i + 1}`} loading="lazy" />
+            </button>
+          ))}
+          {it.urls.length === 0 && <p class="muted">The photo is gone.</p>}
+        </div>
+      )}
+      {it.reasons.length > 0 && (
+        <div class="phq-said" aria-label="His typed reason">
+          {it.reasons.map((r, i) => (
+            <p key={i}>
+              {r.p && <b class="phq-said-p">({r.p})</b>}
+              <b class="phq-said-yes">{r.yes}</b>
+              <span class="phq-said-why">{r.text || <span class="muted">(no reason written)</span>}</span>
+            </p>
+          ))}
+        </div>
+      )}
       <dl class="phq-facts">
         <dt>Key</dt>
         <dd>{it.key ? <KeyWords text={it.key} /> : <span class="muted">not in the key</span>}</dd>
@@ -206,7 +219,8 @@ function Item(props: { it: PhotoItem; left: number }) {
         </div>
       ) : (
         <div class="phq-actions">
-          <button type="button" class="btn ghost" disabled={busy} onClick={() => setAskRetake(true)}>
+          {/* A typed reason has no photo to take again: pale, in its place (every button in a fixed place). */}
+          <button type="button" class="btn ghost" disabled={busy || it.said} onClick={() => setAskRetake(true)}>
             Retake
           </button>
           <button type="button" class="btn primary phq-save" disabled={busy || (!ready && !(part && it.got !== null))} onClick={() => void save()}>

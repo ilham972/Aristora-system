@@ -159,7 +159,8 @@ const boxAns = v.object({
 /** A part's answer and the way he gives it, as the book engine writes it (convex/lib/key.ts `Ans`; key version 2). */
 export const ansKind = v.union(
   v.object({ k: v.union(v.literal("box"), v.literal("fill")), b: v.array(boxAns), any: v.optional(v.boolean()) }),
-  v.object({ k: v.literal("choose"), n: v.number(), a: v.number(), items: v.optional(v.array(v.string())) }),
+  // below = names the paper doesn't print, shown under the question (4 Nov 2026)
+  v.object({ k: v.literal("choose"), n: v.number(), a: v.number(), items: v.optional(v.array(v.string())), below: v.optional(v.literal(true)) }),
   v.object({ k: v.literal("tf"), a: v.array(v.boolean()), items: v.optional(v.array(v.string())) }),
   v.object({
     k: v.literal("mark"),
@@ -170,6 +171,8 @@ export const ansKind = v.union(
   }),
   v.object({ k: v.literal("order"), items: v.array(v.string()), a: v.array(v.number()) }),
   v.object({ k: v.literal("match"), l: v.array(v.string()), r: v.array(v.string()), a: v.array(v.number()) }),
+  // "is it true? give a reason": ஆம் / இல்லை (a = true for ஆம்), then his typed reason (4 Nov 2026)
+  v.object({ k: v.literal("why"), a: v.boolean() }),
   v.object({ k: v.literal("photo") }),
 );
 /** One question of a workbook's answer key (convex/lib/key.ts): a short answer, or its parts' answers and marks. */
@@ -658,8 +661,13 @@ export default defineSchema({
     n: v.number(),
     q: v.number(),
     kind: v.union(v.literal("part"), v.literal("working")),
-    /** 1–3 photos; empty once deleted (`gone`). */
+    /** 1–3 photos; empty once deleted (`gone`), or for his typed reason (`said`). */
     files: v.array(v.id("_storage")),
+    /**
+     * A part that is his typed reason, no photo (4 Nov 2026, his rule for "is it true? give a reason": ஆம் / இல்லை
+     * right, so a teacher reads the reason he typed at his Check). Made by `family.check`; never a retake.
+     */
+    said: v.optional(v.literal(true)),
     /** Sent (the last time). */
     at: v.number(),
     state: v.union(v.literal("waiting"), v.literal("done"), v.literal("retake")),

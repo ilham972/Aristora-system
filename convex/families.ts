@@ -27,7 +27,7 @@ import { OL, olNumber } from "./lib/syllabus";
 import { asMaster, bookFor, cleanBy, cleanName, currentSession, fail, getStudent, keyRow, log } from "./lib/backend";
 import { outOf } from "./lib/book";
 import { phoneKeyFor } from "./lib/homeWork";
-import { allPhone, FIX_TEACHER, phoneShare, wantsOf, wantWords } from "./lib/phone";
+import { allPhone, FIX_TEACHER, phonePart, phoneShare, wantsOf, wantWords } from "./lib/phone";
 
 const token = v.optional(v.string());
 
@@ -272,7 +272,7 @@ export const answers = query({
         // a teacher typed how the phone reads it (`setPhoneAnswer`).
         parts: k.parts
           .filter((p) => p.m > 0)
-          .map((p) => ({ p: p.p, m: p.m, words: p.want ? wantWords(p) : (p.a ?? ""), phone: p.want !== null, fixed: !!p.fixed })),
+          .map((p) => ({ p: p.p, m: p.m, words: p.want ? wantWords(p) : (p.a ?? ""), phone: phonePart(p), fixed: !!p.fixed })),
       })),
     };
   },

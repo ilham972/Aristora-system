@@ -10357,6 +10357,27 @@ body.tm-on .toasts {
   max-height: 320px;
   object-fit: contain;
 }
+/* His typed reason (4 Nov 2026: "is it true? give a reason" has no photo): ஆம் / இல்லை, then his words, big enough to read */
+.phq-said {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--line-2);
+}
+.phq-said p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.45;
+  overflow-wrap: break-word;
+}
+.phq-said-p,
+.phq-said-yes {
+  margin-right: 6px;
+}
+.phq-said-why {
+  white-space: pre-wrap;
+}
 .phq-facts {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);

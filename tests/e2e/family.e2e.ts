@@ -1296,6 +1296,90 @@ test("answer kinds: the question's own blanks, an option, ✓ / ✗, words to un
   await shot(P, "fam45-kind-result");
 });
 
+test("names and reasons: names to tap under the question; ஆம் / இல்லை and his own words; a wrong pick is 0, a right one waits for the teacher", async () => {
+  // 4 Nov 2026, his decisions: a name the paper doesn't print is chosen from the book's names; "is it true? give a
+  // reason" = ஆம் / இல்லை, then his reason typed with the phone's own keyboard (no photo). Made-up questions only.
+  const backend = makeBackend(modules);
+  const t = backend.t;
+  await addPerson(t, { name: "Owner", token: OWNER_TOKEN, role: "owner" });
+  const as = { token: OWNER_TOKEN };
+  await t.mutation(api.setup.ensure, as);
+  const u01 = await t.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G8-U01")).first())!._id);
+  const kinds: Record<number, Ans> = {
+    1: { k: "choose", n: 4, a: 2, items: ["Made-up name A", "Made-up name B", "Made-up name C", "Made-up name D"], below: true },
+    2: { k: "why", a: false },
+    3: { k: "why", a: true },
+  };
+  for (let q = 4; q <= 10; q++) kinds[q] = { k: "box", b: [{ v: [String(q)] }] };
+  const key = fakeKey().map((k) => (kinds[k.q] ? { ...k, t: kinds[k.q] } : k));
+  await t.mutation(api.catalog.saveWorkbook, {
+    ...as,
+    unitId: u01,
+    parts: BOOK.data.parts.map((p) => ({ id: p.id, to: p.to, ...(p.each ? { each: p.each } : {}) })),
+    levels: BOOK.data.levels.map((l) => ({ to: l.to, max: l.max })),
+    marks: BOOK.data.marks ?? {},
+    replace: true,
+    key,
+  });
+  const card = (q: number, text: string) => `<div class="si" data-q="${q}" data-b="${q}.0"><span class="qn">${q}</span><div class="sit">${text}</div></div>`;
+  await t.run(async (ctx) => {
+    for (let q = 1; q <= 10; q++) await ctx.db.insert("questions", { unitId: u01, stage: "master", q, html: card(q, `A made-up question number ${q}`) });
+    await ctx.db.insert("bookCss", { unitId: u01, stage: "master", css: ".qn { font-weight: 700; }", updatedAt: 0 });
+    const book = (await ctx.db.query("books").withIndex("by_unit_stage", (x) => x.eq("unitId", u01).eq("stage", "master")).first())!;
+    await ctx.db.patch(book._id, { qCount: 10 });
+  });
+  const hana = await t.mutation(api.students.add, { ...as, name: "Hana K", grade: 8, term: 1, stage: "master", unitId: u01 });
+  await t.mutation(api.families.setCode, { ...as, studentId: hana, code: "4719" });
+
+  const P = await open(backend, `${site.url}/f/`, size(360, 780));
+  await P.getByLabel(/Index/).fill("1001");
+  await P.getByLabel("Code").fill("4719");
+  await P.getByRole("button", { name: "Sign in" }).click();
+  await stageNow(P, "Level 1");
+  await P.locator(".f-lv.play").click();
+  await contains(P.locator(".f-qn"), "Q1");
+  const nextBar = () => P.locator(".f-nextbar .f-key.next").click();
+
+  // Q1: the four names under the question (the paper prints none); no pad, nothing to type.
+  const names = P.locator(".f-pkn .f-pkb");
+  await until(async () => (await names.count()) === 4, "four names under the question");
+  expect(await P.locator(".f-padkeys").count()).toBe(0);
+  await names.nth(1).click();
+  await visible(P.locator(".f-pkn .f-pkb.on"));
+  await noSideScroll(P);
+  await shot(P, "fam46-kind-names");
+  await nextBar();
+  // Q2: ஆம் / இல்லை, then his reason with the phone's own keyboard (still no pad).
+  await contains(P.locator(".f-qn"), "Q2");
+  expect(await P.locator(".f-padkeys").count()).toBe(0);
+  await P.locator(".f-pk.yn .f-pkb").nth(1).click(); // இல்லை: right
+  await P.locator(".f-whyt textarea").fill("Made-up reason in Thanglish: 15 x 15 = 225, so not 125");
+  await visible(P.locator(".f-pk.yn .f-pkb.on"));
+  await noSideScroll(P);
+  await shot(P, "fam47-kind-why");
+  await nextBar();
+  // Q3: the wrong pick (ஆம் is right).
+  await contains(P.locator(".f-qn"), "Q3");
+  await P.locator(".f-pk.yn .f-pkb").nth(1).click();
+  await P.locator(".f-whyt textarea").fill("Made-up");
+  await nextBar();
+  // Q4–Q10: boxes as always.
+  for (let q = 4; q <= 10; q++) await type(P, String(q).split(""));
+  await P.locator(".f-review").getByRole("button", { name: "Check ✓" }).click();
+
+  // The reveal: Q1 and Q4–Q10 right, Q3 wrong (0 at once), Q2 the teacher's: 16 of the 18 the phone marks.
+  await contains(P.locator(".f-big"), "16");
+  await contains(P.locator(".f-big"), "/ 18");
+  await until(async () => (await P.locator(".f-rrow.bad").allInnerTexts()).join().includes("Q3"), "Q3 wrong");
+  await visible(P.locator(".f-rrow.teach"));
+  await noSideScroll(P);
+  await shot(P, "fam48-kind-why-result");
+  // The teacher reads his words in the Photos queue: no photo, nothing for him to send.
+  const items = await t.query(api.photos.queue, as);
+  expect(items.map((i) => [i.q, i.said, i.urls.length])).toEqual([[2, true, 0]]);
+  expect(items[0].reasons).toEqual([{ p: "", yes: "இல்லை", text: "Made-up reason in Thanglish: 15 x 15 = 225, so not 125" }]);
+});
+
 test("a tute's ladder on the phone: one road numbered as printed; a teacher question asks, Learn shows it a step a tap; Check sets the circles", async () => {
   const backend = makeBackend(modules);
   const t = backend.t;

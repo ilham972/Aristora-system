@@ -74,7 +74,7 @@ import {
 import { DAY_MS, isBirthday, SL_OFFSET_MS, slDay, slDayNo, slWeekStart } from "./lib/day";
 import { bookOf, homeChecks, phoneKeyFor, type LevelBook } from "./lib/homeWork";
 import { computeMaster, markBefore, type MQ, type MState } from "./lib/master";
-import { boxCount, formOf, INPUT_MAX, markQuestion, type FormQ, type KeyQ } from "./lib/phone";
+import { boxCount, formOf, INPUT_MAX, lostOutsideReasons, markQuestion, onlyReasons, REASON_MAX, teacherMarks, type FormQ, type KeyQ } from "./lib/phone";
 import { blockedBy, keyText, PHOTO_BYTES, PHOTO_MAX, PHOTO_URLS_PER_DAY, type PhotoKind } from "./lib/photos";
 import { ladderOf, secQs } from "./lib/ladder";
 import {
@@ -456,6 +456,44 @@ function copy(m: MState): MState {
   };
 }
 
+/** What he typed for a question, as kept: each box at most its length (a typed reason `REASON_MAX`, the rest `INPUT_MAX`). */
+function kept(k: KeyQ, a: string[]): string[] {
+  const boxes = k.parts.flatMap((p) => p.want ?? []);
+  return boxes.map((w, i) => (a[i] ?? "").slice(0, w.box.k === "text" ? REASON_MAX : INPUT_MAX));
+}
+
+/**
+ * His typed reason for a question a teacher marks (his rule, 4 Nov 2026: "is it true? give a reason" never asks for a
+ * photo): its part row waits in her queue at once, with nothing for him to send (`said`; she reads what he typed at his
+ * Check). A level taken back in class and checked again starts its row again.
+ */
+async function sayReason(ctx: MutationCtx, studentId: Id<"students">, unitId: Id<"units">, n: number, q: number, now: number) {
+  const row = await ctx.db
+    .query("homePhotos")
+    .withIndex("by_student", (x) => x.eq("studentId", studentId).eq("unitId", unitId).eq("n", n).eq("q", q))
+    .filter((x) => x.eq(x.field("kind"), "part"))
+    .first();
+  if (!row) {
+    await ctx.db.insert("homePhotos", { studentId, unitId, n, q, kind: "part", files: [], said: true, at: now, state: "waiting" });
+    return;
+  }
+  for (const f of row.files) await ctx.storage.delete(f);
+  await ctx.db.patch(row._id, {
+    files: [],
+    said: true,
+    at: now,
+    state: "waiting",
+    got: undefined,
+    why: undefined,
+    note: undefined,
+    seen: undefined,
+    doneAt: undefined,
+    by: undefined,
+    byId: undefined,
+    gone: undefined,
+  });
+}
+
 /**
  * His answers for a whole level, once: marked here with the answer key and saved as the level marked at home. A
  * question the phone marks entirely gets its marks now (lost marks go to Evaluation, as in class); a question with a
@@ -474,7 +512,8 @@ export const check = mutation({
     const now = Date.now();
     if (args.n < 0) return await checkLadder(ctx, s, args, now);
     const { data, level: l, keys } = await playable(ctx, s, args.unitId, args.n);
-    if (args.typed.length > 200 || args.typed.some((t) => t.a.length > 30 || t.a.some((x) => x.length > INPUT_MAX))) {
+    // A reason he types may be a few sentences; every other box is marked only up to INPUT_MAX (`right`).
+    if (args.typed.length > 200 || args.typed.some((t) => t.a.length > 30 || t.a.some((x) => x.length > REASON_MAX))) {
       fail("Those answers are too long.");
     }
     const typed = new Map(args.typed.map((t) => [t.q, t.a]));
@@ -502,6 +541,8 @@ export const check = mutation({
     let got = 0;
     let phoneMax = 0;
     const teacher: number[] = [];
+    // The questions a teacher only has to read his typed reasons for (no photo): their rows go to her queue now.
+    const said: number[] = [];
     for (let q = l.from; q <= l.to; q++) {
       const k = keys.get(q);
       if (!k) continue;
@@ -515,14 +556,17 @@ export const check = mutation({
       const a = (typed.get(q) ?? []).slice(0, boxCount(k));
       const r = markQuestion(k, a);
       results.push({ q, max: k.max, ok: r.ok, got: r.got, phoneGot: r.phoneGot });
-      if (boxCount(k)) answers.push({ q, a: Array.from({ length: boxCount(k) }, (_, i) => a[i] ?? ""), ok: r.ok });
+      if (boxCount(k)) answers.push({ q, a: kept(k, a), ok: r.ok });
       if (r.got === null) {
         teacher.push(q);
-        pm.push(k.parts.filter((p) => !p.want).reduce((s, p) => s + p.m, 0));
+        pm.push(teacherMarks(k, r.parts));
         pg.push(r.phoneGot);
+        if (onlyReasons(k, r.parts)) said.push(q);
         continue;
       }
-      if (r.got < k.max) wrong.push(q);
+      // His working photo on a lost question (his rule), except where the only loss is a reason's wrong ஆம் / இல்லை
+      // (his rule, 4 Nov 2026: "don't put the image upload option" for those).
+      if (r.got < k.max && lostOutsideReasons(k, r.parts)) wrong.push(q);
       rows[String(q)] = { got: r.got, max: k.max, lost: r.got < k.max, t: now };
       got += r.got;
       phoneMax += k.max;
@@ -548,6 +592,8 @@ export const check = mutation({
     await ctx.db.patch(progress._id, { m, updatedAt: now });
     // What he typed (for the most common wrong answers per question) and the photos this Check asks of him.
     await ctx.db.insert("familyAnswers", { studentId: s._id, unitId: unit._id, n: l.n, at: now, qs: answers, owe: { part: teacher, working: wrong, pm, pg } });
+    // His typed reasons go to the teachers' queue at once, as a part to mark with nothing to send (`said`).
+    for (const q of said) await sayReason(ctx, s._id, unit._id, l.n, q, now);
     await log(ctx, null, now, {
       kind: "level-home",
       studentId: s._id,
@@ -583,7 +629,7 @@ async function checkLadder(
   now: number,
 ) {
   const { lad, sec } = await ladderPlayable(ctx, s, args.unitId, args.n);
-  if (args.typed.length > 200 || args.typed.some((t) => t.a.length > 30 || t.a.some((x) => x.length > INPUT_MAX))) {
+  if (args.typed.length > 200 || args.typed.some((t) => t.a.length > 30 || t.a.some((x) => x.length > REASON_MAX))) {
     fail("Those answers are too long.");
   }
   const typed = new Map(args.typed.map((t) => [t.q, t.a]));
@@ -695,6 +741,8 @@ export const photoSend = mutation({
       .filter((x) => x.eq(x.field("kind"), kind))
       .first();
     if (row?.state === "done") fail("உன் ஆசிரியர் ஏற்கனவே இதைப் பார்த்துவிட்டார்.");
+    // His typed reason is what the teacher reads for this part (no photo for it).
+    if (row?.said) fail("This question doesn't need a photo.");
     if (row) {
       for (const old of row.files) if (!args.files.includes(old)) await ctx.storage.delete(old);
       await ctx.db.patch(row._id, { files: args.files, at: now, state: "waiting", why: undefined, note: undefined, seen: undefined, gone: undefined });

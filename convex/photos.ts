@@ -19,7 +19,7 @@ import { actor, viewer } from "./lib/auth";
 import { asMaster, bookFor, fail, keyRow, log, masterState, progressFor } from "./lib/backend";
 import { phoneKeyFor, photosRequired, REQUIRED_KEY } from "./lib/homeWork";
 import type { MState } from "./lib/master";
-import { markQuestion, slotWords, type KeyQ } from "./lib/phone";
+import { markQuestion, reasonsOf, slotWords, type KeyQ } from "./lib/phone";
 import { isRetake, isWhy, keyText, NOTE_MAX, ORPHAN_MS, partMarks, PHOTO_KEEP_MS, PHOTO_LATE_MS } from "./lib/photos";
 
 const token = v.optional(v.string());
@@ -57,6 +57,10 @@ export type PhotoItem = {
   /** The question's marks now: a part marked in class meanwhile, or the phone's on a wrong answer. */
   got: number | null;
   urls: string[];
+  /** His typed reason, no photo (his ஆம் / இல்லை was right). Never a retake. */
+  said: boolean;
+  /** The reasons she reads (a reason part whose ஆம் / இல்லை was right): its label, ஆம் / இல்லை, his words. */
+  reasons: { p: string; yes: string; text: string }[];
   /** Its printed question is in the app. */
   hasQ: boolean;
 };
@@ -133,6 +137,8 @@ export const queue = query({
         ok: t && t.a.length ? t.ok : null,
         got: mq ? (mq.got ?? null) : null,
         urls,
+        said: !!r.said,
+        reasons: r.kind === "part" && t && t.a.length ? reasonsOf(k, t.a) : [],
         hasQ,
       });
     }
@@ -239,6 +245,7 @@ export const retake = mutation({
     const r = await ctx.db.get(args.id);
     if (!r) fail("That photo is gone.");
     if (r.state !== "waiting") fail("Someone already answered this photo.");
+    if (r.said) fail("This is his typed reason: there is no photo to take again.");
     if (!isRetake(args.why)) fail("Pick what is wrong with the photo.");
     await dropFiles(ctx, r.files);
     await ctx.db.patch(r._id, { state: "retake", why: args.why, files: [], gone: now, doneAt: now, by: me.name, byId: me._id });

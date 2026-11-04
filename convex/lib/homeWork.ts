@@ -89,6 +89,8 @@ export type BookPhoto = {
   at: number;
   /** Her answer, not opened on his phone yet. */
   fresh: boolean;
+  /** His typed reason (no photo): the phone says the teacher reads it. */
+  said: boolean;
 };
 
 export type BookQ = {
@@ -128,6 +130,7 @@ function photoView(p: Doc<"homePhotos">): BookPhoto {
     note: p.note ?? null,
     at: p.at,
     fresh: p.state !== "waiting" && !p.seen,
+    said: !!p.said,
   };
 }
 
