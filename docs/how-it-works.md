@@ -1105,7 +1105,11 @@ learning app of our education institute"): one profile, his class times, what he
   - **The level's book** (`family.book`, also returned by `check`): after Check, every question he lost marks on shows
     the key's working (`sol`, `**` bold = the final answer; his decision: only the ones he got wrong, only after his
     one Check) and what he typed (struck out). The reveal shows it under the rows; the Stage opens it again by tapping a
-    level marked at home (`hm`). The right ones need nothing and are not listed.
+    level marked at home (`hm`). The right ones need nothing and are not listed. **A wrong one that comes back hides
+    its solution** (his report, 4 Nov 2026: "they can go back to Level 1 and get the answer from there"): while it is
+    still to come back (`comesBack`: the `retryPool` test, and a level at least 2 after its own not handed in) the book
+    shows "↻ … மீண்டும் வரும். தீர்வு அதன் பின்." (`back`, `.f-comesback`) instead of `sol`; after his second try
+    (right or wrong), or once the book is finished without it, the solution shows. His working photo is still asked.
   - **Photos he owes** (`familyAnswers.owe`, written at Check, with each part question's marks as at that Check:
     `pm` the teacher's share, `pg` the phone's; `partMarks` reads them, and for an older Check a question the phone now
     reads is the teacher's whole): `part` = a question with a part only a teacher can mark
@@ -1141,6 +1145,8 @@ learning app of our education institute"): one profile, his class times, what he
     changes): his new marks are kept beside the first ones (`MQ.rt`, `rg`: the unit's marks, Progress and the reports
     keep the first try); right = explained (`x`: Evaluation skips it, and its working photo is no longer owed); the marks
     he won back count as XP the day he won them (`xpItems`: never more than he lost, so a wrong first answer never pays).
+    With the question switch on, a ↻ question is printed too (`family.questions` adds the same pool; 4 Nov 2026 it said
+    "இந்தக் கேள்வி இன்னும் phone இல் இல்லை" because only the level's own questions came).
     The reveal: "↻ பழைய கேள்விகள் 1/2 · +2 XP" and the XP pill includes them. History: "old questions back on the
     phone (Q8): 1/1 right" (`retry-home`). A re-mark of the old level in class drops its `rt` (it may come back once
     more).

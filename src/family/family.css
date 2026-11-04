@@ -3951,6 +3951,14 @@ p {
   font-size: 14px;
   font-weight: 600;
 }
+/* A wrong one that comes back later: no solution yet (it would be copied on his second try). */
+.f-ph-state.f-comesback {
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--gold-soft);
+  color: var(--gold-ink);
+  font-weight: 700;
+}
 .f-bookscr {
   padding: calc(12px + var(--safe-t)) 16px calc(28px + var(--safe-b));
 }

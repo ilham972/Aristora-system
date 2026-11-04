@@ -597,7 +597,17 @@ export const questions = query({
     const level = asMaster(book).levels.find((l) => l.n === args.n);
     if (!level) fail("That level is not in this Stage.");
     const qs: FamilyQuestions["qs"] = [];
-    for (let q = level.from; q <= level.to; q++) {
+    // The questions that come back in this level (from an earlier level of the same Stage) are printed too (4 Nov
+    // 2026: the phone said "not in the phone yet" on a ↻ question): the same pool `level` adds.
+    const want: number[] = [];
+    for (let q = level.from; q <= level.to; q++) want.push(q);
+    const p = await progressFor(ctx, s._id, args.unitId, "master");
+    const key = p ? await keyRow(ctx, args.unitId, "master") : null;
+    if (p && key) {
+      const data = asMaster(book);
+      for (const r of retryPool(masterState(p), data, await phoneKeyFor(ctx, args.unitId, data, key.answers), args.n)) want.push(r.q);
+    }
+    for (const q of want) {
       const r = await ctx.db
         .query("questions")
         .withIndex("by_book", (x) => x.eq("unitId", args.unitId).eq("stage", "master").eq("q", q))
