@@ -8,7 +8,7 @@ import { asMaster, bookFor, keyRow, masterState } from "./backend";
 import { comesBack, masterRows } from "./family";
 import type { MasterData } from "./book";
 import type { KeyAnswer } from "./key";
-import { phoneKey, type KeyQ } from "./phone";
+import { phoneKey, slotWords, type KeyQ } from "./phone";
 import { isRetake, isWhy, keyText, owedOf, partMarks, RETAKE, WHY, type CheckDebt, type PhotoKind } from "./photos";
 
 /** The key as the phone reads it, with the answers the teachers typed (Settings → Books → See what the phone accepts). */
@@ -167,7 +167,7 @@ export async function bookOf(
       got: mq ? (mq.got ?? (mq.lost ? 0 : k.max)) : null,
       // A part left to the teacher at his Check keeps its share (`partMarks`), whatever the key reads today.
       teach: row?.owe?.part.includes(q) && !mq ? partMarks(row.owe, q, k, typed?.a ?? null).teach : k.parts.filter((p) => !p.want).reduce((a, p) => a + p.m, 0),
-      typed: typed?.a ?? null,
+      typed: typed ? slotWords(k, typed.a) : null,
       ok: typed?.ok ?? null,
       sol: mq?.lost && !back ? keyText(raw.get(q)) || null : null,
       back,

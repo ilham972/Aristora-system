@@ -340,3 +340,12 @@ EOF
   same (x %, y px). Change `spot` and both follow.
 - **A hook before any early return**: the teachers' `App` returns early while loading or signed out; the gear's
   feedback count (`useFeedbackNew`) sits above those returns.
+
+**Answer kinds (4 Nov 2026).**
+- The slots in a printed question are `data-fill`, `data-opt`, `data-tick`, `data-mark`, never `data-b`: the book
+  engine's cards (`<div class="si" data-q="12" data-b="12.0">`) and blocks already use `data-b` and `data-q`.
+- A level's typed list per question is still one string a slot (`boxCount` counts pick boxes too), so Check's `b`
+  (boxes shown) and the stale check work unchanged; a tap that changes several slots (✓ / ✗, marked words, cards,
+  pairs) must write them in one update (`setRun`): two `set` calls in one handler lose the first.
+- Playwright's CSS locators pierce the paper's open shadow root: `P.locator(".f-paper [data-opt]")` taps an option.
+- The family bundle is ~62 KB with the kinds (budget 64 KB since that evening): `PAPER_CSS` is a string in the JS.

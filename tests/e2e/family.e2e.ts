@@ -12,6 +12,7 @@ import { afterAll, beforeAll, expect, test } from "vitest";
 import { api } from "../../convex/_generated/api";
 import { secretHash } from "../../convex/lib/auth";
 import { outOf } from "../../convex/lib/book";
+import type { Ans } from "../../convex/lib/key";
 import { strToU8, zipSync } from "fflate";
 import { readWorkbookFiles, readWorkbookHtml, type ReadTute } from "../../src/workbookFile";
 import TUTE_HTML from "../fixtures/tute-skeleton.html?raw";
@@ -212,14 +213,12 @@ test("the family app: join, a level on the pad, Check once, the reveal, XP and t
   await type(F, ["5", "4"]);
   await type(F, ["1", "9"]);
   await type(F, ["2", "0"]);
-  // Q20 is the teacher's: no box, the pad pale but → goes on; a key says why instead of doing nothing.
+  // Q20 is the teacher's: no box, so no pad to tap in vain (4 Nov 2026): "do it on paper", and → where the pad's → is.
   await contains(F.locator(".f-teach"), "தாளில்");
-  await visible(F.locator(".f-key.f-keyoff"));
-  await F.locator(".f-padkeys").getByRole("button", { name: "5", exact: true }).click({ force: true }); // aria-disabled, still a tap
-  await contains(F.locator(".f-toast"), "தாளில்");
+  expect(await F.locator(".f-padkeys").count()).toBe(0);
   await noSideScroll(F);
   await shot(F, "fam03b-teacher-question");
-  await F.locator(".f-padkeys .f-key.next").click();
+  await F.locator(".f-nextbar .f-key.next").click();
   await contains(F.locator(".f-review"), "ஆசிரியர் திருத்துவார்");
   await F.locator(".f-review").getByRole("button", { name: "Check ✓" }).click();
   await contains(F.locator(".f-big"), "18");
@@ -441,20 +440,22 @@ test("the new look: class hours and Home, the map, the questions as printed, fee
   await P.locator(".f-node.s-now").click();
   await playIs(P, "Level 1");
 
-  // No workbook with her: the switch shows each question as printed above its boxes; it stays on for the next one.
+  // Her Stage's questions are in the app: each question as printed above its boxes, always (his answer, 4 Nov 2026:
+  // no switch), its printed number hidden (the card says Q1 once), in the app's own font.
   await P.locator(".f-lv.play").click();
   await contains(P.locator(".f-qn"), "Q1");
-  expect(await P.locator(".f-paper").count()).toBe(0);
-  await P.locator(".f-qmode").click();
+  expect(await P.locator(".f-qmode").count()).toBe(0);
   const printed = () => P.locator(".f-paper").evaluate((el) => el.shadowRoot?.querySelector(".qv")?.textContent ?? "");
   await until(async () => (await printed()).includes("made-up question number 1"), "Q1 as printed");
+  const inQv = (sel: string, prop: "display" | "fontFamily") =>
+    P.locator(".f-paper").evaluate((el, [s, k]) => getComputedStyle(el.shadowRoot!.querySelector(s)!)[k as "display"], [sel, prop] as const);
+  expect(await inQv(".qn", "display")).toBe("none");
+  expect(await inQv(".qt", "fontFamily")).toContain("Baloo Thambi 2");
   await noSideScroll(P);
   await shot(P, "fam14-question-mode");
   await type(P, ["3"]);
   await contains(P.locator(".f-qn"), "Q2");
   await until(async () => (await printed()).includes("made-up question number 2"), "Q2 as printed");
-  await P.locator(".f-qmode").click(); // off: only the boxes
-  await until(async () => (await P.locator(".f-paper").count()) === 0, "no question when off");
   await P.getByRole("button", { name: "Back" }).click(); // the Level → its Stage
   await playIs(P, "Level 1");
   await P.getByRole("button", { name: "Back" }).click(); // the Stage → the map
@@ -769,7 +770,8 @@ test("a level holds still: → never makes the page wider than the phone or move
   const key = (k: string) => P.locator(".f-padkeys").getByRole("button", { name: k, exact: true }).tap();
   const next = () => P.locator(".f-padkeys .f-key.next").tap();
 
-  // Only the boxes: Q1 → Q2. The page never wider than the phone, the pad's bottom on the screen's bottom every frame.
+  // Q1 → Q2 (each question as printed, always). The page never wider than the phone, the pad's bottom on the screen's
+  // bottom every frame.
   await key("3");
   const a = await framesOf(P, next);
   await contains(P.locator(".f-qn"), "Q2");
@@ -777,8 +779,7 @@ test("a level holds still: → never makes the page wider than the phone or move
   expect(new Set(a.frames.map((f) => f.pad))).toEqual(new Set([640]));
   expect(a.ys).toEqual([0]);
 
-  // The questions as printed (tall): he scrolls down to his box, types, → . The page moves once, to the top, with Q3.
-  await P.locator(".f-qmode").tap();
+  // A tall question: he scrolls down to his box, types, → . The page moves once, to the top, with Q3.
   await until(async () => (await P.locator(".f-paper").count()) === 1, "Q2 as printed");
   await scrollDown(P, "Q2's box");
   await key("6");
@@ -945,7 +946,7 @@ test("photos from home: a drawing photographed in the level, the working on a wr
   await visible(F.locator(".f-qcard .f-thumb img"));
   await noSideScroll(F);
   await shot(F, "fam-ph01-camera");
-  await F.locator(".f-padkeys .f-key.next").click();
+  await F.locator(".f-nextbar .f-key.next").click();
   await F.locator(".f-review").getByRole("button", { name: "Check ✓" }).click();
 
   // The reveal: 16 of 18 on the phone; below it the book: Q8 with the key's working and a camera for her working; the
@@ -1125,16 +1126,13 @@ test("a printed question opens full screen: two fingers zoom only it, one finger
   await stageNow(P, "Level 1");
   await P.locator(".f-lv.play").click();
   await contains(P.locator(".f-qn"), "Q1");
-  expect(await P.getByRole("button", { name: /^Zoom/ }).count()).toBe(0); // only with the question on screen
   const headH = () => P.locator(".f-qhead").evaluate((el) => Math.round(el.getBoundingClientRect().height));
-  const h0 = await headH();
 
-  // The question on: the zoom button beside the XP (the row as tall as before), the question not selectable.
-  await P.locator(".f-qmode").click();
+  // The question (always on): the zoom button beside the XP (the row no taller for it), the question not selectable.
   const inPaper = (sel: string) => P.locator(sel).evaluate((el) => el.shadowRoot?.querySelector(".qv")?.textContent ?? "");
   await until(async () => (await inPaper(".f-paper")).includes("made-up question number 1"), "Q1 as printed");
   await visible(P.getByRole("button", { name: "Zoom Q1" }));
-  expect(await headH()).toBe(h0);
+  expect(await headH()).toBeLessThanOrEqual(40);
   expect(await P.locator(".f-paper").evaluate((el) => getComputedStyle(el.shadowRoot!.querySelector(".qv")!).userSelect)).toBe("none");
 
   // Full screen: two fingers zoom the question (3x), never the app; one finger moves it.
@@ -1171,6 +1169,131 @@ test("a printed question opens full screen: two fingers zoom only it, one finger
   await P.goBack();
   await playIs(P, "Level 1");
   expect(problems).toEqual([]);
+});
+
+test("answer kinds: the question's own blanks, an option, ✓ / ✗, words to underline, cards to order, pairs; Check marks them exactly", async () => {
+  // A key of version 2 (4 Nov 2026): the book gives each answer and its kind. Made-up questions in the book's shapes.
+  const backend = makeBackend(modules);
+  const t = backend.t;
+  await addPerson(t, { name: "Owner", token: OWNER_TOKEN, role: "owner" });
+  const as = { token: OWNER_TOKEN };
+  await t.mutation(api.setup.ensure, as);
+  const u01 = await t.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G8-U01")).first())!._id);
+  const kinds: Record<number, Ans> = {
+    1: { k: "fill", b: [{ v: ["3"] }, { v: ["4"] }] },
+    2: { k: "choose", n: 4, a: 2 },
+    3: { k: "tf", a: [true, false] },
+    4: { k: "mark", n: 4, a: [2, 3] },
+    5: { k: "order", items: ["5", "−2", "0"], a: [2, 3, 1] },
+    6: { k: "match", l: ["a", "b"], r: ["2", "1"], a: [2, 1] },
+    7: { k: "photo" },
+    8: { k: "box", b: [{ v: ["15"] }] },
+    9: { k: "box", b: [{ v: ["3/4"], same: true }] },
+    10: { k: "box", b: [{ v: ["21"] }] },
+  };
+  const key = fakeKey().map((k) => (kinds[k.q] ? { ...k, t: kinds[k.q] } : k));
+  await t.mutation(api.catalog.saveWorkbook, {
+    ...as,
+    unitId: u01,
+    parts: BOOK.data.parts.map((p) => ({ id: p.id, to: p.to, ...(p.each ? { each: p.each } : {}) })),
+    levels: BOOK.data.levels.map((l) => ({ to: l.to, max: l.max })),
+    marks: BOOK.data.marks ?? {},
+    replace: true,
+    key,
+  });
+  const card = (q: number, text: string) => `<div class="si" data-q="${q}" data-b="${q}.0"><span class="qn">${q}</span><div class="sit">${text}</div></div>`;
+  const html: Record<number, string> = {
+    1: card(1, 'Made-up blanks: 7 + <span class="ab" data-fill="1"></span> = 10 and <span class="ab" data-fill="2"></span> × 2 = 8'),
+    2: card(2, 'A made-up choice<div class="mcq"><span data-opt="1"><b>(1)</b>5</span><span data-opt="2"><b>(2)</b>7</span><span data-opt="3"><b>(3)</b>9</span><span data-opt="4"><b>(4)</b>11</span></div>'),
+    3: card(3, '<div>(a) Made-up true <span data-tick="1">( )</span></div><div>(b) Made-up false <span data-tick="2">( )</span></div>'),
+    4: card(4, 'Underline the made-up ones: <span data-mark="1">10</span>, <span data-mark="2">11</span>, <span data-mark="3">13</span>, <span data-mark="4">14</span>'),
+    5: card(5, "Made-up order: 5, −2, 0"),
+    6: card(6, "Made-up pairs"),
+    7: card(7, "A made-up drawing"),
+  };
+  await t.run(async (ctx) => {
+    for (let q = 1; q <= 10; q++) await ctx.db.insert("questions", { unitId: u01, stage: "master", q, html: html[q] ?? card(q, `A made-up question number ${q}`) });
+    await ctx.db.insert("bookCss", { unitId: u01, stage: "master", css: ".qn { font-weight: 700; } .ab { display: inline-block; width: 18mm; height: 7mm; border: 1pt solid #000; }", updatedAt: 0 });
+    const book = (await ctx.db.query("books").withIndex("by_unit_stage", (x) => x.eq("unitId", u01).eq("stage", "master")).first())!;
+    await ctx.db.patch(book._id, { qCount: 10 });
+  });
+  const hana = await t.mutation(api.students.add, { ...as, name: "Hana K", grade: 8, term: 1, stage: "master", unitId: u01 });
+  await t.mutation(api.families.setCode, { ...as, studentId: hana, code: "4719" });
+
+  const P = await open(backend, `${site.url}/f/`, size(360, 780));
+  await P.getByLabel(/Index/).fill("1001");
+  await P.getByLabel("Code").fill("4719");
+  await P.getByRole("button", { name: "Sign in" }).click();
+  await stageNow(P, "Level 1");
+  await P.locator(".f-lv.play").click();
+  await contains(P.locator(".f-qn"), "Q1");
+  const paper = P.locator(".f-paper");
+  const nextBar = () => P.locator(".f-nextbar .f-key.next").click();
+
+  // Q1: the question's own blanks are his boxes (no box under it); a tap picks the blank, the pad types in it.
+  await visible(paper.locator("[data-fill]").first());
+  expect(await P.locator(".f-qcard .f-boxes").count()).toBe(0);
+  await P.locator(".f-padkeys").getByRole("button", { name: "3", exact: true }).click();
+  await paper.locator("[data-fill]").nth(1).click();
+  await P.locator(".f-padkeys").getByRole("button", { name: "4", exact: true }).click();
+  await until(async () => (await paper.locator("[data-fill]").allInnerTexts()).join() === "3,4", "both blanks typed");
+  await noSideScroll(P);
+  await shot(P, "fam40-kind-blanks");
+  await P.locator(".f-padkeys .f-key.next").click();
+
+  // Q2: an option tapped in the question; no pad (nothing to type), only →.
+  await contains(P.locator(".f-qn"), "Q2");
+  expect(await P.locator(".f-padkeys").count()).toBe(0);
+  await paper.locator("[data-opt]").nth(1).click();
+  await visible(paper.locator("[data-opt].fx-on"));
+  await shot(P, "fam41-kind-choose");
+  await nextBar();
+  // Q3: ✓ and ✗ in each bracket.
+  await paper.locator("[data-tick]").nth(0).locator(".fx-tk").nth(0).click();
+  await paper.locator("[data-tick]").nth(1).locator(".fx-tk").nth(1).click();
+  await shot(P, "fam42-kind-tick");
+  await nextBar();
+  // Q4: words underlined (one tapped twice is back off).
+  for (const i of [1, 0, 0, 2]) await paper.locator("[data-mark]").nth(i).click();
+  expect(await paper.locator("[data-mark].fx-on").count()).toBe(2);
+  await nextBar();
+  // Q5: cards in order, by two taps each (−2, 0, 5).
+  await contains(P.locator(".f-qn"), "Q5");
+  const cards = P.locator(".f-ordc");
+  await cards.nth(0).click();
+  await cards.nth(1).click();
+  await cards.nth(1).click();
+  await cards.nth(2).click();
+  await until(async () => (await cards.allInnerTexts()).join(" ") === "−2 0 5", "the cards in order");
+  await noSideScroll(P);
+  await shot(P, "fam43-kind-order");
+  await nextBar();
+  // Q6: pairs, left then right.
+  const side = (k: number) => P.locator(".f-matc").nth(k).locator(".f-mi");
+  await side(0).nth(0).click();
+  await side(1).nth(1).click();
+  await side(0).nth(1).click();
+  await side(1).nth(0).click();
+  await visible(side(1).nth(0).locator(".f-min"));
+  await shot(P, "fam44-kind-match");
+  await nextBar();
+  // Q7: a drawing, on purpose: the photo, → goes on.
+  await contains(P.locator(".f-teach"), "படம் எடு");
+  await nextBar();
+  // Q8–Q10: boxes as always; Q9 is written the book's way (6/8 is not 3/4).
+  await type(P, ["1", "5"]);
+  await type(P, ["6", "/", "8"]);
+  await type(P, ["2", "1"]);
+  await P.locator(".f-review").getByRole("button", { name: "Check ✓" }).click();
+
+  // The reveal: every kind marked on the phone, Q9 wrong, Q7 the teacher's: 16 of 18.
+  await contains(P.locator(".f-big"), "16");
+  await contains(P.locator(".f-big"), "/ 18");
+  await until(async () => (await P.locator(".f-rrow.bad").allInnerTexts()).join().includes("Q9"), "Q9 wrong");
+  expect(await P.locator(".f-rrow.ok").count()).toBe(8);
+  await visible(P.locator(".f-rrow.teach"));
+  await noSideScroll(P);
+  await shot(P, "fam45-kind-result");
 });
 
 test("a tute's ladder on the phone: one road numbered as printed; a teacher question asks, Learn shows it a step a tap; Check sets the circles", async () => {
