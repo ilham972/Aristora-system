@@ -832,7 +832,7 @@ in the family app on the family phone, taps **Check** once per level and sees �
 before he walks in. Since 3 Nov 2026 it is also **the institute's student app** (his voice note: "this is also the
 learning app of our education institute"): one profile, his class times, what he did in class each day, his progress.
 - Its own small bundle (`src/family/`, ~57 KB over the wire for code, style and page on 4 Nov 2026; `scripts/build.mjs`
-  stops the build over 58 KB: 50 until the owl's acting, ~6 KB; 56 until the photos and the zoomed question), **one font for Tamil and English** (Baloo Thambi 2, weights 500–800, one variable file
+  stops the build over 60 KB: 50 until the owl's acting, ~6 KB; 56 until the photos and the zoomed question; 58 until a tute's ladder and Learn), **one font for Tamil and English** (Baloo Thambi 2, weights 500–800, one variable file
   cut to Tamil + Latin, ~57 KB: `src/family/fonts/`, preloaded by the page, kept by the service worker, not in the
   budget; 4 Nov 2026: the phone's own Tamil fonts differ on every phone, Tamil Sangam MN on iPhones, and never matched
   the English words beside them), no client library (Convex's plain HTTP API, `src/family/net.ts`). It lives under
@@ -996,6 +996,26 @@ learning app of our education institute"): one profile, his class times, what he
     (his best run), Perfect (a Level with every mark), 5 × Perfect, Stage clear (one Level of it in the app at least),
     100 and 300 XP week; won ones gold, the rest pale with a lock and how to win them); On this phone: the children,
     Sound.
+- **A topic tute's ladder on the phone** (4 Nov 2026, his ask: "fighter and master are both mixed ... the question
+  numbers start from one for OL books"; the phone showed Constructions from Q53 only). An O/L tute is one printed book:
+  the ladder (sections A–F, Q1–52 in Constructions), then the past papers (Q53 on). The app keeps its two books; the
+  phone shows them as **one Stage on one road, numbered as printed**: each ladder section is a Level (A = Level 1, B =
+  Level 2 …), then each paper one more Level (`convex/lib/ladder.ts`: `ladderOf` (a workbook with `tute` and its theory
+  book), `ladderKeys` (the ladder's key prints no marks: 1 mark a part), `secQs`, `secDone`). On the phone a ladder
+  Level is n < 0 (-1 = A; `WorldLevel.d` = its number on the road, `lb`/`lt` its letter and Tamil title); the papers
+  keep their own n (shown as n + the sections). His answers: **in order, like Levels**, and the papers wait for the
+  ladder unless he already started them.
+  - A section is done when he checked it at home (`progress.lh[section]`: when, parts right, parts) or when every circle
+    of it is marked in class. Its questions as printed are the theory book's pages (`family.questions`, n < 0).
+  - **A teacher question** (blue on the contents page; his idea): the phone asks "did you do this with your teacher?":
+    yes = he types it; no = **Learn** (`family.learn`: the ladder key's working, one step a tap; only a teacher
+    question of the section he is on), then he does the same question himself. His own questions: typed as usual.
+    (Videos for Learn: his idea; a pilot of 3 for Constructions A later, if the steps prove themselves.)
+  - **Check** (`checkLadder`): marked with the ladder's key and written into the class's circles as Correction would:
+    his own question right = ✓, wrong = ✗ (Evaluation explains it); a teacher question right = taught (he learned
+    it), wrong = left for Theory; a circle the class already marked stays; what the phone can't mark stays for the
+    corrector on paper (no photos for the ladder). XP = parts right (`xpRows` adds `lh` to XP, days in a row, Levels,
+    the race). History line `ladder-home`. The result has no solutions book (the class explains).
 - **The O/L map** (4 Nov 2026, his ask: "who will see the O level syllabus, and who will see the Grade 11 syllabus?";
   his answers: "I tick them", topics "one by one", and "now I want to show specific unit today ... that's what I
   taught lastly"). The O/L topics are their own grade (OL = 12, `term` = the paper part), so before this no phone

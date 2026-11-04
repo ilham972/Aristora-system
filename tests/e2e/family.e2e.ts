@@ -12,7 +12,10 @@ import { afterAll, beforeAll, expect, test } from "vitest";
 import { api } from "../../convex/_generated/api";
 import { secretHash } from "../../convex/lib/auth";
 import { outOf } from "../../convex/lib/book";
-import { readWorkbookHtml } from "../../src/workbookFile";
+import { strToU8, zipSync } from "fflate";
+import { readWorkbookFiles, readWorkbookHtml, type ReadTute } from "../../src/workbookFile";
+import TUTE_HTML from "../fixtures/tute-skeleton.html?raw";
+import TUTE_JSON from "../fixtures/tute-skeleton.json?raw";
 import U01_BOOK from "../fixtures/workbook-g8-u01.html?raw";
 import { addPerson, OWNER_TOKEN } from "../helpers";
 import { makeBackend, playwright, serveDist } from "./harness";
@@ -1166,5 +1169,90 @@ test("a printed question opens full screen: two fingers zoom only it, one finger
   await contains(P.locator(".f-qn"), "Q1");
   await P.goBack();
   await playIs(P, "Level 1");
+  expect(problems).toEqual([]);
+});
+
+test("a tute's ladder on the phone: one road numbered as printed; a teacher question asks, Learn shows it a step a tap; Check sets the circles", async () => {
+  const backend = makeBackend(modules);
+  const t = backend.t;
+  await addPerson(t, { name: "Owner", token: OWNER_TOKEN, role: "owner" });
+  const as = { token: OWNER_TOKEN };
+  await t.mutation(api.setup.ensure, as);
+  // The FAKE skeleton tute (A: teacher Q1, his Q2; B: teacher Q3, his Q4–5; papers Q6–8) filed under OL · Constructions.
+  const cons = (await t.run(async (ctx) => (await ctx.db.query("units").withIndex("by_grade", (q) => q.eq("grade", 12)).collect()).find((u) => u.en === "Constructions")))!._id;
+  const [r] = readWorkbookFiles([
+    { name: "Sample_tute_source.zip", bytes: zipSync({ "tute.json": strToU8(TUTE_JSON), "book.html": strToU8(TUTE_HTML), "content.py": strToU8("") }) },
+  ]) as ReadTute[];
+  await t.mutation(api.catalog.saveTute, {
+    ...as,
+    unitId: cons,
+    title: r.title!,
+    fighter: { sections: r.fighter.sections.map((x) => ({ id: x.id, title: x.title, tamil: x.tamil, teach: x.teach, solo: x.solo })) },
+    master: { part: r.part, levels: r.master.levels.map((l) => ({ from: l.from, to: l.to, max: l.max })), marks: r.master.marks! },
+    fighterKey: r.fighterKey!,
+    masterKey: r.masterKey!,
+  });
+  for (const stage of ["fighter", "master"] as const) {
+    await t.mutation(api.catalog.saveQuestions, { ...as, unitId: cons, stage, first: true, css: r.css, items: [...r.questions[stage]].map(([q, html]) => ({ q, html })) });
+  }
+  const nila = await t.mutation(api.students.add, { ...as, name: "Nila S", grade: 11, term: 3 });
+  await t.mutation(api.families.setOlMap, { ...as, studentIds: [nila], on: true });
+  await t.mutation(api.families.setCode, { ...as, studentId: nila, code: "4719" });
+
+  const P = await open(backend, `${site.url}/f/`, size(360, 780));
+  await P.getByLabel(/Index/).fill("1001");
+  await P.getByLabel("Code").fill("4719");
+  await P.getByRole("button", { name: "Sign in" }).click();
+  await goalIs(P, "Level 1");
+  await tabTo(P, /Learn/);
+  await P.locator(".f-node.s-now").click();
+  // The road: the ladder's A and B are Levels 1 and 2, the papers 3–5 (locked until the ladder is done).
+  await playIs(P, "Level 1");
+  await until(async () => (await P.locator(".f-lv").count()) === 5, "five Levels on the road");
+  expect(await P.locator(".f-lv").nth(2).getAttribute("aria-label")).toMatch(/^Level 3:/);
+  await noSideScroll(P);
+  await shot(P, "fam28-tute-road");
+  await P.locator(".f-lv.play").click();
+
+  // Q1 is a teacher question: did you do it with your teacher? Not yet → Learn, a step a tap, then he does it.
+  await contains(P.locator(".f-qn"), "Q1");
+  await visible(P.locator(".f-teachask"));
+  expect(await P.locator(".f-padkeys").count()).toBe(0);
+  await noSideScroll(P);
+  await shot(P, "fam29-teacher-question");
+  await P.getByRole("button", { name: /கற்றுக்கொள்/ }).click();
+  await until(async () => (await P.locator(".f-steps li").count()) === 1, "the first step");
+  await P.getByRole("button", { name: /அடுத்த படி/ }).click();
+  await until(async () => (await P.locator(".f-steps li").count()) === 2, "the second step");
+  await contains(P.locator(".f-steps li").nth(1), "4");
+  await noSideScroll(P);
+  await shot(P, "fam30-learn-steps");
+  await P.getByRole("button", { name: /நீயே செய்/ }).click();
+  await type(P, ["3"]);
+  await type(P, ["4"]);
+  await P.locator(".f-checkpill").click();
+  await P.locator(".f-review").getByRole("button", { name: "Check ✓" }).click();
+  await visible(P.locator(".f-result"));
+  await noSideScroll(P);
+  await shot(P, "fam31-ladder-result");
+  // The class sees it: Q1 taught (learned at home); the next Level is B (Level 2).
+  const p = await t.run(async (ctx) => (await ctx.db.query("progress").withIndex("by_student", (q) => q.eq("studentId", nila)).collect()).find((x) => x.stage === "fighter" && x.unitId === cons));
+  expect(p?.marks["1"]?.s).toBe("taught");
+  expect(p?.lh?.A).toBeTruthy();
+
+  // 320 px: the choice and the steps fit.
+  const S = await open(backend, `${site.url}/f/`, size(320, 568));
+  await S.getByLabel(/Index/).fill("1001");
+  await S.getByLabel("Code").fill("4719");
+  await S.getByRole("button", { name: "Sign in" }).click();
+  await goalIs(S, "Level 2");
+  await tabTo(S, /Learn/);
+  await S.locator(".f-node.s-now").click();
+  await playIs(S, "Level 2");
+  await S.locator(".f-lv.play").click();
+  await visible(S.locator(".f-teachask"));
+  await noSideScroll(S);
+  await shot(S, "fam32-teacher-question-320");
+
   expect(problems).toEqual([]);
 });

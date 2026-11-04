@@ -30,7 +30,7 @@
 
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import { mutation, query, type QueryCtx } from "./_generated/server";
+import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { feedbackTopic } from "./schema";
 import { checkToken, familyActor, familyOf, familyViewer, FAMILY_SIGNED_OUT, secretHash } from "./lib/auth";
 import { asMaster, bookFor, currentSession, ensureProgress, fail, keyRow, log, masterState, progressFor, refresh } from "./lib/backend";
@@ -50,6 +50,7 @@ import {
   levelDays,
   levelsSince,
   masterRows,
+  xpRows,
   olMapOn,
   retryPool,
   streakOf,
@@ -66,7 +67,8 @@ import { DAY_MS, SL_OFFSET_MS, slDay, slDayNo, slWeekStart } from "./lib/day";
 import { bookOf, homeChecks, phoneKeyFor, type LevelBook } from "./lib/homeWork";
 import { computeMaster, markBefore, type MQ, type MState } from "./lib/master";
 import { boxCount, formOf, INPUT_MAX, markQuestion, type FormQ, type KeyQ } from "./lib/phone";
-import { blockedBy, PHOTO_BYTES, PHOTO_MAX, PHOTO_URLS_PER_DAY, type PhotoKind } from "./lib/photos";
+import { blockedBy, keyText, PHOTO_BYTES, PHOTO_MAX, PHOTO_URLS_PER_DAY, type PhotoKind } from "./lib/photos";
+import { ladderOf, secQs } from "./lib/ladder";
 import { ranks } from "./lib/progress";
 
 const token = v.optional(v.string());
@@ -232,7 +234,7 @@ export const me = query({
   handler: async (ctx, args): Promise<FamilyMe> => {
     const s = await familyViewer(ctx, args.token);
     const now = Date.now();
-    const rows = await masterRows(ctx, s._id);
+    const rows = await xpRows(ctx, s._id);
     const worlds = await worldsOf(ctx, s);
     const days = levelDays(rows);
     // Each level's photos still owed (📷 on the Stage) and the teacher's answers he hasn't opened (a dot).
@@ -299,16 +301,70 @@ export type FamilyLevel = {
   no: number;
   ta: string;
   n: number;
+  /** Its number on the road when it differs from n (a topic tute: the ladder's Levels come first). */
+  d?: number;
   max: number;
-  /** Its questions, then the ones that came back (`re` = the level he got it wrong in, `rb` = marks to win back). */
-  qs: (FormQ & { part: string; re?: number; rb?: number })[];
+  /**
+   * Its questions, then the ones that came back (`re` = the level he got it wrong in, `rb` = marks to win back);
+   * `t` = a ladder's teacher question: done with the teacher, or Learn first (4 Nov 2026).
+   */
+  qs: (FormQ & { part: string; re?: number; rb?: number; t?: true })[];
 };
+
+// ---- A topic tute's ladder on the phone (4 Nov 2026): n < 0 = its sections (-1 = A), before the past papers ----
+
+/** The ladder section he may play now (else a reason, in plain words). */
+async function ladderPlayable(ctx: QueryCtx, s: Doc<"students">, unitId: Id<"units">, n: number) {
+  const worlds = await worldsOf(ctx, s);
+  const world = worlds.find((w) => w.unitId === unitId);
+  if (!world) fail("This Stage is not on your map.");
+  if (!world.open) fail("This Stage is locked. Finish the Stage before it.");
+  const lad = await ladderOf(ctx, unitId, await bookFor(ctx, unitId, "master"));
+  const sec = lad?.secs[-n - 1];
+  if (!lad || !sec) fail("That level is not in this Stage.");
+  const st = world.levels.find((l) => l.n === n)?.s;
+  if (st === "done") fail("This level is already marked.");
+  if (st !== "play") fail("Do the levels in order: finish the level before it.");
+  if (!lad.keys.size) fail("This Stage can't be marked on the phone yet.");
+  const stop = blockedBy((await homeChecks(ctx, s._id)).checks);
+  if (stop) {
+    const w = worlds.find((x) => x.unitId === stop.unitId);
+    fail(`முதலில் Stage ${w?.no ?? ""} · Level ${stop.n} இன் படங்களை அனுப்பு (${stop.owed}).`);
+  }
+  return { world, lad, sec };
+}
+
+/** A teacher question's worked solution, step by step (Learn): only in the ladder section he is on. */
+export const learn = query({
+  args: { token, unitId: v.id("units"), n: v.number(), q: v.number() },
+  handler: async (ctx, args): Promise<{ steps: string[] }> => {
+    const s = await familyViewer(ctx, args.token);
+    if (args.n >= 0) fail("That level is not in this Stage.");
+    const { lad, sec } = await ladderPlayable(ctx, s, args.unitId, args.n);
+    if (!sec.teach.includes(args.q)) fail("Only a teacher question has Learn.");
+    const steps = keyText(lad.raw.get(args.q))
+      .split("\n")
+      .flatMap((l) => (l.includes("; ") ? l.split("; ") : [l]))
+      .map((l) => l.trim())
+      .filter(Boolean);
+    return { steps };
+  },
+});
 
 /** The level he is on, to answer on the phone: each question's boxes (never the answers). */
 export const level = query({
   args: { token, unitId: v.id("units"), n: v.number() },
   handler: async (ctx, args): Promise<FamilyLevel> => {
     const s = await familyViewer(ctx, args.token);
+    if (args.n < 0) {
+      const { world, lad, sec } = await ladderPlayable(ctx, s, args.unitId, args.n);
+      const qs: FamilyLevel["qs"] = [];
+      for (const q of secQs(sec)) {
+        const k = lad.keys.get(q);
+        if (k) qs.push({ ...formOf(k), part: sec.id, ...(sec.teach.includes(q) ? { t: true as const } : {}) });
+      }
+      return { unitId: world.unitId, no: world.no, ta: world.ta, n: args.n, d: -args.n, max: qs.reduce((a, q) => a + q.max, 0), qs };
+    }
     const { world, data, level: l, keys } = await playable(ctx, s, args.unitId, args.n);
     const qs: FamilyLevel["qs"] = [];
     for (let q = l.from; q <= l.to; q++) {
@@ -359,6 +415,7 @@ export const check = mutation({
   handler: async (ctx, args) => {
     const s = await familyActor(ctx, args.token);
     const now = Date.now();
+    if (args.n < 0) return await checkLadder(ctx, s, args, now);
     const { data, level: l, keys } = await playable(ctx, s, args.unitId, args.n);
     if (args.typed.length > 200 || args.typed.some((t) => t.a.length > 30 || t.a.some((x) => x.length > INPUT_MAX))) {
       fail("Those answers are too long.");
@@ -447,7 +504,7 @@ export const check = mutation({
     }
     // In class with the app open: his "out of work" clock follows, as for any level.
     if (s.present) await refresh(ctx, s._id, now, await currentSession(ctx, now));
-    const all = await masterRows(ctx, s._id);
+    const all = await xpRows(ctx, s._id);
     // His trophies now (the phone shows the ones this level just earned).
     const trophies = trophiesOf(all, await worldsOf(ctx, s));
     // The level's book: the key's working on what he got wrong, and the photos it asks for.
@@ -455,6 +512,66 @@ export const check = mutation({
     return { results, got, phoneMax, max: l.max, teacher, xp: weekXp(all, now), streak: streakOf(all, now), trophies, book, retry, bonus };
   },
 });
+
+/**
+ * A ladder section checked at home, once: marked with the ladder's key (1 mark a part) and written into the class's
+ * circles, as Correction would (his answer, 4 Nov 2026: "marks from the phone go into the class's ladder circles"): his
+ * own question right = ✓, wrong = ✗ (Evaluation explains it); a teacher question right = taught (he learned it), wrong =
+ * left for Theory. A circle the class already marked stays. What the phone can't mark stays for the corrector, on paper.
+ */
+async function checkLadder(
+  ctx: MutationCtx,
+  s: Doc<"students">,
+  args: { unitId: Id<"units">; n: number; typed: { q: number; a: string[]; b?: number }[] },
+  now: number,
+) {
+  const { lad, sec } = await ladderPlayable(ctx, s, args.unitId, args.n);
+  if (args.typed.length > 200 || args.typed.some((t) => t.a.length > 30 || t.a.some((x) => x.length > INPUT_MAX))) {
+    fail("Those answers are too long.");
+  }
+  const typed = new Map(args.typed.map((t) => [t.q, t.a]));
+  const shown = new Map(args.typed.map((t) => [t.q, t.b]));
+  const unit = (await ctx.db.get(args.unitId))!;
+  const progress = await ensureProgress(ctx, s._id, unit._id, "fighter", now);
+  if (progress.lh?.[sec.id]) fail("This level is already marked.");
+  const marks = { ...progress.marks };
+  const results: FamilyResult[] = [];
+  const teacher: number[] = [];
+  let got = 0;
+  let max = 0;
+  let phoneMax = 0;
+  for (const q of secQs(sec)) {
+    const k = lad.keys.get(q);
+    if (!k) continue;
+    max += k.max;
+    if (shown.get(q) !== undefined && shown.get(q) !== boxCount(k)) {
+      results.push({ q, max: k.max, ok: k.parts.map(() => null), got: null, phoneGot: 0 });
+      teacher.push(q);
+      continue;
+    }
+    const r = markQuestion(k, (typed.get(q) ?? []).slice(0, boxCount(k)));
+    results.push({ q, max: k.max, ok: r.ok, got: r.got, phoneGot: r.phoneGot });
+    if (r.got === null) {
+      teacher.push(q);
+      got += r.phoneGot;
+      phoneMax += k.parts.filter((p) => p.want).reduce((a, p) => a + p.m, 0);
+      continue;
+    }
+    got += r.got;
+    phoneMax += k.max;
+    if (marks[String(q)]) continue; // the class marked it: its mark stays
+    const right = r.got >= k.max;
+    if (sec.teach.includes(q)) {
+      if (right) marks[String(q)] = { s: "taught", t: now };
+    } else marks[String(q)] = right ? { s: "right", t: now } : { s: "wrong", n: 1, t: now };
+  }
+  await ctx.db.patch(progress._id, { marks, lh: { ...(progress.lh ?? {}), [sec.id]: { t: now, got, max } }, updatedAt: now });
+  await log(ctx, null, now, { kind: "ladder-home", studentId: s._id, name: s.name, unit: unit.key, value: `${sec.id} ${got}/${max}` });
+  if (s.present) await refresh(ctx, s._id, now, await currentSession(ctx, now));
+  const all = await xpRows(ctx, s._id);
+  const trophies = trophiesOf(all, await worldsOf(ctx, s));
+  return { results, got, phoneMax, max, teacher, xp: weekXp(all, now), streak: streakOf(all, now), trophies, book: null, retry: [], bonus: 0 };
+}
 
 // ---- His levels checked at home: the book, photos, the teacher's answers (4 Nov 2026) ----
 
@@ -560,7 +677,7 @@ export const board = query({
       .withIndex("by_archived", (q) => q.eq("archived", false))
       .collect()).filter((x) => x.grade === me.grade && !!x.demo === !!me.demo);
     const list: { id: Id<"students">; name: string; xp: number }[] = [];
-    for (const x of mates) list.push({ id: x._id, name: x.name, xp: xpSince(await masterRows(ctx, x._id), since) });
+    for (const x of mates) list.push({ id: x._id, name: x.name, xp: xpSince(await xpRows(ctx, x._id), since) });
     list.sort((a, b) => b.xp - a.xp || a.name.localeCompare(b.name));
     const rk = ranks(list.map((x) => [x.xp]));
     const rows: BoardRow[] = list.map((x, i) => ({ name: x.name, xp: x.xp, rank: rk[i], me: x.id === me._id }));
@@ -594,6 +711,7 @@ export const questions = query({
     if (!world.open) fail("This Stage is locked. Finish the Stage before it.");
     const book = await bookFor(ctx, args.unitId, "master");
     if (!book) fail("This Stage has no levels yet.");
+    if (args.n < 0) return await ladderQuestions(ctx, args.unitId, book, args.n, args.css !== false);
     const level = asMaster(book).levels.find((l) => l.n === args.n);
     if (!level) fail("That level is not in this Stage.");
     const qs: FamilyQuestions["qs"] = [];
@@ -625,6 +743,29 @@ export const questions = query({
     return { css, qs };
   },
 });
+
+/** A ladder section's questions as printed (the theory book's pages) and that book's CSS. */
+async function ladderQuestions(ctx: QueryCtx, unitId: Id<"units">, master: Doc<"books">, n: number, withCss: boolean): Promise<FamilyQuestions> {
+  const sec = (await ladderOf(ctx, unitId, master))?.secs[-n - 1];
+  if (!sec) fail("That level is not in this Stage.");
+  const qs: FamilyQuestions["qs"] = [];
+  for (const q of secQs(sec)) {
+    const r = await ctx.db
+      .query("questions")
+      .withIndex("by_book", (x) => x.eq("unitId", unitId).eq("stage", "fighter").eq("q", q))
+      .first();
+    if (r) qs.push({ q, html: r.html });
+  }
+  let css: string | null = null;
+  if (withCss) {
+    const row = await ctx.db
+      .query("bookCss")
+      .withIndex("by_book", (x) => x.eq("unitId", unitId).eq("stage", "fighter"))
+      .first();
+    css = row?.css ?? null;
+  }
+  return { css, qs };
+}
 
 /** Words per feedback, and how many one phone may send in a day (Sri Lanka day). */
 export const FEEDBACK_TEXT_MAX = 600;

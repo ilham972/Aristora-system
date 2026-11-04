@@ -219,7 +219,7 @@ EOF
   (it may hold "/"): the e2e harness serves those addresses from its storage (`context.route`) and takes the family
   app's uploads through `__abUpload`. Playwright: `setInputFiles` on the hidden `.f-file` input is the camera. Two
   Checks in one test share a `Date`: order Checks by `_creationTime`, not `at`.
-- **The family bundle is at ~57.4 of 58 KB** (4 Nov 2026: 55.6 after the photos (+3.6 KB), 56.0 after the questions
+- **The family bundle is at ~58.7 of 60 KB** (4 Nov 2026: 58.7 after a tute's ladder and Learn (+~1.3 KB, budget 58 → 60); 55.6 after the photos (+3.6 KB), 56.0 after the questions
   that come back (words were shortened to fit), then the printed question full screen and no selection (+1.5 KB); the
   budget went 56 → 58 for that, with no dead CSS to cut: every class the scan finds unnamed is built in the code). The
   next family feature needs room: trim first (the owl's moods are ~6 KB), and weigh what it is worth before raising

@@ -243,7 +243,7 @@ export function LearnTab(props: { top: ComponentChildren; me: FamilyMe | null; o
               </span>
               {next ? (
                 <button type="button" class={`f-btn gold f-cont${me.streak.today ? "" : " shine"}`} onClick={props.onPlay}>
-                  Level {next.n} <Icon name="play" size={15} class="fill" />
+                  Level {next.d} <Icon name="play" size={15} class="fill" />
                 </button>
               ) : (
                 <button type="button" class="f-btn white f-cont" onClick={() => props.onStage(focus.unitId)}>
@@ -336,7 +336,7 @@ export function StageScreen(props: {
     }
     if (l.s === "play") return toast("இந்த Stage ஐ இன்னும் phone இல் சரிபார்க்க முடியாது. தாளை வகுப்பில் கொடு.");
     sound("tap");
-    toast(`Level ${l.n}: ${l.got !== undefined ? `${l.got} / ${l.max} XP · ` : ""}${STATE_WORDS[l.s]}`);
+    toast(`Level ${l.d ?? l.n}: ${l.got !== undefined ? `${l.got} / ${l.max} XP · ` : ""}${STATE_WORDS[l.s]}`);
   };
   return (
     <div class={`f-stage${stop && canPlay && playIdx >= 0 ? " stopped" : ""}`}>
@@ -392,7 +392,7 @@ export function StageScreen(props: {
             }}>
               <Icon name="camera" size={18} />
               <span>
-                Level {w.levels[playIdx].n} திறக்க, முதலில் Stage {stop.no} · Level {stop.n} இன் <b>{stop.owed} படங்களை</b> அனுப்பு.
+                Level {w.levels[playIdx].d ?? w.levels[playIdx].n} திறக்க, முதலில் Stage {stop.no} · Level {stop.n} இன் <b>{stop.owed} படங்களை</b> அனுப்பு.
               </span>
               <b class="f-stopgo">அனுப்பு →</b>
             </button>
@@ -412,12 +412,12 @@ export function StageScreen(props: {
                   <button
                     type="button"
                     class={`f-lv s-${l.s}${live ? " play" : ""}${w.open ? "" : " shut"}${pct >= 1 ? " full" : ""}`}
-                    aria-label={`Level ${l.n}: ${live ? (stop ? "photos first" : "START") : STATE_WORDS[l.s]}${l.ph ? `, ${l.ph} photos to send` : ""}`}
+                    aria-label={`Level ${l.d ?? l.n}: ${live ? (stop ? "photos first" : "START") : STATE_WORDS[l.s]}${l.ph ? `, ${l.ph} photos to send` : ""}`}
                     onClick={() => tap(l)}
                   >
                     {live && <span class="f-node-ring" aria-hidden="true" />}
                     <span class="f-node-c">
-                      {l.s === "later" ? <Icon name="lock" size={20} /> : l.s === "pre" ? <Icon name="check" size={24} /> : <b>{l.n}</b>}
+                      {l.s === "later" ? <Icon name="lock" size={20} /> : l.s === "pre" ? <Icon name="check" size={24} /> : <b>{l.d ?? l.n}</b>}
                     </span>
                     {l.s === "check" && !l.ph && (
                       <i class="f-lv-tag home" title="phone இல் சரிபார்த்தது">

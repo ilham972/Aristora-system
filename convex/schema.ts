@@ -366,6 +366,11 @@ export default defineSchema({
     marks: v.record(v.string(), markValue),
     /** Master: levels and marks. */
     m: v.optional(masterState),
+    /**
+     * Fighter, a topic tute's ladder done on the family app (4 Nov 2026): each section checked at home (its id ->
+     * when, the parts right, the parts the phone marked). Its circles are set too; this is his XP and the phone's Level.
+     */
+    lh: v.optional(v.record(v.string(), v.object({ t: v.number(), got: v.number(), max: v.number() }))),
     startedAt: v.number(),
     updatedAt: v.number(),
   })

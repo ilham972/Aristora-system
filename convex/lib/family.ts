@@ -19,6 +19,7 @@ import { allPhone, boxCount, type KeyQ } from "./phone";
 import { DAY_MS, slDayNo, slWeekStart } from "./day";
 import { computeMaster, EMPTY_MASTER, type MState } from "./master";
 import { OL, olNumber } from "./syllabus";
+import { ladderOf, secDone } from "./ladder";
 
 export type LevelState =
   /** Marked (in class, or at home and checked). */
@@ -37,7 +38,20 @@ export type LevelState =
  * One level: its marks, its state; hm = marked at home (its book opens from the Stage), ph = photos it still owes, nw =
  * the teacher's answers he hasn't opened (4 Nov 2026).
  */
-export type WorldLevel = { n: number; max: number; got?: number; s: LevelState; ph?: number; nw?: number; hm?: true };
+export type WorldLevel = {
+  n: number;
+  max: number;
+  got?: number;
+  s: LevelState;
+  ph?: number;
+  nw?: number;
+  hm?: true;
+  /** Its number on the road when it differs from n (a topic tute: its ladder's Levels come first). */
+  d?: number;
+  /** A ladder Level (n < 0): its section's letter and Tamil title. */
+  lb?: string;
+  lt?: string;
+};
 
 /** One unit of his grade (the phone shows it as a Stage of its term's World). */
 export type World = {
@@ -187,10 +201,32 @@ export async function worldsOf(ctx: QueryCtx, student: Doc<"students">): Promise
       .first();
     return book && book.data.kind === "master" ? { row: book, data: book.data } : null;
   };
-  const stage = (unit: Doc<"units">, book: { row: Doc<"books">; data: MasterData }, open: boolean): World => {
+  const stage = async (unit: Doc<"units">, book: { row: Doc<"books">; data: MasterData }, open: boolean): Promise<World> => {
     const p = rows.find((r) => r.unitId === unit._id && r.stage === "master");
     const m = p?.m ?? EMPTY_MASTER;
     const at = given.get(unit._id);
+    let levels = levelStates(m, book.data);
+    let allDone = allHandedIn(m, book.data);
+    let phone = (book.row.keyCount ?? 0) > 0;
+    // A topic tute: its ladder's sections come first on the road, numbered on from 1 (4 Nov 2026, his ask).
+    const lad = await ladderOf(ctx, unit._id, book.row);
+    if (lad) {
+      const fp = rows.find((r) => r.unitId === unit._id && r.stage === "fighter");
+      let playing = false;
+      const first: WorldLevel[] = lad.secs.map((sec, i) => {
+        const max = sec.teach.concat(sec.solo).reduce((a, q) => a + (lad.keys.get(q)?.max ?? 1), 0);
+        const home = fp?.lh?.[sec.id];
+        const done = secDone(sec, fp);
+        const st: LevelState = done ? "done" : playing ? "later" : "play";
+        if (!done) playing = true;
+        return { n: -(i + 1), d: i + 1, max: home?.max ?? max, s: st, lb: sec.badge || sec.id, lt: sec.tamil, ...(home ? { got: home.got } : {}) };
+      });
+      // The past papers wait for the ladder, unless he already started them (in class, or before this).
+      if (playing && !started(m)) levels = levels.map((l) => (l.s === "play" ? { ...l, s: "later" as const } : l));
+      levels = [...first, ...levels.map((l) => ({ ...l, d: l.n + first.length }))];
+      allDone = allDone && !playing;
+      phone = phone || lad.keys.size > 0;
+    }
     return {
       unitId: unit._id,
       no: unit.grade === OL ? olNumber(unit, olUnits) : unitNumber(unit.code),
@@ -199,11 +235,11 @@ export async function worldsOf(ctx: QueryCtx, student: Doc<"students">): Promise
       term: unit.term,
       book: true,
       open: open || !!student.openAll || student.unitId === unit._id || at !== undefined || started(m),
-      phone: (book.row.keyCount ?? 0) > 0,
+      phone,
       now: student.unitId === unit._id,
       q: (book.row.qCount ?? 0) > 0,
-      levels: levelStates(m, book.data),
-      allDone: allHandedIn(m, book.data),
+      levels,
+      allDone,
       ...(at !== undefined ? { given: at } : {}),
     };
   };
@@ -231,7 +267,7 @@ export async function worldsOf(ctx: QueryCtx, student: Doc<"students">): Promise
       });
       continue;
     }
-    const w = stage(unit, book, prevDone);
+    const w = await stage(unit, book, prevDone);
     out.push(w);
     prevDone = w.allDone;
   }
@@ -240,7 +276,7 @@ export async function worldsOf(ctx: QueryCtx, student: Doc<"students">): Promise
     const has = student.unitId === unit._id || given.has(unit._id) || rows.some((r) => r.unitId === unit._id && r.stage === "master" && r.m && started(r.m));
     if (!has) continue;
     const book = await workbook(unit);
-    if (book) out.push({ ...stage(unit, book, true), other: true });
+    if (book) out.push({ ...(await stage(unit, book, true)), other: true });
   }
   return out;
 }
@@ -254,6 +290,15 @@ export async function masterRows(ctx: QueryCtx, studentId: Id<"students">): Prom
   return rows.filter((r) => r.stage === "master" && r.m);
 }
 
+/** His rows that make XP, days in a row and levels: his workbooks, and a tute's ladder done at home (`lh`). */
+export async function xpRows(ctx: QueryCtx, studentId: Id<"students">): Promise<Doc<"progress">[]> {
+  const rows = await ctx.db
+    .query("progress")
+    .withIndex("by_student", (q) => q.eq("studentId", studentId))
+    .collect();
+  return rows.filter((r) => (r.stage === "master" && r.m) || r.lh);
+}
+
 /**
  * Every XP he won, and when: a level's marks when he finished it (handed in or marked at home; marked in class or at
  * home; with the marks it has now: the corrector's check can change them), and the marks he won back when a wrong
@@ -263,6 +308,8 @@ export function xpItems(rows: Doc<"progress">[]): { t: number; xp: number }[] {
   const out: { t: number; xp: number }[] = [];
   for (const r of rows) {
     for (const lv of Object.values(r.m?.lv ?? {})) if (lv.fixed) out.push({ t: lv.done ?? lv.fixed, xp: lv.got ?? 0 });
+    // A tute's ladder section checked at home (4 Nov 2026): its parts right.
+    for (const x of Object.values(r.lh ?? {})) out.push({ t: x.t, xp: x.got });
     for (const x of Object.values(r.m?.q ?? {})) {
       if (x.rt !== undefined && (x.rg ?? 0) > (x.got ?? 0)) out.push({ t: x.rt, xp: (x.rg ?? 0) - (x.got ?? 0) });
     }
@@ -284,6 +331,7 @@ export function weekXp(rows: Doc<"progress">[], now: number): number {
 export function levelDays(rows: Doc<"progress">[]): Set<number> {
   const days = new Set<number>();
   for (const r of rows) {
+    for (const x of Object.values(r.lh ?? {})) days.add(slDayNo(x.t));
     for (const lv of Object.values(r.m?.lv ?? {})) {
       const t = lv.done ?? lv.fixed;
       if (t !== undefined && !lv.pre) days.add(slDayNo(t));
@@ -342,6 +390,7 @@ export function weekDayXp(rows: Doc<"progress">[], now: number): number[] {
 export function levelsSince(rows: Doc<"progress">[], since: number): number {
   let n = 0;
   for (const r of rows) {
+    for (const x of Object.values(r.lh ?? {})) if (x.t >= since) n++;
     for (const lv of Object.values(r.m?.lv ?? {})) {
       const t = lv.done ?? lv.fixed;
       if (t !== undefined && !lv.pre && t >= since) n++;

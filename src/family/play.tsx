@@ -100,13 +100,14 @@ function useQuestions(world: World, n: number, on: boolean): { got: FamilyQuesti
   useEffect(() => {
     if (!on || !world.q) return;
     let gone = false;
-    const known = cssOf.get(world.unitId) ?? got?.css ?? null;
+    const ck = n < 0 ? `${world.unitId}:f` : world.unitId; // a tute's ladder: the theory book's own CSS
+    const known = cssOf.get(ck) ?? got?.css ?? null;
     query("family:questions", { unitId: world.unitId, n, css: known === null })
       .then((r) => {
         if (gone) return;
         const x = r as FamilyQuestions;
         const css = x.css ?? known;
-        if (css) cssOf.set(world.unitId, css);
+        if (css) cssOf.set(ck, css);
         const full = { css, qs: x.qs };
         keep(key, full);
         setGot(full);
@@ -301,6 +302,17 @@ export function Play(props: {
   const [qOn, setQOn] = useState<boolean>(() => !!keep<boolean>("qmode"));
   const showQ = qOn && props.world.q;
   const qs = useQuestions(props.world, props.n, showQ);
+  // A tute's teacher question (4 Nov 2026, his idea): done with the teacher → he types it; not yet → Learn (the worked
+  // solution, a step a tap), then he does the same question himself. Kept per level, as his answers are.
+  const howKey = `how.${props.world.unitId}.${props.n}`;
+  const [how, setHow] = useState<Record<number, "do" | "learn">>(() => keep<Record<number, "do" | "learn">>(howKey) ?? {});
+  const pick = (qn: number, h: "do" | "learn") => {
+    buzz();
+    sound(h === "learn" ? "pop" : "tap");
+    const next = { ...how, [qn]: h };
+    setHow(next);
+    keep(howKey, next);
+  };
   const strip = useRef<HTMLDivElement>(null);
 
   // The server says this level is marked (his report, 4 Nov 2026: Check said "This level is already marked", no
@@ -312,6 +324,7 @@ export function Play(props: {
     keep(draftKey, null);
     keep(formKey, null);
     keep(spotKey, null);
+    keep(howKey, null);
     keep(`qs.${props.world.unitId}.${props.n}`, null);
     query("family:book", { unitId: props.world.unitId, n: props.n })
       .then(() => props.onMarked())
@@ -365,6 +378,8 @@ export function Play(props: {
   if (!form) return <Waiting />;
 
   const q = form.qs[at.qi];
+  const asking = !review && !!q.t && !how[q.q];
+  const learning = !review && !!q.t && how[q.q] === "learn";
   const flat = all.findIndex((x) => x.qi === at.qi && x.bi === at.bi);
   const box = flat >= 0 ? all[flat].box : null;
   const val = (qi: number, bi: number) => typed[form.qs[qi].q]?.[bi] ?? "";
@@ -423,6 +438,7 @@ export function Play(props: {
       keep(draftKey, null);
       keep(formKey, null);
       keep(spotKey, null);
+      keep(howKey, null);
       keep(`qs.${form.unitId}.${form.n}`, null);
       props.onChecked(form, res, typed);
     } catch (e) {
@@ -464,7 +480,7 @@ export function Play(props: {
       </header>
       <div class="f-prow">
         <p class="f-kicker">
-          Stage {form.no} · Level {form.n}
+          Stage {form.no} · Level {form.d ?? form.n}
         </p>
         <button type="button" class="f-checkpill" onClick={() => setReview(true)}>
           Check
@@ -475,7 +491,7 @@ export function Play(props: {
           <button
             type="button"
             key={x.q}
-            class={`f-qchip ${filled(qi)}${qi === at.qi && !review ? " on" : ""}${x.re ? " re" : ""}`}
+            class={`f-qchip ${filled(qi)}${qi === at.qi && !review ? " on" : ""}${x.re ? " re" : ""}${x.t ? " tq" : ""}`}
             aria-label={x.re ? `Q${x.q} again` : undefined}
             onClick={() => {
               buzz();
@@ -491,7 +507,7 @@ export function Play(props: {
       {review ? (
         <section class="f-card rise f-review">
           <OwlBadge mood="think" class="mid" />
-          <h2 class="f-h2">Level {form.n} சரிபார்க்கவா?</h2>
+          <h2 class="f-h2">Level {form.d ?? form.n} சரிபார்க்கவா?</h2>
           <ul class="f-sum">
             <li>
               <b>{done}</b> விடைகள் போட்டாய்
@@ -540,6 +556,7 @@ export function Play(props: {
             </span>
           </div>
           {q.re && <p class="f-again">Level {q.re} இல் தவறியது: மீண்டும் முயற்சி!</p>}
+          {q.t && <p class="f-tqtag">ஆசிரியர் கேள்வி · with your teacher</p>}
           {showQ &&
             (printed && css !== null ? (
               <Paper html={printed.html} css={css} q={q.q} onZoom={zoom} />
@@ -548,7 +565,20 @@ export function Play(props: {
                 {qs.failed ? "இணையம் இல்லை: கேள்வியைக் கொண்டுவர முடியவில்லை." : qs.got ? "இந்தக் கேள்வி இன்னும் phone இல் இல்லை." : "கேள்வி வருகிறது…"}
               </p>
             ))}
-          {q.parts.map((p, pi) => {
+          {asking ? (
+            <div class="f-teachask rise">
+              <p>இந்தக் கேள்வியை உன் ஆசிரியருடன் செய்தாயா?</p>
+              <button type="button" class="f-btn go" onClick={() => pick(q.q, "do")}>
+                ஆம்: விடை எழுதுகிறேன்
+              </button>
+              <button type="button" class="f-btn gold" onClick={() => pick(q.q, "learn")}>
+                <Icon name="bulb" size={17} /> இல்லை: கற்றுக்கொள்
+              </button>
+            </div>
+          ) : learning ? (
+            <Learn unitId={props.world.unitId} n={props.n} q={q.q} onDone={() => pick(q.q, "do")} />
+          ) : null}
+          {!asking && !learning && q.parts.map((p, pi) => {
             if (p.boxes && p.boxes.length === 0) return null;
             return (
               <div class="f-part" key={pi}>
@@ -586,9 +616,9 @@ export function Play(props: {
                 ) : (
                   <div class="f-teachq">
                     <p class="f-teach">
-                      <Icon name="pen" size={16} /> இதைத் தாளில் செய்து படம் எடு: உன் ஆசிரியர் திருத்துவார்
+                      <Icon name="pen" size={16} /> {props.n > 0 ? "இதைத் தாளில் செய்து படம் எடு: உன் ஆசிரியர் திருத்துவார்" : "இதைத் தாளில் செய்: வகுப்பில் ஆசிரியர் திருத்துவார்"}
                     </p>
-                    <Taker unitId={props.world.unitId} n={props.n} q={q.q} kind="part" send={false} />
+                    {props.n > 0 && <Taker unitId={props.world.unitId} n={props.n} q={q.q} kind="part" send={false} />}
                   </div>
                 )}
               </div>
@@ -597,7 +627,64 @@ export function Play(props: {
         </section>
       )}
 
-      {!review && <Pad box={box} onKey={onKey} last={flat === all.length - 1} />}
+      {!review && !asking && !learning && <Pad box={box} onKey={onKey} last={flat === all.length - 1} />}
+    </div>
+  );
+}
+
+/** Learn (4 Nov 2026): a teacher question's worked solution, one step a tap, then he does it himself. */
+function Learn(props: { unitId: string; n: number; q: number; onDone: () => void }) {
+  const [steps, setSteps] = useState<string[] | null>(null);
+  const [bad, setBad] = useState(false);
+  const [i, setI] = useState(1);
+  useEffect(() => {
+    query("family:learn", { unitId: props.unitId, n: props.n, q: props.q })
+      .then((r) => setSteps((r as { steps: string[] }).steps))
+      .catch(() => setBad(true));
+  }, [props.q]);
+  if (bad || (steps && steps.length === 0)) {
+    return (
+      <div class="f-learn">
+        <p class="f-paper-note">{bad ? "இணையம் இல்லை: தீர்வைக் கொண்டுவர முடியவில்லை." : "இந்தக் கேள்விக்குத் தீர்வு இன்னும் app இல் இல்லை: வகுப்பில் கேள்."}</p>
+        <button type="button" class="f-btn go" onClick={props.onDone}>
+          நானே முயல்கிறேன் ✍
+        </button>
+      </div>
+    );
+  }
+  if (!steps) return <p class="f-paper-note">தீர்வு வருகிறது…</p>;
+  const last = i >= steps.length;
+  return (
+    <div class="f-learn">
+      <span class="f-sol-h">
+        <Icon name="bulb" size={15} /> இப்படிச் செய்வது
+      </span>
+      <ol class="f-steps">
+        {steps.slice(0, i).map((line, k) => (
+          <li key={k} class={k === i - 1 ? "rise" : ""}>
+            {line.split("**").map((r, j) => (j % 2 ? <b key={j}>{pretty(r)}</b> : <span key={j}>{r}</span>))}
+          </li>
+        ))}
+      </ol>
+      {last ? (
+        <button type="button" class="f-btn gold shine" onClick={props.onDone}>
+          இப்போது நீயே செய் ✍
+        </button>
+      ) : (
+        <button
+          type="button"
+          class="f-btn go"
+          onClick={() => {
+            buzz();
+            sound("tap");
+            setI(i + 1);
+          }}
+        >
+          அடுத்த படி ▸ <small>
+            {i}/{steps.length}
+          </small>
+        </button>
+      )}
     </div>
   );
 }
@@ -620,12 +707,12 @@ function Oops(props: { text: string; onBack: () => void }) {
  * The level to play now: in his Stage now first, then in the newest book the teachers gave him (4 Nov 2026, his words:
  * "the unit I taught lastly"), else the first open Stage the phone can mark, in the map's order.
  */
-export function nextPlay(me: FamilyMe | null): { world: World; n: number } | null {
+export function nextPlay(me: FamilyMe | null): { world: World; n: number; d: number } | null {
   if (!me) return null;
   const ws = [...me.worlds].sort((a, b) => Number(b.now) - Number(a.now) || (b.given ?? 0) - (a.given ?? 0));
   for (const w of ws) {
     const l = w.book && w.open && w.phone ? w.levels.find((x) => x.s === "play") : undefined;
-    if (l) return { world: w, n: l.n };
+    if (l) return { world: w, n: l.n, d: l.d ?? l.n };
   }
   return null;
 }
@@ -742,7 +829,7 @@ export function Result(props: {
   return (
     <div class={`f-result${done ? " done" : ""}`} onClick={() => !done && setShown(rows.length)}>
       <p class="f-kicker f-center-t">
-        Stage {form.no} · Level {form.n}
+        Stage {form.no} · Level {form.d ?? form.n}
       </p>
       <section class={`f-score${done ? " done" : ""}${done && pct >= 0.7 ? " glow" : ""}`}>
         {done && pct >= 0.7 && <Confetti n={pct >= 0.9 ? 18 : 12} />}
@@ -862,8 +949,14 @@ export function Result(props: {
       </ul>
       {done && (
         <>
-          <p class="f-tip rise">✎ உன் தாளிலும் ✓ ✗ போடு. தவறியவற்றின் தீர்வு கீழே.</p>
-          <Book unitId={props.world.unitId} n={form.n} initial={res.book} />
+          {form.n < 0 ? (
+            <p class="f-tip rise">✎ உன் தாளிலும் ✓ ✗ போடு. தவறியவற்றை வகுப்பில் ஆசிரியர் விளக்குவார்.</p>
+          ) : (
+            <>
+              <p class="f-tip rise">✎ உன் தாளிலும் ✓ ✗ போடு. தவறியவற்றின் தீர்வு கீழே.</p>
+              <Book unitId={props.world.unitId} n={form.n} initial={res.book} />
+            </>
+          )}
           <div class={`f-actions rise${nextHere ? " two" : ""}`}>
             {nextHere ? (
               <>
@@ -871,7 +964,7 @@ export function Result(props: {
                   <Icon name="map" size={22} />
                 </button>
                 <button type="button" class="f-btn gold big shine" onClick={() => props.onNext(nextHere.n)}>
-                  Next: Level {nextHere.n} <Icon name="play" size={16} class="fill" />
+                  Next: Level {nextHere.d} <Icon name="play" size={16} class="fill" />
                 </button>
               </>
             ) : (

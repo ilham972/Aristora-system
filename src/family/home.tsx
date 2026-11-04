@@ -135,7 +135,7 @@ function GoalCard(props: { me: FamilyMe | null; onPlay: () => void; onLearn: () 
         {next ? (
           <>
             <b class="f-goal-t">
-              Level {next.n} <small>· Stage {next.world.no}</small>
+              Level {next.d} <small>· Stage {next.world.no}</small>
             </b>
             <small class="f-goal-s">{next.world.ta}</small>
           </>

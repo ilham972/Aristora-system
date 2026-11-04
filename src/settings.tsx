@@ -963,6 +963,10 @@ function describe(e: Doc<"events">): string {
       return `was out of work for ${fmtMin(e.ms ?? 0)}, waiting for ${v.split("+").join(" and ")}`;
     case "level-done":
       return `Level ${v} handed in, waiting for correction`;
+    case "ladder-home": {
+      const [sec, marks] = v.split(" ");
+      return `Ladder ${sec} done at home on the phone: ${marks} (its circles set)`;
+    }
     case "level-home": {
       const [n, marks] = v.split(" ");
       return `Level ${n} marked at home on the phone: ${marks} (⌂ to check)`;
