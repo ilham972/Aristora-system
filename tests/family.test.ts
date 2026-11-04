@@ -96,6 +96,20 @@ describe("what a phone can mark, read from the key", () => {
     expect(words("Rs. 1,250,000/=")).toEqual(["1250000"]);
     expect(words("**12,500**")).toEqual(["12500"]);
     expect(markPart({ p: "", m: 2, ...wantsOf("ரூ. 1,250")! }, ["1250"])!.got).toBe(2);
+    // Thousands with a space (the textbooks' way), thin spaces too; a mixed number stays a mixed number.
+    expect(words("ரூ. 36 000")).toEqual(["36000"]);
+    expect(words("**ரூபா 36\u202f000**")).toEqual(["36000"]);
+    expect(words("1 250 000")).toEqual(["1250000"]);
+    expect(words("2 1/3")).toEqual(["2 1/3"]);
+    // His Q30 shapes (4 Nov 2026): words around one bold number, a label inside the bold, working ending "= a number".
+    expect(words("**மொத்தம் 36000**")).toEqual(["36000"]);
+    expect(words("**36000 ரூபா ஆகும்**")).toEqual(["36000"]);
+    expect(kinds("**x = 36000**")).toEqual(["x = num:36000"]);
+    expect(words("60000 × 3/5 = 36000")).toEqual(["36000"]);
+    expect(words("ரூ. 60000 × 3/5 = ரூ. 36 000")).toEqual(["36000"]);
+    for (const raw of ["21 + 28 = 49 = 7²", "(6 × 7)/2 = 21; (7 × 8)/2 = 28", "**36000 அல்லது 36500**", "3 6 9", "**2x 5**"]) {
+      expect(wantsOf(raw), raw).toBeNull();
+    }
     // Lists stay lists: a comma and a space, short groups, or three groups with no money (terms of a pattern).
     expect(words("70, 85")).toEqual(["70", "85"]);
     expect(words("3,6,9")).toEqual(["3", "6", "9"]);

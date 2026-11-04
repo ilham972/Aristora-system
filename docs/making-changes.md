@@ -229,6 +229,11 @@ EOF
 - **A comma is not always a list** (4 Nov 2026): "ரூ. 1,250" was split into two boxes. `money()` runs before any
   `topSplit` in `wantsOf`; a new shape with commas inside one answer must be joined there first, with a test that a
   list ("70, 85", "3,6,9", "100,121,144") stays a list.
+- **Read a key only through `phoneKeyFor`** (4 Nov 2026): it adds the teachers' fixes (`phoneFixes`). A new reader of
+  the key that calls `phoneKey` directly would mark against answers the owner already corrected.
+- **A level's screen is loaded once, when it opens**: a reader or key change while a student is inside a level
+  reaches his phone only when he opens the level again. Check compares the boxes his screen showed (`typed[].b`) and
+  sends a mismatch to the teacher. Tell him to close (✕) and reopen the level to see a fix.
 - **Changing how a key reads changes past Checks too**: the reader runs on every request, so a question the phone
   could not read yesterday has a box today, also in levels already checked. Anything stored at Check (the photos owed)
   keeps its own numbers (`owe.pm`/`pg`, `partMarks`); test the old-row fallback.

@@ -195,6 +195,20 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_unit", ["unitId"]),
 
+  /**
+   * The answer as the phone should read it, typed by a teacher for one part of a workbook's key (4 Nov 2026, his ask:
+   * "do you have proper solution"): Settings → Books → See what the phone accepts. a = "36000", "25%", "x = 5, y = 7",
+   * or "teacher" (stays with the corrector). Kept apart from the key, so a key uploaded again keeps it.
+   */
+  phoneFixes: defineTable({
+    unitId: v.id("units"),
+    q: v.number(),
+    p: v.string(),
+    a: v.string(),
+    by: v.string(),
+    at: v.number(),
+  }).index("by_unit", ["unitId", "q"]),
+
   /** Each printed question of a book as the book draws it (cleaned HTML), read only while a teacher opens it.
    *  Teachers only, never in the code (his books' content). */
   questions: defineTable({

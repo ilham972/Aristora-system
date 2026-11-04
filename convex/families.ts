@@ -21,7 +21,9 @@ import { actor, FAMILY_LINK_MS, viewer } from "./lib/auth";
 import { codeRow, giveIndex, gradeHoursOf, HOUR_GRADES, weakCode, type GradeHours } from "./lib/family";
 import { OL, olNumber } from "./lib/syllabus";
 import { asMaster, bookFor, cleanBy, fail, getStudent, keyRow, log } from "./lib/backend";
-import { allPhone, phoneKey, phoneShare, wantWords } from "./lib/phone";
+import { outOf } from "./lib/book";
+import { phoneKeyFor } from "./lib/homeWork";
+import { allPhone, FIX_TEACHER, phoneShare, wantsOf, wantWords } from "./lib/phone";
 
 const token = v.optional(v.string());
 
@@ -117,6 +119,43 @@ export const setOpenAll = mutation({
     if (!!s.openAll === args.on) return true;
     await ctx.db.patch(s._id, { openAll: args.on || undefined });
     await log(ctx, null, Date.now(), { kind: "open-all", by: cleanBy(args.by), studentId: s._id, name: s.name, value: args.on ? "on" : "off" });
+    return true;
+  },
+});
+
+/**
+ * The answer as the phone should read it, for one part of a workbook (4 Nov 2026, his ask: "why this problem continues
+ * again and again, do you have proper solution"): when the key's words are a shape the phone can't read, a teacher with
+ * Books types the plain answer ("36000", "25%", "x = 5, y = 7") or "teacher" (it stays with the corrector); empty =
+ * back to the key. It applies at once, to every phone, on the next level opened; levels already checked keep their marks.
+ */
+export const setPhoneAnswer = mutation({
+  args: { token, unitId: v.id("units"), q: v.number(), p: v.string(), a: v.string(), by: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const me = await actor(ctx, args.token, ["owner", "books"], args.by);
+    const book = await bookFor(ctx, args.unitId, "master");
+    if (!book) fail("This unit has no workbook in the app.");
+    const unit = (await ctx.db.get(args.unitId))!;
+    if (!(outOf(asMaster(book), args.q) ?? 0)) fail(`Q${args.q} is not in this workbook.`);
+    const typed = args.a.trim().slice(0, 60);
+    const a = typed.toLowerCase() === FIX_TEACHER ? FIX_TEACHER : typed;
+    if (a && a !== FIX_TEACHER && !wantsOf(a)) {
+      fail(`The phone can't read "${a}". Type only the answer: 36000, 2 1/3, 25%, 2 : 3, x = 5, y = 7, 2n + 1.`);
+    }
+    const old = await ctx.db
+      .query("phoneFixes")
+      .withIndex("by_unit", (x) => x.eq("unitId", args.unitId).eq("q", args.q))
+      .filter((x) => x.eq(x.field("p"), args.p))
+      .first();
+    const now = Date.now();
+    if (!a) {
+      if (old) await ctx.db.delete(old._id);
+    } else {
+      const row = { a, by: me.name, at: now };
+      if (old) await ctx.db.patch(old._id, row);
+      else await ctx.db.insert("phoneFixes", { unitId: args.unitId, q: args.q, p: args.p, ...row });
+    }
+    await log(ctx, null, now, { kind: "phone-fix", by: cleanBy(args.by), unit: unit.key, q: args.q, value: `${args.p || "-"} ${a || "(the key)"}` });
     return true;
   },
 });
@@ -218,15 +257,18 @@ export const answers = query({
     const data = asMaster(book);
     const key = await keyRow(ctx, args.unitId, "master");
     if (!key) return { share: null, qs: [] };
-    const keys = phoneKey(key.answers, data);
+    const keys = await phoneKeyFor(ctx, args.unitId, data, key.answers);
     return {
       share: phoneShare(keys),
       qs: [...keys.values()].map((k) => ({
         q: k.q,
         max: k.max,
         phone: allPhone(k),
-        // A part the corrector marks shows the key's own words: the shape the phone couldn't read (4 Nov 2026).
-        parts: k.parts.filter((p) => p.m > 0).map((p) => ({ p: p.p, m: p.m, words: p.want ? wantWords(p) : (p.a ?? ""), phone: p.want !== null })),
+        // A part the corrector marks shows the key's own words: the shape the phone couldn't read (4 Nov 2026); `fixed` =
+        // a teacher typed how the phone reads it (`setPhoneAnswer`).
+        parts: k.parts
+          .filter((p) => p.m > 0)
+          .map((p) => ({ p: p.p, m: p.m, words: p.want ? wantWords(p) : (p.a ?? ""), phone: p.want !== null, fixed: !!p.fixed })),
       })),
     };
   },

@@ -63,9 +63,9 @@ import {
   type World,
 } from "./lib/family";
 import { DAY_MS, SL_OFFSET_MS, slDay, slDayNo, slWeekStart } from "./lib/day";
-import { bookOf, homeChecks, type LevelBook } from "./lib/homeWork";
+import { bookOf, homeChecks, phoneKeyFor, type LevelBook } from "./lib/homeWork";
 import { computeMaster, markBefore, type MQ, type MState } from "./lib/master";
-import { boxCount, formOf, INPUT_MAX, markQuestion, phoneKey, type FormQ } from "./lib/phone";
+import { boxCount, formOf, INPUT_MAX, markQuestion, type FormQ, type KeyQ } from "./lib/phone";
 import { blockedBy, PHOTO_BYTES, PHOTO_MAX, PHOTO_URLS_PER_DAY, type PhotoKind } from "./lib/photos";
 import { ranks } from "./lib/progress";
 
@@ -291,7 +291,7 @@ async function playable(ctx: QueryCtx, s: Doc<"students">, unitId: Id<"units">, 
     const w = worlds.find((x) => x.unitId === stop.unitId);
     fail(`முதலில் Stage ${w?.no ?? ""} · Level ${stop.n} இன் படங்களை அனுப்பு (${stop.owed}).`);
   }
-  return { world, data, level, keys: phoneKey(key.answers, data) };
+  return { world, data, level, keys: await phoneKeyFor(ctx, unitId, data, key.answers) };
 }
 
 export type FamilyLevel = {
@@ -349,7 +349,13 @@ function copy(m: MState): MState {
  * part only the teacher can mark waits for the corrector (it has no marks until she marks it).
  */
 export const check = mutation({
-  args: { token, unitId: v.id("units"), n: v.number(), typed: v.array(v.object({ q: v.number(), a: v.array(v.string()) })) },
+  args: {
+    token,
+    unitId: v.id("units"),
+    n: v.number(),
+    // b = how many boxes his phone showed for it (4 Nov 2026): a screen opened before a key was read differently.
+    typed: v.array(v.object({ q: v.number(), a: v.array(v.string()), b: v.optional(v.number()) })),
+  },
   handler: async (ctx, args) => {
     const s = await familyActor(ctx, args.token);
     const now = Date.now();
@@ -358,6 +364,10 @@ export const check = mutation({
       fail("Those answers are too long.");
     }
     const typed = new Map(args.typed.map((t) => [t.q, t.a]));
+    // A question his phone showed with other boxes than the key has now (the level was open while a key or the reader
+    // changed): never marked against boxes he didn't see. It goes to the teacher (a photo), whole.
+    const shown = new Map(args.typed.map((t) => [t.q, t.b]));
+    const stale = (q: number, k: KeyQ) => shown.get(q) !== undefined && shown.get(q) !== boxCount(k);
     const unit = (await ctx.db.get(args.unitId))!;
     const progress = await ensureProgress(ctx, s._id, unit._id, "master", now);
     const m = copy(masterState(progress));
@@ -381,6 +391,13 @@ export const check = mutation({
     for (let q = l.from; q <= l.to; q++) {
       const k = keys.get(q);
       if (!k) continue;
+      if (stale(q, k)) {
+        results.push({ q, max: k.max, ok: k.parts.map(() => null), got: null, phoneGot: 0 });
+        teacher.push(q);
+        pm.push(k.max);
+        pg.push(0);
+        continue;
+      }
       const a = (typed.get(q) ?? []).slice(0, boxCount(k));
       const r = markQuestion(k, a);
       results.push({ q, max: k.max, ok: r.ok, got: r.got, phoneGot: r.phoneGot });
@@ -404,6 +421,8 @@ export const check = mutation({
     let bonus = 0;
     for (const r of pool) {
       const k = keys.get(r.q)!;
+      // Only the ones his screen showed, with the same boxes: the others come back next time.
+      if (!typed.has(r.q) || stale(r.q, k)) continue;
       const res = markQuestion(k, (typed.get(r.q) ?? []).slice(0, boxCount(k)));
       const again = res.got ?? 0;
       const before = m.q[String(r.q)];

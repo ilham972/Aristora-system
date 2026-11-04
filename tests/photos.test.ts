@@ -242,6 +242,44 @@ describe("photos from home", () => {
     expect(partMarks({ part: [12], pm: [1], pg: [1] }, 12, k12, null)).toEqual({ teach: 1, phoneGot: 1 });
   });
 
+  test("the phone's answer typed by a teacher: Books or the owner; only what the phone can read; it reads at once; teacher; back to the key", async () => {
+    const BOOKS = "books-teacher-token-0123456789abcdefghijklmnopq";
+    await addPerson(raw, { name: "Kala", token: BOOKS, tabs: ["correction"], can: ["books"] });
+    const fix = (who: ReturnType<typeof asPhone>, q: number, a: string) => who.mutation(api.families.setPhoneAnswer, { unitId: u01, q, p: "", a });
+    await expect(fix(asPhone(raw, CORRECTOR), 10, "30")).rejects.toThrow(/Books/);
+    await expect(fix(asPhone(raw, BOOKS), 10, "சிறப்பு")).rejects.toThrow(/can't read/);
+    await expect(fix(asPhone(raw, BOOKS), 999, "30")).rejects.toThrow(/not in this workbook/);
+    // Q10 (the key's words: a name) → "30": a box on the phone, marked like any number.
+    await fix(asPhone(raw, BOOKS), 10, "30");
+    expect((await level(1)).qs.find((q) => q.q === 10)!.parts[0].boxes).toEqual([{ k: "num" }]);
+    const list = await t.query(api.families.answers, { unitId: u01 });
+    expect(list!.qs.find((q) => q.q === 10)!.parts[0]).toMatchObject({ phone: true, words: "30", fixed: true });
+    // "teacher": Q1 (a number) stays with the corrector.
+    await fix(t, 1, "Teacher");
+    expect((await level(1)).qs.find((q) => q.q === 1)!.parts[0].boxes).toBeNull();
+    const r = await fam().mutation(api.family.check, { unitId: u01, n: 1, typed: [...LEVEL1, { q: 10, a: ["30"] }] });
+    expect(r.results.find((x) => x.q === 10)).toMatchObject({ got: 2 });
+    expect(r.teacher).toEqual([1]);
+    // Back to the key.
+    await fix(t, 10, "");
+    expect((await t.query(api.families.answers, { unitId: u01 }))!.qs.find((q) => q.q === 10)!.parts[0]).toMatchObject({ phone: false, fixed: false });
+    const lines = await raw.run(async (ctx) => (await ctx.db.query("events").collect()).filter((e) => e.kind === "phone-fix").map((e) => `${e.q} ${e.value}`));
+    expect(lines).toEqual(["10 - 30", "1 - teacher", "10 - (the key)"]);
+  });
+
+  test("a screen opened before a key changed: a question with other boxes is never marked against them; it goes to the teacher", async () => {
+    // His screen showed Q10 with no box (the teacher's) and Q3 with one; the server now reads Q10 as a number.
+    await t.mutation(api.families.setPhoneAnswer, { unitId: u01, q: 10, p: "", a: "30" });
+    const typed = LEVEL1.map((x) => ({ ...x, b: 1 })).concat([{ q: 10, a: [], b: 0 }]);
+    const r = await fam().mutation(api.family.check, { unitId: u01, n: 1, typed });
+    expect(r.results.find((x) => x.q === 10)).toMatchObject({ got: null, phoneGot: 0 }); // not ✗
+    expect(r.teacher).toEqual([10]);
+    const q10 = r.book!.qs.find((x) => x.q === 10)!;
+    expect(q10).toMatchObject({ got: null, teach: 2, owe: ["part"] }); // a photo, out of its whole marks
+    expect((await hanaM()).q["10"]).toBeUndefined();
+    expect(r.results.find((x) => x.q === 3)).toMatchObject({ got: 2 }); // the same boxes: marked as usual
+  });
+
   test("questions that come back: wrong ones 2 levels later, one second try each; right = explained and the lost marks back as XP this week", async () => {
     await t.mutation(api.photos.setRequired, { on: false }); // (the photos limit is tested above)
     await fam().mutation(api.family.check, { unitId: u01, n: 1, typed: LEVEL1 }); // Q8 wrong
@@ -263,12 +301,17 @@ describe("photos from home", () => {
     // Level 4: level 2's wrong ones come back (3 at most), never Q8 again.
     const l4 = (await level(4)).qs.filter((q) => q.re).map((q) => q.q);
     expect(l4).toEqual([11, 12, 13]);
-    await checkEmpty(4); // wrong again: no marks back, not explained, never back again
+    // A screen that didn't show one of them (opened before): it isn't marked; it comes back next time.
+    const own4 = (await level(4)).qs.filter((q) => !q.re && q.q !== 13).map((q) => ({ q: q.q, a: [] as string[] }));
+    const typed4 = [...own4, { q: 11, a: [] as string[] }, { q: 12, a: [] as string[] }];
+    expect((await fam().mutation(api.family.check, { unitId: u01, n: 4, typed: typed4 })).retry.map((x) => x.q)).toEqual([11, 12]);
+    expect((await hanaM()).q["13"].rt).toBeUndefined();
+    // Wrong again: no marks back, not explained, never back again.
     expect((await hanaM()).q["11"]).toMatchObject({ rg: 0 });
     expect((await hanaM()).q["11"].x).toBeUndefined();
-    expect((await level(5)).qs.filter((q) => q.re).map((q) => q.q)).toEqual([14, 15, 16]);
+    expect((await level(5)).qs.filter((q) => q.re).map((q) => q.q)).toEqual([13, 14, 15]);
     const line = await raw.run(async (ctx) => (await ctx.db.query("events").collect()).filter((e) => e.kind === "retry-home").map((e) => e.value));
-    expect(line).toEqual(["8 1/1", "11,12,13 0/3"]);
+    expect(line).toEqual(["8 1/1", "11,12 0/2"]);
   });
 
   test("nothing kept: files go a day after marking; uploads never attached go after a day; removing a student takes his", async () => {

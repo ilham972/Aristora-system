@@ -997,6 +997,10 @@ function describe(e: Doc<"events">): string {
       const [n, why] = v.split(" ");
       return `Level ${n}${e.q ? ` Q${e.q}` : ""}: photo to take again (${(RETAKE as Record<string, { en: string }>)[why]?.en ?? why})`;
     }
+    case "phone-fix": {
+      const [part, ...rest] = v.split(" ");
+      return `the phone's answer for Q${e.q ?? "?"}${part !== "-" ? ` (${part})` : ""}: ${rest.join(" ")}`;
+    }
     case "retry-home": {
       const [qs, right] = v.split(" ");
       return `old questions back on the phone (${qs.split(",").map((q) => `Q${q}`).join(", ")}): ${right} right`;

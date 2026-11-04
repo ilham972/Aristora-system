@@ -16,7 +16,7 @@ import { slDate } from "../convex/lib/day";
 import { mutate, randomKey } from "./backend";
 import type { View } from "./derive";
 import { useQuery } from "./live";
-import { act, currentRole, toast } from "./store";
+import { act, currentRole, may, toast } from "./store";
 import { Sheet } from "./ui";
 
 /**
@@ -210,20 +210,38 @@ export function FamilySheet(props: { v: View; onClose: () => void }) {
   );
 }
 
+type PhonePart = { p: string; m: number; words: string; phone: boolean; fixed: boolean };
 type PhoneList = {
   share: { questions: number; of: number; marks: number; max: number } | null;
-  qs: { q: number; max: number; phone: boolean; parts: { p: string; m: number; words: string; phone: boolean }[] }[];
+  qs: { q: number; max: number; phone: boolean; parts: PhonePart[] }[];
 } | null;
 
 /**
  * Settings → Books → a workbook: how much of it the phone marks at home, and exactly what it accepts for each question
  * (read from the answer key; names, reasons and drawings stay with the corrector). Check it once per unit.
+ * 4 Nov 2026 (his ask: "why this problem continues again and again, do you have proper solution"): a part the phone
+ * can't read shows the key's own words; tap it and type the answer as the phone should read it (owner and Books).
  */
 export function PhoneAnswers(props: { unitId: string }) {
   const [open, setOpen] = useState(false);
+  const [onlyTeacher, setOnlyTeacher] = useState(false);
+  const [edit, setEdit] = useState<{ q: number; p: string; a: string } | null>(null);
+  const [busy, setBusy] = useState(false);
   const list = useQuery<PhoneList>(api.families.answers, { unitId: props.unitId as never });
   if (!list?.share) return null;
   const { share } = list;
+  const canFix = may("owner") || may("books");
+  const corrector = list.qs.reduce((n, q) => n + q.parts.filter((x) => !x.phone).length, 0);
+  const save = async (a: string) => {
+    if (!edit) return;
+    setBusy(true);
+    const ok = await act(() => mutate(api.families.setPhoneAnswer, { unitId: props.unitId as never, q: edit.q, p: edit.p, a, by: currentRole() }));
+    setBusy(false);
+    if (ok) {
+      toast(a ? `Q${edit.q}: saved. Phones read it from the next level opened.` : `Q${edit.q}: back to the key.`);
+      setEdit(null);
+    }
+  };
   return (
     <div class="phone-ans">
       <p class="small key-note ok">
@@ -233,22 +251,79 @@ export function PhoneAnswers(props: { unitId: string }) {
         {open ? "Hide what the phone accepts" : "See what the phone accepts"}
       </button>
       {open && (
-        <ul class="phone-ans-list">
-          {list.qs.map((q) => (
-            <li key={q.q} class={q.phone ? "" : "teach"}>
-              <b>Q{q.q}</b>
+        <>
+          {corrector > 0 && (
+            <label class="pa-only small">
+              <input type="checkbox" checked={onlyTeacher} onChange={() => setOnlyTeacher(!onlyTeacher)} />
               <span>
-                {q.parts.map((p, i) => (
-                  <span key={i} class={p.phone ? "pa-ok" : "pa-t"}>
-                    {p.p ? `(${p.p}) ` : ""}
-                    {p.phone ? p.words : `corrector${p.words ? `: ${p.words}` : ""}`}
-                    {q.parts.length > 1 ? ` [${p.m}]` : ""}
-                  </span>
-                ))}
+                Only the {corrector} the corrector marks{canFix ? ": tap one whose answer is a number, and type it" : ""}
               </span>
-            </li>
-          ))}
-        </ul>
+            </label>
+          )}
+          <ul class="phone-ans-list">
+            {list.qs
+              .filter((q) => !onlyTeacher || !q.phone)
+              .map((q) => (
+                <li key={q.q} class={q.phone ? "" : "teach"}>
+                  <b>Q{q.q}</b>
+                  <span class="pa-parts">
+                    {q.parts.map((x, i) => {
+                      const words = (
+                        <>
+                          {x.p ? `(${x.p}) ` : ""}
+                          {x.phone ? x.words : `corrector${x.words ? `: ${x.words}` : ""}`}
+                          {q.parts.length > 1 ? ` [${x.m}]` : ""}
+                          {x.fixed ? " ✎" : ""}
+                        </>
+                      );
+                      return canFix ? (
+                        <button
+                          key={i}
+                          type="button"
+                          class={`pa-fixbtn ${x.phone ? "pa-ok" : "pa-t"}`}
+                          aria-label={`Q${q.q}${x.p ? ` (${x.p})` : ""}: type how the phone reads it`}
+                          onClick={() => setEdit({ q: q.q, p: x.p, a: x.fixed && x.phone ? x.words.replace(/ \(any order\)$/, "") : "" })}
+                        >
+                          {words}
+                        </button>
+                      ) : (
+                        <span key={i} class={x.phone ? "pa-ok" : "pa-t"}>
+                          {words}
+                        </span>
+                      );
+                    })}
+                    {edit?.q === q.q && (
+                      <span class="pa-form">
+                        <input
+                          type="text"
+                          inputMode="text"
+                          value={edit.a}
+                          placeholder="36000"
+                          aria-label={`Q${q.q}: the answer as the phone reads it`}
+                          onInput={(e) => setEdit({ ...edit, a: (e.target as HTMLInputElement).value })}
+                        />
+                        <small class="muted">Only the answer: 36000 · 2 1/3 · 25% · 2 : 3 · x = 5, y = 7 · 2n + 1</small>
+                        <span class="pa-btns">
+                          <button type="button" class="btn primary small" disabled={busy || !edit.a.trim()} onClick={() => void save(edit.a)}>
+                            Save
+                          </button>
+                          <button type="button" class="btn ghost small" disabled={busy} onClick={() => void save("teacher")}>
+                            Corrector marks it
+                          </button>
+                          <button type="button" class="btn ghost small" disabled={busy} onClick={() => void save("")}>
+                            Back to the key
+                          </button>
+                          <button type="button" class="btn ghost small" onClick={() => setEdit(null)}>
+                            Cancel
+                          </button>
+                        </span>
+                      </span>
+                    )}
+                  </span>
+                </li>
+              ))}
+          </ul>
+        </>
       )}
     </div>
   );

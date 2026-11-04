@@ -17,9 +17,9 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, mutation, query, type MutationCtx } from "./_generated/server";
 import { actor, viewer } from "./lib/auth";
 import { asMaster, bookFor, fail, keyRow, log, masterState, progressFor } from "./lib/backend";
-import { photosRequired, REQUIRED_KEY } from "./lib/homeWork";
+import { phoneKeyFor, photosRequired, REQUIRED_KEY } from "./lib/homeWork";
 import type { MState } from "./lib/master";
-import { markQuestion, phoneKey, type KeyQ } from "./lib/phone";
+import { markQuestion, type KeyQ } from "./lib/phone";
 import { isRetake, isWhy, keyText, NOTE_MAX, ORPHAN_MS, partMarks, PHOTO_KEEP_MS, PHOTO_LATE_MS } from "./lib/photos";
 
 const token = v.optional(v.string());
@@ -69,7 +69,7 @@ async function unitBits(ctx: Parameters<typeof keyRow>[0], unitId: Id<"units">):
   const book = await bookFor(ctx, unitId, "master");
   if (!unit || !book) return null;
   const key = await keyRow(ctx, unitId, "master");
-  return { unit, keys: phoneKey(key?.answers ?? null, asMaster(book)), raw: new Map((key?.answers ?? []).map((a) => [a.q, a])) };
+  return { unit, keys: await phoneKeyFor(ctx, unitId, asMaster(book), key?.answers ?? null), raw: new Map((key?.answers ?? []).map((a) => [a.q, a])) };
 }
 
 /** His latest Check of that level: what he typed for the question, and the photos it asked (with the part's marks). */

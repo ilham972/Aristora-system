@@ -10399,3 +10399,44 @@ body.tm-on .toasts {
   background: rgba(255, 255, 255, 0.92);
   font-size: 20px;
 }
+/* What the phone accepts: a part a teacher can fix (4 Nov 2026: type how the phone reads an answer it couldn't). */
+.pa-only {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+.pa-parts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  min-width: 0;
+}
+.pa-fixbtn {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  text-decoration: underline dotted;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.pa-form {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  margin: 6px 0 4px;
+}
+.pa-form input {
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  font: 600 16px var(--font);
+}
+.pa-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}

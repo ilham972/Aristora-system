@@ -399,7 +399,8 @@ export function Play(props: {
         unitId: form.unitId,
         n: form.n,
         // A box he skipped is a gap in his list (or null, kept on the phone): it goes as "" (the server's ✗).
-        typed: form.qs.map((x) => ({ q: x.q, a: Array.from(typed[x.q] ?? [], (s) => (s ?? "").trim()) })),
+        // b = the boxes this screen showed: a question the server reads differently now is never marked against it.
+        typed: form.qs.map((x) => ({ q: x.q, a: Array.from(typed[x.q] ?? [], (s) => (s ?? "").trim()), b: x.parts.reduce((n, p) => n + (p.boxes?.length ?? 0), 0) })),
       })) as Checked;
       keep(draftKey, null);
       keep(formKey, null);

@@ -34,7 +34,7 @@ export type FormQ = { q: number; max: number; parts: FormPart[] };
  */
 export type Want = { box: Box; t: string; words?: string; cont?: true } & ({ ok: Rat[] } | { vals: Rat[] });
 /** One part (server only); a = the key's words when the phone can't read them (the teachers' list shows them). */
-export type KeyPart = { p: string; m: number; want: Want[] | null; anyOrder: boolean; a?: string };
+export type KeyPart = { p: string; m: number; want: Want[] | null; anyOrder: boolean; a?: string; fixed?: true };
 export type KeyQ = { q: number; max: number; parts: KeyPart[] };
 
 /** Where an answer in n is compared. */
@@ -477,11 +477,47 @@ function partOf(items: Item[], free: boolean): { want: Want[]; anyOrder: boolean
  * 250, and his 1250 got ✗). With money in the answer every thousands comma goes; without, only a number of two groups
  * ("12,500"): "100,121,144" may be three terms of a pattern written without spaces.
  */
-function money(s: string): string {
+function money(raw: string): string {
+  const s = raw.replace(/[\u00a0\u2007\u2009\u202f]/g, " ");
   const isMoney = /ரூ|Rs\.?\s?\d|LKR|\d\s*\/\s*[=-]/i.test(s);
   const t = s.replace(/(\d)\s*\/\s*[=-](?=[\s*,;)]|$)/g, "$1");
   const groups = isMoney ? /(^|[^\d.,])(\d{1,3}(?:,\d{3})+)(?!\d|,\d)/g : /(^|[^\d.,])(\d{1,3},\d{3})(?!\d|,\d)/g;
-  return t.replace(groups, (_, pre: string, n: string) => pre + n.replace(/,/g, ""));
+  // Thousands with a space too ("ரூ. 36 000", as Sri Lankan textbooks write them); never "2 1/3" or "2 125/1000".
+  return t
+    .replace(groups, (_, pre: string, n: string) => pre + n.replace(/,/g, ""))
+    .replace(/(?<![\d.,/])(?<!\d )(\d{1,3}(?: \d{3})+)(?![\d/]| \d)/g, (n: string) => n.replace(/ /g, ""));
+}
+
+/** "x = 36000" inside one bold run: a labelled answer (the label is usually just before the bold). */
+function labelledOne(s: string): Item | null {
+  const m = /^([ivx]{1,4}|[A-Za-z])\s*(=|→|->)\s*(.+)$/.exec(s.trim());
+  return m ? itemOf(m[3], `${m[1]} ${m[2] === "=" ? "=" : "→"}`, []) : null;
+}
+
+/**
+ * Working with no bold that is only arithmetic and ends in "= a number" ("60000 × 3/5 = 36000", "8 × 3 = 24"): that
+ * number. Words, letters or a last value that isn't a plain number ("= 7²": show that) stay with the corrector.
+ */
+function arithTail(t: string): Item | null {
+  const plain = normalize(t).replace(/ரூபாய்|ரூபா|ரூ\.?|Rs\.?|LKR\.?/gi, " ");
+  const sides = plain.split("=");
+  if (sides.length < 2 || !/^[\d\s+\-*/().=^]+$/.test(plain)) return null;
+  const last = sides[sides.length - 1].trim();
+  const r = parseNum(last);
+  return r ? { kind: "one", want: [{ box: { k: "num" }, t: last, ok: [r] }] } : null;
+}
+
+/**
+ * A final answer in bold with words around ONE number ("**மொத்தம் 36000**", "**36000 ரூபா ஆகும்**"): the number. Bold is
+ * the author's final answer, so the words are only words; working (=, +, ×) or a letter next to the number is not.
+ */
+function boldNumber(s: string, label: string | undefined): Item | null {
+  const t = normalize(s);
+  const nums = t.match(/-?\d+(?:\.\d+)?(?:\/\d+)?/g) ?? [];
+  if (nums.length !== 1 || /[=+*^→]|\d\s?[a-z]\b|\b[a-z]\s?\d/i.test(t)) return null;
+  const r = parseNum(nums[0]);
+  if (!r) return null;
+  return { kind: "one", want: [{ box: { k: "num", ...(label ? { l: label } : {}) }, t: nums[0], ok: [r] }] };
 }
 
 /** The boxes of one answer as the key writes it, or null: the teacher marks it. */
@@ -500,7 +536,8 @@ export function wantsOf(raw: string): { want: Want[]; anyOrder: boolean } | null
       const lab = /(?:^|[\s,;:→])([A-Za-z])\s*=\s*$/.exec(before);
       const parts = topSplit(runs[i], ",");
       for (const it of parts) {
-        const item = itemOf(it, parts.length === 1 && lab ? `${lab[1]} =` : undefined, []);
+        const label = parts.length === 1 && lab ? `${lab[1]} =` : undefined;
+        const item = itemOf(it, label, []) ?? labelledOne(it) ?? boldNumber(it, label);
         if (!item) return null;
         items.push(item);
       }
@@ -530,7 +567,9 @@ export function wantsOf(raw: string): { want: Want[]; anyOrder: boolean } | null
   if (!t || t.includes(" · ") || t.includes(";")) return null;
   if (/=|→|->/.test(t)) {
     const l = labelled(t);
-    return l ? partOf(l, false) : null;
+    if (l) return partOf(l, false);
+    const tail = arithTail(t);
+    return tail ? partOf([tail], false) : null;
   }
   const parts = topSplit(t, ",");
   const items: Item[] = [];
@@ -546,8 +585,12 @@ export function wantsOf(raw: string): { want: Want[]; anyOrder: boolean } | null
  * Every question of a workbook as the phone can mark it: each part with its marks and boxes (null = the teacher
  * marks that part). A question with no answer in the key, or whose marks can't be split by part, is the teacher's.
  */
-export function phoneKey(key: KeyAnswer[] | null, book: MasterData): Map<number, KeyQ> {
+export function phoneKey(key: KeyAnswer[] | null, book: MasterData, fixes?: Map<string, string>): Map<number, KeyQ> {
   const out = new Map<number, KeyQ>();
+  if (fixes?.size) {
+    for (const [q, k] of phoneKey(key, book)) out.set(q, { ...k, parts: k.parts.map((p) => fixPart(p, fixes.get(`${q}|${p.p}`))) });
+    return out;
+  }
   const byQ = new Map((key ?? []).map((k) => [k.q, k]));
   const last = book.parts.length ? book.parts[book.parts.length - 1].to : 0;
   for (let q = 1; q <= last; q++) {
@@ -575,6 +618,20 @@ export function phoneKey(key: KeyAnswer[] | null, book: MasterData): Map<number,
     });
   }
   return out;
+}
+
+/** "Teacher" typed as a fix: this part stays with the corrector (a real drawing the key's words made look like a number). */
+export const FIX_TEACHER = "teacher";
+
+/**
+ * A teacher's fix for one part (Settings → Books → See what the phone accepts, 4 Nov 2026): the answer as the phone
+ * should read it ("36000", "25%", "x = 5, y = 7"), or "teacher". A fix the phone can't read changes nothing.
+ */
+function fixPart(p: KeyPart, fix: string | undefined): KeyPart {
+  if (fix === undefined || p.m === 0) return p;
+  if (fix === FIX_TEACHER) return { p: p.p, m: p.m, want: null, anyOrder: false, fixed: true, a: p.a };
+  const w = wantsOf(fix);
+  return w ? { p: p.p, m: p.m, want: w.want, anyOrder: w.anyOrder, fixed: true } : p;
 }
 
 /** What the phone may see of a question: its parts' marks and boxes, never the answers. */

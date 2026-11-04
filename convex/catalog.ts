@@ -418,6 +418,11 @@ export const moveTute = mutation({
     for (const r of await ctx.db.query("homePhotos").withIndex("by_unit", (q) => q.eq("unitId", from._id)).collect()) {
       await ctx.db.patch(r._id, { unitId: to._id });
     }
+    // The answers teachers typed for the phone go with the key.
+    for (const r of await ctx.db.query("phoneFixes").withIndex("by_unit", (q) => q.eq("unitId", from._id)).collect()) {
+      if (keep) await ctx.db.delete(r._id);
+      else await ctx.db.patch(r._id, { unitId: to._id });
+    }
 
     // The students: their place, their work, the books given, drafts, a paper someone holds, calls.
     const moved = new Set<Id<"students">>();

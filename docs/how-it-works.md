@@ -1077,6 +1077,21 @@ learning app of our education institute"): one profile, his class times, what he
   it, and thousands commas are read (`money`, `bare`): "ரூ. 1,250" used to become two boxes (1 and 250) and his 1250 got
   ✗. With money in the answer every thousands comma goes; without, only a number of two groups ("12,500"): "100,121,144"
   stays three terms. A key read differently later never strands a photo already owed (`partMarks`, below).
+  **The proper solution** (4 Nov 2026, his second Grade 9 screenshot: "why this problem continues again and again"):
+  the keys are free text written differently for each paper, so (1) the reader takes the general shapes: thousands
+  with a space ("ரூ. 36 000", thin spaces too), ONE number among words inside the bold ("**மொத்தம் 36000**": bold is
+  the final answer; never with =, +, ×, ^ or a letter beside the number), a label inside the bold ("**x = 36000**"),
+  and working with no bold that is only arithmetic ending in "= a number" ("60000 × 3/5 = 36000"; "= 7²" stays a
+  "show that"); (2) **the owner or a Books teacher fixes any answer in 10 seconds**: Settings → Books → the unit → See
+  what the phone accepts → "Only the N the corrector marks" → tap a part → type the answer as the phone should read it
+  → Save (or "Corrector marks it", "Back to the key"); table `phoneFixes` (unit, q, p, a, by, at), read through
+  `phoneKeyFor` by every reader of the key (the phone's level, Check, the book, Photos), refused when the phone can't
+  read it, kept when the key is uploaded again, moved with a tute; the list marks it ✎; history "the phone's answer for
+  Q30: 36000"; (3) **a screen opened before a key changed never costs marks**: a level's questions are loaded once
+  when it opens, so the phone sends how many boxes it showed for each question (`typed[].b`); a question the server
+  now reads with other boxes goes to the teacher whole (a photo, `pm` = its marks), never ✗ for a box he didn't see;
+  a question that came back but wasn't on his screen isn't marked (it comes back next time). Phones from before `b`
+  are marked as before.
 - **What he typed is kept** (4 Nov 2026, his idea: "show the wrong answer most students put"): every Check saves a row
   in `familyAnswers` (student, unit, level, time; each question with boxes: his answers as typed and which boxes were
   right). Nothing reads it yet; after a few weeks it gives each question's most common wrong answers (a hint after

@@ -6,8 +6,19 @@ import type { Doc, Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
 import { asMaster, bookFor, keyRow, masterState } from "./backend";
 import { masterRows } from "./family";
-import { phoneKey } from "./phone";
+import type { MasterData } from "./book";
+import type { KeyAnswer } from "./key";
+import { phoneKey, type KeyQ } from "./phone";
 import { isRetake, isWhy, keyText, owedOf, partMarks, RETAKE, WHY, type CheckDebt, type PhotoKind } from "./photos";
+
+/** The key as the phone reads it, with the answers the teachers typed (Settings → Books → See what the phone accepts). */
+export async function phoneKeyFor(ctx: QueryCtx, unitId: Id<"units">, data: MasterData, answers: KeyAnswer[] | null): Promise<Map<number, KeyQ>> {
+  const rows = await ctx.db
+    .query("phoneFixes")
+    .withIndex("by_unit", (q) => q.eq("unitId", unitId))
+    .collect();
+  return phoneKey(answers, data, new Map(rows.map((r) => [`${r.q}|${r.p}`, r.a])));
+}
 
 /** Settings → Photos (the owner): photos required, 2 levels at most without them. On unless he turned it off. */
 export const REQUIRED_KEY = "photos.required";
@@ -136,7 +147,7 @@ export async function bookOf(
   const lv = m?.lv[String(n)];
   if (!m || !lv?.fixed || !lv.home) return null;
   const key = await keyRow(ctx, unitId, "master");
-  const keys = phoneKey(key?.answers ?? null, data);
+  const keys = await phoneKeyFor(ctx, unitId, data, key?.answers ?? null);
   const raw = new Map((key?.answers ?? []).map((a) => [a.q, a]));
   const h = known ?? (await homeChecks(ctx, s._id));
   const row = h.latest.get(levelKey(unitId, n));

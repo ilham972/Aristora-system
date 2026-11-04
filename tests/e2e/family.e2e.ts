@@ -987,6 +987,31 @@ test("photos from home: a drawing photographed in the level, the working on a wr
   await contains(N.locator(".phq-sum"), "No photos waiting");
   expect(await N.locator(".gear-n").count()).toBe(0);
 
+  // The owner fixes how the phone reads an answer (4 Nov 2026, his ask: "do you have proper solution"): Settings → Books
+  // → Grade 8 → U01 → See what the phone accepts → only the corrector's → Q20 (a name in this fake key) → its answer →
+  // Save; the list shows it with ✎.
+  const O = await open(backend, site.url, size(390, 844), () => {
+    if (sessionStorage.getItem("t")) return;
+    sessionStorage.setItem("t", "1");
+    localStorage.setItem("aristora.token", "owner-phone-token-0123456789abcdefghijklmnopqrstuv");
+  });
+  await O.getByRole("button", { name: "Settings" }).click();
+  await O.getByRole("button", { name: "Books", exact: true }).click();
+  await O.getByRole("button", { name: /^Grade 8\b/ }).click();
+  await O.locator(".unit-list li", { hasText: "U01" }).getByRole("button").first().click();
+  await O.getByRole("button", { name: "See what the phone accepts" }).click();
+  await O.locator(".pa-only input").check();
+  const fixQ = O.locator(".phone-ans-list li", { hasText: "Q20" });
+  await contains(fixQ, "corrector: சிறப்புப் பெயர்");
+  await fixQ.locator(".pa-fixbtn").click();
+  await fixQ.locator(".pa-form input").fill("ரூபா 60");
+  await shot(O, "fam-ph07-fix-answer");
+  await fixQ.getByRole("button", { name: "Save" }).click();
+  await contains(O.locator(".toast").last(), "Q20: saved");
+  await O.locator(".pa-only input").uncheck();
+  await contains(O.locator(".phone-ans-list li", { hasText: "Q20" }), "60 ✎");
+  await noSideScroll(O);
+
   // Hana: Level 1 has a dot on the Stage; its book has both answers, in Tamil, and Q10's marks.
   await F.reload();
   await stageNow(F, "Level 2");
