@@ -1,0 +1,98 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90m/home/runner/work/Aristora-system/Aristora-system[39m
+
+[90mstdout[2m | tests/e2e/class.e2e.ts[2m > [22m[2mTeacher card: a real day (working, free, free while students waited, the others, her week) on one screen; her own only
+[22m[39mCARD [33m390[39m [33m473[39m [33m473[39m [33m556.9375[39m [33m844[39m
+
+[90mstdout[2m | tests/e2e/class.e2e.ts[2m > [22m[2mTeacher card: a real day (working, free, free while students waited, the others, her week) on one screen; her own only
+[22m[39mCARD [33m360[39m [33m423[39m [33m423[39m [33m506.328125[39m [33m640[39m
+
+[90mstdout[2m | tests/e2e/class.e2e.ts[2m > [22m[2mTeacher card: a real day (working, free, free while students waited, the others, her week) on one screen; her own only
+[22m[39mCARD [33m320[39m [33m468[39m [33m468[39m [33m551.734375[39m [33m640[39m
+
+ [31m❯[39m tests/e2e/class.e2e.ts [2m([22m[2m20 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[33m 315245[2mms[22m[39m
+   [33m[2m✓[22m[39m the register: a whole class on three phones[33m 45524[2mms[22m[39m
+   [33m[2m✓[22m[39m Master: workbook levels corrected, lost marks explained, re-teach, Exam Sprint and back[33m 29052[2mms[22m[39m
+   [33m[2m✓[22m[39m Progress: one grade's race per unit, who finished what, and the poster for the parents[33m 7934[2mms[22m[39m
+   [33m[2m✓[22m[39m accounts: the owner sets up, adds a teacher, her phone signs in with the link and is signed out again[33m 5935[2mms[22m[39m
+   [32m✓[39m a phone without the screen wake lock (iPhone 7 Plus) keeps the screen on with the silent video[32m 284[2mms[22m[39m
+[31m   [31m×[31m Correction: one page (one grade's names in one line, + for attendance, the level bar, his unit), one question at a time, ? on a part, Take back[39m[33m 61444[2mms[22m[39m
+   [33m[2m✓[22m[39m Attendance: sign in all / sign out all for one grade (Correction's +), everyone for the whole class (the count), Undo[33m 3669[2mms[22m[39m
+   [33m[2m✓[22m[39m Theory: one screen like Evaluation: grade, stage, unit and lesson rows; her room box with Call, Arrived and Done; Taught for everyone with her; Correction's 3 minutes; the owl[33m 24075[2mms[22m[39m
+[31m   [31m×[31m Evaluation: one screen: grade, stage, unit and questions the most urgent first; her room box with Call, Arrived and Done; one question for everyone with her[39m[33m 36995[2mms[22m[39m
+   [33m[2m✓[22m[39m Several books at once: every book stays on Evaluation and Theory, one book per call, keep him for the next, given books mean work[33m 10666[2mms[22m[39m
+   [33m[2m✓[22m[39m Owner page: now, today, team, business, money; one student's sheet for his parents[33m 14934[2mms[22m[39m
+   [33m[2m✓[22m[39m Simulation: the owner starts it, a teacher joins from the banner, the app sends whom she calls, the Owner page shows her numbers[33m 7513[2mms[22m[39m
+   [33m[2m✓[22m[39m Theory and Evaluation in every situation (the old test class's students, a fixture); only a phone showing the simulation sees them[33m 8493[2mms[22m[39m
+   [33m[2m✓[22m[39m Topic tute: one zip = the unit's theory book and workbook, both answer keys, every question as printed[33m 4357[2mms[22m[39m
+   [33m[2m✓[22m[39m OL: the O/L books by paper part; a tute filed under its topic; a Grade 11 student given one, or the whole OL[33m 3750[2mms[22m[39m
+   [33m[2m✓[22m[39m OL: a tute an older upload left on Grade 11 goes to OL with its students: by uploading it again, or Move on its sheet[33m 2931[2mms[22m[39m
+   [33m[2m✓[22m[39m Class tab: everyone's, the manager acts (arrived / went, send any student: one tap, tap-tap, drag); her phone calls her until Arrived; his day; check-ins; each teacher's card[33m 33390[2mms[22m[39m
+   [33m[2m✓[22m[39m Teacher card: a real day (working, free, free while students waited, the others, her week) on one screen; her own only[33m 2410[2mms[22m[39m
+   [33m[2m✓[22m[39m Whole class: the top bar's whiteboard; any grade, book, section or level; ticked = saved for them; Taught for all at once, Undo; teaching mode; a corrector doesn't see it[33m 9094[2mms[22m[39m
+   [33m[2m✓[22m[39m Update: an older copy of the app says so at the upload, and Update opens Settings → Books again[33m 952[2mms[22m[39m
+[90mstdout[2m | tests/e2e/family.e2e.ts[2m > [22m[2mMe, his profile: a camera photo made small with its bar, the OK, the race; a name asked; his birthday; the map of 12 weeks; the report; a certificate
+[22m[39m[profile] a 6.1 MB photo was sent as 2 KB (image/webp)
+
+ [32m✓[39m tests/e2e/family.e2e.ts [2m([22m[2m13 tests[22m[2m)[22m[33m 122305[2mms[22m[39m
+   [33m[2m✓[22m[39m the family app: join, a level on the pad, Check once, the reveal, XP and the board; Correction's ⌂ and Checked[33m 18149[2mms[22m[39m
+   [33m[2m✓[22m[39m index and code: the Family sheet shows them (the code made on the phone); a family phone signs in with them[33m 2431[2mms[22m[39m
+   [33m[2m✓[22m[39m the new look: class hours and Home, the map, the questions as printed, feedback the owner reads, two children on one phone, the race and Me[33m 18325[2mms[22m[39m
+   [33m[2m✓[22m[39m the O/L map: the owner ticks Grade 11 for the O/L syllabus and gives today's topic; the phone shows the paper parts and goes to it[33m 4149[2mms[22m[39m
+   [33m[2m✓[22m[39m a level holds still: → never makes the page wider than the phone or moves the pad; a new question starts at the top[33m 4381[2mms[22m[39m
+   [33m[2m✓[22m[39m an app, not a web page: two fingers never zoom (Home, the map, a Level's pad and question); one finger still scrolls[33m 5670[2mms[22m[39m
+   [33m[2m✓[22m[39m photos from home: a drawing photographed in the level, the working on a wrong answer, marked by a person he picks; the solution and her answer on his phone[33m 10230[2mms[22m[39m
+   [33m[2m✓[22m[39m a printed question opens full screen: two fingers zoom only it, one finger moves it, ✕ and Back close it; words can't be selected[33m 3824[2mms[22m[39m
+   [33m[2m✓[22m[39m answer kinds: the question's own blanks, an option, ✓ / ✗, words to underline, cards to order, pairs; Check marks them exactly[33m 11145[2mms[22m[39m
+   [33m[2m✓[22m[39m names and reasons: names to tap under the question; ஆம் / இல்லை and his own words; a wrong pick is 0, a right one waits for the teacher[33m 6493[2mms[22m[39m
+   [33m[2m✓[22m[39m a tute's ladder on the phone: one road numbered as printed; a teacher question asks, Learn shows it a step a tap; Check sets the circles[33m 5482[2mms[22m[39m
+   [33m[2m✓[22m[39m Me, his profile: a camera photo made small with its bar, the OK, the race; a name asked; his birthday; the map of 12 weeks; the report; a certificate[33m 25801[2mms[22m[39m
+   [33m[2m✓[22m[39m the owner's Preview: Settings → Books → a unit → every level open on the phone's own screen, look only; nobody else[33m 5905[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 2 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m tests/e2e/class.e2e.ts[2m > [22mCorrection: one page (one grade's names in one line, + for attendance, the level bar, his unit), one question at a time, ? on a part, Take back
+[31m[1mAssertionError[22m: the top bar fits at 320 px: expected false to be true // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- true[39m
+[31m+ false[39m
+
+[36m [2m❯[22m tests/e2e/class.e2e.ts:[2m1706:58[22m[39m
+    [90m1704|[39m   await visible(S.locator(".fc-nm").first());
+    [90m1705|[39m   expect(await S.evaluate(() => document.documentElement.scrollWidth <…
+    [90m1706|[39m   expect(await topFits(S), "the top bar fits at 320 px").toBe(true);
+    [90m   |[39m                                                          [31m^[39m
+    [90m1707|[39m   await shot(S, "f07-focus-names-320", true);
+    [90m1708|[39m   await stap(S.locator(".fc-nm", { hasText: "Vimal" }));
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/e2e/class.e2e.ts[2m > [22mEvaluation: one screen: grade, stage, unit and questions the most urgent first; her room box with Call, Arrived and Done; one question for everyone with her
+[31m[1mError[22m: Timed out waiting for: "Done 2" in locator('.evx-done') (TimeoutError: locator.innerText: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator('.evx-done').first()
+)[39m
+[36m [2m❯[22m until tests/e2e/class.e2e.ts:[2m126:9[22m[39m
+    [90m124|[39m     await new Promise((r) => setTimeout(r, 40));
+    [90m125|[39m   }
+    [90m126|[39m   throw new Error(`Timed out waiting for: ${what}${last ? ` (${String(…
+    [90m   |[39m         [31m^[39m
+    [90m127|[39m }
+    [90m128|[39m const visible = (l: L) => l.first().waitFor({ state: "visible", timeou…
+[90m [2m❯[22m tests/e2e/class.e2e.ts:[2m2369:3[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m1 passed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m31 passed[39m[22m[90m (33)[39m
+[2m   Start at [22m 11:14:06
+[2m   Duration [22m 438.91s[2m (tests 100%)[22m
+
+
+::error file=/home/runner/work/Aristora-system/Aristora-system/tests/e2e/class.e2e.ts,title=tests/e2e/class.e2e.ts > Correction%3A one page (one grade's names in one line%2C + for attendance%2C the level bar%2C his unit)%2C one question at a time%2C ? on a part%2C Take back,line=1706,column=58::AssertionError: the top bar fits at 320 px: expected false to be true // Object.is equality%0A%0A- Expected%0A+ Received%0A%0A- true%0A+ false%0A%0A ❯ tests/e2e/class.e2e.ts:1706:58%0A%0A
+
+::error file=/home/runner/work/Aristora-system/Aristora-system/tests/e2e/class.e2e.ts,title=tests/e2e/class.e2e.ts > Evaluation%3A one screen%3A grade%2C stage%2C unit and questions the most urgent first; her room box with Call%2C Arrived and Done; one question for everyone with her,line=126,column=9::Error: Timed out waiting for: "Done 2" in locator('.evx-done') (TimeoutError: locator.innerText: Timeout 30000ms exceeded.%0ACall log:%0A  - waiting for locator('.evx-done').first()%0A)%0A ❯ until tests/e2e/class.e2e.ts:126:9%0A ❯ tests/e2e/class.e2e.ts:2369:3%0A%0A
