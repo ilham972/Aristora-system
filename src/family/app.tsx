@@ -48,7 +48,9 @@ import {
   switchTo,
   type Account,
 } from "./net";
-import { nextPlay, Play, QuestionZoom, Result, type Checked, type Zoomed } from "./play";
+import { useLevel } from "./level";
+import { nextPlay } from "./next";
+import type { Checked, Zoomed } from "./play";
 import { armSound, buzz, sound } from "./sound";
 import { Surprises } from "./surprise";
 import { Avatar, Flame, firstName, Gem, Icon, Owl, problemWords, setSheetHost, Sheet, showSheet, toast, Toast, Waiting, type IconName, type SheetRender } from "./ui";
@@ -113,6 +115,7 @@ export function App() {
   const [ready, setReady] = useState(false);
   // Me's profile parts: fetched right after the first screen (later.ts), so they are here (and kept) when he looks.
   const parts = useParts();
+  const lv = useLevel(); // the level screen, right after the first screen (level.ts)
   // A page left open keeps its old code (5 Nov 2026): back on the screen after half an hour, a newer version online
   // and nothing on its way or typed, the app loads again by itself (src/appVersion.ts; his drafts and place are kept).
   useEffect(
@@ -407,8 +410,12 @@ export function App() {
   } else if (screen.k === "level") {
     const w = worldOf(screen.unitId);
     const lvN = screen.n;
-    body = w ? (
-      <Play
+    body = !w ? (
+      <Missing onBack={toMain} />
+    ) : !lv ? (
+      <Waiting />
+    ) : (
+      <lv.Play
         key={`${w.unitId}.${screen.n}`}
         world={w}
         n={screen.n}
@@ -436,13 +443,15 @@ export function App() {
           openSheet("zoom"); // the phone's Back closes it first, like a sheet
         }}
       />
-    ) : (
-      <Missing onBack={toMain} />
     );
   } else if (screen.k === "result") {
     const w = worldOf(screen.unitId);
-    body = w ? (
-      <Result
+    body = !w ? (
+      <Missing onBack={toMain} />
+    ) : !lv ? (
+      <Waiting />
+    ) : (
+      <lv.Result
         world={w}
         form={screen.form}
         res={screen.res}
@@ -456,8 +465,6 @@ export function App() {
           window.scrollTo(0, 0);
         }}
       />
-    ) : (
-      <Missing onBack={toMain} />
     );
   } else {
     body = (
@@ -503,7 +510,7 @@ export function App() {
         </Sheet>
       )}
       {sheet === "feedback" && <FeedbackSheet grade={me?.grade ?? acc?.grade ?? null} onClose={closeSheet} />}
-      {sheet === "zoom" && zoomed && <QuestionZoom {...zoomed} onClose={closeSheet} />}
+      {sheet === "zoom" && zoomed && lv && <lv.QuestionZoom {...zoomed} onClose={closeSheet} />}
       {sheet && typeof sheet === "object" && sheet.render(closeSheet)}
       <Toast />
     </div>

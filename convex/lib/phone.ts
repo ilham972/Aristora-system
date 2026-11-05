@@ -32,7 +32,13 @@ export type Rat = [number, number];
  * one before it (":" of a ratio). A "text" box is his reason in his own words, typed with his phone's own keyboard
  * (Tamil or Thanglish), read by a teacher: never marked by the phone.
  */
-export type Box = ({ k: "num" } | { k: "expr"; v: string } | { k: "pick" } | { k: "text" }) & { l?: string; u?: string; j?: string };
+export type Box = ({ k: "num" } | { k: "expr"; v: string } | { k: "pick" } | { k: "text" }) & {
+  l?: string;
+  u?: string;
+  j?: string;
+  /** Drawn as a fraction (`fracLook`): "f" a numerator over a denominator, "m" a whole number and a fraction. */
+  f?: "f" | "m";
+};
 /**
  * How the phone shows a part whose kind the book gave (no answers in it): its boxes in the question's blanks, its
  * options, statements or words tapped in the question, cards to order or pairs to match under it. A "pick" box is one
@@ -386,17 +392,58 @@ function bare(s: string): string {
     .trim();
 }
 
+/**
+ * A fraction is written as a numerator over a denominator, never with a slash (his rule, 5 Nov 2026: "students don't
+ * writing fractions with slash, they know only denominator and numerator ... fraction line is horizontal"): the phone
+ * draws a box whose answer is a fraction as one (`f`), a mixed number with its whole number first (`m`), and an answer
+ * in one letter over something the same (n(n + 1)/2). What it sends is still one answer: "3/4", "1 3/4", "n(n+1)/2".
+ */
+export function fracLook(raw: string): { f?: "f" | "m" } {
+  const t = raw.replace(/[−–]/g, "-").replace(/\s+/g, " ").trim();
+  if (/^-?\d+ \d+\/\d+$/.test(t)) return { f: "m" };
+  if (/^-?\d+\/\d+$/.test(t)) return { f: "f" };
+  return /[a-zA-Z]/.test(t) && overOf(t) ? { f: "f" } : {};
+}
+
+/** "n(n + 1)/2" → ["n(n + 1)", "2"]: one division at the top and no sum or difference beside it; else null. */
+export function overOf(t: string): [string, string] | null {
+  let depth = 0;
+  let at = -1;
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (c === "(") depth++;
+    else if (c === ")") depth--;
+    else if (depth === 0 && c === "/") {
+      if (at >= 0) return null;
+      at = i;
+    } else if (depth === 0 && (c === "+" || c === "-" || c === "−") && i > 0) return null;
+  }
+  if (depth !== 0 || at <= 0 || at >= t.length - 1) return null;
+  const bare = (x: string) => {
+    const y = x.trim();
+    if (!y.startsWith("(") || !y.endsWith(")")) return y;
+    let d = 0;
+    for (let i = 0; i < y.length - 1; i++) {
+      if (y[i] === "(") d++;
+      else if (y[i] === ")") d--;
+      if (d === 0) return y; // "(n + 1)(n + 2)": its brackets aren't one pair round it all
+    }
+    return y.slice(1, -1).trim();
+  };
+  return [bare(t.slice(0, at)), bare(t.slice(at + 1))];
+}
+
 /** One answer box from text: a number (with any numbers also accepted), or an answer in one letter. */
 function wantOf(text: string, label: string | undefined, also: Rat[]): Want | null {
   const t = bare(text);
   if (!t || TAMIL.test(t)) return null;
   const num = parseNum(t);
-  if (num) return { box: { k: "num", ...(label ? { l: label } : {}) }, t, ok: [num, ...also.filter((a) => !same(a, num))] };
+  if (num) return { box: { k: "num", ...(label ? { l: label } : {}), ...fracLook(t) }, t, ok: [num, ...also.filter((a) => !same(a, num))] };
   const e = parseExpr(t);
   if (!e || e.vars.length !== 1) return null; // "5 + 17" (no letter): the form matters, the teacher marks it
   const vals = valuesOf(e.fn);
   if (!vals) return null;
-  return { box: { k: "expr", v: e.vars[0], ...(label ? { l: label } : {}) }, t, vals };
+  return { box: { k: "expr", v: e.vars[0], ...(label ? { l: label } : {}), ...fracLook(t) }, t, vals };
 }
 
 // ---- Units, ratios, points and sets (4 Nov 2026: "0.25 as a percentage" left whole Percentages Stages to the
@@ -648,7 +695,7 @@ export function wantsOf(raw: string): { want: Want[]; anyOrder: boolean } | null
 /** One box the book gives: a number (any of its accepted ones), or an answer in one letter; null = the phone can't. */
 function boxWant(b: BoxAns): Want | null {
   const first = b.v[0];
-  const look = { ...(b.l ? { l: b.l } : {}), ...(b.u ? { u: showUnit(b.u) } : {}), ...(b.j ? { j: b.j } : {}) };
+  const look = { ...(b.l ? { l: b.l } : {}), ...(b.u ? { u: showUnit(b.u) } : {}), ...(b.j ? { j: b.j } : {}), ...fracLook(first) };
   const t = b.u ? withUnit(first, showUnit(b.u)) : first;
   const same = b.same ? { same: b.v.map(formKey) } : {};
   const nums = b.v.map(parseNum);

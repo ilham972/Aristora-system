@@ -1251,6 +1251,28 @@ learning app of our education institute"): one profile, his class times, what he
   now reads with other boxes goes to the teacher whole (a photo, `pm` = its marks), never ✗ for a box he didn't see;
   a question that came back but wasn't on his screen isn't marked (it comes back next time). Phones from before `b`
   are marked as before.
+- **Fractions are written over a line** (5 Nov 2026, his rule after Preview, G8 U01 Q55: "students don't writing
+  fractions with slash, they know only denominator and numerator ... fraction line is horizontal"). A box whose answer
+  is a fraction ("3/4"), a mixed number ("1 3/4") or an answer in one letter over something ("n(n + 1)/2", "(n + 1)/2")
+  is drawn as one: the numerator over a line over the denominator, the whole number first when mixed (`fracLook` sets
+  `Box.f`; the key needs nothing new, every unit at once). He types a cell at a time: → and ␣ go to the next cell, then
+  on; the pad's fraction key (a box over a line over a box, in place of "/") goes down to the denominator; ⌫ on an
+  empty cell goes back; a tap on a cell picks it. What he types is still sent as one answer, as the server reads it
+  ("1 3/4", "7/4", "n(n+1)/2", "(n+1)/(2n)"; `fracJoin`), so marking didn't change (7/4 = 1 3/4 unless the form is the
+  point).
+- **The answer boxes under each sub-question** (5 Nov 2026, his ask: "essay questions have so many sub questions ...
+  after each sub question, I want to put the answer box"). When the question is printed on the phone, each part's row
+  (its boxes, names, ஆம் / இல்லை, cards, pairs, or "do it on paper") sits inside the printed question right under its
+  own sub-question: the paper's shadow root gets a named slot after each part's printed block (`slotParts`: the part's
+  label against the printed `.rl`, the whole label or its last word, in printed order; after the sub-question's figure
+  and the rest of its words, up to the next labelled one), and the row is the paper's child with that slot. A part that
+  matches no printed label (a Part I question with two answers, a part printed without a label) goes to the end of the
+  question, as before. A tap on a row never opens the question full screen.
+- **The level screen comes after the first screen** (5 Nov 2026): `play.tsx` (a level, its result, a question full
+  screen; `kinds.tsx` under it) was a quarter of the first load and the first screen never shows it, and both budgets
+  were full; it is fetched right after the first screen (`level.ts`, named in the page so the service worker keeps it),
+  and opening a level shows the waiting owl until it is here (on slow data, once). The first load went from 65.3 to
+  about 55 KB.
 - **The owner's Preview** (5 Nov 2026, his ask: check every question of a digitized unit "without answering the level
   one"; his answers: **only the owner** ("that's me only"), **only looking**, never for students or other teachers: a
   student must finish a level to see the next). Settings → Books → the unit → **Preview on the phone: every level open

@@ -68,8 +68,12 @@ console.log(`Built dist/ for ${url}: ${basename(js)} ${kb(js)} KB, ${basename(cs
 // 62 → 66 the same evening: the answer kinds, the heart of the app (his voice note: "the most important place ... not
 // in the working condition"): the question's own blanks as boxes, options and ✓ / ✗ to tap, words to underline, cards
 // to order, pairs to match, the question in the app's font (they are the level screen: in the first load).
+// 5 Nov 2026: the level screen (play.tsx and kinds.tsx, a quarter of the first load) moved into the parts right after
+// the first screen (src/family/level.ts), named in the page like Me's: the first screen never shows it, and both budgets
+// were full (65.3 / 66 and 15.8 / 16) with fractions and the boxes inside the question still to come. Later 16 → 32: it
+// holds the level screen that left the first load (nothing a phone didn't already fetch) and those two.
 const FAMILY_BUDGET_KB = 66;
-const FAMILY_LATER_KB = 16;
+const FAMILY_LATER_KB = 32;
 await mkdir("dist/f/assets", { recursive: true });
 const fam = await build({
   // profile.css: the style of the parts that come after the first screen (src/family/later.ts attaches it).
@@ -145,6 +149,6 @@ if (wire > FAMILY_BUDGET_KB * 1024) {
   process.exit(1);
 }
 if (after > FAMILY_LATER_KB * 1024) {
-  console.error(`The family app's profile parts are ${(after / 1024).toFixed(1)} KB: over their ${FAMILY_LATER_KB} KB budget. Make them lighter before they ship.`);
+  console.error(`The family app's later parts (the level screen, Me) are ${(after / 1024).toFixed(1)} KB: over their ${FAMILY_LATER_KB} KB budget. Make them lighter before they ship.`);
   process.exit(1);
 }

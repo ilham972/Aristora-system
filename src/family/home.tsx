@@ -10,7 +10,7 @@ import { isBirthday } from "../../convex/lib/day";
 import type { DayItem } from "../../convex/lib/family";
 import { levelsDone } from "./map";
 import { keep, query } from "./net";
-import { Confetti, nextPlay } from "./play";
+import { Confetti, nextPlay } from "./next";
 import { buzz, sound } from "./sound";
 import { Dashes, firstName, Flame, flameAtRisk, Icon, Owl, OwlBadge, problemWords, Tag, type IconName } from "./ui";
 

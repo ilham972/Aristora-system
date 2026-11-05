@@ -90,6 +90,9 @@ EOF
   reads the page's `script[type="module"][src]` and `link[rel="stylesheet"]`: a stylesheet or module script added at
   run time must carry `data-later` (as `later.ts` does), or that copy always reads "newer" (the banner every time, a
   reload after every half hour away).
+- **The level screen is not in the first load any more** (5 Nov 2026): import `play.tsx` only through `level.ts`
+  (`useLevel`, `loadLevel`) or from a later file (`preview.tsx` in `parts.ts`); a first-screen file that needs a piece
+  of it gets the piece moved out (`next.tsx`: `nextPlay`, `Confetti`). `import type` from it is free.
 - **A new lazy file in the family app costs the first load** (5 Nov 2026, the owner's Preview): a dynamic `import()`
   of a file that imports first-load code (the level screen, `net.ts`, preact) makes esbuild split that shared code
   into extra chunks, and the first load grew 1.2 KB (gzip works worse across files) though nothing was added to it.

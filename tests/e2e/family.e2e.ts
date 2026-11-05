@@ -1282,7 +1282,7 @@ test("answer kinds: the question's own blanks, an option, ✓ / ✗, words to un
   await nextBar();
   // Q8–Q10: boxes as always; Q9 is written the book's way (6/8 is not 3/4).
   await type(P, ["1", "5"]);
-  await type(P, ["6", "/", "8"]);
+  await type(P, ["6", "Denominator", "8"]); // a fraction box: 6 over 8 (5 Nov 2026: never a slash)
   await type(P, ["2", "1"]);
   await P.locator(".f-review").getByRole("button", { name: "Check ✓" }).click();
 
@@ -1773,15 +1773,29 @@ test("the owner's Preview: Settings → Books → a unit → every level open on
     levels: BOOK.data.levels.map((l) => ({ to: l.to, max: l.max })),
     marks: BOOK.data.marks ?? {},
     replace: true,
-    key: fakeKey().map((k) => (kinds[k.q] ? { ...k, t: kinds[k.q] } : k)),
+    key: fakeKey().map((k) => {
+      const m = outOf(BOOK.data, k.q)!;
+      // Level 6: Q53 in two parts (their boxes under each sub-question), Q54 an answer in n over 2, Q55 a mixed number.
+      if (k.q === 53)
+        return { q: 53, parts: [{ p: "i", a: "**5**", m: Math.floor(m / 2), t: { k: "box", b: [{ v: ["5"] }] } }, { p: "ii", a: "**6**", m: m - Math.floor(m / 2), t: { k: "box", b: [{ v: ["6"] }] } }] };
+      if (k.q === 54) return { q: 54, parts: [{ p: "i", a: "n(n + 1)/2", m, t: { k: "box", b: [{ v: ["n(n + 1)/2"] }] } }] };
+      if (k.q === 55) return { q: 55, parts: [{ p: "i", a: "**1 3/4**", m, t: { k: "box", b: [{ v: ["1 3/4"] }] } }] };
+      return kinds[k.q] ? { ...k, t: kinds[k.q] } : k;
+    }),
   });
   const card = (q: number, text: string) => `<div class="si" data-q="${q}" data-b="${q}.0"><span class="qn">${q}</span><div class="sit">${text}</div></div>`;
+  const essay = (q: number, subs: string[]) =>
+    `<div class="pq pqc" data-q="${q}"><div class="bk" data-b="${q}.0"><div class="pqh"><span class="qn">${q}</span></div><p class="lead2">A made-up pattern question number ${q}</p></div>` +
+    subs.map((x, i) => `<div class="bk" data-b="${q}.${i + 1}"><div class="rp in"><span class="rl">(${"i".repeat(i + 1)})</span><span>${x}</span></div><div class="wz" style="height:8mm"></div></div>`).join("") +
+    "</div>";
   // Q41 as the engine prints a question with its figure beside the text (5 Nov 2026: G8 U01 Q48 and Q50 showed none).
   const side = (q: number) =>
     `<div class="si" data-q="${q}" data-b="${q}.0"><div class="sih"><span class="qn">${q}</span><div class="sib"><div class="sit">A made-up question with a figure beside it, long enough to fill the line</div></div>` +
     `<div class="sif"><div class="dg" style="width:58mm;height:20mm"><svg viewBox="0 0 120 40" width="100%" height="100%"><circle cx="20" cy="20" r="15"/><rect x="60" y="5" width="50" height="30"/></svg></div></div></div></div>`;
   await t.run(async (ctx) => {
     for (let q = 41; q <= 52; q++) await ctx.db.insert("questions", { unitId: u01, stage: "master", q, html: q === 41 ? side(q) : card(q, `A made-up question number ${q}`) });
+    await ctx.db.insert("questions", { unitId: u01, stage: "master", q: 53, html: essay(53, ["The first made-up sub-question", "The second made-up sub-question"]) });
+    for (const q of [54, 55]) await ctx.db.insert("questions", { unitId: u01, stage: "master", q, html: essay(q, [`Its only made-up sub-question, ${q}`]) });
     await ctx.db.insert("bookCss", { unitId: u01, stage: "master", css: ".qn { font-weight: 700; } .sih { display: flex; } .sif { flex: none; } .si .sih { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; }", updatedAt: 0 });
   });
 
@@ -1815,6 +1829,35 @@ test("the owner's Preview: Settings → Books → a unit → every level open on
   await O.locator(".f-qchip", { hasText: "42" }).first().click();
   await until(async () => (await O.locator(".f-pk.yn .f-pkb").count()) === 2, "Q42's ஆம் / இல்லை");
   await visible(O.locator(".f-whyt"));
+  await noSideScroll(O);
+
+  // Level 6: each part's boxes right under its own sub-question, inside the printed question (5 Nov 2026, his ask).
+  await O.getByRole("button", { name: "Back" }).first().click();
+  await O.locator(".f-look-levels button", { hasText: "Level 6" }).first().click();
+  await contains(O.locator(".f-qn"), "Q53");
+  await until(async () => (await O.locator(".f-paper > .f-part").count()) === 2, "Q53's two parts inside the question");
+  const box = async (l: L) => (await l.first().boundingBox())!;
+  const [one, two] = [await box(O.locator(".f-paper .rp .rl", { hasText: "(i)" })), await box(O.locator(".f-paper .rp .rl", { hasText: "(ii)" }))];
+  const [r1, r2] = [await box(O.locator(".f-paper > .f-part").nth(0)), await box(O.locator(".f-paper > .f-part").nth(1))];
+  expect(r1.y > one.y && r1.y + r1.height <= two.y && r2.y > two.y).toBe(true);
+  await shot(O, "fam51-preview-parts");
+  // A fraction: the numerator over a line over the denominator, typed a cell at a time (never a slash).
+  await O.locator(".f-qchip", { hasText: "55" }).first().click();
+  await until(async () => (await O.locator(".f-box.frac .f-fc").count()) === 3, "Q55's whole number and fraction");
+  const key = (name: string) => O.getByRole("button", { name, exact: true }).click();
+  await key("1");
+  await O.locator(".f-padkeys .f-key.next").click(); // → to the numerator ("Done" here: Q55 is the level's last box)
+  await key("3");
+  await key("Denominator");
+  await key("4");
+  await until(async () => (await O.locator(".f-box.frac .f-fc").allTextContents()).join(" ") === "1 3 4", "1 3/4 in its cells");
+  await shot(O, "fam52-preview-fraction");
+  await O.locator(".f-qchip", { hasText: "54" }).first().click();
+  await until(async () => (await O.locator(".f-box.frac .f-fc").count()) === 2, "Q54's numerator and denominator");
+  for (const k of ["n", "(", "n", "+", "1", ")", "Denominator", "2"]) await key(k);
+  await until(async () => (await O.locator(".f-box.frac .f-fc").allTextContents()).join(" ") === "n(n+1) 2", "n(n+1) over 2");
+  const sent = await O.evaluate((u) => JSON.parse(localStorage.getItem(`aristora.family.look.draft.${u}.6`) ?? "{}"), u01);
+  expect([sent[54]?.[0], sent[55]?.[0]]).toEqual(["n(n+1)/2", "1 3/4"]);
   await noSideScroll(O);
 
   // Back to the levels, then to the class system on Settings → Books.

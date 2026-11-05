@@ -12,7 +12,7 @@ import type { ComponentChildren } from "preact";
 import { useEffect } from "preact/hooks";
 import type { FamilyMe } from "../../convex/family";
 import type { World, WorldLevel } from "../../convex/lib/family";
-import { nextPlay } from "./play";
+import { nextPlay } from "./next";
 import { buzz, sound } from "./sound";
 import { Dashes, Flame, flameAtRisk, Gem, Icon, Owl, OwlBadge, OwlSays, PART_TA, Tag, TERM_TA, titleSize, toast, Waiting, type Mood } from "./ui";
 

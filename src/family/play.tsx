@@ -9,7 +9,7 @@
 // - A question only the teacher marks has no box: "do it on paper", the pad pale, → goes on (4 Nov 2026: a student
 //   tapped the pad there and nothing happened). A level opens again on the question he left (kept per level).
 
-import { Fragment } from "preact";
+import { Fragment, type ComponentChildren } from "preact";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { FamilyLevel, FamilyMe, FamilyQuestions, FamilyResult } from "../../convex/family";
 import type { Trophy, World } from "../../convex/lib/family";
@@ -17,8 +17,9 @@ import type { LevelBook } from "../../convex/lib/homeWork";
 import type { Box } from "../../convex/lib/phone";
 import { drawQuestion } from "../questionView";
 import { Book, Taker } from "./book";
-import { MatchPairs, OrderCards, paintSlots, PickBelow, slotRuns, slotsFit, tapOf, tapped, typing, WhyBelow, type Live, type SlotRun } from "./kinds";
+import { fracCells, fracJoin, MatchPairs, OrderCards, paintSlots, PickBelow, slotRuns, slotsFit, tapOf, tapped, typing, WhyBelow, type Live, type SlotRun } from "./kinds";
 import { keep, mutation, NetError, query } from "./net";
+import { Confetti, nextPlay } from "./next";
 import { buzz, sound } from "./sound";
 import { Flame, Gem, Icon, Medal, Owl, OwlBadge, pretty, problemWords, Roll, Tag, toast, useOwlTap, Waiting, type Mood } from "./ui";
 
@@ -38,7 +39,8 @@ export type Checked = {
   bonus: number;
 };
 
-type Spot = { qi: number; bi: number };
+/** Where he types: the question, its box, and in a fraction box its cell (whole, numerator, denominator). */
+type Spot = { qi: number; bi: number; ci?: number };
 
 /** Every box of the level in order: question index, box index within its question, the box. */
 function boxesOf(form: FamilyLevel): { qi: number; bi: number; box: Box }[] {
@@ -72,6 +74,7 @@ const KEY_LABEL: Record<string, string> = { "-": "−", "*": "×", "^2": "x²", 
 /** His pad. On a question with no box (the teacher's) only → works: the other keys are pale. */
 function Pad(props: { box: Box | null; onKey: (k: string) => void; last: boolean }) {
   const keys = props.box?.k === "expr" ? exprKeys(props.box.v) : NUM_KEYS;
+  const fr = !!props.box?.f; // a fraction box: "/" goes down to the denominator (drawn as a fraction), ␣ to the next cell
   return (
     <div class={`f-padkeys${props.box?.k === "expr" ? " x" : ""}`} role="group" aria-label="Keys">
       {keys.map((k) => (
@@ -80,13 +83,49 @@ function Pad(props: { box: Box | null; onKey: (k: string) => void; last: boolean
           key={k}
           aria-disabled={!props.box && k !== "→" ? "true" : undefined}
           class={`f-key${k === "→" ? " next" : ""}${k === "⌫" ? " del" : ""}${/^\d$/.test(k) ? "" : " op"}${!props.box && k !== "→" ? " f-keyoff" : ""}`}
-          aria-label={k === "→" ? (props.last ? "Done" : "Next") : k === "⌫" ? "Delete" : k === " " ? "Space" : k === "^2" ? "squared" : k}
+          aria-label={k === "→" ? (props.last ? "Done" : "Next") : k === "⌫" ? "Delete" : k === " " ? "Space" : k === "^2" ? "squared" : fr && k === "/" ? "Denominator" : k}
           onClick={() => props.onKey(k)}
         >
-          {k === "^2" && props.box?.k === "expr" ? `${props.box.v}²` : (KEY_LABEL[k] ?? k)}
+          {fr && k === "/" ? (
+            <span class="f-kfrac" aria-hidden="true">
+              <i />
+              <b />
+              <i class="on" />
+            </span>
+          ) : k === "^2" && props.box?.k === "expr" ? (
+            `${props.box.v}²`
+          ) : (
+            (KEY_LABEL[k] ?? k)
+          )}
         </button>
       ))}
     </div>
+  );
+}
+
+/** A fraction box's cells: the whole number (a mixed number), then the numerator over a line over the denominator. */
+function FracCells(props: { f: "f" | "m"; v: string; on: number; onCell: (c: number) => void }) {
+  const cells = fracCells(props.f, props.v);
+  const cell = (c: number) => (
+    <span
+      class={`f-fc${props.on === c ? " on" : ""}${cells[c] ? "" : " empty"}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        props.onCell(c);
+      }}
+    >
+      {cells[c] ? pretty(cells[c]) : "?"}
+    </span>
+  );
+  const top = props.f === "m" ? 1 : 0;
+  return (
+    <>
+      {props.f === "m" && cell(0)}
+      <span class="f-frac">
+        {cell(top)}
+        {cell(top + 1)}
+      </span>
+    </>
   );
 }
 
@@ -172,12 +211,13 @@ const PAPER_CSS = `.qv { border-radius: 14px; padding: 14px 12px 10px; -webkit-u
  * A question as printed, on the level. A tap opens it full screen (`QuestionZoom`): the app itself never zooms. With
  * its slots live (his answers go in it), a tap answers instead and only 🔍 zooms.
  */
-function Paper(props: { html: string; css: string; q: number; onZoom: () => void; live?: Live }) {
+function Paper(props: { html: string; css: string; q: number; onZoom: () => void; live?: Live; parts?: string[]; children?: ComponentChildren }) {
   const host = useRef<HTMLDivElement>(null);
+  const labels = props.parts?.join("\n");
   useEffect(() => {
     if (!host.current) return;
-    return drawQuestion(host.current, props.html, props.css, PAPER_CSS);
-  }, [props.html, props.css]);
+    return drawQuestion(host.current, props.html, props.css, PAPER_CSS, props.parts);
+  }, [props.html, props.css, labels]);
   // After every change: his answers in the slots (the drawing above runs first).
   useEffect(() => {
     const root = host.current?.shadowRoot;
@@ -190,11 +230,14 @@ function Paper(props: { html: string; css: string; q: number; onZoom: () => void
       ref={host}
       aria-label={`Q${props.q}`}
       onClick={(e) => {
+        if (e.target instanceof Element && e.target.closest(".f-part")) return; // his answers under a sub-question
         if (!live) return props.onZoom();
         const t = tapOf(e, live);
         if (t) live.onSlot(t.run, t.i, t.v);
       }}
-    />
+    >
+      {props.children}
+    </div>
   );
 }
 
@@ -479,7 +522,21 @@ export function Play(props: {
   const onKey = (k: string) => {
     buzz(6);
     sound("key");
+    // A fraction box: → (and ␣) to its next cell, then on; the fraction key down to the denominator; ⌫ on an empty
+    // cell back to the one before.
+    const fr = box?.f ? box.f : null;
+    const ci = at.ci ?? 0;
+    const cells = fr ? fracCells(fr, val(at.qi, at.bi)) : [];
+    if (fr && (k === "→" || k === " ") && ci < cells.length - 1) return setAt({ ...at, ci: ci + 1 });
     if (k === "→") return goNext();
+    if (fr) {
+      if (k === " ") return;
+      if (k === "/") return setAt({ ...at, ci: cells.length - 1 });
+      if (k === "⌫" && !cells[ci]) return ci > 0 ? setAt({ ...at, ci: ci - 1 }) : undefined;
+      if (k !== "⌫" && cells[ci].length >= 16) return;
+      cells[ci] = k === "⌫" ? (cells[ci].endsWith("^2") ? cells[ci].slice(0, -2) : cells[ci].slice(0, -1)) : cells[ci] + k;
+      return set(at.qi, at.bi, fracJoin(fr, cells));
+    }
     // A key while a tap's place is chosen: it goes to the question's first box.
     const here = box ? at.bi : typesIn(at.qi) ? startOf(at.qi) : -1;
     if (here < 0) return toast("இதைத் தாளில் செய்து படம் எடு (📷). → அடுத்த கேள்வி.");
@@ -543,6 +600,101 @@ export function Play(props: {
   const runAt = (from: number) => runs.find((r) => r.at === from);
   const pad = !review && !asking && !learning && typesIn(at.qi);
   let bi = 0;
+  // Each part's answers right under its own sub-question, inside the printed question (5 Nov 2026, his ask: "after each
+  // sub question, I want to put the answer box"; Paper → slotParts), else under the question as before.
+  const inPaper = !!printed && css !== null && !asking && !learning;
+  const sl = (pi: number) => (inPaper ? `p${pi}` : undefined);
+  const rows = asking || learning ? [] : q.parts.map((p, pi) => {
+    if (p.boxes && p.boxes.length === 0) return null;
+    const from = bi;
+    const ui = p.ui;
+    // A kind answered inside the printed question: nothing under it. Cards, pairs, names the paper doesn't print,
+    // a reason and the rest go here.
+    if (ui && ui.k !== "fill" && ui.k !== "order" && ui.k !== "match" && ui.k !== "why") {
+      bi += p.boxes?.length ?? 0;
+      const run = runAt(from);
+      if (!run || (fit.has(run.attr) && !run.below)) return null;
+      return (
+        <div class="f-part" key={pi} slot={sl(pi)}>
+          {p.p && <span class="f-plabel">({p.p})</span>}
+          <PickBelow run={run} vals={mine} onPick={(i, v) => tap(run, i, v)} />
+        </div>
+      );
+    }
+    if (ui?.k === "order" || ui?.k === "match") {
+      bi += p.boxes?.length ?? 0;
+      return (
+        <div class="f-part" key={pi} slot={sl(pi)}>
+          {p.p && <span class="f-plabel">({p.p})</span>}
+          {ui.k === "order" ? (
+            <OrderCards items={ui.items} vals={mine} at={from} onSet={(v) => setRun(at.qi, from, v)} />
+          ) : (
+            <MatchPairs l={ui.l} r={ui.r} vals={mine} at={from} onSet={(v) => setRun(at.qi, from, v)} />
+          )}
+        </div>
+      );
+    }
+    if (ui?.k === "why") {
+      bi += p.boxes?.length ?? 0;
+      return (
+        <div class="f-part" key={pi} slot={sl(pi)}>
+          {p.p && <span class="f-plabel">({p.p})</span>}
+          <WhyBelow vals={mine} at={from} onSet={(v) => setRun(at.qi, from, v)} />
+        </div>
+      );
+    }
+    if (ui?.k === "fill" && fit.has("b")) {
+      bi += p.boxes?.length ?? 0;
+      return null;
+    }
+    return (
+      <div class="f-part" key={pi} slot={sl(pi)}>
+        {p.p && <span class="f-plabel">({p.p})</span>}
+        {p.boxes ? (
+          <div class="f-boxes">
+            {p.boxes.map((b) => {
+              const i = bi++;
+              const v = val(at.qi, i);
+              return (
+                <Fragment key={i}>
+                  {b.j && (
+                    <span class="f-bjoin" aria-hidden="true">
+                      {b.j}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    class={`f-box${at.bi === i ? " on" : ""}${b.k === "expr" ? " x" : ""}${v ? " has" : ""}${b.f ? " frac" : ""}`}
+                    onClick={() => setAt({ qi: at.qi, bi: i })}
+                    aria-label={`${b.l ?? ""} answer ${i + 1}${b.u ? ` (${b.u})` : ""}`}
+                  >
+                    {b.l && <span class="f-blabel">{pretty(b.l)}</span>}
+                    <span class="f-bline">
+                      {b.f ? (
+                        <FracCells f={b.f} v={v} on={at.bi === i ? (at.ci ?? 0) : -1} onCell={(c) => setAt({ qi: at.qi, bi: i, ci: c })} />
+                      ) : (
+                        <span key={at.bi === i ? v.length : 0} class={v ? `f-bval${at.bi === i ? " typed" : ""}` : "f-bval empty"}>
+                          {v ? pretty(v) : "?"}
+                        </span>
+                      )}
+                      {b.u && <span class="f-bunit">{b.u}</span>}
+                    </span>
+                  </button>
+                </Fragment>
+              );
+            })}
+          </div>
+        ) : (
+          <div class="f-teachq">
+            <p class="f-teach">
+              <Icon name="pen" size={16} /> {props.n > 0 ? "இதைத் தாளில் செய்து படம் எடு: உன் ஆசிரியர் திருத்துவார்" : "இதைத் தாளில் செய்: வகுப்பில் ஆசிரியர் திருத்துவார்"}
+            </p>
+            {props.n > 0 && <Taker unitId={props.world.unitId} n={props.n} q={q.q} kind="part" send={false} />}
+          </div>
+        )}
+      </div>
+    );
+  });
   return (
     <div class={`f-play${showQ ? " withq" : ""}${review ? " rev" : ""}${box?.k === "expr" ? " xpad" : ""}${!review && !pad ? " nopad" : ""}`}>
       <header class="f-ptop">
@@ -647,7 +799,9 @@ export function Play(props: {
           {q.t && <p class="f-tqtag">ஆசிரியர் கேள்வி · with your teacher</p>}
           {showQ &&
             (printed && css !== null ? (
-              <Paper html={printed.html} css={css} q={q.q} onZoom={zoom} live={live} />
+              <Paper html={printed.html} css={css} q={q.q} onZoom={zoom} live={live} parts={inPaper ? q.parts.map((x) => x.p ?? "") : undefined}>
+                {inPaper && rows}
+              </Paper>
             ) : (
               <p class="f-paper-note">
                 {qs.failed ? "இணையம் இல்லை: கேள்வியைக் கொண்டுவர முடியவில்லை." : qs.got ? "இந்தக் கேள்வி இன்னும் phone இல் இல்லை." : "கேள்வி வருகிறது…"}
@@ -666,93 +820,7 @@ export function Play(props: {
           ) : learning ? (
             <Learn unitId={props.world.unitId} n={props.n} q={q.q} onDone={() => pick(q.q, "do")} />
           ) : null}
-          {!asking && !learning && q.parts.map((p, pi) => {
-            if (p.boxes && p.boxes.length === 0) return null;
-            const from = bi;
-            const ui = p.ui;
-            // A kind answered inside the printed question: nothing under it. Cards, pairs, names the paper doesn't print,
-            // a reason and the rest go here.
-            if (ui && ui.k !== "fill" && ui.k !== "order" && ui.k !== "match" && ui.k !== "why") {
-              bi += p.boxes?.length ?? 0;
-              const run = runAt(from);
-              if (!run || (fit.has(run.attr) && !run.below)) return null;
-              return (
-                <div class="f-part" key={pi}>
-                  {p.p && <span class="f-plabel">({p.p})</span>}
-                  <PickBelow run={run} vals={mine} onPick={(i, v) => tap(run, i, v)} />
-                </div>
-              );
-            }
-            if (ui?.k === "order" || ui?.k === "match") {
-              bi += p.boxes?.length ?? 0;
-              return (
-                <div class="f-part" key={pi}>
-                  {p.p && <span class="f-plabel">({p.p})</span>}
-                  {ui.k === "order" ? (
-                    <OrderCards items={ui.items} vals={mine} at={from} onSet={(v) => setRun(at.qi, from, v)} />
-                  ) : (
-                    <MatchPairs l={ui.l} r={ui.r} vals={mine} at={from} onSet={(v) => setRun(at.qi, from, v)} />
-                  )}
-                </div>
-              );
-            }
-            if (ui?.k === "why") {
-              bi += p.boxes?.length ?? 0;
-              return (
-                <div class="f-part" key={pi}>
-                  {p.p && <span class="f-plabel">({p.p})</span>}
-                  <WhyBelow vals={mine} at={from} onSet={(v) => setRun(at.qi, from, v)} />
-                </div>
-              );
-            }
-            if (ui?.k === "fill" && fit.has("b")) {
-              bi += p.boxes?.length ?? 0;
-              return null;
-            }
-            return (
-              <div class="f-part" key={pi}>
-                {p.p && <span class="f-plabel">({p.p})</span>}
-                {p.boxes ? (
-                  <div class="f-boxes">
-                    {p.boxes.map((b) => {
-                      const i = bi++;
-                      const v = val(at.qi, i);
-                      return (
-                        <Fragment key={i}>
-                          {b.j && (
-                            <span class="f-bjoin" aria-hidden="true">
-                              {b.j}
-                            </span>
-                          )}
-                          <button
-                            type="button"
-                            class={`f-box${at.bi === i ? " on" : ""}${b.k === "expr" ? " x" : ""}${v ? " has" : ""}`}
-                            onClick={() => setAt({ qi: at.qi, bi: i })}
-                            aria-label={`${b.l ?? ""} answer ${i + 1}${b.u ? ` (${b.u})` : ""}`}
-                          >
-                            {b.l && <span class="f-blabel">{pretty(b.l)}</span>}
-                            <span class="f-bline">
-                              <span key={at.bi === i ? v.length : 0} class={v ? `f-bval${at.bi === i ? " typed" : ""}` : "f-bval empty"}>
-                                {v ? pretty(v) : "?"}
-                              </span>
-                              {b.u && <span class="f-bunit">{b.u}</span>}
-                            </span>
-                          </button>
-                        </Fragment>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div class="f-teachq">
-                    <p class="f-teach">
-                      <Icon name="pen" size={16} /> {props.n > 0 ? "இதைத் தாளில் செய்து படம் எடு: உன் ஆசிரியர் திருத்துவார்" : "இதைத் தாளில் செய்: வகுப்பில் ஆசிரியர் திருத்துவார்"}
-                    </p>
-                    {props.n > 0 && <Taker unitId={props.world.unitId} n={props.n} q={q.q} kind="part" send={false} />}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          {!inPaper && rows}
         </section>
       )}
 
@@ -833,20 +901,6 @@ function Oops(props: { text: string; onBack: () => void }) {
 
 // ---- The reveal ----
 
-/**
- * The level to play now: in his Stage now first, then in the newest book the teachers gave him (4 Nov 2026, his words:
- * "the unit I taught lastly"), else the first open Stage the phone can mark, in the map's order.
- */
-export function nextPlay(me: FamilyMe | null): { world: World; n: number; d: number } | null {
-  if (!me) return null;
-  const ws = [...me.worlds].sort((a, b) => Number(b.now) - Number(a.now) || (b.given ?? 0) - (a.given ?? 0));
-  for (const w of ws) {
-    const l = w.book && w.open && w.phone ? w.levels.find((x) => x.s === "play") : undefined;
-    if (l) return { world: w, n: l.n, d: l.d ?? l.n };
-  }
-  return null;
-}
-
 type RowKind = "ok" | "part" | "bad" | "teach";
 const kindOf = (r: FamilyResult): RowKind => (r.got === null ? "teach" : r.got === r.max ? "ok" : r.got > 0 ? "part" : "bad");
 
@@ -859,20 +913,6 @@ const instant = () =>
 const RING_R = 54;
 const RING_C = Math.round(2 * Math.PI * RING_R * 100) / 100;
 
-/** Confetti from behind the owl: more for a better level. */
-export function Confetti(props: { n: number }) {
-  return (
-    <span class="f-confetti" aria-hidden="true">
-      {Array.from({ length: props.n }, (_, i) => (
-        <i
-          key={i}
-          class={`c${i % 4}`}
-          style={{ "--a": `${(360 / props.n) * i + (i % 3) * 7}deg`, "--d": `${96 + (i % 4) * 22}px`, "--t": `${(i % 5) * 50}ms`, "--r": `${(i % 2 ? 1 : -1) * (160 + i * 23)}deg` }}
-        />
-      ))}
-    </span>
-  );
-}
 
 export function Result(props: {
   world: World;

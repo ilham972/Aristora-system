@@ -29,6 +29,61 @@ export type SlotRun = { attr: Attr; els: number; at: number; ui: Ui; below?: tru
 /** A box he types into with the app's pad (not a tap; not his reason either: that one takes his phone's keyboard). */
 export const typing = (b: Box) => b.k === "num" || b.k === "expr";
 
+// ---- A fraction box (5 Nov 2026, his rule: "students don't writing fractions with slash ... fraction line is
+// horizontal"): a numerator over a line over a denominator, the whole number first for a mixed number (`Box.f`). What
+// he types is kept and sent as one answer, as the server reads it: "3/4", "1 3/4", "n(n+1)/2", "(n+1)/(2n)". ----
+
+/**
+ * "n(n+1)/2" → ["n(n+1)", "2"], a pair of brackets round a whole side taken off. The line is the last "/": a cell never
+ * holds one (the pad's "/" goes down to the denominator), and a numerator he is still typing ("n(", its bracket not yet
+ * closed) must not swallow it.
+ */
+function over(t: string): [string, string] {
+  const i = t.lastIndexOf("/");
+  return i < 0 ? [t, ""] : [unwrap(t.slice(0, i)), unwrap(t.slice(i + 1))];
+}
+
+function unwrap(x: string): string {
+  if (!x.startsWith("(") || !x.endsWith(")")) return x;
+  let d = 0;
+  for (let i = 0; i < x.length - 1; i++) {
+    if (x[i] === "(") d++;
+    else if (x[i] === ")") d--;
+    if (d === 0) return x; // "(n+1)(n+2)": not one pair round it all
+  }
+  return x.slice(1, -1);
+}
+
+/** A sum or a difference at the top ("n+1", not "n(n+1)" or "−3"): it keeps its brackets over a line. */
+function sum(x: string): boolean {
+  let d = 0;
+  for (let i = 0; i < x.length; i++) {
+    if (x[i] === "(") d++;
+    else if (x[i] === ")") d--;
+    else if (d === 0 && i > 0 && (x[i] === "+" || x[i] === "-")) return true;
+  }
+  return false;
+}
+
+/** His answer in a fraction box, cell by cell: "1 3/4" → ["1", "3", "4"] (m), "(n+1)/2" → ["n+1", "2"] (f). */
+export function fracCells(f: "f" | "m", s: string): string[] {
+  const t = s.trim();
+  if (f === "f") return over(t);
+  const i = t.indexOf("/");
+  if (i < 0) return [t, "", ""];
+  const sp = t.lastIndexOf(" ", i);
+  return [sp < 0 ? "" : t.slice(0, sp).trim(), ...over(sp < 0 ? t : t.slice(sp + 1).trim())];
+}
+
+/** His cells back into one answer ("" while all are empty; the whole number alone while the fraction is). */
+export function fracJoin(f: "f" | "m", cells: string[]): string {
+  const [w, n, d] = f === "m" ? cells : ["", ...cells];
+  if (!n && !d) return w;
+  const top = sum(n) ? `(${n})` : n;
+  const bottom = d === "" || /^(-?\d+(\.\d+)?|[a-zA-Z])$/.test(d) ? d : `(${d})`;
+  return `${w ? `${w} ` : ""}${top}/${bottom}`;
+}
+
 /** His typed reason, at most (= `REASON_MAX` in convex/lib/phone.ts: the family bundle never imports the server's code). */
 export const REASON_LETTERS = 300;
 

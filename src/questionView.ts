@@ -45,17 +45,67 @@ export const PHONE_CSS = `
 .qv .qfig, .qv .figrow { max-width: 100%; }
 `;
 
+/** A label's pieces: "(b) i)" → ["b", "i"], "A1" → ["a", "1"], "3.1" → ["3", "1"], "அ ii" → ["அ", "ii"]. */
+const pieces = (s: string) =>
+  s
+    .toLowerCase()
+    .replace(/([a-z])(?=\d)|(\d)(?=[a-z])/g, "$1$2 ")
+    .split(/[^0-9a-z\u0B80-\u0BFF]+/)
+    .filter(Boolean);
+
+/** A key's part label and a printed sub-question's label are the same part: the same last piece, or all the same. */
+const samePart = (key: string, printed: string) => {
+  const k = pieces(key);
+  const p = pieces(printed);
+  return k.length > 0 && p.length > 0 && (k[k.length - 1] === p[p.length - 1] || k.join("") === p.join(""));
+};
+
+/**
+ * Each part's answers right under its own sub-question (5 Nov 2026, his ask: "after each sub question, I want to put
+ * the answer box"): a named slot (`p0`, `p1` … in the key's order) right after the printed block of that part (`.rp`,
+ * matched by its label: the whole of the key's label or its last word, "a ii" → "ii", in printed order), and one slot at
+ * the end for the parts that match none (a Part I question, a part printed without a label). The family app's part
+ * rows are the host's children with `slot="pN"`: they stay the app's (its style, its taps).
+ */
+export function slotParts(box: HTMLElement, parts: string[]): void {
+  const blocks = [...box.querySelectorAll<HTMLElement>(".rp")].filter((b) => b.querySelector(".rl"));
+  const labelled = (el: Element) => (el.matches(".rp") ? !!el.querySelector(".rl") : !!el.querySelector(".rp .rl"));
+  let from = 0;
+  let waiting: HTMLSlotElement[] = []; // parts printed without a label of their own (in a lead's words, G8 U01 Q70 அ)
+  parts.forEach((p, i) => {
+    const slot = document.createElement("slot");
+    slot.name = `p${i}`;
+    for (let j = from; j < blocks.length; j++) {
+      if (!samePart(p, blocks[j].querySelector(".rl")?.textContent ?? "")) continue;
+      // The parts before it that matched no label: just before this sub-question, still in their order.
+      for (const w of waiting) blocks[j].parentElement?.insertBefore(w, blocks[j]);
+      waiting = [];
+      // After the whole sub-question: its figure and the rest of its words come first (G8 U01 Q73 iii), up to the
+      // next labelled one in the same block, else the block's end.
+      let next = blocks[j].nextElementSibling;
+      while (next && !labelled(next)) next = next.nextElementSibling;
+      blocks[j].parentElement?.insertBefore(slot, next);
+      from = j + 1;
+      return;
+    }
+    waiting.push(slot); // every part has its slot: a row whose slot is missing would not show at all
+  });
+  box.append(...waiting, document.createElement("slot"));
+}
+
 /**
  * Draws one question (its HTML and its book's CSS) into `host`'s shadow root, with `extraCss` after the phone's rules
- * (the family app's paper look). Returns the clean-up (stops fitting figures when the host resizes).
+ * (the family app's paper look), and with `parts` (its parts' labels) a place for each part's answers under its
+ * sub-question (`slotParts`). Returns the clean-up (stops fitting figures when the host resizes).
  */
-export function drawQuestion(host: HTMLElement, html: string, css: string, extraCss = ""): () => void {
+export function drawQuestion(host: HTMLElement, html: string, css: string, extraCss = "", parts?: string[]): () => void {
   const root = host.shadowRoot ?? host.attachShadow({ mode: "open" });
   const style = document.createElement("style");
   style.textContent = `${css}\n${PHONE_CSS}\n${extraCss}`;
   const box = document.createElement("div");
   box.className = "qv";
   box.appendChild(safeFragment(html));
+  if (parts) slotParts(box, parts);
   root.replaceChildren(style, box);
   const fit = () => {
     const w = box.clientWidth - 16;
