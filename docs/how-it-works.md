@@ -441,6 +441,11 @@ rows rise in (`@keyframes rise`, 8 px up, never sideways); buttons press (scale)
 `public/index.html` ("Still loading…" after 8 s), `hideSplash()` (`src/splash.ts`, ≥1.2 s); `sh scripts/owl/make.sh`
 rebuilds icons + splash from `scripts/owl/owl.json` (animations: "Splash" in `styles.css`).
 
+**A printed question's side figure** (5 Nov 2026, his Preview: G8 U01 Q48 and Q50 showed no figure): the engine
+prints a Part I figure beside the text (`.si .sih` a grid: number, text, `.sif`). On a phone it takes its own row across
+the card (`PHONE_CSS` in `src/questionView.ts`: `grid-column: 1 / -1; grid-row: 2`): placed by its column alone, it went
+beside the text again once the family app hid the printed number, in a column 0 px wide, and the card cut it off.
+
 **A phone with an old copy (5 Nov 2026, his "I can't upload this").** A page left open keeps the code it loaded,
 for days (the offline banner even says "Don't close this page"): his phone still had the night before's copy, whose
 upload reader didn't know reasons, and refused the U01 v5 zip the new app takes ("Question 62: an answer kind the app

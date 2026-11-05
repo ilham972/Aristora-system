@@ -26,7 +26,9 @@ export function safeFragment(html: string): DocumentFragment {
 }
 
 /** The app's own rules over the book's, for a phone: no print furniture or working space, figures beside text go
- *  under it, answer boxes slimmer. */
+ *  under it, answer boxes slimmer. A side figure (`.sif`) takes its own row across the card (5 Nov 2026, his Preview:
+ *  G8 U01 Q48 and Q50 showed no figure): placed by column alone, it went beside the text again once the family app
+ *  hid the printed number, in a column 0 px wide, and the card cut it off. */
 export const PHONE_CSS = `
 :host { display: block; }
 .qv { font-family: "Mukta Malar", "Noto Sans Tamil", "Latha", "Tamil Sangam MN", system-ui, sans-serif; font-size: 10pt;
@@ -36,7 +38,7 @@ export const PHONE_CSS = `
 .qv .wz, .qv .zone, .qv .fl, .qv .fc, .qv .fr, .qv .tab, .qv .lvl { display: none !important; }
 .qv .ab.ar, .qv .ab.na { width: 22mm; }
 .qv .si .sih { grid-template-columns: auto minmax(0, 1fr); }
-.qv .si .sif { grid-column: 2; margin: 2mm 0 0; }
+.qv .si .sif { grid-column: 1 / -1; grid-row: 2; margin: 2mm 0 0; }
 .qv .pq .bkrow { display: block; }
 .qv .pq .bkf { margin: 1mm 0 0; }
 .qv .sq { margin-left: 4mm; }

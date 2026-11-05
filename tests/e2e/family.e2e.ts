@@ -1776,9 +1776,13 @@ test("the owner's Preview: Settings → Books → a unit → every level open on
     key: fakeKey().map((k) => (kinds[k.q] ? { ...k, t: kinds[k.q] } : k)),
   });
   const card = (q: number, text: string) => `<div class="si" data-q="${q}" data-b="${q}.0"><span class="qn">${q}</span><div class="sit">${text}</div></div>`;
+  // Q41 as the engine prints a question with its figure beside the text (5 Nov 2026: G8 U01 Q48 and Q50 showed none).
+  const side = (q: number) =>
+    `<div class="si" data-q="${q}" data-b="${q}.0"><div class="sih"><span class="qn">${q}</span><div class="sib"><div class="sit">A made-up question with a figure beside it, long enough to fill the line</div></div>` +
+    `<div class="sif"><div class="dg" style="width:58mm;height:20mm"><svg viewBox="0 0 120 40" width="100%" height="100%"><circle cx="20" cy="20" r="15"/><rect x="60" y="5" width="50" height="30"/></svg></div></div></div></div>`;
   await t.run(async (ctx) => {
-    for (let q = 41; q <= 52; q++) await ctx.db.insert("questions", { unitId: u01, stage: "master", q, html: card(q, `A made-up question number ${q}`) });
-    await ctx.db.insert("bookCss", { unitId: u01, stage: "master", css: ".qn { font-weight: 700; }", updatedAt: 0 });
+    for (let q = 41; q <= 52; q++) await ctx.db.insert("questions", { unitId: u01, stage: "master", q, html: q === 41 ? side(q) : card(q, `A made-up question number ${q}`) });
+    await ctx.db.insert("bookCss", { unitId: u01, stage: "master", css: ".qn { font-weight: 700; } .sih { display: flex; } .sif { flex: none; } .si .sih { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; }", updatedAt: 0 });
   });
 
   // The owner: Books → Grade 8 → U01 → Preview on the phone.
@@ -1801,6 +1805,10 @@ test("the owner's Preview: Settings → Books → a unit → every level open on
   await O.locator(".f-look-levels button", { hasText: "Level 5" }).first().click();
   await contains(O.locator(".f-qn"), "Q41");
   await until(async () => (await O.locator(".f-pkn .f-pkb").count()) === 4, "Q41's four names under the question");
+  // Its figure is on the card, not cut off beside the text.
+  const fig = await O.locator(".f-paper .sif svg").first().boundingBox();
+  const paper = await O.locator(".f-paper .qv").first().boundingBox();
+  expect(!!fig && !!paper && fig.width > 100 && fig.x >= paper.x && fig.x + fig.width <= paper.x + paper.width + 1).toBe(true);
   await says(O.locator(".f-checkpill"), "Preview");
   expect(await O.getByRole("button", { name: "Check" }).count()).toBe(0);
   await shot(O, "fam50-preview-level5");
