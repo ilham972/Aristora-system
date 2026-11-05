@@ -1,0 +1,12 @@
+
+> aristora-system@1.0.0 typecheck
+> tsc -p convex --noEmit && tsc -p . --noEmit
+
+tests/free.test.ts(98,31): error TS2339: Property 'free' does not exist on type '{ labels?: Record<string, string> | undefined; kind: "fighter"; sections: { teach: number[]; solo: number[]; kind: "ladder" | "past" | "final"; id: string; badge: string; title: string; tamil: string; }[]; } | { ...; }'.
+  Property 'free' does not exist on type '{ labels?: Record<string, string> | undefined; kind: "fighter"; sections: { teach: number[]; solo: number[]; kind: "ladder" | "past" | "final"; id: string; badge: string; title: string; tamil: string; }[]; }'.
+tests/free.test.ts(103,31): error TS2339: Property 'free' does not exist on type '{ labels?: Record<string, string> | undefined; kind: "fighter"; sections: { teach: number[]; solo: number[]; kind: "ladder" | "past" | "final"; id: string; badge: string; title: string; tamil: string; }[]; } | { ...; }'.
+  Property 'free' does not exist on type '{ labels?: Record<string, string> | undefined; kind: "fighter"; sections: { teach: number[]; solo: number[]; kind: "ladder" | "past" | "final"; id: string; badge: string; title: string; tamil: string; }[]; }'.
+tests/free.test.ts(176,31): error TS2339: Property 'free' does not exist on type '{ labels?: Record<string, string> | undefined; kind: "fighter"; sections: { teach: number[]; solo: number[]; kind: "ladder" | "past" | "final"; id: string; badge: string; title: string; tamil: string; }[]; } | { ...; }'.
+  Property 'free' does not exist on type '{ labels?: Record<string, string> | undefined; kind: "fighter"; sections: { teach: number[]; solo: number[]; kind: "ladder" | "past" | "final"; id: string; badge: string; title: string; tamil: string; }[]; }'.
+tests/free.test.ts(179,31): error TS2339: Property 'free' does not exist on type '{ labels?: Record<string, string> | undefined; kind: "fighter"; sections: { teach: number[]; solo: number[]; kind: "ladder" | "past" | "final"; id: string; badge: string; title: string; tamil: string; }[]; } | { ...; }'.
+  Property 'free' does not exist on type '{ labels?: Record<string, string> | undefined; kind: "fighter"; sections: { teach: number[]; solo: number[]; kind: "ladder" | "past" | "final"; id: string; badge: string; title: string; tamil: string; }[]; }'.
