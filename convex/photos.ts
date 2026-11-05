@@ -1,11 +1,16 @@
 // Photos from home, the teachers' side (4 Nov 2026, his voice notes): the owner and the people he picks (Settings →
 // People → Also: Photos) mark what students send from the family app, so a level done at home is corrected at home.
+// Since 5 Nov 2026 (his voice note: "very hard to check each question one by one ... each individual sub question, I want
+// to put the marks ... rotation button") they are marked inside Correction, in its own ⌂ lane (src/homeLane.tsx).
 //   count        -> how many photos wait, and whether one waited over a day (the Settings gear's count; red = late).
-//   queue        -> the waiting photos, oldest first: who, which level and question, the key's answer, what he typed,
-//                   the photos (addresses that work only while the files exist).
+//   lane         -> Correction's ⌂ lane: every student with photos waiting, oldest first (his grade, how many, since).
+//   student      -> one student's waiting photos, every level, oldest first, each question with its parts: the key's
+//                   answer, what he typed, what the phone gave each part (null = hers to mark).
+//   queue        -> the waiting photos, oldest first (the Photos page before the lane; kept for a page still open).
 //   question     -> one question as printed and its book's style (the question beside the photo).
-//   mark         -> a part: her marks for what the phone left (+ a remark); his working: its cause. His phone shows it
-//                   in Tamil; the marks count at once (XP). A lost question she answered with a cause counts as explained
+//   mark         -> a part: her marks for what the phone left (+ a remark); his working: its cause, and (the lane) the
+//                   question's new marks when his working earns more (method marks) or less. His phone shows it in
+//                   Tamil; the marks count at once (XP). A lost question she answered with a cause counts as explained
 //                   (Evaluation skips it in class), except "needs the lesson again".
 //   retake       -> blurry, wrong page or cut off: he sends it again; the files go at once.
 //   required / setRequired -> photos required, 2 levels at most without them (on; the owner can turn it off).
@@ -19,8 +24,8 @@ import { actor, viewer } from "./lib/auth";
 import { asMaster, bookFor, fail, keyRow, log, masterState, progressFor } from "./lib/backend";
 import { phoneKeyFor, photosRequired, REQUIRED_KEY } from "./lib/homeWork";
 import type { MState } from "./lib/master";
-import { markQuestion, reasonsOf, slotWords, type KeyQ } from "./lib/phone";
-import { isRetake, isWhy, keyText, NOTE_MAX, ORPHAN_MS, partMarks, PHOTO_KEEP_MS, PHOTO_LATE_MS } from "./lib/photos";
+import { markQuestion, reasonsOf, slotWords, wantWords, type KeyQ } from "./lib/phone";
+import { isRetake, isWhy, keyText, NOTE_MAX, ORPHAN_MS, partMarks, PHOTO_KEEP_MS, PHOTO_LATE_MS, type PhotoKind } from "./lib/photos";
 
 const token = v.optional(v.string());
 
@@ -63,10 +68,36 @@ export type PhotoItem = {
   reasons: { p: string; yes: string; text: string }[];
   /** Its printed question is in the app. */
   hasQ: boolean;
+  /** Each part of the question (one part, label "", for a question without parts or without a key). */
+  parts: HomePart[];
+  /**
+   * Each part takes its own marks: a part question, the parts the phone left add up to `teach` (else one row of 0 …
+   * `teach`: a question the phone read differently at his Check); his working, the phone's parts add up to `got` (else
+   * one row of 0 … `max`).
+   */
+  split: boolean;
+  /** The level was checked in class (his paper, ⌂ Checked): its marks stay as the class gave them. */
+  hc: boolean;
 };
 
+/** One part of a question as the ⌂ lane shows it. */
+export type HomePart = {
+  /** Its label ("i", "a"; "" = the whole question). */
+  p: string;
+  m: number;
+  /** The key's answer for it ("" = not in the key). */
+  key: string;
+  /** What the phone gave it (null = the teacher's to mark: a drawing, a reason, a question with no key). */
+  phone: number | null;
+  /** What he typed in its boxes, in words, and which were right. */
+  typed: string[];
+  ok: boolean[] | null;
+};
+
+type RawKey = { q: number; a?: string; parts?: { p: string; a: string; m?: number }[] };
+
 /** One book's pieces for marking, read once per unit. */
-type UnitBits = { unit: Doc<"units">; keys: Map<number, KeyQ>; raw: Map<number, { q: number; a?: string; parts?: { p: string; a: string; m?: number }[] }> };
+type UnitBits = { unit: Doc<"units">; keys: Map<number, KeyQ>; raw: Map<number, RawKey> };
 
 async function unitBits(ctx: Parameters<typeof keyRow>[0], unitId: Id<"units">): Promise<UnitBits | null> {
   const unit = await ctx.db.get(unitId);
@@ -76,23 +107,112 @@ async function unitBits(ctx: Parameters<typeof keyRow>[0], unitId: Id<"units">):
   return { unit, keys: await phoneKeyFor(ctx, unitId, asMaster(book), key?.answers ?? null), raw: new Map((key?.answers ?? []).map((a) => [a.q, a])) };
 }
 
+/** His latest Check of each level he checked at home (`unit:n`), read once for all his photos. */
+async function latestChecks(ctx: Parameters<typeof keyRow>[0], studentId: Id<"students">): Promise<Map<string, Doc<"familyAnswers">>> {
+  const rows = await ctx.db
+    .query("familyAnswers")
+    .withIndex("by_student", (x) => x.eq("studentId", studentId))
+    .order("desc")
+    .collect();
+  const out = new Map<string, Doc<"familyAnswers">>();
+  for (const r of rows) if (!out.has(`${r.unitId}:${r.n}`)) out.set(`${r.unitId}:${r.n}`, r);
+  return out;
+}
+
 /** His latest Check of that level: what he typed for the question, and the photos it asked (with the part's marks). */
 async function typedOf(
   ctx: Parameters<typeof keyRow>[0],
   r: Doc<"homePhotos">,
+  checks?: Map<string, Doc<"familyAnswers">>,
 ): Promise<{ a: string[]; ok: (boolean[] | null)[]; owe: Doc<"familyAnswers">["owe"] } | null> {
-  const rows = await ctx.db
-    .query("familyAnswers")
-    .withIndex("by_student", (x) => x.eq("studentId", r.studentId))
-    .order("desc")
-    .collect();
-  const row = rows.find((x) => x.unitId === r.unitId && x.n === r.n);
+  const row = (checks ?? (await latestChecks(ctx, r.studentId))).get(`${r.unitId}:${r.n}`);
   if (!row) return null;
   const e = row.qs.find((x) => x.q === r.q);
   return { a: e?.a ?? [], ok: e?.ok ?? [], owe: row.owe };
 }
 
-/** The waiting photos, oldest first (20 at a time). */
+/**
+ * Each part of the question for the lane: its key, what he typed in it, what the phone gave it; and whether each part
+ * can take its own marks (`PhotoItem.split`). The key's words come from the book's key by the part's label.
+ */
+export function partsOf(
+  k: KeyQ,
+  raw: RawKey | undefined,
+  typed: string[],
+  kind: PhotoKind,
+  teach: number,
+  got: number | null,
+): { parts: HomePart[]; split: boolean } {
+  const res = markQuestion(k, typed);
+  const words = typed.length ? slotWords(k, typed) : [];
+  const rawParts = raw?.parts ?? [];
+  let at = 0;
+  const parts = k.parts.map((p, j): HomePart => {
+    const n = p.want?.length ?? 0;
+    const mine = words.slice(at, at + n);
+    at += n;
+    const rp = rawParts.find((x) => x.p === p.p) ?? (rawParts.length === k.parts.length ? rawParts[j] : undefined);
+    // One part for the whole question (no parts, or the key's parts don't add up): the key's whole answer.
+    const key = k.parts.length === 1 ? keyText(raw) : rp ? rp.a : (p.a ?? (p.want ? wantWords(p) : ""));
+    return { p: p.p, m: p.m, key, phone: res.parts[j], typed: mine, ok: res.ok[j] };
+  });
+  const teacher = parts.reduce((s, x) => s + (x.phone === null ? x.m : 0), 0);
+  const phone = parts.reduce((s, x) => s + (x.phone ?? 0), 0);
+  const split = kind === "part" ? teacher === teach : got !== null && parts.every((x) => x.phone !== null) && phone === got;
+  return { parts, split };
+}
+
+/** One waiting photo as the teachers see it (null: its book, its key or its question is gone). */
+async function itemOf(
+  ctx: Parameters<typeof keyRow>[0],
+  r: Doc<"homePhotos">,
+  s: Doc<"students">,
+  units: Map<string, UnitBits | null>,
+  checks?: Map<string, Doc<"familyAnswers">>,
+): Promise<PhotoItem | null> {
+  if (!units.has(r.unitId)) units.set(r.unitId, await unitBits(ctx, r.unitId));
+  const u = units.get(r.unitId);
+  const k = u?.keys.get(r.q);
+  if (!u || !k) return null;
+  const p = await progressFor(ctx, r.studentId, r.unitId, "master");
+  const m = p ? masterState(p) : null;
+  const mq = m?.q[String(r.q)];
+  const t = await typedOf(ctx, r, checks);
+  const urls: string[] = [];
+  for (const f of r.files) {
+    const url = await ctx.storage.getUrl(f);
+    if (url) urls.push(url);
+  }
+  const hasQ = !!(await ctx.db
+    .query("questions")
+    .withIndex("by_book", (x) => x.eq("unitId", r.unitId).eq("stage", "master").eq("q", r.q))
+    .first());
+  const marks = r.kind === "part" ? partMarks(t?.owe, r.q, k, t?.a ?? null) : { teach: 0, phoneGot: t ? markQuestion(k, t.a).phoneGot : 0 };
+  const got = mq ? (mq.got ?? null) : null;
+  return {
+    id: r._id,
+    kind: r.kind,
+    at: r.at,
+    student: { id: s._id, name: s.name, grade: s.grade ?? null },
+    unit: { id: u.unit._id, key: u.unit.key, en: u.unit.en, ta: u.unit.ta },
+    n: r.n,
+    q: r.q,
+    max: k.max,
+    ...marks,
+    key: keyText(u.raw.get(r.q)),
+    typed: t && t.a.length ? slotWords(k, t.a) : null,
+    ok: t && t.a.length ? t.ok : null,
+    got,
+    urls,
+    said: !!r.said,
+    reasons: r.kind === "part" && t && t.a.length ? reasonsOf(k, t.a) : [],
+    hasQ,
+    ...partsOf(k, u.raw.get(r.q), t?.a ?? [], r.kind, marks.teach, got),
+    hc: !!m?.lv[String(r.n)]?.hc,
+  };
+}
+
+/** The waiting photos, oldest first (20 at a time): the Photos page before the ⌂ lane, for a page still open. */
 export const queue = query({
   args: { token },
   handler: async (ctx, args): Promise<PhotoItem[]> => {
@@ -106,43 +226,69 @@ export const queue = query({
     for (const r of rows) {
       const s = await ctx.db.get(r.studentId);
       if (!s || s.archived) continue;
-      if (!units.has(r.unitId)) units.set(r.unitId, await unitBits(ctx, r.unitId));
-      const u = units.get(r.unitId);
-      const k = u?.keys.get(r.q);
-      if (!u || !k) continue;
-      const p = await progressFor(ctx, r.studentId, r.unitId, "master");
-      const mq = p ? masterState(p).q[String(r.q)] : undefined;
-      const t = await typedOf(ctx, r);
-      const urls: string[] = [];
-      for (const f of r.files) {
-        const url = await ctx.storage.getUrl(f);
-        if (url) urls.push(url);
-      }
-      const hasQ = !!(await ctx.db
-        .query("questions")
-        .withIndex("by_book", (x) => x.eq("unitId", r.unitId).eq("stage", "master").eq("q", r.q))
-        .first());
-      out.push({
-        id: r._id,
-        kind: r.kind,
-        at: r.at,
-        student: { id: s._id, name: s.name, grade: s.grade ?? null },
-        unit: { id: u.unit._id, key: u.unit.key, en: u.unit.en, ta: u.unit.ta },
-        n: r.n,
-        q: r.q,
-        max: k.max,
-        ...(r.kind === "part" ? partMarks(t?.owe, r.q, k, t?.a ?? null) : { teach: 0, phoneGot: t ? markQuestion(k, t.a).phoneGot : 0 }),
-        key: keyText(u.raw.get(r.q)),
-        typed: t && t.a.length ? slotWords(k, t.a) : null,
-        ok: t && t.a.length ? t.ok : null,
-        got: mq ? (mq.got ?? null) : null,
-        urls,
-        said: !!r.said,
-        reasons: r.kind === "part" && t && t.a.length ? reasonsOf(k, t.a) : [],
-        hasQ,
-      });
+      const it = await itemOf(ctx, r, s, units);
+      if (it) out.push(it);
     }
     return out;
+  },
+});
+
+/** One student in Correction's ⌂ lane: how many of his questions wait, and since when (his oldest). */
+export type LaneRow = { id: Id<"students">; n: number; at: number };
+
+/**
+ * Correction's ⌂ lane (5 Nov 2026): every student with photos waiting, oldest first. Small rows only (the photos
+ * themselves come with `student`, for the one she opens), and only the photos' rows: his name and grade come from the
+ * phone's board, so a tap in class (a student's row changing) never runs this again.
+ */
+export const lane = query({
+  args: { token },
+  handler: async (ctx, args): Promise<LaneRow[]> => {
+    await viewer(ctx, args.token, "photos");
+    const rows = await ctx.db
+      .query("homePhotos")
+      .withIndex("by_state", (q) => q.eq("state", "waiting"))
+      .collect();
+    const by = new Map<Id<"students">, { n: number; at: number }>();
+    for (const r of rows) {
+      const b = by.get(r.studentId);
+      if (b) {
+        b.n++;
+        b.at = Math.min(b.at, r.at);
+      } else by.set(r.studentId, { n: 1, at: r.at });
+    }
+    return [...by].map(([id, b]) => ({ id, n: b.n, at: b.at })).sort((a, b) => a.at - b.at || (a.id < b.id ? -1 : 1));
+  },
+});
+
+/** One student's waiting photos, every level, oldest level first, then by question (a part before his working). */
+export const student = query({
+  args: { token, studentId: v.id("students") },
+  handler: async (ctx, args): Promise<PhotoItem[]> => {
+    await viewer(ctx, args.token, "photos");
+    const s = await ctx.db.get(args.studentId);
+    if (!s || s.archived) return [];
+    const rows = (
+      await ctx.db
+        .query("homePhotos")
+        .withIndex("by_student", (q) => q.eq("studentId", args.studentId))
+        .collect()
+    ).filter((r) => r.state === "waiting");
+    const units = new Map<string, UnitBits | null>();
+    const checks = await latestChecks(ctx, s._id);
+    const out: PhotoItem[] = [];
+    for (const r of rows) {
+      const it = await itemOf(ctx, r, s, units, checks);
+      if (it) out.push(it);
+    }
+    // A level's place = its oldest photo; inside a level, the book's order.
+    const first = new Map<string, number>();
+    for (const it of out) {
+      const key = `${it.unit.id}:${it.n}`;
+      first.set(key, Math.min(first.get(key) ?? Infinity, it.at));
+    }
+    const rank = (it: PhotoItem) => first.get(`${it.unit.id}:${it.n}`)!;
+    return out.sort((a, b) => rank(a) - rank(b) || a.unit.key.localeCompare(b.unit.key) || a.n - b.n || a.q - b.q || (a.kind === "part" ? -1 : 1));
   },
 });
 
@@ -172,11 +318,20 @@ function clone(m: MState): MState {
 const explains = (why: string | undefined) => !!why && why !== "lesson" && why !== "good";
 
 /**
- * Her answer to a photo. A part: `got` = her marks for what the phone left (0 … teach), an optional remark. His working
- * on a wrong answer: `why` = its cause. Both: optional words. A part someone marked in class meanwhile only closes.
+ * Her answer to a photo. A part: `got` = her marks for what the phone left (0 … teach; the lane adds up each part's), an
+ * optional remark. His working on a wrong answer: `why` = its cause; `total` (the lane, optional) = the question's new
+ * marks when his working shows more (method marks) or less than the phone gave; full marks need no cause. Both:
+ * optional words. A part someone marked in class meanwhile only closes; a level checked in class keeps its marks.
  */
 export const mark = mutation({
-  args: { token, id: v.id("homePhotos"), got: v.optional(v.number()), why: v.optional(v.string()), note: v.optional(v.string()) },
+  args: {
+    token,
+    id: v.id("homePhotos"),
+    got: v.optional(v.number()),
+    total: v.optional(v.number()),
+    why: v.optional(v.string()),
+    note: v.optional(v.string()),
+  },
   handler: async (ctx, args): Promise<{ already: boolean }> => {
     const me = await actor(ctx, args.token, ["photos"]);
     const now = Date.now();
@@ -215,13 +370,28 @@ export const mark = mutation({
       await log(ctx, null, now, { kind: "photo-marked", studentId: s._id, name: s.name, unit: u.unit.key, q: r.q, value: `${r.n} ${total}/${k.max}` });
       return { already: false };
     }
-    if (!args.why) fail("Pick why it was wrong.");
-    if (mq?.lost && !mq.x && explains(args.why)) {
+    // His working may earn more than the phone gave (or less): the question's new marks, before its cause.
+    const before = mq?.got ?? 0;
+    const total = args.total ?? before;
+    if (args.total !== undefined && args.total !== before) {
+      if (!mq) fail("This question has no marks yet: open it again.");
+      if (lv.hc) fail("This level was checked in class: its marks stay as the class gave them.");
+      if (!Number.isInteger(total) || total < 0 || total > k.max) fail(`Give 0 to ${k.max} marks.`);
+    }
+    const lost = total < k.max;
+    if (lost && !args.why) fail("Pick why it was wrong.");
+    if (mq && total !== before) {
+      m.q[String(r.q)] = { ...mq, got: total, lost, ...(lost && explains(args.why) && !mq.x ? { x: now } : {}) };
+      lv.got = (lv.got ?? 0) + total - before;
+      await ctx.db.patch(p._id, { m, updatedAt: now });
+      await log(ctx, null, now, { kind: "photo-marked", studentId: s._id, name: s.name, unit: u.unit.key, q: r.q, value: `${r.n} ${total}/${k.max}` });
+    } else if (mq?.lost && !mq.x && explains(args.why)) {
       m.q[String(r.q)] = { ...mq, x: now };
       await ctx.db.patch(p._id, { m, updatedAt: now });
     }
-    await ctx.db.patch(r._id, done);
-    await log(ctx, null, now, { kind: "photo-why", studentId: s._id, name: s.name, unit: u.unit.key, q: r.q, value: `${r.n} ${args.why}` });
+    await ctx.db.patch(r._id, { ...done, ...(total !== before ? { got: total } : {}) });
+    if (args.why)
+      await log(ctx, null, now, { kind: "photo-why", studentId: s._id, name: s.name, unit: u.unit.key, q: r.q, value: `${r.n} ${args.why}` });
     return { already: false };
   },
 });

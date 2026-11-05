@@ -232,6 +232,92 @@ describe("photos from home", () => {
     expect(lines).toEqual(["1 2/2", "1 point"]);
   });
 
+  test("Correction's ⌂ lane: Photos people only; students oldest first; each sub-question its own marks; his working may earn more", async () => {
+    // Q10 in two parts, both the teacher's (names): (a) and (b), 1 mark each.
+    await t.mutation(api.catalog.saveWorkbook, {
+      unitId: u01,
+      parts: BOOK.data.parts.map((p) => ({ id: p.id, to: p.to, ...(p.each ? { each: p.each } : {}) })),
+      levels: BOOK.data.levels.map((l) => ({ to: l.to, max: l.max })),
+      marks: BOOK.data.marks ?? {},
+      replace: true,
+      key: fakeKey().map((k) =>
+        k.q === 10
+          ? { q: 10, parts: [{ p: "a", a: "சிறப்புப் பெயர்", m: 1 }, { p: "b", a: "வேறு பெயர்", m: 1 }] }
+          : k,
+      ),
+    });
+    await fam().mutation(api.family.check, { unitId: u01, n: 1, typed: LEVEL1 });
+    await fam().mutation(api.family.photoSend, { unitId: u01, n: 1, q: 10, kind: "part", files: [await jpeg()] });
+    vi.setSystemTime(new Date("2026-11-04T19:05:00+05:30"));
+    await fam().mutation(api.family.photoSend, { unitId: u01, n: 1, q: 8, kind: "working", files: [await jpeg()] });
+    await expect(asPhone(raw, CORRECTOR).query(api.photos.lane, {})).rejects.toThrow(/Photos/);
+    await expect(asPhone(raw, CORRECTOR).query(api.photos.student, { studentId: hana })).rejects.toThrow(/Photos/);
+    // Another student, later: he comes after Hana (oldest first).
+    const omar = await t.mutation(api.students.add, { name: "Omar R", grade: 8, term: 1, stage: "master", unitId: u01 });
+    await raw.run(async (ctx) => {
+      const f = await ctx.storage.store(new Blob([new Uint8Array(10)], { type: "image/jpeg" }));
+      await ctx.db.insert("homePhotos", { studentId: omar, unitId: u01, n: 1, q: 3, kind: "working", files: [f], at: Date.now() + 60_000, state: "waiting" });
+    });
+    const lane = await picked().query(api.photos.lane, {});
+    expect(lane.map((s) => [s.id, s.n])).toEqual([
+      [hana, 2],
+      [omar, 1],
+    ]);
+    // Hana's photos: the level's questions in the book's order; Q10 in its two parts, each the teacher's.
+    const items = await picked().query(api.photos.student, { studentId: hana });
+    expect(items.map((i) => [i.q, i.kind])).toEqual([
+      [8, "working"],
+      [10, "part"],
+    ]);
+    const [q8, q10] = items;
+    expect(q10).toMatchObject({ teach: 2, split: true, hc: false });
+    expect(q10.parts.map((p) => [p.p, p.m, p.phone, p.key])).toEqual([
+      ["a", 1, null, "சிறப்புப் பெயர்"],
+      ["b", 1, null, "வேறு பெயர்"],
+    ]);
+    expect(q8).toMatchObject({ got: 0, split: true, parts: [{ p: "", m: 2, phone: 0, typed: ["42"], ok: [false], key: "8 × 3 = **24**" }] });
+    // (a) right, (b) wrong: 1 of 2 (the lane adds the parts up).
+    await picked().mutation(api.photos.mark, { id: q10.id, got: 1, why: "label" });
+    // Q8: his working earns a method mark; a cause is still needed (not full marks); never more than the question's.
+    await expect(picked().mutation(api.photos.mark, { id: q8.id, total: 3, why: "slip" })).rejects.toThrow(/0 to 2/);
+    await expect(picked().mutation(api.photos.mark, { id: q8.id, total: 1 })).rejects.toThrow(/why it was wrong/);
+    await picked().mutation(api.photos.mark, { id: q8.id, total: 1, why: "slip" });
+    const m = await hanaM();
+    expect(m.q["10"]).toMatchObject({ got: 1, max: 2, lost: true });
+    expect(m.q["8"]).toMatchObject({ got: 1, max: 2, lost: true });
+    expect(m.q["8"].x).toBeDefined();
+    expect(m.lv["1"].got).toBe(16 + 1 + 1);
+    expect((await fam().query(api.family.book, { unitId: u01, n: 1 })).qs.find((x) => x.q === 8)).toMatchObject({ got: 1 });
+    expect((await picked().query(api.photos.lane, {})).map((s) => s.id)).toEqual([omar]);
+    const lines = await raw.run(async (ctx) => (await ctx.db.query("events").collect()).filter((e) => e.kind.startsWith("photo")).map((e) => `${e.kind} ${e.value}`));
+    expect(lines).toEqual(["photo-marked 1 1/2", "photo-marked 1 1/2", "photo-why 1 slip"]);
+  });
+
+  test("the ⌂ lane: full marks from his working need no cause; a level checked in class keeps its marks", async () => {
+    await fam().mutation(api.family.check, { unitId: u01, n: 1, typed: LEVEL1 });
+    await fam().mutation(api.family.photoSend, { unitId: u01, n: 1, q: 8, kind: "working", files: [await jpeg()] });
+    const [q8] = (await picked().query(api.photos.student, { studentId: hana })).filter((i) => i.q === 8);
+    // The phone misread him: full marks, no cause, not lost any more (nothing for Evaluation).
+    await picked().mutation(api.photos.mark, { id: q8.id, total: 2 });
+    expect((await hanaM()).q["8"]).toMatchObject({ got: 2, lost: false });
+    expect(computeMaster(await hanaM(), BOOK.data).pending.includes(8)).toBe(false);
+    // Level 2: checked in class first (his paper, ⌂ Checked): the photo still gets its cause, never new marks.
+    await checkEmpty(2);
+    await fam().mutation(api.family.photoSend, { unitId: u01, n: 2, q: 11, kind: "working", files: [await jpeg()] });
+    // (The corrector's ⌂ Checked: done here straight on his row, Q20 being a name she would mark first.)
+    await raw.run(async (ctx) => {
+      const p = (await ctx.db.query("progress").withIndex("by_student", (q) => q.eq("studentId", hana)).first())!;
+      const m = p.m as { lv: Record<string, { hc?: number }> };
+      m.lv["2"].hc = Date.now();
+      await ctx.db.patch(p._id, { m: m as never });
+    });
+    const [q11] = (await picked().query(api.photos.student, { studentId: hana })).filter((i) => i.q === 11);
+    expect(q11.hc).toBe(true);
+    await expect(picked().mutation(api.photos.mark, { id: q11.id, total: 1, why: "slip" })).rejects.toThrow(/checked in class/);
+    await picked().mutation(api.photos.mark, { id: q11.id, total: q11.got ?? 0, why: "slip" });
+    expect((await hanaM()).q["11"].x).toBeDefined();
+  });
+
   test("is it true? give a reason: no photo; a right ஆம் / இல்லை waits in the queue with his words, her marks reach him", async () => {
     await useKinds();
     const r = await fam().mutation(api.family.check, { unitId: u01, n: 1, typed: [...LEVEL1, { q: 10, a: ["0", "  a made-up reason  "] }] });
@@ -297,6 +383,8 @@ describe("photos from home", () => {
     await fam().mutation(api.family.photoSend, { unitId: u01, n: 1, q: 10, kind: "part", files: [await jpeg()] });
     const [item] = (await picked().query(api.photos.queue, {})).filter((i) => i.q === 10);
     expect(item).toMatchObject({ teach: 2, phoneGot: 0 });
+    // The ⌂ lane can't split it as the phone reads it now: one row of 0 … 2, as at his Check.
+    expect(item.split).toBe(false);
     await picked().mutation(api.photos.mark, { id: item.id, got: 2 });
     expect((await hanaM()).q["10"]).toMatchObject({ got: 2, max: 2, lost: false });
     // A Check from before the marks were kept (no pm/pg): the question is the teacher's whole.

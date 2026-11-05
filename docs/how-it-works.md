@@ -469,7 +469,9 @@ two errors: marks on the wrong question and on the wrong student. Meant for the 
   itself; faded edges = more; a red/amber dot on an edge = someone who waits is hidden there (`data-u`). Tones: red =
   no work until corrected, amber = handed in ("2" = levels, all his books), blue edge = theory book, dashed ring =
   marked part of the way, grey dashed = gone home with levels to correct. No grade in yet: "Nobody from Grade 11 is
-  in yet: tap +".
+  in yet: tap +". For the owner and Photos people, **⌂** after + (always there for them): the photos from home, in a
+  lane of their own (5 Nov 2026: "Marking them: Correction's ⌂ lane", under "Corrected at home"); the hall's names
+  never light up for a photo.
 - **Grades 6–11** always in the same places, no All (`GradeBar`): "here/total" under each number, red/amber badge
   (`gradeNeeds`); a grade with no students at all is pale and disabled; any other can be picked even with nobody in
   (`focusGrade(chosen, here, all)`, remembered in `aristora.grade.focus`; it never jumps by itself; a paper opened
@@ -1329,19 +1331,55 @@ learning app of our education institute"): one profile, his class times, what he
     (photo sent), never on the teacher's reply. The Stage shows each level's owed count (📷 n) and a dot for her answers
     he hasn't opened (`nw`; `family.seen` when the book opens). Settings → Photos (the owner) turns "required" off
     (`photos.setRequired`, meta `photos.required`): then nothing waits; photos can still be sent.
-  - **Marking them** (Settings → Photos; the owner and the people he ticks **Photos**, Settings → People → Also; the
-    gear's count adds the photos waiting, red when one waited over a day; Settings opens on Photos then): one photo at a
-    time, oldest first (`photos.queue`, 20): who, Stage, level, Q, the photos (tap = full screen, tap again = 2×), the
-    key's answer, what he typed, "Show the question" (as printed, `photos.question`). A typed reason ("Reason to read",
-    `said`) shows his ஆம் / இல்லை and his words instead of photos (`reasons`); its Retake stays pale in its place (no
-    photo to take again; the server refuses it too). A part: her marks for what the
-    phone left (0 … `teach`) + an optional remark; his working: one tap on why it was wrong (`WHY`: careless slip,
-    decimal point, sign, wrong method, copied it wrong, didn't finish, unit, needs the lesson again), her own words
-    optional. Retake (blurry / wrong page / cut off) asks him again and deletes the files at once. Her answer reaches
-    his book in Tamil (`WHY[..].ta`). The marks count at once (the level's `got`, XP; history "marked from his photo");
-    a lost question she answered with a cause counts as **explained** (`x`: Evaluation skips it in class), except
-    "needs the lesson again" (and "well done"). A part marked in class meanwhile only closes. Class still checks his
-    paper (⌂ Checked: his answer, "the class check is enough").
+  - **Marking them: Correction's ⌂ lane** (5 Nov 2026, `src/homeLane.tsx`; his voice note: "within one day I get 42
+    photos ... very hard to check each question one by one ... each individual sub question, I want to put the marks
+    ... rotation button"; his answers: inside Correction, its own lane, Photos people only, build it now). Until then
+    Settings → Photos showed one photo at a time with one row of marks for the whole question.
+    - **Who:** the owner and the people he ticks **Photos** (Settings → People → Also). The gear's count still adds the
+      photos waiting (red when one waited over a day; Settings opens on Photos then): Settings → Photos keeps how many
+      wait and since when, the owner's "Photos required" switch and **⌂ Mark them in Correction** (`PhotoQueue`,
+      `onPhotos` → `openLane`). Someone with Photos but **not** the Correction job gets the Correction tab with only the
+      lane (⌂ dark and fixed, + pale; its tab's number = the photos waiting; her phone keeps her own job's alerts, never
+      Correction's calls: `photosOnly` in `app.tsx`).
+    - **The lane, never mixed into the hall** (my warning, his yes: a name lit on the names row means "a boy is sitting
+      here waiting"; home photos there would take the corrector away from idle students): **⌂** after **+** on the
+      names row, always in the same place (`HomeButton`: the questions waiting, amber, red after a day; dark while on).
+      On: + pale in its place, the names row = this grade's students with photos, oldest first (`HomeNames`: amber, red
+      after a day, the count on each), the grades row keeps its places with badges = students with photos
+      (`laneGrades`); entering it leaves the hall's paper (a level marked to the end saves itself, the book is free
+      again) and shows the grade with the oldest photo if this one has none (once). ⌂ again = back to the hall. A reload
+      starts in the hall. Who and how many come from `photos.lane` (photo rows only: his name and grade from the board,
+      so a tap in class never runs it again).
+    - **His photos** (`HomePaper`, `photos.student`: his waiting photos, oldest level first, then the book's order, a
+      part before his working): his levels with photos (one line; "unit·level" when several units), the open level's
+      line (Level, unit number + Tamil, how many to mark, "checked in class"), its questions as Correction's squares (one
+      she answered keeps its square with her marks; R = asked again), then one question on **Correction's card**: Q,
+      marks, "to mark" / "wrong answer" / "his reason to read", ‹ back, the printed question's icon (`catalog.question`
+      allows Photos now). **His photos big**, as wide as the card: **↻** in the corner turns one a quarter (the box takes
+      the turned photo's room: `Turned`; remembered while the app is open), a tap = full screen (the whole photo, turned
+      the same, ↻ and ✕; a tap there = 2×, scroll it).
+    - **Each sub-question its own marks** (`PartRow`, `photos.partsOf`): each part with its label, the key's answer big
+      (`BigAnswer`), what he typed (right green, wrong red) or his reason (ஆம் / இல்லை + his words), then its marks in
+      one row (Correction's part row). A part question: the parts the phone left, nothing lit until she taps (never
+      "untouched = full"); the phone's own parts show "x/m the phone's"; Save adds them (`got` = her share, as before).
+      His working on a wrong answer: the phone's marks lit, she changes them when his working earns more (method marks)
+      or less (`photos.mark` `total`; never on a level the class already checked, `hc`: "its marks stay"); full marks
+      need no cause and the question is no longer lost. One row of marks (0 … `teach`, or 0 … max) when the parts can't
+      be split: a unit with **no key** (the app doesn't know its sub-questions: only a key gives them) or a question the
+      phone read differently at his Check (`split`).
+    - Then **why it was wrong** (`WHY`: careless slip, decimal point, sign, wrong method, copied it wrong, didn't
+      finish, unit, needs the lesson again; required while marks are lost) or a remark on a part (optional), her own
+      words (optional). The pad, fixed at the bottom like Correction's: **Retake** (blurry / wrong page / cut off: asks
+      him again and deletes the files at once; pale for a typed reason or a part marked in class) and **Save x/max ·
+      next** (green full, amber part, red 0; "· tap why" until a cause is picked); Correction's tap guard (350 ms, Save
+      700 ms after a new card). Save → the next question, then his next level, then round to any she skipped, then the
+      next student by himself (this grade first, oldest first; "Hana done. Next: Omar."), then "Every photo from home is
+      marked". The next card scrolls back to its squares, so the photo shows from its top.
+    - Her answer reaches his book in Tamil (`WHY[..].ta`). The marks count at once (the level's `got`, XP; history
+      "marked from his photo", "photo-why"); a lost question she answered with a cause counts as **explained** (`x`:
+      Evaluation skips it in class), except "needs the lesson again" (and "well done"). A part marked in class meanwhile
+      only closes ("Marked in class already: Save closes it"). Class still checks his paper (⌂ Checked: his answer,
+      "the class check is enough"). `photos.queue` (20 at a time, the old page's) stays for a page still open.
   - **Questions that come back** (his idea: "even after explanation they will forget, so the same question will come
     again in their path; if they do it correctly, bonus points"): a question he lost marks on (at home or in class) that
     the phone can mark entirely comes back at the end of a level at least 2 later in the same book (`retryPool`:
@@ -1384,9 +1422,11 @@ learning app of our education institute"): one profile, his class times, what he
   - `reports`: Reports, History, the Students page numbers, and **Progress** (page and poster);
   - `feedback` (3 Nov 2026, his answer "me and selected people"): Settings → Feedback, what students send from the
     family app, and its count on the Settings gear (`families.feedback`, `feedbackNew`, `feedbackSeen`);
-  - `photos` (4 Nov 2026, his answer "people I pick"): Settings → Photos, marking the photos students send from home,
-    and its count on the gear (`photos.count`, `queue`, `question`, `mark`, `retake`, `required`); turning "photos
-    required" on or off is the owner's (`photos.setRequired`).
+  - `photos` (4 Nov 2026, his answer "people I pick"): marking the photos students send from home, in Correction's ⌂
+    lane since 5 Nov 2026 (the Correction tab with only the lane for someone without the Correction job), Settings →
+    Photos and its count on the gear (`photos.count`, `lane`, `student`, `queue`, `question`, `mark`, `retake`,
+    `required`; `catalog.question` and `catalog.bookCss` for the printed question); turning "photos required" on or off
+    is the owner's (`photos.setRequired`).
 - Everyone signed in sees the Class tab and the Register, reads `people.team` and `manager.day`, and her own card
   (`duty.card`). Correction job = the Correction page and Attendance (`setPresent`, `attendance.day`;
   `by: "attendance"`), Books given (`students.setGiven`), sending called students, Going home, Back in the hall, End

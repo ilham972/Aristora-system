@@ -914,8 +914,15 @@ test("photos from home: a drawing photographed in the level, the working on a wr
   const as = { token: OWNER_TOKEN };
   await t.mutation(api.setup.ensure, as);
   const u01 = await t.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G8-U01")).first())!._id);
-  // Level 1: Q8's key shows its working before the answer; Q10 is a name (the teacher marks it from a photo).
-  const key = fakeKey().map((k) => (k.q === 8 ? { q: 8, a: "8 × 3 = **24**" } : k.q === 10 ? { q: 10, a: "சிறப்புப் பெயர்" } : k));
+  // Level 1: Q8's key shows its working before the answer; Q10 is two names, (a) and (b) (the teacher marks them from a
+  // photo, each its own mark).
+  const key = fakeKey().map((k) =>
+    k.q === 8
+      ? { q: 8, a: "8 × 3 = **24**" }
+      : k.q === 10
+        ? { q: 10, parts: [{ p: "a", a: "சிறப்புப் பெயர்", m: 1 }, { p: "b", a: "வேறு பெயர்", m: 1 }] }
+        : k,
+  );
   await t.mutation(api.catalog.saveWorkbook, {
     ...as,
     unitId: u01,
@@ -942,7 +949,7 @@ test("photos from home: a drawing photographed in the level, the working on a wr
   for (const a of [["3"], ["6"], ["9"], ["1", "2"], ["1", "5"], ["1", "8"], ["7", "n", "-", "1"], ["4", "2"], ["9"], ["1", "0"]]) await type(F, a);
   await contains(F.locator(".f-qn"), "Q10");
   await contains(F.locator(".f-teach"), "படம் எடு");
-  await F.locator(".f-qcard .f-file").setInputFiles(paper);
+  await F.locator(".f-qcard .f-file").first().setInputFiles(paper);
   await visible(F.locator(".f-qcard .f-thumb img"));
   await noSideScroll(F);
   await shot(F, "fam-ph01-camera");
@@ -968,7 +975,8 @@ test("photos from home: a drawing photographed in the level, the working on a wr
   await visible(q8.locator(".f-ph-state.wait"));
   expect(await F.locator(".f-owebar").count()).toBe(0);
 
-  // Nila (Photos only) on the teachers' app: the gear says 2; Settings opens on Photos. Q10: marks 2. Q8: why wrong.
+  // Nila (Photos only, no Correction job) on the teachers' app: the gear says 2; Settings opens on Photos, whose button
+  // opens Correction's ⌂ lane (5 Nov 2026): her only lane (⌂ dark and fixed, + pale), Hana in amber with her 2.
   const N = await open(backend, site.url, size(390, 844), () => {
     if (sessionStorage.getItem("t")) return;
     sessionStorage.setItem("t", "1");
@@ -976,23 +984,75 @@ test("photos from home: a drawing photographed in the level, the working on a wr
   });
   await contains(N.locator(".gear-n"), "2");
   await N.getByRole("button", { name: /Settings/ }).click();
-  const item = N.locator(".phq-item");
-  await contains(item.locator(".phq-who"), "Q10");
-  await visible(item.locator(".phq-ph img"));
-  await until(async () => await item.locator(".phq-ph img").evaluate((i) => (i as HTMLImageElement).naturalWidth > 0), "the photo loaded");
-  await item.locator(".phq-m", { hasText: "2" }).click();
-  await item.locator(".phq-chip", { hasText: "Well done" }).click();
-  await shot(N, "fam-ph03-queue-part");
-  await item.getByRole("button", { name: /Save/ }).click();
-  await contains(item.locator(".phq-who"), "Q8");
-  await contains(item.locator(".phq-typed"), "42");
-  await contains(item.locator(".phq-key"), "24");
-  await item.locator(".phq-chip", { hasText: "Decimal point" }).click();
-  await N.locator(".phq-words input").fill("Count the places after the point");
-  await shot(N, "fam-ph04-queue-working");
-  await item.getByRole("button", { name: /Save/ }).click();
-  await contains(N.locator(".phq-sum"), "No photos waiting");
+  await contains(N.locator(".phq-sum"), "2 to mark from 1 student");
+  await N.getByRole("button", { name: /Mark them in Correction/ }).click();
+  await visible(N.locator(".hl-btn.on"));
+  expect(await N.locator(".hl-btn").isDisabled()).toBe(true);
+  expect(await N.locator(".fc-add").isDisabled()).toBe(true);
+  const hanaPill = N.locator(".fc-names .fc-nm", { hasText: "Hana" });
+  await contains(hanaPill, "2");
+  await contains(N.locator(".hl-idle"), "2 to mark");
+  await shot(N, "fam-ph03-lane");
+  await hanaPill.click();
+  // Her level, the book's order: Q8 (his working on a wrong answer) first. The photo big; the key and what he typed.
+  const card = N.locator(".hl-card");
+  await contains(card.locator(".fc-qn"), "8");
+  await until(async () => await card.locator(".hl-turned img").first().evaluate((i) => (i as HTMLImageElement).naturalWidth > 0), "the photo loaded");
+  await contains(card.locator(".hl-typed"), "42");
+  await contains(card.locator(".ka"), "24");
+  // ↻ turns it a quarter: its box takes the turned photo's room (4 : 3 → 3 : 4).
+  const wide = (await card.locator(".hl-turned").first().boundingBox())!;
+  await card.locator(".hl-turn").first().click();
+  await until(async () => ((await card.locator(".hl-turned img").first().getAttribute("style")) ?? "").includes("rotate(90deg)"), "the photo turned");
+  const tall = (await card.locator(".hl-turned").first().boundingBox())!;
+  expect(wide.width / wide.height).toBeGreaterThan(1.2);
+  expect(tall.height / tall.width).toBeGreaterThan(1.2);
+  // Full screen keeps the turn; ✕ back.
+  await card.locator(".hl-img").first().click();
+  await visible(N.locator(".hl-big"));
+  expect((await N.locator(".hl-big img").getAttribute("style")) ?? "").toContain("rotate(90deg)");
+  await shot(N, "fam-ph03b-full-screen");
+  await N.locator(".hl-close").click();
+  // His working may earn a method mark: 1 lights and Save says 1/2; back to the phone's 0. Save waits for the cause.
+  await N.waitForTimeout(400);
+  await card.getByRole("button", { name: "Q8: 1 of 2" }).click();
+  await contains(N.locator(".hl-go"), "1/2");
+  await card.getByRole("button", { name: "Q8: 0 of 2" }).click();
+  expect(await N.locator(".hl-go").isDisabled()).toBe(true);
+  await card.locator(".phq-chip", { hasText: "Decimal point" }).click();
+  await card.locator(".hl-words input").fill("Count the places after the point");
+  await contains(N.locator(".hl-go"), "0/2");
+  await noSideScroll(N);
+  await shot(N, "fam-ph04-lane-working");
+  await N.setViewportSize({ width: 320, height: 640 });
+  await noSideScroll(N);
+  await shot(N, "fam-ph04b-lane-working-320");
+  await N.setViewportSize({ width: 390, height: 844 });
+  await N.locator(".hl-go").click();
+  // Q10 (two names, (a) and (b): hers to mark): each part its own row, nothing lit until she taps; Save waits for both.
+  // Q8's square keeps her 0.
+  await contains(card.locator(".fc-qn"), "10");
+  await contains(N.locator(".fc-strip .fc-sq.zero"), "0");
+  expect(await card.locator(".fc-pl").allInnerTexts()).toEqual(["a", "b"]);
+  expect(await card.locator(".fc-pb.on").count()).toBe(0);
+  await N.waitForTimeout(400);
+  await card.getByRole("button", { name: "Part a: 1 of 1" }).click();
+  expect(await N.locator(".hl-go").isDisabled()).toBe(true);
+  await card.getByRole("button", { name: "Part b: 0 of 1" }).click();
+  await contains(N.locator(".hl-go"), "1/2");
+  await card.getByRole("button", { name: "Part b: 1 of 1" }).click();
+  await contains(N.locator(".hl-go"), "2/2");
+  await card.locator(".phq-chip", { hasText: "Well done" }).click();
+  await N.setViewportSize({ width: 360, height: 740 });
+  await noSideScroll(N);
+  await shot(N, "fam-ph04c-lane-part-360");
+  await N.waitForTimeout(400);
+  await N.locator(".hl-go").click();
+  // Nothing left anywhere: the lane says so, and the gear's count is gone.
+  await contains(N.locator(".hl-idle"), "No photos waiting");
   expect(await N.locator(".gear-n").count()).toBe(0);
+  expect(await N.locator(".fc-names .fc-nm").count()).toBe(0);
+  expect(problems).toEqual([]);
 
   // The owner fixes how the phone reads an answer (4 Nov 2026, his ask: "do you have proper solution"): Settings → Books
   // → Grade 8 → U01 → See what the phone accepts → only the corrector's → Q20 (a name in this fake key) → its answer →
@@ -1002,6 +1062,18 @@ test("photos from home: a drawing photographed in the level, the working on a wr
     sessionStorage.setItem("t", "1");
     localStorage.setItem("aristora.token", "owner-phone-token-0123456789abcdefghijklmnopqrstuv");
   });
+  // The owner on Correction: ⌂ after + switches the names row to the lane (nothing waits now) and back to the hall.
+  await O.locator(".tabs .tab.correction").click();
+  await visible(O.locator(".hl-btn"));
+  expect(await O.locator(".hl-btn.on").count()).toBe(0);
+  await O.locator(".hl-btn").click();
+  await visible(O.locator(".hl-btn.on"));
+  await contains(O.locator(".hl-idle"), "No photos waiting");
+  expect(await O.locator(".fc-add").isDisabled()).toBe(true);
+  await O.locator(".hl-btn").click();
+  expect(await O.locator(".hl-btn.on").count()).toBe(0);
+  expect(await O.locator(".hl-idle").count()).toBe(0);
+  expect(await O.locator(".fc-add").isDisabled()).toBe(false);
   await O.getByRole("button", { name: "Settings" }).click();
   await O.getByRole("button", { name: "Books", exact: true }).click();
   await O.getByRole("button", { name: /^Grade 8\b/ }).click();

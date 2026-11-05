@@ -113,6 +113,7 @@ import { bookDocAt,
 } from "./store";
 import { tone } from "./tones";
 import { Empty, GRADES, Sheet } from "./ui";
+import { HomeButton, HomeNames, LaneBody, laneGrades, setLaneOn, useLaneList, useLaneState } from "./homeLane";
 
 // ---- What the page remembers while the app is open (switching pages and back keeps the open paper) ----
 
@@ -778,6 +779,33 @@ export function Focus(props: { board: Board; views: View[]; now: number }) {
   const grades = gradesOf(pills.map((p) => p.v));
   const [grade, setGrade] = useFocusGrade(grades, gradesOf(views));
   const shown = pills.filter((p) => p.v.s.grade === grade);
+  // The ⌂ lane (5 Nov 2026, his call): photos from home, in a lane of its own, for the owner and Photos people only.
+  // Someone with Photos but not the Correction job sees only the lane.
+  const canPhotos = may("photos");
+  const hallOk = may("correction");
+  const laneList = useLaneList(canPhotos, views);
+  const ls = useLaneState();
+  const home = canPhotos && (ls.on || !hallOk);
+  // Into the lane: the hall's paper is left (a level marked to the end saves itself, her book is free again), and the
+  // grade with the oldest photo shows if this one has none (once, as she enters; it never jumps by itself after).
+  const laneGradeSet = useRef(false);
+  useEffect(() => {
+    if (!home) {
+      laneGradeSet.current = false;
+      return;
+    }
+    if (laneGradeSet.current || !laneList) return;
+    laneGradeSet.current = true;
+    const oldest = laneList[0];
+    if (oldest && oldest.grade !== null && !laneList.some((s) => s.grade === grade)) setGrade(oldest.grade);
+  }, [home, !!laneList]);
+  const toggleLane = () => {
+    if (!home) {
+      leave();
+      setPaper(null);
+    }
+    setLaneOn(!home);
+  };
   const main = paper ? (views.find((x) => x.s._id === paper.studentId) ?? null) : null;
   const v = paper ? (paper.kind === "wait" ? main : viewOfPaper(views, paper)) : null;
   // His paper opened from elsewhere (Saved, a level from his card): his grade's names show, his own one dark.
@@ -825,8 +853,8 @@ export function Focus(props: { board: Board; views: View[]; now: number }) {
     }
   });
 
-  // While a paper is open, toasts show at the top: nothing may sit over the pad.
-  const marking = !!paper;
+  // While a paper is open, toasts show at the top: nothing may sit over the pad (his photos too, in the ⌂ lane).
+  const marking = home ? !!ls.student : !!paper;
   useEffect(() => {
     document.body.classList.toggle("fc-marking", marking);
     return () => document.body.classList.remove("fc-marking");
@@ -860,16 +888,30 @@ export function Focus(props: { board: Board; views: View[]; now: number }) {
             now={now}
             onPick={(x) => openFor(x, now)}
             onAdd={() => setSheet("attendance")}
+            addOff={home}
+            lead={canPhotos && <HomeButton list={laneList} on={home} locked={!hallOk} onTap={toggleLane} />}
+            names={home ? <HomeNames list={laneList} grade={grade} openId={ls.student} /> : undefined}
           />
         )}
         {views.length > 0 && (
-          <GradeBar views={views} pills={pills} needs={focusNeeds(views)} grade={grade} onPick={setGrade} saved={saved.length} onSaved={() => setSheet("saved")} />
+          <GradeBar
+            views={views}
+            pills={pills}
+            needs={focusNeeds(views)}
+            grade={grade}
+            onPick={setGrade}
+            saved={saved.length}
+            onSaved={() => setSheet("saved")}
+            home={home ? laneGrades(laneList) : undefined}
+          />
         )}
       </div>
       {views.length === 0 ? (
         <Empty title="No students yet">
           {may("students") ? "Open settings (the gear at the top) to add your students." : "The owner adds students in Settings."}
         </Empty>
+      ) : home ? (
+        <LaneBody list={laneList} grade={grade} onGrade={setGrade} />
       ) : (
         <>
           {waitingCarry && (
@@ -1058,17 +1100,24 @@ function NameBar(props: {
   now: number;
   onPick: (v: View) => void;
   onAdd: () => void;
+  /** The ⌂ lane (photos from home): + pale in its place, ⌂ after it, the lane's names instead of the hall's. */
+  addOff?: boolean;
+  lead?: ComponentChildren;
+  names?: ComponentChildren;
 }) {
   const { pills, drafts } = props;
   const marking = (v: View) => (drafts ?? []).some((d) => d.studentId === v.s._id && Object.keys(d.q).length > 0);
   return (
     <div class="fc-namerow">
-      <button type="button" class="fc-add" aria-label={`Attendance: Grade ${props.grade}`} onClick={props.onAdd}>
+      <button type="button" class="fc-add" aria-label={`Attendance: Grade ${props.grade}`} disabled={props.addOff} onClick={props.onAdd}>
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
           <path d="M12 5v14M5 12h14" />
         </svg>
       </button>
-      {pills.length === 0 ? (
+      {props.lead}
+      {props.names ? (
+        props.names
+      ) : pills.length === 0 ? (
         <p class="fc-none">Nobody from Grade {props.grade} is in yet: tap + as they arrive.</p>
       ) : (
         <HRow as="nav" class="fc-names" label={`Grade ${props.grade}: tap the name on the paper`} list={props.grade} at={props.openId}>
@@ -1141,6 +1190,8 @@ function GradeBar(props: {
   onPick: (g: number) => void;
   saved: number;
   onSaved: () => void;
+  /** The ⌂ lane: each grade's students with photos from home (the badge), instead of what waits in the hall. */
+  home?: Map<number, { n: number; late: boolean }>;
 }) {
   const per = gradeNeeds(props.pills, props.needs);
   return (
@@ -1149,11 +1200,14 @@ function GradeBar(props: {
         {GRADES.map((g) => {
           const all = props.views.filter((x) => x.s.grade === g);
           const here = all.filter((x) => x.where !== "absent").length;
-          const c = per.get(g);
+          const c = props.home ? null : per.get(g);
+          const h = props.home?.get(g);
           const on = props.grade === g;
-          const words = all.length
-            ? `Grade ${g}: ${here} of ${all.length} here${c?.red ? `, ${c.red} need you now` : c?.amber ? `, ${c.amber} handed in` : ""}`
-            : `Grade ${g}: no students`;
+          const words = !all.length
+            ? `Grade ${g}: no students`
+            : props.home
+              ? `Grade ${g}: ${h ? `${h.n} with photos from home` : "no photos from home"}`
+              : `Grade ${g}: ${here} of ${all.length} here${c?.red ? `, ${c.red} need you now` : c?.amber ? `, ${c.amber} handed in` : ""}`;
           return (
             <button
               key={g}
@@ -1166,7 +1220,13 @@ function GradeBar(props: {
             >
               <b>{g}</b>
               <small>{all.length ? `${here}/${all.length}` : "–"}</small>
-              {c?.red ? <i class="gp-badge red">{c.red}</i> : c?.amber ? <i class="gp-badge amber">{c.amber}</i> : null}
+              {h ? (
+                <i class={`gp-badge ${h.late ? "red" : "amber"}`}>{h.n}</i>
+              ) : c?.red ? (
+                <i class="gp-badge red">{c.red}</i>
+              ) : c?.amber ? (
+                <i class="gp-badge amber">{c.amber}</i>
+              ) : null}
             </button>
           );
         })}

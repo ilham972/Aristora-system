@@ -75,11 +75,14 @@ export const key = query({
   },
 });
 
-/** One printed question of a book, as the book draws it (null: not in the app). Teachers only, read while open. */
+/**
+ * One printed question of a book, as the book draws it (null: not in the app). Teachers only, read while open; Photos
+ * too (Correction's ⌂ lane, 5 Nov 2026: the question beside his photo).
+ */
 export const question = query({
   args: { token: v.optional(v.string()), unitId: v.id("units"), stage: bookStage, q: v.number() },
   handler: async (ctx, args) => {
-    await viewer(ctx, args.token, "correction", "evaluation", "theory", "books");
+    await viewer(ctx, args.token, "correction", "evaluation", "theory", "books", "photos");
     const r = await ctx.db
       .query("questions")
       .withIndex("by_book", (x) => x.eq("unitId", args.unitId).eq("stage", args.stage).eq("q", args.q))
@@ -92,7 +95,7 @@ export const question = query({
 export const bookCss = query({
   args: { token: v.optional(v.string()), unitId: v.id("units"), stage: bookStage },
   handler: async (ctx, args) => {
-    await viewer(ctx, args.token, "correction", "evaluation", "theory", "books");
+    await viewer(ctx, args.token, "correction", "evaluation", "theory", "books", "photos");
     const r = await ctx.db
       .query("bookCss")
       .withIndex("by_book", (x) => x.eq("unitId", args.unitId).eq("stage", args.stage))

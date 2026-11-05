@@ -16,6 +16,7 @@ import { Settings } from "./settings";
 import { WholeClassPage } from "./wholeClass";
 import { useFeedbackNew } from "./feedbackList";
 import { usePhotosWaiting } from "./photoQueue";
+import { openLane } from "./homeLane";
 import { useAskCount } from "./familyAsks";
 import { alertsState, armAlerts, listenForTaps, ring, useAlertsState, type AlertKind } from "./sound";
 import { clearHash, PinSheet, pinAsked, readHash, SignIn, stopAskingPin, type Hash } from "./signin";
@@ -120,7 +121,10 @@ export function App() {
   const user = me?.user ?? null;
   // The Class tab for everyone, then Correction, Theory and Evaluation for those jobs (the bottom bar).
   const jobs = JOBS.filter((j) => !user || user.role === "owner" || user.tabs.includes(j));
-  const tabs = TABS.filter((t) => t.id === "class" || jobs.includes(t.id));
+  // Photos from home are marked on the Correction page's ⌂ lane (5 Nov 2026): Photos people get its tab even without the
+  // Correction job (then only the lane, and the phone keeps its own job's alerts, never Correction's calls).
+  const photosOnly = may("photos") && !jobs.includes("correction");
+  const tabs = TABS.filter((t) => t.id === "class" || jobs.includes(t.id) || (t.id === "correction" && photosOnly));
   // The Class tab's powers (send students, mark teachers arrived): the owner, and whoever has the Manager job.
   const isManager = user?.role === "owner" || !!user?.tabs.includes("manager");
   // Nothing kept on this phone: the managers start on the Class tab, the others on their first job's page.
@@ -153,7 +157,7 @@ export function App() {
   // the job done last.
   const classJob: Role = lastJob && jobs.includes(lastJob) ? lastJob : (jobs[0] ?? "correction");
   const onClassTab = shown === "board" && tab === "class";
-  const role: Role = base === "register" || tab === "class" ? classJob : tab;
+  const role: Role = base === "register" || tab === "class" || (tab === "correction" && photosOnly) ? classJob : tab;
 
   // A manager's taps on the Class tab are recorded as the manager's ("by the manager" in the history).
   setRole(onClassTab && isManager ? "manager" : role);
@@ -163,7 +167,7 @@ export function App() {
     } catch {
       /* private mode */
     }
-    const job: Role | null = base === "register" || tab === "class" ? null : tab;
+    const job: Role | null = base === "register" || tab === "class" || (tab === "correction" && photosOnly) ? null : tab;
     if (job && job !== lastJob) {
       setLastJob(job);
       try {
@@ -446,6 +450,13 @@ export function App() {
           phN={photos.n}
           phLate={photos.late}
           asks={asks}
+          onPhotos={() => {
+            openLane();
+            setReopen(null);
+            setTab("correction");
+            setBackTo("board");
+            setPage("board");
+          }}
         />
       ) : shown === "register" ? (
         <ClassPage board={board} views={views} now={now} job={role} onAttendance={() => setAttOpen(true)} />
@@ -474,10 +485,12 @@ export function App() {
           const away = !here;
           // The manager sent students to her for this page (3 Nov 2026): they come first, in the room's colour.
           const coming = !away || (r.id !== "theory" && r.id !== "evaluation") ? 0 : comingTo(r.id);
+          // Someone who only marks the photos from home: Correction's number is the photos waiting (red after a day).
+          const lane = r.id === "correction" && photosOnly;
           const badge = !away
             ? 0
-            : coming || (r.id === "class" ? idleNow : r.id === "theory" ? theoryRed : r.id === "evaluation" ? evalRed : papers);
-          const amber = r.id === "correction" && !papersRed;
+            : coming || (r.id === "class" ? idleNow : r.id === "theory" ? theoryRed : r.id === "evaluation" ? evalRed : lane ? photos.n : papers);
+          const amber = r.id === "correction" && (lane ? !photos.late : !papersRed);
           return (
             <button
               key={r.id}

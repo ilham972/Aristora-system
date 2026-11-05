@@ -82,6 +82,15 @@ EOF
 
 ## Gotchas learned the hard way
 
+- **A photo asked again comes back in the same row** (5 Nov 2026, the ⌂ lane): `family.photoSend` patches a retake's
+  `homePhotos` row back to "waiting" with a new `at`. Anything that remembers "answered" or "seen" for a photo keys on
+  its id AND `at` (`answered` in `src/homeLane.tsx`), or the re-sent photo stays hidden.
+- **A live query that reads students' rows runs again on every tap in class** (attendance, moves, `seen` all write
+  them). The ⌂ lane's `photos.lane` returns photo rows only (`LaneRow`: id, count, oldest) and the phone takes names
+  and grades from the board's views: keep big scans away from `students` in anything a phone keeps open.
+- **The family app shows a camera under each teacher part** of a question: in the run-throughs `.f-qcard .f-file`
+  finds one per part (`.first()` for one photo).
+
 - **A phone runs the copy it opened, not what you deployed** (5 Nov 2026: his upload of a new answer kind was refused
   by the teachers' app open since before the deploy). Every new kind, button or rule reaches a page that was already
   open only when it loads again: `src/appVersion.ts` does that (the banner, or by itself after 30 min away), and the

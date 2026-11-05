@@ -675,7 +675,7 @@ export default defineSchema({
     /** Who marked it (her name) and her id. */
     by: v.optional(v.string()),
     byId: v.optional(v.id("users")),
-    /** A part: her marks for the part(s) the phone left. */
+    /** A part: her marks for the part(s) the phone left. His working (Correction's ⌂ lane): the new marks she gave. */
     got: v.optional(v.number()),
     /** The cause of a wrong answer, or a remark on a part (`WHY`); her own words (≤ `NOTE_MAX`). */
     why: v.optional(v.string()),

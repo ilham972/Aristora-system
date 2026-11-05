@@ -67,8 +67,18 @@ const SETTINGS_TABS: [Tab, string, () => boolean][] = [
 /**
  * `start`: the section to open on (Photos when photos wait, Students when students' asks wait for an OK, Feedback when
  * new feedback came); `fbNew`, `phN` and `asks` = their counts on their buttons (`phLate`: a photo waited over a day).
+ * `onPhotos`: Photos' button opens Correction's ⌂ lane, where they are marked.
  */
-export function Settings(props: { views: View[]; onClose: () => void; start?: Tab; fbNew?: number; phN?: number; phLate?: boolean; asks?: number }) {
+export function Settings(props: {
+  views: View[];
+  onClose: () => void;
+  start?: Tab;
+  fbNew?: number;
+  phN?: number;
+  phLate?: boolean;
+  asks?: number;
+  onPhotos?: () => void;
+}) {
   const shown = SETTINGS_TABS.filter(([, , ok]) => ok());
   const [chosen, setTab] = useState<Tab>(props.start && shown.some(([id]) => id === props.start) ? props.start : shown[0][0]);
   const tab = shown.some(([id]) => id === chosen) ? chosen : shown[0][0];
@@ -90,7 +100,7 @@ export function Settings(props: { views: View[]; onClose: () => void; start?: Ta
       {tab === "reports" && <Reports />}
       {tab === "history" && <History />}
       {tab === "feedback" && <FeedbackList />}
-      {tab === "photos" && <PhotoQueue />}
+      {tab === "photos" && <PhotoQueue views={props.views} onOpen={props.onPhotos} />}
       {tab === "hours" && <ClassHours />}
       {tab === "people" && <People />}
       {tab === "account" && <Account />}

@@ -10537,6 +10537,273 @@ body.tm-on .toasts {
   background: rgba(255, 255, 255, 0.92);
   font-size: 20px;
 }
+.phq-open {
+  justify-self: start;
+}
+
+/* ---- Correction's ⌂ lane (5 Nov 2026, src/homeLane.tsx): photos from home, marked on Correction's card ---- */
+/* ⌂ after + on the names row, always in the same place: the questions waiting (amber, red after a day); dark = on. */
+.hl-btn {
+  flex: none;
+  width: 50px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 0;
+  border-radius: 10px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  color: var(--ink-2);
+  font: 700 18px/1 var(--font);
+  transition: transform 0.1s ease;
+}
+.hl-btn:active {
+  transform: scale(0.92);
+}
+.hl-btn.wait {
+  border-color: var(--amber);
+  background: var(--amber-soft);
+  color: var(--amber-ink);
+}
+.hl-btn.late {
+  border-color: var(--red);
+  background: var(--red-soft);
+  color: var(--red-ink);
+}
+.hl-btn.on,
+.hl-btn.on:disabled {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
+}
+.hl-btn-n {
+  font: 700 12.5px/1 var(--font);
+}
+.fc-add:disabled {
+  opacity: 0.35;
+}
+/* When nobody waits: how many, since when, and what to tap. */
+.hl-idle {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1.5px solid var(--line-2);
+  background: var(--card);
+}
+.hl-idle > b {
+  font-size: 17px;
+}
+.hl-idle > b.late {
+  color: var(--red-ink);
+}
+.hl-idle p {
+  margin: 0;
+}
+/* His levels with photos (amber: to mark); the open one ringed. */
+.fc-lb.hl-lb {
+  flex: 0 0 auto;
+  min-width: 30px;
+  padding: 0 6px;
+  border-color: var(--amber);
+  background: var(--amber-soft);
+  color: var(--amber-ink);
+}
+.fc-sq.hl-sq-back {
+  border-style: dashed;
+  color: var(--ink-3);
+}
+.hl-card > * + * {
+  margin-top: 10px;
+}
+.hl-note {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--amber-soft);
+  color: var(--amber-ink);
+  font-size: 14px;
+  font-weight: 700;
+}
+/* His photos, as wide as the card: ↻ in the corner turns one, a tap = full screen. */
+.hl-shots {
+  display: grid;
+  gap: 8px;
+}
+.hl-shot {
+  position: relative;
+  margin: 0;
+}
+.hl-img {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--line-2);
+}
+/* The box takes the turned photo's room; the photo is turned about its middle inside it. */
+.hl-turned {
+  position: relative;
+  display: block;
+  max-width: none;
+  margin: 0 auto;
+  overflow: hidden;
+}
+.hl-turned img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: block;
+  max-width: none;
+  max-height: none;
+}
+.hl-turn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--ink);
+  box-shadow: 0 1px 4px rgba(22, 33, 62, 0.28);
+}
+.hl-turn:active {
+  transform: scale(0.92);
+}
+/* Each part: the key's answer, what he typed, then its own marks (Correction's part row). */
+.fc-paper .fc-part.hl-one {
+  grid-template-columns: minmax(0, 1fr);
+}
+.hl-pans {
+  grid-column: 2;
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+.hl-one .hl-pans {
+  grid-column: 1;
+}
+.hl-pans .fc-anote {
+  margin: 0;
+}
+.hl-typed {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  overflow-wrap: break-word;
+}
+.hl-typed b {
+  display: inline-block;
+  margin: 0 4px 2px 0;
+  padding: 0 6px;
+  border-radius: 6px;
+}
+.hl-typed .hl-bad {
+  background: var(--red-soft);
+  color: var(--red-ink);
+}
+.hl-typed .hl-ok {
+  background: var(--green-soft);
+  color: var(--green-ink);
+}
+.hl-said {
+  white-space: pre-wrap;
+}
+.hl-plab {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-3);
+}
+.hl-phone {
+  grid-column: 1 / -1;
+  margin: 0;
+  font: 700 18px/1 var(--font);
+  color: var(--ink-2);
+}
+.hl-phone small {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+/* The pad: Retake small on the left, Save (with the marks) big on the right, in the same place for every question. */
+.hl-acts {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  gap: 8px;
+}
+.fc-n.hl-again {
+  height: 64px;
+  display: grid;
+  place-items: center;
+}
+.hl-again small {
+  font-size: 15px;
+  font-weight: 700;
+}
+.fc-go.hl-go:disabled {
+  background: var(--line);
+  color: var(--ink-2);
+  box-shadow: none;
+}
+.hl-retake {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.hl-retake .btn {
+  min-height: 48px;
+}
+/* Full screen: the whole photo; a tap = twice as big (scroll it); ↻ and ✕ at the top. */
+.hl-big {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  overflow: auto;
+  overscroll-behavior: contain;
+  background: rgba(10, 14, 28, 0.94);
+}
+.hl-bigimg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 100%;
+  min-height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.hl-big.zoom .hl-bigimg {
+  display: block;
+}
+.hl-bigbar {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 61;
+  display: flex;
+  gap: 10px;
+}
+.hl-turn.big {
+  position: static;
+}
+.hl-close {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 0;
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--ink);
+  font-size: 20px;
+}
 /* What the phone accepts: a part a teacher can fix (4 Nov 2026: type how the phone reads an answer it couldn't). */
 .pa-only {
   display: flex;
