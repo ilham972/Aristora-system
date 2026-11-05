@@ -1,5 +1,6 @@
 // Her taps in her room, kept on this phone until Done (the audit, 31 Oct 2026). Evaluation: explained / to Theory /
-// not now; Theory: taught / not reached. They lived only in the page, so opening Class, Settings or another tab, or the
+// not now; Theory: taught / not reached; a consultation (5 Nov 2026): Not now and what an undo needs (its taps
+// themselves are saved on the server at once). They lived only in the page, so opening Class, Settings or another tab, or the
 // page loading again (Chrome drops a tab in the background; a reload after a deploy), lost them all, and "All explained"
 // in his file then marked as explained even the questions she had sent to Theory.
 //
@@ -64,7 +65,7 @@ export function saveDecisions<D extends object>(room: string, calls: readonly De
  * useState for her decisions, kept on this phone: starts from what she left for the calls in her room, and every
  * change is saved at once.
  */
-export function useRoomDecisions<D extends object>(room: "evaluation" | "theory", calls: readonly DecCall[]): [Record<string, D>, (next: Record<string, D>) => void] {
+export function useRoomDecisions<D extends object>(room: "evaluation" | "theory" | "consult", calls: readonly DecCall[]): [Record<string, D>, (next: Record<string, D>) => void] {
   const [dec, setDec] = useState<Record<string, D>>(() => loadDecisions<D>(room, calls));
   const set = (next: Record<string, D>) => {
     setDec(next);

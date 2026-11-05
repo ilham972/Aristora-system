@@ -912,7 +912,16 @@ function Reports() {
   );
 }
 
-const ROOM_WORD: Record<string, string> = { theory: "Theory", evaluation: "Evaluation" };
+const ROOM_WORD: Record<string, string> = { theory: "Theory", evaluation: "Evaluation", consult: "a consultation" };
+/** A consultation's taps (5 Nov 2026), as the history says them. */
+const CONSULT_WORDS: Record<string, string> = {
+  explained: "explained in consultation",
+  unexplained: "explained in consultation, undone",
+  "to-theory": "sent to Theory in consultation",
+  "to-theory-off": "sent to Theory in consultation, undone",
+  taught: "taught in consultation",
+  untaught: "taught in consultation, undone",
+};
 const qName = (q: number) => `Q${q}`;
 
 /** One history line in plain words. */
@@ -939,6 +948,7 @@ function describe(e: Doc<"events">): string {
       return "sign-in taken back (tapped by mistake)";
     case "call": {
       if (v.endsWith("/check-in")) return "sent by the manager for a check-in (Evaluation)";
+      if (v.startsWith("consult")) return `called for a consultation${v.endsWith("/theory") ? " (theory)" : ""}`;
       const [room, kind, pull] = v.split("/");
       const forTheory = kind === "theory" ? " for theory" : "";
       return `called to ${ROOM_WORD[room] ?? room}${forTheory}${pull || kind === "pull" ? ", straight from Evaluation" : ""}`;
@@ -1071,6 +1081,12 @@ function describe(e: Doc<"events">): string {
       return `${v} taught by Theory`;
     case "board":
       return `${qName(e.q ?? 0)} ${v === "explained" ? "explained" : "taught"} at the board (whole class)`;
+    case "consult":
+      return v.startsWith("whole-unit")
+        ? `the whole unit taught in consultation${v.endsWith("-off") ? ", undone" : ""}`
+        : `${qName(e.q ?? 0)} ${CONSULT_WORDS[v] ?? v}`;
+    case "done-consult":
+      return "consultation finished";
     case "board-undo":
       return `${qName(e.q ?? 0)} at the board, undone`;
     case "untaught":
@@ -1181,7 +1197,14 @@ function History() {
 }
 
 const TAB_NAMES: Record<Job, string> = { correction: "Correction", theory: "Theory", evaluation: "Evaluation", manager: "Manager" };
-const EXTRA_NAMES: Record<Extra, string> = { students: "Students", books: "Books", reports: "Reports and History", feedback: "Feedback", photos: "Photos" };
+const EXTRA_NAMES: Record<Extra, string> = {
+  students: "Students",
+  books: "Books",
+  reports: "Reports and History",
+  feedback: "Feedback",
+  photos: "Photos",
+  consult: "Consultation",
+};
 /** What each job opens (everyone has the Class tab and the Register). */
 const TAB_HELP: Record<Job, string> = {
   correction: "the Correction page (marking papers, + to sign students in), sending students to the rooms",
@@ -1195,6 +1218,7 @@ const EXTRA_HELP: Record<Extra, string> = {
   reports: "end-of-class reports and the history",
   feedback: "reads what students send from the family app",
   photos: "marks the photos students send from home (drawings, the working on wrong answers)",
+  consult: "the top bar's Consultation: calls any student here to her, one to one, and explains or teaches his questions",
 };
 
 function canWords(p: { role: string; tabs: Job[]; can: Extra[] }): string {

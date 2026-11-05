@@ -54,13 +54,17 @@ export const get = query({
     const sent = (await ctx.db.query("calls").withIndex("by_status", (q) => q.eq("status", "sent")).collect()).filter((c) => ours.has(c.studentId));
     // A book a room has him for travels while the call lasts (so her card shows that book, even with nothing left).
     const called = new Set([...requested, ...sent].map((c) => `${c.studentId}:${c.unitId}:${c.stage}`));
+    // A consultation (5 Nov 2026): every book of his changed since it began travels too, so what she explained in it
+    // stays on her screen as ✓ even once nothing waits there.
+    const consultSince = new Map([...requested, ...sent].filter((c) => c.consult).map((c) => [c.studentId as string, c.createdAt]));
     for (const s of students) {
       if (!s.present) continue;
+      const since = consultSince.get(s._id);
       for (const p of await ctx.db.query("progress").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) {
         if (p.unitId === s.unitId && p.stage === s.stage) continue;
         // The other book of his topic tute (one printed book: the ladder + the past papers) always comes along.
         const twin = p.unitId === s.unitId && !!(await bookOf(p.unitId, p.stage))?.tute;
-        const inRoom = called.has(`${s._id}:${p.unitId}:${p.stage}`);
+        const inRoom = called.has(`${s._id}:${p.unitId}:${p.stage}`) || (since !== undefined && p.updatedAt >= since);
         if (!twin && !inRoom && !mayBeOpen(p)) continue;
         const b = await bookOf(p.unitId, p.stage);
         if (!b || (!twin && !inRoom && !openWork(b, p))) continue;

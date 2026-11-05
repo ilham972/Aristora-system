@@ -176,7 +176,8 @@ function hereOf(rc: RoomCall, v: View): EvalHere {
  * and not sent yet, or sent and walking there).
  */
 export function evalRoom(board: Board, views: View[], now: number, me?: string | null): { here: EvalHere[]; coming: RoomCall[] } {
-  const calls = roomCalls(board, views, "evaluation", now, me);
+  // Her consultations (5 Nov 2026) are the Consultation page's, never her Evaluation room's.
+  const calls = roomCalls(board, views, "evaluation", now, me).filter((rc) => !rc.c.consult);
   const here: EvalHere[] = [];
   const coming: RoomCall[] = [];
   for (const rc of calls) {
@@ -198,7 +199,7 @@ export type EvalItem = { h: EvalHere; state: EvalState; id: string; name: string
  */
 export function evalItems(board: Board, views: View[], now: number, me?: string | null): EvalItem[] {
   return roomCalls(board, views, "evaluation", now, me).flatMap((rc) => {
-    if (!rc.v) return [];
+    if (!rc.v || rc.c.consult) return [];
     const state: EvalState | null = rc.walking ? "walking" : rc.c.status === "sent" ? "here" : rc.c.status === "requested" ? "called" : null;
     if (!state) return [];
     const late = state === "walking" ? rc.lost : state === "called" && now - rc.c.createdAt >= LATE_SEND_MS;

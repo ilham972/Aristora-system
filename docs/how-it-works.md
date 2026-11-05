@@ -15,7 +15,9 @@ The technical memory of the app, kept with the code and updated in the same comm
 
 **Top bar and tabs (`c360fa3`; Correction moved to the bottom bar in `0e4446b`, his call; the Class tab 3 Nov 2026).**
 - Top bar, left: the **Register** (list icon, everyone; it was called Class until 3 Nov 2026, no badge since: its
-  count moved to the Class tab), Progress (owner + Reports). Right: `TopStat`, one capsule = people icon + how many in
+  count moved to the Class tab), Progress (owner + Reports), the Owner page (owner), **Consultation** (owner + the
+  Consultation tick, 5 Nov 2026; its corner count = her consultation's students), the whiteboard (Theory, Evaluation:
+  Whole class). Five icons (the owner) fit 320 px with `.top-left.five`. Right: `TopStat`, one capsule = people icon + how many in
   class, the class clock, the link dot (a tap opens Attendance for Correction and the owner), then Settings. No logo,
   no titles. ≤400 / ≤345 px rules; `topFits()`.
 - Bottom tabs: **Class** first, for everyone (3 Nov 2026, his call: the Manager page moved here from its button on the
@@ -401,6 +403,56 @@ everyone stays at his desk, she teaches at the board.
   class)"), seen by that room today (no "no teacher yet" dot), her score +1 question; the page's first tap of a lesson
   (`lesson`: another lesson, or 12 min since her last tap) +1 lesson and the students taught (Theory) / seen
   (Evaluation). Her taps count as Theory when she has it, else Evaluation.
+
+**Consultation (5 Nov 2026, his voice note: "sometimes we have to call some student from the hall and teach that one
+student only ... the student list of the pending evaluation, the count of each student ... more questions wrong come
+first ... how many pending still we have, and how many today ... the system suggests the priority order but still I can
+call anyone I want ... not for everyone: the people I pick in Settings"; `src/consult.tsx` `ConsultPage`, rules
+`src/consultData.ts`, server `convex/consult.ts` and `calls.create` with `consult`).** The top bar's people-and-bubble
+icon, left of the whiteboard (`.cx-btn`; the owner and the **Consultation** tick in Settings → People, `consult`); a
+corner count = her consultation's students while she is on another page. What existed (the Class tab's send to
+herself with "I'm teaching", her Evaluation page) is the machinery; this is HER list and one page for the whole sitting.
+- **Pinned:** Evaluation | Theory in fixed places (`KindBar`, both always open), each with today's count and a red
+  badge = students with no work among them; the pick is kept on the phone (`aristora.consultKind`). Under them **Today
+  N · M students** (the students here, live) and **All N · M** (+ every student not here: `consult.totals`, read on
+  opening, every 3 minutes and after Done; a class left open since an earlier day counts nobody here). Evaluation =
+  questions waiting to be explained (wrong answers, lost marks not explained nor sent to Theory), all his books;
+  Theory = a workbook's questions sent to Theory + the whole unit as one, a theory book's next section's teacher
+  questions (his book now only, as on the Theory page) (`convex/lib/consult.ts`, the same on the phone and the server).
+- **The students here** as one row of pills (`.cx-nm`, Correction's names look), **his order** (`consultRows`): the
+  most waiting first (ties: no work first, then here longest, then A–Z), with the count; a **red ring** = no work at all
+  (his order stays: the ring makes him see the idle boy); **pale** with her name = another teacher called him or has
+  him (not callable: a toast says so), after the ones he can call; then everyone with nothing waiting (a **check-in**:
+  "is that student well or not"), the one not seen in a consultation for longest first (`students.consultAt`, set by
+  Done). Her consultation's students are in her room box instead. The row holds still 5 s after a touch (`useHeld`).
+- **Tap = tick** (6 at most with her: `EVAL_CAP`, counting called and on the way); the ticked show in her room box
+  (`.s-sug.on`) and their questions open below to prepare (pad pale). **Call N** = `calls.create` `consult` (the
+  evaluation room, kind = the pill; any student here, nothing has to wait; refused while another teacher has called him
+  or has him). **Correction's phone says only her name** (his answer: "Kumar, go to Ilham.", `callPhrase` `consult`;
+  3 minutes: "Kumar hasn't reached Ilham.") and its strip says "Ilham · Consultation" with Sent. Then **Arrived** (those
+  Correction sent; one who came by himself: his pill → Arrived), **Done** (everyone with her; one alone: his pill →
+  Done: back to work). Nobody bumps, pulls or sends a consultation: Theory, Evaluation and the manager are refused
+  ("is called to Ilham (consultation)"); never in the rooms' score; his Evaluation room never shows it
+  (`evalRoom`/`evalItems` leave `consult` calls out); the Class tab shows him "with Ilham" (her room) as for any call.
+- **The sitting:** their questions as Correction's squares (`consultQs`: each once for everyone with her who has it, all
+  their books, "8·13" when two books show), the card (who has it with his marks, the answer big, the printed question,
+  teaching mode), and the pad fixed at the bottom: Evaluation **→ Theory · Not now · ✓ Explained**; Theory **Not
+  reached · ✓ Taught**. **Each tap is saved at once** (`consult.mark`, his rule "everything saves live"): for everyone
+  with her on that square; the same tap again = back; another decision first takes the old one back; then the next
+  open square. Saved: a workbook's `x` (explained), `th`+`tb: "consult"` (→ Theory; Explained and → Theory switch),
+  `tt` (taught), the whole unit's request cleared (`wu`, the old one kept for the undo); a theory book's wrong answer →
+  explained (keeps how many times wrong), → Theory = explained + its section's teacher questions open again (as
+  Evaluation's Done does; the undo puts them back exactly from `was`), a teacher question → taught. Not now / Not
+  reached is this phone's only (`useRoomDecisions("consult")`: the question stays waiting for the teachers). Only for
+  a student with her (Arrived); an undo only of what this consultation did (`since` = the call): what someone did
+  before stays. What she did stays on screen as ✓ / T / – (`bookQs`: waiting now, or done since the call), so nothing
+  jumps; switching to Theory with him here teaches his theory in the same sitting (Q13 she just sent → Theory is his
+  to teach).
+- **Done** = `calls.finish` (nothing more to record): `done-consult` in the history with the minutes, `consultAt`,
+  `seen.evaluation` (no "no teacher yet" dot). What she didn't reach stays for the Evaluation and Theory teachers.
+- History: "called for a consultation", "Q4 explained in consultation", "Q13 sent to Theory in consultation", "taught
+  in consultation", "… undone", "consultation finished" (`by: "consult"`). A picked teacher's consultation time counts
+  as her working time on her card (it is a call with her as the teacher); the owner is never in those numbers.
 
 **The rows show her room's book (Theory and Evaluation, 31 Oct 2026, his screenshot).** The bug: Raza and Umair
 (Grade 9 fractions) were with Evaluation, but the rows said Grade 8 unit 1, Grade 9 was pale and could not be tapped,
@@ -1463,6 +1515,10 @@ learning app of our education institute"): one profile, his class times, what he
     Photos and its count on the gear (`photos.count`, `lane`, `student`, `queue`, `question`, `mark`, `retake`,
     `required`; `catalog.question` and `catalog.bookCss` for the printed question); turning "photos required" on or off
     is the owner's (`photos.setRequired`).
+  - `consult` (5 Nov 2026, his ask "not for everyone, the people I pick"): the top bar's Consultation page:
+    `consult.totals`, `calls.create` with `consult` (to herself only), and on her OWN consultation's calls `arrive`,
+    `unarrive`, `cancel`, `finish` (`ownConsult` in `calls.ts`), and `consult.mark` (only for a student with her). It
+    gives nothing of the rooms (the Evaluation page's `workbook.explain` etc. still need Evaluation).
 - Everyone signed in sees the Class tab and the Register, reads `people.team` and `manager.day`, and her own card
   (`duty.card`). Correction job = the Correction page and Attendance (`setPresent`, `attendance.day`;
   `by: "attendance"`), Books given (`students.setGiven`), sending called students, Going home, Back in the hall, End

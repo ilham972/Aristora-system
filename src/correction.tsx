@@ -319,33 +319,37 @@ export function CallsBand(props: { board: Board; views: View[]; now: number; pap
   // One strip per teacher (31 Oct 2026: each Theory or Evaluation teacher has her own room): her name first, so
   // Correction sends each student to the right table.
   type Call = Board["calls"][number];
+  // A consultation (5 Nov 2026) is its own strip: her name, "Consultation" (he goes to her, wherever she sits).
   const byTeacher = (list: Call[]) => {
-    const out: { key: string; room: "theory" | "evaluation"; teacher: string; calls: Call[] }[] = [];
+    const out: { key: string; room: "theory" | "evaluation"; teacher: string; consult: boolean; calls: Call[] }[] = [];
     for (const room of ["theory", "evaluation"] as const)
       for (const c of list) {
         if (c.room !== room) continue;
         const teacher = c.teacher ?? "";
-        const g = out.find((x) => x.room === room && x.teacher === teacher);
+        const consult = !!c.consult;
+        const g = out.find((x) => x.room === room && x.teacher === teacher && x.consult === consult);
         if (g) g.calls.push(c);
-        else out.push({ key: `${room}:${c.teacherId ?? ""}`, room, teacher, calls: [c] });
+        else out.push({ key: `${room}:${c.teacherId ?? ""}${consult ? ":c" : ""}`, room, teacher, consult, calls: [c] });
       }
     return out;
   };
-  const toWhom = (room: "theory" | "evaluation", teacher: string) => (teacher ? `${teacher} in ${ROOM[room]}` : ROOM[room]);
+  const toWhom = (room: "theory" | "evaluation", teacher: string, consult = false) =>
+    consult && teacher ? teacher : teacher ? `${teacher} in ${ROOM[room]}` : ROOM[room];
+  const placeOf = (room: "theory" | "evaluation", consult: boolean) => (consult ? "Consultation" : ROOM[room]);
 
   return (
     <div class="calls" aria-live="assertive">
-      {byTeacher(waiting).map(({ key, room, teacher, calls }) => {
+      {byTeacher(waiting).map(({ key, room, teacher, consult, calls }) => {
         const oldest = Math.min(...calls.map((c) => c.createdAt));
         const late = now - oldest > 60_000;
         return (
-          <section key={key} class={`call-strip ${room}${late ? " late" : ""}`} aria-label={`Send to ${toWhom(room, teacher)}`}>
+          <section key={key} class={`call-strip ${room}${late ? " late" : ""}`} aria-label={`Send to ${toWhom(room, teacher, consult)}`}>
             <span class="cs-room">
               <span class="pulse" aria-hidden="true" />
               <span class="cs-room-text">
                 <b>{teacher || ROOM[room]}</b>
                 <small>
-                  {teacher ? `${ROOM[room]} · ` : ""}
+                  {teacher ? `${placeOf(room, consult)} · ` : ""}
                   {shortMin(now - oldest)}
                 </small>
               </span>
@@ -386,12 +390,12 @@ export function CallsBand(props: { board: Board; views: View[]; now: number; pap
           <b>{byId.get(c.studentId)?.s.name ?? "?"}</b> goes from Evaluation straight to Theory. Nothing to do.
         </p>
       ))}
-      {byTeacher(onWay).map(({ key, room, teacher, calls: list }) => {
+      {byTeacher(onWay).map(({ key, room, teacher, consult, calls: list }) => {
         return (
-          <section key={key} class={`call-strip ${room} cs-walk`} aria-label={`On the way to ${toWhom(room, teacher)}`}>
+          <section key={key} class={`call-strip ${room} cs-walk`} aria-label={`On the way to ${toWhom(room, teacher, consult)}`}>
             <span class="cs-room-text">
               <b>To {teacher || ROOM[room]}</b>
-              <small>{teacher ? `${ROOM[room]} · walking` : "walking"}</small>
+              <small>{teacher ? `${placeOf(room, consult)} · walking` : "walking"}</small>
             </span>
             <ul class="cs-names">
               {list.map((c) => (
@@ -407,7 +411,7 @@ export function CallsBand(props: { board: Board; views: View[]; now: number; pap
       {lost.map((c) => {
         const name = nameOf(c);
         return (
-          <section key={c._id} class="call-strip cs-lost" aria-label={`${name} hasn't reached ${toWhom(c.room, c.teacher ?? "")}`}>
+          <section key={c._id} class="call-strip cs-lost" aria-label={`${name} hasn't reached ${toWhom(c.room, c.teacher ?? "", !!c.consult)}`}>
             <span class="cs-lost-t">
               <b>{name}</b> isn't {c.teacher ? `with ${c.teacher}` : `in ${ROOM[c.room]}`} · {Math.floor(walked(c) / 60_000)}m
             </span>
@@ -416,7 +420,7 @@ export function CallsBand(props: { board: Board; views: View[]; now: number; pap
               class="btn small cs-reached"
               onClick={async () => {
                 const r = await act(() => mutate(api.calls.arrive, { callIds: [c._id], by: currentRole() }));
-                if (r?.arrived) toast(`${name} reached ${ROOM[c.room]}.`);
+                if (r?.arrived) toast(`${name} reached ${c.consult && c.teacher ? c.teacher : ROOM[c.room]}.`);
               }}
             >
               Reached
@@ -426,7 +430,7 @@ export function CallsBand(props: { board: Board; views: View[]; now: number; pap
               class="btn ghost small cs-hall"
               onClick={async () => {
                 const r = await act(() => mutate(api.calls.cancel, { callIds: [c._id], by: currentRole() }));
-                if (r) toast(`${name} is back in the hall. ${ROOM[c.room]} can call him again.`);
+                if (r) toast(`${name} is back in the hall. ${c.consult && c.teacher ? c.teacher : ROOM[c.room]} can call him again.`);
               }}
             >
               In the hall

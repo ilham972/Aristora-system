@@ -9,6 +9,7 @@ import { Focus } from "./focus";
 import { EvaluationPage } from "./evalFocus";
 import { TheoryTab } from "./theoryFocus";
 import { BossPage } from "./boss";
+import { ConsultPage, myConsults } from "./consult";
 import { ManagerPage } from "./manager";
 import { SimBanner } from "./sim";
 import { Progress } from "./progress";
@@ -31,7 +32,7 @@ import { Sheet, Toasts } from "./ui";
  * icon) and Progress are in the top bar.
  */
 type TabId = "class" | "correction" | "theory" | "evaluation";
-type Page = "board" | "register" | "settings" | "progress" | "boss" | "teach";
+type Page = "board" | "register" | "settings" | "progress" | "boss" | "teach" | "consult";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "class", label: "Class" },
@@ -137,10 +138,15 @@ export function App() {
   const canTeach = may("theory") || may("evaluation");
   // The Owner page: the owner only (it shows each teacher's own numbers and his money).
   const isOwner = user?.role === "owner";
-  const shown: Page = (page === "progress" && !canProgress) || (page === "boss" && !isOwner) || (page === "teach" && !canTeach) ? backTo : page;
+  // Consultation (5 Nov 2026, his ask: "not for everyone, the people I pick"): the owner and the Consultation tick.
+  const canConsult = may("consult");
+  const shown: Page =
+    (page === "progress" && !canProgress) || (page === "boss" && !isOwner) || (page === "teach" && !canTeach) || (page === "consult" && !canConsult)
+      ? backTo
+      : page;
   const base: Home = shown === "register" || shown === "board" ? shown : backTo;
   /** Open a page from the top bar; the same button again goes back. */
-  const toggle = (p: "settings" | "progress" | "boss" | "teach") => {
+  const toggle = (p: "settings" | "progress" | "boss" | "teach" | "consult") => {
     if (shown === p) {
       setPage(backTo);
       return;
@@ -275,17 +281,33 @@ export function App() {
   const comingTo = (room: "theory" | "evaluation") => board.calls.filter((c) => c.byManager && c.teacherId === myId && c.room === room && isWalking(c)).length;
   // The Class tab's count: students in the hall with no work right now (red), for whoever looks.
   const idleNow = views.filter((v) => v.where === "hall" && v.tone === "red").length;
+  // Her consultation's students (called, on the way, with her): a corner count on its icon while she is elsewhere.
+  const consults = canConsult ? myConsults(board, myId) : 0;
+  const icons = 1 + (canProgress ? 1 : 0) + (isOwner ? 1 : 0) + (canConsult ? 1 : 0) + (canTeach ? 1 : 0);
 
   return (
     <div
       class={`app${testMode() ? " test-mode" : ""}`}
       data-role={role}
-      data-tab={shown === "register" ? "register" : shown === "teach" ? "theory" : tab === "class" ? "hall" : tab === "correction" ? "focus" : tab}
+      data-tab={
+        shown === "register"
+          ? "register"
+          : shown === "teach"
+            ? "theory"
+            : shown === "consult"
+              ? "evaluation"
+              : tab === "class"
+                ? "hall"
+                : tab === "correction"
+                  ? "focus"
+                  : tab
+      }
     >
       <div class="top-wrap" ref={topRef}>
         <header class="top">
-          {/* Four icons (the owner: Register, Progress, Owner, Whole class): a little tighter on phones, so the clock fits. */}
-          <div class={`top-left${1 + (canProgress ? 1 : 0) + (isOwner ? 1 : 0) + (canTeach ? 1 : 0) >= 4 ? " many" : ""}`}>
+          {/* Four or five icons (the owner: Register, Progress, Owner, Consultation, Whole class): tighter on phones, so
+              the clock fits. */}
+          <div class={`top-left${icons >= 4 ? " many" : ""}${icons >= 5 ? " five" : ""}`}>
             <button
               type="button"
               class={`att-btn class-btn${shown === "register" ? " on" : ""}`}
@@ -355,6 +377,36 @@ export function App() {
                   <path d="M12 17l4.2-5.6" />
                   <circle cx="12" cy="17" r="1.4" fill="currentColor" />
                 </svg>
+              </button>
+            )}
+            {canConsult && (
+              <button
+                type="button"
+                class={`att-btn cx-btn${shown === "consult" ? " on" : ""}`}
+                aria-pressed={shown === "consult"}
+                aria-label={`Consultation: call a student to you, one to one${consults ? `, ${consults} with you or coming` : ""}`}
+                onClick={() => toggle("consult")}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  width="21"
+                  height="21"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="8.5" cy="9" r="3.2" />
+                  <path d="M2.8 20.5c.4-3.6 2.8-5.8 5.7-5.8s5.3 2.2 5.7 5.8" />
+                  <path d="M14.2 3.5h6.3a1.3 1.3 0 0 1 1.3 1.3v3.9a1.3 1.3 0 0 1-1.3 1.3h-2.9l-2.4 2v-2h-1a1.3 1.3 0 0 1-1.3-1.3V4.8a1.3 1.3 0 0 1 1.3-1.3Z" />
+                </svg>
+                {consults > 0 && shown !== "consult" && (
+                  <b class="cx-badge" aria-hidden="true">
+                    {consults}
+                  </b>
+                )}
               </button>
             )}
             {canTeach && (
@@ -466,6 +518,8 @@ export function App() {
         <BossPage board={board} views={views} now={now} />
       ) : shown === "teach" ? (
         <WholeClassPage views={views} />
+      ) : shown === "consult" ? (
+        <ConsultPage board={board} views={views} now={now} />
       ) : tab === "class" ? (
         <ManagerPage board={board} views={views} now={now} canManage={isManager} meId={user._id} />
       ) : tab === "correction" ? (
@@ -657,7 +711,7 @@ function UpdateBanner(props: { sending: number }) {
 
 const REPEAT_MS = 30_000;
 
-type AlertItem = { key: string; kind: AlertKind; name: string; room: RoomName; repeat: boolean; teacher?: string; open?: RoomName };
+type AlertItem = { key: string; kind: AlertKind; name: string; room: RoomName; repeat: boolean; teacher?: string; open?: RoomName; consult?: boolean };
 
 /** What this phone's job should hear about right now. */
 function alertItems(role: Role, board: Board, views: View[], now: number): AlertItem[] {
@@ -672,11 +726,11 @@ function alertItems(role: Role, board: Board, views: View[], now: number): Alert
   if (role === "correction") {
     for (const c of board.calls)
       if (c.status === "requested" && !c.pull)
-        items.push({ key: `call:${c._id}`, kind: "call", name: nameOf.get(c.studentId) ?? "", room: c.room, repeat: true, teacher: c.teacher });
+        items.push({ key: `call:${c._id}`, kind: "call", name: nameOf.get(c.studentId) ?? "", room: c.room, repeat: true, teacher: c.teacher, consult: c.consult });
     // Sent to Theory 3 minutes ago and Theory hasn't tapped Arrived: where is he? (Again every 30 s until it's settled.)
     for (const c of board.calls)
       if (isWalking(c) && now - (c.sentAt ?? c.createdAt) >= WALK_MS)
-        items.push({ key: `lost:${c._id}`, kind: "lost", name: nameOf.get(c.studentId) ?? "", room: c.room, repeat: true, teacher: c.teacher });
+        items.push({ key: `lost:${c._id}`, kind: "lost", name: nameOf.get(c.studentId) ?? "", room: c.room, repeat: true, teacher: c.teacher, consult: c.consult });
     // A workbook student with every level handed in waits for Correction: knock once.
     for (const v of views)
       if (v.where === "hall" && v.noWork && v.ms?.needs.includes("correction"))

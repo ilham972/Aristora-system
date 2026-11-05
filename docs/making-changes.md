@@ -82,6 +82,14 @@ EOF
 
 ## Gotchas learned the hard way
 
+- **A consultation is an evaluation-room call with `consult: true`** (5 Nov 2026). Anything that lists a teacher's
+  Evaluation room must leave it out (`evalRoom`, `evalItems`), anything that bumps, pulls or sends a student must refuse
+  it (`calls.create`'s `inConsult`), and Correction's words and strips name only her (`callPhrase` `consult`,
+  `CallsBand`). A new place that reads `c.room === "evaluation"` as "with an Evaluation teacher": check `c.consult`.
+- **Fake timers + convex-test: every mutation of a test runs at the same millisecond** (+1). A rule like "done before
+  this consultation" (`since` = the call) can't tell them apart: move the clock (`vi.setSystemTime(Date.now() + MIN)`)
+  between "before" and the call, and compare saved times within half a second (`now()` in `tests/consult.test.ts`).
+
 - **A photo asked again comes back in the same row** (5 Nov 2026, the ⌂ lane): `family.photoSend` patches a retake's
   `homePhotos` row back to "waiting" with a new `at`. Anything that remembers "answered" or "seen" for a photo keys on
   its id AND `at` (`answered` in `src/homeLane.tsx`), or the re-sent photo stays hidden.

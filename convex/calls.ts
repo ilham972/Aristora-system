@@ -24,6 +24,15 @@ import { actor, allowed, viewer } from "./lib/auth";
 
 type Rejected = { studentId: Id<"students">; name: string; reason: string };
 
+/** Where a call goes, as the history says it: its room, or "consult" for a consultation (5 Nov 2026). */
+const placeWord = (c: Doc<"calls">) => (c.consult ? "consult" : c.room);
+
+/**
+ * Her own consultation (5 Nov 2026): the Consultation tick alone lets her say he arrived, let him go or finish, but only
+ * on the calls she made to herself from the Consultation page.
+ */
+const ownConsult = (user: Doc<"users">, c: Doc<"calls">) => !!c.consult && c.teacherId === user._id && allowed(user, "consult");
+
 /**
  * A room teacher calls one or more students.
  * Rules: theory beats evaluation. Theory can take a student straight from the
@@ -45,17 +54,26 @@ export const create = mutation({
     teacherId: v.optional(v.id("users")),
     /** With teacherId: a check-in (nothing waits for a teacher; she sees his book). The evaluation room only. */
     visit: v.optional(v.boolean()),
+    /**
+     * A consultation (5 Nov 2026): the caller calls them to herself from the top bar's Consultation page (the
+     * Consultation tick, or the owner). Any student here, even with nothing waiting; the evaluation room; kind = what
+     * she picked (Evaluation or Theory). Correction sends him as usual and says only her name.
+     */
+    consult: v.optional(v.boolean()),
     by: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    // A teacher calls for her own room (her job); the manager sends for any teacher.
-    const me = await actor(ctx, args.token, args.teacherId ? ["manager"] : [args.room], args.by);
+    // A teacher calls for her own room (her job); the manager sends for any teacher; a consultation needs its tick.
+    const consult = !!args.consult;
+    if (consult && (args.teacherId || args.visit)) fail("A consultation is a call to yourself.");
+    const me = await actor(ctx, args.token, consult ? ["consult"] : args.teacherId ? ["manager"] : [args.room], args.by);
     const now = Date.now();
     const by = cleanBy(args.by);
     const manager = !!args.teacherId;
     const visit = manager && !!args.visit;
     if (args.visit && !manager) fail("Only the manager sends a student for a check-in.");
     if (visit && (args.room !== "evaluation" || args.kind !== "evaluation")) fail("A check-in is in the evaluation room.");
+    if (consult && args.room !== "evaluation") fail("A consultation is in your own room: the evaluation room.");
     let teacher: Doc<"users"> = me;
     if (args.teacherId) {
       const t = await ctx.db.get(args.teacherId);
@@ -84,15 +102,16 @@ export const create = mutation({
       }
       const reject = (reason: string) => rejected.push({ studentId: id, name: s.name, reason });
       if (!s.present) { reject("isn't signed in. Ask Correction to sign them in first"); continue; }
-      const target = args.books?.find((b) => b.studentId === id);
+      const target = consult ? undefined : args.books?.find((b) => b.studentId === id);
       const place = target ? await bookPlace(ctx, s, target.unitId, target.stage) : await placeOf(ctx, s);
-      // A check-in needs no book in the app (Legend, Exam Sprint on paper: she looks at his paper).
-      if (!visit && (!place.book || !place.unit)) { reject(target ? "has no book in the app for that unit" : "has no book in the app for this stage"); continue; }
-      if (!visit && target && !place.progress) { reject(`has no work in ${place.unit!.code} yet`); continue; }
+      // A check-in or a consultation needs no book in the app (Legend, Exam Sprint on paper: she looks at his paper).
+      const open = visit || consult;
+      if (!open && (!place.book || !place.unit)) { reject(target ? "has no book in the app for that unit" : "has no book in the app for this stage"); continue; }
+      if (!open && target && !place.progress) { reject(`has no work in ${place.unit!.code} yet`); continue; }
       let section: string | undefined;
       // Called while he still had work (in any of his books): the teacher saw it coming (the room's "ahead" score).
       const dry = (await dryOf(ctx, s)).dry;
-      if (visit || !place.book) {
+      if (open || !place.book) {
         // A check-in: nothing has to wait for her; whatever she explains still counts.
       } else if (place.book.data.kind === "fighter") {
         const status = computeStatus(place.progress?.marks ?? {}, fighter(place.book.data));
@@ -111,20 +130,27 @@ export const create = mutation({
       let bumped = false;
       let bumpedFrom: Id<"users"> | undefined;
       const whose = (c: Doc<"calls">) => (c.teacher ? ` (${c.teacher})` : "");
-      if (manager && (active.length > 0 || s.room)) {
-        // The manager sends him now: never while a teacher has called him or has him (her call stays: send it).
+      // A consultation is one person's own time with him (5 Nov 2026): nobody bumps, pulls or joins it.
+      const inConsult = active.find((c) => c.consult);
+      if (inConsult) {
+        reject(`${inConsult.status === "requested" ? "is called to" : "is with"} ${inConsult.teacher ?? "someone"} (consultation)`);
+        continue;
+      }
+      if ((manager || consult) && (active.length > 0 || s.room)) {
+        // The manager sends him now, or she calls him to herself: never while a teacher has called him or has him (her
+        // call stays: the manager can send it).
         const c = active[0];
         const where = (r: string) => (r === "theory" ? "Theory" : "Evaluation");
         reject(
           c
             ? c.status === "requested"
-              ? `is already called to ${where(c.room)}${whose(c)}: send him there`
+              ? `is already called to ${where(c.room)}${whose(c)}${manager ? ": send him there" : ""}`
               : `is already with ${where(c.room)}${whose(c)}`
             : `is in ${where(s.room!)}`,
         );
         continue;
       }
-      if (manager) {
+      if (manager || consult) {
         // nothing to bump or pull: checked above
       } else if (args.room === "theory") {
         const theory = active.find((c) => c.room === "theory");
@@ -161,8 +187,9 @@ export const create = mutation({
         teacher: teacher.name,
         ...(manager ? { byManager: true } : {}),
         ...(visit ? { visit: true } : {}),
+        ...(consult ? { consult: true } : {}),
         ...(s.test ? { test: true } : {}),
-        ...(dry ? {} : { ahead: true }),
+        ...(dry || consult ? {} : { ahead: true }),
         createdAt: now,
         sessionId: session?._id,
       });
@@ -171,7 +198,9 @@ export const create = mutation({
         by,
         studentId: id,
         name: s.name,
-        value: `${args.room}${args.kind !== args.room ? "/" + args.kind : ""}${pull ? "/pull" : ""}${visit ? "/check-in" : ""}`,
+        value: consult
+          ? `consult${args.kind === "theory" ? "/theory" : ""}`
+          : `${args.room}${args.kind !== args.room ? "/" + args.kind : ""}${pull ? "/pull" : ""}${visit ? "/check-in" : ""}`,
       });
       if (manager) {
         // The manager sends him now: he walks to her, her phone calls her until she taps Arrived.
@@ -179,8 +208,9 @@ export const create = mutation({
         if (c) await sendNow(ctx, c, now, session, by);
       }
       created.push({ studentId: id, callId, pull, bumped });
-      // The simulation's students count in its practice score, never the class's.
-      await roomStats(ctx, s, session, args.room, { calls: 1, ahead: dry ? 0 : 1 });
+      // The simulation's students count in its practice score, never the class's. A consultation is the caller's own
+      // time with him, never the room's score.
+      if (!consult) await roomStats(ctx, s, session, args.room, { calls: 1, ahead: dry ? 0 : 1 });
     }
     await touch(ctx, session, now);
     return { created, rejected };
@@ -202,7 +232,7 @@ async function sendNow(ctx: MutationCtx, c: Doc<"calls">, now: number, session: 
   const s = await ctx.db.get(c.studentId);
   if (!s) return;
   await ctx.db.patch(s._id, { room: c.room });
-  await log(ctx, session, now, { kind: "sent", by, studentId: s._id, name: s.name, value: c.room });
+  await log(ctx, session, now, { kind: "sent", by, studentId: s._id, name: s.name, value: placeWord(c) });
   await refresh(ctx, s._id, now, session);
 }
 
@@ -244,7 +274,7 @@ export const decline = mutation({
     const session = await currentSession(ctx, now);
     await ctx.db.patch(c._id, { status: "declined", endedAt: now });
     const s = await ctx.db.get(c.studentId);
-    await log(ctx, session, now, { kind: "not-now", by: cleanBy(args.by), studentId: c.studentId, name: s?.name, value: c.room });
+    await log(ctx, session, now, { kind: "not-now", by: cleanBy(args.by), studentId: c.studentId, name: s?.name, value: placeWord(c) });
     await touch(ctx, session, now);
     return true;
   },
@@ -263,7 +293,7 @@ export const undoDecline = mutation({
     if ((await activeCalls(ctx, s._id)).length > 0) return false;
     const session = await currentSession(ctx, now);
     await ctx.db.patch(c._id, { status: "requested", endedAt: undefined });
-    await log(ctx, session, now, { kind: "not-now-undo", by: cleanBy(args.by), studentId: s._id, name: s.name, value: c.room });
+    await log(ctx, session, now, { kind: "not-now-undo", by: cleanBy(args.by), studentId: s._id, name: s.name, value: placeWord(c) });
     await touch(ctx, session, now);
     return true;
   },
@@ -279,12 +309,15 @@ const walking = (c: Doc<"calls">) => c.status === "sent" && !!c.walk && c.arrive
 export const cancel = mutation({
   args: { token: v.optional(v.string()), callIds: v.array(v.id("calls")), by: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    await actor(ctx, args.token, ["correction", "theory", "evaluation", "manager"], args.by);
+    const user = await actor(ctx, args.token, ["correction", "theory", "evaluation", "manager", "consult"], args.by);
+    // The Consultation tick alone: only her own consultations (5 Nov 2026).
+    const any = (["correction", "theory", "evaluation", "manager"] as const).some((p) => allowed(user, p));
     const now = Date.now();
     const session = await currentSession(ctx, now);
     for (const id of args.callIds) {
       const c = await ctx.db.get(id);
       if (!c || (c.status !== "requested" && !walking(c))) continue;
+      if (!any && !ownConsult(user, c)) fail("You can only cancel your own consultation.");
       const lost = walking(c);
       await ctx.db.patch(c._id, { status: "cancelled", endedAt: now });
       const s = await ctx.db.get(c.studentId);
@@ -297,7 +330,7 @@ export const cancel = mutation({
         by: cleanBy(args.by),
         studentId: c.studentId,
         name: s?.name,
-        value: c.room,
+        value: placeWord(c),
         ms: lost ? now - (c.sentAt ?? now) : undefined,
       });
     }
@@ -317,7 +350,7 @@ export const UNDO_ARRIVE_MS = 2 * 60_000;
 export const arrive = mutation({
   args: { token: v.optional(v.string()), callIds: v.array(v.id("calls")), by: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    const user = await actor(ctx, args.token, ["theory", "evaluation", "correction", "manager"], args.by);
+    const user = await actor(ctx, args.token, ["theory", "evaluation", "correction", "manager", "consult"], args.by);
     const now = Date.now();
     const by = cleanBy(args.by);
     const session = await currentSession(ctx, now);
@@ -326,7 +359,7 @@ export const arrive = mutation({
     for (const id of args.callIds) {
       const c = await ctx.db.get(id);
       if (!c || (c.status !== "requested" && c.status !== "sent")) continue;
-      if (!allowed(user, c.room) && !allowed(user, "correction") && !allowed(user, "manager")) {
+      if (!allowed(user, c.room) && !allowed(user, "correction") && !allowed(user, "manager") && !ownConsult(user, c)) {
         fail(`Only ${c.room === "theory" ? "Theory" : "Evaluation"}, Correction or the manager can say he is there.`);
       }
       const s = await ctx.db.get(c.studentId);
@@ -339,7 +372,7 @@ export const arrive = mutation({
         await sendNow(ctx, c, now, session, by); // he came by himself before Correction tapped Sent
       } else if (c.arrivedAt !== undefined) continue;
       await ctx.db.patch(c._id, { arrivedAt: now });
-      await log(ctx, session, now, { kind: "arrived", by, studentId: s._id, name: s.name, value: c.room, ms: now - (c.sentAt ?? now) });
+      await log(ctx, session, now, { kind: "arrived", by, studentId: s._id, name: s.name, value: placeWord(c), ms: now - (c.sentAt ?? now) });
       arrived++;
     }
     await touch(ctx, session, now);
@@ -351,16 +384,18 @@ export const arrive = mutation({
 export const unarrive = mutation({
   args: { token: v.optional(v.string()), callId: v.id("calls"), by: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    const user = await actor(ctx, args.token, ["theory", "evaluation", "correction", "manager"], args.by);
+    const user = await actor(ctx, args.token, ["theory", "evaluation", "correction", "manager", "consult"], args.by);
     const now = Date.now();
     const c = await ctx.db.get(args.callId);
     if (!c || c.status !== "sent" || c.arrivedAt === undefined) return false;
-    if (!allowed(user, c.room) && !allowed(user, "correction") && !allowed(user, "manager")) fail("Only the room's teacher, Correction or the manager can take that back.");
+    if (!allowed(user, c.room) && !allowed(user, "correction") && !allowed(user, "manager") && !ownConsult(user, c)) {
+      fail("Only the room's teacher, Correction or the manager can take that back.");
+    }
     if (now - c.arrivedAt > UNDO_ARRIVE_MS) fail("Too late to take that back.");
     await ctx.db.patch(c._id, { arrivedAt: undefined });
     const session = await currentSession(ctx, now);
     const s = await ctx.db.get(c.studentId);
-    await log(ctx, session, now, { kind: "arrived-undo", by: cleanBy(args.by), studentId: c.studentId, name: s?.name, value: c.room });
+    await log(ctx, session, now, { kind: "arrived-undo", by: cleanBy(args.by), studentId: c.studentId, name: s?.name, value: placeWord(c) });
     await touch(ctx, session, now);
     return true;
   },
@@ -419,7 +454,7 @@ export const finish = mutation({
     by: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const user = await actor(ctx, args.token, ["theory", "evaluation"], args.by);
+    const user = await actor(ctx, args.token, ["theory", "evaluation", "consult"], args.by);
     const now = Date.now();
     const by = cleanBy(args.by);
     const session = await currentSession(ctx, now);
@@ -430,9 +465,34 @@ export const finish = mutation({
       const c = await ctx.db.get(item.callId);
       if (!c || (c.status !== "sent" && c.status !== "requested")) continue;
       if (c.pull && c.status === "requested") continue; // still in the evaluation room
-      if (!allowed(user, c.room)) fail(`Only ${c.room === "theory" ? "Theory" : "Evaluation"} can finish this.`);
+      if (!allowed(user, c.room) && !ownConsult(user, c)) fail(`Only ${c.room === "theory" ? "Theory" : "Evaluation"} can finish this.`);
       const s = await ctx.db.get(c.studentId);
       if (!s) continue;
+      if (c.consult) {
+        // A consultation (5 Nov 2026): every Explained / → Theory / Taught was saved as she tapped it (consult.mark):
+        // Done only ends it. Never the room's score; he was seen by a teacher today (no "no teacher yet").
+        await ctx.db.patch(c._id, { status: "done", sentAt: c.sentAt ?? c.createdAt, endedAt: now });
+        await ctx.db.patch(s._id, {
+          room: s.room === c.room ? undefined : s.room,
+          lastActivityAt: now,
+          lastSeenAt: now,
+          consultAt: now,
+          seen: { ...s.seen, [c.room]: now },
+        });
+        const unit = c.unitId ? await ctx.db.get(c.unitId) : null;
+        await log(ctx, session, now, {
+          kind: "done-consult",
+          by,
+          studentId: s._id,
+          name: s.name,
+          unit: unit?.key,
+          value: c.kind,
+          ms: now - (c.arrivedAt ?? c.sentAt ?? c.createdAt),
+        });
+        await refresh(ctx, s._id, now, session);
+        done++;
+        continue;
+      }
       const { value, n } = await record(ctx, c, s, item, now, session, by);
       await roomStats(ctx, s, session, c.room, { done: 1, qs: n });
       if (c.room === "theory") lesson = s;

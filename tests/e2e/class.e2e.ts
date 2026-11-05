@@ -3836,6 +3836,175 @@ test("Whole class: the top bar's whiteboard; any grade, book, section or level; 
   expect(problems, problems.join("\n")).toEqual([]);
 });
 
+test("Consultation: the top bar's icon left of the whiteboard (the owner, the Consultation tick); his order with counts; Today and All; Call to herself (Correction says her name); Arrived; each tap saved at once; Theory in the same sitting; Done; a check-in", async () => {
+  const backend = await newClass();
+  const C = await phone(backend, "focus");
+  await C.getByRole("button", { name: "Settings" }).click();
+  await C.getByRole("button", { name: "Load demo students (three grades)" }).click();
+  await visible(C.getByText(/^14 demo students loaded/));
+  await C.getByRole("button", { name: "Back to the class" }).click();
+  const O = await phone(backend, "evaluation");
+
+  // The owner's top bar: Register, Progress, Owner, Consultation, Whole class (his place for it: left of the whiteboard).
+  await visible(O.locator(".top .cx-btn"));
+  const icons = await O.locator(".top-left > button").evaluateAll((els) => els.map((e) => (e.getAttribute("aria-label") ?? "").split(":")[0]));
+  expect(icons).toEqual(["Register", "Progress", "Owner", "Consultation", "Whole class"]);
+  expect(await topFits(O)).toBe(true);
+  await O.locator(".top .cx-btn").click();
+  const P = O.locator(".cx-page");
+  await visible(P);
+  // Evaluation first: today 9 questions for 5 students (nobody away has any: All the same).
+  await contains(P.locator(".tp-kind.on"), "Evaluation");
+  await says(P.locator(".cx-sum"), "Today 9 · 5 students");
+  await says(P.locator(".cx-sum"), "All 9 · 5");
+  // His order: the most to explain first, then everyone else A–Z. A red ring: no work (Vimal, Fathima; Rizwan waits for
+  // Theory: nothing to explain, still red).
+  await until(async () => (await namesOf(P.locator(".cx-nm"))).length === 13, "the 13 here");
+  expect(await namesOf(P.locator(".cx-nm"))).toEqual(["Malik", "Vimal", "Kumar", "Fathima", "Dilan", "Ahamed", "Nila", "Priya", "Rizwan", "Sana", "Tharun", "Yasmin", "Zainab"]);
+  expect(await P.locator(".cx-nm").evaluateAll((els) => els.slice(0, 5).map((e) => e.querySelector(".cx-n")?.textContent))).toEqual(["3", "2", "2", "1", "1"]);
+  expect(await namesOf(P.locator(".cx-nm.red"))).toEqual(["Vimal", "Fathima", "Rizwan"]);
+  expect(await O.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(O, "cx01-consultation");
+
+  // Tick Malik: his questions to prepare (Q4, Q13, Q17) and the answer; nothing to decide before he comes.
+  await P.locator(".cx-nm", { hasText: "Malik" }).click();
+  await visible(P.locator('.evx-sp.s-sug.on[data-name="Malik"]'));
+  await textsAre(P.locator(".evx-strip .fc-sq small"), ["4", "13", "17"]);
+  await contains(P.locator(".evx-card .fc-qn"), "4");
+  await visible(P.locator(".evx-card .fc-ans"));
+  await until(async () => await P.locator(".fc-go.evx-x").isDisabled(), "Explained waits for him");
+  await P.locator(".evx-call").click();
+  await contains(O.locator(".toast"), "Called Malik. Correction sends him to you.");
+  await visible(P.locator('.evx-sp.s-call[data-name="Malik"]'));
+  await count(P.locator('.cx-nm[data-name="Malik"]'), 0);
+  // Correction's phone: only her name (his answer, 5 Nov 2026), a strip of its own with Sent.
+  await hears(C, "Malik, go to Owner.");
+  const strip = C.locator(".call-strip", { hasText: "Consultation" });
+  await visible(strip);
+  await strip.getByRole("button", { name: "Sent" }).click();
+  await visible(P.locator('.evx-sp.s-walk[data-name="Malik"]'));
+  // Another teacher can't take him now (nobody bumps, pulls or sends a consultation).
+  await addPerson(backend.t, { name: "Nila T", token: "nila-phone-token-0123456789abcdefghijklmnopqrstuvwx", tabs: ["evaluation"] });
+  const malikId = (await marksOf(backend, "Malik"))._id;
+  const r = await backend.t.mutation(api.calls.create, {
+    token: "nila-phone-token-0123456789abcdefghijklmnopqrstuvwx",
+    studentIds: [malikId],
+    room: "evaluation",
+    kind: "evaluation",
+    by: "evaluation",
+  });
+  expect(r.rejected.map((x) => x.reason)).toEqual(["is with Owner (consultation)"]);
+
+  // He walks in: Arrived. Q4 explained (saved at once: gone from Evaluation's list), the next opens by itself.
+  await P.locator(".evx-arrive").click();
+  await contains(O.locator(".toast"), "Malik is here.");
+  await visible(P.locator('.evx-sp.s-in[data-name="Malik"]'));
+  await contains(P.locator(".evx-card .fc-qn"), "4");
+  await P.locator(".fc-go.evx-x").click();
+  await contains(P.locator(".evx-card .fc-qn"), "13");
+  await until(async () => (await marksOf(backend, "Malik")).m?.q["4"]?.x !== undefined, "Q4 explained on the server");
+  await count(P.locator(".evx-strip .fc-sq.d-x"), 1);
+  await says(P.locator(".cx-sum"), "Today 8 · 5 students");
+  // Q13 → Theory (T); Q17 Not now (it stays waiting for the Evaluation teachers).
+  await P.locator(".fc-n.evx-b.th").click();
+  await contains(P.locator(".evx-card .fc-qn"), "17");
+  await until(async () => (await marksOf(backend, "Malik")).m?.q["13"]?.tb === "consult", "Q13 sent to Theory here");
+  await P.locator(".fc-n.evx-b.skip").click();
+  await count(P.locator(".evx-strip .fc-sq.d-th"), 1);
+  await count(P.locator(".evx-strip .fc-sq.d-skip"), 1);
+  // A square tapped again: back. Explained on Q4 again = not explained.
+  await P.locator(".evx-strip .fc-sq").first().click();
+  await contains(P.locator(".evx-card .fc-qn"), "4");
+  await P.locator(".fc-go.evx-x").click();
+  await until(async () => (await marksOf(backend, "Malik")).m?.q["4"]?.x === undefined, "Q4 explained, undone");
+  await P.locator(".fc-go.evx-x").click(); // and explained after all
+  await until(async () => (await marksOf(backend, "Malik")).m?.q["4"]?.x !== undefined, "Q4 explained again");
+  await shot(O, "cx02-with-him");
+
+  // His Evaluation tab never shows the consultation in her Evaluation room.
+  await O.locator(".tabs .tab.evaluation").click();
+  await visible(O.locator(".evx-page:not(.cx-page)"));
+  await count(O.locator('.evx-page .evx-sp.s-in[data-name="Malik"]'), 0);
+  await visible(O.locator(".top .cx-btn .cx-badge"));
+  await O.locator(".top .cx-btn").click();
+  await visible(P);
+
+  // Theory in the same sitting: Q13 (sent to Theory just now) is his to teach; Taught saves it.
+  await P.locator(".tp-kind", { hasText: "Theory" }).click();
+  await contains(P.locator(".tp-kind.on"), "Theory");
+  await textsAre(P.locator(".evx-strip .fc-sq small"), ["13"]);
+  await contains(P.locator(".fc-go.evx-x"), "Taught");
+  await P.locator(".fc-go.evx-x").click();
+  await until(async () => (await marksOf(backend, "Malik")).m?.q["13"]?.tt !== undefined, "Q13 taught here");
+  await count(P.locator(".evx-strip .fc-sq.d-x"), 1);
+  await shot(O, "cx03-theory");
+  await P.locator(".tp-kind", { hasText: "Evaluation" }).click();
+
+  // Done: back to work; what he didn't reach (Q17) stays for the teachers. The history says where it happened.
+  await P.locator(".evx-done").click();
+  await contains(O.locator(".toast"), "Malik back to work.");
+  await visible(P.locator('.cx-nm[data-name="Malik"]'));
+  const malik = await marksOf(backend, "Malik");
+  expect(malik.room).toBeUndefined();
+  expect(malik.consultAt).toBeDefined();
+  expect(malik.m?.q["17"]?.x).toBeUndefined();
+  const ev = await backend.t.run(async (ctx) => (await ctx.db.query("events").collect()).filter((e) => e.kind === "consult" || e.kind === "done-consult"));
+  expect(ev.map((e) => [e.kind, e.q ?? null, e.value])).toEqual([
+    ["consult", 4, "explained"],
+    ["consult", 13, "to-theory"],
+    ["consult", 4, "unexplained"],
+    ["consult", 4, "explained"],
+    ["consult", 13, "taught"],
+    ["done-consult", null, "evaluation"],
+  ]);
+  // Never the Evaluation room's score.
+  const st = await backend.t.run(async (ctx) => (await ctx.db.query("sessions").withIndex("by_open", (q) => q.eq("open", true)).first())!.stats ?? {});
+  expect(st.evaluation?.calls ?? 0).toBe(0);
+
+  // A check-in: Priya has nothing waiting; she comes, they talk, Done.
+  await P.locator(".cx-nm", { hasText: "Priya" }).click();
+  await P.locator(".evx-call").click();
+  await contains(O.locator(".toast"), "Called Priya.");
+  await hears(C, "Priya, go to Owner.");
+  await C.locator(".call-strip", { hasText: "Consultation" }).getByRole("button", { name: "Sent" }).click();
+  await P.locator('.evx-sp[data-name="Priya"]').click();
+  await O.locator(".sheet").getByRole("button", { name: "Arrived" }).click();
+  await contains(P.locator(".evx-hint"), "a check-in");
+  await P.locator(".evx-done").click();
+  await contains(O.locator(".toast"), "Priya back to work.");
+  // Settings → History says it.
+  await O.getByRole("button", { name: /^Settings/ }).click();
+  await O.getByRole("button", { name: "History", exact: true }).click();
+  await visible(O.getByText("Q4 explained in consultation").first());
+  await visible(O.getByText("consultation finished").first());
+  await O.getByRole("button", { name: /^Settings/ }).click();
+
+  // The smallest phone: five icons, the count, the clock and Settings in one row; the page fits.
+  const S = await phone(backend, "evaluation", { ...PHONE, viewport: { width: 320, height: 568 } });
+  await visible(S.locator(".top .cx-btn"));
+  expect(await topFits(S), "the owner's five icons fit at 320 px").toBe(true);
+  await S.locator(".top .cx-btn").click();
+  await visible(S.locator(".cx-page .cx-nm").first());
+  expect(await S.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(S, "cx04-consultation-320");
+  await S.context().close();
+
+  // The Consultation tick alone: the icon (and nothing of the rooms); a corrector without it: no icon.
+  await addPerson(backend.t, { name: "Rani", token: "rani-phone-token-0123456789abcdefghijklmnopqrstuvwx", tabs: [], can: ["consult"] });
+  const R = await phone(backend, "hall", PHONE, "rani-phone-token-0123456789abcdefghijklmnopqrstuvwx");
+  await visible(R.locator(".top .cx-btn"));
+  await count(R.getByRole("button", { name: /^Whole class/ }), 0);
+  await R.locator(".top .cx-btn").click();
+  await visible(R.locator(".cx-page .cx-nm").first());
+  await R.context().close();
+  await addPerson(backend.t, { name: "Kavi", token: "kavi-phone-token-0123456789abcdefghijklmnopqrstuvwx", tabs: ["correction"] });
+  const K = await phone(backend, "focus", PHONE, "kavi-phone-token-0123456789abcdefghijklmnopqrstuvwx");
+  await visible(K.locator(".top-left .class-btn"));
+  await count(K.locator(".top .cx-btn"), 0);
+  await K.context().close();
+  expect(problems, problems.join("\n")).toEqual([]);
+});
+
 // Last in this file: it loads a page again (5 Nov 2026, his upload refused by the teachers' app open since the night
 // before). The page online names other code than this copy runs: a newer version went out while it was open.
 test("Update: an older copy of the app says so at the upload, and Update opens Settings → Books again", async () => {

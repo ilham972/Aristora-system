@@ -34,8 +34,18 @@ export const partId = v.union(
 /** The three working tabs (rooms) a teacher can be allowed. */
 /** The jobs (bottom tabs). Manager (3 Nov 2026): the hall and every room, sending students to any teacher. */
 export const tab = v.union(v.literal("correction"), v.literal("theory"), v.literal("evaluation"), v.literal("manager"));
-/** Extra permissions beyond the tabs. Feedback (3 Nov 2026, his answer): reads what students send from the family app. */
-export const extra = v.union(v.literal("students"), v.literal("books"), v.literal("reports"), v.literal("feedback"), v.literal("photos"));
+/**
+ * Extra permissions beyond the tabs. Feedback (3 Nov 2026, his answer): reads what students send from the family app.
+ * Consultation (5 Nov 2026, his ask): the top bar's Consultation page: call any student here to herself, one to one.
+ */
+export const extra = v.union(
+  v.literal("students"),
+  v.literal("books"),
+  v.literal("reports"),
+  v.literal("feedback"),
+  v.literal("photos"),
+  v.literal("consult"),
+);
 /** What a family app feedback is about (3 Nov 2026). */
 export const feedbackTopic = v.union(
   v.literal("class"),
@@ -283,6 +293,8 @@ export default defineSchema({
     lastSeenAt: v.optional(v.number()),
     /** Last time each room finished with him: "not seen today" goes first on the Evaluation and Theory pages. */
     seen: v.optional(v.object({ theory: v.optional(v.number()), evaluation: v.optional(v.number()) })),
+    /** His last consultation's Done (5 Nov 2026): the Consultation page puts the one not seen longest first. */
+    consultAt: v.optional(v.number()),
     /** Idle tracking for the end-of-session report. */
     idleSince: v.optional(v.number()),
     idleReason: v.optional(v.string()),
@@ -472,6 +484,13 @@ export default defineSchema({
     byManager: v.optional(v.boolean()),
     /** A check-in (3 Nov 2026): nothing waits for a teacher, the manager wants a teacher to see him (no teacher yet). */
     visit: v.optional(v.boolean()),
+    /**
+     * A consultation (5 Nov 2026, his ask): the owner or a Consultation person called him to herself from the top bar's
+     * Consultation page, any student here, nothing has to wait for her. Always the evaluation room (kind = what she picked:
+     * Evaluation or Theory); her taps are saved one by one (`consult.mark`), Done records nothing more. Theory never
+     * bumps or pulls him from it; Correction's phone says only her name ("Kumar, go to Ilham.").
+     */
+    consult: v.optional(v.boolean()),
     endedAt: v.optional(v.number()),
     sessionId: v.optional(v.id("sessions")),
   })

@@ -35,6 +35,18 @@ describe("what the phones say", () => {
     expect(lostPhrase([{ name: "Kumar", room: "theory", teacher: "Fathima" }])).toBe("Kumar hasn't reached Fathima in Theory.");
   });
 
+  test("a consultation: only her name (his answer, 5 Nov 2026: \"Kumar, go to Ilham.\"), apart from her Evaluation room", () => {
+    expect(callPhrase([{ name: "Kumar", room: "evaluation", teacher: "Ilham", consult: true }])).toBe("Kumar, go to Ilham.");
+    expect(
+      callPhrase([
+        { name: "Kumar", room: "evaluation", teacher: "Ilham", consult: true },
+        { name: "Raj", room: "evaluation", teacher: "Ilham" },
+        { name: "Zara", room: "evaluation", teacher: "Ilham", consult: true },
+      ]),
+    ).toBe("Kumar and Zara, go to Ilham. Raj, go to Ilham in Evaluation.");
+    expect(lostPhrase([{ name: "Kumar", room: "evaluation", teacher: "Ilham", consult: true }])).toBe("Kumar hasn't reached Ilham.");
+  });
+
   test("Evaluation hears who Theory is taking", () => {
     expect(pullPhrase(["Kumar"])).toBe("Theory wants Kumar now.");
     expect(pullPhrase([])).toBe("");

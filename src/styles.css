@@ -10870,3 +10870,110 @@ body.tm-on .toasts {
   flex-wrap: wrap;
   gap: 6px;
 }
+
+/* ---------- Consultation (5 Nov 2026, his voice note): the top bar's icon, left of the whiteboard, with a corner
+   count (his consultation's students); the page = the Evaluation page's pieces (.evx-*, Theory's blue with .tpx-page)
+   with its own head: Today / All under Evaluation | Theory, and the students here as one row of pills, the most
+   waiting first (src/consult.tsx). ---------- */
+.cx-btn {
+  position: relative;
+  padding: 0 10px;
+}
+.cx-badge {
+  position: absolute;
+  top: -6px;
+  right: -7px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--evaluation);
+  color: #fff;
+  font: 700 11px/18px var(--font);
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--card);
+}
+.cx-sum {
+  margin: 6px 2px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.cx-sum b {
+  font-size: 16px;
+  color: var(--ink);
+}
+.cx-namebox {
+  min-height: 38px;
+}
+.cx-names {
+  gap: 5px;
+  padding: 4px 2px;
+}
+.cx-names .cx-nm {
+  flex: none;
+}
+.cx-n {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--evaluation-soft);
+  color: var(--evaluation-ink);
+  font: 700 11.5px/1 var(--font);
+  font-style: normal;
+}
+.tpx-page .cx-n {
+  background: var(--theory-soft);
+  color: var(--theory-ink);
+}
+.fc-nm.red .cx-n {
+  background: var(--red);
+  color: #fff;
+}
+.fc-nm.on .cx-n {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+/* Another teacher has him: pale, her name small (he can't be called now). */
+.fc-nm.cx-busy {
+  opacity: 0.45;
+  border-style: dashed;
+}
+.fc-nm.cx-busy small {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-3);
+}
+.cx-none {
+  padding: 8px 2px;
+}
+/* Five icons on the left (the owner: Register, Progress, Owner, Consultation, Whole class): closer still on phones,
+   so the count, the clock and Settings keep their place (topFits in the run-through). */
+@media (max-width: 400px) {
+  .top-left.five {
+    gap: 2px;
+  }
+  .top-left.five .att-btn {
+    padding: 0 4px;
+  }
+  .top-left.five .att-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+}
+@media (max-width: 345px) {
+  .top-left.five .att-btn {
+    padding: 0 3px;
+  }
+  .top-left.five .att-btn svg {
+    width: 17px;
+    height: 17px;
+  }
+}
