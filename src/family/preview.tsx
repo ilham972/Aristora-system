@@ -3,14 +3,16 @@
 // teachers). Opened from the class system (Settings → Books → a unit → Preview on the phone) on the same address
 // (system.aristora.org/f/#preview=<unit>), so it uses his teachers' sign-in: every level of the Stage open, each
 // question as a student sees it (the real level screen, `Play`), Check off. The server side is queries only
-// (convex/preview.ts, the owner's); net.ts sends nothing else while it is on. Not in the first load: it comes with the
-// parts after the first screen (src/family/parts.ts), and only main.tsx's #preview= starts it.
+// (convex/preview.ts, the owner's), and one change of his: a question's free marks, out of the syllabus (the switch
+// under each question, play.tsx `FreeSwitch`); net.ts sends nothing else while it is on. Not in the first load: it
+// comes with the parts after the first screen (src/family/parts.ts), and only main.tsx's #preview= starts it.
 import { render } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import type { PreviewUnit } from "../../convex/preview";
 import { hideSplash } from "../splash";
 import { lookWith, query, words } from "./net";
 import { Play, QuestionZoom, type Zoomed } from "./play";
+import { Toast } from "./ui";
 
 /** Back to the class system, on Settings → Books (its `takeReopen`). */
 function back(): void {
@@ -30,7 +32,13 @@ export function startPreview(unitId: string, el: HTMLElement): void {
     /* private mode */
   }
   lookWith(t ?? "");
-  render(<Preview unitId={unitId} />, el);
+  render(
+    <>
+      <Preview unitId={unitId} />
+      <Toast />
+    </>,
+    el,
+  );
 }
 
 function Preview(props: { unitId: string }) {
@@ -38,6 +46,8 @@ function Preview(props: { unitId: string }) {
   const [err, setErr] = useState<string | null>(null);
   const [n, setN] = useState<number | null>(null);
   const [zoomed, setZoomed] = useState<Zoomed | null>(null);
+  // Back from a level: the list again (its free marks may have changed there).
+  const [ver, setVer] = useState(0);
   useEffect(() => {
     query("preview:unit", { unitId: props.unitId })
       .then((u) => setUnit(u as PreviewUnit))
@@ -46,11 +56,23 @@ function Preview(props: { unitId: string }) {
         setErr(/signed out/i.test(w) ? "Sign in to the class system on this phone first (as the owner), then open Preview from Settings → Books." : /This needs/.test(w) ? "Preview is for the owner only." : w);
       })
       .finally(() => hideSplash());
-  }, []);
+  }, [ver]);
   if (unit && n !== null) {
     return (
       <>
-        <Play key={n} world={unit.world} n={n} look onBack={() => setN(null)} onChecked={() => {}} onMarked={() => {}} onZoom={setZoomed} />
+        <Play
+          key={n}
+          world={unit.world}
+          n={n}
+          look
+          onBack={() => {
+            setN(null);
+            setVer((x) => x + 1);
+          }}
+          onChecked={() => {}}
+          onMarked={() => {}}
+          onZoom={setZoomed}
+        />
         {zoomed && <QuestionZoom {...zoomed} onClose={() => setZoomed(null)} />}
       </>
     );
@@ -62,7 +84,7 @@ function Preview(props: { unitId: string }) {
         <h2 class="f-h2">{unit ? `Stage ${unit.world.no} · ${unit.world.ta}` : "Preview"}</h2>
         <p class="f-muted small">
           {unit ? `Grade ${unit.grade} · ${unit.code} ${unit.world.en}. ` : ""}Every level open, as a student sees it. Check is off:
-          nothing is sent or saved.
+          nothing is sent or saved. Under each question: free marks for everyone, for a question out of the syllabus.
         </p>
         <button type="button" class="f-btn ghost" onClick={back}>
           Back to the class system
@@ -80,6 +102,7 @@ function Preview(props: { unitId: string }) {
               <span>Level {l.n}</span>
               <small style={{ font: "inherit", fontWeight: 600, fontSize: "14px", opacity: 0.8 }}>
                 Q{l.from}–{l.to} · {l.max} marks{l.qs < l.to - l.from + 1 ? ` · ${l.qs} on the phone` : ""}
+                {l.free ? ` · 🎁 ${l.free} free` : ""}
               </small>
             </button>
           ))}

@@ -294,8 +294,10 @@ export function CorrectSheet(props: { v: View; level: number; now: number; onClo
   const lv = l ? v.mm.lv[String(l.n)] : undefined;
   const each = mb && l ? levelOutOf(mb, l) : null;
   const qs = l ? Array.from({ length: l.to - l.from + 1 }, (_, i) => l.from + i) : [];
+  // Free marks (out of the syllabus, the owner's Preview): their marks given, no buttons (the server gives them anyway).
+  const free = (q: number) => !!each && !!mb?.free?.includes(q);
   const [got, setGot] = useState<Record<number, number | null>>(() =>
-    Object.fromEntries(qs.map((q) => [q, lv?.fixed ? (v.mm.q[String(q)]?.got ?? null) : null])),
+    Object.fromEntries(qs.map((q, i) => [q, free(q) ? each![i] : lv?.fixed ? (v.mm.q[String(q)]?.got ?? null) : null])),
   );
   const [lost, setLost] = useState<Record<number, boolean>>(() =>
     Object.fromEntries(qs.map((q) => [q, lv?.fixed ? !!v.mm.q[String(q)]?.lost : false])),
@@ -315,11 +317,11 @@ export function CorrectSheet(props: { v: View; level: number; now: number; onClo
   const answer = new Map((keyQ?.answers ?? []).map((a) => [a.q, a]));
   if (!mb || !l) return null;
 
-  const sum = each ? qs.reduce((a, q) => a + (got[q] ?? 0), 0) : Number(total || 0);
-  const complete = each ? qs.every((q) => got[q] !== null && got[q] !== undefined) : total !== "" && Number.isInteger(Number(total));
+  const sum = each ? qs.reduce((a, q, i) => a + (free(q) ? each[i] : (got[q] ?? 0)), 0) : Number(total || 0);
+  const complete = each ? qs.every((q) => free(q) || (got[q] !== null && got[q] !== undefined)) : total !== "" && Number.isInteger(Number(total));
   const pct = Math.round((sum / l.max) * 100);
   // Lost marks (not "?"): Evaluation explains them, or Theory teaches again (only when the corrector picks it).
-  const lostQs = each ? qs.filter((q, i) => got[q] !== null && got[q] !== undefined && got[q]! < each[i] && !dk[q]) : qs.filter((q) => lost[q]);
+  const lostQs = each ? qs.filter((q, i) => !free(q) && got[q] !== null && got[q] !== undefined && got[q]! < each[i] && !dk[q]) : qs.filter((q) => lost[q]);
   const dkQs = each ? qs.filter((q) => dk[q]) : [];
   const route = to === "theory" ? "theory" : "evaluation";
 
@@ -331,7 +333,7 @@ export function CorrectSheet(props: { v: View; level: number; now: number; onClo
         unitId: v.s.unitId,
         level: l.n,
         items: each
-          ? qs.map((q) => (dk[q] ? (dkp[q]?.length ? { q, got: got[q] ?? 0, dk: true, dkp: dkp[q] } : { q, got: 0, dk: true }) : { q, got: got[q]! }))
+          ? qs.map((q, i) => (free(q) ? { q, got: each[i] } : dk[q] ? (dkp[q]?.length ? { q, got: got[q] ?? 0, dk: true, dkp: dkp[q] } : { q, got: 0, dk: true }) : { q, got: got[q]! }))
           : qs.map((q) => ({ q, lost: lost[q] })),
         total: each ? undefined : Number(total),
         to: route,
@@ -404,6 +406,16 @@ export function CorrectSheet(props: { v: View; level: number; now: number; onClo
         <ul class="ct-list">
           {qs.map((q, i) => {
             const max = each[i];
+            if (free(q)) {
+              return (
+                <li key={q} class="ct-row">
+                  <span class="ct-q">Q{q}</span>
+                  <span class="ct-free">
+                    Free marks · {max} / {max} <small>(out of the syllabus)</small>
+                  </span>
+                </li>
+              );
+            }
             return (
               <li key={q} class="ct-row">
                 <span class="ct-q">Q{q}</span>

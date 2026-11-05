@@ -1285,9 +1285,32 @@ learning app of our education institute"): one profile, his class times, what he
   Server: `convex/preview.ts` (`unit`, `level`, `questions`), queries only (nothing can be written), `viewer(…,
   "owner")`, the same form as `family.level` without a student (no questions coming back, no locks; a change to one
   goes to the other). The phone side sends nothing else while it is on (`lookWith` in `net.ts`: only these three reads
-  go out, with his token; what it keeps is under `look`, apart from any child). On app.aristora.org there is no
-  teachers' sign-in: the server says no. It lives in the family's later parts (`parts.ts`): its own file split the
-  level screen's code out of the first load (+1.2 KB). Tute ladders (n < 0) aren't in it yet.
+  go out, with his token, and his free marks below; what it keeps is under `look`, apart from any child). On
+  app.aristora.org there is no teachers' sign-in: the server says no. It lives in the family's later parts
+  (`parts.ts`): its own file split the level screen's code out of the first load (+1.2 KB). Tute ladders (n < 0)
+  aren't in it yet.
+- **Free marks for a question out of the syllabus** (5 Nov 2026, his ask: the past papers have questions his students
+  can't do; removing them would change the printed book's numbers, so "we have to make that as a all marks question
+  ... giving free marks for that without doing"; his answers: the students who did its level already get them too,
+  and Correction gives them in class). In his Preview, under every question: **🎁 Free marks for everyone (N)**, asked
+  once more ("Yes, free marks"), and **Take back the free marks** on a free one (`FreeSwitch` in `play.tsx`; the
+  only change `net.ts` lets out in Preview). Server `preview.setFree` (the owner only; every question of its level
+  must have its marks): the workbook's `data.free` lists them (kept when the same book is uploaded again, gone with a
+  book of other questions); **every student's level marked already gets the marks at once** (`setFreeIn`: the
+  question's row becomes full marks, `fr` keeps the row before, the level's `got` follows, so XP, the race, reports,
+  Evaluation and Theory all follow with no rule of their own; taking it back puts the row and the total back), and
+  his "out of work" clock follows (`refresh`). Its photos waiting for a teacher close (`homePhotos.free`: he leaves
+  Correction's ⌂ lane and Settings → Photos' count if nothing else waits; a teacher who still had his card open is
+  told "This question is free marks now" at Save or Retake; taken back, they wait again, or go if their files went: he
+  is asked again). Only a workbook **with an answer key** has a Preview, so only those have the switch; a unit
+  without a key gets it once it is digitized (Correction would honour `free` on any workbook). **A level marked later**: the phone shows no
+  question to do but a gift (`FreeCard`: confetti, "இலவசப் புள்ளிகள்! இந்தக் கேள்வி உன் பாடத்திட்டத்தில் இல்லை …",
+  → goes on; a gold chip), its marks at Check (`free: true` in the result: 🎁 on its row, and in the level's book);
+  Correction opens the level with its marks given (`withFree`: the strip's box gold and dashed, its card says "Free
+  marks … nothing to mark", the big button only goes on; the Class page's level sheet shows "Free marks" in place of
+  its buttons) and the server gives them whatever is tapped (`workbook.correct`). It never comes back in a later level. Settings → Books lists the free questions under the
+  phone's share; the history: "Q55: free marks for everyone (out of the syllabus), 12 students who did its level got
+  them now".
 - **What he typed is kept** (4 Nov 2026, his idea: "show the wrong answer most students put"): every Check saves a row
   in `familyAnswers` (student, unit, level, time; each question with boxes: his answers as typed and which boxes were
   right). Nothing reads it yet; after a few weeks it gives each question's most common wrong answers (a hint after

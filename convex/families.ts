@@ -264,6 +264,8 @@ export const answers = query({
     const keys = await phoneKeyFor(ctx, args.unitId, data, key.answers);
     return {
       share: phoneShare(keys),
+      // The owner's free marks (out of the syllabus, his Preview): listed with the book.
+      free: data.free ?? [],
       qs: [...keys.values()].map((k) => ({
         q: k.q,
         max: k.max,

@@ -42,7 +42,8 @@ import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/s
 import { feedbackTopic } from "./schema";
 import { checkToken, familyActor, familyOf, familyViewer, FAMILY_SIGNED_OUT, secretHash } from "./lib/auth";
 import { asMaster, bookFor, cleanName, currentSession, ensureProgress, fail, keyRow, log, masterState, progressFor, refresh } from "./lib/backend";
-import { partOf } from "./lib/book";
+import { outOf, partOf, type MasterData, type MasterLevel } from "./lib/book";
+import { freeRow, isFree } from "./lib/free";
 import {
   bestStreak,
   CODE_FAILS,
@@ -365,7 +366,7 @@ export type FamilyLevel = {
    * Its questions, then the ones that came back (`re` = the level he got it wrong in, `rb` = marks to win back);
    * `t` = a ladder's teacher question: done with the teacher, or Learn first (4 Nov 2026).
    */
-  qs: (FormQ & { part: string; re?: number; rb?: number; t?: true })[];
+  qs: (FormQ & { part: string; re?: number; rb?: number; t?: true; free?: true })[];
 };
 
 // ---- A topic tute's ladder on the phone (4 Nov 2026): n < 0 = its sections (-1 = A), before the past papers ----
@@ -423,12 +424,7 @@ export const level = query({
       return { unitId: world.unitId, no: world.no, ta: world.ta, n: args.n, d: -args.n, max: qs.reduce((a, q) => a + q.max, 0), qs };
     }
     const { world, data, level: l, keys } = await playable(ctx, s, args.unitId, args.n);
-    // The owner's Preview builds the same form without a student (convex/preview.ts): a change here goes there too.
-    const qs: FamilyLevel["qs"] = [];
-    for (let q = l.from; q <= l.to; q++) {
-      const k = keys.get(q);
-      if (k) qs.push({ ...formOf(k), part: partOf(data, q)?.id ?? "" });
-    }
+    const qs = levelForm(data, keys, l); // the owner's Preview shows the same (convex/preview.ts)
     // The questions that come back (his idea, 4 Nov 2026): wrong 2+ levels ago, a second try now.
     const p = await progressFor(ctx, s._id, world.unitId, "master");
     for (const r of p ? retryPool(masterState(p), data, keys, l.n) : []) {
@@ -437,6 +433,21 @@ export const level = query({
     return { unitId: world.unitId, no: world.no, ta: world.ta, n: l.n, max: l.max, qs };
   },
 });
+
+/**
+ * A level's own questions as the phone shows them: each with its boxes (the key's kinds), or free marks (out of the
+ * syllabus, the owner's: no boxes, its marks given, lib/free.ts). Shared with the owner's Preview.
+ */
+export function levelForm(data: MasterData, keys: Map<number, KeyQ>, l: MasterLevel): FamilyLevel["qs"] {
+  const qs: FamilyLevel["qs"] = [];
+  for (let q = l.from; q <= l.to; q++) {
+    const k = keys.get(q);
+    const part = partOf(data, q)?.id ?? "";
+    if (isFree(data, q)) qs.push({ q, max: outOf(data, q) ?? k?.max ?? 0, parts: [], part, free: true });
+    else if (k) qs.push({ ...formOf(k), part });
+  }
+  return qs;
+}
 
 export type FamilyResult = {
   q: number;
@@ -447,6 +458,8 @@ export type FamilyResult = {
   got: number | null;
   /** What the phone gave on the parts it marked. */
   phoneGot: number;
+  /** Free marks: out of the syllabus, its marks his without doing it (the owner's, 5 Nov 2026). */
+  free?: true;
 };
 
 function copy(m: MState): MState {
@@ -546,6 +559,15 @@ export const check = mutation({
     const said: number[] = [];
     for (let q = l.from; q <= l.to; q++) {
       const k = keys.get(q);
+      if (isFree(data, q)) {
+        // Out of the syllabus (the owner's free marks, 5 Nov 2026): its marks without doing it.
+        const max = outOf(data, q) ?? k?.max ?? 0;
+        results.push({ q, max, ok: [], got: max, phoneGot: max, free: true });
+        rows[String(q)] = freeRow(max, m.q[String(q)], now);
+        got += max;
+        phoneMax += max;
+        continue;
+      }
       if (!k) continue;
       if (stale(q, k)) {
         results.push({ q, max: k.max, ok: k.parts.map(() => null), got: null, phoneGot: 0 });

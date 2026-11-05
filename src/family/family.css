@@ -4066,6 +4066,51 @@ p {
   color: var(--gold-ink);
   text-align: center;
 }
+/* Free marks (5 Nov 2026): a question out of the syllabus. A gift instead of the question, a gold chip, its row. */
+.f-qchip.free {
+  background: var(--gold-soft);
+  color: var(--gold-ink);
+  box-shadow: none;
+}
+.f-free {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 22px 16px 18px;
+  border-radius: 18px;
+  background: linear-gradient(160deg, var(--gold-soft), #fff 75%);
+  box-shadow: inset 0 0 0 2px var(--gold-hi);
+  text-align: center;
+}
+.f-free .f-confetti {
+  top: 44px;
+}
+.f-free-gift {
+  font-size: 54px;
+  line-height: 1;
+  animation: f-pop 0.5s var(--spring) both, f-bob 2.4s 0.5s ease-in-out infinite;
+}
+.f-free-h {
+  font: 800 22px/1.2 var(--display);
+  color: var(--gold-ink);
+}
+.f-free p {
+  margin: 0;
+  font-size: 15px;
+  color: var(--ink2);
+}
+.f-sum .free {
+  color: var(--gold-ink);
+}
+.f-rmarks i.g {
+  background: var(--gold-soft);
+}
+.f-bq-free {
+  margin-top: 6px;
+  color: var(--gold-ink);
+}
 /* A tute's teacher question (4 Nov 2026): the tag, the choice (done with the teacher / Learn), the steps one a tap */
 .f-qchip.tq {
   border-style: dashed;

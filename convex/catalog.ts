@@ -198,6 +198,10 @@ export const saveWorkbook = mutation({
     // The answer key: the new one, or the old one while the question numbers still fit, or none.
     const oldKey = await keyRow(ctx, unit._id, "master");
     const sameShape = old?.data.kind === "master" && shape(old.data) === shape(data);
+    // The owner's free marks (his Preview, 5 Nov 2026) stay while the question numbers are the same: a new printing or
+    // key of the same book keeps his choice. A book of other questions starts with none.
+    const free = sameShape && old?.data.kind === "master" ? (old.data.free ?? []).filter((q) => q >= 1 && q <= last) : [];
+    if (free.length) data.free = free;
     const keepOld = !newKey && !!oldKey && sameShape;
     const keyCount: number | undefined = newKey ? newKey.length : keepOld ? oldKey!.answers.length : undefined;
     if (newKey) {

@@ -422,6 +422,8 @@ export function Play(props: {
     keep(howKey, next);
   };
   const strip = useRef<HTMLDivElement>(null);
+  // The owner's Preview: the level again after he changed a question's free marks.
+  const [ver, setVer] = useState(0);
 
   // The server says this level is marked (his report, 4 Nov 2026: Check said "This level is already marked", no
   // summary, no word on why the next level stayed shut): his first Check went through but its answer never reached
@@ -449,7 +451,7 @@ export function Play(props: {
         // Refused now (the photos first, the levels in order): say why, never the old level kept on the phone.
         if (!form || (e instanceof NetError && !e.offline)) setErr(problemWords(e));
       });
-  }, [props.world.unitId, props.n]);
+  }, [props.world.unitId, props.n, ver]);
   // A new question (his report, 4 Nov 2026: after → the screen jumped up and came back down). Only the strip moves,
   // sideways, to his chip: scrollIntoView moved the page too (up to the strip, then the card's smooth scroll back
   // down). A new question is a new page: if he had scrolled down (a tall printed question), it starts at the top,
@@ -507,6 +509,7 @@ export function Play(props: {
   const typesIn = (qi: number) => all.some((x) => x.qi === qi && typing(x.box));
   const boxesIn = (qi: number) => all.filter((x) => x.qi === qi).length;
   const filled = (qi: number) => {
+    if (form.qs[qi].free) return "free";
     const n = boxesIn(qi);
     let f = 0;
     for (let i = 0; i < n; i++) if (val(qi, i).trim()) f++;
@@ -550,6 +553,7 @@ export function Play(props: {
   const done = all.length - empty;
   const teacherQs = form.qs.filter((x) => x.parts.some((p) => !p.boxes)).length;
   const backQs = form.qs.filter((x) => x.re).length;
+  const freeQs = form.qs.filter((x) => x.free);
 
   const check = async () => {
     setBusy(true);
@@ -761,6 +765,11 @@ export function Play(props: {
                 <b>{teacherQs}</b> கேள்விகளை ஆசிரியர் திருத்துவார் ✍
               </li>
             )}
+            {freeQs.length > 0 && (
+              <li class="free">
+                <b>🎁 {freeQs.length}</b> இலவசப் புள்ளிகள் (+{freeQs.reduce((a, x) => a + x.max, 0)} XP)
+              </li>
+            )}
           </ul>
           {props.look ? (
             <p class="f-muted small">Preview: Check is off. Nothing is sent or saved.</p>
@@ -797,7 +806,10 @@ export function Play(props: {
           </div>
           {q.re && <p class="f-again">Level {q.re} இல் தவறியது: மீண்டும் முயற்சி!</p>}
           {q.t && <p class="f-tqtag">ஆசிரியர் கேள்வி · with your teacher</p>}
+          {q.free && <FreeCard max={q.max} />}
+          {/* A free question isn't his to do: only the owner's Preview still shows it (to see what he made free). */}
           {showQ &&
+            (!q.free || props.look) &&
             (printed && css !== null ? (
               <Paper html={printed.html} css={css} q={q.q} onZoom={zoom} live={live} parts={inPaper ? q.parts.map((x) => x.p ?? "") : undefined}>
                 {inPaper && rows}
@@ -821,6 +833,7 @@ export function Play(props: {
             <Learn unitId={props.world.unitId} n={props.n} q={q.q} onDone={() => pick(q.q, "do")} />
           ) : null}
           {!inPaper && rows}
+          {props.look && <FreeSwitch key={q.q} unitId={form.unitId} q={q.q} max={q.max} free={!!q.free} onDone={() => setVer((x) => x + 1)} />}
         </section>
       )}
 
@@ -895,6 +908,80 @@ function Oops(props: { text: string; onBack: () => void }) {
       <button type="button" class="f-btn go" onClick={props.onBack}>
         Back
       </button>
+    </div>
+  );
+}
+
+// ---- Free marks (5 Nov 2026, his ask: a question out of the syllabus stays in the book, everyone gets its marks) ----
+
+/** A free question: a little party instead of the question, its marks his without doing it; → goes on. */
+function FreeCard(props: { max: number }) {
+  useEffect(() => {
+    sound("unlock");
+    buzz(8);
+  }, []);
+  return (
+    <div class="f-free rise" role="status">
+      <Confetti n={14} />
+      <span class="f-free-gift" aria-hidden="true">
+        🎁
+      </span>
+      <b class="f-free-h">இலவசப் புள்ளிகள்!</b>
+      <p>
+        இந்தக் கேள்வி உன் பாடத்திட்டத்தில் இல்லை. இதைச் செய்ய வேண்டாம்: இதன் <b>{props.max} XP</b> உனக்கே. → அடுத்த கேள்வி.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * The owner's switch in his Preview (his ask: "please put the button ... so that question will be all marks question
+ * for everyone"): free marks for this question, or not any more. Every student at once (convex/preview.ts `setFree`),
+ * so it asks once more before it goes.
+ */
+function FreeSwitch(props: { unitId: string; q: number; max: number; free: boolean; onDone: () => void }) {
+  const [sure, setSure] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const go = async () => {
+    setBusy(true);
+    try {
+      const r = (await mutation("preview:setFree", { unitId: props.unitId, q: props.q, free: !props.free })) as { students: number };
+      const who = r.students ? ` ${r.students} student${r.students === 1 ? "" : "s"} who did this level ${props.free ? "lost them" : "got them now"}.` : "";
+      toast(props.free ? `Q${props.q} is a normal question again.${who}` : `Q${props.q}: free marks for everyone (${props.max}).${who}`);
+      setSure(false);
+      props.onDone();
+    } catch (e) {
+      toast(problemWords(e), true);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div class={`f-freesw${props.free ? " on" : ""}`}>
+      {!sure ? (
+        <>
+          <p>{props.free ? `Free marks: every student gets Q${props.q}'s ${props.max} marks.` : "Out of the syllabus? Give everyone its marks."}</p>
+          <button type="button" class="f-btn ghost" onClick={() => setSure(true)}>
+            {props.free ? "Take back the free marks" : `🎁 Free marks for everyone (${props.max})`}
+          </button>
+        </>
+      ) : (
+        <>
+          <p>
+            {props.free
+              ? `Q${props.q} becomes a question to do again. Students who already got its free marks lose them.`
+              : `Every student gets Q${props.q}'s ${props.max} marks without doing it, also the ones who did this level already.`}
+          </p>
+          <div class="f-freesw-row">
+            <button type="button" class="f-btn ghost" disabled={busy} onClick={() => setSure(false)}>
+              Cancel
+            </button>
+            <button type="button" class={`f-btn ${props.free ? "white" : "gold"}`} disabled={busy} onClick={() => void go()}>
+              {busy ? "…" : props.free ? "Yes, take them back" : "Yes, free marks"}
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -1094,6 +1181,11 @@ export function Result(props: {
             <li key={r.q} class={`f-rrow ${k}${i < shown ? " in" : ""}`}>
               <b class="f-rq">Q{r.q}</b>
               <span class="f-rmarks">
+                {r.free && (
+                  <i class="g" title="இலவசப் புள்ளிகள்">
+                    🎁
+                  </i>
+                )}
                 {r.ok.map((part, pi) =>
                   part === null ? (
                     <i key={pi} class="t">

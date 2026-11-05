@@ -323,6 +323,10 @@ const explains = (why: string | undefined) => !!why && why !== "lesson" && why !
  * marks when his working shows more (method marks) or less than the phone gave; full marks need no cause. Both:
  * optional words. A part someone marked in class meanwhile only closes; a level checked in class keeps its marks.
  */
+/** Why a photo can't be answered: someone did, or its question became free marks meanwhile (the owner's Preview). */
+const answered = (r: { free?: true }) =>
+  r.free ? "This question is free marks now (out of the syllabus): nothing to mark." : "Someone already answered this photo.";
+
 export const mark = mutation({
   args: {
     token,
@@ -337,7 +341,7 @@ export const mark = mutation({
     const now = Date.now();
     const r = await ctx.db.get(args.id);
     if (!r) fail("That photo is gone.");
-    if (r.state !== "waiting") fail("Someone already answered this photo.");
+    if (r.state !== "waiting") fail(answered(r));
     const note = (args.note ?? "").trim();
     if (note.length > NOTE_MAX) fail(`Keep the words under ${NOTE_MAX} letters.`);
     if (args.why !== undefined && !isWhy(args.why)) fail("Pick one of the reasons.");
@@ -414,7 +418,7 @@ export const retake = mutation({
     const now = Date.now();
     const r = await ctx.db.get(args.id);
     if (!r) fail("That photo is gone.");
-    if (r.state !== "waiting") fail("Someone already answered this photo.");
+    if (r.state !== "waiting") fail(answered(r));
     if (r.said) fail("This is his typed reason: there is no photo to take again.");
     if (!isRetake(args.why)) fail("Pick what is wrong with the photo.");
     await dropFiles(ctx, r.files);

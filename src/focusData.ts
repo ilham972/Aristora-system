@@ -161,6 +161,23 @@ export function markedParts(k: KeyAnswer | undefined, max: number): KeyPart[] | 
  */
 export type Given = { g: number; dk?: boolean; dkp?: string[] };
 
+/** A question out of the syllabus in this workbook (the owner's free marks, 5 Nov 2026; convex/lib/free.ts). */
+export const isFreeQ = (v: View, q: number) => !!v.mb?.free?.includes(q);
+
+/**
+ * A level's marks with its free questions in: their full marks, already given (his answer "Correction too": the
+ * corrector never marks them, and the server gives them whatever is tapped).
+ */
+export function withFree(v: View, l: MasterLevel, given: Record<number, Given>): Record<number, Given> {
+  const each = marksOfLevel(v, l);
+  if (!each || !v.mb?.free?.length) return given;
+  const out = { ...given };
+  questionsOf(l).forEach((q, i) => {
+    if (isFreeQ(v, q)) out[q] = { g: each[i] };
+  });
+  return out;
+}
+
 /** The marks a question counts for: 0 for a whole "?", else g (a part left blank counts 0 inside g). */
 export const marksOf = (g: Given | undefined) => (!g ? 0 : g.dk && !g.dkp ? 0 : g.g);
 

@@ -318,6 +318,7 @@ function ProfileBlock(props: { v: View }) {
 type PhonePart = { p: string; m: number; words: string; phone: boolean; fixed: boolean };
 type PhoneList = {
   share: { questions: number; of: number; marks: number; max: number } | null;
+  free?: number[];
   qs: { q: number; max: number; phone: boolean; parts: PhonePart[] }[];
 } | null;
 
@@ -352,6 +353,11 @@ export function PhoneAnswers(props: { unitId: string }) {
       <p class="small key-note ok">
         At home the phone marks {share.questions} of {share.of} questions ({share.marks} of {share.max} marks). The rest: the corrector.
       </p>
+      {(list.free?.length ?? 0) > 0 && (
+        <p class="small key-note">
+          Free marks (out of the syllabus): {list.free!.map((q) => `Q${q}`).join(", ")}. Everyone gets their marks; change it in Preview.
+        </p>
+      )}
       <button type="button" class="link-btn" aria-expanded={open} onClick={() => setOpen(!open)}>
         {open ? "Hide what the phone accepts" : "See what the phone accepts"}
       </button>

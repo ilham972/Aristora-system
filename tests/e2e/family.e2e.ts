@@ -1954,3 +1954,120 @@ test("the owner's Preview: Settings → Books → a unit → every level open on
   await contains(B.locator(".f-look [role=alert]"), "Preview is for the owner only.");
   await B.context().close();
 });
+
+test("free marks: the owner gives a question's marks from his Preview; a student meets a gift and gets them; Correction too", async () => {
+  // 5 Nov 2026, his ask: a question out of the syllabus stays in the printed book (its numbers stay) and everyone gets
+  // its marks; his answers: the students who did its level already get them too, and Correction gives them in class.
+  const before = problems.length;
+  const backend = makeBackend(modules);
+  const t = backend.t;
+  await addPerson(t, { name: "Owner", token: OWNER_TOKEN, role: "owner" });
+  const as = { token: OWNER_TOKEN };
+  await t.mutation(api.setup.ensure, as);
+  const u01 = await t.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G8-U01")).first())!._id);
+  await t.mutation(api.catalog.saveWorkbook, {
+    ...as,
+    unitId: u01,
+    parts: BOOK.data.parts.map((p) => ({ id: p.id, to: p.to, ...(p.each ? { each: p.each } : {}) })),
+    levels: BOOK.data.levels.map((l) => ({ to: l.to, max: l.max })),
+    marks: BOOK.data.marks ?? {},
+    replace: true,
+    key: fakeKey(),
+  });
+  const hana = await t.mutation(api.students.add, { ...as, name: "Hana K", grade: 8, term: 1, stage: "master", unitId: u01 });
+  const bilal = await t.mutation(api.students.add, { ...as, name: "Bilal M", grade: 8, term: 1, stage: "master", unitId: u01 });
+  // Bilal's Level 1 was corrected in class before: Q3 lost its 2 marks.
+  const items = Array.from({ length: 10 }, (_, i) => ({ q: i + 1, got: i + 1 === 3 ? 0 : 2 }));
+  await t.mutation(api.workbook.correct, { ...as, studentId: bilal, unitId: u01, level: 1, items, by: "correction" });
+  const code = "hana-free-marks-link-0123456789";
+  await t.mutation(api.families.makeLink, { ...as, studentId: hana, codeHash: secretHash("family-link", code) });
+
+  // The owner's Preview, Level 1, Q3: free marks for everyone (asked once more first).
+  const O = await open(backend, `${site.url}/f/#preview=${u01}`, size(390, 844), () => {
+    if (sessionStorage.getItem("t")) return;
+    sessionStorage.setItem("t", "1");
+    localStorage.setItem("aristora.token", "owner-phone-token-0123456789abcdefghijklmnopqrstuv");
+  });
+  await O.locator(".f-look-levels button", { hasText: "Level 1" }).first().click();
+  await contains(O.locator(".f-qn"), "Q1");
+  await O.locator(".f-qchip", { hasText: /^3$/ }).click();
+  await contains(O.locator(".f-qn"), "Q3");
+  await O.getByRole("button", { name: /Free marks for everyone/ }).click();
+  await contains(O.locator(".f-freesw"), "also the ones who did this level already");
+  await O.getByRole("button", { name: "Yes, free marks" }).click();
+  await contains(O.locator(".f-toast"), "Q3: free marks for everyone (2). 1 student who did this level got them now.");
+  await contains(O.locator(".f-free-h"), "இலவசப் புள்ளிகள்");
+  await visible(O.getByRole("button", { name: "Take back the free marks" }));
+  await visible(O.locator(".f-qchip.free", { hasText: /^3$/ }));
+  await noSideScroll(O);
+  await shot(O, "fam53-preview-free");
+  await O.setViewportSize({ width: 320, height: 640 }); // the smallest phone: the switch fits
+  await noSideScroll(O);
+  await shot(O, "fam53b-preview-free-320");
+  await O.setViewportSize({ width: 390, height: 844 });
+  await O.getByRole("button", { name: "Back" }).first().click();
+  await contains(O.locator(".f-look-levels button").first(), "1 free");
+  await O.context().close();
+  // Them too: Bilal's Level 1 has its 2 marks now, and Q3 is no longer Evaluation's.
+  const bilalM = await t.run(async (ctx) => (await ctx.db.query("progress").withIndex("by_student_unit_stage", (q) => q.eq("studentId", bilal).eq("unitId", u01).eq("stage", "master")).first())!.m!);
+  expect(bilalM.lv["1"].got).toBe(20);
+  expect(bilalM.q["3"]).toMatchObject({ got: 2, lost: false });
+
+  // Hana's Level 1: Q3 is a gift (no pad, no question to do), → goes on; Check gives her its marks.
+  const F = await open(backend, `${site.url}/f/#join=${code}`);
+  await F.getByRole("button", { name: "START" }).click();
+  await stageNow(F, "Level 1");
+  await F.locator(".f-lv.play").click();
+  await contains(F.locator(".f-qn"), "Q1");
+  await type(F, ["3"]);
+  await type(F, ["6"]);
+  await contains(F.locator(".f-qn"), "Q3");
+  await contains(F.locator(".f-free"), "பாடத்திட்டத்தில் இல்லை");
+  expect(await F.locator(".f-padkeys").count()).toBe(0);
+  expect(await F.locator(".f-freesw").count()).toBe(0); // the owner's switch is never on a student's phone
+  await noSideScroll(F);
+  await shot(F, "fam54-free-card");
+  await F.setViewportSize({ width: 320, height: 640 });
+  await noSideScroll(F);
+  await shot(F, "fam54b-free-card-320");
+  await F.setViewportSize({ width: 360, height: 740 });
+  await F.locator(".f-nextbar .f-key.next").click();
+  await contains(F.locator(".f-qn"), "Q4");
+  for (const a of [["1", "2"], ["1", "5"], ["1", "8"], ["7", "n", "-", "1"], ["2", "4"], ["9"], ["1", "0"], ["3", "0"]]) await type(F, a);
+  await contains(F.locator(".f-review"), "இலவசப் புள்ளிகள் (+2 XP)");
+  await F.locator(".f-review").getByRole("button", { name: "Check ✓" }).click();
+  await contains(F.locator(".f-big"), "/ 20");
+  await contains(F.locator(".f-gain"), "+20 XP");
+  await visible(F.locator(".f-rrow", { hasText: "Q3" }).locator(".f-rmarks i.g"));
+  await contains(F.locator(".f-bq.free"), "இலவசப் புள்ளிகள்");
+  await noSideScroll(F);
+  await shot(F, "fam55-free-result");
+  await F.context().close();
+
+  // Correction: another free question (Q12, Level 2) is given already on Bilal's paper; she never marks it.
+  await t.mutation(api.preview.setFree, { ...as, unitId: u01, q: 12, free: true });
+  await t.mutation(api.students.setPresent, { ...as, id: bilal, present: true });
+  const C = await open(backend, site.url, size(390, 844), () => {
+    if (sessionStorage.getItem("t")) return;
+    sessionStorage.setItem("t", "1");
+    localStorage.setItem("aristora.role", "focus");
+    localStorage.setItem("aristora.token", "owner-phone-token-0123456789abcdefghijklmnopqrstuv");
+    localStorage.setItem("aristora.grade.focus", "8");
+  });
+  await C.locator(".fc-nm", { hasText: "Bilal M" }).click();
+  await visible(C.locator(".fc-sq.free", { hasText: "12" }));
+  await until(async () => ((await C.locator(".fc-card").getAttribute("aria-label")) ?? "").startsWith("Question 11,"), "Q11 first");
+  await C.locator(".fc-go").click(); // Q11 full marks: Q12 is given already, so Q13 is next
+  await until(async () => ((await C.locator(".fc-card").getAttribute("aria-label")) ?? "").startsWith("Question 13,"), "Q13 after Q11");
+  await C.waitForTimeout(800);
+  await C.locator(".fc-sq.free", { hasText: "12" }).click();
+  await contains(C.locator(".fc-freenote"), "out of the syllabus");
+  await contains(C.locator(".fc-go"), "free");
+  await noSideScroll(C);
+  await shot(C, "fam56-correction-free");
+  await C.setViewportSize({ width: 320, height: 640 });
+  await noSideScroll(C);
+  await shot(C, "fam56b-correction-free-320");
+  await C.context().close();
+  expect(problems.slice(before)).toEqual([]);
+});

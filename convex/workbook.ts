@@ -28,6 +28,7 @@ import {
 } from "./lib/backend";
 import { levelOutOf, type MasterData } from "./lib/book";
 import { computeMaster, markBefore, type MQ, type MState } from "./lib/master";
+import { freeRow, isFree } from "./lib/free";
 import { actor } from "./lib/auth";
 import { masterState as masterStateShape } from "./schema";
 
@@ -175,6 +176,14 @@ export const correct = mutation({
     let got = 0;
     for (const it of args.items) {
       if (it.q < l.from || it.q > l.to) fail(`Question ${it.q} is not in Level ${l.n}.`);
+      if (each && isFree(book, it.q)) {
+        // Out of the syllabus (the owner's free marks, 5 Nov 2026, his answer "Correction too"): its full marks,
+        // whatever was tapped (the page gives them already).
+        const max = each[it.q - l.from];
+        got += max;
+        rows[String(it.q)] = freeRow(max, m.q[String(it.q)], now);
+        continue;
+      }
       const before = m.q[String(it.q)];
       let row: MQ;
       const dkp = blankParts(it.q, it.dk, it.dkp);

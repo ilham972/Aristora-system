@@ -40,10 +40,12 @@ let sending = 0;
 export const sendingNow = () => sending > 0;
 
 // The owner's Preview (5 Nov 2026, convex/preview.ts; src/family/preview.tsx): his teachers' sign-in on the class
-// system's address, and only these reads go out. Nothing else is ever sent (no Check, no photo, no seen), and what the
-// level screen keeps on the phone is kept apart from any child's.
+// system's address, and only these reads go out, with one change of his own: a question's free marks (out of the
+// syllabus, `preview:setFree`). Nothing else is ever sent (no Check, no photo, no seen), and what the level screen
+// keeps on the phone is kept apart from any child's.
 let look: string | null = null;
 const LOOK: Record<string, string> = { "family:level": "preview:level", "family:questions": "preview:questions", "preview:unit": "preview:unit" };
+const LOOK_CHANGES = new Set(["preview:setFree"]);
 /** Preview with this teachers' sign-in (the owner's). */
 export function lookWith(t: string): void {
   look = t;
@@ -51,6 +53,7 @@ export function lookWith(t: string): void {
 
 export async function call(kind: "query" | "mutation", path: string, args: Record<string, unknown>): Promise<unknown> {
   if (look !== null) {
+    if (kind === "mutation" && LOOK_CHANGES.has(path)) return await ask("mutation", path, { ...args, token: look });
     const to = kind === "query" ? LOOK[path] : undefined;
     if (!to) throw new NetError("Preview: only looking, nothing is sent.");
     return ask("query", to, { ...args, token: look });
