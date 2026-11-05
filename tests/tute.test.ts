@@ -96,6 +96,36 @@ describe("reading a tute's zip", () => {
   });
 });
 
+describe("a digitized tute (tute.json version 2)", () => {
+  // Q5's card gets two printed blanks (data-fill), as the ol-essay engine prints them since 5 Nov 2026.
+  const SLOTS = HTML.replace('<span class="qn">5</span>', '<span class="qn">5</span><span class="ab" data-fill="1"></span><span class="ab" data-fill="2"></span>');
+  const kinds = (fill: string[]) =>
+    edit((j) => {
+      j.version = 2;
+      j.fighter.answers[4].t = { k: "fill", b: fill.map((v) => ({ v: [v] })) };
+      j.fighter.answers[0].parts[0].t = { k: "photo" };
+      j.fighter.answers[0].parts[1].t = { k: "box", b: [{ v: ["4"] }] };
+      j.master.answers[0].parts[0].t = { k: "choose", n: 2, a: 1, items: ["ஆம்", "இல்லை"], below: true };
+    });
+
+  test("each answer keeps its kind: blanks in the printed question, a photo, a box, names under the question", () => {
+    expect(SLOTS).not.toBe(HTML);
+    const [t] = read(kinds(["4", "5"]), SLOTS) as ReadTute[];
+    expect(t.problems).toEqual([]);
+    expect(t.fighterKey?.[4]).toEqual({ q: 5, a: "9", t: { k: "fill", b: [{ v: ["4"] }, { v: ["5"] }] } });
+    expect(t.fighterKey?.[0].parts?.map((p) => p.t?.k)).toEqual(["photo", "box"]);
+    expect(t.masterKey?.[0].parts?.[0].t).toEqual({ k: "choose", n: 2, a: 1, items: ["ஆம்", "இல்லை"], below: true });
+  });
+
+  test("a key whose blanks the book doesn't print, or a kind the app doesn't know, is refused", () => {
+    const bad = (j: string, html = SLOTS) => (read(j, html)[0] as ReadTute).problems.join(" ");
+    expect(bad(kinds(["4", "5", "6"]))).toBe("Question 5: the book prints 2 blanks, its key uses 3.");
+    expect(bad(kinds(["4", "5"]), HTML)).toBe("Question 5: the book prints 0 blanks, its key uses 2.");
+    expect(bad(edit((j) => ((j.version = 2), (j.fighter.answers[4].t = { k: "zzz" }))))).toContain("an answer kind the app doesn't know");
+    expect(read(edit((j) => (j.version = 3)))[0]).toMatchObject({ problem: expect.stringContaining("isn't one the app knows") });
+  });
+});
+
 describe("the print engines' HTML", () => {
   test("a workbook may start after question 1 (a tute's papers go on from its ladder), but its levels may not skip", () => {
     const m: MasterData = { kind: "master", parts: [{ id: "IIB", from: 56, to: 57, kind: "cards" }], levels: [{ n: 1, from: 56, to: 57, max: 20 }], marks: { "56": 10, "57": 10 } };

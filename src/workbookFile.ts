@@ -69,16 +69,22 @@ export type ReadTute = {
 const TUTE_FILE = /(^|\/)tute\.json$/i;
 type J = Record<string, unknown>;
 
+/** A tute's answers; each keeps its kind (tute.json version 2, 5 Nov 2026: the ol-essay engine digitizes every tute). */
 function answersOf(list: unknown): KeyAnswer[] | null {
   if (!Array.isArray(list)) return null;
   const out: KeyAnswer[] = [];
   for (const x of list as J[]) {
     if (typeof x?.q !== "number") return null;
-    if (typeof x.a === "string") out.push({ q: x.q, a: x.a });
+    if (typeof x.a === "string") out.push({ q: x.q, a: x.a, ...kindOf(x.t) });
     else if (Array.isArray(x.parts)) {
       out.push({
         q: x.q,
-        parts: (x.parts as J[]).map((r) => ({ p: String(r?.p ?? ""), a: String(r?.a ?? ""), ...(typeof r?.m === "number" ? { m: r.m } : {}) })),
+        parts: (x.parts as J[]).map((r) => ({
+          p: String(r?.p ?? ""),
+          a: String(r?.a ?? ""),
+          ...(typeof r?.m === "number" ? { m: r.m } : {}),
+          ...kindOf(r?.t),
+        })),
       });
     } else return null;
   }
@@ -97,7 +103,8 @@ export function readTuteFile(text: string, html: string | null, file: string): R
   const unit = j?.unit as J | undefined;
   const f = j?.fighter as J | undefined;
   const m = j?.master as J | undefined;
-  if (j?.kind !== "aristora-tute" || j.version !== 1 || typeof unit?.no !== "number" || !Array.isArray(f?.sections) || !Array.isArray(m?.levels)) return bad;
+  // Version 2 (5 Nov 2026): each answer carries its kind (`t`), as answer-key.json version 2 does for the workbooks.
+  if (j?.kind !== "aristora-tute" || (j.version !== 1 && j.version !== 2) || typeof unit?.no !== "number" || !Array.isArray(f?.sections) || !Array.isArray(m?.levels)) return bad;
   const part = String(m!.part ?? "") as PartId;
   // "OL" = the O/L books (grade 12 in the app); a school grade is a number.
   const grade = typeof j.grade === "number" ? j.grade : j.grade === "OL" ? OL : null;
@@ -130,6 +137,19 @@ export function readTuteFile(text: string, html: string | null, file: string): R
   if (!problems.length && fighterKey) problems.push(...checkFighterKey(fighterKey, fighter));
   if (!problems.length && masterKey) problems.push(...checkKey(masterKey, master));
   const qs = html ? tuteQuestions(html) : { css: "", fighter: new Map<number, string>(), master: new Map<number, string>() };
+  // The blanks, options, brackets and words the kinds use are in the printed question, as many as they need (the book
+  // and its key from the same build; else the phone would put his answers in the wrong places).
+  for (const [key, cards] of [[fighterKey, qs.fighter], [masterKey, qs.master]] as const) {
+    if (problems.length) break;
+    for (const k of key ?? []) {
+      const card = cards.get(k.q);
+      const wrong = card ? slotProblem(k, card) : "";
+      if (wrong) {
+        problems.push(`Question ${k.q}: ${wrong}`);
+        break;
+      }
+    }
+  }
   return {
     kind: "tute",
     file,
