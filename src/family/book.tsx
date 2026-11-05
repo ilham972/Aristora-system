@@ -3,12 +3,13 @@
 // teacher can mark), and her answers in Tamil when they come. His rule: without those photos he may do 2 more levels
 // at most. Shown under the reveal right after Check, and again from the Stage (a level with 📷 or a dot).
 
+import { Fragment } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { BookQ, LevelBook } from "../../convex/lib/homeWork";
 import { mutation, NetError, query } from "./net";
 import { keepPhotos, keptPhotos, photoKey, PHOTO_MAX, sendKept, sendPhotos, shrink, type Kind } from "./photos";
 import { buzz, sound } from "./sound";
-import { Icon, Owl, pretty, problemWords, toast } from "./ui";
+import { Icon, Maths, Owl, problemWords, toast } from "./ui";
 
 /** The key's working: `**` = the final answer (bold), one line per part. */
 export function Solution(props: { text: string }) {
@@ -19,7 +20,7 @@ export function Solution(props: { text: string }) {
       </span>
       {props.text.split("\n").map((line, i) => (
         <p key={i}>
-          {line.split("**").map((r, j) => (j % 2 ? <b key={j}>{pretty(r)}</b> : <span key={j}>{r}</span>))}
+          {line.split("**").map((r, j) => (j % 2 ? <b key={j}><Maths s={r} /></b> : <span key={j}>{r}</span>))}
         </p>
       ))}
     </div>
@@ -138,7 +139,15 @@ function Question(props: { b: BookQ; unitId: string; n: number; onSent: () => vo
       </div>
       {lost && b.typed && b.typed.some((x) => x) && (
         <p class="f-bq-typed">
-          நீ போட்டது: <s>{b.typed.map((x) => pretty(x || "–")).join(", ")}</s>
+          நீ போட்டது:{" "}
+          <s>
+            {b.typed.map((x, i) => (
+              <Fragment key={i}>
+                {i ? ", " : ""}
+                <Maths s={x || "–"} />
+              </Fragment>
+            ))}
+          </s>
         </p>
       )}
       {b.sol && <Solution text={b.sol} />}

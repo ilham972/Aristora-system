@@ -85,6 +85,23 @@ export type KeyQ = { q: number; max: number; parts: KeyPart[] };
 
 /** Where an answer in n is compared. */
 const POINTS = [1, 2, 3, 4, 5, 6, 7];
+/**
+ * Where an answer in several letters is compared (5 Nov 2026: algebra, "5x + 3y"): the k-th row gives the 1st, 2nd and
+ * 3rd letter (in the alphabet's order) their values. Never 0 (a letter may divide), never the same pattern twice.
+ */
+const POINTS_MANY = [
+  [2, 3, 5],
+  [3, 7, 2],
+  [5, 2, 7],
+  [7, 5, 3],
+  [1, 4, 6],
+  [4, 1, 9],
+  [6, 9, 1],
+  [8, 6, 4],
+  [9, 8, 11],
+];
+/** The most letters one box takes: the pad has a key for each (its × and / give way to the 2nd and 3rd). */
+export const LETTERS_MAX = 3;
 /** A box's typed answer is at most this long. */
 export const INPUT_MAX = 40;
 /** His reason (a text box) is at most this long: a few sentences in Tamil or Thanglish. */
@@ -182,7 +199,10 @@ export function exprKey(raw: string): string {
 
 type Tok = { t: "num"; v: Rat } | { t: "var"; v: string } | { t: "op"; v: string };
 
-function tokens(s: string): Tok[] {
+/** Units written in letters: never letters multiplied, even where letters side by side multiply. */
+const UNIT_WORD = /^(mm|cm|km|kg|mg|ml|min|hrs?|rs)$/i;
+
+function tokens(s: string, many = false): Tok[] {
   const out: Tok[] = [];
   let i = 0;
   while (i < s.length) {
@@ -200,7 +220,8 @@ function tokens(s: string): Tok[] {
       continue;
     }
     if (/[a-z]/i.test(c)) {
-      if (i + 1 < s.length && /[a-z]/i.test(s[i + 1])) throw BAD; // a word, not a letter
+      if (!many && i + 1 < s.length && /[a-z]/i.test(s[i + 1])) throw BAD; // a word, not a letter
+      if (many && UNIT_WORD.test(/^[a-z]+/i.exec(s.slice(i))![0])) throw BAD; // "5 cm" is a unit, not c × m
       out.push({ t: "var", v: c.toLowerCase() });
       i++;
       continue;
@@ -215,17 +236,19 @@ function tokens(s: string): Tok[] {
   return out;
 }
 
-/** An expression, as a function of its letter (one letter at most). */
-type Fn = (x: Rat) => Rat;
+/** An expression, as a function of its letters' values. */
+type Fn = (x: Record<string, Rat>) => Rat;
 
 /**
  * Parse "2n - 1", "n^2", "n(n + 1)/2", "3(n - 1) + 2". Implicit × only where people write it (2n, 2(…), n(…), (…)(…),
  * (…)n); never ")2" or "n2": those come from a fraction or a square that lost its shape, and must not be guessed.
+ * many = an answer the book gives in several letters (5 Nov 2026): letters side by side multiply ("4pq", "2a(a + 5b)"),
+ * up to LETTERS_MAX of them; without it two letters together are a word ("cm") and more than one letter is refused.
  */
-export function parseExpr(raw: string): { fn: Fn; vars: string[] } | null {
+export function parseExpr(raw: string, many = false): { fn: Fn; vars: string[] } | null {
   let toks: Tok[];
   try {
-    toks = tokens(normalize(raw));
+    toks = tokens(normalize(raw), many);
   } catch {
     return null;
   }
@@ -304,7 +327,12 @@ export function parseExpr(raw: string): { fn: Fn; vars: string[] } | null {
     if (t.t === "var") {
       vars.add(t.v);
       if (peek()?.t === "num") throw BAD; // "n2": a square that lost its shape
-      return (x) => x;
+      const name = t.v;
+      return (x) => {
+        const v = x[name];
+        if (!v) throw BAD; // a letter the box doesn't have
+        return v;
+      };
     }
     if (t.v === "(") {
       const f = expr();
@@ -317,17 +345,24 @@ export function parseExpr(raw: string): { fn: Fn; vars: string[] } | null {
   }
   try {
     const fn = expr();
-    if (i !== toks.length || vars.size > 1) return null;
-    return { fn, vars: [...vars] };
+    if (i !== toks.length || vars.size > (many ? LETTERS_MAX : 1)) return null;
+    return { fn, vars: [...vars].sort() };
   } catch {
     return null;
   }
 }
 
-/** The values of an answer in its letter at n = 1 … 7; null when it can't be worked out. */
-function valuesOf(fn: Fn): Rat[] | null {
+/**
+ * The values of an answer at the points where it is compared: one letter (or none) at n = 1 … 7, several letters at
+ * POINTS_MANY (letters = the box's, in the alphabet's order: what he types is worked out with the same values); null
+ * when it can't be worked out.
+ */
+function valuesOf(fn: Fn, letters: string[]): Rat[] | null {
   try {
-    return POINTS.map((p) => fn([p, 1]));
+    if (letters.length > 1) {
+      return POINTS_MANY.map((row) => fn(Object.fromEntries(letters.map((l, i) => [l, [row[i], 1] as Rat]))));
+    }
+    return POINTS.map((p) => fn(Object.fromEntries(letters.map((l) => [l, [p, 1] as Rat]))));
   } catch {
     return null;
   }
@@ -441,7 +476,7 @@ function wantOf(text: string, label: string | undefined, also: Rat[]): Want | nu
   if (num) return { box: { k: "num", ...(label ? { l: label } : {}), ...fracLook(t) }, t, ok: [num, ...also.filter((a) => !same(a, num))] };
   const e = parseExpr(t);
   if (!e || e.vars.length !== 1) return null; // "5 + 17" (no letter): the form matters, the teacher marks it
-  const vals = valuesOf(e.fn);
+  const vals = valuesOf(e.fn, e.vars);
   if (!vals) return null;
   return { box: { k: "expr", v: e.vars[0], ...(label ? { l: label } : {}), ...fracLook(t) }, t, vals };
 }
@@ -692,7 +727,10 @@ export function wantsOf(raw: string): { want: Want[]; anyOrder: boolean } | null
 
 // ---- Answers whose kind the book gives (answer-key.json version 2, 4 Nov 2026) ----
 
-/** One box the book gives: a number (any of its accepted ones), or an answer in one letter; null = the phone can't. */
+/**
+ * One box the book gives: a number (any of its accepted ones), an answer in one letter, or (5 Nov 2026) an answer in
+ * 2 to LETTERS_MAX letters (box v = its letters in the alphabet's order: the pad's letter keys); null = the phone can't.
+ */
 function boxWant(b: BoxAns): Want | null {
   const first = b.v[0];
   const look = { ...(b.l ? { l: b.l } : {}), ...(b.u ? { u: showUnit(b.u) } : {}), ...(b.j ? { j: b.j } : {}), ...fracLook(first) };
@@ -700,14 +738,20 @@ function boxWant(b: BoxAns): Want | null {
   const same = b.same ? { same: b.v.map(formKey) } : {};
   const nums = b.v.map(parseNum);
   if (nums.every((x) => x !== null)) return { box: { k: "num", ...look }, t, ok: nums as Rat[], ...same };
+  const sameForm = b.same ? { same: b.v.map(exprKey) } : {};
   const e = parseExpr(first);
-  if (!e || e.vars.length !== 1 || b.v.some((x) => parseExpr(x)?.vars.join() !== e.vars[0])) return null;
-  const vals = valuesOf(e.fn);
-  if (!vals) return null;
-  return { box: { k: "expr", v: e.vars[0], ...look }, t, vals, ...(b.same ? { same: b.v.map(exprKey) } : {}) };
+  if (e && e.vars.length === 1 && b.v.every((x) => parseExpr(x)?.vars.join() === e.vars[0])) {
+    const vals = valuesOf(e.fn, e.vars);
+    return vals ? { box: { k: "expr", v: e.vars[0], ...look }, t, vals, ...sameForm } : null;
+  }
+  // Several letters (algebra: "5x + 3y", "4pq", "2a(a + 5b)"): every accepted answer in the same letters.
+  const m = parseExpr(first, true);
+  if (!m || m.vars.length < 2 || b.v.some((x) => parseExpr(x, true)?.vars.join() !== m.vars.join())) return null;
+  const vals = valuesOf(m.fn, m.vars);
+  return vals ? { box: { k: "expr", v: m.vars.join(""), ...look }, t, vals, ...sameForm } : null;
 }
 
-/** Why the phone can't take this box ("" = fine): it types numbers and answers in one letter, nothing else. */
+/** Why the phone can't take this box ("" = fine): it types numbers and answers in 1 to 3 letters, nothing else. */
 export function boxProblem(b: BoxAns): string {
   return boxWant(b) ? "" : `a box answer the phone can't type ("${b.v[0]}"): a word needs choose, a drawing photo`;
 }
@@ -857,9 +901,10 @@ function right(w: Want, typed: string | undefined): boolean {
     const v = parseNum(typed);
     return !!v && w.ok.some((a) => same(a, v)) && (!w.same || w.same.includes(formKey(typed)));
   }
-  const e = parseExpr(typed);
-  if (!e || e.vars.some((x) => x !== (w.box as { v: string }).v)) return false;
-  const vals = valuesOf(e.fn);
+  const letters = [...(w.box as { v: string }).v];
+  const e = parseExpr(typed, letters.length > 1);
+  if (!e || e.vars.some((x) => !letters.includes(x))) return false;
+  const vals = valuesOf(e.fn, letters);
   return !!vals && vals.every((x, i) => same(x, w.vals[i])) && (!w.same || w.same.includes(exprKey(typed)));
 }
 

@@ -192,6 +192,62 @@ describe("answers whose kind the book gives", () => {
   });
 });
 
+describe("answers in several letters (5 Nov 2026: algebra)", () => {
+  // Made-up answers in the shapes of an algebra unit (never the book's own).
+  const many: Record<number, Ans> = {
+    1: { k: "box", b: [{ v: ["5x + 3y"] }] },
+    2: { k: "box", b: [{ v: ["5x + 3y", "3y + 5x"], same: true }] },
+    3: { k: "box", b: [{ v: ["4pq"] }] },
+    4: { k: "box", b: [{ v: ["2a − b + 3c"] }] },
+    5: { k: "box", b: [{ v: ["2a(a + 5b)"], same: true }] },
+    6: { k: "fill", b: [{ v: ["7"] }, { v: ["−4m"] }, { v: ["2mn"] }] },
+  };
+  const mk: KeyAnswer[] = Object.entries(many).map(([q, t]) => ({ q: Number(q), a: `A${q}`, t }));
+  const mkeys = phoneKey(mk, BOOK.data);
+  const got = (q: number, typed: string[]) => markQuestion(mkeys.get(q)!, typed).got;
+
+  test("the box takes the answer's letters, in the alphabet's order: the pad's letter keys", () => {
+    expect(formOf(mkeys.get(1)!).parts[0].boxes).toEqual([{ k: "expr", v: "xy" }]);
+    expect(formOf(mkeys.get(4)!).parts[0].boxes).toEqual([{ k: "expr", v: "abc" }]);
+    expect(checkKey(mk, BOOK.data)).toEqual([]);
+  });
+
+  test("worked out at several points: any order and any equal form, unless the book wants it written so", () => {
+    expect(got(1, ["5x+3y"])).toBe(2);
+    expect(got(1, ["3y + 5x"])).toBe(2);
+    expect(got(1, ["2(x+y)+3x+y"])).toBe(2); // equal everywhere: the question didn't ask for a form
+    expect(got(1, ["5y+3x"])).toBe(0);
+    expect(got(1, ["5x+3"])).toBe(0);
+    expect(got(1, ["8xy"])).toBe(0);
+    expect(got(2, ["3y+5x"])).toBe(2);
+    expect(got(2, ["2(x+y)+3x+y"])).toBe(0); // "simplify": the question's own expression is not the answer
+    expect(got(3, ["4qp"])).toBe(2); // letters side by side multiply, in any order
+    expect(got(3, ["4p*q"])).toBe(2);
+    expect(got(3, ["4p+q"])).toBe(0);
+    expect(got(4, ["3c+2a-b"])).toBe(2);
+    expect(got(4, ["2a-b+3"])).toBe(0);
+    expect(got(5, ["2a(a+5b)"])).toBe(2);
+    expect(got(5, ["2a^2+10ab"])).toBe(0); // factorise: written so
+    expect(got(6, ["7", "-4m", "2mn"])).toBe(2);
+    expect(got(6, ["7", "-4m", "2n"])).toBe(1);
+  });
+
+  test("a letter the box doesn't have, a unit word, a 4th letter: never an answer", () => {
+    expect(got(1, ["5x+3z"])).toBe(0);
+    const bad = (v: string) => checkKey([{ q: 1, a: "x", t: { k: "box", b: [{ v: [v] }] } }], BOOK.data);
+    expect(bad("2a + b + c + d")[0]).toContain("can't type");
+    expect(bad("5 cm")[0]).toContain("can't type");
+    expect(bad("x + y")).toEqual([]);
+  });
+
+  test("one letter marks exactly as before: a word is still refused there", () => {
+    const one = phoneKey([{ q: 1, a: "A1", t: { k: "box", b: [{ v: ["2n − 1"] }] } }], BOOK.data);
+    expect(formOf(one.get(1)!).parts[0].boxes).toEqual([{ k: "expr", v: "n" }]);
+    expect(markQuestion(one.get(1)!, ["n+n-1"]).got).toBe(2);
+    expect(markQuestion(one.get(1)!, ["2nn"]).got).toBe(0);
+  });
+});
+
 describe("reading a version 2 key from the zip", () => {
   const v2 = (edit: (qs: Record<string, unknown>[]) => void) => {
     const qs: Record<string, unknown>[] = [];

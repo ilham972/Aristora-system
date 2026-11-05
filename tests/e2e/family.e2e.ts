@@ -1261,7 +1261,7 @@ test("answer kinds: the question's own blanks, an option, ✓ / ✗, words to un
     7: { k: "photo" },
     8: { k: "box", b: [{ v: ["15"] }] },
     9: { k: "box", b: [{ v: ["3/4"], same: true }] },
-    10: { k: "box", b: [{ v: ["21"] }] },
+    10: { k: "box", b: [{ v: ["4x + 5y"] }] }, // an answer in two letters (5 Nov 2026): the pad has an x and a y key
   };
   const key = fakeKey().map((k) => (kinds[k.q] ? { ...k, t: kinds[k.q] } : k));
   await t.mutation(api.catalog.saveWorkbook, {
@@ -1355,7 +1355,18 @@ test("answer kinds: the question's own blanks, an option, ✓ / ✗, words to un
   // Q8–Q10: boxes as always; Q9 is written the book's way (6/8 is not 3/4).
   await type(P, ["1", "5"]);
   await type(P, ["6", "Denominator", "8"]); // a fraction box: 6 over 8 (5 Nov 2026: never a slash)
-  await type(P, ["2", "1"]);
+  // Q10: two letters, the pad's letter keys in × and /'s places; typed in the other order (5y + 4x is as good).
+  await contains(P.locator(".f-qn"), "Q10");
+  const keys = P.locator(".f-padkeys");
+  expect(await keys.getByRole("button", { name: "*", exact: true }).count()).toBe(0);
+  await contains(keys.getByRole("button", { name: "squared" }), "□²");
+  await noSideScroll(P);
+  await shot(P, "fam57-kind-letters");
+  for (const k of ["5", "y", "+", "4", "x"]) await keys.getByRole("button", { name: k, exact: true }).click();
+  // His letters in maths italic in his box, as on the pad and in the printed book (x is never mistaken for ×).
+  await until(async () => (await P.locator(".f-box .f-v").allInnerTexts()).join() === "y,x", "his letters in italic");
+  await shot(P, "fam58-kind-letters-typed");
+  await keys.locator(".f-key.next").click();
   await P.locator(".f-review").getByRole("button", { name: "Check ✓" }).click();
 
   // The reveal: every kind marked on the phone, Q9 wrong, Q7 the teacher's: 16 of 18.

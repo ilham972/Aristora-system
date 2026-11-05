@@ -20,7 +20,7 @@ import { addPerson, asOwner, asPhone } from "./helpers";
 import U01 from "./fixtures/workbook-g8-u01.html?raw";
 
 const BOOK = readWorkbookHtml(U01, "G8_U01_Workbook_source_v3.zip")[0];
-const val = (raw: string, n: number) => parseExpr(raw)!.fn([n, 1]);
+const val = (raw: string, n: number) => parseExpr(raw)!.fn({ n: [n, 1] });
 
 describe("what a phone can mark, read from the key", () => {
   test("numbers as students type them: whole, negative, decimal, fractions, mixed", () => {

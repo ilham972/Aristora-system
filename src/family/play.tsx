@@ -21,7 +21,7 @@ import { fracCells, fracJoin, MatchPairs, OrderCards, paintSlots, PickBelow, slo
 import { keep, mutation, NetError, query } from "./net";
 import { Confetti, nextPlay } from "./next";
 import { buzz, sound } from "./sound";
-import { Flame, Gem, Icon, Medal, Owl, OwlBadge, pretty, problemWords, Roll, Tag, toast, useOwlTap, Waiting, type Mood } from "./ui";
+import { Flame, Gem, Icon, Maths, Medal, Owl, OwlBadge, pretty, problemWords, Roll, Tag, toast, useOwlTap, Waiting, type Mood } from "./ui";
 
 export type Checked = {
   results: FamilyResult[];
@@ -68,7 +68,15 @@ export function spotIn(form: FamilyLevel, at: Spot, typed: Record<number, string
 }
 
 const NUM_KEYS = ["7", "8", "9", "⌫", "4", "5", "6", "/", "1", "2", "3", "-", ".", "0", " ", "→"];
-const exprKeys = (v: string) => ["7", "8", "9", "⌫", "4", "5", "6", v, "1", "2", "3", "+", "0", "(", ")", "-", "*", "/", "^2", "→"];
+/**
+ * The pad of an answer in letters: v = the box's letters in the alphabet's order (one, or 2–3 since 5 Nov 2026). Every
+ * key keeps its place: the 1st letter where the one-letter pad has it; a 2nd and 3rd letter take × and /'s places
+ * (letters side by side multiply: 6xy needs no ×).
+ */
+const exprKeys = (v: string) => {
+  const [a, b, c] = [...v];
+  return ["7", "8", "9", "⌫", "4", "5", "6", a, "1", "2", "3", "+", "0", "(", ")", "-", b ?? "*", c ?? "/", "^2", "→"];
+};
 const KEY_LABEL: Record<string, string> = { "-": "−", "*": "×", "^2": "x²", " ": "␣", "⌫": "⌫", "→": "→" };
 
 /** His pad. On a question with no box (the teacher's) only → works: the other keys are pale. */
@@ -93,7 +101,15 @@ function Pad(props: { box: Box | null; onKey: (k: string) => void; last: boolean
               <i class="on" />
             </span>
           ) : k === "^2" && props.box?.k === "expr" ? (
-            `${props.box.v}²`
+            props.box.v.length > 1 ? (
+              "□²"
+            ) : (
+              <>
+                <i class="f-v">{props.box.v}</i>²
+              </>
+            )
+          ) : /^[a-z]$/i.test(k) ? (
+            <i class="f-v">{k}</i>
           ) : (
             (KEY_LABEL[k] ?? k)
           )}
@@ -114,7 +130,7 @@ function FracCells(props: { f: "f" | "m"; v: string; on: number; onCell: (c: num
         props.onCell(c);
       }}
     >
-      {cells[c] ? pretty(cells[c]) : "?"}
+      {cells[c] ? <Maths s={cells[c]} /> : "?"}
     </span>
   );
   const top = props.f === "m" ? 1 : 0;
@@ -205,7 +221,8 @@ const PAPER_CSS = `.qv { border-radius: 14px; padding: 14px 12px 10px; -webkit-u
   cursor: pointer; border-bottom: 3px solid transparent; border-radius: 2px; }
 .qv [data-mark].fx-on { border-bottom-color: var(--brand, #6c5ce7); color: var(--brand-2, #5a49d6); }
 .qv [data-mark].fx-ring { border: 2px solid transparent; border-radius: 999px; padding: 0 .3em; }
-.qv [data-mark].fx-ring.fx-on { border-color: var(--brand, #6c5ce7); }`;
+.qv [data-mark].fx-ring.fx-on { border-color: var(--brand, #6c5ce7); }
+.qv .fx-v { font-family: Georgia, "Noto Serif", "Times New Roman", serif; font-style: italic; font-weight: 700; padding: 0 .04em; }`;
 
 /**
  * A question as printed, on the level. A tap opens it full screen (`QuestionZoom`): the app itself never zooms. With
@@ -672,13 +689,17 @@ export function Play(props: {
                     onClick={() => setAt({ qi: at.qi, bi: i })}
                     aria-label={`${b.l ?? ""} answer ${i + 1}${b.u ? ` (${b.u})` : ""}`}
                   >
-                    {b.l && <span class="f-blabel">{pretty(b.l)}</span>}
+                    {b.l && (
+                      <span class="f-blabel">
+                        <Maths s={b.l} />
+                      </span>
+                    )}
                     <span class="f-bline">
                       {b.f ? (
                         <FracCells f={b.f} v={v} on={at.bi === i ? (at.ci ?? 0) : -1} onCell={(c) => setAt({ qi: at.qi, bi: i, ci: c })} />
                       ) : (
                         <span key={at.bi === i ? v.length : 0} class={v ? `f-bval${at.bi === i ? " typed" : ""}` : "f-bval empty"}>
-                          {v ? pretty(v) : "?"}
+                          {v ? <Maths s={v} /> : "?"}
                         </span>
                       )}
                       {b.u && <span class="f-bunit">{b.u}</span>}
@@ -873,7 +894,7 @@ function Learn(props: { unitId: string; n: number; q: number; onDone: () => void
       <ol class="f-steps">
         {steps.slice(0, i).map((line, k) => (
           <li key={k} class={k === i - 1 ? "rise" : ""}>
-            {line.split("**").map((r, j) => (j % 2 ? <b key={j}>{pretty(r)}</b> : <span key={j}>{r}</span>))}
+            {line.split("**").map((r, j) => (j % 2 ? <b key={j}><Maths s={r} /></b> : <span key={j}>{r}</span>))}
           </li>
         ))}
       </ol>

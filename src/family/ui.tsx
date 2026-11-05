@@ -21,6 +21,30 @@ export const pretty = (s: string) =>
     .replace(/\*/g, "×")
     .replace(/-/g, "−");
 
+/** A unit written after a number ("44 cm", "42 m"): upright, never a letter of the maths. */
+const UNIT_AFTER = /^(mm|cm|km|kg|mg|ml|min|rs|g|m|l|h|s)$/i;
+
+/**
+ * Text cut into runs, true = letters of the maths (5 Nov 2026: in the app's font x looked like ×, on the pad and in his
+ * box; the printed book sets them in italic). A unit after a number and a part's label ("ii)") stay upright.
+ */
+export function mathRuns(s: string): [string, boolean][] {
+  const parts = s.split(/([A-Za-z]+)/);
+  const out: [string, boolean][] = [];
+  parts.forEach((p, i) => {
+    if (!p) return;
+    const unit = UNIT_AFTER.test(p) && /\d\s$/.test(parts[i - 1] ?? "");
+    const label = /^[ivx]+$/i.test(p) && (parts[i + 1] ?? "").startsWith(")");
+    out.push([p, i % 2 === 1 && !unit && !label]);
+  });
+  return out;
+}
+
+/** Maths for the eye: pretty, its letters in italic (`.f-v`). */
+export const Maths = (props: { s: string }) => (
+  <>{mathRuns(pretty(props.s)).map(([t, v], i) => (v ? <i key={i} class="f-v">{t}</i> : t))}</>
+);
+
 export function problemWords(e: unknown): string {
   if (e instanceof NetError && e.offline) return "இணையம் இல்லை. பிறகு மீண்டும் முயற்சி செய்.";
   return e instanceof Error ? e.message : String(e);

@@ -1262,6 +1262,19 @@ learning app of our education institute"): one profile, his class times, what he
   empty cell goes back; a tap on a cell picks it. What he types is still sent as one answer, as the server reads it
   ("1 3/4", "7/4", "n(n+1)/2", "(n+1)/(2n)"; `fracJoin`), so marking didn't change (7/4 = 1 3/4 unless the form is the
   point).
+- **Answers in several letters** (5 Nov 2026, his report on G8 U05 Algebraic expressions, Level 1: "every question
+  asking to take a photo ... then why we digitalizing?"). A box the book gives may hold an answer in 2 or 3 letters
+  ("5x + 3y", "4pq", "2a(a + 5b)"), not only one letter: the upload took one letter only, so the book sent them to
+  photos. The pad keeps every key in its place: the 1st letter where the one-letter pad has its letter, a 2nd and 3rd
+  letter take × and /'s places (letters side by side multiply: 6xy needs no ×), and x² reads □² (it squares what is
+  before it). The server works his answer out at 9 points (`POINTS_MANY`: each letter its own value, never 0) and
+  compares it with the book's, so 3y + 5x is as good as 5x + 3y and 4qp as 4pq; a box the book marks `same` (simplify,
+  factorise) takes only the forms it lists (the book lists every order of the terms). Letters side by side multiply
+  only in such a box: everywhere else two letters are a word, as before, and "cm", "kg", "min" … are never letters
+  multiplied. A 4th letter, a cube or an equation ("=") is not on the pad: those stay photos. One letter marks exactly
+  as before (n = 1 … 7). **Letters are drawn in maths italic** (a serif italic, as the printed book does) on the pad's
+  letter keys, in his boxes and blanks, in what he typed and in the final answers of the reveal and the book: in the
+  app's font x looked like the × key. A unit after a number ("44 cm") and a part's label ("ii)") stay upright.
 - **The answer boxes under each sub-question** (5 Nov 2026, his ask: "essay questions have so many sub questions ...
   after each sub question, I want to put the answer box"). When the question is printed on the phone, each part's row
   (its boxes, names, ஆம் / இல்லை, cards, pairs, or "do it on paper") sits inside the printed question right under its

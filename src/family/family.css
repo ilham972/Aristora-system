@@ -2258,6 +2258,16 @@ p {
   height: 44px;
   font-size: 20px;
 }
+/* A letter of the maths (5 Nov 2026): italic, as in the printed book; in the app's font x looked like ×. */
+.f-v {
+  font-family: Georgia, "Noto Serif", "Times New Roman", serif;
+  font-style: italic;
+  font-weight: 700;
+  padding: 0 0.04em;
+}
+.f-key .f-v {
+  font-size: 1.12em;
+}
 .f-review {
   display: flex;
   flex-direction: column;

@@ -13,7 +13,7 @@
 import { useRef, useState } from "preact/hooks";
 import type { Box, FormQ, Ui } from "../../convex/lib/phone";
 import { buzz, sound } from "./sound";
-import { pretty } from "./ui";
+import { mathRuns, pretty } from "./ui";
 
 export type Attr = "b" | "o" | "t" | "m";
 const ATTR: Partial<Record<Ui["k"], Attr>> = { fill: "b", choose: "o", tf: "t", mark: "m" };
@@ -140,7 +140,16 @@ export function paintSlots(root: ShadowRoot, live: Live): void {
         el.tabIndex = 0;
         if (a === "b") {
           const v = live.vals[r.at + i] ?? "";
-          el.textContent = v ? pretty(v) : "";
+          // Its letters in maths italic, as in the printed question (x is never mistaken for ×).
+          el.replaceChildren(
+            ...mathRuns(v ? pretty(v) : "").map(([t, letter]) => {
+              if (!letter) return t;
+              const it = el.ownerDocument.createElement("i");
+              it.className = "mi fx-v"; // .mi: the paper keeps its own font for it (PAPER_CSS)
+              it.textContent = t;
+              return it;
+            }),
+          );
           el.classList.toggle("fx-on", live.cur === r.at + i);
           el.classList.toggle("fx-has", !!v);
           el.setAttribute("aria-label", `answer ${i + 1}${v ? `: ${pretty(v)}` : ""}`);
