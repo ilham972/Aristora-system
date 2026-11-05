@@ -73,29 +73,37 @@ export const masterData = v.object({
   ),
   levels: v.array(v.object({ n: v.number(), from: v.number(), to: v.number(), max: v.number() })),
   marks: v.optional(v.record(v.string(), v.number())),
+  /** Out of the syllabus: everyone gets these questions' marks without doing them (the owner's Preview, 5 Nov 2026). */
+  free: v.optional(v.array(v.number())),
 });
+/** One corrected question (lib/master.ts `MQ`), without `fr`. */
+const mqFields = {
+  got: v.optional(v.number()),
+  max: v.optional(v.number()),
+  lost: v.boolean(),
+  t: v.number(),
+  x: v.optional(v.number()),
+  /** Sent to Theory at (by Correction or Evaluation); tt = Theory taught it; dk = "?": he couldn't start it. */
+  th: v.optional(v.number()),
+  tb: v.optional(v.string()),
+  tt: v.optional(v.number()),
+  dk: v.optional(v.boolean()),
+  /** "?" on some parts only ("iii"): he left those blank; the parts he answered keep their marks (dk is set too). */
+  dkp: v.optional(v.array(v.string())),
+  /**
+   * It came back 2 levels later on his phone (4 Nov 2026, his idea): rt = when he answered it again, rg = his marks
+   * then. The first marks stay as they were; the marks he won back count as XP that week.
+   */
+  rt: v.optional(v.number()),
+  rg: v.optional(v.number()),
+};
 export const masterState = v.object({
   q: v.record(
     v.string(),
     v.object({
-      got: v.optional(v.number()),
-      max: v.optional(v.number()),
-      lost: v.boolean(),
-      t: v.number(),
-      x: v.optional(v.number()),
-      /** Sent to Theory at (by Correction or Evaluation); tt = Theory taught it; dk = "?": he couldn't start it. */
-      th: v.optional(v.number()),
-      tb: v.optional(v.string()),
-      tt: v.optional(v.number()),
-      dk: v.optional(v.boolean()),
-      /** "?" on some parts only ("iii"): he left those blank; the parts he answered keep their marks (dk is set too). */
-      dkp: v.optional(v.array(v.string())),
-      /**
-       * It came back 2 levels later on his phone (4 Nov 2026, his idea): rt = when he answered it again, rg = his marks
-       * then. The first marks stay as they were; the marks he won back count as XP that week.
-       */
-      rt: v.optional(v.number()),
-      rg: v.optional(v.number()),
+      ...mqFields,
+      /** Free marks (out of the syllabus): the row as it was before, for when it isn't free any more; "none" = no row. */
+      fr: v.optional(v.union(v.object(mqFields), v.literal("none"))),
     }),
   ),
   lv: v.record(
@@ -416,7 +424,9 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_student_unit_stage", ["studentId", "unitId", "stage"])
-    .index("by_student", ["studentId"]),
+    .index("by_student", ["studentId"])
+    // Every student's workbook of one unit (the owner's free marks reach them all at once, convex/preview.ts).
+    .index("by_unit_stage", ["unitId", "stage"]),
 
   calls: defineTable({
     studentId: v.id("students"),
@@ -684,6 +694,8 @@ export default defineSchema({
     seen: v.optional(v.number()),
     /** Its files were deleted at. */
     gone: v.optional(v.number()),
+    /** Closed because its question became free marks (the owner's Preview); open again if it isn't free any more. */
+    free: v.optional(v.literal(true)),
   })
     .index("by_student", ["studentId", "unitId", "n", "q"])
     .index("by_state", ["state", "at"])

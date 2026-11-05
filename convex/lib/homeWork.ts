@@ -6,7 +6,8 @@ import type { Doc, Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
 import { asMaster, bookFor, keyRow, masterState } from "./backend";
 import { comesBack, masterRows } from "./family";
-import type { MasterData } from "./book";
+import { outOf, type MasterData } from "./book";
+import { isFree } from "./free";
 import type { KeyAnswer } from "./key";
 import { phoneKey, slotWords, type KeyQ } from "./phone";
 import { isRetake, isWhy, keyText, owedOf, partMarks, RETAKE, WHY, type CheckDebt, type PhotoKind } from "./photos";
@@ -109,6 +110,8 @@ export type BookQ = {
   photos: BookPhoto[];
   /** The photos he still has to send for it. */
   owe: PhotoKind[];
+  /** Free marks: out of the syllabus, its marks his without doing it (the owner's, 5 Nov 2026; lib/free.ts). */
+  free?: true;
 };
 
 export type LevelBook = { unitId: Id<"units">; n: number; max: number; got: number; required: boolean; qs: BookQ[] };
@@ -160,6 +163,11 @@ export async function bookOf(
   const qs: BookQ[] = [];
   for (let q = l.from; q <= l.to; q++) {
     const k = keys.get(q);
+    if (isFree(data, q)) {
+      const max = outOf(data, q) ?? k?.max ?? 0;
+      qs.push({ q, max, got: max, teach: 0, typed: null, ok: null, sol: null, back: false, photos: [], owe: [], free: true });
+      continue;
+    }
     if (!k) continue;
     const mq = m.q[String(q)];
     const typed = row?.qs.find((x) => x.q === q);

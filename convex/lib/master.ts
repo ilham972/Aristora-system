@@ -34,6 +34,8 @@ export interface MQ {
   /** It came back on his phone 2 levels later (4 Nov 2026): answered again at rt, with rg marks. */
   rt?: number;
   rg?: number;
+  /** Free marks (out of the syllabus, lib/free.ts): the row as it was before; "none" = there was no row. */
+  fr?: Omit<MQ, "fr"> | "none";
 }
 
 /** Waiting for Theory: sent there and not taught yet. */

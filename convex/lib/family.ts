@@ -17,6 +17,7 @@ import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { MasterData } from "./book";
 import { allPhone, boxCount, type KeyQ } from "./phone";
 import { DAY_MS, slDayNo, slWeekStart } from "./day";
+import { isFree } from "./free";
 import { computeMaster, EMPTY_MASTER, type MState } from "./master";
 import { OL, olNumber } from "./syllabus";
 import { ladderOf, secDone } from "./ladder";
@@ -125,7 +126,7 @@ export function retryPool(m: MState, book: MasterData, keys: Map<number, KeyQ>, 
     for (let q = l.from; q <= l.to && out.length < RETRY_PER_LEVEL; q++) {
       const r = m.q[String(q)];
       const k = keys.get(q);
-      if (!r?.lost || r.rt !== undefined || !k || !allPhone(k) || boxCount(k) === 0) continue;
+      if (!r?.lost || r.rt !== undefined || !k || !allPhone(k) || boxCount(k) === 0 || isFree(book, q)) continue;
       out.push({ q, from: l.n, lost: Math.max(0, k.max - (r.got ?? 0)) });
     }
   }
@@ -140,7 +141,7 @@ export function retryPool(m: MState, book: MasterData, keys: Map<number, KeyQ>, 
 export function comesBack(m: MState, book: MasterData, keys: Map<number, KeyQ>, q: number): boolean {
   const r = m.q[String(q)];
   const k = keys.get(q);
-  if (!r?.lost || r.rt !== undefined || !k || !allPhone(k) || boxCount(k) === 0) return false;
+  if (!r?.lost || r.rt !== undefined || !k || !allPhone(k) || boxCount(k) === 0 || isFree(book, q)) return false;
   const own = book.levels.find((l) => q >= l.from && q <= l.to);
   if (!own) return false;
   return book.levels.some((l) => {

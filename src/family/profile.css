@@ -824,3 +824,26 @@ a.f-btn {
   margin-top: 14px;
 }
 
+/* The owner's Preview (5 Nov 2026): his free-marks switch under each question (src/family/play.tsx FreeSwitch). */
+.f-freesw {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 2px dashed var(--line-2, #ddd9f0);
+}
+.f-freesw.on {
+  border-color: var(--gold);
+  background: var(--gold-soft);
+}
+.f-freesw p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ink2);
+}
+.f-freesw-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}

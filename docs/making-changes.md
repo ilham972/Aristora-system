@@ -99,6 +99,12 @@ EOF
   A rare screen goes into the later parts (`parts.ts`, reached through `loadParts`), which already share that code.
   Measure before CI: bundle `src/family/main.tsx` with `/opt/npm-tools/node_modules/.bin/esbuild --splitting --minify
   --packages=external`, gzip `main.js` + the chunks it imports statically, compare with `git stash`.
+- **A question's marks have one more source: free marks** (5 Nov 2026, `convex/lib/free.ts`): anything that marks a
+  master level (the phone's `check`, `workbook.correct`, a new way to come) gives a free question (`isFree`) its full
+  marks first and skips its own rule, with `freeRow(max, the row before, now)` so `fr` keeps what to give back; a
+  reader that picks questions to do again (`retryPool`, `comesBack`) skips them. A rule that rewrites `books.data`
+  keeps `free` (`saveWorkbook` does on a same-shape upload). Rows with `fr` are students' marks like any other: don't
+  read `fr` anywhere but `setFreeIn`.
 - **The family bundle is in two parts** (4 Nov 2026, the profile): what comes after the first screen (Me, the report,
   the photo editor, the certificate) is imported only through `src/family/later.ts` (`loadParts()`, `useParts()`), never
   straight: one plain `import` from a first-load file brings it back into the first load (the build prints both sizes;

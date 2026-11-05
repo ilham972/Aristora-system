@@ -76,6 +76,8 @@ import {
   TAKE_BACK_MS,
   TAP_GUARD_MS,
   unitNo,
+  isFreeQ,
+  withFree,
   type Before,
   type Carry,
   type Draft,
@@ -381,8 +383,9 @@ function useFocusGrade(here: number[], all: number[]): [number | null, (g: numbe
 /** A workbook paper on this level, with the marks given before (his draft), opening where they stopped. */
 function masterAt(v: View, l: MasterLevel): MasterPaper {
   const d = draftOf(latestDrafts, v, l.n);
-  const { given, parts } = fromDraft(d);
-  const count = Object.keys(given).length;
+  const { given: drafted, parts } = fromDraft(d);
+  const count = Object.keys(drafted).length;
+  const given = withFree(v, l, drafted); // out of the syllabus: given already
   const blanks: Record<number, string[]> = {};
   for (const [q, g] of Object.entries(given)) if (g.dkp?.length) blanks[Number(q)] = [...g.dkp];
   return {
@@ -402,7 +405,7 @@ function masterAt(v: View, l: MasterLevel): MasterPaper {
 
 /** A corrected level opened again: its saved marks, on the level's marks (tap a box to change one). */
 function remarkAt(v: View, l: MasterLevel): MasterPaper {
-  const given = savedGiven(v, l);
+  const given = withFree(v, l, savedGiven(v, l));
   const blanks: Record<number, string[]> = {};
   for (const [q, g] of Object.entries(given)) if (g.dkp?.length) blanks[Number(q)] = [...g.dkp];
   return {
@@ -452,7 +455,7 @@ function paperFor(v: View, now: number): Paper {
       studentId: v.s._id,
       unitId: bookId(v)!,
       level: fits.n,
-      given: { ...c.given },
+      given: withFree(v, fits, c.given),
       parts: { ...(c.parts ?? {}) },
       blanks,
       at: qs.length,
@@ -507,7 +510,7 @@ async function saveLevel(v: View, p: MasterPaper, l: MasterLevel, auto: boolean)
       studentId: v.s._id,
       unitId: bookId(v) as Id<"units"> | undefined,
       level: l.n,
-      items: itemsOf(qs, p.given),
+      items: itemsOf(qs, withFree(v, l, p.given)),
       to: route,
       by: currentRole(),
     }),
@@ -565,7 +568,7 @@ function leave() {
     const l = v?.mb?.levels.find((x) => x.n === p.level);
     if (v && l && marksOfLevel(v, l)) {
       const qs = questionsOf(l);
-      const complete = qs.every((q) => p.given[q]);
+      const complete = qs.every((q) => p.given[q] || isFreeQ(v, q));
       const changed = !p.remark || !sameGiven(qs, p.given, p.remark);
       if (complete && changed) {
         void saveLevel(v, p, l, true);
@@ -1772,7 +1775,8 @@ function MasterPaperView(props: {
   const keyQ = useQuery<{ answers: KeyAnswer[] } | null>(api.catalog.key, { unitId: bookId(v) as Id<"units"> | undefined });
   const [clearing, setClearing] = useState(false);
   const lock = useRef(0);
-  const marks = Object.keys(paper.given).length;
+  // Marks the corrector gave (a free question's are the workbook's, not hers).
+  const marks = Object.keys(paper.given).filter((q) => !isFreeQ(v, Number(q))).length;
   const fixedNow = level && !paper.saving && !paper.remark ? v.mm.lv[String(level.n)]?.fixed : undefined;
 
   // Opened before the drafts arrived: load his marks as soon as they do (only if nothing was marked meanwhile).
@@ -1831,7 +1835,8 @@ function MasterPaperView(props: {
                 onClick={() => {
                   setClearing(false);
                   void dropDraft(paper.studentId, paper.unitId, level.n);
-                  setPaper({ ...paper, given: {}, parts: {}, blanks: {}, at: 0, carriedFrom: undefined, resumed: undefined });
+                  const given = withFree(v, level, {});
+                  setPaper({ ...paper, given, parts: {}, blanks: {}, at: resumeAt(questionsOf(level), given), carriedFrom: undefined, resumed: undefined });
                 }}
               >
                 Clear the marks
@@ -1969,7 +1974,15 @@ function Marking(props: {
   const go = (i: number) => setPaper({ ...paper, at: i });
   return (
     <>
-      <Strip qs={qs} each={each} given={paper.given} at={at} onGo={go} teach={fixedLevel ? (q) => teachState(v.mm.q[String(q)]) : undefined} />
+      <Strip
+        qs={qs}
+        each={each}
+        given={paper.given}
+        at={at}
+        onGo={go}
+        free={(q) => isFreeQ(v, q)}
+        teach={fixedLevel ? (q) => teachState(v.mm.q[String(q)]) : undefined}
+      />
       {paper.resumed && !paper.carriedFrom && !paper.remark && (
         // One short line (2 Nov 2026: notes took the answer's room): the boxes above show which.
         <p class="fc-resumed">
@@ -2014,6 +2027,8 @@ function Strip(props: {
   given: Record<number, Given>;
   at: number;
   onGo: (i: number) => void;
+  /** Out of the syllabus: free marks (gold). */
+  free?: (q: number) => boolean;
   teach?: (q: number) => TeachState | null;
 }) {
   const { qs, each, given, at } = props;
@@ -2021,8 +2036,9 @@ function Strip(props: {
     <HRow as="ol" class="fc-strip" label="Questions of this level" list={qs[0]} at={at}>
       {qs.map((q, i) => {
         const g = given[q];
-        const cls = !g ? "" : g.dk ? " dk" : g.g === each[i] ? " full" : g.g === 0 ? " zero" : " part";
-        const words = !g ? "not marked" : g.dk ? (g.dkp?.length ? `${g.g} of ${each[i]}, ? ${g.dkp.join(" ")} blank` : "? blank") : `${g.g} of ${each[i]}`;
+        const free = !!props.free?.(q);
+        const cls = free ? " free" : !g ? "" : g.dk ? " dk" : g.g === each[i] ? " full" : g.g === 0 ? " zero" : " part";
+        const words = free ? `free marks, ${each[i]}` : !g ? "not marked" : g.dk ? (g.dkp?.length ? `${g.g} of ${each[i]}, ? ${g.dkp.join(" ")} blank` : "? blank") : `${g.g} of ${each[i]}`;
         const t = props.teach?.(q) ?? null;
         return (
           <li key={q}>
@@ -2140,6 +2156,34 @@ function QuestionCard(props: {
   };
   const tone = offer.dk ? "dk" : offer.g === max ? "full" : offer.g === 0 ? "zero" : "part";
   const shown = useQuestionShown(bookId(v), "master");
+  const back = i > 0 ? { label: `Q${qs[i - 1]}`, short: String(qs[i - 1]), go: () => setPaper({ ...paper, at: i - 1 }) } : null;
+  if (isFreeQ(v, q)) {
+    // Out of the syllabus (the owner's free marks, 5 Nov 2026): its marks are given; she only goes on.
+    const skip = () => {
+      if (Date.now() < lock.current) return;
+      const given = { ...paper.given, [q]: { g: max } };
+      const next = nextIndex(qs, given, i);
+      lock.current = Date.now() + (next === qs.length ? TAP_GUARD_MS * 2 : TAP_GUARD_MS);
+      setPaper({ ...paper, given, at: next });
+    };
+    return (
+      <>
+        <section class="fc-card fc-freeq" aria-label={`Question ${q}, free marks, ${max} marks`}>
+          <CardHead label={`Q${q}`} n={<><small>Q</small>{q}</>} meta={`${max} mark${max === 1 ? "" : "s"} · free marks`} back={back} shown={shown} />
+          <p class="fc-freenote">
+            <b>Free marks.</b> This question is out of the syllabus: every student gets its {max} mark{max === 1 ? "" : "s"}. Nothing to mark.
+          </p>
+          {shown.open && <BookQuestion unitId={bookId(v)!} stage="master" q={q} />}
+        </section>
+        <div class="fc-pad">
+          <button type="button" class="fc-go full" aria-label={`Q${q}: free marks, ${max} of ${max}. Next`} onClick={skip}>
+            <b>{max}</b> / {max}
+            <small>free · next</small>
+          </button>
+        </div>
+      </>
+    );
+  }
   const blank = (
     <button
       type="button"
@@ -2159,7 +2203,7 @@ function QuestionCard(props: {
           label={`Q${q}`}
           n={<><small>Q</small>{q}</>}
           meta={`${max} mark${max === 1 ? "" : "s"}${parts ? ` · ${parts.length} parts` : ""}`}
-          back={i > 0 ? { label: `Q${qs[i - 1]}`, short: String(qs[i - 1]), go: () => setPaper({ ...paper, at: i - 1 }) } : null}
+          back={back}
           shown={shown}
         />
         <TeachLine v={v} level={paper.level} q={q} />
@@ -2309,11 +2353,12 @@ function Summary(props: { v: View; paper: MasterPaper; level: MasterLevel; each:
     const id = setTimeout(() => setReady(true), Math.max(0, lock.current - Date.now()));
     return () => clearTimeout(id);
   }, []);
-  const missing = qs.filter((q) => !paper.given[q]);
-  const sum = sumOf(qs, paper.given);
+  const given = withFree(v, level, paper.given); // free marks: in, whatever the paper holds
+  const missing = qs.filter((q) => !given[q]);
+  const sum = sumOf(qs, given);
   const pct = Math.round((sum / level.max) * 100);
-  const lostQs = qs.filter((q, i) => paper.given[q] && !paper.given[q].dk && paper.given[q].g < each[i]);
-  const blanks = blankWords(qs, paper.given);
+  const lostQs = qs.filter((q, i) => given[q] && !given[q].dk && given[q].g < each[i]);
+  const blanks = blankWords(qs, given);
   const route = routeOf(paper.to);
   const remark = paper.remark;
   const changed = !remark || !sameGiven(qs, paper.given, remark);

@@ -3,18 +3,19 @@
 // looking (no Check), never for students or other teachers (a student must finish a level to see the next one).
 // Settings → Books → a unit with a key → Preview on the phone (src/familySheet.tsx) opens the family app on the class
 // system's address (/f/#preview=<unit>, src/family/preview.tsx) with his teachers' sign-in: every level of the Stage
-// open, each question as a student sees it, Check off. Queries only: nothing here can change anything, and no
-// student's rule is touched (levels in order, the photo limit, the questions that come back all stay in family.ts).
+// open, each question as a student sees it, Check off. Queries only, and no student's rule is touched (levels in order,
+// the photo limit, the questions that come back all stay in family.ts); the one change is his free marks (`setFree`).
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
-import { query, type QueryCtx } from "./_generated/server";
-import type { FamilyLevel, FamilyQuestions } from "./family";
-import { viewer } from "./lib/auth";
-import { asMaster, bookFor, fail, keyRow } from "./lib/backend";
-import { partOf } from "./lib/book";
+import { mutation, query, type QueryCtx } from "./_generated/server";
+import { levelForm, type FamilyLevel, type FamilyQuestions } from "./family";
+import { actor, viewer } from "./lib/auth";
+import { asMaster, bookFor, currentSession, fail, keyRow, log, masterState, refresh } from "./lib/backend";
+import { levelOutOf, type MasterData } from "./lib/book";
 import { unitNumber, type World } from "./lib/family";
+import { isFree, setFreeIn } from "./lib/free";
 import { phoneKeyFor } from "./lib/homeWork";
-import { formOf } from "./lib/phone";
+import type { MState } from "./lib/master";
 import { OL, olNumber } from "./lib/syllabus";
 
 const token = v.optional(v.string());
@@ -24,8 +25,8 @@ export type PreviewUnit = {
   world: World;
   grade: number;
   code: string;
-  /** Its levels: their first and last question, marks, and how many questions the phone shows. */
-  levels: { n: number; from: number; to: number; max: number; qs: number }[];
+  /** Its levels: their first and last question, marks, how many questions the phone shows, how many are free marks. */
+  levels: { n: number; from: number; to: number; max: number; qs: number; free: number }[];
 };
 
 /** The owner only; the unit's workbook and its key (what the phone shows comes from the key's kinds). */
@@ -60,8 +61,9 @@ export const unit = query({
       .first();
     const levels = data.levels.map((l) => {
       let qs = 0;
-      for (let q = l.from; q <= l.to; q++) if (keys.has(q)) qs++;
-      return { n: l.n, from: l.from, to: l.to, max: l.max, qs };
+      for (let q = l.from; q <= l.to; q++) if (keys.has(q) || isFree(data, q)) qs++;
+      const free = (data.free ?? []).filter((q) => q >= l.from && q <= l.to).length;
+      return { n: l.n, from: l.from, to: l.to, max: l.max, qs, free };
     });
     return {
       grade: unit.grade,
@@ -91,12 +93,7 @@ export const level = query({
   handler: async (ctx, args): Promise<FamilyLevel> => {
     const { unit, data, no, keys } = await stageOf(ctx, args.token, args.unitId);
     const l = levelOf(data, args.n);
-    const qs: FamilyLevel["qs"] = [];
-    for (let q = l.from; q <= l.to; q++) {
-      const k = keys.get(q);
-      if (k) qs.push({ ...formOf(k), part: partOf(data, q)?.id ?? "" });
-    }
-    return { unitId: unit._id, no, ta: unit.ta, n: l.n, max: l.max, qs };
+    return { unitId: unit._id, no, ta: unit.ta, n: l.n, max: l.max, qs: levelForm(data, keys, l) };
   },
 });
 
@@ -123,5 +120,68 @@ export const questions = query({
       css = row?.css ?? null;
     }
     return { css, qs };
+  },
+});
+
+/**
+ * Free marks for a question out of the syllabus (5 Nov 2026, his ask: "instead removing the question, we have to make
+ * that as a all marks question ... I have to do this manually because I am the one know which one is out of the
+ * syllabus"), from his Preview. Everyone gets its marks: the levels marked already at once (his answer "them too"), the
+ * others when they are marked (the phone's Check, the corrector's Save: lib/free.ts). Its photos waiting for a teacher
+ * close (and open again if it isn't free any more). The owner only.
+ */
+export const setFree = mutation({
+  args: { token, unitId: v.id("units"), q: v.number(), free: v.boolean() },
+  handler: async (ctx, args) => {
+    const me = await actor(ctx, args.token, ["owner"]);
+    const now = Date.now();
+    const unit = await ctx.db.get(args.unitId);
+    const book = await bookFor(ctx, args.unitId, "master");
+    if (!unit || !book) fail("This unit has no workbook in the app yet.");
+    const data = asMaster(book);
+    const l = data.levels.find((x) => args.q >= x.from && args.q <= x.to);
+    if (!l) fail(`Question ${args.q} is not in this workbook.`);
+    // Every question's marks of its level: the phone and Correction then give exactly those marks.
+    if (!levelOutOf(data, l)) fail(`This workbook doesn't list every question's marks in Level ${l.n}: free marks need them.`);
+    const free = new Set(data.free ?? []);
+    if (free.has(args.q) === args.free) return { students: 0 };
+    if (args.free) free.add(args.q);
+    else free.delete(args.q);
+    const next: MasterData = { ...data, free: [...free].sort((a, b) => a - b) };
+    if (!free.size) delete next.free;
+    await ctx.db.patch(book._id, { data: next, updatedAt: now });
+    // Every student's workbook of this unit: a level marked already gets (or gives back) its marks now.
+    let students = 0;
+    const session = await currentSession(ctx, now);
+    const rows = await ctx.db.query("progress").withIndex("by_unit_stage", (x) => x.eq("unitId", args.unitId).eq("stage", "master")).collect();
+    for (const p of rows) {
+      if (!p.m) continue;
+      const m = JSON.parse(JSON.stringify(masterState(p))) as MState;
+      if (!setFreeIn(m, next, args.q, args.free, now)) continue;
+      await ctx.db.patch(p._id, { m, updatedAt: now });
+      // In class now: his "out of work" clock follows (a lost question waiting for Evaluation may have been his work).
+      await refresh(ctx, p.studentId, now, session);
+      students++;
+    }
+    // Its photos waiting for a teacher: nothing to mark any more (or again). A photo closed this way whose files went
+    // meanwhile (a day after closing, photos.sweep) goes too: he is asked for it again, as before he sent it.
+    const photos = await ctx.db.query("homePhotos").withIndex("by_unit", (x) => x.eq("unitId", args.unitId)).collect();
+    for (const r of photos) {
+      if (r.q !== args.q) continue;
+      if (args.free && r.state === "waiting") {
+        await ctx.db.patch(r._id, { state: "done", doneAt: now, by: me.name, byId: me._id, free: true, note: "Free marks: out of the syllabus" });
+      } else if (!args.free && r.free) {
+        if (r.gone) await ctx.db.delete(r._id);
+        else await ctx.db.patch(r._id, { state: "waiting", doneAt: undefined, by: undefined, byId: undefined, free: undefined, note: undefined });
+      }
+    }
+    await log(ctx, null, now, {
+      kind: args.free ? "free-marks" : "free-marks-off",
+      by: me.name,
+      unit: unit.key,
+      q: args.q,
+      value: `${students} student${students === 1 ? "" : "s"}`,
+    });
+    return { students };
   },
 });

@@ -48,6 +48,8 @@ export interface MasterData {
   levels: MasterLevel[];
   /** Each question's marks as printed (Part II: the sum of its parts' marks). Missing = not known. */
   marks?: Record<string, number>;
+  /** Out of the syllabus: everyone gets these questions' marks without doing them (lib/free.ts, 5 Nov 2026). */
+  free?: number[];
 }
 
 export type BookData = FighterData | MasterData;

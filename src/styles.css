@@ -4251,6 +4251,31 @@ body.locked.fc-marking .toasts {
   background: var(--theory-soft);
   color: var(--theory-ink);
 }
+/* Free marks (the owner's, 5 Nov 2026): out of the syllabus, its marks given; dashed so it reads as no one's mark. */
+.fc-sq.free {
+  border: 1.5px dashed var(--yellow);
+  background: var(--yellow-soft);
+  color: var(--yellow-ink);
+}
+.ct-free {
+  padding: 6px 10px;
+  border-radius: 9px;
+  border: 1.5px dashed var(--yellow);
+  background: var(--yellow-soft);
+  color: var(--yellow-ink);
+  font-weight: 700;
+}
+.ct-free small {
+  font-weight: 600;
+}
+.fc-freenote {
+  margin: 10px 0 2px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--yellow-soft);
+  color: var(--yellow-ink);
+  font-size: 15px;
+}
 .fc-sq.s-right {
   border-color: var(--green);
   background: var(--green-soft);

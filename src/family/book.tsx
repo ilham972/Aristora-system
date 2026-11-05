@@ -116,6 +116,20 @@ const WHAT: Record<Kind, string> = {
 function Question(props: { b: BookQ; unitId: string; n: number; onSent: () => void }) {
   const { b } = props;
   const lost = b.got !== null && b.got < b.max;
+  if (b.free) {
+    // Out of the syllabus (the owner's free marks, 5 Nov 2026): its marks his, nothing to send.
+    return (
+      <li class="f-bq free">
+        <div class="f-bq-top">
+          <b class="f-rq">Q{b.q}</b>
+          <span class="f-bq-m">
+            {b.max}/{b.max}
+          </span>
+        </div>
+        <p class="f-ph-state f-bq-free">🎁 இலவசப் புள்ளிகள்: இந்தக் கேள்வி உன் பாடத்திட்டத்தில் இல்லை.</p>
+      </li>
+    );
+  }
   return (
     <li class={`f-bq${lost ? " lost" : ""}`}>
       <div class="f-bq-top">
@@ -189,7 +203,8 @@ export function Book(props: { unitId: string; n: number; initial?: LevelBook | n
   }, [book]);
   if (err && !book) return <p class="f-note">{err}</p>;
   if (!book) return <p class="f-note">…</p>;
-  const qs = book.qs.filter((q) => q.sol || q.back || q.owe.length || q.photos.length);
+  const qs = book.qs.filter((q) => !q.free && (q.sol || q.back || q.owe.length || q.photos.length));
+  const free = book.qs.filter((q) => q.free);
   const owed = book.qs.reduce((a, q) => a + q.owe.length, 0);
   return (
     <section class="f-book">
@@ -215,6 +230,13 @@ export function Book(props: { unitId: string; n: number; initial?: LevelBook | n
       ) : (
         <ul class="f-bqs">
           {qs.map((b) => (
+            <Question key={b.q} b={b} unitId={props.unitId} n={props.n} onSent={() => void load()} />
+          ))}
+        </ul>
+      )}
+      {free.length > 0 && (
+        <ul class="f-bqs">
+          {free.map((b) => (
             <Question key={b.q} b={b} unitId={props.unitId} n={props.n} onSent={() => void load()} />
           ))}
         </ul>
