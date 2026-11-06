@@ -17,8 +17,9 @@ import type { ComponentChildren } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { FamilyLevel, FamilyMe } from "../../convex/family";
 import type { Trophy, World } from "../../convex/lib/family";
+import type { RaceRow } from "../../convex/lib/race";
 import { hideSplash } from "../splash";
-import { BoardTab } from "./board";
+import { BoardTab, keptBoard } from "./board";
 import type { CertData } from "./cert";
 import { FeedbackSheet } from "./feedback";
 import { HomeTab } from "./home";
@@ -65,6 +66,8 @@ type Screen =
   | { k: "main" }
   /** Me → Report: his whole report (4 Nov 2026). */
   | { k: "report" }
+  /** A classmate's profile, from the race (7 Nov 2026): his row as the race showed it while it loads. */
+  | { k: "mate"; id: string; row: RaceRow | null }
   | { k: "stage"; unitId: string }
   | { k: "level"; unitId: string; n: number }
   /** A level he checked at home: solutions, photos to send, the teacher's answers (4 Nov 2026). */
@@ -80,11 +83,11 @@ type Screen =
     };
 
 /** How deep a screen is: Back steps up one at a time (the reveal and a Level go back to their Stage). */
-const depth = (s: Screen) => (s.k === "level" || s.k === "result" || s.k === "book" ? 2 : s.k === "stage" || s.k === "add" || s.k === "report" ? 1 : 0);
+const depth = (s: Screen) => (s.k === "level" || s.k === "result" || s.k === "book" ? 2 : s.k === "stage" || s.k === "add" || s.k === "report" || s.k === "mate" ? 1 : 0);
 const parent = (s: Screen): Screen =>
   s.k === "level" || s.k === "result" || s.k === "book"
     ? { k: "stage", unitId: s.unitId }
-    : s.k === "stage" || s.k === "report"
+    : s.k === "stage" || s.k === "report" || s.k === "mate"
       ? { k: "main" }
       : s.k === "add"
         ? current()
@@ -366,6 +369,12 @@ export function App() {
     ) : (
       <Missing onBack={toMain} />
     );
+  } else if (screen.k === "mate") {
+    body = parts ? (
+      <parts.MateScreen key={screen.id} id={screen.id} row={screen.row} board={keptBoard()} me={me} onBack={up} />
+    ) : (
+      <Waiting />
+    );
   } else if (screen.k === "stage") {
     const w = worldOf(screen.unitId);
     body = w ? (
@@ -475,7 +484,16 @@ export function App() {
           ) : tab === "learn" ? (
             <LearnTab top={top} me={me} onStage={(unitId) => go({ k: "stage", unitId })} onPlay={playNow} />
           ) : tab === "race" ? (
-            <BoardTab top={top} me={me} />
+            <BoardTab
+              top={top}
+              me={me}
+              onOpen={(r, b) => {
+                // His own row: his own profile is Me.
+                if (r.id === b.you) return pickTab("me");
+                window.scrollTo(0, 0);
+                go({ k: "mate", id: r.id, row: r });
+              }}
+            />
           ) : !parts ? (
             <>
               <header class="f-hero">{top}</header>

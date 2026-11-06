@@ -5,7 +5,8 @@
 
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import { mutation, query } from "./_generated/server";
+import { query } from "./_generated/server";
+import { mutation } from "./lib/fn";
 import { actor, viewer } from "./lib/auth";
 import { fail, masterState, readDigest, STALE_SESSION_MS } from "./lib/backend";
 import type { Digest, Money } from "./lib/boss";

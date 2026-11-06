@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation } from "./_generated/server";
+import { mutation } from "./lib/fn";
 
 /** Server time, so every phone shows the same timers even if its clock is off. */
 export const ping = mutation({

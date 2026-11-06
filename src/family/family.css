@@ -2787,6 +2787,212 @@ p {
 .f-brow.me .f-rank {
   color: var(--brand-2);
 }
+/* 7 Nov 2026: every row (and the podium) opens that student's profile. */
+button.f-brow,
+button.f-pod {
+  width: 100%;
+  text-align: left;
+}
+button.f-pod {
+  text-align: center;
+}
+button.f-brow:active,
+button.f-pod:active,
+.f-nyc:active {
+  transform: scale(0.98);
+}
+.f-board > li + li {
+  margin-top: 2px;
+}
+/* His grade | ARISTORA: two pills in the header (the report's month switch, here in the first load). */
+.f-rtabs {
+  position: relative;
+  display: flex;
+  gap: 6px;
+  margin-top: 16px;
+}
+.f-rtabs button {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 6px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font: 800 14px/1 var(--display);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+.f-rtabs button.on {
+  background: #fff;
+  color: var(--brand);
+}
+/* Last week's champion of this list. */
+.f-wcrown {
+  margin-left: 3px;
+  font-size: 0.95em;
+}
+/* How he moved since yesterday: up blue, down grey (never a red to shame him). */
+.f-mv {
+  flex: none;
+  font: 800 12.5px/1 var(--display);
+  padding-top: 2px;
+}
+.f-mv.up {
+  color: var(--right);
+}
+.f-mv.down {
+  color: var(--ink3);
+}
+/* A grade, as a number only (the whole ARISTORA list). */
+.f-gchip {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  min-width: 24px;
+  height: 22px;
+  padding: 2px 5px 0;
+  border-radius: 8px;
+  background: var(--lav);
+  color: var(--brand-2);
+  font: 800 12.5px/1 var(--display);
+  font-style: normal;
+}
+/* Not started this week: names only, no number. */
+.f-notyet {
+  margin: 12px 16px 0;
+}
+.f-notyet .f-h2 small {
+  color: var(--ink3);
+}
+.f-ny {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.f-nyc {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 10px 4px 4px;
+  border-radius: 999px;
+  background: var(--bg);
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ink2);
+}
+.f-nyc > span {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.f-nyc.me {
+  background: var(--brand-soft);
+  color: var(--brand-2);
+  box-shadow: inset 0 0 0 2px var(--brand);
+}
+.f-nyc .f-gchip {
+  min-width: 20px;
+  height: 18px;
+  font-size: 11px;
+}
+/* The grade cup: each grade's share that learned this week. */
+.f-gcup {
+  margin: 12px 16px 0;
+}
+.f-gcupl {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 7px;
+}
+.f-gcupl li {
+  display: grid;
+  grid-template-columns: 30px 1fr auto;
+  align-items: center;
+  gap: 10px;
+}
+.f-gcupg {
+  display: grid;
+  place-items: center;
+  height: 26px;
+  border-radius: 9px;
+  background: var(--lav);
+  color: var(--brand-2);
+  font: 800 14px/1 var(--display);
+  padding-top: 2px;
+}
+.f-gcupbar {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+.f-gcupbar i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--brand-mid);
+  transition: width 0.6s var(--spring);
+}
+.f-gcupl li.me .f-gcupg {
+  background: var(--brand);
+  color: #fff;
+}
+.f-gcupl li.me .f-gcupbar i {
+  background: var(--brand);
+}
+.f-gcupl li.lead .f-gcupbar i {
+  background: linear-gradient(90deg, var(--gold-hi), var(--gold));
+}
+.f-gcupl small {
+  min-width: 38px;
+  text-align: right;
+  font: 800 13px var(--display);
+  color: var(--ink2);
+}
+/* Who cheered him this week (Home and Me): gold, a win. */
+.f-clap-h {
+  display: inline-block;
+  margin-right: 6px;
+  font-size: 22px;
+  line-height: 1;
+}
+.f-clapped {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--gold-soft);
+}
+.f-clapped .f-clap-h {
+  margin: 0;
+  font-size: 30px;
+}
+.f-clapped p {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.f-clapped b {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--gold-ink);
+}
+.f-clapped small {
+  font-size: 13px;
+  color: var(--ink2);
+}
+.f-gcup-say {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--ink2);
+}
 
 /* ---------- Me ---------- */
 .f-streaknum {

@@ -6,7 +6,8 @@
 
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
-import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
+import { query, type MutationCtx, type QueryCtx } from "./_generated/server";
+import { mutation } from "./lib/fn";
 import {
   actor,
   checkPin,

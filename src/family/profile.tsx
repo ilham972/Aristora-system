@@ -30,7 +30,7 @@ const dateWords = (t: number) => {
 const monthName = (m: string, full = false) => (full ? MONTH_FULL : MONTH)[Number(m.slice(5)) - 1];
 // ---- The map of 12 weeks ----
 
-export function HeatMap(props: { p: FamilyProfile; onDay: (day: string) => void }) {
+export function HeatMap(props: { p: FamilyProfile; onDay?: (day: string) => void }) {
   const { p } = props;
   const [sel, setSel] = useState(p.today);
   const by = new Map(p.days.map((x) => [x.d, x]));
@@ -128,9 +128,11 @@ export function HeatMap(props: { p: FamilyProfile; onDay: (day: string) => void 
             <Gem size={14} /> {x.xp}
           </span>
         ) : null}
-        <button type="button" class="f-hday-go" onClick={() => props.onDay(isoOf(sel))}>
-          See <Icon name="next" size={16} />
-        </button>
+        {props.onDay && (
+          <button type="button" class="f-hday-go" onClick={() => props.onDay?.(isoOf(sel))}>
+            See <Icon name="next" size={16} />
+          </button>
+        )}
       </div>
     </section>
   );
@@ -218,11 +220,11 @@ function Ring(props: { pct: number | null; size?: number }) {
   );
 }
 
-const sumQ = (xs: QCounts[]): QCounts =>
+export const sumQ = (xs: QCounts[]): QCounts =>
   xs.reduce((a, x) => ({ right: a.right + x.right, learned: a.learned + x.learned, toLearn: a.toLearn + x.toLearn }), { right: 0, learned: 0, toLearn: 0 });
 
 /** Right, Learned, To learn: three counts, and what the last two mean (in his words). */
-function QChips(props: { q: QCounts }) {
+export function QChips(props: { q: QCounts }) {
   return (
     <>
       <div class="f-qc">
@@ -320,13 +322,15 @@ export function ReportCard(props: { me: FamilyMe; p: FamilyProfile; onOpen: () =
   );
 }
 
-function StageCard(props: { s: StageLine; onCert: () => void }) {
+/** A Stage of his report; a classmate's profile without marks (the owner's switch) shows its Levels only, no certificate. */
+export function StageCard(props: { s: StageLine; onCert?: () => void; marks?: boolean }) {
   const s = props.s;
+  const marks = props.marks !== false;
   const dates = [s.given !== null ? `Given ${dateWords(s.given)}` : "", s.start !== null ? `Started ${dateWords(s.start)}` : "", s.end !== null ? `Finished ${dateWords(s.end)}` : ""].filter(Boolean);
   return (
     <article class={`f-card f-sc rise${s.allDone ? " done" : ""}`}>
       <div class="f-sc-top">
-        <Ring pct={pctOf(s)} size={60} />
+        {marks ? <Ring pct={pctOf(s)} size={60} /> : <Ring pct={s.levels ? Math.round((s.done / s.levels) * 100) : null} size={60} />}
         <div class="f-sc-w">
           <small>
             Stage {s.no}
@@ -342,13 +346,15 @@ function StageCard(props: { s: StageLine; onCert: () => void }) {
           {s.done} / {s.levels} Levels{s.home ? ` · ⌂ ${s.home} at home` : ""}
         </small>
       </div>
-      <p class="f-sc-q">
-        <span class="right">✓ {s.right}</span>
-        <span class="learned">Learned {s.learned}</span>
-        <span class="tolearn">To learn {s.toLearn}</span>
-      </p>
+      {marks && (
+        <p class="f-sc-q">
+          <span class="right">✓ {s.right}</span>
+          <span class="learned">Learned {s.learned}</span>
+          <span class="tolearn">To learn {s.toLearn}</span>
+        </p>
+      )}
       {dates.length > 0 && <p class="f-sc-dates">{dates.join(" · ")}</p>}
-      {s.allDone && (
+      {s.allDone && props.onCert && (
         <button type="button" class="f-btn gold f-sc-cert" onClick={props.onCert}>
           <Icon name="award" size={19} /> Certificate
         </button>

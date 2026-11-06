@@ -291,19 +291,45 @@ export async function masterRows(ctx: QueryCtx, studentId: Id<"students">): Prom
   return rows.filter((r) => r.stage === "master" && r.m);
 }
 
-/** His rows that make XP, days in a row and levels: his workbooks, and a tute's ladder done at home (`lh`). */
+/**
+ * His rows that make XP, days in a row and levels: his workbooks, and his theory books (a tute's ladder done at home,
+ * `lh`; since 7 Nov 2026 the questions the class marked too).
+ */
 export async function xpRows(ctx: QueryCtx, studentId: Id<"students">): Promise<Doc<"progress">[]> {
   const rows = await ctx.db
     .query("progress")
     .withIndex("by_student", (q) => q.eq("studentId", studentId))
     .collect();
-  return rows.filter((r) => (r.stage === "master" && r.m) || r.lh);
+  return rows.filter(xpRow);
+}
+
+/** A row that makes XP (xpRows). */
+export const xpRow = (r: Doc<"progress">) => (r.stage === "master" && !!r.m) || r.stage === "fighter";
+
+/**
+ * A theory book's questions he did in class (7 Nov 2026, his voice note: "if they did the question from the classroom
+ * or from the home, whatever, they are progressing"): each circle the class marked, with its state and when. Not the
+ * ones a ladder check at home wrote (those count in `lh`: its moment, or a question of a section checked at home).
+ */
+function classCircles(r: Doc<"progress">): { s: string; t: number }[] {
+  if (r.stage !== "fighter") return [];
+  const homeT = new Set<number>();
+  const homeQ = new Set<number>();
+  for (const x of Object.values(r.lh ?? {})) {
+    homeT.add(x.t);
+    for (const q of x.q ?? []) homeQ.add(q);
+  }
+  const out: { s: string; t: number }[] = [];
+  for (const [q, mk] of Object.entries(r.marks ?? {})) if (!homeT.has(mk.t) && !homeQ.has(Number(q))) out.push(mk);
+  return out;
 }
 
 /**
  * Every XP he won, and when: a level's marks when he finished it (handed in or marked at home; marked in class or at
  * home; with the marks it has now: the corrector's check can change them), and the marks he won back when a wrong
- * question came back (4 Nov 2026: counted the day he won them back, never more than he had lost).
+ * question came back (4 Nov 2026: counted the day he won them back, never more than he had lost). A theory book's
+ * question the class marked right: 1 XP the moment it was marked (7 Nov 2026; at home a ladder section counts its parts).
+ * Being taught or explained is never XP: XP = marks, so nobody wins XP by getting things wrong.
  */
 export function xpItems(rows: Doc<"progress">[]): { t: number; xp: number }[] {
   const out: { t: number; xp: number }[] = [];
@@ -314,6 +340,7 @@ export function xpItems(rows: Doc<"progress">[]): { t: number; xp: number }[] {
     for (const x of Object.values(r.m?.q ?? {})) {
       if (x.rt !== undefined && (x.rg ?? 0) > (x.got ?? 0)) out.push({ t: x.rt, xp: (x.rg ?? 0) - (x.got ?? 0) });
     }
+    for (const c of classCircles(r)) if (c.s === "right") out.push({ t: c.t, xp: 1 });
   }
   return out;
 }
@@ -328,7 +355,10 @@ export function weekXp(rows: Doc<"progress">[], now: number): number {
   return xpSince(rows, slWeekStart(now));
 }
 
-/** Every day (Sri Lanka day number) he finished a level: handed in, or marked in class or at home (never "before the app"). */
+/**
+ * Every day (Sri Lanka day number) he finished a level: handed in, or marked in class or at home (never "before the
+ * app"); and since 7 Nov 2026 a day the class marked his theory-book questions (his own work: right, wrong or a slip).
+ */
 export function levelDays(rows: Doc<"progress">[]): Set<number> {
   const days = new Set<number>();
   for (const r of rows) {
@@ -337,6 +367,7 @@ export function levelDays(rows: Doc<"progress">[]): Set<number> {
       const t = lv.done ?? lv.fixed;
       if (t !== undefined && !lv.pre) days.add(slDayNo(t));
     }
+    for (const c of classCircles(r)) if (c.s === "right" || c.s === "wrong" || c.s === "slip") days.add(slDayNo(c.t));
   }
   return days;
 }

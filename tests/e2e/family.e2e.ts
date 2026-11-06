@@ -1887,6 +1887,116 @@ test("Me, his profile: a camera photo made small with its bar, the OK, the race;
   expect(problems).toEqual([]);
 });
 
+test("the race for everyone: his grade and ARISTORA, not started this week, the grade cup, 👑, a classmate's profile, a cheer", async () => {
+  const before = problems.length;
+  const backend = makeBackend(modules);
+  const t = backend.t;
+  await addPerson(t, { name: "Owner", token: OWNER_TOKEN, role: "owner" });
+  const as = { token: OWNER_TOKEN };
+  await t.mutation(api.setup.ensure, as);
+  const unit = async (key: string) => await t.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", key)).first())!._id);
+  const u01 = await unit("G8-U01");
+  const g9 = await unit("G9-U01");
+  await t.mutation(api.catalog.saveWorkbook, {
+    ...as,
+    unitId: u01,
+    parts: BOOK.data.parts.map((p) => ({ id: p.id, to: p.to, ...(p.each ? { each: p.each } : {}) })),
+    levels: BOOK.data.levels.map((l) => ({ to: l.to, max: l.max })),
+    marks: BOOK.data.marks ?? {},
+    replace: true,
+    key: fakeKey(),
+  });
+  const add = async (name: string, grade: number, unitId?: typeof u01) =>
+    await t.mutation(api.students.add, { ...as, name, grade, term: 1, stage: "master", ...(unitId ? { unitId } : {}) });
+  const hana = await add("Hana K", 8, u01);
+  const bilal = await add("Bilal M", 8, u01);
+  await add("Dev P", 8, u01); // never joined the app, no work this week: still in the race
+  const ravi = await add("Ravi S", 9);
+  await t.mutation(api.families.setCode, { ...as, studentId: hana, code: "4719" });
+  await t.mutation(api.families.setCode, { ...as, studentId: bilal, code: "5820" });
+  // Class work, no app: Bilal's levels corrected in class (one last week: last week's champion), Ravi's in Grade 9.
+  const now = Date.now();
+  const lv = (t0: number, got: number) => ({ done: t0, fixed: t0 + 60_000, got, by: "correction" });
+  await t.run(async (ctx) => {
+    const m = { q: {}, lv: { "1": lv(now - 8 * 86_400_000, 18), "2": lv(now - 3_600_000, 12) } };
+    const p = await ctx.db.query("progress").withIndex("by_student_unit_stage", (q) => q.eq("studentId", bilal).eq("unitId", u01).eq("stage", "master")).first();
+    if (p) await ctx.db.patch(p._id, { m, updatedAt: now });
+    else await ctx.db.insert("progress", { studentId: bilal, unitId: u01, stage: "master", marks: {}, m, startedAt: 0, updatedAt: now });
+    await ctx.db.insert("progress", { studentId: ravi, unitId: g9, stage: "master", marks: {}, m: { q: {}, lv: { "1": lv(now - 7_200_000, 26) } }, startedAt: 0, updatedAt: now });
+  });
+
+  // Hana: Grade 8 first. Bilal (class only) on the podium with last week's 👑; Dev and Hana: not started this week.
+  const P = await open(backend, `${site.url}/f/`, size(360, 780));
+  await P.getByLabel(/Index/).fill("1001");
+  await P.getByLabel("Code").fill("4719");
+  await P.getByRole("button", { name: "Sign in" }).click();
+  await goalIs(P, "Level 1");
+  await tabTo(P, /Race/);
+  await contains(P.locator(".f-hero .f-kicker"), "GRADE 8");
+  await contains(P.locator(".f-pod.p1"), "Bilal");
+  await visible(P.locator(".f-pod.p1 .f-wcrown"));
+  await contains(P.locator(".f-notyet"), "Dev");
+  await contains(P.locator(".f-notyet .f-nyc.me"), "You");
+  expect(await P.locator(".f-notyet .f-nyc").count()).toBe(2);
+  await contains(P.locator(".f-pass"), "race இல் சேர்வாய்");
+  await noSideScroll(P);
+  await shot(P, "fam57-race-grade");
+  // ARISTORA: Ravi (Grade 9) on top, grades as numbers, the grade cup.
+  await P.locator(".f-rtabs").getByRole("button", { name: "ARISTORA" }).click();
+  await contains(P.locator(".f-hero .f-kicker"), "ARISTORA");
+  await contains(P.locator(".f-pod.p1"), "Ravi");
+  await visible(P.locator(".f-gcup"));
+  expect(await P.locator(".f-gcupl li").count()).toBe(2);
+  await contains(P.locator(".f-gcupl li").first(), "1/1"); // Grade 9: all of it learned
+  await noSideScroll(P);
+  await shot(P, "fam58-race-aristora");
+
+  // Bilal's profile from the podium: everything, his place in both lists; a cheer, once a day.
+  await P.locator(".f-pod", { hasText: "Bilal" }).click();
+  await contains(P.locator(".f-mate .f-me-name"), "Bilal M");
+  await contains(P.locator(".f-mate-pl"), "#1");
+  await contains(P.locator(".f-mate-pl"), "#2");
+  await contains(P.locator(".f-mate .f-sc"), "2 / 12 Levels");
+  await visible(P.locator(".f-mate .f-heatbox"));
+  await P.getByRole("button", { name: /Cheer Bilal/ }).click();
+  await contains(P.locator(".f-clap"), "Cheered today");
+  await contains(P.locator(".f-clap small"), "1 👏");
+  await noSideScroll(P);
+  await shot(P, "fam59-mate");
+  await P.getByRole("button", { name: "Back" }).click();
+  await visible(P.locator(".f-rtabs"));
+
+  // Bilal's phone: Me says who cheered him this week.
+  const B = await open(backend, `${site.url}/f/`, size(360, 780));
+  await B.getByLabel(/Index/).fill("1002");
+  await B.getByLabel("Code").fill("5820");
+  await B.getByRole("button", { name: "Sign in" }).click();
+  await goalIs(B, "Level");
+  await tabTo(B, /Me$/);
+  await contains(B.locator(".f-clapped"), "Hana K");
+  await noSideScroll(B);
+  await shot(B, "fam60-me-cheered");
+
+  // The smallest phone: both lists and a profile fit 320 px.
+  const S = await open(backend, `${site.url}/f/`, size(320, 640));
+  await S.getByLabel(/Index/).fill("1001");
+  await S.getByLabel("Code").fill("4719");
+  await S.getByRole("button", { name: "Sign in" }).click();
+  await goalIs(S, "Level 1");
+  await tabTo(S, /Race/);
+  await S.locator(".f-rtabs").getByRole("button", { name: "ARISTORA" }).click();
+  await visible(S.locator(".f-gcup"));
+  await noSideScroll(S);
+  await shot(S, "fam61-race-320");
+  await S.locator(".f-pod", { hasText: "Bilal" }).click();
+  await contains(S.locator(".f-mate .f-me-name"), "Bilal M");
+  await visible(S.locator(".f-mate .f-sc"));
+  await noSideScroll(S);
+  await shot(S, "fam62-mate-320");
+  for (const p of [P, B, S]) await p.context().close();
+  expect(problems.slice(before)).toEqual([]);
+});
+
 test("the owner's Preview: Settings → Books → a unit → every level open on the phone's own screen, look only; nobody else", async () => {
   // 5 Nov 2026, his ask: check every question of a unit without doing its levels in order; his answers: only him, only
   // looking. Made-up questions only.

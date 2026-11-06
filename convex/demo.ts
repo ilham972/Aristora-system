@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import { mutation, type MutationCtx } from "./_generated/server";
+import { type MutationCtx } from "./_generated/server";
+import { mutation } from "./lib/fn";
 import { bookFor, cleanBy, currentSession, ensureSession, fail, log, refresh, startVisit, touch, wipeStudent } from "./lib/backend";
 import { fighter, KNOWN_WORKBOOKS, levelOutOf, PILOT_UNIT, type MasterData } from "./lib/book";
 import type { MQ, MState } from "./lib/master";

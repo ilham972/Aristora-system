@@ -7,7 +7,8 @@
 // the photo limit, the questions that come back all stay in family.ts); the one change is his free marks (`setFree`).
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
-import { mutation, query, type QueryCtx } from "./_generated/server";
+import { query, type QueryCtx } from "./_generated/server";
+import { mutation } from "./lib/fn";
 import { levelForm, type FamilyLevel, type FamilyQuestions } from "./family";
 import { actor, viewer } from "./lib/auth";
 import { asMaster, bookFor, currentSession, fail, keyRow, log, masterState, refresh } from "./lib/backend";

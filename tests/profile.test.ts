@@ -216,22 +216,22 @@ describe("the profile on the server", () => {
     expect(me.photo).toEqual({ key, wait: true });
     expect(await H_().query(api.family.photos, { keys: [key] })).toEqual({ [key]: `data:image/jpeg;base64,${jpeg()}` });
     // Waiting: not in the race, and a classmate who guesses the key gets nothing.
-    expect((await B_().query(api.family.board, {})).top.concat((await B_().query(api.family.board, {})).me!).every((r) => !r.pic)).toBe(true);
+    expect((await B_().query(api.family.board, {})).rows.every((r) => !r.pic)).toBe(true);
     expect(await B_().query(api.family.photos, { keys: [key] })).toEqual({});
     // The teachers: one ask on the gear, the picture in the list.
     expect(await t.query(api.families.askCount, {})).toBe(1);
     const [ask] = await t.query(api.families.asks, {});
     expect(ask).toMatchObject({ studentId: hana, name: "Hana K", grade: 8, kind: "photo", want: null, had: false });
     expect(ask.pic).toBe(`data:image/jpeg;base64,${jpeg()}`);
-    // OK: the race shows it to his grade; another grade never gets it.
+    // OK: the race shows it (his grade, and the whole ARISTORA since 7 Nov 2026: another grade too).
     await t.mutation(api.families.answer, { id: ask.id, yes: true });
     expect(await t.query(api.families.askCount, {})).toBe(0);
     me = await H_().query(api.family.me, {});
     expect(me.photo).toEqual({ key, wait: false });
     const board = await B_().query(api.family.board, {});
-    expect([...board.top, board.me!].find((r) => r.name === "Hana K")?.pic ?? null).toBe(null); // no XP this week: not in the top
+    expect(board.rows.find((r) => r.n === "Hana K")?.pic).toBe(key); // everyone is in the race, 0 XP or not
     expect(await B_().query(api.family.photos, { keys: [key] })).toEqual({ [key]: `data:image/jpeg;base64,${jpeg()}` });
-    expect(await R_().query(api.family.photos, { keys: [key] })).toEqual({});
+    expect(await R_().query(api.family.photos, { keys: [key] })).toEqual({ [key]: `data:image/jpeg;base64,${jpeg()}` });
     // A second photo waits; the first stays in the race until the OK; No = gone, told once.
     const second = (await H_().mutation(api.family.setPhoto, { data: webp(), type: "image/webp" })).key;
     expect((await H_().query(api.family.me, {})).photo).toEqual({ key: second, wait: true });
@@ -267,10 +267,10 @@ describe("the profile on the server", () => {
       if (p) await ctx.db.patch(p._id, { m });
       else await ctx.db.insert("progress", { studentId: hana, unitId: u01, stage: "master", marks: {}, m, startedAt: Date.now(), updatedAt: Date.now() });
     });
-    expect((await B_().query(api.family.board, {})).top.find((r) => r.name === "Hana K")?.pic).toBe(c);
+    expect((await B_().query(api.family.board, {})).rows.find((r) => r.n === "Hana K")?.pic).toBe(c);
     // His family turns it off for the race: his own phone still shows it.
     await H_().mutation(api.family.setRace, { show: false });
-    expect((await B_().query(api.family.board, {})).top.find((r) => r.name === "Hana K")?.pic).toBeUndefined();
+    expect((await B_().query(api.family.board, {})).rows.find((r) => r.n === "Hana K")?.pic).toBeUndefined();
     expect(await B_().query(api.family.photos, { keys: [c] })).toEqual({});
     expect(await H_().query(api.family.photos, { keys: [c] })).toHaveProperty(c);
     expect((await H_().query(api.family.me, {})).photoHide).toBe(true);
@@ -323,12 +323,13 @@ describe("the profile on the server", () => {
     expect((await H_().query(api.family.me, {})).bday).toBe("11-04");
     await expect(H_().mutation(api.family.setBday, { bday: "11-05" })).rejects.toThrow(/ask your teacher/);
     const board = await B_().query(api.family.board, {});
-    // Nobody has XP this week: only his own row comes; Hana's 🎂 shows on hers.
-    expect((await H_().query(api.family.board, {})).me).toMatchObject({ name: "Hana K", bday: true });
-    expect(board.me).toMatchObject({ name: "Bilal M" });
-    expect(board.me!.bday).toBeUndefined();
+    // Everyone is in the race (7 Nov 2026), XP or not: Hana's 🎂 shows on her row, on her phone and her classmates'.
+    const row = (b: typeof board, n: string) => b.rows.find((r) => r.n === n)!;
+    expect(row(await H_().query(api.family.board, {}), "Hana K").bd).toBe(true);
+    expect(row(board, "Hana K").bd).toBe(true);
+    expect(row(board, "Bilal M").bd).toBeUndefined();
     vi.setSystemTime(new Date("2026-11-05T15:00:00+05:30"));
-    expect((await H_().query(api.family.board, {})).me!.bday).toBeUndefined();
+    expect(row(await H_().query(api.family.board, {}), "Hana K").bd).toBeUndefined();
     await t.mutation(api.families.clearBday, { studentId: hana });
     expect((await H_().query(api.family.me, {})).bday).toBeNull();
     await H_().mutation(api.family.setBday, { bday: "11-05" });

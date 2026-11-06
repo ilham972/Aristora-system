@@ -3,7 +3,8 @@
 
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
-import { mutation, query, type QueryCtx } from "./_generated/server";
+import { query, type QueryCtx } from "./_generated/server";
+import { mutation } from "./lib/fn";
 import { actor, LINK_MS, nameKey, viewer } from "./lib/auth";
 import { cleanName, fail, log } from "./lib/backend";
 import { slDay } from "./lib/day";

@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation } from "./_generated/server";
+import { mutation } from "./lib/fn";
 import { cleanBy, closeSession, fail, openSession } from "./lib/backend";
 import { actor } from "./lib/auth";
 

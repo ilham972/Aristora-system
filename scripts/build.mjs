@@ -72,8 +72,11 @@ console.log(`Built dist/ for ${url}: ${basename(js)} ${kb(js)} KB, ${basename(cs
 // the first screen (src/family/level.ts), named in the page like Me's: the first screen never shows it, and both budgets
 // were full (65.3 / 66 and 15.8 / 16) with fractions and the boxes inside the question still to come. Later 16 → 32: it
 // holds the level screen that left the first load (nothing a phone didn't already fetch) and those two.
+// 7 Nov 2026, the race for everyone (his yes: "Race + profiles"): later 32 → 36 for a classmate's profile and cheers
+// (32.9; fetched once, then kept by the service worker); the race's two lists and the grade cup are in the first load
+// (58.6 / 66).
 const FAMILY_BUDGET_KB = 66;
-const FAMILY_LATER_KB = 32;
+const FAMILY_LATER_KB = 36;
 await mkdir("dist/f/assets", { recursive: true });
 const fam = await build({
   // profile.css: the style of the parts that come after the first screen (src/family/later.ts attaches it).

@@ -395,3 +395,24 @@ EOF
   pairs) must write them in one update (`setRun`): two `set` calls in one handler lose the first.
 - Playwright's CSS locators pierce the paper's open shadow root: `P.locator(".f-paper [data-opt]")` taps an option.
 - The family bundle is ~62 KB with the kinds (budget 64 KB since that evening): `PAPER_CSS` is a string in the JS.
+
+**The race kept ready (7 Nov 2026).**
+- **Every mutation comes from `convex/lib/fn.ts`**, never from `./_generated/server` (`tests/race.test.ts` reads every
+  server file and fails on it): its db is watched, and as the mutation ends the progress rows it wrote and the students
+  it added, renamed, moved, removed (or whose photo or birthday changed) reach `raceRows` / `raceParts`. A new server
+  file: `import { mutation } from "./lib/fn";`. A mutation that skips it leaves the race stale for those students.
+- **Writes in a test's `t.run`/`raw.run` skip the wrapper** (they are not mutations): the race rows don't follow. Until
+  meta `raceV` says the rows are ready the race works out the old way (from everyone's rows), so old tests that seed
+  progress straight still see it; a test of the rows runs `internal.race.fill` first (it builds what is missing, then
+  sets `raceV`). One progress row per student and book in a fixture (`students.add` with a unit already made one: patch
+  it), or the map and the race disagree (the map reads the first row, XP adds both).
+- **What counts as XP changes in one place** (`xpItems`, `levelDays` in `convex/lib/family.ts`): then add 1 to
+  `RACE_V` (`convex/lib/raceRows.ts`): every row is built again by `race.fill` (60 a run, every 15 min); until it is
+  done the race reads everyone's rows the old way.
+- **A race row's numbers are as of the moment they were worked out** (`wk`, `d`): read them only through `numsAt`
+  (`raceRowOut`), never `row.xp` straight (on Monday it is last week's).
+- **The family's budgets** (7 Nov 2026, after the race and profiles): first load 58.5 of 66 KB, later parts 32.7 of 36
+  (raised 32 → 36 with his yes for profiles). The race's lists and the grade cup are in the first load (`board.tsx`
+  imports `convex/lib/race.ts`: pure, imports only `./day`; keep it so); a classmate's profile is a later part.
+- **The old race for old phones**: `family.board` still sends `top` / `me` / `count` (phones that opened the app
+  before 7 Nov read them until they load the new version). The new field is `you`, not `me`. Remove after 21 Nov 2026.

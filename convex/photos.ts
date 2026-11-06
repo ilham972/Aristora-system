@@ -21,7 +21,8 @@
 
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import { internalMutation, mutation, query, type MutationCtx } from "./_generated/server";
+import { query, type MutationCtx } from "./_generated/server";
+import { internalMutation, mutation } from "./lib/fn";
 import { actor, viewer } from "./lib/auth";
 import { asMaster, bookFor, fail, keyRow, log, masterState, progressFor } from "./lib/backend";
 import { classClosed, phoneKeyFor, photosRequired, REQUIRED_KEY } from "./lib/homeWork";

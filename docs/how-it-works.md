@@ -1082,11 +1082,55 @@ learning app of our education institute"): one profile, his class times, what he
     level just won ("NEW TROPHY!", a light passing over it), each question ✓ ✗ ✍; **what next stays at the bottom**
     (sticky): the map button and "Next: Level 4" side by side, or the Stage. A tap shows it all at once (and tests
     and "reduce motion" skip the wait).
-  - **The race** (`family.board`): this week in his grade (first name and initial), the top three on a podium (gold,
-    silver, bronze; a crown on the first; "You"), the rest as rows, his row always (violet), "இன்னும் 12 XP எடுத்தால்
-    Bilal ஐ முந்துவாய்!" (to pass the one above), when the week ends ("Ends in 4d 6h"). **Faces** (4 Nov 2026,
-    his pick): a classmate's photo once the teachers said OK and his family shows it (`BoardRow.pic`), his own always on
-    his phone; 🎂 by a name on that student's birthday. Leagues: not built (next week; his call, 3 Nov 2026).
+  - **The race** (`family.board`; rebuilt 7 Nov 2026, his voice note: students who never joined weren't on it, class
+    work "is also progress", "can we show the whole institute ranking? ... two tabs"): **every student of ARISTORA**,
+    on the app or not (first name and initial), XP this week **from class and home** (below: what counts). Two lists
+    in the header, **Grade 8 | ARISTORA** (kept per child, `raceList`): his grade, or everyone (each name with its
+    grade as a number). The top three on a podium (gold, silver, bronze; the gold crown on this week's first; "You"),
+    the rest as rows with how they **moved since yesterday** (▲2 blue, ▼1 grey, ▲ alone = new in the race today;
+    never red), **👑 = last week's champion of that list** (the most XP last week; ties share it), then **"இன்னும்
+    தொடங்கவில்லை"**: everyone with 0 XP this week as name chips with **no number** (my call, told him: the push of
+    being seen not racing, without a "#47 of 47" to laugh at), his row violet wherever he is; "இன்னும் 12 XP எடுத்தால்
+    Bilal ஐ முந்துவாய்!" (to pass the one above; before he starts: "ஒரு Level செய்: நீயும் race இல் சேர்வாய்!"), when the
+    week ends. On ARISTORA the **grade cup** (his pick): each grade's share of students who learned this week (made XP),
+    "18/20" as a bar, best first, his grade violet, the leader gold (fair whatever a grade's books, and it pulls back the
+    ones who stopped coming). **Tap anyone** = his profile (below); his own row = Me. **Faces** (4 Nov 2026, his pick):
+    a student's photo once the teachers said OK and his family shows it (`RaceRow.pic`; since 7 Nov any grade's, the
+    ARISTORA list), his own always on his phone; 🎂 by a name on that student's birthday. The kept race shows at once
+    (`useBoard`, per child), then the new one. Rules in `convex/lib/race.ts` (`placed`, `champsOf`, `passOf`, `cupOf`),
+    shared by the phone and the server. **Leagues**: in 2–3 weeks (his yes, 7 Nov 2026), once the weeks hold real XP.
+  - **What counts as XP** (7 Nov 2026, his voice note: "if they did the question from the classroom or from the home,
+    whatever, they are progressing"): a workbook level's marks the day he handed it in (corrected in class, or checked
+    at home: as before), marks won back by a question that came back, a tute's ladder section checked at home (its
+    parts right), and since 7 Nov **a theory-book question the class marked right: 1 XP** the moment it was marked
+    (`classCircles` in `convex/lib/family.ts`; not a circle the home check wrote, nor a question of a section checked
+    at home: `lh.q`). Being taught or explained is never XP (XP = marks: nobody wins XP by getting things wrong). A day
+    the class marked his theory questions (right, wrong or a slip) lights his flame too (`levelDays`). Today only Grade
+    8 (3 Stages) and the O/L tutes can be played at home: Grades 6, 7, 9, 10 earn XP in class only (told him: the
+    ARISTORA list leans to them until more units are digitized; each grade's list stays fair).
+  - **The race kept ready** (7 Nov 2026; the free plan's 1 GB of reading a month: the old race read every classmate's
+    whole history at each open, the whole ARISTORA would read everyone's): one small `raceRows` row per student (his
+    name, grade, photo key, birthday, removed/demo, and XP numbers as worked out at a moment: `wk`, `d`, `xp`, `xpy`
+    (this week before that day), `prev`, `tot`; `numsAt` reads them at any later moment), one `raceParts` row per
+    progress row. **Every mutation** goes through `convex/lib/fn.ts` (`mutation`, `internalMutation`): its db is
+    watched, and as it ends the progress rows it wrote get their part again and his race row adds his parts up; a
+    student's name, grade, photo, birthday or removal is copied; a missing row or one built with older rules (`RACE_V`)
+    is built again from all his rows. `race.fill` (every 15 min) builds the ones still missing, 60 a run, then notes
+    meta `raceV` and does nothing more; until then the race works out the old way from everyone's rows (`raceList`).
+    `race.week` (Monday 00:05 Sri Lanka) keeps last week's champions in `raceWeeks` (each grade's top 3, ARISTORA's,
+    the grade cup) and adds a week won to each #1's race row (`w` in his grade, `wa` in ARISTORA): his profile counts
+    them (and the gifts will read them). Phones from before 7 Nov read `top` / `me` / `count` from the same answer until
+    they load the new version (remove after 21 Nov 2026).
+  - **A classmate's profile** (7 Nov 2026, his ask: "every profile want to be clickable ... even one student can look
+    another student"; his answer: **Everything**; `src/family/mate.tsx`, a later part; `family.mate`): his face, name,
+    grade, 👑 weeks won (his grade, ARISTORA), his flame and his week, XP ever, best run, Levels; **👏 Cheer** (one tap,
+    no words: `family.cheer`, once a day per classmate, 30 a day, never himself; "இந்த வாரம் 3 👏"); this week's place
+    in his grade and in ARISTORA (from the race on the phone); trophies; his 12 weeks (no hour-by-hour for a classmate);
+    his class (days and hours, usual days, last class); his questions (Right / Learned / To learn) and every Stage with
+    its ring. **The owner's switch** (Settings → Race, on by default: his choice; my escape hatch if a parent complains):
+    off = no marks on a classmate's profile (% right, questions, each Stage's marks: the ring shows Levels done); his
+    own Me keeps them. Never his account, his day hour by hour, WhatsApp or a certificate. **Who cheered him** shows
+    on Home and Me ("👏 Hana K, Raj M and 3 others ... இந்த வாரம் உன்னை உற்சாகப்படுத்தினார்கள்!": `me.cheers`, this week).
   - **Me = his profile** (4 Nov 2026, his voice note: "a proper profile page for the students ... as simple as
     possible"; `me.tsx`, one of the parts that come right after the first screen): a violet header with **his photo**
     (88 px; tap = the camera or the gallery: his photo, below), his name (🎂 on his birthday), grade and index ("Photo ·
@@ -1105,7 +1149,8 @@ learning app of our education institute"): one profile, his class times, what he
     **Learned** (lost marks a teacher then explained in Evaluation or taught in Theory, violet), **To learn** (still
     waiting, rose; never the word "wrong": his request was "how many wrong", my answer: the same numbers, and a mistake
     becomes a win once explained, as the class works), his Stage now (its ring = his marks, its Levels), **See all**,
-    **Send on WhatsApp**. Then XP this week as bars per day (`me.dayXp`); his place in the race; the **trophies**
+    **Send on WhatsApp**. Then XP this week as bars per day (`me.dayXp`); his place in his grade's race (`myPlace`;
+    "Not in the race yet" before his first XP of the week); the **trophies**
     (`trophiesOf`, server; names in English, how to win in Tamil: First Level, 3- / 7- / 30-day streak (his best run),
     Perfect (a Level with every mark), 5 × Perfect, Stage clear (one Level of it in the app at least), 100 and 300 XP
     week; won ones gold, the rest pale with a lock and how to win them); **Your details**: Name (asked: below),

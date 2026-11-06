@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation } from "./_generated/server";
+import { mutation } from "./lib/fn";
 import { bookFor } from "./lib/backend";
 import { KNOWN_WORKBOOKS, PILOT_FIGHTER, PILOT_UNIT } from "./lib/book";
 import { OL, OL_TOPICS, SYLLABUS, unitKey, unitOrder } from "./lib/syllabus";

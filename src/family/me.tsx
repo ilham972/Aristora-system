@@ -7,13 +7,13 @@
 // this phone: the children on it (switch, add another, sign out), the sound, the owl's surprises.
 
 import type { ComponentChildren } from "preact";
-import { useEffect, useState } from "preact/hooks";
+import { useState } from "preact/hooks";
 import type { FamilyMe } from "../../convex/family";
 import { isBirthday } from "../../convex/lib/day";
-import { endsIn, passOf, type Board } from "./board";
+import { Cheered, endsIn, myPlace, useBoard } from "./board";
 import { Kids, whoWords } from "./kids";
 import { bdayWords, useProfile } from "./later";
-import { mutation, query, type Account } from "./net";
+import { mutation, type Account } from "./net";
 import { PhotoSheet } from "./photo";
 import { picOf, usePics } from "./pics";
 import { BdaySheet, ClassCard, DaySheet, HeatMap, NameSheet, ReportCard } from "./profile";
@@ -124,12 +124,7 @@ export function MeTab(props: {
   const [gags, setGags] = useState(surprisesOn());
   const [race, setRace] = useState<boolean | null>(null);
   const [sure, setSure] = useState(false);
-  const [b, setB] = useState<Board | null>(null);
-  useEffect(() => {
-    query("family:board")
-      .then((x) => setB(x as Board))
-      .catch(() => {});
-  }, []);
+  const { b } = useBoard();
   usePics([me?.photo?.key]);
   if (!me) {
     return (
@@ -145,7 +140,8 @@ export function MeTab(props: {
   const today = todayIndex(Date.now());
   const s = me.streak;
   const best = s.days > 0 && s.days >= (me.best ?? 0);
-  const pass = b ? passOf(b) : null;
+  const place = b ? myPlace(b, "grade") : null;
+  const rank = place?.mine?.rank ?? null;
   const pic = picOf(me.photo?.key);
   const party = isBirthday(me.bday, Date.now());
   const shown = race ?? !me.photoHide;
@@ -234,24 +230,31 @@ export function MeTab(props: {
           <small>Levels</small>
         </div>
       </section>
+      <Cheered c={me.cheers} />
       {me.photoNo && <Told text="உன் photo ஐ ஆசிரியர் ஏற்கவில்லை. வேறு ஒன்றைத் தேர்ந்தெடு." onOk={() => void act(() => mutation("family:forget", { kind: "photo" }))} />}
       {me.nameAsk?.no && <Told text={`"${me.nameAsk.name}": உன் ஆசிரியர் இந்தப் பெயரை ஏற்கவில்லை.`} onOk={() => void act(() => mutation("family:forget", { kind: "name" }))} />}
       {p && <HeatMap p={p} onDay={(day) => showSheet((close) => <DaySheet day={day} onClose={close} />)} />}
       {p && <ClassCard p={p} />}
       {p && <ReportCard me={me} p={p} onOpen={props.onReport} />}
       {me.dayXp && <XpBars xp={me.dayXp} total={me.xp} today={today} />}
-      {b?.me && (
+      {b && place?.mine && (
         <button type="button" class="f-racecard f-card rise" onClick={props.onRace}>
-          <span class={`f-race-rank${b.me.rank === 1 && b.me.xp > 0 ? " r1" : ""}`}>#{b.me.rank}</span>
+          <span class={`f-race-rank${rank === 1 ? " r1" : ""}`}>{rank !== null ? `#${rank}` : "–"}</span>
           <span class="f-racecard-w">
-            <b>{b.me.rank === 1 && b.me.xp > 0 ? "#1 in the race!" : `#${b.me.rank} in the race`}</b>
+            <b>{rank === 1 ? "#1 in the race!" : rank !== null ? `#${rank} in the race` : "Not in the race yet"}</b>
             <small>
-              {pass?.above && pass.gap > 0 ? `${pass.gap} XP to #${pass.above.rank}` : `${b.count} in the race`} · ends in {endsIn(b.since, Date.now())}
+              {rank === null
+                ? "ஒரு Level செய்து race இல் சேர்"
+                : place.above && place.gap > 0
+                  ? `${place.gap} XP to #${place.above.rank}`
+                  : `${place.count} in the race`}{" "}
+              · ends in {endsIn(b.since, Date.now())}
             </small>
           </span>
           <Icon name="next" size={20} />
         </button>
       )}
+
       <section class="f-cups f-card rise">
         <h2 class="f-h2">
           Trophies <small>

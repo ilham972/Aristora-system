@@ -511,9 +511,16 @@ describe("the family app on the server", () => {
     await joinAs(bilal, FAM2);
     await fam().mutation(api.family.check, { unitId: u01, n: 1, typed: LEVEL1 });
     const b = await fam(FAM2).query(api.family.board, {});
+    // Everyone of the class (7 Nov 2026): Bilal too, with 0 XP; the phone makes the lists (convex/lib/race.ts).
+    expect(b.you).toBe(bilal);
+    expect(b.grade).toBe(8);
+    // Phones still on the old version read the old race from the same answer (until they load the new one).
     expect(b.top).toEqual([{ name: "Hana K", xp: 16, rank: 1, me: false }]);
     expect(b.me).toEqual({ name: "Bilal M", xp: 0, rank: 2, me: true });
     expect(b.count).toBe(2);
+    expect(b.rows).toHaveLength(2);
+    expect(b.rows.find((r) => r.n === "Hana K")).toMatchObject({ id: hana, g: 8, xp: 16, y: 0, p: 0 });
+    expect(b.rows.find((r) => r.n === "Bilal M")).toMatchObject({ id: bilal, g: 8, xp: 0 });
     expect(b.since).toBe(slWeekStart(Date.now()));
     expect(new Date(b.since + 330 * 60_000).toISOString()).toBe("2026-10-26T00:00:00.000Z"); // Monday 00:00 in Sri Lanka
     // Next Monday: 0 XP, and the streak broke (no level on Saturday or Sunday).

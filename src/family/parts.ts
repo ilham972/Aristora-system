@@ -4,6 +4,8 @@
 export { MeTab } from "./me";
 export { ReportScreen } from "./profile";
 export { CertSheet } from "./cert";
+// A classmate's profile (7 Nov 2026): tap anyone in the race.
+export { MateScreen } from "./mate";
 // The newer-version check (5 Nov 2026): not needed before the first screen, so here, out of the first load's budget.
 export { busyHere, watchUpdates } from "../appVersion";
 // The owner's Preview of a Stage (5 Nov 2026): main.tsx starts it only on the class system's address with #preview=.

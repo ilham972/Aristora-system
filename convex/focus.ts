@@ -7,7 +7,8 @@
 
 import { v, type Infer } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import { mutation, query, type MutationCtx } from "./_generated/server";
+import { query, type MutationCtx } from "./_generated/server";
+import { mutation } from "./lib/fn";
 import { actor, viewer } from "./lib/auth";
 import { asMaster, cleanBy, currentSession, fail, getStudent, masterPlace, masterState, mustHoldBook, touch } from "./lib/backend";
 import { claimLive } from "./lib/claims";

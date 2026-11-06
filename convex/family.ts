@@ -38,7 +38,8 @@
 
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
+import { query, type MutationCtx, type QueryCtx } from "./_generated/server";
+import { mutation } from "./lib/fn";
 import { feedbackTopic } from "./schema";
 import { checkToken, familyActor, familyOf, familyViewer, FAMILY_SIGNED_OUT, secretHash } from "./lib/auth";
 import { asMaster, bookFor, cleanName, currentSession, ensureProgress, fail, keyRow, log, masterState, progressFor, refresh } from "./lib/backend";
@@ -94,7 +95,8 @@ import {
   type PhotoType,
   type StageLine,
 } from "./lib/profile";
-import { ranks } from "./lib/progress";
+import type { RaceRow } from "./lib/race";
+import { mateMarksOn, raceList } from "./lib/raceRows";
 
 const token = v.optional(v.string());
 
@@ -264,7 +266,16 @@ export type FamilyMe = {
   photoHide: boolean;
   /** The new name he asked for: waiting for the teachers' OK, or `no` = they said no (his phone says so once). */
   nameAsk: { name: string; no: boolean } | null;
+  /** Cheers (👏) he got this week: how many, and the first names of the newest few (7 Nov 2026). */
+  cheers: { n: number; from: string[] };
 };
+
+/** This week's cheers in his words: how many, and the newest three classmates (each once). */
+function cheersWords(list: Doc<"cheers">[]): { n: number; from: string[] } {
+  const from: string[] = [];
+  for (const c of list) if (!from.includes(c.name) && from.length < 3) from.push(c.name);
+  return { n: list.length, from };
+}
 
 /** A "no" from the teachers is told for two weeks at most (then the row is as good as gone). */
 const ASK_NO_MS = 14 * DAY_MS;
@@ -321,6 +332,7 @@ export const me = query({
       levelsWeek: levelsSince(rows, slWeekStart(now)),
       trophies: trophiesOf(rows, worlds),
       ol: olMapOn(s),
+      cheers: cheersWords(await cheersOf(ctx, s._id, now)),
       blocked: stop && stopWorld ? { unitId: stopWorld.unitId, no: stopWorld.no, n: stop.n, owed: stop.owed } : null,
       worlds,
     };
@@ -691,7 +703,8 @@ async function checkLadder(
       if (right) marks[String(q)] = { s: "taught", t: now };
     } else marks[String(q)] = right ? { s: "right", t: now } : { s: "wrong", n: 1, t: now };
   }
-  await ctx.db.patch(progress._id, { marks, lh: { ...(progress.lh ?? {}), [sec.id]: { t: now, got, max } }, updatedAt: now });
+  // q: the section's questions (7 Nov 2026), so a class mark in it never counts as XP twice (lib/family.ts xpItems).
+  await ctx.db.patch(progress._id, { marks, lh: { ...(progress.lh ?? {}), [sec.id]: { t: now, got, max, q: secQs(sec) } }, updatedAt: now });
   await log(ctx, null, now, { kind: "ladder-home", studentId: s._id, name: s.name, unit: unit.key, value: `${sec.id} ${got}/${max}` });
   if (s.present) await refresh(ctx, s._id, now, await currentSession(ctx, now));
   const all = await xpRows(ctx, s._id);
@@ -794,40 +807,186 @@ export const seen = mutation({
 });
 
 /**
- * A row of the race: first name and initial, XP this week, the rank. `pic` = his photo's key when the teachers said OK
- * to it and his family shows it in the race (4 Nov 2026); `bday` = today is his birthday (🎂).
+ * The race as the phone gets it: when the week began, who he is (`you`), his grade, and everyone (convex/lib/race.ts).
+ * `top`, `me`, `count`: the race as phones from before 7 Nov 2026 read it (his grade's first 10 with XP, his row, how
+ * many), until they load the new version (they do by themselves: src/appVersion.ts). Remove after 21 Nov 2026.
  */
+export type FamilyBoard = {
+  since: number;
+  you: string;
+  grade: number | null;
+  rows: RaceRow[];
+  top: BoardRow[];
+  me: BoardRow | null;
+  count: number;
+};
+
+/** A row of the race as phones from before 7 Nov 2026 read it. */
 export type BoardRow = { name: string; xp: number; rank: number; me: boolean; pic?: string; bday?: boolean };
 
-/** This week's XP in his grade: the first 10 and him (first name and initial only, as in class). */
+/** The old race (his grade, ranked) from the new rows, for phones still on the old version. */
+function oldBoard(rows: RaceRow[], you: string, grade: number | null): Pick<FamilyBoard, "top" | "me" | "count"> {
+  const mine = rows.filter((r) => r.g !== null && r.g === grade).sort((a, b) => b.xp - a.xp || a.n.localeCompare(b.n));
+  const out: BoardRow[] = [];
+  mine.forEach((r, i) => {
+    const rank = i > 0 && r.xp === mine[i - 1].xp ? out[i - 1].rank : i + 1;
+    out.push({ name: r.n, xp: r.xp, rank, me: r.id === you, ...(r.pic ? { pic: r.pic } : {}), ...(r.bd ? { bday: true } : {}) });
+  });
+  return { top: out.filter((r) => r.xp > 0).slice(0, 10), me: out.find((r) => r.me) ?? null, count: out.length };
+}
+
+/**
+ * The race (7 Nov 2026, his voice note): every student of ARISTORA, joined the app or not (first name and initial, as
+ * in class), with XP from class and home this week, yesterday's (the moves) and last week's (the crowns). The phone
+ * makes both lists, his grade and the whole ARISTORA, and the grade cup. From the race rows kept ready: one small row
+ * per student (convex/lib/raceRows.ts).
+ */
 export const board = query({
   args: { token },
-  handler: async (ctx, args): Promise<{ since: number; top: BoardRow[]; me: BoardRow | null; count: number }> => {
+  handler: async (ctx, args): Promise<FamilyBoard> => {
     const me = await familyViewer(ctx, args.token);
     const now = Date.now();
-    const since = slWeekStart(now);
-    const mates = (await ctx.db
-      .query("students")
-      .withIndex("by_archived", (q) => q.eq("archived", false))
-      .collect()).filter((x) => x.grade === me.grade && !!x.demo === !!me.demo);
-    const list: { s: Doc<"students">; xp: number }[] = [];
-    for (const x of mates) list.push({ s: x, xp: xpSince(await xpRows(ctx, x._id), since) });
-    list.sort((a, b) => b.xp - a.xp || a.s.name.localeCompare(b.s.name));
-    const rk = ranks(list.map((x) => [x.xp]));
-    const rows: BoardRow[] = list.map((x, i) => ({
-      name: x.s.name,
-      xp: x.xp,
-      rank: rk[i],
-      me: x.s._id === me._id,
-      ...(x.s.photo && !x.s.photoHide ? { pic: x.s.photo.id as string } : {}),
-      ...(isBirthday(x.s.bday, now) ? { bday: true } : {}),
-    }));
+    const rows = await raceList(ctx, !!me.demo, now);
+    const grade = me.grade ?? null;
+    return { since: slWeekStart(now), you: me._id, grade, rows, ...oldBoard(rows, me._id, grade) };
+  },
+});
+
+/** A classmate's profile (7 Nov 2026, his answers: every profile can be opened; "Everything"). */
+export type FamilyMate = {
+  id: string;
+  name: string;
+  grade: number | null;
+  /** His photo's key (the teachers said OK, his family shows it), and 🎂 today. */
+  pic: string | null;
+  bday: boolean;
+  xp: number;
+  total: number;
+  streak: { days: number; today: boolean };
+  best: number;
+  week: boolean[];
+  levelsDone: number;
+  trophies: Trophy[];
+  /** Weeks he won: in his grade, in ARISTORA (👑). */
+  wins: { g: number; a: number };
+  /** Cheers this week, and whether this phone's child cheered him today. */
+  cheers: { n: number; mine: boolean };
+  /** The owner's switch (Settings → Race): false = no marks here (% right, questions, the report's marks). */
+  marks: boolean;
+  p: FamilyProfile;
+};
+
+/** His profile's numbers (the map, his months, his report): his own Me and a classmate's profile. */
+async function profileOf(ctx: QueryCtx, s: Doc<"students">, rows: Doc<"progress">[], worlds: World[], now: number): Promise<FamilyProfile> {
+  const today = slDayNo(now);
+  // The map starts on a Monday, 12 weeks ago; the months reach back to the 1st of the month two months ago.
+  const monday = slDayNo(slWeekStart(now));
+  const mapFrom = monday - (HEAT_WEEKS - 1) * 7;
+  const old = monthLinesFrom(now);
+  const from = Math.min(mapFrom * DAY_MS - SL_OFFSET_MS, old);
+  const visits = await ctx.db
+    .query("attendance")
+    .withIndex("by_student", (q) => q.eq("studentId", s._id).gte("inAt", from))
+    .collect();
+  const first = await ctx.db
+    .query("attendance")
+    .withIndex("by_student", (q) => q.eq("studentId", s._id))
+    .first();
+  let since = first ? slDayNo(first.inAt) : null;
+  for (const d of levelDays(rows)) since = since === null ? d : Math.min(since, d);
+  const dayList = [...new Set(visits.map((v) => v.day))].sort();
+  return {
+    today,
+    since,
+    days: heatDays(rows, visits, mapFrom),
+    months: monthLines(rows, visits, now),
+    usual: usualDays(dayList, now),
+    last: dayList.length ? dayList[dayList.length - 1] : null,
+    stages: stageLines(worlds, rows),
+  };
+}
+
+/** The marks taken out of a profile (the owner's switch off): his questions, his Stages' marks. */
+function withoutMarks(p: FamilyProfile): FamilyProfile {
+  const q = { right: 0, learned: 0, toLearn: 0 };
+  return { ...p, months: p.months.map((m) => ({ ...m, ...q })), stages: p.stages.map((s) => ({ ...s, ...q, got: 0, max: 0 })) };
+}
+
+/** Cheers he got this week (newest first). */
+async function cheersOf(ctx: QueryCtx, sid: Id<"students">, now: number) {
+  return await ctx.db
+    .query("cheers")
+    .withIndex("by_to", (q) => q.eq("to", sid).gte("at", slWeekStart(now)))
+    .order("desc")
+    .collect();
+}
+
+/**
+ * A classmate's profile: anyone of ARISTORA (the real class; a demo phone sees the demo class), as the race shows him.
+ * Everything his own Me shows but his account (his answers: "Everything"); his marks only while the owner's switch is on.
+ */
+export const mate = query({
+  args: { token, id: v.string() },
+  handler: async (ctx, args): Promise<FamilyMate> => {
+    const me = await familyViewer(ctx, args.token);
+    const id = ctx.db.normalizeId("students", args.id);
+    const s = id ? await ctx.db.get(id) : null;
+    if (!s || s.archived || !!s.demo !== !!me.demo || !!s.test !== !!me.test) fail("This student isn't in the race.");
+    const now = Date.now();
+    const rows = await xpRows(ctx, s._id);
+    const worlds = await worldsOf(ctx, s);
+    const days = levelDays(rows);
+    const race = await ctx.db
+      .query("raceRows")
+      .withIndex("by_sid", (q) => q.eq("sid", s._id))
+      .first();
+    const cheers = await cheersOf(ctx, s._id, now);
+    const marks = await mateMarksOn(ctx);
+    const p = await profileOf(ctx, s, rows, worlds, now);
     return {
-      since,
-      top: rows.filter((r) => r.xp > 0).slice(0, 10),
-      me: rows.find((r) => r.me) ?? null,
-      count: rows.length,
+      id: s._id,
+      name: s.name,
+      grade: s.grade ?? null,
+      pic: s.photo && !s.photoHide ? s.photo.id : null,
+      bday: isBirthday(s.bday, now),
+      xp: weekXp(rows, now),
+      total: xpSince(rows, 0),
+      streak: streakOf(rows, now),
+      best: bestStreak(days),
+      week: weekDays(days, now),
+      levelsDone: levelsSince(rows, 0),
+      trophies: trophiesOf(rows, worlds),
+      wins: { g: race?.w ?? 0, a: race?.wa ?? 0 },
+      cheers: { n: cheers.length, mine: cheers.some((c) => c.from === me._id && c.day === slDayNo(now)) },
+      marks,
+      p: marks ? p : withoutMarks(p),
     };
+  },
+});
+
+/** Cheers one phone's child may give in a day (one per classmate). */
+export const CHEERS_PER_DAY = 30;
+
+/** 👏 a classmate (one tap, no words): once a day per classmate; never himself. */
+export const cheer = mutation({
+  args: { token, id: v.string() },
+  handler: async (ctx, args) => {
+    const me = await familyActor(ctx, args.token);
+    const id = ctx.db.normalizeId("students", args.id);
+    const s = id ? await ctx.db.get(id) : null;
+    if (!s || s.archived || !!s.demo !== !!me.demo || !!s.test !== !!me.test) fail("This student isn't in the race.");
+    if (s._id === me._id) fail("Cheer a classmate: not yourself!");
+    const now = Date.now();
+    const day = slDayNo(now);
+    const mine = await ctx.db
+      .query("cheers")
+      .withIndex("by_from", (q) => q.eq("from", me._id).eq("day", day))
+      .collect();
+    if (!mine.some((c) => c.to === s._id)) {
+      if (mine.length >= CHEERS_PER_DAY) fail("That's a lot of cheers today: more tomorrow!");
+      await ctx.db.insert("cheers", { to: s._id, from: me._id, name: me.name, at: now, day });
+    }
+    return { n: (await cheersOf(ctx, s._id, now)).length, mine: true };
   },
 });
 
@@ -1125,34 +1284,8 @@ export const profile = query({
   args: { token },
   handler: async (ctx, args): Promise<FamilyProfile> => {
     const s = await familyViewer(ctx, args.token);
-    const now = Date.now();
-    const today = slDayNo(now);
-    // The map starts on a Monday, 12 weeks ago; the months reach back to the 1st of the month two months ago.
-    const monday = slDayNo(slWeekStart(now));
-    const mapFrom = monday - (HEAT_WEEKS - 1) * 7;
-    const old = monthLinesFrom(now);
-    const from = Math.min(mapFrom * DAY_MS - SL_OFFSET_MS, old);
-    const visits = await ctx.db
-      .query("attendance")
-      .withIndex("by_student", (q) => q.eq("studentId", s._id).gte("inAt", from))
-      .collect();
-    const first = await ctx.db
-      .query("attendance")
-      .withIndex("by_student", (q) => q.eq("studentId", s._id))
-      .first();
     const rows = await xpRows(ctx, s._id);
-    let since = first ? slDayNo(first.inAt) : null;
-    for (const d of levelDays(rows)) since = since === null ? d : Math.min(since, d);
-    const dayList = [...new Set(visits.map((v) => v.day))].sort();
-    return {
-      today,
-      since,
-      days: heatDays(rows, visits, mapFrom),
-      months: monthLines(rows, visits, now),
-      usual: usualDays(dayList, now),
-      last: dayList.length ? dayList[dayList.length - 1] : null,
-      stages: stageLines(await worldsOf(ctx, s), rows),
-    };
+    return await profileOf(ctx, s, rows, await worldsOf(ctx, s), Date.now());
   },
 });
 
@@ -1183,7 +1316,8 @@ export const photos = query({
       if (!p) continue;
       if (p.studentId !== me._id) {
         const s = await ctx.db.get(p.studentId);
-        if (!s || s.archived || s.grade !== me.grade || !!s.demo !== !!me.demo || s.photo?.id !== p._id || s.photoHide) continue;
+        // Anyone in his race (7 Nov 2026: the whole ARISTORA, and a classmate's profile), once the teachers said OK.
+        if (!s || s.archived || !!s.demo !== !!me.demo || s.photo?.id !== p._id || s.photoHide) continue;
       }
       out[key] = picUrl(p);
     }

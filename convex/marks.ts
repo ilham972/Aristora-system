@@ -3,7 +3,8 @@
 
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
-import { mutation, type MutationCtx } from "./_generated/server";
+import { type MutationCtx } from "./_generated/server";
+import { mutation } from "./lib/fn";
 import { asFighter, cleanBy, currentSession, fail, fighterPlace, getStudent, log, refresh, touch } from "./lib/backend";
 import type { Fighter } from "./lib/book";
 import { SOLO_STATES, TEACH_STATES, type Mark, type MarkState } from "./lib/status";

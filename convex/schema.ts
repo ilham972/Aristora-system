@@ -431,7 +431,13 @@ export default defineSchema({
      * Fighter, a topic tute's ladder done on the family app (4 Nov 2026): each section checked at home (its id ->
      * when, the parts right, the parts the phone marked). Its circles are set too; this is his XP and the phone's Level.
      */
-    lh: v.optional(v.record(v.string(), v.object({ t: v.number(), got: v.number(), max: v.number() }))),
+    lh: v.optional(
+      v.record(
+        v.string(),
+        // q (7 Nov 2026): the section's questions, so a class mark inside it never counts as XP a second time.
+        v.object({ t: v.number(), got: v.number(), max: v.number(), q: v.optional(v.array(v.number())) }),
+      ),
+    ),
     startedAt: v.number(),
     updatedAt: v.number(),
   })
@@ -796,6 +802,70 @@ export default defineSchema({
 
   /** A simulation's scoreboard as it ended (the Owner page's Sim tab; kept after its students are deleted). */
   simReports: defineTable({ simId: v.id("sims"), report: v.any() }).index("by_sim", ["simId"]),
+
+  /**
+   * The race, kept ready (7 Nov 2026, his voice note: every student on it, class work counted, his grade and the whole
+   * ARISTORA). One small row per student: who he is (copied from his row) and his XP numbers as they were worked out
+   * (`wk` that week's Monday, `d` that day: convex/lib/race.ts reads them at any later moment). Every mutation keeps it
+   * fresh (convex/lib/fn.ts), so the race reads ~120 small rows, never every student's whole history (the free plan's
+   * 1 GB of reading a month). `w` / `wa` = weeks he won in his grade / in ARISTORA (the weekly champions). `v` = the XP
+   * rules it was built with (RACE_V): an older one is built again.
+   */
+  raceRows: defineTable({
+    sid: v.id("students"),
+    n: v.string(),
+    g: v.optional(v.number()),
+    demo: v.boolean(),
+    gone: v.boolean(),
+    pic: v.optional(v.string()),
+    bd: v.optional(v.string()),
+    wk: v.number(),
+    d: v.number(),
+    xp: v.number(),
+    xpy: v.number(),
+    prev: v.number(),
+    tot: v.number(),
+    w: v.optional(v.number()),
+    wa: v.optional(v.number()),
+    v: v.number(),
+  })
+    .index("by_sid", ["sid"])
+    .index("by_list", ["demo", "gone"]),
+
+  /** One progress row's XP numbers (the race row adds them up; a write works out only the row it touched). */
+  raceParts: defineTable({
+    pid: v.id("progress"),
+    sid: v.id("students"),
+    wk: v.number(),
+    d: v.number(),
+    xp: v.number(),
+    xpy: v.number(),
+    prev: v.number(),
+    tot: v.number(),
+  })
+    .index("by_pid", ["pid"])
+    .index("by_sid", ["sid"]),
+
+  /**
+   * A finished week's champions (Monday 00:05 in Sri Lanka, `race.week`): each grade's top 3 (k "g") and ARISTORA's (k
+   * "a"), and the grade cup (the share of each grade that learned that week). The poster and the gifts read it.
+   */
+  raceWeeks: defineTable({
+    wk: v.number(),
+    top: v.array(v.object({ sid: v.id("students"), n: v.string(), g: v.optional(v.number()), xp: v.number(), k: v.union(v.literal("g"), v.literal("a")), place: v.number() })),
+    cup: v.array(v.object({ g: v.number(), n: v.number(), of: v.number() })),
+  }).index("by_wk", ["wk"]),
+
+  /** A cheer (👏, 7 Nov 2026): one tap on a classmate's profile, no words; one a day per classmate. */
+  cheers: defineTable({
+    to: v.id("students"),
+    from: v.id("students"),
+    name: v.string(),
+    at: v.number(),
+    day: v.number(),
+  })
+    .index("by_to", ["to", "at"])
+    .index("by_from", ["from", "day"]),
 
   /** A running simulation's steps: each student's pace and what he is doing, one reading of the class a minute. */
   simPlay: defineTable({

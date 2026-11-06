@@ -42,10 +42,11 @@ import { FeedbackList } from "./feedbackList";
 import { PhotoQueue } from "./photoQueue";
 import { RETAKE, WHY } from "../convex/lib/photos";
 import { ClassHours } from "./classHours";
+import { RaceSettings } from "./raceSettings";
 import { SimPanel, SimSwitch } from "./sim";
 import { GRADES, GradeRow, Sheet, STATE_WORDS, useGrade } from "./ui";
 
-export type SettingsTab = "students" | "books" | "people" | "hours" | "alerts" | "reports" | "history" | "feedback" | "photos" | "account";
+export type SettingsTab = "students" | "books" | "people" | "hours" | "race" | "alerts" | "reports" | "history" | "feedback" | "photos" | "account";
 type Tab = SettingsTab;
 
 const SETTINGS_TABS: [Tab, string, () => boolean][] = [
@@ -54,6 +55,8 @@ const SETTINGS_TABS: [Tab, string, () => boolean][] = [
   ["people", "People", () => may("owner")],
   // When the class is open each weekday (3 Nov 2026): the family app's schedule.
   ["hours", "Class hours", () => may("owner")],
+  // The family app's race and profiles (7 Nov 2026): the owner's switch for marks on a classmate's profile.
+  ["race", "Race", () => may("owner")],
   ["alerts", "Alerts", () => true],
   ["reports", "Reports", () => may("reports")],
   ["history", "History", () => may("reports")],
@@ -102,6 +105,7 @@ export function Settings(props: {
       {tab === "feedback" && <FeedbackList />}
       {tab === "photos" && <PhotoQueue views={props.views} onOpen={props.onPhotos} />}
       {tab === "hours" && <ClassHours />}
+      {tab === "race" && <RaceSettings />}
       {tab === "people" && <People />}
       {tab === "account" && <Account />}
       <button type="button" class="btn ghost wide" onClick={props.onClose}>

@@ -19,7 +19,8 @@
 
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import { mutation, query } from "./_generated/server";
+import { query } from "./_generated/server";
+import { mutation } from "./lib/fn";
 import { actor, FAMILY_LINK_MS, viewer } from "./lib/auth";
 import { codeRow, giveIndex, gradeHoursOf, HOUR_GRADES, weakCode, type GradeHours } from "./lib/family";
 import { picUrl } from "./lib/profile";

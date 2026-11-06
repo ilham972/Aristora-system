@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { query } from "./_generated/server";
+import { mutation } from "./lib/fn";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { bookFor, cleanBy, currentSession, fail, keyRow, log, progressFor, touch } from "./lib/backend";
