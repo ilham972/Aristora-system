@@ -9,7 +9,7 @@
 import { mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { afterAll, beforeAll, expect, test } from "vitest";
-import { api } from "../../convex/_generated/api";
+import { api, internal } from "../../convex/_generated/api";
 import { secretHash } from "../../convex/lib/auth";
 import { outOf } from "../../convex/lib/book";
 import type { Ans } from "../../convex/lib/key";
@@ -1918,11 +1918,11 @@ test("the race for everyone: his grade and ARISTORA, not started this week, the 
   const now = Date.now();
   const lv = (t0: number, got: number) => ({ done: t0, fixed: t0 + 60_000, got, by: "correction" });
   await t.run(async (ctx) => {
-    const m = { q: {}, lv: { "1": lv(now - 8 * 86_400_000, 18), "2": lv(now - 3_600_000, 12) } };
+    const m = { q: {}, lv: { "1": lv(now - 7 * 86_400_000, 18), "2": lv(now - 60_000, 12) } };
     const p = await ctx.db.query("progress").withIndex("by_student_unit_stage", (q) => q.eq("studentId", bilal).eq("unitId", u01).eq("stage", "master")).first();
     if (p) await ctx.db.patch(p._id, { m, updatedAt: now });
     else await ctx.db.insert("progress", { studentId: bilal, unitId: u01, stage: "master", marks: {}, m, startedAt: 0, updatedAt: now });
-    await ctx.db.insert("progress", { studentId: ravi, unitId: g9, stage: "master", marks: {}, m: { q: {}, lv: { "1": lv(now - 7_200_000, 26) } }, startedAt: 0, updatedAt: now });
+    await ctx.db.insert("progress", { studentId: ravi, unitId: g9, stage: "master", marks: {}, m: { q: {}, lv: { "1": lv(now - 30_000, 26) } }, startedAt: 0, updatedAt: now });
   });
 
   // Hana: Grade 8 first. Bilal (class only) on the podium with last week's 👑; Dev and Hana: not started this week.
@@ -1993,7 +1993,62 @@ test("the race for everyone: his grade and ARISTORA, not started this week, the 
   await visible(S.locator(".f-mate .f-sc"));
   await noSideScroll(S);
   await shot(S, "fam62-mate-320");
-  for (const p of [P, B, S]) await p.context().close();
+
+  // The owner: Settings → Race: last week's champions (Bilal), the prizes; Monday's run gives the gift.
+  const C = await open(backend, site.url, size(360, 780), () => {
+    if (sessionStorage.getItem("t")) return;
+    sessionStorage.setItem("t", "1");
+    localStorage.setItem("aristora.role", "focus");
+    localStorage.setItem("aristora.token", "owner-phone-token-0123456789abcdefghijklmnopqrstuv");
+  });
+  await C.getByRole("button", { name: /Settings/ }).click();
+  await C.locator(".seg").getByRole("button", { name: /^Race/ }).click();
+  await contains(C.locator(".rc-champs li", { hasText: "ARISTORA" }), "Bilal M");
+  await contains(C.locator(".rc-champs li", { hasText: "👑 8" }), "Bilal M");
+  await C.getByLabel(/Each grade's champion/).fill("🍦 Ice cream");
+  await C.getByRole("button", { name: "Save the prizes" }).click();
+  await contains(C.locator(".toast").last(), "Prizes saved");
+  await t.mutation(internal.race.week, {});
+  await backend.push();
+  await contains(C.locator(".rc-gifts li").first(), "Bilal M");
+  await contains(C.locator(".seg").getByRole("button", { name: /^Race/ }), "1");
+  await noSideScroll(C);
+  await shot(C, "fam63-settings-race");
+  // The poster: one image for the WhatsApp group.
+  await C.evaluate(() => {
+    const nav = navigator as unknown as { canShare: () => boolean; share: (d: { files: File[] }) => Promise<void> };
+    nav.canShare = () => true;
+    nav.share = async (d) => {
+      const w = window as unknown as { __shared: string[]; __poster?: string };
+      w.__shared = d.files.map((x) => `${x.name}|${x.type}|${x.size > 5000}`);
+      const r = new FileReader();
+      r.onload = () => (w.__poster = String(r.result));
+      r.readAsDataURL(d.files[0]);
+    };
+  });
+  await C.getByRole("button", { name: "Share poster" }).click();
+  await until(async () => !!(await C.evaluate(() => (window as unknown as { __poster?: string }).__poster)), "the poster shared");
+  const shared = await C.evaluate(() => (window as unknown as { __shared: string[] }).__shared);
+  expect(shared[0]).toMatch(/^ARISTORA-champions-\d{4}-\d{2}-\d{2}\.png\|image\/png\|true$/);
+  const poster = await C.evaluate(() => (window as unknown as { __poster: string }).__poster);
+  const { writeFile } = await import("node:fs/promises");
+  await writeFile(join(SHOTS, "fam64-champions-poster.png"), Buffer.from(poster.split(",")[1], "base64"));
+
+  // Bilal's phone: the gift card on Home until a teacher gives it.
+  await tabTo(B, /Home/);
+  await B.reload();
+  await contains(B.locator(".f-giftc"), "🍦 Ice cream");
+  await contains(B.locator(".f-giftc"), "Grade 8 champion");
+  await noSideScroll(B);
+  await shot(B, "fam65-gift-home");
+  await C.locator(".rc-gifts li", { hasText: "Bilal M" }).getByRole("button", { name: "Given" }).click();
+  await contains(C.locator(".toast").last(), "given");
+  await until(async () => (await C.locator(".rc-box > .rc-gifts > li").count()) === 0, "nothing left to give");
+  await contains(C.locator(".rc-given summary"), "Given lately · 1");
+  await B.reload();
+  await goalIs(B, "Level");
+  expect(await B.locator(".f-giftc").count()).toBe(0);
+  for (const p of [P, B, S, C]) await p.context().close();
   expect(problems.slice(before)).toEqual([]);
 });
 

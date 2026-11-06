@@ -268,6 +268,8 @@ export type FamilyMe = {
   nameAsk: { name: string; no: boolean } | null;
   /** Cheers (👏) he got this week: how many, and the first names of the newest few (7 Nov 2026). */
   cheers: { n: number; from: string[] };
+  /** Gifts from the centre he won and hasn't been given yet (7 Nov 2026): what, for which win, which week. */
+  gifts: { id: string; what: string; kind: "g" | "a" | "cup"; wk: number; g: number | null }[];
 };
 
 /** This week's cheers in his words: how many, and the newest three classmates (each once). */
@@ -333,6 +335,12 @@ export const me = query({
       trophies: trophiesOf(rows, worlds),
       ol: olMapOn(s),
       cheers: cheersWords(await cheersOf(ctx, s._id, now)),
+      gifts: (
+        await ctx.db
+          .query("gifts")
+          .withIndex("by_sid", (q) => q.eq("sid", s._id).eq("open", true))
+          .collect()
+      ).map((x) => ({ id: x._id, what: x.what, kind: x.kind, wk: x.wk, g: x.g ?? null })),
       blocked: stop && stopWorld ? { unitId: stopWorld.unitId, no: stopWorld.no, n: stop.n, owed: stop.owed } : null,
       worlds,
     };

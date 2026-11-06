@@ -407,7 +407,7 @@ EOF
   sets `raceV`). One progress row per student and book in a fixture (`students.add` with a unit already made one: patch
   it), or the map and the race disagree (the map reads the first row, XP adds both).
 - **What counts as XP changes in one place** (`xpItems`, `levelDays` in `convex/lib/family.ts`): then add 1 to
-  `RACE_V` (`convex/lib/raceRows.ts`): every row is built again by `race.fill` (60 a run, every 15 min); until it is
+  `RACE_V` (`convex/lib/raceRows.ts`): every row is built again by `race.fill` (20 a run, every 5 min); until it is
   done the race reads everyone's rows the old way.
 - **A race row's numbers are as of the moment they were worked out** (`wk`, `d`): read them only through `numsAt`
   (`raceRowOut`), never `row.xp` straight (on Monday it is last week's).

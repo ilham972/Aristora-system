@@ -55,8 +55,9 @@ const SETTINGS_TABS: [Tab, string, () => boolean][] = [
   ["people", "People", () => may("owner")],
   // When the class is open each weekday (3 Nov 2026): the family app's schedule.
   ["hours", "Class hours", () => may("owner")],
-  // The family app's race and profiles (7 Nov 2026): the owner's switch for marks on a classmate's profile.
-  ["race", "Race", () => may("owner")],
+  // The family app's race (7 Nov 2026): gifts to give (owner, Manager), last week's champions and their poster (and
+  // Reports), the prizes and the marks switch (owner).
+  ["race", "Race", () => may("owner") || may("manager") || may("reports")],
   ["alerts", "Alerts", () => true],
   ["reports", "Reports", () => may("reports")],
   ["history", "History", () => may("reports")],
@@ -80,6 +81,8 @@ export function Settings(props: {
   phN?: number;
   phLate?: boolean;
   asks?: number;
+  /** Gifts waiting to be given (Settings → Race; owner and Manager). */
+  gifts?: number;
   onPhotos?: () => void;
 }) {
   const shown = SETTINGS_TABS.filter(([, , ok]) => ok());
@@ -94,6 +97,7 @@ export function Settings(props: {
             {id === "feedback" && (props.fbNew ?? 0) > 0 && <b class="seg-n">{props.fbNew}</b>}
             {id === "photos" && (props.phN ?? 0) > 0 && <b class={`seg-n${props.phLate ? " late" : ""}`}>{props.phN}</b>}
             {id === "students" && (props.asks ?? 0) > 0 && <b class="seg-n">{props.asks}</b>}
+            {id === "race" && (props.gifts ?? 0) > 0 && <b class="seg-n">{props.gifts}</b>}
           </button>
         ))}
       </nav>

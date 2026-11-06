@@ -10,10 +10,10 @@ import { secretHash } from "../convex/lib/auth";
 import { KNOWN_WORKBOOKS, levelOutOf } from "../convex/lib/book";
 import { slWeekStart } from "../convex/lib/day";
 import { xpItems } from "../convex/lib/family";
-import { addNums, champsOf, cupOf, numsAt, numsOf, passOf, placed, type RaceRow } from "../convex/lib/race";
+import { addNums, championsOf, champsOf, cupOf, cupWinners, numsAt, numsOf, passOf, placed, type RaceRow } from "../convex/lib/race";
 import { RACE_V } from "../convex/lib/raceRows";
 import schema from "../convex/schema";
-import { asOwner, asPhone } from "./helpers";
+import { addPerson, asOwner, asPhone } from "./helpers";
 
 const at = (iso: string) => new Date(iso).getTime();
 const DAY = 86_400_000;
@@ -69,6 +69,31 @@ describe("the race's numbers (convex/lib/race.ts)", () => {
       { g: 7, n: 1, of: 2 },
     ]);
     expect(cupOf([row("A", 5, 0, 0, 7), row("B", 0, 0, 3, 7)], "last")).toEqual([{ g: 7, n: 1, of: 2 }]);
+  });
+});
+
+describe("a finished week's champions (convex/lib/race.ts)", () => {
+  const row = (id: string, p: number, g: number | null): RaceRow => ({ id, n: `${id} K`, g, xp: 0, y: 0, p });
+  test("each grade's top 3 and ARISTORA's (ties share a place); the cup's winners (ties share it)", () => {
+    const rows = [row("A", 40, 7), row("B", 40, 7), row("C", 9, 7), row("D", 2, 7), row("E", 50, 9), row("F", 0, 9)];
+    const { top, cup } = championsOf(rows);
+    expect(top.filter((x) => x.k === "g" && x.g === 7).map((x) => [x.id, x.place])).toEqual([
+      ["A", 1],
+      ["B", 1],
+      ["C", 3],
+    ]);
+    expect(top.filter((x) => x.k === "a").map((x) => [x.id, x.place])).toEqual([
+      ["E", 1],
+      ["A", 2],
+      ["B", 2],
+    ]);
+    expect(cup).toEqual([
+      { g: 7, n: 4, of: 4 },
+      { g: 9, n: 1, of: 2 },
+    ]);
+    expect(cupWinners(cup)).toEqual([7]);
+    expect(cupWinners([{ g: 6, n: 1, of: 2 }, { g: 8, n: 2, of: 4 }])).toEqual([6, 8]);
+    expect(cupWinners([{ g: 6, n: 0, of: 2 }])).toEqual([]);
   });
 });
 
@@ -243,7 +268,7 @@ describe("the race on the server", () => {
     expect(m.p.stages[0]).toMatchObject({ done: 1, right: items(1).length - 1, toLearn: 1 });
     expect(m.p.stages[0].got).toBeGreaterThan(0);
     // The owner: off = no marks on a classmate's profile (his own Me keeps them).
-    expect(await t.query(api.race.settings, {})).toEqual({ marks: true });
+    expect(await t.query(api.race.settings, {})).toEqual({ marks: true, prizes: { g: "", a: "", cup: "" } });
     await t.mutation(api.race.setMarks, { on: false });
     const off = await A.query(api.family.mate, { id: bala });
     expect(off.marks).toBe(false);
@@ -267,6 +292,61 @@ describe("the race on the server", () => {
     expect((await raceRow(asha))!.pic).toBe(photo);
     await A.mutation(api.family.dropPhoto, {});
     expect((await raceRow(asha))!.pic).toBeUndefined();
+  });
+
+  test("gifts: the owner's prizes, Monday gives them to last week's winners, his phone shows them until Given", async () => {
+    await raw.mutation(internal.race.fill, {});
+    await t.mutation(api.workbook.correct, { studentId: bala, level: 1, items: items(1) });
+    await t.mutation(api.workbook.correct, { studentId: asha, level: 1, items: items(1, [items(1)[0].q]) });
+    // Before Monday: the poster works the week out now (last week: nobody yet).
+    expect(await t.query(api.race.champions, {})).toMatchObject({ kept: false, top: [] });
+    await expect(t.mutation(api.race.setPrizes, { g: "x".repeat(41), a: "", cup: "" })).rejects.toThrow(/40 letters/);
+    expect(await t.mutation(api.race.setPrizes, { g: " 🍦  Ice cream ", a: "🍗 Chicken fries", cup: "🍬 A sweet" })).toEqual({
+      g: "🍦 Ice cream",
+      a: "🍗 Chicken fries",
+      cup: "🍬 A sweet",
+    });
+    vi.setSystemTime(new Date("2026-11-09T00:05:00+05:30"));
+    await raw.mutation(internal.race.week, {});
+    // Bala: his grade's champion and ARISTORA's (both gifts); the cup: Grade 7 (both learned), each one a sweet.
+    const g = await t.query(api.race.gifts, {});
+    expect(g.open.map((x) => [x.n, x.kind, x.what]).sort()).toEqual([
+      ["Asha K", "cup", "🍬 A sweet"],
+      ["Bala M", "a", "🍗 Chicken fries"],
+      ["Bala M", "cup", "🍬 A sweet"],
+      ["Bala M", "g", "🍦 Ice cream"],
+    ]);
+    expect(await t.query(api.race.giftCount, {})).toBe(4);
+    const B = await joinAs(bala, FAM_B);
+    expect((await B.query(api.family.me, {})).gifts.map((x) => x.what).sort()).toEqual(["🍗 Chicken fries", "🍦 Ice cream", "🍬 A sweet"]);
+    // The poster reads the kept week now.
+    const c = await t.query(api.race.champions, {});
+    expect(c.kept).toBe(true);
+    expect(c.top.filter((x) => x.place === 1).map((x) => [x.n, x.k])).toEqual([
+      ["Bala M", "g"],
+      ["Bala M", "a"],
+    ]);
+    // The Manager gives one (a Correction-only teacher can't); his phone no longer shows it; Undo brings it back.
+    await addPerson(raw, { name: "Mala", token: "manager-phone-token-0123456789abcdefghijklmnop", tabs: ["correction", "manager"] });
+    await addPerson(raw, { name: "Kavi", token: "corrector-phone-token-0123456789abcdefghijklmn", tabs: ["correction"] });
+    const M = asPhone(raw, "manager-phone-token-0123456789abcdefghijklmnop");
+    const K = asPhone(raw, "corrector-phone-token-0123456789abcdefghijklmn");
+    const ice = g.open.find((x) => x.kind === "g")!;
+    await expect(K.mutation(api.race.give, { id: ice.id as Id<"gifts">, given: true })).rejects.toThrow();
+    await expect(K.query(api.race.gifts, {})).rejects.toThrow();
+    await M.mutation(api.race.give, { id: ice.id as Id<"gifts">, given: true });
+    const after = await M.query(api.race.gifts, {});
+    expect(after.open).toHaveLength(3);
+    expect(after.given).toMatchObject([{ n: "Bala M", what: "🍦 Ice cream", by: "Mala" }]);
+    expect((await B.query(api.family.me, {})).gifts).toHaveLength(2);
+    await M.mutation(api.race.give, { id: ice.id as Id<"gifts">, given: false });
+    expect(await M.query(api.race.giftCount, {})).toBe(4);
+    // No prize = no gift: the next Monday with prizes cleared gives none.
+    await t.mutation(api.race.setPrizes, { g: "", a: "", cup: "" });
+    await t.mutation(api.workbook.correct, { studentId: asha, level: 2, items: items(2) });
+    vi.setSystemTime(new Date("2026-11-16T00:05:00+05:30"));
+    await raw.mutation(internal.race.week, {});
+    expect(await t.query(api.race.giftCount, {})).toBe(4);
   });
 
   test("cheers: one a day per classmate, never himself; he sees who cheered him this week", async () => {

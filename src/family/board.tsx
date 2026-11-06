@@ -85,6 +85,41 @@ export function Cheered(props: { c: FamilyMe["cheers"] | undefined }) {
   );
 }
 
+/** "2 Nov": a week's Monday (Sri Lanka). */
+function weekWords(wk: number): string {
+  const d = new Date(wk + 330 * 60_000);
+  return `${d.getUTCDate()} ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getUTCMonth()]}`;
+}
+
+/** What won it, in his words. */
+export function giftWhy(x: { kind: "g" | "a" | "cup"; g: number | null; wk: number }): string {
+  const win = x.kind === "a" ? `🏆 ${BRAND} champion` : x.kind === "g" ? `👑 Grade ${x.g ?? ""} champion` : `🥇 Grade ${x.g ?? ""} won the cup`;
+  return `${win} · week of ${weekWords(x.wk)}`;
+}
+
+/** A gift from the centre he won (7 Nov 2026): on Home and Me until a teacher gives it to him. */
+export function GiftCards(props: { gifts: FamilyMe["gifts"] | undefined }) {
+  const list = props.gifts ?? [];
+  if (!list.length) return null;
+  return (
+    <>
+      {list.map((x) => (
+        <section key={x.id} class="f-card f-giftc rise" aria-label="A gift for you">
+          <span class="f-giftc-b" aria-hidden="true">
+            🎁
+          </span>
+          <div class="f-giftc-w">
+            <small class="f-giftc-k">நீ வென்றாய்!</small>
+            <b>{x.what}</b>
+            <small>{giftWhy(x)}</small>
+            <p>இதை உன் ஆசிரியரிடம் காட்டு: உனக்குத் தருவார்.</p>
+          </div>
+        </section>
+      ))}
+    </>
+  );
+}
+
 /** 👑 after a name: last week's champion of this list. */
 const Crown = () => (
   <span class="f-wcrown" role="img" aria-label="Last week's champion">

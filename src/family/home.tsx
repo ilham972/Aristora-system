@@ -8,7 +8,7 @@ import { useEffect, useState } from "preact/hooks";
 import type { ClassDay, FamilyClasses, FamilyMe } from "../../convex/family";
 import { isBirthday } from "../../convex/lib/day";
 import type { DayItem } from "../../convex/lib/family";
-import { Cheered } from "./board";
+import { Cheered, GiftCards } from "./board";
 import { levelsDone } from "./map";
 import { keep, query } from "./net";
 import { Confetti, nextPlay } from "./next";
@@ -349,6 +349,7 @@ export function HomeTab(props: { top: ComponentChildren; me: FamilyMe | null; on
       </header>
       {party && <BdayCard name={name} />}
       <TodayCard cls={cls} me={me} now={now} today={days[t.day]} onStage={props.onStage} />
+      <GiftCards gifts={me?.gifts} />
       <GoalCard me={me} onPlay={props.onPlay} onLearn={props.onLearn} />
       <Cheered c={me?.cheers} />
       <section class="f-sched f-card rise" aria-label="Class week">

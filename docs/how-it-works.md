@@ -1115,7 +1115,7 @@ learning app of our education institute"): one profile, his class times, what he
     progress row. **Every mutation** goes through `convex/lib/fn.ts` (`mutation`, `internalMutation`): its db is
     watched, and as it ends the progress rows it wrote get their part again and his race row adds his parts up; a
     student's name, grade, photo, birthday or removal is copied; a missing row or one built with older rules (`RACE_V`)
-    is built again from all his rows. `race.fill` (every 15 min) builds the ones still missing, 60 a run, then notes
+    is built again from all his rows. `race.fill` (every 5 min) builds the ones still missing, 20 a run, then notes
     meta `raceV` and does nothing more; until then the race works out the old way from everyone's rows (`raceList`).
     `race.week` (Monday 00:05 Sri Lanka) keeps last week's champions in `raceWeeks` (each grade's top 3, ARISTORA's,
     the grade cup) and adds a week won to each #1's race row (`w` in his grade, `wa` in ARISTORA): his profile counts
@@ -1131,6 +1131,19 @@ learning app of our education institute"): one profile, his class times, what he
     off = no marks on a classmate's profile (% right, questions, each Stage's marks: the ring shows Levels done); his
     own Me keeps them. Never his account, his day hour by hour, WhatsApp or a certificate. **Who cheered him** shows
     on Home and Me ("👏 Hana K, Raj M and 3 others ... இந்த வாரம் உன்னை உற்சாகப்படுத்தினார்கள்!": `me.cheers`, this week).
+  - **Gifts from the centre** (7 Nov 2026, his ask: "gift cards ... ice-cream or chicken fries"; no votes, my call told
+    him: votes turn into a popularity contest): the owner sets a prize for each win in **Settings → Race** (empty = no
+    gift): 👑 each grade's champion, 🏆 the ARISTORA champion (he is his grade's too: both gifts), 🥇 the grade cup
+    (every student who learned that week in the grade with the best share). `race.week` (Monday 00:05) makes a `gifts`
+    row for each winner with the prize as it is then. His phone shows a gold card on Home and Me ("நீ வென்றாய்! 🍦 Ice
+    cream · 👑 Grade 8 champion · week of 2 Nov · இதை உன் ஆசிரியரிடம் காட்டு") until a teacher taps **Given** (owner or
+    Manager: Settings → Race → Gifts to give; the toast's Undo, or Given lately → Undo). The gear counts the gifts
+    waiting for the owner and the Manager (`race.giftCount`), and Settings opens on Race when nothing else waits.
+  - **The champions poster** (7 Nov 2026, his pick: "Monday poster"; `src/champions.ts`): Settings → Race → Last
+    week's champions (owner, Reports, Manager): ARISTORA's top 3 and each grade's champion and the cup as a list, then
+    **Share poster** / Save: one 1080 × 1350 PNG drawn on the phone (ARISTORA's top 3 as medals, each grade's 👑, the
+    grade cup; first names and initials, never marks or a last place) for the WhatsApp group and the hall wall. Before
+    Monday's run kept the week (`raceWeeks`) it is worked out from the race ("Worked out now").
   - **Me = his profile** (4 Nov 2026, his voice note: "a proper profile page for the students ... as simple as
     possible"; `me.tsx`, one of the parts that come right after the first screen): a violet header with **his photo**
     (88 px; tap = the camera or the gallery: his photo, below), his name (🎂 on his birthday), grade and index ("Photo ·

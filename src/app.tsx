@@ -19,6 +19,7 @@ import { useFeedbackNew } from "./feedbackList";
 import { usePhotosWaiting } from "./photoQueue";
 import { openLane } from "./homeLane";
 import { useAskCount } from "./familyAsks";
+import { useGiftsWaiting } from "./raceSettings";
 import { alertsState, armAlerts, listenForTaps, ring, useAlertsState, type AlertKind } from "./sound";
 import { clearHash, PinSheet, pinAsked, readHash, SignIn, stopAskingPin, type Hash } from "./signin";
 import { hideSplash } from "./splash";
@@ -230,7 +231,9 @@ export function App() {
   // What students asked for in the family app (a photo for the race, a new name), waiting for an OK (owner and
   // Students): on the same gear; Settings opens on Students then.
   const asks = useAskCount(!!me?.user && may("students"));
-  const gearN = photos.n + fbNew + asks;
+  // Gifts from the centre waiting to be given (7 Nov 2026; the owner and the Manager): Settings → Race.
+  const gifts = useGiftsWaiting(!!me?.user && may("manager"));
+  const gearN = photos.n + fbNew + asks + gifts;
 
   if (me === undefined) {
     return (
@@ -448,7 +451,7 @@ export function App() {
               class={`icon-btn has-n${shown === "settings" ? " on" : ""}`}
               aria-label={
                 gearN > 0
-                  ? `Settings${photos.n > 0 ? `, ${photos.n} photos to mark` : ""}${asks > 0 ? `, ${asks} waiting for your OK` : ""}${fbNew > 0 ? `, ${fbNew} new feedback` : ""}`
+                  ? `Settings${photos.n > 0 ? `, ${photos.n} photos to mark` : ""}${asks > 0 ? `, ${asks} waiting for your OK` : ""}${fbNew > 0 ? `, ${fbNew} new feedback` : ""}${gifts > 0 ? `, ${gifts} gifts to give` : ""}`
                   : "Settings"
               }
               onClick={() => toggle("settings")}
@@ -497,8 +500,9 @@ export function App() {
             setReopen(null);
             setPage(backTo);
           }}
-          start={reopen ?? (photos.n > 0 ? "photos" : asks > 0 ? "students" : fbNew > 0 ? "feedback" : undefined)}
+          start={reopen ?? (photos.n > 0 ? "photos" : asks > 0 ? "students" : fbNew > 0 ? "feedback" : gifts > 0 ? "race" : undefined)}
           fbNew={fbNew}
+          gifts={gifts}
           phN={photos.n}
           phLate={photos.late}
           asks={asks}

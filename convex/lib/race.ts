@@ -136,3 +136,28 @@ export function cupOf(rows: RaceRow[], week: "now" | "last" = "now"): Cup[] {
 
 /** "18 of 20" as a whole percentage. */
 export const cupPct = (c: Cup) => (c.of ? Math.round((c.n / c.of) * 100) : 0);
+
+/** One of a finished week's champions: his place (1–3) in his grade's list (`g`) or ARISTORA's (`a`). */
+export type Champ = { id: string; n: string; g: number | null; xp: number; k: "g" | "a"; place: number };
+
+/**
+ * Last week's champions from everyone's rows (their `p`): each grade's top 3 and ARISTORA's top 3 (equal XP share a
+ * place, so a place can hold two), and the grade cup. The #1s are the champions (👑, a week won, a gift).
+ */
+export function championsOf(rows: RaceRow[]): { top: Champ[]; cup: Cup[] } {
+  const top: Champ[] = [];
+  const add = (list: RaceRow[], k: "g" | "a") => {
+    for (const x of placed(list.map((r) => ({ ...r, xp: r.p, y: 0 })))) {
+      if (x.rank !== null && x.rank <= 3) top.push({ id: x.r.id, n: x.r.n, g: x.r.g, xp: x.r.xp, k, place: x.rank });
+    }
+  };
+  for (const g of RACE_GRADES) add(rows.filter((r) => r.g === g), "g");
+  add(rows, "a");
+  return { top, cup: cupOf(rows, "last") };
+}
+
+/** The grades that won a week's cup: the best share (ties share it), none when nobody learned. */
+export function cupWinners(cup: Cup[]): number[] {
+  const best = cup.reduce((m, c) => Math.max(m, c.of ? c.n / c.of : 0), 0);
+  return best > 0 ? cup.filter((c) => c.of && c.n / c.of === best).map((c) => c.g) : [];
+}

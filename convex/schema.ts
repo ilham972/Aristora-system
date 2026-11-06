@@ -856,6 +856,27 @@ export default defineSchema({
     cup: v.array(v.object({ g: v.number(), n: v.number(), of: v.number() })),
   }).index("by_wk", ["wk"]),
 
+  /**
+   * A gift from the centre (7 Nov 2026, his ask: "gift cards ... ice-cream or chicken fries"): made by `race.week` for
+   * last week's winners when the owner set a prize for that win (Settings → Race: `g` each grade's champion, `a`
+   * ARISTORA's, `cup` every student who learned in the grade that won the cup). His phone shows it until a teacher taps
+   * Given (`open` false, who and when).
+   */
+  gifts: defineTable({
+    sid: v.id("students"),
+    n: v.string(),
+    g: v.optional(v.number()),
+    wk: v.number(),
+    kind: v.union(v.literal("g"), v.literal("a"), v.literal("cup")),
+    what: v.string(),
+    at: v.number(),
+    open: v.boolean(),
+    givenAt: v.optional(v.number()),
+    by: v.optional(v.string()),
+  })
+    .index("by_open", ["open", "at"])
+    .index("by_sid", ["sid", "open"]),
+
   /** A cheer (👏, 7 Nov 2026): one tap on a classmate's profile, no words; one a day per classmate. */
   cheers: defineTable({
     to: v.id("students"),

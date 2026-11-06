@@ -10,7 +10,7 @@ import type { ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
 import type { FamilyMe } from "../../convex/family";
 import { isBirthday } from "../../convex/lib/day";
-import { Cheered, endsIn, myPlace, useBoard } from "./board";
+import { Cheered, endsIn, GiftCards, myPlace, useBoard } from "./board";
 import { Kids, whoWords } from "./kids";
 import { bdayWords, useProfile } from "./later";
 import { mutation, type Account } from "./net";
@@ -230,6 +230,7 @@ export function MeTab(props: {
           <small>Levels</small>
         </div>
       </section>
+      <GiftCards gifts={me.gifts} />
       <Cheered c={me.cheers} />
       {me.photoNo && <Told text="உன் photo ஐ ஆசிரியர் ஏற்கவில்லை. வேறு ஒன்றைத் தேர்ந்தெடு." onOk={() => void act(() => mutation("family:forget", { kind: "photo" }))} />}
       {me.nameAsk?.no && <Told text={`"${me.nameAsk.name}": உன் ஆசிரியர் இந்தப் பெயரை ஏற்கவில்லை.`} onOk={() => void act(() => mutation("family:forget", { kind: "name" }))} />}

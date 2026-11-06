@@ -1134,7 +1134,8 @@ test("accounts: the owner sets up, adds a teacher, her phone signs in with the l
     await textsAre(R.locator(".tabs .tab > span:nth-child(2)"), ["Class", "Correction"]);
     expect(await tab(R, "Correction").getAttribute("aria-current")).toBe("page");
     await R.getByRole("button", { name: "Settings" }).click();
-    await textsAre(R.locator(".seg button"), ["Alerts", "Reports", "History", "Account"]); // no People: owner only
+    // No People: owner only. Race (7 Nov 2026): Reports sees last week's champions and their poster (no prizes).
+    await textsAre(R.locator(".seg button"), ["Race", "Alerts", "Reports", "History", "Account"]);
     await shot(R, "a05b-teacher-settings", true);
     await R.getByRole("button", { name: "Back to the class" }).click();
     // The same link can't be used again.

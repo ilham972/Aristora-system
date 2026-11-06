@@ -10962,3 +10962,96 @@ body.tm-on .toasts {
     height: 17px;
   }
 }
+
+/* ---------- Settings → Race (7 Nov 2026): gifts to give, last week's champions and their poster, the prizes ---------- */
+.rc-box {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+}
+.rc-prize {
+  display: grid;
+  gap: 4px;
+}
+.rc-prize > span {
+  display: grid;
+  font-weight: 700;
+}
+.rc-prize input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+}
+.rc-gifts {
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+.rc-gifts li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: var(--amber-soft);
+}
+.rc-given .rc-gifts li {
+  background: var(--line-2);
+}
+.rc-gifts li > span {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+}
+.rc-gifts li small {
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+.rc-gifts .btn {
+  flex: none;
+}
+.rc-g {
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--line-2);
+  font-style: normal;
+  font-size: 13px;
+}
+.rc-given summary {
+  cursor: pointer;
+  color: var(--ink-2);
+  font-weight: 600;
+  padding: 4px 0;
+}
+.rc-champs {
+  list-style: none;
+  display: grid;
+  gap: 4px;
+}
+.rc-champs li {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 8px;
+  align-items: baseline;
+}
+.rc-champs li > span {
+  color: var(--ink-2);
+  font-size: 14px;
+}
+.rc-champs li > b {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.rc-row {
+  display: flex;
+  gap: 8px;
+}
+.rc-row .btn {
+  flex: 1;
+}
