@@ -246,8 +246,11 @@ let sheetHost: ((r: SheetRender) => void) | null = null;
 export function setSheetHost(f: ((r: SheetRender) => void) | null) {
   sheetHost = f;
 }
-export function showSheet(r: SheetRender) {
-  sheetHost?.(r);
+/** False when no app is there to show it (then the caller does without). */
+export function showSheet(r: SheetRender): boolean {
+  if (!sheetHost) return false;
+  sheetHost(r);
+  return true;
 }
 
 /** A number that rolls from one value to the next (his days in a row, yesterday's → today's). */

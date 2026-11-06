@@ -4454,3 +4454,155 @@ p {
   font-style: normal;
   text-align: center;
 }
+
+/* His crop before a photo goes to a teacher (6 Nov 2026, src/family/crop.tsx): full screen, dark, the photo with a frame
+   and four big corners; outside the frame dimmed (the frame's shadow, clipped by the stage). Its script comes with the
+   parts after the first screen; its style is here, in the first load (0.5 KB), because the later parts' budget was full
+   (31.8 of 32 KB with it there, 56.2 of 66 here). */
+.f-cut {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  background: #16142b;
+  animation: f-fade 0.2s ease both;
+  touch-action: none;
+}
+.f-cut-top {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: calc(var(--safe-t) + 12px) 14px 4px;
+}
+.f-cut-top .f-x {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+.f-cut-top p {
+  margin: 0;
+  font: 600 14px/1.35 var(--display);
+  color: rgba(255, 255, 255, 0.78);
+}
+.f-cut-top b {
+  display: block;
+  font: 800 18px/1.25 var(--display);
+  color: #fff;
+}
+.f-cut-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: min(100%, 600px);
+  margin: 0 auto;
+  padding: 24px;
+  overflow: hidden;
+}
+.f-cut-pic {
+  position: relative;
+  line-height: 0;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.f-cut-img canvas {
+  display: block;
+}
+.f-cut-box {
+  position: absolute;
+  display: block;
+  border: 3px solid var(--gold);
+  box-shadow: 0 0 0 100vmax rgba(12, 10, 32, 0.76);
+}
+.f-cut-g {
+  position: absolute;
+  width: 52px;
+  height: 52px;
+  margin: -26px;
+}
+/* A yellow dot (the words say "the yellow dots"), pulsing a few times when the screen opens. */
+.f-cut-g::after {
+  content: "";
+  position: absolute;
+  inset: 13px;
+  border-radius: 50%;
+  background: var(--gold);
+  border: 3px solid #fff;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+  animation: f-cut-hint 0.9s ease-in-out 0.4s 3;
+}
+.f-cut-g.t,
+.f-cut-g.b,
+.f-cut-g.l,
+.f-cut-g.r {
+  width: 44px;
+  height: 44px;
+  margin: -22px;
+}
+.f-cut-g.t::after,
+.f-cut-g.b::after,
+.f-cut-g.l::after,
+.f-cut-g.r::after {
+  inset: 14px;
+}
+.f-cut-g.tl,
+.f-cut-g.tr,
+.f-cut-g.t {
+  top: 0;
+}
+.f-cut-g.bl,
+.f-cut-g.br,
+.f-cut-g.b {
+  bottom: 0;
+}
+.f-cut-g.tl,
+.f-cut-g.bl,
+.f-cut-g.l {
+  left: 0;
+}
+.f-cut-g.tr,
+.f-cut-g.br,
+.f-cut-g.r {
+  right: 0;
+}
+.f-cut-g.t,
+.f-cut-g.b {
+  left: 50%;
+}
+.f-cut-g.l,
+.f-cut-g.r {
+  top: 50%;
+}
+@keyframes f-cut-hint {
+  50% {
+    transform: scale(1.45);
+  }
+}
+.f-cut-bar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 14px calc(14px + var(--safe-b));
+}
+.f-cut-b {
+  flex: none;
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  min-width: 66px;
+  min-height: 54px;
+  padding: 7px 8px 5px;
+  border: 0;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font: 700 12px/1.1 var(--display);
+}
+.f-cut-b:disabled {
+  opacity: 0.38;
+}
+.f-cut-ok {
+  flex: 1;
+}

@@ -6,10 +6,11 @@
 import { Fragment } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { BookQ, LevelBook } from "../../convex/lib/homeWork";
+import { loadParts } from "./later";
 import { mutation, NetError, query } from "./net";
 import { keepPhotos, keptPhotos, photoKey, PHOTO_MAX, sendKept, sendPhotos, shrink, type Kind } from "./photos";
 import { buzz, sound } from "./sound";
-import { Icon, Maths, Owl, problemWords, toast } from "./ui";
+import { Icon, Maths, Owl, problemWords, showSheet, toast } from "./ui";
 
 /** The key's working: `**` = the final answer (bold), one line per part. */
 export function Solution(props: { text: string }) {
@@ -29,7 +30,8 @@ export function Solution(props: { text: string }) {
 
 /**
  * The camera for one question: up to 3 photos, kept on this phone. `send` = a Send button (after Check); without it
- * (during the level) the photos go by themselves right after Check.
+ * (during the level) the photos go by themselves right after Check. Each photo opens his crop first (6 Nov 2026,
+ * src/family/crop.tsx); with no parts on the phone (never fetched, no signal), the whole photo as before.
  */
 export function Taker(props: { unitId: string; n: number; q: number; kind: Kind; send: boolean; onSent?: () => void }) {
   const key = photoKey(props.unitId, props.n, props.q, props.kind);
@@ -49,20 +51,39 @@ export function Taker(props: { unitId: string; n: number; q: number; kind: Kind;
     setUrls(u);
     return () => u.forEach((x) => URL.revokeObjectURL(x));
   }, [blobs]);
+  const now = useRef(blobs);
+  now.current = blobs;
   const keep = (b: Blob[]) => {
     setBlobs(b);
     void keepPhotos(key, b);
+  };
+  const add = (small: Blob) => {
+    buzz(6);
+    sound("pop");
+    keep([...now.current, small].slice(0, PHOTO_MAX));
   };
   const took = async (e: Event) => {
     const el = e.target as HTMLInputElement;
     const file = el.files?.[0];
     el.value = "";
     if (!file) return;
+    const parts = await loadParts().catch(() => null);
+    if (
+      parts &&
+      showSheet((close) => (
+        <parts.CropSheet
+          file={file}
+          onClose={close}
+          onDone={(b) => {
+            close();
+            add(b);
+          }}
+        />
+      ))
+    )
+      return;
     try {
-      const small = await shrink(file);
-      buzz(6);
-      sound("pop");
-      keep([...blobs, small].slice(0, PHOTO_MAX));
+      add(await shrink(file));
     } catch {
       toast("இந்தப் படத்தைத் திறக்க முடியவில்லை. மீண்டும் எடு.", true);
     }

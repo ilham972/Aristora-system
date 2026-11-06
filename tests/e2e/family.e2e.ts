@@ -950,7 +950,45 @@ test("photos from home: a drawing photographed in the level, the working on a wr
   await contains(F.locator(".f-qn"), "Q10");
   await contains(F.locator(".f-teach"), "படம் எடு");
   await F.locator(".f-qcard .f-file").first().setInputFiles(paper);
+  // His crop first (6 Nov 2026, "very easy for the students ... age 11 also"): the whole photo framed, yellow dots on the
+  // corners and sides; a corner and a side dragged, then சரி. What goes is the frame (the photo was 4 : 3, wide).
+  const cut = F.locator(".f-cut");
+  await visible(cut.locator(".f-cut-img canvas"));
+  expect(await cut.locator(".f-cut-g").count()).toBe(8);
+  expect(await cut.getByRole("button", { name: "Whole photo" }).isDisabled()).toBe(true);
+  const pic = (await cut.locator(".f-cut-pic").boundingBox())!;
+  expect(pic.width).toBeGreaterThan(300); // a small photo is shown as big as the screen allows
+  await noSideScroll(F);
+  await shot(F, "fam-ph00-crop");
+  const pull = async (grip: string, dx: number, dy: number) => {
+    const g = (await cut.locator(`.f-cut-g.${grip}`).boundingBox())!;
+    await F.mouse.move(g.x + g.width / 2, g.y + g.height / 2);
+    await F.mouse.down();
+    await F.mouse.move(g.x + g.width / 2 + dx, g.y + g.height / 2 + dy, { steps: 6 });
+    await F.mouse.up();
+  };
+  await pull("br", -pic.width * 0.5, 0);
+  await pull("t", 0, pic.height * 0.1);
+  const frame = (await cut.locator(".f-cut-box").boundingBox())!;
+  expect(frame.width / pic.width).toBeGreaterThan(0.45);
+  expect(frame.width / pic.width).toBeLessThan(0.55);
+  expect(await cut.getByRole("button", { name: "Whole photo" }).isDisabled()).toBe(false);
+  await shot(F, "fam-ph00b-cropped");
+  await F.setViewportSize({ width: 320, height: 640 });
+  await noSideScroll(F);
+  await shot(F, "fam-ph00c-crop-320");
+  await F.setViewportSize({ width: 390, height: 844 });
+  await cut.getByRole("button", { name: "Use this photo" }).click();
   await visible(F.locator(".f-qcard .f-thumb img"));
+  expect(await cut.count()).toBe(0);
+  const sizeOf = (img: ReturnType<typeof F.locator>) =>
+    img.evaluate(async (i) => {
+      const el = i as HTMLImageElement;
+      await el.decode().catch(() => {});
+      return [el.naturalWidth, el.naturalHeight];
+    });
+  const [cw, ch] = await sizeOf(F.locator(".f-qcard .f-thumb img"));
+  expect(cw / ch).toBeLessThan(0.85); // half the width, 0.9 of the height: taller than wide
   await noSideScroll(F);
   await shot(F, "fam-ph01-camera");
   await F.locator(".f-nextbar .f-key.next").click();
@@ -968,7 +1006,20 @@ test("photos from home: a drawing photographed in the level, the working on a wr
   await visible(q10.locator(".f-ph-state.wait"));
   await contains(F.locator(".f-owebar"), "1 படங்கள்");
   await q8.locator(".f-file").setInputFiles(paper);
+  // ↻ stands a sideways photo up (the photo turns, the frame with it); ✕ = no photo added. Then again: one tap on சரி
+  // keeps the whole photo as it is.
+  const canvas = F.locator(".f-cut .f-cut-img canvas");
+  await visible(canvas);
+  await F.locator(".f-cut").getByRole("button", { name: "Turn the photo" }).click();
+  await until(async () => await canvas.evaluate((c) => (c as HTMLCanvasElement).width < (c as HTMLCanvasElement).height), "the photo turned");
+  await F.locator(".f-cut").getByRole("button", { name: "Cancel" }).click();
+  expect(await F.locator(".f-cut").count()).toBe(0);
+  expect(await q8.locator(".f-thumb").count()).toBe(0);
+  await q8.locator(".f-file").setInputFiles(paper);
+  await F.locator(".f-cut").getByRole("button", { name: "Use this photo" }).click();
   await visible(q8.locator(".f-thumb img"));
+  const [tw, th] = await sizeOf(q8.locator(".f-thumb img"));
+  expect(tw / th).toBeCloseTo(96 / 72, 1);
   await noSideScroll(F);
   await shot(F, "fam-ph02-book");
   await q8.getByRole("button", { name: /அனுப்பு/ }).click();

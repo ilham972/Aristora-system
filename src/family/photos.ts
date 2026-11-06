@@ -1,7 +1,8 @@
 // Photos from home (4 Nov 2026, his voice notes): a part only a teacher can mark (a drawing, a construction, a reason)
 // and the working on a wrong answer go to the teachers as photos.
 // - Made small here before they leave the phone: the long side 1280 px, JPEG ≈ 200 KB (mobile data). Drawing the photo
-//   again also leaves out what the camera wrote inside the file (the place it was taken).
+//   again also leaves out what the camera wrote inside the file (the place it was taken). Since 6 Nov 2026 he crops it
+//   first (src/family/crop.tsx: the frame's part goes, made small the same way: `jpegOf`).
 // - Kept on this phone (IndexedDB: photos are too big for localStorage), per child, until they are sent: taken during a
 //   level, they go right after its Check; with no signal, the next time the level's book opens.
 
@@ -9,7 +10,17 @@ import { childId, NetError, mutation, uploadPhoto } from "./net";
 
 export type Kind = "part" | "working";
 export const PHOTO_MAX = 3;
-const SIDE = 1280;
+/** The long side of what goes. */
+export const PHOTO_SIDE = 1280;
+
+/** A drawn photo as the JPEG that goes: about 200 KB, a few hundred at most. */
+export async function jpegOf(c: HTMLCanvasElement): Promise<Blob> {
+  const jpeg = (q: number) => new Promise<Blob | null>((ok) => c.toBlob(ok, "image/jpeg", q));
+  let out = await jpeg(0.72);
+  if (out && out.size > 420 * 1024) out = await jpeg(0.55);
+  if (!out) throw new Error("no photo");
+  return out;
+}
 
 /** A photo from the camera, made small: a JPEG of about 200 KB at most a few hundred. */
 export async function shrink(file: Blob): Promise<Blob> {
@@ -21,7 +32,7 @@ export async function shrink(file: Blob): Promise<Blob> {
       i.onerror = () => bad(new Error("not a photo"));
       i.src = url;
     });
-    const scale = Math.min(1, SIDE / Math.max(img.naturalWidth, img.naturalHeight, 1));
+    const scale = Math.min(1, PHOTO_SIDE / Math.max(img.naturalWidth, img.naturalHeight, 1));
     const c = document.createElement("canvas");
     c.width = Math.max(1, Math.round(img.naturalWidth * scale));
     c.height = Math.max(1, Math.round(img.naturalHeight * scale));
@@ -30,11 +41,7 @@ export async function shrink(file: Blob): Promise<Blob> {
     g.fillStyle = "#fff";
     g.fillRect(0, 0, c.width, c.height);
     g.drawImage(img, 0, 0, c.width, c.height);
-    const jpeg = (q: number) => new Promise<Blob | null>((ok) => c.toBlob(ok, "image/jpeg", q));
-    let out = await jpeg(0.72);
-    if (out && out.size > 420 * 1024) out = await jpeg(0.55);
-    if (!out) throw new Error("no photo");
-    return out;
+    return await jpegOf(c);
   } finally {
     URL.revokeObjectURL(url);
   }

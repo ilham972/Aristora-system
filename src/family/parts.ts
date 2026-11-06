@@ -8,3 +8,5 @@ export { CertSheet } from "./cert";
 export { busyHere, watchUpdates } from "../appVersion";
 // The owner's Preview of a Stage (5 Nov 2026): main.tsx starts it only on the class system's address with #preview=.
 export { startPreview } from "./preview";
+// Cropping a photo of his work before it goes to a teacher (6 Nov 2026): the camera (book.tsx's Taker) opens it.
+export { CropSheet } from "./crop";

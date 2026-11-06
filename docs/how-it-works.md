@@ -1410,8 +1410,21 @@ learning app of our education institute"): one profile, his class times, what he
     (his rule, against my warning about the load: required). 1–3 photos a question, shrunk on the phone to ~200 KB
     (1280 px JPEG; drawing it again drops the camera's location), kept in IndexedDB per child until sent (no signal:
     next time the book opens), uploaded to Convex storage (`family.photoUrl`, 80 a day a phone; `family.photoSend`:
-    images ≤ 900 KB; sending again replaces until she answers). Owed = not sent, not marked or explained in class; a
-    retake is owed again (`owedOf`).
+    images ≤ 900 KB; sending again replaces until she answers). Owed = not sent, not marked or explained in class (none
+    once the class corrected the level); a retake is owed again (`owedOf`).
+  - **His crop first** (6 Nov 2026, the founder's ask: "give me the crop feature for the student, so teacher can do the
+    correction easily ... very easy for the students ... age 11 also"; `src/family/crop.tsx` `CropSheet`, rules in
+    `src/family/frame.ts`): every photo he picks opens full screen, dark: "படத்தை வெட்டு" and one line ("மஞ்சள்
+    புள்ளிகளை இழு: உன் விடை மட்டும் பெட்டிக்குள் இருக்கட்டும்."), the photo as big as the screen allows (small ones
+    too), a yellow box around the **whole photo** (so சரி alone sends it as before: nothing lost if he doesn't
+    understand), 8 big yellow dots (corners 52 px, sides 44 px to touch; they pulse 3 times at first), the box itself
+    slides, outside it dark. Never smaller than 12 % of a side (`CROP_MIN`). Three buttons: திருப்பு (↻ a quarter
+    clockwise, the box turns with the page: `turnedFrame`), முழுப் படம் (back to the whole photo; pale when it is), and
+    the gold சரி; ✕ (or the phone's Back) = no photo added. What goes is cut from a copy with its long side 2560 px,
+    then made small as before (`jpegOf`: long side 1280, JPEG): a cropped part reaches the teacher sharper and smaller.
+    Its script is one of the parts after the first screen (`parts.ts`, opened by `Taker` through `loadParts` and
+    `showSheet`); its style is in `family.css` (the later budget was full). No parts on the phone, or no app to show it
+    (`showSheet` false): the whole photo, as before.
   - **His limit** (his rule: "without the explanation for a wrong question they can go 2 levels maximum"): once he has
     checked 2 more levels at home after the oldest level that still owes photos, the next level waits (`blockedBy`,
     in `playable` and `me.blocked`): the Stage says it above the road (`.f-stopnote`: "Level 5 திறக்க, முதலில் Stage 3 ·
