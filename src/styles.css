@@ -10470,7 +10470,6 @@ body.tm-on .toasts {
   color: var(--ink-3);
 }
 .phq-marks,
-.phq-why,
 .phq-retake {
   display: flex;
   flex-wrap: wrap;
@@ -10489,20 +10488,6 @@ body.tm-on .toasts {
   border-color: var(--theory);
   background: var(--theory);
   color: #fff;
-}
-.phq-chip {
-  min-height: 36px;
-  padding: 0 11px;
-  border: 1.5px solid var(--line);
-  border-radius: 999px;
-  background: var(--card);
-  font: 600 13.5px/1 var(--font);
-  color: var(--ink-2);
-}
-.phq-chip.on {
-  border-color: var(--evaluation);
-  background: var(--evaluation-soft);
-  color: var(--evaluation-ink);
 }
 .phq-words {
   display: grid;

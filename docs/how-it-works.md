@@ -1451,22 +1451,29 @@ learning app of our education institute"): one profile, his class times, what he
       one row (Correction's part row). A part question: the parts the phone left, nothing lit until she taps (never
       "untouched = full"); the phone's own parts show "x/m the phone's"; Save adds them (`got` = her share, as before).
       His working on a wrong answer: the phone's marks lit, she changes them when his working earns more (method marks)
-      or less (`photos.mark` `total`; never on a level the class already checked, `hc`: "its marks stay"); full marks
-      need no cause and the question is no longer lost. One row of marks (0 … `teach`, or 0 … max) when the parts can't
+      or less (`photos.mark` `total`); full marks and the question is no longer lost. One row of marks (0 … `teach`, or 0 … max) when the parts can't
       be split: a unit with **no key** (the app doesn't know its sub-questions: only a key gives them) or a question the
       phone read differently at his Check (`split`).
-    - Then **why it was wrong** (`WHY`: careless slip, decimal point, sign, wrong method, copied it wrong, didn't
-      finish, unit, needs the lesson again; required while marks are lost) or a remark on a part (optional), her own
-      words (optional). The pad, fixed at the bottom like Correction's: **Retake** (blurry / wrong page / cut off: asks
-      him again and deletes the files at once; pale for a typed reason or a part marked in class) and **Save x/max ·
-      next** (green full, amber part, red 0; "· tap why" until a cause is picked); Correction's tap guard (350 ms, Save
-      700 ms after a new card). Save → the next question, then his next level, then round to any she skipped, then the
+    - Then her own words (optional, he reads them). **No reason** (6 Nov 2026, the founder's rule: "the photo is for
+      correction only, not for explanation"): the "why it was wrong" chips and the part remarks are gone. The pad, fixed
+      at the bottom like Correction's: **Retake** (blurry / wrong page / cut off: asks him again and deletes the files at
+      once; pale for a typed reason or one corrected in class) and **Save x/max · next** (green full, amber part, red
+      0); Correction's tap guard (350 ms, Save 700 ms after a new card). Save → the next question, then his next level, then round to any she skipped, then the
       next student by himself (this grade first, oldest first; "Hana done. Next: Omar."), then "Every photo from home is
       marked". The next card scrolls back to its squares, so the photo shows from its top.
-    - Her answer reaches his book in Tamil (`WHY[..].ta`). The marks count at once (the level's `got`, XP; history
-      "marked from his photo", "photo-why"); a lost question she answered with a cause counts as **explained** (`x`:
-      Evaluation skips it in class), except "needs the lesson again" (and "well done"). A part marked in class meanwhile
-      only closes ("Marked in class already: Save closes it"). Class still checks his paper (⌂ Checked: his answer,
+    - The marks count at once (the level's `got`, XP; history "marked from his photo"; old rows still show `WHY[..].ta`
+      and "photo-why"). **A photo never counts as explained**: every question still lost waits for Evaluation in class
+      (`x` is never set here; only Evaluation, or the question coming back right, explains it). `why` is still accepted
+      from a page opened before 6 Nov 2026, and ignored.
+    - **Corrected in class = the photos close** (6 Nov 2026, his report: a photo of a level already corrected in class
+      asked "why it was wrong", and saving it would have marked it explained, so Evaluation would skip it): when
+      Correction saves a level marked at home (`workbook.correct`) or taps ⌂ Checked (`workbook.homeChecked`), every
+      photo still waiting for that level closes (`closeClassPhotos`: `cls`, `seen`, its files go a day later like any
+      marked photo); his phone says "வகுப்பில் திருத்தப்பட்டது: விளக்கம் வகுப்பில்." (`CLASS_SAY`), owes no photo for
+      that level (`homeChecks`: `hc` = nothing owed, so his 2-level limit no longer waits on it) and can't send one
+      (`photoSend`: `LevelBook.hc`); his wrong answers stay lost for Evaluation. A card still open meanwhile says
+      "Corrected in class already (x/y): Close it." and Close only closes (`mark` → `already`); photos left waiting
+      from before this (or a race) close in the hourly sweep. Class still checks his paper (⌂ Checked: his answer,
       "the class check is enough"). `photos.queue` (20 at a time, the old page's) stays for a page still open.
   - **Questions that come back** (his idea: "even after explanation they will forget, so the same question will come
     again in their path; if they do it correctly, bonus points"): a question he lost marks on (at home or in class) that

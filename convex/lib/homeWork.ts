@@ -3,7 +3,7 @@
 // teacher's answers). The rules themselves are pure, in `photos.ts`.
 
 import type { Doc, Id } from "../_generated/dataModel";
-import type { QueryCtx } from "../_generated/server";
+import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { asMaster, bookFor, keyRow, masterState } from "./backend";
 import { comesBack, masterRows } from "./family";
 import { outOf, type MasterData } from "./book";
@@ -67,12 +67,16 @@ export async function homeChecks(ctx: QueryCtx, studentId: Id<"students">): Prom
     const m = states.get(r.unitId);
     const lv = m?.lv[String(r.n)];
     if (!m || !lv?.home || !lv.fixed) continue;
-    const o = owedOf(
-      r.owe,
-      photos.filter((p) => p.unitId === r.unitId && p.n === r.n),
-      m.q,
-      required,
-    );
+    // Corrected in class (his paper, 6 Nov 2026): the photos' job (right or wrong) is done, so nothing is owed; his
+    // wrong answers wait for Evaluation in class.
+    const o = lv.hc
+      ? []
+      : owedOf(
+          r.owe,
+          photos.filter((p) => p.unitId === r.unitId && p.n === r.n),
+          m.q,
+          required,
+        );
     owed.set(k, o);
     // In the order he checked them (the row's creation: two Checks never share it).
     checks.push({ unitId: r.unitId, n: r.n, at: r._creationTime, owed: o.length });
@@ -114,11 +118,38 @@ export type BookQ = {
   free?: true;
 };
 
-export type LevelBook = { unitId: Id<"units">; n: number; max: number; got: number; required: boolean; qs: BookQ[] };
+/** `hc` = corrected in class (his paper): no photo is asked for it any more. */
+export type LevelBook = { unitId: Id<"units">; n: number; max: number; got: number; required: boolean; hc?: true; qs: BookQ[] };
+
+/**
+ * The class corrected a level he marked at home (his paper, 6 Nov 2026, the founder's rule: "the photo is for
+ * correction only ... if that is already corrected in the classroom, we don't need to show the photo"): every photo
+ * still waiting for it closes (`cls`), no dot on his phone; its files go a day later, like any marked photo.
+ */
+export async function closeClassPhotos(ctx: MutationCtx, studentId: Id<"students">, unitId: Id<"units">, n: number, now: number, by?: string) {
+  const rows = await ctx.db
+    .query("homePhotos")
+    .withIndex("by_student", (q) => q.eq("studentId", studentId).eq("unitId", unitId).eq("n", n))
+    .collect();
+  let closed = 0;
+  for (const r of rows) {
+    if (r.state !== "waiting") continue;
+    await ctx.db.patch(r._id, classClosed(now, by));
+    closed++;
+  }
+  return closed;
+}
+
+/** A waiting photo closed because the class corrected its level. */
+export const classClosed = (now: number, by?: string) => ({ state: "done" as const, doneAt: now, seen: now, cls: true as const, ...(by ? { by } : {}) });
+
+/** What his phone says under a photo the class closed. */
+export const CLASS_SAY = "வகுப்பில் திருத்தப்பட்டது: விளக்கம் வகுப்பில்.";
 
 function photoView(p: Doc<"homePhotos">): BookPhoto {
-  const say =
-    p.state === "retake"
+  const say = p.cls
+    ? CLASS_SAY
+    : p.state === "retake"
       ? p.why && isRetake(p.why)
         ? RETAKE[p.why].ta
         : null
@@ -186,5 +217,5 @@ export async function bookOf(
       owe: owed.filter((o) => o.q === q).map((o) => o.kind),
     });
   }
-  return { unitId, n, max: l.max, got: lv.got ?? 0, required: h.required, qs };
+  return { unitId, n, max: l.max, got: lv.got ?? 0, required: h.required, ...(lv.hc ? { hc: true as const } : {}), qs };
 }

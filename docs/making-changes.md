@@ -93,6 +93,11 @@ EOF
 - **A photo asked again comes back in the same row** (5 Nov 2026, the ⌂ lane): `family.photoSend` patches a retake's
   `homePhotos` row back to "waiting" with a new `at`. Anything that remembers "answered" or "seen" for a photo keys on
   its id AND `at` (`answered` in `src/homeLane.tsx`), or the re-sent photo stays hidden.
+- **Explained (`MQ.x`) means a teacher explained it** (6 Nov 2026, the founder's rule: "the photo is for correction
+  only"): marking (a photo, a level's Save) never sets `x`; only Evaluation (or a question that came back right) does.
+  Setting it from a photo once made Evaluation skip questions nobody explained. And anything new that sets `lv.hc` (a
+  home level corrected in class) calls `closeClassPhotos` (`lib/homeWork.ts`), or its photos wait in the ⌂ lane for
+  nothing.
 - **A live query that reads students' rows runs again on every tap in class** (attendance, moves, `seen` all write
   them). The ⌂ lane's `photos.lane` returns photo rows only (`LaneRow`: id, count, oldest) and the phone takes names
   and grades from the board's views: keep big scans away from `students` in anything a phone keeps open.

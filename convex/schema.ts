@@ -715,6 +715,8 @@ export default defineSchema({
     gone: v.optional(v.number()),
     /** Closed because its question became free marks (the owner's Preview); open again if it isn't free any more. */
     free: v.optional(v.literal(true)),
+    /** Closed because the class corrected its level (his paper, 6 Nov 2026): nothing for a teacher to mark. */
+    cls: v.optional(v.literal(true)),
   })
     .index("by_student", ["studentId", "unitId", "n", "q"])
     .index("by_state", ["state", "at"])

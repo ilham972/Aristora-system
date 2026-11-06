@@ -1013,15 +1013,17 @@ test("photos from home: a drawing photographed in the level, the working on a wr
   expect((await N.locator(".hl-big img").getAttribute("style")) ?? "").toContain("rotate(90deg)");
   await shot(N, "fam-ph03b-full-screen");
   await N.locator(".hl-close").click();
-  // His working may earn a method mark: 1 lights and Save says 1/2; back to the phone's 0. Save waits for the cause.
+  // His working may earn a method mark: 1 lights and Save says 1/2; back to the phone's 0. No reason asked (6 Nov 2026:
+  // a photo is for correction only; Evaluation explains in class): Save is ready at once.
   await N.waitForTimeout(400);
   await card.getByRole("button", { name: "Q8: 1 of 2" }).click();
   await contains(N.locator(".hl-go"), "1/2");
   await card.getByRole("button", { name: "Q8: 0 of 2" }).click();
-  expect(await N.locator(".hl-go").isDisabled()).toBe(true);
-  await card.locator(".phq-chip", { hasText: "Decimal point" }).click();
-  await card.locator(".hl-words input").fill("Count the places after the point");
   await contains(N.locator(".hl-go"), "0/2");
+  expect(await N.locator(".hl-go").isDisabled()).toBe(false);
+  expect(await card.locator(".phq-chip").count()).toBe(0);
+  expect(await card.getByText(/why/i).count()).toBe(0);
+  await card.locator(".hl-words input").fill("Count the places after the point");
   await noSideScroll(N);
   await shot(N, "fam-ph04-lane-working");
   await N.setViewportSize({ width: 320, height: 640 });
@@ -1042,7 +1044,6 @@ test("photos from home: a drawing photographed in the level, the working on a wr
   await contains(N.locator(".hl-go"), "1/2");
   await card.getByRole("button", { name: "Part b: 1 of 1" }).click();
   await contains(N.locator(".hl-go"), "2/2");
-  await card.locator(".phq-chip", { hasText: "Well done" }).click();
   await N.setViewportSize({ width: 360, height: 740 });
   await noSideScroll(N);
   await shot(N, "fam-ph04c-lane-part-360");
@@ -1098,8 +1099,9 @@ test("photos from home: a drawing photographed in the level, the working on a wr
   await F.locator(".f-lv", { has: F.locator(".f-lv-dot") }).click();
   await visible(F.locator(".f-bookscr"));
   expect((await F.locator(".f-bookscr .f-kicker").innerText()).toLowerCase()).toContain("level 1");
-  await contains(q8.locator(".f-answer"), "தசமப் புள்ளி");
+  // Her words only (no reason since 6 Nov 2026).
   await contains(q8.locator(".f-answer-note"), "Count the places");
+  expect(await q8.locator(".f-answer").innerText()).not.toContain("தசமப் புள்ளி");
   await contains(q10.locator(".f-answer"), "2/2");
   await noSideScroll(F);
   await shot(F, "fam-ph05-answers");

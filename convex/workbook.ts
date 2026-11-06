@@ -30,6 +30,7 @@ import { levelOutOf, type MasterData } from "./lib/book";
 import { computeMaster, markBefore, type MQ, type MState } from "./lib/master";
 import { freeRow, isFree } from "./lib/free";
 import { actor } from "./lib/auth";
+import { closeClassPhotos } from "./lib/homeWork";
 import { masterState as masterStateShape } from "./schema";
 
 /**
@@ -243,6 +244,8 @@ export const correct = mutation({
     const took = draft ? Math.max(0, now - draft._creationTime) : undefined;
     const session = await currentSession(ctx, now);
     await ctx.db.patch(progress._id, { m, updatedAt: now });
+    // His paper corrected in class: the photos he sent for this level have nothing left to do (6 Nov 2026).
+    if (lv.home) await closeClassPhotos(ctx, student._id, unit._id, l.n, now, me.name);
     await ctx.db.patch(student._id, { lastActivityAt: now });
     await log(ctx, session, now, {
       kind: again ? "level-remarks" : "level-marks",
@@ -510,7 +513,7 @@ export const reteach = mutation({
 export const homeChecked = mutation({
   args: { ...base, level: v.number() },
   handler: async (ctx, args) => {
-    await actor(ctx, args.token, ["correction", "evaluation"], args.by);
+    const me = await actor(ctx, args.token, ["correction", "evaluation"], args.by);
     const now = Date.now();
     const student = await getStudent(ctx, args.studentId);
     const { unit, book, progress, m } = await teachWork(ctx, student, args.unitId, now);
@@ -523,6 +526,7 @@ export const homeChecked = mutation({
     if (left.length) fail(`Mark ${left.map((q) => `Q${q}`).join(", ")} first: the phone left ${left.length === 1 ? "it" : "them"} to you.`);
     m.lv[String(l.n)] = { ...lv, hc: now };
     await ctx.db.patch(progress._id, { m, updatedAt: now });
+    await closeClassPhotos(ctx, student._id, unit._id, l.n, now, me.name);
     await log(ctx, null, now, {
       kind: "level-checked",
       by: cleanBy(args.by),

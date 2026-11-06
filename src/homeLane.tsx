@@ -9,8 +9,11 @@
 // - A name opens his photos, oldest level first, one question at a time on Correction's card: his photos big (↻ turns
 //   one, a tap = full screen, a tap there = 2×), each part with the key's answer, what he typed and its own marks (a
 //   part question: the parts the phone left, nothing lit until she taps; his working on a wrong answer: the phone's
-//   marks lit, change them when his working earns more), why it was wrong (or a remark), her words. Retake and Save at
-//   the bottom like Correction's pad. Save → the next question, the next level, then the next student by itself.
+//   marks lit, change them when his working earns more), her words. Retake and Save at the bottom like Correction's
+//   pad. Save → the next question, the next level, then the next student by itself.
+// - A photo is for correction only (6 Nov 2026, his rule): no "why it was wrong", nothing counts as explained (every
+//   lost question waits for Evaluation in class). A level the class corrected (his paper) closes its photos by itself;
+//   one still on a card only closes.
 // - Server: convex/photos.ts (`lane`, `student`, `mark`, `retake`, `question`); Settings → Photos keeps the count, the
 //   owner's "Photos required" switch and a button here (src/photoQueue.tsx).
 
@@ -18,7 +21,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import type { HomePart, LaneRow, PhotoItem } from "../convex/photos";
-import { NOTE_MAX, PHOTO_LATE_MS, RETAKE, WHY, type RetakeWhy, type Why } from "../convex/lib/photos";
+import { NOTE_MAX, PHOTO_LATE_MS, RETAKE, type RetakeWhy } from "../convex/lib/photos";
 import { errorText, mutate, subscribe } from "./backend";
 import { BigAnswer } from "./bigAnswer";
 import { BookQuestion, useQuestionShown } from "./bookQuestion";
@@ -71,12 +74,6 @@ const doneHere = new Map<string, Done>();
 const turns = new Map<string, number>();
 /** Each photo's own size (for turning it inside its box). */
 const sizes = new Map<string, { w: number; h: number }>();
-
-/** The causes first for his working on a wrong answer; the remarks first for a part. */
-const ORDER: Record<PhotoItem["kind"], Why[]> = {
-  working: ["slip", "point", "sign", "method", "copy", "unfinished", "unit", "lesson"],
-  part: ["good", "ruler", "label", "working", "neat", "unit", "lesson"],
-};
 
 export function ago(t: number): string {
   const min = Math.max(0, Math.round((serverNow() - t) / 60_000));
@@ -350,14 +347,11 @@ function HomeCard(props: {
 }) {
   const { it } = props;
   const part = it.kind === "part";
-  // Marked in class meanwhile (his paper): Save only closes it.
-  const inClass = part && it.got !== null;
-  // His working on a level checked in class: its marks stay as the class gave them.
-  const fixed = !part && it.hc;
+  // Corrected in class meanwhile (his paper: the level, or this part): nothing to mark, Close only closes it.
+  const inClass = it.hc || (part && it.got !== null);
   // Each part as the phone left it: its marks where it marked, nothing lit where it is hers (never "untouched = full").
   const [marks, setMarks] = useState<(number | null)[]>(() => it.parts.map((p) => p.phone));
   const [one, setOne] = useState<number | null>(part ? null : it.got);
-  const [why, setWhy] = useState<Why | null>(null);
   const [note, setNote] = useState("");
   const [retake, setRetake] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -369,11 +363,11 @@ function HomeCard(props: {
   const born = useRef(Date.now());
 
   // Her marks: a part question = what she gives the parts the phone left; his working = the whole question's.
-  const mine = it.parts.map((p) => (part ? p.phone === null : true) && it.split && !fixed && !inClass);
+  const mine = it.parts.map((p) => (part ? p.phone === null : true) && it.split && !inClass);
   const herGot = part ? (it.split ? (marks.every((g, j) => !mine[j] || g !== null) ? marks.reduce<number>((s, g, j) => s + (mine[j] ? (g ?? 0) : 0), 0) : null) : one) : null;
-  const total = inClass ? it.got : part ? (herGot === null ? null : it.phoneGot + herGot) : fixed ? it.got : it.split ? marks.reduce<number>((s, g) => s + (g ?? 0), 0) : one;
+  const total = inClass ? it.got : part ? (herGot === null ? null : it.phoneGot + herGot) : it.split ? marks.reduce<number>((s, g) => s + (g ?? 0), 0) : one;
   const lost = total !== null && total < it.max;
-  const ready = !busy && (inClass || (total !== null && (part || !lost || why !== null)));
+  const ready = !busy && (inClass || total !== null);
   const look = total === null ? "" : total >= it.max ? "" : total === 0 ? " zero" : " part";
 
   const tap = (fn: () => void) => {
@@ -389,8 +383,7 @@ function HomeCard(props: {
       await mutate(api.photos.mark, {
         id: it.id,
         ...(part && !inClass && herGot !== null ? { got: herGot } : {}),
-        ...(!part && !fixed && total !== null && total !== it.got ? { total } : {}),
-        ...(why ? { why } : {}),
+        ...(!part && !inClass && total !== null && total !== it.got ? { total } : {}),
         ...(note.trim() ? { note: note.trim() } : {}),
       });
       tone("done");
@@ -438,8 +431,11 @@ function HomeCard(props: {
             {it.urls.length === 0 && <p class="fc-anote">The photo is gone.</p>}
           </div>
         )}
-        {inClass && <p class="hl-note">Marked in class already ({it.got}/{it.max}): Save closes it.</p>}
-        {fixed && <p class="hl-note">Level {it.n} was checked in class: its marks stay ({it.got}/{it.max}). Tap why it was wrong.</p>}
+        {inClass && (
+          <p class="hl-note">
+            Corrected in class already{it.got !== null ? ` (${it.got}/${it.max})` : ""}: Close it.{lost ? " Evaluation explains it in class." : ""}
+          </p>
+        )}
         <ul class="fc-parts hl-parts">
           {it.split ? (
             it.parts.map((p, j) => (
@@ -465,27 +461,13 @@ function HomeCard(props: {
               p={{ p: "", m: part ? it.teach : it.max, key: it.key, phone: null, typed: it.typed ?? [], ok: it.ok?.flatMap((x) => x ?? []) ?? null }}
               it={it}
               g={part ? one : (one ?? it.got)}
-              edit={!inClass && !fixed}
+              edit={!inClass}
               one
               label={part && it.teach < it.max ? `Phone ${it.phoneGot}/${it.max - it.teach}; marks for the rest` : undefined}
               onMark={(g) => tap(() => setOne(g))}
             />
           )}
         </ul>
-        <div class="phq-why hl-why" role="group" aria-label={part ? "A remark (optional)" : "Why it was wrong"}>
-          <span class="phq-lab">{part ? "Remark (optional)" : lost ? "Why wrong?" : "Why wrong? (not needed: full marks)"}</span>
-          {ORDER[it.kind].map((w) => (
-            <button
-              key={w}
-              type="button"
-              class={`phq-chip${why === w ? " on" : ""}`}
-              aria-pressed={why === w}
-              onClick={() => tap(() => setWhy(why === w ? null : w))}
-            >
-              {WHY[w].en}
-            </button>
-          ))}
-        </div>
         <label class="phq-words hl-words">
           <span class="phq-lab">Your words (optional, he reads them)</span>
           <input type="text" maxLength={NOTE_MAX} value={note} onInput={(e) => setNote((e.target as HTMLInputElement).value)} />
@@ -515,15 +497,17 @@ function HomeCard(props: {
             <button type="button" class={`fc-go hl-go${look}`} disabled={!ready} onClick={() => void save()}>
               {busy ? (
                 "…"
-              ) : total === null ? (
+              ) : total === null && !inClass ? (
                 <small>{part ? "Tap the marks for each part" : "Tap the marks"}</small>
               ) : (
                 <>
                   <span>{inClass ? "Close" : "Save"}</span>
-                  <b>
-                    {total}/{it.max}
-                  </b>
-                  {!part && lost && !why && !inClass ? <small>· tap why</small> : props.hasNext && <small>· next</small>}
+                  {total !== null && (
+                    <b>
+                      {total}/{it.max}
+                    </b>
+                  )}
+                  {props.hasNext && <small>· next</small>}
                 </>
               )}
             </button>

@@ -1,6 +1,7 @@
 // Photos from home (4 Nov 2026): what a Check asks of him (the parts only a teacher can mark, his working on each wrong
 // answer), the key's working shown only where he lost marks, uploads, his 2-level limit, the teachers' queue (marks,
-// causes, retakes), and nothing kept (files gone a day after marking). Fake answers only (the repo is public); the
+// retakes; since 6 Nov 2026 no reason and never "explained"), a level corrected in class closing its photos, and
+// nothing kept (files gone a day after marking). Fake answers only (the repo is public); the
 // book is the U01 skeleton.
 
 import { convexTest } from "convex-test";
@@ -197,7 +198,7 @@ describe("photos from home", () => {
     expect(await t.query(api.photos.required, {})).toBe(false);
   });
 
-  test("the queue: only the owner and people with Photos; marks for a part reach his XP; a cause explains a wrong answer", async () => {
+  test("the queue: only the owner and people with Photos; marks for a part reach his XP; a photo never explains a wrong answer", async () => {
     await fam().mutation(api.family.check, { unitId: u01, n: 1, typed: LEVEL1 });
     await fam().mutation(api.family.photoSend, { unitId: u01, n: 1, q: 10, kind: "part", files: [await jpeg()] });
     await fam().mutation(api.family.photoSend, { unitId: u01, n: 1, q: 8, kind: "working", files: [await jpeg()] });
@@ -211,25 +212,27 @@ describe("photos from home", () => {
     expect(items[1]).toMatchObject({ typed: ["42"], key: "8 × 3 = **24**", got: 0, student: { name: "Hana K" } });
     const xp = (await fam().query(api.family.me, {})).xp;
     await expect(picked().mutation(api.photos.mark, { id: items[0].id, got: 3 })).rejects.toThrow(/0 to 2/);
+    // A page opened before 6 Nov 2026 still sends a reason: accepted, ignored.
     await picked().mutation(api.photos.mark, { id: items[0].id, got: 2, why: "good" });
     await picked().mutation(api.photos.mark, { id: items[1].id, why: "point", note: "Look at the point" });
-    await expect(picked().mutation(api.photos.mark, { id: items[1].id, why: "slip" })).rejects.toThrow(/already answered/);
+    await expect(picked().mutation(api.photos.mark, { id: items[1].id })).rejects.toThrow(/already answered/);
     const m = await hanaM();
     expect(m.q["10"]).toMatchObject({ got: 2, max: 2, lost: false });
     expect(m.lv["1"].got).toBe(16 + 2);
-    expect(m.q["8"].x).toBeDefined(); // explained at home: Evaluation skips it
-    expect(computeMaster(m, BOOK.data).pending).toEqual([]);
+    // A photo is for correction only (his rule, 6 Nov 2026): Q8 still waits for Evaluation in class.
+    expect(m.q["8"].x).toBeUndefined();
+    expect(computeMaster(m, BOOK.data).pending).toEqual([8]);
     const me = await fam().query(api.family.me, {});
     expect(me.xp).toBe(xp + 2);
     expect(me.worlds[0].levels[0]).toMatchObject({ nw: 2 });
     const book = await fam().query(api.family.book, { unitId: u01, n: 1 });
-    expect(book.qs.find((x) => x.q === 8)!.photos[0]).toMatchObject({ state: "done", say: WHY.point.ta, note: "Look at the point", fresh: true });
-    expect(book.qs.find((x) => x.q === 10)).toMatchObject({ got: 2, photos: [{ got: 2, say: WHY.good.ta }] });
+    expect(book.qs.find((x) => x.q === 8)!.photos[0]).toMatchObject({ state: "done", say: null, note: "Look at the point", fresh: true });
+    expect(book.qs.find((x) => x.q === 10)).toMatchObject({ got: 2, photos: [{ got: 2, say: null }] });
     await fam().mutation(api.family.seen, { unitId: u01, n: 1 });
     expect((await fam().query(api.family.me, {})).worlds[0].levels[0].nw).toBeUndefined();
     expect(await picked().query(api.photos.count, {})).toEqual({ n: 0, late: false });
     const lines = await raw.run(async (ctx) => (await ctx.db.query("events").collect()).filter((e) => e.kind.startsWith("photo")).map((e) => e.value));
-    expect(lines).toEqual(["1 2/2", "1 point"]);
+    expect(lines).toEqual(["1 2/2"]);
   });
 
   test("Correction's ⌂ lane: Photos people only; students oldest first; each sub-question its own marks; his working may earn more", async () => {
@@ -277,31 +280,32 @@ describe("photos from home", () => {
     ]);
     expect(q8).toMatchObject({ got: 0, split: true, parts: [{ p: "", m: 2, phone: 0, typed: ["42"], ok: [false], key: "8 × 3 = **24**" }] });
     // (a) right, (b) wrong: 1 of 2 (the lane adds the parts up).
-    await picked().mutation(api.photos.mark, { id: q10.id, got: 1, why: "label" });
-    // Q8: his working earns a method mark; a cause is still needed (not full marks); never more than the question's.
-    await expect(picked().mutation(api.photos.mark, { id: q8.id, total: 3, why: "slip" })).rejects.toThrow(/0 to 2/);
-    await expect(picked().mutation(api.photos.mark, { id: q8.id, total: 1 })).rejects.toThrow(/why it was wrong/);
-    await picked().mutation(api.photos.mark, { id: q8.id, total: 1, why: "slip" });
+    await picked().mutation(api.photos.mark, { id: q10.id, got: 1 });
+    // Q8: his working earns a method mark, no reason asked; never more than the question's.
+    await expect(picked().mutation(api.photos.mark, { id: q8.id, total: 3 })).rejects.toThrow(/0 to 2/);
+    await picked().mutation(api.photos.mark, { id: q8.id, total: 1 });
     const m = await hanaM();
     expect(m.q["10"]).toMatchObject({ got: 1, max: 2, lost: true });
     expect(m.q["8"]).toMatchObject({ got: 1, max: 2, lost: true });
-    expect(m.q["8"].x).toBeDefined();
+    // Both still lost: Evaluation explains them in class.
+    expect(m.q["8"].x).toBeUndefined();
+    expect(m.q["10"].x).toBeUndefined();
     expect(m.lv["1"].got).toBe(16 + 1 + 1);
     expect((await fam().query(api.family.book, { unitId: u01, n: 1 })).qs.find((x) => x.q === 8)).toMatchObject({ got: 1 });
     expect((await picked().query(api.photos.lane, {})).map((s) => s.id)).toEqual([omar]);
     const lines = await raw.run(async (ctx) => (await ctx.db.query("events").collect()).filter((e) => e.kind.startsWith("photo")).map((e) => `${e.kind} ${e.value}`));
-    expect(lines).toEqual(["photo-marked 1 1/2", "photo-marked 1 1/2", "photo-why 1 slip"]);
+    expect(lines).toEqual(["photo-marked 1 1/2", "photo-marked 1 1/2"]);
   });
 
-  test("the ⌂ lane: full marks from his working need no cause; a level checked in class keeps its marks", async () => {
+  test("the ⌂ lane: full marks from his working; a photo on a level corrected in class only closes", async () => {
     await fam().mutation(api.family.check, { unitId: u01, n: 1, typed: LEVEL1 });
     await fam().mutation(api.family.photoSend, { unitId: u01, n: 1, q: 8, kind: "working", files: [await jpeg()] });
     const [q8] = (await picked().query(api.photos.student, { studentId: hana })).filter((i) => i.q === 8);
-    // The phone misread him: full marks, no cause, not lost any more (nothing for Evaluation).
+    // The phone misread him: full marks, not lost any more (nothing for Evaluation).
     await picked().mutation(api.photos.mark, { id: q8.id, total: 2 });
     expect((await hanaM()).q["8"]).toMatchObject({ got: 2, lost: false });
     expect(computeMaster(await hanaM(), BOOK.data).pending.includes(8)).toBe(false);
-    // Level 2: checked in class first (his paper, ⌂ Checked): the photo still gets its cause, never new marks.
+    // Level 2: checked in class while the lane had it open (his paper, ⌂ Checked): it only closes, its marks stay.
     await checkEmpty(2);
     await fam().mutation(api.family.photoSend, { unitId: u01, n: 2, q: 11, kind: "working", files: [await jpeg()] });
     // (The corrector's ⌂ Checked: done here straight on his row, Q20 being a name she would mark first.)
@@ -313,9 +317,69 @@ describe("photos from home", () => {
     });
     const [q11] = (await picked().query(api.photos.student, { studentId: hana })).filter((i) => i.q === 11);
     expect(q11.hc).toBe(true);
-    await expect(picked().mutation(api.photos.mark, { id: q11.id, total: 1, why: "slip" })).rejects.toThrow(/checked in class/);
-    await picked().mutation(api.photos.mark, { id: q11.id, total: q11.got ?? 0, why: "slip" });
-    expect((await hanaM()).q["11"].x).toBeDefined();
+    const before = (await hanaM()).q["11"];
+    expect(await picked().mutation(api.photos.mark, { id: q11.id, total: 1 })).toEqual({ already: true });
+    expect((await hanaM()).q["11"]).toEqual(before); // its marks as the class gave them, still lost, not explained
+    expect(before.x).toBeUndefined();
+    const row = await raw.run(async (ctx) => await ctx.db.get(q11.id));
+    expect(row).toMatchObject({ state: "done", cls: true, by: "Nila" });
+  });
+
+  test("corrected in class (his paper): its photos close by themselves, none owed, the limit opens, the wrong ones wait for Evaluation", async () => {
+    await fam().mutation(api.family.check, { unitId: u01, n: 1, typed: LEVEL1 });
+    await checkEmpty(2);
+    await checkEmpty(3);
+    expect((await fam().query(api.family.me, {})).blocked).toMatchObject({ n: 1, owed: 2 });
+    // He sends his working on Q8 only (Q10, a name, still owed): it waits in the lane.
+    await fam().mutation(api.family.photoSend, { unitId: u01, n: 1, q: 8, kind: "working", files: [await jpeg()] });
+    expect((await picked().query(api.photos.lane, {})).map((s) => [s.id, s.n])).toEqual([[hana, 1]]);
+    // Correction marks Level 1 on his paper in class: Q8 wrong, Q10 right.
+    const items = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((q) => ({ q, got: q === 8 ? 0 : 2 }));
+    await t.mutation(api.workbook.correct, { studentId: hana, unitId: u01, level: 1, items, by: "correction" });
+    // Nothing left in the lane; the photo closed, no dot on his phone, his phone says it was corrected in class.
+    expect(await picked().query(api.photos.lane, {})).toEqual([]);
+    expect(await picked().query(api.photos.count, {})).toEqual({ n: 0, late: false });
+    const book = await fam().query(api.family.book, { unitId: u01, n: 1 });
+    expect(book.hc).toBe(true);
+    expect(book.qs.find((x) => x.q === 8)).toMatchObject({ owe: [], photos: [{ state: "done", fresh: false }] });
+    expect(book.qs.find((x) => x.q === 8)!.photos[0].say).toMatch(/வகுப்பில்/);
+    expect(book.qs.find((x) => x.q === 10)!.owe).toEqual([]);
+    expect((await fam().query(api.family.me, {})).worlds[0].levels[0].ph).toBeUndefined();
+    // Level 1 owes nothing now: the limit waits on Level 2 only after two more Checks.
+    expect((await fam().query(api.family.me, {})).blocked).toBeNull();
+    await expect(fam().mutation(api.family.photoSend, { unitId: u01, n: 1, q: 8, kind: "working", files: [await jpeg()] })).rejects.toThrow(/வகுப்பில்/);
+    // Q8 is still lost and not explained: Evaluation explains it in class.
+    const m = await hanaM();
+    expect(m.q["8"]).toMatchObject({ got: 0, lost: true });
+    expect(m.q["8"].x).toBeUndefined();
+    expect(computeMaster(m, BOOK.data).pending).toContain(8);
+    // ⌂ Checked closes them too (Level 2: no teacher question but Q20, marked here on his row first).
+    await fam().mutation(api.family.photoSend, { unitId: u01, n: 2, q: 11, kind: "working", files: [await jpeg()] });
+    await raw.run(async (ctx) => {
+      const p = (await ctx.db.query("progress").withIndex("by_student", (q) => q.eq("studentId", hana)).first())!;
+      const mm = p.m as { q: Record<string, unknown> };
+      mm.q["20"] = { got: 2, max: 2, lost: false, t: Date.now() };
+      await ctx.db.patch(p._id, { m: mm as never });
+    });
+    expect(await t.mutation(api.workbook.homeChecked, { studentId: hana, unitId: u01, level: 2, by: "correction" })).toBe(true);
+    expect(await picked().query(api.photos.lane, {})).toEqual([]);
+  });
+
+  test("the hourly sweep closes a photo still waiting on a level the class corrected (sent before 6 Nov 2026)", async () => {
+    await fam().mutation(api.family.check, { unitId: u01, n: 1, typed: LEVEL1 });
+    const f = await jpeg();
+    await fam().mutation(api.family.photoSend, { unitId: u01, n: 1, q: 8, kind: "working", files: [f] });
+    // As before this change: the level checked in class, the photo left waiting.
+    await raw.run(async (ctx) => {
+      const p = (await ctx.db.query("progress").withIndex("by_student", (q) => q.eq("studentId", hana)).first())!;
+      const m = p.m as { lv: Record<string, { hc?: number }> };
+      m.lv["1"].hc = Date.now();
+      await ctx.db.patch(p._id, { m: m as never });
+    });
+    expect((await picked().query(api.photos.lane, {})).length).toBe(1);
+    await raw.mutation(internal.photos.sweep, {});
+    expect(await picked().query(api.photos.lane, {})).toEqual([]);
+    expect(await exists(f)).toBe(true); // its file goes a day later, like any marked photo
   });
 
   test("is it true? give a reason: no photo; a right ஆம் / இல்லை waits in the queue with his words, her marks reach him", async () => {
@@ -330,10 +394,10 @@ describe("photos from home", () => {
     expect(item).toMatchObject({ kind: "part", said: true, urls: [], teach: 2, phoneGot: 0, reasons: [{ p: "", yes: "இல்லை", text: "a made-up reason" }] });
     await expect(picked().mutation(api.photos.retake, { id: item.id, why: "blur" })).rejects.toThrow(/typed reason/);
     await expect(fam().mutation(api.family.photoSend, { unitId: u01, n: 1, q: 10, kind: "part", files: [await jpeg()] })).rejects.toThrow(/doesn't need/);
-    await picked().mutation(api.photos.mark, { id: item.id, got: 1, why: "working" });
+    await picked().mutation(api.photos.mark, { id: item.id, got: 1 });
     expect((await hanaM()).q["10"]).toMatchObject({ got: 1, max: 2, lost: true });
     const book = await fam().query(api.family.book, { unitId: u01, n: 1 });
-    expect(book.qs.find((x) => x.q === 10)).toMatchObject({ got: 1, photos: [{ state: "done", got: 1, said: true, say: WHY.working.ta }] });
+    expect(book.qs.find((x) => x.q === 10)).toMatchObject({ got: 1, photos: [{ state: "done", got: 1, said: true, say: null }] });
   });
 
   test("a wrong ஆம் / இல்லை: 0 at once, nothing for the teacher, no photo asked; his words kept, at most 300 letters", async () => {
@@ -347,7 +411,7 @@ describe("photos from home", () => {
     expect(kept).toEqual(["1", "b".repeat(300)]);
   });
 
-  test("a retake: the files go at once and the photo is owed again; a part marked in class first only closes", async () => {
+  test("a retake: the files go at once and the photo is owed again; a level corrected in class closes it by itself", async () => {
     await fam().mutation(api.family.check, { unitId: u01, n: 1, typed: LEVEL1 });
     const f = await jpeg();
     await fam().mutation(api.family.photoSend, { unitId: u01, n: 1, q: 10, kind: "part", files: [f] });
@@ -359,10 +423,11 @@ describe("photos from home", () => {
     expect(q10).toMatchObject({ owe: ["part"], photos: [{ state: "retake" }] });
     expect(q10.photos[0].say).toMatch(/தெளிவாக/);
     await fam().mutation(api.family.photoSend, { unitId: u01, n: 1, q: 10, kind: "part", files: [await jpeg()] });
-    // Meanwhile the corrector marks the whole level in class: the photo only closes.
-    const items = BOOK.data.levels[0] && [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((q) => ({ q, got: q === 8 ? 0 : 2 }));
-    await t.mutation(api.workbook.correct, { studentId: hana, unitId: u01, level: 1, items, by: "correction" });
     const [again] = await picked().query(api.photos.queue, {});
+    // Meanwhile the corrector marks the whole level in class: the photo closes by itself (a card still open only closes).
+    const items = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((q) => ({ q, got: q === 8 ? 0 : 2 }));
+    await t.mutation(api.workbook.correct, { studentId: hana, unitId: u01, level: 1, items, by: "correction" });
+    expect(await picked().query(api.photos.queue, {})).toEqual([]);
     expect(await picked().mutation(api.photos.mark, { id: again.id, got: 1 })).toEqual({ already: true });
     expect((await hanaM()).q["10"].got).toBe(2);
   });
@@ -487,7 +552,7 @@ describe("photos from home", () => {
     const lonely = await jpeg();
     const notImage = await jpeg(10, "audio/mp4");
     const [item] = await picked().query(api.photos.queue, {});
-    await picked().mutation(api.photos.mark, { id: item.id, why: "slip" });
+    await picked().mutation(api.photos.mark, { id: item.id });
     await raw.mutation(internal.photos.sweep, {});
     expect(await exists(f)).toBe(true); // marked just now: kept a day
     expect(await exists(lonely)).toBe(true);
@@ -497,7 +562,7 @@ describe("photos from home", () => {
     expect(await exists(lonely)).toBe(false);
     expect(await exists(notImage)).toBe(true); // only images are swept
     const row = await raw.run(async (ctx) => await ctx.db.get(item.id));
-    expect(row).toMatchObject({ files: [], state: "done", why: "slip" });
+    expect(row).toMatchObject({ files: [], state: "done" });
     expect(row!.gone).toBeDefined();
     // His other photo (waiting) goes with him.
     const g = await jpeg();

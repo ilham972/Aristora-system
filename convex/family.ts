@@ -749,6 +749,8 @@ export const photoSend = mutation({
     const b = await bookOf(ctx, s, args.unitId, args.n);
     const q = b?.qs.find((x) => x.q === args.q);
     if (!b || !q) fail("This question isn't in a level you checked on the phone.");
+    // His paper was corrected in class (6 Nov 2026): no photo needed; the explanation is in class.
+    if (b.hc) fail("வகுப்பில் ஏற்கனவே திருத்தப்பட்டது: படம் தேவையில்லை.");
     const kind: PhotoKind = args.kind;
     if (kind === "part" && (q.teach === 0 || q.got !== null)) fail("This question doesn't need a photo.");
     if (kind === "working" && !(q.got !== null && q.got < q.max)) fail("This question doesn't need a photo.");

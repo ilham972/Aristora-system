@@ -8,24 +8,26 @@
 //                   answer, what he typed, what the phone gave each part (null = hers to mark).
 //   queue        -> the waiting photos, oldest first (the Photos page before the lane; kept for a page still open).
 //   question     -> one question as printed and its book's style (the question beside the photo).
-//   mark         -> a part: her marks for what the phone left (+ a remark); his working: its cause, and (the lane) the
-//                   question's new marks when his working earns more (method marks) or less. His phone shows it in
-//                   Tamil; the marks count at once (XP). A lost question she answered with a cause counts as explained
-//                   (Evaluation skips it in class), except "needs the lesson again".
+//   mark         -> a part: her marks for what the phone left; his working (the lane): the question's new marks when
+//                   his working earns more (method marks) or less. Her own words optional; the marks count at once (XP).
+//                   A photo is for correction only (6 Nov 2026, the founder's rule): no reason is asked and nothing
+//                   counts as explained: every lost question waits for Evaluation in class. A level the class
+//                   corrected (his paper) only closes; Correction's Save or ⌂ Checked closes its photos by itself.
 //   retake       -> blurry, wrong page or cut off: he sends it again; the files go at once.
 //   required / setRequired -> photos required, 2 levels at most without them (on; the owner can turn it off).
 //   sweep        -> every hour (crons.ts): the files of photos marked a day ago, photos of levels taken back or of
-//                   removed students, uploads never attached after a day. Nothing is kept.
+//                   removed students, uploads never attached after a day. Nothing is kept. Photos still waiting for a
+//                   level the class corrected close (`cls`).
 
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, mutation, query, type MutationCtx } from "./_generated/server";
 import { actor, viewer } from "./lib/auth";
 import { asMaster, bookFor, fail, keyRow, log, masterState, progressFor } from "./lib/backend";
-import { phoneKeyFor, photosRequired, REQUIRED_KEY } from "./lib/homeWork";
+import { classClosed, phoneKeyFor, photosRequired, REQUIRED_KEY } from "./lib/homeWork";
 import type { MState } from "./lib/master";
 import { markQuestion, reasonsOf, slotWords, wantWords, type KeyQ } from "./lib/phone";
-import { isRetake, isWhy, keyText, NOTE_MAX, ORPHAN_MS, partMarks, PHOTO_KEEP_MS, PHOTO_LATE_MS, type PhotoKind } from "./lib/photos";
+import { isRetake, keyText, NOTE_MAX, ORPHAN_MS, partMarks, PHOTO_KEEP_MS, PHOTO_LATE_MS, type PhotoKind } from "./lib/photos";
 
 const token = v.optional(v.string());
 
@@ -315,13 +317,12 @@ function clone(m: MState): MState {
 }
 
 /** A remark that explains a lost question (Evaluation skips it): any cause but "needs the lesson again" and "well done". */
-const explains = (why: string | undefined) => !!why && why !== "lesson" && why !== "good";
-
 /**
- * Her answer to a photo. A part: `got` = her marks for what the phone left (0 … teach; the lane adds up each part's), an
- * optional remark. His working on a wrong answer: `why` = its cause; `total` (the lane, optional) = the question's new
- * marks when his working shows more (method marks) or less than the phone gave; full marks need no cause. Both:
- * optional words. A part someone marked in class meanwhile only closes; a level checked in class keeps its marks.
+ * Her answer to a photo. A part: `got` = her marks for what the phone left (0 … teach; the lane adds up each part's).
+ * His working on a wrong answer: `total` (the lane, optional) = the question's new marks when his working shows more
+ * (method marks) or less than the phone gave. Both: her optional words. A photo is for correction only (6 Nov 2026): no
+ * reason, never "explained" (every lost question waits for Evaluation in class); `why` is still accepted from a page
+ * opened before that, and ignored. A part someone marked in class meanwhile, or a level the class corrected, only closes.
  */
 /** Why a photo can't be answered: someone did, or its question became free marks meanwhile (the owner's Preview). */
 const answered = (r: { free?: true }) =>
@@ -333,6 +334,7 @@ export const mark = mutation({
     id: v.id("homePhotos"),
     got: v.optional(v.number()),
     total: v.optional(v.number()),
+    /** A page opened before 6 Nov 2026 still sends a reason: accepted, ignored. */
     why: v.optional(v.string()),
     note: v.optional(v.string()),
   },
@@ -341,10 +343,11 @@ export const mark = mutation({
     const now = Date.now();
     const r = await ctx.db.get(args.id);
     if (!r) fail("That photo is gone.");
+    // Closed by the class meanwhile (a card still open on her phone): it just closes.
+    if (r.state !== "waiting" && r.cls) return { already: true };
     if (r.state !== "waiting") fail(answered(r));
     const note = (args.note ?? "").trim();
     if (note.length > NOTE_MAX) fail(`Keep the words under ${NOTE_MAX} letters.`);
-    if (args.why !== undefined && !isWhy(args.why)) fail("Pick one of the reasons.");
     const s = await ctx.db.get(r.studentId);
     const u = await unitBits(ctx, r.unitId);
     const k = u?.keys.get(r.q);
@@ -353,8 +356,13 @@ export const mark = mutation({
     const m = clone(masterState(p));
     const lv = m.lv[String(r.n)];
     if (!lv?.home || !lv.fixed) fail("This level was taken back in class: it isn't marked at home any more.");
-    const done = { state: "done" as const, doneAt: now, by: me.name, byId: me._id, ...(args.why ? { why: args.why } : {}), ...(note ? { note } : {}) };
     const mq = m.q[String(r.q)];
+    // Corrected in class (his paper): nothing to mark; his wrong answers wait for Evaluation in class.
+    if (lv.hc) {
+      await ctx.db.patch(r._id, classClosed(now, me.name));
+      return { already: true };
+    }
+    const done = { state: "done" as const, doneAt: now, by: me.name, byId: me._id, ...(note ? { note } : {}) };
     if (r.kind === "part") {
       if (mq) {
         // Marked in class already (the corrector had his paper): the photo just closes.
@@ -366,36 +374,28 @@ export const mark = mutation({
       const got = args.got;
       if (got === undefined || !Number.isInteger(got) || got < 0 || got > teach) fail(`Give 0 to ${teach} marks.`);
       const total = phoneGot + got;
-      const lost = total < k.max;
-      m.q[String(r.q)] = { got: total, max: k.max, lost, t: now, ...(lost && explains(args.why) ? { x: now } : {}) };
+      m.q[String(r.q)] = { got: total, max: k.max, lost: total < k.max, t: now };
       lv.got = (lv.got ?? 0) + total;
       await ctx.db.patch(p._id, { m, updatedAt: now });
       await ctx.db.patch(r._id, { ...done, got });
       await log(ctx, null, now, { kind: "photo-marked", studentId: s._id, name: s.name, unit: u.unit.key, q: r.q, value: `${r.n} ${total}/${k.max}` });
       return { already: false };
     }
-    // His working may earn more than the phone gave (or less): the question's new marks, before its cause.
+    // His working may earn more than the phone gave (or less): the question's new marks.
     const before = mq?.got ?? 0;
     const total = args.total ?? before;
     if (args.total !== undefined && args.total !== before) {
       if (!mq) fail("This question has no marks yet: open it again.");
-      if (lv.hc) fail("This level was checked in class: its marks stay as the class gave them.");
       if (!Number.isInteger(total) || total < 0 || total > k.max) fail(`Give 0 to ${k.max} marks.`);
     }
-    const lost = total < k.max;
-    if (lost && !args.why) fail("Pick why it was wrong.");
     if (mq && total !== before) {
-      m.q[String(r.q)] = { ...mq, got: total, lost, ...(lost && explains(args.why) && !mq.x ? { x: now } : {}) };
+      // Full marks from his working: no longer lost (nothing to explain). Still lost: Evaluation explains it in class.
+      m.q[String(r.q)] = { ...mq, got: total, lost: total < k.max };
       lv.got = (lv.got ?? 0) + total - before;
       await ctx.db.patch(p._id, { m, updatedAt: now });
       await log(ctx, null, now, { kind: "photo-marked", studentId: s._id, name: s.name, unit: u.unit.key, q: r.q, value: `${r.n} ${total}/${k.max}` });
-    } else if (mq?.lost && !mq.x && explains(args.why)) {
-      m.q[String(r.q)] = { ...mq, x: now };
-      await ctx.db.patch(p._id, { m, updatedAt: now });
     }
     await ctx.db.patch(r._id, { ...done, ...(total !== before ? { got: total } : {}) });
-    if (args.why)
-      await log(ctx, null, now, { kind: "photo-why", studentId: s._id, name: s.name, unit: u.unit.key, q: r.q, value: `${r.n} ${args.why}` });
     return { already: false };
   },
 });
@@ -483,7 +483,14 @@ export const sweep = internalMutation({
       const s = await ctx.db.get(r.studentId);
       const p = await progressFor(ctx, r.studentId, r.unitId, "master");
       const lv = p ? masterState(p).lv[String(r.n)] : undefined;
-      if (s && !s.archived && lv?.home && lv.fixed) continue;
+      if (s && !s.archived && lv?.home && lv.fixed) {
+        // Corrected in class before this page knew it (photos sent before 6 Nov 2026, or a race): it just closes.
+        if (lv.hc) {
+          await ctx.db.patch(r._id, classClosed(now));
+          gone++;
+        }
+        continue;
+      }
       await dropFiles(ctx, r.files);
       await ctx.db.patch(r._id, { state: "done", doneAt: now, files: [], gone: now, note: "closed: the level or the student is no longer at home" });
       gone++;
