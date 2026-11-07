@@ -169,7 +169,7 @@ export const setFree = mutation({
     const photos = await ctx.db.query("homePhotos").withIndex("by_unit", (x) => x.eq("unitId", args.unitId)).collect();
     for (const r of photos) {
       if (r.q !== args.q) continue;
-      if (args.free && r.state === "waiting") {
+      if (args.free && (r.state === "waiting" || r.state === "ask")) {
         await ctx.db.patch(r._id, { state: "done", doneAt: now, by: me.name, byId: me._id, free: true, note: "Free marks: out of the syllabus" });
       } else if (!args.free && r.free) {
         if (r.gone) await ctx.db.delete(r._id);

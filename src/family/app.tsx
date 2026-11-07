@@ -23,6 +23,7 @@ import { BoardTab, keptBoard } from "./board";
 import type { CertData } from "./cert";
 import { FeedbackSheet } from "./feedback";
 import { HomeTab } from "./home";
+import { BellSheet, pushOff } from "./bell";
 import { BookScreen } from "./book";
 import { LearnTab, StageScreen } from "./map";
 import { Kids } from "./kids";
@@ -249,6 +250,43 @@ export function App() {
     if (history.state?.sheet) history.back();
     else setSheet(null);
   };
+  /** From a sheet straight to a screen: the sheet's step in the history becomes the screen's (one Back = up). */
+  const fromSheet = (s: Screen) => {
+    const d0 = depth(screenRef.current);
+    const steps = depth(s) - d0;
+    for (let i = 0; i < steps; i++) {
+      const st = { f: d0 + i + 1 };
+      if (i === 0 && history.state?.sheet) history.replaceState(st, "");
+      else history.pushState(st, "");
+    }
+    setSheet(null);
+    setScreen(s);
+    window.scrollTo(0, 0);
+  };
+  // The bell (7 Nov 2026): reads the newest "me" each time it draws; a tap on a line opens that level's book.
+  const meRef = useRef(me);
+  meRef.current = me;
+  const openBell = () =>
+    openSheet({
+      render: (close) => <BellSheet items={meRef.current?.bell ?? []} onClose={close} onOpen={(unitId, n) => fromSheet({ k: "book", unitId, n })} />,
+    });
+  // A tap on a phone alert opens the app on the bell (its address ends in #bell, or the open app is told).
+  useEffect(() => {
+    const fromAlert = () => {
+      if (screenRef.current.k !== "main" || !current()) return;
+      openBell();
+      void loadMe();
+    };
+    if (location.hash === "#bell") {
+      history.replaceState(history.state, "", location.pathname + location.search);
+      fromAlert();
+    }
+    const told = (e: MessageEvent) => {
+      if ((e.data as { k?: string } | null)?.k === "bell") fromAlert();
+    };
+    navigator.serviceWorker?.addEventListener("message", told);
+    return () => navigator.serviceWorker?.removeEventListener("message", told);
+  }, []);
 
   /** A child signed in on this phone (his link, or index and code): he is the one on screen. */
   const signedIn = (t: string, name: string) => {
@@ -289,6 +327,8 @@ export function App() {
   const signOut = async () => {
     const a = current();
     if (!a) return;
+    // His phone alerts stop on this phone (before the key goes).
+    await pushOff();
     try {
       await mutation("family:signOut");
     } catch (e) {
@@ -330,7 +370,7 @@ export function App() {
     go({ k: "level", unitId: next.world.unitId, n: next.n });
   };
   const top = (
-    <TopRow me={me} acc={acc} offline={offline} onKids={() => openSheet("kids")} onFeedback={() => openSheet("feedback")} onTab={pickTab} />
+    <TopRow me={me} acc={acc} offline={offline} onKids={() => openSheet("kids")} onFeedback={() => openSheet("feedback")} onBell={openBell} onTab={pickTab} />
   );
   /** A finished Stage's certificate (the report, or the Stage's own screen). */
   const certFor = (d: Omit<CertData, "name" | "pic">) => {
@@ -563,7 +603,7 @@ function useGrew(key: string, v: number): boolean {
 }
 
 /** Who is on screen, his flame, his XP, and Feedback: at the top of every tab. */
-function TopRow(props: { me: FamilyMe | null; acc: Account | null; offline: boolean; onKids: () => void; onFeedback: () => void; onTab: (t: Tab) => void }) {
+function TopRow(props: { me: FamilyMe | null; acc: Account | null; offline: boolean; onKids: () => void; onFeedback: () => void; onBell: () => void; onTab: (t: Tab) => void }) {
   const me = props.me;
   const name = me?.name ?? props.acc?.name ?? "";
   const kids = accounts().length;
@@ -571,6 +611,7 @@ function TopRow(props: { me: FamilyMe | null; acc: Account | null; offline: bool
   const xpGrew = useGrew(`${id}.xp`, me?.total ?? 0);
   usePics([me?.photo?.key]);
   const fireGrew = useGrew(`${id}.fire`, me?.streak.days ?? 0);
+  const bellN = (me?.bell ?? []).filter((b) => b.fresh).length;
   return (
     <div class="f-toprow">
       <button type="button" class="f-who" aria-label={`${name}: the children on this phone`} onClick={props.onKids}>
@@ -593,6 +634,11 @@ function TopRow(props: { me: FamilyMe | null; acc: Account | null; offline: bool
       <button type="button" class={`f-pill gem${xpGrew ? " grew" : ""}`} aria-label={`${me?.total ?? 0} XP`} onClick={() => props.onTab("race")}>
         <Gem />
         {(me?.total ?? 0).toLocaleString("en")}
+      </button>
+      {/* The bell (7 Nov 2026): his teachers' answers and messages; the red count = new ones. */}
+      <button type="button" class="f-fbb f-bellb" aria-label={`Alerts${bellN ? `: ${bellN} new` : ""}`} onClick={props.onBell}>
+        <Icon name="bell" size={20} />
+        {bellN > 0 && <i class="f-bell-n">{bellN > 9 ? "9+" : bellN}</i>}
       </button>
       <button type="button" class="f-fbb" aria-label="Feedback: tell ARISTORA" onClick={props.onFeedback}>
         <Icon name="chat" size={20} />

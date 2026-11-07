@@ -4867,3 +4867,156 @@ button.f-pod:active,
 .f-cut-ok {
   flex: 1;
 }
+
+/* A teacher's message waiting for his answer (7 Nov 2026), and the box for his words under the camera. */
+.f-answer.f-asked {
+  background: var(--gold-soft);
+  box-shadow: inset 0 0 0 2px var(--gold);
+}
+.f-answer.f-asked .f-answer-h {
+  color: var(--gold-ink);
+}
+.f-replybox {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 2px solid var(--line-2);
+  border-radius: 14px;
+  background: #fff;
+  font: 600 16px/1.35 var(--display);
+  color: var(--ink);
+  resize: none;
+}
+.f-replybox:focus {
+  outline: none;
+  border-color: var(--brand);
+}
+.f-checkedby {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--right-soft);
+  font: 700 14px/1.3 var(--display);
+  color: var(--right-ink);
+}
+
+/* The bell (7 Nov 2026): in the top row with a red count; its sheet: phone alerts on top, then his teachers' answers. */
+.f-bellb {
+  position: relative;
+}
+.f-bell-n {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: var(--wrong);
+  border: 2px solid #fff;
+  color: #fff;
+  font: 800 11px/15px var(--display);
+  font-style: normal;
+  text-align: center;
+}
+.f-pushcard {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0 12px;
+  padding: 12px;
+  border-radius: 16px;
+  background: var(--gold-soft);
+  color: var(--gold-ink);
+  font: 600 14px/1.35 var(--display);
+}
+.f-pushcard.on {
+  background: var(--right-soft);
+  color: var(--right-ink);
+}
+.f-pushcard p {
+  flex: 1;
+  margin: 0;
+}
+.f-pushcard b,
+.f-pushcard small {
+  display: block;
+}
+.f-pushon {
+  flex: none;
+  min-height: 44px;
+  padding: 2px 18px 0;
+}
+.f-linkbtn {
+  padding: 4px 0 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: 700 13px/1.2 var(--display);
+  text-decoration: underline;
+}
+.f-belllist {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.f-bellitem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--bg);
+  color: var(--brand-2);
+  text-align: left;
+}
+.f-bellitem.retake,
+.f-bellitem.ask {
+  background: var(--gold-soft);
+  color: var(--gold-ink);
+}
+.f-bellitem.fresh {
+  box-shadow: inset 0 0 0 2px var(--brand-mid);
+}
+.f-bellitem span {
+  flex: 1;
+  min-width: 0;
+}
+.f-bellitem b {
+  display: block;
+  font: 700 15px/1.3 var(--display);
+  color: var(--ink);
+  overflow-wrap: break-word;
+}
+.f-bellitem small {
+  display: block;
+  margin-top: 2px;
+  font: 600 12.5px/1.2 var(--display);
+  color: var(--ink2);
+}
+.f-bellitem.fresh b::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin: 0 6px 1px 0;
+  border-radius: 50%;
+  background: var(--wrong);
+}
+.f-bellnone {
+  padding: 16px 4px;
+}
+/* When he sent it, when she corrected it or wrote (7 Nov 2026). */
+.f-answer-when {
+  display: block;
+  font: 600 12px/1.3 var(--display);
+  color: var(--ink3);
+}

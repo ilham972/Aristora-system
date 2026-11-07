@@ -14,6 +14,9 @@
 //                   counts as explained: every lost question waits for Evaluation in class. A level the class
 //                   corrected (his paper) only closes; Correction's Save or ⌂ Checked closes its photos by itself.
 //   retake       -> blurry, wrong page or cut off: he sends it again; the files go at once.
+//   ask          -> her message before marking (7 Nov 2026: "where is the answer for (b)?", a hint): nothing marked;
+//                   his phone shows it, he answers with a new photo and / or words (family.photoSend); his first
+//                   photo is kept; it comes back to the lane with her message and his answer.
 //   required / setRequired -> photos required, 2 levels at most without them (on; the owner can turn it off).
 //   sweep        -> every hour (crons.ts): the files of photos marked a day ago, photos of levels taken back or of
 //                   removed students, uploads never attached after a day. Nothing is kept. Photos still waiting for a
@@ -26,9 +29,10 @@ import { internalMutation, mutation } from "./lib/fn";
 import { actor, viewer } from "./lib/auth";
 import { asMaster, bookFor, fail, keyRow, log, masterState, progressFor } from "./lib/backend";
 import { classClosed, phoneKeyFor, photosRequired, REQUIRED_KEY } from "./lib/homeWork";
+import { alertStudent } from "./lib/push";
 import type { MState } from "./lib/master";
 import { markQuestion, reasonsOf, slotWords, wantWords, type KeyQ } from "./lib/phone";
-import { isRetake, keyText, NOTE_MAX, ORPHAN_MS, partMarks, PHOTO_KEEP_MS, PHOTO_LATE_MS, type PhotoKind } from "./lib/photos";
+import { ASK_MAX, isRetake, keyText, NOTE_MAX, ORPHAN_MS, partMarks, PHOTO_KEEP_MS, PHOTO_LATE_MS, type PhotoKind } from "./lib/photos";
 
 const token = v.optional(v.string());
 
@@ -81,6 +85,11 @@ export type PhotoItem = {
   split: boolean;
   /** The level was checked in class (his paper, ⌂ Checked): its marks stay as the class gave them. */
   hc: boolean;
+  /** Her message back to him (Ask) and who wrote it; his answer in words. Null until there is one. */
+  ask: string | null;
+  askBy: string | null;
+  askAt: number | null;
+  reply: string | null;
 };
 
 /** One part of a question as the ⌂ lane shows it. */
@@ -212,6 +221,10 @@ async function itemOf(
     hasQ,
     ...partsOf(k, u.raw.get(r.q), t?.a ?? [], r.kind, marks.teach, got),
     hc: !!m?.lv[String(r.n)]?.hc,
+    ask: r.ask ?? null,
+    askBy: r.askBy ?? null,
+    askAt: r.askAt ?? null,
+    reply: r.reply ?? null,
   };
 }
 
@@ -319,7 +332,8 @@ function clone(m: MState): MState {
 
 /** A remark that explains a lost question (Evaluation skips it): any cause but "needs the lesson again" and "well done". */
 /**
- * Her answer to a photo. A part: `got` = her marks for what the phone left (0 … teach; the lane adds up each part's).
+ * Her answer to a photo. A part: `got` = her marks for what the phone left (0 … teach; the lane adds up each part's);
+ * `total` (optional) = the whole question's when she changed the phone's own parts (he typed it wrong, his paper is right).
  * His working on a wrong answer: `total` (the lane, optional) = the question's new marks when his working shows more
  * (method marks) or less than the phone gave. Both: her optional words. A photo is for correction only (6 Nov 2026): no
  * reason, never "explained" (every lost question waits for Evaluation in class); `why` is still accepted from a page
@@ -374,12 +388,15 @@ export const mark = mutation({
       const { teach, phoneGot } = partMarks(t?.owe, r.q, k, t?.a ?? null);
       const got = args.got;
       if (got === undefined || !Number.isInteger(got) || got < 0 || got > teach) fail(`Give 0 to ${teach} marks.`);
-      const total = phoneGot + got;
+      // The phone's parts as she changed them (7 Nov 2026: he typed it wrong, his paper shows it right), or as it gave them.
+      const total = args.total ?? phoneGot + got;
+      if (!Number.isInteger(total) || total - got < 0 || total - got > k.max - teach) fail(`Give 0 to ${k.max - teach} marks for the phone's parts.`);
       m.q[String(r.q)] = { got: total, max: k.max, lost: total < k.max, t: now };
       lv.got = (lv.got ?? 0) + total;
       await ctx.db.patch(p._id, { m, updatedAt: now });
       await ctx.db.patch(r._id, { ...done, got });
       await log(ctx, null, now, { kind: "photo-marked", studentId: s._id, name: s.name, unit: u.unit.key, q: r.q, value: `${r.n} ${total}/${k.max}` });
+      await alertStudent(ctx, s._id, `${me.name} Q${r.q} ஐத் திருத்தினார் (${total}/${k.max}).`);
       return { already: false };
     }
     // His working may earn more than the phone gave (or less): the question's new marks.
@@ -397,6 +414,7 @@ export const mark = mutation({
       await log(ctx, null, now, { kind: "photo-marked", studentId: s._id, name: s.name, unit: u.unit.key, q: r.q, value: `${r.n} ${total}/${k.max}` });
     }
     await ctx.db.patch(r._id, { ...done, ...(total !== before ? { got: total } : {}) });
+    await alertStudent(ctx, s._id, `${me.name} Q${r.q} ஐத் திருத்தினார் (${total}/${k.max}).`);
     return { already: false };
   },
 });
@@ -410,6 +428,36 @@ async function dropFiles(ctx: MutationCtx, files: Id<"_storage">[]) {
     }
   }
 }
+
+/**
+ * Her message back to him before marking (7 Nov 2026, his voice note: "before I do the correction, I want to tell them
+ * where is the second sub question's answer ... or we can give the hint"): nothing is marked; his phone shows it and
+ * owes the photo again; he answers with a new photo and / or words, his first photo kept (family.photoSend).
+ */
+export const ask = mutation({
+  args: { token, id: v.id("homePhotos"), text: v.string() },
+  handler: async (ctx, args) => {
+    const me = await actor(ctx, args.token, ["photos"]);
+    const now = Date.now();
+    const r = await ctx.db.get(args.id);
+    if (!r) fail("That photo is gone.");
+    if (r.state !== "waiting") fail(answered(r));
+    if (r.said) fail("This is his typed reason: there is nothing to send again.");
+    const text = args.text.trim();
+    if (!text) fail("Write your message to him.");
+    if (text.length > ASK_MAX) fail(`Keep the message under ${ASK_MAX} letters.`);
+    const p = await progressFor(ctx, r.studentId, r.unitId, "master");
+    const lv = p ? masterState(p).lv[String(r.n)] : undefined;
+    if (!lv?.home || !lv.fixed) fail("This level was taken back in class: it isn't marked at home any more.");
+    if (lv.hc) fail("This level was corrected in class: nothing to ask.");
+    await ctx.db.patch(r._id, { state: "ask", ask: text, askBy: me.name, askAt: now, reply: undefined, seen: undefined });
+    const s = await ctx.db.get(r.studentId);
+    const unit = await ctx.db.get(r.unitId);
+    await log(ctx, null, now, { kind: "photo-ask", studentId: r.studentId, name: s?.name, unit: unit?.key, q: r.q, value: `${r.n} ${text.slice(0, 60)}` });
+    await alertStudent(ctx, r.studentId, `${me.name} கேட்கிறார் (Q${r.q}): ${text}`);
+    return true;
+  },
+});
 
 /** The photo is no good: he sends it again (its files go now). */
 export const retake = mutation({
@@ -427,6 +475,7 @@ export const retake = mutation({
     const s = await ctx.db.get(r.studentId);
     const unit = await ctx.db.get(r.unitId);
     await log(ctx, null, now, { kind: "photo-retake", studentId: r.studentId, name: s?.name, unit: unit?.key, q: r.q, value: `${r.n} ${args.why}` });
+    await alertStudent(ctx, r.studentId, `${me.name}: Q${r.q} இன் படத்தை மீண்டும் எடு.`);
     return true;
   },
 });
@@ -477,10 +526,18 @@ export const sweep = internalMutation({
       await ctx.db.patch(r._id, { files: [], gone: now });
       gone++;
     }
-    for (const r of await ctx.db
-      .query("homePhotos")
-      .withIndex("by_state", (q) => q.eq("state", "waiting"))
-      .collect()) {
+    // Waiting for a teacher, or for his answer to her message (7 Nov 2026).
+    const open = [
+      ...(await ctx.db
+        .query("homePhotos")
+        .withIndex("by_state", (q) => q.eq("state", "waiting"))
+        .collect()),
+      ...(await ctx.db
+        .query("homePhotos")
+        .withIndex("by_state", (q) => q.eq("state", "ask"))
+        .collect()),
+    ];
+    for (const r of open) {
       const s = await ctx.db.get(r.studentId);
       const p = await progressFor(ctx, r.studentId, r.unitId, "master");
       const lv = p ? masterState(p).lv[String(r.n)] : undefined;

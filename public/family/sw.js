@@ -71,3 +71,40 @@ self.addEventListener("fetch", (e) => {
     );
   }
 });
+
+// Phone alerts (7 Nov 2026): a teacher's answer or message for a child on this phone (the server's push.send). The
+// notification opens the app on its bell; an open app is told instead (it opens the bell itself).
+self.addEventListener("push", (e) => {
+  let d = {};
+  try {
+    d = e.data ? e.data.json() : {};
+  } catch (_) {
+    d = { body: e.data ? e.data.text() : "" };
+  }
+  e.waitUntil(
+    self.registration.showNotification(d.title || "ARISTORA", {
+      body: d.body || "",
+      tag: d.tag || "aristora",
+      renotify: true,
+      icon: "/icon-192.png",
+      badge: "/icon-192.png",
+      data: { url: d.url || "/f/" },
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  const url = (e.notification.data && e.notification.data.url) || "/f/";
+  e.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+      for (const c of list) {
+        if (new URL(c.url).pathname.startsWith("/f/") && "focus" in c) {
+          c.postMessage({ k: "bell" });
+          return c.focus();
+        }
+      }
+      return self.clients.openWindow(url);
+    }),
+  );
+});

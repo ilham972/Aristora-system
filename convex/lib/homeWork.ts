@@ -84,10 +84,13 @@ export async function homeChecks(ctx: QueryCtx, studentId: Id<"students">): Prom
   return { required, checks, owed, photos, latest };
 }
 
-/** One photo row as his phone sees it: her answer in Tamil (`say`), never her name or the files. */
+/**
+ * One photo row as his phone sees it: her answer in Tamil (`say`), her message (`ask`) and her name (`by`: who corrected
+ * or asked, 7 Nov 2026, his ask: "they want the credit"), never the files.
+ */
 export type BookPhoto = {
   kind: PhotoKind;
-  state: "waiting" | "done" | "retake";
+  state: "waiting" | "done" | "retake" | "ask";
   got: number | null;
   say: string | null;
   note: string | null;
@@ -96,6 +99,13 @@ export type BookPhoto = {
   fresh: boolean;
   /** His typed reason (no photo): the phone says the teacher reads it. */
   said: boolean;
+  /** Who marked it, asked it again or wrote the message (her name as in People); null = the app (free marks, a sweep). */
+  by: string | null;
+  /** Her message (state ask: waiting for his answer; after it, kept with his `reply`). */
+  ask: string | null;
+  reply: string | null;
+  /** When she answered it, asked again or wrote her message (null = still with her); `at` = when he sent it. */
+  when: number | null;
 };
 
 export type BookQ = {
@@ -118,8 +128,8 @@ export type BookQ = {
   free?: true;
 };
 
-/** `hc` = corrected in class (his paper): no photo is asked for it any more. */
-export type LevelBook = { unitId: Id<"units">; n: number; max: number; got: number; required: boolean; hc?: true; qs: BookQ[] };
+/** `hc` = corrected in class (his paper): no photo is asked for it any more; `cn` = who checked it there, `hcAt` = when. */
+export type LevelBook = { unitId: Id<"units">; n: number; max: number; got: number; required: boolean; hc?: true; cn?: string; hcAt?: number; qs: BookQ[] };
 
 /**
  * The class corrected a level he marked at home (his paper, 6 Nov 2026, the founder's rule: "the photo is for
@@ -133,7 +143,8 @@ export async function closeClassPhotos(ctx: MutationCtx, studentId: Id<"students
     .collect();
   let closed = 0;
   for (const r of rows) {
-    if (r.state !== "waiting") continue;
+    // Waiting for a teacher, or for his answer to her message: the class's correction is enough.
+    if (r.state !== "waiting" && r.state !== "ask") continue;
     await ctx.db.patch(r._id, classClosed(now, by));
     closed++;
   }
@@ -165,6 +176,10 @@ function photoView(p: Doc<"homePhotos">): BookPhoto {
     at: p.at,
     fresh: p.state !== "waiting" && !p.seen,
     said: !!p.said,
+    by: (p.state === "ask" ? p.askBy : p.by) ?? null,
+    ask: p.ask ?? null,
+    reply: p.reply ?? null,
+    when: (p.state === "ask" ? p.askAt : p.state === "waiting" ? undefined : p.doneAt) ?? null,
   };
 }
 
@@ -217,5 +232,5 @@ export async function bookOf(
       owe: owed.filter((o) => o.q === q).map((o) => o.kind),
     });
   }
-  return { unitId, n, max: l.max, got: lv.got ?? 0, required: h.required, ...(lv.hc ? { hc: true as const } : {}), qs };
+  return { unitId, n, max: l.max, got: lv.got ?? 0, required: h.required, ...(lv.hc ? { hc: true as const } : {}), ...(lv.hc && lv.cn ? { cn: lv.cn, hcAt: lv.hc } : {}), qs };
 }

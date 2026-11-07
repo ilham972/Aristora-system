@@ -234,7 +234,7 @@ export const correct = mutation({
     const doneAt = lv.done ?? now;
     const again = !!lv.fixed;
     // A level marked at home stays one (⌂); the corrector's marks on it are her check of his working.
-    m.lv[key] = { done: doneAt, fixed: now, by, got, ...(lv.home ? { home: lv.home, hc: now } : {}) };
+    m.lv[key] = { done: doneAt, fixed: now, by, got, ...(lv.home ? { home: lv.home, hc: now, cn: me.name } : {}) };
     const pre = markBefore(m, book, l.n, now);
     // How long it took to correct (the Owner page's Correction minutes): from the draft's first mark to this Save.
     const draft = again
@@ -525,7 +525,7 @@ export const homeChecked = mutation({
     const left: number[] = [];
     for (let q = l.from; q <= l.to; q++) if (!m.q[String(q)]) left.push(q);
     if (left.length) fail(`Mark ${left.map((q) => `Q${q}`).join(", ")} first: the phone left ${left.length === 1 ? "it" : "them"} to you.`);
-    m.lv[String(l.n)] = { ...lv, hc: now };
+    m.lv[String(l.n)] = { ...lv, hc: now, cn: me.name };
     await ctx.db.patch(progress._id, { m, updatedAt: now });
     await closeClassPhotos(ctx, student._id, unit._id, l.n, now, me.name);
     await log(ctx, null, now, {

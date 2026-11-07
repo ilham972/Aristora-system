@@ -1014,7 +1014,8 @@ learning app of our education institute"): one profile, his class times, what he
   record): the paper book is the truth.
 - **Screens.** On every tab the top row: who is on screen (his letter on his colour, his name, ▾ or how many children;
   tap = the children on this phone), his flame (days in a row; lit once he did a Level today; tap = Me), his XP ever
-  (tap = the race), **Feedback** (💬); XP and the flame jump once when they grew (back from a Level). A floating bottom
+  (tap = the race), **the bell** (7 Nov 2026, below), **Feedback** (💬); XP and the flame jump once when they grew (back
+  from a Level). A floating bottom
   bar: **Home**, **Learn**, **Race**, **Me** (the one on screen a violet pill with its name; its icon hops).
   - **Home** (`home.tsx`, the institute's side): the date ("WED · 4 NOV") and வணக்கம்; **today's class** (`TodayCard`:
     "In class now · since 3:12 PM", "Class is on now · till 6:30 PM", "Today 3:30 PM – 6:30 PM · in 2 h 10 min", or
@@ -1470,6 +1471,22 @@ learning app of our education institute"): one profile, his class times, what he
     next time the book opens), uploaded to Convex storage (`family.photoUrl`, 80 a day a phone; `family.photoSend`:
     images ≤ 900 KB; sending again replaces until she answers). Owed = not sent, not marked or explained in class (none
     once the class corrected the level); a retake is owed again (`owedOf`).
+  - **The bell and phone alerts** (7 Nov 2026, his voice note: "the family app don't have any alert features ... even
+    though we corrected, students don't know"; his answer: the bell in the app AND an alert on the phone). The top
+    row's bell (`.f-bellb`) with a red count of new ones (`.f-bell-n`); its sheet (`BellSheet`, `src/family/bell.tsx`;
+    `me.bell` = `BellItem`s: his teachers' answers, retakes and messages of the last 14 days, newest first, 20 at most,
+    never what the class or the app closed) lists each with who, Stage · Level · Q and when; a tap opens that level's
+    book (`fromSheet`: the sheet's history step becomes the screen's); opening the book makes them not new
+    (`family.seen`). On top, **phone alerts**: இயக்கு → the phone asks once (Notification), the server's public key
+    (`pushSubs.key`; the first phone asks it to make its keys: `pushSubs.prepare` → `push.makeKeys`, kept in meta
+    `push.vapid`, never in the repo), the browser's push address → `pushSubs.add` (per child and phone, 6 phones at
+    most, the phone must stay signed in); ✓ with நிறுத்து (`pushOff`, also on signing out). A phone without push (an
+    iPhone not on its home screen or below iOS 16.4, an old browser) says to look at the bell. Sending
+    (`lib/push.ts` `alertStudent`, called by `photos.mark`, `retake`, `ask`): nothing unless a phone of his turned
+    them on; else gathered for `PUSH_WAIT_MS` (60 s: a level marked in a minute = one alert, "ஆசிரியரிடமிருந்து 3
+    புதியவை. …") in `pushOut`, then `push.send` (Node, the web-push library: signed with the server's keys, encrypted
+    per phone; a 404 / 410 address is forgotten). The phone shows it even with the app closed (`public/family/sw.js`
+    `push`); a tap opens the app on its bell (`/f/#bell`, or the open app is told: `postMessage` `bell`).
   - **His crop first** (6 Nov 2026, the founder's ask: "give me the crop feature for the student, so teacher can do the
     correction easily ... very easy for the students ... age 11 also"; `src/family/crop.tsx` `CropSheet`, rules in
     `src/family/frame.ts`): every photo he picks opens full screen, dark: "படத்தை வெட்டு" and one line ("மஞ்சள்
@@ -1520,7 +1537,11 @@ learning app of our education institute"): one profile, his class times, what he
     - **Each sub-question its own marks** (`PartRow`, `photos.partsOf`): each part with its label, the key's answer big
       (`BigAnswer`), what he typed (right green, wrong red) or his reason (ஆம் / இல்லை + his words), then its marks in
       one row (Correction's part row). A part question: the parts the phone left, nothing lit until she taps (never
-      "untouched = full"); the phone's own parts show "x/m the phone's"; Save adds them (`got` = her share, as before).
+      "untouched = full"); the phone's own parts lit as the phone gave them and **hers to change** (7 Nov 2026, his report:
+      "they by mistake only type the wrong answer, but actually that is correct in their book ... I want to give the
+      marks": the label says "The phone gave x/m: change it if his paper shows more"; a part question that can't be
+      split has a second row for the phone's parts); Save sends `got` (her share, as before) and, when she changed the
+      phone's parts, `total` (the whole question's; `photos.mark` checks the phone's share stays 0 … max − teach).
       His working on a wrong answer: the phone's marks lit, she changes them when his working earns more (method marks)
       or less (`photos.mark` `total`); full marks and the question is no longer lost. One row of marks (0 … `teach`, or 0 … max) when the parts can't
       be split: a unit with **no key** (the app doesn't know its sub-questions: only a key gives them) or a question the
@@ -1528,10 +1549,29 @@ learning app of our education institute"): one profile, his class times, what he
     - Then her own words (optional, he reads them). **No reason** (6 Nov 2026, the founder's rule: "the photo is for
       correction only, not for explanation"): the "why it was wrong" chips and the part remarks are gone. The pad, fixed
       at the bottom like Correction's: **Retake** (blurry / wrong page / cut off: asks him again and deletes the files at
-      once; pale for a typed reason or one corrected in class) and **Save x/max · next** (green full, amber part, red
+      once; pale for a typed reason or one corrected in class), **Message** (below; pale the same way) and **Save x/max
+      · next** (green full, amber part, red
       0); Correction's tap guard (350 ms, Save 700 ms after a new card). Save → the next question, then his next level, then round to any she skipped, then the
       next student by himself (this grade first, oldest first; "Hana done. Next: Omar."), then "Every photo from home is
       marked". The next card scrolls back to its squares, so the photo shows from its top.
+    - **Her message before marking** (7 Nov 2026, his voice note: "before I do the correction, I want to tell them where is
+      the second sub question's answer ... or we can give the hint ... like retake ... they will resubmit"; his answer:
+      a photo or typed words): Message → the pad becomes a box (≤ `ASK_MAX` 300) and Cancel / **Send to him** →
+      `photos.ask`: nothing is marked, the row is `ask` (her words `ask`, `askBy`, `askAt`), out of the lane, owed again on
+      his phone (📷, his 2-level limit counts it), an alert to his phones. His phone shows it in gold ("Nila கேட்கிறார்")
+      with the camera and a box for his words; Send (a photo, words, or both: `family.photoSend` `text`) → back to
+      `waiting` with a new `at`: the lane shows her message and his answer above the photo (`.hl-asked`), the new
+      photos first and his first photo kept (3 at most). Corrected in class meanwhile: it closes like any (`cls`).
+    - **Who corrected** (7 Nov 2026, his ask: "students want to know this is corrected by Ilham or by Zuhar ... they want
+      the credit"): his phone says "திருத்தியவர்: Nila" on her answer (`BookPhoto.by`), her name on a retake and a message,
+      and "வகுப்பில் திருத்தியவர்: Raj" on top of a home level checked in class (`lv.cn`, written by `workbook.correct` and
+      `homeChecked`; `LevelBook.cn`).
+    - **Times** (7 Nov 2026, his ask: "corrected time and uploaded time ... for teachers and students ... more
+      intuitive"): her card says "sent 2 h ago" (the meta line) and, on an answered message, "Nila asked · 3 h ago" and
+      "His answer · sent just now"; his phone says "அனுப்பியது இன்று 12:28 PM · திருத்தியது இன்று 12:29 PM" under each
+      answer (`BookPhoto.when` = her doneAt / askAt), the time on a retake and a message, "அனுப்பியது …" while it waits,
+      the time a level was checked in class (`LevelBook.hcAt`), and the bell's lines (`stamp` in `bell.tsx`: இன்று /
+      நேற்று / "5 Nov", then the Sri Lanka time).
     - The marks count at once (the level's `got`, XP; history "marked from his photo"; old rows still show `WHY[..].ta`
       and "photo-why"). **A photo never counts as explained**: every question still lost waits for Evaluation in class
       (`x` is never set here; only Evaluation, or the question coming back right, explains it). `why` is still accepted

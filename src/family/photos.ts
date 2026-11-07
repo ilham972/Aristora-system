@@ -108,11 +108,14 @@ async function keysFor(prefix: string): Promise<string[]> {
   return [...new Set([...all.map(String), ...memory.keys()])].filter((k) => k.startsWith(prefix));
 }
 
-/** Send one question's photos (upload each, then attach them): kept on the phone until it worked. */
-export async function sendPhotos(unitId: string, n: number, q: number, kind: Kind, blobs: Blob[]): Promise<void> {
+/**
+ * Send one question's photos (upload each, then attach them): kept on the phone until it worked. `text` = his words back
+ * to a teacher's message (7 Nov 2026), with the photos or alone.
+ */
+export async function sendPhotos(unitId: string, n: number, q: number, kind: Kind, blobs: Blob[], text?: string): Promise<void> {
   const files: string[] = [];
   for (const b of blobs.slice(0, PHOTO_MAX)) files.push(await uploadPhoto(b));
-  await mutation("family:photoSend", { unitId, n, q, kind, files });
+  await mutation("family:photoSend", { unitId, n, q, kind, files, ...(text ? { text } : {}) });
   await keepPhotos(photoKey(unitId, n, q, kind), []);
 }
 

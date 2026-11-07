@@ -80,6 +80,8 @@ export interface MLevel {
   /** Marked at home by the phone (the family app); hc = the corrector checked his working in class. */
   home?: number;
   hc?: number;
+  /** Who checked it in class (her name): his phone shows it. */
+  cn?: string;
 }
 
 /** A level marked at home that the corrector hasn't checked yet (⌂ on Correction). */

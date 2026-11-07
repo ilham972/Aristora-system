@@ -387,6 +387,9 @@ export async function wipeStudent(ctx: MutationCtx, s: Doc<"students">) {
     await ctx.db.delete(p._id);
   }
   for (const p of await ctx.db.query("profilePhotos").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) await ctx.db.delete(p._id);
+  // His phone alerts (7 Nov 2026): the phones' addresses and anything waiting to go.
+  for (const p of await ctx.db.query("pushSubs").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) await ctx.db.delete(p._id);
+  for (const p of await ctx.db.query("pushOut").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) await ctx.db.delete(p._id);
   for (const a of await ctx.db.query("familyAsks").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) await ctx.db.delete(a._id);
   for (const c of await ctx.db.query("calls").withIndex("by_student_status", (q) => q.eq("studentId", s._id)).collect()) await ctx.db.delete(c._id);
   for (const p of await ctx.db.query("progress").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) await ctx.db.delete(p._id);

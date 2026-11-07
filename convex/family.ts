@@ -270,7 +270,27 @@ export type FamilyMe = {
   cheers: { n: number; from: string[] };
   /** Gifts from the centre he won and hasn't been given yet (7 Nov 2026): what, for which win, which week. */
   gifts: { id: string; what: string; kind: "g" | "a" | "cup"; wk: number; g: number | null }[];
+  /** The bell (7 Nov 2026): his teachers' answers, retakes and messages of the last two weeks, newest first. */
+  bell: BellItem[];
 };
+
+/** One line of the bell: what a teacher did on a photo of his, where (Stage, Level, Q), who, and whether it is new. */
+export type BellItem = {
+  unitId: Id<"units">;
+  no: number;
+  n: number;
+  q: number;
+  what: "done" | "retake" | "ask";
+  by: string | null;
+  at: number;
+  fresh: boolean;
+  /** Her message (ask), or the marks the question has now (done). */
+  ask: string | null;
+};
+
+/** The bell keeps two weeks and the newest 20. */
+const BELL_MS = 14 * DAY_MS;
+const BELL_MAX = 20;
 
 /** This week's cheers in his words: how many, and the newest three classmates (each once). */
 function cheersWords(list: Doc<"cheers">[]): { n: number; from: string[] } {
@@ -312,6 +332,17 @@ export const me = query({
     }
     const stop = blockedBy(home.checks);
     const stopWorld = stop ? worlds.find((w) => w.unitId === stop.unitId) : undefined;
+    // The bell: a teacher's own answer (never a photo the class or the app closed), on a Stage of his map.
+    const bell: BellItem[] = [];
+    for (const p of home.photos) {
+      const who = p.state === "ask" ? p.askBy : p.by;
+      if (p.state === "waiting" || p.cls || p.free || !who) continue;
+      const at = (p.state === "ask" ? p.askAt : p.doneAt) ?? p.at;
+      const w = worlds.find((x) => x.unitId === p.unitId);
+      if (!w || now - at > BELL_MS) continue;
+      bell.push({ unitId: p.unitId, no: w.no, n: p.n, q: p.q, what: p.state, by: who, at, fresh: !p.seen, ask: p.state === "ask" ? (p.ask ?? null) : null });
+    }
+    bell.sort((a, b) => b.at - a.at);
     const asks = await asksOf(ctx, s._id);
     const told = (a: Doc<"familyAsks"> | undefined) => !!a && (a.no === undefined || now - a.no < ASK_NO_MS);
     const waiting = asks.photo && asks.photo.no === undefined ? asks.photo.photoId : undefined;
@@ -342,6 +373,7 @@ export const me = query({
           .collect()
       ).map((x) => ({ id: x._id, what: x.what, kind: x.kind, wk: x.wk, g: x.g ?? null })),
       blocked: stop && stopWorld ? { unitId: stopWorld.unitId, no: stopWorld.no, n: stop.n, owed: stop.owed } : null,
+      bell: bell.slice(0, BELL_MAX),
       worlds,
     };
   },
@@ -760,12 +792,23 @@ export const photoSend = mutation({
     q: v.number(),
     kind: v.union(v.literal("part"), v.literal("working")),
     files: v.array(v.id("_storage")),
+    /** His words back to a teacher's message (7 Nov 2026): with new photos, or alone. */
+    text: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const s = await familyActor(ctx, args.token);
     const now = Date.now();
-    if (args.files.length < 1 || args.files.length > PHOTO_MAX || new Set(args.files).size !== args.files.length) {
-      fail(`ஒரு கேள்விக்கு 1 முதல் ${PHOTO_MAX} படங்கள்.`);
+    const row = await ctx.db
+      .query("homePhotos")
+      .withIndex("by_student", (x) => x.eq("studentId", s._id).eq("unitId", args.unitId).eq("n", args.n).eq("q", args.q))
+      .filter((x) => x.eq(x.field("kind"), args.kind))
+      .first();
+    // Answering her message: a new photo, his words, or both (his first photo stays for her).
+    const answering = row?.state === "ask";
+    const text = answering ? (args.text ?? "").trim() : "";
+    if (text.length > REASON_MAX) fail(`${REASON_MAX} எழுத்துகளுக்குள் எழுது.`);
+    if (args.files.length > PHOTO_MAX || new Set(args.files).size !== args.files.length || (args.files.length < 1 && !text)) {
+      fail(answering ? "ஒரு படம் எடு, அல்லது உன் விடையை எழுது." : `ஒரு கேள்விக்கு 1 முதல் ${PHOTO_MAX} படங்கள்.`);
     }
     const b = await bookOf(ctx, s, args.unitId, args.n);
     const q = b?.qs.find((x) => x.q === args.q);
@@ -781,15 +824,15 @@ export const photoSend = mutation({
       // (Refused files are left to the hourly sweep: a delete here would be undone with the refusal.)
       if (meta.size > PHOTO_BYTES || !(meta.contentType ?? "").startsWith("image/")) fail("That photo is too big. Take it again.");
     }
-    const row = await ctx.db
-      .query("homePhotos")
-      .withIndex("by_student", (x) => x.eq("studentId", s._id).eq("unitId", args.unitId).eq("n", args.n).eq("q", args.q))
-      .filter((x) => x.eq(x.field("kind"), kind))
-      .first();
     if (row?.state === "done") fail("உன் ஆசிரியர் ஏற்கனவே இதைப் பார்த்துவிட்டார்.");
     // His typed reason is what the teacher reads for this part (no photo for it).
     if (row?.said) fail("This question doesn't need a photo.");
-    if (row) {
+    if (row && answering) {
+      // The new photos first, then the ones she already saw (3 at most; the oldest beyond go).
+      const files = [...args.files, ...row.files.filter((f) => !args.files.includes(f))];
+      for (const old of files.slice(PHOTO_MAX)) await ctx.storage.delete(old);
+      await ctx.db.patch(row._id, { files: files.slice(0, PHOTO_MAX), at: now, state: "waiting", reply: text || undefined, seen: undefined });
+    } else if (row) {
       for (const old of row.files) if (!args.files.includes(old)) await ctx.storage.delete(old);
       await ctx.db.patch(row._id, { files: args.files, at: now, state: "waiting", why: undefined, note: undefined, seen: undefined, gone: undefined });
     } else {

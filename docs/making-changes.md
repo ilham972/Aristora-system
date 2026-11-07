@@ -93,6 +93,13 @@ EOF
 - **A photo asked again comes back in the same row** (5 Nov 2026, the ⌂ lane): `family.photoSend` patches a retake's
   `homePhotos` row back to "waiting" with a new `at`. Anything that remembers "answered" or "seen" for a photo keys on
   its id AND `at` (`answered` in `src/homeLane.tsx`), or the re-sent photo stays hidden.
+- **Phone alerts in tests** (7 Nov 2026): a mutation that calls `alertStudent` schedules `push.send` only when a phone
+  of that child turned alerts on; a test that turns them on fakes `setTimeout` too (`vi.useFakeTimers({ toFake: ["Date",
+  "setTimeout"] })`) so nothing is sent, and reads `_scheduled_functions` (names like `push:send`). `push.ts` is "use
+  node" (web-push): unit tests run in edge-runtime and must never run it; the run-throughs (node) may. Headless
+  Chromium says `Notification.permission` "denied" whatever `grantPermissions` says: the run-through stubs
+  `Notification`, `navigator.serviceWorker` and `PushManager` in an init script. To check web-push itself, send to a
+  local https server and decrypt with `http_ece` (done once on 7 Nov 2026: 201, the Tamil text intact).
 - **Explained (`MQ.x`) means a teacher explained it** (6 Nov 2026, the founder's rule: "the photo is for correction
   only"): marking (a photo, a level's Save) never sets `x`; only Evaluation (or a question that came back right) does.
   Setting it from a photo once made Evaluation skip questions nobody explained. And anything new that sets `lv.hc` (a

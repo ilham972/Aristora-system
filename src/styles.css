@@ -10747,8 +10747,52 @@ body.tm-on .toasts {
 /* The pad: Retake small on the left, Save (with the marks) big on the right, in the same place for every question. */
 .hl-acts {
   display: grid;
-  grid-template-columns: 84px minmax(0, 1fr);
+  grid-template-columns: 74px 74px minmax(0, 1fr);
   gap: 8px;
+}
+/* Her message back to him (7 Nov 2026): the pad becomes a box and two buttons; on a card he answered, her words and his. */
+.hl-askpad {
+  display: grid;
+  gap: 8px;
+}
+.hl-askpad textarea {
+  width: 100%;
+  min-height: 76px;
+  padding: 8px 10px;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  font: 500 15px/1.35 var(--font);
+  resize: none;
+}
+.hl-askacts {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 8px;
+}
+.hl-askacts .btn {
+  min-height: 48px;
+}
+.hl-asked {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--amber-soft);
+  font-size: 14.5px;
+  font-weight: 600;
+}
+.hl-asked p {
+  margin: 0;
+}
+.hl-asked small {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--amber-ink);
+}
+.hl-reply {
+  padding-top: 6px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
 }
 .fc-n.hl-again {
   height: 64px;

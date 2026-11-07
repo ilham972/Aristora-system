@@ -1082,11 +1082,76 @@ test("photos from home: a drawing photographed in the level, the working on a wr
   await shot(N, "fam-ph04b-lane-working-320");
   await N.setViewportSize({ width: 390, height: 844 });
   await N.locator(".hl-go").click();
-  // Q10 (two names, (a) and (b): hers to mark): each part its own row, nothing lit until she taps; Save waits for both.
-  // Q8's square keeps her 0.
+  // Q10 (two names, (a) and (b): hers to mark). Q8's square keeps her 0.
   await contains(card.locator(".fc-qn"), "10");
   await contains(N.locator(".fc-strip .fc-sq.zero"), "0");
   expect(await card.locator(".fc-pl").allInnerTexts()).toEqual(["a", "b"]);
+  expect(await card.locator(".fc-pb.on").count()).toBe(0);
+  // Her message first (7 Nov 2026, his voice note: "where is the second sub question's answer ... or give the hint"):
+  // Message → her words → Send to him: nothing marked, Q10 leaves the lane until he answers.
+  await N.waitForTimeout(400);
+  await N.locator(".hl-ask").click();
+  await N.locator(".hl-askpad textarea").fill("Where is the answer for (b)?");
+  await noSideScroll(N);
+  await shot(N, "fam-ph04d-message");
+  await N.locator(".hl-askpad").getByRole("button", { name: "Send to him" }).click();
+  await contains(N.locator(".hl-idle"), "No photos waiting");
+
+  // Hana's phone (alerts stubbed: this browser has no push service): the bell in the top row says 2 new (Q8 marked,
+  // Q10 her message), who and where; she turns phone alerts on; a line opens the level's book.
+  await F.addInitScript(() => {
+    const sub = {
+      endpoint: "https://push.example/send/hana",
+      toJSON: () => ({ endpoint: "https://push.example/send/hana", keys: { p256dh: "BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM", auth: "tBHItJI5svbpez7KI4CCXg" } }),
+    };
+    const reg = { pushManager: { getSubscription: async () => null, subscribe: async () => sub } };
+    Object.defineProperty(navigator, "serviceWorker", {
+      configurable: true,
+      value: { ready: Promise.resolve(reg), getRegistration: async () => reg, addEventListener() {}, removeEventListener() {}, register: async () => reg },
+    });
+    const w = window as unknown as { PushManager?: unknown; Notification: unknown };
+    w.PushManager ??= function PushManager() {};
+    // Headless Chromium says "denied" whatever is granted: the phone's own question, answered yes.
+    let perm = "default";
+    w.Notification = {
+      get permission() {
+        return perm;
+      },
+      requestPermission: async () => (perm = "granted"),
+    };
+  });
+  await F.reload();
+  await contains(F.locator(".f-bell-n"), "2");
+  await F.locator(".f-bellb").click();
+  await contains(F.locator(".f-bellitem.ask"), "Nila கேட்கிறார்: Where is the answer for (b)?");
+  await contains(F.locator(".f-bellitem.done"), "திருத்தியவர்: Nila");
+  await contains(F.locator(".f-bellitem.done small"), "Level 1 · Q8");
+  await F.getByRole("button", { name: "Turn on phone alerts" }).click();
+  await until(async () => (await F.locator(".f-pushcard.on").count()) > 0, "alerts on (the server makes its keys first)", 15_000);
+  await contains(F.locator(".f-pushcard.on"), "அறிவிப்பு வரும்");
+  await noSideScroll(F);
+  await shot(F, "fam-ph08b-bell");
+  await F.locator(".f-bellitem.ask").click();
+  await visible(F.locator(".f-bookscr"));
+  // Her message in gold with her name; Q8's answer says who corrected it; he answers in words.
+  await contains(q10.locator(".f-asked"), "Nila கேட்கிறார்");
+  await contains(q10.locator(".f-asked"), "Where is the answer for (b)?");
+  await contains(q8.locator(".f-answer").first(), "திருத்தியவர்: Nila");
+  await q10.locator(".f-replybox").fill("(b) வேறு பெயர்");
+  await noSideScroll(F);
+  await shot(F, "fam-ph08c-reply");
+  await q10.locator(".f-send").click();
+  await visible(q10.locator(".f-ph-state.wait"));
+
+  // Back in Nila's lane: Hana again, the card with her message and his words; now she marks both parts.
+  const hanaBack = N.locator(".fc-names .fc-nm", { hasText: "Hana" });
+  await contains(hanaBack, "1");
+  await hanaBack.click();
+  await contains(card.locator(".fc-qn"), "10");
+  await contains(card.locator(".hl-asked"), "Where is the answer for (b)?");
+  await contains(card.locator(".hl-asked .hl-reply"), "(b) வேறு பெயர்");
+  await shot(N, "fam-ph04e-answered");
+  // Each part its own row, nothing lit until she taps; Save waits for both.
   expect(await card.locator(".fc-pb.on").count()).toBe(0);
   await N.waitForTimeout(400);
   await card.getByRole("button", { name: "Part a: 1 of 1" }).click();

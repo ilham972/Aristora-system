@@ -128,6 +128,8 @@ export const masterState = v.object({
       /** Marked at home by the phone (the family app), at; hc = the corrector looked at his working (Checked). */
       home: v.optional(v.number()),
       hc: v.optional(v.number()),
+      /** Who checked it in class (her name as in People; 7 Nov 2026: his phone says who corrected it). */
+      cn: v.optional(v.string()),
     }),
   ),
   reteach: v.optional(v.object({ at: v.number(), by: v.optional(v.string()) })),
@@ -705,7 +707,8 @@ export default defineSchema({
     said: v.optional(v.literal(true)),
     /** Sent (the last time). */
     at: v.number(),
-    state: v.union(v.literal("waiting"), v.literal("done"), v.literal("retake")),
+    /** ask = a teacher's message back to him (7 Nov 2026): nothing marked until he answers it (a photo or words). */
+    state: v.union(v.literal("waiting"), v.literal("done"), v.literal("retake"), v.literal("ask")),
     doneAt: v.optional(v.number()),
     /** Who marked it (her name) and her id. */
     by: v.optional(v.string()),
@@ -723,6 +726,15 @@ export default defineSchema({
     free: v.optional(v.literal(true)),
     /** Closed because the class corrected its level (his paper, 6 Nov 2026): nothing for a teacher to mark. */
     cls: v.optional(v.literal(true)),
+    /**
+     * A teacher's message before marking (7 Nov 2026, his voice note: "where is the second sub question's answer ... or
+     * we can give the hint"): her words (≤ `ASK_MAX`), her name, when; kept after he answers, for her card.
+     */
+    ask: v.optional(v.string()),
+    askBy: v.optional(v.string()),
+    askAt: v.optional(v.number()),
+    /** His words back to her message (≤ `REASON_MAX`), with or without new photos. */
+    reply: v.optional(v.string()),
   })
     .index("by_student", ["studentId", "unitId", "n", "q"])
     .index("by_state", ["state", "at"])
@@ -757,6 +769,27 @@ export default defineSchema({
 
   /** Small settings: the data version (for one-time updates). */
   meta: defineTable({ key: v.string(), value: v.any() }).index("by_key", ["key"]),
+  /**
+   * Phone alerts (7 Nov 2026, his ask: "even though we corrected, students don't know"): a family phone that turned them
+   * on for a child (the bell → Turn on). The push service's address and keys, as the phone's browser gave them; the
+   * phone (`deviceId`) must still be signed in for an alert to go. Gone with the student, or when the push service
+   * says the address is dead (404 / 410).
+   */
+  pushSubs: defineTable({
+    studentId: v.id("students"),
+    deviceId: v.id("familyDevices"),
+    endpoint: v.string(),
+    p256dh: v.string(),
+    auth: v.string(),
+    at: v.number(),
+  })
+    .index("by_student", ["studentId"])
+    .index("by_endpoint", ["endpoint"]),
+  /**
+   * An alert waiting to go to a child's phones: a teacher's answers come in bursts (a whole level marked in a minute),
+   * so they gather here for `PUSH_WAIT_MS` and go as one notification (push.send). `n` = how many, `text` = the last.
+   */
+  pushOut: defineTable({ studentId: v.id("students"), n: v.number(), text: v.string(), at: v.number() }).index("by_student", ["studentId"]),
 
   /**
    * The simulation (1 Nov 2026, his voice note): made-up students (test students, the class only phones showing the

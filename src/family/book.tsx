@@ -11,6 +11,7 @@ import { mutation, NetError, query } from "./net";
 import { keepPhotos, keptPhotos, photoKey, PHOTO_MAX, sendKept, sendPhotos, shrink, type Kind } from "./photos";
 import { buzz, sound } from "./sound";
 import { Icon, Maths, Owl, problemWords, showSheet, toast } from "./ui";
+import { stamp } from "./bell";
 
 /** The key's working: `**` = the final answer (bold), one line per part. */
 export function Solution(props: { text: string }) {
@@ -33,11 +34,13 @@ export function Solution(props: { text: string }) {
  * (during the level) the photos go by themselves right after Check. Each photo opens his crop first (6 Nov 2026,
  * src/family/crop.tsx); with no parts on the phone (never fetched, no signal), the whole photo as before.
  */
-export function Taker(props: { unitId: string; n: number; q: number; kind: Kind; send: boolean; onSent?: () => void }) {
+export function Taker(props: { unitId: string; n: number; q: number; kind: Kind; send: boolean; reply?: boolean; onSent?: () => void }) {
   const key = photoKey(props.unitId, props.n, props.q, props.kind);
   const [blobs, setBlobs] = useState<Blob[]>([]);
   const [urls, setUrls] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  // His words back to her message (with or without a photo).
+  const [words, setWords] = useState("");
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => {
     let gone = false;
@@ -91,10 +94,11 @@ export function Taker(props: { unitId: string; n: number; q: number; kind: Kind;
   const send = async () => {
     setBusy(true);
     try {
-      await sendPhotos(props.unitId, props.n, props.q, props.kind, blobs);
+      await sendPhotos(props.unitId, props.n, props.q, props.kind, blobs, props.reply ? words.trim() : undefined);
       sound("send");
       toast("அனுப்பியாயிற்று ✓ உன் ஆசிரியர் பார்ப்பார்.");
       setBlobs([]);
+      setWords("");
       props.onSent?.();
     } catch (e) {
       toast(e instanceof NetError && e.offline ? "இணையம் இல்லை. படங்கள் phone இல் உள்ளன: பிறகு அனுப்பு." : problemWords(e), true);
@@ -121,9 +125,20 @@ export function Taker(props: { unitId: string; n: number; q: number; kind: Kind;
         )}
         <input ref={input} type="file" accept="image/*" capture="environment" class="f-file" onChange={(e) => void took(e)} />
       </div>
-      {props.send && blobs.length > 0 && (
+      {props.reply && (
+        <textarea
+          class="f-replybox"
+          rows={2}
+          maxLength={300}
+          aria-label="Your answer to the teacher"
+          placeholder="உன் விடையை இங்கே எழுது"
+          value={words}
+          onInput={(e) => setWords((e.target as HTMLTextAreaElement).value)}
+        />
+      )}
+      {props.send && (blobs.length > 0 || (props.reply && words.trim())) && (
         <button type="button" class="f-btn go f-send" disabled={busy} onClick={() => void send()}>
-          {busy ? "…" : `அனுப்பு (${blobs.length})`}
+          {busy ? "…" : blobs.length ? `அனுப்பு (${blobs.length})` : "அனுப்பு"}
         </button>
       )}
     </div>
@@ -180,29 +195,50 @@ function Question(props: { b: BookQ; unitId: string; n: number; onSent: () => vo
       {b.photos.map((p, i) =>
         p.state === "waiting" ? (
           <p key={i} class="f-ph-state wait">
-            <Icon name="clock" size={14} /> {p.said ? "உன் காரணத்தை ஆசிரியர் வாசிப்பார்." : "படம் அனுப்பியாயிற்று: ஆசிரியர் பார்ப்பார்."}
+            <Icon name="clock" size={14} /> {p.said ? "உன் காரணத்தை ஆசிரியர் வாசிப்பார்." : `அனுப்பியது ${stamp(p.at)}: ஆசிரியர் பார்ப்பார்.`}
           </p>
         ) : p.state === "retake" ? (
           <p key={i} class="f-ph-state redo">
-            <Icon name="camera" size={14} /> {p.say ?? "மீண்டும் படம் எடு."}
+            <Icon name="camera" size={14} /> {p.by ? `${p.by}: ` : ""}
+            {p.say ?? "மீண்டும் படம் எடு."}
+            {p.when ? ` (${stamp(p.when)})` : ""}
           </p>
+        ) : p.state === "ask" ? (
+          // Her message before marking (7 Nov 2026): her name and her words; he answers below (a photo or words).
+          <div key={i} class={`f-answer f-asked${p.fresh ? " fresh" : ""}`}>
+            <span class="f-answer-h">
+              <Icon name="chat" size={15} /> {p.by ?? "ஆசிரியர்"} கேட்கிறார்
+            </span>
+            <p>{p.ask}</p>
+            {p.when && <small class="f-answer-when">{stamp(p.when)}</small>}
+          </div>
         ) : (
           <div key={i} class={`f-answer${p.fresh ? " fresh" : ""}`}>
+            {/* Who corrected it (7 Nov 2026, his ask: "they want the credit"). */}
             <span class="f-answer-h">
-              <Icon name="teach" size={15} /> ஆசிரியர்
+              <Icon name="teach" size={15} /> {p.by ? `திருத்தியவர்: ${p.by}` : "ஆசிரியர்"}
               {p.kind === "part" && p.got !== null && <b> · {p.got}/{b.teach}</b>}
             </span>
             {p.say && <p>{p.say}</p>}
             {p.note && <p class="f-answer-note">“{p.note}”</p>}
+            {/* When he sent it and when she corrected it. */}
+            <small class="f-answer-when">
+              அனுப்பியது {stamp(p.at)}
+              {p.when ? ` · திருத்தியது ${stamp(p.when)}` : ""}
+            </small>
           </div>
         ),
       )}
-      {b.owe.map((k) => (
-        <div key={k} class="f-owe">
-          <p class="f-owe-what">{WHAT[k]}</p>
-          <Taker unitId={props.unitId} n={props.n} q={b.q} kind={k} send onSent={props.onSent} />
-        </div>
-      ))}
+      {b.owe.map((k) => {
+        // Her message waits for his answer: a photo, or his words, or both.
+        const asked = b.photos.some((p) => p.kind === k && p.state === "ask");
+        return (
+          <div key={k} class="f-owe">
+            <p class="f-owe-what">{asked ? "ஆசிரியருக்குப் பதில் அனுப்பு: படம் எடு, அல்லது கீழே எழுது." : WHAT[k]}</p>
+            <Taker unitId={props.unitId} n={props.n} q={b.q} kind={k} send reply={asked} onSent={props.onSent} />
+          </div>
+        );
+      })}
     </li>
   );
 }
@@ -241,6 +277,13 @@ export function Book(props: { unitId: string; n: number; initial?: LevelBook | n
       {props.score && (
         <p class="f-bscore">
           <b>{book.got}</b> / {book.max} XP{book.qs.some((q) => q.got === null) && " · ✍"}
+        </p>
+      )}
+      {book.cn && (
+        // Who checked it in class (7 Nov 2026, his ask: "they want the credit").
+        <p class="f-checkedby">
+          <Icon name="check" size={15} /> வகுப்பில் திருத்தியவர்: <b>{book.cn}</b>
+          {book.hcAt ? <small> · {stamp(book.hcAt)}</small> : null}
         </p>
       )}
       {owed > 0 && (

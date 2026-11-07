@@ -21,7 +21,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import type { HomePart, LaneRow, PhotoItem } from "../convex/photos";
-import { NOTE_MAX, PHOTO_LATE_MS, RETAKE, type RetakeWhy } from "../convex/lib/photos";
+import { ASK_MAX, NOTE_MAX, PHOTO_LATE_MS, RETAKE, type RetakeWhy } from "../convex/lib/photos";
 import { errorText, mutate, subscribe } from "./backend";
 import { BigAnswer } from "./bigAnswer";
 import { BookQuestion, useQuestionShown } from "./bookQuestion";
@@ -74,6 +74,10 @@ const doneHere = new Map<string, Done>();
 const turns = new Map<string, number>();
 /** Each photo's own size (for turning it inside its box). */
 const sizes = new Map<string, { w: number; h: number }>();
+
+/** When he sent it (7 Nov 2026, his ask: "uploaded time ... for teachers"): "sent just now", "sent 2 h ago". */
+const agoWords = (t: number) => (serverNow() - t < 60_000 ? "just now" : `${ago(t)} ago`);
+const sentWords = (t: number) => `sent ${agoWords(t)}`;
 
 export function ago(t: number): string {
   const min = Math.max(0, Math.round((serverNow() - t) / 60_000));
@@ -352,8 +356,13 @@ function HomeCard(props: {
   // Each part as the phone left it: its marks where it marked, nothing lit where it is hers (never "untouched = full").
   const [marks, setMarks] = useState<(number | null)[]>(() => it.parts.map((p) => p.phone));
   const [one, setOne] = useState<number | null>(part ? null : it.got);
+  // A part question that can't be split: the phone's parts as one row of their own (as the phone gave them).
+  const [phoneOne, setPhoneOne] = useState<number>(it.phoneGot);
   const [note, setNote] = useState("");
   const [retake, setRetake] = useState(false);
+  // Her message back to him (7 Nov 2026): the pad turns into a box to write it.
+  const [asking, setAsking] = useState(false);
+  const [askText, setAskText] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [big, setBig] = useState<number | null>(null);
@@ -362,10 +371,15 @@ function HomeCard(props: {
   // twice as long, as it sits where the last card's Save was).
   const born = useRef(Date.now());
 
-  // Her marks: a part question = what she gives the parts the phone left; his working = the whole question's.
-  const mine = it.parts.map((p) => (part ? p.phone === null : true) && it.split && !inClass);
-  const herGot = part ? (it.split ? (marks.every((g, j) => !mine[j] || g !== null) ? marks.reduce<number>((s, g, j) => s + (mine[j] ? (g ?? 0) : 0), 0) : null) : one) : null;
-  const total = inClass ? it.got : part ? (herGot === null ? null : it.phoneGot + herGot) : it.split ? marks.reduce<number>((s, g) => s + (g ?? 0), 0) : one;
+  // Every part takes her marks (7 Nov 2026, his report: he typed it wrong, his paper has it right: "I want to give the
+  // marks"): a part question = the parts the phone left (unlit until she taps) and the phone's own parts (lit as the
+  // phone gave them, hers to change); his working = the whole question's.
+  const edit = it.split && !inClass;
+  const left = it.parts.map((p) => part && p.phone === null);
+  const herGot = part ? (it.split ? (marks.every((g, j) => !left[j] || g !== null) ? marks.reduce<number>((s, g, j) => s + (left[j] ? (g ?? 0) : 0), 0) : null) : one) : null;
+  // The phone's parts now (as the phone gave them, or as she changed them).
+  const phoneNow = part ? (it.split ? marks.reduce<number>((s, g, j) => s + (left[j] ? 0 : (g ?? 0)), 0) : phoneOne) : 0;
+  const total = inClass ? it.got : part ? (herGot === null ? null : phoneNow + herGot) : it.split ? marks.reduce<number>((s, g) => s + (g ?? 0), 0) : one;
   const lost = total !== null && total < it.max;
   const ready = !busy && (inClass || total !== null);
   const look = total === null ? "" : total >= it.max ? "" : total === 0 ? " zero" : " part";
@@ -383,6 +397,7 @@ function HomeCard(props: {
       await mutate(api.photos.mark, {
         id: it.id,
         ...(part && !inClass && herGot !== null ? { got: herGot } : {}),
+        ...(part && !inClass && total !== null && phoneNow !== it.phoneGot ? { total } : {}),
         ...(!part && !inClass && total !== null && total !== it.got ? { total } : {}),
         ...(note.trim() ? { note: note.trim() } : {}),
       });
@@ -407,6 +422,22 @@ function HomeCard(props: {
     }
   };
 
+  const sendAsk = async () => {
+    const text = askText.trim();
+    if (!text || busy) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      await mutate(api.photos.ask, { id: it.id, text });
+      tone("clear");
+      toast(`Q${it.q}: your message went to ${it.student.name}. It comes back here when he answers.`);
+      props.onDone(null);
+    } catch (e) {
+      setErr(errorText(e));
+      setBusy(false);
+    }
+  };
+
   const kindWords = it.said ? "his reason to read" : part ? "to mark" : "wrong answer";
   return (
     <>
@@ -419,10 +450,24 @@ function HomeCard(props: {
               {it.q}
             </>
           }
-          meta={`${it.max} mark${it.max === 1 ? "" : "s"} · ${kindWords}`}
+          meta={`${it.max} mark${it.max === 1 ? "" : "s"} · ${kindWords} · ${sentWords(it.at)}`}
           back={props.back}
           shown={shown}
         />
+        {/* Her message and his answer first: what she reads before the photo. */}
+        {it.ask && (
+          <div class="hl-asked">
+            <p>
+              <small>
+                {it.askBy ?? "You"} asked{it.askAt ? ` · ${agoWords(it.askAt)}` : ""}
+              </small>{" "}
+              {it.ask}
+            </p>
+            <p class="hl-reply">
+              <small>His answer · {sentWords(it.at)}</small> {it.reply ?? <span class="muted">(a new photo, no words)</span>}
+            </p>
+          </div>
+        )}
         {!it.said && (
           <div class="hl-shots">
             {it.urls.map((u, i) => (
@@ -444,8 +489,9 @@ function HomeCard(props: {
                 p={p}
                 it={it}
                 g={marks[j]}
-                edit={mine[j]}
+                edit={edit}
                 one={it.parts.length === 1}
+                label={part && p.phone !== null ? `The phone gave ${p.phone}/${p.m}: change it if his paper shows more` : undefined}
                 onMark={(g) =>
                   tap(() => {
                     const next = [...marks];
@@ -456,16 +502,31 @@ function HomeCard(props: {
               />
             ))
           ) : (
-            // The parts can't take their own marks (the phone read it differently at his Check): one row, as then.
-            <PartRow
-              p={{ p: "", m: part ? it.teach : it.max, key: it.key, phone: null, typed: it.typed ?? [], ok: it.ok?.flatMap((x) => x ?? []) ?? null }}
-              it={it}
-              g={part ? one : (one ?? it.got)}
-              edit={!inClass}
-              one
-              label={part && it.teach < it.max ? `Phone ${it.phoneGot}/${it.max - it.teach}; marks for the rest` : undefined}
-              onMark={(g) => tap(() => setOne(g))}
-            />
+            // The parts can't take their own marks (the phone read it differently at his Check): one row, as then; a part
+            // question's phone parts in a row of their own under it (hers to change too).
+            <>
+              <PartRow
+                p={{ p: "", m: part ? it.teach : it.max, key: it.key, phone: null, typed: it.typed ?? [], ok: it.ok?.flatMap((x) => x ?? []) ?? null }}
+                it={it}
+                g={part ? one : (one ?? it.got)}
+                edit={!inClass}
+                one
+                label={part && it.teach < it.max ? "Marks for the parts the phone left" : undefined}
+                onMark={(g) => tap(() => setOne(g))}
+              />
+              {part && it.teach < it.max && (
+                <PartRow
+                  p={{ p: "", m: it.max - it.teach, key: "", phone: it.phoneGot, typed: [], ok: null }}
+                  it={it}
+                  g={phoneOne}
+                  edit={!inClass}
+                  one
+                  bare
+                  label={`The phone's parts: it gave ${it.phoneGot}/${it.max - it.teach}. Change it if his paper shows more`}
+                  onMark={(g) => tap(() => setPhoneOne(g))}
+                />
+              )}
+            </>
           )}
         </ul>
         <label class="phq-words hl-words">
@@ -477,7 +538,25 @@ function HomeCard(props: {
       </section>
 
       <div class="fc-pad hl-pad">
-        {retake ? (
+        {asking ? (
+          <div class="hl-askpad" role="group" aria-label="Your message to him">
+            <textarea
+              rows={3}
+              maxLength={ASK_MAX}
+              placeholder={`Ask ${it.student.name.split(" ")[0]}: where is the answer for (b)? or a hint. Nothing is marked until he answers.`}
+              value={askText}
+              onInput={(e) => setAskText((e.target as HTMLTextAreaElement).value)}
+            />
+            <div class="hl-askacts">
+              <button type="button" class="btn ghost" disabled={busy} onClick={() => setAsking(false)}>
+                Cancel
+              </button>
+              <button type="button" class="btn" disabled={busy || !askText.trim()} onClick={() => void sendAsk()}>
+                {busy ? "…" : "Send to him"}
+              </button>
+            </div>
+          </div>
+        ) : retake ? (
           <div class="hl-retake" role="group" aria-label="What is wrong with the photo">
             {(Object.keys(RETAKE) as RetakeWhy[]).map((w) => (
               <button key={w} type="button" class="btn ghost" disabled={busy} onClick={() => void again(w)}>
@@ -493,6 +572,10 @@ function HomeCard(props: {
             {/* A typed reason has no photo to take again: pale, in its place (every button in a fixed place). */}
             <button type="button" class="fc-n hl-again" disabled={busy || it.said || inClass} onClick={() => setRetake(true)}>
               <small>Retake</small>
+            </button>
+            {/* Her message before marking (7 Nov 2026): pale where Retake is (his typed reason, corrected in class). */}
+            <button type="button" class="fc-n hl-again hl-ask" disabled={busy || it.said || inClass} onClick={() => setAsking(true)}>
+              <small>Message</small>
             </button>
             <button type="button" class={`fc-go hl-go${look}`} disabled={!ready} onClick={() => void save()}>
               {busy ? (
@@ -531,6 +614,8 @@ function PartRow(props: {
   edit: boolean;
   one: boolean;
   label?: string;
+  /** No answer of its own (a part question's phone parts, when its parts can't be split): the label only. */
+  bare?: boolean;
   onMark: (g: number) => void;
 }) {
   const { p, it } = props;
@@ -540,7 +625,11 @@ function PartRow(props: {
     <li class={`fc-part hl-part${props.one || !name ? " hl-one" : ""}${props.edit ? "" : " hl-ro"}`}>
       {!props.one && name && <em class="fc-pl">{name}</em>}
       <div class="hl-pans">
-        {p.key ? <BigAnswer text={p.key.replace(/\n/g, " / ")} max={44} maxH={110} /> : <p class="fc-anote">{it.key ? "Not in the key for this part: check it yourself." : "No answer key: check his answer yourself."}</p>}
+        {props.bare ? null : p.key ? (
+          <BigAnswer text={p.key.replace(/\n/g, " / ")} max={44} maxH={110} />
+        ) : (
+          <p class="fc-anote">{it.key ? "Not in the key for this part: check it yourself." : "No answer key: check his answer yourself."}</p>
+        )}
         {reason ? (
           <p class="hl-typed">
             <b>{reason.yes}</b> <span class="hl-said">{reason.text || <span class="muted">(no reason written)</span>}</span>

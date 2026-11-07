@@ -29,6 +29,8 @@ export const ORPHAN_MS = 24 * 60 * 60_000;
 export const OWE_LEVELS = 2;
 /** Her own words with a cause or a mark. */
 export const NOTE_MAX = 200;
+/** A teacher's message back to him (the ⌂ card's Ask, 7 Nov 2026). */
+export const ASK_MAX = 300;
 
 export type PhotoKind = "part" | "working";
 
@@ -89,12 +91,12 @@ export function partMarks(
 }
 
 /** One photo row, as the rules need it. */
-export type PhotoRow = { q: number; kind: PhotoKind; state: "waiting" | "done" | "retake" };
+export type PhotoRow = { q: number; kind: PhotoKind; state: "waiting" | "done" | "retake" | "ask" };
 
 /**
  * The photos a checked level still owes: a part not marked in class and with no photo sent; a wrong answer whose
  * working was not sent and that Evaluation hasn't explained in class (a class correction may also have given its marks
- * back). A retake is owed again. `required` off (Settings → Photos): nothing is owed.
+ * back). A retake, or a teacher's message not answered yet, is owed again. `required` off (Settings → Photos): nothing is owed.
  */
 export function owedOf(
   owe: { part: number[]; working: number[] } | undefined,
@@ -103,7 +105,8 @@ export function owedOf(
   required: boolean,
 ): { q: number; kind: PhotoKind }[] {
   if (!owe || !required) return [];
-  const sent = (q: number, kind: PhotoKind) => rows.some((r) => r.q === q && r.kind === kind && r.state !== "retake");
+  // A retake, or a teacher's message he hasn't answered yet (7 Nov 2026), is owed again.
+  const sent = (q: number, kind: PhotoKind) => rows.some((r) => r.q === q && r.kind === kind && r.state !== "retake" && r.state !== "ask");
   const out: { q: number; kind: PhotoKind }[] = [];
   for (const q of owe.part) if (!mq[String(q)] && !sent(q, "part")) out.push({ q, kind: "part" });
   for (const q of owe.working) {
