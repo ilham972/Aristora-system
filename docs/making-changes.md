@@ -93,6 +93,12 @@ EOF
 - **A photo asked again comes back in the same row** (5 Nov 2026, the ⌂ lane): `family.photoSend` patches a retake's
   `homePhotos` row back to "waiting" with a new `at`. Anything that remembers "answered" or "seen" for a photo keys on
   its id AND `at` (`answered` in `src/homeLane.tsx`), or the re-sent photo stays hidden.
+- **A new package** (7 Nov 2026, web-push: the first deploy failed twice over): Vercel installs with `npm ci --omit=dev`,
+  so (1) package.json and package-lock.json must agree exactly (pin the version in package.json, then `npm install
+  --package-lock-only`; a hand edit of package.json alone makes `npm ci` refuse), and (2) anything the server needs at
+  deploy, its types too (`@types/web-push`: Convex typechecks `convex/` while deploying), goes in `dependencies`. Check
+  it before pushing: copy package*.json, tsconfig.json, convex, src, scripts, public into an empty folder, `npm ci
+  --omit=dev`, `npx tsc -p convex --noEmit`, `npm run build`.
 - **Phone alerts in tests** (7 Nov 2026): a mutation that calls `alertStudent` schedules `push.send` only when a phone
   of that child turned alerts on; a test that turns them on fakes `setTimeout` too (`vi.useFakeTimers({ toFake: ["Date",
   "setTimeout"] })`) so nothing is sent, and reads `_scheduled_functions` (names like `push:send`). `push.ts` is "use
