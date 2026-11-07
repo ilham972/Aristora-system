@@ -7,6 +7,10 @@
 // - Us: every grade's lines; 👏 on a line (her name on the phones; the student gets an alert), a name = his profile;
 //   🌟 a shout-out (a grade, a student, a reason), ✍️ a post and ⋯ pin / remove (the owner and the Community tick);
 //   her own guide the first time (what Us is, what she does in two minutes, how it should feel).
+// - Posts and doubts (7 Nov 2026, his voice note: "teachers will put the posters ... the screenshot of the question ...
+//   the name is visible to the teachers only"): ✍️ Post has photos, grades (everyone, one or several) and ❓ Question;
+//   a question or a doubt opens (usPost.tsx ThreadScreen): every answer with its name, ✓ / ✗ / ✎ her words / ✕; a
+//   doubt's replies, her own reply; ⚑ To do = answers to mark, doubts no teacher answered, reports.
 // - Race: the students' race, a grade or ARISTORA; a name = his profile, with 🌟 instead of a classmate's 👏.
 // No XP, flame, trophies or ranking of teachers (his rule: never trophies on the teachers' pages).
 // This file is its own: students' phones never download it (scripts/build.mjs: not prefetched, its own budget).
@@ -60,6 +64,9 @@ const CSS = `
 .t-sheet .f-btn+.f-btn{margin-top:8px}
 .t-end{display:grid;justify-items:center;gap:10px;margin:22px 16px 0;text-align:center}
 .t-end p{max-width:300px;font-size:14.5px;line-height:1.5;color:var(--ink2)}
+.t-two{display:grid;grid-template-columns:1fr 1.6fr;gap:6px;margin:0 0 6px}
+.t-two .t-chip{padding:7px 8px 5px;font-size:14px}
+.t-note{margin:0 0 10px;font-size:13px;line-height:1.45;color:var(--ink3)}
 `;
 
 /** Her three cards, the first time (again from the ?): what Us is, what she does, how it should feel. */
@@ -72,7 +79,7 @@ const GUIDE: { mood: Mood; h: string; p: string }[] = [
   {
     mood: "cheer",
     h: "நீங்கள் செய்வது: 2 நிமிடம்",
-    p: "👏 இன்றைய வரிகளுக்கு (உங்கள் பெயர் அவருக்குத் தெரியும்), 🌟 ஒரு நாளைக்கு 2–3 shout-outs (app பார்க்காத முயற்சிக்கு), ✍️ ஒரு சிறிய post.",
+    p: "👏 இன்றைய வரிகளுக்கு, 🌟 ஒரு நாளைக்கு 2–3 shout-outs, ✍️ ஒரு கேள்வி அல்லது poster. ⚑ To do: மாணவர்களின் விடைகளுக்கு ✓ / ✗, சந்தேகங்களுக்குப் பதில்.",
   },
   {
     mood: "love",
@@ -118,10 +125,14 @@ function StaffApp() {
   const [b, setB] = useState<UsBoard | null>(() => K.keep<UsBoard>("usb"));
   const [err, setErr] = useState<string | null>(null);
   const [mate, setMate] = useState<{ id: string; row: RaceRow | null } | null>(null);
+  // A post or a doubt opened (its answers or replies).
+  const [thread, setThread] = useState<string | null>(null);
   const [sheet, setSheet] = useState<SheetRender | null>(null);
   const [grade, setGrade] = useState<number>(() => K.keep<number>("grade") ?? 8);
   const mateRef = useRef(mate);
   mateRef.current = mate;
+  const threadRef = useRef(thread);
+  threadRef.current = thread;
   const sheetRef = useRef(sheet);
   sheetRef.current = sheet;
 
@@ -169,6 +180,10 @@ function StaffApp() {
     const back = () => {
       if (sheetRef.current) setSheet(null);
       else if (mateRef.current) setMate(null);
+      else if (threadRef.current) {
+        setThread(null);
+        void load();
+      }
     };
     window.addEventListener("message", told);
     window.addEventListener("popstate", back);
@@ -201,6 +216,11 @@ function StaffApp() {
       .catch((e) => K.toast(K.problemWords(e), true));
   };
   const moderate = (m: UsBoardItem) => openSheet((close) => <ModSheet m={m} onClose={close} onDone={() => void load()} />);
+  const openThread = (id: string) => {
+    history.pushState({ t: 1 }, "");
+    setThread(id);
+    window.scrollTo(0, 0);
+  };
 
   const top = (
     <div class="f-toprow">
@@ -228,7 +248,7 @@ function StaffApp() {
     if (m.k === "count") return post ? <MoreButton onClick={() => moderate(x)} /> : null;
     return (
       <span class="t-acts">
-        {!x.tmine && (
+        {!x.tmine && m.k !== "ask" && (
           <button type="button" class={`f-us-clap${x.tme ? " done" : ""}`} aria-pressed={x.tme} aria-label={x.tme ? "You cheered" : "Cheer"} onClick={() => tclap(x)}>
             👏<b>{m.c > 0 ? m.c : ""}</b>
           </button>
@@ -239,7 +259,13 @@ function StaffApp() {
   };
 
   let body: ComponentChildren;
-  if (mate) {
+  if (thread && !mate) {
+    body = parts ? (
+      <parts.ThreadScreen key={thread} id={thread} staff onBack={closeMateBack} onMate={(id) => openMate(id, null)} />
+    ) : (
+      <K.Waiting />
+    );
+  } else if (mate) {
     body = parts ? (
       <parts.MateScreen key={mate.id} id={mate.id} row={mate.row} board={K.keptBoard()} me={null} onBack={closeMateBack} onShout={(id, name) => shout({ id, name })} />
     ) : (
@@ -282,6 +308,7 @@ function StaffApp() {
         onPlay={() => {}}
         onMe={() => {}}
         onMate={(id) => openMate(id, null)}
+        onOpen={openThread}
         staff={{
           feed,
           err: b ? null : err,
@@ -318,10 +345,14 @@ function StaffApp() {
   }
   function closeMateBack() {
     if (history.state?.t) history.back();
-    else setMate(null);
+    else if (mateRef.current) setMate(null);
+    else {
+      setThread(null);
+      void load();
+    }
   }
   return (
-    <div class={`f-app s-${mate ? "mate" : "main"} t-staff`} onPointerDown={K.armSound}>
+    <div class={`f-app s-${mate || thread ? "mate" : "main"} t-staff`} onPointerDown={K.armSound}>
       <main class={`f-main t-${tab}`}>{body}</main>
       {sheet && sheet(closeSheet)}
       <K.Toast />
@@ -417,54 +448,75 @@ function ShoutSheet(props: { pre: { id: string; name: string } | null; shouted: 
   );
 }
 
-/** ✍️ A post to everyone or one grade (the owner and the Community tick), with starters. */
+/**
+ * ✍️ A post (the owner and the Community tick): for everyone, one grade or several; a notice or a ❓ question students
+ * answer (their answers hidden from each other: you mark them); words and up to 3 photos (a poster, a question's
+ * screenshot), starters for the words.
+ */
 function PostSheet(props: { onClose: () => void; onDone: () => void }) {
-  const [to, setTo] = useState<number | null>(null);
-  const [text, setText] = useState("");
+  const parts = K.useParts();
+  const [gs, setGs] = useState<number[]>([]);
+  const [qn, setQn] = useState(false);
   const [pin, setPin] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const send = async () => {
-    if (!text.trim() || busy) return;
-    setBusy(true);
-    try {
-      await K.mutation("us:post", { text, ...(to !== null ? { to } : {}), ...(pin ? { pin: true } : {}) });
+  const [pre, setPre] = useState("");
+  const send = (text: string, ph: unknown[]) =>
+    K.mutation("us:post", { text, ph, ...(gs.length ? { gs } : {}), ...(qn ? { qn: true } : {}), ...(pin ? { pin: true } : {}) }).then(() => {
       K.sound("level");
-      K.toast(to === null ? "✍️ எல்லோருக்கும் போனது." : `✍️ Grade ${to} க்கு போனது.`);
+      K.toast(`✍️ ${gs.length ? `Grade ${gs.join(", ")} க்கு` : "எல்லோருக்கும்"} போனது.${qn ? " மாணவர்களுக்கு அறிவிப்பு போகும்." : ""}`);
       props.onDone();
       props.onClose();
-    } catch (e) {
-      K.toast(K.problemWords(e), true);
-      setBusy(false);
-    }
-  };
+    });
   return (
-    <K.Sheet title="✍️ Post" sub="ஒரு குறிப்பு, ஒரு நினைவூட்டல், ஒரு வாழ்த்து. யாருடைய பெயரையும் குறைவாகச் சொல்ல வேண்டாம்." onClose={props.onClose} class="t-sheet">
-      <span class="t-lab">To</span>
-      <div class="t-grades all" role="group" aria-label="To">
-        <button type="button" class={`t-chip${to === null ? " on" : ""}`} aria-pressed={to === null} onClick={() => setTo(null)}>
+    <K.Sheet title="✍️ Post" sub="ஒரு கேள்வி, ஒரு poster, ஒரு குறிப்பு. யாருடைய பெயரையும் குறைவாகச் சொல்ல வேண்டாம்." onClose={props.onClose} class="t-sheet">
+      <span class="t-lab">For</span>
+      <div class="t-grades all" role="group" aria-label="For">
+        <button type="button" class={`t-chip${!gs.length ? " on" : ""}`} aria-pressed={!gs.length} onClick={() => setGs([])}>
           Everyone
         </button>
         {GRADES.map((g) => (
-          <button key={g} type="button" class={`t-chip${to === g ? " on" : ""}`} aria-pressed={to === g} aria-label={`Grade ${g}`} onClick={() => setTo(g)}>
+          <button
+            key={g}
+            type="button"
+            class={`t-chip${gs.includes(g) ? " on" : ""}`}
+            aria-pressed={gs.includes(g)}
+            aria-label={`Grade ${g}`}
+            onClick={() => setGs(gs.includes(g) ? gs.filter((x) => x !== g) : [...gs, g].sort((a, b) => a - b))}
+          >
             {g}
           </button>
         ))}
       </div>
-      <div class="t-why" role="group" aria-label="Start with">
-        {STARTERS.map(([label, start]) => (
-          <button key={label} type="button" class="t-chip" onClick={() => setText(start + STARTERS.reduce((x, [, s]) => (x.startsWith(s) ? x.slice(s.length) : x), text))}>
-            {label}
-          </button>
-        ))}
+      <div class="t-two" role="group" aria-label="Kind">
+        <button type="button" class={`t-chip${!qn ? " on" : ""}`} aria-pressed={!qn} onClick={() => setQn(false)}>
+          📣 Notice
+        </button>
+        <button type="button" class={`t-chip${qn ? " on" : ""}`} aria-pressed={qn} onClick={() => setQn(true)}>
+          ❓ Question to answer
+        </button>
       </div>
-      <textarea class="t-text" maxLength={300} value={text} placeholder="…" aria-label="Your post" onInput={(e) => setText((e.target as HTMLTextAreaElement).value)} />
+      <p class="t-note">
+        {qn
+          ? "மாணவர்கள் விடை அனுப்புவார்கள்: ஒருவர் விடை மற்றவருக்குத் தெரியாது. நீங்கள் ✓ / ✗ கொடுத்ததும், சரியானவை விடை அனுப்பியவர்களுக்குப் பெயருடன் தெரியும்."
+          : "ஒரு குறிப்பு, ஒரு நினைவூட்டல், ஒரு வாழ்த்து: படத்துடனும் போடலாம்."}
+      </p>
+      {!qn && (
+        <div class="t-why" role="group" aria-label="Start with">
+          {STARTERS.map(([label, start]) => (
+            <button key={label} type="button" class="t-chip" onClick={() => setPre(start)}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+      {parts ? (
+        <parts.Composer key={pre} init={pre} ph={qn ? "கேள்வி (அல்லது படம் மட்டும்)…" : "…"} go="✍️ Post" max={3} crop="மஞ்சள் புள்ளிகளை இழு: தேவையான பகுதி மட்டும்." onSend={send} />
+      ) : (
+        <K.Waiting />
+      )}
       <label class="t-row">
         <input type="checkbox" checked={pin} onChange={() => setPin(!pin)} />
-        <span>மேலே வைத்திரு (📌) · {text.length}/300</span>
+        <span>மேலே வைத்திரு (📌)</span>
       </label>
-      <button type="button" class="f-btn go" disabled={!text.trim() || busy} onClick={() => void send()}>
-        ✍️ Post
-      </button>
     </K.Sheet>
   );
 }

@@ -64,7 +64,7 @@ function cut(s: HTMLCanvasElement, f: Frame): HTMLCanvasElement {
 
 const GRIPS: Grip[] = ["tl", "tr", "bl", "br", "t", "b", "l", "r"];
 
-export function CropSheet(props: { file: Blob; onClose: () => void; onDone: (b: Blob) => void }) {
+export function CropSheet(props: { file: Blob; onClose: () => void; onDone: (b: Blob) => void; say?: string }) {
   const [src, setSrc] = useState<HTMLCanvasElement | null>(null);
   const [f, setF] = useState<Frame>(WHOLE);
   const [busy, setBusy] = useState(false);
@@ -145,7 +145,7 @@ export function CropSheet(props: { file: Blob; onClose: () => void; onDone: (b: 
         </button>
         <p>
           <b>படத்தை வெட்டு</b>
-          மஞ்சள் புள்ளிகளை இழு: உன் விடை மட்டும் பெட்டிக்குள் இருக்கட்டும்.
+          {props.say ?? "மஞ்சள் புள்ளிகளை இழு: உன் விடை மட்டும் பெட்டிக்குள் இருக்கட்டும்."}
         </p>
       </div>
       <div ref={stage} class="f-cut-stage">

@@ -1205,13 +1205,60 @@ learning app of our education institute"): one profile, his class times, what he
       his welcome (≤ 600, default `WELCOME_DEFAULT`), the owl's kinds (each can be turned off: hidden on the phones and
       in the Us tab). The history says "shout-out in Us", "posted in Us", "removed a line from Us", "opened Us on the
       students' phones".
+    - **Posts and doubts** (7 Nov 2026, the same night; his voice note: "teachers will put the posters, like ... the
+      screenshot of the question and ask them to do the question ... when students answer the post, don't show up their
+      name for others ... the name is visible to the teachers only ... students also can post by attaching the photo to
+      ask their doubts and they also can decide who can see this ... exactly like skool"). His answers to three
+      questions decided the rules (`convex/lib/us.ts` says them; the first rule, "students never type", ended here):
+      - **A teacher's post** (the Community tick, `us.post`): words and / or up to 3 photos (a poster, a question's
+        screenshot), **for everyone, one grade or several** (`gs`; every grade = everyone; `to` was one grade before),
+        a 📣 notice or a **❓ question** students answer (`qn`; every student it is for gets a phone alert, "/f/#us=id").
+        Her name shows on it for everyone ("that is credibility").
+      - **Answers** (`us.answer`, `usAnswers`): words and / or 2 photos, **once, never changed** (else he'd copy after
+        seeing the right ones). His rule, word for word: before a student sends his own he sees only **that classmates
+        answered** (`hidden`: a locked card each, no name, no answer, nothing about right or wrong); after sending he
+        sees **the answers a teacher marked right, with the names**; one marked wrong never shows to classmates, nor one
+        not marked yet. His own he always sees, with her mark and her words (`note`: only his). Teachers see every
+        answer with its name (`us.tthread`), mark **✓ / ✗** (`us.mark`; null = unmark; ✎ = her words with the mark),
+        and the student's phone is told. The line keeps `an` (answers), `okN` (right: shown to a student only after his
+        own), `wN` (waiting: the teachers' To do).
+      - **Doubts** (`us.doubt`, `k: "ask"`): words and / or 2 photos, **for Teachers, Seniors (higher grades than his)
+        or Both** (`aud`, his choice; Grade 11 and no grade: teachers); 3 a day. **Students never see who asked** (the
+        line and its replies say "Grade 7 மாணவர் ஒருவர்" / "கேட்டவர்"); teachers always do, and see every doubt (also
+        those for seniors only: the sheet says so). **Replies** (`us.reply`, a senior's or his own; `us.treply`, a
+        teacher's): a senior's is nameless to students until a teacher marks it right (✓: then his name, and he is told
+        "thank you"); his own words in his doubt are never marked (it would show who asked); 20 replies a day.
+        **⚑ Report** (`us.report`): two students hide a doubt or a reply from students until a teacher keeps it
+        (`us.unflag`) or removes it (`us.drop`, any teacher; posts and the owl's lines stay with ⋯ and the Community
+        tick). The history says "reported a doubt / reply in Us".
+      - **The phone** (`src/family/usPost.tsx`, a later part): `Pics` (a line's small copies; a tap = the big one full
+        screen, a tap there zooms: the page itself never zooms), `Composer` (words, the camera or the gallery, the crop
+        first (`crop.tsx`, its sentence per use), Send; each photo goes as **two copies**: 1280 px for a tap, 560 px for
+        the lines, so a phone fetches ~40 KB per photo in the feed), `ThreadScreen` (the screen `post` in `app.tsx`, depth
+        1; the teachers' Us opens the same screen with her sign-in: `net.ts` sends `us:thread` → `us:tthread`,
+        `us:reply` → `us:treply`, `family:photoUrl` → `us:photoUrl`), `DoubtSheet`. In the tab: **🙋 Ask a doubt** and
+        the chips **All · ❓ Questions · 🙋 Doubts** (teachers also **⚑ To do**: answers to mark, doubts no teacher
+        answered (for seniors only: while nobody has), reports); a question or a doubt opens with a tap (its button says
+        what: ✍️ Answer, See ›, 💬 Help, Open ›; Mark › / Reply › for teachers). Phone alerts "/f/#us=id" open that post
+        (the service worker sends `{ k: "us", id }`).
+      - **Photos are kept with their line**: each file is marked in `usFiles`; the hourly `photos.sweep` keeps marked
+        ones and deletes uploads nobody attached (it looks only at files between a day and a day + 6 hours old,
+        `SWEEP_WINDOW_MS`: reading every file every hour would grow with Us's 30 days of photos). A removed post,
+        doubt, answer or reply takes its files at once (`dropPhotos`); lines older than 30 days go with their answers
+        and photos (`us.sweep`, started by `us.daily`: `SWEEP_MAX` deletes a run, the rest a minute later); a removed
+        student's answers and replies go with him (`wipeStudent`). **What it costs**: photos are what fills Convex's free
+        plan (1 GB of files, 1 GB a month of data going out): a photo in a line ~40 KB once per phone (the browser keeps
+        Convex's files 30 days), a tap ~150 KB; the owner checks the Convex dashboard's usage.
     - **Safe by design**: the family app in the class app reads and writes only `us:board`, `us:race`, `us:mate`,
-      `us:pics`, `us:tclap`, `us:shout`, `us:post`, `us:pin`, `us:remove` (`net.ts` `staffWith`: anything else is refused
-      on the phone, and every one of them checks a teacher's sign-in on the server); a family phone can't call them.
-      Only the family app may be framed, and only by its own address (`vercel.json`: `frame-ancestors 'self'` under
-      `/f/`, `'none'` everywhere else).
-    - **Alerts**: `alertStudent(…, url)` (`pushOut.url`): "/f/#us" for a shout-out or a teacher's 👏 (the last in a
-      gathered minute decides); the service worker tells an open app `{ k: "us" }`, the app opens Us.
+      `us:pics`, `us:tthread`, `us:tclap`, `us:shout`, `us:post`, `us:pin`, `us:remove`, `us:mark`, `us:drop`,
+      `us:unflag`, `us:treply`, `us:photoUrl` (`net.ts` `staffWith`: anything else is refused on the phone, and every one
+      of them checks a teacher's sign-in on the server); a family phone can't call them, a teacher can't call the
+      students' (`us:thread`, `us:answer`, `us:doubt`, `us:reply`, `us:report`). Photo addresses go only to who may see
+      them (a Convex file address opens for anyone who has it). Only the family app may be framed, and only by its own
+      address (`vercel.json`: `frame-ancestors 'self'` under `/f/`, `'none'` everywhere else).
+    - **Alerts**: `alertStudent(…, url)` (`pushOut.url`): "/f/#us" for a shout-out or a teacher's 👏, "/f/#us=id" for a
+      new question, a mark, a reply (the last in a gathered minute decides); the service worker tells an open app
+      `{ k: "us", id }`, the app opens Us (and that post).
   - **Me = his profile** (4 Nov 2026, his voice note: "a proper profile page for the students ... as simple as
     possible"; `me.tsx`, one of the parts that come right after the first screen): a violet header with **his photo**
     (88 px; tap = the camera or the gallery: his photo, below), his name (🎂 on his birthday), grade and index ("Photo ·
@@ -1668,7 +1715,9 @@ learning app of our education institute"): one profile, his class times, what he
     more).
   - **Nothing kept**: an hourly cron (`convex/crons.ts` → `photos.sweep`) deletes the files of photos marked a day ago
     (the marks and her answer stay), of photos waiting on a level taken back in class or of a removed student, and
-    image uploads never attached after a day. A removed (wiped) student's photos go with him; a tute's move takes them.
+    image uploads never attached after a day (since 7 Nov 2026 it looks only at files between a day and a day + 6 hours
+    old, `SWEEP_WINDOW_MS`, and keeps the photos on Us: `usFiles`). A removed (wiped) student's photos go with him; a
+    tute's move takes them.
 - A level checked at home is a marked level with ⌂ (`lv.home`): Evaluation and Theory see its lost marks at once.
   Correction: ⌂ on his name and the level; it opens with the phone's marks: **Checked** (`workbook.homeChecked`), or
   change a mark / mark what the phone left (that checks it too, `lv.hc`).
@@ -1704,8 +1753,9 @@ learning app of our education institute"): one profile, his class times, what he
     `consult.totals`, `calls.create` with `consult` (to herself only), and on her OWN consultation's calls `arrive`,
     `unarrive`, `cancel`, `finish` (`ownConsult` in `calls.ts`), and `consult.mark` (only for a student with her). It
     gives nothing of the rooms (the Evaluation page's `workbook.explain` etc. still need Evaluation).
-  - `community` (7 Nov 2026): the students' Us tab: `us.post`, `us.pin`, `us.remove` (posts to everyone or a grade,
-    pinning, removing a line). Every signed-in person has the class app's Us tab: reads `us.board`, `us.race`,
+  - `community` (7 Nov 2026): the students' Us tab: `us.post`, `us.pin`, `us.remove` (posts with photos to everyone,
+    a grade or several, notices or questions students answer; pinning, removing a line). Any teacher also marks answers,
+    replies to doubts and removes a doubt, an answer or a reply (`us.mark`, `us.treply`, `us.drop`, `us.unflag`). Every signed-in person has the class app's Us tab: reads `us.board`, `us.race`,
     `us.mate`, `us.pics` and gives `us.shout` (a reason from the list) and `us.tclap`; `us.setCfg` (Us on the phones,
     the welcome, the owl's kinds) is the owner's. The phone's side: `us.feed`, `us.clap` (family token).
 - Everyone signed in sees the Class tab and the Register, reads `people.team` and `manager.day`, and her own card

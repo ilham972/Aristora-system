@@ -35,6 +35,8 @@ import { markQuestion, reasonsOf, slotWords, wantWords, type KeyQ } from "./lib/
 import { ASK_MAX, isRetake, keyText, NOTE_MAX, ORPHAN_MS, partMarks, PHOTO_KEEP_MS, PHOTO_LATE_MS, type PhotoKind } from "./lib/photos";
 
 const token = v.optional(v.string());
+/** The hourly sweep looks at uploads between a day and a day and this much old (so an hour it missed is caught next time). */
+export const SWEEP_WINDOW_MS = 6 * 60 * 60_000;
 
 /** How many photos wait for a teacher; late = the oldest has waited over a day. */
 export const count = query({
@@ -509,7 +511,8 @@ export const setRequired = mutation({
  * Every hour: nothing is kept. The files of photos marked a day ago (the marks and her answer stay), of photos waiting
  * on a level taken back in class or of a removed student, and uploads never attached to a question after a day.
  * Only image files are swept as unattached: nothing else in the app stores files today (a voice note one day must be
- * referenced before this runs, or kept out of it).
+ * referenced before this runs, or kept out of it). Photos on Us (7 Nov 2026) are attached when they are sent and marked
+ * in usFiles: kept here, they go with their line (convex/lib/us.ts dropPhotos).
  */
 export const sweep = internalMutation({
   args: {},
@@ -555,8 +558,22 @@ export const sweep = internalMutation({
     }
     const used = new Set<string>();
     for (const r of await ctx.db.query("homePhotos").collect()) for (const f of r.files) used.add(f);
-    for (const f of await ctx.db.system.query("_storage").collect()) {
-      if (used.has(f._id) || f._creationTime > now - ORPHAN_MS || !(f.contentType ?? "").startsWith("image/")) continue;
+    // Only the files that just became a day old (a few hours' window: it runs every hour, so a missed hour is caught):
+    // Us keeps its photos 30 days (7 Nov 2026), and reading every file every hour would grow with them.
+    const files = await ctx.db.system
+      .query("_storage")
+      .withIndex("by_creation_time", (q) => q.gt("_creationTime", now - ORPHAN_MS - SWEEP_WINDOW_MS).lte("_creationTime", now - ORPHAN_MS))
+      .collect();
+    for (const f of files) {
+      if (used.has(f._id) || !(f.contentType ?? "").startsWith("image/")) continue;
+      // A photo on Us (a post, an answer, a doubt, a reply): it goes with its line.
+      if (
+        await ctx.db
+          .query("usFiles")
+          .withIndex("by_f", (q) => q.eq("f", f._id))
+          .first()
+      )
+        continue;
       await dropFiles(ctx, [f._id]);
       gone++;
     }

@@ -70,6 +70,8 @@ type Screen =
   | { k: "report" }
   /** A classmate's profile, from the race (7 Nov 2026): his row as the race showed it while it loads. */
   | { k: "mate"; id: string; row: RaceRow | null }
+  /** A post or a doubt of Us opened (7 Nov 2026): its answers or replies. */
+  | { k: "post"; id: string }
   | { k: "stage"; unitId: string }
   | { k: "level"; unitId: string; n: number }
   /** A level he checked at home: solutions, photos to send, the teacher's answers (4 Nov 2026). */
@@ -85,11 +87,12 @@ type Screen =
     };
 
 /** How deep a screen is: Back steps up one at a time (the reveal and a Level go back to their Stage). */
-const depth = (s: Screen) => (s.k === "level" || s.k === "result" || s.k === "book" ? 2 : s.k === "stage" || s.k === "add" || s.k === "report" || s.k === "mate" ? 1 : 0);
+const depth = (s: Screen) =>
+  s.k === "level" || s.k === "result" || s.k === "book" ? 2 : s.k === "stage" || s.k === "add" || s.k === "report" || s.k === "mate" || s.k === "post" ? 1 : 0;
 const parent = (s: Screen): Screen =>
   s.k === "level" || s.k === "result" || s.k === "book"
     ? { k: "stage", unitId: s.unitId }
-    : s.k === "stage" || s.k === "report" || s.k === "mate"
+    : s.k === "stage" || s.k === "report" || s.k === "mate" || s.k === "post"
       ? { k: "main" }
       : s.k === "add"
         ? current()
@@ -274,27 +277,28 @@ export function App() {
       render: (close) => <BellSheet items={meRef.current?.bell ?? []} onClose={close} onOpen={(unitId, n) => fromSheet({ k: "book", unitId, n })} />,
     });
   // A tap on a phone alert opens the app on the bell (its address ends in #bell, or the open app is told); a teacher's
-  // shout-out or 👏 opens Us (#us, 7 Nov 2026).
+  // shout-out or 👏 opens Us (#us, 7 Nov 2026); an answer marked, a reply, a new question opens that post (#us=id).
   useEffect(() => {
-    const fromAlert = (k: string) => {
+    const fromAlert = (k: string, id?: string) => {
       if (screenRef.current.k !== "main" || !current()) return;
       if (k === "us") {
         setTab("us");
         keep("tab", "us");
         window.scrollTo(0, 0);
+        if (id) go({ k: "post", id });
         return;
       }
       openBell();
       void loadMe();
     };
-    if (location.hash === "#bell" || location.hash === "#us") {
-      const k = location.hash.slice(1);
+    const hash = /^#(bell|us)(?:=([A-Za-z0-9_-]+))?$/.exec(location.hash);
+    if (hash) {
       history.replaceState(history.state, "", location.pathname + location.search);
-      fromAlert(k);
+      fromAlert(hash[1], hash[2]);
     }
     const told = (e: MessageEvent) => {
-      const k = (e.data as { k?: string } | null)?.k;
-      if (k === "bell" || k === "us") fromAlert(k);
+      const d = e.data as { k?: string; id?: string } | null;
+      if (d?.k === "bell" || d?.k === "us") fromAlert(d.k, d.id || undefined);
     };
     navigator.serviceWorker?.addEventListener("message", told);
     return () => navigator.serviceWorker?.removeEventListener("message", told);
@@ -427,6 +431,20 @@ export function App() {
     ) : (
       <Waiting />
     );
+  } else if (screen.k === "post") {
+    body = parts ? (
+      <parts.ThreadScreen
+        key={screen.id}
+        id={screen.id}
+        onBack={up}
+        onMate={(id) => {
+          window.scrollTo(0, 0);
+          setScreen({ k: "mate", id, row: null });
+        }}
+      />
+    ) : (
+      <Waiting />
+    );
   } else if (screen.k === "stage") {
     const w = worldOf(screen.unitId);
     body = w ? (
@@ -546,6 +564,7 @@ export function App() {
                   window.scrollTo(0, 0);
                   go({ k: "mate", id, row: null });
                 }}
+                onOpen={(id) => go({ k: "post", id })}
               />
             ) : (
               <>

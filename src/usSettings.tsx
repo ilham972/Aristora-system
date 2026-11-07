@@ -22,6 +22,7 @@ const KIND_EN: Record<UsKind, string> = {
   count: "How many learned yesterday (every morning)",
   post: "Posts",
   shout: "Shout-outs",
+  ask: "Students' doubts",
 };
 
 function seenWhy(): boolean {

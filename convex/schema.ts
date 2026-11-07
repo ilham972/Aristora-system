@@ -64,7 +64,15 @@ export const usKind = v.union(
   v.literal("count"),
   v.literal("post"),
   v.literal("shout"),
+  v.literal("ask"),
 );
+/**
+ * A photo on Us (7 Nov 2026: a teacher's poster or question, a student's answer or doubt): two copies the phone made,
+ * `s` small for the lines (~560 px), `b` big for a tap (1280 px); `w` × `h` = the big one's size.
+ */
+export const usPhoto = v.object({ s: v.id("_storage"), b: v.id("_storage"), w: v.number(), h: v.number() });
+/** Who a student's doubt is for (7 Nov 2026, his words: "teacher or senior students ... or both"). */
+export const usAud = v.union(v.literal("t"), v.literal("s"), v.literal("ts"));
 /** What a family app feedback is about (3 Nov 2026). */
 export const feedbackTopic = v.union(
   v.literal("class"),
@@ -827,6 +835,11 @@ export default defineSchema({
    * number and Tamil name, the days in a row, yesterday's count, a post, a shout-out's reason); `to` = a post to one
    * grade only; `by` / `byN` = the teacher. `demo` = a demo or test student's line: only those phones see it. Kept 30
    * days (`us.daily`).
+   * Posts and doubts (7 Nov 2026, his voice note: "teachers will put the posters ... the screenshot of the question ...
+   * students also can post by attaching the photo to ask their doubts"): `gs` = the grades a post is for (none =
+   * everyone; `to` was one grade before); `ph` = photos; `qn` = a question: students answer (usAnswers; `an` answers,
+   * `okN` marked right, `wN` waiting for a teacher). `k: "ask"` = a student's doubt: `sid` asked it (his name only for
+   * teachers), `aud` who it is for, `an` replies, `tr` a teacher replied, `rpBy` students who reported it.
    */
   usMoments: defineTable({
     k: usKind,
@@ -848,6 +861,15 @@ export default defineSchema({
     cn: v.optional(v.array(v.string())),
     tc: v.optional(v.array(v.object({ id: v.id("users"), n: v.string() }))),
     pin: v.optional(v.boolean()),
+    gs: v.optional(v.array(v.number())),
+    ph: v.optional(v.array(usPhoto)),
+    qn: v.optional(v.boolean()),
+    an: v.optional(v.number()),
+    okN: v.optional(v.number()),
+    wN: v.optional(v.number()),
+    aud: v.optional(usAud),
+    tr: v.optional(v.boolean()),
+    rpBy: v.optional(v.array(v.id("students"))),
   })
     .index("by_feed", ["demo", "at"])
     .index("by_sid", ["sid", "k"])
@@ -855,6 +877,32 @@ export default defineSchema({
     .index("by_pin", ["pin", "at"]),
   /** A student's one tap on a line of Us (one per student and line). */
   usClaps: defineTable({ mid: v.id("usMoments"), sid: v.id("students"), at: v.number() }).index("by_mid", ["mid", "sid"]),
+  /**
+   * A student's answer to a teacher's question, or a reply on a doubt (a student's: `sid`; a teacher's: `by`), 7 Nov
+   * 2026. `n` / `g` = the name and grade (a student's shown to students only once a teacher marked it right: `ok`);
+   * `ok` true ✓ / false ✗ (none = waiting), `okBy` who marked, `note` her words to him (only he sees them); `rpBy`
+   * students who reported it. One answer per student and question, never changed (his rule: classmates see the right
+   * answers only after sending their own).
+   */
+  usAnswers: defineTable({
+    mid: v.id("usMoments"),
+    sid: v.optional(v.id("students")),
+    by: v.optional(v.id("users")),
+    n: v.string(),
+    g: v.optional(v.number()),
+    t: v.optional(v.string()),
+    ph: v.optional(v.array(usPhoto)),
+    at: v.number(),
+    ok: v.optional(v.boolean()),
+    okBy: v.optional(v.string()),
+    note: v.optional(v.string()),
+    rpBy: v.optional(v.array(v.id("students"))),
+    demo: v.boolean(),
+  })
+    .index("by_mid", ["mid", "sid"])
+    .index("by_sid", ["sid", "at"]),
+  /** Every file a photo on Us holds (both copies): the hourly sweep keeps these, and deletes uploads nobody attached. */
+  usFiles: defineTable({ f: v.id("_storage") }).index("by_f", ["f"]),
 
   /**
    * The simulation (1 Nov 2026, his voice note): made-up students (test students, the class only phones showing the

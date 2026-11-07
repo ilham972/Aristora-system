@@ -1103,8 +1103,13 @@ function describe(e: Doc<"events">): string {
     // Us, the students' community (7 Nov 2026).
     case "us-shout":
       return `shout-out in Us: ${SHOUT_WHY[v]?.en ?? v}`;
-    case "us-post":
-      return `posted in Us (${v === "all" ? "everyone" : `Grade ${v}`})`;
+    case "us-post": {
+      // "all", "8" or "10,11"; " question" after it when students answer it (7 Nov 2026).
+      const [to, q] = v.split(" ");
+      return `posted ${q ? "a question " : ""}in Us (${to === "all" ? "everyone" : `Grade ${to.replace(/,/g, ", ")}`})`;
+    }
+    case "us-report":
+      return `reported a ${v} in Us`;
     case "us-remove":
       return `removed a line from Us (${v})`;
     case "us-open":

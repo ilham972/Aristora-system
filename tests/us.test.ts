@@ -193,6 +193,7 @@ describe("Us on the server", () => {
     vi.setSystemTime(new Date("2026-11-05T00:10:00+05:30"));
     await raw.mutation(internal.us.daily, {});
     await raw.mutation(internal.us.daily, {}); // once
+    await raw.mutation(internal.us.sweep, {}); // what daily starts (a scheduled run)
     const ls = await lines();
     expect(ls.map((m) => [m.k, m.n ?? null, m.x ?? null]).sort()).toEqual([
       ["bday", "Hana K", null],
@@ -256,7 +257,7 @@ describe("Us on the server", () => {
     ]);
     expect(f.items[1]).toMatchObject({ n: "Hana K", mine: true });
     // The teachers' page shows every grade's.
-    expect((await R.query(api.us.board, {})).items.map((x) => x.to ?? null)).toEqual([null, 7, null]);
+    expect((await R.query(api.us.board, {})).items.map((x) => x.gs ?? null)).toEqual([null, [7], null]);
     const hist = await raw.run(async (ctx) => await ctx.db.query("events").collect());
     expect(hist.filter((e) => e.kind.startsWith("us-")).map((e) => e.kind)).toEqual(["us-shout", "us-post", "us-post"]);
   });

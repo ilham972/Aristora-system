@@ -76,7 +76,7 @@ console.log(`Built dist/ for ${url}: ${basename(js)} ${kb(js)} KB, ${basename(cs
 // (32.9; fetched once, then kept by the service worker); the race's two lists and the grade cup are in the first load
 // (58.6 / 66).
 const FAMILY_BUDGET_KB = 66;
-const FAMILY_LATER_KB = 36;
+const FAMILY_LATER_KB = 42;
 // 7 Nov 2026, the class app's Us tab: the family app's teachers' screens (src/family/staff.tsx, opened as /f/?staff
 // inside the class app) are their own file: never prefetched by a student's phone, so outside both budgets above,
 // with their own (a teacher's phone fetches them once, the first time she opens Us).

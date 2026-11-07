@@ -52,11 +52,29 @@ export function lookWith(t: string): void {
 }
 
 // The class app's Us tab (7 Nov 2026, src/family/staff.tsx): the family app's own Us and Race screens with a teacher's
-// sign-in (the class system's, kept on its own address). Only these reads (a phone's name for it → the teachers' one)
-// and these changes go out; anything else a screen asks is refused here, before the server refuses it too.
+// sign-in (the class system's, kept on its own address). Only these reads and changes go out (a phone's name for it →
+// the teachers' one: a post opened, a reply, a photo's address); anything else a screen asks is refused here, before
+// the server refuses it too.
 let staff: string | null = null;
-const STAFF: Record<string, string> = { "us:board": "us:board", "family:board": "us:race", "family:mate": "us:mate", "family:photos": "us:pics" };
-const STAFF_CHANGES = new Set(["us:tclap", "us:shout", "us:post", "us:pin", "us:remove"]);
+const STAFF: Record<string, string> = {
+  "us:board": "us:board",
+  "family:board": "us:race",
+  "family:mate": "us:mate",
+  "family:photos": "us:pics",
+  "us:thread": "us:tthread",
+};
+const STAFF_CHANGES: Record<string, string> = {
+  "us:tclap": "us:tclap",
+  "us:shout": "us:shout",
+  "us:post": "us:post",
+  "us:pin": "us:pin",
+  "us:remove": "us:remove",
+  "us:mark": "us:mark",
+  "us:drop": "us:drop",
+  "us:unflag": "us:unflag",
+  "us:reply": "us:treply",
+  "family:photoUrl": "us:photoUrl",
+};
 /** The class app's Us tab with this teacher's sign-in. */
 export function staffWith(t: string): void {
   staff = t;
@@ -64,7 +82,8 @@ export function staffWith(t: string): void {
 
 export async function call(kind: "query" | "mutation", path: string, args: Record<string, unknown>): Promise<unknown> {
   if (staff !== null) {
-    const to = kind === "query" ? STAFF[path] : STAFF_CHANGES.has(path) ? path : undefined;
+    const map = kind === "query" ? STAFF : STAFF_CHANGES;
+    const to = Object.prototype.hasOwnProperty.call(map, path) ? map[path] : undefined;
     if (!to) throw new NetError("This is the students' side: teachers can't do it here.");
     if (kind === "query") return ask("query", to, { ...args, token: staff });
     sending++;

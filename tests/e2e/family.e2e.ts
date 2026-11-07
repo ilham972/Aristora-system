@@ -2208,7 +2208,7 @@ test("Us: closed until the owner opens it; the owl's guide; his welcome; the owl
   await noSideScroll(P);
   await shot(P, "fam67-us-guide");
   await P.locator(".f-us-guide").getByRole("button", { name: "அடுத்து" }).click();
-  await contains(P.locator(".f-us-guide h2"), "ஒரு தொடுகை");
+  await contains(P.locator(".f-us-guide h2"), "தொடு, விடை எழுது");
   await P.locator(".f-us-guide").getByRole("button", { name: "அடுத்து" }).click();
   await P.locator(".f-us-guide").getByRole("button", { name: "தொடங்கு!" }).click();
   // The welcome, today's count, and the lines: the post, her own shout-out (no button: who cheered), Bilal's welcome.
@@ -2276,6 +2276,178 @@ test("Us: closed until the owner opens it; the owl's guide; his welcome; the owl
   await noSideScroll(S);
   await shot(S, "fam69-us-320");
   for (const p of [P, C, S]) await p.context().close();
+  expect(problems.slice(before)).toEqual([]);
+});
+
+test("Us posts and doubts: a teacher's question with a photo for Grade 8; her answer hidden until marked; ✓ shows it; her doubt to seniors; a teacher's reply", async () => {
+  // 7 Nov 2026, his voice notes: "teachers will put the posters ... the screenshot of the question ... when students
+  // answer the post, don't show up their name for others ... class mate can see the answer after they submit their own
+  // answer ... if the answer is only correct by teacher"; doubts for "teacher or senior students ... or both".
+  const before = problems.length;
+  const backend = makeBackend(modules);
+  const t = backend.t;
+  await addPerson(t, { name: "Owner", token: OWNER_TOKEN, role: "owner" });
+  const as = { token: OWNER_TOKEN };
+  await t.mutation(api.setup.ensure, as);
+  const u01 = await t.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G8-U01")).first())!._id);
+  await t.mutation(api.catalog.saveWorkbook, {
+    ...as,
+    unitId: u01,
+    parts: BOOK.data.parts.map((p) => ({ id: p.id, to: p.to, ...(p.each ? { each: p.each } : {}) })),
+    levels: BOOK.data.levels.map((l) => ({ to: l.to, max: l.max })),
+    marks: BOOK.data.marks ?? {},
+    replace: true,
+    key: fakeKey(),
+  });
+  const add = async (name: string, grade: number) => await t.mutation(api.students.add, { ...as, name, grade, term: 1, stage: "master", unitId: u01 });
+  const hana = await add("Hana K", 8);
+  const bilal = await add("Bilal M", 8);
+  await t.mutation(api.families.setCode, { ...as, studentId: hana, code: "4719" });
+  const FAM_B = "family-phone-bilal-qn-0123456789abcdefghijklmnop";
+  await t.mutation(api.families.makeLink, { ...as, studentId: bilal, codeHash: secretHash("family-link", "bilal-qn-family-link-0123456789") });
+  await t.mutation(api.family.join, { code: "bilal-qn-family-link-0123456789", token: FAM_B, label: "Android" });
+  await t.mutation(api.us.setCfg, { ...as, open: true });
+  const paper = { name: "paper.png", mimeType: "image/png", buffer: Buffer.from(PAPER_PNG, "base64") };
+
+  // The class app's Us tab: ✍️ Post → Grade 8, ❓ Question, a photo of the question (cropped), a line of words.
+  const C = await open(backend, site.url, size(390, 820), () => {
+    if (sessionStorage.getItem("t")) return;
+    sessionStorage.setItem("t", "1");
+    localStorage.setItem("aristora.role", "focus");
+    localStorage.setItem("aristora.token", "owner-phone-token-0123456789abcdefghijklmnopqrstuv");
+  });
+  await C.locator(".tabs .tab.us").click();
+  const U = C.frameLocator("iframe.us-frame");
+  for (const b of ["அடுத்து", "அடுத்து", "தொடங்கு!"]) await U.locator(".f-us-guide").getByRole("button", { name: b }).click();
+  await U.locator(".t-head").getByRole("button", { name: /Post/ }).click();
+  const sh = U.locator(".f-sheet");
+  await sh.getByRole("button", { name: "Grade 8" }).click();
+  await sh.getByRole("button", { name: /Question to answer/ }).click();
+  await contains(sh.locator(".t-note"), "ஒருவர் விடை மற்றவருக்குத் தெரியாது");
+  await sh.locator(".f-file").setInputFiles(paper);
+  await U.locator(".f-cut").getByRole("button", { name: "Use this photo" }).click();
+  await visible(sh.locator(".f-thumb img"));
+  await sh.locator("textarea").pressSequentially("x + 3 = 15 எனின் x = ?");
+  await shot(C, "fam80-post-question");
+  await sh.getByRole("button", { name: /Post/ }).last().click();
+  await contains(U.locator(".f-toast"), "Grade 8 க்கு போனது");
+  const q = U.locator(".f-us-line.k-post.opens");
+  await contains(q, "0 answers");
+  await visible(q.locator(".f-pics img"));
+  const mid = await t.run(async (ctx) => (await ctx.db.query("usMoments").collect()).find((m) => m.qn)!._id);
+  // Bilal answers first (his phone, through the server).
+  await t.mutation(api.us.answer, { token: FAM_B, id: mid, text: "x = 18" });
+
+  // Hana's phone: the question with its photo; one classmate answered (a locked card: nothing of his).
+  const P = await open(backend, `${site.url}/f/`, size(360, 780));
+  await P.getByLabel(/Index/).fill("1001");
+  await P.getByLabel("Code").fill("4719");
+  await P.getByRole("button", { name: "Sign in" }).click();
+  await goalIs(P, "Level 1");
+  await until(async () => (await P.locator(".f-tabs .f-tab").count()) === 5, "the Us tab");
+  await tabTo(P, /^Us$/);
+  for (const b of ["அடுத்து", "அடுத்து", "தொடங்கு!"]) await P.locator(".f-us-guide").getByRole("button", { name: b }).click();
+  const line = P.locator(".f-us-line.k-post.opens");
+  await contains(line, "Owner ஆசிரியர் · Grade 8");
+  await contains(line.locator(".f-us-foot"), "1 பேர் விடை அனுப்பினார்கள்");
+  await visible(line.locator(".f-pics img"));
+  await noSideScroll(P);
+  await shot(P, "fam81-us-question-line");
+  // Her photo full screen (the big copy), and back.
+  await line.locator(".f-pic").click();
+  await visible(P.locator(".f-lb img"));
+  await P.locator(".f-lb").getByRole("button", { name: "Close" }).click();
+  await until(async () => (await P.locator(".f-lb").count()) === 0, "the photo closes");
+  await line.getByRole("button", { name: "✍️ Answer" }).click();
+  await contains(P.locator(".f-locks"), "1 பேர் விடை அனுப்பினார்கள்");
+  expect(await P.locator(".f-ut").innerText()).not.toContain("Bilal");
+  expect(await P.locator(".f-ut").innerText()).not.toContain("x = 18");
+  await shot(P, "fam82-us-answer-locked");
+  // Her answer: words and a photo of her working; once only.
+  await P.locator(".f-ut-c textarea").pressSequentially("x = 12");
+  await P.locator(".f-ut-c .f-file").setInputFiles(paper);
+  await P.locator(".f-cut").getByRole("button", { name: "Use this photo" }).click();
+  await visible(P.locator(".f-ut-c .f-thumb img"));
+  await P.locator(".f-ut-c").getByRole("button", { name: "Send" }).click();
+  await contains(P.locator(".f-toast"), "அனுப்பியாயிற்று");
+  await contains(P.locator(".f-ur.mine"), "x = 12");
+  await visible(P.locator(".f-ur.mine .f-pics img"));
+  await contains(P.locator(".f-ur-wait"), "ஆசிரியர் பார்த்ததும்");
+  await contains(P.locator(".f-locks"), "இன்னும் 1 விடைகள் மறைவில்");
+  expect(await P.locator(".f-ut-c textarea").count()).toBe(0);
+  await noSideScroll(P);
+  await shot(P, "fam83-us-answer-sent");
+
+  // The teacher opens the question: both answers with their names; ✓ Hana's, ✗ Bilal's with her words.
+  await C.locator(".tabs .tab.class").click();
+  await C.locator(".tabs .tab.us").click();
+  await contains(q, "2 answers");
+  await q.getByRole("button", { name: "Mark ›" }).click();
+  const hanaA = U.locator(".f-ur", { hasText: "Hana K" });
+  const bilalA = U.locator(".f-ur", { hasText: "Bilal M" });
+  await contains(hanaA, "x = 12");
+  await contains(bilalA, "x = 18");
+  await hanaA.getByRole("button", { name: "Right", exact: true }).click();
+  await until(async () => (await hanaA.getAttribute("class"))!.includes("ok"), "Hana's answer marked right");
+  await bilalA.getByRole("button", { name: "Your words" }).click();
+  await U.locator(".f-sheet textarea").pressSequentially("3 ஐக் கழி");
+  await U.locator(".f-sheet").getByRole("button", { name: /Not right/ }).click();
+  await until(async () => (await bilalA.getAttribute("class"))!.includes(" no"), "Bilal's answer marked not right");
+  await contains(U.locator(".f-ut-sum"), "✓ 1");
+  await shot(C, "fam84-class-us-marking");
+  await U.getByRole("button", { name: "Back" }).click();
+  await visible(U.locator(".f-us-list"));
+
+  // Hana: her answer marked right; Bilal's (marked wrong) never shows to her: still one locked.
+  await P.getByRole("button", { name: "Back" }).click();
+  await visible(P.locator(".f-us-list"));
+  await contains(line.locator(".f-us-foot"), "✓ உன் விடை சரி!");
+  await line.getByRole("button", { name: "See ›" }).click();
+  await contains(P.locator(".f-ur.mine.ok"), "Owner ஆசிரியர்");
+  await contains(P.locator(".f-locks"), "இன்னும் 1");
+  expect(await P.locator(".f-ut").innerText()).not.toContain("x = 18");
+  // Bilal (through the server): Hana's right answer with her name, his own with the teacher's words.
+  const b = await t.query(api.us.thread, { token: FAM_B, id: mid });
+  expect(b.list.map((r) => [r.n, r.ok, r.note ?? null])).toEqual([
+    ["Bilal M", false, "3 ஐக் கழி"],
+    ["Hana K", true, null],
+  ]);
+
+  // Her doubt: Seniors, words; nameless to students, her name for teachers.
+  await P.getByRole("button", { name: "Back" }).click();
+  await P.getByRole("button", { name: "🙋 Ask a doubt" }).click();
+  const ds = P.locator(".f-sheet.f-doubt");
+  await ds.getByRole("button", { name: "Seniors" }).click();
+  await contains(ds.locator(".f-doubt-l.s"), "Grade 9–11");
+  await ds.locator("textarea").pressSequentially("பின்னங்களை எப்படிக் கூட்டுவது?");
+  await shot(P, "fam85-us-doubt-sheet");
+  await ds.getByRole("button", { name: "Send" }).click();
+  await contains(P.locator(".f-toast"), "பதில் வந்ததும்");
+  const mine = P.locator(".f-us-line.k-ask.mine");
+  await contains(mine, "உன் சந்தேகம் · மூத்த மாணவர்கள்");
+  await P.locator(".f-us-fl").getByRole("button", { name: "🙋 Doubts" }).click();
+  expect(await P.locator(".f-us-line").count()).toBe(1);
+  await P.locator(".f-us-fl").getByRole("button", { name: "All" }).click();
+
+  // The teacher: To do counts it; she opens it (Hana's name), replies.
+  await C.locator(".tabs .tab.class").click();
+  await C.locator(".tabs .tab.us").click();
+  await contains(U.locator(".f-us-fl"), "To do · 1");
+  await U.locator(".f-us-fl").getByRole("button", { name: /To do/ }).click();
+  const dl = U.locator(".f-us-line.k-ask");
+  await contains(dl, "Hana K · Grade 8");
+  await dl.getByRole("button", { name: "Reply ›" }).click();
+  await U.locator(".f-ut-c textarea").pressSequentially("பகுதிகளை ஒன்றாக்கு: புத்தகம் பக்கம் 12.");
+  await U.locator(".f-ut-c").getByRole("button", { name: "Reply" }).click();
+  await contains(U.locator(".f-ur.tch"), "Owner ஆசிரியர்");
+  await shot(C, "fam86-class-us-doubt-reply");
+
+  // Hana opens her doubt: the teacher's reply.
+  await mine.click();
+  await contains(P.locator(".f-ur.tch"), "பக்கம் 12");
+  await noSideScroll(P);
+  await shot(P, "fam87-us-doubt-replied");
+  for (const p of [P, C]) await p.context().close();
   expect(problems.slice(before)).toEqual([]);
 });
 

@@ -465,3 +465,20 @@ EOF
 - **`tests/teach.test.ts` is the Whole class page's** (and `shown === "teach"` in `app.tsx` is that page): the family
   app's teachers' screens are "staff" everywhere (`staff.tsx`, `?staff`, `staffWith`, `usStaff.test.ts`). Check a test
   file doesn't exist before writing one (that evening a new `teach.test.ts` replaced it for a moment).
+- **Posts and doubts (the same night): who sees what is decided on the server only.** `lib/us.ts` `seesLine` (a line on
+  his phone), `replyShows` (a reply), `replyOf` (which fields of an answer or reply: a name only to teachers, to him, on
+  a teacher's words, or once marked right, and never the asker's), `itemOf(m, me, staff)` (a doubt's `sid` / `n` /
+  `pic` only to teachers and him); `us.thread` filters the answers BEFORE it makes any photo address (a Convex file
+  address opens for anyone who has it: an address sent is a photo shown). A new field on a line or an answer: decide
+  there who gets it. `tests/usPosts.test.ts` checks the JSON a classmate gets has no name, words or address of a hidden
+  answer.
+- **A photo is two files** (small 560 px for the lines, big 1280 px for a tap: `usPost.tsx` `pickedOf`), checked and
+  marked in `usFiles` by `takePhotos` (`convex/us.ts`: images, sizes `SMALL_BYTES` / `PHOTO_BYTES`, never used twice).
+  Anything new that stores a file must mark it the same way or keep it out of `photos.sweep` (which deletes unmarked
+  images a day old), and delete it with its row (`dropPhotos`). The sweep reads a 6-hour window of `_storage` by
+  creation time (`by_creation_time` on the system table), never the whole table.
+- **Class names**: `.f-ask` (Me's name sheet) and `.f-big` (the reveal's score) were taken; the doubt sheet is
+  `.f-doubt`, the photo viewer `.f-lb`. Before a new `.f-*` class, grep both CSS files.
+- **Budgets after posts and doubts** (his yes, 7 Nov 2026: later parts 36 → 42): first load 63.1 of 66, later parts
+  41.0 of 42 (`usPost.tsx` and its style in `profile.css`), the teachers' Us 5.0 of 8. Old lines are deleted by
+  `us.sweep` (scheduled by `us.daily`): unit tests that check the 30 days call it themselves.
