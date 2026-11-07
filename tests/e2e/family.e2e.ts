@@ -2117,6 +2117,142 @@ test("the race for everyone: his grade and ARISTORA, not started this week, the 
   expect(problems.slice(before)).toEqual([]);
 });
 
+test("Us: closed until the owner opens it; the owl's guide; his welcome; the owl's lines, a shout-out and a post; one tap each; a teacher's 👏", async () => {
+  const before = problems.length;
+  const backend = makeBackend(modules);
+  const t = backend.t;
+  await addPerson(t, { name: "Owner", token: OWNER_TOKEN, role: "owner" });
+  const as = { token: OWNER_TOKEN };
+  await t.mutation(api.setup.ensure, as);
+  const u01 = await t.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G8-U01")).first())!._id);
+  await t.mutation(api.catalog.saveWorkbook, {
+    ...as,
+    unitId: u01,
+    parts: BOOK.data.parts.map((p) => ({ id: p.id, to: p.to, ...(p.each ? { each: p.each } : {}) })),
+    levels: BOOK.data.levels.map((l) => ({ to: l.to, max: l.max })),
+    marks: BOOK.data.marks ?? {},
+    replace: true,
+    key: fakeKey(),
+  });
+  const add = async (name: string, grade: number) => await t.mutation(api.students.add, { ...as, name, grade, term: 1, stage: "master", unitId: u01 });
+  const hana = await add("Hana K", 8);
+  const bilal = await add("Bilal M", 8);
+  await t.mutation(api.families.setCode, { ...as, studentId: hana, code: "4719" });
+  // Bilal's first level from home (his family phone, through the server): the owl welcomes him.
+  const FAM_B = "family-phone-bilal-us-0123456789abcdefghijklmnop";
+  await t.mutation(api.families.makeLink, { ...as, studentId: bilal, codeHash: secretHash("family-link", "bilal-us-family-link-0123456789") });
+  await t.mutation(api.family.join, { code: "bilal-us-family-link-0123456789", token: FAM_B, label: "Android" });
+  await t.mutation(api.family.check, { token: FAM_B, unitId: u01, n: 1, typed: [1, 2, 3, 4, 5, 6, 8].map((q) => ({ q, a: [String(q * 3)] })) });
+  // Yesterday's count and last week's champions (the owl's morning and Monday lines).
+  await t.run(async (ctx) => {
+    const now = Date.now();
+    await ctx.db.insert("usMoments", { k: "count", x: 12, at: now - 5 * 3600_000, day: 0, demo: false, c: 0 });
+    await ctx.db.insert("usMoments", { k: "champs", ppl: [{ sid: bilal, n: "Bilal M", g: 8, a: true }], at: now - 26 * 3600_000, day: 0, demo: false, c: 3 });
+  });
+
+  // Hana's phone: four tabs while Us is closed.
+  const P = await open(backend, `${site.url}/f/`, size(360, 780));
+  await P.getByLabel(/Index/).fill("1001");
+  await P.getByLabel("Code").fill("4719");
+  await P.getByRole("button", { name: "Sign in" }).click();
+  await goalIs(P, "Level 1");
+  expect(await P.locator(".f-tabs .f-tab").count()).toBe(4);
+
+  // The owner: Settings → Community: why and how it should feel, then Open; a shout-out to Hana; a post to everyone.
+  const C = await open(backend, site.url, size(360, 780), () => {
+    if (sessionStorage.getItem("t")) return;
+    sessionStorage.setItem("t", "1");
+    localStorage.setItem("aristora.role", "focus");
+    localStorage.setItem("aristora.token", "owner-phone-token-0123456789abcdefghijklmnopqrstuv");
+  });
+  await C.getByRole("button", { name: /Settings/ }).click();
+  await C.locator(".seg").getByRole("button", { name: /^Community/ }).click();
+  await contains(C.locator(".us-why"), "How it should feel");
+  await contains(C.locator(".us-open"), "Closed");
+  await C.locator(".us-open").getByRole("button", { name: "Open" }).click();
+  await contains(C.locator(".toast").last(), "open on every phone");
+  const shoutCard = C.locator(".us-card", { hasText: "Give a shout-out" });
+  await shoutCard.locator(".grade-row").getByRole("button", { name: "Grade 8" }).click();
+  await shoutCard.getByRole("button", { name: "Hana K" }).click();
+  await shoutCard.getByRole("button", { name: "Never gives up" }).click();
+  await shoutCard.getByRole("button", { name: "Send the shout-out" }).click();
+  await contains(C.locator(".toast").last(), "Shout-out sent");
+  const postCard = C.locator(".us-card", { hasText: "Post to the students" });
+  await postCard.getByRole("button", { name: "Tip" }).click();
+  await postCard.locator("textarea").pressSequentially("எப்போதும் working எழுது.");
+  await postCard.getByRole("button", { name: "Post", exact: true }).click();
+  await contains(C.locator(".toast").last(), "Posted to everyone");
+  await contains(C.locator(".us-list li").first(), "இன்றைய குறிப்பு");
+  await noSideScroll(C);
+  await shot(C, "fam66-settings-community");
+
+  // Hana's phone: the Us tab once she opens the app again; the owl's guide the first time (three cards).
+  await P.reload();
+  await goalIs(P, "Level 1");
+  await until(async () => (await P.locator(".f-tabs .f-tab").count()) === 5, "the Us tab");
+  await tabTo(P, /^Us$/);
+  await contains(P.locator(".f-us-guide h2"), "இது Us");
+  await noSideScroll(P);
+  await shot(P, "fam67-us-guide");
+  await P.locator(".f-us-guide").getByRole("button", { name: "அடுத்து" }).click();
+  await contains(P.locator(".f-us-guide h2"), "ஒரு தொடுகை");
+  await P.locator(".f-us-guide").getByRole("button", { name: "அடுத்து" }).click();
+  await P.locator(".f-us-guide").getByRole("button", { name: "தொடங்கு!" }).click();
+  // The welcome, today's count, and the lines: the post, her own shout-out (no button: who cheered), Bilal's welcome.
+  await contains(P.locator(".f-us-welcome"), "ARISTORA");
+  await contains(P.locator(".f-hero.us .f-hsub"), "இன்று 1 பேர்");
+  await contains(P.locator(".f-us-line.k-post"), "இன்றைய குறிப்பு");
+  await contains(P.locator(".f-us-line.k-shout.mine"), "விடாமுயற்சி");
+  await visible(P.locator(".f-us-line.k-shout.mine .f-us-you"));
+  const welcome = P.locator(".f-us-line.k-home1");
+  await contains(welcome, "Bilal M");
+  await welcome.locator(".f-us-clap").click();
+  await until(async () => (await welcome.locator(".f-us-clap").getAttribute("aria-pressed")) === "true", "her welcome tapped");
+  await contains(welcome.locator(".f-us-clap"), "1");
+  await contains(P.locator(".f-us-line.k-champs"), "🏆");
+  await contains(P.locator(".f-us-day").first(), "TODAY");
+  await noSideScroll(P);
+  await shot(P, "fam68-us-feed");
+  // A name opens that classmate's profile.
+  await welcome.locator(".f-us-n.tap").click();
+  await contains(P.locator(".f-mate .f-me-name"), "Bilal M");
+  await P.getByRole("button", { name: "Back" }).click();
+  await visible(P.locator(".f-us-list"));
+
+  // The owner's page shows her tap; his 👏 shows his name on the phones.
+  const bilalLine = C.locator(".us-list li", { hasText: "first level from home" });
+  await contains(bilalLine, "👏 1");
+  await bilalLine.getByRole("button", { name: "Cheer" }).click();
+  await until(async () => (await bilalLine.getByRole("button", { name: "You cheered" }).count()) === 1, "the owner's 👏");
+  // The tab reads its lines again once a minute at most (flipping tabs reads nothing): a minute later, as here.
+  await tabTo(P, /Home/);
+  await P.evaluate(() => {
+    for (const k of Object.keys(localStorage)) if (k.endsWith(".usAt")) localStorage.removeItem(k);
+  });
+  await tabTo(P, /^Us$/);
+  await contains(P.locator(".f-us-line.k-home1 .f-us-tc"), "Owner ஆசிரியர்");
+  // Yesterday's count asks for a Level today: its button opens his Level now.
+  await P.locator(".f-us-line.k-count").getByRole("button", { name: /இன்று நானும்/ }).click();
+  await visible(P.locator(".f-padkeys"));
+  await P.getByRole("button", { name: "Back" }).first().click();
+
+  // The smallest phone: the tab and its lines fit 320 px.
+  const S = await open(backend, `${site.url}/f/`, size(320, 640));
+  await S.getByLabel(/Index/).fill("1001");
+  await S.getByLabel("Code").fill("4719");
+  await S.getByRole("button", { name: "Sign in" }).click();
+  await goalIs(S, "Level 1");
+  await tabTo(S, /^Us$/);
+  await S.locator(".f-us-guide").getByRole("button", { name: "அடுத்து" }).click();
+  await S.locator(".f-us-guide").getByRole("button", { name: "அடுத்து" }).click();
+  await S.locator(".f-us-guide").getByRole("button", { name: "தொடங்கு!" }).click();
+  await visible(S.locator(".f-us-line.k-home1"));
+  await noSideScroll(S);
+  await shot(S, "fam69-us-320");
+  for (const p of [P, C, S]) await p.context().close();
+  expect(problems.slice(before)).toEqual([]);
+});
+
 test("the owner's Preview: Settings → Books → a unit → every level open on the phone's own screen, look only; nobody else", async () => {
   // 5 Nov 2026, his ask: check every question of a unit without doing its levels in order; his answers: only him, only
   // looking. Made-up questions only.

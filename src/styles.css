@@ -11099,3 +11099,119 @@ body.tm-on .toasts {
 .rc-row .btn {
   flex: 1;
 }
+
+/* ---------- Settings → Community: the students' Us tab, for teachers (7 Nov 2026) ---------- */
+.us-why {
+  padding: 12px 14px;
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+}
+.us-why summary {
+  cursor: pointer;
+}
+.us-why p,
+.us-why ol {
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.us-why ol {
+  padding-left: 20px;
+  display: grid;
+  gap: 6px;
+}
+.us-card {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+}
+.us-card .grade-row {
+  margin: 2px 0;
+}
+.us-open {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.us-open > span {
+  display: grid;
+  gap: 2px;
+}
+.us-field {
+  display: grid;
+  gap: 4px;
+}
+.us-field textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  font: inherit;
+  line-height: 1.5;
+  resize: vertical;
+}
+.us-sub {
+  margin-top: 6px;
+}
+.us-kinds {
+  display: grid;
+  gap: 2px;
+}
+.us-kids {
+  max-height: 210px;
+  overflow-y: auto;
+}
+/* Fixed places, never wrapping: the reasons and the starters two by two; Everyone and the grades in one row. */
+.chip-pick.us-grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.chip-pick.us-to {
+  display: grid;
+  grid-template-columns: 2.4fr repeat(6, 1fr);
+  gap: 4px;
+}
+.chip-pick.us-grid2 button,
+.chip-pick.us-to button {
+  padding: 0 4px;
+}
+.chip-pick.us-to button {
+  font-size: 13.5px;
+}
+.us-list {
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+.us-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: var(--ground);
+}
+.us-list li.pin {
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+}
+.us-w {
+  display: grid;
+  gap: 2px;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.us-acts {
+  display: flex;
+  gap: 4px;
+}
+.us-acts .btn.small {
+  min-width: 40px;
+  padding: 0 8px;
+}

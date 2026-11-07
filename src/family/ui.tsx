@@ -92,6 +92,8 @@ const PATHS = {
   award: "M12 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11zM8.8 13.5 7.5 20.5l4.5-2.5 4.5 2.5-1.3-7",
   turn: "M5.5 11a6.5 6.5 0 1 1 1.9 4.6M5.5 5.5V11H11",
   bin: "M5 7h14M9.5 7V4.5h5V7M7 7l1 13h8l1-13",
+  // Us (7 Nov 2026): two friends side by side.
+  people: "M9 11.2a3.4 3.4 0 1 0 0-6.8 3.4 3.4 0 0 0 0 6.8zM2.8 19.5c.7-3.3 3.2-5.2 6.2-5.2s5.5 1.9 6.2 5.2M15.6 4.8a3.2 3.2 0 0 1 0 6.2M17.4 14.6c2 .6 3.4 2.3 3.9 4.9",
 } as const;
 export type IconName = keyof typeof PATHS;
 

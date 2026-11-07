@@ -57,7 +57,8 @@ import { armSound, buzz, sound } from "./sound";
 import { Surprises } from "./surprise";
 import { Avatar, Flame, firstName, Gem, Icon, Owl, problemWords, setSheetHost, Sheet, showSheet, toast, Toast, Waiting, type IconName, type SheetRender } from "./ui";
 
-export type Tab = "home" | "learn" | "race" | "me";
+/** Us (7 Nov 2026): the students' community, between Learn and the Race once the owner opens it. */
+export type Tab = "home" | "learn" | "us" | "race" | "me";
 
 type Screen =
   | { k: "join"; code: string }
@@ -112,7 +113,9 @@ export function App() {
   const [screen, setScreen] = useState<Screen>(firstScreen);
   const [acc, setAcc] = useState<Account | null>(current);
   const [me, setMe] = useState<FamilyMe | null>(() => fixWorlds(keep<FamilyMe>("me")));
-  const [tab, setTab] = useState<Tab>(() => keep<Tab>("tab") ?? "home");
+  const [tabNow, setTab] = useState<Tab>(() => keep<Tab>("tab") ?? "home");
+  // Us shows once the owner opened it (a phone that kept the tab from before falls back to Home).
+  const tab: Tab = tabNow === "us" && !me?.us ? "home" : tabNow;
   const [offline, setOffline] = useState(false);
   const [sheet, setSheet] = useState<null | "kids" | "feedback" | "zoom" | { render: SheetRender }>(null);
   const [zoomed, setZoomed] = useState<Zoomed | null>(null);
@@ -270,19 +273,28 @@ export function App() {
     openSheet({
       render: (close) => <BellSheet items={meRef.current?.bell ?? []} onClose={close} onOpen={(unitId, n) => fromSheet({ k: "book", unitId, n })} />,
     });
-  // A tap on a phone alert opens the app on the bell (its address ends in #bell, or the open app is told).
+  // A tap on a phone alert opens the app on the bell (its address ends in #bell, or the open app is told); a teacher's
+  // shout-out or 👏 opens Us (#us, 7 Nov 2026).
   useEffect(() => {
-    const fromAlert = () => {
+    const fromAlert = (k: string) => {
       if (screenRef.current.k !== "main" || !current()) return;
+      if (k === "us") {
+        setTab("us");
+        keep("tab", "us");
+        window.scrollTo(0, 0);
+        return;
+      }
       openBell();
       void loadMe();
     };
-    if (location.hash === "#bell") {
+    if (location.hash === "#bell" || location.hash === "#us") {
+      const k = location.hash.slice(1);
       history.replaceState(history.state, "", location.pathname + location.search);
-      fromAlert();
+      fromAlert(k);
     }
     const told = (e: MessageEvent) => {
-      if ((e.data as { k?: string } | null)?.k === "bell") fromAlert();
+      const k = (e.data as { k?: string } | null)?.k;
+      if (k === "bell" || k === "us") fromAlert(k);
     };
     navigator.serviceWorker?.addEventListener("message", told);
     return () => navigator.serviceWorker?.removeEventListener("message", told);
@@ -523,6 +535,24 @@ export function App() {
             <HomeTab top={top} me={me} onPlay={playNow} onLearn={() => pickTab("learn")} onStage={(unitId) => go({ k: "stage", unitId })} />
           ) : tab === "learn" ? (
             <LearnTab top={top} me={me} onStage={(unitId) => go({ k: "stage", unitId })} onPlay={playNow} />
+          ) : tab === "us" ? (
+            parts ? (
+              <parts.UsTab
+                top={top}
+                me={me}
+                onPlay={playNow}
+                onMe={() => pickTab("me")}
+                onMate={(id) => {
+                  window.scrollTo(0, 0);
+                  go({ k: "mate", id, row: null });
+                }}
+              />
+            ) : (
+              <>
+                <header class="f-hero">{top}</header>
+                <Waiting />
+              </>
+            )
           ) : tab === "race" ? (
             <BoardTab
               top={top}
@@ -554,7 +584,7 @@ export function App() {
             />
           )}
         </main>
-        <BottomBar tab={tab} onTab={pickTab} />
+        <BottomBar tab={tab} us={!!me?.us} onTab={pickTab} />
         <Surprises active={sheet === null} />
       </>
     );
@@ -651,14 +681,15 @@ function TopRow(props: { me: FamilyMe | null; acc: Account | null; offline: bool
 const TABS: { id: Tab; icon: IconName; name: string }[] = [
   { id: "home", icon: "home", name: "Home" },
   { id: "learn", icon: "map", name: "Learn" },
+  { id: "us", icon: "people", name: "Us" },
   { id: "race", icon: "trophy", name: "Race" },
   { id: "me", icon: "user", name: "Me" },
 ];
 
-function BottomBar(props: { tab: Tab; onTab: (t: Tab) => void }) {
+function BottomBar(props: { tab: Tab; us: boolean; onTab: (t: Tab) => void }) {
   return (
-    <nav class="f-tabs" aria-label="ARISTORA">
-      {TABS.map((t) => (
+    <nav class={`f-tabs${props.us ? " n5" : ""}`} aria-label="ARISTORA">
+      {TABS.filter((t) => t.id !== "us" || props.us).map((t) => (
         <button
           key={t.id}
           type="button"

@@ -429,3 +429,26 @@ EOF
   imports `convex/lib/race.ts`: pure, imports only `./day`; keep it so); a classmate's profile is a later part.
 - **The old race for old phones**: `family.board` still sends `top` / `me` / `count` (phones that opened the app
   before 7 Nov read them until they load the new version). The new field is `you`, not `me`. Remove after 21 Nov 2026.
+
+**Us, the students' community (7 Nov 2026).**
+- **The owl's lines are written by hooks** in the mutations that finish things (`convex/lib/us.ts`): `homeMoments` in
+  `family.check` and `checkLadder` (a first level from home, days in a row), `stageMoment` in `family.check` and
+  `workbook.correct` (a whole Stage), `backMoment` in `startVisit` (welcome back), `champsMoment` in `race.week`;
+  birthdays, yesterday's count and the most improved come from crons (`us.daily`, `us.improved`). A new way to mark a
+  level at home or to finish a Stage calls the same helper, or the community never hears of it. Each helper dedupes
+  (once per Stage, per milestone and day, per day for birthdays and welcome back).
+- **The count of who learned today rides on the race rows**: `writeRow` (`convex/lib/raceRows.ts`) calls `noteToday`
+  with the student's XP today before and after (real students only): +1 from none to some, −1 back to none. It never
+  scans anything. `lib/us.ts` must not import `lib/raceRows.ts` or `lib/family.ts` (a cycle through `writeRow`); pass
+  what it needs (the streak, the home levels) from the caller.
+- **Lines copy who the student is** (name, grade, photo key from his race row, OK'd and shown) when written: a rename or
+  a new photo shows on new lines only. A wiped student's lines go (`wipeStudent` → `dropMoment`); a removed one's stay
+  until they are 30 days old.
+- **A demo or test student's lines are `demo: true`**: only demo phones read them (`feedOf(ctx, demo, …)`); the
+  teachers' page reads the real ones. Tests that seed a line with `raw.run` must set `demo`, `day` and `c`.
+- **The phone never builds the tab before the owner opens it** (`me.us`); the e2e opens it from Settings → Community
+  (`.us-open` → Open) and reloads the phone. Its style is in `family.css` (the first load: the later budget was full);
+  the code is a later part (`parts.UsTab`). Budgets after Us: first load 62.3 of 66 KB, later parts 35.4 of 36. The
+  next later part: ask him to raise it (he was asked 7 Nov, it wasn't needed), or put its style in the first load too.
+- **A teacher's Settings now opens on Community** when she has no extras (it comes before Alerts and everyone sees it):
+  a run-through that opens Settings as a plain teacher lands there (the accounts run-through's tab list has it).

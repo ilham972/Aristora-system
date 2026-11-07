@@ -100,7 +100,8 @@ self.addEventListener("notificationclick", (e) => {
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
       for (const c of list) {
         if (new URL(c.url).pathname.startsWith("/f/") && "focus" in c) {
-          c.postMessage({ k: "bell" });
+          // A teacher's shout-out or 👏 opens Us (7 Nov 2026), everything else the bell.
+          c.postMessage({ k: url.endsWith("#us") ? "us" : "bell" });
           return c.focus();
         }
       }

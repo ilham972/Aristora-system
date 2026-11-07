@@ -9,6 +9,7 @@ import { slDay } from "./day";
 import { computeMaster, EMPTY_MASTER, homeToCheck, type MState } from "./master";
 import { computeStatus } from "./status";
 import { digestOf, type Digest } from "./boss";
+import { backMoment, dropMoment } from "./us";
 
 export type Stage = "fighter" | "master" | "legend" | "sprint";
 export type BookStage = "fighter" | "master";
@@ -289,6 +290,8 @@ export async function startVisit(
   at: number,
   session: Doc<"sessions"> | null,
 ): Promise<void> {
+  // Us (7 Nov 2026): back after two weeks or more away, the owl says welcome back (read before this visit is added).
+  await backMoment(ctx, studentId, at);
   await ctx.db.insert("attendance", { studentId, day: slDay(at), inAt: at, ...(session ? { sessionId: session._id } : {}) });
 }
 
@@ -390,6 +393,8 @@ export async function wipeStudent(ctx: MutationCtx, s: Doc<"students">) {
   // His phone alerts (7 Nov 2026): the phones' addresses and anything waiting to go.
   for (const p of await ctx.db.query("pushSubs").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) await ctx.db.delete(p._id);
   for (const p of await ctx.db.query("pushOut").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) await ctx.db.delete(p._id);
+  // Us (7 Nov 2026): the lines about him go with their taps (his taps on others' lines go with those lines).
+  for (const m of await ctx.db.query("usMoments").withIndex("by_sid", (q) => q.eq("sid", s._id)).collect()) await dropMoment(ctx, m._id);
   for (const a of await ctx.db.query("familyAsks").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) await ctx.db.delete(a._id);
   for (const c of await ctx.db.query("calls").withIndex("by_student_status", (q) => q.eq("studentId", s._id)).collect()) await ctx.db.delete(c._id);
   for (const p of await ctx.db.query("progress").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) await ctx.db.delete(p._id);

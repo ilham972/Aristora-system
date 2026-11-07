@@ -22,6 +22,7 @@ import { fail } from "./lib/backend";
 import { DAY_MS, slWeekStart } from "./lib/day";
 import { championsOf, cupWinners, type Champ, type Cup } from "./lib/race";
 import { mateMarksOn, RACE_V, raceList, rebuildStudent } from "./lib/raceRows";
+import { champsMoment } from "./lib/us";
 
 const token = v.optional(v.string());
 
@@ -115,6 +116,8 @@ export const week = internalMutation({
       const grades = cupWinners(cup);
       for (const r of rows.filter((x) => x.g !== null && grades.includes(x.g) && x.p > 0)) await gift(r.id, r.n, r.g, "cup", prizes.cup);
     }
+    // Us (7 Nov 2026): the owl names last week's champions to everyone.
+    await champsMoment(ctx, top, now);
     return wk;
   },
 });

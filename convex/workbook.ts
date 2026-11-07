@@ -32,6 +32,9 @@ import { computeMaster, markBefore, type MQ, type MState } from "./lib/master";
 import { freeRow, isFree } from "./lib/free";
 import { actor } from "./lib/auth";
 import { closeClassPhotos } from "./lib/homeWork";
+import { unitNumber } from "./lib/family";
+import { OL } from "./lib/syllabus";
+import { stageDone, stageMoment } from "./lib/us";
 import { masterState as masterStateShape } from "./schema";
 
 /**
@@ -260,6 +263,10 @@ export const correct = mutation({
     });
     await refresh(ctx, student._id, now, session);
     await touch(ctx, session, now);
+    // Us (7 Nov 2026): his whole Stage corrected: the owl tells everyone (once per Stage, at home or in class).
+    if (!student.demo && !student.test && stageDone(book.levels, m.lv)) {
+      await stageMoment(ctx, student._id, unit, unit.grade === OL ? null : unitNumber(unit.code), now);
+    }
     const st = computeMaster(m, book);
     const lost = Object.entries(rows).filter(([, r]) => r.lost);
     return {

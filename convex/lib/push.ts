@@ -16,18 +16,21 @@ export const VAPID_KEY = "push.vapid";
 /** A child on one phone: at most this many phones keep alerts (the oldest go). */
 export const PUSH_PHONES = 6;
 
-/** The notification for a burst: one answer says itself; several say how many, then the last. */
-export function pushPayload(first: string, n: number, text: string): { title: string; body: string; url: string; tag: string } {
+/**
+ * The notification for a burst: one answer says itself; several say how many, then the last. A tap opens the bell, or
+ * `url` (7 Nov 2026: the Us tab, "/f/#us", for a teacher's shout-out or 👏: the last one in the burst decides).
+ */
+export function pushPayload(first: string, n: number, text: string, url?: string): { title: string; body: string; url: string; tag: string } {
   return {
     title: `${first} · ARISTORA`,
     body: n > 1 ? `ஆசிரியரிடமிருந்து ${n} புதியவை. ${text}` : text,
-    url: "/f/#bell",
+    url: url ?? "/f/#bell",
     tag: `aristora-${first}`,
   };
 }
 
 /** An alert for a child: gathered with any other in the next minute; nothing at all if no phone of his turned them on. */
-export async function alertStudent(ctx: MutationCtx, studentId: Id<"students">, text: string): Promise<void> {
+export async function alertStudent(ctx: MutationCtx, studentId: Id<"students">, text: string, url?: string): Promise<void> {
   const sub = await ctx.db
     .query("pushSubs")
     .withIndex("by_student", (q) => q.eq("studentId", studentId))
@@ -39,9 +42,9 @@ export async function alertStudent(ctx: MutationCtx, studentId: Id<"students">, 
     .withIndex("by_student", (q) => q.eq("studentId", studentId))
     .first();
   if (out) {
-    await ctx.db.patch(out._id, { n: out.n + 1, text, at: now });
+    await ctx.db.patch(out._id, { n: out.n + 1, text, at: now, url });
     return;
   }
-  await ctx.db.insert("pushOut", { studentId, n: 1, text, at: now });
+  await ctx.db.insert("pushOut", { studentId, n: 1, text, at: now, ...(url ? { url } : {}) });
   await ctx.scheduler.runAfter(PUSH_WAIT_MS, internal.push.send, { studentId });
 }

@@ -41,12 +41,14 @@ import { olMapList, OlMapSheet } from "./olMap";
 import { FeedbackList } from "./feedbackList";
 import { PhotoQueue } from "./photoQueue";
 import { RETAKE, WHY } from "../convex/lib/photos";
+import { SHOUT_WHY } from "../convex/lib/us";
 import { ClassHours } from "./classHours";
 import { RaceSettings } from "./raceSettings";
+import { UsSettings } from "./usSettings";
 import { SimPanel, SimSwitch } from "./sim";
 import { GRADES, GradeRow, Sheet, STATE_WORDS, useGrade } from "./ui";
 
-export type SettingsTab = "students" | "books" | "people" | "hours" | "race" | "alerts" | "reports" | "history" | "feedback" | "photos" | "account";
+export type SettingsTab = "students" | "books" | "people" | "hours" | "race" | "community" | "alerts" | "reports" | "history" | "feedback" | "photos" | "account";
 type Tab = SettingsTab;
 
 const SETTINGS_TABS: [Tab, string, () => boolean][] = [
@@ -58,6 +60,8 @@ const SETTINGS_TABS: [Tab, string, () => boolean][] = [
   // The family app's race (7 Nov 2026): gifts to give (owner, Manager), last week's champions and their poster (and
   // Reports), the prizes and the marks switch (owner).
   ["race", "Race", () => may("owner") || may("manager") || may("reports")],
+  // Us, the students' community (7 Nov 2026): every teacher cheers and gives shout-outs; the Community tick posts.
+  ["community", "Community", () => true],
   ["alerts", "Alerts", () => true],
   ["reports", "Reports", () => may("reports")],
   ["history", "History", () => may("reports")],
@@ -110,6 +114,7 @@ export function Settings(props: {
       {tab === "photos" && <PhotoQueue views={props.views} onOpen={props.onPhotos} />}
       {tab === "hours" && <ClassHours />}
       {tab === "race" && <RaceSettings />}
+      {tab === "community" && <UsSettings views={props.views} />}
       {tab === "people" && <People />}
       {tab === "account" && <Account />}
       <button type="button" class="btn ghost wide" onClick={props.onClose}>
@@ -1095,6 +1100,15 @@ function describe(e: Doc<"events">): string {
         : `${qName(e.q ?? 0)} ${CONSULT_WORDS[v] ?? v}`;
     case "done-consult":
       return "consultation finished";
+    // Us, the students' community (7 Nov 2026).
+    case "us-shout":
+      return `shout-out in Us: ${SHOUT_WHY[v]?.en ?? v}`;
+    case "us-post":
+      return `posted in Us (${v === "all" ? "everyone" : `Grade ${v}`})`;
+    case "us-remove":
+      return `removed a line from Us (${v})`;
+    case "us-open":
+      return v === "on" ? "opened Us on the students' phones" : "closed Us on the students' phones";
     case "board-undo":
       return `${qName(e.q ?? 0)} at the board, undone`;
     case "untaught":
@@ -1212,6 +1226,7 @@ const EXTRA_NAMES: Record<Extra, string> = {
   feedback: "Feedback",
   photos: "Photos",
   consult: "Consultation",
+  community: "Community",
 };
 /** What each job opens (everyone has the Class tab and the Register). */
 const TAB_HELP: Record<Job, string> = {
@@ -1227,6 +1242,7 @@ const EXTRA_HELP: Record<Extra, string> = {
   feedback: "reads what students send from the family app",
   photos: "marks the photos students send from home (drawings, the working on wrong answers)",
   consult: "the top bar's Consultation: calls any student here to her, one to one, and explains or teaches his questions",
+  community: "writes posts in the students' Us tab, pins and removes lines (every teacher cheers and gives shout-outs)",
 };
 
 function canWords(p: { role: string; tabs: Job[]; can: Extra[] }): string {

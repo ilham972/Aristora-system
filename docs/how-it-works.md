@@ -1145,6 +1145,55 @@ learning app of our education institute"): one profile, his class times, what he
     **Share poster** / Save: one 1080 × 1350 PNG drawn on the phone (ARISTORA's top 3 as medals, each grade's 👑, the
     grade cup; first names and initials, never marks or a last place) for the WhatsApp group and the hall wall. Before
     Monday's run kept the week (`raceWeeks`) it is worked out from the race ("Worked out now").
+  - **Us, the students' community** (7 Nov 2026, his voice notes: "the app is not feel like a community ... students want
+    to use this app continuously"; then "students don't know how to use this community ... how this is want to feel ...
+    automatic messages like birthday or someone get the level up, someone improved more ... when they join and doing
+    some of the task, we can appreciate that"; his yes to my plan: no chat, the owl's lines, teachers' shout-outs and
+    posts, houses next, question rooms after). The rules: **students never type** (120 children typing freely needs a
+    moderator, and answers would travel: the race has prizes); one tap per line; never a mark, never who didn't learn.
+    - **The tab** (`src/family/us.tsx`, a later part: `parts.UsTab`; its style is in `family.css`, the later budget was
+      full): **Us**, between Learn and the Race, only once the owner opens it (`me.us`; a phone that kept the tab falls
+      back to Home); five tabs (`.f-tabs.n5`). The header: ARISTORA · நாம், "🔥 இன்று N பேர் கற்றார்கள்" (students who
+      learned today), the waving owl, **?** (the guide again). **The owl's guide** the first time (kept per child,
+      `usGuide`): three cards (what Us is; one tap is enough: 🎂 wish, 👋 welcome, 👏 cheer; you will be here too, for
+      effort and not only winning), அடுத்து / தொடங்கு!. **The owner's welcome** whole the first time (and whenever he
+      changes it), then two lines with மேலும் › (`usWelcome`). **The lines**, newest first under Today / Yesterday /
+      "Mon 2 Nov", pinned posts on top: each has the student's face (his photo only when OK'd and shown in the race) with
+      the line's mark, Tamil words, the time, the teachers who cheered ("👏 Raj ஆசிரியர்"), and **one button that says
+      what the moment asks for**: 🎂 a birthday, 👋 a first level from home and back in class, 🙏 a teacher's post, 👏
+      the rest; a tap = +1 at once (kept per child, `usClapped`; the server counts one per student). **His own line**
+      (or one he is in) has no button: "உனக்கு" and who cheered (the first three names, +N), gold. **Yesterday's count**
+      asks for a Level instead: **▶ இன்று நானும்** opens his Level now (Continue). A name is a tap to that classmate's
+      profile (his own: Me). At the end: "இன்றைய செய்திகள் இவ்வளவுதான் ... நாளை நீயும் இங்கே வருவாய்!" and **▶
+      Continue**: the community always ends in learning.
+    - **The owl writes** (`convex/lib/us.ts`, hooks in the mutations): a **first level from home ever** (`family.check`
+      and a tute's ladder: `homeMoments`, from his levels at home, `homeLevels` = 1: his words "welcome, you are doing in
+      the mobile also"); **days in a row** 7, 14, 30, 50, 100 (`FLAME_MARKS`, from a Check at home); **a whole Stage
+      finished** (every level corrected or before where he started, one at least his: `stageDone`; at home in
+      `family.check`, in class in `workbook.correct`; once per Stage, its number and Tamil name; none for demo
+      students); **back in class after 14 days or more** (`backMoment` in `startVisit`, read before the new visit);
+      **birthdays** (`us.daily`, 00:10 Sri Lanka, from the race rows' birthdays); **yesterday's count** (`us.daily`, from
+      meta `us.today`, which the race rows keep: `noteToday` in `raceRows.writeRow` moves it when a real student's XP today
+      goes from none to some, or back to none after a take-back); **the week's most improved** (`us.improved`, Sunday
+      23:50, before the race resets: this week against last as a share of last week, at least 20; 20 XP or more this
+      week; the top 3: `mostImproved`); **last week's champions** (`race.week`, Monday 00:05: each grade's #1 by grade,
+      🏆 ARISTORA's marked on his line: `champsMoment`). Each kind once (per student and day, per Stage, per milestone).
+      Lines older than 30 days go (`us.daily`, with their taps).
+    - **Teachers keep their own sign-in** (his question: "give teachers link or index, code?"; mine: a second account
+      system is one more thing to leak or forget): **Settings → Community** (`src/usSettings.tsx`, every teacher; first
+      in Settings for a teacher with no extras). **Why Us, and how it should feel** (open the first time on this phone,
+      `aristora.usWhy`; what a teacher does in two minutes a day: 👏 today's lines, 2–3 shout-outs, one post with the
+      tick). **The owner**: Us on the phones (closed until he opens it: the owl writes meanwhile), his welcome (≤ 600,
+      default `WELCOME_DEFAULT`), the owl's kinds (each can be turned off: hidden on the phones and the page). **Any
+      teacher**: a **shout-out** (a grade, a student (in class first, ✓ = hers today), a reason from the list
+      `SHOUT_WHY`: no free words, so no tick; once a day from her per student; his phone gets an alert that opens Us) and
+      **👏** on any line (once; her name on the phones; the student it is about gets an alert). **The owner and the
+      Community tick** (Settings → People, `community`): a **post** to everyone or one grade (≤ 300, starters Tip / Well
+      done / Reminder / Challenge, pinned if ticked), **📌 pin**, **✕ remove** (with its taps). Then **what the students
+      see**: every grade's lines in English, today's and yesterday's counts. The history says "shout-out in Us", "posted
+      in Us", "removed a line from Us", "opened Us on the students' phones".
+    - **Alerts**: `alertStudent(…, url)` (`pushOut.url`): "/f/#us" for a shout-out or a teacher's 👏 (the last in a
+      gathered minute decides); the service worker tells an open app `{ k: "us" }`, the app opens Us.
   - **Me = his profile** (4 Nov 2026, his voice note: "a proper profile page for the students ... as simple as
     possible"; `me.tsx`, one of the parts that come right after the first screen): a violet header with **his photo**
     (88 px; tap = the camera or the gallery: his photo, below), his name (🎂 on his birthday), grade and index ("Photo ·
@@ -1637,6 +1686,10 @@ learning app of our education institute"): one profile, his class times, what he
     `consult.totals`, `calls.create` with `consult` (to herself only), and on her OWN consultation's calls `arrive`,
     `unarrive`, `cancel`, `finish` (`ownConsult` in `calls.ts`), and `consult.mark` (only for a student with her). It
     gives nothing of the rooms (the Evaluation page's `workbook.explain` etc. still need Evaluation).
+  - `community` (7 Nov 2026): the students' Us tab: `us.post`, `us.pin`, `us.remove` (posts to everyone or a grade,
+    pinning, removing a line). Every signed-in person reads `us.board` and gives `us.shout` (a reason from the list) and
+    `us.tclap`; `us.setCfg` (Us on the phones, the welcome, the owl's kinds) is the owner's. The phone's side:
+    `us.feed`, `us.clap` (family token).
 - Everyone signed in sees the Class tab and the Register, reads `people.team` and `manager.day`, and her own card
   (`duty.card`). Correction job = the Correction page and Attendance (`setPresent`, `attendance.day`;
   `by: "attendance"`), Books given (`students.setGiven`), sending called students, Going home, Back in the hall, End

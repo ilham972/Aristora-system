@@ -97,6 +97,8 @@ import {
 } from "./lib/profile";
 import type { RaceRow } from "./lib/race";
 import { mateMarksOn, raceList } from "./lib/raceRows";
+import { homeLevels, homeMoments, stageDone, stageMoment, usCfg } from "./lib/us";
+import { OL } from "./lib/syllabus";
 
 const token = v.optional(v.string());
 
@@ -272,6 +274,8 @@ export type FamilyMe = {
   gifts: { id: string; what: string; kind: "g" | "a" | "cup"; wk: number; g: number | null }[];
   /** The bell (7 Nov 2026): his teachers' answers, retakes and messages of the last two weeks, newest first. */
   bell: BellItem[];
+  /** Us, the students' community (7 Nov 2026): its tab is on the phones once the owner opened it (Settings → Community). */
+  us: boolean;
 };
 
 /** One line of the bell: what a teacher did on a photo of his, where (Stage, Level, Q), who, and whether it is new. */
@@ -374,6 +378,7 @@ export const me = query({
       ).map((x) => ({ id: x._id, what: x.what, kind: x.kind, wk: x.wk, g: x.g ?? null })),
       blocked: stop && stopWorld ? { unitId: stopWorld.unitId, no: stopWorld.no, n: stop.n, owed: stop.owed } : null,
       bell: bell.slice(0, BELL_MAX),
+      us: (await usCfg(ctx)).open,
       worlds,
     };
   },
@@ -683,11 +688,15 @@ export const check = mutation({
     // In class with the app open: his "out of work" clock follows, as for any level.
     if (s.present) await refresh(ctx, s._id, now, await currentSession(ctx, now));
     const all = await xpRows(ctx, s._id);
+    // Us (7 Nov 2026): his first level from home ever, days in a row, a whole Stage finished: the owl tells everyone.
+    const streak = streakOf(all, now);
+    await homeMoments(ctx, s._id, homeLevels(all), streak, now);
+    if (stageDone(data.levels, m.lv)) await stageMoment(ctx, s._id, unit, unit.grade === OL ? null : unitNumber(unit.code), now);
     // His trophies now (the phone shows the ones this level just earned).
     const trophies = trophiesOf(all, await worldsOf(ctx, s));
     // The level's book: the key's working on what he got wrong, and the photos it asks for.
     const book = await bookOf(ctx, s, unit._id, l.n);
-    return { results, got, phoneMax, max: l.max, teacher, xp: weekXp(all, now), streak: streakOf(all, now), trophies, book, retry, bonus };
+    return { results, got, phoneMax, max: l.max, teacher, xp: weekXp(all, now), streak, trophies, book, retry, bonus };
   },
 });
 
@@ -748,8 +757,10 @@ async function checkLadder(
   await log(ctx, null, now, { kind: "ladder-home", studentId: s._id, name: s.name, unit: unit.key, value: `${sec.id} ${got}/${max}` });
   if (s.present) await refresh(ctx, s._id, now, await currentSession(ctx, now));
   const all = await xpRows(ctx, s._id);
+  const streak = streakOf(all, now);
+  await homeMoments(ctx, s._id, homeLevels(all), streak, now);
   const trophies = trophiesOf(all, await worldsOf(ctx, s));
-  return { results, got, phoneMax, max, teacher, xp: weekXp(all, now), streak: streakOf(all, now), trophies, book: null, retry: [], bonus: 0 };
+  return { results, got, phoneMax, max, teacher, xp: weekXp(all, now), streak, trophies, book: null, retry: [], bonus: 0 };
 }
 
 // ---- His levels checked at home: the book, photos, the teacher's answers (4 Nov 2026) ----

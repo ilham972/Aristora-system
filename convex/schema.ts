@@ -37,6 +37,7 @@ export const tab = v.union(v.literal("correction"), v.literal("theory"), v.liter
 /**
  * Extra permissions beyond the tabs. Feedback (3 Nov 2026, his answer): reads what students send from the family app.
  * Consultation (5 Nov 2026, his ask): the top bar's Consultation page: call any student here to herself, one to one.
+ * Community (7 Nov 2026, his answer): posts in the students' Us tab (every teacher cheers and gives shout-outs).
  */
 export const extra = v.union(
   v.literal("students"),
@@ -45,6 +46,24 @@ export const extra = v.union(
   v.literal("feedback"),
   v.literal("photos"),
   v.literal("consult"),
+  v.literal("community"),
+);
+/**
+ * One line of the Us tab (7 Nov 2026): the owl's own (a birthday, a Stage finished, a first level at home, back in
+ * class, days in a row, the week's most improved and champions, yesterday's count) and the teachers' (a post, a
+ * shout-out). convex/lib/us.ts has the rules.
+ */
+export const usKind = v.union(
+  v.literal("bday"),
+  v.literal("stage"),
+  v.literal("home1"),
+  v.literal("back"),
+  v.literal("flame"),
+  v.literal("up"),
+  v.literal("champs"),
+  v.literal("count"),
+  v.literal("post"),
+  v.literal("shout"),
 );
 /** What a family app feedback is about (3 Nov 2026). */
 export const feedbackTopic = v.union(
@@ -789,7 +808,53 @@ export default defineSchema({
    * An alert waiting to go to a child's phones: a teacher's answers come in bursts (a whole level marked in a minute),
    * so they gather here for `PUSH_WAIT_MS` and go as one notification (push.send). `n` = how many, `text` = the last.
    */
-  pushOut: defineTable({ studentId: v.id("students"), n: v.number(), text: v.string(), at: v.number() }).index("by_student", ["studentId"]),
+  pushOut: defineTable({
+    studentId: v.id("students"),
+    n: v.number(),
+    text: v.string(),
+    at: v.number(),
+    /** Where a tap opens the app (7 Nov 2026: "#us" for a teacher's shout-out or 👏); missing = the bell. */
+    url: v.optional(v.string()),
+  }).index("by_student", ["studentId"]),
+
+  /**
+   * Us, the students' community (7 Nov 2026, his voice notes: "the app is not feel like a community ... students want to
+   * use this app continuously"): one line of the feed. The owl writes most of them by itself (convex/lib/us.ts); the
+   * teachers write posts (the Community tick) and shout-outs (any teacher). Students never type: one tap (👏 🎂 👋 🙏)
+   * adds to `c` (one per student: usClaps), `cn` keeps the first three names, `tc` the teachers who cheered (their names
+   * show on the phones). `sid` / `n` / `g` / `pic` = the student it is about (as the race shows him: his photo only when
+   * OK'd and shown); `ppl` = several (the champions, the most improved); `x` / `t` = a number and words (the Stage's
+   * number and Tamil name, the days in a row, yesterday's count, a post, a shout-out's reason); `to` = a post to one
+   * grade only; `by` / `byN` = the teacher. `demo` = a demo or test student's line: only those phones see it. Kept 30
+   * days (`us.daily`).
+   */
+  usMoments: defineTable({
+    k: usKind,
+    sid: v.optional(v.id("students")),
+    n: v.optional(v.string()),
+    g: v.optional(v.number()),
+    pic: v.optional(v.string()),
+    ppl: v.optional(v.array(v.object({ sid: v.id("students"), n: v.string(), g: v.optional(v.number()), pic: v.optional(v.string()), a: v.optional(v.boolean()) }))),
+    unit: v.optional(v.id("units")),
+    x: v.optional(v.number()),
+    t: v.optional(v.string()),
+    to: v.optional(v.number()),
+    by: v.optional(v.id("users")),
+    byN: v.optional(v.string()),
+    at: v.number(),
+    day: v.number(),
+    demo: v.boolean(),
+    c: v.number(),
+    cn: v.optional(v.array(v.string())),
+    tc: v.optional(v.array(v.object({ id: v.id("users"), n: v.string() }))),
+    pin: v.optional(v.boolean()),
+  })
+    .index("by_feed", ["demo", "at"])
+    .index("by_sid", ["sid", "k"])
+    .index("by_kind", ["k", "day"])
+    .index("by_pin", ["pin", "at"]),
+  /** A student's one tap on a line of Us (one per student and line). */
+  usClaps: defineTable({ mid: v.id("usMoments"), sid: v.id("students"), at: v.number() }).index("by_mid", ["mid", "sid"]),
 
   /**
    * The simulation (1 Nov 2026, his voice note): made-up students (test students, the class only phones showing the

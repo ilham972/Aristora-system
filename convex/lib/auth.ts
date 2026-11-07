@@ -10,12 +10,12 @@ import { fail, rememberActor } from "./backend";
 import { sha256Hex } from "./sha256";
 
 export type Tab = "correction" | "theory" | "evaluation" | "manager";
-export type Extra = "students" | "books" | "reports" | "feedback" | "photos" | "consult";
+export type Extra = "students" | "books" | "reports" | "feedback" | "photos" | "consult" | "community";
 /** "any" = any signed-in person; "owner" = the owner only. */
 export type Perm = Tab | Extra | "owner" | "any";
 
 export const TABS: Tab[] = ["correction", "theory", "evaluation", "manager"];
-export const EXTRAS: Extra[] = ["students", "books", "reports", "feedback", "photos", "consult"];
+export const EXTRAS: Extra[] = ["students", "books", "reports", "feedback", "photos", "consult", "community"];
 
 /** The exact words every signed-out request fails with (the phones look for them). */
 export const SIGNED_OUT = "This phone is signed out. Sign in again.";
@@ -38,6 +38,7 @@ const PERM_WORDS: Record<Exclude<Perm, "any">, string> = {
   feedback: "Feedback (what students send from the family app)",
   photos: "Photos (marking what students send from home)",
   consult: "Consultation (calling a student to you, one to one)",
+  community: "Community (posts in the students' Us tab)",
   owner: "the owner",
 };
 

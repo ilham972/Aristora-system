@@ -141,7 +141,7 @@ export const take = internalMutation({
     }
     if (!subs.length) return null;
     const first = s.name.split(" ")[0] || s.name;
-    return { payload: JSON.stringify(pushPayload(first, out.n, out.text)), subs, pub: keys.pub, priv: keys.priv };
+    return { payload: JSON.stringify(pushPayload(first, out.n, out.text, out.url)), subs, pub: keys.pub, priv: keys.priv };
   },
 });
 

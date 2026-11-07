@@ -8,6 +8,7 @@ import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { isBirthday } from "./day";
 import { xpItems, xpRow } from "./family";
 import { addNums, numsAt, numsOf, sameNums, type RaceRow, type XpNums } from "./race";
+import { noteToday } from "./us";
 
 /** The XP rules the rows were built with: a change of rules (what counts as XP) adds 1, and every row is built again. */
 export const RACE_V = 1;
@@ -83,6 +84,11 @@ async function writePart(ctx: MutationCtx, pid: Id<"progress">, now: number, doc
 async function writeRow(ctx: MutationCtx, sid: Id<"students">, now: number, copy: boolean): Promise<void> {
   const row = await raceRowOf(ctx, sid);
   const nums = addNums((await partsOf(ctx, sid)).map(numsOfRow), now);
+  // Us (7 Nov 2026): his first XP of the day (or a level taken back to none) moves the count of who learned today.
+  const was = row ? numsAt(numsOfRow(row), now) : null;
+  const today = async (real: boolean) => {
+    if (real) await noteToday(ctx, was ? was.xp - was.xpy : 0, nums.xp - nums.xpy, now);
+  };
   if (!row || copy) {
     const s = await ctx.db.get(sid);
     if (!s) {
@@ -90,11 +96,13 @@ async function writeRow(ctx: MutationCtx, sid: Id<"students">, now: number, copy
       return;
     }
     const who = identityOf(s);
+    await today(!who.demo && !who.gone);
     if (!row) await ctx.db.insert("raceRows", { sid, ...who, ...nums, v: RACE_V });
     // A field he no longer has (no grade, his photo removed or hidden, his birthday cleared) goes from the copy too.
     else await ctx.db.patch(row._id, { g: undefined, pic: undefined, bd: undefined, ...who, ...nums });
     return;
   }
+  await today(!row.demo && !row.gone);
   if (!sameNums(numsOfRow(row), nums)) await ctx.db.patch(row._id, nums);
 }
 
