@@ -191,7 +191,7 @@ describe("posts and doubts on Us", () => {
     expect(out.find((o) => o.studentId === id.Mira)!.text).toMatch(/கழி/);
   });
 
-  test("doubts: his choice of teachers, seniors or both; nameless to students, named to teachers; replies; a senior's name after a ✓", async () => {
+  test("doubts: his choice of teachers, seniors or both; nameless to students, named to teachers; replies named (8 Nov 2026); a ✓ thanks him", async () => {
     await alertsOn("Asha", "Hana");
     const p = await photo();
     const d = await ph.Asha.mutation(api.us.doubt, { text: "முக்கோணத்தின் பரப்பளவு எப்படி?", ph: [p], aud: "s" });
@@ -207,15 +207,15 @@ describe("posts and doubts on Us", () => {
     expect((await R().query(api.us.board, {})).items.find((x) => x.id === d)).toMatchObject({ n: "Asha R", g: 7, aud: "s" });
     await expect(ph.Hana.mutation(api.us.clap, { id: d })).rejects.toThrow(/Open it/);
     await expect(ph.Lina.mutation(api.us.reply, { id: d, text: "?" })).rejects.toThrow(/isn't here/);
-    // A senior's reply: nameless to students (his grade shows), the student who asked is told.
+    // A senior's reply: with his name since 8 Nov 2026 (his "who appreciating, who correcting"), the student who asked
+    // is told; she stays "the one who asked".
     await ph.Hana.mutation(api.us.reply, { id: d, text: "அடி × உயரம் ÷ 2" });
     let a: UsThread = await ph.Asha.query(api.us.thread, { id: d });
     expect(a.list).toHaveLength(1);
-    expect(a.list[0]).toMatchObject({ g: 8, t: "அடி × உயரம் ÷ 2" });
-    expect(a.list[0].n).toBeUndefined();
+    expect(a.list[0]).toMatchObject({ g: 8, t: "அடி × உயரம் ÷ 2", n: "Hana K", sid: id.Hana });
     expect(a.can).toMatchObject({ reply: true, report: false });
     const k: UsThread = await ph.Kumar.query(api.us.thread, { id: d });
-    expect(k.list[0].n).toBeUndefined();
+    expect(k.list[0].n).toBe("Hana K");
     expect(k.can).toMatchObject({ reply: true, report: true });
     expect((await pushes()).find((o) => o.studentId === id.Asha)).toMatchObject({ url: `/f/#us=${d}` });
     // A teacher sees the names; her ✓ shows his name to everyone, and tells him; her own reply; no ✗ for replies.

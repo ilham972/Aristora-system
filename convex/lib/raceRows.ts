@@ -8,7 +8,7 @@ import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { isBirthday } from "./day";
 import { xpItems, xpRow } from "./family";
 import { addNums, numsAt, numsOf, sameNums, type RaceRow, type XpNums } from "./race";
-import { noteToday } from "./us";
+import { noteToday } from "./usToday";
 
 /** The XP rules the rows were built with: a change of rules (what counts as XP) adds 1, and every row is built again. */
 export const RACE_V = 1;
@@ -47,9 +47,9 @@ export function partOf(p: Doc<"progress">, now: number): XpNums {
   return numsOf(xpRow(p) ? xpItems([p]) : [], now);
 }
 
-const numsOfRow = (x: XpNums): XpNums => ({ wk: x.wk, d: x.d, xp: x.xp, xpy: x.xpy, prev: x.prev, tot: x.tot });
+export const numsOfRow = (x: XpNums): XpNums => ({ wk: x.wk, d: x.d, xp: x.xp, xpy: x.xpy, prev: x.prev, tot: x.tot });
 
-async function raceRowOf(ctx: QueryCtx, sid: Id<"students">) {
+export async function raceRowOf(ctx: QueryCtx, sid: Id<"students">) {
   return await ctx.db
     .query("raceRows")
     .withIndex("by_sid", (q) => q.eq("sid", sid))
@@ -83,11 +83,17 @@ async function writePart(ctx: MutationCtx, pid: Id<"progress">, now: number, doc
 /** His race row from his parts (and his student row's copy when asked, or when the row is new). */
 async function writeRow(ctx: MutationCtx, sid: Id<"students">, now: number, copy: boolean): Promise<void> {
   const row = await raceRowOf(ctx, sid);
-  const nums = addNums((await partsOf(ctx, sid)).map(numsOfRow), now);
-  // Us (7 Nov 2026): his first XP of the day (or a level taken back to none) moves the count of who learned today.
+  const parts = (await partsOf(ctx, sid)).map(numsOfRow);
+  // Levels and class work; then with Us's part (8 Nov 2026: lib/usXp.ts keeps it on the row itself).
+  const learned = addNums(parts, now);
+  const nums = row?.us ? addNums([...parts, numsOfRow(row.us)], now) : learned;
+  // Us (7 Nov 2026): his first XP of the day (or a level taken back to none) moves the count of who learned today:
+  // Levels and class work only (a comment isn't learning a Level).
   const was = row ? numsAt(numsOfRow(row), now) : null;
+  const wasUs = row?.us ? numsAt(numsOfRow(row.us), now) : null;
+  const wasToday = was ? was.xp - was.xpy - (wasUs ? wasUs.xp - wasUs.xpy : 0) : 0;
   const today = async (real: boolean) => {
-    if (real) await noteToday(ctx, was ? was.xp - was.xpy : 0, nums.xp - nums.xpy, now);
+    if (real) await noteToday(ctx, wasToday, learned.xp - learned.xpy, now);
   };
   if (!row || copy) {
     const s = await ctx.db.get(sid);
@@ -164,6 +170,8 @@ export async function raceReady(ctx: QueryCtx): Promise<boolean> {
 /** A race row as the phone gets it, at `now`. */
 export function raceRowOut(r: Doc<"raceRows">, now: number): RaceRow {
   const x = numsAt(numsOfRow(r), now);
+  // Us's part (8 Nov 2026): in the race, never in the grade cup (cupOf takes it out).
+  const u = r.us ? numsAt(numsOfRow(r.us), now) : null;
   return {
     id: r.sid,
     n: r.n,
@@ -171,6 +179,8 @@ export function raceRowOut(r: Doc<"raceRows">, now: number): RaceRow {
     xp: x.xp,
     y: x.xpy,
     p: x.prev,
+    ...(u?.xp ? { u: u.xp } : {}),
+    ...(u?.prev ? { up: u.prev } : {}),
     ...(r.pic ? { pic: r.pic } : {}),
     ...(isBirthday(r.bd, now) ? { bd: true as const } : {}),
     ...(r.w ? { w: r.w } : {}),

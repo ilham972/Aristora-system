@@ -74,6 +74,11 @@ const STAFF_CHANGES: Record<string, string> = {
   "us:unflag": "us:unflag",
   "us:reply": "us:treply",
   "family:photoUrl": "us:photoUrl",
+  // The talk (8 Nov 2026): her comment, her 👏 on a message, her correction, a 💡 post shown (or not).
+  "us:comment": "us:tcomment",
+  "us:like": "us:tlike",
+  "us:fix": "us:fix",
+  "us:approve": "us:approve",
 };
 /** The class app's Us tab with this teacher's sign-in. */
 export function staffWith(t: string): void {

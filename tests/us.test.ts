@@ -216,7 +216,8 @@ describe("Us on the server", () => {
     await expect(H.mutation(api.us.clap, { id })).rejects.toThrow(/for you/);
     f = await H.query(api.us.feed, {});
     expect(f.items[0]).toMatchObject({ c: 1, cn: ["Bilal M"], mine: true });
-    // A teacher's 👏: her name on the line, and his phones that turned alerts on are told (a tap opens Us).
+    // A teacher's 👏: her name on the line, and his phones that turned alerts on are told (a tap opens that line, 8 Nov
+    // 2026: every line opens, with who cheered).
     await raw.run(async (ctx) => {
       const device = (await ctx.db.query("familyDevices").collect()).find((d) => d.studentId === hana)!;
       await ctx.db.insert("pushSubs", { studentId: hana, deviceId: device._id, endpoint: "https://push.example/hana", p256dh: "k", auth: "a", at: Date.now() });
@@ -227,7 +228,13 @@ describe("Us on the server", () => {
     expect((await H.query(api.us.feed, {})).items[0].tc).toEqual(["Raj"]);
     expect((await asPhone(raw, CORRECTOR).query(api.us.board, {})).items[0].tme).toBe(true);
     const out = await raw.run(async (ctx) => await ctx.db.query("pushOut").collect());
-    expect(out.map((o) => [o.text.includes("Raj"), o.url])).toEqual([[true, "/f/#us"]]);
+    expect(out.map((o) => [o.text.includes("Raj"), o.url])).toEqual([[true, `/f/#us=${id}`]]);
+    // His bell has both: Bilal's 👏 (no phone alert for a classmate's tap) and Raj's.
+    const bell = (await H.query(api.family.me, {})).inbox!;
+    expect(bell.map((b) => [b.k, b.n, !!b.tch])).toEqual([
+      ["tclap", "Raj", true],
+      ["clap", "Bilal M", false],
+    ]);
     // The count line is answered with a Level, not a tap.
     await raw.run(async (ctx) => {
       await ctx.db.insert("usMoments", { k: "count", x: 4, at: Date.now(), day: 0, demo: false, c: 0 });

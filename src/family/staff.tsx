@@ -28,7 +28,7 @@ import type { Mood, SheetRender } from "./ui";
  * the bundler split the students' first load into more files, ~1 KB more for every phone; tests/usStaff.test.ts checks).
  */
 export type Kit = Pick<typeof import("./board"), "BoardTab" | "keptBoard"> &
-  Pick<typeof import("./later"), "useParts"> &
+  Pick<typeof import("./later"), "useParts" | "useUsParts"> &
   Pick<typeof import("./net"), "keep" | "mutation" | "query" | "staffWith"> &
   Pick<typeof import("./sound"), "armSound" | "buzz" | "sound"> &
   Pick<typeof import("./ui"), "Avatar" | "problemWords" | "setSheetHost" | "Sheet" | "toast" | "Toast" | "Waiting">;
@@ -79,7 +79,7 @@ const GUIDE: { mood: Mood; h: string; p: string }[] = [
   {
     mood: "cheer",
     h: "நீங்கள் செய்வது: 2 நிமிடம்",
-    p: "👏 இன்றைய வரிகளுக்கு, 🌟 ஒரு நாளைக்கு 2–3 shout-outs, ✍️ ஒரு கேள்வி அல்லது poster. ⚑ To do: மாணவர்களின் விடைகளுக்கு ✓ / ✗, சந்தேகங்களுக்குப் பதில்.",
+    p: "👏 இன்றைய வரிகளுக்கு, 🌟 ஒரு நாளைக்கு 2–3 shout-outs, ✍️ ஒரு கேள்வி அல்லது poster. ⚑ To do: விடைகளுக்கு ✓ / ✗, சந்தேகங்களுக்குப் பதில், 💡 பதிவுகளுக்கு ✓. ஒவ்வொரு வரியையும் திறந்து எழுதுங்கள்; தவறான விளக்கத்துக்கு ✎ திருத்தம்.",
   },
   {
     mood: "love",
@@ -121,6 +121,7 @@ export function startStaff(el: HTMLElement, kit: Kit): void {
 
 function StaffApp() {
   const parts = K.useParts();
+  const usp = K.useUsParts();
   const [tab, setTab] = useState<"us" | "race">(() => (K.keep<string>("tab") === "race" ? "race" : "us"));
   const [b, setB] = useState<UsBoard | null>(() => K.keep<UsBoard>("usb"));
   const [err, setErr] = useState<string | null>(null);
@@ -260,8 +261,8 @@ function StaffApp() {
 
   let body: ComponentChildren;
   if (thread && !mate) {
-    body = parts ? (
-      <parts.ThreadScreen key={thread} id={thread} staff onBack={closeMateBack} onMate={(id) => openMate(id, null)} />
+    body = usp ? (
+      <usp.ThreadScreen key={thread} id={thread} staff me={b?.me} onBack={closeMateBack} onMate={(id) => openMate(id, null)} />
     ) : (
       <K.Waiting />
     );
@@ -301,8 +302,8 @@ function StaffApp() {
       />
     );
   } else {
-    body = parts ? (
-      <parts.UsTab
+    body = usp ? (
+      <usp.UsTab
         top={top}
         me={null}
         onPlay={() => {}}
@@ -454,7 +455,7 @@ function ShoutSheet(props: { pre: { id: string; name: string } | null; shouted: 
  * screenshot), starters for the words.
  */
 function PostSheet(props: { onClose: () => void; onDone: () => void }) {
-  const parts = K.useParts();
+  const usp = K.useUsParts();
   const [gs, setGs] = useState<number[]>([]);
   const [qn, setQn] = useState(false);
   const [pin, setPin] = useState(false);
@@ -508,8 +509,8 @@ function PostSheet(props: { onClose: () => void; onDone: () => void }) {
           ))}
         </div>
       )}
-      {parts ? (
-        <parts.Composer key={pre} init={pre} ph={qn ? "கேள்வி (அல்லது படம் மட்டும்)…" : "…"} go="✍️ Post" max={3} crop="மஞ்சள் புள்ளிகளை இழு: தேவையான பகுதி மட்டும்." onSend={send} />
+      {usp ? (
+        <usp.Composer key={pre} init={pre} ph={qn ? "கேள்வி (அல்லது படம் மட்டும்)…" : "…"} go="✍️ Post" max={3} crop="மஞ்சள் புள்ளிகளை இழு: தேவையான பகுதி மட்டும்." onSend={send} />
       ) : (
         <K.Waiting />
       )}

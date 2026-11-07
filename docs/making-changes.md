@@ -32,6 +32,19 @@ npx convex codegen --system-udfs --typecheck disable
    `git show origin/ci-<topic>:ci-report/outcome.txt` (the API says "success" for every step; outcome.txt is the
    truth) and the logs. Green = push main itself (never the ci options commit). Branches stay on GitHub (this proxy
    can't delete them): force-push over yours.
+   **The unit tests and typecheck can still run here, from source** (8 Nov 2026; minutes instead of a CI round): git
+   can clone public repos even when npm can't. `git clone --depth 1` `get-convex/convex-js`, `get-convex/convex-test`,
+   `preactjs/preact` (`--branch 10.29.8`) and `101arrowz/fflate` into a scratch folder. **Typecheck**: a scratch
+   tsconfig like `convex/tsconfig.json` (or `tsconfig.json` for `src/family/`) whose `paths` map `convex/server`,
+   `convex/values`, `convex/browser` to `convex-js/src/*/index.ts` and `preact`, `preact/hooks`, `preact/jsx-runtime` to
+   Preact's own `.d.ts`, run with the global `tsc` (ignore `web-push`, the CSS imports and convex-js's own
+   `SharedArrayBuffer` complaints; put an error in a file once to see it is checked). **Unit tests**: bundle one test
+   file with `/opt/npm-tools` esbuild (`platform: "node"`), aliasing `vitest` to a small stand-in (describe / test /
+   expect / vi with `setSystemTime`), `convex-test` to its `index.ts`, the convex and Preact paths above, `fflate` to
+   its `src/index.ts` and `web-push` to a stub; replace `import.meta.glob("../convex/**/*.ts")` with a generated map of
+   `() => import(...)` (keys `../convex/<file>`; `_generated/api.js` and `server.js` included) and load `?raw` imports
+   as text. A few tests use matchers the stand-in lacks (`expect.closeTo`): run the same file on a clean worktree of
+   main (`git worktree add`) before blaming a change. The run-throughs still need the GitHub check.
 4. **For UI changes, look at the screenshots** at 390, 360 and 320 px, cropped with PIL first. No page scrolls
    sideways (the tests check `scrollWidth`); rows that scroll inside themselves are fine. Also look at one screen
    you did NOT change (Settings) when you add CSS: a class name clash shows there.
@@ -482,3 +495,23 @@ EOF
 - **Budgets after posts and doubts** (his yes, 7 Nov 2026: later parts 36 → 42): first load 63.1 of 66, later parts
   41.0 of 42 (`usPost.tsx` and its style in `profile.css`), the teachers' Us 5.0 of 8. Old lines are deleted by
   `us.sweep` (scheduled by `us.daily`): unit tests that check the 30 days call it themselves.
+- **Us is its own file since the talk** (8 Nov 2026): `src/family/usParts.ts` (the tab, a line opened, the sheets) with
+  its style as a string (`usStyle.ts`, attached once as it loads: a `<style>`, which the version check ignores), out of
+  the later parts, with its own budget (`FAMILY_US_KB` 20 in `scripts/build.mjs`: what only `usParts.ts` reaches; not
+  prefetched, `useUsParts` fetches it once `me.us`). Import Us only through `later.ts` `loadUs` / `useUsParts` (the
+  teachers' Us: `K.useUsParts`). The bell's sheet moved to the later parts (`bellSheet.tsx`; Tamil words compress badly:
+  they cost the first load 0.7 KB). Budgets after it (scratch build, matches CI to 0.2 KB): first load 62.9 of 66, later
+  parts 34.6 of 42, Us 16.4 of 20, the teachers' Us 5.1 of 8.
+- **The talk: who sees what, again only on the server** (8 Nov 2026). A comment is a `usAnswers` row with `k: "c"`
+  (`isTalk`): every count, list and rule that read answers and replies must keep them apart (`an` = answers or
+  replies, `cm` = comments; `mineOf` finds his answer, never a comment). A question's talk is for those who answered
+  (`talkOpen`): the feed's faces (`lp`) too, else the faces say who answered. `us.thread` sends no message the student
+  may not see and no `sid` unless the name shows. `tests/usTalk.test.ts` checks a classmate's JSON before his answer.
+- **XP from Us lives in the race row** (`raceRows.us`, `lib/usXp.ts`): never a progress row, so `xpItems` / `levelDays`
+  never see it (the flame stays Levels), and `RACE_V` didn't change. A new thing that gives XP on Us calls `giveXp` with
+  its own `ref` and kind, and whatever removes it calls `takeXp` (a teacher's removal: before `dropAnswer` /
+  `dropMoment`, which never take XP: `lib/usTalk.ts` must not import the race rows, `lib/ladder.ts` → `lib/backend.ts`
+  → `lib/usTalk.ts` would close a cycle). Anything showing a student's XP adds `usNow` (family.me, a check's reveal,
+  `mateOf`), and the grade cup takes `RaceRow.u` / `up` out.
+- **The one-tap words are in two places** (`QUICK` in `convex/lib/us.ts`, for "no XP", and its copy in `usPost.tsx`):
+  `tests/usTalk.test.ts` reads the phone's file and fails if they differ.

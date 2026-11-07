@@ -23,11 +23,11 @@ import { BoardTab, keptBoard } from "./board";
 import type { CertData } from "./cert";
 import { FeedbackSheet } from "./feedback";
 import { HomeTab } from "./home";
-import { BellSheet, pushOff } from "./bell";
+import { pushOff } from "./bell";
 import { BookScreen } from "./book";
 import { LearnTab, StageScreen } from "./map";
 import { Kids } from "./kids";
-import { loadParts, pctOf, useParts } from "./later";
+import { loadParts, pctOf, useParts, useUsParts } from "./later";
 import { picOf, usePics } from "./pics";
 import {
   accounts,
@@ -126,6 +126,8 @@ export function App() {
   // Me's profile parts: fetched right after the first screen (later.ts), so they are here (and kept) when he looks.
   const parts = useParts();
   const lv = useLevel(); // the level screen, right after the first screen (level.ts)
+  // Us's own file (8 Nov 2026, usParts.ts): fetched once the owner opened Us (or a phone alert opens a line of it).
+  const usp = useUsParts(!!me?.us || tab === "us" || screen.k === "post");
   // A page left open keeps its old code (5 Nov 2026): back on the screen after half an hour, a newer version online
   // and nothing on its way or typed, the app loads again by itself (src/appVersion.ts; his drafts and place are kept).
   useEffect(
@@ -170,6 +172,8 @@ export function App() {
         removeAccount(twin.id);
         switchTo(a.id);
       }
+      // Something new in the bell since he last looked (8 Nov 2026): a soft sound and the bell jumps (TopRow).
+      if (before && (m.inboxNew ?? 0) > (before.inboxNew ?? 0)) sound("tweet");
       // A Stage that opened since he last looked: its moment (the map shows it too).
       const opened = before ? m.worlds.filter((w) => w.open && w.book && !before.worlds.find((x) => x.unitId === w.unitId)?.open) : [];
       if (opened.length) {
@@ -272,10 +276,36 @@ export function App() {
   // The bell (7 Nov 2026): reads the newest "me" each time it draws; a tap on a line opens that level's book.
   const meRef = useRef(me);
   meRef.current = me;
-  const openBell = () =>
-    openSheet({
-      render: (close) => <BellSheet items={meRef.current?.bell ?? []} onClose={close} onOpen={(unitId, n) => fromSheet({ k: "book", unitId, n })} />,
-    });
+  const openBell = () => {
+    // Us's lines in it are read now (8 Nov 2026): the red count goes (the server is told too).
+    const m0 = meRef.current;
+    if (m0?.inboxNew) {
+      const read = { ...m0, inboxNew: 0 };
+      keep("me", read);
+      setMe(read);
+      void mutation("us:seen").catch(() => {});
+    }
+    // The sheet is one of the parts right after the first screen (bellSheet.tsx): here by the time he taps.
+    void loadParts().then(
+      (p) =>
+        openSheet({
+          render: (close) => (
+            <p.BellSheet
+              items={meRef.current?.bell ?? []}
+              us={m0?.inbox ?? []}
+              onClose={close}
+              onOpen={(unitId, n) => fromSheet({ k: "book", unitId, n })}
+              onUs={(id) => {
+                setTab("us");
+                keep("tab", "us");
+                fromSheet({ k: "post", id });
+              }}
+            />
+          ),
+        }),
+      (e) => toast(problemWords(e), true),
+    );
+  };
   // A tap on a phone alert opens the app on the bell (its address ends in #bell, or the open app is told); a teacher's
   // shout-out or 👏 opens Us (#us, 7 Nov 2026); an answer marked, a reply, a new question opens that post (#us=id).
   useEffect(() => {
@@ -432,10 +462,11 @@ export function App() {
       <Waiting />
     );
   } else if (screen.k === "post") {
-    body = parts ? (
-      <parts.ThreadScreen
+    body = usp ? (
+      <usp.ThreadScreen
         key={screen.id}
         id={screen.id}
+        me={me?.name}
         onBack={up}
         onMate={(id) => {
           window.scrollTo(0, 0);
@@ -554,8 +585,8 @@ export function App() {
           ) : tab === "learn" ? (
             <LearnTab top={top} me={me} onStage={(unitId) => go({ k: "stage", unitId })} onPlay={playNow} />
           ) : tab === "us" ? (
-            parts ? (
-              <parts.UsTab
+            usp ? (
+              <usp.UsTab
                 top={top}
                 me={me}
                 onPlay={playNow}
@@ -660,7 +691,8 @@ function TopRow(props: { me: FamilyMe | null; acc: Account | null; offline: bool
   const xpGrew = useGrew(`${id}.xp`, me?.total ?? 0);
   usePics([me?.photo?.key]);
   const fireGrew = useGrew(`${id}.fire`, me?.streak.days ?? 0);
-  const bellN = (me?.bell ?? []).filter((b) => b.fresh).length;
+  const bellN = (me?.bell ?? []).filter((b) => b.fresh).length + (me?.inboxNew ?? 0);
+  const bellGrew = useGrew(`${id}.bell`, bellN);
   return (
     <div class="f-toprow">
       <button type="button" class="f-who" aria-label={`${name}: the children on this phone`} onClick={props.onKids}>
@@ -685,7 +717,7 @@ function TopRow(props: { me: FamilyMe | null; acc: Account | null; offline: bool
         {(me?.total ?? 0).toLocaleString("en")}
       </button>
       {/* The bell (7 Nov 2026): his teachers' answers and messages; the red count = new ones. */}
-      <button type="button" class="f-fbb f-bellb" aria-label={`Alerts${bellN ? `: ${bellN} new` : ""}`} onClick={props.onBell}>
+      <button type="button" class={`f-fbb f-bellb${bellGrew ? " grew" : ""}`} aria-label={`Alerts${bellN ? `: ${bellN} new` : ""}`} onClick={props.onBell}>
         <Icon name="bell" size={20} />
         {bellN > 0 && <i class="f-bell-n">{bellN > 9 ? "9+" : bellN}</i>}
       </button>

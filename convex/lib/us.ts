@@ -23,8 +23,21 @@
 //   nameless to students until a teacher marks it right (the same rule as answers). Two reports hide a doubt or a reply
 //   from students until a teacher keeps it or removes it.
 //
+// 8 Nov 2026, his voice note: "if I go to inside any thread, that feel like boring ... other students don't get more
+// context, who appreciating, who correcting ... student can chat inside each thread"; his answers: comments "everyone,
+// like the hall"; XP for what a teacher ticks and for comments ("not for thumbs or clap"); students' 💡 posts after a
+// teacher's ✓. So, since then:
+// - Every line opens into a thread: who cheered (faces), and the talk: comments (usAnswers k "c"), a reply under a
+//   comment (`re`), 👏 on a message, a teacher's ✓ with her name or her correction (`fix`) that everyone reads.
+// - A question's talk opens only once he sent his answer (it would give the answer away); a doubt's talk is its
+//   replies. Names: everyone who writes is named (his "who correcting"), except the student who asked a doubt, and an
+//   answer to a teacher's question until she marks it right (his rule of 7 Nov stays).
+// - A 💡 post (k "learn"): his words and a photo of his working; only he and the teachers see it until a teacher's ✓.
+// - XP (lib/usXp.ts), the bell's Us lines and alerts (lib/usTalk.ts), no phone numbers or links (`unsafeWords`).
+//
 // This file: the rules (pure) and the writes the other mutations call. It imports nothing that imports it back
-// (lib/raceRows.ts calls `noteToday`).
+// (lib/raceRows.ts calls `noteToday`, now in lib/usToday.ts), nor the race rows (lib/usXp.ts) or alerts (lib/usTalk.ts):
+// the class app's pages import its constants.
 
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
@@ -61,6 +74,70 @@ export const REPLIES_A_DAY = 20;
 export const REPORT_HIDE = 2;
 /** Deletes one sweep of old lines may do (their answers and photos too); more are left for the next minute. */
 export const SWEEP_MAX = 2000;
+/** A comment in the talk (8 Nov 2026): this many letters at most (a teacher's may be a post's length). */
+export const TALK_MAX = 200;
+/** A student's comments in a day (all threads together): a flood stops here. */
+export const COMMENTS_A_DAY = 40;
+/** A student's 💡 posts in a day. */
+export const LEARN_A_DAY = 2;
+/** Faces of the last people who wrote in a thread, on its card. */
+export const LAST_PEOPLE = 3;
+
+/**
+ * One-tap words under a line (8 Nov 2026): what a moment asks for, so an 11-year-old comments in one tap. They are 👏
+ * with words: never XP (his rule: "not for thumbs or clap"). The phone keeps its own copy (us.tsx QUICK): a test pins
+ * them together.
+ */
+export const QUICK = {
+  bday: ["🎂 பிறந்தநாள் வாழ்த்துகள்!", "🎉 இனிய நாள்!", "🥳 சூப்பர் நாளாகட்டும்!"],
+  win: ["🎉 வாழ்த்துகள்!", "💪 சூப்பர்!", "🔥 தொடர்ந்து செய்!", "👏 அருமை!"],
+  hi: ["👋 வருக!", "🎉 வாழ்த்துகள்!", "💪 சேர்ந்து கற்போம்!"],
+  learn: ["💡 நல்ல குறிப்பு!", "🙏 நன்றி!", "👏 அருமை!"],
+  post: ["🙏 நன்றி!", "👍 சரி!", "✅ செய்கிறேன்!"],
+  talk: ["🙏 நன்றி!", "💡 புரிந்தது!", "🤔 எப்படி?"],
+} as const;
+const QUICK_ALL = new Set<string>(Object.values(QUICK).flat());
+/** Which one-tap words a line gets. */
+export function quickOf(m: Pick<Doc<"usMoments">, "k" | "qn">): keyof typeof QUICK {
+  if (m.k === "bday") return "bday";
+  if (m.k === "home1" || m.k === "back") return "hi";
+  if (m.k === "learn") return "learn";
+  if (m.k === "ask" || m.qn) return "talk";
+  if (m.k === "post" || m.k === "count") return "post";
+  return "win";
+}
+/** One-tap words (the same as a button's, emoji and all). */
+export const isQuick = (t: string) => QUICK_ALL.has(t.trim());
+
+/**
+ * Words of his own that earn XP (8 Nov 2026): two words or more (a word = 2 letters, signs or digits at least: Tamil's
+ * vowel signs count), never one-tap words.
+ */
+export function ownWords(t: string): boolean {
+  if (isQuick(t)) return false;
+  const words = t
+    .split(/\s+/)
+    .map((w) => w.replace(/[^\p{L}\p{M}\p{N}]/gu, ""))
+    .filter((w) => w.length >= 2);
+  return words.length >= 2;
+}
+
+/** The same words (spaces, case and emoji aside): a repeat never earns XP twice. */
+export const sameWords = (a: string, b: string) => {
+  const k = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{M}\p{N}]/gu, "");
+  return k(a) === k(b);
+};
+
+/**
+ * No phone numbers or links on Us (8 Nov 2026: children; "boy and girl students can't message each other", so a number
+ * in a comment would go around the rule). Sri Lankan mobile numbers in any spacing, and web addresses.
+ */
+export function unsafeWords(t: string): string | null {
+  const digits = t.replace(/[\s\-().]/g, "");
+  if (/(?:\+?94|0)7\d{8}/.test(digits)) return "phone";
+  if (/https?:\/\/|www\.|\.(com|lk|net|org|io|me)\b|wa\.me|t\.me/i.test(t)) return "link";
+  return null;
+}
 
 /** A shout-out's reasons (a teacher picks one: no free words, so any teacher may give one). */
 export const SHOUT_WHY: Record<string, { en: string; ta: string }> = {
@@ -78,12 +155,13 @@ export const WELCOME_DEFAULT =
   "பிறந்தநாளுக்கு 🎂 வாழ்த்துவோம், புதியவர்களை 👋 வரவேற்போம், முன்னேறியவர்களை 👏 பாராட்டுவோம். " +
   "இங்கே யாரும் தனியாக இல்லை: நாம் ஒன்றாக வளர்வோம்! — ARISTORA";
 
-/** Settings → Community (meta "us.cfg"): the tab on the phones, the welcome, the owl's kinds turned off. */
-export type UsCfg = { open: boolean; welcome: string; off: UsKind[] };
+/**
+ * Settings → Community (meta "us.cfg"): the tab on the phones, the welcome, the owl's kinds turned off, and (8 Nov 2026,
+ * his choice after my warning about farming) whether comments in his own words give XP (`cxp`, on unless turned off).
+ */
+export type UsCfg = { open: boolean; welcome: string; off: UsKind[]; cxp: boolean };
 export const US_CFG = "us.cfg";
-/** Students who learned today (meta "us.today"): kept by the race rows as each one's first XP of the day comes. */
-export const US_TODAY = "us.today";
-type Today = { d: number; n: number; pd?: number; pn?: number };
+export { noteToday, todayCount, US_TODAY } from "./usToday";
 
 async function metaOf(ctx: QueryCtx, key: string) {
   return await ctx.db
@@ -94,40 +172,18 @@ async function metaOf(ctx: QueryCtx, key: string) {
 
 export async function usCfg(ctx: QueryCtx): Promise<UsCfg> {
   const v = (await metaOf(ctx, US_CFG))?.value as Partial<UsCfg> | undefined;
-  return { open: !!v?.open, welcome: typeof v?.welcome === "string" ? v.welcome : WELCOME_DEFAULT, off: Array.isArray(v?.off) ? v.off : [] };
+  return {
+    open: !!v?.open,
+    welcome: typeof v?.welcome === "string" ? v.welcome : WELCOME_DEFAULT,
+    off: Array.isArray(v?.off) ? v.off : [],
+    cxp: v?.cxp !== false,
+  };
 }
 
 export async function setUsCfg(ctx: MutationCtx, cfg: UsCfg): Promise<void> {
   const row = await metaOf(ctx, US_CFG);
   if (row) await ctx.db.patch(row._id, { value: cfg });
   else await ctx.db.insert("meta", { key: US_CFG, value: cfg });
-}
-
-/** How many students learned today (0 when nobody yet), and yesterday (for the owl's morning line). */
-export async function todayCount(ctx: QueryCtx, now: number): Promise<{ today: number; yesterday: number }> {
-  const v = (await metaOf(ctx, US_TODAY))?.value as Today | undefined;
-  const d = slDayNo(now);
-  if (!v) return { today: 0, yesterday: 0 };
-  return { today: v.d === d ? v.n : 0, yesterday: v.d === d - 1 ? v.n : v.pd === d - 1 ? (v.pn ?? 0) : 0 };
-}
-
-/**
- * One student's XP today went from none to some (+1), or back to none (−1: a level taken back): the count of students
- * who learned today follows. Called by the race rows (lib/raceRows.ts writeRow) for real students only.
- */
-export async function noteToday(ctx: MutationCtx, before: number, after: number, now: number): Promise<void> {
-  const flip = before <= 0 && after > 0 ? 1 : before > 0 && after <= 0 ? -1 : 0;
-  if (!flip) return;
-  const d = slDayNo(now);
-  const row = await metaOf(ctx, US_TODAY);
-  const v = row?.value as Today | undefined;
-  let next: Today;
-  if (!v || v.d !== d) {
-    if (flip < 0) return;
-    next = { d, n: 1, ...(v ? { pd: v.d, pn: v.n } : {}) };
-  } else next = { ...v, n: Math.max(0, v.n + flip) };
-  if (row) await ctx.db.patch(row._id, { value: next });
-  else await ctx.db.insert("meta", { key: US_TODAY, value: next });
 }
 
 /** Who a line is about, as the race shows him (his photo only when OK'd and shown). Null = removed. */
@@ -268,75 +324,6 @@ export function mostImproved<T extends { xp: number; prev: number }>(rows: T[], 
     .slice(0, max);
 }
 
-type PhotoDoc = NonNullable<Doc<"usMoments">["ph"]>[number];
-
-/** A photo's two files go at once (a removed photo never stays reachable), with their marks in usFiles. Deletes done. */
-export async function dropPhotos(ctx: MutationCtx, ph: PhotoDoc[] | undefined): Promise<number> {
-  let n = 0;
-  for (const f of (ph ?? []).flatMap((p) => [p.s, p.b])) {
-    try {
-      await ctx.storage.delete(f);
-    } catch {
-      /* already gone */
-    }
-    const r = await ctx.db
-      .query("usFiles")
-      .withIndex("by_f", (q) => q.eq("f", f))
-      .first();
-    if (r) await ctx.db.delete(r._id);
-    n += 2;
-  }
-  return n;
-}
-
-/** An answer or a reply goes (removed, or with its line, or with its student): its photos, and its line's counts. */
-export async function dropAnswer(ctx: MutationCtx, a: Doc<"usAnswers">, withLine = false): Promise<number> {
-  const n = (await dropPhotos(ctx, a.ph)) + 1;
-  await ctx.db.delete(a._id);
-  if (withLine) return n;
-  const m = await ctx.db.get(a.mid);
-  if (m) {
-    const tch = !!a.by;
-    await ctx.db.patch(m._id, {
-      an: Math.max(0, (m.an ?? 1) - 1),
-      ...(m.qn ? { okN: Math.max(0, (m.okN ?? 0) - (a.ok === true ? 1 : 0)), wN: Math.max(0, (m.wN ?? 0) - (a.ok === undefined ? 1 : 0)) } : {}),
-      ...(tch && m.k === "ask" ? { tr: await teacherReplied(ctx, m._id) } : {}),
-    });
-  }
-  return n;
-}
-
-/** Whether a teacher replied on a doubt (after one reply went). */
-async function teacherReplied(ctx: MutationCtx, mid: Id<"usMoments">): Promise<boolean | undefined> {
-  const rows = await ctx.db
-    .query("usAnswers")
-    .withIndex("by_mid", (q) => q.eq("mid", mid))
-    .collect();
-  return rows.some((r) => !!r.by) || undefined;
-}
-
-/** A line and its taps go (a teacher removed it, or it is older than US_KEEP_MS), its answers and photos too. Deletes done. */
-export async function dropMoment(ctx: MutationCtx, id: Id<"usMoments">): Promise<number> {
-  let n = 1;
-  const claps = await ctx.db
-    .query("usClaps")
-    .withIndex("by_mid", (q) => q.eq("mid", id))
-    .collect();
-  for (const c of claps) await ctx.db.delete(c._id);
-  n += claps.length;
-  const answers = await ctx.db
-    .query("usAnswers")
-    .withIndex("by_mid", (q) => q.eq("mid", id))
-    .collect();
-  for (const a of answers) n += await dropAnswer(ctx, a, true);
-  const m = await ctx.db.get(id);
-  if (m) {
-    n += await dropPhotos(ctx, m.ph);
-    await ctx.db.delete(id);
-  }
-  return n;
-}
-
 /** The grades a post is for (null = everyone); `to` = one grade (posts before photos came). */
 export const gradesOf = (m: Pick<Doc<"usMoments">, "gs" | "to">): number[] | null => m.gs ?? (m.to !== undefined ? [m.to] : null);
 
@@ -344,16 +331,26 @@ export const gradesOf = (m: Pick<Doc<"usMoments">, "gs" | "to">): number[] | nul
 export const seniorSees = (m: Pick<Doc<"usMoments">, "aud" | "g" | "rpBy">, g: number | null): boolean =>
   m.aud !== "t" && g !== null && m.g !== undefined && g > m.g && (m.rpBy?.length ?? 0) < REPORT_HIDE;
 
-/** A line on his phone: a doubt his own or a senior's (seniorSees); anything else for everyone or his grade. */
+/**
+ * A line on his phone: a doubt his own or a senior's (seniorSees); a 💡 post his own, or shown by a teacher's ✓ (and not
+ * hidden by reports); anything else for everyone or his grade.
+ */
 export function seesLine(m: Doc<"usMoments">, me: Id<"students">, g: number | null): boolean {
   if (m.k === "ask") return m.sid === me || seniorSees(m, g);
+  if (m.k === "learn") return m.sid === me || (m.ok === true && (m.rpBy?.length ?? 0) < REPORT_HIDE);
   const gs = gradesOf(m);
   return !gs || (g !== null && gs.includes(g));
 }
 
-/** A reply students see: a teacher's, his own, or not hidden by reports. */
+/** A reply or a comment students see: a teacher's, his own, or not hidden by reports. */
 export const replyShows = (a: Pick<Doc<"usAnswers">, "by" | "sid" | "rpBy">, me: Id<"students">): boolean =>
   !!a.by || a.sid === me || (a.rpBy?.length ?? 0) < REPORT_HIDE;
+
+/** A message of a question's talk (k "c"): only for those who sent their answer (the talk would give it away). */
+export const talkOpen = (m: Pick<Doc<"usMoments">, "qn">, answered: boolean): boolean => !m.qn || answered;
+
+/** The talk's own messages (comments), against answers to a question and replies on a doubt. */
+export const isTalk = (a: Pick<Doc<"usAnswers">, "k">) => a.k === "c";
 
 /** One line as a phone gets it (the words are made on the phone, in Tamil; the teachers' page in English). */
 export type UsItem = {
@@ -390,6 +387,19 @@ export type UsItem = {
   wN?: number;
   tr?: boolean;
   rp?: number;
+  /**
+   * The talk (8 Nov 2026): comments (`cm`; a doubt's are its replies, `an`), the last thing written (`la`), the faces of
+   * the last who wrote (`lp`: on a question only once he answered, or to teachers), students who opened it (`vw`).
+   */
+  cm?: number;
+  la?: number;
+  lp?: { n: string; pic?: string; tch?: boolean }[];
+  vw?: number;
+  /** A 💡 post: waiting for a teacher (`w`), shown (`ok`), or not this time (`no`: only he sees it, with her words). */
+  lst?: "w" | "ok" | "no";
+  note?: string;
+  /** Teachers only: messages in it under a report. */
+  rpm?: number;
 };
 
 /** A photo as a phone gets it: the small copy's address, the big one's, the big one's size. */
@@ -424,6 +434,15 @@ export function itemOf(m: Doc<"usMoments">, me?: Id<"students">, staff = false):
     ...(staff && m.qn ? { okN: m.okN ?? 0, wN: m.wN ?? 0 } : {}),
     ...(staff && m.tr ? { tr: true } : {}),
     ...(staff && m.rpBy?.length ? { rp: m.rpBy.length } : {}),
+    ...(m.cm ? { cm: m.cm } : {}),
+    ...(m.la ? { la: m.la } : {}),
+    // A question's talk shows who wrote only to those who answered (lineFor adds them): the faces would say who did.
+    ...(m.lp?.length && (!m.qn || staff) ? { lp: m.lp.map((p) => ({ n: p.n, ...(p.pic ? { pic: p.pic } : {}), ...(p.tch ? { tch: true } : {}) })) } : {}),
+    ...(m.vw && (mine || staff || m.k === "post" || m.k === "learn") ? { vw: m.vw } : {}),
+    ...(m.k === "learn" ? { lst: m.ok === true ? ("ok" as const) : m.ok === false ? ("no" as const) : ("w" as const) } : {}),
+    ...(m.k === "learn" && m.okBy && m.ok !== undefined ? { by: m.okBy } : {}),
+    ...(m.k === "learn" && m.note && (mine || staff) ? { note: m.note } : {}),
+    ...(staff && m.rpm ? { rpm: m.rpm } : {}),
   };
 }
 
@@ -446,24 +465,55 @@ export type UsReply = {
   mine?: boolean;
   /** The one who asked the doubt wrote it. */
   ask?: boolean;
-  /** Teachers: his id (a tap = his profile), reports. */
+  /** Teachers: his id (a tap = his profile), reports. Since 8 Nov 2026 students too, when his name shows. */
   sid?: string;
   rp?: number;
+  /**
+   * The talk (8 Nov 2026): a comment (`c`), the message it answers (`re`), 👏 on it (`lk`, the first names `ln`, his own
+   * `liked`), a teacher's correction everyone reads (`fix`, `fixBy`), the writer's face (`pic`).
+   */
+  c?: boolean;
+  re?: string;
+  lk?: number;
+  ln?: string[];
+  liked?: boolean;
+  fix?: string;
+  fixBy?: string;
+  pic?: string;
 };
 
-/** A post or a doubt opened: the line, the answers or replies he may see, how many he may not, what he may do. */
+/** Who cheered a line (8 Nov 2026: faces in the thread; a tap = his profile). */
+export type UsCheer = { sid: string; n: string; g?: number; pic?: string };
+
+/**
+ * A post or a doubt opened: the line, the answers or replies he may see (`list`), how many he may not (`hidden`), what he
+ * may do. Since 8 Nov 2026 every line opens: its talk (`talk`: comments; a doubt's talk is its replies, in `list`), the
+ * messages of a question's talk he may not see before his answer (`talkHidden`), who cheered (`cheers`, `tc`
+ * teachers).
+ */
 export type UsThread = {
   m: UsItem;
   list: UsReply[];
   hidden: number;
-  can: { answer?: boolean; reply?: boolean; report?: boolean; mark?: boolean };
+  can: { answer?: boolean; reply?: boolean; report?: boolean; mark?: boolean; talk?: boolean; approve?: boolean };
+  talk?: UsReply[];
+  talkHidden?: number;
+  cheers?: UsCheer[];
+  /** His own 👏 on the line (a student's phone). */
+  clapped?: boolean;
 };
 
-/** What of an answer or reply shows (`staff`: everything; else `me` = the student looking). Photos added by the caller. */
+/**
+ * What of an answer, reply or comment shows (`staff`: everything; else `me` = the student looking). Photos added by the
+ * caller. Names (8 Nov 2026, his answers: "who appreciating, who correcting", comments "like the hall"): a comment and a
+ * reply on a doubt carry the writer's name, except the student who asked (never named to students: no shame in asking);
+ * an answer to a teacher's question only once she marked it right (his rule: no copying, no shame).
+ */
 export function replyOf(a: Doc<"usAnswers">, m: Pick<Doc<"usMoments">, "sid" | "k">, me: Id<"students"> | null, staff: boolean): UsReply {
   const mine = !!me && a.sid === me;
   const asker = m.k === "ask" && !!a.sid && a.sid === m.sid;
-  const named = staff || mine || !!a.by || (a.ok === true && !asker);
+  const answer = !isTalk(a) && m.k !== "ask";
+  const named = staff || mine || !!a.by || (asker ? false : answer ? a.ok === true : true);
   const own = staff || mine;
   return {
     id: a._id,
@@ -476,13 +526,26 @@ export function replyOf(a: Doc<"usAnswers">, m: Pick<Doc<"usMoments">, "sid" | "
     ...(a.note && own ? { note: a.note } : {}),
     ...(a.by ? { tch: true } : {}),
     ...(mine ? { mine: true } : {}),
-    ...(m.k === "ask" && a.sid && a.sid === m.sid ? { ask: true } : {}),
-    ...(staff && a.sid ? { sid: a.sid } : {}),
+    ...(asker ? { ask: true } : {}),
+    ...(a.sid && named && !a.by && (staff || !asker) ? { sid: a.sid } : {}),
     ...(staff && a.rpBy?.length ? { rp: a.rpBy.length } : {}),
+    ...(isTalk(a) ? { c: true } : {}),
+    ...(a.re ? { re: a.re } : {}),
+    ...(a.lk ? { lk: a.lk } : {}),
+    ...(a.ln?.length ? { ln: a.ln } : {}),
+    ...(a.fix ? { fix: a.fix, ...(a.fixBy ? { fixBy: a.fixBy } : {}) } : {}),
+    ...(a.pic && named ? { pic: a.pic } : {}),
   };
 }
 
-/** The newest lines for a phone or the teachers' page: pinned ones first, then newest first. */
+/** When a line last came alive: the last thing written in it, else when it came. */
+export const liveAt = (m: Pick<Doc<"usMoments">, "la" | "at">) => Math.max(m.la ?? 0, m.at);
+
+/**
+ * The newest lines for a phone or the teachers' page: pinned ones first, then the liveliest first (8 Nov 2026: a line
+ * someone just wrote in comes back to the top, as a talk does). Only the newest lines are looked at (the free plan's
+ * reading): an older line's talk lives in its thread and the bell.
+ */
 export async function feedOf(ctx: QueryCtx, demo: boolean, keep: (m: Doc<"usMoments">) => boolean, max = FEED_MAX): Promise<Doc<"usMoments">[]> {
   const pins = (
     await ctx.db
@@ -498,5 +561,5 @@ export async function feedOf(ctx: QueryCtx, demo: boolean, keep: (m: Doc<"usMome
       // Lines for other grades and other grades' doubts are passed over (7 Nov 2026: more of them since posts and doubts).
       .take(max + 25)
   ).filter((m) => !m.pin && keep(m));
-  return [...pins.sort((a, b) => b.at - a.at), ...rows].slice(0, max);
+  return [...pins.sort((a, b) => b.at - a.at), ...rows.sort((a, b) => liveAt(b) - liveAt(a))].slice(0, max);
 }

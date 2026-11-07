@@ -57,6 +57,33 @@ export function useParts(): Parts | null {
   return m;
 }
 
+export type UsParts = typeof import("./usParts");
+let usMod: UsParts | null = null;
+let usLoading: Promise<UsParts> | null = null;
+
+/** Us (8 Nov 2026): its own file, fetched once (again after a failure: no signal the first time). */
+export function loadUs(): Promise<UsParts> {
+  if (!usLoading) {
+    usLoading = import("./usParts").then(
+      (m) => (usMod = m),
+      (e) => {
+        usLoading = null;
+        throw e;
+      },
+    );
+  }
+  return usLoading;
+}
+
+/** Us's screens once here (null while they come: the screen draws the owl meanwhile). `want` = start fetching now. */
+export function useUsParts(want = true): UsParts | null {
+  const [m, setM] = useState<UsParts | null>(usMod);
+  useEffect(() => {
+    if (!m && want) void loadUs().then(setM, () => {});
+  }, [want]);
+  return m;
+}
+
 /** His profile's numbers (family.profile), kept for this child: the screen shows the last ones at once. */
 export function useProfile(): FamilyProfile | null {
   const [p, setP] = useState<FamilyProfile | null>(() => keep<FamilyProfile>("profile"));

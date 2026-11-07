@@ -81,6 +81,11 @@ const FAMILY_LATER_KB = 42;
 // inside the class app) are their own file: never prefetched by a student's phone, so outside both budgets above,
 // with their own (a teacher's phone fetches them once, the first time she opens Us).
 const FAMILY_STAFF_KB = 8;
+// 8 Nov 2026, Us's talk (his voice note: "if I go to inside any thread, that feel like boring ... student can chat inside
+// each thread"): Us is its own file (src/family/usParts.ts: its tab, a line opened with its talk, what students write,
+// its style), out of the later parts (they were 41 of 42 KB) with a budget of its own. Not prefetched: a phone fetches
+// it once the owner opened Us (then the service worker keeps it), and the teachers' Us uses it too.
+const FAMILY_US_KB = 20;
 await mkdir("dist/f/assets", { recursive: true });
 const fam = await build({
   // profile.css: the style of the parts that come after the first screen (src/family/later.ts attaches it).
@@ -130,13 +135,17 @@ if (!laterCss) throw new Error("Build did not produce the family app's later sty
 // what it shares with the students' later parts (the Us tab, a profile) stays theirs (students fetch it anyway).
 const staffJs = Object.keys(famOuts).find((f) => famOuts[f].entryPoint === "src/family/staff.tsx");
 if (!staffJs) throw new Error("Build did not produce the family app's teachers' screens (src/family/staff.tsx)");
+const usJs = Object.keys(famOuts).find((f) => famOuts[f].entryPoint === "src/family/usParts.ts");
+if (!usJs) throw new Error("Build did not produce Us's own file (src/family/usParts.ts)");
 const studentsLater = new Set(
   Object.keys(famOuts)
-    .filter((f) => f.endsWith(".js") && famOuts[f].entryPoint && f !== staffJs && !first.has(f))
+    .filter((f) => f.endsWith(".js") && famOuts[f].entryPoint && f !== staffJs && f !== usJs && !first.has(f))
     .flatMap((f) => [...staticOf(f)]),
 );
-const staffOnly = [...staticOf(staffJs)].filter((f) => !first.has(f) && !studentsLater.has(f));
-const later = [...Object.keys(famOuts).filter((f) => f.endsWith(".js") && !first.has(f) && !staffOnly.includes(f)), laterCss];
+// Us's own (8 Nov 2026): what only usParts.ts reaches (what it shares with Me or the level screen stays theirs).
+const usOnly = [...staticOf(usJs)].filter((f) => !first.has(f) && !studentsLater.has(f));
+const staffOnly = [...staticOf(staffJs)].filter((f) => !first.has(f) && !studentsLater.has(f) && !usOnly.includes(f));
+const later = [...Object.keys(famOuts).filter((f) => f.endsWith(".js") && !first.has(f) && !staffOnly.includes(f) && !usOnly.includes(f)), laterCss];
 const asset = (f) => `/f/assets/${basename(f)}`;
 const preload = [
   ...[...first].filter((f) => f !== famJs).map((f) => `<link rel="modulepreload" href="${asset(f)}">`),
@@ -160,9 +169,15 @@ let after = 0;
 for (const f of later) after += await gz(f);
 let staffKb = 0;
 for (const f of staffOnly) staffKb += await gz(f);
+let usKb = 0;
+for (const f of usOnly) usKb += await gz(f);
 console.log(
-  `Built the family app: ${basename(famJs)} + ${basename(famCss)}, ${(wire / 1024).toFixed(1)} KB over the wire on the first load (budget ${FAMILY_BUDGET_KB} KB), ${(after / 1024).toFixed(1)} KB right after it (budget ${FAMILY_LATER_KB} KB), the teachers' Us ${(staffKb / 1024).toFixed(1)} KB (budget ${FAMILY_STAFF_KB} KB)`,
+  `Built the family app: ${basename(famJs)} + ${basename(famCss)}, ${(wire / 1024).toFixed(1)} KB over the wire on the first load (budget ${FAMILY_BUDGET_KB} KB), ${(after / 1024).toFixed(1)} KB right after it (budget ${FAMILY_LATER_KB} KB), Us ${(usKb / 1024).toFixed(1)} KB (budget ${FAMILY_US_KB} KB), the teachers' Us ${(staffKb / 1024).toFixed(1)} KB (budget ${FAMILY_STAFF_KB} KB)`,
 );
+if (usKb > FAMILY_US_KB * 1024) {
+  console.error(`Us's own file is ${(usKb / 1024).toFixed(1)} KB: over its ${FAMILY_US_KB} KB budget.`);
+  process.exit(1);
+}
 if (staffKb > FAMILY_STAFF_KB * 1024) {
   console.error(`The family app's teachers' screens are ${(staffKb / 1024).toFixed(1)} KB: over their ${FAMILY_STAFF_KB} KB budget.`);
   process.exit(1);

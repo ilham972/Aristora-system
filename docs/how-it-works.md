@@ -1109,6 +1109,18 @@ learning app of our education institute"): one profile, his class times, what he
     the class marked his theory questions (right, wrong or a slip) lights his flame too (`levelDays`). Today only Grade
     8 (3 Stages) and the O/L tutes can be played at home: Grades 6, 7, 9, 10 earn XP in class only (told him: the
     ARISTORA list leans to them until more units are digitized; each grade's list stays fair).
+    **XP from Us** (8 Nov 2026, his answers: "first option and second option, not for thumbs or clap"): his answer to a
+    teacher's question marked ✓ **+5**, his reply on a doubt marked ✓ **+10** (he helped), his 💡 post shown by a
+    teacher **+5**, and a comment in his own words **+1, 20 a day at most** (my warning that comments get farmed with
+    prizes on the race was given; the guards: one-tap words never count, two words at least, never the same words as one
+    of his last three, a teacher removing it takes it back, and the owner's switch Settings → Community → Comments give
+    XP). 👏 never. `convex/lib/usXp.ts`: one `usXp` row per thing (its `ref`: the answer, reply, comment or post), so a
+    ✓ taken back or a removal takes the same XP from the same day (`takeXp`); his race row keeps the sum as its `us`
+    part (`raceRows.us`, an `XpNums`), added to its numbers (`writeRow` adds it to his parts; `giveXp`/`takeXp` move both
+    with `shifted`). It counts in the race, his XP this week and ever (`family.me` `xp`/`total`/`dayXp`, a check's
+    reveal, a classmate's profile), never in the flame, "who learned today" (`noteToday` gets Levels and class work
+    only) or the grade cup (`RaceRow.u` / `up` = this week's and last week's Us XP, `cupOf` takes them out). `usXp` rows
+    are kept 31 days (`sweepXp`); a line swept after 30 days keeps the XP it gave.
   - **The race kept ready** (7 Nov 2026; the free plan's 1 GB of reading a month: the old race read every classmate's
     whole history at each open, the whole ARISTORA would read everyone's): one small `raceRows` row per student (his
     name, grade, photo key, birthday, removed/demo, and XP numbers as worked out at a moment: `wk`, `d`, `xp`, `xpy`
@@ -1151,14 +1163,14 @@ learning app of our education institute"): one profile, his class times, what he
     some of the task, we can appreciate that"; his yes to my plan: no chat, the owl's lines, teachers' shout-outs and
     posts, houses next, question rooms after). The rules: **students never type** (120 children typing freely needs a
     moderator, and answers would travel: the race has prizes); one tap per line; never a mark, never who didn't learn.
-    - **The tab** (`src/family/us.tsx`, a later part: `parts.UsTab`; its style is in `family.css`, the later budget was
-      full): **Us**, between Learn and the Race, only once the owner opens it (`me.us`; a phone that kept the tab falls
+    - **The tab** (`src/family/us.tsx`; since 8 Nov 2026 in Us's own file `usParts.ts` with its own style `usStyle.ts`,
+      fetched once the owner opened Us: `later.ts` `loadUs` / `useUsParts`): **Us**, between Learn and the Race, only once the owner opens it (`me.us`; a phone that kept the tab falls
       back to Home); five tabs (`.f-tabs.n5`). The header: ARISTORA · நாம், "🔥 இன்று N பேர் கற்றார்கள்" (students who
       learned today), the waving owl, **?** (the guide again). **The owl's guide** the first time (kept per child,
       `usGuide`): three cards (what Us is; one tap is enough: 🎂 wish, 👋 welcome, 👏 cheer; you will be here too, for
       effort and not only winning), அடுத்து / தொடங்கு!. **The owner's welcome** whole the first time (and whenever he
-      changes it), then two lines with மேலும் › (`usWelcome`). **The lines**, newest first under Today / Yesterday /
-      "Mon 2 Nov", pinned posts on top: each has the student's face (his photo only when OK'd and shown in the race) with
+      changes it), then two lines with மேலும் › (`usWelcome`). **The lines** (cards since 8 Nov 2026: the talk, below),
+      pinned posts on top: each has the student's face (his photo only when OK'd and shown in the race) with
       the line's mark, Tamil words, the time, the teachers who cheered ("👏 Raj ஆசிரியர்"), and **one button that says
       what the moment asks for**: 🎂 a birthday, 👋 a first level from home and back in class, 🙏 a teacher's post, 👏
       the rest; a tap = +1 at once (kept per child, `usClapped`; the server counts one per student). **His own line**
@@ -1251,14 +1263,70 @@ learning app of our education institute"): one profile, his class times, what he
         Convex's files 30 days), a tap ~150 KB; the owner checks the Convex dashboard's usage.
     - **Safe by design**: the family app in the class app reads and writes only `us:board`, `us:race`, `us:mate`,
       `us:pics`, `us:tthread`, `us:tclap`, `us:shout`, `us:post`, `us:pin`, `us:remove`, `us:mark`, `us:drop`,
-      `us:unflag`, `us:treply`, `us:photoUrl` (`net.ts` `staffWith`: anything else is refused on the phone, and every one
-      of them checks a teacher's sign-in on the server); a family phone can't call them, a teacher can't call the
-      students' (`us:thread`, `us:answer`, `us:doubt`, `us:reply`, `us:report`). Photo addresses go only to who may see
+      `us:unflag`, `us:treply`, `us:photoUrl`, and since 8 Nov 2026 `us:tcomment`, `us:tlike`, `us:fix`, `us:approve`
+      (`net.ts` `staffWith`: anything else is refused on the phone, and every one of them checks a teacher's sign-in on
+      the server); a family phone can't call them, a teacher can't call the students' (`us:thread`, `us:answer`,
+      `us:doubt`, `us:reply`, `us:report`, `us:comment`, `us:like`, `us:view`, `us:learn`, `us:seen`). Photo addresses go only to who may see
       them (a Convex file address opens for anyone who has it). Only the family app may be framed, and only by its own
       address (`vercel.json`: `frame-ancestors 'self'` under `/f/`, `'none'` everywhere else).
-    - **Alerts**: `alertStudent(…, url)` (`pushOut.url`): "/f/#us" for a shout-out or a teacher's 👏, "/f/#us=id" for a
-      new question, a mark, a reply (the last in a gathered minute decides); the service worker tells an open app
-      `{ k: "us", id }`, the app opens Us (and that post).
+    - **Alerts**: `alertStudent(…, url)` (`pushOut.url`): "/f/#us=id" for a shout-out, a teacher's 👏, a new question,
+      a mark, a reply, a comment (since 8 Nov 2026 every line opens; the last in a gathered minute decides); the service
+      worker tells an open app `{ k: "us", id }`, the app opens Us (and that line). A burst from Us says "3 புதியவை"
+      (classmates too), not "from the teacher" (`pushPayload`).
+    - **The talk** (8 Nov 2026, his voice note: "if I go to inside any thread, that feel like boring ... other students
+      don't get more context, who appreciating, who correcting ... student can chat inside each thread ... like skool";
+      his answers: comments **"everyone, like the hall"**, XP as above, students' 💡 posts **after a teacher's ✓**).
+      `convex/lib/us.ts` says the rules; `convex/lib/usTalk.ts` the writes (the bell, alerts, counts, removals);
+      `convex/us.ts` the calls.
+      - **Cards** (`us.tsx` `Card`): a face with the line's mark (`Face`), the name and grade (`Who`), what it is and
+        when ("🏁 Stage முடிவு · 2h": `What`, `KIND`, `ago`), a gold banner for a Stage or days in a row, the words and
+        photos, a state line (his answer, a 💡 post waiting), and a footer: the one tap (🎂 👋 👏 🙏, "உனக்கு" on his
+        own), 💬 the talk's count (🔒 on a question he hasn't answered), the faces of the last three who wrote (`lp`;
+        a teacher's ringed), the teachers who cheered, and the button the line asks for (✍️ Answer, 💬 Help, ▶ இன்று
+        நானும்; teachers Mark ›, Reply ›, Check ›). A tap anywhere opens it. **The liveliest first**: lines sort by the
+        last thing written in them (`la`, `liveAt`), among the newest 65 (the free plan's reading). A dot and a ring on
+        what came alive since his last visit (`usLast`) and he hasn't opened (`usSeen`). On top, what he can write:
+        **💡 இன்று என்ன கற்றாய்? பகிர்…** (his face; opens `LearnSheet`) and **🙋 கேள்** (`DoubtSheet`). Chips: All · ❓
+        Questions · 🙋 Doubts · 💡 Learned · 🎉 Wins · 📣 Teachers (teachers: ⚑ To do, now with 💡 posts waiting and
+        reported messages). Told once to everyone who saw the guide before: "🆕 இப்போது Us இல் பேசலாம்!" (`usNews1`);
+        the guide's cards say it too.
+      - **A line opened** (`usPost.tsx` `ThreadScreen`, every kind): the card, then **who cheered** (the one tap, faces
+        with teachers first, "Nila ஆசிரியர், Mira J +7 ›" → `CheersSheet`: everyone, a name = his profile; `usClaps`
+        keep the name and face since 8 Nov), "👀 N" (students who opened it, once each, never his own: `us.view`,
+        `usViews`, kept per phone `usViewed`), a question's answers as before, then **the talk**: messages oldest first,
+        a reply under the message it answers (`re` = the first of its chain: one level; `treeOf`), each with a face,
+        name, grade, time, a bubble (a teacher's violet with "ஆசிரியர்"), photos, a teacher's ✓ with her name ("✓ சரி ·
+        Nila ஆசிரியர்"), **her correction** read by everyone (`fix`: "✎ Nila ஆசிரியர்: …"), 👏 (`us.like` / `us.tlike`:
+        once each, never one's own, `usLikes`; the writer's bell gathers them, no phone alert), Reply, ⚑. At the bottom
+        **his words** (`TalkBar`, fixed): one-tap words for what the line is (`QUICK`, a copy of `convex/lib/us.ts`'s,
+        pinned by a test: 🎂 பிறந்தநாள் வாழ்த்துகள்!, 🎉 வாழ்த்துகள்!, 🙏 நன்றி! …: never XP), or his own (200 letters;
+        "💎 +1 XP"), "↩ Bilal M க்குப் பதில் ✕" after Reply, a 📷 on a doubt (and a teacher's anywhere). The open thread
+        reads again every 20 s while on screen (`POLL_MS`).
+      - **Who sees what** (decided only on the server): a comment (`usAnswers` `k: "c"`) on any line but a doubt
+        (`us.comment`, `us.tcomment`); **a question's talk only once he sent his answer** (`talkOpen`; before it a count,
+        `talkHidden`: no words, names or faces, `lp` too); a doubt's talk is its replies (`us.reply` / `us.treply`, now
+        with `re`). **Names**: everyone who writes is named (his "who correcting"), **except the student who asked a
+        doubt** (never to students: "கேட்டவர்", no face) and an answer to a teacher's question until she marks it right
+        (his rule of 7 Nov). Since 8 Nov a senior's reply on a doubt carries his name at once (it was nameless until a ✓:
+        my default then, never his). Two reports hide any student's message or 💡 post from students until a teacher keeps
+        or removes it (`rpBy`; `rpm` on the line = the To do). Students never write a phone number or a link
+        (`unsafeWords`: Sri Lankan mobile numbers in any spacing; web addresses): his rule that a boy and a girl never
+        message each other would leak through a number. 40 messages a day (`COMMENTS_A_DAY`).
+      - **A teacher** (any): ✓ an answer or a reply on a doubt (+XP), ✗ an answer, ✎ her words to him on an answer
+        (only he sees them) or **her correction** on a reply or a comment (`us.fix`, everyone sees it; not on an answer),
+        👏, Reply, 🗑 (`us.drop`: any message, a doubt, a 💡 post; the XP it gave goes; the bell forgets it), ⚑ Keep.
+      - **💡 posts** (`us.learn`, `k: "learn"`, `LearnSheet`): his words and up to 2 photos of his working, starters for
+        a child who doesn't know what to write ("இன்று கற்றது", "நினைவில் வைக்க ஒரு வழி", "நான் செய்த தவறு…"), 2 a day.
+        Only he and the teachers see it (`seesLine`) until a teacher's **✓ Show to everyone** (`us.approve`: everyone,
+        every grade, its time becomes now, +5 XP, his bell and phone); **✗ Not this time** = her words, only he sees
+        them; "Hide again" = waiting (the XP goes back).
+      - **The bell's Us lines** (`usInbox`, `lib/usTalk.ts` `tell`, `inboxOf`; `family.me` `inbox` (14 days, 30 at
+        most) and `inboxNew`): a comment on his line (`c`), a reply to him (`r`: the one he tapped Reply on is told,
+        once), 👏 on his words or his line (`l`, `clap`: gathered while unread, "Mira J + 2"), a teacher's ✓ (+XP) or
+        "she looked" (`ok`, `no`), her correction (`fix`), a new question for his grade (`q`), a shout-out, a teacher's
+        👏. Phone alerts for all but 👏. The bell's count adds them; opening the bell reads them (`us.seen`); something
+        new since the last look rings the bell once (`.f-bellb.grew`) with a soft sound. They go with their line (30
+        days), a removed message's with it.
   - **Me = his profile** (4 Nov 2026, his voice note: "a proper profile page for the students ... as simple as
     possible"; `me.tsx`, one of the parts that come right after the first screen): a violet header with **his photo**
     (88 px; tap = the camera or the gallery: his photo, below), his name (🎂 on his birthday), grade and index ("Photo ·
@@ -1587,7 +1655,9 @@ learning app of our education institute"): one profile, his class times, what he
     once the class corrected the level); a retake is owed again (`owedOf`).
   - **The bell and phone alerts** (7 Nov 2026, his voice note: "the family app don't have any alert features ... even
     though we corrected, students don't know"; his answer: the bell in the app AND an alert on the phone). The top
-    row's bell (`.f-bellb`) with a red count of new ones (`.f-bell-n`); its sheet (`BellSheet`, `src/family/bell.tsx`;
+    row's bell (`.f-bellb`) with a red count of new ones (`.f-bell-n`); its sheet (`BellSheet`, `src/family/bellSheet.tsx`
+    since 8 Nov 2026, one of the parts right after the first screen: only a tap shows it; with Us's lines by time:
+    above;
     `me.bell` = `BellItem`s: his teachers' answers, retakes and messages of the last 14 days, newest first, 20 at most,
     never what the class or the app closed) lists each with who, Stage · Level · Q and when; a tap opens that level's
     book (`fromSheet`: the sheet's history step becomes the screen's); opening the book makes them not new

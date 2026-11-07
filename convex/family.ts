@@ -78,6 +78,8 @@ import { bookOf, homeChecks, phoneKeyFor, type LevelBook } from "./lib/homeWork"
 import { computeMaster, markBefore, type MQ, type MState } from "./lib/master";
 import { boxCount, formOf, INPUT_MAX, lostOutsideReasons, markQuestion, onlyReasons, REASON_MAX, teacherMarks, type FormQ, type KeyQ } from "./lib/phone";
 import { blockedBy, keyText, PHOTO_BYTES, PHOTO_MAX, PHOTO_URLS_PER_DAY, type PhotoKind } from "./lib/photos";
+import { inboxOf, type UsInboxItem } from "./lib/usTalk";
+import { usDays, usNow } from "./lib/usXp";
 import { ladderOf, secQs } from "./lib/ladder";
 import {
   askedName,
@@ -95,7 +97,7 @@ import {
   type PhotoType,
   type StageLine,
 } from "./lib/profile";
-import type { RaceRow } from "./lib/race";
+import { numsAt, type RaceRow } from "./lib/race";
 import { mateMarksOn, raceList } from "./lib/raceRows";
 import { homeLevels, homeMoments, stageDone, stageMoment, usCfg } from "./lib/us";
 import { OL } from "./lib/syllabus";
@@ -276,6 +278,12 @@ export type FamilyMe = {
   bell: BellItem[];
   /** Us, the students' community (7 Nov 2026): its tab is on the phones once the owner opened it (Settings → Community). */
   us: boolean;
+  /**
+   * The bell's Us lines (8 Nov 2026: a comment on his line, a reply to him, 👏, a teacher's ✓, a new question, a
+   * shout-out) and how many he hasn't seen. Missing on a server from before.
+   */
+  inbox?: UsInboxItem[];
+  inboxNew?: number;
 };
 
 /** One line of the bell: what a teacher did on a photo of his, where (Stage, Level, Q), who, and whether it is new. */
@@ -349,6 +357,10 @@ export const me = query({
     bell.sort((a, b) => b.at - a.at);
     const asks = await asksOf(ctx, s._id);
     const told = (a: Doc<"familyAsks"> | undefined) => !!a && (a.no === undefined || now - a.no < ASK_NO_MS);
+    // Us (8 Nov 2026): his XP from Us counts with his Levels' (never in the flame); the bell's Us lines.
+    const us = await usNow(ctx, s._id, now);
+    const usDay = us.xp > 0 ? await usDays(ctx, s._id, now) : null;
+    const inbox = await inboxOf(ctx, s._id, now);
     const waiting = asks.photo && asks.photo.no === undefined ? asks.photo.photoId : undefined;
     return {
       bday: s.bday ?? null,
@@ -359,12 +371,12 @@ export const me = query({
       name: s.name,
       grade: s.grade ?? null,
       index: s.index ?? null,
-      xp: weekXp(rows, now),
-      total: xpSince(rows, 0),
+      xp: weekXp(rows, now) + us.xp,
+      total: xpSince(rows, 0) + us.tot,
       streak: streakOf(rows, now),
       best: bestStreak(days),
       week: weekDays(days, now),
-      dayXp: weekDayXp(rows, now),
+      dayXp: weekDayXp(rows, now).map((x, i) => x + (usDay?.[i] ?? 0)),
       levelsDone: levelsSince(rows, 0),
       levelsWeek: levelsSince(rows, slWeekStart(now)),
       trophies: trophiesOf(rows, worlds),
@@ -379,6 +391,8 @@ export const me = query({
       blocked: stop && stopWorld ? { unitId: stopWorld.unitId, no: stopWorld.no, n: stop.n, owed: stop.owed } : null,
       bell: bell.slice(0, BELL_MAX),
       us: (await usCfg(ctx)).open,
+      inbox: inbox.items,
+      inboxNew: inbox.fresh,
       worlds,
     };
   },
@@ -696,7 +710,7 @@ export const check = mutation({
     const trophies = trophiesOf(all, await worldsOf(ctx, s));
     // The level's book: the key's working on what he got wrong, and the photos it asks for.
     const book = await bookOf(ctx, s, unit._id, l.n);
-    return { results, got, phoneMax, max: l.max, teacher, xp: weekXp(all, now), streak, trophies, book, retry, bonus };
+    return { results, got, phoneMax, max: l.max, teacher, xp: weekXp(all, now) + (await usNow(ctx, s._id, now)).xp, streak, trophies, book, retry, bonus };
   },
 });
 
@@ -760,7 +774,7 @@ async function checkLadder(
   const streak = streakOf(all, now);
   await homeMoments(ctx, s._id, homeLevels(all), streak, now);
   const trophies = trophiesOf(all, await worldsOf(ctx, s));
-  return { results, got, phoneMax, max, teacher, xp: weekXp(all, now), streak, trophies, book: null, retry: [], bonus: 0 };
+  return { results, got, phoneMax, max, teacher, xp: weekXp(all, now) + (await usNow(ctx, s._id, now)).xp, streak, trophies, book: null, retry: [], bonus: 0 };
 }
 
 // ---- His levels checked at home: the book, photos, the teacher's answers (4 Nov 2026) ----
@@ -1020,8 +1034,9 @@ export async function mateOf(ctx: QueryCtx, s: Doc<"students">, from: Id<"studen
     grade: s.grade ?? null,
     pic: s.photo && !s.photoHide ? s.photo.id : null,
     bday: isBirthday(s.bday, now),
-    xp: weekXp(rows, now),
-    total: xpSince(rows, 0),
+    // XP from Us too (8 Nov 2026): his race row's Us part, as on his own phone.
+    xp: weekXp(rows, now) + (race?.us ? numsAt(race.us, now).xp : 0),
+    total: xpSince(rows, 0) + (race?.us ? numsAt(race.us, now).tot : 0),
     streak: streakOf(rows, now),
     best: bestStreak(days),
     week: weekDays(days, now),

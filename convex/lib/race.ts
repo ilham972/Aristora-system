@@ -64,7 +64,21 @@ export const sameNums = (a: XpNums, b: XpNums) =>
  * before today (`y`: the moves), last week (`p`: the crowns), his photo's key (OK'd and shown), 🎂 today, weeks won in
  * his grade (`w`) and in ARISTORA (`wa`).
  */
-export type RaceRow = { id: string; n: string; g: number | null; xp: number; y: number; p: number; pic?: string; bd?: true; w?: number; wa?: number };
+export type RaceRow = {
+  id: string;
+  n: string;
+  g: number | null;
+  xp: number;
+  y: number;
+  p: number;
+  pic?: string;
+  bd?: true;
+  w?: number;
+  wa?: number;
+  /** Of `xp` and `p`: the XP that came from Us (8 Nov 2026), left out of the grade cup (it counts who learned Levels). */
+  u?: number;
+  up?: number;
+};
 
 /** A row in its list: its place (null = not started this week) and how it moved since yesterday. */
 export type Placed = {
@@ -129,7 +143,8 @@ export function cupOf(rows: RaceRow[], week: "now" | "last" = "now"): Cup[] {
   for (const g of RACE_GRADES) {
     const mine = rows.filter((r) => r.g === g);
     if (!mine.length) continue;
-    out.push({ g, n: mine.filter((r) => (week === "now" ? r.xp : r.p) > 0).length, of: mine.length });
+    // XP from Levels and class work: Us's XP (comments, answers on Us) never makes a student "learned" for the cup.
+    out.push({ g, n: mine.filter((r) => (week === "now" ? r.xp - (r.u ?? 0) : r.p - (r.up ?? 0)) > 0).length, of: mine.length });
   }
   return out.sort((a, b) => b.n / b.of - a.n / a.of || b.n - a.n || a.g - b.g);
 }

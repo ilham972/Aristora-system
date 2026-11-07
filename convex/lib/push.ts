@@ -23,7 +23,8 @@ export const PUSH_PHONES = 6;
 export function pushPayload(first: string, n: number, text: string, url?: string): { title: string; body: string; url: string; tag: string } {
   return {
     title: `${first} · ARISTORA`,
-    body: n > 1 ? `ஆசிரியரிடமிருந்து ${n} புதியவை. ${text}` : text,
+    // Us's bursts (8 Nov 2026) come from classmates too: "3 new" without "from the teacher".
+    body: n > 1 ? (url?.includes("#us") ? `${n} புதியவை. ${text}` : `ஆசிரியரிடமிருந்து ${n} புதியவை. ${text}`) : text,
     url: url ?? "/f/#bell",
     tag: `aristora-${first}`,
   };

@@ -1,29 +1,37 @@
 // Us, the students' community (7 Nov 2026; the rules are in lib/us.ts).
 //   feed      -> the phone's Us tab: the owner's welcome, how many learned today, the newest lines for him (his grade's
-//                posts, his own doubts, younger students' doubts sent to seniors).
-//   clap      -> his one tap on a line (👏 🎂 👋 🙏): once per line, never his own.
-//   board     -> the teachers' Us (any teacher): the same lines (every grade, every doubt with who asked), the switches.
-//   shout     -> a teacher's shout-out to one student, a reason from the list (any teacher; his phone gets an alert).
-//   tclap     -> a teacher's 👏 on a line (her name shows on the phones; the student's phone gets an alert).
+//                posts, his own doubts and 💡 posts, younger students' doubts sent to seniors), the liveliest first.
+//   clap      -> his one tap on a line (👏 🎂 👋 🙏): once per line, never his own; its student's bell is told.
+//   board     -> the teachers' Us (any teacher): the same lines (every grade, every doubt with who asked, 💡 posts
+//                waiting), the switches.
+//   shout     -> a teacher's shout-out to one student, a reason from the list (any teacher; his bell and phone).
+//   tclap     -> a teacher's 👏 on a line (her name shows on the phones; the student's bell and phone).
 //   post      -> a teacher's post (the owner and the Community tick): words and / or photos, for everyone, one grade or
-//                several; a question, which students answer (their phones get an alert).
-//   pin, remove -> the same people: a post stays on top, a line goes.
-//   setCfg    -> the owner: the tab on the phones, his welcome, the owl's kinds.
+//                several; a question, which students answer (their bells and phones are told).
+//   pin, remove -> the same people: a post stays on top, a line goes (the XP it gave goes too).
+//   setCfg    -> the owner: the tab on the phones, his welcome, the owl's kinds, comments' XP.
 //   race, mate, pics -> the class app's Us tab (7 Nov 2026, his ask: "build the tab for the teachers on the Aristora
 //                   system app ... the same UI UX"): the family app's own screens with the teacher's sign-in read the race
 //                   (every student), a student's profile (his marks too) and the race's pictures.
 //   photoUrl  -> an address for one photo from a teacher (her posts and replies; a student's: family.photoUrl).
-//   thread    -> a post or a doubt opened on his phone: the answers or replies he may see (lib/us.ts says which).
+//   thread    -> a line opened on his phone: who cheered, the answers or replies he may see, the talk (lib/us.ts).
 //   answer    -> his answer to a teacher's question: once, never changed.
 //   doubt     -> his doubt (words and / or photos) for the teachers, the seniors or both.
-//   reply     -> his reply on a doubt (his own doubt, or a younger student's sent to seniors).
-//   report    -> a doubt or a reply that shouldn't be there (two reports hide it from students until a teacher looks).
-//   tthread   -> a post or a doubt for a teacher: everything, with names.
-//   mark      -> a teacher marks an answer right or not (a senior's reply right): his phone gets an alert.
-//   treply    -> a teacher's reply on a doubt (the student who asked gets an alert).
-//   drop, unflag -> any teacher: a doubt, an answer or a reply goes; or stays (its reports cleared).
+//   reply     -> his reply on a doubt (his own doubt, or a younger student's sent to seniors), under a reply if he likes.
+//   comment   -> his comment on any other line (8 Nov 2026: a question's only once he answered), under one if he likes.
+//   like      -> his 👏 on a message of the talk (once; never his own).
+//   view      -> he opened a line (once; never his own): "👀 34".
+//   learn     -> his 💡 post: what he learned, words and photos; everyone sees it after a teacher's ✓.
+//   seen      -> he opened the bell: its Us lines are read.
+//   report    -> a doubt, a 💡 post or a message that shouldn't be there (two reports hide it until a teacher looks).
+//   tthread   -> a line for a teacher: everything, with names.
+//   mark      -> a teacher marks an answer right or not, a reply on a doubt right (XP for both): his bell and phone.
+//   fix       -> a teacher's correction on a reply or a comment, read by everyone who sees it ("who correcting").
+//   approve   -> a teacher shows a 💡 post to everyone (✓, XP), or not this time (her words to him only).
+//   treply, tcomment, tlike -> a teacher's reply on a doubt, her comment on any line, her 👏 on a message.
+//   drop, unflag -> any teacher: a doubt, a 💡 post or any message goes (its XP too); or stays (its reports cleared).
 //   daily     -> 00:10 in Sri Lanka: birthdays, yesterday's count; then `sweep`: lines older than 30 days go (their
-//                answers and photos too), a few hundred deletes at a time.
+//                answers, talk and photos too; the XP stays), a few hundred deletes at a time.
 //   improved  -> Sunday 23:50 in Sri Lanka: the week's most improved (this week against last, before the race resets).
 
 import { v } from "convex/values";
@@ -36,43 +44,50 @@ import { fail, log } from "./lib/backend";
 import { DAY_MS, isBirthday, slDayNo, slWeekStart } from "./lib/day";
 import { internalMutation, mutation } from "./lib/fn";
 import { NOTE_MAX, PHOTO_BYTES } from "./lib/photos";
-import { alertStudent } from "./lib/push";
 import { picUrl } from "./lib/profile";
 import { numsAt, RACE_GRADES } from "./lib/race";
 import { raceList } from "./lib/raceRows";
 import {
   addMoment,
+  COMMENTS_A_DAY,
   DOUBTS_A_DAY,
-  dropAnswer,
-  dropMoment,
   feedOf,
   groupMoment,
+  isTalk,
   itemOf,
+  LEARN_A_DAY,
   mostImproved,
   OWL_KINDS,
+  ownWords,
   POST_MAX,
   POST_PHOTOS,
-  REPLIES_A_DAY,
   REPLY_PHOTOS,
   replyOf,
   replyShows,
+  sameWords,
   seesLine,
   setUsCfg,
   SHOUT_WHY,
   SMALL_BYTES,
   SWEEP_MAX,
+  TALK_MAX,
+  talkOpen,
   todayCount,
+  unsafeWords,
   US_KEEP_MS,
   usCfg,
   WELCOME_MAX,
   whoOf,
   type UsCfg,
+  type UsCheer,
   type UsItem,
   type UsKind,
   type UsPic,
   type UsReply,
   type UsThread,
 } from "./lib/us";
+import { clip, dropAnswer, dropMoment, tell, wroteIn, type Tell } from "./lib/usTalk";
+import { COMMENT_XP_A_DAY, commentXpToday, giveXp, sweepXp, takeXp, XP_ANSWER, XP_COMMENT, XP_HELP, XP_LEARN } from "./lib/usXp";
 import { usAud, usKind, usPhoto } from "./schema";
 
 const token = v.optional(v.string());
@@ -106,11 +121,14 @@ async function withPics<T extends UsItem | UsReply>(ctx: QueryCtx, x: T, ph: Pho
   return pics ? { ...x, ph: pics } : x;
 }
 
-const mineOf = (ctx: QueryCtx, mid: Id<"usMoments">, sid: Id<"students">) =>
-  ctx.db
+/** His answer to a question (never a comment of its talk). */
+async function mineOf(ctx: QueryCtx, mid: Id<"usMoments">, sid: Id<"students">) {
+  const rows = await ctx.db
     .query("usAnswers")
     .withIndex("by_mid", (q) => q.eq("mid", mid).eq("sid", sid))
-    .first();
+    .collect();
+  return rows.find((a) => !isTalk(a)) ?? null;
+}
 
 async function answersOf(ctx: QueryCtx, mid: Id<"usMoments">): Promise<Doc<"usAnswers">[]> {
   const rows = await ctx.db
@@ -120,7 +138,10 @@ async function answersOf(ctx: QueryCtx, mid: Id<"usMoments">): Promise<Doc<"usAn
   return rows.sort((a, b) => a.at - b.at || a._creationTime - b._creationTime);
 }
 
-/** One line for his phone: its photos, and on a question his answer (once he answered, how many are right). */
+/**
+ * One line for his phone: its photos; on a question his answer (once he answered, how many are right, and the faces of
+ * the talk).
+ */
 async function lineFor(ctx: QueryCtx, m: Doc<"usMoments">, me: Id<"students">): Promise<UsItem> {
   const it = await withPics(ctx, itemOf(m, me), m.ph);
   if (m.qn) {
@@ -128,6 +149,7 @@ async function lineFor(ctx: QueryCtx, m: Doc<"usMoments">, me: Id<"students">): 
     if (a) {
       it.my = a.ok === true ? "ok" : a.ok === false ? "no" : "w";
       it.okN = m.okN ?? 0;
+      if (m.lp?.length) it.lp = m.lp.map((p) => ({ n: p.n, ...(p.pic ? { pic: p.pic } : {}), ...(p.tch ? { tch: true } : {}) }));
     }
   }
   return it;
@@ -171,10 +193,15 @@ async function takePhotos(ctx: MutationCtx, ph: Photos, max: number): Promise<Ph
 }
 
 /** Words or photos, within the letters: the tidied words (a student's limits are said in Tamil). */
-function wordsOf(text: string | undefined, ph: Photos, student: boolean): string {
+function wordsOf(text: string | undefined, ph: Photos, student: boolean, most = POST_MAX): string {
   const t = tidy(text);
-  if (t.length > POST_MAX) fail(student ? `${POST_MAX} எழுத்துகளுக்குள் எழுது (இப்போது ${t.length}).` : `At most ${POST_MAX} letters: this is ${t.length}.`);
+  if (t.length > most) fail(student ? `${most} எழுத்துகளுக்குள் எழுது (இப்போது ${t.length}).` : `At most ${most} letters: this is ${t.length}.`);
   if (!t && !ph?.length) fail(student ? "எழுது, அல்லது ஒரு படம் எடு." : "Write something or add a photo first.");
+  if (student) {
+    const bad = unsafeWords(t);
+    if (bad === "phone") fail("phone எண்கள் இங்கே வேண்டாம்: பாதுகாப்புக்காக.");
+    if (bad === "link") fail("links இங்கே வேண்டாம்: உன் வார்த்தைகளில் எழுது.");
+  }
   return t;
 }
 
@@ -183,6 +210,75 @@ async function openUs(ctx: QueryCtx) {
 }
 
 const gradeOf = (s: Doc<"students">) => (typeof s.grade === "number" ? s.grade : null);
+
+/** A student as the talk shows him: his name, grade and face (as the race shows them). */
+async function meAs(ctx: QueryCtx, s: Doc<"students">) {
+  const w = await whoOf(ctx, s._id);
+  const g = gradeOf(s);
+  return { n: s.name, ...(g !== null ? { g } : {}), ...(w?.pic ? { pic: w.pic } : {}) };
+}
+
+/** The students a line is about (his moment, his doubt or 💡 post, the champions): told when someone writes in it. */
+const peopleOf = (m: Doc<"usMoments">): Id<"students">[] => [...new Set([...(m.sid ? [m.sid] : []), ...(m.ppl ?? []).map((p) => p.sid)])];
+
+/**
+ * The message a new one answers (`re`), on this line: `to` = the one he tapped Reply on (its writer is told), `root` =
+ * the first of its chain (the new one goes under it: one level).
+ */
+async function parentOf(ctx: QueryCtx, m: Doc<"usMoments">, re: string | undefined): Promise<{ to: Doc<"usAnswers">; root: Doc<"usAnswers"> } | null> {
+  if (!re) return null;
+  const id = ctx.db.normalizeId("usAnswers", re);
+  const to = id ? await ctx.db.get(id) : null;
+  if (!to || to.mid !== m._id) fail("That message isn't here any more.");
+  const root = to.re ? ((await ctx.db.get(to.re)) ?? to) : to;
+  return { to, root };
+}
+
+/**
+ * Someone wrote: the line's students are told (a comment on his moment, a reply on his doubt), and the writer of the
+ * message it answers ("replied to you": that one only, when he is both). Never the writer himself.
+ */
+async function tellWriting(
+  ctx: MutationCtx,
+  m: Doc<"usMoments">,
+  from: Id<"students"> | null,
+  parent: { to: Doc<"usAnswers"> } | null,
+  base: Omit<Tell, "k">,
+  words: string,
+): Promise<void> {
+  const said = clip(words || "📷", 60);
+  const r = parent?.to.sid && parent.to.sid !== from ? parent.to.sid : null;
+  if (r) await tell(ctx, r, from, { ...base, k: "r" }, `↩️ ${base.n}: ${said}`);
+  for (const sid of peopleOf(m)) {
+    if (sid === r || sid === from) continue;
+    await tell(ctx, sid, from, { ...base, k: "c" }, `💬 ${base.n}: ${said}`);
+  }
+}
+
+/**
+ * XP for a comment in his own words (+1; his choice, 8 Nov 2026): Settings → Community's switch on, two words at least,
+ * never one-tap words, never the same words as one of his last three, 20 a day at most. Says how much it gave.
+ */
+async function commentXp(ctx: MutationCtx, s: Doc<"students">, id: Id<"usAnswers">, t: string, now: number): Promise<number> {
+  if (!(await usCfg(ctx)).cxp || !ownWords(t)) return 0;
+  const last = await ctx.db
+    .query("usAnswers")
+    .withIndex("by_sid", (q) => q.eq("sid", s._id))
+    .order("desc")
+    .take(4);
+  if (last.some((a) => a._id !== id && !!a.t && sameWords(a.t, t))) return 0;
+  if ((await commentXpToday(ctx, s._id, now)) + XP_COMMENT > COMMENT_XP_A_DAY) return 0;
+  return await giveXp(ctx, s._id, XP_COMMENT, "c", id, now);
+}
+
+/** His messages in the last day (the flood stops at COMMENTS_A_DAY). */
+async function wroteToday(ctx: QueryCtx, sid: Id<"students">, now: number): Promise<number> {
+  const recent = await ctx.db
+    .query("usAnswers")
+    .withIndex("by_sid", (q) => q.eq("sid", sid).gt("at", now - DAY_MS))
+    .collect();
+  return recent.length;
+}
 
 /** His Us tab: the welcome, how many of ARISTORA learned today, the newest lines for him. */
 export const feed = query({
@@ -198,7 +294,7 @@ export const feed = query({
   },
 });
 
-/** His one tap on a line: once per line (a second tap changes nothing), never on his own. */
+/** His one tap on a line: once per line (a second tap changes nothing), never on his own. Its students are told. */
 export const clap = mutation({
   args: { token, id: v.string() },
   handler: async (ctx, args) => {
@@ -212,9 +308,11 @@ export const clap = mutation({
       .withIndex("by_mid", (q) => q.eq("mid", m._id).eq("sid", s._id))
       .first();
     if (had) return { c: m.c };
-    await ctx.db.insert("usClaps", { mid: m._id, sid: s._id, at: Date.now() });
+    const me = await meAs(ctx, s);
+    await ctx.db.insert("usClaps", { mid: m._id, sid: s._id, at: Date.now(), n: me.n, ...(me.pic ? { pic: me.pic } : {}) });
     const cn = m.cn ?? [];
     await ctx.db.patch(m._id, { c: m.c + 1, ...(cn.length < 3 && !cn.includes(s.name) ? { cn: [...cn, s.name] } : {}) });
+    for (const sid of peopleOf(m)) await tell(ctx, sid, s._id, { k: "clap", mid: m._id, n: me.n, ...(me.pic ? { pic: me.pic } : {}) });
     return { c: m.c + 1 };
   },
 });
@@ -323,7 +421,7 @@ export const shout = mutation({
       .withIndex("by_sid", (q) => q.eq("sid", args.studentId).eq("k", "shout"))
       .collect();
     if (today.some((m) => m.by === u._id && m.day === day)) fail(`You gave ${w.n} a shout-out today already: another tomorrow!`);
-    await addMoment(ctx, {
+    const id = await addMoment(ctx, {
       k: "shout",
       sid: w.sid,
       n: w.n,
@@ -335,12 +433,12 @@ export const shout = mutation({
       demo: false,
       at: now,
     });
-    await alertStudent(ctx, w.sid, `🌟 ${u.name} ஆசிரியர் உனக்கு ஒரு shout-out கொடுத்தார்: ${why.ta}`, "/f/#us");
+    await tell(ctx, w.sid, null, { k: "shout", mid: id, n: u.name, tch: true, t: args.why }, `🌟 ${u.name} ஆசிரியர் உனக்கு ஒரு shout-out கொடுத்தார்: ${why.ta}`);
     await log(ctx, null, now, { kind: "us-shout", studentId: w.sid, name: w.n, value: args.why });
   },
 });
 
-/** A teacher's 👏 on a line (once): her name shows on the phones; the student it is about gets an alert. */
+/** A teacher's 👏 on a line (once): her name shows on the phones; the students it is about are told. */
 export const tclap = mutation({
   args: { token, id: v.id("usMoments") },
   handler: async (ctx, args) => {
@@ -350,7 +448,9 @@ export const tclap = mutation({
     if (m.k === "count" || m.k === "ask" || (m.k === "post" && m.by === u._id) || (m.k === "shout" && m.by === u._id)) return;
     if (m.tc?.some((x) => x.id === u._id)) return;
     await ctx.db.patch(m._id, { tc: [...(m.tc ?? []), { id: u._id, n: u.name }].slice(-8) });
-    if (m.sid && m.k !== "shout") await alertStudent(ctx, m.sid, `👏 ${u.name} ஆசிரியர் உன்னைப் பாராட்டினார்!`, "/f/#us");
+    if (m.k !== "shout") {
+      for (const sid of peopleOf(m)) await tell(ctx, sid, null, { k: "tclap", mid: m._id, n: u.name, tch: true }, `👏 ${u.name} ஆசிரியர் உன்னைப் பாராட்டினார்!`);
+    }
   },
 });
 
@@ -366,7 +466,7 @@ export const photoUrl = mutation({
 /**
  * A teacher's post (the owner and the Community tick): words and / or photos (a poster, a screenshot of a question),
  * for everyone, one grade or several (`gs`; `to` = one grade, from before). A question (`qn`): students answer it, and
- * every student it is for gets an alert (his phones that turned them on).
+ * every student it is for is told (his bell, and his phones that turned alerts on).
  */
 export const post = mutation({
   args: {
@@ -405,7 +505,9 @@ export const post = mutation({
         .withIndex("by_list", (q) => q.eq("demo", false).eq("gone", false))
         .collect();
       for (const r of rows) {
-        if (all || (r.g !== undefined && gs.includes(r.g))) await alertStudent(ctx, r.sid, `❓ ${u.name} ஆசிரியர் ஒரு கேள்வி கேட்கிறார். உன் விடையை அனுப்பு!`, `/f/#us=${id}`);
+        if (all || (r.g !== undefined && gs.includes(r.g))) {
+          await tell(ctx, r.sid, null, { k: "q", mid: id, n: u.name, tch: true, ...(t ? { t } : {}) }, `❓ ${u.name} ஆசிரியர் ஒரு கேள்வி கேட்கிறார். உன் விடையை அனுப்பு!`);
+        }
       }
     }
     return id;
@@ -423,21 +525,29 @@ export const pin = mutation({
   },
 });
 
-/** A line goes from every phone (and its taps, answers and photos). */
+/** A line a teacher removes: the XP it and its talk gave goes first, then the line (its taps, answers, talk, photos). */
+async function removeLine(ctx: MutationCtx, m: Doc<"usMoments">): Promise<void> {
+  const now = Date.now();
+  for (const a of await answersOf(ctx, m._id)) await takeXp(ctx, a._id, now);
+  await takeXp(ctx, m._id, now);
+  await dropMoment(ctx, m._id);
+}
+
+/** A line goes from every phone (and its taps, answers, talk and photos; the XP they gave). */
 export const remove = mutation({
   args: { token, id: v.id("usMoments") },
   handler: async (ctx, args) => {
     const u = await actor(ctx, args.token, ["community"]);
     const m = await ctx.db.get(args.id);
     if (!m) return;
-    await dropMoment(ctx, m._id);
+    await removeLine(ctx, m);
     await log(ctx, null, Date.now(), { kind: "us-remove", ...(m.sid ? { studentId: m.sid } : {}), ...(m.n ? { name: m.n } : {}), value: `${m.k} by ${u.name}` });
   },
 });
 
-/** The owner: the tab on the phones, his welcome, the owl's kinds turned off. */
+/** The owner: the tab on the phones, his welcome, the owl's kinds turned off, comments' XP. */
 export const setCfg = mutation({
-  args: { token, open: v.optional(v.boolean()), welcome: v.optional(v.string()), off: v.optional(v.array(usKind)) },
+  args: { token, open: v.optional(v.boolean()), welcome: v.optional(v.string()), off: v.optional(v.array(usKind)), cxp: v.optional(v.boolean()) },
   handler: async (ctx, args) => {
     await actor(ctx, args.token, ["owner"]);
     const cfg = await usCfg(ctx);
@@ -449,17 +559,56 @@ export const setCfg = mutation({
     }
     if (args.open !== undefined) cfg.open = args.open;
     if (args.off !== undefined) cfg.off = args.off.filter((k: UsKind) => OWL_KINDS.includes(k));
+    if (args.cxp !== undefined) cfg.cxp = args.cxp;
     await setUsCfg(ctx, cfg);
     if (args.open !== undefined) await log(ctx, null, Date.now(), { kind: "us-open", value: args.open ? "on" : "off" });
+    if (args.cxp !== undefined) await log(ctx, null, Date.now(), { kind: "us-cxp", value: args.cxp ? "on" : "off" });
   },
 });
 
-// ---- Posts and doubts opened (7 Nov 2026) ----
+// ---- A line opened: who cheered, the answers or replies, the talk (7 Nov 2026; every line since 8 Nov) ----
+
+/** Who cheered a line (the newest first): the faces kept with each tap (older taps: as the race shows him). */
+async function cheersOf(ctx: QueryCtx, mid: Id<"usMoments">): Promise<UsCheer[]> {
+  const rows = (
+    await ctx.db
+      .query("usClaps")
+      .withIndex("by_mid", (q) => q.eq("mid", mid))
+      .collect()
+  ).sort((a, b) => b.at - a.at);
+  const out: UsCheer[] = [];
+  for (const c of rows.slice(0, 60)) {
+    if (c.n) out.push({ sid: c.sid, n: c.n, ...(c.pic ? { pic: c.pic } : {}) });
+    else {
+      const w = await whoOf(ctx, c.sid);
+      if (w) out.push({ sid: c.sid, n: w.n, ...(w.g !== undefined ? { g: w.g } : {}), ...(w.pic ? { pic: w.pic } : {}) });
+    }
+  }
+  return out;
+}
+
+/** Messages as one person may see them, with their photos and whether he gave each a 👏. */
+async function messagesFor(ctx: QueryCtx, rows: Doc<"usAnswers">[], m: Doc<"usMoments">, me: Id<"students"> | null, staff: boolean, who: string): Promise<UsReply[]> {
+  const out: UsReply[] = [];
+  for (const a of rows) {
+    const r = await withPics(ctx, replyOf(a, m, me, staff), a.ph);
+    if (a.lk) {
+      const mine = await ctx.db
+        .query("usLikes")
+        .withIndex("by_aid", (q) => q.eq("aid", a._id).eq("who", who))
+        .first();
+      if (mine) r.liked = true;
+    }
+    out.push(r);
+  }
+  return out;
+}
 
 /**
- * A post or a doubt on his phone, opened. A question: his own answer always; the others only once he sent his, and
- * only those a teacher marked right (with the names); the rest are counted (`hidden`). A doubt: its replies, a
- * senior's nameless until a teacher marks it right; two reports hide a reply.
+ * A line on his phone, opened. A question: his own answer always; the others only once he sent his, and only those a
+ * teacher marked right (with the names); the rest are counted (`hidden`); its talk opens with his answer
+ * (`talkHidden` before). A doubt: its replies, named but for the one who asked; two reports hide a reply. Every other
+ * line: its talk. And who cheered.
  */
 export const thread = query({
   args: { token, id: v.string() },
@@ -467,15 +616,31 @@ export const thread = query({
     const s = await familyViewer(ctx, args.token);
     const m = await lineOf(ctx, s, args.id);
     const rows = await answersOf(ctx, m._id);
-    const sent = rows.some((a) => a.sid === s._id);
-    const shown = rows.filter((a) => (m.k === "ask" ? replyShows(a, s._id) : a.sid === s._id || (sent && a.ok === true)));
-    const list: UsReply[] = [];
-    for (const a of shown) list.push(await withPics(ctx, replyOf(a, m, s._id, false), a.ph));
+    const base = rows.filter((a) => !isTalk(a));
+    const talkRows = rows.filter(isTalk);
+    const sent = base.some((a) => a.sid === s._id);
+    const shown = base.filter((a) => (m.k === "ask" ? replyShows(a, s._id) : a.sid === s._id || (sent && a.ok === true)));
+    const open = talkOpen(m, sent);
+    const talk = open ? talkRows.filter((a) => replyShows(a, s._id)) : [];
+    const clapped = await ctx.db
+      .query("usClaps")
+      .withIndex("by_mid", (q) => q.eq("mid", m._id).eq("sid", s._id))
+      .first();
+    const mineLine = m.sid === s._id;
     return {
       m: await lineFor(ctx, m, s._id),
-      list,
-      hidden: m.qn ? rows.length - shown.length : 0,
-      can: m.k === "ask" ? { reply: true, report: m.sid !== s._id } : m.qn ? { answer: !sent } : {},
+      list: await messagesFor(ctx, shown, m, s._id, false, s._id),
+      hidden: m.qn ? base.length - shown.length : 0,
+      can:
+        m.k === "ask"
+          ? { reply: true, report: !mineLine }
+          : m.qn
+            ? { answer: !sent, talk: sent }
+            : { talk: true, ...(m.k === "learn" && !mineLine ? { report: true } : {}) },
+      talk: await messagesFor(ctx, talk, m, s._id, false, s._id),
+      ...(open ? {} : { talkHidden: talkRows.length }),
+      cheers: await cheersOf(ctx, m._id),
+      ...(clapped ? { clapped: true } : {}),
     };
   },
 });
@@ -492,8 +657,9 @@ export const answer = mutation({
     const t = wordsOf(args.text, args.ph, true);
     const ph = await takePhotos(ctx, args.ph, REPLY_PHOTOS);
     const g = gradeOf(s);
-    await ctx.db.insert("usAnswers", { mid: m._id, sid: s._id, n: s.name, ...(g !== null ? { g } : {}), ...(t ? { t } : {}), ...(ph ? { ph } : {}), at: Date.now(), demo: m.demo });
-    await ctx.db.patch(m._id, { an: (m.an ?? 0) + 1, wN: (m.wN ?? 0) + 1 });
+    const now = Date.now();
+    await ctx.db.insert("usAnswers", { mid: m._id, sid: s._id, n: s.name, ...(g !== null ? { g } : {}), ...(t ? { t } : {}), ...(ph ? { ph } : {}), at: now, demo: m.demo });
+    await ctx.db.patch(m._id, { an: (m.an ?? 0) + 1, wN: (m.wN ?? 0) + 1, la: now });
   },
 });
 
@@ -531,9 +697,12 @@ export const doubt = mutation({
   },
 });
 
-/** His reply on a doubt (his own, or a younger student's sent to seniors); the student who asked gets an alert. */
+/**
+ * His reply on a doubt (his own, or a younger student's sent to seniors), under another reply if he likes (`re`): the
+ * student who asked and the one he answers are told; his own words give +1 XP (commentXp).
+ */
 export const reply = mutation({
-  args: { token, id: v.string(), text: v.optional(v.string()), ph: v.optional(v.array(usPhoto)) },
+  args: { token, id: v.string(), text: v.optional(v.string()), ph: v.optional(v.array(usPhoto)), re: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const s = await familyActor(ctx, args.token);
     await openUs(ctx);
@@ -541,56 +710,234 @@ export const reply = mutation({
     if (m.k !== "ask") fail("Replies are for doubts.");
     const t = wordsOf(args.text, args.ph, true);
     const now = Date.now();
-    const recent = await ctx.db
-      .query("usAnswers")
-      .withIndex("by_sid", (q) => q.eq("sid", s._id).gt("at", now - DAY_MS))
-      .collect();
-    if (recent.length >= REPLIES_A_DAY) fail("இன்றைக்குப் போதுமான பதில்கள்: நாளை தொடர்.");
+    if ((await wroteToday(ctx, s._id, now)) >= COMMENTS_A_DAY) fail("இன்றைக்குப் போதுமான பதில்கள்: நாளை தொடர்.");
+    const parent = await parentOf(ctx, m, args.re);
     const ph = await takePhotos(ctx, args.ph, REPLY_PHOTOS);
-    const g = gradeOf(s);
-    await ctx.db.insert("usAnswers", { mid: m._id, sid: s._id, n: s.name, ...(g !== null ? { g } : {}), ...(t ? { t } : {}), ...(ph ? { ph } : {}), at: now, demo: m.demo });
+    const me = await meAs(ctx, s);
+    const asker = m.sid === s._id;
+    const id = await ctx.db.insert("usAnswers", {
+      mid: m._id,
+      sid: s._id,
+      n: s.name,
+      ...(me.g !== undefined ? { g: me.g } : {}),
+      ...(t ? { t } : {}),
+      ...(ph ? { ph } : {}),
+      at: now,
+      demo: m.demo,
+      ...(parent ? { re: parent.root._id } : {}),
+      ...(me.pic && !asker ? { pic: me.pic } : {}),
+    });
     await ctx.db.patch(m._id, { an: (m.an ?? 0) + 1 });
-    if (m.sid && m.sid !== s._id) await alertStudent(ctx, m.sid, "💬 உன் சந்தேகத்துக்கு ஒரு மூத்த மாணவர் பதில் சொன்னார்.", `/f/#us=${m._id}`);
+    // The one who asked is never named, never a face on the card.
+    await wroteIn(ctx, { ...m, an: (m.an ?? 0) + 1 }, asker ? null : { n: me.n, ...(me.pic ? { pic: me.pic } : {}) }, false, now);
+    await tellWriting(ctx, m, s._id, parent, { mid: m._id, aid: id, n: asker ? "கேட்டவர்" : me.n, ...(me.pic && !asker ? { pic: me.pic } : {}), ...(t ? { t } : {}) }, t);
+    return { xp: await commentXp(ctx, s, id, t, now) };
   },
 });
 
-/** A doubt, or a reply on one, that shouldn't be there (never his own, never a teacher's): two reports hide it. */
+/**
+ * His comment on any line but a doubt (8 Nov 2026, his "student can chat inside each thread"; "everyone, like the
+ * hall"): words only (a teacher's may have photos), under another comment if he likes (`re`). A question's talk only once
+ * he sent his answer. The line's students and the one he answers are told; his own words give +1 XP.
+ */
+export const comment = mutation({
+  args: { token, id: v.string(), text: v.string(), re: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const s = await familyActor(ctx, args.token);
+    await openUs(ctx);
+    const m = await lineOf(ctx, s, args.id);
+    if (m.k === "ask") fail("Replies are for doubts: write it there.");
+    if (m.qn && !(await mineOf(ctx, m._id, s._id))) fail("முதலில் உன் விடையை அனுப்பு: பிறகு பேசலாம்.");
+    const t = wordsOf(args.text, undefined, true, TALK_MAX);
+    const now = Date.now();
+    if ((await wroteToday(ctx, s._id, now)) >= COMMENTS_A_DAY) fail("இன்றைக்குப் போதுமான comments: நாளை தொடர்.");
+    const parent = await parentOf(ctx, m, args.re);
+    if (parent && !replyShows(parent.to, s._id)) fail("That message isn't here any more.");
+    const me = await meAs(ctx, s);
+    const id = await ctx.db.insert("usAnswers", {
+      mid: m._id,
+      sid: s._id,
+      n: me.n,
+      ...(me.g !== undefined ? { g: me.g } : {}),
+      t,
+      at: now,
+      demo: m.demo,
+      k: "c",
+      ...(parent ? { re: parent.root._id } : {}),
+      ...(me.pic ? { pic: me.pic } : {}),
+    });
+    await wroteIn(ctx, m, { n: me.n, ...(me.pic ? { pic: me.pic } : {}) }, true, now);
+    await tellWriting(ctx, m, s._id, parent, { mid: m._id, aid: id, n: me.n, ...(me.pic ? { pic: me.pic } : {}), t }, t);
+    return { xp: await commentXp(ctx, s, id, t, now) };
+  },
+});
+
+/** A message he may see on a line he may see (for a 👏 or a report). */
+async function messageFor(ctx: QueryCtx, s: Doc<"students">, aid: string): Promise<{ a: Doc<"usAnswers">; m: Doc<"usMoments"> }> {
+  const id = ctx.db.normalizeId("usAnswers", aid);
+  const a = id ? await ctx.db.get(id) : null;
+  if (!a) fail("This isn't here any more.");
+  const m = await lineOf(ctx, s, a.mid);
+  const answered = !!(await mineOf(ctx, m._id, s._id));
+  const sees = isTalk(a)
+    ? talkOpen(m, answered) && replyShows(a, s._id)
+    : m.k === "ask"
+      ? replyShows(a, s._id)
+      : a.sid === s._id || (answered && a.ok === true);
+  if (!sees) fail("This isn't here any more.");
+  return { a, m };
+}
+
+/** 👏 on a message (a student or a teacher): once each, never on one's own; the student who wrote it is told (no alert). */
+async function likeIt(ctx: MutationCtx, a: Doc<"usAnswers">, m: Doc<"usMoments">, who: string, n: string, from: Id<"students"> | null, tch: boolean, pic?: string) {
+  const had = await ctx.db
+    .query("usLikes")
+    .withIndex("by_aid", (q) => q.eq("aid", a._id).eq("who", who))
+    .first();
+  if (had) return { lk: a.lk ?? 0 };
+  await ctx.db.insert("usLikes", { aid: a._id, who, at: Date.now() });
+  const ln = a.ln ?? [];
+  const lk = (a.lk ?? 0) + 1;
+  await ctx.db.patch(a._id, { lk, ...(ln.length < 3 && !ln.includes(n) ? { ln: [...ln, n] } : {}) });
+  if (a.sid) await tell(ctx, a.sid, from, { k: "l", mid: m._id, aid: a._id, n, ...(tch ? { tch: true } : {}), ...(pic ? { pic } : {}) });
+  return { lk };
+}
+
+/** His 👏 on a message of the talk (never his own; no XP: his rule, "not for thumbs or clap"). */
+export const like = mutation({
+  args: { token, aid: v.string() },
+  handler: async (ctx, args) => {
+    const s = await familyActor(ctx, args.token);
+    const { a, m } = await messageFor(ctx, s, args.aid);
+    if (a.sid === s._id) fail("This one is yours!");
+    const me = await meAs(ctx, s);
+    return await likeIt(ctx, a, m, s._id, me.n, s._id, false, me.pic);
+  },
+});
+
+/** He opened a line: once each, never his own (its "👀 N"). */
+export const view = mutation({
+  args: { token, id: v.string() },
+  handler: async (ctx, args) => {
+    const s = await familyActor(ctx, args.token);
+    const m = await lineOf(ctx, s, args.id);
+    if (peopleOf(m).includes(s._id)) return;
+    const had = await ctx.db
+      .query("usViews")
+      .withIndex("by_mid", (q) => q.eq("mid", m._id).eq("sid", s._id))
+      .first();
+    if (had) return;
+    await ctx.db.insert("usViews", { mid: m._id, sid: s._id, at: Date.now() });
+    await ctx.db.patch(m._id, { vw: (m.vw ?? 0) + 1 });
+  },
+});
+
+/**
+ * His 💡 post (8 Nov 2026, his answer: students post what they learned, "after a teacher's ✓"): words and / or 2 photos
+ * of his working, 2 a day. Only he and the teachers see it until one of them shows it to everyone (+5 XP).
+ */
+export const learn = mutation({
+  args: { token, text: v.optional(v.string()), ph: v.optional(v.array(usPhoto)) },
+  handler: async (ctx, args) => {
+    const s = await familyActor(ctx, args.token);
+    await openUs(ctx);
+    const t = wordsOf(args.text, args.ph, true);
+    const now = Date.now();
+    const day = slDayNo(now);
+    const had = await ctx.db
+      .query("usMoments")
+      .withIndex("by_sid", (q) => q.eq("sid", s._id).eq("k", "learn"))
+      .collect();
+    if (had.filter((m) => m.day === day).length >= LEARN_A_DAY) fail(`ஒரு நாளைக்கு ${LEARN_A_DAY} 💡 பதிவுகள் மட்டும்: நாளை இன்னொன்று!`);
+    const ph = await takePhotos(ctx, args.ph, REPLY_PHOTOS);
+    const me = await meAs(ctx, s);
+    const id = await addMoment(ctx, {
+      k: "learn",
+      sid: s._id,
+      n: me.n,
+      ...(me.g !== undefined ? { g: me.g } : {}),
+      ...(me.pic ? { pic: me.pic } : {}),
+      ...(t ? { t } : {}),
+      ...(ph ? { ph } : {}),
+      demo: !!s.demo || !!s.test,
+      at: now,
+    });
+    await log(ctx, null, now, { kind: "us-learn", studentId: s._id, name: s.name });
+    return id;
+  },
+});
+
+/** He opened the bell: its Us lines are read. */
+export const seen = mutation({
+  args: { token },
+  handler: async (ctx, args) => {
+    const s = await familyActor(ctx, args.token);
+    const rows = await ctx.db
+      .query("usInbox")
+      .withIndex("by_seen", (q) => q.eq("sid", s._id).eq("seen", false))
+      .collect();
+    for (const r of rows) await ctx.db.patch(r._id, { seen: true });
+    return rows.length;
+  },
+});
+
+/**
+ * A doubt, a 💡 post, or a message (a reply or a comment) that shouldn't be there (never his own, never a teacher's):
+ * two reports hide it from students until a teacher keeps it or removes it.
+ */
 export const report = mutation({
   args: { token, id: v.string(), rid: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const s = await familyActor(ctx, args.token);
     const m = await lineOf(ctx, s, args.id);
-    if (m.k !== "ask") fail("Only doubts and their replies can be reported.");
-    const rid = args.rid ? ctx.db.normalizeId("usAnswers", args.rid) : null;
-    const a = rid ? await ctx.db.get(rid) : null;
-    if (args.rid && (!a || a.mid !== m._id || a.by)) fail("This isn't here any more.");
+    let a: Doc<"usAnswers"> | null = null;
+    if (args.rid) {
+      a = (await messageFor(ctx, s, args.rid)).a;
+      if (a.mid !== m._id || a.by) fail("This isn't here any more.");
+    } else if (m.k !== "ask" && m.k !== "learn") fail("Only doubts, 💡 posts and what students write can be reported.");
     if ((a ?? m).sid === s._id) fail("This one is yours.");
-    const by = (x: Id<"students">[] | undefined) => (x ?? []).includes(s._id) ? null : [...(x ?? []), s._id].slice(-5);
+    const by = (x: Id<"students">[] | undefined) => ((x ?? []).includes(s._id) ? null : [...(x ?? []), s._id].slice(-5));
     const next = by((a ?? m).rpBy);
     if (!next) return; // reported once already
-    if (a) await ctx.db.patch(a._id, { rpBy: next });
-    else await ctx.db.patch(m._id, { rpBy: next });
-    await log(ctx, null, Date.now(), { kind: "us-report", studentId: s._id, name: s.name, value: a ? "reply" : "doubt" });
+    if (a) {
+      await ctx.db.patch(a._id, { rpBy: next });
+      if (!a.rpBy?.length) await ctx.db.patch(m._id, { rpm: (m.rpm ?? 0) + 1 });
+    } else await ctx.db.patch(m._id, { rpBy: next });
+    await log(ctx, null, Date.now(), { kind: "us-report", studentId: s._id, name: s.name, value: a ? (isTalk(a) ? "comment" : "reply") : m.k === "learn" ? "learn" : "doubt" });
   },
 });
 
-/** A post or a doubt for a teacher: every answer and reply, with names, marks and her notes. */
+/** A line for a teacher: every answer, reply and comment, with names, marks and her notes; who cheered. */
 export const tthread = query({
   args: { token, id: v.string() },
   handler: async (ctx, args): Promise<UsThread> => {
-    await viewer(ctx, args.token, "any");
+    const u = await viewer(ctx, args.token, "any");
     const mid = ctx.db.normalizeId("usMoments", args.id);
     const m = mid ? await ctx.db.get(mid) : null;
     if (!m) fail("This isn't here any more.");
-    const list: UsReply[] = [];
-    for (const a of await answersOf(ctx, m._id)) list.push(await withPics(ctx, replyOf(a, m, null, true), a.ph));
-    return { m: await withPics(ctx, itemOf(m, undefined, true), m.ph), list, hidden: 0, can: { mark: !!m.qn || m.k === "ask", reply: m.k === "ask" } };
+    const rows = await answersOf(ctx, m._id);
+    return {
+      m: await withPics(ctx, itemOf(m, undefined, true), m.ph),
+      list: await messagesFor(
+        ctx,
+        rows.filter((a) => !isTalk(a)),
+        m,
+        null,
+        true,
+        u._id,
+      ),
+      hidden: 0,
+      can: { mark: !!m.qn || m.k === "ask", reply: m.k === "ask", talk: m.k !== "ask", ...(m.k === "learn" ? { approve: true } : {}) },
+      talk: await messagesFor(ctx, rows.filter(isTalk), m, null, true, u._id),
+      cheers: await cheersOf(ctx, m._id),
+    };
   },
 });
 
 /**
  * A teacher's mark (any teacher): an answer ✓ right / ✗ not right (null = not marked), her words to him if she likes;
- * a senior's reply on a doubt ✓ (then his name shows). His phone gets an alert.
+ * a reply on a doubt ✓ (he helped). XP for a ✓ (8 Nov 2026, his answer): +5 an answer, +10 help; taken back with the ✓.
+ * His bell and phone are told.
  */
 export const mark = mutation({
   args: { token, id: v.id("usAnswers"), ok: v.union(v.boolean(), v.null()), note: v.optional(v.string()) },
@@ -600,6 +947,7 @@ export const mark = mutation({
     const m = a ? await ctx.db.get(a.mid) : null;
     if (!a || !m) fail("This answer isn't here any more.");
     if (a.by) fail("A teacher's reply has no mark.");
+    if (isTalk(a)) fail("A comment gets 👏 or your correction (✎), not a mark.");
     // The student who asked: his own words in his doubt are never marked (a ✓ shows the name, and his stays hidden).
     if (m.k === "ask" && a.sid === m.sid) fail("These are the asking student's own words: nothing to mark.");
     if (m.k === "ask" && args.ok === false) fail("A reply is marked right, or removed.");
@@ -607,41 +955,136 @@ export const mark = mutation({
     if (note.length > NOTE_MAX) fail(`Keep your words under ${NOTE_MAX} letters.`);
     const ok = args.ok ?? undefined;
     const was = a.ok;
+    const now = Date.now();
     await ctx.db.patch(a._id, { ok, okBy: ok === undefined ? undefined : u.name, note: note || undefined });
     if (m.qn) {
       const right = (x: boolean | undefined) => (x === true ? 1 : 0);
       const wait = (x: boolean | undefined) => (x === undefined ? 1 : 0);
       await ctx.db.patch(m._id, { okN: Math.max(0, (m.okN ?? 0) + right(ok) - right(was)), wN: Math.max(0, (m.wN ?? 0) + wait(ok) - wait(was)) });
     }
-    if (a.sid && ok !== undefined && (ok !== was || note !== (a.note ?? ""))) {
+    if (!a.sid) return;
+    const kind = m.k === "ask" ? ("help" as const) : ("ans" as const);
+    let xp = 0;
+    if (ok === true && was !== true) xp = await giveXp(ctx, a.sid, kind === "help" ? XP_HELP : XP_ANSWER, kind, a._id, now);
+    else if (ok !== true && was === true) await takeXp(ctx, a._id, now, kind);
+    if (ok !== undefined && (ok !== was || note !== (a.note ?? ""))) {
       const said = note ? ` ${note}` : "";
+      const plus = xp ? ` +${xp} XP` : "";
       const text =
         m.k === "ask"
-          ? `✓ ${u.name} ஆசிரியர்: நீ சொன்ன பதில் சரி! நன்றி 🙏${said}`
+          ? `✓ ${u.name} ஆசிரியர்: நீ சொன்ன பதில் சரி! நன்றி 🙏${plus}${said}`
           : ok
-            ? `✓ ${u.name} ஆசிரியர்: உன் விடை சரி! 🎉${said}`
+            ? `✓ ${u.name} ஆசிரியர்: உன் விடை சரி! 🎉${plus}${said}`
             : `${u.name} ஆசிரியர் உன் விடையைப் பார்த்தார்.${said || " சரியான விடைகளைப் பார்."}`;
-      await alertStudent(ctx, a.sid, text, `/f/#us=${m._id}`);
+      await tell(ctx, a.sid, null, { k: ok ? "ok" : "no", mid: m._id, aid: a._id, n: u.name, tch: true, ...(note ? { t: note } : {}), ...(xp ? { x: xp } : {}) }, text);
     }
   },
 });
 
-/** A teacher's reply on a doubt (any teacher): words and / or photos; the student who asked gets an alert. */
+/**
+ * A teacher's correction on a reply or a comment (8 Nov 2026, his "who correcting"): her words under it, read by everyone
+ * who sees it, with her name (null or empty takes them away). An answer to her question keeps ✓ / ✗ and words to him.
+ */
+export const fix = mutation({
+  args: { token, id: v.id("usAnswers"), text: v.union(v.string(), v.null()) },
+  handler: async (ctx, args) => {
+    const u = await actor(ctx, args.token, ["any"]);
+    const a = await ctx.db.get(args.id);
+    const m = a ? await ctx.db.get(a.mid) : null;
+    if (!a || !m) fail("This isn't here any more.");
+    if (a.by) fail("These are a teacher's own words: write another comment instead.");
+    if (!isTalk(a) && m.k !== "ask") fail("An answer gets ✓ / ✗ and your words to him (✎).");
+    const t = (args.text ?? "").trim();
+    if (t.length > NOTE_MAX) fail(`Keep your words under ${NOTE_MAX} letters.`);
+    await ctx.db.patch(a._id, { fix: t || undefined, fixBy: t ? u.name : undefined });
+    if (t && a.sid && t !== a.fix) {
+      await tell(ctx, a.sid, null, { k: "fix", mid: m._id, aid: a._id, n: u.name, tch: true, t }, `✎ ${u.name} ஆசிரியர்: ${clip(t, 60)}`);
+    }
+  },
+});
+
+/**
+ * A teacher on a 💡 post (any teacher): ✓ shows it to everyone (+5 XP, his bell and phone), ✗ "not this time" (only he
+ * sees it, with her words), null = waiting again (the XP goes back).
+ */
+export const approve = mutation({
+  args: { token, id: v.id("usMoments"), ok: v.union(v.boolean(), v.null()), note: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const u = await actor(ctx, args.token, ["any"]);
+    const m = await ctx.db.get(args.id);
+    if (!m || m.k !== "learn" || !m.sid) fail("This post isn't here any more.");
+    const note = (args.note ?? "").trim();
+    if (note.length > NOTE_MAX) fail(`Keep your words under ${NOTE_MAX} letters.`);
+    const ok = args.ok ?? undefined;
+    const was = m.ok;
+    const now = Date.now();
+    // Shown now: it comes as new to everyone (its place in the feed is the moment it was shown).
+    await ctx.db.patch(m._id, { ok, okBy: ok === undefined ? undefined : u.name, note: note || undefined, ...(ok === true && was !== true ? { at: now } : {}) });
+    let xp = 0;
+    if (ok === true && was !== true) xp = await giveXp(ctx, m.sid, XP_LEARN, "learn", m._id, now);
+    else if (ok !== true && was === true) await takeXp(ctx, m._id, now, "learn");
+    if (ok === true && was !== true) {
+      await tell(ctx, m.sid, null, { k: "ok", mid: m._id, n: u.name, tch: true, ...(note ? { t: note } : {}), ...(xp ? { x: xp } : {}) }, `💡 ${u.name} ஆசிரியர் உன் பதிவை எல்லோருக்கும் காட்டினார்! +${xp} XP`);
+    } else if (ok === false && was !== false) {
+      await tell(ctx, m.sid, null, { k: "no", mid: m._id, n: u.name, tch: true, ...(note ? { t: note } : {}) }, `${u.name} ஆசிரியர் உன் 💡 பதிவைப் பார்த்தார்.${note ? ` ${note}` : ""}`);
+    }
+    await log(ctx, null, now, { kind: "us-approve", studentId: m.sid, ...(m.n ? { name: m.n } : {}), value: ok === true ? "shown" : ok === false ? "not now" : "waiting" });
+  },
+});
+
+/** A teacher's reply on a doubt (any teacher): words and / or photos; the student who asked (and the one she answers) are told. */
 export const treply = mutation({
-  args: { token, id: v.id("usMoments"), text: v.optional(v.string()), ph: v.optional(v.array(usPhoto)) },
+  args: { token, id: v.id("usMoments"), text: v.optional(v.string()), ph: v.optional(v.array(usPhoto)), re: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const u = await actor(ctx, args.token, ["any"]);
     const m = await ctx.db.get(args.id);
     if (!m || m.k !== "ask") fail("This doubt isn't here any more.");
     const t = wordsOf(args.text, args.ph, false);
+    const parent = await parentOf(ctx, m, args.re);
     const ph = await takePhotos(ctx, args.ph, REPLY_PHOTOS);
-    await ctx.db.insert("usAnswers", { mid: m._id, by: u._id, n: u.name, ...(t ? { t } : {}), ...(ph ? { ph } : {}), at: Date.now(), demo: m.demo });
+    const now = Date.now();
+    const id = await ctx.db.insert("usAnswers", { mid: m._id, by: u._id, n: u.name, ...(t ? { t } : {}), ...(ph ? { ph } : {}), at: now, demo: m.demo, ...(parent ? { re: parent.root._id } : {}) });
     await ctx.db.patch(m._id, { an: (m.an ?? 0) + 1, tr: true });
-    if (m.sid) await alertStudent(ctx, m.sid, `💬 ${u.name} ஆசிரியர் உன் சந்தேகத்துக்குப் பதில் சொன்னார்.`, `/f/#us=${m._id}`);
+    await wroteIn(ctx, { ...m, an: (m.an ?? 0) + 1, tr: true }, { n: u.name, tch: true }, false, now);
+    await tellWriting(ctx, m, null, parent, { mid: m._id, aid: id, n: u.name, tch: true, ...(t ? { t } : {}) }, t);
   },
 });
 
-/** Any teacher: a doubt goes from every phone (with its replies), or one answer or reply (`rid`). */
+/** A teacher's comment on any line but a doubt (her photos too, under a message if she likes): its students are told. */
+export const tcomment = mutation({
+  args: { token, id: v.id("usMoments"), text: v.optional(v.string()), ph: v.optional(v.array(usPhoto)), re: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const u = await actor(ctx, args.token, ["any"]);
+    const m = await ctx.db.get(args.id);
+    if (!m) fail("This isn't here any more.");
+    if (m.k === "ask") fail("Reply on a doubt instead.");
+    const t = wordsOf(args.text, args.ph, false);
+    const parent = await parentOf(ctx, m, args.re);
+    const ph = await takePhotos(ctx, args.ph, REPLY_PHOTOS);
+    const now = Date.now();
+    const id = await ctx.db.insert("usAnswers", { mid: m._id, by: u._id, n: u.name, ...(t ? { t } : {}), ...(ph ? { ph } : {}), at: now, demo: m.demo, k: "c", ...(parent ? { re: parent.root._id } : {}) });
+    await wroteIn(ctx, m, { n: u.name, tch: true }, true, now);
+    await tellWriting(ctx, m, null, parent, { mid: m._id, aid: id, n: u.name, tch: true, ...(t ? { t } : {}) }, t);
+  },
+});
+
+/** A teacher's 👏 on a message (once; her name with it). */
+export const tlike = mutation({
+  args: { token, aid: v.id("usAnswers") },
+  handler: async (ctx, args) => {
+    const u = await actor(ctx, args.token, ["any"]);
+    const a = await ctx.db.get(args.aid);
+    const m = a ? await ctx.db.get(a.mid) : null;
+    if (!a || !m) fail("This isn't here any more.");
+    if (a.by === u._id) fail("This one is yours!");
+    return await likeIt(ctx, a, m, u._id, u.name, null, true);
+  },
+});
+
+/**
+ * Any teacher: a doubt or a 💡 post goes from every phone (with its talk), or one answer, reply or comment (`rid`). The
+ * XP it gave goes too. Posts and the owl's lines stay with ⋯ and the Community tick.
+ */
 export const drop = mutation({
   args: { token, id: v.id("usMoments"), rid: v.optional(v.id("usAnswers")) },
   handler: async (ctx, args) => {
@@ -652,24 +1095,30 @@ export const drop = mutation({
     if (args.rid) {
       const a = await ctx.db.get(args.rid);
       if (!a || a.mid !== m._id) return;
+      await takeXp(ctx, a._id, now);
       await dropAnswer(ctx, a);
-      await log(ctx, null, now, { kind: "us-remove", ...(a.sid ? { studentId: a.sid } : {}), name: a.n, value: `${m.k === "ask" ? "reply" : "answer"} by ${u.name}` });
+      await log(ctx, null, now, { kind: "us-remove", ...(a.sid ? { studentId: a.sid } : {}), name: a.n, value: `${isTalk(a) ? "comment" : m.k === "ask" ? "reply" : "answer"} by ${u.name}` });
       return;
     }
-    if (m.k !== "ask") fail("Only the Community tick removes posts and the owl's lines (⋯).");
-    await dropMoment(ctx, m._id);
-    await log(ctx, null, now, { kind: "us-remove", ...(m.sid ? { studentId: m.sid } : {}), ...(m.n ? { name: m.n } : {}), value: `ask by ${u.name}` });
+    if (m.k !== "ask" && m.k !== "learn") fail("Only the Community tick removes posts and the owl's lines (⋯).");
+    await removeLine(ctx, m);
+    await log(ctx, null, now, { kind: "us-remove", ...(m.sid ? { studentId: m.sid } : {}), ...(m.n ? { name: m.n } : {}), value: `${m.k} by ${u.name}` });
   },
 });
 
-/** Any teacher: a reported doubt or reply stays (its reports cleared: students see it again). */
+/** Any teacher: a reported doubt, 💡 post, reply or comment stays (its reports cleared: students see it again). */
 export const unflag = mutation({
   args: { token, id: v.id("usMoments"), rid: v.optional(v.id("usAnswers")) },
   handler: async (ctx, args) => {
     await actor(ctx, args.token, ["any"]);
     const a = args.rid ? await ctx.db.get(args.rid) : null;
-    if (a) await ctx.db.patch(a._id, { rpBy: undefined });
-    else if (!args.rid && (await ctx.db.get(args.id))) await ctx.db.patch(args.id, { rpBy: undefined });
+    if (a) {
+      if (a.rpBy?.length) {
+        await ctx.db.patch(a._id, { rpBy: undefined });
+        const m = await ctx.db.get(a.mid);
+        if (m) await ctx.db.patch(m._id, { rpm: Math.max(0, (m.rpm ?? 1) - 1) });
+      }
+    } else if (!args.rid && (await ctx.db.get(args.id))) await ctx.db.patch(args.id, { rpBy: undefined });
   },
 });
 
@@ -707,8 +1156,9 @@ export const daily = internalMutation({
 });
 
 /**
- * Lines older than 30 days go, with their taps, answers, replies and photos: SWEEP_MAX deletes at a time (a question
- * with a hundred answers is a few hundred), the rest a minute later.
+ * Lines older than 30 days go, with their taps, answers, replies, talk, bell lines and photos (the XP they gave stays):
+ * SWEEP_MAX deletes at a time (a question with a hundred answers is a few hundred), the rest a minute later. Then XP rows
+ * nothing can take back any more.
  */
 export const sweep = internalMutation({
   args: {},
@@ -732,6 +1182,7 @@ export const sweep = internalMutation({
         return;
       }
     }
+    if ((await sweepXp(ctx, now, Math.max(0, left))) >= left && left > 0) await ctx.scheduler.runAfter(60_000, internal.us.sweep, {});
   },
 });
 
@@ -744,7 +1195,14 @@ export const improved = internalMutation({
       .query("raceRows")
       .withIndex("by_list", (q) => q.eq("demo", false).eq("gone", false))
       .collect();
-    const top = mostImproved(rows.map((r: Doc<"raceRows">) => ({ r, ...numsAt(r, now) })));
+    // Levels and class work only (8 Nov 2026): a week of comments never makes anyone "most improved".
+    const top = mostImproved(
+      rows.map((r: Doc<"raceRows">) => {
+        const a = numsAt(r, now);
+        const u = r.us ? numsAt(r.us, now) : null;
+        return { r, xp: a.xp - (u?.xp ?? 0), prev: a.prev - (u?.prev ?? 0) };
+      }),
+    );
     await groupMoment(
       ctx,
       "up",

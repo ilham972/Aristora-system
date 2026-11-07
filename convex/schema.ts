@@ -65,7 +65,26 @@ export const usKind = v.union(
   v.literal("post"),
   v.literal("shout"),
   v.literal("ask"),
+  /** 8 Nov 2026: a student's 💡 "what I learned" (words and a photo of his working): everyone sees it after a teacher's ✓. */
+  v.literal("learn"),
 );
+/** What a student is told about in the bell (8 Nov 2026: Us's own alerts). */
+export const usInboxKind = v.union(
+  v.literal("c"),
+  v.literal("r"),
+  v.literal("l"),
+  v.literal("ok"),
+  v.literal("no"),
+  v.literal("fix"),
+  v.literal("q"),
+  v.literal("shout"),
+  v.literal("tclap"),
+  v.literal("clap"),
+);
+/** What gave a student XP on Us (8 Nov 2026, his answers): an answer ✓, help ✓, a 💡 post ✓, a comment in his words. */
+export const usXpKind = v.union(v.literal("ans"), v.literal("help"), v.literal("learn"), v.literal("c"));
+/** XP numbers as convex/lib/race.ts works them out (a race row's Us part). */
+export const xpNums = v.object({ wk: v.number(), d: v.number(), xp: v.number(), xpy: v.number(), prev: v.number(), tot: v.number() });
 /**
  * A photo on Us (7 Nov 2026: a teacher's poster or question, a student's answer or doubt): two copies the phone made,
  * `s` small for the lines (~560 px), `b` big for a tap (1280 px); `w` × `h` = the big one's size.
@@ -870,13 +889,35 @@ export default defineSchema({
     aud: v.optional(usAud),
     tr: v.optional(v.boolean()),
     rpBy: v.optional(v.array(v.id("students"))),
+    /**
+     * The talk (8 Nov 2026, his voice note: "student can chat inside each thread ... who appreciating, who correcting"):
+     * `cm` comments (usAnswers with k "c"), `la` the last thing written in it (the feed puts the liveliest first), `lp`
+     * the last three people who wrote (faces on the card; never the one who asked a doubt), `vw` students who opened it,
+     * `rpm` messages in it under a report (the teachers' To do).
+     */
+    cm: v.optional(v.number()),
+    la: v.optional(v.number()),
+    lp: v.optional(v.array(v.object({ n: v.string(), pic: v.optional(v.string()), tch: v.optional(v.boolean()) }))),
+    vw: v.optional(v.number()),
+    rpm: v.optional(v.number()),
+    /** A 💡 post: a teacher's ✓ shows it to everyone (true), or "not this time" (false: only he sees it, with `note`). */
+    ok: v.optional(v.boolean()),
+    okBy: v.optional(v.string()),
+    note: v.optional(v.string()),
   })
     .index("by_feed", ["demo", "at"])
     .index("by_sid", ["sid", "k"])
     .index("by_kind", ["k", "day"])
     .index("by_pin", ["pin", "at"]),
   /** A student's one tap on a line of Us (one per student and line). */
-  usClaps: defineTable({ mid: v.id("usMoments"), sid: v.id("students"), at: v.number() }).index("by_mid", ["mid", "sid"]),
+  usClaps: defineTable({
+    mid: v.id("usMoments"),
+    sid: v.id("students"),
+    at: v.number(),
+    /** Who (8 Nov 2026: the thread shows the faces of who cheered), as the race shows him. */
+    n: v.optional(v.string()),
+    pic: v.optional(v.string()),
+  }).index("by_mid", ["mid", "sid"]),
   /**
    * A student's answer to a teacher's question, or a reply on a doubt (a student's: `sid`; a teacher's: `by`), 7 Nov
    * 2026. `n` / `g` = the name and grade (a student's shown to students only once a teacher marked it right: `ok`);
@@ -898,11 +939,59 @@ export default defineSchema({
     note: v.optional(v.string()),
     rpBy: v.optional(v.array(v.id("students"))),
     demo: v.boolean(),
+    /**
+     * The talk (8 Nov 2026): `k` "c" = a comment (on any line; on a question only for those who answered); none = an
+     * answer to a question or a reply on a doubt, as before. `re` = the message it answers (one level: the first of
+     * the chain). `lk` 👏 on it (one per person: usLikes), `ln` the first three names. `fix` = a teacher's correction
+     * everyone who sees it reads (`fixBy` her name). `pic` = the writer's face (as the race shows him).
+     */
+    k: v.optional(v.literal("c")),
+    re: v.optional(v.id("usAnswers")),
+    lk: v.optional(v.number()),
+    ln: v.optional(v.array(v.string())),
+    fix: v.optional(v.string()),
+    fixBy: v.optional(v.string()),
+    pic: v.optional(v.string()),
   })
     .index("by_mid", ["mid", "sid"])
     .index("by_sid", ["sid", "at"]),
   /** Every file a photo on Us holds (both copies): the hourly sweep keeps these, and deletes uploads nobody attached. */
   usFiles: defineTable({ f: v.id("_storage") }).index("by_f", ["f"]),
+  /** A 👏 on a message of the talk (8 Nov 2026): one per person (`who` = a student's id, or a teacher's). */
+  usLikes: defineTable({ aid: v.id("usAnswers"), who: v.string(), at: v.number() }).index("by_aid", ["aid", "who"]),
+  /** A student opened a line (8 Nov 2026: "👀 34" on it): once each, never his own line. */
+  usViews: defineTable({ mid: v.id("usMoments"), sid: v.id("students"), at: v.number() }).index("by_mid", ["mid", "sid"]),
+  /**
+   * What the bell tells a student about Us (8 Nov 2026, his voice note: "they don't know what's going on ... otherwise
+   * they will forget our app"): a comment on his line, a reply to him, 👏 on his comment or his line (gathered while
+   * unread: `x` how many), a teacher's ✓ (`x` = XP won) or her words, a new question for him, a shout-out. `n` = who
+   * (the last one), `t` = a few of the words. Kept 30 days; `seen` once he opened the bell.
+   */
+  usInbox: defineTable({
+    sid: v.id("students"),
+    k: usInboxKind,
+    mid: v.id("usMoments"),
+    aid: v.optional(v.id("usAnswers")),
+    n: v.string(),
+    tch: v.optional(v.boolean()),
+    pic: v.optional(v.string()),
+    t: v.optional(v.string()),
+    x: v.optional(v.number()),
+    at: v.number(),
+    seen: v.boolean(),
+  })
+    .index("by_sid", ["sid", "at"])
+    .index("by_seen", ["sid", "seen"])
+    .index("by_mid", ["mid"]),
+  /**
+   * XP from Us (8 Nov 2026, his answers): one row per thing that gave XP (`ref` = the answer, reply, comment or post),
+   * so taking it back (a teacher's ✓ taken back, a comment removed) takes the same XP from the same day. His race row
+   * keeps the sum (raceRows.us); these rows are kept 31 days (after that nothing can take them back).
+   */
+  usXp: defineTable({ sid: v.id("students"), at: v.number(), xp: v.number(), k: usXpKind, ref: v.string() })
+    .index("by_sid", ["sid", "at"])
+    .index("by_ref", ["ref"])
+    .index("by_at", ["at"]),
 
   /**
    * The simulation (1 Nov 2026, his voice note): made-up students (test students, the class only phones showing the
@@ -974,6 +1063,12 @@ export default defineSchema({
     w: v.optional(v.number()),
     wa: v.optional(v.number()),
     v: v.number(),
+    /**
+     * The part of these numbers that came from Us (8 Nov 2026: an answer or help a teacher ticked, a 💡 post, comments
+     * in his own words: convex/lib/usXp.ts). Counted in the race; never in the flame, "who learned today" or the grade
+     * cup (those are about Levels).
+     */
+    us: v.optional(xpNums),
   })
     .index("by_sid", ["sid"])
     .index("by_list", ["demo", "gone"]),

@@ -1114,6 +1114,13 @@ function describe(e: Doc<"events">): string {
       return `removed a line from Us (${v})`;
     case "us-open":
       return v === "on" ? "opened Us on the students' phones" : "closed Us on the students' phones";
+    // The talk (8 Nov 2026): a student's 💡 post, a teacher's ✓ on it, the owner's comments-XP switch.
+    case "us-learn":
+      return "posted 💡 what he learned in Us";
+    case "us-approve":
+      return v === "shown" ? "💡 post shown to everyone in Us" : v === "not now" ? "💡 post: not this time" : "💡 post waiting again";
+    case "us-cxp":
+      return v === "on" ? "comments in Us give XP" : "comments in Us give no XP";
     case "board-undo":
       return `${qName(e.q ?? 0)} at the board, undone`;
     case "untaught":

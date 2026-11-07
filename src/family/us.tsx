@@ -1,32 +1,32 @@
 // Us, the students' community (7 Nov 2026, his voice notes: "the app is not feel like a community"; "students don't
 // know how to use this community ... we have to give the hint ... how this is want to feel"). One tab, between Learn
 // and the Race, once the owner opens it (Settings → Community):
-// - the owl's guide the first time (three cards: what this place is, one tap is enough, you will be here too), again
-//   from the ? in the header;
-// - the owner's welcome; how many of ARISTORA learned today;
-// - the lines, newest first: the owl's (a birthday, a first level from home, back in class, a Stage finished, days in a
-//   row, the week's most improved and champions, yesterday's count) and the teachers' (a shout-out, a post). Each has
-//   one button that says what the moment asks for: 🎂 wish, 👋 welcome, 👏 cheer, 🙏 thank; yesterday's count asks
-//   for a Level today. His own lines show who cheered him instead.
+// - the owl's guide the first time (three cards), again from the ? in the header; the owner's welcome; how many of
+//   ARISTORA learned today;
+// - the lines: the owl's (a birthday, a first level from home, back in class, a Stage finished, days in a row, the
+//   week's most improved and champions, yesterday's count), the teachers' (a shout-out, a post, a question) and the
+//   students' (a doubt, a 💡 post);
 // - the end of the list sends him to learn: the community is never the place he stays.
-// The same evening (his next voice note): teachers' posts have photos and can be questions (✍️ Answer opens it: his
-// answer is hidden from classmates, usPost.tsx), and he asks his own doubts (🙋 Ask a doubt: teachers, seniors or
-// both). Chips show only the questions or only the doubts. The words are Tamil; the game words English.
+// 8 Nov 2026 (his voice note: "if I go to inside any thread, that feel like boring ... who appreciating, who correcting
+// ... student can chat inside each thread"): every line is a card that opens into its thread (usPost.tsx): a face, a
+// name, what it is and when; its one tap (🎂 👋 👏 🙏); 💬 its talk with the faces of the last who wrote; a dot on what
+// came alive since he last looked. The liveliest first. On top, what he can write: 💡 what he learned, 🙋 a doubt.
+// The words are Tamil; the game words English.
 
 import type { ComponentChildren } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import type { FamilyMe } from "../../convex/family";
 import type { UsFeed } from "../../convex/us";
 import type { UsItem } from "../../convex/lib/us";
-import { DAY_EN, MONTH, timeOf } from "./home";
+import { DAY_EN, MONTH } from "./home";
 import { keep, mutation, query } from "./net";
 import { picOf, usePics } from "./pics";
 import { buzz, sound } from "./sound";
-import { Avatar, Owl, OwlBadge, problemWords, showSheet, toast, Waiting, type Mood } from "./ui";
-import { AUD, DoubtSheet, gradesWords, Pics } from "./usPost";
+import { Avatar, Icon, Owl, OwlBadge, problemWords, showSheet, toast, Waiting, type Mood } from "./ui";
+import { AUD, DoubtSheet, gradesWords, LearnSheet, Pics } from "./usPost";
 
 /** A shout-out's reason, in his words (convex/lib/us.ts SHOUT_WHY: the phone keeps its own copy, see family.ts). */
-const WHY_TA: Record<string, string> = {
+export const WHY_TA: Record<string, string> = {
   try: "எப்போதும் விடாமுயற்சி!",
   help: "நண்பருக்கு உதவினார்!",
   work: "அழகான, தெளிவான working!",
@@ -36,9 +36,9 @@ const WHY_TA: Record<string, string> = {
 };
 
 /** What a line asks for: its button. */
-const ASK: Partial<Record<UsItem["k"], string>> = { bday: "🎂", home1: "👋", back: "👋", post: "🙏" };
+export const ASK: Partial<Record<UsItem["k"], string>> = { bday: "🎂", home1: "👋", back: "👋", post: "🙏" };
 /** The small mark on a line's picture. */
-const MARK: Record<UsItem["k"], string> = {
+export const MARK: Record<UsItem["k"], string> = {
   bday: "🎂",
   home1: "🏠",
   back: "👋",
@@ -50,6 +50,22 @@ const MARK: Record<UsItem["k"], string> = {
   post: "📣",
   shout: "🌟",
   ask: "🙋",
+  learn: "💡",
+};
+/** What a line is, in a word or two (under the name). */
+export const KIND: Record<UsItem["k"], string> = {
+  bday: "பிறந்தநாள்",
+  home1: "வீட்டிலிருந்து முதல் Level",
+  back: "மீண்டும் வகுப்பில்",
+  stage: "Stage முடிவு",
+  flame: "தொடர்ந்து கற்றல்",
+  up: "Most improved",
+  champs: "Champions",
+  count: "கற்றவர்கள்",
+  post: "அறிவிப்பு",
+  shout: "Shout-out",
+  ask: "சந்தேகம்",
+  learn: "நான் கற்றது",
 };
 
 const GUIDE: { mood: Mood; h: string; p: string }[] = [
@@ -60,13 +76,13 @@ const GUIDE: { mood: Mood; h: string; p: string }[] = [
   },
   {
     mood: "cheer",
-    h: "தொடு, விடை எழுது, கேள்",
-    p: "🎂 வாழ்த்து, 👋 வரவேற்பு, 👏 பாராட்டு: ஒரு தொடுகை போதும். ❓ ஆசிரியரின் கேள்விக்கு உன் விடை: வேறு யாருக்கும் தெரியாது. 🙋 புரியவில்லையா? சந்தேகம் கேள்.",
+    h: "தொடு, திற, எழுது",
+    p: "🎂 👋 👏 ஒரு தொடுகை போதும். ஒவ்வொரு வரியையும் திறந்து பேசு: உன் சொந்த வார்த்தைகளுக்கு +1 XP. ❓ ஆசிரியரின் கேள்விக்கு உன் விடை: வேறு யாருக்கும் தெரியாது.",
   },
   {
     mood: "love",
     h: "நீயும் இங்கே வருவாய்",
-    p: "Level செய்யும்போதும், தொடர்ந்து கற்கும்போதும், முன்னேறும்போதும் ஆந்தை உன்னைப் பற்றி இங்கே சொல்லும். வெற்றி மட்டுமல்ல, முயற்சியும் தெரியும்.",
+    p: "💡 இன்று கற்றதைப் பகிர்: ஆசிரியர் ✓ கொடுத்ததும் எல்லோருக்கும், +5 XP. 🙋 புரியவில்லையா? சந்தேகம் கேள். Level செய்யும்போதும் ஆந்தை உன்னைப் பற்றி இங்கே சொல்லும்.",
   },
 ];
 
@@ -106,20 +122,49 @@ function useUs(on: boolean): { f: UsFeed | null; err: string | null; set: (f: Us
   return { f, err, set, read: () => void read() };
 }
 
-/** What the chips show: everything, the teachers' questions, the doubts; a teacher's to-do (answers to mark, doubts
- * no teacher answered: those for seniors only while nobody has, reports). */
-type Show = "all" | "q" | "ask" | "todo";
-const todo = (m: UsItem) => (m.wN ?? 0) > 0 || (m.k === "ask" && !m.tr && (m.aud !== "s" || !m.an)) || (m.rp ?? 0) > 0;
+/** What the chips show: everything, the teachers' questions, the doubts, the 💡 posts, the wins, the teachers' lines;
+ * a teacher's to-do (answers to mark, doubts no teacher answered, 💡 posts waiting, reports). */
+type Show = "all" | "q" | "ask" | "learn" | "win" | "tch" | "todo";
+const WINS = new Set<UsItem["k"]>(["bday", "home1", "back", "stage", "flame", "up", "champs", "count"]);
+const todo = (m: UsItem) =>
+  (m.wN ?? 0) > 0 || (m.k === "ask" && !m.tr && (m.aud !== "s" || !m.an)) || (m.rp ?? 0) > 0 || (m.rpm ?? 0) > 0 || (m.k === "learn" && m.lst === "w");
+const shows: Record<Show, (m: UsItem) => boolean> = {
+  all: () => true,
+  q: (m) => !!m.qn,
+  ask: (m) => m.k === "ask",
+  learn: (m) => m.k === "learn",
+  win: (m) => WINS.has(m.k) || m.k === "shout",
+  tch: (m) => m.k === "post" || m.k === "shout",
+  todo,
+};
 
-/** "Today", "Yesterday", "Mon 2 Nov" (Sri Lanka's days). */
-function dayWords(t: number, now: number): string {
+/** When a line came, as he reads it: "now", "5m", "2h", "Yesterday", "Mon 2 Nov" (Sri Lanka's days). */
+export function ago(t: number, now = Date.now()): string {
   const SL = 330 * 60_000;
   const day = (x: number) => Math.floor((x + SL) / 86_400_000);
+  const m = Math.floor((now - t) / 60_000);
+  if (m < 1) return "now";
+  if (m < 60) return `${m}m`;
   const d = day(now) - day(t);
-  if (d === 0) return "Today";
+  if (d === 0) return `${Math.floor(m / 60)}h`;
   if (d === 1) return "Yesterday";
   const x = new Date(t + SL);
   return `${DAY_EN[(x.getUTCDay() + 6) % 7]} ${x.getUTCDate()} ${MONTH[x.getUTCMonth()]}`;
+}
+
+/** When a line last came alive (the last thing written in it). */
+const liveAt = (m: UsItem) => Math.max(m.la ?? 0, m.at);
+
+/** Lines opened on this phone (kept per child): when each was last opened. The newest 200. */
+export function seenAt(id: string): number {
+  return keep<Record<string, number>>("usSeen")?.[id] ?? 0;
+}
+export function markSeen(id: string): void {
+  const all = keep<Record<string, number>>("usSeen") ?? {};
+  all[id] = Date.now();
+  const keys = Object.keys(all);
+  if (keys.length > 200) for (const k of keys.sort((a, b) => all[a] - all[b]).slice(0, keys.length - 200)) delete all[k];
+  keep("usSeen", all);
 }
 
 export function UsTab(props: {
@@ -128,7 +173,7 @@ export function UsTab(props: {
   onPlay: () => void;
   onMate: (id: string) => void;
   onMe: () => void;
-  /** A post or a doubt opened (usPost.tsx ThreadScreen). */
+  /** A line opened (usPost.tsx ThreadScreen). */
   onOpen: (id: string) => void;
   staff?: UsStaff;
 }) {
@@ -149,8 +194,15 @@ export function UsTab(props: {
   const [step, setStep] = useState(0);
   const [mine, setMine] = useState<string[]>(() => keep<string[]>("usClapped") ?? []);
   const [show, setShow] = useState<Show>("all");
+  // What came alive since his last visit gets a dot (until he opens it); a first visit marks nothing.
+  const [since] = useState(() => keep<number>("usLast") ?? Date.now());
+  useEffect(() => {
+    keep("usLast", Date.now());
+  }, []);
+  // What's new in Us (8 Nov 2026), told once to everyone who saw the guide before.
+  const [news, setNews] = useState(() => !t && !!keep<boolean>("usGuide") && !keep<boolean>("usNews1"));
   const all = f?.items ?? [];
-  const items = all.filter((m) => (show === "q" ? !!m.qn : show === "ask" ? m.k === "ask" : show === "todo" ? todo(m) : true));
+  const items = all.filter(shows[show]);
   const todoN = t ? all.filter(todo).length : 0;
   // His welcome is read once whole (kept: the words he read); after that two lines until a tap.
   const [openW, setOpenW] = useState(false);
@@ -159,10 +211,11 @@ export function UsTab(props: {
   useEffect(() => {
     if (f && !guide) keep("usWelcome", f.welcome);
   }, [f?.welcome, guide]);
-  usePics(items.flatMap((m) => [m.pic, ...(m.ppl ?? []).map((p) => p.pic)]).slice(0, 40));
+  usePics([props.me?.photo?.key, ...items.flatMap((m) => [m.pic, ...(m.ppl ?? []).map((p) => p.pic), ...(m.lp ?? []).map((p) => p.pic)])].slice(0, 50));
 
   const done = () => {
     keep("usGuide", true);
+    keep("usNews1", true);
     setGuide(false);
     setStep(0);
     sound("level");
@@ -183,10 +236,19 @@ export function UsTab(props: {
       })
       .catch((e) => toast(problemWords(e), true));
   };
+  const open = (id: string) => {
+    buzz();
+    sound("tap");
+    markSeen(id);
+    props.onOpen(id);
+  };
+  const write = (k: "learn" | "ask") =>
+    k === "learn"
+      ? showSheet((close) => <LearnSheet onClose={close} onDone={own.read} />)
+      : showSheet((close) => <DoubtSheet grade={props.me?.grade ?? null} onClose={close} onDone={own.read} />);
 
   const today = f?.today ?? 0;
   const now = Date.now();
-  let lastDay = "";
   return (
     <>
       <header class="f-hero us">
@@ -238,6 +300,23 @@ export function UsTab(props: {
           </button>
         </section>
       )}
+      {!guide && news && (
+        <section class="f-card f-us-news rise" aria-label="New in Us">
+          <b>🆕 இப்போது Us இல் பேசலாம்!</b>
+          <p>ஒவ்வொரு வரியையும் தொட்டுத் திற: யார் பாராட்டினார்கள், யார் என்ன சொன்னார்கள். உன் சொந்த வார்த்தைகளுக்கு +1 XP. 💡 இன்று கற்றதைப் பகிர்: +5 XP.</p>
+          <button
+            type="button"
+            class="f-btn go"
+            onClick={() => {
+              buzz();
+              keep("usNews1", true);
+              setNews(false);
+            }}
+          >
+            சரி!
+          </button>
+        </section>
+      )}
       {!guide && f?.welcome && (
         // His welcome: whole the first time (and whenever he changes it), then two lines; a tap shows it all again.
         <section
@@ -255,13 +334,17 @@ export function UsTab(props: {
       {!guide && f && (
         <div class="f-us-bar">
           {!t && (
-            <button
-              type="button"
-              class="f-btn go f-us-ask"
-              onClick={() => showSheet((close) => <DoubtSheet grade={props.me?.grade ?? null} onClose={close} onDone={own.read} />)}
-            >
-              🙋 Ask a doubt
-            </button>
+            // What he can write (8 Nov 2026): 💡 what he learned (a teacher shows it to everyone), 🙋 a doubt.
+            <div class="f-us-write">
+              <button type="button" class="f-us-say" onClick={() => write("learn")}>
+                <Avatar name={props.me?.name ?? "?"} size="s" pic={picOf(props.me?.photo?.key)} />
+                <span>💡 இன்று என்ன கற்றாய்? பகிர்…</span>
+              </button>
+              <button type="button" class="f-us-askb" aria-label="Ask a doubt" onClick={() => write("ask")}>
+                🙋
+                <small>கேள்</small>
+              </button>
+            </div>
           )}
           <div class="f-us-fl" role="group" aria-label="Show">
             {(
@@ -269,6 +352,9 @@ export function UsTab(props: {
                 ["all", "All"],
                 ["q", "❓ Questions"],
                 ["ask", "🙋 Doubts"],
+                ["learn", "💡 Learned"],
+                ["win", "🎉 Wins"],
+                ["tch", "📣 Teachers"],
                 ...(t ? [["todo", `⚑ To do${todoN ? ` · ${todoN}` : ""}`]] : []),
               ] as [Show, string][]
             ).map(([k, l]) => (
@@ -292,17 +378,37 @@ export function UsTab(props: {
       {err && !f && <p class="f-lead f-center-t">{err}</p>}
       {!guide && f && (
         <ol class="f-us-list">
-          {items.flatMap((m) => {
-            const d = dayWords(m.at, now);
-            const head = d !== lastDay && !m.pin;
-            if (head) lastDay = d;
-            const line = <Line key={m.id} m={m} done={mine.includes(m.id)} onClap={() => clap(m)} onPlay={props.onPlay} onMate={mate} onOpen={props.onOpen} act={t?.act} staff={!!t} />;
-            return head ? [<li key={`d.${d}`} class="f-us-day">{d}</li>, line] : [line];
-          })}
+          {items.map((m) => (
+            <Card
+              key={m.id}
+              m={m}
+              now={now}
+              fresh={!t && !m.mine && liveAt(m) > Math.max(since, seenAt(m.id))}
+              done={mine.includes(m.id)}
+              onClap={() => clap(m)}
+              onPlay={props.onPlay}
+              onMate={mate}
+              onOpen={() => open(m.id)}
+              act={t?.act}
+              staff={!!t}
+            />
+          ))}
         </ol>
       )}
       {!guide && f && t && t.end}
-      {!guide && f && show !== "all" && !items.length && <p class="f-ut-none">{show === "q" ? "இப்போது கேள்விகள் இல்லை." : show === "ask" ? "இப்போது சந்தேகங்கள் இல்லை." : "Nothing waiting for you. 👏"}</p>}
+      {!guide && f && show !== "all" && !items.length && (
+        <p class="f-ut-none">
+          {show === "q"
+            ? "இப்போது கேள்விகள் இல்லை."
+            : show === "ask"
+              ? "இப்போது சந்தேகங்கள் இல்லை."
+              : show === "learn"
+                ? "இன்னும் 💡 பதிவுகள் இல்லை. முதலாவது உன்னுடையதா?"
+                : show === "todo"
+                  ? "Nothing waiting for you. 👏"
+                  : "இப்போது எதுவும் இல்லை."}
+        </p>
+      )}
       {!guide && f && !t && (
         <section class="f-us-end rise">
           <Owl mood={items.length ? "happy" : "think"} class="tiny" />
@@ -320,7 +426,7 @@ export function UsTab(props: {
   );
 }
 
-function Name(props: { id?: string; n: string; g?: number; onMate: (id: string) => void }) {
+export function Name(props: { id?: string; n: string; g?: number; onMate: (id: string) => void }) {
   return (
     <>
       <b
@@ -357,8 +463,9 @@ function People(props: { m: UsItem; onMate: (id: string) => void }) {
   );
 }
 
-function say(m: UsItem, onMate: (id: string) => void): ComponentChildren {
-  const n = m.n ? <Name id={m.sid} n={m.n} g={m.g} onMate={onMate} /> : null;
+/** A line's words (Tamil), as the card and its thread show them. */
+export function say(m: UsItem, onMate: (id: string) => void): ComponentChildren {
+  const n = m.n ? <Name id={m.sid} n={m.n} onMate={onMate} /> : null;
   switch (m.k) {
     case "bday":
       return <>இன்று {n} இன் பிறந்தநாள்! வாழ்த்துவோம்.</>;
@@ -367,12 +474,7 @@ function say(m: UsItem, onMate: (id: string) => void): ComponentChildren {
     case "back":
       return <>{n} மீண்டும் வகுப்புக்கு வந்துவிட்டார்! வரவேற்போம்.</>;
     case "stage":
-      return (
-        <>
-          {n} {m.x !== undefined ? `Stage ${m.x} · ` : ""}
-          {m.t} முழுவதும் முடித்தார்! பாராட்டுவோம்.
-        </>
-      );
+      return <>{n} இந்த Stage ஐ முழுவதும் முடித்தார்! பாராட்டுவோம்.</>;
     case "flame":
       return <>{n} தொடர்ந்து {m.x} நாட்கள் கற்றார்! பாராட்டுவோம்.</>;
     case "up":
@@ -403,33 +505,78 @@ function say(m: UsItem, onMate: (id: string) => void): ComponentChildren {
         </>
       );
     case "post":
-      return (
-        <>
-          <b class="f-us-by">
-            {m.by} ஆசிரியர் · {gradesWords(m.gs)}
-          </b>
-          {m.t && <span class="f-us-post">{m.t}</span>}
-        </>
-      );
     case "ask":
-      return (
-        <>
-          <b class="f-us-by">
-            {m.mine ? `உன் சந்தேகம் · ${AUD[m.aud ?? "t"]}` : m.n ? `${m.n} · Grade ${m.g ?? "?"} · ${AUD[m.aud ?? "t"]}` : `Grade ${m.g ?? "?"} மாணவர் ஒருவர் கேட்கிறார்`}
-          </b>
-          {m.t && <span class="f-us-post">{m.t}</span>}
-        </>
-      );
+    case "learn":
+      return m.t ? <span class="f-us-post">{m.t}</span> : null;
   }
 }
 
-/** Under a question or a doubt: how many answered (and his answer), or the replies; its button opens it. */
-function Foot(props: { m: UsItem; staff: boolean; onOpen: () => void }) {
+/** Who a card is from (its first row): a student, a teacher, the asker of a doubt (never named), or ARISTORA's owl. */
+function Who(props: { m: UsItem; onMate: (id: string) => void }) {
   const m = props.m;
-  const n = m.an ?? 0;
-  const q = !!m.qn;
-  const said = q
-    ? props.staff
+  if (m.k === "post") return <b class="f-us-n">{m.by} ஆசிரியர்</b>;
+  if (m.k === "ask") {
+    // The one who asked is never named to students (teachers see the name).
+    if (m.mine) return <b class="f-us-n">உன் சந்தேகம்</b>;
+    return m.n ? <Name id={m.sid} n={m.n} g={m.g} onMate={props.onMate} /> : <b class="f-us-n">Grade {m.g ?? "?"} மாணவர்</b>;
+  }
+  if (m.n && m.k !== "count") return <Name id={m.sid} n={m.n} g={m.g} onMate={props.onMate} />;
+  return <b class="f-us-n">ARISTORA</b>;
+}
+
+/** The card's face: the student's (his photo or letter) with the line's mark; a teacher's post or the owl's: a mark. */
+export function Face(props: { m: UsItem; size?: "s" | "m" }) {
+  const m = props.m;
+  const pic = m.k === "post" || m.k === "count" || m.ppl ? null : picOf(m.pic);
+  const person = !!m.n && m.k !== "post" && !(m.k === "ask" && !m.mine && !m.n);
+  return (
+    <span class={`f-uk-face${props.size === "s" ? " s" : ""}`}>
+      {m.k === "post" ? (
+        <Avatar name={m.by ?? "?"} size={props.size === "s" ? "s" : "m"} />
+      ) : person ? (
+        <Avatar name={m.n!} size={props.size === "s" ? "s" : "m"} pic={pic} />
+      ) : (
+        <span class={`f-uk-emo k-${m.k}`}>{m.k === "count" || m.ppl ? MARK[m.k] : m.k === "ask" ? "🙋" : "🦉"}</span>
+      )}
+      {(person || m.k === "post") && <i class="f-uk-mark">{m.qn ? "❓" : MARK[m.k]}</i>}
+    </span>
+  );
+}
+
+/** What it is and when, under the name ("🏁 Stage முடிவு · 2h", "❓ கேள்வி · Grade 8 · now"). */
+function What(props: { m: UsItem; now: number }) {
+  const m = props.m;
+  const kind = m.qn ? "❓ கேள்வி" : m.k === "post" ? `📣 ${gradesWords(m.gs)}` : m.k === "ask" ? `🙋 ${AUD[m.aud ?? "t"]}` : `${MARK[m.k]} ${KIND[m.k]}`;
+  return (
+    <small class="f-uk-what">
+      {m.pin ? "📌 " : ""}
+      {kind}
+      {m.qn && m.gs ? ` · ${gradesWords(m.gs)}` : ""} · {ago(m.at, props.now)}
+    </small>
+  );
+}
+
+/** Faces of the last who wrote in a thread (on a question only once he answered). */
+export function Faces(props: { lp?: UsItem["lp"]; max?: number }) {
+  const list = (props.lp ?? []).slice(0, props.max ?? 3);
+  if (!list.length) return null;
+  return (
+    <span class="f-uk-faces" aria-hidden="true">
+      {list.map((p, i) => (
+        <span key={i} class={p.tch ? "tch" : ""}>
+          <Avatar name={p.n} size="s" pic={picOf(p.pic)} />
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/** The line's own state on a question, a doubt or a 💡 post (his answer, replies, a teacher's ✓). */
+function State(props: { m: UsItem; staff: boolean }) {
+  const m = props.m;
+  if (m.qn) {
+    const n = m.an ?? 0;
+    const said = props.staff
       ? `${n} answers · ✓ ${m.okN ?? 0} · waiting ${m.wN ?? 0}`
       : m.my === "ok"
         ? "✓ உன் விடை சரி!"
@@ -439,86 +586,105 @@ function Foot(props: { m: UsItem; staff: boolean; onOpen: () => void }) {
             ? "⏳ உன் விடை போனது"
             : n
               ? `${n} பேர் விடை அனுப்பினார்கள்`
-              : "முதல் விடை உன்னுடையதா?"
-    : `💬 ${n} ${n === 1 ? "பதில்" : "பதில்கள்"}${props.staff && m.rp ? ` · ⚑ ${m.rp}` : ""}`;
-  const go = q ? (props.staff ? "Mark ›" : m.my ? "See ›" : "✍️ Answer") : props.staff ? "Reply ›" : m.mine ? "Open ›" : "💬 Help";
-  return (
-    <div class={`f-us-foot${m.my === "ok" ? " ok" : ""}`}>
-      <small>{said}</small>
-      <button
-        type="button"
-        class={`f-us-open${!m.my && !m.mine && !props.staff ? " go" : ""}`}
-        onClick={(e) => {
-          e.stopPropagation();
-          props.onOpen();
-        }}
-      >
-        {go}
-      </button>
-    </div>
-  );
+              : "முதல் விடை உன்னுடையதா?";
+    return <p class={`f-uk-state${m.my === "ok" ? " ok" : ""}`}>{said}</p>;
+  }
+  if (m.k === "learn" && (m.mine || props.staff)) {
+    if (m.lst === "w") return <p class="f-uk-state wait">⏳ ஆசிரியர் ✓ கொடுத்ததும் எல்லோருக்கும் தெரியும்</p>;
+    if (m.lst === "no") return <p class="f-uk-state no">இந்த முறை இல்லை{m.note ? `: ${m.note}` : ""}</p>;
+  }
+  if (m.k === "learn" && m.lst === "ok" && m.by) return <p class="f-uk-state ok">✓ {m.by} ஆசிரியர் காட்டினார்</p>;
+  return null;
 }
 
-function Line(props: {
+function Card(props: {
   m: UsItem;
+  now: number;
+  fresh: boolean;
   done: boolean;
   onClap: () => void;
   onPlay: () => void;
   onMate: (id: string) => void;
-  onOpen: (id: string) => void;
+  onOpen: () => void;
   act?: (m: UsItem) => ComponentChildren;
   staff: boolean;
 }) {
   const m = props.m;
   const ask = ASK[m.k] ?? "👏";
-  const pic = m.k === "post" || m.k === "count" || m.ppl ? null : picOf(m.pic);
-  // A question or a doubt opens (a tap anywhere on it); its own button says what to do there.
-  const opens = !!m.qn || m.k === "ask";
-  const open = () => {
-    buzz();
-    sound("tap");
-    props.onOpen(m.id);
+  const talkN = m.k === "ask" ? (m.an ?? 0) : (m.cm ?? 0);
+  // A question's talk opens with his answer (the server sends no faces before it).
+  const locked = !!m.qn && !m.my && !props.staff;
+  const stop = (f: () => void) => (e: Event) => {
+    e.stopPropagation();
+    f();
   };
+  const go = m.qn
+    ? props.staff
+      ? "Mark ›"
+      : m.my
+        ? null
+        : "✍️ Answer"
+    : m.k === "ask"
+      ? props.staff
+        ? "Reply ›"
+        : m.mine
+          ? null
+          : "💬 Help"
+      : m.k === "learn" && props.staff && m.lst === "w"
+        ? "Check ›"
+        : m.k === "count" && !props.staff
+          ? "▶ இன்று நானும்"
+          : null;
   return (
-    <li class={`f-us-line k-${m.k}${m.mine ? " mine" : ""}${m.pin ? " pin" : ""}${opens ? " opens" : ""}`} onClick={opens ? open : undefined}>
-      <span class="f-us-ic">
-        {m.n && m.k !== "post" ? <Avatar name={m.n} size="s" pic={pic} /> : <span class="f-us-emo">{MARK[m.k]}</span>}
-        {m.n && m.k !== "post" && <i class="f-us-mark">{MARK[m.k]}</i>}
-      </span>
-      <div class="f-us-w">
-        <p>{say(m, props.onMate)}</p>
-        {m.ph && <Pics ph={m.ph} />}
-        {opens && <Foot m={m} staff={props.staff} onOpen={open} />}
-        <small>
-          {m.pin ? "📌 " : ""}
-          {timeOf(m.at)}
-          {m.tc?.length ? <span class="f-us-tc"> · 👏 {m.tc.join(", ")} ஆசிரியர்</span> : null}
-          {m.mine && m.c > 0 ? <span> · {m.cn?.length ? `${m.cn.join(", ")}${m.c > m.cn.length ? ` +${m.c - m.cn.length}` : ""}` : ""}</span> : null}
-        </small>
+    <li class={`f-uk k-${m.k}${m.mine ? " mine" : ""}${m.pin ? " pin" : ""}${props.fresh ? " fresh" : ""}`} onClick={props.onOpen}>
+      <div class="f-uk-h">
+        <Face m={m} />
+        <div class="f-uk-who">
+          <p>
+            <Who m={m} onMate={props.onMate} />
+          </p>
+          <What m={m} now={props.now} />
+        </div>
+        {props.fresh && <i class="f-uk-new" aria-label="New" />}
       </div>
-      {props.act ? (
-        <span onClick={(e) => e.stopPropagation()}>{props.act(m)}</span>
-      ) : opens ? null : m.k === "count" ? (
-        <button type="button" class="f-us-go" onClick={props.onPlay}>
-          ▶ இன்று நானும்
+      {m.k === "stage" || m.k === "flame" ? (
+        <p class="f-uk-win">
+          {m.k === "stage" ? `🏁 Stage ${m.x ?? ""}` : `🔥 ${m.x}`}
+          <small>{m.k === "stage" ? m.t : "நாட்கள்"}</small>
+        </p>
+      ) : null}
+      <div class="f-uk-b">
+        {m.k !== "post" && m.k !== "ask" && m.k !== "learn" ? <p>{say(m, props.onMate)}</p> : m.t ? <p class="f-us-post">{m.t}</p> : null}
+        {m.ph && <Pics ph={m.ph} />}
+        <State m={m} staff={props.staff} />
+      </div>
+      <div class="f-uk-f">
+        {props.act ? (
+          <span onClick={(e) => e.stopPropagation()}>{props.act(m)}</span>
+        ) : m.k === "count" || m.k === "ask" || m.qn ? null : m.mine ? (
+          <span class="f-us-you" aria-label={`${m.c} cheered`}>
+            <i>உனக்கு</i>
+            {m.c > 0 ? `${ask} ${m.c}` : MARK[m.k]}
+          </span>
+        ) : (
+          <button type="button" class={`f-us-clap${props.done ? " done" : ""}`} aria-pressed={props.done} aria-label={`${ask} ${m.c}`} onClick={stop(props.onClap)}>
+            {ask}
+            <b>{m.c > 0 ? m.c : ""}</b>
+          </button>
+        )}
+        <button type="button" class="f-uk-talk" aria-label={`Talk: ${talkN}`} onClick={stop(props.onOpen)}>
+          {locked ? <Icon name="lock" size={16} /> : <Icon name="chat" size={18} />}
+          <b>{talkN || ""}</b>
         </button>
-      ) : m.mine ? (
-        <span class="f-us-you" aria-label={`${m.c} cheered`}>
-          <i>உனக்கு</i>
-          {m.c > 0 ? `${ask} ${m.c}` : MARK[m.k]}
-        </span>
-      ) : (
-        <button
-          type="button"
-          class={`f-us-clap${props.done ? " done" : ""}`}
-          aria-pressed={props.done}
-          aria-label={`${ask} ${m.c}`}
-          onClick={props.onClap}
-        >
-          {ask}
-          <b>{m.c > 0 ? m.c : ""}</b>
-        </button>
-      )}
+        {!locked && <Faces lp={m.lp} />}
+        {m.tc?.length ? <small class="f-uk-tc">👏 {m.tc.map((x) => `${x} ஆசிரியர்`).join(", ")}</small> : null}
+        <span class="f-sp" />
+        {go && (
+          <button type="button" class={`f-us-open${props.staff ? "" : " go"}`} onClick={stop(m.k === "count" ? props.onPlay : props.onOpen)}>
+            {go}
+          </button>
+        )}
+      </div>
     </li>
   );
 }

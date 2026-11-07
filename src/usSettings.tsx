@@ -1,5 +1,6 @@
 // Settings → Community (7 Nov 2026), the owner's: Us on the students' phones (closed until he opens it), his welcome at
-// the top of the tab, the owl's kinds; and why Us exists and how it should feel (open the first time). Everything a
+// the top of the tab, the owl's kinds, comments' XP (8 Nov 2026); and why Us exists and how it should feel (open the
+// first time). Everything a
 // teacher does in Us (👏, shout-outs, posts, pin, remove) is in the class app's own Us tab since the same evening (his
 // voice note: "you build community in the setting, but this is for teachers ... the same UI UX"): src/usFrame.tsx.
 
@@ -23,6 +24,7 @@ const KIND_EN: Record<UsKind, string> = {
   post: "Posts",
   shout: "Shout-outs",
   ask: "Students' doubts",
+  learn: "Students' 💡 posts",
 };
 
 function seenWhy(): boolean {
@@ -54,8 +56,9 @@ function WhyCard(props: { owner: boolean }) {
       </p>
       <p>
         <b>How it should feel:</b> every student seen, nobody shamed. We praise effort, not only marks. Us never shows
-        marks and never shows who didn't learn. Students never type: they tap one button, 🎂 wish, 👋 welcome, 👏 cheer,
-        🙏 thank you.
+        marks and never shows who didn't learn. One tap is enough (🎂 wish, 👋 welcome, 👏 cheer, 🙏 thank you), and every
+        line opens into its talk: students write under it, reply to each other and give 👏, with their names, like in the
+        hall. They also ask doubts and post 💡 what they learned (everyone sees it once a teacher ticks it).
       </p>
       <p>
         <b>What you do, two minutes a day:</b>
@@ -67,6 +70,7 @@ function WhyCard(props: { owner: boolean }) {
         <li>Tap 👏 on today's lines, first the birthdays, the first levels from home and the welcome-backs. Your name shows on the phones and the student gets an alert.</li>
         <li>Give 2 or 3 shout-outs a day, for what the app can't see: never gives up, helped a friend, clear working. Start with students who never had one.</li>
         <li>With the Community tick: one short post a day, a tip, a reminder or a well done to a grade. Never name a student who did badly.</li>
+        <li>⚑ To do: tick the right answers, reply to doubts, show the good 💡 posts (✓), and correct a wrong explanation with ✎ (everyone reads your correction, with your name). Remove anything unkind.</li>
       </ol>
       {props.owner && (
         <p class="muted">
@@ -81,7 +85,7 @@ function OwnerCard(props: { b: UsBoard }) {
   const cfg = props.b.cfg;
   const [w, setW] = useState(cfg.welcome);
   const [busy, setBusy] = useState(false);
-  const run = (args: { open?: boolean; welcome?: string; off?: UsKind[] }, said: string) => {
+  const run = (args: { open?: boolean; welcome?: string; off?: UsKind[]; cxp?: boolean }, said: string) => {
     setBusy(true);
     void act(async () => {
       await mutate(api.us.setCfg, args);
@@ -107,6 +111,19 @@ function OwnerCard(props: { b: UsBoard }) {
       <button type="button" class="btn ghost wide" disabled={busy || w.trim() === cfg.welcome} onClick={() => run({ welcome: w }, "Welcome saved.")}>
         Save the welcome
       </button>
+      <div class="us-open">
+        <span>
+          <b>Comments give XP</b>
+          <small class="muted">
+            {cfg.cxp
+              ? "On: +1 XP for a comment in the student's own words (two words at least, not a one-tap word, not the same words again), 20 a day at most. A comment you remove takes its XP back."
+              : "Off: comments give no XP. What a teacher ticks still does (+5 an answer, +10 help on a doubt, +5 a 💡 post)."}
+          </small>
+        </span>
+        <button type="button" class={`btn ${cfg.cxp ? "ghost" : "primary"}`} disabled={busy} onClick={() => run({ cxp: !cfg.cxp }, cfg.cxp ? "Comments give no XP now." : "Comments give XP again.")}>
+          {cfg.cxp ? "Turn off" : "Turn on"}
+        </button>
+      </div>
       <b class="us-sub">What the owl writes by itself</b>
       <div class="us-kinds">
         {OWL_KINDS.map((k) => {
