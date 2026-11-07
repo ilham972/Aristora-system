@@ -291,7 +291,7 @@ function NoteSheet(props: { r: UsReply; q: boolean; onClose: () => void; onMark:
   const [t, setT] = useState(props.r.note ?? "");
   const go = (ok: boolean) => void props.onMark(ok, t).then(props.onClose);
   return (
-    <Sheet title="✎ Your words to him" sub="அவருக்கு மட்டும் தெரியும்: ஒரு குறிப்பு, ஒரு hint, ஒரு வாழ்த்து." onClose={props.onClose}>
+    <Sheet title={`✎ Your words to ${props.r.n ?? "the student"}`} sub="அவருக்கு மட்டும் தெரியும்: ஒரு குறிப்பு, ஒரு hint, ஒரு வாழ்த்து." onClose={props.onClose}>
       <textarea class="f-replybox" rows={3} maxLength={200} value={t} aria-label="Your words" onInput={(e) => setT((e.target as HTMLTextAreaElement).value)} />
       <div class="f-ur-two">
         <button type="button" class="f-btn go" onClick={() => go(true)}>
@@ -754,12 +754,12 @@ export function ThreadScreen(props: { id: string; staff?: boolean; me?: string; 
               {m.k !== "post" && m.k !== "ask" && m.k !== "learn" ? <p>{say(m, props.onMate)}</p> : m.t ? <p class="f-us-post">{m.t}</p> : null}
               {m.ph && <Pics ph={m.ph} />}
             </div>
-            {m.k === "learn" && m.lst === "w" && <p class="f-uk-state wait">⏳ {st ? "Waiting for a teacher's ✓: only he and the teachers see it." : "ஆசிரியர் ✓ கொடுத்ததும் எல்லோருக்கும் தெரியும். இப்போது உனக்கும் ஆசிரியர்களுக்கும் மட்டும்."}</p>}
+            {m.k === "learn" && m.lst === "w" && <p class="f-uk-state wait">⏳ {st ? `Waiting for a teacher's ✓: only ${m.n ?? "the student"} and the teachers see it.` : "ஆசிரியர் ✓ கொடுத்ததும் எல்லோருக்கும் தெரியும். இப்போது உனக்கும் ஆசிரியர்களுக்கும் மட்டும்."}</p>}
             {m.k === "learn" && m.lst === "no" && <p class="f-uk-state no">இந்த முறை இல்லை{m.note ? `: ${m.note}` : ""}</p>}
             {m.k === "learn" && m.lst === "ok" && m.by && <p class="f-uk-state ok">✓ {m.by} ஆசிரியர் எல்லோருக்கும் காட்டினார்</p>}
             {st && d.can.approve && (
               <div class="f-ur-two">
-                <button type="button" class={`f-btn ${m.lst === "ok" ? "white" : "go"}`} onClick={() => void act("us:approve", { ok: m.lst === "ok" ? null : true }, m.lst === "ok" ? "Waiting again." : "✓ Shown to everyone: +5 XP for him.")}>
+                <button type="button" class={`f-btn ${m.lst === "ok" ? "white" : "go"}`} onClick={() => void act("us:approve", { ok: m.lst === "ok" ? null : true }, m.lst === "ok" ? "Waiting again." : `✓ Shown to everyone: +5 XP for ${m.n ?? "the student"}.`)}>
                   {m.lst === "ok" ? "Hide again" : "✓ Show to everyone"}
                 </button>
                 <button type="button" class="f-btn white" onClick={() => showSheet((close) => <NotNowSheet onClose={close} onSend={(note) => act("us:approve", { ok: false, note })} />)}>
@@ -870,7 +870,17 @@ export function ThreadScreen(props: { id: string; staff?: boolean; me?: string; 
             ) : talk.length === 0 ? (
               <div class="f-talk-none">
                 <Owl mood="wave" class="tiny" still />
-                <p>{ask ? (m.mine ? "இன்னும் பதில் இல்லை. பதில் வந்ததும் சொல்வோம்." : "இன்னும் பதில் இல்லை. முதல் பதில் நீயா?") : "இன்னும் யாரும் எழுதவில்லை. முதலில் நீ!"}</p>
+                <p>
+                  {st
+                    ? ask
+                      ? "No reply yet: be the first."
+                      : "Nobody has written yet."
+                    : ask
+                      ? m.mine
+                        ? "இன்னும் பதில் இல்லை. பதில் வந்ததும் சொல்வோம்."
+                        : "இன்னும் பதில் இல்லை. முதல் பதில் நீயா?"
+                      : "இன்னும் யாரும் எழுதவில்லை. முதலில் நீ!"}
+                </p>
               </div>
             ) : (
               <ol class="f-msgs">
