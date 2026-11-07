@@ -60,8 +60,8 @@ const SETTINGS_TABS: [Tab, string, () => boolean][] = [
   // The family app's race (7 Nov 2026): gifts to give (owner, Manager), last week's champions and their poster (and
   // Reports), the prizes and the marks switch (owner).
   ["race", "Race", () => may("owner") || may("manager") || may("reports")],
-  // Us, the students' community (7 Nov 2026): every teacher cheers and gives shout-outs; the Community tick posts.
-  ["community", "Community", () => true],
+  // Us, the students' community (7 Nov 2026): the owner's switches (the teachers' side is the class app's Us tab).
+  ["community", "Community", () => may("owner")],
   ["alerts", "Alerts", () => true],
   ["reports", "Reports", () => may("reports")],
   ["history", "History", () => may("reports")],
@@ -114,7 +114,7 @@ export function Settings(props: {
       {tab === "photos" && <PhotoQueue views={props.views} onOpen={props.onPhotos} />}
       {tab === "hours" && <ClassHours />}
       {tab === "race" && <RaceSettings />}
-      {tab === "community" && <UsSettings views={props.views} />}
+      {tab === "community" && <UsSettings />}
       {tab === "people" && <People />}
       {tab === "account" && <Account />}
       <button type="button" class="btn ghost wide" onClick={props.onClose}>

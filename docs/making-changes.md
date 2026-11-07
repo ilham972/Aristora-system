@@ -448,7 +448,20 @@ EOF
   teachers' page reads the real ones. Tests that seed a line with `raw.run` must set `demo`, `day` and `c`.
 - **The phone never builds the tab before the owner opens it** (`me.us`); the e2e opens it from Settings → Community
   (`.us-open` → Open) and reloads the phone. Its style is in `family.css` (the first load: the later budget was full);
-  the code is a later part (`parts.UsTab`). Budgets after Us: first load 62.3 of 66 KB, later parts 35.4 of 36. The
-  next later part: ask him to raise it (he was asked 7 Nov, it wasn't needed), or put its style in the first load too.
-- **A teacher's Settings now opens on Community** when she has no extras (it comes before Alerts and everyone sees it):
-  a run-through that opens Settings as a plain teacher lands there (the accounts run-through's tab list has it).
+  the code is a later part (`parts.UsTab`). Budgets after Us: first load 62.3 of 66 KB, later parts 35.4 of 36 (then
+  62.9 / 35.6 with the teachers' tab, below). The next later part: ask him to raise it (he was asked 7 Nov, it wasn't
+  needed), or put its style in the first load too.
+- **The teachers' side is the class app's Us tab** (the same evening): an iframe of `/f/?staff` (`src/usFrame.tsx`) running
+  `src/family/staff.tsx` with the class system's sign-in. Three things it needs: (1) **`frame-ancestors 'self'` under
+  `/f/` only** (`vercel.json`, two rules: `/f/(.*)` and `/((?!f/).*)` with `'none'`; the e2e server reads the same
+  rules, `tests/hosting.test.ts` pins them): with `'none'` the frame stays blank (`chrome-error://`). (2) **`staff.tsx`
+  imports only types and Preact**: any import of the students' modules makes esbuild split the students' first load
+  differently (measured: +1.1 KB for an import of `../splash`, `./board`, `./later`...; Preact alone still costs ~0.4 KB:
+  its own chunk). It gets what it uses from `main.tsx` (`Kit`); `tests/usStaff.test.ts` fails on a value import.
+  (3) Its own budget (`FAMILY_STAFF_KB` 8, 4.6 used): `scripts/build.mjs` keeps what only `staff.tsx` reaches out of the
+  students' prefetch and budgets. Budgets after it: first load 62.9 of 66, later parts 35.6 of 36.
+- **The class app's bottom bar has Us for everyone**: every run-through that lists the tab words ends with "Us"; five
+  tabs for the owner (`.tabs.n5`: 13 px, 11 px at ≤345). Us is nobody's job: `role` follows her job as on Class.
+- **`tests/teach.test.ts` is the Whole class page's** (and `shown === "teach"` in `app.tsx` is that page): the family
+  app's teachers' screens are "staff" everywhere (`staff.tsx`, `?staff`, `staffWith`, `usStaff.test.ts`). Check a test
+  file doesn't exist before writing one (that evening a new `teach.test.ts` replaced it for a moment).

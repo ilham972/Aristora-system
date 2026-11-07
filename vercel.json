@@ -4,9 +4,24 @@
   "installCommand": "npm ci --omit=dev",
   "buildCommand": "sh scripts/vercel-build.sh",
   "outputDirectory": "dist",
-  "git": { "deploymentEnabled": { "ci-check": false, "ci-*": false } },
+  "git": {
+    "deploymentEnabled": {
+      "ci-check": false,
+      "ci-*": false
+    }
+  },
   "redirects": [
-    { "source": "/", "has": [{ "type": "host", "value": "app.aristora.org" }], "destination": "/f/", "permanent": false }
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "app.aristora.org"
+        }
+      ],
+      "destination": "/f/",
+      "permanent": false
+    }
   ],
   "headers": [
     {
@@ -28,7 +43,7 @@
       ]
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!f/).*)",
       "headers": [
         {
           "key": "X-Robots-Tag",
@@ -49,6 +64,31 @@
         {
           "key": "Content-Security-Policy",
           "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://*.convex.cloud; media-src 'self' data: blob:; connect-src 'self' https://*.convex.cloud wss://*.convex.cloud; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+        }
+      ]
+    },
+    {
+      "source": "/f/(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "no-referrer"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=(), payment=()"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://*.convex.cloud; media-src 'self' data: blob:; connect-src 'self' https://*.convex.cloud wss://*.convex.cloud; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
         }
       ]
     }

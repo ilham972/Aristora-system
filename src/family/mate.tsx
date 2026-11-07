@@ -25,7 +25,15 @@ function placeIn(rows: RaceRow[], id: string): number | null {
   return placed(rows).find((x) => x.r.id === id)?.rank ?? null;
 }
 
-export function MateScreen(props: { id: string; row: RaceRow | null; board: Board | null; me: FamilyMe | null; onBack: () => void }) {
+export function MateScreen(props: {
+  id: string;
+  row: RaceRow | null;
+  board: Board | null;
+  me: FamilyMe | null;
+  onBack: () => void;
+  /** A teacher (the class app's Us tab, 7 Nov 2026): 🌟 a shout-out for him instead of a classmate's 👏. */
+  onShout?: (id: string, name: string) => void;
+}) {
   const [m, setM] = useState<FamilyMate | null>(() => seen.get(props.id) ?? null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -138,6 +146,17 @@ export function MateScreen(props: { id: string; row: RaceRow | null; board: Boar
               <small>Levels</small>
             </div>
           </section>
+          {props.onShout ? (
+            <section class="f-card f-clap rise" aria-label="Shout-out">
+              <button type="button" class="f-btn big gold" onClick={() => props.onShout!(props.id, name)}>
+                <span class="f-clap-h" aria-hidden="true">
+                  🌟
+                </span>
+                Shout-out for {name.split(" ")[0]}
+              </button>
+              <small>{m.cheers.n > 0 ? `இந்த வாரம் மாணவர்களிடமிருந்து ${m.cheers.n} 👏` : "அவருடைய முயற்சியைப் பாராட்டுங்கள்: அவருக்கு அறிவிப்பு போகும்."}</small>
+            </section>
+          ) : (
           <section class={`f-card f-clap rise${pop ? " pop" : ""}`} aria-label="Cheers">
             <button type="button" class={`f-btn big ${m.cheers.mine ? "ghost" : "gold"}`} disabled={m.cheers.mine || busy} onClick={() => void cheer()}>
               <span class="f-clap-h" aria-hidden="true">
@@ -149,6 +168,7 @@ export function MateScreen(props: { id: string; row: RaceRow | null; board: Boar
               {m.cheers.n > 0 ? `இந்த வாரம் ${m.cheers.n} 👏` : "இந்த வாரம் முதல் 👏 உன்னுடையதாக இருக்கட்டும்!"}
             </small>
           </section>
+          )}
           <section class="f-card f-mate-race rise" aria-label="This week">
             <h2 class="f-h2">
               This week <small>{m.xp} XP</small>

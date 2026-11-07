@@ -257,8 +257,17 @@ function GradeCup(props: { rows: RaceRow[]; grade: number | null }) {
   );
 }
 
-export function BoardTab(props: { top: ComponentChildren; me: FamilyMe | null; onOpen: (r: RaceRow, b: Board) => void }) {
-  const { b, err } = useBoard();
+export function BoardTab(props: {
+  top: ComponentChildren;
+  me: FamilyMe | null;
+  onOpen: (r: RaceRow, b: Board) => void;
+  /** A teacher (the class app's Us tab, 7 Nov 2026): the grade she picked (she has none), and her row of grades. */
+  grade?: number;
+  gradeRow?: ComponentChildren;
+}) {
+  const kept = useBoard();
+  const b = kept.b && props.grade !== undefined ? { ...kept.b, grade: props.grade } : kept.b;
+  const err = kept.err;
   const [list, setList] = useState<RaceList>(() => (keep<RaceList>("raceList") === "all" ? "all" : "grade"));
   const pick = (l: RaceList) => {
     if (l === list) return;
@@ -308,6 +317,7 @@ export function BoardTab(props: { top: ComponentChildren; me: FamilyMe | null; o
             {BRAND}
           </button>
         </div>
+        {!all && props.gradeRow}
       </header>
       <section class="f-race f-card rise">
         {err && !b && <p class="f-lead f-center-t">{err}</p>}

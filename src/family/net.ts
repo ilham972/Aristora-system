@@ -51,7 +51,29 @@ export function lookWith(t: string): void {
   look = t;
 }
 
+// The class app's Us tab (7 Nov 2026, src/family/staff.tsx): the family app's own Us and Race screens with a teacher's
+// sign-in (the class system's, kept on its own address). Only these reads (a phone's name for it → the teachers' one)
+// and these changes go out; anything else a screen asks is refused here, before the server refuses it too.
+let staff: string | null = null;
+const STAFF: Record<string, string> = { "us:board": "us:board", "family:board": "us:race", "family:mate": "us:mate", "family:photos": "us:pics" };
+const STAFF_CHANGES = new Set(["us:tclap", "us:shout", "us:post", "us:pin", "us:remove"]);
+/** The class app's Us tab with this teacher's sign-in. */
+export function staffWith(t: string): void {
+  staff = t;
+}
+
 export async function call(kind: "query" | "mutation", path: string, args: Record<string, unknown>): Promise<unknown> {
+  if (staff !== null) {
+    const to = kind === "query" ? STAFF[path] : STAFF_CHANGES.has(path) ? path : undefined;
+    if (!to) throw new NetError("This is the students' side: teachers can't do it here.");
+    if (kind === "query") return ask("query", to, { ...args, token: staff });
+    sending++;
+    try {
+      return await ask("mutation", to, { ...args, token: staff });
+    } finally {
+      sending--;
+    }
+  }
   if (look !== null) {
     if (kind === "mutation" && LOOK_CHANGES.has(path)) return await ask("mutation", path, { ...args, token: look });
     const to = kind === "query" ? LOOK[path] : undefined;
@@ -235,7 +257,7 @@ export function removeAccount(id: string): Account | null {
 export const query = (path: string, args: Record<string, unknown> = {}) => call("query", path, { token: token() ?? undefined, ...args });
 export const mutation = (path: string, args: Record<string, unknown> = {}) => call("mutation", path, { token: token() ?? undefined, ...args });
 /** The child on screen: photos waiting on this phone are his (4 Nov 2026). */
-export const childId = () => (look !== null ? "look" : (currentId ?? "_"));
+export const childId = () => (look !== null ? "look" : staff !== null ? "staff" : (currentId ?? "_"));
 
 /** One photo into Convex storage (an address from `family:photoUrl`, then a plain POST): its storage id. */
 export async function uploadPhoto(blob: Blob): Promise<string> {
@@ -274,7 +296,7 @@ export const signInIndex = (index: number, code: string, t: string) =>
 
 /** Small things kept on this phone for the child on screen (his home screen, typed answers): never needed, only faster. */
 export function keep<T>(key: string, value?: T | null): T | null {
-  const k = `aristora.family.${look !== null ? "look" : (currentId ?? "_")}.${key}`;
+  const k = `aristora.family.${look !== null ? "look" : staff !== null ? "staff" : (currentId ?? "_")}.${key}`;
   try {
     if (value === undefined) {
       const s = ls()?.getItem(k);

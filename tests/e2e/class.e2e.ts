@@ -1131,12 +1131,12 @@ test("accounts: the owner sets up, adds a teacher, her phone signs in with the l
     await visible(tab(R, "Correction")); // marks papers, + takes attendance
     await visible(R.getByRole("button", { name: /^Register/ })); // and sees everyone's rows
     await visible(R.getByRole("button", { name: /in class.*\. Attendance$/ })); // the count by the clock: Attendance too
-    await textsAre(R.locator(".tabs .tab > span:nth-child(2)"), ["Class", "Correction"]);
+    await textsAre(R.locator(".tabs .tab > span:nth-child(2)"), ["Class", "Correction", "Us"]);
     expect(await tab(R, "Correction").getAttribute("aria-current")).toBe("page");
     await R.getByRole("button", { name: "Settings" }).click();
     // No People: owner only. Race (7 Nov 2026): Reports sees last week's champions and their poster (no prizes).
-    // Community (7 Nov 2026): every teacher (cheers and shout-outs in the students' Us tab).
-    await textsAre(R.locator(".seg button"), ["Race", "Community", "Alerts", "Reports", "History", "Account"]);
+    // Community (7 Nov 2026) is the owner's switches; the teachers' side is the Us tab at the bottom.
+    await textsAre(R.locator(".seg button"), ["Race", "Alerts", "Reports", "History", "Account"]);
     await shot(R, "a05b-teacher-settings", true);
     await R.getByRole("button", { name: "Back to the class" }).click();
     // The same link can't be used again.
@@ -1161,7 +1161,7 @@ test("accounts: the owner sets up, adds a teacher, her phone signs in with the l
     await R.getByLabel("PIN (6 digits)").fill("583920");
     await R.getByRole("button", { name: "Sign in", exact: true }).click();
     await visible(tab(R, "Correction"));
-    await textsAre(R.locator(".tabs .tab > span:nth-child(2)"), ["Class", "Correction"]);
+    await textsAre(R.locator(".tabs .tab > span:nth-child(2)"), ["Class", "Correction", "Us"]);
 
     // The history names who did each thing.
     await O.locator(".sheet").getByRole("button", { name: "Close" }).click();
@@ -1227,7 +1227,7 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
   await F.getByRole("button", { name: "Back to the class" }).click();
   // Correction is a bottom tab (it was at the top, and was "Focus"), first of the jobs after the Class tab (everyone's
   // since 3 Nov 2026); the Register is at the top. The phone opens on Correction.
-  await textsAre(F.locator(".tabs .tab > span:nth-child(2)"), ["Class", "Correction", "Theory", "Evaluation"]);
+  await textsAre(F.locator(".tabs .tab > span:nth-child(2)"), ["Class", "Correction", "Theory", "Evaluation", "Us"]);
   expect(await tab(F, "Correction").getAttribute("aria-current")).toBe("page");
   await count(F.locator(".tabs .tab.on"), 1);
   await count(F.locator(".top .focus-btn"), 0);
@@ -3349,8 +3349,8 @@ test("Class tab: everyone's, the manager acts (arrived / went, send any student:
 
   // The Class tab is first in the bottom bar, for everyone (3 Nov 2026, his call: the Manager page moves there; named
   // Class, nobody is shown as "Manager"); no Manager button on the Correction page any more.
-  await textsAre(M.locator(".tabs .tab > span:nth-child(2)"), ["Class", "Correction"]);
-  await textsAre(S.locator(".tabs .tab > span:nth-child(2)"), ["Class", "Evaluation"]);
+  await textsAre(M.locator(".tabs .tab > span:nth-child(2)"), ["Class", "Correction", "Us"]);
+  await textsAre(S.locator(".tabs .tab > span:nth-child(2)"), ["Class", "Evaluation", "Us"]);
   await count(M.locator(".fc-mgr"), 0);
   // Its count while she is elsewhere: students in the hall with no work (the Register's icon has none any more).
   await visible(tab(M, "Class").locator(".tab-badge"));
@@ -3588,7 +3588,7 @@ test("Class tab: everyone's, the manager acts (arrived / went, send any student:
   await O.locator(".teach-switch").getByRole("button", { name: "Not teaching" }).click();
   await count(room("Owner"), 0);
   // The owner's own phone: four tabs in one row.
-  await textsAre(O.locator(".tabs .tab > span:nth-child(2)"), ["Class", "Correction", "Theory", "Evaluation"]);
+  await textsAre(O.locator(".tabs .tab > span:nth-child(2)"), ["Class", "Correction", "Theory", "Evaluation", "Us"]);
   await O.context().close();
 
   // Small phones: one screen, nothing sideways, the tabs in one row (the owner's four too).

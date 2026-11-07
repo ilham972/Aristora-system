@@ -2158,7 +2158,7 @@ test("Us: closed until the owner opens it; the owl's guide; his welcome; the owl
   await goalIs(P, "Level 1");
   expect(await P.locator(".f-tabs .f-tab").count()).toBe(4);
 
-  // The owner: Settings → Community: why and how it should feel, then Open; a shout-out to Hana; a post to everyone.
+  // The owner: Settings → Community (his switches): why and how it should feel, then Open.
   const C = await open(backend, site.url, size(360, 780), () => {
     if (sessionStorage.getItem("t")) return;
     sessionStorage.setItem("t", "1");
@@ -2171,20 +2171,33 @@ test("Us: closed until the owner opens it; the owl's guide; his welcome; the owl
   await contains(C.locator(".us-open"), "Closed");
   await C.locator(".us-open").getByRole("button", { name: "Open" }).click();
   await contains(C.locator(".toast").last(), "open on every phone");
-  const shoutCard = C.locator(".us-card", { hasText: "Give a shout-out" });
-  await shoutCard.locator(".grade-row").getByRole("button", { name: "Grade 8" }).click();
-  await shoutCard.getByRole("button", { name: "Hana K" }).click();
-  await shoutCard.getByRole("button", { name: "Never gives up" }).click();
-  await shoutCard.getByRole("button", { name: "Send the shout-out" }).click();
-  await contains(C.locator(".toast").last(), "Shout-out sent");
-  const postCard = C.locator(".us-card", { hasText: "Post to the students" });
-  await postCard.getByRole("button", { name: "Tip" }).click();
-  await postCard.locator("textarea").pressSequentially("எப்போதும் working எழுது.");
-  await postCard.getByRole("button", { name: "Post", exact: true }).click();
-  await contains(C.locator(".toast").last(), "Posted to everyone");
-  await contains(C.locator(".us-list li").first(), "இன்றைய குறிப்பு");
-  await noSideScroll(C);
   await shot(C, "fam66-settings-community");
+  await C.getByRole("button", { name: "Back to the class" }).click();
+  // The class app's Us tab (7 Nov 2026, his ask): the family app's own screens inside it, with his sign-in. His guide
+  // the first time; then a shout-out to Hana and a post to everyone.
+  await C.locator(".tabs .tab.us").click();
+  const U = C.frameLocator("iframe.us-frame");
+  await contains(U.locator(".f-us-guide h2"), "மாணவர்கள் பார்ப்பது");
+  await U.locator(".f-us-guide").getByRole("button", { name: "அடுத்து" }).click();
+  await U.locator(".f-us-guide").getByRole("button", { name: "அடுத்து" }).click();
+  await U.locator(".f-us-guide").getByRole("button", { name: "தொடங்கு!" }).click();
+  await contains(U.locator(".t-me"), "Owner");
+  await U.locator(".t-head").getByRole("button", { name: /Shout-out/ }).click();
+  const sh = U.locator(".f-sheet");
+  await sh.getByRole("button", { name: "Grade 8" }).click();
+  await sh.getByRole("button", { name: "Hana K" }).click();
+  await sh.getByRole("button", { name: "எப்போதும் விடாமுயற்சி" }).click();
+  await sh.getByRole("button", { name: /Send/ }).click();
+  await contains(U.locator(".f-toast"), "shout-out போனது");
+  await U.locator(".t-head").getByRole("button", { name: /Post/ }).click();
+  await sh.getByRole("button", { name: "Tip" }).click();
+  await sh.locator("textarea").pressSequentially("எப்போதும் working எழுது.");
+  await sh.getByRole("button", { name: /Post/ }).last().click();
+  await contains(U.locator(".f-toast"), "எல்லோருக்கும் போனது");
+  await contains(U.locator(".f-us-line.k-post"), "இன்றைய குறிப்பு");
+  await contains(U.locator(".f-us-line.k-shout"), "Hana K");
+  expect(await C.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(C, "fam66b-class-us-tab");
 
   // Hana's phone: the Us tab once she opens the app again; the owl's guide the first time (three cards).
   await P.reload();
@@ -2219,11 +2232,24 @@ test("Us: closed until the owner opens it; the owl's guide; his welcome; the owl
   await P.getByRole("button", { name: "Back" }).click();
   await visible(P.locator(".f-us-list"));
 
-  // The owner's page shows her tap; his 👏 shows his name on the phones.
-  const bilalLine = C.locator(".us-list li", { hasText: "first level from home" });
-  await contains(bilalLine, "👏 1");
+  // The class app's Us tab shows her tap once it reads again (each opening of the tab); his 👏 shows his name on the
+  // phones. The Race there: every grade, a name = that student's profile with a shout-out instead of a cheer.
+  await C.locator(".tabs .tab.class").click();
+  await C.locator(".tabs .tab.us").click();
+  const bilalLine = U.locator(".f-us-line.k-home1");
+  await contains(bilalLine.locator(".f-us-clap"), "1");
   await bilalLine.getByRole("button", { name: "Cheer" }).click();
   await until(async () => (await bilalLine.getByRole("button", { name: "You cheered" }).count()) === 1, "the owner's 👏");
+  await U.locator(".t-seg").getByRole("button", { name: "Race" }).click();
+  await U.locator(".t-grades").getByRole("button", { name: "Grade 8" }).click();
+  await visible(U.locator(".f-pod.p1, .f-notyet").first());
+  await U.locator(".f-rtabs").getByRole("button", { name: "ARISTORA" }).click();
+  await U.locator(".f-pod", { hasText: "Bilal" }).first().click();
+  await contains(U.locator(".f-mate .f-me-name"), "Bilal M");
+  await visible(U.getByRole("button", { name: /Shout-out for Bilal/ }));
+  await shot(C, "fam66c-class-us-mate");
+  await U.getByRole("button", { name: "Back" }).click();
+  await visible(U.locator(".f-rtabs"));
   // The tab reads its lines again once a minute at most (flipping tabs reads nothing): a minute later, as here.
   await tabTo(P, /Home/);
   await P.evaluate(() => {

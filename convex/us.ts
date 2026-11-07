@@ -7,18 +7,24 @@
 //   post      -> a teacher's words to everyone or one grade (the owner and the Community tick).
 //   pin, remove -> the same people: a post stays on top, a line goes.
 //   setCfg    -> the owner: the tab on the phones, his welcome, the owl's kinds.
+//   race, mate, pics -> the class app's Us tab (7 Nov 2026, his ask: "build the tab for the teachers on the Aristora
+//                   system app ... the same UI UX"): the family app's own screens with the teacher's sign-in read the race
+//                   (every student), a student's profile (his marks too) and the race's pictures.
 //   daily     -> 00:10 in Sri Lanka: birthdays, yesterday's count, lines older than 30 days go.
 //   improved  -> Sunday 23:50 in Sri Lanka: the week's most improved (this week against last, before the race resets).
 
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
+import { mateOf, type FamilyBoard, type FamilyMate } from "./family";
 import { query } from "./_generated/server";
 import { actor, allowed, familyActor, familyViewer, viewer } from "./lib/auth";
 import { fail, log } from "./lib/backend";
-import { isBirthday, slDayNo } from "./lib/day";
+import { isBirthday, slDayNo, slWeekStart } from "./lib/day";
 import { internalMutation, mutation } from "./lib/fn";
 import { alertStudent } from "./lib/push";
+import { picUrl } from "./lib/profile";
 import { numsAt, RACE_GRADES } from "./lib/race";
+import { raceList } from "./lib/raceRows";
 import {
   addMoment,
   dropMoment,
@@ -79,8 +85,8 @@ export const clap = mutation({
   },
 });
 
-/** A line on the teachers' page: whether she already cheered it. */
-export type UsBoardItem = UsItem & { tme: boolean };
+/** A line on the teachers' page: whether she already cheered it, whether she wrote it. */
+export type UsBoardItem = UsItem & { tme: boolean; tmine?: boolean };
 export type UsBoard = {
   cfg: UsCfg;
   today: number;
@@ -91,6 +97,8 @@ export type UsBoard = {
   owner: boolean;
   /** Her shout-outs today (student ids), so the page can say "given today". */
   shouted: string[];
+  /** Her name (the class app's Us tab shows who is on it). */
+  me: string;
 };
 
 /** Settings → Community: what the students see (every grade's lines), and the switches. Any teacher. */
@@ -111,11 +119,53 @@ export const board = query({
       cfg,
       today: c.today,
       yesterday: c.yesterday,
-      items: rows.map((m) => ({ ...itemOf(m), tme: !!m.tc?.some((x) => x.id === u._id) })),
+      items: rows.map((m) => ({ ...itemOf(m), tme: !!m.tc?.some((x) => x.id === u._id), ...(m.by === u._id ? { tmine: true } : {}) })),
       post: allowed(u, "community"),
       owner: u.role === "owner",
       shouted: shouts.filter((m) => m.by === u._id && m.sid).map((m) => m.sid as string),
+      me: u.name,
     };
+  },
+});
+
+/** The race for the class app's Us tab: every real student, as the phones see it (a teacher has no grade of her own). */
+export const race = query({
+  args: { token },
+  handler: async (ctx, args): Promise<FamilyBoard> => {
+    await viewer(ctx, args.token, "any");
+    const now = Date.now();
+    return { since: slWeekStart(now), you: "", grade: null, rows: await raceList(ctx, false, now), top: [], me: null, count: 0 };
+  },
+});
+
+/** A student's profile for a teacher (from the race or a line of Us): everything, his marks too. */
+export const mate = query({
+  args: { token, id: v.string() },
+  handler: async (ctx, args): Promise<FamilyMate> => {
+    await viewer(ctx, args.token, "any");
+    const id = ctx.db.normalizeId("students", args.id);
+    const s = id ? await ctx.db.get(id) : null;
+    if (!s || s.archived || s.demo || s.test) fail("This student isn't in the class.");
+    return await mateOf(ctx, s, null, true);
+  },
+});
+
+/** The race's pictures for a teacher: each student's photo the teachers said OK to and his family shows. */
+export const pics = query({
+  args: { token, keys: v.array(v.string()) },
+  handler: async (ctx, args): Promise<Record<string, string>> => {
+    await viewer(ctx, args.token, "any");
+    if (args.keys.length > 60) fail("Too many photos at once.");
+    const out: Record<string, string> = {};
+    for (const key of new Set(args.keys)) {
+      const id = ctx.db.normalizeId("profilePhotos", key);
+      const p = id ? await ctx.db.get(id) : null;
+      if (!p) continue;
+      const s = await ctx.db.get(p.studentId);
+      if (!s || s.archived || s.photo?.id !== p._id || s.photoHide) continue;
+      out[key] = picUrl(p);
+    }
+    return out;
   },
 });
 

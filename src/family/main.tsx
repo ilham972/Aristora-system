@@ -5,8 +5,11 @@ import "./family.css";
 import "./owl.css";
 import { render } from "preact";
 import { App } from "./app";
-import { loadParts } from "./later";
-import { keepOwl } from "./ui";
+import { BoardTab, keptBoard } from "./board";
+import { loadParts, useParts } from "./later";
+import { keep, mutation, query, staffWith } from "./net";
+import { armSound, buzz, sound } from "./sound";
+import { Avatar, keepOwl, problemWords, setSheetHost, Sheet, toast, Toast, Waiting } from "./ui";
 
 // Two fingers never zoom (his ask, 4 Nov 2026: "students want to feel like a native app"). Chrome obeys the page's
 // user-scalable=no and the CSS touch-action; an iPhone ignores user-scalable=no (since iOS 10), so Safari's own pinch
@@ -27,7 +30,12 @@ keepOwl();
 // with his sign-in; it lives in the parts fetched after the first screen (its own file would split the level screen's
 // code out of the first load, +1.2 KB). Every other phone opens the app.
 const look = /^#preview=([a-z0-9]+)$/i.exec(location.hash);
+// The class app's Us tab (7 Nov 2026): /f/?staff inside it, with the teacher's own sign-in (src/family/staff.tsx, a
+// file of its own that students' phones never download). It gets what it uses of the app from here (staff.tsx: Kit).
+const staff = new URLSearchParams(location.search).has("staff");
+const kit = { BoardTab, keptBoard, useParts, keep, mutation, query, staffWith, armSound, buzz, sound, Avatar, problemWords, setSheetHost, Sheet, toast, Toast, Waiting };
 if (look) void loadParts().then((m) => m.startPreview(look[1], document.getElementById("app")!));
+else if (staff) void import("./staff").then((m) => m.startStaff(document.getElementById("app")!, kit));
 else render(<App />, document.getElementById("app")!);
 
 // Opens with no signal after the first visit: the page from the network when there is one, else the copy kept on the
@@ -36,6 +44,7 @@ if (
   "serviceWorker" in navigator &&
   location.pathname.startsWith("/f/") &&
   !look &&
+  !staff &&
   !(globalThis as { __ARISTORA_TEST_BACKEND__?: unknown }).__ARISTORA_TEST_BACKEND__
 ) {
   window.addEventListener("load", () => void navigator.serviceWorker.register("/f/sw.js").catch(() => {}));

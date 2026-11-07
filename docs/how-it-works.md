@@ -1179,19 +1179,37 @@ learning app of our education institute"): one profile, his class times, what he
       week; the top 3: `mostImproved`); **last week's champions** (`race.week`, Monday 00:05: each grade's #1 by grade,
       🏆 ARISTORA's marked on his line: `champsMoment`). Each kind once (per student and day, per Stage, per milestone).
       Lines older than 30 days go (`us.daily`, with their taps).
-    - **Teachers keep their own sign-in** (his question: "give teachers link or index, code?"; mine: a second account
-      system is one more thing to leak or forget): **Settings → Community** (`src/usSettings.tsx`, every teacher; first
-      in Settings for a teacher with no extras). **Why Us, and how it should feel** (open the first time on this phone,
-      `aristora.usWhy`; what a teacher does in two minutes a day: 👏 today's lines, 2–3 shout-outs, one post with the
-      tick). **The owner**: Us on the phones (closed until he opens it: the owl writes meanwhile), his welcome (≤ 600,
-      default `WELCOME_DEFAULT`), the owl's kinds (each can be turned off: hidden on the phones and the page). **Any
-      teacher**: a **shout-out** (a grade, a student (in class first, ✓ = hers today), a reason from the list
-      `SHOUT_WHY`: no free words, so no tick; once a day from her per student; his phone gets an alert that opens Us) and
-      **👏** on any line (once; her name on the phones; the student it is about gets an alert). **The owner and the
-      Community tick** (Settings → People, `community`): a **post** to everyone or one grade (≤ 300, starters Tip / Well
-      done / Reminder / Challenge, pinned if ticked), **📌 pin**, **✕ remove** (with its taps). Then **what the students
-      see**: every grade's lines in English, today's and yesterday's counts. The history says "shout-out in Us", "posted
-      in Us", "removed a line from Us", "opened Us on the students' phones".
+    - **Teachers: the class app's Us tab** (7 Nov 2026, the same evening; his voice notes: "you build community in the
+      setting, but this is for teachers ... teachers also want to join ... the same UI UX ... otherwise they can't get
+      the same feeling"; then "if we build separate apps we have to manage three apps ... build the tab for the teachers
+      on the Aristora system app ... if they want to go community they can immediately switch the tab"). His answers:
+      a tab in the class app, **Us + the Race**. Built: **Us**, last in the class app's bottom bar for everyone (Class,
+      her jobs, Us; five tabs for the owner: `.tabs.n5`), no count. It shows **the family app's own screens** inside the
+      class app (`src/usFrame.tsx`: an iframe of `/f/?staff` on the class system's own address, made the first time the
+      tab opens and kept while the app is open; each opening asks it for the newest lines, `us-refresh`), with **the
+      teacher's own sign-in** (`aristora.token` on that address: nothing new to remember, no second account system) and
+      none of the class app's weight (the family app's small files; the class app's alerts keep ringing meanwhile).
+      `src/family/staff.tsx` (`startStaff`, `StaffApp`): her name in the top row (· ஆசிரியர்) and **Us | Race**; **Us** =
+      the students' tab (every grade's lines, the welcome, the count) with her guide the first time (three cards: what
+      students see, what she does in two minutes, how it should feel), **🌟 Shout-out** (a sheet: a grade, a student
+      (✓ = hers today), a reason) and **✍️ Post** (the owner and the Community tick: Everyone or a grade, starters, pin)
+      under the header, and on each line **👏** (once; her name on the phones, an alert for the student; none on her
+      own posts and shout-outs) and **⋯** (the owner and the Community tick: 📌 pin / unpin, ✕ remove, asked once
+      more); a name = that student's profile with **🌟 Shout-out for …** instead of a classmate's 👏 (his marks shown:
+      teachers see them in class anyway). **Race** = the students' race with her row of grades (6–11, one row) or
+      ARISTORA; a name = his profile. No XP, flame, trophies or ranking of teachers (his rule: never trophies on the
+      teachers' pages; ranking teachers by cheers would turn warmth into points); names stay the owner's (People:
+      Correction's phone speaks them). Next, to ask: her photo on her lines, a private "your week".
+    - **Settings → Community** (`src/usSettings.tsx`) is the owner's only: why Us and how it should feel (open the first
+      time on this phone, `aristora.usWhy`), **Us on the phones** (closed until he opens it: the owl writes meanwhile),
+      his welcome (≤ 600, default `WELCOME_DEFAULT`), the owl's kinds (each can be turned off: hidden on the phones and
+      in the Us tab). The history says "shout-out in Us", "posted in Us", "removed a line from Us", "opened Us on the
+      students' phones".
+    - **Safe by design**: the family app in the class app reads and writes only `us:board`, `us:race`, `us:mate`,
+      `us:pics`, `us:tclap`, `us:shout`, `us:post`, `us:pin`, `us:remove` (`net.ts` `staffWith`: anything else is refused
+      on the phone, and every one of them checks a teacher's sign-in on the server); a family phone can't call them.
+      Only the family app may be framed, and only by its own address (`vercel.json`: `frame-ancestors 'self'` under
+      `/f/`, `'none'` everywhere else).
     - **Alerts**: `alertStudent(…, url)` (`pushOut.url`): "/f/#us" for a shout-out or a teacher's 👏 (the last in a
       gathered minute decides); the service worker tells an open app `{ k: "us" }`, the app opens Us.
   - **Me = his profile** (4 Nov 2026, his voice note: "a proper profile page for the students ... as simple as
@@ -1687,9 +1705,9 @@ learning app of our education institute"): one profile, his class times, what he
     `unarrive`, `cancel`, `finish` (`ownConsult` in `calls.ts`), and `consult.mark` (only for a student with her). It
     gives nothing of the rooms (the Evaluation page's `workbook.explain` etc. still need Evaluation).
   - `community` (7 Nov 2026): the students' Us tab: `us.post`, `us.pin`, `us.remove` (posts to everyone or a grade,
-    pinning, removing a line). Every signed-in person reads `us.board` and gives `us.shout` (a reason from the list) and
-    `us.tclap`; `us.setCfg` (Us on the phones, the welcome, the owl's kinds) is the owner's. The phone's side:
-    `us.feed`, `us.clap` (family token).
+    pinning, removing a line). Every signed-in person has the class app's Us tab: reads `us.board`, `us.race`,
+    `us.mate`, `us.pics` and gives `us.shout` (a reason from the list) and `us.tclap`; `us.setCfg` (Us on the phones,
+    the welcome, the owl's kinds) is the owner's. The phone's side: `us.feed`, `us.clap` (family token).
 - Everyone signed in sees the Class tab and the Register, reads `people.team` and `manager.day`, and her own card
   (`duty.card`). Correction job = the Correction page and Attendance (`setPresent`, `attendance.day`;
   `by: "attendance"`), Books given (`students.setGiven`), sending called students, Going home, Back in the hall, End

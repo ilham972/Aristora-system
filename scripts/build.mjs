@@ -77,6 +77,10 @@ console.log(`Built dist/ for ${url}: ${basename(js)} ${kb(js)} KB, ${basename(cs
 // (58.6 / 66).
 const FAMILY_BUDGET_KB = 66;
 const FAMILY_LATER_KB = 36;
+// 7 Nov 2026, the class app's Us tab: the family app's teachers' screens (src/family/staff.tsx, opened as /f/?staff
+// inside the class app) are their own file: never prefetched by a student's phone, so outside both budgets above,
+// with their own (a teacher's phone fetches them once, the first time she opens Us).
+const FAMILY_STAFF_KB = 8;
 await mkdir("dist/f/assets", { recursive: true });
 const fam = await build({
   // profile.css: the style of the parts that come after the first screen (src/family/later.ts attaches it).
@@ -122,7 +126,17 @@ const staticOf = (start) => {
 const first = staticOf(famJs);
 const laterCss = Object.keys(famOuts).find((f) => famOuts[f].entryPoint === "src/family/profile.css");
 if (!laterCss) throw new Error("Build did not produce the family app's later style");
-const later = [...Object.keys(famOuts).filter((f) => f.endsWith(".js") && !first.has(f)), laterCss];
+// The teachers' Us (7 Nov 2026): what only staff.tsx reaches is theirs (not prefetched, not in the students' budgets);
+// what it shares with the students' later parts (the Us tab, a profile) stays theirs (students fetch it anyway).
+const staffJs = Object.keys(famOuts).find((f) => famOuts[f].entryPoint === "src/family/staff.tsx");
+if (!staffJs) throw new Error("Build did not produce the family app's teachers' screens (src/family/staff.tsx)");
+const studentsLater = new Set(
+  Object.keys(famOuts)
+    .filter((f) => f.endsWith(".js") && famOuts[f].entryPoint && f !== staffJs && !first.has(f))
+    .flatMap((f) => [...staticOf(f)]),
+);
+const staffOnly = [...staticOf(staffJs)].filter((f) => !first.has(f) && !studentsLater.has(f));
+const later = [...Object.keys(famOuts).filter((f) => f.endsWith(".js") && !first.has(f) && !staffOnly.includes(f)), laterCss];
 const asset = (f) => `/f/assets/${basename(f)}`;
 const preload = [
   ...[...first].filter((f) => f !== famJs).map((f) => `<link rel="modulepreload" href="${asset(f)}">`),
@@ -144,9 +158,15 @@ let wire = (await gz(famCss)) + gzipSync(famHtml).length;
 for (const f of first) wire += await gz(f);
 let after = 0;
 for (const f of later) after += await gz(f);
+let staffKb = 0;
+for (const f of staffOnly) staffKb += await gz(f);
 console.log(
-  `Built the family app: ${basename(famJs)} + ${basename(famCss)}, ${(wire / 1024).toFixed(1)} KB over the wire on the first load (budget ${FAMILY_BUDGET_KB} KB), ${(after / 1024).toFixed(1)} KB right after it (budget ${FAMILY_LATER_KB} KB)`,
+  `Built the family app: ${basename(famJs)} + ${basename(famCss)}, ${(wire / 1024).toFixed(1)} KB over the wire on the first load (budget ${FAMILY_BUDGET_KB} KB), ${(after / 1024).toFixed(1)} KB right after it (budget ${FAMILY_LATER_KB} KB), the teachers' Us ${(staffKb / 1024).toFixed(1)} KB (budget ${FAMILY_STAFF_KB} KB)`,
 );
+if (staffKb > FAMILY_STAFF_KB * 1024) {
+  console.error(`The family app's teachers' screens are ${(staffKb / 1024).toFixed(1)} KB: over their ${FAMILY_STAFF_KB} KB budget.`);
+  process.exit(1);
+}
 if (wire > FAMILY_BUDGET_KB * 1024) {
   console.error(`The family app's first load is ${(wire / 1024).toFixed(1)} KB: over its ${FAMILY_BUDGET_KB} KB budget. Make it lighter before it ships.`);
   process.exit(1);

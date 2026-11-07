@@ -66,8 +66,22 @@ const GUIDE: { mood: Mood; h: string; p: string }[] = [
   },
 ];
 
-/** The kept lines (per child) show at once; the new ones come after. */
-function useUs(): { f: UsFeed | null; err: string | null; set: (f: UsFeed) => void } {
+/**
+ * The class app's Us tab (7 Nov 2026, staff.tsx): the same tab for a teacher, its lines and buttons hers. `feed` = the
+ * teachers' lines as the tab reads them (null while loading); `head` under the header (🌟, ✍️); `act` a line's buttons
+ * (👏, ⋯) instead of the students' one; `guide` her three cards; `end` the end of the list instead of Continue.
+ */
+export type UsStaff = {
+  feed: UsFeed | null;
+  err: string | null;
+  head: ComponentChildren;
+  act: (m: UsItem) => ComponentChildren;
+  guide: { mood: Mood; h: string; p: string }[];
+  end: ComponentChildren;
+};
+
+/** The kept lines (per child) show at once; the new ones come after. Off for a teacher (her tab reads its own). */
+function useUs(on: boolean): { f: UsFeed | null; err: string | null; set: (f: UsFeed) => void } {
   const [f, setF] = useState<UsFeed | null>(() => keep<UsFeed>("us"));
   const [err, setErr] = useState<string | null>(null);
   const set = (x: UsFeed) => {
@@ -76,7 +90,7 @@ function useUs(): { f: UsFeed | null; err: string | null; set: (f: UsFeed) => vo
   };
   useEffect(() => {
     // Flipping tabs never reads it again within a minute (the free plan's reading; a tap updates it anyway).
-    if (Date.now() - (keep<number>("usAt") ?? 0) < 60_000) return;
+    if (!on || Date.now() - (keep<number>("usAt") ?? 0) < 60_000) return;
     query("us:feed")
       .then((x) => {
         keep("usAt", Date.now());
@@ -98,8 +112,20 @@ function dayWords(t: number, now: number): string {
   return `${DAY_EN[(x.getUTCDay() + 6) % 7]} ${x.getUTCDate()} ${MONTH[x.getUTCMonth()]}`;
 }
 
-export function UsTab(props: { top: ComponentChildren; me: FamilyMe | null; onPlay: () => void; onMate: (id: string) => void; onMe: () => void }) {
-  const { f, err, set } = useUs();
+export function UsTab(props: {
+  top: ComponentChildren;
+  me: FamilyMe | null;
+  onPlay: () => void;
+  onMate: (id: string) => void;
+  onMe: () => void;
+  staff?: UsStaff;
+}) {
+  const own = useUs(!props.staff);
+  const t = props.staff;
+  const f = t ? t.feed : own.f;
+  const err = t ? t.err : own.err;
+  const set = own.set;
+  const G = t?.guide ?? GUIDE;
   // A name is a tap to that student's profile (his own: Me).
   const mate = (id: string) => {
     buzz();
@@ -171,13 +197,14 @@ export function UsTab(props: { top: ComponentChildren; me: FamilyMe | null; onPl
           ?
         </button>
       </header>
+      {t && !guide && t.head}
       {guide && (
         <section class="f-card f-us-guide rise" aria-label="How Us works">
-          <Owl mood={GUIDE[step].mood} class="mid" />
-          <h2>{GUIDE[step].h}</h2>
-          <p>{GUIDE[step].p}</p>
+          <Owl mood={G[step].mood} class="mid" />
+          <h2>{G[step].h}</h2>
+          <p>{G[step].p}</p>
           <div class="f-us-dots" aria-hidden="true">
-            {GUIDE.map((_, i) => (
+            {G.map((_, i) => (
               <i key={i} class={i === step ? "on" : ""} />
             ))}
           </div>
@@ -186,13 +213,13 @@ export function UsTab(props: { top: ComponentChildren; me: FamilyMe | null; onPl
             class="f-btn go"
             onClick={() => {
               buzz();
-              if (step < GUIDE.length - 1) {
+              if (step < G.length - 1) {
                 sound("tap");
                 setStep(step + 1);
               } else done();
             }}
           >
-            {step < GUIDE.length - 1 ? "அடுத்து" : "தொடங்கு!"}
+            {step < G.length - 1 ? "அடுத்து" : "தொடங்கு!"}
           </button>
         </section>
       )}
@@ -218,12 +245,13 @@ export function UsTab(props: { top: ComponentChildren; me: FamilyMe | null; onPl
             const d = dayWords(m.at, now);
             const head = d !== lastDay && !m.pin;
             if (head) lastDay = d;
-            const line = <Line key={m.id} m={m} done={mine.includes(m.id)} onClap={() => clap(m)} onPlay={props.onPlay} onMate={mate} />;
+            const line = <Line key={m.id} m={m} done={mine.includes(m.id)} onClap={() => clap(m)} onPlay={props.onPlay} onMate={mate} act={t?.act} />;
             return head ? [<li key={`d.${d}`} class="f-us-day">{d}</li>, line] : [line];
           })}
         </ol>
       )}
-      {!guide && f && (
+      {!guide && f && t && t.end}
+      {!guide && f && !t && (
         <section class="f-us-end rise">
           <Owl mood={items.length ? "happy" : "think"} class="tiny" />
           <p>
@@ -334,7 +362,7 @@ function say(m: UsItem, onMate: (id: string) => void): ComponentChildren {
   }
 }
 
-function Line(props: { m: UsItem; done: boolean; onClap: () => void; onPlay: () => void; onMate: (id: string) => void }) {
+function Line(props: { m: UsItem; done: boolean; onClap: () => void; onPlay: () => void; onMate: (id: string) => void; act?: (m: UsItem) => ComponentChildren }) {
   const m = props.m;
   const ask = ASK[m.k] ?? "👏";
   const pic = m.k === "post" || m.k === "count" || m.ppl ? null : picOf(m.pic);
@@ -353,7 +381,9 @@ function Line(props: { m: UsItem; done: boolean; onClap: () => void; onPlay: () 
           {m.mine && m.c > 0 ? <span> · {m.cn?.length ? `${m.cn.join(", ")}${m.c > m.cn.length ? ` +${m.c - m.cn.length}` : ""}` : ""}</span> : null}
         </small>
       </div>
-      {m.k === "count" ? (
+      {props.act ? (
+        props.act(m)
+      ) : m.k === "count" ? (
         <button type="button" class="f-us-go" onClick={props.onPlay}>
           ▶ இன்று நானும்
         </button>

@@ -291,6 +291,36 @@ describe("Us on the server", () => {
     expect((await H.query(api.us.feed, {})).items.map((x) => x.n ?? null)).toEqual([null]);
   });
 
+  test("the class app's Us tab reads the race, a profile (his marks too) and pictures with a teacher's sign-in; a phone can't", async () => {
+    await addPerson(raw, { name: "Raj", token: CORRECTOR, tabs: ["correction"] });
+    const R = asPhone(raw, CORRECTOR);
+    await t.mutation(api.workbook.correct, { studentId: asha, level: 1, items: items(1) });
+    await raw.mutation(internal.race.fill, {});
+    const race = await R.query(api.us.race, {});
+    expect(race).toMatchObject({ you: "", grade: null });
+    expect(race.rows.map((r) => r.n).sort()).toEqual(["Asha R", "Bilal M", "Hana K"]);
+    expect(race.rows.find((r) => r.id === asha)!.xp).toBeGreaterThan(0);
+    // The owner's marks switch is for classmates: a teacher sees his marks anyway.
+    await t.mutation(api.race.setMarks, { on: false });
+    const m = await R.query(api.us.mate, { id: asha });
+    expect(m).toMatchObject({ name: "Asha R", grade: 7, marks: true, cheers: { mine: false } });
+    expect(m.p.stages.length).toBeGreaterThan(0);
+    // A demo student is not in the class; a removed one neither.
+    const demo = await raw.run(async (ctx) => await ctx.db.insert("students", { name: "Demo D", archived: false, demo: true, present: false, idleMs: 0 }));
+    await expect(R.query(api.us.mate, { id: demo })).rejects.toThrow(/isn't in the class/);
+    expect(await R.query(api.us.pics, { keys: ["nonsense", demo] })).toEqual({});
+    // A family phone can't use them (its token is not a teacher's).
+    const H = await joinAs(hana, FAM_H);
+    await expect(H.query(api.us.race, {})).rejects.toThrow(/signed out/i);
+    await expect(H.mutation(api.us.tclap, { id: (await lines())[0]?._id ?? ("x" as never) })).rejects.toThrow();
+    // Her board says her name and which lines she wrote.
+    await t.mutation(api.us.post, { text: "Hello" });
+    const b = await asPhone(raw, CORRECTOR).query(api.us.board, {});
+    expect(b.me).toBe("Raj");
+    expect((await t.query(api.us.board, {})).items.find((x) => x.k === "post")).toMatchObject({ tmine: true });
+    expect(b.items.find((x) => x.k === "post")!.tmine).toBeUndefined();
+  });
+
   test("Sunday 23:50: the week's most improved from the race rows; Monday 00:05: last week's champions", async () => {
     await raw.mutation(internal.race.fill, {});
     // Last week: Bilal 10 XP. This week: Bilal 40 (from 10: ×3), Hana 30 (from none), Asha 25 (from none).

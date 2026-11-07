@@ -10,6 +10,7 @@ import { EvaluationPage } from "./evalFocus";
 import { TheoryTab } from "./theoryFocus";
 import { BossPage } from "./boss";
 import { ConsultPage, myConsults } from "./consult";
+import { UsFrame } from "./usFrame";
 import { ManagerPage } from "./manager";
 import { SimBanner } from "./sim";
 import { Progress } from "./progress";
@@ -32,7 +33,8 @@ import { Sheet, Toasts } from "./ui";
  * calls it Focus), Theory and Evaluation, for the jobs this person has. Everyone's register (the Register: a list
  * icon) and Progress are in the top bar.
  */
-type TabId = "class" | "correction" | "theory" | "evaluation";
+/** Us (7 Nov 2026): the students' community, every teacher's, last in the bar (src/usFrame.tsx). */
+type TabId = "class" | "correction" | "theory" | "evaluation" | "us";
 type Page = "board" | "register" | "settings" | "progress" | "boss" | "teach" | "consult";
 
 const TABS: { id: TabId; label: string }[] = [
@@ -40,6 +42,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "correction", label: "Correction" },
   { id: "theory", label: "Theory" },
   { id: "evaluation", label: "Evaluation" },
+  { id: "us", label: "Us" },
 ];
 const JOBS: Role[] = ["correction", "theory", "evaluation"];
 
@@ -54,6 +57,7 @@ function loadStart(): { tab: TabId | null; page: Page } {
     if (r === "focus") return { tab: "correction", page: "board" };
     // ("manager": the Manager tab of 2–3 Nov 2026, now the Class tab.)
     if (r === "hall" || r === "manager") return { tab: "class", page: "board" };
+    if (r === "us") return { tab: "us", page: "board" };
     if (r === "class" || r === "correction") return { tab: null, page: "register" };
   } catch {
     /* private mode */
@@ -81,6 +85,26 @@ function ClassMark() {
     >
       <rect x="3" y="3.5" width="18" height="17" rx="2.5" />
       <path d="M3 10.5h18M12 3.5v7" />
+    </svg>
+  );
+}
+
+/** The Us tab's mark (7 Nov 2026): two friends side by side, as on the students' phones. */
+function UsMark() {
+  return (
+    <svg
+      class="tab-plan"
+      viewBox="0 0 24 24"
+      width="20"
+      height="20"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2.2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <path d="M9 11.2a3.4 3.4 0 1 0 0-6.8 3.4 3.4 0 0 0 0 6.8zM2.8 19.5c.7-3.3 3.2-5.2 6.2-5.2s5.5 1.9 6.2 5.2M15.6 4.8a3.2 3.2 0 0 1 0 6.2M17.4 14.6c2 .6 3.4 2.3 3.9 4.9" />
     </svg>
   );
 }
@@ -126,11 +150,11 @@ export function App() {
   // Photos from home are marked on the Correction page's ⌂ lane (5 Nov 2026): Photos people get its tab even without the
   // Correction job (then only the lane, and the phone keeps its own job's alerts, never Correction's calls).
   const photosOnly = may("photos") && !jobs.includes("correction");
-  const tabs = TABS.filter((t) => t.id === "class" || jobs.includes(t.id) || (t.id === "correction" && photosOnly));
+  const tabs = TABS.filter((t) => t.id === "class" || t.id === "us" || jobs.includes(t.id as Role) || (t.id === "correction" && photosOnly));
   // The Class tab's powers (send students, mark teachers arrived): the owner, and whoever has the Manager job.
   const isManager = user?.role === "owner" || !!user?.tabs.includes("manager");
   // Nothing kept on this phone: the managers start on the Class tab, the others on their first job's page.
-  const first: TabId = isManager ? "class" : (tabs.find((t) => t.id !== "class")?.id ?? "class");
+  const first: TabId = isManager ? "class" : (tabs.find((t) => t.id !== "class" && t.id !== "us")?.id ?? "class");
   const tab: TabId = chosen && tabs.some((t) => t.id === chosen) ? chosen : first;
   // Correction (marking papers, and signing students in with its +) is Correction's job; Progress needs Reports.
   const canCorrect = may("correction");
@@ -164,17 +188,19 @@ export function App() {
   // the job done last.
   const classJob: Role = lastJob && jobs.includes(lastJob) ? lastJob : (jobs[0] ?? "correction");
   const onClassTab = shown === "board" && tab === "class";
-  const role: Role = base === "register" || tab === "class" || (tab === "correction" && photosOnly) ? classJob : tab;
+  // Us is nobody's job: the taps elsewhere (the Register) follow her job as on the Class tab.
+  const role: Role = base === "register" || tab === "class" || tab === "us" || (tab === "correction" && photosOnly) ? classJob : tab;
 
   // A manager's taps on the Class tab are recorded as the manager's ("by the manager" in the history).
   setRole(onClassTab && isManager ? "manager" : role);
   useEffect(() => {
     try {
       localStorage.setItem("aristora.role", base === "register" ? "class" : tab === "correction" ? "focus" : tab === "class" ? "hall" : tab);
+      // ("us" is kept as "us": loadStart opens it again.)
     } catch {
       /* private mode */
     }
-    const job: Role | null = base === "register" || tab === "class" || (tab === "correction" && photosOnly) ? null : tab;
+    const job: Role | null = base === "register" || tab === "class" || tab === "us" || (tab === "correction" && photosOnly) ? null : tab;
     if (job && job !== lastJob) {
       setLastJob(job);
       try {
@@ -301,6 +327,8 @@ export function App() {
               ? "evaluation"
               : tab === "class"
                 ? "hall"
+                : tab === "us"
+                  ? "us"
                 : tab === "correction"
                   ? "focus"
                   : tab
@@ -524,7 +552,7 @@ export function App() {
         <WholeClassPage views={views} />
       ) : shown === "consult" ? (
         <ConsultPage board={board} views={views} now={now} />
-      ) : tab === "class" ? (
+      ) : tab === "us" ? null : tab === "class" ? (
         <ManagerPage board={board} views={views} now={now} canManage={isManager} meId={user._id} />
       ) : tab === "correction" ? (
         <Focus board={board} views={views} now={now} />
@@ -534,6 +562,7 @@ export function App() {
         <TheoryTab board={board} views={views} now={now} />
       )}
 
+      <UsFrame open={shown === "board" && tab === "us"} />
       <nav class={`tabs n${tabs.length}`} aria-label="Choose your page">
         {tabs.map((r) => {
           // A number: something waits for that page's job while this phone is busy elsewhere. Class: students in the
@@ -545,9 +574,10 @@ export function App() {
           const coming = !away || (r.id !== "theory" && r.id !== "evaluation") ? 0 : comingTo(r.id);
           // Someone who only marks the photos from home: Correction's number is the photos waiting (red after a day).
           const lane = r.id === "correction" && photosOnly;
-          const badge = !away
-            ? 0
-            : coming || (r.id === "class" ? idleNow : r.id === "theory" ? theoryRed : r.id === "evaluation" ? evalRed : lane ? photos.n : papers);
+          const badge =
+            !away || r.id === "us"
+              ? 0
+              : coming || (r.id === "class" ? idleNow : r.id === "theory" ? theoryRed : r.id === "evaluation" ? evalRed : lane ? photos.n : papers);
           const amber = r.id === "correction" && (lane ? !photos.late : !papersRed);
           return (
             <button
@@ -562,7 +592,7 @@ export function App() {
                 setPage("board");
               }}
             >
-              {r.id === "class" ? <ClassMark /> : <span class="tab-mark" aria-hidden="true" />}
+              {r.id === "class" ? <ClassMark /> : r.id === "us" ? <UsMark /> : <span class="tab-mark" aria-hidden="true" />}
               <span>{r.label}</span>
               {badge > 0 && <span class={`tab-badge${coming ? ` tb-coming ${r.id}` : amber ? " tb-amber" : ""}`}>{badge}</span>}
             </button>

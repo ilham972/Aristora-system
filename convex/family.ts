@@ -994,37 +994,45 @@ export const mate = query({
     const id = ctx.db.normalizeId("students", args.id);
     const s = id ? await ctx.db.get(id) : null;
     if (!s || s.archived || !!s.demo !== !!me.demo || !!s.test !== !!me.test) fail("This student isn't in the race.");
-    const now = Date.now();
-    const rows = await xpRows(ctx, s._id);
-    const worlds = await worldsOf(ctx, s);
-    const days = levelDays(rows);
-    const race = await ctx.db
-      .query("raceRows")
-      .withIndex("by_sid", (q) => q.eq("sid", s._id))
-      .first();
-    const cheers = await cheersOf(ctx, s._id, now);
-    const marks = await mateMarksOn(ctx);
-    const p = await profileOf(ctx, s, rows, worlds, now);
-    return {
-      id: s._id,
-      name: s.name,
-      grade: s.grade ?? null,
-      pic: s.photo && !s.photoHide ? s.photo.id : null,
-      bday: isBirthday(s.bday, now),
-      xp: weekXp(rows, now),
-      total: xpSince(rows, 0),
-      streak: streakOf(rows, now),
-      best: bestStreak(days),
-      week: weekDays(days, now),
-      levelsDone: levelsSince(rows, 0),
-      trophies: trophiesOf(rows, worlds),
-      wins: { g: race?.w ?? 0, a: race?.wa ?? 0 },
-      cheers: { n: cheers.length, mine: cheers.some((c) => c.from === me._id && c.day === slDayNo(now)) },
-      marks,
-      p: marks ? p : withoutMarks(p),
-    };
+    return await mateOf(ctx, s, me._id, await mateMarksOn(ctx));
   },
 });
+
+/**
+ * A student's profile as the race opens it: for a classmate (`from`: whether his phone's child cheered him today; his
+ * marks only while the owner's switch is on) or for a teacher in the class app's Us tab (7 Nov 2026: `from` null, his
+ * marks always: teachers see them in class anyway).
+ */
+export async function mateOf(ctx: QueryCtx, s: Doc<"students">, from: Id<"students"> | null, marks: boolean): Promise<FamilyMate> {
+  const now = Date.now();
+  const rows = await xpRows(ctx, s._id);
+  const worlds = await worldsOf(ctx, s);
+  const days = levelDays(rows);
+  const race = await ctx.db
+    .query("raceRows")
+    .withIndex("by_sid", (q) => q.eq("sid", s._id))
+    .first();
+  const cheers = await cheersOf(ctx, s._id, now);
+  const p = await profileOf(ctx, s, rows, worlds, now);
+  return {
+    id: s._id,
+    name: s.name,
+    grade: s.grade ?? null,
+    pic: s.photo && !s.photoHide ? s.photo.id : null,
+    bday: isBirthday(s.bday, now),
+    xp: weekXp(rows, now),
+    total: xpSince(rows, 0),
+    streak: streakOf(rows, now),
+    best: bestStreak(days),
+    week: weekDays(days, now),
+    levelsDone: levelsSince(rows, 0),
+    trophies: trophiesOf(rows, worlds),
+    wins: { g: race?.w ?? 0, a: race?.wa ?? 0 },
+    cheers: { n: cheers.length, mine: !!from && cheers.some((c) => c.from === from && c.day === slDayNo(now)) },
+    marks,
+    p: marks ? p : withoutMarks(p),
+  };
+}
 
 /** Cheers one phone's child may give in a day (one per classmate). */
 export const CHEERS_PER_DAY = 30;
