@@ -1279,7 +1279,7 @@ const EXTRA_HELP: Record<Extra, string> = {
 };
 
 function canWords(p: { role: string; tabs: Job[]; can: Extra[]; dept?: Dept | null; lead?: boolean; pages?: PageId[] | null }): string {
-  if (p.role === "owner") return p.pages ? `Owner: everything · ${roleWords({ dept: null, lead: false, pages: p.pages })}` : "Owner: everything";
+  if (p.role === "owner") return `Owner: everything · ${roleWords({ role: "owner", dept: p.dept ?? null, lead: !!p.lead, pages: p.pages ?? null })}`;
   // Her own app (Settings → Roles, 8 Nov 2026): her department and pages say it.
   if (p.pages) return roleWords({ dept: p.dept ?? null, lead: !!p.lead, pages: p.pages });
   const tabs = p.tabs.map((t) => TAB_NAMES[t]).join(", ");

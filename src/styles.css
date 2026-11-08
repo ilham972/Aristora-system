@@ -11448,6 +11448,10 @@ body.tm-on .toasts {
   gap: 5px;
   height: 92px;
 }
+/* Correction's grades are the students' own: 6–11 (8 Nov 2026). */
+.dash-grades.n6 {
+  grid-template-columns: repeat(6, 1fr);
+}
 .dash-g {
   position: relative;
   display: flex;
@@ -11624,6 +11628,18 @@ body.tm-on .toasts {
 .role-tag.lead {
   background: var(--ink);
   color: #fff;
+}
+/* A page only the owner can have, in his own sheet (8 Nov 2026): a small tag under its name (the row is a column). */
+.role-only {
+  align-self: flex-start;
+  margin: 2px 0 1px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--line-2);
+  color: var(--ink-2);
+  font-size: 10.5px;
+  font-style: normal;
+  font-weight: 800;
 }
 .role-empty {
   margin: 0;

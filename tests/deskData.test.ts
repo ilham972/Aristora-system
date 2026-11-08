@@ -9,7 +9,7 @@ import { computeStatus, type Marks } from "../convex/lib/status";
 import { correctionSends, LEAD_LATE_MS, leadSends, phoneSends } from "../src/callRoute";
 import { consultRows, deptTally, todayOf, waitsOf } from "../src/consultData";
 import type { View } from "../src/derive";
-import { deptNow, deskLists, deskLook, deskPlan, deskQs, deskTicks, DESK_CAP, isBlank, nextQ, type DeskQ } from "../src/deskData";
+import { correctionNow, deptNow, deskLists, deskLook, deskPlan, deskQs, deskTicks, DESK_CAP, isBlank, nextQ, type DeskQ } from "../src/deskData";
 import { asView } from "./views";
 
 const PILOT = fighter(PILOT_FIGHTER);
@@ -220,11 +220,70 @@ describe("who sends a consultation's student (src/callRoute.ts)", () => {
     expect(phoneSends(correction, c, NOW - MIN + LEAD_LATE_MS)).toBe(true);
   });
 
+  test("the owner working in a department as its lead: its consultations ring on his phone, Correction's calls don't; never his own", () => {
+    const owner = { _id: "o1", role: "owner" as const, dept: "master" as const, lead: true };
+    const c = { ...call({ consult: true, dept: "master", toLead: true }), teacherId: "t9" };
+    expect([leadSends(owner, c), phoneSends(owner, c, NOW), phoneSends(owner, call({}), NOW)]).toEqual([true, true, false]);
+    expect(leadSends(owner, { ...c, teacherId: "o1" })).toBe(false); // his own consultation: not his to send
+    // In no department, as before: Correction's calls.
+    expect(phoneSends({ _id: "o1", role: "owner" }, call({}), NOW)).toBe(true);
+    // Working in Management: Correction's calls, not a department's consultation in its first 3 minutes.
+    expect([phoneSends({ role: "owner", dept: "management" }, call({}), NOW), phoneSends({ role: "owner", dept: "management" }, c, NOW)]).toEqual([true, false]);
+  });
+
   test("every other call is Correction's (the owner and the manager too), never a department lead's", () => {
     const plain = call({});
     const noLead = call({ consult: true, dept: "fighter" });
     expect([phoneSends(correction, plain, NOW), phoneSends({ role: "owner" }, plain, NOW), phoneSends(null, plain, NOW)]).toEqual([true, true, true]);
     expect([phoneSends(lead, plain, NOW), phoneSends(fighterLead, noLead, NOW)]).toEqual([false, false]);
     expect(phoneSends(correction, noLead, NOW)).toBe(true);
+  });
+});
+
+/** A workbook student with levels handed in (these minutes ago) and not corrected yet; all = every level of the book. */
+function handedIn(name: string, grade: number, ago: number[], o: { all?: boolean; noWork?: boolean; where?: View["where"] } = {}): View {
+  const m: MState = { q: {}, lv: {} };
+  const levels = o.all ? G7U08.levels : G7U08.levels.slice(0, ago.length);
+  levels.forEach((l, i) => (m.lv[String(l.n)] = { done: NOW - (ago[i] ?? ago[ago.length - 1]) * MIN }));
+  const ms = computeMaster(m, G7U08);
+  return asView({
+    s: { _id: name, name, unitId: U08._id, grade, stage: "master", lastSeenAt: 0, lastInAt: NOW - 60 * MIN },
+    unit: U08,
+    stage: "master",
+    kind: "master",
+    where: o.where ?? "hall",
+    f: null,
+    st: null,
+    marks: {},
+    mb: G7U08,
+    ms,
+    mm: m,
+    pending: ms.pending,
+    calls: [],
+    pulled: false,
+    noWork: !!o.noWork,
+    tag: "G7 · U08",
+  });
+}
+
+describe("the Correction department's numbers now (correctionNow: its dashboard)", () => {
+  test("papers handed in, from how many students; red = in the hall with no work until one is corrected; the oldest; by grade", () => {
+    const asha = handedIn("Asha", 7, [30]);
+    const bala = handedIn("Bala", 8, [12, 10], { all: true, noWork: true });
+    const chitra = handedIn("Chitra", 7, [5], { where: "evaluation" });
+    const gone = handedIn("Gone", 9, [50], { where: "absent" });
+    const dinesh = wb("Dinesh", [3]); // corrected already: nothing waits
+    expect(bala.ms!.needs).toEqual(["correction"]);
+    const n = correctionNow([asha, bala, chitra, gone, dinesh]);
+    expect(n).toMatchObject({ papers: 2 + G7U08.levels.length, students: 3, red: 1, oldest: NOW - 30 * MIN });
+    expect(n.byGrade).toEqual([
+      { grade: 6, students: 0, red: 0 },
+      { grade: 7, students: 2, red: 0 },
+      { grade: 8, students: 1, red: 1 },
+      { grade: 9, students: 0, red: 0 },
+      { grade: 10, students: 0, red: 0 },
+      { grade: 11, students: 0, red: 0 },
+    ]);
+    expect(correctionNow([dinesh])).toMatchObject({ papers: 0, students: 0, red: 0, oldest: null });
   });
 });

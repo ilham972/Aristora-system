@@ -100,8 +100,9 @@ export const create = mutation({
     if (args.room === "theory" && args.kind !== "theory") fail("The theory room only teaches theory.");
     const session = await currentSession(ctx, now);
     const group = `${now.toString(36)}${Math.floor(Math.random() * 1e9).toString(36)}`;
-    // Her department's lead sends him (8 Nov 2026): only when that department has one.
-    const toLead = consult && !!args.dept && (await leadsOf(ctx, args.dept)).length > 0;
+    // Her department's lead sends him (8 Nov 2026): only when that department has one other than the caller (the owner
+    // can lead a department and call to himself: then Correction sends him, as before).
+    const toLead = consult && !!args.dept && (await leadsOf(ctx, args.dept)).some((id) => id !== me._id);
     const created: { studentId: Id<"students">; callId: Id<"calls">; pull: boolean; bumped: boolean }[] = [];
     const rejected: Rejected[] = [];
 

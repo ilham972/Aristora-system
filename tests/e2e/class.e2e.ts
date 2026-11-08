@@ -59,10 +59,14 @@ afterAll(async () => {
   await site?.close();
 });
 
-/** A class backend with the owner's account (every phone below is the owner's unless it says otherwise). */
-async function newClass() {
+/**
+ * A class backend with the owner's account (every phone below is the owner's unless it says otherwise). His bar: the
+ * pages these run-throughs were written for (Class, Correction, the old Theory and Evaluation pages, Us: his own pages
+ * since 8 Nov 2026); his default bar (Fighter and Master) is the "Owner's own app" run-through's.
+ */
+async function newClass(o: { defaultBar?: boolean } = {}) {
   const backend = makeBackend(modules);
-  await addPerson(backend.t, { name: "Owner", token: OWNER_TOKEN, role: "owner" });
+  await addPerson(backend.t, { name: "Owner", token: OWNER_TOKEN, role: "owner", ...(o.defaultBar ? {} : { pages: ["class", "correction", "theory", "evaluation", "us"] }) });
   return backend;
 }
 
@@ -4199,6 +4203,126 @@ test("Departments: Settings → Roles gives each teacher her own app; Preview lo
   await C.locator(".pv-banner").getByRole("button", { name: "Exit" }).click();
   await visible(C.locator(".roles"));
   await count(C.locator(".pv-banner"), 0);
+  expect(problems, problems.join("\n")).toEqual([]);
+});
+
+test("Owner's own app: Fighter and Master on his bar, not Theory and Evaluation; he works in a department (Management: the Correction dashboard; Fighter as its lead: its consultation rings on his phone); his own pages leave the top bar", async () => {
+  const backend = await newClass({ defaultBar: true });
+  const O = await phone(backend, "hall");
+  const bar = (p: Page) => p.locator(".tabs .tab").evaluateAll((els) => els.map((e) => (e.getAttribute("aria-label") ?? "").split(",")[0]));
+  const DEFAULT = ["Dashboard", "Class", "Fighter", "Master", "Correction", "Us"];
+  await until(async () => JSON.stringify(await bar(O)) === JSON.stringify(DEFAULT), "his default bar");
+  await count(O.locator(".tabs .tab.theory, .tabs .tab.evaluation"), 0);
+  await O.getByRole("button", { name: "Settings" }).click();
+  await O.getByRole("button", { name: "Load demo students (three grades)" }).click();
+  await visible(O.getByText(/^14 demo students loaded/));
+  await O.getByRole("button", { name: "Back to the class" }).click();
+
+  // His dashboard: the three departments; Management (Correction now): Malik's and Vimal's papers wait.
+  await O.locator(".tabs .tab.dash").click();
+  await says(O.locator(".dash-who small"), "Owner");
+  await count(O.locator(".dash-seg .segc-b"), 3);
+  await O.locator(".dash-seg .segc-b", { hasText: "Management" }).click();
+  await says(O.locator(".dash-ask"), "How many papers wait to be corrected?");
+  await until(async () => (await O.locator(".dash-n b").textContent()) === "2", "Malik's and Vimal's papers");
+  await visible(O.locator('.dash-g[aria-label^="7:"]:not([disabled])'));
+  await shot(O, "o01-owner-correction-dash");
+  // Where to go now: Grade 7 opens Correction on Grade 7.
+  await O.locator('.dash-g[aria-label^="7:"]').click();
+  await visible(O.locator(".fc-grades .gp.on"));
+  await contains(O.locator(".fc-grades .gp.on"), "7");
+  // Malik's Level 3 corrected: one paper left; corrected today counts it.
+  const G7U08 = KNOWN_WORKBOOKS[0].data;
+  const malik = await backend.t.run(async (ctx) => (await ctx.db.query("students").collect()).find((x) => x.name === "Malik")!._id);
+  const l3 = G7U08.levels[2];
+  const items = Array.from({ length: l3.to - l3.from + 1 }, (_, i) => ({ q: l3.from + i, got: outOf(G7U08, l3.from + i) ?? 2 }));
+  await backend.t.mutation(api.workbook.correct, { token: OWNER_TOKEN, studentId: malik, level: l3.n, items, by: "correction" });
+  await backend.push(); // the phones see what changed outside them
+  await O.locator(".tabs .tab.dash").click();
+  await until(async () => (await O.locator(".dash-n b").textContent()) === "1", "Vimal's paper left");
+  await contains(O.locator(".dash-team"), "1 level");
+  await count(O.locator(".dash-mine"), 0); // he doesn't work in Management (yet)
+
+  // Settings → Roles: his own app first. He works in Management and adds the Owner page (only his).
+  await O.getByRole("button", { name: /^Settings/ }).click();
+  await O.getByRole("button", { name: "Roles", exact: true }).click();
+  const R = O.locator(".roles");
+  await visible(R.locator(".role-dept.rd-owner"));
+  expect(await R.locator(".role-dept").first().getAttribute("class")).toContain("rd-owner");
+  await contains(R.locator(".rd-owner .role-p small"), "All departments");
+  await R.locator(".rd-owner .role-p").click();
+  const sheet = O.locator(".role-sheet .sheet");
+  await visible(sheet);
+  const ticked = () => sheet.locator(".role-pages .perm").evaluateAll((els) => els.filter((e) => (e.querySelector("input") as HTMLInputElement).checked).map((e) => e.querySelector("span")!.firstChild!.textContent));
+  await until(async () => JSON.stringify(await ticked()) === JSON.stringify(DEFAULT), "his default, ticked");
+  await count(sheet.locator(".role-only"), 5); // Owner, Register, Theory, Evaluation, Progress
+  await sheet.getByRole("button", { name: "Management", exact: true }).click();
+  await until(async () => JSON.stringify(await ticked()) === JSON.stringify(["Dashboard", "Class", "Correction", "Us"]), "Management's pages");
+  await sheet.getByRole("checkbox", { name: /^Owner/ }).check();
+  await until(async () => JSON.stringify(await ticked()) === JSON.stringify(["Dashboard", "Owner", "Class", "Correction", "Us"]), "with the Owner page");
+  await shot(O, "o02-owner-sheet");
+  await sheet.getByRole("button", { name: "Save" }).click();
+  await contains(O.locator(".toast"), "Your app is saved: you work in the Management department.");
+  await until(async () => JSON.stringify(await bar(O)) === JSON.stringify(["Dashboard", "Owner", "Class", "Correction", "Us"]), "his bar");
+  await count(O.locator(".top .boss-btn"), 0); // the Owner page is his tab now, not an icon too
+  await O.locator(".tabs .tab.boss").click();
+  await visible(O.locator(".page.boss"));
+  await O.locator(".tabs .tab.dash").click();
+  await says(O.locator(".dash-who small"), "Owner · works in Management department");
+  await visible(O.locator(".dash-seg .segc-b.on", { hasText: "Management" }));
+  await contains(O.locator(".dash-mine"), "You: 1 level");
+  await shot(O, "o03-owner-bar");
+
+  // Raj, a Management teacher: his dashboard is Correction's, no switch; at 320 px nothing goes sideways.
+  const RAJ = "raj-own-token-0123456789abcdefghijklmnopqrstuvwxyz0123";
+  const raj = await addPerson(backend.t, { name: "Raj", token: RAJ, tabs: ["correction"] });
+  await backend.t.mutation(api.people.setRole, { token: OWNER_TOKEN, id: raj, dept: "management", lead: false, pages: ["dash", "class", "correction", "us"], tabs: ["correction"], can: ["photos"] });
+  const RJ = await phone(backend, "dash", { ...PHONE, viewport: { width: 320, height: 568 } }, RAJ);
+  await says(RJ.locator(".dash-ask"), "How many papers wait to be corrected?");
+  await count(RJ.locator(".dash-seg"), 0);
+  await says(RJ.locator(".dash-who small"), "Management department");
+  await until(async () => (await RJ.locator(".dash-n b").textContent()) === "1", "Raj: Vimal's paper");
+  expect(await RJ.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(RJ, "o04-correction-dash-320");
+  await RJ.context().close();
+
+  // He works in Fighter as its lead: Sana (Fighter's consultation room) calls someone; his phone says it, he taps Sent.
+  await O.getByRole("button", { name: /^Settings/ }).click();
+  await O.getByRole("button", { name: "Roles", exact: true }).click();
+  await R.locator(".rd-owner .role-p").click();
+  await visible(sheet);
+  await sheet.getByRole("button", { name: "Fighter", exact: true }).click();
+  await visible(sheet.getByRole("radio", { name: /^Lead teacher/, checked: true }));
+  await until(async () => JSON.stringify(await ticked()) === JSON.stringify(["Dashboard", "Fighter", "Correction", "Teach", "Consult", "Us"]), "Fighter lead's six");
+  await sheet.getByRole("button", { name: "Save" }).click();
+  await contains(O.locator(".toast"), "as its lead");
+  await count(O.locator(".top .boss-btn"), 1); // the Owner page back in the top bar
+  await O.locator(".tabs .tab.dash").click();
+  await says(O.locator(".dash-ask"), "How many students have no work?");
+  const SANA = "sana-own-token-0123456789abcdefghijklmnopqrstuvwxyz012";
+  const sana = await addPerson(backend.t, { name: "Sana", token: SANA, tabs: [], can: ["consult"] });
+  await backend.t.mutation(api.people.setRole, { token: OWNER_TOKEN, id: sana, dept: "fighter", lead: false, pages: ["consult", "us"], tabs: [], can: [] });
+  const SN = await phone(backend, "consult", PHONE, SANA);
+  const SP = SN.locator(".cx-page");
+  await visible(SP.locator(".cx-nm").first());
+  const who = (await SP.locator(".cx-nm").first().getAttribute("data-name"))!;
+  await SP.locator(".cx-nm").first().click();
+  await SP.locator(".evx-call").click();
+  await contains(SN.locator(".toast"), `Called ${who}. The Fighter lead sends him to you.`);
+  await hears(O, `${who}, go to Sana.`);
+  const strip = O.locator(".call-strip", { hasText: "Sana" });
+  await visible(strip);
+  await shot(O, "o05-owner-lead-sends");
+  await strip.getByRole("button", { name: "Sent" }).click();
+  await until(async () => (await marksOf(backend, who)).room === "evaluation", `${who} on his way to Sana`);
+  await SN.context().close();
+
+  // Back to all departments: his default bar again.
+  await O.getByRole("button", { name: /^Settings/ }).click();
+  await O.getByRole("button", { name: "Roles", exact: true }).click();
+  await R.locator(".rd-owner .role-p").click();
+  await sheet.locator(".role-reset").click();
+  await until(async () => JSON.stringify(await bar(O)) === JSON.stringify(DEFAULT), "his default bar again");
   expect(problems, problems.join("\n")).toEqual([]);
 });
 

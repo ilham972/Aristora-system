@@ -131,7 +131,8 @@ export function ConsultPage(props: { board: Board; views: View[]; now: number })
   // only (Fighter: No work · Evaluation; Master: one list, blanks in their own colour). The owner (or anyone in no
   // department) switches between the two: Fighter | Master.
   const own: DeptPick | null = person && person.role === "teacher" && isTeachDept(person.dept) ? person.dept : null;
-  const [deptPick, setDeptPick] = useState<DeptPick>(loadDeptPick);
+  // The owner working in Fighter or Master (Settings → Roles → your own app) opens on it; he can still switch.
+  const [deptPick, setDeptPick] = useState<DeptPick>(() => (person?.role === "owner" && isTeachDept(person.dept) ? person.dept : loadDeptPick()));
   const scope: DeptPick = own ?? deptPick;
   const [kindPick, setKind] = useState<ConsultKind | null>(loadKind);
   // Master: one list (wrong and blank questions to explain); Fighter: No work (theory, its first number) or Evaluation.

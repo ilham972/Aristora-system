@@ -36,6 +36,11 @@ export function slDayNo(t: number): number {
   return Math.floor((t + SL_OFFSET_MS) / DAY_MS);
 }
 
+/** Midnight in Sri Lanka at the start of this time's day ("today" for a dashboard). */
+export function slDayStart(t: number): number {
+  return slDayNo(t) * DAY_MS - SL_OFFSET_MS;
+}
+
 /** When this week began in Sri Lanka: Monday 00:00 (the family app's weekly points start again then). */
 export function slWeekStart(t: number): number {
   const day = slDayNo(t);

@@ -3,16 +3,17 @@
 import type { TestConvex } from "convex-test";
 import type { Id } from "../convex/_generated/dataModel";
 import { EXTRAS, secretHash, TABS, type Extra, type Tab } from "../convex/lib/auth";
+import type { PageId } from "../convex/lib/dept";
 import type schema from "../convex/schema";
 
 type T = TestConvex<typeof schema>;
 
 export const OWNER_TOKEN = "owner-phone-token-0123456789abcdefghijklmnopqrstuv";
 
-/** A person with a phone already signed in (with this token). */
+/** A person with a phone already signed in (with this token); `pages` = her own app (Settings → Roles). */
 export async function addPerson(
   t: T,
-  p: { name: string; token: string; role?: "owner" | "teacher"; tabs?: Tab[]; can?: Extra[] },
+  p: { name: string; token: string; role?: "owner" | "teacher"; tabs?: Tab[]; can?: Extra[]; pages?: PageId[] },
 ): Promise<Id<"users">> {
   return await t.run(async (ctx) => {
     const now = Date.now();
@@ -23,6 +24,7 @@ export async function addPerson(
       role: owner ? "owner" : "teacher",
       tabs: owner ? TABS : (p.tabs ?? ["correction"]),
       can: owner ? EXTRAS : (p.can ?? []),
+      ...(p.pages ? { pages: p.pages } : {}),
       active: true,
       createdAt: now,
     });

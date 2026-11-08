@@ -352,6 +352,16 @@ function remember(s: Saved) {
 
 const GRADE_KEY = "aristora.grade.focus";
 
+/** The Correction dashboard's "where to go now" (8 Nov 2026): Correction opens on this grade, its papers in the hall. */
+export function openFocusAt(g: number) {
+  try {
+    localStorage.setItem(GRADE_KEY, String(g));
+  } catch {
+    /* private mode */
+  }
+  setLaneOn(false);
+}
+
 /**
  * The grade whose names show on this phone, remembered (any grade with students, even before anyone of it is in).
  * The one shown is always the one remembered: the names never jump to another grade by themselves.

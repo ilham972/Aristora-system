@@ -9,8 +9,9 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { KNOWN_WORKBOOKS, levelOutOf } from "../convex/lib/book";
-import { cleanPages, jobsFor, presetPages, withNeeds } from "../convex/lib/dept";
+import { barPages, cleanPages, jobsFor, OWNER_DEFAULT, ownerPreset, presetPages, withNeeds } from "../convex/lib/dept";
 import type { MState } from "../convex/lib/master";
+import { beforeOf } from "../src/focusData";
 import schema from "../convex/schema";
 import { addPerson, asOwner, asPhone } from "./helpers";
 
@@ -71,11 +72,11 @@ afterEach(() => {
 });
 
 describe("the departments' rules (convex/lib/dept.ts)", () => {
-  test("presets: his lead teacher's six; a consultation teacher's two; Management's three", () => {
+  test("presets: his lead teacher's six; a consultation teacher's two; Management's four (its dashboard first)", () => {
     expect(presetPages("fighter", true)).toEqual(["dash", "fighter", "correction", "teach", "consult", "us"]);
     expect(presetPages("master", true)).toEqual(["dash", "master", "correction", "consult", "us"]);
     expect(presetPages("fighter", false)).toEqual(["consult", "us"]);
-    expect(presetPages("management", false)).toEqual(["class", "correction", "us"]);
+    expect(presetPages("management", false)).toEqual(["dash", "class", "correction", "us"]);
     expect(presetPages(undefined, false)).toEqual(["class", "us"]);
   });
   test("pages in their fixed places, once each, six at most; the jobs and extras they can't work without", () => {
@@ -117,10 +118,13 @@ describe("Settings → Roles (people.setRole, people.add)", () => {
     // Only the owner sets roles.
     await expect(phone.mutation(api.people.setRole, { id: nila, pages: ["us"], tabs: [], can: [] })).rejects.toThrow(/owner/);
 
-    // The owner's own app: his pages only.
+    // The owner's own app: his pages (in their fixed places).
     const owner = await t.run(async (ctx) => (await ctx.db.query("users").collect()).find((x) => x.role === "owner")!._id);
     await t.mutation(api.people.setRole, { id: owner, pages: ["class", "correction", "fighter", "master", "us"], tabs: [], can: [] });
     expect((await t.query(api.auth.me, {})).user).toMatchObject({ role: "owner", pages: ["class", "fighter", "master", "correction", "us"] });
+    // A page only the owner can have never reaches a teacher's bar.
+    await t.mutation(api.people.setRole, { id: nila, dept: "fighter", lead: true, pages: ["boss", "dash", "fighter", "progress", "theory", "us"], tabs: ["correction"], can: [] });
+    expect((await userOf(t, nila)).pages).toEqual(["dash", "fighter", "us"]);
 
     // Back to the app of before: her jobs stay.
     await t.mutation(api.people.setRole, { id: nila, pages: [], tabs: [], can: [], reset: true });
@@ -279,5 +283,108 @@ describe("a department's consultation rings on its lead's phone", () => {
     expect(c3.toLead).toBeUndefined();
     // A department belongs to a consultation only.
     await expect(t.mutation(api.calls.create, { studentIds: [ravi], room: "evaluation", kind: "evaluation", dept: "master" })).rejects.toThrow(/Only a consultation/);
+  });
+});
+
+describe("the owner's own app (8 Nov 2026: Fighter and Master on his bar, his department, his own pages)", () => {
+  test("his bar with none set: Dashboard, Class, Fighter, Master, Correction, Us (no Theory, no Evaluation); his own pages only on his", () => {
+    expect(barPages({ role: "owner" })).toEqual(["dash", "class", "fighter", "master", "correction", "us"]);
+    expect(OWNER_DEFAULT).not.toContain("theory");
+    expect(barPages({ role: "teacher" })).toBeNull(); // a teacher with none: the app of before
+    expect(barPages({ role: "teacher", pages: ["boss", "dash", "register", "us"] })).toEqual(["dash", "us"]);
+    expect(barPages({ role: "owner", pages: ["us", "boss", "theory", "evaluation", "progress"] })).toEqual(["boss", "theory", "evaluation", "progress", "us"]);
+    expect(cleanPages(["register", "fighter", "boss"])).toEqual(["fighter"]);
+    expect(cleanPages(["register", "fighter", "boss"], true)).toEqual(["boss", "register", "fighter"]);
+    // The department he works in starts his pages; all departments: his default.
+    expect(ownerPreset(null, false)).toEqual([...OWNER_DEFAULT]);
+    expect(ownerPreset("fighter", true)).toEqual(presetPages("fighter", true));
+    expect(ownerPreset("management", false)).toEqual(["dash", "class", "correction", "us"]);
+  });
+
+  test("he works in a department: saved with his pages (his own ones too); its consultation rings on his phone as its lead; back to all", async () => {
+    const t = await setup();
+    const owner = await t.run(async (ctx) => (await ctx.db.query("users").collect()).find((x) => x.role === "owner")!._id);
+    await t.mutation(api.people.setRole, { id: owner, dept: "fighter", lead: true, pages: ["boss", "dash", "fighter", "correction", "consult", "us"], tabs: [], can: [] });
+    expect((await t.query(api.auth.me, {})).user).toMatchObject({ role: "owner", dept: "fighter", lead: true, pages: ["dash", "boss", "fighter", "correction", "consult", "us"] });
+    // His powers never change.
+    expect(await userOf(t, owner)).toMatchObject({ tabs: ["correction", "theory", "evaluation", "manager"] });
+    await expect(t.mutation(api.people.setRole, { id: owner, dept: "management", lead: true, pages: ["dash"], tabs: [], can: [] })).rejects.toThrow(/Fighter or Master/);
+    await expect(t.mutation(api.people.setRole, { id: owner, pages: [], tabs: [], can: [] })).rejects.toThrow(/at least one page/);
+
+    // Sana (Fighter's consultation room) calls Ahamed: the owner leads Fighter, so he sends him.
+    const sana = await addPerson(t, { name: "Sana", token: SANA, tabs: [], can: ["consult"] });
+    await t.mutation(api.people.setRole, { id: sana, dept: "fighter", lead: false, pages: ["consult", "us"], tabs: [], can: [] });
+    const ahamed = await add(t, "Ahamed", 11, "fighter", "G11-U13");
+    const res = await asPhone(t, SANA).mutation(api.calls.create, { studentIds: [ahamed], room: "evaluation", kind: "theory", consult: true, dept: "fighter", by: "consult" });
+    expect(res.toLead).toBe(true);
+    expect((await t.mutation(api.calls.send, { callIds: [res.created[0].callId], by: "correction" })).sent).toBe(1);
+    // His own consultation (he is Fighter's only lead): nobody else leads it, so Correction sends him, as before.
+    const ravi = await add(t, "Ravi", 11, "fighter", "G11-U13");
+    const own = await t.mutation(api.calls.create, { studentIds: [ravi], room: "evaluation", kind: "theory", consult: true, dept: "fighter", by: "consult" });
+    expect(own.toLead).toBe(false);
+
+    // Back to all departments: his default bar again.
+    await t.mutation(api.people.setRole, { id: owner, pages: [], tabs: [], can: [], reset: true });
+    const u = await userOf(t, owner);
+    expect([u.dept, u.lead, u.pages]).toEqual([undefined, undefined, undefined]);
+    expect((await t.query(api.state.history, {})).filter((e) => e.kind === "person-role").length).toBe(3);
+  });
+});
+
+describe("the Correction department's dashboard: what each person corrected today (desk.corrected)", () => {
+  test("levels saved, theory-book questions as Correction's last tap left them, photos from home; today only, real students only", async () => {
+    const t = await setup();
+    const raj = await addPerson(t, { name: "Raj", token: RAJ, tabs: ["correction"] });
+    void raj;
+    const kumar = await add(t, "Kumar", 7, "master", "G7-U08");
+    const ahamed = await add(t, "Ahamed", 11, "fighter", "G11-U13");
+    // Kumar's Level 1: handed in, corrected by Raj (Correction's Save).
+    const u08 = await unitId(t, "G7-U08");
+    await asPhone(t, RAJ).mutation(api.workbook.levelDone, { studentId: kumar, unitId: u08, level: 1, by: "correction" });
+    vi.setSystemTime(START + 5 * MIN);
+    const l1 = G7U08.levels[0];
+    const each = levelOutOf(G7U08, l1)!;
+    const items = Array.from({ length: l1.to - l1.from + 1 }, (_, i) => ({ q: l1.from + i, got: each[i] }));
+    const before = beforeOf((await work(t, kumar, "G7-U08", "master")).m, l1);
+    await asPhone(t, RAJ).mutation(api.workbook.correct, { studentId: kumar, unitId: u08, level: 1, items, by: "correction" });
+    const fixed = (await work(t, kumar, "G7-U08", "master")).m.lv["1"]!.fixed!;
+    // Ahamed's theory book: Raj marks Q5 right and Q6 wrong, then clears Q6; the owner marks Q7; Theory's tap isn't Correction's.
+    const u13 = await unitId(t, "G11-U13");
+    await asPhone(t, RAJ).mutation(api.marks.set, { studentId: ahamed, unitId: u13, q: 5, s: "right", by: "correction" });
+    await asPhone(t, RAJ).mutation(api.marks.set, { studentId: ahamed, unitId: u13, q: 6, s: "wrong", by: "correction" });
+    await asPhone(t, RAJ).mutation(api.marks.set, { studentId: ahamed, unitId: u13, q: 6, s: null, by: "correction" });
+    await t.mutation(api.marks.set, { studentId: ahamed, unitId: u13, q: 7, s: "right", by: "correction" });
+    await t.mutation(api.marks.set, { studentId: ahamed, unitId: u13, q: 8, s: "right", by: "theory" });
+    // Two photos from home Raj marked today, one yesterday, and one of a test student (the simulation's).
+    const testKid = await t.run(async (ctx) => {
+      const k = (await ctx.db.query("students").collect()).find((s) => s._id === kumar)!;
+      const { _id, _creationTime, ...rest } = k;
+      void _id;
+      void _creationTime;
+      return await ctx.db.insert("students", { ...rest, name: "Sim", test: true });
+    });
+    await t.run(async (ctx) => {
+      const at = START + 6 * MIN;
+      for (const [studentId, when] of [
+        [kumar, at],
+        [kumar, at + 1],
+        [kumar, START - 24 * 60 * MIN],
+        [testKid, at],
+      ] as const)
+        await ctx.db.insert("events", { at: when, kind: "photo-marked", who: "Raj", studentId, name: "Kumar", unit: "G7-U08", q: 3, value: "1 2/2" });
+    });
+
+    const day = await asPhone(t, RAJ).query(api.desk.corrected, {});
+    expect(day.total).toMatchObject({ levels: 1, qs: 2, photos: 2, students: 2 });
+    expect(day.people).toEqual([
+      { name: "Raj", levels: 1, qs: 1, photos: 2, students: 2 },
+      { name: "Owner", levels: 0, qs: 1, photos: 0, students: 1 },
+    ]);
+    expect(day.since).toBe(new Date("2026-11-09T00:00:00+05:30").getTime());
+    // The simulation's phone counts its own students only.
+    expect((await t.query(api.desk.corrected, { test: true })).total).toMatchObject({ levels: 0, qs: 0, photos: 1, students: 1 });
+    // A level taken back leaves the count.
+    await asPhone(t, RAJ).mutation(api.workbook.uncorrect, { studentId: kumar, unitId: u08, level: 1, fixed, before, by: "correction" });
+    expect((await t.query(api.desk.corrected, {})).total.levels).toBe(0);
   });
 });

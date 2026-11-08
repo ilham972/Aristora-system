@@ -377,3 +377,49 @@ export function deptNow(views: readonly View[], dept: TeachDept): DeptNow {
   out.byGrade = DESK_GRADES.map((grade) => ({ grade, students: grades.get(grade)?.students.size ?? 0, noWork: grades.get(grade)?.noWork.size ?? 0 }));
   return out;
 }
+
+// ---------------- The Correction department's numbers now (its dashboard, 8 Nov 2026) ----------------
+
+/** Correction's grades: the students' own (its names row has 6–11; an O/L student is in 11). */
+export const CORR_GRADES = [6, 7, 8, 9, 10, 11];
+
+/** Papers waiting for Correction among the students here (his "the correction department's dashboard"). */
+export type CorrNow = {
+  /** Workbook levels handed in and not corrected yet (every book of theirs), and how many students they are. */
+  papers: number;
+  students: number;
+  /** Of those students: in the hall with no work until a paper is corrected (red). */
+  red: number;
+  /** When the oldest of those papers was handed in (server time), or null. */
+  oldest: number | null;
+  /** By the students' grade (6–11): students with papers waiting, and those with no work until then. */
+  byGrade: { grade: number; students: number; red: number }[];
+};
+
+/** What waits for Correction now: the papers handed in, the students with no work until one is corrected. */
+export function correctionNow(views: readonly View[]): CorrNow {
+  const out: CorrNow = { papers: 0, students: 0, red: 0, oldest: null, byGrade: [] };
+  const grades = new Map<number, { students: number; red: number }>();
+  for (const home of views) {
+    if (home.where === "absent") continue;
+    const books = [home, ...home.others].filter((v) => (v.ms?.waiting.length ?? 0) > 0);
+    if (books.length === 0) continue;
+    const blocked = home.where === "hall" && home.noWork && [home, ...home.others].some((v) => !!v.ms?.needs.includes("correction"));
+    out.students++;
+    if (blocked) out.red++;
+    for (const v of books) {
+      out.papers += v.ms!.waiting.length;
+      const t = v.ms!.waitingSince;
+      if (t !== null && (out.oldest === null || t < out.oldest)) out.oldest = t;
+    }
+    const g = home.s.grade;
+    if (typeof g === "number") {
+      const x = grades.get(g) ?? { students: 0, red: 0 };
+      x.students++;
+      if (blocked) x.red++;
+      grades.set(g, x);
+    }
+  }
+  out.byGrade = CORR_GRADES.map((grade) => ({ grade, students: grades.get(grade)?.students ?? 0, red: grades.get(grade)?.red ?? 0 }));
+  return out;
+}

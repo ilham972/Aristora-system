@@ -484,17 +484,35 @@ and the phones: `convex/lib/dept.ts`.
   later, another chat). A department's **lead** (`users.lead`) walks from grade to grade; its other people (later) sit
   in the consultation room: their department's Consultation page.
 - **Her own app** (`users.pages`): the pages of her bottom bar, in fixed places (`PAGE_IDS`: Dashboard, Class, Fighter,
-  Master, Correction, Teach, Consult, Us), six at most (`MAX_PAGES`: they fit 320 px). Unset = the app of before
-  (Class, her jobs' pages Correction / Theory / Evaluation, Us): nothing changed for anyone until the owner sets it.
+  Master, Correction, Teach, Consult, Us; the owner's own pages too, below), six at most (`MAX_PAGES`: they fit 320 px).
+  Unset = the app of before (Class, her jobs' pages Correction / Theory / Evaluation, Us): nothing changed for any
+  teacher until the owner sets it (the owner's own bar: his default, below).
   Presets (`presetPages`): Fighter lead = his six (Dashboard, Fighter, Correction, Teach, Consult, Us); Master lead =
-  Dashboard, Master, Correction, Consult, Us; a consultation teacher = Consult, Us; Management = Class, Correction, Us.
+  Dashboard, Master, Correction, Consult, Us; a consultation teacher = Consult, Us; Management = Dashboard, Class,
+  Correction, Us (its dashboard since the afternoon of 8 Nov).
   Her jobs follow from her pages (`withNeeds`: Fighter or Master = Theory + Evaluation; Teach = Theory when she has
   neither; Correction = one of its modes, Class = the Correction job, Homework = Photos; Consult = its extra): the server
   adds what a page can't work without, never more. In her app the top bar leaves out Consultation and Whole class when
   they are her tabs (`consultIcon`, `teachIcon` in `src/app.tsx`). A tab's badge: Fighter / Master = that department's
   students with no work now (`deptNow`); Consult = her consultation's students.
-- **Settings → Roles** (owner, `src/roles.tsx` `Roles`): the three departments with their people (the lead first),
-  those in none (the app of before), and the owner's own app (his pages only: he can always do everything). Tap someone
+- **The owner's own app** (8 Nov 2026 afternoon, his "you not updated the owner view because still I am seeing theory
+  and evaluation, instead master or Fighter ... for my self also I can set permissions, so each time I can work in each
+  department. And some special pages also I can make visible for me"): with no pages set his bar is **Dashboard, Class,
+  Fighter, Master, Correction, Us** (`OWNER_DEFAULT`; `barPages` decides every bar: hers, his, or his default; a
+  teacher with none keeps the app of before). Only he can have **his own pages** (`OWNER_PAGES`, never on a teacher's
+  bar: `cleanPages(…, owner)`, `barPages`): **Owner** (the Owner page), **Register**, **Progress** (each then leaves the
+  top bar: `bossIcon`, `progressIcon`, `registerTab`) and the **old Theory and Evaluation pages** (the room with Call,
+  Arrived and Done: the run-throughs of those pages give the test owner them). He can **work in a department**
+  (`users.dept` / `lead` on his own row, `people.setRole`'s owner branch; his powers never change): his pages start
+  from its preset (`ownerPreset`; Fighter or Master as its lead first), his Dashboard and Consultation open on it (he
+  can still switch), and as a Fighter or Master lead he is that department's lead like a teacher: its consultation
+  calls ring on his phone (`leadsOf` counts him; `toLead` never counts the caller, so his own consultation goes to
+  Correction when he is its only lead; `leadSends` never his own call), its strip shows (`leadBand`), his alerts are
+  its (`alertItems`), and Correction's calls aren't his (`phoneSends`). Working in Management: Correction's calls, as
+  before. "All" (no department) = as before. Back to his default: "Back to your default (all departments)".
+- **Settings → Roles** (owner, `src/roles.tsx` `Roles`): his own app first ("You work in": Fighter / Master /
+  Management / All, lead or consultation, his pages with the "only you" ones: `.role-only`), then the three departments
+  with their people (the lead first), and those in none (the app of before). Tap someone
   (`RoleSheet`): Department (Fighter / Master / Management / None), Lead teacher or Consultation teacher, her pages
   (ticks in fixed order; the other teaching department's page is pale), Correction's two modes (Homework, Class), Runs
   the hall (the Manager job), Also (Students, Books, Reports, Feedback, Community); **Save** (`people.setRole`; history
@@ -545,8 +563,20 @@ and the phones: `convex/lib/dept.ts`.
   (`openDeskAt`); **Cleared today**: hers and each of her department's teachers' (explained, taught, to theory, from
   `desk.today`: the class going on's `desk` / `consult` / `board` events of that department's books, undos taken off;
   read on opening and every minute, never live), never a ranking colour; "Your day" opens her card (`TeacherCard`). The
-  owner (or anyone in no department) switches Fighter | Master (`aristora.dashDept`). The live numbers: `deptNow`
-  (src/deskData.ts) from the board every phone has.
+  owner (or anyone in no department) switches Fighter | Master | Management (`aristora.dashDept`; the owner opens on the
+  department he works in, and gets "You:" there). The live numbers: `deptNow` (src/deskData.ts) from the board every
+  phone has.
+- **The Correction (Management) dashboard** (`CorrectionDash`, his "is that possible to build the correction
+  department's dashboard"): "How many papers wait to be corrected?": workbook levels handed in and not corrected, every
+  book of the students here (`correctionNow`), "from N students"; red when someone sits in the hall with no work until
+  his is corrected, amber when papers wait, green "Nothing waits."; under it: how many with no work, how long the oldest
+  has waited, ⌂ photos from home waiting (Photos people; "one over a day"); **Where to go now**: the students' grades
+  6–11 (`.dash-grades.n6`) with papers waiting (red corner = no work until then): a tap opens Correction on that grade,
+  its hall papers (`openFocusAt`: the grade Correction remembers, the ⌂ lane off); **Corrected today** (`desk.corrected`,
+  since midnight in Sri Lanka, everyone's correction: the Fighter and Master teachers correct homework too): levels
+  saved (`level-marks`; a level taken back loses its line), theory-book questions Correction marked (each question
+  once, as its last tap left it), photos from home marked; "You:" for its people (and the owner working in it), then
+  "Everyone:" and each person.
 - **Correction: Homework | Class** (his "two modes, two tabs"): a Fighter or Master teacher with both modes gets the
   segmented row `.fc-modes` (⌂ Homework with the photos' count, Class with the papers handed in) instead of the ⌂ button,
   and her Correction opens on Homework once per app load (`homeFirstDone`). Everyone else: the ⌂ button as before.

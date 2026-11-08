@@ -46,12 +46,17 @@ export const teachDept = v.union(v.literal("fighter"), v.literal("master"));
 /** A page of a person's own bottom bar (convex/lib/dept.ts, Settings → Roles). */
 export const pageId = v.union(
   v.literal("dash"),
+  v.literal("boss"),
   v.literal("class"),
+  v.literal("register"),
   v.literal("fighter"),
   v.literal("master"),
   v.literal("correction"),
+  v.literal("theory"),
+  v.literal("evaluation"),
   v.literal("teach"),
   v.literal("consult"),
+  v.literal("progress"),
   v.literal("us"),
 );
 export const extra = v.union(

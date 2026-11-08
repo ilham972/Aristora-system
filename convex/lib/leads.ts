@@ -5,8 +5,11 @@ import type { Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
 import { isTeachDept } from "./dept";
 
-/** The active teachers who lead this department (Settings → Roles: the department and the lead tick). */
+/**
+ * The people who lead this department (Settings → Roles: the department and the lead tick): its lead teachers, and the
+ * owner while he works in it as its lead (8 Nov 2026).
+ */
 export async function leadsOf(ctx: QueryCtx, d: string | undefined): Promise<Id<"users">[]> {
   if (!isTeachDept(d as never)) return [];
-  return (await ctx.db.query("users").collect()).filter((u) => u.active && u.role === "teacher" && u.dept === d && !!u.lead).map((u) => u._id);
+  return (await ctx.db.query("users").collect()).filter((u) => u.active && u.dept === d && !!u.lead).map((u) => u._id);
 }

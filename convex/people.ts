@@ -8,7 +8,7 @@ import { mutation } from "./lib/fn";
 import { actor, LINK_MS, nameKey, viewer } from "./lib/auth";
 import { cleanName, fail, log } from "./lib/backend";
 import { slDay } from "./lib/day";
-import { cleanPages, withNeeds } from "./lib/dept";
+import { cleanPages, isTeachDept, withNeeds } from "./lib/dept";
 import { dept, extra, pageId, tab } from "./schema";
 
 const token = v.optional(v.string());
@@ -234,10 +234,18 @@ export const setRole = mutation({
       return me._id === u._id;
     }
     if (u.role === "owner") {
-      const pages = cleanPages(args.pages);
+      // His own app (8 Nov 2026, his "for myself also I can set permissions, so each time I can work in each department,
+      // and some special pages also I can make visible for me"): the department he works in (its dashboard, its
+      // consultation, its lead's calls when he leads it) and his pages, his own ones too. His powers never change.
+      const pages = cleanPages(args.pages, true);
       if (pages.length === 0) fail("Pick at least one page for your app.");
-      await ctx.db.patch(u._id, { pages });
-      await log(ctx, null, now, { kind: "person-role", value: `${u.name}: ${pages.join(" ")}` });
+      if (args.lead && !isTeachDept(args.dept)) fail("A lead teacher leads Fighter or Master: pick the department first.");
+      const lead = isTeachDept(args.dept) && !!args.lead;
+      await ctx.db.patch(u._id, { pages, dept: args.dept, lead: lead || undefined });
+      await log(ctx, null, now, {
+        kind: "person-role",
+        value: `${u.name}: ${args.dept ? `${args.dept}${lead ? " lead" : ""} · ` : ""}${pages.join(" ")}`,
+      });
       return true;
     }
     const r = roleOf({ ...args, tabs: args.tabs, can: args.can });

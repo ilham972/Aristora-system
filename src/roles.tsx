@@ -7,7 +7,10 @@
 //   in fixed places), Correction's two modes, the hall's powers, and the extras. The jobs follow from her pages (the
 //   server adds what a page can't work without). Save works at once on her phone.
 // - Preview: her app exactly as she sees it, on this phone, look only (src/store.ts startPreview; a banner with Exit).
-// - The owner's own app: his pages only (he can always do everything).
+// - The owner's own app, first (his "for myself also I can set permissions, so each time I can work in each department,
+//   and some special pages also I can make visible for me"): the department he works in (or All), lead or consultation,
+//   and his pages, the ones only he can have too (Owner, Register, Progress, the old Theory and Evaluation). He can
+//   always do everything. With none set: Dashboard, Class, Fighter, Master, Correction, Us.
 
 import { useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
@@ -16,9 +19,12 @@ import {
   DEPT_NAMES,
   DEPTS,
   extrasFor,
+  isOwnerPage,
   isTeachDept,
   jobsFor,
   MAX_PAGES,
+  OWNER_DEFAULT,
+  ownerPreset,
   PAGE_HELP,
   PAGE_IDS,
   PAGE_LABEL,
@@ -60,12 +66,16 @@ const OWN_EXTRAS: { id: Extra; name: string; help: string }[] = [
   { id: "community", name: "Community", help: "writes posts in the students' Us tab" },
 ];
 
-/** "Fighter lead · Dashboard, Fighter, Correction, Teach, Consult, Us", or the app of before. */
-export function roleWords(p: Pick<RolePerson, "dept" | "lead" | "pages">): string {
+/** "Fighter lead · Dashboard, Fighter, Correction, Teach, Consult, Us", or the app of before (the owner: his default). */
+export function roleWords(p: Pick<RolePerson, "dept" | "lead" | "pages"> & { role?: RolePerson["role"] }): string {
   const who = p.dept ? `${DEPT_NAMES[p.dept]}${isTeachDept(p.dept) ? (p.lead ? " lead" : " consultation") : ""}` : "";
-  if (!p.pages) return who ? `${who} · the app of before` : "The app of before";
-  const pages = PAGE_IDS.filter((x) => p.pages!.includes(x)).map((x) => PAGE_LABEL[x]).join(", ");
-  return who ? `${who} · ${pages}` : pages;
+  const words = (list: readonly PageId[]) => PAGE_IDS.filter((x) => list.includes(x)).map((x) => PAGE_LABEL[x]).join(", ");
+  if (!p.pages) {
+    if (p.role === "owner") return `${who ? `${who} · ` : "All departments · "}${words(OWNER_DEFAULT)}`;
+    return who ? `${who} · the app of before` : "The app of before";
+  }
+  if (p.role === "owner" && !who) return `All departments · ${words(p.pages)}`;
+  return who ? `${who} · ${words(p.pages)}` : words(p.pages);
 }
 
 export function Roles(props: { onClose: () => void }) {
@@ -83,6 +93,25 @@ export function Roles(props: { onClose: () => void }) {
         Each teacher's own app: her department, the pages at the bottom of her phone, and what else she may do. <b>Preview</b> shows her app as she
         sees it. New teacher? Settings → People → Add a teacher.
       </p>
+      {owner && (
+        <section class="role-dept rd-owner" aria-label="Your own app">
+          <h3 class="role-h">
+            Your own app
+            <small>the department you work in and the pages at the bottom of your phone (you can always do everything)</small>
+          </h3>
+          <ul class="role-list">
+            <li>
+              <button type="button" class="role-p" onClick={() => setOpen(owner._id)}>
+                <b>
+                  {owner.name}
+                  {owner._id === me?._id && <span class="role-tag">You</span>}
+                </b>
+                <small>{roleWords(owner)}</small>
+              </button>
+            </li>
+          </ul>
+        </section>
+      )}
       {DEPTS.map((d) => {
         const ppl = teachers.filter((p) => p.dept === d).sort((a, b) => Number(b.lead) - Number(a.lead) || a.name.localeCompare(b.name));
         return (
@@ -129,25 +158,6 @@ export function Roles(props: { onClose: () => void }) {
           </ul>
         </section>
       )}
-      {owner && (
-        <section class="role-dept rd-owner" aria-label="Your own app">
-          <h3 class="role-h">
-            Your own app
-            <small>the pages at the bottom of your phone (you can always do everything)</small>
-          </h3>
-          <ul class="role-list">
-            <li>
-              <button type="button" class="role-p" onClick={() => setOpen(owner._id)}>
-                <b>
-                  {owner.name}
-                  {owner._id === me?._id && <span class="role-tag">You</span>}
-                </b>
-                <small>{roleWords(owner)}</small>
-              </button>
-            </li>
-          </ul>
-        </section>
-      )}
       {person && <RoleSheet key={person._id} p={person} onClose={() => setOpen(null)} onPreview={props.onClose} />}
     </div>
   );
@@ -159,7 +169,7 @@ function RoleSheet(props: { p: RolePerson; onClose: () => void; onPreview: () =>
   const owner = p.role === "owner";
   const [dept, setDept] = useState<Dept | null>(p.dept);
   const [lead, setLead] = useState(p.lead);
-  const [pages, setPages] = useState<PageId[]>(p.pages ?? presetPages(p.dept ?? undefined, p.lead));
+  const [pages, setPages] = useState<PageId[]>(p.pages ?? (owner ? ownerPreset(p.dept, p.lead) : presetPages(p.dept ?? undefined, p.lead)));
   const [homework, setHomework] = useState(p.pages ? p.can.includes("photos") : true);
   const [klass, setKlass] = useState(p.pages ? p.tabs.includes("correction") : p.tabs.includes("correction") || !isTeachDept(p.dept));
   const [manager, setManager] = useState(p.tabs.includes("manager"));
@@ -168,8 +178,12 @@ function RoleSheet(props: { p: RolePerson; onClose: () => void; onPreview: () =>
 
   /** A department (and lead) picked: her pages start from its preset (she can change any). */
   const preset = (d: Dept | null, l: boolean) => {
-    const next = presetPages(d ?? undefined, l);
+    const next = owner ? ownerPreset(d, l) : presetPages(d ?? undefined, l);
     setPages(next);
+    if (owner) {
+      toast(d ? `Your pages for the ${DEPT_NAMES[d]} department${isTeachDept(d) ? (l ? " as its lead" : " in consultation") : ""}: change any below.` : "Your pages for all departments: change any below.");
+      return;
+    }
     if (d === "management") {
       setKlass(true);
       setManager(true);
@@ -183,7 +197,8 @@ function RoleSheet(props: { p: RolePerson; onClose: () => void; onPreview: () =>
   const pickDept = (d: Dept | null) => {
     if (d === dept) return;
     tone("tick");
-    const l = isTeachDept(d) ? lead : false;
+    // The owner stepping into Fighter or Master works in it as its lead first (he walks the grades); he can change it.
+    const l = isTeachDept(d) ? (owner && !isTeachDept(dept) ? true : lead) : false;
     setDept(d);
     setLead(l);
     preset(d, l);
@@ -200,13 +215,15 @@ function RoleSheet(props: { p: RolePerson; onClose: () => void; onPreview: () =>
       toast(`${MAX_PAGES} pages at most: they must fit the phone. Untick one first.`, "error");
       return;
     }
-    if (!on && ((x === "fighter" && dept === "master") || (x === "master" && dept === "fighter"))) {
+    if (!on && !owner && ((x === "fighter" && dept === "master") || (x === "master" && dept === "fighter"))) {
       toast(`The ${PAGE_LABEL[x]} page is the ${PAGE_LABEL[x]} department's.`, "error");
       return;
     }
     tone("tick");
     setPages(on ? pages.filter((y) => y !== x) : PAGE_IDS.filter((y) => y === x || pages.includes(y)));
   };
+  // The pages this sheet offers: the owner's own ones only on his.
+  const offered = PAGE_IDS.filter((x) => owner || !isOwnerPage(x));
 
   /** What she gets: her jobs (and extras) from her pages and the ticks. */
   const role = () => {
@@ -234,7 +251,13 @@ function RoleSheet(props: { p: RolePerson; onClose: () => void; onPreview: () =>
     setBusy(false);
     if (res === undefined) return;
     tone("done");
-    toast(owner ? "Your app is saved." : `${p.name}'s app is saved: her phone shows it now.`);
+    toast(
+      owner
+        ? dept
+          ? `Your app is saved: you work in the ${DEPT_NAMES[dept]} department${isTeachDept(dept) && lead ? " as its lead (its consultation calls ring on your phone)" : ""}.`
+          : "Your app is saved."
+        : `${p.name}'s app is saved: her phone shows it now.`,
+    );
     props.onClose();
   };
   const reset = async () => {
@@ -254,8 +277,8 @@ function RoleSheet(props: { p: RolePerson; onClose: () => void; onPreview: () =>
       role: owner ? "owner" : "teacher",
       tabs: owner ? (["correction", "theory", "evaluation", "manager"] as Job[]) : r.tabs,
       can: owner ? (["students", "books", "reports", "feedback", "photos", "consult", "community"] as Extra[]) : r.can,
-      ...(dept && !owner ? { dept } : {}),
-      ...(isTeachDept(dept) && lead && !owner ? { lead: true } : {}),
+      ...(dept ? { dept } : {}),
+      ...(isTeachDept(dept) && lead ? { lead: true } : {}),
       pages,
     });
     toast(`${p.name}'s app: look only. Exit is at the top.`);
@@ -266,7 +289,7 @@ function RoleSheet(props: { p: RolePerson; onClose: () => void; onPreview: () =>
   return (
     <Sheet
       title={owner ? "Your own app" : p.name}
-      sub={owner ? "Only the pages: you can always do everything." : "Her department and her own app. Save works at once on her phone."}
+      sub={owner ? "The department you work in and your pages: you can always do everything." : "Her department and her own app. Save works at once on her phone."}
       onClose={props.onClose}
       cls="role-sheet"
       foot={
@@ -280,48 +303,49 @@ function RoleSheet(props: { p: RolePerson; onClose: () => void; onPreview: () =>
         </div>
       }
     >
-      {!owner && (
-        <>
-          <h3 class="block-title">Department</h3>
-          <div class="segc plain role-seg" role="group" aria-label="Her department">
-            {DEPTS.map((d) => (
-              <button key={d} type="button" class={`segc-b${dept === d ? " on" : ""}`} aria-pressed={dept === d} onClick={() => pickDept(d)}>
-                {DEPT_NAMES[d]}
-              </button>
-            ))}
-            <button type="button" class={`segc-b${dept === null ? " on" : ""}`} aria-pressed={dept === null} onClick={() => pickDept(null)}>
-              None
-            </button>
-          </div>
-          {isTeachDept(dept) && (
-            <div class="perm-list role-lead">
-              <label class="perm">
-                <input type="radio" name="lead" checked={lead} onChange={() => pickLead(true)} />
-                <span>
-                  Lead teacher
-                  <small>walks from grade to grade; her department's consultation calls ring on her phone (she sends him)</small>
-                </span>
-              </label>
-              <label class="perm">
-                <input type="radio" name="lead" checked={!lead} onChange={() => pickLead(false)} />
-                <span>
-                  Consultation teacher
-                  <small>sits in the consultation room: her department's Consultation page</small>
-                </span>
-              </label>
-            </div>
-          )}
-        </>
+      <h3 class="block-title">{owner ? "You work in" : "Department"}</h3>
+      <div class="segc plain role-seg" role="group" aria-label={owner ? "The department you work in" : "Her department"}>
+        {DEPTS.map((d) => (
+          <button key={d} type="button" class={`segc-b${dept === d ? " on" : ""}`} aria-pressed={dept === d} onClick={() => pickDept(d)}>
+            {DEPT_NAMES[d]}
+          </button>
+        ))}
+        <button type="button" class={`segc-b${dept === null ? " on" : ""}`} aria-pressed={dept === null} onClick={() => pickDept(null)}>
+          {owner ? "All" : "None"}
+        </button>
+      </div>
+      {isTeachDept(dept) && (
+        <div class="perm-list role-lead">
+          <label class="perm">
+            <input type="radio" name="lead" checked={lead} onChange={() => pickLead(true)} />
+            <span>
+              Lead teacher
+              <small>
+                {owner
+                  ? "you walk from grade to grade; its consultation calls ring on your phone too (you send him)"
+                  : "walks from grade to grade; her department's consultation calls ring on her phone (she sends him)"}
+              </small>
+            </span>
+          </label>
+          <label class="perm">
+            <input type="radio" name="lead" checked={!lead} onChange={() => pickLead(false)} />
+            <span>
+              Consultation teacher
+              <small>{owner ? "you sit in the consultation room: its Consultation page" : "sits in the consultation room: her department's Consultation page"}</small>
+            </span>
+          </label>
+        </div>
       )}
       <h3 class="block-title">
         {owner ? "Your pages" : "Her app"} <small class="muted">({pages.length} of {MAX_PAGES} at most, in this order)</small>
       </h3>
       <div class="perm-list role-pages">
-        {PAGE_IDS.map((x) => (
-          <label key={x} class={`perm${(x === "fighter" && dept === "master") || (x === "master" && dept === "fighter") ? " off" : ""}`}>
+        {offered.map((x) => (
+          <label key={x} class={`perm${!owner && ((x === "fighter" && dept === "master") || (x === "master" && dept === "fighter")) ? " off" : ""}`}>
             <input type="checkbox" checked={pages.includes(x)} onChange={() => togglePage(x)} />
             <span>
               {PAGE_LABEL[x]}
+              {isOwnerPage(x) && <em class="role-only">only you</em>}
               <small>{PAGE_HELP[x]}</small>
             </span>
           </label>
@@ -373,7 +397,7 @@ function RoleSheet(props: { p: RolePerson; onClose: () => void; onPreview: () =>
       )}
       {p.pages && (
         <button type="button" class="link-btn role-reset" disabled={busy} onClick={() => void reset()}>
-          {owner ? "Back to the app of before" : `Give ${p.name} the app of before`}
+          {owner ? "Back to your default (all departments)" : `Give ${p.name} the app of before`}
         </button>
       )}
     </Sheet>

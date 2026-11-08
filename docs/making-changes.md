@@ -101,6 +101,12 @@ EOF
   Master person never sends Correction's calls (`mayHandle` in `convex/calls.ts`, `phoneSends` in `src/callRoute.ts`),
   hears only her department's alerts (`alertItems`), and `desk.mark` checks her department against the book. A person
   with no pages keeps the app of before: the run-throughs of the old Theory and Evaluation pages still use that.
+- **The run-throughs' owner has the old bar** (8 Nov 2026): his default bar became Dashboard, Class, Fighter, Master,
+  Correction, Us, so `newClass()` in `tests/e2e/class.e2e.ts` gives the test owner the pages those run-throughs were
+  written for (Class, Correction, the old Theory and Evaluation pages, Us: his own pages) and `newClass({ defaultBar:
+  true })` the real default (the "Owner's own app" run-through). A run-through that opens his phone on "theory" or
+  "evaluation" needs those pages; `addPerson` takes `pages`. The family run-throughs' owner has the default bar (they
+  use Correction, Class and Us).
 - **Preview is the owner's phone pretending** (8 Nov 2026): `currentMe()` / `may()` give the previewed person, the
   data still comes with his sign-in, and every mutation is refused (`LOOK_ONLY` in `src/backend.ts`; only `clock:ping`
   passes). Anything new that writes on its own (a timer, a background save) must expect that refusal quietly.

@@ -19,7 +19,7 @@ import { WholeClassPage } from "./wholeClass";
 import { DeskPage } from "./desk";
 import { deptNow } from "./deskData";
 import { Dashboard } from "./dash";
-import { isTeachDept, PAGE_IDS, PAGE_LABEL, type PageId } from "../convex/lib/dept";
+import { barPages, isTeachDept, PAGE_LABEL, type PageId } from "../convex/lib/dept";
 import { correctionSends, leadSends } from "./callRoute";
 import { useFeedbackNew } from "./feedbackList";
 import { usePhotosWaiting } from "./photoQueue";
@@ -42,9 +42,11 @@ import { Sheet, Toasts } from "./ui";
 /**
  * Her own app (8 Nov 2026, his voice note: "the personalized system for each teacher based on their role"): with pages
  * set in Settings → Roles, the bar is her pages (Dashboard, Class, Fighter, Master, Correction, Teach, Consult, Us, in
- * that order); without, the bar of before (Class, her jobs' pages: Correction, Theory, Evaluation, then Us).
+ * that order); without, the bar of before (Class, her jobs' pages: Correction, Theory, Evaluation, then Us). The owner
+ * without pages: Dashboard, Class, Fighter, Master, Correction, Us; his own pages (Owner, Register, Progress, the old
+ * Theory and Evaluation) only on his bar (convex/lib/dept.ts OWNER_PAGES).
  */
-type TabId = "dash" | "class" | "correction" | "theory" | "evaluation" | "fighter" | "master" | "teach" | "consult" | "us";
+type TabId = PageId;
 type Page = "board" | "register" | "settings" | "progress" | "boss" | "teach" | "consult";
 
 const TABS: { id: TabId; label: string }[] = [
@@ -66,8 +68,10 @@ function loadStart(): { tab: TabId | null; page: Page } {
   try {
     const r = localStorage.getItem("aristora.role");
     if (r === "theory" || r === "evaluation") return { tab: r, page: "board" };
-    // Her own app's pages (8 Nov 2026).
+    // Her own app's pages (8 Nov 2026), and the owner's own ones ("register" is his Register tab; the Register page of the
+    // top bar is kept as "class").
     if (r === "dash" || r === "fighter" || r === "master" || r === "teach" || r === "consult") return { tab: r, page: "board" };
+    if (r === "boss" || r === "progress" || r === "register") return { tab: r, page: "board" };
     if (r === "focus") return { tab: "correction", page: "board" };
     // ("manager": the Manager tab of 2–3 Nov 2026, now the Class tab.)
     if (r === "hall" || r === "manager") return { tab: "class", page: "board" };
@@ -156,6 +160,34 @@ function ConsultMark() {
   );
 }
 
+/** The owner's own pages as tabs (8 Nov 2026): the top bar's icons, the same pictures. */
+function OwnerMark() {
+  return (
+    <svg class="tab-plan" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3.5 17a8.5 8.5 0 1 1 17 0" />
+      <path d="M12 17l4.2-5.6" />
+      <circle cx="12" cy="17" r="1.4" fill="currentColor" />
+    </svg>
+  );
+}
+function RegisterMark() {
+  return (
+    <svg class="tab-plan" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <circle cx="5" cy="6" r="1.9" />
+      <circle cx="5" cy="12" r="1.9" />
+      <circle cx="5" cy="18" r="1.9" />
+      <path d="M10 6h10M10 12h10M10 18h7" />
+    </svg>
+  );
+}
+function ProgressMark() {
+  return (
+    <svg class="tab-plan" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 20V10M10 20V4M16 20v-7M21 20H3" />
+    </svg>
+  );
+}
+
 /** The owner's Preview of someone's app (8 Nov 2026, Settings → Roles): look only, with Exit back to Roles. */
 function PreviewBanner(props: { name: string }) {
   return (
@@ -219,8 +251,11 @@ export function App() {
   // Photos from home are marked on the Correction page's ⌂ lane (5 Nov 2026): Photos people get its tab even without the
   // Correction job (then only the lane, and the phone keeps its own job's alerts, never Correction's calls).
   const photosOnly = may("photos") && !jobs.includes("correction");
-  // Her own app (Settings → Roles): her pages; else the bar of before.
-  const pages: PageId[] | null = user?.pages?.length ? PAGE_IDS.filter((p) => user.pages!.includes(p)) : null;
+  // Her own app (Settings → Roles): her pages; else the bar of before. The owner's own (8 Nov 2026, his "still I am
+  // seeing theory and evaluation, instead master or Fighter"): his pages, else Dashboard, Class, Fighter, Master,
+  // Correction, Us; the pages only he can have (Owner, Register, Progress, the old Theory and Evaluation) never on
+  // anyone else's bar.
+  const pages: PageId[] | null = user ? barPages(user) : null;
   const tabs = pages
     ? pages.map(pageTab)
     : TABS.filter((t) => t.id === "class" || t.id === "us" || jobs.includes(t.id as Role) || (t.id === "correction" && photosOnly));
@@ -238,6 +273,10 @@ export function App() {
   const canTeach = may("theory") || may("evaluation");
   const teachTab = !!pages?.includes("teach");
   const consultTab = !!pages?.includes("consult");
+  // The owner's own pages on his bar leave the top bar (their icons would be the same page twice).
+  const registerTab = !!pages?.includes("register");
+  const progressTab = !!pages?.includes("progress");
+  const bossTab = !!pages?.includes("boss");
   // The Owner page: the owner only (it shows each teacher's own numbers and his money).
   const isOwner = user?.role === "owner";
   // Consultation (5 Nov 2026, his ask: "not for everyone, the people I pick"): the owner and the Consultation tick.
@@ -419,10 +458,12 @@ export function App() {
   // In her own app, Consult and Teach can be bottom tabs: then the top bar leaves their icons out.
   const consultIcon = canConsult && !consultTab;
   const teachIcon = canTeach && !teachTab;
-  const icons = 1 + (canProgress ? 1 : 0) + (isOwner ? 1 : 0) + (consultIcon ? 1 : 0) + (teachIcon ? 1 : 0);
+  const progressIcon = canProgress && !progressTab;
+  const bossIcon = isOwner && !bossTab;
+  const icons = (registerTab ? 0 : 1) + (progressIcon ? 1 : 0) + (bossIcon ? 1 : 0) + (consultIcon ? 1 : 0) + (teachIcon ? 1 : 0);
   // A department lead (8 Nov 2026): her department's consultation calls ring on her phone, on every page (she sends
   // him): their strip under the top bar (on Correction and the Register, the page's own strip shows them).
-  const leadBand = !!user && user.role === "teacher" && !!user.lead && isTeachDept(user.dept) && !(shown === "board" && tab === "correction") && shown !== "register";
+  const leadBand = !!user && !!user.lead && isTeachDept(user.dept) && !(shown === "board" && (tab === "correction" || tab === "register")) && shown !== "register";
   const preview = previewing();
 
   return (
@@ -450,30 +491,32 @@ export function App() {
           {/* Four or five icons (the owner: Register, Progress, Owner, Consultation, Whole class): tighter on phones, so
               the clock fits. */}
           <div class={`top-left${icons >= 4 ? " many" : ""}${icons >= 5 ? " five" : ""}`}>
-            <button
-              type="button"
-              class={`att-btn class-btn${shown === "register" ? " on" : ""}`}
-              aria-pressed={shown === "register"}
-              aria-label="Register: everyone in class, row by row"
-              onClick={goRegister}
-            >
-              <svg
-                viewBox="0 0 24 24"
-                width="21"
-                height="21"
-                aria-hidden="true"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
+            {!registerTab && (
+              <button
+                type="button"
+                class={`att-btn class-btn${shown === "register" ? " on" : ""}`}
+                aria-pressed={shown === "register"}
+                aria-label="Register: everyone in class, row by row"
+                onClick={goRegister}
               >
-                <circle cx="5" cy="6" r="1.9" />
-                <circle cx="5" cy="12" r="1.9" />
-                <circle cx="5" cy="18" r="1.9" />
-                <path d="M10 6h10M10 12h10M10 18h7" />
-              </svg>
-            </button>
-            {canProgress && (
+                <svg
+                  viewBox="0 0 24 24"
+                  width="21"
+                  height="21"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                >
+                  <circle cx="5" cy="6" r="1.9" />
+                  <circle cx="5" cy="12" r="1.9" />
+                  <circle cx="5" cy="18" r="1.9" />
+                  <path d="M10 6h10M10 12h10M10 18h7" />
+                </svg>
+              </button>
+            )}
+            {progressIcon && (
               <button
                 type="button"
                 class={`att-btn prog-btn${shown === "progress" ? " on" : ""}`}
@@ -496,7 +539,7 @@ export function App() {
                 </svg>
               </button>
             )}
-            {isOwner && (
+            {bossIcon && (
               <button
                 type="button"
                 class={`att-btn boss-btn${shown === "boss" ? " on" : ""}`}
@@ -675,6 +718,12 @@ export function App() {
         <DeskPage key={tab} board={board} views={views} now={now} dept={tab} />
       ) : tab === "dash" ? (
         <Dashboard board={board} views={views} now={now} onOpen={(t: TabId) => setTab(t)} />
+      ) : tab === "boss" ? (
+        <BossPage board={board} views={views} now={now} />
+      ) : tab === "progress" ? (
+        <Progress board={board} now={now} />
+      ) : tab === "register" ? (
+        <ClassPage board={board} views={views} now={now} job={role} onAttendance={() => setAttOpen(true)} />
       ) : tab === "teach" ? (
         <WholeClassPage views={views} />
       ) : tab === "consult" ? (
@@ -696,7 +745,7 @@ export function App() {
           // Someone who only marks the photos from home: Correction's number is the photos waiting (red after a day).
           const lane = r.id === "correction" && photosOnly;
           const badge =
-            !away || r.id === "us" || r.id === "dash" || r.id === "teach"
+            !away || r.id === "us" || r.id === "dash" || r.id === "teach" || r.id === "boss" || r.id === "progress" || r.id === "register"
               ? 0
               : r.id === "fighter" || r.id === "master"
                 ? deptRed(r.id)
@@ -727,6 +776,12 @@ export function App() {
                 <BoardMark />
               ) : r.id === "consult" ? (
                 <ConsultMark />
+              ) : r.id === "boss" ? (
+                <OwnerMark />
+              ) : r.id === "register" ? (
+                <RegisterMark />
+              ) : r.id === "progress" ? (
+                <ProgressMark />
               ) : (
                 <span class="tab-mark" aria-hidden="true" />
               )}
@@ -898,8 +953,9 @@ export function alertItems(role: Role, board: Board, views: View[], now: number,
   // A department lead (8 Nov 2026): her department's consultations say "Kumar, go to Ilham." on any page until she
   // taps Sent, then "Kumar hasn't reached Ilham." after 3 minutes; and a knock when one of her department's students runs
   // out of work. Nothing of Correction's: her Correction tab is for homework and papers.
-  const lead = person && person.role === "teacher" && person.lead && isTeachDept(person.dept) ? person.dept : null;
-  if (person && person.role === "teacher" && isTeachDept(person.dept)) {
+  // The owner working in a department (Settings → Roles → your own app) hears it as its people do.
+  const lead = person && person.lead && isTeachDept(person.dept) ? person.dept : null;
+  if (person && isTeachDept(person.dept)) {
     for (const c of board.calls) {
       if (!leadSends(person, c)) continue;
       if (c.status === "requested")
