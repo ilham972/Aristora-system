@@ -374,9 +374,29 @@ export function seedLeagues<T extends { id: string; n: string; p: number; t: num
 
 /**
  * His last week in his league (Monday's card): the league he raced in, his place (null: no XP), the move, his XP, a win;
- * `sh` = his 🛡️ kept him there (he was in the bottom 3, and learned on SHIELD_DAYS days).
+ * `sh` = his 🛡️ kept him there (he was in the bottom 3, and learned on SHIELD_DAYS days); `pl` = the first leagues: last
+ * week's XP put him in league `l` (no race yet, so no move and no win).
  */
-export type LeagueResult = { wk: number; l: number; p: number | null; m: -1 | 0 | 1; xp: number; win: boolean; of: number; sh?: boolean };
+export type LeagueResult = { wk: number; l: number; p: number | null; m: -1 | 0 | 1; xp: number; win: boolean; of: number; sh?: boolean; pl?: boolean };
+
+/**
+ * The first leagues' Monday card (9 Nov 2026: the leagues came on a Monday night and his students saw only this week's
+ * 0): each one's last week, saved, and the league it gave him. Rows with their new league (`l`) and last week's XP.
+ */
+export function leaguePlacement<T extends { id: string; n: string; l?: number; p: number; ddp: number; t: number }>(rows: T[], wk: number): Map<string, LeagueResult> {
+  const out = new Map<string, LeagueResult>();
+  for (let l = 1; l <= LEAGUES.length; l++) {
+    const ordered = leagueOrder(
+      rows.filter((r) => leagueOf(r.l) === l),
+      (r) => r.p,
+      (r) => r.ddp,
+      (r) => r.t,
+    );
+    const places = leaguePlaces(ordered, (r) => r.p);
+    for (const r of ordered) out.set(r.id, { wk, l, p: places.get(r.id) ?? null, m: 0, xp: r.p, win: false, of: ordered.length, pl: true });
+  }
+  return out;
+}
 
 /** A finished week's leagues (the server's Monday run): each one's result, the winners, the moves. */
 export function leagueWeek<T extends { id: string; n: string; l?: number; p: number; ddp: number; t: number }>(

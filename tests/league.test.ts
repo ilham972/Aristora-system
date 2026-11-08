@@ -218,6 +218,10 @@ describe("the leagues and ranks on the server", () => {
     vi.setSystemTime(new Date("2026-11-09T10:00:00+05:30")); // Monday: last week's XP is `prev` now
     await raw.mutation(internal.race.fill, {});
     expect(await Promise.all(ids.map(async (id) => (await rowOf(id)).lg))).toEqual([5, 4, 3, 2, 1]);
+    // Each one's first Monday card at once (9 Nov 2026): last week saved, the league it gave him.
+    const wk = at("2026-11-02T00:00:00+05:30");
+    expect((await rowOf(ids[0])).lr).toEqual({ wk, l: 5, p: 1, m: 0, xp: 50, win: false, of: 1, pl: true });
+    expect((await rowOf(ids[4])).lr).toEqual({ wk, l: 1, p: null, m: 0, xp: 0, win: false, of: 1, pl: true });
     // Once: a second fill changes nothing, a new student is in the first league.
     await lastWeek(ids[4], 0, 0, 1);
     await raw.mutation(internal.race.fill, {});
@@ -225,6 +229,7 @@ describe("the leagues and ranks on the server", () => {
     const late = await add("Faiz T");
     expect((await rowOf(late)).lg).toBeUndefined();
     const A = await joinAs(ids[0], FAM);
+    expect((await A.query(api.family.me, {})).race?.lr).toMatchObject({ l: 5, xp: 50, pl: true });
     const b = await A.query(api.family.board, {});
     expect(b.rows.find((r) => r.id === ids[0])).toMatchObject({ l: 5, t: 50 });
     expect(b.rows.find((r) => r.id === late)?.l).toBeUndefined();
@@ -270,8 +275,47 @@ describe("the leagues and ranks on the server", () => {
     vi.setSystemTime(new Date("2026-11-09T00:05:00+05:30"));
     await t.mutation(api.race.setPrizes, { lg: "🍦 Ice cream", mi: "", cup: "" });
     await raw.mutation(internal.race.week, {});
-    expect((await rowOf(a)).lr).toBeUndefined();
+    // No race behind it: his first card only says where last week put him.
+    expect((await rowOf(a)).lr).toEqual({ wk: at("2026-11-02T00:00:00+05:30"), l: 5, p: 1, m: 0, xp: 30, win: false, of: 1, pl: true });
     expect(await t.query(api.race.giftCount, {})).toBe(0);
+  });
+
+  test("the leagues came before the first cards (the live server, 9 Nov 2026): each one gets his card once, that week only", async () => {
+    await ready();
+    const ids: Id<"students">[] = [];
+    for (const [i, n] of ["Asha K", "Bala M", "Chen R"].entries()) {
+      ids.push(await add(n));
+      await lastWeek(ids[i], [40, 10, 0][i], 1, [3, 2, 1][i], [40, 10, 0][i]);
+    }
+    vi.setSystemTime(new Date("2026-11-09T02:30:00+05:30"));
+    await raw.run(async (ctx) => {
+      await ctx.db.insert("meta", { key: "leagues", value: { at: at("2026-11-09T01:45:00+05:30") } });
+      const r = (await ctx.db.query("raceRows").withIndex("by_sid", (q) => q.eq("sid", ids[1])).first())!;
+      await ctx.db.patch(r._id, { lr: { wk: 1, l: 2, p: 1, m: 0, xp: 1, win: true, of: 1 } });
+    });
+    await raw.mutation(internal.race.fill, {});
+    const wk = at("2026-11-02T00:00:00+05:30");
+    expect((await rowOf(ids[0])).lr).toEqual({ wk, l: 3, p: 1, m: 0, xp: 40, win: false, of: 1, pl: true });
+    expect((await rowOf(ids[1])).lr).toMatchObject({ wk: 1, win: true });
+    expect((await rowOf(ids[2])).lr).toEqual({ wk, l: 1, p: null, m: 0, xp: 0, win: false, of: 1, pl: true });
+    // Once: a card closed or changed later is never written again.
+    await raw.run(async (ctx) => {
+      const r = (await ctx.db.query("raceRows").withIndex("by_sid", (q) => q.eq("sid", ids[0])).first())!;
+      await ctx.db.patch(r._id, { lr: undefined });
+    });
+    await raw.mutation(internal.race.fill, {});
+    expect((await rowOf(ids[0])).lr).toBeUndefined();
+  });
+
+  test("leagues that came in an earlier week get no first cards later", async () => {
+    await ready();
+    const a = await add("Asha K");
+    await lastWeek(a, 40, 1, 3, 40);
+    await raw.run(async (ctx) => await ctx.db.insert("meta", { key: "leagues", value: { at: at("2026-11-02T03:00:00+05:30") } }));
+    vi.setSystemTime(new Date("2026-11-09T10:00:00+05:30"));
+    await raw.mutation(internal.race.fill, {});
+    expect((await rowOf(a)).lr).toBeUndefined();
+    expect(await raw.run(async (ctx) => (await ctx.db.query("meta").withIndex("by_key", (q) => q.eq("key", "leagueCards")).first()) !== null)).toBe(true);
   });
 
   test("his rank: a new one is the owl's line (from Us's XP or a level); never down when marks go back; a new row says nothing", async () => {

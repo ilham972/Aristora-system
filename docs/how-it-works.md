@@ -1283,7 +1283,12 @@ learning app of our education institute"): one profile, his class times, what he
       `levelDays` (a Level, a class mark, a home check; Us XP never counts).
     - **Monday's card** (`WeekCard`): "📦 கடந்த வாரம் சேமிக்கப்பட்டது": last week's XP added to his XP ever, his place
       in his league and where it took him (⬆, stayed, ⬇ or 🛡️ kept), a win; "சூப்பர்! புதிய வாரம் ▶" closes it for
-      that week (`lrSeen`). From his row's `lr` (`LeagueResult`, written by `race.week`).
+      that week (`lrSeen`). From his row's `lr` (`LeagueResult`, written by `race.week`). **The first one at once** (9 Nov
+      2026, his message at 2 AM: "everything started from zero": the leagues came on a Monday night, so his students'
+      first sight was this week's 0): the first leagues write each student's card too (`pl`: last week's XP saved and
+      "🥇 தங்கம் லீக்கில் தொடங்குகிறாய்!"; `leaguePlacement`, in `seedOnce`, and once for the live server `cardsOnce`).
+    - **His rank on his face** everywhere in the race (podium, rows, not started: `Face`, `.f-rkb`), from the row's `t`
+      and `k`: what everyone earned shows even at 0 XP on a Monday morning.
     - **The owl in Us**: each league's winners ("champs" with the league), who moved up ("lgup"), the month's most
       improved ("upm"), a new rank ("rank"); each one switchable in Settings → Community like the others.
     - Code: `src/family/raceTab.tsx` (the race tab) and `src/family/league.tsx` (`RaceTop`, `WeekCard`, `RankCard`,

@@ -11,7 +11,7 @@
 import type { ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
 import type { FamilyMe } from "../../convex/family";
-import { champsOf, cupOf, cupPct, LEAGUE_UP, leagueMoves, leagueOf, leagueOrder, LEAGUES, passOf, placed, SHIELD_DAYS, type Placed, type RaceRow } from "../../convex/lib/race";
+import { champsOf, cupOf, cupPct, LEAGUE_UP, leagueMoves, leagueOf, leagueOrder, LEAGUES, passOf, placed, RANKS, rankShown, SHIELD_DAYS, type Placed, type RaceRow } from "../../convex/lib/race";
 import { endsIn, useBoard, type Board } from "./board";
 import { LeagueRoad, RaceTop } from "./league";
 import { keep } from "./net";
@@ -66,6 +66,22 @@ export function leagueGaps(rows: RaceRow[], me: string, moves: Map<string, 1 | -
   return { out: pass ? pass.xp - mine.xp + 1 : null, top: last && last.id !== me && !moves.has(me) && last.xp >= mine.xp ? last.xp - mine.xp + 1 : null };
 }
 
+/** His face with his rank's badge (9 Nov 2026): what he earned, kept for good, so the race shows it even at 0 XP on a
+ *  Monday. None from a server that sends no XP ever. */
+function Face(props: { r: RaceRow; size: "s" | "l" }) {
+  const { r } = props;
+  return (
+    <span class="f-face">
+      <Avatar name={r.n} size={props.size} pic={picOf(r.pic)} />
+      {r.t !== undefined && (
+        <i class="f-rkb" aria-hidden="true">
+          {RANKS[rankShown(r.t, r.k)].e}
+        </i>
+      )}
+    </span>
+  );
+}
+
 /** 👑 after a name: last week's champion of this list. */
 const Crown = () => (
   <span class="f-wcrown" role="img" aria-label="Last week's champion">
@@ -92,7 +108,7 @@ function Podium(props: { rows: Placed[]; me: string; crowns: Set<string>; all: b
                 <path d="M3 8.5l4.5 4 4.5-7 4.5 7 4.5-4-2 10.5H5z" />
               </svg>
             )}
-            <Avatar name={x.r.n} size="l" pic={picOf(x.r.pic)} />
+            <Face r={x.r} size="l" />
             <b class="f-pod-n">
               {x.r.id === props.me ? "You" : firstName(x.r.n)}
               {x.r.bd ? " 🎂" : ""}
@@ -157,7 +173,7 @@ function Row(props: { x: Placed; i: number; me: string; all: boolean; crown: boo
     <li class="rise" style={{ animationDelay: `${Math.min(props.i, 12) * 45}ms` }}>
       <button type="button" class={`f-brow${mine ? " me" : ""}${props.z === -1 ? " dz" : ""}`} onClick={() => props.onOpen(r)}>
         <span class="f-rank">{props.x.rank}</span>
-        <Avatar name={r.n} size="s" pic={picOf(r.pic)} />
+        <Face r={r} size="s" />
         <b class="f-bname">
           {mine ? `${r.n} · You` : r.n}
           {r.bd ? " 🎂" : ""}
@@ -185,7 +201,7 @@ function NotYet(props: { rows: Placed[]; me: string; crowns: Set<string>; all: b
       <div class="f-ny">
         {props.rows.map(({ r }) => (
           <button type="button" key={r.id} class={`f-nyc${r.id === props.me ? " me" : ""}`} onClick={() => props.onOpen(r)}>
-            <Avatar name={r.n} size="s" pic={picOf(r.pic)} />
+            <Face r={r} size="s" />
             <span>
               {r.id === props.me ? "You" : firstName(r.n)}
               {props.crowns.has(r.id) && <Crown />}

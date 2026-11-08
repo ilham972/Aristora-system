@@ -12,6 +12,7 @@ import { afterAll, beforeAll, expect, test } from "vitest";
 import { api, internal } from "../../convex/_generated/api";
 import { secretHash } from "../../convex/lib/auth";
 import { outOf } from "../../convex/lib/book";
+import { slWeekStart } from "../../convex/lib/day";
 import type { Ans } from "../../convex/lib/key";
 import { strToU8, zipSync } from "fflate";
 import { readWorkbookFiles, readWorkbookHtml, type ReadTute } from "../../src/workbookFile";
@@ -1990,8 +1991,14 @@ test("the race for everyone: his grade and ARISTORA, not started this week, the 
     await ctx.db.insert("progress", { studentId: ravi, unitId: g9, stage: "master", marks: {}, m: { q: {}, lv: { "1": lv(now - 30_000, 26) } }, startedAt: 0, updatedAt: now });
   });
 
-  // The leagues (8 Nov 2026) as they came: everyone in the first (none of them raced in one yet).
-  await t.run(async (ctx) => await ctx.db.insert("meta", { key: "leagues", value: { at: now } }));
+  // The leagues (8 Nov 2026) as they came: everyone in the first (none of them raced in one yet). Hana's first Monday
+  // card (9 Nov 2026: no XP last week, the league she starts in); the others' cards were already written.
+  await t.run(async (ctx) => {
+    await ctx.db.insert("meta", { key: "leagues", value: { at: now } });
+    await ctx.db.insert("meta", { key: "leagueCards", value: { at: now } });
+    const r = (await ctx.db.query("raceRows").withIndex("by_sid", (q) => q.eq("sid", hana)).first())!;
+    await ctx.db.patch(r._id, { lr: { wk: slWeekStart(now) - 7 * 86_400_000, l: 1, p: null, m: 0, xp: 0, win: false, of: 4, pl: true } });
+  });
 
   // Hana: her league first (all grades mixed): her rank (XP ever, never down), the leagues' road, Ravi and Bilal on the
   // podium (the top one moves up on Monday), Dev and Hana not started this week.
@@ -2001,12 +2008,18 @@ test("the race for everyone: his grade and ARISTORA, not started this week, the 
   await P.getByRole("button", { name: "Sign in" }).click();
   await goalIs(P, "Level 1");
   await tabTo(P, /Race/);
+  await contains(P.locator(".f-wsave"), "லீக்கில் தொடங்குகிறாய்");
+  await contains(P.locator(".f-wsave"), "கடந்த வாரம் சேமிக்கப்பட்டது");
+  await shot(P, "fam57-race-first-card");
+  await P.locator(".f-wsave-go").click();
+  await until(async () => (await P.locator(".f-wsave").count()) === 0, "her first card closes");
   await contains(P.locator(".f-hero .f-kicker"), "வெண்கலம்");
   await contains(P.locator(".f-rank-c"), "புதியவர்");
   await contains(P.locator(".f-rank-c"), "இன்னும் 100 XP");
   await contains(P.locator(".f-lroad li.on"), "வெண்கலம்");
   await contains(P.locator(".f-pod.p1"), "Ravi");
   await contains(P.locator(".f-pod.p2"), "Bilal");
+  await contains(P.locator(".f-pod.p1 .f-rkb"), "🌱"); // his rank on his face (26 XP ever)
   await contains(P.locator(".f-podnote"), "முதல் 3");
   await contains(P.locator(".f-pass"), "race இல் சேர்வாய்");
   await noSideScroll(P);

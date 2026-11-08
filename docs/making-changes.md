@@ -477,7 +477,7 @@ EOF
   phone imports it). Since 8 Nov 2026 the race tab is a later part (`raceTab.tsx`, `league.tsx` via `parts.ts`: the
   first load was at 66.0 with the leagues); `board.tsx` keeps only what the first load needs (`useBoard`, `Cheered`,
   `GiftCards`, `endsIn`) and a copy of the league names (`LEAGUE_NAMES`: importing `LEAGUES` would pull the rules in;
-  `tests/league.test.ts` keeps the copy equal). Budgets after the leagues: first load 62.6 of 66, later parts 41.4 of
+  `tests/league.test.ts` keeps the copy equal). Budgets after the leagues and the rank on faces: first load 62.7 of 66, later parts 41.6 of
   42 (full: the next later thing needs a cut or his yes), Us 24.1 of 28, the chats 7.9 of 20, the teachers' Us 7.8 of 8.
 - **The old race for old phones**: `family.board` still sends `top` / `me` / `count` (phones that opened the app
   before 7 Nov read them until they load the new version). The new field is `you`, not `me`. Remove after 21 Nov 2026.
@@ -488,6 +488,9 @@ EOF
 - **convex-test's clock never goes back**: a mutation runs at the later of the fake time and the last commit, so a test
   can't set the date earlier than a write it already made (a month test written backwards gave wrong months and
   hung). Write week and month stories forwards (Nov → Dec 1).
+- **Something weekly that starts on a Monday shows its first week's 0 first** (9 Nov 2026: he woke at 2 AM to "everything
+  started from zero"): give everyone last week's result at once (the leagues' first cards: `leaguePlacement`, written
+  by `seedOnce`, and `cardsOnce` for the live server; remove `cardsOnce` after 16 Nov 2026).
 - **A change to `race.week` deployed on a Monday after 00:05 waits a week**: that week is already in `raceWeeks`. The
   leagues came on Monday 9 Nov 2026: `race.fill` cut them within 5 minutes of the deploy (meta `leagues`), the first
   moves and league gifts are on 16 Nov; the run of 9 Nov gave the old prizes.

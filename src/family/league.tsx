@@ -55,6 +55,15 @@ function weekWords(lr: LeagueResult): { head: string; say: string; party: boolea
   const L = LEAGUES[lr.l - 1] ?? LEAGUES[0];
   const up = LEAGUES[lr.l];
   const down = LEAGUES[lr.l - 2];
+  // The first leagues (9 Nov 2026): last week's XP put him here; no race behind it yet.
+  if (lr.pl) {
+    if (lr.p === null) return { head: "கடந்த வாரம் XP இல்லை", say: `${L.e} ${L.n} லீக்கில் தொடங்குகிறாய். ஒரு Level செய்து மேலே ஏறு!`, party: false };
+    return {
+      head: `${L.e} ${L.n} லீக்கில் தொடங்குகிறாய்!`,
+      say: up ? `உன் கடந்த வார XP ஆல் இந்த லீக் உனக்குக் கிடைத்தது. முதல் 3 இல் வந்தால் ${up.e} ${up.n}!` : "உன் கடந்த வார XP ஆல் உச்ச லீக்! இங்கே முதலிடம் = வார சாம்பியன்.",
+      party: lr.l > 1,
+    };
+  }
   const kept = `🛡️ ${SHIELD_DAYS} நாள் கற்றதால் நீ கீழே போகவில்லை! இந்த வாரமும் ${L.n} லீக்கில்.`;
   if (lr.p === null) {
     return {

@@ -26,7 +26,7 @@ import { internalMutation, mutation } from "./lib/fn";
 import { actor, viewer } from "./lib/auth";
 import { fail, log } from "./lib/backend";
 import { DAY_MS, slDayNo, slMonthBefore, slMonthStart, slWeekStart } from "./lib/day";
-import { championsOf, cupWinners, daysIn, leagueOf, leagueWeek, numsAt, seedLeagues, type Champ, type Cup } from "./lib/race";
+import { championsOf, cupWinners, daysIn, leagueOf, leaguePlacement, leagueWeek, numsAt, seedLeagues, type Champ, type Cup } from "./lib/race";
 import { mateMarksOn, numsOfRow, RACE_V, raceList, rebuildStudent } from "./lib/raceRows";
 import { giftMoment, leagueMoments, monthMoment, mostImprovedMonth } from "./lib/us";
 
@@ -45,6 +45,7 @@ export const fill = internalMutation({
   handler: async (ctx) => {
     const now = Date.now();
     await seedOnce(ctx, now);
+    await cardsOnce(ctx, now);
     const meta = await ctx.db
       .query("meta")
       .withIndex("by_key", (q) => q.eq("key", "raceV"))
@@ -87,14 +88,47 @@ async function seedOnce(ctx: MutationCtx, now: number): Promise<boolean> {
   if (had) return false;
   for (const demo of [false, true]) {
     const kept = await keptRows(ctx, demo);
-    const seed = seedLeagues((await raceList(ctx, demo, now)).map((r) => ({ id: r.id, n: r.n, p: r.p, t: r.t ?? 0 })));
+    const list = await leagueList(ctx, demo, now);
+    const seed = seedLeagues(list);
+    // His first Monday card at once (9 Nov 2026): last week saved, and the league it gave him.
+    const cards = leaguePlacement(
+      list.map((x) => ({ ...x, l: seed.get(x.id) ?? 1 })),
+      lastWeek(now),
+    );
     for (const [sid, lg] of seed) {
       const r = kept.get(sid);
-      if (r && r.lg !== lg) await ctx.db.patch(r._id, { lg });
+      const lr = cards.get(sid);
+      if (r) await ctx.db.patch(r._id, { lg, ...(lr ? { lr } : {}) });
     }
   }
   await ctx.db.insert("meta", { key: "leagues", value: { at: now } });
   return true;
+}
+
+/**
+ * Once (9 Nov 2026, his message at 2 AM: "everything started from zero"): the leagues came that Monday before the first
+ * cards did, so each student gets his first Monday card now, if the leagues came this week (meta "leagueCards"). Remove
+ * after 16 Nov 2026 (Monday's run writes everyone's card from then on).
+ */
+async function cardsOnce(ctx: MutationCtx, now: number): Promise<void> {
+  const done = await ctx.db
+    .query("meta")
+    .withIndex("by_key", (q) => q.eq("key", "leagueCards"))
+    .first();
+  if (done) return;
+  const seeded = await ctx.db
+    .query("meta")
+    .withIndex("by_key", (q) => q.eq("key", "leagues"))
+    .first();
+  if (seeded && ((seeded.value as { at?: number }).at ?? 0) >= slWeekStart(now))
+    for (const demo of [false, true]) {
+      const kept = await keptRows(ctx, demo);
+      for (const [sid, lr] of leaguePlacement(await leagueList(ctx, demo, now), lastWeek(now))) {
+        const r = kept.get(sid);
+        if (r && !r.lr) await ctx.db.patch(r._id, { lr });
+      }
+    }
+  await ctx.db.insert("meta", { key: "leagueCards", value: { at: now } });
 }
 
 /**

@@ -2954,7 +2954,7 @@ button.f-pod:active,
   font-weight: 700;
   color: var(--ink2);
 }
-.f-nyc > span {
+.f-nyc > span:not(.f-face) {
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -5257,6 +5257,34 @@ button.f-pod:active,
   font-size: 12.5px;
   font-weight: 600;
   color: var(--ink2);
+}
+/* His rank's badge on his face in the race (9 Nov 2026): what he earned, there even at 0 XP on a Monday. */
+.f-face {
+  position: relative;
+  display: inline-grid;
+  flex: none;
+}
+.f-rkb {
+  position: absolute;
+  right: -5px;
+  bottom: -4px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(28, 26, 58, 0.28);
+  font-size: 11px;
+  font-style: normal;
+  line-height: 1;
+}
+.f-pod .f-rkb {
+  right: -6px;
+  bottom: -3px;
+  width: 25px;
+  height: 25px;
+  font-size: 15px;
 }
 .f-lroad {
   margin: 12px 12px 0;

@@ -154,6 +154,7 @@ export const leagueResult = v.object({
   win: v.boolean(),
   of: v.number(),
   sh: v.optional(v.boolean()),
+  pl: v.optional(v.boolean()),
 });
 /**
  * A photo on Us (7 Nov 2026: a teacher's poster or question, a student's answer or doubt): two copies the phone made,
