@@ -9,9 +9,10 @@
 
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
-import { DAY_MS, SL_OFFSET_MS, slDayNo, slWeekStart } from "./day";
-import { numsAt, type XpNums } from "./race";
+import { DAY_MS, SL_OFFSET_MS, slDayNo, slMonthBefore, slWeekStart } from "./day";
+import { numsAt, rankOf, zeroNums, type XpNums } from "./race";
 import { numsOfRow, RACE_V, raceRowOf, rebuildStudent } from "./raceRows";
+import { rankMoment } from "./usToday";
 
 /** His answer to a teacher's question, marked right. */
 export const XP_ANSWER = 5;
@@ -28,9 +29,12 @@ export const XP_ROWS_KEEP_MS = 31 * DAY_MS;
 
 export type UsXpKind = Doc<"usXp">["k"];
 
-const zero = (now: number): XpNums => ({ wk: slWeekStart(now), d: slDayNo(now), xp: 0, xpy: 0, prev: 0, tot: 0 });
+const zero = (now: number): XpNums => zeroNums(now);
 
-/** Numbers as they stand at `now`, with `xp` added (or taken: below 0) for something of time `t`. Never below 0. */
+/**
+ * Numbers as they stand at `now`, with `xp` added (or taken: below 0) for something of time `t`. Never below 0. The days
+ * he learned stay as they were (a comment isn't learning a Level); the month's XP moves with it (8 Nov 2026).
+ */
 export function shifted(n: XpNums, xp: number, t: number, now: number): XpNums {
   const a = numsAt(n, now);
   const today = slDayNo(now) * DAY_MS - SL_OFFSET_MS;
@@ -39,6 +43,10 @@ export function shifted(n: XpNums, xp: number, t: number, now: number): XpNums {
     out.xp = Math.max(0, a.xp + xp);
     if (t < today) out.xpy = Math.max(0, a.xpy + xp);
   } else if (t >= a.wk - 7 * DAY_MS) out.prev = Math.max(0, a.prev + xp);
+  const m1k = slMonthBefore(a.mk);
+  if (t >= a.mk) out.mo = Math.max(0, a.mo + xp);
+  else if (t >= m1k) out.m1 = Math.max(0, a.m1 + xp);
+  else if (t >= slMonthBefore(m1k)) out.m2 = Math.max(0, a.m2 + xp);
   return out;
 }
 
@@ -51,7 +59,12 @@ async function moveRow(ctx: MutationCtx, sid: Id<"students">, xp: number, t: num
   }
   if (!row) return;
   const us = shifted(row.us ? numsOfRow(row.us) : zero(now), xp, t, now);
-  await ctx.db.patch(row._id, { ...shifted(numsOfRow(row), xp, t, now), us });
+  const nums = shifted(numsOfRow(row), xp, t, now);
+  // His rank (8 Nov 2026): Us's XP counts in his XP ever, so it can bring a new rank (never take one away).
+  const kept = row.rk ?? rankOf(numsAt(numsOfRow(row), now).tot);
+  const rk = Math.max(kept, rankOf(nums.tot));
+  await ctx.db.patch(row._id, { ...nums, us, rk });
+  if (rk > kept && !row.demo && !row.gone) await rankMoment(ctx, { sid, n: row.n, ...(row.g !== undefined ? { g: row.g } : {}), ...(row.pic ? { pic: row.pic } : {}) }, rk, now);
 }
 
 /** XP for one thing (once per thing and kind). Says how much it gave. */

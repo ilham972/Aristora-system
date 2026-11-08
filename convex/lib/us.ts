@@ -45,7 +45,7 @@ import { DAY_MS, slDayNo } from "./day";
 
 export type UsKind = Doc<"usMoments">["k"];
 /** The lines the owl writes by itself (the owner can turn each kind off: Settings → Community). */
-export const OWL_KINDS: UsKind[] = ["bday", "stage", "home1", "back", "flame", "up", "champs", "count"];
+export const OWL_KINDS: UsKind[] = ["bday", "stage", "home1", "back", "flame", "up", "champs", "count", "rank", "lgup", "upm", "gift"];
 
 /** Days in a row that get a line (7, 14, 30, 50, 100). */
 export const FLAME_MARKS = [7, 14, 30, 50, 100];
@@ -276,8 +276,14 @@ export async function backMoment(ctx: MutationCtx, sid: Id<"students">, at: numb
   await once(ctx, sid, "back", at, (m) => m.day === day);
 }
 
-/** A line about several students (the champions, the most improved): once a day for its kind. */
-export async function groupMoment(ctx: MutationCtx, k: "champs" | "up", ppl: NonNullable<Doc<"usMoments">["ppl"]>, now: number): Promise<boolean> {
+/** A line about several students (the champions, the most improved, who moved up): once a day for its kind. */
+export async function groupMoment(
+  ctx: MutationCtx,
+  k: "champs" | "up" | "lgup" | "upm",
+  ppl: NonNullable<Doc<"usMoments">["ppl"]>,
+  now: number,
+  extra: Partial<New> = {},
+): Promise<boolean> {
   if (!ppl.length) return false;
   const day = slDayNo(now);
   const had = await ctx.db
@@ -285,8 +291,51 @@ export async function groupMoment(ctx: MutationCtx, k: "champs" | "up", ppl: Non
     .withIndex("by_kind", (q) => q.eq("k", k).eq("day", day))
     .first();
   if (had) return false;
-  await addMoment(ctx, { k, ppl, demo: false, at: now });
+  await addMoment(ctx, { k, ppl, demo: false, at: now, ...extra });
   return true;
+}
+
+/** Students as a line names them (real students only, the top league first when `l` is given). */
+async function pplOf(ctx: MutationCtx, list: { sid: Id<"students">; l?: number }[]): Promise<NonNullable<Doc<"usMoments">["ppl"]>> {
+  const out: NonNullable<Doc<"usMoments">["ppl"]> = [];
+  for (const x of [...list].sort((a, b) => (b.l ?? 0) - (a.l ?? 0))) {
+    const w = await whoOf(ctx, x.sid);
+    if (!w || w.demo || out.some((p) => p.sid === w.sid)) continue;
+    out.push({ sid: w.sid, n: w.n, ...(w.g !== undefined ? { g: w.g } : {}), ...(w.pic ? { pic: w.pic } : {}), ...(x.l ? { l: x.l } : {}) });
+  }
+  return out;
+}
+
+/**
+ * Monday (race.week, 8 Nov 2026: the leagues): the owl names each league's winner (the "champs" line, each with his
+ * league `l`) and who moved up (the "lgup" line, each with the league he reached).
+ */
+export async function leagueMoments(ctx: MutationCtx, winners: { sid: Id<"students">; l: number }[], up: { sid: Id<"students">; l: number }[], now: number): Promise<void> {
+  await groupMoment(ctx, "champs", await pplOf(ctx, winners), now);
+  await groupMoment(ctx, "lgup", await pplOf(ctx, up), now);
+}
+
+/** The 1st (race.month): last month's most improved (`x` = that month's 1st). */
+export async function monthMoment(ctx: MutationCtx, sids: Id<"students">[], mk: number, now: number): Promise<void> {
+  await groupMoment(
+    ctx,
+    "upm",
+    await pplOf(
+      ctx,
+      sids.map((sid) => ({ sid })),
+    ),
+    now,
+    { x: mk },
+  );
+}
+
+/** A gift a teacher gave by hand, told to everyone (race.giveNow): the students and her reason. */
+export async function giftMoment(ctx: MutationCtx, sids: Id<"students">[], why: string, now: number): Promise<void> {
+  const ppl = await pplOf(
+    ctx,
+    sids.map((sid) => ({ sid })),
+  );
+  if (ppl.length) await addMoment(ctx, { k: "gift", ppl, t: why, demo: false, at: now });
 }
 
 /**
@@ -316,13 +365,23 @@ export async function champsMoment(
  * previous to now"): XP this week against last week, as a share of last week (at least 20, so a beginner's first week
  * doesn't always win and a strong student's steady week doesn't either). This week 20 XP or more, and more than last.
  */
-export function mostImproved<T extends { xp: number; prev: number }>(rows: T[], max = UP_MAX): T[] {
-  const score = (r: T) => (r.xp - r.prev) / Math.max(r.prev, UP_MIN_XP);
+export function mostImproved<T extends { xp: number; prev: number }>(rows: T[], max = UP_MAX, min = UP_MIN_XP): T[] {
+  const score = (r: T) => (r.xp - r.prev) / Math.max(r.prev, min);
   return rows
-    .filter((r) => r.xp >= UP_MIN_XP && r.xp > r.prev)
+    .filter((r) => r.xp >= min && r.xp > r.prev)
     .sort((a, b) => score(b) - score(a) || b.xp - a.xp)
     .slice(0, max);
 }
+
+/** XP a month must hold to count for the month's most improved (and the floor of the month before). */
+export const UP_MONTH_MIN_XP = 60;
+
+/**
+ * The month's most improved (8 Nov 2026, his answer: "the students whose XP grew the most compared with last month"):
+ * as the week's (mostImproved), with a month's floor: last month 60 XP or more and more than the month before, growth as
+ * a share of the month before (at least 60).
+ */
+export const mostImprovedMonth = <T extends { xp: number; prev: number }>(rows: T[], max: number): T[] => mostImproved(rows, max, UP_MONTH_MIN_XP);
 
 /** The grades a post is for (null = everyone); `to` = one grade (posts before photos came). */
 export const gradesOf = (m: Pick<Doc<"usMoments">, "gs" | "to">): number[] | null => m.gs ?? (m.to !== undefined ? [m.to] : null);
@@ -361,7 +420,8 @@ export type UsItem = {
   n?: string;
   g?: number;
   pic?: string;
-  ppl?: { sid: string; n: string; g?: number; pic?: string; a?: boolean }[];
+  /** Several students (champions, the most improved, who moved up, a gift); `l` = a league (8 Nov 2026). */
+  ppl?: { sid: string; n: string; g?: number; pic?: string; a?: boolean; l?: number }[];
   x?: number;
   t?: string;
   /** A post's grades (none = everyone). */
@@ -427,7 +487,9 @@ export function itemOf(m: Doc<"usMoments">, me?: Id<"students">, staff = false):
     ...(m.n && who ? { n: m.n } : {}),
     ...(m.g !== undefined ? { g: m.g } : {}),
     ...(m.pic && who ? { pic: m.pic } : {}),
-    ...(m.ppl ? { ppl: m.ppl.map((p) => ({ sid: p.sid as string, n: p.n, ...(p.g !== undefined ? { g: p.g } : {}), ...(p.pic ? { pic: p.pic } : {}), ...(p.a ? { a: true } : {}) })) } : {}),
+    ...(m.ppl
+      ? { ppl: m.ppl.map((p) => ({ sid: p.sid as string, n: p.n, ...(p.g !== undefined ? { g: p.g } : {}), ...(p.pic ? { pic: p.pic } : {}), ...(p.a ? { a: true } : {}), ...(p.l ? { l: p.l } : {}) })) }
+      : {}),
     ...(m.x !== undefined ? { x: m.x } : {}),
     ...(m.t !== undefined ? { t: m.t } : {}),
     ...(gs ? { gs } : {}),

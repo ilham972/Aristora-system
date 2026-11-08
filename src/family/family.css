@@ -2875,6 +2875,46 @@ button.f-pod:active,
 .f-mv.down {
   color: var(--ink3);
 }
+/* A league (8 Nov 2026): ⬆ moves up on Monday (blue), ⬇ moves down (grey: never a red to shame him), 🛡️ safe (4 days). */
+.f-zone {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  border-radius: 8px;
+  font: 800 12px/1 var(--display);
+}
+.f-zone.up {
+  background: var(--right-soft);
+  color: var(--right);
+}
+.f-zone.down {
+  background: var(--line);
+  color: var(--ink2);
+}
+.f-zone.safe {
+  font-size: 13px;
+}
+.f-brow.dz {
+  background: #faf9ff;
+}
+.f-nyd {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--ink2);
+}
+.f-podnote {
+  margin: 6px 0 0;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--right-ink);
+}
+.f-pass.down {
+  background: var(--line);
+  color: var(--ink);
+}
 /* A grade, as a number only (the whole ARISTORA list). */
 .f-gchip {
   flex: none;
@@ -5067,3 +5107,233 @@ button.f-pod:active,
 }
 
 /* Us (7 Nov 2026) has its own style since 8 Nov 2026: src/family/usStyle.ts, with Us's own file (usParts.ts). */
+
+/* ---- The race keeps what he earned (8 Nov 2026, league.tsx, a later part; its style here: the later parts' budget was
+   full): Monday's card, his rank, the leagues' road ---- */
+.f-wsave {
+  position: relative;
+  overflow: hidden;
+  margin: 12px 16px 0;
+  padding: 16px 16px 14px;
+  text-align: center;
+  background: linear-gradient(160deg, #fff 0%, var(--brand-soft) 100%);
+}
+.f-wsave.party {
+  background: linear-gradient(160deg, var(--gold-soft) 0%, #fff 70%);
+}
+.f-wsave .f-confetti {
+  top: 30px;
+}
+.f-wsave-k {
+  font: 800 13px/1.2 var(--display);
+  letter-spacing: 0.04em;
+  color: var(--brand-2);
+  margin: 0;
+}
+.f-wsave-xp {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin: 10px 0 6px;
+  font-size: 15px;
+  color: var(--ink2);
+}
+.f-wsave-xp > b {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font: 800 30px/1 var(--display);
+  color: var(--gem-2);
+}
+.f-wsave-xp > span b {
+  color: var(--ink);
+}
+.f-wsave-h {
+  margin: 6px 0 2px;
+  font: 800 17px/1.3 var(--display);
+  color: var(--ink);
+}
+.f-wsave-s {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink2);
+}
+.f-wsave-go {
+  min-height: 44px;
+  padding: 0 20px;
+  border-radius: 999px;
+  background: var(--brand);
+  color: #fff;
+  font: 800 15px/1 var(--display);
+}
+.f-rank-c {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 16px 0;
+  padding: 12px 14px;
+}
+.f-rank-c.fresh {
+  box-shadow: 0 0 0 2px var(--gold), var(--shadow);
+}
+.f-rank-c .f-confetti {
+  left: 34px;
+  top: 34px;
+}
+.f-rank-b {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 18px;
+  background: var(--brand-soft);
+  font-size: 30px;
+}
+.f-rank-c.fresh .f-rank-b {
+  background: var(--gold-soft);
+  animation: f-rank-pop 0.9s ease 2;
+}
+@keyframes f-rank-pop {
+  50% {
+    transform: scale(1.15) rotate(-6deg);
+  }
+}
+.f-rank-w {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+.f-rank-n {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  min-width: 0;
+}
+.f-rank-n > b {
+  min-width: 0;
+  font: 800 17px/1.2 var(--display);
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.f-rank-new {
+  flex: none;
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--gold-ink);
+}
+.f-rank-xp {
+  margin-left: auto;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font: 800 15px/1 var(--display);
+  color: var(--gem-2);
+}
+.f-rank-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--line);
+  overflow: hidden;
+}
+.f-rank-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--brand-mid), var(--brand));
+}
+.f-rank-w > small {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink2);
+}
+.f-lroad {
+  margin: 12px 12px 0;
+}
+/* One road: a thin line behind five badges; his league a wider pill with its name (no name is ever cut short). */
+.f-lroad ol {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  background: linear-gradient(var(--line), var(--line)) center / calc(100% - 40px) 2px no-repeat;
+}
+.f-lroad li {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+}
+.f-lroad li.on {
+  flex: 0 0 auto;
+}
+.f-lstep {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  opacity: 0.55;
+}
+button.f-lstep {
+  cursor: pointer;
+}
+.f-lroad li.past .f-lstep {
+  opacity: 0.8;
+}
+.f-lroad li.on .f-lstep {
+  padding: 0 10px 0 7px;
+  opacity: 1;
+  box-shadow: 0 0 0 2px var(--brand);
+}
+.f-lstep > span {
+  font-size: 20px;
+  line-height: 1;
+}
+.f-lstep > b {
+  padding-top: 2px;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.f-lroad > p {
+  margin: 6px 4px 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink2);
+  text-align: center;
+}
+.f-rkline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  margin: 4px 0 0;
+  font-size: 13px;
+}
+.f-rkline > b {
+  font-weight: 800;
+}
+.f-rkline > span {
+  opacity: 0.85;
+  font-weight: 700;
+}

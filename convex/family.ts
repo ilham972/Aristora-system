@@ -99,8 +99,8 @@ import {
   type PhotoType,
   type StageLine,
 } from "./lib/profile";
-import { numsAt, type RaceRow } from "./lib/race";
-import { mateMarksOn, raceList } from "./lib/raceRows";
+import { daysIn, leagueOf, numsAt, rankShown, type LeagueResult, type RaceRow } from "./lib/race";
+import { mateMarksOn, numsOfRow, raceList, raceRowOf } from "./lib/raceRows";
 import { homeLevels, homeMoments, stageDone, stageMoment, usCfg } from "./lib/us";
 import { OL } from "./lib/syllabus";
 
@@ -274,8 +274,17 @@ export type FamilyMe = {
   nameAsk: { name: string; no: boolean } | null;
   /** Cheers (👏) he got this week: how many, and the first names of the newest few (7 Nov 2026). */
   cheers: { n: number; from: string[] };
-  /** Gifts from the centre he won and hasn't been given yet (7 Nov 2026): what, for which win, which week. */
-  gifts: { id: string; what: string; kind: "g" | "a" | "cup"; wk: number; g: number | null }[];
+  /**
+   * Gifts from the centre he won and hasn't been given yet (7 Nov 2026): what, for which win, which week. Since 8 Nov
+   * 2026 also a league's winner (`l`), the month's most improved, a gift by hand (`why`). `l` / `why` missing from before.
+   */
+  gifts: { id: string; what: string; kind: Doc<"gifts">["kind"]; wk: number; g: number | null; l?: number; why?: string }[];
+  /**
+   * The race (8 Nov 2026, his voice note: "they feel like they are losing what they earned"): his league (1–5), the rank
+   * he reached (an index of RANKS: never down), his last week in his league (Monday's card; null before the first
+   * Monday), the days he learned this week (🛡️ at 4). Missing on a server from before.
+   */
+  race?: { lg: number; rk: number; lr: LeagueResult | null; dd: number };
   /** The bell (7 Nov 2026): his teachers' answers, retakes and messages of the last two weeks, newest first. */
   bell: BellItem[];
   /** Us, the students' community (7 Nov 2026): its tab is on the phones once the owner opened it (Settings → Community). */
@@ -392,7 +401,8 @@ export const me = query({
           .query("gifts")
           .withIndex("by_sid", (q) => q.eq("sid", s._id).eq("open", true))
           .collect()
-      ).map((x) => ({ id: x._id, what: x.what, kind: x.kind, wk: x.wk, g: x.g ?? null })),
+      ).map((x) => ({ id: x._id, what: x.what, kind: x.kind, wk: x.wk, g: x.g ?? null, ...(x.l ? { l: x.l } : {}), ...(x.why ? { why: x.why } : {}) })),
+      race: await raceOf(ctx, s._id, xpSince(rows, 0) + us.tot, now),
       blocked: stop && stopWorld ? { unitId: stopWorld.unitId, no: stopWorld.no, n: stop.n, owed: stop.owed } : null,
       bell: bell.slice(0, BELL_MAX),
       us: usOpen,
@@ -403,6 +413,14 @@ export const me = query({
     };
   },
 });
+
+/** His league, rank, last week in his league and days learned this week (family.me's `race`), from his race row. */
+async function raceOf(ctx: QueryCtx, sid: Id<"students">, total: number, now: number): Promise<NonNullable<FamilyMe["race"]>> {
+  const r = await raceRowOf(ctx, sid);
+  if (!r) return { lg: 1, rk: rankShown(total), lr: null, dd: 0 };
+  const x = numsAt(numsOfRow(r), now);
+  return { lg: leagueOf(r.lg), rk: rankShown(total, r.rk), lr: r.lr ?? null, dd: daysIn(x.dm) };
+}
 
 /** The World, its workbook and his level, when he may play it now (else a reason, in plain words). */
 async function playable(ctx: QueryCtx, s: Doc<"students">, unitId: Id<"units">, n: number) {
@@ -958,6 +976,9 @@ export type FamilyMate = {
   p: FamilyProfile;
   /** May the one looking message him (8 Nov 2026: his boy / girl rule; a teacher always)? Missing on a server from before. */
   dm?: boolean;
+  /** His rank (an index of RANKS: never down) and his league (1–5), 8 Nov 2026. Missing on a server from before. */
+  rk?: number;
+  lg?: number;
 };
 
 /** His profile's numbers (the map, his months, his report): his own Me and a classmate's profile. */
@@ -1038,6 +1059,7 @@ export async function mateOf(ctx: QueryCtx, s: Doc<"students">, from: Id<"studen
     .first();
   const cheers = await cheersOf(ctx, s._id, now);
   const p = await profileOf(ctx, s, rows, worlds, now);
+  const total = xpSince(rows, 0) + (race?.us ? numsAt(race.us, now).tot : 0);
   return {
     id: s._id,
     name: s.name,
@@ -1046,13 +1068,15 @@ export async function mateOf(ctx: QueryCtx, s: Doc<"students">, from: Id<"studen
     bday: isBirthday(s.bday, now),
     // XP from Us too (8 Nov 2026): his race row's Us part, as on his own phone.
     xp: weekXp(rows, now) + (race?.us ? numsAt(race.us, now).xp : 0),
-    total: xpSince(rows, 0) + (race?.us ? numsAt(race.us, now).tot : 0),
+    total,
     streak: streakOf(rows, now),
     best: bestStreak(days),
     week: weekDays(days, now),
     levelsDone: levelsSince(rows, 0),
     trophies: trophiesOf(rows, worlds),
     wins: { g: race?.w ?? 0, a: race?.wa ?? 0 },
+    rk: rankShown(total, race?.rk),
+    lg: leagueOf(race?.lg),
     cheers: { n: cheers.length, mine: !!from && cheers.some((c) => c.from === from && c.day === slDayNo(now)) },
     marks,
     p: marks ? p : withoutMarks(p),

@@ -29,7 +29,7 @@ import type { Picked, SaveInfo, SpotProps } from "./usPost";
  * What it uses of the students' app, handed over by main.tsx (never imported here: an import of any of them would make
  * the bundler split the students' first load into more files, ~1 KB more for every phone; tests/usStaff.test.ts checks).
  */
-export type Kit = Pick<typeof import("./board"), "BoardTab" | "keptBoard"> &
+export type Kit = Pick<typeof import("./board"), "keptBoard"> &
   Pick<typeof import("./later"), "useParts" | "useUsParts" | "useChatParts"> &
   Pick<typeof import("./net"), "keep" | "mutation" | "query" | "staffWith"> &
   Pick<typeof import("./pics"), "picOf" | "usePics"> &
@@ -362,8 +362,11 @@ function StaffApp() {
       <K.Waiting />
     );
   } else if (tab === "race") {
-    body = (
-      <K.BoardTab
+    // The race tab is a later part since 8 Nov 2026 (the leagues).
+    body = !parts ? (
+      <K.Waiting />
+    ) : (
+      <parts.BoardTab
         top={top}
         me={null}
         grade={grade}

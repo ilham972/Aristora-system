@@ -10,8 +10,10 @@ import type { ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
 import type { FamilyMe } from "../../convex/family";
 import { isBirthday } from "../../convex/lib/day";
-import { Cheered, endsIn, GiftCards, myPlace, useBoard } from "./board";
+import { Cheered, endsIn, GiftCards, useBoard } from "./board";
+import { myPlace } from "./raceTab";
 import { Kids, whoWords } from "./kids";
+import { RankLine } from "./league";
 import { bdayWords, useProfile } from "./later";
 import { mutation, type Account } from "./net";
 import { PhotoSheet } from "./photo";
@@ -183,6 +185,7 @@ export function MeTab(props: {
               {party && <span class="f-cake"> 🎂</span>}
             </b>
             <small>{whoWords(me)}</small>
+            <RankLine total={me.total ?? me.xp} rk={me.race?.rk} lg={me.race?.lg} />
             {me.photo?.wait ? (
               <Tag tone="glass" class="f-me-tag">
                 Photo · waiting for OK

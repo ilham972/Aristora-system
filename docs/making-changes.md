@@ -466,15 +466,31 @@ EOF
   sets `raceV`). One progress row per student and book in a fixture (`students.add` with a unit already made one: patch
   it), or the map and the race disagree (the map reads the first row, XP adds both).
 - **What counts as XP changes in one place** (`xpItems`, `levelDays` in `convex/lib/family.ts`): then add 1 to
-  `RACE_V` (`convex/lib/raceRows.ts`): every row is built again by `race.fill` (20 a run, every 5 min); until it is
-  done the race reads everyone's rows the old way.
+  `RACE_V` (`convex/lib/raceRows.ts`; 2 since 8 Nov 2026: days learned and the months): every row is built again by
+  `race.fill` (20 a run, again at once while rows are left); until it is done the race reads everyone's rows the old
+  way. A new field of `XpNums` must be optional in `xpFields` (old rows) and `sameNums` must say "not the same" when
+  it is missing, or old rows are never rebuilt.
 - **A race row's numbers are as of the moment they were worked out** (`wk`, `d`): read them only through `numsAt`
   (`raceRowOut`), never `row.xp` straight (on Monday it is last week's).
 - **The family's budgets** (7 Nov 2026, after the race and profiles): first load 58.5 of 66 KB, later parts 32.7 of 36
-  (raised 32 → 36 with his yes for profiles). The race's lists and the grade cup are in the first load (`board.tsx`
-  imports `convex/lib/race.ts`: pure, imports only `./day`; keep it so); a classmate's profile is a later part.
+  (raised 32 → 36 with his yes for profiles). `convex/lib/race.ts` is pure and imports only `./day`: keep it so (the
+  phone imports it). Since 8 Nov 2026 the race tab is a later part (`raceTab.tsx`, `league.tsx` via `parts.ts`: the
+  first load was at 66.0 with the leagues); `board.tsx` keeps only what the first load needs (`useBoard`, `Cheered`,
+  `GiftCards`, `endsIn`) and a copy of the league names (`LEAGUE_NAMES`: importing `LEAGUES` would pull the rules in;
+  `tests/league.test.ts` keeps the copy equal). Budgets after the leagues: first load 62.6 of 66, later parts 41.4 of
+  42 (full: the next later thing needs a cut or his yes), Us 24.1 of 28, the chats 7.9 of 20, the teachers' Us 7.8 of 8.
 - **The old race for old phones**: `family.board` still sends `top` / `me` / `count` (phones that opened the app
   before 7 Nov read them until they load the new version). The new field is `you`, not `me`. Remove after 21 Nov 2026.
+- **Leagues and champions read through `raceList`** (8 Nov 2026), never `raceRows` straight: before `raceV` says the
+  rows are ready they are stale or missing, and `raceList` works either way (`leagueList` in `convex/race.ts` takes a
+  row's `lg` from `raceRows` and the numbers from `raceList`). A test that patches race rows inserts meta `raceV` =
+  `RACE_V` first (`ready()` in `tests/league.test.ts`), or the race ignores the patch.
+- **convex-test's clock never goes back**: a mutation runs at the later of the fake time and the last commit, so a test
+  can't set the date earlier than a write it already made (a month test written backwards gave wrong months and
+  hung). Write week and month stories forwards (Nov → Dec 1).
+- **A change to `race.week` deployed on a Monday after 00:05 waits a week**: that week is already in `raceWeeks`. The
+  leagues came on Monday 9 Nov 2026: `race.fill` cut them within 5 minutes of the deploy (meta `leagues`), the first
+  moves and league gifts are on 16 Nov; the run of 9 Nov gave the old prizes.
 
 **Us, the students' community (7 Nov 2026).**
 - **The owl's lines are written by hooks** in the mutations that finish things (`convex/lib/us.ts`): `homeMoments` in

@@ -19,12 +19,16 @@ const KIND_EN: Record<UsKind, string> = {
   back: "Back in class after 2 weeks or more",
   flame: "Days in a row: 7, 14, 30, 50, 100",
   up: "The week's most improved (Sunday night)",
-  champs: "Last week's champions (Monday)",
+  champs: "Each league's winner (Monday)",
   count: "How many learned yesterday (every morning)",
   post: "Posts",
   shout: "Shout-outs",
   ask: "Students' doubts",
   learn: "Students' 💡 posts",
+  rank: "A new rank (his XP ever: 🌱 to 🦉)",
+  lgup: "Who moved up a league (Monday)",
+  upm: "The month's most improved (the 1st)",
+  gift: "A gift you gave by hand (with your reason)",
 };
 
 function seenWhy(): boolean {

@@ -1242,9 +1242,9 @@ learning app of our education institute"): one profile, his class times, what he
     and "reduce motion" skip the wait).
   - **The race** (`family.board`; rebuilt 7 Nov 2026, his voice note: students who never joined weren't on it, class
     work "is also progress", "can we show the whole institute ranking? ... two tabs"): **every student of ARISTORA**,
-    on the app or not (first name and initial), XP this week **from class and home** (below: what counts). Two lists
-    in the header, **Grade 8 | ARISTORA** (kept per child, `raceList`): his grade, or everyone (each name with its
-    grade as a number). The top three on a podium (gold, silver, bronze; the gold crown on this week's first; "You"),
+    on the app or not (first name and initial), XP this week **from class and home** (below: what counts). Three lists
+    in the header since 8 Nov 2026, **🥉 League | Grade 8 | ARISTORA** (kept per child, `raceList`; his league first, a
+    teacher's grades first): his league (below), his grade, or everyone (each name with its grade as a number). The top three on a podium (gold, silver, bronze; the gold crown on this week's first; "You"),
     the rest as rows with how they **moved since yesterday** (▲2 blue, ▼1 grey, ▲ alone = new in the race today;
     never red), **👑 = last week's champion of that list** (the most XP last week; ties share it), then **"இன்னும்
     தொடங்கவில்லை"**: everyone with 0 XP this week as name chips with **no number** (my call, told him: the push of
@@ -1256,7 +1256,39 @@ learning app of our education institute"): one profile, his class times, what he
     a student's photo once the teachers said OK and his family shows it (`RaceRow.pic`; since 7 Nov any grade's, the
     ARISTORA list), his own always on his phone; 🎂 by a name on that student's birthday. The kept race shows at once
     (`useBoard`, per child), then the new one. Rules in `convex/lib/race.ts` (`placed`, `champsOf`, `passOf`, `cupOf`),
-    shared by the phone and the server. **Leagues**: in 2–3 weeks (his yes, 7 Nov 2026), once the weeks hold real XP.
+    shared by the phone and the server. Leagues, ranks and Monday's card: the next part (8 Nov 2026).
+  - **What he keeps: his rank, his league, Monday's card** (8 Nov 2026, his voice note: "when it comes to Monday, all the
+    progress will start from zero ... They feel like they are losing what they earned"; his answers: **5 leagues, all
+    grades mixed**, gifts for **each league's winner every week** and **the month's most improved**, houses next). The
+    week's race still starts again on Monday (everyone's fresh chance); nothing he earned goes:
+    - **His rank** = his XP ever, **never down** (`raceRows.rk` keeps the highest he reached: marks taken back never
+      lower it): 🌱 புதியவர் (0), 📘 கற்பவர் (100), 🔎 தேடுபவர் (300), ✏️ முயல்பவர் (600), 🧠 சிந்தனையாளர் (1,000),
+      ⚡ திறமையாளர் (1,500), 🎯 வல்லவர் (2,200), 📜 அறிஞர் (3,000), 🌟 மேதை (4,000), 🦉 தங்க ஆந்தை (5,500), then a ⭐
+      every 2,500 XP more (my names, told him; `RANKS`, `RANK_STAR_XP`, `rankOf`, `rankShown`, `nextStep`). On the race:
+      the rank card (his badge, XP ever, the bar to the next, "இன்னும் 100 XP → 📘 கற்பவர் · உன் XP என்றும்
+      குறையாது"), a celebration the first time he sees a new one (`rankSeen`, per child); a line on Me and on a
+      classmate's profile (`RankLine`); the owl's "rank" line in Us (`rankMoment` in `lib/usToday.ts`, from `writeRow`
+      when `rk` grows for a real student; never on a row's first build).
+    - **Five leagues** (`LEAGUES`: 🥉 வெண்கலம், 🥈 வெள்ளி, 🥇 தங்கம், 💎 வைரம், 🏆 சாம்பியன்), all grades mixed,
+      about 20 each. The first leagues were cut once, in fifths by last week's XP (meta `leagues`, `seedLeagues` via
+      `seedOnce`: the best fifth on top, anyone who never learned in 🥉); a new student starts in 🥉. His league
+      (`raceRows.lg`) is the first list of his race: its podium and rows by this week's XP, then days learned, then XP
+      ever (`leagueOrder`). **Monday 00:05** (`race.week`): the **top 3 with XP move up**, the **bottom 3 move down** (a
+      league under 9: a third each way), **never one who learned on 4 days that week** (🛡️; `LEAGUE_UP`,
+      `SHIELD_DAYS`, `leagueMoves`, `leagueWeek`). The rows show it live: a ⬆ zone and a ⬇ zone, 🛡️ by a name, "இன்னும்
+      40 XP எடுத்தால் முதல் 3 இல்: 🥈 வெள்ளி லீக்!" and the ⬇ warnings (`leagueSay`), "⬆ முதல் 3 பேர் திங்கள் 🥈
+      வெள்ளி லீக்குக்கு" under the podium. The road (`LeagueRoad`): the five on one line, his own a pill with its name,
+      Monday's rule under it; a teacher is in none, so her road is her picker (`raceLg`). The demo class has its own.
+    - **Days learned** (the 🛡️): `XpNums.dm` (this week, a bit a day, Monday = bit 0) and `dmp` (last week), from
+      `levelDays` (a Level, a class mark, a home check; Us XP never counts).
+    - **Monday's card** (`WeekCard`): "📦 கடந்த வாரம் சேமிக்கப்பட்டது": last week's XP added to his XP ever, his place
+      in his league and where it took him (⬆, stayed, ⬇ or 🛡️ kept), a win; "சூப்பர்! புதிய வாரம் ▶" closes it for
+      that week (`lrSeen`). From his row's `lr` (`LeagueResult`, written by `race.week`).
+    - **The owl in Us**: each league's winners ("champs" with the league), who moved up ("lgup"), the month's most
+      improved ("upm"), a new rank ("rank"); each one switchable in Settings → Community like the others.
+    - Code: `src/family/raceTab.tsx` (the race tab) and `src/family/league.tsx` (`RaceTop`, `WeekCard`, `RankCard`,
+      `RankLine`, `LeagueRoad`), both later parts: until they come the race shows its header and the owl. Rules in
+      `convex/lib/race.ts`, shared with the server.
   - **What counts as XP** (7 Nov 2026, his voice note: "if they did the question from the classroom or from the home,
     whatever, they are progressing"): a workbook level's marks the day he handed it in (corrected in class, or checked
     at home: as before), marks won back by a question that came back, a tute's ladder section checked at home (its
@@ -1285,8 +1317,9 @@ learning app of our education institute"): one profile, his class times, what he
     progress row. **Every mutation** goes through `convex/lib/fn.ts` (`mutation`, `internalMutation`): its db is
     watched, and as it ends the progress rows it wrote get their part again and his race row adds his parts up; a
     student's name, grade, photo, birthday or removal is copied; a missing row or one built with older rules (`RACE_V`)
-    is built again from all his rows. `race.fill` (every 5 min) builds the ones still missing, 20 a run, then notes
-    meta `raceV` and does nothing more; until then the race works out the old way from everyone's rows (`raceList`).
+    is built again from all his rows. `race.fill` (every 5 min) builds the ones still missing, 20 a run (since 8 Nov
+    2026 it runs again at once while rows are left; it also cuts the first leagues), then notes meta `raceV` and does
+    nothing more (`RACE_V` 2 since 8 Nov 2026: days learned and the months, `dm`/`dmp`, `mk`/`mo`/`m1`/`m2`); until then the race works out the old way from everyone's rows (`raceList`).
     `race.week` (Monday 00:05 Sri Lanka) keeps last week's champions in `raceWeeks` (each grade's top 3, ARISTORA's,
     the grade cup) and adds a week won to each #1's race row (`w` in his grade, `wa` in ARISTORA): his profile counts
     them (and the gifts will read them). Phones from before 7 Nov read `top` / `me` / `count` from the same answer until
@@ -1303,16 +1336,25 @@ learning app of our education institute"): one profile, his class times, what he
     on Home and Me ("👏 Hana K, Raj M and 3 others ... இந்த வாரம் உன்னை உற்சாகப்படுத்தினார்கள்!": `me.cheers`, this week).
   - **Gifts from the centre** (7 Nov 2026, his ask: "gift cards ... ice-cream or chicken fries"; no votes, my call told
     him: votes turn into a popularity contest): the owner sets a prize for each win in **Settings → Race** (empty = no
-    gift): 👑 each grade's champion, 🏆 the ARISTORA champion (he is his grade's too: both gifts), 🥇 the grade cup
-    (every student who learned that week in the grade with the best share). `race.week` (Monday 00:05) makes a `gifts`
-    row for each winner with the prize as it is then. His phone shows a gold card on Home and Me ("நீ வென்றாய்! 🍦 Ice
+    gift). Since 8 Nov 2026 (his answers): 🏆 **each league's winner, every Monday** (`lg`, ties share it), 📈 **the
+    month's most improved** on the 1st (`mi`: the top 3 by Levels and class work last month against the month before,
+    as a share of the month before (at least 60), Us XP left out; `race.month`, called by `us.daily` on the 1st, once a
+    month by meta `raceMonth`; `mostImprovedMonth`), 🥇 the grade cup (`cup`: every student who learned that week in the
+    grade with the best share; until the houses). Each grade's champion and ARISTORA's keep their 👑 and weeks won,
+    without a gift (the same strongest students won it every week: the leagues give everyone a winnable race). The
+    runs make a `gifts` row for each winner with the prize as it is then. **A gift by hand** (`race.giveNow`, owner and
+    Manager: Settings → Race → 🎁 Give a gift now): students picked by grade (40 at most), the gift (40 letters), why (80),
+    and whether the owl tells Us ("gift": the names and why, never the gift); his card says "உனக்கு ஒரு பரிசு!" with the
+    why; a history line. His phone shows a gold card on Home and Me ("நீ வென்றாய்! 🍦 Ice
     cream · 👑 Grade 8 champion · week of 2 Nov · இதை உன் ஆசிரியரிடம் காட்டு") until a teacher taps **Given** (owner or
     Manager: Settings → Race → Gifts to give; the toast's Undo, or Given lately → Undo). The gear counts the gifts
     waiting for the owner and the Manager (`race.giftCount`), and Settings opens on Race when nothing else waits.
   - **The champions poster** (7 Nov 2026, his pick: "Monday poster"; `src/champions.ts`): Settings → Race → Last
     week's champions (owner, Reports, Manager): ARISTORA's top 3 and each grade's champion and the cup as a list, then
     **Share poster** / Save: one 1080 × 1350 PNG drawn on the phone (ARISTORA's top 3 as medals, each grade's 👑, the
-    grade cup; first names and initials, never marks or a last place) for the WhatsApp group and the hall wall. Before
+    grade cup; first names and initials, never marks or a last place) for the WhatsApp group and the hall wall. Since 8
+    Nov 2026 each league's winner (the top league first) takes the grade champions' place, with how many moved up; the
+    card lists the leagues and "Leagues: ⬆ N moved up · ⬇ N moved down". Before
     Monday's run kept the week (`raceWeeks`) it is worked out from the race ("Worked out now").
   - **Us, the students' community** (7 Nov 2026, his voice notes: "the app is not feel like a community ... students want
     to use this app continuously"; then "students don't know how to use this community ... how this is want to feel ...

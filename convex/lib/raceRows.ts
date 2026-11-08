@@ -6,12 +6,15 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { isBirthday } from "./day";
-import { xpItems, xpRow } from "./family";
-import { addNums, numsAt, numsOf, sameNums, type RaceRow, type XpNums } from "./race";
-import { noteToday } from "./usToday";
+import { levelDays, xpItems, xpRow } from "./family";
+import { addNums, daysIn, fullNums, leagueOf, numsAt, numsOf, rankOf, sameNums, type RaceRow, type XpNums } from "./race";
+import { noteToday, rankMoment } from "./usToday";
 
-/** The XP rules the rows were built with: a change of rules (what counts as XP) adds 1, and every row is built again. */
-export const RACE_V = 1;
+/**
+ * The XP rules the rows were built with: a change of rules (what counts as XP) adds 1, and every row is built again.
+ * 2 (8 Nov 2026): the numbers also keep the days he learned (the league's 🛡️) and XP by month (the monthly most improved).
+ */
+export const RACE_V = 2;
 
 /** Fields of a student row his race row copies (a patch touching any of them copies them again). */
 export const RACE_IDENTITY = ["name", "grade", "archived", "demo", "test", "photo", "photoHide", "bday", "sex"] as const;
@@ -44,12 +47,13 @@ export function identityOf(s: Doc<"students">): { n: string; g?: number; demo: b
   };
 }
 
-/** One progress row's XP numbers now (a row that makes no XP: zeros). */
+/** One progress row's XP numbers now, with the days it made him learn (a row that makes no XP: zeros). */
 export function partOf(p: Doc<"progress">, now: number): XpNums {
-  return numsOf(xpRow(p) ? xpItems([p]) : [], now);
+  return xpRow(p) ? numsOf(xpItems([p]), now, levelDays([p])) : numsOf([], now);
 }
 
-export const numsOfRow = (x: XpNums): XpNums => ({ wk: x.wk, d: x.d, xp: x.xp, xpy: x.xpy, prev: x.prev, tot: x.tot });
+/** The numbers of a stored row (a part, a race row, its Us part): every field, none from before 8 Nov 2026 missing. */
+export const numsOfRow = (x: Partial<XpNums> & Pick<XpNums, "wk" | "d" | "xp" | "xpy" | "prev" | "tot">): XpNums => fullNums(x);
 
 export async function raceRowOf(ctx: QueryCtx, sid: Id<"students">) {
   return await ctx.db
@@ -97,6 +101,13 @@ async function writeRow(ctx: MutationCtx, sid: Id<"students">, now: number, copy
   const today = async (real: boolean) => {
     if (real) await noteToday(ctx, wasToday, learned.xp - learned.xpy, now);
   };
+  // The rank he reached (8 Nov 2026): never down (marks taken back keep it); a new one is the owl's line in Us for a real
+  // student whose row was there (a row built for the first time, or again with new rules, says nothing).
+  const kept = row?.rk ?? rankOf(was?.tot ?? nums.tot);
+  const rk = Math.max(kept, rankOf(nums.tot));
+  const ranked = async (who: { n: string; g?: number; pic?: string; demo: boolean; gone: boolean }) => {
+    if (row && rk > kept && !who.demo && !who.gone) await rankMoment(ctx, { sid, n: who.n, ...(who.g !== undefined ? { g: who.g } : {}), ...(who.pic ? { pic: who.pic } : {}) }, rk, now);
+  };
   if (!row || copy) {
     const s = await ctx.db.get(sid);
     if (!s) {
@@ -105,13 +116,15 @@ async function writeRow(ctx: MutationCtx, sid: Id<"students">, now: number, copy
     }
     const who = identityOf(s);
     await today(!who.demo && !who.gone);
-    if (!row) await ctx.db.insert("raceRows", { sid, ...who, ...nums, v: RACE_V });
+    if (!row) await ctx.db.insert("raceRows", { sid, ...who, ...nums, rk, v: RACE_V });
     // A field he no longer has (no grade, his photo removed or hidden, his birthday cleared) goes from the copy too.
-    else await ctx.db.patch(row._id, { g: undefined, pic: undefined, bd: undefined, sx: undefined, ...who, ...nums });
+    else await ctx.db.patch(row._id, { g: undefined, pic: undefined, bd: undefined, sx: undefined, ...who, ...nums, rk });
+    await ranked(who);
     return;
   }
   await today(!row.demo && !row.gone);
-  if (!sameNums(numsOfRow(row), nums)) await ctx.db.patch(row._id, nums);
+  if (!sameNums(numsOfRow(row), nums) || row.rk !== rk) await ctx.db.patch(row._id, { ...nums, rk });
+  await ranked({ n: row.n, ...(row.g !== undefined ? { g: row.g } : {}), ...(row.pic ? { pic: row.pic } : {}), demo: row.demo, gone: row.gone });
 }
 
 /** Builds his parts and his race row again from all his rows (a missing row, older rules, the first fill). */
@@ -174,6 +187,9 @@ export function raceRowOut(r: Doc<"raceRows">, now: number): RaceRow {
   const x = numsAt(numsOfRow(r), now);
   // Us's part (8 Nov 2026): in the race, never in the grade cup (cupOf takes it out).
   const u = r.us ? numsAt(numsOfRow(r.us), now) : null;
+  const k = Math.max(r.rk ?? 0, rankOf(x.tot));
+  const dd = daysIn(x.dm);
+  const l = leagueOf(r.lg);
   return {
     id: r.sid,
     n: r.n,
@@ -187,6 +203,12 @@ export function raceRowOut(r: Doc<"raceRows">, now: number): RaceRow {
     ...(isBirthday(r.bd, now) ? { bd: true as const } : {}),
     ...(r.w ? { w: r.w } : {}),
     ...(r.wa ? { wa: r.wa } : {}),
+    // The leagues and ranks (8 Nov 2026): XP ever, his rank, his league, the days he learned this week (🛡️ at 4).
+    t: x.tot,
+    ...(k ? { k } : {}),
+    ...(l > 1 ? { l } : {}),
+    ...(dd ? { dd } : {}),
+    ...(daysIn(x.dmp) ? { dp: daysIn(x.dmp) } : {}),
   };
 }
 
@@ -207,6 +229,13 @@ export async function raceList(ctx: QueryCtx, demo: boolean, now: number): Promi
     .query("students")
     .withIndex("by_archived", (q) => q.eq("archived", false))
     .collect();
+  // Rows built with older rules still know each one's league and rank (8 Nov 2026: the leagues never fall back to the first).
+  const kept = new Map<string, Doc<"raceRows">>();
+  for (const r of await ctx.db
+    .query("raceRows")
+    .withIndex("by_list", (q) => q.eq("demo", demo).eq("gone", false))
+    .collect())
+    kept.set(r.sid, r);
   for (const s of students) {
     const who = identityOf(s);
     if (who.demo !== demo) continue;
@@ -214,8 +243,26 @@ export async function raceList(ctx: QueryCtx, demo: boolean, now: number): Promi
       .query("progress")
       .withIndex("by_student", (q) => q.eq("studentId", s._id))
       .collect();
-    const x = numsOf(xpItems(rows.filter(xpRow)), now);
-    out.push({ id: s._id, n: who.n, g: who.g ?? null, xp: x.xp, y: x.xpy, p: x.prev, ...(who.pic ? { pic: who.pic } : {}), ...(isBirthday(who.bd, now) ? { bd: true as const } : {}) });
+    const mine = rows.filter(xpRow);
+    const x = numsOf(xpItems(mine), now, levelDays(mine));
+    const had = kept.get(s._id);
+    const k = Math.max(had?.rk ?? 0, rankOf(x.tot));
+    const l = leagueOf(had?.lg);
+    out.push({
+      id: s._id,
+      n: who.n,
+      g: who.g ?? null,
+      xp: x.xp,
+      y: x.xpy,
+      p: x.prev,
+      ...(who.pic ? { pic: who.pic } : {}),
+      ...(isBirthday(who.bd, now) ? { bd: true as const } : {}),
+      t: x.tot,
+      ...(k ? { k } : {}),
+      ...(l > 1 ? { l } : {}),
+      ...(daysIn(x.dm) ? { dd: daysIn(x.dm) } : {}),
+      ...(daysIn(x.dmp) ? { dp: daysIn(x.dmp) } : {}),
+    });
   }
   return out;
 }

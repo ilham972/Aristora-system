@@ -41,7 +41,7 @@ import { mateOf, type FamilyBoard, type FamilyMate } from "./family";
 import { query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { actor, allowed, familyActor, familyViewer, viewer } from "./lib/auth";
 import { fail, log } from "./lib/backend";
-import { DAY_MS, isBirthday, slDayNo, slWeekStart } from "./lib/day";
+import { DAY_MS, isBirthday, slDay, slDayNo, slWeekStart } from "./lib/day";
 import { internalMutation, mutation } from "./lib/fn";
 import { NOTE_MAX, PHOTO_BYTES } from "./lib/photos";
 import { photoProblem, picUrl, staffPicUrl } from "./lib/profile";
@@ -1521,6 +1521,8 @@ export const daily = internalMutation({
     await ctx.scheduler.runAfter(0, internal.us.sweep, {});
     // The chats too (8 Nov 2026): messages older than 30 days (convex/chat.ts sweep).
     await ctx.scheduler.runAfter(0, internal.chat.sweep, {});
+    // The 1st (8 Nov 2026): last month's most improved, their gifts (convex/race.ts month).
+    if (slDay(now).slice(8) === "01") await ctx.scheduler.runAfter(0, internal.race.month, {});
   },
 });
 

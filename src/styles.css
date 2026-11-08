@@ -11133,6 +11133,52 @@ body.tm-on .toasts {
 .rc-row .btn {
   flex: 1;
 }
+/* A gift by hand (8 Nov 2026): the grades in one row, each with how many are ticked; the students to tick. */
+.rc-givebtn {
+  min-height: 46px;
+}
+.rc-grades {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 5px;
+  margin-bottom: 8px;
+}
+.rc-grades .st-chip {
+  position: relative;
+  padding: 0;
+  font-weight: 800;
+}
+.rc-n {
+  position: absolute;
+  top: -6px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--amber);
+  color: #fff;
+  font: 800 11px/18px var(--font, inherit);
+  font-style: normal;
+}
+.rc-pick {
+  max-height: 34vh;
+  overflow-y: auto;
+  margin-bottom: 10px;
+}
+.rc-pick label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+}
+.rc-pick input {
+  width: 20px;
+  height: 20px;
+}
+.rc-give .rc-prize {
+  margin-bottom: 8px;
+}
 
 /* ---------- Settings → Community: the students' Us tab, for teachers (7 Nov 2026) ---------- */
 .us-why {

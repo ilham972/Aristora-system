@@ -19,7 +19,7 @@ import type { FamilyLevel, FamilyMe } from "../../convex/family";
 import type { Trophy, World } from "../../convex/lib/family";
 import type { RaceRow } from "../../convex/lib/race";
 import { hideSplash } from "../splash";
-import { BoardTab, keptBoard } from "./board";
+import { keptBoard } from "./board";
 import type { CertData } from "./cert";
 import { FeedbackSheet } from "./feedback";
 import { HomeTab } from "./home";
@@ -685,16 +685,24 @@ export function App() {
               </>
             )
           ) : tab === "race" ? (
-            <BoardTab
-              top={top}
-              me={me}
-              onOpen={(r, b) => {
-                // His own row: his own profile is Me.
-                if (r.id === b.you) return pickTab("me");
-                window.scrollTo(0, 0);
-                go({ k: "mate", id: r.id, row: r });
-              }}
-            />
+            // A later part since 8 Nov 2026 (the leagues: out of the first load); a moment the first time.
+            parts ? (
+              <parts.BoardTab
+                top={top}
+                me={me}
+                onOpen={(r, b) => {
+                  // His own row: his own profile is Me.
+                  if (r.id === b.you) return pickTab("me");
+                  window.scrollTo(0, 0);
+                  go({ k: "mate", id: r.id, row: r });
+                }}
+              />
+            ) : (
+              <>
+                <header class="f-hero race">{top}</header>
+                <Waiting />
+              </>
+            )
           ) : !parts ? (
             <>
               <header class="f-hero">{top}</header>

@@ -97,6 +97,15 @@ export const usKind = v.union(
   v.literal("ask"),
   /** 8 Nov 2026: a student's 💡 "what I learned" (words and a photo of his working): everyone sees it after a teacher's ✓. */
   v.literal("learn"),
+  /**
+   * 8 Nov 2026 (the leagues and ranks): a new rank (`x` its index of RANKS), Monday's moves up (`ppl` with `l` the league
+   * each reached), the month's most improved (`ppl`, `x` = that month's 1st), a gift a teacher gave by hand (`ppl`, `t`
+   * her reason).
+   */
+  v.literal("rank"),
+  v.literal("lgup"),
+  v.literal("upm"),
+  v.literal("gift"),
 );
 /** What a student is told about in the bell (8 Nov 2026: Us's own alerts). */
 export const usInboxKind = v.union(
@@ -115,8 +124,37 @@ export const usInboxKind = v.union(
 );
 /** What gave a student XP on Us (8 Nov 2026, his answers): an answer ✓, help ✓, a 💡 post ✓, a comment in his words. */
 export const usXpKind = v.union(v.literal("ans"), v.literal("help"), v.literal("learn"), v.literal("c"));
-/** XP numbers as convex/lib/race.ts works them out (a race row's Us part). */
-export const xpNums = v.object({ wk: v.number(), d: v.number(), xp: v.number(), xpy: v.number(), prev: v.number(), tot: v.number() });
+/**
+ * XP numbers worked out at one moment (convex/lib/race.ts XpNums). Since 8 Nov 2026 also the days he learned that week
+ * and the week before (`dm`, `dmp`: bits, Monday = 1) and XP in the month of `mk`, the month before and the one before
+ * that (`mo`, `m1`, `m2`); numbers kept before have none (the race rows are built again: RACE_V 2).
+ */
+const xpFields = {
+  wk: v.number(),
+  d: v.number(),
+  xp: v.number(),
+  xpy: v.number(),
+  prev: v.number(),
+  tot: v.number(),
+  dm: v.optional(v.number()),
+  dmp: v.optional(v.number()),
+  mk: v.optional(v.number()),
+  mo: v.optional(v.number()),
+  m1: v.optional(v.number()),
+  m2: v.optional(v.number()),
+};
+export const xpNums = v.object(xpFields);
+/** His last week in his league (convex/lib/race.ts LeagueResult): Monday's card on his phone. */
+export const leagueResult = v.object({
+  wk: v.number(),
+  l: v.number(),
+  p: v.union(v.number(), v.null()),
+  m: v.union(v.literal(-1), v.literal(0), v.literal(1)),
+  xp: v.number(),
+  win: v.boolean(),
+  of: v.number(),
+  sh: v.optional(v.boolean()),
+});
 /**
  * A photo on Us (7 Nov 2026: a teacher's poster or question, a student's answer or doubt): two copies the phone made,
  * `s` small for the lines (~560 px), `b` big for a tap (1280 px); `w` × `h` = the big one's size.
@@ -964,7 +1002,9 @@ export default defineSchema({
     n: v.optional(v.string()),
     g: v.optional(v.number()),
     pic: v.optional(v.string()),
-    ppl: v.optional(v.array(v.object({ sid: v.id("students"), n: v.string(), g: v.optional(v.number()), pic: v.optional(v.string()), a: v.optional(v.boolean()) }))),
+    ppl: v.optional(
+      v.array(v.object({ sid: v.id("students"), n: v.string(), g: v.optional(v.number()), pic: v.optional(v.string()), a: v.optional(v.boolean()), l: v.optional(v.number()) })),
+    ),
     unit: v.optional(v.id("units")),
     x: v.optional(v.number()),
     t: v.optional(v.string()),
@@ -1259,12 +1299,7 @@ export default defineSchema({
     gone: v.boolean(),
     pic: v.optional(v.string()),
     bd: v.optional(v.string()),
-    wk: v.number(),
-    d: v.number(),
-    xp: v.number(),
-    xpy: v.number(),
-    prev: v.number(),
-    tot: v.number(),
+    ...xpFields,
     w: v.optional(v.number()),
     wa: v.optional(v.number()),
     v: v.number(),
@@ -1276,6 +1311,14 @@ export default defineSchema({
     us: v.optional(xpNums),
     /** His boy / girl (8 Nov 2026): the Members page says who he may message without reading every student row. */
     sx: v.optional(sexKind),
+    /**
+     * The leagues and ranks (8 Nov 2026, his voice note: "they feel like they are losing what they earned"): his league
+     * (`lg`, 1–5; missing = the first), set each Monday by `race.week` (and once when the leagues came: `race.fill`); his
+     * last week in it (`lr`: Monday's card); the highest rank he reached (`rk`, an index of RANKS: never down).
+     */
+    lg: v.optional(v.number()),
+    lr: v.optional(leagueResult),
+    rk: v.optional(v.number()),
   })
     .index("by_sid", ["sid"])
     .index("by_list", ["demo", "gone"]),
@@ -1284,12 +1327,7 @@ export default defineSchema({
   raceParts: defineTable({
     pid: v.id("progress"),
     sid: v.id("students"),
-    wk: v.number(),
-    d: v.number(),
-    xp: v.number(),
-    xpy: v.number(),
-    prev: v.number(),
-    tot: v.number(),
+    ...xpFields,
   })
     .index("by_pid", ["pid"])
     .index("by_sid", ["sid"]),
@@ -1302,6 +1340,10 @@ export default defineSchema({
     wk: v.number(),
     top: v.array(v.object({ sid: v.id("students"), n: v.string(), g: v.optional(v.number()), xp: v.number(), k: v.union(v.literal("g"), v.literal("a")), place: v.number() })),
     cup: v.array(v.object({ g: v.number(), n: v.number(), of: v.number() })),
+    /** 8 Nov 2026: each league's winner(s) (`l` 1–5), and how many moved up and down. */
+    lw: v.optional(v.array(v.object({ l: v.number(), sid: v.id("students"), n: v.string(), g: v.optional(v.number()), xp: v.number() }))),
+    lup: v.optional(v.number()),
+    ldown: v.optional(v.number()),
   }).index("by_wk", ["wk"]),
 
   /**
@@ -1315,12 +1357,19 @@ export default defineSchema({
     n: v.string(),
     g: v.optional(v.number()),
     wk: v.number(),
-    kind: v.union(v.literal("g"), v.literal("a"), v.literal("cup")),
+    /**
+     * The win: `g` / `a` (each grade's and ARISTORA's champion: until 8 Nov 2026), `cup`, and since 8 Nov 2026 (his
+     * answers) `lg` a league's winner (`l` the league), `mi` the month's most improved (`wk` = that month's 1st), `own` a
+     * gift a teacher gave by hand (`why`, her words).
+     */
+    kind: v.union(v.literal("g"), v.literal("a"), v.literal("cup"), v.literal("lg"), v.literal("mi"), v.literal("own")),
     what: v.string(),
     at: v.number(),
     open: v.boolean(),
     givenAt: v.optional(v.number()),
     by: v.optional(v.string()),
+    l: v.optional(v.number()),
+    why: v.optional(v.string()),
   })
     .index("by_open", ["open", "at"])
     .index("by_sid", ["sid", "open"]),

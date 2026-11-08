@@ -9,6 +9,7 @@ import { useEffect, useState } from "preact/hooks";
 import type { FamilyMate, FamilyMe } from "../../convex/family";
 import { placed, type RaceRow } from "../../convex/lib/race";
 import type { Board } from "./board";
+import { RankLine } from "./league";
 import { mutation, query } from "./net";
 import { picOf, usePics } from "./pics";
 import { ClassCard, HeatMap, QChips, StageCard, sumQ } from "./profile";
@@ -95,6 +96,7 @@ export function MateScreen(props: {
               {m?.bday && <span class="f-cake"> 🎂</span>}
             </b>
             <small>{grade ? `Grade ${grade}` : BRAND}</small>
+            {m && <RankLine total={m.total} rk={m.rk} lg={m.lg} />}
             {m && (m.wins.g > 0 || m.wins.a > 0) && (
               <span class="f-mate-wins">
                 👑 {m.wins.g > 0 ? `${m.wins.g} ${m.wins.g === 1 ? "week" : "weeks"} won` : ""}

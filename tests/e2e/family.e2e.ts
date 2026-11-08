@@ -1990,13 +1990,29 @@ test("the race for everyone: his grade and ARISTORA, not started this week, the 
     await ctx.db.insert("progress", { studentId: ravi, unitId: g9, stage: "master", marks: {}, m: { q: {}, lv: { "1": lv(now - 30_000, 26) } }, startedAt: 0, updatedAt: now });
   });
 
-  // Hana: Grade 8 first. Bilal (class only) on the podium with last week's 👑; Dev and Hana: not started this week.
+  // The leagues (8 Nov 2026) as they came: everyone in the first (none of them raced in one yet).
+  await t.run(async (ctx) => await ctx.db.insert("meta", { key: "leagues", value: { at: now } }));
+
+  // Hana: her league first (all grades mixed): her rank (XP ever, never down), the leagues' road, Ravi and Bilal on the
+  // podium (the top one moves up on Monday), Dev and Hana not started this week.
   const P = await open(backend, `${site.url}/f/`, size(360, 780));
   await P.getByLabel(/Index/).fill("1001");
   await P.getByLabel("Code").fill("4719");
   await P.getByRole("button", { name: "Sign in" }).click();
   await goalIs(P, "Level 1");
   await tabTo(P, /Race/);
+  await contains(P.locator(".f-hero .f-kicker"), "வெண்கலம்");
+  await contains(P.locator(".f-rank-c"), "புதியவர்");
+  await contains(P.locator(".f-rank-c"), "இன்னும் 100 XP");
+  await contains(P.locator(".f-lroad li.on"), "வெண்கலம்");
+  await contains(P.locator(".f-pod.p1"), "Ravi");
+  await contains(P.locator(".f-pod.p2"), "Bilal");
+  await contains(P.locator(".f-podnote"), "முதல் 3");
+  await contains(P.locator(".f-pass"), "race இல் சேர்வாய்");
+  await noSideScroll(P);
+  await shot(P, "fam57a-race-league");
+  // His grade's list: as before.
+  await P.locator(".f-rtabs").getByRole("button", { name: "Grade 8" }).click();
   await contains(P.locator(".f-hero .f-kicker"), "GRADE 8");
   await contains(P.locator(".f-pod.p1"), "Bilal");
   await visible(P.locator(".f-pod.p1 .f-wcrown"));
@@ -2069,13 +2085,15 @@ test("the race for everyone: his grade and ARISTORA, not started this week, the 
   await C.getByRole("button", { name: /Settings/ }).click();
   await C.locator(".seg").getByRole("button", { name: /^Race/ }).click();
   await contains(C.locator(".rc-champs li", { hasText: "ARISTORA" }), "Bilal M");
-  await contains(C.locator(".rc-champs li", { hasText: "👑 8" }), "Bilal M");
-  await C.getByLabel(/Each grade's champion/).fill("🍦 Ice cream");
+  // Each league's winner (8 Nov 2026): last week, Bilal in the first league.
+  await contains(C.locator(".rc-champs li", { hasText: "வெண்கலம்" }), "Bilal M");
+  await C.getByLabel(/Each league's winner/).fill("🍦 Ice cream");
   await C.getByRole("button", { name: "Save the prizes" }).click();
   await contains(C.locator(".toast").last(), "Prizes saved");
   await t.mutation(internal.race.week, {});
   await backend.push();
   await contains(C.locator(".rc-gifts li").first(), "Bilal M");
+  await contains(C.locator(".rc-gifts li").first(), "league winner");
   await contains(C.locator(".seg").getByRole("button", { name: /^Race/ }), "1");
   await noSideScroll(C);
   await shot(C, "fam63-settings-race");
@@ -2103,9 +2121,27 @@ test("the race for everyone: his grade and ARISTORA, not started this week, the 
   await tabTo(B, /Home/);
   await B.reload();
   await contains(B.locator(".f-giftc"), "🍦 Ice cream");
-  await contains(B.locator(".f-giftc"), "Grade 8 champion");
+  await contains(B.locator(".f-giftc"), "வெண்கலம் லீக் வெற்றியாளர்");
   await noSideScroll(B);
   await shot(B, "fam65-gift-home");
+  // His race on Monday: last week saved (its XP into his XP ever, the win, the move up), then his new league.
+  await tabTo(B, /Race/);
+  await contains(B.locator(".f-wsave"), "சேமிக்கப்பட்டது");
+  await contains(B.locator(".f-wsave"), "வெற்றியாளர்");
+  await contains(B.locator(".f-wsave"), "வெள்ளி");
+  await contains(B.locator(".f-wsave-xp"), "30 XP");
+  await contains(B.locator(".f-hero .f-kicker"), "வெள்ளி");
+  await noSideScroll(B);
+  await shot(B, "fam65b-race-week-saved");
+  await B.locator(".f-wsave-go").click();
+  await until(async () => (await B.locator(".f-wsave").count()) === 0, "Monday's card closes");
+  await tabTo(B, /Home/);
+  await B.reload();
+  await goalIs(B, "Level");
+  await tabTo(B, /Race/);
+  await visible(B.locator(".f-rank-c"));
+  expect(await B.locator(".f-wsave").count()).toBe(0);
+  await tabTo(B, /Home/);
   await C.locator(".rc-gifts li", { hasText: "Bilal M" }).getByRole("button", { name: "Given" }).click();
   await contains(C.locator(".toast").last(), "given");
   await until(async () => (await C.locator(".rc-box > .rc-gifts > li").count()) === 0, "nothing left to give");
@@ -2113,6 +2149,22 @@ test("the race for everyone: his grade and ARISTORA, not started this week, the 
   await B.reload();
   await goalIs(B, "Level");
   expect(await B.locator(".f-giftc").count()).toBe(0);
+  // A gift by hand (8 Nov 2026, his ask): Hana, a sweet, why; her phone's card says why.
+  await C.getByRole("button", { name: "🎁 Give a gift now" }).click();
+  await C.locator(".rc-grades").getByRole("button", { name: /^8/ }).click();
+  await C.locator(".rc-pick li", { hasText: "Hana K" }).getByRole("checkbox").check();
+  await C.locator(".rc-give").getByLabel("The gift", { exact: true }).fill("🍬 A sweet");
+  await C.locator(".rc-give").getByLabel(/Why/).fill("7 days in a row");
+  await noSideScroll(C);
+  await shot(C, "fam65c-give-gift");
+  await C.getByRole("button", { name: "Give to 1 student" }).click();
+  await contains(C.locator(".toast").last(), "1 student");
+  await tabTo(P, /Home/);
+  await P.reload();
+  await goalIs(P, "Level 1");
+  await contains(P.locator(".f-giftc"), "உனக்கு ஒரு பரிசு");
+  await contains(P.locator(".f-giftc"), "🎁 7 days in a row");
+  await shot(P, "fam65d-gift-by-hand");
   for (const p of [P, B, S, C]) await p.context().close();
   expect(problems.slice(before)).toEqual([]);
 });
@@ -2245,6 +2297,18 @@ test("Us: closed until the owner opens it; the owl's guide; his welcome; the owl
   await U.locator(".t-seg").getByRole("button", { name: "Race" }).click();
   await U.locator(".t-grades").getByRole("button", { name: "Grade 8" }).click();
   await visible(U.locator(".f-pod.p1, .f-notyet").first());
+  // The leagues (8 Nov 2026): she picks one to look at (she is in none); no rank card for her.
+  await U.locator(".f-rtabs").getByRole("button", { name: /League/ }).click();
+  // The road is her picker: Silver, then back to Bronze (the race's one league with students in it here).
+  await U.locator(".f-lroad").getByRole("button", { name: "வெள்ளி league" }).click();
+  await contains(U.locator(".f-lroad li.on"), "வெள்ளி");
+  await contains(U.locator(".f-hero .f-kicker"), "வெள்ளி");
+  await U.locator(".f-lroad").getByRole("button", { name: "வெண்கலம் league" }).click();
+  await contains(U.locator(".f-lroad li.on"), "வெண்கலம்");
+  await visible(U.locator(".f-pod.p1, .f-notyet").first());
+  expect(await U.locator(".f-rank-c").count()).toBe(0);
+  await noSideScroll(C);
+  await shot(C, "fam71b-teacher-league");
   await U.locator(".f-rtabs").getByRole("button", { name: "ARISTORA" }).click();
   await U.locator(".f-pod", { hasText: "Bilal" }).first().click();
   await contains(U.locator(".f-mate .f-me-name"), "Bilal M");

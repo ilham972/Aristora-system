@@ -48,6 +48,24 @@ export function slWeekStart(t: number): number {
   return monday * DAY_MS - SL_OFFSET_MS;
 }
 
+/** When this month began in Sri Lanka: the 1st, 00:00 (the race's monthly most improved, 8 Nov 2026). */
+export function slMonthStart(t: number): number {
+  const d = new Date(t + SL_OFFSET_MS);
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1) - SL_OFFSET_MS;
+}
+
+/** The start of the month before the month that began at `ms`. */
+export function slMonthBefore(ms: number): number {
+  return slMonthStart(ms - DAY_MS);
+}
+
+/** Whole months from the month of `a` to the month of `b` (b later: more than 0). Sri Lanka months. */
+export function monthsApart(a: number, b: number): number {
+  const x = new Date(a + SL_OFFSET_MS);
+  const y = new Date(b + SL_OFFSET_MS);
+  return (y.getUTCFullYear() - x.getUTCFullYear()) * 12 + y.getUTCMonth() - x.getUTCMonth();
+}
+
 /**
  * Is today his birthday in Sri Lanka? `bday` = "MM-DD" (day and month only: the family app's Me, 4 Nov 2026). Born on
  * 29 Feb: 28 Feb in a year without it. Both apps use it (the family app's party, the teachers' 🎂).

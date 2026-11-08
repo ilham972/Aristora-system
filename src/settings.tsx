@@ -118,7 +118,7 @@ export function Settings(props: {
       {tab === "feedback" && <FeedbackList />}
       {tab === "photos" && <PhotoQueue views={props.views} onOpen={props.onPhotos} />}
       {tab === "hours" && <ClassHours />}
-      {tab === "race" && <RaceSettings />}
+      {tab === "race" && <RaceSettings views={props.views} />}
       {tab === "community" && <UsSettings />}
       {tab === "people" && <People />}
       {tab === "roles" && <Roles onClose={props.onClose} />}

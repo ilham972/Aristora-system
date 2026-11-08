@@ -8,20 +8,47 @@
 //   not in the race, without a "#47 of 47" to laugh at.
 // Pure and import-free but for the clock: the server and the family app (board.tsx) both use it.
 
-import { DAY_MS, SL_OFFSET_MS, slDayNo, slWeekStart } from "./day";
+import { DAY_MS, monthsApart, SL_OFFSET_MS, slDayNo, slMonthBefore, slMonthStart, slWeekStart } from "./day";
 
 const WEEK_MS = 7 * DAY_MS;
 
-/** XP numbers worked out at one moment: that week's Monday (`wk`), that day (`d`), XP that week, that week before that
- * day (`xpy`), the week before (`prev`), ever (`tot`). */
-export type XpNums = { wk: number; d: number; xp: number; xpy: number; prev: number; tot: number };
+/**
+ * XP numbers worked out at one moment: that week's Monday (`wk`), that day (`d`), XP that week, that week before that
+ * day (`xpy`), the week before (`prev`), ever (`tot`). Since 8 Nov 2026 (the leagues and the monthly most improved): the
+ * days he learned (the flame's days) in week `wk` as bits (`dm`: Monday = 1, Tuesday = 2 … Sunday = 64) and in the week
+ * before (`dmp`); XP in the month that began at `mk` (`mo`), the month before (`m1`) and the one before that (`m2`).
+ */
+export type XpNums = {
+  wk: number;
+  d: number;
+  xp: number;
+  xpy: number;
+  prev: number;
+  tot: number;
+  dm: number;
+  dmp: number;
+  mk: number;
+  mo: number;
+  m1: number;
+  m2: number;
+};
 
-/** A list of XP items (`xpItems`), worked out at `now`. */
-export function numsOf(items: { t: number; xp: number }[], now: number): XpNums {
-  const wk = slWeekStart(now);
-  const d = slDayNo(now);
-  const today = d * DAY_MS - SL_OFFSET_MS;
-  const out: XpNums = { wk, d, xp: 0, xpy: 0, prev: 0, tot: 0 };
+/** Numbers kept before 8 Nov 2026 have no days or months: none. */
+export function fullNums(n: Partial<XpNums> & Pick<XpNums, "wk" | "d" | "xp" | "xpy" | "prev" | "tot">): XpNums {
+  return { wk: n.wk, d: n.d, xp: n.xp, xpy: n.xpy, prev: n.prev, tot: n.tot, dm: n.dm ?? 0, dmp: n.dmp ?? 0, mk: n.mk ?? slMonthStart(n.wk), mo: n.mo ?? 0, m1: n.m1 ?? 0, m2: n.m2 ?? 0 };
+}
+
+/** Nothing yet, at `now`. */
+export const zeroNums = (now: number): XpNums => ({ wk: slWeekStart(now), d: slDayNo(now), xp: 0, xpy: 0, prev: 0, tot: 0, dm: 0, dmp: 0, mk: slMonthStart(now), mo: 0, m1: 0, m2: 0 });
+
+/** A list of XP items (`xpItems`) and the days he learned (`levelDays`: the flame's), worked out at `now`. */
+export function numsOf(items: { t: number; xp: number }[], now: number, days: Iterable<number> = []): XpNums {
+  const out = zeroNums(now);
+  const { wk } = out;
+  const today = out.d * DAY_MS - SL_OFFSET_MS;
+  const mk = out.mk;
+  const m1k = slMonthBefore(mk);
+  const m2k = slMonthBefore(m1k);
   for (const i of items) {
     if (!i.xp) continue;
     out.tot += i.xp;
@@ -29,35 +56,77 @@ export function numsOf(items: { t: number; xp: number }[], now: number): XpNums 
       out.xp += i.xp;
       if (i.t < today) out.xpy += i.xp;
     } else if (i.t >= wk - WEEK_MS) out.prev += i.xp;
+    if (i.t >= mk) out.mo += i.xp;
+    else if (i.t >= m1k) out.m1 += i.xp;
+    else if (i.t >= m2k) out.m2 += i.xp;
+  }
+  const monday = slDayNo(wk);
+  for (const day of days) {
+    const i = day - monday;
+    if (i >= 0 && i < 7) out.dm |= 1 << i;
+    else if (i >= -7 && i < 0) out.dmp |= 1 << (i + 7);
   }
   return out;
 }
 
 /** Numbers worked out earlier, as they stand at `now` (nothing came since: else they were worked out again). */
-export function numsAt(n: XpNums, now: number): XpNums {
+export function numsAt(n0: Partial<XpNums> & Pick<XpNums, "wk" | "d" | "xp" | "xpy" | "prev" | "tot">, now: number): XpNums {
+  const n = fullNums(n0);
   const wk = slWeekStart(now);
   const d = slDayNo(now);
-  if (n.wk === wk) return { wk, d, xp: n.xp, xpy: n.d === d ? n.xpy : n.xp, prev: n.prev, tot: n.tot };
-  if (n.wk === wk - WEEK_MS) return { wk, d, xp: 0, xpy: 0, prev: n.xp, tot: n.tot };
-  return { wk, d, xp: 0, xpy: 0, prev: 0, tot: n.tot };
+  const mk = slMonthStart(now);
+  const k = monthsApart(n.mk, mk);
+  const months = k === 0 ? { mo: n.mo, m1: n.m1, m2: n.m2 } : k === 1 ? { mo: 0, m1: n.mo, m2: n.m1 } : k === 2 ? { mo: 0, m1: 0, m2: n.mo } : { mo: 0, m1: 0, m2: 0 };
+  if (n.wk === wk) return { wk, d, xp: n.xp, xpy: n.d === d ? n.xpy : n.xp, prev: n.prev, tot: n.tot, dm: n.dm, dmp: n.dmp, mk, ...months };
+  if (n.wk === wk - WEEK_MS) return { wk, d, xp: 0, xpy: 0, prev: n.xp, tot: n.tot, dm: 0, dmp: n.dm, mk, ...months };
+  return { wk, d, xp: 0, xpy: 0, prev: 0, tot: n.tot, dm: 0, dmp: 0, mk, ...months };
 }
 
-/** Several rows' numbers (each worked out at its own moment) added up at `now`. */
-export function addNums(list: XpNums[], now: number): XpNums {
-  const out: XpNums = { wk: slWeekStart(now), d: slDayNo(now), xp: 0, xpy: 0, prev: 0, tot: 0 };
+/** Several rows' numbers (each worked out at its own moment) added up at `now` (the days: any row's). */
+export function addNums(list: (Partial<XpNums> & Pick<XpNums, "wk" | "d" | "xp" | "xpy" | "prev" | "tot">)[], now: number): XpNums {
+  const out = zeroNums(now);
   for (const x of list) {
     const a = numsAt(x, now);
     out.xp += a.xp;
     out.xpy += a.xpy;
     out.prev += a.prev;
     out.tot += a.tot;
+    out.dm |= a.dm;
+    out.dmp |= a.dmp;
+    out.mo += a.mo;
+    out.m1 += a.m1;
+    out.m2 += a.m2;
   }
   return out;
 }
 
-/** The same numbers? (a race row is written only when something changed) */
-export const sameNums = (a: XpNums, b: XpNums) =>
-  a.wk === b.wk && a.d === b.d && a.xp === b.xp && a.xpy === b.xpy && a.prev === b.prev && a.tot === b.tot;
+/** The same numbers? (a race row is written only when something changed; numbers from before 8 Nov have no days) */
+export function sameNums(a0: Partial<XpNums> & Pick<XpNums, "wk" | "d" | "xp" | "xpy" | "prev" | "tot">, b0: Partial<XpNums> & Pick<XpNums, "wk" | "d" | "xp" | "xpy" | "prev" | "tot">): boolean {
+  if (a0.mk === undefined || b0.mk === undefined) return false;
+  const a = fullNums(a0);
+  const b = fullNums(b0);
+  return (
+    a.wk === b.wk &&
+    a.d === b.d &&
+    a.xp === b.xp &&
+    a.xpy === b.xpy &&
+    a.prev === b.prev &&
+    a.tot === b.tot &&
+    a.dm === b.dm &&
+    a.dmp === b.dmp &&
+    a.mk === b.mk &&
+    a.mo === b.mo &&
+    a.m1 === b.m1 &&
+    a.m2 === b.m2
+  );
+}
+
+/** How many days a week's bits hold. */
+export function daysIn(mask: number): number {
+  let n = 0;
+  for (let m = mask; m; m &= m - 1) n++;
+  return n;
+}
 
 /**
  * One student in the race, as the phone gets it: id, name (first name and initial), grade, XP this week, XP this week
@@ -78,6 +147,17 @@ export type RaceRow = {
   /** Of `xp` and `p`: the XP that came from Us (8 Nov 2026), left out of the grade cup (it counts who learned Levels). */
   u?: number;
   up?: number;
+  /**
+   * 8 Nov 2026 (his voice note: "they feel like they are losing what they earned"): XP ever (`t`), the rank he reached
+   * (`k`, an index of RANKS: never down), his league (`l`, 1–5; missing = 1) and the days he learned this week (`dd`: 4 =
+   * 🛡️, never down on Monday). Missing on a server from before.
+   */
+  t?: number;
+  k?: number;
+  l?: number;
+  dd?: number;
+  /** The days he learned last week (Monday's 🛡️: the server's league run reads it). */
+  dp?: number;
 };
 
 /** A row in its list: its place (null = not started this week) and how it moved since yesterday. */
@@ -175,4 +255,156 @@ export function championsOf(rows: RaceRow[]): { top: Champ[]; cup: Cup[] } {
 export function cupWinners(cup: Cup[]): number[] {
   const best = cup.reduce((m, c) => Math.max(m, c.of ? c.n / c.of : 0), 0);
   return best > 0 ? cup.filter((c) => c.of && c.n / c.of === best).map((c) => c.g) : [];
+}
+
+// ---- Ranks and leagues (8 Nov 2026, his voice note: "when it comes to Monday, all the progress will start from zero
+// ... they feel like they are losing what they earned"; his answers: 5 leagues, all grades mixed; gifts for each league's
+// winner every week and the most improved every month). What a student earns is kept for good (his XP ever, the rank
+// it gives, his trophies, his crowns); only the week's race starts again, and each week's result moves his league. ----
+
+/** The ranks: his XP ever, never down (his race row keeps the highest he reached, `rk`: marks taken back never lower it). */
+export const RANKS: { at: number; e: string; n: string }[] = [
+  { at: 0, e: "🌱", n: "புதியவர்" },
+  { at: 100, e: "📘", n: "கற்பவர்" },
+  { at: 300, e: "🔎", n: "தேடுபவர்" },
+  { at: 600, e: "✏️", n: "முயல்பவர்" },
+  { at: 1000, e: "🧠", n: "சிந்தனையாளர்" },
+  { at: 1500, e: "⚡", n: "திறமையாளர்" },
+  { at: 2200, e: "🎯", n: "வல்லவர்" },
+  { at: 3000, e: "📜", n: "அறிஞர்" },
+  { at: 4000, e: "🌟", n: "மேதை" },
+  { at: 5500, e: "🦉", n: "தங்க ஆந்தை" },
+];
+/** Past the last rank, a ⭐ every 2,500 XP more: the road never ends. */
+export const RANK_STAR_XP = 2500;
+
+/** The rank his XP ever gives (an index of RANKS). */
+export function rankOf(tot: number): number {
+  let i = 0;
+  while (i + 1 < RANKS.length && tot >= RANKS[i + 1].at) i++;
+  return i;
+}
+
+/** The rank he shows: the highest of what his XP gives now and what he reached (`kept`). */
+export const rankShown = (tot: number, kept?: number): number => Math.max(rankOf(tot), kept ?? 0);
+
+/** ⭐ past the last rank. */
+export function starsOf(tot: number): number {
+  const top = RANKS[RANKS.length - 1].at;
+  return tot >= top ? Math.floor((tot - top) / RANK_STAR_XP) : 0;
+}
+
+/** What comes next on his road: the next rank (or the next ⭐ past the last), where it is and the XP it takes. */
+export function nextStep(tot: number, kept?: number): { from: number; at: number; need: number; e: string; n: string } {
+  const i = rankShown(tot, kept);
+  if (i + 1 < RANKS.length) {
+    const at = RANKS[i + 1].at;
+    return { from: RANKS[i].at, at, need: Math.max(1, at - tot), e: RANKS[i + 1].e, n: RANKS[i + 1].n };
+  }
+  const top = RANKS[RANKS.length - 1].at;
+  const from = top + starsOf(tot) * RANK_STAR_XP;
+  return { from, at: from + RANK_STAR_XP, need: Math.max(1, from + RANK_STAR_XP - tot), e: "⭐", n: `${RANKS[RANKS.length - 1].n} ⭐${starsOf(tot) + 1}` };
+}
+
+/** The leagues, the first to the top: every student is in one; a new student starts in the first. */
+export const LEAGUES: { e: string; n: string }[] = [
+  { e: "🥉", n: "வெண்கலம்" },
+  { e: "🥈", n: "வெள்ளி" },
+  { e: "🥇", n: "தங்கம்" },
+  { e: "💎", n: "வைரம்" },
+  { e: "🏆", n: "சாம்பியன்" },
+];
+/** Monday: the top 3 of a league move up, the bottom 3 move down (fewer in a league under 9: a third). */
+export const LEAGUE_UP = 3;
+/** Learning days in the week that keep him from moving down (🛡️): his own effort, whatever his marks. */
+export const SHIELD_DAYS = 4;
+
+/** His league (a row from before the leagues: the first). */
+export const leagueOf = (l: number | undefined): number => (l && l >= 1 && l <= LEAGUES.length ? l : 1);
+
+/** A league's order: more XP first, then more days learned, then more XP ever, then the name. */
+export function leagueOrder<T extends { n: string }>(rows: T[], xp: (r: T) => number, dd: (r: T) => number, tot: (r: T) => number): T[] {
+  return [...rows].sort((a, b) => xp(b) - xp(a) || dd(b) - dd(a) || tot(b) - tot(a) || a.n.localeCompare(b.n));
+}
+
+/**
+ * Monday's moves in one league (or the moves if the week ended now): the top 3 with XP move up (not from the top
+ * league), the bottom 3 move down (not from the first league), skipping anyone with 🛡️ (SHIELD_DAYS days learned). In a
+ * league of fewer than 9, a third of it moves each way. Rows in league order (leagueOrder).
+ */
+export function leagueMoves<T extends { id: string }>(ordered: T[], lg: number, xp: (r: T) => number, dd: (r: T) => number): Map<string, 1 | -1> {
+  const out = new Map<string, 1 | -1>();
+  const k = Math.min(LEAGUE_UP, Math.floor(ordered.length / 3));
+  if (lg < LEAGUES.length) for (const r of ordered.slice(0, k)) if (xp(r) > 0) out.set(r.id, 1);
+  if (lg > 1) {
+    let n = 0;
+    for (let i = ordered.length - 1; i >= 0 && n < k; i--) {
+      const r = ordered[i];
+      if (out.has(r.id)) break;
+      if (dd(r) >= SHIELD_DAYS) continue;
+      out.set(r.id, -1);
+      n++;
+    }
+  }
+  return out;
+}
+
+/** Places in a league's order (equal XP share a place: 1, 2, 2, 4; none for 0 XP). */
+export function leaguePlaces<T extends { id: string }>(ordered: T[], xp: (r: T) => number): Map<string, number> {
+  const out = new Map<string, number>();
+  ordered.forEach((r, i) => {
+    if (xp(r) <= 0) return;
+    out.set(r.id, i > 0 && xp(r) === xp(ordered[i - 1]) ? out.get(ordered[i - 1].id)! : i + 1);
+  });
+  return out;
+}
+
+/**
+ * The first leagues (once, when they came): the students who ever learned, by last week's XP, then XP ever, cut in five
+ * (the best fifth in the top league); the ones who never learned in the first.
+ */
+export function seedLeagues<T extends { id: string; n: string; p: number; t: number }>(rows: T[]): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const r of rows) out.set(r.id, 1);
+  const active = rows.filter((r) => r.t > 0).sort((a, b) => b.p - a.p || b.t - a.t || a.n.localeCompare(b.n));
+  const per = active.length / LEAGUES.length;
+  active.forEach((r, i) => out.set(r.id, LEAGUES.length - Math.floor(i / per)));
+  return out;
+}
+
+/**
+ * His last week in his league (Monday's card): the league he raced in, his place (null: no XP), the move, his XP, a win;
+ * `sh` = his 🛡️ kept him there (he was in the bottom 3, and learned on SHIELD_DAYS days).
+ */
+export type LeagueResult = { wk: number; l: number; p: number | null; m: -1 | 0 | 1; xp: number; win: boolean; of: number; sh?: boolean };
+
+/** A finished week's leagues (the server's Monday run): each one's result, the winners, the moves. */
+export function leagueWeek<T extends { id: string; n: string; l?: number; p: number; ddp: number; t: number }>(
+  rows: T[],
+  wk: number,
+): { results: Map<string, LeagueResult>; winners: { l: number; r: T }[]; up: { l: number; r: T }[] } {
+  const results = new Map<string, LeagueResult>();
+  const winners: { l: number; r: T }[] = [];
+  const up: { l: number; r: T }[] = [];
+  for (let l = 1; l <= LEAGUES.length; l++) {
+    const ordered = leagueOrder(
+      rows.filter((r) => leagueOf(r.l) === l),
+      (r) => r.p,
+      (r) => r.ddp,
+      (r) => r.t,
+    );
+    const moves = leagueMoves(ordered, l, (r) => r.p, (r) => r.ddp);
+    // Who would have moved down without the 🛡️: the ones it kept are told so on Monday.
+    const bare = leagueMoves(ordered, l, (r) => r.p, () => 0);
+    const places = leaguePlaces(ordered, (r) => r.p);
+    for (const r of ordered) {
+      const p = places.get(r.id) ?? null;
+      const m = moves.get(r.id) ?? 0;
+      const sh = bare.get(r.id) === -1 && m !== -1;
+      results.set(r.id, { wk, l, p, m, xp: r.p, win: p === 1, of: ordered.length, ...(sh ? { sh } : {}) });
+      if (p === 1) winners.push({ l, r });
+      if (m === 1) up.push({ l: l + 1, r });
+    }
+  }
+  return { results, winners, up };
 }

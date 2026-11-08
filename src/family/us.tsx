@@ -18,6 +18,7 @@ import { useEffect, useState } from "preact/hooks";
 import type { FamilyMe } from "../../convex/family";
 import type { UsFeed } from "../../convex/us";
 import type { UsItem } from "../../convex/lib/us";
+import { LEAGUES, RANKS } from "../../convex/lib/race";
 import { DAY_EN, MONTH } from "./home";
 import { keep, mutation, query } from "./net";
 import { picOf, usePics } from "./pics";
@@ -52,6 +53,10 @@ export const MARK: Record<UsItem["k"], string> = {
   shout: "🌟",
   ask: "🙋",
   learn: "💡",
+  rank: "🎖️",
+  lgup: "⬆️",
+  upm: "📈",
+  gift: "🎁",
 };
 /** What a line is, in a word or two (under the name). */
 export const KIND: Record<UsItem["k"], string> = {
@@ -67,6 +72,10 @@ export const KIND: Record<UsItem["k"], string> = {
   shout: "Shout-out",
   ask: "சந்தேகம்",
   learn: "நான் கற்றது",
+  rank: "புதிய தரம்",
+  lgup: "லீக் முன்னேற்றம்",
+  upm: "மாத முன்னேற்றம்",
+  gift: "ARISTORA பரிசு",
 };
 
 const GUIDE: { mood: Mood; h: string; p: string }[] = [
@@ -126,7 +135,7 @@ function useUs(on: boolean): { f: UsFeed | null; err: string | null; set: (f: Us
 /** What the chips show: everything, the teachers' questions, the doubts, the 💡 posts, the wins, the teachers' lines;
  * a teacher's to-do (answers to mark, doubts no teacher answered, 💡 posts waiting, reports). */
 type Show = "all" | "q" | "ask" | "learn" | "win" | "tch" | "todo";
-const WINS = new Set<UsItem["k"]>(["bday", "home1", "back", "stage", "flame", "up", "champs", "count"]);
+const WINS = new Set<UsItem["k"]>(["bday", "home1", "back", "stage", "flame", "up", "champs", "count", "rank", "lgup", "upm", "gift"]);
 const todo = (m: UsItem) =>
   (m.wN ?? 0) > 0 || (m.k === "ask" && !m.tr && (m.aud !== "s" || !m.an)) || (m.rp ?? 0) > 0 || (m.rpm ?? 0) > 0 || (m.k === "learn" && m.lst === "w");
 const shows: Record<Show, (m: UsItem) => boolean> = {
@@ -494,7 +503,8 @@ function People(props: { m: UsItem; onMate: (id: string) => void }) {
       {list.map((p, i) => (
         <span key={p.sid} class="f-us-p">
           {i > 0 && ", "}
-          {props.m.k === "champs" && (p.a ? "🏆 " : "👑 ")}
+          {props.m.k === "champs" && !p.l && (p.a ? "🏆 " : "👑 ")}
+          {p.l ? `${LEAGUES[p.l - 1]?.e ?? ""} ` : ""}
           <Name id={p.sid} n={p.n} g={p.g} onMate={props.onMate} />
         </span>
       ))}
@@ -524,9 +534,42 @@ export function say(m: UsItem, onMate: (id: string) => void): ComponentChildren 
         </>
       );
     case "champs":
+      // 8 Nov 2026: each league's winner (each name with his league); a line from before names the grades' champions.
       return (
         <>
-          <b class="f-us-by">கடந்த வார champions 👑</b>
+          <b class="f-us-by">{m.ppl?.some((p) => p.l) ? "கடந்த வார லீக் வெற்றியாளர்கள் 🏆" : "கடந்த வார champions 👑"}</b>
+          <People m={m} onMate={onMate} />
+        </>
+      );
+    case "lgup":
+      return (
+        <>
+          <b class="f-us-by">இந்த வாரம் மேல் லீக்குக்கு முன்னேறியவர்கள் ⬆️</b>
+          <People m={m} onMate={onMate} />
+        </>
+      );
+    case "upm":
+      return (
+        <>
+          <b class="f-us-by">{m.x !== undefined ? `${MONTH[new Date(m.x + 330 * 60_000).getUTCMonth()]} மாதம்` : "கடந்த மாதம்"} மிக அதிகம் முன்னேறியவர்கள் 📈</b>
+          <People m={m} onMate={onMate} />
+        </>
+      );
+    case "rank": {
+      const r = RANKS[m.x ?? 0] ?? RANKS[0];
+      return (
+        <>
+          {n} இப்போது <b>
+            {r.e} {r.n}
+          </b>
+          ! {r.at.toLocaleString("en")} XP கடந்தார். பாராட்டுவோம்.
+        </>
+      );
+    }
+    case "gift":
+      return (
+        <>
+          <b class="f-us-by">🎁 ARISTORA வின் பரிசு{m.t ? `: ${m.t}` : ""}</b>
           <People m={m} onMate={onMate} />
         </>
       );
@@ -563,6 +606,10 @@ const OWL_MOOD: Partial<Record<UsItem["k"], Mood>> = {
   up: "strong",
   champs: "champ",
   count: "happy",
+  rank: "star",
+  lgup: "strong",
+  upm: "strong",
+  gift: "party",
 };
 /** The owl's name on its lines. */
 export const OWL_NAME = "ஆந்தை";
