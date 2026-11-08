@@ -11,6 +11,11 @@ import type { MutationCtx } from "../_generated/server";
 
 /** How long a burst of answers gathers before one notification goes. */
 export const PUSH_WAIT_MS = 60_000;
+/**
+ * Us's alerts (8 Nov 2026, his voice note: "the notification instantly ... like WhatsApp"): a reply, a mark, a new
+ * question goes in seconds (a few at once still come as one).
+ */
+export const US_PUSH_WAIT_MS = 5_000;
 /** Where the keys are kept (meta): { pub, priv }, base64url as web push uses them. */
 export const VAPID_KEY = "push.vapid";
 /** A child on one phone: at most this many phones keep alerts (the oldest go). */
@@ -47,5 +52,5 @@ export async function alertStudent(ctx: MutationCtx, studentId: Id<"students">, 
     return;
   }
   await ctx.db.insert("pushOut", { studentId, n: 1, text, at: now, ...(url ? { url } : {}) });
-  await ctx.scheduler.runAfter(PUSH_WAIT_MS, internal.push.send, { studentId });
+  await ctx.scheduler.runAfter(url?.includes("#us") ? US_PUSH_WAIT_MS : PUSH_WAIT_MS, internal.push.send, { studentId });
 }

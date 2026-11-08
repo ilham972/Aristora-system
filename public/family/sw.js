@@ -74,6 +74,8 @@ self.addEventListener("fetch", (e) => {
 
 // Phone alerts (7 Nov 2026): a teacher's answer or message for a child on this phone (the server's push.send). The
 // notification opens the app on its bell; an open app is told instead (it opens the bell itself).
+// 8 Nov 2026 (his voice note: "the alert need to be give the sound ... instantly ... like WhatsApp"): the phone's own
+// sound and a buzz; and while the app is on the screen, no notification: the app itself rings and shows the words.
 self.addEventListener("push", (e) => {
   let d = {};
   try {
@@ -82,13 +84,22 @@ self.addEventListener("push", (e) => {
     d = { body: e.data ? e.data.text() : "" };
   }
   e.waitUntil(
-    self.registration.showNotification(d.title || "ARISTORA", {
-      body: d.body || "",
-      tag: d.tag || "aristora",
-      renotify: true,
-      icon: "/icon-192.png",
-      badge: "/icon-192.png",
-      data: { url: d.url || "/f/" },
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+      const open = list.find((c) => c.visibilityState === "visible" && new URL(c.url).pathname.startsWith("/f/"));
+      if (open) {
+        open.postMessage({ k: "new", body: d.body || "", url: d.url || "/f/" });
+        return;
+      }
+      return self.registration.showNotification(d.title || "ARISTORA", {
+        body: d.body || "",
+        tag: d.tag || "aristora",
+        renotify: true,
+        silent: false,
+        vibrate: [120, 60, 120],
+        icon: "/icon-192.png",
+        badge: "/icon-192.png",
+        data: { url: d.url || "/f/" },
+      });
     }),
   );
 });

@@ -2525,11 +2525,22 @@ test("Us talk: a birthday opened; one-tap words and her own (+1 XP); a reply and
   await tabTo(P, /Home/);
   await until(async () => /: 2 new/.test((await P.locator(".f-bellb").getAttribute("aria-label")) ?? ""), "two new in the bell");
   await P.locator(".f-bellb").click();
+  // The bell's page (8 Nov 2026): alerts said plainly on top, then today's lines with a face each.
+  await visible(P.locator(".f-bellscr .f-pushcard.big"));
+  await contains(P.locator(".f-bell-day").first(), "இன்று");
   await contains(P.locator(".f-belllist"), "உனக்குப் பதில்");
   await contains(P.locator(".f-belllist"), "பாராட்டினார்");
+  await visible(P.locator(".f-bellitem.us.r .f-bell-face"));
+  await noSideScroll(P);
   await shot(P, "fam92-bell-us");
+  // Us only: the chip.
+  await P.locator(".f-bell-chips").getByRole("button", { name: "Us" }).click();
+  await until(async () => (await P.locator(".f-bellitem:not(.us)").count()) === 0, "only Us's lines");
   await P.locator(".f-bellitem.us.r").click();
   await contains(P.locator(".f-msgs.kids .f-msg"), "நன்றி Hana");
+  // Back from a line opened in the bell: the bell again, then Back to Us.
+  await P.getByRole("button", { name: "Back" }).click();
+  await visible(P.locator(".f-bellscr"));
   await P.getByRole("button", { name: "Back" }).click();
 
   // Her 💡: what she learned (a starter, her words); only she and the teachers see it until a ✓.
@@ -2701,7 +2712,10 @@ test("Us people: her photo on her lines; the owl writes the automatic lines; a f
   expect(await sc.innerText()).not.toContain("Bilal");
   await visible(sc.getByRole("button", { name: "🔍 கண்டுபிடி" }));
   await noSideScroll(P);
-  await shot(P, "fam98-us-owl-and-spot");
+  await sc.evaluate((el) => el.scrollIntoView({ block: "start" }));
+  await shot(P, "fam98-us-spot-card");
+  await bd.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await shot(P, "fam98b-us-owl-line");
   await bd.locator(".f-uk-about .f-tapface").click();
   await contains(P.locator(".f-mate .f-me-name"), "Bilal M");
   await P.getByRole("button", { name: "Back" }).click();
@@ -2709,6 +2723,7 @@ test("Us people: her photo on her lines; the owl writes the automatic lines; a f
   // The smallest phone: the find-the-mistake card fits 320 px.
   await P.setViewportSize({ width: 320, height: 640 });
   await noSideScroll(P);
+  await sc.evaluate((el) => el.scrollIntoView({ block: "start" }));
   await shot(P, "fam99-us-spot-320");
   for (const p of [P, C]) await p.context().close();
   expect(problems.slice(before)).toEqual([]);

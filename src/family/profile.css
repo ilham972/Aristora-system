@@ -924,3 +924,80 @@ a.f-btn {
     animation: none;
   }
 }
+
+/* The bell's page (8 Nov 2026, his "build notification page"): alerts said plainly, chips, days, a face per line. */
+.f-bellbody {
+  padding: 14px 16px 28px;
+}
+.f-pushcard.big {
+  align-items: flex-start;
+  padding: 14px;
+  box-shadow: 0 0 0 2px var(--gold-hi);
+}
+.f-pushcard.big .f-pushon {
+  width: 100%;
+  margin-top: 10px;
+}
+.f-pushcard small {
+  margin-top: 3px;
+  font-weight: 600;
+}
+.f-push-acts {
+  display: flex;
+  gap: 18px;
+  margin-top: 4px;
+}
+.f-push-fail {
+  color: var(--wrong-ink);
+}
+.f-bell-chips {
+  display: flex;
+  gap: 6px;
+  margin: 2px 0 4px;
+}
+.f-bell-chip {
+  min-height: 36px;
+  padding: 2px 14px 0;
+  border-radius: 999px;
+  background: #fff;
+  border: 1.5px solid var(--lav);
+  color: var(--brand-2);
+  font: 800 13.5px/1 var(--display);
+}
+.f-bell-chip.on {
+  background: var(--brand);
+  border-color: transparent;
+  color: #fff;
+}
+.f-bell-day {
+  margin: 14px 2px 8px;
+  font: 800 13px/1 var(--display);
+  color: var(--ink3);
+  letter-spacing: 0.03em;
+}
+.f-bellitem .f-bell-face {
+  position: relative;
+  flex: none;
+  display: inline-grid;
+}
+.f-bell-face .f-ava.s {
+  width: 40px;
+  height: 40px;
+  font-size: 16px;
+}
+.f-bell-face i {
+  position: absolute;
+  right: -6px;
+  bottom: -4px;
+  font-style: normal;
+  font-size: 14px;
+  line-height: 1;
+  filter: drop-shadow(0 1px 1px rgba(40, 30, 110, 0.25));
+}
+.f-bellscr .f-bellnone {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 26px 8px;
+  text-align: center;
+}

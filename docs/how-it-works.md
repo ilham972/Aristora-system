@@ -1681,6 +1681,19 @@ learning app of our education institute"): one profile, his class times, what he
     next time the book opens), uploaded to Convex storage (`family.photoUrl`, 80 a day a phone; `family.photoSend`:
     images ≤ 900 KB; sending again replaces until she answers). Owed = not sent, not marked or explained in class (none
     once the class corrected the level); a retake is owed again (`owedOf`).
+  - **The bell's page** (8 Nov 2026, his voice note: "the alert need to be give the sound ... notification instantly ...
+    a standalone page", then "build notification page"): the bell opens a page of its own (`BellScreen` in
+    `bellSheet.tsx`, screen `bell` in `app.tsx`, depth 1; a line of Us opened from it is `post` with `from: "bell"`:
+    Back returns to the page; a level's book goes back to its Stage as before). Its header says how many are new (the
+    owl in party mood) or "எல்லாம் பார்த்தாய் ✓"; then **phone alerts said plainly** (`PushCard`: off = 🔔 அறிவிப்புகளை
+    இயக்கு, big; on = ✓ with 🔊 ஒலி கேள் (the app's own sound) and நிறுத்து; not allowed = where to allow it in Chrome and
+    மீண்டும் பார்; a phone without push = the iPhone's Add to Home Screen); chips எல்லாம் · ✓ திருத்தம் · Us; the lines
+    by day (இன்று, நேற்று, முன்பு; the time only, a date before yesterday), each with a face (the teacher's letter, a
+    student's photo) and a mark (✓ 📷 💬 ↩ 👏 👀 ✎ ❓ 🌟), new ones with a dot and a ring. **Instantly** (his word): Us's
+    alerts gather 5 s (`US_PUSH_WAIT_MS`), not a minute (a teacher's marking still gathers 60 s); a phone alert has the
+    phone's own sound and a buzz (`vibrate`); while the app is on the screen the service worker shows no notification
+    but tells the app (`{ k: "new", body }`): the app shows the words (a toast "🔔 …"), reads `me` again and rings
+    (`tweet`, also when a correction is new: `fresh`) with the bell jumping.
   - **The bell and phone alerts** (7 Nov 2026, his voice note: "the family app don't have any alert features ... even
     though we corrected, students don't know"; his answer: the bell in the app AND an alert on the phone). The top
     row's bell (`.f-bellb`) with a red count of new ones (`.f-bell-n`); its sheet (`BellSheet`, `src/family/bellSheet.tsx`

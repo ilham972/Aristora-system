@@ -71,7 +71,9 @@ type Screen =
   /** A classmate's profile, from the race (7 Nov 2026): his row as the race showed it while it loads. */
   | { k: "mate"; id: string; row: RaceRow | null }
   /** A post or a doubt of Us opened (7 Nov 2026): its answers or replies. */
-  | { k: "post"; id: string }
+  | { k: "post"; id: string; from?: "bell" }
+  /** The bell's page (8 Nov 2026, his "build notification page"): everything for him, newest first, by day. */
+  | { k: "bell" }
   | { k: "stage"; unitId: string }
   | { k: "level"; unitId: string; n: number }
   /** A level he checked at home: solutions, photos to send, the teacher's answers (4 Nov 2026). */
@@ -88,11 +90,17 @@ type Screen =
 
 /** How deep a screen is: Back steps up one at a time (the reveal and a Level go back to their Stage). */
 const depth = (s: Screen) =>
-  s.k === "level" || s.k === "result" || s.k === "book" ? 2 : s.k === "stage" || s.k === "add" || s.k === "report" || s.k === "mate" || s.k === "post" ? 1 : 0;
+  s.k === "level" || s.k === "result" || s.k === "book" || (s.k === "post" && s.from)
+    ? 2
+    : s.k === "stage" || s.k === "add" || s.k === "report" || s.k === "mate" || s.k === "post" || s.k === "bell"
+      ? 1
+      : 0;
 const parent = (s: Screen): Screen =>
   s.k === "level" || s.k === "result" || s.k === "book"
     ? { k: "stage", unitId: s.unitId }
-    : s.k === "stage" || s.k === "report" || s.k === "mate" || s.k === "post"
+    : s.k === "post" && s.from
+      ? { k: "bell" }
+      : s.k === "stage" || s.k === "report" || s.k === "mate" || s.k === "post" || s.k === "bell"
       ? { k: "main" }
       : s.k === "add"
         ? current()
@@ -173,7 +181,8 @@ export function App() {
         switchTo(a.id);
       }
       // Something new in the bell since he last looked (8 Nov 2026): a soft sound and the bell jumps (TopRow).
-      if (before && (m.inboxNew ?? 0) > (before.inboxNew ?? 0)) sound("tweet");
+      const fresh = (x: FamilyMe) => (x.inboxNew ?? 0) + x.bell.filter((b) => b.fresh).length;
+      if (before && fresh(m) > fresh(before)) sound("tweet");
       // A Stage that opened since he last looked: its moment (the map shows it too).
       const opened = before ? m.worlds.filter((w) => w.open && w.book && !before.worlds.find((x) => x.unitId === w.unitId)?.open) : [];
       if (opened.length) {
@@ -285,24 +294,11 @@ export function App() {
       setMe(read);
       void mutation("us:seen").catch(() => {});
     }
-    // The sheet is one of the parts right after the first screen (bellSheet.tsx): here by the time he taps.
+    // Its page is one of the parts right after the first screen (bellSheet.tsx): here by the time he taps.
     void loadParts().then(
-      (p) =>
-        openSheet({
-          render: (close) => (
-            <p.BellSheet
-              items={meRef.current?.bell ?? []}
-              us={m0?.inbox ?? []}
-              onClose={close}
-              onOpen={(unitId, n) => fromSheet({ k: "book", unitId, n })}
-              onUs={(id) => {
-                setTab("us");
-                keep("tab", "us");
-                fromSheet({ k: "post", id });
-              }}
-            />
-          ),
-        }),
+      () => {
+        if (screenRef.current.k !== "bell") go({ k: "bell" });
+      },
       (e) => toast(problemWords(e), true),
     );
   };
@@ -327,8 +323,13 @@ export function App() {
       fromAlert(hash[1], hash[2]);
     }
     const told = (e: MessageEvent) => {
-      const d = e.data as { k?: string; id?: string } | null;
+      const d = e.data as { k?: string; id?: string; body?: string } | null;
       if (d?.k === "bell" || d?.k === "us") fromAlert(d.k, d.id || undefined);
+      // An alert while the app is on the screen (8 Nov 2026): no notification; the app rings and shows the words.
+      if (d?.k === "new") {
+        if (d.body) toast(`🔔 ${d.body}`);
+        void loadMe();
+      }
     };
     navigator.serviceWorker?.addEventListener("message", told);
     return () => navigator.serviceWorker?.removeEventListener("message", told);
@@ -471,6 +472,22 @@ export function App() {
         onMate={(id) => {
           window.scrollTo(0, 0);
           setScreen({ k: "mate", id, row: null });
+        }}
+      />
+    ) : (
+      <Waiting />
+    );
+  } else if (screen.k === "bell") {
+    body = parts ? (
+      <parts.BellScreen
+        items={me?.bell ?? []}
+        us={me?.inbox ?? []}
+        onBack={up}
+        onOpen={(unitId, n) => go({ k: "book", unitId, n })}
+        onUs={(id) => {
+          setTab("us");
+          keep("tab", "us");
+          go({ k: "post", id, from: "bell" });
         }}
       />
     ) : (
