@@ -101,6 +101,9 @@ EOF
   Master person never sends Correction's calls (`mayHandle` in `convex/calls.ts`, `phoneSends` in `src/callRoute.ts`),
   hears only her department's alerts (`alertItems`), and `desk.mark` checks her department against the book. A person
   with no pages keeps the app of before: the run-throughs of the old Theory and Evaluation pages still use that.
+- **A reload right after a tab change** (8 Nov 2026): the phone remembers its tab (`aristora.role`) in an effect just
+  after the page shows, so a run-through that reloads at once can open the page before (the old "Done 2" flake of the
+  Evaluation run-through: it opened the Register). Wait for `localStorage.getItem("aristora.role")` first.
 - **The run-throughs' owner has the old bar** (8 Nov 2026): his default bar became Dashboard, Class, Fighter, Master,
   Correction, Us, so `newClass()` in `tests/e2e/class.e2e.ts` gives the test owner the pages those run-throughs were
   written for (Class, Correction, the old Theory and Evaluation pages, Us: his own pages) and `newClass({ defaultBar:
@@ -111,7 +114,7 @@ EOF
   data still comes with his sign-in, and every mutation is refused (`LOOK_ONLY` in `src/backend.ts`; only `clock:ping`
   passes). Anything new that writes on its own (a timer, a background save) must expect that refusal quietly.
 - **A teacher's tap needs its book's stage on its history line** (`events.stage`, 8 Nov 2026) for her department's
-  "cleared today" (`desk.today`): log it on any new tap that explains or teaches (desk, consult and board do).
+  "cleared today" and "every class" (`work.days`, convex/lib/work.ts): log it on any new tap that explains or teaches (desk, consult and board do), with `stage`.
 - **The phone's clock is not the server's**: a "since" the phone sends (the desk page's sitting) must come from
   `now()` in `src/store.ts` (synced), never `Date.now()`, or a phone a few minutes fast hides the squares it just did
   and can't undo them.

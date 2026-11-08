@@ -64,6 +64,7 @@ import type * as lib_us from "../lib/us.js";
 import type * as lib_usTalk from "../lib/usTalk.js";
 import type * as lib_usToday from "../lib/usToday.js";
 import type * as lib_usXp from "../lib/usXp.js";
+import type * as lib_work from "../lib/work.js";
 import type * as manager from "../manager.js";
 import type * as marks from "../marks.js";
 import type * as people from "../people.js";
@@ -80,6 +81,7 @@ import type * as state from "../state.js";
 import type * as students from "../students.js";
 import type * as teach from "../teach.js";
 import type * as us from "../us.js";
+import type * as work from "../work.js";
 import type * as workbook from "../workbook.js";
 
 /**
@@ -142,6 +144,7 @@ declare const fullApi: ApiFromModules<{
   "lib/usTalk": typeof lib_usTalk;
   "lib/usToday": typeof lib_usToday;
   "lib/usXp": typeof lib_usXp;
+  "lib/work": typeof lib_work;
   manager: typeof manager;
   marks: typeof marks;
   people: typeof people;
@@ -158,6 +161,7 @@ declare const fullApi: ApiFromModules<{
   students: typeof students;
   teach: typeof teach;
   us: typeof us;
+  work: typeof work;
   workbook: typeof workbook;
 }>;
 export declare const api: FilterApi<

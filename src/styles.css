@@ -11482,6 +11482,147 @@ body.tm-on .toasts {
   gap: 5px;
   height: 92px;
 }
+/* Every class (8 Nov 2026): each day's work as a bar, hers inside it. One hue per department, light (the department)
+   to dark (you), each pair checked against the card (light end 2.3–2.6:1, monotone, one hue). */
+.wk {
+  --wk-all: #97a1b8;
+  --wk-you: #16213e;
+}
+.dash-page[data-dept="fighter"] .wk {
+  --wk-all: #8eaaf0;
+  --wk-you: #1c40b0;
+}
+.dash-page[data-dept="master"] .wk {
+  --wk-all: #b590fb;
+  --wk-you: #6024be;
+}
+.dash-h small {
+  margin-left: 6px;
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 600;
+}
+.wk-trend {
+  margin: 0 0 8px;
+  color: var(--ink-2);
+  font-size: 14px;
+}
+.wk-trend b {
+  color: var(--ink);
+  font-weight: 800;
+}
+.wk-trend-you {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink);
+  font-weight: 700;
+}
+.wk-key {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 4px;
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+.wk-sw {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--wk-all);
+}
+.wk-sw.you {
+  background: var(--wk-you);
+}
+.wk-sw.all {
+  margin-left: 8px;
+}
+.wk-chart {
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-end;
+  height: 140px;
+  padding-top: 16px;
+}
+/* Few days: narrow columns at the right (today last); fourteen fill the card. */
+.wk-b {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+.wk-plot {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  border-bottom: 1px solid var(--line);
+  border-radius: 6px 6px 0 0;
+}
+.wk-b.on .wk-plot {
+  background: var(--line-2);
+}
+.wk-all,
+.wk-you {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: calc(100% - 6px);
+  max-width: 24px;
+  transform: translateX(-50%);
+  border-radius: 4px 4px 0 0;
+}
+.wk-all {
+  background: var(--wk-all);
+}
+.wk-you {
+  background: var(--wk-you);
+}
+.wk-v {
+  position: absolute;
+  left: 50%;
+  transform: translate(-50%, -3px);
+  color: var(--ink);
+  font: 800 11px/1 var(--cond);
+  white-space: nowrap;
+}
+.wk-b small {
+  height: 12px;
+  margin-top: 4px;
+  color: var(--ink-3);
+  font: 600 10.5px/12px var(--cond);
+  white-space: nowrap;
+}
+.wk-b.today small,
+.wk-b.on small {
+  color: var(--ink);
+  font-weight: 800;
+}
+.wk-best {
+  min-height: 1em;
+  margin: 6px 0 0;
+}
+.wk-day {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-2);
+}
+.wk-dh {
+  margin: 0 0 2px;
+  font-size: 15px;
+}
+.wk-grades {
+  margin: 6px 0 0;
+}
+
 /* Correction's grades are the students' own: 6–11 (8 Nov 2026). */
 .dash-grades.n6 {
   grid-template-columns: repeat(6, 1fr);

@@ -12,14 +12,12 @@
 //   board), he is seen by that room today, and her room's score counts each question (and the lesson on its first tap).
 
 import { ConvexError, v } from "convex/values";
-import { query } from "./_generated/server";
 import { mutation } from "./lib/fn";
-import { actor, viewer } from "./lib/auth";
-import { bookFor, cleanBy, currentSession, fail, getStudent, log, openSession, progressFor, refresh, roomStats, STALE_SESSION_MS, touch } from "./lib/backend";
-import { slDayStart } from "./lib/day";
+import { actor } from "./lib/auth";
+import { bookFor, cleanBy, currentSession, fail, getStudent, log, progressFor, refresh, roomStats, touch } from "./lib/backend";
 import { DEPT_NAMES, isTeachDept } from "./lib/dept";
 import { applyMark, reteachValue, wasValue, what, WORDS, type MarkResult } from "./lib/marking";
-import { bookStage, teachDept } from "./schema";
+import { bookStage } from "./schema";
 
 /** A sitting's undo reaches back at most this far (a phone left open since the morning can't undo yesterday). */
 export const SITTING_MAX_MS = 3 * 60 * 60_000;
@@ -98,129 +96,5 @@ export const mark = mutation({
     }
     if (out.some((x) => x.changed)) await touch(ctx, session, now);
     return { at: now, items: out, errors };
-  },
-});
-
-/** One teacher's cleared work in this class: explained, sent to Theory, taught; the students she worked with. */
-type Cleared = { name: string; x: number; th: number; tt: number; students: number };
-
-/** Which number a teacher's tap moves (its undo the same number down). */
-const NUMBER_OF: Record<string, "x" | "th" | "tt"> = {
-  explained: "x",
-  unexplained: "x",
-  "to-theory": "th",
-  "to-theory-off": "th",
-  taught: "tt",
-  untaught: "tt",
-  "whole-unit": "tt",
-  "whole-unit-off": "tt",
-};
-const UNDO = new Set(["unexplained", "to-theory-off", "untaught", "whole-unit-off"]);
-
-/**
- * A department today (the dashboard, 8 Nov 2026, his voice note: "how many questions still pending to evaluate? how much
- * reduced today?"): what each of its teachers cleared in the class going on (at his desk, in consultation, at the board),
- * from the history. Read on opening the dashboard and every minute (never live: it reads the class's history).
- */
-export const today = query({
-  args: { token: v.optional(v.string()), dept: teachDept, test: v.optional(v.boolean()) },
-  handler: async (ctx, args): Promise<{ startedAt: number | null; people: Cleared[]; total: Cleared }> => {
-    await viewer(ctx, args.token, "any");
-    const total: Cleared = { name: "", x: 0, th: 0, tt: 0, students: 0 };
-    const session = await openSession(ctx);
-    if (!session || Date.now() - session.lastActivityAt > STALE_SESSION_MS) return { startedAt: null, people: [], total };
-    const test = !!args.test;
-    const kids = await ctx.db
-      .query("students")
-      .withIndex("by_archived", (q) => q.eq("archived", false))
-      .collect();
-    const mine = new Set(kids.filter((s) => !!s.test === test).map((s) => s._id as string));
-    const by = new Map<string, Cleared & { ids: Set<string> }>();
-    const all = new Set<string>();
-    for (const e of await ctx.db
-      .query("events")
-      .withIndex("by_session", (q) => q.eq("sessionId", session._id))
-      .collect()) {
-      if (e.stage !== args.dept || !e.studentId || !mine.has(e.studentId) || !e.who) continue;
-      if (e.kind !== "desk" && e.kind !== "desk-undo" && e.kind !== "consult" && e.kind !== "board" && e.kind !== "board-undo") continue;
-      const n = NUMBER_OF[e.value ?? ""];
-      if (!n) continue;
-      const down = e.kind.endsWith("-undo") || UNDO.has(e.value ?? "");
-      const p = by.get(e.who) ?? { name: e.who, x: 0, th: 0, tt: 0, students: 0, ids: new Set<string>() };
-      p[n] += down ? -1 : 1;
-      total[n] += down ? -1 : 1;
-      if (!down) {
-        p.ids.add(e.studentId);
-        all.add(e.studentId);
-      }
-      by.set(e.who, p);
-    }
-    const people = [...by.values()]
-      .map(({ ids, ...p }) => ({ ...p, x: Math.max(0, p.x), th: Math.max(0, p.th), tt: Math.max(0, p.tt), students: ids.size }))
-      .filter((p) => p.x + p.th + p.tt > 0)
-      .sort((a, b) => b.x + b.tt + b.th - (a.x + a.tt + a.th) || a.name.localeCompare(b.name));
-    return {
-      startedAt: session.startedAt,
-      people,
-      total: { ...total, x: Math.max(0, total.x), th: Math.max(0, total.th), tt: Math.max(0, total.tt), students: all.size },
-    };
-  },
-});
-
-/** One person's correction today: workbook levels corrected, theory-book questions marked, photos from home marked. */
-type Corrected = { name: string; levels: number; qs: number; photos: number; students: number };
-
-/**
- * The Correction (Management) department today (8 Nov 2026, his "is that possible to build the correction department's
- * dashboard"): what each person corrected since midnight in Sri Lanka, from the history: workbook levels (Save on
- * Correction: "level-marks"; a level taken back loses its line), theory-book questions Correction marked (each question
- * once, as its last tap left it), and photos from home marked (each one). Anyone's correction counts (the Fighter and
- * Master teachers correct homework too). Read on opening the dashboard and every minute (never live).
- */
-export const corrected = query({
-  args: { token: v.optional(v.string()), test: v.optional(v.boolean()) },
-  handler: async (ctx, args): Promise<{ since: number; people: Corrected[]; total: Corrected }> => {
-    await viewer(ctx, args.token, "any");
-    const since = slDayStart(Date.now());
-    const test = !!args.test;
-    const kids = await ctx.db
-      .query("students")
-      .withIndex("by_archived", (q) => q.eq("archived", false))
-      .collect();
-    const mine = new Set(kids.filter((s) => !!s.test === test).map((s) => s._id as string));
-    const by = new Map<string, Corrected & { ids: Set<string> }>();
-    const all = new Set<string>();
-    const add = (who: string, n: "levels" | "qs" | "photos", studentId: string) => {
-      const p = by.get(who) ?? { name: who, levels: 0, qs: 0, photos: 0, students: 0, ids: new Set<string>() };
-      p[n]++;
-      p.ids.add(studentId);
-      all.add(studentId);
-      by.set(who, p);
-    };
-    // A theory book's question: its last tap by Correction today (marked, or cleared again).
-    const lastMark = new Map<string, { who: string; value: string; studentId: string }>();
-    for (const e of await ctx.db
-      .query("events")
-      .withIndex("by_at", (q) => q.gte("at", since))
-      .collect()) {
-      if (!e.studentId || !mine.has(e.studentId)) continue;
-      const who = e.who ?? "Correction";
-      if (e.kind === "level-marks") add(who, "levels", e.studentId);
-      else if (e.kind === "photo-marked") add(who, "photos", e.studentId);
-      else if ((e.kind === "mark" || e.kind === "undo") && e.by === "correction" && e.q !== undefined)
-        lastMark.set(`${e.studentId}:${e.unit ?? ""}:${e.q}`, { who, value: e.value ?? "clear", studentId: e.studentId });
-    }
-    for (const m of lastMark.values()) if (m.value !== "clear") add(m.who, "qs", m.studentId);
-    const people = [...by.values()]
-      .map(({ ids, ...p }) => ({ ...p, students: ids.size }))
-      .sort((a, b) => b.levels + b.qs + b.photos - (a.levels + a.qs + a.photos) || a.name.localeCompare(b.name));
-    const total: Corrected = {
-      name: "",
-      levels: people.reduce((n, p) => n + p.levels, 0),
-      qs: people.reduce((n, p) => n + p.qs, 0),
-      photos: people.reduce((n, p) => n + p.photos, 0),
-      students: all.size,
-    };
-    return { since, people, total };
   },
 });
