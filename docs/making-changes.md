@@ -495,6 +495,14 @@ EOF
 - **Budgets after posts and doubts** (his yes, 7 Nov 2026: later parts 36 → 42): first load 63.1 of 66, later parts
   41.0 of 42 (`usPost.tsx` and its style in `profile.css`), the teachers' Us 5.0 of 8. Old lines are deleted by
   `us.sweep` (scheduled by `us.daily`): unit tests that check the 30 days call it themselves.
+- **Teachers' own tools in Us go in `staff.tsx`** (8 Nov 2026: Download / Share, find the mistake): Us's file draws them only
+  through `setStaffTools` (usPost.tsx), so students' phones never download them; `staff.tsx` still imports only types and
+  Preact (`U` = Us's file once loaded: `pickedOf`, `sendPicked`, `CropSheet`; `Kit` gives `Icon`, `picOf`, `usePics`).
+  Their style is in `usStyle.ts` (the teachers' file was nearly full). Budgets after it: first load 62.9 of 66, later
+  34.6 of 42, Us 18.0 of 20, the teachers' 7.5 of 8 (ask him before raising one). A teacher's photo is a `staffPhotos`
+  row read as she is now (`staffPics` in `us.ts`: never copy her photo key into a line; `lp` keeps her id `u`). "Find the
+  mistake" never stores who answered on the new line: its photos are copies her phone made (she may cut a name out),
+  `src` points at the question, not the answer (`tests/usPeople.test.ts` reads a student's JSON for the name and id).
 - **Us is its own file since the talk** (8 Nov 2026): `src/family/usParts.ts` (the tab, a line opened, the sheets) with
   its style as a string (`usStyle.ts`, attached once as it loads: a `<style>`, which the version check ignores), out of
   the later parts, with its own budget (`FAMILY_US_KB` 20 in `scripts/build.mjs`: what only `usParts.ts` reaches; not

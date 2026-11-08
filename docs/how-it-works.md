@@ -1327,6 +1327,34 @@ learning app of our education institute"): one profile, his class times, what he
         👏. Phone alerts for all but 👏. The bell's count adds them; opening the bell reads them (`us.seen`); something
         new since the last look rings the bell once (`.f-bellb.grew`) with a soft sound. They go with their line (30
         days), a removed message's with it.
+    - **The people of Us** (8 Nov 2026, his voice note: "we don't have any features to edit the profile photo for the
+      teachers ... teachers like to download that photo ... put the share button ... we have doubts group ... if that
+      is wrong, teacher can repost that ... who can find what the problem here ... don't show the student's name ...
+      the automatic message ... feel like that's come from owl ... profile is not clickable"):
+      - **A teacher's photo**: the class app's Us tab → her picture at the top (📷 on it until she has one) → Choose a
+        photo (the students' own photo screen: moved and zoomed in the circle, made small on her phone, `PhotoSheet`
+        with `send`) or Take my photo off (`us.setMyPhoto` / `us.dropMyPhoto`, any teacher, her own; `staffPhotos`,
+        `users.photo`). Shown at once (no OK: a teacher), on her old lines too, only while she is in the class: her posts
+        and shout-outs (`bp`), her replies and comments (`pic`), the card's faces (`lp` keep her id `u`). The phones'
+        picture readers (`family.photos`, `us.pics`) give a teacher's key too (`staffPicUrl`).
+      - **The owl writes the automatic lines** (birthdays, a first Level from home, welcome back, a Stage, days in a row,
+        most improved, champions, yesterday's count): its face is the owl in the mood of the moment (`OWL_MOOD`: party,
+        star, wave, cheer, cool, strong, champ, happy; a tap makes it react), its name **ஆந்தை**; the student is in its
+        words with his face first (`About`). A shout-out's author is the teacher (her photo), the student in its words.
+      - **Every face opens a profile**: a student's face on a card, in its words, in the talk (`Tap`), as his name does.
+      - **⬇ Download and Share** (teachers only): under a student's photos in a line (answers, replies, comments, a
+        doubt's or a 💡's photos), and at the bottom of a photo opened full screen; never beside ✕ (his rule). Download
+        = the big copy as a file (`aristora-<date>.jpg`); Share = the phone's share sheet with the picture and a few
+        Tamil words with app.aristora.org (the student's name only on an answer marked right); a phone that can't share
+        a picture saves it and copies the words; a slow picture: "tap Share again".
+      - **🔍 Find the mistake** (any teacher): under an answer she marked ✗ (the ✗ toast says so too): a sheet with the
+        question, the answer without the name (its words; its photos as copies her phone makes: **✂ Cut** a name
+        written on the paper out, ✕ leave a photo out), her words (Tamil, a starter) and the grades (the question's own
+        at first) → **Post for everyone** (`us.spot`: once per answer, only a ✗ one). A new question on Us
+        (`src` = the first question, `sw` = the answer's words, `ph` = the copies; never a student id or name): its card
+        says "🔍 தவறைக் கண்டுபிடி", the question above, "📝 ஒரு மாணவரின் விடை", the button "🔍 கண்டுபிடி"; its grades'
+        bells and phones are told; answered as any question (hidden until his own, +5 XP for a right one). The first
+        answer says "🔍 Asked everyone on Us"; the first question removed, the new one stays without the box above.
   - **Me = his profile** (4 Nov 2026, his voice note: "a proper profile page for the students ... as simple as
     possible"; `me.tsx`, one of the parts that come right after the first screen): a violet header with **his photo**
     (88 px; tap = the camera or the gallery: his photo, below), his name (🎂 on his birthday), grade and index ("Photo ·

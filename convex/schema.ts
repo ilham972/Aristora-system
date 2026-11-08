@@ -616,6 +616,11 @@ export default defineSchema({
     createdAt: v.number(),
     /** Settings → Feedback: the newest feedback this person has seen (the count on the gear is what came after). */
     feedbackSeenAt: v.optional(v.number()),
+    /**
+     * Her photo (8 Nov 2026, his ask: "we don't have any features to edit the profile photo for the teachers"): on her
+     * posts, shout-outs and replies in Us; set in the class app's Us tab (her picture at the top). A staffPhotos row.
+     */
+    photo: v.optional(v.object({ id: v.id("staffPhotos"), at: v.number() })),
   }).index("by_name", ["nameKey"]),
 
   /** A signed-in phone. It keeps a random token; only the token's SHA-256 is stored here. */
@@ -797,6 +802,13 @@ export default defineSchema({
     type: v.union(v.literal("image/jpeg"), v.literal("image/webp")),
     at: v.number(),
   }).index("by_student", ["studentId"]),
+  /** A teacher's photo (8 Nov 2026): made small on her phone as a student's is; shown at once (no OK); one per teacher. */
+  staffPhotos: defineTable({
+    userId: v.id("users"),
+    data: v.string(),
+    type: v.union(v.literal("image/jpeg"), v.literal("image/webp")),
+    at: v.number(),
+  }).index("by_user", ["userId"]),
   /**
    * What a student asked the teachers for in the family app (4 Nov 2026, his answers: every new photo waits for his OK
    * before classmates see it; a new name changes everywhere only after his OK): one row per student and kind. `no` =
@@ -897,13 +909,21 @@ export default defineSchema({
      */
     cm: v.optional(v.number()),
     la: v.optional(v.number()),
-    lp: v.optional(v.array(v.object({ n: v.string(), pic: v.optional(v.string()), tch: v.optional(v.boolean()) }))),
+    lp: v.optional(v.array(v.object({ n: v.string(), pic: v.optional(v.string()), tch: v.optional(v.boolean()), u: v.optional(v.id("users")) }))),
     vw: v.optional(v.number()),
     rpm: v.optional(v.number()),
     /** A 💡 post: a teacher's ✓ shows it to everyone (true), or "not this time" (false: only he sees it, with `note`). */
     ok: v.optional(v.boolean()),
     okBy: v.optional(v.string()),
     note: v.optional(v.string()),
+    /**
+     * "Find the mistake" (8 Nov 2026, his voice note: "if that is wrong, teacher can repost that ... who can find what the
+     * problem here ... don't show the student's name"): a teacher's question made from an answer marked ✗. `src` = the
+     * question it came from (its words and photos show above it), `sw` = the answer's words; its photos are this line's
+     * `ph` (copies her phone made: she may cut a name out). Never whose: no id, no name.
+     */
+    src: v.optional(v.id("usMoments")),
+    sw: v.optional(v.string()),
   })
     .index("by_feed", ["demo", "at"])
     .index("by_sid", ["sid", "k"])
@@ -952,6 +972,8 @@ export default defineSchema({
     fix: v.optional(v.string()),
     fixBy: v.optional(v.string()),
     pic: v.optional(v.string()),
+    /** A teacher asked everyone to find its mistake (8 Nov 2026): that question (no name on it). */
+    spot: v.optional(v.id("usMoments")),
   })
     .index("by_mid", ["mid", "sid"])
     .index("by_sid", ["sid", "at"]),

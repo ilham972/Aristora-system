@@ -92,6 +92,7 @@ import {
   PHOTOS_PER_DAY,
   picUrl,
   stageLines,
+  staffPicUrl,
   type HeatDay,
   type MonthLine,
   type PhotoType,
@@ -1398,7 +1399,12 @@ export const photos = query({
     for (const key of new Set(args.keys)) {
       const id = ctx.db.normalizeId("profilePhotos", key);
       const p = id ? await ctx.db.get(id) : null;
-      if (!p) continue;
+      if (!p) {
+        // A teacher's photo (8 Nov 2026: on her posts and replies in Us).
+        const t = await staffPicUrl(ctx, key);
+        if (t) out[key] = t;
+        continue;
+      }
       if (p.studentId !== me._id) {
         const s = await ctx.db.get(p.studentId);
         // Anyone in his race (7 Nov 2026: the whole ARISTORA, and a classmate's profile), once the teachers said OK.

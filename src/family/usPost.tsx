@@ -14,7 +14,7 @@
 // - DoubtSheet: his doubt, and who sees it (teachers, seniors, both: his choice). LearnSheet: his 💡, what he learned.
 // The words a student reads are Tamil; buttons English.
 
-import type { ComponentChildren } from "preact";
+import type { ComponentChildren, VNode } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { UsCheer, UsItem, UsPic, UsReply, UsThread } from "../../convex/lib/us";
 import { CropSheet } from "./crop";
@@ -23,7 +23,7 @@ import { jpegOf } from "./photos";
 import { picOf, usePics } from "./pics";
 import { buzz, sound } from "./sound";
 import { Avatar, Icon, Owl, problemWords, Sheet, showSheet, toast, Waiting } from "./ui";
-import { ago, ASK, Face, KIND, markSeen, MARK, Name, say } from "./us";
+import { ago, ASK, Face, KIND, LineWords, markSeen, MARK, Tap, Who } from "./us";
 
 /** The lines' copy of a photo: its long side. */
 const SMALL = 560;
@@ -56,10 +56,10 @@ function quickOf(m: Pick<UsItem, "k" | "qn">): readonly string[] {
 }
 
 /** A photo picked: the big copy (cropped), the small one, the big one's size, an address to show it here. */
-type Picked = { b: Blob; s: Blob; w: number; h: number; u: string };
+export type Picked = { b: Blob; s: Blob; w: number; h: number; u: string };
 export type Sent = { s: string; b: string; w: number; h: number };
 
-async function pickedOf(big: Blob): Promise<Picked> {
+export async function pickedOf(big: Blob): Promise<Picked> {
   const u = URL.createObjectURL(big);
   const img = new Image();
   img.src = u;
@@ -78,14 +78,14 @@ async function pickedOf(big: Blob): Promise<Picked> {
   return { b: big, s: await jpegOf(c), w, h, u };
 }
 
-async function sendPicked(list: Picked[]): Promise<Sent[]> {
+export async function sendPicked(list: Picked[]): Promise<Sent[]> {
   const ph: Sent[] = [];
   for (const p of list) ph.push({ s: await uploadPhoto(p.s), b: await uploadPhoto(p.b), w: p.w, h: p.h });
   return ph;
 }
 
-/** A photo full screen (the big copy); a tap zooms in and out; several: dots to the next. */
-function Big(props: { ph: UsPic[]; i: number; onClose: () => void }) {
+/** A photo full screen (the big copy); a tap zooms in and out; several: dots to the next. A teacher: ⬇ and Share at the bottom. */
+function Big(props: { ph: UsPic[]; i: number; onClose: () => void; save?: Omit<SaveInfo, "urls"> }) {
   const [i, setI] = useState(props.i);
   const [z, setZ] = useState(false);
   const p = props.ph[i] ?? props.ph[0];
@@ -97,6 +97,11 @@ function Big(props: { ph: UsPic[]; i: number; onClose: () => void }) {
       <button type="button" class="f-round f-lb-x" aria-label="Close" onClick={props.onClose}>
         <Icon name="close" size={22} />
       </button>
+      {props.save && tools && (
+        <div class="f-lb-save">
+          <tools.Save x={{ ...props.save, urls: [p.b] }} />
+        </div>
+      )}
       {props.ph.length > 1 && (
         <div class="f-lb-n">
           {props.ph.map((_, j) => (
@@ -117,10 +122,32 @@ function Big(props: { ph: UsPic[]; i: number; onClose: () => void }) {
   );
 }
 
-/** A line's photos (small copies; one alone keeps its shape up to a height); a tap: the big one. */
-export function Pics(props: { ph: UsPic[] }) {
+/**
+ * Teachers' own tools (8 Nov 2026): 🔍 "find the mistake" (a wrong answer asked again without the name) and ⬇ Download
+ * / Share under a student's photos (his rule: away from ✕). staff.tsx hands them over (setStaffTools), so students'
+ * phones never download them; without them nothing shows.
+ */
+export type SaveInfo = { urls: string[]; name: string; text: string };
+export type SpotProps = { r: UsReply; q: UsItem; onClose: () => void; onDone: () => void };
+export type StaffTools = { Spot: (p: SpotProps) => VNode; Save: (p: { x: SaveInfo }) => VNode };
+let tools: StaffTools | null = null;
+export function setStaffTools(t: StaffTools): void {
+  tools = t;
+}
+
+/** The words a teacher sends with a student's photo (8 Nov 2026): his name only on an answer marked right. */
+function shareWords(r: Pick<UsReply, "ok" | "n">): string {
+  if (r.ok === true && r.n) return `✓ ${r.n} இன் சரியான விடை! 🎉 நீயும் ARISTORA app இல் உன் விடையை அனுப்பு: app.aristora.org`;
+  if (r.ok === false) return "🔍 இந்த விடையில் என்ன தவறு? ARISTORA app இல் சொல்: app.aristora.org";
+  return "📝 ARISTORA app இல் வந்த ஒரு விடை. நீயும் உன் விடையை அனுப்பு: app.aristora.org";
+}
+const fileBase = (at: number) => `aristora-${new Date(at).toISOString().slice(0, 10)}`;
+
+/** A line's photos (small copies; one alone keeps its shape up to a height); a tap: the big one. `save`: a teacher's ⬇ and Share. */
+export function Pics(props: { ph: UsPic[]; save?: Omit<SaveInfo, "urls"> }) {
   const one = props.ph.length === 1;
   return (
+    <>
     <div class={`f-pics n${Math.min(props.ph.length, 3)}`}>
       {props.ph.map((p, i) => (
         <button
@@ -132,13 +159,15 @@ export function Pics(props: { ph: UsPic[] }) {
           onClick={(e) => {
             e.stopPropagation();
             buzz();
-            showSheet((close) => <Big ph={props.ph} i={i} onClose={close} />);
+            showSheet((close) => <Big ph={props.ph} i={i} onClose={close} save={props.save} />);
           }}
         >
           <img src={p.s} alt="" loading="lazy" decoding="async" />
         </button>
       ))}
     </div>
+    {props.save && tools && <tools.Save x={{ ...props.save, urls: props.ph.map((p) => p.b) }} />}
+    </>
   );
 }
 
@@ -389,7 +418,13 @@ function Msg(props: {
   return (
     <li class={`f-msg${r.tch ? " tch" : ""}${r.mine ? " mine" : ""}${r.ok === true ? " ok" : r.ok === false ? " no" : ""}`}>
       <span class="f-msg-ava">
-        {r.ask && !props.staff ? <span class="f-uk-emo k-ask">🙋</span> : <Avatar name={r.mine && props.me ? props.me : name} size="s" pic={picOf(r.pic)} />}
+        {r.ask && !props.staff ? (
+          <span class="f-uk-emo k-ask">🙋</span>
+        ) : (
+          <Tap id={r.sid} onMate={props.onMate}>
+            <Avatar name={r.mine && props.me ? props.me : name} size="s" pic={picOf(r.pic)} />
+          </Tap>
+        )}
       </span>
       <div class="f-msg-w">
         <p class="f-msg-h">
@@ -413,7 +448,7 @@ function Msg(props: {
         </p>
         <div class="f-msg-b">
           {r.t && <p class="f-msg-t">{r.t}</p>}
-          {r.ph && <Pics ph={r.ph} />}
+          {r.ph && <Pics ph={r.ph} save={props.staff && !r.tch ? { name: fileBase(r.at), text: shareWords(r) } : undefined} />}
         </div>
         {r.ok === true ? <p class="f-msg-ok">✓ சரி · {r.okBy} ஆசிரியர்</p> : r.ok === false ? <p class="f-msg-no">✗ சரியில்லை · {r.okBy} ஆசிரியர்</p> : null}
         {r.fix && (
@@ -570,7 +605,7 @@ export function ThreadScreen(props: { id: string; staff?: boolean; me?: string; 
     }, POLL_MS);
     return () => window.clearInterval(tick);
   }, [props.id]);
-  usePics([...(d?.cheers ?? []).slice(0, 8).map((c) => c.pic), ...(d?.talk ?? []).map((r) => r.pic), ...(d?.list ?? []).map((r) => r.pic), d?.m.pic]);
+  usePics([...(d?.cheers ?? []).slice(0, 8).map((c) => c.pic), ...(d?.talk ?? []).map((r) => r.pic), ...(d?.list ?? []).map((r) => r.pic), d?.m.pic, d?.m.bp]);
   // After any change the Us tab reads its lines again when it opens.
   const after = () => {
     keep("usAt", 0);
@@ -625,6 +660,7 @@ export function ThreadScreen(props: { id: string; staff?: boolean; me?: string; 
     const answer = q && !r.c;
     const replyOnDoubt = ask && !r.tch && !r.ask;
     return (
+      <>
       <div class="f-msg-a">
         {!r.mine && (
           <button type="button" class={`f-msg-b1 like${r.liked ? " on" : ""}`} aria-pressed={!!r.liked} aria-label="Cheer" onClick={() => like(r)}>
@@ -650,7 +686,13 @@ export function ThreadScreen(props: { id: string; staff?: boolean; me?: string; 
           </button>
         )}
         {st && answer && (
-          <button type="button" class={`f-ur-b no${r.ok === false ? " on" : ""}`} aria-label="Not right" aria-pressed={r.ok === false} onClick={() => void act("us:mark", { id: r.id, ok: r.ok === false ? null : false })}>
+          <button
+            type="button"
+            class={`f-ur-b no${r.ok === false ? " on" : ""}`}
+            aria-label="Not right"
+            aria-pressed={r.ok === false}
+            onClick={() => void act("us:mark", { id: r.id, ok: r.ok === false ? null : false }, r.ok === false ? undefined : "✗ Marked. 🔍 You can ask everyone to find the mistake.")}
+          >
             ✗
           </button>
         )}
@@ -689,6 +731,17 @@ export function ThreadScreen(props: { id: string; staff?: boolean; me?: string; 
           </button>
         )}
       </div>
+      {/* A wrong answer asked again without the name (8 Nov 2026): said here, where she just marked it, so she knows she can. */}
+      {st && answer && r.ok === false && m && tools ? (
+        r.spot ? (
+          <p class="f-spot-done">🔍 Asked everyone on Us (no name)</p>
+        ) : (
+          <button type="button" class="f-spot-go" onClick={() => showSheet((close) => tools!.Spot({ r, q: m, onClose: close, onDone: () => void after() }))}>
+            🔍 Find the mistake: ask everyone (no name)
+          </button>
+        )
+      ) : null}
+      </>
     );
   };
   const send = (text: string, ph: Sent[]) => {
@@ -726,21 +779,13 @@ export function ThreadScreen(props: { id: string; staff?: boolean; me?: string; 
         <>
           <article class="f-card f-ut-m rise">
             <div class="f-uk-h">
-              <Face m={m} />
+              <Face m={m} onMate={props.onMate} />
               <div class="f-uk-who">
                 <p>
-                  {m.k === "post" ? (
-                    <b class="f-us-n">{m.by} ஆசிரியர்</b>
-                  ) : m.k === "ask" ? (
-                    <b class="f-us-n">{m.mine ? "உன் சந்தேகம்" : m.n ? `${m.n}` : `Grade ${m.g ?? "?"} மாணவர் ஒருவர்`}</b>
-                  ) : m.n ? (
-                    <Name id={m.sid} n={m.n} g={m.g} onMate={props.onMate} />
-                  ) : (
-                    <b class="f-us-n">ARISTORA</b>
-                  )}
+                  <Who m={m} onMate={props.onMate} />
                 </p>
                 <small class="f-uk-what">
-                  {m.k === "post" ? gradesWords(m.gs) : m.k === "ask" ? `🙋 ${AUD[m.aud ?? "t"]}` : KIND[m.k]} · {ago(m.at)}
+                  {m.spot ? `🔍 தவறைக் கண்டுபிடி · ${gradesWords(m.gs)}` : m.k === "post" ? gradesWords(m.gs) : m.k === "ask" ? `🙋 ${AUD[m.aud ?? "t"]}` : `${MARK[m.k]} ${KIND[m.k]}`} · {ago(m.at)}
                 </small>
               </div>
             </div>
@@ -751,8 +796,17 @@ export function ThreadScreen(props: { id: string; staff?: boolean; me?: string; 
               </p>
             ) : null}
             <div class="f-uk-b">
-              {m.k !== "post" && m.k !== "ask" && m.k !== "learn" ? <p>{say(m, props.onMate)}</p> : m.t ? <p class="f-us-post">{m.t}</p> : null}
-              {m.ph && <Pics ph={m.ph} />}
+              <LineWords m={m} onMate={props.onMate} />
+              {m.ph && !m.spot && (
+                <Pics
+                  ph={m.ph}
+                  save={
+                    st && (m.k === "ask" || m.k === "learn")
+                      ? { name: fileBase(m.at), text: m.k === "learn" && m.lst === "ok" && m.n ? `💡 ${m.n} கற்றது! ARISTORA app இல் பார்: app.aristora.org` : "🙋 ஒரு மாணவரின் கேள்வி. உதவ: ARISTORA app, app.aristora.org" }
+                      : undefined
+                  }
+                />
+              )}
             </div>
             {m.k === "learn" && m.lst === "w" && <p class="f-uk-state wait">⏳ {st ? `Waiting for a teacher's ✓: only ${m.n ?? "the student"} and the teachers see it.` : "ஆசிரியர் ✓ கொடுத்ததும் எல்லோருக்கும் தெரியும். இப்போது உனக்கும் ஆசிரியர்களுக்கும் மட்டும்."}</p>}
             {m.k === "learn" && m.lst === "no" && <p class="f-uk-state no">இந்த முறை இல்லை{m.note ? `: ${m.note}` : ""}</p>}

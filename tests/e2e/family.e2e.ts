@@ -2228,7 +2228,8 @@ test("Us: closed until the owner opens it; the owl's guide; his welcome; the owl
   await noSideScroll(P);
   await shot(P, "fam68-us-feed");
   // A name opens that classmate's profile.
-  await welcome.locator(".f-uk-who .f-us-n.tap").click();
+  // 8 Nov 2026: the owl writes the line; his face (and his name) in its words open his profile.
+  await welcome.locator(".f-uk-about .f-tapface").click();
   await contains(P.locator(".f-mate .f-me-name"), "Bilal M");
   await P.getByRole("button", { name: "Back" }).click();
   await visible(P.locator(".f-us-list"));
@@ -2582,6 +2583,136 @@ async function hanaToken(p: Page): Promise<string | null> {
     return list.find((a) => a.id === cur)?.token ?? null;
   });
 }
+
+test("Us people: her photo on her lines; the owl writes the automatic lines; a face opens the profile; a wrong answer saved, shared and asked again without the name", async () => {
+  // 8 Nov 2026, his voice note: "we don't have any features to edit the profile photo for the teachers ... teachers like
+  // to download that photo ... put the share button ... we have doubts group ... if that is wrong, teacher can repost that
+  // ... who can find what the problem here ... don't show the student's name ... the automatic message ... feel like
+  // that's come from owl ... profile is not clickable in the community page". Made-up students and words.
+  const before = problems.length;
+  const backend = makeBackend(modules);
+  const t = backend.t;
+  await addPerson(t, { name: "Owner", token: OWNER_TOKEN, role: "owner" });
+  const as = { token: OWNER_TOKEN };
+  await t.mutation(api.setup.ensure, as);
+  const u01 = await t.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G8-U01")).first())!._id);
+  const add = async (name: string, grade: number) => await t.mutation(api.students.add, { ...as, name, grade, term: 1, stage: "master", unitId: u01 });
+  const hana = await add("Hana K", 8);
+  const bilal = await add("Bilal M", 8);
+  await t.mutation(api.families.setCode, { ...as, studentId: hana, code: "4719" });
+  const FAM_B = "family-phone-bilal-ppl-0123456789abcdefghijklmno";
+  await t.mutation(api.families.makeLink, { ...as, studentId: bilal, codeHash: secretHash("family-link", "bilal-ppl-family-link-0123456789") });
+  await t.mutation(api.family.join, { code: "bilal-ppl-family-link-0123456789", token: FAM_B, label: "Android" });
+  await t.mutation(api.us.setCfg, { ...as, open: true });
+  await t.run(async (ctx) => await ctx.db.insert("usMoments", { k: "bday", sid: bilal, n: "Bilal M", g: 8, at: Date.now() - 3600_000, day: 0, demo: false, c: 0 }));
+  // The owner's question for Grade 8; Bilal's wrong answer with a photo of his paper (through the server).
+  const qid = await t.mutation(api.us.post, { ...as, text: "x + 3 = 15 எனின் x = ?", gs: [8], qn: true });
+  const file = async () => await t.run(async (ctx) => await ctx.storage.store(new Blob([Buffer.from(PAPER_PNG, "base64")], { type: "image/png" })));
+  await t.mutation(api.us.answer, { token: FAM_B, id: qid, text: "x = 18", ph: [{ s: await file(), b: await file(), w: 96, h: 72 }] });
+
+  // The class app's Us tab: her picture at the top → her photo (made small on her phone) → on her post.
+  const C = await open(backend, site.url, size(390, 820), () => {
+    if (sessionStorage.getItem("t")) return;
+    sessionStorage.setItem("t", "1");
+    localStorage.setItem("aristora.role", "focus");
+    localStorage.setItem("aristora.token", "owner-phone-token-0123456789abcdefghijklmnopqrstuv");
+  });
+  await C.locator(".tabs .tab.us").click();
+  const U = C.frameLocator("iframe.us-frame");
+  for (const b of ["அடுத்து", "அடுத்து", "தொடங்கு!"]) await U.locator(".f-us-guide").getByRole("button", { name: b }).click();
+  await visible(U.locator(".t-me .t-cam"));
+  await U.locator(".t-me").click();
+  await contains(U.locator(".t-sheet"), "Students see it");
+  await U.locator(".t-sheet .f-file").setInputFiles({ name: "me.png", mimeType: "image/png", buffer: Buffer.from(PAPER_PNG, "base64") });
+  await U.locator(".f-photo-sheet .f-crop.live").waitFor({ state: "visible", timeout: 25_000 });
+  await U.getByRole("button", { name: /Use this photo/ }).click();
+  await contains(U.locator(".f-toast"), "Your photo is on Us");
+  await visible(U.locator(".t-me .f-ava.pic img"));
+  expect(await t.run(async (ctx) => (await ctx.db.query("staffPhotos").collect()).length)).toBe(1);
+  // The owl's line: its face is the owl in the mood of the moment, its name the owl's.
+  const owlLine = U.locator(".f-uk.k-bday");
+  await visible(owlLine.locator(".f-uk-owl .f-owl"));
+  await contains(owlLine.locator(".f-uk-who"), "ஆந்தை");
+  await shot(C, "fam96-class-us-her-photo");
+
+  // Her question opened: Bilal's answer with ⬇ Download and Share under his photo (the bin stays at the end of the row).
+  await U.locator(".f-uk.k-post").getByRole("button", { name: "Mark ›" }).click();
+  const ans = U.locator(".f-msg").filter({ hasText: "x = 18" });
+  await visible(ans.locator(".f-pics img"));
+  const save = ans.locator(".f-save");
+  await visible(save);
+  const [dl] = await Promise.all([C.waitForEvent("download"), save.getByRole("button", { name: /Download/ }).click()]);
+  expect(dl.suggestedFilename()).toMatch(/^aristora-\d{4}-\d\d-\d\d\.png$/);
+  await contains(U.locator(".f-toast"), "Saved on this phone");
+  // Share: the phone's share sheet (stood in for here) gets the picture and the words, without his name (not marked).
+  await U.locator("body").evaluate(() => {
+    const w = window as unknown as { __shared?: unknown };
+    Object.assign(navigator, {
+      canShare: () => true,
+      share: async (d: { files: File[]; text: string }) => {
+        w.__shared = { n: d.files.length, name: d.files[0].name, text: d.text };
+      },
+    });
+  });
+  await save.getByRole("button", { name: /Share/ }).click();
+  await until(async () => !!(await U.locator("body").evaluate(() => (window as unknown as { __shared?: unknown }).__shared)), "the share sheet");
+  const shared = (await U.locator("body").evaluate(() => (window as unknown as { __shared?: unknown }).__shared)) as { n: number; name: string; text: string };
+  expect(shared.n).toBe(1);
+  expect(shared.text).toContain("app.aristora.org");
+  expect(shared.text).not.toContain("Bilal");
+  // ✗: then "find the mistake" right there; the sheet: the answer without the name, ✂ to cut a name out of the paper.
+  await ans.getByRole("button", { name: "Not right" }).click();
+  await contains(U.locator(".f-toast"), "find the mistake");
+  await ans.locator(".f-spot-go").click();
+  const sp = U.locator(".f-sheet").filter({ hasText: "Find the mistake" });
+  await contains(sp.locator(".f-spot-a"), "x = 18");
+  await visible(sp.locator(".f-spot-pics img"));
+  await shot(C, "fam97-class-us-spot-sheet");
+  await sp.getByRole("button", { name: "✂ Cut" }).click();
+  await U.locator(".f-cut").getByRole("button", { name: "Use this photo" }).click();
+  await visible(sp.locator(".f-spot-pics img"));
+  await sp.getByRole("button", { name: /Post for everyone/ }).click();
+  await contains(U.locator(".f-toast"), "for Grade 8");
+  await contains(ans.locator(".f-spot-done"), "Asked everyone");
+  const spot = await t.run(async (ctx) => (await ctx.db.query("usMoments").collect()).find((m) => m.src));
+  expect(spot).toMatchObject({ k: "post", qn: true, gs: [8], src: qid, sw: "x = 18", byN: "Owner" });
+  expect(spot!.ph).toHaveLength(1);
+  expect(spot!.sid).toBeUndefined();
+
+  // Hana's phone: the owl's birthday line (a tap on Bilal's face = his profile), her teacher's photo on the post, and
+  // the "find the mistake": the question above, a student's answer, no name anywhere.
+  const P = await open(backend, `${site.url}/f/`, size(390, 820));
+  await P.getByLabel(/Index/).fill("1001");
+  await P.getByLabel("Code").fill("4719");
+  await P.getByRole("button", { name: "Sign in" }).click();
+  await until(async () => (await P.locator(".f-tabs .f-tab").count()) === 5, "the Us tab");
+  await tabTo(P, /^Us$/);
+  for (const b of ["அடுத்து", "அடுத்து", "தொடங்கு!"]) await P.locator(".f-us-guide").getByRole("button", { name: b }).click();
+  const bd = P.locator(".f-uk.k-bday");
+  await visible(bd.locator(".f-uk-owl .f-owl"));
+  await contains(bd.locator(".f-uk-who"), "ஆந்தை");
+  await contains(bd.locator(".f-uk-about"), "Bilal M");
+  await visible(P.locator(".f-uk.k-post .f-uk-face .f-ava.pic img").first());
+  const sc = P.locator(".f-uk.k-post").filter({ has: P.locator(".f-spot-a") });
+  await contains(sc.locator(".f-uk-what"), "தவறைக் கண்டுபிடி");
+  await contains(sc.locator(".f-spot-q"), "x + 3 = 15");
+  await contains(sc.locator(".f-spot-a"), "x = 18");
+  await visible(sc.locator(".f-spot-a .f-pics img"));
+  expect(await sc.innerText()).not.toContain("Bilal");
+  await visible(sc.getByRole("button", { name: "🔍 கண்டுபிடி" }));
+  await noSideScroll(P);
+  await shot(P, "fam98-us-owl-and-spot");
+  await bd.locator(".f-uk-about .f-tapface").click();
+  await contains(P.locator(".f-mate .f-me-name"), "Bilal M");
+  await P.getByRole("button", { name: "Back" }).click();
+  await visible(P.locator(".f-us-list"));
+  // The smallest phone: the find-the-mistake card fits 320 px.
+  await P.setViewportSize({ width: 320, height: 640 });
+  await noSideScroll(P);
+  await shot(P, "fam99-us-spot-320");
+  for (const p of [P, C]) await p.context().close();
+  expect(problems.slice(before)).toEqual([]);
+});
 
 test("the owner's Preview: Settings → Books → a unit → every level open on the phone's own screen, look only; nobody else", async () => {
   // 5 Nov 2026, his ask: check every question of a unit without doing its levels in order; his answers: only him, only

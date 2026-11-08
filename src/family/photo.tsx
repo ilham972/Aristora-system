@@ -132,7 +132,15 @@ const dataUrlOf = (b: Blob) =>
     r.readAsDataURL(b);
   });
 
-export function PhotoSheet(props: { file: File; onClose: () => void; onDone: (key: string) => void }) {
+export function PhotoSheet(props: {
+  file: File;
+  onClose: () => void;
+  onDone: (key: string) => void;
+  /** A teacher's own photo (8 Nov 2026, the class app's Us tab): her words, and her call (no bar of bytes: ~20 KB). */
+  title?: string;
+  sub?: string;
+  send?: (data: string, type: string) => Promise<unknown>;
+}) {
   const [step, setStep] = useState<Step>({ k: "open" });
   const [src, setSrc] = useState<HTMLCanvasElement | null>(null);
   const [z, setZ] = useState(1);
@@ -193,7 +201,11 @@ export function PhotoSheet(props: { file: File; onClose: () => void; onDone: (ke
     const m = made.current!;
     setStep({ k: "send", part: 0, to: m.size });
     try {
-      const r = (await mutationSending("family:setPhoto", { data: m.data, type: m.type }, (p) => setStep({ k: "send", part: p, to: m.size }))) as { key: string };
+      const r = (
+        props.send
+          ? await props.send(m.data, m.type)
+          : await mutationSending("family:setPhoto", { data: m.data, type: m.type }, (p) => setStep({ k: "send", part: p, to: m.size }))
+      ) as { key: string };
       keepPic(r.key, m.url);
       sound("send");
       setStep({ k: "done", to: m.size });
@@ -253,7 +265,12 @@ export function PhotoSheet(props: { file: File; onClose: () => void; onDone: (ke
     ) : null;
 
   return (
-    <Sheet title="Your photo" sub="உன் ஆசிரியர் சரி என்ற பின் வகுப்பு நண்பர்கள் Race இல் பார்ப்பார்கள்." onClose={() => !busy && props.onClose()} class="f-photo-sheet">
+    <Sheet
+      title={props.title ?? "Your photo"}
+      sub={props.sub ?? "உன் ஆசிரியர் சரி என்ற பின் வகுப்பு நண்பர்கள் Race இல் பார்ப்பார்கள்."}
+      onClose={() => !busy && props.onClose()}
+      class="f-photo-sheet"
+    >
       <div
         ref={box}
         class={`f-crop${step.k === "edit" ? " live" : ""}`}

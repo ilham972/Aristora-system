@@ -9,3 +9,6 @@ addUsStyle();
 
 export { UsTab } from "./us";
 export { Composer, DoubtSheet, LearnSheet, ThreadScreen } from "./usPost";
+// What the teachers' own tools use (8 Nov 2026: staff.tsx's find the mistake), already here for the students' screens.
+export { pickedOf, sendPicked, setStaffTools } from "./usPost";
+export { CropSheet } from "./crop";

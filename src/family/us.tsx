@@ -22,7 +22,7 @@ import { DAY_EN, MONTH } from "./home";
 import { keep, mutation, query } from "./net";
 import { picOf, usePics } from "./pics";
 import { buzz, sound } from "./sound";
-import { Avatar, Icon, Owl, OwlBadge, problemWords, showSheet, toast, Waiting, type Mood } from "./ui";
+import { Avatar, Icon, Owl, OwlBadge, problemWords, showSheet, toast, useOwlTap, Waiting, type Mood } from "./ui";
 import { AUD, DoubtSheet, gradesWords, LearnSheet, Pics } from "./usPost";
 
 /** A shout-out's reason, in his words (convex/lib/us.ts SHOUT_WHY: the phone keeps its own copy, see family.ts). */
@@ -211,7 +211,7 @@ export function UsTab(props: {
   useEffect(() => {
     if (f && !guide) keep("usWelcome", f.welcome);
   }, [f?.welcome, guide]);
-  usePics([props.me?.photo?.key, ...items.flatMap((m) => [m.pic, ...(m.ppl ?? []).map((p) => p.pic), ...(m.lp ?? []).map((p) => p.pic)])].slice(0, 50));
+  usePics([props.me?.photo?.key, ...items.flatMap((m) => [m.pic, m.bp, ...(m.ppl ?? []).map((p) => p.pic), ...(m.lp ?? []).map((p) => p.pic)])].slice(0, 50));
 
   const done = () => {
     keep("usGuide", true);
@@ -500,7 +500,6 @@ export function say(m: UsItem, onMate: (id: string) => void): ComponentChildren 
     case "shout":
       return (
         <>
-          <b class="f-us-by">{m.by} ஆசிரியரின் shout-out</b>
           {n} {WHY_TA[m.t ?? ""] ?? ""}
         </>
       );
@@ -511,42 +510,165 @@ export function say(m: UsItem, onMate: (id: string) => void): ComponentChildren 
   }
 }
 
-/** Who a card is from (its first row): a student, a teacher, the asker of a doubt (never named), or ARISTORA's owl. */
-function Who(props: { m: UsItem; onMate: (id: string) => void }) {
+/**
+ * The lines the owl writes by itself (8 Nov 2026, his voice note: "for the automatic message, we can use the owl ...
+ * that is want to feel like that's come from owl instead from organization ... based on the automatic post that will
+ * look different"): the owl is their author, in the mood of the moment; the student is in the words, with his face.
+ */
+const OWL_MOOD: Partial<Record<UsItem["k"], Mood>> = {
+  bday: "party",
+  home1: "star",
+  back: "wave",
+  stage: "cheer",
+  flame: "cool",
+  up: "strong",
+  champs: "champ",
+  count: "happy",
+};
+/** The owl's name on its lines. */
+export const OWL_NAME = "ஆந்தை";
+export const byOwl = (m: Pick<UsItem, "k">) => OWL_MOOD[m.k] !== undefined;
+
+/** Who a card is from (its first row): the owl, a teacher (a post, a shout-out), a student, the asker of a doubt (never named). */
+export function Who(props: { m: UsItem; onMate: (id: string) => void }) {
   const m = props.m;
-  if (m.k === "post") return <b class="f-us-n">{m.by} ஆசிரியர்</b>;
+  if (byOwl(m)) return <b class="f-us-n owl">{OWL_NAME}</b>;
+  if (m.k === "post" || m.k === "shout") return <b class="f-us-n">{m.by} ஆசிரியர்</b>;
   if (m.k === "ask") {
     // The one who asked is never named to students (teachers see the name).
     if (m.mine) return <b class="f-us-n">உன் சந்தேகம்</b>;
     return m.n ? <Name id={m.sid} n={m.n} g={m.g} onMate={props.onMate} /> : <b class="f-us-n">Grade {m.g ?? "?"} மாணவர்</b>;
   }
-  if (m.n && m.k !== "count") return <Name id={m.sid} n={m.n} g={m.g} onMate={props.onMate} />;
-  return <b class="f-us-n">ARISTORA</b>;
+  if (m.n) return <Name id={m.sid} n={m.n} g={m.g} onMate={props.onMate} />;
+  return <b class="f-us-n owl">{OWL_NAME}</b>;
 }
 
-/** The card's face: the student's (his photo or letter) with the line's mark; a teacher's post or the owl's: a mark. */
-export function Face(props: { m: UsItem; size?: "s" | "m" }) {
+/** The owl as a line's face: its mood; a tap makes it react (its sounds), never opens the line. */
+function OwlFace(props: { mood: Mood }) {
+  const [mood, tap] = useOwlTap(props.mood);
+  return (
+    <span
+      class="f-uk-owl"
+      role="button"
+      aria-label={OWL_NAME}
+      onClick={(e) => {
+        e.stopPropagation();
+        tap();
+      }}
+    >
+      <Owl mood={mood} key={mood} still />
+    </span>
+  );
+}
+
+/** A face a tap opens: a student's = his profile (8 Nov 2026, his ask: "by pressing that, that will open that student's profile"). */
+export function Tap(props: { id?: string; onMate?: (id: string) => void; children: ComponentChildren }) {
+  if (!props.id || !props.onMate) return <>{props.children}</>;
+  return (
+    <span
+      class="f-tapface"
+      role="button"
+      aria-label="Profile"
+      onClick={(e) => {
+        e.stopPropagation();
+        buzz();
+        props.onMate!(props.id!);
+      }}
+    >
+      {props.children}
+    </span>
+  );
+}
+
+/** The card's face: the owl's (in its mood), a teacher's (her photo or letter), a student's (a tap: his profile) with the line's mark. */
+export function Face(props: { m: UsItem; size?: "s" | "m"; onMate?: (id: string) => void }) {
   const m = props.m;
-  const pic = m.k === "post" || m.k === "count" || m.ppl ? null : picOf(m.pic);
-  const person = !!m.n && m.k !== "post" && !(m.k === "ask" && !m.mine && !m.n);
+  const size = props.size === "s" ? "s" : "m";
+  const mood = OWL_MOOD[m.k];
+  if (mood) {
+    return (
+      <span class={`f-uk-face${props.size === "s" ? " s" : ""}`}>
+        <OwlFace mood={mood} />
+      </span>
+    );
+  }
+  const teacher = m.k === "post" || m.k === "shout";
+  const person = !teacher && !!m.n;
   return (
     <span class={`f-uk-face${props.size === "s" ? " s" : ""}`}>
-      {m.k === "post" ? (
-        <Avatar name={m.by ?? "?"} size={props.size === "s" ? "s" : "m"} />
+      {teacher ? (
+        <Avatar name={m.by ?? "?"} size={size} pic={picOf(m.bp)} />
       ) : person ? (
-        <Avatar name={m.n!} size={props.size === "s" ? "s" : "m"} pic={pic} />
+        <Tap id={m.sid} onMate={props.onMate}>
+          <Avatar name={m.n!} size={size} pic={picOf(m.pic)} />
+        </Tap>
       ) : (
-        <span class={`f-uk-emo k-${m.k}`}>{m.k === "count" || m.ppl ? MARK[m.k] : m.k === "ask" ? "🙋" : "🦉"}</span>
+        <span class={`f-uk-emo k-${m.k}`}>{m.k === "ask" ? "🙋" : "🦉"}</span>
       )}
-      {(person || m.k === "post") && <i class="f-uk-mark">{m.qn ? "❓" : MARK[m.k]}</i>}
+      {(person || teacher) && <i class="f-uk-mark">{m.spot ? "🔍" : m.qn ? "❓" : MARK[m.k]}</i>}
     </span>
+  );
+}
+
+/** The owl's words about one student (or a teacher's shout-out): his face first (a tap: his profile), then the words. */
+function About(props: { m: UsItem; onMate: (id: string) => void }) {
+  const m = props.m;
+  return (
+    <p class="f-uk-about">
+      <Tap id={m.sid} onMate={props.onMate}>
+        <Avatar name={m.n!} size="s" pic={picOf(m.pic)} />
+      </Tap>
+      <span>{say(m, props.onMate)}</span>
+    </p>
+  );
+}
+
+/** A line's words: the owl's and shout-outs' with his face; a find-the-mistake's three parts; a post's, a doubt's, a 💡's own. */
+export function LineWords(props: { m: UsItem; onMate: (id: string) => void }) {
+  const m = props.m;
+  if (m.spot) return <SpotBody m={m} />;
+  if (m.k === "post" || m.k === "ask" || m.k === "learn") return m.t ? <p class="f-us-post">{m.t}</p> : null;
+  if (m.n && !m.ppl && (byOwl(m) || m.k === "shout")) return <About m={m} onMate={props.onMate} />;
+  return <p>{say(m, props.onMate)}</p>;
+}
+
+/**
+ * "Find the mistake" (8 Nov 2026): a teacher's words, the question it came from (its words and photos, small), and a
+ * student's answer with no name: its words and its photos (`ph`: shown here, not under the words).
+ */
+export function SpotBody(props: { m: UsItem }) {
+  const m = props.m;
+  return (
+    <>
+      {m.t && <p class="f-us-post">{m.t}</p>}
+      {m.sq && (m.sq.t || m.sq.ph) && (
+        <div class="f-spot-q">
+          <b>❓ கேள்வி</b>
+          {m.sq.t && <p>{m.sq.t}</p>}
+          {m.sq.ph && <Pics ph={m.sq.ph} />}
+        </div>
+      )}
+      <div class="f-spot-a">
+        <b>📝 ஒரு மாணவரின் விடை</b>
+        {m.sw && <p>{m.sw}</p>}
+        {m.ph && <Pics ph={m.ph} />}
+      </div>
+    </>
   );
 }
 
 /** What it is and when, under the name ("🏁 Stage முடிவு · 2h", "❓ கேள்வி · Grade 8 · now"). */
 function What(props: { m: UsItem; now: number }) {
   const m = props.m;
-  const kind = m.qn ? "❓ கேள்வி" : m.k === "post" ? `📣 ${gradesWords(m.gs)}` : m.k === "ask" ? `🙋 ${AUD[m.aud ?? "t"]}` : `${MARK[m.k]} ${KIND[m.k]}`;
+  const kind = m.spot
+    ? "🔍 தவறைக் கண்டுபிடி"
+    : m.qn
+      ? "❓ கேள்வி"
+      : m.k === "post"
+        ? `📣 ${gradesWords(m.gs)}`
+        : m.k === "ask"
+          ? `🙋 ${AUD[m.aud ?? "t"]}`
+          : `${MARK[m.k]} ${KIND[m.k]}`;
   return (
     <small class="f-uk-what">
       {m.pin ? "📌 " : ""}
@@ -623,7 +745,9 @@ function Card(props: {
       ? "Mark ›"
       : m.my
         ? null
-        : "✍️ Answer"
+        : m.spot
+          ? "🔍 கண்டுபிடி"
+          : "✍️ Answer"
     : m.k === "ask"
       ? props.staff
         ? "Reply ›"
@@ -638,7 +762,7 @@ function Card(props: {
   return (
     <li class={`f-uk k-${m.k}${m.mine ? " mine" : ""}${m.pin ? " pin" : ""}${props.fresh ? " fresh" : ""}`} onClick={props.onOpen}>
       <div class="f-uk-h">
-        <Face m={m} />
+        <Face m={m} onMate={props.onMate} />
         <div class="f-uk-who">
           <p>
             <Who m={m} onMate={props.onMate} />
@@ -654,8 +778,8 @@ function Card(props: {
         </p>
       ) : null}
       <div class="f-uk-b">
-        {m.k !== "post" && m.k !== "ask" && m.k !== "learn" ? <p>{say(m, props.onMate)}</p> : m.t ? <p class="f-us-post">{m.t}</p> : null}
-        {m.ph && <Pics ph={m.ph} />}
+        <LineWords m={m} onMate={props.onMate} />
+        {m.ph && !m.spot && <Pics ph={m.ph} />}
         <State m={m} staff={props.staff} />
       </div>
       <div class="f-uk-f">

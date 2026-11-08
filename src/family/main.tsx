@@ -8,8 +8,9 @@ import { App } from "./app";
 import { BoardTab, keptBoard } from "./board";
 import { loadParts, useParts, useUsParts } from "./later";
 import { keep, mutation, query, staffWith } from "./net";
+import { picOf, usePics } from "./pics";
 import { armSound, buzz, sound } from "./sound";
-import { Avatar, keepOwl, problemWords, setSheetHost, Sheet, toast, Toast, Waiting } from "./ui";
+import { Avatar, Icon, keepOwl, problemWords, setSheetHost, Sheet, toast, Toast, Waiting } from "./ui";
 
 // Two fingers never zoom (his ask, 4 Nov 2026: "students want to feel like a native app"). Chrome obeys the page's
 // user-scalable=no and the CSS touch-action; an iPhone ignores user-scalable=no (since iOS 10), so Safari's own pinch
@@ -33,7 +34,7 @@ const look = /^#preview=([a-z0-9]+)$/i.exec(location.hash);
 // The class app's Us tab (7 Nov 2026): /f/?staff inside it, with the teacher's own sign-in (src/family/staff.tsx, a
 // file of its own that students' phones never download). It gets what it uses of the app from here (staff.tsx: Kit).
 const staff = new URLSearchParams(location.search).has("staff");
-const kit = { BoardTab, keptBoard, useParts, useUsParts, keep, mutation, query, staffWith, armSound, buzz, sound, Avatar, problemWords, setSheetHost, Sheet, toast, Toast, Waiting };
+const kit = { BoardTab, keptBoard, useParts, useUsParts, keep, mutation, query, staffWith, armSound, buzz, sound, Avatar, Icon, problemWords, setSheetHost, Sheet, toast, Toast, Waiting, picOf, usePics };
 if (look) void loadParts().then((m) => m.startPreview(look[1], document.getElementById("app")!));
 else if (staff) void import("./staff").then((m) => m.startStaff(document.getElementById("app")!, kit));
 else render(<App />, document.getElementById("app")!);

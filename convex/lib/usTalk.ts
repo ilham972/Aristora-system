@@ -70,9 +70,19 @@ export async function tell(ctx: MutationCtx, to: Id<"students">, from: Id<"stude
  * Someone wrote in a thread: its talk count (`talk`: a comment), its last moment (the feed puts the liveliest first),
  * the faces of the last who wrote (`who`: never the student who asked a doubt, never a question's answers).
  */
-export async function wroteIn(ctx: MutationCtx, m: Doc<"usMoments">, who: { n: string; pic?: string; tch?: boolean } | null, talk: boolean, now: number): Promise<void> {
+export async function wroteIn(
+  ctx: MutationCtx,
+  m: Doc<"usMoments">,
+  who: { n: string; pic?: string; tch?: boolean; u?: Id<"users"> } | null,
+  talk: boolean,
+  now: number,
+): Promise<void> {
+  // A teacher's face is her photo as it is when a phone reads it (`u`: convex/us.ts dressed), never a copy.
   const lp = who
-    ? [{ n: who.n, ...(who.pic ? { pic: who.pic } : {}), ...(who.tch ? { tch: true } : {}) }, ...(m.lp ?? []).filter((p) => p.n !== who.n)].slice(0, LAST_PEOPLE)
+    ? [{ n: who.n, ...(who.pic ? { pic: who.pic } : {}), ...(who.tch ? { tch: true } : {}), ...(who.u ? { u: who.u } : {}) }, ...(m.lp ?? []).filter((p) => p.n !== who.n)].slice(
+        0,
+        LAST_PEOPLE,
+      )
     : undefined;
   await ctx.db.patch(m._id, { ...(talk ? { cm: (m.cm ?? 0) + 1 } : {}), la: now, ...(lp ? { lp } : {}) });
 }

@@ -7,6 +7,7 @@
 // Pure rules here (tested in tests/profile.test.ts); the queries and mutations are in convex/family.ts and families.ts.
 
 import type { Doc } from "../_generated/dataModel";
+import type { QueryCtx } from "../_generated/server";
 import { DAY_MS, SL_OFFSET_MS, slDay, slDayNo, slMonth } from "./day";
 import { xpItems, type World } from "./family";
 import { teachState, type MQ } from "./master";
@@ -35,6 +36,15 @@ export function photoProblem(data: string, type: string): string | null {
 
 /** The picture as an image address (always one of the two types above: never a page or a script). */
 export const picUrl = (p: Pick<Doc<"profilePhotos">, "data" | "type">) => `data:${p.type};base64,${p.data}`;
+
+/** A teacher's photo by its key (8 Nov 2026): only her photo now, only while she is in the class; else null. */
+export async function staffPicUrl(ctx: QueryCtx, key: string): Promise<string | null> {
+  const id = ctx.db.normalizeId("staffPhotos", key);
+  const p = id ? await ctx.db.get(id) : null;
+  if (!p) return null;
+  const u = await ctx.db.get(p.userId);
+  return u?.active && u.photo?.id === p._id ? picUrl(p) : null;
+}
 
 // ---- A new name (the teachers say OK first) ----
 

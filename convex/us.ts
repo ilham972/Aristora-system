@@ -44,7 +44,7 @@ import { fail, log } from "./lib/backend";
 import { DAY_MS, isBirthday, slDayNo, slWeekStart } from "./lib/day";
 import { internalMutation, mutation } from "./lib/fn";
 import { NOTE_MAX, PHOTO_BYTES } from "./lib/photos";
-import { picUrl } from "./lib/profile";
+import { photoProblem, picUrl, staffPicUrl } from "./lib/profile";
 import { numsAt, RACE_GRADES } from "./lib/race";
 import { raceList } from "./lib/raceRows";
 import {
@@ -52,6 +52,7 @@ import {
   COMMENTS_A_DAY,
   DOUBTS_A_DAY,
   feedOf,
+  gradesOf,
   groupMoment,
   isTalk,
   itemOf,
@@ -121,6 +122,49 @@ async function withPics<T extends UsItem | UsReply>(ctx: QueryCtx, x: T, ph: Pho
   return pics ? { ...x, ph: pics } : x;
 }
 
+/**
+ * Teachers' photo keys (8 Nov 2026: her photo on her posts, shout-outs, replies and faces), each teacher read once per
+ * query: as she is now (a new photo shows on her old lines too), and only while she is in the class.
+ */
+function staffPics(ctx: QueryCtx): (id: Id<"users"> | undefined) => Promise<string | undefined> {
+  const memo = new Map<string, Promise<string | undefined>>();
+  return (id) => {
+    if (!id) return Promise.resolve(undefined);
+    let p = memo.get(id);
+    if (!p) {
+      p = ctx.db.get(id).then((u) => (u?.active && u.photo ? (u.photo.id as string) : undefined));
+      memo.set(id, p);
+    }
+    return p;
+  };
+}
+type StaffPics = ReturnType<typeof staffPics>;
+
+/** A line as a phone shows it: its teacher's photo, the teachers among its faces, and the question a "find the mistake" came from. */
+async function dressed<T extends UsItem>(ctx: QueryCtx, it: T, m: Doc<"usMoments">, tp: StaffPics): Promise<T> {
+  if (m.by && (m.k === "post" || m.k === "shout")) {
+    const k = await tp(m.by);
+    if (k) it.bp = k;
+  }
+  // itemOf and lineFor keep m.lp's order: the same place = the same person.
+  if (it.lp && m.lp) {
+    const lp: NonNullable<UsItem["lp"]> = [];
+    for (let i = 0; i < it.lp.length; i++) {
+      const k = await tp(m.lp[i]?.u);
+      lp.push(k ? { ...it.lp[i], pic: k } : it.lp[i]);
+    }
+    it.lp = lp;
+  }
+  if (m.src) {
+    const q = await ctx.db.get(m.src);
+    if (q) {
+      const ph = await picsOf(ctx, q.ph);
+      it.sq = { ...(q.t ? { t: q.t } : {}), ...(ph ? { ph } : {}) };
+    }
+  }
+  return it;
+}
+
 /** His answer to a question (never a comment of its talk). */
 async function mineOf(ctx: QueryCtx, mid: Id<"usMoments">, sid: Id<"students">) {
   const rows = await ctx.db
@@ -142,7 +186,7 @@ async function answersOf(ctx: QueryCtx, mid: Id<"usMoments">): Promise<Doc<"usAn
  * One line for his phone: its photos; on a question his answer (once he answered, how many are right, and the faces of
  * the talk).
  */
-async function lineFor(ctx: QueryCtx, m: Doc<"usMoments">, me: Id<"students">): Promise<UsItem> {
+async function lineFor(ctx: QueryCtx, m: Doc<"usMoments">, me: Id<"students">, tp: StaffPics): Promise<UsItem> {
   const it = await withPics(ctx, itemOf(m, me), m.ph);
   if (m.qn) {
     const a = await mineOf(ctx, m._id, me);
@@ -152,7 +196,7 @@ async function lineFor(ctx: QueryCtx, m: Doc<"usMoments">, me: Id<"students">): 
       if (m.lp?.length) it.lp = m.lp.map((p) => ({ n: p.n, ...(p.pic ? { pic: p.pic } : {}), ...(p.tch ? { tch: true } : {}) }));
     }
   }
-  return it;
+  return await dressed(ctx, it, m, tp);
 }
 
 /** A line he may open: it is on his phone (lib/us.ts seesLine), demo with demo. */
@@ -289,7 +333,8 @@ export const feed = query({
     const g = gradeOf(s);
     const rows = await feedOf(ctx, !!s.demo || !!s.test, (m) => !cfg.off.includes(m.k) && seesLine(m, s._id, g));
     const items: UsItem[] = [];
-    for (const m of rows) items.push(await lineFor(ctx, m, s._id));
+    const tp = staffPics(ctx);
+    for (const m of rows) items.push(await lineFor(ctx, m, s._id, tp));
     return { open: cfg.open, welcome: cfg.welcome, today: (await todayCount(ctx, Date.now())).today, items, you: s._id };
   },
 });
@@ -329,8 +374,9 @@ export type UsBoard = {
   owner: boolean;
   /** Her shout-outs today (student ids), so the page can say "given today". */
   shouted: string[];
-  /** Her name (the class app's Us tab shows who is on it). */
+  /** Her name (the class app's Us tab shows who is on it) and her photo's key (8 Nov 2026: a tap on it changes it). */
   me: string;
+  mePic?: string;
 };
 
 /** The teachers' Us: what the students see (every grade's lines, every doubt with who asked), and the switches. */
@@ -348,8 +394,10 @@ export const board = query({
       .withIndex("by_kind", (q) => q.eq("k", "shout").eq("day", day))
       .collect();
     const items: UsBoardItem[] = [];
+    const tp = staffPics(ctx);
     for (const m of rows) {
-      items.push(await withPics(ctx, { ...itemOf(m, undefined, true), tme: !!m.tc?.some((x) => x.id === u._id), ...(m.by === u._id ? { tmine: true } : {}) }, m.ph));
+      const it = await withPics(ctx, { ...itemOf(m, undefined, true), tme: !!m.tc?.some((x) => x.id === u._id), ...(m.by === u._id ? { tmine: true } : {}) }, m.ph);
+      items.push(await dressed(ctx, it, m, tp));
     }
     return {
       cfg,
@@ -360,6 +408,7 @@ export const board = query({
       owner: u.role === "owner",
       shouted: shouts.filter((m) => m.by === u._id && m.sid).map((m) => m.sid as string),
       me: u.name,
+      ...(u.photo ? { mePic: u.photo.id as string } : {}),
     };
   },
 });
@@ -396,7 +445,12 @@ export const pics = query({
     for (const key of new Set(args.keys)) {
       const id = ctx.db.normalizeId("profilePhotos", key);
       const p = id ? await ctx.db.get(id) : null;
-      if (!p) continue;
+      if (!p) {
+        // A teacher's photo (8 Nov 2026).
+        const t = await staffPicUrl(ctx, key);
+        if (t) out[key] = t;
+        continue;
+      }
       const s = await ctx.db.get(p.studentId);
       if (!s || s.archived || s.photo?.id !== p._id || s.photoHide) continue;
       out[key] = picUrl(p);
@@ -481,9 +535,9 @@ export const post = mutation({
   handler: async (ctx, args) => {
     const u = await actor(ctx, args.token, ["community"]);
     const t = wordsOf(args.text, args.ph, false);
-    const gs = [...new Set(args.gs ?? (args.to !== undefined ? [args.to] : []))].sort((a, b) => a - b);
-    if (gs.some((g) => !RACE_GRADES.includes(g))) fail("Choose grades from 6 to 11, or everyone.");
-    const all = gs.length === 0 || gs.length === RACE_GRADES.length;
+    const picked = gradesPicked(args.gs ?? (args.to !== undefined ? [args.to] : []));
+    const all = !picked;
+    const gs = picked ?? [];
     const ph = await takePhotos(ctx, args.ph, POST_PHOTOS);
     const now = Date.now();
     const id = await addMoment(ctx, {
@@ -499,18 +553,111 @@ export const post = mutation({
       ...(args.pin ? { pin: true } : {}),
     });
     await log(ctx, null, now, { kind: "us-post", value: `${all ? "all" : gs.join(",")}${args.qn ? " question" : ""}` });
-    if (args.qn) {
-      const rows = await ctx.db
-        .query("raceRows")
-        .withIndex("by_list", (q) => q.eq("demo", false).eq("gone", false))
-        .collect();
-      for (const r of rows) {
-        if (all || (r.g !== undefined && gs.includes(r.g))) {
-          await tell(ctx, r.sid, null, { k: "q", mid: id, n: u.name, tch: true, ...(t ? { t } : {}) }, `❓ ${u.name} ஆசிரியர் ஒரு கேள்வி கேட்கிறார். உன் விடையை அனுப்பு!`);
-        }
-      }
-    }
+    if (args.qn) await askGrades(ctx, id, all ? null : gs, u.name, t, `❓ ${u.name} ஆசிரியர் ஒரு கேள்வி கேட்கிறார். உன் விடையை அனுப்பு!`);
     return id;
+  },
+});
+
+/** A new question: the bell and the phone of every student of its grades (null = everyone) are told. */
+async function askGrades(ctx: MutationCtx, id: Id<"usMoments">, gs: number[] | null, n: string, t: string, alert: string): Promise<void> {
+  const rows = await ctx.db
+    .query("raceRows")
+    .withIndex("by_list", (q) => q.eq("demo", false).eq("gone", false))
+    .collect();
+  for (const r of rows) {
+    if (!gs || (r.g !== undefined && gs.includes(r.g))) await tell(ctx, r.sid, null, { k: "q", mid: id, n, tch: true, ...(t ? { t } : {}) }, alert);
+  }
+}
+
+/** The grades a teacher picked (none = everyone): 6 to 11 only; null = everyone. */
+function gradesPicked(list: number[] | undefined): number[] | null {
+  const gs = [...new Set(list ?? [])].sort((a, b) => a - b);
+  if (gs.some((g) => !RACE_GRADES.includes(g))) fail("Choose grades from 6 to 11, or everyone.");
+  return gs.length === 0 || gs.length === RACE_GRADES.length ? null : gs;
+}
+
+/**
+ * "Find the mistake" (8 Nov 2026, his voice note: "if one submits their answer, if that is wrong, teacher can repost that
+ * in the chat ... who can find what the problem here ... don't show the student's name ... showing the answer to everyone
+ * is not a problem ... that makes even community engaged"): any teacher, from an answer marked ✗, once. A new question
+ * for the grades she picks (the first question's by default): her words, the answer's words and photos (copies her phone
+ * made: she may cut a name out of a photo first), and the question it came from above them. Never whose: the line keeps
+ * no student id and no name. Students answer it as any question (+5 XP for a right one).
+ */
+export const spot = mutation({
+  args: { token, aid: v.id("usAnswers"), text: v.string(), gs: v.optional(v.array(v.number())), ph: v.optional(v.array(usPhoto)), words: v.optional(v.boolean()) },
+  handler: async (ctx, args) => {
+    const u = await actor(ctx, args.token, ["any"]);
+    const a = await ctx.db.get(args.aid);
+    const q = a ? await ctx.db.get(a.mid) : null;
+    if (!a || !q) fail("This answer isn't here any more.");
+    if (!q.qn || isTalk(a) || a.by) fail("Only a student's answer to a question can be asked again.");
+    if (a.ok !== false) fail("Mark it ✗ first: only a wrong answer is asked again.");
+    if (a.spot && (await ctx.db.get(a.spot))) fail("It is already on Us.");
+    const sw = args.words === false ? "" : tidy(a.t);
+    const t = wordsOf(args.text, args.ph, false);
+    if (!t) fail("Write what they should find first.");
+    if (!sw && !args.ph?.length) fail("This answer has no words: add its photo.");
+    const gs = gradesPicked(args.gs ?? gradesOf(q) ?? []);
+    const ph = await takePhotos(ctx, args.ph, REPLY_PHOTOS);
+    const now = Date.now();
+    const id = await addMoment(ctx, {
+      k: "post",
+      t,
+      ...(gs ? { gs } : {}),
+      ...(ph ? { ph } : {}),
+      qn: true,
+      an: 0,
+      okN: 0,
+      wN: 0,
+      by: u._id,
+      byN: u.name,
+      demo: false,
+      at: now,
+      src: q._id,
+      ...(sw ? { sw } : {}),
+    });
+    await ctx.db.patch(a._id, { spot: id });
+    await log(ctx, null, now, { kind: "us-post", value: `${gs ? gs.join(",") : "all"} find the mistake` });
+    await askGrades(ctx, id, gs, u.name, t, `🔍 ${u.name} ஆசிரியர்: இந்த விடையில் உள்ள தவறைக் கண்டுபிடி!`);
+    return id;
+  },
+});
+
+/**
+ * Her photo (8 Nov 2026, his ask: "still we don't have any features to edit the profile photo for the teachers"): any
+ * teacher, her own, made small on her phone as a student's is (≤ 288 px square, under 45 KB). Shown at once (no OK: she
+ * is a teacher), on her old lines too; the one before goes.
+ */
+export const setMyPhoto = mutation({
+  args: { token, data: v.string(), type: v.string() },
+  handler: async (ctx, args) => {
+    const u = await actor(ctx, args.token, ["any"]);
+    const why = photoProblem(args.data, args.type);
+    if (why) fail(why);
+    const now = Date.now();
+    for (const p of await ctx.db
+      .query("staffPhotos")
+      .withIndex("by_user", (q) => q.eq("userId", u._id))
+      .collect())
+      await ctx.db.delete(p._id);
+    const id = await ctx.db.insert("staffPhotos", { userId: u._id, data: args.data, type: args.type as "image/jpeg" | "image/webp", at: now });
+    await ctx.db.patch(u._id, { photo: { id, at: now } });
+    return { key: id as string };
+  },
+});
+
+/** She takes her photo off (her letter again). */
+export const dropMyPhoto = mutation({
+  args: { token },
+  handler: async (ctx, args) => {
+    const u = await actor(ctx, args.token, ["any"]);
+    for (const p of await ctx.db
+      .query("staffPhotos")
+      .withIndex("by_user", (q) => q.eq("userId", u._id))
+      .collect())
+      await ctx.db.delete(p._id);
+    await ctx.db.patch(u._id, { photo: undefined });
   },
 });
 
@@ -588,10 +735,21 @@ async function cheersOf(ctx: QueryCtx, mid: Id<"usMoments">): Promise<UsCheer[]>
 }
 
 /** Messages as one person may see them, with their photos and whether he gave each a 👏. */
-async function messagesFor(ctx: QueryCtx, rows: Doc<"usAnswers">[], m: Doc<"usMoments">, me: Id<"students"> | null, staff: boolean, who: string): Promise<UsReply[]> {
+async function messagesFor(
+  ctx: QueryCtx,
+  rows: Doc<"usAnswers">[],
+  m: Doc<"usMoments">,
+  me: Id<"students"> | null,
+  staff: boolean,
+  who: string,
+  tp: StaffPics,
+): Promise<UsReply[]> {
   const out: UsReply[] = [];
   for (const a of rows) {
     const r = await withPics(ctx, replyOf(a, m, me, staff), a.ph);
+    // A teacher's face: her photo as it is now (8 Nov 2026).
+    const k = await tp(a.by);
+    if (k) r.pic = k;
     if (a.lk) {
       const mine = await ctx.db
         .query("usLikes")
@@ -627,9 +785,10 @@ export const thread = query({
       .withIndex("by_mid", (q) => q.eq("mid", m._id).eq("sid", s._id))
       .first();
     const mineLine = m.sid === s._id;
+    const tp = staffPics(ctx);
     return {
-      m: await lineFor(ctx, m, s._id),
-      list: await messagesFor(ctx, shown, m, s._id, false, s._id),
+      m: await lineFor(ctx, m, s._id, tp),
+      list: await messagesFor(ctx, shown, m, s._id, false, s._id, tp),
       hidden: m.qn ? base.length - shown.length : 0,
       can:
         m.k === "ask"
@@ -637,7 +796,7 @@ export const thread = query({
           : m.qn
             ? { answer: !sent, talk: sent }
             : { talk: true, ...(m.k === "learn" && !mineLine ? { report: true } : {}) },
-      talk: await messagesFor(ctx, talk, m, s._id, false, s._id),
+      talk: await messagesFor(ctx, talk, m, s._id, false, s._id, tp),
       ...(open ? {} : { talkHidden: talkRows.length }),
       cheers: await cheersOf(ctx, m._id),
       ...(clapped ? { clapped: true } : {}),
@@ -916,8 +1075,9 @@ export const tthread = query({
     const m = mid ? await ctx.db.get(mid) : null;
     if (!m) fail("This isn't here any more.");
     const rows = await answersOf(ctx, m._id);
+    const tp = staffPics(ctx);
     return {
-      m: await withPics(ctx, itemOf(m, undefined, true), m.ph),
+      m: await dressed(ctx, await withPics(ctx, itemOf(m, undefined, true), m.ph), m, tp),
       list: await messagesFor(
         ctx,
         rows.filter((a) => !isTalk(a)),
@@ -925,10 +1085,11 @@ export const tthread = query({
         null,
         true,
         u._id,
+        tp,
       ),
       hidden: 0,
       can: { mark: !!m.qn || m.k === "ask", reply: m.k === "ask", talk: m.k !== "ask", ...(m.k === "learn" ? { approve: true } : {}) },
-      talk: await messagesFor(ctx, rows.filter(isTalk), m, null, true, u._id),
+      talk: await messagesFor(ctx, rows.filter(isTalk), m, null, true, u._id, tp),
       cheers: await cheersOf(ctx, m._id),
     };
   },
@@ -1045,7 +1206,7 @@ export const treply = mutation({
     const now = Date.now();
     const id = await ctx.db.insert("usAnswers", { mid: m._id, by: u._id, n: u.name, ...(t ? { t } : {}), ...(ph ? { ph } : {}), at: now, demo: m.demo, ...(parent ? { re: parent.root._id } : {}) });
     await ctx.db.patch(m._id, { an: (m.an ?? 0) + 1, tr: true });
-    await wroteIn(ctx, { ...m, an: (m.an ?? 0) + 1, tr: true }, { n: u.name, tch: true }, false, now);
+    await wroteIn(ctx, { ...m, an: (m.an ?? 0) + 1, tr: true }, { n: u.name, tch: true, u: u._id }, false, now);
     await tellWriting(ctx, m, null, parent, { mid: m._id, aid: id, n: u.name, tch: true, ...(t ? { t } : {}) }, t);
   },
 });
@@ -1063,7 +1224,7 @@ export const tcomment = mutation({
     const ph = await takePhotos(ctx, args.ph, REPLY_PHOTOS);
     const now = Date.now();
     const id = await ctx.db.insert("usAnswers", { mid: m._id, by: u._id, n: u.name, ...(t ? { t } : {}), ...(ph ? { ph } : {}), at: now, demo: m.demo, k: "c", ...(parent ? { re: parent.root._id } : {}) });
-    await wroteIn(ctx, m, { n: u.name, tch: true }, true, now);
+    await wroteIn(ctx, m, { n: u.name, tch: true, u: u._id }, true, now);
     await tellWriting(ctx, m, null, parent, { mid: m._id, aid: id, n: u.name, tch: true, ...(t ? { t } : {}) }, t);
   },
 });

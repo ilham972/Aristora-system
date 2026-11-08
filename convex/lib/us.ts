@@ -400,6 +400,15 @@ export type UsItem = {
   note?: string;
   /** Teachers only: messages in it under a report. */
   rpm?: number;
+  /** The teacher's photo on her post or shout-out (8 Nov 2026): its key (convex/us.ts `dressed` adds it). */
+  bp?: string;
+  /**
+   * "Find the mistake" (8 Nov 2026): a question made from an answer a teacher marked ✗: the question it came from (`sq`:
+   * its words and photos), the answer's words (`sw`; its photos are `ph`). Never whose.
+   */
+  spot?: boolean;
+  sq?: { t?: string; ph?: UsPic[] };
+  sw?: string;
 };
 
 /** A photo as a phone gets it: the small copy's address, the big one's, the big one's size. */
@@ -443,6 +452,8 @@ export function itemOf(m: Doc<"usMoments">, me?: Id<"students">, staff = false):
     ...(m.k === "learn" && m.okBy && m.ok !== undefined ? { by: m.okBy } : {}),
     ...(m.k === "learn" && m.note && (mine || staff) ? { note: m.note } : {}),
     ...(staff && m.rpm ? { rpm: m.rpm } : {}),
+    ...(m.src ? { spot: true } : {}),
+    ...(m.sw ? { sw: m.sw } : {}),
   };
 }
 
@@ -480,6 +491,8 @@ export type UsReply = {
   fix?: string;
   fixBy?: string;
   pic?: string;
+  /** Teachers: the "find the mistake" question made from this answer (8 Nov 2026). */
+  spot?: string;
 };
 
 /** Who cheered a line (8 Nov 2026: faces in the thread; a tap = his profile). */
@@ -535,6 +548,7 @@ export function replyOf(a: Doc<"usAnswers">, m: Pick<Doc<"usMoments">, "sid" | "
     ...(a.ln?.length ? { ln: a.ln } : {}),
     ...(a.fix ? { fix: a.fix, ...(a.fixBy ? { fixBy: a.fixBy } : {}) } : {}),
     ...(a.pic && named ? { pic: a.pic } : {}),
+    ...(staff && a.spot ? { spot: a.spot } : {}),
   };
 }
 

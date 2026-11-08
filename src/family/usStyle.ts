@@ -217,6 +217,40 @@ const CSS = `
 .f-uk-tc{display:none}
 }
 @media (prefers-reduced-motion:reduce){.f-uk{animation:none}.f-us-clap.done{animation:none}}
+.f-us-n.owl{color:var(--brand-2)}
+.f-uk-owl{display:grid;place-items:center;width:100%;height:100%;border-radius:50%;background:radial-gradient(circle at 50% 40%,#fff,var(--brand-soft) 72%);box-shadow:inset 0 0 0 1.5px var(--lav);overflow:hidden;cursor:pointer}
+.f-uk-owl .f-owl{width:118%;height:118%;margin-top:9%}
+.f-uk-owl .f-owl svg{width:100%;height:100%}
+.f-tapface{display:inline-grid;border-radius:50%;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.f-tapface:active{transform:scale(.92)}
+.f-uk-about{display:flex;align-items:flex-start;gap:9px}
+.f-uk-about>span:last-child{flex:1;min-width:0;padding-top:3px}
+.f-uk-about .f-ava.s{width:30px;height:30px;font-size:13px;flex:none}
+/* The teachers' tools in a line (8 Nov 2026: staff.tsx draws them; here, the teachers' file was full). */
+.f-spot-pics{display:flex;flex-wrap:wrap;gap:8px}
+.f-thumb.big{width:112px;height:112px}
+.f-spot-cut{position:absolute;left:5px;bottom:5px;padding:4px 9px 2px;border-radius:999px;background:rgba(28,26,58,.78);color:#fff;font:800 12.5px/1.2 var(--display)}
+.f-spot-warn{font-size:12.5px;line-height:1.4;color:var(--gold-ink)}
+.f-spot-l{display:block;margin:12px 0 6px;font:800 12.5px/1 var(--display);color:var(--ink3)}
+.f-spot-gs{display:grid;grid-template-columns:repeat(6,1fr);gap:5px}
+.f-spot-g{min-height:40px;border-radius:12px;background:var(--brand-soft);color:var(--brand-2);border:1.5px solid var(--lav);font:800 15px/1 var(--display)}
+.f-spot-g.on{background:var(--brand);color:#fff;border-color:transparent}
+.f-spot-err{margin-top:10px;color:var(--wrong-ink,#c0392b);font-size:13.5px}
+.f-spot-go{display:block;width:100%;margin-top:7px;min-height:38px;padding:3px 12px 1px;border-radius:12px;background:var(--gold-soft);border:1.5px dashed var(--gold-hi);color:var(--gold-ink);font:800 13.5px/1.25 var(--display);text-align:left}
+.f-spot-done{margin-top:6px;font:800 12.5px/1.3 var(--display);color:var(--ink3)}
+.f-save{display:flex;gap:8px;margin-top:7px}
+.f-save-b{display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:2px 13px 0;border-radius:999px;background:#fff;border:1.5px solid var(--lav);color:var(--brand-2);font:800 13px/1 var(--display)}
+.f-save-b:disabled{opacity:.55}
+.f-lb-save{position:absolute;left:0;right:0;bottom:calc(var(--safe-b) + 40px);display:flex;justify-content:center}
+.f-lb-save .f-save-b{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.3);color:#fff;min-height:40px;padding:2px 16px 0}
+.f-spot-post{width:100%;margin-top:12px}
+.f-spot-q,.f-spot-a{margin:8px 0 0;padding:9px 11px 10px;border-radius:14px;display:grid;gap:5px}
+.f-spot-q{background:var(--brand-soft)}
+.f-spot-a{background:var(--gold-soft);box-shadow:inset 0 0 0 1.5px var(--gold-hi)}
+.f-spot-q>b,.f-spot-a>b{font:800 12.5px/1.2 var(--display);color:var(--ink3);letter-spacing:.02em}
+.f-spot-a>b{color:var(--gold-ink)}
+.f-spot-q p,.f-spot-a p{font-size:14.5px;line-height:1.5;color:var(--ink);white-space:pre-wrap;overflow-wrap:anywhere}
+.f-spot-q .f-pics,.f-spot-a .f-pics{margin-top:2px}
 `;
 
 let added = false;

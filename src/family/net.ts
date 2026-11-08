@@ -79,6 +79,10 @@ const STAFF_CHANGES: Record<string, string> = {
   "us:like": "us:tlike",
   "us:fix": "us:fix",
   "us:approve": "us:approve",
+  // 8 Nov 2026: her photo; a wrong answer asked again without the name ("find the mistake").
+  "us:setMyPhoto": "us:setMyPhoto",
+  "us:dropMyPhoto": "us:dropMyPhoto",
+  "us:spot": "us:spot",
 };
 /** The class app's Us tab with this teacher's sign-in. */
 export function staffWith(t: string): void {

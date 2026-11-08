@@ -21,7 +21,9 @@ import type { UsBoard, UsBoardItem, UsFeed } from "../../convex/us";
 import type { UsItem } from "../../convex/lib/us";
 import type { RaceRow } from "../../convex/lib/race";
 import type { Board } from "./board";
+import type { UsParts } from "./later";
 import type { Mood, SheetRender } from "./ui";
+import type { Picked, SaveInfo, SpotProps } from "./usPost";
 
 /**
  * What it uses of the students' app, handed over by main.tsx (never imported here: an import of any of them would make
@@ -30,8 +32,9 @@ import type { Mood, SheetRender } from "./ui";
 export type Kit = Pick<typeof import("./board"), "BoardTab" | "keptBoard"> &
   Pick<typeof import("./later"), "useParts" | "useUsParts"> &
   Pick<typeof import("./net"), "keep" | "mutation" | "query" | "staffWith"> &
+  Pick<typeof import("./pics"), "picOf" | "usePics"> &
   Pick<typeof import("./sound"), "armSound" | "buzz" | "sound"> &
-  Pick<typeof import("./ui"), "Avatar" | "problemWords" | "setSheetHost" | "Sheet" | "toast" | "Toast" | "Waiting">;
+  Pick<typeof import("./ui"), "Avatar" | "Icon" | "problemWords" | "setSheetHost" | "Sheet" | "toast" | "Toast" | "Waiting">;
 let K: Kit;
 
 /** Her style (her screens only): a string here, so the students' style files carry none of it. */
@@ -39,8 +42,11 @@ const CSS = `
 .t-seg{display:flex;gap:2px;padding:3px;border-radius:999px;background:rgba(255,255,255,.18)}
 .t-seg button{height:34px;padding:2px 16px 0;border-radius:999px;color:#fff;font:800 14.5px/1 var(--display)}
 .t-seg button.on{background:#fff;color:var(--brand-2)}
-.t-me{display:flex;align-items:center;gap:8px;min-width:0;color:#fff;font:800 15px/1 var(--display)}
+.t-me{display:flex;align-items:center;gap:8px;min-width:0;color:#fff;font:800 15px/1 var(--display);text-align:left}
 .t-me i{font-style:normal;font-size:12px;opacity:.8}
+.t-mepic{position:relative;flex:none}
+.t-cam{position:absolute;right:-5px;bottom:-4px;width:19px;height:19px;border-radius:50%;background:#fff;display:grid;place-items:center;font-size:11px;font-style:normal!important;opacity:1!important;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.t-photo{display:grid;place-items:center;margin:4px 0 16px}
 .t-head{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 16px 0}
 .t-head.one{grid-template-columns:1fr}
 .t-head .f-btn{min-height:46px;font-size:15.5px;padding:2px 8px 0;margin-bottom:5px}
@@ -122,6 +128,12 @@ export function startStaff(el: HTMLElement, kit: Kit): void {
 function StaffApp() {
   const parts = K.useParts();
   const usp = K.useUsParts();
+  // Her own tools in a line (Download / Share, find the mistake): handed to the Us file once it is here.
+  useEffect(() => {
+    if (!usp) return;
+    U = usp;
+    usp.setStaffTools({ Spot: (p) => <SpotSheet {...p} />, Save: (p) => <SaveRow {...p} /> });
+  }, [usp]);
   const [tab, setTab] = useState<"us" | "race">(() => (K.keep<string>("tab") === "race" ? "race" : "us"));
   const [b, setB] = useState<UsBoard | null>(() => K.keep<UsBoard>("usb"));
   const [err, setErr] = useState<string | null>(null);
@@ -223,14 +235,55 @@ function StaffApp() {
     window.scrollTo(0, 0);
   };
 
+  K.usePics([b?.mePic]);
+  // Her photo (8 Nov 2026, his ask): a tap on her picture; students see it on her posts and replies.
+  const myPhoto = () =>
+    openSheet((close) => (
+      <MyPhotoSheet
+        name={b?.me ?? ""}
+        pic={K.picOf(b?.mePic)}
+        has={!!b?.mePic}
+        onClose={close}
+        onFile={(file) => {
+          if (!parts) return;
+          openSheet((done) => (
+            <parts.PhotoSheet
+              file={file}
+              title="Your photo"
+              sub="Students see it on your posts, shout-outs and replies in Us."
+              send={(data, type) => K.mutation("us:setMyPhoto", { data, type })}
+              onClose={done}
+              onDone={() => {
+                done();
+                K.toast("✓ Your photo is on Us.");
+                void load();
+              }}
+            />
+          ));
+        }}
+        onDrop={() =>
+          K.mutation("us:dropMyPhoto")
+            .then(() => {
+              close();
+              K.toast("Photo removed.");
+              void load();
+            })
+            .catch((e) => K.toast(K.problemWords(e), true))
+        }
+      />
+    ));
+
   const top = (
     <div class="f-toprow">
-      <span class="t-me">
-        <K.Avatar name={b?.me || "?"} size="s" />
+      <button type="button" class="t-me" aria-label="Your photo" onClick={myPhoto}>
+        <span class="t-mepic">
+          <K.Avatar name={b?.me || "?"} size="s" pic={K.picOf(b?.mePic)} />
+          {!b?.mePic && <i class="t-cam" aria-hidden="true">📷</i>}
+        </span>
         <span>
           {b?.me ?? ""} <i>· ஆசிரியர்</i>
         </span>
-      </span>
+      </button>
       <span class="f-sp" />
       <div class="t-seg" role="group" aria-label="Us or the race">
         <button type="button" class={tab === "us" ? "on" : ""} aria-pressed={tab === "us"} onClick={() => pick("us")}>
@@ -358,6 +411,278 @@ function StaffApp() {
       {sheet && sheet(closeSheet)}
       <K.Toast />
     </div>
+  );
+}
+
+// ---- Her own tools in a line (8 Nov 2026): Download / Share a student's photos, and 🔍 find the mistake ----
+// usPost.tsx draws them only with these handed over (setStaffTools), so students' phones never download them.
+
+/** The Us file once here (its photo helpers and crop), for her tools below. */
+let U: UsParts | null = null;
+
+/** A picture kept a few minutes: a second tap is at once (a phone opens its share sheet only right after a tap). */
+const keptPics = new Map<string, { b: Blob; t: number }>();
+async function picBlob(url: string): Promise<Blob> {
+  const k = keptPics.get(url);
+  if (k && Date.now() - k.t < 300_000) return k.b;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(String(r.status));
+  const b = await r.blob();
+  keptPics.set(url, { b, t: Date.now() });
+  return b;
+}
+const picName = (base: string, i: number, n: number, b: Blob) => `${base}${n > 1 ? `-${i + 1}` : ""}.${b.type === "image/png" ? "png" : b.type === "image/webp" ? "webp" : "jpg"}`;
+function saveBlob(b: Blob, name: string): void {
+  const u = URL.createObjectURL(b);
+  const a = document.createElement("a");
+  a.href = u;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.setTimeout(() => URL.revokeObjectURL(u), 60_000);
+}
+
+/**
+ * ⬇ Download and Share under a student's photos (8 Nov 2026, his voice note: "teachers like to download that photo ...
+ * don't put that icon near the delete button ... put the share button so they can share that answer in the WhatsApp,
+ * because we have doubts group"): right under the photos, and at the bottom of a photo opened full screen. Share = the
+ * phone's own share sheet with the pictures and a few words (his name only on an answer marked right); a phone that
+ * can't share a picture saves it and copies the words. No signal for the file: the picture opens (a long press saves).
+ */
+function SaveRow(props: { x: SaveInfo }) {
+  const [busy, setBusy] = useState(false);
+  const run = (f: () => Promise<void>) => (e: Event) => {
+    e.stopPropagation();
+    if (busy) return;
+    K.buzz();
+    setBusy(true);
+    void f().finally(() => setBusy(false));
+  };
+  const files = async () => {
+    const list = await Promise.all(props.x.urls.map(picBlob));
+    return list.map((b, i) => new File([b], picName(props.x.name, i, list.length, b), { type: b.type || "image/jpeg" }));
+  };
+  const download = async () => {
+    try {
+      for (const f of await files()) saveBlob(f, f.name);
+      K.toast("⬇ Saved on this phone.");
+    } catch {
+      window.open(props.x.urls[0], "_blank", "noopener");
+      K.toast("Opened: press and hold the photo to save it.");
+    }
+  };
+  const share = async () => {
+    const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
+    let list: File[] = [];
+    try {
+      list = await files();
+    } catch {
+      list = [];
+    }
+    if (list.length && nav.share && nav.canShare?.({ files: list })) {
+      try {
+        await nav.share({ files: list, text: props.x.text });
+        return;
+      } catch (e) {
+        const n = (e as { name?: string }).name;
+        if (n === "AbortError") return;
+        if (n === "NotAllowedError") return K.toast("Ready: tap Share again.");
+      }
+    }
+    if (list.length) for (const f of list) saveBlob(f, f.name);
+    else window.open(props.x.urls[0], "_blank", "noopener");
+    try {
+      await navigator.clipboard.writeText(props.x.text);
+    } catch {
+      /* no clipboard here */
+    }
+    K.toast("Saved, and the words are copied: paste them in WhatsApp.");
+  };
+  return (
+    <div class="f-save">
+      <button type="button" class="f-save-b" disabled={busy} onClick={run(download)}>
+        <K.Icon name="save" size={16} /> Download
+      </button>
+      <button type="button" class="f-save-b" disabled={busy} onClick={run(share)}>
+        <K.Icon name="share" size={16} /> Share
+      </button>
+    </div>
+  );
+}
+
+/** The words "find the mistake" starts with (she may change them): students read Tamil. */
+const SPOT_WORDS = "இந்த விடையில் ஒரு தவறு இருக்கிறது. அதைக் கண்டுபிடி, சரியான விடையையும் எழுது!";
+
+/**
+ * 🔍 "Find the mistake" (8 Nov 2026, his voice note: "if that is wrong, teacher can repost that ... who can find what the
+ * problem here ... don't show the student's name ... that makes even community engaged"): a wrong answer asked again
+ * as a new question, without the name. Her words, the grades (the question's own at first), the answer's words and
+ * photos: copies her phone makes, ✂ to cut out a name written on the paper, ✕ to leave a photo out.
+ */
+function SpotSheet(props: SpotProps) {
+  const [text, setText] = useState(SPOT_WORDS);
+  const [gs, setGs] = useState<number[]>(props.q.gs ?? []);
+  const [pics, setPics] = useState<Picked[] | null>(props.r.ph?.length ? null : []);
+  const [cut, setCut] = useState<{ i: number; b: Blob } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    let gone = false;
+    Promise.all((props.r.ph ?? []).map(async (p) => await U!.pickedOf(await picBlob(p.b)))).then(
+      (list) => !gone && setPics(list),
+      () => {
+        if (gone) return;
+        setPics([]);
+        setErr("The photos didn't come (no signal?). Close and try again.");
+      },
+    );
+    return () => {
+      gone = true;
+    };
+  }, []);
+  const ready = !!pics && !!text.trim() && (!!props.r.t || pics.length > 0) && !busy;
+  const send = async () => {
+    if (!pics || !U) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const ph = await U.sendPicked(pics);
+      await K.mutation("us:spot", { aid: props.r.id, text: text.trim(), gs, ...(ph.length ? { ph } : {}) });
+      K.buzz();
+      K.sound("send");
+      K.toast(`🔍 On Us${gs.length ? ` for Grade ${gs.join(", ")}` : " for everyone"}: who finds the mistake?`);
+      props.onDone();
+      props.onClose();
+    } catch (e) {
+      setErr(K.problemWords(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const Crop = U?.CropSheet;
+  return (
+    <K.Sheet title="🔍 Find the mistake" sub="A new question on Us: this answer, without the name. Students find what is wrong (+5 XP for a right one)." onClose={() => !busy && props.onClose()}>
+      {props.q.t && (
+        <div class="f-spot-q">
+          <b>The question</b>
+          <p>{props.q.t}</p>
+        </div>
+      )}
+      <div class="f-spot-a">
+        <b>The answer · no name</b>
+        {props.r.t && <p>{props.r.t}</p>}
+        {props.r.ph?.length ? (
+          <>
+            <div class="f-spot-pics">
+              {!pics && <K.Waiting />}
+              {(pics ?? []).map((p, i) => (
+                <span key={p.u} class="f-thumb big">
+                  <img src={p.u} alt={`Photo ${i + 1}`} />
+                  <button type="button" class="f-spot-cut" onClick={() => setCut({ i, b: p.b })}>
+                    ✂ Cut
+                  </button>
+                  <button
+                    type="button"
+                    class="f-thumb-x"
+                    aria-label={`Leave photo ${i + 1} out`}
+                    onClick={() => {
+                      URL.revokeObjectURL(p.u);
+                      setPics(pics!.filter((_, j) => j !== i));
+                    }}
+                  >
+                    <K.Icon name="close" size={12} />
+                  </button>
+                </span>
+              ))}
+            </div>
+            <small class="f-spot-warn">Check: no name on the paper. ✂ Cut it out, or ✕ leave the photo out.</small>
+          </>
+        ) : null}
+      </div>
+      <label class="f-spot-l">Your words (Tamil: students read them)</label>
+      <textarea class="f-replybox" rows={3} maxLength={300} value={text} aria-label="Your words" onInput={(e) => setText((e.target as HTMLTextAreaElement).value)} />
+      <label class="f-spot-l">Grades · none = everyone</label>
+      <div class="f-spot-gs">
+        {[6, 7, 8, 9, 10, 11].map((g) => (
+          <button
+            key={g}
+            type="button"
+            class={`f-spot-g${gs.includes(g) ? " on" : ""}`}
+            aria-pressed={gs.includes(g)}
+            onClick={() => setGs(gs.includes(g) ? gs.filter((x) => x !== g) : [...gs, g].sort((a, b) => a - b))}
+          >
+            {g}
+          </button>
+        ))}
+      </div>
+      {err && <p class="f-spot-err">{err}</p>}
+      <button type="button" class="f-btn go f-spot-post" disabled={!ready} onClick={() => void send()}>
+        {busy ? "Posting…" : "🔍 Post for everyone"}
+      </button>
+      {cut && Crop && (
+        <Crop
+          file={cut.b}
+          say="Cut out the student's name: keep only the working."
+          onClose={() => setCut(null)}
+          onDone={(b) => {
+            const i = cut.i;
+            setCut(null);
+            void U!.pickedOf(b).then(
+              (p) =>
+                setPics((list) =>
+                  (list ?? []).map((x, j) => {
+                    if (j !== i) return x;
+                    URL.revokeObjectURL(x.u);
+                    return p;
+                  }),
+                ),
+              () => K.toast("That photo didn't open. Try again.", true),
+            );
+          }}
+        />
+      )}
+    </K.Sheet>
+  );
+}
+
+/** Her photo (8 Nov 2026): as it shows to students, choose another (her phone makes it small), or take it off. */
+function MyPhotoSheet(props: { name: string; pic: string | null; has: boolean; onClose: () => void; onFile: (f: File) => void; onDrop: () => void }) {
+  const input = useRef<HTMLInputElement>(null);
+  const [sure, setSure] = useState(false);
+  return (
+    <K.Sheet title="Your photo" sub="Students see it beside your name: on your posts, shout-outs and replies." onClose={props.onClose} class="t-sheet">
+      <div class="t-photo">
+        <K.Avatar name={props.name || "?"} size="xl" pic={props.pic} />
+      </div>
+      <input
+        ref={input}
+        type="file"
+        accept="image/*"
+        class="f-file"
+        onChange={(e) => {
+          const el = e.target as HTMLInputElement;
+          const f = el.files?.[0];
+          el.value = "";
+          if (f) props.onFile(f);
+        }}
+      />
+      <button type="button" class="f-btn go" onClick={() => input.current?.click()}>
+        📷 {props.has ? "Choose another photo" : "Choose a photo"}
+      </button>
+      {props.has && (
+        <button
+          type="button"
+          class="f-btn white"
+          onClick={() => {
+            if (!sure) return setSure(true);
+            props.onDrop();
+          }}
+        >
+          {sure ? "Take it off?" : "Take my photo off"}
+        </button>
+      )}
+    </K.Sheet>
   );
 }
 
