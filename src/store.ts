@@ -8,8 +8,9 @@ import { fighter, type Fighter, type MasterData } from "../convex/lib/book";
 import { EMPTY_MASTER, type MState } from "../convex/lib/master";
 import { computeStatus, type Mark, type Marks, type Status } from "../convex/lib/status";
 import { SIGNED_OUT } from "../convex/lib/auth";
+import type { Dept, PageId } from "../convex/lib/dept";
 import type { SimInfo } from "../convex/sim";
-import { errorText, mutate, phoneToken, savePhoneToken, subscribe, watchLink, type Link } from "./backend";
+import { errorText, mutate, phoneToken, savePhoneToken, setLookOnly, subscribe, watchLink, type Link } from "./backend";
 
 export type Student = Doc<"students">;
 export type Call = Doc<"calls">;
@@ -50,6 +51,13 @@ export type Me = {
   hasPin: boolean;
   /** The owner teaches today (his switch in Settings → Account): his room on the Manager page. */
   teaching?: boolean;
+  /** Her department and whether she leads it (8 Nov 2026, Settings → Roles). */
+  dept?: Dept;
+  lead?: boolean;
+  /** Her own app: the pages of her bottom bar. Unset = the app of before. */
+  pages?: PageId[];
+  /** Her photo's key (set in the Us tab): us.pics gives the picture. */
+  photo?: string;
   deviceId: Id<"devices">;
 };
 export type MeState = { user: Me | null; setupDone: boolean };
@@ -178,6 +186,11 @@ export function signedIn(token: string) {
 
 /** Sign this phone out. */
 export async function signOutHere(): Promise<void> {
+  // In the owner's Preview, "Sign out" only ends the preview (his phone stays signed in).
+  if (preview) {
+    endPreview();
+    return;
+  }
   try {
     await mutate(api.auth.signOut, {});
   } catch {
@@ -231,12 +244,12 @@ function startBoard(): () => void {
 }
 
 export function currentMe(): Me | null {
-  return me?.user ?? null;
+  return preview ?? me?.user ?? null;
 }
 
 /** Owner, or has this permission (tabs and extras). */
 export function may(what: Job | Extra | "owner"): boolean {
-  const u = me?.user;
+  const u = preview ?? me?.user;
   if (!u) return false;
   if (u.role === "owner") return true;
   if (what === "owner") return false;
@@ -273,8 +286,32 @@ export function useStore() {
       listeners.delete(force);
     };
   }, []);
-  return { board, boardError, link, units, me };
+  return { board, boardError, link, units, me: preview && me?.user ? { ...me, user: preview } : me };
 }
+
+// ---- The owner's Preview of someone's app (8 Nov 2026, Settings → Roles) ----
+// The phone shows her app (her pages, her permissions, her own room and consultations), with his sign-in for the
+// data, and saves nothing (src/backend.ts: LOOK_ONLY). A banner says so, with Exit.
+let preview: Me | null = null;
+let previewFrom: "roles" | null = null;
+export function startPreview(p: Omit<Me, "deviceId" | "hasPin">) {
+  const owner = me?.user;
+  if (!owner || owner.role !== "owner") return;
+  preview = { ...p, hasPin: false, deviceId: owner.deviceId };
+  previewFrom = "roles";
+  setLookOnly(true);
+  emit();
+}
+export function endPreview(): "roles" | null {
+  const from = previewFrom;
+  preview = null;
+  previewFrom = null;
+  setLookOnly(false);
+  emit();
+  return from;
+}
+/** The person being previewed (the owner's phone), or null. */
+export const previewing = (): Me | null => preview;
 
 export function unitOf(id: string | undefined | null): Unit | null {
   return id ? (unitById.get(id) ?? null) : null;

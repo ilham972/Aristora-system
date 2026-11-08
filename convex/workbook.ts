@@ -1,9 +1,9 @@
 // Master: the past-paper workbook, level by level.
 //   Level done -> the student handed the level in; it waits for correction (he starts the next level at once).
 //   Correct    -> the level's marks: each question's marks when the workbook knows them, else the level's total
-//                 and which questions lost marks. Correcting again changes them. "?" (dk) = he couldn't start it:
-//                 0 marks, straight to Theory. `to: "theory"` sends the level's lost marks to Theory instead of
-//                 Evaluation (only when the corrector picks it: he forgot the theory).
+//                 and which questions lost marks. Correcting again changes them. "?" (dk) = he couldn't start it
+//                 (blank): 0 marks, a wrong answer for the Master teacher (8 Nov 2026; Theory before). `to: "theory"`
+//                 sends the level's lost marks to Theory instead (only when the corrector picks it: he forgot the theory).
 //   Uncorrect  -> Take back (Focus tab): a level saved on the wrong student goes back to how it was (30 minutes).
 //   Explain    -> the Evaluation teacher, for the questions that lost marks.
 //   To Theory  -> Correction or Evaluation sends lost questions to Theory (he keeps working; Theory calls him).
@@ -215,8 +215,10 @@ export const correct = mutation({
         const { x, th, tb, tt } = before;
         row = { ...row, ...(x ? { x } : {}), ...(th ? { th } : {}), ...(tb ? { tb } : {}), ...(tt ? { tt } : {}) };
       }
-      // Theory gets it: "?" always; every lost question when the level's lost marks go to Theory.
-      if (row.lost && !row.th && !row.tt && (row.dk || args.to === "theory")) {
+      // Theory gets it only when the level's lost marks go to Theory. A "?" (blank) is a wrong answer since 8 Nov 2026
+      // (his voice note: "from today blank questions are considered as wrong questions": the Master teacher explains a
+      // big question's blank part with its wrong parts, at one time); before, "?" went to Theory by itself.
+      if (row.lost && !row.th && !row.tt && args.to === "theory") {
         row.th = now;
         if (by) row.tb = by;
       }

@@ -145,6 +145,7 @@ const ACCOUNT_KINDS = new Set([
   "pin-clear",
   "person-add",
   "person-edit",
+  "person-role",
   "person-remove",
   "link-made",
   "device-out",

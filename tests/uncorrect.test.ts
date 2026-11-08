@@ -123,11 +123,13 @@ describe("Take back a saved level", () => {
     expect((await events(t)).filter((e) => e.kind === "level-marks" || e.kind === "level-remarks").map((e) => e.kind)).toEqual(["level-marks"]);
   });
 
-  test("'?' sent to Theory by that save goes with it; questions outside the level in the snapshot are ignored", async () => {
+  test("a '?' marked by that save goes with it; questions outside the level in the snapshot are ignored", async () => {
     const t = await setup();
     const vimal = await addMaster(t, "Vimal");
     const back = await save(t, vimal, 2, { dk: [15] });
-    expect((await work(t, vimal.id)).q["15"]).toMatchObject({ dk: true, th: back.fixed });
+    // A blank waits with the wrong answers since 8 Nov 2026 (no Theory by itself).
+    expect((await work(t, vimal.id)).q["15"]).toMatchObject({ dk: true, lost: true });
+    expect((await work(t, vimal.id)).q["15"].th).toBeUndefined();
     await t.mutation(api.workbook.uncorrect, {
       ...back,
       before: { ...back.before, q: { ...back.before.q, "40": { got: 0, max: 1, lost: true, t: 1 } } },
@@ -226,7 +228,7 @@ describe("levels done on paper before the app, and '?' on one part", () => {
     expect((await work(t, who.id)).lv).toEqual({});
   });
 
-  test("'?' on one part: the parts he answered keep their marks, the question goes to Theory with the part's name", async () => {
+  test("'?' on one part: the parts he answered keep their marks, the question waits with the part's name", async () => {
     const t = await setup();
     const who = await addMaster(t, "Vimal");
     // Level 8 = Q56 (4 marks) and Q57 (11 marks). Q56: part ii left blank, part i right (2 of 4).
@@ -236,9 +238,9 @@ describe("levels done on paper before the app, and '?' on one part", () => {
     ];
     const r = await t.mutation(api.workbook.correct, { studentId: who.id, unitId: who.unitId, level: 8, items: it, by: "correction" });
     expect(r.got).toBe(13);
-    expect(r.theory).toEqual([56]);
+    expect([r.theory, r.evaluation]).toEqual([[], [56]]);
     const m = await work(t, who.id);
-    expect(m.q["56"]).toMatchObject({ got: 2, max: 4, lost: true, dk: true, dkp: ["ii"], tb: "correction" });
+    expect(m.q["56"]).toMatchObject({ got: 2, max: 4, lost: true, dk: true, dkp: ["ii"] });
     // Refused: a blank part with full marks; a whole "?" with marks; blank parts without "?".
     const bad = async (x: { q: number; got: number; dk?: boolean; dkp?: string[] }) =>
       await expect(t.mutation(api.workbook.correct, { studentId: who.id, unitId: who.unitId, level: 8, items: [x, { q: 57, got: 11 }], by: "correction" })).rejects.toThrow();

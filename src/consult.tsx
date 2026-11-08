@@ -30,6 +30,7 @@ import {
   consultRoom,
   consultRows,
   consultWords,
+  deptTally,
   openOn,
   qKey,
   sqLabel,
@@ -50,6 +51,8 @@ import { CardAnswer, CardHead, PrintedQuestion, QPill, TeachMode } from "./qcard
 import { useRoomDecisions } from "./roomDecisions";
 import { KindBar, LessonName, LockIcon, useHeld, usePinned } from "./roomkit";
 import { act, clearToasts, currentMe, testMode, toast, type Board } from "./store";
+import { isTeachDept } from "../convex/lib/dept";
+import { isBlank } from "./deskData";
 import { tone } from "./tones";
 import { Sheet } from "./ui";
 
@@ -61,13 +64,24 @@ const CAP = EVAL_CAP;
 const ALL_MS = 3 * 60_000;
 
 type Decision = "x" | "th" | "tt" | "skip";
-type Away = { evaluation: { qs: number; students: number }; theory: { qs: number; students: number } };
+type Counts = { evaluation: { qs: number; students: number }; theory: { qs: number; students: number } };
+type Away = Counts & { fighter?: Counts; master?: Counts };
+type DeptPick = "fighter" | "master";
 
-function loadKind(): ConsultKind {
+function loadDeptPick(): DeptPick {
   try {
-    return localStorage.getItem("aristora.consultKind") === "theory" ? "theory" : "evaluation";
+    return localStorage.getItem("aristora.consultDept") === "master" ? "master" : "fighter";
   } catch {
-    return "evaluation";
+    return "fighter";
+  }
+}
+
+function loadKind(): ConsultKind | null {
+  try {
+    const k = localStorage.getItem("aristora.consultKind");
+    return k === "theory" || k === "evaluation" ? k : null;
+  } catch {
+    return null;
   }
 }
 function saveKind(k: ConsultKind) {
@@ -111,8 +125,17 @@ export function myConsults(board: Board, me: string | null | undefined): number 
 
 export function ConsultPage(props: { board: Board; views: View[]; now: number }) {
   const { board, views, now } = props;
-  const me = (currentMe()?._id as string | undefined) ?? null;
-  const [kind, setKind] = useState<ConsultKind>(loadKind);
+  const person = currentMe();
+  const me = (person?._id as string | undefined) ?? null;
+  // Her department's consultation (8 Nov 2026, his voice note): a Fighter or Master person sees her department's books
+  // only (Fighter: No work · Evaluation; Master: one list, blanks in their own colour). The owner (or anyone in no
+  // department) switches between the two: Fighter | Master.
+  const own: DeptPick | null = person && person.role === "teacher" && isTeachDept(person.dept) ? person.dept : null;
+  const [deptPick, setDeptPick] = useState<DeptPick>(loadDeptPick);
+  const scope: DeptPick = own ?? deptPick;
+  const [kindPick, setKind] = useState<ConsultKind | null>(loadKind);
+  // Master: one list (wrong and blank questions to explain); Fighter: No work (theory, its first number) or Evaluation.
+  const kind: ConsultKind = scope === "master" ? "evaluation" : (kindPick ?? "theory");
   const [ticks, setTicks] = useState<string[]>([]);
   const [at, setAt] = useState<string | null>(null);
   const [fileId, setFileId] = useState<string | null>(null);
@@ -139,19 +162,22 @@ export function ConsultPage(props: { board: Board; views: View[]; now: number })
   const left = Math.max(0, CAP - items.length);
   const live = here.length > 0;
 
-  // ---- The students here, in his order ----
-  const rows = consultRows(views, kind, me);
+  // ---- The students here, in his order (the Fighter department's No work: the idle ones first) ----
+  const rows = consultRows(views, kind, me, scope, scope === "fighter" && kind === "theory");
   const held = useHeld(rows, (r) => r.v.s._id as string, (r) => `${r.n}.${r.red}.${r.busy ?? ""}`);
   const callable = new Set(rows.filter((r) => !r.busy).map((r) => r.v.s._id as string));
   const ticked = ticks.filter((id) => callable.has(id)).slice(0, left);
   const tickedRows = ticked.flatMap((id) => rows.find((r) => r.v.s._id === id) ?? []);
-  const today = { evaluation: todayOf(views, "evaluation"), theory: todayOf(views, "theory") };
-  const all = away ? { qs: away[kind].qs + today[kind].qs, students: away[kind].students + today[kind].students } : null;
+  const today = { evaluation: todayOf(views, "evaluation", scope), theory: todayOf(views, "theory", scope) };
+  const awayHere = away ? (away[scope] ?? away) : null;
+  const all = awayHere ? { qs: awayHere[kind].qs + today[kind].qs, students: awayHere[kind].students + today[kind].students } : null;
+  // The Fighter department's No work: its students here who sit with no work (his number).
+  const noWork = views.filter((v) => v.where !== "absent" && v.noWork && v.kind === "fighter").length;
 
   // ---- The squares: those with her; nobody yet: those coming (to prepare); nobody called: the ticked ----
   const people = (live ? here : items.length ? items : []).map((it) => ({ it, v: it.v, since: it.rc.c.createdAt, local: locals[it.id] ?? {} }));
   const prep = people.length ? people : tickedRows.map((r) => ({ it: null, v: r.v, since: now, local: {} as Local }));
-  const base = consultQs(prep, kind);
+  const base = consultQs(prep, kind, scope);
   // Her taps not confirmed by the board yet.
   const qs: ConsultQ[] = base.map((sq) => ({
     ...sq,
@@ -178,6 +204,19 @@ export function ConsultPage(props: { board: Board; views: View[]; now: number })
     setAt(null);
     setTeaching(false);
   };
+  const pickDept = (d: DeptPick) => {
+    if (d === scope) return;
+    tone("tick");
+    setDeptPick(d);
+    try {
+      localStorage.setItem("aristora.consultDept", d);
+    } catch {
+      /* private mode */
+    }
+    setTicks([]);
+    setAt(null);
+    setTeaching(false);
+  };
   const toggle = (r: ConsultRow) => {
     const id = r.v.s._id as string;
     if (r.busy) {
@@ -199,7 +238,7 @@ export function ConsultPage(props: { board: Board; views: View[]; now: number })
     if (ticked.length === 0) return;
     setBusy(true);
     const asked = ticked;
-    const res = await act(() => mutate(api.calls.create, { studentIds: asked as Id<"students">[], room: "evaluation", kind, consult: true, by: BY }));
+    const res = await act(() => mutate(api.calls.create, { studentIds: asked as Id<"students">[], room: "evaluation", kind, consult: true, dept: scope, by: BY }));
     setBusy(false);
     if (!res) return;
     for (const r of res.rejected) toast(`${r.name} ${r.reason}.`, "error");
@@ -209,7 +248,9 @@ export function ConsultPage(props: { board: Board; views: View[]; now: number })
     setAt(null);
     tone("call");
     const names = joinNames(res.created.map((c) => rows.find((r) => r.v.s._id === c.studentId)?.v.s.name ?? "?"));
-    if (!res.rejected.length) toast(`Called ${names}. Correction sends ${got === 1 ? "him" : "them"} to you.`);
+    // His department's lead sends him (8 Nov 2026): she is in the classrooms; with no lead, Correction as before.
+    if (!res.rejected.length)
+      toast(`Called ${names}. ${res.toLead ? `The ${scope === "fighter" ? "Fighter" : "Master"} lead` : "Correction"} sends ${got === 1 ? "him" : "them"} to you.`);
   };
   const arrive = async (list: ConsultItem[]) => {
     if (list.length === 0) return;
@@ -378,13 +419,15 @@ export function ConsultPage(props: { board: Board; views: View[]; now: number })
         {qs.map((x) => {
           const look = squareLook(x);
           const withHim = x.who.filter((w) => w.it.state === "here").length;
+          // A blank ("?" at correction) is a wrong answer in its own colour (8 Nov 2026).
+          const blank = !theory && x.q !== WHOLE && isBlank(x.v, x.q) && !look.sign ? " blank" : "";
           return (
             <li key={x.key}>
               <button
                 type="button"
-                class={`fc-sq${look.cls}${x.key === sq?.key ? " on" : ""}`}
+                class={`fc-sq${look.cls}${blank}${x.key === sq?.key ? " on" : ""}`}
                 aria-current={x.key === sq?.key ? "step" : undefined}
-                aria-label={`${sqLabel(x)}: ${withHim ? `${withHim} with you` : "to prepare"}${look.words ? `, ${look.words}` : ""}`}
+                aria-label={`${sqLabel(x)}: ${withHim ? `${withHim} with you` : "to prepare"}${look.words ? `, ${look.words}` : blank ? ", left blank" : ""}`}
                 onClick={() => setAt(x.key)}
               >
                 <small>
@@ -491,22 +534,49 @@ export function ConsultPage(props: { board: Board; views: View[]; now: number })
   return (
     <main class={`page ev-page evx-page cx-page${theory ? " tpx-page" : ""}`}>
       <div class="stick tp-stick ev-stick" ref={stick}>
-        <KindBar<ConsultKind>
-          value={kind}
-          items={[
-            { id: "evaluation", label: "Evaluation", c: { total: today.evaluation.qs, red: today.evaluation.red, orange: 0, yellow: 0 }, open: true },
-            { id: "theory", label: "Theory", c: { total: today.theory.qs, red: today.theory.red, orange: 0, yellow: 0 }, open: true },
-          ]}
-          onPick={pickKind}
-        />
-        <p class="cx-sum" aria-label={`${theory ? "To teach" : "To explain"}: today ${today[kind].qs} for ${today[kind].students} students here; all ${all ? `${all.qs} for ${all.students} students` : "loading"}`}>
-          <span>
-            Today <b>{today[kind].qs}</b> · {today[kind].students} {today[kind].students === 1 ? "student" : "students"}
-          </span>
-          <span>
-            All <b>{all ? all.qs : "…"}</b> · {all ? all.students : "…"}
-          </span>
-        </p>
+        {!own && (
+          <KindBar<DeptPick>
+            value={scope}
+            items={(["fighter", "master"] as const).map((d) => {
+              // Its students here who need it (red: with no work).
+              const t = deptTally(views, d);
+              return { id: d, label: d === "fighter" ? "Fighter" : "Master", c: { total: t.students, red: t.red, orange: 0, yellow: 0 }, open: true };
+            })}
+            onPick={pickDept}
+          />
+        )}
+        {scope === "fighter" && (
+          <KindBar<ConsultKind>
+            value={kind}
+            items={[
+              // His words for the Fighter department's two numbers: the students with no work (they need the next
+              // theory) and the wrong answers to explain.
+              { id: "theory", label: "No work", c: { total: noWork, red: noWork, orange: 0, yellow: 0 }, open: true },
+              { id: "evaluation", label: "Evaluation", c: { total: today.evaluation.qs, red: today.evaluation.red, orange: 0, yellow: 0 }, open: true },
+            ]}
+            onPick={pickKind}
+          />
+        )}
+        {scope === "fighter" && kind === "theory" ? (
+          // The Fighter department's No work (his number): who sits idle now, and who needs his next theory.
+          <p class="cx-sum" aria-label={`No work: ${noWork} here; ${today.theory.students} need their next theory`}>
+            <span>
+              No work <b>{noWork}</b> · {today.theory.students} need theory
+            </span>
+            <span>
+              All <b>{all ? all.students : "…"}</b> {all && all.students === 1 ? "student" : "students"}
+            </span>
+          </p>
+        ) : (
+          <p class="cx-sum" aria-label={`${theory ? "To teach" : "To explain"}: today ${today[kind].qs} for ${today[kind].students} students here; all ${all ? `${all.qs} for ${all.students} students` : "loading"}`}>
+            <span>
+              Today <b>{today[kind].qs}</b> · {today[kind].students} {today[kind].students === 1 ? "student" : "students"}
+            </span>
+            <span>
+              All <b>{all ? all.qs : "…"}</b> · {all ? all.students : "…"}
+            </span>
+          </p>
+        )}
       </div>
 
       <div class="tp-body evx-body">

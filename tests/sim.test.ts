@@ -89,7 +89,7 @@ describe("the rules (convex/lib/sim.ts)", () => {
     expect(planSim([{ ...BOOKS[0], levels: [G7.levels[0]] }], "easy", 4, 1, 30)).toEqual([]);
   });
 
-  test("a level marked by the app: its marks add up, a ? is 0 and goes to Theory, the hard questions lose the most", () => {
+  test("a level marked by the app: its marks add up, a ? is 0 and waits with the wrong answers, the hard questions lose the most", () => {
     const traps = trapsOf(G7.levels.flatMap((l) => Array.from({ length: l.to - l.from + 1 }, (_, i) => l.from + i)), 9);
     expect(traps.length).toBeGreaterThanOrEqual(1);
     let lostTrap = 0;
@@ -106,7 +106,8 @@ describe("the rules (convex/lib/sim.ts)", () => {
         expect(got).toBeLessThanOrEqual(l.max);
         for (const [q, x] of Object.entries(rows)) {
           expect(x.lost).toBe((x.got ?? 0) < (x.max ?? 0));
-          if (x.dk) expect([x.got, x.th, x.tb]).toEqual([0, START, "correction"]);
+          // A blank is a wrong answer since 8 Nov 2026: 0 marks, waiting for the Master teacher (no Theory by itself).
+          if (x.dk) expect([x.got, x.th, x.tb, x.lost]).toEqual([0, undefined, undefined, true]);
           if (traps.includes(Number(q))) {
             trapN++;
             if (x.lost) lostTrap++;

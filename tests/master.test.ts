@@ -246,16 +246,20 @@ describe("Master: levels and marks", () => {
 });
 
 describe("Master: Theory comes after Correction and Evaluation", () => {
-  test("'?' goes straight to Theory; the other lost marks wait for Evaluation", async () => {
+  test("'?' (a blank) is a wrong answer since 8 Nov 2026: it waits with the other lost marks, never for Theory by itself", async () => {
     const t = await setup();
     const id = await addMaster(t, "Malik");
     const it = items(G7U08, 1, [4, 7]).map((x) => (x.q === 7 ? { q: 7, got: 0, dk: true } : x));
     const res = await t.mutation(api.workbook.correct, { studentId: id, level: 1, items: it, by: "correction" });
-    expect(res).toMatchObject({ got: 16, theory: [7], evaluation: [4] });
+    expect(res).toMatchObject({ got: 16, theory: [], evaluation: [4, 7] });
     const { m } = await work(t, id);
-    expect(m.q["7"]).toMatchObject({ got: 0, lost: true, dk: true, tb: "correction" });
+    expect(m.q["7"]).toMatchObject({ got: 0, lost: true, dk: true });
+    expect(m.q["7"].th).toBeUndefined();
     const ms = computeMaster(m, G7U08);
-    expect([ms.pending, ms.theory, ms.reteach, ms.wholeUnit]).toEqual([[4], [7], true, false]);
+    expect([ms.pending, ms.theory, ms.reteach, ms.wholeUnit]).toEqual([[4, 7], [], false, false]);
+    // The corrector can still send the level's lost marks to Theory (he forgot the theory): the blank goes too.
+    await t.mutation(api.workbook.correct, { studentId: id, level: 1, items: it.map((x) => (x.q === 4 ? { q: 4, got: 1 } : x)), to: "theory", by: "correction" });
+    expect(computeMaster((await work(t, id)).m, G7U08).theory).toEqual([4, 7]);
     const bad = it.map((x) => (x.q === 7 ? { q: 7, got: 2, dk: true } : x));
     await expect(t.mutation(api.workbook.correct, { studentId: id, level: 1, items: bad })).rejects.toThrow(/couldn't start it, so 0 marks/);
   });
@@ -328,12 +332,23 @@ describe("Master: Theory comes after Correction and Evaluation", () => {
     const id = await addMaster(t, "Priya");
     for (const l of G7U08.levels) await t.mutation(api.workbook.correct, { studentId: id, level: l.n, items: items(G7U08, l.n) });
     expect(computeMaster((await work(t, id)).m, G7U08).finished).toBe(true);
-    const it = items(G7U08, 1).map((x) => (x.q === 1 ? { q: 1, got: 0, dk: true } : x));
-    await t.mutation(api.workbook.correct, { studentId: id, level: 1, items: it });
+    await t.mutation(api.workbook.correct, { studentId: id, level: 1, items: items(G7U08, 1, [1]), to: "theory" });
     const { s, m } = await work(t, id);
     const ms = computeMaster(m, G7U08);
     expect([ms.finished, ms.dry, ms.needs]).toEqual([false, true, ["theory"]]);
     expect(s.idleReason).toBe("theory");
+  });
+
+  test("every level done and only a blank left: out of work, waiting for the Master teacher's explanation", async () => {
+    const t = await setup();
+    const id = await addMaster(t, "Ravi");
+    for (const l of G7U08.levels) await t.mutation(api.workbook.correct, { studentId: id, level: l.n, items: items(G7U08, l.n) });
+    const it = items(G7U08, 1).map((x) => (x.q === 1 ? { q: 1, got: 0, dk: true } : x));
+    await t.mutation(api.workbook.correct, { studentId: id, level: 1, items: it });
+    const { s, m } = await work(t, id);
+    const ms = computeMaster(m, G7U08);
+    expect([ms.finished, ms.dry, ms.needs, ms.pending]).toEqual([false, true, ["evaluation"], [1]]);
+    expect(s.idleReason).toBe("evaluation");
   });
 });
 
@@ -483,14 +498,14 @@ describe("Correction's unit sheet: what the teachers did, each unit's progress, 
     const t = await setup();
     const id = await addMaster(t, "Malik");
     const l1 = G7U08.levels[0];
-    // Q2 and Q3 lost marks, Q7 "?" (couldn't start it): no Theory unless picked, even on a poor level.
+    // Q2 and Q3 lost marks, Q7 "?" (couldn't start it, a wrong answer since 8 Nov 2026): no Theory unless picked.
     const it = items(G7U08, 1, [2, 3, 7]).map((x) => (x.q === 7 ? { q: 7, got: 0, dk: true } : x));
     await t.mutation(api.workbook.correct, { studentId: id, level: 1, items: it, by: "correction" });
     let { m } = await work(t, id);
-    expect([teachState(m.q["1"]), teachState(m.q["2"]), teachState(m.q["7"]), teachState(undefined)]).toEqual([null, "eval", "theory", null]);
-    expect(levelWaits(m, l1)).toEqual({ evaluation: 2, theory: 1 });
+    expect([teachState(m.q["1"]), teachState(m.q["2"]), teachState(m.q["7"]), teachState(undefined)]).toEqual([null, "eval", "eval", null]);
+    expect(levelWaits(m, l1)).toEqual({ evaluation: 3, theory: 0 });
     await t.mutation(api.workbook.explain, { studentId: id, qs: [2], on: true });
-    await t.mutation(api.workbook.toTheory, { studentId: id, qs: [3], on: true });
+    await t.mutation(api.workbook.toTheory, { studentId: id, qs: [3, 7], on: true });
     await t.mutation(api.workbook.taught, { studentId: id, qs: [7], on: true });
     ({ m } = await work(t, id));
     expect([teachState(m.q["2"]), teachState(m.q["3"]), teachState(m.q["7"])]).toEqual(["explained", "theory", "taught"]);

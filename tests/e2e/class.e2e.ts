@@ -702,14 +702,16 @@ test("Master: workbook levels corrected, lost marks explained, re-teach, Exam Sp
     return v.q["22"]?.x !== undefined && v.q["51"]?.x !== undefined;
   }, "Vimal Q22 and Q51 explained");
 
-  // Correction marks Vimal's Level 8 (his marks table): he couldn't even start Q57 ("?"), so it goes straight to Theory.
+  // Correction marks Vimal's Level 8 (his marks table): he couldn't even start Q57 ("?"): a lost mark like the others
+  // since 8 Nov 2026; he forgot the theory, so the corrector sends the level's lost marks to Theory.
   await row(C, "Vimal").locator(".reg-strip").click();
   await row(C, "Vimal").getByRole("button", { name: /^Level 8, questions 56 to 57/ }).click();
   const vs = C.locator(".sheet");
   await contains(vs.locator("h2"), "Vimal · Level 8");
   await vs.getByRole("button", { name: "All full marks" }).click();
-  await vs.getByRole("button", { name: "Q57: couldn't start it (to Theory)" }).click();
-  await contains(vs.locator(".ct-dk"), "Q57: couldn't start, so straight to Theory.");
+  await vs.getByRole("button", { name: "Q57: couldn't start it (blank)" }).click();
+  await contains(vs.locator(".ct-dk"), "Q57: couldn't start, so it goes with the lost marks.");
+  await vs.locator(".ct-route .segc-b.theory").click();
   await shot(C, "m03c-correct-question-mark");
   await vs.getByRole("button", { name: /^Save / }).click();
   await contains(C.locator(".toast"), "Theory: Q57.");
@@ -945,7 +947,7 @@ test("Master: workbook levels corrected, lost marks explained, re-teach, Exam Sp
   await row(small, "Vimal").getByRole("button", { name: /^Level 8, questions 56 to 57/ }).click();
   await visible(small.locator(".sheet .ct-list"));
   await contains(small.locator(".sheet .ct-row", { hasText: "Q56" }).locator(".ct-key"), "B56");
-  await visible(small.locator(".sheet").getByRole("button", { name: "Q57: couldn't start it (to Theory)", pressed: true }));
+  await visible(small.locator(".sheet").getByRole("button", { name: "Q57: couldn't start it (blank)", pressed: true }));
   expect(await small.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
   const box = (await small.locator(".sheet").boundingBox())!;
   expect(box.x).toBeGreaterThanOrEqual(0);
@@ -1345,13 +1347,13 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
   // Q13 wrong, Q14 one mark, Q15 blank (?), the rest full.
   await tap(F.getByRole("button", { name: "Q13: 0 of 2" }));
   await tap(F.getByRole("button", { name: "Q14: 1 of 2" }));
-  await tap(F.getByRole("button", { name: "Q15: blank, couldn't start it (to Theory)" }));
+  await tap(F.getByRole("button", { name: "Q15: blank, couldn't start it" }));
   for (const q of [16, 17, 18, 19, 20]) {
     await contains(F.locator(".fc-qn"), String(q));
     await tap(F.locator(".fc-go"));
   }
   await says(F.locator(".fc-total"), "15 / 20");
-  await contains(F.locator(".fc-sum .ct-dk"), "Q15: blank, so straight to Theory.");
+  await contains(F.locator(".fc-sum .ct-dk"), "Q15: blank, it goes with the lost marks.");
   await visible(F.locator(".segc-b.evaluation.on"));
   // He spots Q14 was really right: tap it in the strip, give 2, and he is back at the level's marks.
   await tap(F.locator(".fc-sq", { hasText: "14" }));
@@ -1362,13 +1364,14 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
   await says(F.locator(".fc-total"), "16 / 20");
   await shot(F, "f03-focus-summary");
   await tap(F.getByRole("button", { name: /^Save Priya · 16 \/ 20/ }));
-  await contains(F.locator(".toast"), "Saved: Priya, Level 2, 16 / 20. Theory: Q15. Evaluation: Q13.");
+  await contains(F.locator(".toast"), "Saved: Priya, Level 2, 16 / 20. Evaluation: Q13 Q15.");
   // Saved exactly as the Class page's correct sheet saves it; her next level opens by itself.
   const p2 = (await marksOf(backend, "Priya")).m!;
   expect(p2.lv["2"]).toMatchObject({ got: 16, by: "correction" });
   expect(p2.q["13"]).toMatchObject({ got: 0, max: 2, lost: true });
   expect(p2.q["14"]).toMatchObject({ got: 2, lost: false });
-  expect(p2.q["15"]).toMatchObject({ got: 0, dk: true, tb: "correction" });
+  expect(p2.q["15"]).toMatchObject({ got: 0, dk: true });
+  expect(p2.q["15"].th).toBeUndefined(); // a blank waits with the wrong answers (8 Nov 2026)
   await says(F.locator(".fc-lvline"), "Level 3 · Q21–30");
   await contains(F.locator(".fc-qn"), "21");
   await visible(F.locator(".fc-lb.fixed", { hasText: "2" }));
@@ -1426,16 +1429,16 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
 
   // An old level: tap Level 2 on her bar. Its marks show; Q13 was really right: change it, Save changes, back to Level 4.
   // On the bar, Level 2 has a violet dot (Q13 waits for Evaluation). In its boxes: E on Q13 (hollow: Evaluation hasn't
-  // explained it yet), T on Q15 (blank: sent to Theory, not taught yet).
+  // explained it yet), and E on Q15 too (a blank waits with the wrong answers since 8 Nov 2026).
   await visible(F.locator(".fc-lb.fixed.w-eval", { hasText: "2" }));
   await tap(F.locator(".fc-lb", { hasText: "2" }).first());
   await says(F.locator(".fc-lvline"), "Level 2 · Q11–20 · Part I · corrected 16 / 20");
   await contains(F.locator(".fc-remark"), "Corrected before.");
   await visible(F.getByRole("button", { name: "No changes" }));
-  await textsAre(F.locator(".fc-sq .fc-ts"), ["E", "T"]);
+  await textsAre(F.locator(".fc-sq .fc-ts"), ["E", "E"]);
   await visible(F.locator(".fc-sq", { hasText: "13" }).locator(".fc-ts.eval"));
-  await visible(F.locator(".fc-sq", { hasText: "15" }).locator(".fc-ts.theory"));
-  expect(await F.locator(".fc-sq", { hasText: "15" }).getAttribute("aria-label")).toBe("Q15: ? blank, sent to Theory, not taught yet");
+  await visible(F.locator(".fc-sq", { hasText: "15" }).locator(".fc-ts.eval"));
+  expect(await F.locator(".fc-sq", { hasText: "15" }).getAttribute("aria-label")).toBe("Q15: ? blank, waiting for Evaluation");
   await shot(F, "f06e-correction-teacher-marks");
   await tap(F.locator(".fc-sq", { hasText: "13" }));
   await contains(F.locator(".fc-teach.eval"), "Waiting for Evaluation");
@@ -1446,7 +1449,7 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
   await contains(F.locator(".toast"), "Changed: Priya, Level 2, 18 / 20.");
   expect((await marksOf(backend, "Priya")).m!.q["13"]).toMatchObject({ got: 2, lost: false });
   await says(F.locator(".fc-lvline"), "Level 4");
-  await visible(F.locator(".fc-lb.fixed.w-theory", { hasText: "2" })); // only Q15 waits now, for Theory
+  await visible(F.locator(".fc-lb.fixed.w-eval", { hasText: "2" })); // only Q15 waits now, for Evaluation
 
   // His card (Marks): Going home, Needs theory, Move and the marks table, as on Class; a level there opens it here.
   await tap(name("Malik"));
@@ -1747,10 +1750,10 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
   await shot(S, "f09-focus-11-marks-320");
   await stap(S.locator(".fc-go"));
   await says(S.locator(".fc-total"), "13 / 15");
-  await contains(S.locator(".fc-sum .ct-dk"), "Q56 (ii): blank, so straight to Theory.");
+  await contains(S.locator(".fc-sum .ct-dk"), "Q56 (ii): blank, it goes with the lost marks.");
   await shot(S, "f10-focus-summary-320");
   await stap(S.getByRole("button", { name: /^Save Vimal · 13 \/ 15/ }));
-  await contains(S.locator(".toast"), "Saved: Vimal, Level 8, 13 / 15. Theory: Q56.");
+  await contains(S.locator(".toast"), "Saved: Vimal, Level 8, 13 / 15. Evaluation: Q56.");
   expect((await marksOf(backend, "Vimal")).m!.q["56"]).toMatchObject({ got: 2, max: 4, lost: true, dk: true, dkp: ["ii"] });
   // That was his last level: the unit's marks come by themselves (to write on the marks sheet in his book).
   await visible(S.locator(".fc-over"));
@@ -3855,16 +3858,34 @@ test("Consultation: the top bar's icon left of the whiteboard (the owner, the Co
   await O.locator(".top .cx-btn").click();
   const P = O.locator(".cx-page");
   await visible(P);
-  // Evaluation first: today 9 questions for 5 students (nobody away has any: All the same).
-  await contains(P.locator(".tp-kind.on"), "Evaluation");
-  await says(P.locator(".cx-sum"), "Today 9 · 5 students");
-  await says(P.locator(".cx-sum"), "All 9 · 5");
-  // His order: the most to explain first, then everyone else A–Z. A red ring: no work (Vimal, Fathima; Rizwan waits for
-  // Theory: nothing to explain, still red).
+  // The departments (8 Nov 2026, his voice note: "remove Evaluation and Theory, instead put Fighter and Master"): the
+  // owner switches. Fighter first: No work (its students who sit with no work: Fathima, Rizwan) and Evaluation.
+  const firsts = (l: L) => l.evaluateAll((els) => els.map((e) => e.firstChild?.textContent ?? ""));
+  await until(async () => JSON.stringify(await firsts(P.locator(".tp-kinds").first().locator(".tp-kind"))) === '["Fighter","Master"]', "Fighter | Master");
+  await contains(P.locator(".tp-kinds").first().locator(".tp-kind.on"), "Fighter");
+  await until(async () => JSON.stringify(await firsts(P.locator(".tp-kinds").nth(1).locator(".tp-kind"))) === '["No work","Evaluation"]', "No work | Evaluation");
+  await until(
+    async () => ((await P.locator(".tp-kinds").nth(1).locator(".tp-kind.on").getAttribute("aria-label")) ?? "").startsWith("No work: 2"),
+    "No work: 2",
+  );
+  expect((await namesOf(P.locator(".cx-nm.red"))).slice(0, 2)).toEqual(["Fathima", "Rizwan"]);
+  expect((await namesOf(P.locator(".cx-nm"))).slice(0, 2)).toEqual(["Fathima", "Rizwan"]);
+  await shot(O, "cx00-consultation-fighter");
+  // Fighter's Evaluation: the theory books' wrong answers only (Kumar 2, Fathima 1, Dilan 1).
+  await P.locator(".tp-kinds").nth(1).locator(".tp-kind", { hasText: "Evaluation" }).click();
+  await says(P.locator(".cx-sum"), "Today 4 · 3 students");
+  expect((await namesOf(P.locator(".cx-nm"))).slice(0, 3)).toEqual(["Kumar", "Fathima", "Dilan"]);
+  // Master: one list, the workbooks' lost marks (blanks too): 5 questions for Malik and Vimal (nobody away has any).
+  await P.locator(".tp-kinds").first().locator(".tp-kind", { hasText: "Master" }).click();
+  await contains(P.locator(".tp-kinds").first().locator(".tp-kind.on"), "Master");
+  await count(P.locator(".tp-kinds"), 1);
+  await says(P.locator(".cx-sum"), "Today 5 · 2 students");
+  await says(P.locator(".cx-sum"), "All 5 · 2");
+  // His order: the most to explain first, then everyone else A–Z. A red ring: no work in a workbook (Vimal).
   await until(async () => (await namesOf(P.locator(".cx-nm"))).length === 13, "the 13 here");
-  expect(await namesOf(P.locator(".cx-nm"))).toEqual(["Malik", "Vimal", "Kumar", "Fathima", "Dilan", "Ahamed", "Nila", "Priya", "Rizwan", "Sana", "Tharun", "Yasmin", "Zainab"]);
-  expect(await P.locator(".cx-nm").evaluateAll((els) => els.slice(0, 5).map((e) => e.querySelector(".cx-n")?.textContent))).toEqual(["3", "2", "2", "1", "1"]);
-  expect(await namesOf(P.locator(".cx-nm.red"))).toEqual(["Vimal", "Fathima", "Rizwan"]);
+  expect(await namesOf(P.locator(".cx-nm"))).toEqual(["Malik", "Vimal", "Ahamed", "Dilan", "Fathima", "Kumar", "Nila", "Priya", "Rizwan", "Sana", "Tharun", "Yasmin", "Zainab"]);
+  expect(await P.locator(".cx-nm").evaluateAll((els) => els.slice(0, 2).map((e) => e.querySelector(".cx-n")?.textContent))).toEqual(["3", "2"]);
+  expect(await namesOf(P.locator(".cx-nm.red"))).toEqual(["Vimal"]);
   expect(await O.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await shot(O, "cx01-consultation");
 
@@ -3906,7 +3927,7 @@ test("Consultation: the top bar's icon left of the whiteboard (the owner, the Co
   await contains(P.locator(".evx-card .fc-qn"), "13");
   await until(async () => (await marksOf(backend, "Malik")).m?.q["4"]?.x !== undefined, "Q4 explained on the server");
   await count(P.locator(".evx-strip .fc-sq.d-x"), 1);
-  await says(P.locator(".cx-sum"), "Today 8 · 5 students");
+  await says(P.locator(".cx-sum"), "Today 4 · 2 students");
   // Q13 → Theory (T); Q17 Not now (it stays waiting for the Evaluation teachers).
   await P.locator(".fc-n.evx-b.th").click();
   await contains(P.locator(".evx-card .fc-qn"), "17");
@@ -3931,16 +3952,13 @@ test("Consultation: the top bar's icon left of the whiteboard (the owner, the Co
   await O.locator(".top .cx-btn").click();
   await visible(P);
 
-  // Theory in the same sitting: Q13 (sent to Theory just now) is his to teach; Taught saves it.
-  await P.locator(".tp-kind", { hasText: "Theory" }).click();
-  await contains(P.locator(".tp-kind.on"), "Theory");
-  await textsAre(P.locator(".evx-strip .fc-sq small"), ["13"]);
-  await contains(P.locator(".fc-go.evx-x"), "Taught");
-  await P.locator(".fc-go.evx-x").click();
-  await until(async () => (await marksOf(backend, "Malik")).m?.q["13"]?.tt !== undefined, "Q13 taught here");
-  await count(P.locator(".evx-strip .fc-sq.d-x"), 1);
-  await shot(O, "cx03-theory");
-  await P.locator(".tp-kind", { hasText: "Evaluation" }).click();
+  // Q13 sent to Theory waits on the Master page's Theory (the Master department teaches its own theory, his answer of
+  // 8 Nov 2026); the Fighter view never shows a workbook's questions, even with him here.
+  await P.locator(".tp-kinds").first().locator(".tp-kind", { hasText: "Fighter" }).click();
+  await count(P.locator(".evx-strip .fc-sq"), 0);
+  await shot(O, "cx03-fighter-with-him");
+  await P.locator(".tp-kinds").first().locator(".tp-kind", { hasText: "Master" }).click();
+  await textsAre(P.locator(".evx-strip .fc-sq small"), ["4", "13", "17"]);
 
   // Done: back to work; what he didn't reach (Q17) stays for the teachers. The history says where it happened.
   await P.locator(".evx-done").click();
@@ -3956,9 +3974,10 @@ test("Consultation: the top bar's icon left of the whiteboard (the owner, the Co
     ["consult", 13, "to-theory"],
     ["consult", 4, "unexplained"],
     ["consult", 4, "explained"],
-    ["consult", 13, "taught"],
     ["done-consult", null, "evaluation"],
   ]);
+  // Each tap names its book's department (the dashboard's "cleared today").
+  expect(ev.filter((e) => e.kind === "consult").every((e) => e.stage === "master")).toBe(true);
   // Never the Evaluation room's score.
   const st = await backend.t.run(async (ctx) => (await ctx.db.query("sessions").withIndex("by_open", (q) => q.eq("open", true)).first())!.stats ?? {});
   expect(st.evaluation?.calls ?? 0).toBe(0);
@@ -4004,6 +4023,182 @@ test("Consultation: the top bar's icon left of the whiteboard (the owner, the Co
   await visible(K.locator(".top-left .class-btn"));
   await count(K.locator(".top .cx-btn"), 0);
   await K.context().close();
+  expect(problems, problems.join("\n")).toEqual([]);
+});
+
+test("Departments: Settings → Roles gives each teacher her own app; Preview looks only; Fighter and Master save each tap at once with no Call; her dashboard; Homework | Class; a Master consultation rings on the Master lead's phone, not Correction's", async () => {
+  const backend = await newClass();
+  const C = await phone(backend, "focus");
+  await C.getByRole("button", { name: "Settings" }).click();
+  await C.getByRole("button", { name: "Load demo students (three grades)" }).click();
+  await visible(C.getByText(/^14 demo students loaded/));
+  const NILA = "nila-dept-token-0123456789abcdefghijklmnopqrstuvwxyz01";
+  const MEERA = "meera-dept-token-0123456789abcdefghijklmnopqrstuvwxyz0";
+  const SANA = "sana-dept-token-0123456789abcdefghijklmnopqrstuvwxyz01";
+  await addPerson(backend.t, { name: "Nila", token: NILA, tabs: ["theory", "evaluation"] });
+  await addPerson(backend.t, { name: "Meera", token: MEERA, tabs: ["theory", "evaluation"] });
+  await addPerson(backend.t, { name: "Sana", token: SANA, tabs: [], can: ["consult"] });
+
+  // Settings → Roles: the three departments (nobody in them yet), everyone else, the owner's own app.
+  await C.getByRole("button", { name: "Roles", exact: true }).click();
+  const R = C.locator(".roles");
+  await visible(R.locator(".role-dept.rd-fighter"));
+  await count(R.locator(".role-dept"), 5);
+  await count(R.locator(".rd-none .role-p"), 3);
+  expect(await C.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(C, "d01-roles");
+  const sheet = C.locator(".role-sheet .sheet");
+  const setRole = async (name: string, dept: string, lead: boolean) => {
+    await R.locator(".role-p", { hasText: name }).click();
+    await visible(sheet);
+    await sheet.getByRole("button", { name: dept, exact: true }).click();
+    await sheet.getByRole("radio", { name: lead ? /^Lead teacher/ : /^Consultation teacher/ }).check();
+  };
+  // Nila leads Fighter: his six pages, ticked by the department's place.
+  await setRole("Nila", "Fighter", true);
+  const ticked = () => sheet.locator(".role-pages .perm").evaluateAll((els) => els.filter((e) => (e.querySelector("input") as HTMLInputElement).checked).map((e) => e.querySelector("span")!.firstChild!.textContent));
+  await until(async () => JSON.stringify(await ticked()) === JSON.stringify(["Dashboard", "Fighter", "Correction", "Teach", "Consult", "Us"]), "his six");
+  await shot(C, "d02-role-sheet");
+  await sheet.getByRole("button", { name: "Save" }).click();
+  await contains(C.locator(".toast"), "Nila's app is saved");
+  await setRole("Meera", "Master", true);
+  await until(async () => JSON.stringify(await ticked()) === JSON.stringify(["Dashboard", "Master", "Correction", "Consult", "Us"]), "the Master lead's five");
+  await sheet.getByRole("button", { name: "Save" }).click();
+  await contains(C.locator(".toast"), "Meera's app is saved");
+  await setRole("Sana", "Master", false);
+  await until(async () => JSON.stringify(await ticked()) === JSON.stringify(["Consult", "Us"]), "a consultation teacher's two");
+  await sheet.getByRole("button", { name: "Save" }).click();
+  await contains(R.locator(".rd-master"), "Meera");
+  await contains(R.locator(".rd-master .role-tag.lead"), "Lead");
+  const meera = await backend.t.run(async (ctx) => (await ctx.db.query("users").collect()).find((u) => u.name === "Meera")!);
+  expect(meera).toMatchObject({ dept: "master", lead: true, tabs: ["correction", "theory", "evaluation"], can: ["photos", "consult"] });
+
+  // Nila's phone: her six at the bottom, in one row; her dashboard first: her department's question, answered.
+  const N = await phone(backend, "dash", PHONE, NILA);
+  const bar = (p: Page) => p.locator(".tabs .tab").evaluateAll((els) => els.map((e) => (e.getAttribute("aria-label") ?? "").split(",")[0]));
+  await until(async () => JSON.stringify(await bar(N)) === JSON.stringify(["Dashboard", "Fighter", "Correction", "Teach", "Consult", "Us"]), "her bar");
+  await count(N.locator(".top .cx-btn, .top .teach-btn"), 0); // Consult and Teach are her tabs: not in the top bar
+  await contains(N.locator(".dash-who"), "Nila");
+  await contains(N.locator(".dash-who small"), "Fighter department · lead");
+  await says(N.locator(".dash-ask"), "How many students have no work?");
+  await until(async () => (await N.locator(".dash-n b").textContent()) === "2", "2 with no work (Fathima, Rizwan)");
+  await visible(N.locator(".dash-g.red", { hasText: "11" }));
+  await shot(N, "d03-dashboard");
+
+  // Her Fighter page: Grade 11, Theory first; a section's lesson with its students ticked; no Call, no Arrived, no Done.
+  await N.locator(".tabs .tab.fighter").click();
+  const F = N.locator(".dk-page");
+  await visible(F);
+  await contains(F.locator(".evx-g.on"), "11");
+  await until(async () => (await F.locator(".tp-kind.on").evaluate((e) => e.firstChild?.textContent)) === "Theory", "Theory first");
+  await count(F.locator(".evx-call, .evx-arrive, .evx-done"), 0);
+  await visible(F.locator(".evx-qg.tpx-sec.on"));
+  expect((await namesOf(F.locator(".evx-sp.s-sug.on"))).length).toBeGreaterThan(0);
+  const q = Number(await F.locator(".evx-strip .fc-sq.on small").textContent());
+  // Who has this square: everyone ticked who needs its teacher question.
+  const at = await F.locator(".evx-card .evx-who > span").evaluateAll((els) => els.map((e) => (e.firstChild?.textContent ?? "").trim()));
+  expect(at.length).toBeGreaterThan(0);
+  expect(await N.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(N, "d04-fighter-theory");
+  // Taught: saved at once for everyone ticked (no Done), the next square opens.
+  await F.locator(".fc-go.evx-x").click();
+  for (const name of at)
+    await until(async () => ((await marksOf(backend, name)).marks as Record<string, { s: string }>)[String(q)]?.s === "taught", `${name} Q${q} taught`);
+  await visible(F.locator(".evx-strip .fc-sq.d-x"));
+  expect((await backend.t.run(async (ctx) => (await ctx.db.query("events").collect()).filter((e) => e.kind === "desk"))).length).toBe(at.length);
+  // Evaluation: the theory books' wrong answers. Fathima's Q22, explained at her desk.
+  await F.locator(".tp-kind", { hasText: "Evaluation" }).click();
+  await F.locator(".evx-qg", { hasText: "22" }).click();
+  expect(await namesOf(F.locator(".evx-sp.s-sug.on"))).toEqual(["Fathima"]);
+  await contains(F.locator(".fc-go.evx-x"), "Explained");
+  await F.locator(".fc-go.evx-x").click();
+  await until(async () => ((await marksOf(backend, "Fathima")).marks as Record<string, { s: string }>)["22"]?.s === "explained", "Fathima Q22 explained");
+  await shot(N, "d05-fighter-evaluation");
+
+  // Correction: Homework | Class, Homework first (her Correction is mostly the photos from home).
+  await N.locator(".tabs .tab.correction").click();
+  await visible(N.locator(".fc-modes .segc-b.on", { hasText: "Homework" }));
+  await N.locator(".fc-modes .segc-b", { hasText: "Class" }).click();
+  await visible(N.locator(".fc-modes .segc-b.on", { hasText: "Class" }));
+  await visible(N.locator(".fc-names .fc-nm").first());
+  await shot(N, "d06-correction-modes");
+  // Teach: freestyle teaching at the board, a tab of hers.
+  await N.locator(".tabs .tab.teach").click();
+  await visible(N.locator(".wc-page, .tpx-page").first());
+
+  // The smallest phone: her six tabs fit, the Fighter page doesn't scroll sideways.
+  const N3 = await phone(backend, "fighter", { ...PHONE, viewport: { width: 320, height: 568 } }, NILA);
+  await visible(N3.locator(".dk-page"));
+  expect(await N3.evaluate(() => [...document.querySelectorAll(".tabs .tab")].every((t) => t.scrollWidth <= t.clientWidth + 1))).toBe(true);
+  expect(await N3.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(N3, "d07-fighter-320");
+  await N3.locator(".tabs .tab.dash").click();
+  await visible(N3.locator(".dash-q"));
+  expect(await N3.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(N3, "d08-dashboard-320");
+  await N3.context().close();
+
+  // Meera's Master page: Grade 7, Evaluation first; a blank ("?") in its own colour; Explained saved at once.
+  await backend.t.run(async (ctx) => {
+    const s = (await ctx.db.query("students").collect()).find((x) => x.name === "Malik")!;
+    const p = (await ctx.db.query("progress").withIndex("by_student", (x) => x.eq("studentId", s._id)).collect()).find((x) => x.stage === "master")!;
+    const m = p.m!;
+    await ctx.db.patch(p._id, { m: { ...m, q: { ...m.q, "13": { ...m.q["13"], got: 0, dk: true } } } });
+  });
+  const M = await phone(backend, "master", PHONE, MEERA);
+  const MP = M.locator(".dk-page");
+  await visible(MP);
+  await contains(MP.locator(".evx-g.on"), "7");
+  await until(async () => (await MP.locator(".tp-kind.on").evaluate((e) => e.firstChild?.textContent)) === "Evaluation", "Evaluation first");
+  await MP.locator(".evx-qg", { hasText: "13" }).click();
+  expect(await namesOf(MP.locator(".evx-sp.s-sug.on"))).toEqual(["Malik"]);
+  await visible(MP.locator(".evx-strip .fc-sq.blank"));
+  await contains(MP.locator(".evx-strip .fc-sq.blank small"), "13");
+  await shot(M, "d09-master-blank");
+  await MP.locator(".evx-strip .fc-sq", { hasText: "4" }).first().click();
+  await MP.locator(".fc-go.evx-x").click();
+  await until(async () => (await marksOf(backend, "Malik")).m?.q["4"]?.x !== undefined, "Malik Q4 explained at his desk");
+
+  // Sana, the Master department's consultation teacher: her app is Consult and Us; one list (no bars).
+  const SN = await phone(backend, "consult", PHONE, SANA);
+  await until(async () => JSON.stringify(await bar(SN)) === JSON.stringify(["Consult", "Us"]), "Sana's bar");
+  const SP = SN.locator(".cx-page");
+  await visible(SP);
+  await count(SP.locator(".tp-kinds"), 0);
+  await SP.locator(".cx-nm", { hasText: "Vimal" }).click();
+  await SP.locator(".evx-call").click();
+  await contains(SN.locator(".toast"), "Called Vimal. The Master lead sends him to you.");
+  // The Master lead's phone says it, on her own page, with Sent; Correction's phone stays quiet.
+  await hears(M, "Vimal, go to Sana.");
+  const strip = M.locator(".call-strip", { hasText: "Sana" });
+  await visible(strip);
+  await shot(M, "d10-master-lead-sends");
+  await C.getByRole("button", { name: "Back to the class" }).click();
+  await count(C.locator(".call-strip", { hasText: "Sana" }), 0);
+  await strip.getByRole("button", { name: "Sent" }).click();
+  await until(async () => (await marksOf(backend, "Vimal")).room === "evaluation", "Vimal on his way to Sana");
+  await SP.locator(".evx-arrive").click();
+  await contains(SN.locator(".toast"), "Vimal is here.");
+  await SP.locator(".fc-go.evx-x").click();
+  await until(async () => Object.values((await marksOf(backend, "Vimal")).m?.q ?? {}).some((r) => r.x !== undefined), "Vimal: one explained in consultation");
+  await SP.locator(".evx-done").click();
+  await contains(SN.locator(".toast"), "Vimal back to work.");
+
+  // The owner previews Meera's app: her bar, a banner, nothing saved; Exit = back to Roles.
+  await C.getByRole("button", { name: /^Settings/ }).click();
+  await C.getByRole("button", { name: "Roles", exact: true }).click();
+  await R.locator(".role-p", { hasText: "Meera" }).click();
+  await sheet.getByRole("button", { name: "Preview" }).click();
+  await visible(C.locator(".pv-banner"));
+  await until(async () => JSON.stringify(await bar(C)) === JSON.stringify(["Dashboard", "Master", "Correction", "Consult", "Us"]), "Meera's bar in the preview");
+  await C.locator(".tabs .tab.master").click();
+  await visible(C.locator(".dk-page"));
+  await C.locator(".dk-page .fc-go.evx-x").click();
+  await contains(C.locator(".toast"), "Preview: look only. Nothing is saved.");
+  await shot(C, "d11-preview");
+  await C.locator(".pv-banner").getByRole("button", { name: "Exit" }).click();
+  await visible(C.locator(".roles"));
+  await count(C.locator(".pv-banner"), 0);
   expect(problems, problems.join("\n")).toEqual([]);
 });
 

@@ -384,7 +384,8 @@ export function digestOf(input: {
   const lastBoard = new Map<string, { at: number; s: number; unit?: string }>();
   for (const e of events) {
     if (!e.studentId) continue;
-    if (e.kind === "board") {
+    // A tap at his desk on the Fighter or Master page (8 Nov 2026, convex/desk.ts) is her work as at the board.
+    if (e.kind === "board" || e.kind === "desk") {
       const room: RoomKey = e.by === "evaluation" ? "evaluation" : "theory";
       const name = e.who ?? (room === "theory" ? "Theory" : "Evaluation");
       const x = person(name);
@@ -402,7 +403,7 @@ export function digestOf(input: {
       if (room === "evaluation") d.rooms.evaluation.qs++;
       continue;
     }
-    if (e.kind === "board-undo") {
+    if (e.kind === "board-undo" || e.kind === "desk-undo") {
       if (e.by === "evaluation") d.rooms.evaluation.qs = Math.max(0, d.rooms.evaluation.qs - 1);
       continue;
     }

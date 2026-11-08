@@ -22,9 +22,16 @@ export type { ConsultKind };
 /** One book of his with what waits there for the picked kind (`whole`: a workbook's whole unit asked for Theory). */
 export type BookWait = { v: View; qs: number[]; whole: boolean };
 
+/**
+ * A department's books only (8 Nov 2026): Fighter = theory books, Master = workbooks; none = every book (the page as
+ * before).
+ */
+export type Scope = "fighter" | "master" | null;
+export const inScope = (v: View, scope: Scope) => !scope || v.kind === scope;
+
 /** What waits for the picked kind in each of his books (his book now, then the others with something). */
-export function waitsOf(home: View, kind: ConsultKind): BookWait[] {
-  return [home, ...home.others].flatMap((v): BookWait[] => {
+export function waitsOf(home: View, kind: ConsultKind, scope: Scope = null): BookWait[] {
+  return [home, ...home.others].filter((v) => inScope(v, scope)).flatMap((v): BookWait[] => {
     if (kind === "evaluation") {
       const qs = evalWaiting(v.st, v.ms);
       return qs.length ? [{ v, qs: [...qs], whole: false }] : [];
@@ -68,18 +75,24 @@ export const isMineNow = (v: View, me: string | null) => v.calls.some((c) => c.c
  * them (pale); then everyone with nothing waiting, the one not seen in a consultation for longest first. Her own
  * consultation's students are in her room box, not here.
  */
-export function consultRows(views: readonly View[], kind: ConsultKind, me: string | null): ConsultRow[] {
+export function consultRows(views: readonly View[], kind: ConsultKind, me: string | null, scope: Scope = null, redFirst = false): ConsultRow[] {
   const rows: ConsultRow[] = [];
   for (const v of views) {
     if (v.where === "absent" || isMineNow(v, me)) continue;
-    rows.push({ v, n: countOf(waitsOf(v, kind)), red: v.noWork, busy: busyWith(v, me), lastAt: v.s.consultAt ?? null });
+    // A department's page (8 Nov 2026): a student with no work counts as red only when his book is that department's.
+    const n = countOf(waitsOf(v, kind, scope));
+    rows.push({ v, n, red: v.noWork && (n > 0 || inScope(v, scope)), busy: busyWith(v, me), lastAt: v.s.consultAt ?? null });
   }
   const group = (r: ConsultRow) => (r.n > 0 ? (r.busy ? 1 : 0) : r.busy ? 3 : 2);
   return rows.sort(
     (a, b) =>
       group(a) - group(b) ||
       (group(a) < 2
-        ? b.n - a.n || Number(b.red) - Number(a.red) || (a.v.s.lastInAt ?? 0) - (b.v.s.lastInAt ?? 0)
+        ? // The Fighter department's "No work" (8 Nov 2026): the students sitting idle first, then the most waiting.
+          (redFirst ? Number(b.red) - Number(a.red) : 0) ||
+          b.n - a.n ||
+          Number(b.red) - Number(a.red) ||
+          (a.v.s.lastInAt ?? 0) - (b.v.s.lastInAt ?? 0)
         : (a.lastAt ?? 0) - (b.lastAt ?? 0)) ||
       a.v.s.name.localeCompare(b.v.s.name),
   );
@@ -89,17 +102,31 @@ export function consultRows(views: readonly View[], kind: ConsultKind, me: strin
 export type Tally = { qs: number; students: number; red: number };
 
 /** What waits for the picked kind among the students here (her own consultation's too: it is still to do). */
-export function todayOf(views: readonly View[], kind: ConsultKind): Tally {
+export function todayOf(views: readonly View[], kind: ConsultKind, scope: Scope = null): Tally {
   const t: Tally = { qs: 0, students: 0, red: 0 };
   for (const v of views) {
     if (v.where === "absent") continue;
-    const n = countOf(waitsOf(v, kind));
+    const n = countOf(waitsOf(v, kind, scope));
     if (!n) continue;
     t.qs += n;
     t.students++;
     if (v.noWork) t.red++;
   }
   return t;
+}
+
+/** A department's students here (8 Nov 2026, the owner's Fighter | Master bar): those with anything waiting for it, and
+ *  how many of them sit with no work. */
+export function deptTally(views: readonly View[], scope: "fighter" | "master"): { students: number; red: number } {
+  let students = 0;
+  let red = 0;
+  for (const v of views) {
+    if (v.where === "absent") continue;
+    if (countOf(waitsOf(v, "evaluation", scope)) + countOf(waitsOf(v, "theory", scope)) === 0) continue;
+    students++;
+    if (v.noWork) red++;
+  }
+  return { students, red };
 }
 
 // ---------------- Her room ----------------
@@ -216,10 +243,11 @@ export type ConsultQ = {
 export function consultQs(
   people: readonly { it: ConsultItem | null; v: View; since: number; local: Local }[],
   kind: ConsultKind,
+  scope: Scope = null,
 ): ConsultQ[] {
   const by = new Map<string, ConsultQ>();
   for (const p of people) {
-    for (const b of [p.v, ...p.v.others]) {
+    for (const b of [p.v, ...p.v.others].filter((x) => inScope(x, scope))) {
       for (const x of bookQs(b, kind, p.since, p.local)) {
         const key = qKey(b, x.q);
         const sq = by.get(key) ?? { key, q: x.q, v: b, who: [] };

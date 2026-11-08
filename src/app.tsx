@@ -3,7 +3,7 @@ import { callPhrase, comingPhrase, lostPhrase, pullPhrase, type RoomName } from 
 import { AttendanceSheet } from "./attendance";
 import { busyHere, takeReopen, watchUpdates } from "./appVersion";
 import type { Link } from "./backend";
-import { ClassPage } from "./correction";
+import { CallsBand, ClassPage } from "./correction";
 import { buildViews, evalQueue, fmtClock, isWalking, liveSession, theoryGroups, theoryMembers, WALK_MS, waitingAll, type View } from "./derive";
 import { Focus } from "./focus";
 import { EvaluationPage } from "./evalFocus";
@@ -16,6 +16,11 @@ import { SimBanner } from "./sim";
 import { Progress } from "./progress";
 import { Settings } from "./settings";
 import { WholeClassPage } from "./wholeClass";
+import { DeskPage } from "./desk";
+import { deptNow } from "./deskData";
+import { Dashboard } from "./dash";
+import { isTeachDept, PAGE_IDS, PAGE_LABEL, type PageId } from "../convex/lib/dept";
+import { correctionSends, leadSends } from "./callRoute";
 import { useFeedbackNew } from "./feedbackList";
 import { usePhotosWaiting } from "./photoQueue";
 import { openLane } from "./homeLane";
@@ -24,7 +29,7 @@ import { useGiftsWaiting } from "./raceSettings";
 import { alertsState, armAlerts, listenForTaps, ring, useAlertsState, type AlertKind } from "./sound";
 import { clearHash, PinSheet, pinAsked, readHash, SignIn, stopAskingPin, type Hash } from "./signin";
 import { hideSplash } from "./splash";
-import { currentMe, may, setRole, signOutHere, testMode, useStore, useTick, type Board, type Role } from "./store";
+import { currentMe, endPreview, may, previewing, setRole, signOutHere, testMode, useStore, useTick, type Board, type Me, type Role } from "./store";
 import { Sheet, Toasts } from "./ui";
 
 /**
@@ -34,7 +39,12 @@ import { Sheet, Toasts } from "./ui";
  * icon) and Progress are in the top bar.
  */
 /** Us (7 Nov 2026): the students' community, every teacher's, last in the bar (src/usFrame.tsx). */
-type TabId = "class" | "correction" | "theory" | "evaluation" | "us";
+/**
+ * Her own app (8 Nov 2026, his voice note: "the personalized system for each teacher based on their role"): with pages
+ * set in Settings → Roles, the bar is her pages (Dashboard, Class, Fighter, Master, Correction, Teach, Consult, Us, in
+ * that order); without, the bar of before (Class, her jobs' pages: Correction, Theory, Evaluation, then Us).
+ */
+type TabId = "dash" | "class" | "correction" | "theory" | "evaluation" | "fighter" | "master" | "teach" | "consult" | "us";
 type Page = "board" | "register" | "settings" | "progress" | "boss" | "teach" | "consult";
 
 const TABS: { id: TabId; label: string }[] = [
@@ -45,6 +55,8 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "us", label: "Us" },
 ];
 const JOBS: Role[] = ["correction", "theory", "evaluation"];
+/** A page of her own app as a tab (the same ids). */
+const pageTab = (p: PageId): { id: TabId; label: string } => ({ id: p, label: PAGE_LABEL[p] });
 
 /**
  * Where this phone was: the Class tab ("hall"), Correction ("focus"), Theory or Evaluation, or the Register ("class":
@@ -54,6 +66,8 @@ function loadStart(): { tab: TabId | null; page: Page } {
   try {
     const r = localStorage.getItem("aristora.role");
     if (r === "theory" || r === "evaluation") return { tab: r, page: "board" };
+    // Her own app's pages (8 Nov 2026).
+    if (r === "dash" || r === "fighter" || r === "master" || r === "teach" || r === "consult") return { tab: r, page: "board" };
     if (r === "focus") return { tab: "correction", page: "board" };
     // ("manager": the Manager tab of 2–3 Nov 2026, now the Class tab.)
     if (r === "hall" || r === "manager") return { tab: "class", page: "board" };
@@ -109,6 +123,61 @@ function UsMark() {
   );
 }
 
+/** The Dashboard's mark (8 Nov 2026): a gauge, her own numbers. */
+function DashMark() {
+  return (
+    <svg class="tab-plan" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3.5 17a8.5 8.5 0 1 1 17 0" />
+      <path d="M12 17l4.2-5.6" />
+      <circle cx="12" cy="17" r="1.4" fill="currentColor" />
+    </svg>
+  );
+}
+
+/** The Teach tab's mark: the whiteboard (the top bar's Whole class icon). */
+function BoardMark() {
+  return (
+    <svg class="tab-plan" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="3.5" width="18" height="12" rx="1.6" />
+      <path d="M8.5 21l3.5-5.5 3.5 5.5" />
+      <path d="M7 8h7M7 11.2h4.5" />
+    </svg>
+  );
+}
+
+/** The Consult tab's mark: a person and a speech bubble (the top bar's Consultation icon). */
+function ConsultMark() {
+  return (
+    <svg class="tab-plan" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="8.5" cy="9" r="3.2" />
+      <path d="M2.8 20.5c.4-3.6 2.8-5.8 5.7-5.8s5.3 2.2 5.7 5.8" />
+      <path d="M14.2 3.5h6.3a1.3 1.3 0 0 1 1.3 1.3v3.9a1.3 1.3 0 0 1-1.3 1.3h-2.9l-2.4 2v-2h-1a1.3 1.3 0 0 1-1.3-1.3V4.8a1.3 1.3 0 0 1 1.3-1.3Z" />
+    </svg>
+  );
+}
+
+/** The owner's Preview of someone's app (8 Nov 2026, Settings → Roles): look only, with Exit back to Roles. */
+function PreviewBanner(props: { name: string }) {
+  return (
+    <div class="pv-banner" role="status">
+      <span>
+        <b>Preview: {props.name}'s app.</b> Look only: nothing you tap is saved.
+      </span>
+      <button
+        type="button"
+        class="btn small"
+        onClick={() => {
+          endPreview();
+          location.hash = "";
+          window.dispatchEvent(new CustomEvent("aristora:roles"));
+        }}
+      >
+        Exit
+      </button>
+    </div>
+  );
+}
+
 /** The job this phone did last (Correction, Theory or Evaluation): the Class page's taps follow it. */
 function loadJob(): Role | null {
   try {
@@ -124,7 +193,7 @@ export function App() {
   const { board, boardError, link, me } = useStore();
   const [start] = useState(loadStart);
   // Loaded again by the upload sheet's Update (an older copy of the app was open): back on Settings → Books.
-  const [reopen, setReopen] = useState(() => (takeReopen() === "books" ? ("books" as const) : null));
+  const [reopen, setReopen] = useState<"books" | "roles" | null>(() => (takeReopen() === "books" ? "books" : null));
   const [chosen, setTab] = useState<TabId | null>(start.tab);
   const [page, setPage] = useState<Page>(reopen ? "settings" : start.page);
   const [lastJob, setLastJob] = useState<Role | null>(loadJob);
@@ -150,17 +219,25 @@ export function App() {
   // Photos from home are marked on the Correction page's ⌂ lane (5 Nov 2026): Photos people get its tab even without the
   // Correction job (then only the lane, and the phone keeps its own job's alerts, never Correction's calls).
   const photosOnly = may("photos") && !jobs.includes("correction");
-  const tabs = TABS.filter((t) => t.id === "class" || t.id === "us" || jobs.includes(t.id as Role) || (t.id === "correction" && photosOnly));
+  // Her own app (Settings → Roles): her pages; else the bar of before.
+  const pages: PageId[] | null = user?.pages?.length ? PAGE_IDS.filter((p) => user.pages!.includes(p)) : null;
+  const tabs = pages
+    ? pages.map(pageTab)
+    : TABS.filter((t) => t.id === "class" || t.id === "us" || jobs.includes(t.id as Role) || (t.id === "correction" && photosOnly));
   // The Class tab's powers (send students, mark teachers arrived): the owner, and whoever has the Manager job.
   const isManager = user?.role === "owner" || !!user?.tabs.includes("manager");
-  // Nothing kept on this phone: the managers start on the Class tab, the others on their first job's page.
-  const first: TabId = isManager ? "class" : (tabs.find((t) => t.id !== "class" && t.id !== "us")?.id ?? "class");
+  // Nothing kept on this phone: her own app opens on its first page; before, the managers on the Class tab, the others
+  // on their first job's page.
+  const first: TabId = pages ? tabs[0].id : isManager ? "class" : (tabs.find((t) => t.id !== "class" && t.id !== "us")?.id ?? "class");
   const tab: TabId = chosen && tabs.some((t) => t.id === chosen) ? chosen : first;
   // Correction (marking papers, and signing students in with its +) is Correction's job; Progress needs Reports.
   const canCorrect = may("correction");
   const canProgress = may("reports");
-  // The whole-class lesson (3 Nov 2026): whoever teaches (Theory, Evaluation) and the owner.
+  // The whole-class lesson (3 Nov 2026): whoever teaches (Theory, Evaluation) and the owner. In her own app it can be a
+  // bottom tab (Teach, 8 Nov 2026: "let's put that freestyle teaching mode on the bottom bar"): then not in the top bar.
   const canTeach = may("theory") || may("evaluation");
+  const teachTab = !!pages?.includes("teach");
+  const consultTab = !!pages?.includes("consult");
   // The Owner page: the owner only (it shows each teacher's own numbers and his money).
   const isOwner = user?.role === "owner";
   // Consultation (5 Nov 2026, his ask: "not for everyone, the people I pick"): the owner and the Consultation tick.
@@ -188,8 +265,23 @@ export function App() {
   // the job done last.
   const classJob: Role = lastJob && jobs.includes(lastJob) ? lastJob : (jobs[0] ?? "correction");
   const onClassTab = shown === "board" && tab === "class";
-  // Us is nobody's job: the taps elsewhere (the Register) follow her job as on the Class tab.
-  const role: Role = base === "register" || tab === "class" || tab === "us" || (tab === "correction" && photosOnly) ? classJob : tab;
+  // Us is nobody's job: the taps elsewhere (the Register) follow her job as on the Class tab. Her own app's pages: the
+  // Fighter and Master pages say on each tap what it is (convex/desk.ts); Teach counts as Theory when she has it.
+  const pageRole = (t: TabId): Role | null =>
+    t === "theory" || t === "evaluation"
+      ? t
+      : t === "correction"
+        ? photosOnly
+          ? null
+          : "correction"
+        : t === "fighter" || t === "master"
+          ? "evaluation"
+          : t === "teach"
+            ? may("theory")
+              ? "theory"
+              : "evaluation"
+            : null;
+  const role: Role = base === "register" ? classJob : (pageRole(tab) ?? classJob);
 
   // A manager's taps on the Class tab are recorded as the manager's ("by the manager" in the history).
   setRole(onClassTab && isManager ? "manager" : role);
@@ -200,7 +292,7 @@ export function App() {
     } catch {
       /* private mode */
     }
-    const job: Role | null = base === "register" || tab === "class" || tab === "us" || (tab === "correction" && photosOnly) ? null : tab;
+    const job: Role | null = base === "register" ? null : pageRole(tab);
     if (job && job !== lastJob) {
       setLastJob(job);
       try {
@@ -212,6 +304,16 @@ export function App() {
   }, [tab, base]);
   // Phones only allow sound after a tap: every tap turns alerts (back) on where needed.
   useEffect(() => listenForTaps(), []);
+  // The owner's Preview ends (its Exit): back on Settings → Roles.
+  useEffect(() => {
+    const go = () => {
+      setReopen("roles");
+      setBackTo("board");
+      setPage("settings");
+    };
+    window.addEventListener("aristora:roles", go);
+    return () => window.removeEventListener("aristora:roles", go);
+  }, []);
   useEffect(() => {
     const seen = () => setHashSeen((n) => n + 1);
     window.addEventListener("hashchange", seen);
@@ -310,9 +412,18 @@ export function App() {
   const comingTo = (room: "theory" | "evaluation") => board.calls.filter((c) => c.byManager && c.teacherId === myId && c.room === room && isWalking(c)).length;
   // The Class tab's count: students in the hall with no work right now (red), for whoever looks.
   const idleNow = views.filter((v) => v.where === "hall" && v.tone === "red").length;
+  // The Fighter and Master tabs' count: that department's students with no work now.
+  const deptRed = (d: "fighter" | "master") => deptNow(views, d).noWork;
   // Her consultation's students (called, on the way, with her): a corner count on its icon while she is elsewhere.
   const consults = canConsult ? myConsults(board, myId) : 0;
-  const icons = 1 + (canProgress ? 1 : 0) + (isOwner ? 1 : 0) + (canConsult ? 1 : 0) + (canTeach ? 1 : 0);
+  // In her own app, Consult and Teach can be bottom tabs: then the top bar leaves their icons out.
+  const consultIcon = canConsult && !consultTab;
+  const teachIcon = canTeach && !teachTab;
+  const icons = 1 + (canProgress ? 1 : 0) + (isOwner ? 1 : 0) + (consultIcon ? 1 : 0) + (teachIcon ? 1 : 0);
+  // A department lead (8 Nov 2026): her department's consultation calls ring on her phone, on every page (she sends
+  // him): their strip under the top bar (on Correction and the Register, the page's own strip shows them).
+  const leadBand = !!user && user.role === "teacher" && !!user.lead && isTeachDept(user.dept) && !(shown === "board" && tab === "correction") && shown !== "register";
+  const preview = previewing();
 
   return (
     <div
@@ -410,7 +521,7 @@ export function App() {
                 </svg>
               </button>
             )}
-            {canConsult && (
+            {consultIcon && (
               <button
                 type="button"
                 class={`att-btn cx-btn${shown === "consult" ? " on" : ""}`}
@@ -440,7 +551,7 @@ export function App() {
                 )}
               </button>
             )}
-            {canTeach && (
+            {teachIcon && (
               <button
                 type="button"
                 class={`att-btn teach-btn${shown === "teach" ? " on" : ""}`}
@@ -504,7 +615,9 @@ export function App() {
         <LinkBanner link={link} />
         {newer && link.connected && <UpdateBanner sending={link.sending} />}
       </div>
+      {preview && <PreviewBanner name={preview.name} />}
       <SimBanner sim={board.sim} />
+      {leadBand && <CallsBand board={board} views={views} now={now} />}
       {alerts.needTap && (
         <button type="button" class="sound-banner" onClick={armAlerts}>
           <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
@@ -558,6 +671,14 @@ export function App() {
         <Focus board={board} views={views} now={now} />
       ) : tab === "evaluation" ? (
         <EvaluationPage board={board} views={views} now={now} />
+      ) : tab === "fighter" || tab === "master" ? (
+        <DeskPage key={tab} board={board} views={views} now={now} dept={tab} />
+      ) : tab === "dash" ? (
+        <Dashboard board={board} views={views} now={now} onOpen={(t: TabId) => setTab(t)} />
+      ) : tab === "teach" ? (
+        <WholeClassPage views={views} />
+      ) : tab === "consult" ? (
+        <ConsultPage board={board} views={views} now={now} />
       ) : (
         <TheoryTab board={board} views={views} now={now} />
       )}
@@ -575,9 +696,13 @@ export function App() {
           // Someone who only marks the photos from home: Correction's number is the photos waiting (red after a day).
           const lane = r.id === "correction" && photosOnly;
           const badge =
-            !away || r.id === "us"
+            !away || r.id === "us" || r.id === "dash" || r.id === "teach"
               ? 0
-              : coming || (r.id === "class" ? idleNow : r.id === "theory" ? theoryRed : r.id === "evaluation" ? evalRed : lane ? photos.n : papers);
+              : r.id === "fighter" || r.id === "master"
+                ? deptRed(r.id)
+                : r.id === "consult"
+                  ? consults
+                  : coming || (r.id === "class" ? idleNow : r.id === "theory" ? theoryRed : r.id === "evaluation" ? evalRed : lane ? photos.n : papers);
           const amber = r.id === "correction" && (lane ? !photos.late : !papersRed);
           return (
             <button
@@ -592,7 +717,19 @@ export function App() {
                 setPage("board");
               }}
             >
-              {r.id === "class" ? <ClassMark /> : r.id === "us" ? <UsMark /> : <span class="tab-mark" aria-hidden="true" />}
+              {r.id === "class" ? (
+                <ClassMark />
+              ) : r.id === "us" ? (
+                <UsMark />
+              ) : r.id === "dash" ? (
+                <DashMark />
+              ) : r.id === "teach" ? (
+                <BoardMark />
+              ) : r.id === "consult" ? (
+                <ConsultMark />
+              ) : (
+                <span class="tab-mark" aria-hidden="true" />
+              )}
               <span>{r.label}</span>
               {badge > 0 && <span class={`tab-badge${coming ? ` tb-coming ${r.id}` : amber ? " tb-amber" : ""}`}>{badge}</span>}
             </button>
@@ -601,7 +738,7 @@ export function App() {
       </nav>
       {attOpen && canCorrect && <AttendanceSheet board={board} views={views} now={now} onClose={() => setAttOpen(false)} />}
       <Toasts />
-      <Alerts role={role} board={board} views={views} now={now} live={link.connected} />
+      <Alerts role={role} board={board} views={views} now={now} live={link.connected} me={user} />
       {(hash.join || hash.setup) && (
         <Sheet
           title={`Signed in as ${user.name}`}
@@ -748,22 +885,44 @@ const REPEAT_MS = 30_000;
 type AlertItem = { key: string; kind: AlertKind; name: string; room: RoomName; repeat: boolean; teacher?: string; open?: RoomName; consult?: boolean };
 
 /** What this phone's job should hear about right now. */
-function alertItems(role: Role, board: Board, views: View[], now: number): AlertItem[] {
+export function alertItems(role: Role, board: Board, views: View[], now: number, who?: Me | null): AlertItem[] {
   const nameOf = new Map(views.map((v) => [v.s._id as string, v.s.name]));
   const items: AlertItem[] = [];
   const me = currentMe()?._id;
+  const person = who === undefined ? currentMe() : who;
   // The manager sent a student to her (3 Nov 2026): her phone says so every 30 s until she taps Arrived, on any page
   // (the owner teaching from the Correction page too): "Open Evaluation" when she isn't on that room's page.
   for (const c of board.calls)
     if (c.byManager && c.teacherId === me && isWalking(c))
       items.push({ key: `coming:${c._id}`, kind: "coming", name: nameOf.get(c.studentId) ?? "", room: c.room, repeat: true, open: c.room !== role ? c.room : undefined });
+  // A department lead (8 Nov 2026): her department's consultations say "Kumar, go to Ilham." on any page until she
+  // taps Sent, then "Kumar hasn't reached Ilham." after 3 minutes; and a knock when one of her department's students runs
+  // out of work. Nothing of Correction's: her Correction tab is for homework and papers.
+  const lead = person && person.role === "teacher" && person.lead && isTeachDept(person.dept) ? person.dept : null;
+  if (person && person.role === "teacher" && isTeachDept(person.dept)) {
+    for (const c of board.calls) {
+      if (!leadSends(person, c)) continue;
+      if (c.status === "requested")
+        items.push({ key: `call:${c._id}`, kind: "call", name: nameOf.get(c.studentId) ?? "", room: c.room, repeat: true, teacher: c.teacher, consult: true });
+      else if (isWalking(c) && now - (c.sentAt ?? c.createdAt) >= WALK_MS)
+        items.push({ key: `lost:${c._id}`, kind: "lost", name: nameOf.get(c.studentId) ?? "", room: c.room, repeat: true, teacher: c.teacher, consult: true });
+    }
+    const d = lead ?? person.dept!;
+    for (const m of theoryMembers(theoryGroups(views)))
+      if (m.urgency === "red" && !m.inEvaluation && m.v.kind === d && !items.some((x) => x.key === `red:${m.v.s._id}`))
+        items.push({ key: `red:${m.v.s._id}`, kind: "red", name: m.v.s.name, room: "theory", repeat: false });
+    for (const m of evalQueue(views, now))
+      if (m.urgency === "red" && !m.blockedBy && m.v.kind === d && !items.some((x) => x.key === `red:${m.v.s._id}`))
+        items.push({ key: `red:${m.v.s._id}`, kind: "red", name: m.v.s.name, room: "evaluation", repeat: false });
+    return items;
+  }
   if (role === "correction") {
     for (const c of board.calls)
-      if (c.status === "requested" && !c.pull)
+      if (c.status === "requested" && !c.pull && correctionSends(c, now))
         items.push({ key: `call:${c._id}`, kind: "call", name: nameOf.get(c.studentId) ?? "", room: c.room, repeat: true, teacher: c.teacher, consult: c.consult });
     // Sent to Theory 3 minutes ago and Theory hasn't tapped Arrived: where is he? (Again every 30 s until it's settled.)
     for (const c of board.calls)
-      if (isWalking(c) && now - (c.sentAt ?? c.createdAt) >= WALK_MS)
+      if (isWalking(c) && now - (c.sentAt ?? c.createdAt) >= WALK_MS && correctionSends(c, now))
         items.push({ key: `lost:${c._id}`, kind: "lost", name: nameOf.get(c.studentId) ?? "", room: c.room, repeat: true, teacher: c.teacher, consult: c.consult });
     // A workbook student with every level handed in waits for Correction: knock once.
     for (const v of views)
@@ -806,9 +965,10 @@ function sayFor(items: AlertItem[]): { kind: AlertKind; words?: string } | null 
  * A knock when a student runs out of work: Theory or Evaluation for theory books, Correction when
  * every workbook level he handed in is waiting to be corrected.
  */
-function Alerts(props: { role: Role; board: Board; views: View[]; now: number; live: boolean }) {
+function Alerts(props: { role: Role; board: Board; views: View[]; now: number; live: boolean; me: Me | null }) {
   const { role, board, views, now, live } = props;
-  const items = alertItems(role, board, views, now);
+  // The owner's Preview is silent (it is his phone, not hers).
+  const items = previewing() ? [] : alertItems(role, board, views, now, props.me);
   const seen = useRef<{ role: Role; keys: Set<string> } | null>(null);
   const lastRing = useRef(0);
   const latest = useRef({ items, live });

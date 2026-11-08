@@ -8,7 +8,8 @@ import { mutation } from "./lib/fn";
 import { actor, LINK_MS, nameKey, viewer } from "./lib/auth";
 import { cleanName, fail, log } from "./lib/backend";
 import { slDay } from "./lib/day";
-import { extra, tab } from "./schema";
+import { cleanPages, withNeeds } from "./lib/dept";
+import { dept, extra, pageId, tab } from "./schema";
 
 const token = v.optional(v.string());
 
@@ -42,6 +43,9 @@ export const list = query({
         role: u.role,
         tabs: u.tabs,
         can: u.can,
+        dept: u.dept ?? null,
+        lead: !!u.lead,
+        pages: u.pages ?? null,
         hasPin: !!u.pinHash,
         lockedUntil: u.lockedUntil !== undefined && u.lockedUntil > now ? u.lockedUntil : null,
         devices,
@@ -91,6 +95,10 @@ export const team = query({
         name: u.name,
         role: u.role,
         tabs: u.role === "owner" ? (["theory", "evaluation"] as typeof u.tabs) : u.tabs,
+        dept: u.dept ?? null,
+        lead: !!u.lead,
+        // A Fighter or Master lead walks to the students (8 Nov 2026): no room of her own on the Class tab.
+        desk: u.role === "teacher" && !!u.pages && (u.pages.includes("fighter") || u.pages.includes("master")),
         lastEnd: lastEnd.get(u._id) ?? null,
         stay: u.role === "owner" ? null : stayOf(u._id),
       }))
@@ -120,12 +128,22 @@ async function nameFree(ctx: QueryCtx, name: string, except?: Id<"users">) {
 
 /** Add a teacher with the tabs and permissions the owner ticked. */
 export const add = mutation({
-  args: { token, name: v.string(), tabs: v.array(tab), can: v.array(extra) },
+  args: {
+    token,
+    name: v.string(),
+    tabs: v.array(tab),
+    can: v.array(extra),
+    // Added from Settings → Roles (8 Nov 2026): her department and her own app from the start.
+    dept: v.optional(dept),
+    lead: v.optional(v.boolean()),
+    pages: v.optional(v.array(pageId)),
+  },
   handler: async (ctx, args) => {
     await actor(ctx, args.token, ["owner"]);
     const now = Date.now();
     const name = cleanName(args.name);
-    if (args.tabs.length === 0) fail("Tick at least one job: Correction, Theory, Evaluation or Manager.");
+    const role = args.pages ? roleOf(args) : null;
+    if (!role && args.tabs.length === 0) fail("Tick at least one job: Correction, Theory, Evaluation or Manager.");
     await nameFree(ctx, name);
     const count = (await ctx.db.query("users").collect()).filter((u) => u.active).length;
     if (count >= 30) fail("That's 30 people already. Remove someone first.");
@@ -133,8 +151,11 @@ export const add = mutation({
       name,
       nameKey: nameKey(name),
       role: "teacher",
-      tabs: [...new Set(args.tabs)],
-      can: [...new Set(args.can)],
+      tabs: role ? role.tabs : [...new Set(args.tabs)],
+      can: role ? role.can : [...new Set(args.can)],
+      ...(role?.dept ? { dept: role.dept } : {}),
+      ...(role?.lead ? { lead: true } : {}),
+      ...(role ? { pages: role.pages } : {}),
       active: true,
       createdAt: now,
     });
@@ -165,6 +186,66 @@ export const update = mutation({
     if (args.can !== undefined) patch.can = [...new Set(args.can)];
     await ctx.db.patch(u._id, patch);
     await log(ctx, null, Date.now(), { kind: "person-edit", value: patch.name ?? u.name });
+    return me._id === u._id;
+  },
+});
+
+/**
+ * What Settings → Roles saves (8 Nov 2026): her department, lead or not, her pages, and the jobs and extras ticked,
+ * plus whatever her pages can't work without (convex/lib/dept.ts withNeeds).
+ */
+function roleOf(a: { dept?: "fighter" | "master" | "management"; lead?: boolean; pages?: string[]; tabs: string[]; can: string[] }) {
+  const pages = cleanPages(a.pages ?? []);
+  if (pages.length === 0) fail("Pick at least one page for her app.");
+  if (a.lead && !a.dept) fail("A lead teacher leads a department: pick the department first.");
+  if ((pages.includes("fighter") && a.dept === "master") || (pages.includes("master") && a.dept === "fighter")) {
+    fail("The Fighter page is the Fighter department's, the Master page the Master department's.");
+  }
+  const need = withNeeds(pages, a.tabs as never, a.can as never);
+  return { dept: a.dept, lead: !!a.lead && !!a.dept, pages, ...need };
+}
+
+/**
+ * Settings → Roles (8 Nov 2026, his voice note: "a dedicated role management page ... set the permissions ... how the
+ * UI looks for each teacher"): her department, lead or not, the pages of her own app, her jobs and extras. The owner's
+ * own app: only his pages (he can always do everything). `pages: []` with `reset` = back to the app of before.
+ */
+export const setRole = mutation({
+  args: {
+    token,
+    id: v.id("users"),
+    dept: v.optional(dept),
+    lead: v.optional(v.boolean()),
+    pages: v.array(pageId),
+    tabs: v.array(tab),
+    can: v.array(extra),
+    /** Back to the app of before (her jobs' pages): department and pages cleared, jobs kept. */
+    reset: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const me = await actor(ctx, args.token, ["owner"]);
+    const u = await ctx.db.get(args.id);
+    if (!u || !u.active) fail("That person was removed. Refresh the page.");
+    const now = Date.now();
+    if (args.reset) {
+      if (u.role !== "owner" && u.tabs.length === 0) fail(`${u.name} has no job: give her pages instead.`);
+      await ctx.db.patch(u._id, { dept: undefined, lead: undefined, pages: undefined });
+      await log(ctx, null, now, { kind: "person-role", value: `${u.name}: the app of before` });
+      return me._id === u._id;
+    }
+    if (u.role === "owner") {
+      const pages = cleanPages(args.pages);
+      if (pages.length === 0) fail("Pick at least one page for your app.");
+      await ctx.db.patch(u._id, { pages });
+      await log(ctx, null, now, { kind: "person-role", value: `${u.name}: ${pages.join(" ")}` });
+      return true;
+    }
+    const r = roleOf({ ...args, tabs: args.tabs, can: args.can });
+    await ctx.db.patch(u._id, { dept: r.dept, lead: r.lead || undefined, pages: r.pages, tabs: r.tabs, can: r.can });
+    await log(ctx, null, now, {
+      kind: "person-role",
+      value: `${u.name}: ${r.dept ? `${r.dept}${r.lead ? " lead" : ""} · ` : ""}${r.pages.join(" ")}`,
+    });
     return me._id === u._id;
   },
 });

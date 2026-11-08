@@ -138,7 +138,7 @@ export const taught = mutation({
         const before = p.marks?.[key] ?? null;
         if (before?.s === "taught") continue;
         await ctx.db.patch(p._id, { marks: { ...(p.marks ?? {}), [key]: { s: "taught", t: now } }, updatedAt: now });
-        await log(ctx, session, now, { kind: "board", by, studentId: s._id, name: s.name, unit: unit.key, q: args.q, value: "taught" });
+        await log(ctx, session, now, { kind: "board", by, studentId: s._id, name: s.name, unit: unit.key, q: args.q, value: "taught", stage: args.stage });
         changed.push({ studentId: s._id, name: s.name, was: before?.s === "skip" ? "skip" : "none" });
       } else {
         const m: MState = { ...masterState(p), q: { ...masterState(p).q } };
@@ -150,7 +150,7 @@ export const taught = mutation({
         }
         m.q[key] = t === "theory" ? { ...r!, tt: now } : { ...r!, x: now };
         await ctx.db.patch(p._id, { m, updatedAt: now });
-        await log(ctx, session, now, { kind: "board", by, studentId: s._id, name: s.name, unit: unit.key, q: args.q, value: t === "theory" ? "taught" : "explained" });
+        await log(ctx, session, now, { kind: "board", by, studentId: s._id, name: s.name, unit: unit.key, q: args.q, value: t === "theory" ? "taught" : "explained", stage: args.stage });
         changed.push({ studentId: s._id, name: s.name, was: t });
       }
       // Seen by this room today: he isn't "no teacher yet", and the room's queue puts the unseen first.
@@ -197,7 +197,7 @@ export const untaught = mutation({
         if (it.was === "skip") marks[key] = { s: "skip", t: now };
         else delete marks[key];
         await ctx.db.patch(p._id, { marks, updatedAt: now });
-        await log(ctx, session, now, { kind: "board-undo", by, studentId: s._id, name: s.name, unit: unit.key, q: args.q, value: "taught" });
+        await log(ctx, session, now, { kind: "board-undo", by, studentId: s._id, name: s.name, unit: unit.key, q: args.q, value: "taught", stage: args.stage });
       } else {
         const m: MState = { ...masterState(p), q: { ...masterState(p).q } };
         const r = m.q[key];
@@ -210,7 +210,7 @@ export const untaught = mutation({
           m.q[key] = rest;
         } else continue;
         await ctx.db.patch(p._id, { m, updatedAt: now });
-        await log(ctx, session, now, { kind: "board-undo", by, studentId: s._id, name: s.name, unit: unit.key, q: args.q, value: it.was === "theory" ? "taught" : "explained" });
+        await log(ctx, session, now, { kind: "board-undo", by, studentId: s._id, name: s.name, unit: unit.key, q: args.q, value: it.was === "theory" ? "taught" : "explained", stage: args.stage });
       }
       await refresh(ctx, s._id, now, session);
       await roomStats(ctx, s, session, room, { qs: -1 });

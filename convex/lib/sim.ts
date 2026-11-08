@@ -332,7 +332,8 @@ export function markLevel(
       continue;
     }
     if (r() < P.dk) {
-      rows[String(q)] = { got: 0, max, lost: true, t: at, dk: true, th: at, tb: "correction" };
+      // A blank is a wrong answer (8 Nov 2026): it waits for the Master teacher, not Theory.
+      rows[String(q)] = { got: 0, max, lost: true, t: at, dk: true };
       continue;
     }
     const g = Math.floor(r() * max);

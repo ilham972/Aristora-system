@@ -11189,3 +11189,467 @@ body.tm-on .toasts {
     letter-spacing: -0.2px;
   }
 }
+
+/* ---------- Departments and each teacher's own app (8 Nov 2026) ---------- */
+/* Six tabs on her own bar (his lead teacher's six): smaller words, icons above. */
+.tabs.n6 .tab {
+  font-size: 11.5px;
+  gap: 4px;
+  min-width: 0;
+}
+@media (max-width: 345px) {
+  .tabs.n6 .tab {
+    font-size: 10px;
+    letter-spacing: -0.2px;
+  }
+}
+/* Six tabs are narrow (53 px on a 320 px phone): the count sits on the icon's corner, smaller, inside its own tab. */
+.tabs.n6 .tab-badge {
+  top: 7px;
+  left: calc(50% + 4px);
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  font-size: 11px;
+}
+.tab.fighter .tab-mark {
+  box-shadow: 0 0 0 2px var(--card), 0 0 0 4px currentColor;
+}
+.tab.fighter.on,
+.tab.teach.on {
+  color: var(--theory);
+}
+.tab.master.on,
+.tab.consult.on {
+  color: var(--evaluation);
+}
+.tab.dash.on {
+  color: var(--ink);
+}
+
+/* The owner's Preview of someone's app: look only, with Exit. */
+.pv-banner {
+  position: sticky;
+  top: var(--top-h, 64px);
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 8px;
+  padding: 8px 12px;
+  background: #2b2346;
+  color: #fff;
+  font-size: 13.5px;
+  line-height: 1.3;
+}
+.pv-banner span {
+  flex: 1;
+  min-width: 0;
+}
+.pv-banner .btn {
+  flex: none;
+  background: #fff;
+  color: #2b2346;
+}
+
+/* The Fighter and Master pages: the Evaluation page's pieces, no Call / Arrived / Done (she walks to them). */
+.dk-room .evx-box {
+  border-color: var(--role, var(--evaluation));
+}
+.dk-page.tpx-page .dk-room .evx-box {
+  border-color: var(--theory);
+}
+.dk-book {
+  color: var(--ink-2);
+  font-weight: 600;
+}
+.evx-bh .dk-next {
+  margin-left: auto;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--green-ink);
+}
+.evx-sp.dk-hold {
+  border-style: dashed;
+}
+/* A blank ("?" at correction): a wrong answer in its own colour (his ask: a small colour difference). */
+.fc-sq.blank {
+  border-style: dashed;
+  border-color: var(--evaluation);
+  background: #faf6ff;
+}
+.fc-sq.blank small {
+  color: var(--evaluation-ink);
+}
+.evx-qg.dk-blank {
+  border-style: dashed;
+}
+.fc-card.dk-blankcard .evx-who small {
+  color: var(--evaluation-ink);
+}
+
+/* Correction: Homework | Class for a Fighter or Master teacher. */
+.fc-modes {
+  display: flex;
+  flex: none;
+  margin: 0 0 6px;
+}
+.fc-modes .segc-b {
+  flex: 1;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.fc-mode-n {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--amber);
+  color: #3d2600;
+  font: 800 12px/20px var(--font);
+}
+.fc-modes .segc-b.on .fc-mode-n {
+  background: #fff;
+  color: var(--ink);
+}
+
+/* The Class tab: a Fighter or Master lead's chip (she walks the classrooms: no room). */
+.mg2-walk {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  background: var(--theory);
+  color: #fff;
+  font: 800 9.5px/1 var(--font);
+  font-style: normal;
+}
+.mg2-desk.walk.master .mg2-walk {
+  background: var(--evaluation);
+}
+
+/* Her dashboard. */
+.dash-page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.dash-me {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 2px 0;
+}
+.dash-pic {
+  width: 52px;
+  height: 52px;
+  flex: none;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--ink);
+}
+.dash-ini {
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font: 800 22px/1 var(--font);
+}
+.dash-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.dash-who b {
+  font-size: 21px;
+  line-height: 1.15;
+}
+.dash-who small {
+  color: var(--ink-2);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.dash-seg {
+  display: flex;
+  flex: none;
+}
+.dash-seg .segc-b {
+  flex: 1;
+}
+.dash-q {
+  padding: 14px 14px 12px;
+  border-radius: 16px;
+  background: var(--card);
+  border: 2px solid var(--line);
+}
+.dash-q.red {
+  border-color: var(--red);
+}
+.dash-q.amber {
+  border-color: var(--amber);
+}
+.dash-q.calm {
+  border-color: var(--green);
+}
+.dash-ask {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+.dash-n {
+  margin: 4px 0 2px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.dash-n b {
+  font: 800 54px/1 var(--cond);
+}
+.dash-q.red .dash-n b {
+  color: var(--red-ink);
+}
+.dash-q.amber .dash-n b {
+  color: var(--amber-ink);
+}
+.dash-q.calm .dash-n b {
+  color: var(--green-ink);
+}
+.dash-n span {
+  font-size: 15px;
+  font-weight: 700;
+}
+.dash-also {
+  margin: 4px 0 0;
+  font-size: 13.5px;
+  color: var(--ink-2);
+}
+.dash-go {
+  margin-top: 10px;
+  width: 100%;
+}
+.dash-card {
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--card);
+  border: 1.5px solid var(--line);
+}
+.dash-h {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+.dash-grades {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 5px;
+  height: 92px;
+}
+.dash-g {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 2px;
+  padding: 0 0 4px;
+  border-radius: 10px;
+  border: 1.5px solid var(--line-2);
+  background: var(--ground);
+  overflow: hidden;
+  color: var(--ink-3);
+}
+.dash-g.on,
+.dash-g.red {
+  color: var(--ink);
+}
+.dash-gbar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--role-soft, #e6e9f0);
+}
+.dash-page[data-dept="fighter"] .dash-gbar {
+  background: var(--theory-soft);
+}
+.dash-page[data-dept="master"] .dash-gbar {
+  background: var(--evaluation-soft);
+}
+.dash-g b,
+.dash-g small,
+.dash-g i {
+  position: relative;
+}
+.dash-g b {
+  font: 800 17px/1 var(--cond);
+}
+.dash-g small {
+  font-size: 12px;
+  font-weight: 700;
+}
+.dash-g i {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: var(--red);
+  color: #fff;
+  font: 800 11px/17px var(--font);
+  font-style: normal;
+}
+.dash-g.red {
+  border-color: var(--red);
+}
+.dash-key {
+  margin: 6px 0 0;
+}
+.dash-mine,
+.dash-team {
+  margin: 0 0 6px;
+  font-size: 14.5px;
+}
+.dash-mine small,
+.dash-team small {
+  color: var(--ink-2);
+}
+.dash-people {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dash-people li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--ground);
+  font-weight: 700;
+  font-size: 14px;
+}
+.dash-people li.me {
+  background: var(--green-soft);
+  color: var(--green-ink);
+}
+.dash-people small {
+  font-weight: 600;
+  color: var(--ink-2);
+  text-align: right;
+}
+.dash-thanks {
+  margin: 8px 0 0;
+  color: var(--green-ink);
+  font-weight: 700;
+  font-size: 14px;
+}
+
+/* Settings → Roles. */
+.roles {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.role-dept {
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+}
+.role-dept.rd-fighter {
+  border-color: var(--theory);
+}
+.role-dept.rd-master {
+  border-color: var(--evaluation);
+}
+.role-h {
+  margin: 0 0 8px;
+  display: flex;
+  flex-direction: column;
+  font-size: 16px;
+}
+.role-h small {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+.role-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.role-p {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1.5px solid var(--line-2);
+  background: var(--ground);
+  text-align: left;
+  font: inherit;
+}
+.role-p b {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+}
+.role-p small {
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+.role-tag {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--line-2);
+  color: var(--ink-2);
+  font-size: 11px;
+  font-weight: 800;
+}
+.role-tag.lead {
+  background: var(--ink);
+  color: #fff;
+}
+.role-empty {
+  margin: 0;
+}
+/* A segmented row in a sheet's scrolling column never shrinks (its overflow is hidden: it would be squeezed to a
+   sliver when the sheet is long, and its buttons couldn't be tapped). */
+.role-seg {
+  display: flex;
+  flex: none;
+  margin-bottom: 8px;
+}
+.role-seg .segc-b {
+  flex: 1;
+  padding: 0 4px;
+  font-size: 13px;
+}
+.role-lead {
+  margin-bottom: 4px;
+}
+.perm.off {
+  opacity: 0.45;
+}
+.role-reset {
+  margin-top: 12px;
+  font-size: 13.5px;
+}
+.ps-role {
+  margin: 6px 0 0;
+}

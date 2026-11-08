@@ -53,7 +53,17 @@ import { tone } from "./tones";
 const BY = "manager";
 /** Her stay today (marked by the manager): open while outAt is null. */
 export type Stay = { id: string; inAt: number; outAt: number | null; editedAt: number };
-export type TeamRow = { _id: string; name: string; role?: string; tabs: string[]; lastEnd: number | null; stay: Stay | null };
+export type TeamRow = {
+  _id: string;
+  name: string;
+  role?: string;
+  tabs: string[];
+  /** A Fighter or Master lead (8 Nov 2026): she walks to the students, so no room of her own (a chip on the team line). */
+  desk?: boolean;
+  dept?: string | null;
+  lastEnd: number | null;
+  stay: Stay | null;
+};
 type Focus = "correct" | "explain" | "teach" | null;
 type Sel = { id: string; call?: string } | null;
 
@@ -103,7 +113,7 @@ export function ManagerPage(props: { board: Board; views: View[]; now: number; c
     return () => document.body.classList.remove("mg2-on");
   }, []);
   // Rooms: the Theory and Evaluation teachers (and the owner teaching). Correctors sit at the team line.
-  const roomRows = (rows ?? []).filter((r) => jobsOf(r.tabs).length > 0);
+  const roomRows = (rows ?? []).filter((r) => jobsOf(r.tabs).length > 0 && !r.desk);
   const team: Teacher[] = roomRows.map((r) => ({
     id: r._id,
     name: r.name,
@@ -117,9 +127,10 @@ export function ManagerPage(props: { board: Board; views: View[]; now: number; c
   const inClass = views.filter((v) => v.where !== "absent");
   const rowOf = (id: string) => (rows ?? []).find((r) => r._id === id) ?? null;
   // The team line: correctors here (her desk), then everyone not marked here (or gone), A–Z.
-  const desks = (rows ?? []).filter((r) => jobsOf(r.tabs).length === 0 && r.role !== "owner" && isHere(r));
+  // A Fighter or Master lead walks to the students: her chip there too (no room).
+  const desks = (rows ?? []).filter((r) => (jobsOf(r.tabs).length === 0 || r.desk) && r.role !== "owner" && isHere(r));
   const outIds = new Set(plan.away.map((t) => t.id));
-  const out = (rows ?? []).filter((r) => r.role !== "owner" && !isHere(r) && (outIds.has(r._id) || jobsOf(r.tabs).length === 0));
+  const out = (rows ?? []).filter((r) => r.role !== "owner" && !isHere(r) && (outIds.has(r._id) || jobsOf(r.tabs).length === 0 || !!r.desk));
   /** A teacher tapped: her card (hers; anyone's for a manager), else what she is doing now. */
   const openTeacher = (id: string) => {
     const r = rowOf(id);
@@ -325,13 +336,17 @@ export function ManagerPage(props: { board: Board; views: View[]; now: number; c
             <button
               key={r._id}
               type="button"
-              class={`mg2-desk${r._id === props.meId ? " me" : ""}`}
-              aria-label={`${r.name}: Correction, here since ${slClock(r.stay!.inAt)}`}
+              class={`mg2-desk${r._id === props.meId ? " me" : ""}${r.desk ? ` walk ${r.dept ?? ""}` : ""}`}
+              aria-label={`${r.name}: ${r.desk ? `${r.dept === "master" ? "Master" : "Fighter"}, walks the classrooms` : "Correction"}, here since ${slClock(r.stay!.inAt)}`}
               onClick={() => openTeacher(r._id)}
             >
-              <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M4 20h4L19 9l-4-4L4 16z" />
-              </svg>
+              {r.desk ? (
+                <i class="mg2-walk" aria-hidden="true">{r.dept === "master" ? "M" : "F"}</i>
+              ) : (
+                <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M4 20h4L19 9l-4-4L4 16z" />
+                </svg>
+              )}
               {r.name}
             </button>
           ))}

@@ -35,7 +35,7 @@ import { OL, OL_PARTS, olNumber, termOf } from "../convex/lib/syllabus";
 import { errorText, mutate } from "./backend";
 import { Book } from "./board";
 import { CallsBand } from "./correction";
-import { fmtMin, tagOf, type View } from "./derive";
+import { fmtMin, tagOf, waitingAll, type View } from "./derive";
 import {
   autoLevel,
   bookId,
@@ -102,6 +102,7 @@ import { bookDocAt,
   allUnits,
   clearToasts,
   currentMe,
+  previewing,
   currentRole,
   may,
   now as serverNow,
@@ -724,6 +725,23 @@ async function takeBackMarks(s: SavedMarks): Promise<boolean> {
 
 type SheetName = "unit" | "card" | "move" | "theory" | "saved" | "attendance";
 
+/** Her Correction opened on Homework once (this app load): after that, it stays where she left it. */
+let homeFirstDone = false;
+
+/** Homework | Class (8 Nov 2026): a Fighter or Master teacher's two modes of correcting, each with what waits. */
+function ModeBar(props: { home: boolean; photos: number; papers: number; onPick: (home: boolean) => void }) {
+  return (
+    <nav class="segc plain fc-modes" aria-label="Homework or class">
+      <button type="button" class={`segc-b${props.home ? " on" : ""}`} aria-pressed={props.home} onClick={() => props.onPick(true)}>
+        <span aria-hidden="true">⌂</span> Homework{props.photos > 0 && <b class="fc-mode-n">{props.photos > 99 ? "99+" : props.photos}</b>}
+      </button>
+      <button type="button" class={`segc-b${!props.home ? " on" : ""}`} aria-pressed={!props.home} onClick={() => props.onPick(false)}>
+        Class{props.papers > 0 && <b class="fc-mode-n">{props.papers}</b>}
+      </button>
+    </nav>
+  );
+}
+
 export function Focus(props: { board: Board; views: View[]; now: number }) {
   const { board, views, now } = props;
   latestViews = views;
@@ -789,6 +807,18 @@ export function Focus(props: { board: Board; views: View[]; now: number }) {
   const laneList = useLaneList(canPhotos, views);
   const ls = useLaneState();
   const home = canPhotos && (ls.on || !hallOk);
+  // A Fighter or Master teacher (8 Nov 2026, his voice note: "two modes, two tabs: homework and class ... these teachers
+  // always do homework correction, class correction sometimes when needed"): the two modes as a row of their own, and
+  // her Correction opens on Homework.
+  const who = currentMe();
+  const modes = canPhotos && hallOk && !!who && who.role === "teacher" && (who.dept === "fighter" || who.dept === "master");
+  useEffect(() => {
+    // (Never in the owner's Preview: it is his phone, his own Correction stays as he left it.)
+    if (modes && !homeFirstDone && !previewing()) {
+      homeFirstDone = true;
+      if (!ls.on) setLaneOn(true);
+    }
+  }, [modes]);
   // Into the lane: the hall's paper is left (a level marked to the end saves itself, her book is free again), and the
   // grade with the oldest photo shows if this one has none (once, as she enters; it never jumps by itself after).
   const laneGradeSet = useRef(false);
@@ -880,6 +910,7 @@ export function Focus(props: { board: Board; views: View[]; now: number }) {
     <main class="page fc-page">
       <div class="stick fc-stick" ref={stick}>
         <CallsBand board={board} views={views} now={now} paper />
+        {modes && views.length > 0 && <ModeBar home={home} photos={(laneList ?? []).reduce((n, x) => n + x.n, 0)} papers={views.reduce((n, x) => n + waitingAll(x), 0)} onPick={(h) => h !== home && toggleLane()} />}
         {views.length > 0 && grade !== null && (
           <NameBar
             pills={shown}
@@ -892,7 +923,7 @@ export function Focus(props: { board: Board; views: View[]; now: number }) {
             onPick={(x) => openFor(x, now)}
             onAdd={() => setSheet("attendance")}
             addOff={home}
-            lead={canPhotos && <HomeButton list={laneList} on={home} locked={!hallOk} onTap={toggleLane} />}
+            lead={canPhotos && !modes && <HomeButton list={laneList} on={home} locked={!hallOk} onTap={toggleLane} />}
             names={home ? <HomeNames list={laneList} grade={grade} openId={ls.student} /> : undefined}
           />
         )}
@@ -2248,7 +2279,7 @@ function QuestionCard(props: {
     <button
       type="button"
       class={`fc-n dk${prev?.dk && !prev.dkp?.length ? " on" : ""}`}
-      aria-label={`Q${q}: blank, couldn't start it (to Theory)`}
+      aria-label={`Q${q}: blank, couldn't start it`}
       onClick={() => give({ g: 0, dk: true })}
     >
       <b>?</b>
@@ -2499,10 +2530,11 @@ function Summary(props: { v: View; paper: MasterPaper; level: MasterLevel; each:
         )}
         {blanks && (
           <p class="ct-dk">
-            <b>?</b> {blanks}: blank, so straight to Theory.
+            <b>?</b> {blanks}: blank, it goes with the lost marks.
           </p>
         )}
-        {lostQs.length > 0 && (
+        {/* A blank is a lost mark (8 Nov 2026): it goes where the lost marks go. */}
+        {(lostQs.length > 0 || !!blanks) && (
           <div class="fc-route">
             <span class="ct-route-l">Lost marks go to</span>
             <span class="segc" role="group" aria-label="Lost marks go to">

@@ -113,7 +113,7 @@ describe("the whole-class lesson on a workbook", () => {
     const t = await setup();
     const malik = await add(t, "Malik", 7, "master", "G7-U08");
     const u08 = await unitId(t, "G7-U08");
-    // Level 1 corrected: Q3 lost its marks (waits for Evaluation), Q4 "?" (he couldn't start it: Theory).
+    // Level 1 corrected: Q3 lost its marks (waits for Evaluation), Q4 "?" (he couldn't start it), sent to Theory.
     const l1 = G7U08.levels[0];
     const each = levelOutOf(G7U08, l1)!;
     const items = Array.from({ length: l1.to - l1.from + 1 }, (_, i) => {
@@ -121,6 +121,8 @@ describe("the whole-class lesson on a workbook", () => {
       return q === 4 ? { q, got: 0, dk: true } : { q, got: q === 3 ? 0 : each[i] };
     });
     await t.mutation(api.workbook.correct, { studentId: malik, unitId: u08, level: 1, items, by: "correction" });
+    // A blank is a wrong answer since 8 Nov 2026: Theory gets it only when a teacher sends it there.
+    await t.mutation(api.workbook.toTheory, { studentId: malik, unitId: u08, qs: [4], on: true, by: "correction" });
 
     const r = (await t.query(api.teach.roster, { unitId: u08, stage: "master" }))!;
     expect(r.students[0].waits).toEqual({ "3": "eval", "4": "theory" });

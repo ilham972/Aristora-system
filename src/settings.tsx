@@ -46,15 +46,19 @@ import { ClassHours } from "./classHours";
 import { RaceSettings } from "./raceSettings";
 import { UsSettings } from "./usSettings";
 import { SimPanel, SimSwitch } from "./sim";
+import { roleWords, Roles } from "./roles";
+import { DEPT_NAMES, extrasFor, isTeachDept, jobsFor, presetPages, type Dept, type PageId } from "../convex/lib/dept";
 import { GRADES, GradeRow, Sheet, STATE_WORDS, useGrade } from "./ui";
 
-export type SettingsTab = "students" | "books" | "people" | "hours" | "race" | "community" | "alerts" | "reports" | "history" | "feedback" | "photos" | "account";
+export type SettingsTab = "students" | "books" | "people" | "roles" | "hours" | "race" | "community" | "alerts" | "reports" | "history" | "feedback" | "photos" | "account";
 type Tab = SettingsTab;
 
 const SETTINGS_TABS: [Tab, string, () => boolean][] = [
   ["students", "Students", () => may("students")],
   ["books", "Books", () => may("books")],
   ["people", "People", () => may("owner")],
+  // Each teacher's department and own app (8 Nov 2026, his voice note): the owner.
+  ["roles", "Roles", () => may("owner")],
   // When the class is open each weekday (3 Nov 2026): the family app's schedule.
   ["hours", "Class hours", () => may("owner")],
   // The family app's race (7 Nov 2026): gifts to give (owner, Manager), last week's champions and their poster (and
@@ -116,6 +120,7 @@ export function Settings(props: {
       {tab === "race" && <RaceSettings />}
       {tab === "community" && <UsSettings />}
       {tab === "people" && <People />}
+      {tab === "roles" && <Roles onClose={props.onClose} />}
       {tab === "account" && <Account />}
       <button type="button" class="btn ghost wide" onClick={props.onClose}>
         Back to the class
@@ -935,6 +940,15 @@ const CONSULT_WORDS: Record<string, string> = {
   taught: "taught in consultation",
   untaught: "taught in consultation, undone",
 };
+/** A tap at his desk on the Fighter or Master page (8 Nov 2026): the lead teacher walked to him. */
+const DESK_WORDS: Record<string, string> = {
+  explained: "explained at his desk",
+  unexplained: "explained at his desk, undone",
+  "to-theory": "sent to theory at his desk",
+  "to-theory-off": "sent to theory at his desk, undone",
+  taught: "taught at his desk",
+  untaught: "taught at his desk, undone",
+};
 const qName = (q: number) => `Q${q}`;
 
 /** One history line in plain words. */
@@ -1100,6 +1114,11 @@ function describe(e: Doc<"events">): string {
         : `${qName(e.q ?? 0)} ${CONSULT_WORDS[v] ?? v}`;
     case "done-consult":
       return "consultation finished";
+    case "desk":
+    case "desk-undo":
+      return v.startsWith("whole-unit")
+        ? `the whole unit taught at his desk${v.endsWith("-off") ? ", undone" : ""}`
+        : `${qName(e.q ?? 0)} ${DESK_WORDS[v] ?? v}`;
     // Us, the students' community (7 Nov 2026).
     case "us-shout":
       return `shout-out in Us: ${SHOUT_WHY[v]?.en ?? v}`;
@@ -1185,6 +1204,8 @@ function describe(e: Doc<"events">): string {
       return `added ${v}`;
     case "person-edit":
       return `changed what ${v} may do`;
+    case "person-role":
+      return `set the department and app of ${v}`;
     case "person-remove":
       return `removed ${v} (all their phones signed out)`;
     case "link-made":
@@ -1257,8 +1278,10 @@ const EXTRA_HELP: Record<Extra, string> = {
   community: "writes posts in the students' Us tab, pins and removes lines (every teacher cheers and gives shout-outs)",
 };
 
-function canWords(p: { role: string; tabs: Job[]; can: Extra[] }): string {
-  if (p.role === "owner") return "Owner: everything";
+function canWords(p: { role: string; tabs: Job[]; can: Extra[]; dept?: Dept | null; lead?: boolean; pages?: PageId[] | null }): string {
+  if (p.role === "owner") return p.pages ? `Owner: everything · ${roleWords({ dept: null, lead: false, pages: p.pages })}` : "Owner: everything";
+  // Her own app (Settings → Roles, 8 Nov 2026): her department and pages say it.
+  if (p.pages) return roleWords({ dept: p.dept ?? null, lead: !!p.lead, pages: p.pages });
   const tabs = p.tabs.map((t) => TAB_NAMES[t]).join(", ");
   return p.can.length ? `${tabs} · also ${p.can.map((c) => EXTRA_NAMES[c]).join(", ")}` : tabs;
 }
@@ -1375,6 +1398,9 @@ type Person = {
   role: "owner" | "teacher";
   tabs: Job[];
   can: Extra[];
+  dept: Dept | null;
+  lead: boolean;
+  pages: PageId[] | null;
   hasPin: boolean;
   lockedUntil: number | null;
   devices: { _id: Id<"devices">; label: string; createdAt: number; lastSeenAt: number }[];
@@ -1445,14 +1471,26 @@ function People() {
   );
 }
 
+/** A new teacher's start (8 Nov 2026): a department's place, with its own app; or jobs ticked by hand (the app of before). */
+const STARTS: { key: string; label: string; dept: Dept; lead: boolean }[] = [
+  { key: "fighter-lead", label: "Fighter lead", dept: "fighter", lead: true },
+  { key: "fighter", label: "Fighter consultation", dept: "fighter", lead: false },
+  { key: "master-lead", label: "Master lead", dept: "master", lead: true },
+  { key: "master", label: "Master consultation", dept: "master", lead: false },
+  { key: "management", label: "Management", dept: "management", lead: false },
+];
+
 function PersonSheet(props: { person?: Person; onClose: () => void; onAdded?: (id: Id<"users">, name: string) => void }) {
   const p = props.person;
   const owner = p?.role === "owner";
   const [name, setName] = useState(p?.name ?? "");
   const [tabs, setTabs] = useState<Job[]>(p?.tabs ?? ["correction"]);
   const [can, setCan] = useState<Extra[]>(p?.can ?? ["reports"]);
+  // Adding: a department's place (her own app at once), or jobs by hand.
+  const [start, setStart] = useState<string | null>(null);
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
+  const preset = STARTS.find((x) => x.key === start) ?? null;
   const nameRef = useRef<HTMLInputElement>(null);
   const toggle = <T,>(list: T[], x: T) => (list.includes(x) ? list.filter((y) => y !== x) : [...list, x]);
   const save = async () => {
@@ -1462,10 +1500,22 @@ function PersonSheet(props: { person?: Person; onClose: () => void; onAdded?: (i
       nameRef.current?.focus();
       return toast(p ? "Type the name first." : "Type the teacher's name first (at the top).", "error");
     }
-    if (!owner && tabs.length === 0) return toast("Tick at least one tab: Correction, Theory or Evaluation.", "error");
+    if (!owner && !preset && !p?.pages && tabs.length === 0) return toast("Tick at least one tab: Correction, Theory or Evaluation.", "error");
     setBusy(true);
+    if (!p && preset) {
+      // Her department's place: its pages, and the jobs and extras they need (Settings → Roles changes any of it).
+      const pages = presetPages(preset.dept, preset.lead);
+      const mgr = preset.dept === "management";
+      const t = jobsFor(pages, mgr);
+      const c = [...new Set([...can.filter((x) => x !== "photos" && x !== "consult"), ...extrasFor(pages)])];
+      const id = await act(() => mutate(api.people.add, { name, tabs: t, can: c, dept: preset.dept, lead: preset.lead, pages }));
+      setBusy(false);
+      if (id) props.onAdded?.(id, name.trim());
+      return;
+    }
     if (p) {
-      const r = await act(() => mutate(api.people.update, owner ? { id: p._id, name } : { id: p._id, name, tabs, can }));
+      // Her own app (Settings → Roles) keeps her jobs: only the name changes here.
+      const r = await act(() => mutate(api.people.update, owner || p.pages ? { id: p._id, name } : { id: p._id, name, tabs, can }));
       setBusy(false);
       if (r !== undefined) {
         toast(`${name.trim()} saved.`);
@@ -1498,7 +1548,36 @@ function PersonSheet(props: { person?: Person; onClose: () => void; onAdded?: (i
           onInput={(e) => setName((e.target as HTMLInputElement).value)}
         />
       </label>
-      {!owner && (
+      {!owner && !p && (
+        <>
+          <h3 class="block-title">Start as</h3>
+          <div class="perm-list ps-start">
+            {STARTS.map((x) => (
+              <label key={x.key} class="perm">
+                <input type="radio" name="start" checked={start === x.key} onChange={() => setStart(x.key)} />
+                <span>
+                  {x.label}
+                  <small>{roleWords({ dept: null, lead: false, pages: presetPages(x.dept, x.lead) })}</small>
+                </span>
+              </label>
+            ))}
+            <label class="perm">
+              <input type="radio" name="start" checked={start === null} onChange={() => setStart(null)} />
+              <span>
+                Jobs by hand
+                <small>tick them below (the app of before)</small>
+              </span>
+            </label>
+          </div>
+        </>
+      )}
+      {!owner && p?.pages && (
+        <p class="muted ps-role">
+          <b>{p.dept ? `${DEPT_NAMES[p.dept]} department${isTeachDept(p.dept) ? (p.lead ? " · lead" : " · consultation") : ""}` : "Her own app"}.</b> {roleWords(p)}.
+          Change it in Settings → Roles.
+        </p>
+      )}
+      {!owner && !preset && !p?.pages && (
         <>
           <h3 class="block-title">Jobs</h3>
           <div class="perm-list">

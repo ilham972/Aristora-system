@@ -95,6 +95,26 @@ EOF
 
 ## Gotchas learned the hard way
 
+- **Her own app is two layers** (8 Nov 2026): her pages (`users.pages`, the UI) and her jobs (`users.tabs`, the server's
+  permissions). The jobs no longer name a department: a Fighter lead has Theory AND Evaluation (both kinds of work on
+  her books) and often Correction (Class mode). So never read "has the Correction job" as "is Correction": a Fighter or
+  Master person never sends Correction's calls (`mayHandle` in `convex/calls.ts`, `phoneSends` in `src/callRoute.ts`),
+  hears only her department's alerts (`alertItems`), and `desk.mark` checks her department against the book. A person
+  with no pages keeps the app of before: the run-throughs of the old Theory and Evaluation pages still use that.
+- **Preview is the owner's phone pretending** (8 Nov 2026): `currentMe()` / `may()` give the previewed person, the
+  data still comes with his sign-in, and every mutation is refused (`LOOK_ONLY` in `src/backend.ts`; only `clock:ping`
+  passes). Anything new that writes on its own (a timer, a background save) must expect that refusal quietly.
+- **A teacher's tap needs its book's stage on its history line** (`events.stage`, 8 Nov 2026) for her department's
+  "cleared today" (`desk.today`): log it on any new tap that explains or teaches (desk, consult and board do).
+- **The phone's clock is not the server's**: a "since" the phone sends (the desk page's sitting) must come from
+  `now()` in `src/store.ts` (synced), never `Date.now()`, or a phone a few minutes fast hides the squares it just did
+  and can't undo them.
+- **Running the unit tests here with no npm** (8 Nov 2026): a runner outside the repo (`/home/claude/runner`, not
+  committed: a vitest stand-in, esbuild from `/opt/npm-tools` with the libraries cloned from source, one bundle per test
+  file; `import.meta.glob` of `../convex/**/*.ts` replaced by a generated map, of `../convex/*.ts` with `eager` by the
+  files' text; a RegExp in `toMatchObject` matches a string) ran all 588 in about 4 minutes; the typecheck from source
+  with TypeScript 6 (`ignoreDeprecations: "6.0"` for `baseUrl`). Rebuild it the same way in a new chat (step 3 above).
+
 - **A consultation is an evaluation-room call with `consult: true`** (5 Nov 2026). Anything that lists a teacher's
   Evaluation room must leave it out (`evalRoom`, `evalItems`), anything that bumps, pulls or sends a student must refuse
   it (`calls.create`'s `inConsult`), and Correction's words and strips name only her (`callPhrase` `consult`,
@@ -228,6 +248,10 @@ EOF
 - A tab with a red count reads "Theory 2" to Playwright: select tabs by class (`.tabs .tab.theory`), not exact name.
 - The top bar: every inline count costs ~26 px; 4 icons + the clock fit 320 px only with corner badges (Class) and
   the ≤345 px rules; `topFits()` checks it (a flex overlap isn't sideways scrolling).
+- The bottom bar's six tabs are 53 px each on a 320 px phone (8 Nov 2026): a tab's count (`.tab-badge`, absolute)
+  counts in the tab's `scrollWidth`, so `.tabs.n6 .tab-badge` sits closer and smaller; a check that "every tab's words
+  fit" fails on the badge first. A segmented row (`.segc`, overflow hidden) inside a sheet's flex column shrinks to
+  nothing and the sheet's body takes its clicks ("intercepts pointer events"): give it `flex: none`.
 - In e2e, wait for the other phone to show a state before acting on it. `contains()` reads the first match's
   `innerText` (follows `text-transform`: "GRADE 7"): capital headings with `says()` (textContent).
 - Headless Chrome has no `navigator.share` (e2e fakes it); phones allow it only straight after a tap. iOS 15 Safari

@@ -39,6 +39,21 @@ export const tab = v.union(v.literal("correction"), v.literal("theory"), v.liter
  * Consultation (5 Nov 2026, his ask): the top bar's Consultation page: call any student here to herself, one to one.
  * Community (7 Nov 2026, his answer): posts in the students' Us tab (every teacher cheers and gives shout-outs).
  */
+/** A department (8 Nov 2026, his voice note): convex/lib/dept.ts. */
+export const dept = v.union(v.literal("fighter"), v.literal("master"), v.literal("management"));
+/** The two that teach: a theory book is Fighter's, a workbook Master's. */
+export const teachDept = v.union(v.literal("fighter"), v.literal("master"));
+/** A page of a person's own bottom bar (convex/lib/dept.ts, Settings → Roles). */
+export const pageId = v.union(
+  v.literal("dash"),
+  v.literal("class"),
+  v.literal("fighter"),
+  v.literal("master"),
+  v.literal("correction"),
+  v.literal("teach"),
+  v.literal("consult"),
+  v.literal("us"),
+);
 export const extra = v.union(
   v.literal("students"),
   v.literal("books"),
@@ -545,6 +560,13 @@ export default defineSchema({
      * bumps or pulls him from it; Correction's phone says only her name ("Kumar, go to Ilham.").
      */
     consult: v.optional(v.boolean()),
+    /**
+     * A consultation's department (8 Nov 2026): Fighter (theory books) or Master (workbooks). `toLead`: that department
+     * had a lead teacher when he was called, so her phone says it and she sends him (she is in the classrooms);
+     * Correction hears it only when nobody sends him for 3 minutes. No lead: Correction, as before.
+     */
+    dept: v.optional(teachDept),
+    toLead: v.optional(v.boolean()),
     endedAt: v.optional(v.number()),
     sessionId: v.optional(v.id("sessions")),
   })
@@ -588,6 +610,8 @@ export default defineSchema({
     took: v.optional(v.number()),
     /** The signed-in person who did it (by = the tab it was done from). */
     who: v.optional(v.string()),
+    /** The book a teacher's tap was on (8 Nov 2026: desk, consult, board): its department's dashboard counts it. */
+    stage: v.optional(bookStage),
   })
     .index("by_at", ["at"])
     .index("by_session", ["sessionId"])
@@ -607,6 +631,17 @@ export default defineSchema({
      * the manager can send him students. Owner only.
      */
     teaching: v.optional(v.boolean()),
+    /**
+     * Her department (8 Nov 2026, his voice note: "assign the responsibility to each teacher"), and whether she is its
+     * lead (walks from grade to grade; her department's consultation calls ring on her phone). Settings → Roles.
+     */
+    dept: v.optional(dept),
+    lead: v.optional(v.boolean()),
+    /**
+     * Her own app: the pages of her bottom bar (convex/lib/dept.ts). Unset = the app of before (Class, her jobs' pages,
+     * Us). With pages set her jobs follow from them (people.setRole).
+     */
+    pages: v.optional(v.array(pageId)),
     /** SHA-256 of the PIN with this user's id; the PIN itself is never stored. */
     pinHash: v.optional(v.string()),
     /** Wrong PINs in a row, and the lock they caused. */

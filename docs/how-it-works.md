@@ -31,6 +31,11 @@ The technical memory of the app, kept with the code and updated in the same comm
   just opens (`goRegister`); Settings/Progress go back to `backTo`.
 - The job decides the taps, the alerts and `by`: the bottom tab = that job; the Register and the Class tab = the job
   this phone used last (`aristora.job`), else the person's first; a manager's taps on the Class tab are `by: "manager"`.
+- **Her own app (8 Nov 2026, Settings → Roles):** with `users.pages` set, the bottom bar is her pages instead (Dashboard,
+  Class, Fighter, Master, Correction, Teach, Consult, Us: those she has, in that order, six at most; `.tabs.n6`: 11.5 px
+  words, 10 px at ≤345, the count smaller on the icon's corner so it stays inside a 53 px tab); the phone opens on her first page (or what it showed last: `aristora.role` "dash", "fighter",
+  "master", "teach", "consult"). The Fighter and Master tabs' taps say their own `by` (convex/desk.ts); Teach = Theory
+  when she has it; a Fighter or Master person's alerts are her department's (below, "Departments").
 
 **Attendance** (a full-page sheet since `3bce3bd`, `AttendanceSheet`; owner + Correction job): from Correction's +
 (the grade picked there, no grade row: `only`), the count by the clock or Class's "Sign students in" (grades 6–11
@@ -160,10 +165,15 @@ chips for other books ("U08 Eval 2"). Absent students: book now only.
      **Later** = handed in, correct later (the waiting clock starts; he carries on with the next level), or mark it
      now. (Also: Class → his name → the level in his marks table.)
   2. Marking (Correction, or the correct sheet): full marks by default, lower the questions that lost marks; **?** = he
-     couldn't start it (0 marks, straight to Theory); in a Part II question, ? on one part only (`dkp`: the parts he
-     answered keep their marks; the question goes to Theory). The answer key shows under each question. Then "Lost
-     marks go to Evaluation | Theory": always Evaluation unless the corrector picks Theory (`routeOf`; the old "Theory
-     when under half" default hid weak students from Evaluation: removed in `2b3e2cf`). The toast says where each went.
+     couldn't start it (a blank: 0 marks); in a Part II question, ? on one part only (`dkp`: the parts he answered keep
+     their marks). **Since 8 Nov 2026 a blank is a wrong answer** (his voice note: "from today blank questions are
+     considered as wrong questions": a big question's blank part is explained with its wrong parts, at one time, by the
+     Master teacher): it waits with the lost marks, never for Theory by itself (`workbook.correct`; before, "?" went
+     straight to Theory; rows already sent there stay there); the Fighter / Master pages and Consultation show it in its
+     own colour (`.fc-sq.blank`: dashed violet). The answer key shows under each question. Then "Lost marks go to
+     Evaluation | Theory" (blanks too: the row shows for a blank alone since 8 Nov 2026): always Evaluation unless the
+     corrector picks Theory (`routeOf`; the old "Theory when under half" default hid weak students from Evaluation:
+     removed in `2b3e2cf`). The toast says where each went.
   3. Evaluation explains lost marks (her page, one question at a time; or red → violet on the Class rows). When she
      finds he needs theory: **→ Theory** (her page, his row, or "Needs theory" in the open book: pick the
      questions or "the whole unit again"). He keeps working; Theory calls him when ready.
@@ -412,7 +422,17 @@ call anyone I want ... not for everyone: the people I pick in Settings"; `src/co
 icon, left of the whiteboard (`.cx-btn`; the owner and the **Consultation** tick in Settings → People, `consult`); a
 corner count = her consultation's students while she is on another page. What existed (the Class tab's send to
 herself with "I'm teaching", her Evaluation page) is the machinery; this is HER list and one page for the whole sitting.
-- **Pinned:** Evaluation | Theory in fixed places (`KindBar`, both always open), each with today's count and a red
+- **Per department (8 Nov 2026, his voice note: "remove that, instead put Fighter and Master ... the fighter department
+  just sees the fighter things ... two metrics, no work and evaluation ... for Master we don't need any filters").** A
+  Fighter person sees the theory books only: **No work** (the theory to teach: the next section of those who need it,
+  the students with no work first; its count = the department's students with no work) **· Evaluation** (the theory
+  books' wrong answers). A Master person sees the workbooks only: one list, the lost marks and blanks (a blank's square
+  in its own colour), no bar. The owner and anyone in no department: **Fighter | Master** first (`aristora.consultDept`),
+  then Fighter's two (`scope` in `src/consultData.ts`: `waitsOf`, `consultRows` (`redFirst` for No work), `todayOf`,
+  `consultQs`; All = `consult.totals` per department: `fighter`, `master`). Her call carries the department
+  (`calls.create` `dept`): its lead sends him (above, "Departments"), the toast says who ("The Master lead sends him to
+  you."). Gone for Master: teaching his theory in the same sitting (→ Theory sends it to the Master page's Theory).
+- **Pinned (5 Nov 2026, before the departments):** Evaluation | Theory in fixed places (`KindBar`, both always open), each with today's count and a red
   badge = students with no work among them; the pick is kept on the phone (`aristora.consultKind`). Under them **Today
   N · M students** (the students here, live) and **All N · M** (+ every student not here: `consult.totals`, read on
   opening, every 3 minutes and after Done; a class left open since an earlier day counts nobody here). Evaluation =
@@ -453,6 +473,95 @@ herself with "I'm teaching", her Evaluation page) is the machinery; this is HER 
 - History: "called for a consultation", "Q4 explained in consultation", "Q13 sent to Theory in consultation", "taught
   in consultation", "… undone", "consultation finished" (`by: "consult"`). A picked teacher's consultation time counts
   as her working time on her card (it is a call with her as the teacher); the owner is never in those numbers.
+
+**Departments and each teacher's own app (8 Nov 2026, his voice note: "we are not assigning the responsibility to each
+teacher ... build the personalized system for each teacher based on their role ... theory teachers are not sitting in
+their own room, they always cycling in all grades ... remove the call and arrive button").** Rules shared by the server
+and the phones: `convex/lib/dept.ts`.
+- **Three departments** (`users.dept`): **Fighter** = the theory books (their sections' theory, the students with no
+  work, the wrong answers of their own questions); **Master** = the workbooks (lost marks and blanks, and the theory they
+  need: his answer when asked, "the book decides the department"); **Management** = correction now (fees and books
+  later, another chat). A department's **lead** (`users.lead`) walks from grade to grade; its other people (later) sit
+  in the consultation room: their department's Consultation page.
+- **Her own app** (`users.pages`): the pages of her bottom bar, in fixed places (`PAGE_IDS`: Dashboard, Class, Fighter,
+  Master, Correction, Teach, Consult, Us), six at most (`MAX_PAGES`: they fit 320 px). Unset = the app of before
+  (Class, her jobs' pages Correction / Theory / Evaluation, Us): nothing changed for anyone until the owner sets it.
+  Presets (`presetPages`): Fighter lead = his six (Dashboard, Fighter, Correction, Teach, Consult, Us); Master lead =
+  Dashboard, Master, Correction, Consult, Us; a consultation teacher = Consult, Us; Management = Class, Correction, Us.
+  Her jobs follow from her pages (`withNeeds`: Fighter or Master = Theory + Evaluation; Teach = Theory when she has
+  neither; Correction = one of its modes, Class = the Correction job, Homework = Photos; Consult = its extra): the server
+  adds what a page can't work without, never more. In her app the top bar leaves out Consultation and Whole class when
+  they are her tabs (`consultIcon`, `teachIcon` in `src/app.tsx`). A tab's badge: Fighter / Master = that department's
+  students with no work now (`deptNow`); Consult = her consultation's students.
+- **Settings → Roles** (owner, `src/roles.tsx` `Roles`): the three departments with their people (the lead first),
+  those in none (the app of before), and the owner's own app (his pages only: he can always do everything). Tap someone
+  (`RoleSheet`): Department (Fighter / Master / Management / None), Lead teacher or Consultation teacher, her pages
+  (ticks in fixed order; the other teaching department's page is pale), Correction's two modes (Homework, Class), Runs
+  the hall (the Manager job), Also (Students, Books, Reports, Feedback, Community); **Save** (`people.setRole`; history
+  "set the department and app of …", owner-only lines), **Preview**, "the app of before" (`reset`: department and pages
+  cleared, jobs kept). Settings → People: "Add a teacher" starts as a department's place (Fighter lead, Fighter
+  consultation, Master lead, Master consultation, Management) or jobs by hand; a person with her own app shows it in
+  words there ("Change it in Settings → Roles"), her jobs no longer ticked there.
+- **Preview** (owner): his phone shows her app exactly (her bar, her pages, her own consultations and room, her
+  permissions in the UI) with his sign-in for the data, and **saves nothing** (`startPreview` / `endPreview` in
+  `src/store.ts`: `currentMe()` and `may()` are hers; `src/backend.ts` `LOOK_ONLY`: every mutation but the clock's ping
+  is refused with "Preview: look only. Nothing is saved."; alerts silent; "Sign out" only ends it). A dark banner
+  (`.pv-banner`) with **Exit** → Settings → Roles again (`aristora:roles`).
+- **The Fighter and Master pages** (`src/desk.tsx` `DeskPage`, rules `src/deskData.ts`, server `convex/desk.ts`): the
+  Theory and Evaluation pages' rows (`deskLists`: `candidates` and `planLessons` of her department's books only;
+  `deskPlan`): grades 6–11 and OL in fixed places (each student once, both kinds of work, the most urgent outlined),
+  then **Theory · Evaluation** (Fighter) or **Evaluation · Theory** (Master) in fixed places (`deskWhats`), the units, the
+  lessons (a section; a workbook's questions for Theory; the whole unit) or the questions the same students got wrong
+  ("13 · 17"; a pill with a blank: dashed). Each row the most urgent first and picked; her pick holds while it has
+  someone. **At your table** (`.dk-room`): the picked pill's students, ticked by the page (`deskTicks`: red and orange,
+  never someone with a teacher or going home within 15 min, six at most; nobody ready: the most urgent one); she calls
+  them by mouth; a tap ticks / unticks. Her first tap fixes the sitting (`Sit`: book, work, section, ticked, `since` =
+  the page's opening in the server's time minus 30 s): the rows may re-rank, her table stays; everything done: **Next ›**
+  (the page's next pick). Their questions as Correction's squares (`deskQs`: every question of theirs in that book, the
+  pill's first; a section's teacher questions in book order), the card (who has it with his marks, "blank" for a blank,
+  teaching mode, the printed question), and the pad fixed at the bottom: Evaluation **→ Theory · Not now · ✓
+  Explained**, Theory **Not reached · ✓ Taught** ("for N"). **Each tap is saved at once** for everyone ticked who has
+  that square (`desk.mark`: several students in one call; tap again = back; another decision first takes the old one
+  back), then the next open square; Not now / Not reached is this phone's only. No Call, no Arrived, no Done, no room:
+  the student stays at his desk (the Class tab never shows him "with" her). Gone from the old pages (they stay, in the
+  app of before): the room box's states, "free ~6m · call now", bump and pull notes, Theory-busy "Teach", "keep him for
+  his next book", "the same mistake by 4+ → All to Theory" (at the table, Explained for 7 is that one lesson), his file
+  sheet, today's score line.
+- **`desk.mark`** (Theory or Evaluation; a Fighter or Master teacher only on her department's books): Explained (x),
+  → Theory (th, `tb: "desk"`; a theory book: explained + its section's teacher questions open again), Taught (tt, a
+  theory book's teacher question), the whole unit (wu); the same per-student logic as Consultation
+  (`convex/lib/marking.ts` `applyMark`, shared with `consult.mark`); what someone did before the sitting stays
+  (`since`, at most 3 h back: `SITTING_MAX_MS`). One student who can't have it (explained by someone else meanwhile) is
+  told in `errors`, the others are saved. History: one `desk` event per student and tap (`desk-undo` for its undo;
+  value explained / to-theory / taught / whole-unit; `stage`; `who`): her card counts it as her working time like a
+  lesson at the board (`digestOf`), he is seen by that room today, the room's score counts each question and the
+  lesson on its first Taught (`lesson`).
+- **Her dashboard** (`src/dash.tsx` `Dashboard`, his "personalized dashboard for the lead teachers ... they feel like a
+  team member"): her photo (set in Us: `me.photo` → `us.pics`) and name, her department and place; **her department's
+  one question**, asked again and again (his words): Fighter "How many students have no work?", Master "How many
+  questions wait to be explained?" (the answer big: red / amber when something waits, green "Everyone has work." /
+  "Nothing waits."; under it what else waits: wrong answers, theory needed now or soon, blanks); **Where to go now**:
+  each grade with the students who need her department (red corner = no work), a tap opens her page on that grade
+  (`openDeskAt`); **Cleared today**: hers and each of her department's teachers' (explained, taught, to theory, from
+  `desk.today`: the class going on's `desk` / `consult` / `board` events of that department's books, undos taken off;
+  read on opening and every minute, never live), never a ranking colour; "Your day" opens her card (`TeacherCard`). The
+  owner (or anyone in no department) switches Fighter | Master (`aristora.dashDept`). The live numbers: `deptNow`
+  (src/deskData.ts) from the board every phone has.
+- **Correction: Homework | Class** (his "two modes, two tabs"): a Fighter or Master teacher with both modes gets the
+  segmented row `.fc-modes` (⌂ Homework with the photos' count, Class with the papers handed in) instead of the ⌂ button,
+  and her Correction opens on Homework once per app load (`homeFirstDone`). Everyone else: the ⌂ button as before.
+- **Teach** (his "put that freestyle teaching mode on the bottom bar"): the top bar's Whole class page as a bottom tab.
+- **The Class tab**: a Fighter or Master lead walks the classrooms, so she has no room there (`people.team` `desk`); her
+  chip on the team line (`.mg2-desk.walk`, an F or M) when the manager marked her here.
+- **A consultation rings on its department's lead's phone** (his "the call ring or alert goes to that department
+  teacher only"): Consultation's calls carry `dept` (fighter / master) and `toLead` (that department had a lead when he
+  was called; `convex/lib/leads.ts`). Her phone says "Kumar, go to Sana." on any page until she taps Sent, and "Kumar
+  hasn't reached Sana." after 3 minutes (`alertItems`: her department's calls only, and a knock when one of her
+  department's students runs out of work; nothing of Correction's); its strip shows under the top bar on every page
+  (`leadBand`; on Correction and the Register their own strip). `calls.send` / `decline` / `undoDecline`: a Fighter or
+  Master person only as her department's lead, its consultations (`mayHandle`; her Correction job is for homework and
+  papers). Correction's phone sends every other call, and a lead's consultation nobody sent for 3 minutes
+  (`src/callRoute.ts` `phoneSends`, `LEAD_LATE_MS`). No lead in that department: Correction, as before.
 
 **The rows show her room's book (Theory and Evaluation, 31 Oct 2026, his screenshot).** The bug: Raza and Umair
 (Grade 9 fractions) were with Evaluation, but the rows said Grade 8 unit 1, Grade 9 was pale and could not be tapped,
@@ -1883,6 +1992,13 @@ learning app of our education institute"): one profile, his class times, what he
   steps' nudge is any signed-in phone), and the account lines of the history (sign-ins, PINs,
   links, people changes).
 - The permission names are `Perm` in `convex/lib/auth.ts`: jobs, extras, `"owner"`, `"any"`.
+- **Departments and her own app (8 Nov 2026):** `users.dept` (fighter / master / management), `users.lead`,
+  `users.pages` (her bottom bar); set by the owner in Settings → Roles (`people.setRole`; `people.add` with them), sent
+  to her phone by `auth.me` (`publicUser`: `dept`, `lead`, `pages`, and `photo` = her Us photo's key). The jobs stay the
+  server's permissions; her pages decide them (above, "Departments"). `desk.mark` = Theory or Evaluation (a Fighter or
+  Master teacher only on her department's books); `desk.today` = any signed-in person. `calls.send` / `decline` /
+  `undoDecline` = Correction, Manager, or a department's lead for her department's consultations (a Fighter or Master
+  person never Correction's other calls).
 
 **Signing in.**
 - The owner set up once with a one-time setup code (2026-10-28). That code is spent.

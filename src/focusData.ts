@@ -156,8 +156,9 @@ export function markedParts(k: KeyAnswer | undefined, max: number): KeyPart[] | 
 }
 
 /**
- * One question's mark on this phone: g marks, or "?" (dk: he couldn't start it, 0 marks, straight to Theory). With
- * dkp, only those parts were left blank: the parts he answered keep their marks (g), and it still goes to Theory.
+ * One question's mark on this phone: g marks, or "?" (dk: he couldn't start it, 0 marks: since 8 Nov 2026 a lost mark
+ * like the others, explained by the Master teacher). With dkp, only those parts were left blank: the parts he answered
+ * keep their marks (g).
  */
 export type Given = { g: number; dk?: boolean; dkp?: string[] };
 
@@ -195,7 +196,7 @@ export function sumOf(qs: number[], given: Record<number, Given>): number {
 
 /**
  * Where the level's lost marks go: Evaluation, unless the corrector picks Theory (since 30 Oct 2026: a level under half
- * no longer goes to Theory by itself; those students vanished from the Evaluation page). "?" always goes to Theory.
+ * no longer goes to Theory by itself; those students vanished from the Evaluation page). "?" goes with them (8 Nov 2026).
  */
 export function routeOf(to: "auto" | "evaluation" | "theory"): "evaluation" | "theory" {
   return to === "theory" ? "theory" : "evaluation";

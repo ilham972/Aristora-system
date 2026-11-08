@@ -51,7 +51,8 @@ const callOf = (t: T, id: Id<"calls">) => t.run(async (ctx) => (await ctx.db.get
 const stats = (t: T) => t.run(async (ctx) => (await ctx.db.query("sessions").withIndex("by_open", (q) => q.eq("open", true)).first())?.stats ?? {});
 const events = (t: T, kind: string) => t.run(async (ctx) => (await ctx.db.query("events").collect()).filter((e) => e.kind === kind));
 
-/** G7 U08 Level 1 corrected: Q3 and Q5 lost their marks (Evaluation), Q4 "?" (Theory). */
+/** G7 U08 Level 1 corrected: Q3 and Q5 lost their marks (Evaluation), Q4 "?" sent to Theory (a blank waits with the
+ *  wrong answers since 8 Nov 2026: the corrector sends it). */
 async function level1(t: T, id: Id<"students">) {
   const u08 = await unitId(t, "G7-U08");
   const l1 = G7U08.levels[0];
@@ -61,6 +62,7 @@ async function level1(t: T, id: Id<"students">) {
     return q === 4 ? { q, got: 0, dk: true } : { q, got: q === 3 || q === 5 ? 0 : each[i] };
   });
   await t.mutation(api.workbook.correct, { studentId: id, unitId: u08, level: 1, items, by: "correction" });
+  await t.mutation(api.workbook.toTheory, { studentId: id, unitId: u08, qs: [4], on: true, by: "correction" });
   return u08;
 }
 
@@ -348,10 +350,22 @@ describe("every student's waiting work", () => {
 
     // Those here count on the phone (live): the server counts the others. Asha isn't here: her two wrong answers and her
     // next section B (9–11).
-    expect(await t.query(api.consult.totals, {})).toEqual({ evaluation: { qs: 2, students: 1 }, theory: { qs: 3, students: 1 } });
+    // Each department's books apart too (8 Nov 2026): Asha's theory book is the Fighter department's.
+    const none = { evaluation: { qs: 0, students: 0 }, theory: { qs: 0, students: 0 } };
+    expect(await t.query(api.consult.totals, {})).toEqual({
+      evaluation: { qs: 2, students: 1 },
+      theory: { qs: 3, students: 1 },
+      fighter: { evaluation: { qs: 2, students: 1 }, theory: { qs: 3, students: 1 } },
+      master: none,
+    });
     // Everyone gone home: Malik 2 + Asha 2 to explain; Malik Q4 + Sara Q4 and her whole unit + Asha's B.
     for (const id of [malik, sara]) await t.mutation(api.students.setPresent, { id, present: false });
-    expect(await t.query(api.consult.totals, {})).toEqual({ evaluation: { qs: 4, students: 2 }, theory: { qs: 6, students: 3 } });
+    expect(await t.query(api.consult.totals, {})).toEqual({
+      evaluation: { qs: 4, students: 2 },
+      theory: { qs: 6, students: 3 },
+      fighter: { evaluation: { qs: 2, students: 1 }, theory: { qs: 3, students: 1 } },
+      master: { evaluation: { qs: 2, students: 1 }, theory: { qs: 3, students: 2 } },
+    });
     // The simulation's students count only on a phone showing the simulation.
     await t.run(async (ctx) => await ctx.db.patch(malik, { test: true }));
     expect((await t.query(api.consult.totals, {})).evaluation).toEqual({ qs: 2, students: 1 });

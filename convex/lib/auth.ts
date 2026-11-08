@@ -146,6 +146,12 @@ export function publicUser(user: Doc<"users">) {
     teaching: user.role === "owner" && !!user.teaching,
     can: user.role === "owner" ? EXTRAS : user.can,
     hasPin: !!user.pinHash,
+    // Her department and her own app (8 Nov 2026, Settings → Roles): unset = the app of before.
+    ...(user.dept ? { dept: user.dept } : {}),
+    ...(user.lead ? { lead: true } : {}),
+    ...(user.pages ? { pages: user.pages } : {}),
+    // Her photo (Us, 8 Nov 2026): its key, for her dashboard's header (us.pics gives the picture).
+    ...(user.photo ? { photo: user.photo.id as string } : {}),
   };
 }
 

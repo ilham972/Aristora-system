@@ -9,7 +9,8 @@ import { fmtMin, isWalking, liveSession, shortMin, WALK_MS, type View } from "./
 import { GradePills, gradesOf, inGrade, needsOf, useGradeFilter } from "./grades";
 import { nowOf } from "./nextData";
 import { ReportView, type Report } from "./report";
-import { act, currentRole, may, STAGES, testMode, toast, type Board, type Role, type Stage } from "./store";
+import { act, currentMe, currentRole, may, STAGES, testMode, toast, type Board, type Role, type Stage } from "./store";
+import { phoneSends } from "./callRoute";
 import { classPace, type HeatCount } from "./theoryFocusData";
 import { Empty, Sheet } from "./ui";
 
@@ -307,10 +308,13 @@ async function notNow(callId: Id<"calls">, name: string, room: keyof typeof ROOM
 export function CallsBand(props: { board: Board; views: View[]; now: number; paper?: boolean }) {
   const { board, views, now } = props;
   const byId = new Map(views.map((v) => [v.s._id as string, v]));
-  const waiting = board.calls.filter((c) => c.status === "requested" && !c.pull);
-  const pulls = board.calls.filter((c) => c.status === "requested" && c.pull);
+  // The calls this phone sends (8 Nov 2026): a department lead her department's consultations; Correction the rest.
+  const me = currentMe();
+  const calls = board.calls.filter((c) => phoneSends(me, c, now));
+  const waiting = calls.filter((c) => c.status === "requested" && !c.pull);
+  const pulls = calls.filter((c) => c.status === "requested" && c.pull);
   const walked = (c: Board["calls"][number]) => now - (c.sentAt ?? c.createdAt);
-  const walking = board.calls.filter(isWalking);
+  const walking = calls.filter(isWalking);
   const onWay = props.paper ? [] : walking.filter((c) => walked(c) < WALK_MS);
   const lost = walking.filter((c) => walked(c) >= WALK_MS);
   if (waiting.length === 0 && pulls.length === 0 && onWay.length === 0 && lost.length === 0) return null;

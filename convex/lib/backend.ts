@@ -222,6 +222,8 @@ type LogInput = {
   value?: string;
   ms?: number;
   took?: number;
+  /** The book of a teacher's tap (desk, consult, board): its department's dashboard counts it. */
+  stage?: "fighter" | "master";
 };
 
 export async function log(

@@ -137,10 +137,21 @@ export async function fetchOnce<Q extends FunctionReference<"query">>(query: Q, 
   return (await convex().query(query, a)) as FunctionReturnType<Q>;
 }
 
+/**
+ * The owner's Preview of someone's app (8 Nov 2026, Settings → Roles): look only. Every tap that would save is refused
+ * with these words (the clock's ping still goes: it changes nothing).
+ */
+export const LOOK_ONLY = "Preview: look only. Nothing is saved.";
+let lookOnly = false;
+export function setLookOnly(on: boolean) {
+  lookOnly = on;
+}
+
 export async function mutate<M extends FunctionReference<"mutation">>(
   fn: M,
   args: FunctionArgs<M>,
 ): Promise<FunctionReturnType<M>> {
+  if (lookOnly && getFunctionName(fn) !== "clock:ping") throw new Error(LOOK_ONLY);
   const a = withToken(args);
   if (testBackend) return (await testBackend.mutation(getFunctionName(fn), a)) as FunctionReturnType<M>;
   return await convex().mutation(fn, a);

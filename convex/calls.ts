@@ -20,8 +20,10 @@ import {
 import { fighter } from "./lib/book";
 import { computeMaster, forTheory } from "./lib/master";
 import { computeStatus } from "./lib/status";
-import { bookStage, room } from "./schema";
+import { bookStage, room, teachDept } from "./schema";
 import { actor, allowed, viewer } from "./lib/auth";
+import { leadsOf } from "./lib/leads";
+import { isTeachDept } from "./lib/dept";
 
 type Rejected = { studentId: Id<"students">; name: string; reason: string };
 
@@ -61,11 +63,17 @@ export const create = mutation({
      * she picked (Evaluation or Theory). Correction sends him as usual and says only her name.
      */
     consult: v.optional(v.boolean()),
+    /**
+     * A consultation's department (8 Nov 2026): Fighter or Master. That department's lead teacher sends him (her phone
+     * says it); with no lead, Correction as before.
+     */
+    dept: v.optional(teachDept),
     by: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     // A teacher calls for her own room (her job); the manager sends for any teacher; a consultation needs its tick.
     const consult = !!args.consult;
+    if (args.dept && !consult) fail("Only a consultation has a department.");
     if (consult && (args.teacherId || args.visit)) fail("A consultation is a call to yourself.");
     const me = await actor(ctx, args.token, consult ? ["consult"] : args.teacherId ? ["manager"] : [args.room], args.by);
     const now = Date.now();
@@ -92,6 +100,8 @@ export const create = mutation({
     if (args.room === "theory" && args.kind !== "theory") fail("The theory room only teaches theory.");
     const session = await currentSession(ctx, now);
     const group = `${now.toString(36)}${Math.floor(Math.random() * 1e9).toString(36)}`;
+    // Her department's lead sends him (8 Nov 2026): only when that department has one.
+    const toLead = consult && !!args.dept && (await leadsOf(ctx, args.dept)).length > 0;
     const created: { studentId: Id<"students">; callId: Id<"calls">; pull: boolean; bumped: boolean }[] = [];
     const rejected: Rejected[] = [];
 
@@ -189,6 +199,8 @@ export const create = mutation({
         ...(manager ? { byManager: true } : {}),
         ...(visit ? { visit: true } : {}),
         ...(consult ? { consult: true } : {}),
+        ...(consult && args.dept ? { dept: args.dept } : {}),
+        ...(toLead ? { toLead: true } : {}),
         ...(s.test ? { test: true } : {}),
         ...(dry || consult ? {} : { ahead: true }),
         createdAt: now,
@@ -214,7 +226,8 @@ export const create = mutation({
       if (!consult) await roomStats(ctx, s, session, args.room, { calls: 1, ahead: dry ? 0 : 1 });
     }
     await touch(ctx, session, now);
-    return { created, rejected };
+    // A consultation: whether his department's lead sends him (her phone says it), else Correction.
+    return { created, rejected, toLead };
   },
 });
 
@@ -237,11 +250,22 @@ async function sendNow(ctx: MutationCtx, c: Doc<"calls">, now: number, session: 
   await refresh(ctx, s._id, now, session);
 }
 
+/**
+ * Who may send (or say "not now" to) a call: Correction and the manager; and a department's lead for her department's
+ * consultations (8 Nov 2026: she is in the classrooms, the call rings on her phone).
+ */
+const mayHandle = (user: Doc<"users">, c: Doc<"calls">) =>
+  // A Fighter or Master person: only as her department's lead, its consultations (her Correction job is for her
+  // homework and papers, as on her phone: src/callRoute.ts).
+  user.role === "teacher" && isTeachDept(user.dept)
+    ? !!c.consult && c.dept === user.dept && !!user.lead
+    : allowed(user, "correction") || allowed(user, "manager");
+
 /** Correction: "Sent" - the student is on his way. */
 export const send = mutation({
   args: { token: v.optional(v.string()), callIds: v.array(v.id("calls")), by: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    await actor(ctx, args.token, ["correction", "manager"], args.by);
+    const user = await actor(ctx, args.token, ["correction", "manager", "theory", "evaluation"], args.by);
     const now = Date.now();
     const by = cleanBy(args.by);
     const session = await currentSession(ctx, now);
@@ -250,6 +274,7 @@ export const send = mutation({
     for (const id of args.callIds) {
       const c = await ctx.db.get(id);
       if (!c || c.status !== "requested") continue;
+      if (!mayHandle(user, c)) fail("Correction sends this student (or his department's lead).");
       const s = await ctx.db.get(c.studentId);
       if (!s) continue;
       if (c.pull || s.room) {
@@ -268,10 +293,11 @@ export const send = mutation({
 export const decline = mutation({
   args: { token: v.optional(v.string()), callId: v.id("calls"), by: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    await actor(ctx, args.token, ["correction", "manager"], args.by);
+    const user = await actor(ctx, args.token, ["correction", "manager", "theory", "evaluation"], args.by);
     const now = Date.now();
     const c = await ctx.db.get(args.callId);
     if (!c || c.status !== "requested") return false;
+    if (!mayHandle(user, c)) fail("Correction answers this call (or his department's lead).");
     const session = await currentSession(ctx, now);
     await ctx.db.patch(c._id, { status: "declined", endedAt: now });
     const s = await ctx.db.get(c.studentId);
@@ -285,10 +311,11 @@ export const decline = mutation({
 export const undoDecline = mutation({
   args: { token: v.optional(v.string()), callId: v.id("calls"), by: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    await actor(ctx, args.token, ["correction", "manager"], args.by);
+    const user = await actor(ctx, args.token, ["correction", "manager", "theory", "evaluation"], args.by);
     const now = Date.now();
     const c = await ctx.db.get(args.callId);
     if (!c || c.status !== "declined") return false;
+    if (!mayHandle(user, c)) fail("Correction answers this call (or his department's lead).");
     const s = await ctx.db.get(c.studentId);
     if (!s || s.archived || !s.present || s.room) return false;
     if ((await activeCalls(ctx, s._id)).length > 0) return false;

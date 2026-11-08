@@ -283,7 +283,7 @@ export function MasterBook(props: { role: Role; v: View; onCorrect: (level: numb
 
 /**
  * Correct one level. With every question's marks known: tap each question's marks ("All full marks" first, then
- * lower the few that lost marks); "?" = he couldn't start it (0 marks, straight to Theory). Otherwise: the level's
+ * lower the few that lost marks); "?" = he couldn't start it (0 marks: a lost mark like the others, 8 Nov 2026). Otherwise: the level's
  * marks and which questions lost marks. Then where the lost marks go: Evaluation (explains them), or Theory when he
  * forgot the theory (only when the corrector picks it).
  */
@@ -424,7 +424,7 @@ export function CorrectSheet(props: { v: View; level: number; now: number; onClo
                     type="button"
                     class={`ct-m dk${dk[q] ? " on" : ""}`}
                     aria-pressed={!!dk[q]}
-                    aria-label={`Q${q}: couldn't start it (to Theory)`}
+                    aria-label={`Q${q}: couldn't start it (blank)`}
                     onClick={() => {
                       setDk({ ...dk, [q]: !dk[q] });
                       setDkp({ ...dkp, [q]: undefined });
@@ -489,10 +489,11 @@ export function CorrectSheet(props: { v: View; level: number; now: number; onClo
         <div class="ct-route">
           {dkQs.length > 0 && (
             <p class="ct-dk">
-              <b>?</b> {dkQs.map((q) => `Q${q}`).join(" ")}: couldn't start, so straight to Theory.
+              <b>?</b> {dkQs.map((q) => `Q${q}`).join(" ")}: couldn't start, so it goes with the lost marks.
             </p>
           )}
-          {lostQs.length > 0 && (
+          {/* A blank is a lost mark (8 Nov 2026): it goes where the lost marks go. */}
+          {(lostQs.length > 0 || dkQs.length > 0) && (
             <>
               <span class="ct-route-l">Lost marks go to</span>
               <span class="segc" role="group" aria-label="Lost marks go to">
