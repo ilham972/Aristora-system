@@ -8,6 +8,7 @@ import { afterAll, beforeAll, expect, test } from "vitest";
 import { api, internal } from "../../convex/_generated/api";
 import { normalizeCode, secretHash } from "../../convex/lib/auth";
 import { KNOWN_WORKBOOKS, outOf } from "../../convex/lib/book";
+import { slDayNo } from "../../convex/lib/day";
 import { digestOf, type DCall, type DEvent } from "../../convex/lib/boss";
 import { readWorkbookFiles, readWorkbookHtml, type ReadTute } from "../../src/workbookFile";
 import U01_BOOK from "../fixtures/workbook-g8-u01.html?raw";
@@ -2374,6 +2375,9 @@ test("Evaluation: one screen: grade, stage, unit and questions the most urgent f
   await visible(E.locator(".reg-row").first());
   await tab(E, "Evaluation").click();
   await contains(evDone(E), "Done 2");
+  // The phone remembers its tab just after the page shows (an effect): a reload in between opened the Register (the
+  // old flake, 3–8 Nov 2026), so wait until it is remembered.
+  await until(async () => (await E.evaluate(() => localStorage.getItem("aristora.role"))) === "evaluation", "the Evaluation tab remembered");
   await E.reload();
   await contains(evDone(E), "Done 2");
   await textsAre(E.locator(".evx-strip .fc-sq.s-explained small"), ["22"]);
@@ -4240,8 +4244,36 @@ test("Owner's own app: Fighter and Master on his bar, not Theory and Evaluation;
   await backend.push(); // the phones see what changed outside them
   await O.locator(".tabs .tab.dash").click();
   await until(async () => (await O.locator(".dash-n b").textContent()) === "1", "Vimal's paper left");
-  await contains(O.locator(".dash-team"), "1 level");
+  const lq = l3.to - l3.from + 1;
+  await contains(O.locator(".dash-team"), `${lq} questions in 1 paper`);
   await count(O.locator(".dash-mine"), 0); // he doesn't work in Management (yet)
+  // Every class: today's bar; a day kept before it (yesterday: 40 questions) and today against it.
+  await count(O.locator(".wk .wk-b"), 1);
+  await contains(O.locator(".wk-trend"), `Today: ${lq}`);
+  const empty = { total: 0, parts: {}, students: 0, people: [], grades: [] };
+  await backend.t.run(async (ctx) => {
+    const day = slDayNo(Date.now()) - 1;
+    const parts = { levels: 4, lq: 40, qs: 0, photos: 0 };
+    await ctx.db.insert("workDays", {
+      day,
+      fighter: { day, ...empty },
+      master: { day, ...empty },
+      management: { day, total: 40, parts, students: 3, people: [{ name: "Raj", total: 40, parts, students: 3 }], grades: [{ grade: 7, n: 40 }] },
+      events: 9,
+      at: Date.now(),
+    });
+  });
+  await O.locator(".tabs .tab.class").click();
+  await O.locator(".tabs .tab.dash").click();
+  await count(O.locator(".wk .wk-b"), 2);
+  await contains(O.locator(".wk-trend"), `${40 - lq} fewer than the class before (40)`);
+  await contains(O.locator(".wk-best"), "Best: Yesterday · 40");
+  await count(O.locator(".wk-best", { hasText: "Lowest" }), 0); // today isn't over: not the lowest yet
+  await O.locator(".wk .wk-b").first().click();
+  await contains(O.locator(".wk-dh"), "Yesterday · 40 questions corrected");
+  await contains(O.locator(".wk-day .dash-people"), "Raj");
+  await contains(O.locator(".wk-grades"), "7: 40");
+  await shot(O, "o06-every-class");
 
   // Settings → Roles: his own app first. He works in Management and adds the Owner page (only his).
   await O.getByRole("button", { name: /^Settings/ }).click();
@@ -4270,7 +4302,7 @@ test("Owner's own app: Fighter and Master on his bar, not Theory and Evaluation;
   await O.locator(".tabs .tab.dash").click();
   await says(O.locator(".dash-who small"), "Owner · works in Management department");
   await visible(O.locator(".dash-seg .segc-b.on", { hasText: "Management" }));
-  await contains(O.locator(".dash-mine"), "You: 1 level");
+  await contains(O.locator(".dash-mine").first(), `You: ${lq} questions in 1 paper`);
   await shot(O, "o03-owner-bar");
 
   // Raj, a Management teacher: his dashboard is Correction's, no switch; at 320 px nothing goes sideways.

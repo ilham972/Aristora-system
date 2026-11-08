@@ -561,8 +561,9 @@ and the phones: `convex/lib/dept.ts`.
   "Nothing waits."; under it what else waits: wrong answers, theory needed now or soon, blanks); **Where to go now**:
   each grade with the students who need her department (red corner = no work), a tap opens her page on that grade
   (`openDeskAt`); **Cleared today**: hers and each of her department's teachers' (explained, taught, to theory, from
-  `desk.today`: the class going on's `desk` / `consult` / `board` events of that department's books, undos taken off;
-  read on opening and every minute, never live), never a ranking colour; "Your day" opens her card (`TeacherCard`). The
+  `work.days` (convex/lib/work.ts `countTeach`): today's `desk` / `consult` / `board` events of that department's books, undos taken off;
+  read on opening and every minute, never live; since the evening of 8 Nov: since midnight in Sri Lanka, so it stays
+  after the class: `work.days`), never a ranking colour; "Your day" opens her card (`TeacherCard`). The
   owner (or anyone in no department) switches Fighter | Master | Management (`aristora.dashDept`; the owner opens on the
   department he works in, and gets "You:" there). The live numbers: `deptNow` (src/deskData.ts) from the board every
   phone has.
@@ -572,11 +573,28 @@ and the phones: `convex/lib/dept.ts`.
   his is corrected, amber when papers wait, green "Nothing waits."; under it: how many with no work, how long the oldest
   has waited, ⌂ photos from home waiting (Photos people; "one over a day"); **Where to go now**: the students' grades
   6–11 (`.dash-grades.n6`) with papers waiting (red corner = no work until then): a tap opens Correction on that grade,
-  its hall papers (`openFocusAt`: the grade Correction remembers, the ⌂ lane off); **Corrected today** (`desk.corrected`,
+  its hall papers (`openFocusAt`: the grade Correction remembers, the ⌂ lane off); **Corrected today** (`work.days`,
   since midnight in Sri Lanka, everyone's correction: the Fighter and Master teachers correct homework too): levels
   saved (`level-marks`; a level taken back loses its line), theory-book questions Correction marked (each question
-  once, as its last tap left it), photos from home marked; "You:" for its people (and the owner working in it), then
+  once, as its last tap left it), photos from home marked; its number: the questions corrected (the levels' questions
+  from their books, the theory-book questions, the photos); "You:" for its people (and the owner working in it), then
   "Everyone:" and each person.
+- **Every class** (8 Nov 2026 evening, his "after class I can see how much they corrected the paper, how much they
+  explained ... but next day that's gone ... I want the insight, analytical graph ... each class ... which class getting
+  lower correction, which class getting higher ... they can also see their performance ... yesterday 100 questions
+  correction, today 300 corrections. So they are improving ... in all the department's dashboards"): on each
+  department's dashboard (`WorkChart` in `src/dash.tsx`), each day's number as a bar (Fighter and Master: explained +
+  taught; Correction: questions corrected), hers inside it, dark (legend "You / the department"), the last 14 days with
+  work and today; the selected bar and the best carry their number; "Today: 300 · 200 more than the class before (100)"
+  and hers; "Best: …" (the owner: "Lowest: …" too); a tap shows that day: its parts, her line, each person, each grade.
+  Never red. The days: `convex/lib/work.ts` counts (`countTeach`, `countCorrected`, `levelSizes`: the same counting
+  for today and every day); `work.days` = today counted now + the days kept (`workDays`, the last 60 with work; the
+  simulation's phone: its own today only); `work.fill` (convex/crons.ts, every 10 minutes) keeps each day once it is
+  over, oldest missing first, back to the first day in the history (a day with nothing is kept empty, so none is
+  counted twice; a run goes on while it has read fewer than 1,500 events, 60 days at most, then goes on at once). A
+  day = midnight to midnight in Sri Lanka; a day kept stays as it was (a level taken back later stays in it). Fighter
+  and Master's days start on 8 Nov (their taps carry the book's department since then); Correction's go back to the
+  first day in the history.
 - **Correction: Homework | Class** (his "two modes, two tabs"): a Fighter or Master teacher with both modes gets the
   segmented row `.fc-modes` (⌂ Homework with the photos' count, Class with the papers handed in) instead of the ⌂ button,
   and her Correction opens on Homework once per app load (`homeFirstDone`). Everyone else: the ⌂ button as before.
@@ -2105,7 +2123,7 @@ learning app of our education institute"): one profile, his class times, what he
   `users.pages` (her bottom bar); set by the owner in Settings → Roles (`people.setRole`; `people.add` with them), sent
   to her phone by `auth.me` (`publicUser`: `dept`, `lead`, `pages`, and `photo` = her Us photo's key). The jobs stay the
   server's permissions; her pages decide them (above, "Departments"). `desk.mark` = Theory or Evaluation (a Fighter or
-  Master teacher only on her department's books); `desk.today` = any signed-in person. `calls.send` / `decline` /
+  Master teacher only on her department's books); `work.days` = any signed-in person. `calls.send` / `decline` /
   `undoDecline` = Correction, Manager, or a department's lead for her department's consultations (a Fighter or Master
   person never Correction's other calls).
 

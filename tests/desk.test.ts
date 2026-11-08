@@ -6,9 +6,10 @@
 
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { api } from "../convex/_generated/api";
+import { api, internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { KNOWN_WORKBOOKS, levelOutOf } from "../convex/lib/book";
+import { slDayNo } from "../convex/lib/day";
 import { barPages, cleanPages, jobsFor, OWNER_DEFAULT, ownerPreset, presetPages, withNeeds } from "../convex/lib/dept";
 import type { MState } from "../convex/lib/master";
 import { beforeOf } from "../src/focusData";
@@ -26,9 +27,15 @@ const RAJ = "raj-phone-token-0123456789abcdefghijklmnopqrstuvwxyz0";
 const SANA = "sana-phone-token-0123456789abcdefghijklmnopqrstuvwxy";
 
 async function setup() {
-  const t = await asOwner(convexTest(schema, modules));
+  return (await setupRaw()).t;
+}
+
+/** The backend, and the same backend as the owner's phone (internal functions take no sign-in). */
+async function setupRaw() {
+  const raw = convexTest(schema, modules);
+  const t = await asOwner(raw);
   await t.mutation(api.setup.ensure, {});
-  return t;
+  return { t, raw };
 }
 type T = Awaited<ReturnType<typeof setup>>;
 
@@ -198,11 +205,11 @@ describe("the Fighter and Master pages: each tap saved at once, no call (desk.ma
     ]);
     expect((await t.run(async (ctx) => (await ctx.db.get(a))!)).seen?.evaluation).toBeDefined();
 
-    // Cleared today (her dashboard): her taps on the department's books, undos taken off.
-    const today = await m.query(api.desk.today, { dept: "master" });
-    expect(today.total).toMatchObject({ x: 2, th: 1, tt: 0, students: 2 });
-    expect(today.people).toEqual([{ name: "Meera", x: 2, th: 1, tt: 0, students: 2 }]);
-    expect((await m.query(api.desk.today, { dept: "fighter" })).total).toMatchObject({ x: 0, th: 0, tt: 0 });
+    // Cleared today (her dashboard): her taps on the department's books, undos taken off; its number = explained + taught.
+    const today = (await m.query(api.work.days, { dept: "master" })).today;
+    expect(today).toMatchObject({ day: slDayNo(Date.now()), total: 2, parts: { x: 2, tt: 0, th: 1 }, students: 2, grades: [{ grade: 7, n: 2 }] });
+    expect(today.people).toEqual([{ name: "Meera", total: 2, parts: { x: 2, tt: 0, th: 1 }, students: 2 }]);
+    expect((await m.query(api.work.days, { dept: "fighter" })).today).toMatchObject({ total: 0, people: [] });
   });
 
   test("her department's books only; a theory book's Taught and wrong answers; refusals per student", async () => {
@@ -331,7 +338,7 @@ describe("the owner's own app (8 Nov 2026: Fighter and Master on his bar, his de
   });
 });
 
-describe("the Correction department's dashboard: what each person corrected today (desk.corrected)", () => {
+describe("the Correction department's dashboard: what each person corrected today (work.days)", () => {
   test("levels saved, theory-book questions as Correction's last tap left them, photos from home; today only, real students only", async () => {
     const t = await setup();
     const raj = await addPerson(t, { name: "Raj", token: RAJ, tabs: ["correction"] });
@@ -374,17 +381,86 @@ describe("the Correction department's dashboard: what each person corrected toda
         await ctx.db.insert("events", { at: when, kind: "photo-marked", who: "Raj", studentId, name: "Kumar", unit: "G7-U08", q: 3, value: "1 2/2" });
     });
 
-    const day = await asPhone(t, RAJ).query(api.desk.corrected, {});
-    expect(day.total).toMatchObject({ levels: 1, qs: 2, photos: 2, students: 2 });
+    // Its number: the questions corrected (Level 1's questions, two theory-book questions, two photos).
+    const lq = l1.to - l1.from + 1;
+    const day = (await asPhone(t, RAJ).query(api.work.days, { dept: "management" })).today;
+    expect(day).toMatchObject({ total: lq + 4, parts: { levels: 1, lq, qs: 2, photos: 2 }, students: 2 });
     expect(day.people).toEqual([
-      { name: "Raj", levels: 1, qs: 1, photos: 2, students: 2 },
-      { name: "Owner", levels: 0, qs: 1, photos: 0, students: 1 },
+      { name: "Raj", total: lq + 3, parts: { levels: 1, lq, qs: 1, photos: 2 }, students: 2 },
+      { name: "Owner", total: 1, parts: { levels: 0, lq: 0, qs: 1, photos: 0 }, students: 1 },
     ]);
-    expect(day.since).toBe(new Date("2026-11-09T00:00:00+05:30").getTime());
-    // The simulation's phone counts its own students only.
-    expect((await t.query(api.desk.corrected, { test: true })).total).toMatchObject({ levels: 0, qs: 0, photos: 1, students: 1 });
+    expect(day.grades).toEqual([
+      { grade: 7, n: lq + 2 },
+      { grade: 11, n: 2 },
+    ]);
+    // The simulation's phone counts its own students only (and keeps no days).
+    expect(await t.query(api.work.days, { dept: "management", test: true })).toMatchObject({ today: { parts: { levels: 0, qs: 0, photos: 1 }, students: 1 }, days: [] });
     // A level taken back leaves the count.
     await asPhone(t, RAJ).mutation(api.workbook.uncorrect, { studentId: kumar, unitId: u08, level: 1, fixed, before, by: "correction" });
-    expect((await t.query(api.desk.corrected, {})).total.levels).toBe(0);
+    expect((await t.query(api.work.days, { dept: "management" })).today.parts.levels).toBe(0);
+  });
+});
+
+describe("every class kept (8 Nov 2026: his \"the progress also always saved\"): work.fill and work.days", () => {
+  test("each day over is kept once, oldest first, back to the first day in the history; its dashboard shows the days with work and today", async () => {
+    const { t, raw } = await setupRaw();
+    const asha = await add(t, "Asha", 7, "master", "G7-U08");
+    const ravi = await add(t, "Ravi", 11, "fighter", "G11-U13");
+    const today = slDayNo(START);
+    const at = (daysAgo: number, min: number) => START - daysAgo * 24 * 60 * MIN + min * MIN;
+    await t.run(async (ctx) => {
+      const ev = (when: number, e: Record<string, unknown>) => ctx.db.insert("events", { at: when, ...e } as never);
+      // Three days ago: Meera explains twice and teaches once (Master); one explanation taken back.
+      await ev(at(3, 0), { kind: "desk", stage: "master", who: "Meera", studentId: asha, value: "explained", q: 3 });
+      await ev(at(3, 1), { kind: "desk", stage: "master", who: "Meera", studentId: asha, value: "explained", q: 4 });
+      await ev(at(3, 2), { kind: "consult", stage: "master", who: "Sana", studentId: asha, value: "taught", q: 5 });
+      await ev(at(3, 3), { kind: "desk-undo", stage: "master", who: "Meera", studentId: asha, value: "unexplained", q: 4 });
+      // Two days ago: nothing. Yesterday: Nila teaches Ravi at the board (Fighter); Raj marks two photos.
+      await ev(at(1, 0), { kind: "board", stage: "fighter", who: "Nila", studentId: ravi, value: "taught", q: 1 });
+      await ev(at(1, 1), { kind: "photo-marked", who: "Raj", studentId: asha, unit: "G7-U08", q: 3, value: "1 2/2" });
+      await ev(at(1, 2), { kind: "photo-marked", who: "Raj", studentId: asha, unit: "G7-U08", q: 4, value: "1 2/2" });
+      // Today: Nila explains Ravi's Q2 (counted now, never kept today).
+      await ev(at(0, 0), { kind: "desk", stage: "fighter", who: "Nila", studentId: ravi, value: "explained", q: 2 });
+    });
+
+    expect(await raw.mutation(internal.work.fill, { chain: false })).toBe(3);
+    const kept = await t.run(async (ctx) => await ctx.db.query("workDays").collect());
+    expect(kept.map((r) => [r.day - today, r.master.total, r.fighter.total, r.management.total])).toEqual([
+      [-3, 2, 0, 0],
+      [-2, 0, 0, 0],
+      [-1, 0, 1, 2],
+    ]);
+    expect(kept[0].master.people).toEqual([
+      { name: "Meera", total: 1, parts: { x: 1, tt: 0, th: 0 }, students: 1 },
+      { name: "Sana", total: 1, parts: { x: 0, tt: 1, th: 0 }, students: 1 },
+    ]);
+    // Nothing more to keep until today is over; then today is kept too.
+    expect(await raw.mutation(internal.work.fill, { chain: false })).toBe(0);
+
+    // The dashboards: the days with work (each department its own), and today counted now.
+    expect(await t.query(api.work.days, { dept: "fighter" })).toMatchObject({ today: { day: today, total: 1, parts: { x: 1 } }, days: [{ day: today - 1, total: 1 }] });
+    expect((await t.query(api.work.days, { dept: "master" })).days.map((d) => [d.day - today, d.total])).toEqual([[-3, 2]]);
+    expect((await t.query(api.work.days, { dept: "management" })).days.map((d) => [d.day - today, d.total, d.parts.photos])).toEqual([[-1, 2, 2]]);
+    // A teacher's phone reads it too; the simulation's keeps none.
+    expect((await asPhone(t, MEERA).query(api.work.days, { dept: "master" }).catch((e: Error) => e.message)) as unknown).toMatch(/sign/i);
+    await addPerson(t, { name: "Meera", token: MEERA, tabs: ["evaluation"] });
+    expect((await asPhone(t, MEERA).query(api.work.days, { dept: "master" })).days).toHaveLength(1);
+    expect((await t.query(api.work.days, { dept: "master", test: true })).days).toEqual([]);
+
+    // The next day: yesterday (today now) is kept once.
+    vi.setSystemTime(START + 24 * 60 * MIN);
+    expect(await raw.mutation(internal.work.fill, { chain: false })).toBe(1);
+    expect((await t.query(api.work.days, { dept: "fighter" })).days.map((d) => [d.day - today, d.total])).toEqual([
+      [-1, 1],
+      [0, 1],
+    ]);
+  });
+
+  test("an empty history keeps nothing", async () => {
+    const { raw: t } = await setupRaw();
+    await t.run(async (ctx) => {
+      for (const e of await ctx.db.query("events").collect()) await ctx.db.delete(e._id);
+    });
+    expect(await t.mutation(internal.work.fill, { chain: false })).toBe(0);
   });
 });

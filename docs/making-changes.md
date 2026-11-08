@@ -111,7 +111,7 @@ EOF
   data still comes with his sign-in, and every mutation is refused (`LOOK_ONLY` in `src/backend.ts`; only `clock:ping`
   passes). Anything new that writes on its own (a timer, a background save) must expect that refusal quietly.
 - **A teacher's tap needs its book's stage on its history line** (`events.stage`, 8 Nov 2026) for her department's
-  "cleared today" (`desk.today`): log it on any new tap that explains or teaches (desk, consult and board do).
+  "cleared today" and "every class" (`work.days`, convex/lib/work.ts): log it on any new tap that explains or teaches (desk, consult and board do), with `stage`.
 - **The phone's clock is not the server's**: a "since" the phone sends (the desk page's sitting) must come from
   `now()` in `src/store.ts` (synced), never `Date.now()`, or a phone a few minutes fast hides the squares it just did
   and can't undo them.

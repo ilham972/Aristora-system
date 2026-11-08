@@ -44,6 +44,16 @@ export const dept = v.union(v.literal("fighter"), v.literal("master"), v.literal
 /** The two that teach: a theory book is Fighter's, a workbook Master's. */
 export const teachDept = v.union(v.literal("fighter"), v.literal("master"));
 /** A page of a person's own bottom bar (convex/lib/dept.ts, Settings → Roles). */
+/** One department's day of work (convex/lib/work.ts DeptDay): its number, its parts, each person, each grade. */
+const deptDay = v.object({
+  day: v.number(),
+  total: v.number(),
+  parts: v.record(v.string(), v.number()),
+  students: v.number(),
+  people: v.array(v.object({ name: v.string(), total: v.number(), parts: v.record(v.string(), v.number()), students: v.number() })),
+  grades: v.array(v.object({ grade: v.number(), n: v.number() })),
+});
+
 export const pageId = v.union(
   v.literal("dash"),
   v.literal("boss"),
@@ -888,6 +898,21 @@ export default defineSchema({
 
   /** Small settings: the data version (for one-time updates). */
   meta: defineTable({ key: v.string(), value: v.any() }).index("by_key", ["key"]),
+  /**
+   * Each day's work of each department, kept once the day is over (8 Nov 2026, his "the progress also always saved ...
+   * yesterday 100 questions correction, today 300 corrections"): convex/lib/work.ts counts it from the history, at
+   * midnight in Sri Lanka (convex/work.ts fill: the days still missing, every 10 minutes); its dashboard's "Every
+   * class" shows them. Real students only; a day with nothing done is kept too (empty), so no day is counted twice.
+   */
+  workDays: defineTable({
+    day: v.number(),
+    fighter: deptDay,
+    master: deptDay,
+    management: deptDay,
+    /** The day's events read (at most WORK_EVENTS). */
+    events: v.number(),
+    at: v.number(),
+  }).index("by_day", ["day"]),
   /**
    * Phone alerts (7 Nov 2026, his ask: "even though we corrected, students don't know"): a family phone that turned them
    * on for a child (the bell → Turn on). The push service's address and keys, as the phone's browser gave them; the
