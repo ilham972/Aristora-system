@@ -1,0 +1,12 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90m/home/runner/work/Aristora-system/Aristora-system[39m
+
+ [32m✓[39m tests/e2e/class.e2e.ts [2m([22m[2m23 tests[22m[2m | [22m[33m22 skipped[39m[2m)[22m[33m 16646[2mms[22m[39m
+   [33m[2m✓[22m[39m Evaluation: one screen: grade, stage, unit and questions the most urgent first; her room box with Call, Arrived and Done; one question for everyone with her[33m 16319[2mms[22m[39m
+ [2m[90m↓[39m[22m tests/e2e/family.e2e.ts [2m([22m[2m20 tests[22m[2m | [22m[33m20 skipped[39m[2m)[22m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[2m | [22m[33m1 skipped[39m[90m (2)[39m
+[2m      Tests [22m [1m[32m1 passed[39m[22m[2m | [22m[33m42 skipped[39m[90m (43)[39m
+[2m   Start at [22m 00:14:59
+[2m   Duration [22m 18.58s[2m (tests 91%, transform 5%, import 4%)[22m
+
