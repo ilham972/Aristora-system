@@ -1,0 +1,25 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90m/home/runner/work/Aristora-system/Aristora-system[39m
+
+[90mstdout[2m | tests/e2e/class.e2e.ts[2m > [22m[2mTeacher card: a real day (working, free, free while students waited, the others, her week) on one screen; her own only
+[22m[39mCARD [33m390[39m [33m473[39m [33m473[39m [33m556.9375[39m [33m844[39m
+
+[90mstdout[2m | tests/e2e/class.e2e.ts[2m > [22m[2mTeacher card: a real day (working, free, free while students waited, the others, her week) on one screen; her own only
+[22m[39mCARD [33m360[39m [33m423[39m [33m423[39m [33m506.328125[39m [33m640[39m
+
+[90mstdout[2m | tests/e2e/class.e2e.ts[2m > [22m[2mTeacher card: a real day (working, free, free while students waited, the others, her week) on one screen; her own only
+[22m[39mCARD [33m320[39m [33m468[39m [33m468[39m [33m551.734375[39m [33m640[39m
+
+ [32m✓[39m tests/e2e/class.e2e.ts [2m([22m[2m23 tests[22m[2m | [22m[33m22 skipped[39m[2m)[22m[33m 3722[2mms[22m[39m
+   [33m[2m✓[22m[39m Teacher card: a real day (working, free, free while students waited, the others, her week) on one screen; her own only[33m 3461[2mms[22m[39m
+[90mstdout[2m | tests/e2e/family.e2e.ts[2m > [22m[2mMe, his profile: a camera photo made small with its bar, the OK, the race; a name asked; his birthday; the map of 12 weeks; the report; a certificate
+[22m[39m[profile] a 6.1 MB photo was sent as 2 KB (image/webp)
+
+ [32m✓[39m tests/e2e/family.e2e.ts [2m([22m[2m20 tests[22m[2m | [22m[33m19 skipped[39m[2m)[22m[33m 25454[2mms[22m[39m
+   [33m[2m✓[22m[39m Me, his profile: a camera photo made small with its bar, the OK, the race; a name asked; his birthday; the map of 12 weeks; the report; a certificate[33m 25294[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m2 passed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[32m2 passed[39m[22m[2m | [22m[33m41 skipped[39m[90m (43)[39m
+[2m   Start at [22m 02:02:33
+[2m   Duration [22m 30.99s[2m (tests 95%, transform 3%, import 3%)[22m
+
