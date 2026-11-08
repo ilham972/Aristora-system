@@ -100,6 +100,8 @@ export const usInboxKind = v.union(
   v.literal("shout"),
   v.literal("tclap"),
   v.literal("clap"),
+  /** 8 Nov 2026 (his voice note: "tagging option, reply option"): someone tagged him (@) in a thread. */
+  v.literal("m"),
 );
 /** What gave a student XP on Us (8 Nov 2026, his answers): an answer ✓, help ✓, a 💡 post ✓, a comment in his words. */
 export const usXpKind = v.union(v.literal("ans"), v.literal("help"), v.literal("learn"), v.literal("c"));
@@ -109,7 +111,20 @@ export const xpNums = v.object({ wk: v.number(), d: v.number(), xp: v.number(), 
  * A photo on Us (7 Nov 2026: a teacher's poster or question, a student's answer or doubt): two copies the phone made,
  * `s` small for the lines (~560 px), `b` big for a tap (1280 px); `w` × `h` = the big one's size.
  */
-export const usPhoto = v.object({ s: v.id("_storage"), b: v.id("_storage"), w: v.number(), h: v.number() });
+export const usPhoto = v.object({
+  s: v.id("_storage"),
+  b: v.id("_storage"),
+  w: v.number(),
+  h: v.number(),
+  /**
+   * 8 Nov 2026 (his voice note: "instead of using locking feature, why we can't make like blurring feature"): the photo
+   * as a few coloured squares ("6x4:" then 3 hex digits a square, at most 6 on the long side), made on the phone. A
+   * classmate who hasn't answered yet sees it blurred: the colours of a page, never a word or a number of it.
+   */
+  z: v.optional(v.string()),
+});
+/** Who a student is for private messages (8 Nov 2026, his rule: a boy and a girl student never message each other). */
+export const sexKind = v.union(v.literal("b"), v.literal("g"));
 /** Who a student's doubt is for (7 Nov 2026, his words: "teacher or senior students ... or both"). */
 export const usAud = v.union(v.literal("t"), v.literal("s"), v.literal("ts"));
 /** What a family app feedback is about (3 Nov 2026). */
@@ -403,6 +418,12 @@ export default defineSchema({
     photo: v.optional(v.object({ id: v.id("profilePhotos"), at: v.number() })),
     /** His family turned his photo off for the race (Me → "Show it in the race"); his own phone still shows it. */
     photoHide: v.optional(v.boolean()),
+    /**
+     * Boy or girl (8 Nov 2026, his rule for private messages: "girl student and boy student can't message each other ...
+     * boy can chat another boy, girl can chat another girl, whatever grade"; teachers anyone). Set by the owner and the
+     * Students tick (Settings → Students → Boys and girls); unset = he messages teachers only, and only teachers him.
+     */
+    sex: v.optional(sexKind),
   })
     .index("by_archived", ["archived"])
     .index("by_index", ["index"]),
@@ -1014,13 +1035,32 @@ export default defineSchema({
     pic: v.optional(v.string()),
     /** A teacher asked everyone to find its mistake (8 Nov 2026): that question (no name on it). */
     spot: v.optional(v.id("usMoments")),
+    /**
+     * 8 Nov 2026 (his voice note: "we don't know which message is for which one ... tagging option, reply option"): the
+     * message it answers exactly (`re` stays the first of the chain, for phones from before), the students it tags
+     * (`mt`: id and name; each is told), the reactions on it by kind (`rx`: convex/lib/chat.ts RX; `lk` = all of them).
+     */
+    rt: v.optional(v.id("usAnswers")),
+    mt: v.optional(v.array(v.object({ s: v.id("students"), n: v.string() }))),
+    rx: v.optional(v.record(v.string(), v.number())),
   })
     .index("by_mid", ["mid", "sid"])
     .index("by_sid", ["sid", "at"]),
   /** Every file a photo on Us holds (both copies): the hourly sweep keeps these, and deletes uploads nobody attached. */
   usFiles: defineTable({ f: v.id("_storage") }).index("by_f", ["f"]),
   /** A 👏 on a message of the talk (8 Nov 2026): one per person (`who` = a student's id, or a teacher's). */
-  usLikes: defineTable({ aid: v.id("usAnswers"), who: v.string(), at: v.number() }).index("by_aid", ["aid", "who"]),
+  usLikes: defineTable({
+    aid: v.id("usAnswers"),
+    who: v.string(),
+    at: v.number(),
+    /**
+     * 8 Nov 2026 (his voice note: "we can put so many emojis ... we can see everything, who are doing, what are doing"):
+     * which reaction (convex/lib/chat.ts RX: c 👏 h ❤️ l 😂 f 🔥 k 💯 i 💡 t 🤔 p 🙏; none = 👏), and who (a name and face).
+     */
+    e: v.optional(v.string()),
+    n: v.optional(v.string()),
+    pic: v.optional(v.string()),
+  }).index("by_aid", ["aid", "who"]),
   /** A student opened a line (8 Nov 2026: "👀 34" on it): once each, never his own line. */
   usViews: defineTable({ mid: v.id("usMoments"), sid: v.id("students"), at: v.number() }).index("by_mid", ["mid", "sid"]),
   /**
@@ -1054,6 +1094,84 @@ export default defineSchema({
     .index("by_sid", ["sid", "at"])
     .index("by_ref", ["ref"])
     .index("by_at", ["at"]),
+
+  /**
+   * Groups and private messages in Us (8 Nov 2026, his voice note: "students want to forget the WhatsApp when it comes to
+   * the community ... we need group ... like a Discord ... private messaging options"; his answers: boys and girls together
+   * in groups, like the hall; teachers make groups; each grade its own). One row per group or private chat.
+   * - A group (`k` "g"): `gg` = a grade's own group (made the first time someone writes or opens it), else `gs` grades and
+   *   `sids` students picked by a teacher; `name`, `emo`; `ro` = only teachers write. Every teacher is in every group.
+   * - A private chat (`k` "d"): `pp` = its two people ("s:<student>" or "u:<teacher>"), `key` = both joined (one chat a
+   *   pair). His rule decides who may start one (convex/lib/chat.ts mayMessage).
+   * `la` / `lt` / `ln` / `lw` = the last message (when, a few words, who, whose key), `n` messages, `rv` = bumps when an
+   * older message changes (a reaction, a removal), so an open chat reads its page again.
+   */
+  usRooms: defineTable({
+    k: v.union(v.literal("g"), v.literal("d")),
+    name: v.optional(v.string()),
+    emo: v.optional(v.string()),
+    gg: v.optional(v.number()),
+    gs: v.optional(v.array(v.number())),
+    sids: v.optional(v.array(v.id("students"))),
+    ro: v.optional(v.boolean()),
+    by: v.optional(v.id("users")),
+    pp: v.optional(v.array(v.string())),
+    key: v.optional(v.string()),
+    la: v.number(),
+    lt: v.optional(v.string()),
+    ln: v.optional(v.string()),
+    lw: v.optional(v.string()),
+    n: v.number(),
+    rv: v.number(),
+    demo: v.boolean(),
+    at: v.number(),
+  })
+    .index("by_kind", ["demo", "k", "la"])
+    .index("by_key", ["key"])
+    .index("by_grade", ["demo", "gg"]),
+  /**
+   * Who has read a group or a private chat up to when (`rd`), per person ("s:<id>" / "u:<id>"). A private chat's two
+   * seats are made with it (`d`: how his chat list finds it); a group's when he first opens it. `blk` = he blocked the
+   * other one of a private chat (the other can't write to him).
+   */
+  usSeats: defineTable({
+    rid: v.id("usRooms"),
+    who: v.string(),
+    rd: v.number(),
+    d: v.optional(v.boolean()),
+    blk: v.optional(v.boolean()),
+  })
+    .index("by_who", ["who", "rid"])
+    .index("by_room", ["rid", "who"]),
+  /**
+   * A message in a group or a private chat (8 Nov 2026): a student's (`sid`) or a teacher's (`by`); `n` / `g` / `pic` the
+   * name, grade and face (as the race shows him); words and / or photos; `re` the message it answers; `mt` the students it
+   * tags; `rx` reactions by kind (usChatRx: one per person); `rpBy` students who reported it (two hide it from students).
+   * Kept 30 days (`chat.sweep`, `by_at`), as Us's lines.
+   */
+  usChat: defineTable({
+    rid: v.id("usRooms"),
+    sid: v.optional(v.id("students")),
+    by: v.optional(v.id("users")),
+    n: v.string(),
+    g: v.optional(v.number()),
+    pic: v.optional(v.string()),
+    t: v.optional(v.string()),
+    ph: v.optional(v.array(usPhoto)),
+    re: v.optional(v.id("usChat")),
+    mt: v.optional(v.array(v.object({ s: v.id("students"), n: v.string() }))),
+    rx: v.optional(v.record(v.string(), v.number())),
+    rpBy: v.optional(v.array(v.id("students"))),
+    at: v.number(),
+    demo: v.boolean(),
+  })
+    .index("by_room", ["rid", "at"])
+    .index("by_sid", ["sid", "at"])
+    .index("by_at", ["at"]),
+  /** A reaction on a chat message (one per person: `who` "s:<id>" / "u:<id>"; `e` the kind, `n` / `pic` who). */
+  usChatRx: defineTable({ cid: v.id("usChat"), who: v.string(), e: v.string(), n: v.string(), pic: v.optional(v.string()) })
+    .index("by_cid", ["cid", "who"])
+    .index("by_who", ["who"]),
 
   /**
    * The simulation (1 Nov 2026, his voice note): made-up students (test students, the class only phones showing the
@@ -1131,6 +1249,8 @@ export default defineSchema({
      * cup (those are about Levels).
      */
     us: v.optional(xpNums),
+    /** His boy / girl (8 Nov 2026): the Members page says who he may message without reading every student row. */
+    sx: v.optional(sexKind),
   })
     .index("by_sid", ["sid"])
     .index("by_list", ["demo", "gone"]),

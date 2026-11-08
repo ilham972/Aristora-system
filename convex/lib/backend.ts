@@ -9,6 +9,7 @@ import { slDay } from "./day";
 import { computeMaster, EMPTY_MASTER, homeToCheck, type MState } from "./master";
 import { computeStatus } from "./status";
 import { digestOf, type Digest } from "./boss";
+import { wipeChats } from "./chat";
 import { backMoment } from "./us";
 import { dropAnswer, dropMoment } from "./usTalk";
 
@@ -403,6 +404,8 @@ export async function wipeStudent(ctx: MutationCtx, s: Doc<"students">) {
   // The talk (8 Nov 2026): his bell's Us lines, his XP rows from Us.
   for (const b of await ctx.db.query("usInbox").withIndex("by_sid", (q) => q.eq("sid", s._id)).collect()) await ctx.db.delete(b._id);
   for (const x of await ctx.db.query("usXp").withIndex("by_sid", (q) => q.eq("sid", s._id)).collect()) await ctx.db.delete(x._id);
+  // His chats (8 Nov 2026): his private chats whole, his messages and reactions in groups.
+  await wipeChats(ctx, s);
   for (const a of await ctx.db.query("familyAsks").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) await ctx.db.delete(a._id);
   for (const c of await ctx.db.query("calls").withIndex("by_student_status", (q) => q.eq("studentId", s._id)).collect()) await ctx.db.delete(c._id);
   for (const p of await ctx.db.query("progress").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) await ctx.db.delete(p._id);

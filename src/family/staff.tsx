@@ -30,7 +30,7 @@ import type { Picked, SaveInfo, SpotProps } from "./usPost";
  * the bundler split the students' first load into more files, ~1 KB more for every phone; tests/usStaff.test.ts checks).
  */
 export type Kit = Pick<typeof import("./board"), "BoardTab" | "keptBoard"> &
-  Pick<typeof import("./later"), "useParts" | "useUsParts"> &
+  Pick<typeof import("./later"), "useParts" | "useUsParts" | "useChatParts"> &
   Pick<typeof import("./net"), "keep" | "mutation" | "query" | "staffWith"> &
   Pick<typeof import("./pics"), "picOf" | "usePics"> &
   Pick<typeof import("./sound"), "armSound" | "buzz" | "sound"> &
@@ -140,6 +140,11 @@ function StaffApp() {
   const [mate, setMate] = useState<{ id: string; row: RaceRow | null } | null>(null);
   // A post or a doubt opened (its answers or replies).
   const [thread, setThread] = useState<string | null>(null);
+  // Groups and chats (8 Nov 2026): the screens opened on top of Us, newest last (Back = one off).
+  const [chats, setChats] = useState<({ k: "room"; id: string } | { k: "people" } | { k: "all" })[]>([]);
+  const chatsRef = useRef(chats);
+  chatsRef.current = chats;
+  const chp = K.useChatParts(chats.length > 0);
   const [sheet, setSheet] = useState<SheetRender | null>(null);
   const [grade, setGrade] = useState<number>(() => K.keep<number>("grade") ?? 8);
   const mateRef = useRef(mate);
@@ -193,6 +198,7 @@ function StaffApp() {
     const back = () => {
       if (sheetRef.current) setSheet(null);
       else if (mateRef.current) setMate(null);
+      else if (chatsRef.current.length) setChats(chatsRef.current.slice(0, -1));
       else if (threadRef.current) {
         setThread(null);
         void load();
@@ -234,6 +240,13 @@ function StaffApp() {
     setThread(id);
     window.scrollTo(0, 0);
   };
+  const openChat = (x: { k: "room"; id: string } | { k: "people" } | { k: "all" }) => {
+    history.pushState({ t: 1 }, "");
+    setMate(null);
+    setChats([...chatsRef.current, x]);
+    window.scrollTo(0, 0);
+  };
+  const chatTop = chats[chats.length - 1];
 
   K.usePics([b?.mePic]);
   // Her photo (8 Nov 2026, his ask): a tap on her picture; students see it on her posts and replies.
@@ -313,7 +326,17 @@ function StaffApp() {
   };
 
   let body: ComponentChildren;
-  if (thread && !mate) {
+  if (chatTop && !mate) {
+    body = !chp ? (
+      <K.Waiting />
+    ) : chatTop.k === "room" ? (
+      <chp.RoomScreen key={chatTop.id} id={chatTop.id} staff me={b?.me} onBack={closeMateBack} onMate={(id) => openMate(id, null)} />
+    ) : chatTop.k === "people" ? (
+      <chp.PeopleScreen staff onBack={closeMateBack} onRoom={(id) => openChat({ k: "room", id })} onMate={(id) => openMate(id, null)} />
+    ) : (
+      <chp.AllChats onBack={closeMateBack} onRoom={(id) => openChat({ k: "room", id })} />
+    );
+  } else if (thread && !mate) {
     body = usp ? (
       <usp.ThreadScreen key={thread} id={thread} staff me={b?.me} onBack={closeMateBack} onMate={(id) => openMate(id, null)} />
     ) : (
@@ -321,7 +344,20 @@ function StaffApp() {
     );
   } else if (mate) {
     body = parts ? (
-      <parts.MateScreen key={mate.id} id={mate.id} row={mate.row} board={K.keptBoard()} me={null} onBack={closeMateBack} onShout={(id, name) => shout({ id, name })} />
+      <parts.MateScreen
+        key={mate.id}
+        id={mate.id}
+        row={mate.row}
+        board={K.keptBoard()}
+        me={null}
+        onBack={closeMateBack}
+        onShout={(id, name) => shout({ id, name })}
+        onMessage={(id) =>
+          K.mutation("chat:dm", { to: `s:${id}` })
+            .then((r) => openChat({ k: "room", id: (r as { id: string }).id }))
+            .catch((e) => K.toast(K.problemWords(e), true))
+        }
+      />
     ) : (
       <K.Waiting />
     );
@@ -363,6 +399,9 @@ function StaffApp() {
         onMe={() => {}}
         onMate={(id) => openMate(id, null)}
         onOpen={openThread}
+        onRoom={(id) => openChat({ k: "room", id })}
+        onPeople={() => openChat({ k: "people" })}
+        onAll={() => openChat({ k: "all" })}
         staff={{
           feed,
           err: b ? null : err,
@@ -400,13 +439,14 @@ function StaffApp() {
   function closeMateBack() {
     if (history.state?.t) history.back();
     else if (mateRef.current) setMate(null);
+    else if (chatsRef.current.length) setChats(chatsRef.current.slice(0, -1));
     else {
       setThread(null);
       void load();
     }
   }
   return (
-    <div class={`f-app s-${mate || thread ? "mate" : "main"} t-staff`} onPointerDown={K.armSound}>
+    <div class={`f-app s-${mate || thread || chatTop ? "mate" : "main"} t-staff`} onPointerDown={K.armSound}>
       <main class={`f-main t-${tab}`}>{body}</main>
       {sheet && sheet(closeSheet)}
       <K.Toast />

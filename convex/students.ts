@@ -339,6 +339,35 @@ export const rename = mutation({
   },
 });
 
+/**
+ * Boy or girl (8 Nov 2026, his rule for private messages in Us: a boy and a girl student never message each other;
+ * boys any boy, girls any girl, teachers anyone). Settings → Students → Boys and girls, by the owner and the Students
+ * tick, saved as tapped; null = not set (he messages teachers only). Several at once, all checked first.
+ */
+export const setSex = mutation({
+  args: {
+    token: v.optional(v.string()),
+    ids: v.array(v.id("students")),
+    sex: v.union(v.literal("b"), v.literal("g"), v.null()),
+    by: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["owner", "students"], args.by);
+    if (args.ids.length > 200) fail("At most 200 students at once.");
+    const now = Date.now();
+    const list: Doc<"students">[] = [];
+    for (const id of new Set(args.ids)) list.push(await getStudent(ctx, id));
+    let n = 0;
+    for (const s of list) {
+      if ((s.sex ?? null) === args.sex) continue;
+      await ctx.db.patch(s._id, { sex: args.sex ?? undefined });
+      await log(ctx, null, now, { kind: "sex", by: cleanBy(args.by), studentId: s._id, name: s.name, value: args.sex === "b" ? "boy" : args.sex === "g" ? "girl" : "not set" });
+      n++;
+    }
+    return n;
+  },
+});
+
 /** Remove from the class (kept, and can be restored with all progress). */
 export const setArchived = mutation({
   args: { token: v.optional(v.string()), id: v.id("students"), archived: v.boolean(), by: v.optional(v.string()) },

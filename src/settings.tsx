@@ -38,6 +38,7 @@ import { OlPicks, olChoices, olMatch, olNo, studentsWork, UploadBooks } from "./
 import { FamilySheet, PhoneAnswers } from "./familySheet";
 import { FamilyAsks } from "./familyAsks";
 import { olMapList, OlMapSheet } from "./olMap";
+import { SexSheet, sexWords } from "./sexSheet";
 import { FeedbackList } from "./feedbackList";
 import { PhotoQueue } from "./photoQueue";
 import { RETAKE, WHY } from "../convex/lib/photos";
@@ -150,6 +151,7 @@ function Students(props: { views: View[] }) {
   const [moving, setMoving] = useState<string | null>(null);
   const [family, setFamily] = useState<string | null>(null);
   const [olSheet, setOlSheet] = useState(false);
+  const [sexSheet, setSexSheet] = useState(false);
   const [confirmDemo, setConfirmDemo] = useState(false);
   // This phone's class (the class, or the test class): its removed students only.
   const archived = useQuery<Removed[]>(api.state.archived, {})?.filter((a) => !!a.test === testMode());
@@ -227,6 +229,18 @@ function Students(props: { views: View[] }) {
           </svg>
         </button>
       )}
+      {!testing && (
+        // Boys and girls (8 Nov 2026): who may message whom in Us (his rule: never a boy and a girl student).
+        <button type="button" class="sex-line" onClick={() => setSexSheet(true)}>
+          <span>
+            <b>Boys and girls (messages in Us)</b>
+            <small>{sexWords(props.views, grade)}</small>
+          </span>
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+            <path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+      )}
       <h3 class="list-title">
         Grade {grade} · {list.length === 1 ? "1 student" : `${list.length} students`}
       </h3>
@@ -280,6 +294,7 @@ function Students(props: { views: View[] }) {
       )}
       {moveView && <MoveSheet v={moveView} onClose={() => setMoving(null)} />}
       {olSheet && olGrade && <OlMapSheet grade={grade} views={props.views} onClose={() => setOlSheet(false)} />}
+      {sexSheet && <SexSheet grade={grade} views={props.views} onClose={() => setSexSheet(false)} />}
       {family && props.views.some((v) => v.s._id === family) && (
         <FamilySheet v={props.views.find((v) => v.s._id === family)!} onClose={() => setFamily(null)} />
       )}
@@ -1040,6 +1055,10 @@ function describe(e: Doc<"events">): string {
       return v === "on" ? "every Stage opened in the family app" : "Stages open in order again (family app)";
     case "ol-map":
       return v === "on" ? "O/L map on in the family app" : "his grade's map again (family app)";
+    case "sex":
+      return `marked ${v} (messages in Us)`;
+    case "chat-group":
+      return `Us group ${e.name ?? ""}: ${v}`;
     case "photo-marked": {
       const [n, marks] = v.split(" ");
       return `Level ${n}${e.q ? ` Q${e.q}` : ""} marked from his photo: ${marks}`;

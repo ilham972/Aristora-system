@@ -25,7 +25,12 @@ const LOOK: Record<BellItem["what"], { icon: IconName; words: (b: BellItem) => s
 const US_LOOK: Record<UsInboxItem["k"], { icon: IconName; words: (b: UsInboxItem) => string }> = {
   c: { icon: "chat", words: (b) => `${b.n}${b.tch ? " ஆசிரியர்" : ""}: “${b.t ?? "📷"}”` },
   r: { icon: "chat", words: (b) => `${b.n}${b.tch ? " ஆசிரியர்" : ""} உனக்குப் பதில்: “${b.t ?? "📷"}”` },
-  l: { icon: "star", words: (b) => `👏 ${b.n}${(b.x ?? 1) > 1 ? ` + ${(b.x ?? 1) - 1}` : ""} உன் வார்த்தைகளைப் பாராட்டினார்${(b.x ?? 1) > 1 ? "கள்" : ""}` },
+  l: {
+    icon: "star",
+    words: (b) =>
+      `${b.t ?? "👏"} ${b.n}${(b.x ?? 1) > 1 ? ` + ${(b.x ?? 1) - 1}` : ""} ${!b.t || b.t === "👏" ? "உன் வார்த்தைகளைப் பாராட்டினார்" : "உன் வார்த்தைகளுக்கு react செய்தார்"}${(b.x ?? 1) > 1 ? "கள்" : ""}`,
+  },
+  m: { icon: "chat", words: (b) => `@ ${b.n}${b.tch ? " ஆசிரியர்" : ""} உன்னை tag செய்தார்: “${b.t ?? "📷"}”` },
   clap: { icon: "star", words: (b) => `👏 ${b.n}${(b.x ?? 1) > 1 ? ` + ${(b.x ?? 1) - 1}` : ""} உன்னைப் பாராட்டினார்${(b.x ?? 1) > 1 ? "கள்" : ""}` },
   tclap: { icon: "star", words: (b) => `👏 ${b.n} ஆசிரியர் உன்னைப் பாராட்டினார்` },
   ok: { icon: "check", words: (b) => `✓ ${b.n} ஆசிரியர்: சரி!${b.x ? ` +${b.x} XP` : ""}${b.t ? ` “${b.t}”` : ""}` },
@@ -36,7 +41,7 @@ const US_LOOK: Record<UsInboxItem["k"], { icon: IconName; words: (b: UsInboxItem
 };
 
 /** The mark on a face: what it is at a glance. */
-const MARKS: Record<string, string> = { done: "✓", retake: "📷", ask: "💬", c: "💬", r: "↩", l: "👏", clap: "👏", tclap: "👏", ok: "✓", no: "👀", fix: "✎", q: "❓", shout: "🌟" };
+const MARKS: Record<string, string> = { done: "✓", retake: "📷", ask: "💬", c: "💬", r: "↩", m: "@", l: "👏", clap: "👏", tclap: "👏", ok: "✓", no: "👀", fix: "✎", q: "❓", shout: "🌟" };
 const SL = 330 * 60_000;
 const dayOf = (t: number) => Math.floor((t + SL) / 86_400_000);
 
@@ -205,7 +210,7 @@ export function BellScreen(props: {
                       <button type="button" class={`f-bellitem us ${x.u.k}${x.u.fresh ? " fresh" : ""}`} onClick={() => props.onUs?.(x.u.mid)}>
                         <span class="f-bell-face">
                           <Avatar name={x.u.n || "?"} size="s" pic={picOf(x.u.pic)} />
-                          <i>{MARKS[x.u.k]}</i>
+                          <i>{x.u.k === "l" && x.u.t ? x.u.t : MARKS[x.u.k]}</i>
                         </span>
                         <span>
                           <b>{US_LOOK[x.u.k].words(x.u)}</b>

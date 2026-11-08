@@ -85,7 +85,12 @@ const FAMILY_STAFF_KB = 8;
 // each thread"): Us is its own file (src/family/usParts.ts: its tab, a line opened with its talk, what students write,
 // its style), out of the later parts (they were 41 of 42 KB) with a budget of its own. Not prefetched: a phone fetches
 // it once the owner opened Us (then the service worker keeps it), and the teachers' Us uses it too.
-const FAMILY_US_KB = 20;
+// 8 Nov 2026 (his yes: "raise the limits"): 20 → 28 for the talk's replies with quotes, @tags, reactions, the emoji
+// panel and the blurred answers.
+const FAMILY_US_KB = 28;
+// 8 Nov 2026, groups, private chats and the Members page (his voice note: "students want to forget the WhatsApp"; his
+// yes to their own limit): their own file (src/family/chatParts.ts), fetched the first time one opens, never prefetched.
+const FAMILY_CHAT_KB = 20;
 await mkdir("dist/f/assets", { recursive: true });
 const fam = await build({
   // profile.css: the style of the parts that come after the first screen (src/family/later.ts attaches it).
@@ -137,15 +142,22 @@ const staffJs = Object.keys(famOuts).find((f) => famOuts[f].entryPoint === "src/
 if (!staffJs) throw new Error("Build did not produce the family app's teachers' screens (src/family/staff.tsx)");
 const usJs = Object.keys(famOuts).find((f) => famOuts[f].entryPoint === "src/family/usParts.ts");
 if (!usJs) throw new Error("Build did not produce Us's own file (src/family/usParts.ts)");
+const chatJs = Object.keys(famOuts).find((f) => famOuts[f].entryPoint === "src/family/chatParts.ts");
+if (!chatJs) throw new Error("Build did not produce the chats' own file (src/family/chatParts.ts)");
 const studentsLater = new Set(
   Object.keys(famOuts)
-    .filter((f) => f.endsWith(".js") && famOuts[f].entryPoint && f !== staffJs && f !== usJs && !first.has(f))
+    .filter((f) => f.endsWith(".js") && famOuts[f].entryPoint && f !== staffJs && f !== usJs && f !== chatJs && !first.has(f))
     .flatMap((f) => [...staticOf(f)]),
 );
 // Us's own (8 Nov 2026): what only usParts.ts reaches (what it shares with Me or the level screen stays theirs).
 const usOnly = [...staticOf(usJs)].filter((f) => !first.has(f) && !studentsLater.has(f));
-const staffOnly = [...staticOf(staffJs)].filter((f) => !first.has(f) && !studentsLater.has(f) && !usOnly.includes(f));
-const later = [...Object.keys(famOuts).filter((f) => f.endsWith(".js") && !first.has(f) && !staffOnly.includes(f) && !usOnly.includes(f)), laterCss];
+// The chats' own (8 Nov 2026): what only chatParts.ts reaches (what it shares with Us, the talk's pieces, is Us's).
+const chatOnly = [...staticOf(chatJs)].filter((f) => !first.has(f) && !studentsLater.has(f) && !usOnly.includes(f));
+const staffOnly = [...staticOf(staffJs)].filter((f) => !first.has(f) && !studentsLater.has(f) && !usOnly.includes(f) && !chatOnly.includes(f));
+const later = [
+  ...Object.keys(famOuts).filter((f) => f.endsWith(".js") && !first.has(f) && !staffOnly.includes(f) && !usOnly.includes(f) && !chatOnly.includes(f)),
+  laterCss,
+];
 const asset = (f) => `/f/assets/${basename(f)}`;
 const preload = [
   ...[...first].filter((f) => f !== famJs).map((f) => `<link rel="modulepreload" href="${asset(f)}">`),
@@ -171,11 +183,17 @@ let staffKb = 0;
 for (const f of staffOnly) staffKb += await gz(f);
 let usKb = 0;
 for (const f of usOnly) usKb += await gz(f);
+let chatKb = 0;
+for (const f of chatOnly) chatKb += await gz(f);
 console.log(
-  `Built the family app: ${basename(famJs)} + ${basename(famCss)}, ${(wire / 1024).toFixed(1)} KB over the wire on the first load (budget ${FAMILY_BUDGET_KB} KB), ${(after / 1024).toFixed(1)} KB right after it (budget ${FAMILY_LATER_KB} KB), Us ${(usKb / 1024).toFixed(1)} KB (budget ${FAMILY_US_KB} KB), the teachers' Us ${(staffKb / 1024).toFixed(1)} KB (budget ${FAMILY_STAFF_KB} KB)`,
+  `Built the family app: ${basename(famJs)} + ${basename(famCss)}, ${(wire / 1024).toFixed(1)} KB over the wire on the first load (budget ${FAMILY_BUDGET_KB} KB), ${(after / 1024).toFixed(1)} KB right after it (budget ${FAMILY_LATER_KB} KB), Us ${(usKb / 1024).toFixed(1)} KB (budget ${FAMILY_US_KB} KB), the chats ${(chatKb / 1024).toFixed(1)} KB (budget ${FAMILY_CHAT_KB} KB), the teachers' Us ${(staffKb / 1024).toFixed(1)} KB (budget ${FAMILY_STAFF_KB} KB)`,
 );
 if (usKb > FAMILY_US_KB * 1024) {
   console.error(`Us's own file is ${(usKb / 1024).toFixed(1)} KB: over its ${FAMILY_US_KB} KB budget.`);
+  process.exit(1);
+}
+if (chatKb > FAMILY_CHAT_KB * 1024) {
+  console.error(`The chats' own file is ${(chatKb / 1024).toFixed(1)} KB: over its ${FAMILY_CHAT_KB} KB budget.`);
   process.exit(1);
 }
 if (staffKb > FAMILY_STAFF_KB * 1024) {

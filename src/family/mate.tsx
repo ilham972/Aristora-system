@@ -33,6 +33,8 @@ export function MateScreen(props: {
   onBack: () => void;
   /** A teacher (the class app's Us tab, 7 Nov 2026): 🌟 a shout-out for him instead of a classmate's 👏. */
   onShout?: (id: string, name: string) => void;
+  /** 💬 A private chat with him (8 Nov 2026): only where his rule allows (the server says: `dm`). */
+  onMessage?: (id: string) => void;
 }) {
   const [m, setM] = useState<FamilyMate | null>(() => seen.get(props.id) ?? null);
   const [err, setErr] = useState<string | null>(null);
@@ -168,6 +170,11 @@ export function MateScreen(props: {
               {m.cheers.n > 0 ? `இந்த வாரம் ${m.cheers.n} 👏` : "இந்த வாரம் முதல் 👏 உன்னுடையதாக இருக்கட்டும்!"}
             </small>
           </section>
+          )}
+          {m.dm && props.onMessage && (
+            <button type="button" class="f-btn white f-mate-dm rise" onClick={() => props.onMessage!(props.id)}>
+              💬 Message {name.split(" ")[0]}
+            </button>
           )}
           <section class="f-card f-mate-race rise" aria-label="This week">
             <h2 class="f-h2">

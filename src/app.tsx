@@ -10,7 +10,7 @@ import { EvaluationPage } from "./evalFocus";
 import { TheoryTab } from "./theoryFocus";
 import { BossPage } from "./boss";
 import { ConsultPage, myConsults } from "./consult";
-import { UsFrame } from "./usFrame";
+import { UsFrame, useChatNew } from "./usFrame";
 import { ManagerPage } from "./manager";
 import { SimBanner } from "./sim";
 import { Progress } from "./progress";
@@ -401,6 +401,8 @@ export function App() {
   // Gifts from the centre waiting to be given (7 Nov 2026; the owner and the Manager): Settings → Race.
   const gifts = useGiftsWaiting(!!me?.user && may("manager"));
   const gearN = photos.n + fbNew + asks + gifts;
+  // Her private chats in Us with a message she hasn't read (8 Nov 2026): a number on the Us tab while she is elsewhere.
+  const chatNew = useChatNew(!!me?.user);
 
   if (me === undefined) {
     return (
@@ -745,7 +747,11 @@ export function App() {
           // Someone who only marks the photos from home: Correction's number is the photos waiting (red after a day).
           const lane = r.id === "correction" && photosOnly;
           const badge =
-            !away || r.id === "us" || r.id === "dash" || r.id === "teach" || r.id === "boss" || r.id === "progress" || r.id === "register"
+            r.id === "us"
+              ? away
+                ? chatNew
+                : 0
+              : !away || r.id === "dash" || r.id === "teach" || r.id === "boss" || r.id === "progress" || r.id === "register"
               ? 0
               : r.id === "fighter" || r.id === "master"
                 ? deptRed(r.id)
@@ -759,7 +765,7 @@ export function App() {
               type="button"
               class={`tab ${r.id}${here ? " on" : ""}`}
               aria-current={here ? "page" : undefined}
-              aria-label={`${r.label}${badge ? `, ${badge} ${coming ? "coming to you" : r.id === "correction" ? "waiting" : "with no work"}` : ""}`}
+              aria-label={`${r.label}${badge ? `, ${badge} ${r.id === "us" ? "new messages" : coming ? "coming to you" : r.id === "correction" ? "waiting" : "with no work"}` : ""}`}
               onClick={() => {
                 setTab(r.id);
                 setBackTo("board");
@@ -786,7 +792,7 @@ export function App() {
                 <span class="tab-mark" aria-hidden="true" />
               )}
               <span>{r.label}</span>
-              {badge > 0 && <span class={`tab-badge${coming ? ` tb-coming ${r.id}` : amber ? " tb-amber" : ""}`}>{badge}</span>}
+              {badge > 0 && <span class={`tab-badge${coming ? ` tb-coming ${r.id}` : amber ? " tb-amber" : r.id === "us" ? " tb-us" : ""}`}>{badge}</span>}
             </button>
           );
         })}

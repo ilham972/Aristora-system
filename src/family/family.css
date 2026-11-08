@@ -1037,6 +1037,28 @@ p {
 .f-tab:active .f-ic {
   transform: scale(0.88);
 }
+/* Something new in a group or a chat (8 Nov 2026): a dot on Us. */
+.f-tab {
+  position: relative;
+}
+.f-tab-dot {
+  position: absolute;
+  top: 9px;
+  left: calc(50% + 5px);
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--gem);
+  box-shadow: 0 0 0 2px #fff;
+}
+.f-tab.on .f-tab-dot {
+  display: none;
+}
+.f-mate-dm {
+  display: flex;
+  width: calc(100% - 32px);
+  margin: 12px 16px 0;
+}
 /* Five tabs (Us, 7 Nov 2026): the open one a little narrower so the other four keep a thumb's width. */
 .f-tabs.n5 {
   gap: 2px;

@@ -84,6 +84,33 @@ export function useUsParts(want = true): UsParts | null {
   return m;
 }
 
+export type ChatParts = typeof import("./chatParts");
+let chatMod: ChatParts | null = null;
+let chatLoading: Promise<ChatParts> | null = null;
+
+/** Groups, private chats and Members (8 Nov 2026): their own file, fetched the first time one opens. */
+export function loadChat(): Promise<ChatParts> {
+  if (!chatLoading) {
+    chatLoading = import("./chatParts").then(
+      (m) => (chatMod = m),
+      (e) => {
+        chatLoading = null;
+        throw e;
+      },
+    );
+  }
+  return chatLoading;
+}
+
+/** The chats' screens once here (null while they come). `want` = start fetching now. */
+export function useChatParts(want = true): ChatParts | null {
+  const [m, setM] = useState<ChatParts | null>(chatMod);
+  useEffect(() => {
+    if (!m && want) void loadChat().then(setM, () => {});
+  }, [want]);
+  return m;
+}
+
 /** His profile's numbers (family.profile), kept for this child: the screen shows the last ones at once. */
 export function useProfile(): FamilyProfile | null {
   const [p, setP] = useState<FamilyProfile | null>(() => keep<FamilyProfile>("profile"));

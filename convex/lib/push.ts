@@ -52,5 +52,6 @@ export async function alertStudent(ctx: MutationCtx, studentId: Id<"students">, 
     return;
   }
   await ctx.db.insert("pushOut", { studentId, n: 1, text, at: now, ...(url ? { url } : {}) });
-  await ctx.scheduler.runAfter(url?.includes("#us") ? US_PUSH_WAIT_MS : PUSH_WAIT_MS, internal.push.send, { studentId });
+  // Us and its chats (8 Nov 2026) say it within seconds, like a message app; a teacher's marking is gathered a minute.
+  await ctx.scheduler.runAfter(/#(us|chat)=/.test(url ?? "") ? US_PUSH_WAIT_MS : PUSH_WAIT_MS, internal.push.send, { studentId });
 }

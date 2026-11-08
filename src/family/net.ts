@@ -62,6 +62,14 @@ const STAFF: Record<string, string> = {
   "family:mate": "us:mate",
   "family:photos": "us:pics",
   "us:thread": "us:tthread",
+  // 8 Nov 2026: who reacted; the groups and private chats, the Members page, the owner's view of every chat.
+  "us:reactors": "us:treactors",
+  "chat:rooms": "chat:trooms",
+  "chat:room": "chat:troom",
+  "chat:reactors": "chat:treactors",
+  "chat:people": "chat:tpeople",
+  "chat:tall": "chat:tall",
+  "chat:tgroupInfo": "chat:tgroupInfo",
 };
 const STAFF_CHANGES: Record<string, string> = {
   "us:tclap": "us:tclap",
@@ -83,6 +91,16 @@ const STAFF_CHANGES: Record<string, string> = {
   "us:setMyPhoto": "us:setMyPhoto",
   "us:dropMyPhoto": "us:dropMyPhoto",
   "us:spot": "us:spot",
+  // 8 Nov 2026: reactions; groups and private chats (her own; groups with the Community tick; removing any message).
+  "us:react": "us:treact",
+  "chat:send": "chat:tsend",
+  "chat:read": "chat:tread",
+  "chat:react": "chat:treact",
+  "chat:dm": "chat:tdm",
+  "chat:tdrop": "chat:tdrop",
+  "chat:tkeep": "chat:tkeep",
+  "chat:tgroup": "chat:tgroup",
+  "chat:tgroupDrop": "chat:tgroupDrop",
 };
 /** The class app's Us tab with this teacher's sign-in. */
 export function staffWith(t: string): void {

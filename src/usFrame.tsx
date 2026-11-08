@@ -7,6 +7,23 @@
 // newest lines.
 
 import { useEffect, useRef, useState } from "preact/hooks";
+import { api } from "../convex/_generated/api";
+import { subscribe } from "./backend";
+
+/** Her private chats in Us with something new (8 Nov 2026: convex/chat.ts tunread), live: the Us tab's number. */
+export function useChatNew(on: boolean): number {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    if (!on) return;
+    return subscribe(
+      api.chat.tunread,
+      {},
+      (v) => setN(v),
+      () => setN(0),
+    );
+  }, [on]);
+  return n;
+}
 
 export function UsFrame(props: { open: boolean }) {
   const ref = useRef<HTMLIFrameElement>(null);

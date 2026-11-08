@@ -14,7 +14,7 @@ import { noteToday } from "./usToday";
 export const RACE_V = 1;
 
 /** Fields of a student row his race row copies (a patch touching any of them copies them again). */
-export const RACE_IDENTITY = ["name", "grade", "archived", "demo", "test", "photo", "photoHide", "bday"] as const;
+export const RACE_IDENTITY = ["name", "grade", "archived", "demo", "test", "photo", "photoHide", "bday", "sex"] as const;
 
 /** What a mutation wrote that the race cares about. */
 export type RaceWrites = {
@@ -31,7 +31,7 @@ export type RaceWrites = {
 export const noWrites = (): RaceWrites => ({ progress: new Set(), progressGone: new Set(), students: new Set(), studentsGone: new Set() });
 
 /** His row's copy of who he is (a field he doesn't have is left out). */
-export function identityOf(s: Doc<"students">): { n: string; g?: number; demo: boolean; gone: boolean; pic?: string; bd?: string } {
+export function identityOf(s: Doc<"students">): { n: string; g?: number; demo: boolean; gone: boolean; pic?: string; bd?: string; sx?: "b" | "g" } {
   return {
     n: s.name,
     ...(typeof s.grade === "number" ? { g: s.grade } : {}),
@@ -39,6 +39,8 @@ export function identityOf(s: Doc<"students">): { n: string; g?: number; demo: b
     gone: !!s.archived,
     ...(s.photo && !s.photoHide ? { pic: s.photo.id as string } : {}),
     ...(s.bday ? { bd: s.bday } : {}),
+    // Boy or girl (8 Nov 2026): who he may message, without reading every student row.
+    ...(s.sex ? { sx: s.sex } : {}),
   };
 }
 
@@ -105,7 +107,7 @@ async function writeRow(ctx: MutationCtx, sid: Id<"students">, now: number, copy
     await today(!who.demo && !who.gone);
     if (!row) await ctx.db.insert("raceRows", { sid, ...who, ...nums, v: RACE_V });
     // A field he no longer has (no grade, his photo removed or hidden, his birthday cleared) goes from the copy too.
-    else await ctx.db.patch(row._id, { g: undefined, pic: undefined, bd: undefined, ...who, ...nums });
+    else await ctx.db.patch(row._id, { g: undefined, pic: undefined, bd: undefined, sx: undefined, ...who, ...nums });
     return;
   }
   await today(!row.demo && !row.gone);

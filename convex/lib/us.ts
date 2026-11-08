@@ -493,7 +493,41 @@ export type UsReply = {
   pic?: string;
   /** Teachers: the "find the mistake" question made from this answer (8 Nov 2026). */
   spot?: string;
+  /**
+   * 8 Nov 2026 (his voice note: "we don't know which message is for which one ... tagging option, reply option ... we can
+   * put so many emojis"): the message it answers exactly (`rt`; `re` = the first of the chain, for phones from before),
+   * the students it tags (`mt`), the reactions by kind (`rx`, convex/lib/chat.ts RX) and his own (`my`).
+   */
+  rt?: string;
+  mt?: { id: string; n: string }[];
+  rx?: Record<string, number>;
+  my?: string;
 };
+
+/**
+ * A photo's blurred squares (8 Nov 2026, his voice note: "instead of showing nothing, we can show the blur option"):
+ * "6x4:" then 3 hex digits a square, at most 6 on a side. Made on the phone from the photo it sends.
+ */
+export const SEED_MAX = 6;
+export function seedOk(z: string): boolean {
+  const m = /^([1-6])x([1-6]):([0-9a-f]+)$/.exec(z);
+  return !!m && m[3].length === Number(m[1]) * Number(m[2]) * 3;
+}
+
+/**
+ * An answer a classmate may not see yet, as he sees it blurred: its photos' squares, about how many lines its words fill,
+ * how many photos. Never a name, a word, an id, a photo's address or whether it is right (his rule since 7 Nov).
+ */
+export type UsVeil = { z: string[]; w: number; p: number };
+export function veilOf(a: Pick<Doc<"usAnswers">, "t" | "ph">): UsVeil {
+  return {
+    z: (a.ph ?? []).map((p) => p.z).filter((z): z is string => !!z && seedOk(z)),
+    w: a.t ? Math.min(6, Math.ceil(a.t.length / 30)) : 0,
+    p: a.ph?.length ?? 0,
+  };
+}
+/** Blurred answers a thread sends at most (the count above says the rest). */
+export const VEIL_MAX = 12;
 
 /** Who cheered a line (8 Nov 2026: faces in the thread; a tap = his profile). */
 export type UsCheer = { sid: string; n: string; g?: number; pic?: string };
@@ -511,6 +545,8 @@ export type UsThread = {
   can: { answer?: boolean; reply?: boolean; report?: boolean; mark?: boolean; talk?: boolean; approve?: boolean };
   talk?: UsReply[];
   talkHidden?: number;
+  /** The answers he may not see yet, blurred (8 Nov 2026; at most VEIL_MAX). */
+  veil?: UsVeil[];
   cheers?: UsCheer[];
   /** His own 👏 on the line (a student's phone). */
   clapped?: boolean;
@@ -549,6 +585,9 @@ export function replyOf(a: Doc<"usAnswers">, m: Pick<Doc<"usMoments">, "sid" | "
     ...(a.fix ? { fix: a.fix, ...(a.fixBy ? { fixBy: a.fixBy } : {}) } : {}),
     ...(a.pic && named ? { pic: a.pic } : {}),
     ...(staff && a.spot ? { spot: a.spot } : {}),
+    ...(a.rt ? { rt: a.rt } : {}),
+    ...(a.mt?.length ? { mt: a.mt.map((x) => ({ id: x.s as string, n: x.n })) } : {}),
+    ...(a.rx ? { rx: a.rx } : a.lk ? { rx: { c: a.lk } } : {}),
   };
 }
 

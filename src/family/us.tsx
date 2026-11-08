@@ -23,6 +23,7 @@ import { keep, mutation, query } from "./net";
 import { picOf, usePics } from "./pics";
 import { buzz, sound } from "./sound";
 import { Avatar, Icon, Owl, OwlBadge, problemWords, showSheet, toast, useOwlTap, Waiting, type Mood } from "./ui";
+import { useChatParts } from "./later";
 import { AUD, DoubtSheet, gradesWords, LearnSheet, Pics } from "./usPost";
 
 /** A shout-out's reason, in his words (convex/lib/us.ts SHOUT_WHY: the phone keeps its own copy, see family.ts). */
@@ -175,6 +176,10 @@ export function UsTab(props: {
   onMe: () => void;
   /** A line opened (usPost.tsx ThreadScreen). */
   onOpen: (id: string) => void;
+  /** Groups and private chats (8 Nov 2026): a chat opened, the Members page, the owner's every chat. */
+  onRoom?: (id: string) => void;
+  onPeople?: () => void;
+  onAll?: () => void;
   staff?: UsStaff;
 }) {
   const own = useUs(!props.staff);
@@ -199,8 +204,13 @@ export function UsTab(props: {
   useEffect(() => {
     keep("usLast", Date.now());
   }, []);
-  // What's new in Us (8 Nov 2026), told once to everyone who saw the guide before.
-  const [news, setNews] = useState(() => !t && !!keep<boolean>("usGuide") && !keep<boolean>("usNews1"));
+  // What's new in Us (8 Nov 2026: groups, chats, replies, tags, reactions), told once to everyone who saw the guide before.
+  const [news, setNews] = useState(() => !t && !!keep<boolean>("usGuide") && !keep<boolean>("usNews2"));
+  // Feed, Groups or Chats (8 Nov 2026): the last one he looked at.
+  const [seg, setSeg] = useState<"feed" | "g" | "d">(() => (props.onRoom ? (keep<"feed" | "g" | "d">("usSeg") ?? "feed") : "feed"));
+  const cp = useChatParts(seg !== "feed");
+  const feed = seg === "feed";
+  const cn = props.me?.chat;
   const all = f?.items ?? [];
   const items = all.filter(shows[show]);
   const todoN = t ? all.filter(todo).length : 0;
@@ -215,7 +225,7 @@ export function UsTab(props: {
 
   const done = () => {
     keep("usGuide", true);
-    keep("usNews1", true);
+    keep("usNews2", true);
     setGuide(false);
     setStep(0);
     sound("level");
@@ -275,6 +285,35 @@ export function UsTab(props: {
         </button>
       </header>
       {t && !guide && t.head}
+      {props.onRoom && !guide && (
+        <div class="f-us-seg" role="tablist" aria-label="Us">
+          {(
+            [
+              ["feed", "📰 Feed", 0],
+              ["g", "👥 Groups", cn?.g ?? 0],
+              ["d", "💬 Chats", cn?.d ?? 0],
+            ] as const
+          ).map(([k, l, n]) => (
+            <button
+              key={k}
+              type="button"
+              role="tab"
+              class={seg === k ? "on" : ""}
+              aria-selected={seg === k}
+              onClick={() => {
+                buzz();
+                sound("tap");
+                setSeg(k);
+                keep("usSeg", k);
+              }}
+            >
+              {l}
+              {n ? <i>{n}</i> : null}
+            </button>
+          ))}
+        </div>
+      )}
+      {!guide && !feed && (cp ? <cp.ChatList kind={seg === "g" ? "g" : "d"} staff={!!t} onRoom={props.onRoom!} onPeople={props.onPeople!} onAll={props.onAll} /> : <Waiting />)}
       {guide && (
         <section class="f-card f-us-guide rise" aria-label="How Us works">
           <Owl mood={G[step].mood} class="mid" />
@@ -300,16 +339,16 @@ export function UsTab(props: {
           </button>
         </section>
       )}
-      {!guide && news && (
+      {!guide && feed && news && (
         <section class="f-card f-us-news rise" aria-label="New in Us">
-          <b>🆕 இப்போது Us இல் பேசலாம்!</b>
-          <p>ஒவ்வொரு வரியையும் தொட்டுத் திற: யார் பாராட்டினார்கள், யார் என்ன சொன்னார்கள். உன் சொந்த வார்த்தைகளுக்கு +1 XP. 💡 இன்று கற்றதைப் பகிர்: +5 XP.</p>
+          <b>🆕 Groups 👥 · Chats 💬</b>
+          <p>உன் grade குழுவில் எல்லோருடனும் பேசு; ஆசிரியர்களுக்கு நேரடியாக message செய். ஒரு message ஐ வலப்பக்கம் இழு: பதில் ↩. அழுத்திப் பிடி: 😂 ❤️ 🔥. @ பெயர்: tag. கேள்விகளின் விடைகள் இப்போது மங்கலாகத் தெரியும்: உன் விடையை அனுப்பு, திறக்கும்!</p>
           <button
             type="button"
             class="f-btn go"
             onClick={() => {
               buzz();
-              keep("usNews1", true);
+              keep("usNews2", true);
               setNews(false);
             }}
           >
@@ -317,7 +356,7 @@ export function UsTab(props: {
           </button>
         </section>
       )}
-      {!guide && f?.welcome && (
+      {!guide && feed && f?.welcome && (
         // His welcome: whole the first time (and whenever he changes it), then two lines; a tap shows it all again.
         <section
           class={`f-card f-us-welcome rise${short ? " short" : ""}`}
@@ -331,7 +370,7 @@ export function UsTab(props: {
           {short && <span class="f-us-more">மேலும் ›</span>}
         </section>
       )}
-      {!guide && f && (
+      {!guide && feed && f && (
         <div class="f-us-bar">
           {!t && (
             // What he can write (8 Nov 2026): 💡 what he learned (a teacher shows it to everyone), 🙋 a doubt.
@@ -374,9 +413,9 @@ export function UsTab(props: {
           </div>
         </div>
       )}
-      {!f && !err && <Waiting />}
-      {err && !f && <p class="f-lead f-center-t">{err}</p>}
-      {!guide && f && (
+      {feed && !f && !err && <Waiting />}
+      {feed && err && !f && <p class="f-lead f-center-t">{err}</p>}
+      {!guide && feed && f && (
         <ol class="f-us-list">
           {items.map((m) => (
             <Card
@@ -395,8 +434,8 @@ export function UsTab(props: {
           ))}
         </ol>
       )}
-      {!guide && f && t && t.end}
-      {!guide && f && show !== "all" && !items.length && (
+      {!guide && feed && f && t && t.end}
+      {!guide && feed && f && show !== "all" && !items.length && (
         <p class="f-ut-none">
           {show === "q"
             ? "இப்போது கேள்விகள் இல்லை."
@@ -409,7 +448,7 @@ export function UsTab(props: {
                   : "இப்போது எதுவும் இல்லை."}
         </p>
       )}
-      {!guide && f && !t && (
+      {!guide && feed && f && !t && (
         <section class="f-us-end rise">
           <Owl mood={items.length ? "happy" : "think"} class="tiny" />
           <p>

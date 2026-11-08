@@ -111,9 +111,10 @@ self.addEventListener("notificationclick", (e) => {
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
       for (const c of list) {
         if (new URL(c.url).pathname.startsWith("/f/") && "focus" in c) {
-          // A teacher's shout-out or 👏 opens Us (7 Nov 2026), an answer marked or a reply that post (#us=id),
-          // everything else the bell.
-          c.postMessage({ k: url.indexOf("#us") >= 0 ? "us" : "bell", id: url.split("#us=")[1] || "" });
+          // A teacher's shout-out or 👏 opens Us (7 Nov 2026), an answer marked or a reply that post (#us=id), a
+          // message that chat (#chat=id, 8 Nov 2026), everything else the bell.
+          const k = url.indexOf("#chat=") >= 0 ? "chat" : url.indexOf("#us") >= 0 ? "us" : "bell";
+          c.postMessage({ k: k, id: url.split(k === "chat" ? "#chat=" : "#us=")[1] || "" });
           return c.focus();
         }
       }

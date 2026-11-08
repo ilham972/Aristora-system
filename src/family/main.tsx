@@ -6,7 +6,7 @@ import "./owl.css";
 import { render } from "preact";
 import { App } from "./app";
 import { BoardTab, keptBoard } from "./board";
-import { loadParts, useParts, useUsParts } from "./later";
+import { loadParts, useChatParts, useParts, useUsParts } from "./later";
 import { keep, mutation, query, staffWith } from "./net";
 import { picOf, usePics } from "./pics";
 import { armSound, buzz, sound } from "./sound";
@@ -34,7 +34,7 @@ const look = /^#preview=([a-z0-9]+)$/i.exec(location.hash);
 // The class app's Us tab (7 Nov 2026): /f/?staff inside it, with the teacher's own sign-in (src/family/staff.tsx, a
 // file of its own that students' phones never download). It gets what it uses of the app from here (staff.tsx: Kit).
 const staff = new URLSearchParams(location.search).has("staff");
-const kit = { BoardTab, keptBoard, useParts, useUsParts, keep, mutation, query, staffWith, armSound, buzz, sound, Avatar, Icon, problemWords, setSheetHost, Sheet, toast, Toast, Waiting, picOf, usePics };
+const kit = { BoardTab, keptBoard, useParts, useUsParts, useChatParts, keep, mutation, query, staffWith, armSound, buzz, sound, Avatar, Icon, problemWords, setSheetHost, Sheet, toast, Toast, Waiting, picOf, usePics };
 if (look) void loadParts().then((m) => m.startPreview(look[1], document.getElementById("app")!));
 else if (staff) void import("./staff").then((m) => m.startStaff(document.getElementById("app")!, kit));
 else render(<App />, document.getElementById("app")!);

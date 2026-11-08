@@ -552,4 +552,31 @@ EOF
   → `lib/usTalk.ts` would close a cycle). Anything showing a student's XP adds `usNow` (family.me, a check's reveal,
   `mateOf`), and the grade cup takes `RaceRow.u` / `up` out.
 - **The one-tap words are in two places** (`QUICK` in `convex/lib/us.ts`, for "no XP", and its copy in `usPost.tsx`):
-  `tests/usTalk.test.ts` reads the phone's file and fails if they differ.
+  `tests/usTalk.test.ts` reads the phone's file and fails if they differ. So are the reactions (`RX` in
+  `convex/lib/chat.ts` and `talk.tsx`: `tests/chat.test.ts`).
+- **The chats are their own file** (8 Nov 2026, groups and private chats): `src/family/chatParts.ts` (`chat.tsx`, its
+  style `chatStyle.ts`), budget `FAMILY_CHAT_KB` 20 = what only it reaches; what it shares with Us (`talk.tsx`: the
+  bubble, reactions, tags, the write bar, the photo picker) is counted in Us's file. Import the chats only through
+  `later.ts` `loadChat` / `useChatParts` (the teachers' Us: `K.useChatParts`, handed over by `main.tsx`). The teachers'
+  Us file is near its 8 KB (7.8): put new teacher screens in Us's or the chats' file, not in `staff.tsx`. Budgets after
+  it (scratch build): first load 63.7 of 66, later parts 35.7 of 42, Us 23.7 of 28, the chats 7.9 of 20.
+- **Chats: who may write is decided on the server, on every call** (`access` in `convex/chat.ts`, `mayMessage` in
+  `convex/lib/chat.ts`): opening, sending, reacting, reporting, a new private chat. A student's boy / girl can change, so
+  never store "may message" anywhere: compute it. The race rows keep `sx` for the Members list (`RACE_IDENTITY`
+  copies `sex`), the student row is the truth. A teacher's call is `chat:t*` (the family app's `net.ts` maps the
+  students' names; add a new one to `STAFF` / `STAFF_CHANGES`, or the teachers' Us refuses it).
+- **A line's reply has two ids**: `re` = the chain's first (the one-level tree, counts, who is told as before) and `rt` =
+  the message actually answered (the quote). Old replies have only `re`. In chats there is one: `re` = the message
+  answered (no tree).
+- **The blur sends no answer**: `veilOf` gives colour squares (`z`, made on the phone at upload: `seedOf` in
+  `talk.tsx`), an approximate line count and the photo count, nothing else. Never add a field to `UsVeil` that comes
+  from the answer's words, name, id or files; `tests/chat.test.ts` reads a classmate's JSON before his answer.
+- **Chats poll, they don't subscribe** (the family app has no websocket client): an open chat asks every 4 s with
+  `since` (only new messages) and `rv` (bumped by `chat.react`, `report`, `tkeep`, `tdrop`, `block`, `roomAfter`: then
+  the whole page). Anything that changes an old message must bump the room's `rv`, or open phones never see it.
+- **Kept 30 days**: `chat.sweep` (from `us.daily`) deletes old messages with their photos (`usFiles` marks too) and
+  reactions; `wipeStudent` calls `wipeChats`. A new table holding a student's chat things must be cleaned in both.
+- **Run-throughs on a machine without the class app's fonts**: seven class run-throughs that measure the top bar at
+  320 px or a strip's height fail there (they did on the commit before the chats too); CI is the judge. A stand-in for
+  the web push library must return real-looking keys (a 65-byte P-256 public key, base64url), or the photos
+  run-through's "alerts on" waits forever (the phone decodes the key before it subscribes).

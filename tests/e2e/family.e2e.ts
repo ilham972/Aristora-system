@@ -2337,8 +2337,9 @@ test("Us posts and doubts: a teacher's question with a photo for Grade 8; her an
   await contains(q, "0 answers");
   await visible(q.locator(".f-pics img"));
   const mid = await t.run(async (ctx) => (await ctx.db.query("usMoments").collect()).find((m) => m.qn)!._id);
-  // Bilal answers first (his phone, through the server).
-  await t.mutation(api.us.answer, { token: FAM_B, id: mid, text: "x = 18" });
+  // Bilal answers first (his phone, through the server): words and a photo (its blurred squares made on his phone).
+  const pngFile = async () => await t.run(async (ctx) => await ctx.storage.store(new Blob([Buffer.from(PAPER_PNG, "base64")], { type: "image/png" })));
+  await t.mutation(api.us.answer, { token: FAM_B, id: mid, text: "x = 18", ph: [{ s: await pngFile(), b: await pngFile(), w: 96, h: 72, z: "4x3:fffeee238ffffff238238eeeeeefff238fff" }] });
 
   // Hana's phone: the question with its photo; one classmate answered (a locked card: nothing of his).
   const P = await open(backend, `${site.url}/f/`, size(360, 780));
@@ -2363,7 +2364,14 @@ test("Us posts and doubts: a teacher's question with a photo for Grade 8; her an
   await until(async () => (await P.locator(".f-lb").count()) === 0, "the photo closes");
   await line.getByRole("button", { name: "✍️ Answer" }).click();
   await contains(P.locator(".f-locks"), "1 பேர் விடை அனுப்பினார்கள்");
+  // Blurred, not locked (8 Nov 2026): his card with no face, no name, made-up words under the blur.
+  await visible(P.locator(".f-veil-c"));
+  await visible(P.locator(".f-veil-ph img"));
+  await visible(P.locator(".f-veil-go"));
   expect(await P.locator(".f-ut").innerText()).not.toContain("Bilal");
+  expect(await P.locator(".f-ut img[src^='http']").count()).toBe(1);
+  await P.locator(".f-veil").scrollIntoViewIfNeeded();
+  await shot(P, "fam82b-us-answers-blurred");
   expect(await P.locator(".f-ut").innerText()).not.toContain("x = 18");
   await shot(P, "fam82-us-answer-locked");
   // Her answer: words and a photo of her working; once only.
@@ -2510,10 +2518,26 @@ test("Us talk: a birthday opened; one-tap words and her own (+1 XP); a reply and
   expect(hers).toMatchObject({ n: "Hana K", g: 8 });
   await t.mutation(api.us.comment, { token: FAM_B, id: bday, text: "நன்றி Hana! 🙏", re: hers.id });
   await t.mutation(api.us.like, { token: FAM_B, aid: hers.id });
-  // The open thread reads again by itself (every 20 s while on screen): his reply under hers, her 👏 count.
-  await until(async () => (await P.locator(".f-msgs.kids .f-msg").count()) === 1, "Bilal's reply under hers", 30_000);
-  await contains(P.locator(".f-msgs.kids .f-msg"), "நன்றி Hana");
-  await contains(P.locator(".f-msg.mine .f-msg-lk"), "1");
+  // The open thread reads again by itself (every 20 s while on screen): his reply with hers quoted above it (8 Nov
+  // 2026: "we don't know which message is for which one"), her 👏 under her words.
+  await until(async () => (await P.locator(".f-msg.re").count()) === 1, "Bilal's reply quoting hers", 30_000);
+  const his = P.locator(".f-msg.re");
+  await contains(his, "நன்றி Hana");
+  await contains(his.locator(".f-msg-q"), "இனிய பிறந்தநாள்");
+  await contains(P.locator(".f-msg.mine .f-rx").first(), "1");
+  // She reacts ❤️ to his reply (😊, then the bar), and answers him with a tag (@ and a tap on his name).
+  await his.getByRole("button", { name: "React", exact: true }).click();
+  await P.locator(".f-rxbar").getByRole("button", { name: "React ❤️" }).click();
+  await contains(his.locator(".f-rx.on"), "❤️");
+  await his.getByRole("button", { name: "↩ Reply" }).click();
+  await contains(P.locator(".f-tb-re"), "Bilal M");
+  await P.locator(".f-tb-in").pressSequentially("@Bil");
+  await P.locator(".f-tb-at").getByRole("button", { name: /Bilal M/ }).click();
+  await P.locator(".f-tb-in").pressSequentially("நாளை சந்திப்போம்");
+  await P.locator(".f-tb").getByRole("button", { name: "Send" }).click();
+  await until(async () => (await P.locator(".f-msg.re").count()) === 2, "her reply quoting his");
+  await contains(P.locator(".f-msg.re").last().locator(".f-at"), "@Bilal M");
+  await contains(P.locator(".f-msg.re").last().locator(".f-msg-q"), "நன்றி Hana");
   await noSideScroll(P);
   await shot(P, "fam91-us-thread-talk");
 
@@ -2537,7 +2561,7 @@ test("Us talk: a birthday opened; one-tap words and her own (+1 XP); a reply and
   await P.locator(".f-bell-chips").getByRole("button", { name: "Us" }).click();
   await until(async () => (await P.locator(".f-bellitem:not(.us)").count()) === 0, "only Us's lines");
   await P.locator(".f-bellitem.us.r").click();
-  await contains(P.locator(".f-msgs.kids .f-msg"), "நன்றி Hana");
+  await contains(P.locator(".f-msg.re").first(), "நன்றி Hana");
   // Back from a line opened in the bell: the bell again, then Back to Us.
   await P.getByRole("button", { name: "Back" }).click();
   await visible(P.locator(".f-bellscr"));
@@ -2573,7 +2597,8 @@ test("Us talk: a birthday opened; one-tap words and her own (+1 XP); a reply and
   await contains(U.locator(".f-uk-state.ok"), "எல்லோருக்கும் காட்டினார்");
   await shot(C, "fam94-class-us-learn-shown");
   expect((await t.query(api.us.feed, { token: FAM_B })).items.find((x) => x.k === "learn")).toMatchObject({ n: "Hana K", lst: "ok", by: "Owner" });
-  expect((await t.query(api.family.me, { token: (await hanaToken(P))! })).xp).toBe(6);
+  // +1 her own words, +1 her tagged reply to Bilal (own words too), +5 the 💡 shown.
+  expect((await t.query(api.family.me, { token: (await hanaToken(P))! })).xp).toBe(7);
 
   // The smallest phone: the thread and its bar fit 320 px.
   await P.setViewportSize({ width: 320, height: 640 });
@@ -2725,6 +2750,179 @@ test("Us people: her photo on her lines; the owl writes the automatic lines; a f
   await noSideScroll(P);
   await sc.evaluate((el) => el.scrollIntoView({ block: "start" }));
   await shot(P, "fam99-us-spot-320");
+  for (const p of [P, C]) await p.context().close();
+  expect(problems.slice(before)).toEqual([]);
+});
+
+test("Us groups and chats: his grade's group with a reply, a tag and a reaction; two boys message, a girl can't; Members; a teacher's chat and her number; a group she makes; the owner reads every chat", async () => {
+  // 8 Nov 2026, his voice note: "students want to forget the WhatsApp ... we need group ... like a Discord ... private
+  // messaging ... the girl students and boy students can't message each other ... teacher can message anyone". His
+  // answers: groups like the hall, teachers make groups, each grade its own. Made-up students and words.
+  const before = problems.length;
+  const backend = makeBackend(modules);
+  const t = backend.t;
+  await addPerson(t, { name: "Owner", token: OWNER_TOKEN, role: "owner" });
+  const as = { token: OWNER_TOKEN };
+  await t.mutation(api.setup.ensure, as);
+  const u01 = await t.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G8-U01")).first())!._id);
+  const add = async (name: string, grade: number) => await t.mutation(api.students.add, { ...as, name, grade, term: 1, stage: "master", unitId: u01 });
+  const arun = await add("Arun K", 8);
+  const bilal = await add("Bilal M", 8);
+  const hana = await add("Hana K", 8);
+  const kumar = await t.mutation(api.students.add, { ...as, name: "Kumar P", grade: 11, term: 1, stage: "fighter" });
+  await t.mutation(api.students.setSex, { ...as, ids: [arun, bilal, kumar], sex: "b" });
+  await t.mutation(api.students.setSex, { ...as, ids: [hana], sex: "g" });
+  await t.mutation(api.families.setCode, { ...as, studentId: arun, code: "4719" });
+  const phone = async (sid: typeof arun, key: string) => {
+    const tok = `family-phone-${key}-chat-`.padEnd(48, "x");
+    const code = `${key}-chat-family-link-0123456789`;
+    await t.mutation(api.families.makeLink, { ...as, studentId: sid, codeHash: secretHash("family-link", code) });
+    await t.mutation(api.family.join, { code, token: tok, label: "Android" });
+    return tok;
+  };
+  const FAM_B = await phone(bilal, "bilal");
+  const FAM_H = await phone(hana, "hana");
+  const FAM_K = await phone(kumar, "kumar");
+  await t.mutation(api.us.setCfg, { ...as, open: true });
+
+  // Arun's phone: Us → Groups → his grade's group (there before anyone wrote); his hello.
+  const P = await open(backend, `${site.url}/f/`, size(360, 780));
+  await P.getByLabel(/Index/).fill("1001");
+  await P.getByLabel("Code").fill("4719");
+  await P.getByRole("button", { name: "Sign in" }).click();
+  await until(async () => (await P.locator(".f-tabs .f-tab").count()) === 5, "the Us tab");
+  await tabTo(P, /^Us$/);
+  for (const b of ["அடுத்து", "அடுத்து", "தொடங்கு!"]) await P.locator(".f-us-guide").getByRole("button", { name: b }).click();
+  await P.locator(".f-us-seg").getByRole("tab", { name: /Groups/ }).click();
+  const g8 = P.locator(".c-row", { hasText: "Grade 8" });
+  await contains(g8, "முதலில் நீ");
+  await noSideScroll(P);
+  await shot(P, "fam100-us-groups");
+  await g8.click();
+  await contains(P.locator(".c-head-w"), "Grade 8");
+  await P.locator(".f-tb-in").pressSequentially("எல்லோருக்கும் வணக்கம்! 👋");
+  await P.locator(".f-tb").getByRole("button", { name: "Send" }).click();
+  await contains(P.locator(".f-msg.mine"), "எல்லோருக்கும் வணக்கம்");
+  // Bilal answers him with a quote and a tag (his phone, through the server); Arun's open chat shows it in seconds.
+  const gid = (await t.query(api.chat.rooms, { token: FAM_B })).groups[0].id;
+  const hello = (await t.query(api.chat.room, { token: FAM_B, id: gid })).msgs[0];
+  await t.mutation(api.chat.send, { token: FAM_B, id: gid, text: "@Arun K வணக்கம்! நாளை வருகிறாயா?", re: hello.id, mt: [arun] });
+  await until(async () => (await P.locator(".f-msg.re").count()) === 1, "Bilal's reply in the open group", 15_000);
+  await contains(P.locator(".f-msg.re .f-msg-q"), "எல்லோருக்கும் வணக்கம்");
+  await contains(P.locator(".f-msg.re .f-at"), "@Arun K");
+  await P.locator(".f-msg.re").getByRole("button", { name: "React", exact: true }).click();
+  await P.locator(".f-rxbar").getByRole("button", { name: "React 😂" }).click();
+  await contains(P.locator(".f-msg.re .f-rx.on"), "😂");
+  await until(async () => (await t.query(api.chat.room, { token: FAM_B, id: gid })).msgs[1].rx?.l === 1, "his 😂 on the server");
+  // Anyone in his grade's group can be tagged, also a classmate who hasn't written yet: @Ha → Hana K.
+  await P.locator(".f-tb-in").pressSequentially("@Ha");
+  await P.locator(".f-tb-at").getByRole("button", { name: /Hana K/ }).click();
+  await P.locator(".f-tb-in").pressSequentially("நீயும் வா!");
+  await P.locator(".f-tb").getByRole("button", { name: "Send" }).click();
+  await until(async () => (await t.query(api.chat.room, { token: FAM_H, id: gid })).msgs.some((m) => m.t === "@Hana K நீயும் வா!" && m.mt?.[0]?.n === "Hana K"), "Hana tagged");
+  await contains(P.locator(".f-msg.mine .f-at").last(), "@Hana K");
+  await noSideScroll(P);
+  await shot(P, "fam101-us-grade-group");
+
+  // Chats → New chat → Members: boys any grade and teachers have 💬, Hana (a girl) none.
+  await P.getByRole("button", { name: "Back" }).click();
+  await P.locator(".f-us-seg").getByRole("tab", { name: /Chats/ }).click();
+  await P.locator(".c-tools").getByRole("button", { name: /புதிய chat/ }).click();
+  await contains(P.locator(".c-rule"), "மாணவர்களுடனும்");
+  const row = (n: string) => P.locator(".c-people li", { hasText: n });
+  await visible(row("Hana K"));
+  expect(await row("Hana K").locator(".c-dm").count()).toBe(0);
+  await visible(row("Kumar P").locator(".c-dm"));
+  await visible(row("Owner").locator(".c-dm"));
+  await noSideScroll(P);
+  await shot(P, "fam102-us-members");
+  await row("Bilal M").locator(".c-dm").click();
+  await contains(P.locator(".c-head-w"), "Bilal M");
+  await contains(P.locator(".c-safe"), "பாதுகாப்புக்காக");
+  expect(await P.locator(".f-tb-cam").count()).toBe(0);
+  await P.locator(".f-tb-in").pressSequentially("Q5 இன் விடை என்ன?");
+  await P.locator(".f-tb").getByRole("button", { name: "Send" }).click();
+  await contains(P.locator(".f-msg.mine"), "Q5 இன் விடை");
+  const dmB = (await t.query(api.chat.rooms, { token: FAM_B })).dms[0];
+  expect(dmB).toMatchObject({ name: "Arun K", un: 1, lt: "Q5 இன் விடை என்ன?" });
+  await t.mutation(api.chat.send, { token: FAM_B, id: dmB.id, text: "36 என்று நினைக்கிறேன் 🤔" });
+  await until(async () => (await P.locator(".f-msg:not(.mine)").count()) === 1, "Bilal's answer in the open chat", 15_000);
+  await shot(P, "fam103-us-dm");
+  // His rule on the server: never a boy and a girl; a Grade 11 boy is fine.
+  await expect(t.mutation(api.chat.dm, { token: FAM_H, to: `s:${arun}` })).rejects.toThrow();
+  expect((await t.mutation(api.chat.dm, { token: FAM_K, to: `s:${arun}` })).id).toBeTruthy();
+
+  // Arun writes to the owner from Members: the class app's Us tab shows her number while she is elsewhere.
+  await P.getByRole("button", { name: "Back" }).click();
+  await P.getByRole("button", { name: "Back" }).click();
+  await P.locator(".c-tools").getByRole("button", { name: /புதிய chat/ }).click();
+  await row("Owner").locator(".c-dm").click();
+  await visible(P.locator(".f-tb-cam"));
+  await P.locator(".f-tb-in").pressSequentially("Sir, நாளை வகுப்பு உண்டா?");
+  await P.locator(".f-tb").getByRole("button", { name: "Send" }).click();
+  await contains(P.locator(".f-msg.mine"), "நாளை வகுப்பு");
+  const C = await open(backend, site.url, size(390, 820), () => {
+    if (sessionStorage.getItem("t")) return;
+    sessionStorage.setItem("t", "1");
+    localStorage.setItem("aristora.role", "focus");
+    localStorage.setItem("aristora.token", "owner-phone-token-0123456789abcdefghijklmnopqrstuv");
+  });
+  await contains(C.locator(".tabs .tab.us .tab-badge"), "1");
+  await C.locator(".tabs .tab.us").click();
+  const U = C.frameLocator("iframe.us-frame");
+  for (const b of ["அடுத்து", "அடுத்து", "தொடங்கு!"]) await U.locator(".f-us-guide").getByRole("button", { name: b }).click();
+  await U.locator(".f-us-seg").getByRole("tab", { name: /Chats/ }).click();
+  await U.locator(".c-row", { hasText: "Arun K" }).click();
+  await contains(U.locator(".f-msg"), "நாளை வகுப்பு");
+  await U.locator(".f-tb-in").pressSequentially("ஆம் Arun, 4 மணிக்கு 👍");
+  await U.locator(".f-tb").getByRole("button", { name: "Send" }).click();
+  await contains(U.locator(".f-msg.mine"), "4 மணிக்கு");
+  await until(async () => (await t.query(api.chat.room, { token: (await hanaToken(P))!, id: (await t.query(api.chat.rooms, { token: (await hanaToken(P))! })).dms.find((x) => x.tch)!.id })).msgs.length === 2, "her answer on his side");
+  await shot(C, "fam104-class-us-chat");
+  // A group she makes: O/L doubts for Grade 11 (Kumar sees it; Arun doesn't).
+  await U.getByRole("button", { name: "Back" }).click();
+  await U.locator(".f-us-seg").getByRole("tab", { name: /Groups/ }).click();
+  await U.locator(".c-tools").getByRole("button", { name: /New group/ }).click();
+  await U.locator(".c-gsheet .c-gname").first().fill("O/L doubts");
+  await U.locator(".c-gsheet .c-chips").getByRole("button", { name: "11", exact: true }).click();
+  await U.locator(".c-gsheet").getByRole("button", { name: "Make the group" }).click();
+  await contains(U.locator(".c-head-w"), "O/L doubts");
+  expect((await t.query(api.chat.rooms, { token: FAM_K })).groups.map((x) => x.name)).toEqual(["Grade 11", "O/L doubts"]);
+  expect((await t.query(api.chat.rooms, { token: (await hanaToken(P))! })).groups.map((x) => x.name)).toEqual(["Grade 8"]);
+  // The owner reads every private chat (look only).
+  await U.getByRole("button", { name: "Back" }).click();
+  await U.locator(".f-us-seg").getByRole("tab", { name: /Chats/ }).click();
+  await U.locator(".c-tools").getByRole("button", { name: /Every chat/ }).click();
+  await U.locator(".c-row", { hasText: "Arun K · Bilal M" }).click();
+  await contains(U.locator(".c-cant"), "Only the two of them");
+  await shot(C, "fam105-class-every-chat");
+  // Settings → Students → Grade 8 → Boys and girls: all 3 set; Arun's Boy tapped off (teachers only until set), on again.
+  await C.getByRole("button", { name: /Settings/ }).click();
+  await C.getByRole("button", { name: /^Grade 8\b/ }).click();
+  await contains(C.locator(".sex-line small"), "All 3 set");
+  await C.locator(".sex-line").click();
+  await contains(C.locator(".olm-sheet .olm-top b"), "2 boys · 1 girl");
+  const arunRow = C.locator(".sex-kids li", { hasText: "Arun K" });
+  await arunRow.getByRole("button", { name: /Boy/ }).click();
+  await contains(C.locator(".olm-sheet .olm-top b"), "1 boy · 1 girl · 1 not set");
+  await until(async () => (await t.run(async (ctx) => await ctx.db.get(arun)))?.sex === undefined, "Arun not set on the server");
+  await arunRow.getByRole("button", { name: /Boy/ }).click();
+  await until(async () => (await t.run(async (ctx) => await ctx.db.get(arun)))?.sex === "b", "Arun a boy again");
+  await visible(C.locator(".sex-done"));
+  await noSideScroll(C);
+  await shot(C, "fam107-class-boys-girls");
+  await C.locator(".olm-sheet").getByRole("button", { name: "Close" }).click();
+  await contains(C.locator(".sex-line small"), "All 3 set");
+
+  // The smallest phone: the group and its bar fit 320 px.
+  await P.setViewportSize({ width: 320, height: 640 });
+  await P.getByRole("button", { name: "Back" }).click();
+  await P.getByRole("button", { name: "Back" }).click();
+  await P.locator(".f-us-seg").getByRole("tab", { name: /Groups/ }).click();
+  await P.locator(".c-row", { hasText: "Grade 8" }).click();
+  await visible(P.locator(".f-tb-in"));
+  await noSideScroll(P);
+  await shot(P, "fam106-us-group-320");
   for (const p of [P, C]) await p.context().close();
   expect(problems.slice(before)).toEqual([]);
 });

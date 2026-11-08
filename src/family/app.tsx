@@ -27,7 +27,7 @@ import { pushOff } from "./bell";
 import { BookScreen } from "./book";
 import { LearnTab, StageScreen } from "./map";
 import { Kids } from "./kids";
-import { loadParts, pctOf, useParts, useUsParts } from "./later";
+import { loadParts, pctOf, useChatParts, useParts, useUsParts } from "./later";
 import { picOf, usePics } from "./pics";
 import {
   accounts,
@@ -74,6 +74,9 @@ type Screen =
   | { k: "post"; id: string; from?: "bell" }
   /** The bell's page (8 Nov 2026, his "build notification page"): everything for him, newest first, by day. */
   | { k: "bell" }
+  /** A group or a private chat (8 Nov 2026), from Us or from the Members page; the Members page. */
+  | { k: "room"; id: string; from?: "people" }
+  | { k: "people" }
   | { k: "stage"; unitId: string }
   | { k: "level"; unitId: string; n: number }
   /** A level he checked at home: solutions, photos to send, the teacher's answers (4 Nov 2026). */
@@ -90,9 +93,9 @@ type Screen =
 
 /** How deep a screen is: Back steps up one at a time (the reveal and a Level go back to their Stage). */
 const depth = (s: Screen) =>
-  s.k === "level" || s.k === "result" || s.k === "book" || (s.k === "post" && s.from)
+  s.k === "level" || s.k === "result" || s.k === "book" || (s.k === "post" && s.from) || (s.k === "room" && s.from)
     ? 2
-    : s.k === "stage" || s.k === "add" || s.k === "report" || s.k === "mate" || s.k === "post" || s.k === "bell"
+    : s.k === "stage" || s.k === "add" || s.k === "report" || s.k === "mate" || s.k === "post" || s.k === "bell" || s.k === "room" || s.k === "people"
       ? 1
       : 0;
 const parent = (s: Screen): Screen =>
@@ -100,7 +103,9 @@ const parent = (s: Screen): Screen =>
     ? { k: "stage", unitId: s.unitId }
     : s.k === "post" && s.from
       ? { k: "bell" }
-      : s.k === "stage" || s.k === "report" || s.k === "mate" || s.k === "post" || s.k === "bell"
+      : s.k === "room" && s.from
+        ? { k: "people" }
+      : s.k === "stage" || s.k === "report" || s.k === "mate" || s.k === "post" || s.k === "bell" || s.k === "room" || s.k === "people"
       ? { k: "main" }
       : s.k === "add"
         ? current()
@@ -136,6 +141,8 @@ export function App() {
   const lv = useLevel(); // the level screen, right after the first screen (level.ts)
   // Us's own file (8 Nov 2026, usParts.ts): fetched once the owner opened Us (or a phone alert opens a line of it).
   const usp = useUsParts(!!me?.us || tab === "us" || screen.k === "post");
+  // The chats' own file (8 Nov 2026, chatParts.ts): fetched the first time a chat or the Members page opens.
+  const chp = useChatParts(screen.k === "room" || screen.k === "people");
   // A page left open keeps its old code (5 Nov 2026): back on the screen after half an hour, a newer version online
   // and nothing on its way or typed, the app loads again by itself (src/appVersion.ts; his drafts and place are kept).
   useEffect(
@@ -307,6 +314,13 @@ export function App() {
   useEffect(() => {
     const fromAlert = (k: string, id?: string) => {
       if (screenRef.current.k !== "main" || !current()) return;
+      // A message in a group or a private chat (8 Nov 2026): that chat.
+      if (k === "chat") {
+        setTab("us");
+        keep("tab", "us");
+        if (id) go({ k: "room", id });
+        return;
+      }
       if (k === "us") {
         setTab("us");
         keep("tab", "us");
@@ -317,14 +331,14 @@ export function App() {
       openBell();
       void loadMe();
     };
-    const hash = /^#(bell|us)(?:=([A-Za-z0-9_-]+))?$/.exec(location.hash);
+    const hash = /^#(bell|us|chat)(?:=([A-Za-z0-9:_-]+))?$/.exec(location.hash);
     if (hash) {
       history.replaceState(history.state, "", location.pathname + location.search);
       fromAlert(hash[1], hash[2]);
     }
     const told = (e: MessageEvent) => {
       const d = e.data as { k?: string; id?: string; body?: string } | null;
-      if (d?.k === "bell" || d?.k === "us") fromAlert(d.k, d.id || undefined);
+      if (d?.k === "bell" || d?.k === "us" || d?.k === "chat") fromAlert(d.k, d.id || undefined);
       // An alert while the app is on the screen (8 Nov 2026): no notification; the app rings and shows the words.
       if (d?.k === "new") {
         if (d.body) toast(`🔔 ${d.body}`);
@@ -458,7 +472,24 @@ export function App() {
     );
   } else if (screen.k === "mate") {
     body = parts ? (
-      <parts.MateScreen key={screen.id} id={screen.id} row={screen.row} board={keptBoard()} me={me} onBack={up} />
+      <parts.MateScreen
+        key={screen.id}
+        id={screen.id}
+        row={screen.row}
+        board={keptBoard()}
+        me={me}
+        onBack={up}
+        onMessage={(id) =>
+          mutation("chat:dm", { to: `s:${id}` }).then(
+            (r) => {
+              setTab("us");
+              keep("tab", "us");
+              setScreen({ k: "room", id: (r as { id: string }).id });
+            },
+            (e) => toast(problemWords(e), true),
+          )
+        }
+      />
     ) : (
       <Waiting />
     );
@@ -471,6 +502,37 @@ export function App() {
         onBack={up}
         onMate={(id) => {
           window.scrollTo(0, 0);
+          setScreen({ k: "mate", id, row: null });
+        }}
+      />
+    ) : (
+      <Waiting />
+    );
+  } else if (screen.k === "room") {
+    body = chp ? (
+      <chp.RoomScreen
+        key={screen.id}
+        id={screen.id}
+        staff={false}
+        me={me?.name}
+        onBack={up}
+        onMate={(id) => {
+          window.scrollTo(0, 0);
+          setScreen({ k: "mate", id, row: null });
+        }}
+      />
+    ) : (
+      <Waiting />
+    );
+  } else if (screen.k === "people") {
+    body = chp ? (
+      <chp.PeopleScreen
+        staff={false}
+        onBack={up}
+        onRoom={(id) => go({ k: "room", id, from: "people" })}
+        onMate={(id) => {
+          window.scrollTo(0, 0);
+          if (id === keptBoard()?.you) return;
           setScreen({ k: "mate", id, row: null });
         }}
       />
@@ -613,6 +675,8 @@ export function App() {
                   go({ k: "mate", id, row: null });
                 }}
                 onOpen={(id) => go({ k: "post", id })}
+                onRoom={(id) => go({ k: "room", id })}
+                onPeople={() => go({ k: "people" })}
               />
             ) : (
               <>
@@ -651,7 +715,7 @@ export function App() {
             />
           )}
         </main>
-        <BottomBar tab={tab} us={!!me?.us} onTab={pickTab} />
+        <BottomBar tab={tab} us={!!me?.us} dot={!!me?.chat && me.chat.g + me.chat.d > 0} onTab={pickTab} />
         <Surprises active={sheet === null} />
       </>
     );
@@ -754,7 +818,7 @@ const TABS: { id: Tab; icon: IconName; name: string }[] = [
   { id: "me", icon: "user", name: "Me" },
 ];
 
-function BottomBar(props: { tab: Tab; us: boolean; onTab: (t: Tab) => void }) {
+function BottomBar(props: { tab: Tab; us: boolean; dot?: boolean; onTab: (t: Tab) => void }) {
   return (
     <nav class={`f-tabs${props.us ? " n5" : ""}`} aria-label="ARISTORA">
       {TABS.filter((t) => t.id !== "us" || props.us).map((t) => (
@@ -768,6 +832,7 @@ function BottomBar(props: { tab: Tab; us: boolean; onTab: (t: Tab) => void }) {
         >
           <Icon name={t.icon} size={22} />
           <span>{t.name}</span>
+          {t.id === "us" && props.dot && <i class="f-tab-dot" aria-hidden="true" />}
         </button>
       ))}
     </nav>

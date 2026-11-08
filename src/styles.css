@@ -6586,8 +6586,10 @@ body.locked.tp-padded .toasts {
 .bday-tag {
   white-space: nowrap;
 }
-/* Settings → Students → O/L map (4 Nov 2026): the line above a Grade 10/11 list, the tag on a ticked name, the sheet */
-.olm-line {
+/* Settings → Students → O/L map (4 Nov 2026): the line above a Grade 10/11 list, the tag on a ticked name, the sheet.
+   .sex-line (8 Nov 2026) is the Boys and girls line below it, same look. */
+.olm-line,
+.sex-line {
   width: 100%;
   display: flex;
   align-items: center;
@@ -6603,22 +6605,26 @@ body.locked.tp-padded .toasts {
   text-align: left;
   font: inherit;
 }
-.olm-line > span {
+.olm-line > span,
+.sex-line > span {
   display: grid;
   gap: 1px;
   min-width: 0;
 }
-.olm-line b {
+.olm-line b,
+.sex-line b {
   font-size: 16px;
 }
-.olm-line small {
+.olm-line small,
+.sex-line small {
   font-size: 13px;
   color: var(--ink-2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.olm-line svg {
+.olm-line svg,
+.sex-line svg {
   flex: none;
   color: var(--ink-3);
 }
@@ -6707,6 +6713,34 @@ body.locked.tp-padded .toasts {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* The Us tab's number: her private chats with a new message (8 Nov 2026), in the students' violet. */
+.tab-badge.tb-us {
+  background: #6c5ce7;
+}
+/* Settings → Students → Boys and girls (8 Nov 2026): a Boy / Girl pair per student, for private messages in Us. */
+.sex-kids > li {
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+.sex-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.sex-pick {
+  flex: none;
+  display: flex;
+  gap: 6px;
+}
+.sex-pick .btn {
+  min-width: 72px;
+  padding: 0 8px;
+}
+.sex-done {
+  margin-top: 10px;
 }
 .phone-ans {
   margin-top: 6px;

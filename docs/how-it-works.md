@@ -1335,7 +1335,8 @@ learning app of our education institute"): one profile, his class times, what he
       the same feeling"; then "if we build separate apps we have to manage three apps ... build the tab for the teachers
       on the Aristora system app ... if they want to go community they can immediately switch the tab"). His answers:
       a tab in the class app, **Us + the Race**. Built: **Us**, last in the class app's bottom bar for everyone (Class,
-      her jobs, Us; five tabs for the owner: `.tabs.n5`), no count. It shows **the family app's own screens** inside the
+      her jobs, Us; five tabs for the owner: `.tabs.n5`), no count (since 8 Nov 2026: her private chats with something
+      new, `chat.tunread`). It shows **the family app's own screens** inside the
       class app (`src/usFrame.tsx`: an iframe of `/f/?staff` on the class system's own address, made the first time the
       tab opens and kept while the app is open; each opening asks it for the newest lines, `us-refresh`), with **the
       teacher's own sign-in** (`aristora.token` on that address: nothing new to remember, no second account system) and
@@ -1367,7 +1368,8 @@ learning app of our education institute"): one profile, his class times, what he
         Her name shows on it for everyone ("that is credibility").
       - **Answers** (`us.answer`, `usAnswers`): words and / or 2 photos, **once, never changed** (else he'd copy after
         seeing the right ones). His rule, word for word: before a student sends his own he sees only **that classmates
-        answered** (`hidden`: a locked card each, no name, no answer, nothing about right or wrong); after sending he
+        answered** (`hidden`: since 8 Nov 2026 a **blurred** card each instead of a lock, his ask "instead of using
+        locking feature ... blurring feature": `veil` below; no name, no answer, nothing about right or wrong); after sending he
         sees **the answers a teacher marked right, with the names**; one marked wrong never shows to classmates, nor one
         not marked yet. His own he always sees, with her mark and her words (`note`: only his). Teachers see every
         answer with its name (`us.tthread`), mark **✓ / ✗** (`us.mark`; null = unmark; ✎ = her words with the mark),
@@ -1402,16 +1404,21 @@ learning app of our education institute"): one profile, his class times, what he
         Convex's files 30 days), a tap ~150 KB; the owner checks the Convex dashboard's usage.
     - **Safe by design**: the family app in the class app reads and writes only `us:board`, `us:race`, `us:mate`,
       `us:pics`, `us:tthread`, `us:tclap`, `us:shout`, `us:post`, `us:pin`, `us:remove`, `us:mark`, `us:drop`,
-      `us:unflag`, `us:treply`, `us:photoUrl`, and since 8 Nov 2026 `us:tcomment`, `us:tlike`, `us:fix`, `us:approve`
+      `us:unflag`, `us:treply`, `us:photoUrl`, and since 8 Nov 2026 `us:tcomment`, `us:tlike`, `us:fix`, `us:approve`,
+      `us:treact`, `us:treactors` and the chats' `chat:t*` (`trooms`, `tall`, `troom`, `tsend`, `tread`, `treact`,
+      `treactors`, `tdm`, `tpeople`, `tdrop`, `tkeep`, `tgroup`, `tgroupDrop`, `tgroupInfo`)
       (`net.ts` `staffWith`: anything else is refused on the phone, and every one of them checks a teacher's sign-in on
       the server); a family phone can't call them, a teacher can't call the students' (`us:thread`, `us:answer`,
-      `us:doubt`, `us:reply`, `us:report`, `us:comment`, `us:like`, `us:view`, `us:learn`, `us:seen`). Photo addresses go only to who may see
+      `us:doubt`, `us:reply`, `us:report`, `us:comment`, `us:like`, `us:react`, `us:view`, `us:learn`, `us:seen`,
+      `chat:rooms`, `chat:room`, `chat:send`, `chat:read`, `chat:react`, `chat:dm`, `chat:people`, `chat:report`,
+      `chat:block`). Photo addresses go only to who may see
       them (a Convex file address opens for anyone who has it). Only the family app may be framed, and only by its own
       address (`vercel.json`: `frame-ancestors 'self'` under `/f/`, `'none'` everywhere else).
     - **Alerts**: `alertStudent(…, url)` (`pushOut.url`): "/f/#us=id" for a shout-out, a teacher's 👏, a new question,
       a mark, a reply, a comment (since 8 Nov 2026 every line opens; the last in a gathered minute decides); the service
       worker tells an open app `{ k: "us", id }`, the app opens Us (and that line). A burst from Us says "3 புதியவை"
-      (classmates too), not "from the teacher" (`pushPayload`).
+      (classmates too), not "from the teacher" (`pushPayload`). Since 8 Nov 2026 a chat's alert is "/f/#chat=<room>"
+      (`{ k: "chat", id }`: the app opens that chat), gathered 5 s as Us's (`US_PUSH_WAIT_MS` covers `#us=` and `#chat=`).
     - **The talk** (8 Nov 2026, his voice note: "if I go to inside any thread, that feel like boring ... other students
       don't get more context, who appreciating, who correcting ... student can chat inside each thread ... like skool";
       his answers: comments **"everyone, like the hall"**, XP as above, students' 💡 posts **after a teacher's ✓**).
@@ -1461,7 +1468,9 @@ learning app of our education institute"): one profile, his class times, what he
         them; "Hide again" = waiting (the XP goes back).
       - **The bell's Us lines** (`usInbox`, `lib/usTalk.ts` `tell`, `inboxOf`; `family.me` `inbox` (14 days, 30 at
         most) and `inboxNew`): a comment on his line (`c`), a reply to him (`r`: the one he tapped Reply on is told,
-        once), 👏 on his words or his line (`l`, `clap`: gathered while unread, "Mira J + 2"), a teacher's ✓ (+XP) or
+        once), **@ his name in someone's words** (`m`, since 8 Nov 2026: "@ Mira J உன்னை tag செய்தார்: “…”"), 👏 on his
+        words or his line (`l`, `clap`: gathered while unread, "Mira J + 2"; since 8 Nov any reaction, its emoji in the
+        words), a teacher's ✓ (+XP) or
         "she looked" (`ok`, `no`), her correction (`fix`), a new question for his grade (`q`), a shout-out, a teacher's
         👏. Phone alerts for all but 👏. The bell's count adds them; opening the bell reads them (`us.seen`); something
         new since the last look rings the bell once (`.f-bellb.grew`) with a soft sound. They go with their line (30
@@ -1494,6 +1503,72 @@ learning app of our education institute"): one profile, his class times, what he
         says "🔍 தவறைக் கண்டுபிடி", the question above, "📝 ஒரு மாணவரின் விடை", the button "🔍 கண்டுபிடி"; its grades'
         bells and phones are told; answered as any question (hidden until his own, +5 XP for a right one). The first
         answer says "🔍 Asked everyone on Us"; the first question removed, the new one stays without the box above.
+    - **Groups, private chats, replies, tags, reactions and the blur** (8 Nov 2026, his voice note: "Skool, Discord,
+      WhatsApp ... inside each post ... we don't know which message is for which one ... tagging option, reply option
+      ... more emojis ... that page need to be fun ... instead of using locking feature ... blurring feature ... my
+      students want to forget the WhatsApp ... groups ... private messaging ... the girl students and boy students
+      can't message each other ... teacher can message anyone. Any student can message to teacher"). His answers: groups
+      **together, like the hall** (boys and girls, teachers in every group, every message named), **only teachers make
+      groups**, each grade has its own; the size limits raised for it (asked first: Us 20 → 28 KB, the chats' own
+      file 20 KB, the first load unchanged). The rules: `convex/lib/chat.ts`; the calls: `convex/chat.ts`; the phone:
+      `src/family/talk.tsx` (shared by a line's talk and the chats), `src/family/chat.tsx` (the chats' own file
+      `chatParts.ts`, its style `chatStyle.ts`, fetched by `later.ts` `loadChat` / `useChatParts` only when Groups or
+      Chats opens: never in the first load).
+      - **Us has three parts** (`.f-us-seg`, kept per child `usSeg`): **📰 Feed** (the lines, as before), **👥 Groups**,
+        **💬 Chats**, each with how many chats have something new (`family.me` `chat` = `chatNew`: reads his seats and
+        groups, never a message); the Us tab has a dot while one has (`.f-tab-dot`). Told once to everyone who saw the
+        guide: "🆕 Groups 👥 · Chats 💬" with how to reply, react and tag, and that answers are now blurred (`usNews2`).
+      - **Groups** (`usRooms` `k: "g"`): **his grade's own group** ("Grade 8", `gg`) is on his list before anyone wrote
+        (`g:<grade>`; the row is made by the first message: `gradeRoom`); a teacher with the Community tick (and the owner)
+        makes more (**New group** → `GroupSheet`: a name, an emoji of `GROUP_EMOJIS`, grades (`gs`) and / or students
+        picked (`sids`), **📣 only teachers write** (`ro`): notices) and changes or removes them (`chat.tgroup`,
+        `chat.tgroupDrop`: with its messages; a grade's own group stays, its emoji and `ro` can change). Every teacher
+        reads and writes in every group; a student only in his (`inGroup`: his grade's, one for his grade, or picked).
+        The head says "N மாணவர்கள் + ஆசிரியர்கள்" (`members`, counted on a full read only). **Members** (`PeopleScreen`,
+        `chat.people`): everyone in ARISTORA, teachers first, then students by grade, a name = his profile, and 💬 only
+        where his rule allows; on top, the rule for him (`.c-rule`: "💬 நீ ஆசிரியர்களுடனும் மற்ற மாணவிகளுடனும் message
+        செய்யலாம்: எந்த grade ஆனாலும்."; not set yet: teachers only, until ARISTORA adds it), a search and grade chips.
+      - **Private chats** (`k: "d"`, one per pair: `pairKey`; two seats `usSeats` with `d`): from Members (💬), a profile
+        (**💬 Message**, `us.mate` / `family.mate` `dm: true` only where allowed) or a teacher anywhere. **His rule**
+        (`mayMessage`, checked on every open, write and new chat, never only on the phone): a boy any boy, a girl any girl,
+        any grade; never a boy and a girl; a teacher anyone, anyone a teacher; a student not marked boy or girl yet
+        messages teachers only; demo students only demo students. **Boy / girl** is set in the class app: **Settings →
+        Students → (a grade) → Boys and girls (messages in Us)** (`src/sexSheet.tsx`: 👦 Boy / 👧 Girl per student,
+        saved as tapped; the owner and the Students tick: `students.setSex`; `students.sex`, copied to the race rows' `sx`;
+        the history says "boy" / "girl" / "not set"). My defaults, told him: **between two students words and emoji only**
+        (photos in groups and in chats with a teacher), **the owner reads every private chat** (look only: **👁 Every chat**,
+        `chat.tall`; every private chat says so: "🛡️ ARISTORA பாதுகாப்புக்காக chats ஐப் பார்க்கலாம்"), **⛔ block** (a
+        student blocks another, two taps; the other can't write; teachers can't be blocked: `chat.block`), no phone numbers
+        or links (as in the talk), **200 messages a day** a student (`CHAT_A_DAY`, all chats), 500 letters
+        (`CHAT_MAX`), 2 photos (`CHAT_PHOTOS`). A chat whose two may no longer write (one boy, one girl after a change; one
+        removed) stays readable with a line why.
+      - **A chat open** (`RoomScreen`): messages by day ("இன்று", "நேற்று", "8 Nov"), his own on the right (violet), the
+        others' with face, name, grade chip or "ஆசிரியர்"; read again every 4 s while open and on screen (`ROOM_MS`:
+        `since` = only new messages; `rv` changed = the page again, for a reaction, a report or a removal), the lists
+        every 15 s (`LIST_MS`); a sound when something new arrives; **↑ Earlier** for older messages (`CHAT_PAGE` 60 at
+        a time). ⚑ (a student, not on a teacher's): two reports hide a message from students until a teacher keeps
+        (`chat.tkeep`) or removes it (`chat.tdrop`: any teacher in groups, her own private chats, the owner anywhere).
+        Alerts on the phone (`/f/#chat=<room>`): a private message, a reply to him, a tag; never every hello in a group.
+        The class app's Us tab shows her private chats with something new (`chat.tunread`, live; `.tab-badge.tb-us`).
+        **Kept 30 days**, as Us's lines (`chat.sweep` after `us.sweep` each night: messages with their photos and
+        reactions; `CHAT_KEEP_MS`); a student removed for good takes his chats (`wipeChats` in `wipeStudent`).
+      - **Talking, everywhere** (a line's talk and the chats: `talk.tsx`): **↩ Reply** (or swipe a message right) quotes
+        it above his words (a tap on the quote goes to it; a line's talk keeps `rt` = the message answered and `re` =
+        its chain's first, so the one-level tree stays); **@ tags**: typing @ (or @ in the emoji panel) lists the people
+        of this talk (a group: also its other students, fetched on the first @), 5 at most a message (`MENTIONS_MAX`),
+        each told (the bell's `m` line and an alert), shown as a violet chip that opens the profile; **reactions**: hold a
+        message (or 😊+) for 👏 ❤️ 😂 🔥 💯 💡 🤔 🙏 (`RX`, one per person, tap again to take it back, never on one's own,
+        never XP), the counts under it, who reacted on a tap (`ReactorsSheet`); 😊 opens an emoji panel; the box grows;
+        in a line's talk a "புதியவை" line where his unread start. A line's 👏 is now a reaction (`usLikes` `e`, `us.react`;
+        the bell says which).
+      - **The blur** (his ask; his rule unchanged: an answer shows only when a teacher marked it right AND he sent his
+        own): before his own answer he sees each classmate's answer as a **blurred card** (`Veil`): a face blur, lines of
+        blurred words about as long as the answer and, for a photo, its colours blurred. The phone makes each photo's
+        **6 × 6 colour squares** when it is taken (`seedOf`: `z` = "WxH:hex", 3 hex a square, on `usPhoto`); the server
+        sends only these (`veil`: `z`, about how many lines, how many photos; `veilOf`, `VEIL_MAX` 12; a wrong `z` is
+        dropped: `seedOk`), never a name, a word, an id or a photo address; the blurred words are fake teasing words, never
+        an answer. A tap: "✍️ உன் விடையை அனுப்பு: மறைவு விலகும்". After his own answer the ones not marked right stay
+        blurred ("இன்னும் N விடைகள் மறைவில்").
   - **Me = his profile** (4 Nov 2026, his voice note: "a proper profile page for the students ... as simple as
     possible"; `me.tsx`, one of the parts that come right after the first screen): a violet header with **his photo**
     (88 px; tap = the camera or the gallery: his photo, below), his name (🎂 on his birthday), grade and index ("Photo ·
@@ -1989,7 +2064,7 @@ learning app of our education institute"): one profile, his class times, what he
 - Teachers get jobs (`correction`, `theory`, `evaluation`, `manager` (3 Nov 2026: the Class tab's powers: send any
   student to any teacher, mark teachers arrived / went, every teacher's card; with any job or alone); People shows them
   as "Jobs" with what each opens) and extras:
-  - `students`: add, rename, remove;
+  - `students`: add, rename, remove; since 8 Nov 2026 also Boys and girls (`students.setSex`, who may message whom in Us);
   - `books`: workbooks (typing and uploading) and unit names;
   - `reports`: Reports, History, the Students page numbers, and **Progress** (page and poster);
   - `feedback` (3 Nov 2026, his answer "me and selected people"): Settings → Feedback, what students send from the
@@ -2007,7 +2082,11 @@ learning app of our education institute"): one profile, his class times, what he
     a grade or several, notices or questions students answer; pinning, removing a line). Any teacher also marks answers,
     replies to doubts and removes a doubt, an answer or a reply (`us.mark`, `us.treply`, `us.drop`, `us.unflag`). Every signed-in person has the class app's Us tab: reads `us.board`, `us.race`,
     `us.mate`, `us.pics` and gives `us.shout` (a reason from the list) and `us.tclap`; `us.setCfg` (Us on the phones,
-    the welcome, the owl's kinds) is the owner's. The phone's side: `us.feed`, `us.clap` (family token).
+    the welcome, the owl's kinds) is the owner's. The phone's side: `us.feed`, `us.clap` (family token). Since 8 Nov
+    2026 the groups in Us: `community` makes, changes and removes them (`chat.tgroup`, `chat.tgroupDrop`,
+    `chat.tgroupInfo`); every teacher writes in every group and to anyone (`chat.tsend`, `chat.tdm`), reacts, removes a
+    group's message or keeps a reported one (`chat.tdrop`, `chat.tkeep`); the owner reads every private chat
+    (`chat.tall`, look only).
 - Everyone signed in sees the Class tab and the Register, reads `people.team` and `manager.day`, and her own card
   (`duty.card`). Correction job = the Correction page and Attendance (`setPresent`, `attendance.day`;
   `by: "attendance"`), Books given (`students.setGiven`), sending called students, Going home, Back in the hall, End

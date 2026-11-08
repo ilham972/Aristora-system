@@ -79,6 +79,7 @@ import { computeMaster, markBefore, type MQ, type MState } from "./lib/master";
 import { boxCount, formOf, INPUT_MAX, lostOutsideReasons, markQuestion, onlyReasons, REASON_MAX, teacherMarks, type FormQ, type KeyQ } from "./lib/phone";
 import { blockedBy, keyText, PHOTO_BYTES, PHOTO_MAX, PHOTO_URLS_PER_DAY, type PhotoKind } from "./lib/photos";
 import { inboxOf, type UsInboxItem } from "./lib/usTalk";
+import { chatNew, mayMessage } from "./lib/chat";
 import { usDays, usNow } from "./lib/usXp";
 import { ladderOf, secQs } from "./lib/ladder";
 import {
@@ -285,6 +286,8 @@ export type FamilyMe = {
    */
   inbox?: UsInboxItem[];
   inboxNew?: number;
+  /** His groups and private chats with something new (8 Nov 2026): the Us tab's dot, the Groups and Chats counts. */
+  chat?: { g: number; d: number };
 };
 
 /** One line of the bell: what a teacher did on a photo of his, where (Stage, Level, Q), who, and whether it is new. */
@@ -362,6 +365,7 @@ export const me = query({
     const us = await usNow(ctx, s._id, now);
     const usDay = us.xp > 0 ? await usDays(ctx, s._id, now) : null;
     const inbox = await inboxOf(ctx, s._id, now);
+    const usOpen = (await usCfg(ctx)).open;
     const waiting = asks.photo && asks.photo.no === undefined ? asks.photo.photoId : undefined;
     return {
       bday: s.bday ?? null,
@@ -391,9 +395,10 @@ export const me = query({
       ).map((x) => ({ id: x._id, what: x.what, kind: x.kind, wk: x.wk, g: x.g ?? null })),
       blocked: stop && stopWorld ? { unitId: stopWorld.unitId, no: stopWorld.no, n: stop.n, owed: stop.owed } : null,
       bell: bell.slice(0, BELL_MAX),
-      us: (await usCfg(ctx)).open,
+      us: usOpen,
       inbox: inbox.items,
       inboxNew: inbox.fresh,
+      ...(usOpen ? { chat: await chatNew(ctx, s) } : {}),
       worlds,
     };
   },
@@ -951,6 +956,8 @@ export type FamilyMate = {
   /** The owner's switch (Settings → Race): false = no marks here (% right, questions, the report's marks). */
   marks: boolean;
   p: FamilyProfile;
+  /** May the one looking message him (8 Nov 2026: his boy / girl rule; a teacher always)? Missing on a server from before. */
+  dm?: boolean;
 };
 
 /** His profile's numbers (the map, his months, his report): his own Me and a classmate's profile. */
@@ -1009,7 +1016,9 @@ export const mate = query({
     const id = ctx.db.normalizeId("students", args.id);
     const s = id ? await ctx.db.get(id) : null;
     if (!s || s.archived || !!s.demo !== !!me.demo || !!s.test !== !!me.test) fail("This student isn't in the race.");
-    return await mateOf(ctx, s, me._id, await mateMarksOn(ctx));
+    const out = await mateOf(ctx, s, me._id, await mateMarksOn(ctx));
+    const dm = (await usCfg(ctx)).open && mayMessage({ k: "s", id: me._id, ...(me.sex ? { sex: me.sex } : {}), demo: !!me.demo || !!me.test }, { k: "s", id: s._id, ...(s.sex ? { sex: s.sex } : {}), demo: !!s.demo || !!s.test });
+    return { ...out, dm };
   },
 });
 

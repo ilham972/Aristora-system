@@ -46,7 +46,7 @@ export async function tell(ctx: MutationCtx, to: Id<"students">, from: Id<"stude
       .collect();
     const same = unread.find((r) => r.k === item.k && r.mid === item.mid && r.aid === item.aid);
     if (same) {
-      await ctx.db.patch(same._id, { n: item.n, pic: item.pic, tch: item.tch, x: (same.x ?? 1) + 1, at: now });
+      await ctx.db.patch(same._id, { n: item.n, pic: item.pic, tch: item.tch, x: (same.x ?? 1) + 1, at: now, ...(item.t ? { t: clip(item.t) } : {}) });
       return;
     }
   }

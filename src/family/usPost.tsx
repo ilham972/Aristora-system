@@ -7,26 +7,28 @@
 //   copies: 1280 px for a tap, 560 px for the lines.
 // - ThreadScreen (7 Nov 2026 for questions and doubts; 8 Nov 2026 every line, his voice note: "if I go to inside any
 //   thread, that feel like boring ... who appreciating, who correcting ... student can chat inside each thread"): the
-//   line, who cheered (faces, teachers first), a question's answers (his rule: locked until he sends his own, then the
-//   ones a teacher marked right, with names), and the talk: comments with names, a reply under one, 👏 on each, a
-//   teacher's ✓ or her correction with her name; at the bottom his words (one-tap words for a child, his own for +1
+//   line, who cheered (faces, teachers first), a question's answers (his rule: hidden until he sends his own, then the
+//   ones a teacher marked right, with names; since 8 Nov 2026 blurred, not locked: Veil), and the talk: comments with
+//   names, oldest first, a reply showing the message it answers, @tags, reactions, a teacher's ✓ or her correction
+//   with her name (talk.tsx: Bubble, WriteBar); at the bottom his words (one-tap words for a child, his own for +1
 //   XP). A doubt's talk is its replies (the one who asked is never named). A teacher sees every name and ✓ ✗ ✎ ✕.
 // - DoubtSheet: his doubt, and who sees it (teachers, seniors, both: his choice). LearnSheet: his 💡, what he learned.
 // The words a student reads are Tamil; buttons English.
 
 import type { ComponentChildren, VNode } from "preact";
-import { useEffect, useRef, useState } from "preact/hooks";
-import type { UsCheer, UsItem, UsPic, UsReply, UsThread } from "../../convex/lib/us";
-import { CropSheet } from "./crop";
-import { keep, mutation, NetError, query, uploadPhoto } from "./net";
-import { jpegOf } from "./photos";
+import { useEffect, useState } from "preact/hooks";
+import type { UsCheer, UsItem, UsPic, UsReply, UsThread, UsVeil } from "../../convex/lib/us";
+import { keep, mutation, NetError, query } from "./net";
 import { picOf, usePics } from "./pics";
 import { buzz, sound } from "./sound";
+import { Bubble, jumpTo, ReactorsSheet, seedUrl, sendPicked, usePicker, WriteBar, type Sent, type Taggable } from "./talk";
 import { Avatar, Icon, Owl, problemWords, Sheet, showSheet, toast, Waiting } from "./ui";
-import { ago, ASK, Face, KIND, LineWords, markSeen, MARK, Tap, Who } from "./us";
+import { ago, ASK, Face, KIND, LineWords, markSeen, MARK, seenAt, Who } from "./us";
 
-/** The lines' copy of a photo: its long side. */
-const SMALL = 560;
+// The photos picked for a message live in talk.tsx (8 Nov 2026: the chats use them too); here for the teachers' tools.
+export { pickedOf, sendPicked } from "./talk";
+export type { Picked, Sent } from "./talk";
+
 /** Who a doubt is for, in his words. */
 export const AUD: Record<string, string> = { t: "ஆசிரியர்கள்", s: "மூத்த மாணவர்கள்", ts: "ஆசிரியர்கள் + மூத்தவர்கள்" };
 /** A comment's letters (convex/lib/us.ts TALK_MAX). */
@@ -53,35 +55,6 @@ function quickOf(m: Pick<UsItem, "k" | "qn">): readonly string[] {
   if (m.k === "ask" || m.qn) return QUICK.talk;
   if (m.k === "post" || m.k === "count") return QUICK.post;
   return QUICK.win;
-}
-
-/** A photo picked: the big copy (cropped), the small one, the big one's size, an address to show it here. */
-export type Picked = { b: Blob; s: Blob; w: number; h: number; u: string };
-export type Sent = { s: string; b: string; w: number; h: number };
-
-export async function pickedOf(big: Blob): Promise<Picked> {
-  const u = URL.createObjectURL(big);
-  const img = new Image();
-  img.src = u;
-  await img.decode();
-  const w = img.naturalWidth;
-  const h = img.naturalHeight;
-  const k = Math.min(1, SMALL / Math.max(w, h, 1));
-  const c = document.createElement("canvas");
-  c.width = Math.max(1, Math.round(w * k));
-  c.height = Math.max(1, Math.round(h * k));
-  const g = c.getContext("2d");
-  if (!g) throw new Error("no canvas");
-  g.fillStyle = "#fff";
-  g.fillRect(0, 0, c.width, c.height);
-  g.drawImage(img, 0, 0, c.width, c.height);
-  return { b: big, s: await jpegOf(c), w, h, u };
-}
-
-export async function sendPicked(list: Picked[]): Promise<Sent[]> {
-  const ph: Sent[] = [];
-  for (const p of list) ph.push({ s: await uploadPhoto(p.s), b: await uploadPhoto(p.b), w: p.w, h: p.h });
-  return ph;
 }
 
 /** A photo full screen (the big copy); a tap zooms in and out; several: dots to the next. A teacher: ⬇ and Share at the bottom. */
@@ -171,66 +144,6 @@ export function Pics(props: { ph: UsPic[]; save?: Omit<SaveInfo, "urls"> }) {
   );
 }
 
-/** Photos picked for a message: thumbnails with ✕, the camera button, the crop first. */
-function usePicker(max: number, crop?: string) {
-  const [list, setList] = useState<Picked[]>([]);
-  const [file, setFile] = useState<Blob | null>(null);
-  const input = useRef<HTMLInputElement>(null);
-  const cropped = async (b: Blob) => {
-    setFile(null);
-    try {
-      const p = await pickedOf(b);
-      buzz(6);
-      sound("pop");
-      setList((x) => [...x, p].slice(0, max));
-    } catch {
-      toast("இந்தப் படத்தைத் திறக்க முடியவில்லை. மீண்டும் எடு.", true);
-    }
-  };
-  const clear = () => {
-    list.forEach((p) => URL.revokeObjectURL(p.u));
-    setList([]);
-  };
-  const thumbs = (
-    <>
-      {list.map((p, i) => (
-        <span key={p.u} class="f-thumb">
-          <img src={p.u} alt={`படம் ${i + 1}`} />
-          <button
-            type="button"
-            class="f-thumb-x"
-            aria-label={`Remove photo ${i + 1}`}
-            onClick={() => {
-              URL.revokeObjectURL(p.u);
-              setList(list.filter((_, j) => j !== i));
-            }}
-          >
-            <Icon name="close" size={12} />
-          </button>
-        </span>
-      ))}
-    </>
-  );
-  const picker = (
-    <>
-      <input
-        ref={input}
-        type="file"
-        accept="image/*"
-        class="f-file"
-        onChange={(e) => {
-          const el = e.target as HTMLInputElement;
-          const f = el.files?.[0];
-          el.value = "";
-          if (f) setFile(f);
-        }}
-      />
-      {file && <CropSheet file={file} say={crop ?? "மஞ்சள் புள்ளிகளை இழு: தேவையான பகுதி மட்டும் பெட்டிக்குள்."} onClose={() => setFile(null)} onDone={(b) => void cropped(b)} />}
-    </>
-  );
-  return { list, thumbs, picker, pick: () => input.current?.click(), clear, full: list.length >= max };
-}
-
 /** Words and photos, then Send: an answer, a doubt, a 💡 post, a teacher's post. `onSend` gets the words and the photos (uploaded). */
 export function Composer(props: {
   ph: string;
@@ -294,23 +207,76 @@ function whoOf(r: UsReply, staff: boolean): string {
   return r.n ?? "மாணவர்";
 }
 
-/** The answers he may not see yet, as locked cards (his words: "hide the image and tell them this is hidden"). */
-function Locks(props: { n: number; sent: boolean }) {
+/**
+ * Made-up words under the blur, never a classmate's (the server sends none, only about how many lines): if a child
+ * squints, they only tease ("send yours first").
+ */
+const FAKE = ["🙈 உன் விடையை அனுப்பு, பிறகு பார் ", "✍️ முதலில் நீ, பிறகு நான் ", "🤫 ஆசிரியர் சரி என்றால் திறக்கும் ", "🔐 இது ஒரு ரகசிய விடை "];
+
+/**
+ * The answers he may not see yet, blurred (8 Nov 2026, his voice note: "instead of showing nothing, we can show the blur
+ * option ... student will eager to put their answer ... this will give so much community vibe"): each answer as a card
+ * with no face and no name, its photo as a few squares of colour blurred, its words made-up and blurred. A tap on one:
+ * write yours first. (A server from before sends no `veil`: lock tiles, as before.)
+ */
+function Veil(props: { n: number; sent: boolean; v?: UsVeil[]; onGo?: () => void }) {
+  const cards = (props.v ?? []).slice(-12);
+  const extra = props.n - cards.length;
+  const tease = () => {
+    buzz(12);
+    sound("boing");
+    if (props.sent) toast("ஆசிரியர் சரி என்றதும் இது திறக்கும் 🔓");
+    else props.onGo?.();
+  };
   return (
-    <section class="f-locks" aria-label={`${props.n} hidden`}>
+    <section class="f-locks f-veil" aria-label={`${props.n} hidden`}>
       <p>
         {props.sent
           ? `இன்னும் ${props.n} விடைகள் மறைவில். ஆசிரியர் சரி என்றவை மட்டும் இங்கே தெரியும்.`
           : `${props.n} பேர் விடை அனுப்பினார்கள். நீ அனுப்பிய பின், ஆசிரியர் சரி என்ற விடைகள் தெரியும்.`}
       </p>
-      <div class="f-locks-g" aria-hidden="true">
-        {Array.from({ length: Math.min(props.n, 12) }, (_, i) => (
-          <i key={i}>
-            <Icon name="lock" size={18} />
-          </i>
-        ))}
-        {props.n > 12 && <b>+{props.n - 12}</b>}
-      </div>
+      {cards.length ? (
+        <ol class="f-veil-l">
+          {cards.map((x, i) => (
+            <li key={i} class="f-veil-c" style={{ "--i": String(i) }} onClick={tease}>
+              <span class="f-veil-ava" />
+              <div class="f-veil-w">
+                <i class="f-veil-n" />
+                {x.w > 0 && (
+                  <p class="f-veil-t" aria-hidden="true">
+                    {FAKE[i % FAKE.length].repeat(x.w).slice(0, x.w * 28)}
+                  </p>
+                )}
+                {x.p > 0 && (
+                  <div class="f-veil-ph">
+                    {Array.from({ length: Math.min(2, x.p) }, (_, j) => {
+                      const u = x.z[j] ? seedUrl(x.z[j]) : null;
+                      return <span key={j}>{u ? <img src={u} alt="" /> : null}</span>;
+                    })}
+                  </div>
+                )}
+              </div>
+              <b class="f-veil-lock" aria-hidden="true">
+                <Icon name="lock" size={15} />
+              </b>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <div class="f-locks-g" aria-hidden="true">
+          {Array.from({ length: Math.min(props.n, 12) }, (_, i) => (
+            <i key={i}>
+              <Icon name="lock" size={18} />
+            </i>
+          ))}
+        </div>
+      )}
+      {extra > 0 && <b class="f-veil-more">+{extra}</b>}
+      {!props.sent && props.onGo && (
+        <button type="button" class="f-btn go f-veil-go" onClick={props.onGo}>
+          ✍️ உன் விடையை அனுப்பு: மறைவு விலகும்
+        </button>
+      )}
     </section>
   );
 }
@@ -402,166 +368,55 @@ function CheersSheet(props: { tc: string[]; cheers: UsCheer[]; onClose: () => vo
   );
 }
 
-/** One message of the talk (or an answer, or a reply), its replies under it. */
+/** A message of the talk, an answer or a reply, as a Bubble (talk.tsx): its name as he may know it, its marks under it. */
 function Msg(props: {
   r: UsReply;
   staff: boolean;
-  /** Replies under it (one level). */
-  kids?: UsReply[];
   onMate: (id: string) => void;
-  /** Its own buttons (👏, Reply, ⚑, a teacher's ✓ ✗ ✎ ✕), made by the screen. */
-  acts: (r: UsReply) => ComponentChildren;
+  /** A teacher's buttons and ⚑ (made by the screen); none on his own answer at the top. */
+  acts?: ComponentChildren;
   me?: string;
+  quote?: { n: string; t?: string; ph?: boolean } | null;
+  onReply?: () => void;
+  onReact?: (e: string | null) => void;
+  onWho?: () => void;
+  cls?: string;
+  /** Under its marks (a teacher's "find the mistake"). */
+  below?: ComponentChildren;
 }) {
   const r = props.r;
   const name = whoOf(r, props.staff);
   return (
-    <li class={`f-msg${r.tch ? " tch" : ""}${r.mine ? " mine" : ""}${r.ok === true ? " ok" : r.ok === false ? " no" : ""}`}>
-      <span class="f-msg-ava">
-        {r.ask && !props.staff ? (
-          <span class="f-uk-emo k-ask">🙋</span>
-        ) : (
-          <Tap id={r.sid} onMate={props.onMate}>
-            <Avatar name={r.mine && props.me ? props.me : name} size="s" pic={picOf(r.pic)} />
-          </Tap>
-        )}
-      </span>
-      <div class="f-msg-w">
-        <p class="f-msg-h">
-          <b
-            class={r.sid ? "tap" : ""}
-            onClick={
-              r.sid
-                ? () => {
-                    buzz();
-                    props.onMate(r.sid!);
-                  }
-                : undefined
-            }
-          >
-            {name}
-          </b>
+    <Bubble
+      x={{ ...r, n: name, rx: r.rx ?? (r.lk ? { c: r.lk } : undefined), my: r.my ?? (r.liked ? "c" : undefined) }}
+      cls={`${r.ok === true ? "ok" : r.ok === false ? "no" : ""}${props.quote !== undefined ? " re" : ""}${props.cls ? ` ${props.cls}` : ""}`}
+      ava={r.ask && !props.staff ? <span class="f-uk-emo k-ask">🙋</span> : undefined}
+      tags={
+        <>
           {r.tch && <i class="f-msg-tag">ஆசிரியர்</i>}
           {!r.tch && r.g !== undefined && <i class="f-gchip">{r.g}</i>}
           {props.staff && r.ask && <i class="f-msg-tag ask">asked</i>}
-          <small>{ago(r.at)}</small>
-        </p>
-        <div class="f-msg-b">
-          {r.t && <p class="f-msg-t">{r.t}</p>}
-          {r.ph && <Pics ph={r.ph} save={props.staff && !r.tch ? { name: fileBase(r.at), text: shareWords(r) } : undefined} />}
-        </div>
-        {r.ok === true ? <p class="f-msg-ok">✓ சரி · {r.okBy} ஆசிரியர்</p> : r.ok === false ? <p class="f-msg-no">✗ சரியில்லை · {r.okBy} ஆசிரியர்</p> : null}
-        {r.fix && (
-          <p class="f-msg-fix">
-            <b>✎ {r.fixBy} ஆசிரியர்:</b> {r.fix}
-          </p>
-        )}
-        {r.note && <p class="f-ur-note">💬 {r.note}</p>}
-        {props.acts(r)}
-        {props.kids && props.kids.length > 0 && (
-          <ol class="f-msgs kids">
-            {props.kids.map((k) => (
-              <Msg key={k.id} r={k} staff={props.staff} onMate={props.onMate} acts={props.acts} me={props.me} />
-            ))}
-          </ol>
-        )}
-      </div>
-    </li>
-  );
-}
-
-/** Messages as a talk: each first message with the replies under it, oldest first (a reply whose first is gone: on its own). */
-function treeOf(list: UsReply[]): { r: UsReply; kids: UsReply[] }[] {
-  const ids = new Set(list.map((r) => r.id));
-  const roots = list.filter((r) => !r.re || !ids.has(r.re));
-  return roots.map((r) => ({ r, kids: list.filter((k) => k.re === r.id) }));
-}
-
-/**
- * His words at the bottom of a thread (8 Nov 2026): one-tap words for a child (never XP), or his own (+1 XP); a reply
- * under a message ("↩ Bilal M"); photos on a doubt (and a teacher's anywhere).
- */
-function TalkBar(props: {
-  m: UsItem;
-  staff: boolean;
-  photos: boolean;
-  re: { id: string; n: string } | null;
-  onUnRe: () => void;
-  onSend: (text: string, ph: Sent[]) => Promise<{ xp?: number } | unknown>;
-}) {
-  const [t, setT] = useState("");
-  const [busy, setBusy] = useState(false);
-  const pk = usePicker(2);
-  const box = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => {
-    if (props.re) box.current?.focus();
-  }, [props.re?.id]);
-  const send = async (words: string) => {
-    const w = words.trim();
-    if (busy || (!w && !pk.list.length)) return;
-    setBusy(true);
-    try {
-      const ph = props.photos ? await sendPicked(pk.list) : [];
-      const r = (await props.onSend(w, ph)) as { xp?: number } | undefined;
-      sound("send");
-      buzz(8);
-      pk.clear();
-      setT("");
-      if (r?.xp) toast(`💎 +${r.xp} XP: உன் சொந்த வார்த்தைகளுக்கு!`);
-    } catch (e) {
-      toast(e instanceof NetError && e.offline ? "இணையம் இல்லை. பிறகு அனுப்பு." : problemWords(e), true);
-    } finally {
-      setBusy(false);
-    }
-  };
-  const quick = props.staff ? [] : quickOf(props.m);
-  return (
-    <div class="f-tb" role="group" aria-label="Write">
-      {quick.length > 0 && !t && !props.re && (
-        <div class="f-tb-q">
-          {quick.map((q) => (
-            <button key={q} type="button" disabled={busy} onClick={() => void send(q)}>
-              {q}
-            </button>
-          ))}
-        </div>
-      )}
-      {props.re && (
-        <p class="f-tb-re">
-          ↩ <b>{props.re.n}</b> க்குப் பதில்
-          <button type="button" aria-label="Not a reply" onClick={props.onUnRe}>
-            <Icon name="close" size={14} />
-          </button>
+        </>
+      }
+      quote={props.quote}
+      onQuote={() => jumpTo(r.rt ?? r.re ?? "")}
+      pics={r.ph && <Pics ph={r.ph} save={props.staff && !r.tch ? { name: fileBase(r.at), text: shareWords(r) } : undefined} />}
+      me={props.me}
+      onMate={props.onMate}
+      onReply={props.onReply}
+      onReact={props.onReact}
+      onWho={props.onWho}
+      acts={props.acts}
+    >
+      {r.ok === true ? <p class="f-msg-ok">✓ சரி · {r.okBy} ஆசிரியர்</p> : r.ok === false ? <p class="f-msg-no">✗ சரியில்லை · {r.okBy} ஆசிரியர்</p> : null}
+      {r.fix && (
+        <p class="f-msg-fix">
+          <b>✎ {r.fixBy} ஆசிரியர்:</b> {r.fix}
         </p>
       )}
-      {pk.list.length > 0 && <div class="f-tb-ph">{pk.thumbs}</div>}
-      <div class="f-tb-row">
-        {props.photos && !pk.full && (
-          <button type="button" class="f-tb-cam" aria-label="Add a photo" onClick={pk.pick}>
-            <Icon name="camera" size={22} />
-          </button>
-        )}
-        <textarea
-          ref={box}
-          class="f-tb-in"
-          rows={1}
-          maxLength={props.staff ? 300 : TALK_MAX}
-          placeholder={props.staff ? "Write…" : "உன் வார்த்தைகள்…"}
-          aria-label="Your words"
-          value={t}
-          onInput={(e) => {
-            const el = e.target as HTMLTextAreaElement;
-            setT(el.value);
-            el.style.height = "auto";
-            el.style.height = `${Math.min(el.scrollHeight, 110)}px`;
-          }}
-        />
-        <button type="button" class="f-tb-go" aria-label="Send" disabled={busy || (!t.trim() && !pk.list.length)} onClick={() => void send(t)}>
-          {busy ? "…" : <Icon name="next" size={22} />}
-        </button>
-      </div>
-      {pk.picker}
-    </div>
+      {r.note && <p class="f-ur-note">💬 {r.note}</p>}
+      {props.below}
+    </Bubble>
   );
 }
 
@@ -582,8 +437,10 @@ export function ThreadScreen(props: { id: string; staff?: boolean; me?: string; 
   const [err, setErr] = useState<string | null>(null);
   const [sure, setSure] = useState<string | null>(null);
   const [told, setTold] = useState<string[]>([]);
-  const [re, setRe] = useState<{ id: string; n: string } | null>(null);
+  const [re, setRe] = useState<{ id: string; n: string; t?: string } | null>(null);
   const [clapped, setClapped] = useState(false);
+  // When he last opened it (before this time): the talk's "new" line goes above what came after.
+  const [since] = useState(() => seenAt(props.id));
   const st = !!props.staff;
   const load = () =>
     query("us:thread", { id: props.id }).then(
@@ -631,13 +488,20 @@ export function ThreadScreen(props: { id: string; staff?: boolean; me?: string; 
     setTold([...told, rid ?? props.id]);
     void act("us:report", rid ? { rid } : {}, "⚑ நன்றி. ஆசிரியர்கள் பார்ப்பார்கள்.");
   };
-  const like = (r: UsReply) => {
-    if (r.liked || !d) return;
-    buzz();
-    sound("pop");
-    const bump = (x: UsReply) => (x.id === r.id ? { ...x, liked: true, lk: (x.lk ?? 0) + 1 } : x);
+  // A reaction (8 Nov 2026): shown at once, then the server's counts.
+  const react = (r: UsReply, e: string | null) => {
+    if (!d) return;
+    const was = r.my ?? (r.liked ? "c" : undefined);
+    const rx: Record<string, number> = { ...(r.rx ?? (r.lk ? { c: r.lk } : {})) };
+    if (was) rx[was] = Math.max(0, (rx[was] ?? 1) - 1);
+    if (e) rx[e] = (rx[e] ?? 0) + 1;
+    for (const k of Object.keys(rx)) if (!rx[k]) delete rx[k];
+    const bump = (x: UsReply): UsReply => (x.id === r.id ? { ...x, rx, my: e ?? undefined, liked: !!e, lk: Object.values(rx).reduce((a, n) => a + n, 0) } : x);
     setD({ ...d, list: d.list.map(bump), talk: d.talk?.map(bump) });
-    mutation("us:like", { aid: r.id }).catch((e) => toast(problemWords(e), true));
+    mutation("us:react", { aid: r.id, e }).catch((err) => {
+      toast(problemWords(err), true);
+      void load();
+    });
   };
   const clap = () => {
     if (!d || clapped || d.m.mine) return;
@@ -661,25 +525,6 @@ export function ThreadScreen(props: { id: string; staff?: boolean; me?: string; 
     const replyOnDoubt = ask && !r.tch && !r.ask;
     return (
       <>
-      <div class="f-msg-a">
-        {!r.mine && (
-          <button type="button" class={`f-msg-b1 like${r.liked ? " on" : ""}`} aria-pressed={!!r.liked} aria-label="Cheer" onClick={() => like(r)}>
-            👏<b>{r.lk ? r.lk : ""}</b>
-          </button>
-        )}
-        {r.mine && r.lk ? <span class="f-msg-lk">👏 {r.lk}</span> : null}
-        {!answer && (
-          <button
-            type="button"
-            class="f-msg-b1"
-            onClick={() => {
-              buzz();
-              setRe({ id: r.id, n: whoOf(r, st) });
-            }}
-          >
-            Reply
-          </button>
-        )}
         {st && (answer || replyOnDoubt) && (
           <button type="button" class={`f-ur-b ok${r.ok === true ? " on" : ""}`} aria-label="Right" aria-pressed={r.ok === true} onClick={() => void act("us:mark", { id: r.id, ok: r.ok === true ? null : true })}>
             ✓
@@ -730,8 +575,14 @@ export function ThreadScreen(props: { id: string; staff?: boolean; me?: string; 
             ⚑
           </button>
         )}
-      </div>
-      {/* A wrong answer asked again without the name (8 Nov 2026): said here, where she just marked it, so she knows she can. */}
+      </>
+    );
+  };
+  // A wrong answer asked again without the name (8 Nov 2026): said under it, where she just marked it, so she knows she can.
+  const spotOf = (r: UsReply): ComponentChildren => {
+    const answer = q && !r.c;
+    return (
+      <>
       {st && answer && r.ok === false && m && tools ? (
         r.spot ? (
           <p class="f-spot-done">🔍 Asked everyone on Us (no name)</p>
@@ -744,14 +595,55 @@ export function ThreadScreen(props: { id: string; staff?: boolean; me?: string; 
       </>
     );
   };
-  const send = (text: string, ph: Sent[]) => {
-    const args = { text, ...(ph.length ? { ph } : {}), ...(re ? { re: re.id } : {}) };
+  const send = (text: string, ph: Sent[], mt: string[]) => {
+    const args = { text, ...(ph.length ? { ph } : {}), ...(re ? { re: re.id } : {}), ...(mt.length ? { mt } : {}) };
     return mutation(ask ? "us:reply" : "us:comment", { id: props.id, ...args }).then(async (r) => {
       setRe(null);
       await after();
       window.setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }), 60);
       return r;
     });
+  };
+  // Each message by id: a reply shows what it answers (the message exactly; before 8 Nov 2026 the chain's first).
+  const byId = new Map<string, UsReply>([...(d?.list ?? []), ...(d?.talk ?? [])].map((r) => [r.id, r]));
+  const quoteOf = (r: UsReply) => {
+    const to = r.rt ?? r.re;
+    if (!to) return undefined;
+    const x = byId.get(to);
+    return x ? { n: whoOf(x, st), t: x.t, ph: !!x.ph?.length } : null;
+  };
+  const firstNew = since ? talk.findIndex((r) => r.at > since && !r.mine) : -1;
+  // People he can tag: everyone named in this thread to him (never a teacher: tags tell students).
+  const people: Taggable[] = [];
+  const addP = (sid?: string, n?: string, pic?: string, g?: number) => {
+    if (sid && n && sid !== props.me && !people.some((p) => p.id === sid)) people.push({ id: sid, n, ...(pic ? { pic } : {}), ...(g !== undefined ? { g } : {}) });
+  };
+  if (m && (m.k !== "ask" || st)) addP(m.sid, m.n, m.pic, m.g);
+  for (const p of m?.ppl ?? []) addP(p.sid, p.n, p.pic, p.g);
+  for (const r of [...talk, ...(q ? (d?.list ?? []) : [])]) if (!r.tch && !r.mine && !(r.ask && !st)) addP(r.sid, r.n, r.pic, r.g);
+  const toAnswer = () => {
+    const box = document.querySelector<HTMLTextAreaElement>(".f-ut-c textarea");
+    box?.scrollIntoView({ block: "center", behavior: "smooth" });
+    window.setTimeout(() => box?.focus(), 350);
+  };
+  /** A message of this thread with its quote, reactions, Reply and a teacher's buttons. */
+  const msgIn = (r: UsReply) => {
+    const answer = q && !r.c;
+    return (
+      <Msg
+        key={r.id}
+        r={r}
+        staff={st}
+        onMate={props.onMate}
+        me={props.me}
+        quote={quoteOf(r)}
+        acts={teach(r)}
+        onReply={answer ? undefined : () => setRe({ id: r.id, n: whoOf(r, st), ...(r.t ? { t: r.t } : {}) })}
+        onReact={(e) => react(r, e)}
+        onWho={() => showSheet((close) => <ReactorsSheet load={() => query(st ? "us:treactors" : "us:reactors", { aid: r.id }) as Promise<never>} onClose={close} />)}
+        below={spotOf(r)}
+      />
+    );
   };
   const allCheers = (d?.cheers?.length ?? 0) + (m?.tc?.length ?? 0);
   const button = m ? (ASK[m.k] ?? "👏") : "👏";
@@ -899,28 +791,36 @@ export function ThreadScreen(props: { id: string; staff?: boolean; me?: string; 
           {q && d.list.length > 0 && (
             <ol class="f-msgs">
               {!st && mine && <li class="f-ur-head">உன் விடை</li>}
-              {!st && mine && <Msg r={mine} staff={false} onMate={props.onMate} acts={() => null} me={props.me} />}
+              {!st && mine && <Msg r={mine} staff={false} onMate={props.onMate} me={props.me} />}
               {!st && mine && mine.ok === undefined && <li class="f-ur-wait">⏳ ஆசிரியர் பார்த்ததும் இங்கே தெரியும்.</li>}
               {!st && d.list.some((r) => !r.mine) && <li class="f-ur-head">✓ சரியான விடைகள்</li>}
               {d.list
                 .filter((r) => st || !r.mine)
-                .map((r) => (
-                  <Msg key={r.id} r={r} staff={st} onMate={props.onMate} acts={teach} me={props.me} />
-                ))}
+                .map(msgIn)}
             </ol>
           )}
-          {q && !st && d.hidden > 0 && <Locks n={d.hidden} sent={!!mine} />}
+          {q && !st && d.hidden > 0 && <Veil n={d.hidden} sent={!!mine} v={d.veil} onGo={toAnswer} />}
           <section class="f-talk" aria-label="Talk">
             <h2 class="f-h2">
               💬 {ask ? "பதில்கள்" : "பேச்சு"} <small>{talk.length + (d.talkHidden ?? 0) || ""}</small>
             </h2>
             {d.talkHidden ? (
-              <p class="f-talk-lock">
-                <Icon name="lock" size={18} />
-                <span>
-                  {d.talkHidden} பேர் இதைப் பற்றிப் பேசுகிறார்கள். உன் விடையை அனுப்பியதும் பேச்சு திறக்கும்.
-                </span>
-              </p>
+              <div class="f-talk-lock">
+                <ol class="f-veil-talk" aria-hidden="true">
+                  {Array.from({ length: Math.min(4, d.talkHidden) }, (_, i) => (
+                    <li key={i} class={i % 2 ? "r" : ""}>
+                      <span class="f-veil-ava" />
+                      <i style={{ width: `${48 + ((i * 23) % 38)}%` }} />
+                    </li>
+                  ))}
+                </ol>
+                <p>
+                  <Icon name="lock" size={18} />
+                  <span>
+                    {d.talkHidden} பேர் இதைப் பற்றிப் பேசுகிறார்கள். உன் விடையை அனுப்பியதும் பேச்சு திறக்கும்.
+                  </span>
+                </p>
+              </div>
             ) : talk.length === 0 ? (
               <div class="f-talk-none">
                 <Owl mood="wave" class="tiny" still />
@@ -938,13 +838,22 @@ export function ThreadScreen(props: { id: string; staff?: boolean; me?: string; 
               </div>
             ) : (
               <ol class="f-msgs">
-                {treeOf(talk).map(({ r, kids }) => (
-                  <Msg key={r.id} r={r} kids={kids} staff={st} onMate={props.onMate} acts={teach} me={props.me} />
-                ))}
+                {talk.flatMap((r, i) => [...(i === firstNew ? [<li key="new" class="f-new-div">புதியவை</li>] : []), msgIn(r)])}
               </ol>
             )}
           </section>
-          {canTalk && <TalkBar m={m} staff={st} photos={st || ask} re={re} onUnRe={() => setRe(null)} onSend={send} />}
+          {canTalk && (
+            <WriteBar
+              quick={st ? undefined : quickOf(m)}
+              max={st ? 300 : TALK_MAX}
+              hint={st ? "Write…" : "உன் வார்த்தைகள்…"}
+              photos={st || ask}
+              re={re}
+              onUnRe={() => setRe(null)}
+              people={people}
+              onSend={send}
+            />
+          )}
         </>
       )}
     </div>

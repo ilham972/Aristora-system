@@ -66,6 +66,7 @@ import {
   replyOf,
   replyShows,
   sameWords,
+  seedOk,
   seesLine,
   setUsCfg,
   SHOUT_WHY,
@@ -77,6 +78,8 @@ import {
   unsafeWords,
   US_KEEP_MS,
   usCfg,
+  VEIL_MAX,
+  veilOf,
   WELCOME_MAX,
   whoOf,
   type UsCfg,
@@ -88,6 +91,7 @@ import {
   type UsThread,
 } from "./lib/us";
 import { clip, dropAnswer, dropMoment, tell, wroteIn, type Tell } from "./lib/usTalk";
+import { bumpRx, isRx, MENTIONS_MAX, RX, type RxCode } from "./lib/chat";
 import { COMMENT_XP_A_DAY, commentXpToday, giveXp, sweepXp, takeXp, XP_ANSWER, XP_COMMENT, XP_HELP, XP_LEARN } from "./lib/usXp";
 import { usAud, usKind, usPhoto } from "./schema";
 
@@ -97,7 +101,7 @@ type Photos = Doc<"usMoments">["ph"];
 export type UsFeed = { open: boolean; welcome: string; today: number; items: UsItem[]; you: string };
 
 /** Words as typed, tidied: each line trimmed, at most one empty line in a row. */
-const tidy = (t: string | undefined) =>
+export const tidy = (t: string | undefined) =>
   (t ?? "")
     .split("\n")
     .map((l) => l.trim())
@@ -106,7 +110,7 @@ const tidy = (t: string | undefined) =>
     .trim();
 
 /** The photos' addresses (a deleted file is left out). */
-async function picsOf(ctx: QueryCtx, ph: Photos): Promise<UsPic[] | undefined> {
+export async function picsOf(ctx: QueryCtx, ph: Photos): Promise<UsPic[] | undefined> {
   if (!ph?.length) return undefined;
   const out: UsPic[] = [];
   for (const p of ph) {
@@ -126,7 +130,7 @@ async function withPics<T extends UsItem | UsReply>(ctx: QueryCtx, x: T, ph: Pho
  * Teachers' photo keys (8 Nov 2026: her photo on her posts, shout-outs, replies and faces), each teacher read once per
  * query: as she is now (a new photo shows on her old lines too), and only while she is in the class.
  */
-function staffPics(ctx: QueryCtx): (id: Id<"users"> | undefined) => Promise<string | undefined> {
+export function staffPics(ctx: QueryCtx): (id: Id<"users"> | undefined) => Promise<string | undefined> {
   const memo = new Map<string, Promise<string | undefined>>();
   return (id) => {
     if (!id) return Promise.resolve(undefined);
@@ -211,13 +215,15 @@ async function lineOf(ctx: QueryCtx, s: Doc<"students">, id: string): Promise<Do
  * Photos just uploaded for a post, an answer, a doubt or a reply: each two image files (small and big) under their
  * sizes, never used before; marked in usFiles (the hourly sweep keeps them; they go with their line, or when removed).
  */
-async function takePhotos(ctx: MutationCtx, ph: Photos, max: number): Promise<Photos> {
+export async function takePhotos(ctx: MutationCtx, ph: Photos, max: number): Promise<Photos> {
   if (!ph?.length) return undefined;
   if (ph.length > max) fail(`At most ${max} photos.`);
   const files = ph.flatMap((p) => [p.s, p.b]);
   if (new Set(files).size !== files.length) fail("A photo is there twice. Take it again.");
   for (const p of ph) {
     if (!(p.w > 0 && p.h > 0 && p.w <= 5000 && p.h <= 5000)) fail("That photo didn't come right. Take it again.");
+    // Its blurred squares (8 Nov 2026): a few colours, never more (a wrong one is left out, the photo stays).
+    if (p.z !== undefined && !seedOk(p.z)) delete (p as { z?: string }).z;
     for (const [f, most] of [
       [p.s, SMALL_BYTES],
       [p.b, PHOTO_BYTES],
@@ -289,14 +295,56 @@ async function tellWriting(
   parent: { to: Doc<"usAnswers"> } | null,
   base: Omit<Tell, "k">,
   words: string,
+  tagged: Id<"students">[] = [],
 ): Promise<void> {
   const said = clip(words || "📷", 60);
   const r = parent?.to.sid && parent.to.sid !== from ? parent.to.sid : null;
   if (r) await tell(ctx, r, from, { ...base, k: "r" }, `↩️ ${base.n}: ${said}`);
+  // Tagged (8 Nov 2026): each once, the bell's @ line and his phone (a reply to him already told him).
+  const told = new Set<string>([r ?? "", from ?? ""]);
+  for (const sid of tagged) {
+    if (told.has(sid)) continue;
+    told.add(sid);
+    await tell(ctx, sid, from, { ...base, k: "m" }, `@ ${base.n}: ${said}`);
+  }
   for (const sid of peopleOf(m)) {
-    if (sid === r || sid === from) continue;
+    if (told.has(sid)) continue;
     await tell(ctx, sid, from, { ...base, k: "c" }, `💬 ${base.n}: ${said}`);
   }
+}
+
+/**
+ * The students a message tags (8 Nov 2026, his "tagging option"): only people this writer sees named in this thread (the
+ * line's own students, and writers whose names show to him), never himself, at most MENTIONS_MAX. Each with his name.
+ */
+async function tagsOf(
+  ctx: QueryCtx,
+  m: Doc<"usMoments">,
+  ids: string[] | undefined,
+  me: Id<"students"> | null,
+  staff: boolean,
+): Promise<{ s: Id<"students">; n: string }[]> {
+  if (!ids?.length) return [];
+  if (ids.length > MENTIONS_MAX) fail(staff ? `Tag at most ${MENTIONS_MAX} students.` : `ஒரே நேரத்தில் ${MENTIONS_MAX} பேரை மட்டும் tag செய்.`);
+  const seen = new Map<string, string>();
+  const item = itemOf(m, me ?? undefined, staff);
+  if (item.sid && item.n) seen.set(item.sid, item.n);
+  for (const p of item.ppl ?? []) seen.set(p.sid, p.n);
+  const rows = await answersOf(ctx, m._id);
+  const answered = !!me && rows.some((a) => !isTalk(a) && a.sid === me);
+  for (const a of rows) {
+    if (!a.sid || a.by) continue;
+    const sees = staff || (isTalk(a) ? talkOpen(m, answered) && replyShows(a, me!) : m.k === "ask" ? replyShows(a, me!) : a.sid === me || (answered && a.ok === true));
+    const r = sees ? replyOf(a, m, me, staff) : null;
+    if (r?.sid && r.n) seen.set(r.sid, r.n);
+  }
+  const out: { s: Id<"students">; n: string }[] = [];
+  for (const id of new Set(ids)) {
+    const n = seen.get(id);
+    if (!n || id === me) fail(staff ? "Tag someone in this thread." : "இந்தப் பேச்சில் இருப்பவர்களை மட்டும் tag செய்.");
+    out.push({ s: id as Id<"students">, n });
+  }
+  return out;
 }
 
 /**
@@ -431,7 +479,8 @@ export const mate = query({
     const id = ctx.db.normalizeId("students", args.id);
     const s = id ? await ctx.db.get(id) : null;
     if (!s || s.archived || s.demo || s.test) fail("This student isn't in the class.");
-    return await mateOf(ctx, s, null, true);
+    // A teacher may message anyone (8 Nov 2026, his rule).
+    return { ...(await mateOf(ctx, s, null, true)), dm: true };
   },
 });
 
@@ -755,7 +804,10 @@ async function messagesFor(
         .query("usLikes")
         .withIndex("by_aid", (q) => q.eq("aid", a._id).eq("who", who))
         .first();
-      if (mine) r.liked = true;
+      if (mine) {
+        r.liked = true;
+        r.my = mine.e ?? "c";
+      }
     }
     out.push(r);
   }
@@ -798,6 +850,8 @@ export const thread = query({
             : { talk: true, ...(m.k === "learn" && !mineLine ? { report: true } : {}) },
       talk: await messagesFor(ctx, talk, m, s._id, false, s._id, tp),
       ...(open ? {} : { talkHidden: talkRows.length }),
+      // Blurred, not locked (8 Nov 2026, his voice note): the answers he may not see, as squares of colour, nameless.
+      ...(m.qn && base.length > shown.length ? { veil: base.filter((a) => !shown.includes(a)).slice(-VEIL_MAX).map(veilOf) } : {}),
       cheers: await cheersOf(ctx, m._id),
       ...(clapped ? { clapped: true } : {}),
     };
@@ -861,7 +915,7 @@ export const doubt = mutation({
  * student who asked and the one he answers are told; his own words give +1 XP (commentXp).
  */
 export const reply = mutation({
-  args: { token, id: v.string(), text: v.optional(v.string()), ph: v.optional(v.array(usPhoto)), re: v.optional(v.string()) },
+  args: { token, id: v.string(), text: v.optional(v.string()), ph: v.optional(v.array(usPhoto)), re: v.optional(v.string()), mt: v.optional(v.array(v.string())) },
   handler: async (ctx, args) => {
     const s = await familyActor(ctx, args.token);
     await openUs(ctx);
@@ -871,6 +925,7 @@ export const reply = mutation({
     const now = Date.now();
     if ((await wroteToday(ctx, s._id, now)) >= COMMENTS_A_DAY) fail("இன்றைக்குப் போதுமான பதில்கள்: நாளை தொடர்.");
     const parent = await parentOf(ctx, m, args.re);
+    const mt = await tagsOf(ctx, m, args.mt, s._id, false);
     const ph = await takePhotos(ctx, args.ph, REPLY_PHOTOS);
     const me = await meAs(ctx, s);
     const asker = m.sid === s._id;
@@ -883,13 +938,14 @@ export const reply = mutation({
       ...(ph ? { ph } : {}),
       at: now,
       demo: m.demo,
-      ...(parent ? { re: parent.root._id } : {}),
+      ...(parent ? { re: parent.root._id, rt: parent.to._id } : {}),
+      ...(mt.length ? { mt } : {}),
       ...(me.pic && !asker ? { pic: me.pic } : {}),
     });
     await ctx.db.patch(m._id, { an: (m.an ?? 0) + 1 });
     // The one who asked is never named, never a face on the card.
     await wroteIn(ctx, { ...m, an: (m.an ?? 0) + 1 }, asker ? null : { n: me.n, ...(me.pic ? { pic: me.pic } : {}) }, false, now);
-    await tellWriting(ctx, m, s._id, parent, { mid: m._id, aid: id, n: asker ? "கேட்டவர்" : me.n, ...(me.pic && !asker ? { pic: me.pic } : {}), ...(t ? { t } : {}) }, t);
+    await tellWriting(ctx, m, s._id, parent, { mid: m._id, aid: id, n: asker ? "கேட்டவர்" : me.n, ...(me.pic && !asker ? { pic: me.pic } : {}), ...(t ? { t } : {}) }, t, mt.map((x) => x.s));
     return { xp: await commentXp(ctx, s, id, t, now) };
   },
 });
@@ -900,7 +956,7 @@ export const reply = mutation({
  * he sent his answer. The line's students and the one he answers are told; his own words give +1 XP.
  */
 export const comment = mutation({
-  args: { token, id: v.string(), text: v.string(), re: v.optional(v.string()) },
+  args: { token, id: v.string(), text: v.string(), re: v.optional(v.string()), mt: v.optional(v.array(v.string())) },
   handler: async (ctx, args) => {
     const s = await familyActor(ctx, args.token);
     await openUs(ctx);
@@ -912,6 +968,7 @@ export const comment = mutation({
     if ((await wroteToday(ctx, s._id, now)) >= COMMENTS_A_DAY) fail("இன்றைக்குப் போதுமான comments: நாளை தொடர்.");
     const parent = await parentOf(ctx, m, args.re);
     if (parent && !replyShows(parent.to, s._id)) fail("That message isn't here any more.");
+    const mt = await tagsOf(ctx, m, args.mt, s._id, false);
     const me = await meAs(ctx, s);
     const id = await ctx.db.insert("usAnswers", {
       mid: m._id,
@@ -922,11 +979,12 @@ export const comment = mutation({
       at: now,
       demo: m.demo,
       k: "c",
-      ...(parent ? { re: parent.root._id } : {}),
+      ...(parent ? { re: parent.root._id, rt: parent.to._id } : {}),
+      ...(mt.length ? { mt } : {}),
       ...(me.pic ? { pic: me.pic } : {}),
     });
     await wroteIn(ctx, m, { n: me.n, ...(me.pic ? { pic: me.pic } : {}) }, true, now);
-    await tellWriting(ctx, m, s._id, parent, { mid: m._id, aid: id, n: me.n, ...(me.pic ? { pic: me.pic } : {}), t }, t);
+    await tellWriting(ctx, m, s._id, parent, { mid: m._id, aid: id, n: me.n, ...(me.pic ? { pic: me.pic } : {}), t }, t, mt.map((x) => x.s));
     return { xp: await commentXp(ctx, s, id, t, now) };
   },
 });
@@ -954,13 +1012,114 @@ async function likeIt(ctx: MutationCtx, a: Doc<"usAnswers">, m: Doc<"usMoments">
     .withIndex("by_aid", (q) => q.eq("aid", a._id).eq("who", who))
     .first();
   if (had) return { lk: a.lk ?? 0 };
-  await ctx.db.insert("usLikes", { aid: a._id, who, at: Date.now() });
-  const ln = a.ln ?? [];
-  const lk = (a.lk ?? 0) + 1;
-  await ctx.db.patch(a._id, { lk, ...(ln.length < 3 && !ln.includes(n) ? { ln: [...ln, n] } : {}) });
-  if (a.sid) await tell(ctx, a.sid, from, { k: "l", mid: m._id, aid: a._id, n, ...(tch ? { tch: true } : {}), ...(pic ? { pic } : {}) });
-  return { lk };
+  return { lk: (await reactIt(ctx, a, m, who, n, from, tch, pic, "c")).lk };
 }
+
+/** A reaction's rx before 8 Nov 2026: every 👏 counted in lk only. */
+const rxOf = (a: Doc<"usAnswers">) => a.rx ?? (a.lk ? { c: a.lk } : undefined);
+
+/**
+ * A reaction on a message (8 Nov 2026: 👏 ❤️ 😂 🔥 💯 💡 🤔 🙏; one per person: another kind replaces it, the same one
+ * again (or null) takes it back). Never on one's own, never XP. The writer is told of a new one (the bell, no alert).
+ */
+async function reactIt(
+  ctx: MutationCtx,
+  a: Doc<"usAnswers">,
+  m: Doc<"usMoments">,
+  who: string,
+  n: string,
+  from: Id<"students"> | null,
+  tch: boolean,
+  pic: string | undefined,
+  e: RxCode | null,
+) {
+  const had = await ctx.db
+    .query("usLikes")
+    .withIndex("by_aid", (q) => q.eq("aid", a._id).eq("who", who))
+    .first();
+  let rx = rxOf(a);
+  let lk = a.lk ?? 0;
+  const was = had ? ((had.e ?? "c") as RxCode) : null;
+  if (had && (e === null || e === was)) {
+    await ctx.db.delete(had._id);
+    rx = bumpRx(rx, was!, -1);
+    lk = Math.max(0, lk - 1);
+    const ln = (a.ln ?? []).filter((x) => x !== n);
+    await ctx.db.patch(a._id, { lk: lk || undefined, rx, ln: ln.length ? ln : undefined });
+    return { lk, rx: rx ?? {}, my: null };
+  }
+  if (e === null) return { lk, rx: rx ?? {}, my: null };
+  const now = Date.now();
+  if (had) {
+    await ctx.db.patch(had._id, { e, at: now });
+    rx = bumpRx(bumpRx(rx, was!, -1), e, 1);
+    await ctx.db.patch(a._id, { rx });
+    return { lk, rx: rx ?? {}, my: e };
+  }
+  await ctx.db.insert("usLikes", { aid: a._id, who, at: now, e, n, ...(pic ? { pic } : {}) });
+  rx = bumpRx(rx, e, 1);
+  lk += 1;
+  const ln = a.ln ?? [];
+  await ctx.db.patch(a._id, { lk, rx, ...(ln.length < 3 && !ln.includes(n) ? { ln: [...ln, n] } : {}) });
+  if (a.sid) await tell(ctx, a.sid, from, { k: "l", mid: m._id, aid: a._id, n, t: RX[e], ...(tch ? { tch: true } : {}), ...(pic ? { pic } : {}) });
+  return { lk, rx: rx ?? {}, my: e };
+}
+
+/** Who reacted to a message, newest first: a name, a face, a reaction (8 Nov 2026: "we can see everything, who are doing"). */
+export type UsReactor = { n: string; pic?: string; tch?: boolean; e: string };
+async function reactorsOf(ctx: QueryCtx, aid: Id<"usAnswers">): Promise<UsReactor[]> {
+  const rows = await ctx.db
+    .query("usLikes")
+    .withIndex("by_aid", (q) => q.eq("aid", aid))
+    .collect();
+  const out: UsReactor[] = [];
+  for (const r of rows.sort((x, y) => y.at - x.at).slice(0, 60)) {
+    let n = r.n;
+    let pic = r.pic;
+    let tch = false;
+    if (!n) {
+      // A 👏 from before 8 Nov 2026 kept no name: the student's (his race row) or the teacher's.
+      const sid = ctx.db.normalizeId("students", r.who);
+      const w = sid ? await whoOf(ctx, sid) : null;
+      if (w) {
+        n = w.n;
+        pic = w.pic;
+      } else {
+        const uid = ctx.db.normalizeId("users", r.who);
+        const u = uid ? await ctx.db.get(uid) : null;
+        if (u) {
+          n = u.name;
+          tch = true;
+        }
+      }
+    } else if (ctx.db.normalizeId("users", r.who)) tch = true;
+    if (n) out.push({ n, ...(pic ? { pic } : {}), ...(tch ? { tch: true } : {}), e: r.e ?? "c" });
+  }
+  return out;
+}
+
+/** His reaction on a message he sees (none on his own). `e` null takes his back. */
+export const react = mutation({
+  args: { token, aid: v.string(), e: v.union(v.string(), v.null()) },
+  handler: async (ctx, args) => {
+    const s = await familyActor(ctx, args.token);
+    if (args.e !== null && !isRx(args.e)) fail("That reaction isn't in the app.");
+    const { a, m } = await messageFor(ctx, s, args.aid);
+    if (a.sid === s._id) fail("This one is yours!");
+    const me = await meAs(ctx, s);
+    return await reactIt(ctx, a, m, s._id, me.n, s._id, false, me.pic, args.e as RxCode | null);
+  },
+});
+
+/** Who reacted to a message he sees. */
+export const reactors = query({
+  args: { token, aid: v.string() },
+  handler: async (ctx, args): Promise<UsReactor[]> => {
+    const s = await familyViewer(ctx, args.token);
+    const { a } = await messageFor(ctx, s, args.aid);
+    return await reactorsOf(ctx, a._id);
+  },
+});
 
 /** His 👏 on a message of the talk (never his own; no XP: his rule, "not for thumbs or clap"). */
 export const like = mutation({
@@ -1195,25 +1354,36 @@ export const approve = mutation({
 
 /** A teacher's reply on a doubt (any teacher): words and / or photos; the student who asked (and the one she answers) are told. */
 export const treply = mutation({
-  args: { token, id: v.id("usMoments"), text: v.optional(v.string()), ph: v.optional(v.array(usPhoto)), re: v.optional(v.string()) },
+  args: { token, id: v.id("usMoments"), text: v.optional(v.string()), ph: v.optional(v.array(usPhoto)), re: v.optional(v.string()), mt: v.optional(v.array(v.string())) },
   handler: async (ctx, args) => {
     const u = await actor(ctx, args.token, ["any"]);
     const m = await ctx.db.get(args.id);
     if (!m || m.k !== "ask") fail("This doubt isn't here any more.");
     const t = wordsOf(args.text, args.ph, false);
     const parent = await parentOf(ctx, m, args.re);
+    const mt = await tagsOf(ctx, m, args.mt, null, true);
     const ph = await takePhotos(ctx, args.ph, REPLY_PHOTOS);
     const now = Date.now();
-    const id = await ctx.db.insert("usAnswers", { mid: m._id, by: u._id, n: u.name, ...(t ? { t } : {}), ...(ph ? { ph } : {}), at: now, demo: m.demo, ...(parent ? { re: parent.root._id } : {}) });
+    const id = await ctx.db.insert("usAnswers", {
+      mid: m._id,
+      by: u._id,
+      n: u.name,
+      ...(t ? { t } : {}),
+      ...(ph ? { ph } : {}),
+      at: now,
+      demo: m.demo,
+      ...(parent ? { re: parent.root._id, rt: parent.to._id } : {}),
+      ...(mt.length ? { mt } : {}),
+    });
     await ctx.db.patch(m._id, { an: (m.an ?? 0) + 1, tr: true });
     await wroteIn(ctx, { ...m, an: (m.an ?? 0) + 1, tr: true }, { n: u.name, tch: true, u: u._id }, false, now);
-    await tellWriting(ctx, m, null, parent, { mid: m._id, aid: id, n: u.name, tch: true, ...(t ? { t } : {}) }, t);
+    await tellWriting(ctx, m, null, parent, { mid: m._id, aid: id, n: u.name, tch: true, ...(t ? { t } : {}) }, t, mt.map((x) => x.s));
   },
 });
 
 /** A teacher's comment on any line but a doubt (her photos too, under a message if she likes): its students are told. */
 export const tcomment = mutation({
-  args: { token, id: v.id("usMoments"), text: v.optional(v.string()), ph: v.optional(v.array(usPhoto)), re: v.optional(v.string()) },
+  args: { token, id: v.id("usMoments"), text: v.optional(v.string()), ph: v.optional(v.array(usPhoto)), re: v.optional(v.string()), mt: v.optional(v.array(v.string())) },
   handler: async (ctx, args) => {
     const u = await actor(ctx, args.token, ["any"]);
     const m = await ctx.db.get(args.id);
@@ -1221,11 +1391,47 @@ export const tcomment = mutation({
     if (m.k === "ask") fail("Reply on a doubt instead.");
     const t = wordsOf(args.text, args.ph, false);
     const parent = await parentOf(ctx, m, args.re);
+    const mt = await tagsOf(ctx, m, args.mt, null, true);
     const ph = await takePhotos(ctx, args.ph, REPLY_PHOTOS);
     const now = Date.now();
-    const id = await ctx.db.insert("usAnswers", { mid: m._id, by: u._id, n: u.name, ...(t ? { t } : {}), ...(ph ? { ph } : {}), at: now, demo: m.demo, k: "c", ...(parent ? { re: parent.root._id } : {}) });
+    const id = await ctx.db.insert("usAnswers", {
+      mid: m._id,
+      by: u._id,
+      n: u.name,
+      ...(t ? { t } : {}),
+      ...(ph ? { ph } : {}),
+      at: now,
+      demo: m.demo,
+      k: "c",
+      ...(parent ? { re: parent.root._id, rt: parent.to._id } : {}),
+      ...(mt.length ? { mt } : {}),
+    });
     await wroteIn(ctx, m, { n: u.name, tch: true, u: u._id }, true, now);
-    await tellWriting(ctx, m, null, parent, { mid: m._id, aid: id, n: u.name, tch: true, ...(t ? { t } : {}) }, t);
+    await tellWriting(ctx, m, null, parent, { mid: m._id, aid: id, n: u.name, tch: true, ...(t ? { t } : {}) }, t, mt.map((x) => x.s));
+  },
+});
+
+/** A teacher's reaction on a message (her name with it; none on her own). */
+export const treact = mutation({
+  args: { token, aid: v.id("usAnswers"), e: v.union(v.string(), v.null()) },
+  handler: async (ctx, args) => {
+    const u = await actor(ctx, args.token, ["any"]);
+    if (args.e !== null && !isRx(args.e)) fail("That reaction isn't in the app.");
+    const a = await ctx.db.get(args.aid);
+    const m = a ? await ctx.db.get(a.mid) : null;
+    if (!a || !m) fail("This isn't here any more.");
+    if (a.by === u._id) fail("This one is yours!");
+    const k = await staffPics(ctx)(u._id);
+    return await reactIt(ctx, a, m, u._id, u.name, null, true, k, args.e as RxCode | null);
+  },
+});
+
+/** Who reacted to a message (any teacher). */
+export const treactors = query({
+  args: { token, aid: v.id("usAnswers") },
+  handler: async (ctx, args): Promise<UsReactor[]> => {
+    await viewer(ctx, args.token, "any");
+    return await reactorsOf(ctx, args.aid);
   },
 });
 
@@ -1285,7 +1491,7 @@ export const unflag = mutation({
 
 // ---- The owl's own lines, and the old ones going ----
 
-/** 00:10 in Sri Lanka: today's birthdays, yesterday's count, then the old lines go (`sweep`). */
+/** 00:10 in Sri Lanka: today's birthdays, yesterday's count, then the old lines go (`sweep`), and old chat messages. */
 export const daily = internalMutation({
   args: {},
   handler: async (ctx) => {
@@ -1313,6 +1519,8 @@ export const daily = internalMutation({
       .first();
     if (yesterday > 0 && !had) await addMoment(ctx, { k: "count", x: yesterday, demo: false, at: now });
     await ctx.scheduler.runAfter(0, internal.us.sweep, {});
+    // The chats too (8 Nov 2026): messages older than 30 days (convex/chat.ts sweep).
+    await ctx.scheduler.runAfter(0, internal.chat.sweep, {});
   },
 });
 
