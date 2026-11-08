@@ -1,7 +1,7 @@
-commit 53b7dd9d37797677459c6bb410212e7f10372cf5
+commit bfe027de8c13ddca233193a812f6fc19e068ffba
 install success
 typecheck success
 unit success
 build success
 chromium success
-e2e failure
+e2e success
