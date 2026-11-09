@@ -163,7 +163,11 @@ export const move = mutation({
   },
 });
 
-/** A unit's book handed to him (given) or taken back: Correction's unit sheet, "Books given". */
+/**
+ * A unit's book handed to him (given) or taken back: the Books page and his money sheet (9 Nov 2026; Correction's unit
+ * sheet before), the Class tab's Give a book. A printed book given after the fees began is charged by itself
+ * (convex/lib/feeRows.ts); taken back, the charge goes.
+ */
 export const setGiven = mutation({
   args: {
     token: v.optional(v.string()),
@@ -174,7 +178,7 @@ export const setGiven = mutation({
     by: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await actor(ctx, args.token, ["correction"], args.by);
+    await actor(ctx, args.token, ["correction", "money"], args.by);
     const now = Date.now();
     const s = await getStudent(ctx, args.id);
     const unit = await ctx.db.get(args.unitId);
@@ -287,7 +291,7 @@ export const openTwin = mutation({
 export const giveAllOl = mutation({
   args: { token: v.optional(v.string()), id: v.id("students"), stage: bookStage, given: v.boolean(), by: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    await actor(ctx, args.token, ["correction"], args.by);
+    await actor(ctx, args.token, ["correction", "money"], args.by);
     const now = Date.now();
     const s = await getStudent(ctx, args.id);
     if (args.given) checkOl(s.grade);
@@ -300,7 +304,8 @@ export const giveAllOl = mutation({
       const rows = mine.filter((h) => h.unitId === u._id);
       if (args.given) {
         if (rows.length || !(await bookFor(ctx, u._id, args.stage))) continue;
-        await ctx.db.insert("handouts", { studentId: s._id, unitId: u._id, stage: args.stage, at: now, by: cleanBy(args.by) });
+        // Opened on his phone, not a printed copy (9 Nov 2026): never charged, never taken from the stock.
+        await ctx.db.insert("handouts", { studentId: s._id, unitId: u._id, stage: args.stage, at: now, by: cleanBy(args.by), noCopy: true });
         n++;
       } else if (rows.length) {
         for (const h of rows) await ctx.db.delete(h._id);

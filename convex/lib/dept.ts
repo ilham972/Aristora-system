@@ -4,7 +4,7 @@
 //
 // - Three departments: Fighter (the theory books: their theory lessons, the students with no work, the wrong answers of
 //   their own questions), Master (the workbooks: their lost marks, blanks counted as wrong, and the theory they need),
-//   Management (correction now; fees and books later, in another chat).
+//   Management (correction, and since 9 Nov 2026 the Fees and Books pages: the students' money and printed books).
 // - The lead teacher of a department walks from grade to grade (no room of her own): her Fighter or Master page has no
 //   Call and no Arrived, each tap is saved at once for the students she ticked. A consultation call of her department
 //   rings on her phone (she sends him to the consultation room). The other people of a department (later) sit in the
@@ -35,6 +35,8 @@ export type PageId =
   | "fighter"
   | "master"
   | "correction"
+  | "fees"
+  | "books"
   | "theory"
   | "evaluation"
   | "teach"
@@ -50,6 +52,8 @@ export const PAGE_IDS: readonly PageId[] = [
   "fighter",
   "master",
   "correction",
+  "fees",
+  "books",
   "theory",
   "evaluation",
   "teach",
@@ -77,6 +81,8 @@ export const PAGE_LABEL: Record<PageId, string> = {
   fighter: "Fighter",
   master: "Master",
   correction: "Correction",
+  fees: "Fees",
+  books: "Books",
   theory: "Theory",
   evaluation: "Evaluation",
   teach: "Teach",
@@ -94,6 +100,8 @@ export const PAGE_HELP: Record<PageId, string> = {
   fighter: "theory books: the lessons and the wrong answers, grade by grade; she walks to them (no Call)",
   master: "workbooks: lost marks and blanks, and the theory they need, grade by grade; she walks to them (no Call)",
   correction: "Homework (photos from home) and Class (papers in the hall)",
+  fees: "the students' class fees and book money: who paid today, who owes, one sheet to take it (the owner: the business)",
+  books: "printed books: what to print, who has which book, who finishes soon, books not paid, the stock",
   theory: "the old Theory page: her room with Call, Arrived and Done",
   evaluation: "the old Evaluation page: her room with Call, Arrived and Done",
   teach: "freestyle teaching at the board: any grade, book, section or level",
@@ -112,7 +120,7 @@ export function cleanPages(pages: readonly string[], owner = false): PageId[] {
 export function presetPages(dept: Dept | undefined, lead: boolean): PageId[] {
   if (dept === "fighter") return lead ? ["dash", "fighter", "correction", "teach", "consult", "us"] : ["consult", "us"];
   if (dept === "master") return lead ? ["dash", "master", "correction", "consult", "us"] : ["consult", "us"];
-  if (dept === "management") return ["dash", "class", "correction", "us"];
+  if (dept === "management") return ["dash", "class", "correction", "fees", "books", "us"];
   return ["class", "us"];
 }
 
@@ -145,11 +153,12 @@ export function jobsFor(pages: readonly PageId[], manager: boolean): Tab[] {
   return (["correction", "theory", "evaluation", "manager"] as Tab[]).filter((x) => t.has(x));
 }
 
-/** The extras her pages need: Correction's Homework mode = Photos; the Consultation page = Consultation. */
+/** The extras her pages need: Correction's Homework mode = Photos; the Consultation page = Consultation; Fees and Books = Money. */
 export function extrasFor(pages: readonly PageId[]): Extra[] {
   const x: Extra[] = [];
   if (pages.includes("correction")) x.push("photos");
   if (pages.includes("consult")) x.push("consult");
+  if (pages.includes("fees") || pages.includes("books")) x.push("money");
   return x;
 }
 
@@ -168,9 +177,10 @@ export function withNeeds(pages: readonly PageId[], tabs: readonly Tab[], can: r
   if (pages.includes("teach") && !t.has("theory") && !t.has("evaluation")) t.add("theory");
   if (pages.includes("correction") && !t.has("correction") && !c.has("photos")) t.add("correction");
   if (pages.includes("consult")) c.add("consult");
+  if (pages.includes("fees") || pages.includes("books")) c.add("money");
   return {
     tabs: (["correction", "theory", "evaluation", "manager"] as Tab[]).filter((x) => t.has(x)),
-    can: (["students", "books", "reports", "feedback", "photos", "consult", "community"] as Extra[]).filter((x) => c.has(x)),
+    can: (["students", "books", "reports", "feedback", "photos", "consult", "community", "money"] as Extra[]).filter((x) => c.has(x)),
   };
 }
 

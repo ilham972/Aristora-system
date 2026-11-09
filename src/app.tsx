@@ -19,6 +19,8 @@ import { WholeClassPage } from "./wholeClass";
 import { DeskPage } from "./desk";
 import { deptNow } from "./deskData";
 import { Dashboard } from "./dash";
+import { FeesPage } from "./fees";
+import { BooksPage, redCopies, useBooksData } from "./books";
 import { barPages, isTeachDept, PAGE_LABEL, type PageId } from "../convex/lib/dept";
 import { correctionSends, leadSends } from "./callRoute";
 import { useFeedbackNew } from "./feedbackList";
@@ -47,7 +49,8 @@ import { Sheet, Toasts } from "./ui";
  * Theory and Evaluation) only on his bar (convex/lib/dept.ts OWNER_PAGES).
  */
 type TabId = PageId;
-type Page = "board" | "register" | "settings" | "progress" | "boss" | "teach" | "consult";
+/** fees / books: the owner's (or a Money person's) Fees and Books pages when they aren't on the bar (his Dashboard opens them). */
+type Page = "board" | "register" | "settings" | "progress" | "boss" | "teach" | "consult" | "fees" | "books";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "class", label: "Class" },
@@ -70,7 +73,7 @@ function loadStart(): { tab: TabId | null; page: Page } {
     if (r === "theory" || r === "evaluation") return { tab: r, page: "board" };
     // Her own app's pages (8 Nov 2026), and the owner's own ones ("register" is his Register tab; the Register page of the
     // top bar is kept as "class").
-    if (r === "dash" || r === "fighter" || r === "master" || r === "teach" || r === "consult") return { tab: r, page: "board" };
+    if (r === "dash" || r === "fighter" || r === "master" || r === "teach" || r === "consult" || r === "fees" || r === "books") return { tab: r, page: "board" };
     if (r === "boss" || r === "progress" || r === "register") return { tab: r, page: "board" };
     if (r === "focus") return { tab: "correction", page: "board" };
     // ("manager": the Manager tab of 2–3 Nov 2026, now the Class tab.)
@@ -156,6 +159,28 @@ function ConsultMark() {
       <circle cx="8.5" cy="9" r="3.2" />
       <path d="M2.8 20.5c.4-3.6 2.8-5.8 5.7-5.8s5.3 2.2 5.7 5.8" />
       <path d="M14.2 3.5h6.3a1.3 1.3 0 0 1 1.3 1.3v3.9a1.3 1.3 0 0 1-1.3 1.3h-2.9l-2.4 2v-2h-1a1.3 1.3 0 0 1-1.3-1.3V4.8a1.3 1.3 0 0 1 1.3-1.3Z" />
+    </svg>
+  );
+}
+
+/** The Fees tab's mark (9 Nov 2026): a note of money. */
+function FeesMark() {
+  return (
+    <svg class="tab-plan" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2.5" y="6" width="19" height="12" rx="2" />
+      <circle cx="12" cy="12" r="2.6" />
+      <path d="M6 9.5v5M18 9.5v5" />
+    </svg>
+  );
+}
+
+/** The Books tab's mark (9 Nov 2026): two printed books side by side. */
+function BooksMark() {
+  return (
+    <svg class="tab-plan" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 4.5h5.5v15H4z" />
+      <path d="M9.5 6.5l5-1.5 4.5 14.5-5 1.5z" />
+      <path d="M4 8.5h5.5" />
     </svg>
   );
 }
@@ -281,8 +306,15 @@ export function App() {
   const isOwner = user?.role === "owner";
   // Consultation (5 Nov 2026, his ask: "not for everyone, the people I pick"): the owner and the Consultation tick.
   const canConsult = may("consult");
+  // Fees and Books (9 Nov 2026): the owner and the Money tick; as bottom tabs (the Management department's preset) or
+  // opened from the Dashboard.
+  const canMoney = may("money");
   const shown: Page =
-    (page === "progress" && !canProgress) || (page === "boss" && !isOwner) || (page === "teach" && !canTeach) || (page === "consult" && !canConsult)
+    (page === "progress" && !canProgress) ||
+    (page === "boss" && !isOwner) ||
+    (page === "teach" && !canTeach) ||
+    (page === "consult" && !canConsult) ||
+    ((page === "fees" || page === "books") && !canMoney)
       ? backTo
       : page;
   const base: Home = shown === "register" || shown === "board" ? shown : backTo;
@@ -294,6 +326,17 @@ export function App() {
     }
     if (shown === "board" || shown === "register") setBackTo(shown);
     setPage(p);
+  };
+  /** A page of the bar, or (Fees, Books not on her bar) the same page opened over it: the Dashboard's buttons. */
+  const openPage = (t: TabId) => {
+    if (tabs.some((x) => x.id === t) || (t !== "fees" && t !== "books")) {
+      setTab(t);
+      setBackTo("board");
+      setPage("board");
+      return;
+    }
+    setBackTo("board");
+    setPage(t);
   };
   /** The Register from the top bar: it just opens. */
   const goRegister = () => {
@@ -403,6 +446,9 @@ export function App() {
   const gearN = photos.n + fbNew + asks + gifts;
   // Her private chats in Us with a message she hasn't read (8 Nov 2026): a number on the Us tab while she is elsewhere.
   const chatNew = useChatNew(!!me?.user);
+  // The Books tab's red count (9 Nov 2026): copies someone needs now and nobody has in hand. Read only with the tab.
+  const booksTab = !!me?.user && !!barPages(me.user)?.includes("books") && may("money");
+  const booksData = useBooksData(booksTab);
 
   if (me === undefined) {
     return (
@@ -439,6 +485,7 @@ export function App() {
   }
 
   const views = buildViews(board, now);
+  const booksRed = booksTab ? redCopies(views, booksData) : 0;
   const theoryRed = theoryMembers(theoryGroups(views)).filter((m) => m.urgency === "red" && !m.inEvaluation).length;
   const evalRed = new Set(evalQueue(views, now).filter((m) => m.urgency === "red" && !m.blockedBy).map((m) => m.v.s._id)).size;
   const toSend = board.calls.filter((c) => c.status === "requested" && !c.pull).length;
@@ -710,6 +757,10 @@ export function App() {
         <WholeClassPage views={views} />
       ) : shown === "consult" ? (
         <ConsultPage board={board} views={views} now={now} />
+      ) : shown === "fees" ? (
+        <FeesPage board={board} views={views} now={now} />
+      ) : shown === "books" ? (
+        <BooksPage board={board} views={views} now={now} />
       ) : tab === "us" ? null : tab === "class" ? (
         <ManagerPage board={board} views={views} now={now} canManage={isManager} meId={user._id} />
       ) : tab === "correction" ? (
@@ -719,7 +770,11 @@ export function App() {
       ) : tab === "fighter" || tab === "master" ? (
         <DeskPage key={tab} board={board} views={views} now={now} dept={tab} />
       ) : tab === "dash" ? (
-        <Dashboard board={board} views={views} now={now} onOpen={(t: TabId) => setTab(t)} />
+        <Dashboard board={board} views={views} now={now} onOpen={openPage} />
+      ) : tab === "fees" ? (
+        <FeesPage board={board} views={views} now={now} />
+      ) : tab === "books" ? (
+        <BooksPage board={board} views={views} now={now} />
       ) : tab === "boss" ? (
         <BossPage board={board} views={views} now={now} />
       ) : tab === "progress" ? (
@@ -751,8 +806,10 @@ export function App() {
               ? away
                 ? chatNew
                 : 0
-              : !away || r.id === "dash" || r.id === "teach" || r.id === "boss" || r.id === "progress" || r.id === "register"
+              : !away || r.id === "dash" || r.id === "teach" || r.id === "boss" || r.id === "progress" || r.id === "register" || r.id === "fees"
               ? 0
+              : r.id === "books"
+                ? booksRed
               : r.id === "fighter" || r.id === "master"
                 ? deptRed(r.id)
                 : r.id === "consult"
@@ -765,7 +822,7 @@ export function App() {
               type="button"
               class={`tab ${r.id}${here ? " on" : ""}`}
               aria-current={here ? "page" : undefined}
-              aria-label={`${r.label}${badge ? `, ${badge} ${r.id === "us" ? "new messages" : coming ? "coming to you" : r.id === "correction" ? "waiting" : "with no work"}` : ""}`}
+              aria-label={`${r.label}${badge ? `, ${badge} ${r.id === "us" ? "new messages" : coming ? "coming to you" : r.id === "correction" ? "waiting" : r.id === "books" ? "to print now" : "with no work"}` : ""}`}
               onClick={() => {
                 setTab(r.id);
                 setBackTo("board");
@@ -788,6 +845,10 @@ export function App() {
                 <RegisterMark />
               ) : r.id === "progress" ? (
                 <ProgressMark />
+              ) : r.id === "fees" ? (
+                <FeesMark />
+              ) : r.id === "books" ? (
+                <BooksMark />
               ) : (
                 <span class="tab-mark" aria-hidden="true" />
               )}

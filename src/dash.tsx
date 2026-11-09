@@ -37,6 +37,9 @@ import { useQuery } from "./live";
 import { usePhotosWaiting } from "./photoQueue";
 import { TeacherCard } from "./teacherCard";
 import { currentMe, may, testMode, type Board, type Me } from "./store";
+import { needsOf, useBooksData } from "./books";
+import type { FeeBoard } from "./fees";
+import { rs, todayList } from "./moneyData";
 import { tone } from "./tones";
 
 /** A department's work: today (counted now) and the days kept before it. */
@@ -374,6 +377,8 @@ function CorrectionDash(props: { views: View[]; now: number; me: Me; mine: boole
         <p class="muted small dash-key">Students with papers waiting, by grade; red = no work until it's corrected.</p>
       </section>
 
+      {may("money") && <MoneyCard views={props.views} onOpen={props.onOpen} />}
+
       <section class="dash-card" aria-label="Corrected today">
         <h3 class="dash-h">Corrected today</h3>
         {err ? (
@@ -419,6 +424,44 @@ function CorrectionDash(props: { views: View[]; now: number; me: Me; mine: boole
 
       {w && <WorkChart w={w} me={me} mine={props.mine} what="questions corrected" words={(p) => correctedWords(p)} who="Everyone" />}
     </>
+  );
+}
+
+/**
+ * The Management department's money and books (9 Nov 2026): today's money, who came and hasn't paid, what to print; its
+ * two pages one tap away (on her bar, or opened over it).
+ */
+function MoneyCard(props: { views: View[]; onOpen: Open }) {
+  const fees = useQuery<FeeBoard>(api.money.board, {});
+  const books = useBooksData(true);
+  if (!fees) return null;
+  const needs = needsOf(props.views, books.cat, books.shop);
+  const print = needs.reduce((a, r) => a + r.print, 0);
+  const red = needs.reduce((a, r) => a + r.red, 0);
+  const unpaid = fees.on ? todayList(fees.acc, fees.paid, fees.today).filter((x) => x.a.owe > 0 && x.paidToday === 0).length : 0;
+  return (
+    <section class="dash-card dash-money" aria-label="Money and books">
+      <h3 class="dash-h">Money and books</h3>
+      {fees.on ? (
+        <p class="mn-dline">
+          <b>Today:</b> {rs(fees.inToday)} from {fees.nToday} {fees.nToday === 1 ? "payment" : "payments"}
+          {unpaid > 0 && <small> · {unpaid} came and haven't paid</small>}
+        </p>
+      ) : (
+        <p class="muted small">The fees aren't set up yet (the owner, on the Fees page).</p>
+      )}
+      <p class="mn-dline">
+        <b>Books:</b> {print > 0 ? `print ${print}${red ? ` (${red} needed now)` : ""}` : "nothing to print"}
+      </p>
+      <div class="row-actions">
+        <button type="button" class="btn ghost small" onClick={() => props.onOpen("fees")}>
+          Fees ›
+        </button>
+        <button type="button" class="btn ghost small" onClick={() => props.onOpen("books")}>
+          Books ›
+        </button>
+      </div>
+    </section>
   );
 }
 

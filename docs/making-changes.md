@@ -118,6 +118,28 @@ EOF
 - **The phone's clock is not the server's**: a "since" the phone sends (the desk page's sitting) must come from
   `now()` in `src/store.ts` (synced), never `Date.now()`, or a phone a few minutes fast hides the squares it just did
   and can't undo them.
+- **Running the run-throughs here with no npm** (9 Nov 2026): the same runner bundles `tests/e2e/*.e2e.ts` too (keys of
+  `import.meta.glob("../../convex/**/*.ts")` with its own `../../`), with Playwright from `/opt/npm-tools/node_modules`
+  (`NODE_PATH`) and `/usr/bin/google-chrome` (`chromium.launch` patched with `executablePath`, `--no-sandbox`); `dist/`
+  is built by a copy of `scripts/build.mjs` whose `build()` adds an alias plugin (Preact, `convex/browser|server|values`,
+  `fflate` from source; `nosleep.js/src/media.js` and `@fontsource/*` stubbed). Run one with `cd repo && SHOTS=… TZ=Asia/Colombo
+  NODE_PATH=/opt/npm-tools/node_modules node runner.mjs tests/e2e/class.e2e.ts "<name part>"` (13 s for "Fees and books").
+  Without the class app's fonts the checks that measure the top bar at 320 px fail (`topFits`): run those on GitHub.
+- **Every mutation keeps the fees too** (9 Nov 2026, `convex/lib/fn.ts`): `watched` notes the students whose
+  `attendance` or `handouts` rows were inserted or deleted (a delete reads the row first), and as the handler ends
+  `syncFees` (`convex/lib/feeRows.ts`) adds or removes their class and book charges and rebuilds their `accounts` row.
+  So a new way to sign in or give a book is charged by itself; anything else that should charge must go through those
+  tables or call `syncOne`. A `t.run` in a test skips it (like the race). Nothing happens before the owner's set-up
+  (meta `fees`), so a test without `money.setup` sees no charges. A charge is a row with its amount: changing the fee
+  never touches a day already charged.
+- **A `hidden` attribute loses to the page's CSS** (9 Nov 2026): `.segc { display: inline-flex }` showed a `hidden`
+  segmented row anyway (a run-through still found "Books given"). Leave it out of the render instead.
+- **A new card on a page needs its own class names** (9 Nov 2026): the Money and books card first used `.dash-team`, and
+  a run-through's `O.locator(".dash-team")` (`.first()`) read it instead of Corrected today's. Name new lines after the
+  card (`.mn-dline`).
+- **Management's preset is six pages, the most a bar holds** (9 Nov 2026: Dashboard, Class, Correction, Fees, Books,
+  Us): adding one of the owner's own pages to it means unticking another (the "Owner's own app" run-through unticks
+  Class for the Owner page).
 - **Running the unit tests here with no npm** (8 Nov 2026): a runner outside the repo (`/home/claude/runner`, not
   committed: a vitest stand-in, esbuild from `/opt/npm-tools` with the libraries cloned from source, one bundle per test
   file; `import.meta.glob` of `../convex/**/*.ts` replaced by a generated map, of `../convex/*.ts` with `eager` by the

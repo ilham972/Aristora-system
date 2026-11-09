@@ -57,7 +57,11 @@ export function nextSteps(v: View, units: Unit[]): Step[] {
   return out;
 }
 
-export function MoveSheet(props: { v: View; onClose: () => void }) {
+/**
+ * `onUnits` (Correction, 9 Nov 2026): "All his units" opens the grid of his grade's units (and the OL books for Grade 10
+ * and 11), how far he is in each, a tap moves him: what the paper's book button opened before it went.
+ */
+export function MoveSheet(props: { v: View; onClose: () => void; onUnits?: () => void }) {
   const { v } = props;
   const units = allUnits();
   const books = useQuery<BookInfo[]>(api.catalog.books, {}) ?? [];
@@ -104,6 +108,11 @@ export function MoveSheet(props: { v: View; onClose: () => void }) {
         </button>
       }
     >
+      {props.onUnits && (
+        <button type="button" class="btn ghost wide mv-all" onClick={props.onUnits}>
+          All his units at a glance ›
+        </button>
+      )}
       <div class="mv-steps">
         {nextSteps(v, units).map((st) => (
           <button key={st.label} type="button" class="mv-step" onClick={() => void go(st)}>

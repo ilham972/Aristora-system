@@ -5365,3 +5365,19 @@ button.f-lstep {
   opacity: 0.85;
   font-weight: 700;
 }
+
+/* His fees on Home (9 Nov 2026): gentle, never red. */
+.f-fees-n {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-weight: 700;
+}
+.f-fees-n b {
+  font-size: 22px;
+}
+.f-fees.owe .f-fees-n b {
+  color: #8a5600;
+}

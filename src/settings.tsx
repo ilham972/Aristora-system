@@ -1171,6 +1171,37 @@ function describe(e: Doc<"events">): string {
       return `O/L tute moved: ${v}`;
     case "book-given":
       return `book given: ${v}`;
+    // Fees and books (9 Nov 2026): the owner's history only (state.history hides money lines from others).
+    case "money-setup":
+      return `fees: ${v}`;
+    case "money-pay":
+      return `paid ${v}`;
+    case "money-unpay":
+      return `payment of ${v} taken back`;
+    case "money-waive":
+      return `waived: ${v}`;
+    case "money-unwaive":
+      return `charged again: ${v}`;
+    case "money-opening":
+      return `money before the app: ${v}`;
+    case "money-fee":
+      return `his class fee: ${v}`;
+    case "money-book":
+      return `book ${e.unit ?? ""}: ${v}`;
+    case "money-print":
+      return `printed ${e.unit ?? ""}: ${v}`;
+    case "money-unprint":
+      return `print of ${e.unit ?? ""} taken back (${v})`;
+    case "money-count":
+      return `books counted ${e.unit ?? ""}: ${v}`;
+    case "money-staff":
+      return `a teacher paid ${v}`;
+    case "money-other":
+      return `spent ${v}`;
+    case "money-unspend":
+      return `spending of ${v} taken back`;
+    case "money-rate":
+      return `pay set for ${v}`;
     case "keep":
       return `kept in Evaluation for ${v} (his next book)`;
     case "book-given-off":
@@ -1279,6 +1310,7 @@ const EXTRA_NAMES: Record<Extra, string> = {
   photos: "Photos",
   consult: "Consultation",
   community: "Community",
+  money: "Money",
 };
 /** What each job opens (everyone has the Class tab and the Register). */
 const TAB_HELP: Record<Job, string> = {
@@ -1295,6 +1327,7 @@ const EXTRA_HELP: Record<Extra, string> = {
   photos: "marks the photos students send from home (drawings, the working on wrong answers)",
   consult: "the top bar's Consultation: calls any student here to her, one to one, and explains or teaches his questions",
   community: "writes posts in the students' Us tab, pins and removes lines (every teacher cheers and gives shout-outs)",
+  money: "the Fees and Books pages: takes the students' fees and book money, gives books, records printing (never the business numbers or staff pay: the owner's)",
 };
 
 function canWords(p: { role: string; tabs: Job[]; can: Extra[]; dept?: Dept | null; lead?: boolean; pages?: PageId[] | null }): string {

@@ -62,6 +62,8 @@ export const pageId = v.union(
   v.literal("fighter"),
   v.literal("master"),
   v.literal("correction"),
+  v.literal("fees"),
+  v.literal("books"),
   v.literal("theory"),
   v.literal("evaluation"),
   v.literal("teach"),
@@ -77,6 +79,7 @@ export const extra = v.union(
   v.literal("photos"),
   v.literal("consult"),
   v.literal("community"),
+  v.literal("money"),
 );
 /**
  * One line of the Us tab (7 Nov 2026): the owl's own (a birthday, a Stage finished, a first level at home, back in
@@ -520,6 +523,11 @@ export default defineSchema({
     stage: bookStage,
     at: v.number(),
     by: v.optional(v.string()),
+    /**
+     * Opened on his phone only, no printed copy (the O/L map's "every OL book in the app", 9 Nov 2026): never charged,
+     * never taken from the stock.
+     */
+    noCopy: v.optional(v.boolean()),
   }).index("by_student", ["studentId"]),
 
   /** The attendance register: one row per visit, when he arrived and when he left. */
@@ -1397,4 +1405,104 @@ export default defineSchema({
     samples: v.array(simSample),
     sampledAt: v.optional(v.number()),
   }).index("by_sim", ["simId"]),
+
+  /**
+   * Fees (9 Nov 2026, his voice note: "some students not giving me fees ... I don't know who give and who didn't"): each
+   * student's ledger, one row a line (convex/lib/money.ts has the rules). The charges come by themselves from what the
+   * app knows (convex/lib/feeRows.ts keeps them in step): a day he was signed in = class (his fee that day), a printed
+   * book given = book (its price then); owe / credit = an old debt or credit the owner typed once. pay = money he gave,
+   * `to` = the charges he said it was for (the rest pays his oldest). Never on a teacher's open page whole: `accounts`
+   * keeps each student's sums.
+   */
+  fees: defineTable({
+    sid: v.id("students"),
+    k: v.union(v.literal("class"), v.literal("book"), v.literal("owe"), v.literal("pay"), v.literal("credit")),
+    /** Whole rupees, never below 0. */
+    a: v.number(),
+    /** The day in Sri Lanka ("2026-11-09"): the class, the book given, the payment. */
+    day: v.string(),
+    at: v.number(),
+    /** A book: its unit and stage (a topic tute: one printed book, charged as its theory book). */
+    u: v.optional(v.id("units")),
+    st: v.optional(bookStage),
+    /** A payment: the charges it was for. */
+    to: v.optional(v.array(v.id("fees"))),
+    /** A book given before its price was set: Rs 0 until the owner types the price. */
+    np: v.optional(v.boolean()),
+    /** Waived by the owner (when, his name): counts as nothing. */
+    w: v.optional(v.number()),
+    wb: v.optional(v.string()),
+    /** Who took the money / gave the book. */
+    by: v.optional(v.string()),
+    note: v.optional(v.string()),
+  })
+    .index("by_sid", ["sid", "at"])
+    .index("by_day", ["day"])
+    .index("by_book", ["u", "st"]),
+
+  /**
+   * Each student's account kept ready (like the race rows): what the Fees and Books pages and his family phone read,
+   * never his whole ledger. Rebuilt from his `fees` rows whenever one changes. `fee` = his own class fee (the owner's),
+   * else the centre's. name / grade / gone: copied, so the lists never read the students' rows.
+   */
+  accounts: defineTable({
+    sid: v.id("students"),
+    name: v.string(),
+    grade: v.optional(v.number()),
+    gone: v.optional(v.boolean()),
+    owe: v.number(),
+    cr: v.number(),
+    c: v.number(),
+    b: v.number(),
+    o: v.number(),
+    since: v.optional(v.string()),
+    bu: v.array(v.string()),
+    np: v.number(),
+    paid: v.number(),
+    last: v.optional(v.number()),
+    lastA: v.optional(v.number()),
+    came: v.optional(v.string()),
+    fee: v.optional(v.number()),
+    at: v.number(),
+  }).index("by_sid", ["sid"]),
+
+  /**
+   * Money out (9 Nov 2026): print = copies printed at the shop (copies × papers × the paper's cost, his Rs 7), staff = a
+   * person paid (`uid`), other = anything else (rent, light). The owner's Business tab adds them up; staff and other are
+   * the owner's only.
+   */
+  cash: defineTable({
+    k: v.union(v.literal("print"), v.literal("staff"), v.literal("other")),
+    a: v.number(),
+    day: v.string(),
+    at: v.number(),
+    u: v.optional(v.id("units")),
+    st: v.optional(bookStage),
+    copies: v.optional(v.number()),
+    papers: v.optional(v.number()),
+    uid: v.optional(v.id("users")),
+    note: v.optional(v.string()),
+    by: v.optional(v.string()),
+  }).index("by_day", ["day"]),
+
+  /**
+   * A printed book (9 Nov 2026, his answer: "I set each book's price manually, but show the cost of each book"): its
+   * papers (the cost = papers × the paper's cost), the price he types, and its copies kept ready: `printed` (copies
+   * recorded at the shop) and `given` (copies charged to students since the fees began), both kept by every change.
+   * Counted in hand: `base` copies when `basePrinted` / `baseGiven` were the counts. In hand now = base + printed since
+   * − given since (no count yet: printed − given).
+   */
+  shop: defineTable({
+    u: v.id("units"),
+    st: bookStage,
+    papers: v.optional(v.number()),
+    price: v.optional(v.number()),
+    printed: v.number(),
+    given: v.number(),
+    base: v.optional(v.number()),
+    basePrinted: v.optional(v.number()),
+    baseGiven: v.optional(v.number()),
+    baseAt: v.optional(v.number()),
+    at: v.number(),
+  }).index("by_book", ["u", "st"]),
 });

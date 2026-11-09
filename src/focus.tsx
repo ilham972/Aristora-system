@@ -996,7 +996,7 @@ export function Focus(props: { board: Board; views: View[]; now: number }) {
       {sheet === "attendance" && grade !== null && (
         <AttendanceSheet board={board} views={views} now={now} grade={grade} only onClose={() => setSheet(null)} />
       )}
-      {main && sheet === "unit" && <StageUnitSheet v={main} onClose={() => setSheet(null)} />}
+      {main && sheet === "unit" && <StageUnitSheet v={main} moveOnly onClose={() => setSheet(null)} />}
       {v && sheet === "card" && (
         <Sheet title={v.s.name} sub={tagOf(v.s, v.unit)} onClose={() => setSheet(null)}>
           <Book
@@ -1011,7 +1011,7 @@ export function Focus(props: { board: Board; views: View[]; now: number }) {
           />
         </Sheet>
       )}
-      {main && sheet === "move" && <MoveSheet v={main} onClose={() => setSheet(null)} />}
+      {main && sheet === "move" && <MoveSheet v={main} onClose={() => setSheet(null)} onUnits={() => setSheet("unit")} />}
       {askedMe && mine && <GiveSheet claim={mine} ask={askedMe} />}
       {asking && !askedMe && <AskSheet a={asking} />}
       {v && sheet === "theory" && v.ms && <TheorySheet v={v} onClose={() => setSheet(null)} />}
@@ -1312,7 +1312,7 @@ type StudentUnits = { cells: UnitCell[]; given: { unitId: string; stage: "fighte
  * waiting for Evaluation, blue = waiting for Theory, ✓ = the book was given to him. "Move him" (one tap moves him
  * and closes) or "Books given" (each tap gives or takes back that unit's book; the sheet stays open).
  */
-export function StageUnitSheet(props: { v: View; onClose: () => void; mode?: "move" | "given" }) {
+export function StageUnitSheet(props: { v: View; onClose: () => void; mode?: "move" | "given"; moveOnly?: boolean; by?: string }) {
   const { v } = props;
   const books = useQuery<BookInfo[]>(api.catalog.books, {});
   const mine = useQuery<StudentUnits>(api.progress.student, { studentId: v.s._id });
@@ -1344,7 +1344,7 @@ export function StageUnitSheet(props: { v: View; onClose: () => void; mode?: "mo
   /** Every OL book in the app given to him (or all taken back): his whole O/L syllabus in one tap. */
   const giveAll = async () => {
     setBusy(true);
-    const n = await act(() => mutate(api.students.giveAllOl, { id: v.s._id, stage, given: !olAllGiven, by: currentRole() }));
+    const n = await act(() => mutate(api.students.giveAllOl, { id: v.s._id, stage, given: !olAllGiven, by: props.by ?? currentRole() }));
     setBusy(false);
     if (typeof n === "number") {
       setFlip({});
@@ -1364,7 +1364,7 @@ export function StageUnitSheet(props: { v: View; onClose: () => void; mode?: "mo
       const next = !givenOf(u);
       setFlip((f) => ({ ...f, [key]: next }));
       const ok = await act(() =>
-        mutate(api.students.setGiven, { id: v.s._id, unitId: u._id as Id<"units">, stage, given: next, by: currentRole() }),
+        mutate(api.students.setGiven, { id: v.s._id, unitId: u._id as Id<"units">, stage, given: next, by: props.by ?? currentRole() }),
       );
       if (!ok) setFlip((f) => ({ ...f, [key]: !next }));
       return;
@@ -1401,14 +1401,16 @@ export function StageUnitSheet(props: { v: View; onClose: () => void; mode?: "mo
               </button>
             ))}
           </div>
-          <div class="segc su-modes" role="group" aria-label="A tap on a unit">
-            <button type="button" class={`segc-b${mode === "move" ? " on" : ""}`} aria-pressed={mode === "move"} onClick={() => setMode("move")}>
-              Move him
-            </button>
-            <button type="button" class={`segc-b${mode === "given" ? " on" : ""}`} aria-pressed={mode === "given"} onClick={() => setMode("given")}>
-              Books given
-            </button>
-          </div>
+          {!props.moveOnly && (
+            <div class="segc su-modes" role="group" aria-label="A tap on a unit">
+              <button type="button" class={`segc-b${mode === "move" ? " on" : ""}`} aria-pressed={mode === "move"} onClick={() => setMode("move")}>
+                Move him
+              </button>
+              <button type="button" class={`segc-b${mode === "given" ? " on" : ""}`} aria-pressed={mode === "given"} onClick={() => setMode("given")}>
+                Books given
+              </button>
+            </div>
+          )}
         </div>
         {terms.map(({ t, list }, ti) => (
           <section key={`${olView ? "ol" : "g"}${t}`} class="su-term" aria-label={olView ? OL_PARTS[t].en : t ? `Term ${t}` : "Extra"}>
@@ -1585,7 +1587,7 @@ function SavedSheet(props: { now: number; onClose: () => void }) {
 function PaperView(props: { v: View; paper: Paper; drafts: Draft[] | undefined; now: number; onSheet: (s: SheetName) => void }) {
   const { v, paper, now } = props;
   const head = (later?: () => void) => (
-    <PaperHead v={v} later={later} onUnit={() => props.onSheet("unit")} onCard={() => props.onSheet("card")} />
+    <PaperHead v={v} later={later} onCard={() => props.onSheet("card")} />
   );
   if (paper.kind === "fighter" && v.kind === "fighter") return <FighterPaperView v={v} paper={paper} head={head()} />;
   if (paper.kind === "master" && v.kind === "master") return <MasterPaperView v={v} paper={paper} drafts={props.drafts} now={now} head={head} />;
@@ -1602,12 +1604,14 @@ function PaperView(props: { v: View; paper: Paper; drafts: Draft[] | undefined; 
 }
 
 /**
- * The paper's top (3 Nov 2026, his call: his name is already dark in the names row, so not again here): the book button
- * (all his units: move him, books given); then Later, the question sheet, went home and his card; then his books in
- * one line (tap one to correct it). Later (a level he hasn't handed in yet): handed in, correct it later (the waiting
- * clock starts). (The Manager button that stood first moved to the bottom bar as the Class tab, 3 Nov 2026.)
+ * The paper's top (3 Nov 2026, his call: his name is already dark in the names row, so not again here): Later, the
+ * question sheet, went home and his card, on the right; then his books in one line (tap one to correct it). Later (a
+ * level he hasn't handed in yet): handed in, correct it later (the waiting clock starts). (The Manager button that stood
+ * first moved to the bottom bar as the Class tab, 3 Nov 2026; the book button that followed it, all his units with Move
+ * him and Books given, went on 9 Nov 2026, his ask: books are given on the Books page now, with their money. Move him
+ * stays: Marks → Move, and "Choose his stage and unit" when he has no book.)
  */
-function PaperHead(props: { v: View; later?: () => void; onUnit: () => void; onCard: () => void }) {
+function PaperHead(props: { v: View; later?: () => void; onCard: () => void }) {
   const { v } = props;
   const [busy, setBusy] = useState(false);
   const [race, setRace] = useState(false);
@@ -1626,9 +1630,8 @@ function PaperHead(props: { v: View; later?: () => void; onUnit: () => void; onC
   return (
     <>
       <header class="fc-head" aria-label={`${v.s.name}'s paper`}>
-        <div class="fc-head-tools">
-          <UnitsButton v={v} onUnits={props.onUnit} />
-        </div>
+        {/* Empty since 9 Nov 2026 (the book button went): it keeps every button on the right, in its place. */}
+        <div class="fc-head-tools" />
         <div class="fc-head-acts">
           {props.later && (
             <button type="button" class="btn ghost small fc-later" aria-label="Handed in: correct later" onClick={props.later}>
@@ -1685,22 +1688,10 @@ function PaperHead(props: { v: View; later?: () => void; onUnit: () => void; onC
   );
 }
 
-/** The book button: all the units of his grade (move him, books given). In the paper's top row since 3 Nov 2026. */
-function UnitsButton(props: { v: View; onUnits: () => void }) {
-  return (
-    <button type="button" class="fc-units" aria-label={`${props.v.s.name}: all units (move him, books given)`} onClick={props.onUnits}>
-      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5z" />
-        <path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19" />
-      </svg>
-    </button>
-  );
-}
-
 /**
  * His books in ONE line that scrolls sideways (30 Oct 2026): his book now (dark), every book given to him that he
  * hasn't finished, any other book with a level handed in (amber count). A tap switches his paper to that book at once
- * (no dialog). The book button (all his grade's units: Move him, Books given) is in the row above since 3 Nov 2026.
+ * (no dialog). A book given on the Books page (9 Nov 2026) shows here at once.
  */
 function BookRow(props: { v: View; open: string | undefined; openStage: string | null }) {
   const { v } = props;
@@ -1712,7 +1703,7 @@ function BookRow(props: { v: View; open: string | undefined; openStage: string |
   return (
     <div class="fc-bookrow">
       {books.length === 0 ? (
-        <p class="fc-none">No book yet: tap the book above to choose his unit.</p>
+        <p class="fc-none">No book yet: choose his stage and unit below, or give him one on the Books page.</p>
       ) : (
         <HRow as="nav" class="fc-books" label={`${v.s.name}'s books: tap one to correct it`} list={v.s._id} at={props.open}>
           {books.map((b) => {

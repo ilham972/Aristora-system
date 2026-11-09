@@ -103,6 +103,7 @@ import { daysIn, leagueOf, numsAt, rankShown, type LeagueResult, type RaceRow } 
 import { mateMarksOn, numsOfRow, raceList, raceRowOf } from "./lib/raceRows";
 import { homeLevels, homeMoments, stageDone, stageMoment, usCfg } from "./lib/us";
 import { OL } from "./lib/syllabus";
+import { accountOf, feeCfg } from "./lib/feeRows";
 
 const token = v.optional(v.string());
 
@@ -297,6 +298,11 @@ export type FamilyMe = {
   inboxNew?: number;
   /** His groups and private chats with something new (8 Nov 2026): the Us tab's dot, the Groups and Chats counts. */
   chat?: { g: number; d: number };
+  /**
+   * His fees (9 Nov 2026, the owner's answer: the parents hear it "in the class ... and also in the family app"): what
+   * he owes (o) for how many classes (c) and books (b), or his credit (cr). Missing = nothing owed, or no fees yet.
+   */
+  fees?: { o: number; c: number; b: number; cr: number };
 };
 
 /** One line of the bell: what a teacher did on a photo of his, where (Stage, Level, Q), who, and whether it is new. */
@@ -409,10 +415,18 @@ export const me = query({
       inbox: inbox.items,
       inboxNew: inbox.fresh,
       ...(usOpen ? { chat: await chatNew(ctx, s) } : {}),
+      ...(await feesLine(ctx, s._id)),
       worlds,
     };
   },
 });
+
+/** What his family phone says about his fees (family.me's `fees`): only once the fees are set up, only when something is owed or paid ahead. */
+async function feesLine(ctx: QueryCtx, sid: Id<"students">): Promise<{ fees?: NonNullable<FamilyMe["fees"]> }> {
+  const a = await accountOf(ctx, sid);
+  if (!a || (a.owe <= 0 && a.cr <= 0) || !(await feeCfg(ctx))) return {};
+  return { fees: { o: a.owe, c: a.c, b: a.b + a.o, cr: a.cr } };
+}
 
 /** His league, rank, last week in his league and days learned this week (family.me's `race`), from his race row. */
 async function raceOf(ctx: QueryCtx, sid: Id<"students">, total: number, now: number): Promise<NonNullable<FamilyMe["race"]>> {

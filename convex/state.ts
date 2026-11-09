@@ -159,7 +159,8 @@ export const history = query({
     const n = Math.min(Math.max(Math.floor(limit ?? 80), 1), 300);
     if (user.role === "owner") return await ctx.db.query("events").withIndex("by_at").order("desc").take(n);
     const rows = await ctx.db.query("events").withIndex("by_at").order("desc").take(n * 2);
-    return rows.filter((e) => !ACCOUNT_KINDS.has(e.kind)).slice(0, n);
+    // Money (9 Nov 2026: fees, prints, the team's pay) is the owner's too.
+    return rows.filter((e) => !ACCOUNT_KINDS.has(e.kind) && !e.kind.startsWith("money-")).slice(0, n);
   },
 });
 

@@ -22,6 +22,26 @@ export const DAY_EN = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 export const DAY_S = ["M", "T", "W", "T", "F", "S", "S"];
 export const MONTH = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+/**
+ * His fees (9 Nov 2026, the owner's answer: the parents hear it in class and on the family app, never by WhatsApp):
+ * what he owes for how many classes and books, gently (never red), or what he paid ahead. Nothing when all is paid.
+ */
+function FeesCard(props: { f: FamilyMe["fees"] }) {
+  const f = props.f;
+  if (!f) return null;
+  const owe = f.o > 0;
+  const what = [f.c ? `${f.c} வகுப்பு` : "", f.b ? `${f.b} புத்தகம்` : ""].filter(Boolean).join(" · ");
+  return (
+    <section class={`f-card f-fees rise${owe ? " owe" : ""}`} aria-label="Fees">
+      <p class="f-fees-n">
+        <span>கட்டணம் · Fees</span>
+        <b>Rs {(owe ? f.o : f.cr).toLocaleString("en-US")}</b>
+      </p>
+      <p class="f-muted">{owe ? `செலுத்த வேண்டியது${what ? ` (${what})` : ""}. அடுத்த வகுப்பில் கொடுக்கலாம்.` : "முன்பணம்: அடுத்த வகுப்புகளுக்கு."}</p>
+    </section>
+  );
+}
+
 /** Sri Lanka now: the date ("2026-11-03"), minutes after midnight, the weekday (Monday = 0). */
 function slNow(now: number) {
   const d = new Date(now + SL);
@@ -349,6 +369,7 @@ export function HomeTab(props: { top: ComponentChildren; me: FamilyMe | null; on
       </header>
       {party && <BdayCard name={name} />}
       <TodayCard cls={cls} me={me} now={now} today={days[t.day]} onStage={props.onStage} />
+      <FeesCard f={me?.fees} />
       <GiftCards gifts={me?.gifts} />
       <GoalCard me={me} onPlay={props.onPlay} onLearn={props.onLearn} />
       <Cheered c={me?.cheers} />

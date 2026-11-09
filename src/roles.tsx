@@ -54,10 +54,10 @@ export type RolePerson = {
 export const DEPT_HELP: Record<Dept, string> = {
   fighter: "theory books: the lessons, the students with no work, the wrong answers of their own questions",
   master: "workbooks: lost marks and blanks, and the theory they need",
-  management: "correction now; fees and books come later",
+  management: "correction, the students' fees and the printed books",
 };
 
-/** The extras the owner ticks himself (Photos and Consultation follow from her pages). */
+/** The extras the owner ticks himself (Photos, Consultation and Money follow from her pages). */
 const OWN_EXTRAS: { id: Extra; name: string; help: string }[] = [
   { id: "students", name: "Students", help: "add, rename, remove students" },
   { id: "books", name: "Books", help: "workbooks and unit names" },
@@ -276,7 +276,7 @@ function RoleSheet(props: { p: RolePerson; onClose: () => void; onPreview: () =>
       name: p.name,
       role: owner ? "owner" : "teacher",
       tabs: owner ? (["correction", "theory", "evaluation", "manager"] as Job[]) : r.tabs,
-      can: owner ? (["students", "books", "reports", "feedback", "photos", "consult", "community"] as Extra[]) : r.can,
+      can: owner ? (["students", "books", "reports", "feedback", "photos", "consult", "community", "money"] as Extra[]) : r.can,
       ...(dept ? { dept } : {}),
       ...(isTeachDept(dept) && lead ? { lead: true } : {}),
       pages,

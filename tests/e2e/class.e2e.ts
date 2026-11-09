@@ -1320,11 +1320,12 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
 
   // Priya: her paper opens under the names at the level she is on (L2). The names stay; hers is dark.
   await tap(name("Priya"));
-  // No big name on the paper (3 Nov 2026, his call): hers is dark in the names row; the top row starts with the book
-  // button (the Manager button left for the bottom bar's Class tab the same day).
+  // No big name on the paper (3 Nov 2026, his call): hers is dark in the names row. No book button since 9 Nov 2026 (his
+  // ask: books are given on the Books page): the top row's buttons stay on the right, in their places.
   await count(F.locator(".fc-name"), 0);
   await visible(F.locator(".fc-nm.on", { hasText: "Priya" }));
-  await visible(F.locator(".fc-head .fc-head-tools > .fc-units:first-child"));
+  await count(F.locator(".fc-units"), 0);
+  await visible(F.locator(".fc-head .fc-head-acts .fc-cardbtn"));
   await count(F.locator(".fc-mgr"), 0);
   await textsAre(F.locator(".fc-bk.on i"), ["8"]); // her book now, dark, in the row of her books
   await visible(F.locator(".fc-nm.on", { hasText: "Priya" }));
@@ -1521,11 +1522,15 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
   await says(F.locator(".fc-lvline"), "Level 4");
   expect((await marksOf(backend, "Nimal")).m!.lv["1"]?.pre).toBeGreaterThan(0);
 
-  // His units (the book button before his books): all 31 of Grade 8 on one screen, no scrolling, as small pills (number
-  // and Tamil name) under Term 1 / 2 / 3. Each fills as far as he got (green: good marks); his unit now has a dark ring.
+  // His units (Marks → Move → All his units at a glance since 9 Nov 2026; the paper's book button before): all 31 of
+  // Grade 8 on one screen, no scrolling, as small pills (number and Tamil name) under Term 1 / 2 / 3. Each fills as far
+  // as he got (green: good marks); his unit now has a dark ring. Move only here: books are given on the Books page.
   const pill = (n: number) => F.locator(".su-p", { has: F.locator("b", { hasText: new RegExp(`^${n}$`) }) });
-  await tap(F.locator(".fc-units"));
+  await tap(F.locator(".fc-cardbtn"));
+  await tap(F.locator(".sheet").getByRole("button", { name: "Move: unit or stage" }));
+  await tap(F.locator(".sheet").getByRole("button", { name: "All his units at a glance ›" }));
   await contains(F.locator(".sheet h2"), "Nimal: units");
+  await count(F.locator(".sheet").getByRole("button", { name: "Books given" }), 0);
   await visible(F.locator(".su-st.master.on"));
   expect(await F.locator(".su-tl > span").allTextContents()).toEqual(["Term 1", "Term 2", "Term 3"]);
   await count(F.locator(".su-olb"), 0); // OL books are for Grade 10 and 11 students: no switch for Grade 8
@@ -1553,46 +1558,19 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
   await contains(F.locator(".toast"), "Nimal: Master · 2");
   await contains(F.locator(".fc-paper .empty-title"), "No workbook for G8 · U02 in the app yet");
   expect((await marksOf(backend, "Nimal")).unitKey).toBe("G8-U02");
-  // Back to unit 1: his paper opens there again, at the level he is on (4).
-  await tap(F.locator(".fc-units"));
+  // Back to unit 1 from his paper (no workbook for U02 in the app): "Choose his stage and unit", the same grid, at the
+  // level he is on (4). (Books given: the Books page's run-through, "Fees and books: …".)
+  await count(F.locator(".fc-units"), 0);
+  await tap(F.locator(".fc-paper").getByRole("button", { name: "Choose his stage and unit" }));
+  await count(F.locator(".sheet").getByRole("button", { name: "Books given" }), 0);
   await tap(pill(1));
   await says(F.locator(".fc-lvline"), "Level 4");
   expect((await marksOf(backend, "Nimal")).unitKey).toBe("G8-U01");
-  // Books given: each tap gives that unit's workbook (✓, green) or takes it back; the sheet stays open. Per book:
-  // the theory book of the same unit is not given.
-  await tap(F.locator(".fc-units"));
-  await tap(F.locator(".sheet").getByRole("button", { name: "Books given" }));
-  await contains(F.locator(".su-key"), "Books given: tap each workbook you gave him");
-  await tap(pill(1));
-  await tap(pill(3));
-  await visible(pill(1).and(F.locator(".given")).locator(".su-g"));
-  await visible(pill(3).and(F.locator(".given")));
-  await tap(pill(3));
-  await count(F.locator(".su-p.given"), 1);
-  await shot(F, "f15c-correction-books-given");
-  const handouts = () =>
-    backend.t.run(async (ctx) =>
-      Promise.all(
-        (await ctx.db.query("handouts").collect()).map(async (h) => `${(await ctx.db.get(h.unitId))!.key} ${h.stage}`),
-      ),
-    );
-  await until(async () => JSON.stringify(await handouts()) === JSON.stringify(["G8-U01 master"]), "U01 workbook given");
-  await tap(F.locator(".sheet").getByRole("button", { name: "Fighter" }));
-  await count(F.locator(".su-p.given"), 0);
-  await tap(F.locator(".sheet").getByRole("button", { name: "Close" }));
-  await count(F.locator(".sheet"), 0);
-  // Opened again: from the server.
-  await tap(F.locator(".fc-units"));
-  await visible(pill(1).and(F.locator(".given")));
-  await tap(F.locator(".sheet").getByRole("button", { name: "Close" }));
-  const given = await backend.t.run(async (ctx) => (await ctx.db.query("events").collect()).filter((e) => e.kind.startsWith("book-given")));
-  expect(given.map((e) => `${e.kind} ${e.value}`)).toEqual([
-    "book-given G8-U01 workbook",
-    "book-given G8-U03 workbook",
-    "book-given-off G8-U03 workbook",
-  ]);
   // His books in ONE line under his name: his book now (dark) and every book given to him that he hasn't finished.
-  // Give him U03 too: it joins the row; one tap switches his paper to it (no dialog), another tap back.
+  // His U01 workbook given (the Books page gives books since 9 Nov 2026), then U03 too: it joins the row; one tap
+  // switches his paper to it (no dialog), another tap back.
+  await backend.t.mutation(api.students.setGiven, { token: OWNER_TOKEN, id: nimal, unitId: u01, stage: "master", given: true });
+  await backend.push();
   await textsAre(F.locator(".fc-bk i"), ["1"]);
   const u03 = await backend.t.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G8-U03")).first())!._id);
   await backend.t.mutation(api.students.setGiven, { token: OWNER_TOKEN, id: nimal, unitId: u03, stage: "master", given: true });
@@ -3196,25 +3174,24 @@ test("OL: the O/L books by paper part; a tute filed under its topic; a Grade 11 
   const fit = await row.evaluate((el) => ({ sw: el.scrollWidth, cw: el.clientWidth, h: Math.round(el.getBoundingClientRect().height), n: el.children.length }));
   expect(fit.sw <= fit.cw + 1 && fit.h < 70, `seven grades in one row at 320 px: ${JSON.stringify(fit)}`).toBe(true);
 
-  // Correction: a Grade 11 student's units sheet → OL books: the four parts; the whole OL in one tap (only the books in
-  // the app: Simultaneous equations); then he moves onto it and stays Grade 11.
+  // Correction: a Grade 11 student's units (Marks → Move → All his units at a glance since 9 Nov 2026) → OL books: the
+  // four parts; he moves onto Simultaneous equations and stays Grade 11. (The whole OL in one tap is Books given's: his
+  // sheet on the Books page, the same grid.)
   await C.getByRole("button", { name: "Back to the class" }).click();
   await C.locator(".fc-grades").getByRole("button", { name: /^Grade 11\b|^11\b/ }).first().click();
   const kumar = await backend.t.run(async (ctx) => (await ctx.db.query("students").collect()).find((x) => x.grade === 11 && x.present)!.name);
   await C.locator(".fc-nm", { hasText: new RegExp(`^${kumar}`) }).first().click();
   await C.waitForTimeout(420);
-  await C.locator(".fc-units").click();
+  await C.locator(".fc-cardbtn").click();
+  await C.locator(".sheet").getByRole("button", { name: "Move: unit or stage" }).click();
+  await C.locator(".sheet").getByRole("button", { name: "All his units at a glance ›" }).click();
   await C.locator(".su-olb").click();
   const parts = ["பகுதி 1A · Paper I · Part A", "பகுதி 1B · Paper I · Part B", "பகுதி 2A · Paper II · Part A", "பகுதி 2B · Paper II · Part B"];
   await until(async () => JSON.stringify(await C.locator(".su-tl > span").allTextContents()) === JSON.stringify(parts), "the four parts"); // drawn in capitals
   await visible(C.locator(".su-olb", { hasText: "Grade 11 ›" }));
   await C.locator(".sheet .su-st.master").click();
-  await C.locator(".sheet").getByRole("button", { name: "Books given" }).click();
-  await C.locator(".su-olall", { hasText: "Give him every OL workbook in the app (1)" }).click();
-  await contains(C.locator(".toast"), `${kumar}: 1 OL workbook given.`);
-  await visible(C.locator(".su-olall", { hasText: "Take back every OL workbook (1)" }));
+  await count(C.locator(".sheet").getByRole("button", { name: "Books given" }), 0);
   await shot(C, "o03-units-sheet-ol");
-  await C.locator(".sheet").getByRole("button", { name: "Move him" }).click();
   await C.locator(".su-p", { hasText: "ஒருங்கமை சமன்பாடு" }).click();
   await contains(C.locator(".toast"), `${kumar}: Master · OL 3 ஒருங்கமை சமன்பாடு.`);
   const s = await backend.t.run(async (ctx) => {
@@ -4289,13 +4266,15 @@ test("Owner's own app: Fighter and Master on his bar, not Theory and Evaluation;
   await until(async () => JSON.stringify(await ticked()) === JSON.stringify(DEFAULT), "his default, ticked");
   await count(sheet.locator(".role-only"), 5); // Owner, Register, Theory, Evaluation, Progress
   await sheet.getByRole("button", { name: "Management", exact: true }).click();
-  await until(async () => JSON.stringify(await ticked()) === JSON.stringify(["Dashboard", "Class", "Correction", "Us"]), "Management's pages");
+  // Management's six since 9 Nov 2026 (Fees and Books): the Owner page takes the Class tab's place (six at most).
+  await until(async () => JSON.stringify(await ticked()) === JSON.stringify(["Dashboard", "Class", "Correction", "Fees", "Books", "Us"]), "Management's pages");
+  await sheet.getByRole("checkbox", { name: /^Class/ }).uncheck();
   await sheet.getByRole("checkbox", { name: /^Owner/ }).check();
-  await until(async () => JSON.stringify(await ticked()) === JSON.stringify(["Dashboard", "Owner", "Class", "Correction", "Us"]), "with the Owner page");
+  await until(async () => JSON.stringify(await ticked()) === JSON.stringify(["Dashboard", "Owner", "Correction", "Fees", "Books", "Us"]), "with the Owner page");
   await shot(O, "o02-owner-sheet");
   await sheet.getByRole("button", { name: "Save" }).click();
   await contains(O.locator(".toast"), "Your app is saved: you work in the Management department.");
-  await until(async () => JSON.stringify(await bar(O)) === JSON.stringify(["Dashboard", "Owner", "Class", "Correction", "Us"]), "his bar");
+  await until(async () => JSON.stringify(await bar(O)) === JSON.stringify(["Dashboard", "Owner", "Correction", "Fees", "Books", "Us"]), "his bar");
   await count(O.locator(".top .boss-btn"), 0); // the Owner page is his tab now, not an icon too
   await O.locator(".tabs .tab.boss").click();
   await visible(O.locator(".page.boss"));
@@ -4355,6 +4334,173 @@ test("Owner's own app: Fighter and Master on his bar, not Theory and Evaluation;
   await R.locator(".rd-owner .role-p").click();
   await sheet.locator(".role-reset").click();
   await until(async () => JSON.stringify(await bar(O)) === JSON.stringify(DEFAULT), "his default bar again");
+  expect(problems, problems.join("\n")).toEqual([]);
+});
+
+test("Fees and books: the owner starts the fees; each day signed in is a class; one sheet takes the class and a book together; what to print, Printed, the stock and its price; the Business tab is his", async () => {
+  // 9 Nov 2026, his voice note: "students not giving me fees ... both need to be in the one place when it comes to data
+  // entry ... the alert ... print five books from the unit six". Grade 7: U08's workbook (in the code) and U09's (the
+  // same skeleton, test only). Kumar finished U08 (needs U09 now), Hana is on Level 7 of 8 (soon), Ravi on Level 1.
+  const backend = await newClass({ defaultBar: true });
+  const as = { token: OWNER_TOKEN };
+  await backend.t.mutation(api.setup.ensure, as);
+  const G7U08 = KNOWN_WORKBOOKS[0].data;
+  const ids = await backend.t.run(async (ctx) => {
+    const unit = async (key: string) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", key)).first())!;
+    const u09 = await unit("G7-U09");
+    await ctx.db.insert("books", { unitId: u09._id, stage: "master", data: G7U08, updatedAt: Date.now() });
+    return { u08: (await unit("G7-U08"))._id, u09: u09._id };
+  });
+  const add = (name: string) => backend.t.mutation(api.students.add, { ...as, name, grade: 7, term: 1, stage: "master", unitId: ids.u08 });
+  const kumar = await add("Kumar S");
+  const hana = await add("Hana K");
+  const ravi = await add("Ravi P");
+  const correct = async (id: typeof kumar, levels: number) => {
+    for (const lv of G7U08.levels.slice(0, levels)) {
+      const items = Array.from({ length: lv.to - lv.from + 1 }, (_, i) => ({ q: lv.from + i, got: outOf(G7U08, lv.from + i)! }));
+      await backend.t.mutation(api.workbook.correct, { ...as, studentId: id, level: lv.n, items, by: "correction" });
+    }
+  };
+  await correct(kumar, 8);
+  await correct(hana, 6);
+  for (const id of [kumar, hana, ravi]) await backend.t.mutation(api.students.setPresent, { ...as, id, present: true });
+  const MALA = "mala-fees-token-0123456789abcdefghijklmnopqrstuvwxyz01";
+  const mala = await addPerson(backend.t, { name: "Mala", token: MALA, tabs: ["correction"] });
+  await backend.t.mutation(api.people.setRole, { ...as, id: mala, dept: "management", lead: false, pages: ["dash", "class", "correction", "fees", "books", "us"], tabs: ["correction"], can: ["photos"] });
+  await backend.push();
+
+  // The owner: his Dashboard → Management → Money and books → Fees (not on his bar: it opens over it). The first card.
+  const O = await phone(backend, "dash");
+  await O.locator(".dash-seg .segc-b", { hasText: "Management" }).click();
+  await contains(O.locator(".dash-money"), "The fees aren't set up yet");
+  await O.locator(".dash-money").getByRole("button", { name: "Fees ›" }).click();
+  await visible(O.locator(".mn-setup"));
+  await shot(O, "fb01-fees-setup");
+  await O.locator(".mn-start").getByRole("button", { name: "Today" }).click();
+  await O.getByRole("button", { name: "Start the fees" }).click();
+  await contains(O.locator(".toast"), "Fees on: Rs 350 a class, counted from today.");
+  // Everyone already here today has today's class (A–Z, each owing Rs 350).
+  await textsAre(O.locator(".mn-rows .mn-row > b"), ["Hana K", "Kumar S", "Ravi P"]);
+  await textsAre(O.locator(".mn-rows .mn-row .mn-r em"), ["Rs 350", "Rs 350", "Rs 350"]);
+
+  // Mala (Management): her six tabs; the Books tab's red 1 = Kumar needs U09 now and none is in hand.
+  const M = await phone(backend, "fees", PHONE, MALA);
+  await textsAre(M.locator(".tabs .tab > span:nth-child(2)"), ["Dashboard", "Class", "Correction", "Fees", "Books", "Us"]);
+  await textsAre(M.locator(".tabs .tab.books .tab-badge"), ["1"]);
+  await M.locator(".tabs .tab.books").click();
+  await says(M.locator(".mn-printsay"), "Print 2 of Unit 9.");
+  await visible(M.locator(".mn-need.red", { hasText: "Print 2" }));
+  await textsAre(M.locator(".mn-need .mn-pill"), ["Kumar S", "Hana K"]);
+  await visible(M.locator(".mn-pill.now", { hasText: "Kumar S" }));
+  await shot(M, "fb02-books-to-print");
+  // Printed: 2 copies of 18 papers × Rs 7 = Rs 252; then enough in hand, the red count goes.
+  await M.locator(".mn-need").getByRole("button", { name: "Printed…" }).click();
+  const PS = M.locator(".mn-sheet");
+  await textsAre(PS.locator(".mn-step b"), ["2"]);
+  await PS.getByLabel("Papers in one copy").fill("18");
+  await contains(PS.locator(".boss-mix"), "2 × 18 papers × Rs 7 = Rs 252");
+  await PS.getByRole("button", { name: /^Printed 2/ }).click();
+  await contains(M.locator(".toast"), "printed (Rs 252)");
+  await count(M.locator(".mn-sheet"), 0);
+  await contains(M.locator(".boss-say"), "Enough in hand");
+  await M.locator(".tabs .tab.fees").click();
+  await count(M.locator(".tabs .tab.books .tab-badge"), 0);
+
+  // The owner prices it (Books → Stock): its cost is shown (18 × Rs 7 = Rs 126), he types Rs 200. Mala only sees it.
+  await O.locator(".tabs .tab.dash").click();
+  await O.locator(".dash-money").getByRole("button", { name: "Books ›" }).click();
+  await O.locator(".mn-seg").getByRole("button", { name: "Stock" }).click();
+  await O.locator(".grade-row").getByRole("button", { name: /^Grade 7\b/ }).click();
+  await O.locator(".mn-row", { has: O.locator("b", { hasText: /^9 / }) }).click();
+  const BS = O.locator(".mn-sheet");
+  await says(BS.locator(".sheet-title p"), "2 in hand · 2 printed · 0 given");
+  await contains(BS.locator(".boss-mix").first(), "Cost: 18 papers × Rs 7 = Rs 126 a copy.");
+  await BS.getByLabel(/^Price for a student/).fill("200");
+  await BS.locator(".mn-field", { hasText: "Price for a student" }).getByRole("button", { name: "Save" }).click();
+  await contains(O.locator(".toast"), "Price saved");
+  await contains(BS.locator(".boss-note"), "Profit Rs 74 a copy.");
+  await shot(O, "fb03-book-price");
+  await BS.getByRole("button", { name: "Close" }).click();
+
+  // The end of class, on Mala's Fees page: Kumar's sheet has today's class ticked; Give puts U09 on it, ticked too.
+  await M.locator(".mn-row", { hasText: "Kumar S" }).click();
+  const S = M.locator(".mn-sheet");
+  await visible(S.locator(".mn-chip.on", { hasText: "Today · class" }));
+  const amount = () => S.getByLabel("Amount in rupees").inputValue();
+  await until(async () => (await amount()) === "350", "Rs 350 ticked");
+  await contains(S.locator(".mn-next"), "Rs 200 · 2 in hand");
+  await shot(M, "fb04-sheet");
+  await S.locator(".mn-next").getByRole("button", { name: "Give" }).click();
+  await contains(M.locator(".toast"), "Kumar S: 9");
+  await count(S.locator(".mn-chip.on"), 2);
+  await until(async () => (await amount()) === "550", "Rs 550 ticked");
+  await visible(S.locator(".mn-has"));
+  await S.getByRole("button", { name: "Paid Rs 550" }).click();
+  await contains(M.locator(".toast"), "Kumar S paid Rs 550 · all paid.");
+  await count(M.locator(".mn-sheet"), 0);
+  // Hana gives Rs 200 of her Rs 350 (typed): part paid. Ravi says next time: nothing.
+  await M.locator(".mn-row", { hasText: "Hana K" }).click();
+  await until(async () => (await amount()) === "350", "Hana's Rs 350 ticked");
+  await S.getByLabel("Amount in rupees").fill("200");
+  await S.getByRole("button", { name: "Paid Rs 200" }).click();
+  await contains(M.locator(".toast"), "Hana K paid Rs 200 · still owes Rs 150.");
+  await textsAre(M.locator(".mn-rows .mn-row > b"), ["Ravi P", "Hana K", "Kumar S"]);
+  await textsAre(M.locator(".mn-rows .mn-row.part .mn-r em"), ["Rs 150"]);
+  await contains(M.locator(".mn-tiles"), "Rs 750");
+  await count(M.locator(".mn-seg .segc-b", { hasText: "Business" }), 0); // the owner's only
+  await shot(M, "fb05-fees-today");
+  const rows = await backend.t.run(async (ctx) =>
+    (await ctx.db.query("fees").collect()).filter((r) => r.sid === kumar).map((r) => `${r.k} ${r.a}${r.to ? ` for ${r.to.length}` : ""}`),
+  );
+  expect(rows.sort()).toEqual(["book 200", "class 350", "pay 550 for 2"]);
+
+  // Books → Students (Grade 7): each student's book now and how near its end, his next book, books not paid.
+  await M.locator(".tabs .tab.books").click();
+  await M.locator(".mn-seg").getByRole("button", { name: "Students" }).click();
+  await M.locator(".grade-row").getByRole("button", { name: /^Grade 7\b/ }).click();
+  await textsAre(M.locator(".mn-rows .mn-l b"), ["Hana K", "Kumar S", "Ravi P"]);
+  await contains(M.locator(".mn-row", { hasText: "Kumar S" }), "✓ has Unit 9");
+  await count(M.locator(".mn-row.f-now"), 0); // finished, but his next book is in his hands: calm
+  await contains(M.locator(".mn-row.f-soon", { hasText: "Hana K" }), "Level 7 of 8");
+  await shot(M, "fb05b-books-students");
+  await M.locator(".tabs .tab.fees").click();
+
+  // Books given, on the sheet (Correction's book button went, his ask): Ravi's sheet → Give another book… → the grid.
+  await M.locator(".mn-row", { hasText: "Ravi P" }).click();
+  await S.getByRole("button", { name: "Give another book…" }).click();
+  await contains(M.locator(".su-sheet h2"), "Ravi P: units");
+  await visible(M.locator(".su-sheet").getByRole("button", { name: "Books given", pressed: true }));
+  await M.locator(".su-p", { has: M.locator("b", { hasText: /^10$/ }) }).click();
+  await visible(M.locator(".su-p.given", { has: M.locator("b", { hasText: /^10$/ }) }));
+  await M.locator(".su-sheet").getByRole("button", { name: "Close" }).click();
+  await contains(S.locator(".mn-list .mn-line"), "no price yet");
+  await S.getByRole("button", { name: "Close" }).click();
+
+  // At 320 px nothing goes sideways: the Fees page, Kumar's sheet, the Books page.
+  const N = await phone(backend, "fees", { ...PHONE, viewport: { width: 320, height: 640 } }, MALA);
+  await visible(N.locator(".mn-rows .mn-row"));
+  expect(await N.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(N, "fb06-fees-320");
+  await N.locator(".mn-row", { hasText: "Hana K" }).click();
+  await visible(N.locator(".mn-sheet .mn-pay"));
+  expect(await N.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(N, "fb07-sheet-320");
+  await N.locator(".mn-sheet").getByRole("button", { name: "Close" }).click();
+  await N.locator(".tabs .tab.books").click();
+  await visible(N.locator(".mn-seg"));
+  expect(await N.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(N, "fb08-books-320");
+  await N.context().close();
+
+  // The owner's Business tab: money in Rs 750, out Rs 252 (printing), profit Rs 498.
+  await O.locator(".tabs .tab.dash").click();
+  await O.locator(".dash-money").getByRole("button", { name: "Fees ›" }).click();
+  await O.locator(".mn-seg").getByRole("button", { name: "Business" }).click();
+  const month = O.locator(".boss-card").first();
+  await contains(month, "Rs 750");
+  await contains(month, "Rs 252");
+  await contains(month, "Rs 498");
+  await shot(O, "fb09-business", true);
   expect(problems, problems.join("\n")).toEqual([]);
 });
 

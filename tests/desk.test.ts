@@ -79,11 +79,11 @@ afterEach(() => {
 });
 
 describe("the departments' rules (convex/lib/dept.ts)", () => {
-  test("presets: his lead teacher's six; a consultation teacher's two; Management's four (its dashboard first)", () => {
+  test("presets: his lead teacher's six; a consultation teacher's two; Management's six (its dashboard first; Fees and Books since 9 Nov 2026)", () => {
     expect(presetPages("fighter", true)).toEqual(["dash", "fighter", "correction", "teach", "consult", "us"]);
     expect(presetPages("master", true)).toEqual(["dash", "master", "correction", "consult", "us"]);
     expect(presetPages("fighter", false)).toEqual(["consult", "us"]);
-    expect(presetPages("management", false)).toEqual(["dash", "class", "correction", "us"]);
+    expect(presetPages("management", false)).toEqual(["dash", "class", "correction", "fees", "books", "us"]);
     expect(presetPages(undefined, false)).toEqual(["class", "us"]);
   });
   test("pages in their fixed places, once each, six at most; the jobs and extras they can't work without", () => {
@@ -305,7 +305,7 @@ describe("the owner's own app (8 Nov 2026: Fighter and Master on his bar, his de
     // The department he works in starts his pages; all departments: his default.
     expect(ownerPreset(null, false)).toEqual([...OWNER_DEFAULT]);
     expect(ownerPreset("fighter", true)).toEqual(presetPages("fighter", true));
-    expect(ownerPreset("management", false)).toEqual(["dash", "class", "correction", "us"]);
+    expect(ownerPreset("management", false)).toEqual(["dash", "class", "correction", "fees", "books", "us"]);
   });
 
   test("he works in a department: saved with his pages (his own ones too); its consultation rings on his phone as its lead; back to all", async () => {

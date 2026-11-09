@@ -11890,3 +11890,561 @@ body.tm-on .toasts {
 .ps-role {
   margin: 6px 0 0;
 }
+
+/* ---------- Fees and Books (9 Nov 2026): the Management department's money and printed books ---------- */
+.mn-page {
+  padding-bottom: 18px;
+}
+.mn-seg {
+  display: flex;
+  flex: none;
+}
+.mn-seg .segc-b {
+  flex: 1;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.mn-seg .segc-b small {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: var(--line-2);
+  color: var(--ink);
+  font: 700 12.5px/20px var(--cond);
+}
+.mn-seg .segc-b.on small {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+.mn-seg .segc-b small.red {
+  background: var(--red);
+  color: #fff;
+}
+.mn-tiles .boss-tile b {
+  font-size: 21px;
+}
+.mn-search {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  font: 600 15px/1.2 var(--font);
+  color: var(--ink);
+}
+.mn-rows,
+.mn-list,
+.mn-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+/* One student (or book) a row: the name, a grade chip, what he owes on the right. Never two lines of buttons. */
+.mn-row {
+  width: 100%;
+  min-height: 52px;
+  padding: 7px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--ink);
+  text-align: left;
+  transition: transform 0.1s ease;
+}
+.mn-row:active {
+  transform: scale(0.985);
+}
+.mn-row > b {
+  min-width: 0;
+  flex: 0 1 auto;
+  font: 700 16.5px/1.15 var(--font);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mn-g {
+  flex: none;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  border-radius: 7px;
+  background: var(--line-2);
+  color: var(--ink-2);
+  font: 700 12.5px/22px var(--cond);
+  font-style: normal;
+  text-align: center;
+}
+.mn-tag {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--line-2);
+  color: var(--ink-2);
+  font: 700 11.5px/1.4 var(--font);
+  font-style: normal;
+}
+.mn-r {
+  min-width: 0;
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  text-align: right;
+  font: 700 14px/1.2 var(--font);
+  color: var(--ink-2);
+}
+.mn-r em {
+  font: 700 17px/1.1 var(--cond);
+  font-style: normal;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.mn-r small {
+  max-width: 100%;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mn-row.due {
+  border-color: #f3c27a;
+  background: #fffaf0;
+}
+.mn-row.due .mn-r em {
+  color: var(--amber-ink);
+}
+.mn-row.part {
+  border-color: #f3dc8a;
+  background: #fffcee;
+}
+.mn-row.paid .mn-r {
+  color: var(--green-ink);
+}
+.mn-row.due.age-red {
+  border-color: #f2a3ad;
+  background: var(--red-soft);
+}
+.mn-row.due.age-red .mn-r em {
+  color: var(--red-ink);
+}
+/* A book or a student's books: two lines on the left (the name, then his book), the stock or next book on the right. */
+.mn-l {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.mn-l b {
+  font: 700 16px/1.15 var(--font);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mn-l small {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mn-row.bk .mn-r {
+  flex: none;
+  max-width: 46%;
+}
+.mn-row.bk .mn-r em {
+  font: 700 14.5px/1.15 var(--font);
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mn-row.bk.f-soon {
+  border-color: #f3c27a;
+}
+.mn-row.bk.f-now {
+  border-color: #f2a3ad;
+  background: var(--red-soft);
+}
+.mn-h {
+  margin: 4px 0 0;
+  font: 700 15px/1.2 var(--font);
+  color: var(--ink-2);
+}
+/* The sheet: money first (chips, the amount, Paid), then his books, his history, the owner's fixes. */
+.mn-sheet .segc {
+  display: flex;
+  flex: none;
+}
+.mn-sheet .segc .segc-b {
+  flex: 1;
+}
+.mn-sec {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line-2);
+}
+.mn-sec:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.mn-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.mn-chip {
+  min-height: 44px;
+  padding: 5px 11px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--ink);
+  font: 600 14px/1.2 var(--font);
+  text-align: left;
+}
+.mn-chip b {
+  font: 700 16px/1 var(--cond);
+}
+.mn-chip small {
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+.mn-chip.on {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
+}
+.mn-chip.on small {
+  color: rgba(255, 255, 255, 0.75);
+}
+.mn-chip.on::before {
+  content: "✓";
+  font-weight: 800;
+}
+.mn-none {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.mn-amt,
+.mn-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.mn-amt span,
+.mn-field span {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: 700 14.5px/1.2 var(--font);
+  color: var(--ink-2);
+}
+.mn-amt i,
+.mn-field i {
+  font: 700 16px/1 var(--cond);
+  font-style: normal;
+  color: var(--ink-3);
+}
+.mn-amt input,
+.mn-field input {
+  flex: none;
+  width: 116px;
+  min-height: 46px;
+  padding: 0 10px;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--ink);
+  font: 700 21px/1 var(--cond);
+  text-align: right;
+}
+.mn-field input:not([inputmode]) {
+  width: 160px;
+  font: 600 15px/1.2 var(--font);
+  text-align: left;
+}
+.mn-amt input:focus,
+.mn-field input:focus,
+.mn-search:focus {
+  outline: 2px solid var(--theory);
+  outline-offset: 1px;
+}
+.mn-all {
+  align-self: flex-end;
+}
+.mn-pay {
+  margin-top: 2px;
+}
+.mn-now,
+.mn-has {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font: 700 14.5px/1.3 var(--font);
+}
+.mn-now small {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.mn-now.f-soon small {
+  color: var(--amber-ink);
+}
+.mn-now.f-now small {
+  color: var(--red-ink);
+}
+.mn-has {
+  color: var(--green-ink);
+}
+.mn-next {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: var(--ground);
+}
+.mn-next > span {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.mn-next b {
+  font: 700 14.5px/1.25 var(--font);
+}
+.mn-next small {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.mn-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line-2);
+  font: 600 14px/1.3 var(--font);
+}
+.mn-line > span {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.mn-line small {
+  color: var(--ink-3);
+  font-weight: 600;
+}
+.mn-line > b {
+  flex: none;
+  font: 700 15px/1.1 var(--cond);
+  white-space: nowrap;
+}
+.mn-line > b.due {
+  color: var(--amber-ink);
+}
+.mn-line > b.paid,
+.mn-line.in > b {
+  color: var(--green-ink);
+}
+.mn-line > b.np,
+.mn-line > b.waived,
+.mn-line.w > b {
+  color: var(--ink-3);
+}
+.mn-line.w > span {
+  text-decoration: line-through;
+  color: var(--ink-3);
+}
+.mn-line .boss-link {
+  flex: none;
+  padding: 2px 0;
+}
+.mn-more {
+  align-self: flex-start;
+}
+.mn-fold {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: 700 15px/1.2 var(--font);
+  text-align: left;
+}
+.mn-fold small {
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mn-fold i {
+  margin-left: auto;
+  font-style: normal;
+  color: var(--ink-3);
+}
+.mn-fix {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mn-fix .boss-link {
+  align-self: flex-start;
+}
+.mn-fix > .btn {
+  align-self: flex-start;
+}
+.mn-setup .mn-field input {
+  width: 96px;
+}
+.mn-start {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.mn-start > span {
+  font: 700 14.5px/1.2 var(--font);
+  color: var(--ink-2);
+}
+/* The print list: his words on top, then a card per book (red = needed now, none in hand). */
+.mn-printsay {
+  font-size: 15.5px;
+}
+.mn-need h3 {
+  align-items: center;
+  font-size: 15px;
+}
+.mn-need.red {
+  border: 2px solid var(--red);
+}
+.mn-need.amber {
+  border: 2px solid var(--amber);
+}
+.mn-needline {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.mn-needline b {
+  font: 700 22px/1 var(--cond);
+}
+.mn-need.red .mn-needline b {
+  color: var(--red-ink);
+}
+.mn-need.amber .mn-needline b {
+  color: var(--amber-ink);
+}
+.mn-needline span {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.mn-names {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.mn-pill {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1.5px solid var(--line);
+  border-radius: 17px;
+  background: var(--card);
+  color: var(--ink);
+  font: 700 13.5px/1 var(--font);
+}
+.mn-pill.now {
+  border-color: var(--red);
+  color: var(--red-ink);
+}
+.mn-need > .btn {
+  align-self: flex-start;
+}
+.mn-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.mn-step > span {
+  flex: 1 1 auto;
+  font: 700 14.5px/1.2 var(--font);
+  color: var(--ink-2);
+}
+.mn-step > b {
+  min-width: 44px;
+  text-align: center;
+  font: 700 28px/1 var(--cond);
+}
+.mn-step .btn {
+  width: 46px;
+  font-size: 22px;
+}
+.mv-all {
+  margin-bottom: 8px;
+}
+.dash-money .row-actions {
+  justify-content: flex-start;
+}
+@media (max-width: 345px) {
+  .mn-tiles .boss-tile {
+    padding: 8px 7px;
+  }
+  .mn-tiles .boss-tile b {
+    font-size: 17px;
+  }
+  .mn-row {
+    padding: 6px 9px;
+    gap: 6px;
+  }
+  .mn-row > b {
+    font-size: 15.5px;
+  }
+  .mn-amt input,
+  .mn-field input {
+    width: 100px;
+  }
+  .mn-seg .segc-b {
+    padding: 0 3px;
+    font-size: 13px;
+  }
+}
+.mn-dline {
+  margin: 0 0 6px;
+  font-size: 14.5px;
+}
+.mn-dline small {
+  color: var(--ink-2);
+}
