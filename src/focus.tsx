@@ -287,7 +287,7 @@ async function claimBook(want: { studentId: string; unitId: string }) {
       asking = { ...want, who: r.by ?? "Another corrector", name, tag, state: "held" };
       emit();
     } else if (r.took) {
-      toast(`${r.took}'s phone was quiet for a minute: ${name}'s ${tag} is yours now.`);
+      toast(`${r.took}'s phone was quiet for 2 minutes: ${name}'s ${tag} is yours now.`);
     }
   } catch {
     /* no signal: the next "still here" tries again */
@@ -306,7 +306,7 @@ function lostBook(h: { studentId: string; unitId: string }, by: string | null) {
   toast(`${by ?? "Another corrector"} has ${name}'s ${tag} now. Your marks were kept.`);
 }
 
-/** "Still here" every 20 s while the Correction page is on screen (a locked phone stops: after a minute it is free). */
+/** "Still here" every 45 s while the Correction page is on screen (a locked phone stops: after 2 minutes it is free). */
 async function stillHere() {
   const h = holding;
   if (!h || document.visibilityState !== "visible") return;

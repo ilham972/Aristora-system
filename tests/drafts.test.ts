@@ -70,7 +70,8 @@ describe("a level marked part of the way", () => {
     const { s, m } = await work(t, malik.id);
     expect(m.lv["3"]).toBeUndefined();
     expect(m.q["24"]).toBeUndefined();
-    expect(s.lastActivityAt).toBe(Date.now());
+    // (Written at most once a minute since 10 Nov 2026: each write woke every phone.)
+    expect(s.lastActivityAt).toBeGreaterThan(Date.now() - 60_000);
     const kinds = (await t.run(async (ctx) => await ctx.db.query("events").collect())).map((e) => e.kind);
     expect(kinds.filter((k) => k.startsWith("level"))).toEqual([]);
     // Every question cleared: the draft is gone.

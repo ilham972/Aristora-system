@@ -257,8 +257,13 @@ export async function ensureSession(ctx: MutationCtx, now: number, by?: string):
   return created;
 }
 
+/**
+ * The class's "last active" time, at most once a minute (10 Nov 2026: written on every tap, it made every phone re-read
+ * the whole board on every tap; a class goes stale after 4 hours, so a minute changes nothing).
+ */
+export const TOUCH_EVERY_MS = 60_000;
 export async function touch(ctx: MutationCtx, session: Doc<"sessions"> | null, now: number) {
-  if (session) await ctx.db.patch(session._id, { lastActivityAt: now });
+  if (session && now - session.lastActivityAt >= TOUCH_EVERY_MS) await ctx.db.patch(session._id, { lastActivityAt: now });
 }
 
 export async function activeCalls(ctx: QueryCtx, studentId: Id<"students">) {

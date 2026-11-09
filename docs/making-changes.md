@@ -125,6 +125,16 @@ EOF
   `fflate` from source; `nosleep.js/src/media.js` and `@fontsource/*` stubbed). Run one with `cd repo && SHOTS=… TZ=Asia/Colombo
   NODE_PATH=/opt/npm-tools/node_modules node runner.mjs tests/e2e/class.e2e.ts "<name part>"` (13 s for "Fees and books").
   Without the class app's fonts the checks that measure the top bar at 320 px fail (`topFits`): run those on GitHub.
+- **The Convex bill: what one tap costs** (10 Nov 2026, his first month hit the free plan's limit; top: `state.get`, then
+  `focus.claims`, `focus.drafts`, `catalog.key`, `focus.claim`). A live query runs again, whole, on every phone that has
+  it open whenever ANY row it read changes, and every run counts all the bytes it reads. `state.get` read every
+  student's marks in every book, and a draft tap on Correction rewrote the student's `lastActivityAt` and the class's
+  `lastActivityAt`, so each tap re-read the whole class on every phone. Now: phones read `state.live` (students, calls,
+  session) and one `state.his` per student (his books; only his own changes wake it), put together in `src/store.ts`
+  (`state.get` stays for old phones and the tests; `tests/boardSplit.test.ts` proves the parts add up to it); `touch`
+  and the draft tap's student write at most once a minute; "still here" every 45 s (a book free after 2 minutes, not
+  1). Before adding a live query, ask: what does it read, and what writes to that on every tap? Never write to
+  `students`, `sessions` or `users` on every tap.
 - **Every mutation keeps the fees too** (9 Nov 2026, `convex/lib/fn.ts`): `watched` notes the students whose
   `attendance` or `handouts` rows were inserted or deleted (a delete reads the row first), and as the handler ends
   `syncFees` (`convex/lib/feeRows.ts`) adds or removes their class and book charges and rebuilds their `accounts` row.

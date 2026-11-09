@@ -367,8 +367,8 @@ describe("the simulation on the server (convex/sim.ts)", () => {
       await raw.run(async (ctx) => ((await ctx.db.query("progress").withIndex("by_student", (q) => q.eq("studentId", kid._id)).collect())[0].m as MState).lv[String(level)]);
     await steps(r, 1, 5_000);
     expect((await lvOf()).fixed).toBeUndefined();
-    // Her phone went quiet for a minute (or she gave it up): the app corrects it.
-    await steps(r, 4, 20_000);
+    // Her phone went quiet for two minutes (or she gave it up): the app corrects it.
+    await steps(r, 7, 20_000);
     expect((await lvOf()).fixed).toBeDefined();
     expect((await lvOf()).by).toBe("correction");
   });

@@ -2,10 +2,13 @@
 // open (he works on several at once); the same book is one corrector's at a time, so nobody marks a paper twice.
 // The rules the server and the phones share.
 
-/** Her phone says "still here" this often while a book is open (and the page is on screen). */
-export const CLAIM_PING_MS = 20_000;
-/** After this much silence (phone locked, page closed, no signal) anyone can take her book. */
-export const CLAIM_LIVE_MS = 60_000;
+/**
+ * Her phone says "still here" this often while a book is open (and the page is on screen). 10 Nov 2026 (the Convex
+ * limit): every 45 s, not 20; each "still here" re-sent the list of claims to every Correction phone.
+ */
+export const CLAIM_PING_MS = 45_000;
+/** After this much silence (phone locked, page closed, no signal) anyone can take her book (two pings missed). */
+export const CLAIM_LIVE_MS = 120_000;
 
 export type Claim = {
   studentId: string;
@@ -20,7 +23,7 @@ export type Claim = {
   kept?: { userId: string; at: number };
 };
 
-/** Still hers: her phone spoke in the last minute. */
+/** Still hers: her phone spoke in the last 2 minutes. */
 export function claimLive(c: { seenAt: number }, now: number): boolean {
   return now - c.seenAt < CLAIM_LIVE_MS;
 }

@@ -711,8 +711,9 @@ describe("Several books at once (30 Oct 2026): every book reaches the rooms, one
     cl = await t.query(api.focus.claims, {});
     expect(cl[0]).toMatchObject({ name: "Kavi", kept: { userId: expect.any(String) } });
     expect(cl[0].ask).toBeUndefined();
-    // Kavi's phone goes quiet for a minute (locked): Nisha takes it without asking. Leaving frees it.
-    advance(1.1);
+    // Kavi's phone goes quiet for two minutes (locked; two "still here" missed, 10 Nov 2026): Nisha takes it without
+    // asking. Leaving frees it.
+    advance(2.1);
     expect(await nisha.mutation(api.focus.claim, { studentId: id, unitId: u08 })).toMatchObject({ ok: true, took: "Kavi" });
     await nisha.mutation(api.focus.release, { studentId: id, unitId: u08 });
     expect(await t.query(api.focus.claims, {})).toEqual([]);

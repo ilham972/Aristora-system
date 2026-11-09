@@ -114,8 +114,8 @@ export const mark = mutation({
     } else {
       await ctx.db.insert("drafts", { studentId: student._id, unitId: unit._id, level: l.n, q, updatedAt: now, ...(by ? { by } : {}) });
     }
-    // Marks on his questions mean he is working: not "quiet".
-    if (args.set.length) await ctx.db.patch(student._id, { lastActivityAt: now });
+    // Marks on his questions mean he is working: not "quiet" (at most once a minute: each write wakes every phone).
+    if (args.set.length && now - (student.lastActivityAt ?? 0) >= 60_000) await ctx.db.patch(student._id, { lastActivityAt: now });
     await touch(ctx, await currentSession(ctx, now), now);
     return true;
   },
@@ -135,8 +135,8 @@ export const drop = mutation({
 
 // ---- One corrector per book (31 Oct 2026) ----
 // Two correctors can each have one of a student's books open; the same book is one corrector's at a time. Her phone
-// claims the book when it opens, says "still here" every 20 s while it stays open, and lets go when she leaves it.
-// Another corrector who wants it asks; the holder gives it or keeps it. A phone silent for a minute loses it.
+// claims the book when it opens, says "still here" every 45 s while it stays open, and lets go when she leaves it.
+// Another corrector who wants it asks; the holder gives it or keeps it. A phone silent for 2 minutes loses it.
 
 const paperArgs = {
   token: v.optional(v.string()),
@@ -173,7 +173,7 @@ export const claims = query({
 
 /**
  * Open one of his books on this phone: hers until she leaves it. Refused while another corrector has it (her phone
- * spoke in the last minute): `by` names her. `ping`: only "I am still here" (never takes a book); not hers any more
+ * spoke in the last 2 minutes): `by` names her. `ping`: only "I am still here" (never takes a book); not hers any more
  * (given, or taken while her phone was quiet) = ok false.
  */
 export const claim = mutation({

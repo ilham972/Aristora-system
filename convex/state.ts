@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import { query } from "./_generated/server";
+import { query, type QueryCtx } from "./_generated/server";
 import { viewer } from "./lib/auth";
 import { givenWork, mayBeOpen, openWork } from "./lib/backend";
 import { recentSim, simInfo } from "./sim";
@@ -22,99 +22,148 @@ export const get = query({
   args: { token: v.optional(v.string()), test: v.optional(v.boolean()) },
   handler: async (ctx, args) => {
     await viewer(ctx, args.token);
-    const everyone = await ctx.db
-      .query("students")
-      .withIndex("by_archived", (q) => q.eq("archived", false))
-      .collect();
-    const test = !!args.test;
-    const students = everyone.filter((s) => !!s.test === test);
-    const tests = everyone.filter((s) => s.test).length;
-    const ours = new Set(students.map((s) => s._id as string));
+    const light = await lightBoard(ctx, !!args.test);
     const progress: Record<string, Doc<"progress">> = {};
     const books: Record<string, Doc<"books">> = {};
     const more: Record<string, Doc<"progress">[]> = {};
-    const given: Record<string, { unitId: Id<"units">; stage: "fighter" | "master"; work: boolean; done: boolean }[]> = {};
+    const given: Record<string, Given[]> = {};
     const cache = new Map<string, Doc<"books"> | null>();
-    const bookOf = async (unitId: Id<"units">, stage: "fighter" | "master") => {
-      const key = `${unitId}:${stage}`;
-      if (!cache.has(key)) {
-        cache.set(
-          key,
-          await ctx.db
-            .query("books")
-            .withIndex("by_unit_stage", (q) => q.eq("unitId", unitId).eq("stage", stage))
-            .first(),
-        );
-      }
-      return cache.get(key) ?? null;
-    };
-    const requested = (await ctx.db.query("calls").withIndex("by_status", (q) => q.eq("status", "requested")).collect()).filter((c) =>
-      ours.has(c.studentId),
-    );
-    const sent = (await ctx.db.query("calls").withIndex("by_status", (q) => q.eq("status", "sent")).collect()).filter((c) => ours.has(c.studentId));
-    // A book a room has him for travels while the call lasts (so her card shows that book, even with nothing left).
-    const called = new Set([...requested, ...sent].map((c) => `${c.studentId}:${c.unitId}:${c.stage}`));
-    // A consultation (5 Nov 2026): every book of his changed since it began travels too, so what she explained in it
-    // stays on her screen as ✓ even once nothing waits there.
-    const consultSince = new Map([...requested, ...sent].filter((c) => c.consult).map((c) => [c.studentId as string, c.createdAt]));
-    for (const s of students) {
-      if (!s.present) continue;
-      const since = consultSince.get(s._id);
-      for (const p of await ctx.db.query("progress").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) {
-        if (p.unitId === s.unitId && p.stage === s.stage) continue;
-        // The other book of his topic tute (one printed book: the ladder + the past papers) always comes along.
-        const twin = p.unitId === s.unitId && !!(await bookOf(p.unitId, p.stage))?.tute;
-        const inRoom = called.has(`${s._id}:${p.unitId}:${p.stage}`) || (since !== undefined && p.updatedAt >= since);
-        if (!twin && !inRoom && !mayBeOpen(p)) continue;
-        const b = await bookOf(p.unitId, p.stage);
-        if (!b || (!twin && !inRoom && !openWork(b, p))) continue;
-        (more[s._id] ??= []).push(p);
-        books[`${p.unitId}:${p.stage}`] = b;
-      }
-      const g = await givenWork(ctx, s, cache);
-      if (g.length) given[s._id] = g;
+    for (const s of light.students) {
+      const h = await hisBoard(ctx, s, light.calls, cache);
+      if (h.progress) progress[s._id] = h.progress;
+      Object.assign(books, h.books);
+      if (h.more) more[s._id] = h.more;
+      if (h.given) given[s._id] = h.given;
     }
-    for (const s of students) {
-      if (!s.unitId || (s.stage !== "fighter" && s.stage !== "master")) continue;
-      const stage = s.stage;
-      const unitId = s.unitId;
-      const p = await ctx.db
-        .query("progress")
-        .withIndex("by_student_unit_stage", (q) => q.eq("studentId", s._id).eq("unitId", unitId).eq("stage", stage))
-        .first();
-      if (p) progress[s._id] = p;
-      const key = `${unitId}:${stage}`;
-      if (!(key in books)) {
-        const b = await bookOf(unitId, stage);
-        if (b) books[key] = b;
-      }
-    }
-    const session = await ctx.db.query("sessions").withIndex("by_open", (q) => q.eq("open", true)).first();
-    const legacy = students.some((s) => !s.stage);
-    const sim = await recentSim(ctx, Date.now());
-    return {
-      students,
-      progress,
-      books,
-      more,
-      given,
-      calls: [...requested, ...sent],
-      session: session
-        ? {
-            _id: session._id,
-            startedAt: session.startedAt,
-            lastActivityAt: session.lastActivityAt,
-            stats: (test ? sim?.stats : session.stats) ?? {},
-          }
-        : null,
-      /** Data from before grades and stages: the phone runs setup.ensure first. */
-      legacy,
-      /** Test students: the simulation's (any phone may switch to it: Settings, or the Join banner). */
-      tests,
-      sim: sim ? simInfo(sim) : null,
-    };
+    return { ...light, progress, books, more, given };
   },
 });
+
+/**
+ * The board without anyone's books (10 Nov 2026, the Convex limit hit on his first month: every tap re-read every
+ * student's marks on every phone): the students, the calls, the session, the simulation. It changes when a student,
+ * a call or the session does; each student's books come from `his`, which changes only when HIS do. The phones put the
+ * two together (src/store.ts) into the same board as `get` (kept for old phones and the tests; a test proves the two
+ * add up to the same board).
+ */
+export const live = query({
+  args: { token: v.optional(v.string()), test: v.optional(v.boolean()) },
+  handler: async (ctx, args) => {
+    await viewer(ctx, args.token);
+    return await lightBoard(ctx, !!args.test);
+  },
+});
+
+/** One student's part of the board: his book now's progress, his other books with work (in class), the books given. */
+export const his = query({
+  args: { token: v.optional(v.string()), id: v.id("students") },
+  handler: async (ctx, args) => {
+    await viewer(ctx, args.token);
+    const s = await ctx.db.get(args.id);
+    if (!s || s.archived) return { progress: null, books: {}, more: null, given: null };
+    const calls = [
+      ...(await ctx.db
+        .query("calls")
+        .withIndex("by_student_status", (q) => q.eq("studentId", s._id).eq("status", "requested"))
+        .collect()),
+      ...(await ctx.db
+        .query("calls")
+        .withIndex("by_student_status", (q) => q.eq("studentId", s._id).eq("status", "sent"))
+        .collect()),
+    ];
+    return await hisBoard(ctx, s, calls, new Map());
+  },
+});
+
+type Given = { unitId: Id<"units">; stage: "fighter" | "master"; work: boolean; done: boolean };
+
+async function lightBoard(ctx: QueryCtx, test: boolean) {
+  const everyone = await ctx.db
+    .query("students")
+    .withIndex("by_archived", (q) => q.eq("archived", false))
+    .collect();
+  const students = everyone.filter((s) => !!s.test === test);
+  const tests = everyone.filter((s) => s.test).length;
+  const ours = new Set(students.map((s) => s._id as string));
+  const requested = (await ctx.db.query("calls").withIndex("by_status", (q) => q.eq("status", "requested")).collect()).filter((c) =>
+    ours.has(c.studentId),
+  );
+  const sent = (await ctx.db.query("calls").withIndex("by_status", (q) => q.eq("status", "sent")).collect()).filter((c) => ours.has(c.studentId));
+  const session = await ctx.db.query("sessions").withIndex("by_open", (q) => q.eq("open", true)).first();
+  const legacy = students.some((s) => !s.stage);
+  const sim = await recentSim(ctx, Date.now());
+  return {
+    students,
+    calls: [...requested, ...sent],
+    session: session
+      ? {
+          _id: session._id,
+          startedAt: session.startedAt,
+          lastActivityAt: session.lastActivityAt,
+          stats: (test ? sim?.stats : session.stats) ?? {},
+        }
+      : null,
+    /** Data from before grades and stages: the phone runs setup.ensure first. */
+    legacy,
+    /** Test students: the simulation's (any phone may switch to it: Settings, or the Join banner). */
+    tests,
+    sim: sim ? simInfo(sim) : null,
+  };
+}
+
+/** His books on the board (the same for `get` and `his`): `calls` = the open calls (his are picked out). */
+async function hisBoard(ctx: QueryCtx, s: Doc<"students">, calls: Doc<"calls">[], cache: Map<string, Doc<"books"> | null>) {
+  const books: Record<string, Doc<"books">> = {};
+  let more: Doc<"progress">[] | null = null;
+  let given: Given[] | null = null;
+  let progress: Doc<"progress"> | null = null;
+  const bookOf = async (unitId: Id<"units">, stage: "fighter" | "master") => {
+    const key = `${unitId}:${stage}`;
+    if (!cache.has(key)) {
+      cache.set(
+        key,
+        await ctx.db
+          .query("books")
+          .withIndex("by_unit_stage", (q) => q.eq("unitId", unitId).eq("stage", stage))
+          .first(),
+      );
+    }
+    return cache.get(key) ?? null;
+  };
+  const mine = calls.filter((c) => c.studentId === s._id);
+  if (s.present) {
+    // A book a room has him for travels while the call lasts (so her card shows that book, even with nothing left).
+    const called = new Set(mine.map((c) => `${c.unitId}:${c.stage}`));
+    // A consultation (5 Nov 2026): every book of his changed since it began travels too, so what she explained in it
+    // stays on her screen as ✓ even once nothing waits there.
+    const since = mine.find((c) => c.consult)?.createdAt;
+    for (const p of await ctx.db.query("progress").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) {
+      if (p.unitId === s.unitId && p.stage === s.stage) continue;
+      // The other book of his topic tute (one printed book: the ladder + the past papers) always comes along.
+      const twin = p.unitId === s.unitId && !!(await bookOf(p.unitId, p.stage))?.tute;
+      const inRoom = called.has(`${p.unitId}:${p.stage}`) || (since !== undefined && p.updatedAt >= since);
+      if (!twin && !inRoom && !mayBeOpen(p)) continue;
+      const b = await bookOf(p.unitId, p.stage);
+      if (!b || (!twin && !inRoom && !openWork(b, p))) continue;
+      (more ??= []).push(p);
+      books[`${p.unitId}:${p.stage}`] = b;
+    }
+    const g = await givenWork(ctx, s, cache);
+    if (g.length) given = g;
+  }
+  if (s.unitId && (s.stage === "fighter" || s.stage === "master")) {
+    const stage = s.stage;
+    const unitId = s.unitId;
+    progress =
+      (await ctx.db
+        .query("progress")
+        .withIndex("by_student_unit_stage", (q) => q.eq("studentId", s._id).eq("unitId", unitId).eq("stage", stage))
+        .first()) ?? null;
+    const b = await bookOf(unitId, stage);
+    if (b) books[`${unitId}:${stage}`] = b;
+  }
+  return { progress, books, more, given };
+}
 
 export const archived = query({
   args: { token: v.optional(v.string()) },

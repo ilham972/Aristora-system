@@ -205,17 +205,76 @@ export async function signOutHere(): Promise<void> {
   emit();
 }
 
+/**
+ * The board in two parts (10 Nov 2026, the Convex limit: every tap re-read every student's marks on every phone):
+ * `state.live` (the students, calls, session) and one `state.his` per student (his books), each re-read only when its
+ * own rows change. Put together here into the same board `state.get` gives. Shown once every student's part came (or
+ * after 4 s), so a page never opens half-filled.
+ */
+type His = { progress: Progress | null; books: Record<string, BookDoc>; more: Progress[] | null; given: NonNullable<Board["given"]>[string] | null };
 function startBoard(): () => void {
   void ensureData();
+  let light: Omit<Board, "progress" | "books" | "more" | "given"> | null = null;
+  const his = new Map<string, His>();
+  const hisStops = new Map<string, () => void>();
+  let ready = false;
+  const readyTimer = window.setTimeout(() => {
+    ready = true;
+    build();
+  }, 4000);
+  function build() {
+    if (!light) return;
+    if (!ready && light.students.some((s) => !his.has(s._id))) return;
+    ready = true;
+    const progress: Board["progress"] = {};
+    const books: Board["books"] = {};
+    const more: NonNullable<Board["more"]> = {};
+    const given: NonNullable<Board["given"]> = {};
+    for (const s of light.students) {
+      const h = his.get(s._id);
+      if (!h) continue;
+      if (h.progress) progress[s._id] = h.progress;
+      Object.assign(books, h.books);
+      if (h.more) more[s._id] = h.more;
+      if (h.given) given[s._id] = h.given;
+    }
+    board = { ...light, progress, books, more, given };
+    boardError = null;
+    emit();
+  }
+  const follow = (ids: string[]) => {
+    const want = new Set(ids);
+    for (const [id, stop] of hisStops) {
+      if (want.has(id)) continue;
+      stop();
+      hisStops.delete(id);
+      his.delete(id);
+    }
+    for (const id of ids) {
+      if (hisStops.has(id)) continue;
+      hisStops.set(
+        id,
+        subscribe(
+          api.state.his,
+          { id: id as Id<"students"> },
+          (value) => {
+            his.set(id, value as His);
+            build();
+          },
+          () => {},
+        ),
+      );
+    }
+  };
   const stops = [
     subscribe(
-      api.state.get,
+      api.state.live,
       test ? { test: true } : {},
       (value) => {
-        board = value;
-        boardError = null;
+        light = value;
+        follow(value.students.map((s) => s._id as string));
         if (value.legacy) void ensureData();
-        emit();
+        build();
       },
       (e) => {
         const text = errorText(e);
@@ -237,7 +296,10 @@ function startBoard(): () => void {
     ),
   ];
   return () => {
+    window.clearTimeout(readyTimer);
     for (const stop of stops) stop();
+    for (const stop of hisStops.values()) stop();
+    hisStops.clear();
     board = null;
     boardError = null;
   };
