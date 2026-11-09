@@ -24,14 +24,15 @@ jobs:
             date -u
             echo "== GET /version"; curl -sS -m 20 "$U/version" -w '\nHTTP %{http_code}\n'
             for body in \
-              '{"path":"auth:me","args":{},"format":"json"}' \
-              '{"path":"auth:me","args":{"token":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"format":"json"}' \
-              '{"path":"auth:peekLink","args":{"code":"abcdefghijklmnopqrstuvwxyz"},"format":"json"}' \
-              '{"path":"state:get","args":{},"format":"json"}' \
-              '{"path":"family:me","args":{},"format":"json"}'; do
+              '{"path":"nope:nothing","args":{},"format":"json"}' \
+              '{"path":"attendance:day","args":{"day":5},"format":"json"}' \
+              '{"path":"attendance:day","args":{"day":"2026-11-09"},"format":"json"}' \
+              '{"path":"auth:me","args":{},"format":"json"}'; do
               echo "== POST /api/query $body"
               curl -sS -m 30 -X POST "$U/api/query" -H 'Content-Type: application/json' -d "$body" -w '\nHTTP %{http_code} in %{time_total}s\n'
             done
+            echo "== POST /api/mutation auth:signOut (no sign-in)"
+            curl -sS -m 30 -X POST "$U/api/mutation" -H 'Content-Type: application/json' -d '{"path":"auth:signOut","args":{},"format":"json"}' -w '\nHTTP %{http_code} in %{time_total}s\n'
           } > ci-report/probe.txt 2>&1
           cat ci-report/probe.txt
           git config user.name "aristora-check"
