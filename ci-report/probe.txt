@@ -1,19 +1,19 @@
-Mon Nov  9 17:59:57 UTC 2026
+Mon Nov  9 18:01:45 UTC 2026
 == GET /version
 20261105T013321Z-86ccadb6d118
 HTTP 200
+== POST /api/query {"path":"nope:nothing","args":{},"format":"json"}
+{"status":"error","errorMessage":"[Request ID: ddfdbc6846746c26] Server Error"}
+HTTP 200 in 0.055685s
+== POST /api/query {"path":"attendance:day","args":{"day":5},"format":"json"}
+{"status":"error","errorMessage":"[Request ID: b67ffd21c434316b] Server Error"}
+HTTP 200 in 0.057016s
+== POST /api/query {"path":"attendance:day","args":{"day":"2026-11-09"},"format":"json"}
+{"status":"error","errorMessage":"[Request ID: 49226f88924aae21] Server Error"}
+HTTP 200 in 0.068929s
 == POST /api/query {"path":"auth:me","args":{},"format":"json"}
-{"status":"error","errorMessage":"[Request ID: ae7841c66e7d9ec3] Server Error"}
-HTTP 200 in 0.078055s
-== POST /api/query {"path":"auth:me","args":{"token":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"format":"json"}
-{"status":"error","errorMessage":"[Request ID: 042dccff5445a551] Server Error"}
-HTTP 200 in 0.122470s
-== POST /api/query {"path":"auth:peekLink","args":{"code":"abcdefghijklmnopqrstuvwxyz"},"format":"json"}
-{"status":"error","errorMessage":"[Request ID: e614521c3f077794] Server Error"}
-HTTP 200 in 0.086605s
-== POST /api/query {"path":"state:get","args":{},"format":"json"}
-{"status":"error","errorMessage":"[Request ID: 5d24a876eacb74e3] Server Error"}
-HTTP 200 in 0.073137s
-== POST /api/query {"path":"family:me","args":{},"format":"json"}
-{"status":"error","errorMessage":"[Request ID: 443c19f84d0a7817] Server Error"}
-HTTP 200 in 0.166559s
+{"status":"error","errorMessage":"[Request ID: 40fe2cfaba71acff] Server Error"}
+HTTP 200 in 0.066207s
+== POST /api/mutation auth:signOut (no sign-in)
+{"status":"error","errorMessage":"[Request ID: c5ec59ac06b14345] Server Error"}
+HTTP 200 in 0.066689s
