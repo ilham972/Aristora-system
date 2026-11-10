@@ -46,7 +46,11 @@ export const PHONE_CSS = `
 .qv .sq { margin-left: 4mm; }
 .qv .qfig, .qv .figrow { max-width: 100%; }
 .qv [data-paper] { display: none !important; }
-.qv .rp > span:not(.rl) { min-width: 0; overflow-wrap: anywhere; }
+.qv .rp > span:not(.rl) { min-width: 0; overflow-wrap: break-word; }
+.qv [style*="display:flex"], .qv [style*="display: flex"], .qv .figrow { flex-wrap: wrap; row-gap: 6px; }
+.qv table[data-fx-stack] { display: block; margin-left: 0 !important; }
+.qv table[data-fx-stack] > tbody, .qv table[data-fx-stack] tr, .qv table[data-fx-stack] td { display: block; }
+.qv table[data-fx-stack] td:empty { display: none; }
 `;
 
 /** A label's pieces: "(b) i)" → ["b", "i"], "A1" → ["a", "1"], "3.1" → ["3", "1"], "அ ii" → ["அ", "ii"]. */
@@ -129,16 +133,30 @@ export function drawQuestion(host: HTMLElement, html: string, css: string, extra
   root.replaceChildren(style, box);
   const fit = () => {
     const w = box.clientWidth - 16;
+    const right = box.getBoundingClientRect().right - 8;
+    const all = box.querySelectorAll<HTMLElement>(".nb, .rl, .dg, table");
+    all.forEach((el) => {
+      el.style.whiteSpace = "";
+      el.style.zoom = "";
+      el.removeAttribute("data-fx-stack");
+    });
+    if (!(w > 0)) return;
+    const past = (el: Element) => el.getBoundingClientRect().right > right + 0.5;
+    // A borderless table (a derivation in two columns, items beside items) wider than the phone reads top to bottom: its
+    // cells stacked (10 Nov 2026, G8 U10 Q52: the right column squeezed to one sign a line). A grid (.gt) shrinks below.
+    box.querySelectorAll<HTMLElement>("table:not(.gt)").forEach((t) => {
+      if (past(t)) t.setAttribute("data-fx-stack", "");
+    });
     // A line the book keeps on one line (".nb": an expression with its blanks, a sequence) wraps only when it is wider
     // than the phone (10 Nov 2026, his screenshot: a sub-question's words ran off the card, cut off).
-    const right = box.getBoundingClientRect().right - 8;
     box.querySelectorAll<HTMLElement>(".nb, .rl").forEach((el) => {
-      el.style.whiteSpace = "";
-      if (w > 0 && el.getBoundingClientRect().right > right + 0.5) el.style.whiteSpace = "normal";
+      if (past(el)) el.style.whiteSpace = "normal";
     });
+    // Figures and grids: shrunk to what is left of the card from where they start (an indented table fitted by width
+    // and still ran off).
     box.querySelectorAll<HTMLElement>(".dg, table").forEach((f) => {
-      f.style.zoom = "";
-      if (f.offsetWidth > w && w > 0) f.style.zoom = String(Math.max(0.35, w / f.offsetWidth));
+      const room = Math.min(w, right - f.getBoundingClientRect().left);
+      if (f.offsetWidth > room && room > 0) f.style.zoom = String(Math.max(0.35, room / f.offsetWidth));
     });
   };
   fit();
