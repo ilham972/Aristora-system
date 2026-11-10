@@ -218,6 +218,8 @@ const PAPER_CSS = `.qv { border-radius: 14px; padding: 14px 12px 10px; -webkit-u
   min-width: 2.3em !important; width: auto !important; height: 1.8em; margin: 0 .1em; padding: 0 .3em; border: 2px dashed var(--brand-mid, #cbc3ff) !important;
   border-radius: 10px; background: var(--brand-soft, #efecff); color: var(--brand-2, #5a49d6); font: 800 1.05em/1 "Baloo Thambi 2", sans-serif !important; cursor: pointer; }
 .qv .frc [data-fill] { min-width: 1.75em !important; height: 1.45em; margin: 0 0 .12em; border-radius: 8px; }
+.qv [data-fill][style*="vertical-align:."], .qv sup [data-fill] { min-width: 1.45em !important; height: 1.3em !important; margin: 0 .05em !important;
+  padding: 0 .15em; border-radius: 7px; font-size: .74em !important; vertical-align: .7em !important; }
 .qv [data-fill].fx-has { border-style: solid !important; background: #fff; }
 .qv [data-fill].fx-on { border: 2.5px solid var(--brand, #6c5ce7) !important; background: #fff; box-shadow: 0 0 0 4px var(--brand-soft, #efecff); }
 .qv [data-opt] { display: inline-flex; align-items: center; gap: .3em; margin: .15em 0; padding: .2em .7em; border-radius: 12px; cursor: pointer;

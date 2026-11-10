@@ -268,7 +268,15 @@ function opEdits(h: string, s: number, e: number, op: Op): Edit[] | string {
   if (op.kind === "fill") {
     // Only an empty box is a blank (a box with "+3" printed in it is part of the question).
     const re = /<span class="ab(?: [^"]*)?"[^>]*>(?=(?:\s|&nbsp;|&#160;)*<\/span>)/g;
-    for (let m = re.exec(seg); m && out.length < op.n; m = re.exec(seg)) if (!/data-fill/.test(m[0])) out.push({ at: s + m.index + 5, del: 0, ins: ' data-fill="0"' });
+    let skip = op.skip ?? 0;
+    for (let m = re.exec(seg); m && out.length < op.n; m = re.exec(seg)) {
+      if (/data-fill/.test(m[0])) continue;
+      if (skip > 0) {
+        skip--;
+        continue;
+      }
+      out.push({ at: s + m.index + 5, del: 0, ins: ' data-fill="0"' });
+    }
     return out.length === op.n ? out : `${op.n} blanks wanted, ${out.length} printed there`;
   }
   if (op.kind === "opt") {
@@ -312,11 +320,12 @@ function opEdits(h: string, s: number, e: number, op: Op): Edit[] | string {
   const re = sel.startsWith(".") ? new RegExp(`<([a-z0-9]+)(?=[^>]*\\sclass="[^"]*\\b${sel.slice(1)}\\b)`, "g") : new RegExp(`<${sel}\\b`, "g");
   let k = 0;
   for (let m = re.exec(seg); m; m = re.exec(seg)) {
-    if (++k < Number(nth ?? 1)) continue;
+    if (nth !== "*" && ++k < Number(nth ?? 1)) continue;
     const tag = sel.startsWith(".") ? m[1] : sel;
-    return [{ at: s + m.index + 1 + tag.length, del: 0, ins: ' data-paper="1"' }];
+    out.push({ at: s + m.index + 1 + tag.length, del: 0, ins: ' data-paper="1"' });
+    if (nth !== "*") return out;
   }
-  return `no ${op.sel} there`;
+  return out.length ? out : `no ${op.sel} there`;
 }
 
 /** The slots numbered in printed order inside the card, as the engine numbers them. */

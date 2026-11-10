@@ -17,7 +17,7 @@ import type { Ans, BoxAns } from "../convex/lib/key";
 
 /** A change to the printed question: a slot on a blank, an option, a bracket, a word; or a block for paper only. */
 export type Op =
-  | { kind: "fill"; n: number }
+  | { kind: "fill"; n: number; skip?: number }
   | { kind: "opt"; n: number }
   | { kind: "tick"; n: number; pat?: string }
   | { kind: "mark"; words: string[] }
@@ -92,6 +92,11 @@ export const fill = (...vs: (string | [string, BoxOpts])[]): Spec => {
   const b = vs.map((x) => (typeof x === "string" ? box(x) : box(x[0], x[1])));
   return { t: { k: "fill", b }, a: b.map(said).join(", "), ops: [{ kind: "fill", n: b.length }] };
 };
+/** The printed blanks after the first `skip` ones (a blank before them is another part's: a name tapped under it). */
+export const fillAfter = (skip: number, ...vs: (string | [string, BoxOpts])[]): Spec => {
+  const s = fill(...vs);
+  return { ...s, ops: [{ kind: "fill", n: vs.length, skip }] };
+};
 /** Blanks printed as dots ("……………"): each run of dots becomes a blank box in the question, filled in order. */
 export const fillDots = (...vs: (string | [string, BoxOpts])[]): Spec => {
   const s = fill(...vs);
@@ -153,7 +158,7 @@ export const mark = (words: string[], right: string[], o: { how?: "line" | "ring
 });
 /** One printed sub-question, two or more answers: [label word, marks, kind] each (their marks add up to the part's). */
 export const split = (...parts: [string, number, Spec][]): Split => ({ split: parts });
-/** A printed block for paper only (never drawn on a phone): "table", "table:2", ".mt", "svg". */
+/** A printed block for paper only (never drawn on a phone): "table", "table:2", ".mt", "svg", ".ab:*" (every one). */
 export const paper = (sel: string): Spec => ({ ops: [{ kind: "hide", sel }], card: true });
 /** A kind with ops on the whole card instead of its sub-question (its blanks are printed in the lead). */
 export const onCard = (s: Spec): Spec => ({ ...s, card: true });
