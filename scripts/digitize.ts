@@ -125,7 +125,8 @@ const samePart = (key: string, printed: string) => {
 /** Each printed sub-question (`.rp` with its label) as a stretch of the card's HTML: [start, end). */
 function blocks(h: string): { label: string; s: number; e: number }[] {
   const out: { label: string; s: number; e: number }[] = [];
-  const re = /<div class="rp(?: [^"]*)?"><span class="rl">([\s\S]*?)<\/span>/g;
+  // Any .rp, as the phone finds them (a style after the class too: G7 U02 Q52's "(i)" … "(iv)" set in by 8 mm).
+  const re = /<div class="rp(?: [^"]*)?"[^>]*><span class="rl">([\s\S]*?)<\/span>/g;
   for (let m = re.exec(h); m; m = re.exec(h)) out.push({ label: m[1].replace(/<[^>]+>/g, ""), s: m.index, e: h.length });
   out.forEach((b, i) => (b.e = i + 1 < out.length ? out[i + 1].s : h.length));
   return out;
@@ -266,8 +267,9 @@ function opEdits(h: string, s: number, e: number, op: Op): Edit[] | string {
   const out: Edit[] = [];
   const seg = h.slice(s, e);
   if (op.kind === "fill") {
-    // Only an empty box is a blank (a box with "+3" printed in it is part of the question).
-    const re = /<span class="ab(?: [^"]*)?"[^>]*>(?=(?:\s|&nbsp;|&#160;)*<\/span>)/g;
+    // Only an empty box is a blank (a box with "+3" printed in it is part of the question): an `.ab`, or a box or a
+    // dotted line drawn by its style (G7 U08 Q37 "□ + (−6) = (+3)", Q52 "(+5) + (……) = (……)").
+    const re = /<span (?:class="ab(?: [^"]*)?"|style="display:inline-block;[^"]*border[^"]*")[^>]*>(?=(?:\s|&nbsp;|&#160;)*<\/span>)/g;
     let skip = op.skip ?? 0;
     for (let m = re.exec(seg); m && out.length < op.n; m = re.exec(seg)) {
       if (/data-fill/.test(m[0])) continue;
@@ -287,6 +289,12 @@ function opEdits(h: string, s: number, e: number, op: Op): Edit[] | string {
     for (let m = re.exec(seg); m && out.length < op.n; m = re.exec(seg)) out.push({ at: s + m.index + 5, del: 0, ins: ' data-opt="0"' });
     return out.length === op.n ? out : `${op.n} options wanted, ${out.length} printed`;
   }
+  if (op.kind === "tick" && op.cell) {
+    // ✓ / ✗ written in a table's empty cells (G7 U02 Q24: a statement a row, its last cell empty): a slot in each.
+    const re = /<td\b[^>]*>(?=(?:\s|&nbsp;|&#160;)*<\/td>)/g;
+    for (let m = re.exec(seg); m && out.length < op.n; m = re.exec(seg)) out.push({ at: s + m.index + m[0].length, del: 0, ins: '<span data-tick="0"></span>' });
+    return out.length === op.n ? out : `${op.n} empty cells wanted, ${out.length} printed`;
+  }
   if (op.kind === "tick") {
     const re = new RegExp(op.pat ?? String.raw`\((?:\s|&nbsp;|&#160;| | )*\)`, "g");
     for (let m = re.exec(seg); m && out.length < op.n; m = re.exec(seg)) {
@@ -301,7 +309,10 @@ function opEdits(h: string, s: number, e: number, op: Op): Edit[] | string {
       let i = seg.indexOf(w, from);
       while (i >= 0 && inTag(h, s + i)) i = seg.indexOf(w, i + 1);
       if (i < 0) return `"${w}" not found in order`;
-      out.push({ at: s + i, del: w.length, ins: `<span data-mark="0">${w}</span>` });
+      // Words more than one (G7 U02 Q25's statements: "which are sets?") wrap as the line's text does (`.mk-l`): in a box
+      // of their own they went under their label, centred.
+      const long = /\s/.test(w.replace(/<[^>]+>/g, "").trim());
+      out.push({ at: s + i, del: w.length, ins: `<span data-mark="0"${long ? ' class="mk-l"' : ""}>${w}</span>` });
       from = i + w.length;
     }
     return out;
@@ -380,7 +391,7 @@ async function build(udir: string) {
     if (short) {
       if (d && "t" in d && (d as Spec).t) {
         const s = d as Spec;
-        rows = [{ p: "", a: s.a ?? k?.a ?? "", m: marks, t: s.t }];
+        rows = [{ p: "", a: (k?.a?.trim() ? k.a : s.a) ?? "", m: marks, t: s.t }];
         take(s, "card");
       } else if (d && !("t" in d) && !("ops" in d)) {
         const ps = Object.entries(d as Record<string, Spec>);
@@ -405,7 +416,9 @@ async function build(udir: string) {
             take(s, rows.length - 1);
           }
         } else {
-          rows.push({ ...p, a: x.a ?? p.a, t: x.t ?? p.t, ...(x.m ? { m: x.m } : {}) });
+          // The key's own words stay (the working and the reason the teachers read: "✗ (√196 = 14)"); a kind's words
+          // only where the key has none.
+          rows.push({ ...p, a: p.a?.trim() ? p.a : (x.a ?? ""), t: x.t ?? p.t, ...(x.m ? { m: x.m } : {}) });
           take(x, rows.length - 1);
         }
       }

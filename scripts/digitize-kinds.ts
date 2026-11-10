@@ -19,12 +19,13 @@ import type { Ans, BoxAns } from "../convex/lib/key";
 export type Op =
   | { kind: "fill"; n: number; skip?: number }
   | { kind: "opt"; n: number }
-  | { kind: "tick"; n: number; pat?: string }
+  | { kind: "tick"; n: number; pat?: string; cell?: true }
   | { kind: "mark"; words: string[] }
   | { kind: "hide"; sel: string }
   | { kind: "dots"; n: number };
 
-/** One answer's kind; `a` = its words for the teachers (else the key's own); `ops` = what its printed question needs. */
+/** One answer's kind; `a` = its words for the teachers where the key has none (a split's pieces: the key's own words,
+ *  with their working, stay); `ops` = what its printed question needs. */
 export type Spec = { t?: Ans; a?: string; ops?: Op[]; card?: true; m?: number };
 /** A part's marks when its key has none (a printed table's rows). */
 export const marks = (m: number, s: Spec): Spec => ({ ...s, m });
@@ -59,6 +60,14 @@ export const boxes = (list: [string, string, string?][], o: { any?: boolean; sam
 export const words = (list: string[][], o: { l?: string; any?: boolean } = { any: true }): Spec => ({
   t: { k: "box", b: list.map((v) => ({ ...box(v[0], { l: o.l, also: v.slice(1) }), w: true })), ...(o.any !== false ? { any: true } : {}) },
   a: list.map((v) => v[0]).join(", "),
+});
+/**
+ * A set's elements, a box each in any order, the set's name before the first ("A =", "A இனுள்" for its Venn diagram):
+ * numbers on the pad; letters (`letters`) typed with his phone's keyboard, any case ("P = {S, c, i, e, n}").
+ */
+export const members = (name: string | undefined, vs: string[], o: { letters?: boolean } = {}): Spec => ({
+  t: { k: "box", b: vs.map((v, i) => ({ v: [v], ...(i === 0 && name ? { l: name } : {}), ...(o.letters ? { w: true } : {}) })), any: true },
+  a: `${name ? `${name} ` : ""}{${vs.join(", ")}}`,
 });
 /** An angle named by three letters, typed either way round ("AOB" = "BOA"); more names when the key takes them. */
 export const angle = (...names: string[]): Spec => word(names.flatMap((n) => (n.length === 3 ? [n, [...n].reverse().join("")] : [n])), { l: "∠" });
@@ -138,17 +147,31 @@ export const factored = (v: string, also: string[] = []): Spec => {
   const all = [...new Set([v, ...forms, ...also])].slice(0, 6);
   return { t: { k: "box", b: [{ v: all, same: true }] }, a: v };
 };
+/**
+ * A simplified answer ("simplify 3x + 4y + x + 3y" → "4x + 7y"): only a simplified form counts (the question typed back
+ * says the same, and is not an answer), its terms in any order (at most 6 forms: 3 terms). More forms in `also`
+ * ("10y²x³" beside "10x³y²").
+ */
+export const simplified = (v: string, o: BoxOpts = {}): Spec => {
+  const all = [...new Set([v, ...perms(terms(v)).map(joinTerms), ...(o.also ?? [])])];
+  if (all.length > 6) throw new Error(`simplified("${v}"): ${all.length} forms, at most 6: give the forms yourself`);
+  const b: BoxAns = { ...box(all[0], { ...o, also: all.slice(1) }), same: true };
+  return { t: { k: "box", b: [b] }, a: said(b) };
+};
 /** The paper's printed options (its `.mcq`): the right one from 1; items = their words for the teachers. */
 export const choose = (right: number, n: number, items?: string[]): Spec => ({
   t: { k: "choose", n, a: right, ...(items ? { items } : {}) },
   a: `(${right})${items ? ` ${items[right - 1]}` : ""}`,
   ops: [{ kind: "opt", n }],
 });
-/** ✓ / ✗ for each printed bracket, in order (pat = how the bracket is printed, a regular expression). */
-export const tf = (vals: boolean[], o: { pat?: string } = {}): Spec => ({
+/**
+ * ✓ / ✗ for each printed bracket, in order (pat = how the bracket is printed, a regular expression; cell = in a table's
+ * empty cells, one a statement).
+ */
+export const tf = (vals: boolean[], o: { pat?: string; cell?: true } = {}): Spec => ({
   t: { k: "tf", a: vals },
   a: vals.map((x) => (x ? "✓" : "✗")).join(" "),
-  ops: [{ kind: "tick", n: vals.length, ...(o.pat ? { pat: o.pat } : {}) }],
+  ops: [{ kind: "tick", n: vals.length, ...(o.pat ? { pat: o.pat } : {}), ...(o.cell ? { cell: true as const } : {}) }],
 });
 /** Words or numbers to underline (how "ring": circle): every candidate as printed, in order, and the right ones. */
 export const mark = (words: string[], right: string[], o: { how?: "line" | "ring"; items?: string[] } = {}): Spec => ({

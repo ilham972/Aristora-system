@@ -131,7 +131,16 @@ node $TSX scripts/digitize.ts push $D G8-U03 G8-U04   # saved in the app, all or
   marks, nothing typed must get 0, a split's marks must add up to its part's, every part needs a kind (a words-only
   key's parts get the kind the app read from their words: review them).
 - A matching question's printed columns: `match(…, { hide: "table" })` or `paper("table")`, else the phone shows them
-  above the same pairs as cards, cut off.
+  above the same pairs as cards, cut off. A matching drawn as a figure: `{ hide: ".qfig" }` (its whole box: hiding the
+  svg alone leaves its height empty).
+- The form the question asks for (G7, 10 Nov 2026): "simplify" an expression → `simplified("4x + 7y")` (the question
+  typed back says the same and is no answer); a fraction "simplify" / "as a mixed number" / "as a decimal" →
+  `num(v, { same: true, also })` (6/8 is not taken for 3/4); ascending order → `nums([...])` in order, never `any`
+  (the words-only reading takes a list for a set). A set's elements → `members("A =", [...], { letters })`.
+- The key's own words stay as the teachers read them (its working: "x + x + 10 = **2x + 10**"); a kind's words only
+  where the key has none.
+- ✓ / ✗ in a table's empty cells: `tf([...], { cell: true })`. A blank drawn by its style (a box, a dotted line), not
+  an `.ab`, is a blank to `fill` too.
 - Parts of one sub-question ("name it and find its perimeter"): `split(["பெயர்", 1, pick(…)], ["சுற்றளவு", 1, num(…)])`.
 - Never ask twice (10 Nov 2026): a question that prints its own blank (□, "(−15) + □ + (−3) = 34") takes its answer in
   that blank, `fill(…)` (or `fillAfter(n, …)` when the first n blanks are another part's), not a box under it; a printed
