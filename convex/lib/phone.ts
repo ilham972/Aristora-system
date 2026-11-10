@@ -31,9 +31,11 @@ export type Rat = [number, number];
  * "y"), u = a unit printed after his number ("%", "°", "cm²", "h"; never typed), j = a sign between this box and the
  * one before it (":" of a ratio). A "text" box is typed with his phone's own keyboard (Tamil, English or Thanglish):
  * his reason or his own words, read by a teacher and never marked by the phone; or `w`, a word or a name in letters
- * ("AOB", "செவ்வகம்": one line) that the phone marks. An "expr" box with `eq` takes an equation: its pad has "=".
+ * ("AOB", "செவ்வகம்": one line) that the phone marks. An "expr" box with `eq` takes an equation: its pad has "="; with
+ * `p` a power above 2 (x⁶, (2ab)³: 10 Nov 2026): its pad has □ⁿ (the exponent's digits follow). An "expr" box with no
+ * letters (v "") is a number written in index form (7³, 2⁶ × 3³), right only as the book writes it (`same`).
  */
-export type Box = ({ k: "num" } | { k: "expr"; v: string; eq?: true } | { k: "pick" } | { k: "text"; w?: true }) & {
+export type Box = ({ k: "num" } | { k: "expr"; v: string; eq?: true; p?: true } | { k: "pick" } | { k: "text"; w?: true }) & {
   l?: string;
   u?: string;
   j?: string;
@@ -161,8 +163,8 @@ export function normalize(s: string): string {
     .replace(/[−‐-―﹣－]/g, "-")
     .replace(/[×✕✖⋅∙]/g, "*")
     .replace(/[÷⁄∕]/g, "/")
-    .replace(/²/g, "^2")
-    .replace(/³/g, "^3")
+    // Any power written up ("x⁶", "2¹⁰": 10 Nov 2026, Indices), as "^" and its digits.
+    .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, (d) => `^${[...d].map((c) => "⁰¹²³⁴⁵⁶⁷⁸⁹".indexOf(c)).join("")}`)
     .replace(/(\d?)([½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞])/g, (_, d: string, f: string) => (d ? `${d} ${VULGAR[f]}` : VULGAR[f]))
     .replace(/[º˚]/g, "°")
     .replace(/°\s+C\b/g, "°C")
@@ -743,6 +745,9 @@ export function wantsOf(raw: string): { want: Want[]; anyOrder: boolean } | null
  * One box the book gives: a number (any of its accepted ones), an answer in one letter, or (5 Nov 2026) an answer in
  * 2 to LETTERS_MAX letters (box v = its letters in the alphabet's order: the pad's letter keys); null = the phone can't.
  */
+/** An answer with a power above 2 ("x^6", "(2ab)³"): the pad needs □ⁿ. */
+const powered = (vs: string[]) => vs.some((x) => /\^(?:[03-9]|\d{2,})/.test(normalize(x)));
+
 function boxWant(b: BoxAns): Want | null {
   const first = b.v[0];
   const edge = { ...(b.l ? { l: b.l } : {}), ...(b.u ? { u: showUnit(b.u) } : {}), ...(b.j ? { j: b.j } : {}) };
@@ -757,16 +762,22 @@ function boxWant(b: BoxAns): Want | null {
   const nums = b.v.map(parseNum);
   if (nums.every((x) => x !== null)) return { box: { k: "num", ...look }, t, ok: nums as Rat[], ...same };
   const sameForm = b.same ? { same: b.v.map(exprKey) } : {};
+  const pw = powered(b.v) ? { p: true as const } : {};
   const e = parseExpr(first);
+  // A number in index form (10 Nov 2026, Indices: "7³", "2⁶ × 3³"): only as the book writes it.
+  if (e && e.vars.length === 0 && b.same && b.v.every((x) => parseExpr(x)?.vars.length === 0)) {
+    const vals = valuesOf(e.fn, []);
+    return vals ? { box: { k: "expr", v: "", ...look, p: true }, t, vals, ...sameForm } : null;
+  }
   if (e && e.vars.length === 1 && b.v.every((x) => parseExpr(x)?.vars.join() === e.vars[0])) {
     const vals = valuesOf(e.fn, e.vars);
-    return vals ? { box: { k: "expr", v: e.vars[0], ...look }, t, vals, ...sameForm } : null;
+    return vals ? { box: { k: "expr", v: e.vars[0], ...look, ...pw }, t, vals, ...sameForm } : null;
   }
   // Several letters (algebra: "5x + 3y", "4pq", "2a(a + 5b)"): every accepted answer in the same letters.
   const m = parseExpr(first, true);
   if (!m || m.vars.length < 2 || b.v.some((x) => parseExpr(x, true)?.vars.join() !== m.vars.join())) return null;
   const vals = valuesOf(m.fn, m.vars);
-  return vals ? { box: { k: "expr", v: m.vars.join(""), ...look }, t, vals, ...sameForm } : null;
+  return vals ? { box: { k: "expr", v: m.vars.join(""), ...look, ...pw }, t, vals, ...sameForm } : null;
 }
 
 /**
@@ -816,7 +827,7 @@ function eqWant(b: BoxAns, edge: { l?: string; u?: string; j?: string }, t: stri
     if (!vals || vals.every((x) => x[0] === 0) || new Set(vals.map((x) => `${x[0]}/${x[1]}`)).size === 1) return null;
     eqs.push(vals);
   }
-  return { box: { k: "expr", v: first.vars.join(""), eq: true, ...edge }, t, eqs, ...(b.same ? { same: b.v.map(exprKey) } : {}) };
+  return { box: { k: "expr", v: first.vars.join(""), eq: true, ...edge, ...(powered(b.v) ? { p: true as const } : {}) }, t, eqs, ...(b.same ? { same: b.v.map(exprKey) } : {}) };
 }
 
 /** Why the phone can't take this box ("" = fine): it types numbers, answers in 1 to 3 letters and equations in them;

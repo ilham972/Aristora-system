@@ -21,10 +21,13 @@ export type Op =
   | { kind: "opt"; n: number }
   | { kind: "tick"; n: number; pat?: string }
   | { kind: "mark"; words: string[] }
-  | { kind: "hide"; sel: string };
+  | { kind: "hide"; sel: string }
+  | { kind: "dots"; n: number };
 
 /** One answer's kind; `a` = its words for the teachers (else the key's own); `ops` = what its printed question needs. */
-export type Spec = { t?: Ans; a?: string; ops?: Op[]; card?: true };
+export type Spec = { t?: Ans; a?: string; ops?: Op[]; card?: true; m?: number };
+/** A part's marks when its key has none (a printed table's rows). */
+export const marks = (m: number, s: Spec): Spec => ({ ...s, m });
 export type Split = { split: [string, number, Spec][] };
 export type Decision = Spec | Record<string, Spec | Split>;
 export type Kinds = Record<number, Decision>;
@@ -47,6 +50,20 @@ export const nums = (vs: string[], o: BoxOpts & { any?: boolean } = {}): Spec =>
   const b = vs.map((v, i) => box(v, { ...o, also: [], j: i ? o.j : undefined }));
   return { t: { k: "box", b, ...(o.any ? { any: true } : {}) }, a: b.map(said).join(o.j ? ` ${o.j} ` : ", ") };
 };
+/** Boxes each with its own label and unit: [label, answer, unit?] ("ABC =", "30", "°"); any = in any order. */
+export const boxes = (list: [string, string, string?][], o: { any?: boolean; same?: boolean } = {}): Spec => {
+  const b = list.map(([l, v, u]) => box(v, { l: l || undefined, u, same: o.same }));
+  return { t: { k: "box", b, ...(o.any ? { any: true } : {}) }, a: b.map(said).join(", ") };
+};
+/** Names he types, a box each (a pair of angles: [["COD", "DOC"], ["DOB", "BOD"]]): every spelling of each; any order. */
+export const words = (list: string[][], o: { l?: string; any?: boolean } = { any: true }): Spec => ({
+  t: { k: "box", b: list.map((v) => ({ ...box(v[0], { l: o.l, also: v.slice(1) }), w: true })), ...(o.any !== false ? { any: true } : {}) },
+  a: list.map((v) => v[0]).join(", "),
+});
+/** An angle named by three letters, typed either way round ("AOB" = "BOA"); more names when the key takes them. */
+export const angle = (...names: string[]): Spec => word(names.flatMap((n) => (n.length === 3 ? [n, [...n].reverse().join("")] : [n])), { l: "∠" });
+/** Two angles that form a pair, each typed either way round, the pair in any order (one right pair only). */
+export const anglePair = (x: string, y: string): Spec => words([x, y].map((n) => [n, [...n].reverse().join("")]), { l: "∠" });
 /** An equation ("2x + 5 = 25"): his terms may be on either side; `also` = other equations the book accepts. */
 export const eq = (v: string, o: { also?: string[] } = {}): Spec => ({ t: { k: "box", b: [box(v, { also: o.also })] }, a: v });
 /** A word or a name in letters he types with his phone's keyboard ("AOB", "செவ்வகம்"): every spelling it takes. */
@@ -74,6 +91,47 @@ export const photo = (a?: string): Spec => ({ t: { k: "photo" }, ...(a ? { a } :
 export const fill = (...vs: (string | [string, BoxOpts])[]): Spec => {
   const b = vs.map((x) => (typeof x === "string" ? box(x) : box(x[0], x[1])));
   return { t: { k: "fill", b }, a: b.map(said).join(", "), ops: [{ kind: "fill", n: b.length }] };
+};
+/** Blanks printed as dots ("……………"): each run of dots becomes a blank box in the question, filled in order. */
+export const fillDots = (...vs: (string | [string, BoxOpts])[]): Spec => {
+  const s = fill(...vs);
+  return { ...s, ops: [{ kind: "dots", n: vs.length }, ...(s.ops ?? [])] };
+};
+
+/** The terms of a sum at its top level, each with its sign ("5x − 4y + 6" → ["5x", "− 4y", "+ 6"]). */
+function terms(x: string): string[] {
+  const out: string[] = [];
+  let d = 0;
+  let cur = "";
+  for (const ch of x.trim()) {
+    if (ch === "(") d++;
+    if (ch === ")") d--;
+    if (d === 0 && (ch === "+" || ch === "−" || ch === "-") && cur.trim()) {
+      out.push(cur.trim());
+      cur = ch;
+    } else cur += ch;
+  }
+  out.push(cur.trim());
+  return out;
+}
+const perms = <T>(xs: T[]): T[][] => (xs.length <= 1 ? [xs] : xs.flatMap((x, i) => perms([...xs.slice(0, i), ...xs.slice(i + 1)]).map((p) => [x, ...p])));
+const joinTerms = (ts: string[]) =>
+  ts
+    .map((t, i) => {
+      const sign = /^[+−-]/.test(t) ? t[0] : "+";
+      const body = t.replace(/^[+−-]\s*/, "");
+      return i === 0 ? `${sign === "+" ? "" : "−"}${body}` : ` ${sign === "-" ? "−" : sign} ${body}`;
+    })
+    .join("");
+/**
+ * A factorised answer: "3(2x + 3y)", written only so (an expanded answer is wrong), its bracket's terms in any order
+ * (at most 6 forms: a bracket of 3 terms). More forms in `also`.
+ */
+export const factored = (v: string, also: string[] = []): Spec => {
+  const m = /^(.*?)\((.*)\)$/.exec(v.trim());
+  const forms = m ? perms(terms(m[2])).map((ts) => `${m[1]}(${joinTerms(ts)})`) : [v];
+  const all = [...new Set([v, ...forms, ...also])].slice(0, 6);
+  return { t: { k: "box", b: [{ v: all, same: true }] }, a: v };
 };
 /** The paper's printed options (its `.mcq`): the right one from 1; items = their words for the teachers. */
 export const choose = (right: number, n: number, items?: string[]): Spec => ({

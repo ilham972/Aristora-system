@@ -153,7 +153,8 @@ const ratText = ([n, d]: [number, number]) => (d === 1 ? String(n) : `${n}/${d}`
 
 /** What the phone read from a key's words (version 1) as a kind, or null: the same answers, now said by the book. */
 export function fromWords(a: string): Ans | null {
-  const w = wantsOf(a);
+  // A directed number's sign ("+7", "(+3)") is the same number for the phone (its pad has no + for numbers).
+  const w = wantsOf(a) ?? wantsOf(a.replace(/(^|[\s(*=⇒:,·])\+(?=\d)/g, "$1"));
   if (!w || !w.want.length) return null;
   const b: BoxAns[] = [];
   for (const x of w.want) {
@@ -198,30 +199,60 @@ function kindWords(t: Ans | undefined): string {
 
 // ---------------------------------------------------------------- review
 
-function review(udir: string, all: boolean) {
+const squash = (x: string) =>
+  x.replace(/[\s°]/g, "").replace(/[−–]/g, "-").replace(/×/g, "*").replace(/ரூபா|ரூ\.?|Rs\.?/g, "").toLowerCase();
+/** What the app read is not the key's bold answer ("**2ax**" read as 2). */
+function boldOdd(a: string, t: Ans | null): boolean {
+  const runs = [...a.matchAll(/\*\*(.+?)\*\*/g)].map((m) => squash(m[1]));
+  if (!t || t.k !== "box" || !runs.length) return false;
+  const said = squash(t.b.map((x) => `${x.l ?? ""}${x.v[0]}${x.u ?? ""}`).join(","));
+  const bare = squash(t.b.map((x) => x.v[0]).join(","));
+  const ok = (r: string) => r === said || r === bare || r.replace(/^[a-zஅ-ஹ]+=/, "") === bare;
+  return !runs.some(ok) && runs.join(",") !== said && runs.join(",") !== bare && !t.b.every((x, i) => runs[i] !== undefined && (runs[i] === squash(`${x.l ?? ""}${x.v[0]}${x.u ?? ""}`) || runs[i].replace(/^[a-zஅ-ஹ]+=/, "") === squash(x.v[0])));
+}
+
+function review(udir: string, all: boolean, from = 1, to = Infinity) {
   const { u, html, last, key } = load(udir);
   const v2 = (u.answers ?? []).some((k) => k.t || k.parts?.some((p) => p.t));
-  console.log(`${u.unit.key} ${u.unit.en} · ${u.unit.ta} · ${last} questions · key: ${u.answers ? (v2 ? "kinds" : "words") : "NONE"} · fixes ${u.fixes.length} · ${JSON.stringify(u.share)}`);
-  for (let q = 1; q <= last; q++) {
+  console.log(`${u.unit.key} ${u.unit.en} · ${u.unit.ta} · ${last} questions · key: ${u.answers ? (v2 ? "kinds" : "words") : "NONE"} · fixes ${u.fixes.length}`);
+  const quick: string[] = [];
+  for (let q = Math.max(1, from); q <= Math.min(last, to); q++) {
     const h = html.get(q) ?? "";
     const k = key.get(q);
     const part = partOf(u.data, q);
     const rows = k?.parts?.length ? k.parts : k ? [{ p: "", a: k.a ?? "", m: outOf(u.data, q) ?? 0, t: k.t }] : [];
-    const need = (p: KeyPart) => !p.t || p.t.k === "photo" || p.t.k === "match";
-    if (!all && rows.length && !rows.some(need) && !/data-paper/.test(h) && h) continue;
+    const autoOf = (p: KeyPart) => (p.t ? null : fromWords(p.a));
+    // A decision: a photo, nothing the app can read, a matching (its printed columns), a form the wording asks for.
+    const decide = (p: KeyPart) => (!p.t && !autoOf(p)) || p.t?.k === "photo" || p.t?.k === "match";
+    if (!all && rows.length && !rows.some(decide)) {
+      const text = plain(h).replace(/^\d+\s*/, "");
+      const form = /சுருக்கு|கலப்பு|தசம|பின்னமாக|எளிய|சதவீதமாக|விகிதமாக|நியம|காரணி/.test(text) ? " FORM?" : "";
+      // A label read from "a + b + c + d = 360" is only its last letter ("d ="): the sum was the answer.
+      const label = rows.some((p) => {
+        const t = p.t ?? autoOf(p);
+        return t?.k === "box" && t.b.some((x) => x.l && new RegExp(String.raw`[+\-−×]\s*${x.l.replace(/[^A-Za-z]/g, "")}\s*=`).test(p.a));
+      })
+        ? " LABEL?"
+        : "";
+      const bold = rows.some((p) => boldOdd(p.a, p.t ? null : autoOf(p))) ? " BOLD?" : "";
+      quick.push(`Q${q}${form}${label}${bold} ${rows.map((p) => `${p.p ? `${p.p}:` : ""}${kindWords(p.t ?? autoOf(p) ?? undefined).replace(/^box /, "")}`).join(" · ")}  ← ${text.slice(0, 70)}`);
+      continue;
+    }
     console.log(`\nQ${q} [${part?.id} · ${outOf(u.data, q)} marks]${h ? "" : " (not printed in the app)"}`);
     if (part?.kind === "cards") {
       const bs = blocks(h);
       const lead = plain(h.slice(0, bs[0]?.s ?? h.length));
       if (lead) console.log(`  ${lead}`);
-      for (const bl of bs) console.log(`  (${plain(bl.label)}) ${plain(h.slice(bl.s, bl.e)).replace(plain(bl.label), "").trim()}`);
+      for (const bl of bs) console.log(`  ${plain(h.slice(bl.s, bl.e))}`);
     } else console.log(`  ${plain(h)}`);
     if (!rows.length) console.log("  KEY: none");
     for (const p of rows) {
-      const auto = !p.t ? fromWords(p.a) : null;
-      console.log(`  ${p.p ? `${p.p}: ` : ""}KEY ${JSON.stringify(p.a)} [${p.m}] · ${p.t ? kindWords(p.t) : auto ? `words → ${kindWords(auto)}` : "GAP"}`);
+      const auto = autoOf(p);
+      const odd = boldOdd(p.a, auto) ? " BOLD?" : "";
+      console.log(`  ${p.p ? `${p.p}: ` : ""}KEY ${JSON.stringify(p.a)} [${p.m}] · ${p.t ? kindWords(p.t) : auto ? `words → ${kindWords(auto)}${odd}` : "GAP"}`);
     }
   }
+  if (quick.length) console.log(`\nREAD FROM WORDS OR KINDS ALREADY (${quick.length}):\n${quick.join("\n")}`);
 }
 
 // ---------------------------------------------------------------- build
@@ -235,14 +266,15 @@ function opEdits(h: string, s: number, e: number, op: Op): Edit[] | string {
   const out: Edit[] = [];
   const seg = h.slice(s, e);
   if (op.kind === "fill") {
-    const re = /<span class="ab(?: [^"]*)?"[^>]*>/g;
+    // Only an empty box is a blank (a box with "+3" printed in it is part of the question).
+    const re = /<span class="ab(?: [^"]*)?"[^>]*>(?=(?:\s|&nbsp;|&#160;)*<\/span>)/g;
     for (let m = re.exec(seg); m && out.length < op.n; m = re.exec(seg)) if (!/data-fill/.test(m[0])) out.push({ at: s + m.index + 5, del: 0, ins: ' data-fill="0"' });
     return out.length === op.n ? out : `${op.n} blanks wanted, ${out.length} printed there`;
   }
   if (op.kind === "opt") {
     const at = seg.indexOf('<div class="mcq"');
     if (at < 0) return "no printed options (.mcq) there";
-    const re = /<span>(?=<b>\(\d+\)<\/b>)/g;
+    const re = /<span>(?=<b>\([^)<]{1,5}\)<\/b>)/g; // (1) … (4), (I) … (IV), (a) …
     re.lastIndex = at;
     for (let m = re.exec(seg); m && out.length < op.n; m = re.exec(seg)) out.push({ at: s + m.index + 5, del: 0, ins: ' data-opt="0"' });
     return out.length === op.n ? out : `${op.n} options wanted, ${out.length} printed`;
@@ -265,6 +297,16 @@ function opEdits(h: string, s: number, e: number, op: Op): Edit[] | string {
       from = i + w.length;
     }
     return out;
+  }
+  if (op.kind === "dots") {
+    // A run of dots (three or more, or "…") outside a tag becomes an empty blank box.
+    const re = /(?:…|\.{3,})(?:[\s.…]|&nbsp;)*/g;
+    for (let m = re.exec(seg); m && out.length < op.n; m = re.exec(seg)) {
+      if (inTag(h, s + m.index)) continue;
+      const lead = /^\s*/.exec(m[0])![0];
+      out.push({ at: s + m.index + lead.length, del: m[0].trimEnd().length - lead.length, ins: '<span class="ab" style="width:16mm"></span>' });
+    }
+    return out.length === op.n ? out : `${op.n} dotted blanks wanted, ${out.length} printed`;
   }
   const [sel, nth] = op.sel.split(":");
   const re = sel.startsWith(".") ? new RegExp(`<([a-z0-9]+)(?=[^>]*\\sclass="[^"]*\\b${sel.slice(1)}\\b)`, "g") : new RegExp(`<${sel}\\b`, "g");
@@ -354,7 +396,7 @@ async function build(udir: string) {
             take(s, rows.length - 1);
           }
         } else {
-          rows.push({ ...p, a: x.a ?? p.a, t: x.t ?? p.t });
+          rows.push({ ...p, a: x.a ?? p.a, t: x.t ?? p.t, ...(x.m ? { m: x.m } : {}) });
           take(x, rows.length - 1);
         }
       }
@@ -375,18 +417,34 @@ async function build(udir: string) {
       }
       if (!r.a.trim()) r.a = kindWords(r.t);
     }
-    // The printed question: its slots and its blocks for paper only.
-    if (edits.length) {
+    // The printed question: its slots and its blocks for paper only. Dotted blanks become boxes first (a pass of their
+    // own), so the blanks' slots are then found like any printed box.
+    let h1 = h0;
+    if (edits.some((e) => e.op.kind === "dots")) {
       const ranges = partRanges(h0, rows.map((r) => r.p));
-      const all: Edit[] = [];
-      for (const ed of edits) {
+      const ds: Edit[] = [];
+      for (const ed of edits.filter((e) => e.op.kind === "dots")) {
         const [s, e] = ed.range === "card" ? [0, h0.length] : ranges[ed.range];
         const got = opEdits(h0, s, e, ed.op);
+        if (typeof got === "string") problems.push(`Q${q}: ${got}`);
+        else ds.push(...got);
+      }
+      ds.sort((a, b2) => b2.at - a.at);
+      for (const ed of ds) h1 = h1.slice(0, ed.at) + ed.ins + h1.slice(ed.at + ed.del);
+    }
+    const rest = edits.filter((e) => e.op.kind !== "dots");
+    if (rest.length || h1 !== h0) {
+      const h0b = h1;
+      const ranges = partRanges(h0b, rows.map((r) => r.p));
+      const all: Edit[] = [];
+      for (const ed of rest) {
+        const [s, e] = ed.range === "card" ? [0, h0b.length] : ranges[ed.range];
+        const got = opEdits(h0b, s, e, ed.op);
         if (typeof got === "string") problems.push(`Q${q}: ${got}`);
         else all.push(...got);
       }
       all.sort((a, b2) => b2.at - a.at);
-      let h = h0;
+      let h = h0b;
       for (const ed of all) h = h.slice(0, ed.at) + ed.ins + h.slice(ed.at + ed.del);
       h = numberSlots(h);
       if (h !== h0) {
@@ -469,7 +527,10 @@ async function push(dir: string, keys: string[]) {
 const [cmd, ...args] = process.argv.slice(2);
 const main = async () => {
   if (cmd === "pull") return pull(outside(args[0]), args.slice(1));
-  if (cmd === "review") return review(outside(args[0]), args[1] === "all");
+  if (cmd === "review") {
+    const [f, t] = (args.find((x) => /^\d+-\d+$/.test(x)) ?? "1-9999").split("-").map(Number);
+    return review(outside(args[0]), args.includes("all"), f, t);
+  }
   if (cmd === "build") {
     let ok = true;
     for (const u of args) ok = (await build(outside(u))) && ok;

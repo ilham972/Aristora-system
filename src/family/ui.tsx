@@ -14,10 +14,11 @@ export const BRAND = "ARISTORA";
 export const firstName = (name: string) => name.split(" ")[0];
 
 /** "2n-1" → "2n − 1" for the eye; the typed text stays plain. */
+const SUP: Record<string, string> = { "0": "⁰", "1": "¹", "2": "²", "3": "³", "4": "⁴", "5": "⁵", "6": "⁶", "7": "⁷", "8": "⁸", "9": "⁹" };
+/** "x^6" → "x⁶" (any power: 10 Nov 2026, Indices); a "^" he just typed waits for its digits. */
 export const pretty = (s: string) =>
   s
-    .replace(/\^2/g, "²")
-    .replace(/\^3/g, "³")
+    .replace(/\^(\d+)/g, (_, d: string) => [...d].map((x) => SUP[x]).join(""))
     .replace(/\*/g, "×")
     .replace(/-/g, "−");
 

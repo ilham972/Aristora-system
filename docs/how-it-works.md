@@ -1915,6 +1915,12 @@ learning app of our education institute"): one profile, his class times, what he
     his phone's own keyboard (`WordBox`; no pad on a question with only such boxes); right when it is one of `v` as
     `wordKey` writes them (capitals, spaces and ∠ ^ ° . , never count; the letters' order does: the book lists "AOB"
     and "BOA"). Only under the question (`box`), never in a printed blank (`fill`: refused).
+  - **Powers above 2** (his Grade 8 Indices: x⁶, (2ab)³, x⁴y⁴ had boxes no student could type: the letters pad had only
+    □²): a box whose answer has one gets **□ⁿ** on the pad (`Box.p`, `powered`; in →'s place, → on a row of its own, as
+    for "="), and the exponent's digits follow it; the phone draws any power up (`pretty`: "x^6" → x⁶; the reader takes
+    every superscript digit, `normalize`). **A number in index form** (7³, 2⁶ × 3³, 2² × 3² × 5) is a box with no
+    letters (`v` ""), only when the book writes it `same`: its pad has □ⁿ where a letter would be; it counts only as
+    written (343 for 7³ is wrong); a number expression without `same` stays refused, as before.
   - **His own words** = kind `say` ("explain", "describe", "show that"): one box for his phone's keyboard (`SayBelow`,
     ≤ `REASON_MAX`); a teacher reads them in Settings → Photos exactly as a reason (`readPart`: `why` or `say`; a part
     row with no files, `said`; `reasonsOf` with `yes` ""); nothing typed = the part's 0 at once and no working photo.

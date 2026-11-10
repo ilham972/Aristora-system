@@ -383,3 +383,43 @@ describe("typed words and equations", () => {
     expect(w.key![2].t).toEqual({ k: "say" });
   });
 });
+
+// 10 Nov 2026, Indices: answers with a power above 2 ("x⁶", "(2ab)³") had boxes no student could type (the letters pad
+// has only □²), and a number in index form ("7³", "2⁶ × 3³") could not be a box at all. Now □ⁿ on the pad.
+describe("powers above 2 and numbers in index form", () => {
+  const key: KeyAnswer[] = [
+    { q: 1, a: "x⁶", t: { k: "box", b: [{ v: ["x^6"] }] } },
+    { q: 2, a: "(2ab)³", t: { k: "box", b: [{ v: ["(2ab)³", "(2ba)³"], same: true }] } },
+    { q: 3, a: "7³", t: { k: "box", b: [{ v: ["7³"], same: true }] } },
+    { q: 4, a: "2⁶ × 3³", t: { k: "box", b: [{ v: ["2⁶ × 3³", "3³ × 2⁶"], same: true }] } },
+    { q: 5, a: "x²", t: { k: "box", b: [{ v: ["x^2"] }] } },
+  ];
+  const keys = phoneKey(key, BOOK.data);
+  const got = (q: number, typed: string) => markQuestion(keys.get(q)!, [typed]).got;
+
+  test("the pad gets □ⁿ only where a power above 2 is the answer; a number in index form has no letters", () => {
+    expect(checkKey(key, BOOK.data)).toEqual([]);
+    expect(formOf(keys.get(1)!).parts[0].boxes).toEqual([{ k: "expr", v: "x", p: true }]);
+    expect(formOf(keys.get(2)!).parts[0].boxes).toEqual([{ k: "expr", v: "ab", p: true }]);
+    expect(formOf(keys.get(3)!).parts[0].boxes).toEqual([{ k: "expr", v: "", p: true }]);
+    expect(formOf(keys.get(5)!).parts[0].boxes).toEqual([{ k: "expr", v: "x" }]);
+  });
+
+  test("marked by value, and by form where the book says so", () => {
+    expect(got(1, "x^6")).toBe(2);
+    expect(got(1, "x^5")).toBe(0);
+    expect(got(2, "(2ab)^3")).toBe(2);
+    expect(got(2, "8a^3b^3")).toBe(0); // the same value, not a power of a product
+    expect(got(3, "7^3")).toBe(2);
+    expect(got(3, "343")).toBe(0);
+    expect(got(4, "3^3*2^6")).toBe(2);
+    expect(got(4, "2^6*3^3")).toBe(2);
+    expect(got(4, "1728")).toBe(0);
+    expect(got(5, "x^2")).toBe(2);
+  });
+
+  test("a number expression without the form is still refused (the teacher's, as before)", () => {
+    expect(checkKey([{ q: 1, a: "x", t: { k: "box", b: [{ v: ["5 + 17"] }] } }], BOOK.data)[0]).toContain("can't type");
+  });
+});
+

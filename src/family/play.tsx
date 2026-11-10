@@ -76,18 +76,23 @@ const NUM_KEYS = ["7", "8", "9", "⌫", "4", "5", "6", "/", "1", "2", "3", "-", 
  * key keeps its place: the 1st letter where the one-letter pad has it; a 2nd and 3rd letter take × and /'s places
  * (letters side by side multiply: 6xy needs no ×).
  */
-const exprKeys = (v: string, eq = false) => {
+const exprKeys = (v: string, eq = false, power = false) => {
   const [a, b, c] = [...v];
-  const keys = ["7", "8", "9", "⌫", "4", "5", "6", a, "1", "2", "3", "+", "0", "(", ")", "-", b ?? "*", c ?? "/", "^2"];
-  // An equation (10 Nov 2026): "=" takes →'s place and → a row of its own under it: every other key stays put.
-  return eq ? [...keys, "=", "→"] : [...keys, "→"];
+  // A number in index form (no letter, 10 Nov 2026: 7³, 2⁶ × 3³): □ⁿ where the letter would be, × and / as always.
+  const keys = ["7", "8", "9", "⌫", "4", "5", "6", a ?? "^", "1", "2", "3", "+", "0", "(", ")", "-", b ?? "*", c ?? "/", "^2"];
+  // An equation (10 Nov 2026): "=" takes →'s place and → a row of its own under it: every other key stays put. A power
+  // above 2 (x⁶, (2ab)³) puts □ⁿ there the same way (its exponent's digits follow it).
+  const more = [...(eq ? ["="] : []), ...(power && a ? ["^"] : [])];
+  return [...keys, ...more, "→"];
 };
-const KEY_LABEL: Record<string, string> = { "-": "−", "*": "×", "^2": "x²", " ": "␣", "⌫": "⌫", "→": "→" };
+const KEY_LABEL: Record<string, string> = { "-": "−", "*": "×", "^2": "x²", "^": "□ⁿ", " ": "␣", "⌫": "⌫", "→": "→" };
 
 /** His pad. On a question with no box (the teacher's) only → works: the other keys are pale. */
 function Pad(props: { box: Box | null; onKey: (k: string) => void; last: boolean }) {
   const eq = props.box?.k === "expr" && !!props.box.eq;
-  const keys = props.box?.k === "expr" ? exprKeys(props.box.v, eq) : NUM_KEYS;
+  const power = props.box?.k === "expr" && !!props.box.p;
+  const keys = props.box?.k === "expr" ? exprKeys(props.box.v, eq, power) : NUM_KEYS;
+  const wide = props.box?.k === "expr" && (eq || (power && !!props.box.v));
   const fr = !!props.box?.f; // a fraction box: "/" goes down to the denominator (drawn as a fraction), ␣ to the next cell
   return (
     <div class={`f-padkeys${props.box?.k === "expr" ? " x" : ""}`} role="group" aria-label="Keys">
@@ -96,8 +101,8 @@ function Pad(props: { box: Box | null; onKey: (k: string) => void; last: boolean
           type="button"
           key={k}
           aria-disabled={!props.box && k !== "→" ? "true" : undefined}
-          class={`f-key${k === "→" ? ` next${eq ? " wide" : ""}` : ""}${k === "⌫" ? " del" : ""}${/^\d$/.test(k) ? "" : " op"}${!props.box && k !== "→" ? " f-keyoff" : ""}`}
-          aria-label={k === "→" ? (props.last ? "Done" : "Next") : k === "⌫" ? "Delete" : k === " " ? "Space" : k === "^2" ? "squared" : fr && k === "/" ? "Denominator" : k}
+          class={`f-key${k === "→" ? ` next${wide ? " wide" : ""}` : ""}${k === "⌫" ? " del" : ""}${/^\d$/.test(k) ? "" : " op"}${!props.box && k !== "→" ? " f-keyoff" : ""}`}
+          aria-label={k === "→" ? (props.last ? "Done" : "Next") : k === "⌫" ? "Delete" : k === " " ? "Space" : k === "^2" ? "squared" : k === "^" ? "power" : fr && k === "/" ? "Denominator" : k}
           onClick={() => props.onKey(k)}
         >
           {fr && k === "/" ? (
@@ -107,7 +112,7 @@ function Pad(props: { box: Box | null; onKey: (k: string) => void; last: boolean
               <i class="on" />
             </span>
           ) : k === "^2" && props.box?.k === "expr" ? (
-            props.box.v.length > 1 ? (
+            props.box.v.length !== 1 ? (
               "□²"
             ) : (
               <>
@@ -738,7 +743,7 @@ export function Play(props: {
     );
   });
   return (
-    <div class={`f-play${showQ ? " withq" : ""}${review ? " rev" : ""}${box?.k === "expr" ? ` xpad${box.eq ? " eqpad" : ""}` : ""}${!review && !pad ? " nopad" : ""}`}>
+    <div class={`f-play${showQ ? " withq" : ""}${review ? " rev" : ""}${box?.k === "expr" ? ` xpad${box.eq || (box.p && box.v) ? " eqpad" : ""}` : ""}${!review && !pad ? " nopad" : ""}`}>
       <header class="f-ptop">
         <button type="button" class="f-round" aria-label="Back" onClick={props.onBack}>
           <Icon name="close" size={20} />

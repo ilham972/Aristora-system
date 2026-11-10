@@ -1612,6 +1612,8 @@ test("typed words and equations: an equation on the pad with =, a name in letter
           { p: "i · சுற்றளவு", a: "**20** cm", m: 1, t: { k: "box" as const, b: [{ v: ["20"], u: "cm" }] } },
         ],
       };
+    // Q5: a power above 2 (□ⁿ on the pad, 10 Nov 2026).
+    if (k.q === 5) return { q: 5, a: "x⁶", t: { k: "box" as const, b: [{ v: ["x^6"] }] } };
     return k.q <= 10 ? { q: k.q, a: String(k.q), t: { k: "box" as const, b: [{ v: [String(k.q)] }] } } : k;
   });
   await t.mutation(api.catalog.saveWorkbook, {
@@ -1693,8 +1695,15 @@ test("typed words and equations: an equation on the pad with =, a name in letter
   await noSideScroll(P);
   await shot(P, "famtw4-two-answers");
   await type(P, ["2", "0"]);
-  // Q5–Q10: boxes as always.
-  for (let q = 5; q <= 10; q++) await type(P, String(q).split(""));
+  // Q5: x⁶ with □ⁿ (its exponent's digits after it), drawn up.
+  await contains(P.locator(".f-qn"), "Q5");
+  for (const k of ["x", "power", "6"]) await P.locator(".f-padkeys").getByRole("button", { name: k, exact: true }).click();
+  await contains(P.locator(".f-box.on"), "⁶");
+  await noSideScroll(P);
+  await shot(P, "famtw7-power");
+  await P.locator(".f-padkeys .f-key.next").click();
+  // Q6–Q10: boxes as always.
+  for (let q = 6; q <= 10; q++) await type(P, String(q).split(""));
   await P.locator(".f-review").getByRole("button", { name: "Check ✓" }).click();
 
   // The reveal: everything the phone marks is right (18 of 18); Q3 waits for the teacher, who reads his words.
