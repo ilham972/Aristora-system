@@ -133,6 +133,10 @@ node $TSX scripts/digitize.ts push $D G8-U03 G8-U04   # saved in the app, all or
 - A matching question's printed columns: `match(…, { hide: "table" })` or `paper("table")`, else the phone shows them
   above the same pairs as cards, cut off.
 - Parts of one sub-question ("name it and find its perimeter"): `split(["பெயர்", 1, pick(…)], ["சுற்றளவு", 1, num(…)])`.
+- Never ask twice (10 Nov 2026): a question that prints its own blank (□, "(−15) + □ + (−3) = 34") takes its answer in
+  that blank, `fill(…)` (or `fillAfter(n, …)` when the first n blanks are another part's), not a box under it; a printed
+  blank for a name that is tapped below is hidden, `"@": paper(".ab")` (`".ab:*"` = every one). A blank raised as a
+  power ("2□ × x³") is drawn small and raised by the family app's PAPER_CSS.
 
 ## Security audit
 
@@ -154,7 +158,7 @@ EOF
 
 ## Gotchas learned the hard way
 
-- **The family's later parts are at their budget again** (10 Nov 2026): 42.0 of 44 KB (`FAMILY_LATER_KB`, raised from 42
+- **The family's later parts are at their budget again** (10 Nov 2026): 42.4 of 44 KB (`FAMILY_LATER_KB`, raised from 42
   for the typed answers). The level screen is where the next kinds will land: measure with esbuild before CI.
 - **A new answer kind or box field goes in four places**: `Ans` / `BoxAns` (`convex/lib/key.ts`, with `ansProblem`), the
   validator `ansKind` / `boxAns` (`convex/schema.ts`), the upload reader's field lists (`kindOf` in
