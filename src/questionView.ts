@@ -46,6 +46,7 @@ export const PHONE_CSS = `
 .qv .sq { margin-left: 4mm; }
 .qv .qfig, .qv .figrow { max-width: 100%; }
 .qv [data-paper] { display: none !important; }
+.qv .rp > span:not(.rl) { min-width: 0; overflow-wrap: anywhere; }
 `;
 
 /** A label's pieces: "(b) i)" → ["b", "i"], "A1" → ["a", "1"], "3.1" → ["3", "1"], "அ ii" → ["அ", "ii"]. */
@@ -128,6 +129,13 @@ export function drawQuestion(host: HTMLElement, html: string, css: string, extra
   root.replaceChildren(style, box);
   const fit = () => {
     const w = box.clientWidth - 16;
+    // A line the book keeps on one line (".nb": an expression with its blanks, a sequence) wraps only when it is wider
+    // than the phone (10 Nov 2026, his screenshot: a sub-question's words ran off the card, cut off).
+    const right = box.getBoundingClientRect().right - 8;
+    box.querySelectorAll<HTMLElement>(".nb, .rl").forEach((el) => {
+      el.style.whiteSpace = "";
+      if (w > 0 && el.getBoundingClientRect().right > right + 0.5) el.style.whiteSpace = "normal";
+    });
     box.querySelectorAll<HTMLElement>(".dg, table").forEach((f) => {
       f.style.zoom = "";
       if (f.offsetWidth > w && w > 0) f.style.zoom = String(Math.max(0.35, w / f.offsetWidth));

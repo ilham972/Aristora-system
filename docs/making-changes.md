@@ -105,6 +105,33 @@ node $TSX scripts/claude-link.ts $SCR/req.json $SCR/link-out        # → $SCR/l
   megabyte, and a Convex function has one second).
 - The functions `link.ask` and `link.tell` print OPEN in the audit below on purpose: the seal is their sign-in.
 
+## Digitize a unit in the app (through the Claude link)
+
+His rule (10 Nov 2026): every answer is given on the phone (a box, a tap, the pad with =, a word, his own words typed);
+a photo only for a drawing or a construction. With the link's code in a file outside the repo, everything else in the
+scratchpad (his answers and questions never go in the repo):
+
+```bash
+cd /home/claude/aristora-system
+TSX=/opt/npm-tools/node_modules/tsx/dist/cli.mjs; export ARISTORA_LINK_FILE=$SCR/link-code; D=$SCR/units
+node $TSX scripts/digitize.ts pull $D                 # Grade 8 Term 1 (or name units: G8-U03 G8-U04): books, keys, questions
+node $TSX scripts/digitize.ts review $D/G8-U03        # what needs a decision: photo parts, gaps, words-only keys, matchings
+#   write $D/G8-U03/kinds.ts with scripts/digitize-kinds.ts (its head says how): num, nums, eq, word, pick, why, say,
+#   fill, choose, tf, mark, order, match, photo, split (two answers under one sub-question), paper (hide a printed block)
+node $TSX scripts/digitize.ts build $D/G8-U03         # every check of the upload + the phone marks the key's answers right
+node $TSX scripts/phone-look.ts $D/G8-U03 $SCR/look   # each question drawn as the phone draws it; what runs past the card
+node $TSX scripts/digitize.ts push $D G8-U03 G8-U04   # saved in the app, all or nothing a unit; the phone's share back
+```
+
+- Local tools need two things the packages would give: esbuild and Playwright are in `/opt/npm-tools`; `fflate` is
+  stubbed (a folder `node_modules/fflate` above the repo, exporting `unzipSync`, `zipSync`, `strToU8`).
+- `build` refuses anything the upload would refuse, and more: a key's own answer typed on the phone must get its
+  marks, nothing typed must get 0, a split's marks must add up to its part's, every part needs a kind (a words-only
+  key's parts get the kind the app read from their words: review them).
+- A matching question's printed columns: `match(…, { hide: "table" })` or `paper("table")`, else the phone shows them
+  above the same pairs as cards, cut off.
+- Parts of one sub-question ("name it and find its perimeter"): `split(["பெயர்", 1, pick(…)], ["சுற்றளவு", 1, num(…)])`.
+
 ## Security audit
 
 After adding functions, every function must print GUARD except the open ones on purpose: `auth.me`, `auth.setupOwner`,

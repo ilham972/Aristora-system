@@ -1921,6 +1921,9 @@ learning app of our education institute"): one profile, his class times, what he
   - **Two answers under one printed sub-question** (a name to tap and a number): the key cuts the part in two, each
     with its marks, their labels the printed label then " · " and a word ("ii · பெயர்", "ii · சுற்றளவு"): `slotParts`
     puts both rows under sub-question ii, one after the other (`base`).
+  - **Nothing runs off the card** (his screenshot: a sub-question's words cut off): a line the book keeps on one line
+    (`.nb`, a label) wraps when it is wider than the phone (`fit` in `drawQuestion`), and a sub-question's words break
+    a long run if they must; wide figures and tables shrink, as before.
   - **For the printed book only**: anything with `data-paper` in a question's HTML is never drawn on a phone (a matching
     question's two printed columns above the same pairs as cards: his screenshot, cut off by the card).
   `photo` is now only a drawing or a construction. Books digitized before keep their photos until their kinds are

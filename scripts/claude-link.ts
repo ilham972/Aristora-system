@@ -1,6 +1,7 @@
 // The chat's side of the Claude link (convex/link.ts; docs/making-changes.md "The Claude link"). Run with tsx:
 //
-//   ARISTORA_LINK="ARISTORA-LINK name.key" tsx scripts/claude-link.ts <requests.json> <out-dir>
+//   ARISTORA_LINK_FILE=<a file outside the repo holding the code> tsx scripts/claude-link.ts <requests.json> <out-dir>
+//   (or ARISTORA_LINK="ARISTORA-LINK name.key"; scripts/digitize.ts calls `exchange` the same way)
 //
 // requests.json = [{ "name": "u05", "fn": "ask" | "tell", "req": { "op": "unit", "unitId": "…" } }, …]
 // Each request is sealed with the link's key and pushed onto a branch "link-…" of this repo (nothing but the carrier's
@@ -13,16 +14,20 @@ import { randomBytes } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { fileURLToPath } from "node:url";
 import { fromB64, seal, unseal } from "../convex/lib/seal";
 
-type Req = { name: string; fn: "ask" | "tell"; req: Record<string, unknown> };
+export type Req = { name: string; fn: "ask" | "tell"; req: Record<string, unknown> };
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: ["ignore", "pipe", "pipe"], maxBuffer: 256 * 1024 * 1024 }).toString();
 
 function code(): { id: string; key: Uint8Array } {
-  const m = /([A-Za-z0-9]{8,24})\.([A-Za-z0-9_-]{43})\s*$/.exec((process.env.ARISTORA_LINK ?? "").trim());
+  const file = process.env.ARISTORA_LINK_FILE;
+  const raw = file ? readFileSync(file, "utf8") : (process.env.ARISTORA_LINK ?? "");
+  if (file && resolve(file).startsWith(repo + "/")) throw new Error("Keep the link's code outside the repo.");
+  const m = /([A-Za-z0-9]{8,24})\.([A-Za-z0-9_-]{43})\s*$/.exec(raw.trim());
   const key = m ? fromB64(m[2]) : null;
   if (!m || !key || key.length !== 32) throw new Error('ARISTORA_LINK is not a link code ("ARISTORA-LINK name.key").');
   return { id: m[1], key };
@@ -30,12 +35,13 @@ function code(): { id: string; key: Uint8Array } {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function main() {
-  const [file, outDir] = process.argv.slice(2);
-  if (!file || !outDir) throw new Error("usage: claude-link.ts <requests.json> <out-dir>");
-  if (resolve(outDir).startsWith(repo + "/")) throw new Error("Keep the answers outside the repo (his books' content).");
+/**
+ * Each request sealed, carried to the app and back, opened: { [name]: the app's answer } ({ ok: false, error } when
+ * nothing came back for it). Names must be unique.
+ */
+export async function exchange(reqs: Req[], log = (s: string) => console.log(s)): Promise<Record<string, Record<string, any>>> {
   const { id, key } = code();
-  const reqs = JSON.parse(readFileSync(file, "utf8")) as Req[];
+  if (new Set(reqs.map((r) => r.name)).size !== reqs.length) throw new Error("exchange: two requests with one name");
   const branch = process.env.LINK_BRANCH ?? `link-${randomBytes(4).toString("hex")}`;
   if (!/^link-[a-z0-9-]+$/.test(branch)) throw new Error("LINK_BRANCH must be link-…");
 
@@ -71,7 +77,7 @@ async function main() {
       await sleep(4000);
     }
   }
-  console.log(`sent ${reqs.length} request${reqs.length === 1 ? "" : "s"} on ${branch} (${sent.slice(0, 7)}); waiting for the answers…`);
+  log(`sent ${reqs.length} request${reqs.length === 1 ? "" : "s"} on ${branch} (${sent.slice(0, 7)}); waiting for the answers…`);
 
   // The answers: a commit on top of ours, with link/got/done.txt.
   const ref = `refs/remotes/origin/${branch}`;
@@ -91,8 +97,7 @@ async function main() {
     }
   }
   if (!done) throw new Error(`No answer on ${branch} yet: look at the repo's Actions page ("link"), then run again.`);
-  mkdirSync(outDir, { recursive: true });
-  let bad = 0;
+  const out: Record<string, Record<string, any>> = {};
   for (const [name, short] of nonces) {
     let answer: unknown;
     try {
@@ -106,17 +111,31 @@ async function main() {
     } catch (e) {
       answer = { ok: false, error: `no answer file: ${String((e as Error).message).slice(0, 200)}` };
     }
-    if (!(answer as { ok?: boolean }).ok) bad++;
-    writeFileSync(join(outDir, `${short}.json`), JSON.stringify(answer));
-    const a = answer as { ok?: boolean; error?: string };
-    console.log(`${short}: ${a.ok ? "ok" : `NO: ${a.error}`}`);
+    out[short] = answer as Record<string, any>;
   }
   rmSync(work, { recursive: true, force: true });
+  return out;
+}
+
+async function main() {
+  const [file, outDir] = process.argv.slice(2);
+  if (!file || !outDir) throw new Error("usage: claude-link.ts <requests.json> <out-dir>");
+  if (resolve(outDir).startsWith(repo + "/")) throw new Error("Keep the answers outside the repo (his books' content).");
+  const got = await exchange(JSON.parse(readFileSync(file, "utf8")) as Req[]);
+  mkdirSync(outDir, { recursive: true });
+  let bad = 0;
+  for (const [name, a] of Object.entries(got)) {
+    writeFileSync(join(outDir, `${name}.json`), JSON.stringify(a));
+    if (!a.ok) bad++;
+    console.log(`${name}: ${a.ok ? "ok" : `NO: ${a.error}`}`);
+  }
   if (existsSync(join(repo, "link"))) console.log("note: a link/ folder is in the repo's working tree: never commit it to main.");
   process.exit(bad ? 1 : 0);
 }
 
-main().catch((e) => {
-  console.error(String((e as Error).message ?? e));
-  process.exit(2);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  main().catch((e) => {
+    console.error(String((e as Error).message ?? e));
+    process.exit(2);
+  });
+}
