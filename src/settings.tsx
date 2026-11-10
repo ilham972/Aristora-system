@@ -44,6 +44,7 @@ import { PhotoQueue } from "./photoQueue";
 import { RETAKE, WHY } from "../convex/lib/photos";
 import { SHOUT_WHY } from "../convex/lib/us";
 import { ClassHours } from "./classHours";
+import { ClaudeLink } from "./claudeLink";
 import { RaceSettings } from "./raceSettings";
 import { UsSettings } from "./usSettings";
 import { SimPanel, SimSwitch } from "./sim";
@@ -506,6 +507,7 @@ function Books() {
   return (
     <div class="settings-body">
       <UploadBooks units={units} books={books} onSaved={setGrade} />
+      {may("owner") && <ClaudeLink />}
       <GradeRow
         value={grade}
         onPick={setGrade}
@@ -1167,6 +1169,8 @@ function describe(e: Doc<"events">): string {
       return `moved: ${v}`;
     case "book-save":
       return `workbook saved: ${v}`;
+    case "claude-link":
+      return `Claude link (Settings → Books): ${v}`;
     case "book-move":
       return `O/L tute moved: ${v}`;
     case "book-given":

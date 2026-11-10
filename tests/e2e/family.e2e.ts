@@ -14,6 +14,7 @@ import { secretHash } from "../../convex/lib/auth";
 import { outOf } from "../../convex/lib/book";
 import { slWeekStart } from "../../convex/lib/day";
 import type { Ans } from "../../convex/lib/key";
+import { fromB64, seal, sha256, unseal } from "../../convex/lib/seal";
 import { strToU8, zipSync } from "fflate";
 import { readWorkbookFiles, readWorkbookHtml, type ReadTute } from "../../src/workbookFile";
 import TUTE_HTML from "../fixtures/tute-skeleton.html?raw";
@@ -1587,6 +1588,168 @@ test("names and reasons: names to tap under the question; ஆம் / இல்�
   const items = await t.query(api.photos.queue, as);
   expect(items.map((i) => [i.q, i.said, i.urls.length])).toEqual([[2, true, 0]]);
   expect(items[0].reasons).toEqual([{ p: "", yes: "இல்லை", text: "Made-up reason in Thanglish: 15 x 15 = 225, so not 125" }]);
+});
+
+test("typed words and equations: an equation on the pad with =, a name in letters, his own words for a teacher, two answers under one sub-question; no photo anywhere", async () => {
+  // 10 Nov 2026, his rule: "if student need to write the answer, then we can put the typing box"; a photo is only for a
+  // drawing. His screenshots: "build an equation in x" and "name the shape and find its perimeter" asked for photos.
+  // Made-up questions only.
+  const backend = makeBackend(modules);
+  const t = backend.t;
+  await addPerson(t, { name: "Owner", token: OWNER_TOKEN, role: "owner" });
+  const as = { token: OWNER_TOKEN };
+  await t.mutation(api.setup.ensure, as);
+  const u01 = await t.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G8-U01")).first())!._id);
+  const key = fakeKey().map((k) => {
+    if (k.q === 1) return { q: 1, a: "2x + 5 = 25", t: { k: "box" as const, b: [{ v: ["2x + 5 = 25"] }] } };
+    if (k.q === 2) return { q: 2, a: "AOB", t: { k: "box" as const, b: [{ v: ["AOB", "BOA"], w: true, l: "∠" }] } };
+    if (k.q === 3) return { q: 3, a: "his own words", t: { k: "say" as const } };
+    if (k.q === 4)
+      return {
+        q: 4,
+        parts: [
+          { p: "i · பெயர்", a: "Made-up name B", m: 1, t: { k: "choose" as const, n: 3, a: 2, items: ["Made-up name A", "Made-up name B", "Made-up name C"], below: true as const } },
+          { p: "i · சுற்றளவு", a: "**20** cm", m: 1, t: { k: "box" as const, b: [{ v: ["20"], u: "cm" }] } },
+        ],
+      };
+    return k.q <= 10 ? { q: k.q, a: String(k.q), t: { k: "box" as const, b: [{ v: [String(k.q)] }] } } : k;
+  });
+  await t.mutation(api.catalog.saveWorkbook, {
+    ...as,
+    unitId: u01,
+    parts: BOOK.data.parts.map((p) => ({ id: p.id, to: p.to, ...(p.each ? { each: p.each } : {}) })),
+    levels: BOOK.data.levels.map((l) => ({ to: l.to, max: l.max })),
+    marks: BOOK.data.marks ?? {},
+    replace: true,
+    key,
+  });
+  const card = (q: number, text: string) => `<div class="si" data-q="${q}" data-b="${q}.0"><span class="qn">${q}</span><div class="sit">${text}</div></div>`;
+  // Q4 as a question with two sub-questions; a block for the printed book only (a matching's columns) never shows.
+  const q4 =
+    '<div class="si" data-q="4" data-b="4.0"><span class="qn">4</span><div class="sit">A made-up shape question' +
+    '<div class="rp"><span class="rl">(i)</span><span>Name it and find its perimeter</span></div>' +
+    '<div class="rp"><span class="rl">(ii)</span><span>A made-up second sub-question</span></div>' +
+    '<div data-paper="1" class="made-up-columns">ONLY ON PAPER</div></div></div>';
+  await t.run(async (ctx) => {
+    for (let q = 1; q <= 10; q++) await ctx.db.insert("questions", { unitId: u01, stage: "master", q, html: q === 4 ? q4 : card(q, `A made-up question number ${q}`) });
+    await ctx.db.insert("bookCss", { unitId: u01, stage: "master", css: ".qn { font-weight: 700; } .rp { display: flex; }", updatedAt: 0 });
+    const book = (await ctx.db.query("books").withIndex("by_unit_stage", (x) => x.eq("unitId", u01).eq("stage", "master")).first())!;
+    await ctx.db.patch(book._id, { qCount: 10 });
+  });
+  const hana = await t.mutation(api.students.add, { ...as, name: "Hana K", grade: 8, term: 1, stage: "master", unitId: u01 });
+  await t.mutation(api.families.setCode, { ...as, studentId: hana, code: "4719" });
+
+  const P = await open(backend, `${site.url}/f/`, size(360, 780));
+  await P.getByLabel(/Index/).fill("1001");
+  await P.getByLabel("Code").fill("4719");
+  await P.getByRole("button", { name: "Sign in" }).click();
+  await stageNow(P, "Level 1");
+  await P.locator(".f-lv.play").click();
+  await contains(P.locator(".f-qn"), "Q1");
+  const nextBar = () => P.locator(".f-nextbar .f-key.next").click();
+  const noPhoto = async () => {
+    expect(await P.locator(".f-teachq").count()).toBe(0);
+    expect(await P.getByText("படம் எடு").count()).toBe(0);
+  };
+
+  // Q1: an equation. The pad has "=" (→ in a row of its own); his terms may be on either side.
+  await visible(P.locator(".f-padkeys").getByRole("button", { name: "=", exact: true }));
+  await visible(P.locator(".f-padkeys .f-key.next.wide"));
+  await noPhoto();
+  await noSideScroll(P);
+  await shot(P, "famtw1-equation");
+  await type(P, ["2", "5", "=", "5", "+", "2", "x"]);
+  await noSideScroll(P);
+  // Q2: a name in letters, typed with the phone's own keyboard in the box itself: no pad.
+  await contains(P.locator(".f-qn"), "Q2");
+  expect(await P.locator(".f-padkeys").count()).toBe(0);
+  await noPhoto();
+  await P.locator(".f-box.w .f-bword").fill("b o a");
+  await visible(P.locator(".f-box.w.has"));
+  await noSideScroll(P);
+  await shot(P, "famtw2-word");
+  await nextBar();
+  // Q3: his own words for a teacher (no ஆம் / இல்லை, no photo).
+  await contains(P.locator(".f-qn"), "Q3");
+  expect(await P.locator(".f-pk.yn").count()).toBe(0);
+  await noPhoto();
+  await P.locator(".f-say textarea").fill("Made-up words in Thanglish: rendu pakkamum samam");
+  await shot(P, "famtw3-say");
+  await nextBar();
+  // Q4: one printed sub-question, two answers under it (a name to tap, then a number), before sub-question (ii);
+  // what is for the printed book only isn't drawn.
+  await contains(P.locator(".f-qn"), "Q4");
+  await until(async () => (await P.locator(".f-paper .f-part").count()) === 2, "two answer rows in the question");
+  const order = await P.locator(".f-paper").evaluate((host) => {
+    const out: string[] = [];
+    host.shadowRoot!.querySelectorAll(".rp, slot[name]").forEach((el) => out.push(el.matches("slot") ? (el as HTMLSlotElement).name : (el.querySelector(".rl")?.textContent ?? "")));
+    return out.join(" ");
+  });
+  expect(order).toBe("(i) p0 p1 (ii)");
+  expect(await P.locator(".f-paper").evaluate((host) => getComputedStyle(host.shadowRoot!.querySelector("[data-paper]")!).display)).toBe("none");
+  await noPhoto();
+  await P.locator(".f-pkn .f-pkb").nth(1).click();
+  await P.locator(".f-paper .f-box").first().click();
+  await noSideScroll(P);
+  await shot(P, "famtw4-two-answers");
+  await type(P, ["2", "0"]);
+  // Q5–Q10: boxes as always.
+  for (let q = 5; q <= 10; q++) await type(P, String(q).split(""));
+  await P.locator(".f-review").getByRole("button", { name: "Check ✓" }).click();
+
+  // The reveal: everything the phone marks is right (18 of 18); Q3 waits for the teacher, who reads his words.
+  await contains(P.locator(".f-big"), "18");
+  await contains(P.locator(".f-big"), "/ 18");
+  expect(await P.locator(".f-rrow.bad").count()).toBe(0);
+  await visible(P.locator(".f-rrow.teach"));
+  await noSideScroll(P);
+  await shot(P, "famtw5-typed-result");
+  const items = await t.query(api.photos.queue, as);
+  expect(items.map((i) => [i.q, i.said, i.urls.length])).toEqual([[3, true, 0]]);
+  expect(items[0].reasons).toEqual([{ p: "", yes: "", text: "Made-up words in Thanglish: rendu pakkamum samam" }]);
+});
+
+test("the Claude link: the owner turns it on in Settings → Books, the code is shown once; a request sealed with it is answered; Turn off ends it", async () => {
+  // 10 Nov 2026, his ask: "create the direct pipeline ... directly digitalize from here". The code is made on his phone.
+  const backend = makeBackend(modules);
+  const t = backend.t;
+  await addPerson(t, { name: "Owner", token: OWNER_TOKEN, role: "owner" });
+  const MALA = "books-teacher-token-link-0123456789abcdefghijklm";
+  await addPerson(t, { name: "Mala", token: MALA, tabs: ["correction"], can: ["books"] });
+  await t.mutation(api.setup.ensure, { token: OWNER_TOKEN });
+  const signedIn = (token: string) =>
+    new Function(`return () => { if (sessionStorage.getItem("t")) return; sessionStorage.setItem("t", "1"); localStorage.setItem("aristora.token", ${JSON.stringify(token)}); }`)() as () => void;
+  const O = await open(backend, site.url, size(360, 780), signedIn(OWNER_TOKEN));
+  await O.getByRole("button", { name: "Settings" }).click();
+  await O.getByRole("button", { name: "Books", exact: true }).click();
+  const cardOf = (p: Page) => p.locator(".cl-card");
+  await contains(cardOf(O), "Off.");
+  await cardOf(O).getByRole("button", { name: /^Turn on the Claude link/ }).click();
+  await contains(cardOf(O), "On until");
+  const code = await cardOf(O).locator(".cl-code").inputValue();
+  expect(code).toMatch(/^ARISTORA-LINK [A-Za-z0-9]{12}\.[A-Za-z0-9_-]{43}$/);
+  await noSideScroll(O);
+  await shot(O, "famtw6-claude-link");
+  // The chat's side: a request sealed with the code is answered, sealed; without the code, nothing.
+  const [, id, secret] = /^ARISTORA-LINK (\w+)\.(.+)$/.exec(code)!;
+  const linkKey = fromB64(secret)!;
+  const nonce = sha256(new TextEncoder().encode("a made-up nonce")).subarray(0, 16);
+  const got = await t.query(api.link.ask, { id, box: seal(linkKey, nonce, JSON.stringify({ op: "books", t: Date.now() })) });
+  const answer = JSON.parse(unseal(linkKey, got.box)!.words) as { ok: boolean; units: { key: string }[] };
+  expect(answer.ok).toBe(true);
+  expect(answer.units.some((u) => u.key === "G8-U01")).toBe(true);
+  expect(await t.query(api.link.ask, { id, box: seal(new Uint8Array(32), nonce, JSON.stringify({ op: "books", t: Date.now() })) })).toEqual({ box: "" });
+  // A Books teacher never sees the card.
+  const M = await open(backend, site.url, size(360, 780), signedIn(MALA));
+  await M.getByRole("button", { name: "Settings" }).click();
+  await M.getByRole("button", { name: "Books", exact: true }).click();
+  await visible(M.locator(".upload-btn"));
+  expect(await cardOf(M).count()).toBe(0);
+  // Turn off (asked once more): the code is worth nothing.
+  await cardOf(O).getByRole("button", { name: "Turn off" }).click();
+  await cardOf(O).getByRole("button", { name: "Yes, turn it off" }).click();
+  await contains(cardOf(O), "Off.");
+  expect(await t.query(api.link.ask, { id, box: seal(linkKey, nonce, JSON.stringify({ op: "books", t: Date.now() })) })).toEqual({ box: "" });
 });
 
 test("a tute's ladder on the phone: one road numbered as printed; a teacher question asks, Learn shows it a step a tap; Check sets the circles", async () => {

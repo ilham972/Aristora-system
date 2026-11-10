@@ -1899,7 +1899,52 @@ learning app of our education institute"): one profile, his class times, what he
   in Settings → Photos at once (a part row with no files, `said`), so he owes nothing and the level never waits for it;
   she reads ஆம் / இல்லை and his words (`reasonsOf`) and gives the part's marks. A reason question never comes back
   (`allPhone` / `phonePart`: the phone can't mark it alone) and its marks count as the teacher's in "See what the
-  phone accepts". A drawing and "show that" stay photos.
+  phone accepts". A drawing and "show that" stay photos (until 10 Nov 2026: below).
+- **What he writes is typed, a photo only for a drawing** (10 Nov 2026, his voice note and six screenshots: "everywhere
+  you can see, upload the photo, teacher will be corrected ... you have to remove completely ... the diagrams only need
+  this feature ... if student need to write the answer, then we can put the typing box so they can write in English or
+  Tamil"; "build an equation in x" and "name the shape and find its perimeter" asked for photos). Three more ways to
+  answer, all from the book's kinds:
+  - **An equation** = a box whose answer has "=" ("2x + 5 = 25"; `eqWant`, `parseEq`): the letters pad with **=** where
+    → was and → in a row of its own under it (`exprKeys(v, eq)`, `.f-key.wide`, `.eqpad`). His is right when it says the
+    same with its terms on either side ("25 = 5 + 2x", "2x = 25 − 5", "2x + 5 − 25 = 0": left less right equal to the
+    book's, or to its opposite, at every point). One divided or multiplied through ("x + 2.5 = 12.5") and the solved one
+    ("x = 10") are other equations: right only when the book lists them in `v`. An equation always or never true is
+    refused at the save.
+  - **A word or a name in letters** = a box with `w` ("AOB", "PQ", "செவ்வகம்"): one line in the box itself, typed with
+    his phone's own keyboard (`WordBox`; no pad on a question with only such boxes); right when it is one of `v` as
+    `wordKey` writes them (capitals, spaces and ∠ ^ ° . , never count; the letters' order does: the book lists "AOB"
+    and "BOA"). Only under the question (`box`), never in a printed blank (`fill`: refused).
+  - **His own words** = kind `say` ("explain", "describe", "show that"): one box for his phone's keyboard (`SayBelow`,
+    ≤ `REASON_MAX`); a teacher reads them in Settings → Photos exactly as a reason (`readPart`: `why` or `say`; a part
+    row with no files, `said`; `reasonsOf` with `yes` ""); nothing typed = the part's 0 at once and no working photo.
+  - **Two answers under one printed sub-question** (a name to tap and a number): the key cuts the part in two, each
+    with its marks, their labels the printed label then " · " and a word ("ii · பெயர்", "ii · சுற்றளவு"): `slotParts`
+    puts both rows under sub-question ii, one after the other (`base`).
+  - **For the printed book only**: anything with `data-paper` in a question's HTML is never drawn on a phone (a matching
+    question's two printed columns above the same pairs as cards: his screenshot, cut off by the card).
+  `photo` is now only a drawing or a construction. Books digitized before keep their photos until their kinds are
+  saved again (the Claude link, below).
+- **The Claude link** (10 Nov 2026, his voice note: "I can't digitalize each zip file each time ... create the direct
+  pipeline ... directly digitalize from here ... I can't upload again and again"). Settings → Books → **Claude link**
+  (the owner only, `src/claudeLink.tsx`): **Turn on the Claude link (7 days)** makes a code on his phone ("ARISTORA-LINK
+  name.key": a public name and a 32-byte secret), shown once with **Copy the code**; he pastes it into his Claude chat.
+  **New code** makes another (the old one stops), **Turn off** (asked once more) ends it; the card says until when it
+  is on, the last save and how many. While it is on, the chat reads the workbooks (the list, a unit's shape, key, style
+  and the phone's fixes, its printed questions) and saves a unit's key (every question's answer and kind) and the
+  questions whose HTML changed, **through the same checks as an uploaded zip** (`checkKey`, the safe-HTML rules,
+  `slotProblem`), all or nothing; the book itself (question numbers, levels, marks) is never changed there, so no
+  student's marks move. Only workbooks: never a student, a teacher, a mark or a photo. The history: "workbook saved:
+  Claude link (Owner): answer kinds for N questions …; the phone marks M/T marks, P photos" and "Claude link: on for 7
+  days / off" (the owner's lines).
+  How it travels: the chat's machine reaches only GitHub, so a GitHub job carries each request to the app and the
+  answer back through a branch `link-…` of this public repo (`.github/workflows/link.yml`, `scripts/link-relay.mjs`;
+  the chat's side `scripts/claude-link.ts`). So everything is **sealed** with the link's key (`convex/lib/seal.ts`:
+  hidden with a SHA-256 keystream, signed with HMAC-SHA-256, plain TypeScript, the same in Convex, Node and tests): the
+  carrier, its log and the branch hold letters without meaning. `link.ask` (a query) and `link.tell` (a mutation) are
+  public on purpose (the carrier has no sign-in): the seal is the sign-in. A box the key didn't seal, a link that is
+  off or past its 7 days, a request older than 30 minutes: an empty answer, nothing said. A save is taken once (its
+  time must be newer than the last one taken).
 - The server marks with the uploaded answer keys (`convex/lib/phone.ts`; a key without kinds, version 1): numbers,
   several numbers, answers in n (same values for n = 1..7), labelled answers (x = 52), "also accepted" notes. Since 4 Nov 2026 (his screenshot: "0.25 as a
   percentage" was the teacher's, so whole Percentages Stages were): a number with its unit (25%, 45°, −3 °C, 12 cm,

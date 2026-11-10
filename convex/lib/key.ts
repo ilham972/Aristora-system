@@ -12,9 +12,12 @@ import { boxProblem } from "./phone";
  * One answer box as the book gives it (answer-key.json version 2, 4 Nov 2026): v = the accepted answers as he would
  * type them (the first is the one teachers see); same = he must write it the book's way (the question tests the form:
  * 11/4 is not 2 3/4, 6/8 is not 3/4); l = a label before his box ("x ="), u = a unit after it ("cm"), j = a sign
- * between this box and the one before (":" of a ratio).
+ * between this box and the one before (":" of a ratio). An answer with "=" in it is an equation ("2x + 5 = 25": his
+ * may have its terms on either side, `phone.ts` `eqWant`). w = a word or a name in letters he types with his phone's
+ * own keyboard ("AOB", "PQ", "செவ்வகம்": 10 Nov 2026), right when it is one of v (capitals, spaces and ∠ ^ never
+ * count: `wordKey`); only in a box under the question, never in a printed blank.
  */
-export type BoxAns = { v: string[]; same?: boolean; l?: string; u?: string; j?: string };
+export type BoxAns = { v: string[]; same?: boolean; l?: string; u?: string; j?: string; w?: boolean };
 
 /**
  * A part's answer and the way he gives it, written by the book engine where it knows them (never guessed from the
@@ -30,7 +33,10 @@ export type BoxAns = { v: string[]; same?: boolean; l?: string; u?: string; j?: 
  * - why: "is it true? give a reason" (4 Nov 2026, his rule): ஆம் / இல்லை (a = true for ஆம்), then his reason typed.
  *   A wrong ஆம் / இல்லை = the part's 0 at once (no reason to read); a right one leaves the part to a teacher, who
  *   reads his typed reason (no photo);
- * - photo: done on paper (a drawing, a construction, "show that"): the teacher marks his photo.
+ * - say: his own words, typed with his phone's keyboard in Tamil, English or Thanglish (10 Nov 2026, his rule: "if
+ *   student need to write the answer, then we can put the typing box"): "explain", "describe", "show that". A teacher
+ *   reads them (no photo); nothing typed = the part's 0;
+ * - photo: done on paper, only a drawing or a construction (10 Nov 2026, his rule): the teacher marks his photo.
  * items (choose, tf, mark) = their words, for a phone that can't find the slots in the question. Everything counts
  * from 1, as printed: option (2), the 3rd card.
  */
@@ -42,6 +48,7 @@ export type Ans =
   | { k: "order"; items: string[]; a: number[] }
   | { k: "match"; l: string[]; r: string[]; a: number[] }
   | { k: "why"; a: boolean }
+  | { k: "say" }
   | { k: "photo" };
 
 /** One part of a Part II question: its label ("ii", "a iii"), the answer (**bold** = the final answer), its marks. */
@@ -75,6 +82,8 @@ export function ansProblem(t: unknown): string {
       for (const bx of b) {
         if (!bx || !Array.isArray(bx.v) || bx.v.length === 0 || bx.v.length > ANS_V_MAX || !bx.v.every(isWord)) return "a box with no answer";
         for (const f of ["l", "u", "j"] as const) if (bx[f] !== undefined && !isWord(bx[f])) return "a box's label is too long";
+        if (bx.w !== undefined && typeof bx.w !== "boolean") return "a box of words, yes or no";
+        if (bx.w && x.k === "fill") return "a word to type goes in a box under the question, not in a printed blank";
       }
       return "";
     }
@@ -109,6 +118,7 @@ export function ansProblem(t: unknown): string {
       if (!isWords(l) || l.length < 2 || !isWords(x.r)) return "pairs to match";
       return Array.isArray(x.a) && x.a.length === l.length && isIndexes(x.a, (x.r as string[]).length, 1) ? "" : "pairs without their partners";
     }
+    case "say":
     case "photo":
       return "";
     default:

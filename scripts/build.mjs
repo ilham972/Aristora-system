@@ -75,8 +75,11 @@ console.log(`Built dist/ for ${url}: ${basename(js)} ${kb(js)} KB, ${basename(cs
 // 7 Nov 2026, the race for everyone (his yes: "Race + profiles"): later 32 → 36 for a classmate's profile and cheers
 // (32.9; fetched once, then kept by the service worker); the race's two lists and the grade cup are in the first load
 // (58.6 / 66).
+// 10 Nov 2026: later 42 → 44 for what he types instead of photographing (his rule: "if student need to write the
+// answer, then we can put the typing box"): an equation's pad, a word's own box, his own words (42.0 with them; fetched
+// after the first screen and kept by the service worker, never part of the first load).
 const FAMILY_BUDGET_KB = 66;
-const FAMILY_LATER_KB = 42;
+const FAMILY_LATER_KB = 44;
 // 7 Nov 2026, the class app's Us tab: the family app's teachers' screens (src/family/staff.tsx, opened as /f/?staff
 // inside the class app) are their own file: never prefetched by a student's phone, so outside both budgets above,
 // with their own (a teacher's phone fetches them once, the first time she opens Us).

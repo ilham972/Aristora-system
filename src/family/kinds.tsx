@@ -9,6 +9,9 @@
 //   shows the same choices under it instead (`PickBelow`, the boxes as before).
 // - Names the paper doesn't print (choose `below`, 4 Nov 2026: a pattern's name) are always under the
 //   question; "is it true? give a reason" (why) = ஆம் / இல்லை and his reason in his own words (`WhyBelow`).
+// - Whatever he writes in words is typed with his phone's own keyboard, never photographed (10 Nov 2026, his rule: "if
+//   student need to write the answer, then we can put the typing box"): his own words for a teacher (say, `SayBelow`),
+//   a word or a name the phone marks (a text box with `w`, `WordBox`). A photo is only for a drawing.
 
 import { useRef, useState } from "preact/hooks";
 import type { Box, FormQ, Ui } from "../../convex/lib/phone";
@@ -283,6 +286,56 @@ export function WhyBelow(props: { vals: string[]; at: number; onSet: (v: string[
         />
       </label>
     </div>
+  );
+}
+
+/**
+ * His own words (10 Nov 2026: "explain", "describe", "show that"): one box for his phone's keyboard, in Tamil, English
+ * or Thanglish. A teacher reads them (no photo); left empty it is the part's 0.
+ */
+export function SayBelow(props: { v: string; onSet: (v: string) => void }) {
+  return (
+    <label class="f-whyt f-say">
+      <span>உன் விடை</span>
+      <textarea
+        rows={3}
+        maxLength={REASON_LETTERS}
+        placeholder="தமிழில், English இல் அல்லது Thanglish இல் எழுது…"
+        value={props.v}
+        onInput={(e) => props.onSet((e.currentTarget as HTMLTextAreaElement).value)}
+      />
+    </label>
+  );
+}
+
+/** A word or a name the phone marks ("AOB", "PQ", "செவ்வகம்"): one line, his phone's own keyboard. */
+export function WordBox(props: { box: Box; v: string; on: boolean; onFocus: () => void; onSet: (v: string) => void }) {
+  const b = props.box;
+  return (
+    <label class={`f-box w${props.on ? " on" : ""}${props.v ? " has" : ""}`}>
+      {b.l && <span class="f-blabel">{b.l}</span>}
+      <span class="f-bline">
+        <input
+          type="text"
+          class="f-bword"
+          value={props.v}
+          maxLength={40}
+          placeholder="?"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck={false}
+          enterkeyhint="done"
+          aria-label={`${b.l ?? ""} answer in words`}
+          onFocus={props.onFocus}
+          onInput={(e) => props.onSet((e.currentTarget as HTMLInputElement).value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur();
+          }}
+        />
+        {b.u && <span class="f-bunit">{b.u}</span>}
+      </span>
+    </label>
   );
 }
 

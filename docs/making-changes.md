@@ -76,11 +76,41 @@ fields need no data step: old rows simply don't have them.
 The sandbox shell can't reach `*.convex.cloud` or the site (the proxy blocks it), and WebFetch refuses
 system.aristora.org. You can't read live data: ask him for screenshots.
 
+## The Claude link: reading and saving his books from a chat
+
+The owner turns it on (Settings → Books → Claude link → Turn on → Copy the code) and pastes the code into the chat.
+Keep the code in the chat's shell only (`export ARISTORA_LINK="ARISTORA-LINK name.key"`), never in a file of the repo;
+keep what comes back (his books' content) in the scratchpad, never in the repo.
+
+```bash
+cd /home/claude/aristora-system
+TSX=/opt/npm-tools/node_modules/tsx/dist/cli.mjs
+echo '[{"name":"books","fn":"ask","req":{"op":"books"}}]' > $SCR/req.json
+node $TSX scripts/claude-link.ts $SCR/req.json $SCR/link-out        # → $SCR/link-out/books.json (about a minute)
+# a unit, then its questions (ask again with "from": next while next is not null):
+#   {"name":"u05","fn":"ask","req":{"op":"unit","unitId":"<unitId>"}}
+#   {"name":"u05-q1","fn":"ask","req":{"op":"questions","unitId":"<unitId>","from":1}}
+# save its kinds (the whole key) and only the questions whose HTML changed:
+#   {"name":"save-u05","fn":"tell","req":{"op":"save","unitId":"<unitId>","answers":[…],"items":[{"q":12,"html":"…"}],"dropFixes":true}}
+```
+
+- One file of requests = one push to a branch `link-…` (an orphan commit: the carrier's two files and the sealed
+  requests) and one run of the "link" job (no install: about 30 seconds); the script waits for the answers and opens
+  them. `LINK_BRANCH=link-<topic>` pushes over the same branch each time. Requests go in the file's order.
+- A save is checked like an uploaded zip and is all or nothing; its answer says what was wrong in plain words
+  ("Question 12: the book prints 0 blanks, its key uses 1."), else what the phone now marks (`share`: marks, parts
+  phone / read / photo, and the photo parts' numbers). Send a unit's whole key (`answers`), never a piece of it.
+- "The app took nothing" = the link is off, its 7 days are over, or the code is another link's: ask him for a new code.
+- Keep each request under about 1.5 MB (`LINK_SAVE_MAX`; the seal is plain TypeScript, about a tenth of a second a
+  megabyte, and a Convex function has one second).
+- The functions `link.ask` and `link.tell` print OPEN in the audit below on purpose: the seal is their sign-in.
+
 ## Security audit
 
 After adding functions, every function must print GUARD except the open ones on purpose: `auth.me`, `auth.setupOwner`,
 `auth.peekLink`, `auth.useLink`, `auth.signInPin`, `auth.signOut`, `clock.ping`, and the family app's `family.*` (`peek`
-and `join` check the family link; the rest call `familyViewer` / `familyActor`: the family phone only).
+and `join` check the family link; the rest call `familyViewer` / `familyActor`: the family phone only). Also `link.ask`
+and `link.tell` (10 Nov 2026, the Claude link): they answer only a request sealed with the link's key (`opened`).
 
 ```bash
 python3 - <<'EOF'
@@ -94,6 +124,12 @@ EOF
 ```
 
 ## Gotchas learned the hard way
+
+- **The family's later parts are at their budget again** (10 Nov 2026): 42.0 of 44 KB (`FAMILY_LATER_KB`, raised from 42
+  for the typed answers). The level screen is where the next kinds will land: measure with esbuild before CI.
+- **A new answer kind or box field goes in four places**: `Ans` / `BoxAns` (`convex/lib/key.ts`, with `ansProblem`), the
+  validator `ansKind` / `boxAns` (`convex/schema.ts`), the upload reader's field lists (`kindOf` in
+  `src/workbookFile.ts`), and the phone (`typedPart` / `boxWant` in `convex/lib/phone.ts`, `kinds.tsx`, `play.tsx`).
 
 - **Her own app is two layers** (8 Nov 2026): her pages (`users.pages`, the UI) and her jobs (`users.tabs`, the server's
   permissions). The jobs no longer name a department: a Fighter lead has Theory AND Evaluation (both kinds of work on

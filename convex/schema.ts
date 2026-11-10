@@ -310,6 +310,8 @@ const boxAns = v.object({
   l: v.optional(v.string()),
   u: v.optional(v.string()),
   j: v.optional(v.string()),
+  // a word or a name in letters, typed with his phone's keyboard (10 Nov 2026)
+  w: v.optional(v.boolean()),
 });
 /** A part's answer and the way he gives it, as the book engine writes it (convex/lib/key.ts `Ans`; key version 2). */
 export const ansKind = v.union(
@@ -328,6 +330,8 @@ export const ansKind = v.union(
   v.object({ k: v.literal("match"), l: v.array(v.string()), r: v.array(v.string()), a: v.array(v.number()) }),
   // "is it true? give a reason": ஆம் / இல்லை (a = true for ஆம்), then his typed reason (4 Nov 2026)
   v.object({ k: v.literal("why"), a: v.boolean() }),
+  // his own words, typed: a teacher reads them (10 Nov 2026: "explain", "show that"; never a photo)
+  v.object({ k: v.literal("say") }),
   v.object({ k: v.literal("photo") }),
 );
 /** One question of a workbook's answer key (convex/lib/key.ts): a short answer, or its parts' answers and marks. */
@@ -407,6 +411,24 @@ export default defineSchema({
     css: v.string(),
     updatedAt: v.number(),
   }).index("by_book", ["unitId", "stage"]),
+
+  /**
+   * The Claude link (10 Nov 2026, his ask: "create the direct pipeline ... directly digitalize from here"): while it is
+   * on, a Claude chat holding its code reads the books and saves each question's answer kinds (convex/link.ts). id =
+   * its public name (in every request); key = its secret (base64url, 32 bytes), made on the owner's phone, shown to him
+   * once and never sent to any phone again: every request and answer is sealed with it (convex/lib/seal.ts). last =
+   * the newest request taken (an older one is refused: nothing can be sent twice). One row at most.
+   */
+  claudeLinks: defineTable({
+    id: v.string(),
+    key: v.string(),
+    by: v.string(),
+    at: v.number(),
+    until: v.number(),
+    last: v.optional(v.number()),
+    usedAt: v.optional(v.number()),
+    uses: v.optional(v.number()),
+  }).index("by_link", ["id"]),
 
   students: defineTable({
     name: v.string(),

@@ -5391,3 +5391,54 @@ button.f-lstep {
 .f-fees.owe .f-fees-n b {
   color: #8a5600;
 }
+
+/* ---- Typed words and equations (10 Nov 2026, his rule: what he writes is typed, a photo only for a drawing) ---- */
+/* A word or a name the phone marks: one line, his phone's own keyboard, inside the answer box. */
+.f-box.w {
+  min-width: 150px;
+  flex: 1 1 150px;
+  cursor: text;
+}
+.f-box.w:focus-within {
+  background: #fff;
+  box-shadow:
+    inset 0 0 0 2.5px var(--brand),
+    0 0 0 4px var(--brand-soft);
+}
+.f-bword {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--ink);
+  font: 800 21px/1.25 var(--display);
+}
+.f-bword::placeholder {
+  color: var(--line-2);
+}
+.f-box.w .f-bline {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+}
+/* His own words for a teacher: the reason box alone. */
+.f-say {
+  flex: 1;
+  min-width: 0;
+}
+/* An equation's pad: "=" where → was, → a row of its own under it. */
+.f-key.wide {
+  grid-column: 1 / -1;
+}
+.f-play.xpad.eqpad {
+  --pad-h: 352px;
+}
+@media (max-width: 345px) {
+  .f-play.xpad.eqpad {
+    --pad-h: 330px;
+  }
+}
+

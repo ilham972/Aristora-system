@@ -12448,3 +12448,43 @@ body.tm-on .toasts {
 .mn-dline small {
   color: var(--ink-2);
 }
+
+/* ---------- Books: the Claude link (10 Nov 2026) ---------- */
+.cl-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 14px 0 6px;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.cl-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+.cl-card .muted {
+  margin: 0;
+}
+.cl-on {
+  margin: 0;
+  font-size: 14px;
+}
+.cl-on b {
+  color: var(--green-ink);
+}
+.cl-code {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: 600 13px/1.4 ui-monospace, Menlo, Consolas, monospace;
+  overflow-wrap: anywhere;
+  resize: none;
+}
+

@@ -287,3 +287,99 @@ describe("reading a version 2 key from the zip", () => {
     expect(w.key).toBeNull();
   });
 });
+
+// 10 Nov 2026, his voice note and screenshots: "build an equation in x" and "name the shape and find its perimeter"
+// asked for a photo. His rule: "if student need to write the answer, then we can put the typing box"; a photo is only
+// for a drawing. Three ways to type: an equation on the pad, a word or a name with his own keyboard (the phone marks
+// both), his own words for a teacher.
+describe("typed words and equations", () => {
+  const key: KeyAnswer[] = [
+    { q: 1, a: "2x + 5 = 25", t: { k: "box", b: [{ v: ["2x + 5 = 25"] }] } },
+    { q: 2, a: "AOB", t: { k: "box", b: [{ v: ["AOB", "BOA"], w: true, l: "∠" }] } },
+    { q: 3, a: "his words", t: { k: "say" } },
+    { q: 4, a: "x + y = 10", t: { k: "box", b: [{ v: ["x + y = 10", "2x + 2y = 20"] }] } },
+    {
+      q: 5,
+      parts: [
+        { p: "i · பெயர்", a: "B", m: 1, t: { k: "choose", n: 3, a: 2, items: ["Name A", "Name B", "Name C"], below: true } },
+        { p: "i · சுற்றளவு", a: "**20** cm", m: 1, t: { k: "box", b: [{ v: ["20"], u: "cm" }] } },
+      ],
+    },
+    { q: 6, a: "செவ்வகம்", t: { k: "box", b: [{ v: ["செவ்வகம்", "sevvakam"], w: true }] } },
+  ];
+  const keys = phoneKey(key, BOOK.data);
+  const got = (q: number, typed: string[]) => markQuestion(keys.get(q)!, typed).got;
+
+  test("the key is taken; the phone gets the boxes, never the answers", () => {
+    expect(checkKey(key, BOOK.data)).toEqual([]);
+    expect(formOf(keys.get(1)!).parts[0].boxes).toEqual([{ k: "expr", v: "x", eq: true }]);
+    expect(formOf(keys.get(2)!).parts[0].boxes).toEqual([{ k: "text", w: true, l: "∠" }]);
+    expect(formOf(keys.get(3)!).parts[0]).toEqual({ p: "", m: 2, boxes: [{ k: "text" }], ui: { k: "say" } });
+    expect(formOf(keys.get(4)!).parts[0].boxes).toEqual([{ k: "expr", v: "xy", eq: true }]);
+    const sent = JSON.stringify([1, 2, 3, 4, 6].map((q) => formOf(keys.get(q)!)));
+    for (const secret of ["25", "AOB", "BOA", "10", "20", "செவ்வகம்", "sevvakam"]) expect(sent).not.toContain(secret);
+    expect([1, 2, 3].map((q) => wantWords(keys.get(q)!.parts[0]))).toEqual(["2x + 5 = 25", "∠ AOB", "his own words (a teacher reads them)"]);
+  });
+
+  test("an equation: his terms on either side; the solved or divided one is another equation", () => {
+    for (const ok of ["2x + 5 = 25", "25 = 5 + 2x", "2x = 25 − 5", "2x+5-25=0", "5 + 2x = 25"]) expect(got(1, [ok])).toBe(2);
+    for (const no of ["x = 10", "x + 2.5 = 12.5", "2x + 5 = 20", "2x + 5", "2x = 20 = 5", "2y + 5 = 25", "=", ""]) expect(got(1, [no])).toBe(0);
+    expect(got(4, ["y + x = 10"])).toBe(2);
+    expect(got(4, ["2x+2y=20"])).toBe(2); // listed
+    expect(got(4, ["3x+3y=30"])).toBe(0); // not listed
+    // An equation that is always true, or never: never an answer.
+    const bad = (v: string) => checkKey([{ q: 1, a: "x", t: { k: "box", b: [{ v: [v] }] } }], BOOK.data);
+    expect(bad("x + 1 = 1 + x")[0]).toContain("can't type");
+    expect(bad("x + 1 = x + 2")[0]).toContain("can't type");
+    expect(bad("5 = 5")[0]).toContain("can't type");
+    expect(bad("2x + 1 = 7")).toEqual([]);
+  });
+
+  test("a word or a name: capitals, spaces and ∠ ^ never count; the letters' order does", () => {
+    for (const ok of ["AOB", "aob", "∠BOA", "A O B", "AÔB", " boa. "]) expect(got(2, [ok])).toBe(2);
+    for (const no of ["ABO", "AO", "", "x".repeat(41)]) expect(got(2, [no])).toBe(0);
+    expect(got(6, ["செவ்வகம்"])).toBe(2);
+    expect(got(6, ["Sevvakam"])).toBe(2);
+    expect(got(6, ["சதுரம்"])).toBe(0);
+    // A word goes in a box under the question, never in a printed blank.
+    expect(checkKey([{ q: 1, a: "x", t: { k: "fill", b: [{ v: ["AB"], w: true }] } }], BOOK.data)[0]).toContain("not in a printed blank");
+  });
+
+  test("his own words: a teacher reads them (no photo); nothing typed is 0", () => {
+    const k = keys.get(3)!;
+    const r = markQuestion(k, ["made-up words"]);
+    expect(r).toMatchObject({ got: null, phoneGot: 0, parts: [null] });
+    expect(onlyReasons(k, r.parts)).toBe(true);
+    expect(reasonsOf(k, ["made-up words"])).toEqual([{ p: "", yes: "", text: "made-up words" }]);
+    expect(markQuestion(k, [""])).toMatchObject({ got: 0, parts: [0] });
+    expect(lostOutsideReasons(k, [0])).toBe(false); // an empty box asks no working photo
+    expect(allPhone(k)).toBe(false);
+    expect(slotWords(k, ["made-up words"])).toEqual(["made-up words"]);
+  });
+
+  test("one printed sub-question, two answers: a name to tap and a number, a mark each", () => {
+    const k = keys.get(5)!;
+    expect(formOf(k).parts.map((p) => p.p)).toEqual(["i · பெயர்", "i · சுற்றளவு"]);
+    expect(markQuestion(k, ["2", "20"])).toMatchObject({ got: 2, parts: [1, 1] });
+    expect(markQuestion(k, ["1", "20"])).toMatchObject({ got: 1, parts: [0, 1] });
+    expect(allPhone(k)).toBe(true);
+  });
+
+  test("the upload reader keeps the new kinds", () => {
+    const qs: Record<string, unknown>[] = [];
+    for (let q = 1; q <= 73; q++) {
+      const m = outOf(BOOK.data, q)!;
+      qs.push(q <= 52 ? { q, part: "I", marks: 2, a: `A${q}` } : { q, part: "II", marks: m, a: [{ p: "i", a: `**B${q}**`, m }] });
+    }
+    qs[0].t = { k: "box", b: [{ v: ["2x + 5 = 25"] }] };
+    qs[1].t = { k: "box", b: [{ v: ["AOB"], w: true, x: 1 }] };
+    qs[2].t = { k: "say", x: 1 };
+    const json = { kind: "aristora-answer-key", version: 2, grade: 8, units: [{ no: 1, code: "U01", en: "Number patterns", ta: "எண்கோலங்கள்", questions: qs }] };
+    const zip = zipSync({ "book.html": strToU8(U01), "answer-key.json": strToU8(JSON.stringify(json)) });
+    const w = readWorkbookFiles([{ name: FILE, bytes: zip }])[0] as ReadWorkbook;
+    expect(w.problems).toEqual([]);
+    expect(w.key![0].t).toEqual({ k: "box", b: [{ v: ["2x + 5 = 25"] }] });
+    expect(w.key![1].t).toEqual({ k: "box", b: [{ v: ["AOB"], w: true }] });
+    expect(w.key![2].t).toEqual({ k: "say" });
+  });
+});

@@ -187,6 +187,7 @@ export const archived = query({
 
 /** Sign-ins, PINs and people changes: the owner's business only. */
 const ACCOUNT_KINDS = new Set([
+  "claude-link",
   "owner-setup",
   "sign-in",
   "sign-out",

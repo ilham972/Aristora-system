@@ -17,7 +17,7 @@ import type { LevelBook } from "../../convex/lib/homeWork";
 import type { Box } from "../../convex/lib/phone";
 import { drawQuestion } from "../questionView";
 import { Book, Taker } from "./book";
-import { fracCells, fracJoin, MatchPairs, OrderCards, paintSlots, PickBelow, slotRuns, slotsFit, tapOf, tapped, typing, WhyBelow, type Live, type SlotRun } from "./kinds";
+import { fracCells, fracJoin, MatchPairs, OrderCards, paintSlots, PickBelow, SayBelow, slotRuns, slotsFit, tapOf, tapped, typing, WhyBelow, WordBox, type Live, type SlotRun } from "./kinds";
 import { keep, mutation, NetError, query } from "./net";
 import { Confetti, nextPlay } from "./next";
 import { buzz, sound } from "./sound";
@@ -76,15 +76,18 @@ const NUM_KEYS = ["7", "8", "9", "⌫", "4", "5", "6", "/", "1", "2", "3", "-", 
  * key keeps its place: the 1st letter where the one-letter pad has it; a 2nd and 3rd letter take × and /'s places
  * (letters side by side multiply: 6xy needs no ×).
  */
-const exprKeys = (v: string) => {
+const exprKeys = (v: string, eq = false) => {
   const [a, b, c] = [...v];
-  return ["7", "8", "9", "⌫", "4", "5", "6", a, "1", "2", "3", "+", "0", "(", ")", "-", b ?? "*", c ?? "/", "^2", "→"];
+  const keys = ["7", "8", "9", "⌫", "4", "5", "6", a, "1", "2", "3", "+", "0", "(", ")", "-", b ?? "*", c ?? "/", "^2"];
+  // An equation (10 Nov 2026): "=" takes →'s place and → a row of its own under it: every other key stays put.
+  return eq ? [...keys, "=", "→"] : [...keys, "→"];
 };
 const KEY_LABEL: Record<string, string> = { "-": "−", "*": "×", "^2": "x²", " ": "␣", "⌫": "⌫", "→": "→" };
 
 /** His pad. On a question with no box (the teacher's) only → works: the other keys are pale. */
 function Pad(props: { box: Box | null; onKey: (k: string) => void; last: boolean }) {
-  const keys = props.box?.k === "expr" ? exprKeys(props.box.v) : NUM_KEYS;
+  const eq = props.box?.k === "expr" && !!props.box.eq;
+  const keys = props.box?.k === "expr" ? exprKeys(props.box.v, eq) : NUM_KEYS;
   const fr = !!props.box?.f; // a fraction box: "/" goes down to the denominator (drawn as a fraction), ␣ to the next cell
   return (
     <div class={`f-padkeys${props.box?.k === "expr" ? " x" : ""}`} role="group" aria-label="Keys">
@@ -93,7 +96,7 @@ function Pad(props: { box: Box | null; onKey: (k: string) => void; last: boolean
           type="button"
           key={k}
           aria-disabled={!props.box && k !== "→" ? "true" : undefined}
-          class={`f-key${k === "→" ? " next" : ""}${k === "⌫" ? " del" : ""}${/^\d$/.test(k) ? "" : " op"}${!props.box && k !== "→" ? " f-keyoff" : ""}`}
+          class={`f-key${k === "→" ? ` next${eq ? " wide" : ""}` : ""}${k === "⌫" ? " del" : ""}${/^\d$/.test(k) ? "" : " op"}${!props.box && k !== "→" ? " f-keyoff" : ""}`}
           aria-label={k === "→" ? (props.last ? "Done" : "Next") : k === "⌫" ? "Delete" : k === " " ? "Space" : k === "^2" ? "squared" : fr && k === "/" ? "Denominator" : k}
           onClick={() => props.onKey(k)}
         >
@@ -634,7 +637,7 @@ export function Play(props: {
     const ui = p.ui;
     // A kind answered inside the printed question: nothing under it. Cards, pairs, names the paper doesn't print,
     // a reason and the rest go here.
-    if (ui && ui.k !== "fill" && ui.k !== "order" && ui.k !== "match" && ui.k !== "why") {
+    if (ui && ui.k !== "fill" && ui.k !== "order" && ui.k !== "match" && ui.k !== "why" && ui.k !== "say") {
       bi += p.boxes?.length ?? 0;
       const run = runAt(from);
       if (!run || (fit.has(run.attr) && !run.below)) return null;
@@ -667,6 +670,15 @@ export function Play(props: {
         </div>
       );
     }
+    if (ui?.k === "say") {
+      bi += p.boxes?.length ?? 0;
+      return (
+        <div class="f-part" key={pi} slot={sl(pi)}>
+          {p.p && <span class="f-plabel">({p.p})</span>}
+          <SayBelow v={mine[from] ?? ""} onSet={(v) => setRun(at.qi, from, [v])} />
+        </div>
+      );
+    }
     if (ui?.k === "fill" && fit.has("b")) {
       bi += p.boxes?.length ?? 0;
       return null;
@@ -679,6 +691,8 @@ export function Play(props: {
             {p.boxes.map((b) => {
               const i = bi++;
               const v = val(at.qi, i);
+              // A word or a name: his phone's own keyboard, in the box itself.
+              if (b.k === "text") return <WordBox key={i} box={b} v={v} on={at.bi === i} onFocus={() => setAt({ qi: at.qi, bi: i })} onSet={(x) => set(at.qi, i, x)} />;
               return (
                 <Fragment key={i}>
                   {b.j && (
@@ -724,7 +738,7 @@ export function Play(props: {
     );
   });
   return (
-    <div class={`f-play${showQ ? " withq" : ""}${review ? " rev" : ""}${box?.k === "expr" ? " xpad" : ""}${!review && !pad ? " nopad" : ""}`}>
+    <div class={`f-play${showQ ? " withq" : ""}${review ? " rev" : ""}${box?.k === "expr" ? ` xpad${box.eq ? " eqpad" : ""}` : ""}${!review && !pad ? " nopad" : ""}`}>
       <header class="f-ptop">
         <button type="button" class="f-round" aria-label="Back" onClick={props.onBack}>
           <Icon name="close" size={20} />

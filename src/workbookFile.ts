@@ -391,7 +391,7 @@ function kindOf(t: unknown): { t?: Ans } {
   const x = t as Record<string, unknown>;
   const pick = (...names: string[]) => Object.fromEntries(names.filter((n) => x[n] !== undefined).map((n) => [n, x[n]]));
   const boxes = (b: unknown) =>
-    Array.isArray(b) ? b.map((bx) => (bx && typeof bx === "object" ? (Object.fromEntries(["v", "same", "l", "u", "j"].filter((n) => (bx as Record<string, unknown>)[n] !== undefined).map((n) => [n, (bx as Record<string, unknown>)[n]])) as BoxAns) : (bx as BoxAns))) : b;
+    Array.isArray(b) ? b.map((bx) => (bx && typeof bx === "object" ? (Object.fromEntries(["v", "same", "l", "u", "j", "w"].filter((n) => (bx as Record<string, unknown>)[n] !== undefined).map((n) => [n, (bx as Record<string, unknown>)[n]])) as BoxAns) : (bx as BoxAns))) : b;
   const fields: Record<string, string[]> = {
     box: ["k", "any"],
     fill: ["k", "any"],
@@ -401,6 +401,7 @@ function kindOf(t: unknown): { t?: Ans } {
     order: ["k", "items", "a"],
     match: ["k", "l", "r", "a"],
     why: ["k", "a"],
+    say: ["k"],
     photo: ["k"],
   };
   const names = fields[String(x.k)];

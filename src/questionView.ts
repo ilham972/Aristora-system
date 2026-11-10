@@ -28,7 +28,9 @@ export function safeFragment(html: string): DocumentFragment {
 /** The app's own rules over the book's, for a phone: no print furniture or working space, figures beside text go
  *  under it, answer boxes slimmer. A side figure (`.sif`) takes its own row across the card (5 Nov 2026, his Preview:
  *  G8 U01 Q48 and Q50 showed no figure): placed by column alone, it went beside the text again once the family app
- *  hid the printed number, in a column 0 px wide, and the card cut it off. */
+ *  hid the printed number, in a column 0 px wide, and the card cut it off. `data-paper` = for the printed book only
+ *  (10 Nov 2026, his screenshot: a matching question's two printed columns, cut off by the card, above the same pairs
+ *  as cards to tap): what the phone asks in its own way is not drawn twice. */
 export const PHONE_CSS = `
 :host { display: block; }
 .qv { font-family: "Mukta Malar", "Noto Sans Tamil", "Latha", "Tamil Sangam MN", system-ui, sans-serif; font-size: 10pt;
@@ -43,6 +45,7 @@ export const PHONE_CSS = `
 .qv .pq .bkf { margin: 1mm 0 0; }
 .qv .sq { margin-left: 4mm; }
 .qv .qfig, .qv .figrow { max-width: 100%; }
+.qv [data-paper] { display: none !important; }
 `;
 
 /** A label's pieces: "(b) i)" → ["b", "i"], "A1" → ["a", "1"], "3.1" → ["3", "1"], "அ ii" → ["அ", "ii"]. */
@@ -53,9 +56,15 @@ const pieces = (s: string) =>
     .split(/[^0-9a-z\u0B80-\u0BFF]+/)
     .filter(Boolean);
 
+/**
+ * A key's part label without its note: a part the key cuts in two for the phone (10 Nov 2026: "name it and find its
+ * perimeter" = a name to tap and a number, "ii · பெயர்" and "ii · சுற்றளவு") keeps the printed label before " · ".
+ */
+const base = (key: string) => key.split(" · ")[0];
+
 /** A key's part label and a printed sub-question's label are the same part: the same last piece, or all the same. */
 const samePart = (key: string, printed: string) => {
-  const k = pieces(key);
+  const k = pieces(base(key));
   const p = pieces(printed);
   return k.length > 0 && p.length > 0 && (k[k.length - 1] === p[p.length - 1] || k.join("") === p.join(""));
 };
@@ -65,16 +74,24 @@ const samePart = (key: string, printed: string) => {
  * the answer box"): a named slot (`p0`, `p1` … in the key's order) right after the printed block of that part (`.rp`,
  * matched by its label: the whole of the key's label or its last word, "a ii" → "ii", in printed order), and one slot at
  * the end for the parts that match none (a Part I question, a part printed without a label). The family app's part
- * rows are the host's children with `slot="pN"`: they stay the app's (its style, its taps).
+ * rows are the host's children with `slot="pN"`: they stay the app's (its style, its taps). Parts the key cut from one
+ * printed sub-question ("ii · பெயர்", "ii · சுற்றளவு") go under it one after the other.
  */
 export function slotParts(box: HTMLElement, parts: string[]): void {
   const blocks = [...box.querySelectorAll<HTMLElement>(".rp")].filter((b) => b.querySelector(".rl"));
   const labelled = (el: Element) => (el.matches(".rp") ? !!el.querySelector(".rl") : !!el.querySelector(".rp .rl"));
   let from = 0;
   let waiting: HTMLSlotElement[] = []; // parts printed without a label of their own (in a lead's words, G8 U01 Q70 அ)
+  let last: { key: string; slot: HTMLSlotElement } | null = null; // the part before, when it found its sub-question
   parts.forEach((p, i) => {
     const slot = document.createElement("slot");
     slot.name = `p${i}`;
+    // The next piece of the same printed sub-question: right after the piece before it.
+    if (last && p.includes(" · ") && base(p) === base(last.key)) {
+      last.slot.after(slot);
+      last = { key: p, slot };
+      return;
+    }
     for (let j = from; j < blocks.length; j++) {
       if (!samePart(p, blocks[j].querySelector(".rl")?.textContent ?? "")) continue;
       // The parts before it that matched no label: just before this sub-question, still in their order.
@@ -86,8 +103,10 @@ export function slotParts(box: HTMLElement, parts: string[]): void {
       while (next && !labelled(next)) next = next.nextElementSibling;
       blocks[j].parentElement?.insertBefore(slot, next);
       from = j + 1;
+      last = { key: p, slot };
       return;
     }
+    last = null;
     waiting.push(slot); // every part has its slot: a row whose slot is missing would not show at all
   });
   box.append(...waiting, document.createElement("slot"));

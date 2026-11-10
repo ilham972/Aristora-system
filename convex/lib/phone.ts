@@ -29,10 +29,11 @@ export type Rat = [number, number];
 /**
  * What the phone shows for one answer box: a number pad, or a pad with the letter (n). l = a label in the box ("x =",
  * "y"), u = a unit printed after his number ("%", "°", "cm²", "h"; never typed), j = a sign between this box and the
- * one before it (":" of a ratio). A "text" box is his reason in his own words, typed with his phone's own keyboard
- * (Tamil or Thanglish), read by a teacher: never marked by the phone.
+ * one before it (":" of a ratio). A "text" box is typed with his phone's own keyboard (Tamil, English or Thanglish):
+ * his reason or his own words, read by a teacher and never marked by the phone; or `w`, a word or a name in letters
+ * ("AOB", "செவ்வகம்": one line) that the phone marks. An "expr" box with `eq` takes an equation: its pad has "=".
  */
-export type Box = ({ k: "num" } | { k: "expr"; v: string } | { k: "pick" } | { k: "text" }) & {
+export type Box = ({ k: "num" } | { k: "expr"; v: string; eq?: true } | { k: "pick" } | { k: "text"; w?: true }) & {
   l?: string;
   u?: string;
   j?: string;
@@ -53,7 +54,8 @@ export type Ui =
   | { k: "mark"; n: number; how: "line" | "ring"; items?: string[] }
   | { k: "order"; items: string[] }
   | { k: "match"; l: string[]; r: string[] }
-  | { k: "why" };
+  | { k: "why" }
+  | { k: "say" };
 /** One part of a question on the phone: its label ("ii", "" for a short question), marks, boxes (null = teacher). */
 export type FormPart = { p: string; m: number; boxes: Box[] | null; ui?: Ui };
 /** One question on the phone: no answers in it. */
@@ -63,12 +65,22 @@ export type FormQ = { q: number; max: number; parts: FormPart[] };
  * One box with its answer (server only). t = the answer as the key writes it (for the teachers' list). An answer of
  * several boxes ("2 : 3", "2 h 30 min") is listed once: its first box carries the words, the others are `cont`.
  */
-export type Want = { box: Box; t: string; words?: string; cont?: true; same?: string[] } & ({ ok: Rat[] } | { vals: Rat[] } | { pick: string } | { text: true });
+export type Want = { box: Box; t: string; words?: string; cont?: true; same?: string[] } & (
+  | { ok: Rat[] }
+  | { vals: Rat[] }
+  /** An equation: each accepted one as its left side less its right at the points; his may be either way round. */
+  | { eqs: Rat[][] }
+  | { pick: string }
+  /** A word or a name he types: any of these, as `wordKey` writes them. */
+  | { word: string[] }
+  | { text: true }
+);
 /**
  * One part (server only); a = the key's words when the phone can't read them (the teachers' list shows them). A part
  * of a kind the book gave: ui = how the phone shows it, rule = how it is marked ("all": every card in its place or
  * nothing; "picks": right words marked less wrong ones; "why": a wrong ஆம் / இல்லை is 0, a right one is the teacher's
- * (his reason); else a share per box), words = its answer for the teachers.
+ * (his reason); "say": his own words are the teacher's, nothing typed is 0; else a share per box), words = its answer
+ * for the teachers.
  */
 export type KeyPart = {
   p: string;
@@ -78,7 +90,7 @@ export type KeyPart = {
   a?: string;
   fixed?: true;
   ui?: Ui;
-  rule?: "all" | "picks" | "why";
+  rule?: "all" | "picks" | "why" | "say";
   words?: string;
 };
 export type KeyQ = { q: number; max: number; parts: KeyPart[] };
@@ -733,8 +745,14 @@ export function wantsOf(raw: string): { want: Want[]; anyOrder: boolean } | null
  */
 function boxWant(b: BoxAns): Want | null {
   const first = b.v[0];
-  const look = { ...(b.l ? { l: b.l } : {}), ...(b.u ? { u: showUnit(b.u) } : {}), ...(b.j ? { j: b.j } : {}), ...fracLook(first) };
+  const edge = { ...(b.l ? { l: b.l } : {}), ...(b.u ? { u: showUnit(b.u) } : {}), ...(b.j ? { j: b.j } : {}) };
   const t = b.u ? withUnit(first, showUnit(b.u)) : first;
+  if (b.w) {
+    const word = b.v.map(wordKey);
+    return word.every(Boolean) ? { box: { k: "text", w: true, ...edge }, t, word } : null;
+  }
+  if (first.includes("=")) return eqWant(b, edge, t);
+  const look = { ...edge, ...fracLook(first) };
   const same = b.same ? { same: b.v.map(formKey) } : {};
   const nums = b.v.map(parseNum);
   if (nums.every((x) => x !== null)) return { box: { k: "num", ...look }, t, ok: nums as Rat[], ...same };
@@ -751,9 +769,60 @@ function boxWant(b: BoxAns): Want | null {
   return vals ? { box: { k: "expr", v: m.vars.join(""), ...look }, t, vals, ...sameForm } : null;
 }
 
-/** Why the phone can't take this box ("" = fine): it types numbers and answers in 1 to 3 letters, nothing else. */
+/**
+ * A word or a name as it is compared (10 Nov 2026): capitals, spaces and the marks people add or leave out never count
+ * ("∠AOB", "A O B", "aob" and "AÔB" are one answer; "PQ." is "PQ"). The order of its letters does count: the book lists
+ * every order it takes ("AOB", "BOA").
+ */
+export function wordKey(raw: string): string {
+  return normalize(raw)
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .normalize("NFC")
+    .toLowerCase()
+    .replace(/[\s∠∡^ˆ△Δ▵°.,;:'"`’‘“”()\[\]{}_|]/g, "");
+}
+
+/** An equation's two sides as one function (left less right) of its letters; null when it isn't one equation. */
+function parseEq(raw: string): { fn: Fn; vars: string[] } | null {
+  const sides = normalize(raw).split("=");
+  if (sides.length !== 2) return null;
+  const l = parseExpr(sides[0], true);
+  const r = parseExpr(sides[1], true);
+  if (!l || !r) return null;
+  const vars = [...new Set([...l.vars, ...r.vars])].sort();
+  if (!vars.length || vars.length > LETTERS_MAX) return null;
+  return { fn: (x) => sub(l.fn(x), r.fn(x)), vars };
+}
+
+/** An equation's values where it is compared: several letters at POINTS_MANY, one at n = 1 … 7. */
+const eqValues = (fn: Fn, letters: string[]) => valuesOf(fn, letters);
+
+/**
+ * A box whose answer is an equation (10 Nov 2026, his screenshot: "build an equation in x" asked for a photo): every
+ * accepted one in the same letters. His is right when it says the same as one of them with its terms on either side
+ * ("2x + 5 = 25", "25 = 5 + 2x", "2x = 25 − 5", "2x + 5 − 25 = 0"): left less right equal to the book's at every point,
+ * or to its opposite. One divided or multiplied through ("x + 2.5 = 12.5"), and the solved one ("x = 10"), are other
+ * equations: right only when the book lists them. An equation true for every value, or for none, is never an answer.
+ */
+function eqWant(b: BoxAns, edge: { l?: string; u?: string; j?: string }, t: string): Want | null {
+  const first = parseEq(b.v[0]);
+  if (!first) return null;
+  const eqs: Rat[][] = [];
+  for (const v of b.v) {
+    const e = parseEq(v);
+    if (!e || e.vars.join() !== first.vars.join()) return null;
+    const vals = eqValues(e.fn, e.vars);
+    if (!vals || vals.every((x) => x[0] === 0) || new Set(vals.map((x) => `${x[0]}/${x[1]}`)).size === 1) return null;
+    eqs.push(vals);
+  }
+  return { box: { k: "expr", v: first.vars.join(""), eq: true, ...edge }, t, eqs, ...(b.same ? { same: b.v.map(exprKey) } : {}) };
+}
+
+/** Why the phone can't take this box ("" = fine): it types numbers, answers in 1 to 3 letters and equations in them;
+ *  a word or a name needs `w` (his phone's keyboard) or names to tap. */
 export function boxProblem(b: BoxAns): string {
-  return boxWant(b) ? "" : `a box answer the phone can't type ("${b.v[0]}"): a word needs choose, a drawing photo`;
+  return boxWant(b) ? "" : `a box answer the phone can't type ("${b.v[0]}"): a word needs w or choose, a drawing photo`;
 }
 
 const pickWants = (vals: string[]): Want[] => vals.map((v) => ({ box: { k: "pick" }, t: v, pick: v }));
@@ -792,6 +861,9 @@ function typedPart(t: Ans, p: string, m: number, a: string): KeyPart {
         ui: { k: "why" },
       };
     }
+    case "say":
+      // His own words (a text box the teacher reads): "explain", "describe", "show that".
+      return { ...base, want: [{ box: { k: "text" }, t: "his words", text: true }], rule: "say", words: "his own words (a teacher reads them)", ui: { k: "say" } };
     case "tf":
       return { ...base, want: pickWants(t.a.map((x) => (x ? "1" : "0"))), words: t.a.map(tick).join(" "), ui: { k: "tf", n: t.a.length, ...(t.items ? { items: t.items } : {}) } };
     case "mark": {
@@ -873,8 +945,11 @@ export function formOf(k: KeyQ): FormQ {
   return { q: k.q, max: k.max, parts: k.parts.map((p) => ({ p: p.p, m: p.m, boxes: p.want ? p.want.map((w) => w.box) : null, ...(p.ui ? { ui: p.ui } : {}) })) };
 }
 
+/** A part a teacher reads what he typed for (never a photo): a reason, or his own words. */
+export const readPart = (p: KeyPart) => p.rule === "why" || p.rule === "say";
+
 /** A part the phone marks by itself, always (a reason's ஆம் / இல்லை may leave it to the teacher). */
-export const phonePart = (p: KeyPart) => p.want !== null && p.rule !== "why";
+export const phonePart = (p: KeyPart) => p.want !== null && !readPart(p);
 
 /** The phone marks every part of this question, always (so it may come back: `retryPool`). */
 export const allPhone = (k: KeyQ) => k.parts.every(phonePart);
@@ -895,8 +970,18 @@ export function phoneShare(keys: Map<number, KeyQ>): { questions: number; of: nu
 /** One typed answer against one box. */
 function right(w: Want, typed: string | undefined): boolean {
   if (typeof typed !== "string" || !typed.trim() || typed.length > INPUT_MAX) return false;
-  if ("text" in w) return false; // his reason: a teacher reads it (`markPart`, rule "why")
+  if ("text" in w) return false; // his reason or his own words: a teacher reads them (`markPart`)
   if ("pick" in w) return typed.trim() === w.pick;
+  if ("word" in w) return w.word.includes(wordKey(typed));
+  if ("eqs" in w) {
+    const letters = [...(w.box as { v: string }).v];
+    const e = parseEq(typed);
+    if (!e || e.vars.some((x) => !letters.includes(x))) return false;
+    const mine = eqValues(e.fn, letters);
+    if (!mine) return false;
+    const says = (a: Rat[]) => a.every((x, i) => same(x, mine[i])) || a.every((x, i) => same([-x[0], x[1]], mine[i]));
+    return w.eqs.some(says) && (!w.same || w.same.includes(exprKey(typed)));
+  }
   if ("ok" in w) {
     const v = parseNum(typed);
     return !!v && w.ok.some((a) => same(a, v)) && (!w.same || w.same.includes(formKey(typed)));
@@ -917,6 +1002,8 @@ export function markPart(part: KeyPart, typed: string[]): { ok: boolean[]; got: 
   if (!part.want) return null;
   const n = part.want.length;
   if (part.rule === "why") return right(part.want[0], typed[0]) ? null : { ok: part.want.map(() => false), got: 0 };
+  // His own words: a teacher reads them; nothing typed is nothing to read.
+  if (part.rule === "say") return (typed[0] ?? "").trim() ? null : { ok: [false], got: 0 };
   // Words to mark: one he didn't tap is "not marked" (0), right or wrong like the others.
   if (part.rule === "picks") typed = Array.from({ length: n }, (_, i) => (typed[i] ?? "").trim() || "0");
   let ok: boolean[];
@@ -985,7 +1072,7 @@ export function teacherMarks(k: KeyQ, parts: (number | null)[]): number {
 
 /** The question waits for a teacher only to read his typed reasons (no photo needed: every part it left is a reason). */
 export const onlyReasons = (k: KeyQ, parts: (number | null)[]) =>
-  parts.some((x) => x === null) && k.parts.every((p, i) => parts[i] !== null || p.rule === "why");
+  parts.some((x) => x === null) && k.parts.every((p, i) => parts[i] !== null || readPart(p));
 
 /** His typed reasons a teacher reads: each reason part whose ஆம் / இல்லை was right, with what he wrote. */
 export function reasonsOf(k: KeyQ, typed: string[]): { p: string; yes: string; text: string }[] {
@@ -994,13 +1081,14 @@ export function reasonsOf(k: KeyQ, typed: string[]): { p: string; yes: string; t
   let at = 0;
   k.parts.forEach((p, i) => {
     if (p.rule === "why" && left[i] === null) out.push({ p: p.p, yes: typed[at] === "1" ? "ஆம்" : "இல்லை", text: (typed[at + 1] ?? "").trim() });
+    if (p.rule === "say" && left[i] === null) out.push({ p: p.p, yes: "", text: (typed[at] ?? "").trim() });
     at += p.want?.length ?? 0;
   });
   return out;
 }
 
 /** He lost marks on a part the phone marks by itself (not a reason): his working photo is asked for. */
-export const lostOutsideReasons = (k: KeyQ, parts: (number | null)[]) => k.parts.some((p, i) => p.rule !== "why" && parts[i] !== null && parts[i]! < p.m);
+export const lostOutsideReasons = (k: KeyQ, parts: (number | null)[]) => k.parts.some((p, i) => !readPart(p) && parts[i] !== null && parts[i]! < p.m);
 
 /** The answer as the teachers' list shows it ("x = 52 · y = 48", "4n − 3"). Teachers only. */
 export function wantWords(p: KeyPart): string {
@@ -1032,6 +1120,7 @@ export function slotWords(k: KeyQ, typed: string[]): string[] {
     else if (ui.k === "mark") out.push(...mine.map((x, i) => (x === "1" ? (ui.items?.[i] ?? `#${i + 1}`) : "")));
     else if (ui.k === "order") out.push(...mine.map((x) => ui.items[Number(x) - 1] ?? ""));
     else if (ui.k === "why") out.push(mine[0] === "1" ? "ஆம்" : mine[0] === "0" ? "இல்லை" : "", mine[1] ?? "");
+    else if (ui.k === "say") out.push(...mine);
     else out.push(...mine.map((x, i) => (x ? `${ui.l[i]} → ${ui.r[Number(x) - 1] ?? "?"}` : "")));
   }
   return out;

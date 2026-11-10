@@ -7,7 +7,8 @@
   "git": {
     "deploymentEnabled": {
       "ci-check": false,
-      "ci-*": false
+      "ci-*": false,
+      "link-*": false
     }
   },
   "redirects": [
