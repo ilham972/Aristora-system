@@ -180,6 +180,9 @@ EOF
 - **The top row is full** (10 Nov 2026): who, the flame, the XP | coins capsule, the bell, Feedback fill a 320 px phone
   with "1.2k" numbers and no name; under 480 px the name is hidden. One more piece needs one taken out (or the capsule
   to take it). The Shop run-through's `topRowFits` checks every piece is inside the screen and none overlaps.
+- **The owner's "top bar fits at 320 px" check fails under load** (10 Nov 2026): with both run-through files at once,
+  "Whole class" failed it in one full run and "Consultation" in the next, on a change that doesn't touch the teachers'
+  top bar; both passed alone (`-t "Consultation|Whole class"`). Rerun that one alone before blaming a change.
 
 - **Her own app is two layers** (8 Nov 2026): her pages (`users.pages`, the UI) and her jobs (`users.tabs`, the server's
   permissions). The jobs no longer name a department: a Fighter lead has Theory AND Evaluation (both kinds of work on
