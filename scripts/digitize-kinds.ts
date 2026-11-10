@@ -22,11 +22,12 @@ export type Op =
   | { kind: "tick"; n: number; pat?: string; cell?: true }
   | { kind: "mark"; words: string[] }
   | { kind: "hide"; sel: string }
+  | { kind: "swap"; from: string; to: string }
   | { kind: "dots"; n: number };
 
 /** One answer's kind; `a` = its words for the teachers where the key has none (a split's pieces: the key's own words,
  *  with their working, stay); `ops` = what its printed question needs. */
-export type Spec = { t?: Ans; a?: string; ops?: Op[]; card?: true; m?: number };
+export type Spec = { t?: Ans; a?: string; ops?: Op[]; card?: true; m?: number; aNew?: true };
 /** A part's marks when its key has none (a printed table's rows). */
 export const marks = (m: number, s: Spec): Spec => ({ ...s, m });
 export type Split = { split: [string, number, Spec][] };
@@ -185,3 +186,12 @@ export const split = (...parts: [string, number, Spec][]): Split => ({ split: pa
 export const paper = (sel: string): Spec => ({ ops: [{ kind: "hide", sel }], card: true });
 /** A kind with ops on the whole card instead of its sub-question (its blanks are printed in the lead). */
 export const onCard = (s: Spec): Spec => ({ ...s, card: true });
+/** A printed mistake put right (a wrong digit, a missing space): the words as printed, once in the card, and the new. */
+export const retype = (from: string, to: string): Spec => ({ ops: [{ kind: "swap", from, to }], card: true });
+/**
+ * Two decisions on a Part I question: its kind and a change to its printed card (`both(num("5"), retype("1050kg",
+ * "1050 kg"))`, `both(pick([...], 2), paper(".ab"))`). In a question of parts, the card's change goes under "@".
+ */
+export const both = (a: Spec, b: Spec): Spec => ({ ...b, ...a, ops: [...(a.ops ?? []), ...(b.ops ?? [])], card: a.card });
+/** The key's own answer was wrong: new words for the teachers with the kind (`rekey("**12 cm**", num("12", { u: "cm" }))`). */
+export const rekey = (words: string, s: Spec): Spec => ({ ...s, a: words, aNew: true });

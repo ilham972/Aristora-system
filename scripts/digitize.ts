@@ -2,21 +2,26 @@
 // can't upload again and again"; docs/making-changes.md "Digitize a unit in the app"). Run with tsx, the link's code in
 // a file outside the repo (ARISTORA_LINK_FILE), the units in the scratchpad (his books' content: never in the repo):
 //
+//   tsx scripts/digitize.ts units  <dir> <grade>       a grade's units: key, names, whether its book is in the app
 //   tsx scripts/digitize.ts pull   <dir> [G8-U01 …]   the units' books, keys and printed questions (default: Grade 8 Term 1)
 //   tsx scripts/digitize.ts review <dir>/<KEY> [all]   each question's words, key and kind; only what needs a decision
 //   tsx scripts/digitize.ts build  <dir>/<KEY>         its kinds.ts applied and checked with the app's own code → out/
 //   tsx scripts/digitize.ts push   <dir> <KEY …>       each unit's out/ saved in the app (all or nothing a unit)
+//   tsx scripts/digitize.ts show   <dir>/<KEY> <Q …>   one question in a few lines: words, part labels, key, kind, slots
+//   tsx scripts/digitize.ts ship   <dir> <KEY …>       build → push → read back and compare (one question put right)
+//   tsx scripts/digitize.ts help                       the kinds' words (scripts/digitize-kinds.ts)
 //
 // The checks are the app's: the key as the upload checks it (`checkKey`), safe HTML (`unsafeHtml`), the printed slots
 // against the key (`slotProblem`), and every answer typed as the key gives it is marked right by the phone's own
 // marking (`phoneKey` → `markQuestion`). Nothing is sent before they all pass.
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { isDeepStrictEqual } from "node:util";
 import { outOf, partOf, type MasterData } from "../convex/lib/book";
 import { checkKey, slotProblem, type Ans, type BoxAns, type KeyAnswer, type KeyPart } from "../convex/lib/key";
-import { boxCount, markQuestion, phoneKey, phonePart, readPart, wantsOf, wantWords, type KeyQ } from "../convex/lib/phone";
+import { boxCount, markQuestion, normalize, phoneKey, phonePart, readPart, wantsOf, wantWords, type Box, type KeyQ } from "../convex/lib/phone";
 import { unsafeHtml } from "../convex/lib/questions";
 import { exchange, type Req } from "./claude-link";
 import type { Decision, Kinds, Op, Spec, Split } from "./digitize-kinds";
@@ -41,11 +46,27 @@ const readJson = <T>(p: string): T => JSON.parse(readFileSync(p, "utf8")) as T;
 
 // ---------------------------------------------------------------- pull
 
-async function pull(dir: string, keys: string[]) {
+/** The app's list of units (asked once an hour at most: each ask is a minute on the carrier). */
+async function bookList(dir: string, fresh = false): Promise<Record<string, any>> {
   mkdirSync(dir, { recursive: true });
+  const file = join(dir, "books.json");
+  if (!fresh && existsSync(file) && Date.now() - statSync(file).mtimeMs < 3_600_000) return readJson(file);
   const books = (await exchange([{ name: "books", fn: "ask", req: { op: "books" } }])).books;
   if (!books?.ok) throw new Error(`books: ${books?.error}`);
-  writeFileSync(join(dir, "books.json"), JSON.stringify(books, null, 1));
+  writeFileSync(file, JSON.stringify(books, null, 1));
+  return books;
+}
+
+/** A grade's units, a line each: its key (what every other command takes), its names, whether its book is in the app. */
+async function units(dir: string, grade: string) {
+  type Row = { key: string; grade: number; term: number; en: string; ta: string; master: null | { qCount?: number } };
+  for (const u of ((await bookList(dir)).units as Row[]).filter((x) => x.key.startsWith(`${/^\d+$/.test(grade) ? `G${grade}` : grade.toUpperCase()}-`))) console.log(`${u.key} · term ${u.term} · ${u.en} · ${u.ta} · ${u.master ? `book, ${u.master.qCount ?? "?"} questions` : "no book in the app"}`);
+}
+
+async function pull(dir: string, keys: string[]) {
+  let books = await bookList(dir);
+  // A book uploaded since the list was asked for: ask again.
+  if (keys.some((k) => !(books.units as { key: string; master: unknown }[]).some((u) => u.key === k && u.master))) books = await bookList(dir, true);
   type Row = { unitId: string; key: string; grade: number; term: number; master: null | Record<string, unknown> };
   const units = (books.units as Row[]).filter((u) => (keys.length ? keys.includes(u.key) : u.grade === 8 && u.term === 1) && u.master);
   console.log(`${units.length} units: ${units.map((u) => `${u.key} (${JSON.stringify(u.master)})`).join("\n  ")}`);
@@ -95,7 +116,8 @@ export function plain(h: string): string {
     .replace(/<span class="frc"><span class="nu">([\s\S]*?)<\/span><span class="de">([\s\S]*?)<\/span><\/span>/g, " ($1)/($2) ")
     .replace(/<sup>([\s\S]*?)<\/sup>/g, "^$1")
     .replace(/<sub>([\s\S]*?)<\/sub>/g, "_$1")
-    .replace(/<span class="ab[^"]*"[^>]*>([\s\S]*?)<\/span>/g, (_, x: string) => `[${x.replace(/<[^>]+>/g, "") || "□"}]`)
+    // A blank: an `.ab`, a box or a dotted line drawn by its style, a slot already (data-fill) or not.
+    .replace(/<span (?:data-fill="\d*" ?)?(?:class="ab[^"]*"|style="display:inline-block;[^"]*border[^"]*")[^>]*>((?:(?!<\/?span)[\s\S])*?)<\/span>/g, (_, x: string) => `[${x.replace(/<[^>]+>/g, "").replace(/&nbsp;|\s/g, "") || "□"}]`)
     .replace(/<(td|th)[^>]*>/g, " | ")
     .replace(/<\/tr>/g, " ¶ ")
     .replace(/<div class="pm"[^>]*>[\s\S]*?<\/div>|<span class="pm"[^>]*>[\s\S]*?<\/span>/g, " ")
@@ -289,6 +311,12 @@ function opEdits(h: string, s: number, e: number, op: Op): Edit[] | string {
     for (let m = re.exec(seg); m && out.length < op.n; m = re.exec(seg)) out.push({ at: s + m.index + 5, del: 0, ins: ' data-opt="0"' });
     return out.length === op.n ? out : `${op.n} options wanted, ${out.length} printed`;
   }
+  if (op.kind === "swap") {
+    const i = seg.indexOf(op.from);
+    if (i < 0 || inTag(h, s + i)) return `"${op.from}" is not printed here`;
+    if (seg.indexOf(op.from, i + 1) >= 0) return `"${op.from}" is printed more than once: give more of the words around it`;
+    return [{ at: s + i, del: op.from.length, ins: op.to }];
+  }
   if (op.kind === "tick" && op.cell) {
     // ✓ / ✗ written in a table's empty cells (G7 U02 Q24: a statement a row, its last cell empty): a slot in each.
     const re = /<td\b[^>]*>(?=(?:\s|&nbsp;|&#160;)*<\/td>)/g;
@@ -345,6 +373,56 @@ const numberSlots = (h: string) => {
   return h.replace(/data-(fill|opt|tick|mark)="[^"]*"/g, (_, a: string) => `data-${a}="${(n[a] = (n[a] ?? 0) + 1)}"`);
 };
 
+/**
+ * Why an answer can't be typed on the phone's pad for its box ("" = it can): the keys of src/family/play.tsx (NUM_KEYS,
+ * exprKeys). 11 Nov 2026, a student's call: G8 Mass Q12 "1.05 t" was a box in the letter t (a tonne read as algebra),
+ * and the letters' pad has no decimal point. A unit belongs in `u`, never in the answer.
+ */
+function padProblem(box: Box, v: string): string {
+  if (box.k !== "num" && box.k !== "expr") return "";
+  const t = normalize(v).toLowerCase();
+  if (box.k === "num") {
+    const bad = [...new Set(t.replace(/[0-9./\- ]/g, ""))];
+    return bad.length ? `"${v}" needs ${bad.join(" ")}: not on the number pad (a unit goes in u, a word in a word box)` : "";
+  }
+  const L = [...box.v.toLowerCase()];
+  const need: string[] = [];
+  const rest = t.replace(/\s+/g, "").replace(/\^2(?!\d)/g, "");
+  for (const ch of new Set(rest)) {
+    if (/[0-9+\-()]/.test(ch) || L.includes(ch)) continue;
+    // × between letters or powers is never typed (letters side by side multiply); between two numbers it must be.
+    if (ch === "*" && (L.length < 2 || !/\d\*\d/.test(rest))) continue;
+    if (ch === "/" && L.length < 3) continue;
+    if (ch === "^" && (!L.length || box.p)) continue;
+    if (ch === "=" && box.eq) continue;
+    need.push(ch === "." ? "a decimal point" : ch);
+  }
+  return need.length ? `"${v}" needs ${need.join(" ")}: not on the letters' pad [${L.join(" ")}]${/[a-z]/.test(t) && need.includes("a decimal point") ? " (a unit read as a letter? give num(v, { u }))" : ""}` : "";
+}
+
+/** A question's HTML without its slots (a digitized question decided again: its ops find the printed page as it was). */
+function unslot(h: string): string {
+  let out = h.replace(/ data-(?:fill|opt)="\d*"/g, "");
+  for (;;) {
+    const m = /<span data-(?:tick|mark)="\d*"(?: class="mk-l")?>/.exec(out);
+    if (!m) return out;
+    // Its closing tag: the one that brings the depth of spans back.
+    const re = /<span\b|<\/span>/g;
+    re.lastIndex = m.index + m[0].length;
+    let depth = 1;
+    let end = -1;
+    for (let x = re.exec(out); x; x = re.exec(out)) {
+      depth += x[0] === "</span>" ? -1 : 1;
+      if (depth === 0) {
+        end = x.index;
+        break;
+      }
+    }
+    if (end < 0) return out;
+    out = out.slice(0, m.index) + out.slice(m.index + m[0].length, end) + out.slice(end + "</span>".length);
+  }
+}
+
 /** What a kind's answer is when typed as the key gives it (the phone's list for that part). */
 function typedFor(t: Ans): string[] {
   switch (t.k) {
@@ -391,7 +469,7 @@ async function build(udir: string) {
     if (short) {
       if (d && "t" in d && (d as Spec).t) {
         const s = d as Spec;
-        rows = [{ p: "", a: (k?.a?.trim() ? k.a : s.a) ?? "", m: marks, t: s.t }];
+        rows = [{ p: "", a: (k?.a?.trim() && !s.aNew ? k.a : s.a) ?? "", m: marks, t: s.t }];
         take(s, "card");
       } else if (d && !("t" in d) && !("ops" in d)) {
         const ps = Object.entries(d as Record<string, Spec>);
@@ -418,7 +496,7 @@ async function build(udir: string) {
         } else {
           // The key's own words stay (the working and the reason the teachers read: "✗ (√196 = 14)"); a kind's words
           // only where the key has none.
-          rows.push({ ...p, a: p.a?.trim() ? p.a : (x.a ?? ""), t: x.t ?? p.t, ...(x.m ? { m: x.m } : {}) });
+          rows.push({ ...p, a: p.a?.trim() && !x.aNew ? p.a : (x.a ?? ""), t: x.t ?? p.t, ...(x.m ? { m: x.m } : {}) });
           take(x, rows.length - 1);
         }
       }
@@ -441,13 +519,15 @@ async function build(udir: string) {
     }
     // The printed question: its slots and its blocks for paper only. Dotted blanks become boxes first (a pass of their
     // own), so the blanks' slots are then found like any printed box.
-    let h1 = h0;
+    // A question decided again (its slots already in the app's copy): its ops start from the page without slots.
+    const h00 = edits.length && /data-(?:fill|opt|tick|mark)=/.test(h0) ? unslot(h0) : h0;
+    let h1 = h00;
     if (edits.some((e) => e.op.kind === "dots")) {
-      const ranges = partRanges(h0, rows.map((r) => r.p));
+      const ranges = partRanges(h00, rows.map((r) => r.p));
       const ds: Edit[] = [];
       for (const ed of edits.filter((e) => e.op.kind === "dots")) {
-        const [s, e] = ed.range === "card" ? [0, h0.length] : ranges[ed.range];
-        const got = opEdits(h0, s, e, ed.op);
+        const [s, e] = ed.range === "card" ? [0, h00.length] : ranges[ed.range];
+        const got = opEdits(h00, s, e, ed.op);
         if (typeof got === "string") problems.push(`Q${q}: ${got}`);
         else ds.push(...got);
       }
@@ -501,6 +581,17 @@ async function build(udir: string) {
     const rows = a.parts ?? [{ p: "", a: a.a ?? "", t: a.t }];
     const typed = rows.flatMap((r) => (r.t ? typedFor(r.t) : []));
     if (typed.length !== boxCount(kq)) problems.push(`Q${a.q}: ${typed.length} answers typed, the phone has ${boxCount(kq)} boxes`);
+    rows.forEach((r, i) => {
+      if (r.t?.k !== "box" && r.t?.k !== "fill") return;
+      const want = kq.parts[i]?.want ?? [];
+      r.t.b.forEach((b, j) => {
+        const box = want[j]?.box;
+        for (const v of box && !b.w ? b.v : []) {
+          const bad = padProblem(box!, v);
+          if (bad) problems.push(`Q${a.q}${r.p ? ` ${r.p}` : ""}: ${bad}`);
+        }
+      });
+    });
     const res = markQuestion(kq, typed);
     const none = markQuestion(kq, typed.map(() => ""));
     kq.parts.forEach((p, i) => {
@@ -526,7 +617,7 @@ async function build(udir: string) {
 
 // ---------------------------------------------------------------- push
 
-async function push(dir: string, keys: string[]) {
+async function push(dir: string, keys: string[], drop = false) {
   const reqs: Req[] = [];
   for (const key of keys) {
     const udir = join(dir, key);
@@ -535,7 +626,10 @@ async function push(dir: string, keys: string[]) {
     const items = readJson<{ q: number; html: string }[]>(join(udir, "out", "items.json"));
     const size = items.reduce((a, it) => a + it.html.length, 0) + JSON.stringify(answers).length;
     if (size > 1_400_000) throw new Error(`${key}: ${size} letters in one save: split it`);
-    reqs.push({ name: key, fn: "tell", req: { op: "save", unitId: u.unit.unitId, answers, items, dropFixes: true } });
+    // The answers a teacher typed in the app (Settings → Books) override the key at their parts: kept, unless `drop`
+    // (they were decided again in kinds.ts).
+    if (u.fixes.length) console.log(`${key}: ${u.fixes.length} answers typed in the app ${drop ? "are dropped" : `still override the key (${u.fixes.map((f) => `Q${f.q}${f.p ? ` ${f.p}` : ""}`).join(", ")}): decide them in kinds.ts and add "drop" to replace them`}`);
+    reqs.push({ name: key, fn: "tell", req: { op: "save", unitId: u.unit.unitId, answers, items, dropFixes: drop } });
   }
   const got = await exchange(reqs);
   for (const key of keys) {
@@ -544,8 +638,64 @@ async function push(dir: string, keys: string[]) {
   }
 }
 
+// ---------------------------------------------------------------- show, ship, help (one question put right)
+
+/** One question as the app has it, in a few lines: its words by part, each part's label, marks, key and kind. */
+function show(udir: string, qs: number[]) {
+  const { u, html, key } = load(udir);
+  for (const q of qs) {
+    const h = html.get(q) ?? "";
+    const k = key.get(q);
+    const part = partOf(u.data, q);
+    console.log(`${u.unit.key} Q${q} [${part?.kind === "short" ? "short: one answer, or { name: kind } for two" : "parts: { label: kind }"} · ${outOf(u.data, q)} marks]${h ? "" : " (not printed in the app)"}`);
+    const bs = part?.kind === "cards" ? blocks(h) : [];
+    if (bs.length) {
+      const lead = plain(h.slice(0, bs[0].s));
+      if (lead) console.log(`  ${lead}`);
+      for (const bl of bs) console.log(`  ${plain(h.slice(bl.s, bl.e))}`);
+    } else console.log(`  ${plain(h)}`);
+    const n = (re: RegExp) => (h.match(re) ?? []).length;
+    console.log(
+      `  printed: ${n(/<span (?:class="ab(?: [^"]*)?"|style="display:inline-block;[^"]*border[^"]*")[^>]*>(?:\s|&nbsp;)*<\/span>/g)} blanks · ${n(/<span><b>\(?[^()<]{1,5}\)<\/b>/g)} options · ${n(/<svg/g)} figures · ${n(/<table/g)} tables · slots now: ${n(/data-fill=/g)} fill, ${n(/data-opt=/g)} opt, ${n(/data-tick=/g)} tick, ${n(/data-mark=/g)} mark, ${n(/data-paper/g)} paper-only`,
+    );
+    const rows = k?.parts?.length ? k.parts : k ? [{ p: "", a: k.a ?? "", m: outOf(u.data, q) ?? 0, t: k.t }] : [];
+    if (!rows.length) console.log("  KEY: none");
+    for (const f of u.fixes.filter((x) => x.q === q)) console.log(`  TYPED IN THE APP by a teacher, overrides the key: ${f.p ? `"${f.p}": ` : ""}${JSON.stringify(f.a)}`);
+    for (const p of rows) console.log(`  ${p.p ? `"${p.p}": ` : ""}KEY ${JSON.stringify(p.a)} [${p.m}] · ${p.t ? kindWords(p.t) : fromWords(p.a) ? `words → ${kindWords(fromWords(p.a)!)}` : "GAP (a photo)"}`);
+  }
+}
+
+/** build → push → read back and compare, a unit a line. Nothing is sent unless every check passes. */
+async function ship(dir: string, keys: string[], drop = false) {
+  for (const key of keys) if (!(await build(join(dir, key)))) throw new Error(`${key}: not sent (fix kinds.ts, then ship again)`);
+  await push(dir, keys, drop);
+  const got = await exchange(
+    keys.map((key) => ({ name: key, fn: "ask" as const, req: { op: "unit", unitId: readJson<Unit>(join(dir, key, "unit.json")).unit.unitId } })),
+    () => {},
+  );
+  let ok = true;
+  for (const key of keys) {
+    const a = got[key];
+    const answers = readJson<KeyAnswer[]>(join(dir, key, "out", "answers.json"));
+    const items = readJson<{ q: number; html: string }[]>(join(dir, key, "out", "items.json"));
+    const sizes = new Map(((a?.questions ?? []) as { q: number; size: number }[]).map((x) => [x.q, x.size]));
+    const same = a?.ok && isDeepStrictEqual(a.answers, answers) && items.every((it) => sizes.get(it.q) === it.html.length);
+    ok = ok && !!same;
+    console.log(`${key}: ${same ? "IN THE APP, read back the same as built" : `READ BACK DIFFERENT (${a?.ok ? "the key or a question" : a?.error}): pull and look`} · ${JSON.stringify(a?.share?.parts ?? {})}`);
+  }
+  if (!ok) process.exitCode = 1;
+}
+
+/** The kinds' words, from their own comments in scripts/digitize-kinds.ts (always the current ones). */
+function help() {
+  const src = readFileSync(join(repo, "scripts", "digitize-kinds.ts"), "utf8");
+  for (const m of src.matchAll(/\/\*\*((?:(?!\*\/)[\s\S])*)\*\/\nexport const (\w+)/g)) console.log(`${m[2]}: ${m[1].replace(/\s*\n\s*\*\s?/g, " ").trim()}`);
+}
+
 // ---------------------------------------------------------------- the command line
 
+// One carrier branch for the tool (emptied after each exchange), not a new one a run.
+process.env.LINK_BRANCH ??= "link-digitize";
 const [cmd, ...args] = process.argv.slice(2);
 const main = async () => {
   if (cmd === "pull") return pull(outside(args[0]), args.slice(1));
@@ -559,8 +709,13 @@ const main = async () => {
     if (!ok) process.exitCode = 1;
     return;
   }
-  if (cmd === "push") return push(outside(args[0]), args.slice(1));
-  console.log("usage: digitize.ts pull <dir> [KEY …] | review <dir>/<KEY> [all] | build <dir>/<KEY> … | push <dir> <KEY …>");
+  const drop = args.includes("drop");
+  if (cmd === "push") return push(outside(args[0]), args.slice(1).filter((x) => x !== "drop"), drop);
+  if (cmd === "show") return show(outside(args[0]), args.slice(1).map(Number));
+  if (cmd === "ship") return ship(outside(args[0]), args.slice(1).filter((x) => x !== "drop"), drop);
+  if (cmd === "help") return help();
+  if (cmd === "units") return units(outside(args[0]), args[1] ?? "");
+  console.log("usage: digitize.ts units <dir> <grade> | pull <dir> <KEY …> | show <dir>/<KEY> <Q …> | review <dir>/<KEY> [all] [from-to] | build <dir>/<KEY> … | ship <dir> <KEY …> | push <dir> <KEY …> | help");
 };
 if (process.argv[1] && basename(process.argv[1]).startsWith("digitize")) main().catch((e) => {
   console.error(String((e as Error).stack ?? e));

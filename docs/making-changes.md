@@ -147,6 +147,28 @@ node $TSX scripts/digitize.ts push $D G8-U03 G8-U04   # saved in the app, all or
   blank for a name that is tapped below is hidden, `"@": paper(".ab")` (`".ab:*"` = every one). A blank raised as a
   power ("2□ × x³") is drawn small and raised by the family app's PAPER_CSS.
 
+## Put one question right (a student's call)
+
+11 Nov 2026, his ask: "if I say the grade, unit and the question number, then immediately go to that place and solve
+that problem, without wasting the token". Four commands and one small file, nothing else to read (the link's code in
+a file outside the repo, `$B` = a folder in the scratchpad):
+
+```bash
+tsx scripts/digitize.ts pull $B G8-U09            # the unit as the app has it now (kinds and slots included)
+tsx scripts/digitize.ts show $B/G8-U09 12         # the question in a few lines: words, part labels, key, kind, slots
+# $B/G8-U09/kinds.ts: only that question, e.g.  export default { 12: num("1.05", { u: "t" }) };
+tsx scripts/digitize.ts ship $B G8-U09            # build (every check) → save → read back and compare
+```
+
+- A question decided again starts from its printed page without slots (`unslot`): give its ops again for every part of
+  that question that fills blanks, taps options, ticks or underlines (the check on slots says which is missing).
+- `rekey(words, kind)` = the key's own answer was wrong; `retype(from, to)` = a printed mistake; `both(a, b)`.
+- The pad check (`padProblem`): every answer must be typeable on its box's pad. G8 Mass Q12 "1.05 t" was a box in
+  the letter t (a tonne read as algebra; the letters' pad has no decimal point): a unit goes in `u`. `build` on a unit
+  with no kinds.ts lists every such answer.
+- Answers a teacher typed in the app (Settings → Books) override the key at their parts: `show` prints them, a save
+  keeps them; `ship … drop` replaces them (decide those parts in kinds.ts first).
+
 ## Security audit
 
 After adding functions, every function must print GUARD except the open ones on purpose: `auth.me`, `auth.setupOwner`,
