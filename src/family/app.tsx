@@ -420,13 +420,18 @@ export function App() {
   const worldOf = (unitId: string): World | undefined => me?.worlds.find((w) => w.unitId === unitId);
   /** His Level now, from anywhere (the Continue buttons). */
   const playNow = () => {
-    // His limit (4 Nov 2026): photos owed for 2 levels: Continue opens that level's book.
-    if (me?.blocked) {
-      toast(`📷 முதலில் Stage ${me.blocked.no} · Level ${me.blocked.n} இன் படங்களை அனுப்பு.`);
-      return go({ k: "book", unitId: me.blocked.unitId, n: me.blocked.n });
-    }
     const next = nextPlay(me);
-    if (!next) return toast("இப்போது phone இல் செய்ய Level இல்லை. உன் தாளை வகுப்பில் கொடு.");
+    if (!next) {
+      // The unit gate (10 Nov 2026): a Stage finished below 75 % keeps the next shut; his wrong ones to redo come first.
+      const g = me?.worlds.find((w) => w.gate && w.gate.redo > 0);
+      if (g) {
+        toast(`↻ Stage ${g.no}: தவறிய கேள்விகளை மீண்டும் செய், அடுத்த Stage திறக்கும்.`);
+        return go({ k: "stage", unitId: g.unitId });
+      }
+      const shut = me?.worlds.find((w) => w.gate);
+      if (shut) return toast(`Stage ${shut.no}: தவறிய கேள்விகளை வகுப்பில் ஆசிரியர் விளக்கிய பின் அடுத்த Stage திறக்கும்.`);
+      return toast("இப்போது phone இல் செய்ய Level இல்லை. உன் தாளை வகுப்பில் கொடு.");
+    }
     sound("start");
     go({ k: "level", unitId: next.world.unitId, n: next.n });
   };
@@ -574,7 +579,7 @@ export function App() {
           certFor({ no: w.no, ta: w.ta, pct: max ? Math.round((got / max) * 100) : null, levels: w.levels.length, at: kept?.end ?? Date.now() });
         }}
         onBook={(n) => go({ k: "book", unitId: w.unitId, n })}
-        onPhotos={(b) => go({ k: "book", unitId: b.unitId, n: b.n })}
+        onStage={(unitId) => go({ k: "stage", unitId })}
       />
     ) : (
       <Missing onBack={toMain} />

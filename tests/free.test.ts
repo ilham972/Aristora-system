@@ -120,7 +120,7 @@ describe("free marks", () => {
     let m = await hanaM();
     expect(m.lv["1"].got).toBe(16);
     expect(computeMaster(m, BOOK.data).pending).toEqual([8]);
-    expect((await fam().query(api.family.book, { unitId: u01, n: 1 })).qs.find((x) => x.q === 8)!.owe).toEqual(["working"]);
+    expect((await fam().query(api.family.book, { unitId: u01, n: 1 })).qs.find((x) => x.q === 8)!.owe).toEqual([]); // no photo of his working (10 Nov 2026)
 
     expect(await t.mutation(api.preview.setFree, { unitId: u01, q: 8, free: true })).toEqual({ students: 1 });
     m = await hanaM();

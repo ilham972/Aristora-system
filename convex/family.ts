@@ -5,7 +5,8 @@
 //                   O/L syllabus when the teachers ticked him for it (by paper part; 4 Nov 2026), then the other
 //                   syllabus's books he has; each Stage's levels, XP this week and ever, his streak, his week, trophies.
 //   level        -> the level he is on: each question's boxes (numbers, or answers in n), never the answers; then up to
-//                   3 questions he got wrong 2+ levels before, back for a second try (`re`, 4 Nov 2026).
+//                   3 questions he got wrong 2+ levels before, back for a second try (`re`, 4 Nov 2026). n = 0 = the
+//                   redo of a Stage he finished below 75 % (10 Nov 2026): his lost questions, one more try each.
 //   check        -> his typed answers for a whole level, once: the server marks them with the answer key and saves the
 //                   level as marked at home (⌂). Evaluation and Theory see his lost marks at once; the corrector looks
 //                   at his working in class and taps Checked (or changes a mark). What the phone can't mark (names,
@@ -21,8 +22,8 @@
 //   book         -> a level he checked at home, question by question: marks, the key's working where he lost marks, his
 //                   photos and the teacher's answers (4 Nov 2026).
 //   photoUrl     -> an address to upload one photo to (a few dozen a day per phone).
-//   photoSend    -> attach 1–3 uploaded photos to a question: a part only a teacher can mark, or his working on a wrong
-//                   answer (his rule: both required; 2 levels at most without them).
+//   photoSend    -> attach 1–3 uploaded photos to a part only a teacher can mark (a drawing, a construction). Never his
+//                   working on a wrong answer (10 Nov 2026: that is Evaluation's, in class).
 //   seen         -> he opened the teacher's answers on a level.
 //   profile      -> Me, his profile (4 Nov 2026): his 12 weeks at home and in class, his class days and hours by month,
 //                   his report (each Stage: Levels, marks, questions right / learned with a teacher / still to learn).
@@ -62,6 +63,9 @@ import {
   masterRows,
   xpRows,
   olMapOn,
+  redoPool,
+  gateOf,
+  secondTry,
   retryPool,
   streakOf,
   trophiesOf,
@@ -76,8 +80,8 @@ import {
 import { DAY_MS, isBirthday, SL_OFFSET_MS, slDay, slDayNo, slWeekStart } from "./lib/day";
 import { bookOf, homeChecks, phoneKeyFor, type LevelBook } from "./lib/homeWork";
 import { computeMaster, markBefore, type MQ, type MState } from "./lib/master";
-import { boxCount, formOf, INPUT_MAX, lostOutsideReasons, markQuestion, onlyReasons, REASON_MAX, teacherMarks, type FormQ, type KeyQ } from "./lib/phone";
-import { blockedBy, keyText, PHOTO_BYTES, PHOTO_MAX, PHOTO_URLS_PER_DAY, type PhotoKind } from "./lib/photos";
+import { boxCount, formOf, INPUT_MAX, markQuestion, onlyReasons, REASON_MAX, teacherMarks, type FormQ, type KeyQ } from "./lib/phone";
+import { keyText, PHOTO_BYTES, PHOTO_MAX, PHOTO_URLS_PER_DAY, type PhotoKind } from "./lib/photos";
 import { inboxOf, type UsInboxItem } from "./lib/usTalk";
 import { chatNew, mayMessage } from "./lib/chat";
 import { usDays, usNow } from "./lib/usXp";
@@ -251,11 +255,6 @@ export type FamilyMe = {
    */
   ol: boolean;
   /**
-   * His limit (4 Nov 2026): the oldest level he checked at home that still owes photos, once he has checked 2 more since.
-   * The next level waits until he sends them (null: nothing waits).
-   */
-  blocked: { unitId: Id<"units">; no: number; n: number; owed: number } | null;
-  /**
    * Every unit of his map, in book order (the phone groups them by term, or by paper part on the O/L map: its Worlds),
    * then the other syllabus's books he has (`other`: one more World).
    */
@@ -361,8 +360,6 @@ export const me = query({
         if (fresh) l.nw = fresh;
       }
     }
-    const stop = blockedBy(home.checks);
-    const stopWorld = stop ? worlds.find((w) => w.unitId === stop.unitId) : undefined;
     // The bell: a teacher's own answer (never a photo the class or the app closed), on a Stage of his map.
     const bell: BellItem[] = [];
     for (const p of home.photos) {
@@ -409,7 +406,6 @@ export const me = query({
           .collect()
       ).map((x) => ({ id: x._id, what: x.what, kind: x.kind, wk: x.wk, g: x.g ?? null, ...(x.l ? { l: x.l } : {}), ...(x.why ? { why: x.why } : {}) })),
       race: await raceOf(ctx, s._id, xpSince(rows, 0) + us.tot, now),
-      blocked: stop && stopWorld ? { unitId: stopWorld.unitId, no: stopWorld.no, n: stop.n, owed: stop.owed } : null,
       bell: bell.slice(0, BELL_MAX),
       us: usOpen,
       inbox: inbox.items,
@@ -454,13 +450,28 @@ async function playable(ctx: QueryCtx, s: Doc<"students">, unitId: Id<"units">, 
   if (st !== "play") fail("Do the levels in order: finish the level before it.");
   const key = await keyRow(ctx, unitId, "master");
   if (!key) fail("This Stage can't be marked on the phone yet.");
-  // His limit (his rule, 4 Nov 2026): 2 levels at most after one that still owes photos.
-  const stop = blockedBy((await homeChecks(ctx, s._id)).checks);
-  if (stop) {
-    const w = worlds.find((x) => x.unitId === stop.unitId);
-    fail(`முதலில் Stage ${w?.no ?? ""} · Level ${stop.n} இன் படங்களை அனுப்பு (${stop.owed}).`);
-  }
   return { world, data, level, keys: await phoneKeyFor(ctx, unitId, data, key.answers) };
+}
+
+/**
+ * The redo of a Stage he finished below PASS_PCT (n = 0, 10 Nov 2026): the Stage, its workbook, his marks and the
+ * questions he may try again now (else a reason, in plain words).
+ */
+async function redoPlayable(ctx: QueryCtx, s: Doc<"students">, unitId: Id<"units">) {
+  const worlds = await worldsOf(ctx, s);
+  const world = worlds.find((w) => w.unitId === unitId);
+  if (!world) fail("This Stage is not on your map.");
+  if (!world.open) fail("This Stage is locked. Finish the Stage before it.");
+  const book = await bookFor(ctx, unitId, "master");
+  if (!book) fail("This Stage has no levels yet.");
+  const data = asMaster(book);
+  const key = await keyRow(ctx, unitId, "master");
+  if (!key) fail("This Stage can't be marked on the phone yet.");
+  const keys = await phoneKeyFor(ctx, unitId, data, key.answers);
+  const p = await progressFor(ctx, s._id, unitId, "master");
+  const pool = redoPool(masterState(p), data, keys);
+  if (!pool.length) fail("மீண்டும் செய்ய கேள்விகள் இல்லை: மீதமுள்ளவற்றை வகுப்பில் ஆசிரியர் விளக்குவார்.");
+  return { world, data, keys, pool };
 }
 
 export type FamilyLevel = {
@@ -493,11 +504,6 @@ async function ladderPlayable(ctx: QueryCtx, s: Doc<"students">, unitId: Id<"uni
   if (st === "done") fail("This level is already marked.");
   if (st !== "play") fail("Do the levels in order: finish the level before it.");
   if (!lad.keys.size) fail("This Stage can't be marked on the phone yet.");
-  const stop = blockedBy((await homeChecks(ctx, s._id)).checks);
-  if (stop) {
-    const w = worlds.find((x) => x.unitId === stop.unitId);
-    fail(`முதலில் Stage ${w?.no ?? ""} · Level ${stop.n} இன் படங்களை அனுப்பு (${stop.owed}).`);
-  }
   return { world, lad, sec };
 }
 
@@ -531,6 +537,11 @@ export const level = query({
         if (k) qs.push({ ...formOf(k), part: sec.id, ...(sec.teach.includes(q) ? { t: true as const } : {}) });
       }
       return { unitId: world.unitId, no: world.no, ta: world.ta, n: args.n, d: -args.n, max: qs.reduce((a, q) => a + q.max, 0), qs };
+    }
+    if (args.n === 0) {
+      const { world, data, keys, pool } = await redoPlayable(ctx, s, args.unitId);
+      const qs: FamilyLevel["qs"] = pool.map((r) => ({ ...formOf(keys.get(r.q)!), part: partOf(data, r.q)?.id ?? "", re: r.from, rb: r.lost }));
+      return { unitId: world.unitId, no: world.no, ta: world.ta, n: 0, max: qs.reduce((a, q) => a + q.max, 0), qs };
     }
     const { world, data, level: l, keys } = await playable(ctx, s, args.unitId, args.n);
     const qs = levelForm(data, keys, l); // the owner's Preview shows the same (convex/preview.ts)
@@ -634,6 +645,7 @@ export const check = mutation({
     const s = await familyActor(ctx, args.token);
     const now = Date.now();
     if (args.n < 0) return await checkLadder(ctx, s, args, now);
+    if (args.n === 0) return await checkRedo(ctx, s, args, now);
     const { data, level: l, keys } = await playable(ctx, s, args.unitId, args.n);
     // A reason he types may be a few sentences; every other box is marked only up to INPUT_MAX (`right`).
     if (args.typed.length > 200 || args.typed.some((t) => t.a.length > 30 || t.a.some((x) => x.length > REASON_MAX))) {
@@ -657,8 +669,7 @@ export const check = mutation({
     const results: FamilyResult[] = [];
     const rows: Record<string, MQ> = {};
     const answers: Doc<"familyAnswers">["qs"] = [];
-    // The photos this Check asks of him: the parts only a teacher can mark, his working on each wrong answer.
-    const wrong: number[] = [];
+    // The photos this Check asks of him: the parts only a teacher can mark (never his working: 10 Nov 2026).
     const pm: number[] = [];
     const pg: number[] = [];
     let got = 0;
@@ -696,9 +707,6 @@ export const check = mutation({
         if (onlyReasons(k, r.parts)) said.push(q);
         continue;
       }
-      // His working photo on a lost question (his rule), except where the only loss is a reason's wrong ஆம் / இல்லை
-      // (his rule, 4 Nov 2026: "don't put the image upload option" for those).
-      if (r.got < k.max && lostOutsideReasons(k, r.parts)) wrong.push(q);
       rows[String(q)] = { got: r.got, max: k.max, lost: r.got < k.max, t: now };
       got += r.got;
       phoneMax += k.max;
@@ -715,15 +723,14 @@ export const check = mutation({
       if (!typed.has(r.q) || stale(r.q, k)) continue;
       const res = markQuestion(k, (typed.get(r.q) ?? []).slice(0, boxCount(k)));
       const again = res.got ?? 0;
-      const before = m.q[String(r.q)];
-      m.q[String(r.q)] = { ...before, rt: now, rg: again, ...(again >= k.max && !before.x ? { x: now } : {}) };
-      bonus += Math.max(0, again - (before.got ?? 0));
+      // Right = half its marks back (10 Nov 2026) and explained; wrong = Evaluation still explains it.
+      bonus += secondTry(m, data, r.q, k.max, again, now);
       retry.push({ q: r.q, max: k.max, got: again, from: r.from, ok: res.ok });
     }
     markBefore(m, data, l.n, now);
     await ctx.db.patch(progress._id, { m, updatedAt: now });
     // What he typed (for the most common wrong answers per question) and the photos this Check asks of him.
-    await ctx.db.insert("familyAnswers", { studentId: s._id, unitId: unit._id, n: l.n, at: now, qs: answers, owe: { part: teacher, working: wrong, pm, pg } });
+    await ctx.db.insert("familyAnswers", { studentId: s._id, unitId: unit._id, n: l.n, at: now, qs: answers, owe: { part: teacher, working: [], pm, pg } });
     // His typed reasons go to the teachers' queue at once, as a part to mark with nothing to send (`said`).
     for (const q of said) await sayReason(ctx, s._id, unit._id, l.n, q, now);
     await log(ctx, null, now, {
@@ -751,6 +758,55 @@ export const check = mutation({
     return { results, got, phoneMax, max: l.max, teacher, xp: weekXp(all, now) + (await usNow(ctx, s._id, now)).xp, streak, trophies, book, retry, bonus };
   },
 });
+
+/**
+ * The redo checked (n = 0, 10 Nov 2026, his rule: below 75 % the next Stage waits for the explanation): each question
+ * he tried again, once. Right = explained (`x`: Evaluation skips it, the gate counts it); wrong = only the class can
+ * explain it now. His first marks stay his score (Progress, the reports); the marks he won back are XP (`xpItems`), as
+ * for a question that came back in a level.
+ */
+async function checkRedo(
+  ctx: MutationCtx,
+  s: Doc<"students">,
+  args: { unitId: Id<"units">; typed: { q: number; a: string[]; b?: number }[] },
+  now: number,
+) {
+  const { data, keys, pool } = await redoPlayable(ctx, s, args.unitId);
+  if (args.typed.length > 200 || args.typed.some((t) => t.a.length > 30 || t.a.some((x) => x.length > REASON_MAX))) {
+    fail("Those answers are too long.");
+  }
+  const typed = new Map(args.typed.map((t) => [t.q, t.a]));
+  const shown = new Map(args.typed.map((t) => [t.q, t.b]));
+  const unit = (await ctx.db.get(args.unitId))!;
+  const progress = await ensureProgress(ctx, s._id, unit._id, "master", now);
+  const m = copy(masterState(progress));
+  const results: FamilyResult[] = [];
+  const retry: { q: number; max: number; got: number; from: number; ok: (boolean[] | null)[] }[] = [];
+  let got = 0;
+  let max = 0;
+  let bonus = 0;
+  for (const r of pool) {
+    const k = keys.get(r.q)!;
+    // Only the ones his screen showed, with the same boxes: the others stay for another try.
+    if (!typed.has(r.q) || (shown.get(r.q) !== undefined && shown.get(r.q) !== boxCount(k))) continue;
+    const res = markQuestion(k, (typed.get(r.q) ?? []).slice(0, boxCount(k)));
+    const again = res.got ?? 0;
+    bonus += secondTry(m, data, r.q, k.max, again, now);
+    results.push({ q: r.q, max: k.max, ok: res.ok, got: again, phoneGot: again });
+    retry.push({ q: r.q, max: k.max, got: again, from: r.from, ok: res.ok });
+    got += again;
+    max += k.max;
+  }
+  if (!results.length) fail("உன் விடைகள் வரவில்லை. மீண்டும் முயற்சி செய்.");
+  await ctx.db.patch(progress._id, { m, updatedAt: now });
+  const right = retry.filter((r) => r.got >= r.max).length;
+  await log(ctx, null, now, { kind: "retry-home", studentId: s._id, name: s.name, unit: unit.key, value: `${retry.map((r) => r.q).join(",")} ${right}/${retry.length}` });
+  const all = await xpRows(ctx, s._id);
+  const streak = streakOf(all, now);
+  const trophies = trophiesOf(all, await worldsOf(ctx, s));
+  // The reveal's ring = his marks on the redo; its XP line = only the half marks he won back (`bonus`, the phone: n = 0).
+  return { results, got, phoneMax: max, max, teacher: [], xp: weekXp(all, now) + (await usNow(ctx, s._id, now)).xp, streak, trophies, book: null, retry: [], bonus, redo: { right, of: retry.length, gate: gateOf(m, data, keys) } };
+}
 
 /**
  * A ladder section checked at home, once: marked with the ladder's key (1 mark a part) and written into the class's
@@ -843,9 +899,9 @@ export const photoUrl = mutation({
 });
 
 /**
- * 1–3 uploaded photos for one question of a level he checked at home: `part` = a part only a teacher can mark (not
- * marked yet), `working` = his working on a question he lost marks on. Sending again replaces the photos until she
- * has answered.
+ * 1–3 uploaded photos for one question of a level he checked at home: a part only a teacher can mark (not marked yet).
+ * Sending again replaces the photos until she has answered. `working` (his working on a wrong answer) is refused since
+ * 10 Nov 2026 (kept in the arguments for a phone that hasn't updated yet).
  */
 export const photoSend = mutation({
   args: {
@@ -861,6 +917,7 @@ export const photoSend = mutation({
   handler: async (ctx, args) => {
     const s = await familyActor(ctx, args.token);
     const now = Date.now();
+    if (args.kind === "working") fail("தவறிய கேள்விக்குப் படம் தேவையில்லை: வகுப்பில் விளக்கம் கிடைக்கும்.");
     const row = await ctx.db
       .query("homePhotos")
       .withIndex("by_student", (x) => x.eq("studentId", s._id).eq("unitId", args.unitId).eq("n", args.n).eq("q", args.q))
@@ -880,7 +937,6 @@ export const photoSend = mutation({
     if (b.hc) fail("வகுப்பில் ஏற்கனவே திருத்தப்பட்டது: படம் தேவையில்லை.");
     const kind: PhotoKind = args.kind;
     if (kind === "part" && (q.teach === 0 || q.got !== null)) fail("This question doesn't need a photo.");
-    if (kind === "working" && !(q.got !== null && q.got < q.max)) fail("This question doesn't need a photo.");
     for (const id of args.files) {
       const meta = await ctx.db.system.get(id);
       if (!meta) fail("A photo didn't arrive. Take it again.");

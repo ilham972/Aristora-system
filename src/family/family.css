@@ -233,8 +233,8 @@ p {
   background: #efedf8;
   color: var(--ink2);
 }
-/* The photos he owes before the next level opens: the whole note is the button, held at the bottom of the screen
-   (the Stage scrolls down to his level, so a note above the road would be off screen). */
+/* A Stage shut by the unit gate (10 Nov 2026): the whole note is the button to the Stage that shuts it, held at the
+   bottom of the screen. */
 .f-stage.stopped {
   padding-bottom: calc(120px + var(--safe-b));
 }
@@ -4377,12 +4377,6 @@ button.f-pod:active,
   color: var(--gold-ink);
   font: 800 11px/1 var(--display);
 }
-.f-lv-tag.stop {
-  left: -4px;
-  right: auto;
-  background: var(--gold-soft);
-  color: var(--gold-ink);
-}
 .f-lv-dot {
   position: absolute;
   left: -2px;
@@ -4515,6 +4509,22 @@ button.f-pod:active,
 }
 .f-stage-cert {
   padding-bottom: 24px;
+}
+/* The unit gate on a Stage finished below 75 % (10 Nov 2026): the score, the redo, what the class explains. */
+.f-gate {
+  margin: 12px 16px 0;
+  display: grid;
+  gap: 10px;
+  text-align: center;
+}
+.f-gate-t {
+  margin: 0;
+  font-size: 15px;
+}
+.f-gate-s {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink2);
 }
 /* His birthday on Home: the cake, confetti (kept inside the card: nothing past the phone's edge), the owl's wishes. */
 .f-bdaycard {

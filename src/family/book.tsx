@@ -1,7 +1,6 @@
 // A level he checked at home (4 Nov 2026, his voice notes: "everything corrected at home"): where he lost marks, the
-// key's working (the solution); on each, the photos the teachers ask for (his working on a wrong answer; a part only a
-// teacher can mark), and her answers in Tamil when they come. His rule: without those photos he may do 2 more levels
-// at most. Shown under the reveal right after Check, and again from the Stage (a level with 📷 or a dot).
+// key's working (the solution); on each, the photos the teachers ask for (a part only a teacher can mark: a drawing, a
+// construction), and her answers in Tamil when they come. Nothing waits on them (10 Nov 2026: no limit). Shown under the reveal right after Check, and again from the Stage (a level with 📷 or a dot).
 
 import { Fragment } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";

@@ -46,6 +46,7 @@ export const count = query({
     const rows = await ctx.db
       .query("homePhotos")
       .withIndex("by_state", (q) => q.eq("state", "waiting"))
+      .filter((q) => q.eq(q.field("kind"), "part"))
       .take(100);
     return { n: rows.length, late: rows.length > 0 && Date.now() - rows[0].at > PHOTO_LATE_MS };
   },
@@ -238,6 +239,7 @@ export const queue = query({
     const rows = await ctx.db
       .query("homePhotos")
       .withIndex("by_state", (q) => q.eq("state", "waiting"))
+      .filter((q) => q.eq(q.field("kind"), "part"))
       .take(20);
     const units = new Map<string, UnitBits | null>();
     const out: PhotoItem[] = [];
@@ -263,10 +265,13 @@ export const lane = query({
   args: { token },
   handler: async (ctx, args): Promise<LaneRow[]> => {
     await viewer(ctx, args.token, "photos");
-    const rows = await ctx.db
-      .query("homePhotos")
-      .withIndex("by_state", (q) => q.eq("state", "waiting"))
-      .collect();
+    // Only a drawing's part (10 Nov 2026: no photos of his working on a wrong answer any more).
+    const rows = (
+      await ctx.db
+        .query("homePhotos")
+        .withIndex("by_state", (q) => q.eq("state", "waiting"))
+        .collect()
+    ).filter((r) => r.kind === "part");
     const by = new Map<Id<"students">, { n: number; at: number }>();
     for (const r of rows) {
       const b = by.get(r.studentId);
@@ -279,7 +284,7 @@ export const lane = query({
   },
 });
 
-/** One student's waiting photos, every level, oldest level first, then by question (a part before his working). */
+/** One student's waiting photos (a drawing's part only, since 10 Nov 2026), every level, oldest level first, then by question. */
 export const student = query({
   args: { token, studentId: v.id("students") },
   handler: async (ctx, args): Promise<PhotoItem[]> => {
@@ -291,7 +296,7 @@ export const student = query({
         .query("homePhotos")
         .withIndex("by_student", (q) => q.eq("studentId", args.studentId))
         .collect()
-    ).filter((r) => r.state === "waiting");
+    ).filter((r) => r.state === "waiting" && r.kind === "part");
     const units = new Map<string, UnitBits | null>();
     const checks = await latestChecks(ctx, s._id);
     const out: PhotoItem[] = [];
@@ -508,6 +513,29 @@ export const setRequired = mutation({
 });
 
 /**
+ * His working on a wrong answer is no longer asked for (10 Nov 2026, his rule: "clear them, and delete them from the
+ * database"): every such photo not answered yet (waiting, a retake, a message he hasn't answered) goes, row and files.
+ * The answered ones stay (his phone shows her answer; their files go a day after marking, as before). Runs in the
+ * hourly sweep; after the first run there is nothing left for it to find (the phone can't send one any more).
+ */
+export async function dropWorking(ctx: MutationCtx): Promise<number> {
+  let gone = 0;
+  for (const state of ["waiting", "ask", "retake"] as const) {
+    const rows = await ctx.db
+      .query("homePhotos")
+      .withIndex("by_state", (q) => q.eq("state", state))
+      .filter((q) => q.eq(q.field("kind"), "working"))
+      .collect();
+    for (const r of rows) {
+      await dropFiles(ctx, r.files);
+      await ctx.db.delete(r._id);
+      gone++;
+    }
+  }
+  return gone;
+}
+
+/**
  * Every hour: nothing is kept. The files of photos marked a day ago (the marks and her answer stay), of photos waiting
  * on a level taken back in class or of a removed student, and uploads never attached to a question after a day.
  * Only image files are swept as unattached: nothing else in the app stores files today (a voice note one day must be
@@ -518,7 +546,7 @@ export const sweep = internalMutation({
   args: {},
   handler: async (ctx) => {
     const now = Date.now();
-    let gone = 0;
+    let gone = await dropWorking(ctx);
     const marked = await ctx.db
       .query("homePhotos")
       .withIndex("by_done", (q) => q.lt("doneAt", now - PHOTO_KEEP_MS))

@@ -1,5 +1,5 @@
-// His levels checked at home, read from the database (4 Nov 2026): the photos each Check still owes, his 2-level limit
-// (`blockedBy`), and one level's book for his phone (marks, the key's working where he lost marks, his photos and the
+// His levels checked at home, read from the database (4 Nov 2026): the photos each Check still owes (a drawing's part
+// only, since 10 Nov 2026), and one level's book for his phone (marks, the key's working where he lost marks, his photos and the
 // teacher's answers). The rules themselves are pure, in `photos.ts`.
 
 import type { Doc, Id } from "../_generated/dataModel";
@@ -10,7 +10,7 @@ import { outOf, type MasterData } from "./book";
 import { isFree } from "./free";
 import type { KeyAnswer } from "./key";
 import { phoneKey, slotWords, type KeyQ } from "./phone";
-import { isRetake, isWhy, keyText, owedOf, partMarks, RETAKE, WHY, type CheckDebt, type PhotoKind } from "./photos";
+import { isRetake, isWhy, keyText, owedOf, partMarks, RETAKE, WHY, type PhotoKind } from "./photos";
 
 /** The key as the phone reads it, with the answers the teachers typed (Settings → Books → See what the phone accepts). */
 export async function phoneKeyFor(ctx: QueryCtx, unitId: Id<"units">, data: MasterData, answers: KeyAnswer[] | null): Promise<Map<number, KeyQ>> {
@@ -21,7 +21,7 @@ export async function phoneKeyFor(ctx: QueryCtx, unitId: Id<"units">, data: Mast
   return phoneKey(answers, data, new Map(rows.map((r) => [`${r.q}|${r.p}`, r.a])));
 }
 
-/** Settings → Photos (the owner): photos required, 2 levels at most without them. On unless he turned it off. */
+/** Settings → Photos (the owner): a drawing's photo is asked for (📷 on the Level). On unless he turned it off. */
 export const REQUIRED_KEY = "photos.required";
 
 export async function photosRequired(ctx: QueryCtx): Promise<boolean> {
@@ -36,8 +36,6 @@ const levelKey = (unitId: string, n: number) => `${unitId}:${n}`;
 
 export type HomeChecks = {
   required: boolean;
-  /** Each level he checked at home (its latest Check) and how many photos it still owes. */
-  checks: CheckDebt[];
   owed: Map<string, { q: number; kind: PhotoKind }[]>;
   photos: Doc<"homePhotos">[];
   latest: Map<string, Doc<"familyAnswers">>;
@@ -61,7 +59,6 @@ export async function homeChecks(ctx: QueryCtx, studentId: Id<"students">): Prom
     .query("homePhotos")
     .withIndex("by_student", (q) => q.eq("studentId", studentId))
     .collect();
-  const checks: CheckDebt[] = [];
   const owed = new Map<string, { q: number; kind: PhotoKind }[]>();
   for (const [k, r] of latest) {
     const m = states.get(r.unitId);
@@ -78,10 +75,8 @@ export async function homeChecks(ctx: QueryCtx, studentId: Id<"students">): Prom
           required,
         );
     owed.set(k, o);
-    // In the order he checked them (the row's creation: two Checks never share it).
-    checks.push({ unitId: r.unitId, n: r.n, at: r._creationTime, owed: o.length });
   }
-  return { required, checks, owed, photos, latest };
+  return { required, owed, photos, latest };
 }
 
 /**

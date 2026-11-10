@@ -239,6 +239,8 @@ const mqFields = {
    */
   rt: v.optional(v.number()),
   rg: v.optional(v.number()),
+  /** Right on that second try (10 Nov 2026, his rule): the marks it added (half the question's, whole), in the level's. */
+  rh: v.optional(v.number()),
 };
 export const masterState = v.object({
   q: v.record(

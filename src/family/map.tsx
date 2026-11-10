@@ -78,6 +78,18 @@ export const levelsDone = (w: World) => w.levels.filter((l) => l.s !== "play" &&
 
 type NodeState = "done" | "now" | "open" | "lock" | "soon";
 
+/**
+ * The unit gate (10 Nov 2026): the Stage before this one (in his map's order) that finished below 75 % and keeps it shut,
+ * if that is why it is shut.
+ */
+export function shutBy(me: FamilyMe, w: World): World | undefined {
+  if (w.open || w.other) return undefined;
+  const mine = me.worlds.filter((x) => !x.other);
+  const at = mine.findIndex((x) => x.unitId === w.unitId);
+  const before = at > 0 ? mine.slice(0, at).reverse().find((x) => x.book) : undefined;
+  return before?.gate ? before : undefined;
+}
+
 function stateOf(w: World, focus: World | null): NodeState {
   if (!w.book) return "soon";
   if (focus && w.unitId === focus.unitId) return "now";
@@ -95,7 +107,7 @@ const STAGE_STEP = 132;
 const STAGE_HEAD = 104;
 const stagePos = (i: number, g: number) => ({ x: 50 + 25 * Math.sin(i * 1.6 + g * 1.7), y: STAGE_HEAD + i * STAGE_STEP });
 
-function StageNode(props: { w: World; st: NodeState; at: { x: number; y: number }; onOpen: () => void }) {
+function StageNode(props: { w: World; st: NodeState; at: { x: number; y: number }; shut: boolean; onOpen: () => void }) {
   const { w, st, at } = props;
   const done = levelsDone(w);
   const pct = w.levels.length ? Math.round((done / w.levels.length) * 100) : 0;
@@ -105,6 +117,8 @@ function StageNode(props: { w: World; st: NodeState; at: { x: number; y: number 
     if (st === "soon") return toast(`Stage ${w.no}: விரைவில் app இல் வரும்.`);
     if (st === "lock") {
       sound("wrong");
+      // Shut by the gate: its screen says why and opens the Stage to fix.
+      if (props.shut) return props.onOpen();
       return toast("இது பூட்டப்பட்டுள்ளது: முன்னுள்ள Stage ஐ முடி, அல்லது வகுப்பில் கேள்.");
     }
     sound("pop");
@@ -142,7 +156,7 @@ function StageNode(props: { w: World; st: NodeState; at: { x: number; y: number 
   );
 }
 
-function WorldMap(props: { g: WorldGroup; focus: World | null; onStage: (unitId: string) => void }) {
+function WorldMap(props: { g: WorldGroup; focus: World | null; me: FamilyMe; onStage: (unitId: string) => void }) {
   const { g, focus } = props;
   const n = g.stages.length;
   const pts = g.stages.map((_, i) => stagePos(i, g.no));
@@ -182,7 +196,7 @@ function WorldMap(props: { g: WorldGroup; focus: World | null; onStage: (unitId:
       <div class="f-roadbox" style={{ height: `${height}px` }}>
         <Road pts={[...pts, chest]} height={height} reached={reached} />
         {g.stages.map((w, i) => (
-          <StageNode key={w.unitId} w={w} st={states[i]} at={pts[i]} onOpen={() => props.onStage(w.unitId)} />
+          <StageNode key={w.unitId} w={w} st={states[i]} at={pts[i]} shut={!!shutBy(props.me, w)} onOpen={() => props.onStage(w.unitId)} />
         ))}
         <span class={`f-chest${allDone ? " won" : ""}`} style={{ left: `${chest.x}%`, top: `${chest.y}px` }} aria-label={allDone ? `World ${g.no}: won` : undefined}>
           <Icon name="trophy" size={26} />
@@ -268,7 +282,7 @@ export function LearnTab(props: { top: ComponentChildren; me: FamilyMe | null; o
       </OwlSays>
       <div class="f-map">
         {groups.map((x) => (
-          <WorldMap key={x.key} g={x} focus={focus} onStage={props.onStage} />
+          <WorldMap key={x.key} g={x} focus={focus} me={me} onStage={props.onStage} />
         ))}
         {me.worlds.length === 0 && <p class="f-none">உன் பாடத்திட்டம் விரைவில் வரும்.</p>}
       </div>
@@ -297,8 +311,8 @@ export function StageScreen(props: {
   onBack: () => void;
   onPlay: (n: number) => void;
   onBook: (n: number) => void;
-  /** The level whose photos he owes (his limit): its book, in this Stage or another. */
-  onPhotos: (b: NonNullable<FamilyMe["blocked"]>) => void;
+  /** Another Stage (the one whose wrong questions keep this one shut). */
+  onStage: (unitId: string) => void;
   /** Every Level done: the Stage's certificate (4 Nov 2026). */
   onCert?: () => void;
 }) {
@@ -317,15 +331,10 @@ export function StageScreen(props: {
     const el = document.querySelector(".f-lv.play");
     if (el && el.getBoundingClientRect().top > window.innerHeight - 160) el.scrollIntoView({ block: "center" });
   }, []);
-  // His limit (4 Nov 2026): 2 levels at most after one that still owes photos.
-  const stop = me.blocked;
+  // The unit gate (10 Nov 2026): this Stage shut because the one before it finished below 75 %.
+  const shut = shutBy(me, w);
   const tap = (l: WorldLevel) => {
     buzz();
-    if (l.s === "play" && canPlay && stop) {
-      sound("wrong");
-      toast(`📷 முதலில் Stage ${stop.no} · Level ${stop.n} இன் படங்களை அனுப்பு.`);
-      return props.onPhotos(stop);
-    }
     if (l.s === "play" && canPlay) return props.onPlay(l.n);
     // A level marked at home: its book (solutions, photos, the teacher's answers).
     if (l.hm) {
@@ -334,14 +343,14 @@ export function StageScreen(props: {
     }
     if (!w.open) {
       sound("wrong");
-      return toast("இந்த Stage பூட்டப்பட்டுள்ளது.");
+      return toast(shut ? `Stage ${shut.no} இல் 75% வேண்டும், அல்லது தவறியவற்றுக்கு விளக்கம்.` : "இந்த Stage பூட்டப்பட்டுள்ளது.");
     }
     if (l.s === "play") return toast("இந்த Stage ஐ இன்னும் phone இல் சரிபார்க்க முடியாது. தாளை வகுப்பில் கொடு.");
     sound("tap");
     toast(`Level ${l.d ?? l.n}: ${l.got !== undefined ? `${l.got} / ${l.max} XP · ` : ""}${STATE_WORDS[l.s]}`);
   };
   return (
-    <div class={`f-stage${stop && canPlay && playIdx >= 0 ? " stopped" : ""}`}>
+    <div class={`f-stage${shut ? " stopped" : ""}`}>
       <header class="f-hero">
         <div class="f-toprow">
           <button type="button" class="f-round on-brand" aria-label="Back" onClick={props.onBack}>
@@ -384,20 +393,40 @@ export function StageScreen(props: {
         </div>
       ) : (
         <>
-          {!w.open && <p class="f-note lock">இந்த Stage பூட்டப்பட்டுள்ளது: முன்னுள்ள Stage ஐ முடி, அல்லது வகுப்பில் கேள்.</p>}
+          {!w.open &&
+            (shut ? (
+              // Shut by the gate (10 Nov 2026): why, and the way to open it, where he looks.
+              <button type="button" class="f-note f-stopnote" onClick={() => {
+                buzz();
+                props.onStage(shut.unitId);
+              }}>
+                <Icon name="lock" size={18} />
+                <span>
+                  Stage {shut.no} இல் <b>75%</b> வேண்டும் (உனக்கு {shut.gate!.pct}%).
+                </span>
+                <b class="f-stopgo">Stage {shut.no} →</b>
+              </button>
+            ) : (
+              <p class="f-note lock">இந்த Stage பூட்டப்பட்டுள்ளது: முன்னுள்ள Stage ஐ முடி, அல்லது வகுப்பில் கேள்.</p>
+            ))}
           {w.open && !w.phone && <p class="f-note">இந்த Stage விரைவில் phone இல்: இப்போது தாளை வகுப்பில் கொடு.</p>}
-          {stop && canPlay && playIdx >= 0 && (
-            // Why the next level stays shut (his report, 4 Nov 2026: "not showing the reason"): said where he looks.
-            <button type="button" class="f-note f-stopnote" onClick={() => {
-              buzz();
-              props.onPhotos(stop);
-            }}>
-              <Icon name="camera" size={18} />
-              <span>
-                Level {w.levels[playIdx].d ?? w.levels[playIdx].n} திறக்க, முதலில் Stage {stop.no} · Level {stop.n} இன் <b>{stop.owed} படங்களை</b> அனுப்பு.
-              </span>
-              <b class="f-stopgo">அனுப்பு →</b>
-            </button>
+          {w.gate && (
+            // The unit gate (10 Nov 2026): finished below 75 %. The next Stage waits for his wrong ones to be explained:
+            // right again here (half their marks), or by the teacher in class.
+            <section class="f-card f-gate rise">
+              <p class="f-gate-t">
+                அடுத்த Stage திறக்க <b>75%</b> வேண்டும். உனக்கு <b>{w.gate.pct}%</b>.
+              </p>
+              {w.gate.redo > 0 && (
+                <button type="button" class="f-btn gold big shine" onClick={() => props.onPlay(0)}>
+                  ↻ Redo · {w.gate.redo}
+                </button>
+              )}
+              <p class="f-gate-s">
+                {w.gate.redo > 0 && <>சரி = பாதிப் புள்ளிகள் (ஒரு முறை மட்டும்).<br /></>}
+                {w.gate.cls > 0 ? `${w.gate.cls} கேள்விகள்: வகுப்பில் விளக்கம்.` : "எல்லாம் சரி என்றால் திறக்கும்."}
+              </p>
+            </section>
           )}
           <div class="f-roadbox lv" style={{ height: `${height}px` }}>
             <Road pts={[...pts, cup]} height={height} reached={reached} />
@@ -408,13 +437,13 @@ export function StageScreen(props: {
                 <div key={l.n} class={`f-lvwrap ${pts[i].x < 50 ? "r" : "l"}`} style={{ left: `${pts[i].x}%`, top: `${pts[i].y}px` }}>
                   {live && (
                     <span class="f-start" aria-hidden="true">
-                      {stop ? "📷" : "START"}
+                      START
                     </span>
                   )}
                   <button
                     type="button"
                     class={`f-lv s-${l.s}${live ? " play" : ""}${w.open ? "" : " shut"}${pct >= 1 ? " full" : ""}`}
-                    aria-label={`Level ${l.d ?? l.n}: ${live ? (stop ? "photos first" : "START") : STATE_WORDS[l.s]}${l.ph ? `, ${l.ph} photos to send` : ""}`}
+                    aria-label={`Level ${l.d ?? l.n}: ${live ? "START" : STATE_WORDS[l.s]}${l.ph ? `, ${l.ph} photos to send` : ""}`}
                     onClick={() => tap(l)}
                   >
                     {live && <span class="f-node-ring" aria-hidden="true" />}
@@ -433,11 +462,6 @@ export function StageScreen(props: {
                       </i>
                     )}
                     {!!l.nw && <i class="f-lv-dot" title="ஆசிரியரின் பதில்" />}
-                    {live && stop && (
-                      <i class="f-lv-tag stop" title="படங்கள் முதலில்">
-                        <Icon name="lock" size={12} />
-                      </i>
-                    )}
                     {l.s === "class" && (
                       <i class="f-lv-tag wait" title="ஆசிரியரிடம்">
                         <Icon name="clock" size={12} />

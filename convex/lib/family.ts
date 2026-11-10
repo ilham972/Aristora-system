@@ -3,8 +3,8 @@
 // - On his screens (3 Nov 2026, his voice note): a term is a World, a unit a Stage, its workbook's levels are Levels,
 //   marks are XP (1 mark = 1 XP). A unit with no workbook in the app yet is in the map too ("coming soon").
 // - A Stage (unit; the type is still called World here) is open when the teachers opened it for him (his unit now, a
-//   book given, levels done there), when the one before it is done (every level handed in or marked), or when "Open
-//   every Stage" is on for him.
+//   book given, levels done there), when the one before it is done (every level handed in or marked) AND passed the
+//   unit gate (75 %, or every lost question explained: `gateOf`, 10 Nov 2026), or when "Open every Stage" is on for him.
 // - The O/L map (4 Nov 2026, his ask: "who will see the O level syllabus, and who will see the Grade 11 syllabus?"):
 //   a Grade 10 or 11 student the teachers ticked (Settings → Students → O/L map) sees the O/L syllabus instead: each
 //   paper part a World (Paper I A, I B, II A, II B), each O/L topic a Stage numbered as on his sheet, the first topic in
@@ -14,11 +14,12 @@
 
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
-import type { MasterData } from "./book";
-import { allPhone, boxCount, type KeyQ } from "./phone";
+import { outOf, type MasterData } from "./book";
+import { allPhone, boxCount, phoneKey, type KeyQ } from "./phone";
 import { DAY_MS, slDayNo, slWeekStart } from "./day";
 import { isFree } from "./free";
 import { computeMaster, EMPTY_MASTER, type MState } from "./master";
+import { keyRow } from "./backend";
 import { OL, olNumber } from "./syllabus";
 import { ladderOf, secDone } from "./ladder";
 
@@ -76,6 +77,8 @@ export type World = {
   levels: WorldLevel[];
   /** Every level handed in or marked. */
   allDone: boolean;
+  /** Finished below PASS_PCT with questions still to explain: the next Stage stays shut (10 Nov 2026). */
+  gate?: Gate;
   /**
    * From the other syllabus (an O/L book on his grade's map, or his grade's book on the O/L map): the phone puts these in
    * one more World after the others. Only books he is on now, was given or started; always open.
@@ -127,7 +130,7 @@ export function retryPool(m: MState, book: MasterData, keys: Map<number, KeyQ>, 
       const r = m.q[String(q)];
       const k = keys.get(q);
       if (!r?.lost || r.rt !== undefined || !k || !allPhone(k) || boxCount(k) === 0 || isFree(book, q)) continue;
-      out.push({ q, from: l.n, lost: Math.max(0, k.max - (r.got ?? 0)) });
+      out.push({ q, from: l.n, lost: Math.max(0, halfMarks(k.max) - (r.got ?? 0)) });
     }
   }
   return out;
@@ -144,10 +147,104 @@ export function comesBack(m: MState, book: MasterData, keys: Map<number, KeyQ>, 
   if (!r?.lost || r.rt !== undefined || !k || !allPhone(k) || boxCount(k) === 0 || isFree(book, q)) return false;
   const own = book.levels.find((l) => q >= l.from && q <= l.to);
   if (!own) return false;
+  // The redo of a finished book below PASS_PCT (10 Nov 2026): no solution until he tries it again.
+  if (redoable(m, book, keys, q) && allHandedIn(m, book) && !gatePasses(m, book)) return true;
   return book.levels.some((l) => {
     const lv = m.lv[String(l.n)];
     return l.n >= own.n + RETRY_GAP && !(lv?.done || lv?.fixed || lv?.pre);
   });
+}
+
+// ---- The unit gate (10 Nov 2026, his rule: "if they get below 75, they can't go to the next unit until they get the
+// explanation for the wrong questions"): no limit inside a unit; the next Stage opens on the phone when this one scored
+// PASS_PCT or more, or when every question he lost marks on was explained (Evaluation in class, Theory, or right again
+// on his phone: the redo). The class always wins: a teacher who puts him on the next unit (or gives the book) opens it. ----
+
+/**
+ * A wrong question right on its second try (the redo, or a question that came back in a level; 10 Nov 2026, his rule):
+ * half its marks, a whole number (rounded down, at least 1), never less than he had. Explained at once (`x`: Evaluation
+ * skips it). His first marks stay in `got`; what the second try added is `rh`, added to the level's marks too (Progress,
+ * the gate, the reports) and counted as XP the day he won it (`xpItems`). Returns the marks added.
+ */
+/** Second tries before this (10 Nov 2026, ~2 PM Sri Lanka) kept the old XP rule: the marks he won back, as XP only. */
+export const HALF_FROM = Date.UTC(2026, 10, 10, 8, 30);
+
+export function halfMarks(max: number): number {
+  return Math.max(1, Math.floor(max / 2));
+}
+
+export function secondTry(m: MState, book: MasterData, q: number, max: number, again: number, now: number): number {
+  const before = m.q[String(q)];
+  const right = again >= max;
+  const add = right ? Math.max(0, halfMarks(max) - (before.got ?? 0)) : 0;
+  m.q[String(q)] = { ...before, rt: now, rg: again, ...(right && !before.x ? { x: now } : {}), ...(add ? { rh: add } : {}) };
+  const l = book.levels.find((x) => q >= x.from && q <= x.to);
+  const lv = l ? m.lv[String(l.n)] : undefined;
+  if (add && lv?.fixed) lv.got = (lv.got ?? 0) + add;
+  return add;
+}
+
+/** The score that opens the next Stage by itself. */
+export const PASS_PCT = 75;
+
+/**
+ * His score on a book for the gate: the marked levels' marks over their marks, leaving out a home level's questions still
+ * waiting for a teacher (a drawing he sent: not his fault she hasn't marked it yet). Levels done before the app count
+ * nothing. Null when nothing is marked.
+ */
+export function gatePct(m: MState, book: MasterData): number | null {
+  let got = 0;
+  let max = 0;
+  for (const l of book.levels) {
+    const lv = m.lv[String(l.n)];
+    if (!lv?.fixed) continue;
+    got += lv.got ?? 0;
+    max += l.max;
+    // A home level the class hasn't checked: a question with no marks yet is a teacher's part still to mark.
+    if (lv.home && !lv.hc) for (let q = l.from; q <= l.to; q++) if (!m.q[String(q)] && !isFree(book, q)) max -= outOf(book, q) ?? 0;
+  }
+  return max > 0 ? Math.round((got / max) * 100) : null;
+}
+
+/** A question he can redo on the phone while the gate is shut: lost, not explained, not with Theory, never tried again. */
+function redoable(m: MState, book: MasterData, keys: Map<number, KeyQ>, q: number): boolean {
+  const r = m.q[String(q)];
+  const k = keys.get(q);
+  return !!r?.lost && !r.x && !r.th && r.rt === undefined && !!k && allPhone(k) && boxCount(k) > 0 && !isFree(book, q);
+}
+
+/** Does this finished book open the next Stage? (75 % or more, or nothing left to explain.) */
+export function gatePasses(m: MState, book: MasterData): boolean {
+  const pct = gatePct(m, book);
+  if (pct === null || pct >= PASS_PCT) return true;
+  const st = computeMaster(m, book);
+  return st.pending.length === 0 && st.theory.length === 0;
+}
+
+/**
+ * The redo (n = 0 on the phone): every question he can still try again in a book he finished below PASS_PCT, in book
+ * order. One try each: right = explained (`x`), wrong = only the class can explain it now.
+ */
+export function redoPool(m: MState, book: MasterData, keys: Map<number, KeyQ>): { q: number; from: number; lost: number }[] {
+  if (!allHandedIn(m, book) || gatePasses(m, book)) return [];
+  const out: { q: number; from: number; lost: number }[] = [];
+  for (const l of book.levels) {
+    if (!m.lv[String(l.n)]?.fixed) continue;
+    for (let q = l.from; q <= l.to; q++) {
+      if (redoable(m, book, keys, q)) out.push({ q, from: l.n, lost: Math.max(0, halfMarks(keys.get(q)!.max) - (m.q[String(q)]!.got ?? 0)) });
+    }
+  }
+  return out;
+}
+
+/** Why a finished Stage keeps the next one shut: his score, how many he can redo, how many only the class can explain. */
+export type Gate = { pct: number; redo: number; cls: number };
+
+export function gateOf(m: MState, book: MasterData, keys: Map<number, KeyQ>): Gate | null {
+  if (!allHandedIn(m, book) || gatePasses(m, book)) return null;
+  const st = computeMaster(m, book);
+  const redo = redoPool(m, book, keys).length;
+  return { pct: gatePct(m, book) ?? 0, redo, cls: st.pending.length + st.theory.length - redo };
 }
 
 /** Every level handed in, marked or done before the app. */
@@ -161,6 +258,17 @@ export function allHandedIn(m: MState, book: MasterData): boolean {
 /** Has he done anything in this book (a level handed in, marked or done before the app)? */
 function started(m: MState): boolean {
   return Object.values(m.lv).some((lv) => lv.done || lv.fixed || lv.pre);
+}
+
+/** A workbook's key as the phone marks it (the same as homeWork's `phoneKeyFor`: the key with the owner's fixes). */
+export async function keysFor(ctx: QueryCtx, unitId: Id<"units">, data: MasterData): Promise<Map<number, KeyQ>> {
+  const key = await keyRow(ctx, unitId, "master");
+  if (!key) return new Map();
+  const rows = await ctx.db
+    .query("phoneFixes")
+    .withIndex("by_unit", (q) => q.eq("unitId", unitId))
+    .collect();
+  return phoneKey(key.answers, data, new Map(rows.map((r) => [`${r.q}|${r.p}`, r.a])));
 }
 
 /** A grade's units in book order; the O/L topics by paper part, each part in his sheet's order. */
@@ -228,6 +336,8 @@ export async function worldsOf(ctx: QueryCtx, student: Doc<"students">): Promise
       allDone = allDone && !playing;
       phone = phone || lad.keys.size > 0;
     }
+    // The unit gate: a finished book below PASS_PCT with questions still to explain (the keys only then: the redo count).
+    const gate = allDone && !gatePasses(m, book.data) ? gateOf(m, book.data, await keysFor(ctx, unit._id, book.data)) : null;
     return {
       unitId: unit._id,
       no: unit.grade === OL ? olNumber(unit, olUnits) : unitNumber(unit.code),
@@ -241,6 +351,7 @@ export async function worldsOf(ctx: QueryCtx, student: Doc<"students">): Promise
       q: (book.row.qCount ?? 0) > 0,
       levels,
       allDone,
+      ...(gate ? { gate } : {}),
       ...(at !== undefined ? { given: at } : {}),
     };
   };
@@ -270,7 +381,7 @@ export async function worldsOf(ctx: QueryCtx, student: Doc<"students">): Promise
     }
     const w = await stage(unit, book, prevDone);
     out.push(w);
-    prevDone = w.allDone;
+    prevDone = w.allDone && !w.gate;
   }
   // The other syllabus: only what he has there (his book now, a book given, levels done), always open.
   for (const unit of ol ? gradeUnits : olUnits) {
@@ -338,7 +449,11 @@ export function xpItems(rows: Doc<"progress">[]): { t: number; xp: number }[] {
     // A tute's ladder section checked at home (4 Nov 2026): its parts right.
     for (const x of Object.values(r.lh ?? {})) out.push({ t: x.t, xp: x.got });
     for (const x of Object.values(r.m?.q ?? {})) {
-      if (x.rt !== undefined && (x.rg ?? 0) > (x.got ?? 0)) out.push({ t: x.rt, xp: (x.rg ?? 0) - (x.got ?? 0) });
+      if (x.rt === undefined) continue;
+      if (x.rh !== undefined) {
+        // Half marks on a second try (10 Nov 2026): in the level's marks now, but won the day of the second try.
+        out.push({ t: x.rt, xp: x.rh }, { t: x.t, xp: -x.rh });
+      } else if ((x.rg ?? 0) > (x.got ?? 0) && x.rt < HALF_FROM) out.push({ t: x.rt, xp: (x.rg ?? 0) - (x.got ?? 0) });
     }
     for (const c of classCircles(r)) if (c.s === "right") out.push({ t: c.t, xp: 1 });
   }

@@ -1084,7 +1084,7 @@ function describe(e: Doc<"events">): string {
       return `old questions back on the phone (${qs.split(",").map((q) => `Q${q}`).join(", ")}): ${right} right`;
     }
     case "photos-required":
-      return v === "on" ? "photos from home required again (2 levels at most without)" : "photos from home no longer required";
+      return v === "on" ? "drawing photos from home asked for again" : "drawing photos from home no longer asked for";
     case "family-photo":
       return v === "sent"
         ? "sent a photo from the family app (waits for an OK)"

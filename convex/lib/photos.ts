@@ -2,10 +2,10 @@
 // will be done at home").
 // - A part the phone can't mark (a drawing, a construction, a reason) comes as a photo; a person he picks (the Photos
 //   permission) marks it from the photo, and the marks reach his phone as XP.
-// - A wrong answer comes with a photo of his working (his rule: required), to see WHY it was wrong; she answers with
-//   one tap on its cause (`WHY`), the phone shows it in Tamil beside the key's working (the solution).
-// - His limit: without those photos he may do 2 more levels at most (`OWE_LEVELS`); the next waits for the photos. The
-//   limit waits on HIM (photo sent), never on the teacher's reply: a slow queue never blocks a student.
+// - No photo of his working on a wrong answer any more (10 Nov 2026, his rule: "a nightmare": the teachers looked again
+//   at levels already corrected; 42 photos a day). Wrong answers wait for Evaluation in class. Old Checks' `working`
+//   lists are ignored (`owedOf`); their waiting photos were deleted (`photos.dropWorking`). And no 2-level limit: the
+//   unit gate decides instead (`lib/family.ts`: 75 % or every lost question explained opens the next Stage).
 // - Nothing is kept: a photo's files go a day after marking (`PHOTO_KEEP_MS`), a retake's at once, a file never
 //   attached after a day (`photos.sweep`).
 
@@ -25,8 +25,6 @@ export const PHOTO_KEEP_MS = 24 * 60 * 60_000;
 export const PHOTO_LATE_MS = 24 * 60 * 60_000;
 /** An uploaded file never attached to a question is deleted after this. */
 export const ORPHAN_MS = 24 * 60 * 60_000;
-/** Levels he may check at home after one that still owes photos. */
-export const OWE_LEVELS = 2;
 /** Her own words with a cause or a mark. */
 export const NOTE_MAX = 200;
 /** A teacher's message back to him (the ⌂ card's Ask, 7 Nov 2026). */
@@ -94,9 +92,9 @@ export function partMarks(
 export type PhotoRow = { q: number; kind: PhotoKind; state: "waiting" | "done" | "retake" | "ask" };
 
 /**
- * The photos a checked level still owes: a part not marked in class and with no photo sent; a wrong answer whose
- * working was not sent and that Evaluation hasn't explained in class (a class correction may also have given its marks
- * back). A retake, or a teacher's message not answered yet, is owed again. `required` off (Settings → Photos): nothing is owed.
+ * The photos a checked level still owes: a part only a teacher marks (a drawing, a construction), not marked in class and
+ * with no photo sent. A retake, or a teacher's message not answered yet, is owed again. `required` off (Settings →
+ * Photos): nothing is owed. His working on a wrong answer is never owed (10 Nov 2026): an old Check's `working` is ignored.
  */
 export function owedOf(
   owe: { part: number[]; working: number[] } | undefined,
@@ -106,26 +104,6 @@ export function owedOf(
 ): { q: number; kind: PhotoKind }[] {
   if (!owe || !required) return [];
   // A retake, or a teacher's message he hasn't answered yet (7 Nov 2026), is owed again.
-  const sent = (q: number, kind: PhotoKind) => rows.some((r) => r.q === q && r.kind === kind && r.state !== "retake" && r.state !== "ask");
-  const out: { q: number; kind: PhotoKind }[] = [];
-  for (const q of owe.part) if (!mq[String(q)] && !sent(q, "part")) out.push({ q, kind: "part" });
-  for (const q of owe.working) {
-    const r = mq[String(q)];
-    if (r?.lost && !r.x && !sent(q, "working")) out.push({ q, kind: "working" });
-  }
-  return out.sort((a, b) => a.q - b.q || (a.kind === "part" ? -1 : 1));
-}
-
-/** One Check of his at home: when, which level, and how many photos it still owes. */
-export type CheckDebt = { unitId: string; n: number; at: number; owed: number };
-
-/**
- * His limit (his rule, 4 Nov 2026): "without the explanation for a wrong question they can go 2 levels maximum". The
- * oldest Check that still owes photos, if he has checked `OWE_LEVELS` levels at home since: the next level waits.
- */
-export function blockedBy(checks: CheckDebt[]): CheckDebt | null {
-  const owing = checks.filter((c) => c.owed > 0).sort((a, b) => a.at - b.at)[0];
-  if (!owing) return null;
-  const after = checks.filter((c) => c.at > owing.at).length;
-  return after >= OWE_LEVELS ? owing : null;
+  const sent = (q: number) => rows.some((r) => r.q === q && r.kind === "part" && r.state !== "retake" && r.state !== "ask");
+  return owe.part.filter((q) => !mq[String(q)] && !sent(q)).sort((a, b) => a - b).map((q) => ({ q, kind: "part" as const }));
 }

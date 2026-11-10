@@ -2020,7 +2020,8 @@ learning app of our education institute"): one profile, his class times, what he
     its solution** (his report, 4 Nov 2026: "they can go back to Level 1 and get the answer from there"): while it is
     still to come back (`comesBack`: the `retryPool` test, and a level at least 2 after its own not handed in) the book
     shows "↻ … மீண்டும் வரும். தீர்வு அதன் பின்." (`back`, `.f-comesback`) instead of `sol`; after his second try
-    (right or wrong), or once the book is finished without it, the solution shows. His working photo is still asked.
+    (right or wrong), or once the book is finished without it, the solution shows (a book finished below 75 % keeps it
+    hidden while the question waits for his redo: below, "The unit gate").
   - **A level the server already has** (4 Nov 2026, his screenshot: Check said "This level is already marked", no
     summary, the next level shut): the phone keeps a level while he types, so a Check whose answer was lost (the signal
     dropped just after it) or a level a teacher marked in class kept showing the old level. Now, when opening the level
@@ -2033,7 +2034,12 @@ learning app of our education institute"): one profile, his class times, what he
     (a drawing; a name or a reason the key gives no kind): during the level its card has a camera ("இதைத் தாளில் செய்து
     படம் எடு"), the photos are kept on the phone and go by themselves after Check. A typed reason (kind `why`) is never
     a photo: when every part the question left is a reason, the Check itself puts its row in the queue (`said`,
-    `sayReason`), so nothing is owed for it; `working` = his working on each question he lost marks on
+    `sayReason`), so nothing is owed for it. **Never his working on a wrong answer** (10 Nov 2026, his rule: "a
+    nightmare": the teachers looked again at levels already corrected, 42 photos a day; wrong answers wait for
+    Evaluation in class): Check writes `working: []`, `owedOf` ignores an old Check's `working`, `photoSend` refuses kind
+    `working` ("தவறிய கேள்விக்குப் படம் தேவையில்லை"), the lane, the queue and the count show `part` rows only, and the
+    hourly sweep deleted every working photo not answered yet (`photos.dropWorking`: waiting, asked again, retake: row and
+    files; the answered ones stay). Before: `working` = his working on each question he lost marks on
     (his rule, against my warning about the load: required). 1–3 photos a question, shrunk on the phone to ~200 KB
     (1280 px JPEG; drawing it again drops the camera's location), kept in IndexedDB per child until sent (no signal:
     next time the book opens), uploaded to Convex storage (`family.photoUrl`, 80 a day a phone; `family.photoSend`:
@@ -2083,13 +2089,27 @@ learning app of our education institute"): one profile, his class times, what he
     Its script is one of the parts after the first screen (`parts.ts`, opened by `Taker` through `loadParts` and
     `showSheet`); its style is in `family.css` (the later budget was full). No parts on the phone, or no app to show it
     (`showSheet` false): the whole photo, as before.
-  - **His limit** (his rule: "without the explanation for a wrong question they can go 2 levels maximum"): once he has
-    checked 2 more levels at home after the oldest level that still owes photos, the next level waits (`blockedBy`,
-    in `playable` and `me.blocked`): the Stage says it above the road (`.f-stopnote`: "Level 5 திறக்க, முதலில் Stage 3 ·
-    Level 2 இன் 9 படங்களை அனுப்பு", a tap opens that level's book, in any Stage), START and Continue open that book too. It waits on HIM
-    (photo sent), never on the teacher's reply. The Stage shows each level's owed count (📷 n) and a dot for her answers
-    he hasn't opened (`nw`; `family.seen` when the book opens). Settings → Photos (the owner) turns "required" off
-    (`photos.setRequired`, meta `photos.required`): then nothing waits; photos can still be sent.
+  - **No limit inside a unit** (10 Nov 2026, his rule; before, "2 levels at most" while photos were owed: `blockedBy`,
+    `me.blocked`, gone): he plays on whatever is owed or unexplained. Settings → Photos (the owner) still turns
+    "required" off (`photos.setRequired`, meta `photos.required`): then no drawing's photo is asked for (no 📷 on the
+    Level); photos can still be sent.
+  - **The unit gate** (10 Nov 2026, his rule: "when the unit is finished, if they get below 75 they can't go to the next
+    unit until they get the explanation for the wrong questions"; `lib/family.ts`): the next Stage opens when the one
+    before it is done AND passes: its score (`gatePct`: the marked levels' marks ÷ their marks, without a home level's
+    questions still waiting for a teacher: a drawing he sent is not his fault) is `PASS_PCT` 75 or more, or every
+    question he lost marks on is explained (`computeMaster`'s `pending` and `theory` empty: Evaluation's ✓, Theory
+    taught it, or right on his second try). `worldsOf` gives a failing Stage `gate` = {pct, redo, cls} (`gateOf`; the keys
+    are read only then, `keysFor`) and the chain stops there. The class always wins: his book now, a book given, a book
+    he started there or "Open every Stage" opens it. **His phone**: the finished Stage shows a card above the road
+    (`.f-gate`: "அடுத்த Stage திறக்க 75% வேண்டும். உனக்கு 62%.", the gold **↻ Redo · n** button, then "சரி = பாதிப்
+    புள்ளிகள் (ஒரு முறை மட்டும்)." and "n கேள்விகள்: வகுப்பில் விளக்கம்."); the shut Stage's node opens its screen
+    (`shutBy`), whose note at the bottom ("Stage 1 இல் 75% வேண்டும் (உனக்கு 8%)." · Stage 1 →) goes to it; Continue with
+    no Level left goes to the Stage with a redo (a toast says why). **The redo** (n = 0 on `family.level` / `check`,
+    `redoPlayable`, `redoPool`, `checkRedo`): his lost questions in that book that the phone marks entirely, not
+    explained, not with Theory, never tried again (a question that came back in a level already had its one second
+    try), in book order; the level screen says "Stage 1 · ↻ Redo", each chip ↻, the card "Level 4 இல் தவறியது" and
+    "↻ +1 XP"; its solution stays hidden until then (`comesBack`). Check marks each once (`secondTry`, below);
+    history `retry-home`; the reveal's ring = his redo marks, its XP pill only the half marks won; no book under it.
   - **Marking them: Correction's ⌂ lane** (5 Nov 2026, `src/homeLane.tsx`; his voice note: "within one day I get 42
     photos ... very hard to check each question one by one ... each individual sub question, I want to put the marks
     ... rotation button"; his answers: inside Correction, its own lane, Photos people only, build it now). Until then
@@ -2141,7 +2161,7 @@ learning app of our education institute"): one profile, his class times, what he
       the second sub question's answer ... or we can give the hint ... like retake ... they will resubmit"; his answer:
       a photo or typed words): Message → the pad becomes a box (≤ `ASK_MAX` 300) and Cancel / **Send to him** →
       `photos.ask`: nothing is marked, the row is `ask` (her words `ask`, `askBy`, `askAt`), out of the lane, owed again on
-      his phone (📷, his 2-level limit counts it), an alert to his phones. His phone shows it in gold ("Nila கேட்கிறார்")
+      his phone (📷), an alert to his phones. His phone shows it in gold ("Nila கேட்கிறார்")
       with the camera and a box for his words; Send (a photo, words, or both: `family.photoSend` `text`) → back to
       `waiting` with a new `at`: the lane shows her message and his answer above the photo (`.hl-asked`), the new
       photos first and his first photo kept (3 at most). Corrected in class meanwhile: it closes like any (`cls`).
@@ -2164,7 +2184,7 @@ learning app of our education institute"): one profile, his class times, what he
       Correction saves a level marked at home (`workbook.correct`) or taps ⌂ Checked (`workbook.homeChecked`), every
       photo still waiting for that level closes (`closeClassPhotos`: `cls`, `seen`, its files go a day later like any
       marked photo); his phone says "வகுப்பில் திருத்தப்பட்டது: விளக்கம் வகுப்பில்." (`CLASS_SAY`), owes no photo for
-      that level (`homeChecks`: `hc` = nothing owed, so his 2-level limit no longer waits on it) and can't send one
+      that level (`homeChecks`: `hc` = nothing owed) and can't send one
       (`photoSend`: `LevelBook.hc`); his wrong answers stay lost for Evaluation. A card still open meanwhile says
       "Corrected in class already (x/y): Close it." and Close only closes (`mark` → `already`); photos left waiting
       from before this (or a race) close in the hourly sweep. Class still checks his paper (⌂ Checked: his answer,
@@ -2173,16 +2193,21 @@ learning app of our education institute"): one profile, his class times, what he
     again in their path; if they do it correctly, bonus points"): a question he lost marks on (at home or in class) that
     the phone can mark entirely comes back at the end of a level at least 2 later in the same book (`retryPool`:
     `RETRY_GAP` 2, `RETRY_PER_LEVEL` 3, the oldest first, one second try each). The chip says ↻8, the card "Level 1 இல்
-    தவறியது" and "↻ +2 XP" (the marks he lost). At Check (`family.check`, the same pool computed before anything
-    changes): his new marks are kept beside the first ones (`MQ.rt`, `rg`: the unit's marks, Progress and the reports
-    keep the first try); right = explained (`x`: Evaluation skips it, and its working photo is no longer owed); the marks
-    he won back count as XP the day he won them (`xpItems`: never more than he lost, so a wrong first answer never pays).
+    தவறியது" and "↻ +1 XP" (the marks to win). At Check (`family.check`, the same pool computed before anything
+    changes) each goes through `secondTry` (shared with the redo): his new marks kept beside the first ones (`MQ.rt`,
+    `rg`); **right = half the question's marks** (10 Nov 2026, his rule: "half marks dedicated for that question ... no
+    decimal marks": `halfMarks` = rounded down, at least 1, never below what he had) as `rh` on the question, added to
+    its level's `got` (Progress, the reports, the gate count it; `got` on the question stays his first try), and
+    explained (`x`: Evaluation skips it); wrong = nothing, Evaluation explains it. XP (`xpItems`): `rh` the day he won it
+    (taken off the level's day, which counts it in `got`); a second try before `HALF_FROM` (10 Nov 2026, ~2 PM) keeps the
+    old rule (rg − got as XP only).
     A ↻ question is printed too (`family.questions` adds the same pool; 4 Nov 2026 it said
     "இந்தக் கேள்வி இன்னும் phone இல் இல்லை" because only the level's own questions came).
-    The reveal: "↻ பழைய கேள்விகள் 1/2 · +2 XP" and the XP pill includes them. History: "old questions back on the
+    The reveal: "↻ பழைய கேள்விகள் 1/2 · +1 XP" and the XP pill includes them. History: "old questions back on the
     phone (Q8): 1/1 right" (`retry-home`). A re-mark of the old level in class drops its `rt` (it may come back once
     more).
-  - **Nothing kept**: an hourly cron (`convex/crons.ts` → `photos.sweep`) deletes the files of photos marked a day ago
+  - **Nothing kept**: an hourly cron (`convex/crons.ts` → `photos.sweep`) first deletes any working photo not answered
+    (`dropWorking`, 10 Nov 2026), then the files of photos marked a day ago
     (the marks and her answer stay), of photos waiting on a level taken back in class or of a removed student, and
     image uploads never attached after a day (since 7 Nov 2026 it looks only at files between a day and a day + 6 hours
     old, `SWEEP_WINDOW_MS`, and keeps the photos on Us: `usFiles`). A removed (wiped) student's photos go with him; a

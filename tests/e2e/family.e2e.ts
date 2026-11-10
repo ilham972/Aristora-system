@@ -281,10 +281,11 @@ test("the family app: join, a level on the pad, Check once, the reveal, XP and t
   await contains(S.locator(".f-qcard .f-box").nth(1).locator(".f-bunit"), "min");
   await noSideScroll(S);
   await shot(S, "fam07d-time-320");
-  // Q8, wrong in Level 1, comes back at the end of Level 3 (his idea, 4 Nov 2026): the marks he lost are his to win back.
+  // Q8, wrong in Level 1, comes back at the end of Level 3 (his idea, 4 Nov 2026): right now = half its marks (10 Nov 2026:
+  // 2 marks → 1).
   await S.locator(".f-qchip.re", { hasText: "8" }).click();
   await contains(S.locator(".f-again"), "Level 1");
-  await contains(S.locator(".f-xpchip.re"), "+2 XP");
+  await contains(S.locator(".f-xpchip.re"), "+1 XP");
   await noSideScroll(S);
   await shot(S, "fam07e-again-320");
 
@@ -908,7 +909,7 @@ test("an app, not a web page: two fingers never zoom (Home, the map, a Level's p
 /** A small made-up drawing on lined paper, as a phone camera would give it (PNG). */
 const PAPER_PNG = "iVBORw0KGgoAAAANSUhEUgAAAGAAAABICAIAAACGBWc0AAACGklEQVR42u2cPXLCMBCFzRuqXII6J0iVQ1DT5AY5CzdwQ+0bJEWqFEmbmjqp05LCM54MxmYlrVYr87ZgGH4k+WP36bFje3U6nRrGdIAICIiACIiACIiAlhrr188fUpiJFY0iS4yACIiACEgWm81ueOQudpnOEMfjgRl0IZxwcQdoXFZOCm318vFdfBFP2+f+Sdvtp165XQ0aMuWsuKZev9ESG1OgSEuFpqwYwWFxjZOoICO4peOEEfy7nlsU6bh0KJJEcFtcTgoN/umUZVSmJ912+4h5227fO2zLNZs66XRzbG+vURGdIoWGiugUYYQaez2WzghuXY8TZ4SKiqtIoaFGOpaMUHWb2UCMUKP0WM6Vqydt2VTOOlcuJ93/pGb7cb7p1h4S/v3+ceqth6+3oHnVGelnkHznmuESQSrTjqkMSLjKMzQzBy//ZCZGWQDJ6QgrSP4VdTHSBCT5AYdDDRIX+XfVk0gNkJxOBJqgQXQZoS46wwgzAq/7FwQ2xl+LTigjF076qpG9222bpvk9dLp+Yn5YLXudqkFXiytFlRM1W0WMYOMJ1elIxlQRIxhIT+7IKkYw+MOVI33+jywZPzqJIjXIyelfBqvF4ukkihEWc75uptWiinNQCvaqsOziSi+0ACft59xlywZ2wC5m3GZ20sCWAqpdeqKVG4vcsxSPiBf18opDAiIgAiKghvfuaHjvDpYYg4DC4w9skm3oaYrUiQAAAABJRU5ErkJggg==";
 
-test("photos from home: a drawing photographed in the level, the working on a wrong answer, marked by a person he picks; the solution and her answer on his phone", async () => {
+test("photos from home: a drawing photographed in the level, marked by a person he picks (never his working on a wrong answer); her answer on his phone; the unit gate and its redo", async () => {
   const backend = makeBackend(modules);
   const t = backend.t;
   await addPerson(t, { name: "Owner", token: OWNER_TOKEN, role: "owner" });
@@ -950,6 +951,15 @@ test("photos from home: a drawing photographed in the level, the working on a wr
   for (const a of [["3"], ["6"], ["9"], ["1", "2"], ["1", "5"], ["1", "8"], ["7", "n", "-", "1"], ["4", "2"], ["9"], ["1", "0"]]) await type(F, a);
   await contains(F.locator(".f-qn"), "Q10");
   await contains(F.locator(".f-teach"), "படம் எடு");
+  // ↻ stands a sideways photo up (the photo turns, the frame with it); ✕ = no photo added.
+  await F.locator(".f-qcard .f-file").first().setInputFiles(paper);
+  const canvas = F.locator(".f-cut .f-cut-img canvas");
+  await visible(canvas);
+  await F.locator(".f-cut").getByRole("button", { name: "Turn the photo" }).click();
+  await until(async () => await canvas.evaluate((c) => (c as HTMLCanvasElement).width < (c as HTMLCanvasElement).height), "the photo turned");
+  await F.locator(".f-cut").getByRole("button", { name: "Cancel" }).click();
+  expect(await F.locator(".f-cut").count()).toBe(0);
+  expect(await F.locator(".f-qcard .f-thumb").count()).toBe(0);
   await F.locator(".f-qcard .f-file").first().setInputFiles(paper);
   // His crop first (6 Nov 2026, "very easy for the students ... age 11 also"): the whole photo framed, yellow dots on the
   // corners and sides; a corner and a side dragged, then சரி. What goes is the frame (the photo was 4 : 3, wide).
@@ -995,8 +1005,8 @@ test("photos from home: a drawing photographed in the level, the working on a wr
   await F.locator(".f-nextbar .f-key.next").click();
   await F.locator(".f-review").getByRole("button", { name: "Check ✓" }).click();
 
-  // The reveal: 16 of 18 on the phone; below it the book: Q8 with the key's working and a camera for her working; the
-  // Q10 photo goes by itself.
+  // The reveal: 16 of 18 on the phone; below it the book: Q8 with no camera (10 Nov 2026: no photo of his working on a
+  // wrong answer; Evaluation explains it in class); the Q10 photo goes by itself.
   await contains(F.locator(".f-big"), "16");
   const q8 = F.locator(".f-bq", { has: F.locator(".f-rq", { hasText: "Q8" }) });
   const q10 = F.locator(".f-bq", { has: F.locator(".f-rq", { hasText: "Q10" }) });
@@ -1005,88 +1015,56 @@ test("photos from home: a drawing photographed in the level, the working on a wr
   expect(await q8.locator(".f-sol").count()).toBe(0);
   await contains(q8.locator(".f-bq-typed"), "42");
   await visible(q10.locator(".f-ph-state.wait"));
-  await contains(F.locator(".f-owebar"), "1 படங்கள்");
-  await q8.locator(".f-file").setInputFiles(paper);
-  // ↻ stands a sideways photo up (the photo turns, the frame with it); ✕ = no photo added. Then again: one tap on சரி
-  // keeps the whole photo as it is.
-  const canvas = F.locator(".f-cut .f-cut-img canvas");
-  await visible(canvas);
-  await F.locator(".f-cut").getByRole("button", { name: "Turn the photo" }).click();
-  await until(async () => await canvas.evaluate((c) => (c as HTMLCanvasElement).width < (c as HTMLCanvasElement).height), "the photo turned");
-  await F.locator(".f-cut").getByRole("button", { name: "Cancel" }).click();
-  expect(await F.locator(".f-cut").count()).toBe(0);
-  expect(await q8.locator(".f-thumb").count()).toBe(0);
-  await q8.locator(".f-file").setInputFiles(paper);
-  await F.locator(".f-cut").getByRole("button", { name: "Use this photo" }).click();
-  await visible(q8.locator(".f-thumb img"));
-  const [tw, th] = await sizeOf(q8.locator(".f-thumb img"));
-  expect(tw / th).toBeCloseTo(96 / 72, 1);
+  expect(await q8.locator(".f-file").count()).toBe(0);
+  expect(await F.locator(".f-owebar").count()).toBe(0);
   await noSideScroll(F);
   await shot(F, "fam-ph02-book");
-  await q8.getByRole("button", { name: /அனுப்பு/ }).click();
-  await visible(q8.locator(".f-ph-state.wait"));
-  expect(await F.locator(".f-owebar").count()).toBe(0);
 
-  // Nila (Photos only, no Correction job) on the teachers' app: the gear says 2; Settings opens on Photos, whose button
-  // opens Correction's ⌂ lane (5 Nov 2026): her only lane (⌂ dark and fixed, + pale), Hana in amber with her 2.
+  // Nila (Photos only, no Correction job) on the teachers' app: the gear says 1; Settings opens on Photos, whose button
+  // opens Correction's ⌂ lane (5 Nov 2026): her only lane (⌂ dark and fixed, + pale), Hana in amber with her 1.
   const N = await open(backend, site.url, size(390, 844), () => {
     if (sessionStorage.getItem("t")) return;
     sessionStorage.setItem("t", "1");
     localStorage.setItem("aristora.token", "nila-photos-token-0123456789abcdefghijklmnopq");
   });
-  await contains(N.locator(".gear-n"), "2");
+  await contains(N.locator(".gear-n"), "1");
   await N.getByRole("button", { name: /Settings/ }).click();
-  await contains(N.locator(".phq-sum"), "2 to mark from 1 student");
+  await contains(N.locator(".phq-sum"), "1 to mark from 1 student");
   await N.getByRole("button", { name: /Mark them in Correction/ }).click();
   await visible(N.locator(".hl-btn.on"));
   expect(await N.locator(".hl-btn").isDisabled()).toBe(true);
   expect(await N.locator(".fc-add").isDisabled()).toBe(true);
   const hanaPill = N.locator(".fc-names .fc-nm", { hasText: "Hana" });
-  await contains(hanaPill, "2");
-  await contains(N.locator(".hl-idle"), "2 to mark");
+  await contains(hanaPill, "1");
+  await contains(N.locator(".hl-idle"), "1 to mark");
   await shot(N, "fam-ph03-lane");
   await hanaPill.click();
-  // Her level, the book's order: Q8 (his working on a wrong answer) first. The photo big; the key and what he typed.
+  // Q10 only (his working on Q8 is never asked for). The photo big.
   const card = N.locator(".hl-card");
-  await contains(card.locator(".fc-qn"), "8");
+  await contains(card.locator(".fc-qn"), "10");
   await until(async () => await card.locator(".hl-turned img").first().evaluate((i) => (i as HTMLImageElement).naturalWidth > 0), "the photo loaded");
-  await contains(card.locator(".hl-typed"), "42");
-  await contains(card.locator(".ka"), "24");
-  // ↻ turns it a quarter: its box takes the turned photo's room (4 : 3 → 3 : 4).
-  const wide = (await card.locator(".hl-turned").first().boundingBox())!;
+  // ↻ turns it a quarter: its box takes the turned photo's room (his crop was taller than wide: now wider than tall).
+  const before = (await card.locator(".hl-turned").first().boundingBox())!;
   await card.locator(".hl-turn").first().click();
   await until(async () => ((await card.locator(".hl-turned img").first().getAttribute("style")) ?? "").includes("rotate(90deg)"), "the photo turned");
-  const tall = (await card.locator(".hl-turned").first().boundingBox())!;
-  expect(wide.width / wide.height).toBeGreaterThan(1.2);
-  expect(tall.height / tall.width).toBeGreaterThan(1.2);
+  const after = (await card.locator(".hl-turned").first().boundingBox())!;
+  expect(before.height / before.width).toBeGreaterThan(1.1);
+  expect(after.width / after.height).toBeGreaterThan(1.1);
   // Full screen keeps the turn; ✕ back.
   await card.locator(".hl-img").first().click();
   await visible(N.locator(".hl-big"));
   expect((await N.locator(".hl-big img").getAttribute("style")) ?? "").toContain("rotate(90deg)");
   await shot(N, "fam-ph03b-full-screen");
   await N.locator(".hl-close").click();
-  // His working may earn a method mark: 1 lights and Save says 1/2; back to the phone's 0. No reason asked (6 Nov 2026:
-  // a photo is for correction only; Evaluation explains in class): Save is ready at once.
-  await N.waitForTimeout(400);
-  await card.getByRole("button", { name: "Q8: 1 of 2" }).click();
-  await contains(N.locator(".hl-go"), "1/2");
-  await card.getByRole("button", { name: "Q8: 0 of 2" }).click();
-  await contains(N.locator(".hl-go"), "0/2");
-  expect(await N.locator(".hl-go").isDisabled()).toBe(false);
+  // Q10 (two names, (a) and (b): hers to mark). No reason chips (6 Nov 2026).
+  expect(await card.locator(".fc-pl").allInnerTexts()).toEqual(["a", "b"]);
   expect(await card.locator(".phq-chip").count()).toBe(0);
-  expect(await card.getByText(/why/i).count()).toBe(0);
-  await card.locator(".hl-words input").fill("Count the places after the point");
   await noSideScroll(N);
-  await shot(N, "fam-ph04-lane-working");
+  await shot(N, "fam-ph04-lane-part");
   await N.setViewportSize({ width: 320, height: 640 });
   await noSideScroll(N);
-  await shot(N, "fam-ph04b-lane-working-320");
+  await shot(N, "fam-ph04b-lane-part-320");
   await N.setViewportSize({ width: 390, height: 844 });
-  await N.locator(".hl-go").click();
-  // Q10 (two names, (a) and (b): hers to mark). Q8's square keeps her 0.
-  await contains(card.locator(".fc-qn"), "10");
-  await contains(N.locator(".fc-strip .fc-sq.zero"), "0");
-  expect(await card.locator(".fc-pl").allInnerTexts()).toEqual(["a", "b"]);
   expect(await card.locator(".fc-pb.on").count()).toBe(0);
   // Her message first (7 Nov 2026, his voice note: "where is the second sub question's answer ... or give the hint"):
   // Message → her words → Send to him: nothing marked, Q10 leaves the lane until he answers.
@@ -1098,8 +1076,8 @@ test("photos from home: a drawing photographed in the level, the working on a wr
   await N.locator(".hl-askpad").getByRole("button", { name: "Send to him" }).click();
   await contains(N.locator(".hl-idle"), "No photos waiting");
 
-  // Hana's phone (alerts stubbed: this browser has no push service): the bell in the top row says 2 new (Q8 marked,
-  // Q10 her message), who and where; she turns phone alerts on; a line opens the level's book.
+  // Hana's phone (alerts stubbed: this browser has no push service): the bell in the top row says 1 new (Q10 her
+  // message), who and where; she turns phone alerts on; a line opens the level's book.
   await F.addInitScript(() => {
     const sub = {
       endpoint: "https://push.example/send/hana",
@@ -1122,11 +1100,10 @@ test("photos from home: a drawing photographed in the level, the working on a wr
     };
   });
   await F.reload();
-  await contains(F.locator(".f-bell-n"), "2");
+  await contains(F.locator(".f-bell-n"), "1");
   await F.locator(".f-bellb").click();
   await contains(F.locator(".f-bellitem.ask"), "Nila கேட்கிறார்: Where is the answer for (b)?");
-  await contains(F.locator(".f-bellitem.done"), "திருத்தியவர்: Nila");
-  await contains(F.locator(".f-bellitem.done small"), "Level 1 · Q8");
+  await contains(F.locator(".f-bellitem.ask small"), "Level 1 · Q10");
   await F.getByRole("button", { name: "Turn on phone alerts" }).click();
   await until(async () => (await F.locator(".f-pushcard.on").count()) > 0, "alerts on (the server makes its keys first)", 15_000);
   await contains(F.locator(".f-pushcard.on"), "அறிவிப்பு வரும்");
@@ -1134,10 +1111,9 @@ test("photos from home: a drawing photographed in the level, the working on a wr
   await shot(F, "fam-ph08b-bell");
   await F.locator(".f-bellitem.ask").click();
   await visible(F.locator(".f-bookscr"));
-  // Her message in gold with her name; Q8's answer says who corrected it; he answers in words.
+  // Her message in gold with her name; he answers in words.
   await contains(q10.locator(".f-asked"), "Nila கேட்கிறார்");
   await contains(q10.locator(".f-asked"), "Where is the answer for (b)?");
-  await contains(q8.locator(".f-answer").first(), "திருத்தியவர்: Nila");
   await q10.locator(".f-replybox").fill("(b) வேறு பெயர்");
   await noSideScroll(F);
   await shot(F, "fam-ph08c-reply");
@@ -1161,6 +1137,7 @@ test("photos from home: a drawing photographed in the level, the working on a wr
   await contains(N.locator(".hl-go"), "1/2");
   await card.getByRole("button", { name: "Part b: 1 of 1" }).click();
   await contains(N.locator(".hl-go"), "2/2");
+  await card.locator(".hl-words input").fill("Good: both names right");
   await N.setViewportSize({ width: 360, height: 740 });
   await noSideScroll(N);
   await shot(N, "fam-ph04c-lane-part-360");
@@ -1216,10 +1193,10 @@ test("photos from home: a drawing photographed in the level, the working on a wr
   await F.locator(".f-lv", { has: F.locator(".f-lv-dot") }).click();
   await visible(F.locator(".f-bookscr"));
   expect((await F.locator(".f-bookscr .f-kicker").innerText()).toLowerCase()).toContain("level 1");
-  // Her words only (no reason since 6 Nov 2026).
-  await contains(q8.locator(".f-answer-note"), "Count the places");
-  expect(await q8.locator(".f-answer").innerText()).not.toContain("தசமப் புள்ளி");
+  // Her words and her marks; who corrected it.
+  await contains(q10.locator(".f-answer-note"), "both names right");
   await contains(q10.locator(".f-answer"), "2/2");
+  await contains(q10.locator(".f-answer").first(), "திருத்தியவர்: Nila");
   await noSideScroll(F);
   await shot(F, "fam-ph05-answers");
   await F.setViewportSize({ width: 320, height: 640 });
@@ -1246,18 +1223,48 @@ test("photos from home: a drawing photographed in the level, the working on a wr
   await visible(F.locator(".f-bookscr"));
   expect((await F.locator(".f-bookscr .f-kicker").innerText()).toLowerCase()).toContain("level 2");
   await contains(F.locator(".f-toast"), "ஏற்கனவே");
-  // Levels 3 and 4 too (Level 2 still owes its photos): Level 5 waits, and the Stage says why, where he looks.
+  // Levels 3 and 4 too (Level 2's drawing still not sent): no limit any more (10 Nov 2026), Level 5 is START.
   await checkEmpty(3);
   await checkEmpty(4);
   await F.getByRole("button", { name: "Back" }).click();
   await playIs(F, "Level 5");
-  await contains(F.locator(".f-stopnote"), "Level 5");
-  await contains(F.locator(".f-stopnote"), "Level 2");
+  expect(await F.locator(".f-stopnote").count()).toBe(0);
+
+  // The unit gate (10 Nov 2026): Stage 2 has a workbook too; he finishes Stage 1 far below 75 %. Stage 2 stays shut: its
+  // node opens its screen, which says why and goes to Stage 1; Stage 1 offers the redo of his wrong ones.
+  const u02 = await t.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G8-U02")).first())!._id);
+  await t.mutation(api.catalog.saveWorkbook, {
+    ...as,
+    unitId: u02,
+    parts: BOOK.data.parts.map((p) => ({ id: p.id, to: p.to, ...(p.each ? { each: p.each } : {}) })),
+    levels: BOOK.data.levels.map((l) => ({ to: l.to, max: l.max })),
+    marks: BOOK.data.marks ?? {},
+    replace: true,
+    key,
+  });
+  for (const l of BOOK.data.levels.slice(4)) await checkEmpty(l.n);
+  await F.reload();
+  await tabTo(F, /Learn/);
+  await F.getByRole("button", { name: /^Stage 2:/ }).click();
+  await contains(F.locator(".f-stopnote"), "75%");
   await noSideScroll(F);
-  await shot(F, "fam-ph08-photos-first");
+  await shot(F, "fam-gate1-shut");
   await F.locator(".f-stopnote").click();
-  await visible(F.locator(".f-bookscr"));
-  expect((await F.locator(".f-bookscr .f-kicker").innerText()).toLowerCase()).toContain("level 2");
+  const gate = F.locator(".f-gate");
+  await contains(gate, "75%");
+  await visible(gate.getByRole("button", { name: /Redo/ }));
+  await noSideScroll(F);
+  await shot(F, "fam-gate2-redo");
+  await F.setViewportSize({ width: 320, height: 640 });
+  await noSideScroll(F);
+  await shot(F, "fam-gate2b-redo-320");
+  await F.setViewportSize({ width: 390, height: 844 });
+  await gate.getByRole("button", { name: /Redo/ }).click();
+  await visible(F.locator(".f-again"));
+  expect((await F.locator(".f-prow .f-kicker").innerText()).toLowerCase()).toContain("↻ redo");
+  expect(await F.locator(".f-strip .f-qchip:not(.re)").count()).toBe(0); // only his wrong ones, each ↻
+  await noSideScroll(F);
+  await shot(F, "fam-gate3-redo-level");
 
   expect(problems).toEqual([]);
 });

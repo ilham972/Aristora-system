@@ -1,5 +1,5 @@
 // Photos from home (4 Nov 2026, his voice notes): a part only a teacher can mark (a drawing, a construction, a reason)
-// and the working on a wrong answer go to the teachers as photos.
+// go to the teachers as photos (never his working on a wrong answer since 10 Nov 2026).
 // - Made small here before they leave the phone: the long side 1280 px, JPEG ≈ 200 KB (mobile data). Drawing the photo
 //   again also leaves out what the camera wrote inside the file (the place it was taken). Since 6 Nov 2026 he crops it
 //   first (src/family/crop.tsx: the frame's part goes, made small the same way: `jpegOf`).

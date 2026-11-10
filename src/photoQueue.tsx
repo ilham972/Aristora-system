@@ -56,7 +56,7 @@ export function PhotoQueue(props: { views: View[]; onOpen?: () => void }) {
                 void mutate(api.photos.setRequired, { on: !required }).finally(() => setBusy(false));
               }}
             />
-            <span>Photos required: 2 levels at most without them</span>
+            <span>Ask for drawing photos</span>
           </label>
         )}
       </section>

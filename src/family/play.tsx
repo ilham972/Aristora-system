@@ -23,6 +23,9 @@ import { Confetti, nextPlay } from "./next";
 import { buzz, sound } from "./sound";
 import { Flame, Gem, Icon, Maths, Medal, Owl, OwlBadge, pretty, problemWords, Roll, Tag, toast, useOwlTap, Waiting, type Mood } from "./ui";
 
+/** A level's name on its screens: the redo of a Stage finished below 75 % is n = 0 (10 Nov 2026). */
+const lvName = (f: { n: number; d?: number }) => (f.n === 0 ? "↻ Redo" : `Level ${f.d ?? f.n}`);
+
 export type Checked = {
   results: FamilyResult[];
   got: number;
@@ -735,7 +738,7 @@ export function Play(props: {
       </header>
       <div class="f-prow">
         <p class="f-kicker">
-          Stage {form.no} · Level {form.d ?? form.n}
+          Stage {form.no} · {lvName(form)}
         </p>
         {props.look ? (
           <span class="f-checkpill">Preview</span>
@@ -766,7 +769,7 @@ export function Play(props: {
       {review ? (
         <section class="f-card rise f-review">
           <OwlBadge mood="think" class="mid" />
-          <h2 class="f-h2">Level {form.d ?? form.n} சரிபார்க்கவா?</h2>
+          <h2 class="f-h2">{lvName(form)} சரிபார்க்கவா?</h2>
           <ul class="f-sum">
             <li>
               <b>{done}</b> விடைகள் போட்டாய்
@@ -1100,14 +1103,13 @@ export function Result(props: {
   const mood: Mood = !done ? "think" : medal ? "champ" : pct >= 1 ? "star" : pct >= 0.9 ? "party" : pct >= 0.7 ? "cheer" : "strong";
   const [owlMood, tapOwl] = useOwlTap(mood);
   const next = nextPlay(props.me);
-  // His limit (4 Nov 2026): with photos owed for 2 levels, Next waits; the book below says which.
-  const nextHere = next && !props.me?.blocked && next.world.unitId === props.world.unitId && next.n !== form.n ? next : null;
+  const nextHere = next && next.world.unitId === props.world.unitId && next.n !== form.n && form.n !== 0 ? next : null;
   // The ring round the owl fills as his marks come in.
   const ringK = res.phoneMax ? (done ? res.got : score) / res.phoneMax : 0;
   return (
     <div class={`f-result${done ? " done" : ""}`} onClick={() => !done && setShown(rows.length)}>
       <p class="f-kicker f-center-t">
-        Stage {form.no} · Level {form.d ?? form.n}
+        Stage {form.no} · {lvName(form)}
       </p>
       <section class={`f-score${done ? " done" : ""}${done && pct >= 0.7 ? " glow" : ""}`}>
         {done && pct >= 0.7 && <Confetti n={pct >= 0.9 ? 18 : 12} />}
@@ -1146,7 +1148,7 @@ export function Result(props: {
         {done ? (
           <p class="f-gain rise">
             <span class="f-pill gem">
-              <Gem size={17} /> +{res.got + (res.bonus ?? 0)} XP
+              <Gem size={17} /> +{form.n === 0 ? res.bonus ?? 0 : res.got + (res.bonus ?? 0)} XP
             </span>
             <span class={`f-pill fire${res.streak.today ? " lit" : ""}${lit ? " pop" : ""}`}>
               <Flame lit={res.streak.today} size={17} /> {res.streak.days} {res.streak.days === 1 ? "day" : "days"}
@@ -1236,7 +1238,10 @@ export function Result(props: {
       </ul>
       {done && (
         <>
-          {form.n < 0 ? (
+          {form.n === 0 ? (
+            // The redo (10 Nov 2026): right = half its marks and explained; wrong = the teacher explains it in class.
+            <p class="f-tip rise">✓ சரியானவை: பாதிப் புள்ளிகள், விளக்கம் தேவையில்லை. ✗ தவறியவற்றை வகுப்பில் ஆசிரியர் விளக்குவார். தீர்வுகள் அந்த Level இல்.</p>
+          ) : form.n < 0 ? (
             <p class="f-tip rise">✎ உன் தாளிலும் ✓ ✗ போடு. தவறியவற்றை வகுப்பில் ஆசிரியர் விளக்குவார்.</p>
           ) : (
             <>

@@ -34,6 +34,8 @@ export interface MQ {
   /** It came back on his phone 2 levels later (4 Nov 2026): answered again at rt, with rg marks. */
   rt?: number;
   rg?: number;
+  /** Right on that second try (10 Nov 2026): the marks it added (half the question's, `secondTry`), in the level's marks. */
+  rh?: number;
   /** Free marks (out of the syllabus, lib/free.ts): the row as it was before; "none" = there was no row. */
   fr?: Omit<MQ, "fr"> | "none";
 }

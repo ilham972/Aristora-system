@@ -180,7 +180,13 @@ EOF
   Chromium says `Notification.permission` "denied" whatever `grantPermissions` says: the run-through stubs
   `Notification`, `navigator.serviceWorker` and `PushManager` in an init script. To check web-push itself, send to a
   local https server and decrypt with `http_ece` (done once on 7 Nov 2026: 201, the Tamil text intact).
-- **Explained (`MQ.x`) means a teacher explained it** (6 Nov 2026, the founder's rule: "the photo is for correction
+- **A second try's half marks are in two places on purpose** (10 Nov 2026): `rh` on the question and inside its level's
+  `got` (`secondTry`), so every reader of a level's marks (Progress, the gate, the reports) counts them with no change.
+  `xpItems` gives `rh` on the day of the second try and takes it off the question's `t` (the level's day). Anything new
+  that rewrites a level's `got` from its questions must add `rh` back, or the half marks vanish.
+- **The redo is level n = 0** (10 Nov 2026): ladder levels are n < 0, workbook levels n ≥ 1. `props.n > 0` on the phone
+  means "a real workbook level" (photos, its book); keep it that way.
+- **Explained (`MQ.x`) means a teacher explained it, or he got it right on a second try** (6 Nov 2026, the founder's rule: "the photo is for correction
   only"): marking (a photo, a level's Save) never sets `x`; only Evaluation (or a question that came back right) does.
   Setting it from a photo once made Evaluation skip questions nobody explained. And anything new that sets `lv.hc` (a
   home level corrected in class) calls `closeClassPhotos` (`lib/homeWork.ts`), or its photos wait in the ⌂ lane for
