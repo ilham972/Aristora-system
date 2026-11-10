@@ -8,7 +8,7 @@ import { useEffect, useState } from "preact/hooks";
 import type { ClassDay, FamilyClasses, FamilyMe } from "../../convex/family";
 import { isBirthday } from "../../convex/lib/day";
 import type { DayItem } from "../../convex/lib/family";
-import { Cheered, GiftCards } from "./board";
+import { Cheered, GiftCards, PayCard } from "./board";
 import { levelsDone } from "./map";
 import { keep, query } from "./net";
 import { Confetti, nextPlay } from "./next";
@@ -297,7 +297,15 @@ function Recent(props: { list: ClassDay[]; sel: string; onSel: (day: string) => 
   );
 }
 
-export function HomeTab(props: { top: ComponentChildren; me: FamilyMe | null; onPlay: () => void; onLearn: () => void; onStage: (unitId: string) => void }) {
+export function HomeTab(props: {
+  top: ComponentChildren;
+  me: FamilyMe | null;
+  onPlay: () => void;
+  onLearn: () => void;
+  onStage: (unitId: string) => void;
+  /** The Shop (10 Nov 2026): Home's PAYDAY card opens it. */
+  onShop: () => void;
+}) {
   const [cls, setCls] = useState<FamilyClasses | null>(() => keep<FamilyClasses>("classes"));
   const [now, setNow] = useState(() => Date.now());
   const t = slNow(now);
@@ -370,6 +378,7 @@ export function HomeTab(props: { top: ComponentChildren; me: FamilyMe | null; on
       {party && <BdayCard name={name} />}
       <TodayCard cls={cls} me={me} now={now} today={days[t.day]} onStage={props.onStage} />
       <FeesCard f={me?.fees} />
+      <PayCard coins={me?.coins} onShop={props.onShop} />
       <GiftCards gifts={me?.gifts} />
       <GoalCard me={me} onPlay={props.onPlay} onLearn={props.onLearn} />
       <Cheered c={me?.cheers} />

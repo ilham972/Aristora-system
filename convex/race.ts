@@ -16,6 +16,8 @@
 //                  right, questions, his Stages' marks; on by default, his answer "Everything"; one tap off if a parent
 //                  complains); the centre's prize for each win (his ask: "gift cards ... ice-cream or chicken fries").
 //   gifts, giftCount, give -> the gifts to give and given lately (owner and Manager): Given when it is handed over.
+//                  Since 10 Nov 2026 also what students bought in the Shop (kind "shop", convex/coins.ts; Coins back =
+//                  coins.refund).
 // The race itself is family.board (every student, both lists) and family.mate (a classmate's profile).
 
 import { v } from "convex/values";
@@ -24,6 +26,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { internalMutation, mutation } from "./lib/fn";
 import { actor, viewer } from "./lib/auth";
+import { coinsOnce } from "./coins";
 import { fail, log } from "./lib/backend";
 import { DAY_MS, slDayNo, slMonthBefore, slMonthStart, slWeekStart } from "./lib/day";
 import { championsOf, cupWinners, daysIn, leagueOf, leaguePlacement, leagueWeek, numsAt, seedLeagues, type Champ, type Cup } from "./lib/race";
@@ -46,6 +49,8 @@ export const fill = internalMutation({
     const now = Date.now();
     await seedOnce(ctx, now);
     await cardsOnce(ctx, now);
+    // The Shop came (10 Nov 2026): last week's pay at once, not next Monday (once).
+    await coinsOnce(ctx, now);
     const meta = await ctx.db
       .query("meta")
       .withIndex("by_key", (q) => q.eq("key", "raceV"))
@@ -380,8 +385,11 @@ export type GiftItem = {
   by: string | null;
   l: number | null;
   why: string | null;
+  /** A thing he bought in the Shop (10 Nov 2026): its coins (Coins back gives them back). */
+  c: number | null;
 };
 const itemOf = (x: Doc<"gifts">): GiftItem => ({
+  c: x.kind === "shop" ? (x.c ?? 0) : null,
   id: x._id,
   sid: x.sid,
   n: x.n,

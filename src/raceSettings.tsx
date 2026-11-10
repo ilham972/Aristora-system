@@ -41,6 +41,8 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 
 /** What won a gift, and when: the win's words and its week (a month for the most improved, the reason for one by hand). */
 function winOf(x: GiftItem): string {
+  // Bought in the Shop (10 Nov 2026): his coins.
+  if (x.kind === "shop") return `🛍️ bought in the Shop · ${(x.c ?? 0).toLocaleString("en")} coins`;
   if (x.kind === "own") return `🎁 ${x.why ? x.why : "given by hand"} · ${weekSpan(x.wk)}`;
   if (x.kind === "mi") return `📈 Most improved · ${MONTHS[new Date(x.wk + 330 * 60_000).getUTCMonth()]}`;
   const lg = LEAGUES[(x.l ?? 1) - 1] ?? LEAGUES[0];
@@ -124,7 +126,23 @@ function PrizeForm() {
 function GiftList() {
   const g = useQuery<{ open: GiftItem[]; given: GiftItem[] }>(api.race.gifts, {});
   const [busy, setBusy] = useState<string | null>(null);
+  // A thing bought that the Shop couldn't get (10 Nov 2026): Coins back asks once more.
+  const [sure, setSure] = useState<string | null>(null);
   if (!g) return null;
+  /** His coins come back (coins.refund), the card goes. */
+  const back = (x: GiftItem) => {
+    if (sure !== x.id) return setSure(x.id);
+    setBusy(x.id);
+    void act(() => mutate(api.coins.refund, { id: x.id as never, by: currentRole() }))
+      .then((r) => r && toast(`${x.n}: ${(x.c ?? 0).toLocaleString("en")} coins back.`))
+      .finally(() => {
+        setBusy(null);
+        setSure(null);
+      });
+  };
+  // What to buy for the Shop's cards waiting (10 Nov 2026): one line, by thing.
+  const toBuy = new Map<string, number>();
+  for (const x of g.open) if (x.kind === "shop") toBuy.set(x.what, (toBuy.get(x.what) ?? 0) + 1);
   const give = (x: GiftItem, given: boolean) => {
     setBusy(x.id);
     void act(() => mutate(api.race.give, { id: x.id as never, given }))
@@ -136,12 +154,17 @@ function GiftList() {
   return (
     <section class="rc-box">
       <b>Gifts to give{g.open.length ? ` · ${g.open.length}` : ""}</b>
+      {toBuy.size > 0 && (
+        <p class="sh-buy">
+          <b>From the Shop:</b> {[...toBuy].map(([w, c]) => `${w} × ${c}`).join(" · ")}
+        </p>
+      )}
       {g.open.length === 0 ? (
         <small class="muted">Nothing waits. The winners get theirs when you set a prize below.</small>
       ) : (
         <ul class="rc-gifts">
           {g.open.map((x) => (
-            <li key={x.id}>
+            <li key={x.id} class={x.kind === "shop" ? "rc-shop" : undefined}>
               <span>
                 <b>
                   {x.n}
@@ -151,6 +174,11 @@ function GiftList() {
                   {x.what} · {winOf(x)}
                 </small>
               </span>
+              {x.kind === "shop" && (
+                <button type="button" class={`btn ${sure === x.id ? "danger" : "ghost"}`} disabled={busy === x.id} onClick={() => back(x)}>
+                  {sure === x.id ? "Sure?" : "Coins back"}
+                </button>
+              )}
               <button type="button" class="btn primary" disabled={busy === x.id} onClick={() => give(x, true)}>
                 Given
               </button>

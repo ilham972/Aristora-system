@@ -8,6 +8,8 @@
 // Us (7 Nov 2026): every day at 00:10 in Sri Lanka (18:40 UTC) the owl's birthdays and yesterday's count, and lines older
 // than 30 days go (`us.daily`); Sunday 23:50 in Sri Lanka (18:20 UTC), before the race resets, the week's most improved
 // (`us.improved`).
+// The Shop (10 Nov 2026): Monday 00:15 in Sri Lanka (Sunday 18:45 UTC) each student's pay day: last week's XP pays coins,
+// 5 XP = 1 coin (`coins.payday`, 20 a run; the first pay ran once when the Shop came, from `race.fill`).
 
 import { cronJobs } from "convex/server";
 import { internal } from "./_generated/api";
@@ -19,5 +21,6 @@ crons.interval("keep each day's work", { minutes: 10 }, internal.work.fill, {});
 crons.weekly("keep last week's race champions", { dayOfWeek: "sunday", hourUTC: 18, minuteUTC: 35 }, internal.race.week, {});
 crons.daily("the owl's birthdays and yesterday's count in Us", { hourUTC: 18, minuteUTC: 40 }, internal.us.daily, {});
 crons.weekly("the week's most improved in Us", { dayOfWeek: "sunday", hourUTC: 18, minuteUTC: 20 }, internal.us.improved, {});
+crons.weekly("pay day: last week's XP pays coins", { dayOfWeek: "sunday", hourUTC: 18, minuteUTC: 45 }, internal.coins.payday, {});
 
 export default crons;

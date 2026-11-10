@@ -78,8 +78,11 @@ console.log(`Built dist/ for ${url}: ${basename(js)} ${kb(js)} KB, ${basename(cs
 // 10 Nov 2026: later 42 → 44 for what he types instead of photographing (his rule: "if student need to write the
 // answer, then we can put the typing box"): an equation's pad, a word's own box, his own words (42.0 with them; fetched
 // after the first screen and kept by the service worker, never part of the first load).
+// 10 Nov 2026, the Shop (his voice note: "creating the marketplace for the students"): later 44 → 47 for its screen and
+// style (2.1 KB: prefetched right after the first screen, like Me). As its own file it cost the first load 0.9 KB more
+// (esbuild split the shared code into one more chunk: gzip works worse across files), so it lives in the parts.
 const FAMILY_BUDGET_KB = 66;
-const FAMILY_LATER_KB = 44;
+const FAMILY_LATER_KB = 47;
 // 7 Nov 2026, the class app's Us tab: the family app's teachers' screens (src/family/staff.tsx, opened as /f/?staff
 // inside the class app) are their own file: never prefetched by a student's phone, so outside both budgets above,
 // with their own (a teacher's phone fetches them once, the first time she opens Us).

@@ -21,3 +21,5 @@ export { CropSheet } from "./crop";
 export { BellScreen } from "./bellSheet";
 // His photo's sheet (Me uses it): a teacher's own photo too (8 Nov 2026, the class app's Us tab: staff.tsx).
 export { PhotoSheet } from "./photo";
+// The Shop (10 Nov 2026): the top row's coin or Home's PAYDAY card opens it (its style in profile.css).
+export { ShopScreen } from "./shop";

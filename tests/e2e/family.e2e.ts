@@ -117,6 +117,9 @@ async function stageNow(p: Page, level: string) {
 
 /** Home's goal for today names his Level now. */
 const goalIs = (p: Page, level: string) => contains(p.locator(".f-goal-t"), level);
+/** Who is on screen (the top row's face: on a phone his name is its label, not its words: 10 Nov 2026). */
+const whoIs = (p: Page, name: string) =>
+  until(async () => ((await p.locator(".f-who").first().getAttribute("aria-label")) ?? "").startsWith(name), `${name} on screen`);
 
 /** Type one answer on the pad (keys by their names), then → to the next box. */
 async function type(p: Page, keys: string[]) {
@@ -508,7 +511,7 @@ test("the new look: class hours and Home, the map, the questions as printed, fee
   await P.getByLabel(/Index/).fill("1002");
   await P.getByLabel("Code").fill("5820");
   await P.getByRole("button", { name: "Sign in" }).click();
-  await contains(P.locator(".f-who"), "Bilal");
+  await whoIs(P, "Bilal");
   await contains(P.locator(".f-caret.many"), "2");
   await goalIs(P, "Level 1");
   await shot(P, "fam18-second-child");
@@ -517,15 +520,15 @@ test("the new look: class hours and Home, the map, the questions as printed, fee
   await visible(P.locator(".f-sheet .f-kid", { hasText: "Bilal M" }));
   await shot(P, "fam19-children");
   await P.locator(".f-sheet .f-kid", { hasText: "Hana K" }).click();
-  await contains(P.locator(".f-who"), "Hana");
+  await whoIs(P, "Hana");
   // Bilal signs out of this phone (from Me): Hana stays; his phone key stops on the server.
   await P.locator(".f-who").click();
   await P.locator(".f-sheet .f-kid", { hasText: "Bilal M" }).click();
-  await contains(P.locator(".f-who"), "Bilal");
+  await whoIs(P, "Bilal");
   await tabTo(P, /Me$/);
   await P.getByRole("button", { name: /Sign out Bilal/ }).click();
   await P.locator(".f-sure").getByRole("button", { name: "Sign out", exact: true }).click();
-  await contains(P.locator(".f-who"), "Hana");
+  await whoIs(P, "Hana");
   await until(async () => (await P.locator(".f-caret.many").count()) === 0, "one child left");
   const bilalPhones = await t.run(async (ctx) => await ctx.db.query("familyDevices").withIndex("by_student", (q) => q.eq("studentId", bilal)).collect());
   expect(bilalPhones.every((d) => d.revokedAt !== undefined)).toBe(true);
@@ -3429,5 +3432,237 @@ test("free marks: the owner gives a question's marks from his Preview; a student
   await noSideScroll(C);
   await shot(C, "fam56b-correction-free-320");
   await C.context().close();
+  expect(problems.slice(before)).toEqual([]);
+});
+
+/** The top row holds every piece in one line: nothing past the screen's edge, no two pieces on top of each other. */
+async function topRowFits(p: Page) {
+  const r = await p.evaluate(() =>
+    [...document.querySelectorAll(".f-main .f-toprow > *")].map((e) => {
+      const b = e.getBoundingClientRect();
+      return { l: b.left, r: b.right, w: b.width, cls: e.className };
+    }),
+  );
+  const w = await p.evaluate(() => window.innerWidth);
+  expect(r.length, "the top row is there").toBeGreaterThan(4);
+  for (let i = 0; i < r.length; i++) {
+    expect(r[i].r, `${r[i].cls} inside the screen`).toBeLessThanOrEqual(w - 4);
+    if (i > 0 && r[i].w > 0 && r[i - 1].w > 0) expect(r[i].l, `${r[i].cls} after ${r[i - 1].cls}`).toBeGreaterThanOrEqual(r[i - 1].r - 0.5);
+  }
+  // His face is never squeezed away (the avatar at least).
+  expect(r[0].w).toBeGreaterThanOrEqual(38);
+}
+
+test("the Shop: the owner's things with a photo; last week's pay; the coin on the top row; PAYDAY; buying, the gold card, Cancel; Coins back and Given; 320 px", async () => {
+  const before = problems.length;
+  const backend = makeBackend(modules);
+  const t = backend.t;
+  await addPerson(t, { name: "Owner", token: OWNER_TOKEN, role: "owner" });
+  const as = { token: OWNER_TOKEN };
+  await t.mutation(api.setup.ensure, as);
+  const u01 = await t.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G8-U01")).first())!._id);
+  await t.mutation(api.catalog.saveWorkbook, {
+    ...as,
+    unitId: u01,
+    parts: BOOK.data.parts.map((p) => ({ id: p.id, to: p.to, ...(p.each ? { each: p.each } : {}) })),
+    levels: BOOK.data.levels.map((l) => ({ to: l.to, max: l.max })),
+    marks: BOOK.data.marks ?? {},
+    replace: true,
+    key: fakeKey(),
+  });
+  const hana = await t.mutation(api.students.add, { ...as, name: "Hana K", grade: 8, term: 1, stage: "master", unitId: u01 });
+  await t.mutation(api.families.setCode, { ...as, studentId: hana, code: "4719" });
+  // Eleven days in a row of class work, made-up marks: 1,240 XP ever (a long number for the top row), 840 of it last
+  // week (7 days × 120), 400 before it, and today and this Monday with no marks (the flame: 11).
+  const DAY = 86_400_000;
+  const monday = slWeekStart(Date.now());
+  await t.run(async (ctx) => {
+    const lv: Record<string, { done: number; fixed: number; got: number; by: string }> = {};
+    const day = (i: number) => monday - i * DAY + 10 * 3_600_000;
+    const work: [number, number][] = [
+      ...[1, 2, 3, 4, 5, 6, 7].map((i) => [day(i), 120] as [number, number]),
+      [day(8), 100],
+      [day(8) + 3_600_000, 100],
+      [day(9), 200],
+      [monday + 60_000, 0],
+      [Date.now() - 60_000, 0],
+    ];
+    work.forEach(([when, got], i) => (lv[String(i + 1)] = { done: when, fixed: when + 30_000, got, by: "correction" }));
+    const p = await ctx.db.query("progress").withIndex("by_student_unit_stage", (q) => q.eq("studentId", hana).eq("unitId", u01).eq("stage", "master")).first();
+    if (p) await ctx.db.patch(p._id, { m: { q: {}, lv }, updatedAt: Date.now() });
+    else await ctx.db.insert("progress", { studentId: hana, unitId: u01, stage: "master", marks: {}, m: { q: {}, lv }, startedAt: 0, updatedAt: Date.now() });
+  });
+
+  // The owner: Settings → Shop: a sticker with a photo (made small on the phone), an ice cream, chicken fries.
+  const C = await open(backend, site.url, size(360, 780), () => {
+    if (sessionStorage.getItem("t")) return;
+    sessionStorage.setItem("t", "1");
+    localStorage.setItem("aristora.role", "focus");
+    localStorage.setItem("aristora.token", "owner-phone-token-0123456789abcdefghijklmnopqrstuv");
+  });
+  await C.getByRole("button", { name: /Settings/ }).click();
+  await C.locator(".seg").getByRole("button", { name: /^Shop/ }).click();
+  await contains(C.locator(".settings-body.sh"), "Nothing yet");
+  const png = await C.evaluate(() => {
+    const c = document.createElement("canvas");
+    c.width = c.height = 900;
+    const g = c.getContext("2d")!;
+    g.fillStyle = "#6C5CE7";
+    g.fillRect(0, 0, 900, 900);
+    g.fillStyle = "#ffc23d";
+    g.beginPath();
+    g.arc(450, 450, 300, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = "#fff";
+    g.beginPath();
+    g.arc(360, 400, 70, 0, Math.PI * 2);
+    g.arc(540, 400, 70, 0, Math.PI * 2);
+    g.fill();
+    return c.toDataURL("image/png").split(",")[1];
+  });
+  const addThing = async (name: string, price: string, many: string, shelf: RegExp, photo = false) => {
+    await C.getByRole("button", { name: "+ Add a thing" }).click();
+    const S = C.locator(".sh-sheet");
+    if (photo) {
+      await S.getByLabel("Photo").setInputFiles({ name: "sticker.png", mimeType: "image/png", buffer: Buffer.from(png, "base64") });
+      await visible(S.locator(".sh-pic.big img"));
+    }
+    await S.getByLabel("Name").fill(name);
+    await S.getByLabel("Price (coins)").fill(price);
+    await S.getByLabel("How many").fill(many);
+    await S.getByRole("button", { name: shelf }).click();
+    if (photo) await shot(C, "shop01-settings-add");
+    await S.getByRole("button", { name: "Add to the Shop" }).click();
+    await contains(C.locator(".toast").last(), "saved");
+  };
+  await addThing("🦉 Owl sticker", "20", "30", /Owl things/, true);
+  await addThing("🍦 Ice cream", "150", "", /Treats/);
+  await addThing("🍗 Chicken fries", "450", "", /Treats/);
+  await contains(C.locator(".sh-list").first(), "🦉 Owl sticker");
+  await visible(C.locator(".sh-list .sh-pic img"));
+  await contains(C.locator(".sh-list").nth(1), "no end");
+  await noSideScroll(C);
+  await shot(C, "shop02-settings-shop");
+
+  // The Shop came: the fill starts the first pay (last week's XP only: 840 → 168 coins).
+  await t.mutation(internal.race.fill, {});
+  await t.mutation(internal.coins.payday, {});
+
+  // Hana's phone: PAYDAY on Home, her coins on the top row (every piece fits), the Shop.
+  const P = await open(backend, `${site.url}/f/`, size(360, 780));
+  await P.getByLabel(/Index/).fill("1001");
+  await P.getByLabel("Code").fill("4719");
+  await P.getByRole("button", { name: "Sign in" }).click();
+  await goalIs(P, "Level");
+  await contains(P.locator(".f-payc"), "+168");
+  await contains(P.locator(".f-pill.coin"), "168");
+  await contains(P.locator(".f-pill.gem"), "1,240");
+  await topRowFits(P);
+  await noSideScroll(P);
+  await shot(P, "shop03-home-payday");
+  await P.locator(".f-payc").getByRole("button", { name: "Shop" }).click();
+  await contains(P.locator(".f-shop .f-kicker"), "SHOP");
+  await contains(P.locator(".f-shop-n"), "168");
+  await contains(P.locator(".f-shop-hi"), "XP = உன் rank");
+  await visible(P.locator(".f-shi", { hasText: "Owl sticker" }).locator("img"));
+  await contains(P.locator(".f-shi.can").first(), "Owl sticker");
+  await visible(P.locator(".f-shi", { hasText: "Chicken fries" }).locator(".f-shbar"));
+  await contains(P.locator(".f-shlines"), "PAYDAY");
+  await noSideScroll(P);
+  await shot(P, "shop04-shop");
+  await P.getByRole("button", { name: "OK!" }).click();
+  await until(async () => (await P.locator(".f-shop-hi").count()) === 0, "the owl's line closes for good");
+  // Chicken fries: not enough coins yet.
+  await P.locator(".f-shi", { hasText: "Chicken fries" }).click();
+  await contains(P.locator(".f-buy"), "இன்னும் 282");
+  expect(await P.locator(".f-buy").getByRole("button", { name: /282 more/ }).isDisabled()).toBe(true);
+  await shot(P, "shop05-short");
+  await P.locator(".f-buy").getByRole("button", { name: "Close" }).click();
+  // The ice cream: 168 → 18.
+  await P.locator(".f-shi", { hasText: "Ice cream" }).click();
+  await contains(P.locator(".f-buy"), "18");
+  await shot(P, "shop06-buy-sheet");
+  await P.locator(".f-buy").getByRole("button", { name: /Buy · 150/ }).click();
+  await contains(P.locator(".f-toast"), "வாங்கினாய்");
+  await contains(P.locator(".f-shop-n"), "18");
+  await contains(P.locator(".f-shop-orders"), "🍦 Ice cream");
+  await noSideScroll(P);
+  await shot(P, "shop07-bought");
+  // Home: his gold card; Cancel asks once more, then the coins come back.
+  await P.getByRole("button", { name: "Back" }).click();
+  await contains(P.locator(".f-giftc.bought"), "நீ வாங்கியது");
+  await contains(P.locator(".f-pill.coin"), "18");
+  expect(await P.locator(".f-payc").count()).toBe(0); // he opened the Shop: PAYDAY is seen
+  await shot(P, "shop08-home-card");
+  await P.locator(".f-giftc.bought").getByRole("button", { name: "Cancel" }).click();
+  await P.locator(".f-giftc.bought").getByRole("button", { name: /Coins back\? Tap again/ }).click();
+  await contains(P.locator(".f-toast"), "150 coins");
+  await until(async () => (await P.locator(".f-giftc.bought").count()) === 0, "the card goes");
+  await contains(P.locator(".f-pill.coin"), "168");
+  // The sticker this time (from the top row's coin).
+  await P.locator(".f-pill.coin").click();
+  await P.locator(".f-shi", { hasText: "Owl sticker" }).click();
+  await P.locator(".f-buy").getByRole("button", { name: /Buy · 20/ }).click();
+  await contains(P.locator(".f-shop-n"), "148");
+
+  // The owner: Race → Gifts to give: what to buy, Coins back (asks once more), then Given.
+  await C.locator(".seg").getByRole("button", { name: /^Race/ }).click();
+  await contains(C.locator(".sh-buy"), "🦉 Owl sticker × 1");
+  await contains(C.locator(".rc-gifts li").first(), "bought in the Shop · 20 coins");
+  await noSideScroll(C);
+  await shot(C, "shop09-gifts-to-give");
+  await C.locator(".rc-gifts li").first().getByRole("button", { name: "Coins back" }).click();
+  await C.locator(".rc-gifts li").first().getByRole("button", { name: "Sure?" }).click();
+  await contains(C.locator(".toast").last(), "20 coins back");
+  await until(async () => (await C.locator(".rc-box > .rc-gifts > li").count()) === 0, "the card goes");
+  await P.getByRole("button", { name: "Back" }).click();
+  await P.reload();
+  await contains(P.locator(".f-pill.coin"), "168");
+  await P.locator(".f-pill.coin").click();
+  await contains(P.locator(".f-shlines"), "Coins back");
+  await P.locator(".f-shi", { hasText: "Owl sticker" }).click();
+  await P.locator(".f-buy").getByRole("button", { name: /Buy · 20/ }).click();
+  await contains(P.locator(".f-shop-n"), "148");
+  await backend.push();
+  await C.locator(".rc-gifts li", { hasText: "Hana K" }).getByRole("button", { name: "Given" }).click();
+  await contains(C.locator(".toast").last(), "given");
+  await P.getByRole("button", { name: "Back" }).click();
+  await P.reload();
+  await goalIs(P, "Level");
+  expect(await P.locator(".f-giftc.bought").count()).toBe(0);
+  // Settings → Shop: the month's coins, the sticker one less in stock.
+  await C.locator(".seg").getByRole("button", { name: /^Shop/ }).click();
+  await contains(C.locator(".sh-nums"), "168");
+  await contains(C.locator(".sh-list").first(), "29 left");
+
+  // The smallest phone: the top row in one line, the Shop.
+  const S = await open(backend, `${site.url}/f/`, size(320, 640));
+  await S.getByLabel(/Index/).fill("1001");
+  await S.getByLabel("Code").fill("4719");
+  await S.getByRole("button", { name: "Sign in" }).click();
+  await goalIs(S, "Level");
+  await contains(S.locator(".f-pill.coin"), "148");
+  await topRowFits(S);
+  await noSideScroll(S);
+  await shot(S, "shop10-home-320");
+  await tabTo(S, /Race/);
+  await visible(S.locator(".f-main .f-toprow"));
+  await topRowFits(S);
+  await S.locator(".f-pill.coin").click();
+  await contains(S.locator(".f-shop-n"), "148");
+  await noSideScroll(S);
+  await shot(S, "shop11-shop-320");
+  // A 393 px phone (a Redmi Note): every piece fits; his face, not his name (Home greets him by name).
+  const R = await open(backend, `${site.url}/f/`, size(393, 820));
+  await R.getByLabel(/Index/).fill("1001");
+  await R.getByLabel("Code").fill("4719");
+  await R.getByRole("button", { name: "Sign in" }).click();
+  await goalIs(R, "Level");
+  await contains(R.locator(".f-pill.coin"), "148");
+  await topRowFits(R);
+  expect(await R.locator(".f-main .f-toprow .f-name").isVisible()).toBe(false);
+  await contains(R.locator(".f-greet"), "Hana");
+  await shot(R, "shop12-home-393");
+  for (const p of [P, S, C, R]) await p.context().close();
   expect(problems.slice(before)).toEqual([]);
 });

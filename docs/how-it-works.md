@@ -1251,7 +1251,11 @@ learning app of our education institute"): one profile, his class times, what he
 - **Screens.** On every tab the top row: who is on screen (his letter on his colour, his name, ▾ or how many children;
   tap = the children on this phone), his flame (days in a row; lit once he did a Level today; tap = Me), his XP ever
   (tap = the race), **the bell** (7 Nov 2026, below), **Feedback** (💬); XP and the flame jump once when they grew (back
-  from a Level). A floating bottom
+  from a Level). Since 10 Nov 2026 (the Shop, below): XP and **his coins** share one white capsule (`.f-wallet`: 💎 XP |
+  🪙 coins, two taps: the race, the Shop; the coins jump when they grow); on a phone (under 480 px) the top row shows his
+  face without his name (a name cut to "H…" looked broken: Home greets him by name; `.f-who`'s label still names him);
+  under 400 px every piece is a little tighter, under 346 px the ▾ goes for one child and a number from 1,000 on is short
+  ("1.2k": `Num` in `app.tsx`, `.f-nl` / `.f-ns`). A floating bottom
   bar: **Home**, **Learn**, **Race**, **Me** (the one on screen a violet pill with its name; its icon hops).
   - **Home** (`home.tsx`, the institute's side): the date ("WED · 4 NOV") and வணக்கம்; **today's class** (`TodayCard`:
     "In class now · since 3:12 PM", "Class is on now · till 6:30 PM", "Today 3:30 PM – 6:30 PM · in 2 h 10 min", or
@@ -1433,6 +1437,51 @@ learning app of our education institute"): one profile, his class times, what he
     cream · 👑 Grade 8 champion · week of 2 Nov · இதை உன் ஆசிரியரிடம் காட்டு") until a teacher taps **Given** (owner or
     Manager: Settings → Race → Gifts to give; the toast's Undo, or Given lately → Undo). The gear counts the gifts
     waiting for the owner and the Manager (`race.giftCount`), and Settings opens on Race when nothing else waits.
+  - **The Shop** (10 Nov 2026, his voice note: "students always have questions like, I have diamonds and I don't know
+    what to do with the diamonds ... what about creating the marketplace"; my answer: his instinct right, his rate on XP
+    trash: XP = marks and the comments' XP, so 1 XP = Rs 1 paid a keen student ~Rs 1,200 a month, 40% of his fee, and
+    spending XP broke "your XP never goes down"; his answers after that: coins, Monday's pay from last week's XP at 5 XP
+    = 1 coin, buying lowers his coins only, all three shelves, the race's prizes in coins later, **no weekly limit**
+    (after the warning: ~Rs 470 a month for a boy doing 3 Levels a day; the owner's escape hatch below), the first pay
+    = last week only, fees and the Shop never mixed). Part 1 built; part 2 (a saving goal, prizes in coins, the free
+    shelf: a flame shield, a frame on his photo) not yet.
+    - **Coins** (`convex/lib/coins.ts`, `convex/coins.ts`; tables `wallets` (one row a student: `n` coins, `xp` XP paid
+      out, `wk` his last pay day's Monday, `last` its coins, `paid` / `spent` ever) and `coinLog` (a line per change:
+      `pay` +, `buy` −, `back` +, `w` = the week or the thing)). **Pay day** = `coins.payday` (cron Monday 00:15 Sri
+      Lanka; 20 students a run, then at once again while some are left; a student already paid that week is skipped):
+      the XP that pays (`payXpBefore`: `xpItems(rows, true)`, the XP rule itself without a workbook Level checked at home
+      that no teacher has checked in class: `lv.home && !lv.hc`; Us XP never, it is not in `xpRows`), won before this
+      Monday, less `xp` already paid out, in whole coins (`payFrom`: the rest waits; marks taken back since are filled
+      by new XP first, so his coins never go down by themselves; the owner's limit = at most that many coins, the XP over
+      it used up). A student without a wallet (the Shop came, or a new student's first Monday) gets `firstPay`: last
+      week's XP only, what came before counts as paid out. **The first pay ran once when the Shop came**: `race.fill`
+      calls `coinsOnce` (meta `coinsStart`), which starts `coins.payday`. Demo and removed students never get one.
+    - **His phone** (`src/family/shop.tsx`, one of the later parts: `parts.ShopScreen`; screen `shop` in `app.tsx`;
+      its style in `profile.css` `.f-shop* .f-sh* .f-buy`): the coin on the top row (or Home's PAYDAY card) opens it.
+      The header: SHOP, his coins, "every Monday last week's XP becomes your coins: 5 XP = 1 coin"; the owl says once
+      per child what XP and coins are (`shopHi`: "💎 XP = உன் rank ... 🪙 Coins = உன் பணம் ..."); "Waiting for you" (his
+      gold cards with Cancel); the shelves **🦉 Owl things** then **🍦 Treats** (each by price; its photo, or its first
+      emoji big; a gold ring when he can buy it, a thin gold bar when he can't yet, SOLD OUT, "3 left"); a thing opened
+      (`BuySheet`): big, its price, "after: 168 → 18 coins, your XP stays", **Buy · 150** (gold), or "282 more" with the
+      bar; bought = a sound, a toast, the gold card. "Your coins": the last 12 lines (PAYDAY · 2–8 Nov +168, a thing −,
+      Coins back +). Kept per child (`shop`).
+    - **Buying** (`coins.buy`, family): the thing must be on the phones, at the price his phone showed (a changed price
+      is said, never charged), in stock, and his coins enough; at most 5 things waiting at once (`OPEN_ORDERS_MAX`).
+      His coins down, one less in stock, a `gifts` row (`kind` "shop", `c` coins, `item`): **the same gold card** as a
+      race gift ("நீ வாங்கியது", its coins, "show this to your teacher", `BoughtCard` in `src/family/board.tsx`, Home and
+      Me and the Shop) with **Cancel** (two taps; `coins.cancel`: coins back, stock back, until a teacher taps Given).
+    - **Home's PAYDAY card** (`PayCard`, `board.tsx`): the week his last pay came (`coins.last` > 0, that Monday): the
+      coins and "your XP stays as it is", **Shop**; gone once he opens the Shop or closes it (`paySeen`, per child).
+    - **The teachers**: what was bought shows in **Settings → Race → Gifts to give** with the race's gifts ("From the
+      Shop: 🦉 Owl sticker × 2", a row "bought in the Shop · 20 coins", **Coins back** (two taps; `coins.refund`, owner
+      and Manager: the Shop couldn't get it) and **Given**). **Settings → Shop** (owner, `src/shopSettings.tsx`, `.sh-*`):
+      this month's coins (paid, spent, in students' hands: `shopMonth`), what to buy for the cards waiting, + Add a
+      thing (a photo made 640 px on his phone and sent to storage: `upload` in `src/backend.ts`, `coins.photoUrl`; name
+      ≤ 40, price in coins, how many (empty = no end), shelf, on the phones), each thing to change or remove (its photo
+      is deleted with it; the hourly sweep keeps the Shop's photos), and **the most coins a week** (off; his escape
+      hatch: `coins.setLimit`, meta `coinLimit`). **The Owner page → Business** has a Shop card the months a wallet
+      exists (coins paid, spent, in students' hands, the paid coins as a share of the month's money in). History lines
+      `shop-buy`, `shop-back`, `shop-item`, `shop-limit`.
   - **The champions poster** (7 Nov 2026, his pick: "Monday poster"; `src/champions.ts`): Settings → Race → Last
     week's champions (owner, Reports, Manager): ARISTORA's top 3 and each grade's champion and the cup as a list, then
     **Share poster** / Save: one 1080 × 1350 PNG drawn on the phone (ARISTORA's top 3 as medals, each grade's 👑, the

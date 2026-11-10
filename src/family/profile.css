@@ -1002,3 +1002,208 @@ a.f-btn {
   text-align: center;
 }
 
+
+/* The Shop (10 Nov 2026, shop.tsx: one of the parts after the first screen): its own class names (.f-sh*, .f-shop*,
+   .f-buy); gold = what he wins (the coins, Buy), white cards on lavender, violet the header. What the first screens show
+   of it (the coin, the gold card he bought, Home's PAYDAY card) is in family.css. */
+.f-shop {
+  padding-bottom: 32px;
+}
+.f-shop-n {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: clamp(30px, 9vw, 38px);
+}
+.f-shop-n small {
+  align-self: flex-end;
+  margin-bottom: 5px;
+  font: 700 15px/1 var(--display);
+  color: rgba(255, 255, 255, .8);
+}
+.f-shop-hi {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+}
+.f-shop-hi .f-owlsays {
+  width: 100%;
+}
+.f-shop-hi .f-btn {
+  min-width: 120px;
+}
+.f-shop-err {
+  margin: 20px 16px 0;
+  text-align: center;
+}
+.f-shop-orders .f-h2 {
+  margin: 20px 20px 0;
+}
+.f-shelf .f-h2 {
+  margin-bottom: 12px;
+}
+.f-shgrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.f-shi {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+  padding: 8px 8px 10px;
+  border-radius: 18px;
+  background: var(--bg);
+  text-align: left;
+  box-shadow: inset 0 0 0 2px var(--line);
+  transition: transform .08s ease;
+}
+.f-shi:active {
+  transform: scale(.97);
+}
+.f-shi.can {
+  box-shadow: inset 0 0 0 2px var(--gold), 0 3px 0 var(--gold-3d);
+}
+.f-shi.out {
+  opacity: .55;
+}
+.f-shpic {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 13px;
+  background: #fff;
+}
+.f-shpic img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.f-shemo {
+  font-size: 52px;
+  line-height: 1;
+}
+.f-shpic.big {
+  width: min(62vw, 240px);
+  margin: 4px auto 0;
+  border-radius: 22px;
+  box-shadow: var(--shadow);
+}
+.f-shpic.big .f-shemo {
+  font-size: 96px;
+}
+.f-shtag {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  padding: 4px 8px 3px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #fff;
+  font: 800 11px/1 var(--display);
+  letter-spacing: .06em;
+}
+.f-shtag.few {
+  background: var(--wrong);
+  letter-spacing: 0;
+}
+.f-shi-n {
+  font: 800 14.5px/1.2 var(--display);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.f-shi-p {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font: 800 15px/1 var(--display);
+  color: var(--gold-ink);
+  font-variant-numeric: tabular-nums;
+}
+.f-shbar {
+  display: block;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+.f-shbar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--gold-hi), var(--gold));
+}
+.f-buy .f-buy-p {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+  font: 800 34px/1 var(--display);
+  color: var(--gold-ink);
+}
+.f-buy .f-buy-w {
+  margin: 10px 4px 0;
+  text-align: center;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--ink2);
+}
+.f-buy .f-buy-w b {
+  color: var(--ink);
+}
+.f-buy .f-shbar {
+  margin: 10px 8px 0;
+}
+.f-buy .f-btn {
+  margin-top: 16px;
+}
+.f-shlines ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.f-shlines li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 0;
+}
+.f-shlines li+li {
+  border-top: 1px solid var(--line);
+}
+.f-shlines li span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.f-shlines li span b {
+  font: 700 14.5px/1.2 var(--display);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.f-shlines li span small {
+  font-size: 12.5px;
+  color: var(--ink3);
+}
+.f-shlines li > b {
+  flex: none;
+  font: 800 16px/1 var(--display);
+  font-variant-numeric: tabular-nums;
+}
+.f-shlines li > b.up {
+  color: var(--gold-ink);
+}
+.f-shlines li > b.down {
+  color: var(--ink2);
+}
+@media (prefers-reduced-motion: reduce) {
+  .f-shi {
+    transition: none;
+  }
+}

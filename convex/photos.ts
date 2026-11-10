@@ -586,6 +586,8 @@ export const sweep = internalMutation({
     }
     const used = new Set<string>();
     for (const r of await ctx.db.query("homePhotos").collect()) for (const f of r.files) used.add(f);
+    // The Shop's photos (10 Nov 2026): kept while their thing is in the Shop (coins.save and coins.drop delete them).
+    for (const x of await ctx.db.query("shopItems").collect()) if (x.ph) used.add(x.ph);
     // Only the files that just became a day old (a few hours' window: it runs every hour, so a missed hour is caught):
     // Us keeps its photos 30 days (7 Nov 2026), and reading every file every hour would grow with them.
     const files = await ctx.db.system

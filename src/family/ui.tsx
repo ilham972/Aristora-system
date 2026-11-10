@@ -141,6 +141,19 @@ export function Gem(props: { size?: number }) {
   );
 }
 
+/** A coin (10 Nov 2026, the Shop): gold, what he wins, a darker edge and a highlight, like START's coin. */
+export function Coin(props: { size?: number }) {
+  const n = props.size ?? 18;
+  return (
+    <svg class="f-coin" viewBox="0 0 24 24" width={n} height={n} aria-hidden="true">
+      <circle class="f-coin-e" cx="12" cy="12" r="10.5" />
+      <circle class="f-coin-f" cx="12" cy="11" r="9" />
+      <circle class="f-coin-r" cx="12" cy="11" r="6" />
+      <path class="f-coin-h" d="M7.2 8.4a5.6 5.6 0 0 1 4-2.9" />
+    </svg>
+  );
+}
+
 // ---- The owl lives in owl.tsx (its moods, its marks, tap reactions); its pieces are re-exported here. ----
 
 export { flameAtRisk, keepOwl, Owl, OwlBadge, OwlSays, useOwlTap, type Mood } from "./owl";

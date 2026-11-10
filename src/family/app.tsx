@@ -55,7 +55,7 @@ import { nextPlay } from "./next";
 import type { Checked, Zoomed } from "./play";
 import { armSound, buzz, sound } from "./sound";
 import { Surprises } from "./surprise";
-import { Avatar, Flame, firstName, Gem, Icon, Owl, problemWords, setSheetHost, Sheet, showSheet, toast, Toast, Waiting, type IconName, type SheetRender } from "./ui";
+import { Avatar, Coin, Flame, firstName, Gem, Icon, Owl, problemWords, setSheetHost, Sheet, showSheet, toast, Toast, Waiting, type IconName, type SheetRender } from "./ui";
 
 /** Us (7 Nov 2026): the students' community, between Learn and the Race once the owner opens it. */
 export type Tab = "home" | "learn" | "us" | "race" | "me";
@@ -77,6 +77,8 @@ type Screen =
   /** A group or a private chat (8 Nov 2026), from Us or from the Members page; the Members page. */
   | { k: "room"; id: string; from?: "people" }
   | { k: "people" }
+  /** The Shop (10 Nov 2026): his coins, the things, what he bought; from the top row's coin or Home's PAYDAY card. */
+  | { k: "shop" }
   | { k: "stage"; unitId: string }
   | { k: "level"; unitId: string; n: number }
   /** A level he checked at home: solutions, photos to send, the teacher's answers (4 Nov 2026). */
@@ -95,7 +97,7 @@ type Screen =
 const depth = (s: Screen) =>
   s.k === "level" || s.k === "result" || s.k === "book" || (s.k === "post" && s.from) || (s.k === "room" && s.from)
     ? 2
-    : s.k === "stage" || s.k === "add" || s.k === "report" || s.k === "mate" || s.k === "post" || s.k === "bell" || s.k === "room" || s.k === "people"
+    : s.k === "stage" || s.k === "add" || s.k === "report" || s.k === "mate" || s.k === "post" || s.k === "bell" || s.k === "room" || s.k === "people" || s.k === "shop"
       ? 1
       : 0;
 const parent = (s: Screen): Screen =>
@@ -105,7 +107,7 @@ const parent = (s: Screen): Screen =>
       ? { k: "bell" }
       : s.k === "room" && s.from
         ? { k: "people" }
-      : s.k === "stage" || s.k === "report" || s.k === "mate" || s.k === "post" || s.k === "bell" || s.k === "room" || s.k === "people"
+      : s.k === "stage" || s.k === "report" || s.k === "mate" || s.k === "post" || s.k === "bell" || s.k === "room" || s.k === "people" || s.k === "shop"
       ? { k: "main" }
       : s.k === "add"
         ? current()
@@ -223,6 +225,13 @@ export function App() {
       void loadMe();
       hello();
     } else if (screen.k === "signin") setReady(true);
+  }, []);
+
+  // A gold card cancelled from Home or Me (10 Nov 2026, board.tsx): his coins and cards again.
+  useEffect(() => {
+    const again = () => void loadMe();
+    window.addEventListener("f-me", again);
+    return () => window.removeEventListener("f-me", again);
   }, []);
 
   // The phone's Back button: a sheet closes first, then one screen up (a Level → its Stage → the map).
@@ -435,8 +444,23 @@ export function App() {
     sound("start");
     go({ k: "level", unitId: next.world.unitId, n: next.n });
   };
+  /** The Shop (10 Nov 2026): his coins and what he can buy. */
+  const openShop = () => {
+    buzz();
+    sound("pop");
+    go({ k: "shop" });
+  };
   const top = (
-    <TopRow me={me} acc={acc} offline={offline} onKids={() => openSheet("kids")} onFeedback={() => openSheet("feedback")} onBell={openBell} onTab={pickTab} />
+    <TopRow
+      me={me}
+      acc={acc}
+      offline={offline}
+      onKids={() => openSheet("kids")}
+      onFeedback={() => openSheet("feedback")}
+      onBell={openBell}
+      onTab={pickTab}
+      onShop={openShop}
+    />
   );
   /** A finished Stage's certificate (the report, or the Stage's own screen). */
   const certFor = (d: Omit<CertData, "name" | "pic">) => {
@@ -540,6 +564,17 @@ export function App() {
           if (id === keptBoard()?.you) return;
           setScreen({ k: "mate", id, row: null });
         }}
+      />
+    ) : (
+      <Waiting />
+    );
+  } else if (screen.k === "shop") {
+    body = parts ? (
+      <parts.ShopScreen
+        key={acc?.id ?? ""}
+        me={me}
+        onBack={up}
+        onChanged={() => void loadMe()}
       />
     ) : (
       <Waiting />
@@ -665,7 +700,7 @@ export function App() {
       <>
         <main class={`f-main t-${tab}`} key={`${acc?.id ?? ""}.${tab}`}>
           {tab === "home" ? (
-            <HomeTab top={top} me={me} onPlay={playNow} onLearn={() => pickTab("learn")} onStage={(unitId) => go({ k: "stage", unitId })} />
+            <HomeTab top={top} me={me} onPlay={playNow} onLearn={() => pickTab("learn")} onStage={(unitId) => go({ k: "stage", unitId })} onShop={openShop} />
           ) : tab === "learn" ? (
             <LearnTab top={top} me={me} onStage={(unitId) => go({ k: "stage", unitId })} onPlay={playNow} />
           ) : tab === "us" ? (
@@ -776,13 +811,42 @@ function useGrew(key: string, v: number): boolean {
   return grew;
 }
 
-/** Who is on screen, his flame, his XP, and Feedback: at the top of every tab. */
-function TopRow(props: { me: FamilyMe | null; acc: Account | null; offline: boolean; onKids: () => void; onFeedback: () => void; onBell: () => void; onTab: (t: Tab) => void }) {
+/**
+ * A top-row number: 1,240 as it is; on the smallest phones (CSS, ≤ 340 px) "1.2k" from 1,000 on, so the row keeps one
+ * line with his face; from 100,000 on always short.
+ */
+function Num(props: { n: number }) {
+  const n = props.n;
+  const k = n / 1000;
+  const short = k >= 100 ? `${Math.floor(k)}k` : `${(Math.floor(k * 10) / 10).toFixed(1).replace(/\.0$/, "")}k`;
+  if (n < 1000) return <>{n}</>;
+  if (n >= 100_000) return <>{short}</>;
+  return (
+    <>
+      <span class="f-nl">{n.toLocaleString("en")}</span>
+      <span class="f-ns">{short}</span>
+    </>
+  );
+}
+
+/** Who is on screen, his flame, his XP, his coins, the bell and Feedback: at the top of every tab. */
+function TopRow(props: {
+  me: FamilyMe | null;
+  acc: Account | null;
+  offline: boolean;
+  onKids: () => void;
+  onFeedback: () => void;
+  onBell: () => void;
+  onTab: (t: Tab) => void;
+  onShop: () => void;
+}) {
   const me = props.me;
   const name = me?.name ?? props.acc?.name ?? "";
   const kids = accounts().length;
   const id = props.acc?.id ?? "";
   const xpGrew = useGrew(`${id}.xp`, me?.total ?? 0);
+  const coins = me?.coins?.n ?? 0;
+  const coinGrew = useGrew(`${id}.coin`, coins);
   usePics([me?.photo?.key]);
   const fireGrew = useGrew(`${id}.fire`, me?.streak.days ?? 0);
   const bellN = (me?.bell ?? []).filter((b) => b.fresh).length + (me?.inboxNew ?? 0);
@@ -806,10 +870,20 @@ function TopRow(props: { me: FamilyMe | null; acc: Account | null; offline: bool
         <Flame lit={!!me?.streak.today} />
         {me?.streak.days ?? 0}
       </button>
-      <button type="button" class={`f-pill gem${xpGrew ? " grew" : ""}`} aria-label={`${me?.total ?? 0} XP`} onClick={() => props.onTab("race")}>
-        <Gem />
-        {(me?.total ?? 0).toLocaleString("en")}
-      </button>
+      {/* XP and his coins in one capsule (10 Nov 2026: the Shop on the top row; two pills didn't fit a 360 px phone with
+          his name): the gem = XP (his rank, never spent; tap = the race), the coin = his money (tap = the Shop). */}
+      <span class="f-wallet">
+        <button type="button" class={`f-pill gem${xpGrew ? " grew" : ""}`} aria-label={`${me?.total ?? 0} XP`} onClick={() => props.onTab("race")}>
+          <Gem />
+          <Num n={me?.total ?? 0} />
+        </button>
+        {me?.coins && (
+          <button type="button" class={`f-pill coin${coinGrew ? " grew" : ""}`} aria-label={`${coins} coins: the Shop`} onClick={props.onShop}>
+            <Coin />
+            <Num n={coins} />
+          </button>
+        )}
+      </span>
       {/* The bell (7 Nov 2026): his teachers' answers and messages; the red count = new ones. */}
       <button type="button" class={`f-fbb f-bellb${bellGrew ? " grew" : ""}`} aria-label={`Alerts${bellN ? `: ${bellN} new` : ""}`} onClick={props.onBell}>
         <Icon name="bell" size={20} />

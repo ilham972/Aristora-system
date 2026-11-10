@@ -108,6 +108,7 @@ import { mateMarksOn, numsOfRow, raceList, raceRowOf } from "./lib/raceRows";
 import { homeLevels, homeMoments, stageDone, stageMoment, usCfg } from "./lib/us";
 import { OL } from "./lib/syllabus";
 import { accountOf, feeCfg } from "./lib/feeRows";
+import { walletOf } from "./lib/coins";
 
 const token = v.optional(v.string());
 
@@ -278,7 +279,12 @@ export type FamilyMe = {
    * Gifts from the centre he won and hasn't been given yet (7 Nov 2026): what, for which win, which week. Since 8 Nov
    * 2026 also a league's winner (`l`), the month's most improved, a gift by hand (`why`). `l` / `why` missing from before.
    */
-  gifts: { id: string; what: string; kind: Doc<"gifts">["kind"]; wk: number; g: number | null; l?: number; why?: string }[];
+  gifts: { id: string; what: string; kind: Doc<"gifts">["kind"]; wk: number; g: number | null; l?: number; why?: string; c?: number }[];
+  /**
+   * His coins (10 Nov 2026, the Shop: convex/coins.ts): how many he has (`n`), his last pay day (`wk`, its Monday) and
+   * its coins (`last`: Home's PAYDAY card that week). Missing on a server from before; all 0 before his first pay.
+   */
+  coins?: { n: number; wk: number; last: number };
   /**
    * The race (8 Nov 2026, his voice note: "they feel like they are losing what they earned"): his league (1–5), the rank
    * he reached (an index of RANKS: never down), his last week in his league (Monday's card; null before the first
@@ -404,7 +410,17 @@ export const me = query({
           .query("gifts")
           .withIndex("by_sid", (q) => q.eq("sid", s._id).eq("open", true))
           .collect()
-      ).map((x) => ({ id: x._id, what: x.what, kind: x.kind, wk: x.wk, g: x.g ?? null, ...(x.l ? { l: x.l } : {}), ...(x.why ? { why: x.why } : {}) })),
+      ).map((x) => ({
+        id: x._id,
+        what: x.what,
+        kind: x.kind,
+        wk: x.wk,
+        g: x.g ?? null,
+        ...(x.l ? { l: x.l } : {}),
+        ...(x.why ? { why: x.why } : {}),
+        ...(x.kind === "shop" ? { c: x.c ?? 0 } : {}),
+      })),
+      coins: await coinsOf(ctx, s._id),
       race: await raceOf(ctx, s._id, xpSince(rows, 0) + us.tot, now),
       bell: bell.slice(0, BELL_MAX),
       us: usOpen,
@@ -422,6 +438,12 @@ async function feesLine(ctx: QueryCtx, sid: Id<"students">): Promise<{ fees?: No
   const a = await accountOf(ctx, sid);
   if (!a || (a.owe <= 0 && a.cr <= 0) || !(await feeCfg(ctx))) return {};
   return { fees: { o: a.owe, c: a.c, b: a.b + a.o, cr: a.cr } };
+}
+
+/** His coins (family.me's `coins`): one small row; all 0 before his first pay day. */
+async function coinsOf(ctx: QueryCtx, sid: Id<"students">): Promise<NonNullable<FamilyMe["coins"]>> {
+  const w = await walletOf(ctx, sid);
+  return { n: w?.n ?? 0, wk: w?.wk ?? 0, last: w?.last ?? 0 };
 }
 
 /** His league, rank, last week in his league and days learned this week (family.me's `race`), from his race row. */

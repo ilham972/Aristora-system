@@ -4,8 +4,8 @@
 
 import { useEffect, useState } from "preact/hooks";
 import type { FamilyBoard, FamilyMe } from "../../convex/family";
-import { keep, query } from "./net";
-import { BRAND, problemWords } from "./ui";
+import { keep, mutation, query } from "./net";
+import { BRAND, Coin, problemWords, toast } from "./ui";
 
 export type Board = FamilyBoard;
 
@@ -95,26 +95,103 @@ export function giftWhy(x: { kind: FamilyMe["gifts"][number]["kind"]; g: number 
   return `${win} · week of ${weekWords(x.wk)}`;
 }
 
-/** A gift from the centre he won (7 Nov 2026): on Home and Me until a teacher gives it to him. */
+/** A gift from the centre he won (7 Nov 2026): on Home and Me until a teacher gives it to him. Since 10 Nov 2026 also
+ * what he bought in the Shop (its coins; Cancel until it is given: two taps, the coins come back). */
 export function GiftCards(props: { gifts: FamilyMe["gifts"] | undefined }) {
   const list = props.gifts ?? [];
   if (!list.length) return null;
   return (
     <>
-      {list.map((x) => (
-        <section key={x.id} class="f-card f-giftc rise" aria-label="A gift for you">
-          <span class="f-giftc-b" aria-hidden="true">
-            🎁
-          </span>
-          <div class="f-giftc-w">
-            <small class="f-giftc-k">{x.kind === "own" ? "உனக்கு ஒரு பரிசு!" : "நீ வென்றாய்!"}</small>
-            <b>{x.what}</b>
-            <small>{giftWhy(x)}</small>
-            <p>இதை உன் ஆசிரியரிடம் காட்டு: உனக்குத் தருவார்.</p>
-          </div>
-        </section>
-      ))}
+      {list.map((x) =>
+        x.kind === "shop" ? (
+          <BoughtCard key={x.id} id={x.id} what={x.what} c={x.c ?? 0} />
+        ) : (
+          <section key={x.id} class="f-card f-giftc rise" aria-label="A gift for you">
+            <span class="f-giftc-b" aria-hidden="true">
+              🎁
+            </span>
+            <div class="f-giftc-w">
+              <small class="f-giftc-k">{x.kind === "own" ? "உனக்கு ஒரு பரிசு!" : "நீ வென்றாய்!"}</small>
+              <b>{x.what}</b>
+              <small>{giftWhy(x)}</small>
+              <p>இதை உன் ஆசிரியரிடம் காட்டு: உனக்குத் தருவார்.</p>
+            </div>
+          </section>
+        ),
+      )}
     </>
+  );
+}
+
+/**
+ * A thing he bought in the Shop (10 Nov 2026): his gold card until a teacher taps Given. Cancel asks once more ("Coins
+ * back?"), then his coins come back (coins.cancel) and the app reads his coins again (the "f-me" event, app.tsx).
+ */
+export function BoughtCard(props: { id: string; what: string; c: number; onDone?: () => void }) {
+  const [sure, setSure] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const cancel = () => {
+    if (!sure) return setSure(true);
+    setBusy(true);
+    mutation("coins:cancel", { id: props.id })
+      .then(() => {
+        toast(`🪙 ${props.c} coins திரும்ப வந்தன.`);
+        props.onDone?.();
+        window.dispatchEvent(new Event("f-me"));
+      })
+      .catch((e) => toast(problemWords(e), true))
+      .finally(() => {
+        setBusy(false);
+        setSure(false);
+      });
+  };
+  return (
+    <section class="f-card f-giftc bought rise" aria-label={`You bought ${props.what}`}>
+      <span class="f-giftc-b" aria-hidden="true">
+        🛍️
+      </span>
+      <div class="f-giftc-w">
+        <small class="f-giftc-k">நீ வாங்கியது</small>
+        <b>{props.what}</b>
+        <small class="f-giftc-c">
+          <Coin size={15} /> {props.c.toLocaleString("en")}
+        </small>
+        <p>இதை உன் ஆசிரியரிடம் காட்டு: உனக்குத் தருவார்.</p>
+        <button type="button" class={`f-linkbtn f-giftc-x${sure ? " sure" : ""}`} disabled={busy} onClick={cancel}>
+          {sure ? "Coins back? Tap again" : "Cancel"}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Pay day on Home (10 Nov 2026): the Monday his last week's XP paid coins, a gold card with them and the Shop, until he
+ * opens the Shop or closes it (kept per child: `paySeen` = that Monday). Nothing in a week without a pay.
+ */
+export function PayCard(props: { coins: FamilyMe["coins"]; onShop: () => void }) {
+  const c = props.coins;
+  const [seen, setSeen] = useState(() => keep<number>("paySeen"));
+  if (!c || c.last <= 0 || Date.now() - c.wk >= WEEK_MS || seen === c.wk) return null;
+  const close = (shop: boolean) => {
+    keep("paySeen", c.wk);
+    setSeen(c.wk);
+    if (shop) props.onShop();
+  };
+  return (
+    <section class="f-card f-payc rise" aria-label="Payday">
+      <button type="button" class="f-payc-x" aria-label="Close" onClick={() => close(false)}>
+        ✕
+      </button>
+      <span class="f-tag gold">PAYDAY</span>
+      <p class="f-payc-n">
+        <Coin size={30} />+{c.last.toLocaleString("en")}
+      </p>
+      <p class="f-payc-w">கடந்த வாரத்தின் XP உன் coins ஆனது! உன் XP அப்படியே இருக்கும்.</p>
+      <button type="button" class="f-btn go f-payc-go" onClick={() => close(true)}>
+        Shop
+      </button>
+    </section>
   );
 }
 

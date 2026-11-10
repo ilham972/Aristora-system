@@ -11133,6 +11133,139 @@ body.tm-on .toasts {
 .rc-row .btn {
   flex: 1;
 }
+/* ---------- Settings → Shop (10 Nov 2026): the month's coins, the things, a thing's sheet, the limit; the Shop's line in
+   Race → Gifts to give ---------- */
+/* A thing bought in the Shop on the gifts' list: its words on one line, Coins back and Given under them. */
+.rc-gifts li.rc-shop {
+  flex-wrap: wrap;
+}
+.rc-gifts li.rc-shop > span {
+  flex-basis: 100%;
+}
+.rc-gifts li.rc-shop .btn {
+  flex: 1;
+}
+.sh-nums {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.sh-nums li {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: var(--amber-soft);
+}
+.sh-nums b {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+.sh-nums small {
+  color: var(--ink-2);
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+.sh-buy {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: var(--amber-soft);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.sh-list {
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+.sh-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--ground);
+  box-shadow: inset 0 0 0 1.5px var(--line);
+  color: inherit;
+  text-align: left;
+}
+.sh-row.off {
+  opacity: 0.6;
+}
+.sh-pic {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--line-2);
+}
+.sh-pic img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.sh-pic i {
+  font-style: normal;
+  font-size: 26px;
+}
+.sh-pic.big {
+  width: 120px;
+  height: 120px;
+  border-radius: 16px;
+}
+.sh-pic.big i {
+  font-size: 44px;
+}
+.sh-w {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+}
+.sh-w small {
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+.sh-photo {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.sh-photo label.btn {
+  position: relative;
+  overflow: hidden;
+}
+.sh-photo input[type="file"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+}
+.sh-two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.sh-shelves {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.sh-limit {
+  width: 64px;
+  padding: 6px 8px;
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+}
 /* A gift by hand (8 Nov 2026): the grades in one row, each with how many are ticked; the students to tick. */
 .rc-givebtn {
   min-height: 46px;

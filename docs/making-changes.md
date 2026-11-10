@@ -144,6 +144,8 @@ After adding functions, every function must print GUARD except the open ones on 
 `auth.peekLink`, `auth.useLink`, `auth.signInPin`, `auth.signOut`, `clock.ping`, and the family app's `family.*` (`peek`
 and `join` check the family link; the rest call `familyViewer` / `familyActor`: the family phone only). Also `link.ask`
 and `link.tell` (10 Nov 2026, the Claude link): they answer only a request sealed with the link's key (`opened`).
+And `coins.shop`, `coins.buy`, `coins.cancel` (10 Nov 2026, the Shop: `familyViewer` / `familyActor`, which the
+script's lower-case match misses); `coins.payday` is internal.
 
 ```bash
 python3 - <<'EOF'
@@ -158,11 +160,26 @@ EOF
 
 ## Gotchas learned the hard way
 
-- **The family's later parts are at their budget again** (10 Nov 2026): 42.4 of 44 KB (`FAMILY_LATER_KB`, raised from 42
-  for the typed answers). The level screen is where the next kinds will land: measure with esbuild before CI.
+- **The family's later parts are at their budget again** (10 Nov 2026): 44.6 of 47 KB (`FAMILY_LATER_KB`, raised from 42
+  for the typed answers, then for the Shop). The level screen is where the next kinds will land: measure with esbuild before CI.
 - **A new answer kind or box field goes in four places**: `Ans` / `BoxAns` (`convex/lib/key.ts`, with `ansProblem`), the
   validator `ansKind` / `boxAns` (`convex/schema.ts`), the upload reader's field lists (`kindOf` in
   `src/workbookFile.ts`), and the phone (`typedPart` / `boxWant` in `convex/lib/phone.ts`, `kinds.tsx`, `play.tsx`).
+- **The Shop's coins are not XP** (10 Nov 2026): never lower XP or a race number to pay for a thing; buying lowers
+  `wallets.n` only. Anything new that gives XP (a new answer kind, a new way to mark) pays coins by itself through
+  `xpItems(rows, true)` (convex/lib/family.ts) on the next Monday, unless it is Us XP (not in `xpRows`) or a home
+  workbook Level not yet checked (`lv.home && !lv.hc`). A rule that should never pay must stay out of `xpItems`'s `pay`
+  path. The weekly pay keeps the XP paid out (`wallets.xp`) and never takes coins back: marks taken back fill first.
+- **A file in storage needs a keeper** (10 Nov 2026): `photos.sweep` deletes every image a day old that no row names
+  (`homePhotos`, `usFiles`, and since 10 Nov `shopItems.ph`). A new kind of upload must be named there, or it vanishes
+  the next day.
+- **A new screen for students goes into the later parts** (10 Nov 2026, the Shop): as its own lazy file it cost the first
+  load 0.9 KB more (esbuild split the code it shares with the first screen into one more chunk) though nothing was added
+  to the first screen; inside `parts.ts` it cost the later parts 2.1 KB (their budget 44 → 47). Its style goes in
+  `profile.css` with the parts'.
+- **The top row is full** (10 Nov 2026): who, the flame, the XP | coins capsule, the bell, Feedback fill a 320 px phone
+  with "1.2k" numbers and no name; under 480 px the name is hidden. One more piece needs one taken out (or the capsule
+  to take it). The Shop run-through's `topRowFits` checks every piece is inside the screen and none overlaps.
 
 - **Her own app is two layers** (8 Nov 2026): her pages (`users.pages`, the UI) and her jobs (`users.tabs`, the server's
   permissions). The jobs no longer name a department: a Fighter lead has Theory AND Evaluation (both kinds of work on

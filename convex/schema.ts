@@ -1395,7 +1395,7 @@ export default defineSchema({
      * answers) `lg` a league's winner (`l` the league), `mi` the month's most improved (`wk` = that month's 1st), `own` a
      * gift a teacher gave by hand (`why`, her words).
      */
-    kind: v.union(v.literal("g"), v.literal("a"), v.literal("cup"), v.literal("lg"), v.literal("mi"), v.literal("own")),
+    kind: v.union(v.literal("g"), v.literal("a"), v.literal("cup"), v.literal("lg"), v.literal("mi"), v.literal("own"), v.literal("shop")),
     what: v.string(),
     at: v.number(),
     open: v.boolean(),
@@ -1403,9 +1403,54 @@ export default defineSchema({
     by: v.optional(v.string()),
     l: v.optional(v.number()),
     why: v.optional(v.string()),
+    /** 10 Nov 2026, the Shop (`shop`): what he bought (`item`) for how many coins (`c`); his card until Given. */
+    c: v.optional(v.number()),
+    item: v.optional(v.id("shopItems")),
   })
     .index("by_open", ["open", "at"])
     .index("by_sid", ["sid", "open"]),
+
+  /**
+   * The Shop (10 Nov 2026, his voice note: "I have diamonds and I don't know what to do with the diamonds"): what a
+   * student can buy with his coins, set by the owner in Settings → Shop. `p` = its price in coins (1 coin = Rs 1 of the
+   * shop's price), `st` = how many are left (missing = no end), `sh` = its shelf (owl things, treats), `on` = on the
+   * phones, `ph` = its photo (a file the hourly sweep keeps).
+   */
+  shopItems: defineTable({
+    n: v.string(),
+    p: v.number(),
+    st: v.optional(v.number()),
+    sh: v.union(v.literal("owl"), v.literal("treat")),
+    on: v.boolean(),
+    ph: v.optional(v.id("_storage")),
+    at: v.number(),
+  }).index("by_on", ["on"]),
+
+  /**
+   * A student's coins (10 Nov 2026): `n` = the coins he has; `xp` = the XP already paid out (every Monday last week's XP
+   * pays, 5 XP = 1 coin: convex/lib/coins.ts); `wk` = the Monday of his last pay, `last` = its coins (Home's PAYDAY card);
+   * `paid` / `spent` = coins ever paid and spent.
+   */
+  wallets: defineTable({
+    sid: v.id("students"),
+    n: v.number(),
+    xp: v.number(),
+    wk: v.number(),
+    last: v.number(),
+    paid: v.number(),
+    spent: v.number(),
+  }).index("by_sid", ["sid"]),
+
+  /** Each change to a student's coins: a Monday's pay, a thing bought, coins given back (`w` = what, in words). */
+  coinLog: defineTable({
+    sid: v.id("students"),
+    at: v.number(),
+    n: v.number(),
+    k: v.union(v.literal("pay"), v.literal("buy"), v.literal("back")),
+    w: v.optional(v.string()),
+  })
+    .index("by_sid", ["sid", "at"])
+    .index("by_at", ["at"]),
 
   /** A cheer (👏, 7 Nov 2026): one tap on a classmate's profile, no words; one a day per classmate. */
   cheers: defineTable({

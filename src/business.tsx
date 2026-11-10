@@ -39,6 +39,8 @@ type Biz =
       allOut: number;
       staff: StaffLine[];
       spends: { id: string; k: "staff" | "other"; a: number; at: number; day: string; who?: string; note?: string }[];
+      /** The family app's Shop this month (10 Nov 2026; missing on a server from before). */
+      shop?: { paid: number; spent: number; back: number; held: number; wallets: number };
     };
 
 const RELOAD_MS = 5 * 60_000;
@@ -126,6 +128,24 @@ export function BusinessTab(props: { cfg: { fee: number; from: string; paper: nu
           <Tile v={rs(b.allIn - b.allOut)} k="money kept" sub={`since ${dateWords(b.cfg.from)}: in ${rs(b.allIn)}, out ${rs(b.allOut)}`} tone={b.allIn - b.allOut < 0 ? "red" : undefined} />
         </div>
       </section>
+
+      {b.shop && b.shop.wallets > 0 && (
+        <section class="boss-card">
+          <h3>
+            Shop <small>coins this month</small>
+          </h3>
+          <div class="boss-tiles three money">
+            <Tile v={rs(b.shop.paid)} k="coins paid" sub="every Monday: 5 XP = 1 coin" />
+            <Tile v={rs(b.shop.spent - b.shop.back)} k="spent in the Shop" sub="what the things cost you" />
+            <Tile v={rs(b.shop.held)} k="in students' hands" sub="coins not spent yet" />
+          </div>
+          <p class="boss-note">
+            1 coin = Rs 1 of a thing's price.{" "}
+            {m.inA > 0 ? `Coins paid = ${Math.round((b.shop.paid / m.inA) * 100)}% of this month's money in. ` : ""}Set the things and
+            the most coins a week in Settings → Shop.
+          </p>
+        </section>
+      )}
 
       <section class="boss-card">
         <h3>Books</h3>

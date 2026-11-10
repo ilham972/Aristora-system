@@ -46,13 +46,14 @@ import { SHOUT_WHY } from "../convex/lib/us";
 import { ClassHours } from "./classHours";
 import { ClaudeLink } from "./claudeLink";
 import { RaceSettings } from "./raceSettings";
+import { ShopSettings } from "./shopSettings";
 import { UsSettings } from "./usSettings";
 import { SimPanel, SimSwitch } from "./sim";
 import { roleWords, Roles } from "./roles";
 import { DEPT_NAMES, extrasFor, isTeachDept, jobsFor, presetPages, type Dept, type PageId } from "../convex/lib/dept";
 import { GRADES, GradeRow, Sheet, STATE_WORDS, useGrade } from "./ui";
 
-export type SettingsTab = "students" | "books" | "people" | "roles" | "hours" | "race" | "community" | "alerts" | "reports" | "history" | "feedback" | "photos" | "account";
+export type SettingsTab = "students" | "books" | "people" | "roles" | "hours" | "race" | "shop" | "community" | "alerts" | "reports" | "history" | "feedback" | "photos" | "account";
 type Tab = SettingsTab;
 
 const SETTINGS_TABS: [Tab, string, () => boolean][] = [
@@ -66,6 +67,8 @@ const SETTINGS_TABS: [Tab, string, () => boolean][] = [
   // The family app's race (7 Nov 2026): gifts to give (owner, Manager), last week's champions and their poster (and
   // Reports), the prizes and the marks switch (owner).
   ["race", "Race", () => may("owner") || may("manager") || may("reports")],
+  // The family app's Shop (10 Nov 2026): the owner's things, the month's coins, the most coins a week.
+  ["shop", "Shop", () => may("owner")],
   // Us, the students' community (7 Nov 2026): the owner's switches (the teachers' side is the class app's Us tab).
   ["community", "Community", () => may("owner")],
   ["alerts", "Alerts", () => true],
@@ -120,6 +123,7 @@ export function Settings(props: {
       {tab === "photos" && <PhotoQueue views={props.views} onOpen={props.onPhotos} />}
       {tab === "hours" && <ClassHours />}
       {tab === "race" && <RaceSettings views={props.views} />}
+      {tab === "shop" && <ShopSettings />}
       {tab === "community" && <UsSettings />}
       {tab === "people" && <People />}
       {tab === "roles" && <Roles onClose={props.onClose} />}
@@ -1206,6 +1210,15 @@ function describe(e: Doc<"events">): string {
       return `spending of ${v} taken back`;
     case "money-rate":
       return `pay set for ${v}`;
+    // The family app's Shop (10 Nov 2026).
+    case "shop-buy":
+      return `bought in the Shop: ${v}`;
+    case "shop-back":
+      return `coins given back: ${v}`;
+    case "shop-item":
+      return `the Shop: ${v}`;
+    case "shop-limit":
+      return v === "none" ? "the Shop: no limit on a week's pay" : `the Shop: the pay stops at ${v} coins a week`;
     case "keep":
       return `kept in Evaluation for ${v} (his next book)`;
     case "book-given-off":

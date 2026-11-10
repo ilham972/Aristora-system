@@ -441,11 +441,13 @@ function classCircles(r: Doc<"progress">): { s: string; t: number }[] {
  * question came back (4 Nov 2026: counted the day he won them back, never more than he had lost). A theory book's
  * question the class marked right: 1 XP the moment it was marked (7 Nov 2026; at home a ladder section counts its parts).
  * Being taught or explained is never XP: XP = marks, so nobody wins XP by getting things wrong.
+ * `pay` (10 Nov 2026, the Shop's coins: convex/lib/coins.ts): the XP that pays coins, the same without a workbook Level he
+ * checked at home that no teacher has checked in class yet.
  */
-export function xpItems(rows: Doc<"progress">[]): { t: number; xp: number }[] {
+export function xpItems(rows: Doc<"progress">[], pay = false): { t: number; xp: number }[] {
   const out: { t: number; xp: number }[] = [];
   for (const r of rows) {
-    for (const lv of Object.values(r.m?.lv ?? {})) if (lv.fixed) out.push({ t: lv.done ?? lv.fixed, xp: lv.got ?? 0 });
+    for (const lv of Object.values(r.m?.lv ?? {})) if (lv.fixed && !(pay && lv.home && !lv.hc)) out.push({ t: lv.done ?? lv.fixed, xp: lv.got ?? 0 });
     // A tute's ladder section checked at home (4 Nov 2026): its parts right.
     for (const x of Object.values(r.lh ?? {})) out.push({ t: x.t, xp: x.got });
     for (const x of Object.values(r.m?.q ?? {})) {

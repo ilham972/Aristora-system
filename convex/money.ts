@@ -8,6 +8,7 @@
 // else's payment, the team's pay, other spending, the Business tab.
 
 import { v } from "convex/values";
+import { shopMonth } from "./lib/coins";
 import type { Doc, Id } from "./_generated/dataModel";
 import { query, type QueryCtx } from "./_generated/server";
 import { actor, viewer } from "./lib/auth";
@@ -330,6 +331,8 @@ export const business = query({
       allOut,
       staff,
       spends,
+      // The family app's Shop (10 Nov 2026): its coins this month (1 coin = Rs 1 of a thing's price at most).
+      shop: await shopMonth(ctx, now),
     };
   },
 });

@@ -11,6 +11,8 @@ type TestBackend = {
   mutation(name: string, args: unknown): Promise<unknown>;
   /** One answer to a query (the test harness has it; older fakes don't). */
   query?(name: string, args: unknown): Promise<unknown>;
+  /** A file into the test storage (the harness; 10 Nov 2026: the Shop's photos). */
+  upload?(blob: Blob): Promise<string>;
 };
 
 const testBackend = (globalThis as { __ARISTORA_TEST_BACKEND__?: TestBackend }).__ARISTORA_TEST_BACKEND__;
@@ -155,6 +157,19 @@ export async function mutate<M extends FunctionReference<"mutation">>(
   const a = withToken(args);
   if (testBackend) return (await testBackend.mutation(getFunctionName(fn), a)) as FunctionReturnType<M>;
   return await convex().mutation(fn, a);
+}
+
+/**
+ * One file into Convex storage (10 Nov 2026, the Shop's photos): an address from `urlFn` (a mutation that checks who
+ * may), then a plain POST of the file. Its storage id, for the mutation that saves it.
+ */
+export async function upload(urlFn: FunctionReference<"mutation">, blob: Blob): Promise<string> {
+  const url = (await mutate(urlFn, {} as FunctionArgs<typeof urlFn>)) as string;
+  if (testBackend?.upload) return await testBackend.upload(blob);
+  const res = await fetch(url, { method: "POST", headers: { "Content-Type": blob.type || "image/jpeg" }, body: blob });
+  const j = (await res.json().catch(() => null)) as { storageId?: string } | null;
+  if (!res.ok || !j?.storageId) throw new Error("The photo didn't arrive. Try again.");
+  return j.storageId;
 }
 
 export type Link = { connected: boolean; everConnected: boolean; sending: number };

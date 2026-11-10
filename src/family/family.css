@@ -324,6 +324,29 @@ p {
 .f-gem-c {
   fill: var(--gem-hi);
 }
+/* The coin (10 Nov 2026, the Shop): gold = what he wins; a darker edge, a ring, a highlight. */
+.f-coin {
+  display: block;
+  flex: none;
+}
+.f-coin-e {
+  fill: var(--gold-3d);
+}
+.f-coin-f {
+  fill: var(--gold);
+}
+.f-coin-r {
+  fill: none;
+  stroke: var(--gold-3d);
+  stroke-width: 1.6;
+  opacity: 0.55;
+}
+.f-coin-h {
+  fill: none;
+  stroke: var(--gold-hi);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
 
 /* Labels: a pill ("STAGE 4" on a header: glass; "PERSONAL BEST", "7 IN A ROW": gold, a little tilt for a win) */
 .f-tag {
@@ -934,8 +957,77 @@ p {
   animation: f-bump 0.5s var(--spring) both;
 }
 .f-pill.grew .f-gem,
-.f-pill.grew .f-flame {
+.f-pill.grew .f-flame,
+.f-pill.grew .f-coin {
   animation: f-tabpop 0.6s var(--spring) both;
+}
+/* XP and his coins in one capsule (10 Nov 2026, the Shop on the top row): one white pill, two taps, a hairline between. */
+.f-wallet {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  height: 36px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+.f-wallet .f-pill {
+  height: 100%;
+  background: none;
+  box-shadow: none;
+}
+.f-wallet .f-pill.coin {
+  position: relative;
+  padding-left: 9px;
+}
+.f-wallet .f-pill.coin::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 1.5px;
+  border-radius: 1px;
+  background: var(--line-2);
+}
+.f-hero .f-wallet {
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: none;
+}
+.f-hero .f-wallet .f-pill {
+  background: none;
+}
+.f-hero .f-wallet .f-pill.coin::before {
+  background: rgba(255, 255, 255, 0.3);
+}
+/* A long number short on the smallest phones ("1.2k": Num in app.tsx). */
+.f-ns {
+  display: none;
+}
+/* On a phone (under 480 px) the top row shows his face, not his name (10 Nov 2026: the coins took its room; a name cut
+   to "H…" looked broken; Home greets him by name, the children sheet names each one). */
+@media (max-width: 479px) {
+  .f-toprow .f-who .f-name {
+    display: none;
+  }
+}
+/* A 360–400 px phone (most Redmis): the top row's pieces a little tighter. */
+@media (max-width: 400px) {
+  .f-toprow {
+    gap: 5px;
+  }
+  .f-pill {
+    gap: 4px;
+    padding: 0 9px 0 7px;
+  }
+  .f-pill svg {
+    width: 17px;
+    height: 17px;
+  }
+  .f-toprow .f-fbb {
+    width: 36px;
+    height: 36px;
+  }
 }
 .f-fbb {
   display: grid;
@@ -3081,6 +3173,67 @@ button.f-pod:active,
     animation: none;
   }
 }
+/* What he bought in the Shop (10 Nov 2026): the same gold card, its coins, Cancel (asks once more). */
+.f-giftc-c {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.f-giftc-x {
+  position: relative;
+  z-index: 1;
+  justify-self: start;
+  margin-top: 2px;
+  color: var(--gold-ink);
+}
+.f-giftc-x.sure {
+  color: var(--wrong-ink);
+}
+/* Pay day on Home (10 Nov 2026): white with a gold ring, the coins he got, the Shop. */
+.f-payc {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  text-align: center;
+  background: linear-gradient(170deg, #fff 40%, var(--gold-soft));
+  box-shadow: inset 0 0 0 2px var(--gold), var(--shadow);
+}
+.f-payc-x {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  color: var(--ink3);
+  font-size: 15px;
+}
+.f-payc-n {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+  font: 800 40px/1 var(--display);
+  color: var(--gold-ink);
+}
+.f-payc-n .f-coin {
+  animation: f-bob 2s ease-in-out infinite;
+}
+.f-payc-w {
+  max-width: 30ch;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink2);
+}
+.f-payc-go {
+  min-width: 150px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .f-payc-n .f-coin {
+    animation: none;
+  }
+}
 /* Who cheered him this week (Home and Me): gold, a win. */
 .f-clap-h {
   display: inline-block;
@@ -4029,12 +4182,49 @@ button.f-pod:active,
     padding: 0 9px 0 7px;
     font-size: 14px;
   }
-  .f-fbb {
+  .f-fbb,
+  .f-toprow .f-fbb {
     width: 34px;
     height: 34px;
   }
   .f-toprow {
     gap: 5px;
+  }
+  /* 10 Nov 2026, the coins on the top row: his face without the name (the children sheet names him), long numbers
+     short, everything a little tighter. */
+  .f-toprow {
+    gap: 4px;
+  }
+  .f-toprow .f-who {
+    gap: 0;
+    padding-right: 5px;
+  }
+  .f-toprow .f-who .f-name,
+  .f-toprow .f-who .f-caret:not(.many) {
+    display: none;
+  }
+  .f-toprow .f-who .f-caret.many {
+    margin-left: 4px;
+  }
+  .f-wallet {
+    height: 34px;
+  }
+  .f-toprow .f-pill {
+    gap: 3px;
+    padding: 0 7px 0 6px;
+  }
+  .f-wallet .f-pill.coin {
+    padding-left: 7px;
+  }
+  .f-toprow .f-pill svg {
+    width: 16px;
+    height: 16px;
+  }
+  .f-nl {
+    display: none;
+  }
+  .f-ns {
+    display: inline;
   }
   .f-tab span {
     font-size: 12.5px;
