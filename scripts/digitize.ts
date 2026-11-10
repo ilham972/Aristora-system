@@ -284,7 +284,7 @@ function opEdits(h: string, s: number, e: number, op: Op): Edit[] | string {
   if (op.kind === "opt") {
     const at = seg.indexOf('<div class="mcq"');
     if (at < 0) return "no printed options (.mcq) there";
-    const re = /<span>(?=<b>\([^)<]{1,5}\)<\/b>)/g; // (1) … (4), (I) … (IV), (a) …
+    const re = /<span>(?=<b>\(?[^()<]{1,5}\)<\/b>)/g; // (1) … (4), (I) … (IV), (a) …, I) … IV)
     re.lastIndex = at;
     for (let m = re.exec(seg); m && out.length < op.n; m = re.exec(seg)) out.push({ at: s + m.index + 5, del: 0, ins: ' data-opt="0"' });
     return out.length === op.n ? out : `${op.n} options wanted, ${out.length} printed`;
