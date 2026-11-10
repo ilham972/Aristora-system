@@ -114,7 +114,25 @@ export async function exchange(reqs: Req[], log = (s: string) => console.log(s))
     out[short] = answer as Record<string, any>;
   }
   rmSync(work, { recursive: true, force: true });
+  await empty(branch, remote);
   return out;
+}
+
+/** The branch emptied once its answers are read: nothing sealed stays on GitHub (deleting a branch is refused here). */
+async function empty(branch: string, remote: string): Promise<void> {
+  const dir = mkdtempSync(join(tmpdir(), "link-empty-"));
+  try {
+    writeFileSync(join(dir, "README.md"), "The Claude link's carrier branch: emptied after use (scripts/claude-link.ts).\n");
+    writeFileSync(join(dir, "vercel.json"), JSON.stringify({ git: { deploymentEnabled: false } }));
+    git(dir, "init", "-q", "-b", branch);
+    git(dir, "add", "-A");
+    git(dir, "-c", "user.name=claude", "-c", "user.email=noreply@anthropic.com", "commit", "-q", "-m", "Emptied after use");
+    git(dir, "push", "-q", "--force", remote, `HEAD:refs/heads/${branch}`);
+  } catch {
+    // best effort: the next exchange pushes over it anyway
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 async function main() {

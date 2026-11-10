@@ -95,8 +95,10 @@ node $TSX scripts/claude-link.ts $SCR/req.json $SCR/link-out        # → $SCR/l
 ```
 
 - One file of requests = one push to a branch `link-…` (an orphan commit: the carrier's two files and the sealed
-  requests) and one run of the "link" job (no install: about 30 seconds); the script waits for the answers and opens
-  them. `LINK_BRANCH=link-<topic>` pushes over the same branch each time. Requests go in the file's order.
+  requests) and one run of the "link" job (no install: about 30 seconds); the script waits for the answers, opens
+  them, then empties the branch (an empty commit: deleting a branch is refused from a chat). `LINK_BRANCH=link-<topic>`
+  pushes over the same branch each time. Requests go in the file's order.
+- When the work is done, tell him to tap **Turn off** (Settings → Books → Claude link): the code is in the chat.
 - A save is checked like an uploaded zip and is all or nothing; its answer says what was wrong in plain words
   ("Question 12: the book prints 0 blanks, its key uses 1."), else what the phone now marks (`share`: marks, parts
   phone / read / photo, and the photo parts' numbers). Send a unit's whole key (`answers`), never a piece of it.
