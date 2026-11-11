@@ -617,8 +617,8 @@ books from the unit six ... every day revenue and how much money credit ... the 
 the employees ... both need to be in the one place when it comes to data entry"; his answers: he types each book's
 price and the app shows its cost, the Management people and he take the money, the parents hear it in class and on the
 family app, never by WhatsApp).** Rules `convex/lib/money.ts` (pure), the ledger kept in step `convex/lib/feeRows.ts`,
-server `convex/money.ts`; phones `src/fees.tsx`, `src/books.tsx`, `src/moneySheet.tsx`, `src/business.tsx`,
-`src/moneyData.ts`.
+server `convex/money.ts`; phones `src/fees.tsx`, `src/books.tsx`, `src/moneyDesk.tsx` (the pad, the pills),
+`src/moneySheet.tsx` (the rare things' sheet), `src/business.tsx`, `src/moneyData.ts`.
 - **Nothing happens until the owner sets the fees up** (the Fees page's first card, owner only): a class's fee (Rs 350),
   one paper at the print shop (Rs 7), and the first day counted (Today: everyone already signed in today gets today's
   class at once; or Tomorrow). Nothing before that day is ever charged. Later only the fee and the paper change (Business
@@ -637,32 +637,79 @@ server `convex/money.ts`; phones `src/fees.tsx`, `src/books.tsx`, `src/moneyShee
   pays his next charges as they come. `accounts` keeps each student's sums ready (owe, credit, open classes / books / old
   debt, since when, books not paid, paid in all, his last payment, the last day he came, his own fee; his name and grade
   copied so no list reads the students' rows). Take back (`unpay`): whoever took it, within 12 hours; the owner always.
-- **Only the owner:** waive a charge (`waive`: it counts as nothing; Charge again), a student's own fee (`setFee`, Rs 0
-  = free, from his next class), what he owed or had paid ahead before the app (`opening`, one line each, the oldest),
+- **Only the owner:** waive a charge (`waive`: it counts as nothing; Charge again), a student's own fee (`setFee`, from
+  his next class), a free student (`setFree`, below), another day's Didn't come (`absent`), what he owed or had paid
+  ahead before the app (`opening`, one line each, the oldest),
   a book's price (`setBook price`), staff pay and other spending (`spend`, `setRate`, `unspend`), the Business tab
   (`money.business`), and the money lines of the history (`money-*`, hidden from Reports people in `state.history`).
+- **One screen each, no pop-up for the daily work (11 Nov 2026, his voice note: "each time I have to press each row and
+  that will open the pop-up ... one by one doing is very hard ... look at the correction page ... I can do everything
+  immediately, without thinking ... for the fast use this is not suitable").** Both pages are built like Correction
+  (`src/moneyDesk.tsx`): rows pinned under the top bar (the page's tabs, the grades in one row with their numbers), the
+  names as **pills** that wrap, and **the pad** at the bottom, every button in its place. A tap on a name picks him
+  (nothing opens; a tap never unpicks). The toasts sit just above the pad on these pages (`body.mnx-desk`,
+  `--mnx-pad-h`), so Undo never covers Paid.
+- **The pad (one student's money and books):** who he is and what he owes ("Owes Rs 1,050 · 2 classes · 1 book · 16
+  days"; his free tags), then **Give** his next book (its price, the copies in hand, his book now; red when he is at the
+  end of his book; "✓ Has Unit 9" when he holds it) and **Didn't come**, then his charges as **chips in one line**
+  (Today first, then a book given today, then the oldest; today's are ticked by themselves, also one that comes while he
+  is picked: a book given here), then **All** (everything he owes; again = today's only), the **amount** (the ticked sum,
+  or typed: part of it, or more = credit, said in his line) and the big **Paid**. A normal student = his name, Paid. The
+  book and today's class together = his name, Give, Paid. After Paid the pad stays his, nothing ticked, Paid pale until
+  his lines come back (a second tap takes nothing), with "✓ Paid Rs 550 today. Take back". Nobody picked: the same pad,
+  pale.
+- **Behind ⋯ (`MoreSheet`, a sheet, the rare things):** the owner's two switches (Class free, Books free); his books
+  (his book now, the books given since the fees began: paid ✓ / to pay / free / no price yet, the ones from before,
+  **Give another book…** = the units grid with Move him and Books given, the old Correction sheet); his history (who
+  took each payment; Take back; the owner's Waive / Charge; Didn't come on a class line; the classes taken off); the
+  owner: his own fee and his money from before the app. Before the fees are set up it still gives books (not charged).
 - **The Fees page** (a bottom tab for the Management department; the owner opens it from his Dashboard → Management →
-  Money and books, or puts it on his bar): three tiles (in today, came and not paid, owed to you; red when someone
-  has owed for 2 weeks), "Find any student" (to pay ahead, or for another day), then **Today** (everyone who came today:
-  still owing first, then part-paid, then paid; A–Z inside each), **Owed** (most first, how many days, red from 14,
-  amber from 7; those who left the class too, tagged; the grade row filters, tap again for all; paid ahead below) and,
-  for the owner, **Business**. Anyone without the Money tick or the owner: refused by the server.
-- **His sheet: money and books in one place** (`MoneySheet`, from the Fees and Books pages): what he owes as chips,
-  today's already ticked (today's class, a book given today, and any that comes while it is open); the amount is the
-  ticked sum or what is typed (part of it, or more = credit, said under the button); **Paid** saves and closes, Undo in
-  the toast. His books: his book now and how near its end, his next book (its price, the copies in hand, **Give**: its
-  charge appears ticked at once), the books given since the fees began (paid ✓ / to pay / free / no price yet), the ones
-  from before; **Give another book…** = the units grid with Move him and Books given (the old Correction sheet: its OL
-  books and "Give him every OL book" too). His history (who took each payment; Take back; the owner's Waive). The
-  owner: his fee and his money from before.
+  Money and books, or puts it on his bar): **Today · Owed · Everyone** (· the owner's **Business**), one line of money
+  (in today and how many payments; owed to you, red when someone has owed 2 weeks), the grades (the number = who still
+  has to pay there, a red corner = an old debt; **every grade until she taps one, the dark grade again = every grade**;
+  Everyone: always one grade). The pills: amber = owes (how much), yellow = gave part today, green ✓ = paid (or "+150"
+  paid ahead), dashed = free, red = owed 2 weeks, "left" = he left the class. **Today**: everyone who came today, A–Z,
+  in places that never move as they pay. **Owed**: the most first, then paid ahead; the names hold still while she takes
+  the money (`holdPlaces`: one who paid everything keeps his place, green). **Everyone**: a grade's students with or
+  without an account (to pay ahead, to make one free; it replaced "Find any student"). Anyone without the Money tick or
+  the owner: refused by the server.
+- **Free students (the owner only; his words: "some students is always free, some student book is also free, some
+  student class free not book free"):** two switches behind ⋯, any mix (`money.setFree`). **Class free** = his own fee
+  Rs 0 (a Rs 0 class row each day he comes, so his days are still counted). **Books free** = `accounts.fb`: a printed
+  book given is a Rs 0 `book` row marked `fr` (no price ever reaches it; its copy still leaves the stock). **On wipes
+  what he still owes of it** (his answer; `freeFix`): a charge nobody paid for is waived (`w`, `fr`), a charge paid in
+  part keeps the part he paid as its amount (`a`, `fr`: nothing he gave turns into credit), a book waiting for its price
+  never takes one; what he paid stays paid. Off: from his next class (the centre's fee) or book; what was made free
+  stays free (History → Charge puts one back).
+- **Didn't come (his words: "we put some person attendant to the class accidentally, but they actually not come ...
+  otherwise we consider that person not give the money"):** `money.absent(sid, day)`: his visits of that day leave the
+  register (`neverCame` in `convex/lib/backend.ts`: still signed in → out of the hall with no idle time, his calls
+  closed, like Attendance's Undo, which works for 5 minutes only), so the class row goes by itself (a payment for it
+  becomes his credit), and a Rs 0 `off` row stays (which day, who took it off, when). **Money people: today's class
+  only; the owner: any day since the fees began** (his answer: an old class must not vanish without him). The pad's
+  button is today's class (asked once more: "Sure? Tap again", and a double tap is not a yes: 450 ms); another day's is
+  on its line in his history. The owner's Business tab lists the month's (`offs`, `MonthMoney.offN`). He did come after
+  all: sign him in again on Attendance.
+- **The same money is never taken twice:** `money.pay` refuses a payment whose ticked charges are all paid already (a
+  second phone with the page from a minute ago): "… has paid that already". Nothing ticked (paying ahead) is never
+  refused.
 - **The Books page** (a bottom tab for the Management department; the owner: Dashboard → Books ›): **To print** (his
   words at the top: "Print 2 of Unit 9." with the grade when two grades are in it, and about how much; a card per next
   book: Print N (red when someone needs it now and none is in hand), who needs it now (red pills) and soon, the copies
-  in hand, papers × the paper's cost, **Printed…**), **Students** (grade by grade: his book now, "Level 7 of 8" or
-  "finished", his next book: "✓ has Unit 9", in hand, or to print; books not paid; the grade row counts those near the
-  end with no next book in hand), **Stock** (every book in the app by grade, OL too: in hand, papers, price and cost; a
-  tap: papers, the price (owner; the profit a copy shown), Copies in hand now (a count on the shelf restarts the stock),
-  Printed…, the last prints). The Books tab's red number = copies someone needs now that nobody has in hand.
+  in hand, papers × the paper's cost, **Printed…**; a name there opens him in Students). **Students**: the grades (the
+  number = near the end with no next book in hand, red = at the end), that grade's names as pills (red "needs" = at the
+  end of his book with no next one, amber "soon", green ✓ = he has it; an amber dot = a book not paid), and the same pad
+  as on Fees. **Stock (his words: "in the stock when I press any book, I can select any students I want, then that's
+  where also we can give the books")**: the grades (OL too), that grade's printed books in ONE row in book order (its
+  number, the copies in hand under it; red or amber outline = to print, dashed = no price yet, a small T = a theory
+  book; the page picks the one someone needs; the row stays under the pinned rows), then the students it can go to
+  (`stockPeople`: its grade's; an OL book's: Grades 10 and 11): ✓ = has it, "needs" / "soon" = his next book, "on it" =
+  his book now, pale = not here today. **The page ticks who is at the end of his book and here** (`stockTicks`; the
+  ticks hold once shown, her first tap makes them hers); she ticks anyone; **Give to N** (`students.giveMany`, now also
+  for Money people; each copy is charged by itself, a free student's is free; Undo in the toast); more ticked than the
+  shelf holds is said in amber, never refused; **Take back** for the ticked who have it. Its pad's ⋯ = the book's sheet:
+  papers, the price (owner; the profit a copy shown), Copies in hand now (a count on the shelf restarts the stock),
+  Printed…, the last prints. The Books tab's red number = copies someone needs now that nobody has in hand.
 - **Near the end** (`finishOf`): a workbook with 2 levels or fewer left (the one he is on counts) = soon; every level
   handed in or finished = now. A theory book with a fifth of its questions or fewer not tried (or its final open) = soon;
   every question tried or finished = now. **His next book** (`nextBookOf`): the first unit after his book now in his
@@ -2371,9 +2418,11 @@ learning app of our education institute"): one profile, his class times, what he
 - The permission names are `Perm` in `convex/lib/auth.ts`: jobs, extras, `"owner"`, `"any"`.
 - **Money (9 Nov 2026):** the extra `money` (Settings → People "Money", or the Fees / Books pages on her bar: the server
   adds it, `withNeeds`): `money.board`, `money.student`, `money.shop`, `money.pay`, `money.unpay` (her own within 12 h),
-  `money.printed`, `money.unprint` (hers within 12 h), `money.count`, `money.setBook` (papers only), and
-  `students.setGiven` (with Correction). Owner only: `money.setup`, `money.waive`, `money.opening`, `money.setFee`,
-  `money.setBook` price, `money.spend`, `money.unspend`, `money.setRate`, `money.business`.
+  `money.printed`, `money.unprint` (hers within 12 h), `money.count`, `money.setBook` (papers only),
+  `money.absent` for today's class (11 Nov 2026), and `students.setGiven` and `students.giveMany` (with Correction /
+  Students). Owner only: `money.setup`, `money.waive`, `money.opening`, `money.setFee`, `money.setFree`,
+  `money.absent` for another day, `money.setBook` price, `money.spend`, `money.unspend`, `money.setRate`,
+  `money.business`.
 - **Departments and her own app (8 Nov 2026):** `users.dept` (fighter / master / management), `users.lead`,
   `users.pages` (her bottom bar); set by the owner in Settings → Roles (`people.setRole`; `people.add` with them), sent
   to her phone by `auth.me` (`publicUser`: `dept`, `lead`, `pages`, and `photo` = her Us photo's key). The jobs stay the

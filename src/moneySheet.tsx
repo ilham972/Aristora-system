@@ -1,26 +1,26 @@
-// One student's money and books in ONE sheet (9 Nov 2026, his voice note: "students will give us money end of the class
-// ... if it is book money or if it is class fee, both they gave us in the same time ... we can't switch the pages ...
-// these both need to be in the one place when it comes to data entry"). Opened from the Fees page and the Books page.
-// - What he owes as chips, today's already ticked (today's class, a book given today): Paid takes the ticked amount (or
-//   the amount typed: part of it, or more = credit). A tap on Paid closes the sheet, Undo in the toast.
-// - His books: his book now and how near its end, his next book (Give: its price goes on the chips at once, ticked),
-//   the books given since the fees began (paid or not), the ones from before.
-// - The history (Take back a payment: whoever took it within 12 hours, the owner always; the owner waives a charge).
+// One student's rare things in a sheet (11 Nov 2026; before, 9 Nov, this sheet was the only way to take money or give
+// a book, and he found it slow: "each time I have to press each row and that will open the pop-up"). The daily work
+// moved onto the page (src/moneyDesk.tsx: his chips, Give, Didn't come, Paid, at the bottom of the Fees and Books
+// pages). What stays here, behind the pad's ⋯:
+// - The owner's switches: Class free, Books free (what he owes of it is wiped; convex/money.ts setFree).
+// - His books: his book now, the books given since the fees began (paid or not), the ones from before, Give another
+//   book… (the units grid).
+// - The history (Take back a payment: whoever took it within 12 hours, the owner always; the owner waives a charge;
+//   Didn't come on a class: the owner any day, Money people today's).
 // - The owner: his own fee, an old debt or credit from before the app.
+// Also here: the words both pages share (a unit's number and name, a book, a day).
 
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useRef, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
-import { slDay } from "../convex/lib/day";
 import { addDay, isCharge, type FeeKind } from "../convex/lib/money";
 import { OL, olNumber } from "../convex/lib/syllabus";
 import { mutate } from "./backend";
 import type { View } from "./derive";
 import { StageUnitSheet } from "./focus";
 import { unitNo } from "./focusData";
-import { useQuery } from "./live";
-import { finishOf, keyOf, nextBookOf, rs, type BookStage } from "./moneyData";
-import { act, allUnits, now as serverNow, toast, unitOf } from "./store";
+import { finishOf, rs, type BookStage } from "./moneyData";
+import { act, allUnits, toast, unitOf } from "./store";
 import { tone } from "./tones";
 import { Sheet } from "./ui";
 
@@ -32,6 +32,10 @@ export type StudentMoney = {
   now: number;
   fee: number;
   own: boolean;
+  /** His books are free (the owner's switch). */
+  freeBooks: boolean;
+  /** Today in Sri Lanka, as the server has it. */
+  today: string;
   from: string | null;
   owe: number;
   cr: number;
@@ -47,6 +51,7 @@ export type StudentMoney = {
     to?: string[];
     w?: number;
     np?: boolean;
+    fr?: boolean;
     by?: string;
     note?: string;
     left: number;
@@ -106,257 +111,199 @@ export function dayWords(day: string, today: string): string {
 const clock = (t: number) => new Date(t + 330 * 60_000).toISOString().slice(11, 16);
 
 /** What a charge is, in a few words. */
-function chargeWords(r: { k: FeeKind; day: string; u?: string; st?: BookStage }, today: string): string {
+export function chargeWords(r: { k: FeeKind; day: string; u?: string; st?: BookStage }, today: string): string {
   if (r.k === "class") return `${dayWords(r.day, today)} · class`;
   if (r.k === "book") return r.u && r.st ? bookWords(r.u, r.st) : "a book";
   return "Old debt";
 }
+/** The same on a chip of the pad (one line that scrolls sideways: as short as it can be). */
+export function chipWords(r: { k: FeeKind; day: string; u?: string; st?: BookStage }, today: string): string {
+  if (r.k === "class") return r.day === today ? "Today" : dateWords(r.day);
+  if (r.k === "book") return r.u ? `Book ${unitNum(r.u)}${r.st === "fighter" ? " theory" : ""}` : "Book";
+  return "Old debt";
+}
 
-const digits = (s: string) => s.replace(/[^\d]/g, "").slice(0, 7);
+export const digits = (s: string) => s.replace(/[^\d]/g, "").slice(0, 7);
+/** May this phone take this payment back? Whoever took it within 12 hours; the owner always. */
+export const mayTakeBack = (d: Pick<StudentMoney, "owner" | "me" | "now">, r: { k: FeeKind; by?: string; at: number }) =>
+  r.k === "pay" && (d.owner || (r.by === d.me && d.now - r.at < TAKE_BACK_MS));
 
-export function MoneySheet(props: { sid: string; name: string; view: View | null; onClose: () => void }) {
-  const { sid } = props;
-  const d = useQuery<StudentMoney>(api.money.student, { sid });
-  const shop = useQuery<ShopData>(api.money.shop, {});
-  const cat = useQuery<CatalogBook[]>(api.catalog.books, {});
-  const today = slDay(serverNow());
-  const [ticks, setTicks] = useState<Set<string> | null>(null);
-  const seen = useRef<Set<string>>(new Set());
-  const [typed, setTyped] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+/** The pad's ⋯: his books, his history, the owner's switches and fixes. `d` = money.student, read by the pad. */
+export function MoreSheet(props: { sid: string; name: string; view: View | null; d: StudentMoney; onClose: () => void }) {
+  const { sid, d } = props;
+  const today = d.today;
   const [giving, setGiving] = useState(false);
-  const [history, setHistory] = useState(false);
   const [fix, setFix] = useState(false);
-
-  const open = d ? d.rows.filter((r) => isCharge(r.k) && r.left > 0 && r.w === undefined) : [];
-  // Today's charges ticked by themselves: when the sheet opens, and any that comes while it is open (a book given here).
-  useEffect(() => {
-    if (!d) return;
-    const fresh = open.filter((r) => !seen.current.has(r.id));
-    for (const r of open) seen.current.add(r.id);
-    setTicks((t) => {
-      const base = t ?? new Set<string>();
-      const next = new Set([...base].filter((id) => open.some((r) => r.id === id)));
-      for (const r of fresh) if (r.day === today) next.add(r.id);
-      return next;
-    });
-  }, [d]);
-
-  const ticked = open.filter((r) => ticks?.has(r.id));
-  const sum = ticked.reduce((a, r) => a + r.left, 0);
-  const amount = typed !== null ? Number(typed || "0") : sum;
-  // Today's charges first, then the oldest.
-  const chips = [...open.filter((r) => r.day === today), ...open.filter((r) => r.day !== today).sort((a, b) => a.at - b.at)];
-
-  const toggle = (id: string) => {
-    tone("tick");
-    setTyped(null);
-    setTicks((t) => {
-      const n = new Set(t ?? []);
-      if (n.has(id)) n.delete(id);
-      else n.add(id);
-      return n;
-    });
-  };
-
-  const pay = async () => {
-    if (!(amount > 0)) return;
-    setBusy(true);
-    const r = await act(() => mutate(api.money.pay, { sid: sid as Id<"students">, a: amount, to: ticked.map((x) => x.id as Id<"fees">) }));
-    setBusy(false);
-    if (!r) return;
-    tone("done");
-    const after = r.owe > 0 ? `still owes ${rs(r.owe)}` : r.cr > 0 ? `${rs(r.cr)} paid ahead` : "all paid";
-    toast(`${props.name} paid ${rs(amount)} · ${after}.`, "info", () => {
-      void act(() => mutate(api.money.unpay, { id: r.id })).then((x) => x && toast(`${props.name}'s ${rs(amount)} taken back.`));
-    });
-    props.onClose();
-  };
-
-  // ---- His books ----
   const v = props.view;
   const fin = v ? finishOf(v) : null;
-  const inApp = (u: string, st: BookStage) => !!cat?.some((b) => b.unitId === u && b.stage === st);
-  const holds = new Set(shop?.hand[sid] ?? []);
-  const next = v && cat ? nextBookOf(v, allUnits(), inApp, holds) : { need: null, covered: null };
-  const item = (u: string, st: BookStage) => shop?.items.find((i) => i.u === u && i.st === st);
-  const give = async (u: string, st: BookStage) => {
-    setBusy(true);
-    const ok = await act(() => mutate(api.students.setGiven, { id: sid as Id<"students">, unitId: u as Id<"units">, stage: st, given: true, by: "money" }));
-    setBusy(false);
-    if (ok) {
-      tone("tick");
-      toast(`${props.name}: ${bookWords(u, st)} given.`);
-    }
-  };
-  const fromAt = d?.from ? Date.parse(`${d.from}T00:00:00+05:30`) : Infinity;
-  const charged = (d?.rows ?? []).filter((r) => r.k === "book");
-  const before = (d?.books ?? []).filter((b) => !b.noCopy && !charged.some((r) => r.u === b.u && r.st === b.st) && b.at < fromAt);
-
-  const balance = !d ? "" : d.owe > 0 ? `Owes ${rs(d.owe)}` : d.cr > 0 ? `${rs(d.cr)} paid ahead` : "All paid";
+  const fromAt = d.from ? Date.parse(`${d.from}T00:00:00+05:30`) : Infinity;
+  const charged = d.rows.filter((r) => r.k === "book");
+  const before = d.books.filter((b) => !b.noCopy && !charged.some((r) => r.u === b.u && r.st === b.st) && b.at < fromAt);
+  const balance = d.owe > 0 ? `Owes ${rs(d.owe)}` : d.cr > 0 ? `${rs(d.cr)} paid ahead` : "All paid";
   return (
-    <Sheet title={props.name} sub={balance} onClose={props.onClose} cls="mn-sheet" tone={d && d.owe > 0 ? "amber" : undefined}>
-      {!d ? (
-        <p class="muted">Loading…</p>
-      ) : !d.on ? (
-        <p class="muted">The owner hasn't set the fees up yet (the Fees page).</p>
-      ) : (
-        <>
-          <section class="mn-sec" aria-label="Take money">
-            {chips.length > 0 ? (
-              <div class="mn-chips" role="group" aria-label="What he is paying for">
-                {chips.map((r) => (
-                  <button
-                    key={r.id}
-                    type="button"
-                    class={`mn-chip${ticks?.has(r.id) ? " on" : ""}${r.day === today ? " today" : ""}`}
-                    aria-pressed={!!ticks?.has(r.id)}
-                    onClick={() => toggle(r.id)}
-                  >
-                    <span>{chargeWords(r, today)}</span>
-                    <b>{rs(r.left)}</b>
-                    {r.left < r.a && <small>of {rs(r.a)}</small>}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p class="mn-none">{d.cr > 0 ? `Nothing to pay: ${rs(d.cr)} paid ahead pays his next classes.` : "Nothing to pay now. Type an amount to pay ahead."}</p>
-            )}
-            <label class="mn-amt">
-              <span>Amount</span>
-              <i aria-hidden="true">Rs</i>
-              <input
-                inputMode="numeric"
-                aria-label="Amount in rupees"
-                value={typed !== null ? typed : sum ? String(sum) : ""}
-                placeholder="0"
-                onInput={(e) => setTyped(digits((e.target as HTMLInputElement).value))}
-              />
-            </label>
-            {d.owe > 0 && sum !== d.owe && (
-              <button
-                type="button"
-                class="boss-link mn-all"
-                onClick={() => {
-                  setTyped(null);
-                  setTicks(new Set(open.map((r) => r.id)));
-                }}
-              >
-                All he owes: {rs(d.owe)}
-              </button>
-            )}
-            <button type="button" class="btn primary big wide mn-pay" disabled={busy || !(amount > 0)} onClick={() => void pay()}>
-              {amount > 0 ? `Paid ${rs(amount)}` : "Paid"}
-            </button>
-            {amount > d.owe && d.owe >= 0 && amount > 0 && <p class="boss-note">{rs(amount - d.owe)} more than he owes: it pays his next classes.</p>}
-          </section>
+    <Sheet title={props.name} sub={balance} onClose={props.onClose} cls="mn-sheet" tone={d.owe > 0 ? "amber" : undefined}>
+      {!d.on && <p class="boss-say t-amber">The fees aren't set up yet (the Fees page): books given aren't charged.</p>}
+      {d.owner && d.on && <FreeSwitches d={d} sid={sid} name={props.name} />}
+      {!d.owner && (d.fee === 0 || d.freeBooks) && (
+        <p class="mn-freeline">{d.fee === 0 && d.freeBooks ? "Free: his classes and his books." : d.fee === 0 ? "His classes are free." : "His books are free."}</p>
+      )}
 
-          <section class="mn-sec" aria-label="His books">
-            <h3 class="mn-h">Books</h3>
-            {v && v.unit && (v.stage === "fighter" || v.stage === "master") && (
-              <p class={`mn-now${fin ? ` f-${fin.state}` : ""}`}>
-                <span>Now: {bookWords(v.unit._id, v.stage)}</span>
-                {fin && <small>{fin.words}{fin.state === "now" ? " · needs his next book" : fin.state === "soon" ? " · finishes soon" : ""}</small>}
-              </p>
-            )}
-            {next.need && (
-              <div class="mn-next">
+      <section class="mn-sec" aria-label="His books">
+        <h3 class="mn-h">Books</h3>
+        {v && v.unit && (v.stage === "fighter" || v.stage === "master") && (
+          <p class={`mn-now${fin ? ` f-${fin.state}` : ""}`}>
+            <span>Now: {bookWords(v.unit._id, v.stage)}</span>
+            {fin && <small>{fin.words}{fin.state === "now" ? " · needs his next book" : fin.state === "soon" ? " · finishes soon" : ""}</small>}
+          </p>
+        )}
+        {charged.length > 0 && (
+          <ul class="mn-list">
+            {charged.map((r) => (
+              <li key={r.id} class="mn-line">
                 <span>
-                  <b>Next: {bookWords(next.need.u, next.need.st)}</b>
-                  <small>
-                    {item(next.need.u, next.need.st)?.price !== undefined ? rs(item(next.need.u, next.need.st)!.price!) : "no price yet"} ·{" "}
-                    {(() => {
-                      const n = item(next.need.u, next.need.st)?.inHand;
-                      return n === null || n === undefined ? "not counted" : n > 0 ? `${n} in hand` : "none in hand: print it";
-                    })()}
-                  </small>
+                  {r.u && r.st ? bookWords(r.u, r.st) : "a book"}
+                  <small> · {dayWords(r.day, today)}</small>
                 </span>
-                <button type="button" class="btn small" disabled={busy} onClick={() => void give(next.need!.u, next.need!.st)}>
-                  Give
-                </button>
-              </div>
-            )}
-            {next.covered && <p class="mn-has">✓ Has his next book: {bookWords(next.covered.u, next.covered.st)}</p>}
-            {charged.length > 0 && (
-              <ul class="mn-list">
-                {charged.map((r) => (
-                  <li key={r.id} class="mn-line">
-                    <span>
-                      {r.u && r.st ? bookWords(r.u, r.st) : "a book"}
-                      <small> · {dayWords(r.day, today)}</small>
-                    </span>
-                    <b class={r.w !== undefined ? "waived" : r.np ? "np" : r.left > 0 ? "due" : "paid"}>
-                      {r.w !== undefined ? "free" : r.np ? "no price yet" : r.left > 0 ? `${rs(r.left)} to pay` : `✓ ${rs(r.a)}`}
-                    </b>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {before.length > 0 && (
-              <p class="boss-note">Given before the fees began: {before.map((b) => unitWords(b.u)).join(", ")}.</p>
-            )}
-            {v && (
-              <button type="button" class="btn ghost small mn-more" onClick={() => setGiving(true)}>
-                Give another book…
-              </button>
-            )}
-          </section>
+                <b class={r.fr || r.w !== undefined ? "waived" : r.np ? "np" : r.left > 0 ? "due" : "paid"}>
+                  {r.fr || r.w !== undefined ? "free" : r.np ? "no price yet" : r.left > 0 ? `${rs(r.left)} to pay` : `✓ ${rs(r.a)}`}
+                </b>
+              </li>
+            ))}
+          </ul>
+        )}
+        {before.length > 0 && <p class="boss-note">Given before the fees began: {before.map((b) => unitWords(b.u)).join(", ")}.</p>}
+        {v && (
+          <button type="button" class="btn ghost small mn-more" onClick={() => setGiving(true)}>
+            Give another book…
+          </button>
+        )}
+      </section>
 
-          <section class="mn-sec" aria-label="History">
-            <button type="button" class="mn-fold" aria-expanded={history} onClick={() => setHistory(!history)}>
-              History <small>{d.rows.length ? `${d.rows.length} line${d.rows.length === 1 ? "" : "s"} · paid ${rs(d.paid)} in all` : "nothing yet"}</small>
-              <i aria-hidden="true">{history ? "▴" : "▾"}</i>
-            </button>
-            {history && <History d={d} today={today} name={props.name} />}
-          </section>
+      <section class="mn-sec" aria-label="History">
+        <h3 class="mn-h">
+          History <small>{d.rows.length ? `paid ${rs(d.paid)} in all` : "nothing yet"}</small>
+        </h3>
+        <History d={d} sid={sid} today={today} name={props.name} />
+      </section>
 
-          {d.owner && (
-            <section class="mn-sec" aria-label="The owner's">
-              <button type="button" class="mn-fold" aria-expanded={fix} onClick={() => setFix(!fix)}>
-                His fee and old money <small>{d.own ? `his own fee ${rs(d.fee)}` : `the centre's ${rs(d.fee)}`}</small>
-                <i aria-hidden="true">{fix ? "▴" : "▾"}</i>
-              </button>
-              {fix && <OwnerFix d={d} sid={sid} name={props.name} />}
-            </section>
-          )}
-        </>
+      {d.owner && d.on && (
+        <section class="mn-sec" aria-label="The owner's">
+          <button type="button" class="mn-fold" aria-expanded={fix} onClick={() => setFix(!fix)}>
+            His fee and old money <small>{d.own ? `his own fee ${rs(d.fee)}` : `the centre's ${rs(d.fee)}`}</small>
+            <i aria-hidden="true">{fix ? "▴" : "▾"}</i>
+          </button>
+          {fix && <OwnerFix d={d} sid={sid} name={props.name} />}
+        </section>
       )}
       {giving && v && <StageUnitSheet v={v} mode="given" by="money" onClose={() => setGiving(false)} />}
     </Sheet>
   );
 }
 
-/** His lines, newest first: payments (who took them; Take back), charges (the owner: waive). */
-function History(props: { d: StudentMoney; today: string; name: string }) {
+/**
+ * The owner's two switches (11 Nov 2026, his words: "some students is always free, some student book is also free, some
+ * student class free not book free"). On: what he still owes of it is wiped too (his answer), from now it is free.
+ */
+function FreeSwitches(props: { d: StudentMoney; sid: string; name: string }) {
+  const { d } = props;
+  const [busy, setBusy] = useState(false);
+  const sid = props.sid as Id<"students">;
+  const cls = d.fee === 0;
+  const set = async (what: { cls?: boolean; books?: boolean }, words: string) => {
+    setBusy(true);
+    const ok = await act(() => mutate(api.money.setFree, { sid, ...what }));
+    setBusy(false);
+    if (ok) {
+      tone("tick");
+      toast(words);
+    }
+  };
+  return (
+    <section class="mn-sec mn-free" aria-label="Free student">
+      <div class="mn-freerow" role="group" aria-label="Free">
+        <button
+          type="button"
+          class={`mn-sw${cls ? " on" : ""}`}
+          aria-pressed={cls}
+          disabled={busy}
+          onClick={() => void set({ cls: !cls }, cls ? `${props.name}: the centre's fee from his next class.` : `${props.name}: his classes are free.`)}
+        >
+          <b>Class free</b>
+          <small>{cls ? "on" : "off"}</small>
+        </button>
+        <button
+          type="button"
+          class={`mn-sw${d.freeBooks ? " on" : ""}`}
+          aria-pressed={d.freeBooks}
+          disabled={busy}
+          onClick={() => void set({ books: !d.freeBooks }, d.freeBooks ? `${props.name}: he pays for his next books.` : `${props.name}: his books are free.`)}
+        >
+          <b>Books free</b>
+          <small>{d.freeBooks ? "on" : "off"}</small>
+        </button>
+      </div>
+      <p class="boss-note">On: what he still owes of it is wiped too, and it is free from now. What he already paid stays paid. Off: from his next class or book.</p>
+    </section>
+  );
+}
+
+/**
+ * His lines, newest first: payments (who took them; Take back), charges (the owner: Waive; a class: Didn't come, the
+ * owner any day, Money people today's), and the classes taken off (who, when).
+ */
+function History(props: { d: StudentMoney; sid: string; today: string; name: string }) {
   const { d, today } = props;
   const [busy, setBusy] = useState(false);
+  const [sure, setSure] = useState<string | null>(null);
+  const armedAt = useRef(0);
   const run = async (f: () => Promise<unknown>, words: string) => {
     setBusy(true);
     const ok = await act(f);
     setBusy(false);
     if (ok) toast(words);
   };
+  if (d.rows.length === 0) return <p class="mn-none">Nothing yet.</p>;
   return (
     <ul class="mn-list mn-hist">
       {d.rows.map((r) => {
         const pay = r.k === "pay" || r.k === "credit";
-        const mayBack = r.k === "pay" && (d.owner || (r.by === d.me && d.now - r.at < TAKE_BACK_MS));
+        const off = r.k === "off";
+        const mayAbsent = r.k === "class" && (d.owner || r.day === today);
         return (
-          <li key={r.id} class={`mn-line${pay ? " in" : ""}${r.w !== undefined ? " w" : ""}`}>
+          <li key={r.id} class={`mn-line${pay ? " in" : ""}${r.w !== undefined ? " w" : ""}${off ? " off" : ""}`}>
             <span>
-              {r.k === "pay" ? `Paid${r.by ? ` (${r.by})` : ""}` : r.k === "credit" ? "Old credit" : chargeWords(r, today)}
+              {r.k === "pay" ? `Paid${r.by ? ` (${r.by})` : ""}` : r.k === "credit" ? "Old credit" : off ? `Didn't come: class taken off${r.by ? ` (${r.by})` : ""}` : chargeWords(r, today)}
               <small>
                 {" "}
                 · {dayWords(r.day, today)}
                 {r.k === "pay" ? ` ${clock(r.at)}` : ""}
-                {r.w !== undefined ? " · waived" : ""}
+                {r.w !== undefined ? (r.fr ? " · free" : " · waived") : r.fr ? (r.a > 0 ? " · the rest free" : " · free") : ""}
                 {isCharge(r.k) && r.w === undefined && r.left > 0 ? ` · ${rs(r.left)} to pay` : ""}
               </small>
             </span>
-            <b>{pay ? `+${rs(r.a)}` : rs(r.a)}</b>
-            {mayBack && (
+            {!off && <b>{pay ? `+${rs(r.a)}` : rs(r.a)}</b>}
+            {mayTakeBack(d, r) && (
               <button type="button" class="boss-link" disabled={busy} onClick={() => void run(() => mutate(api.money.unpay, { id: r.id as Id<"fees"> }), "Payment taken back.")}>
                 Take back
+              </button>
+            )}
+            {mayAbsent && (
+              <button
+                type="button"
+                class={`boss-link${sure === r.id ? " mn-sure" : ""}`}
+                disabled={busy}
+                onClick={() => {
+                  if (sure !== r.id) {
+                    armedAt.current = Date.now();
+                    setSure(r.id);
+                    return;
+                  }
+                  if (Date.now() - armedAt.current < 450) return; // a double tap is not a yes
+                  setSure(null);
+                  void run(() => mutate(api.money.absent, { sid: props.sid as Id<"students">, day: r.day }), `${props.name}: the class of ${dayWords(r.day, today).toLowerCase()} is taken off.`);
+                }}
+              >
+                {sure === r.id ? "Sure? Tap again" : "Didn't come"}
               </button>
             )}
             {d.owner && isCharge(r.k) && r.k !== "owe" && (

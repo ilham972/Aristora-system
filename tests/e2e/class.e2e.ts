@@ -4337,10 +4337,13 @@ test("Owner's own app: Fighter and Master on his bar, not Theory and Evaluation;
   expect(problems, problems.join("\n")).toEqual([]);
 });
 
-test("Fees and books: the owner starts the fees; each day signed in is a class; one sheet takes the class and a book together; what to print, Printed, the stock and its price; the Business tab is his", async () => {
+test("Fees and books: one screen each, no pop-up to take money; the owner starts the fees; a name then Paid; Give his next book and take its money with today's class; Didn't come; free students; one book given to many; what to print, the stock and its price; the Business tab is his", async () => {
   // 9 Nov 2026, his voice note: "students not giving me fees ... both need to be in the one place when it comes to data
-  // entry ... the alert ... print five books from the unit six". Grade 7: U08's workbook (in the code) and U09's (the
-  // same skeleton, test only). Kumar finished U08 (needs U09 now), Hana is on Level 7 of 8 (soon), Ravi on Level 1.
+  // entry ... the alert ... print five books from the unit six". 11 Nov: "each time I have to press each row and that
+  // will open the pop-up ... one by one doing is very hard ... in the stock when I press any book, I can select any
+  // students ... some students is always free ... we put some person attendant accidentally". Grade 7: U08's workbook
+  // (in the code) and U09's (the same skeleton, test only). Kumar finished U08 (needs U09 now), Hana is on Level 7 of 8
+  // (soon), Ravi on Level 1.
   const backend = await newClass({ defaultBar: true });
   const as = { token: OWNER_TOKEN };
   await backend.t.mutation(api.setup.ensure, as);
@@ -4368,6 +4371,12 @@ test("Fees and books: the owner starts the fees; each day signed in is a class; 
   const mala = await addPerson(backend.t, { name: "Mala", token: MALA, tabs: ["correction"] });
   await backend.t.mutation(api.people.setRole, { ...as, id: mala, dept: "management", lead: false, pages: ["dash", "class", "correction", "fees", "books", "us"], tabs: ["correction"], can: ["photos"] });
   await backend.push();
+  const pill = (p: Page, name: string) => p.locator(`.mnx-names .mnx-p[data-name="${name}"]`);
+  const names = (p: Page) => namesOf(p.locator(".mnx-names .mnx-p"));
+  const namesAreNow = (p: Page, list: string[]) => until(async () => JSON.stringify(await names(p)) === JSON.stringify(list), `the names ${list.join(", ")}`);
+  const fits = async (p: Page) => expect(await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  const feeRows = (id: typeof kumar) =>
+    backend.t.run(async (ctx) => (await ctx.db.query("fees").collect()).filter((r) => r.sid === id).map((r) => `${r.k} ${r.a}${r.to ? ` for ${r.to.length}` : ""}${r.fr ? " free" : ""}${r.by ? ` by ${r.by}` : ""}`).sort());
 
   // The owner: his Dashboard → Management → Money and books → Fees (not on his bar: it opens over it). The first card.
   const O = await phone(backend, "dash");
@@ -4379,9 +4388,14 @@ test("Fees and books: the owner starts the fees; each day signed in is a class; 
   await O.locator(".mn-start").getByRole("button", { name: "Today" }).click();
   await O.getByRole("button", { name: "Start the fees" }).click();
   await contains(O.locator(".toast"), "Fees on: Rs 350 a class, counted from today.");
-  // Everyone already here today has today's class (A–Z, each owing Rs 350).
-  await textsAre(O.locator(".mn-rows .mn-row > b"), ["Hana K", "Kumar S", "Ravi P"]);
-  await textsAre(O.locator(".mn-rows .mn-row .mn-r em"), ["Rs 350", "Rs 350", "Rs 350"]);
+  // Everyone already here today has today's class: the names as pills, A–Z, each owing Rs 350; Grade 7's number is 3.
+  await namesAreNow(O, ["Hana K", "Kumar S", "Ravi P"]);
+  await textsAre(O.locator(".mnx-names .mnx-p.mnx-s-due small"), ["350", "350", "350"]);
+  await textsAre(O.locator(".mnx-grades .evx-g.on"), []); // every grade until he taps one
+  await visible(O.locator(".mnx-grades").getByRole("button", { name: "Grade 7: 3 to pay" }));
+  // Nobody picked: the pad is there already, pale, every button in its place.
+  await visible(O.locator(".mnx-pad .mnx-who.idle"));
+  expect(await O.locator(".mnx-pad .mnx-paid").isDisabled()).toBe(true);
 
   // Mala (Management): her six tabs; the Books tab's red 1 = Kumar needs U09 now and none is in hand.
   const M = await phone(backend, "fees", PHONE, MALA);
@@ -4406,12 +4420,17 @@ test("Fees and books: the owner starts the fees; each day signed in is a class; 
   await M.locator(".tabs .tab.fees").click();
   await count(M.locator(".tabs .tab.books .tab-badge"), 0);
 
-  // The owner prices it (Books → Stock): its cost is shown (18 × Rs 7 = Rs 126), he types Rs 200. Mala only sees it.
+  // The owner prices it (Books → Stock): Grade 7's books in one row, Unit 9 picked by the page (someone needs it); its
+  // line at the bottom; ⋯ = its papers, price and count. The cost is shown (18 × Rs 7 = Rs 126), he types Rs 200.
   await O.locator(".tabs .tab.dash").click();
   await O.locator(".dash-money").getByRole("button", { name: "Books ›" }).click();
   await O.locator(".mn-seg").getByRole("button", { name: "Stock" }).click();
-  await O.locator(".grade-row").getByRole("button", { name: /^Grade 7\b/ }).click();
-  await O.locator(".mn-row", { has: O.locator("b", { hasText: /^9 / }) }).click();
+  await O.locator(".mnx-grades").getByRole("button", { name: /^Grade 7\b/ }).click();
+  await textsAre(O.locator(".mnx-books .mnx-bk > b"), ["8", "9"]);
+  await textsAre(O.locator(".mnx-books .mnx-bk.on > b"), ["9"]);
+  await textsAre(O.locator(".mnx-books .mnx-bk.on > i"), ["2"]);
+  await contains(O.locator(".mnx-givepad .mnx-bookline"), "workbook · 2 in hand · no price yet");
+  await O.locator(".mnx-givepad .mnx-more").click();
   const BS = O.locator(".mn-sheet");
   await says(BS.locator(".sheet-title p"), "2 in hand · 2 printed · 0 given");
   await contains(BS.locator(".boss-mix").first(), "Cost: 18 papers × Rs 7 = Rs 126 a copy.");
@@ -4421,85 +4440,172 @@ test("Fees and books: the owner starts the fees; each day signed in is a class; 
   await contains(BS.locator(".boss-note"), "Profit Rs 74 a copy.");
   await shot(O, "fb03-book-price");
   await BS.getByRole("button", { name: "Close" }).click();
+  await contains(O.locator(".mnx-givepad .mnx-bookline"), "Rs 200 (cost Rs 126)");
 
-  // The end of class, on Mala's Fees page: Kumar's sheet has today's class ticked; Give puts U09 on it, ticked too.
-  await M.locator(".mn-row", { hasText: "Kumar S" }).click();
-  const S = M.locator(".mn-sheet");
-  await visible(S.locator(".mn-chip.on", { hasText: "Today · class" }));
-  const amount = () => S.getByLabel("Amount in rupees").inputValue();
-  await until(async () => (await amount()) === "350", "Rs 350 ticked");
-  await contains(S.locator(".mn-next"), "Rs 200 · 2 in hand");
-  await shot(M, "fb04-sheet");
-  await S.locator(".mn-next").getByRole("button", { name: "Give" }).click();
-  await contains(M.locator(".toast"), "Kumar S: 9");
-  await count(S.locator(".mn-chip.on"), 2);
-  await until(async () => (await amount()) === "550", "Rs 550 ticked");
-  await visible(S.locator(".mn-has"));
-  await S.getByRole("button", { name: "Paid Rs 550" }).click();
-  await contains(M.locator(".toast"), "Kumar S paid Rs 550 · all paid.");
+  // The end of class, on Mala's Fees page. No pop-up: a tap on Kumar's name and the pad at the bottom is his. Today's
+  // class is ticked by itself; Give puts U09 on it, ticked too; one Paid takes both.
+  const pad = M.locator(".mnx-pad");
+  const amount = () => pad.getByLabel("Amount in rupees").inputValue();
+  await pill(M, "Kumar S").click();
   await count(M.locator(".mn-sheet"), 0);
-  // Hana gives Rs 200 of her Rs 350 (typed): part paid. Ravi says next time: nothing.
-  await M.locator(".mn-row", { hasText: "Hana K" }).click();
+  await textsAre(pad.locator(".mnx-who > b"), ["Kumar S"]);
+  await textsAre(pad.locator(".mnx-chip.tk > span"), ["Today"]);
+  await until(async () => (await amount()) === "350", "Rs 350 ticked");
+  await contains(pad.locator(".mnx-give"), "+ Give Unit 9");
+  await contains(pad.locator(".mnx-give small"), "Rs 200 · 2 in hand");
+  await shot(M, "fb04-desk");
+  await pad.locator(".mnx-give").click();
+  await contains(M.locator(".toast"), "Kumar S: 9");
+  await textsAre(pad.locator(".mnx-chip.tk > span"), ["Today", "Book 9"]);
+  await until(async () => (await amount()) === "550", "Rs 550 ticked");
+  await contains(pad.locator(".mnx-give.has"), "✓ Has Unit 9");
+  await pad.getByRole("button", { name: "Paid Rs 550" }).click();
+  await contains(M.locator(".toast"), "Kumar S paid Rs 550 · all paid.");
+  await visible(M.locator('.mnx-p.mnx-s-paid[data-name="Kumar S"]'));
+  // The pad stays his and says so; nothing is left to tap by mistake.
+  await contains(pad.locator(".mnx-nochips"), "✓ Paid Rs 550 today.");
+  expect(await pad.locator(".mnx-paid").isDisabled()).toBe(true);
+  // Hana gives Rs 200 of her Rs 350 (typed): part paid, her pill says what is left. The names never moved.
+  await pill(M, "Hana K").click();
   await until(async () => (await amount()) === "350", "Hana's Rs 350 ticked");
-  await S.getByLabel("Amount in rupees").fill("200");
-  await S.getByRole("button", { name: "Paid Rs 200" }).click();
+  await pad.getByLabel("Amount in rupees").fill("200");
+  await pad.getByRole("button", { name: "Paid Rs 200" }).click();
   await contains(M.locator(".toast"), "Hana K paid Rs 200 · still owes Rs 150.");
-  await textsAre(M.locator(".mn-rows .mn-row > b"), ["Ravi P", "Hana K", "Kumar S"]);
-  await textsAre(M.locator(".mn-rows .mn-row.part .mn-r em"), ["Rs 150"]);
-  await contains(M.locator(".mn-tiles"), "Rs 750");
+  await textsAre(M.locator('.mnx-p.mnx-s-part[data-name="Hana K"] small'), ["150"]);
+  // What is left of her class waits unticked: a second tap on Paid takes nothing.
+  await textsAre(pad.locator(".mnx-chip > b"), ["Rs 150"]);
+  await count(pad.locator(".mnx-chip.tk"), 0);
+  expect(await pad.locator(".mnx-paid").isDisabled()).toBe(true);
+  await namesAreNow(M, ["Hana K", "Kumar S", "Ravi P"]);
+  await contains(M.locator(".mnx-sum"), "Rs 750");
   await count(M.locator(".mn-seg .segc-b", { hasText: "Business" }), 0); // the owner's only
   await shot(M, "fb05-fees-today");
-  const rows = await backend.t.run(async (ctx) =>
-    (await ctx.db.query("fees").collect()).filter((r) => r.sid === kumar).map((r) => `${r.k} ${r.a}${r.to ? ` for ${r.to.length}` : ""}`),
-  );
-  expect(rows.sort()).toEqual(["book 200", "class 350", "pay 550 for 2"]);
+  expect(await feeRows(kumar)).toEqual(["book 200", "class 350", "pay 550 for 2 by Mala"]);
 
-  // Books → Students (Grade 7): each student's book now and how near its end, his next book, books not paid.
-  await M.locator(".tabs .tab.books").click();
-  await M.locator(".mn-seg").getByRole("button", { name: "Students" }).click();
-  await M.locator(".grade-row").getByRole("button", { name: /^Grade 7\b/ }).click();
-  await textsAre(M.locator(".mn-rows .mn-l b"), ["Hana K", "Kumar S", "Ravi P"]);
-  await contains(M.locator(".mn-row", { hasText: "Kumar S" }), "✓ has Unit 9");
-  await count(M.locator(".mn-row.f-now"), 0); // finished, but his next book is in his hands: calm
-  await contains(M.locator(".mn-row.f-soon", { hasText: "Hana K" }), "Level 7 of 8");
-  await shot(M, "fb05b-books-students");
-  await M.locator(".tabs .tab.fees").click();
+  // Ravi was signed in by mistake (the wrong name tapped), long after Attendance's Undo: Didn't come, asked once more.
+  // His class comes off his fees and the register, he is out of the hall; a line stays for the owner.
+  await pill(M, "Ravi P").click();
+  await pad.locator(".mnx-absent").dblclick(); // a double tap is not a yes: it only asks
+  await contains(pad.locator(".mnx-absent.sure"), "Sure? Tap again");
+  await namesAreNow(M, ["Hana K", "Kumar S", "Ravi P"]);
+  await M.waitForTimeout(500);
+  await pad.locator(".mnx-absent").click();
+  await contains(M.locator(".toast"), "Ravi P didn't come: today's class is off.");
+  await namesAreNow(M, ["Hana K", "Kumar S"]);
+  expect(await feeRows(ravi)).toEqual(["off 0 by Mala"]);
+  expect(await backend.t.run(async (ctx) => ({ here: (await ctx.db.get(ravi))!.present, visits: (await ctx.db.query("attendance").withIndex("by_student", (q) => q.eq("studentId", ravi)).collect()).length }))).toEqual({ here: false, visits: 0 });
+  // Owed: the most first. Everyone: a grade's students, here or not (Ravi again).
+  await M.locator(".mn-seg").getByRole("button", { name: "Owed" }).click();
+  await namesAreNow(M, ["Hana K"]);
+  await M.locator(".mn-seg").getByRole("button", { name: "Everyone" }).click();
+  await namesAreNow(M, ["Hana K", "Kumar S", "Ravi P"]);
+  await textsAre(M.locator(".mnx-grades .evx-g.on > b"), ["7"]);
 
-  // Books given, on the sheet (Correction's book button went, his ask): Ravi's sheet → Give another book… → the grid.
-  await M.locator(".mn-row", { hasText: "Ravi P" }).click();
+  // The rare things are behind ⋯ (a sheet): Ravi's books → Give another book… → the units grid; his history.
+  await pill(M, "Ravi P").click();
+  await pad.locator(".mnx-more").click();
+  const S = M.locator(".mn-sheet");
+  await contains(S.locator(".mn-hist"), "Didn't come: class taken off (Mala)");
   await S.getByRole("button", { name: "Give another book…" }).click();
   await contains(M.locator(".su-sheet h2"), "Ravi P: units");
   await visible(M.locator(".su-sheet").getByRole("button", { name: "Books given", pressed: true }));
   await M.locator(".su-p", { has: M.locator("b", { hasText: /^10$/ }) }).click();
   await visible(M.locator(".su-p.given", { has: M.locator("b", { hasText: /^10$/ }) }));
   await M.locator(".su-sheet").getByRole("button", { name: "Close" }).click();
-  await contains(S.locator(".mn-list .mn-line"), "no price yet");
+  await contains(S.locator(".mn-list .mn-line").first(), "no price yet");
+  await count(S.locator(".mn-sw"), 0); // the free switches are the owner's
   await S.getByRole("button", { name: "Close" }).click();
 
-  // At 320 px nothing goes sideways: the Fees page, Kumar's sheet, the Books page.
+  // Free students: the owner only, two switches behind Hana's ⋯. Class free: the Rs 150 she still owed is wiped, the
+  // Rs 200 she gave stays. Books free too: her next book will be a Rs 0 line.
+  await O.locator(".tabs .tab.dash").click();
+  await O.locator(".dash-money").getByRole("button", { name: "Fees ›" }).click();
+  await O.locator(".mn-seg").getByRole("button", { name: "Everyone" }).click();
+  await pill(O, "Hana K").click();
+  await O.locator(".mnx-pad .mnx-more").click();
+  const OS = O.locator(".mn-sheet");
+  await OS.getByRole("button", { name: "Class free" }).click();
+  await contains(O.locator(".toast"), "Hana K: his classes are free.");
+  await visible(OS.locator('.mn-sw.on[aria-pressed="true"]', { hasText: "Class free" }));
+  await OS.getByRole("button", { name: "Books free" }).click();
+  await contains(O.locator(".toast"), "Hana K: his books are free.");
+  await shot(O, "fb05a-free");
+  await OS.getByRole("button", { name: "Close" }).click();
+  await textsAre(O.locator(".mnx-pad .mnx-freetag"), ["class free", "books free"]);
+  expect(await feeRows(hana)).toEqual(["class 200 free", "pay 200 for 1 by Mala"]);
+  expect(await backend.t.query(api.money.student, { ...as, sid: hana })).toMatchObject({ owe: 0, cr: 0, fee: 0, freeBooks: true });
+
+  // Books → Students (Grade 7): the names as pills by their next book: Kumar has his (✓), Hana finishes soon (amber);
+  // nobody is red. A tap: the same pad as on Fees.
+  await M.locator(".tabs .tab.books").click();
+  await M.locator(".mn-seg").getByRole("button", { name: "Students" }).click();
+  await M.locator(".mnx-grades").getByRole("button", { name: /^Grade 7\b/ }).click();
+  await namesAreNow(M, ["Hana K", "Kumar S", "Ravi P"]);
+  await visible(M.locator('.mnx-p.mnx-b-has[data-name="Kumar S"]'));
+  await visible(M.locator('.mnx-p.mnx-b-soon[data-name="Hana K"]'));
+  await count(M.locator(".mnx-p.mnx-b-now"), 0); // Kumar finished, but his next book is in his hands: calm
+  await pill(M, "Hana K").click();
+  await contains(M.locator(".mnx-pad .mnx-give"), "+ Give Unit 9");
+  await contains(M.locator(".mnx-pad .mnx-give small"), "Level 7 of 8");
+  await shot(M, "fb05b-books-students");
+
+  // Books → Stock: one book, many students. Unit 9: Kumar has it (✓), 1 copy in hand. She ticks Hana and Ravi: more
+  // than the shelf holds (said in amber), Give to 2 all the same. Hana's is free; Ravi's is charged Rs 200.
+  await M.locator(".mn-seg").getByRole("button", { name: "Stock" }).click();
+  await M.locator(".mnx-grades").getByRole("button", { name: /^Grade 7\b/ }).click();
+  await M.locator(".mnx-books .mnx-bk", { has: M.locator("b", { hasText: /^9$/ }) }).click();
+  const gp = M.locator(".mnx-givepad");
+  await contains(gp.locator(".mnx-bookline"), "workbook · 1 in hand · Rs 200");
+  await visible(M.locator('.mnx-p.mnx-b-has[data-name="Kumar S"]'));
+  await visible(M.locator('.mnx-p.mnx-away[data-name="Ravi P"]')); // not here today
+  await count(M.locator(".mnx-names .mnx-p.on"), 0); // nobody at the end of his book without it: the page ticks nobody
+  expect(await gp.locator(".mnx-paid").isDisabled()).toBe(true);
+  await pill(M, "Hana K").click();
+  await pill(M, "Ravi P").click();
+  await contains(gp.locator(".mnx-bookline.warn"), "2 ticked, 1 in hand");
+  await shot(M, "fb05c-stock-give");
+  await gp.getByRole("button", { name: "Give to 2" }).click();
+  await contains(M.locator(".toast"), "Unit 9 given to 2: Hana K, Ravi P.");
+  await count(M.locator(".mnx-names .mnx-p.mnx-b-has"), 3);
+  await count(M.locator(".mnx-names .mnx-p.on"), 0);
+  expect((await feeRows(hana)).filter((r) => r.startsWith("book"))).toEqual(["book 0 free"]);
+  expect((await feeRows(ravi)).filter((r) => r.startsWith("book"))).toEqual(["book 0", "book 200"]); // Unit 10 has no price yet
+  // Given to Ravi by mistake: tick him (he has it), Take back.
+  await pill(M, "Ravi P").click();
+  await gp.locator(".mnx-take").click();
+  await contains(M.locator(".toast"), "Unit 9 taken back from 1: Ravi P.");
+  await count(M.locator(".mnx-names .mnx-p.mnx-b-has"), 2);
+  expect((await feeRows(ravi)).filter((r) => r.startsWith("book"))).toEqual(["book 0"]);
+  await M.locator(".tabs .tab.fees").click();
+
+  // At 320 px nothing goes sideways: the Fees page, the pad with a student, the Books page's three tabs.
   const N = await phone(backend, "fees", { ...PHONE, viewport: { width: 320, height: 640 } }, MALA);
-  await visible(N.locator(".mn-rows .mn-row"));
-  expect(await N.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await visible(N.locator(".mnx-names .mnx-p"));
+  await fits(N);
   await shot(N, "fb06-fees-320");
-  await N.locator(".mn-row", { hasText: "Hana K" }).click();
-  await visible(N.locator(".mn-sheet .mn-pay"));
-  expect(await N.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await shot(N, "fb07-sheet-320");
-  await N.locator(".mn-sheet").getByRole("button", { name: "Close" }).click();
+  await pill(N, "Kumar S").click();
+  await visible(N.locator(".mnx-pad .mnx-who > b", { hasText: "Kumar S" }));
+  await fits(N);
+  await shot(N, "fb07-desk-320");
   await N.locator(".tabs .tab.books").click();
   await visible(N.locator(".mn-seg"));
-  expect(await N.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await fits(N);
+  await N.locator(".mn-seg").getByRole("button", { name: "Stock" }).click();
+  await N.locator(".mnx-grades").getByRole("button", { name: /^Grade 7\b/ }).click();
+  await visible(N.locator(".mnx-givepad"));
+  await fits(N);
   await shot(N, "fb08-books-320");
   await N.context().close();
 
-  // The owner's Business tab: money in Rs 750, out Rs 252 (printing), profit Rs 498.
-  await O.locator(".tabs .tab.dash").click();
-  await O.locator(".dash-money").getByRole("button", { name: "Fees ›" }).click();
+  // The owner's Business tab: money in Rs 750, out Rs 252 (printing), profit Rs 498; and the class taken off, by whom.
   await O.locator(".mn-seg").getByRole("button", { name: "Business" }).click();
   const month = O.locator(".boss-card").first();
   await contains(month, "Rs 750");
   await contains(month, "Rs 252");
   await contains(month, "Rs 498");
+  await contains(O.locator(".mn-offs"), "1 class taken off this month");
+  await contains(O.locator(".mn-offs .mn-line"), "Ravi P");
+  await contains(O.locator(".mn-offs .mn-line"), "Mala");
   await shot(O, "fb09-business", true);
   expect(problems, problems.join("\n")).toEqual([]);
 });

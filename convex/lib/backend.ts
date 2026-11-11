@@ -5,7 +5,7 @@ import { claimLive } from "./claims";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { fighter, type Fighter, type MasterData } from "./book";
-import { slDay } from "./day";
+import { DAY_MS, SL_OFFSET_MS, slDay } from "./day";
 import { computeMaster, EMPTY_MASTER, homeToCheck, type MState } from "./master";
 import { computeStatus } from "./status";
 import { digestOf, type Digest } from "./boss";
@@ -308,6 +308,33 @@ export async function startVisit(
 export async function endVisit(ctx: MutationCtx, studentId: Id<"students">, at: number): Promise<void> {
   const v = await lastVisit(ctx, studentId);
   if (v && v.outAt === undefined) await ctx.db.patch(v._id, { outAt: Math.max(at, v.inAt) });
+}
+
+/**
+ * He never came that day (11 Nov 2026, the Fees page's Didn't come: signed in by mistake and noticed after Undo's five
+ * minutes): his visits of that day leave the register, as if nobody had tapped him. Still signed in on one of them: he
+ * is out of the hall with no idle time and his last arrival as before (like Undo), his calls closed. Returns how many
+ * visits went. The fees follow by themselves (convex/lib/fn.ts: a visit deleted = his class of that day goes).
+ */
+export async function neverCame(ctx: MutationCtx, s: Doc<"students">, day: string, now: number): Promise<number> {
+  const from = Date.parse(`${day}T00:00:00Z`) - SL_OFFSET_MS;
+  const visits = (
+    await ctx.db
+      .query("attendance")
+      .withIndex("by_student", (q) => q.eq("studentId", s._id).gte("inAt", from).lt("inAt", from + DAY_MS))
+      .collect()
+  ).filter((x) => x.day === day);
+  if (visits.length === 0) return 0;
+  const open = visits.some((x) => x.outAt === undefined);
+  for (const x of visits) await ctx.db.delete(x._id);
+  const before = await lastVisit(ctx, s._id);
+  if (open && s.present) {
+    for (const c of await activeCalls(ctx, s._id)) await ctx.db.patch(c._id, { status: c.status === "sent" ? "done" : "cancelled", endedAt: now });
+    await ctx.db.patch(s._id, { present: false, room: undefined, idleSince: undefined, idleReason: undefined, lastInAt: before?.inAt });
+  } else if (s.lastInAt !== before?.inAt) {
+    await ctx.db.patch(s._id, { lastInAt: before?.inAt });
+  }
+  return visits.length;
 }
 
 /** Close the teachers' stays still open on these days at `at` (never before she arrived). */

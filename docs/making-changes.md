@@ -32,19 +32,22 @@ npx convex codegen --system-udfs --typecheck disable
    `git show origin/ci-<topic>:ci-report/outcome.txt` (the API says "success" for every step; outcome.txt is the
    truth) and the logs. Green = push main itself (never the ci options commit). Branches stay on GitHub (this proxy
    can't delete them): force-push over yours.
-   **The unit tests and typecheck can still run here, from source** (8 Nov 2026; minutes instead of a CI round): git
-   can clone public repos even when npm can't. `git clone --depth 1` `get-convex/convex-js`, `get-convex/convex-test`,
-   `preactjs/preact` (`--branch 10.29.8`) and `101arrowz/fflate` into a scratch folder. **Typecheck**: a scratch
-   tsconfig like `convex/tsconfig.json` (or `tsconfig.json` for `src/family/`) whose `paths` map `convex/server`,
-   `convex/values`, `convex/browser` to `convex-js/src/*/index.ts` and `preact`, `preact/hooks`, `preact/jsx-runtime` to
-   Preact's own `.d.ts`, run with the global `tsc` (ignore `web-push`, the CSS imports and convex-js's own
-   `SharedArrayBuffer` complaints; put an error in a file once to see it is checked). **Unit tests**: bundle one test
-   file with `/opt/npm-tools` esbuild (`platform: "node"`), aliasing `vitest` to a small stand-in (describe / test /
-   expect / vi with `setSystemTime`), `convex-test` to its `index.ts`, the convex and Preact paths above, `fflate` to
-   its `src/index.ts` and `web-push` to a stub; replace `import.meta.glob("../convex/**/*.ts")` with a generated map of
-   `() => import(...)` (keys `../convex/<file>`; `_generated/api.js` and `server.js` included) and load `?raw` imports
-   as text. A few tests use matchers the stand-in lacks (`expect.closeTo`): run the same file on a clean worktree of
-   main (`git worktree add`) before blaming a change. The run-throughs still need the GitHub check.
+   **Everything also runs here, from source, with one script** (since 11 Nov 2026: `scripts/here/check.sh`; a
+   minute to set up, then seconds a check, instead of a CI round each time): git can clone public repos even when npm
+   can't. `scripts/here/check.sh setup` (once per chat: clones convex-js, convex-test, Preact 10.29.8 and fflate into
+   `/home/claude/runner/src` and writes the scratch tsconfigs), then `… tc` (both projects; only the repo's own errors
+   are shown; 4 lines about `any` in `tests/chime.test.ts` come from the stand-in's types), `… unit [tests/x.test.ts]`
+   (one file in a second, all of them in about a minute), `… build` (`dist/`, under a second) and `… e2e "<name part>"
+   [class|family]` (a run-through in seconds; screenshots in `/home/claude/runner/shots`; build first, after every CSS
+   or page change). How it works: `scripts/here/runner.mjs` bundles one test file with `/opt/npm-tools` esbuild,
+   `vitest` = the stand-in beside it (`vitest-standin.mjs`: add a matcher there when a test needs one), the libraries
+   from source, `import.meta.glob` of the convex files replaced by a generated map, `?raw` as text, Playwright from
+   `/opt/npm-tools` with `/usr/bin/google-chrome`; `scripts/here/build.mjs` runs the repo's own `scripts/build.mjs`
+   with the same aliases (fonts and the silent video stubbed). **What only GitHub can judge** (they fail here on main
+   too, 11 Nov 2026: run them on a stash before blaming a change): the checks that measure the top bar at 320 px or a
+   text's width (no Barlow font here: "the register", "Correction: one page", "Theory: one screen", "Evaluation: one
+   screen", "Owner page", "Whole class", "Consultation"), the family "photos from home" (web-push is a stub), and the
+   family app's size budgets. So: iterate here, then one `ci-<topic>` round before main.
 4. **For UI changes, look at the screenshots** at 390, 360 and 320 px, cropped with PIL first. No page scrolls
    sideways (the tests check `scrollWidth`); rows that scroll inside themselves are fine. Also look at one screen
    you did NOT change (Settings) when you add CSS: a class name clash shows there.
@@ -238,13 +241,6 @@ EOF
 - **The phone's clock is not the server's**: a "since" the phone sends (the desk page's sitting) must come from
   `now()` in `src/store.ts` (synced), never `Date.now()`, or a phone a few minutes fast hides the squares it just did
   and can't undo them.
-- **Running the run-throughs here with no npm** (9 Nov 2026): the same runner bundles `tests/e2e/*.e2e.ts` too (keys of
-  `import.meta.glob("../../convex/**/*.ts")` with its own `../../`), with Playwright from `/opt/npm-tools/node_modules`
-  (`NODE_PATH`) and `/usr/bin/google-chrome` (`chromium.launch` patched with `executablePath`, `--no-sandbox`); `dist/`
-  is built by a copy of `scripts/build.mjs` whose `build()` adds an alias plugin (Preact, `convex/browser|server|values`,
-  `fflate` from source; `nosleep.js/src/media.js` and `@fontsource/*` stubbed). Run one with `cd repo && SHOTS=… TZ=Asia/Colombo
-  NODE_PATH=/opt/npm-tools/node_modules node runner.mjs tests/e2e/class.e2e.ts "<name part>"` (13 s for "Fees and books").
-  Without the class app's fonts the checks that measure the top bar at 320 px fail (`topFits`): run those on GitHub.
 - **The Convex bill: what one tap costs** (10 Nov 2026, his first month hit the free plan's limit; top: `state.get`, then
   `focus.claims`, `focus.drafts`, `catalog.key`, `focus.claim`). A live query runs again, whole, on every phone that has
   it open whenever ANY row it read changes, and every run counts all the bytes it reads. `state.get` read every
@@ -270,11 +266,29 @@ EOF
 - **Management's preset is six pages, the most a bar holds** (9 Nov 2026: Dashboard, Class, Correction, Fees, Books,
   Us): adding one of the owner's own pages to it means unticking another (the "Owner's own app" run-through unticks
   Class for the Owner page).
-- **Running the unit tests here with no npm** (8 Nov 2026): a runner outside the repo (`/home/claude/runner`, not
-  committed: a vitest stand-in, esbuild from `/opt/npm-tools` with the libraries cloned from source, one bundle per test
-  file; `import.meta.glob` of `../convex/**/*.ts` replaced by a generated map, of `../convex/*.ts` with `eager` by the
-  files' text; a RegExp in `toMatchObject` matches a string) ran all 588 in about 4 minutes; the typecheck from source
-  with TypeScript 6 (`ignoreDeprecations: "6.0"` for `baseUrl`). Rebuild it the same way in a new chat (step 3 above).
+- **Running the checks here with no npm**: `scripts/here/check.sh` (step 3 above; since 11 Nov 2026 the runner is in
+  the repo, nothing to rebuild in a new chat).
+- **A pad that stays on the page needs its own guards** (11 Nov 2026, the Fees and Books pages; before, the money sheet
+  closed after Paid). (1) After Paid the ticks are cleared and Paid waits for the student's lines to come back
+  (`paidOn === d`), and the server refuses a payment whose ticked charges are all paid (`money.pay`): a second tap or a
+  second phone takes nothing. (2) "Sure? Tap again" ignores a second tap within 450 ms (`SURE_MS`): a double tap is not
+  a yes. (3) A tap on a name always picks (never unpicks): a double tap must not empty the pad. (4) The page's own
+  ticks (Stock) are put in state once shown (`auto`), or a student signing in adds a name to "Give to 3".
+- **A sheet inside a sticking pad opens under the top bar** (11 Nov 2026): `.fc-pad` is `position: sticky; z-index: 5`,
+  its own layer, so a `Sheet` rendered inside it can never rise above the header (Playwright: "top-wrap intercepts
+  pointer events"). Render the sheet beside the pad (`DeskFor` returns the pad and the sheet as siblings).
+- **A state's class on a pill must not be a button's class** (11 Nov 2026): the paid pill was `.mnx-paid`, the same as
+  the big Paid button, and grew to 58 px. The names' states are `.mnx-s-*` (money) and `.mnx-b-*` (books); grep a new
+  class in `src/styles.css` AND in the `.tsx` files before using it.
+- **The desk pages' layout sums** (`.mnx-body`, like `.tp-body`): its `min-height` ends where the pad sticks, so
+  `.mnx-page` has no bottom padding (`.mn-page`'s 18 px lifted the pad at the end of a long list); the pinned rows'
+  height is `--mnx-stick-h` (`useDeskPage`), the pad's `--mnx-pad-h` (`DeskPad`), and the toasts sit above the pad
+  (`body.mnx-desk .toasts`; a tab with no pad sets it to 0). The chips' row is an `HRow`: a ticked chip is `.tk`, never
+  `.on` (`.on` is what `HRow` centres, and a tick must not scroll the row).
+- **A row in `fees` that is not money** (11 Nov 2026): `k: "off"` (a class taken off, Rs 0) lives in the ledger so his
+  sheet and the Business tab can show it; `replay` skips it (Rs 0), `isCharge` is false. Anything new that lists a
+  student's lines must know it (`History`). `money.business` names students from every account, then from the student's
+  row: one whose only line is an `off` has an empty account, or none.
 
 - **A consultation is an evaluation-room call with `consult: true`** (5 Nov 2026). Anything that lists a teacher's
   Evaluation room must leave it out (`evalRoom`, `evalItems`), anything that bumps, pulls or sends a student must refuse

@@ -210,7 +210,8 @@ export const setGiven = mutation({
  * One workbook given to many students at once, or taken back from them (Settings → Students → O/L map, 4 Nov 2026: his
  * words, "now I want to show specific unit today ... that's what I taught lastly"): Books given for each, as on
  * Correction, so it opens on their phones and the class sees they have it. Only a book that is in the app (a given book
- * with nothing in the app would count as work for good). Returns how many changed.
+ * with nothing in the app would count as work for good). Returns how many changed. Since 11 Nov 2026 the Books page's
+ * Stock too (Money people: tick the students, Give): each printed copy is charged by itself (convex/lib/feeRows.ts).
  */
 export const giveMany = mutation({
   args: {
@@ -222,7 +223,7 @@ export const giveMany = mutation({
     by: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await actor(ctx, args.token, ["students", "correction"], args.by);
+    await actor(ctx, args.token, ["students", "correction", "money"], args.by);
     if (args.ids.length > MANY_MAX) fail(`At most ${MANY_MAX} students at once.`);
     const now = Date.now();
     const unit = await ctx.db.get(args.unitId);

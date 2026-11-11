@@ -13,6 +13,7 @@ import {
   addDay,
   dayStartAt,
   feeDiff,
+  freeFix,
   monthMoney,
   moneyProblem,
   printStage,
@@ -115,6 +116,36 @@ describe("the rules", () => {
     expect(next.drop.sort()).toEqual(["b7", "c2", "c9"]);
     // A free student's day is still counted (Rs 0), so a later fee never charges it.
     expect(feeDiff({ days: [{ day: "2026-11-10", at: 10 }], books: [] }, [], 0).add).toEqual([{ k: "class", a: 0, day: "2026-11-10", at: 10 }]);
+  });
+
+  test("a free student: his books are Rs 0 lines no price reaches; made free, what he owes is wiped and what he paid stays", () => {
+    // Books free: a book given is a Rs 0 line marked free (never "no price yet").
+    const d = feeDiff({ days: [], books: [{ u: "U6", st: "master", at: 40, price: 200, free: true }, { u: "U7", st: "master", at: 50, price: null, free: true }] }, [], 350);
+    expect(d.add).toEqual([
+      { k: "book", a: 0, day: "1970-01-01", at: 40, u: "U6", st: "master", fr: true },
+      { k: "book", a: 0, day: "1970-01-01", at: 50, u: "U7", st: "master", fr: true },
+    ]);
+    // Made free: c1 is paid (stays), c2 is paid in part (keeps the Rs 100 he gave), c3 nobody paid (waived); the book
+    // with no price yet never takes one. Books are another kind: untouched by "class".
+    const rows = [
+      row("c1", "class", 350, 1, { day: "2026-11-10" }),
+      row("c2", "class", 350, 2, { day: "2026-11-12" }),
+      row("b1", "book", 200, 3, { u: "U6", st: "master" }),
+      row("p1", "pay", 450, 4),
+      row("c3", "class", 350, 5, { day: "2026-11-14" }),
+      row("b2", "book", 0, 6, { u: "U7", st: "master", np: true }),
+    ];
+    expect(replay(rows)).toMatchObject({ owe: 800, credit: 0 });
+    const cls = freeFix(rows, "class");
+    expect(cls).toEqual({ waive: ["c3"], trim: [{ id: "c2", a: 100 }], unprice: [] });
+    const after = rows.map((r) => (r._id === "c3" ? { ...r, w: 9, fr: true } : r._id === "c2" ? { ...r, a: 100, fr: true } : r));
+    // Nothing he gave turned into credit, and only the book is still owed.
+    expect(replay(after)).toMatchObject({ owe: 200, credit: 0, paid: 450 });
+    expect(freeFix(rows, "book")).toEqual({ waive: ["b1"], trim: [], unprice: ["b2"] });
+    // A class taken off (he never came) is a Rs 0 line: it counts as nothing, the month counts how many.
+    const off = [...rows, row("x1", "off", 0, 7, { day: "2026-11-14" })];
+    expect(replay(off)).toMatchObject({ owe: 800, credit: 0, paid: 450 });
+    expect(monthMoney(off, []).offN).toBe(1);
   });
 
   test("days, words and checks", () => {
@@ -372,6 +403,135 @@ describe("the server", () => {
     expect((await rowsOf(hana)).find((r) => r.k === "class")).toMatchObject({ a: 0 });
     expect(await accOf(hana)).toMatchObject({ owe: 0, cr: 400, fee: 0 });
     await expect(mala().mutation(api.money.setFee, { sid: hana, fee: null })).rejects.toThrow(/owner/);
+  });
+
+  test("the same money is never taken twice: a second Paid for charges already paid takes nothing (a double tap, a second phone)", async () => {
+    await setUp("today");
+    await signIn(kumar);
+    step();
+    const cls = (await rowsOf(kumar)).find((r) => r.k === "class")!._id;
+    await mala().mutation(api.money.pay, { sid: kumar, a: 200, to: [cls] });
+    // Part paid: the rest can be paid for the same class.
+    await mala().mutation(api.money.pay, { sid: kumar, a: 150, to: [cls] });
+    expect(await accOf(kumar)).toMatchObject({ owe: 0, cr: 0, paid: 350 });
+    // All paid: the same tick again (Raj's phone still shows it) is refused, nothing is written.
+    await expect(raj().mutation(api.money.pay, { sid: kumar, a: 350, to: [cls] })).rejects.toThrow(/has paid that already/);
+    expect(await accOf(kumar)).toMatchObject({ owe: 0, cr: 0, paid: 350 });
+    // Paying ahead (nothing ticked) is still his to do.
+    await raj().mutation(api.money.pay, { sid: kumar, a: 350 });
+    expect(await accOf(kumar)).toMatchObject({ owe: 0, cr: 350, paid: 700 });
+  });
+
+  test("free students (the owner): class free, books free, or both; what he owes of it is wiped, what he paid stays", async () => {
+    await setUp("today");
+    await t.mutation(api.money.setBook, { u: u09, st: "master", price: 200 });
+    await signIn(kumar);
+    await signIn(hana);
+    step();
+    await t.mutation(api.students.setGiven, { id: kumar, unitId: u09, stage: "master", given: true });
+    await t.mutation(api.students.setGiven, { id: hana, unitId: u09, stage: "master", given: true });
+    expect(await accOf(kumar)).toMatchObject({ owe: 550, c: 1, b: 1 });
+    await expect(mala().mutation(api.money.setFree, { sid: kumar, cls: true })).rejects.toThrow(/owner/);
+    // Kumar: class free, not his books. Today's unpaid class is wiped; the book is still owed.
+    step();
+    await t.mutation(api.money.setFree, { sid: kumar, cls: true });
+    expect(await accOf(kumar)).toMatchObject({ owe: 200, c: 0, b: 1, fee: 0 });
+    expect((await accOf(kumar))!.fb).toBeUndefined();
+    expect((await rowsOf(kumar)).find((r) => r.k === "class")).toMatchObject({ a: 350, fr: true, wb: "Owner" });
+    // Hana paid Rs 100 of her class, then books free: her book is wiped, her class still owes Rs 250.
+    await mala().mutation(api.money.pay, { sid: hana, a: 100, to: [(await rowsOf(hana)).find((r) => r.k === "class")!._id] });
+    step();
+    await t.mutation(api.money.setFree, { sid: hana, books: true });
+    expect(await accOf(hana)).toMatchObject({ owe: 250, c: 1, b: 0, cr: 0, fb: true });
+    // Then class free too: the part she paid stays as the class's amount; nothing owed, nothing turned into credit.
+    await t.mutation(api.money.setFree, { sid: hana, cls: true });
+    expect(await accOf(hana)).toMatchObject({ owe: 0, cr: 0, paid: 100, fee: 0, fb: true });
+    expect((await rowsOf(hana)).find((r) => r.k === "class")).toMatchObject({ a: 100, fr: true });
+    // A book given to her now: a Rs 0 line marked free; its copy still leaves the stock; a new price never reaches it.
+    step();
+    await mala().mutation(api.students.setGiven, { id: hana, unitId: u08, stage: "master", given: true, by: "money" });
+    expect((await rowsOf(hana)).find((r) => r.k === "book" && r.u === u08)).toMatchObject({ a: 0, fr: true });
+    await t.mutation(api.money.setBook, { u: u08, st: "master", price: 300 });
+    expect((await rowsOf(hana)).find((r) => r.k === "book" && r.u === u08)).toMatchObject({ a: 0, fr: true });
+    expect((await mala().query(api.money.shop, {})).items.find((i) => i.u === u08)).toMatchObject({ given: 1 });
+    expect(await accOf(hana)).toMatchObject({ owe: 0, np: 0 });
+    // The next day both come: free classes are Rs 0 days. Kumar not free any more: the centre's fee from his next class.
+    vi.setSystemTime(new Date("2026-11-11T15:30:00+05:30"));
+    await signOut(kumar);
+    step();
+    await signIn(kumar);
+    await signIn(hana);
+    expect((await rowsOf(kumar)).filter((r) => r.k === "class").map((r) => [r.day, r.a])).toEqual([["2026-11-10", 350], ["2026-11-11", 0]]);
+    expect(await accOf(hana)).toMatchObject({ owe: 0, came: "2026-11-11" });
+    await t.mutation(api.money.setFree, { sid: kumar, cls: false });
+    expect((await accOf(kumar))!.fee).toBeUndefined();
+    vi.setSystemTime(new Date("2026-11-12T15:30:00+05:30"));
+    await signOut(kumar);
+    step();
+    await signIn(kumar);
+    expect(await accOf(kumar)).toMatchObject({ owe: 550, c: 1, b: 1 });
+    // His sheet says so.
+    expect(await mala().query(api.money.student, { sid: hana })).toMatchObject({ fee: 0, own: true, freeBooks: true });
+  });
+
+  test("Didn't come: the class comes off his fees and the register; staff today only, the owner any day; a line stays", async () => {
+    await setUp("today");
+    await signIn(kumar);
+    await signIn(hana);
+    step();
+    const visits = (id: Id<"students">) => raw.run(async (ctx) => (await ctx.db.query("attendance").withIndex("by_student", (q) => q.eq("studentId", id)).collect()).map((x) => x.day));
+    // Hana paid for today, then it turns out she never came (the wrong name was tapped): her Rs 350 is her credit.
+    await mala().mutation(api.money.pay, { sid: hana, a: 350 });
+    step(20 * MIN);
+    await expect(asPhone(raw, NILA).mutation(api.money.absent, { sid: hana, day: "2026-11-10" })).rejects.toThrow(/This needs/);
+    await mala().mutation(api.money.absent, { sid: hana, day: "2026-11-10" });
+    expect(await visits(hana)).toEqual([]);
+    expect((await rowsOf(hana)).map((r) => [r.k, r.a, r.by])).toEqual([["pay", 350, "Mala"], ["off", 0, "Mala"]]);
+    expect(await accOf(hana)).toMatchObject({ owe: 0, c: 0, cr: 350 });
+    expect((await accOf(hana))!.came).toBeUndefined();
+    expect(await raw.run(async (ctx) => (await ctx.db.get(hana))!.present)).toBe(false);
+    // Twice is refused (she isn't signed in that day any more); a day before the fees began too.
+    await expect(mala().mutation(api.money.absent, { sid: hana, day: "2026-11-10" })).rejects.toThrow(/isn't signed in/);
+    await expect(t.mutation(api.money.absent, { sid: kumar, day: "2026-11-09" })).rejects.toThrow(/since the fees began/);
+    // The next day: yesterday's class of Kumar is the owner's to take off, never the staff's.
+    vi.setSystemTime(new Date("2026-11-11T15:30:00+05:30"));
+    await signOut(kumar);
+    step();
+    await signIn(kumar);
+    expect(await accOf(kumar)).toMatchObject({ owe: 700, c: 2 });
+    await expect(mala().mutation(api.money.absent, { sid: kumar, day: "2026-11-10" })).rejects.toThrow(/Only the owner/);
+    await t.mutation(api.money.absent, { sid: kumar, day: "2026-11-10" });
+    expect(await visits(kumar)).toEqual(["2026-11-11"]);
+    expect(await accOf(kumar)).toMatchObject({ owe: 350, c: 1, since: "2026-11-11", came: "2026-11-11" });
+    expect(await raw.run(async (ctx) => (await ctx.db.get(kumar))!.present)).toBe(true); // today's visit is untouched
+    // The owner's Business tab lists them: who, which day, who took it off.
+    const b = await t.query(api.money.business, {});
+    if (!b.on) throw new Error("fees not on");
+    expect(b.m.offN).toBe(2);
+    expect(b.offs.map((o) => [o.name, o.day, o.by])).toEqual([["Kumar S", "2026-11-10", "Owner"], ["Hana K", "2026-11-10", "Mala"]]);
+    // His sheet keeps the line.
+    const sheet = await mala().query(api.money.student, { sid: kumar });
+    expect(sheet.rows.find((r) => r.k === "off")).toMatchObject({ day: "2026-11-10", by: "Owner", a: 0 });
+    expect(sheet.today).toBe("2026-11-11");
+  });
+
+  test("one book given to several students at once by a Money person: each copy charged, the stock follows; taken back", async () => {
+    await setUp("today");
+    await raw.run(async (ctx) => {
+      await ctx.db.insert("books", { unitId: u09, stage: "master", data: KNOWN_WORKBOOKS[0].data, updatedAt: Date.now() });
+    });
+    await t.mutation(api.money.setBook, { u: u09, st: "master", price: 200 });
+    await t.mutation(api.money.setFree, { sid: hana, books: true });
+    step();
+    // Raj has only the Money tick (no Correction job).
+    expect(await raj().mutation(api.students.giveMany, { ids: [kumar, hana], unitId: u09, stage: "master", given: true, by: "money" })).toBe(2);
+    expect((await rowsOf(kumar)).find((r) => r.k === "book")).toMatchObject({ a: 200, u: u09 });
+    expect((await rowsOf(hana)).find((r) => r.k === "book")).toMatchObject({ a: 0, fr: true });
+    expect((await raj().query(api.money.shop, {})).items.find((i) => i.u === u09)).toMatchObject({ given: 2 });
+    expect(await raj().mutation(api.students.giveMany, { ids: [kumar, hana], unitId: u09, stage: "master", given: false, by: "money" })).toBe(2);
+    expect(await rowsOf(kumar)).toEqual([]);
+    expect((await raj().query(api.money.shop, {})).items.find((i) => i.u === u09)).toMatchObject({ given: 0 });
+    await expect(asPhone(raw, NILA).mutation(api.students.giveMany, { ids: [kumar], unitId: u09, stage: "master", given: true })).resolves.toBe(1); // Correction, as before
   });
 
   test("the Business tab: the owner only; in, out, owed and how long, the team's days and pay", async () => {

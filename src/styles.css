@@ -12058,19 +12058,6 @@ body.tm-on .toasts {
   background: var(--red);
   color: #fff;
 }
-.mn-tiles .boss-tile b {
-  font-size: 21px;
-}
-.mn-search {
-  width: 100%;
-  min-height: 44px;
-  padding: 0 12px;
-  border: 1.5px solid var(--line);
-  border-radius: 12px;
-  background: var(--card);
-  font: 600 15px/1.2 var(--font);
-  color: var(--ink);
-}
 .mn-rows,
 .mn-list,
 .mn-cards {
@@ -12154,67 +12141,6 @@ body.tm-on .toasts {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.mn-row.due {
-  border-color: #f3c27a;
-  background: #fffaf0;
-}
-.mn-row.due .mn-r em {
-  color: var(--amber-ink);
-}
-.mn-row.part {
-  border-color: #f3dc8a;
-  background: #fffcee;
-}
-.mn-row.paid .mn-r {
-  color: var(--green-ink);
-}
-.mn-row.due.age-red {
-  border-color: #f2a3ad;
-  background: var(--red-soft);
-}
-.mn-row.due.age-red .mn-r em {
-  color: var(--red-ink);
-}
-/* A book or a student's books: two lines on the left (the name, then his book), the stock or next book on the right. */
-.mn-l {
-  min-width: 0;
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-.mn-l b {
-  font: 700 16px/1.15 var(--font);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.mn-l small {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--ink-2);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.mn-row.bk .mn-r {
-  flex: none;
-  max-width: 46%;
-}
-.mn-row.bk .mn-r em {
-  font: 700 14.5px/1.15 var(--font);
-  max-width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.mn-row.bk.f-soon {
-  border-color: #f3c27a;
-}
-.mn-row.bk.f-now {
-  border-color: #f2a3ad;
-  background: var(--red-soft);
-}
 .mn-h {
   margin: 4px 0 0;
   font: 700 15px/1.2 var(--font);
@@ -12238,43 +12164,6 @@ body.tm-on .toasts {
 .mn-sec:first-child {
   border-top: 0;
   padding-top: 0;
-}
-.mn-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.mn-chip {
-  min-height: 44px;
-  padding: 5px 11px;
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-  border: 1.5px solid var(--line);
-  border-radius: 12px;
-  background: var(--card);
-  color: var(--ink);
-  font: 600 14px/1.2 var(--font);
-  text-align: left;
-}
-.mn-chip b {
-  font: 700 16px/1 var(--cond);
-}
-.mn-chip small {
-  font-size: 11.5px;
-  color: var(--ink-3);
-}
-.mn-chip.on {
-  border-color: var(--ink);
-  background: var(--ink);
-  color: #fff;
-}
-.mn-chip.on small {
-  color: rgba(255, 255, 255, 0.75);
-}
-.mn-chip.on::before {
-  content: "✓";
-  font-weight: 800;
 }
 .mn-none {
   margin: 0;
@@ -12321,16 +12210,9 @@ body.tm-on .toasts {
   text-align: left;
 }
 .mn-amt input:focus,
-.mn-field input:focus,
-.mn-search:focus {
+.mn-field input:focus {
   outline: 2px solid var(--theory);
   outline-offset: 1px;
-}
-.mn-all {
-  align-self: flex-end;
-}
-.mn-pay {
-  margin-top: 2px;
 }
 .mn-now,
 .mn-has {
@@ -12350,32 +12232,6 @@ body.tm-on .toasts {
 }
 .mn-now.f-now small {
   color: var(--red-ink);
-}
-.mn-has {
-  color: var(--green-ink);
-}
-.mn-next {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: 12px;
-  background: var(--ground);
-}
-.mn-next > span {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-.mn-next b {
-  font: 700 14.5px/1.25 var(--font);
-}
-.mn-next small {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--ink-2);
 }
 .mn-line {
   display: flex;
@@ -12552,12 +12408,6 @@ body.tm-on .toasts {
   justify-content: flex-start;
 }
 @media (max-width: 345px) {
-  .mn-tiles .boss-tile {
-    padding: 8px 7px;
-  }
-  .mn-tiles .boss-tile b {
-    font-size: 17px;
-  }
   .mn-row {
     padding: 6px 9px;
     gap: 6px;
@@ -12580,6 +12430,690 @@ body.tm-on .toasts {
 }
 .mn-dline small {
   color: var(--ink-2);
+}
+
+/* ---------- Fees and Books as one screen each (11 Nov 2026, his words: "for the fast use this is not suitable"):
+   rows pinned under the top bar, the names as pills, and the pad at the bottom, every button in its place like
+   Correction's (src/moneyDesk.tsx). The toasts sit just above the pad here (its height is measured), so Undo never
+   covers Paid and is under her thumb. ---------- */
+body.mnx-desk .toasts {
+  bottom: calc(var(--tabs) + env(safe-area-inset-bottom) + 24px + var(--mnx-pad-h, 0px) + 10px);
+}
+body.mnx-desk .toast {
+  pointer-events: none; /* the words never swallow a tap meant for a name under them */
+}
+body.mnx-desk .toast button {
+  pointer-events: auto;
+}
+body.locked.mnx-desk .toasts {
+  bottom: calc(24px + env(safe-area-inset-bottom));
+}
+.mnx-page {
+  gap: 10px;
+  padding-bottom: 0; /* the pad ends the page: at the end of a long list it sits where it always sits */
+}
+.mnx-page[data-mode="business"],
+.mnx-page[data-mode="print"] {
+  padding-bottom: 18px;
+}
+.mnx-stick {
+  gap: 6px;
+  box-shadow: 0 1px 0 var(--line-2);
+}
+.mnx-stick .boss-say {
+  margin: 0;
+  font-size: 13px;
+}
+.mnx-sum {
+  margin: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  font: 600 12.5px/1.2 var(--font);
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.mnx-sum b {
+  font: 700 15.5px/1 var(--cond);
+  color: var(--ink);
+}
+.mnx-sum b.in {
+  color: var(--green-ink);
+}
+.mnx-sum b.old {
+  color: var(--red-ink);
+}
+.mnx-sum small {
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+/* Under the pinned rows: the names, then the pad. It ends where the pad sticks (the tabs + 24 px), so the pad sits in
+   the same place on a short list and a long one. 40 = the page's 14 px top padding - the pinned rows' 8 px pull-up +
+   their 10 px gap + the app's 24 px (the same sum as .tp-body). */
+.mnx-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: calc(100vh - var(--top-h, 68px) - var(--mnx-stick-h, 120px) - var(--tabs) - env(safe-area-inset-bottom) - 40px);
+  min-height: calc(100dvh - var(--top-h, 68px) - var(--mnx-stick-h, 120px) - var(--tabs) - env(safe-area-inset-bottom) - 40px);
+}
+.mnx-empty {
+  margin: 4px 2px;
+  font: 600 14.5px/1.35 var(--font);
+  color: var(--ink-2);
+}
+/* The names: pills that wrap. Colour = what he owes (Fees) or his next book (Books); dark = picked or ticked. */
+.mnx-names {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 6px;
+}
+.mnx-p {
+  position: relative;
+  max-width: 100%;
+  min-height: 40px;
+  padding: 0 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  font: 700 14.5px/1 var(--font);
+  white-space: nowrap;
+}
+.mnx-p:active {
+  transform: scale(0.96);
+}
+.mnx-p > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mnx-p > small {
+  flex: none;
+  font: 700 13.5px/1 var(--cond);
+  color: var(--ink-3);
+}
+.mnx-p > i {
+  flex: none;
+  padding: 2px 5px;
+  border-radius: 6px;
+  background: var(--line-2);
+  color: var(--ink-2);
+  font: 700 10.5px/1 var(--font);
+  font-style: normal;
+}
+.mnx-p.mnx-s-due,
+.mnx-p.mnx-b-soon {
+  border-color: var(--amber);
+  background: var(--amber-soft);
+}
+.mnx-p.mnx-s-due > small,
+.mnx-p.mnx-b-soon > small {
+  color: var(--amber-ink);
+}
+.mnx-p.mnx-s-part {
+  border-color: var(--yellow);
+  background: var(--yellow-soft);
+}
+.mnx-p.mnx-s-part > small {
+  color: var(--yellow-ink);
+}
+.mnx-p.mnx-s-paid,
+.mnx-p.mnx-b-has {
+  border-color: var(--green);
+  background: var(--green-soft);
+  color: var(--green-ink);
+}
+.mnx-p.mnx-s-paid > small,
+.mnx-p.mnx-b-has > small {
+  color: var(--green-ink);
+}
+.mnx-p.mnx-s-free,
+.mnx-p.mnx-b-cur {
+  border-style: dashed;
+  color: var(--ink-2);
+}
+.mnx-p.mnx-s-old,
+.mnx-p.mnx-b-now {
+  border-color: var(--red);
+  background: var(--red-soft);
+}
+.mnx-p.mnx-s-old > small,
+.mnx-p.mnx-b-now > small {
+  color: var(--red-ink);
+}
+.mnx-p.mnx-away {
+  opacity: 0.62;
+}
+/* A book of his not paid yet (the Books page): a small amber dot on his name. */
+.mnx-p.mnx-owesb::after {
+  content: "";
+  position: absolute;
+  top: -3px;
+  right: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--amber);
+  box-shadow: 0 0 0 1.5px var(--ground);
+}
+.mnx-p.on {
+  border-style: solid;
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
+  opacity: 1;
+}
+.mnx-p.on > small {
+  color: #d6dbe6;
+}
+/* A grade's printed books in one row: its number, the copies in hand under it. */
+.mnx-books {
+  gap: 5px;
+  padding: 2px 0;
+}
+/* The books row stays under the pinned rows while a long list of names scrolls. */
+.mnx-body > .hrow {
+  position: sticky;
+  top: calc(var(--top-h, 68px) + var(--mnx-stick-h, 120px));
+  z-index: 4;
+  margin: -10px -12px 0;
+  padding: 8px 12px 6px;
+  background: var(--ground);
+}
+.mnx-bk {
+  flex: none;
+  position: relative;
+  min-width: 46px;
+  height: 44px;
+  padding: 0 8px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border-radius: 12px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  white-space: nowrap;
+}
+.mnx-bk:active {
+  transform: scale(0.96);
+}
+.mnx-bk > b {
+  font: 700 17px/1 var(--cond);
+}
+.mnx-bk > i {
+  font: 700 10.5px/1 var(--font);
+  font-style: normal;
+  color: var(--ink-3);
+}
+.mnx-bk > em {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  font: 700 9px/1 var(--font);
+  font-style: normal;
+  color: var(--theory-ink);
+}
+.mnx-bk.bk-noprice {
+  border-style: dashed;
+}
+.mnx-bk.bk-amber {
+  border-color: var(--amber);
+}
+.mnx-bk.bk-red {
+  border-color: var(--red);
+}
+.mnx-bk.bk-red > i {
+  color: var(--red-ink);
+}
+.mnx-bk.on {
+  border-style: solid;
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
+}
+.mnx-bk.on > i {
+  color: #c4cad8;
+}
+.mnx-bk.on > em {
+  color: #b9c8ff;
+}
+/* The pad: who, his next book and Didn't come, his charges in one line, then All · the amount · Paid. */
+.fc-pad.mnx-pad {
+  gap: 6px;
+  box-shadow:
+    0 24px 0 0 var(--ground),
+    0 -1px 0 var(--line-2);
+}
+.mnx-who {
+  margin: 0;
+  min-width: 0;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.mnx-who > b {
+  flex: 0 1 auto;
+  min-width: 0;
+  font: 700 17px/1.15 var(--font);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mnx-who > span {
+  flex: 1 1 0;
+  min-width: 0;
+  font: 600 12.5px/1.2 var(--font);
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mnx-who.owes > span {
+  color: var(--amber-ink);
+  font-weight: 700;
+}
+.mnx-who.idle > b {
+  color: var(--ink-2);
+}
+.mnx-freetag {
+  background: var(--green-soft);
+  color: var(--green-ink);
+}
+.mnx-more {
+  flex: none;
+  margin-left: auto;
+  width: 46px;
+  height: 32px;
+  padding: 0 0 7px;
+  border-radius: 10px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  font: 700 21px/1 var(--font);
+}
+.mnx-more:disabled {
+  opacity: 0.4;
+}
+.mnx-row3 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 104px;
+  gap: 6px;
+}
+.mnx-give {
+  min-width: 0;
+  height: 46px;
+  padding: 3px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 3px;
+  border-radius: 12px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  color: var(--ink-2);
+  text-align: left;
+}
+.mnx-give > b,
+.mnx-give > small {
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mnx-give > b {
+  font: 700 15px/1.1 var(--font);
+}
+.mnx-give > small {
+  font: 600 11.5px/1.1 var(--font);
+  color: var(--ink-3);
+}
+.mnx-give.go {
+  border-color: var(--theory);
+  background: var(--theory-soft);
+  color: var(--theory-ink);
+}
+.mnx-give.go.f-now {
+  border-color: var(--red);
+  background: var(--red-soft);
+  color: var(--red-ink);
+}
+.mnx-give.go > small {
+  color: var(--ink-2);
+}
+.mnx-give.has > b {
+  color: var(--green-ink);
+}
+.mnx-give:disabled:not(.has) {
+  opacity: 0.55;
+}
+.mnx-absent {
+  min-width: 0;
+  height: 46px;
+  padding: 0 4px;
+  border-radius: 12px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  color: var(--ink-2);
+  font: 700 13.5px/1.1 var(--font);
+}
+.mnx-absent.sure {
+  border-color: var(--red);
+  background: var(--red);
+  color: #fff;
+}
+.mnx-absent:disabled {
+  opacity: 0.4;
+}
+.mnx-chips {
+  gap: 6px;
+  height: 44px;
+}
+.mnx-chip {
+  flex: none;
+  height: 42px;
+  padding: 0 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--ink);
+  font: 600 13.5px/1 var(--font);
+  white-space: nowrap;
+}
+.mnx-chip > b {
+  font: 700 16px/1 var(--cond);
+}
+.mnx-chip > small {
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.mnx-chip.tk {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
+}
+.mnx-chip.tk > small {
+  color: rgba(255, 255, 255, 0.75);
+}
+.mnx-chip.tk::before {
+  content: "✓";
+  font-weight: 800;
+}
+.mnx-nochips {
+  margin: 0;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 600 13px/1.25 var(--font);
+  color: var(--ink-2);
+  overflow: hidden;
+}
+.mnx-nochips .boss-link {
+  flex: none;
+}
+.mnx-payrow {
+  display: grid;
+  grid-template-columns: 84px 92px minmax(0, 1fr);
+  gap: 6px;
+}
+.mnx-giverow {
+  grid-template-columns: 96px minmax(0, 1fr);
+}
+.mnx-givepad .mnx-who > b {
+  flex: 1 1 0;
+}
+.mnx-bookline {
+  margin: 0;
+  height: 44px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+}
+.mnx-bookline > span {
+  font: 700 13.5px/1.2 var(--font);
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mnx-bookline > small {
+  font: 600 12.5px/1.2 var(--font);
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mnx-bookline.warn > small {
+  color: var(--amber-ink);
+  font-weight: 700;
+}
+.mnx-all {
+  min-width: 0;
+  height: 58px;
+  padding: 0 3px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-radius: 14px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+}
+.mnx-all > small {
+  font: 700 11.5px/1 var(--font);
+  color: var(--ink-3);
+}
+.mnx-all > b {
+  font: 700 16px/1 var(--cond);
+  white-space: nowrap;
+}
+.mnx-all.on {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
+}
+.mnx-all.on > small {
+  color: #c9d0dd;
+}
+.mnx-all:disabled {
+  opacity: 0.4;
+}
+.mnx-amt {
+  min-width: 0;
+  height: 58px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+}
+.mnx-amt > i {
+  flex: none;
+  font: 700 13px/1 var(--cond);
+  font-style: normal;
+  color: var(--ink-3);
+}
+.mnx-amt > input {
+  flex: 1 1 0;
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--ink);
+  font: 700 21px/1 var(--cond);
+  text-align: right;
+}
+.mnx-amt:focus-within {
+  outline: 2px solid var(--theory);
+  outline-offset: 1px;
+}
+.mnx-paid {
+  min-width: 0;
+  height: 58px;
+  padding: 0 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--green);
+  color: #fff;
+  font: 700 19px/1 var(--font);
+  white-space: nowrap;
+  box-shadow: 0 2px 0 rgba(22, 33, 62, 0.14);
+}
+.mnx-paid > span {
+  font-size: 20px;
+}
+.mnx-paid:disabled {
+  opacity: 0.4;
+}
+.mnx-paid:active:not(:disabled),
+.mnx-all:active:not(:disabled),
+.mnx-give:active:not(:disabled),
+.mnx-absent:active:not(:disabled),
+.mnx-chip:active {
+  transform: scale(0.97);
+}
+/* The sheet behind ⋯: the owner's two switches, the history's lines. */
+.mn-freerow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.mn-sw {
+  min-width: 0;
+  min-height: 52px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-radius: 14px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+}
+.mn-sw > b {
+  font: 700 15px/1.1 var(--font);
+}
+.mn-sw > small {
+  font: 700 12.5px/1 var(--font);
+  color: var(--ink-3);
+}
+.mn-sw.on {
+  border-color: var(--green);
+  background: var(--green-soft);
+  color: var(--green-ink);
+}
+.mn-sw.on > small {
+  color: var(--green-ink);
+}
+.mn-freeline {
+  margin: 0;
+  font: 700 14px/1.3 var(--font);
+  color: var(--green-ink);
+}
+.mn-h > small {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+.mn-line.off > span {
+  color: var(--ink-2);
+}
+.mn-line .boss-link.mn-sure {
+  color: var(--red-ink);
+}
+/* A short phone (an old iPhone SE): the pad a little lower, so more names show above it. */
+@media (max-height: 620px) {
+  .fc-pad.mnx-pad {
+    gap: 5px;
+    padding-top: 6px;
+  }
+  .mnx-who,
+  .mnx-more {
+    min-height: 0;
+    height: 28px;
+  }
+  .mnx-more {
+    padding-bottom: 6px;
+  }
+  .mnx-give,
+  .mnx-absent {
+    height: 40px;
+  }
+  .mnx-chips,
+  .mnx-nochips,
+  .mnx-bookline {
+    height: 38px;
+  }
+  .mnx-chip {
+    height: 36px;
+  }
+  .mnx-all,
+  .mnx-amt,
+  .mnx-paid {
+    height: 50px;
+  }
+  .mnx-p {
+    min-height: 36px;
+  }
+}
+@media (max-width: 345px) {
+  .mnx-p {
+    padding: 0 9px;
+    font-size: 13.5px;
+  }
+  .mnx-row3 {
+    grid-template-columns: minmax(0, 1fr) 92px;
+  }
+  .mnx-absent {
+    font-size: 12.5px;
+  }
+  .mnx-payrow {
+    grid-template-columns: 74px 80px minmax(0, 1fr);
+  }
+  .mnx-giverow {
+    grid-template-columns: 84px minmax(0, 1fr);
+  }
+  .mnx-all > b {
+    font-size: 14.5px;
+  }
+  .mnx-amt > input {
+    font-size: 19px;
+  }
+  .mnx-paid {
+    font-size: 17px;
+  }
+  .mnx-who > b {
+    font-size: 16px;
+  }
 }
 
 /* ---------- Books: the Claude link (10 Nov 2026) ---------- */

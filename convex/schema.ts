@@ -1494,7 +1494,11 @@ export default defineSchema({
    */
   fees: defineTable({
     sid: v.id("students"),
-    k: v.union(v.literal("class"), v.literal("book"), v.literal("owe"), v.literal("pay"), v.literal("credit")),
+    /**
+     * class / book / owe = charges, pay / credit = money; off = a class taken off because he never came that day (11 Nov
+     * 2026: Rs 0, a line for the owner to see who took it off and when; it counts as nothing).
+     */
+    k: v.union(v.literal("class"), v.literal("book"), v.literal("owe"), v.literal("pay"), v.literal("credit"), v.literal("off")),
     /** Whole rupees, never below 0. */
     a: v.number(),
     /** The day in Sri Lanka ("2026-11-09"): the class, the book given, the payment. */
@@ -1510,6 +1514,8 @@ export default defineSchema({
     /** Waived by the owner (when, his name): counts as nothing. */
     w: v.optional(v.number()),
     wb: v.optional(v.string()),
+    /** Free because he is a free student (11 Nov 2026): a book at Rs 0 that never takes a price, a charge wiped when he was made free. */
+    fr: v.optional(v.boolean()),
     /** Who took the money / gave the book. */
     by: v.optional(v.string()),
     note: v.optional(v.string()),
@@ -1541,6 +1547,8 @@ export default defineSchema({
     lastA: v.optional(v.number()),
     came: v.optional(v.string()),
     fee: v.optional(v.number()),
+    /** His books are free (11 Nov 2026, the owner's switch): a printed book given is a Rs 0 line, the copy still leaves the stock. */
+    fb: v.optional(v.boolean()),
     at: v.number(),
   }).index("by_sid", ["sid"]),
 
