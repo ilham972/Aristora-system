@@ -160,11 +160,11 @@ describe("Us on the server", () => {
 
   test("a whole Stage corrected in class: the owl tells everyone once", async () => {
     for (const l of G7U08.levels) await t.mutation(api.workbook.correct, { studentId: asha, level: l.n, items: items(l.n) });
-    // (8 Nov 2026: the Stage's XP also took her past 100 XP ever: her new rank is a line of its own.)
+    // (8–10 Nov 2026 the Stage's XP also made a new rank line; the ranks went on 11 Nov 2026.)
     const ls = (await lines()).filter((m) => m.k === "stage");
     expect(ls.map((m) => [m.k, m.n, m.x, m.t])).toEqual([["stage", "Asha R", 8, ls[0].t]]);
     expect(ls[0].t).toBeTruthy(); // the Stage's Tamil name
-    expect((await lines()).filter((m) => m.k === "rank").map((m) => [m.n, m.x])).toEqual([["Asha R", 1]]);
+    expect((await lines()).filter((m) => m.k === "rank")).toEqual([]);
     // Corrected again (a mark changed): no second line.
     const last = G7U08.levels[G7U08.levels.length - 1].n;
     await t.mutation(api.workbook.correct, { studentId: asha, level: last, items: items(last) });
@@ -348,14 +348,18 @@ describe("Us on the server", () => {
     await raw.mutation(internal.us.improved, {}); // once
     let ls = await lines();
     expect(ls.map((m) => [m.k, m.ppl?.map((p) => p.n)])).toEqual([["up", ["Bilal M", "Hana K", "Asha R"]]]);
-    // Monday: the race keeps the champions; since 8 Nov 2026 the owl names each league's winner (all of them in the
-    // first league here) with his league. Asha's level is her real XP (her row is worked out again from it); Bilal's 40
-    // stays the most.
+    // Monday: the race keeps the champions; since 11 Nov 2026 the owl names each grade's weekly coin winner, lowest grade
+    // first, with the coins (`x`). Asha's level is her real XP (her row is worked out again from it); Bilal's 40 stays
+    // Grade 8's most.
     await t.mutation(api.workbook.correct, { studentId: asha, level: 1, items: items(1) });
     vi.setSystemTime(new Date("2026-11-09T00:05:00+05:30"));
     await raw.mutation(internal.race.week, {});
     ls = await lines();
     const champs = ls.find((m) => m.k === "champs")!;
-    expect(champs.ppl!.map((p) => [p.n, p.g, p.l])).toEqual([["Bilal M", 8, 1]]);
+    expect(champs.ppl!.map((p) => [p.n, p.g])).toEqual([
+      ["Asha R", 7],
+      ["Bilal M", 8],
+    ]);
+    expect(champs.x).toBe(50);
   });
 });

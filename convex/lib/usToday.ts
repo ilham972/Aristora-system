@@ -2,7 +2,6 @@
 // one's first XP of the day from a Level or class work comes (lib/raceRows.ts writeRow). Its own file (8 Nov 2026) so
 // the race rows don't import lib/us.ts, which now gives XP through them (lib/usXp.ts): no import cycle.
 
-import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { slDayNo } from "./day";
 
@@ -43,23 +42,4 @@ export async function noteToday(ctx: MutationCtx, before: number, after: number,
   } else next = { ...v, n: Math.max(0, v.n + flip) };
   if (row) await ctx.db.patch(row._id, { value: next });
   else await ctx.db.insert("meta", { key: US_TODAY, value: next });
-}
-
-/**
- * A new rank (8 Nov 2026, the ranks: his XP ever, never down): the owl's line in Us ("🧠 Bilal K இப்போது
- * சிந்தனையாளர்!", `x` = the rank's index of RANKS). Real students only (the race rows call it; lib/usXp.ts too).
- */
-export async function rankMoment(ctx: MutationCtx, who: { sid: Id<"students">; n: string; g?: number; pic?: string }, rk: number, now: number): Promise<void> {
-  await ctx.db.insert("usMoments", {
-    k: "rank",
-    sid: who.sid,
-    n: who.n,
-    ...(who.g !== undefined ? { g: who.g } : {}),
-    ...(who.pic ? { pic: who.pic } : {}),
-    x: rk,
-    at: now,
-    day: slDayNo(now),
-    demo: false,
-    c: 0,
-  });
 }

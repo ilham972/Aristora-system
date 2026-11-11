@@ -46,7 +46,7 @@ import { internalMutation, mutation } from "./lib/fn";
 import { NOTE_MAX, PHOTO_BYTES } from "./lib/photos";
 import { photoProblem, picUrl, staffPicUrl } from "./lib/profile";
 import { numsAt, RACE_GRADES } from "./lib/race";
-import { raceList } from "./lib/raceRows";
+import { raceList, weekCoinsOf } from "./lib/raceRows";
 import {
   addMoment,
   COMMENTS_A_DAY,
@@ -58,6 +58,7 @@ import {
   itemOf,
   LEARN_A_DAY,
   mostImproved,
+  GONE_KINDS,
   OWL_KINDS,
   ownWords,
   POST_MAX,
@@ -379,7 +380,7 @@ export const feed = query({
     const s = await familyViewer(ctx, args.token);
     const cfg = await usCfg(ctx);
     const g = gradeOf(s);
-    const rows = await feedOf(ctx, !!s.demo || !!s.test, (m) => !cfg.off.includes(m.k) && seesLine(m, s._id, g));
+    const rows = await feedOf(ctx, !!s.demo || !!s.test, (m) => !cfg.off.includes(m.k) && !GONE_KINDS.includes(m.k) && seesLine(m, s._id, g));
     const items: UsItem[] = [];
     const tp = staffPics(ctx);
     for (const m of rows) items.push(await lineFor(ctx, m, s._id, tp));
@@ -434,7 +435,7 @@ export const board = query({
     const u = await viewer(ctx, args.token, "any");
     const now = Date.now();
     const cfg = await usCfg(ctx);
-    const rows = await feedOf(ctx, false, (m) => !cfg.off.includes(m.k), 80);
+    const rows = await feedOf(ctx, false, (m) => !cfg.off.includes(m.k) && !GONE_KINDS.includes(m.k), 80);
     const c = await todayCount(ctx, now);
     const day = slDayNo(now);
     const shouts = await ctx.db
@@ -467,7 +468,7 @@ export const race = query({
   handler: async (ctx, args): Promise<FamilyBoard> => {
     await viewer(ctx, args.token, "any");
     const now = Date.now();
-    return { since: slWeekStart(now), you: "", grade: null, rows: await raceList(ctx, false, now), top: [], me: null, count: 0 };
+    return { since: slWeekStart(now), you: "", grade: null, rows: await raceList(ctx, false, now), wc: await weekCoinsOf(ctx), top: [], me: null, count: 0 };
   },
 });
 

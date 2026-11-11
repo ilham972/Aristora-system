@@ -45,7 +45,9 @@ import { DAY_MS, slDayNo } from "./day";
 
 export type UsKind = Doc<"usMoments">["k"];
 /** The lines the owl writes by itself (the owner can turn each kind off: Settings → Community). */
-export const OWL_KINDS: UsKind[] = ["bday", "stage", "home1", "back", "flame", "up", "champs", "count", "rank", "lgup", "upm", "gift"];
+export const OWL_KINDS: UsKind[] = ["bday", "stage", "home1", "back", "flame", "up", "champs", "count", "goat", "upm", "gift"];
+/** Lines nobody sees any more (11 Nov 2026: the ranks and the leagues out): a new rank, who moved up a league. */
+export const GONE_KINDS: UsKind[] = ["rank", "lgup"];
 
 /** Days in a row that get a line (7, 14, 30, 50, 100). */
 export const FLAME_MARKS = [7, 14, 30, 50, 100];
@@ -279,7 +281,7 @@ export async function backMoment(ctx: MutationCtx, sid: Id<"students">, at: numb
 /** A line about several students (the champions, the most improved, who moved up): once a day for its kind. */
 export async function groupMoment(
   ctx: MutationCtx,
-  k: "champs" | "up" | "lgup" | "upm",
+  k: "champs" | "up" | "upm" | "goat",
   ppl: NonNullable<Doc<"usMoments">["ppl"]>,
   now: number,
   extra: Partial<New> = {},
@@ -295,24 +297,30 @@ export async function groupMoment(
   return true;
 }
 
-/** Students as a line names them (real students only, the top league first when `l` is given). */
-async function pplOf(ctx: MutationCtx, list: { sid: Id<"students">; l?: number }[]): Promise<NonNullable<Doc<"usMoments">["ppl"]>> {
+/** Students as a line names them (real students only, in the order given). */
+async function pplOf(ctx: MutationCtx, sids: Id<"students">[]): Promise<NonNullable<Doc<"usMoments">["ppl"]>> {
   const out: NonNullable<Doc<"usMoments">["ppl"]> = [];
-  for (const x of [...list].sort((a, b) => (b.l ?? 0) - (a.l ?? 0))) {
-    const w = await whoOf(ctx, x.sid);
+  for (const sid of sids) {
+    const w = await whoOf(ctx, sid);
     if (!w || w.demo || out.some((p) => p.sid === w.sid)) continue;
-    out.push({ sid: w.sid, n: w.n, ...(w.g !== undefined ? { g: w.g } : {}), ...(w.pic ? { pic: w.pic } : {}), ...(x.l ? { l: x.l } : {}) });
+    out.push({ sid: w.sid, n: w.n, ...(w.g !== undefined ? { g: w.g } : {}), ...(w.pic ? { pic: w.pic } : {}) });
   }
   return out;
 }
 
 /**
- * Monday (race.week, 8 Nov 2026: the leagues): the owl names each league's winner (the "champs" line, each with his
- * league `l`) and who moved up (the "lgup" line, each with the league he reached).
+ * Monday (race.week, 11 Nov 2026: the weekly coins): the owl names each grade's coin winner (the "champs" line, lowest
+ * grade first; `x` = the coins each won).
  */
-export async function leagueMoments(ctx: MutationCtx, winners: { sid: Id<"students">; l: number }[], up: { sid: Id<"students">; l: number }[], now: number): Promise<void> {
-  await groupMoment(ctx, "champs", await pplOf(ctx, winners), now);
-  await groupMoment(ctx, "lgup", await pplOf(ctx, up), now);
+export async function coinsMoment(ctx: MutationCtx, sids: Id<"students">[], coins: number, now: number): Promise<void> {
+  const ppl = await pplOf(ctx, sids);
+  ppl.sort((a, b) => (a.g ?? 99) - (b.g ?? 99) || a.n.localeCompare(b.n));
+  await groupMoment(ctx, "champs", ppl, now, { x: coins });
+}
+
+/** A new GOAT (race.fill, 11 Nov 2026): the owl's line, once a day at most. */
+export async function goatMoment(ctx: MutationCtx, sid: Id<"students">, now: number): Promise<void> {
+  await groupMoment(ctx, "goat", await pplOf(ctx, [sid]), now);
 }
 
 /** The 1st (race.month): last month's most improved (`x` = that month's 1st). */
@@ -320,10 +328,7 @@ export async function monthMoment(ctx: MutationCtx, sids: Id<"students">[], mk: 
   await groupMoment(
     ctx,
     "upm",
-    await pplOf(
-      ctx,
-      sids.map((sid) => ({ sid })),
-    ),
+    await pplOf(ctx, sids),
     now,
     { x: mk },
   );
@@ -331,10 +336,7 @@ export async function monthMoment(ctx: MutationCtx, sids: Id<"students">[], mk: 
 
 /** A gift a teacher gave by hand, told to everyone (race.giveNow): the students and her reason. */
 export async function giftMoment(ctx: MutationCtx, sids: Id<"students">[], why: string, now: number): Promise<void> {
-  const ppl = await pplOf(
-    ctx,
-    sids.map((sid) => ({ sid })),
-  );
+  const ppl = await pplOf(ctx, sids);
   if (ppl.length) await addMoment(ctx, { k: "gift", ppl, t: why, demo: false, at: now });
 }
 
@@ -395,6 +397,7 @@ export const seniorSees = (m: Pick<Doc<"usMoments">, "aud" | "g" | "rpBy">, g: n
  * hidden by reports); anything else for everyone or his grade.
  */
 export function seesLine(m: Doc<"usMoments">, me: Id<"students">, g: number | null): boolean {
+  if (GONE_KINDS.includes(m.k)) return false;
   if (m.k === "ask") return m.sid === me || seniorSees(m, g);
   if (m.k === "learn") return m.sid === me || (m.ok === true && (m.rpBy?.length ?? 0) < REPORT_HIDE);
   const gs = gradesOf(m);

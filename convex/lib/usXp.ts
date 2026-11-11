@@ -10,9 +10,8 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { DAY_MS, SL_OFFSET_MS, slDayNo, slMonthBefore, slWeekStart } from "./day";
-import { numsAt, rankOf, zeroNums, type XpNums } from "./race";
+import { numsAt, zeroNums, type XpNums } from "./race";
 import { numsOfRow, RACE_V, raceRowOf, rebuildStudent } from "./raceRows";
-import { rankMoment } from "./usToday";
 
 /** His answer to a teacher's question, marked right. */
 export const XP_ANSWER = 5;
@@ -60,11 +59,7 @@ async function moveRow(ctx: MutationCtx, sid: Id<"students">, xp: number, t: num
   if (!row) return;
   const us = shifted(row.us ? numsOfRow(row.us) : zero(now), xp, t, now);
   const nums = shifted(numsOfRow(row), xp, t, now);
-  // His rank (8 Nov 2026): Us's XP counts in his XP ever, so it can bring a new rank (never take one away).
-  const kept = row.rk ?? rankOf(numsAt(numsOfRow(row), now).tot);
-  const rk = Math.max(kept, rankOf(nums.tot));
-  await ctx.db.patch(row._id, { ...nums, us, rk });
-  if (rk > kept && !row.demo && !row.gone) await rankMoment(ctx, { sid, n: row.n, ...(row.g !== undefined ? { g: row.g } : {}), ...(row.pic ? { pic: row.pic } : {}) }, rk, now);
+  await ctx.db.patch(row._id, { ...nums, us });
 }
 
 /** XP for one thing (once per thing and kind). Says how much it gave. */

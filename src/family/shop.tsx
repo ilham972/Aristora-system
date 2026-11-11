@@ -25,12 +25,14 @@ const SHELVES: { id: ShopItem["sh"]; name: string }[] = [
   { id: "treat", name: "🍦 Treats" },
 ];
 
-/** A coin line in his words: Monday's pay, what he bought, coins given back. */
+/** A coin line in his words: Monday's pay, his grade's weekly coins, what he bought, coins given back. */
 function lineWords(l: CoinLine): { what: string; when: string } {
   const d = new Date(l.at + 330 * 60_000);
   const when = `${d.getUTCDate()} ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getUTCMonth()]}`;
   if (l.k === "pay") return { what: `PAYDAY${l.w ? ` · ${l.w}` : ""}`, when };
   if (l.k === "back") return { what: `Coins back · ${l.w ?? ""}`, when };
+  // His grade's weekly #1 (11 Nov 2026): "👑 Grade 8 · #1 · 2–8 Nov".
+  if (l.k === "win") return { what: `👑 ${l.w ?? ""}`, when };
   return { what: l.w ?? "", when };
 }
 

@@ -1,95 +1,68 @@
-// The race tab (7 Nov 2026, his voice note): every student of ARISTORA, joined the app or not; XP from class and home this
-// week; his league (8 Nov 2026, his answers: 5 leagues, all grades mixed: the top 3 up on Monday, the bottom 3 down,
-// never one who learned on 4 days), his grade and the whole ARISTORA ("they can see both ranks"); the top three on a
-// podium, then the rest with how each moved since yesterday; in a league ⬆ / ⬇ / 🛡️ for Monday; 👑 = last week's
-// champion of a grade's or ARISTORA's list; the ones with no XP yet this week at the end with no number ("not started
-// this week"); how much XP passes the one above him (in a league: what changes his Monday); the grade cup (ARISTORA:
-// the share of each grade that learned this week). Tap anyone = his profile. Faces: the photos the teachers said OK to
-// (his own always, on his phone); 🎂 on a birthday. Above it (league.tsx): Monday's card, his rank, the leagues' road.
-// A later part (parts.ts: out of the first load since 8 Nov 2026). The lists and their rules: convex/lib/race.ts.
+// The race tab (7 Nov 2026, his voice note): every student of ARISTORA, joined the app or not. Since 11 Nov 2026 (his
+// voice note: students who put in so much work thought "everything is gone" when the week's list started from zero; his
+// answers: the leagues and the rank badges out) three lists:
+// - This week: his grade, XP this week (a new student can reach the top); 👑 = last week's #1; the grade cup; each
+//   grade's weekly #1 wins the owner's coins on Monday (never two weeks running);
+// - All time: his grade, XP ever, never reset (every XP he earned is here);
+// - GOAT: all of ARISTORA, every grade, XP ever; its #1 is the GOAT, a medal that moves the moment someone passes him.
+// Each: the top three on a podium (the GOAT on his own card), the rest with how each moved since yesterday, the ones with
+// no XP yet at the end with no number, how much XP passes the one above him. Tap anyone = his profile. Faces: the
+// photos the teachers said OK to (his own always, on his phone); 🎂 on a birthday; the GOAT's gold ring wherever he is.
+// A later part (parts.ts: out of the first load since 8 Nov 2026). The lists' rules: convex/lib/race.ts.
 
 import type { ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
 import type { FamilyMe } from "../../convex/family";
-import { champsOf, cupOf, cupPct, LEAGUE_UP, leagueMoves, leagueOf, leagueOrder, LEAGUES, passOf, placed, RANKS, rankShown, SHIELD_DAYS, type Placed, type RaceRow } from "../../convex/lib/race";
+import { champsOf, cupOf, cupPct, goatOf, passOf, placed, placedEver, type Placed, type RaceRow } from "../../convex/lib/race";
 import { endsIn, useBoard, type Board } from "./board";
-import { LeagueRoad, RaceTop } from "./league";
+import { GoatChip, GoatMedal } from "./goat";
 import { keep } from "./net";
 import { picOf, usePics } from "./pics";
 import { buzz, sound } from "./sound";
-import { Avatar, BRAND, firstName, Gem, OwlBadge, Waiting } from "./ui";
+import { Avatar, BRAND, Coin, firstName, Gem, OwlBadge, Waiting } from "./ui";
 
-/** His league (8 Nov 2026: the default), his grade's list, or everyone's. */
-export type RaceList = "league" | "grade" | "all";
+/** This week in his grade (the default), all time in his grade, or the GOAT (all of ARISTORA, all time). */
+export type RaceList = "week" | "ever" | "goat";
 
-/** His league: his own row's (a teacher picks one: `lg`). */
-export const myLeague = (b: Board, lg?: number): number => lg ?? leagueOf(b.rows.find((r) => r.id === b.you)?.l);
-
-/** A list's rows: his league's, his grade's, or everyone's. */
-export function rowsOf(b: Board, list: RaceList, lg?: number): RaceRow[] {
-  if (list === "league") {
-    const l = myLeague(b, lg);
-    return b.rows.filter((r) => leagueOf(r.l) === l);
-  }
-  return list === "grade" ? b.rows.filter((r) => r.g !== null && r.g === b.grade) : b.rows;
+/** A list's rows: his grade's, or everyone's for the GOAT. */
+export function rowsOf(b: Board, list: RaceList): RaceRow[] {
+  return list === "goat" ? b.rows : b.rows.filter((r) => r.g !== null && r.g === b.grade);
 }
 
-/** His place in a list: where he is, who he passes next and for how much, how many race. */
+/** A list in its order: by XP this week, or by XP ever. */
+const rank = (rows: RaceRow[], list: RaceList): Placed[] => (list === "week" ? placed(rows) : placedEver(rows));
+
+/** His place in a list: where he is, who he passes next and for how much, how many are in it. */
 export function myPlace(b: Board, list: RaceList) {
-  const ranked = placed(rowsOf(b, list));
+  const ranked = rank(rowsOf(b, list), list);
   const mine = ranked.find((x) => x.r.id === b.you) ?? null;
   return { mine, count: ranked.length, ...passOf(ranked, b.you) };
 }
 
-const xpOf = (r: RaceRow) => r.xp;
-const ddOf = (r: RaceRow) => r.dd ?? 0;
-/** A league in Monday's order: more XP, more days learned, more XP ever, the name (convex/lib/race.ts leagueOrder). */
-const ordered = (rows: RaceRow[]) => leagueOrder(rows, xpOf, ddOf, (r) => r.t ?? 0);
+/** "2,140". */
+const num = (n: number) => n.toLocaleString("en");
 
-/** A league's moves if the week ended now (8 Nov 2026): +1 up, −1 down (convex/lib/race.ts leagueMoves). */
-export function movesNow(rows: RaceRow[], lg: number): Map<string, 1 | -1> {
-  return leagueMoves(ordered(rows), lg, xpOf, ddOf);
-}
-
-/**
- * The XP that changes his Monday (8 Nov 2026): out of the bottom (`out`: pass the lowest one above him who neither moves
- * nor has 🛡️; null = only 🛡️ saves him), into the top (`top`: pass the last one moving up).
- */
-export function leagueGaps(rows: RaceRow[], me: string, moves: Map<string, 1 | -1>): { out: number | null; top: number | null } {
-  const order = ordered(rows);
-  const mine = order.find((r) => r.id === me);
-  if (!mine) return { out: null, top: null };
-  const stay = order.filter((r) => r.id !== me && !moves.has(r.id) && ddOf(r) < SHIELD_DAYS && r.xp >= mine.xp);
-  const pass = stay[stay.length - 1];
-  const k = Math.min(LEAGUE_UP, Math.floor(rows.length / 3));
-  const last = k > 0 ? order[k - 1] : undefined;
-  return { out: pass ? pass.xp - mine.xp + 1 : null, top: last && last.id !== me && !moves.has(me) && last.xp >= mine.xp ? last.xp - mine.xp + 1 : null };
-}
-
-/** His face with his rank's badge (9 Nov 2026): what he earned, kept for good, so the race shows it even at 0 XP on a
- *  Monday. None from a server that sends no XP ever. */
-function Face(props: { r: RaceRow; size: "s" | "l" }) {
-  const { r } = props;
+/** His face; the GOAT's with a gold ring and its chip. */
+function Face(props: { r: RaceRow; size: "s" | "l"; goat: boolean }) {
   return (
-    <span class="f-face">
-      <Avatar name={r.n} size={props.size} pic={picOf(r.pic)} />
-      {r.t !== undefined && (
-        <i class="f-rkb" aria-hidden="true">
-          {RANKS[rankShown(r.t, r.k)].e}
-        </i>
-      )}
+    <span class={`f-rface${props.goat ? " goat" : ""}`}>
+      <Avatar name={props.r.n} size={props.size} pic={picOf(props.r.pic)} />
+      {props.goat && <GoatChip />}
     </span>
   );
 }
 
-/** 👑 after a name: last week's champion of this list. */
+/** 👑 after a name: last week's #1 of his grade. */
 const Crown = () => (
   <span class="f-wcrown" role="img" aria-label="Last week's champion">
     👑
   </span>
 );
 
-function Podium(props: { rows: Placed[]; me: string; crowns: Set<string>; all: boolean; onOpen: (r: RaceRow) => void }) {
+type Marks = { me: string; goat: string | null; crowns: Set<string>; grades: boolean; onOpen: (r: RaceRow) => void };
+
+function Podium(props: { rows: Placed[]; m: Marks }) {
+  const { m } = props;
   // 2nd, 1st, 3rd: the winner in the middle, highest.
   const order = [props.rows[1], props.rows[0], props.rows[2]];
   return (
@@ -99,25 +72,25 @@ function Podium(props: { rows: Placed[]; me: string; crowns: Set<string>; all: b
           <button
             type="button"
             key={x.r.id}
-            class={`f-pod p${Math.min(x.rank ?? 3, 3)}${x.r.id === props.me ? " me" : ""}`}
+            class={`f-pod p${Math.min(x.rank ?? 3, 3)}${x.r.id === m.me ? " me" : ""}`}
             style={{ animationDelay: `${[140, 0, 260][i]}ms` }}
-            onClick={() => props.onOpen(x.r)}
+            onClick={() => m.onOpen(x.r)}
           >
             {x.rank === 1 && (
               <svg class="f-crown" viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
                 <path d="M3 8.5l4.5 4 4.5-7 4.5 7 4.5-4-2 10.5H5z" />
               </svg>
             )}
-            <Face r={x.r} size="l" />
+            <Face r={x.r} size="l" goat={x.r.id === m.goat} />
             <b class="f-pod-n">
-              {x.r.id === props.me ? "You" : firstName(x.r.n)}
+              {x.r.id === m.me ? "You" : firstName(x.r.n)}
               {x.r.bd ? " 🎂" : ""}
-              {props.crowns.has(x.r.id) && <Crown />}
+              {m.crowns.has(x.r.id) && <Crown />}
             </b>
             <span class="f-pod-xp">
               <Gem size={13} />
-              {x.r.xp}
-              {props.all && x.r.g !== null && <i class="f-gchip">{x.r.g}</i>}
+              {num(x.r.xp)}
+              {m.grades && x.r.g !== null && <i class="f-gchip">{x.r.g}</i>}
             </span>
             <span class="f-pod-col">{x.rank}</span>
           </button>
@@ -129,7 +102,7 @@ function Podium(props: { rows: Placed[]; me: string; crowns: Set<string>; all: b
   );
 }
 
-/** ▲2 (up two places since yesterday), ▼1, ▲ (new in the race today), or nothing. */
+/** ▲2 (up two places since yesterday), ▼1, ▲ (new in the list today), or nothing. */
 function Move(props: { m: Placed["move"] }) {
   const m = props.m;
   if (m === null || m === 0) return null;
@@ -145,69 +118,48 @@ function Move(props: { m: Placed["move"] }) {
   );
 }
 
-/** In a league (8 Nov 2026): ⬆ moves up on Monday if the week ended now, ⬇ moves down, 🛡️ can't move down (4 days). */
-function Zone(props: { z?: 1 | -1; shield?: boolean }) {
-  if (props.z === 1)
-    return (
-      <span class="f-zone up" aria-label="Moves up on Monday">
-        ⬆
-      </span>
-    );
-  if (props.z === -1)
-    return (
-      <span class="f-zone down" aria-label="Moves down on Monday">
-        ⬇
-      </span>
-    );
-  return props.shield ? (
-    <span class="f-zone safe" aria-label={`Learned ${SHIELD_DAYS} days: safe`}>
-      🛡️
-    </span>
-  ) : null;
-}
-
-function Row(props: { x: Placed; i: number; me: string; all: boolean; crown: boolean; z?: 1 | -1; shield?: boolean; onOpen: (r: RaceRow) => void }) {
+function Row(props: { x: Placed; i: number; m: Marks }) {
   const { r } = props.x;
-  const mine = r.id === props.me;
+  const { m } = props;
+  const mine = r.id === m.me;
   return (
     <li class="rise" style={{ animationDelay: `${Math.min(props.i, 12) * 45}ms` }}>
-      <button type="button" class={`f-brow${mine ? " me" : ""}${props.z === -1 ? " dz" : ""}`} onClick={() => props.onOpen(r)}>
+      <button type="button" class={`f-brow${mine ? " me" : ""}`} onClick={() => m.onOpen(r)}>
         <span class="f-rank">{props.x.rank}</span>
-        <Face r={r} size="s" />
+        <Face r={r} size="s" goat={r.id === m.goat} />
         <b class="f-bname">
           {mine ? `${r.n} · You` : r.n}
           {r.bd ? " 🎂" : ""}
-          {props.crown && <Crown />}
+          {m.crowns.has(r.id) && <Crown />}
         </b>
-        {props.all && r.g !== null && <i class="f-gchip">{r.g}</i>}
-        <Zone z={props.z} shield={props.shield} />
+        {m.grades && r.g !== null && <i class="f-gchip">{r.g}</i>}
         <Move m={props.x.move} />
         <span class="f-bxp">
           <Gem size={14} />
-          {r.xp}
+          {num(r.xp)}
         </span>
       </button>
     </li>
   );
 }
 
-/** The ones with no XP yet this week: names only, no number (still in the race, still tappable); ⬇ in a league. */
-function NotYet(props: { rows: Placed[]; me: string; crowns: Set<string>; all: boolean; moves?: Map<string, 1 | -1>; onOpen: (r: RaceRow) => void }) {
+/** The ones with no XP yet (this week, or ever): names only, no number (still in the list, still tappable). */
+function NotYet(props: { rows: Placed[]; m: Marks; week: boolean }) {
+  const { m } = props;
   return (
-    <section class="f-notyet f-card rise" aria-label="Not started this week">
+    <section class="f-notyet f-card rise" aria-label={props.week ? "Not started this week" : "Not started yet"}>
       <h2 class="f-h2">
         இன்னும் தொடங்கவில்லை <small>{props.rows.length}</small>
       </h2>
       <div class="f-ny">
         {props.rows.map(({ r }) => (
-          <button type="button" key={r.id} class={`f-nyc${r.id === props.me ? " me" : ""}`} onClick={() => props.onOpen(r)}>
-            <Face r={r} size="s" />
+          <button type="button" key={r.id} class={`f-nyc${r.id === m.me ? " me" : ""}`} onClick={() => m.onOpen(r)}>
+            <Face r={r} size="s" goat={false} />
             <span>
-              {r.id === props.me ? "You" : firstName(r.n)}
-              {props.crowns.has(r.id) && <Crown />}
+              {r.id === m.me ? "You" : firstName(r.n)}
+              {m.crowns.has(r.id) && <Crown />}
             </span>
-            {props.all && r.g !== null && <i class="f-gchip">{r.g}</i>}
-            {props.moves?.get(r.id) === -1 && <i class="f-nyd" aria-label="Moves down on Monday">⬇</i>}
+            {m.grades && r.g !== null && <i class="f-gchip">{r.g}</i>}
           </button>
         ))}
       </div>
@@ -242,6 +194,32 @@ function GradeCup(props: { rows: RaceRow[]; grade: number | null }) {
   );
 }
 
+/** The GOAT's own card (the GOAT list's top): the medal, his face and name, his grade and XP ever. */
+function GoatCard(props: { x: Placed; m: Marks }) {
+  const { r } = props.x;
+  const mine = r.id === props.m.me;
+  return (
+    <button type="button" class={`f-goatc rise${mine ? " me" : ""}`} onClick={() => props.m.onOpen(r)}>
+      <GoatMedal size={104} class="hero" />
+      <span class="f-goatc-w">
+        <small class="f-goatc-k">Greatest of all time</small>
+        <span class="f-goatc-who">
+          <Avatar name={r.n} size="m" pic={picOf(r.pic)} />
+          <b>
+            {mine ? "You!" : r.n}
+            {r.bd ? " 🎂" : ""}
+          </b>
+        </span>
+        <span class="f-goatc-xp">
+          <Gem size={15} />
+          {num(r.xp)} XP
+          {r.g !== null && <i class="f-gchip">{r.g}</i>}
+        </span>
+      </span>
+    </button>
+  );
+}
+
 export function BoardTab(props: {
   top: ComponentChildren;
   me: FamilyMe | null;
@@ -254,35 +232,32 @@ export function BoardTab(props: {
   const b = kept.b && props.grade !== undefined ? { ...kept.b, grade: props.grade } : kept.b;
   const err = kept.err;
   const staff = props.grade !== undefined;
-  // 8 Nov 2026: his league first (a list kept from before stays as he left it); a teacher's grades first (she thinks in
-  // grades; the leagues are one tap away, each league one more).
+  // This week first, always (11 Nov 2026: the list a new student can win); a list he picked stays as he left it.
   const [list, setList] = useState<RaceList>(() => {
-    const k = keep<RaceList>("raceList");
-    return k === "all" || k === "grade" || k === "league" ? k : staff ? "grade" : "league";
+    const k = keep<string>("raceList2");
+    return k === "ever" || k === "goat" ? k : "week";
   });
-  // A teacher picks the league she looks at (she is in none).
-  const [pickLg, setPickLg] = useState<number>(() => leagueOf(keep<number>("raceLg") ?? undefined));
   const pick = (l: RaceList) => {
     if (l === list) return;
     buzz();
     sound("tap");
     setList(l);
-    keep("raceList", l);
+    keep("raceList2", l);
   };
-  const all = list === "all";
-  const league = list === "league";
-  const lg = b ? myLeague(b, staff ? pickLg : undefined) : 1;
-  const rows = b ? rowsOf(b, list, staff ? pickLg : undefined) : [];
-  const ranked = placed(rows);
-  const notYet = ranked.filter((x) => x.rank === null);
-  const crowns = league ? new Set<string>() : champsOf(rows);
-  const moves = league ? movesNow(rows, lg) : new Map<string, 1 | -1>();
+  const week = list === "week";
+  const goatList = list === "goat";
+  const rows = b ? rowsOf(b, list) : [];
+  const ranked = rank(rows, list);
+  const goat = b ? (goatOf(b.rows)?.id ?? null) : null;
   const me = b?.you ?? "";
   // His own row shows his own photo (even one waiting for the OK): it is his phone.
   const own = (x: Placed): Placed => (x.r.id === me && props.me?.photo ? { ...x, r: { ...x.r, pic: props.me.photo.key } } : x);
   const shown = ranked.map(own);
-  const podium = shown.filter((x) => x.rank !== null).slice(0, 3);
-  const rest = shown.filter((x) => x.rank !== null).slice(3);
+  const placedRows = shown.filter((x) => x.rank !== null);
+  // The GOAT list: the GOAT on his own card, then everyone from #2; the others: the podium, then from #4.
+  const head = goatList ? placedRows.slice(0, 1) : placedRows.slice(0, 3);
+  const rest = placedRows.slice(head.length);
+  const notYet = shown.filter((x) => x.rank === null);
   usePics([...shown.slice(0, 14).map((x) => x.r.pic), ...shown.filter((x) => x.r.id === me).map((x) => x.r.pic)]);
   const mine = ranked.find((x) => x.r.id === me) ?? null;
   const { above, gap } = passOf(ranked, me);
@@ -292,42 +267,26 @@ export function BoardTab(props: {
     sound("tap");
     if (b) props.onOpen(r, b);
   };
+  const m: Marks = { me, goat, crowns: week ? champsOf(rows) : new Set<string>(), grades: goatList, onOpen: open };
   const grade = b?.grade ?? props.me?.grade ?? null;
-  const L = LEAGUES[lg - 1];
-  const next = LEAGUES[lg];
-  const below = LEAGUES[lg - 2];
-  // His league's line: what Monday does to him if the week ended now, and what changes it.
-  const myMove = moves.get(me);
-  const myDays = Math.max(b?.rows.find((r) => r.id === me)?.dd ?? 0, props.me?.race?.dd ?? 0);
-  const gaps = league && b ? leagueGaps(rows, me, moves) : { out: null, top: null };
-  const leagueSay = (): ComponentChildren => {
+  const gradeWords = grade ? `Grade ${grade}` : "My grade";
+  const wc = b?.wc ?? 0;
+  const top = placedRows[0];
+  // What he does next, in one line.
+  const say = (): ComponentChildren => {
     if (!mine || staff) return null;
-    if (myMove === -1 && below) {
-      const days = Math.max(1, SHIELD_DAYS - myDays);
-      return (
-        <p class="f-pass down rise">
-          ⬇ இப்போது கீழ் லீக்குக்குப் போகும் இடம்.{" "}
-          {gaps.out !== null ? (
-            <>
-              இன்னும் <b>{gaps.out} XP</b> எடு, அல்லது{" "}
-            </>
-          ) : null}
-          இன்னும் {days} நாள் கற்றால் 🛡️ பாதுகாப்பு!
-        </p>
-      );
-    }
-    if (mine.rank === null) return <p class="f-pass rise">ஒரு Level செய்: நீயும் race இல் சேர்வாய்!</p>;
-    if (first) return <p class="f-pass top rise">நீ {L.n} லீக்கில் முதலிடத்தில்! இதைக் காப்பாற்று.</p>;
-    if (myMove === 1 && next) return <p class="f-pass top rise">⬆ இப்போது நீ {next.e} {next.n} லீக்குக்குப் போகும் இடத்தில்! காப்பாற்று.</p>;
-    if (next && gaps.top !== null)
+    if (mine.rank === null) return <p class="f-pass rise">{week ? "ஒரு Level செய்: நீயும் இந்த வார race இல் சேர்வாய்!" : "ஒரு Level செய்: உன் முதல் XP இங்கே என்றும் இருக்கும்!"}</p>;
+    if (goatList && first) return <p class="f-pass top rise">நீ தான் ARISTORA வின் GOAT! யாரும் முந்த விடாதே.</p>;
+    if (first) return <p class="f-pass top rise">நீ முதலிடத்தில்! இதைக் காப்பாற்று.</p>;
+    if (goatList && top)
       return (
         <p class="f-pass rise">
-          இன்னும் <b>{gaps.top} XP</b> எடுத்தால் முதல் 3 இல்: {next.e} {next.n} லீக்!
+          GOAT ஆக இன்னும் <b>{num(top.r.xp - mine.r.xp + 1)} XP</b>!
         </p>
       );
     return above && gap > 0 ? (
       <p class="f-pass rise">
-        இன்னும் <b>{gap} XP</b> எடுத்தால் {firstName(above.r.n)} ஐ முந்துவாய்!
+        இன்னும் <b>{num(gap)} XP</b> எடுத்தால் {firstName(above.r.n)} ஐ முந்துவாய்!
       </p>
     ) : null;
   };
@@ -342,84 +301,54 @@ export function BoardTab(props: {
         {props.top}
         <div class="f-hero-in">
           <div class="f-hero-w">
-            <p class="f-kicker">This week · {league ? `${L.e} ${L.n}` : all ? BRAND : grade ? `Grade ${grade}` : "Race"}</p>
+            <p class="f-kicker">{week ? `This week · ${gradeWords}` : goatList ? `All time · ${BRAND}` : `All time · ${gradeWords}`}</p>
             <h1 class="f-title">Race</h1>
-            <p class="f-hsub">{b ? `Ends in ${endsIn(b.since, Date.now())}` : "…"}</p>
+            <p class="f-hsub">{!b ? "…" : week ? `Ends in ${endsIn(b.since, Date.now())}` : goatList ? "Every grade · XP ever" : "XP ever · never resets"}</p>
           </div>
           <OwlBadge mood={first ? "cool" : mine?.rank ? "strong" : "happy"} class="hero" />
         </div>
         <div class="f-rtabs" role="group" aria-label="Which race">
-          {tab("league", `${L.e} League`)}
-          {tab("grade", grade ? `Grade ${grade}` : "My grade")}
-          {tab("all", BRAND)}
+          {tab("week", "This week")}
+          {tab("ever", "All time")}
+          {tab("goat", "GOAT")}
         </div>
-        {list === "grade" && props.gradeRow}
+        {!goatList && props.gradeRow}
       </header>
-      {/* What he keeps for good (8 Nov 2026): last week saved (Monday), his rank, the leagues' road. Later parts. */}
-      {!staff && props.me && <RaceTop me={props.me} league={league} />}
-      {league && (
-        <LeagueRoad
-          lg={lg}
-          staff={staff}
-          onPick={
-            staff
-              ? (l) => {
-                  if (l === pickLg) return;
-                  buzz();
-                  sound("tap");
-                  setPickLg(l);
-                  keep("raceLg", l);
-                }
-              : undefined
-          }
-        />
-      )}
       <section class="f-race f-card rise">
         {err && !b && <p class="f-lead f-center-t">{err}</p>}
         {!b && !err && <Waiting />}
-        {b && (podium.length > 0 ? <Podium rows={podium} me={me} crowns={crowns} all={all || league} onOpen={open} /> : <p class="f-none">இந்த வாரம் இன்னும் யாரும் இல்லை. நீ முதலாவதாக வா!</p>)}
-        {b && league && podium.length > 0 && (
-          <p class="f-podnote">{next ? `⬆ முதல் 3 பேர் திங்கள் ${next.e} ${next.n} லீக்குக்கு` : `${L.e} முதலிடம் = இந்த வார சாம்பியன்`}</p>
+        {b &&
+          (head.length === 0 ? (
+            <p class="f-none">{week ? "இந்த வாரம் இன்னும் யாரும் இல்லை. நீ முதலாவதாக வா!" : "இன்னும் யாரும் இல்லை. நீ முதலாவதாக வா!"}</p>
+          ) : goatList ? (
+            <GoatCard x={head[0]} m={m} />
+          ) : (
+            <Podium rows={head} m={m} />
+          ))}
+        {b && week && wc > 0 && head.length > 0 && (
+          <p class="f-podnote">
+            <Coin size={15} /> முதலிடம் = திங்கள் +{num(wc)} coins
+          </p>
         )}
       </section>
       {b && (
         <>
-          {league ? (
-            leagueSay()
-          ) : (
-            <>
-              {first && <p class="f-pass top rise">நீ முதலிடத்தில்! இதைக் காப்பாற்று.</p>}
-              {mine && mine.rank === null && <p class="f-pass rise">ஒரு Level செய்: நீயும் race இல் சேர்வாய்!</p>}
-              {mine && mine.rank !== null && above && gap > 0 && (
-                <p class="f-pass rise">
-                  இன்னும் <b>{gap} XP</b> எடுத்தால் {firstName(above.r.n)} ஐ முந்துவாய்!
-                </p>
-              )}
-            </>
-          )}
-          {all && <GradeCup rows={b.rows} grade={b.grade} />}
+          {say()}
           {rest.length > 0 && (
             <ol class="f-board">
               {rest.map((x, i) => (
-                <Row
-                  key={x.r.id}
-                  x={x}
-                  i={i}
-                  me={me}
-                  all={all || league}
-                  crown={crowns.has(x.r.id)}
-                  z={moves.get(x.r.id)}
-                  shield={league && lg > 1 && (x.r.dd ?? 0) >= SHIELD_DAYS}
-                  onOpen={open}
-                />
+                <Row key={x.r.id} x={x} i={i} m={m} />
               ))}
             </ol>
           )}
-          {notYet.length > 0 && <NotYet rows={shown.filter((x) => x.rank === null)} me={me} crowns={crowns} all={all || league} moves={league ? moves : undefined} onOpen={open} />}
+          {notYet.length > 0 && <NotYet rows={notYet} m={m} week={week} />}
+          {week && <GradeCup rows={b.rows} grade={b.grade} />}
           <p class="f-muted small f-center-t f-pad-x">
-            {league
-              ? `${next ? "முதல் 3 → மேல் லீக் · " : ""}${below ? `கடைசி 3 → கீழ் லீக் · 🛡️ = இந்த வாரம் ${SHIELD_DAYS} நாள் கற்றவர்: கீழே போக மாட்டார். ` : ""}உன் மொத்த XP என்றும் குறையாது.`
-              : `${crowns.size > 0 ? "👑 = கடந்த வார வெற்றியாளர். " : ""}திங்கள்: புதிய வாரம், எல்லோருக்கும் புதிய வாய்ப்பு. உன் மொத்த XP என்றும் உனக்கே.`}
+            {week
+              ? `${m.crowns.size > 0 ? "👑 = கடந்த வார முதலிடம். " : ""}${wc > 0 ? `திங்கள்: ஒவ்வொரு grade இன் முதலிடத்துக்கு ${num(wc)} coins (கடந்த வாரம் வென்றவர் தவிர: அடுத்தவருக்கு). ` : ""}புதிய வாரம், எல்லோருக்கும் புதிய வாய்ப்பு. உன் XP எல்லாம் All time இல் என்றும் இருக்கும்.`
+              : goatList
+                ? "எல்லா grade உம், எல்லா நாளும்: அதிக XP எடுத்தவர் GOAT. யாராவது முந்தினால் GOAT அவருக்குப் போகும்."
+                : "நீ எடுத்த ஒவ்வொரு XP உம் இங்கே: இது என்றும் குறையாது."}
           </p>
         </>
       )}

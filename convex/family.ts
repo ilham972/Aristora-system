@@ -103,8 +103,8 @@ import {
   type PhotoType,
   type StageLine,
 } from "./lib/profile";
-import { daysIn, leagueOf, numsAt, rankShown, type LeagueResult, type RaceRow } from "./lib/race";
-import { mateMarksOn, numsOfRow, raceList, raceRowOf } from "./lib/raceRows";
+import { everPlace, goatOf, numsAt, type RaceRow } from "./lib/race";
+import { mateMarksOn, numsOfRow, raceList, raceReady, raceRowOf, weekCoinsOf } from "./lib/raceRows";
 import { homeLevels, homeMoments, stageDone, stageMoment, usCfg } from "./lib/us";
 import { OL } from "./lib/syllabus";
 import { accountOf, feeCfg } from "./lib/feeRows";
@@ -286,11 +286,13 @@ export type FamilyMe = {
    */
   coins?: { n: number; wk: number; last: number };
   /**
-   * The race (8 Nov 2026, his voice note: "they feel like they are losing what they earned"): his league (1–5), the rank
-   * he reached (an index of RANKS: never down), his last week in his league (Monday's card; null before the first
-   * Monday), the days he learned this week (🛡️ at 4). Missing on a server from before.
+   * What he keeps for good (11 Nov 2026, his voice note: students thought "everything is gone" each Monday): his place
+   * in his grade's all-time list (null: no XP ever yet) of how many, and whether he is the GOAT (ARISTORA's all-time #1
+   * over every grade). Missing on a server from before, and while the race rows are being built.
    */
-  race?: { lg: number; rk: number; lr: LeagueResult | null; dd: number };
+  ever?: { place: number | null; of: number; goat: boolean };
+  /** His grade's weekly coins, won last week (11 Nov 2026): Home's and the race's gold card this week; null if not. */
+  won?: { g: number; c: number; wk: number } | null;
   /** The bell (7 Nov 2026): his teachers' answers, retakes and messages of the last two weeks, newest first. */
   bell: BellItem[];
   /** Us, the students' community (7 Nov 2026): its tab is on the phones once the owner opened it (Settings → Community). */
@@ -421,7 +423,7 @@ export const me = query({
         ...(x.kind === "shop" ? { c: x.c ?? 0 } : {}),
       })),
       coins: await coinsOf(ctx, s._id),
-      race: await raceOf(ctx, s._id, xpSince(rows, 0) + us.tot, now),
+      ...(await everOf(ctx, s, now)),
       bell: bell.slice(0, BELL_MAX),
       us: usOpen,
       inbox: inbox.items,
@@ -446,12 +448,22 @@ async function coinsOf(ctx: QueryCtx, sid: Id<"students">): Promise<NonNullable<
   return { n: w?.n ?? 0, wk: w?.wk ?? 0, last: w?.last ?? 0 };
 }
 
-/** His league, rank, last week in his league and days learned this week (family.me's `race`), from his race row. */
-async function raceOf(ctx: QueryCtx, sid: Id<"students">, total: number, now: number): Promise<NonNullable<FamilyMe["race"]>> {
-  const r = await raceRowOf(ctx, sid);
-  if (!r) return { lg: 1, rk: rankShown(total), lr: null, dd: 0 };
-  const x = numsAt(numsOfRow(r), now);
-  return { lg: leagueOf(r.lg), rk: rankShown(total, r.rk), lr: r.lr ?? null, dd: daysIn(x.dm) };
+/**
+ * His all-time place and the GOAT (family.me's `ever`, 11 Nov 2026), and last week's coins if he won his grade's
+ * (`won`). From the race rows (nothing while they are being built).
+ */
+async function everOf(ctx: QueryCtx, s: Doc<"students">, now: number): Promise<Pick<FamilyMe, "ever" | "won">> {
+  const wk = slWeekStart(now) - 7 * DAY_MS;
+  const kept = await ctx.db
+    .query("raceWeeks")
+    .withIndex("by_wk", (q) => q.eq("wk", wk))
+    .first();
+  const w = (kept?.cw ?? []).find((x) => x.sid === s._id);
+  const won = w ? { g: w.g, c: w.c, wk } : null;
+  if (!(await raceReady(ctx))) return { won };
+  const rows = await raceList(ctx, !!s.demo, now);
+  const grade = typeof s.grade === "number" ? s.grade : null;
+  return { ever: { ...everPlace(rows, s._id, grade), goat: goatOf(rows)?.id === s._id }, won };
 }
 
 /** The World, its workbook and his level, when he may play it now (else a reason, in plain words). */
@@ -1008,6 +1020,8 @@ export type FamilyBoard = {
   you: string;
   grade: number | null;
   rows: RaceRow[];
+  /** The coins each grade's weekly #1 wins on Monday (11 Nov 2026; 0 = none). Missing on a server from before. */
+  wc?: number;
   top: BoardRow[];
   me: BoardRow | null;
   count: number;
@@ -1040,7 +1054,7 @@ export const board = query({
     const now = Date.now();
     const rows = await raceList(ctx, !!me.demo, now);
     const grade = me.grade ?? null;
-    return { since: slWeekStart(now), you: me._id, grade, rows, ...oldBoard(rows, me._id, grade) };
+    return { since: slWeekStart(now), you: me._id, grade, rows, wc: await weekCoinsOf(ctx), ...oldBoard(rows, me._id, grade) };
   },
 });
 
@@ -1068,9 +1082,8 @@ export type FamilyMate = {
   p: FamilyProfile;
   /** May the one looking message him (8 Nov 2026: his boy / girl rule; a teacher always)? Missing on a server from before. */
   dm?: boolean;
-  /** His rank (an index of RANKS: never down) and his league (1–5), 8 Nov 2026. Missing on a server from before. */
-  rk?: number;
-  lg?: number;
+  /** His place in his grade's all-time list, of how many, and the GOAT (11 Nov 2026). Missing on a server from before. */
+  ever?: { place: number | null; of: number; goat: boolean };
 };
 
 /** His profile's numbers (the map, his months, his report): his own Me and a classmate's profile. */
@@ -1152,6 +1165,7 @@ export async function mateOf(ctx: QueryCtx, s: Doc<"students">, from: Id<"studen
   const cheers = await cheersOf(ctx, s._id, now);
   const p = await profileOf(ctx, s, rows, worlds, now);
   const total = xpSince(rows, 0) + (race?.us ? numsAt(race.us, now).tot : 0);
+  const ev = await everOf(ctx, s, now);
   return {
     id: s._id,
     name: s.name,
@@ -1167,8 +1181,7 @@ export async function mateOf(ctx: QueryCtx, s: Doc<"students">, from: Id<"studen
     levelsDone: levelsSince(rows, 0),
     trophies: trophiesOf(rows, worlds),
     wins: { g: race?.w ?? 0, a: race?.wa ?? 0 },
-    rk: rankShown(total, race?.rk),
-    lg: leagueOf(race?.lg),
+    ...(ev.ever ? { ever: ev.ever } : {}),
     cheers: { n: cheers.length, mine: !!from && cheers.some((c) => c.from === from && c.day === slDayNo(now)) },
     marks,
     p: marks ? p : withoutMarks(p),

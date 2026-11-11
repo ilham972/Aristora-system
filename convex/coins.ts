@@ -1,6 +1,7 @@
 // The Shop (10 Nov 2026, his voice note: "What do you think about creating the marketplace for the students ... they can
-// buy whatever they want, if they have enough money"; his answers): coins, not XP (XP stays his rank and league); every
-// Monday last week's XP pays coins (5 XP = 1 coin); three shelves (the free ones come in part 2); buying = the gold card
+// buy whatever they want, if they have enough money"; his answers): coins, not XP (XP stays his: his all-time lists); every
+// Monday last week's XP pays coins (5 XP = 1 coin), and since 11 Nov 2026 each grade's weekly #1 wins the owner's coins on
+// top (race.week keeps them, payday adds them); three shelves (the free ones come in part 2); buying = the gold card
 // he shows in class, a teacher taps Given (race.give, Settings → Race). The rules: convex/lib/coins.ts. Functions:
 //   payday (internal: Monday 00:15 in Sri Lanka, crons.ts; once when the Shop came, race.fill) -> each student's pay,
 //                  20 a run, the next run at once while some are left; a student without a wallet gets last week's pay.
@@ -61,6 +62,12 @@ export const payday = internalMutation({
     const monday = slWeekStart(now);
     const limit = await payLimit(ctx);
     const students = (await ctx.db.query("students").collect()).filter((s) => !s.archived && !s.demo);
+    // The weekly coins (11 Nov 2026): each grade's winner of the week before, kept by race.week (00:05) with that week.
+    const kept = await ctx.db
+      .query("raceWeeks")
+      .withIndex("by_wk", (q) => q.eq("wk", monday - 7 * DAY_MS))
+      .first();
+    const wins = new Map((kept?.cw ?? []).map((x) => [x.sid as string, x]));
     let done = 0;
     let left = false;
     for (const s of students) {
@@ -73,14 +80,31 @@ export const payday = internalMutation({
       done++;
       const rows = await xpRows(ctx, s._id);
       const pay = w ? weekPay(rows, w.xp, monday, limit) : firstPay(rows, monday, limit);
-      if (w) await ctx.db.patch(w._id, { n: w.n + pay.coins, xp: pay.xp, wk: monday, last: pay.coins, paid: w.paid + pay.coins });
-      else await ctx.db.insert("wallets", { sid: s._id, n: pay.coins, xp: pay.xp, wk: monday, last: pay.coins, paid: pay.coins, spent: 0 });
+      // His grade's weekly coins on top (never under the owner's weekly limit: a prize, not pay).
+      const win = wins.get(s._id)?.c ?? 0;
+      const got = pay.coins + win;
+      if (w) await ctx.db.patch(w._id, { n: w.n + got, xp: pay.xp, wk: monday, last: got, paid: w.paid + got });
+      else await ctx.db.insert("wallets", { sid: s._id, n: got, xp: pay.xp, wk: monday, last: got, paid: got, spent: 0 });
       if (pay.coins > 0) await ctx.db.insert("coinLog", { sid: s._id, at: now, n: pay.coins, k: "pay", w: payWeek(monday) });
+      if (win > 0) await ctx.db.insert("coinLog", { sid: s._id, at: now + 1, n: win, k: "win", w: `Grade ${wins.get(s._id)?.g ?? ""} · #1 · ${payWeek(monday)}` });
     }
     if (left) await ctx.scheduler.runAfter(0, internal.coins.payday, {});
     return done;
   },
 });
+
+/**
+ * His grade's weekly coins (11 Nov 2026) when this Monday's pay already reached his wallet (race.week ran after
+ * payday): added at once, with their line. Otherwise payday adds them with his pay (never both: payday only pays a
+ * wallet not yet paid this Monday).
+ */
+export async function winNow(ctx: MutationCtx, sid: Id<"students">, c: number, g: number, wk: number, now: number): Promise<void> {
+  const monday = slWeekStart(now);
+  const w = await walletOf(ctx, sid);
+  if (!w || w.wk < monday || c <= 0) return;
+  await ctx.db.patch(w._id, { n: w.n + c, last: w.last + c, paid: w.paid + c });
+  await ctx.db.insert("coinLog", { sid, at: now, n: c, k: "win", w: `Grade ${g} · #1 · ${payWeek(wk + 7 * DAY_MS)}` });
+}
 
 /** The Shop came (10 Nov 2026): the first pay at once, not next Monday (once: meta "coinsStart"; race.fill calls it). */
 export async function coinsOnce(ctx: MutationCtx, now: number): Promise<void> {
@@ -97,7 +121,7 @@ export async function coinsOnce(ctx: MutationCtx, now: number): Promise<void> {
 export type ShopItem = { id: string; n: string; p: number; st: number | null; sh: Shelf; ph: string | null };
 /** A thing he bought and waits for (his gold card until a teacher taps Given). */
 export type ShopOrder = { id: string; what: string; c: number; at: number };
-/** One change to his coins: a Monday's pay (+), a thing bought (−), coins given back (+). */
+/** One change to his coins: a Monday's pay (+), his grade's weekly coins (+, 11 Nov 2026), a thing bought (−), coins given back (+). */
 export type CoinLine = { at: number; n: number; k: Doc<"coinLog">["k"]; w: string | null };
 /** The Shop on his phone. */
 export type FamilyShop = { n: number; wk: number; last: number; items: ShopItem[]; orders: ShopOrder[]; lines: CoinLine[] };

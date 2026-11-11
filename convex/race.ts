@@ -1,12 +1,13 @@
 // The race on the server (7 Nov 2026). Functions:
 //   fill (every 5 min, crons.ts) -> builds the race rows of students who have none yet, or built with older XP rules
 //                  (20 a run: a mutation has a second); once none is left it notes it (meta "raceV") and does nothing
-//                  more until the rules change.
+//                  more until the rules change. Since 11 Nov 2026 it also watches the GOAT (ARISTORA's all-time #1, every
+//                  grade): a new one is the owl's line in Us (meta "goat").
 //   week (Monday 00:05 in Sri Lanka, crons.ts) -> last week's champions: each grade's top 3 and ARISTORA's, and the
 //                  grade cup, kept in raceWeeks; each champion's weeks won on his race row (his profile counts them);
-//                  since 8 Nov 2026 the leagues: each league's result (Monday's card), its winner, the top 3 up and the
-//                  bottom 3 down (never one with 🛡️: 4 days learned); the gifts for the prizes the owner set (each
-//                  league's winner, the grade cup); the owl's lines (the winners, who moved up).
+//                  since 11 Nov 2026 (the leagues out, his answers) the weekly coins: each grade's #1, never two weeks
+//                  running (then the next one), kept in raceWeeks (`cw`) for Monday's pay (coins.payday); the cup's gifts;
+//                  the owl's line (the coin winners, or the grade champions when the coins are off).
 //   month (the 1st, 00:10 in Sri Lanka, from us.daily) -> the month's most improved (8 Nov 2026, his answer): their
 //                  gifts and the owl's line.
 //   giveNow -> a gift by hand, any time (the owner and the Manager): his ask "how we can give the gift when we want".
@@ -14,11 +15,12 @@
 //                  worked out now before Monday's run kept it.
 //   settings, setMarks, setPrizes -> the owner (Settings → Race): classmates see a student's marks on his profile (%
 //                  right, questions, his Stages' marks; on by default, his answer "Everything"; one tap off if a parent
-//                  complains); the centre's prize for each win (his ask: "gift cards ... ice-cream or chicken fries").
+//                  complains); the weekly coins and the centre's prizes (his ask: "gift cards ... ice-cream or chicken
+//                  fries").
 //   gifts, giftCount, give -> the gifts to give and given lately (owner and Manager): Given when it is handed over.
 //                  Since 10 Nov 2026 also what students bought in the Shop (kind "shop", convex/coins.ts; Coins back =
 //                  coins.refund).
-// The race itself is family.board (every student, both lists) and family.mate (a classmate's profile).
+// The race itself is family.board (every student, all three lists) and family.mate (a classmate's profile).
 
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
@@ -26,12 +28,12 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { internalMutation, mutation } from "./lib/fn";
 import { actor, viewer } from "./lib/auth";
-import { coinsOnce } from "./coins";
+import { coinsOnce, winNow } from "./coins";
 import { fail, log } from "./lib/backend";
 import { DAY_MS, slDayNo, slMonthBefore, slMonthStart, slWeekStart } from "./lib/day";
-import { championsOf, cupWinners, daysIn, leagueOf, leaguePlacement, leagueWeek, numsAt, seedLeagues, type Champ, type Cup } from "./lib/race";
-import { mateMarksOn, numsOfRow, RACE_V, raceList, rebuildStudent } from "./lib/raceRows";
-import { giftMoment, leagueMoments, monthMoment, mostImprovedMonth } from "./lib/us";
+import { championsOf, cupWinners, goatOf, numsAt, weekWinners, type Champ, type Cup, type WeekWin } from "./lib/race";
+import { mateMarksOn, numsOfRow, RACE_V, raceList, rebuildStudent, weekCoinsOf } from "./lib/raceRows";
+import { champsMoment, coinsMoment, giftMoment, goatMoment, monthMoment, mostImprovedMonth } from "./lib/us";
 
 const token = v.optional(v.string());
 
@@ -40,15 +42,14 @@ export const FILL_PER_RUN = 20;
 
 /**
  * The race rows of students who have none (or older ones): up to 20 a run, the next run at once while some are left
- * (8 Nov 2026: new rules rebuild everyone in a minute, not half an hour); then notes that every row is ready. The first
- * time after the leagues came, it puts everyone in a league first (`seedLeagues`).
+ * (8 Nov 2026: new rules rebuild everyone in a minute, not half an hour); then notes that every row is ready. Each run
+ * first looks at the GOAT (goatWatch).
  */
 export const fill = internalMutation({
   args: {},
   handler: async (ctx) => {
     const now = Date.now();
-    await seedOnce(ctx, now);
-    await cardsOnce(ctx, now);
+    await goatWatch(ctx, now);
     // The Shop came (10 Nov 2026): last week's pay at once, not next Monday (once).
     await coinsOnce(ctx, now);
     const meta = await ctx.db
@@ -68,82 +69,41 @@ export const fill = internalMutation({
   },
 });
 
-/** The race rows of a class by student (to write each one's league). */
-async function keptRows(ctx: QueryCtx, demo: boolean): Promise<Map<string, Doc<"raceRows">>> {
-  const out = new Map<string, Doc<"raceRows">>();
-  for (const r of await ctx.db
-    .query("raceRows")
-    .withIndex("by_list", (q) => q.eq("demo", demo).eq("gone", false))
-    .collect())
-    out.set(r.sid, r);
-  return out;
-}
-
-/** A class's race as the leagues read it (raceList: the rows, or the old way while they are built). */
-async function leagueList(ctx: QueryCtx, demo: boolean, now: number) {
-  return (await raceList(ctx, demo, now)).map((r) => ({ id: r.id, n: r.n, l: r.l, p: r.p, ddp: r.dp ?? 0, t: r.t ?? 0, g: r.g }));
-}
-
-/** The leagues came (meta "leagues"): everyone in one, once (the real class and the demo class each their own). */
-async function seedOnce(ctx: MutationCtx, now: number): Promise<boolean> {
-  const had = await ctx.db
+/**
+ * The GOAT (11 Nov 2026, his answers: ARISTORA's all-time #1 over every grade; the badge moves the moment someone passes
+ * him): a new one is noted (meta "goat") and is the owl's line in Us, at most once a day. Only once the rows are ready
+ * (before that the list is worked out the slow way).
+ */
+async function goatWatch(ctx: MutationCtx, now: number): Promise<void> {
+  const ready = await ctx.db
     .query("meta")
-    .withIndex("by_key", (q) => q.eq("key", "leagues"))
+    .withIndex("by_key", (q) => q.eq("key", "raceV"))
     .first();
-  if (had) return false;
-  for (const demo of [false, true]) {
-    const kept = await keptRows(ctx, demo);
-    const list = await leagueList(ctx, demo, now);
-    const seed = seedLeagues(list);
-    // His first Monday card at once (9 Nov 2026): last week saved, and the league it gave him.
-    const cards = leaguePlacement(
-      list.map((x) => ({ ...x, l: seed.get(x.id) ?? 1 })),
-      lastWeek(now),
-    );
-    for (const [sid, lg] of seed) {
-      const r = kept.get(sid);
-      const lr = cards.get(sid);
-      if (r) await ctx.db.patch(r._id, { lg, ...(lr ? { lr } : {}) });
-    }
-  }
-  await ctx.db.insert("meta", { key: "leagues", value: { at: now } });
-  return true;
+  if (ready?.value !== RACE_V) return;
+  const goat = goatOf(await raceList(ctx, false, now));
+  if (!goat) return;
+  const m = await ctx.db
+    .query("meta")
+    .withIndex("by_key", (q) => q.eq("key", "goat"))
+    .first();
+  if ((m?.value as { sid?: string } | undefined)?.sid === goat.id) return;
+  const value = { sid: goat.id, at: now };
+  if (m) await ctx.db.patch(m._id, { value });
+  else await ctx.db.insert("meta", { key: "goat", value });
+  await goatMoment(ctx, goat.id as Id<"students">, now);
 }
 
 /**
- * Once (9 Nov 2026, his message at 2 AM: "everything started from zero"): the leagues came that Monday before the first
- * cards did, so each student gets his first Monday card now, if the leagues came this week (meta "leagueCards"). Remove
- * after 16 Nov 2026 (Monday's run writes everyone's card from then on).
+ * The weekly coins and the centre's prizes. Since 11 Nov 2026 (his answers: the leagues out; "instead of giving gift we
+ * can give direct coins, they will buy in the market"): each grade's weekly #1 wins `wc` coins (0 = none; never two weeks
+ * running: his worry of 8 Nov, "the same strongest students won it every week"). Gifts for the month's most improved
+ * (`mi`) and the grade cup (`cup`, until the houses): empty = no gift. ARISTORA's champion keeps his 🏆 and weeks won.
  */
-async function cardsOnce(ctx: MutationCtx, now: number): Promise<void> {
-  const done = await ctx.db
-    .query("meta")
-    .withIndex("by_key", (q) => q.eq("key", "leagueCards"))
-    .first();
-  if (done) return;
-  const seeded = await ctx.db
-    .query("meta")
-    .withIndex("by_key", (q) => q.eq("key", "leagues"))
-    .first();
-  if (seeded && ((seeded.value as { at?: number }).at ?? 0) >= slWeekStart(now))
-    for (const demo of [false, true]) {
-      const kept = await keptRows(ctx, demo);
-      for (const [sid, lr] of leaguePlacement(await leagueList(ctx, demo, now), lastWeek(now))) {
-        const r = kept.get(sid);
-        if (r && !r.lr) await ctx.db.patch(r._id, { lr });
-      }
-    }
-  await ctx.db.insert("meta", { key: "leagueCards", value: { at: now } });
-}
-
-/**
- * The centre's prize for each win (empty = no gift). Since 8 Nov 2026 (his answers): each league's winner every week
- * (`lg`), the month's most improved (`mi`), the grade cup (`cup`, until the houses). Each grade's champion and ARISTORA's
- * keep their 👑 and weeks won, without a gift (his answer: the same strongest students won it every week).
- */
-export type Prizes = { lg: string; mi: string; cup: string };
+export type Prizes = { wc: number; mi: string; cup: string };
 /** A prize's words, at most ("🍦 Ice cream", "🍗 Chicken fries and a drink"). */
 export const PRIZE_MAX = 40;
+/** The most weekly coins the owner can set. */
+export const WEEK_COINS_MAX = 10_000;
 /** The month's most improved: how many get the gift. */
 export const MONTH_TOP = 3;
 /** Students one gift by hand may go to at once. */
@@ -156,8 +116,8 @@ async function prizesOf(ctx: QueryCtx): Promise<Prizes> {
     .query("meta")
     .withIndex("by_key", (q) => q.eq("key", "giftPrizes"))
     .first();
-  const x = (m?.value ?? {}) as Partial<Prizes>;
-  return { lg: x.lg ?? "", mi: x.mi ?? "", cup: x.cup ?? "" };
+  const x = (m?.value ?? {}) as { mi?: string; cup?: string };
+  return { wc: await weekCoinsOf(ctx), mi: x.mi ?? "", cup: x.cup ?? "" };
 }
 
 /** The week before this one (its Monday 00:00 in Sri Lanka). */
@@ -165,10 +125,10 @@ const lastWeek = (now: number) => slWeekStart(now) - 7 * DAY_MS;
 
 /**
  * Last week, once (Monday 00:05). The real class: each grade's top 3 and ARISTORA's top 3, the grade cup; each #1 (ties
- * share it) gets a week won on his race row (`w` in his grade, `wa` in ARISTORA). The leagues (8 Nov 2026), the real
- * class and the demo class each their own: every student's result kept on his row (`lr`, Monday's card), his new league
- * (`lg`: the top 3 up, the bottom 3 down, never one with 🛡️). Gifts for the prizes the owner set: each league's winner,
- * the grade cup (every student who learned in that grade). The owl names the winners and who moved up.
+ * share it) gets a week won on his race row (`w` in his grade, `wa` in ARISTORA). The weekly coins (11 Nov 2026): each
+ * grade's #1, or the next one when the #1 won that grade's coins the week before, kept with the week (`cw`); Monday's
+ * pay adds them to his coins (coins.payday, 00:15). Gifts for the grade cup (every student who learned in that grade).
+ * The owl names the coin winners (or, coins off, each grade's champion).
  */
 export const week = internalMutation({
   args: {},
@@ -180,8 +140,6 @@ export const week = internalMutation({
       .withIndex("by_wk", (q) => q.eq("wk", wk))
       .first();
     if (done) return null;
-    // Leagues put together only now (nobody raced in one last week): no moves, no league gifts this time.
-    const fresh = await seedOnce(ctx, now);
     const rows = await raceList(ctx, false, now);
     const { top, cup } = championsOf(rows);
     const won = new Map<string, { w: number; wa: number }>();
@@ -198,48 +156,32 @@ export const week = internalMutation({
         .first();
       if (row) await ctx.db.patch(row._id, { w: (row.w ?? 0) + x.w, wa: (row.wa ?? 0) + x.wa });
     }
-    // The leagues: last week's XP and days learned, each student's result and his league from today.
     const prizes = await prizesOf(ctx);
-    const gift = async (r: { sid: Id<"students">; n: string; g?: number }, kind: Doc<"gifts">["kind"], what: string, extra: { l?: number } = {}) =>
-      await ctx.db.insert("gifts", { sid: r.sid, n: r.n, ...(r.g !== undefined ? { g: r.g } : {}), wk, kind, what, at: now, open: true, ...extra });
-    let lw: NonNullable<Doc<"raceWeeks">["lw"]> = [];
-    let lup = 0;
-    let ldown = 0;
-    for (const demo of fresh ? [] : [false, true]) {
-      const kept = await keptRows(ctx, demo);
-      const list = await leagueList(ctx, demo, now);
-      const { results, winners, up } = leagueWeek(list, wk);
-      for (const x of list) {
-        const res = results.get(x.id);
-        const row = kept.get(x.id);
-        if (!res || !row) continue;
-        await ctx.db.patch(row._id, { lr: res, lg: Math.min(5, Math.max(1, leagueOf(x.l) + res.m)) });
-      }
-      if (demo) continue;
-      const sid = (id: string) => id as Id<"students">;
-      lw = winners.map(({ l, r }) => ({ l, sid: sid(r.id), n: r.n, ...(r.g !== null ? { g: r.g } : {}), xp: r.p }));
-      lup = up.length;
-      ldown = [...results.values()].filter((x) => x.m === -1).length;
-      if (prizes.lg) for (const { l, r } of winners) await gift({ sid: sid(r.id), n: r.n, ...(r.g !== null ? { g: r.g } : {}) }, "lg", prizes.lg, { l });
-      await leagueMoments(
-        ctx,
-        winners.map(({ l, r }) => ({ sid: sid(r.id), l })),
-        up.map(({ l, r }) => ({ sid: sid(r.id), l })),
-        now,
-      );
-    }
+    const before = await ctx.db
+      .query("raceWeeks")
+      .withIndex("by_wk", (q) => q.eq("wk", wk - 7 * DAY_MS))
+      .first();
+    const cw = prizes.wc > 0 ? weekWinners(rows, new Set((before?.cw ?? []).map((x) => x.sid as string))) : [];
     await ctx.db.insert("raceWeeks", {
       wk,
       top: top.map((c) => ({ sid: c.id as Id<"students">, n: c.n, ...(c.g !== null ? { g: c.g } : {}), xp: c.xp, k: c.k, place: c.place })),
       cup,
-      lw,
-      lup,
-      ldown,
+      cw: cw.map((x) => ({ g: x.g, sid: x.id as Id<"students">, n: x.n, xp: x.xp, c: prizes.wc })),
     });
+    // Monday's pay already came (it runs at 00:15; a late run of this one): the coins go to his wallet now.
+    for (const x of cw) await winNow(ctx, x.id as Id<"students">, prizes.wc, x.g, wk, now);
+    if (cw.length)
+      await coinsMoment(
+        ctx,
+        cw.map((x) => x.id as Id<"students">),
+        prizes.wc,
+        now,
+      );
+    else await champsMoment(ctx, top, now);
     if (prizes.cup) {
       const grades = cupWinners(cup);
       for (const r of rows.filter((x) => x.g !== null && grades.includes(x.g) && x.p - (x.up ?? 0) > 0))
-        await gift({ sid: r.id as Id<"students">, n: r.n, ...(r.g !== null ? { g: r.g } : {}) }, "cup", prizes.cup);
+        await ctx.db.insert("gifts", { sid: r.id as Id<"students">, n: r.n, ...(r.g !== null ? { g: r.g } : {}), wk, kind: "cup", what: prizes.cup, at: now, open: true });
     }
     return wk;
   },
@@ -286,13 +228,13 @@ export const month = internalMutation({
   },
 });
 
-/** One league's winner of a week (8 Nov 2026). */
-export type LeagueWin = { l: number; id: string; n: string; g: number | null; xp: number };
+/** A grade's weekly coins as the poster and Settings → Race show them (11 Nov 2026): who, the XP, the coins. */
+export type CoinWin = WeekWin & { c: number };
 /**
- * A week's champions for the poster: its Monday, the top 3s, the cup, each league's winner (`lw`) and how many moved up
- * and down; `kept` = Monday's run kept it.
+ * A week's champions for the poster: its Monday, the top 3s, the cup, each grade's coin winner (`cw`; none for a week
+ * from before the coins: then each grade's champion); `kept` = Monday's run kept it.
  */
-export type Champions = { wk: number; top: Champ[]; cup: Cup[]; lw: LeagueWin[]; lup: number; ldown: number; kept: boolean };
+export type Champions = { wk: number; top: Champ[]; cup: Cup[]; cw: CoinWin[]; kept: boolean };
 
 /** Last week's champions (the poster): the week Monday's run kept, else worked out now from the race. */
 export const champions = query({
@@ -310,22 +252,18 @@ export const champions = query({
         wk,
         top: kept.top.map((c) => ({ id: c.sid, n: c.n, g: c.g ?? null, xp: c.xp, k: c.k, place: c.place })),
         cup: kept.cup,
-        lw: (kept.lw ?? []).map((x) => ({ l: x.l, id: x.sid, n: x.n, g: x.g ?? null, xp: x.xp })),
-        lup: kept.lup ?? 0,
-        ldown: kept.ldown ?? 0,
+        cw: (kept.cw ?? []).map((x) => ({ g: x.g, id: x.sid, n: x.n, xp: x.xp, c: x.c })),
         kept: true,
       };
-    // Before Monday's run: the leagues as they raced last week (they move only then).
-    const { winners, results } = leagueWeek(await leagueList(ctx, false, now), wk);
-    const res = [...results.values()];
-    return {
-      wk,
-      ...championsOf(await raceList(ctx, false, now)),
-      lw: winners.map(({ l, r }) => ({ l, id: r.id, n: r.n, g: r.g, xp: r.p })),
-      lup: res.filter((x) => x.m === 1).length,
-      ldown: res.filter((x) => x.m === -1).length,
-      kept: false,
-    };
+    // Before Monday's run: who would win the coins if it ran now.
+    const rows = await raceList(ctx, false, now);
+    const prizes = await prizesOf(ctx);
+    const before = await ctx.db
+      .query("raceWeeks")
+      .withIndex("by_wk", (q) => q.eq("wk", wk - 7 * DAY_MS))
+      .first();
+    const cw = prizes.wc > 0 ? weekWinners(rows, new Set((before?.cw ?? []).map((x) => x.sid as string))).map((x) => ({ ...x, c: prizes.wc })) : [];
+    return { wk, ...championsOf(rows), cw, kept: false };
   },
 });
 
@@ -353,14 +291,15 @@ export const setMarks = mutation({
   },
 });
 
-/** The owner's prizes (empty = no gift for that win): Monday's run (a league's winner, the cup) and the 1st's (the month's most improved). */
+/** The owner's weekly coins (0 = none) and prizes (empty = no gift): Monday's run (the coins, the cup) and the 1st's (the month's most improved). */
 export const setPrizes = mutation({
-  args: { token, lg: v.string(), mi: v.string(), cup: v.string() },
+  args: { token, wc: v.number(), mi: v.string(), cup: v.string() },
   handler: async (ctx, args) => {
     await actor(ctx, args.token, ["owner"]);
     const clean = (s: string) => s.replace(/\s+/g, " ").trim();
-    const value: Prizes = { lg: clean(args.lg), mi: clean(args.mi), cup: clean(args.cup) };
-    if (Object.values(value).some((x) => [...x].length > PRIZE_MAX)) fail(`A prize in ${PRIZE_MAX} letters at most.`);
+    const value: Prizes = { wc: args.wc, mi: clean(args.mi), cup: clean(args.cup) };
+    if (!Number.isInteger(value.wc) || value.wc < 0 || value.wc > WEEK_COINS_MAX) fail(`Weekly coins: a whole number from 0 to ${WEEK_COINS_MAX.toLocaleString("en")}.`);
+    if ([value.mi, value.cup].some((x) => [...x].length > PRIZE_MAX)) fail(`A prize in ${PRIZE_MAX} letters at most.`);
     const m = await ctx.db
       .query("meta")
       .withIndex("by_key", (q) => q.eq("key", "giftPrizes"))
@@ -371,7 +310,7 @@ export const setPrizes = mutation({
   },
 });
 
-/** A gift on the teachers' list (`l` a league's winner's league, `why` the reason of a gift given by hand). */
+/** A gift on the teachers' list (`l` a league's winner's league, from before 11 Nov 2026; `why` the reason of a gift given by hand). */
 export type GiftItem = {
   id: string;
   sid: string;

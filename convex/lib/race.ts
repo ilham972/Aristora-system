@@ -1,7 +1,7 @@
 // The race (7 Nov 2026, his voice note): every student of ARISTORA on it, joined the app or not; XP from class and from
-// home; two lists, his grade and the whole ARISTORA ("like the world ranking of a game, institute-wide"); last week's
-// champions wear a crown (👑) all week; the moves since yesterday; the grade cup (the share of each grade that learned
-// this week: fair whatever a grade's books, and it pulls back the ones who stopped coming).
+// home. Since 11 Nov 2026 three lists: his grade this week, his grade all time, and the GOAT (all of ARISTORA, all time);
+// last week's champions wear a crown (👑) all week; the moves since yesterday; the grade cup (the share of each grade that
+// learned this week: fair whatever a grade's books, and it pulls back the ones who stopped coming).
 // - XP numbers are worked out when his XP changes (convex/lib/raceRows.ts) and read at any later moment here: no XP came
 //   since, so this week's, yesterday's and last week's XP follow from the moment they were worked out.
 // - Students with 0 XP this week are listed at the end with no number ("not started this week"): everyone sees who is
@@ -14,7 +14,7 @@ const WEEK_MS = 7 * DAY_MS;
 
 /**
  * XP numbers worked out at one moment: that week's Monday (`wk`), that day (`d`), XP that week, that week before that
- * day (`xpy`), the week before (`prev`), ever (`tot`). Since 8 Nov 2026 (the leagues and the monthly most improved): the
+ * day (`xpy`), the week before (`prev`), ever (`tot`). Since 8 Nov 2026 (the monthly most improved, Monday's ties): the
  * days he learned (the flame's days) in week `wk` as bits (`dm`: Monday = 1, Tuesday = 2 … Sunday = 64) and in the week
  * before (`dmp`); XP in the month that began at `mk` (`mo`), the month before (`m1`) and the one before that (`m2`).
  */
@@ -148,15 +148,11 @@ export type RaceRow = {
   u?: number;
   up?: number;
   /**
-   * 8 Nov 2026 (his voice note: "they feel like they are losing what they earned"): XP ever (`t`), the rank he reached
-   * (`k`, an index of RANKS: never down), his league (`l`, 1–5; missing = 1) and the days he learned this week (`dd`: 4 =
-   * 🛡️, never down on Monday). Missing on a server from before.
+   * XP ever (`t`, 8 Nov 2026: what he keeps for good; the all-time lists and the GOAT, 11 Nov 2026), the days he learned
+   * this week (`dd`) and last week (`dp`: Monday's coins, a tie). Missing on a server from before.
    */
   t?: number;
-  k?: number;
-  l?: number;
   dd?: number;
-  /** The days he learned last week (Monday's 🛡️: the server's league run reads it). */
   dp?: number;
 };
 
@@ -257,174 +253,56 @@ export function cupWinners(cup: Cup[]): number[] {
   return best > 0 ? cup.filter((c) => c.of && c.n / c.of === best).map((c) => c.g) : [];
 }
 
-// ---- Ranks and leagues (8 Nov 2026, his voice note: "when it comes to Monday, all the progress will start from zero
-// ... they feel like they are losing what they earned"; his answers: 5 leagues, all grades mixed; gifts for each league's
-// winner every week and the most improved every month). What a student earns is kept for good (his XP ever, the rank
-// it gives, his trophies, his crowns); only the week's race starts again, and each week's result moves his league. ----
+// ---- All time and the GOAT (11 Nov 2026, his voice note: students saw the week's list start from zero and thought
+// "everything is gone"; his answers: the leagues and the rank badges out; each grade's list this week AND all time; the
+// GOAT = ARISTORA's all-time #1 over every grade, a badge that moves the moment someone passes him; each grade's weekly
+// #1 wins the owner's coins, never two weeks running). What he earned is his XP ever (`t`), never reset. ----
 
-/** The ranks: his XP ever, never down (his race row keeps the highest he reached, `rk`: marks taken back never lower it). */
-export const RANKS: { at: number; e: string; n: string }[] = [
-  { at: 0, e: "🌱", n: "புதியவர்" },
-  { at: 100, e: "📘", n: "கற்பவர்" },
-  { at: 300, e: "🔎", n: "தேடுபவர்" },
-  { at: 600, e: "✏️", n: "முயல்பவர்" },
-  { at: 1000, e: "🧠", n: "சிந்தனையாளர்" },
-  { at: 1500, e: "⚡", n: "திறமையாளர்" },
-  { at: 2200, e: "🎯", n: "வல்லவர்" },
-  { at: 3000, e: "📜", n: "அறிஞர்" },
-  { at: 4000, e: "🌟", n: "மேதை" },
-  { at: 5500, e: "🦉", n: "தங்க ஆந்தை" },
-];
-/** Past the last rank, a ⭐ every 2,500 XP more: the road never ends. */
-export const RANK_STAR_XP = 2500;
-
-/** The rank his XP ever gives (an index of RANKS). */
-export function rankOf(tot: number): number {
-  let i = 0;
-  while (i + 1 < RANKS.length && tot >= RANKS[i + 1].at) i++;
-  return i;
-}
-
-/** The rank he shows: the highest of what his XP gives now and what he reached (`kept`). */
-export const rankShown = (tot: number, kept?: number): number => Math.max(rankOf(tot), kept ?? 0);
-
-/** ⭐ past the last rank. */
-export function starsOf(tot: number): number {
-  const top = RANKS[RANKS.length - 1].at;
-  return tot >= top ? Math.floor((tot - top) / RANK_STAR_XP) : 0;
-}
-
-/** What comes next on his road: the next rank (or the next ⭐ past the last), where it is and the XP it takes. */
-export function nextStep(tot: number, kept?: number): { from: number; at: number; need: number; e: string; n: string } {
-  const i = rankShown(tot, kept);
-  if (i + 1 < RANKS.length) {
-    const at = RANKS[i + 1].at;
-    return { from: RANKS[i].at, at, need: Math.max(1, at - tot), e: RANKS[i + 1].e, n: RANKS[i + 1].n };
-  }
-  const top = RANKS[RANKS.length - 1].at;
-  const from = top + starsOf(tot) * RANK_STAR_XP;
-  return { from, at: from + RANK_STAR_XP, need: Math.max(1, from + RANK_STAR_XP - tot), e: "⭐", n: `${RANKS[RANKS.length - 1].n} ⭐${starsOf(tot) + 1}` };
-}
-
-/** The leagues, the first to the top: every student is in one; a new student starts in the first. */
-export const LEAGUES: { e: string; n: string }[] = [
-  { e: "🥉", n: "வெண்கலம்" },
-  { e: "🥈", n: "வெள்ளி" },
-  { e: "🥇", n: "தங்கம்" },
-  { e: "💎", n: "வைரம்" },
-  { e: "🏆", n: "சாம்பியன்" },
-];
-/** Monday: the top 3 of a league move up, the bottom 3 move down (fewer in a league under 9: a third). */
-export const LEAGUE_UP = 3;
-/** Learning days in the week that keep him from moving down (🛡️): his own effort, whatever his marks. */
-export const SHIELD_DAYS = 4;
-
-/** His league (a row from before the leagues: the first). */
-export const leagueOf = (l: number | undefined): number => (l && l >= 1 && l <= LEAGUES.length ? l : 1);
-
-/** A league's order: more XP first, then more days learned, then more XP ever, then the name. */
-export function leagueOrder<T extends { n: string }>(rows: T[], xp: (r: T) => number, dd: (r: T) => number, tot: (r: T) => number): T[] {
-  return [...rows].sort((a, b) => xp(b) - xp(a) || dd(b) - dd(a) || tot(b) - tot(a) || a.n.localeCompare(b.n));
-}
+/** His XP ever (0 on a row from a server before 8 Nov 2026). */
+export const everOf = (r: Pick<RaceRow, "t">): number => r.t ?? 0;
 
 /**
- * Monday's moves in one league (or the moves if the week ended now): the top 3 with XP move up (not from the top
- * league), the bottom 3 move down (not from the first league), skipping anyone with 🛡️ (SHIELD_DAYS days learned). In a
- * league of fewer than 9, a third of it moves each way. Rows in league order (leagueOrder).
+ * A list by XP ever (the all-time lists): the week's places and moves, on XP ever (each row's `xp` is then his XP ever;
+ * yesterday's = XP ever less what came today). Nobody with 0 XP ever gets a place.
  */
-export function leagueMoves<T extends { id: string }>(ordered: T[], lg: number, xp: (r: T) => number, dd: (r: T) => number): Map<string, 1 | -1> {
-  const out = new Map<string, 1 | -1>();
-  const k = Math.min(LEAGUE_UP, Math.floor(ordered.length / 3));
-  if (lg < LEAGUES.length) for (const r of ordered.slice(0, k)) if (xp(r) > 0) out.set(r.id, 1);
-  if (lg > 1) {
-    let n = 0;
-    for (let i = ordered.length - 1; i >= 0 && n < k; i--) {
-      const r = ordered[i];
-      if (out.has(r.id)) break;
-      if (dd(r) >= SHIELD_DAYS) continue;
-      out.set(r.id, -1);
-      n++;
-    }
+export function placedEver(rows: RaceRow[]): Placed[] {
+  return placed(rows.map((r) => ({ ...r, xp: everOf(r), y: Math.max(0, everOf(r) - Math.max(0, r.xp - r.y)) })));
+}
+
+/** The GOAT: the most XP ever in all of ARISTORA (equal XP: the name, as every list); null before anyone learned. */
+export function goatOf<T extends { n: string; t?: number }>(rows: T[]): T | null {
+  let best: T | null = null;
+  for (const r of rows) {
+    const t = r.t ?? 0;
+    if (t <= 0) continue;
+    if (!best || t > (best.t ?? 0) || (t === (best.t ?? 0) && r.n.localeCompare(best.n) < 0)) best = r;
+  }
+  return best;
+}
+
+/** His place among his grade's XP ever (null: no XP ever yet) and how many are in the grade. */
+export function everPlace(rows: RaceRow[], me: string, grade: number | null): { place: number | null; of: number } {
+  const list = placedEver(rows.filter((r) => r.g !== null && r.g === grade));
+  return { place: list.find((x) => x.r.id === me)?.rank ?? null, of: list.length };
+}
+
+/** A grade's weekly coins: who won them (last week's XP `xp`). */
+export type WeekWin = { g: number; id: string; n: string; xp: number };
+
+/**
+ * The week's coin winners (Monday): in each grade, last week's #1 (XP, then days learned, then XP ever, then the name;
+ * nobody without XP), except the one who won that grade's coins the week before (`last`): then the next one.
+ */
+export function weekWinners(rows: RaceRow[], last: Set<string>): WeekWin[] {
+  const out: WeekWin[] = [];
+  for (const g of RACE_GRADES) {
+    const best = rows
+      .filter((r) => r.g === g && r.p > 0 && !last.has(r.id))
+      .sort((a, b) => b.p - a.p || (b.dp ?? 0) - (a.dp ?? 0) || everOf(b) - everOf(a) || a.n.localeCompare(b.n))[0];
+    if (best) out.push({ g, id: best.id, n: best.n, xp: best.p });
   }
   return out;
 }
 
-/** Places in a league's order (equal XP share a place: 1, 2, 2, 4; none for 0 XP). */
-export function leaguePlaces<T extends { id: string }>(ordered: T[], xp: (r: T) => number): Map<string, number> {
-  const out = new Map<string, number>();
-  ordered.forEach((r, i) => {
-    if (xp(r) <= 0) return;
-    out.set(r.id, i > 0 && xp(r) === xp(ordered[i - 1]) ? out.get(ordered[i - 1].id)! : i + 1);
-  });
-  return out;
-}
-
-/**
- * The first leagues (once, when they came): the students who ever learned, by last week's XP, then XP ever, cut in five
- * (the best fifth in the top league); the ones who never learned in the first.
- */
-export function seedLeagues<T extends { id: string; n: string; p: number; t: number }>(rows: T[]): Map<string, number> {
-  const out = new Map<string, number>();
-  for (const r of rows) out.set(r.id, 1);
-  const active = rows.filter((r) => r.t > 0).sort((a, b) => b.p - a.p || b.t - a.t || a.n.localeCompare(b.n));
-  const per = active.length / LEAGUES.length;
-  active.forEach((r, i) => out.set(r.id, LEAGUES.length - Math.floor(i / per)));
-  return out;
-}
-
-/**
- * His last week in his league (Monday's card): the league he raced in, his place (null: no XP), the move, his XP, a win;
- * `sh` = his 🛡️ kept him there (he was in the bottom 3, and learned on SHIELD_DAYS days); `pl` = the first leagues: last
- * week's XP put him in league `l` (no race yet, so no move and no win).
- */
-export type LeagueResult = { wk: number; l: number; p: number | null; m: -1 | 0 | 1; xp: number; win: boolean; of: number; sh?: boolean; pl?: boolean };
-
-/**
- * The first leagues' Monday card (9 Nov 2026: the leagues came on a Monday night and his students saw only this week's
- * 0): each one's last week, saved, and the league it gave him. Rows with their new league (`l`) and last week's XP.
- */
-export function leaguePlacement<T extends { id: string; n: string; l?: number; p: number; ddp: number; t: number }>(rows: T[], wk: number): Map<string, LeagueResult> {
-  const out = new Map<string, LeagueResult>();
-  for (let l = 1; l <= LEAGUES.length; l++) {
-    const ordered = leagueOrder(
-      rows.filter((r) => leagueOf(r.l) === l),
-      (r) => r.p,
-      (r) => r.ddp,
-      (r) => r.t,
-    );
-    const places = leaguePlaces(ordered, (r) => r.p);
-    for (const r of ordered) out.set(r.id, { wk, l, p: places.get(r.id) ?? null, m: 0, xp: r.p, win: false, of: ordered.length, pl: true });
-  }
-  return out;
-}
-
-/** A finished week's leagues (the server's Monday run): each one's result, the winners, the moves. */
-export function leagueWeek<T extends { id: string; n: string; l?: number; p: number; ddp: number; t: number }>(
-  rows: T[],
-  wk: number,
-): { results: Map<string, LeagueResult>; winners: { l: number; r: T }[]; up: { l: number; r: T }[] } {
-  const results = new Map<string, LeagueResult>();
-  const winners: { l: number; r: T }[] = [];
-  const up: { l: number; r: T }[] = [];
-  for (let l = 1; l <= LEAGUES.length; l++) {
-    const ordered = leagueOrder(
-      rows.filter((r) => leagueOf(r.l) === l),
-      (r) => r.p,
-      (r) => r.ddp,
-      (r) => r.t,
-    );
-    const moves = leagueMoves(ordered, l, (r) => r.p, (r) => r.ddp);
-    // Who would have moved down without the 🛡️: the ones it kept are told so on Monday.
-    const bare = leagueMoves(ordered, l, (r) => r.p, () => 0);
-    const places = leaguePlaces(ordered, (r) => r.p);
-    for (const r of ordered) {
-      const p = places.get(r.id) ?? null;
-      const m = moves.get(r.id) ?? 0;
-      const sh = bare.get(r.id) === -1 && m !== -1;
-      results.set(r.id, { wk, l, p, m, xp: r.p, win: p === 1, of: ordered.length, ...(sh ? { sh } : {}) });
-      if (p === 1) winners.push({ l, r });
-      if (m === 1) up.push({ l: l + 1, r });
-    }
-  }
-  return { results, winners, up };
-}
+/** The weekly coins until the owner sets them (Settings → Race): 50 = what 250 XP pays on Monday. */
+export const WEEK_COINS = 50;

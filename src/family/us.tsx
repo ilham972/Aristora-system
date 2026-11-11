@@ -18,7 +18,6 @@ import { useEffect, useState } from "preact/hooks";
 import type { FamilyMe } from "../../convex/family";
 import type { UsFeed } from "../../convex/us";
 import type { UsItem } from "../../convex/lib/us";
-import { LEAGUES, RANKS } from "../../convex/lib/race";
 import { DAY_EN, MONTH } from "./home";
 import { keep, mutation, query } from "./net";
 import { picOf, usePics } from "./pics";
@@ -57,6 +56,7 @@ export const MARK: Record<UsItem["k"], string> = {
   lgup: "⬆️",
   upm: "📈",
   gift: "🎁",
+  goat: "🏅",
 };
 /** What a line is, in a word or two (under the name). */
 export const KIND: Record<UsItem["k"], string> = {
@@ -76,6 +76,7 @@ export const KIND: Record<UsItem["k"], string> = {
   lgup: "லீக் முன்னேற்றம்",
   upm: "மாத முன்னேற்றம்",
   gift: "ARISTORA பரிசு",
+  goat: "GOAT",
 };
 
 const GUIDE: { mood: Mood; h: string; p: string }[] = [
@@ -135,7 +136,7 @@ function useUs(on: boolean): { f: UsFeed | null; err: string | null; set: (f: Us
 /** What the chips show: everything, the teachers' questions, the doubts, the 💡 posts, the wins, the teachers' lines;
  * a teacher's to-do (answers to mark, doubts no teacher answered, 💡 posts waiting, reports). */
 type Show = "all" | "q" | "ask" | "learn" | "win" | "tch" | "todo";
-const WINS = new Set<UsItem["k"]>(["bday", "home1", "back", "stage", "flame", "up", "champs", "count", "rank", "lgup", "upm", "gift"]);
+const WINS = new Set<UsItem["k"]>(["bday", "home1", "back", "stage", "flame", "up", "champs", "count", "upm", "gift", "goat"]);
 const todo = (m: UsItem) =>
   (m.wN ?? 0) > 0 || (m.k === "ask" && !m.tr && (m.aud !== "s" || !m.an)) || (m.rp ?? 0) > 0 || (m.rpm ?? 0) > 0 || (m.k === "learn" && m.lst === "w");
 const shows: Record<Show, (m: UsItem) => boolean> = {
@@ -504,7 +505,6 @@ function People(props: { m: UsItem; onMate: (id: string) => void }) {
         <span key={p.sid} class="f-us-p">
           {i > 0 && ", "}
           {props.m.k === "champs" && !p.l && (p.a ? "🏆 " : "👑 ")}
-          {p.l ? `${LEAGUES[p.l - 1]?.e ?? ""} ` : ""}
           <Name id={p.sid} n={p.n} g={p.g} onMate={props.onMate} />
         </span>
       ))}
@@ -534,18 +534,21 @@ export function say(m: UsItem, onMate: (id: string) => void): ComponentChildren 
         </>
       );
     case "champs":
-      // 8 Nov 2026: each league's winner (each name with his league); a line from before names the grades' champions.
+      // 11 Nov 2026: each grade's weekly coins (`x` = the coins each); 8–10 Nov each league's winner; before, the champions.
       return (
         <>
-          <b class="f-us-by">{m.ppl?.some((p) => p.l) ? "கடந்த வார லீக் வெற்றியாளர்கள் 🏆" : "கடந்த வார champions 👑"}</b>
+          <b class="f-us-by">
+            {m.x ? `கடந்த வாரம் ஒவ்வொரு grade இலும் முதலிடம் 👑 +${m.x} coins` : m.ppl?.some((p) => p.l) ? "கடந்த வார லீக் வெற்றியாளர்கள் 🏆" : "கடந்த வார champions 👑"}
+          </b>
           <People m={m} onMate={onMate} />
         </>
       );
-    case "lgup":
+    case "goat":
       return (
         <>
-          <b class="f-us-by">இந்த வாரம் மேல் லீக்குக்கு முன்னேறியவர்கள் ⬆️</b>
+          <b class="f-us-by">புதிய GOAT! 🏅 எல்லா grade இலும் அதிக XP</b>
           <People m={m} onMate={onMate} />
+          <span> இப்போது ARISTORA வின் Greatest of all time. யார் முந்துவார்?</span>
         </>
       );
     case "upm":
@@ -555,17 +558,10 @@ export function say(m: UsItem, onMate: (id: string) => void): ComponentChildren 
           <People m={m} onMate={onMate} />
         </>
       );
-    case "rank": {
-      const r = RANKS[m.x ?? 0] ?? RANKS[0];
-      return (
-        <>
-          {n} இப்போது <b>
-            {r.e} {r.n}
-          </b>
-          ! {r.at.toLocaleString("en")} XP கடந்தார். பாராட்டுவோம்.
-        </>
-      );
-    }
+    // The ranks and the leagues went on 11 Nov 2026: their old lines never reach a phone (lib/us.ts GONE_KINDS).
+    case "rank":
+    case "lgup":
+      return null;
     case "gift":
       return (
         <>
@@ -606,10 +602,9 @@ const OWL_MOOD: Partial<Record<UsItem["k"], Mood>> = {
   up: "strong",
   champs: "champ",
   count: "happy",
-  rank: "star",
-  lgup: "strong",
   upm: "strong",
   gift: "party",
+  goat: "champ",
 };
 /** The owl's name on its lines. */
 export const OWL_NAME = "ஆந்தை";

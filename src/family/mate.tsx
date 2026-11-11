@@ -7,9 +7,9 @@
 
 import { useEffect, useState } from "preact/hooks";
 import type { FamilyMate, FamilyMe } from "../../convex/family";
-import { placed, type RaceRow } from "../../convex/lib/race";
+import { placed, placedEver, type RaceRow } from "../../convex/lib/race";
 import type { Board } from "./board";
-import { RankLine } from "./league";
+import { EverLine } from "./goat";
 import { mutation, query } from "./net";
 import { picOf, usePics } from "./pics";
 import { ClassCard, HeatMap, QChips, StageCard, sumQ } from "./profile";
@@ -21,7 +21,7 @@ const DAYS = ["M", "T", "W", "T", "F", "S", "S"];
 /** Profiles seen in this visit (back and forth between the race and a profile asks once). */
 const seen = new Map<string, FamilyMate>();
 
-/** His place in a list of the race (null: not started this week, or not in it). */
+/** His place in his grade this week (null: not started this week, or not in it). */
 function placeIn(rows: RaceRow[], id: string): number | null {
   return placed(rows).find((x) => x.r.id === id)?.rank ?? null;
 }
@@ -55,7 +55,8 @@ export function MateScreen(props: {
   usePics([key]);
   const b = props.board;
   const inGrade = b && grade !== null ? placeIn(b.rows.filter((r) => r.g === grade), props.id) : null;
-  const inAll = b ? placeIn(b.rows, props.id) : null;
+  // His grade all time (11 Nov 2026: the whole ARISTORA's week list went; the GOAT list is all time).
+  const inEver = b && grade !== null ? (placedEver(b.rows.filter((r) => r.g === grade)).find((x) => x.r.id === props.id)?.rank ?? null) : null;
   const today = (new Date(Date.now() + 330 * 60_000).getUTCDay() + 6) % 7;
   const cheer = async () => {
     if (!m || m.cheers.mine || busy) return;
@@ -96,7 +97,7 @@ export function MateScreen(props: {
               {m?.bday && <span class="f-cake"> 🎂</span>}
             </b>
             <small>{grade ? `Grade ${grade}` : BRAND}</small>
-            {m && <RankLine total={m.total} rk={m.rk} lg={m.lg} />}
+            {m && <EverLine ever={m.ever} grade={m.grade} />}
             {m && (m.wins.g > 0 || m.wins.a > 0) && (
               <span class="f-mate-wins">
                 👑 {m.wins.g > 0 ? `${m.wins.g} ${m.wins.g === 1 ? "week" : "weeks"} won` : ""}
@@ -178,18 +179,18 @@ export function MateScreen(props: {
               💬 Message {name.split(" ")[0]}
             </button>
           )}
-          <section class="f-card f-mate-race rise" aria-label="This week">
+          <section class="f-card f-mate-race rise" aria-label="Race">
             <h2 class="f-h2">
-              This week <small>{m.xp} XP</small>
+              Race{grade ? ` · Grade ${grade}` : ""} <small>{m.xp} XP this week</small>
             </h2>
             <div class="f-mate-pl">
               <div>
                 <b>{inGrade !== null ? `#${inGrade}` : "—"}</b>
-                <small>{grade ? `Grade ${grade}` : "Grade"}</small>
+                <small>This week</small>
               </div>
               <div>
-                <b>{inAll !== null ? `#${inAll}` : "—"}</b>
-                <small>{BRAND}</small>
+                <b>{inEver !== null ? `#${inEver}` : "—"}</b>
+                <small>All time</small>
               </div>
             </div>
           </section>

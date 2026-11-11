@@ -6,10 +6,8 @@ export { ReportScreen } from "./profile";
 export { CertSheet } from "./cert";
 // A classmate's profile (7 Nov 2026): tap anyone in the race.
 export { MateScreen } from "./mate";
-// The race tab (8 Nov 2026: out of the first load with the leagues), and what he keeps for good on it: Monday's card,
-// his rank, the leagues' road (league.tsx).
+// The race tab (8 Nov 2026: out of the first load): this week, all time, the GOAT (11 Nov 2026; the medal: goat.tsx).
 export { BoardTab, myPlace } from "./raceTab";
-export { LeagueRoad, RaceTop, RankLine } from "./league";
 // The newer-version check (5 Nov 2026): not needed before the first screen, so here, out of the first load's budget.
 export { busyHere, watchUpdates } from "../appVersion";
 // The owner's Preview of a Stage (5 Nov 2026): main.tsx starts it only on the class system's address with #preview=.

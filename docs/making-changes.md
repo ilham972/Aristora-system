@@ -632,31 +632,36 @@ EOF
   (`raceRowOut`), never `row.xp` straight (on Monday it is last week's).
 - **The family's budgets** (7 Nov 2026, after the race and profiles): first load 58.5 of 66 KB, later parts 32.7 of 36
   (raised 32 → 36 with his yes for profiles). `convex/lib/race.ts` is pure and imports only `./day`: keep it so (the
-  phone imports it). Since 8 Nov 2026 the race tab is a later part (`raceTab.tsx`, `league.tsx` via `parts.ts`: the
-  first load was at 66.0 with the leagues); `board.tsx` keeps only what the first load needs (`useBoard`, `Cheered`,
-  `GiftCards`, `endsIn`) and a copy of the league names (`LEAGUE_NAMES`: importing `LEAGUES` would pull the rules in;
-  `tests/league.test.ts` keeps the copy equal). Budgets after the leagues and the rank on faces: first load 62.7 of 66, later parts 41.6 of
-  42 (full: the next later thing needs a cut or his yes), Us 24.1 of 28, the chats 7.9 of 20, the teachers' Us 7.8 of 8.
+  phone imports it). Since 8 Nov 2026 the race tab is a later part (`raceTab.tsx`, `goat.tsx` via `parts.ts`; its
+  style in `profile.css`, which loads with the parts); `board.tsx` keeps only what the first load needs (`useBoard`,
+  `Cheered`, `GiftCards`, `PayCard`, `endsIn`). Budgets after the three lists and the GOAT (11 Nov 2026, the leagues and
+  ranks out): first load 63.7 of 66, later parts 43.4 of 47, Us 24.1 of 28, the chats 7.9 of 20, the teachers' Us 7.8 of 8.
 - **The old race for old phones**: `family.board` still sends `top` / `me` / `count` (phones that opened the app
   before 7 Nov read them until they load the new version). The new field is `you`, not `me`. Remove after 21 Nov 2026.
-- **Leagues and champions read through `raceList`** (8 Nov 2026), never `raceRows` straight: before `raceV` says the
-  rows are ready they are stale or missing, and `raceList` works either way (`leagueList` in `convex/race.ts` takes a
-  row's `lg` from `raceRows` and the numbers from `raceList`). A test that patches race rows inserts meta `raceV` =
-  `RACE_V` first (`ready()` in `tests/league.test.ts`), or the race ignores the patch.
+- **The race's lists, the GOAT and the champions read through `raceList`**, never `raceRows` straight: before `raceV`
+  says the rows are ready they are stale or missing, and `raceList` works either way. What reads the rows only when
+  ready (`family.me` / `family.mate` `ever`, `goatWatch`) says nothing until then. A test that patches race rows inserts
+  meta `raceV` = `RACE_V` first (`ready()` in `tests/goat.test.ts`), or the race ignores the patch; a run-through that
+  writes progress rows straight (not through a mutation) deletes the race rows and runs `race.fill` (rows a student's
+  `add` built stay at 0 XP otherwise).
+- **The weekly coins and Monday's pay are two runs** (`race.week` 00:05 keeps `raceWeeks.cw`, `coins.payday` 00:15 adds
+  them): payday only pays a wallet not yet paid this Monday, and `race.week` adds them itself when the pay came first
+  (`winNow`), so either order pays once.
+- **CSS class names are global, across the family app's files too**: the race's face was `.f-face`, also the feedback
+  sheet's face buttons (its `display` leaked both ways); since 11 Nov 2026 the race's is `.f-rface`.
 - **convex-test's clock never goes back**: a mutation runs at the later of the fake time and the last commit, so a test
   can't set the date earlier than a write it already made (a month test written backwards gave wrong months and
   hung). Write week and month stories forwards (Nov → Dec 1).
 - **Something weekly that starts on a Monday shows its first week's 0 first** (9 Nov 2026: he woke at 2 AM to "everything
-  started from zero"): give everyone last week's result at once (the leagues' first cards: `leaguePlacement`, written
-  by `seedOnce`, and `cardsOnce` for the live server; remove `cardsOnce` after 16 Nov 2026).
+  started from zero"; on 11 Nov 2026 students still read it as "everything is gone"): what a student earned must stay
+  visible as a list of its own (the All time list), not only in a sentence or a card.
 - **A change to `race.week` deployed on a Monday after 00:05 waits a week**: that week is already in `raceWeeks`. The
-  leagues came on Monday 9 Nov 2026: `race.fill` cut them within 5 minutes of the deploy (meta `leagues`), the first
-  moves and league gifts are on 16 Nov; the run of 9 Nov gave the old prizes.
+  weekly coins (11 Nov 2026) first run on Monday 16 Nov.
 
 **Us, the students' community (7 Nov 2026).**
 - **The owl's lines are written by hooks** in the mutations that finish things (`convex/lib/us.ts`): `homeMoments` in
   `family.check` and `checkLadder` (a first level from home, days in a row), `stageMoment` in `family.check` and
-  `workbook.correct` (a whole Stage), `backMoment` in `startVisit` (welcome back), `champsMoment` in `race.week`;
+  `workbook.correct` (a whole Stage), `backMoment` in `startVisit` (welcome back), `coinsMoment` / `champsMoment` in `race.week`, `goatMoment` in `race.fill`;
   birthdays, yesterday's count and the most improved come from crons (`us.daily`, `us.improved`). A new way to mark a
   level at home or to finish a Stage calls the same helper, or the community never hears of it. Each helper dedupes
   (once per Stage, per milestone and day, per day for birthdays and welcome back).

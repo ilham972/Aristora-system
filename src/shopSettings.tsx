@@ -237,7 +237,7 @@ export function ShopSettings() {
       <section class="phq-sum">
         <b>The Shop in the family app</b>
         <small class="muted">
-          Students spend coins, never XP (XP stays their rank and league). Every Monday last week's XP pays coins: 5 XP = 1
+          Students spend coins, never XP (XP stays theirs, on the all-time lists). Every Monday last week's XP pays coins: 5 XP = 1
           coin. A Level done at home pays once it is checked in class; Us XP never pays. What they buy shows as a gold card
           on their phone: hand it over in Race → Gifts to give.
         </small>

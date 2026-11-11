@@ -1,18 +1,18 @@
 // Settings → Race (7 Nov 2026, his voice note): the family app's race has every student, joined or not, with XP from
-// class and home, his grade and the whole ARISTORA, any student's profile one tap away, cheers. Here:
+// class and home; since 11 Nov 2026 his grade this week, his grade all time and the GOAT (all grades, all time); any
+// student's profile one tap away, cheers. Here:
 // - the owner: the marks switch (his answer for the profiles was "Everything"; this is the way back if a parent
-//   complains: classmates stop seeing a student's marks, the rest stays) and the centre's prizes (his ask: "gift cards
-//   ... ice-cream or chicken fries"; since 8 Nov 2026, his answers: each league's winner every Monday, the month's most
-//   improved on the 1st, the grade cup until the houses);
+//   complains: classmates stop seeing a student's marks, the rest stays), the weekly coins (11 Nov 2026, his answer:
+//   each grade's #1 wins coins for the Shop instead of a gift, never two weeks running) and the centre's prizes (his ask:
+//   "gift cards ... ice-cream or chicken fries": the month's most improved on the 1st, the grade cup until the houses);
 // - the owner and the Manager: the gifts to give (the student's phone shows his card until Given) and given lately, and
 //   since 8 Nov 2026 a gift by hand, any time (his ask: "how we can give the gift when we want to give the gift?");
-// - the owner, Reports and the Manager: last week's champions (each league's winner) and their poster for the WhatsApp
-//   group and the wall.
+// - the owner, Reports and the Manager: last week's champions (each grade's coin winner) and their poster for the
+//   WhatsApp group and the wall.
 
 import { useEffect, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
-import { LEAGUES } from "../convex/lib/race";
 import type { Champions, GiftItem, Prizes } from "../convex/race";
 import { mutate, subscribe } from "./backend";
 import { championsFile, drawChampions, weekSpan } from "./champions";
@@ -45,8 +45,7 @@ function winOf(x: GiftItem): string {
   if (x.kind === "shop") return `🛍️ bought in the Shop · ${(x.c ?? 0).toLocaleString("en")} coins`;
   if (x.kind === "own") return `🎁 ${x.why ? x.why : "given by hand"} · ${weekSpan(x.wk)}`;
   if (x.kind === "mi") return `📈 Most improved · ${MONTHS[new Date(x.wk + 330 * 60_000).getUTCMonth()]}`;
-  const lg = LEAGUES[(x.l ?? 1) - 1] ?? LEAGUES[0];
-  const win = x.kind === "lg" ? `${lg.e} ${lg.n} league winner` : x.kind === "g" ? "👑 Grade champion" : x.kind === "a" ? "🏆 ARISTORA champion" : "🥇 Grade cup";
+  const win = x.kind === "lg" ? "🏆 League winner" : x.kind === "g" ? "👑 Grade champion" : x.kind === "a" ? "🏆 ARISTORA champion" : "🥇 Grade cup";
   return `${win} · ${weekSpan(x.wk)}`;
 }
 
@@ -80,14 +79,15 @@ function MarksSwitch() {
 
 function PrizeForm() {
   const s = useQuery<{ marks: boolean; prizes: Prizes }>(api.race.settings, {});
-  const [p, setP] = useState<Prizes | null>(null);
+  const [p, setP] = useState<{ wc: string; mi: string; cup: string } | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    if (s && !p) setP(s.prizes);
+    if (s && !p) setP({ ...s.prizes, wc: String(s.prizes.wc) });
   }, [s]);
   if (!s || !p) return null;
-  const changed = p.lg !== s.prizes.lg || p.mi !== s.prizes.mi || p.cup !== s.prizes.cup;
-  const field = (k: keyof Prizes, label: string, hint: string) => (
+  const wc = /^\d{1,5}$/.test(p.wc.trim()) ? Number(p.wc.trim()) : null;
+  const changed = wc !== s.prizes.wc || p.mi !== s.prizes.mi || p.cup !== s.prizes.cup;
+  const field = (k: "mi" | "cup", label: string, hint: string) => (
     <label class="rc-prize">
       <span>
         {label}
@@ -98,26 +98,33 @@ function PrizeForm() {
   );
   return (
     <section class="rc-box">
-      <b>Gifts from the centre</b>
-      <small class="muted">
-        The app gives the winners a gift card on their phone (empty = no gift). Grade and ARISTORA champions keep their 👑,
-        without a gift.
-      </small>
-      {field("lg", "🏆 Each league's winner (every Monday)", "the #1 of each of the 5 leagues: 5 students of different levels")}
+      <b>Weekly coins and gifts</b>
+      <label class="rc-prize">
+        <span>
+          🪙 Each grade's weekly #1 (every Monday)
+          <small class="muted">
+            coins for the Shop, with Monday's pay. Last week's winner of a grade can't win it again the next week: the
+            coins go to the next one. 0 = none.
+          </small>
+        </span>
+        <input value={p.wc} inputMode="numeric" maxLength={5} placeholder="0" onInput={(e) => setP({ ...p, wc: (e.target as HTMLInputElement).value })} />
+      </label>
+      <small class="muted">Gifts: the app gives the winners a gift card on their phone (empty = no gift).</small>
       {field("mi", "📈 The month's most improved (the 1st)", "the 3 students whose XP grew the most against the month before")}
       {field("cup", "🥇 Grade cup (every Monday)", "every student who learned in the grade that won")}
       <button
         type="button"
         class="btn primary wide"
-        disabled={busy || !changed}
+        disabled={busy || !changed || wc === null}
         onClick={() => {
+          if (wc === null) return;
           setBusy(true);
-          void act(() => mutate(api.race.setPrizes, p))
+          void act(() => mutate(api.race.setPrizes, { wc, mi: p.mi, cup: p.cup }))
             .then((r) => r && toast("Prizes saved."))
             .finally(() => setBusy(false));
         }}
       >
-        Save the prizes
+        {wc === null ? "Coins: a whole number" : "Save the prizes"}
       </button>
     </section>
   );
@@ -217,7 +224,6 @@ function ChampionsCard() {
   const ones = (k: "g" | "a", g?: number) => c.top.filter((x) => x.k === k && x.place === 1 && (g === undefined || x.g === g));
   const all = ones("a");
   const cup = c.cup[0];
-  const winsIn = (l: number) => c.lw.filter((x) => x.l === l);
   const share = async (save: boolean) => {
     setBusy(true);
     try {
@@ -241,37 +247,27 @@ function ChampionsCard() {
           <span>🏆 ARISTORA</span>
           <b>{all.length ? `${all.map((x) => x.n).join(" · ")} · ${all[0].xp} XP` : "—"}</b>
         </li>
-        {c.lw.length
-          ? LEAGUES.map((lg, i) => {
-              const w = winsIn(LEAGUES.length - i);
-              const L = LEAGUES[LEAGUES.length - 1 - i];
-              return (
-                <li key={lg.n}>
-                  <span>
-                    {L.e} {L.n}
-                  </span>
-                  <b>{w.length ? `${w.map((x) => (x.g !== null ? `${x.n} (${x.g})` : x.n)).join(" · ")} · ${w[0].xp} XP` : "—"}</b>
-                </li>
-              );
-            })
-          : [6, 7, 8, 9, 10, 11].map((g) => {
-              const w = ones("g", g);
-              return (
-                <li key={g}>
-                  <span>👑 {g}</span>
-                  <b>{w.length ? `${w.map((x) => x.n).join(" · ")} · ${w[0].xp} XP` : "—"}</b>
-                </li>
-              );
-            })}
+        {[6, 7, 8, 9, 10, 11].map((g) => {
+          // A week with the coins: each grade's coin winner; a week from before: its champion.
+          const coin = c.cw.find((x) => x.g === g);
+          const w = coin ? [coin] : ones("g", g);
+          return (
+            <li key={g}>
+              <span>👑 {g}</span>
+              <b>
+                {w.length ? `${w.map((x) => x.n).join(" · ")} · ${w[0].xp} XP` : "—"}
+                {coin ? ` · +${coin.c} 🪙` : ""}
+              </b>
+            </li>
+          );
+        })}
         <li>
           <span>🥇 Cup</span>
           <b>{cup && cup.n > 0 ? `Grade ${cup.g} · ${cup.n}/${cup.of} learned` : "—"}</b>
         </li>
       </ul>
-      {(c.lup > 0 || c.ldown > 0) && (
-        <small class="muted">
-          Leagues: ⬆ {c.lup} moved up · ⬇ {c.ldown} moved down
-        </small>
+      {c.cw.some((x) => !ones("g", x.g).some((o) => o.id === x.id)) && (
+        <small class="muted">A grade's #1 who won the coins the week before gave them to the next one.</small>
       )}
       {!c.kept && <small class="muted">Worked out now from the race; Monday 00:05 keeps it for good.</small>}
       <div class="rc-row">
@@ -381,9 +377,9 @@ export function RaceSettings(props: { views: View[] }) {
       <section class="phq-sum">
         <b>The race in the family app</b>
         <small class="muted">
-          Every student is in it, on the app or not: XP from class and from home. Since 8 Nov: 5 leagues, all grades
-          mixed (every Monday the top 3 move up, the bottom 3 move down; 4 days learned = never down); his XP ever is a rank
-          that never goes down. His grade and the whole ARISTORA too, last week's champions with a 👑.
+          Every student is in it, on the app or not: XP from class and from home. Three lists: his grade this week (starts
+          again every Monday; last week's #1 wears a 👑), his grade all time (XP ever: never resets), and the GOAT (every
+          grade, all time: the #1 wears the GOAT medal until someone passes him).
         </small>
       </section>
       {(owner || may("manager")) && (

@@ -103,12 +103,14 @@ export const usKind = v.union(
   /**
    * 8 Nov 2026 (the leagues and ranks): a new rank (`x` its index of RANKS), Monday's moves up (`ppl` with `l` the league
    * each reached), the month's most improved (`ppl`, `x` = that month's 1st), a gift a teacher gave by hand (`ppl`, `t`
-   * her reason).
+   * her reason). The ranks and leagues went on 11 Nov 2026: their old lines stay, nobody sees them (lib/us.ts GONE_KINDS).
    */
   v.literal("rank"),
   v.literal("lgup"),
   v.literal("upm"),
   v.literal("gift"),
+  /** 11 Nov 2026: a new GOAT (`ppl`: ARISTORA's all-time #1 over every grade). */
+  v.literal("goat"),
 );
 /** What a student is told about in the bell (8 Nov 2026: Us's own alerts). */
 export const usInboxKind = v.union(
@@ -1347,7 +1349,8 @@ export default defineSchema({
     /**
      * The leagues and ranks (8 Nov 2026, his voice note: "they feel like they are losing what they earned"): his league
      * (`lg`, 1–5; missing = the first), set each Monday by `race.week` (and once when the leagues came: `race.fill`); his
-     * last week in it (`lr`: Monday's card); the highest rank he reached (`rk`, an index of RANKS: never down).
+     * last week in it (`lr`: Monday's card); the highest rank he reached (`rk`, an index of RANKS: never down). Out since
+     * 11 Nov 2026 (his answers): no longer written or read; kept for the rows that have them.
      */
     lg: v.optional(v.number()),
     lr: v.optional(leagueResult),
@@ -1373,10 +1376,15 @@ export default defineSchema({
     wk: v.number(),
     top: v.array(v.object({ sid: v.id("students"), n: v.string(), g: v.optional(v.number()), xp: v.number(), k: v.union(v.literal("g"), v.literal("a")), place: v.number() })),
     cup: v.array(v.object({ g: v.number(), n: v.number(), of: v.number() })),
-    /** 8 Nov 2026: each league's winner(s) (`l` 1–5), and how many moved up and down. */
+    /** 8 Nov 2026 (the leagues, out since 11 Nov 2026): each league's winner(s) (`l` 1–5), and how many moved up and down. */
     lw: v.optional(v.array(v.object({ l: v.number(), sid: v.id("students"), n: v.string(), g: v.optional(v.number()), xp: v.number() }))),
     lup: v.optional(v.number()),
     ldown: v.optional(v.number()),
+    /**
+     * 11 Nov 2026 (his answers): each grade's weekly coins: its winner (the #1, or the next when the #1 won them the week
+     * before), his XP that week and the coins (`c`); Monday's pay (coins.payday) adds them to his coins.
+     */
+    cw: v.optional(v.array(v.object({ g: v.number(), sid: v.id("students"), n: v.string(), xp: v.number(), c: v.number() }))),
   }).index("by_wk", ["wk"]),
 
   /**
@@ -1446,7 +1454,8 @@ export default defineSchema({
     sid: v.id("students"),
     at: v.number(),
     n: v.number(),
-    k: v.union(v.literal("pay"), v.literal("buy"), v.literal("back")),
+    /** `win` (11 Nov 2026): his grade's weekly coins (`w` = the grade and the week). */
+    k: v.union(v.literal("pay"), v.literal("buy"), v.literal("back"), v.literal("win")),
     w: v.optional(v.string()),
   })
     .index("by_sid", ["sid", "at"])

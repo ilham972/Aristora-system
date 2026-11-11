@@ -378,7 +378,7 @@ export function HomeTab(props: {
       {party && <BdayCard name={name} />}
       <TodayCard cls={cls} me={me} now={now} today={days[t.day]} onStage={props.onStage} />
       <FeesCard f={me?.fees} />
-      <PayCard coins={me?.coins} onShop={props.onShop} />
+      <PayCard coins={me?.coins} won={me?.won} onShop={props.onShop} />
       <GiftCards gifts={me?.gifts} />
       <GoalCard me={me} onPlay={props.onPlay} onLearn={props.onLearn} />
       <Cheered c={me?.cheers} />

@@ -1207,3 +1207,198 @@ a.f-btn {
     transition: none;
   }
 }
+
+/* ---------- The GOAT and what he keeps (11 Nov 2026: goat.tsx, raceTab.tsx; the leagues and rank badges went) ----------
+   Gold = a win, with depth; the ribbon and the star in ARISTORA's violet. Motion: transform and opacity only. */
+.f-rface {
+  position: relative;
+  display: inline-grid;
+  justify-items: center;
+  flex: none;
+}
+span.f-rface.goat .f-ava {
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 0 4.5px var(--gold),
+    0 4px 14px rgba(240, 164, 0, 0.45);
+}
+.f-goatchip {
+  position: absolute;
+  left: 50%;
+  bottom: -8px;
+  transform: translateX(-50%);
+  padding: 2px 5px 1px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--gold-hi), var(--gold) 70%);
+  box-shadow: 0 1.5px 0 var(--gold-3d);
+  color: var(--gold-ink);
+  font: 800 8px/1.1 var(--display);
+  font-style: normal;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+.f-pod .f-goatchip {
+  bottom: -9px;
+  padding: 2px 7px 1px;
+  font-size: 10px;
+}
+/* The podium's GOAT: room for the chip above his name. */
+.f-pod .f-rface.goat {
+  margin-bottom: 10px;
+}
+.f-goat {
+  display: block;
+  flex: none;
+  overflow: visible;
+}
+.f-goat-laurel path {
+  fill: var(--gold-3d);
+}
+.f-goat-laurel g:nth-child(odd) path {
+  fill: #f2b21c;
+}
+.f-goat-edge {
+  fill: var(--gold-3d);
+}
+.f-goat-ring {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.7);
+  stroke-width: 1.6;
+}
+.f-goat-star {
+  fill: var(--brand);
+  stroke: var(--brand-3);
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+}
+.f-goat-shine {
+  fill: rgba(255, 255, 255, 0.6);
+  animation: f-goat-shine 4s ease-in-out infinite;
+}
+@keyframes f-goat-shine {
+  0%,
+  60% {
+    transform: translateX(0);
+  }
+  90%,
+  100% {
+    transform: translateX(160px);
+  }
+}
+.f-goat-band {
+  fill: var(--brand);
+}
+.f-goat-tail {
+  fill: var(--brand-3);
+}
+.f-goat-t {
+  fill: #fff;
+  font: 800 14px var(--display);
+  letter-spacing: 1.6px;
+  text-anchor: middle;
+}
+.f-goat.hero {
+  filter: drop-shadow(0 8px 14px rgba(224, 148, 0, 0.35));
+  animation: f-goat-float 3.2s ease-in-out infinite;
+}
+@keyframes f-goat-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+/* The GOAT list's top: his own card. */
+.f-goatc {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  /* In the race's card, whose top is kept for the podium's crown. */
+  margin: -20px 0 12px;
+  padding: 12px 14px 12px 8px;
+  border-radius: 22px;
+  background: linear-gradient(160deg, var(--gold-soft), #fff 72%);
+  box-shadow: inset 0 0 0 2px var(--gold);
+  text-align: left;
+}
+.f-goatc.me {
+  box-shadow:
+    inset 0 0 0 2px var(--gold),
+    0 0 0 3px var(--brand);
+}
+.f-goatc-w {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.f-goatc-k {
+  font: 800 11.5px/1.2 var(--display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold-ink);
+}
+.f-goatc-who {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.f-goatc-who > b {
+  font: 800 20px/1.15 var(--display);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.f-goatc-xp {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font: 800 15px/1 var(--display);
+  color: var(--gem-2);
+}
+/* Under his name on Me and a profile: his all-time place, or the GOAT's medal. */
+.f-everl {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin: 8px 0 0;
+}
+.f-everl > b {
+  padding: 4px 10px 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font: 800 13.5px/1.1 var(--display);
+}
+.f-everl > small {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.f-everl.goat {
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+.f-everl.goat > span {
+  display: grid;
+  gap: 1px;
+}
+.f-everl.goat b {
+  color: var(--gold-hi);
+  font: 800 19px/1 var(--display);
+  letter-spacing: 0.08em;
+}
+.f-everl.goat small {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 12px;
+  font-weight: 600;
+}
+@media (prefers-reduced-motion: reduce) {
+  .f-goat-shine,
+  .f-goat.hero {
+    animation: none;
+  }
+}

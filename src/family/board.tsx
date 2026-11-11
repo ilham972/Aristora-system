@@ -19,12 +19,6 @@ export function endsIn(since: number, now: number): string {
   return d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h` : `${Math.max(1, Math.ceil(left / 60_000))} min`;
 }
 
-/**
- * The leagues' names, the first to the top: a copy of convex/lib/race.ts LEAGUES (the rules stay out of the first
- * load; tests/league.test.ts compares them).
- */
-export const LEAGUE_NAMES = ["🥉 வெண்கலம்", "🥈 வெள்ளி", "🥇 தங்கம்", "💎 வைரம்", "🏆 சாம்பியன்"];
-
 /** The race kept for this child (a copy kept before 7 Nov 2026 had another shape: none). */
 export function keptBoard(): Board | null {
   const k = keep<Board>("board");
@@ -76,17 +70,16 @@ function weekWords(wk: number): string {
   return `${d.getUTCDate()} ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getUTCMonth()]}`;
 }
 
-/** What won it, in his words (8 Nov 2026: a league's winner, the month's most improved, a gift by hand with its reason). */
+/** What won it, in his words (a league's winner 8–10 Nov 2026, the month's most improved, a gift by hand with its reason). */
 export function giftWhy(x: { kind: FamilyMe["gifts"][number]["kind"]; g: number | null; wk: number; l?: number; why?: string }): string {
   if (x.kind === "own") return x.why ? `🎁 ${x.why}` : `🎁 ${BRAND} வின் பரிசு`;
   if (x.kind === "mi") {
     const d = new Date(x.wk + 330 * 60_000);
     return `📈 ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getUTCMonth()]} மாதம் மிக அதிகம் முன்னேறியவர்`;
   }
-  const lg = LEAGUE_NAMES[(x.l ?? 1) - 1] ?? LEAGUE_NAMES[0];
   const win =
     x.kind === "lg"
-      ? `${lg} லீக் வெற்றியாளர்`
+      ? "🏆 லீக் வெற்றியாளர்"
       : x.kind === "a"
         ? `🏆 ${BRAND} champion`
         : x.kind === "g"
@@ -169,8 +162,10 @@ export function BoughtCard(props: { id: string; what: string; c: number; onDone?
  * Pay day on Home (10 Nov 2026): the Monday his last week's XP paid coins, a gold card with them and the Shop, until he
  * opens the Shop or closes it (kept per child: `paySeen` = that Monday). Nothing in a week without a pay.
  */
-export function PayCard(props: { coins: FamilyMe["coins"]; onShop: () => void }) {
+export function PayCard(props: { coins: FamilyMe["coins"]; won?: FamilyMe["won"]; onShop: () => void }) {
   const c = props.coins;
+  // His grade's weekly coins came with this pay (11 Nov 2026): the card says he won.
+  const won = props.won && c && props.won.wk + WEEK_MS === c.wk ? props.won : null;
   const [seen, setSeen] = useState(() => keep<number>("paySeen"));
   if (!c || c.last <= 0 || Date.now() - c.wk >= WEEK_MS || seen === c.wk) return null;
   const close = (shop: boolean) => {
@@ -179,15 +174,19 @@ export function PayCard(props: { coins: FamilyMe["coins"]; onShop: () => void })
     if (shop) props.onShop();
   };
   return (
-    <section class="f-card f-payc rise" aria-label="Payday">
+    <section class={`f-card f-payc rise${won ? " won" : ""}`} aria-label={won ? "You won" : "Payday"}>
       <button type="button" class="f-payc-x" aria-label="Close" onClick={() => close(false)}>
         ✕
       </button>
-      <span class="f-tag gold">PAYDAY</span>
+      <span class="f-tag gold">{won ? `👑 Grade ${won.g} · #1` : "PAYDAY"}</span>
       <p class="f-payc-n">
         <Coin size={30} />+{c.last.toLocaleString("en")}
       </p>
-      <p class="f-payc-w">கடந்த வாரத்தின் XP உன் coins ஆனது! உன் XP அப்படியே இருக்கும்.</p>
+      <p class="f-payc-w">
+        {won
+          ? `கடந்த வாரம் Grade ${won.g} இல் நீ முதலிடம்! +${won.c.toLocaleString("en")} coins பரிசு, மீதி உன் XP இன் coins.`
+          : "கடந்த வாரத்தின் XP உன் coins ஆனது! உன் XP அப்படியே இருக்கும்."}
+      </p>
       <button type="button" class="f-btn go f-payc-go" onClick={() => close(true)}>
         Shop
       </button>

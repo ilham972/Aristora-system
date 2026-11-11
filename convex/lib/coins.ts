@@ -1,5 +1,5 @@
 // The Shop's coins (10 Nov 2026, his voice note: "students always have questions like, I have diamonds and I don't know
-// what to do with the diamonds"; his answers). XP stays his rank and his league: never spent, never down. Coins are his
+// what to do with the diamonds"; his answers). XP stays his (his all-time lists): never spent, never down. Coins are his
 // money: every Monday last week's XP pays coins (5 XP = 1 coin, his rate; what is left over waits for the next Monday),
 // and buying in the Shop lowers his coins only (his answer: "Only his coins"). The guards (told him, his yes):
 // - Us XP never pays (a comment must never turn into chips): only the XP of Levels and class work (xpRows).

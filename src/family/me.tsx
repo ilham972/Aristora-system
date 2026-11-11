@@ -13,7 +13,7 @@ import { isBirthday } from "../../convex/lib/day";
 import { Cheered, endsIn, GiftCards, useBoard } from "./board";
 import { myPlace } from "./raceTab";
 import { Kids, whoWords } from "./kids";
-import { RankLine } from "./league";
+import { EverLine } from "./goat";
 import { bdayWords, useProfile } from "./later";
 import { mutation, type Account } from "./net";
 import { PhotoSheet } from "./photo";
@@ -142,7 +142,7 @@ export function MeTab(props: {
   const today = todayIndex(Date.now());
   const s = me.streak;
   const best = s.days > 0 && s.days >= (me.best ?? 0);
-  const place = b ? myPlace(b, "grade") : null;
+  const place = b ? myPlace(b, "week") : null;
   const rank = place?.mine?.rank ?? null;
   const pic = picOf(me.photo?.key);
   const party = isBirthday(me.bday, Date.now());
@@ -185,7 +185,7 @@ export function MeTab(props: {
               {party && <span class="f-cake"> 🎂</span>}
             </b>
             <small>{whoWords(me)}</small>
-            <RankLine total={me.total ?? me.xp} rk={me.race?.rk} lg={me.race?.lg} />
+            <EverLine ever={me.ever} grade={me.grade} />
             {me.photo?.wait ? (
               <Tag tone="glass" class="f-me-tag">
                 Photo · waiting for OK

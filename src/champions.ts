@@ -1,10 +1,9 @@
 // Last week's champions as one image (7 Nov 2026, his pick: "Monday poster ... for the WhatsApp group and the hall
 // wall"): 1080 × 1350 like the progress poster, drawn on the phone, shared through the phone's own share sheet or saved.
-// ARISTORA's top 3 on a podium of cards, each league's winner (8 Nov 2026: the leagues, his answer; before them each
-// grade's champion 👑), the grade cup; first names and initials only, as in class; never marks or a last place. Tamil
-// first, English after.
+// ARISTORA's top 3 on a podium of cards, each grade's winner 👑 (since 11 Nov 2026 the one who won the weekly coins, with
+// them; a week from 8–10 Nov showed the league winners), the grade cup; first names and initials only, as in class;
+// never marks or a last place. Tamil first, English after.
 
-import { LEAGUES } from "../convex/lib/race";
 import type { Champions } from "../convex/race";
 import { C, H, loadImage, rr, text, W, width } from "./poster";
 
@@ -72,47 +71,29 @@ export async function drawChampions(c: Champions): Promise<HTMLCanvasElement> {
     text(g, `${first.xp} XP`, x + cardW / 2, top + h - 30, "800 30px", C.blue, "center");
   });
   y += 290 + 54;
-  // Each league's winner, the top league first (a week from before the leagues: each grade's champion).
+  // Each grade's winner: the one who won the weekly coins (with them), or, a week from before the coins, its champion.
   const rowH = 66;
-  if (c.lw.length) {
-    text(g, "🏆  ஒவ்வொரு லீக்கிலும் · League winners", 56, y, "800 34px", C.ink);
-    y += 22;
-    g.fillStyle = C.card;
-    rr(g, 40, y, W - 80, LEAGUES.length * rowH + 20, 26);
+  text(g, "👑  ஒவ்வொரு தரத்திலும் · Each grade", 56, y, "800 34px", C.ink);
+  y += 22;
+  const grades = [6, 7, 8, 9, 10, 11];
+  g.fillStyle = C.card;
+  rr(g, 40, y, W - 80, grades.length * rowH + 20, 26);
+  g.fill();
+  y += 10;
+  for (const gr of grades) {
+    const coin = c.cw.find((x) => x.g === gr);
+    const who = coin ? [coin] : namesAt(c, "g", 1, gr);
+    g.fillStyle = "#e7ebff";
+    rr(g, 64, y + 12, 64, 44, 12);
     g.fill();
-    y += 10;
-    for (let l = LEAGUES.length; l >= 1; l--) {
-      const who = c.lw.filter((x) => x.l === l);
-      text(g, `${LEAGUES[l - 1].e} ${LEAGUES[l - 1].n}`, 64, y + 46, "800 30px", C.blue, "left", 300);
-      if (who.length) {
-        text(g, who.map((w) => (w.g !== null ? `${w.n} (${w.g})` : w.n)).join(" · "), 372, y + 46, "800 32px", C.ink, "left", 520);
-        text(g, `${who[0].xp} XP`, W - 72, y + 46, "800 30px", C.blue, "right");
-      } else text(g, "—", 372, y + 46, "700 30px", C.ink3);
-      y += rowH;
-    }
-    y += 10 + 50;
-  } else {
-    text(g, "👑  ஒவ்வொரு தரத்திலும் · Each grade", 56, y, "800 34px", C.ink);
-    y += 22;
-    const grades = [6, 7, 8, 9, 10, 11];
-    g.fillStyle = C.card;
-    rr(g, 40, y, W - 80, grades.length * rowH + 20, 26);
-    g.fill();
-    y += 10;
-    for (const gr of grades) {
-      const who = namesAt(c, "g", 1, gr);
-      g.fillStyle = "#e7ebff";
-      rr(g, 64, y + 12, 64, 44, 12);
-      g.fill();
-      text(g, String(gr), 96, y + 46, "800 30px", C.blue, "center");
-      if (who.length) {
-        text(g, who.map((w) => w.n).join(" · "), 152, y + 46, "800 32px", C.ink, "left", 640);
-        text(g, `${who[0].xp} XP`, W - 72, y + 46, "800 30px", C.blue, "right");
-      } else text(g, "—", 152, y + 46, "700 30px", C.ink3);
-      y += rowH;
-    }
-    y += 10 + 50;
+    text(g, String(gr), 96, y + 46, "800 30px", C.blue, "center");
+    if (who.length) {
+      text(g, who.map((w) => w.n).join(" · "), 152, y + 46, "800 32px", C.ink, "left", coin ? 470 : 640);
+      text(g, coin ? `+${coin.c} coins` : `${who[0].xp} XP`, W - 72, y + 46, "800 30px", coin ? C.gold : C.blue, "right");
+    } else text(g, "—", 152, y + 46, "700 30px", C.ink3);
+    y += rowH;
   }
+  y += 10 + 50;
   // The grade cup: the grade with the best share of students who learned.
   const cup = c.cup.filter((x) => x.of > 0);
   const best = cup[0];
@@ -125,7 +106,7 @@ export async function drawChampions(c: Champions): Promise<HTMLCanvasElement> {
   // Footer.
   g.fillStyle = C.line;
   g.fillRect(34, H - 76, W - 68, 2);
-  text(g, c.lup ? `⬆ ${c.lup} பேர் மேல் லீக்குக்கு · XP என்றும் உனக்கே` : "திங்கள்: புதிய வாரம் · XP என்றும் உனக்கே", 40, H - 30, "600 24px", C.ink2, "left", W - 360);
+  text(g, "திங்கள்: புதிய வாரம் · XP என்றும் உனக்கே", 40, H - 30, "600 24px", C.ink2, "left", W - 360);
   text(g, "app.aristora.org", W - 40, H - 30, "700 24px", C.ink3, "right");
   return cv;
 }
