@@ -88,7 +88,6 @@ import {
 } from "./focusData";
 import { BookRaceSheet } from "./bookRace";
 import { dropDraft, flushFocus, queueDraft, setFighterMark } from "./focusSave";
-import { AttendanceSheet } from "./attendance";
 import { gradesOf } from "./grades";
 import { HRow } from "./hrow";
 import { useQuery } from "./live";
@@ -733,7 +732,7 @@ async function takeBackMarks(s: SavedMarks): Promise<boolean> {
 
 // ---- The page ----
 
-type SheetName = "unit" | "card" | "move" | "theory" | "saved" | "attendance";
+type SheetName = "unit" | "card" | "move" | "theory" | "saved";
 
 /** Her Correction opened on Homework once (this app load): after that, it stays where she left it. */
 let homeFirstDone = false;
@@ -931,8 +930,6 @@ export function Focus(props: { board: Board; views: View[]; now: number }) {
             me={me}
             now={now}
             onPick={(x) => openFor(x, now)}
-            onAdd={() => setSheet("attendance")}
-            addOff={home}
             lead={canPhotos && !modes && <HomeButton list={laneList} on={home} locked={!hallOk} onTap={toggleLane} />}
             names={home ? <HomeNames list={laneList} grade={grade} openId={ls.student} /> : undefined}
           />
@@ -993,9 +990,6 @@ export function Focus(props: { board: Board; views: View[]; now: number }) {
       )}
 
       {sheet === "saved" && <SavedSheet now={now} onClose={() => setSheet(null)} />}
-      {sheet === "attendance" && grade !== null && (
-        <AttendanceSheet board={board} views={views} now={now} grade={grade} only onClose={() => setSheet(null)} />
-      )}
       {main && sheet === "unit" && <StageUnitSheet v={main} moveOnly onClose={() => setSheet(null)} />}
       {v && sheet === "card" && (
         <Sheet title={v.s.name} sub={tagOf(v.s, v.unit)} onClose={() => setSheet(null)}>
@@ -1130,8 +1124,8 @@ const TONE_WORDS: Record<string, string> = {
 };
 
 /**
- * One grade's row: + first, always in the same place (that grade's Attendance), then its tiny name pills A–Z in ONE
- * line that scrolls sideways: the open one is dark and kept in view; a red or amber dot on an edge says a student who
+ * One grade's row: its tiny name pills A–Z in ONE line that scrolls sideways (Attendance is the top bar's count since
+ * 12 Nov 2026: the + is gone): the open one is dark and kept in view; a red or amber dot on an edge says a student who
  * waits for the corrector is hidden that way.
  */
 function NameBar(props: {
@@ -1143,9 +1137,7 @@ function NameBar(props: {
   me: string | null;
   now: number;
   onPick: (v: View) => void;
-  onAdd: () => void;
-  /** The ⌂ lane (photos from home): + pale in its place, ⌂ after it, the lane's names instead of the hall's. */
-  addOff?: boolean;
+  /** The ⌂ lane (photos from home): ⌂ first, the lane's names instead of the hall's. */
   lead?: ComponentChildren;
   names?: ComponentChildren;
 }) {
@@ -1153,16 +1145,11 @@ function NameBar(props: {
   const marking = (v: View) => (drafts ?? []).some((d) => d.studentId === v.s._id && Object.keys(d.q).length > 0);
   return (
     <div class="fc-namerow">
-      <button type="button" class="fc-add" aria-label={`Attendance: Grade ${props.grade}`} disabled={props.addOff} onClick={props.onAdd}>
-        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
-          <path d="M12 5v14M5 12h14" />
-        </svg>
-      </button>
       {props.lead}
       {props.names ? (
         props.names
       ) : pills.length === 0 ? (
-        <p class="fc-none">Nobody from Grade {props.grade} is in yet: tap + as they arrive.</p>
+        <p class="fc-none">Nobody from Grade {props.grade} is in yet: sign them in with the count at the top.</p>
       ) : (
         <HRow as="nav" class="fc-names" label={`Grade ${props.grade}: tap the name on the paper`} list={props.grade} at={props.openId}>
           {pills.map((p) => {

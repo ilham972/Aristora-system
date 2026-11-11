@@ -34,6 +34,11 @@ export type Board = {
   tests?: number;
   /** The simulation running or just ended (the Join banner, SIM in the top bar); missing on an old server. */
   sim?: SimInfo | null;
+  /**
+   * Attendance mode off (12 Nov 2026, the switch on Attendance): every student shows on every page, signed in or not;
+   * missing on an old server = on.
+   */
+  attOff?: boolean;
 };
 export type Role = "correction" | "theory" | "evaluation";
 /** A person's jobs (Settings → People): the three pages, and Manager (3 Nov 2026: the hall and every room). */

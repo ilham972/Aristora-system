@@ -59,8 +59,10 @@ export type View = {
   /** Questions waiting for the Evaluation teacher, in either book. */
   pending: number[];
   calls: Call[];
-  /** Where he is right now. */
+  /** Where he is right now, for the pages (attendance mode off: everyone is at least in the hall). */
   where: "absent" | "hall" | "theory" | "evaluation";
+  /** Really signed in today (Attendance, the top bar's count), whatever attendance mode says. */
+  signed: boolean;
   /** A room has called him and he hasn't gone yet (Correction must send him). */
   calledTo?: "theory" | "evaluation";
   /** Theory will take him straight from the evaluation room. */
@@ -190,7 +192,9 @@ export function buildViews(board: Board, now: number): View[] {
     const calls = byStudent.get(s._id) ?? [];
     const requested = calls.find((c) => c.status === "requested" && !c.pull);
     const pulled = calls.some((c) => c.status === "requested" && c.pull);
-    const where: View["where"] = !s.present || !live ? "absent" : (s.room ?? "hall");
+    const signed = !!s.present && live;
+    // Attendance mode off (12 Nov 2026): every student is on every page, as if signed in (the register is untouched).
+    const where: View["where"] = !signed && !board.attOff ? "absent" : (s.room ?? "hall");
     const idleMs = s.idleSince !== undefined ? Math.max(0, now - s.idleSince) : undefined;
     const quietMs = s.lastActivityAt !== undefined ? now - s.lastActivityAt : undefined;
     const limit = st ? quietLimit(st) : QUIET_PAPERS_MS;
@@ -285,6 +289,7 @@ export function buildViews(board: Board, now: number): View[] {
       pending,
       calls,
       where,
+      signed,
       calledTo: requested?.room,
       pulled,
       idleMs,

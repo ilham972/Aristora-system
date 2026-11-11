@@ -5,10 +5,12 @@ import { mutation } from "./lib/fn";
 import {
   activeCalls,
   bookFor,
+  attendanceOff,
   cleanBy,
   currentSession,
   dryOf,
   fail,
+  hereNow,
   log,
   masterState,
   placeOf,
@@ -105,6 +107,7 @@ export const create = mutation({
     const toLead = consult && !!args.dept && (await leadsOf(ctx, args.dept)).some((id) => id !== me._id);
     const created: { studentId: Id<"students">; callId: Id<"calls">; pull: boolean; bumped: boolean }[] = [];
     const rejected: Rejected[] = [];
+    const off = await attendanceOff(ctx);
 
     for (const id of ids) {
       const s = await ctx.db.get(id);
@@ -113,7 +116,7 @@ export const create = mutation({
         continue;
       }
       const reject = (reason: string) => rejected.push({ studentId: id, name: s.name, reason });
-      if (!s.present) { reject("isn't signed in. Ask Correction to sign them in first"); continue; }
+      if (!hereNow(s, off)) { reject("isn't signed in. Ask Correction to sign them in first"); continue; }
       const target = consult ? undefined : args.books?.find((b) => b.studentId === id);
       const place = target ? await bookPlace(ctx, s, target.unitId, target.stage) : await placeOf(ctx, s);
       // A check-in or a consultation needs no book in the app (Legend, Exam Sprint on paper: she looks at his paper).
@@ -318,7 +321,7 @@ export const undoDecline = mutation({
     if (!c || c.status !== "declined") return false;
     if (!mayHandle(user, c)) fail("Correction answers this call (or his department's lead).");
     const s = await ctx.db.get(c.studentId);
-    if (!s || s.archived || !s.present || s.room) return false;
+    if (!s || s.archived || !hereNow(s, await attendanceOff(ctx)) || s.room) return false;
     if ((await activeCalls(ctx, s._id)).length > 0) return false;
     const session = await currentSession(ctx, now);
     await ctx.db.patch(c._id, { status: "requested", endedAt: undefined });

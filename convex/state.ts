@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { query, type QueryCtx } from "./_generated/server";
 import { viewer } from "./lib/auth";
-import { givenWork, mayBeOpen, openWork } from "./lib/backend";
+import { attendanceOff, givenWork, hereNow, mayBeOpen, openWork } from "./lib/backend";
 import { recentSim, simInfo } from "./sim";
 
 /**
@@ -29,7 +29,7 @@ export const get = query({
     const given: Record<string, Given[]> = {};
     const cache = new Map<string, Doc<"books"> | null>();
     for (const s of light.students) {
-      const h = await hisBoard(ctx, s, light.calls, cache);
+      const h = await hisBoard(ctx, s, light.calls, cache, light.attOff);
       if (h.progress) progress[s._id] = h.progress;
       Object.assign(books, h.books);
       if (h.more) more[s._id] = h.more;
@@ -71,7 +71,7 @@ export const his = query({
         .withIndex("by_student_status", (q) => q.eq("studentId", s._id).eq("status", "sent"))
         .collect()),
     ];
-    return await hisBoard(ctx, s, calls, new Map());
+    return await hisBoard(ctx, s, calls, new Map(), !s.test && (await attendanceOff(ctx)));
   },
 });
 
@@ -108,11 +108,19 @@ async function lightBoard(ctx: QueryCtx, test: boolean) {
     /** Test students: the simulation's (any phone may switch to it: Settings, or the Join banner). */
     tests,
     sim: sim ? simInfo(sim) : null,
+    /** Attendance mode off (12 Nov 2026): every student shows on every page, signed in or not (never the simulation's). */
+    attOff: !test && (await attendanceOff(ctx)),
   };
 }
 
 /** His books on the board (the same for `get` and `his`): `calls` = the open calls (his are picked out). */
-async function hisBoard(ctx: QueryCtx, s: Doc<"students">, calls: Doc<"calls">[], cache: Map<string, Doc<"books"> | null>) {
+async function hisBoard(
+  ctx: QueryCtx,
+  s: Doc<"students">,
+  calls: Doc<"calls">[],
+  cache: Map<string, Doc<"books"> | null>,
+  off: boolean,
+) {
   const books: Record<string, Doc<"books">> = {};
   let more: Doc<"progress">[] | null = null;
   let given: Given[] | null = null;
@@ -131,7 +139,7 @@ async function hisBoard(ctx: QueryCtx, s: Doc<"students">, calls: Doc<"calls">[]
     return cache.get(key) ?? null;
   };
   const mine = calls.filter((c) => c.studentId === s._id);
-  if (s.present) {
+  if (hereNow(s, off)) {
     // A book a room has him for travels while the call lasts (so her card shows that book, even with nothing left).
     const called = new Set(mine.map((c) => `${c.unitId}:${c.stage}`));
     // A consultation (5 Nov 2026): every book of his changed since it began travels too, so what she explained in it

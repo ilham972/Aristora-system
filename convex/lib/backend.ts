@@ -23,6 +23,25 @@ export function fail(message: string): never {
   throw new ConvexError(message);
 }
 
+/**
+ * Attendance mode (12 Nov 2026, his ask: "most of the time we test the app ... we have to do the correction even the
+ * students not in the classroom"). Meta "attendance.off" = true: every real student counts as here on every page
+ * (Correction's names, Fighter, Master, Consultation, the Class tab, calls), signed in or not. Nothing is written for
+ * them: no visit, no fee, no register line. Off → on: only the signed-in ones again. The simulation never follows it.
+ */
+export const ATT_OFF_KEY = "attendance.off";
+
+export async function attendanceOff(ctx: QueryCtx): Promise<boolean> {
+  const row = await ctx.db
+    .query("meta")
+    .withIndex("by_key", (q) => q.eq("key", ATT_OFF_KEY))
+    .first();
+  return row?.value === true;
+}
+
+/** Here for the pages: signed in, or attendance mode is off (real students only). */
+export const hereNow = (s: Doc<"students">, off: boolean): boolean => s.present || (off && !s.test);
+
 export function cleanBy(by: string | undefined): string | undefined {
   if (!by) return undefined;
   return by.replace(/[^a-z]/gi, "").slice(0, 16) || undefined;

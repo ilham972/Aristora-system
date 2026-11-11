@@ -285,3 +285,38 @@ describe("attendance", () => {
     expect(await t.run(async (ctx) => (await ctx.db.query("attendance").collect()).length)).toBe(0);
   });
 });
+
+describe("attendance mode (12 Nov 2026)", () => {
+  test("off: every real student counts as here (board, calls), nothing written for them; only the owner turns it off", async () => {
+    const t = await setup();
+    const g11 = await t.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G11-U13")).first())!._id);
+    const id = await t.mutation(api.students.add, { name: "Kumar", grade: 11, term: 2, stage: "fighter", unitId: g11 });
+    expect((await t.query(api.state.live, {})).attOff).toBe(false);
+    // Not signed in: no call for him while the mode is on.
+    const call = () => t.mutation(api.calls.create, { studentIds: [id], room: "evaluation", kind: "evaluation", consult: true, by: "consult" });
+    expect((await call()).rejected[0]?.reason).toMatch(/isn't signed in/);
+
+    // A Correction teacher can't turn it off.
+    await addPerson(t, { name: "Rimas", token: tok(1), tabs: ["correction"] });
+    const rimas = asPhone(t, tok(1));
+    await expect(rimas.mutation(api.attendance.setMode, { on: false, by: "attendance" })).rejects.toThrow(/Only the owner/);
+
+    await t.mutation(api.attendance.setMode, { on: false, by: "attendance" });
+    expect((await t.query(api.state.live, {})).attOff).toBe(true);
+    // The simulation's board never follows it.
+    expect((await t.query(api.state.live, { test: true })).attOff).toBe(false);
+    expect((await call()).created).toHaveLength(1);
+    // Nothing in the register: no sign-in, no visit.
+    expect((await studentDoc(t, id)).present).toBe(false);
+    expect(await visits(t, id)).toEqual([]);
+    const ev = await t.run(async (ctx) => (await ctx.db.query("events").collect()).filter((e) => e.kind === "attendance-mode"));
+    expect(ev.map((e) => e.value)).toEqual(["off"]);
+
+    // Anyone who takes attendance turns it back on (a real class day found with it off).
+    await rimas.mutation(api.attendance.setMode, { on: true, by: "attendance" });
+    expect((await t.query(api.state.live, {})).attOff).toBe(false);
+    // The same again: nothing more in the history.
+    await rimas.mutation(api.attendance.setMode, { on: true, by: "attendance" });
+    expect(await t.run(async (ctx) => (await ctx.db.query("events").collect()).filter((e) => e.kind === "attendance-mode").length)).toBe(2);
+  });
+});

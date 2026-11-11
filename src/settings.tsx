@@ -994,6 +994,8 @@ function describe(e: Doc<"events">): string {
       return "signed out";
     case "in-undo":
       return "sign-in taken back (tapped by mistake)";
+    case "attendance-mode":
+      return v === "on" ? "attendance mode on: only signed-in students show" : "attendance mode off: every student shows everywhere";
     case "call": {
       if (v.endsWith("/check-in")) return "sent by the manager for a check-in (Evaluation)";
       if (v.startsWith("consult")) return `called for a consultation${v.endsWith("/theory") ? " (theory)" : ""}`;

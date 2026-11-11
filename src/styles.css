@@ -3512,22 +3512,6 @@ body.locked.fc-marking .toasts {
   min-width: 0;
 }
 /* + : that grade's Attendance (full page), first in the names row. */
-.fc-add {
-  flex: none;
-  width: 38px;
-  height: 30px;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  border-radius: 10px;
-  border: 1.5px solid var(--green);
-  background: var(--green-soft);
-  color: var(--green-ink);
-  transition: transform 0.1s ease;
-}
-.fc-add:active {
-  transform: scale(0.92);
-}
 /* A grade with no students at all: pale, and it can't be tapped. */
 .fc-grades .gp.none {
   border-style: dashed;
@@ -10625,9 +10609,6 @@ body.tm-on .toasts {
 .hl-btn-n {
   font: 700 12.5px/1 var(--font);
 }
-.fc-add:disabled {
-  opacity: 0.35;
-}
 /* When nobody waits: how many, since when, and what to tap. */
 .hl-idle {
   display: grid;
@@ -13196,4 +13177,90 @@ body.locked.mnx-desk .toasts {
 .cx-sh.on.red {
   border-color: var(--red);
   background: var(--red);
+}
+
+/* Attendance mode (12 Nov 2026): the small switch at the top of Attendance; off = every student shows on every page. */
+.att-mode {
+  margin: 0 0 10px;
+}
+.att-mode-b {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 40px;
+  padding: 4px 12px 4px 14px;
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 14px;
+}
+.att-mode-b:disabled {
+  opacity: 0.6;
+}
+.att-mode-k {
+  position: relative;
+  width: 38px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--green);
+  transition: background 0.15s;
+}
+.att-mode-k b {
+  position: absolute;
+  top: 3px;
+  left: 19px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: left 0.15s;
+}
+.att-mode-v {
+  min-width: 2.2em;
+  color: var(--green-ink);
+}
+.att-mode.off .att-mode-b {
+  border-color: var(--amber);
+  background: var(--amber-soft);
+}
+.att-mode.off .att-mode-k {
+  background: var(--ink-3);
+}
+.att-mode.off .att-mode-k b {
+  left: 3px;
+}
+.att-mode.off .att-mode-v {
+  color: var(--amber-ink);
+}
+.att-mode-w {
+  margin: 6px 2px 0;
+  color: var(--amber-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+/* The top bar's count while attendance mode is off: dashed amber, no words (the top bar has no room). */
+.top-stat.att-off {
+  border-style: dashed;
+  border-color: var(--amber);
+  background: var(--amber-soft);
+}
+/* The grade picked: Sign in all / Sign out all (12 Nov 2026; before, Correction's + opened one grade for them). */
+.att-grade {
+  display: flex;
+  gap: 8px;
+  margin: -2px 0 12px;
+}
+.att-grade .btn {
+  gap: 7px;
+}
+.att-grade .btn small {
+  min-width: 22px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--line-2);
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--ink);
 }

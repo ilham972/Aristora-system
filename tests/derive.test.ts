@@ -60,3 +60,26 @@ describe("Theory's chips for workbook students", () => {
     expect(theoryGroups([called, gone])).toEqual([]);
   });
 });
+
+describe("attendance mode off (12 Nov 2026)", () => {
+  test("every student is in the hall for the pages; `signed` stays the register's", async () => {
+    const { buildViews } = await import("../src/derive");
+    const now = Date.now();
+    const s = (name: string, present: boolean) => ({ _id: name, name, present, archived: false, lastSeenAt: 0 });
+    const board = {
+      students: [s("Asha", true), s("Bala", false)],
+      progress: {},
+      books: {},
+      calls: [],
+      session: { _id: "s1", startedAt: now - 60_000, lastActivityAt: now },
+      legacy: false,
+    } as unknown as Parameters<typeof buildViews>[0];
+    const on = buildViews(board, now);
+    expect(on.map((v) => [v.where, v.signed])).toEqual([["hall", true], ["absent", false]]);
+    const off = buildViews({ ...board, attOff: true }, now);
+    expect(off.map((v) => [v.where, v.signed])).toEqual([["hall", true], ["hall", false]]);
+    // No class open (or one left from yesterday): still everyone, with nobody signed in.
+    const none = buildViews({ ...board, session: null, attOff: true }, now);
+    expect(none.map((v) => [v.where, v.signed])).toEqual([["hall", false], ["hall", false]]);
+  });
+});
