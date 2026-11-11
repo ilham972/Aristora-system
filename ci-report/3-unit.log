@@ -1,0 +1,76 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90m/home/runner/work/Aristora-system/Aristora-system[39m
+
+ [32m✓[39m tests/family.test.ts [2m([22m[2m25 tests[22m[2m)[22m[33m 920[2mms[22m[39m
+ [32m✓[39m tests/master.test.ts [2m([22m[2m29 tests[22m[2m)[22m[33m 1127[2mms[22m[39m
+ [32m✓[39m tests/photos.test.ts [2m([22m[2m25 tests[22m[2m)[22m[33m 1917[2mms[22m[39m
+   [32m✓[39m photos from home [2m(22)[22m
+     [33m[2m✓[22m[39m the unit gate (10 Nov 2026): finished below 75 %, the next Stage waits; the redo (half marks, explained) or the class opens it[33m 344[2mms[22m[39m
+ [32m✓[39m tests/tute.test.ts [2m([22m[2m22 tests[22m[2m)[22m[33m 624[2mms[22m[39m
+ [32m✓[39m tests/backend.test.ts [2m([22m[2m37 tests[22m[2m)[22m[33m 1336[2mms[22m[39m
+ [32m✓[39m tests/desk.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 636[2mms[22m[39m
+ [32m✓[39m tests/theoryFocus.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 33[2mms[22m[39m
+ [32m✓[39m tests/chat.test.ts [2m([22m[2m15 tests[22m[2m)[22m[33m 989[2mms[22m[39m
+ [32m✓[39m tests/consult.test.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 548[2mms[22m[39m
+ [32m✓[39m tests/profile.test.ts [2m([22m[2m14 tests[22m[2m)[22m[33m 488[2mms[22m[39m
+ [32m✓[39m tests/answerKinds.test.ts [2m([22m[2m30 tests[22m[2m)[22m[32m 76[2mms[22m[39m
+ [32m✓[39m tests/evalFocus.test.ts [2m([22m[2m23 tests[22m[2m)[22m[32m 20[2mms[22m[39m
+ [32m✓[39m tests/money.test.ts [2m([22m[2m18 tests[22m[2m)[22m[33m 511[2mms[22m[39m
+ [32m✓[39m tests/boss.test.ts [2m([22m[2m31 tests[22m[2m)[22m[32m 277[2mms[22m[39m
+ [32m✓[39m tests/goat.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 495[2mms[22m[39m
+ [32m✓[39m tests/usTalk.test.ts [2m([22m[2m13 tests[22m[2m)[22m[33m 782[2mms[22m[39m
+ [32m✓[39m tests/usPosts.test.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 534[2mms[22m[39m
+ [32m✓[39m tests/us.test.ts [2m([22m[2m14 tests[22m[2m)[22m[33m 680[2mms[22m[39m
+ [32m✓[39m tests/race.test.ts [2m([22m[2m15 tests[22m[2m)[22m[33m 454[2mms[22m[39m
+ [32m✓[39m tests/sim.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 1329[2mms[22m[39m
+   [32m✓[39m the simulation on the server (convex/sim.ts) [2m(6)[22m
+     [33m[2m✓[22m[39m the steps: students hand levels in, the app corrects them (as Correction, named Simulation), answers are marked[33m 443[2mms[22m[39m
+ [32m✓[39m tests/focus.test.ts [2m([22m[2m25 tests[22m[2m)[22m[32m 31[2mms[22m[39m
+ [32m✓[39m tests/manager.test.ts [2m([22m[2m17 tests[22m[2m)[22m[32m 35[2mms[22m[39m
+ [32m✓[39m tests/deskData.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+ [32m✓[39m tests/coins.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 370[2mms[22m[39m
+ [32m✓[39m tests/teach.test.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 302[2mms[22m[39m
+ [32m✓[39m tests/auth.test.ts [2m([22m[2m11 tests[22m[2m)[22m[33m 430[2mms[22m[39m
+ [32m✓[39m tests/managerServer.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 552[2mms[22m[39m
+ [32m✓[39m tests/consultData.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 25[2mms[22m[39m
+ [32m✓[39m tests/uncorrect.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 489[2mms[22m[39m
+ [32m✓[39m tests/attendance.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 405[2mms[22m[39m
+ [32m✓[39m tests/duty.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 437[2mms[22m[39m
+ [32m✓[39m tests/usPeople.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 288[2mms[22m[39m
+ [32m✓[39m tests/link.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 362[2mms[22m[39m
+ [32m✓[39m tests/free.test.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 482[2mms[22m[39m
+ [32m✓[39m tests/workbookFile.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 124[2mms[22m[39m
+ [32m✓[39m tests/answerKey.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 332[2mms[22m[39m
+ [32m✓[39m tests/moneyData.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 25[2mms[22m[39m
+ [32m✓[39m tests/ladder.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 559[2mms[22m[39m
+ [32m✓[39m tests/drafts.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 282[2mms[22m[39m
+ [32m✓[39m tests/status.test.ts [2m([22m[2m17 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m tests/roomRows.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m tests/appVersion.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+ [32m✓[39m tests/progress.test.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 342[2mms[22m[39m
+ [32m✓[39m tests/preview.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 272[2mms[22m[39m
+ [32m✓[39m tests/hosting.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m tests/answerText.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m tests/announce.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m tests/fractions.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m tests/cropFrame.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m tests/stats.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m tests/timeline.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m tests/boardSplit.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 323[2mms[22m[39m
+ [32m✓[39m tests/taps.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m tests/derive.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 18[2mms[22m[39m
+ [32m✓[39m tests/roomDecisions.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m tests/chime.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 110[2mms[22m[39m
+ [32m✓[39m tests/evalPace.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m tests/hrow.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m tests/usStaff.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m tests/sha256.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 66[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m60 passed[39m[22m[90m (60)[39m
+[2m      Tests [22m [1m[32m676 passed[39m[22m[90m (676)[39m
+[2m   Start at [22m 00:05:41
+[2m   Duration [22m 12.88s[2m (tests 65%, import 13%, transform 12%, environment 9%, worker 1%)[22m
+
+[2m    Isolate [22m [33m60 workers spawned[39m[2m · ~146ms startup each (spawn + environment, per file)[22m
+[2m            [22m [2mat least ~2.77s faster with [22m[33misolate: false[39m[2m — reuses workers across files instead of one per file[22m
+

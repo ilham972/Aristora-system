@@ -1,0 +1,13 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90m/home/runner/work/Aristora-system/Aristora-system[39m
+
+ [32m✓[39m tests/e2e/class.e2e.ts [2m([22m[2m24 tests[22m[2m | [22m[33m22 skipped[39m[2m)[22m[33m 23358[2mms[22m[39m
+   [33m[2m✓[22m[39m Consultation: the top bar's icon left of the whiteboard (the owner, the Consultation tick); his order with counts; Today and All; Call to herself (Correction says her name); Arrived; each tap saved at once; Theory in the same sitting; Done; a check-in[33m 10668[2mms[22m[39m
+   [33m[2m✓[22m[39m Departments: Settings → Roles gives each teacher her own app; Preview looks only; Fighter and Master save each tap at once with no Call; her dashboard; Homework | Class; a Master consultation rings on the Master lead's phone, not Correction's[33m 12418[2mms[22m[39m
+ [2m[90m↓[39m[22m tests/e2e/family.e2e.ts [2m([22m[2m23 tests[22m[2m | [22m[33m23 skipped[39m[2m)[22m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[2m | [22m[33m1 skipped[39m[90m (2)[39m
+[2m      Tests [22m [1m[32m2 passed[39m[22m[2m | [22m[33m45 skipped[39m[90m (47)[39m
+[2m   Start at [22m 00:06:11
+[2m   Duration [22m 24.73s[2m (tests 95%, transform 3%, import 2%)[22m
+
