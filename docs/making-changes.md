@@ -191,6 +191,11 @@ EOF
 
 ## Gotchas learned the hard way
 
+- **A refused live query looks like "Loading…" for ever** (11 Nov 2026): `useQuery` (`src/live.ts`) gives `undefined`
+  on an error, the same as "not here yet". A page's reads must allow every permission that opens the page: the
+  Consultation tick alone was refused `catalog.key`, `question` and `bookCss`, so a consultation teacher's card said
+  "Loading the answer…" while the owner's phone showed it at once (it looked like a slow phone). A new page or
+  permission: list its queries (`grep -o "api\.[a-zA-Z]*\.[a-zA-Z]*"`) and check each one's `viewer(…)` list.
 - **The family's later parts are at their budget again** (10 Nov 2026): 44.6 of 47 KB (`FAMILY_LATER_KB`, raised from 42
   for the typed answers, then for the Shop). The level screen is where the next kinds will land: measure with esbuild before CI.
 - **A new answer kind or box field goes in four places**: `Ans` / `BoxAns` (`convex/lib/key.ts`, with `ansProblem`), the

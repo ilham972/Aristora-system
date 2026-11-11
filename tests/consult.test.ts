@@ -101,6 +101,12 @@ describe("who may hold a consultation", () => {
     await expect(rani.mutation(api.calls.create, { studentIds: [ravi], room: "evaluation", kind: "evaluation", consult: true, teacherId: await t.run(async (ctx) => (await ctx.db.query("users").first())!._id) })).rejects.toThrow(/yourself/);
     await expect(rani.mutation(api.calls.create, { studentIds: [ravi], room: "theory", kind: "theory", consult: true })).rejects.toThrow(/evaluation room/);
 
+    // Her card's answer and the question as printed (11 Nov 2026: refused before, "Loading the answer…" for ever).
+    const unit8 = await unitId(t, "G7-U08");
+    await rani.query(api.catalog.key, { unitId: unit8, stage: "master" }); // refused = this throws
+    await rani.query(api.catalog.question, { unitId: unit8, stage: "master", q: 1 });
+    await rani.query(api.catalog.bookCss, { unitId: unit8, stage: "master" });
+
     // Ravi has nothing waiting: still called (a check-in by her); Sara isn't here.
     const res = await rani.mutation(api.calls.create, { studentIds: [ravi, absent], room: "evaluation", kind: "evaluation", consult: true, by: "consult" });
     expect(res.created.map((c) => c.studentId)).toEqual([ravi]);

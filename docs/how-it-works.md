@@ -194,7 +194,8 @@ chips for other books ("U08 Eval 2"). Absent students: book now only.
 **Answer keys.** The unit's source zip carries `answer-key.json` (the engine writes it; an old zip gets it from a
 past-paper-workbook chat in "answer key only" mode, §4b); he uploads the zip as usual ("Same book: adds its answer
 key"). The reader checks numbers, each question's marks and the grade. Own table `keys`, never in `books`; fetched
-(`catalog.key`) only while a level or an Evaluation card is open; teachers + owner only, never the parents'/students'
+(`catalog.key`) only while a level or an Evaluation card is open; teachers + owner only (Correction, Evaluation,
+Theory, Books, Photos or Consultation: the same people read `catalog.question` and `catalog.bookCss`), never the parents'/students'
 sites. Final answer bold from `**…**`, never HTML; Books page K pill. A re-upload without a key keeps it.
 **One key per book** (`keys.stage`; a row without one = the workbook's, as before): `catalog.key {stage}`,
 `keyRow(ctx, unit, stage)` (the family app reads the workbook's). A theory book's key (topic tutes) shows on

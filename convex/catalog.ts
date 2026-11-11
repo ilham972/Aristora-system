@@ -70,7 +70,9 @@ export const books = query({
 export const key = query({
   args: { token: v.optional(v.string()), unitId: v.id("units"), stage: v.optional(bookStage) },
   handler: async (ctx, args) => {
-    await viewer(ctx, args.token, "correction", "evaluation", "theory", "books");
+    // Consultation too (11 Nov 2026): a teacher with only the Consultation tick was refused, and her card said
+    // "Loading the answer…" for ever (the owner's phone, never refused, showed it at once).
+    await viewer(ctx, args.token, "correction", "evaluation", "theory", "books", "photos", "consult");
     const k = await keyRow(ctx, args.unitId, args.stage ?? "master");
     return k ? { answers: k.answers, updatedAt: k.updatedAt } : null;
   },
@@ -83,7 +85,7 @@ export const key = query({
 export const question = query({
   args: { token: v.optional(v.string()), unitId: v.id("units"), stage: bookStage, q: v.number() },
   handler: async (ctx, args) => {
-    await viewer(ctx, args.token, "correction", "evaluation", "theory", "books", "photos");
+    await viewer(ctx, args.token, "correction", "evaluation", "theory", "books", "photos", "consult");
     const r = await ctx.db
       .query("questions")
       .withIndex("by_book", (x) => x.eq("unitId", args.unitId).eq("stage", args.stage).eq("q", args.q))
@@ -96,7 +98,7 @@ export const question = query({
 export const bookCss = query({
   args: { token: v.optional(v.string()), unitId: v.id("units"), stage: bookStage },
   handler: async (ctx, args) => {
-    await viewer(ctx, args.token, "correction", "evaluation", "theory", "books", "photos");
+    await viewer(ctx, args.token, "correction", "evaluation", "theory", "books", "photos", "consult");
     const r = await ctx.db
       .query("bookCss")
       .withIndex("by_book", (x) => x.eq("unitId", args.unitId).eq("stage", args.stage))
