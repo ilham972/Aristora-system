@@ -37,16 +37,21 @@ The technical memory of the app, kept with the code and updated in the same comm
   "master", "teach", "consult"). The Fighter and Master tabs' taps say their own `by` (convex/desk.ts); Teach = Theory
   when she has it; a Fighter or Master person's alerts are her department's (below, "Departments").
 
-**Attendance** (a full-page sheet since `3bce3bd`, `AttendanceSheet`; owner + Correction job): from Correction's +
-(the grade picked there, no grade row: `only`), the count by the clock or Class's "Sign students in" (grades 6–11
-in one row, "here/total", `aristora.attendanceGrade`). That grade's students as pills A–Z, never moving: white = not
+**Attendance** (a full-page sheet since `3bce3bd`, `AttendanceSheet`; owner + Correction job): from the count by the
+clock (the top bar; Correction's + is gone since 12 Nov 2026, his "we don't need attendance in two places") or Class's
+"Sign students in" (grades 6–11 in one row, "here/total", `aristora.attendanceGrade`). That grade's students as pills A–Z, never moving: white = not
 here, green = here (✓ + arrival time), grey dashed = went home today. Tap white → signed in, toast with **Undo**
-(deletes the visit; `setPresent` `undo`, 5 min). Tap green → "Sign out: going home" / Keep (within 5 min also
+(deletes the visit; `setPresent` `undo`, 5 min). **Every tap shows at once** (12 Nov 2026, his "the response want
+to be very quick ... the class starting time"): the name turns green (or back) the moment it is tapped, the toast with
+it; the sign-in goes to the server behind (`pending` + `sendPresent` in `src/attendance.tsx`; one phone's mutations
+run in the order sent; an entry goes when the board says the same, after 60 s, or when the sign-in fails: back to
+white, the error's toast). Kept outside the sheet: closing it mid-way loses nothing. Sign out, Take it back, Sign in
+N and a grade's Sign out all the same; only Sign out everyone (it ends the class) waits for the server. Tap green → "Sign out: going home" / Keep (within 5 min also
 "Signed in by mistake? Take it back"; a sheet over the sheet). Calls strip there too. Every visit = a row in
 `attendance` (`day`, `inAt`, `outAt`, `sessionId`), closed by sign-out, End the session, a class left open, or
 removing the student. **Several at once (2 Nov 2026, his ask; he overruled the old "no sign in everyone" after the
-warning):** at the bottom, **Sign in all** / **Sign out all** for that grade (from +) or **Sign in everyone** / **Sign
-out everyone** (from the count), each with how many. Sign in = `SignInMany`: a list with every name not in ticked
+warning):** **Sign in all** / **Sign out all** for the grade picked (under its summary, `.att-grade`, since 12 Nov 2026) and
+**Sign in everyone** / **Sign out everyone** at the bottom, each with how many. Sign in = `SignInMany`: a list with every name not in ticked
 (those gone home today not ticked; per grade "Tick all / Untick all" in the whole-class list), she unticks whoever
 isn't in the hall, "Sign in 12" = `students.setPresentMany` (each exactly one `setPresent`: a real visit; removed and
 already-in skipped; at most 200), toast with **Undo** (`undo`: as if they never came). Sign out all (a grade) = a
@@ -56,6 +61,20 @@ he accepted: a name ticked who isn't there hides a student who stopped coming an
 the list (not one blind tap) is the guard. Class, Theory and
 Evaluation show **only signed-in students** ("Nobody is signed in yet"); gone-home students with levels to correct
 stay at the bottom of Class and Evaluation ("Correct L3").
+
+**Attendance mode** (12 Nov 2026, his ask: "most of the time we test the app ... we have to do the correction even the
+students not in the classroom"): the switch at the top of Attendance (`ModeSwitch`, `attendance.setMode`, meta
+`attendance.off`). **On** (the default, as always before) = the pages show only signed-in students. **Off** = every
+student shows on every page, signed in or not: the board's `attOff` makes `buildViews` put everyone at least in the
+hall (`where`), so Correction's names, Fighter, Master, Consultation, the Class tab, the Register, the whiteboard and
+the Manager page all have them; the server agrees (`hereNow` in `convex/lib/backend.ts`: `calls.create` and
+`undoDecline` call them, `consult.totals` counts nobody as not here, `teach.roster` lists them, `state.his` sends
+their other books). Nothing is written for them: no sign-in, no visit, no fee, no idle clock; Attendance itself, the
+top bar's count and `View.signed` stay the register's. While off: a dashed amber capsule in the top bar
+(`.top-stat.att-off`) and an amber line under the switch. Only the owner turns it off; anyone who takes attendance
+turns it back on (a real class day found with it off is put right at the door). Never the simulation (`attOff` is
+false on a test board; `hereNow` never counts a test student). Each change is a line in the history
+("attendance-mode").
 
 **The Register (top bar list icon, everyone's view, `c360fa3`; called the Class page until 3 Nov 2026).** `src/correction.tsx` `ClassPage`.
 - Calls strips (Correction job), then the control panel: grade pills; stage tiles (All/Fighter/Master/Legend…,
@@ -814,12 +833,12 @@ later parts (`parts.ts`), out of the first load's budget.
 **Correction page (ex-"Focus": `src/focus.tsx`; one page since `0e67580`, one-line rows since `3bce3bd`).** Kills his
 two errors: marks on the wrong question and on the wrong student. Meant for the paid corrector.
 - **Pinned under the top bar** (`.fc-stick`, with the calls): the names row and the grades; the paper scrolls under
-  them. Names row: **+** first, always in the same place (that grade's Attendance, full page), then the grade's tiny
+  them. Names row (no + since 12 Nov 2026: Attendance is the top bar's count): the grade's tiny
   pills A–Z in ONE line that scrolls sideways (`HRow`, `src/hrow.tsx`): the open one dark and kept in the middle by
   itself; faded edges = more; a red/amber dot on an edge = someone who waits is hidden there (`data-u`). Tones: red =
   no work until corrected, amber = handed in ("2" = levels, all his books), blue edge = theory book, dashed ring =
   marked part of the way, grey dashed = gone home with levels to correct. No grade in yet: "Nobody from Grade 11 is
-  in yet: tap +". For the owner and Photos people, **⌂** after + (always there for them): the photos from home, in a
+  in yet: sign them in with the count at the top". For the owner and Photos people, **⌂** first (always there for them): the photos from home, in a
   lane of their own (5 Nov 2026: "Marking them: Correction's ⌂ lane", under "Corrected at home"); the hall's names
   never light up for a photo.
 - **Grades 6–11** always in the same places, no All (`GradeBar`): "here/total" under each number, red/amber badge
@@ -2418,7 +2437,7 @@ learning app of our education institute"): one profile, his class times, what he
     group's message or keeps a reported one (`chat.tdrop`, `chat.tkeep`); the owner reads every private chat
     (`chat.tall`, look only).
 - Everyone signed in sees the Class tab and the Register, reads `people.team` and `manager.day`, and her own card
-  (`duty.card`). Correction job = the Correction page and Attendance (`setPresent`, `attendance.day`;
+  (`duty.card`). Correction job = the Correction page and Attendance (`setPresent`, `attendance.day`, `attendance.setMode` on (off = owner only);
   `by: "attendance"`), Books given (`students.setGiven`), sending called students, Going home, Back in the hall, End
   the session. `progress.student` (the unit sheet's numbers) = Correction, Evaluation or Theory.
 - Workbook permissions: `correct`, `uncorrect`, `levelDone`, `toTheory`, `reteach`, and Correction's drafts

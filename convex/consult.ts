@@ -15,11 +15,13 @@ import { mutation } from "./lib/fn";
 import { actor, viewer } from "./lib/auth";
 import {
   activeCalls,
+  attendanceOff,
   bookFor,
   cleanBy,
   currentSession,
   fail,
   getStudent,
+  hereNow,
   log,
   masterState,
   openSession,
@@ -116,12 +118,14 @@ export const totals = query({
     const test = !!args.test;
     const session = await openSession(ctx);
     const live = !!session && Date.now() - session.lastActivityAt < STALE_SESSION_MS;
+    // Attendance mode off (12 Nov 2026): everyone is "here", so nobody is in the not-here part.
+    const off = !test && (await attendanceOff(ctx));
     const students = (
       await ctx.db
         .query("students")
         .withIndex("by_archived", (q) => q.eq("archived", false))
         .collect()
-    ).filter((s) => !!s.test === test && !(live && s.present));
+    ).filter((s) => !!s.test === test && !((live || off) && hereNow(s, off)));
     const cache = new Map<string, Doc<"books"> | null>();
     const bookOf = async (unitId: Id<"units">, stage: "fighter" | "master") => {
       const k = `${unitId}:${stage}`;

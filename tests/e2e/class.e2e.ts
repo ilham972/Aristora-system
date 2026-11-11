@@ -1224,7 +1224,7 @@ test("a phone without the screen wake lock (iPhone 7 Plus) keeps the screen on w
   expect(problems, problems.join("\n")).toEqual([]);
 });
 
-test("Correction: one page (one grade's names in one line, + for attendance, the level bar, his unit), one question at a time, ? on a part, Take back", async () => {
+test("Correction: one page (one grade's names in one line, attendance from the count, the level bar, his unit), one question at a time, ? on a part, Take back", async () => {
   const backend = await newClass();
   const F = await phone(backend, "focus");
   const E = await phone(backend, "evaluation");
@@ -1301,16 +1301,19 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
   expect(await F.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await shot(F, "f01-focus-names", true);
 
-  // + (first in the names row): this grade's Attendance, the whole page, no grade to pick again. Keerthi arrives:
-  // one tap; she joins the names, and the grade says 10/10.
-  await tap(F.getByRole("button", { name: "Attendance: Grade 11" }));
+  // No + in the names row since 12 Nov 2026 (his ask: attendance in one place): the names come first. Attendance is the
+  // top bar's count, the whole page. Keerthi arrives: one tap, green at once (the server follows); she joins the names,
+  // and the grade says 10/10.
+  await count(F.locator(".fc-namerow").getByRole("button", { name: /^Attendance/ }), 0);
+  await tap(F.locator(".top-stat"));
   const att = F.locator(".sheet-wrap.fullpage");
-  await contains(att.locator(".sheet-title h2"), "Attendance · Grade 11");
-  await count(att.locator(".grade-row"), 0);
+  await contains(att.locator(".sheet-title h2"), "Attendance");
+  await tap(att.locator(".grade-row").getByRole("button", { name: /^Grade 11\b/ }));
   await contains(att.locator(".attendance .summary"), "Grade 11: 9 of 10 here");
   await tap(att.getByRole("button", { name: /^Keerthi:/ }));
-  await until(async () => (await marksOf(backend, "Keerthi")).present, "Keerthi signed in");
+  await visible(att.locator(".ap.in", { hasText: "Keerthi" }));
   await contains(F.locator(".toast"), "Keerthi signed in, ");
+  await until(async () => (await marksOf(backend, "Keerthi")).present, "Keerthi signed in");
   await shot(F, "f01b-correction-attendance");
   await tap(att.getByRole("button", { name: "Close" }));
   await count(att, 0);
@@ -1825,7 +1828,7 @@ test("Correction: one page (one grade's names in one line, + for attendance, the
   expect(problems, problems.join("\n")).toEqual([]);
 });
 
-test("Attendance: sign in all / sign out all for one grade (Correction's +), everyone for the whole class (the count), Undo", async () => {
+test("Attendance: sign in all / sign out all for one grade, everyone for the whole class (the count), Undo, attendance mode", async () => {
   const backend = await newClass();
   const F = await phone(backend, "focus");
   await F.getByRole("button", { name: "Settings" }).click();
@@ -1838,13 +1841,13 @@ test("Attendance: sign in all / sign out all for one grade (Correction's +), eve
   const present = async (names: string[]) => Promise.all(names.map(async (n) => (await marksOf(backend, n)).present));
   const G11 = ["Ahamed", "Dilan", "Fathima", "Keerthi", "Kumar", "Nila", "Rizwan", "Sana", "Tharun", "Yasmin"];
 
-  // Grade 11 from +: 9 of 10 here. At the bottom: Sign in all (Keerthi) and Sign out all (9).
-  await F.getByRole("button", { name: /^Grade 11\b/ }).click();
-  await F.getByRole("button", { name: "Attendance: Grade 11" }).click();
-  await contains(att.locator(".sheet-title h2"), "Attendance · Grade 11");
-  await visible(att.getByRole("button", { name: "Sign in all: 1 not here" }));
+  // Grade 11 from the count: 9 of 10 here. Under its summary: Sign in all (Keerthi) and Sign out all (9).
+  await F.locator(".top-stat").click();
+  await contains(att.locator(".sheet-title h2"), "Attendance");
+  await att.locator(".grade-row").getByRole("button", { name: /^Grade 11\b/ }).click();
+  await visible(att.getByRole("button", { name: "Sign in all of Grade 11: 1 not here" }));
   // Sign out all: a sheet asks, naming them. Nine go home; the class goes on (Grade 7 stays in).
-  await att.getByRole("button", { name: "Sign out all: 9 here" }).click();
+  await att.getByRole("button", { name: "Sign out all of Grade 11: 9 here" }).click();
   await contains(ask.locator("h2"), "Sign out Grade 11?");
   await contains(ask.locator(".sheet-title p"), "9 students go home now.");
   await contains(ask.locator(".atm-names"), "Ahamed, Dilan, Fathima");
@@ -1856,8 +1859,34 @@ test("Attendance: sign in all / sign out all for one grade (Correction's +), eve
   await contains(att.locator(".attendance .summary"), "Grade 11: 0 of 10 here");
   expect(await backend.t.run(async (ctx) => (await ctx.db.query("sessions").collect()).filter((s) => s.open).length)).toBe(1);
 
+  // Attendance mode (12 Nov 2026): on by default. Off = every student on every page, signed in or not: Grade 11's names
+  // are back on Correction though nobody signed in, the count stays the register's (4) in a dashed amber capsule.
+  const mode = att.getByRole("switch", { name: /^Attendance mode/ });
+  expect(await mode.getAttribute("aria-checked")).toBe("true");
+  await mode.click();
+  await contains(F.locator(".toast"), "Attendance mode off: every student shows on every page.");
+  await until(async () => (await mode.getAttribute("aria-checked")) === "false", "attendance mode off");
+  await visible(att.locator(".att-mode-w"));
+  await visible(F.locator(".top-stat.att-off"));
+  await contains(F.locator(".top-stat .ts-n"), "4");
+  await contains(att.locator(".attendance .summary"), "Grade 11: 0 of 10 here"); // Attendance itself: the register
+  await shot(F, "a01b-attendance-mode-off");
+  await att.getByRole("button", { name: "Close" }).click();
+  await F.getByRole("button", { name: /^Grade 11\b/ }).click();
+  await textsAre(F.locator(".fc-nm"), G11);
+  expect((await present(G11)).every((p) => !p)).toBe(true); // nothing written for them
+  // Back on: only the signed-in ones again.
+  await F.locator(".top-stat").click();
+  await mode.click();
+  await until(async () => (await mode.getAttribute("aria-checked")) === "true", "attendance mode on");
+  await count(F.locator(".top-stat.att-off"), 0);
+  await att.getByRole("button", { name: "Close" }).click();
+  await count(F.locator(".fc-nm"), 0);
+  await F.locator(".top-stat").click();
+  await att.locator(".grade-row").getByRole("button", { name: /^Grade 11\b/ }).click();
+
   // Sign in all: a list with everyone ticked but those who went home today (Keerthi only). She ticks two more: 3.
-  await att.getByRole("button", { name: "Sign in all: 10 not here" }).click();
+  await att.getByRole("button", { name: "Sign in all of Grade 11: 10 not here" }).click();
   await contains(many.locator("h2"), "Sign in Grade 11");
   await contains(many.locator(".sheet-title p"), "Untick anyone who isn't in the hall.");
   await textsAre(many.locator(".atm.on .ap-n"), ["Keerthi"]);

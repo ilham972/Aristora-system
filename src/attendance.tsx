@@ -1,14 +1,18 @@
 // Attendance: sign students in as they arrive. Pick the grade, tap the name; the time goes in the register,
-// and the student appears in Correction, Theory and Evaluation. Since 30 Oct 2026 it is a full-page sheet: from
-// Correction (tap the grade, then + before its names: that grade only), or the count by the clock (any grade).
+// and the student appears in Correction, Theory and Evaluation. Since 30 Oct 2026 it is a full-page sheet, opened from
+// the count by the clock in the top bar (any grade).
 //
-// At the bottom (2 Nov 2026, his ask): "Sign in all" and "Sign out all" for that grade (from +), "Sign in everyone" and
-// "Sign out everyone" for the whole class (from the count). Signing in several is a list with everyone ticked: she
-// unticks whoever isn't in the hall, then "Sign in 12" (a name signed in who isn't here hides a student who stopped
-// coming, and turns red on Theory and Evaluation). Its toast has Undo. "Sign out everyone" ends the class (the report).
+// 2 Nov 2026 (his ask): "Sign in all" and "Sign out all" for the grade picked (under its summary since 12 Nov 2026, when
+// Correction's + that opened one grade went), "Sign in everyone" and "Sign out everyone" for the whole class (the foot).
+// Signing in several is a list with everyone ticked: she unticks whoever isn't in the hall, then "Sign in 12" (a name
+// signed in who isn't here hides a student who stopped coming, and turns red on Theory and Evaluation). Its toast has Undo. "Sign out everyone" ends the class (the report).
+//
+// 12 Nov 2026 (his ask): only from the top bar's count now (Correction's + is gone); every tap is green AT ONCE and the
+// server follows behind (`pending`: the class is starting, nobody waits for a round trip); and the Attendance mode
+// switch at the top: off = every student shows on every page, signed in or not (convex/attendance.ts `setMode`).
 
 import type { ComponentChildren } from "preact";
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { slClock, slDay } from "../convex/lib/day";
@@ -31,14 +35,97 @@ const setMany = (ids: Id<"students">[], present: boolean, undo = false) =>
   act(() => mutate(api.students.setPresentMany, { ids, present, by: "attendance", ...(undo ? { undo: true } : {}) }));
 const people = (n: number) => `${n} student${n === 1 ? "" : "s"}`;
 
+/**
+ * Taps on their way to the server (12 Nov 2026, his "the response want to be very quick"): a name turns green (or back)
+ * the moment it is tapped; the sign-in goes in the background, in order (one phone's mutations run in the order sent).
+ * An entry goes when the board says the same, or the sign-in failed (its toast says why), or after `PENDING_MS`. Kept
+ * outside the sheet, so closing and opening it again mid-way shows the same.
+ */
+const pending = new Map<string, { in: boolean; at: number }>();
+const pendingSeen = new Set<() => void>();
+const PENDING_MS = 60_000;
+function setPending(ids: string[], v: { in: boolean; at: number } | null) {
+  for (const id of ids) {
+    if (v) pending.set(id, v);
+    else pending.delete(id);
+  }
+  for (const f of pendingSeen) f();
+}
+function usePending(views: View[]) {
+  const [, bump] = useState(0);
+  useEffect(() => {
+    const f = () => bump((n) => n + 1);
+    pendingSeen.add(f);
+    return () => void pendingSeen.delete(f);
+  }, []);
+  // The board caught up (or the tap is too old to trust): the server's word again.
+  useEffect(() => {
+    const t = Date.now();
+    const done = views.filter((v) => {
+      const p = pending.get(v.s._id);
+      return p && (p.in === v.signed || t - p.at > PENDING_MS);
+    });
+    if (done.length) setPending(done.map((v) => v.s._id), null);
+  });
+}
+/** In now, as Attendance shows it: a tap on its way wins over the board. */
+const signedNow = (v: View) => pending.get(v.s._id)?.in ?? v.signed;
+/** Sign in or out at once on the screen, the server behind. */
+function sendPresent(ids: Id<"students">[], present: boolean, undo = false) {
+  setPending(ids, { in: present, at: Date.now() });
+  const go = ids.length === 1 ? setPresent(ids[0], present, undo) : setMany(ids, present, undo);
+  void go.then((ok) => {
+    if (!ok) setPending(ids, null);
+  });
+}
+
+/**
+ * The switch at the top of Attendance (12 Nov 2026). On (always so before) = only the students signed in show on the
+ * pages. Off = every student shows everywhere (Correction, Fighter, Master, Consultation, the Class tab), for testing and
+ * for correcting a student who isn't in the hall; signing in still keeps the register and the fees. Only the owner turns
+ * it off; anyone here turns it back on.
+ */
+function ModeSwitch(props: { off: boolean }) {
+  const [busy, setBusy] = useState(false);
+  const on = !props.off;
+  const locked = on && !may("owner");
+  const flip = async () => {
+    if (busy || locked) return;
+    setBusy(true);
+    const ok = await act(() => mutate(api.attendance.setMode, { on: !on, by: "attendance" }));
+    setBusy(false);
+    if (ok) toast(on ? "Attendance mode off: every student shows on every page." : "Attendance mode on: only the students signed in show.");
+  };
+  return (
+    <div class={`att-mode${on ? "" : " off"}`}>
+      <button
+        type="button"
+        role="switch"
+        class="att-mode-b"
+        aria-checked={on}
+        aria-label={`Attendance mode: ${on ? "on" : "off"}${locked ? ". Only the owner turns it off" : ""}`}
+        disabled={busy || locked}
+        onClick={() => void flip()}
+      >
+        <span class="att-mode-l">Attendance mode</span>
+        <i class="att-mode-k" aria-hidden="true">
+          <b />
+        </i>
+        <span class="att-mode-v" aria-hidden="true">
+          {on ? "On" : "Off"}
+        </span>
+      </button>
+      {!on && <p class="att-mode-w">Every student shows on every page, signed in or not.</p>}
+    </div>
+  );
+}
+
 export function AttendanceSheet(props: {
   board: Board;
   views: View[];
   now: number;
-  /** Open on this grade (Correction's). */
+  /** Open on this grade. */
   grade?: number | null;
-  /** That grade only (from Correction's +: the grade was picked there): no row of grades. */
-  only?: boolean;
   onClose: () => void;
 }) {
   const { board, views, now } = props;
@@ -51,9 +138,9 @@ export function AttendanceSheet(props: {
     setGradeHere(g);
     store(g);
   };
-  const [busy, setBusy] = useState<string[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
-  const [bulk, setBulk] = useState<"in" | "out" | null>(null);
+  // in / out = everyone (the foot), gin / gout = the grade picked (under its summary).
+  const [bulk, setBulk] = useState<"in" | "out" | "gin" | "gout" | null>(null);
   const visits = useQuery<Visit[]>(api.attendance.day, { day: slDay(now) });
 
   // Who went home today, and when (signed in again: simply in).
@@ -61,34 +148,33 @@ export function AttendanceSheet(props: {
   for (const r of visits ?? []) {
     if (r.outAt !== null && r.outAt > (leftAt.get(r.studentId) ?? 0)) leftAt.set(r.studentId, r.outAt);
   }
-  const isIn = (v: View) => v.where !== "absent";
+  usePending(views);
+  const isIn = signedNow;
   const ofGrade = (g: number) => views.filter((v) => v.s.grade === g);
   const list = ofGrade(grade);
   const here = list.filter(isIn).length;
   const open = openId ? views.find((v) => v.s._id === openId && isIn(v)) : undefined;
 
-  const signIn = async (v: View) => {
-    if (busy.includes(v.s._id)) return;
-    setBusy((b) => [...b, v.s._id]);
-    const ok = await setPresent(v.s._id, true);
-    setBusy((b) => b.filter((x) => x !== v.s._id));
-    if (ok) {
-      toast(`${v.s.name} signed in, ${slClock(serverNow())}.`, "info", () => {
-        void setPresent(v.s._id, false, true).then((r) => r && toast(`${v.s.name}: sign-in taken back.`));
-      });
-    }
+  // Green at once; the server follows (a failure turns it back and its toast says why).
+  const signIn = (v: View) => {
+    const id = v.s._id as Id<"students">;
+    sendPresent([id], true);
+    toast(`${v.s.name} signed in, ${slClock(serverNow())}.`, "info", () => {
+      sendPresent([id], false, true);
+      toast(`${v.s.name}: sign-in taken back.`);
+    });
   };
 
   const inClass = views.filter(isIn).length;
-  // "All" = this grade (from Correction's +) or the whole class (from the count by the clock).
-  const scope = props.only ? list : views;
-  const outNow = scope.filter((v) => !isIn(v));
-  const inNow = scope.filter(isIn);
+  const outNow = views.filter((v) => !isIn(v));
+  const inNow = views.filter(isIn);
+  const gOut = list.filter((v) => !isIn(v));
+  const gIn = list.filter(isIn);
   const sheet = (body: ComponentChildren) => (
     <Sheet
       full
-      title={props.only ? `Attendance · Grade ${grade}` : "Attendance"}
-      sub={props.only ? undefined : `${inClass} in class`}
+      title="Attendance"
+      sub={`${inClass} in class`}
       onClose={props.onClose}
       foot={
         views.length > 0 && (
@@ -97,27 +183,30 @@ export function AttendanceSheet(props: {
               type="button"
               class="btn ghost"
               disabled={outNow.length === 0}
-              aria-label={`${props.only ? "Sign in all" : "Sign in everyone"}: ${outNow.length} not here`}
+              aria-label={`Sign in everyone: ${outNow.length} not here`}
               onClick={() => setBulk("in")}
             >
-              {props.only ? "Sign in all" : "Sign in everyone"}
+              Sign in everyone
               {outNow.length > 0 && <small aria-hidden="true">{outNow.length}</small>}
             </button>
             <button
               type="button"
               class="btn ghost"
               disabled={inNow.length === 0}
-              aria-label={`${props.only ? "Sign out all" : "Sign out everyone"}: ${inNow.length} here`}
+              aria-label={`Sign out everyone: ${inNow.length} here`}
               onClick={() => setBulk("out")}
             >
-              {props.only ? "Sign out all" : "Sign out everyone"}
+              Sign out everyone
               {inNow.length > 0 && <small aria-hidden="true">{inNow.length}</small>}
             </button>
           </div>
         )
       }
     >
-      <div class="attendance">{body}</div>
+      <div class="attendance">
+        {!testMode() && <ModeSwitch off={!!board.attOff} />}
+        {body}
+      </div>
     </Sheet>
   );
 
@@ -134,25 +223,47 @@ export function AttendanceSheet(props: {
       {sheet(
         <>
           {may("correction") && <CallsBand board={board} views={views} now={now} />}
-          {!props.only && (
-            <GradeRow
-              value={grade}
-              onPick={setGrade}
-              label="Grade"
-              count={(g) => {
-                const all = ofGrade(g);
-                const n = all.filter(isIn).length;
-                if (all.length === 0) return { text: "–", aria: "no students" };
-                return { text: `${n}/${all.length}`, aria: `${n} of ${all.length} here`, some: n > 0 };
-              }}
-            />
-          )}
+          <GradeRow
+            value={grade}
+            onPick={setGrade}
+            label="Grade"
+            count={(g) => {
+              const all = ofGrade(g);
+              const n = all.filter(isIn).length;
+              if (all.length === 0) return { text: "–", aria: "no students" };
+              return { text: `${n}/${all.length}`, aria: `${n} of ${all.length} here`, some: n > 0 };
+            }}
+          />
           <p class="summary">
             <span class="strong">
               Grade {grade}: {here} of {list.length} here
             </span>
             <span>Tap a name when the student arrives; tap a green one when he goes home.</span>
           </p>
+          {list.length > 0 && (
+            <div class="att-grade">
+              <button
+                type="button"
+                class="btn ghost small"
+                disabled={gOut.length === 0}
+                aria-label={`Sign in all of Grade ${grade}: ${gOut.length} not here`}
+                onClick={() => setBulk("gin")}
+              >
+                Sign in all
+                {gOut.length > 0 && <small aria-hidden="true">{gOut.length}</small>}
+              </button>
+              <button
+                type="button"
+                class="btn ghost small"
+                disabled={gIn.length === 0}
+                aria-label={`Sign out all of Grade ${grade}: ${gIn.length} here`}
+                onClick={() => setBulk("gout")}
+              >
+                Sign out all
+                {gIn.length > 0 && <small aria-hidden="true">{gIn.length}</small>}
+              </button>
+            </div>
+          )}
 
           {list.length === 0 ? (
             <Empty title={`No Grade ${grade} students yet`}>
@@ -162,18 +273,17 @@ export function AttendanceSheet(props: {
             <ul class="att-list" aria-label={`Grade ${grade} students`}>
               {list.map((v) => {
                 const inNow = isIn(v);
-                const wait = !inNow && busy.includes(v.s._id);
+                const p = pending.get(v.s._id);
                 const left = inNow ? undefined : leftAt.get(v.s._id);
-                const since = v.s.lastInAt;
-                const tone = inNow ? "in" : wait ? "busy" : left ? "left" : "";
-                const time = inNow ? (since ? `✓ ${slClock(since, false)}` : "✓") : wait ? "…" : left ? `left ${slClock(left, false)}` : "";
+                // A tap on its way: its own time (the server's comes a moment later, the same minute).
+                const since = p?.in ? p.at : v.s.lastInAt;
+                const tone = inNow ? "in" : left ? "left" : "";
+                const time = inNow ? (since ? `✓ ${slClock(since, false)}` : "✓") : left ? `left ${slClock(left, false)}` : "";
                 const label = inNow
                   ? `${v.s.name}: here${since ? ` since ${slClock(since)}` : ""}`
-                  : wait
-                    ? `${v.s.name}: signing in`
-                    : left
-                      ? `${v.s.name}: went home at ${slClock(left)}, tap to sign in again`
-                      : `${v.s.name}: tap to sign in`;
+                  : left
+                    ? `${v.s.name}: went home at ${slClock(left)}, tap to sign in again`
+                    : `${v.s.name}: tap to sign in`;
                 return (
                   <li key={v.s._id}>
                     <button
@@ -181,7 +291,7 @@ export function AttendanceSheet(props: {
                       class={`ap ${tone}`}
                       aria-label={label}
                       aria-pressed={inNow}
-                      onClick={() => (inNow ? setOpenId(v.s._id) : void signIn(v))}
+                      onClick={() => (inNow ? setOpenId(v.s._id) : signIn(v))}
                     >
                       <span class="ap-n">{v.s.name}</span>
                       {time && <span class="ap-t">{time}</span>}
@@ -194,17 +304,17 @@ export function AttendanceSheet(props: {
         </>,
       )}
 
-      {bulk === "in" && (
+      {(bulk === "in" || bulk === "gin") && (
         <SignInMany
-          title={props.only ? `Sign in Grade ${grade}` : "Sign in everyone"}
-          views={outNow}
-          grouped={!props.only}
+          title={bulk === "gin" ? `Sign in Grade ${grade}` : "Sign in everyone"}
+          views={bulk === "gin" ? gOut : outNow}
+          grouped={bulk === "in"}
           leftAt={leftAt}
           onClose={() => setBulk(null)}
         />
       )}
-      {bulk === "out" && (
-        <SignOutMany grade={props.only ? grade : null} views={inNow} onClose={() => setBulk(null)} />
+      {(bulk === "out" || bulk === "gout") && (
+        <SignOutMany grade={bulk === "gout" ? grade : null} views={bulk === "gout" ? gIn : inNow} onClose={() => setBulk(null)} />
       )}
 
       {open && (
@@ -220,10 +330,10 @@ export function AttendanceSheet(props: {
               <button
                 type="button"
                 class="btn primary"
-                onClick={async () => {
-                  const ok = await setPresent(open.s._id, false);
+                onClick={() => {
+                  sendPresent([open.s._id as Id<"students">], false);
                   setOpenId(null);
-                  if (ok) toast(`${open.s.name} signed out, ${slClock(serverNow())}.`);
+                  toast(`${open.s.name} signed out, ${slClock(serverNow())}.`);
                 }}
               >
                 Sign out: going home
@@ -240,10 +350,10 @@ export function AttendanceSheet(props: {
             <button
               type="button"
               class="link-btn"
-              onClick={async () => {
-                const ok = await setPresent(open.s._id, false, true);
+              onClick={() => {
+                sendPresent([open.s._id as Id<"students">], false, true);
                 setOpenId(null);
-                if (ok) toast(`${open.s.name}: sign-in taken back.`);
+                toast(`${open.s.name}: sign-in taken back.`);
               }}
             >
               Signed in by mistake? Take it back
@@ -261,7 +371,6 @@ export function AttendanceSheet(props: {
  */
 function SignInMany(props: { title: string; views: View[]; grouped: boolean; leftAt: Map<string, number>; onClose: () => void }) {
   const [off, setOff] = useState<Set<string>>(() => new Set(props.views.filter((v) => props.leftAt.has(v.s._id)).map((v) => v.s._id)));
-  const [busy, setBusy] = useState(false);
   const picked = props.views.filter((v) => !off.has(v.s._id));
   const flip = (ids: string[], on: boolean) => {
     const next = new Set(off);
@@ -271,16 +380,14 @@ function SignInMany(props: { title: string; views: View[]; grouped: boolean; lef
     }
     setOff(next);
   };
-  const go = async () => {
-    if (busy || picked.length === 0) return;
-    setBusy(true);
+  const go = () => {
+    if (picked.length === 0) return;
     const ids = picked.map((v) => v.s._id as Id<"students">);
-    const r = await setMany(ids, true);
-    setBusy(false);
-    if (!r) return;
+    sendPresent(ids, true);
     props.onClose();
-    toast(`${people(r.changed)} signed in, ${slClock(serverNow())}.`, "info", () => {
-      void setMany(ids, false, true).then((u) => u && toast(`Sign-in taken back for ${people(u.changed)}.`));
+    toast(`${people(ids.length)} signed in, ${slClock(serverNow())}.`, "info", () => {
+      sendPresent(ids, false, true);
+      toast(`Sign-in taken back for ${people(ids.length)}.`);
     });
   };
   const grades = GRADES.filter((g) => props.views.some((v) => v.s.grade === g));
@@ -295,8 +402,8 @@ function SignInMany(props: { title: string; views: View[]; grouped: boolean; lef
           <button type="button" class="btn ghost" onClick={props.onClose}>
             Cancel
           </button>
-          <button type="button" class="btn primary" disabled={busy || picked.length === 0} onClick={() => void go()}>
-            {busy ? "Signing in…" : `Sign in ${picked.length}`}
+          <button type="button" class="btn primary" disabled={picked.length === 0} onClick={go}>
+            {`Sign in ${picked.length}`}
           </button>
         </div>
       }
@@ -366,14 +473,13 @@ function SignOutMany(props: { grade: number | null; views: View[]; onClose: () =
       toast("Class ended: everyone signed out. Today's report is in Settings → Reports.");
       return;
     }
-    const r = await setMany(
+    sendPresent(
       props.views.map((v) => v.s._id as Id<"students">),
       false,
     );
     setBusy(false);
-    if (!r) return;
     props.onClose();
-    toast(`${people(r.changed)} signed out, ${slClock(serverNow())}.`);
+    toast(`${people(n)} signed out, ${slClock(serverNow())}.`);
   };
   return (
     <Sheet

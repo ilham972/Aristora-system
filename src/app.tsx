@@ -490,7 +490,8 @@ export function App() {
   const evalRed = new Set(evalQueue(views, now).filter((m) => m.urgency === "red" && !m.blockedBy).map((m) => m.v.s._id)).size;
   const toSend = board.calls.filter((c) => c.status === "requested" && !c.pull).length;
   const session = liveSession(board, now);
-  const inClass = views.filter((v) => v.where !== "absent").length;
+  // Signed in (attendance mode off shows everyone on the pages, but the count stays the register's).
+  const inClass = views.filter((v) => v.signed).length;
   // Correction's count (its tab): workbook levels handed in, waiting to be corrected; red when someone has no work
   // until then.
   const papers = views.reduce((a, v) => a + waitingAll(v), 0);
@@ -674,6 +675,7 @@ export function App() {
               inClass={inClass}
               clock={session ? fmtClock(now - session.startedAt) : null}
               test={testMode()}
+              attOff={!!board.attOff}
               link={link}
               onTap={canCorrect ? () => setAttOpen(true) : undefined}
             />
@@ -917,10 +919,14 @@ function SlowLoad() {
  * Top right: how many are in class, the class clock and the link dot, in one capsule. For whoever signs students in
  * (Correction, the owner) it is also a way into Attendance from any page.
  */
-function TopStat(props: { inClass: number; clock: string | null; test?: boolean; link: Link; onTap?: () => void }) {
+function TopStat(props: { inClass: number; clock: string | null; test?: boolean; attOff?: boolean; link: Link; onTap?: () => void }) {
   const { inClass, clock } = props;
   // The simulation (Settings): SIM where the clock is, so nobody mistakes it for the real class.
-  const words = props.test ? `The simulation: ${inClass} made-up students in class` : `${inClass} in class, ${clock ? `class time ${clock}` : "no class now"}`;
+  const words = props.test
+    ? `The simulation: ${inClass} made-up students in class`
+    : `${inClass} in class, ${clock ? `class time ${clock}` : "no class now"}${props.attOff ? ", attendance mode off: every student shows" : ""}`;
+  // Attendance mode off (12 Nov 2026): the capsule dashed amber, so nobody forgets it on a real class day.
+  const cls = `top-stat${inClass ? "" : " zero"}${props.attOff && !props.test ? " att-off" : ""}`;
   const inside = (
     <>
       <svg
@@ -950,11 +956,11 @@ function TopStat(props: { inClass: number; clock: string | null; test?: boolean;
     </>
   );
   return props.onTap ? (
-    <button type="button" class={`top-stat${inClass ? "" : " zero"}`} aria-label={`${words}. Attendance`} onClick={props.onTap}>
+    <button type="button" class={cls} aria-label={`${words}. Attendance`} onClick={props.onTap}>
       {inside}
     </button>
   ) : (
-    <div class={`top-stat${inClass ? "" : " zero"}`} role="group" aria-label={words}>
+    <div class={cls} role="group" aria-label={words}>
       {inside}
     </div>
   );

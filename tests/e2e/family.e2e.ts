@@ -1037,7 +1037,6 @@ test("photos from home: a drawing photographed in the level, marked by a person 
   await N.getByRole("button", { name: /Mark them in Correction/ }).click();
   await visible(N.locator(".hl-btn.on"));
   expect(await N.locator(".hl-btn").isDisabled()).toBe(true);
-  expect(await N.locator(".fc-add").isDisabled()).toBe(true);
   const hanaPill = N.locator(".fc-names .fc-nm", { hasText: "Hana" });
   await contains(hanaPill, "1");
   await contains(N.locator(".hl-idle"), "1 to mark");
@@ -1168,11 +1167,9 @@ test("photos from home: a drawing photographed in the level, marked by a person 
   await O.locator(".hl-btn").click();
   await visible(O.locator(".hl-btn.on"));
   await contains(O.locator(".hl-idle"), "No photos waiting");
-  expect(await O.locator(".fc-add").isDisabled()).toBe(true);
   await O.locator(".hl-btn").click();
   expect(await O.locator(".hl-btn.on").count()).toBe(0);
   expect(await O.locator(".hl-idle").count()).toBe(0);
-  expect(await O.locator(".fc-add").isDisabled()).toBe(false);
   await O.getByRole("button", { name: "Settings" }).click();
   await O.getByRole("button", { name: "Books", exact: true }).click();
   await O.getByRole("button", { name: /^Grade 8\b/ }).click();

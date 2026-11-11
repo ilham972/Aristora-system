@@ -16,7 +16,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { query, type QueryCtx } from "./_generated/server";
 import { mutation } from "./lib/fn";
 import { actor, viewer } from "./lib/auth";
-import { asFighter, bookFor, cleanBy, currentSession, fail, getStudent, log, masterState, progressFor, refresh, roomStats, touch } from "./lib/backend";
+import { asFighter, attendanceOff, bookFor, cleanBy, currentSession, fail, getStudent, hereNow, log, masterState, progressFor, refresh, roomStats, touch } from "./lib/backend";
 import { teachState, type MQ, type MState } from "./lib/master";
 import { OL } from "./lib/syllabus";
 import type { MarkState } from "./lib/status";
@@ -34,7 +34,8 @@ async function hereFor(ctx: QueryCtx, unit: Doc<"units">, test: boolean) {
     .query("students")
     .withIndex("by_archived", (q) => q.eq("archived", false))
     .collect();
-  return all.filter((s) => s.present && !!s.test === test && s.grade !== undefined && grades.includes(s.grade)).sort((a, b) => a.name.localeCompare(b.name));
+  const off = !test && (await attendanceOff(ctx));
+  return all.filter((s) => hereNow(s, off) && !!s.test === test && s.grade !== undefined && grades.includes(s.grade)).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /**
