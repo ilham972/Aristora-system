@@ -109,7 +109,7 @@ import { homeLevels, homeMoments, stageDone, stageMoment, usCfg } from "./lib/us
 import { OL } from "./lib/syllabus";
 import { accountOf, feeCfg } from "./lib/feeRows";
 import { walletOf } from "./lib/coins";
-import { seenOf, seenOn } from "./online";
+import { seenOf, seenOn, type Seen } from "./online";
 
 const token = v.optional(v.string());
 
@@ -1085,8 +1085,8 @@ export type FamilyMate = {
   dm?: boolean;
   /** His place in his grade's all-time list, of how many, and the GOAT (11 Nov 2026). Missing on a server from before. */
   ever?: { place: number | null; of: number; goat: boolean };
-  /** Online now and when he was last in the app (12 Nov 2026): only while the owner's switch is on (Settings → Race). */
-  seen?: { at: number | null; on: boolean };
+  /** Online, studying (and the Stage), last seen (12 Nov 2026; the day only for a classmate): while the owner's switch is on. */
+  seen?: Seen;
 };
 
 /** His profile's numbers (the map, his months, his report): his own Me and a classmate's profile. */
@@ -1147,7 +1147,7 @@ export const mate = query({
     if (!s || s.archived || !!s.demo !== !!me.demo || !!s.test !== !!me.test) fail("This student isn't in the race.");
     const out = await mateOf(ctx, s, me._id, await mateMarksOn(ctx));
     const dm = (await usCfg(ctx)).open && mayMessage({ k: "s", id: me._id, ...(me.sex ? { sex: me.sex } : {}), demo: !!me.demo || !!me.test }, { k: "s", id: s._id, ...(s.sex ? { sex: s.sex } : {}), demo: !!s.demo || !!s.test });
-    const seen = (await seenOn(ctx)) ? { seen: await seenOf(ctx, s._id) } : {};
+    const seen = (await seenOn(ctx)) ? { seen: await seenOf(ctx, s._id, s._id === me._id) } : {};
     return { ...out, dm, ...seen };
   },
 });

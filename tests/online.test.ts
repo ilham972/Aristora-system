@@ -7,7 +7,7 @@ import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
-import { BEAT_MAX_MS, beatOn, dayBars, GAP_MS, hourBars, isOnline, ONLINE_MS, seenWords, spanWords, type Stay } from "../convex/lib/appTime";
+import { BEAT_MAX_MS, beatOn, dayBars, GAP_MS, hourBars, isOnline, isStudying, ONLINE_MS, seenDayWords, seenWords, spanWords, type Stay } from "../convex/lib/appTime";
 import { secretHash } from "../convex/lib/auth";
 import { slDayNo } from "../convex/lib/day";
 import schema from "../convex/schema";
@@ -21,21 +21,31 @@ describe("the arithmetic (convex/lib/appTime.ts)", () => {
 
   test("the first beat starts a stay; each next one adds the time since the last, inside a Level apart", () => {
     expect(beatOn(null, T0, false, false)).toEqual({ add: stay() });
-    expect(beatOn(stay(), T0 + MIN, false, false)).toEqual({ patch: { to: T0 + MIN, ms: MIN, lv: 0 } });
-    expect(beatOn(stay({ to: T0 + MIN, ms: MIN }), T0 + 2 * MIN, true, false)).toEqual({ patch: { to: T0 + 2 * MIN, ms: 2 * MIN, lv: MIN } });
+    expect(beatOn(stay(), T0 + MIN, false, false)).toMatchObject({ patch: { to: T0 + MIN, ms: MIN, lv: 0, inLv: false } });
+    expect(beatOn(stay({ to: T0 + MIN, ms: MIN }), T0 + 2 * MIN, true, false)).toMatchObject({ patch: { to: T0 + 2 * MIN, ms: 2 * MIN, lv: MIN } });
   });
 
   test("a late beat adds at most 90 s (a phone asleep adds nothing more); after 3 minutes a new stay", () => {
-    expect(beatOn(stay(), T0 + 2.5 * MIN, false, false)).toEqual({ patch: { to: T0 + 2.5 * MIN, ms: BEAT_MAX_MS, lv: 0 } });
+    expect(beatOn(stay(), T0 + 2.5 * MIN, false, false)).toMatchObject({ patch: { to: T0 + 2.5 * MIN, ms: BEAT_MAX_MS, lv: 0 } });
     expect(beatOn(stay(), T0 + GAP_MS + 1, false, false)).toEqual({ add: stay({ from: T0 + GAP_MS + 1, to: T0 + GAP_MS + 1 }) });
   });
 
   test("bye closes the stay with its last minute; the next beat starts a new one; a new day starts a new one", () => {
-    expect(beatOn(stay(), T0 + 30_000, false, true)).toEqual({ patch: { to: T0 + 30_000, ms: 30_000, lv: 0, bye: true } });
+    expect(beatOn(stay(), T0 + 30_000, false, true)).toMatchObject({ patch: { to: T0 + 30_000, ms: 30_000, lv: 0, bye: true, inLv: false } });
     expect("add" in beatOn(stay({ bye: true }), T0 + 10_000, false, false)).toBe(true);
     const night = new Date("2026-11-12T23:59:30+05:30").getTime();
     const r = beatOn(stay({ from: night, to: night }), night + MIN, false, false);
     expect(r).toEqual({ add: { day: slDayNo(T0) + 1, from: night + MIN, to: night + MIN, ms: 0, lv: 0 } });
+  });
+
+  test("studying: inside a Level at the last beat (its Stage kept), online too; a bye or leaving the Level ends it", () => {
+    const r = beatOn(stay(), T0 + MIN, true, false, { inLv: true, st: 4 });
+    expect(r).toMatchObject({ patch: { inLv: true, st: 4 } });
+    expect(isStudying({ to: T0 + MIN, inLv: true }, T0 + MIN)).toBe(true);
+    expect(isStudying({ to: T0 + MIN, inLv: true }, T0 + MIN + ONLINE_MS + 1)).toBe(false);
+    expect(beatOn(stay({ inLv: true, st: 4 }), T0 + MIN, true, true, { inLv: true, st: 4 })).toMatchObject({ patch: { inLv: false, st: undefined, bye: true } });
+    expect(beatOn(stay({ inLv: true, st: 4 }), T0 + MIN, true, false, {})).toMatchObject({ patch: { inLv: false, st: undefined } });
+    expect(isStudying({ to: T0 }, T0)).toBe(false);
   });
 
   test("online: a beat in the last 150 s and no bye", () => {
@@ -56,10 +66,11 @@ describe("the arithmetic (convex/lib/appTime.ts)", () => {
 
   test("a day hour by hour: a stay's time spread over the hours it covered", () => {
     const from = new Date("2026-11-12T18:30:00+05:30").getTime();
-    const h = hourBars([{ from, to: from + 60 * MIN, ms: 40 * MIN }], slDayNo(T0));
+    const h = hourBars([{ from, to: from + 60 * MIN, ms: 40 * MIN, lv: 20 * MIN }], slDayNo(T0));
     expect(h[18]).toBe(20);
     expect(h[19]).toBe(20);
     expect(h.reduce((a, b) => a + b, 0)).toBe(40);
+    expect(hourBars([{ from, to: from + 60 * MIN, ms: 40 * MIN, lv: 20 * MIN }], slDayNo(T0), "lv")[18]).toBe(10);
   });
 
   test("the words: Online, minutes, hours, yesterday, a weekday, a date; spans", () => {
@@ -71,6 +82,12 @@ describe("the arithmetic (convex/lib/appTime.ts)", () => {
     expect(seenWords(T0 - 24 * 60 * MIN, false, T0)).toBe("Yesterday");
     expect(seenWords(T0 - 3 * 24 * 60 * MIN, false, T0)).toBe("Mon");
     expect(seenWords(T0 - 10 * 24 * 60 * MIN, false, T0)).toBe("2 Nov");
+    // A classmate's: the day only.
+    const d = slDayNo(T0);
+    expect(seenDayWords(d, T0)).toBe("Today");
+    expect(seenDayWords(d - 1, T0)).toBe("Yesterday");
+    expect(seenDayWords(d - 3, T0)).toBe("Mon");
+    expect(seenDayWords(null, T0)).toBeNull();
     expect(spanWords(40 * MIN)).toBe("40 m");
     expect(spanWords(85 * MIN)).toBe("1 h 25 m");
     expect(spanWords(120 * MIN)).toBe("2 h");
@@ -112,12 +129,14 @@ describe("online on the server", () => {
     const B = await joinAs(bilal, FAM_B);
     expect((await H.mutation(api.online.beat, {})).on).toEqual([hana]);
     at(MIN);
-    await H.mutation(api.online.beat, { lv: true });
+    await H.mutation(api.online.beat, { lv: true, inLv: true, st: 4 });
     at(2 * MIN);
     const r = await B.mutation(api.online.beat, {});
     expect(r.show).toBe(true);
     expect(new Set(r.on)).toEqual(new Set([hana, bilal]));
-    expect((await B.query(api.family.mate, { id: hana })).seen).toEqual({ at: T0 + MIN, on: true });
+    expect(r.study).toEqual({ [hana]: 4 });
+    // A classmate: studying, its Stage, and the day only (never the time).
+    expect((await B.query(api.family.mate, { id: hana })).seen).toEqual({ on: true, lv: true, st: 4, at: null, d: slDayNo(T0) });
     at(2.5 * MIN);
     await H.mutation(api.online.beat, { bye: true });
     expect((await B.mutation(api.online.beat, {})).on).toEqual([bilal]);
@@ -129,12 +148,18 @@ describe("online on the server", () => {
     expect(Math.abs(stays[0].lv - MIN)).toBeLessThan(5);
     // A classmate sees the bars and the day's stays; he sees his own as "me".
     const u = await B.query(api.online.usage, { id: hana });
+    expect(u.own).toBe(false);
     expect(u.bars[29]).toMatchObject({ ms: stays[0].ms, lv: stays[0].lv });
-    expect(u.seen).toEqual({ at: T0 + 2.5 * MIN, on: false });
-    const day = await B.query(api.online.usageDay, { id: hana, day: u.today });
+    expect(u.seen).toEqual({ on: false, lv: false, st: null, at: null, d: slDayNo(T0) });
+    // The times he came and went: only his own phone.
+    await expect(B.query(api.online.usageDay, { id: hana, day: u.today })).rejects.toThrow(/Only he/);
+    const mine = await H.query(api.online.usage, { id: "me" });
+    expect(mine.own).toBe(true);
+    expect(mine.seen.at).toBe(T0 + 2.5 * MIN);
+    expect(mine.bars[29].ms).toBe(stays[0].ms);
+    const day = await H.query(api.online.usageDay, { id: "me", day: u.today });
     expect(day.stays).toEqual([{ from: stays[0].from, to: T0 + 2.5 * MIN, ms: stays[0].ms, lv: stays[0].lv, on: false }]);
-    expect((await H.query(api.online.usage, { id: "me" })).bars[29].ms).toBe(stays[0].ms);
-    await expect(B.query(api.online.usageDay, { id: hana, day: u.today - 30 })).rejects.toThrow(/too long ago/);
+    await expect(H.query(api.online.usageDay, { id: "me", day: u.today - 30 })).rejects.toThrow(/too long ago/);
   });
 
   test("the owner's switch: off = no dots, no last seen, no classmate's bars; his own stays his", async () => {
@@ -145,7 +170,7 @@ describe("online on the server", () => {
     await expect(asPhone(raw, CORRECTOR).mutation(api.race.setSeen, { on: false })).rejects.toThrow();
     await t.mutation(api.race.setSeen, { on: false });
     expect((await t.query(api.race.settings, {})).seen).toBe(false);
-    expect(await B.mutation(api.online.beat, {})).toEqual({ show: false, on: [] });
+    expect(await B.mutation(api.online.beat, {})).toEqual({ show: false, on: [], study: {} });
     expect((await B.query(api.family.mate, { id: hana })).seen).toBeUndefined();
     await expect(B.query(api.online.usage, { id: hana })).rejects.toThrow(/own/);
     expect((await H.query(api.online.usage, { id: "me" })).bars).toHaveLength(30);

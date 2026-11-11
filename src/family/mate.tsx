@@ -80,7 +80,11 @@ export function MateScreen(props: {
   };
   // Online now (12 Nov 2026): the beat's answer is fresher than the profile's.
   const live = useOnline();
-  const seenNow = m?.seen ? { ...m.seen, on: m.seen.on || (live.show && live.on.has(props.id)) } : undefined;
+  // Online and studying (12 Nov 2026): the beat's answer is fresher than the profile's.
+  const lvLive = live.show && props.id in live.study;
+  const seenNow = m?.seen
+    ? { ...m.seen, on: m.seen.on || (live.show && live.on.has(props.id)), lv: m.seen.lv || lvLive, st: (lvLive ? live.study[props.id] : 0) || m.seen.st }
+    : undefined;
   const won = m?.trophies ?? [];
   const s = m?.streak;
   return (
@@ -95,7 +99,7 @@ export function MateScreen(props: {
         <div class="f-me-id">
           <span class="f-me-pic">
             <Avatar name={name || "?"} pic={picOf(key)} size="xl" />
-            <OnDot on={!!seenNow?.on} />
+            <OnDot on={!!seenNow?.on} lv={!!seenNow?.lv} />
           </span>
           <div class="f-me-w">
             <b class={`f-me-name${titleSize(name)}`}>

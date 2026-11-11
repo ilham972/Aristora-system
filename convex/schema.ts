@@ -1482,6 +1482,8 @@ export default defineSchema({
     ms: v.number(),
     lv: v.number(),
     bye: v.optional(v.boolean()),
+    inLv: v.optional(v.boolean()),
+    st: v.optional(v.number()),
   })
     .index("by_sid", ["sid", "to"])
     .index("by_sid_day", ["sid", "day"])

@@ -231,7 +231,9 @@ export function App() {
   // Online and time in the app (12 Nov 2026, beat.ts): a beat a minute while on the screen; a new child beats at once.
   useEffect(() => startBeat(), []);
   useEffect(() => beatNow(), [acc?.id]);
-  useEffect(() => setInLevel(screen.k === "level"), [screen.k]);
+  // Inside a Level = studying (12 Nov 2026), with its Stage's number for the classmates' "Studying · Stage 4".
+  const lvStage = screen.k === "level" ? me?.worlds.find((w) => w.unitId === screen.unitId)?.no : undefined;
+  useEffect(() => setInLevel(screen.k === "level", lvStage), [screen.k, lvStage]);
 
   // A gold card cancelled from Home or Me (10 Nov 2026, board.tsx): his coins and cards again.
   useEffect(() => {

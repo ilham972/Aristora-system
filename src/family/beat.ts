@@ -7,16 +7,22 @@ import { useEffect, useState } from "preact/hooks";
 import { beacon, childId, mutation } from "./net";
 
 let on = new Set<string>();
+/** Studying now (inside a Level): id → his Stage (0 = not known). */
+let study: Record<string, number> = {};
 let show = false;
 const subs = new Set<() => void>();
 /** Inside a Level since the last beat (the bar's sheet shows that time apart). */
 let lvNow = false;
 let lvSince = false;
+let stNow: number | undefined;
 
-/** The phone is inside a Level now, or not (the app tells it as screens change). */
-export function setInLevel(v: boolean): void {
+/** The phone is inside a Level now (and its Stage), or not: the app tells it as screens change; a change beats at once. */
+export function setInLevel(v: boolean, st?: number): void {
+  const changed = v !== lvNow || (v && st !== stNow);
   lvNow = v;
+  stNow = v ? st : undefined;
   if (v) lvSince = true;
+  if (changed) void beat();
 }
 
 const own = () => childId() !== "look" && childId() !== "staff" && childId() !== "_";
@@ -26,8 +32,13 @@ async function beat(): Promise<void> {
   const lv = lvSince || lvNow;
   lvSince = lvNow;
   try {
-    const r = (await mutation("online:beat", { lv })) as { show: boolean; on: string[] };
+    const r = (await mutation("online:beat", { lv, inLv: lvNow, ...(lvNow && stNow ? { st: stNow } : {}) })) as {
+      show: boolean;
+      on: string[];
+      study?: Record<string, number>;
+    };
     on = new Set(r.on);
+    study = r.study ?? {};
     show = r.show;
     subs.forEach((f) => f());
   } catch {
@@ -52,13 +63,13 @@ export function startBeat(): () => void {
 /** A new child on the phone: his beat at once (the dots are his view from now). */
 export const beatNow = () => void beat();
 
-/** Who is online now (empty while the owner's switch is off); the screen draws again when it changes. */
-export function useOnline(): { on: Set<string>; show: boolean } {
+/** Who is online now and who is studying (empty while the owner's switch is off); the screen draws again when it changes. */
+export function useOnline(): { on: Set<string>; study: Record<string, number>; show: boolean } {
   const [, set] = useState(0);
   useEffect(() => {
     const f = () => set((n) => n + 1);
     subs.add(f);
     return () => void subs.delete(f);
   }, []);
-  return { on, show };
+  return { on, study, show };
 }

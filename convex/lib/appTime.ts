@@ -7,6 +7,11 @@
 // a parent complains: Settings → Race → "Classmates see online, last seen and app time" (off: his own phone still shows
 // him his own time).
 //
+// 12 Nov 2026, 1:40 AM, his change of mind ("I agree your recommendation ... if the student online show online, if
+// studies show studying ... sorry for previous overrule"): two states, **Online** (the app open) and **Studying** (inside
+// a Level, with its Stage); classmates see last seen **by day only** and the **study bars** (minutes inside Levels); the
+// come and go times stay with him (his phone: him and his parents). The owner's switch stays.
+//
 // The phone beats once a minute while the app is on the screen (and once more when it leaves it: `bye`). Each beat
 // adds the time since the one before (at most BEAT_MAX_MS: a phone asleep in a pocket adds nothing) to the open stay;
 // a beat after GAP_MS, after a `bye`, or on a new Sri Lanka day starts a new stay. Pure, so the arithmetic is tested.
@@ -27,19 +32,53 @@ export const KEEP_DAYS = 62;
 export const BAR_DAYS = 30;
 
 /** A stay in the app: `from` the first beat, `to` the last; `ms` in the app, `lv` of it inside a Level. */
-export type Stay = { day: number; from: number; to: number; ms: number; lv: number; bye?: boolean };
+export type Stay = {
+  day: number;
+  from: number;
+  to: number;
+  ms: number;
+  lv: number;
+  bye?: boolean;
+  /** Inside a Level at the last beat (studying now), and that Level's Stage number. */
+  inLv?: boolean;
+  st?: number;
+};
 
 /**
  * One beat on his last stay (null: none yet). `add`: a new stay to insert; otherwise `patch` for the last one.
  * `lv`: the phone was inside a Level since the last beat.
  */
-export function beatOn(last: Stay | null, now: number, lv: boolean, bye: boolean): { add: Stay } | { patch: Partial<Stay> } {
+export function beatOn(
+  last: Stay | null,
+  now: number,
+  lv: boolean,
+  bye: boolean,
+  at: { inLv?: boolean; st?: number } = {},
+): { add: Stay } | { patch: Partial<Stay> } {
   const day = slDayNo(now);
+  // Where he is now: inside a Level (and its Stage) or not; a bye leaves it.
+  const here = { inLv: !bye && !!at.inLv, st: !bye && at.inLv && at.st ? at.st : undefined };
   if (!last || last.bye || now - last.to > GAP_MS || last.day !== day || now < last.to) {
-    return { add: { day, from: now, to: now, ms: 0, lv: 0, ...(bye ? { bye: true } : {}) } };
+    return { add: { day, from: now, to: now, ms: 0, lv: 0, ...(bye ? { bye: true } : {}), ...(here.inLv ? { inLv: true } : {}), ...(here.st ? { st: here.st } : {}) } };
   }
   const step = Math.min(now - last.to, BEAT_MAX_MS);
-  return { patch: { to: now, ms: last.ms + step, lv: last.lv + (lv ? step : 0), ...(bye ? { bye: true } : {}) } };
+  return { patch: { to: now, ms: last.ms + step, lv: last.lv + (lv ? step : 0), ...(bye ? { bye: true } : {}), inLv: here.inLv, st: here.st } };
+}
+
+/** Studying now: online and inside a Level at the last beat. */
+export function isStudying(last: Pick<Stay, "to" | "bye" | "inLv"> | null, now: number): boolean {
+  return isOnline(last, now) && !!last?.inLv;
+}
+
+/** A classmate's last seen, by day only (12 Nov 2026: no minutes, no night-time stamps): "Today", "Yesterday", "Mon", "2 Nov". */
+export function seenDayWords(day: number | null, now: number): string | null {
+  if (day === null) return null;
+  const days = slDayNo(now) - day;
+  if (days <= 0) return "Today";
+  if (days === 1) return "Yesterday";
+  const d = new Date(day * DAY_MS);
+  if (days < 7) return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getUTCDay()];
+  return `${d.getUTCDate()} ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getUTCMonth()]}`;
 }
 
 /** Online now: his last stay beat within ONLINE_MS and he didn't leave. */
@@ -64,21 +103,21 @@ export function dayBars(stays: Stay[], now: number): DayBar[] {
   return out;
 }
 
-/** Minutes in the app in each hour of one day (24 numbers), each stay's time spread over the hours it covered. */
-export function hourBars(stays: Pick<Stay, "from" | "to" | "ms">[], day: number): number[] {
+/** Minutes in each hour of one day (24 numbers), each stay's time (`ms`, or `lv`: inside Levels) spread over its hours. */
+export function hourBars(stays: Pick<Stay, "from" | "to" | "ms" | "lv">[], day: number, of: "ms" | "lv" = "ms"): number[] {
   const out = new Array<number>(24).fill(0);
   const start = day * DAY_MS - SL_OFFSET_MS;
   for (const s of stays) {
     const span = Math.max(1, s.to - s.from);
     if (s.to <= s.from) {
       const h = Math.floor((s.from - start) / 3_600_000);
-      if (h >= 0 && h < 24) out[h] += s.ms / 60_000;
+      if (h >= 0 && h < 24) out[h] += s[of] / 60_000;
       continue;
     }
     for (let h = 0; h < 24; h++) {
       const a = Math.max(s.from, start + h * 3_600_000);
       const b = Math.min(s.to, start + (h + 1) * 3_600_000);
-      if (b > a) out[h] += ((b - a) / span) * (s.ms / 60_000);
+      if (b > a) out[h] += ((b - a) / span) * (s[of] / 60_000);
     }
   }
   return out.map((m) => Math.round(m));

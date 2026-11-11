@@ -3654,7 +3654,7 @@ test("the Shop: the owner's things with a photo; last week's pay; the coin on th
   expect(problems.slice(before)).toEqual([]);
 });
 
-test("online and app time: the green dot, Online now, last seen, the bars (Day / Week / Month), a bar's day sheet; the owner's switch", async () => {
+test("online and studying: the green dot and the pencil, Studying now and Online, a classmate's state, his study bars and day totals; his own day with its times; the owner's switch", async () => {
   const before = problems.length;
   const backend = makeBackend(modules);
   const t = backend.t;
@@ -3671,7 +3671,15 @@ test("online and app time: the green dot, Online now, last seen, the bars (Day /
   const M = 60_000;
   await t.run(async (ctx) => {
     const stay = async (from: number, min: number, lv: number, live = false) =>
-      await ctx.db.insert("appTime", { sid: bilal, day: slDayNo(from), from, to: live ? now - 20_000 : from + (min + 3) * M, ms: min * M, lv: lv * M, ...(live ? {} : { bye: true }) });
+      await ctx.db.insert("appTime", {
+        sid: bilal,
+        day: slDayNo(from),
+        from,
+        to: live ? now - 20_000 : from + (min + 3) * M,
+        ms: min * M,
+        lv: lv * M,
+        ...(live ? { inLv: true, st: 8 } : { bye: true }),
+      });
     await stay(now - 42 * M, 40, 25, true);
     for (let d = 1; d <= 12; d++) await stay(now - d * 86_400_000 - 60 * M, 20 + ((d * 37) % 70), (d * 13) % 30);
     await stay(now - 2 * 86_400_000 - 300 * M, 35, 10);
@@ -3683,47 +3691,51 @@ test("online and app time: the green dot, Online now, last seen, the bars (Day /
   await P.getByRole("button", { name: "Sign in" }).click();
   await goalIs(P, "Level");
   await tabTo(P, /Race/);
-  // Online now: Hana (this phone) first, then Bilal, each with the green dot.
-  await contains(P.locator(".f-onl h2"), "Online now");
-  await contains(P.locator(".f-onl h2 small"), "2");
-  await contains(P.locator(".f-onl-c").first(), "You");
-  await visible(P.locator(".f-onl-c .f-on"));
+  // Studying now: Bilal inside a Level of Stage 8 (the pencil); Online: Hana (this phone) on the Race tab.
+  await contains(P.locator(".f-onl"), "Studying now");
+  await contains(P.locator(".f-onl"), "Stage 8");
+  await contains(P.locator(".f-onl"), "Online");
+  await visible(P.locator(".f-onl .f-on.lv"));
   await noSideScroll(P);
   await P.locator(".f-onl").scrollIntoViewIfNeeded();
   await shot(P, "online01-race");
-  // Bilal's profile: the dot on his photo, "Online" under his name; the bars, today's dark, a hint to tap.
+  // Bilal's profile: the pencil on his photo, "Studying · Stage 8"; his study bars (Week and Month, no Day for a classmate).
   await P.locator(".f-onl-c").filter({ hasText: "Bilal" }).click();
   await contains(P.locator(".f-mate .f-me-name"), "Bilal M");
-  await contains(P.locator(".f-mate .f-seen.on"), "Online");
-  await visible(P.locator(".f-mate .f-me-pic .f-on"));
+  await contains(P.locator(".f-mate .f-seen.lv"), "Studying · Stage 8");
+  await visible(P.locator(".f-mate .f-me-pic .f-on.lv"));
   await shot(P, "online02-mate-top");
-  await P.locator(".f-utabs").getByRole("button", { name: "Week" }).click();
   await P.locator(".f-usage").scrollIntoViewIfNeeded();
-  await contains(P.locator(".f-usage h2"), "App time");
-  await contains(P.locator(".f-utap"), "bar");
+  await contains(P.locator(".f-usage h2"), "Study time");
+  expect(await P.locator(".f-utabs button").count()).toBe(2);
+  await P.locator(".f-utabs").getByRole("button", { name: "Week" }).click();
   await visible(P.locator(".f-usage .f-ubar.hot"));
   await noSideScroll(P);
   await shot(P, "online03-week");
   await P.locator(".f-utabs").getByRole("button", { name: "Month" }).click();
   expect(await P.locator(".f-usage .f-ubar").count()).toBe(30);
   await shot(P, "online04-month");
-  await P.locator(".f-utabs").getByRole("button", { name: "Day" }).click();
-  await until(async () => (await P.locator(".f-usage .f-ubar").count()) === 24, "24 hours");
-  await shot(P, "online05-day");
-  // Today's bar: the day's sheet: in the app, in Levels, his stays with "now".
-  await P.locator(".f-usage .f-ubar").last().click();
-  await contains(P.locator(".f-usheet .f-ustats"), "In Levels");
-  await contains(P.locator(".f-ustays li.on"), "now");
-  await contains(P.locator(".f-ustays li.on"), "Levels 25 m");
-  await noSideScroll(P);
-  await shot(P, "online06-day-sheet");
+  // His bar: that day's study and app time, never the times he came and went.
+  await P.locator(".f-usage .f-ubar.hot").click();
+  await contains(P.locator(".f-usheet .f-ustats"), "Studied");
+  await contains(P.locator(".f-usheet .f-ustats .lv"), "25 m");
+  await contains(P.locator(".f-usheet"), "🔒");
+  expect(await P.locator(".f-ustays").count()).toBe(0);
+  await shot(P, "online05-mate-day");
   await P.getByRole("button", { name: "Close" }).click();
-  // His own Me: his own app time (this visit).
+  // His own Me: Day / Week / Month; today's bar = his own times.
   await P.getByRole("button", { name: "Back" }).click();
   await tabTo(P, /Me/);
   await P.locator(".f-usage").scrollIntoViewIfNeeded();
-  await contains(P.locator(".f-usage h2"), "App time");
-  await shot(P, "online07-me");
+  await P.locator(".f-utabs").getByRole("button", { name: "Day" }).click();
+  await until(async () => (await P.locator(".f-usage .f-ubar").count()) === 24, "24 hours");
+  await shot(P, "online06-me-day");
+  await P.locator(".f-usage .f-ubar").first().click();
+  await visible(P.locator(".f-ustays li"));
+  await contains(P.locator(".f-ustays li.on"), "now");
+  await noSideScroll(P);
+  await shot(P, "online07-me-sheet");
+  await P.getByRole("button", { name: "Close" }).click();
   // The owner's switch off: no last seen, no classmate's bars; his own stays.
   await t.mutation(api.race.setSeen, { ...as, on: false });
   await tabTo(P, /Race/);
@@ -3748,7 +3760,7 @@ test("online and app time: the green dot, Online now, last seen, the bars (Day /
   await noSideScroll(S);
   await shot(S, "online08-week-320");
   await S.locator(".f-usage .f-ubar.hot").click();
-  await contains(S.locator(".f-ustays"), "now");
+  await contains(S.locator(".f-usheet"), "Studied");
   await noSideScroll(S);
   await shot(S, "online09-sheet-320");
   for (const p of [P, S]) await p.context().close();

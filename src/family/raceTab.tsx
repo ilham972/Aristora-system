@@ -51,7 +51,7 @@ function Face(props: { r: RaceRow; size: "s" | "l"; goat: boolean }) {
     <span class={`f-rface${props.goat ? " goat" : ""}`}>
       <Avatar name={props.r.n} size={props.size} pic={picOf(props.r.pic)} />
       {props.goat && <GoatChip />}
-      <OnDot on={live.show && live.on.has(props.r.id)} />
+      <OnDot on={live.show && live.on.has(props.r.id)} lv={live.show && props.r.id in live.study} />
     </span>
   );
 }
@@ -199,31 +199,50 @@ function GradeCup(props: { rows: RaceRow[]; grade: number | null }) {
 }
 
 /**
- * Online now (12 Nov 2026, his ask: "each student want to know which student is online right now"): the faces of everyone
- * in the app this minute, his grade first; a tap opens a profile. Nothing while the owner's switch is off (Settings → Race).
+ * Studying now and Online now (12 Nov 2026, his asks: "which student is online right now"; "if studies show studying"):
+ * the faces of everyone inside a Level this minute (with the Stage), then everyone else in the app; himself first, then
+ * his grade; a tap opens a profile. Nothing while the owner's switch is off (Settings → Race).
  */
 function OnlineNow(props: { rows: RaceRow[]; grade: number | null; m: Marks }) {
   const live = useOnline();
   if (!live.show) return null;
-  const rows = props.rows
-    .filter((r) => live.on.has(r.id))
-    .sort((a, b) => Number(b.id === props.m.me) - Number(a.id === props.m.me) || Number(b.g === props.grade) - Number(a.g === props.grade) || b.xp - a.xp);
-  if (rows.length === 0) return null;
+  const order = (a: RaceRow, b: RaceRow) =>
+    Number(b.id === props.m.me) - Number(a.id === props.m.me) || Number(b.g === props.grade) - Number(a.g === props.grade) || b.xp - a.xp;
+  const here = props.rows.filter((r) => live.on.has(r.id) || r.id in live.study).sort(order);
+  if (here.length === 0) return null;
+  const studying = here.filter((r) => r.id in live.study);
+  const online = here.filter((r) => !(r.id in live.study));
   const MAX = 12;
+  const faces = (rows: RaceRow[], lv: boolean) => (
+    <div class="f-onl-row">
+      {rows.slice(0, MAX).map((r) => (
+        <button type="button" key={r.id} class={`f-onl-c${r.id === props.m.me ? " me" : ""}`} onClick={() => props.m.onOpen(r)}>
+          <Face r={r} size="s" goat={false} />
+          <span>{r.id === props.m.me ? "You" : firstName(r.n)}</span>
+          {lv && live.study[r.id] > 0 && <small class="f-onl-st">Stage {live.study[r.id]}</small>}
+        </button>
+      ))}
+      {rows.length > MAX && <span class="f-onl-more">+{rows.length - MAX}</span>}
+    </div>
+  );
   return (
     <section class="f-onl f-card rise" aria-label="Online now">
-      <h2 class="f-h2">
-        <i class="f-on in" aria-hidden="true" /> Online now <small>{rows.length}</small>
-      </h2>
-      <div class="f-onl-row">
-        {rows.slice(0, MAX).map((r) => (
-          <button type="button" key={r.id} class={`f-onl-c${r.id === props.m.me ? " me" : ""}`} onClick={() => props.m.onOpen(r)}>
-            <Face r={r} size="s" goat={false} />
-            <span>{r.id === props.m.me ? "You" : firstName(r.n)}</span>
-          </button>
-        ))}
-        {rows.length > MAX && <span class="f-onl-more">+{rows.length - MAX}</span>}
-      </div>
+      {studying.length > 0 && (
+        <>
+          <h2 class="f-h2">
+            <i aria-hidden="true">✏️</i> Studying now <small>{studying.length}</small>
+          </h2>
+          {faces(studying, true)}
+        </>
+      )}
+      {online.length > 0 && (
+        <>
+          <h2 class={`f-h2${studying.length > 0 ? " f-onl-2" : ""}`}>
+            <i class="f-on in" aria-hidden="true" /> Online <small>{online.length}</small>
+          </h2>
+          {faces(online, false)}
+        </>
+      )}
     </section>
   );
 }

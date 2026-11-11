@@ -1403,7 +1403,8 @@ span.f-rface.goat .f-ava {
   }
 }
 
-/* ---- Online, last seen and app time (12 Nov 2026: usage.tsx; the green dot was his ask, the only green here) ---- */
+/* ---- Online, studying, last seen and study time (12 Nov 2026: usage.tsx; the green dot was his ask, the only green
+   here; studying = the same green with a pencil) ---- */
 .f-on {
   position: absolute;
   right: 1px;
@@ -1676,4 +1677,55 @@ span.f-rface.goat .f-ava {
 .f-ustay-m small {
   font: 700 11.5px/1 var(--display);
   color: var(--gem-ink);
+}
+
+/* Studying: a white disc with the pencil on the green, a little bigger than the dot. */
+.f-on.lv {
+  display: grid;
+  place-items: center;
+  width: 34%;
+  min-width: 15px;
+  max-width: 28px;
+  right: -2px;
+  bottom: -2px;
+  font-size: 9px;
+  font-style: normal;
+  line-height: 1;
+  background: #fff;
+  box-shadow: 0 0 0 2px #22c55e, 0 0 0 4px #fff;
+}
+.f-ava.xl ~ .f-on.lv {
+  font-size: 15px;
+}
+.f-seen.lv {
+  color: #fff;
+}
+.f-seen > i:not(.f-on) {
+  font-style: normal;
+}
+.f-onl h2 > i:not(.f-on) {
+  font-style: normal;
+  font-size: 0.85em;
+}
+.f-onl-2 {
+  margin-top: 10px;
+}
+.f-onl-st {
+  margin-top: -2px;
+  font: 700 10.5px/1 var(--display);
+  color: #15803d;
+  white-space: nowrap;
+}
+.f-ustats.two {
+  grid-template-columns: repeat(2, 1fr);
+}
+.f-usheet .f-utap {
+  margin: 0;
+}
+/* His own stays: Studied in the study pink (as the box above), the app time in violet under it. */
+.f-ustay-m {
+  color: var(--gem-ink);
+}
+.f-ustay-m small {
+  color: var(--brand);
 }
