@@ -3858,14 +3858,23 @@ test("Consultation: the top bar's icon left of the whiteboard (the owner, the Co
   await shot(O, "cx00-consultation-fighter");
   // Fighter's Evaluation: the theory books' wrong answers only (Kumar 2, Fathima 1, Dilan 1).
   await P.locator(".tp-kinds").nth(1).locator(".tp-kind", { hasText: "Evaluation" }).click();
-  await says(P.locator(".cx-sum"), "Today 4 · 3 students");
+  await says(P.locator(".cx-sum"), "Here 4 · 3 students");
   expect((await namesOf(P.locator(".cx-nm"))).slice(0, 3)).toEqual(["Kumar", "Fathima", "Dilan"]);
   // Master: one list, the workbooks' lost marks (blanks too): 5 questions for Malik and Vimal (nobody away has any).
   await P.locator(".tp-kinds").first().locator(".tp-kind", { hasText: "Master" }).click();
   await contains(P.locator(".tp-kinds").first().locator(".tp-kind.on"), "Master");
   await count(P.locator(".tp-kinds"), 1);
-  await says(P.locator(".cx-sum"), "Today 5 · 2 students");
-  await says(P.locator(".cx-sum"), "All 5 · 2");
+  await says(P.locator(".cx-sum"), "Here 5 · 2 students");
+  await says(P.locator(".cx-sum"), "Everyone 5 · 2");
+  // All | Past | Today (12 Nov 2026): All first and on; Past + Today = All (each wrong question in one of them).
+  await until(async () => JSON.stringify((await P.locator(".cx-sh").allInnerTexts()).map((x) => x.trim().split(/\s+/)[0])) === '["All","Past","Today"]', "All | Past | Today");
+  await says(P.locator(".cx-sh.on"), "All 5");
+  const shN = async (i: number) => Number(await P.locator(".cx-sh b").nth(i).textContent());
+  expect((await shN(1)) + (await shN(2))).toBe(5);
+  await P.locator(".cx-sh", { hasText: "Today" }).click();
+  await says(P.locator(".cx-sum"), `Here ${await shN(2)} ·`);
+  await P.locator(".cx-sh", { hasText: "All" }).click();
+  await says(P.locator(".cx-sh.on"), "All 5");
   // His order: the most to explain first, then everyone else A–Z. A red ring: no work in a workbook (Vimal).
   await until(async () => (await namesOf(P.locator(".cx-nm"))).length === 13, "the 13 here");
   expect(await namesOf(P.locator(".cx-nm"))).toEqual(["Malik", "Vimal", "Ahamed", "Dilan", "Fathima", "Kumar", "Nila", "Priya", "Rizwan", "Sana", "Tharun", "Yasmin", "Zainab"]);
@@ -3912,7 +3921,7 @@ test("Consultation: the top bar's icon left of the whiteboard (the owner, the Co
   await contains(P.locator(".evx-card .fc-qn"), "13");
   await until(async () => (await marksOf(backend, "Malik")).m?.q["4"]?.x !== undefined, "Q4 explained on the server");
   await count(P.locator(".evx-strip .fc-sq.d-x"), 1);
-  await says(P.locator(".cx-sum"), "Today 4 · 2 students");
+  await says(P.locator(".cx-sum"), "Here 4 · 2 students");
   // Q13 → Theory (T); Q17 Not now (it stays waiting for the Evaluation teachers).
   await P.locator(".fc-n.evx-b.th").click();
   await contains(P.locator(".evx-card .fc-qn"), "17");

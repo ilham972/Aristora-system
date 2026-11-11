@@ -440,6 +440,20 @@ herself with "I'm teaching", her Evaluation page) is the machinery; this is HER 
   questions waiting to be explained (wrong answers, lost marks not explained nor sent to Theory), all his books;
   Theory = a workbook's questions sent to Theory + the whole unit as one, a theory book's next section's teacher
   questions (his book now only, as on the Theory page) (`convex/lib/consult.ts`, the same on the phone and the server).
+- **All | Past | Today (12 Nov 2026, his voice note** after "the wrong questions count isn't increasing immediately":
+  it was by design, a workbook level counts once Correction taps Save; her taps before it are a draft she can still
+  change; a theory book's wrong circle counts at once). On every Evaluation list (Master, Fighter's Evaluation), three
+  fixed pills under the bars (`.cx-show` `.cx-sh`, the pick kept as `aristora.consultShow`, **All** by default), each
+  with its count of the students here: **All** = every wrong question AND the questions lost in a level Correction is
+  marking now (`consult.drafts`, read live only while All or Today is on; a "?" or fewer marks than printed,
+  `draftLost`); **Past** = corrected before today (Sri Lanka midnight, `slDayStart`); **Today** = corrected today + the
+  levels being marked now, its count red while any waits ("always need to be no pending of today's"). The question's
+  time: a workbook row's `t`, a theory book circle's `t` (`wrongAt`, `inShow` in `convex/lib/consult.ts`). The pills,
+  the line and the squares follow the pick (`Show` in `src/consultData.ts`: `waitsOf`, `consultRows`, `todayOf`,
+  `bookQs`, `consultQs`); a question being marked has no square (nothing to explain before Save: his file says "2 being
+  corrected"). The line under the bars says **Here N · M students** and **Everyone N · M** (were Today / All, now the
+  pills' words); Everyone's students not here come from `consult.totals` `past` / `today` (an older server: its
+  evaluation count).
 - **The students here** as one row of pills (`.cx-nm`, Correction's names look), **his order** (`consultRows`): the
   most waiting first (ties: no work first, then here longest, then A–Z), with the count; a **red ring** = no work at all
   (his order stays: the ring makes him see the idle boy); **pale** with her name = another teacher called him or has

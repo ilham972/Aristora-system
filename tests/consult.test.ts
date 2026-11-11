@@ -357,24 +357,51 @@ describe("every student's waiting work", () => {
     // Those here count on the phone (live): the server counts the others. Asha isn't here: her two wrong answers and her
     // next section B (9–11).
     // Each department's books apart too (8 Nov 2026): Asha's theory book is the Fighter department's.
-    const none = { evaluation: { qs: 0, students: 0 }, theory: { qs: 0, students: 0 } };
+    // Past | Today (12 Nov 2026): the wrong questions by when they were corrected (Asha's long ago: the past).
+    const z = { qs: 0, students: 0 };
+    const none = { evaluation: z, theory: z, past: z, today: z };
     expect(await t.query(api.consult.totals, {})).toEqual({
       evaluation: { qs: 2, students: 1 },
       theory: { qs: 3, students: 1 },
-      fighter: { evaluation: { qs: 2, students: 1 }, theory: { qs: 3, students: 1 } },
+      past: { qs: 2, students: 1 },
+      today: z,
+      fighter: { evaluation: { qs: 2, students: 1 }, theory: { qs: 3, students: 1 }, past: { qs: 2, students: 1 }, today: z },
       master: none,
     });
     // Everyone gone home: Malik 2 + Asha 2 to explain; Malik Q4 + Sara Q4 and her whole unit + Asha's B.
     for (const id of [malik, sara]) await t.mutation(api.students.setPresent, { id, present: false });
+    // Malik's Level 1 was corrected today.
     expect(await t.query(api.consult.totals, {})).toEqual({
       evaluation: { qs: 4, students: 2 },
       theory: { qs: 6, students: 3 },
-      fighter: { evaluation: { qs: 2, students: 1 }, theory: { qs: 3, students: 1 } },
-      master: { evaluation: { qs: 2, students: 1 }, theory: { qs: 3, students: 2 } },
+      past: { qs: 2, students: 1 },
+      today: { qs: 2, students: 1 },
+      fighter: { evaluation: { qs: 2, students: 1 }, theory: { qs: 3, students: 1 }, past: { qs: 2, students: 1 }, today: z },
+      master: { evaluation: { qs: 2, students: 1 }, theory: { qs: 3, students: 2 }, past: z, today: { qs: 2, students: 1 } },
     });
+    // The next day, it is the past.
+    vi.setSystemTime(START + 24 * 60 * MIN);
+    const next = await t.query(api.consult.totals, {});
+    expect([next.past, next.today]).toEqual([{ qs: 4, students: 2 }, z]);
     // The simulation's students count only on a phone showing the simulation.
     await t.run(async (ctx) => await ctx.db.patch(malik, { test: true }));
     expect((await t.query(api.consult.totals, {})).evaluation).toEqual({ qs: 2, students: 1 });
     expect((await t.query(api.consult.totals, { test: true })).evaluation).toEqual({ qs: 2, students: 1 });
+  });
+});
+
+describe("the levels being marked now (12 Nov 2026: All and Today count them)", () => {
+  test("consult.drafts: each draft's marks per question, for the Consultation tick only", async () => {
+    const t = await setup();
+    const malik = await add(t, "Malik", 7, "master", "G7-U08");
+    const u08 = await unitId(t, "G7-U08");
+    await t.run(async (ctx) => {
+      await ctx.db.insert("drafts", { studentId: malik, unitId: u08, level: 2, q: { "11": { g: 0 }, "13": { g: 0, dk: true, dkp: ["a"], p: [0] } }, updatedAt: Date.now(), by: "Kavi" });
+    });
+    await addPerson(t, { name: "Rani", token: RANI, tabs: [], can: ["consult"] });
+    await addPerson(t, { name: "Kavi", token: KAVI, tabs: ["correction"] });
+    const rows = await asPhone(t, RANI).query(api.consult.drafts, {});
+    expect(rows).toEqual([{ studentId: malik, unitId: u08, level: 2, q: { "11": { g: 0 }, "13": { g: 0, dk: true } }, updatedAt: expect.any(Number) }]);
+    await expect(asPhone(t, KAVI).query(api.consult.drafts, {})).rejects.toThrow(/Consultation/);
   });
 });
