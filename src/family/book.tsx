@@ -33,6 +33,54 @@ export function Solution(props: { text: string }) {
  * (during the level) the photos go by themselves right after Check. Each photo opens his crop first (6 Nov 2026,
  * src/family/crop.tsx); with no parts on the phone (never fetched, no signal), the whole photo as before.
  */
+/** Her message's words when she only spoke (convex/lib/photos.ts `VOICE_ONLY`; not imported: it would pull the rules in). */
+const VOICE_ONLY = "🎤 குரல் செய்தி";
+const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+
+/**
+ * Her voice note (12 Nov 2026): one round ▶ and the seconds. Nothing downloads until he taps it (the audio is made on
+ * the tap), so a book full of messages costs nothing to open.
+ */
+function VoicePlay(props: { url: string; sec: number }) {
+  const a = useRef<HTMLAudioElement | null>(null);
+  const [on, setOn] = useState(false);
+  const [at, setAt] = useState(0);
+  useEffect(() => () => a.current?.pause(), []);
+  const tap = () => {
+    if (!a.current) {
+      const x = new Audio(props.url);
+      x.ontimeupdate = () => setAt(x.currentTime);
+      x.onended = () => {
+        setOn(false);
+        setAt(0);
+      };
+      x.onerror = () => {
+        setOn(false);
+        toast("இந்தக் குரல் செய்தியை இங்கே இயக்க முடியவில்லை.", true);
+      };
+      a.current = x;
+    }
+    const x = a.current;
+    if (on) {
+      x.pause();
+      setOn(false);
+    } else {
+      void x.play().catch(() => setOn(false));
+      setOn(true);
+    }
+  };
+  const left = Math.max(0, props.sec - at);
+  return (
+    <button type="button" class={`f-voice${on ? " on" : ""}`} onClick={tap} aria-label={on ? "Pause" : "Play the voice message"}>
+      <span class="f-voice-b">{on ? <i class="f-voice-pause" /> : <Icon name="play" size={18} />}</span>
+      <span class="f-voice-bar">
+        <i style={{ width: `${props.sec ? Math.min(100, (at / props.sec) * 100) : 0}%` }} />
+      </span>
+      <small>{mmss(on || at ? left : props.sec)}</small>
+    </button>
+  );
+}
+
 export function Taker(props: { unitId: string; n: number; q: number; kind: Kind; send: boolean; reply?: boolean; onSent?: () => void }) {
   const key = photoKey(props.unitId, props.n, props.q, props.kind);
   const [blobs, setBlobs] = useState<Blob[]>([]);
@@ -208,7 +256,8 @@ function Question(props: { b: BookQ; unitId: string; n: number; onSent: () => vo
             <span class="f-answer-h">
               <Icon name="chat" size={15} /> {p.by ?? "ஆசிரியர்"} கேட்கிறார்
             </span>
-            <p>{p.ask}</p>
+            {p.voice && <VoicePlay url={p.voice} sec={p.sec ?? 0} />}
+            {!(p.voice && p.ask === VOICE_ONLY) && <p>{p.ask}</p>}
             {p.when && <small class="f-answer-when">{stamp(p.when)}</small>}
           </div>
         ) : (
@@ -271,6 +320,8 @@ export function Book(props: { unitId: string; n: number; initial?: LevelBook | n
   const qs = book.qs.filter((q) => !q.free && (q.sol || q.back || q.owe.length || q.photos.length));
   const free = book.qs.filter((q) => q.free);
   const owed = book.qs.reduce((a, q) => a + q.owe.length, 0);
+  // Her messages waiting for his answer (12 Nov 2026: also on a question with no photo): the bar says answer her.
+  const asks = book.qs.filter((q) => q.photos.some((p) => p.state === "ask")).length;
   return (
     <section class="f-book">
       {props.score && (
@@ -287,11 +338,16 @@ export function Book(props: { unitId: string; n: number; initial?: LevelBook | n
       )}
       {owed > 0 && (
         <div class="f-owebar">
-          <Icon name="camera" size={18} />
-          <p>
-            <b>{owed} படங்கள்</b> அனுப்ப வேண்டும்.
-            {book.required && " அனுப்பாமல் இன்னும் 2 Level வரை மட்டுமே செய்யலாம்."}
-          </p>
+          <Icon name={asks ? "chat" : "camera"} size={18} />
+          {asks ? (
+            <p>
+              ஆசிரியர் <b>{asks} கேள்வி</b> பற்றிக் கேட்கிறார்: பதில் அனுப்பு.
+            </p>
+          ) : (
+            <p>
+              <b>{owed} படங்கள்</b> அனுப்ப வேண்டும்.
+            </p>
+          )}
         </div>
       )}
       {qs.length === 0 ? (

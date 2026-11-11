@@ -101,6 +101,9 @@ export type BookPhoto = {
   reply: string | null;
   /** When she answered it, asked again or wrote her message (null = still with her); `at` = when he sent it. */
   when: number | null;
+  /** Her voice note with the message (12 Nov 2026): its address (his phone loads it only when he taps ▶) and seconds. */
+  voice?: string;
+  sec?: number;
 };
 
 export type BookQ = {
@@ -178,6 +181,14 @@ function photoView(p: Doc<"homePhotos">): BookPhoto {
   };
 }
 
+/** A photo row for his phone, with her voice note's address when she spoke (an address only: nothing is downloaded). */
+async function withVoice(ctx: QueryCtx, p: Doc<"homePhotos">): Promise<BookPhoto> {
+  const v = photoView(p);
+  if (!p.askVoice) return v;
+  const url = await ctx.storage.getUrl(p.askVoice);
+  return url ? { ...v, voice: url, sec: p.askSec ?? 0 } : v;
+}
+
 /** A level he checked at home, question by question (null: not one). */
 export async function bookOf(
   ctx: QueryCtx,
@@ -223,7 +234,7 @@ export async function bookOf(
       ok: typed?.ok ?? null,
       sol: mq?.lost && !back ? keyText(raw.get(q)) || null : null,
       back,
-      photos: h.photos.filter((p) => p.unitId === unitId && p.n === n && p.q === q).map(photoView),
+      photos: await Promise.all(h.photos.filter((p) => p.unitId === unitId && p.n === n && p.q === q).map((p) => withVoice(ctx, p))),
       owe: owed.filter((o) => o.q === q).map((o) => o.kind),
     });
   }

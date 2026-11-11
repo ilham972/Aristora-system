@@ -57,7 +57,8 @@ const problems: string[] = [];
 beforeAll(async () => {
   await mkdir(SHOTS, { recursive: true });
   site = await serveDist(resolve("dist"));
-  browser = await playwright.chromium.launch();
+  // A fake microphone, allowed without asking (12 Nov 2026: the teacher's voice note records for real).
+  browser = await playwright.chromium.launch({ args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"] });
 });
 afterAll(async () => {
   await browser?.close();
@@ -126,6 +127,10 @@ async function type(p: Page, keys: string[]) {
   for (const k of keys) await p.locator(".f-padkeys").getByRole("button", { name: k, exact: true }).click();
   await p.locator(".f-padkeys .f-key.next").click();
 }
+
+/** A teachers' page signed in with this token (once per tab: a reload keeps what the page did since). */
+const signedIn = (token: string) =>
+  new Function(`return () => { if (sessionStorage.getItem("t")) return; sessionStorage.setItem("t", "1"); localStorage.setItem("aristora.token", ${JSON.stringify(token)}); }`)() as () => void;
 
 test("the family app: join, a level on the pad, Check once, the reveal, XP and the board; Correction's ⌂ and Checked", async () => {
   const backend = makeBackend(modules);
@@ -1588,6 +1593,65 @@ test("names and reasons: names to tap under the question; ஆம் / இல்�
   const items = await t.query(api.photos.queue, as);
   expect(items.map((i) => [i.q, i.said, i.urls.length])).toEqual([[2, true, 0]]);
   expect(items[0].reasons).toEqual([{ p: "", yes: "இல்லை", text: "Made-up reason in Thanglish: 15 x 15 = 225, so not 125" }]);
+  // His reason in the ⌂ lane (12 Nov 2026, the founder: "message button not working ... no photo"): no Retake (nothing to
+  // take again), Message works; its box has the voice note's Record button.
+  const O = await open(backend, site.url, size(390, 844), signedIn(OWNER_TOKEN));
+  await O.getByRole("button", { name: /Settings/ }).click();
+  await O.getByRole("button", { name: /Mark them in Correction/ }).click();
+  await O.locator(".fc-names .fc-nm").first().click();
+  const lane = O.locator(".hl-card");
+  await contains(lane.locator(".fc-qn"), "2");
+  expect(await O.locator(".hl-acts .hl-again").count()).toBe(1);
+  expect(await O.locator(".hl-ask").isDisabled()).toBe(false);
+  await noSideScroll(O);
+  await shot(O, "fam48b-lane-reason-message");
+  await O.waitForTimeout(400);
+  await O.locator(".hl-ask").click();
+  await visible(O.locator(".hl-askpad .vn-rec"));
+  await O.locator(".hl-askpad textarea").fill("Why is the reason so short?");
+  // Her voice note: Record (the fake microphone), the red dot and the time, Stop; Send waits while it records.
+  await O.context().grantPermissions(["microphone"]);
+  await O.locator(".vn-rec").click();
+  await visible(O.locator(".vn-row.rec"));
+  expect(await O.locator(".hl-askpad").getByRole("button", { name: "Send to him" }).isDisabled()).toBe(true);
+  await shot(O, "fam48c-lane-voice-recording");
+  await O.waitForTimeout(1600);
+  await O.locator(".vn-stop").click();
+  await visible(O.locator(".hl-askpad .vn-play"));
+  await noSideScroll(O);
+  await shot(O, "fam48d-lane-reason-message-pad");
+  await O.locator(".hl-askpad").getByRole("button", { name: "Send to him" }).click();
+  await until(async () => (await t.query(api.photos.queue, as)).length === 0, "her message went to him");
+  const asked = await t.run(async (ctx) => (await ctx.db.query("homePhotos").collect()).find((r) => r.state === "ask")!);
+  expect(asked).toMatchObject({ ask: "Why is the reason so short?", said: true });
+  expect(asked.askSec).toBeGreaterThanOrEqual(1);
+  const file = await t.run(async (ctx) => await ctx.db.system.get(asked.askVoice!));
+  expect(file!.contentType).toMatch(/^audio\//);
+  // His phone: her words with ▶ and the seconds, and a box for his answer (no photo needed).
+  await P.reload();
+  await contains(P.locator(".f-bell-n"), "1");
+  await P.locator(".f-bellb").click();
+  await contains(P.locator(".f-bellitem.ask"), "Owner கேட்கிறார்: Why is the reason so short?");
+  await P.locator(".f-bellitem.ask").click();
+  await visible(P.locator(".f-bookscr"));
+  const q2 = P.locator(".f-bq", { has: P.locator(".f-rq", { hasText: "Q2" }) });
+  await contains(q2.locator(".f-asked"), "Why is the reason so short?");
+  await visible(q2.locator(".f-asked .f-voice"));
+  await contains(P.locator(".f-owebar"), "பதில் அனுப்பு");
+  // ▶ plays it (the audio is made on the tap).
+  await q2.locator(".f-voice").click();
+  await visible(q2.locator(".f-voice.on"));
+  await noSideScroll(P);
+  await shot(P, "fam48e-phone-voice-message");
+  await q2.locator(".f-voice").click();
+  // He answers in words alone: back in her lane with his answer and her voice note.
+  await q2.locator(".f-replybox").fill("Made-up longer reason");
+  await q2.locator(".f-send").click();
+  await until(async () => (await t.query(api.photos.queue, as)).length === 1, "his answer came back");
+  await O.locator(".fc-names .fc-nm", { hasText: "Hana" }).click();
+  await contains(O.locator(".hl-asked .hl-reply"), "Made-up longer reason");
+  await visible(O.locator(".hl-asked .vn-play"));
+  await shot(O, "fam48f-lane-his-answer");
 });
 
 test("typed words and equations: an equation on the pad with =, a name in letters, his own words for a teacher, two answers under one sub-question; no photo anywhere", async () => {
@@ -1726,8 +1790,6 @@ test("the Claude link: the owner turns it on in Settings → Books, the code is 
   const MALA = "books-teacher-token-link-0123456789abcdefghijklm";
   await addPerson(t, { name: "Mala", token: MALA, tabs: ["correction"], can: ["books"] });
   await t.mutation(api.setup.ensure, { token: OWNER_TOKEN });
-  const signedIn = (token: string) =>
-    new Function(`return () => { if (sessionStorage.getItem("t")) return; sessionStorage.setItem("t", "1"); localStorage.setItem("aristora.token", ${JSON.stringify(token)}); }`)() as () => void;
   const O = await open(backend, site.url, size(360, 780), signedIn(OWNER_TOKEN));
   await O.getByRole("button", { name: "Settings" }).click();
   await O.getByRole("button", { name: "Books", exact: true }).click();

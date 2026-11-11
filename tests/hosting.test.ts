@@ -49,4 +49,12 @@ describe("the two addresses", () => {
     const m = JSON.parse(MANIFEST) as { start_url: string; scope: string; id: string };
     expect([m.id, m.start_url, m.scope]).toEqual(["/f/", "/f/", "/f/"]);
   });
+
+  test("voice notes (12 Nov 2026): the teachers' app may use the microphone; both apps play audio from storage", () => {
+    const rules = config.headers as { source: string; headers: { key: string; value: string }[] }[];
+    const head = (src: string, key: string) => rules.find((r) => r.source === src)?.headers.find((h) => h.key === key)?.value ?? "";
+    expect(head("/((?!f/).*)", "Permissions-Policy")).toContain("microphone=(self)");
+    expect(head("/f/(.*)", "Permissions-Policy")).toContain("microphone=()"); // students never record
+    for (const src of ["/((?!f/).*)", "/f/(.*)"]) expect(head(src, "Content-Security-Policy")).toMatch(/media-src [^;]*https:\/\/\*\.convex\.cloud/);
+  });
 });

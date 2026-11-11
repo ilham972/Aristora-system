@@ -16,7 +16,9 @@
 //   retake       -> blurry, wrong page or cut off: he sends it again; the files go at once.
 //   ask          -> her message before marking (7 Nov 2026: "where is the answer for (b)?", a hint): nothing marked;
 //                   his phone shows it, he answers with a new photo and / or words (family.photoSend); his first
-//                   photo is kept; it comes back to the lane with her message and his answer.
+//                   photo is kept; it comes back to the lane with her message and his answer. Since 12 Nov 2026 also
+//                   on a card with no photo (his typed reason, `said`: "why didn't you put the answer?") and with her
+//                   voice note (`voiceUrl` gives the address; words, voice or both).
 //   required / setRequired -> photos required, 2 levels at most without them (on; the owner can turn it off).
 //   sweep        -> every hour (crons.ts): the files of photos marked a day ago, photos of levels taken back or of
 //                   removed students, uploads never attached after a day. Nothing is kept. Photos still waiting for a
@@ -32,7 +34,7 @@ import { classClosed, phoneKeyFor, photosRequired, REQUIRED_KEY } from "./lib/ho
 import { alertStudent } from "./lib/push";
 import type { MState } from "./lib/master";
 import { markQuestion, reasonsOf, slotWords, wantWords, type KeyQ } from "./lib/phone";
-import { ASK_MAX, isRetake, keyText, NOTE_MAX, ORPHAN_MS, partMarks, PHOTO_KEEP_MS, PHOTO_LATE_MS, type PhotoKind } from "./lib/photos";
+import { ASK_MAX, isRetake, keyText, NOTE_MAX, ORPHAN_MS, partMarks, PHOTO_KEEP_MS, PHOTO_LATE_MS, VOICE_BYTES, VOICE_ONLY, VOICE_SEC, type PhotoKind } from "./lib/photos";
 
 const token = v.optional(v.string());
 /** The hourly sweep looks at uploads between a day and a day and this much old (so an hour it missed is caught next time). */
@@ -93,6 +95,9 @@ export type PhotoItem = {
   askBy: string | null;
   askAt: number | null;
   reply: string | null;
+  /** Her voice note with the message (12 Nov 2026): its address (it loads only when she taps it) and seconds. */
+  voice: string | null;
+  voiceSec: number | null;
 };
 
 /** One part of a question as the ⌂ lane shows it. */
@@ -228,6 +233,8 @@ async function itemOf(
     askBy: r.askBy ?? null,
     askAt: r.askAt ?? null,
     reply: r.reply ?? null,
+    voice: r.askVoice ? await ctx.storage.getUrl(r.askVoice) : null,
+    voiceSec: r.askVoice ? (r.askSec ?? null) : null,
   };
 }
 
@@ -442,29 +449,59 @@ async function dropFiles(ctx: MutationCtx, files: Id<"_storage">[]) {
  * owes the photo again; he answers with a new photo and / or words, his first photo kept (family.photoSend).
  */
 export const ask = mutation({
-  args: { token, id: v.id("homePhotos"), text: v.string() },
+  args: {
+    token,
+    id: v.id("homePhotos"),
+    text: v.string(),
+    /** Her voice note (12 Nov 2026): uploaded first to `voiceUrl`'s address; its seconds as her phone counted them. */
+    voice: v.optional(v.id("_storage")),
+    sec: v.optional(v.number()),
+  },
   handler: async (ctx, args) => {
     const me = await actor(ctx, args.token, ["photos"]);
     const now = Date.now();
     const r = await ctx.db.get(args.id);
-    if (!r) fail("That photo is gone.");
+    if (!r) fail("That question is gone.");
     if (r.state !== "waiting") fail(answered(r));
-    if (r.said) fail("This is his typed reason: there is nothing to send again.");
+    // His typed reason too (12 Nov 2026, the founder: "some student accidentally don't put the answer ... I want to ask
+    // them"): she asks, he answers in words (or a photo), it comes back to her with his answer.
     const text = args.text.trim();
-    if (!text) fail("Write your message to him.");
+    if (!text && !args.voice) fail("Write your message to him, or record it.");
     if (text.length > ASK_MAX) fail(`Keep the message under ${ASK_MAX} letters.`);
+    if (args.voice) {
+      const meta = await ctx.db.system.get(args.voice);
+      // (A refused file is left to the hourly sweep: a delete here would be undone with the refusal.)
+      if (!meta) fail("The voice note didn't arrive. Record it again.");
+      if (!(meta.contentType ?? "").startsWith("audio/") || meta.size > VOICE_BYTES) fail(`Keep the voice note under ${VOICE_SEC} seconds.`);
+    }
     const p = await progressFor(ctx, r.studentId, r.unitId, "master");
     const lv = p ? masterState(p).lv[String(r.n)] : undefined;
     if (!lv?.home || !lv.fixed) fail("This level was taken back in class: it isn't marked at home any more.");
     if (lv.hc) fail("This level was corrected in class: nothing to ask.");
-    await ctx.db.patch(r._id, { state: "ask", ask: text, askBy: me.name, askAt: now, reply: undefined, seen: undefined });
+    // A new message replaces her last voice note (a card asked twice keeps only the new one).
+    if (r.askVoice && r.askVoice !== args.voice) await dropFiles(ctx, [r.askVoice]);
+    const sec = args.voice ? Math.max(1, Math.min(VOICE_SEC, Math.round(args.sec ?? 0) || 1)) : undefined;
+    const words = text || VOICE_ONLY;
+    await ctx.db.patch(r._id, { state: "ask", ask: words, askBy: me.name, askAt: now, reply: undefined, seen: undefined, askVoice: args.voice, askSec: sec });
     const s = await ctx.db.get(r.studentId);
     const unit = await ctx.db.get(r.unitId);
-    await log(ctx, null, now, { kind: "photo-ask", studentId: r.studentId, name: s?.name, unit: unit?.key, q: r.q, value: `${r.n} ${text.slice(0, 60)}` });
-    await alertStudent(ctx, r.studentId, `${me.name} கேட்கிறார் (Q${r.q}): ${text}`);
+    await log(ctx, null, now, { kind: "photo-ask", studentId: r.studentId, name: s?.name, unit: unit?.key, q: r.q, value: `${r.n} ${args.voice ? "🎤 " : ""}${text.slice(0, 60)}` });
+    await alertStudent(ctx, r.studentId, `${me.name} கேட்கிறார் (Q${r.q}): ${text ? (args.voice ? `🎤 ${text}` : text) : VOICE_ONLY}`);
     return true;
   },
 });
+
+/** An address for her voice note (12 Nov 2026): her phone sends the recording there, then `ask` with its id. */
+export const voiceUrl = mutation({
+  args: { token },
+  handler: async (ctx, args): Promise<string> => {
+    await actor(ctx, args.token, ["photos"]);
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
+/** A row's files: his photos and her voice note. */
+export const filesOf = (r: Doc<"homePhotos">): Id<"_storage">[] => (r.askVoice ? [...r.files, r.askVoice] : r.files);
 
 /** The photo is no good: he sends it again (its files go now). */
 export const retake = mutation({
@@ -527,7 +564,7 @@ export async function dropWorking(ctx: MutationCtx): Promise<number> {
       .filter((q) => q.eq(q.field("kind"), "working"))
       .collect();
     for (const r of rows) {
-      await dropFiles(ctx, r.files);
+      await dropFiles(ctx, filesOf(r));
       await ctx.db.delete(r._id);
       gone++;
     }
@@ -538,8 +575,8 @@ export async function dropWorking(ctx: MutationCtx): Promise<number> {
 /**
  * Every hour: nothing is kept. The files of photos marked a day ago (the marks and her answer stay), of photos waiting
  * on a level taken back in class or of a removed student, and uploads never attached to a question after a day.
- * Only image files are swept as unattached: nothing else in the app stores files today (a voice note one day must be
- * referenced before this runs, or kept out of it). Photos on Us (7 Nov 2026) are attached when they are sent and marked
+ * Only image and audio files are swept as unattached (12 Nov 2026: her voice note is referenced by its row's `askVoice`
+ * the moment she sends it; one recorded and never sent goes a day later). Photos on Us (7 Nov 2026) are attached when they are sent and marked
  * in usFiles: kept here, they go with their line (convex/lib/us.ts dropPhotos).
  */
 export const sweep = internalMutation({
@@ -552,9 +589,9 @@ export const sweep = internalMutation({
       .withIndex("by_done", (q) => q.lt("doneAt", now - PHOTO_KEEP_MS))
       .collect();
     for (const r of marked) {
-      if (r.doneAt === undefined || !r.files.length) continue;
-      await dropFiles(ctx, r.files);
-      await ctx.db.patch(r._id, { files: [], gone: now });
+      if (r.doneAt === undefined || !filesOf(r).length) continue;
+      await dropFiles(ctx, filesOf(r));
+      await ctx.db.patch(r._id, { files: [], gone: now, askVoice: undefined });
       gone++;
     }
     // Waiting for a teacher, or for his answer to her message (7 Nov 2026).
@@ -580,12 +617,12 @@ export const sweep = internalMutation({
         }
         continue;
       }
-      await dropFiles(ctx, r.files);
-      await ctx.db.patch(r._id, { state: "done", doneAt: now, files: [], gone: now, note: "closed: the level or the student is no longer at home" });
+      await dropFiles(ctx, filesOf(r));
+      await ctx.db.patch(r._id, { state: "done", doneAt: now, files: [], gone: now, askVoice: undefined, note: "closed: the level or the student is no longer at home" });
       gone++;
     }
     const used = new Set<string>();
-    for (const r of await ctx.db.query("homePhotos").collect()) for (const f of r.files) used.add(f);
+    for (const r of await ctx.db.query("homePhotos").collect()) for (const f of filesOf(r)) used.add(f);
     // The Shop's photos (10 Nov 2026): kept while their thing is in the Shop (coins.save and coins.drop delete them).
     for (const x of await ctx.db.query("shopItems").collect()) if (x.ph) used.add(x.ph);
     // Only the files that just became a day old (a few hours' window: it runs every hour, so a missed hour is caught):
@@ -595,7 +632,8 @@ export const sweep = internalMutation({
       .withIndex("by_creation_time", (q) => q.gt("_creationTime", now - ORPHAN_MS - SWEEP_WINDOW_MS).lte("_creationTime", now - ORPHAN_MS))
       .collect();
     for (const f of files) {
-      if (used.has(f._id) || !(f.contentType ?? "").startsWith("image/")) continue;
+      const type = f.contentType ?? "";
+      if (used.has(f._id) || !(type.startsWith("image/") || type.startsWith("audio/"))) continue;
       // A photo on Us (a post, an answer, a doubt, a reply): it goes with its line.
       if (
         await ctx.db

@@ -2361,7 +2361,8 @@ learning app of our education institute"): one profile, his class times, what he
     - Then her own words (optional, he reads them). **No reason** (6 Nov 2026, the founder's rule: "the photo is for
       correction only, not for explanation"): the "why it was wrong" chips and the part remarks are gone. The pad, fixed
       at the bottom like Correction's: **Retake** (blurry / wrong page / cut off: asks him again and deletes the files at
-      once; pale for a typed reason or one corrected in class), **Message** (below; pale the same way) and **Save x/max
+      once; pale once corrected in class; **gone** on a card with no photo, his typed reason: 12 Nov 2026, Message then
+      sits on the left alone, `.hl-acts.one`), **Message** (below; pale only once corrected in class) and **Save x/max
       · next** (green full, amber part, red
       0); Correction's tap guard (350 ms, Save 700 ms after a new card). Save → the next question, then his next level, then round to any she skipped, then the
       next student by himself (this grade first, oldest first; "Hana done. Next: Omar."), then "Every photo from home is
@@ -2374,6 +2375,27 @@ learning app of our education institute"): one profile, his class times, what he
       with the camera and a box for his words; Send (a photo, words, or both: `family.photoSend` `text`) → back to
       `waiting` with a new `at`: the lane shows her message and his answer above the photo (`.hl-asked`), the new
       photos first and his first photo kept (3 at most). Corrected in class meanwhile: it closes like any (`cls`).
+    - **Message on a card with no photo, and her voice note** (12 Nov 2026, the founder: "the message button is not
+      working ... maybe there is no photo ... some student accidentally don't put the answer ... I want to ask them";
+      "add the voice note ... be careful, this is a web app: it must not get heavy"). The bug: since 10 Nov most cards are
+      his typed reason (`said`, no photo), and Message was pale there (and `photos.ask` refused it). Now Message works on
+      every card; `photos.ask` takes a `said` row; his phone answers in words alone (`family.photoSend` takes no photo on
+      a `said` row only when answering her); her message is owed on his phone even with Settings → Photos off
+      (`owedOf`: the switch is about photos, not about answering her), and the gold bar says "ஆசிரியர் N கேள்வி பற்றிக்
+      கேட்கிறார்: பதில் அனுப்பு" instead of "N படங்கள்" (its old "only 2 more Levels" line was false since 10 Nov: gone).
+      **Her voice note** (`src/voiceNote.tsx`, no library): in the message box, **Record a voice note** → the phone's
+      own recorder (MediaRecorder, mono, ~24 kbps, MP4/AAC where the phone can, else WebM/Opus) → a red dot, the time
+      "0:12 / 1:00" and **Stop** (it stops by itself at `VOICE_SEC` 60) → ▶ to listen and 🗑 to record again; Send waits
+      while it records. The microphone opens only on Record and closes on Stop or when she leaves the card. Send uploads
+      it to `photos.voiceUrl`'s address, then `photos.ask` with `voice` and `sec` (audio only, ≤ `VOICE_BYTES` 700 KB;
+      words optional: voice alone keeps `VOICE_ONLY` "🎤 குரல் செய்தி" as the words, for the bell, the alert and the log;
+      the cards show the player instead). Rows keep `askVoice` / `askSec`; a new message deletes the old voice; the
+      sweep deletes it with the photos a day after marking, with a removed student, and one recorded but never sent
+      after a day (audio is swept like images now). His phone: ▶, a gold bar and the seconds in her gold message
+      (`VoicePlay` in `src/family/book.tsx`); the audio is made on his tap, so a book full of messages downloads nothing
+      until played. The lane shows it the same way under her words (`VoicePlay`, `.vn-play`). Headers (`vercel.json`):
+      the teachers' app allows `microphone=(self)` (the family app keeps `microphone=()`), and both apps' CSP allow
+      `media-src https://*.convex.cloud` (the voice's address); `tests/hosting.test.ts` pins both.
     - **Who corrected** (7 Nov 2026, his ask: "students want to know this is corrected by Ilham or by Zuhar ... they want
       the credit"): his phone says "திருத்தியவர்: Nila" on her answer (`BookPhoto.by`), her name on a retake and a message,
       and "வகுப்பில் திருத்தியவர்: Raj" on top of a home level checked in class (`lv.cn`, written by `workbook.correct` and

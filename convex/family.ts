@@ -646,9 +646,11 @@ async function sayReason(ctx: MutationCtx, studentId: Id<"students">, unitId: Id
     await ctx.db.insert("homePhotos", { studentId, unitId, n, q, kind: "part", files: [], said: true, at: now, state: "waiting" });
     return;
   }
-  for (const f of row.files) await ctx.storage.delete(f);
+  for (const f of row.askVoice ? [...row.files, row.askVoice] : row.files) await ctx.storage.delete(f);
   await ctx.db.patch(row._id, {
     files: [],
+    askVoice: undefined,
+    askSec: undefined,
     said: true,
     at: now,
     state: "waiting",
@@ -979,8 +981,9 @@ export const photoSend = mutation({
       if (meta.size > PHOTO_BYTES || !(meta.contentType ?? "").startsWith("image/")) fail("That photo is too big. Take it again.");
     }
     if (row?.state === "done") fail("உன் ஆசிரியர் ஏற்கனவே இதைப் பார்த்துவிட்டார்.");
-    // His typed reason is what the teacher reads for this part (no photo for it).
-    if (row?.said) fail("This question doesn't need a photo.");
+    // His typed reason is what the teacher reads for this part (no photo for it), unless she asked him about it (12 Nov
+    // 2026): then his words (or a photo of his paper) answer her.
+    if (row?.said && !answering) fail("This question doesn't need a photo.");
     if (row && answering) {
       // The new photos first, then the ones she already saw (3 at most; the oldest beyond go).
       const files = [...args.files, ...row.files.filter((f) => !args.files.includes(f))];

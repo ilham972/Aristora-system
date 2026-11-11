@@ -4,6 +4,7 @@
 // its photos, nothing kept (files gone a day after marking), and the unit gate with its redo (10 Nov 2026). Fake answers only (the repo is public); the
 // book is the U01 skeleton.
 
+import { readFileSync } from "node:fs";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api";
@@ -15,7 +16,7 @@ import type { KeyAnswer } from "../convex/lib/key";
 import { computeMaster } from "../convex/lib/master";
 import { comesBack, gateOf, gatePasses, gatePct, halfMarks, redoPool } from "../convex/lib/family";
 import type { KeyQ } from "../convex/lib/phone";
-import { owedOf, PHOTO_BYTES, PHOTO_URLS_PER_DAY, WHY } from "../convex/lib/photos";
+import { owedOf, PHOTO_BYTES, PHOTO_URLS_PER_DAY, VOICE_BYTES, VOICE_ONLY, WHY } from "../convex/lib/photos";
 import schema from "../convex/schema";
 import { readWorkbookHtml } from "../src/workbookFile";
 import { addPerson, asOwner, asPhone } from "./helpers";
@@ -389,12 +390,58 @@ describe("photos from home", () => {
     const [item] = (await picked().query(api.photos.queue, {})).filter((i) => i.q === 10);
     expect(item).toMatchObject({ kind: "part", said: true, urls: [], teach: 2, phoneGot: 0, reasons: [{ p: "", yes: "இல்லை", text: "a made-up reason" }] });
     await expect(picked().mutation(api.photos.retake, { id: item.id, why: "blur" })).rejects.toThrow(/typed reason/);
-    await expect(picked().mutation(api.photos.ask, { id: item.id, text: "Write more" })).rejects.toThrow(/typed reason/);
     await expect(fam().mutation(api.family.photoSend, { unitId: u01, n: 1, q: 10, kind: "part", files: [await jpeg()] })).rejects.toThrow(/doesn't need/);
     await picked().mutation(api.photos.mark, { id: item.id, got: 1 });
     expect((await hanaM()).q["10"]).toMatchObject({ got: 1, max: 2, lost: true });
     const book = await fam().query(api.family.book, { unitId: u01, n: 1 });
     expect(book.qs.find((x) => x.q === 10)).toMatchObject({ got: 1, photos: [{ state: "done", got: 1, said: true, say: null }] });
+  });
+
+  test("her message on a card with no photo (12 Nov 2026): words or a voice note; he answers in words; no Retake; the voice goes a day after marking", async () => {
+    await useKinds();
+    await fam().mutation(api.family.check, { unitId: u01, n: 1, typed: [...LEVEL1, { q: 10, a: ["0", ""] }] });
+    const [item] = (await picked().query(api.photos.queue, {})).filter((i) => i.q === 10);
+    expect(item).toMatchObject({ said: true, urls: [], voice: null });
+    await expect(picked().mutation(api.photos.ask, { id: item.id, text: "  " })).rejects.toThrow(/record it/);
+    // A voice note only: its words are VOICE_ONLY for the bell; his phone gets its address and seconds.
+    const voice = await jpeg(150 * 1024, "audio/mp4");
+    await picked().mutation(api.photos.ask, { id: item.id, text: "", voice, sec: 12.4 });
+    let book = await fam().query(api.family.book, { unitId: u01, n: 1 });
+    const q10 = () => book.qs.find((x) => x.q === 10)!;
+    expect(q10()).toMatchObject({ owe: ["part"], photos: [{ state: "ask", said: true, ask: VOICE_ONLY, sec: 12 }] });
+    expect(q10().photos[0].voice).toMatch(/^http/);
+    // He answers in words alone (no photo needed): back to her with his words and her voice note.
+    await fam().mutation(api.family.photoSend, { unitId: u01, n: 1, q: 10, kind: "part", files: [], text: "I forgot to type it: 12" });
+    const [back] = (await picked().query(api.photos.queue, {})).filter((i) => i.q === 10);
+    expect(back).toMatchObject({ said: true, urls: [], reply: "I forgot to type it: 12", voiceSec: 12 });
+    expect(back.voice).toMatch(/^http/);
+    // A new message replaces the old voice note; a file that isn't audio, or too big, is refused.
+    await expect(picked().mutation(api.photos.ask, { id: item.id, text: "", voice: await jpeg(), sec: 3 })).rejects.toThrow(/under 60 seconds/);
+    await expect(picked().mutation(api.photos.ask, { id: item.id, text: "", voice: await jpeg(VOICE_BYTES + 1, "audio/webm"), sec: 3 })).rejects.toThrow(/under 60 seconds/);
+    const second = await jpeg(40 * 1024, "audio/webm");
+    await picked().mutation(api.photos.ask, { id: item.id, text: "Write the working too", voice: second, sec: 999 });
+    expect(await exists(voice)).toBe(false);
+    book = await fam().query(api.family.book, { unitId: u01, n: 1 });
+    expect(q10().photos[0]).toMatchObject({ state: "ask", ask: "Write the working too", sec: 60 });
+    await fam().mutation(api.family.photoSend, { unitId: u01, n: 1, q: 10, kind: "part", files: [], text: "12, because 3 × 4" });
+    await picked().mutation(api.photos.mark, { id: item.id, got: 2 });
+    vi.setSystemTime(new Date(Date.now() + 25 * 60 * 60_000));
+    await raw.mutation(internal.photos.sweep, {});
+    expect(await exists(second)).toBe(false);
+    const row = await raw.run(async (ctx) => await ctx.db.get(item.id));
+    expect(row).toMatchObject({ state: "done", files: [] });
+    expect(row!.askVoice).toBeUndefined();
+  });
+
+  test("his phone's copy of the voice-only words matches the rules' (book.tsx can't import them: size)", () => {
+    expect(readFileSync(new URL("../src/family/book.tsx", import.meta.url), "utf8")).toContain(`const VOICE_ONLY = "${VOICE_ONLY}";`);
+  });
+
+  test("her message waits for his answer even with photos off (12 Nov 2026)", () => {
+    const owe = { part: [10, 11], working: [] };
+    expect(owedOf(owe, [{ q: 10, kind: "part", state: "ask" }, { q: 11, kind: "part", state: "waiting" }], {}, false)).toEqual([{ q: 10, kind: "part" }]);
+    expect(owedOf(owe, [], {}, false)).toEqual([]);
+    expect(owedOf(owe, [], {}, true)).toEqual([{ q: 10, kind: "part" }, { q: 11, kind: "part" }]);
   });
 
   test("a wrong ஆம் / இல்லை: 0 at once, nothing for the teacher, no photo asked; his words kept, at most 300 letters", async () => {
@@ -771,7 +818,8 @@ describe("photos from home", () => {
     const f = await jpeg();
     await fam().mutation(api.family.photoSend, { unitId: u01, n: 1, q: 10, kind: "part", files: [f] });
     const lonely = await jpeg();
-    const notImage = await jpeg(10, "audio/mp4");
+    const notOurs = await jpeg(10, "application/pdf");
+    const lonelyVoice = await jpeg(10, "audio/mp4"); // recorded, never sent (12 Nov 2026)
     const [item] = await picked().query(api.photos.queue, {});
     await picked().mutation(api.photos.mark, { id: item.id, got: 2 });
     await raw.mutation(internal.photos.sweep, {});
@@ -781,7 +829,8 @@ describe("photos from home", () => {
     await raw.mutation(internal.photos.sweep, {});
     expect(await exists(f)).toBe(false);
     expect(await exists(lonely)).toBe(false);
-    expect(await exists(notImage)).toBe(true); // only images are swept
+    expect(await exists(lonelyVoice)).toBe(false);
+    expect(await exists(notOurs)).toBe(true); // only images and voice notes are swept
     const row = await raw.run(async (ctx) => await ctx.db.get(item.id));
     expect(row).toMatchObject({ files: [], state: "done" });
     expect(row!.gone).toBeDefined();

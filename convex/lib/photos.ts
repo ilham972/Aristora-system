@@ -29,6 +29,14 @@ export const ORPHAN_MS = 24 * 60 * 60_000;
 export const NOTE_MAX = 200;
 /** A teacher's message back to him (the ⌂ card's Ask, 7 Nov 2026). */
 export const ASK_MAX = 300;
+/**
+ * Her voice note with the message (12 Nov 2026, his ask: "why you not put the answer?" said, not typed). The teacher's
+ * phone records it small (mono, ~24 kbps: a minute ≈ 180 KB); a bigger file is refused. It plays only when he taps it.
+ */
+export const VOICE_SEC = 60;
+export const VOICE_BYTES = 700 * 1024;
+/** Her message's words when she only spoke (the bell, the alert and the log read it; the cards show the player). */
+export const VOICE_ONLY = "🎤 குரல் செய்தி";
 
 export type PhotoKind = "part" | "working";
 
@@ -94,7 +102,9 @@ export type PhotoRow = { q: number; kind: PhotoKind; state: "waiting" | "done" |
 /**
  * The photos a checked level still owes: a part only a teacher marks (a drawing, a construction), not marked in class and
  * with no photo sent. A retake, or a teacher's message not answered yet, is owed again. `required` off (Settings →
- * Photos): nothing is owed. His working on a wrong answer is never owed (10 Nov 2026): an old Check's `working` is ignored.
+ * Photos): no photo is owed, but her message still waits for his answer (12 Nov 2026: she asked him; the switch is about
+ * photos, not about answering her). His working on a wrong answer is never owed (10 Nov 2026): an old Check's `working`
+ * is ignored.
  */
 export function owedOf(
   owe: { part: number[]; working: number[] } | undefined,
@@ -102,8 +112,12 @@ export function owedOf(
   mq: Record<string, MQ>,
   required: boolean,
 ): { q: number; kind: PhotoKind }[] {
-  if (!owe || !required) return [];
+  if (!owe) return [];
+  const asked = (q: number) => rows.some((r) => r.q === q && r.kind === "part" && r.state === "ask");
   // A retake, or a teacher's message he hasn't answered yet (7 Nov 2026), is owed again.
   const sent = (q: number) => rows.some((r) => r.q === q && r.kind === "part" && r.state !== "retake" && r.state !== "ask");
-  return owe.part.filter((q) => !mq[String(q)] && !sent(q)).sort((a, b) => a - b).map((q) => ({ q, kind: "part" as const }));
+  return owe.part
+    .filter((q) => !mq[String(q)] && (required ? !sent(q) : asked(q)))
+    .sort((a, b) => a - b)
+    .map((q) => ({ q, kind: "part" as const }));
 }

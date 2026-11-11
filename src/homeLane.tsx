@@ -21,8 +21,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import type { HomePart, LaneRow, PhotoItem } from "../convex/photos";
-import { ASK_MAX, NOTE_MAX, PHOTO_LATE_MS, RETAKE, type RetakeWhy } from "../convex/lib/photos";
-import { errorText, mutate, subscribe } from "./backend";
+import { ASK_MAX, NOTE_MAX, PHOTO_LATE_MS, RETAKE, VOICE_ONLY, type RetakeWhy } from "../convex/lib/photos";
+import { errorText, mutate, subscribe, upload } from "./backend";
 import { BigAnswer } from "./bigAnswer";
 import { BookQuestion, useQuestionShown } from "./bookQuestion";
 import { TAP_GUARD_MS } from "./focusData";
@@ -32,6 +32,7 @@ import type { View } from "./derive";
 import { CardHead } from "./qcard";
 import { now as serverNow, toast } from "./store";
 import { tone } from "./tones";
+import { VoicePlay, VoiceRec, type Voice } from "./voiceNote";
 
 // ---- What the lane remembers while the app is open (a reload starts in the hall) ----
 
@@ -363,6 +364,9 @@ function HomeCard(props: {
   // Her message back to him (7 Nov 2026): the pad turns into a box to write it.
   const [asking, setAsking] = useState(false);
   const [askText, setAskText] = useState("");
+  // Her voice note with it (12 Nov 2026), and whether she is recording right now (Send waits).
+  const [voice, setVoice] = useState<Voice | null>(null);
+  const [recording, setRecording] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [big, setBig] = useState<number | null>(null);
@@ -424,11 +428,12 @@ function HomeCard(props: {
 
   const sendAsk = async () => {
     const text = askText.trim();
-    if (!text || busy) return;
+    if ((!text && !voice) || busy || recording) return;
     setBusy(true);
     setErr(null);
     try {
-      await mutate(api.photos.ask, { id: it.id, text });
+      const v = voice ? ((await upload(api.photos.voiceUrl, voice.blob)) as Id<"_storage">) : undefined;
+      await mutate(api.photos.ask, { id: it.id, text, ...(v && voice ? { voice: v, sec: voice.sec } : {}) });
       tone("clear");
       toast(`Q${it.q}: your message went to ${it.student.name}. It comes back here when he answers.`);
       props.onDone(null);
@@ -439,6 +444,7 @@ function HomeCard(props: {
   };
 
   const kindWords = it.said ? "his reason to read" : part ? "to mark" : "wrong answer";
+  const canRetake = !it.said && it.urls.length > 0;
   return (
     <>
       <section class={`fc-card hl-card ${it.kind}`} aria-label={`Question ${it.q}, ${it.max} marks, ${kindWords}`}>
@@ -461,14 +467,16 @@ function HomeCard(props: {
               <small>
                 {it.askBy ?? "You"} asked{it.askAt ? ` · ${agoWords(it.askAt)}` : ""}
               </small>{" "}
-              {it.ask}
+              {!(it.voice && it.ask === VOICE_ONLY) && it.ask}
             </p>
+            {it.voice && <VoicePlay url={it.voice} sec={it.voiceSec ?? 0} />}
             <p class="hl-reply">
               <small>His answer · {sentWords(it.at)}</small> {it.reply ?? <span class="muted">(a new photo, no words)</span>}
             </p>
           </div>
         )}
-        {!it.said && (
+        {/* His typed reason has no photo, unless he answered her message with one (12 Nov 2026). */}
+        {(!it.said || it.urls.length > 0) && (
           <div class="hl-shots">
             {it.urls.map((u, i) => (
               <Shot key={u} url={u} turnKey={`${it.id}:${i}`} label={`Photo ${i + 1}${it.urls.length > 1 ? ` of ${it.urls.length}` : ""}`} onBig={() => setBig(i)} />
@@ -543,15 +551,25 @@ function HomeCard(props: {
             <textarea
               rows={3}
               maxLength={ASK_MAX}
-              placeholder={`Ask ${it.student.name.split(" ")[0]}: where is the answer for (b)? or a hint. Nothing is marked until he answers.`}
+              placeholder={`Ask ${it.student.name.split(" ")[0]}: why is the answer empty? where is (b)? or a hint. Nothing is marked until he answers.`}
               value={askText}
               onInput={(e) => setAskText((e.target as HTMLTextAreaElement).value)}
             />
+            <VoiceRec onVoice={setVoice} onBusy={setRecording} disabled={busy} />
             <div class="hl-askacts">
-              <button type="button" class="btn ghost" disabled={busy} onClick={() => setAsking(false)}>
+              <button
+                type="button"
+                class="btn ghost"
+                disabled={busy}
+                onClick={() => {
+                  setAsking(false);
+                  setVoice(null);
+                  setRecording(false);
+                }}
+              >
                 Cancel
               </button>
-              <button type="button" class="btn" disabled={busy || !askText.trim()} onClick={() => void sendAsk()}>
+              <button type="button" class="btn" disabled={busy || recording || (!askText.trim() && !voice)} onClick={() => void sendAsk()}>
                 {busy ? "…" : "Send to him"}
               </button>
             </div>
@@ -568,13 +586,15 @@ function HomeCard(props: {
             </button>
           </div>
         ) : (
-          <div class="hl-acts">
-            {/* A typed reason has no photo to take again: pale, in its place (every button in a fixed place). */}
-            <button type="button" class="fc-n hl-again" disabled={busy || it.said || inClass} onClick={() => setRetake(true)}>
-              <small>Retake</small>
-            </button>
-            {/* Her message before marking (7 Nov 2026): pale where Retake is (his typed reason, corrected in class). */}
-            <button type="button" class="fc-n hl-again hl-ask" disabled={busy || it.said || inClass} onClick={() => setAsking(true)}>
+          <div class={`hl-acts${canRetake ? "" : " one"}`}>
+            {/* Retake only where there is a photo to take again (12 Nov 2026: his typed reason has none, so no button). */}
+            {canRetake && (
+              <button type="button" class="fc-n hl-again" disabled={busy || inClass} onClick={() => setRetake(true)}>
+                <small>Retake</small>
+              </button>
+            )}
+            {/* Her message before marking (7 Nov 2026), on every card since 12 Nov 2026 (words or her voice). */}
+            <button type="button" class="fc-n hl-again hl-ask" disabled={busy || inClass} onClick={() => setAsking(true)}>
               <small>Message</small>
             </button>
             <button type="button" class={`fc-go hl-go${look}`} disabled={!ready} onClick={() => void save()}>

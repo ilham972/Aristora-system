@@ -5121,6 +5121,56 @@ button.f-pod:active,
 .f-answer.f-asked .f-answer-h {
   color: var(--gold-ink);
 }
+/* Her voice note (12 Nov 2026): a round ▶, the bar, the seconds. */
+.f-voice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 300px;
+  margin: 6px 0 4px;
+  padding: 6px 12px 6px 6px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: inset 0 0 0 2px var(--gold);
+  color: var(--gold-ink);
+  font: inherit;
+}
+.f-voice-b {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--gold);
+  color: #fff;
+}
+.f-voice-pause {
+  width: 12px;
+  height: 14px;
+  border-left: 4px solid #fff;
+  border-right: 4px solid #fff;
+}
+.f-voice-bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--gold-soft);
+  overflow: hidden;
+}
+.f-voice-bar i {
+  display: block;
+  height: 100%;
+  background: var(--gold);
+  transition: width 0.25s linear;
+}
+.f-voice small {
+  flex: none;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
 .f-replybox {
   display: block;
   width: 100%;

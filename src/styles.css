@@ -10765,6 +10765,113 @@ body.tm-on .toasts {
   grid-template-columns: 74px 74px minmax(0, 1fr);
   gap: 8px;
 }
+/* No photo to take again (his typed reason, 12 Nov 2026): Message alone on the left. */
+.hl-acts.one {
+  grid-template-columns: 96px minmax(0, 1fr);
+}
+/* Her voice note (12 Nov 2026): Record, then the red dot and the time with Stop, then ▶ and delete. */
+.vn-rec {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 46px;
+}
+.vn-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 46px;
+}
+.vn-row.rec {
+  padding: 0 4px 0 12px;
+  border-radius: 12px;
+  background: var(--amber-soft);
+}
+.vn-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #e5484d;
+  animation: vn-blink 1s ease-in-out infinite;
+}
+@keyframes vn-blink {
+  50% {
+    opacity: 0.25;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vn-dot {
+    animation: none;
+  }
+}
+.vn-t {
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+}
+.vn-max {
+  color: var(--ink-3);
+  font-weight: 600;
+}
+.vn-stop {
+  margin-left: auto;
+  min-height: 40px;
+  padding: 0 18px;
+}
+.vn-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 46px;
+  height: 46px;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  background: var(--card, #fff);
+  color: var(--ink-2);
+}
+.vn-play {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  max-width: 320px;
+  padding: 5px 12px 5px 5px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--card, #fff);
+  box-shadow: inset 0 0 0 1.5px var(--line);
+  color: var(--ink);
+  font: inherit;
+}
+.vn-b {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: #fff;
+}
+.vn-bar {
+  flex: 1;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--line);
+  overflow: hidden;
+}
+.vn-bar i {
+  display: block;
+  height: 100%;
+  background: var(--ink);
+  transition: width 0.25s linear;
+}
+.vn-play small {
+  flex: none;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
 /* Her message back to him (7 Nov 2026): the pad becomes a box and two buttons; on a card he answered, her words and his. */
 .hl-askpad {
   display: grid;

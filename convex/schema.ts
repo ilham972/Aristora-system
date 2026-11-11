@@ -930,6 +930,12 @@ export default defineSchema({
     askAt: v.optional(v.number()),
     /** His words back to her message (≤ `REASON_MAX`), with or without new photos. */
     reply: v.optional(v.string()),
+    /**
+     * Her voice note with the message (12 Nov 2026): one audio file (≤ `VOICE_SEC`, ≤ `VOICE_BYTES`) and its seconds.
+     * It goes with the photos' files (a day after marking, `photos.sweep`), and when she sends a new message.
+     */
+    askVoice: v.optional(v.id("_storage")),
+    askSec: v.optional(v.number()),
   })
     .index("by_student", ["studentId", "unitId", "n", "q"])
     .index("by_state", ["state", "at"])

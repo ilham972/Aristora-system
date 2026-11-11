@@ -441,7 +441,7 @@ export async function roomStats(
 export async function wipeStudent(ctx: MutationCtx, s: Doc<"students">) {
   for (const a of await ctx.db.query("familyAnswers").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) await ctx.db.delete(a._id);
   for (const p of await ctx.db.query("homePhotos").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) {
-    for (const f of p.files) await ctx.storage.delete(f).catch(() => undefined);
+    for (const f of p.askVoice ? [...p.files, p.askVoice] : p.files) await ctx.storage.delete(f).catch(() => undefined);
     await ctx.db.delete(p._id);
   }
   for (const r of await ctx.db.query("appTime").withIndex("by_sid", (q) => q.eq("sid", s._id)).collect()) await ctx.db.delete(r._id);
