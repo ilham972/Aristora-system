@@ -12,7 +12,7 @@ import { shopMonth } from "./lib/coins";
 import type { Doc, Id } from "./_generated/dataModel";
 import { query, type QueryCtx } from "./_generated/server";
 import { actor, viewer } from "./lib/auth";
-import { currentSession, fail, getStudent, log } from "./lib/backend";
+import { currentSession, fail, getStudent, log, neverCame } from "./lib/backend";
 import { DAY_MS, SL_OFFSET_MS, slDay, slDayNo, slMonth, slMonthBefore, slMonthStart } from "./lib/day";
 import {
   accountOf,
@@ -34,6 +34,7 @@ import {
   addDay,
   dayStartAt,
   FEE_DEFAULT,
+  freeFix,
   isCharge,
   monthMoney,
   moneyProblem,
@@ -78,6 +79,7 @@ function accOut(a: Doc<"accounts">) {
     ...(a.last !== undefined ? { last: a.last, lastA: a.lastA ?? 0 } : {}),
     ...(a.came ? { came: a.came } : {}),
     ...(a.fee !== undefined ? { fee: a.fee } : {}),
+    ...(a.fb ? { fb: true } : {}),
   };
 }
 export type AccountOut = ReturnType<typeof accOut>;
@@ -137,6 +139,8 @@ export const student = query({
       now,
       fee: acc?.fee ?? cfg?.fee ?? FEE_DEFAULT,
       own: acc?.fee !== undefined,
+      freeBooks: !!acc?.fb,
+      today: slDay(now),
       from: cfg?.from ?? null,
       owe: led.owe,
       cr: led.credit,
@@ -156,6 +160,7 @@ export const student = query({
           ...(r.to ? { to: r.to } : {}),
           ...(r.w !== undefined ? { w: r.w } : {}),
           ...(r.np ? { np: true } : {}),
+          ...(r.fr ? { fr: true } : {}),
           ...(r.by ? { by: r.by } : {}),
           ...(r.note ? { note: r.note } : {}),
           left: left.get(r._id) ?? 0,
@@ -273,6 +278,13 @@ export const business = query({
     });
     const cur = await range(`${month}-01`, today);
     const before = await range(`${prev}-01`, `${prev}-31`);
+    // Classes taken off this month because the student never came (Didn't come): who, which day, who took it off.
+    const offRows = (
+      await ctx.db
+        .query("fees")
+        .withIndex("by_day", (q) => q.gte("day", `${month}-01`).lte("day", today))
+        .collect()
+    ).filter((r) => r.k === "off");
     // The last 30 days, each day's money in (oldest first).
     const start30 = addDay(today, -29);
     const in30 = new Map<string, number>();
@@ -281,7 +293,8 @@ export const business = query({
       const day = addDay(start30, i);
       return { day, a: in30.get(day) ?? 0 };
     });
-    const accounts = (await ctx.db.query("accounts").collect()).filter((a) => !(a.owe === 0 && a.cr === 0 && a.paid === 0));
+    const everyAccount = await ctx.db.query("accounts").collect();
+    const accounts = everyAccount.filter((a) => !(a.owe === 0 && a.cr === 0 && a.paid === 0));
     const oldDay = addDay(today, -OLD_DAYS);
     const owing = accounts.filter((a) => a.owe > 0);
     const old = owing.filter((a) => a.since !== undefined && a.since <= oldDay);
@@ -331,6 +344,18 @@ export const business = query({
       allOut,
       staff,
       spends,
+      offs: await Promise.all(
+        offRows
+          .sort((a, b) => b.at - a.at)
+          .slice(0, 40)
+          .map(async (r) => ({
+            // A student with nothing but this line has an empty account, or none yet: his name from his own row then.
+            name: everyAccount.find((a) => a.sid === r.sid)?.name ?? (await ctx.db.get(r.sid))?.name ?? "?",
+            day: r.day,
+            at: r.at,
+            ...(r.by ? { by: r.by } : {}),
+          })),
+      ),
       // The family app's Shop (10 Nov 2026): its coins this month (1 coin = Rs 1 of a thing's price at most).
       shop: await shopMonth(ctx, now),
     };
@@ -408,6 +433,12 @@ export const pay = mutation({
       const r = await ctx.db.get(id);
       if (!r || r.sid !== s._id || !isCharge(r.k)) fail("Something on his sheet changed. Open it again.");
       if (!to.includes(id)) to.push(id);
+    }
+    // Everything ticked is paid already (11 Nov 2026: the pad stays on the page, so a second tap, or a second phone
+    // with the page from a minute ago, could take the same money twice and call it credit): say so, take nothing.
+    if (to.length > 0) {
+      const open = new Set(replay((await feeRowsOf(ctx, s._id)).map(asRow)).open.map((o) => o.id));
+      if (!to.some((x) => open.has(x))) fail(`${s.name} has paid that already. Look at his name again.`);
     }
     const id = await ctx.db.insert("fees", { sid: s._id, k: "pay", a: args.a, day: slDay(now), at: now, ...(to.length ? { to } : {}), by: me.name });
     const acc = (await rebuild(ctx, s._id, now, s))!;
@@ -526,6 +557,70 @@ export const setFee = mutation({
       name: s.name,
       value: args.fee === null ? "the centre's fee" : rupees(args.fee),
     });
+    return true;
+  },
+});
+
+/**
+ * The owner makes a student free (11 Nov 2026, his words: "some students is always free ... some student book is also
+ * free, some student class free not book free"): his classes (`cls`), his books (`books`), or both. On: what he still
+ * owes of that kind is wiped too (his answer; what he already paid stays paid), and from now a class is a Rs 0 day and
+ * a printed book a Rs 0 line (its copy still leaves the stock). Off: from his next class or book; what was made free
+ * stays free (History → Charge puts one back).
+ */
+export const setFree = mutation({
+  args: { token, sid: v.id("students"), cls: v.optional(v.boolean()), books: v.optional(v.boolean()) },
+  handler: async (ctx, args) => {
+    const me = await actor(ctx, args.token, ["owner"]);
+    await needCfg(ctx);
+    const s = await getStudent(ctx, args.sid);
+    const now = Date.now();
+    const acc = await ensureAccount(ctx, s, now);
+    const patch: Partial<Doc<"accounts">> = { at: now };
+    if (args.cls === true) patch.fee = 0;
+    else if (args.cls === false && acc.fee === 0) patch.fee = undefined;
+    if (args.books !== undefined) patch.fb = args.books ? true : undefined;
+    await ctx.db.patch(acc._id, patch);
+    for (const kind of ["class", "book"] as const) {
+      if (!(kind === "class" ? args.cls : args.books)) continue;
+      const fix = freeFix((await feeRowsOf(ctx, s._id)).map(asRow), kind);
+      for (const id of fix.waive) await ctx.db.patch(id as Id<"fees">, { w: now, wb: me.name, fr: true });
+      for (const t of fix.trim) await ctx.db.patch(t.id as Id<"fees">, { a: t.a, fr: true });
+      for (const id of fix.unprice) await ctx.db.patch(id as Id<"fees">, { np: undefined, fr: true });
+    }
+    await rebuild(ctx, s._id, now, s);
+    await log(ctx, await currentSession(ctx, now), now, {
+      kind: "money-free",
+      by: "money",
+      studentId: s._id,
+      name: s.name,
+      value: [args.cls !== undefined ? `class ${args.cls ? "free" : "not free"}` : "", args.books !== undefined ? `books ${args.books ? "free" : "not free"}` : ""].filter(Boolean).join(", "),
+    });
+    return true;
+  },
+});
+
+/**
+ * He didn't come (11 Nov 2026, his words: "we put some person attendant to the class accidentally, but they actually
+ * not come ... otherwise we consider that person not give the money"): that day's class comes off his fees and his
+ * visits off the register, as if he was never signed in (Attendance's Undo does it for five minutes only). Money
+ * people: today's class; the owner: any day since the fees began (his answer: an old class must not vanish without
+ * him). A Rs 0 line stays on his sheet and on the owner's Business tab: which day, who took it off, when.
+ */
+export const absent = mutation({
+  args: { token, sid: v.id("students"), day: v.string() },
+  handler: async (ctx, args) => {
+    const me = await actor(ctx, args.token, ["money"]);
+    const cfg = await needCfg(ctx);
+    const now = Date.now();
+    const today = slDay(now);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(args.day) || args.day > today || args.day < cfg.from) fail("Choose a class since the fees began.");
+    if (args.day !== today && me.role !== "owner") fail("Only the owner can take off a class of another day.");
+    const session = await currentSession(ctx, now); // first: a class left open since yesterday signs everyone out
+    const s = await getStudent(ctx, args.sid);
+    if ((await neverCame(ctx, s, args.day, now)) === 0) fail(`${s.name} isn't signed in on that day.`);
+    await ctx.db.insert("fees", { sid: s._id, k: "off", a: 0, day: args.day, at: now, by: me.name });
+    await log(ctx, session, now, { kind: "money-absent", by: "money", studentId: s._id, name: s.name, value: `class ${args.day}` });
     return true;
   },
 });

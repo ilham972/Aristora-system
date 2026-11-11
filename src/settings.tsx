@@ -1194,6 +1194,10 @@ function describe(e: Doc<"events">): string {
       return `money before the app: ${v}`;
     case "money-fee":
       return `his class fee: ${v}`;
+    case "money-free":
+      return `free student: ${v}`;
+    case "money-absent":
+      return `didn't come, taken off: ${v}`;
     case "money-book":
       return `book ${e.unit ?? ""}: ${v}`;
     case "money-print":

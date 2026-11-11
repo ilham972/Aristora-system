@@ -4,7 +4,8 @@
 // minutes, never live (it reads the month). The owner's only: the server refuses everyone else.
 // - This month: money in, money out (printing, the team, other), profit; against last month.
 // - Money in each of the last 30 days.
-// - Students: owed to you (and how much for 2 weeks or more), paid ahead, the share of the month's charges collected.
+// - Students: owed to you (and how much for 2 weeks or more), paid ahead, the share of the month's charges collected;
+//   the classes taken off this month with Didn't come (who took each off: an old class never vanishes unseen).
 // - Books: charged, their printing, their profit. The numbers to watch: money a class day, a paying student's month,
 //   the students a class day needs to pay the team and the other costs, the money kept since the fees began.
 // - The team: each person's days this month (marked arrived on the Class tab, or work in the app that day), her pay (a
@@ -39,6 +40,8 @@ type Biz =
       allOut: number;
       staff: StaffLine[];
       spends: { id: string; k: "staff" | "other"; a: number; at: number; day: string; who?: string; note?: string }[];
+      /** Classes taken off this month because the student never came (11 Nov 2026; missing on a server from before). */
+      offs?: { name: string; day: string; at: number; by?: string }[];
       /** The family app's Shop this month (10 Nov 2026; missing on a server from before). */
       shop?: { paid: number; spent: number; back: number; held: number; wallets: number };
     };
@@ -117,6 +120,27 @@ export function BusinessTab(props: { cfg: { fee: number; from: string; paper: nu
         <p class="boss-mix">
           {m.classN} classes charged ({rs(m.classA)}) on {m.classDays} class day{m.classDays === 1 ? "" : "s"}, {b.came} students came this month.
         </p>
+        {b.offs && b.offs.length > 0 && (
+          <div class="mn-offs">
+            <p class="boss-mix">
+              <b>{b.offs.length}</b> class{b.offs.length === 1 ? "" : "es"} taken off this month with Didn't come (signed in by mistake). Who took each off:
+            </p>
+            <ul class="mn-list">
+              {b.offs.map((o) => (
+                <li key={`${o.name}:${o.at}`} class="mn-line">
+                  <span>
+                    {o.name}
+                    <small>
+                      {" "}
+                      · class of {dayWords(o.day, b.today).toLowerCase()} · taken off {dayWords(new Date(o.at + 330 * 60_000).toISOString().slice(0, 10), b.today).toLowerCase()}
+                    </small>
+                  </span>
+                  <b>{o.by ?? ""}</b>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </section>
 
       <section class="boss-card">

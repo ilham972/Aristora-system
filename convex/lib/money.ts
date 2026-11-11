@@ -15,7 +15,7 @@
 
 import { DAY_MS, SL_OFFSET_MS, slDay } from "./day";
 
-export type FeeKind = "class" | "book" | "owe" | "pay" | "credit";
+export type FeeKind = "class" | "book" | "owe" | "pay" | "credit" | "off";
 export type ChargeKind = "class" | "book" | "owe";
 export type BookStage = "fighter" | "master";
 
@@ -32,6 +32,8 @@ export type FeeRow = {
   to?: string[];
   w?: number;
   np?: boolean;
+  /** Free because he is a free student: a book that never takes a price, a charge wiped when he was made free. */
+  fr?: boolean;
 };
 /** A row to add (the server gives it an id). */
 export type NewFee = Omit<FeeRow, "_id" | "sid">;
@@ -167,7 +169,8 @@ export function sumOf(rows: readonly FeeRow[], led: Ledger = replay(rows)): Acco
 /** The charges the app wants for him: each day he came, each printed book given (since the fees began). */
 export type Want = {
   days: { day: string; at: number }[];
-  books: { u: string; st: BookStage; at: number; price: number | null }[];
+  /** `free`: his books are free (the owner's switch): Rs 0, and no price ever reaches it. */
+  books: { u: string; st: BookStage; at: number; price: number | null; free?: boolean }[];
 };
 
 /**
@@ -181,7 +184,7 @@ export function feeDiff(want: Want, rows: readonly FeeRow[], fee: number): { add
   const drop: string[] = [];
   const days = new Map<string, number>();
   for (const d of want.days) days.set(d.day, Math.min(days.get(d.day) ?? Infinity, d.at));
-  const books = new Map<string, { u: string; st: BookStage; at: number; price: number | null }>();
+  const books = new Map<string, Want["books"][number]>();
   for (const b of want.books) {
     const k = bookKey(b.u, b.st);
     const had = books.get(k);
@@ -204,9 +207,24 @@ export function feeDiff(want: Want, rows: readonly FeeRow[], fee: number): { add
   }
   for (const [k, b] of [...books].sort((x, y) => x[1].at - y[1].at)) {
     if (haveBook.has(k)) continue;
-    add.push({ k: "book", a: b.price ?? 0, day: slDay(b.at), at: b.at, u: b.u, st: b.st, ...(b.price === null ? { np: true } : {}) });
+    if (b.free) add.push({ k: "book", a: 0, day: slDay(b.at), at: b.at, u: b.u, st: b.st, fr: true });
+    else add.push({ k: "book", a: b.price ?? 0, day: slDay(b.at), at: b.at, u: b.u, st: b.st, ...(b.price === null ? { np: true } : {}) });
   }
   return { add, drop };
+}
+
+/**
+ * A student made free (11 Nov 2026, his answer: "wipe them"): what becomes of what he still owes of that kind. A charge
+ * nobody paid anything for is waived; a charge paid in part keeps the part he paid as its amount (the money he gave
+ * stays where it was: nothing turns into credit); a book waiting for its price never takes one. Paid charges stay paid.
+ */
+export function freeFix(rows: readonly FeeRow[], kind: "class" | "book"): { waive: string[]; trim: { id: string; a: number }[]; unprice: string[] } {
+  const open = replay(rows).open.filter((o) => o.k === kind);
+  return {
+    waive: open.filter((o) => o.a === o.full).map((o) => o.id),
+    trim: open.filter((o) => o.a < o.full).map((o) => ({ id: o.id, a: o.full - o.a })),
+    unprice: kind === "book" ? rows.filter((r) => r.k === "book" && r.np && r.w === undefined).map((r) => r._id) : [],
+  };
 }
 
 /** The first moment of a Sri Lanka day ("2026-11-09" → 00:00 that day). */
@@ -265,6 +283,8 @@ export type MonthMoney = {
   bookProfit: number;
   /** Money in each day of the month ("2026-11-09" → rupees). */
   byDay: Record<string, number>;
+  /** Classes taken off because the student never came (signed in by mistake). */
+  offN: number;
 };
 
 /** One month's numbers from its rows (fee rows and cash rows whose day is in that month). */
@@ -304,6 +324,7 @@ export function monthMoney(fees: readonly FeeRow[], cash: readonly CashRow[]): M
     perDay: classDays > 0 ? Math.round(inA / classDays) : null,
     bookProfit: bookA - printA,
     byDay,
+    offN: fees.filter((r) => r.k === "off").length,
   };
 }
 

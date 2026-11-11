@@ -3,7 +3,27 @@
 // Fees lists. Made-up students and units only.
 
 import { describe, expect, test } from "vitest";
-import { ageTone, costOf, creditList, finishOf, nextBookOf, oweWords, owedList, printNeeds, rs, todayList, type Acc } from "../src/moneyData";
+import {
+  ageTone,
+  bookNeedOf,
+  classFree,
+  costOf,
+  creditList,
+  deskWords,
+  feeCount,
+  feePills,
+  finishOf,
+  holdPlaces,
+  nextBookOf,
+  oweWords,
+  owedList,
+  printNeeds,
+  rs,
+  stockPeople,
+  stockTicks,
+  todayList,
+  type Acc,
+} from "../src/moneyData";
 import type { Unit } from "../src/store";
 import { asView } from "./views";
 
@@ -130,5 +150,98 @@ describe("the Fees lists", () => {
     expect(rs(12500)).toBe("Rs 12,500");
     expect(costOf(18, 7)).toBe(126);
     expect(costOf(undefined, 7)).toBeNull();
+  });
+});
+
+describe("the desk: names as pills, one tap each (11 Nov 2026)", () => {
+  const acc = (sid: string, more: Partial<Acc>): Acc => ({ sid, name: sid, grade: 8, owe: 0, cr: 0, c: 0, b: 0, o: 0, bu: [], np: 0, paid: 0, ...more });
+  const T = "2026-11-10";
+  test("today: everyone who came, A–Z, in places that never move as they pay; what each pill says", () => {
+    const list = [
+      acc("Zara", { came: T, owe: 350, c: 1 }),
+      acc("Arun", { came: T, owe: 1050, c: 3, since: "2026-10-20" }),
+      acc("Bala", { came: T, paid: 350 }),
+      acc("Chan", { came: T, owe: 150, c: 1 }),
+      acc("Dev", { came: T, fee: 0 }),
+      acc("Esha", { came: T, cr: 150, paid: 500 }),
+      acc("Old", { came: "2026-11-09", owe: 350 }),
+      acc("Left", { came: T, owe: 350, gone: true }),
+    ];
+    const pills = feePills("today", list, { Bala: 350, Chan: 200 }, T);
+    expect(pills.map((p) => [p.name, p.st, p.n, p.age])).toEqual([
+      ["Arun", "due", "1,050", "red"],
+      ["Bala", "paid", "✓", null],
+      ["Chan", "part", "150", null],
+      ["Dev", "free", "free", null],
+      ["Esha", "paid", "+150", null],
+      ["Zara", "due", "350", null],
+    ]);
+    // The grade's number: who still has to pay (red = an old debt among them).
+    expect(feeCount("today", pills, 8)).toEqual({ n: 3, red: 1 });
+    expect(feeCount("today", pills, 9)).toEqual({ n: 0, red: 0 });
+    expect(classFree(list[4])).toBe(true);
+    expect(classFree(list[0])).toBe(false);
+  });
+  test("owed: the most first (those who left too), then paid ahead; everyone: a grade's students A–Z, with or without an account", () => {
+    const list = [acc("A", { owe: 350 }), acc("B", { owe: 1050, gone: true }), acc("C", { cr: 200 }), acc("D", { owe: 700 }), acc("E", { paid: 350, came: T })];
+    expect(feePills("owed", list, {}, T).map((p) => [p.name, p.st, p.n, !!p.gone])).toEqual([
+      ["B", "due", "1,050", true],
+      ["D", "due", "700", false],
+      ["A", "due", "350", false],
+      ["C", "paid", "+200", false],
+    ]);
+    const all = feePills("all", list, {}, T, [
+      { sid: "New", name: "New", grade: 8 },
+      { sid: "E", name: "E", grade: 8 },
+      { sid: "A", name: "A", grade: 8 },
+    ]);
+    expect(all.map((p) => [p.name, p.st, p.n])).toEqual([
+      ["A", "due", "350"],
+      ["E", "paid", "✓"],
+      ["New", "none", ""],
+    ]);
+    expect(feeCount("all", all, 8)).toEqual({ n: 3, red: 0 });
+    // The Owed names hold still: D paid everything and keeps his place, a new debtor goes to the end.
+    expect(holdPlaces(null, ["B", "D", "A"])).toEqual(["B", "D", "A"]);
+    expect(holdPlaces(["B", "D", "A"], ["B", "A", "Z"])).toEqual(["B", "D", "A", "Z"]);
+    expect(deskWords(acc("A", { owe: 1050, c: 2, b: 1, since: "2026-10-25" }), T)).toBe("Owes Rs 1,050 · 2 classes · 1 book · 16 days");
+    expect(deskWords(acc("A", { cr: 150 }), T)).toBe("Rs 150 paid ahead");
+    expect(deskWords(acc("A", {}), T)).toBe("All paid");
+    expect(deskWords(null, T)).toBe("Nothing yet");
+  });
+  test("books: who needs his next book now or soon, who has it; one book and the students it can go to; the page's ticks", () => {
+    const holds = (sid: string) => new Set(sid === "c" ? ["U2:master"] : sid === "e" ? ["U1:master"] : []);
+    const views = [
+      master("a", UNITS[0], null, { s: { _id: "a", name: "Arun", grade: 8, present: true } }), // finished U1, here: needs U2 now
+      master("b", UNITS[0], 4, { s: { _id: "b", name: "Bala", grade: 8, present: true } }), // soon
+      master("c", UNITS[0], null, { s: { _id: "c", name: "Chan", grade: 8, present: true } }), // finished, has U2
+      master("d", UNITS[0], null, { s: { _id: "d", name: "Dev", grade: 8, present: false } }), // finished, not here
+      master("e", UNITS[1], 2, { s: { _id: "e", name: "Esha", grade: 8, present: true } }), // on U2 already
+      master("x", UNITS[4], null, { s: { _id: "x", name: "Xavi", grade: 9, present: true } }), // another grade
+      master("t", UNITS[0], null, { s: { _id: "t", name: "Test", grade: 8, present: true, test: true } }),
+    ];
+    expect(bookNeedOf(views[0], UNITS, all, holds("a"))).toMatchObject({ st: "now", need: { u: "U2", st: "master" }, covered: null });
+    expect(bookNeedOf(views[1], UNITS, all, holds("b")).st).toBe("soon");
+    expect(bookNeedOf(views[2], UNITS, all, holds("c"))).toMatchObject({ st: "has", covered: { u: "U2", st: "master" } });
+    expect(bookNeedOf(views[4], UNITS, all, holds("e")).st).toBe("ok");
+    const people = stockPeople(views, { u: "U2", st: "master" }, UNITS, all, holds);
+    expect(people.map((p) => [p.name, p.has, p.cur, p.need, p.here])).toEqual([
+      ["Arun", false, false, "now", true],
+      ["Bala", false, false, "soon", true],
+      ["Chan", true, false, null, true],
+      ["Dev", false, false, "now", false],
+      ["Esha", false, true, null, true],
+    ]);
+    // Only the one at the end of his book who is here and has no copy is ticked by the page.
+    expect(stockTicks(people)).toEqual(["a"]);
+    // U1's workbook: Esha holds a copy; the others work in it (their book now).
+    expect(stockPeople(views, { u: "U1", st: "master" }, UNITS, all, holds).map((p) => [p.name, p.has, p.cur])).toEqual([
+      ["Arun", false, true],
+      ["Bala", false, true],
+      ["Chan", false, true],
+      ["Dev", false, true],
+      ["Esha", true, false],
+    ]);
+    expect(stockPeople(views, { u: "nope", st: "master" }, UNITS, all, holds)).toEqual([]);
   });
 });

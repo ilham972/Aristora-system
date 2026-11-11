@@ -66,6 +66,7 @@ export const asRow = (r: Doc<"fees">): FeeRow => ({
   ...(r.to ? { to: r.to } : {}),
   ...(r.w !== undefined ? { w: r.w } : {}),
   ...(r.np ? { np: true } : {}),
+  ...(r.fr ? { fr: true } : {}),
 });
 
 export async function shopRow(ctx: QueryCtx, u: Id<"units">, st: "fighter" | "master"): Promise<Doc<"shop"> | null> {
@@ -102,6 +103,7 @@ export async function rebuild(ctx: MutationCtx, sid: Id<"students">, now: number
     ...(student ? (student.archived ? { gone: true } : {}) : { gone: true }),
     ...sum,
     ...(acc?.fee !== undefined ? { fee: acc.fee } : {}),
+    ...(acc?.fb ? { fb: true } : {}),
     at: now,
   };
   if (acc) {
@@ -131,15 +133,16 @@ export async function syncOne(ctx: MutationCtx, cfg: FeeCfg, sid: Id<"students">
       .collect()
   ).filter((h) => h.at >= fromAt && !h.noCopy);
   const want: Want = { days: visits.filter((x) => x.day >= cfg.from).map((x) => ({ day: x.day, at: x.inAt })), books: [] };
+  const acc = await accountOf(ctx, sid);
+  const freeBooks = !!acc?.fb;
   const prices = new Map<string, number | null>();
   for (const h of hand) {
     const st = printStage(h.stage, await isTute(ctx, h.unitId, h.stage, cache));
     const k = `${h.unitId}:${st}`;
     if (!prices.has(k)) prices.set(k, (await shopRow(ctx, h.unitId, st))?.price ?? null);
-    want.books.push({ u: h.unitId, st, at: h.at, price: prices.get(k)! });
+    want.books.push({ u: h.unitId, st, at: h.at, price: prices.get(k)!, ...(freeBooks ? { free: true } : {}) });
   }
   const rows = await feeRowsOf(ctx, sid);
-  const acc = await accountOf(ctx, sid);
   const { add, drop } = feeDiff(want, rows.map(asRow), acc?.fee ?? cfg.fee);
   if (add.length === 0 && drop.length === 0) {
     // A rename or a removal reaches his account row at his next change; nothing to charge.
@@ -162,6 +165,7 @@ export async function syncOne(ctx: MutationCtx, cfg: FeeCfg, sid: Id<"students">
       ...(r.u ? { u: r.u as Id<"units"> } : {}),
       ...(r.st ? { st: r.st } : {}),
       ...(r.np ? { np: true } : {}),
+      ...(r.fr ? { fr: true } : {}),
     });
   }
   await rebuild(ctx, sid, now, s);

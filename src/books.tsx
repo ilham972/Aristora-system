@@ -2,16 +2,21 @@
 // based on the performance ... sometimes not in the order ... sometimes they finish their book but I don't have next
 // book to give them ... I want to have the alert ... you have to print five books from the unit six and three books
 // from the unit four ... I will go to the printing shop and immediately print those books"). The Management
-// department's and the owner's.
+// department's and the owner's. Students and Stock rebuilt on 11 Nov 2026 as one screen each, like the Fighter and
+// Master pages (his words: "in the stock when I press any list of book, then I can select any students I want, then
+// that's where also we can give the books ... student tab also same like this").
 // - To print: each next book someone needs (finished = now, near the end = soon) less the copies in hand, in his own
 //   words at the top ("Print 5 of Unit 6 ..."), with the papers and the cost; Printed records the copies (the cost goes
-//   to the Business tab, the copies to the stock).
-// - Students: grade by grade, each student's book now and how near its end, his next book (in hand, to print, or he
-//   has it), his books not paid. A tap opens his sheet (money and books together).
-// - Stock: every book in the app by grade: in hand, papers, its cost (papers × the paper's cost) and its price (the
-//   owner types it, his answer: "show cost of each book, from that I will decide the price").
+//   to the Business tab, the copies to the stock). A name there opens him in Students.
+// - Students: the grades, then the grade's names as pills (red = at the end of his book with no next one, amber = soon,
+//   ✓ = has his next book); a tap picks him and the pad at the bottom is his (src/moneyDesk.tsx: Give his next book,
+//   its money and today's class in one place).
+// - Stock: the grades (OL too), that grade's printed books in one row (its number, the copies in hand), then the
+//   students it can go to: the page ticks who needs it now and is here, she ticks anyone; Give to N at the bottom
+//   (Take back for the ticked who have it). The book's papers, price and count: ⋯ on its line.
 
-import { useState } from "preact/hooks";
+import type { ComponentChildren } from "preact";
+import { useEffect, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { OL } from "../convex/lib/syllabus";
@@ -19,13 +24,15 @@ import { mutate } from "./backend";
 import type { View } from "./derive";
 import type { FeeBoard } from "./fees";
 import { unitNo } from "./focusData";
+import { HRow } from "./hrow";
 import { useQuery } from "./live";
-import { bookWords, dayWords, KIND_WORD, MoneySheet, unitShort, unitWords, type CatalogBook, type ShopData } from "./moneySheet";
-import { costOf, finishOf, keyOf, nextBookOf, printNeeds, rs, type BookStage, type PrintNeed } from "./moneyData";
+import { DeskGrades, DeskPad, MoneyDesk, NamePills, useDeskPage, type DeskPick, type NamePill } from "./moneyDesk";
+import { bookWords, dayWords, KIND_WORD, unitNum, unitShort, unitWords, type CatalogBook, type ShopData } from "./moneySheet";
+import { bookNeedOf, costOf, keyOf, printNeeds, rs, stockPeople, stockTicks, type Acc, type BookStage, type PrintNeed } from "./moneyData";
 import { act, allUnits, now as serverNow, toast, unitOf, type Board } from "./store";
 import { slDay } from "../convex/lib/day";
 import { tone } from "./tones";
-import { GradeRow, GRADES, Sheet } from "./ui";
+import { GRADES, Sheet } from "./ui";
 
 type BookTab = "print" | "students" | "stock";
 const BOOK_GRADES = [...GRADES, OL];
@@ -71,22 +78,37 @@ export function printWords(list: readonly PrintNeed[]): string {
   return `Print ${parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`}.`;
 }
 
+const remember = (key: string, value: string) => {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* private mode */
+  }
+};
+const recall = (key: string, allowed: readonly number[]): number | null => {
+  try {
+    const g = Number(localStorage.getItem(key));
+    return allowed.includes(g) ? g : null;
+  } catch {
+    return null;
+  }
+};
+
 export function BooksPage(props: { board: Board; views: View[]; now: number }) {
   const shop = useQuery<ShopData>(api.money.shop, {});
   const cat = useQuery<CatalogBook[]>(api.catalog.books, {});
   const fees = useQuery<FeeBoard>(api.money.board, {});
   const [tab, setTabRaw] = useState<BookTab>(loadTab);
-  const [open, setOpen] = useState<{ sid: string; name: string } | null>(null);
+  const [pick, setPick] = useState<DeskPick | null>(null);
+  const [sGrade, setSGradeRaw] = useState<number | null>(() => recall("aristora.booksGrade", GRADES));
+  const [kGrade, setKGradeRaw] = useState<number | null>(() => recall("aristora.stockGrade", BOOK_GRADES));
   const [printing, setPrinting] = useState<{ u: string; st: BookStage; copies: number } | null>(null);
   const [book, setBook] = useState<{ u: string; st: BookStage } | null>(null);
+  const stick = useDeskPage(`${tab}:${!!shop}:${!!cat}`, tab !== "print");
   const setTab = (t: BookTab) => {
     tone("tick");
     setTabRaw(t);
-    try {
-      localStorage.setItem("aristora.booksTab", t);
-    } catch {
-      /* private mode */
-    }
+    remember("aristora.booksTab", t);
   };
   if (!shop || !cat) {
     return (
@@ -95,31 +117,99 @@ export function BooksPage(props: { board: Board; views: View[]; now: number }) {
       </main>
     );
   }
+  const real = realViews(props.views);
   const needs = needsOf(props.views, cat, shop);
   const red = needs.reduce((a, r) => a + r.red, 0);
   const viewOf = (sid: string) => props.views.find((v) => v.s._id === sid) ?? null;
-  const acc = fees && fees.on ? fees.acc : [];
+  const acc: Acc[] = fees && fees.on ? fees.acc : [];
+  const today = fees?.today ?? slDay(serverNow());
+  const inApp = (u: string, st: BookStage) => cat.some((b) => b.unitId === u && b.stage === st);
+  const holds = (sid: string) => new Set(shop.hand[sid] ?? []);
+  const firstGrade = GRADES.find((g) => real.some((v) => v.s.grade === g)) ?? 8;
+  const studentsGrade = sGrade ?? firstGrade;
+  const stockGrade = kGrade ?? firstGrade;
+  const setSGrade = (g: number) => {
+    tone("tick");
+    setSGradeRaw(g);
+    remember("aristora.booksGrade", String(g));
+  };
+  const setKGrade = (g: number) => {
+    tone("tick");
+    setKGradeRaw(g);
+    remember("aristora.stockGrade", String(g));
+  };
+  /** A name on the print list: his grade's names, with him picked. */
+  const openStudent = (x: DeskPick) => {
+    const g = viewOf(x.sid)?.s.grade;
+    setTabRaw("students");
+    remember("aristora.booksTab", "students");
+    if (g !== undefined && GRADES.includes(g)) setSGradeRaw(g);
+    setPick(x);
+  };
+  // Students near the end of their book with no next book in their hands (the grade row's numbers).
+  const needIn = (g: number) => {
+    const list = real.filter((v) => v.s.grade === g).map((v) => bookNeedOf(v, allUnits(), inApp, holds(v.s._id)).st);
+    return { now: list.filter((x) => x === "now").length, soon: list.filter((x) => x === "soon").length };
+  };
+  const booksIn = (g: number) => cat.filter((b) => unitOf(b.unitId)?.grade === g && !(b.tute && b.stage === "master")).length;
 
   return (
-    <main class="page mn-page">
-      {!shop.on && <p class="boss-say t-amber">The fees aren't set up yet (the Fees page): books given aren't charged and Printed waits for it.</p>}
-      <nav class="segc plain mn-seg" aria-label="Books">
-        <button type="button" class={`segc-b${tab === "print" ? " on" : ""}`} aria-pressed={tab === "print"} onClick={() => setTab("print")}>
-          To print {needs.some((r) => r.print > 0) && <small class={red ? "red" : ""}>{needs.reduce((a, r) => a + r.print, 0)}</small>}
-        </button>
-        <button type="button" class={`segc-b${tab === "students" ? " on" : ""}`} aria-pressed={tab === "students"} onClick={() => setTab("students")}>
-          Students
-        </button>
-        <button type="button" class={`segc-b${tab === "stock" ? " on" : ""}`} aria-pressed={tab === "stock"} onClick={() => setTab("stock")}>
-          Stock
-        </button>
-      </nav>
+    <main class="page mn-page mnx-page" data-mode={tab}>
+      <div class="stick mnx-stick" ref={stick}>
+        {!shop.on && <p class="boss-say t-amber">The fees aren't set up yet (the Fees page): books given aren't charged and Printed waits for it.</p>}
+        <nav class="segc plain mn-seg" aria-label="Books">
+          <button type="button" class={`segc-b${tab === "print" ? " on" : ""}`} aria-pressed={tab === "print"} onClick={() => setTab("print")}>
+            To print {needs.some((r) => r.print > 0) && <small class={red ? "red" : ""}>{needs.reduce((a, r) => a + r.print, 0)}</small>}
+          </button>
+          <button type="button" class={`segc-b${tab === "students" ? " on" : ""}`} aria-pressed={tab === "students"} onClick={() => setTab("students")}>
+            Students
+          </button>
+          <button type="button" class={`segc-b${tab === "stock" ? " on" : ""}`} aria-pressed={tab === "stock"} onClick={() => setTab("stock")}>
+            Stock
+          </button>
+        </nav>
+        {tab === "students" && (
+          <DeskGrades
+            grades={GRADES}
+            value={studentsGrade}
+            label="Grade"
+            count={(g) => {
+              const n = needIn(g);
+              return { n: n.now + n.soon, red: n.now, aria: `${n.now + n.soon} finishing with no next book` };
+            }}
+            onPick={setSGrade}
+          />
+        )}
+        {tab === "stock" && (
+          <DeskGrades
+            grades={BOOK_GRADES}
+            value={stockGrade}
+            label="Grade"
+            count={(g) => {
+              const n = booksIn(g);
+              return { n, aria: `${n} books` };
+            }}
+            onPick={setKGrade}
+          />
+        )}
+      </div>
 
-      {tab === "print" && <PrintTab needs={needs} shop={shop} onOpen={setOpen} onPrint={setPrinting} />}
-      {tab === "students" && <StudentsTab views={props.views} cat={cat} shop={shop} acc={acc} onOpen={setOpen} />}
-      {tab === "stock" && <StockTab cat={cat} shop={shop} onBook={setBook} />}
+      {tab === "print" && <PrintTab needs={needs} shop={shop} onOpen={openStudent} onPrint={setPrinting} />}
+      {tab === "students" && (
+        <StudentsTab views={real} grade={studentsGrade} inApp={inApp} holds={holds} acc={acc} pick={pick} onPick={setPick}>
+          <MoneyDesk
+            pick={pick}
+            view={pick ? viewOf(pick.sid) : null}
+            acc={pick ? (acc.find((a) => a.sid === pick.sid) ?? null) : null}
+            grade={pick ? viewOf(pick.sid)?.s.grade : undefined}
+            today={today}
+            shop={shop}
+            cat={cat}
+          />
+        </StudentsTab>
+      )}
+      {tab === "stock" && <StockTab key={stockGrade} grade={stockGrade} views={real} cat={cat} shop={shop} needs={needs} inApp={inApp} holds={holds} onBook={setBook} />}
 
-      {open && <MoneySheet sid={open.sid} name={open.name} view={viewOf(open.sid)} onClose={() => setOpen(null)} />}
       {printing && <PrintSheet u={printing.u} st={printing.st} copies={printing.copies} shop={shop} onClose={() => setPrinting(null)} />}
       {book && (
         <BookSheet
@@ -193,148 +283,201 @@ function PrintTab(props: { needs: PrintNeed[]; shop: ShopData; onOpen: (x: { sid
   );
 }
 
-/** Grade by grade: each student's book now, how near its end, his next book, his books not paid. */
+/**
+ * A grade's students as pills: red = at the end of his book with no next book in his hands, amber = soon, ✓ = he has
+ * it. A tap picks him: the pad below (the page's children) is his.
+ */
 function StudentsTab(props: {
   views: View[];
-  cat: CatalogBook[];
-  shop: ShopData;
-  acc: { sid: string; bu: string[]; b: number }[];
-  onOpen: (x: { sid: string; name: string }) => void;
+  grade: number;
+  inApp: (u: string, st: BookStage) => boolean;
+  holds: (sid: string) => ReadonlySet<string>;
+  acc: { sid: string; b: number }[];
+  pick: DeskPick | null;
+  onPick: (p: DeskPick) => void;
+  children: ComponentChildren;
 }) {
-  const real = realViews(props.views);
-  const first = () => GRADES.find((g) => real.some((v) => v.s.grade === g)) ?? 8;
-  const [grade, setGradeRaw] = useState<number>(() => {
-    try {
-      const g = Number(localStorage.getItem("aristora.booksGrade"));
-      return GRADES.includes(g) ? g : first();
-    } catch {
-      return first();
-    }
+  const list = props.views.filter((v) => v.s.grade === props.grade).sort((a, b) => a.s.name.localeCompare(b.s.name));
+  const pills: NamePill[] = list.map((v) => {
+    const n = bookNeedOf(v, allUnits(), props.inApp, props.holds(v.s._id));
+    const unpaid = props.acc.find((x) => x.sid === v.s._id)?.b ?? 0;
+    const nowBook = v.unit && (v.stage === "fighter" || v.stage === "master") ? `${unitShort(v.unit._id)}, ${n.fin ? n.fin.words : KIND_WORD[v.stage]}` : "no book";
+    const next = n.covered ? `has ${unitShort(n.covered.u)}` : n.need ? `next ${unitShort(n.need.u)}${n.st === "now" ? ", needs it now" : n.st === "soon" ? ", soon" : ""}` : "";
+    return {
+      id: v.s._id,
+      name: v.s.name,
+      cls: `mnx-b-${n.st}${unpaid ? " mnx-owesb" : ""}`,
+      small: n.st === "has" ? "✓" : n.st === "now" ? "needs" : n.st === "soon" ? "soon" : "",
+      aria: [nowBook, next, unpaid ? `${unpaid} book${unpaid === 1 ? "" : "s"} not paid` : ""].filter(Boolean).join("; "),
+    };
   });
-  const setGrade = (g: number) => {
-    tone("tick");
-    setGradeRaw(g);
-    try {
-      localStorage.setItem("aristora.booksGrade", String(g));
-    } catch {
-      /* private mode */
-    }
-  };
-  const inApp = (u: string, st: BookStage) => props.cat.some((b) => b.unitId === u && b.stage === st);
-  const stock = (u: string, st: BookStage) => props.shop.items.find((i) => i.u === u && i.st === st)?.inHand ?? null;
-  const list = real.filter((v) => v.s.grade === grade).sort((a, b) => a.s.name.localeCompare(b.s.name));
-  // Students near the end of their book with no next book in hand yet (the grade row's numbers).
-  const soonIn = (g: number) =>
-    real.filter((v) => v.s.grade === g).filter((v) => {
-      const f = finishOf(v);
-      return f && f.state !== "ok" && !nextBookOf(v, allUnits(), inApp, new Set(props.shop.hand[v.s._id] ?? [])).covered;
-    }).length;
   return (
-    <>
-      <GradeRow
-        value={grade}
-        label="Grade"
-        onPick={setGrade}
-        count={(g) => {
-          const n = soonIn(g);
-          return { text: n ? String(n) : "", aria: `${n} finishing`, some: n > 0 };
+    <div class="mnx-body">
+      <NamePills
+        label={`Grade ${props.grade}`}
+        pills={pills}
+        on={(id) => id === props.pick?.sid}
+        onPick={(p) => {
+          tone("tick");
+          props.onPick({ sid: p.id, name: p.name });
         }}
+        empty={`No students in Grade ${props.grade}.`}
       />
-      {list.length === 0 && <p class="muted small">No students in Grade {grade}.</p>}
-      <ul class="mn-rows" aria-label={`Grade ${grade}`}>
-        {list.map((v) => {
-          const f = finishOf(v);
-          const nb = nextBookOf(v, allUnits(), inApp, new Set(props.shop.hand[v.s._id] ?? []));
-          const a = props.acc.find((x) => x.sid === v.s._id);
-          const n = nb.need ? stock(nb.need.u, nb.need.st) : null;
-          return (
-            <li key={v.s._id}>
-              <button type="button" class={`mn-row bk${f && !nb.covered ? ` f-${f.state}` : ""}`} onClick={() => props.onOpen({ sid: v.s._id, name: v.s.name })}>
-                <span class="mn-l">
-                  <b>{v.s.name}</b>
-                  <small>{v.unit && (v.stage === "fighter" || v.stage === "master") ? `${unitShort(v.unit._id)} · ${f ? f.words : KIND_WORD[v.stage]}` : "no book"}</small>
-                </span>
-                <span class="mn-r">
-                  <em>
-                    {nb.covered ? `✓ has ${unitShort(nb.covered.u)}` : nb.need ? `next ${unitShort(nb.need.u)}` : ""}
-                  </em>
-                  <small>
-                    {nb.need ? (n !== null && n > 0 ? `${n} in hand` : "to print") : ""}
-                    {a && a.b > 0 ? `${nb.need ? " · " : ""}${a.b} book${a.b === 1 ? "" : "s"} not paid` : ""}
-                  </small>
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-    </>
+      {props.children}
+    </div>
   );
 }
 
-/** Every book in the app, by grade: in hand, papers, cost, price. A tap: its sheet. */
-function StockTab(props: { cat: CatalogBook[]; shop: ShopData; onBook: (x: { u: string; st: BookStage }) => void }) {
-  const [grade, setGradeRaw] = useState<number>(() => {
-    try {
-      const g = Number(localStorage.getItem("aristora.stockGrade"));
-      return BOOK_GRADES.includes(g) ? g : 8;
-    } catch {
-      return 8;
-    }
-  });
-  const setGrade = (g: number) => {
-    tone("tick");
-    setGradeRaw(g);
-    try {
-      localStorage.setItem("aristora.stockGrade", String(g));
-    } catch {
-      /* private mode */
-    }
-  };
+/**
+ * One grade's printed books in a row (book order; its number and the copies in hand), then the students the picked
+ * book can go to. The page ticks who needs it now and is here; a tap ticks or unticks anyone. Give to N at the bottom.
+ */
+function StockTab(props: {
+  grade: number;
+  views: View[];
+  cat: CatalogBook[];
+  shop: ShopData;
+  needs: PrintNeed[];
+  inApp: (u: string, st: BookStage) => boolean;
+  holds: (sid: string) => ReadonlySet<string>;
+  onBook: (x: { u: string; st: BookStage }) => void;
+}) {
+  const { shop } = props;
   // A topic tute is one printed book: shown once, as its theory book.
   const books = props.cat
     .filter((b) => !(b.tute && b.stage === "master"))
-    .map((b) => ({ u: b.unitId, st: b.stage, unit: unitOf(b.unitId) }))
-    .filter((b) => b.unit && b.unit.grade === grade)
+    .map((b) => ({ u: b.unitId, st: b.stage, unit: unitOf(b.unitId), key: keyOf(b.unitId, b.stage) }))
+    .filter((b) => b.unit && b.unit.grade === props.grade)
     .sort((a, b) => (a.unit!.term || 99) - (b.unit!.term || 99) || a.unit!.order - b.unit!.order || unitNo(a.unit!.code) - unitNo(b.unit!.code) || (a.st === "fighter" ? -1 : 1));
-  const count = (g: number) => props.cat.filter((b) => unitOf(b.unitId)?.grade === g && !(b.tute && b.stage === "master")).length;
+  const need = (key: string) => props.needs.find((n) => n.key === key);
+  // The page's pick: the book someone needs now with none in hand, else one to print, else the first. It holds once shown.
+  const first = books.find((b) => (need(b.key)?.red ?? 0) > 0) ?? books.find((b) => need(b.key)) ?? books[0];
+  const [bookKey, setBookKey] = useState<string | null>(null);
+  useEffect(() => {
+    if (bookKey === null && first) setBookKey(first.key);
+  }, [first?.key]);
+  const cur = books.find((b) => b.key === bookKey) ?? first ?? null;
+  // The ticks: the page's own for a book just shown (who is at the end of his book and here). They hold once on the
+  // screen (a student signing in while she looks must not add a name to "Give to 3"); her first tap makes them hers.
+  const [ticks, setTicks] = useState<Set<string> | null>(null);
+  const [auto, setAuto] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const people = cur ? stockPeople(props.views, { u: cur.u, st: cur.st }, allUnits(), props.inApp, props.holds) : [];
+  useEffect(() => {
+    if (cur && ticks === null) setTicks(new Set(stockTicks(people)));
+  }, [cur?.key, ticks === null]);
+  const ticked = ticks ?? new Set(stockTicks(people));
+  const item = cur ? shop.items.find((i) => i.u === cur.u && i.st === cur.st) : undefined;
+  const each = costOf(item?.papers, shop.paper);
+  const toGive = people.filter((p) => ticked.has(p.sid) && !p.has);
+  const toTake = people.filter((p) => ticked.has(p.sid) && p.has);
+  const short = item?.inHand !== null && item?.inHand !== undefined && toGive.length > Math.max(0, item.inHand);
+  const pickBook = (key: string) => {
+    tone("tick");
+    setBookKey(key);
+    setTicks(null);
+    setAuto(true);
+  };
+  const toggle = (sid: string) => {
+    tone("tick");
+    setAuto(false);
+    const n = new Set(ticked);
+    if (n.has(sid)) n.delete(sid);
+    else n.add(sid);
+    setTicks(n);
+  };
+  const run = async (list: typeof people, given: boolean) => {
+    if (!cur || list.length === 0) return;
+    const ids = list.map((p) => p.sid as Id<"students">);
+    const args = { ids, unitId: cur.u as Id<"units">, stage: cur.st, by: "money" };
+    setBusy(true);
+    const n = await act(() => mutate(api.students.giveMany, { ...args, given }));
+    setBusy(false);
+    if (n === undefined) return;
+    tone(given ? "done" : "tick");
+    setTicks(new Set());
+    setAuto(false);
+    const names = list.length <= 3 ? list.map((p) => p.name).join(", ") : `${list[0].name}, ${list[1].name} and ${list.length - 2} more`;
+    toast(given ? `${unitShort(cur.u)} given to ${list.length}: ${names}.` : `${unitShort(cur.u)} taken back from ${list.length}: ${names}.`, "info", () => {
+      void act(() => mutate(api.students.giveMany, { ...args, given: !given })).then((x) => x !== undefined && toast(given ? "Taken back." : "Given again."));
+    });
+  };
+  const pills: NamePill[] = people.map((p) => ({
+    id: p.sid,
+    name: p.name,
+    cls: `${p.has ? "mnx-b-has" : p.need ? `mnx-b-${p.need}` : p.cur ? "mnx-b-cur" : "mnx-b-ok"}${p.here ? "" : " mnx-away"}`,
+    small: p.has ? "✓" : p.need === "now" ? "needs" : p.need === "soon" ? "soon" : p.cur ? "on it" : "",
+    aria: [p.has ? "has it" : p.need === "now" ? "needs it now" : p.need === "soon" ? "needs it soon" : p.cur ? "his book now" : "doesn't have it", p.here ? "here" : "not here today"].join(", "),
+  }));
   return (
-    <>
-      <GradeRow
-        value={grade}
-        label="Grade"
-        grades={BOOK_GRADES}
-        onPick={setGrade}
-        count={(g) => {
-          const n = count(g);
-          return { text: n ? String(n) : "", aria: `${n} books`, some: n > 0 };
-        }}
-      />
-      {books.length === 0 && <p class="muted small">No books of this grade in the app yet.</p>}
-      <ul class="mn-rows" aria-label="Books">
-        {books.map((b) => {
-          const it = props.shop.items.find((i) => i.u === b.u && i.st === b.st);
-          const each = costOf(it?.papers, props.shop.paper);
-          return (
-            <li key={keyOf(b.u, b.st)}>
-              <button type="button" class="mn-row bk" onClick={() => props.onBook({ u: b.u, st: b.st })}>
-                <span class="mn-l">
-                  <b>{unitWords(b.u)}</b>
-                  <small>
-                    {KIND_WORD[b.st]}
-                    {it?.papers ? ` · ${it.papers} papers` : ""}
-                  </small>
-                </span>
-                <span class="mn-r">
-                  <em>{it?.inHand === null || it?.inHand === undefined ? "–" : it.inHand < 0 ? "count it" : `${it.inHand} in hand`}</em>
-                  <small>{it?.price !== undefined ? `${rs(it.price)}${each !== null ? ` (cost ${rs(each)})` : ""}` : each !== null ? `cost ${rs(each)} · no price` : "no price"}</small>
-                </span>
+    <div class="mnx-body">
+      {books.length === 0 ? (
+        <p class="mnx-empty">No books of this grade in the app yet.</p>
+      ) : (
+        <HRow as="nav" class="mnx-books" label="Printed books of this grade, in book order" list={props.grade} at={cur?.key}>
+          {books.map((b) => {
+            const it = shop.items.find((i) => i.u === b.u && i.st === b.st);
+            const n = need(b.key);
+            const on = b.key === cur?.key;
+            const hand = it?.inHand === null || it?.inHand === undefined ? "–" : it.inHand < 0 ? "?" : String(it.inHand);
+            return (
+              <button
+                key={b.key}
+                type="button"
+                class={`mnx-bk${on ? " on" : ""}${n?.red ? " bk-red" : n?.print ? " bk-amber" : ""}${it?.price === undefined ? " bk-noprice" : ""}`}
+                data-u={n?.red ? "red" : n?.print ? "amber" : undefined}
+                aria-pressed={on}
+                aria-label={`${bookWords(b.u, b.st)}: ${hand === "–" ? "not counted" : hand === "?" ? "count it" : `${hand} in hand`}${n?.red ? `, ${n.red} needed now` : ""}${it?.price === undefined ? ", no price yet" : ""}`}
+                onClick={() => pickBook(b.key)}
+              >
+                <b>{unitNum(b.u)}</b>
+                {b.st === "fighter" && <em>T</em>}
+                <i>{hand}</i>
               </button>
-            </li>
-          );
-        })}
-      </ul>
-    </>
+            );
+          })}
+        </HRow>
+      )}
+      {cur && <NamePills label={`Who gets ${bookWords(cur.u, cur.st)}`} pills={pills} on={(id) => ticked.has(id)} onPick={(p) => toggle(p.id)} empty={props.grade === OL ? "No Grade 10 or 11 students yet." : `No students in Grade ${props.grade}.`} />}
+      <DeskPad cls="mnx-givepad" label="Give this book">
+        <p class="mnx-who">
+          <b lang="ta">{cur ? unitWords(cur.u) : "Pick a book"}</b>
+          <button type="button" class="mnx-more" aria-label={cur ? `${bookWords(cur.u, cur.st)}: papers, price, count, printed` : "The book"} disabled={!cur} onClick={() => cur && props.onBook({ u: cur.u, st: cur.st })}>
+            ⋯
+          </button>
+        </p>
+        <p class={`mnx-bookline${short ? " warn" : ""}`}>
+          <span>
+            {cur
+              ? [
+                  KIND_WORD[cur.st],
+                  item?.inHand === null || item?.inHand === undefined ? "not counted" : item.inHand < 0 ? "count it" : `${item.inHand} in hand`,
+                  item?.price !== undefined ? `${rs(item.price)}${each !== null && shop.owner ? ` (cost ${rs(each)})` : ""}` : "no price yet",
+                ].join(" · ")
+              : ""}
+          </span>
+          <small>
+            {!cur
+              ? ""
+              : short
+                ? `${toGive.length} ticked, ${Math.max(0, item!.inHand!)} in hand: count the shelf or print.`
+                : auto && toGive.length > 0
+                  ? "Ticked by the page: at the end of his book, here now."
+                  : "Tick who gets it. ✓ has it: tick him to take it back."}
+          </small>
+        </p>
+        <div class="mnx-payrow mnx-giverow">
+          <button type="button" class="mnx-all mnx-take" disabled={busy || toTake.length === 0} onClick={() => void run(toTake, false)}>
+            <small>Take back</small>
+            <b>{toTake.length || "–"}</b>
+          </button>
+          <button type="button" class="mnx-paid" disabled={busy || toGive.length === 0 || !cur} onClick={() => void run(toGive, true)}>
+            <span aria-hidden="true">✓</span>
+            <b>{toGive.length > 0 ? `Give to ${toGive.length}` : "Give"}</b>
+          </button>
+        </div>
+      </DeskPad>
+    </div>
   );
 }
 
