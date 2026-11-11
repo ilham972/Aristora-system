@@ -32,6 +32,7 @@ import { coinsOnce, winNow } from "./coins";
 import { fail, log } from "./lib/backend";
 import { DAY_MS, slDayNo, slMonthBefore, slMonthStart, slWeekStart } from "./lib/day";
 import { championsOf, cupWinners, goatOf, numsAt, weekWinners, type Champ, type Cup, type WeekWin } from "./lib/race";
+import { seenOn } from "./online";
 import { mateMarksOn, numsOfRow, RACE_V, raceList, rebuildStudent, weekCoinsOf } from "./lib/raceRows";
 import { champsMoment, coinsMoment, giftMoment, goatMoment, monthMoment, mostImprovedMonth } from "./lib/us";
 
@@ -270,9 +271,9 @@ export const champions = query({
 /** Settings → Race (the owner): the marks switch and the prizes. */
 export const settings = query({
   args: { token },
-  handler: async (ctx, args): Promise<{ marks: boolean; prizes: Prizes }> => {
+  handler: async (ctx, args): Promise<{ marks: boolean; seen: boolean; prizes: Prizes }> => {
     await viewer(ctx, args.token, "owner");
-    return { marks: await mateMarksOn(ctx), prizes: await prizesOf(ctx) };
+    return { marks: await mateMarksOn(ctx), seen: await seenOn(ctx), prizes: await prizesOf(ctx) };
   },
 });
 
@@ -287,6 +288,21 @@ export const setMarks = mutation({
       .first();
     if (m) await ctx.db.patch(m._id, { value: args.on });
     else await ctx.db.insert("meta", { key: "mateMarks", value: args.on });
+    return args.on;
+  },
+});
+
+/** The owner's switch (12 Nov 2026): classmates see online, last seen and app time on a profile, or not. */
+export const setSeen = mutation({
+  args: { token, on: v.boolean() },
+  handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["owner"]);
+    const m = await ctx.db
+      .query("meta")
+      .withIndex("by_key", (q) => q.eq("key", "seenOn"))
+      .first();
+    if (m) await ctx.db.patch(m._id, { value: args.on });
+    else await ctx.db.insert("meta", { key: "seenOn", value: args.on });
     return args.on;
   },
 });

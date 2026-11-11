@@ -21,6 +21,7 @@ crons.interval("keep each day's work", { minutes: 10 }, internal.work.fill, {});
 crons.weekly("keep last week's race champions", { dayOfWeek: "sunday", hourUTC: 18, minuteUTC: 35 }, internal.race.week, {});
 crons.daily("the owl's birthdays and yesterday's count in Us", { hourUTC: 18, minuteUTC: 40 }, internal.us.daily, {});
 crons.weekly("the week's most improved in Us", { dayOfWeek: "sunday", hourUTC: 18, minuteUTC: 20 }, internal.us.improved, {});
+crons.daily("drop app time older than two months", { hourUTC: 19, minuteUTC: 5 }, internal.online.sweep, {});
 crons.weekly("pay day: last week's XP pays coins", { dayOfWeek: "sunday", hourUTC: 18, minuteUTC: 45 }, internal.coins.payday, {});
 
 export default crons;

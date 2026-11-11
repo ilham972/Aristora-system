@@ -18,6 +18,7 @@ import { bdayWords, useProfile } from "./later";
 import { mutation, type Account } from "./net";
 import { PhotoSheet } from "./photo";
 import { picOf, usePics } from "./pics";
+import { UsageCard } from "./usage";
 import { BdaySheet, ClassCard, DaySheet, HeatMap, NameSheet, ReportCard } from "./profile";
 import { setSoundOn, sound, soundOn } from "./sound";
 import { setSurprisesOn, surprisesOn } from "./surprise";
@@ -238,6 +239,8 @@ export function MeTab(props: {
       {me.photoNo && <Told text="உன் photo ஐ ஆசிரியர் ஏற்கவில்லை. வேறு ஒன்றைத் தேர்ந்தெடு." onOk={() => void act(() => mutation("family:forget", { kind: "photo" }))} />}
       {me.nameAsk?.no && <Told text={`"${me.nameAsk.name}": உன் ஆசிரியர் இந்தப் பெயரை ஏற்கவில்லை.`} onOk={() => void act(() => mutation("family:forget", { kind: "name" }))} />}
       {p && <HeatMap p={p} onDay={(day) => showSheet((close) => <DaySheet day={day} onClose={close} />)} />}
+      {/* His own time in the app (12 Nov 2026): always his, whatever the owner's switch for classmates. */}
+      <UsageCard id="me" />
       {p && <ClassCard p={p} />}
       {p && <ReportCard me={me} p={p} onOpen={props.onReport} />}
       {me.dayXp && <XpBars xp={me.dayXp} total={me.xp} today={today} />}

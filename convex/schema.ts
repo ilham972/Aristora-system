@@ -1471,6 +1471,21 @@ export default defineSchema({
   })
     .index("by_to", ["to", "at"])
     .index("by_from", ["from", "day"]),
+  // Time in the family app (12 Nov 2026, convex/online.ts): one row per stay (the app on his screen; a beat a minute),
+  // `ms` in the app, `lv` of it inside a Level; `bye` = he left it. Online, last seen and the bars on a profile come from
+  // here; rows older than KEEP_DAYS go (the daily sweep).
+  appTime: defineTable({
+    sid: v.id("students"),
+    day: v.number(),
+    from: v.number(),
+    to: v.number(),
+    ms: v.number(),
+    lv: v.number(),
+    bye: v.optional(v.boolean()),
+  })
+    .index("by_sid", ["sid", "to"])
+    .index("by_sid_day", ["sid", "day"])
+    .index("by_to", ["to"]),
 
   /** A running simulation's steps: each student's pace and what he is doing, one reading of the class a minute. */
   simPlay: defineTable({

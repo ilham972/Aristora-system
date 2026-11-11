@@ -268,7 +268,7 @@ describe("the race on the server", () => {
     expect(m.p.stages[0]).toMatchObject({ done: 1, right: items(1).length - 1, toLearn: 1 });
     expect(m.p.stages[0].got).toBeGreaterThan(0);
     // The owner: off = no marks on a classmate's profile (his own Me keeps them).
-    expect(await t.query(api.race.settings, {})).toEqual({ marks: true, prizes: { wc: 50, mi: "", cup: "" } });
+    expect(await t.query(api.race.settings, {})).toEqual({ marks: true, seen: true, prizes: { wc: 50, mi: "", cup: "" } });
     await t.mutation(api.race.setMarks, { on: false });
     const off = await A.query(api.family.mate, { id: bala });
     expect(off.marks).toBe(false);

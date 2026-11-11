@@ -303,6 +303,23 @@ export function removeAccount(id: string): Account | null {
 export const query = (path: string, args: Record<string, unknown> = {}) => call("query", path, { token: token() ?? undefined, ...args });
 export const mutation = (path: string, args: Record<string, unknown> = {}) => call("mutation", path, { token: token() ?? undefined, ...args });
 /** The child on screen: photos waiting on this phone are his (4 Nov 2026). */
+/**
+ * A mutation that must go out as the page leaves the screen (the app's `bye` beat, 12 Nov 2026): `keepalive`, so the
+ * phone sends it even while it hides the page; nothing comes back. Only the phone's own child (never Preview or a teacher).
+ */
+export function beacon(path: string, args: Record<string, unknown> = {}): void {
+  const t = token();
+  if (!t || look !== null || staff !== null) return;
+  const body = { token: t, ...args };
+  if (testBackend) return void Promise.resolve(testBackend.mutation(path, body)).catch(() => {});
+  void fetch(`${__CONVEX_URL__}/api/mutation`, {
+    method: "POST",
+    keepalive: true,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path, args: body, format: "json" }),
+  }).catch(() => {});
+}
+
 export const childId = () => (look !== null ? "look" : staff !== null ? "staff" : (currentId ?? "_"));
 
 /** One photo into Convex storage (an address from `family:photoUrl`, then a plain POST): its storage id. */

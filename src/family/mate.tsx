@@ -14,6 +14,8 @@ import { mutation, query } from "./net";
 import { picOf, usePics } from "./pics";
 import { ClassCard, HeatMap, QChips, StageCard, sumQ } from "./profile";
 import { buzz, sound } from "./sound";
+import { useOnline } from "./beat";
+import { OnDot, SeenLine, UsageCard } from "./usage";
 import { Avatar, BRAND, Flame, Gem, Icon, Medal, problemWords, titleSize, toast, TROPHY_ORDER, Waiting } from "./ui";
 
 const DAYS = ["M", "T", "W", "T", "F", "S", "S"];
@@ -76,6 +78,9 @@ export function MateScreen(props: {
       setBusy(false);
     }
   };
+  // Online now (12 Nov 2026): the beat's answer is fresher than the profile's.
+  const live = useOnline();
+  const seenNow = m?.seen ? { ...m.seen, on: m.seen.on || (live.show && live.on.has(props.id)) } : undefined;
   const won = m?.trophies ?? [];
   const s = m?.streak;
   return (
@@ -90,6 +95,7 @@ export function MateScreen(props: {
         <div class="f-me-id">
           <span class="f-me-pic">
             <Avatar name={name || "?"} pic={picOf(key)} size="xl" />
+            <OnDot on={!!seenNow?.on} />
           </span>
           <div class="f-me-w">
             <b class={`f-me-name${titleSize(name)}`}>
@@ -97,6 +103,7 @@ export function MateScreen(props: {
               {m?.bday && <span class="f-cake"> 🎂</span>}
             </b>
             <small>{grade ? `Grade ${grade}` : BRAND}</small>
+            <SeenLine seen={seenNow} />
             {m && <EverLine ever={m.ever} grade={m.grade} />}
             {m && (m.wins.g > 0 || m.wins.a > 0) && (
               <span class="f-mate-wins">
@@ -207,6 +214,7 @@ export function MateScreen(props: {
             </div>
           </section>
           <HeatMap p={m.p} />
+          {m.seen && <UsageCard id={props.id} />}
           <ClassCard p={m.p} />
           {m.marks && (
             <section class="f-card rise">

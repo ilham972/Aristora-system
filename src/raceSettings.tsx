@@ -50,7 +50,7 @@ function winOf(x: GiftItem): string {
 }
 
 function MarksSwitch() {
-  const s = useQuery<{ marks: boolean; prizes: Prizes }>(api.race.settings, {});
+  const s = useQuery<{ marks: boolean; seen: boolean; prizes: Prizes }>(api.race.settings, {});
   const [busy, setBusy] = useState(false);
   if (!s) return null;
   return (
@@ -73,12 +73,29 @@ function MarksSwitch() {
           ? "On: everything, as you chose. Turn it off if a parent asks: his own phone still shows him everything."
           : "Off: classmates see his Levels, XP, days and trophies, not his marks. His own phone still shows him everything."}
       </small>
+      <label class="phq-req">
+        <input
+          type="checkbox"
+          checked={s.seen}
+          disabled={busy}
+          onChange={() => {
+            setBusy(true);
+            void act(() => mutate(api.race.setSeen, { on: !s.seen })).finally(() => setBusy(false));
+          }}
+        />
+        <span>Classmates see who is online, last seen and app time (the bars and the times he came and went)</span>
+      </label>
+      <small class="muted">
+        {s.seen
+          ? "On: the green dot, \"Seen 2 h ago\" and every profile's bars, as you chose. Turn it off if a parent complains."
+          : "Off: no green dots, no last seen, no classmate's bars. His own phone still shows him his own app time."}
+      </small>
     </section>
   );
 }
 
 function PrizeForm() {
-  const s = useQuery<{ marks: boolean; prizes: Prizes }>(api.race.settings, {});
+  const s = useQuery<{ marks: boolean; seen: boolean; prizes: Prizes }>(api.race.settings, {});
   const [p, setP] = useState<{ wc: string; mi: string; cup: string } | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => {

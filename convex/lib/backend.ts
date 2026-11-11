@@ -444,6 +444,7 @@ export async function wipeStudent(ctx: MutationCtx, s: Doc<"students">) {
     for (const f of p.files) await ctx.storage.delete(f).catch(() => undefined);
     await ctx.db.delete(p._id);
   }
+  for (const r of await ctx.db.query("appTime").withIndex("by_sid", (q) => q.eq("sid", s._id)).collect()) await ctx.db.delete(r._id);
   for (const p of await ctx.db.query("profilePhotos").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) await ctx.db.delete(p._id);
   // His phone alerts (7 Nov 2026): the phones' addresses and anything waiting to go.
   for (const p of await ctx.db.query("pushSubs").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) await ctx.db.delete(p._id);

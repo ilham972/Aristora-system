@@ -1488,6 +1488,33 @@ learning app of our education institute"): one profile, his class times, what he
     off = no marks on a classmate's profile (% right, questions, each Stage's marks: the ring shows Levels done); his
     own Me keeps them. Never his account, his day hour by hour, WhatsApp or a certificate. **Who cheered him** shows
     on Home and Me ("👏 Hana K, Raj M and 3 others ... இந்த வாரம் உன்னை உற்சாகப்படுத்தினார்கள்!": `me.cheers`, this week).
+  - **Online, last seen and app time** (12 Nov 2026, his voice note: "each student want to know which student is online
+    right now ... green dot ... closed a few minutes ago or few hours ago ... bar graph how many hours studied each day
+    ... press any bar ... the time they come and go"). Told him straight first: an open app isn't studying (kids leave it
+    open to look online), app hours reward the slow, a child's night-time last seen shown to every classmate is what
+    makes a parent delete the app, green breaks the palette. **His answers after the warning**: online = the app open;
+    classmates see everything; the bars = time in the app; the bar's sheet also shows the time inside Levels; "students
+    want to know the bar is pressable". Built (`convex/online.ts`, `convex/lib/appTime.ts`, `src/family/beat.ts` in the
+    first load, `src/family/usage.tsx` in the later parts, the table `appTime`):
+    - **The beat**: while the app is on the screen the phone calls `online.beat` once a minute (at once when it comes back
+      or a child is switched; `bye` with `keepalive` when the page hides). Each beat adds the time since the last one,
+      **at most 90 s** (a phone asleep adds nothing), to his open **stay**; a beat after **3 min**, after a `bye` or on a
+      new Sri Lanka day starts a new stay. `lv` = the Level screen was on since the last beat (its time goes to `lv` too).
+      Never from the owner's Preview or a teacher's Us. **Online** = a beat in the last 150 s and no `bye` since.
+    - **The green dot** on every face in the race (podium, rows, not started), on a profile's photo, and **Online now**
+      on the Race tab under the podium (everyone in the app this minute, himself first, then his grade; tap = profile).
+      The beat's answer is the list, so the dots move once a minute with no extra reads.
+    - **Last seen** under a classmate's name: "Online", "Just now", "12 min ago", "3 h ago", "Yesterday", "Mon", "2 Nov"
+      (`seenWords`; `family.mate.seen`).
+    - **App time** card (Me and a classmate's profile, after the 12 weeks): **Day / Week / Month** (the tab kept per
+      phone), bars of minutes in the app (Day: today's 24 hours; Week: Mon–Sun; Month: the last 30 days), today's bar
+      dark violet, the tallest bounces twice so it reads as a button, "👆 ஒரு bar ஐ அழுத்து ..." under it. **A bar tapped
+      = that day's sheet**: In the app, In Levels (pink), Visits; the day hour by hour; each stay "7:05 PM → 7:48 PM",
+      its minutes and its Levels minutes ("now" and a green edge while he is in it). `online.usage` (30 days of bars,
+      `id: "me"` for his own) and `online.usageDay` (one day of the last 30).
+    - **The owner's switch** (Settings → Race, on by default: his choice; the way back if a parent complains): off = no
+      dots, no Online now, no last seen, no classmate's bars (`usage` refuses); his own Me keeps his own app time.
+    - Stays older than **62 days** go (`online.sweep`, daily 00:35 Sri Lanka); a student removed takes his stays with him.
   - **Gifts from the centre** (7 Nov 2026, his ask: "gift cards ... ice-cream or chicken fries"; no votes, my call told
     him: votes turn into a popularity contest): the owner sets a prize for each win in **Settings → Race** (empty = no
     gift). **The weekly coins** (11 Nov 2026, his answer: "instead of giving gift we can give direct coins, they will buy

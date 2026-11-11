@@ -179,7 +179,8 @@ After adding functions, every function must print GUARD except the open ones on 
 and `join` check the family link; the rest call `familyViewer` / `familyActor`: the family phone only). Also `link.ask`
 and `link.tell` (10 Nov 2026, the Claude link): they answer only a request sealed with the link's key (`opened`).
 And `coins.shop`, `coins.buy`, `coins.cancel` (10 Nov 2026, the Shop: `familyViewer` / `familyActor`, which the
-script's lower-case match misses); `coins.payday` is internal.
+script's lower-case match misses); `coins.payday` is internal. And `online.beat` (`familyActor`), `online.usage`
+and `online.usageDay` (`whose` → `familyViewer`) (12 Nov 2026); `online.sweep` is internal.
 
 ```bash
 python3 - <<'EOF'

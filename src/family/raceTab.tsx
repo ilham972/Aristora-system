@@ -19,6 +19,8 @@ import { GoatChip, GoatMedal } from "./goat";
 import { keep } from "./net";
 import { picOf, usePics } from "./pics";
 import { buzz, sound } from "./sound";
+import { useOnline } from "./beat";
+import { OnDot } from "./usage";
 import { Avatar, BRAND, Coin, firstName, Gem, OwlBadge, Waiting } from "./ui";
 
 /** This week in his grade (the default), all time in his grade, or the GOAT (all of ARISTORA, all time). */
@@ -44,10 +46,12 @@ const num = (n: number) => n.toLocaleString("en");
 
 /** His face; the GOAT's with a gold ring and its chip. */
 function Face(props: { r: RaceRow; size: "s" | "l"; goat: boolean }) {
+  const live = useOnline();
   return (
     <span class={`f-rface${props.goat ? " goat" : ""}`}>
       <Avatar name={props.r.n} size={props.size} pic={picOf(props.r.pic)} />
       {props.goat && <GoatChip />}
+      <OnDot on={live.show && live.on.has(props.r.id)} />
     </span>
   );
 }
@@ -194,6 +198,36 @@ function GradeCup(props: { rows: RaceRow[]; grade: number | null }) {
   );
 }
 
+/**
+ * Online now (12 Nov 2026, his ask: "each student want to know which student is online right now"): the faces of everyone
+ * in the app this minute, his grade first; a tap opens a profile. Nothing while the owner's switch is off (Settings → Race).
+ */
+function OnlineNow(props: { rows: RaceRow[]; grade: number | null; m: Marks }) {
+  const live = useOnline();
+  if (!live.show) return null;
+  const rows = props.rows
+    .filter((r) => live.on.has(r.id))
+    .sort((a, b) => Number(b.id === props.m.me) - Number(a.id === props.m.me) || Number(b.g === props.grade) - Number(a.g === props.grade) || b.xp - a.xp);
+  if (rows.length === 0) return null;
+  const MAX = 12;
+  return (
+    <section class="f-onl f-card rise" aria-label="Online now">
+      <h2 class="f-h2">
+        <i class="f-on in" aria-hidden="true" /> Online now <small>{rows.length}</small>
+      </h2>
+      <div class="f-onl-row">
+        {rows.slice(0, MAX).map((r) => (
+          <button type="button" key={r.id} class={`f-onl-c${r.id === props.m.me ? " me" : ""}`} onClick={() => props.m.onOpen(r)}>
+            <Face r={r} size="s" goat={false} />
+            <span>{r.id === props.m.me ? "You" : firstName(r.n)}</span>
+          </button>
+        ))}
+        {rows.length > MAX && <span class="f-onl-more">+{rows.length - MAX}</span>}
+      </div>
+    </section>
+  );
+}
+
 /** The GOAT's own card (the GOAT list's top): the medal, his face and name, his grade and XP ever. */
 function GoatCard(props: { x: Placed; m: Marks }) {
   const { r } = props.x;
@@ -334,6 +368,7 @@ export function BoardTab(props: {
       {b && (
         <>
           {say()}
+          {!staff && <OnlineNow rows={b.rows} grade={grade} m={m} />}
           {rest.length > 0 && (
             <ol class="f-board">
               {rest.map((x, i) => (

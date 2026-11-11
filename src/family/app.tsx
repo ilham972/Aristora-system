@@ -13,6 +13,7 @@
 //   Stage, Level, XP), Tamil for the owl's voice and every sentence; never the same words twice in two languages. No
 //   school words on his screens (book, unit, marks).
 
+import { beatNow, setInLevel, startBeat } from "./beat";
 import type { ComponentChildren } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { FamilyLevel, FamilyMe } from "../../convex/family";
@@ -226,6 +227,11 @@ export function App() {
       hello();
     } else if (screen.k === "signin") setReady(true);
   }, []);
+
+  // Online and time in the app (12 Nov 2026, beat.ts): a beat a minute while on the screen; a new child beats at once.
+  useEffect(() => startBeat(), []);
+  useEffect(() => beatNow(), [acc?.id]);
+  useEffect(() => setInLevel(screen.k === "level"), [screen.k]);
 
   // A gold card cancelled from Home or Me (10 Nov 2026, board.tsx): his coins and cards again.
   useEffect(() => {
