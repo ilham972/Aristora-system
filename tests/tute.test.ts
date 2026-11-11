@@ -13,7 +13,7 @@ import { cleanHtml, unsafeCss, unsafeHtml } from "../convex/lib/questions";
 import schema from "../convex/schema";
 import { bookCssOf, tuteQuestions } from "../src/bookQuestions";
 import { olNo, uploadRows } from "../src/upload";
-import { readWorkbookFiles, type ReadTute } from "../src/workbookFile";
+import { readWorkbookFiles, type ReadTheory, type ReadTute } from "../src/workbookFile";
 import { addPerson, asOwner, asPhone } from "./helpers";
 import HTML from "./fixtures/tute-skeleton.html?raw";
 import TUTE from "./fixtures/tute-skeleton.json?raw";
@@ -559,5 +559,115 @@ describe("An O/L tute belongs in OL (his Constructions on Grade 11, 3 Nov 2026)"
     expect(await move(ol, unit("OL-U48")._id)).toEqual({ students: 2, kept: false });
     expect((await booksOn(unit("OL-U48")._id)).books).toHaveLength(2);
     await expect(move(unit("OL-U48")._id, unit("OL-U48")._id)).rejects.toThrow("It is in Arithmetic and geometric progressions already.");
+  });
+});
+
+// A school unit's Fighter and Master books are two printed books (11 Nov 2026): the Fighter zip (fighter.json) brings
+// the theory book alone; the unit's workbook, its key and the students' work in it stay. The fake tute's ladder serves.
+describe("a unit's theory book alone (fighter.json)", () => {
+  const FIGHTER = (f: (j: Record<string, any>) => void = () => {}) => {
+    const j: Record<string, any> = {
+      kind: "aristora-fighter",
+      version: 1,
+      grade: 10,
+      unit: { no: 27, code: "U27", en: "Sample", ta: "மாதிரி" },
+      title: "மாதிரி",
+      fighter: JSON.parse(TUTE).fighter,
+    };
+    f(j);
+    return JSON.stringify(j);
+  };
+  const readTheory = (json: string = FIGHTER(), html: string | null = HTML) => {
+    const files: Record<string, Uint8Array> = { "fighter.json": strToU8(json), "content.py": strToU8("") };
+    if (html !== null) files["book.html"] = strToU8(html);
+    return readWorkbookFiles([{ name: "G10_U27_Fighter_source_v1.zip", bytes: zipSync(files) }]);
+  };
+  const args = (r: ReadTheory, unitId: Id<"units">) => ({
+    unitId,
+    title: r.title!,
+    fighter: { sections: r.fighter.sections.map((x) => ({ id: x.id, title: x.title, tamil: x.tamil, teach: x.teach, solo: x.solo })) },
+    fighterKey: r.fighterKey!,
+  });
+
+  test("read: the ladder, its key and its printed questions; a wrong file is refused in plain words", () => {
+    const [r] = readTheory() as ReadTheory[];
+    expect([r.kind, r.grade, r.code, r.title, r.problems]).toEqual(["theory", 10, "U27", "மாதிரி", []]);
+    expect(r.fighter.sections.map((s) => [s.id, s.kind, s.teach, s.solo])).toEqual([
+      ["A", "ladder", [1], [2]],
+      ["B", "ladder", [3], [4, 5]],
+    ]);
+    expect(r.fighterKey?.map((k) => k.q)).toEqual([1, 2, 3, 4, 5]);
+    expect([...r.questions.keys()]).toEqual([1, 2, 3, 4, 5]); // paper cards in the page are never the ladder's
+    expect(readTheory(FIGHTER((j) => (j.kind = "aristora-tute")))[0]).toMatchObject({ problem: expect.stringContaining("fighter.json") });
+    expect((readTheory(FIGHTER((j) => j.fighter.answers.push({ q: 40, a: "x" })))[0] as ReadTheory).problems.join(" ")).toContain("the theory book has no such question");
+    const noHtml = readTheory(FIGHTER(), null)[0] as ReadTheory;
+    expect([noHtml.problems, noHtml.questions.size]).toEqual([[], 0]);
+  });
+
+  test("the upload list: its own row beside the unit's workbook; new or replaces the theory book only; never onto a tute", () => {
+    const units = [{ _id: "u27", grade: 10, code: "U27", en: "Chords of a circle", ta: "வட்டத்தின் நாண்கள்", term: 3, order: 27, key: "G10-U27" }] as never[];
+    const [row] = uploadRows(readTheory(), units, []);
+    expect(row).toMatchObject({ key: "u27:theory", state: "new", words: "New: theory book (the workbook stays as it is)", title: "G10 · U27 Chords of a circle · theory book" });
+    expect(row.detail).toBe("Theory book: A–B, 5 questions (2 with the teacher)");
+    expect(row.keyLine).toEqual({ words: "✓ Answer key: all 5 questions", ok: true });
+    expect(row.qLine).toEqual({ words: "✓ Questions as printed: all 5", ok: true });
+    const workbook = { unitId: "u27", stage: "master" as const, master: { parts: [], levels: [{ n: 1, from: 1, to: 9, max: 20 }], total: 20, marksKnown: 0 }, keyCount: 9 };
+    expect(uploadRows(readTheory(), units, [workbook])[0]).toMatchObject({ state: "new" }); // the workbook is not its business
+    const theory = { unitId: "u27", stage: "fighter" as const, master: null, questions: 7, keyCount: 7 };
+    expect(uploadRows(readTheory(), units, [workbook, theory])[0]).toMatchObject({ state: "replace", words: "Replaces the theory book in the app (7 questions); the workbook stays" });
+    expect(uploadRows(readTheory(), units, [{ ...theory, tute: true }])[0]).toMatchObject({ state: "bad", words: expect.stringContaining("topic tute") });
+    expect(uploadRows(readTheory(FIGHTER((j) => (j.unit.no = 99))), units, [])[0]).toMatchObject({ state: "bad", words: "Grade 10 has no unit U99 in the app." });
+  });
+
+  test("saved: the theory book and its key, not a tute's; the unit's workbook and its key stay; refusals", async () => {
+    const raw = fresh();
+    const t = await asOwner(raw);
+    await t.mutation(api.setup.ensure, {});
+    const idOf = async (key: string) => await raw.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", key)).first())!._id);
+    const unitId = await idOf("G10-U27");
+    const doc = async (id: Id<"units">, stage: "fighter" | "master") =>
+      await raw.run(async (ctx) => await ctx.db.query("books").withIndex("by_unit_stage", (q) => q.eq("unitId", id).eq("stage", stage)).first());
+    // The unit's own workbook, with a key, first.
+    await t.mutation(api.catalog.saveWorkbook, {
+      unitId,
+      parts: [{ id: "IA", to: 2, each: 2 }],
+      levels: [{ to: 2, max: 4 }],
+      marks: {},
+      replace: true,
+      key: [
+        { q: 1, a: "A1" },
+        { q: 2, a: "A2" },
+      ],
+    });
+    const before = (await doc(unitId, "master"))!;
+    const [r] = readTheory() as ReadTheory[];
+    expect(await t.mutation(api.catalog.saveTheory, args(r, unitId))).toBe(true);
+    const f = (await doc(unitId, "fighter"))!;
+    expect([f.title, f.keyCount, f.tute ?? false, f.data.kind]).toEqual(["மாதிரி", 5, false, "fighter"]);
+    expect((await t.query(api.catalog.key, { unitId, stage: "fighter" }))!.answers[0]).toEqual(r.fighterKey![0]);
+    const after = (await doc(unitId, "master"))!;
+    expect([after.updatedAt, after.keyCount, after.tute ?? false]).toEqual([before.updatedAt, 2, false]);
+    expect((await t.query(api.catalog.key, { unitId }))!.answers.map((a) => a.q)).toEqual([1, 2]);
+    const line = await raw.run(async (ctx) => (await ctx.db.query("events").collect()).filter((e) => e.kind === "book-save").at(-1));
+    expect(line?.value).toBe("theory book: 5 questions + answer key (5)");
+    // Its printed questions go to the theory book; again = the same book, patched, not doubled.
+    await t.mutation(api.catalog.saveQuestions, { unitId, stage: "fighter", first: true, css: r.css, items: [...r.questions].map(([q, html]) => ({ q, html })) });
+    expect((await doc(unitId, "fighter"))!.qCount).toBe(5);
+    await t.mutation(api.catalog.saveTheory, args(r, unitId));
+    expect(await raw.run(async (ctx) => (await ctx.db.query("books").collect()).filter((b) => b.unitId === unitId).length)).toBe(2);
+    expect((await doc(unitId, "fighter"))!.qCount).toBe(5); // the same questions: kept
+    // Refused: a key for a question the book hasn't, a unit with a topic tute, someone without Books.
+    await expect(t.mutation(api.catalog.saveTheory, { ...args(r, unitId), fighterKey: [{ q: 40, a: "x" }] })).rejects.toThrow(/no such question/);
+    const tuteUnit = await idOf("G11-U24");
+    const [tt] = read() as ReadTute[];
+    await t.mutation(api.catalog.saveTute, {
+      unitId: tuteUnit,
+      fighter: { sections: tt.fighter.sections.map((x) => ({ id: x.id, title: x.title, tamil: x.tamil, teach: x.teach, solo: x.solo })) },
+      master: { part: tt.part, levels: tt.master.levels.map((l) => ({ from: l.from, to: l.to, max: l.max })), marks: tt.master.marks! },
+    });
+    await expect(t.mutation(api.catalog.saveTheory, args(r, tuteUnit))).rejects.toThrow(/topic tute/);
+    const KALA = "kala-phone-token-0123456789abcdefghijklmnopqrstuvwx";
+    await addPerson(raw, { name: "Kala", token: KALA, tabs: ["correction"] });
+    await expect(asPhone(raw, KALA).mutation(api.catalog.saveTheory, args(r, unitId))).rejects.toThrow();
   });
 });

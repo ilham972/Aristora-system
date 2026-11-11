@@ -7,7 +7,7 @@ import { describe, expect, test } from "vitest";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { asOwner } from "./helpers";
-import { nameHint, readWorkbookFiles, readWorkbookHtml, type ReadWorkbook } from "../src/workbookFile";
+import { nameHint, partIdOf, readWorkbookFiles, readWorkbookHtml, type ReadWorkbook } from "../src/workbookFile";
 import U01 from "./fixtures/workbook-g8-u01.html?raw";
 import U03 from "./fixtures/workbook-g8-u03.html?raw";
 import U10 from "./fixtures/workbook-g8-u10.html?raw";
@@ -139,5 +139,13 @@ describe("saving an uploaded workbook", () => {
     );
     const line = await t.run(async (ctx) => (await ctx.db.query("events").collect()).filter((e) => e.kind === "book-save").at(-1));
     expect(line).toMatchObject({ unit: "G8-U01", value: "12 levels, 230 marks (uploaded book)", who: "Owner" });
+  });
+});
+
+describe("the part names on a marks sheet", () => {
+  test("Grades 6–9 print பகுதி I / II; Grades 10–11 print the paper and its part, as the engine writes them", () => {
+    expect(["பகுதி I", "பகுதி II", "பகுதி IA", "பகுதி I A", "பகுதி IIB"].map(partIdOf)).toEqual(["I", "II", "IA", "IA", "IIB"]);
+    expect(["வினாத்தாள் I · பகுதி A", "வினாத்தாள் I · பகுதி B", "வினாத்தாள் II · பகுதி A", "வினாத்தாள் II · பகுதி B"].map(partIdOf)).toEqual(["IA", "IB", "IIA", "IIB"]);
+    expect(partIdOf("மொத்தம்")).toBeNull();
   });
 });

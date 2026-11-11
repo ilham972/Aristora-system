@@ -176,6 +176,14 @@ chips for other books ("U08 Eval 2"). Absent students: book now only.
   source zips (or book.html) from the workbook chats. The phone reads them (no AI, no deploy), shows New /
   Replaces / Already in the app / refused-with-reason, and one tap saves them (`saveWorkbook` with `replace`). A tute
   zip is one row "topic tute" (both books, both keys, the questions): "Save 1 tute" (`saveTute`).
+  **A unit's theory book alone** (11 Nov 2026, his ask after the first Grade 10 units were built as two printed
+  books, Fighter and Master): a Fighter zip (`fighter.json` + its book.html) is one row "G10 · U27 … · theory book":
+  New, or "Replaces the theory book in the app …; the workbook stays" (`saveTheory`, then its printed questions).
+  Only the unit's theory book and its key change; the workbook, its key, its questions and the students' work in it
+  stay. It is not a tute's book (no twin rules, nothing on the phone's road yet); a unit that has a topic tute
+  refuses it (one printed book: its ladder comes with the tute's zip). Its row has its own key, so the unit's
+  workbook zip can be picked in the same upload. **Grades 10–11 workbooks** print their parts as the paper and its
+  part ("வினாத்தாள் I · பகுதி A" = IA … "வினாத்தாள் II · பகுதி B" = IIB): the reader takes both that and "பகுதி IA".
 - The unit % = marks ÷ book total. "So far %" counts corrected levels only.
 - **The bar under the row** shows where he is: a marker ▼ "L3 4" over the level he works on (dark) and each waiting
   level (amber); neighbours share one marker; near the ends it leans inwards (`markerRuns`, `.mk`).

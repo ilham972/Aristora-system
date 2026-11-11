@@ -1,6 +1,8 @@
 // Settings → Books → Upload workbooks: the unit zips (or book.html files) from the workbook chats go straight into
 // the app. This phone reads each book's parts, levels and marks (src/workbookFile.ts), its answer key and its printed
 // questions (src/bookQuestions.ts), the owner checks the list, and one tap saves them. No typing, no chat, no deploy.
+// A unit's theory book alone (a Fighter zip, with fighter.json; 11 Nov 2026) goes to its school unit as its theory book:
+// its workbook is another printed book and stays as it is.
 // A topic tute's zip (ol-essay, with tute.json) is TWO books of its OL topic: the ladder = the theory book (Fighter),
 // the past papers = the workbook (Master), each with its answers and questions. Every O/L tute is an OL book (his rule,
 // 3 Nov 2026): the essay engine still writes "grade": 11, so the tute's paper part and name find its OL topic, he can
@@ -16,7 +18,7 @@ import { mutate } from "./backend";
 import { act, currentRole, toast, type Unit } from "./store";
 import { Sheet } from "./ui";
 import { newerOnline, updateNow } from "./appVersion";
-import { readWorkbookFiles, type ReadTute, type ReadWorkbook } from "./workbookFile";
+import { readWorkbookFiles, type ReadTheory, type ReadTute, type ReadWorkbook } from "./workbookFile";
 
 /** What the Books page knows about a unit's workbook already in the app. */
 type InApp = {
@@ -45,6 +47,8 @@ type Row = {
   unit?: Unit;
   book?: ReadWorkbook;
   tute?: ReadTute;
+  /** A unit's theory book alone (fighter.json): the unit's workbook stays. */
+  theory?: ReadTheory;
   /** An O/L tute: the OL topics of its paper part, to pick where it goes. */
   choices?: Unit[];
   /** The school unit an older upload filed this tute under: saving moves it here first, with its students' work. */
@@ -162,6 +166,38 @@ function tuteRow(t: ReadTute, i: number, units: Unit[], books: InApp[], pick: st
   };
 }
 
+/** The row of a unit's theory book alone: against its school unit's theory book in the app; the workbook stays. */
+function theoryRow(t: ReadTheory, i: number, units: Unit[], books: InApp[]): Row {
+  const unit = units.find((u) => u.grade === t.grade && u.code === t.code);
+  const title = `${`G${t.grade ?? "?"} · ${t.code} ${unit?.en ?? t.en ?? ""}`.trim()} · theory book`;
+  const bad = (words: string): Row => ({ key: `bad${i}`, file: t.file, title, detail: "", state: "bad", words });
+  if (t.problems.length) return bad(t.problems.join(" "));
+  if (!unit) return bad(`Grade ${t.grade ?? "?"} has no unit ${t.code} in the app.`);
+  const inF = books.find((b) => b.unitId === unit._id && b.stage === "fighter");
+  // A topic tute is ONE printed book (its ladder and its papers numbered together): its theory book comes with its zip.
+  if (inF?.tute) return bad(`${unit.en} has a topic tute in the app: its theory book comes with the tute's zip.`);
+  const f = fighter(t.fighter);
+  const teach = t.fighter.sections.reduce((a, s) => a + s.teach.length, 0);
+  const secs = t.fighter.sections.map((s) => s.id);
+  const fk = t.fighterKey?.length ?? 0;
+  const fq = t.questions.size;
+  return {
+    key: `${unit._id}:theory`, // its own row: the unit's workbook may be in the same upload
+    file: t.file,
+    title,
+    detail: `Theory book: ${secs[0]}–${secs[secs.length - 1]}, ${f.all.length} questions (${teach} with the teacher)`,
+    state: inF ? "replace" : "new",
+    words: inF ? `Replaces the theory book in the app (${inF.questions ?? "?"} questions); the workbook stays` : "New: theory book (the workbook stays as it is)",
+    keyLine: fk ? { words: `✓ Answer key: ${countWords(fk, f.all.length)} questions`, ok: fk === f.all.length } : { words: "No answer key in this file", ok: false },
+    qLine:
+      fq && t.css
+        ? { words: `✓ Questions as printed: ${countWords(fq, f.all.length)}`, ok: fq === f.all.length }
+        : { words: "No printed questions found (book.html missing?)", ok: false },
+    unit,
+    theory: t,
+  };
+}
+
 function describeBook(w: ReadWorkbook): string {
   const parts = w.data.parts.map((p) => `${PART_NAME[p.id]} ${p.from}–${p.to}`).join(" · ");
   return `${parts} · ${w.data.levels.length} levels · ${w.total} marks`;
@@ -183,7 +219,7 @@ function sameAsApp(w: ReadWorkbook, m: NonNullable<InApp["master"]>): boolean {
 export function uploadRows(found: ReturnType<typeof readWorkbookFiles>, units: Unit[], books: InApp[], picks: Record<number, string> = {}): Row[] {
   const rows: Row[] = found.map((f, i): Row => {
     if ("problem" in f) return { key: `bad${i}`, file: f.file, title: f.file, detail: "", state: "bad", words: f.problem };
-    if ("kind" in f) return tuteRow(f, i, units, books, picks[i]);
+    if ("kind" in f) return f.kind === "theory" ? theoryRow(f, i, units, books) : tuteRow(f, i, units, books, picks[i]);
     const unit = units.find((u) => u.grade === f.grade && u.code === f.code);
     const title = `G${f.grade ?? "?"} · ${f.code} ${unit?.en ?? f.en ?? ""}`.trim();
     if (f.problems.length) return { key: `bad${i}`, file: f.file, title, detail: "", state: "bad", words: f.problems.join(" ") };
@@ -228,10 +264,11 @@ export function uploadRows(found: ReturnType<typeof readWorkbookFiles>, units: U
   return rows;
 }
 
-/** "1 workbook", "2 tutes", "3 books" (a tute is two books, a workbook one). */
+/** "1 workbook", "2 tutes", "1 theory book", "3 books" (a tute is two books, a workbook or a theory book one). */
 function howMany(rows: Row[]): string {
   const tutes = rows.filter((r) => r.tute).length;
-  const word = tutes === rows.length ? "tute" : tutes === 0 ? "workbook" : "book";
+  const theory = rows.filter((r) => r.theory).length;
+  const word = tutes === rows.length ? "tute" : theory === rows.length ? "theory book" : tutes + theory === 0 ? "workbook" : "book";
   return `${rows.length} ${word}${rows.length === 1 ? "" : "s"}`;
 }
 
@@ -343,6 +380,22 @@ export function UploadBooks(props: { units: Unit[]; books: InApp[]; onSaved: (gr
         saved++;
         continue;
       }
+      if (r.theory) {
+        const t = r.theory;
+        const ok =
+          (await act(() =>
+            mutate(api.catalog.saveTheory, {
+              unitId,
+              ...(t.title ? { title: t.title } : {}),
+              fighter: { sections: t.fighter.sections.map((x) => ({ id: x.id, title: x.title, tamil: x.tamil, teach: x.teach, solo: x.solo })) },
+              ...(t.fighterKey ? { fighterKey: t.fighterKey } : {}),
+              by: currentRole(),
+            }),
+          )) && (await saveQuestions(unitId, "fighter", t.questions, t.css));
+        if (!ok) break;
+        saved++;
+        continue;
+      }
       const w = r.book!;
       const ok = await act(() =>
         mutate(api.catalog.saveWorkbook, {
@@ -360,14 +413,16 @@ export function UploadBooks(props: { units: Unit[]; books: InApp[]; onSaved: (gr
     }
     setSaving(false);
     if (saved > 0) {
-      const keys = ready.slice(0, saved).filter((r) => r.book?.key?.length || r.tute?.masterKey?.length).length;
+      const keys = ready.slice(0, saved).filter((r) => r.book?.key?.length || r.tute?.masterKey?.length || r.theory?.fighterKey?.length).length;
       const withKeys = keys === 0 ? "" : saved === 1 ? " with its answer key" : keys === saved ? ", all with answer keys" : `, ${keys} with answer keys`;
       const off = moved.length ? ` Taken off ${moved.join("; ")}.` : "";
       toast(
         saved === 1 && ready[0].tute
           ? `Saved ${ready[0].title}: its theory book and workbook${ready[0].tute.fighterKey || ready[0].tute.masterKey ? ", with their answer keys" : ""}.${off || " Students on them see them now."}`
-          : saved === 1
-            ? `Saved ${ready[0].title}${withKeys}. Students on it see the new levels now.`
+          : saved === 1 && ready[0].theory
+            ? `Saved ${ready[0].title}${withKeys}. The unit's workbook stays as it is.`
+            : saved === 1
+              ? `Saved ${ready[0].title}${withKeys}. Students on it see the new levels now.`
             : `Saved ${howMany(ready.slice(0, saved))}${withKeys}.${off || " Students on them see the new levels now."}`,
       );
       props.onSaved(ready[0].unit!.grade);
@@ -386,7 +441,8 @@ export function UploadBooks(props: { units: Unit[]; books: InApp[]; onSaved: (gr
       </label>
       <p class="muted">
         Pick the unit zips from the workbook and essay chats, one or many at once. The app reads the levels, marks, answer keys and the
-        printed questions; an O/L essay tute goes to its OL topic as a theory book and a workbook. You check them, then save.
+        printed questions; an O/L essay tute goes to its OL topic as a theory book and a workbook; a unit's theory book zip goes to its unit
+        (its workbook stays). You check them, then save.
       </p>
 
       {rows && (

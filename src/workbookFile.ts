@@ -66,7 +66,26 @@ export type ReadTute = {
   problems: string[];
 };
 
+/** A unit's theory book alone (a Fighter zip with fighter.json, 11 Nov 2026): a school unit's ladder, printed as its
+ *  own book. It becomes the unit's theory book; the unit's workbook (another printed book, its own numbers) stays. */
+export type ReadTheory = {
+  kind: "theory";
+  file: string;
+  grade: number | null;
+  unitNo: number;
+  code: string;
+  en: string | null;
+  ta: string | null;
+  title: string | null;
+  fighter: FighterData;
+  fighterKey: KeyAnswer[] | null;
+  questions: Map<number, string>;
+  css: string;
+  problems: string[];
+};
+
 const TUTE_FILE = /(^|\/)tute\.json$/i;
+const THEORY_FILE = /(^|\/)fighter\.json$/i;
 type J = Record<string, unknown>;
 
 /** A tute's answers; each keeps its kind (tute.json version 2, 5 Nov 2026: the ol-essay engine digitizes every tute). */
@@ -91,6 +110,66 @@ function answersOf(list: unknown): KeyAnswer[] | null {
   return out.sort((a, b) => a.q - b.q);
 }
 
+/** A ladder's sections as the engines write them (tute.json and fighter.json: `fighter.sections`). */
+function ladderData(sections: J[]): FighterData {
+  return {
+    kind: "fighter",
+    sections: sections.map((x) => ({
+      id: String(x?.id ?? ""),
+      badge: String(x?.id ?? ""),
+      title: String(x?.title ?? ""),
+      tamil: String(x?.tamil ?? ""),
+      kind: "ladder" as const,
+      teach: Array.isArray(x?.teach) ? (x.teach as number[]) : [],
+      solo: Array.isArray(x?.solo) ? (x.solo as number[]) : [],
+    })),
+  };
+}
+
+/** Read fighter.json (a unit's theory book alone) and its questions from the book.html beside it. */
+export function readTheoryFile(text: string, html: string | null, file: string): ReadTheory | { file: string; problem: string } {
+  const bad = { file, problem: "The theory book file (fighter.json) isn't one the app knows: make it again in its book chat." };
+  let j: J;
+  try {
+    j = JSON.parse(text) as J;
+  } catch {
+    return { file, problem: "The theory book file (fighter.json) can't be read." };
+  }
+  const unit = j?.unit as J | undefined;
+  const f = j?.fighter as J | undefined;
+  if (j?.kind !== "aristora-fighter" || (j.version !== 1 && j.version !== 2) || typeof unit?.no !== "number" || !Array.isArray(f?.sections)) return bad;
+  const fighter = ladderData(f!.sections as J[]);
+  const problems: string[] = [...checkFighter(fighter)];
+  const fighterKey = answersOf(f!.answers);
+  if (f!.answers !== undefined && !fighterKey) problems.push("The theory book's answers can't be read.");
+  if (!problems.length && fighterKey) problems.push(...checkFighterKey(fighterKey, fighter));
+  const qs = html ? tuteQuestions(html) : { css: "", fighter: new Map<number, string>() };
+  // The slots its kinds use are in the printed question (the book and its key from the same build), as for a tute.
+  for (const k of problems.length ? [] : (fighterKey ?? [])) {
+    const card = qs.fighter.get(k.q);
+    const wrong = card ? slotProblem(k, card) : "";
+    if (wrong) {
+      problems.push(`Question ${k.q}: ${wrong}`);
+      break;
+    }
+  }
+  return {
+    kind: "theory",
+    file,
+    grade: typeof j.grade === "number" ? j.grade : null,
+    unitNo: unit!.no as number,
+    code: `U${String(unit!.no).padStart(2, "0")}`,
+    en: typeof unit!.en === "string" ? unit!.en : null,
+    ta: typeof unit!.ta === "string" ? unit!.ta : null,
+    title: typeof j.title === "string" ? j.title : null,
+    fighter,
+    fighterKey: fighterKey?.length ? fighterKey : null,
+    questions: qs.fighter,
+    css: qs.css,
+    problems: [...new Set(problems)],
+  };
+}
+
 /** Read tute.json (and the questions from the book.html beside it); problems in plain words, nothing silently dropped. */
 export function readTuteFile(text: string, html: string | null, file: string): ReadTute | { file: string; problem: string } {
   const bad = { file, problem: "The tute file (tute.json) isn't one the app knows: make it again in an ol-essay chat." };
@@ -109,18 +188,7 @@ export function readTuteFile(text: string, html: string | null, file: string): R
   // "OL" = the O/L books (grade 12 in the app); a school grade is a number.
   const grade = typeof j.grade === "number" ? j.grade : j.grade === "OL" ? OL : null;
   const problems: string[] = [];
-  const fighter: FighterData = {
-    kind: "fighter",
-    sections: (f!.sections as J[]).map((x) => ({
-      id: String(x?.id ?? ""),
-      badge: String(x?.id ?? ""),
-      title: String(x?.title ?? ""),
-      tamil: String(x?.tamil ?? ""),
-      kind: "ladder" as const,
-      teach: Array.isArray(x?.teach) ? (x.teach as number[]) : [],
-      solo: Array.isArray(x?.solo) ? (x.solo as number[]) : [],
-    })),
-  };
+  const fighter = ladderData(f!.sections as J[]);
   const levels: MasterLevel[] = (m!.levels as J[]).map((l, i) => ({ n: i + 1, from: Number(l?.from), to: Number(l?.to), max: Number(l?.max) }));
   const marks: Record<string, number> = {};
   for (const x of (Array.isArray(m!.questions) ? m!.questions : []) as J[]) if (typeof x?.q === "number" && typeof x.marks === "number") marks[String(x.q)] = x.marks;
@@ -186,9 +254,10 @@ const ROW_NAME = /^\s*<td class="c0"[^>]*>([^<]*)<\/td>/;
 const CELL = /<td(?: [^>]*)?><em>Level (\d+)<\/em><i>\s*(\d+)(?:\s*[–-]\s*(\d+))?\s*<\/i><b>\/\s*(\d+)<\/b><\/td>/g;
 const ROW_TOTAL = /<td class="cz"[^>]*>[\s\S]*?<b>\/\s*(\d+)<\/b><\/td>/;
 
-/** "பகுதி II" → "II"; Grades 10–11 "பகுதி IA" / "பகுதி I A" → "IA". */
-function partIdOf(label: string): PartId | null {
-  const m = /(II|I)\s*([AB])?(?![A-Za-z])/.exec(label);
+/** "பகுதி II" → "II"; Grades 10–11 "பகுதி IA" / "பகுதி I A" → "IA", and as the workbook engine prints them on the
+ *  marks sheet: "வினாத்தாள் I · பகுதி A" → "IA", "வினாத்தாள் II · பகுதி B" → "IIB" (11 Nov 2026: the first Grade 10 books). */
+export function partIdOf(label: string): PartId | null {
+  const m = /(II|I)\s*(?:·\s*பகுதி\s*)?([AB])?(?![A-Za-z])/.exec(label);
   if (!m) return null;
   return `${m[1]}${m[2] ?? ""}` as PartId;
 }
@@ -452,23 +521,25 @@ function isZip(bytes: Uint8Array): boolean {
  * Every workbook in the files the owner picked: unit source zips (their book.html is read), or book.html files.
  * A file with no marks sheet comes back as one entry with a problem, so nothing is silently skipped.
  */
-export function readWorkbookFiles(files: { name: string; bytes: Uint8Array }[]): (ReadWorkbook | ReadTute | { file: string; problem: string })[] {
-  const out: (ReadWorkbook | ReadTute | { file: string; problem: string })[] = [];
+export function readWorkbookFiles(files: { name: string; bytes: Uint8Array }[]): (ReadWorkbook | ReadTute | ReadTheory | { file: string; problem: string })[] {
+  const out: (ReadWorkbook | ReadTute | ReadTheory | { file: string; problem: string })[] = [];
   const decode = (b: Uint8Array) => new TextDecoder("utf-8").decode(b);
   for (const f of files) {
     let pages: string[] = [];
     let keyText: string | null = null;
     let tuteText: string | null = null;
+    let theoryText: string | null = null;
     try {
       if (isZip(f.bytes)) {
         const inside = unzipSync(f.bytes, {
           filter: (e) =>
             (/\.html?$/i.test(e.name) && e.originalSize < 30_000_000) ||
-            ((KEY_FILE.test(e.name) || TUTE_FILE.test(e.name)) && e.originalSize < 2_000_000),
+            ((KEY_FILE.test(e.name) || TUTE_FILE.test(e.name) || THEORY_FILE.test(e.name)) && e.originalSize < 2_000_000),
         });
         for (const [name, bytes] of Object.entries(inside)) {
           if (KEY_FILE.test(name)) keyText = decode(bytes);
           else if (TUTE_FILE.test(name)) tuteText = decode(bytes);
+          else if (THEORY_FILE.test(name)) theoryText = decode(bytes);
           else pages.push(decode(bytes));
         }
       } else if (/\.html?$/i.test(f.name)) {
@@ -485,6 +556,12 @@ export function readWorkbookFiles(files: { name: string; bytes: Uint8Array }[]):
       // A topic tute: its book.html is the one with question cards (the zip may hold its HTML copy too).
       const html = pages.find((h) => /<div class="qq(?: [^"]*)?" data-q=/.test(h)) ?? null;
       out.push(readTuteFile(tuteText, html, f.name));
+      continue;
+    }
+    if (theoryText !== null) {
+      // A unit's theory book alone: the same engine's question cards, no papers after them.
+      const html = pages.find((h) => /<div class="qq(?: [^"]*)?" data-q=/.test(h)) ?? null;
+      out.push(readTheoryFile(theoryText, html, f.name));
       continue;
     }
     // Each book's printed cards, to check its key's blanks and options against (even when its style is missing).

@@ -238,6 +238,7 @@ async function saveTuteBook(
   title: string | undefined,
   key: KeyAnswer[] | null,
   now: number,
+  tute = true,
 ): Promise<void> {
   const old = await bookFor(ctx, unitId, stage);
   const oldKey = await keyRow(ctx, unitId, stage);
@@ -247,7 +248,7 @@ async function saveTuteBook(
   } else if (oldKey) await ctx.db.delete(oldKey._id);
   const same = !!old && bookShape(old.data) === bookShape(data);
   if (old && !same && old.qCount) await dropQuestions(ctx, unitId, stage);
-  const fields = { data, title, updatedAt: now, keyCount: key ? key.length : undefined, tute: true, ...(same ? {} : { qCount: undefined }) };
+  const fields = { data, title, updatedAt: now, keyCount: key ? key.length : undefined, ...(tute ? { tute: true } : {}), ...(same ? {} : { qCount: undefined }) };
   if (old) await ctx.db.patch(old._id, fields);
   else await ctx.db.insert("books", { unitId, stage, ...fields });
 }
@@ -327,6 +328,57 @@ export const saveTute = mutation({
       by: cleanBy(args.by),
       unit: unit.key,
       value: `topic tute: theory book ${ladder.length} questions, workbook ${mdata.levels.length} levels, ${bookTotal(mdata)} marks${keys}`,
+    });
+    await touch(ctx, session, now);
+    return true;
+  },
+});
+
+/**
+ * A unit's theory book alone (a Fighter zip with fighter.json, 11 Nov 2026; his ask: the Fighter and Master books of a
+ * school unit are two printed books, built together): its ladder (sections A, B, C …, teacher and solo questions)
+ * becomes the unit's theory book, with its answer key. Only the theory book changes: the unit's workbook, its key, its
+ * questions and every student's work in it stay. Never onto a topic tute (one printed book: its ladder comes with its
+ * zip), and the book is not a tute's: nothing of the twin rules applies to it.
+ */
+export const saveTheory = mutation({
+  args: {
+    token: v.optional(v.string()),
+    unitId: v.id("units"),
+    title: v.optional(v.string()),
+    fighter: v.object({
+      sections: v.array(v.object({ id: v.string(), title: v.string(), tamil: v.string(), teach: v.array(v.number()), solo: v.array(v.number()) })),
+    }),
+    fighterKey: v.optional(v.array(keyAnswer)),
+    by: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["books"]);
+    const now = Date.now();
+    const unit = await ctx.db.get(args.unitId);
+    if (!unit) fail("That unit no longer exists.");
+    if ((await bookFor(ctx, unit._id, "fighter"))?.tute) fail(`${unit.en} has a topic tute in the app: its theory book comes with the tute's zip.`);
+    const fdata: FighterData = {
+      kind: "fighter",
+      sections: args.fighter.sections.map((x) => ({ id: x.id, badge: x.id, title: x.title, tamil: x.tamil, kind: "ladder" as const, teach: x.teach, solo: x.solo })),
+    };
+    const fBad = checkFighter(fdata);
+    if (fBad.length) fail(fBad[0]);
+    const ladder = fighter(fdata).all;
+    if (!ladder.length) fail("The theory book has no questions.");
+    const fKey = args.fighterKey?.length ? args.fighterKey : null;
+    if (fKey) {
+      const bad = checkFighterKey(fKey, fdata);
+      if (bad.length) fail(bad[0]);
+    }
+    const title = (args.title ?? "").replace(/\s+/g, " ").trim().slice(0, 80) || undefined;
+    await saveTuteBook(ctx, unit._id, "fighter", fdata, title, fKey, now, false);
+    const session = await currentSession(ctx, now);
+    await log(ctx, session, now, {
+      kind: "book-save",
+      by: cleanBy(args.by),
+      unit: unit.key,
+      value: `theory book: ${ladder.length} questions${fKey ? ` + answer key (${fKey.length})` : ""}`,
     });
     await touch(ctx, session, now);
     return true;
