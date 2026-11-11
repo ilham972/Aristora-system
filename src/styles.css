@@ -12621,3 +12621,45 @@ body.tm-on .toasts {
   resize: none;
 }
 
+/* The Consultation's All | Past | Today (12 Nov 2026): three fixed places, the picked one dark, Today's count red while
+   any of today's wrong questions waits. */
+.cx-show {
+  margin: 6px 0 0;
+  display: flex;
+  gap: 6px;
+}
+.cx-sh {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 28px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border-radius: 999px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  color: var(--ink-2);
+  font: 700 12.5px/1 var(--font);
+  white-space: nowrap;
+}
+.cx-sh b {
+  color: var(--ink);
+  font-size: 14px;
+}
+.cx-sh.red b {
+  color: var(--red);
+}
+.cx-sh.on {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
+}
+.cx-sh.on b {
+  color: #fff;
+}
+.cx-sh.on.red {
+  border-color: var(--red);
+  background: var(--red);
+}

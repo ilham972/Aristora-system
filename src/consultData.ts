@@ -9,18 +9,52 @@
 // - Their questions as squares, each once for everyone with her who has it: what still waits, and what this
 //   consultation did (its square stays with ✓ / T), so nothing jumps under her finger while she works.
 
-import { evalWaiting, theoryCount, theoryWaiting, toTeach, type ConsultKind } from "../convex/lib/consult";
+import { outOf } from "../convex/lib/book";
+import { evalWaiting, inShow, theoryCount, theoryWaiting, toTeach, wrongAt, type ConsultKind, type EvalShow } from "../convex/lib/consult";
 import { teachState } from "../convex/lib/master";
 import type { Mark } from "../convex/lib/status";
 import { roomCalls, type RoomCall, type View } from "./derive";
 import { bookKey, qLabel } from "./evalFocusData";
+import { bookId } from "./focusData";
 import type { Board } from "./store";
 import { LATE_SEND_MS, mShort, sinceWords } from "./theoryFocusData";
 
-export type { ConsultKind };
+export type { ConsultKind, EvalShow };
 
-/** One book of his with what waits there for the picked kind (`whole`: a workbook's whole unit asked for Theory). */
-export type BookWait = { v: View; qs: number[]; whole: boolean };
+/** One book of his with what waits there for the picked kind (`whole`: a workbook's whole unit asked for Theory;
+ *  `drafting`: questions lost in a level Correction is marking now, not saved yet). */
+export type BookWait = { v: View; qs: number[]; whole: boolean; drafting?: number[] };
+
+/** A level Correction is marking now (`consult.drafts`): its marks per question so far. */
+export type ConsultDraft = { studentId: string; unitId: string; level: number; q: Record<string, { g: number; dk?: boolean }> };
+
+/**
+ * The All | Past | Today filter on the wrong questions (12 Nov 2026): `day` = midnight in Sri Lanka today; `drafts` =
+ * the levels being marked now (All and Today count them; null = not read).
+ */
+export type Show = { show: EvalShow; day: number; drafts: readonly ConsultDraft[] | null };
+
+/** When this book's question was marked wrong (0 = not known: the past). */
+const wrongWhen = (v: View, q: number) => wrongAt(q, v.marks, v.ms ? v.mm : null);
+
+/**
+ * The questions a workbook lost in a level Correction is marking now (not saved: a "?" or fewer marks than printed). A
+ * question whose marks the book doesn't print counts only as "?".
+ */
+export function draftLost(v: View, drafts: readonly ConsultDraft[] | null | undefined): number[] {
+  if (!drafts || !v.mb) return [];
+  const unit = bookId(v);
+  const out: number[] = [];
+  for (const d of drafts) {
+    if (d.studentId !== v.s._id || d.unitId !== unit || v.mm.lv[String(d.level)]?.fixed) continue;
+    for (const [k, r] of Object.entries(d.q)) {
+      const q = Number(k);
+      const max = outOf(v.mb, q);
+      if (r.dk || (max !== null && r.g < max)) out.push(q);
+    }
+  }
+  return out.sort((a, b) => a - b);
+}
 
 /**
  * A department's books only (8 Nov 2026): Fighter = theory books, Master = workbooks; none = every book (the page as
@@ -30,11 +64,12 @@ export type Scope = "fighter" | "master" | null;
 export const inScope = (v: View, scope: Scope) => !scope || v.kind === scope;
 
 /** What waits for the picked kind in each of his books (his book now, then the others with something). */
-export function waitsOf(home: View, kind: ConsultKind, scope: Scope = null): BookWait[] {
+export function waitsOf(home: View, kind: ConsultKind, scope: Scope = null, show?: Show): BookWait[] {
   return [home, ...home.others].filter((v) => inScope(v, scope)).flatMap((v): BookWait[] => {
     if (kind === "evaluation") {
-      const qs = evalWaiting(v.st, v.ms);
-      return qs.length ? [{ v, qs: [...qs], whole: false }] : [];
+      const qs = show ? evalWaiting(v.st, v.ms).filter((q) => inShow(show.show, wrongWhen(v, q), show.day)) : [...evalWaiting(v.st, v.ms)];
+      const drafting = show && show.show !== "past" ? draftLost(v, show.drafts) : [];
+      return qs.length || drafting.length ? [{ v, qs, whole: false, ...(drafting.length ? { drafting } : {}) }] : [];
     }
     const w = theoryWaiting({ st: v.st, f: v.f, marks: v.marks, ms: v.ms, bookNow: !v.home });
     return w.qs.length || w.whole ? [{ v, ...w }] : [];
@@ -42,7 +77,7 @@ export function waitsOf(home: View, kind: ConsultKind, scope: Scope = null): Boo
 }
 
 /** How many things wait: questions, and a whole unit as one. */
-export const countOf = (w: readonly BookWait[]) => w.reduce((n, b) => n + theoryCount(b), 0);
+export const countOf = (w: readonly BookWait[]) => w.reduce((n, b) => n + theoryCount(b) + (b.drafting?.length ?? 0), 0);
 
 /** One student's pill. */
 export type ConsultRow = {
@@ -75,12 +110,12 @@ export const isMineNow = (v: View, me: string | null) => v.calls.some((c) => c.c
  * them (pale); then everyone with nothing waiting, the one not seen in a consultation for longest first. Her own
  * consultation's students are in her room box, not here.
  */
-export function consultRows(views: readonly View[], kind: ConsultKind, me: string | null, scope: Scope = null, redFirst = false): ConsultRow[] {
+export function consultRows(views: readonly View[], kind: ConsultKind, me: string | null, scope: Scope = null, redFirst = false, show?: Show): ConsultRow[] {
   const rows: ConsultRow[] = [];
   for (const v of views) {
     if (v.where === "absent" || isMineNow(v, me)) continue;
     // A department's page (8 Nov 2026): a student with no work counts as red only when his book is that department's.
-    const n = countOf(waitsOf(v, kind, scope));
+    const n = countOf(waitsOf(v, kind, scope, show));
     rows.push({ v, n, red: v.noWork && (n > 0 || inScope(v, scope)), busy: busyWith(v, me), lastAt: v.s.consultAt ?? null });
   }
   const group = (r: ConsultRow) => (r.n > 0 ? (r.busy ? 1 : 0) : r.busy ? 3 : 2);
@@ -102,11 +137,11 @@ export function consultRows(views: readonly View[], kind: ConsultKind, me: strin
 export type Tally = { qs: number; students: number; red: number };
 
 /** What waits for the picked kind among the students here (her own consultation's too: it is still to do). */
-export function todayOf(views: readonly View[], kind: ConsultKind, scope: Scope = null): Tally {
+export function todayOf(views: readonly View[], kind: ConsultKind, scope: Scope = null, show?: Show): Tally {
   const t: Tally = { qs: 0, students: 0, red: 0 };
   for (const v of views) {
     if (v.where === "absent") continue;
-    const n = countOf(waitsOf(v, kind, scope));
+    const n = countOf(waitsOf(v, kind, scope, show));
     if (!n) continue;
     t.qs += n;
     t.students++;
@@ -186,10 +221,15 @@ export const WHOLE = 0;
  * (since `since`, the call), so the square stays. Theory on a theory book: his next section's teacher questions (his
  * book now) and those taught here.
  */
-export function bookQs(v: View, kind: ConsultKind, since: number, local: Local): { q: number; state: QState }[] {
+export function bookQs(v: View, kind: ConsultKind, since: number, local: Local, show?: Show): { q: number; state: QState }[] {
   const out: { q: number; state: QState }[] = [];
   const skipped = (q: number) => !!local.skip?.[qKey(v, q)];
-  const add = (q: number, state: QState) => out.push({ q, state: state === "open" && skipped(q) ? "skip" : state });
+  // The filter hides a question still waiting that wasn't corrected in its time (what this consultation did stays).
+  const shown = (q: number) => !show || inShow(show.show, wrongWhen(v, q), show.day);
+  const add = (q: number, state: QState) => {
+    if (state === "open" && kind === "evaluation" && !shown(q)) return;
+    out.push({ q, state: state === "open" && skipped(q) ? "skip" : state });
+  };
   if (v.ms) {
     for (const [k, r] of Object.entries(v.mm.q)) {
       const q = Number(k);
@@ -244,11 +284,12 @@ export function consultQs(
   people: readonly { it: ConsultItem | null; v: View; since: number; local: Local }[],
   kind: ConsultKind,
   scope: Scope = null,
+  show?: Show,
 ): ConsultQ[] {
   const by = new Map<string, ConsultQ>();
   for (const p of people) {
     for (const b of [p.v, ...p.v.others].filter((x) => inScope(x, scope))) {
-      for (const x of bookQs(b, kind, p.since, p.local)) {
+      for (const x of bookQs(b, kind, p.since, p.local, show)) {
         const key = qKey(b, x.q);
         const sq = by.get(key) ?? { key, q: x.q, v: b, who: [] };
         if (p.it) sq.who.push({ it: p.it, v: b, state: x.state });
@@ -285,12 +326,13 @@ export function squareLook(sq: ConsultQ): { cls: string; sign: string; words: st
 export const sqLabel = (sq: { q: number; v: View }) => (sq.q === WHOLE && sq.v.ms ? "Whole unit" : qLabel(sq.v, sq.q));
 
 /** "Unit 1: 4 to explain · 1 to Theory": his books, for his file. */
-export function bookLines(home: View, unitNo: (code: string) => number): string[] {
+export function bookLines(home: View, unitNo: (code: string) => number, drafts?: readonly ConsultDraft[] | null): string[] {
   return [home, ...home.others].flatMap((v) => {
     const e = evalWaiting(v.st, v.ms).length;
     const t = theoryCount(theoryWaiting({ st: v.st, f: v.f, marks: v.marks, ms: v.ms, bookNow: !v.home }));
-    if (!e && !t) return [];
+    const d = draftLost(v, drafts).length;
+    if (!e && !t && !d) return [];
     const name = v.unit ? `Unit ${unitNo(v.unit.code)}${v.kind === "fighter" ? " theory book" : ""}` : "His book";
-    return [`${name}: ${[e ? `${e} to explain` : "", t ? `${t} to teach` : ""].filter(Boolean).join(" · ")}`];
+    return [`${name}: ${[e ? `${e} to explain` : "", d ? `${d} being corrected` : "", t ? `${t} to teach` : ""].filter(Boolean).join(" · ")}`];
   });
 }

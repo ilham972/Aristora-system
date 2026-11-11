@@ -19,7 +19,8 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
-import type { ConsultKind } from "../convex/lib/consult";
+import { EVAL_SHOWS, type ConsultKind, type EvalShow } from "../convex/lib/consult";
+import { slDayStart } from "../convex/lib/day";
 import { joinNames } from "./announce";
 import { fetchOnce, mutate } from "./backend";
 import { NobodyHere } from "./board";
@@ -38,15 +39,18 @@ import {
   todayOf,
   WHOLE,
   type ConsultItem,
+  type ConsultDraft,
   type ConsultQ,
   type ConsultRow,
   type Local,
   type QState,
+  type Show,
 } from "./consultData";
 import type { View } from "./derive";
 import { bookKey, EVAL_CAP, lostWords } from "./evalFocusData";
 import { unitNo } from "./focusData";
 import { HRow } from "./hrow";
+import { useQuery } from "./live";
 import { CardAnswer, CardHead, PrintedQuestion, QPill, TeachMode } from "./qcard";
 import { useRoomDecisions } from "./roomDecisions";
 import { KindBar, LessonName, LockIcon, useHeld, usePinned } from "./roomkit";
@@ -64,7 +68,9 @@ const CAP = EVAL_CAP;
 const ALL_MS = 3 * 60_000;
 
 type Decision = "x" | "th" | "tt" | "skip";
-type Counts = { evaluation: { qs: number; students: number }; theory: { qs: number; students: number } };
+type Tot = { qs: number; students: number };
+/** `past` / `today`: the wrong questions by when they were corrected (missing on a server older than 12 Nov 2026). */
+type Counts = { evaluation: Tot; theory: Tot; past?: Tot; today?: Tot };
 type Away = Counts & { fighter?: Counts; master?: Counts };
 type DeptPick = "fighter" | "master";
 
@@ -73,6 +79,17 @@ function loadDeptPick(): DeptPick {
     return localStorage.getItem("aristora.consultDept") === "master" ? "master" : "fighter";
   } catch {
     return "fighter";
+  }
+}
+
+/** The wrong questions' filter (12 Nov 2026): All (the default), Past or Today, kept on this phone. */
+const SHOW_WORD: Record<EvalShow, string> = { all: "All", past: "Past", today: "Today" };
+function loadShow(): EvalShow {
+  try {
+    const x = localStorage.getItem("aristora.consultShow");
+    return x === "past" || x === "today" ? x : "all";
+  } catch {
+    return "all";
   }
 }
 
@@ -137,6 +154,14 @@ export function ConsultPage(props: { board: Board; views: View[]; now: number })
   const [kindPick, setKind] = useState<ConsultKind | null>(loadKind);
   // Master: one list (wrong and blank questions to explain); Fighter: No work (theory, its first number) or Evaluation.
   const kind: ConsultKind = scope === "master" ? "evaluation" : (kindPick ?? "theory");
+  // All | Past | Today on the wrong questions (12 Nov 2026, his voice note). All and Today also count the levels
+  // Correction is marking right now (read live only then).
+  const [showPick, setShowPick] = useState<EvalShow>(loadShow);
+  const evalOn = kind === "evaluation";
+  const draftRows = useQuery<ConsultDraft[]>(api.consult.drafts, {}, !evalOn || showPick === "past");
+  const day = slDayStart(now);
+  const showOf = (x: EvalShow): Show => ({ show: x, day, drafts: draftRows ?? null });
+  const show: Show | undefined = evalOn ? showOf(showPick) : undefined;
   const [ticks, setTicks] = useState<string[]>([]);
   const [at, setAt] = useState<string | null>(null);
   const [fileId, setFileId] = useState<string | null>(null);
@@ -164,21 +189,24 @@ export function ConsultPage(props: { board: Board; views: View[]; now: number })
   const live = here.length > 0;
 
   // ---- The students here, in his order (the Fighter department's No work: the idle ones first) ----
-  const rows = consultRows(views, kind, me, scope, scope === "fighter" && kind === "theory");
+  const rows = consultRows(views, kind, me, scope, scope === "fighter" && kind === "theory", show);
   const held = useHeld(rows, (r) => r.v.s._id as string, (r) => `${r.n}.${r.red}.${r.busy ?? ""}`);
   const callable = new Set(rows.filter((r) => !r.busy).map((r) => r.v.s._id as string));
   const ticked = ticks.filter((id) => callable.has(id)).slice(0, left);
   const tickedRows = ticked.flatMap((id) => rows.find((r) => r.v.s._id === id) ?? []);
-  const today = { evaluation: todayOf(views, "evaluation", scope), theory: todayOf(views, "theory", scope) };
+  const today = { evaluation: todayOf(views, "evaluation", scope, showOf(evalOn ? showPick : "all")), theory: todayOf(views, "theory", scope) };
+  // Each filter's count here (its pill), and the students not here for the picked one (an older server: no split).
+  const byShow = Object.fromEntries(EVAL_SHOWS.map((x) => [x, x === showPick && evalOn ? today.evaluation : todayOf(views, "evaluation", scope, showOf(x))])) as Record<EvalShow, ReturnType<typeof todayOf>>;
   const awayHere = away ? (away[scope] ?? away) : null;
-  const all = awayHere ? { qs: awayHere[kind].qs + today[kind].qs, students: awayHere[kind].students + today[kind].students } : null;
+  const awayKind = awayHere ? (evalOn && showPick !== "all" ? (awayHere[showPick] ?? awayHere.evaluation) : awayHere[kind]) : null;
+  const all = awayKind ? { qs: awayKind.qs + today[kind].qs, students: awayKind.students + today[kind].students } : null;
   // The Fighter department's No work: its students here who sit with no work (his number).
   const noWork = views.filter((v) => v.where !== "absent" && v.noWork && v.kind === "fighter").length;
 
   // ---- The squares: those with her; nobody yet: those coming (to prepare); nobody called: the ticked ----
   const people = (live ? here : items.length ? items : []).map((it) => ({ it, v: it.v, since: it.rc.c.createdAt, local: locals[it.id] ?? {} }));
   const prep = people.length ? people : tickedRows.map((r) => ({ it: null, v: r.v, since: now, local: {} as Local }));
-  const base = consultQs(prep, kind, scope);
+  const base = consultQs(prep, kind, scope, show);
   // Her taps not confirmed by the board yet.
   const qs: ConsultQ[] = base.map((sq) => ({
     ...sq,
@@ -197,6 +225,18 @@ export function ConsultPage(props: { board: Board; views: View[]; now: number })
   const mixed = new Set(qs.map((x) => bookKey(x.v))).size > 1;
   const tag = (x: ConsultQ) => (mixed && x.v.unit ? `${unitNo(x.v.unit.code)}·` : "");
 
+  const pickShow = (x: EvalShow) => {
+    if (x === showPick) return;
+    tone("tick");
+    setShowPick(x);
+    try {
+      localStorage.setItem("aristora.consultShow", x);
+    } catch {
+      /* private mode */
+    }
+    setAt(null);
+    setTeaching(false);
+  };
   const pickKind = (k: ConsultKind) => {
     if (k === kind) return;
     tone("tick");
@@ -558,6 +598,27 @@ export function ConsultPage(props: { board: Board; views: View[]; now: number })
             onPick={pickKind}
           />
         )}
+        {evalOn && (
+          // The wrong questions' filter, in fixed places: All (also the levels being corrected now), Past (corrected
+          // before today), Today (corrected today: red while any waits, his "no pending of today's").
+          <div class="cx-show" role="group" aria-label="Which wrong questions">
+            {EVAL_SHOWS.map((x) => {
+              const c = byShow[x];
+              return (
+                <button
+                  key={x}
+                  type="button"
+                  class={`cx-sh${x === showPick ? " on" : ""}${x === "today" && c.qs > 0 ? " red" : ""}`}
+                  aria-pressed={x === showPick}
+                  aria-label={`${SHOW_WORD[x]}: ${c.qs} wrong questions, ${c.students} students here`}
+                  onClick={() => pickShow(x)}
+                >
+                  {SHOW_WORD[x]} <b>{c.qs}</b>
+                </button>
+              );
+            })}
+          </div>
+        )}
         {scope === "fighter" && kind === "theory" ? (
           // The Fighter department's No work (his number): who sits idle now, and who needs his next theory.
           <p class="cx-sum" aria-label={`No work: ${noWork} here; ${today.theory.students} need their next theory`}>
@@ -570,11 +631,12 @@ export function ConsultPage(props: { board: Board; views: View[]; now: number })
           </p>
         ) : (
           <p class="cx-sum" aria-label={`${theory ? "To teach" : "To explain"}: today ${today[kind].qs} for ${today[kind].students} students here; all ${all ? `${all.qs} for ${all.students} students` : "loading"}`}>
+            {/* "Here" and "Everyone" since 12 Nov 2026 (were Today and All: those are the filter's words now). */}
             <span>
-              Today <b>{today[kind].qs}</b> · {today[kind].students} {today[kind].students === 1 ? "student" : "students"}
+              Here <b>{today[kind].qs}</b> · {today[kind].students} {today[kind].students === 1 ? "student" : "students"}
             </span>
             <span>
-              All <b>{all ? all.qs : "…"}</b> · {all ? all.students : "…"}
+              Everyone <b>{all ? all.qs : "…"}</b> · {all ? all.students : "…"}
             </span>
           </p>
         )}
@@ -714,6 +776,7 @@ export function ConsultPage(props: { board: Board; views: View[]; now: number })
         <ConsultFile
           it={file}
           now={now}
+          drafts={draftRows}
           busy={busy}
           onClose={() => setFileId(null)}
           onArrive={() => void arrive([file])}
@@ -726,10 +789,10 @@ export function ConsultPage(props: { board: Board; views: View[]; now: number })
 }
 
 /** One student of her consultation: where he is, what waits in his books; Arrived / Not coming, or Done for him. */
-function ConsultFile(props: { it: ConsultItem; now: number; busy: boolean; onClose: () => void; onArrive: () => void; onCancel: () => void; onDone: () => void }) {
+function ConsultFile(props: { it: ConsultItem; now: number; drafts: readonly ConsultDraft[] | null | undefined; busy: boolean; onClose: () => void; onArrive: () => void; onCancel: () => void; onDone: () => void }) {
   const { it, now } = props;
   const v = it.v;
-  const lines = bookLines(v, unitNo);
+  const lines = bookLines(v, unitNo, props.drafts);
   const foot =
     it.state === "here" ? (
       <div class="row-actions evx-file-acts">

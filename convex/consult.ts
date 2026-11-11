@@ -29,7 +29,8 @@ import {
   touch,
 } from "./lib/backend";
 import { fighter } from "./lib/book";
-import { evalWaiting, theoryCount, theoryWaiting } from "./lib/consult";
+import { evalWaiting, inShow, theoryCount, theoryWaiting, wrongAt } from "./lib/consult";
+import { slDayStart } from "./lib/day";
 import { applyMark, reteachValue, wasValue, what, WORDS, type MarkResult } from "./lib/marking";
 import { computeMaster } from "./lib/master";
 import { computeStatus, type Marks } from "./lib/status";
@@ -128,12 +129,19 @@ export const totals = query({
       return cache.get(k) ?? null;
     };
     // Every book (as before), and each department's books (8 Nov 2026: Fighter = theory books, Master = workbooks).
-    const zero = () => ({ evaluation: { qs: 0, students: 0 }, theory: { qs: 0, students: 0 } });
+    // Evaluation also split by when it was corrected (12 Nov 2026, the Past | Today filters): before today, today.
+    const zero = () => ({
+      evaluation: { qs: 0, students: 0 },
+      theory: { qs: 0, students: 0 },
+      past: { qs: 0, students: 0 },
+      today: { qs: 0, students: 0 },
+    });
+    const dayStart = slDayStart(Date.now());
     const out = { ...zero(), fighter: zero(), master: zero() };
     for (const s of students) {
       let e = 0;
       let t = 0;
-      const d = { fighter: { e: 0, t: 0 }, master: { e: 0, t: 0 } };
+      const d = { fighter: { e: 0, t: 0, ep: 0, et: 0 }, master: { e: 0, t: 0, ep: 0, et: 0 } };
       for (const p of await ctx.db
         .query("progress")
         .withIndex("by_student", (q) => q.eq("studentId", s._id))
@@ -145,20 +153,29 @@ export const totals = query({
           const f = fighter(b.data);
           const marks = (p.marks ?? {}) as Marks;
           const st = computeStatus(marks, f);
-          const be = evalWaiting(st, null).length;
+          const wait = evalWaiting(st, null);
+          const be = wait.length;
           const bt = theoryCount(theoryWaiting({ st, f, marks, ms: null, bookNow }));
           e += be;
           t += bt;
           d.fighter.e += be;
           d.fighter.t += bt;
+          const now = wait.filter((q) => inShow("today", wrongAt(q, marks, null), dayStart)).length;
+          d.fighter.et += now;
+          d.fighter.ep += be - now;
         } else if (b.data.kind === "master" && p.stage === "master") {
-          const ms = computeMaster(masterState(p), b.data);
-          const be = evalWaiting(null, ms).length;
+          const m = masterState(p);
+          const ms = computeMaster(m, b.data);
+          const wait = evalWaiting(null, ms);
+          const be = wait.length;
           const bt = theoryCount(theoryWaiting({ st: null, f: null, marks: {}, ms, bookNow }));
           e += be;
           t += bt;
           d.master.e += be;
           d.master.t += bt;
+          const now = wait.filter((q) => inShow("today", wrongAt(q, {}, m), dayStart)).length;
+          d.master.et += now;
+          d.master.ep += be - now;
         }
       }
       for (const k of ["fighter", "master"] as const) {
@@ -170,10 +187,28 @@ export const totals = query({
           out[k].theory.qs += d[k].t;
           out[k].theory.students++;
         }
+        if (d[k].ep) {
+          out[k].past.qs += d[k].ep;
+          out[k].past.students++;
+        }
+        if (d[k].et) {
+          out[k].today.qs += d[k].et;
+          out[k].today.students++;
+        }
       }
       if (e) {
         out.evaluation.qs += e;
         out.evaluation.students++;
+      }
+      const ep = d.fighter.ep + d.master.ep;
+      const et = d.fighter.et + d.master.et;
+      if (ep) {
+        out.past.qs += ep;
+        out.past.students++;
+      }
+      if (et) {
+        out.today.qs += et;
+        out.today.students++;
       }
       if (t) {
         out.theory.qs += t;
@@ -181,5 +216,25 @@ export const totals = query({
       }
     }
     return out;
+  },
+});
+
+/**
+ * The workbook levels Correction is marking now, not saved yet (12 Nov 2026, the All and Today filters: "even if
+ * corrected at the moment right now"): each draft's marks per question. Read live only while one of those filters is
+ * on (a Correction tap rewrites a draft: small rows, one phone).
+ */
+export const drafts = query({
+  args: { token: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    await viewer(ctx, args.token, "consult");
+    const rows = await ctx.db.query("drafts").take(500);
+    return rows.map((d) => ({
+      studentId: d.studentId as string,
+      unitId: d.unitId as string,
+      level: d.level,
+      q: Object.fromEntries(Object.entries(d.q).map(([k, r]) => [k, r.dk ? { g: r.g, dk: true } : { g: r.g }])),
+      updatedAt: d.updatedAt,
+    }));
   },
 });

@@ -3,10 +3,12 @@
 // her room, and the squares: what still waits and what this consultation did (so nothing jumps while she works).
 
 import { describe, expect, test } from "vitest";
-import { fighter, KNOWN_WORKBOOKS, PILOT_FIGHTER } from "../convex/lib/book";
+import { fighter, KNOWN_WORKBOOKS, outOf, PILOT_FIGHTER } from "../convex/lib/book";
+import type { EvalShow } from "../convex/lib/consult";
+import { slDayStart } from "../convex/lib/day";
 import { computeMaster, type MState } from "../convex/lib/master";
 import { computeStatus, type Marks } from "../convex/lib/status";
-import { consultQs, consultRoom, consultRows, consultWords, countOf, squareLook, todayOf, waitsOf, WHOLE, type ConsultItem } from "../src/consultData";
+import { bookLines, consultQs, consultRoom, consultRows, consultWords, countOf, draftLost, squareLook, todayOf, waitsOf, WHOLE, type ConsultDraft, type ConsultItem, type Show } from "../src/consultData";
 import type { View } from "../src/derive";
 import type { Board } from "../src/store";
 import { asView } from "./views";
@@ -207,5 +209,48 @@ describe("her room and the squares", () => {
       [10, "open"],
       [11, "open"],
     ]);
+  });
+});
+
+describe("All | Past | Today (12 Nov 2026): the wrong questions by when they were corrected", () => {
+  const DAY = slDayStart(NOW);
+  /** Kumar lost Q3 (two days ago) and Q5 (today); Correction is marking his Level 2 now: Q11 0 marks, Q12 full, Q13 "?". */
+  const kumar = () => {
+    const v = wb("Kumar", { lost: [3, 5] });
+    v.mm.q["3"] = { ...v.mm.q["3"]!, t: NOW - 2 * 24 * 60 * MIN };
+    return v;
+  };
+  const drafts: ConsultDraft[] = [
+    { studentId: "Kumar", unitId: "u08", level: 2, q: { "11": { g: 0 }, "12": { g: outOf(G7U08, 12)! }, "13": { g: 0, dk: true } } },
+    { studentId: "Other", unitId: "u08", level: 2, q: { "11": { g: 0 } } },
+  ];
+  const show = (x: EvalShow, d: ConsultDraft[] | null = drafts): Show => ({ show: x, day: DAY, drafts: d });
+
+  test("a level being marked now: its lost questions and its ?, his own only; nothing once the level is saved", () => {
+    expect(draftLost(kumar(), drafts)).toEqual([11, 13]);
+    const saved = kumar();
+    saved.mm.lv["2"] = { done: NOW - 5 * MIN, fixed: NOW - MIN, got: 0 };
+    expect(draftLost(saved, drafts)).toEqual([]);
+    expect(draftLost(kumar(), null)).toEqual([]);
+  });
+
+  test("All = every wrong question and the ones being marked; Past = before today; Today = today and being marked", () => {
+    const v = kumar();
+    expect(countOf(waitsOf(v, "evaluation"))).toBe(2); // no filter: as before (saved levels only)
+    expect(countOf(waitsOf(v, "evaluation", null, show("all")))).toBe(4);
+    expect(countOf(waitsOf(v, "evaluation", null, show("past")))).toBe(1);
+    expect(countOf(waitsOf(v, "evaluation", null, show("today")))).toBe(3);
+    expect(countOf(waitsOf(v, "evaluation", null, show("today", null)))).toBe(1);
+    expect(waitsOf(v, "evaluation", null, show("past"))[0].qs).toEqual([3]);
+    // The pills and the line follow it.
+    expect(consultRows([v], "evaluation", ME, null, false, show("past"))[0].n).toBe(1);
+    expect(todayOf([v], "evaluation", null, show("today"))).toEqual({ qs: 3, students: 1, red: 0 });
+    // The squares: the saved ones in its time (a level still being marked has nothing to explain yet).
+    const p = [{ it: null, v, since: NOW, local: {} }];
+    expect(consultQs(p, "evaluation", null, show("past")).map((x) => x.q)).toEqual([3]);
+    expect(consultQs(p, "evaluation", null, show("today")).map((x) => x.q)).toEqual([5]);
+    expect(consultQs(p, "evaluation", null, show("all")).map((x) => x.q)).toEqual([3, 5]);
+    // His file names them.
+    expect(bookLines(v, () => 8, drafts)).toEqual(["Unit 8: 2 to explain · 2 being corrected"]);
   });
 });
