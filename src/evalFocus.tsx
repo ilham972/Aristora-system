@@ -233,12 +233,11 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
   const inBook = (x: SessionQ) => bookKey(x.v) === unitKey;
   const sq = onRoom ? ((atRoom && inBook(atRoom) ? atRoom : firstOpen(roomQs.filter(inBook))) ?? null) : (qs.find((x) => x.key === at) ?? qs[0] ?? null);
   const nUnits = new Set(qs.map((x) => x.v.unit?._id)).size;
-  const mixed = nUnits > 1;
   // A unit's theory book AND its workbook on screen (a topic tute, or a term-test workbook): the theory book's squares
   // carry their section letter ("C·22"), so the two Q22s never look the same.
   const twoBooks = new Set(qs.map((x) => bookKey(x.v))).size > nUnits;
   const tag = (x: SessionQ) =>
-    `${mixed && x.v.unit ? `${unitNo(x.v.unit.code)}·` : ""}${twoBooks && x.v.f ? `${x.v.f.sections.find((sec) => sec.solo.includes(x.q))?.id ?? "F"}·` : ""}`;
+    `${x.v.unit ? `${unitNo(x.v.unit.code)}·` : ""}${twoBooks && x.v.f ? `${x.v.f.sections.find((sec) => sec.solo.includes(x.q))?.id ?? "F"}·` : ""}`;
   const allAre = (d: Decision) => !!sq && sq.who.length > 0 && sq.who.every((h) => (dec[h.v.key] ?? {})[sq.q] === d);
   const canDecide = live && !!sq && sq.who.length > 0 && !busy;
   // Before anyone is called: who among those offered has the question on screen.

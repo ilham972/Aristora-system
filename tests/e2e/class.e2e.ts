@@ -135,8 +135,14 @@ const count = (l: L, n: number) => until(async () => (await l.count()) === n, `$
 const contains = (l: L, text: string) => until(async () => (await l.first().innerText()).includes(text), `"${text}" in ${l}`);
 /** Like contains, but reads the words as written (headings drawn in capitals look different to innerText). */
 const says = (l: L, text: string) => until(async () => ((await l.first().textContent()) ?? "").includes(text), `"${text}" in ${l}`);
-const textsAre = (l: L, list: string[]) =>
-  until(async () => JSON.stringify((await l.allInnerTexts()).map((x) => x.trim())) === JSON.stringify(list), `${list.join(", ")} in ${l}`);
+const textsAre = async (l: L, list: string[]) => {
+  let seen: string[] = [];
+  try {
+    await until(async () => JSON.stringify((seen = (await l.allInnerTexts()).map((x) => x.trim()))) === JSON.stringify(list), `${list.join(", ")} in ${l}`);
+  } catch (e) {
+    throw new Error(`${(e as Error).message}; on screen: ${JSON.stringify(seen)}`);
+  }
+};
 /** The same names, in any order. */
 const namesAre = (l: L, list: string[]) =>
   until(
@@ -758,7 +764,7 @@ test("Master: workbook levels corrected, lost marks explained, re-teach, Exam Sp
   await until(async () => (await marksOf(backend, "Malik")).room === "theory", "Malik on his way to Theory");
   // He walks in: Arrived. His questions as squares, each with what he got and who sent it; his file says the same.
   await evArrive(T, ["Malik"]);
-  await textsAre(T.locator(".evx-strip .fc-sq small"), ["13", "17"]);
+  await textsAre(T.locator(".evx-strip .fc-sq small"), ["8·13", "8·17"]);
   await contains(T.locator(".evx-who"), "Malik 0/2 · Evaluation");
   const mf = await evFile(T, "Malik");
   await contains(mf.locator(".tpx-fq"), "Evaluation");
@@ -2000,7 +2006,7 @@ test("Theory: one screen like Evaluation: grade, stage, unit and lesson rows; he
   await visible(evDone(T).and(T.locator(":disabled")));
   await contains(T.locator(".evx-bh"), "room for 6");
   // What to teach, to prepare before they come: D's four teacher questions, the first with who needs it; the pad pale.
-  await textsAre(T.locator(".evx-strip .fc-sq small"), ["D·23", "D·24", "D·25", "D·26"]);
+  await textsAre(T.locator(".evx-strip .fc-sq small"), ["13·D·23", "13·D·24", "13·D·25", "13·D·26"]);
   await contains(T.locator(".evx-card .fc-qn"), "23");
   await contains(T.locator(".evx-card .tpx-what"), "D");
   await contains(T.locator(".evx-card .evx-who"), "Fathima");
@@ -2069,7 +2075,7 @@ test("Theory: one screen like Evaluation: grade, stage, unit and lesson rows; he
   expect(Math.abs((await padY()) - y0)).toBeLessThanOrEqual(2); // the pad never moved
 
   // The lesson: Q23 to Q25 taught for both (one tap each, the next opens by itself); the bell rang before Q26.
-  await textsAre(T.locator(".evx-strip .fc-sq small"), ["D·23", "D·24", "D·25", "D·26"]);
+  await textsAre(T.locator(".evx-strip .fc-sq small"), ["13·D·23", "13·D·24", "13·D·25", "13·D·26"]);
   await contains(T.locator(".evx-x"), "for 2");
   for (const q of ["23", "24", "25"]) {
     await contains(T.locator(".evx-card .fc-qn"), q);
@@ -2134,7 +2140,7 @@ test("Theory: one screen like Evaluation: grade, stage, unit and lesson rows; he
   await visible(tm);
   await contains(tm.locator(".tm-title .tp-ln-n"), "13·D");
   expect(await tm.locator(".tm-title .tp-ln-t").textContent()).toMatch(/^[^A-Za-z]+$/);
-  await textsAre(tm.locator(".fc-strip .fc-sq small"), ["D·23", "D·24", "D·25", "D·26"]);
+  await textsAre(tm.locator(".fc-strip .fc-sq small"), ["13·D·23", "13·D·24", "13·D·25", "13·D·26"]);
   await contains(tm.locator(".fc-qmeta.evx-who"), "Dilan");
   await contains(tm.locator(".fc-qmeta.evx-who"), "Nila");
   await visible(tm.locator(".tm-noq"));
@@ -2171,7 +2177,7 @@ test("Theory: one screen like Evaluation: grade, stage, unit and lesson rows; he
   await hears(C, "Malik, go to Owner in Theory.");
   await C.locator(".call-strip.theory").getByRole("button", { name: /^Sent/ }).click();
   await evArrive(T, ["Malik"]);
-  await textsAre(T.locator(".evx-strip .fc-sq small"), ["13", "17"]);
+  await textsAre(T.locator(".evx-strip .fc-sq small"), ["8·13", "8·17"]);
   // His screenshot (31 Oct 2026): nobody else needs Malik's lesson, yet the rows stay on it (Grade 7, Master, unit 8,
   // each marked hers for a screen reader) and the box offers nobody from another book.
   const onGrade = async () => T.locator(".evx-g.on b").textContent();
@@ -2188,7 +2194,7 @@ test("Theory: one screen like Evaluation: grade, stage, unit and lesson rows; he
   await shot(T, "t05c-theory-another-book");
   await T.locator(".evx-card .evx-back").click();
   await until(async () => (await onGrade()) === "7", "back to her room's grade");
-  await textsAre(T.locator(".evx-strip .fc-sq small"), ["13", "17"]);
+  await textsAre(T.locator(".evx-strip .fc-sq small"), ["8·13", "8·17"]);
   await contains(T.locator(".evx-who"), "Malik 0/2 · Evaluation");
   await visible(T.locator(".evx-card .fc-anote", { hasText: "No answer key for this workbook yet." }));
   const mf = await evFile(T, "Malik");
@@ -2369,7 +2375,7 @@ test("Evaluation: one screen: grade, stage, unit and questions the most urgent f
   await contains(E.locator(".evx-bh"), "free ~3m · call now");
   await visible(E.locator(".evx-call.ahead"));
   // Q22 once for both: Explained (for 2); their pills are done; Done 2 sends both back.
-  await textsAre(E.locator(".evx-strip .fc-sq small"), ["22"]);
+  await textsAre(E.locator(".evx-strip .fc-sq small"), ["13·22"]);
   await contains(E.locator(".evx-who"), "Fathima");
   await contains(E.locator(".evx-who"), "Ahamed");
   await contains(E.locator(".evx-x"), "for 2");
@@ -2387,7 +2393,7 @@ test("Evaluation: one screen: grade, stage, unit and questions the most urgent f
   await until(async () => (await E.evaluate(() => localStorage.getItem("aristora.role"))) === "evaluation", "the Evaluation tab remembered");
   await E.reload();
   await contains(evDone(E), "Done 2");
-  await textsAre(E.locator(".evx-strip .fc-sq.s-explained small"), ["22"]);
+  await textsAre(E.locator(".evx-strip .fc-sq.s-explained small"), ["13·22"]);
   await evDone(E).click();
   await contains(E.locator(".toast"), "Saved: Fathima and Ahamed back to work.");
   await until(
@@ -2406,7 +2412,7 @@ test("Evaluation: one screen: grade, stage, unit and questions the most urgent f
   await evArrive(E, ["Vimal"]);
   // His questions one at a time with his marks and the key's answer, big as on Correction's card (3 Nov 2026): the
   // number a dark pill in the top line with who has it, then the answer.
-  await textsAre(E.locator(".evx-strip .fc-sq small"), ["22", "51"]);
+  await textsAre(E.locator(".evx-strip .fc-sq small"), ["8·22", "8·51"]);
   await contains(E.locator(".evx-card .fc-qhead .fc-qn"), "22");
   await contains(E.locator(".evx-card .fc-qhead .evx-who"), "Vimal 0/");
   await contains(E.locator(".evx-card .fc-ans .ka-h"), "−3");
@@ -2418,7 +2424,7 @@ test("Evaluation: one screen: grade, stage, unit and questions the most urgent f
   const tm = E.locator(".tm");
   await visible(tm);
   await contains(tm.locator(".tm-title .tp-ln-n"), "8");
-  await textsAre(tm.locator(".fc-strip .fc-sq small"), ["22", "51"]);
+  await textsAre(tm.locator(".fc-strip .fc-sq small"), ["8·22", "8·51"]);
   await contains(tm.locator(".fc-qn"), "22");
   await contains(tm.locator(".fc-qmeta.evx-who"), "Vimal");
   await visible(tm.locator(".tm-noq"));
@@ -2436,7 +2442,7 @@ test("Evaluation: one screen: grade, stage, unit and questions the most urgent f
   await E.goBack({ waitUntil: "commit" }); // Android's Back button
   await count(E.locator(".tm"), 0);
   await contains(E.locator(".evx-card .fc-qn"), "51");
-  await textsAre(E.locator(".evx-strip .fc-sq.s-explained small"), ["22"]);
+  await textsAre(E.locator(".evx-strip .fc-sq.s-explained small"), ["8·22"]);
   await count(E.locator(".evx-strip .fc-sq.dk"), 1);
   // His file (his pill): what was decided, his unit, his day; Done sends him back.
   const vf = await evFile(E, "Vimal");
@@ -2469,7 +2475,7 @@ test("Evaluation: one screen: grade, stage, unit and questions the most urgent f
   await textsAre(E.locator(".evx-u.on .tp-ln-n"), ["13"]);
   expect(await E.locator(".evx-u.on").getAttribute("aria-label")).toContain("your room");
   await count(E.locator(".evx-sp.s-sug"), 0);
-  await textsAre(E.locator(".evx-strip .fc-sq small"), ["18", "28", "29"]);
+  await textsAre(E.locator(".evx-strip .fc-sq small"), ["13·18", "13·28", "13·29"]);
   await visible(E.locator(".evx-g:not(:disabled)", { hasText: "7" }));
   await shot(E, "e06-room-rows");
   // To call Malik next she taps Grade 7: the rows, the box and the question on screen are unit 8's (to prepare, the pad
@@ -2477,14 +2483,14 @@ test("Evaluation: one screen: grade, stage, unit and questions the most urgent f
   await evPick(E, { grade: "7" });
   await textsAre(E.locator(".evx-u.on .tp-ln-n"), ["8"]);
   expect(await namesOf(E.locator(".evx-sp.s-sug"))).toEqual(["Malik"]);
-  await textsAre(E.locator(".evx-strip .fc-sq small"), ["4", "13", "17"]);
+  await textsAre(E.locator(".evx-strip .fc-sq small"), ["8·4", "8·13", "8·17"]);
   await contains(E.locator(".evx-who"), "Malik");
   await visible(E.locator(".evx-x:disabled"));
   expect(await E.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await shot(E, "e07-another-book");
   await E.locator(".evx-card .evx-back").click();
   await until(async () => (await onGrade(E)) === "11", "back to her room's grade");
-  await textsAre(E.locator(".evx-strip .fc-sq small"), ["18", "28", "29"]);
+  await textsAre(E.locator(".evx-strip .fc-sq small"), ["13·18", "13·28", "13·29"]);
   // She calls Malik from Grade 7: two books in her room. The rows show the book of the question on her screen; a tap on
   // a square of the other book takes them there.
   await evPick(E, { grade: "7" });
@@ -2573,13 +2579,13 @@ test("Several books at once: every book stays on Evaluation and Theory, one book
 
   // With her (Arrived): U08's questions only. Done, and he stays for U09 (no walk back): the room has space.
   await evArrive(E, ["Malik"]);
-  await textsAre(E.locator(".evx-strip .fc-sq small"), ["4", "13"]);
+  await textsAre(E.locator(".evx-strip .fc-sq small"), ["8·4", "8·13"]);
   const mh = await evFile(E, "Malik");
   await contains(mh.locator(".tp-fl .tp-ln-n"), "8");
   await shot(E, "b02-evaluation-keep");
   await mh.getByRole("button", { name: "All explained, keep him for unit 9 (1)" }).click();
   await contains(E.locator(".toast"), "Saved: Malik stays for unit 9 (1 to explain).");
-  await textsAre(E.locator(".evx-strip .fc-sq small"), ["2"]);
+  await textsAre(E.locator(".evx-strip .fc-sq small"), ["9·2"]);
   await E.locator(".evx-x").click();
   await contains(evDone(E), "Done 1");
   await evDone(E).click();
@@ -3915,7 +3921,7 @@ test("Consultation: the top bar's icon left of the whiteboard (the owner, the Co
   // Tick Malik: his questions to prepare (Q4, Q13, Q17) and the answer; nothing to decide before he comes.
   await P.locator(".cx-nm", { hasText: "Malik" }).click();
   await visible(P.locator('.evx-sp.s-sug.on[data-name="Malik"]'));
-  await textsAre(P.locator(".evx-strip .fc-sq small"), ["4", "13", "17"]);
+  await textsAre(P.locator(".evx-strip .fc-sq small"), ["8·4", "8·13", "8·17"]);
   await contains(P.locator(".evx-card .fc-qn"), "4");
   await visible(P.locator(".evx-card .fc-ans"));
   // Explain online (12 Nov 2026): no icon for a demo student (no phone on the other side).
@@ -3983,7 +3989,7 @@ test("Consultation: the top bar's icon left of the whiteboard (the owner, the Co
   await count(P.locator(".evx-strip .fc-sq"), 0);
   await shot(O, "cx03-fighter-with-him");
   await P.locator(".tp-kinds").first().locator(".tp-kind", { hasText: "Master" }).click();
-  await textsAre(P.locator(".evx-strip .fc-sq small"), ["4", "13", "17"]);
+  await textsAre(P.locator(".evx-strip .fc-sq small"), ["8·4", "8·13", "8·17"]);
 
   // Done: back to work; what he didn't reach (Q17) stays for the teachers. The history says where it happened.
   await P.locator(".evx-done").click();

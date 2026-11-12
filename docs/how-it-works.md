@@ -373,7 +373,8 @@ shared `src/roomkit.tsx`) in Theory's blue (`.tpx-page`).
   or with Theory, the most first, top 5).
 - **The questions** (`sessionQs`): Correction's squares (`.fc-strip .fc-sq`): each question ONCE for everyone with her
   who has it, the most shared first (×2); one per BOOK (key `bookKey:q`: a unit's theory book and its workbook each
-  keep their own Q22; with both on screen the theory book's squares carry the section letter, "C·22"); before anyone comes, the picked group's (to prepare). One question at a
+  keep their own Q22; with both on screen the theory book's squares carry the section letter, "C·22"; every square
+  carries its unit first, "8·22", since 12 Nov 2026); before anyone comes, the picked group's (to prepare). One question at a
   time, **Correction's card** (3 Nov 2026, his ask; `CardHead` in `src/qcard.tsx`): one top line = the number as a
   dark pill, who has it with his marks ("Vimal 0/2", `.fc-qmeta.evx-who`, two lines at most), teaching mode's
   whiteboard icon and the printed question's icon; then **the answer big** (`CardAnswer`: `catalog.key` while open,
@@ -489,7 +490,8 @@ herself with "I'm teaching", her Evaluation page) is the machinery; this is HER 
   ("is called to Ilham (consultation)"); never in the rooms' score; his Evaluation room never shows it
   (`evalRoom`/`evalItems` leave `consult` calls out); the Class tab shows him "with Ilham" (her room) as for any call.
 - **The sitting:** their questions as Correction's squares (`consultQs`: each once for everyone with her who has it, all
-  their books, "8·13" when two books show), the card (who has it with his marks, the answer big, the printed question,
+  their books; every square carries its unit, "8·13", one book or several: 12 Nov 2026, a bare "81" hid the unit;
+  `.evx-strip li` 36–54 px), the card (who has it with his marks, the answer big, the printed question,
   teaching mode), and the pad fixed at the bottom: Evaluation **→ Theory · Not now · ✓ Explained**; Theory **Not
   reached · ✓ Taught**. **Each tap is saved at once** (`consult.mark`, his rule "everything saves live"): for everyone
   with her on that square; the same tap again = back; another decision first takes the old one back; then the next

@@ -257,9 +257,9 @@ export function ConsultPage(props: { board: Board; views: View[]; now: number })
   useEffect(() => {
     if (teaching && !sq) setTeaching(false); // nothing on her screen any more: back to the page
   }, [teaching, !!sq]);
-  // Several books on screen: a square carries its unit's number ("8·13").
-  const mixed = new Set(qs.map((x) => bookKey(x.v))).size > 1;
-  const tag = (x: ConsultQ) => (mixed && x.v.unit ? `${unitNo(x.v.unit.code)}·` : "");
+  // Every square carries its unit's number ("8·13"), one book on screen or several: a bare "81" leaves the teacher
+  // guessing which unit to open (12 Nov 2026, his screenshots).
+  const tag = (x: ConsultQ) => (x.v.unit ? `${unitNo(x.v.unit.code)}·` : "");
 
   const pickShow = (x: EvalShow) => {
     if (x === showPick) return;

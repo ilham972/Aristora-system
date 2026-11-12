@@ -13411,3 +13411,12 @@ body.locked.mnx-desk .toasts {
   font-weight: 800;
   color: var(--ink);
 }
+
+/* Consultation's, Evaluation's and Theory's squares always carry the unit ("16·46", 12 Nov 2026): room for it. */
+.evx-strip li {
+  flex-basis: 36px;
+  max-width: 54px;
+}
+.evx-strip .fc-sq small {
+  white-space: nowrap;
+}

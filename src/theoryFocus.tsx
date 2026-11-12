@@ -246,7 +246,6 @@ export function TheoryTab(props: { board: Board; views: View[]; now: number }) {
   const browsing = !onRoom && roomSqs.length > 0;
   const sqs = onRoom ? roomSqs : items.length === 0 || browsing ? theorySquares([], pill) : [];
   const sq = onRoom ? roomSq : (sqs.find((x) => x.key === at) ?? sqs[0] ?? null);
-  const mixed = new Set(sqs.map((x) => x.unit?._id)).size > 1;
   const withHer = sq ? sq.who.filter((it) => it.state === "here") : [];
   const allAre = (d: TDecision) => !!sq && withHer.length > 0 && withHer.every((it) => decOf(dec, it)[String(sq.q)] === d);
   const canDecide = live && withHer.length > 0 && !busy;
@@ -390,7 +389,7 @@ export function TheoryTab(props: { board: Board; views: View[]; now: number }) {
                 }}
               >
                 <small>
-                  {mixed && x.unit ? `${unitNo(x.unit.code)}·` : ""}
+                  {x.unit ? `${unitNo(x.unit.code)}·` : ""}
                   {x.kind === "section" && x.section ? `${x.section.id}·` : ""}
                   {qShort(x.q)}
                 </small>
