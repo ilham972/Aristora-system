@@ -885,7 +885,8 @@ export default defineSchema({
    * level checked at home: `part` = the part(s) the phone can't mark, marked from the photo by a person he picks (the
    * Photos permission); `working` = his working on a wrong answer, answered with its cause (`why`). His rule: both are
    * required, 2 levels at most without them (`OWE_LEVELS`; Settings → Photos can turn that off). The files live in
-   * Convex storage only until a day after marking (`photos.sweep`); a retake's files go at once.
+   * Convex storage until a day after marking, or until their question is explained if he lost marks on it (12 Nov
+   * 2026, 30 days at most: `photos.sweep`, `PHOTO_HOLD_MS`); a retake's files go at once.
    */
   homePhotos: defineTable({
     studentId: v.id("students"),

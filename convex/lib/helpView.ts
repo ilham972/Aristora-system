@@ -13,9 +13,17 @@ import { unitNumber } from "./family";
 import { asksIn, isLate } from "./help";
 import { phoneKeyFor } from "./homeWork";
 import { slotWords, type KeyQ } from "./phone";
+import { partMarks } from "./photos";
 
 /** One part of a question as he answered it: its label ("i", "ii"; "" = the only one), right or wrong (null = the teacher's). */
 export type HelpPart = { p: string; ok: boolean | null; typed: string[] };
+
+/**
+ * The photo(s) he sent from home for the part(s) of this question a teacher marks (a drawing, a construction), with
+ * her marks (12 Nov 2026, his words: "in the thread we have to show everything that student done"): kept until the
+ * question is explained (convex/photos.ts sweep). `urls` empty: deleted since, or his typed reason.
+ */
+export type HelpPhoto = { urls: string[]; st: "waiting" | "done" | "retake" | "ask"; got?: number; max: number; by?: string; note?: string };
 
 export type HelpAsk = {
   id: string;
@@ -38,6 +46,7 @@ export type HelpAsk = {
   max?: number;
   /** What he typed, part by part (his own on his phone; everyone's for a teacher). */
   parts?: HelpPart[];
+  photo?: HelpPhoto;
   /** Who explained it. */
   by?: string;
 };
@@ -62,15 +71,22 @@ export type HelpHead = {
 };
 
 /** A student's answer to one question, part by part, from his last Check of that level at home (null: none kept). */
-async function partsOf(ctx: QueryCtx, sid: Id<"students">, unitId: Id<"units">, n: number, k: KeyQ | undefined): Promise<HelpPart[] | undefined> {
+async function partsOf(
+  ctx: QueryCtx,
+  sid: Id<"students">,
+  unitId: Id<"units">,
+  n: number,
+  k: KeyQ | undefined,
+): Promise<{ parts: HelpPart[]; photo?: HelpPhoto } | undefined> {
   if (!k) return undefined;
   const rows = await ctx.db
     .query("familyAnswers")
     .withIndex("by_student", (x) => x.eq("studentId", sid))
     .collect();
   const row = rows.filter((r) => r.unitId === unitId && r.n === n).sort((a, b) => b.at - a.at)[0];
-  const typed = row?.qs.find((x) => x.q === k.q);
-  if (!typed) return undefined;
+  if (!row) return undefined;
+  // Nothing typed for it in that Check (a question that is all the teacher's, or left blank): every box empty.
+  const typed = row.qs.find((x) => x.q === k.q) ?? { q: k.q, a: [] as string[], ok: k.parts.map((p) => (p.want ? p.want.map(() => false) : null)) };
   const words = slotWords(k, typed.a);
   const out: HelpPart[] = [];
   let at = 0;
@@ -80,7 +96,30 @@ async function partsOf(ctx: QueryCtx, sid: Id<"students">, unitId: Id<"units">, 
     out.push({ p: p.p, ok: ok === null || ok === undefined ? null : ok.every(Boolean), typed: words.slice(at, at + boxes) });
     at += boxes;
   });
-  return out;
+  // His photo of the teacher's part(s), the last one sent, with her marks.
+  const sent = (
+    await ctx.db
+      .query("homePhotos")
+      .withIndex("by_student", (x) => x.eq("studentId", sid).eq("unitId", unitId).eq("n", n).eq("q", k.q))
+      .collect()
+  )
+    .filter((r) => r.kind === "part" && !r.free && !r.cls)
+    .sort((a, b) => b.at - a.at)[0];
+  if (!sent) return { parts: out };
+  const urls: string[] = [];
+  for (const f of sent.files) {
+    const u = await ctx.storage.getUrl(f);
+    if (u) urls.push(u);
+  }
+  const photo: HelpPhoto = {
+    urls,
+    st: sent.state,
+    max: partMarks(row.owe, k.q, k, typed.a).teach,
+    ...(sent.state === "done" && sent.got !== undefined ? { got: sent.got } : {}),
+    ...(sent.by ? { by: sent.by } : {}),
+    ...(sent.note ? { note: sent.note } : {}),
+  };
+  return { parts: out, photo };
 }
 
 const PARTS_FOR = 12;
@@ -122,8 +161,11 @@ export async function helpHeadOf(ctx: QueryCtx, me: { k: "s"; sid: Id<"students"
         row.got = mq.got ?? (mq.lost ? 0 : (k?.max ?? null));
         if (k) row.max = k.max;
       }
-      const parts = await partsOf(ctx, a.sid, a.unitId, a.n, k);
-      if (parts) row.parts = parts;
+      const typed = await partsOf(ctx, a.sid, a.unitId, a.n, k);
+      if (typed) {
+        row.parts = typed.parts;
+        if (typed.photo) row.photo = typed.photo;
+      }
     }
     out.push(row);
   }

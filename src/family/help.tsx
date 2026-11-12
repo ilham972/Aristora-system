@@ -12,12 +12,13 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { ChatMsg } from "../../convex/chat";
 import type { HelpLine, HelpStart, HelpTeacher } from "../../convex/help";
-import type { HelpAsk, HelpHead, HelpPart } from "../../convex/lib/helpView";
+import type { HelpAsk, HelpHead, HelpPart, HelpPhoto } from "../../convex/lib/helpView";
 import { drawQuestion } from "../questionView";
 import { keep, mutation, NetError, query, uploadPhoto } from "./net";
 import { picOf, usePics } from "./pics";
 import { buzz, sound } from "./sound";
 import { agoShort, sendPicked, usePicker } from "./talk";
+import { Pics } from "./usPost";
 import { Avatar, Icon, Maths, problemWords, Sheet, showSheet, toast, Waiting } from "./ui";
 
 const LIST_MS = 20_000;
@@ -173,24 +174,45 @@ const Rich = (props: { s: string }) => (
  * each sub questions. This answer key is only for teachers"): what he typed (✓ blue, ✗ rose, ✍ the teacher's part),
  * then, for a teacher, the key. `slot` = its place in the printed question; without one it is a row of the plain list.
  */
-function Answer(props: { label: string; part?: HelpPart; k?: string; staff: boolean; slot?: string }) {
+function Answer(props: { label: string; part?: HelpPart; k?: string; staff: boolean; slot?: string; photo?: HelpPhoto; first?: boolean }) {
   const p = props.part;
+  // A part only a teacher marks, photographed at home: her marks, and the photo itself under the first such part.
+  const ph = p?.ok === null ? props.photo : undefined;
+  const marked = ph?.st === "done" && ph.got !== undefined;
   // In its slot the printed label is right above it: only a split part's note ("பெயர்") is said again.
   const label = props.slot ? (props.label.split(" · ")[1] ?? "") : props.label;
   const typed = p?.typed.some((t) => t);
   return (
     <div class="h-ans" slot={props.slot}>
       {label && <small class="h-al">{label}</small>}
-      {p && (
-        <span class={`h-a ${p.ok === false ? "no" : p.ok ? "ok" : "tch"}`}>
-          <i aria-hidden="true">{p.ok === false ? "✗" : p.ok ? "✓" : "✍"}</i>
-          {typed ? p.typed.map((t, j) => <Maths key={j} s={`${j ? ", " : ""}${t || "–"}`} />) : p.ok === null ? (props.staff ? "on paper" : "தாளில்") : props.staff ? "blank" : "விடை இல்லை"}
+      {p && ph ? (
+        <span class={`h-a ${marked ? (ph.got! >= ph.max ? "ok" : "no") : "tch"}`}>
+          <i class="h-ai" aria-hidden="true">✍</i>
+          {!props.first
+            ? props.staff
+              ? "in the photo above"
+              : "மேலே உள்ள படத்தில்"
+            : marked
+              ? `${ph.got}/${ph.max}${props.staff && ph.by ? ` · ${ph.by}` : ""}`
+              : props.staff
+                ? ph.st === "retake"
+                  ? "photo asked again"
+                  : "photo not marked yet"
+                : "இன்னும் திருத்தப்படவில்லை"}
         </span>
+      ) : (
+        p && (
+          <span class={`h-a ${p.ok === false ? "no" : p.ok ? "ok" : "tch"}`}>
+            <i class="h-ai" aria-hidden="true">{p.ok === false ? "✗" : p.ok ? "✓" : "✍"}</i>
+            {typed ? p.typed.map((t, j) => <Maths key={j} s={`${j ? ", " : ""}${t || "–"}`} />) : p.ok === null ? (props.staff ? "on paper" : "தாளில்") : props.staff ? "blank" : "விடை இல்லை"}
+          </span>
+        )
       )}
+      {ph && props.first && (ph.urls.length ? <div class="h-aph"><Pics ph={ph.urls.map((u) => ({ s: u, b: u, w: 4, h: 3 }))} /></div> : <small class="h-al">{props.staff ? "(photo deleted)" : "(படம் நீக்கப்பட்டது)"}</small>)}
+      {ph && props.first && ph.note && <small class="h-anote">{ph.note}</small>}
       {props.staff && props.k && (
         <span class="h-k">
-          <i>Key</i>
-          <Rich s={props.k} />
+          <i class="h-kt">Key</i> <Rich s={props.k} />
         </span>
       )}
     </div>
@@ -219,7 +241,9 @@ function Printed(props: { id: string; staff: boolean; ask?: HelpAsk }) {
     if (host.current && x?.html) return drawQuestion(host.current, x.html, x.css ?? "", PAPER, labels);
   }, [x, sig]);
   if (!x) return <Waiting />;
-  const rows = (slots: boolean) => labels.map((l, i) => <Answer key={i} label={l} part={parts?.[i]} k={x.kp?.[i]?.a} staff={props.staff} slot={slots ? `p${i}` : undefined} />);
+  const firstPhoto = parts?.findIndex((p) => p.ok === null) ?? -1;
+  const rows = (slots: boolean) =>
+    labels.map((l, i) => <Answer key={i} label={l} part={parts?.[i]} k={x.kp?.[i]?.a} staff={props.staff} slot={slots ? `p${i}` : undefined} photo={props.ask?.photo} first={i === firstPhoto} />);
   return (
     <>
       {x.html ? (

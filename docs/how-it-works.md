@@ -1917,7 +1917,11 @@ learning app of our education institute"): one profile, his class times, what he
       the key part by part in the phone key's order: `keyParts`; never sent to a student, `help.question`). A book
       whose questions aren't in the app: the same rows as a plain list (`.h-plist`). A student sees only his own
       answers; a teacher sees the first student still waiting and **taps a name for another's** (`.h-asks li.sel`,
-      `.h-whose`). **Nearly as wide as the phone** (his screenshot: "left and right have so much white margin ...
+      `.h-whose`). **A sub-question only a teacher marks** (a drawing he photographed at home) shows
+      **his photo and her marks** under it (`HelpPhoto` on his row, from `homePhotos`: ✍ 1/1 · her name, a small
+      photo that opens full screen; "(photo deleted)" once it went), kept until the question is explained (the rule
+      under "Nothing kept"). Such a question counts as lost, and gets its pill, only once its photo is marked.
+      **Nearly as wide as the phone** (his screenshot: "left and right have so much white margin ...
       makes to scroll too much"): the card 6 px from the edge, the paper to the card's edge, a sub-question's label
       only as wide as its words (`PAPER` in `help.tsx`). His photo is the first message (`ask`). A teacher's link
       shows as a ▶ button (students still can't send links).
@@ -2510,7 +2514,13 @@ learning app of our education institute"): one profile, his class times, what he
     more).
   - **Nothing kept**: an hourly cron (`convex/crons.ts` → `photos.sweep`) first deletes any working photo not answered
     (`dropWorking`, 10 Nov 2026), then the files of photos marked a day ago
-    (the marks and her answer stay), of photos waiting on a level taken back in class or of a removed student, and
+    (the marks and her answer stay). **A marked photo whose question still waits to be explained is kept** (12 Nov
+    2026, his words after an online thread showed "on paper" for a drawing he had marked that morning: "don't delete
+    that until explain that question in the classroom or in the online ... even though have another sub question
+    wrong ... in the thread we have to show everything that student done"): while he lost marks on the question, on
+    any sub-question, and nobody explained or taught it (`askable`), 30 days at most after marking (`PHOTO_HOLD_MS`,
+    mine: a question nobody ever explains must not keep its photos for ever); the first sweep after Explained (online
+    or in class) takes it. A question with full marks: a day, as before. Then the files of photos waiting on a level taken back in class or of a removed student, and
     image uploads never attached after a day (since 7 Nov 2026 it looks only at files between a day and a day + 6 hours
     old, `SWEEP_WINDOW_MS`, and keeps the photos on Us: `usFiles`). A removed (wiped) student's photos go with him; a
     tute's move takes them.

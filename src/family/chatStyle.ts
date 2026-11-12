@@ -116,13 +116,16 @@ const CSS = `
 .h-ans{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:4px 0 12px}
 .h-plist{margin-top:8px;padding:10px 10px 2px;border-radius:12px;background:var(--bg)}
 .h-al{flex:none;min-width:20px;font:800 13px/1 var(--display);color:var(--ink2)}
-.h-a,.h-k{display:inline-flex;flex-wrap:wrap;align-items:center;gap:5px;min-height:30px;padding:3px 10px 1px;border-radius:10px;font:700 15px/1.3 var(--text)}
-.h-a i,.h-k i{font:800 12px/1 var(--display);font-style:normal}
+.h-a{display:inline-flex;flex-wrap:wrap;align-items:center;gap:5px;min-height:30px;padding:3px 10px 1px;border-radius:10px;font:700 15px/1.3 var(--text)}
+.h-k{display:inline-block;max-width:100%;padding:5px 10px 3px;border-radius:10px;font:500 15px/1.45 var(--text);overflow-wrap:anywhere}
+.h-ai,.h-kt{font:800 12px/1 var(--display);font-style:normal}
+.h-aph{flex-basis:100%;max-width:180px}
+.h-anote{flex-basis:100%;font-size:13px;color:var(--ink2)}
 .h-a.ok{background:var(--right-soft);color:var(--right-ink);box-shadow:0 0 0 1.5px var(--right)}
 .h-a.no{background:var(--wrong-soft);color:var(--wrong-ink);box-shadow:0 0 0 1.5px var(--wrong)}
 .h-a.tch{background:var(--lav);color:var(--ink2)}
-.h-k{background:var(--card);box-shadow:0 0 0 1.5px var(--line-2);color:var(--ink);font-weight:500}
-.h-k i{color:var(--ink3)}
+.h-k{background:var(--card);box-shadow:0 0 0 1.5px var(--line-2);color:var(--ink)}
+.h-kt{margin-right:2px;color:var(--ink3)}
 .h-st{flex:1;font-size:12.5px;color:var(--ink2)}
 .h-asks li.open .h-st{color:var(--gold-ink);font-weight:700}
 .h-dots,.h-more{font:800 22px/1 var(--display)}

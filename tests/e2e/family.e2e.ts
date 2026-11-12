@@ -3848,8 +3848,9 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
     levels: BOOK.data.levels.map((l) => ({ to: l.to, max: l.max })),
     marks: BOOK.data.marks ?? {},
     replace: true,
-    // Q8 has two sub-questions here (a mark each): the thread shows each one's answer under it.
-    key: fakeKey().map((k) => (k.q === 8 ? { q: 8, parts: [{ p: "i", a: "24", m: 1 }, { p: "ii", a: "48", m: 1 }] } : k)),
+    // Q8 has two sub-questions here (a mark each): (i) a number on the pad, (ii) a drawing only a teacher marks (a
+    // photo from home). The thread shows each one's answer under it.
+    key: fakeKey().map((k) => (k.q === 8 ? { q: 8, parts: [{ p: "i", a: "24", m: 1 }, { p: "ii", a: "சிறப்புப் பெயர்", m: 1 }] } : k)),
   });
   // The book's questions as printed (made-up words): Q8 with its (i) and (ii).
   await t.run(async (ctx) => {
@@ -3884,9 +3885,23 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
   await stageNow(P, "Level 1");
   await P.locator(".f-lv.play").click();
   await contains(P.locator(".f-qn"), "Q1");
-  for (const a of [["3"], ["6"], ["1", "0"], ["1", "2"], ["1", "5"], ["1", "8"], ["n", "+", "6", "n", "-", "1"], ["9", "9"], ["4", "8"], ["1", "0"], ["9"], ["3", "0"]]) await type(P, a);
+  for (const a of [["3"], ["6"], ["1", "0"], ["1", "2"], ["1", "5"], ["1", "8"], ["n", "+", "6", "n", "-", "1"]]) await type(P, a);
+  // Q8: (i) on the pad, wrong; (ii) her drawing, photographed.
+  await contains(P.locator(".f-qn"), "Q8");
+  await P.locator(".f-qcard .f-file").first().setInputFiles(paper);
+  await P.locator(".f-cut").getByRole("button", { name: "Use this photo" }).click();
+  await visible(P.locator(".f-qcard .f-thumb"));
+  for (const a of [["9", "9"], ["1", "0"], ["9"], ["3", "0"]]) await type(P, a);
   await P.locator(".f-review").getByRole("button", { name: "Check ✓" }).click();
-  await contains(P.locator(".f-big"), "19");
+  await contains(P.locator(".f-big"), "18");
+  // Her photo goes by itself; the owner marks the drawing right in the morning (1 of 1). Q8 still lost a mark on (i).
+  await until(async () => (await t.query(api.photos.queue, as)).length === 1, "her photo with the teachers", 15_000);
+  await t.mutation(api.photos.mark, { ...as, id: (await t.query(api.photos.queue, as))[0].id, got: 1 });
+  // The question's marks are final now: she opens Level 1 again (its book).
+  await P.reload();
+  await stageNow(P, "Level 2");
+  await P.locator(".f-lv").first().click();
+  await visible(P.locator(".f-bookscr"));
 
   // The pill on Q8 (the only one with marks lost: its (i)): her photo first, then the teacher; Send waits for both.
   const q8 = P.locator(".f-bq", { has: P.locator(".f-rq", { hasText: "Q8" }) });
@@ -3914,10 +3929,11 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
   await contains(P.locator(".h-top-h"), "Q8");
   await contains(P.locator(".h-top-h"), "Stage 1 · Level 1");
   // The question as printed, open, nearly as wide as the phone; her answer under each sub-question: (i) wrong in rose,
-  // (ii) right in blue. Never the key on her phone.
+  // (ii) her photo with the teacher's mark in blue (kept until the question is explained). Never the key on her phone.
   const yOf = async (l: L) => (await l.first().boundingBox())!.y;
   await contains(P.locator(".h-paper .h-a.no"), "99");
-  await contains(P.locator(".h-paper .h-a.ok"), "48");
+  await contains(P.locator(".h-paper .h-a.ok"), "1/1");
+  await visible(P.locator(".h-paper .h-aph img"));
   const y = [await yOf(P.locator(".h-paper .rl", { hasText: "(i)" })), await yOf(P.locator(".h-a.no")), await yOf(P.locator(".h-paper .rl", { hasText: "(ii)" })), await yOf(P.locator(".h-a.ok"))];
   expect([...y].sort((a, b) => a - b)).toEqual(y);
   expect(await P.locator(".h-k").count()).toBe(0);
@@ -3950,8 +3966,9 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
   await line.click();
   // The thread for her: the key on Question, what Hana typed, her photo; nothing explained yet.
   await contains(U.locator(".h-paper .h-a.no"), "99");
-  await contains(U.locator(".h-paper .h-a.ok"), "48");
-  expect((await U.locator(".h-paper .h-k").allInnerTexts()).map((x) => x.replace(/\s+/g, " ").trim())).toEqual(["Key 24", "Key 48"]);
+  await contains(U.locator(".h-paper .h-a.ok"), "1/1 · Owner");
+  await visible(U.locator(".h-paper .h-aph img"));
+  expect((await U.locator(".h-paper .h-k").allInnerTexts()).map((x) => x.replace(/\s+/g, " ").trim())).toEqual(["Key 24", "Key சிறப்புப் பெயர்"]);
   await noSideScroll(C);
   await shot(C, "help04b-teacher-card");
   await contains(U.locator(".h-wait"), "Waiting on you");
@@ -4014,10 +4031,13 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
   await shot(P, "help09-pill-done");
 
   // Mira got Q8 wrong too (her phone, through the server): the same thread, with everything in it; not explained yet.
-  await t.mutation(api.family.check, { token: MIRA, unitId: u01, n: 1, typed: [{ q: 1, a: ["3"] }, { q: 8, a: ["41", "48"] }] });
+  await t.mutation(api.family.check, { token: MIRA, unitId: u01, n: 1, typed: [{ q: 1, a: ["3"] }, { q: 8, a: ["41"] }] });
+  const png = async () => await t.run(async (ctx) => await ctx.storage.store(new Blob([Buffer.from(PAPER_PNG, "base64")], { type: "image/png" })));
+  // Her drawing for (ii) too, marked right: Q8 lost its (i) mark.
+  await t.mutation(api.family.photoSend, { token: MIRA, unitId: u01, n: 1, q: 8, kind: "part", files: [await png()] });
+  await t.mutation(api.photos.mark, { ...as, id: (await t.query(api.photos.queue, as))[0].id, got: 1 });
   const tid = (await askOf(hana, 8))!.rid;
   expect((await t.query(api.help.start, { token: MIRA, unitId: u01, q: 8 })).thread).toMatchObject({ id: tid, tname: "Nila", n: 1 });
-  const png = async () => await t.run(async (ctx) => await ctx.storage.store(new Blob([Buffer.from(PAPER_PNG, "base64")], { type: "image/png" })));
   expect((await t.mutation(api.help.ask, { token: MIRA, unitId: u01, q: 8, ph: [{ s: await png(), b: await png(), w: 96, h: 72 }] })).id).toBe(tid);
   const hers = await t.query(api.chat.room, { token: MIRA, id: tid });
   expect(hers.msgs.map((m) => m.n)).toEqual(["Hana K", "Nila", "Nila", "Hana K", "Mira J"]);

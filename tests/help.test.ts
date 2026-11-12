@@ -324,6 +324,51 @@ describe("online explanations", () => {
     expect((await m().query(api.family.book, { unitId: u01, n: 1 })).qs.find((x) => x.q === 7)!.hp).toBeUndefined();
   });
 
+  test("his photo of a teacher's part is kept until the question is explained, and shows in the thread with her marks", async () => {
+    // 12 Nov 2026, his words: "don't delete that until explain that question in the classroom or in the online ... in the
+    // thread we have to show everything that student done". Q10 is the teacher's (a drawing): Hana photographs it.
+    const f = await file("image/jpeg");
+    await h().mutation(api.family.photoSend, { unitId: u01, n: 1, q: 10, kind: "part", files: [f] });
+    const [item] = await t.query(api.photos.queue, {});
+    await t.mutation(api.photos.mark, { id: item.id, got: 1 }); // 1 of 2: she lost a mark, it waits to be explained
+    const id = await send(h(), 10, nila);
+    const card = async (who: ReturnType<typeof h>, staff = false) => (await who.query(staff ? api.chat.troom : api.chat.room, { id })).head.help!.asks[0];
+    expect(await card(tn(), true)).toMatchObject({ got: 1, max: 2, parts: [{ ok: null }], photo: { st: "done", got: 1, max: 2, by: "Owner" } });
+    expect((await card(tn(), true)).photo!.urls).toHaveLength(1);
+    expect((await card(h())).photo!.urls).toHaveLength(1);
+    // A day later it would have gone: it stays, the question still waits.
+    vi.setSystemTime(Date.now() + 26 * 3_600_000);
+    await raw.mutation(internal.photos.sweep, {});
+    expect(await exists(f)).toBe(true);
+    // Mira's photo of the same question, full marks: nothing to explain, gone after the day as before.
+    const g = await file("image/jpeg");
+    await m().mutation(api.family.photoSend, { unitId: u01, n: 1, q: 10, kind: "part", files: [g] });
+    await t.mutation(api.photos.mark, { id: (await t.query(api.photos.queue, {}))[0].id, got: 2 });
+    vi.setSystemTime(Date.now() + 26 * 3_600_000);
+    await raw.mutation(internal.photos.sweep, {});
+    expect(await exists(g)).toBe(false);
+    expect(await exists(f)).toBe(true);
+    // Explained online: the next sweep takes it; the card keeps her marks, no photo.
+    await tn().mutation(api.help.tdone, { id });
+    await raw.mutation(internal.photos.sweep, {});
+    expect(await exists(f)).toBe(false);
+    const after = (await card(tn(), true)).photo!;
+    expect(after).toMatchObject({ st: "done", got: 1, max: 2 });
+    expect(after.urls).toEqual([]);
+  });
+
+  test("a photo nobody ever explains goes after 30 days", async () => {
+    const f = await file("image/jpeg");
+    await h().mutation(api.family.photoSend, { unitId: u01, n: 1, q: 10, kind: "part", files: [f] });
+    await t.mutation(api.photos.mark, { id: (await t.query(api.photos.queue, {}))[0].id, got: 0 });
+    vi.setSystemTime(Date.now() + 29 * 86_400_000);
+    await raw.mutation(internal.photos.sweep, {});
+    expect(await exists(f)).toBe(true);
+    vi.setSystemTime(Date.now() + 2 * 86_400_000);
+    await raw.mutation(internal.photos.sweep, {});
+    expect(await exists(f)).toBe(false);
+  });
+
   test("kept a year, not 30 days: the explanation serves the next student; a removed student's rows go", async () => {
     const id = await send(h(), 8, nila);
     const voice = await file("audio/mp4");

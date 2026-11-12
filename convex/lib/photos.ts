@@ -21,6 +21,13 @@ export const PHOTO_BYTES = 900 * 1024;
 export const PHOTO_URLS_PER_DAY = 80;
 /** A marked photo's files are deleted this long after marking. */
 export const PHOTO_KEEP_MS = 24 * 60 * 60_000;
+/**
+ * A marked photo is kept past that day while its question still waits to be explained (12 Nov 2026, his words: "don't
+ * delete that until explain that question in the classroom or in the online ... in the thread we have to show
+ * everything that student done"): he lost marks on it, on any sub-question, and nobody explained or taught it yet.
+ * At most this long after marking (mine: a question nobody ever explains must not keep its photos for ever).
+ */
+export const PHOTO_HOLD_MS = 30 * 24 * 60 * 60_000;
 /** Waiting longer than this: the teachers' count turns red. */
 export const PHOTO_LATE_MS = 24 * 60 * 60_000;
 /** An uploaded file never attached to a question is deleted after this. */

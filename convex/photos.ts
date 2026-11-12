@@ -34,7 +34,22 @@ import { classClosed, phoneKeyFor, photosRequired, REQUIRED_KEY } from "./lib/ho
 import { alertStudent } from "./lib/push";
 import type { MState } from "./lib/master";
 import { markQuestion, reasonsOf, slotWords, wantWords, type KeyQ } from "./lib/phone";
-import { ASK_MAX, isRetake, keyText, NOTE_MAX, ORPHAN_MS, partMarks, PHOTO_KEEP_MS, PHOTO_LATE_MS, VOICE_BYTES, VOICE_ONLY, VOICE_SEC, type PhotoKind } from "./lib/photos";
+import { askable } from "./lib/help";
+import {
+  ASK_MAX,
+  isRetake,
+  keyText,
+  NOTE_MAX,
+  ORPHAN_MS,
+  partMarks,
+  PHOTO_KEEP_MS,
+  PHOTO_LATE_MS,
+  VOICE_BYTES,
+  VOICE_ONLY,
+  VOICE_SEC,
+  type PhotoKind,
+  PHOTO_HOLD_MS,
+} from "./lib/photos";
 
 const token = v.optional(v.string());
 /** The hourly sweep looks at uploads between a day and a day and this much old (so an hour it missed is caught next time). */
@@ -573,7 +588,8 @@ export async function dropWorking(ctx: MutationCtx): Promise<number> {
 }
 
 /**
- * Every hour: nothing is kept. The files of photos marked a day ago (the marks and her answer stay), of photos waiting
+ * Every hour: nothing is kept longer than needed. The files of photos marked a day ago (the marks and her answer stay;
+ * a photo whose question still waits to be explained stays until it is, 30 days at most: `PHOTO_HOLD_MS`), of photos waiting
  * on a level taken back in class or of a removed student, and uploads never attached to a question after a day.
  * Only image and audio files are swept as unattached (12 Nov 2026: her voice note is referenced by its row's `askVoice`
  * the moment she sends it, a teacher's in an explanation's thread is marked in usFiles with its message; one recorded
@@ -591,6 +607,12 @@ export const sweep = internalMutation({
       .collect();
     for (const r of marked) {
       if (r.doneAt === undefined || !filesOf(r).length) continue;
+      // Kept while its question still waits to be explained, in class or online (12 Nov 2026), 30 days at most.
+      if (r.kind === "part" && r.state === "done" && now - r.doneAt < PHOTO_HOLD_MS) {
+        const p = await progressFor(ctx, r.studentId, r.unitId, "master");
+        const s = await ctx.db.get(r.studentId);
+        if (s && !s.archived && p && askable(masterState(p).q[String(r.q)])) continue;
+      }
       await dropFiles(ctx, filesOf(r));
       await ctx.db.patch(r._id, { files: [], gone: now, askVoice: undefined });
       gone++;
