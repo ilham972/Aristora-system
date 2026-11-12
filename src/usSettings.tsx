@@ -86,6 +86,45 @@ function WhyCard(props: { owner: boolean }) {
   );
 }
 
+/**
+ * Online explanations (12 Nov 2026): how many wrong questions a student may send a day. His answer: no limit (the photo
+ * he must take first is the brake); this is the switch for the night the teachers have too many.
+ */
+function HelpLimit() {
+  const saved = useQuery<number>(api.help.limit, {});
+  const [n, setN] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const shown = n ?? (saved ? String(saved) : "");
+  const next = Number(shown || 0);
+  const ok = Number.isInteger(next) && next >= 0 && next <= 50;
+  return (
+    <div class="us-open">
+      <span>
+        <b>Online explanations a day</b>
+        <small class="muted">
+          {saved ? `Each student may send ${saved} wrong ${saved === 1 ? "question" : "questions"} a day (Explain online, after Check).` : "No limit: a student may send every wrong question (each needs a photo of his working)."} Empty or 0 = no limit.
+        </small>
+      </span>
+      <input class="us-num" type="number" inputMode="numeric" min={0} max={50} placeholder="no limit" aria-label="Online explanations a student may send a day" value={shown} onInput={(e) => setN((e.target as HTMLInputElement).value)} />
+      <button
+        type="button"
+        class="btn ghost"
+        disabled={busy || saved === undefined || !ok || next === (saved ?? 0)}
+        onClick={() => {
+          setBusy(true);
+          void act(async () => {
+            await mutate(api.help.setLimit, { n: next });
+            setN(null);
+            toast(next ? `At most ${next} a day for each student.` : "No limit a day.");
+          }).finally(() => setBusy(false));
+        }}
+      >
+        Save
+      </button>
+    </div>
+  );
+}
+
 function OwnerCard(props: { b: UsBoard }) {
   const cfg = props.b.cfg;
   const [w, setW] = useState(cfg.welcome);
@@ -129,6 +168,7 @@ function OwnerCard(props: { b: UsBoard }) {
           {cfg.cxp ? "Turn off" : "Turn on"}
         </button>
       </div>
+      <HelpLimit />
       <b class="us-sub">What the owl writes by itself</b>
       <div class="us-kinds">
         {OWL_KINDS.map((k) => {

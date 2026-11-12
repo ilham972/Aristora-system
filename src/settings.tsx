@@ -1154,6 +1154,13 @@ function describe(e: Doc<"events">): string {
       const [to, q] = v.split(" ");
       return `posted ${q ? "a question " : ""}in Us (${to === "all" ? "everyone" : `Grade ${to.replace(/,/g, ", ")}`})`;
     }
+    // Online explanations (12 Nov 2026).
+    case "help-explained":
+      return `${qName(e.q ?? 0)} explained online (a thread in Us)`;
+    case "help-skip":
+      return `${qName(e.q ?? 0)}: not explained online, left for the class`;
+    case "help-limit":
+      return v === "none" ? "online explanations: no limit a day" : `online explanations: at most ${v} a day for each student`;
     case "us-report":
       return `reported a ${v} in Us`;
     case "us-remove":

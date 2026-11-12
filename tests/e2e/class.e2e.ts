@@ -3918,6 +3918,8 @@ test("Consultation: the top bar's icon left of the whiteboard (the owner, the Co
   await textsAre(P.locator(".evx-strip .fc-sq small"), ["4", "13", "17"]);
   await contains(P.locator(".evx-card .fc-qn"), "4");
   await visible(P.locator(".evx-card .fc-ans"));
+  // Explain online (12 Nov 2026): no icon for a demo student (no phone on the other side).
+  await count(P.locator(".evx-card .fc-onl"), 0);
   await until(async () => await P.locator(".fc-go.evx-x").isDisabled(), "Explained waits for him");
   await P.locator(".evx-call").click();
   await contains(O.locator(".toast"), "Called Malik. Correction sends him to you.");

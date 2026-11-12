@@ -56,7 +56,7 @@ import { nextPlay } from "./next";
 import type { Checked, Zoomed } from "./play";
 import { armSound, buzz, sound } from "./sound";
 import { Surprises } from "./surprise";
-import { Avatar, Coin, Flame, firstName, Gem, Icon, Owl, problemWords, setSheetHost, Sheet, showSheet, toast, Toast, Waiting, type IconName, type SheetRender } from "./ui";
+import { Avatar, Coin, Flame, firstName, Gem, Icon, Owl, problemWords, setRoomHost, setSheetHost, Sheet, showSheet, toast, Toast, Waiting, type IconName, type SheetRender } from "./ui";
 
 /** Us (7 Nov 2026): the students' community, between Learn and the Race once the owner opens it. */
 export type Tab = "home" | "learn" | "us" | "race" | "me";
@@ -76,7 +76,7 @@ type Screen =
   /** The bell's page (8 Nov 2026, his "build notification page"): everything for him, newest first, by day. */
   | { k: "bell" }
   /** A group or a private chat (8 Nov 2026), from Us or from the Members page; the Members page. */
-  | { k: "room"; id: string; from?: "people" }
+  | { k: "room"; id: string; from?: "people"; back?: { unitId: string; n: number } }
   | { k: "people" }
   /** The Shop (10 Nov 2026): his coins, the things, what he bought; from the top row's coin or Home's PAYDAY card. */
   | { k: "shop" }
@@ -96,13 +96,18 @@ type Screen =
 
 /** How deep a screen is: Back steps up one at a time (the reveal and a Level go back to their Stage). */
 const depth = (s: Screen) =>
-  s.k === "level" || s.k === "result" || s.k === "book" || (s.k === "post" && s.from) || (s.k === "room" && s.from)
+  // An explanation's thread opened from a Level's book (12 Nov 2026): one step deeper, Back returns to that book.
+  s.k === "room" && s.back
+    ? 3
+    : s.k === "level" || s.k === "result" || s.k === "book" || (s.k === "post" && s.from) || (s.k === "room" && s.from)
     ? 2
     : s.k === "stage" || s.k === "add" || s.k === "report" || s.k === "mate" || s.k === "post" || s.k === "bell" || s.k === "room" || s.k === "people" || s.k === "shop"
       ? 1
       : 0;
 const parent = (s: Screen): Screen =>
-  s.k === "level" || s.k === "result" || s.k === "book"
+  s.k === "room" && s.back
+    ? { k: "book", unitId: s.back.unitId, n: s.back.n }
+    : s.k === "level" || s.k === "result" || s.k === "book"
     ? { k: "stage", unitId: s.unitId }
     : s.k === "post" && s.from
       ? { k: "bell" }
@@ -287,7 +292,17 @@ export function App() {
   // Any screen can open a sheet (Me's photo, name, birthday and days; a certificate): it is one of the app's sheets.
   useEffect(() => {
     setSheetHost((render) => openSheet({ render }));
-    return () => setSheetHost(null);
+    // The pill on a wrong question (a Level's book or the reveal): its thread, from the sheet or straight.
+    setRoomHost((id, back) => {
+      const at = screenRef.current;
+      const to: Screen = { k: "room", id, ...(back && (at.k === "book" || at.k === "result") ? { back } : {}) };
+      if (sheetRef.current) fromSheet(to);
+      else go(to);
+    });
+    return () => {
+      setSheetHost(null);
+      setRoomHost(null);
+    };
   }, []);
   const closeSheet = () => {
     if (history.state?.sheet) history.back();

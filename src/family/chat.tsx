@@ -14,6 +14,7 @@ import type { ChatHead, ChatLine, ChatMsg, ChatPeople, ChatPerson, ChatRoom } fr
 import { keep, mutation, query } from "./net";
 import { picOf, usePics } from "./pics";
 import { buzz, sound } from "./sound";
+import { AskSheet, HelpList, HelpMenu, HelpTop, Voice, VoiceRec } from "./help";
 import { agoShort, Bubble, jumpTo, ReactorsSheet, WriteBar, type Sent, type Taggable } from "./talk";
 import { Avatar, Icon, Owl, problemWords, Sheet, showSheet, toast, Waiting } from "./ui";
 import { Pics } from "./usPost";
@@ -32,8 +33,10 @@ const dayNo = (t: number) => Math.floor((t + SL) / 86_400_000);
 type Rooms = { groups: ChatLine[]; dms: ChatLine[]; edit?: boolean; owner?: boolean };
 
 /** A chat's picture: a group's emoji (a grade's group: its number), or the other person's face. */
-function RoomFace(props: { r: Pick<ChatLine, "k" | "emo" | "gg" | "name" | "pic" | "tch">; big?: boolean }) {
+function RoomFace(props: { r: Pick<ChatLine, "emo" | "gg" | "name" | "pic" | "tch"> & { k: "g" | "d" | "h" }; big?: boolean }) {
   const r = props.r;
+  // An online explanation's thread (12 Nov 2026).
+  if (r.k === "h") return <span class="c-gface" aria-hidden="true">🎧</span>;
   if (r.k === "g")
     return (
       <span class={`c-gface${props.big ? " big" : ""}${r.gg !== undefined && !r.emo ? " grade" : ""}`} aria-hidden="true">
@@ -113,6 +116,7 @@ export function ChatList(props: { kind: "g" | "d"; staff: boolean; onRoom: (id: 
           </button>
         )}
       </div>
+      {props.kind === "d" && <HelpList staff={props.staff} onRoom={props.onRoom} />}
       {!d ? (
         <Waiting />
       ) : !list?.length ? (
@@ -204,7 +208,8 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
       const x = (await query("chat:room", { id: props.id, ...(last && r.head && !first ? { since: last.at, rv: r.head.rv } : {}) })) as ChatRoom;
       const end = nearEnd();
       // A short read (only what is new) doesn't count the group again: the count from before stays.
-      setHead(x.head.members === undefined && r.head?.members ? { ...x.head, members: r.head.members } : x.head);
+      // An explanation's question card comes on a full read only: the one from before stays too.
+      setHead({ ...x.head, ...(x.head.members === undefined && r.head?.members ? { members: r.head.members } : {}), ...(x.head.help === undefined && r.head?.help ? { help: r.head.help } : {}) });
       setErr(null);
       if (x.full) {
         setMsgs(x.msgs);
@@ -257,8 +262,8 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
       (err) => toast(problemWords(err), true),
     );
   };
-  const send = async (text: string, ph: Sent[], mt: string[]) => {
-    const r = (await mutation("chat:send", { id: props.id, ...(text ? { text } : {}), ...(ph.length ? { ph } : {}), ...(re ? { re: re.id } : {}), ...(mt.length ? { mt } : {}) })) as { id: string; at: number };
+  const send = async (text: string, ph: Sent[], mt: string[], au?: { f: string; d: number }) => {
+    const r = (await mutation("chat:send", { id: props.id, ...(text ? { text } : {}), ...(ph.length ? { ph } : {}), ...(re ? { re: re.id } : {}), ...(mt.length ? { mt } : {}), ...(au ? { au } : {}) })) as { id: string; at: number };
     setRe(null);
     await load();
     toEnd();
@@ -300,7 +305,11 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
     ? ""
     : head.look
       ? "👁 Reading as the owner"
-      : head.k === "g"
+      : head.k === "h"
+        ? head.help
+          ? `Stage ${head.help.no} · Level ${head.help.n}${props.staff ? ` · ${head.help.open} waiting` : ` · ${head.help.tname}`}`
+          : ""
+        : head.k === "g"
         ? `${head.members ? `${head.members} மாணவர்கள் + ஆசிரியர்கள்` : "மாணவர்கள் + ஆசிரியர்கள்"}${head.ro ? " · 📣 ஆசிரியர்கள் மட்டும் எழுதுவார்கள்" : ""}`
         : head.tch
           ? "ஆசிரியர்"
@@ -325,6 +334,12 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
             </button>
           )}
           <span class="f-sp" />
+          {head?.k === "h" && head.help && props.staff && (
+            // His words: "not put as big button, because mistakenly teachers can press that. So just put three dot."
+            <button type="button" class="f-round on-brand h-more" aria-label="Explained, Not now, Send to another teacher" onClick={() => showSheet((close) => <HelpMenu id={props.id} help={head.help!} onClose={close} onChange={() => void load(true)} />)}>
+              ⋮
+            </button>
+          )}
           {head?.k === "g" && head.can.edit && (
             <button type="button" class="f-round on-brand" aria-label="Edit the group" onClick={() => showSheet((close) => <GroupSheet id={props.id} onClose={close} onDone={() => void load(true)} />)}>
               <Icon name="pen" size={18} />
@@ -361,6 +376,16 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
       {err && !head && <p class="f-lead f-center-t">{err}</p>}
       {head && (
         <>
+          {head.k === "h" && head.help && (
+            <HelpTop
+              id={props.id}
+              help={head.help}
+              staff={props.staff}
+              onChange={() => void load(true)}
+              onMate={props.onMate}
+              onPhoto={() => showSheet((close) => <AskSheet unitId={head.help!.unitId} q={head.help!.q} onClose={close} onDone={() => (close(), void load(true))} />)}
+            />
+          )}
           {head.k === "d" && !head.look && <p class="c-safe">🛡️ {props.staff ? "The owner can read private chats (the students are told)." : "ARISTORA பாதுகாப்புக்காக chats ஐப் பார்க்கலாம். நல்ல வார்த்தைகள் மட்டும்."}</p>}
           {more && (
             <button type="button" class="f-btn white c-more" onClick={() => void earlier()}>
@@ -370,7 +395,7 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
           {!msgs.length ? (
             <div class="f-talk-none">
               <Owl mood="wave" class="tiny" still />
-              <p>{head.k === "g" ? (props.staff ? "Nobody has written yet: say hello." : "இன்னும் யாரும் எழுதவில்லை. முதலில் நீ: வணக்கம் சொல்! 👋") : props.staff ? "Say hello." : "வணக்கம் சொல் 👋"}</p>
+              <p>{head.k === "h" ? (props.staff ? "Nothing here yet." : "இன்னும் எதுவும் இல்லை.") : head.k === "g" ? (props.staff ? "Nobody has written yet: say hello." : "இன்னும் யாரும் எழுதவில்லை. முதலில் நீ: வணக்கம் சொல்! 👋") : props.staff ? "Say hello." : "வணக்கம் சொல் 👋"}</p>
             </div>
           ) : (
             <ol class="f-msgs c-msgs">
@@ -387,12 +412,25 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
                     tags={
                       <>
                         {m.tch && <i class="f-msg-tag">ஆசிரியர்</i>}
+                        {m.ask && <i class="f-msg-tag h-asktag">📷 {props.staff ? "his working" : "வழிமுறை"}</i>}
                         {!m.tch && head.k === "g" && m.g !== undefined && <i class="f-gchip">{m.g}</i>}
                       </>
                     }
                     quote={m.re ? (q ? { n: q.mine ? "நீ" : q.n, ...(q.t ? { t: q.t } : {}), ph: !!q.ph?.length } : null) : undefined}
                     onQuote={() => m.re && jumpTo(m.re)}
-                    pics={m.ph && <Pics ph={m.ph} />}
+                    pics={
+                      <>
+                        {m.ph && <Pics ph={m.ph} />}
+                        {m.hid && <p class="h-hid">🙈 படம் மறைக்கப்பட்டுள்ளது</p>}
+                        {m.au && <Voice au={m.au} />}
+                        {/* A teacher's link (a video she made or found, his words: "they can record the video and put the YouTube ... link"). */}
+                        {m.tch && head.k === "h" && (m.t?.match(/https?:\/\/[^\s]+/g) ?? []).slice(0, 3).map((u) => (
+                          <a key={u} class="h-link" href={u} target="_blank" rel="noopener noreferrer">
+                            ▶ {u.replace(/^https?:\/\/(www\.)?/, "").slice(0, 38)}
+                          </a>
+                        ))}
+                      </>
+                    }
                     me={props.me}
                     onMate={props.onMate}
                     onReply={head.can.write ? () => setRe({ id: m.id, n: m.mine ? "நீ" : m.n, ...(m.t ? { t: m.t } : {}) }) : undefined}
@@ -449,6 +487,7 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
               people={head.k === "g" ? people : undefined}
               onAt={head.k === "g" ? askMembers : undefined}
               onSend={send}
+              extra={head.k === "h" && props.staff ? <VoiceRec onSend={(au) => send("", [], [], au)} /> : undefined}
             />
           ) : (
             <p class="c-cant">{head.look ? "👁 Only the two of them write here." : (head.can.why ?? "இங்கே இப்போது எழுத முடியாது.")}</p>

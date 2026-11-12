@@ -4446,6 +4446,27 @@ button.f-pod:active,
   font: 800 15px/1 var(--display);
   color: var(--ink2);
 }
+/* The pill on a wrong question (12 Nov 2026): explain online; sent already: how it stands. */
+.f-hpill {
+  margin: -4px auto -4px 0;
+  height: 28px;
+  padding: 2px 10px 0;
+  border-radius: 14px;
+  background: var(--brand-soft);
+  font: 800 12.5px/1 var(--display);
+  color: var(--brand-2);
+  white-space: nowrap;
+}
+.f-hpill.open {
+  background: var(--gold-soft);
+  color: var(--gold-ink);
+}
+.f-hpill.done,
+.f-hpill.class,
+.f-hpill.skip {
+  background: var(--bg);
+  color: var(--ink2);
+}
 .f-bq.lost .f-bq-m,
 .f-bq-typed s,
 .f-ph-state.redo {

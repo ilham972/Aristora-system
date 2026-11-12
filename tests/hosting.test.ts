@@ -50,11 +50,14 @@ describe("the two addresses", () => {
     expect([m.id, m.start_url, m.scope]).toEqual(["/f/", "/f/", "/f/"]);
   });
 
-  test("voice notes (12 Nov 2026): the teachers' app may use the microphone; both apps play audio from storage", () => {
+  test("voice notes (12 Nov 2026): the teachers' app and its Us frame may use the microphone; both apps play audio from storage", () => {
     const rules = config.headers as { source: string; headers: { key: string; value: string }[] }[];
     const head = (src: string, key: string) => rules.find((r) => r.source === src)?.headers.find((h) => h.key === key)?.value ?? "";
     expect(head("/((?!f/).*)", "Permissions-Policy")).toContain("microphone=(self)");
-    expect(head("/f/(.*)", "Permissions-Policy")).toContain("microphone=()"); // students never record
+    // The teachers' Us tab is the family app's page in a frame (/f/?staff): a teacher records her explanation there
+    // (an online explanation's thread), so /f/ may use the microphone too. Students still never record: their screens
+    // have no recorder and the server refuses a student's voice note (tests/help.test.ts).
+    expect(head("/f/(.*)", "Permissions-Policy")).toContain("microphone=(self)");
     for (const src of ["/((?!f/).*)", "/f/(.*)"]) expect(head(src, "Content-Security-Policy")).toMatch(/media-src [^;]*https:\/\/\*\.convex\.cloud/);
   });
 });

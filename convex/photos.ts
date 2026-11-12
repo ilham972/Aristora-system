@@ -576,7 +576,8 @@ export async function dropWorking(ctx: MutationCtx): Promise<number> {
  * Every hour: nothing is kept. The files of photos marked a day ago (the marks and her answer stay), of photos waiting
  * on a level taken back in class or of a removed student, and uploads never attached to a question after a day.
  * Only image and audio files are swept as unattached (12 Nov 2026: her voice note is referenced by its row's `askVoice`
- * the moment she sends it; one recorded and never sent goes a day later). Photos on Us (7 Nov 2026) are attached when they are sent and marked
+ * the moment she sends it, a teacher's in an explanation's thread is marked in usFiles with its message; one recorded
+ * and never sent goes a day later). Photos on Us (7 Nov 2026) are attached when they are sent and marked
  * in usFiles: kept here, they go with their line (convex/lib/us.ts dropPhotos).
  */
 export const sweep = internalMutation({

@@ -5,11 +5,11 @@
 import { Fragment } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { BookQ, LevelBook } from "../../convex/lib/homeWork";
-import { loadParts } from "./later";
+import { loadChat, loadParts } from "./later";
 import { mutation, NetError, query } from "./net";
 import { keepPhotos, keptPhotos, photoKey, PHOTO_MAX, sendKept, sendPhotos, shrink, type Kind } from "./photos";
 import { buzz, sound } from "./sound";
-import { Icon, Maths, Owl, problemWords, showSheet, toast } from "./ui";
+import { Icon, Maths, Owl, openRoom, problemWords, showSheet, toast } from "./ui";
 import { stamp } from "./bell";
 
 /** The key's working: `**` = the final answer (bold), one line per part. */
@@ -197,6 +197,30 @@ const WHAT: Record<Kind, string> = {
   part: "உன் விடையைப் படம் எடுத்து அனுப்பு.",
 };
 
+/**
+ * The pill on a question he lost marks on (12 Nov 2026, his words: "small tiny pill like explain online ... asking help
+ * for that wrong question"): his photo and a teacher (the chats' own file, fetched on the tap), then its thread. Sent
+ * already: how it stands, and a tap opens the thread.
+ */
+const HELP_ST = { open: "⏳ காத்திருக்கிறது", done: "✓ விளக்கப்பட்டது", class: "✓ வகுப்பில்", skip: "📚 வகுப்பில்" } as const;
+function HelpPill(props: { hp: NonNullable<BookQ["hp"]>; unitId: string; n: number; q: number }) {
+  const { hp } = props;
+  const back = { unitId: props.unitId, n: props.n };
+  const [busy, setBusy] = useState(false);
+  const ask = () => {
+    setBusy(true);
+    loadChat()
+      .then((c) => showSheet((close) => <c.AskSheet unitId={props.unitId} q={props.q} onClose={close} onDone={(id) => openRoom(id, back)} />))
+      .catch((e) => toast(problemWords(e), true))
+      .finally(() => setBusy(false));
+  };
+  return (
+    <button type="button" class={`f-hpill${hp === "can" ? "" : ` ${hp.st}`}`} disabled={busy} onClick={() => (hp === "can" ? ask() : openRoom(hp.id, back))}>
+      🎧 {hp === "can" ? "Explain online" : HELP_ST[hp.st]}
+    </button>
+  );
+}
+
 function Question(props: { b: BookQ; unitId: string; n: number; onSent: () => void }) {
   const { b } = props;
   const lost = b.got !== null && b.got < b.max;
@@ -218,6 +242,7 @@ function Question(props: { b: BookQ; unitId: string; n: number; onSent: () => vo
     <li class={`f-bq${lost ? " lost" : ""}`}>
       <div class="f-bq-top">
         <b class="f-rq">Q{b.q}</b>
+        {b.hp && <HelpPill hp={b.hp} unitId={props.unitId} n={props.n} q={b.q} />}
         <span class="f-bq-m">{b.got === null ? "✍ ஆசிரியர்" : `${b.got}/${b.max}`}</span>
       </div>
       {lost && b.typed && b.typed.some((x) => x) && (
@@ -317,7 +342,7 @@ export function Book(props: { unitId: string; n: number; initial?: LevelBook | n
   }, [book]);
   if (err && !book) return <p class="f-note">{err}</p>;
   if (!book) return <p class="f-note">…</p>;
-  const qs = book.qs.filter((q) => !q.free && (q.sol || q.back || q.owe.length || q.photos.length));
+  const qs = book.qs.filter((q) => !q.free && (q.sol || q.back || q.owe.length || q.photos.length || q.hp));
   const free = book.qs.filter((q) => q.free);
   const owed = book.qs.reduce((a, q) => a + q.owe.length, 0);
   // Her messages waiting for his answer (12 Nov 2026: also on a question with no photo): the bar says answer her.

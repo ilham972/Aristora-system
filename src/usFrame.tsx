@@ -10,7 +10,10 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import { subscribe } from "./backend";
 
-/** Her private chats in Us with something new (8 Nov 2026: convex/chat.ts tunread), live: the Us tab's number. */
+/**
+ * Her private chats in Us with something new (8 Nov 2026: convex/chat.ts tunread), live: the Us tab's number. Since
+ * 12 Nov 2026 also the online explanations waiting on her (and the frame may use the microphone: her voice notes).
+ */
 export function useChatNew(on: boolean): number {
   const [n, setN] = useState(0);
   useEffect(() => {
@@ -34,5 +37,5 @@ export function UsFrame(props: { open: boolean }) {
     ref.current?.contentWindow?.postMessage({ k: "us-refresh" }, location.origin);
   }, [props.open]);
   if (!made) return null;
-  return <iframe ref={ref} class={`us-frame${props.open ? " on" : ""}`} src="/f/?staff" title="Us: the students' community" />;
+  return <iframe ref={ref} class={`us-frame${props.open ? " on" : ""}`} src="/f/?staff" allow="microphone" title="Us: the students' community" />;
 }

@@ -536,6 +536,8 @@ export function WriteBar(props: {
   /** He started a tag (@): a chat fetches its group's members then (once), so anyone in it can be tagged. */
   onAt?: () => void;
   onSend: (text: string, ph: Sent[], mt: string[]) => Promise<unknown>;
+  /** Above the words (12 Nov 2026: a teacher's voice-note recorder in an explanation's thread). */
+  extra?: ComponentChildren;
 }) {
   const [t, setT] = useState("");
   const [busy, setBusy] = useState(false);
@@ -647,6 +649,7 @@ export function WriteBar(props: {
         </div>
       )}
       {pk.list.length > 0 && <div class="f-tb-ph">{pk.thumbs}</div>}
+      {props.extra}
       <div class="f-tb-row">
         <button
           type="button"

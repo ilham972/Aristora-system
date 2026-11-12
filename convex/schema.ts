@@ -1213,7 +1213,16 @@ export default defineSchema({
    * older message changes (a reaction, a removal), so an open chat reads its page again.
    */
   usRooms: defineTable({
-    k: v.union(v.literal("g"), v.literal("d")),
+    k: v.union(v.literal("g"), v.literal("d"), v.literal("h")),
+    /**
+     * An online explanation's thread (12 Nov 2026, `k` "h": convex/help.ts): one per question of a workbook (`hu` the
+     * unit, `hn` its level, `hq` the question; `key` = "h:<unit>:<q>"), `ht` = the teacher it waits on now. Its students
+     * are its helpAsks rows; every teacher may open it. Its messages are kept (`usChat.kp`).
+     */
+    hu: v.optional(v.id("units")),
+    hn: v.optional(v.number()),
+    hq: v.optional(v.number()),
+    ht: v.optional(v.id("users")),
     name: v.optional(v.string()),
     emo: v.optional(v.string()),
     gg: v.optional(v.number()),
@@ -1268,16 +1277,58 @@ export default defineSchema({
     mt: v.optional(v.array(v.object({ s: v.id("students"), n: v.string() }))),
     rx: v.optional(v.record(v.string(), v.number())),
     rpBy: v.optional(v.array(v.id("students"))),
+    /**
+     * 12 Nov 2026, an online explanation's thread: `au` = a teacher's voice note (its file and its seconds); `ak` = the
+     * message a student came in with (his photo of his working: helpAsks); `kp` = kept past the 30 days (an explanation
+     * serves the next student who gets the question wrong: HELP_KEEP_MS).
+     */
+    au: v.optional(v.object({ f: v.id("_storage"), d: v.number() })),
+    ak: v.optional(v.id("helpAsks")),
+    kp: v.optional(v.boolean()),
     at: v.number(),
     demo: v.boolean(),
   })
     .index("by_room", ["rid", "at"])
     .index("by_sid", ["sid", "at"])
-    .index("by_at", ["at"]),
+    .index("by_at", ["at"])
+    .index("by_keep", ["kp", "at"]),
   /** A reaction on a chat message (one per person: `who` "s:<id>" / "u:<id>"; `e` the kind, `n` / `pic` who). */
   usChatRx: defineTable({ cid: v.id("usChat"), who: v.string(), e: v.string(), n: v.string(), pic: v.optional(v.string()) })
     .index("by_cid", ["cid", "who"])
     .index("by_who", ["who"]),
+
+  /**
+   * A wrong question a student wants explained online (12 Nov 2026, his voice note: "I don't want to explain everything
+   * on my classroom ... explaining in the voice note like a WhatsApp ... that will open the new thread in the
+   * community"). One row per student and question; `rid` = the question's thread (usRooms `k` "h": the next student who
+   * gets it wrong joins the same thread and sees what was explained). `tid` = the teacher it waits on (he picks; she can
+   * send it to another), `ta` since when, `tw` when a teacher last wrote in the thread for it. `st`: open → done (the
+   * teacher tapped Explained: the question counts as explained in class too) / class (explained in class first: it
+   * closed by itself) / skip (Not now: it waits for the class). `from` "t" = a teacher asked for it (Consultation), his
+   * photo still to come (`ph` false). `hn` / `hp` = a teacher hid his name / his photos from the thread's other students.
+   */
+  helpAsks: defineTable({
+    rid: v.id("usRooms"),
+    sid: v.id("students"),
+    unitId: v.id("units"),
+    n: v.number(),
+    q: v.number(),
+    tid: v.id("users"),
+    ta: v.number(),
+    tw: v.optional(v.number()),
+    st: v.union(v.literal("open"), v.literal("done"), v.literal("class"), v.literal("skip")),
+    from: v.union(v.literal("s"), v.literal("t")),
+    ph: v.boolean(),
+    hn: v.optional(v.boolean()),
+    hp: v.optional(v.boolean()),
+    by: v.optional(v.string()),
+    at: v.number(),
+    doneAt: v.optional(v.number()),
+    demo: v.boolean(),
+  })
+    .index("by_sid", ["sid", "unitId", "q"])
+    .index("by_room", ["rid", "at"])
+    .index("by_st", ["st", "at"]),
 
   /**
    * The simulation (1 Nov 2026, his voice note): made-up students (test students, the class only phones showing the

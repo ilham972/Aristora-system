@@ -270,6 +270,17 @@ export function showSheet(r: SheetRender): boolean {
   return true;
 }
 
+/**
+ * A chat or an explanation's thread opened from anywhere (12 Nov 2026: the pill on a wrong question, from a Level's
+ * book): the app goes there; `back` = the Level's book Back returns to.
+ */
+type RoomHost = (id: string, back?: { unitId: string; n: number }) => void;
+let roomHost: RoomHost | null = null;
+export function setRoomHost(f: RoomHost | null) {
+  roomHost = f;
+}
+export const openRoom: RoomHost = (id, back) => roomHost?.(id, back);
+
 /** A number that rolls from one value to the next (his days in a row, yesterday's → today's). */
 export function Roll(props: { from: number; to: number }) {
   if (props.from === props.to) return <span>{props.to}</span>;

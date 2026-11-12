@@ -7,3 +7,5 @@ import { addChatStyle } from "./chatStyle";
 addChatStyle();
 
 export { AllChats, ChatList, PeopleScreen, RoomScreen } from "./chat";
+// Online explanations (12 Nov 2026): the pill's sheet (a Level's book opens it through loadChat).
+export { AskSheet } from "./help";

@@ -5,11 +5,13 @@
 // - The handler gets the same ctx with its db watched: insert, patch, replace and delete still go straight through; the
 //   ids of progress rows written and students added, changed (a field the race copies) or deleted are noted.
 // - As the handler ends, in the same transaction, the race rows follow (a handler that throws writes nothing at all).
+// - Online explanations (12 Nov 2026): the progress rows written are checked against the open asks (convex/lib/help.ts).
 // - Fees (9 Nov 2026): the students it signed in or out (attendance) or gave or took a book from (handouts) are noted
 //   too; as it ends their fees follow (convex/lib/feeRows.ts: a day he came = a class, a printed book = its price).
 
 import { internalMutation as rawInternalMutation, mutation as rawMutation, type MutationCtx } from "../_generated/server";
 import { syncFees } from "./feeRows";
+import { syncHelp } from "./help";
 import { afterWrites, noWrites, RACE_IDENTITY, type RaceWrites } from "./raceRows";
 
 type Writer = (...a: unknown[]) => Promise<unknown>;
@@ -71,6 +73,8 @@ function wrap<B>(builder: B): B {
       const money = new Set<string>();
       const res = await handler(watched(ctx, w, money), args);
       await afterWrites(ctx, w, Date.now());
+      // Online explanations (12 Nov 2026): a question explained in class closes its thread for him by itself.
+      if (w.progress.size) await syncHelp(ctx, w.progress, Date.now());
       if (money.size) await syncFees(ctx, money, Date.now());
       return res;
     };

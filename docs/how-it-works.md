@@ -1865,6 +1865,64 @@ learning app of our education institute"): one profile, his class times, what he
         dropped: `seedOk`), never a name, a word, an id or a photo address; the blurred words are fake teasing words, never
         an answer. A tap: "✍️ உன் விடையை அனுப்பு: மறைவு விலகும்". After his own answer the ones not marked right stay
         blurred ("இன்னும் N விடைகள் மறைவில்").
+  - **Explain online (12 Nov 2026**, his voice note: "sometimes the students will get more wrong questions ... I don't
+    want to explain everything on my classroom ... it's not like video class, it's not like Zoom class. It's just
+    explaining in the voice note like a WhatsApp ... small tiny pill like explain online ... that will open the new
+    thread in the community ... that will ask the photo ... which teacher want to add"). A wrong workbook question gets a
+    **thread** in Us where a teacher explains it by voice note, photo, words or a link. The calls: `convex/help.ts`; the
+    rules: `convex/lib/help.ts`; the thread's top card: `convex/lib/helpView.ts`; the screens: `src/family/help.tsx` (in
+    the chats' own file, never in the first load). A thread **is a room of the chats** (`usRooms` `k: "h"`, `hu` / `hn`
+    / `hq` = unit, level, question, `ht` = the teacher it waits on, `key` "h:<unit>:<q>"): `chat.room` / `chat.send`
+    read and write its messages; its students are its `helpAsks` rows (one per student and question: `st` open / done /
+    class / skip, `tid`, `ta` since when, `tw` a teacher's last word, `from` s / t, `ph`, `hn` / `hp` hidden).
+    His decisions the same night (do not reopen without him):
+    - **The explanation stays on its question** (he first asked "deleted after one day"; my warning: she would record
+      the same question five times): the next student who gets it wrong sends his photo, **joins the same thread and
+      sees everything**, names and photos (his answer; "teacher can hide photo or name or both, as default everything
+      visible"). A student's ⋮ → Hide his name / Hide his photos: the thread's other students get "மாணவர்", no face, no
+      id (`msgOf` with `maskOf`; `w` becomes "x:…"), no photo (`hid`); he and the teachers still see all. He is told
+      before he sends (`.h-told`: the others will see his photo and name). Kept **a year** (`usChat.kp`, `HELP_KEEP_MS`,
+      index `by_keep`; ordinary chats still 30 days).
+    - **The student picks the teacher** (my warning: everyone picks the owner; his answer: "student can pick, teacher
+      can redirect"): the first student picks from every active teacher; later students come to the thread's teacher.
+      ⋮ → **Send to another teacher** (`help.tpass`: `ht`, each open row's `tid` / `ta`). My escape hatch: nobody wrote
+      for **12 hours** (`isLate`, `HELP_LATE_MS`) → every teacher has it under Mine with ⏰.
+    - **No limit a day** (my warning: 30 students × 4 wrong × 3 minutes = 6 hours a night; his answer "no limit"): the
+      photo he must take first is the brake. Escape hatch: Settings → Community → **Online explanations a day**
+      (`help.setLimit`, meta `help.perDay`, 0 = none; counts only what he sent himself).
+    - **Only Explained counts** (his words: "count as explained if the teacher press explained button or closed the
+      thread. Otherwise that's question not consider as explained"): ⋮ → **Explained (close the thread)**, two taps
+      (`help.tdone`), closes every student still waiting in it and sets the question's `x` in his workbook, exactly as
+      Evaluation's tap (Evaluation stops calling him for it; history "Q8 explained online"). A voice note alone changes
+      nothing. **Not now** (a student's ⋮, two taps, `help.tskip`): not explained, it waits for the class, he is told
+      and can't send it again. **Explained or taught in class first**, or the mark changed: his row closes by itself
+      (`class`: `syncHelp`, run by `lib/fn.ts` after any mutation that wrote a progress row). An explanation taken back
+      in class lets him send it again (his old row opens again).
+    - Cut with his yes: friends added to a thread (they would see his wrong answer; doubts already do friend help), an
+      "urgent" message (every student would type it; the list is oldest first), a "please close" warning (it closes by
+      itself).
+    The screens:
+    - **The pill** (`HelpPill` in `book.tsx`, `.f-hpill`): on each question he lost marks on, after Check (the reveal
+      and the Level's book); `family.book` sends `hp`: "can" (lost, not explained or taught, Us open, not a demo
+      student) or his thread and how it stands (⏳ / ✓ / 📚; a tap opens it). The sheet (`AskSheet`, `help.start` /
+      `help.ask`): 1 a photo of his working (1–2, cropped; required), 2 the teacher (or "the thread's teacher explained
+      this to N already"); then his thread opens (`openRoom` → `setRoomHost` in `app.tsx`; Back returns to the book).
+    - **The thread** = a chat with a card on top (`HelpTop`, sent only on a full read: `head.help`): Q, Stage, Level,
+      the question as printed on a tap (`help.question`; teachers also the key: `help.tquestion`), and each student:
+      his marks and **what he typed part by part, the wrong parts in rose** (`partsOf` from `familyAnswers`; his words:
+      "highlight which one is wrong, otherwise teacher need to explain everything"; a student sees only his own).
+      His photo is the first message (`ask`). A teacher's link shows as a ▶ button (students still can't send links).
+    - **A teacher's voice note** (`VoiceRec` / `Voice` in `help.tsx`): 🎤 → the phone's own recorder (MP4/AAC first,
+      else WebM/Opus, mono 24 kbps), at most **2 minutes** (`VOICE_MAX_S`, 1.5 MB), she hears it, Send. Teachers only
+      and only in a thread (`takeVoice`; `usChat.au`; marked in `usFiles`, deleted with its message). A second recorder
+      beside `src/voiceNote.tsx` (the home lane's, 60 s) because the Us frame can't load the teachers' store.
+    - **Teachers:** the Us tab's number counts the threads waiting on her (`chat.tunread`); Us → Chats → **Online
+      explanations** on top (`HelpList`, `help.tlist`): Mine (hers and the ⏰ late ones) · Everyone's · Closed (14 days),
+      then Stage and student chips when the list is long (his ask: filters by student and unit). Students: the same
+      list on their Chats (Waiting · All; it counts in the Chats number: `helpNew`).
+    - **Consultation's icon** (headphones beside the whiteboard on a Master question's card, `OnlineButton`,
+      `help.tcall`; none for a demo student): a thread opens for the ticked student with her as its teacher, he is
+      alerted to send his photo, she can explain at once; filled once it is open (`help.topen`).
   - **Me = his profile** (4 Nov 2026, his voice note: "a proper profile page for the students ... as simple as
     possible"; `me.tsx`, one of the parts that come right after the first screen): a violet header with **his photo**
     (88 px; tap = the camera or the gallery: his photo, below), his name (🎂 on his birthday), grade and index ("Photo ·

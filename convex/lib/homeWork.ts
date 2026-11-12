@@ -8,6 +8,8 @@ import { asMaster, bookFor, keyRow, masterState } from "./backend";
 import { comesBack, masterRows } from "./family";
 import { outOf, type MasterData } from "./book";
 import { isFree } from "./free";
+import { askable } from "./help";
+import { usCfg } from "./us";
 import type { KeyAnswer } from "./key";
 import { phoneKey, slotWords, type KeyQ } from "./phone";
 import { isRetake, isWhy, keyText, owedOf, partMarks, RETAKE, WHY, type PhotoKind } from "./photos";
@@ -124,6 +126,11 @@ export type BookQ = {
   owe: PhotoKind[];
   /** Free marks: out of the syllabus, its marks his without doing it (the owner's, 5 Nov 2026; lib/free.ts). */
   free?: true;
+  /**
+   * An online explanation (12 Nov 2026, convex/help.ts): "can" = he lost marks and nobody explained it yet (the pill);
+   * or the thread he sent it to, and how it stands.
+   */
+  hp?: "can" | { id: string; st: "open" | "done" | "class" | "skip" };
 };
 
 /** `hc` = corrected in class (his paper): no photo is asked for it any more; `cn` = who checked it there, `hcAt` = when. */
@@ -212,6 +219,17 @@ export async function bookOf(
   const h = known ?? (await homeChecks(ctx, s._id));
   const row = h.latest.get(levelKey(unitId, n));
   const owed = h.owed.get(levelKey(unitId, n)) ?? [];
+  // His online explanations in this unit (12 Nov 2026); a demo student has none (no teacher on the other side).
+  const asked = new Map(
+    (
+      await ctx.db
+        .query("helpAsks")
+        .withIndex("by_sid", (x) => x.eq("sid", s._id).eq("unitId", unitId))
+        .collect()
+    ).map((a) => [a.q, a]),
+  );
+  // Only while Us is open on the phones: a thread lives there.
+  const canAsk = !s.demo && !s.test && (await usCfg(ctx)).open;
   const qs: BookQ[] = [];
   for (let q = l.from; q <= l.to; q++) {
     const k = keys.get(q);
@@ -236,6 +254,7 @@ export async function bookOf(
       back,
       photos: await Promise.all(h.photos.filter((p) => p.unitId === unitId && p.n === n && p.q === q).map((p) => withVoice(ctx, p))),
       owe: owed.filter((o) => o.q === q).map((o) => o.kind),
+      ...(asked.has(q) ? { hp: { id: asked.get(q)!.rid as string, st: asked.get(q)!.st } } : canAsk && askable(mq) ? { hp: "can" as const } : {}),
     });
   }
   return { unitId, n, max: l.max, got: lv.got ?? 0, required: h.required, ...(lv.hc ? { hc: true as const } : {}), ...(lv.hc && lv.cn ? { cn: lv.cn, hcAt: lv.hc } : {}), qs };

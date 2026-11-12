@@ -47,6 +47,8 @@ import {
   uKey,
   writerOf,
 } from "./lib/chat";
+import { asksIn, HELP_KEEP_MS, isLate, unanswered, VOICE_BYTES, VOICE_MAX_S } from "./lib/help";
+import { helpHeadOf, type HelpHead } from "./lib/helpView";
 import { alertStudent } from "./lib/push";
 import { RACE_GRADES } from "./lib/race";
 import { unsafeWords, type UsPic } from "./lib/us";
@@ -106,11 +108,19 @@ export type ChatMsg = {
   my?: string;
   /** Teachers: how many reported it. */
   rp?: number;
+  /** A teacher's voice note (an explanation's thread, 12 Nov 2026): its address and its seconds. */
+  au?: { u: string; d: number };
+  /** The message a student came into an explanation's thread with (his photo of his working). */
+  ask?: true;
+  /** His photos are hidden from this phone (a teacher hid them from the thread's other students). */
+  hid?: true;
 };
 
 export type ChatHead = {
   id: string;
-  k: "g" | "d";
+  k: "g" | "d" | "h";
+  /** An online explanation's thread (12 Nov 2026): its question and its students; only on a full read. */
+  help?: HelpHead;
   name: string;
   emo?: string;
   gg?: number;
@@ -226,7 +236,14 @@ async function gradeRoom(ctx: MutationCtx, gg: number, demo: boolean, now: numbe
   return (await ctx.db.get(id))!;
 }
 
-type Access = { r: Doc<"usRooms"> | null; gg?: number; write: boolean; photos: boolean; why?: string; look: boolean; other?: string };
+type Access = { r: Doc<"usRooms"> | null; gg?: number; write: boolean; photos: boolean; why?: string; look: boolean; other?: string; asks?: Doc<"helpAsks">[] };
+
+/** Why he can't write in an explanation's thread any more (his own question in it is closed). */
+const HELP_SHUT: Record<Exclude<Doc<"helpAsks">["st"], "open">, string> = {
+  done: "✓ விளக்கம் முடிந்தது. இன்னும் புரியவில்லையா? வகுப்பில் ஆசிரியரிடம் கேள்.",
+  class: "✓ இந்தக் கேள்வி வகுப்பில் விளக்கப்பட்டது.",
+  skip: "📚 இந்தக் கேள்வியை ஆசிரியர் வகுப்பில் விளக்குவார்.",
+};
 
 /**
  * May this person open this room, and write in it? A student: his grade's group, a group he is in, his own private
@@ -243,6 +260,14 @@ async function access(ctx: QueryCtx, me: Me, ref: string): Promise<Access> {
       if (!inGroup(r, { id: me.s._id, grade: me.grade, demo: me.demo })) fail(r.gg !== undefined ? "This group is for another grade." : "This group isn't yours.");
       return { r, ...(gg !== undefined ? { gg } : {}), write: !r.ro, photos: !r.ro, ...(r.ro ? { why: "ஆசிரியர்கள் மட்டும் இங்கே எழுதுவார்கள்." } : {}), look: false };
     }
+    if (r.k === "h") {
+      // An explanation's thread: only a student who sent this question in (he writes while his own is open).
+      const asks = await asksIn(ctx, r._id);
+      const mine = asks.find((x) => x.sid === me.s._id);
+      if (!mine) fail("This thread isn't yours.");
+      const why = mine.st === "open" ? undefined : HELP_SHUT[mine.st];
+      return { r, write: !why, photos: !why, ...(why ? { why } : {}), look: false, asks };
+    }
     const seat = await seatOf(ctx, r._id, me.key);
     if (!seat) fail("This chat isn't yours.");
     const other = otherOf(r, me.key);
@@ -254,6 +279,8 @@ async function access(ctx: QueryCtx, me: Me, ref: string): Promise<Access> {
   }
   if (!r) return { r: null, gg, write: true, photos: true, look: false };
   if (r.k === "g") return { r, ...(gg !== undefined ? { gg } : {}), write: true, photos: true, look: false };
+  // An explanation's thread: every teacher (the one it waits on, one it is sent to, one who explained it in class).
+  if (r.k === "h") return { r, write: true, photos: true, look: false, asks: await asksIn(ctx, r._id) };
   const seat = await seatOf(ctx, r._id, me.key);
   const other = otherOf(r, me.key);
   if (!seat) {
@@ -294,7 +321,7 @@ async function unreadOf(ctx: QueryCtx, r: Doc<"usRooms">, who: string, rd: numbe
 async function lineOf(ctx: QueryCtx, r: Doc<"usRooms">, me: Me, seat: Doc<"usSeats"> | undefined): Promise<ChatLine> {
   const base = {
     id: r._id as string,
-    k: r.k,
+    k: r.k === "g" ? ("g" as const) : ("d" as const),
     la: r.la,
     ...(r.lt ? { lt: r.lt } : {}),
     ...(r.ln ? { ln: r.ln } : {}),
@@ -404,10 +431,24 @@ export const tunread = query({
     const u = await viewer(ctx, args.token, "any");
     const who = uKey(u._id);
     let n = 0;
-    for (const seat of (await seatsOf(ctx, who)).values()) {
+    const seats = await seatsOf(ctx, who);
+    for (const seat of seats.values()) {
       if (!seat.d) continue;
       const r = await ctx.db.get(seat.rid);
       if (r && r.n > 0 && r.lw !== who && r.la > seat.rd) n++;
+    }
+    // The explanations waiting on her (12 Nov 2026), and the ones nobody answered for 12 hours: each thread once,
+    // while its last word isn't a teacher's own.
+    const now = Date.now();
+    const open = await ctx.db
+      .query("helpAsks")
+      .withIndex("by_st", (q) => q.eq("st", "open"))
+      .collect();
+    const rooms = new Set<string>();
+    for (const x of open) if (x.tid === u._id || isLate(x, now)) rooms.add(x.rid);
+    for (const rid of rooms) {
+      const r = await ctx.db.get(rid as Id<"usRooms">);
+      if (r && (open.some((x) => x.rid === rid && unanswered(x)) || (isStudentKey(r.lw ?? "") && r.la > (seats.get(rid)?.rd ?? 0)))) n++;
     }
     return n;
   },
@@ -415,10 +456,39 @@ export const tunread = query({
 
 // ---------------------------------------------------------------- messages
 
-async function msgOf(ctx: QueryCtx, c: Doc<"usChat">, me: Me, tp: ReturnType<typeof staffPics>): Promise<ChatMsg> {
+/** What a teacher hid of a student in an explanation's thread, for the other students (his own phone sees all). */
+type Mask = Map<string, { n: boolean; p: boolean }>;
+const maskOf = (me: Me, asks: Doc<"helpAsks">[] | undefined): Mask | undefined => {
+  if (me.k !== "s" || !asks) return undefined;
+  const m: Mask = new Map();
+  for (const a of asks) if (a.sid !== me.s._id && (a.hn || a.hp)) m.set(a.sid, { n: !!a.hn, p: !!a.hp });
+  return m.size ? m : undefined;
+};
+
+async function msgOf(ctx: QueryCtx, c: Doc<"usChat">, me: Me, tp: ReturnType<typeof staffPics>, mask?: Mask): Promise<ChatMsg> {
+  const hide = c.sid ? mask?.get(c.sid) : undefined;
+  if (hide?.n || hide?.p) {
+    // Hidden by a teacher: no name, face or id (`w` is only "someone else"), and / or no photos.
+    const pics = hide.p ? undefined : await picsOf(ctx, c.ph);
+    return {
+      id: c._id,
+      at: c.at,
+      w: hide.n ? `x:${c.sid!.slice(-4)}` : writerOf(c),
+      n: hide.n ? "மாணவர்" : c.n,
+      ...(!hide.n && c.g !== undefined ? { g: c.g } : {}),
+      ...(!hide.n && c.pic ? { pic: c.pic } : {}),
+      ...(c.t ? { t: c.t } : {}),
+      ...(pics ? { ph: pics } : {}),
+      ...(hide.p && c.ph?.length ? { hid: true as const } : {}),
+      ...(c.ak ? { ask: true as const } : {}),
+      ...(c.re ? { re: c.re } : {}),
+      ...(c.rx ? { rx: c.rx } : {}),
+    };
+  }
   const w = writerOf(c);
   const pics = await picsOf(ctx, c.ph);
   const pic = c.by ? await tp(c.by) : c.pic;
+  const voice = c.au ? await ctx.storage.getUrl(c.au.f) : null;
   let my: string | undefined;
   if (c.rx) {
     const r = await ctx.db
@@ -443,6 +513,8 @@ async function msgOf(ctx: QueryCtx, c: Doc<"usChat">, me: Me, tp: ReturnType<typ
     ...(c.rx ? { rx: c.rx } : {}),
     ...(my ? { my } : {}),
     ...(me.k === "u" && c.rpBy?.length ? { rp: c.rpBy.length } : {}),
+    ...(c.au && voice ? { au: { u: voice, d: c.au.d } } : {}),
+    ...(c.ak ? { ask: true as const } : {}),
   };
 }
 
@@ -464,7 +536,7 @@ async function roomOf(ctx: QueryCtx, me: Me, ref: string, since: number | undefi
   const head: ChatHead = {
     id: r?._id ?? ref,
     k: r?.k ?? "g",
-    name: r?.name ?? (a.gg !== undefined ? gradeGroupName(a.gg) : "Group"),
+    name: r?.k === "h" ? `Q${r.hq ?? ""}` : (r?.name ?? (a.gg !== undefined ? gradeGroupName(a.gg) : "Group")),
     ...(r?.emo ? { emo: r.emo } : {}),
     ...(a.gg !== undefined ? { gg: a.gg } : {}),
     ...(r?.gs?.length ? { gs: r.gs } : {}),
@@ -506,9 +578,10 @@ async function roomOf(ctx: QueryCtx, me: Me, ref: string, since: number | undefi
     return { head, msgs: [], more: false, full: true };
   }
   const tp = staffPics(ctx);
+  const mask = maskOf(me, a.asks);
   const outOf = async (rows: Doc<"usChat">[]) => {
     const out: ChatMsg[] = [];
-    for (const c of rows) if (!hidden(c, me)) out.push(await msgOf(ctx, c, me, tp));
+    for (const c of rows) if (!hidden(c, me)) out.push(await msgOf(ctx, c, me, tp, mask));
     return out;
   };
   if (before !== undefined) {
@@ -527,6 +600,11 @@ async function roomOf(ctx: QueryCtx, me: Me, ref: string, since: number | undefi
     return { head, msgs: await outOf(rows), more: false, full: false };
   }
   if (r.k === "g" && since === undefined) head.members = await membersOf(ctx, r);
+  // An explanation's thread: its question and its students, on a full read only (the short reads keep the phone's).
+  if (r.k === "h") {
+    const help = await helpHeadOf(ctx, me.k === "s" ? { k: "s", sid: me.s._id } : { k: "u", uid: me.u._id }, r, Date.now());
+    if (help) head.help = help;
+  }
   const rows = await ctx.db
     .query("usChat")
     .withIndex("by_room", (q) => q.eq("rid", r._id))
@@ -591,19 +669,44 @@ const sendArgs = {
   ph: v.optional(v.array(usPhoto)),
   re: v.optional(v.string()),
   mt: v.optional(v.array(v.string())),
+  /** A voice note (a teacher, in an explanation's thread): its uploaded file and its seconds. */
+  au: v.optional(v.object({ f: v.id("_storage"), d: v.number() })),
 };
+
+/**
+ * A voice note just uploaded (12 Nov 2026, his words: "explaining in the voice note like a WhatsApp"): a teacher's, in
+ * an explanation's thread, an audio file under its size and 2 minutes, never used before; marked in usFiles (it goes
+ * with its message).
+ */
+async function takeVoice(ctx: MutationCtx, me: Me, r: Doc<"usRooms">, au: { f: Id<"_storage">; d: number }): Promise<{ f: Id<"_storage">; d: number }> {
+  if (me.k !== "u") fail("குரல் பதிவுகள் ஆசிரியர்களுக்கு மட்டும்: எழுதி அல்லது படம் எடுத்து அனுப்பு.");
+  if (r.k !== "h") fail("Voice notes are for the explanation threads.");
+  const meta = await ctx.db.system.get(au.f);
+  if (!meta) fail("The voice note didn't arrive. Record it again.");
+  const type = meta.contentType ?? "";
+  if (meta.size > VOICE_BYTES || !(type.startsWith("audio/") || type.startsWith("video/webm") || type.startsWith("video/mp4"))) fail("That voice note is too long. Record a shorter one.");
+  const d = Math.round(au.d);
+  if (!(d >= 1 && d <= VOICE_MAX_S + 5)) fail(`A voice note is at most ${VOICE_MAX_S / 60} minutes.`);
+  const had = await ctx.db
+    .query("usFiles")
+    .withIndex("by_f", (q) => q.eq("f", au.f))
+    .first();
+  if (had) fail("That voice note was sent already.");
+  await ctx.db.insert("usFiles", { f: au.f });
+  return { f: au.f, d: Math.min(d, VOICE_MAX_S) };
+}
 
 async function sendIt(
   ctx: MutationCtx,
   me: Me,
-  args: { id: string; text?: string; ph?: Photos; re?: string; mt?: string[] },
+  args: { id: string; text?: string; ph?: Photos; re?: string; mt?: string[]; au?: { f: Id<"_storage">; d: number } },
 ): Promise<{ id: string; rid: string; at: number }> {
   const a = await access(ctx, me, args.id);
   if (!a.write) fail(a.why ?? "You can't write here.");
   const student = me.k === "s";
   const t = tidy(args.text);
   if (t.length > CHAT_MAX) fail(student ? `${CHAT_MAX} எழுத்துகளுக்குள் எழுது (இப்போது ${t.length}).` : `At most ${CHAT_MAX} letters: this is ${t.length}.`);
-  if (!t && !args.ph?.length) fail(student ? "எதையாவது எழுது." : "Write something first.");
+  if (!t && !args.ph?.length && !args.au) fail(student ? "எதையாவது எழுது." : "Write something first.");
   if (student) {
     const bad = unsafeWords(t);
     if (bad) fail(bad === "phone" ? "தொலைபேசி எண்கள் இங்கே வேண்டாம்: ARISTORA உள்ளேயே பேசுவோம்." : "Links இங்கே வேண்டாம்: ARISTORA உள்ளேயே பேசுவோம்.");
@@ -621,6 +724,7 @@ async function sendIt(
   }
   const mt = await tagsIn(ctx, me, acc, args.mt);
   const ph = await takePhotos(ctx, args.ph, CHAT_PHOTOS);
+  const au = args.au ? await takeVoice(ctx, me, r, args.au) : undefined;
   const id = await ctx.db.insert("usChat", {
     rid: r._id,
     ...(me.k === "s" ? { sid: me.s._id } : { by: me.u._id }),
@@ -631,14 +735,16 @@ async function sendIt(
     ...(ph ? { ph } : {}),
     ...(re ? { re: re._id } : {}),
     ...(mt.length ? { mt } : {}),
+    ...(au ? { au } : {}),
+    ...(r.k === "h" ? { kp: true } : {}),
     at: now,
     demo: me.demo,
   });
-  await ctx.db.patch(r._id, { la: now, lt: lastWords(t, ph?.length ?? 0), ln: me.n, lw: me.key, n: r.n + 1 });
+  await ctx.db.patch(r._id, { la: now, lt: au && !t ? "🎤" : lastWords(t, ph?.length ?? 0), ln: me.n, lw: me.key, n: r.n + 1 });
   await markRead(ctx, r._id, me.key, now);
   // Who is told on the phone (the bell keeps Us's lines; a chat keeps its own count): the other one of a private chat,
   // and in a group only who is tagged or answered (a grade's group would ring 40 phones for every hello).
-  const said = clip(t || "📷", 60);
+  const said = clip(t || (au ? "🎤" : "📷"), 60);
   const told = new Set<string>([me.key]);
   const ring = async (key: string, text: string) => {
     if (told.has(key) || !isStudentKey(key)) return;
@@ -647,6 +753,15 @@ async function sendIt(
     if (sid) await alertStudent(ctx, sid, text, `/f/#chat=${r._id}`);
   };
   if (r.k === "d") await ring(otherOf(r, me.key), `💬 ${me.n}${me.k === "u" ? " ஆசிரியர்" : ""}: ${said}`);
+  // An explanation's thread: a teacher's message rings every student still waiting in it, and counts as her answer
+  // (`tw`: it is no longer "nobody answered for 12 hours").
+  if (r.k === "h" && me.k === "u") {
+    for (const x of a.asks ?? []) {
+      if (x.st !== "open") continue;
+      await ctx.db.patch(x._id, { tw: now });
+      await ring(sKey(x.sid), `🎧 ${me.n} ஆசிரியர் (Q${r.hq}): ${au && !t ? "🎤 குரல் விளக்கம்" : said}`);
+    }
+  }
   if (re?.sid) await ring(sKey(re.sid), `↩️ ${me.n} (${r.name ?? "chat"}): ${said}`);
   for (const x of mt) await ring(sKey(x.s), `@ ${me.n} (${r.name ?? "chat"}): ${said}`);
   return { id, rid: r._id, at: now };
@@ -961,10 +1076,18 @@ export const tgroupInfo = query({
 export const sweep = internalMutation({
   args: {},
   handler: async (ctx) => {
-    const old = await ctx.db
-      .query("usChat")
-      .withIndex("by_at", (q) => q.lt("at", Date.now() - CHAT_KEEP_MS))
-      .take(200);
+    // An explanation's messages (`kp`) stay a year: they serve the next student who gets the question wrong.
+    const now = Date.now();
+    const old = [
+      ...(await ctx.db
+        .query("usChat")
+        .withIndex("by_keep", (q) => q.eq("kp", undefined).lt("at", now - CHAT_KEEP_MS))
+        .take(200)),
+      ...(await ctx.db
+        .query("usChat")
+        .withIndex("by_keep", (q) => q.eq("kp", true).lt("at", now - HELP_KEEP_MS))
+        .take(100)),
+    ];
     let left = CHAT_SWEEP_MAX;
     const gone = new Map<Id<"usRooms">, number>();
     let i = 0;
@@ -973,6 +1096,6 @@ export const sweep = internalMutation({
       gone.set(old[i].rid, (gone.get(old[i].rid) ?? 0) + 1);
     }
     for (const [rid, n] of gone) await roomAfter(ctx, rid, n);
-    if (i < old.length || old.length === 200) await ctx.scheduler.runAfter(60_000, internal.chat.sweep, {});
+    if (i < old.length || old.length >= 200) await ctx.scheduler.runAfter(60_000, internal.chat.sweep, {});
   },
 });

@@ -518,9 +518,9 @@ EOF
 - A sheet over a sheet (sign out over Attendance): `body.locked` is counted (`openSheets`), never removed by the inner
   one. A toast can cover a sheet's title: Correction clears toasts when a sheet opens.
 - **Photos and file storage** (4 Nov 2026): a mutation that fails undoes its `ctx.storage.delete` too, so a refused
-  upload is left to the hourly sweep (never delete then `fail`). The sweep deletes only image files nobody references:
-  any other stored file (a voice note one day) must be referenced by a row before an hour passes, or kept out of the
-  sweep. convex-test can't return a Blob from `t.run` (send bytes); its `getUrl` ends with the file's base64 sha256
+  upload is left to the hourly sweep (never delete then `fail`). The sweep deletes image and audio files nobody
+  references a day after they were made (12 Nov 2026): a voice note must be referenced the moment it is sent (the home
+  lane's by its row's `askVoice`; a thread's by a mark in `usFiles`, like a photo on Us). convex-test can't return a Blob from `t.run` (send bytes); its `getUrl` ends with the file's base64 sha256
   (it may hold "/"): the e2e harness serves those addresses from its storage (`context.route`) and takes the family
   app's uploads through `__abUpload`. Playwright: `setInputFiles` on the hidden `.f-file` input is the camera. Two
   Checks in one test share a `Date`: order Checks by `_creationTime`, not `at`.
@@ -785,3 +785,15 @@ EOF
   320 px or a strip's height fail there (they did on the commit before the chats too); CI is the judge. A stand-in for
   the web push library must return real-looking keys (a 65-byte P-256 public key, base64url), or the photos
   run-through's "alerts on" waits forever (the phone decodes the key before it subscribes).
+- **Two voice recorders, on purpose** (12 Nov 2026, two chats the same night): `src/voiceNote.tsx` (the class app's home
+  lane, 60 s) and `src/family/help.tsx` `VoiceRec` (an explanation's thread in the Us frame, 2 minutes). The Us frame is
+  the family app's page (`/f/?staff`): it can't import the teachers' store, so it has its own. Recording there needs
+  three things at once: `Permissions-Policy: microphone=(self)` on `/f/` (vercel.json; students' screens simply have no
+  recorder and the server refuses a student's voice note), `allow="microphone"` on the iframe (`usFrame.tsx`), and
+  `media-src https://*.convex.cloud` to play it. `tests/hosting.test.ts` holds the headers.
+- **An explanation's thread is a chat room** (`usRooms` `k: "h"`): anything that lists or counts rooms by kind must say
+  what it does with "h" (`lineOf` maps it out of the chat lists; `access` has its own branch; `wipeChats` drops a removed student's
+  messages in it by `sid` and calls `wipeHelp` for his rows). Its top card (`head.help`) comes only on a full read: the phone keeps it between the
+  short reads, and a change that must show (Explained, a name hidden, a new student) bumps the room's `rv`
+  (`bumpRoom`). A run-through reaches a thread's teacher side through `C.frameLocator("iframe.us-frame")`; the fake
+  microphone is on for every family run-through (`--use-fake-device-for-media-stream`).

@@ -33,6 +33,8 @@ export function CardHead(props: {
   back?: { label: string; short: string; go: () => void } | null;
   shown?: ReturnType<typeof useQuestionShown>;
   onTeach?: () => void;
+  /** Explain this question online (12 Nov 2026, Consultation): `on` = its thread is open already. */
+  online?: { on: boolean; names: string; go: () => void };
 }) {
   return (
     <div class="fc-qhead">
@@ -46,6 +48,7 @@ export function CardHead(props: {
             ‹ {props.back.short}
           </button>
         )}
+        {props.online && <OnlineButton q={props.label} {...props.online} />}
         {props.onTeach && <TeachButton q={props.label} onOpen={props.onTeach} />}
         {props.shown && <QuestionIcon q={props.label} shown={props.shown} />}
       </span>
@@ -102,6 +105,28 @@ function KeyFetch(props: { unitId: string; q: number; stage: Stage; noKey?: stri
     </ul>
   ) : (
     <BigAnswer text={k.a ?? ""} max={props.max} maxH={props.maxH} />
+  );
+}
+
+/**
+ * Explain online (12 Nov 2026, his words: "near that we can put another button like calling the student to explain in
+ * the online inside the thread. So small icon"): headphones. Filled once the thread is open (he is asked for his photo).
+ */
+export function OnlineButton(props: { q: string; on: boolean; names: string; go: () => void }) {
+  return (
+    <button
+      type="button"
+      class={`fc-tmb fc-onl${props.on ? " on" : ""}`}
+      aria-pressed={props.on}
+      aria-label={props.on ? `${props.q}: an online thread is open for ${props.names}` : `Explain ${props.q} online to ${props.names}: open a thread and ask for his photo`}
+      onClick={props.go}
+    >
+      <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4.5 14v-2a7.5 7.5 0 0 1 15 0v2" />
+        <rect x="3" y="13.5" width="4.5" height="6.5" rx="1.6" />
+        <rect x="16.5" y="13.5" width="4.5" height="6.5" rx="1.6" />
+      </svg>
+    </button>
   );
 }
 

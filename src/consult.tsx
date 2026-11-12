@@ -218,6 +218,42 @@ export function ConsultPage(props: { board: Board; views: View[]; now: number })
   const n = withHer.length;
   const stage: "fighter" | "master" = sq?.v.ms ? "master" : "fighter";
   const printed = useQuestionShown(sq && sq.q !== WHOLE ? sq.v.unit?._id : undefined, stage);
+  // Explain online (12 Nov 2026): the students on this square who still wait for it get a thread in Us and are asked
+  // for a photo of their working; she explains there by voice note. `asked` = the threads open now.
+  const [asked, setAsked] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    void fetchOnce(api.help.topen, {}).then(
+      (x) => setAsked(new Set(x)),
+      () => {},
+    );
+  }, []);
+  const onlineKids =
+    sq && sq.q !== WHOLE && stage === "master" && sq.v.unit && kind !== "theory"
+      ? sq.who.length
+        ? sq.who.filter((w) => w.state === "open").map((w) => ({ id: w.v.s._id as string, name: w.it.name, demo: !!w.v.s.demo || !!w.v.s.test }))
+        : tickedRows.filter((r) => [r.v, ...r.v.others].some((b) => qKey(b, sq.q) === sq.key)).map((r) => ({ id: r.v.s._id as string, name: r.v.s.name, demo: !!r.v.s.demo || !!r.v.s.test }))
+      : [];
+  const onlineKey = (id: string) => `${id}:${sq?.v.unit?._id}:${sq?.q}`;
+  const online =
+    onlineKids.length && !onlineKids.some((k) => k.demo)
+      ? {
+          on: onlineKids.every((k) => asked.has(onlineKey(k.id))),
+          names: joinNames(onlineKids.map((k) => k.name)),
+          go: async () => {
+            const todo = onlineKids.filter((k) => !asked.has(onlineKey(k.id)));
+            if (!todo.length) return toast("Its thread is open: Us → Chats → Online explanations.");
+            const done: string[] = [];
+            for (const k of todo) {
+              const r = await act(() => mutate(api.help.tcall, { studentId: k.id as Id<"students">, unitId: sq!.v.unit!._id, q: sq!.q }));
+              if (r) done.push(k.id);
+            }
+            if (!done.length) return;
+            setAsked(new Set([...asked, ...done.map(onlineKey)]));
+            tone("call");
+            toast(`🎧 Thread open for ${joinNames(todo.filter((k) => done.includes(k.id)).map((k) => k.name))}: asked for a photo. Explain in Us → Chats.`);
+          },
+        }
+      : undefined;
   useEffect(() => {
     if (teaching && !sq) setTeaching(false); // nothing on her screen any more: back to the page
   }, [teaching, !!sq]);
@@ -739,6 +775,7 @@ export function ConsultPage(props: { board: Board; views: View[]; now: number })
               meta={who}
               metaCls="evx-who"
               shown={sq.q === WHOLE ? undefined : printed}
+              online={online}
               onTeach={sq.q === WHOLE ? undefined : () => {
                 clearToasts();
                 setTeaching(true);

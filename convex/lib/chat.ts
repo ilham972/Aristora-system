@@ -9,6 +9,7 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { DAY_MS } from "./day";
+import { helpNew, wipeHelp } from "./help";
 import { dropPhotos } from "./usTalk";
 
 /** The reactions (one per person per message; tap the same again to take it back). Never XP (his rule). */
@@ -149,6 +150,8 @@ export async function chatNew(ctx: QueryCtx, s: Doc<"students">): Promise<{ g: n
     const r = await ctx.db.get(seat.rid);
     if (r && r.n > 0 && r.lw !== who && r.la > seat.rd) d++;
   }
+  // His online explanations (12 Nov 2026) sit with his chats.
+  d += await helpNew(ctx, s._id, seats);
   return { g, d };
 }
 
@@ -160,6 +163,20 @@ export const writerOf = (c: Doc<"usChat">) => (c.sid ? sKey(c.sid) : c.by ? uKey
 /** A message goes, with its photos (and their marks) and its reactions. Returns the deletes done. */
 export async function dropChatMsg(ctx: MutationCtx, c: Doc<"usChat">): Promise<number> {
   let n = await dropPhotos(ctx, c.ph);
+  if (c.au) {
+    // A voice note's file goes with its message (its mark in usFiles too).
+    try {
+      await ctx.storage.delete(c.au.f);
+    } catch {
+      /* already gone */
+    }
+    const mark = await ctx.db
+      .query("usFiles")
+      .withIndex("by_f", (q) => q.eq("f", c.au!.f))
+      .first();
+    if (mark) await ctx.db.delete(mark._id);
+    n += 2;
+  }
   for (const x of await ctx.db
     .query("usChatRx")
     .withIndex("by_cid", (q) => q.eq("cid", c._id))
@@ -195,6 +212,7 @@ export async function roomAfter(ctx: MutationCtx, rid: Id<"usRooms">, gone: numb
  */
 export async function wipeChats(ctx: MutationCtx, s: Doc<"students">): Promise<void> {
   const me = sKey(s._id);
+  await wipeHelp(ctx, s._id);
   const touched = new Map<Id<"usRooms">, number>();
   for (const seat of await ctx.db
     .query("usSeats")

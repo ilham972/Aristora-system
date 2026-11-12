@@ -4428,7 +4428,8 @@ body.locked.fc-marking .toasts {
   border-color: var(--room-ink, var(--ink-2));
   color: var(--room-ink, var(--ink-2));
 }
-.fc-qdoc.on {
+.fc-qdoc.on,
+.fc-onl.on {
   border-color: var(--ink);
   background: var(--ink);
   color: #fff;
@@ -11439,6 +11440,19 @@ body.tm-on .toasts {
 .us-open > span {
   display: grid;
   gap: 2px;
+}
+/* Online explanations a day (12 Nov 2026): a small number beside its words. */
+.us-num {
+  flex: none;
+  width: 76px;
+  height: 40px;
+  padding: 0 8px;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  font: 700 15px/1 var(--font);
+  color: var(--ink);
+  text-align: center;
 }
 .us-field {
   display: grid;

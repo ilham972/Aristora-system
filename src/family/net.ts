@@ -70,6 +70,9 @@ const STAFF: Record<string, string> = {
   "chat:people": "chat:tpeople",
   "chat:tall": "chat:tall",
   "chat:tgroupInfo": "chat:tgroupInfo",
+  // 12 Nov 2026, online explanations: the teachers' queue, a thread's question with its key.
+  "help:tlist": "help:tlist",
+  "help:question": "help:tquestion",
 };
 const STAFF_CHANGES: Record<string, string> = {
   "us:tclap": "us:tclap",
@@ -101,6 +104,11 @@ const STAFF_CHANGES: Record<string, string> = {
   "chat:tkeep": "chat:tkeep",
   "chat:tgroup": "chat:tgroup",
   "chat:tgroupDrop": "chat:tgroupDrop",
+  // 12 Nov 2026, online explanations: Explained, Not now, sent to another teacher, a name or a photo hidden.
+  "help:tdone": "help:tdone",
+  "help:tskip": "help:tskip",
+  "help:tpass": "help:tpass",
+  "help:thide": "help:thide",
 };
 /** The class app's Us tab with this teacher's sign-in. */
 export function staffWith(t: string): void {
