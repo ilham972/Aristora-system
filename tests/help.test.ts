@@ -132,9 +132,9 @@ describe("online explanations", () => {
     expect(room.msgs[0].ph).toHaveLength(1);
     // The short read every few seconds carries no question card (the phone keeps the first one).
     expect((await h().query(api.chat.room, { id, since: room.msgs[0].at, rv: room.head.rv })).head.help).toBeUndefined();
-    // His list; the Chats count has nothing new (his own message was the last).
+    // His list; the Thread count has nothing new (his own message was the last).
     expect(await h().query(api.help.mine, {})).toMatchObject([{ id, q: 8, n: 1, no: 1, st: "open", tname: "Nila" }]);
-    expect((await h().query(api.family.me, {})).chat).toMatchObject({ d: 0 });
+    expect((await h().query(api.family.me, {})).chat).toEqual({ g: 0, d: 0 });
     // Sending it twice opens nothing new; another student can't open his thread.
     expect(await send(h(), 8, raj)).toBe(id);
     await expect(m().query(api.chat.room, { id })).rejects.toThrow(/isn't yours/);
@@ -164,7 +164,7 @@ describe("online explanations", () => {
     await expect(tn().mutation(api.chat.tsend, { id, au: { f: await file("audio/webm"), d: 400 } })).rejects.toThrow(/2 minutes/);
     const after = await h().query(api.chat.room, { id });
     expect(after.msgs[1]).toMatchObject({ tch: true, n: "Nila", au: { d: 61 } });
-    expect((await h().query(api.family.me, {})).chat).toMatchObject({ d: 1 });
+    expect((await h().query(api.family.me, {})).chat).toEqual({ g: 0, d: 0, h: 1 });
     expect((await h().query(api.help.mine, {}))[0]).toMatchObject({ fresh: true, lt: "🎤" });
     // She answered: nothing new for her now. And a voice note alone explains nothing (his rule).
     expect(await tn().query(api.chat.tunread, {})).toBe(0);

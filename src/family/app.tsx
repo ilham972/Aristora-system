@@ -745,12 +745,13 @@ export function App() {
               </>
             )
           ) : tab === "chat" ? (
-            // The Chat tab (12 Nov 2026): threads, groups, private messages | Members; the chats' own file.
+            // The Thread tab (12 Nov 2026): Thread (his explanations) | Members (groups, chats, everyone); the chats' own file.
             chp ? (
               <chp.ChatTab
                 top={top}
                 staff={false}
-                n={me?.chat ? me.chat.g + me.chat.d : 0}
+                nh={me?.chat?.h ?? 0}
+                nm={me?.chat ? me.chat.g + me.chat.d : 0}
                 onRoom={(id) => go({ k: "room", id })}
                 onMate={(id) => {
                   if (id === keptBoard()?.you) return pickTab("me");
@@ -802,7 +803,7 @@ export function App() {
             />
           )}
         </main>
-        <BottomBar tab={tab} us={!!me?.us} n={me?.chat ? me.chat.g + me.chat.d : 0} onTab={pickTab} />
+        <BottomBar tab={tab} us={!!me?.us} n={me?.chat ? me.chat.g + me.chat.d + (me.chat.h ?? 0) : 0} onTab={pickTab} />
         <Surprises active={sheet === null} />
       </>
     );
@@ -942,8 +943,9 @@ const TABS: { id: Tab; icon: IconName; name: string }[] = [
   { id: "learn", icon: "map", name: "Learn" },
   { id: "us", icon: "people", name: "Us" },
   { id: "race", icon: "trophy", name: "Race" },
-  // 12 Nov 2026, his ask: the Chat page in the right corner (Me moved to his face in the top row).
-  { id: "chat", icon: "chat", name: "Chat" },
+  // 12 Nov 2026, his ask: the Chat page in the right corner (Me moved to his face in the top row); named Thread the same
+  // day (his: "chat page is not for the chat, it's actually for the thread"; groups and chats went under Members).
+  { id: "chat", icon: "chat", name: "Thread" },
 ];
 
 function BottomBar(props: { tab: Tab; us: boolean; n?: number; onTab: (t: Tab) => void }) {

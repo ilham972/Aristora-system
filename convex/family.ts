@@ -305,7 +305,8 @@ export type FamilyMe = {
   inbox?: UsInboxItem[];
   inboxNew?: number;
   /** His groups and private chats with something new (8 Nov 2026): the Us tab's dot, the Groups and Chats counts. */
-  chat?: { g: number; d: number };
+  /** New in his groups (g), private chats (d) and threads (h, the Thread tab, 12 Nov 2026). */
+  chat?: { g: number; d: number; h?: number };
   /**
    * His fees (9 Nov 2026, the owner's answer: the parents hear it "in the class ... and also in the family app"): what
    * he owes (o) for how many classes (c) and books (b), or his credit (cr). Missing = nothing owed, or no fees yet.

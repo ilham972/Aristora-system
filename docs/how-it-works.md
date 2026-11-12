@@ -1317,7 +1317,7 @@ learning app of our education institute"): one profile, his class times, what he
   ACHOO, a kiss, a party toot, a dizzy warble, a splat, a wipe's squeak, a whoosh, a tweet). On unless Me → Sound is
   off.
 - **Words** (his ask, 4 Nov 2026: "a mix of both; some places English is appropriate, M for Monday"): **English for
-  the app's chrome and game words**: the tabs (Home, Learn, Us, Race, Chat), buttons (START, Check, Next, Send, Sign in,
+  the app's chrome and game words**: the tabs (Home, Learn, Us, Race, Thread), buttons (START, Check, Next, Send, Sign in,
   Back), days and times (M T W T F S S, Wed · 4 Nov, 3:30 PM, in 2 h 10 min, ends in 4d 6h), labels (Today's goal,
   Class week, XP this week, Trophies, Total XP, Best streak) and game words (World, Stage, Level, XP, IN A ROW, NEW
   TROPHY, PERSONAL BEST, a trophy's name). **Tamil for the owl's voice and every sentence**: the greeting, praise in
@@ -1334,16 +1334,17 @@ learning app of our education institute"): one profile, his class times, what he
   the tab he was on (`beforeMe`, a history step `{ me: 1 }`); **On this phone** is Me's last card, below everything (his
   ask the same day, after I had put it first for families: his phone holds six children); the old children sheet is
   gone), his flame (days in a row; lit once he did a Level today; tap = Me), his XP ever
-  (tap = the race), **the bell** (7 Nov 2026, below), **Feedback** (a smile since 12 Nov 2026: the speech bubble is the Chat
+  (tap = the race), **the bell** (7 Nov 2026, below), **Feedback** (a smile since 12 Nov 2026: the speech bubble is the Thread
   tab's); XP and the flame jump once when they grew (back
   from a Level). Since 10 Nov 2026 (the Shop, below): XP and **his coins** share one white capsule (`.f-wallet`: 💎 XP |
   🪙 coins, two taps: the race, the Shop; the coins jump when they grow); on a phone (under 480 px) the top row shows his
   face without his name (a name cut to "H…" looked broken: Home greets him by name; `.f-who`'s label still names him);
   under 400 px every piece is a little tighter, under 346 px the ▾ goes for one child and a number from 1,000 on is short
   ("1.2k": `Num` in `app.tsx`, `.f-nl` / `.f-ns`). A floating bottom
-  bar: **Home**, **Learn**, **Us**, **Race**, **Chat** (12 Nov 2026, his ask: Chat in the right corner where Me was; Us and
-  Chat only once the owner opened Us; the one on screen a violet pill with its name; its icon hops; Chat carries the
-  count of his chats and threads with something new, `.f-tab-n`). Me has no button there: his face opens it.
+  bar: **Home**, **Learn**, **Us**, **Race**, **Thread** (12 Nov 2026, his ask: the threads' page in the right corner
+  where Me was; Us and Thread only once the owner opened Us; the one on screen a violet pill with its name; its icon
+  hops; Thread carries the count of his threads, groups and chats with something new, `.f-tab-n`). Me has no button
+  there: his face opens it.
   - **Home** (`home.tsx`, the institute's side): the date ("WED · 4 NOV") and வணக்கம்; **today's class** (`TodayCard`:
     "In class now · since 3:12 PM", "Class is on now · till 6:30 PM", "Today 3:30 PM – 6:30 PM · in 2 h 10 min", or
     "Next class: Tomorrow / Thu": one of his usual days first), with his Stage in class and how far he is; **today's
@@ -1643,7 +1644,7 @@ learning app of our education institute"): one profile, his class times, what he
       tab opens and kept while the app is open; each opening asks it for the newest lines, `us-refresh`), with **the
       teacher's own sign-in** (`aristora.token` on that address: nothing new to remember, no second account system) and
       none of the class app's weight (the family app's small files; the class app's alerts keep ringing meanwhile).
-      `src/family/staff.tsx` (`startStaff`, `StaffApp`): her name in the top row (· ஆசிரியர்) and **Us | Chat | Race** (Chat since
+      `src/family/staff.tsx` (`startStaff`, `StaffApp`): her name in the top row (· ஆசிரியர்) and **Us | Thread | Race** (since
       12 Nov 2026: the chats left Us, as on the phones); **Us** =
       the students' tab (every grade's lines, the welcome, the count) with her guide the first time (three cards: what
       students see, what she does in two minutes, how it should feel), **🌟 Shout-out** (a sheet: a grade, a student
@@ -1817,18 +1818,19 @@ learning app of our education institute"): one profile, his class times, what he
       `src/family/talk.tsx` (shared by a line's talk and the chats), `src/family/chat.tsx` (the chats' own file
       `chatParts.ts`, its style `chatStyle.ts`, fetched by `later.ts` `loadChat` / `useChatParts` only when Groups or
       Chats opens: never in the first load).
-      - **Us is the Feed only; the chats have their own Chat tab** (12 Nov 2026, his voice note: "us page only have feeds
-        only ... the chat page have 2 tabs, members and chat ... in the chat tab ... the groups and threads and also
-        personal messages"; until then Us had three parts, Feed | Groups | Chats). **Chat** (`ChatTab` in `chat.tsx`,
-        the chats' own file): a hero with his top row and **💬 Chat | 👥 Members** (`.c-seg`, kept per child `chatSeg`;
-        Chat's number = `family.me` `chat` g + d = `chatNew`: reads his seats and groups, never a message). **Chat**
-        (`ChatHome`) = 🎧 **Explain online** first (his threads, `HelpList`; none yet: a one-line hint how to start one),
-        then **Groups**: his grade's group and **Everyone** as two big cards (`GroupCard`, `.c-gcards`), a teacher's other
-        groups as rows below; then **Messages** (his private chats; **+ புதிய chat** opens Members). **Members** = the
-        Members page inside the tab (`PeopleScreen` `bare`); Back from a chat returns to the part he left. Told once to
-        everyone who saw Us's guide: "🆕 💬 Chat" (`usNews3`: where the chats went, the Everyone group, his face = his
-        profile). Teachers (the class app's Us, `staff.tsx`): **Us | Chat | Race**, the same Chat with every group as rows
-        (Everyone first), **New group**, **New chat** and the owner's **👁 Every chat** on the section heads (`.c-shb`).
+      - **Us is the Feed only; the right corner is Thread** (12 Nov 2026, his voice notes: first "the chat page have 2
+        tabs, members and chat", the same morning after trying it: "chat page is not for the chat, it's actually for the
+        thread only ... put the group and chat inside the members page ... small group icon ... change the name from Chat
+        to Thread ... give them dedicated page"; until then Us had three parts, Feed | Groups | Chats). The bottom bar's
+        **Thread** (tab id `chat`, `ChatTab` in `chat.tsx`, the chats' own file): a hero with his top row and **🎧 Thread |
+        👥 Members** (`.c-seg`, kept per child `chatSeg`). **Thread** = his online explanations only (`HelpList`; none
+        yet: an owl and how to start one, `.c-tempty`), counted apart (`family.me` `chat.h` = `helpNew`). **Members** =
+        **Groups** as small icons in one row (`ChatsPart`: `.c-gstrip .c-gpill`, his grade's first, then Everyone, then a
+        teacher's others; sideways when many), **Messages** (his private chats; none yet: tap 💬 beside a name), then
+        everyone (`PeopleScreen` `bare`); its count = `chat.g + chat.d`. The bottom tab's count = all three. Back from a
+        chat returns to the part he left. Told once to everyone who saw Us's guide: "🆕 Thread" (`usNews3`). Teachers
+        (the class app's Us, `staff.tsx`): **Us | Thread | Race**, the same two parts (every group in the row, Everyone
+        first; **New group** and the owner's **👁 Every chat** on the section heads, `.c-shb`).
       - **The Everyone group** (12 Nov 2026, his ask: "a community group ... everyone there ... if anyone message there";
         my warning, told him: the Feed already is the everyone place and 120 students of Grades 6–11 at 200 messages a day
         is a room no teacher reads; **his answer: anyone, any time**): a grade's own group with the grade **0**
@@ -1955,10 +1957,10 @@ learning app of our education institute"): one profile, his class times, what he
       hidden from the thread's other students with his name or his photos (a voice names him: `hid`). `takeVoice`;
       `usChat.au`; marked in `usFiles`, deleted with its message. A second recorder beside `src/voiceNote.tsx` (the
       home lane's, 60 s) because the Us frame can't load the teachers' store.
-    - **Teachers:** the Us tab's number counts the threads waiting on her (`chat.tunread`); Us → Chat → **Online
-      explanations** on top (`HelpList`, `help.tlist`): Mine (hers and the ⏰ late ones) · Everyone's · Closed (14 days),
+    - **Teachers:** the Us tab's number counts the threads waiting on her (`chat.tunread`); Us → Thread → **Online
+      explanations** (`HelpList`, `help.tlist`): Mine (hers and the ⏰ late ones) · Everyone's · Closed (14 days),
       then Stage and student chips when the list is long (his ask: filters by student and unit). Students: the same
-      list first on their Chat tab (Waiting · All; it counts in the Chat number: `helpNew`).
+      list on their Thread tab (Waiting · All; its own count `chat.h`: `helpNew`).
     - **Consultation's icon** (headphones beside the whiteboard on a Master question's card, `OnlineButton`,
       `help.tcall`; none for a demo student): a thread opens for the ticked student with her as its teacher, he is
       alerted to send his photo, she can explain at once; filled once it is open (`help.topen`).

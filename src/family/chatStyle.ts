@@ -14,17 +14,18 @@ const CSS = `
 .c-sh span{flex:1;min-width:0}
 .c-shb{flex:none;display:inline-flex;align-items:center;gap:4px;height:32px;padding:2px 11px 0;border-radius:999px;background:var(--brand-soft);color:var(--brand-2);font:800 13px/1 var(--display);white-space:nowrap}
 .c-shb:active{transform:scale(.96)}
-.c-gcards{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}
-.c-gcard{position:relative;display:grid;justify-items:start;align-content:start;gap:6px;min-width:0;padding:14px 12px 12px;border-radius:18px;background:var(--card);box-shadow:var(--shadow);text-align:left;transition:transform .12s}
-.c-gcard:active{transform:scale(.97)}
-.c-gcard b{max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font:800 16px/1.15 var(--display);color:var(--ink)}
-.c-gcard small{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.7em;font-size:12.5px;line-height:1.35;color:var(--ink2);overflow-wrap:anywhere}
-.c-gcard.new small{color:var(--ink);font-weight:700}
-.c-gcard .c-un,.c-gcard .c-ro{position:absolute;top:10px;right:10px}
-.c-gface.big{width:52px;height:52px;border-radius:17px;font-size:28px}
-.c-gface.big.grade{font-size:24px}
 .c-gowl{overflow:hidden}
 .c-gowl .f-owl{width:86%}
+.c-sh-m{margin:22px 18px 0}
+.c-gstrip{display:flex;gap:6px;margin:8px -16px 0;padding:2px 16px 6px;overflow-x:auto;scrollbar-width:none}
+.c-gstrip::-webkit-scrollbar{display:none}
+.c-gpill{position:relative;flex:none;display:grid;justify-items:center;gap:6px;width:76px;padding:10px 4px 8px;border-radius:16px;background:var(--card);box-shadow:var(--shadow)}
+.c-gpill:active{transform:scale(.95)}
+.c-gpill b{max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font:800 12.5px/1.15 var(--display);color:var(--ink)}
+.c-gpill .c-un,.c-gpill .c-ro{position:absolute;top:4px;right:4px}
+.c-tempty{display:grid;justify-items:center;gap:8px;margin-top:18px;padding:22px 18px;border-radius:20px;background:var(--card);box-shadow:var(--shadow);text-align:center}
+.c-tempty b{font:800 17px/1.25 var(--display);color:var(--ink)}
+.c-tempty p{margin:0;font-size:14px;line-height:1.55;color:var(--ink2)}
 .c-hint{margin:8px 0 0;padding:12px;border-radius:14px;background:var(--card);box-shadow:var(--shadow);font-size:13.5px;line-height:1.5;color:var(--ink2)}
 .c-ppl{padding-bottom:8px}
 .c-list{margin:12px 16px 0}

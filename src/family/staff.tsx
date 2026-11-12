@@ -304,12 +304,12 @@ function StaffApp() {
         </span>
       </button>
       <span class="f-sp" />
-      <div class="t-seg" role="group" aria-label="Us, Chat or the race">
+      <div class="t-seg" role="group" aria-label="Us, Thread or the race">
         <button type="button" class={tab === "us" ? "on" : ""} aria-pressed={tab === "us"} onClick={() => pick("us")}>
           Us
         </button>
         <button type="button" class={tab === "chat" ? "on" : ""} aria-pressed={tab === "chat"} onClick={() => pick("chat")}>
-          Chat
+          Thread
         </button>
         <button type="button" class={tab === "race" ? "on" : ""} aria-pressed={tab === "race"} onClick={() => pick("race")}>
           Race

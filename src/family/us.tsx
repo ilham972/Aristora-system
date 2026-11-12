@@ -314,8 +314,8 @@ export function UsTab(props: {
       )}
       {!guide && news && (
         <section class="f-card f-us-news rise" aria-label="New in Us">
-          <b>🆕 💬 Chat</b>
-          <p>Groups, chats, 🎧 விளக்கங்கள் இப்போது கீழே வலப்பக்கம் 💬 Chat இல். புதிய 🦉 Everyone குழு: எல்லா grade உம் ஒன்றாக! உன் profile: மேலே இடப்பக்கம் உன் முகத்தைத் தொடு.</p>
+          <b>🆕 Thread</b>
+          <p>🎧 விளக்கங்கள் இப்போது கீழே வலப்பக்கம் Thread இல். Groups, chats: Thread → 👥 Members. புதிய 🦉 Everyone குழு: எல்லா grade உம் ஒன்றாக! உன் profile: மேலே இடப்பக்கம் உன் முகத்தைத் தொடு.</p>
           <button
             type="button"
             class="f-btn go"

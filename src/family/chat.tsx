@@ -2,7 +2,8 @@
 // the community ... we need group which was in the community, like a Discord ... the app don't have private messaging
 // options ... the girl students and boy students can't message each other ... teacher can message anyone". His answers:
 // boys and girls together in groups (like the hall), teachers make groups, each grade its own (convex/chat.ts).
-// - ChatTab (12 Nov 2026: its own tab in the bottom bar, out of Us): Chat (threads, groups, private messages) | Members.
+// - ChatTab (12 Nov 2026: its own tab in the bottom bar, out of Us): Thread (his explanations only) | Members (groups as
+//   small icons, private messages, everyone).
 // - RoomScreen: a group or a private chat: the messages as in a line's talk (talk.tsx: reply with a quote, @tags,
 //   reactions), by day, read every few seconds while it is open; the words box at the bottom.
 // - PeopleScreen (the Members page, his step 8): everyone in ARISTORA, teachers first, and 💬 where his rule allows.
@@ -82,36 +83,28 @@ function Row(props: { r: ChatLine; onOpen: () => void }) {
   );
 }
 
-/** A group as a big card (the Chat tab: his grade's group and Everyone side by side): its face, name, last words, new. */
-function GroupCard(props: { r: ChatLine; sub: string; onOpen: () => void }) {
-  const r = props.r;
-  return (
-    <button type="button" class={`c-gcard${r.un ? " new" : ""}`} onClick={props.onOpen}>
-      <RoomFace r={r} big />
-      <b>{r.name}</b>
-      <small>{r.lt ? `${r.mine ? "நீ" : (r.ln ?? "")}: ${r.lt}` : props.sub}</small>
-      {r.un ? <i class="c-un">{r.un > 20 ? "20+" : r.un}</i> : r.ro ? <i class="c-ro">📣</i> : null}
-    </button>
-  );
-}
-
 /**
- * The Chat tab (12 Nov 2026, his voice note: "in the bottom bar right side corner ... this chat page is very important
- * ... inside the chat put two tabs, one is chat, another is members"): Chat = his threads (Explain online) first, then
- * the groups (his grade's and Everyone as two big cards, a teacher's other groups below), then his private messages;
- * Members = everyone in ARISTORA, 💬 where his rule allows. A teacher's (staff): the same, with every grade's group.
+ * The Thread tab (12 Nov 2026; first "Chat" the same morning). His voice notes: "in the bottom bar right side corner ...
+ * this chat is like threads ... explain the wrong questions ... very important", then after trying it: "chat page is
+ * not for the chat, it's actually for the thread only ... put the group and chat inside the members page ... small
+ * group icon ... change the name from Chat to Thread ... give them dedicated page". Two parts:
+ * - Thread: his online explanations only (HelpList), a page of their own.
+ * - Members: his groups as small icons in a row (his grade's, Everyone, a teacher's others), his private messages, then
+ *   everyone in ARISTORA (PeopleScreen bare: 💬 where his rule allows).
+ * A teacher's (staff): the same, every group in the row, New group, the owner's Every chat.
  */
 export function ChatTab(props: {
   top: ComponentChildren;
   staff: boolean;
-  /** New in his groups and chats (family.me chat): the Chat button's count. */
-  n?: number;
+  /** New threads (family.me chat.h) and new in his groups and private chats (g + d): the two parts' counts. */
+  nh?: number;
+  nm?: number;
   onRoom: (id: string) => void;
   onMate: (id: string) => void;
   onAll?: () => void;
 }) {
-  const [seg, setSeg] = useState<"chat" | "people">(() => (keep<string>("chatSeg") === "people" ? "people" : "chat"));
-  const pick = (k: "chat" | "people") => {
+  const [seg, setSeg] = useState<"thread" | "people">(() => (keep<string>("chatSeg") === "people" ? "people" : "thread"));
+  const pick = (k: "thread" | "people") => {
     if (k === seg) return;
     buzz();
     sound("tap");
@@ -119,30 +112,54 @@ export function ChatTab(props: {
     keep("chatSeg", k);
     window.scrollTo(0, 0);
   };
+  const count = (n?: number) => (n ? <i>{n > 20 ? "20+" : n}</i> : null);
+  const open = (id: string) => {
+    buzz();
+    sound("tap");
+    props.onRoom(id);
+  };
   return (
     <>
       <header class="f-hero us c-hero">
         {props.top}
-        <div class="c-seg" role="tablist" aria-label="Chat">
-          <button type="button" role="tab" aria-selected={seg === "chat"} class={seg === "chat" ? "on" : ""} onClick={() => pick("chat")}>
-            💬 Chat{props.n ? <i>{props.n > 20 ? "20+" : props.n}</i> : null}
+        <div class="c-seg" role="tablist" aria-label="Thread">
+          <button type="button" role="tab" aria-selected={seg === "thread"} class={seg === "thread" ? "on" : ""} onClick={() => pick("thread")}>
+            🎧 Thread{count(props.nh)}
           </button>
           <button type="button" role="tab" aria-selected={seg === "people"} class={seg === "people" ? "on" : ""} onClick={() => pick("people")}>
-            👥 Members
+            👥 Members{count(props.nm)}
           </button>
         </div>
       </header>
-      {seg === "chat" ? (
-        <ChatHome staff={props.staff} onRoom={props.onRoom} onNew={() => pick("people")} onAll={props.onAll} />
+      {seg === "thread" ? (
+        <section class="c-list c-home" aria-label="Threads">
+          <HelpList
+            staff={props.staff}
+            onRoom={open}
+            empty={
+              <div class="c-tempty">
+                <Owl mood="wave" class="mid" still />
+                <b>{props.staff ? "No online explanations yet." : "இன்னும் thread இல்லை"}</b>
+                {!props.staff && <p>Check செய்த பின், தவறிய கேள்வியில் 🎧 Explain online ஐத் தொடு. ஆசிரியரின் விளக்கம் இங்கே வரும்.</p>}
+              </div>
+            }
+          />
+        </section>
       ) : (
-        <PeopleScreen bare staff={props.staff} onBack={() => pick("chat")} onRoom={props.onRoom} onMate={props.onMate} />
+        <>
+          <ChatsPart staff={props.staff} onRoom={open} onAll={props.onAll} />
+          <h2 class="c-sh c-sh-m">
+            <span>Members</span>
+          </h2>
+          <PeopleScreen bare staff={props.staff} onBack={() => pick("thread")} onRoom={props.onRoom} onMate={props.onMate} />
+        </>
       )}
     </>
   );
 }
 
-/** The Chat part: threads, groups, private messages; the lists read again while on screen. */
-function ChatHome(props: { staff: boolean; onRoom: (id: string) => void; onNew: () => void; onAll?: () => void }) {
+/** Members' top: his groups as small icons in one row, then his private messages; the lists read again while on screen. */
+function ChatsPart(props: { staff: boolean; onRoom: (id: string) => void; onAll?: () => void }) {
   const [d, setD] = useState<Rooms | null>(() => keep<Rooms>("chatRooms"));
   const load = () =>
     query("chat:rooms").then(
@@ -160,27 +177,8 @@ function ChatHome(props: { staff: boolean; onRoom: (id: string) => void; onNew: 
   const groups = d?.groups ?? [];
   const dms = d?.dms ?? [];
   usePics(dms.map((r) => r.pic));
-  // A student: his grade's group and Everyone as the two big cards (the server lists them first), other groups below.
-  const big = props.staff ? [] : groups.filter((r) => r.gg !== undefined).slice(0, 2);
-  const rest = groups.filter((r) => !big.includes(r));
-  const open = (id: string) => {
-    buzz();
-    sound("tap");
-    props.onRoom(id);
-  };
   return (
-    <section class="c-list c-home" aria-label="Chat">
-      <HelpList
-        staff={props.staff}
-        onRoom={open}
-        empty={
-          props.staff ? null : (
-            <p class="c-hint">
-              🎧 <b>Explain online</b>: Check செய்த பின் தவறிய கேள்வியில் 🎧 ஐத் தொடு. ஆசிரியரின் விளக்கம் இங்கே வரும்.
-            </p>
-          )
-        }
-      />
+    <section class="c-list c-home" aria-label="Groups and messages">
       <h2 class="c-sh">
         <span>Groups</span>
         {props.staff && d?.edit && (
@@ -191,30 +189,21 @@ function ChatHome(props: { staff: boolean; onRoom: (id: string) => void; onNew: 
       </h2>
       {!d ? (
         <Waiting />
+      ) : groups.length ? (
+        <div class="c-gstrip" role="list">
+          {groups.map((r) => (
+            <button key={r.id} type="button" role="listitem" class={`c-gpill${r.un ? " new" : ""}`} aria-label={`${r.name}${r.un ? `: ${r.un} new` : ""}`} onClick={() => props.onRoom(r.id)}>
+              <RoomFace r={r} />
+              <b>{r.name}</b>
+              {r.un ? <i class="c-un">{r.un > 20 ? "20+" : r.un}</i> : r.ro ? <i class="c-ro">📣</i> : null}
+            </button>
+          ))}
+        </div>
       ) : (
-        <>
-          {big.length > 0 && (
-            <div class="c-gcards">
-              {big.map((r) => (
-                <GroupCard key={r.id} r={r} sub={r.gg === 0 ? "எல்லா grade உம்" : `Grade ${r.gg} மட்டும்`} onOpen={() => open(r.id)} />
-              ))}
-            </div>
-          )}
-          {rest.length > 0 && (
-            <ul class="c-rows">
-              {rest.map((r) => (
-                <Row key={r.id} r={r} onOpen={() => open(r.id)} />
-              ))}
-            </ul>
-          )}
-          {!big.length && !rest.length && <p class="c-hint">{props.staff ? "No groups yet." : "குழுக்கள் இன்னும் இல்லை."}</p>}
-        </>
+        <p class="c-hint">{props.staff ? "No groups yet." : "குழுக்கள் இன்னும் இல்லை."}</p>
       )}
       <h2 class="c-sh">
         <span>Messages</span>
-        <button type="button" class="c-shb" onClick={props.onNew}>
-          <Icon name="plus" size={16} /> {props.staff ? "New chat" : "புதிய chat"}
-        </button>
         {props.staff && d?.owner && props.onAll && (
           <button type="button" class="c-shb" onClick={props.onAll}>
             <Icon name="eye" size={16} /> Every chat
@@ -222,14 +211,11 @@ function ChatHome(props: { staff: boolean; onRoom: (id: string) => void; onNew: 
         )}
       </h2>
       {!d ? null : !dms.length ? (
-        <div class="f-talk-none">
-          <Owl mood="wave" class="tiny" still />
-          <p>{props.staff ? "No chats yet. Tap New chat to message a student or a teacher." : "இன்னும் chat இல்லை. புதிய chat: ஆசிரியர் அல்லது நண்பருக்கு எழுது! 💬"}</p>
-        </div>
+        <p class="c-hint">{props.staff ? "No chats yet: tap 💬 beside a name below." : "இன்னும் chat இல்லை: கீழே ஒரு பெயருக்கு அருகில் 💬 ஐத் தொடு."}</p>
       ) : (
         <ul class="c-rows">
           {dms.map((r) => (
-            <Row key={r.id} r={r} onOpen={() => open(r.id)} />
+            <Row key={r.id} r={r} onOpen={() => props.onRoom(r.id)} />
           ))}
         </ul>
       )}

@@ -146,7 +146,7 @@ export async function seatsOf(ctx: QueryCtx, who: string): Promise<Map<string, D
  * How many of his chats have something new (the Us tab's dot, the Groups and Chats counts): a group or a private chat
  * whose last message is someone else's, after he last read it. Reads his seats and the groups, never a message.
  */
-export async function chatNew(ctx: QueryCtx, s: Doc<"students">): Promise<{ g: number; d: number }> {
+export async function chatNew(ctx: QueryCtx, s: Doc<"students">): Promise<{ g: number; d: number; h?: number }> {
   const who = sKey(s._id);
   const seats = await seatsOf(ctx, who);
   let g = 0;
@@ -160,9 +160,9 @@ export async function chatNew(ctx: QueryCtx, s: Doc<"students">): Promise<{ g: n
     const r = await ctx.db.get(seat.rid);
     if (r && r.n > 0 && r.lw !== who && r.la > seat.rd) d++;
   }
-  // His online explanations (12 Nov 2026) sit with his chats.
-  d += await helpNew(ctx, s._id, seats);
-  return { g, d };
+  // His online explanations (12 Nov 2026): their own count since the Thread tab (h, only when some are new).
+  const h = await helpNew(ctx, s._id, seats);
+  return { g, d, ...(h ? { h } : {}) };
 }
 
 // ---------------------------------------------------------------- messages going
