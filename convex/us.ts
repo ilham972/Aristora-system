@@ -92,6 +92,7 @@ import {
   type UsThread,
 } from "./lib/us";
 import { clip, dropAnswer, dropMoment, tell, wroteIn, type Tell } from "./lib/usTalk";
+import { alertStudent } from "./lib/push";
 import { bumpRx, isRx, MENTIONS_MAX, RX, type RxCode } from "./lib/chat";
 import { COMMENT_XP_A_DAY, commentXpToday, giveXp, sweepXp, takeXp, XP_ANSWER, XP_COMMENT, XP_HELP, XP_LEARN } from "./lib/usXp";
 import { usAud, usKind, usPhoto } from "./schema";
@@ -604,6 +605,16 @@ export const post = mutation({
     });
     await log(ctx, null, now, { kind: "us-post", value: `${all ? "all" : gs.join(",")}${args.qn ? " question" : ""}` });
     if (args.qn) await askGrades(ctx, id, all ? null : gs, u.name, t, `❓ ${u.name} ஆசிரியர் ஒரு கேள்வி கேட்கிறார். உன் விடையை அனுப்பு!`);
+    // A notice too (12 Nov 2026, the founder: "whatever ... we put, students want to get the notification"): the phone
+    // of every student of its grades, no line in the bell (the feed shows it on top).
+    else {
+      const rows = await ctx.db
+        .query("raceRows")
+        .withIndex("by_list", (q) => q.eq("demo", false).eq("gone", false))
+        .collect();
+      const said = `📣 ${u.name} ஆசிரியர்: ${t ? clip(t, 80) : "📷"}`;
+      for (const r of rows) if (all || (r.g !== undefined && gs.includes(r.g))) await alertStudent(ctx, r.sid, said, `/f/#us=${id}`);
+    }
     return id;
   },
 });

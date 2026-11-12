@@ -336,7 +336,15 @@ describe("chats on Us", () => {
     const room = await ph.Kumar.query(api.chat.room, { id: ol.id });
     expect(room.head).toMatchObject({ name: "O/L notices", emo: "📣", ro: true, can: { write: false } });
     await expect(ph.Kumar.mutation(api.chat.send, { id: ol.id, text: "hi" })).rejects.toThrow(/ஆசிரியர்கள் மட்டும்/);
+    // A teacher's message in a group rings every student in it (12 Nov 2026): the grade's and the picked one's
+    // phones, never another grade's; the student's own message above rang nobody.
+    await alertsOn("Kumar", "Devi", "Arun");
+    expect(await pushes()).toEqual([]);
     await N().mutation(api.chat.tsend, { id: ol.id, text: "நாளை 4 மணிக்கு O/L வகுப்பு 📣" });
+    expect((await pushes()).map((o) => [o.studentId === id.Kumar ? "Kumar" : o.studentId === id.Devi ? "Devi" : "?", o.text, o.url]).sort()).toEqual([
+      ["Devi", "📣 Nila ஆசிரியர் (O/L notices): நாளை 4 மணிக்கு O/L வகுப்பு 📣", `/f/#chat=${ol.id}`],
+      ["Kumar", "📣 Nila ஆசிரியர் (O/L notices): நாளை 4 மணிக்கு O/L வகுப்பு 📣", `/f/#chat=${ol.id}`],
+    ]);
     // A grade's own group keeps its name; a made group goes with its messages.
     await N().mutation(api.chat.tgroup, { id: "g:8", name: "ignored", emo: "🦉", gs: [], sids: [], ro: false });
     expect((await ph.Arun.query(api.chat.rooms, {})).groups[0]).toMatchObject({ name: "Grade 8", emo: "🦉" });

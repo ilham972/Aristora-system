@@ -85,7 +85,11 @@ console.log(`Built dist/ for ${url}: ${basename(js)} ${kb(js)} KB, ${basename(cs
 // first load (0.5 KB: 64.2 / 66); the dots, the bars and the day's sheet in the later parts (46.4 with them): later 47 → 49
 // so the next change has room.
 const FAMILY_BUDGET_KB = 66;
-const FAMILY_LATER_KB = 49;
+// 12 Nov 2026: phone alerts that reach (the founder: "the most important feature on this app is notification"): turning
+// them on, the address given again at every open, the reminder above the bottom bar and the bell's test alert with its
+// "make it loud" steps moved to the later parts (src/family/alerts.tsx): the first load got lighter (64.9 → 64.6), the
+// later parts 47.7 → 49.0: later 49 → 50.
+const FAMILY_LATER_KB = 50;
 // 7 Nov 2026, the class app's Us tab: the family app's teachers' screens (src/family/staff.tsx, opened as /f/?staff
 // inside the class app) are their own file: never prefetched by a student's phone, so outside both budgets above,
 // with their own (a teacher's phone fetches them once, the first time she opens Us).

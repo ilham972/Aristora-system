@@ -950,6 +950,47 @@ a.f-btn {
 .f-push-fail {
   color: var(--wrong-ink);
 }
+.f-push-help {
+  margin-top: 8px;
+  font-size: 13px;
+}
+.f-push-help summary {
+  font-weight: 800;
+  text-decoration: underline;
+}
+.f-push-help ol {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+.f-push-help li {
+  margin-top: 4px;
+}
+/* The reminder to turn alerts on (12 Nov 2026): above the floating bottom bar, never pushing the page. */
+.f-nudge {
+  position: fixed;
+  z-index: 21;
+  left: 50%;
+  bottom: calc(82px + var(--safe-b));
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  width: max-content;
+  max-width: calc(100% - 24px);
+}
+.f-nudge button {
+  min-height: 44px;
+  padding: 2px 16px 0;
+  border-radius: 999px;
+  box-shadow: 0 10px 24px -10px rgba(40, 30, 110, 0.5);
+}
+.f-nudge button + button {
+  width: 44px;
+  padding: 0;
+  background: #fff;
+  color: var(--ink2);
+  font-weight: 800;
+}
+
 .f-bell-chips {
   display: flex;
   gap: 6px;

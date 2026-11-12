@@ -758,7 +758,8 @@ async function sendIt(
   await ctx.db.patch(r._id, { la: now, lt: au && !t ? "🎤" : lastWords(t, ph?.length ?? 0), ln: me.n, lw: me.key, n: r.n + 1 });
   await markRead(ctx, r._id, me.key, now);
   // Who is told on the phone (the bell keeps Us's lines; a chat keeps its own count): the other one of a private chat,
-  // and in a group only who is tagged or answered (a grade's group would ring 40 phones for every hello).
+  // and in a group only who is tagged or answered (a grade's group would ring 40 phones for every hello), unless a
+  // teacher writes (below: everyone in the group).
   const said = clip(t || (au ? "🎤" : "📷"), 60);
   const told = new Set<string>([me.key]);
   const ring = async (key: string, text: string) => {
@@ -779,6 +780,15 @@ async function sendIt(
   }
   if (re?.sid) await ring(sKey(re.sid), `↩️ ${me.n} (${r.name ?? "chat"}): ${said}`);
   for (const x of mt) await ring(sKey(x.s), `@ ${me.n} (${r.name ?? "chat"}): ${said}`);
+  // A teacher's message in a group rings every student in it (12 Nov 2026, the founder: "whatever the chat we put,
+  // students want to get the notification"). A student's message still rings only who it tags or answers.
+  if (r.k === "g" && me.k === "u") {
+    const rows = await ctx.db
+      .query("raceRows")
+      .withIndex("by_list", (q) => q.eq("demo", r.demo).eq("gone", false))
+      .collect();
+    for (const x of rows) if (inGroup(r, { id: x.sid, grade: x.g ?? null, demo: r.demo })) await ring(sKey(x.sid), `📣 ${me.n} ஆசிரியர் (${r.name ?? "chat"}): ${said}`);
+  }
   return { id, rid: r._id, at: now };
 }
 

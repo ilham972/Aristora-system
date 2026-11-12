@@ -26,7 +26,9 @@ export type Tone =
   | "splat"
   | "squeak"
   | "whoosh"
-  | "tweet";
+  | "tweet"
+  // 12 Nov 2026: something new for him while the app is on the screen
+  | "alert";
 const KEY = "aristora.family.sound";
 
 export function soundOn(): boolean {
@@ -188,11 +190,16 @@ export function sound(kind: Tone, step = 0) {
       return play([{ f: 220, to: 900, at: 0, len: 0.32, wave: "triangle", vol: 0.5 }, { f: 900, to: 300, at: 0.3, len: 0.25, wave: "triangle", vol: 0.3 }], 0.09);
     case "tweet":
       return play([{ f: 2200, to: 2900, at: 0, len: 0.07 }, { f: 2300, to: 3100, at: 0.12, len: 0.08 }], 0.07);
+    // The app's own ring (12 Nov 2026, the founder: "they can't hear that even though the notification arrived"): the
+    // tweet above, 0.15 s at 7% loudness, was what rang for a new message while the app was open. Four bells, as loud
+    // as the app plays anything.
+    case "alert":
+      return play(bells([1568, 2093, 1568, 2093], 0.17, 0.5), 0.55);
   }
 }
 
-/** A tiny buzz on Android (iPhones have none). */
-export function buzz(ms = 8) {
+/** A tiny buzz on Android (iPhones have none); a pattern for something new (12 Nov 2026). */
+export function buzz(ms: number | number[] = 8) {
   try {
     navigator.vibrate?.(ms);
   } catch {

@@ -11441,6 +11441,32 @@ body.tm-on .toasts {
   display: grid;
   gap: 2px;
 }
+/* Phone alerts, who is reached (12 Nov 2026): each list its label, then names by grade number. */
+.us-who {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.us-who > b {
+  flex: 0 0 100%;
+}
+.us-who.red > b {
+  color: var(--red, #c62828);
+}
+.us-who.amber > b {
+  color: var(--amber, #b26a00);
+}
+.us-who-g b {
+  display: inline-block;
+  min-width: 20px;
+  padding: 0 5px;
+  border-radius: 6px;
+  background: var(--line);
+  text-align: center;
+}
 /* Online explanations a day (12 Nov 2026): a small number beside its words. */
 .us-num {
   flex: none;

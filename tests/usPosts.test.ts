@@ -113,11 +113,14 @@ describe("posts and doubts on Us", () => {
       ["Devi", `/f/#us=${mid}`],
       ["Hana", `/f/#us=${mid}`],
     ]);
-    // Every grade chosen = everyone; a notice tells nobody; a photo alone is a post.
+    // Every grade chosen = everyone; a photo alone is a post. A notice tells the phones too (12 Nov 2026: "whatever
+    // ... we put, students want to get the notification"): everyone's that turned alerts on, a tap opens it.
     const all = await N().mutation(api.us.post, { text: "", ph: [await photo()], gs: [6, 7, 8, 9, 10, 11] });
     expect((await seen("Lina")) ?? (await ph.Lina.query(api.us.feed, {})).items.find((x) => x.id === all)).toBeDefined();
     expect((await ph.Kumar.query(api.us.feed, {})).items.find((x) => x.id === all)!.gs).toBeUndefined();
-    expect((await pushes()).length).toBe(2);
+    const told = await pushes();
+    expect(told.length).toBe(3);
+    expect(told.every((o) => o.url === `/f/#us=${all}` && o.text === "📣 Nila ஆசிரியர்: 📷")).toBe(true);
     const hist = await raw.run(async (ctx) => (await ctx.db.query("events").collect()).filter((e) => e.kind === "us-post").map((e) => e.value));
     expect(hist).toEqual(["8,10 question", "all"]);
   });

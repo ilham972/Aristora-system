@@ -1006,6 +1006,14 @@ export default defineSchema({
     p256dh: v.string(),
     auth: v.string(),
     at: v.number(),
+    /**
+     * How its last alert went (12 Nov 2026: before, a failed send left no trace and the founder couldn't know why a
+     * student heard nothing): `ok` = when the phone's push service last took one; `bad` = its answer when it refused
+     * or never answered (0), after the tries; cleared by the next one that goes. `tst` = his last test alert.
+     */
+    ok: v.optional(v.number()),
+    bad: v.optional(v.number()),
+    tst: v.optional(v.number()),
   })
     .index("by_student", ["studentId"])
     .index("by_endpoint", ["endpoint"]),

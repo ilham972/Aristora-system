@@ -20,18 +20,36 @@ export const US_PUSH_WAIT_MS = 5_000;
 export const VAPID_KEY = "push.vapid";
 /** A child on one phone: at most this many phones keep alerts (the oldest go). */
 export const PUSH_PHONES = 6;
+/**
+ * The words a phone shows, at most (12 Nov 2026): a push service refuses a notification above 4 KB, and Tamil is 3
+ * bytes a letter, so a long message once meant no alert at all.
+ */
+export const PUSH_WORDS = 240;
+/** His own test alert (the bell → Test alert) leaves this long after the tap: time to lock the phone. */
+export const PUSH_TEST_WAIT_MS = 8_000;
+/** A second test before this is the same test. */
+export const PUSH_TEST_EVERY_MS = 15_000;
+/** Worth another try: the push service never answered (0), is busy (429) or has its own trouble (5xx). Never a refusal. */
+export const retryable = (code: number): boolean => code === 0 || code === 429 || code >= 500;
+/** The test alert's words. */
+export const PUSH_TEST_TEXT = "🔔 இது ஒரு test. இந்த ஒலி கேட்டதா? இனி ஒவ்வொரு message உம் இப்படியே வரும்.";
 
 /**
  * The notification for a burst: one answer says itself; several say how many, then the last. A tap opens the bell, or
  * `url` (7 Nov 2026: the Us tab, "/f/#us", for a teacher's shout-out or 👏: the last one in the burst decides).
+ * 12 Nov 2026: the words are cut to PUSH_WORDS; each place has its own `tag` (a chat's alert no longer replaces a
+ * teacher's marking still unread on the lock screen); `force` = show it even while the app is on the screen (his test).
  */
-export function pushPayload(first: string, n: number, text: string, url?: string): { title: string; body: string; url: string; tag: string } {
+export function pushPayload(first: string, n: number, text: string, url?: string, force?: boolean): { title: string; body: string; url: string; tag: string; force?: true } {
+  // Us's bursts (8 Nov 2026) come from classmates too: "3 new" without "from the teacher".
+  const body = n > 1 ? (url?.includes("#us") || url?.includes("#chat") ? `${n} புதியவை. ${text}` : `ஆசிரியரிடமிருந்து ${n} புதியவை. ${text}`) : text;
+  const place = /#(?:chat|us)=([A-Za-z0-9:_-]+)/.exec(url ?? "")?.[1] ?? (url?.includes("#us") ? "us" : "bell");
   return {
     title: `${first} · ARISTORA`,
-    // Us's bursts (8 Nov 2026) come from classmates too: "3 new" without "from the teacher".
-    body: n > 1 ? (url?.includes("#us") ? `${n} புதியவை. ${text}` : `ஆசிரியரிடமிருந்து ${n} புதியவை. ${text}`) : text,
+    body: body.length > PUSH_WORDS ? `${body.slice(0, PUSH_WORDS - 1)}…` : body,
     url: url ?? "/f/#bell",
-    tag: `aristora-${first}`,
+    tag: `aristora-${first}-${place}`,
+    ...(force ? { force: true as const } : {}),
   };
 }
 

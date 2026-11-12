@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
+import type { PushWho } from "../convex/pushSubs";
 import type { UsBoard } from "../convex/us";
 import { OWL_KINDS, WELCOME_MAX, type UsKind } from "../convex/lib/us";
 import { mutate } from "./backend";
@@ -190,11 +191,56 @@ function OwnerCard(props: { b: UsBoard }) {
   );
 }
 
+/** Names by grade, the grade as a number only: "8 Hana, Raj · 9 Nila". */
+function byGrade(rows: PushWho[]) {
+  const gs = [...new Set(rows.map((r) => r.g))];
+  return gs.map((g) => (
+    <span key={String(g)} class="us-who-g">
+      <b>{g ?? "?"}</b> {rows.filter((r) => r.g === g).map((r) => r.n).join(", ")}
+    </span>
+  ));
+}
+
+/**
+ * Phone alerts: who is reached (12 Nov 2026, the founder: "the notification sometimes not reaching the students"). An
+ * alert goes only to a phone whose student turned alerts on, and until now nothing said who never did. The count, then
+ * the names to fix in class: alerts off, failing, no phone signed in.
+ */
+function AlertsCard() {
+  const who = useQuery<PushWho[]>(api.pushSubs.who, {});
+  if (!who) return null;
+  const of = (st: PushWho["st"]) => who.filter((r) => r.st === st);
+  const on = of("on");
+  const part = (label: string, rows: PushWho[], cls: string) =>
+    rows.length ? (
+      <p class={`us-who ${cls}`}>
+        <b>
+          {label} · {rows.length}
+        </b>
+        {byGrade(rows)}
+      </p>
+    ) : null;
+  return (
+    <section class="us-card" aria-label="Phone alerts">
+      <b>
+        Phone alerts: {on.length} of {who.length} students are reached
+      </b>
+      <small class="muted">
+        A student hears nothing until alerts are on in his app. In class: open his app → the gold “அறிவிப்புகளை இயக்கு” button → Allow → the bell → “Test அனுப்பு” → lock the phone: it must ring within 10 seconds. The volume and the sound are set on the phone (the bell's page says how).
+      </small>
+      {part("Alerts off (app on a phone)", of("off"), "red")}
+      {part("On, but the last alert failed", of("bad"), "amber")}
+      {part("No phone signed in", of("none"), "")}
+    </section>
+  );
+}
+
 export function UsSettings() {
   const b = useQuery<UsBoard>(api.us.board, {});
   return (
     <div class="settings-body us">
       <WhyCard owner={!!b?.owner} />
+      <AlertsCard />
       {!b ? <p class="muted">Loading…</p> : <OwnerCard b={b} />}
     </div>
   );

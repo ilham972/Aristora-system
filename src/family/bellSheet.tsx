@@ -9,10 +9,10 @@
 import type { BellItem } from "../../convex/family";
 import type { UsInboxItem } from "../../convex/lib/usTalk";
 import { useState } from "preact/hooks";
-import { keep } from "./net";
+import { keep, mutation } from "./net";
 import { picOf, usePics } from "./pics";
-import { pushable, pushOff, pushOn, stamp } from "./bell";
-import { sound } from "./sound";
+import { pushNow, pushOn, type Push } from "./alerts";
+import { pushOff, stamp } from "./bell";
 import { Avatar, Icon, Owl, OwlBadge, type IconName } from "./ui";
 
 const LOOK: Record<BellItem["what"], { icon: IconName; words: (b: BellItem) => string }> = {
@@ -45,12 +45,30 @@ const MARKS: Record<string, string> = { done: "✓", retake: "📷", ask: "💬"
 const SL = 330 * 60_000;
 const dayOf = (t: number) => Math.floor((t + SL) / 86_400_000);
 
-type Push = "on" | "off" | "busy" | "denied" | "no" | "fail";
-const pushNow = (): Push => (!pushable() ? "no" : keep("push") && Notification.permission === "granted" ? "on" : Notification.permission === "denied" ? "denied" : "off");
+/**
+ * What makes a phone quiet or late, in his words (12 Nov 2026, the founder: "the notification sound is low ... they
+ * can't hear that even though the notification arrived"). A web app cannot choose the alert's sound or how loud it
+ * is: the phone decides. So the card says where the phone decides it, and the test proves it.
+ */
+function LoudHelp() {
+  return (
+    <details class="f-push-help">
+      <summary>ஒலி குறைவா? தாமதமா? இதைச் செய்</summary>
+      <ol>
+        <li>Phone இன் பக்க volume button → ⋮ → 🔔 Notification volume ஐ முழுவதும் கூட்டு. Silent / Do Not Disturb ஐ நிறுத்து.</li>
+        <li>Test அறிவிப்பு வந்ததும் அதை அழுத்திப் பிடி → ⚙ Settings → Sound: சத்தமான ஒலியைத் தேர்ந்தெடு; Pop on screen ஐ இயக்கு.</li>
+        <li>Redmi: Settings → Apps → Chrome → Autostart ON; Battery saver → No restrictions.</li>
+        <li>Data / Wi-Fi இயக்கத்தில் இருக்கட்டும்: இல்லையெனில் அது திரும்ப வரும்போதுதான் அறிவிப்பு வரும்.</li>
+      </ol>
+    </details>
+  );
+}
 
-/** Phone alerts, said plainly: on (a sound to hear, off); off (why and the button); not allowed (where to allow); none here. */
+/** Phone alerts, said plainly: on (a real test alert, how to make it loud, off); off (why and the button); not allowed (where to allow); none here. */
 function PushCard() {
   const [state, setState] = useState<Push>(pushNow);
+  // His test alert: null = not asked, a number = it is on its way to that many phones (0 = the server has none of his).
+  const [test, setTest] = useState<number | null>(null);
   const turnOn = async () => {
     setState("busy");
     try {
@@ -65,15 +83,26 @@ function PushCard() {
         <Icon name="bell" size={22} />
         <p>
           <b>இந்த phone இல் அறிவிப்பு வரும் ✓</b>
-          <small>ஆசிரியர் திருத்தியதும், Us இல் உனக்கு யாராவது எழுதியதும், app மூடியிருந்தாலும்.</small>
+          <small>{test === null ? "ஆசிரியர் எழுதியதும், திருத்தியதும், app மூடியிருந்தாலும்." : test ? "8 விநாடிகளில் வரும்: இப்போதே phone ஐ lock செய்து கேள்!" : "இந்த phone பதிவாகவில்லை: நிறுத்து, பிறகு மீண்டும் இயக்கு."}</small>
           <span class="f-push-acts">
-            <button type="button" class="f-linkbtn" onClick={() => sound("tweet")}>
-              🔊 ஒலி கேள்
+            <button
+              type="button"
+              class="f-linkbtn"
+              aria-label="Send me a test alert"
+              onClick={() =>
+                void mutation("pushSubs:test").then(
+                  (n) => setTest(n as number),
+                  () => setTest(0),
+                )
+              }
+            >
+              🔔 Test அனுப்பு
             </button>
-            <button type="button" class="f-linkbtn" onClick={() => void pushOff().then(() => setState("off"))}>
+            <button type="button" class="f-linkbtn" onClick={() => void pushOff(true).then(() => setState("off"))}>
               நிறுத்து
             </button>
           </span>
+          <LoudHelp />
         </p>
       </div>
     );
@@ -95,7 +124,9 @@ function PushCard() {
         <Icon name="bell" size={22} />
         <p>
           <b>அறிவிப்புக்கு அனுமதி இல்லை</b>
-          <small>Chrome: ⋮ → Settings → Notifications → app.aristora.org → Allow. பிறகு இங்கே தொடு:</small>
+          <small>
+            1. Chrome: ⋮ → Settings → Notifications → app.aristora.org → Allow. 2. அதுவும் இல்லையெனில் phone Settings → Apps → Chrome → Notifications ஐ இயக்கு. பிறகு இங்கே தொடு:
+          </small>
           <button type="button" class="f-btn gold f-pushon" onClick={() => setState(pushNow())}>
             மீண்டும் பார்
           </button>

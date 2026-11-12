@@ -17,6 +17,7 @@ import { computeMaster } from "../convex/lib/master";
 import { comesBack, gateOf, gatePasses, gatePct, halfMarks, redoPool } from "../convex/lib/family";
 import type { KeyQ } from "../convex/lib/phone";
 import { owedOf, PHOTO_BYTES, PHOTO_URLS_PER_DAY, VOICE_BYTES, VOICE_ONLY, WHY } from "../convex/lib/photos";
+import { pushPayload, PUSH_TEST_TEXT, PUSH_WORDS, retryable } from "../convex/lib/push";
 import schema from "../convex/schema";
 import { readWorkbookHtml } from "../src/workbookFile";
 import { addPerson, asOwner, asPhone } from "./helpers";
@@ -610,7 +611,7 @@ describe("photos from home", () => {
     });
     const job = await raw.mutation(internal.pushSubs.take, { studentId: hana });
     expect(job).toMatchObject({ pub: "PUB", priv: "PRIV", subs: [{ endpoint: sub.endpoint }] });
-    expect(JSON.parse(job!.payload)).toEqual({ title: "Hana · ARISTORA", body: "ஆசிரியரிடமிருந்து 2 புதியவை. Nila Q8 ஐத் திருத்தினார் (2/2).", url: "/f/#bell", tag: "aristora-Hana" });
+    expect(JSON.parse(job!.payload)).toEqual({ title: "Hana · ARISTORA", body: "ஆசிரியரிடமிருந்து 2 புதியவை. Nila Q8 ஐத் திருத்தினார் (2/2).", url: "/f/#bell", tag: "aristora-Hana-bell" });
     expect(await raw.mutation(internal.pushSubs.take, { studentId: hana })).toBeNull();
     // The public key only (never the private one); the phone signed out of ARISTORA gets nothing.
     expect(await fam().query(api.pushSubs.key, {})).toBe("PUB");
@@ -622,6 +623,62 @@ describe("photos from home", () => {
     // A dead address is forgotten; his removal takes his rows.
     await raw.mutation(internal.pushSubs.drop, { endpoint: sub.endpoint });
     expect(await raw.query(internal.pushSubs.count, { studentId: hana })).toBe(0);
+  });
+
+  test("phone alerts that reach (12 Nov 2026): his test alert, each phone's result, who is reached, short words, a tag per place", async () => {
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout"] });
+    vi.setSystemTime(new Date("2026-11-12T19:00:00+05:30"));
+    const scheduled = async () => await raw.run(async (ctx) => (await ctx.db.system.query("_scheduled_functions").collect()).map((f) => [f.name, f.args[0]]));
+    const sub = { endpoint: "https://push.example/send/abc123", p256dh: "BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM", auth: "tBHItJI5svbpez7KI4CCXg" };
+    // The teachers' list: his app is on a phone, alerts never turned on.
+    const me = async () => (await picked().query(api.pushSubs.who, {})).find((r) => r.id === hana);
+    await expect(raw.query(api.pushSubs.who, {})).rejects.toThrow(/signed out/);
+    expect(await me()).toMatchObject({ n: "Hana K", g: 8, st: "off", phones: 0 });
+    // No phone of his: a test goes nowhere and says so.
+    await expect(raw.mutation(api.pushSubs.test, { token: "nobody-0123456789abcdefghijklmnopqrstuvwxyz" })).rejects.toThrow(/signed out/);
+    expect(await fam().mutation(api.pushSubs.test, {})).toBe(0);
+    expect(await scheduled()).toEqual([]);
+    // Alerts on: a test is one real alert, a few seconds later (time to lock the phone); a second tap is the same test.
+    await fam().mutation(api.pushSubs.add, sub);
+    await raw.run(async (ctx) => void (await ctx.db.insert("meta", { key: "push.vapid", value: { pub: "PUB", priv: "PRIV" } })));
+    expect(await me()).toMatchObject({ st: "on", phones: 1 });
+    expect(await fam().mutation(api.pushSubs.test, {})).toBe(1);
+    expect(await fam().mutation(api.pushSubs.test, {})).toBe(1);
+    expect(await scheduled()).toEqual([["push:send", { studentId: hana, test: true }]]);
+    // It needs no waiting alert, is shown even with the app open (`force`), and leaves a waiting one alone.
+    await raw.run(async (ctx) => void (await ctx.db.insert("pushOut", { studentId: hana, n: 1, text: "x", at: Date.now(), url: "/f/#chat=room1" })));
+    const job = await raw.mutation(internal.pushSubs.take, { studentId: hana, test: true });
+    expect(JSON.parse(job!.payload)).toEqual({ title: "Hana · ARISTORA", body: PUSH_TEST_TEXT, url: "/f/#bell", tag: "aristora-Hana-bell", force: true });
+    expect(await raw.run(async (ctx) => (await ctx.db.query("pushOut").collect()).length)).toBe(1);
+    // A chat's alert has its own tag (it never replaces a marking still on the lock screen) and isn't "from the teacher".
+    expect(JSON.parse((await raw.mutation(internal.pushSubs.take, { studentId: hana }))!.payload)).toMatchObject({ body: "x", tag: "aristora-Hana-room1" });
+    expect(pushPayload("Hana", 3, "💬 Arun: hi", "/f/#chat=room1").body).toBe("3 புதியவை. 💬 Arun: hi");
+    expect(pushPayload("Hana", 1, "x", "/f/#us").tag).toBe("aristora-Hana-us");
+    // Long words are cut: above 4 KB a push service refuses the whole alert.
+    const long = pushPayload("Hana", 1, "அ".repeat(2000), "/f/#us=m1");
+    expect(long.body.length).toBe(PUSH_WORDS);
+    expect(new TextEncoder().encode(JSON.stringify(long)).length).toBeLessThan(1500);
+    // What is worth another try: no answer, busy, the service's own trouble; never a refusal or a dead address.
+    expect([0, 429, 500, 503].every(retryable)).toBe(true);
+    expect([201, 400, 403, 404, 410, 413].some(retryable)).toBe(false);
+    // Each phone's result is kept: a refusal shows him as failing in the teachers' list; the next one that goes clears it;
+    // so does the phone giving its address again (the app does at every open).
+    await raw.mutation(internal.pushSubs.sent, { studentId: hana, results: [{ endpoint: sub.endpoint, code: 403 }] });
+    expect(await me()).toMatchObject({ st: "bad", phones: 1 });
+    await raw.mutation(internal.pushSubs.sent, { studentId: hana, results: [{ endpoint: sub.endpoint, code: 201 }] });
+    expect(await me()).toMatchObject({ st: "on" });
+    const row = await raw.run(async (ctx) => (await ctx.db.query("pushSubs").collect())[0]);
+    expect(typeof row.ok).toBe("number");
+    expect(row.bad).toBeUndefined();
+    await raw.mutation(internal.pushSubs.sent, { studentId: hana, results: [{ endpoint: sub.endpoint, code: 0 }] });
+    expect(await me()).toMatchObject({ st: "bad" });
+    await fam().mutation(api.pushSubs.add, sub);
+    expect(await me()).toMatchObject({ st: "on", phones: 1 });
+    // A phone signed out of ARISTORA: no phone at all.
+    await raw.run(async (ctx) => {
+      for (const d of await ctx.db.query("familyDevices").collect()) await ctx.db.patch(d._id, { revokedAt: Date.now() });
+    });
+    expect(await me()).toMatchObject({ st: "none", phones: 0 });
   });
 
   test("phone alerts: the first phone asks the server to make its keys, once", async () => {

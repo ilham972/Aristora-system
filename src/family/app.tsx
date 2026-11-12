@@ -130,6 +130,18 @@ function fixWorlds(m: FamilyMe | null): FamilyMe | null {
   return { ...m, worlds: m.worlds.map((w) => (w.book === undefined ? { ...w, book: true } : w)) };
 }
 
+/**
+ * Something new for him while the app is on the screen (12 Nov 2026): the app's loud ring and a buzz, once for one
+ * moment (a phone alert and the bell's new count often say the same thing a second apart).
+ */
+let rang = 0;
+function ring() {
+  if (Date.now() - rang < 4000) return;
+  rang = Date.now();
+  sound("alert");
+  buzz([200, 100, 200]);
+}
+
 export function App() {
   const [screen, setScreen] = useState<Screen>(firstScreen);
   const [acc, setAcc] = useState<Account | null>(current);
@@ -158,6 +170,11 @@ export function App() {
     () => (parts ? parts.watchUpdates({ page: "/f/", checkAfter: 30 * 60_000, safe: () => !sendingNow() && !parts.busyHere() }) : undefined),
     [parts],
   );
+  // At every open, and for each child he switches to (12 Nov 2026): a phone that allows alerts gives its address again
+  // (alerts.tsx pushSync), so an address the browser changed never leaves him without alerts.
+  useEffect(() => {
+    if (parts && acc) parts.pushSync();
+  }, [parts, acc?.id]);
   const screenRef = useRef(screen);
   screenRef.current = screen;
   const sheetRef = useRef(sheet);
@@ -196,9 +213,9 @@ export function App() {
         removeAccount(twin.id);
         switchTo(a.id);
       }
-      // Something new in the bell since he last looked (8 Nov 2026): a soft sound and the bell jumps (TopRow).
+      // Something new in the bell since he last looked (8 Nov 2026): the app rings and the bell jumps (TopRow).
       const fresh = (x: FamilyMe) => (x.inboxNew ?? 0) + x.bell.filter((b) => b.fresh).length;
-      if (before && fresh(m) > fresh(before)) sound("tweet");
+      if (before && fresh(m) > fresh(before)) ring();
       // A Stage that opened since he last looked: its moment (the map shows it too).
       const opened = before ? m.worlds.filter((w) => w.open && w.book && !before.worlds.find((x) => x.unitId === w.unitId)?.open) : [];
       if (opened.length) {
@@ -382,6 +399,9 @@ export function App() {
       // An alert while the app is on the screen (8 Nov 2026): no notification; the app rings and shows the words.
       if (d?.k === "new") {
         if (d.body) toast(`🔔 ${d.body}`);
+        // 12 Nov 2026: it rings here too. A chat's message changes no count of the bell, so reading `me` again rang
+        // for nothing: a message in a group arrived in silence while the app was open.
+        ring();
         void loadMe();
       }
     };
@@ -803,6 +823,7 @@ export function App() {
             />
           )}
         </main>
+        {parts && me && <parts.AlertNudge onBell={openBell} />}
         <BottomBar tab={tab} us={!!me?.us} n={me?.chat ? me.chat.g + me.chat.d + (me.chat.h ?? 0) : 0} onTab={pickTab} />
         <Surprises active={sheet === null} />
       </>

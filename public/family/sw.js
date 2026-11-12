@@ -76,6 +76,12 @@ self.addEventListener("fetch", (e) => {
 // notification opens the app on its bell; an open app is told instead (it opens the bell itself).
 // 8 Nov 2026 (his voice note: "the alert need to be give the sound ... instantly ... like WhatsApp"): the phone's own
 // sound and a buzz; and while the app is on the screen, no notification: the app itself rings and shows the words.
+// 12 Nov 2026 ("the notification sometimes not reaching the students"):
+// - Only an Android phone may skip the notification while the app is on the screen. An iPhone counts every push that
+//   shows nothing and, after three, cancels this phone's alerts for good; so everywhere else it is always shown.
+// - `force` (his own test alert) is always shown: the test is of the phone's real sound.
+// - It never ends without one of the two: if telling the open app fails, the notification is shown.
+const ANDROID = /Android/.test(self.navigator.userAgent);
 self.addEventListener("push", (e) => {
   let d = {};
   try {
@@ -83,24 +89,27 @@ self.addEventListener("push", (e) => {
   } catch (_) {
     d = { body: e.data ? e.data.text() : "" };
   }
+  const show = () =>
+    self.registration.showNotification(d.title || "ARISTORA", {
+      body: d.body || "",
+      tag: d.tag || "aristora",
+      renotify: true,
+      silent: false,
+      vibrate: [300, 120, 300, 120, 300],
+      timestamp: Date.now(),
+      icon: "/icon-192.png",
+      badge: "/icon-192.png",
+      data: { url: d.url || "/f/" },
+    });
   e.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
-      const open = list.find((c) => c.visibilityState === "visible" && new URL(c.url).pathname.startsWith("/f/"));
-      if (open) {
-        open.postMessage({ k: "new", body: d.body || "", url: d.url || "/f/" });
-        return;
-      }
-      return self.registration.showNotification(d.title || "ARISTORA", {
-        body: d.body || "",
-        tag: d.tag || "aristora",
-        renotify: true,
-        silent: false,
-        vibrate: [120, 60, 120],
-        icon: "/icon-192.png",
-        badge: "/icon-192.png",
-        data: { url: d.url || "/f/" },
-      });
-    }),
+    (ANDROID && !d.force
+      ? self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+          const open = list.find((c) => c.visibilityState === "visible" && new URL(c.url).pathname.startsWith("/f/"));
+          if (!open) return show();
+          open.postMessage({ k: "new", body: d.body || "", url: d.url || "/f/" });
+        })
+      : show()
+    ).catch(show),
   );
 });
 

@@ -17,6 +17,8 @@ export { CropSheet } from "./crop";
 // Us (7 Nov 2026) has its own file since 8 Nov 2026: usParts.ts (later.ts loadUs).
 // The bell's page (8 Nov 2026: only a tap shows it; its words, with Us's lines, are heavy for the first load).
 export { BellScreen } from "./bellSheet";
+// Phone alerts kept on at every open, and the reminder to turn them on (12 Nov 2026: alerts.tsx).
+export { AlertNudge, pushSync } from "./alerts";
 // His photo's sheet (Me uses it): a teacher's own photo too (8 Nov 2026, the class app's Us tab: staff.tsx).
 export { PhotoSheet } from "./photo";
 // The Shop (10 Nov 2026): the top row's coin or Home's PAYDAY card opens it (its style in profile.css).

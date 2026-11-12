@@ -1108,12 +1108,27 @@ test("photos from home: a drawing photographed in the level, marked by a person 
   });
   await F.reload();
   await contains(F.locator(".f-bell-n"), "1");
+  // A phone that never answered the alerts question is reminded above the bottom bar (12 Nov 2026); ✕ = not today.
+  await contains(F.locator(".f-nudge"), "அறிவிப்புகளை இயக்கு");
+  await noSideScroll(F);
+  await shot(F, "fam-ph08a-nudge");
+  await F.locator(".f-nudge").getByRole("button", { name: "Later" }).click();
+  await until(async () => (await F.locator(".f-nudge").count()) === 0, "the reminder goes for today");
+  await F.evaluate(() => {
+    for (const k of Object.keys(localStorage)) if (k.endsWith(".pushLater")) localStorage.removeItem(k);
+  });
   await F.locator(".f-bellb").click();
   await contains(F.locator(".f-bellitem.ask"), "Nila கேட்கிறார்: Where is the answer for (b)?");
   await contains(F.locator(".f-bellitem.ask small"), "Level 1 · Q10");
   await F.getByRole("button", { name: "Turn on phone alerts" }).click();
   await until(async () => (await F.locator(".f-pushcard.on").count()) > 0, "alerts on (the server makes its keys first)", 15_000);
   await contains(F.locator(".f-pushcard.on"), "அறிவிப்பு வரும்");
+  // His own test alert (12 Nov 2026): a real one to this phone in a few seconds, so he hears the phone's real sound;
+  // and where the phone decides how loud it is.
+  await F.getByRole("button", { name: "Send me a test alert" }).click();
+  await contains(F.locator(".f-pushcard.on"), "8 விநாடிகளில் வரும்");
+  await F.locator(".f-push-help summary").click();
+  await contains(F.locator(".f-push-help"), "Notification volume");
   await noSideScroll(F);
   await shot(F, "fam-ph08b-bell");
   await F.locator(".f-bellitem.ask").click();
@@ -2468,6 +2483,8 @@ test("Us: closed until the owner opens it; the owl's guide; his welcome; the owl
   await C.getByRole("button", { name: /Settings/ }).click();
   await C.locator(".seg").getByRole("button", { name: /^Community/ }).click();
   await contains(C.locator(".us-why"), "How it should feel");
+  // Phone alerts, who is reached (12 Nov 2026): no phone here turned them on.
+  await contains(C.locator('section[aria-label="Phone alerts"]'), "Phone alerts: 0 of");
   await contains(C.locator(".us-open"), "Closed");
   await C.locator(".us-open").getByRole("button", { name: "Open" }).click();
   await contains(C.locator(".toast").last(), "open on every phone");

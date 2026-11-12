@@ -2358,14 +2358,47 @@ learning app of our education institute"): one profile, his class times, what he
     `bellSheet.tsx`, screen `bell` in `app.tsx`, depth 1; a line of Us opened from it is `post` with `from: "bell"`:
     Back returns to the page; a level's book goes back to its Stage as before). Its header says how many are new (the
     owl in party mood) or "எல்லாம் பார்த்தாய் ✓"; then **phone alerts said plainly** (`PushCard`: off = 🔔 அறிவிப்புகளை
-    இயக்கு, big; on = ✓ with 🔊 ஒலி கேள் (the app's own sound) and நிறுத்து; not allowed = where to allow it in Chrome and
+    இயக்கு, big; on = ✓ with 🔔 Test அனுப்பு (12 Nov 2026: a real alert; before, 🔊 ஒலி கேள் played the app's own sound) and நிறுத்து; not allowed = where to allow it in Chrome and
     மீண்டும் பார்; a phone without push = the iPhone's Add to Home Screen); chips எல்லாம் · ✓ திருத்தம் · Us; the lines
     by day (இன்று, நேற்று, முன்பு; the time only, a date before yesterday), each with a face (the teacher's letter, a
     student's photo) and a mark (✓ 📷 💬 ↩ 👏 👀 ✎ ❓ 🌟), new ones with a dot and a ring. **Instantly** (his word): Us's
     alerts gather 5 s (`US_PUSH_WAIT_MS`), not a minute (a teacher's marking still gathers 60 s); a phone alert has the
     phone's own sound and a buzz (`vibrate`); while the app is on the screen the service worker shows no notification
-    but tells the app (`{ k: "new", body }`): the app shows the words (a toast "🔔 …"), reads `me` again and rings
-    (`tweet`, also when a correction is new: `fresh`) with the bell jumping.
+    but tells the app (`{ k: "new", body }`; Android only since 12 Nov 2026): the app shows the words (a toast "🔔 …"),
+    rings (`alert` since 12 Nov 2026, also when a correction is new: `fresh`) and reads `me` again, the bell jumping.
+  - **Alerts that reach** (12 Nov 2026, the founder: "the most important feature on this app is notification ... the
+    notification sometimes not reaching the students ... the sound is low ... find all the possibilities"). What was
+    wrong and what is built:
+    - *Nobody told a phone to turn alerts on* (only the bell's page had the button; an alert goes nowhere for a
+      student who never tapped it). Now a gold button above the bottom bar on every main tab, "🔔 அறிவிப்புகளை இயக்கு"
+      (`AlertNudge`; ✕ = not today), and "🔕 அறிவிப்பு வராது: சரிசெய்" when the phone blocked them (opens the bell's
+      page; ✕ = 3 days). The owner sees who is reached: **Settings → Community → Phone alerts** ("34 of 112 students
+      are reached", then by grade: alerts off, on but the last one failed, no phone signed in; `pushSubs.who`).
+    - *Late:* alerts were sent as "normal" urgency, which a sleeping Android phone may hold until it next wakes. Now
+      `urgency: "high"`.
+    - *Lost:* one busy moment of the phone's push service lost the alert (no second try, no trace). Now three tries (at
+      once, +3 s, +12 s) and each phone's result on its row (`ok`, `bad`); a message longer than a push allows (4 KB)
+      is cut to 240 letters instead of refused.
+    - *A phone that says "on" but isn't:* its push address was sent once, on the day of Turn on. Now the app gives it
+      again at every open and for each child switched to (`pushSync`), and makes a new one when the old was made with
+      other server keys. நிறுத்து is remembered (`push` = 0): opening the app doesn't turn alerts on again.
+    - *iPhones:* a push that shows no notification counts against the phone; after three, Safari cancels its alerts.
+      The app-on-screen case (told the app, showed nothing) did exactly that. Now only Android does it; everywhere
+      else the notification is always shown.
+    - *Silence with the app open:* the ring was a 0.15 s chirp at 7% loudness, and a chat's message didn't ring at all.
+      Now four bells at the app's full loudness and a buzz (`sound("alert")`, `ring()` in app.tsx), for every alert.
+    - *"The sound is low":* a web app cannot choose the notification's sound or loudness; the phone does. The bell's
+      card had "🔊 ஒலி கேள்", which played the app's own soft chirp, not the phone's sound. Now **🔔 Test அனுப்பு**: a real
+      alert to his phones 8 s later, shown even with the app open ("இப்போதே phone ஐ lock செய்து கேள்!"; 0 phones = "நிறுத்து,
+      பிறகு மீண்டும் இயக்கு"), and **ஒலி குறைவா? தாமதமா? இதைச் செய்**: the notification volume and Silent / Do Not Disturb,
+      the site's sound and Pop on screen (hold the test alert → Settings), a Redmi's Autostart and battery saver for
+      Chrome, data on. The blocked card also names the phone's own Settings → Apps → Chrome → Notifications.
+    - *Who is rung:* a **teacher's** message in a group rings every student in it ("📣 Nila ஆசிரியர் (Grade 8): …"; a
+      student's message still rings only who it tags or answers), and a teacher's **notice** in Us rings every student
+      of its grades ("📣 Nila ஆசிரியர்: …", a tap opens it), like her question did. Each chat, Us and the bell have their
+      own notification (`tag`), so a chat no longer replaces a marking unread on the lock screen.
+    - Not built, his decision: a real Android app (the only way to ship ARISTORA's own loud sound); a WhatsApp or SMS
+      fallback for phones that can never get alerts (an iPhone 7, a student who blocks them).
   - **The bell and phone alerts** (7 Nov 2026, his voice note: "the family app don't have any alert features ... even
     though we corrected, students don't know"; his answer: the bell in the app AND an alert on the phone). The top
     row's bell (`.f-bellb`) with a red count of new ones (`.f-bell-n`); its sheet (`BellSheet`, `src/family/bellSheet.tsx`

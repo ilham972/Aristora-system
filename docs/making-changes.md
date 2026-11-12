@@ -320,6 +320,20 @@ EOF
   Chromium says `Notification.permission` "denied" whatever `grantPermissions` says: the run-through stubs
   `Notification`, `navigator.serviceWorker` and `PushManager` in an init script. To check web-push itself, send to a
   local https server and decrypt with `http_ece` (done once on 7 Nov 2026: 201, the Tamil text intact).
+- **What a web app can and cannot do about a phone alert** (12 Nov 2026, the founder: "some students say the
+  notification sound is low ... sometimes not reaching"). Cannot: choose the sound, its loudness, the vibration pattern
+  (Android 8+ ignores `vibrate` and `silent`: the phone's notification channel for the site decides), or get past Silent
+  / Do Not Disturb, data turned off, or a Redmi that stopped Chrome (Autostart off, battery saver). Only a real Android
+  app (its own notification channel with its own sound file) can ship a sound: not built, his decision. Can, and must:
+  send as `urgency: "high"` (the library's default "normal" lets a sleeping phone hold the alert until it wakes); try
+  again on no answer / 429 / 5xx; never end a `push` event without `showNotification` on an iPhone (three silent pushes
+  and Safari cancels the phone's alerts for good), so only Android may tell the open app instead; give the push address
+  again at every open (`pushSync`: the browser changes it without telling the server); keep the words short (4 KB at
+  most, Tamil is 3 bytes a letter: `PUSH_WORDS`); ask every phone to turn alerts on (`AlertNudge`), since nothing goes
+  to a phone that never did. The app's own ring (`sound("alert")`, the app open) plays at the phone's *media* volume and
+  only after a first tap. To check a phone: the bell → Test அனுப்பு → lock it; to check the class: Settings → Community →
+  Phone alerts. A change to `public/family/sw.js` reaches a phone the next time it opens the app online (the browser
+  compares the file); the cache number only needs to go up for a new look.
 - **A second try's half marks are in two places on purpose** (10 Nov 2026): `rh` on the question and inside its level's
   `got` (`secondTry`), so every reader of a level's marks (Progress, the gate, the reports) counts them with no change.
   `xpItems` gives `rh` on the day of the second try and takes it off the question's `t` (the level's day). Anything new
