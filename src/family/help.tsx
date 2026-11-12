@@ -6,13 +6,13 @@
 // - HelpTop: on top of a thread: the question, what each student typed with the wrong parts in rose, how it stands.
 // - HelpMenu: the teacher's ⋮ (Explained, Not now, Send to another teacher, hide a name or a photo): never a big
 //   button, his words: "mistakenly teachers can press that".
-// - VoiceRec / Voice: a teacher's voice note (the phone's own recorder, 2 minutes), and its player.
+// - VoiceRec / Voice: a voice note (the phone's own recorder: a teacher 2 minutes, a student 1), and its player.
 // - HelpList: his explanations (or the teachers' queue) with its filters, on top of Chats.
 
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { ChatMsg } from "../../convex/chat";
 import type { HelpLine, HelpStart, HelpTeacher } from "../../convex/help";
-import type { HelpAsk, HelpHead } from "../../convex/lib/helpView";
+import type { HelpAsk, HelpHead, HelpPart } from "../../convex/lib/helpView";
 import { drawQuestion } from "../questionView";
 import { keep, mutation, NetError, query, uploadPhoto } from "./net";
 import { picOf, usePics } from "./pics";
@@ -20,8 +20,6 @@ import { buzz, sound } from "./sound";
 import { agoShort, sendPicked, usePicker } from "./talk";
 import { Avatar, Icon, Maths, problemWords, Sheet, showSheet, toast, Waiting } from "./ui";
 
-/** A voice note's longest (convex/lib/help.ts VOICE_MAX_S). */
-const VOICE_MAX_S = 120;
 const LIST_MS = 20_000;
 
 const STATE: Record<HelpAsk["st"], { ta: string; en: string; cls: string }> = {
@@ -139,65 +137,125 @@ export function AskSheet(props: { unitId: string; q: number; onClose: () => void
 
 // ---------------------------------------------------------------- on top of a thread
 
-/** The book's page inside the thread: readable, nothing to tap. */
-const PAPER = `.qv{border-radius:12px;padding:10px;font:500 16px/1.55 "Baloo Thambi 2","Noto Sans Tamil",system-ui,sans-serif;color:#1c1a3a;-webkit-user-select:none;user-select:none}
+/**
+ * The book's page inside the thread: readable, nothing to tap, and as wide as the phone (12 Nov 2026, his screenshot:
+ * "left and right have so much white margin ... makes to scroll too much"): almost no padding, a sub-question's label
+ * only as wide as its words, no extra indent.
+ */
+const PAPER = `.qv{border-radius:10px;padding:6px 4px 2px;font:500 15.5px/1.5 "Baloo Thambi 2","Noto Sans Tamil",system-ui,sans-serif;color:#1c1a3a;-webkit-user-select:none;user-select:none}
 .qv :not(svg):not(svg *):not(.mi):not(.mi *){font-family:"Baloo Thambi 2","Noto Sans Tamil",system-ui,sans-serif!important}
 .qv .qn,.qv .pm,.qv .mk{display:none!important}
+.qv .sq{margin-left:0!important}
+.qv .rp{grid-template-columns:auto minmax(0,1fr)!important;column-gap:6px!important;gap:0 6px}
+.qv .rl{width:auto!important;min-width:0!important;flex:none;padding:0!important;margin:0!important}
 .qv [data-fill]{display:inline-block;min-width:2em;border-bottom:2px dashed #cbc3ff}`;
 
-function Printed(props: { id: string; staff: boolean }) {
+type Printed = { html: string | null; css: string | null; key?: string | null; kp?: { p: string; a: string }[] };
+
+/** A key's words: **bold** kept, its maths drawn. */
+const Rich = (props: { s: string }) => (
+  <>
+    {props.s.split("**").map((r, i) =>
+      i % 2 ? (
+        <b key={i}>
+          <Maths s={r} />
+        </b>
+      ) : (
+        <span key={i}>{r}</span>
+      ),
+    )}
+  </>
+);
+
+/**
+ * One sub-question's answer, right under it (12 Nov 2026, his words: "below the each of questions put the student's
+ * answer. If it is right, highlight that. If it is wrong, highlight in red ... and also real answer key near that for
+ * each sub questions. This answer key is only for teachers"): what he typed (✓ blue, ✗ rose, ✍ the teacher's part),
+ * then, for a teacher, the key. `slot` = its place in the printed question; without one it is a row of the plain list.
+ */
+function Answer(props: { label: string; part?: HelpPart; k?: string; staff: boolean; slot?: string }) {
+  const p = props.part;
+  // In its slot the printed label is right above it: only a split part's note ("பெயர்") is said again.
+  const label = props.slot ? (props.label.split(" · ")[1] ?? "") : props.label;
+  const typed = p?.typed.some((t) => t);
+  return (
+    <div class="h-ans" slot={props.slot}>
+      {label && <small class="h-al">{label}</small>}
+      {p && (
+        <span class={`h-a ${p.ok === false ? "no" : p.ok ? "ok" : "tch"}`}>
+          <i aria-hidden="true">{p.ok === false ? "✗" : p.ok ? "✓" : "✍"}</i>
+          {typed ? p.typed.map((t, j) => <Maths key={j} s={`${j ? ", " : ""}${t || "–"}`} />) : p.ok === null ? (props.staff ? "on paper" : "தாளில்") : props.staff ? "blank" : "விடை இல்லை"}
+        </span>
+      )}
+      {props.staff && props.k && (
+        <span class="h-k">
+          <i>Key</i>
+          <Rich s={props.k} />
+        </span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The question as printed, with each part's answer under its own sub-question (the slots of `drawQuestion`, as on a
+ * Level). A book whose questions aren't in the app: the same answers as a plain list, part by part. `ask` = whose
+ * answers (his own on his phone; the student the teacher picked).
+ */
+function Printed(props: { id: string; staff: boolean; ask?: HelpAsk }) {
   const host = useRef<HTMLDivElement>(null);
-  const [x, setX] = useState<{ html: string | null; css: string | null; key?: string | null } | null>(null);
+  const [x, setX] = useState<Printed | null>(null);
   useEffect(() => {
     query("help:question", { id: props.id }).then(
-      (r) => setX(r as never),
+      (r) => setX(r as Printed),
       () => setX({ html: null, css: null }),
     );
   }, [props.id]);
+  const parts = props.ask?.parts;
+  // The parts in the key's order: from the key for a teacher (a student who did it on paper typed nothing), else his own.
+  const labels = x?.kp?.map((k) => k.p) ?? parts?.map((p) => p.p) ?? [];
+  const sig = labels.join("\n");
   useEffect(() => {
-    if (host.current && x?.html) return drawQuestion(host.current, x.html, x.css ?? "", PAPER);
-  }, [x]);
+    if (host.current && x?.html) return drawQuestion(host.current, x.html, x.css ?? "", PAPER, labels);
+  }, [x, sig]);
   if (!x) return <Waiting />;
+  const rows = (slots: boolean) => labels.map((l, i) => <Answer key={i} label={l} part={parts?.[i]} k={x.kp?.[i]?.a} staff={props.staff} slot={slots ? `p${i}` : undefined} />);
   return (
     <>
-      {x.html ? <div class="h-paper" ref={host} /> : <p class="h-none">{props.staff ? "This book's questions aren't in the app (Books → Q)." : "இந்தக் கேள்வி உன் புத்தகத்தில் உள்ளது."}</p>}
-      {props.staff && x.key && (
+      {x.html ? (
+        <div class="h-paper" ref={host}>
+          {rows(true)}
+        </div>
+      ) : (
+        <>
+          <p class="h-none">{props.staff ? "This book's questions aren't in the app (Books → Q): the answers part by part." : "கேள்வி உன் புத்தகத்தில் உள்ளது. உன் விடைகள்:"}</p>
+          <div class="h-plist">{rows(false)}</div>
+        </>
+      )}
+      {props.staff && !labels.length && x.key && (
         <p class="h-key">
-          <b>Key</b>{" "}
-          {x.key.split("**").map((r, i) => (i % 2 ? <b key={i}><Maths s={r} /></b> : <span key={i}>{r}</span>))}
+          <b>Key</b> <Rich s={x.key} />
         </p>
       )}
     </>
   );
 }
 
-/** What he typed, part by part: the wrong parts in rose (his words: "highlight which one is wrong"). */
-function Parts(props: { a: HelpAsk }) {
-  const parts = props.a.parts;
-  if (!parts?.length) return null;
-  return (
-    <span class="h-parts">
-      {parts.map((p, i) => (
-        <i key={i} class={p.ok === false ? "no" : p.ok ? "ok" : "tch"}>
-          {p.p && <small>{p.p}</small>}
-          {p.ok === null ? "✍" : p.typed.some((t) => t) ? p.typed.map((t, j) => <Maths key={j} s={`${j ? ", " : ""}${t || "–"}`} />) : "–"}
-        </i>
-      ))}
-    </span>
-  );
-}
-
 /**
- * On top of a thread: which question (Stage, Level, Q), the question as printed on a tap, and each student: how it
- * stands, his marks, what he typed. A student sees his own answer; a teacher everyone's, with ⋮ on each.
+ * On top of a thread: which question (Stage, Level, Q), each student (how it stands, his marks; a teacher taps one to
+ * see his answers, ⋮ on each), and the question with the picked student's answer under each sub-question (the key
+ * beside it for a teacher). A student sees only his own answers.
  */
 export function HelpTop(props: { id: string; help: HelpHead; staff: boolean; onChange: () => void; onMate: (id: string) => void; onPhoto: () => void }) {
   const h = props.help;
-  const [show, setShow] = useState(false);
+  const [show, setShow] = useState(true);
+  const [sel, setSel] = useState<string | null>(null);
   usePics(h.asks.map((a) => a.pic));
   const mine = h.asks.find((a) => a.mine);
   const rows = props.staff ? h.asks : h.asks.filter((a) => a.mine);
   const others = h.asks.length - rows.length;
+  // Whose answers the question shows: his own; for a teacher the one she tapped, else the first still waiting.
+  const shown = props.staff ? (h.asks.find((a) => a.id === sel) ?? h.asks.find((a) => a.st === "open") ?? h.asks[0]) : mine;
   return (
     <section class="h-top" aria-label={`Q${h.q}`}>
       <div class="h-top-h">
@@ -209,14 +267,20 @@ export function HelpTop(props: { id: string; help: HelpHead; staff: boolean; onC
           <small>{h.unit}</small>
         </p>
         <button type="button" class={`h-showq${show ? " on" : ""}`} aria-pressed={show} onClick={() => setShow(!show)}>
-          {props.staff ? (show ? "Close" : "Question") : show ? "மூடு" : "கேள்வி"}
+          {props.staff ? (show ? "Hide" : "Question") : show ? "மூடு" : "கேள்வி"}
         </button>
       </div>
-      {show && <Printed id={props.id} staff={props.staff} />}
       <ul class="h-asks">
         {rows.map((a) => (
-          <li key={a.id} class={STATE[a.st].cls}>
-            <button type="button" class="h-who" disabled={!a.sid || !!a.mine} onClick={() => a.sid && props.onMate(a.sid)}>
+          <li key={a.id} class={`${STATE[a.st].cls}${props.staff && rows.length > 1 && a.id === shown?.id ? " sel" : ""}`}>
+            <button
+              type="button"
+              class="h-who"
+              disabled={!props.staff || rows.length < 2}
+              aria-pressed={props.staff && rows.length > 1 ? a.id === shown?.id : undefined}
+              aria-label={props.staff && rows.length > 1 ? `Show ${a.n}'s answers` : undefined}
+              onClick={() => setSel(a.id)}
+            >
               <Avatar name={a.n} size="s" pic={picOf(a.pic)} />
               <b>{a.mine ? "நீ" : a.n}</b>
             </button>
@@ -225,7 +289,6 @@ export function HelpTop(props: { id: string; help: HelpHead; staff: boolean; onC
                 {a.got}/{a.max}
               </em>
             )}
-            <Parts a={a} />
             <span class="h-st">
               {props.staff ? STATE[a.st].en : STATE[a.st].ta}
               {a.st === "done" && a.by ? ` · ${a.by}` : ""}
@@ -241,6 +304,12 @@ export function HelpTop(props: { id: string; help: HelpHead; staff: boolean; onC
         ))}
       </ul>
       {!props.staff && others > 0 && <p class="h-others">+ இதே கேள்வியில் இன்னும் {others} பேர்</p>}
+      {show && (
+        <>
+          {props.staff && rows.length > 1 && shown && <p class="h-whose">{shown.n}'s answers · tap a name for another's</p>}
+          <Printed id={props.id} staff={props.staff} ask={shown} />
+        </>
+      )}
       {!props.staff && mine?.st === "open" && (
         <p class="h-wait">
           {mine.ph ? (
@@ -371,10 +440,13 @@ function voiceType(): string | undefined {
 }
 
 /**
- * A teacher's voice note (his words: "explaining in the voice note like a WhatsApp"): 🎤 starts the phone's own
- * recorder (nothing added to the app), ■ stops (by itself at 2 minutes), then she hears it and sends or drops it.
+ * A voice note (his words: "explaining in the voice note like a WhatsApp"; students too since his ask of 12 Nov 2026,
+ * "please give the voice note feature for students also"): 🎤 starts the phone's own recorder (nothing added to the
+ * app), ■ stops (by itself at `max` seconds), then it is heard and sent or dropped.
  */
-export function VoiceRec(props: { onSend: (au: { f: string; d: number }) => Promise<unknown> }) {
+export function VoiceRec(props: { onSend: (au: { f: string; d: number }) => Promise<unknown>; max: number; staff: boolean }) {
+  const MAX = props.max;
+  const say = (en: string, ta: string) => toast(props.staff ? en : ta, true);
   const [st, setSt] = useState<"idle" | "rec" | "ready" | "busy">("idle");
   const [secs, setSecs] = useState(0);
   const [url, setUrl] = useState<string | null>(null);
@@ -405,12 +477,12 @@ export function VoiceRec(props: { onSend: (au: { f: string; d: number }) => Prom
     if (!keepIt) drop();
   };
   const start = async () => {
-    if (typeof MediaRecorder === "undefined" || !navigator.mediaDevices?.getUserMedia) return toast("This phone's browser can't record. Update it, or type the explanation.", true);
+    if (typeof MediaRecorder === "undefined" || !navigator.mediaDevices?.getUserMedia) return say("This phone's browser can't record. Update it, or type the explanation.", "இந்த phone இல் குரல் பதிவு இயலாது. எழுதி அனுப்பு.");
     let stream: MediaStream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch {
-      return toast("The microphone is blocked: allow it for this site in the browser's settings.", true);
+      return say("The microphone is blocked: allow it for this site in the browser's settings.", "Microphone தடுக்கப்பட்டுள்ளது: browser settings இல் இந்தத் தளத்துக்கு அனுமதி கொடு.");
     }
     const type = voiceType();
     const rec = new MediaRecorder(stream, { ...(type ? { mimeType: type } : {}), audioBitsPerSecond: 24_000 });
@@ -428,7 +500,7 @@ export function VoiceRec(props: { onSend: (au: { f: string; d: number }) => Prom
       const d = Math.max(1, Math.round((Date.now() - x.from) / 1000));
       if (!blob.size) return drop();
       x.blob = blob;
-      setSecs(Math.min(d, VOICE_MAX_S));
+      setSecs(Math.min(d, MAX));
       setUrl(URL.createObjectURL(blob));
       setSt("ready");
     };
@@ -439,7 +511,7 @@ export function VoiceRec(props: { onSend: (au: { f: string; d: number }) => Prom
     x.tick = window.setInterval(() => {
       const s = Math.floor((Date.now() - x.from) / 1000);
       setSecs(s);
-      if (s >= VOICE_MAX_S) stop(true);
+      if (s >= MAX) stop(true);
     }, 500);
   };
   const send = async () => {
@@ -452,7 +524,7 @@ export function VoiceRec(props: { onSend: (au: { f: string; d: number }) => Prom
       sound("send");
       drop();
     } catch (e) {
-      toast(e instanceof NetError && e.offline ? "No signal: the voice note is still here, send it again." : problemWords(e), true);
+      toast(e instanceof NetError && e.offline ? (props.staff ? "No signal: the voice note is still here, send it again." : "இணையம் இல்லை: பதிவு இங்கேயே உள்ளது, மீண்டும் அனுப்பு.") : problemWords(e), true);
       setSt("ready");
     }
   };
@@ -468,7 +540,7 @@ export function VoiceRec(props: { onSend: (au: { f: string; d: number }) => Prom
         <>
           <i class="h-dot" aria-hidden="true" />
           <b>
-            {clock(secs)} <small>/ {clock(VOICE_MAX_S)}</small>
+            {clock(secs)} <small>/ {clock(MAX)}</small>
           </b>
           <span class="f-sp" />
           <button type="button" class="h-rb" aria-label="Cancel the recording" onClick={() => stop(false)}>

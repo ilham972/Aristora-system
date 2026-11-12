@@ -17,8 +17,14 @@ import type { MQ, MState } from "./master";
 export const HELP_KEEP_MS = 365 * DAY_MS;
 /** Waiting on one teacher this long with nothing from any teacher: every teacher sees it as hers. */
 export const HELP_LATE_MS = 12 * 60 * 60_000;
-/** A voice note: seconds, bytes (2 minutes of speech is 250 to 900 KB, by phone). Teachers only. */
+/**
+ * A voice note in a thread: seconds, bytes (2 minutes of speech is 250 to 900 KB, by phone). A teacher's 2 minutes; a
+ * student's 1 minute and 5 a day in one thread (his ask of 12 Nov 2026: "please give the voice note feature for
+ * students also"; the limits are mine: a thread is kept a year).
+ */
 export const VOICE_MAX_S = 120;
+export const VOICE_STUDENT_S = 60;
+export const VOICE_STUDENT_DAY = 5;
 export const VOICE_BYTES = 1_500_000;
 /** The photos he comes in with (his working). */
 export const HELP_PHOTOS = 2;

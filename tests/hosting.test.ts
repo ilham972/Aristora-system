@@ -55,8 +55,8 @@ describe("the two addresses", () => {
     const head = (src: string, key: string) => rules.find((r) => r.source === src)?.headers.find((h) => h.key === key)?.value ?? "";
     expect(head("/((?!f/).*)", "Permissions-Policy")).toContain("microphone=(self)");
     // The teachers' Us tab is the family app's page in a frame (/f/?staff): a teacher records her explanation there
-    // (an online explanation's thread), so /f/ may use the microphone too. Students still never record: their screens
-    // have no recorder and the server refuses a student's voice note (tests/help.test.ts).
+    // (an online explanation's thread), so /f/ may use the microphone too; a student records there as well (his ask
+    // the same day), nowhere else: the server refuses a voice note outside a thread (tests/help.test.ts).
     expect(head("/f/(.*)", "Permissions-Policy")).toContain("microphone=(self)");
     for (const src of ["/((?!f/).*)", "/f/(.*)"]) expect(head(src, "Content-Security-Policy")).toMatch(/media-src [^;]*https:\/\/\*\.convex\.cloud/);
   });

@@ -788,8 +788,8 @@ EOF
 - **Two voice recorders, on purpose** (12 Nov 2026, two chats the same night): `src/voiceNote.tsx` (the class app's home
   lane, 60 s) and `src/family/help.tsx` `VoiceRec` (an explanation's thread in the Us frame, 2 minutes). The Us frame is
   the family app's page (`/f/?staff`): it can't import the teachers' store, so it has its own. Recording there needs
-  three things at once: `Permissions-Policy: microphone=(self)` on `/f/` (vercel.json; students' screens simply have no
-  recorder and the server refuses a student's voice note), `allow="microphone"` on the iframe (`usFrame.tsx`), and
+  three things at once: `Permissions-Policy: microphone=(self)` on `/f/` (vercel.json; students record too since the same day,
+  only in an explanation's thread: the server refuses a voice note anywhere else), `allow="microphone"` on the iframe (`usFrame.tsx`), and
   `media-src https://*.convex.cloud` to play it. `tests/hosting.test.ts` holds the headers.
 - **An explanation's thread is a chat room** (`usRooms` `k: "h"`): anything that lists or counts rooms by kind must say
   what it does with "h" (`lineOf` maps it out of the chat lists; `access` has its own branch; `wipeChats` drops a removed student's

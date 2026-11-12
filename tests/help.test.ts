@@ -30,11 +30,13 @@ const fresh = () => convexTest(schema, import.meta.glob("../convex/**/*.ts"));
 function fakeKey(): KeyAnswer[] {
   const out: KeyAnswer[] = [];
   for (let q = 1; q <= 52; q++) out.push({ q, a: q % 10 === 0 ? "சிறப்புப் பெயர்" : String(q * 3) });
+  // Q8 has two sub-questions (2 marks): the thread shows each one's answer under it, the key beside it for a teacher.
+  out[7] = { q: 8, parts: [{ p: "i", a: "24", m: 1 }, { p: "ii", a: "work = **48**", m: 1 }] };
   for (let q = 53; q <= 73; q++) out.push({ q, parts: [{ p: "i", a: `**${q}**`, m: outOf(BOOK.data, q)! }] });
   return out;
 }
-/** Level 1 with Q7 and Q8 wrong. */
-const LEVEL1 = [1, 2, 3, 4, 5, 6, 9].map((q) => ({ q, a: [String(q * 3)] })).concat([{ q: 7, a: ["1"] }, { q: 8, a: ["42"] }]);
+/** Level 1 with Q7 wrong and Q8 half wrong (its i wrong, its ii right). */
+const LEVEL1 = [1, 2, 3, 4, 5, 6, 9].map((q) => ({ q, a: [String(q * 3)] })).concat([{ q: 7, a: ["1"] }, { q: 8, a: ["42", "48"] }]);
 
 describe("the rules", () => {
   test("askable: lost marks, not explained, not taught; late: 12 hours with no teacher's word", () => {
@@ -125,7 +127,7 @@ describe("online explanations", () => {
     const room = await h().query(api.chat.room, { id });
     expect(room.head).toMatchObject({ k: "h", name: "Q8", can: { write: true, photos: true } });
     expect(room.head.help).toMatchObject({ no: 1, n: 1, q: 8, open: 1, tname: "Nila", tid: nila });
-    expect(room.head.help!.asks).toMatchObject([{ n: "Hana K", st: "open", ph: true, mine: true, got: 0, parts: [{ ok: false, typed: ["42"] }] }]);
+    expect(room.head.help!.asks).toMatchObject([{ n: "Hana K", st: "open", ph: true, mine: true, got: 1, max: 2, parts: [{ p: "i", ok: false, typed: ["42"] }, { p: "ii", ok: true, typed: ["48"] }] }]);
     expect(room.msgs).toMatchObject([{ ask: true, mine: true }]);
     expect(room.msgs[0].ph).toHaveLength(1);
     // The short read every few seconds carries no question card (the phone keeps the first one).
@@ -148,13 +150,14 @@ describe("online explanations", () => {
     expect(await tn().query(api.chat.tunread, {})).toBe(1);
     expect(await tr().query(api.chat.tunread, {})).toBe(0);
     const room = await tn().query(api.chat.troom, { id });
-    expect(room.head.help).toMatchObject({ own: true, asks: [{ n: "Hana K", parts: [{ ok: false, typed: ["42"] }] }] });
-    expect(await tn().query(api.help.tquestion, { id })).toMatchObject({ key: "24" });
+    expect(room.head.help).toMatchObject({ own: true, asks: [{ n: "Hana K", parts: [{ p: "i", ok: false }, { p: "ii", ok: true }] }] });
+    // The key, whole and part by part (in the order of his typed parts); never on a student's call.
+    expect(await tn().query(api.help.tquestion, { id })).toMatchObject({ key: "(i) 24\n(ii) work = **48**", kp: [{ p: "i", a: "24" }, { p: "ii", a: "work = **48**" }] });
+    expect(Object.keys(await h().query(api.help.question, { id })).sort()).toEqual(["css", "html"]);
     // Her voice note: an audio file, a minute. A student's, a file too big, a photo passed as one: refused.
     const voice = await file("audio/webm;codecs=opus");
     vi.setSystemTime(Date.now() + 5000);
     await tn().mutation(api.chat.tsend, { id, au: { f: voice, d: 61 } });
-    await expect(h().mutation(api.chat.send, { id, au: { f: await file("audio/webm"), d: 5 } })).rejects.toThrow(/ஆசிரியர்களுக்கு/);
     await expect(tn().mutation(api.chat.tsend, { id, au: { f: await file("audio/mp4", VOICE_BYTES + 1), d: 5 } })).rejects.toThrow(/too long/);
     await expect(tn().mutation(api.chat.tsend, { id, au: { f: await file("image/jpeg"), d: 5 } })).rejects.toThrow(/too long/);
     await expect(tn().mutation(api.chat.tsend, { id, au: { f: voice, d: 61 } })).rejects.toThrow(/already/);
@@ -167,6 +170,19 @@ describe("online explanations", () => {
     expect(await tn().query(api.chat.tunread, {})).toBe(0);
     expect((await mq(hana, 8)).x).toBeUndefined();
     expect((await askRow(hana, 8)).st).toBe("open");
+    // A student's too, in his own open thread (his ask the same day): 1 minute at most, 5 a day; never in a group or a chat.
+    const hers = await file("audio/mp4");
+    await h().mutation(api.chat.send, { id, au: { f: hers, d: 20 } });
+    await expect(h().mutation(api.chat.send, { id, au: { f: await file("audio/mp4"), d: 90 } })).rejects.toThrow(/1 நிமிடம்/);
+    const g8 = (await h().query(api.chat.rooms, {})).groups[0].id;
+    await expect(h().mutation(api.chat.send, { id: g8, au: { f: await file("audio/mp4"), d: 5 } })).rejects.toThrow(/online விளக்கத்தில்/);
+    for (let i = 0; i < 4; i++) await h().mutation(api.chat.send, { id, au: { f: await file("audio/mp4"), d: 5 } });
+    await expect(h().mutation(api.chat.send, { id, au: { f: await file("audio/mp4"), d: 5 } })).rejects.toThrow(/5 குரல் பதிவுகள்/);
+    await raw.run(async (ctx) => {
+      for (const c of await ctx.db.query("usChat").collect()) if (c.au && c.sid && c.au.f !== hers) await ctx.db.delete(c._id);
+    });
+    expect((await h().query(api.chat.room, { id })).msgs[2]).toMatchObject({ mine: true, au: { d: 20 } });
+    expect(await tn().query(api.chat.tunread, {})).toBe(1); // his voice note is new for her
     // A teacher's link goes; a student's is refused as everywhere.
     await tn().mutation(api.chat.tsend, { id, text: "https://youtu.be/abc123 இதைப் பார்" });
     await expect(h().mutation(api.chat.send, { id, text: "see https://example.com" })).rejects.toThrow(/Links/);
@@ -190,6 +206,7 @@ describe("online explanations", () => {
 
   test("the next student joins the same thread and sees everything; a teacher hides a name, a photo or both", async () => {
     const id = await send(h(), 8, nila);
+    await h().mutation(api.chat.send, { id, au: { f: await file("audio/mp4"), d: 9 } });
     await tn().mutation(api.chat.tsend, { id, text: "முதலில் 8 ஐ 3 ஆல் பெருக்கு." });
     await tn().mutation(api.help.tdone, { id });
     // Mira got the same question wrong: the thread is there, with its teacher; she picks nobody.
@@ -197,7 +214,8 @@ describe("online explanations", () => {
     expect(await send(m(), 8, raj)).toBe(id);
     expect(await askRow(mira, 8)).toMatchObject({ st: "open", tid: nila });
     const room = await m().query(api.chat.room, { id });
-    expect(room.msgs.map((x) => x.n)).toEqual(["Hana K", "Nila", "Mira J"]);
+    expect(room.msgs.map((x) => x.n)).toEqual(["Hana K", "Hana K", "Nila", "Mira J"]);
+    expect(room.msgs[1].au).toMatchObject({ d: 9 }); // Hana's voice note: Mira hears it
     expect(room.msgs[0].ph).toHaveLength(1);
     expect(room.head.help!.asks).toMatchObject([{ n: "Hana K", st: "done" }, { n: "Mira J", st: "open", mine: true }]);
     expect(room.head.help!.asks[0].parts).toBeUndefined(); // another student's typed answer isn't hers to read
@@ -213,6 +231,9 @@ describe("online explanations", () => {
     expect(veiled.msgs[0]).toMatchObject({ n: "மாணவர்", hid: true, ask: true });
     expect(veiled.msgs[0].ph).toBeUndefined();
     expect(veiled.msgs[0].w.startsWith("s:")).toBe(false);
+    // Her voice names her as much as her name: hidden with either.
+    expect(veiled.msgs[1]).toMatchObject({ n: "மாணவர்", hid: true });
+    expect(veiled.msgs[1].au).toBeUndefined();
     expect(JSON.stringify(veiled)).not.toContain(hana);
     expect(JSON.stringify(veiled)).not.toContain("Hana");
     expect((await h().query(api.chat.room, { id })).msgs[0]).toMatchObject({ n: "Hana K", mine: true });
@@ -222,6 +243,7 @@ describe("online explanations", () => {
     const half = (await m().query(api.chat.room, { id })).msgs[0];
     expect(half).toMatchObject({ n: "மாணவர்" });
     expect(half.ph).toHaveLength(1);
+    expect((await m().query(api.chat.room, { id })).msgs[1].au).toBeUndefined();
     // One tap covers everyone waiting.
     expect(await tn().mutation(api.help.tdone, { id })).toEqual({ n: 1 });
     expect((await mq(mira, 8)).x).toBeDefined();

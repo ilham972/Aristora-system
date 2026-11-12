@@ -15,7 +15,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { actor, allowed, familyActor, familyViewer, viewer } from "./lib/auth";
 import { fail, log } from "./lib/backend";
-import { slDayStart } from "./lib/day";
+import { DAY_MS, slDayStart } from "./lib/day";
 import { internalMutation, mutation } from "./lib/fn";
 import {
   bumpRx,
@@ -47,7 +47,7 @@ import {
   uKey,
   writerOf,
 } from "./lib/chat";
-import { asksIn, HELP_KEEP_MS, isLate, unanswered, VOICE_BYTES, VOICE_MAX_S } from "./lib/help";
+import { asksIn, HELP_KEEP_MS, isLate, unanswered, VOICE_BYTES, VOICE_MAX_S, VOICE_STUDENT_DAY, VOICE_STUDENT_S } from "./lib/help";
 import { helpHeadOf, type HelpHead } from "./lib/helpView";
 import { alertStudent } from "./lib/push";
 import { RACE_GRADES } from "./lib/race";
@@ -479,7 +479,8 @@ async function msgOf(ctx: QueryCtx, c: Doc<"usChat">, me: Me, tp: ReturnType<typ
       ...(!hide.n && c.pic ? { pic: c.pic } : {}),
       ...(c.t ? { t: c.t } : {}),
       ...(pics ? { ph: pics } : {}),
-      ...(hide.p && c.ph?.length ? { hid: true as const } : {}),
+      // His voice names him as much as his name: hidden with either.
+      ...((hide.p && c.ph?.length) || c.au ? { hid: true as const } : {}),
       ...(c.ak ? { ask: true as const } : {}),
       ...(c.re ? { re: c.re } : {}),
       ...(c.rx ? { rx: c.rx } : {}),
@@ -674,26 +675,35 @@ const sendArgs = {
 };
 
 /**
- * A voice note just uploaded (12 Nov 2026, his words: "explaining in the voice note like a WhatsApp"): a teacher's, in
- * an explanation's thread, an audio file under its size and 2 minutes, never used before; marked in usFiles (it goes
- * with its message).
+ * A voice note just uploaded (12 Nov 2026, his words: "explaining in the voice note like a WhatsApp"; the same day:
+ * "please give the voice note feature for students also"): only in an explanation's thread, an audio file under its
+ * size, never used before; a teacher's up to 2 minutes, a student's 1 minute and 5 a day in one thread (he writes
+ * there only while his own question is open: `access`). Marked in usFiles (it goes with its message).
  */
-async function takeVoice(ctx: MutationCtx, me: Me, r: Doc<"usRooms">, au: { f: Id<"_storage">; d: number }): Promise<{ f: Id<"_storage">; d: number }> {
-  if (me.k !== "u") fail("குரல் பதிவுகள் ஆசிரியர்களுக்கு மட்டும்: எழுதி அல்லது படம் எடுத்து அனுப்பு.");
-  if (r.k !== "h") fail("Voice notes are for the explanation threads.");
+async function takeVoice(ctx: MutationCtx, me: Me, r: Doc<"usRooms">, au: { f: Id<"_storage">; d: number }, now: number): Promise<{ f: Id<"_storage">; d: number }> {
+  const student = me.k === "s";
+  if (r.k !== "h") fail(student ? "குரல் பதிவு online விளக்கத்தில் மட்டும்." : "Voice notes are for the explanation threads.");
+  const max = student ? VOICE_STUDENT_S : VOICE_MAX_S;
   const meta = await ctx.db.system.get(au.f);
-  if (!meta) fail("The voice note didn't arrive. Record it again.");
+  if (!meta) fail(student ? "குரல் பதிவு வந்து சேரவில்லை. மீண்டும் பதிவு செய்." : "The voice note didn't arrive. Record it again.");
   const type = meta.contentType ?? "";
-  if (meta.size > VOICE_BYTES || !(type.startsWith("audio/") || type.startsWith("video/webm") || type.startsWith("video/mp4"))) fail("That voice note is too long. Record a shorter one.");
+  if (meta.size > VOICE_BYTES || !(type.startsWith("audio/") || type.startsWith("video/webm") || type.startsWith("video/mp4"))) fail(student ? "இந்தக் குரல் பதிவு மிக நீளம். சுருக்கமாகப் பதிவு செய்." : "That voice note is too long. Record a shorter one.");
   const d = Math.round(au.d);
-  if (!(d >= 1 && d <= VOICE_MAX_S + 5)) fail(`A voice note is at most ${VOICE_MAX_S / 60} minutes.`);
+  if (!(d >= 1 && d <= max + 5)) fail(student ? `குரல் பதிவு ${max / 60} நிமிடம் வரை மட்டும்.` : `A voice note is at most ${max / 60} minutes.`);
+  if (student) {
+    const mine = await ctx.db
+      .query("usChat")
+      .withIndex("by_room", (q) => q.eq("rid", r._id).gt("at", now - DAY_MS))
+      .collect();
+    if (mine.filter((c) => c.au && c.sid === me.s._id).length >= VOICE_STUDENT_DAY) fail(`இன்றைக்கு ${VOICE_STUDENT_DAY} குரல் பதிவுகள் போதும்: எழுதி அல்லது படம் எடுத்து அனுப்பு.`);
+  }
   const had = await ctx.db
     .query("usFiles")
     .withIndex("by_f", (q) => q.eq("f", au.f))
     .first();
-  if (had) fail("That voice note was sent already.");
+  if (had) fail(student ? "இந்தக் குரல் பதிவு ஏற்கனவே அனுப்பப்பட்டது." : "That voice note was sent already.");
   await ctx.db.insert("usFiles", { f: au.f });
-  return { f: au.f, d: Math.min(d, VOICE_MAX_S) };
+  return { f: au.f, d: Math.min(d, max) };
 }
 
 async function sendIt(
@@ -724,7 +734,7 @@ async function sendIt(
   }
   const mt = await tagsIn(ctx, me, acc, args.mt);
   const ph = await takePhotos(ctx, args.ph, CHAT_PHOTOS);
-  const au = args.au ? await takeVoice(ctx, me, r, args.au) : undefined;
+  const au = args.au ? await takeVoice(ctx, me, r, args.au, now) : undefined;
   const id = await ctx.db.insert("usChat", {
     rid: r._id,
     ...(me.k === "s" ? { sid: me.s._id } : { by: me.u._id }),

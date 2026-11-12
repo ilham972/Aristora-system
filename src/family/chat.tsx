@@ -487,7 +487,7 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
               people={head.k === "g" ? people : undefined}
               onAt={head.k === "g" ? askMembers : undefined}
               onSend={send}
-              extra={head.k === "h" && props.staff ? <VoiceRec onSend={(au) => send("", [], [], au)} /> : undefined}
+              extra={head.k === "h" ? <VoiceRec staff={props.staff} max={props.staff ? 120 : 60} onSend={(au) => send("", [], [], au)} /> : undefined}
             />
           ) : (
             <p class="c-cant">{head.look ? "👁 Only the two of them write here." : (head.can.why ?? "இங்கே இப்போது எழுத முடியாது.")}</p>

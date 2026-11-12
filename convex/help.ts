@@ -25,7 +25,10 @@ import { DAY_MS, slDayStart } from "./lib/day";
 import { unitNumber } from "./lib/family";
 import { mutation } from "./lib/fn";
 import { askable, askOf, asksIn, bumpRoom, HELP_LIMIT_KEY, HELP_LIST_DAYS, HELP_PHOTOS, helpKey, helpLimit, isLate, unanswered } from "./lib/help";
+import { phoneKeyFor } from "./lib/homeWork";
+import type { KeyAnswer } from "./lib/key";
 import type { MState } from "./lib/master";
+import type { KeyQ } from "./lib/phone";
 import { keyText } from "./lib/photos";
 import { alertStudent } from "./lib/push";
 import { usCfg } from "./lib/us";
@@ -384,14 +387,36 @@ export const question = query({
   },
 });
 
-/** The same for a teacher, with the key's answer and working. */
+/**
+ * The key part by part, in the phone key's order (the order of a student's typed parts: convex/lib/helpView.ts), so a
+ * teacher reads each sub-question's answer beside the student's (12 Nov 2026, his words: "real answer key also near
+ * that for each sub questions. This answer key is only for teachers"). A printed part the key cut in two for the phone
+ * ("ii · பெயர்", "ii · சுற்றளவு") says its words once, on the first.
+ */
+function keyParts(raw: KeyAnswer | undefined, k: KeyQ | undefined): { p: string; a: string }[] {
+  if (!raw || !k) return [];
+  const said = new Set<string>();
+  return k.parts.map((p, i) => {
+    const base = p.p.split(" · ")[0];
+    const from = raw.parts?.length ? (raw.parts.find((x) => x.p === p.p) ?? raw.parts.find((x) => x.p === base) ?? (raw.parts.length === k.parts.length ? raw.parts[i] : undefined)) : undefined;
+    const words = from ? (from.a ?? "") : raw.parts?.length ? "" : (raw.a ?? "");
+    const a = (said.has(`${base}\n${words}`) ? "" : words) || p.words || p.a || "";
+    said.add(`${base}\n${words}`);
+    return { p: p.p, a };
+  });
+}
+
+/** The same for a teacher, with the key: whole (`key`) and part by part (`kp`). */
 export const tquestion = query({
   args: { token, id: v.string() },
-  handler: async (ctx, args): Promise<{ html: string | null; css: string | null; key: string | null }> => {
+  handler: async (ctx, args): Promise<{ html: string | null; css: string | null; key: string | null; kp: { p: string; a: string }[] }> => {
     await viewer(ctx, args.token, "any");
     const r = await roomOf(ctx, args.id);
     const key = await keyRow(ctx, r.hu!, "master");
-    return { ...(await printed(ctx, r)), key: keyText(key?.answers.find((a) => a.q === r.hq)) || null };
+    const raw = key?.answers.find((a) => a.q === r.hq);
+    const book = await bookFor(ctx, r.hu!, "master");
+    const k = book && key ? (await phoneKeyFor(ctx, r.hu!, asMaster(book), key.answers)).get(r.hq!) : undefined;
+    return { ...(await printed(ctx, r)), key: keyText(raw) || null, kp: keyParts(raw, k) };
   },
 });
 

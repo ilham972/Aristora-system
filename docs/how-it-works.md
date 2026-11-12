@@ -1908,14 +1908,27 @@ learning app of our education institute"): one profile, his class times, what he
       `help.ask`): 1 a photo of his working (1–2, cropped; required), 2 the teacher (or "the thread's teacher explained
       this to N already"); then his thread opens (`openRoom` → `setRoomHost` in `app.tsx`; Back returns to the book).
     - **The thread** = a chat with a card on top (`HelpTop`, sent only on a full read: `head.help`): Q, Stage, Level,
-      the question as printed on a tap (`help.question`; teachers also the key: `help.tquestion`), and each student:
-      his marks and **what he typed part by part, the wrong parts in rose** (`partsOf` from `familyAnswers`; his words:
-      "highlight which one is wrong, otherwise teacher need to explain everything"; a student sees only his own).
-      His photo is the first message (`ask`). A teacher's link shows as a ▶ button (students still can't send links).
-    - **A teacher's voice note** (`VoiceRec` / `Voice` in `help.tsx`): 🎤 → the phone's own recorder (MP4/AAC first,
-      else WebM/Opus, mono 24 kbps), at most **2 minutes** (`VOICE_MAX_S`, 1.5 MB), she hears it, Send. Teachers only
-      and only in a thread (`takeVoice`; `usChat.au`; marked in `usFiles`, deleted with its message). A second recorder
-      beside `src/voiceNote.tsx` (the home lane's, 60 s) because the Us frame can't load the teachers' store.
+      each student (marks, how it stands; ⋮ for a teacher), and **the question as printed, open, with each
+      sub-question's answer right under it** (the same day, his words: "below the each of questions put the student's
+      answer. If it is right, highlight that. If it is wrong, highlight in red ... and also real answer key near that
+      for each sub questions. This answer key is only for teachers"): `Printed` draws it with `drawQuestion`'s slots
+      (as a Level does) and puts an `Answer` in each: what he typed (✓ blue `.h-a.ok`, ✗ rose `.h-a.no`, ✍ the
+      teacher's part; `partsOf` from `familyAnswers`) and, for a teacher, **Key** (`.h-k`: `help.tquestion` `kp`,
+      the key part by part in the phone key's order: `keyParts`; never sent to a student, `help.question`). A book
+      whose questions aren't in the app: the same rows as a plain list (`.h-plist`). A student sees only his own
+      answers; a teacher sees the first student still waiting and **taps a name for another's** (`.h-asks li.sel`,
+      `.h-whose`). **Nearly as wide as the phone** (his screenshot: "left and right have so much white margin ...
+      makes to scroll too much"): the card 6 px from the edge, the paper to the card's edge, a sub-question's label
+      only as wide as its words (`PAPER` in `help.tsx`). His photo is the first message (`ask`). A teacher's link
+      shows as a ▶ button (students still can't send links).
+    - **Voice notes** (`VoiceRec` / `Voice` in `help.tsx`): 🎤 above the typing box → the phone's own recorder
+      (MP4/AAC first, else WebM/Opus, mono 24 kbps), heard, then Send. A teacher's up to **2 minutes**
+      (`VOICE_MAX_S`). **Students too** (his ask the same day, "please give the voice note feature for students
+      also"; my limits, since a thread is kept a year and classmates join it): **1 minute**, **5 a day in one
+      thread** (`VOICE_STUDENT_S`, `VOICE_STUDENT_DAY`), only in a thread and only while his own question is open;
+      hidden from the thread's other students with his name or his photos (a voice names him: `hid`). `takeVoice`;
+      `usChat.au`; marked in `usFiles`, deleted with its message. A second recorder beside `src/voiceNote.tsx` (the
+      home lane's, 60 s) because the Us frame can't load the teachers' store.
     - **Teachers:** the Us tab's number counts the threads waiting on her (`chat.tunread`); Us → Chats → **Online
       explanations** on top (`HelpList`, `help.tlist`): Mine (hers and the ⏰ late ones) · Everyone's · Closed (14 days),
       then Stage and student chips when the list is long (his ask: filters by student and unit). Students: the same

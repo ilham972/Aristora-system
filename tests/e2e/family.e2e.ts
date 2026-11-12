@@ -3848,7 +3848,17 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
     levels: BOOK.data.levels.map((l) => ({ to: l.to, max: l.max })),
     marks: BOOK.data.marks ?? {},
     replace: true,
-    key: fakeKey(),
+    // Q8 has two sub-questions here (a mark each): the thread shows each one's answer under it.
+    key: fakeKey().map((k) => (k.q === 8 ? { q: 8, parts: [{ p: "i", a: "24", m: 1 }, { p: "ii", a: "48", m: 1 }] } : k)),
+  });
+  // The book's questions as printed (made-up words): Q8 with its (i) and (ii).
+  await t.run(async (ctx) => {
+    const q8 =
+      '<div class="qq"><span class="qn">8</span><div class="qt">A made-up question with two parts</div>' +
+      '<div class="rp"><span class="rl">(i)</span><span>A made-up first part</span></div>' +
+      '<div class="rp"><span class="rl">(ii)</span><span>A made-up second part</span></div></div>';
+    for (let q = 1; q <= 10; q++) await ctx.db.insert("questions", { unitId: u01, stage: "master", q, html: q === 8 ? q8 : `<div class="qq"><span class="qn">${q}</span><div class="qt">A made-up question number ${q}</div></div>` });
+    await ctx.db.insert("bookCss", { unitId: u01, stage: "master", css: ".qn { font-weight: 700; } .rp { display: flex; }", updatedAt: 0 });
   });
   const hana = await t.mutation(api.students.add, { ...as, name: "Hana K", grade: 8, term: 1, stage: "master", unitId: u01 });
   const mira = await t.mutation(api.students.add, { ...as, name: "Mira J", grade: 8, term: 1, stage: "master", unitId: u01 });
@@ -3874,11 +3884,11 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
   await stageNow(P, "Level 1");
   await P.locator(".f-lv.play").click();
   await contains(P.locator(".f-qn"), "Q1");
-  for (const a of [["3"], ["6"], ["1", "0"], ["1", "2"], ["1", "5"], ["1", "8"], ["n", "+", "6", "n", "-", "1"], ["9", "9"], ["1", "0"], ["9"], ["3", "0"]]) await type(P, a);
+  for (const a of [["3"], ["6"], ["1", "0"], ["1", "2"], ["1", "5"], ["1", "8"], ["n", "+", "6", "n", "-", "1"], ["9", "9"], ["4", "8"], ["1", "0"], ["9"], ["3", "0"]]) await type(P, a);
   await P.locator(".f-review").getByRole("button", { name: "Check ✓" }).click();
-  await contains(P.locator(".f-big"), "18");
+  await contains(P.locator(".f-big"), "19");
 
-  // The pill on Q8 (the only wrong one): her photo first, then the teacher; Send waits for both.
+  // The pill on Q8 (the only one with marks lost: its (i)): her photo first, then the teacher; Send waits for both.
   const q8 = P.locator(".f-bq", { has: P.locator(".f-rq", { hasText: "Q8" }) });
   await contains(q8.locator(".f-hpill"), "Explain online");
   expect(await P.locator(".f-hpill").count()).toBe(1);
@@ -3903,7 +3913,17 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
   // Her thread: Q8 on top, what she typed in rose, waiting on Nila; her photo as its first message.
   await contains(P.locator(".h-top-h"), "Q8");
   await contains(P.locator(".h-top-h"), "Stage 1 · Level 1");
-  await contains(P.locator(".h-parts i.no"), "99");
+  // The question as printed, open, nearly as wide as the phone; her answer under each sub-question: (i) wrong in rose,
+  // (ii) right in blue. Never the key on her phone.
+  const yOf = async (l: L) => (await l.first().boundingBox())!.y;
+  await contains(P.locator(".h-paper .h-a.no"), "99");
+  await contains(P.locator(".h-paper .h-a.ok"), "48");
+  const y = [await yOf(P.locator(".h-paper .rl", { hasText: "(i)" })), await yOf(P.locator(".h-a.no")), await yOf(P.locator(".h-paper .rl", { hasText: "(ii)" })), await yOf(P.locator(".h-a.ok"))];
+  expect([...y].sort((a, b) => a - b)).toEqual(y);
+  expect(await P.locator(".h-k").count()).toBe(0);
+  const paperBox = (await P.locator(".h-paper").boundingBox())!;
+  expect(paperBox.x).toBeLessThanOrEqual(10);
+  expect(paperBox.width).toBeGreaterThanOrEqual(340);
   await contains(P.locator(".h-wait"), "Nila ஆசிரியர்");
   await visible(P.locator(".f-msg.mine .f-pics img, .f-msg.mine img").first());
   expect(await askOf(hana, 8)).toMatchObject({ st: "open", ph: true, from: "s" });
@@ -3929,9 +3949,11 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
   await shot(C, "help04-teacher-queue");
   await line.click();
   // The thread for her: the key on Question, what Hana typed, her photo; nothing explained yet.
-  await contains(U.locator(".h-parts i.no"), "99");
-  await U.locator(".h-showq").click();
-  await contains(U.locator(".h-key"), "24");
+  await contains(U.locator(".h-paper .h-a.no"), "99");
+  await contains(U.locator(".h-paper .h-a.ok"), "48");
+  expect((await U.locator(".h-paper .h-k").allInnerTexts()).map((x) => x.replace(/\s+/g, " ").trim())).toEqual(["Key 24", "Key 48"]);
+  await noSideScroll(C);
+  await shot(C, "help04b-teacher-card");
   await contains(U.locator(".h-wait"), "Waiting on you");
   // Her voice note: Record (the fake microphone), the time, Stop, listen, Send.
   await U.locator(".h-mic").click();
@@ -3960,6 +3982,18 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
   expect(await P.locator(".h-bad").count()).toBe(0);
   await shot(P, "help07-voice-student");
 
+  // Hana answers with a voice note of her own (his ask, 12 Nov 2026: students too; 1 minute at most).
+  await P.locator(".h-mic").click();
+  await visible(P.locator(".h-rec.rec .h-dot"));
+  await contains(P.locator(".h-rec.rec small"), "1:00");
+  await P.waitForTimeout(1300);
+  await P.locator(".h-rec").getByRole("button", { name: "Stop recording" }).click();
+  await P.locator(".h-rec").getByRole("button", { name: /^Send/ }).click();
+  await visible(P.locator(".f-msg.mine .h-voice"));
+  await until(async () => (await t.run(async (ctx) => (await ctx.db.query("usChat").collect()).filter((c) => c.au).length)) === 2, "her voice note on the server");
+  await noSideScroll(P);
+  await shot(P, "help07b-voice-from-student");
+
   // ⋮ → Explained (two taps: never by mistake): explained in class too, the thread shuts for her.
   await U.locator(".h-more").click();
   const menu = U.locator(".h-menu");
@@ -3980,18 +4014,25 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
   await shot(P, "help09-pill-done");
 
   // Mira got Q8 wrong too (her phone, through the server): the same thread, with everything in it; not explained yet.
-  await t.mutation(api.family.check, { token: MIRA, unitId: u01, n: 1, typed: [{ q: 1, a: ["3"] }, { q: 8, a: ["41"] }] });
+  await t.mutation(api.family.check, { token: MIRA, unitId: u01, n: 1, typed: [{ q: 1, a: ["3"] }, { q: 8, a: ["41", "48"] }] });
   const tid = (await askOf(hana, 8))!.rid;
   expect((await t.query(api.help.start, { token: MIRA, unitId: u01, q: 8 })).thread).toMatchObject({ id: tid, tname: "Nila", n: 1 });
   const png = async () => await t.run(async (ctx) => await ctx.storage.store(new Blob([Buffer.from(PAPER_PNG, "base64")], { type: "image/png" })));
   expect((await t.mutation(api.help.ask, { token: MIRA, unitId: u01, q: 8, ph: [{ s: await png(), b: await png(), w: 96, h: 72 }] })).id).toBe(tid);
   const hers = await t.query(api.chat.room, { token: MIRA, id: tid });
-  expect(hers.msgs.map((m) => m.n)).toEqual(["Hana K", "Nila", "Nila", "Mira J"]);
+  expect(hers.msgs.map((m) => m.n)).toEqual(["Hana K", "Nila", "Nila", "Hana K", "Mira J"]);
   expect(hers.msgs[1].au).toBeDefined();
   expect((await mq(mira, 8))?.x).toBeUndefined();
   // Nila's open thread: Mira waits; ⋮ on Hana → her name hidden from Mira's phone.
   await until(async () => (await U.locator(".h-asks li").count()) === 2, "Mira in the thread", 20_000);
   await contains(U.locator(".h-asks li.open"), "Mira J");
+  // The question shows the one still waiting (Mira: 41); a tap on Hana's name shows hers (99).
+  await contains(U.locator(".h-whose"), "Mira J's answers");
+  await contains(U.locator(".h-paper .h-a.no"), "41");
+  await U.locator(".h-asks li", { hasText: "Hana K" }).locator(".h-who").click();
+  await contains(U.locator(".h-whose"), "Hana K's answers");
+  await contains(U.locator(".h-paper .h-a.no"), "99");
+  await shot(C, "help09b-teacher-two");
   await U.locator(".h-asks li", { hasText: "Hana K" }).locator(".h-dots").click();
   await U.locator(".h-menu").getByRole("button", { name: /Hide his name/ }).click();
   await until(async () => (await t.query(api.chat.room, { token: MIRA, id: tid })).msgs[0].n === "மாணவர்", "Hana's name hidden from Mira");
