@@ -40,10 +40,12 @@ let K: Kit;
 /** Her style (her screens only): a string here, so the students' style files carry none of it. */
 const CSS = `
 .t-seg{display:flex;gap:2px;padding:3px;border-radius:999px;background:rgba(255,255,255,.18)}
-.t-seg button{height:34px;padding:2px 16px 0;border-radius:999px;color:#fff;font:800 14.5px/1 var(--display)}
+.t-seg button{height:34px;padding:2px 13px 0;border-radius:999px;color:#fff;font:800 14.5px/1 var(--display)}
 .t-seg button.on{background:#fff;color:var(--brand-2)}
 .t-me{display:flex;align-items:center;gap:8px;min-width:0;color:#fff;font:800 15px/1 var(--display);text-align:left}
 .t-me i{font-style:normal;font-size:12px;opacity:.8}
+.t-me>span:last-child{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.t-seg{flex:none}
 .t-mepic{position:relative;flex:none}
 .t-cam{position:absolute;right:-5px;bottom:-4px;width:19px;height:19px;border-radius:50%;background:#fff;display:grid;place-items:center;font-size:11px;font-style:normal!important;opacity:1!important;box-shadow:0 1px 3px rgba(0,0,0,.25)}
 .t-photo{display:grid;place-items:center;margin:4px 0 16px}
@@ -134,17 +136,21 @@ function StaffApp() {
     U = usp;
     usp.setStaffTools({ Spot: (p) => <SpotSheet {...p} />, Save: (p) => <SaveRow {...p} /> });
   }, [usp]);
-  const [tab, setTab] = useState<"us" | "race">(() => (K.keep<string>("tab") === "race" ? "race" : "us"));
+  // Us | Chat | Race (12 Nov 2026: the chats left Us for their own Chat, as on the students' phones).
+  const [tab, setTab] = useState<"us" | "chat" | "race">(() => {
+    const k = K.keep<string>("tab");
+    return k === "race" || k === "chat" ? k : "us";
+  });
   const [b, setB] = useState<UsBoard | null>(() => K.keep<UsBoard>("usb"));
   const [err, setErr] = useState<string | null>(null);
   const [mate, setMate] = useState<{ id: string; row: RaceRow | null } | null>(null);
   // A post or a doubt opened (its answers or replies).
   const [thread, setThread] = useState<string | null>(null);
   // Groups and chats (8 Nov 2026): the screens opened on top of Us, newest last (Back = one off).
-  const [chats, setChats] = useState<({ k: "room"; id: string } | { k: "people" } | { k: "all" })[]>([]);
+  const [chats, setChats] = useState<({ k: "room"; id: string } | { k: "all" })[]>([]);
   const chatsRef = useRef(chats);
   chatsRef.current = chats;
-  const chp = K.useChatParts(chats.length > 0);
+  const chp = K.useChatParts(chats.length > 0 || tab === "chat");
   const [sheet, setSheet] = useState<SheetRender | null>(null);
   const [grade, setGrade] = useState<number>(() => K.keep<number>("grade") ?? 8);
   const mateRef = useRef(mate);
@@ -213,7 +219,7 @@ function StaffApp() {
     };
   }, []);
 
-  const pick = (x: "us" | "race") => {
+  const pick = (x: "us" | "chat" | "race") => {
     if (x === tab) return;
     K.buzz();
     K.sound("tap");
@@ -240,7 +246,7 @@ function StaffApp() {
     setThread(id);
     window.scrollTo(0, 0);
   };
-  const openChat = (x: { k: "room"; id: string } | { k: "people" } | { k: "all" }) => {
+  const openChat = (x: { k: "room"; id: string } | { k: "all" }) => {
     history.pushState({ t: 1 }, "");
     setMate(null);
     setChats([...chatsRef.current, x]);
@@ -298,9 +304,12 @@ function StaffApp() {
         </span>
       </button>
       <span class="f-sp" />
-      <div class="t-seg" role="group" aria-label="Us or the race">
+      <div class="t-seg" role="group" aria-label="Us, Chat or the race">
         <button type="button" class={tab === "us" ? "on" : ""} aria-pressed={tab === "us"} onClick={() => pick("us")}>
           Us
+        </button>
+        <button type="button" class={tab === "chat" ? "on" : ""} aria-pressed={tab === "chat"} onClick={() => pick("chat")}>
+          Chat
         </button>
         <button type="button" class={tab === "race" ? "on" : ""} aria-pressed={tab === "race"} onClick={() => pick("race")}>
           Race
@@ -331,8 +340,6 @@ function StaffApp() {
       <K.Waiting />
     ) : chatTop.k === "room" ? (
       <chp.RoomScreen key={chatTop.id} id={chatTop.id} staff me={b?.me} onBack={closeMateBack} onMate={(id) => openMate(id, null)} />
-    ) : chatTop.k === "people" ? (
-      <chp.PeopleScreen staff onBack={closeMateBack} onRoom={(id) => openChat({ k: "room", id })} onMate={(id) => openMate(id, null)} />
     ) : (
       <chp.AllChats onBack={closeMateBack} onRoom={(id) => openChat({ k: "room", id })} />
     );
@@ -360,6 +367,12 @@ function StaffApp() {
       />
     ) : (
       <K.Waiting />
+    );
+  } else if (tab === "chat") {
+    body = !chp ? (
+      <K.Waiting />
+    ) : (
+      <chp.ChatTab top={top} staff onRoom={(id) => openChat({ k: "room", id })} onMate={(id) => openMate(id, null)} onAll={() => openChat({ k: "all" })} />
     );
   } else if (tab === "race") {
     // The race tab is a later part since 8 Nov 2026 (the leagues).
@@ -402,9 +415,6 @@ function StaffApp() {
         onMe={() => {}}
         onMate={(id) => openMate(id, null)}
         onOpen={openThread}
-        onRoom={(id) => openChat({ k: "room", id })}
-        onPeople={() => openChat({ k: "people" })}
-        onAll={() => openChat({ k: "all" })}
         staff={{
           feed,
           err: b ? null : err,

@@ -2,13 +2,14 @@
 // the community ... we need group which was in the community, like a Discord ... the app don't have private messaging
 // options ... the girl students and boy students can't message each other ... teacher can message anyone". His answers:
 // boys and girls together in groups (like the hall), teachers make groups, each grade its own (convex/chat.ts).
-// - ChatList: his groups (his grade's first) or his private chats: the last words, when, how many new.
+// - ChatTab (12 Nov 2026: its own tab in the bottom bar, out of Us): Chat (threads, groups, private messages) | Members.
 // - RoomScreen: a group or a private chat: the messages as in a line's talk (talk.tsx: reply with a quote, @tags,
 //   reactions), by day, read every few seconds while it is open; the words box at the bottom.
 // - PeopleScreen (the Members page, his step 8): everyone in ARISTORA, teachers first, and 💬 where his rule allows.
 // - AllChats: the owner reads every private chat. GroupSheet: a teacher with the Community tick makes or changes a group.
 // Its own file (chatParts.ts, later.ts useChatParts): never in the first load.
 
+import type { ComponentChildren } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { ChatHead, ChatLine, ChatMsg, ChatPeople, ChatPerson, ChatRoom } from "../../convex/chat";
 import { keep, mutation, query } from "./net";
@@ -37,6 +38,13 @@ function RoomFace(props: { r: Pick<ChatLine, "emo" | "gg" | "name" | "pic" | "tc
   const r = props.r;
   // An online explanation's thread (12 Nov 2026).
   if (r.k === "h") return <span class="c-gface" aria-hidden="true">🎧</span>;
+  // The Everyone group (12 Nov 2026): ARISTORA's own owl, not the phone's owl emoji (unless a teacher picked another).
+  if (r.k === "g" && r.gg === 0 && (!r.emo || r.emo === "🦉"))
+    return (
+      <span class={`c-gface c-gowl${props.big ? " big" : ""}`} aria-hidden="true">
+        <Owl mood="wave" class="tiny" still />
+      </span>
+    );
   if (r.k === "g")
     return (
       <span class={`c-gface${props.big ? " big" : ""}${r.gg !== undefined && !r.emo ? " grade" : ""}`} aria-hidden="true">
@@ -74,8 +82,67 @@ function Row(props: { r: ChatLine; onOpen: () => void }) {
   );
 }
 
-/** A student's (or a teacher's) groups or private chats, newest first; the lists read again while on screen. */
-export function ChatList(props: { kind: "g" | "d"; staff: boolean; onRoom: (id: string) => void; onPeople: () => void; onAll?: () => void }) {
+/** A group as a big card (the Chat tab: his grade's group and Everyone side by side): its face, name, last words, new. */
+function GroupCard(props: { r: ChatLine; sub: string; onOpen: () => void }) {
+  const r = props.r;
+  return (
+    <button type="button" class={`c-gcard${r.un ? " new" : ""}`} onClick={props.onOpen}>
+      <RoomFace r={r} big />
+      <b>{r.name}</b>
+      <small>{r.lt ? `${r.mine ? "நீ" : (r.ln ?? "")}: ${r.lt}` : props.sub}</small>
+      {r.un ? <i class="c-un">{r.un > 20 ? "20+" : r.un}</i> : r.ro ? <i class="c-ro">📣</i> : null}
+    </button>
+  );
+}
+
+/**
+ * The Chat tab (12 Nov 2026, his voice note: "in the bottom bar right side corner ... this chat page is very important
+ * ... inside the chat put two tabs, one is chat, another is members"): Chat = his threads (Explain online) first, then
+ * the groups (his grade's and Everyone as two big cards, a teacher's other groups below), then his private messages;
+ * Members = everyone in ARISTORA, 💬 where his rule allows. A teacher's (staff): the same, with every grade's group.
+ */
+export function ChatTab(props: {
+  top: ComponentChildren;
+  staff: boolean;
+  /** New in his groups and chats (family.me chat): the Chat button's count. */
+  n?: number;
+  onRoom: (id: string) => void;
+  onMate: (id: string) => void;
+  onAll?: () => void;
+}) {
+  const [seg, setSeg] = useState<"chat" | "people">(() => (keep<string>("chatSeg") === "people" ? "people" : "chat"));
+  const pick = (k: "chat" | "people") => {
+    if (k === seg) return;
+    buzz();
+    sound("tap");
+    setSeg(k);
+    keep("chatSeg", k);
+    window.scrollTo(0, 0);
+  };
+  return (
+    <>
+      <header class="f-hero us c-hero">
+        {props.top}
+        <div class="c-seg" role="tablist" aria-label="Chat">
+          <button type="button" role="tab" aria-selected={seg === "chat"} class={seg === "chat" ? "on" : ""} onClick={() => pick("chat")}>
+            💬 Chat{props.n ? <i>{props.n > 20 ? "20+" : props.n}</i> : null}
+          </button>
+          <button type="button" role="tab" aria-selected={seg === "people"} class={seg === "people" ? "on" : ""} onClick={() => pick("people")}>
+            👥 Members
+          </button>
+        </div>
+      </header>
+      {seg === "chat" ? (
+        <ChatHome staff={props.staff} onRoom={props.onRoom} onNew={() => pick("people")} onAll={props.onAll} />
+      ) : (
+        <PeopleScreen bare staff={props.staff} onBack={() => pick("chat")} onRoom={props.onRoom} onMate={props.onMate} />
+      )}
+    </>
+  );
+}
+
+/** The Chat part: threads, groups, private messages; the lists read again while on screen. */
+function ChatHome(props: { staff: boolean; onRoom: (id: string) => void; onNew: () => void; onAll?: () => void }) {
   const [d, setD] = useState<Rooms | null>(() => keep<Rooms>("chatRooms"));
   const load = () =>
     query("chat:rooms").then(
@@ -90,48 +157,83 @@ export function ChatList(props: { kind: "g" | "d"; staff: boolean; onRoom: (id: 
     const t = window.setInterval(() => document.visibilityState === "visible" && void load(), LIST_MS);
     return () => window.clearInterval(t);
   }, []);
-  const list = props.kind === "g" ? d?.groups : d?.dms;
-  usePics((list ?? []).map((r) => r.pic));
+  const groups = d?.groups ?? [];
+  const dms = d?.dms ?? [];
+  usePics(dms.map((r) => r.pic));
+  // A student: his grade's group and Everyone as the two big cards (the server lists them first), other groups below.
+  const big = props.staff ? [] : groups.filter((r) => r.gg !== undefined).slice(0, 2);
+  const rest = groups.filter((r) => !big.includes(r));
+  const open = (id: string) => {
+    buzz();
+    sound("tap");
+    props.onRoom(id);
+  };
   return (
-    <section class="c-list" aria-label={props.kind === "g" ? "Groups" : "Chats"}>
-      <div class="c-tools">
-        {props.kind === "d" && (
-          <button type="button" class="f-btn go c-new" onClick={props.onPeople}>
-            <Icon name="plus" size={18} /> {props.staff ? "New chat" : "புதிய chat"}
+    <section class="c-list c-home" aria-label="Chat">
+      <HelpList
+        staff={props.staff}
+        onRoom={open}
+        empty={
+          props.staff ? null : (
+            <p class="c-hint">
+              🎧 <b>Explain online</b>: Check செய்த பின் தவறிய கேள்வியில் 🎧 ஐத் தொடு. ஆசிரியரின் விளக்கம் இங்கே வரும்.
+            </p>
+          )
+        }
+      />
+      <h2 class="c-sh">
+        <span>Groups</span>
+        {props.staff && d?.edit && (
+          <button type="button" class="c-shb" onClick={() => showSheet((close) => <GroupSheet onClose={close} onDone={(id) => (void load(), props.onRoom(id))} />)}>
+            <Icon name="plus" size={16} /> New group
           </button>
         )}
-        {props.kind === "g" && props.staff && d?.edit && (
-          <button type="button" class="f-btn go c-new" onClick={() => showSheet((close) => <GroupSheet onClose={close} onDone={(id) => (void load(), props.onRoom(id))} />)}>
-            <Icon name="plus" size={18} /> New group
-          </button>
-        )}
-        {props.kind === "g" && (
-          <button type="button" class="f-btn white c-new" onClick={props.onPeople}>
-            <Icon name="people" size={18} /> Members
-          </button>
-        )}
-        {props.kind === "d" && props.staff && d?.owner && props.onAll && (
-          <button type="button" class="f-btn white c-new" onClick={props.onAll}>
-            <Icon name="eye" size={18} /> Every chat
-          </button>
-        )}
-      </div>
-      {props.kind === "d" && <HelpList staff={props.staff} onRoom={props.onRoom} />}
+      </h2>
       {!d ? (
         <Waiting />
-      ) : !list?.length ? (
+      ) : (
+        <>
+          {big.length > 0 && (
+            <div class="c-gcards">
+              {big.map((r) => (
+                <GroupCard key={r.id} r={r} sub={r.gg === 0 ? "எல்லா grade உம்" : `Grade ${r.gg} மட்டும்`} onOpen={() => open(r.id)} />
+              ))}
+            </div>
+          )}
+          {rest.length > 0 && (
+            <ul class="c-rows">
+              {rest.map((r) => (
+                <Row key={r.id} r={r} onOpen={() => open(r.id)} />
+              ))}
+            </ul>
+          )}
+          {!big.length && !rest.length && <p class="c-hint">{props.staff ? "No groups yet." : "குழுக்கள் இன்னும் இல்லை."}</p>}
+        </>
+      )}
+      <h2 class="c-sh">
+        <span>Messages</span>
+        <button type="button" class="c-shb" onClick={props.onNew}>
+          <Icon name="plus" size={16} /> {props.staff ? "New chat" : "புதிய chat"}
+        </button>
+        {props.staff && d?.owner && props.onAll && (
+          <button type="button" class="c-shb" onClick={props.onAll}>
+            <Icon name="eye" size={16} /> Every chat
+          </button>
+        )}
+      </h2>
+      {!d ? null : !dms.length ? (
         <div class="f-talk-none">
           <Owl mood="wave" class="tiny" still />
-          <p>{props.kind === "d" ? (props.staff ? "No chats yet. Tap New chat to message a student or a teacher." : "இன்னும் chat இல்லை. புதிய chat: ஆசிரியர் அல்லது நண்பருக்கு எழுது! 💬") : "குழுக்கள் இன்னும் இல்லை."}</p>
+          <p>{props.staff ? "No chats yet. Tap New chat to message a student or a teacher." : "இன்னும் chat இல்லை. புதிய chat: ஆசிரியர் அல்லது நண்பருக்கு எழுது! 💬"}</p>
         </div>
       ) : (
         <ul class="c-rows">
-          {list.map((r) => (
-            <Row key={r.id} r={r} onOpen={() => props.onRoom(r.id)} />
+          {dms.map((r) => (
+            <Row key={r.id} r={r} onOpen={() => open(r.id)} />
           ))}
         </ul>
       )}
-      {props.kind === "d" && !props.staff && <p class="c-safe">🛡️ ARISTORA பாதுகாப்புக்காக chats ஐப் பார்க்கலாம். நல்ல வார்த்தைகள் மட்டும்; தொலைபேசி எண்கள், links வேண்டாம்.</p>}
+      {!props.staff && <p class="c-safe">🛡️ ARISTORA பாதுகாப்புக்காக chats ஐப் பார்க்கலாம். நல்ல வார்த்தைகள் மட்டும்; தொலைபேசி எண்கள், links வேண்டாம்.</p>}
     </section>
   );
 }
@@ -289,7 +391,8 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
     setMembers([]);
     query("chat:people").then(
       (x) => {
-        const inIt = (g?: number) => g !== undefined && (h.gg === g || !!h.gs?.includes(g));
+        // h.gg 0 = the Everyone group (convex/lib/chat.ts EVERYONE_GG): every student with a grade.
+        const inIt = (g?: number) => g !== undefined && (h.gg === 0 || h.gg === g || !!h.gs?.includes(g));
         setMembers((x as ChatPeople).st.filter((p) => !p.me && inIt(p.g)).map((p) => ({ id: p.w.slice(2), n: p.n, ...(p.pic ? { pic: p.pic } : {}), ...(p.g !== undefined ? { g: p.g } : {}) })));
       },
       () => setMembers(null),
@@ -499,7 +602,7 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
 }
 
 /** The Members page: teachers, then every student by grade; 💬 where his rule allows; a student's name: his profile. */
-export function PeopleScreen(props: { staff: boolean; onBack: () => void; onRoom: (id: string) => void; onMate: (id: string) => void }) {
+export function PeopleScreen(props: { staff: boolean; /** Inside the Chat tab (12 Nov 2026): no header of its own. */ bare?: boolean; onBack: () => void; onRoom: (id: string) => void; onMate: (id: string) => void }) {
   const [d, setD] = useState<ChatPeople | null>(() => keep<ChatPeople>("chatPeople"));
   const [find, setFind] = useState("");
   const [g, setG] = useState<number | "t" | null>(null);
@@ -547,17 +650,19 @@ export function PeopleScreen(props: { staff: boolean; onBack: () => void; onRoom
     </li>
   );
   return (
-    <div class="c-scr">
-      <header class="f-hero us">
-        <div class="f-toprow">
-          <button type="button" class="f-round on-brand" aria-label="Back" onClick={props.onBack}>
-            <Icon name="back" size={20} />
-          </button>
-          <b class="f-ut-h">
-            👥 Members {d ? <small>{d.tch.length + d.st.length}</small> : null}
-          </b>
-        </div>
-      </header>
+    <div class={props.bare ? "c-ppl" : "c-scr"}>
+      {!props.bare && (
+        <header class="f-hero us">
+          <div class="f-toprow">
+            <button type="button" class="f-round on-brand" aria-label="Back" onClick={props.onBack}>
+              <Icon name="back" size={20} />
+            </button>
+            <b class="f-ut-h">
+              👥 Members {d ? <small>{d.tch.length + d.st.length}</small> : null}
+            </b>
+          </div>
+        </header>
+      )}
       {!props.staff && d && (
         <p class="c-rule">
           {d.sex === "b"

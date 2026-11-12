@@ -102,7 +102,8 @@ async function open(backend: ReturnType<typeof makeBackend>, url: string, sz = s
 }
 
 /** A tab of the bottom bar. */
-const tabTo = (p: Page, name: RegExp) => p.locator(".f-tabs").getByRole("button", { name }).click();
+// Me has no bottom-bar button since 12 Nov 2026: his face in the top row opens it.
+const tabTo = (p: Page, name: RegExp) => (/Me/.test(name.source) ? p.locator(".f-toprow .f-who").first().click() : p.locator(".f-tabs").getByRole("button", { name }).click());
 
 /** Inside his Stage: the Level he can play now (the gold one with START) is this one. */
 async function playIs(p: Page, level: string) {
@@ -520,17 +521,15 @@ test("the new look: class hours and Home, the map, the questions as printed, fee
   await contains(P.locator(".f-caret.many"), "2");
   await goalIs(P, "Level 1");
   await shot(P, "fam18-second-child");
-  // Switch back to Hana from the top bar: her XP, her map.
+  // Switch back to Hana: her face opens her profile with the children on top (12 Nov 2026), one tap more switches.
   await P.locator(".f-who").click();
-  await visible(P.locator(".f-sheet .f-kid", { hasText: "Bilal M" }));
+  await visible(P.locator(".f-kids-top .f-kid", { hasText: "Bilal M" }));
   await shot(P, "fam19-children");
-  await P.locator(".f-sheet .f-kid", { hasText: "Hana K" }).click();
+  await P.locator(".f-kids-top .f-kid", { hasText: "Hana K" }).click();
   await whoIs(P, "Hana");
   // Bilal signs out of this phone (from Me): Hana stays; his phone key stops on the server.
-  await P.locator(".f-who").click();
-  await P.locator(".f-sheet .f-kid", { hasText: "Bilal M" }).click();
+  await P.locator(".f-kids-top .f-kid", { hasText: "Bilal M" }).click();
   await whoIs(P, "Bilal");
-  await tabTo(P, /Me$/);
   await P.getByRole("button", { name: /Sign out Bilal/ }).click();
   await P.locator(".f-sure").getByRole("button", { name: "Sign out", exact: true }).click();
   await whoIs(P, "Hana");
@@ -2396,7 +2395,8 @@ test("the race for everyone: this week, all time and the GOAT, not started yet, 
   await until(async () => (await C.locator(".rc-box > .rc-gifts > li", { hasText: "Bilal M" }).count()) === 0, "Bilal's gift given");
   await B.reload();
   await goalIs(B, "Level");
-  expect(await B.locator(".f-giftc").count()).toBe(0);
+  // The phone shows its kept copy first, then the server's answer (12 Nov 2026: once read before the answer came).
+  await until(async () => (await B.locator(".f-giftc").count()) === 0, "the gift card gone");
   // A gift by hand (8 Nov 2026, his ask): Hana, a sweet, why; her phone's card says why.
   await C.getByRole("button", { name: "🎁 Give a gift now" }).click();
   await C.locator(".rc-grades").getByRole("button", { name: /^8/ }).click();
@@ -2450,13 +2450,13 @@ test("Us: closed until the owner opens it; the owl's guide; his welcome; the owl
     await ctx.db.insert("usMoments", { k: "champs", ppl: [{ sid: bilal, n: "Bilal M", g: 8, a: true }], at: now - 26 * 3600_000, day: 0, demo: false, c: 3 });
   });
 
-  // Hana's phone: four tabs while Us is closed.
+  // Hana's phone: three tabs while Us is closed (Home, Learn, Race; Me is her face since 12 Nov 2026).
   const P = await open(backend, `${site.url}/f/`, size(360, 780));
   await P.getByLabel(/Index/).fill("1001");
   await P.getByLabel("Code").fill("4719");
   await P.getByRole("button", { name: "Sign in" }).click();
   await goalIs(P, "Level 1");
-  expect(await P.locator(".f-tabs .f-tab").count()).toBe(4);
+  expect(await P.locator(".f-tabs .f-tab").count()).toBe(3);
 
   // The owner: Settings → Community (his switches): why and how it should feel, then Open.
   const C = await open(backend, site.url, size(360, 780), () => {
@@ -3093,17 +3093,17 @@ test("Us groups and chats: his grade's group with a reply, a tag and a reaction;
   const FAM_K = await phone(kumar, "kumar");
   await t.mutation(api.us.setCfg, { ...as, open: true });
 
-  // Arun's phone: Us → Groups → his grade's group (there before anyone wrote); his hello.
+  // Arun's phone: Chat (12 Nov 2026: its own tab, right corner) → his grade's group and Everyone as two cards.
   const P = await open(backend, `${site.url}/f/`, size(360, 780));
   await P.getByLabel(/Index/).fill("1001");
   await P.getByLabel("Code").fill("4719");
   await P.getByRole("button", { name: "Sign in" }).click();
   await until(async () => (await P.locator(".f-tabs .f-tab").count()) === 5, "the Us tab");
-  await tabTo(P, /^Us$/);
-  for (const b of ["அடுத்து", "அடுத்து", "தொடங்கு!"]) await P.locator(".f-us-guide").getByRole("button", { name: b }).click();
-  await P.locator(".f-us-seg").getByRole("tab", { name: /Groups/ }).click();
-  const g8 = P.locator(".c-row", { hasText: "Grade 8" });
-  await contains(g8, "முதலில் நீ");
+  await tabTo(P, /^Chat$/);
+  const g8 = P.locator(".c-gcard", { hasText: "Grade 8" });
+  await contains(g8, "Grade 8 மட்டும்");
+  await contains(P.locator(".c-gcard", { hasText: "Everyone" }), "எல்லா grade உம்");
+  await contains(P.locator(".c-hint"), "Explain online");
   await noSideScroll(P);
   await shot(P, "fam100-us-groups");
   await g8.click();
@@ -3132,10 +3132,10 @@ test("Us groups and chats: his grade's group with a reply, a tag and a reaction;
   await noSideScroll(P);
   await shot(P, "fam101-us-grade-group");
 
-  // Chats → New chat → Members: boys any grade and teachers have 💬, Hana (a girl) none.
+  // Back on Chat → New chat → its Members tab: boys any grade and teachers have 💬, Hana (a girl) none.
   await P.getByRole("button", { name: "Back" }).click();
-  await P.locator(".f-us-seg").getByRole("tab", { name: /Chats/ }).click();
-  await P.locator(".c-tools").getByRole("button", { name: /புதிய chat/ }).click();
+  await P.locator(".c-sh").getByRole("button", { name: /புதிய chat/ }).click();
+  await contains(P.locator(".c-seg [aria-selected=true]"), "Members");
   await contains(P.locator(".c-rule"), "மாணவர்களுடனும்");
   const row = (n: string) => P.locator(".c-people li", { hasText: n });
   await visible(row("Hana K"));
@@ -3160,10 +3160,8 @@ test("Us groups and chats: his grade's group with a reply, a tag and a reaction;
   await expect(t.mutation(api.chat.dm, { token: FAM_H, to: `s:${arun}` })).rejects.toThrow();
   expect((await t.mutation(api.chat.dm, { token: FAM_K, to: `s:${arun}` })).id).toBeTruthy();
 
-  // Arun writes to the owner from Members: the class app's Us tab shows her number while she is elsewhere.
+  // Arun writes to the owner from Members (Back from a chat returns to Members): the class app's Us tab shows her number.
   await P.getByRole("button", { name: "Back" }).click();
-  await P.getByRole("button", { name: "Back" }).click();
-  await P.locator(".c-tools").getByRole("button", { name: /புதிய chat/ }).click();
   await row("Owner").locator(".c-dm").click();
   await visible(P.locator(".f-tb-cam"));
   await P.locator(".f-tb-in").pressSequentially("Sir, நாளை வகுப்பு உண்டா?");
@@ -3179,8 +3177,10 @@ test("Us groups and chats: his grade's group with a reply, a tag and a reaction;
   await C.locator(".tabs .tab.us").click();
   const U = C.frameLocator("iframe.us-frame");
   for (const b of ["அடுத்து", "அடுத்து", "தொடங்கு!"]) await U.locator(".f-us-guide").getByRole("button", { name: b }).click();
-  await U.locator(".f-us-seg").getByRole("tab", { name: /Chats/ }).click();
-  await U.locator(".c-row", { hasText: "Arun K" }).click();
+  // Teachers too: Us | Chat | Race (12 Nov 2026).
+  await U.locator(".t-seg").getByRole("button", { name: "Chat" }).click();
+  // Groups and private messages on one page now: his private chat is the row with his words.
+  await U.locator(".c-row", { hasText: "Sir, நாளை" }).click();
   await contains(U.locator(".f-msg"), "நாளை வகுப்பு");
   await U.locator(".f-tb-in").pressSequentially("ஆம் Arun, 4 மணிக்கு 👍");
   await U.locator(".f-tb").getByRole("button", { name: "Send" }).click();
@@ -3189,18 +3189,17 @@ test("Us groups and chats: his grade's group with a reply, a tag and a reaction;
   await shot(C, "fam104-class-us-chat");
   // A group she makes: O/L doubts for Grade 11 (Kumar sees it; Arun doesn't).
   await U.getByRole("button", { name: "Back" }).click();
-  await U.locator(".f-us-seg").getByRole("tab", { name: /Groups/ }).click();
-  await U.locator(".c-tools").getByRole("button", { name: /New group/ }).click();
+  await contains(U.locator(".c-row").first(), "Everyone");
+  await U.locator(".c-sh").getByRole("button", { name: /New group/ }).click();
   await U.locator(".c-gsheet .c-gname").first().fill("O/L doubts");
   await U.locator(".c-gsheet .c-chips").getByRole("button", { name: "11", exact: true }).click();
   await U.locator(".c-gsheet").getByRole("button", { name: "Make the group" }).click();
   await contains(U.locator(".c-head-w"), "O/L doubts");
-  expect((await t.query(api.chat.rooms, { token: FAM_K })).groups.map((x) => x.name)).toEqual(["Grade 11", "O/L doubts"]);
-  expect((await t.query(api.chat.rooms, { token: (await hanaToken(P))! })).groups.map((x) => x.name)).toEqual(["Grade 8"]);
+  expect((await t.query(api.chat.rooms, { token: FAM_K })).groups.map((x) => x.name)).toEqual(["Grade 11", "Everyone", "O/L doubts"]);
+  expect((await t.query(api.chat.rooms, { token: (await hanaToken(P))! })).groups.map((x) => x.name)).toEqual(["Grade 8", "Everyone"]);
   // The owner reads every private chat (look only).
   await U.getByRole("button", { name: "Back" }).click();
-  await U.locator(".f-us-seg").getByRole("tab", { name: /Chats/ }).click();
-  await U.locator(".c-tools").getByRole("button", { name: /Every chat/ }).click();
+  await U.locator(".c-sh").getByRole("button", { name: /Every chat/ }).click();
   await U.locator(".c-row", { hasText: "Arun K · Bilal M" }).click();
   await contains(U.locator(".c-cant"), "Only the two of them");
   await shot(C, "fam105-class-every-chat");
@@ -3222,12 +3221,14 @@ test("Us groups and chats: his grade's group with a reply, a tag and a reaction;
   await C.locator(".olm-sheet").getByRole("button", { name: "Close" }).click();
   await contains(C.locator(".sex-line small"), "All 3 set");
 
-  // The smallest phone: the group and its bar fit 320 px.
+  // The smallest phone: the Chat tab, the group and its bar fit 320 px.
   await P.setViewportSize({ width: 320, height: 640 });
   await P.getByRole("button", { name: "Back" }).click();
-  await P.getByRole("button", { name: "Back" }).click();
-  await P.locator(".f-us-seg").getByRole("tab", { name: /Groups/ }).click();
-  await P.locator(".c-row", { hasText: "Grade 8" }).click();
+  await P.locator(".c-seg").getByRole("tab", { name: /Chat/ }).click();
+  await visible(P.locator(".c-gcard", { hasText: "Everyone" }));
+  await noSideScroll(P);
+  await shot(P, "fam108-chat-tab-320");
+  await P.locator(".c-gcard", { hasText: "Grade 8" }).click();
   await visible(P.locator(".f-tb-in"));
   await noSideScroll(P);
   await shot(P, "fam106-us-group-320");
@@ -3946,7 +3947,7 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
   await noSideScroll(P);
   await shot(P, "help03-thread-student");
 
-  // Nila's class app: the Us tab's number; Us → Chats → Online explanations → Mine: Hana · Q8.
+  // Nila's class app: the Us tab's number; Us → Chat → Online explanations → Mine: Hana · Q8.
   const C = await open(backend, site.url, size(390, 820), () => {
     if (sessionStorage.getItem("t")) return;
     sessionStorage.setItem("t", "1");
@@ -3957,7 +3958,7 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
   await C.locator(".tabs .tab.us").click();
   const U = C.frameLocator("iframe.us-frame");
   for (const b of ["அடுத்து", "அடுத்து", "தொடங்கு!"]) await U.locator(".f-us-guide").getByRole("button", { name: b }).click();
-  await U.locator(".f-us-seg").getByRole("tab", { name: /Chats/ }).click();
+  await U.locator(".t-seg").getByRole("button", { name: "Chat" }).click();
   await contains(U.locator(".h-list-h"), "Online explanations");
   await contains(U.locator(".h-chips button.on"), "Mine 1");
   const line = U.locator(".h-row", { hasText: "Hana K · Q8" });
@@ -4087,14 +4088,12 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
   await visible(P.locator(".h-top"));
   await noSideScroll(P);
   await shot(P, "help13-thread-320");
-  // Her explanations sit on top of her Chats: this one, closed (Waiting 0 · All 1).
+  // Her explanations come first on her Chat tab (12 Nov 2026): this one, closed (Waiting 0 · All 1).
   for (const scr of [".f-bookscr", ".f-lv", ".f-tabs"]) {
     await P.getByRole("button", { name: "Back" }).first().click();
     await visible(P.locator(scr));
   }
-  await tabTo(P, /^Us$/);
-  for (const b of ["அடுத்து", "அடுத்து", "தொடங்கு!"]) await P.locator(".f-us-guide").getByRole("button", { name: b }).click();
-  await P.locator(".f-us-seg").getByRole("tab", { name: /Chats/ }).click();
+  await tabTo(P, /^Chat$/);
   await contains(P.locator(".h-list-h"), "Explain online");
   await contains(P.locator(".h-chips button.on"), "Waiting 0");
   await P.locator(".h-chips").getByRole("tab", { name: /All/ }).click();

@@ -3,6 +3,30 @@
 // talk's (.f-msg*, usStyle.ts). The palette is family.css's (:root).
 
 const CSS = `
+.c-hero{padding-bottom:14px}
+.c-seg{display:grid;grid-template-columns:1fr 1fr;gap:3px;margin:12px 16px 0;padding:4px;border-radius:16px;background:rgba(255,255,255,.18)}
+.c-seg button{position:relative;height:42px;padding-top:2px;border-radius:12px;color:#fff;font:800 15px/1 var(--display)}
+.c-seg button.on{background:#fff;color:var(--brand-2);box-shadow:0 2px 0 rgba(0,0,0,.08)}
+.c-seg i{position:absolute;top:3px;right:8px;min-width:18px;height:18px;padding:2px 5px 0;border-radius:9px;background:var(--gem);color:#fff;font:800 11px/1.3 var(--display);font-style:normal}
+.c-home{margin-top:14px}
+.c-home .h-list{margin:0}
+.c-sh{display:flex;align-items:center;gap:6px;min-height:32px;margin:20px 2px 0;font:800 15px/1.2 var(--display);color:var(--ink)}
+.c-sh span{flex:1;min-width:0}
+.c-shb{flex:none;display:inline-flex;align-items:center;gap:4px;height:32px;padding:2px 11px 0;border-radius:999px;background:var(--brand-soft);color:var(--brand-2);font:800 13px/1 var(--display);white-space:nowrap}
+.c-shb:active{transform:scale(.96)}
+.c-gcards{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}
+.c-gcard{position:relative;display:grid;justify-items:start;align-content:start;gap:6px;min-width:0;padding:14px 12px 12px;border-radius:18px;background:var(--card);box-shadow:var(--shadow);text-align:left;transition:transform .12s}
+.c-gcard:active{transform:scale(.97)}
+.c-gcard b{max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font:800 16px/1.15 var(--display);color:var(--ink)}
+.c-gcard small{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.7em;font-size:12.5px;line-height:1.35;color:var(--ink2);overflow-wrap:anywhere}
+.c-gcard.new small{color:var(--ink);font-weight:700}
+.c-gcard .c-un,.c-gcard .c-ro{position:absolute;top:10px;right:10px}
+.c-gface.big{width:52px;height:52px;border-radius:17px;font-size:28px}
+.c-gface.big.grade{font-size:24px}
+.c-gowl{overflow:hidden}
+.c-gowl .f-owl{width:86%}
+.c-hint{margin:8px 0 0;padding:12px;border-radius:14px;background:var(--card);box-shadow:var(--shadow);font-size:13.5px;line-height:1.5;color:var(--ink2)}
+.c-ppl{padding-bottom:8px}
 .c-list{margin:12px 16px 0}
 .c-tools{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding-bottom:4px}
 .c-tools::-webkit-scrollbar{display:none}

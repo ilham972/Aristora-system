@@ -9,6 +9,7 @@
 // - VoiceRec / Voice: a voice note (the phone's own recorder: a teacher 2 minutes, a student 1), and its player.
 // - HelpList: his explanations (or the teachers' queue) with its filters, on top of Chats.
 
+import type { ComponentChildren } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { ChatMsg } from "../../convex/chat";
 import type { HelpLine, HelpStart, HelpTeacher } from "../../convex/help";
@@ -641,7 +642,7 @@ type Filter = "open" | "mine" | "all" | "closed";
  * ones nobody answered for 12 hours) · Everyone's · Closed, then a student or a unit to narrow it (his words: "we have
  * to put the filters ... for the students or the unit").
  */
-export function HelpList(props: { staff: boolean; onRoom: (id: string) => void }) {
+export function HelpList(props: { staff: boolean; onRoom: (id: string) => void; /** Shown when he has no thread yet (the Chat tab's first section). */ empty?: ComponentChildren }) {
   const key = props.staff ? "helpT" : "helpMine";
   const [d, setD] = useState<HelpLine[] | null>(() => keep<HelpLine[]>(key));
   const [f, setF] = useState<Filter>(props.staff ? "mine" : "open");
@@ -662,7 +663,8 @@ export function HelpList(props: { staff: boolean; onRoom: (id: string) => void }
     return () => window.clearInterval(t);
   }, []);
   usePics((d ?? []).map((l) => l.pic));
-  if (!d?.length) return null;
+  if (!d) return null;
+  if (!d.length) return props.empty ?? null;
   const open = d.filter((l) => l.st === "open");
   const mineT = open.filter((l) => l.mine || l.late);
   const base = f === "closed" ? d.filter((l) => l.st !== "open") : f === "mine" ? mineT : f === "open" ? open : props.staff ? open : d;

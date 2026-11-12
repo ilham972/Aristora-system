@@ -157,9 +157,40 @@ describe("chats on Us", () => {
     await expect(ph.Devi.query(api.chat.room, { id: "g:8" })).rejects.toThrow(/another grade/);
     // Teachers see every grade's group.
     const tl = await R().query(api.chat.trooms, {});
-    expect(tl.groups.map((x) => x.name)).toEqual(["Grade 6", "Grade 7", "Grade 8", "Grade 9", "Grade 10", "Grade 11"]);
+    expect(tl.groups.map((x) => x.name)).toEqual(["Everyone", "Grade 6", "Grade 7", "Grade 8", "Grade 9", "Grade 10", "Grade 11"]);
     expect(tl.edit).toBe(false);
     expect((await N().query(api.chat.trooms, {})).edit).toBe(true);
+  });
+
+  test("the Everyone group (12 Nov 2026): every grade in one group, anyone writes; a teacher can make it teachers-only, never remove it", async () => {
+    // There before anyone wrote: second on every student's list, after his own grade's.
+    for (const k of ["Arun", "Devi", "Kumar"] as const) {
+      const g = (await ph[k].query(api.chat.rooms, {})).groups;
+      expect(g[1]).toMatchObject({ id: "g:0", name: "Everyone", emo: "🦉", gg: 0, un: 0 });
+    }
+    const empty = await ph.Devi.query(api.chat.room, { id: "g:0" });
+    expect(empty.head).toMatchObject({ name: "Everyone", emo: "🦉", gg: 0, can: { write: true, photos: true } });
+    expect(empty.head.members).toBe(7);
+    // Grade 10 writes; Grade 8 and Grade 11 read the same group.
+    await ph.Devi.mutation(api.chat.send, { id: "g:0", text: "எல்லா grade க்கும் வணக்கம்!" });
+    const all = (await ph.Arun.query(api.chat.rooms, {})).groups[1];
+    expect(all).toMatchObject({ name: "Everyone", gg: 0, lt: "எல்லா grade க்கும் வணக்கம்!", un: 1 });
+    expect(all.id).not.toBe("g:0");
+    expect((await ph.Kumar.query(api.chat.room, { id: all.id })).msgs[0]).toMatchObject({ n: "Devi S", g: 10 });
+    await ph.Kumar.mutation(api.chat.send, { id: all.id, text: "வணக்கம் 👋" });
+    expect((await ph.Arun.query(api.chat.room, { id: all.id })).head.members).toBe(7);
+    // One room only: writing by "g:0" again lands in the same one.
+    await ph.Arun.mutation(api.chat.send, { id: "g:0", text: "நானும் 👋" });
+    expect((await ph.Hana.query(api.chat.room, { id: all.id })).msgs).toHaveLength(3);
+    // Teachers see it first; the escape hatch: teachers-only writing, then open again. It is never removed.
+    expect((await R().query(api.chat.trooms, {})).groups[0]).toMatchObject({ id: all.id, name: "Everyone", gg: 0 });
+    await N().mutation(api.chat.tgroup, { id: all.id, name: "ignored", emo: "📣", gs: [], sids: [], ro: true });
+    await expect(ph.Arun.mutation(api.chat.send, { id: all.id, text: "hi" })).rejects.toThrow(/ஆசிரியர்கள் மட்டும்/);
+    expect((await ph.Arun.query(api.chat.rooms, {})).groups[1]).toMatchObject({ name: "Everyone", emo: "📣", ro: true });
+    await N().mutation(api.chat.tgroup, { id: all.id, name: "ignored", emo: "🦉", gs: [], sids: [], ro: false });
+    await ph.Arun.mutation(api.chat.send, { id: all.id, text: "நன்றி" });
+    await expect(N().mutation(api.chat.tgroupDrop, { id: all.id })).rejects.toThrow(/Everyone group stays/);
+    await expect(ph.Arun.query(api.chat.room, { id: "g:5" })).rejects.toThrow(/isn't here/);
   });
 
   test("private messages keep his rule: boy-boy and girl-girl any grade, never boy-girl; teachers anyone; not set = teachers only", async () => {
@@ -296,9 +327,9 @@ describe("chats on Us", () => {
     await expect(N().mutation(api.chat.tgroup, { name: "x", emo: "🍕", gs: [11], sids: [], ro: false })).rejects.toThrow(/emoji/);
     await expect(N().mutation(api.chat.tgroup, { name: "Nobody", emo: "📚", gs: [], sids: [], ro: false })).rejects.toThrow(/grade or one student/);
     const ol = await N().mutation(api.chat.tgroup, { name: "O/L doubts", emo: "📚", gs: [11], sids: [id.Devi], ro: false });
-    expect((await ph.Kumar.query(api.chat.rooms, {})).groups.map((x) => x.name)).toEqual(["Grade 11", "O/L doubts"]);
-    expect((await ph.Devi.query(api.chat.rooms, {})).groups.map((x) => x.name)).toEqual(["Grade 10", "O/L doubts"]);
-    expect((await ph.Arun.query(api.chat.rooms, {})).groups.map((x) => x.name)).toEqual(["Grade 8"]);
+    expect((await ph.Kumar.query(api.chat.rooms, {})).groups.map((x) => x.name)).toEqual(["Grade 11", "Everyone", "O/L doubts"]);
+    expect((await ph.Devi.query(api.chat.rooms, {})).groups.map((x) => x.name)).toEqual(["Grade 10", "Everyone", "O/L doubts"]);
+    expect((await ph.Arun.query(api.chat.rooms, {})).groups.map((x) => x.name)).toEqual(["Grade 8", "Everyone"]);
     await ph.Devi.mutation(api.chat.send, { id: ol.id, text: "இன்று O/L கேள்வி கேட்கலாமா?" });
     // Only teachers write: students read.
     await N().mutation(api.chat.tgroup, { id: ol.id, name: "O/L notices", emo: "📣", gs: [11], sids: [id.Devi], ro: true });
@@ -311,7 +342,7 @@ describe("chats on Us", () => {
     expect((await ph.Arun.query(api.chat.rooms, {})).groups[0]).toMatchObject({ name: "Grade 8", emo: "🦉" });
     await expect(N().mutation(api.chat.tgroupDrop, { id: "g:8" })).rejects.toThrow(/stays/);
     await N().mutation(api.chat.tgroupDrop, { id: ol.id });
-    expect((await ph.Kumar.query(api.chat.rooms, {})).groups.map((x) => x.name)).toEqual(["Grade 11"]);
+    expect((await ph.Kumar.query(api.chat.rooms, {})).groups.map((x) => x.name)).toEqual(["Grade 11", "Everyone"]);
     expect(await raw.run(async (ctx) => (await ctx.db.query("usChat").collect()).length)).toBe(0);
   });
 

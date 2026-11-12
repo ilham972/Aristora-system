@@ -1317,7 +1317,7 @@ learning app of our education institute"): one profile, his class times, what he
   ACHOO, a kiss, a party toot, a dizzy warble, a splat, a wipe's squeak, a whoosh, a tweet). On unless Me → Sound is
   off.
 - **Words** (his ask, 4 Nov 2026: "a mix of both; some places English is appropriate, M for Monday"): **English for
-  the app's chrome and game words**: the tabs (Home, Learn, Race, Me), buttons (START, Check, Next, Send, Sign in,
+  the app's chrome and game words**: the tabs (Home, Learn, Us, Race, Chat), buttons (START, Check, Next, Send, Sign in,
   Back), days and times (M T W T F S S, Wed · 4 Nov, 3:30 PM, in 2 h 10 min, ends in 4d 6h), labels (Today's goal,
   Class week, XP this week, Trophies, Total XP, Best streak) and game words (World, Stage, Level, XP, IN A ROW, NEW
   TROPHY, PERSONAL BEST, a trophy's name). **Tamil for the owl's voice and every sentence**: the greeting, praise in
@@ -1329,15 +1329,20 @@ learning app of our education institute"): one profile, his class times, what he
   = a **World** (its banner on the map: முதலாம் தவணை), a unit = a **Stage**, its workbook's levels = **Levels**, marks
   = **XP** (1 mark = 1 XP), days in a row = his flame. Only the level he is on can be played (the first with no
   record): the paper book is the truth.
-- **Screens.** On every tab the top row: who is on screen (his letter on his colour, his name, ▾ or how many children;
-  tap = the children on this phone), his flame (days in a row; lit once he did a Level today; tap = Me), his XP ever
-  (tap = the race), **the bell** (7 Nov 2026, below), **Feedback** (💬); XP and the flame jump once when they grew (back
+- **Screens.** On every tab the top row: who is on screen (his letter on his colour, his name, how many children when
+  two or more; **tap = Me, his profile**, since 12 Nov 2026: lit white while Me is on screen; the phone's Back returns to
+  the tab he was on (`beforeMe`, a history step `{ me: 1 }`); with two or more children **On this phone** is Me's first
+  card (`.f-kids-top`), so switching stays two taps; the old children sheet is gone), his flame (days in a row; lit once he did a Level today; tap = Me), his XP ever
+  (tap = the race), **the bell** (7 Nov 2026, below), **Feedback** (a smile since 12 Nov 2026: the speech bubble is the Chat
+  tab's); XP and the flame jump once when they grew (back
   from a Level). Since 10 Nov 2026 (the Shop, below): XP and **his coins** share one white capsule (`.f-wallet`: 💎 XP |
   🪙 coins, two taps: the race, the Shop; the coins jump when they grow); on a phone (under 480 px) the top row shows his
   face without his name (a name cut to "H…" looked broken: Home greets him by name; `.f-who`'s label still names him);
   under 400 px every piece is a little tighter, under 346 px the ▾ goes for one child and a number from 1,000 on is short
   ("1.2k": `Num` in `app.tsx`, `.f-nl` / `.f-ns`). A floating bottom
-  bar: **Home**, **Learn**, **Race**, **Me** (the one on screen a violet pill with its name; its icon hops).
+  bar: **Home**, **Learn**, **Us**, **Race**, **Chat** (12 Nov 2026, his ask: Chat in the right corner where Me was; Us and
+  Chat only once the owner opened Us; the one on screen a violet pill with its name; its icon hops; Chat carries the
+  count of his chats and threads with something new, `.f-tab-n`). Me has no button there: his face opens it.
   - **Home** (`home.tsx`, the institute's side): the date ("WED · 4 NOV") and வணக்கம்; **today's class** (`TodayCard`:
     "In class now · since 3:12 PM", "Class is on now · till 6:30 PM", "Today 3:30 PM – 6:30 PM · in 2 h 10 min", or
     "Next class: Tomorrow / Thu": one of his usual days first), with his Stage in class and how far he is; **today's
@@ -1637,7 +1642,8 @@ learning app of our education institute"): one profile, his class times, what he
       tab opens and kept while the app is open; each opening asks it for the newest lines, `us-refresh`), with **the
       teacher's own sign-in** (`aristora.token` on that address: nothing new to remember, no second account system) and
       none of the class app's weight (the family app's small files; the class app's alerts keep ringing meanwhile).
-      `src/family/staff.tsx` (`startStaff`, `StaffApp`): her name in the top row (· ஆசிரியர்) and **Us | Race**; **Us** =
+      `src/family/staff.tsx` (`startStaff`, `StaffApp`): her name in the top row (· ஆசிரியர்) and **Us | Chat | Race** (Chat since
+      12 Nov 2026: the chats left Us, as on the phones); **Us** =
       the students' tab (every grade's lines, the welcome, the count) with her guide the first time (three cards: what
       students see, what she does in two minutes, how it should feel), **🌟 Shout-out** (a sheet: a grade, a student
       (✓ = hers today), a reason) and **✍️ Post** (the owner and the Community tick: Everyone or a grade, starters, pin)
@@ -1810,10 +1816,25 @@ learning app of our education institute"): one profile, his class times, what he
       `src/family/talk.tsx` (shared by a line's talk and the chats), `src/family/chat.tsx` (the chats' own file
       `chatParts.ts`, its style `chatStyle.ts`, fetched by `later.ts` `loadChat` / `useChatParts` only when Groups or
       Chats opens: never in the first load).
-      - **Us has three parts** (`.f-us-seg`, kept per child `usSeg`): **📰 Feed** (the lines, as before), **👥 Groups**,
-        **💬 Chats**, each with how many chats have something new (`family.me` `chat` = `chatNew`: reads his seats and
-        groups, never a message); the Us tab has a dot while one has (`.f-tab-dot`). Told once to everyone who saw the
-        guide: "🆕 Groups 👥 · Chats 💬" with how to reply, react and tag, and that answers are now blurred (`usNews2`).
+      - **Us is the Feed only; the chats have their own Chat tab** (12 Nov 2026, his voice note: "us page only have feeds
+        only ... the chat page have 2 tabs, members and chat ... in the chat tab ... the groups and threads and also
+        personal messages"; until then Us had three parts, Feed | Groups | Chats). **Chat** (`ChatTab` in `chat.tsx`,
+        the chats' own file): a hero with his top row and **💬 Chat | 👥 Members** (`.c-seg`, kept per child `chatSeg`;
+        Chat's number = `family.me` `chat` g + d = `chatNew`: reads his seats and groups, never a message). **Chat**
+        (`ChatHome`) = 🎧 **Explain online** first (his threads, `HelpList`; none yet: a one-line hint how to start one),
+        then **Groups**: his grade's group and **Everyone** as two big cards (`GroupCard`, `.c-gcards`), a teacher's other
+        groups as rows below; then **Messages** (his private chats; **+ புதிய chat** opens Members). **Members** = the
+        Members page inside the tab (`PeopleScreen` `bare`); Back from a chat returns to the part he left. Told once to
+        everyone who saw Us's guide: "🆕 💬 Chat" (`usNews3`: where the chats went, the Everyone group, his face = his
+        profile). Teachers (the class app's Us, `staff.tsx`): **Us | Chat | Race**, the same Chat with every group as rows
+        (Everyone first), **New group**, **New chat** and the owner's **👁 Every chat** on the section heads (`.c-shb`).
+      - **The Everyone group** (12 Nov 2026, his ask: "a community group ... everyone there ... if anyone message there";
+        my warning, told him: the Feed already is the everyone place and 120 students of Grades 6–11 at 200 messages a day
+        is a room no teacher reads; **his answer: anyone, any time**): a grade's own group with the grade **0**
+        (`EVERYONE_GG` in `convex/lib/chat.ts`; `g:0`, made by its first message like a grade's; every student with a
+        grade is in it, `inGroup`; members = every student with a grade), named "Everyone", ARISTORA's own owl as its face
+        (`.c-gowl`; the 🦉 emoji on the server, `EVERYONE_EMO`). The escape hatch: a teacher with the Community tick taps
+        the group's edit and **📣 only teachers write** (`ro`), like a grade's; it is never removed (`tgroupDrop` refuses).
       - **Groups** (`usRooms` `k: "g"`): **his grade's own group** ("Grade 8", `gg`) is on his list before anyone wrote
         (`g:<grade>`; the row is made by the first message: `gradeRoom`); a teacher with the Community tick (and the owner)
         makes more (**New group** → `GroupSheet`: a name, an emoji of `GROUP_EMOJIS`, grades (`gs`) and / or students
@@ -1933,10 +1954,10 @@ learning app of our education institute"): one profile, his class times, what he
       hidden from the thread's other students with his name or his photos (a voice names him: `hid`). `takeVoice`;
       `usChat.au`; marked in `usFiles`, deleted with its message. A second recorder beside `src/voiceNote.tsx` (the
       home lane's, 60 s) because the Us frame can't load the teachers' store.
-    - **Teachers:** the Us tab's number counts the threads waiting on her (`chat.tunread`); Us → Chats → **Online
+    - **Teachers:** the Us tab's number counts the threads waiting on her (`chat.tunread`); Us → Chat → **Online
       explanations** on top (`HelpList`, `help.tlist`): Mine (hers and the ⏰ late ones) · Everyone's · Closed (14 days),
       then Stage and student chips when the list is long (his ask: filters by student and unit). Students: the same
-      list on their Chats (Waiting · All; it counts in the Chats number: `helpNew`).
+      list first on their Chat tab (Waiting · All; it counts in the Chat number: `helpNew`).
     - **Consultation's icon** (headphones beside the whiteboard on a Master question's card, `OnlineButton`,
       `help.tcall`; none for a demo student): a thread opens for the ticked student with her as its teacher, he is
       alerted to send his photo, she can explain at once; filled once it is open (`help.topen`).
@@ -2068,7 +2089,7 @@ learning app of our education institute"): one profile, his class times, what he
   row); the phone keeps the list (`aristora.family.accounts`, the one on screen `aristora.family.current`) and sends
   the key of the child on screen. Everything kept on the phone is kept per child (`keep()` = `aristora.family.<id>.…`:
   his screens, typed answers, a level's form and questions, the tab). Add another = his index
-  and code (or his link); switch = tap a child (top row, or Me); sign out = Me → "Bilal: வெளியேறு" → yes (the key
+  and code (or his link); switch = his face → Me → On this phone (first with two or more) → a child; sign out = Me → "Bilal: வெளியேறு" → yes (the key
   stops on the server; the next child is on screen; the last → the sign-in). The same child twice (his link, then his
   code): the newer stays, the older is signed out (`me.index`). A child signed out by the class leaves the list by
   himself. Up to 6. A phone from before (one key at `aristora.family.token`) becomes the first child with all it kept.

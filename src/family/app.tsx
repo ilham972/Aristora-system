@@ -27,7 +27,6 @@ import { HomeTab } from "./home";
 import { pushOff } from "./bell";
 import { BookScreen } from "./book";
 import { LearnTab, StageScreen } from "./map";
-import { Kids } from "./kids";
 import { loadParts, pctOf, useChatParts, useParts, useUsParts } from "./later";
 import { picOf, usePics } from "./pics";
 import {
@@ -56,10 +55,11 @@ import { nextPlay } from "./next";
 import type { Checked, Zoomed } from "./play";
 import { armSound, buzz, sound } from "./sound";
 import { Surprises } from "./surprise";
-import { Avatar, Coin, Flame, firstName, Gem, Icon, Owl, problemWords, setRoomHost, setSheetHost, Sheet, showSheet, toast, Toast, Waiting, type IconName, type SheetRender } from "./ui";
+import { Avatar, Coin, Flame, firstName, Gem, Icon, Owl, problemWords, setRoomHost, setSheetHost, showSheet, toast, Toast, Waiting, type IconName, type SheetRender } from "./ui";
 
 /** Us (7 Nov 2026): the students' community, between Learn and the Race once the owner opens it. */
-export type Tab = "home" | "learn" | "us" | "race" | "me";
+// "me" (his profile) has no bottom-bar button since 12 Nov 2026: his face in the top row opens it; "chat" took its corner.
+export type Tab = "home" | "learn" | "us" | "race" | "chat" | "me";
 
 type Screen =
   | { k: "join"; code: string }
@@ -75,9 +75,8 @@ type Screen =
   | { k: "post"; id: string; from?: "bell" }
   /** The bell's page (8 Nov 2026, his "build notification page"): everything for him, newest first, by day. */
   | { k: "bell" }
-  /** A group or a private chat (8 Nov 2026), from Us or from the Members page; the Members page. */
-  | { k: "room"; id: string; from?: "people"; back?: { unitId: string; n: number } }
-  | { k: "people" }
+  /** A group, a private chat or a thread (8 Nov 2026), from the Chat tab (12 Nov 2026: Chat | Members). */
+  | { k: "room"; id: string; back?: { unitId: string; n: number } }
   /** The Shop (10 Nov 2026): his coins, the things, what he bought; from the top row's coin or Home's PAYDAY card. */
   | { k: "shop" }
   | { k: "stage"; unitId: string }
@@ -99,9 +98,9 @@ const depth = (s: Screen) =>
   // An explanation's thread opened from a Level's book (12 Nov 2026): one step deeper, Back returns to that book.
   s.k === "room" && s.back
     ? 3
-    : s.k === "level" || s.k === "result" || s.k === "book" || (s.k === "post" && s.from) || (s.k === "room" && s.from)
+    : s.k === "level" || s.k === "result" || s.k === "book" || (s.k === "post" && s.from)
     ? 2
-    : s.k === "stage" || s.k === "add" || s.k === "report" || s.k === "mate" || s.k === "post" || s.k === "bell" || s.k === "room" || s.k === "people" || s.k === "shop"
+    : s.k === "stage" || s.k === "add" || s.k === "report" || s.k === "mate" || s.k === "post" || s.k === "bell" || s.k === "room" || s.k === "shop"
       ? 1
       : 0;
 const parent = (s: Screen): Screen =>
@@ -111,9 +110,7 @@ const parent = (s: Screen): Screen =>
     ? { k: "stage", unitId: s.unitId }
     : s.k === "post" && s.from
       ? { k: "bell" }
-      : s.k === "room" && s.from
-        ? { k: "people" }
-      : s.k === "stage" || s.k === "report" || s.k === "mate" || s.k === "post" || s.k === "bell" || s.k === "room" || s.k === "people" || s.k === "shop"
+      : s.k === "stage" || s.k === "report" || s.k === "mate" || s.k === "post" || s.k === "bell" || s.k === "room" || s.k === "shop"
       ? { k: "main" }
       : s.k === "add"
         ? current()
@@ -138,10 +135,14 @@ export function App() {
   const [acc, setAcc] = useState<Account | null>(current);
   const [me, setMe] = useState<FamilyMe | null>(() => fixWorlds(keep<FamilyMe>("me")));
   const [tabNow, setTab] = useState<Tab>(() => keep<Tab>("tab") ?? "home");
-  // Us shows once the owner opened it (a phone that kept the tab from before falls back to Home).
-  const tab: Tab = tabNow === "us" && !me?.us ? "home" : tabNow;
+  // Us and Chat show once the owner opened Us (a phone that kept the tab from before falls back to Home).
+  const tab: Tab = (tabNow === "us" || tabNow === "chat") && !me?.us ? "home" : tabNow;
+  const tabRef = useRef(tab);
+  tabRef.current = tab;
+  // The tab he was on before his face opened Me: the phone's Back returns there.
+  const beforeMe = useRef<Tab>("home");
   const [offline, setOffline] = useState(false);
-  const [sheet, setSheet] = useState<null | "kids" | "feedback" | "zoom" | { render: SheetRender }>(null);
+  const [sheet, setSheet] = useState<null | "feedback" | "zoom" | { render: SheetRender }>(null);
   const [zoomed, setZoomed] = useState<Zoomed | null>(null);
   const [ready, setReady] = useState(false);
   // Me's profile parts: fetched right after the first screen (later.ts), so they are here (and kept) when he looks.
@@ -150,7 +151,7 @@ export function App() {
   // Us's own file (8 Nov 2026, usParts.ts): fetched once the owner opened Us (or a phone alert opens a line of it).
   const usp = useUsParts(!!me?.us || tab === "us" || screen.k === "post");
   // The chats' own file (8 Nov 2026, chatParts.ts): fetched the first time a chat or the Members page opens.
-  const chp = useChatParts(screen.k === "room" || screen.k === "people");
+  const chp = useChatParts(screen.k === "room" || (screen.k === "main" && tab === "chat"));
   // A page left open keeps its old code (5 Nov 2026): back on the screen after half an hour, a newer version online
   // and nothing on its way or typed, the app loads again by itself (src/appVersion.ts; his drafts and place are kept).
   useEffect(
@@ -251,6 +252,13 @@ export function App() {
   useEffect(() => {
     const back = () => {
       if (sheetRef.current) return setSheet(null);
+      // Me opened from his face (12 Nov 2026): Back returns to the tab he was on.
+      if (screenRef.current.k === "main" && tabRef.current === "me") {
+        setTab(beforeMe.current);
+        keep("tab", beforeMe.current);
+        window.scrollTo(0, 0);
+        return;
+      }
       const up = parent(screenRef.current);
       setScreen(up);
       if (up.k === "main") void loadMe();
@@ -281,7 +289,7 @@ export function App() {
     window.scrollTo(0, 0);
     void loadMe();
   };
-  const openSheet = (x: "kids" | "feedback" | "zoom" | { render: SheetRender }) => {
+  const openSheet = (x: "feedback" | "zoom" | { render: SheetRender }) => {
     buzz();
     sound("pop");
     // One sheet at a time: a sheet opened from a sheet takes its place (one Back closes it).
@@ -348,8 +356,8 @@ export function App() {
       if (screenRef.current.k !== "main" || !current()) return;
       // A message in a group or a private chat (8 Nov 2026): that chat.
       if (k === "chat") {
-        setTab("us");
-        keep("tab", "us");
+        setTab("chat");
+        keep("tab", "chat");
         if (id) go({ k: "room", id });
         return;
       }
@@ -443,8 +451,13 @@ export function App() {
     if (t === tab) return;
     buzz();
     sound("tap");
+    // Me is a step on the phone's history (his face, the flame, his race row): Back returns to the tab before it.
+    if (t === "me") {
+      beforeMe.current = tab;
+      history.pushState({ f: 0, me: 1 }, "");
+    } else if (tab === "me" && history.state?.me) history.back();
     setTab(t);
-    keep("tab", t);
+    if (t !== "me") keep("tab", t);
     window.scrollTo(0, 0);
     // Me shows what the teachers may have just said OK to (his photo in the race, his new name): ask again.
     if (t === "me") void loadMe();
@@ -478,7 +491,8 @@ export function App() {
       me={me}
       acc={acc}
       offline={offline}
-      onKids={() => openSheet("kids")}
+      onMe={() => pickTab("me")}
+      on={screen.k === "main" && tab === "me"}
       onFeedback={() => openSheet("feedback")}
       onBell={openBell}
       onTab={pickTab}
@@ -534,8 +548,8 @@ export function App() {
         onMessage={(id) =>
           mutation("chat:dm", { to: `s:${id}` }).then(
             (r) => {
-              setTab("us");
-              keep("tab", "us");
+              setTab("chat");
+              keep("tab", "chat");
               setScreen({ k: "room", id: (r as { id: string }).id });
             },
             (e) => toast(problemWords(e), true),
@@ -570,21 +584,6 @@ export function App() {
         onBack={up}
         onMate={(id) => {
           window.scrollTo(0, 0);
-          setScreen({ k: "mate", id, row: null });
-        }}
-      />
-    ) : (
-      <Waiting />
-    );
-  } else if (screen.k === "people") {
-    body = chp ? (
-      <chp.PeopleScreen
-        staff={false}
-        onBack={up}
-        onRoom={(id) => go({ k: "room", id, from: "people" })}
-        onMate={(id) => {
-          window.scrollTo(0, 0);
-          if (id === keptBoard()?.you) return;
           setScreen({ k: "mate", id, row: null });
         }}
       />
@@ -738,12 +737,29 @@ export function App() {
                   go({ k: "mate", id, row: null });
                 }}
                 onOpen={(id) => go({ k: "post", id })}
-                onRoom={(id) => go({ k: "room", id })}
-                onPeople={() => go({ k: "people" })}
               />
             ) : (
               <>
                 <header class="f-hero">{top}</header>
+                <Waiting />
+              </>
+            )
+          ) : tab === "chat" ? (
+            // The Chat tab (12 Nov 2026): threads, groups, private messages | Members; the chats' own file.
+            chp ? (
+              <chp.ChatTab
+                top={top}
+                staff={false}
+                n={me?.chat ? me.chat.g + me.chat.d : 0}
+                onRoom={(id) => go({ k: "room", id })}
+                onMate={(id) => {
+                  if (id === keptBoard()?.you) return pickTab("me");
+                  go({ k: "mate", id, row: null });
+                }}
+              />
+            ) : (
+              <>
+                <header class="f-hero us">{top}</header>
                 <Waiting />
               </>
             )
@@ -786,7 +802,7 @@ export function App() {
             />
           )}
         </main>
-        <BottomBar tab={tab} us={!!me?.us} dot={!!me?.chat && me.chat.g + me.chat.d > 0} onTab={pickTab} />
+        <BottomBar tab={tab} us={!!me?.us} n={me?.chat ? me.chat.g + me.chat.d : 0} onTab={pickTab} />
         <Surprises active={sheet === null} />
       </>
     );
@@ -794,11 +810,6 @@ export function App() {
   return (
     <div class={`f-app s-${screen.k}`} onPointerDown={armSound}>
       {body}
-      {sheet === "kids" && (
-        <Sheet title="On this phone" sub="மாற்ற ஒருவரைத் தொடு." onClose={closeSheet}>
-          <Kids list={accounts()} current={acc} onSwitch={switchKid} onAdd={addKid} onSignOut={() => void signOut()} />
-        </Sheet>
-      )}
       {sheet === "feedback" && <FeedbackSheet grade={me?.grade ?? acc?.grade ?? null} onClose={closeSheet} />}
       {sheet === "zoom" && zoomed && lv && <lv.QuestionZoom {...zoomed} onClose={closeSheet} />}
       {sheet && typeof sheet === "object" && sheet.render(closeSheet)}
@@ -857,11 +868,14 @@ function TopRow(props: {
   me: FamilyMe | null;
   acc: Account | null;
   offline: boolean;
-  onKids: () => void;
+  /** His face: his profile (Me), since 12 Nov 2026; the children on this phone are at its top. */
+  onMe: () => void;
   onFeedback: () => void;
   onBell: () => void;
   onTab: (t: Tab) => void;
   onShop: () => void;
+  /** Me is on screen: his face is lit. */
+  on?: boolean;
 }) {
   const me = props.me;
   const name = me?.name ?? props.acc?.name ?? "";
@@ -876,12 +890,14 @@ function TopRow(props: {
   const bellGrew = useGrew(`${id}.bell`, bellN);
   return (
     <div class="f-toprow">
-      <button type="button" class="f-who" aria-label={`${name}: the children on this phone`} onClick={props.onKids}>
+      <button type="button" class={`f-who${props.on ? " on" : ""}`} aria-label={`${name}: your profile`} aria-pressed={!!props.on} onClick={props.onMe}>
         <Avatar name={name || "?"} size="s" pic={picOf(me?.photo?.key)} />
         <b class="f-name">{firstName(name)}</b>
-        <span class={`f-caret${kids > 1 ? " many" : ""}`} aria-hidden="true">
-          {kids > 1 ? kids : "▾"}
-        </span>
+        {kids > 1 && (
+          <span class="f-caret many" aria-hidden="true">
+            {kids}
+          </span>
+        )}
       </button>
       {props.offline && (
         <span class="f-off" title="No internet">
@@ -913,7 +929,8 @@ function TopRow(props: {
         {bellN > 0 && <i class="f-bell-n">{bellN > 9 ? "9+" : bellN}</i>}
       </button>
       <button type="button" class="f-fbb" aria-label="Feedback: tell ARISTORA" onClick={props.onFeedback}>
-        <Icon name="chat" size={20} />
+        {/* A smile since 12 Nov 2026: the speech bubble is the Chat tab's now (two bubbles on one screen confused). */}
+        <Icon name="smile" size={20} />
       </button>
     </div>
   );
@@ -925,13 +942,14 @@ const TABS: { id: Tab; icon: IconName; name: string }[] = [
   { id: "learn", icon: "map", name: "Learn" },
   { id: "us", icon: "people", name: "Us" },
   { id: "race", icon: "trophy", name: "Race" },
-  { id: "me", icon: "user", name: "Me" },
+  // 12 Nov 2026, his ask: the Chat page in the right corner (Me moved to his face in the top row).
+  { id: "chat", icon: "chat", name: "Chat" },
 ];
 
-function BottomBar(props: { tab: Tab; us: boolean; dot?: boolean; onTab: (t: Tab) => void }) {
+function BottomBar(props: { tab: Tab; us: boolean; n?: number; onTab: (t: Tab) => void }) {
   return (
     <nav class={`f-tabs${props.us ? " n5" : ""}`} aria-label="ARISTORA">
-      {TABS.filter((t) => t.id !== "us" || props.us).map((t) => (
+      {TABS.filter((t) => (t.id !== "us" && t.id !== "chat") || props.us).map((t) => (
         <button
           key={t.id}
           type="button"
@@ -942,7 +960,7 @@ function BottomBar(props: { tab: Tab; us: boolean; dot?: boolean; onTab: (t: Tab
         >
           <Icon name={t.icon} size={22} />
           <span>{t.name}</span>
-          {t.id === "us" && props.dot && <i class="f-tab-dot" aria-hidden="true" />}
+          {t.id === "chat" && !!props.n && <i class="f-tab-n">{props.n > 9 ? "9+" : props.n}</i>}
         </button>
       ))}
     </nav>

@@ -75,15 +75,25 @@ export const CHAT_KEEP_MS = 30 * DAY_MS;
 /** Deletes one sweep may do (photos, reactions, messages); the rest a minute later. */
 export const CHAT_SWEEP_MAX = 2000;
 
-/** Is this student in this group? A grade's own group, a group of his grade, or he was picked into it. */
+/**
+ * The Everyone group (12 Nov 2026, his ask: "a community group ... everyone there ... anyone can message there"): a
+ * grade's own group with the grade 0, so it is made, listed, kept and changed (emoji, teachers-only) like one, and never
+ * removed. Every student with a grade is in it.
+ */
+export const EVERYONE_GG = 0;
+
+/** Is this student in this group? Everyone's, a grade's own group, a group of his grade, or he was picked into it. */
 export function inGroup(r: Pick<Doc<"usRooms">, "k" | "gg" | "gs" | "sids" | "demo">, s: { id: string; grade: number | null; demo: boolean }): boolean {
   if (r.k !== "g" || r.demo !== s.demo) return false;
+  if (s.grade !== null && r.gg === EVERYONE_GG) return true;
   if (s.grade !== null && (r.gg === s.grade || !!r.gs?.includes(s.grade))) return true;
   return !!r.sids?.some((x) => x === s.id);
 }
 
-/** A grade's own group's words. */
-export const gradeGroupName = (g: number) => `Grade ${g}`;
+/** A grade's own group's words (the grade 0: the Everyone group). */
+export const gradeGroupName = (g: number) => (g === EVERYONE_GG ? "Everyone" : `Grade ${g}`);
+/** The Everyone group's face until a teacher picks another (one of GROUP_EMOJIS). */
+export const EVERYONE_EMO = "🦉";
 
 /** A message's few words for the chat list ("📷" for a photo alone). */
 export function lastWords(t: string | undefined, photos: number): string {

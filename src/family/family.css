@@ -1066,6 +1066,18 @@ p {
   background: #fff;
   color: var(--brand-2);
 }
+/* His face opens Me (12 Nov 2026): lit while Me is on screen. */
+.f-who:active {
+  transform: scale(0.96);
+}
+.f-hero .f-who.on {
+  background: #fff;
+  color: var(--brand-2);
+}
+.f-hero .f-who.on .f-caret.many {
+  background: var(--brand);
+  color: #fff;
+}
 .f-hero .f-off {
   background: rgba(255, 255, 255, 0.9);
 }
@@ -1129,21 +1141,26 @@ p {
 .f-tab:active .f-ic {
   transform: scale(0.88);
 }
-/* Something new in a group or a chat (8 Nov 2026): a dot on Us. */
+/* New in his groups, chats and threads (12 Nov 2026: a count on Chat; a dot on Us before). */
 .f-tab {
   position: relative;
 }
-.f-tab-dot {
+.f-tab-n {
   position: absolute;
-  top: 9px;
-  left: calc(50% + 5px);
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
+  top: 5px;
+  left: calc(50% + 3px);
+  min-width: 18px;
+  height: 18px;
+  padding: 2px 5px 0;
+  border-radius: 9px;
   background: var(--gem);
   box-shadow: 0 0 0 2px #fff;
+  color: #fff;
+  font: 800 11px/1.3 var(--display);
+  font-style: normal;
+  text-align: center;
 }
-.f-tab.on .f-tab-dot {
+.f-tab.on .f-tab-n {
   display: none;
 }
 .f-mate-dm {

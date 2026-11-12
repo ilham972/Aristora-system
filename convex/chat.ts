@@ -31,6 +31,8 @@ import {
   GROUP_NAME_MAX,
   GROUP_SIDS_MAX,
   gradeGroupName,
+  EVERYONE_GG,
+  EVERYONE_EMO,
   groupsOf,
   inGroup,
   isRx,
@@ -207,12 +209,12 @@ const personFor = (me: Me) => (me.k === "u" ? { k: "u" as const, id: me.u._id as
 
 // ---------------------------------------------------------------- rooms
 
-/** A room by its id, or a grade's own group by "g:<grade>" (null until someone writes in it). */
+/** A room by its id, or a grade's own group by "g:<grade>" ("g:0" the Everyone group; null until someone writes in it). */
 async function roomRef(ctx: QueryCtx, ref: string, demo: boolean): Promise<{ r: Doc<"usRooms"> | null; gg?: number }> {
   const m = /^g:(\d{1,2})$/.exec(ref);
   if (m) {
     const gg = Number(m[1]);
-    if (!(RACE_GRADES as readonly number[]).includes(gg)) fail("This group isn't here.");
+    if (gg !== EVERYONE_GG && !(RACE_GRADES as readonly number[]).includes(gg)) fail("This group isn't here.");
     const r = await ctx.db
       .query("usRooms")
       .withIndex("by_grade", (q) => q.eq("demo", demo).eq("gg", gg))
@@ -232,7 +234,7 @@ async function gradeRoom(ctx: MutationCtx, gg: number, demo: boolean, now: numbe
     .withIndex("by_grade", (q) => q.eq("demo", demo).eq("gg", gg))
     .first();
   if (had) return had;
-  const id = await ctx.db.insert("usRooms", { k: "g", gg, name: gradeGroupName(gg), la: now, n: 0, rv: 0, demo, at: now });
+  const id = await ctx.db.insert("usRooms", { k: "g", gg, name: gradeGroupName(gg), ...(gg === EVERYONE_GG ? { emo: EVERYONE_EMO } : {}), la: now, n: 0, rv: 0, demo, at: now });
   return (await ctx.db.get(id))!;
 }
 
@@ -253,7 +255,7 @@ async function access(ctx: QueryCtx, me: Me, ref: string): Promise<Access> {
   const { r, gg } = await roomRef(ctx, ref, me.demo);
   if (me.k === "s") {
     if (!r) {
-      if (gg !== me.grade) fail("This group is for another grade.");
+      if (gg !== me.grade && !(gg === EVERYONE_GG && me.grade !== null)) fail("This group is for another grade.");
       return { r: null, gg, write: true, photos: true, look: false };
     }
     if (r.k === "g") {
@@ -343,7 +345,7 @@ async function lineOf(ctx: QueryCtx, r: Doc<"usRooms">, me: Me, seat: Doc<"usSea
 }
 
 /** A grade's own group before anyone wrote in it. */
-const emptyGrade = (gg: number): ChatLine => ({ id: `g:${gg}`, k: "g", name: gradeGroupName(gg), gg, la: 0, un: 0 });
+const emptyGrade = (gg: number): ChatLine => ({ id: `g:${gg}`, k: "g", name: gradeGroupName(gg), ...(gg === EVERYONE_GG ? { emo: EVERYONE_EMO } : {}), gg, la: 0, un: 0 });
 
 /** Newest first; a grade's own groups first among groups. */
 const byLast = (a: ChatLine, b: ChatLine) => b.la - a.la;
@@ -358,7 +360,10 @@ export const rooms = query({
     const groups: ChatLine[] = [];
     for (const r of await groupsOf(ctx, me.s)) groups.push(await lineOf(ctx, r, me, seats.get(r._id)));
     if (me.grade !== null && !groups.some((x) => x.gg === me.grade)) groups.push(emptyGrade(me.grade));
-    groups.sort((a, b) => (a.gg === me.grade ? -1 : b.gg === me.grade ? 1 : byLast(a, b)));
+    if (me.grade !== null && !groups.some((x) => x.gg === EVERYONE_GG)) groups.push(emptyGrade(EVERYONE_GG));
+    // His grade's group first, then Everyone, then the others newest first.
+    const rank = (x: ChatLine) => (x.gg === me.grade ? 0 : x.gg === EVERYONE_GG ? 1 : 2);
+    groups.sort((a, b) => rank(a) - rank(b) || byLast(a, b));
     const dms: ChatLine[] = [];
     for (const seat of seats.values()) {
       if (!seat.d) continue;
@@ -382,7 +387,7 @@ export const trooms = query({
       .collect();
     const groups: ChatLine[] = [];
     for (const r of all) groups.push(await lineOf(ctx, r, me, seats.get(r._id)));
-    for (const gg of RACE_GRADES) if (!groups.some((x) => x.gg === gg)) groups.push(emptyGrade(gg));
+    for (const gg of [EVERYONE_GG, ...RACE_GRADES]) if (!groups.some((x) => x.gg === gg)) groups.push(emptyGrade(gg));
     groups.sort((a, b) => (a.gg !== undefined && b.gg !== undefined ? a.gg - b.gg : a.gg !== undefined ? -1 : b.gg !== undefined ? 1 : byLast(a, b)));
     const dms: ChatLine[] = [];
     for (const seat of seats.values()) {
@@ -538,7 +543,7 @@ async function roomOf(ctx: QueryCtx, me: Me, ref: string, since: number | undefi
     id: r?._id ?? ref,
     k: r?.k ?? "g",
     name: r?.k === "h" ? `Q${r.hq ?? ""}` : (r?.name ?? (a.gg !== undefined ? gradeGroupName(a.gg) : "Group")),
-    ...(r?.emo ? { emo: r.emo } : {}),
+    ...(r?.emo ? { emo: r.emo } : !r && a.gg === EVERYONE_GG ? { emo: EVERYONE_EMO } : {}),
     ...(a.gg !== undefined ? { gg: a.gg } : {}),
     ...(r?.gs?.length ? { gs: r.gs } : {}),
     ...(r?.ro ? { ro: true } : {}),
@@ -574,7 +579,7 @@ async function roomOf(ctx: QueryCtx, me: Me, ref: string, since: number | undefi
         .query("raceRows")
         .withIndex("by_list", (q) => q.eq("demo", me.demo).eq("gone", false))
         .collect();
-      head.members = rows.filter((x) => x.g === a.gg).length;
+      head.members = rows.filter((x) => (a.gg === EVERYONE_GG ? x.g !== undefined : x.g === a.gg)).length;
     }
     return { head, msgs: [], more: false, full: true };
   }
@@ -1038,7 +1043,7 @@ export const tgroupDrop = mutation({
     const u = await actor(ctx, args.token, ["community"]);
     const { r } = await roomRef(ctx, args.id, false);
     if (!r || r.k !== "g") return;
-    if (r.gg !== undefined) fail("A grade's own group stays (its messages can be removed one by one).");
+    if (r.gg !== undefined) fail(r.gg === EVERYONE_GG ? "The Everyone group stays (its messages can be removed one by one)." : "A grade's own group stays (its messages can be removed one by one).");
     for (const c of await ctx.db
       .query("usChat")
       .withIndex("by_room", (q) => q.eq("rid", r._id))
