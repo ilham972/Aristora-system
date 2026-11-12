@@ -217,13 +217,6 @@ export function MeTab(props: {
           ))}
         </div>
       </header>
-      {/* His face opens Me since 12 Nov 2026: a parent with two or more children switches here first, in two taps. */}
-      {props.list.length > 1 && (
-        <section class="f-set f-card rise f-kids-top" aria-label="On this phone">
-          <h2 class="f-h2">On this phone</h2>
-          <Kids list={props.list} current={props.current} onSwitch={props.onSwitch} onAdd={props.onAdd} onSignOut={props.onSignOut} />
-        </section>
-      )}
       <section class="f-stats rise">
         <div>
           <Gem size={22} />
@@ -354,14 +347,9 @@ export function MeTab(props: {
           ))}
       </section>
       <section class="f-set f-card rise">
-        {props.list.length > 1 ? (
-          <h2 class="f-h2">Settings</h2>
-        ) : (
-          <>
-            <h2 class="f-h2">On this phone</h2>
-            <Kids list={props.list} current={props.current} onSwitch={props.onSwitch} onAdd={props.onAdd} onSignOut={props.onSignOut} />
-          </>
-        )}
+        {/* Always the last card (12 Nov 2026, his ask: "put this end of the profile page, below of everything"). */}
+        <h2 class="f-h2">On this phone</h2>
+        <Kids list={props.list} current={props.current} onSwitch={props.onSwitch} onAdd={props.onAdd} onSignOut={props.onSignOut} />
         <button
           type="button"
           class="f-row"

@@ -1331,8 +1331,9 @@ learning app of our education institute"): one profile, his class times, what he
   record): the paper book is the truth.
 - **Screens.** On every tab the top row: who is on screen (his letter on his colour, his name, how many children when
   two or more; **tap = Me, his profile**, since 12 Nov 2026: lit white while Me is on screen; the phone's Back returns to
-  the tab he was on (`beforeMe`, a history step `{ me: 1 }`); with two or more children **On this phone** is Me's first
-  card (`.f-kids-top`), so switching stays two taps; the old children sheet is gone), his flame (days in a row; lit once he did a Level today; tap = Me), his XP ever
+  the tab he was on (`beforeMe`, a history step `{ me: 1 }`); **On this phone** is Me's last card, below everything (his
+  ask the same day, after I had put it first for families: his phone holds six children); the old children sheet is
+  gone), his flame (days in a row; lit once he did a Level today; tap = Me), his XP ever
   (tap = the race), **the bell** (7 Nov 2026, below), **Feedback** (a smile since 12 Nov 2026: the speech bubble is the Chat
   tab's); XP and the flame jump once when they grew (back
   from a Level). Since 10 Nov 2026 (the Shop, below): XP and **his coins** share one white capsule (`.f-wallet`: 💎 XP |
@@ -2089,7 +2090,7 @@ learning app of our education institute"): one profile, his class times, what he
   row); the phone keeps the list (`aristora.family.accounts`, the one on screen `aristora.family.current`) and sends
   the key of the child on screen. Everything kept on the phone is kept per child (`keep()` = `aristora.family.<id>.…`:
   his screens, typed answers, a level's form and questions, the tab). Add another = his index
-  and code (or his link); switch = his face → Me → On this phone (first with two or more) → a child; sign out = Me → "Bilal: வெளியேறு" → yes (the key
+  and code (or his link); switch = his face → Me → On this phone (the last card) → a child; sign out = Me → "Bilal: வெளியேறு" → yes (the key
   stops on the server; the next child is on screen; the last → the sign-in). The same child twice (his link, then his
   code): the newer stays, the older is signed out (`me.index`). A child signed out by the class leaves the list by
   himself. Up to 6. A phone from before (one key at `aristora.family.token`) becomes the first child with all it kept.

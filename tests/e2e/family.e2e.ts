@@ -521,14 +521,14 @@ test("the new look: class hours and Home, the map, the questions as printed, fee
   await contains(P.locator(".f-caret.many"), "2");
   await goalIs(P, "Level 1");
   await shot(P, "fam18-second-child");
-  // Switch back to Hana: her face opens her profile with the children on top (12 Nov 2026), one tap more switches.
+  // Switch back to Hana: her face opens her profile; On this phone is its last card (12 Nov 2026).
   await P.locator(".f-who").click();
-  await visible(P.locator(".f-kids-top .f-kid", { hasText: "Bilal M" }));
+  await visible(P.locator(".f-kids .f-kid", { hasText: "Bilal M" }));
   await shot(P, "fam19-children");
-  await P.locator(".f-kids-top .f-kid", { hasText: "Hana K" }).click();
+  await P.locator(".f-kids .f-kid", { hasText: "Hana K" }).click();
   await whoIs(P, "Hana");
   // Bilal signs out of this phone (from Me): Hana stays; his phone key stops on the server.
-  await P.locator(".f-kids-top .f-kid", { hasText: "Bilal M" }).click();
+  await P.locator(".f-kids .f-kid", { hasText: "Bilal M" }).click();
   await whoIs(P, "Bilal");
   await P.getByRole("button", { name: /Sign out Bilal/ }).click();
   await P.locator(".f-sure").getByRole("button", { name: "Sign out", exact: true }).click();
