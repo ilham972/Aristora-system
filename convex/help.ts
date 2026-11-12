@@ -509,13 +509,29 @@ export const thide = mutation({
 });
 
 /**
+ * His photo of this question's teacher's part is in the thread's card already (marked from home, its files still
+ * kept): a teacher who opens the thread herself needs no photo from him (12 Nov 2026, Correction's Homework card).
+ */
+async function photoHere(ctx: QueryCtx, sid: Id<"students">, unitId: Id<"units">, n: number, q: number): Promise<boolean> {
+  const rows = await ctx.db
+    .query("homePhotos")
+    .withIndex("by_student", (x) => x.eq("studentId", sid).eq("unitId", unitId).eq("n", n).eq("q", q))
+    .collect();
+  const last = rows.filter((r) => r.kind === "part" && !r.free && !r.cls).sort((a, b) => b.at - a.at)[0];
+  return !!last && last.state === "done" && last.files.length > 0;
+}
+
+/**
  * A teacher asks a student for one of his wrong questions (Consultation's icon, his words: "calling the student to
  * explain in the online inside the thread ... ask to upload the photo"): the thread opens for him with her as its
  * teacher, he is told to send his photo. She can explain at once.
+ * From Correction's Homework card too (12 Nov 2026, his idea: "put the headset icon same like in the consult page",
+ * built after marking: a photo question counts as lost only once it is marked): his photo and her marks are in the
+ * thread's card already (`photoHere`), so he is asked for nothing (`have`) and told she explains there.
  */
 export const tcall = mutation({
   args: { token, studentId: v.id("students"), unitId: v.id("units"), q: v.number() },
-  handler: async (ctx, args): Promise<{ id: string; again: boolean }> => {
+  handler: async (ctx, args): Promise<{ id: string; again: boolean; have?: true }> => {
     const u = await actor(ctx, args.token, ["any"]);
     const s = await ctx.db.get(args.studentId);
     if (!s || s.archived) fail("This student isn't in the class.");
@@ -528,12 +544,20 @@ export const tcall = mutation({
     if (!his.ok) fail("This question doesn't wait for an explanation any more.");
     const r = await threadFor(ctx, args.unitId, his.n, args.q, u._id, now);
     if (r.ht !== u._id) await ctx.db.patch(r._id, { ht: u._id });
-    if (had) await ctx.db.patch(had._id, { rid: r._id, st: "open", tid: u._id, ta: now, tw: now, ph: false, at: now, doneAt: undefined, by: undefined, from: "t" });
-    else await ctx.db.insert("helpAsks", { rid: r._id, sid: s._id, unitId: args.unitId, n: his.n, q: args.q, tid: u._id, ta: now, tw: now, st: "open", from: "t", ph: false, at: now, demo: false });
+    const have = await photoHere(ctx, s._id, args.unitId, his.n, args.q);
+    if (had) await ctx.db.patch(had._id, { rid: r._id, st: "open", tid: u._id, ta: now, tw: now, ph: have, at: now, doneAt: undefined, by: undefined, from: "t" });
+    else await ctx.db.insert("helpAsks", { rid: r._id, sid: s._id, unitId: args.unitId, n: his.n, q: args.q, tid: u._id, ta: now, tw: now, st: "open", from: "t", ph: have, at: now, demo: false });
     const first = s.name.split(" ")[0];
-    await say(ctx, r, { by: u._id, n: u.name }, now, { t: `${first}, Q${args.q}: உன் வழிமுறையின் படத்தை இங்கே அனுப்பு. நான் விளக்குகிறேன்.` });
-    await alertStudent(ctx, s._id, `🎧 ${u.name} ஆசிரியர் Q${args.q} ஐ online இல் விளக்க விரும்புகிறார்: உன் படத்தை அனுப்பு.`, `/f/#chat=${r._id}`);
-    return { id: r._id, again: false };
+    await say(ctx, r, { by: u._id, n: u.name }, now, {
+      t: have ? `${first}, Q${args.q}: உன் படத்தைப் பார்த்தேன். இங்கே விளக்குகிறேன்.` : `${first}, Q${args.q}: உன் வழிமுறையின் படத்தை இங்கே அனுப்பு. நான் விளக்குகிறேன்.`,
+    });
+    await alertStudent(
+      ctx,
+      s._id,
+      have ? `🎧 ${u.name} ஆசிரியர் Q${args.q} ஐ online இல் விளக்குகிறார்: thread ஐத் திற.` : `🎧 ${u.name} ஆசிரியர் Q${args.q} ஐ online இல் விளக்க விரும்புகிறார்: உன் படத்தை அனுப்பு.`,
+      `/f/#chat=${r._id}`,
+    );
+    return { id: r._id, again: false, ...(have ? { have: true as const } : {}) };
   },
 });
 

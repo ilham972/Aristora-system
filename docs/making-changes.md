@@ -811,3 +811,12 @@ EOF
   short reads, and a change that must show (Explained, a name hidden, a new student) bumps the room's `rv`
   (`bumpRoom`). A run-through reaches a thread's teacher side through `C.frameLocator("iframe.us-frame")`; the fake
   microphone is on for every family run-through (`--use-fake-device-for-media-stream`).
+- **The Homework pad's headphones** (12 Nov 2026): `.hl-onl` has its own class on purpose: a run-through counts
+  `.hl-acts .hl-again` to know whether Retake is there (a typed reason has none), so a new pad button never takes
+  `.hl-again`. A fourth button leaves Save 88 px at 320 px: its words and marks are two lines (`.hl-go-l`, `b`), and
+  the "Explain online" run-through measures the widest label ("Save · next" over 10/12) on a copy of the button.
+  **A thread only for a lost question**: `help.tcall` refuses a photo question before `photos.mark` (it isn't lost
+  yet), so the pad saves first, then calls; two mutations, the marks never wait on the thread. In a run-through, rows
+  written straight on the server (`t.mutation`, not from a page) reach an open page only after `await backend.push()`
+  (the lane's names come from the board's views: without it the new student's name never shows). Never call a test
+  helper that uses `raw.run` inside another `raw.run`: it waits on itself until the 120 s timeout.

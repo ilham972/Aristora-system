@@ -1068,8 +1068,11 @@ test("photos from home: a drawing photographed in the level, marked by a person 
   expect(await card.locator(".phq-chip").count()).toBe(0);
   await noSideScroll(N);
   await shot(N, "fam-ph04-lane-part");
+  // The headphones (12 Nov 2026) wait in their place, pale: nothing is marked yet, so nothing to explain online.
+  expect(await N.locator(".hl-acts .hl-onl").isDisabled()).toBe(true);
   await N.setViewportSize({ width: 320, height: 640 });
   await noSideScroll(N);
+  expect(await N.locator(".hl-go").evaluate((b) => b.scrollWidth <= b.clientWidth && b.scrollHeight <= b.clientHeight)).toBe(true);
   await shot(N, "fam-ph04b-lane-part-320");
   await N.setViewportSize({ width: 390, height: 844 });
   expect(await card.locator(".fc-pb.on").count()).toBe(0);
@@ -4102,6 +4105,73 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
   await until(async () => (await O.locator(".evx-card .fc-onl.on").count()) === 1, "the icon filled");
   expect((await t.query(api.help.mine, { token: MIRA })).find((l) => l.q === qNow)).toMatchObject({ ph: false, from: "t", tname: "Owner" });
   await noSideScroll(O);
+
+  // The same headphones on Correction's Homework card (12 Nov 2026, his idea: "put the headset icon same like in the
+  // consult page"; built after marking, his yes: before her marks a drawing isn't lost, so nothing to explain yet).
+  // Omar's Level 1 from home: Q8 (i) right on the pad, his drawing for (ii) photographed, waiting in the lane.
+  const omar = await t.mutation(api.students.add, { ...as, name: "Omar S", grade: 8, term: 1, stage: "master", unitId: u01 });
+  const OMAR = "family-phone-omar-help-".padEnd(48, "x");
+  await t.mutation(api.families.makeLink, { ...as, studentId: omar, codeHash: secretHash("family-link", "omar-help-family-link-0123456789") });
+  await t.mutation(api.family.join, { code: "omar-help-family-link-0123456789", token: OMAR, label: "Android" });
+  await t.mutation(api.family.check, { token: OMAR, unitId: u01, n: 1, typed: [{ q: 1, a: ["3"] }, { q: 8, a: ["24"] }] });
+  await t.mutation(api.family.photoSend, { token: OMAR, unitId: u01, n: 1, q: 8, kind: "part", files: [await png()] });
+  await backend.push();
+  await O.locator(".tabs .tab.correction").click();
+  await O.locator(".hl-btn").click();
+  await O.locator(".fc-names .fc-nm", { hasText: "Omar" }).click();
+  const hw = O.locator(".hl-card");
+  await contains(hw.locator(".fc-qn"), "8");
+  // Always in its place between Message and Save; pale until the marks she taps are below the maximum.
+  const onl = O.locator(".hl-acts .hl-onl");
+  await visible(onl);
+  expect(await onl.isDisabled()).toBe(true);
+  await O.waitForTimeout(400);
+  await hw.getByRole("button", { name: "Part ii: 1 of 1" }).click();
+  await contains(O.locator(".hl-go"), "2/2");
+  expect(await onl.isDisabled()).toBe(true); // full marks: nothing to explain
+  await hw.getByRole("button", { name: "Part ii: 0 of 1" }).click();
+  await contains(O.locator(".hl-go"), "1/2");
+  expect(await onl.isDisabled()).toBe(false);
+  await noSideScroll(O);
+  await shot(O, "help15-homework-headset");
+  for (const [w, hgt] of [
+    [360, 740],
+    [320, 640],
+  ]) {
+    await O.setViewportSize({ width: w, height: hgt });
+    await noSideScroll(O);
+    // Nothing on the pad is cut: Save still shows its marks.
+    expect(await O.locator(".hl-go").evaluate((b) => b.scrollWidth <= b.clientWidth)).toBe(true);
+    // Nor at its widest ("Save · next" over 10/12): measured on a copy of the button, as wide as the real one.
+    expect(
+      await O.locator(".hl-go").evaluate((b) => {
+        const c = b.cloneNode(true) as HTMLElement;
+        c.style.cssText = `position:absolute;visibility:hidden;width:${b.clientWidth}px`;
+        c.querySelector(".hl-go-l")!.textContent = "Save · next";
+        c.querySelector("b")!.textContent = "10/12";
+        document.body.appendChild(c);
+        const ok = c.scrollWidth <= c.clientWidth;
+        c.remove();
+        return ok;
+      }),
+    ).toBe(true);
+    await shot(O, `help15-homework-headset-${w}`);
+  }
+  await O.setViewportSize({ width: 390, height: 820 });
+  expect(await askOf(omar, 8)).toBeNull();
+  await O.waitForTimeout(800);
+  // One tap: her marks saved (1/2: lost), his thread open with her as its teacher, no photo asked (it is in the card).
+  await onl.click();
+  await contains(O.locator(".toast"), "Omar's thread is open: explain in Us → Thread");
+  expect(await mq(omar, 8)).toMatchObject({ got: 1, max: 2, lost: true });
+  expect((await mq(omar, 8))?.x).toBeUndefined();
+  expect(await askOf(omar, 8)).toMatchObject({ st: "open", from: "t", ph: true, rid: tid });
+  expect((await t.query(api.help.mine, { token: OMAR })).find((l) => l.q === 8)).toMatchObject({ ph: true, from: "t", tname: "Owner" });
+  const his = await t.query(api.chat.room, { token: OMAR, id: tid });
+  expect(his.msgs[his.msgs.length - 1].t).toContain("உன் படத்தைப் பார்த்தேன்");
+  expect(his.head.help!.asks.find((a) => a.mine)!.photo).toMatchObject({ st: "done", got: 0, max: 1, by: "Owner" });
+  // The lane has nothing left.
+  await contains(O.locator(".hl-idle"), "No photos waiting");
 
   // The smallest phone: Hana's thread fits 320 px.
   await P.setViewportSize({ width: 320, height: 640 });

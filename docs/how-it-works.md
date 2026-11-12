@@ -1966,6 +1966,24 @@ learning app of our education institute"): one profile, his class times, what he
     - **Consultation's icon** (headphones beside the whiteboard on a Master question's card, `OnlineButton`,
       `help.tcall`; none for a demo student): a thread opens for the ticked student with her as its teacher, he is
       alerted to send his photo, she can explain at once; filled once it is open (`help.topen`).
+    - **The same headphones on Correction's Homework card** (12 Nov 2026, his idea: "put the headset icon same like
+      in the consult page ... do the correction inside the thread"; my answer, his "you are correct, build as you
+      recommended": never the correction inside the thread and never her Message as a thread (a thread belongs to the
+      question, is kept a year and every later student joins it: "retake, blurry" is private noise there; before her
+      marks a photo question isn't lost, so `help.tcall` refuses it; the lane's Save → next is his speed; the thread's
+      screen can't use the class app's marking pad), but **after marking**). On the pad between Message and Save
+      (`.hl-onl`), always in its place: pale until the marks she tapped are **below the maximum** (and on a card the
+      class corrected, or a demo student's: `PhotoItem.student.demo`); one tap = **Save, then his thread** (`save(true)`
+      in `HomeCard`: `photos.mark`, then `help.tcall`; her marks stay saved if the thread can't open, e.g. Us closed:
+      the toast says why) and the next card as after Save. **He is asked for no photo** when his marked photo of the
+      teacher's part is still kept (`photoHere` in `convex/help.ts`: the last `part` row, `done`, with files): his row
+      starts with `ph: true`, the thread's first words are "உன் படத்தைப் பார்த்தேன். இங்கே விளக்குகிறேன்.", his alert
+      "…விளக்குகிறார்: thread ஐத் திற."; `tcall` returns `have`. The same for Consultation's icon on such a question.
+      A typed reason (no photo) or a photo already deleted: he is asked for one, as before. She explains in Us →
+      Thread (Mine); Message, her voice note and Retake stay as they are, for before marking. Whoever taps it is the
+      thread's teacher (the owner and Photos people: ⋮ → Send to another teacher; 12 hours with no word → everyone's).
+      **Save is two lines in the lane since then** ("Save · next" small, her marks big: `.hl-go-l`), so the four
+      buttons fit 320 px (`.hl-acts` 66 / 74 / 50 px + Save; without Retake 96 / 50 px + Save).
   - **Me = his profile** (4 Nov 2026, his voice note: "a proper profile page for the students ... as simple as
     possible"; `me.tsx`, one of the parts that come right after the first screen): a violet header with **his photo**
     (88 px; tap = the camera or the gallery: his photo, below), his name (🎂 on his birthday), grade and index ("Photo ·
@@ -2498,7 +2516,8 @@ learning app of our education institute"): one profile, his class times, what he
       once; pale once corrected in class; **gone** on a card with no photo, his typed reason: 12 Nov 2026, Message then
       sits on the left alone, `.hl-acts.one`), **Message** (below; pale only once corrected in class) and **Save x/max
       · next** (green full, amber part, red
-      0); Correction's tap guard (350 ms, Save 700 ms after a new card). Save → the next question, then his next level, then round to any she skipped, then the
+      0; two lines since 12 Nov 2026, with the **headphones** between Message and Save: "Explain online" above,
+      "The same headphones on Correction's Homework card"); Correction's tap guard (350 ms, Save 700 ms after a new card). Save → the next question, then his next level, then round to any she skipped, then the
       next student by himself (this grade first, oldest first; "Hana done. Next: Omar."), then "Every photo from home is
       marked". The next card scrolls back to its squares, so the photo shows from its top.
     - **Her message before marking** (7 Nov 2026, his voice note: "before I do the correction, I want to tell them where is

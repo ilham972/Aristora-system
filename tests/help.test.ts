@@ -357,6 +357,39 @@ describe("online explanations", () => {
     expect(after.urls).toEqual([]);
   });
 
+  test("Correction's Homework card: her call on a drawing she just marked asks him for no photo; nothing before her marks, nothing on full marks", async () => {
+    // 12 Nov 2026, his idea: "put the headset icon same like in the consult page" on the Homework card. Built after
+    // marking (his yes): before her marks the question isn't lost, so there is nothing to explain.
+    const f = await file("image/jpeg");
+    await h().mutation(api.family.photoSend, { unitId: u01, n: 1, q: 10, kind: "part", files: [f] });
+    const [item] = await t.query(api.photos.queue, {});
+    expect(item.student.demo).toBeUndefined();
+    await expect(t.mutation(api.help.tcall, { studentId: hana, unitId: u01, q: 10 })).rejects.toThrow(/doesn't wait/);
+    await t.mutation(api.photos.mark, { id: item.id, got: 1 }); // 1 of 2: lost
+    const r = await t.mutation(api.help.tcall, { studentId: hana, unitId: u01, q: 10 });
+    expect(r).toMatchObject({ again: false, have: true });
+    // Her photo counts as sent: her phone shows no "send your photo" button, and the thread's first words don't ask.
+    expect(await askRow(hana, 10)).toMatchObject({ st: "open", from: "t", ph: true });
+    expect((await h().query(api.help.mine, {})).find((x) => x.q === 10)).toMatchObject({ ph: true, from: "t", tname: "Owner" });
+    const room = await h().query(api.chat.room, { id: r.id });
+    expect(room.msgs[0]).toMatchObject({ tch: true, t: expect.stringContaining("உன் படத்தைப் பார்த்தேன்") });
+    expect(room.head.help!.asks[0].photo).toMatchObject({ st: "done", got: 1, max: 2 });
+    expect(room.head.help!.asks[0].photo!.urls).toHaveLength(1);
+    expect(await t.mutation(api.help.tcall, { studentId: hana, unitId: u01, q: 10 })).toEqual({ id: r.id, again: true });
+    // Mira's drawing, full marks: nothing to explain, no thread.
+    await m().mutation(api.family.photoSend, { unitId: u01, n: 1, q: 10, kind: "part", files: [await file("image/jpeg")] });
+    await t.mutation(api.photos.mark, { id: (await t.query(api.photos.queue, {}))[0].id, got: 2 });
+    await expect(t.mutation(api.help.tcall, { studentId: mira, unitId: u01, q: 10 })).rejects.toThrow(/doesn't wait/);
+    // Not now, and her photo gone meanwhile (the 30 days): a later call asks for one, as Consultation's always did.
+    await tn().mutation(api.help.tskip, { aid: (await askRow(hana, 10))._id });
+    await raw.run(async (ctx) => {
+      const row = (await ctx.db.query("homePhotos").collect()).find((x) => x.studentId === hana && x.q === 10)!;
+      await ctx.db.patch(row._id, { files: [], gone: Date.now() });
+    });
+    expect(await tr().mutation(api.help.tcall, { studentId: hana, unitId: u01, q: 10 })).toMatchObject({ again: false });
+    expect(await askRow(hana, 10)).toMatchObject({ st: "open", ph: false, tid: raj });
+  });
+
   test("a photo nobody ever explains goes after 30 days", async () => {
     const f = await file("image/jpeg");
     await h().mutation(api.family.photoSend, { unitId: u01, n: 1, q: 10, kind: "part", files: [f] });

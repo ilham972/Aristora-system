@@ -393,8 +393,13 @@ function HomeCard(props: {
     tone("tick");
     fn();
   };
-  const save = async () => {
-    if (Date.now() - born.current < TAP_GUARD_MS * 2 || !ready) return;
+  // Explain online (12 Nov 2026, his idea: "put the headset icon same like in the consult page"; built after marking,
+  // his yes: before her marks a photo question isn't lost, so there is nothing to explain yet). Always in its place on
+  // the pad, pale until the marks she tapped are below the maximum; one tap = Save, then his thread opens with her as
+  // its teacher (Consultation's call: `help.tcall`). His photo and her marks are in the thread already.
+  const canOnline = ready && lost && !inClass && !it.student.demo;
+  const save = async (online = false) => {
+    if (Date.now() - born.current < TAP_GUARD_MS * 2 || !ready || (online && !canOnline)) return;
     setBusy(true);
     setErr(null);
     try {
@@ -405,12 +410,25 @@ function HomeCard(props: {
         ...(!part && !inClass && total !== null && total !== it.got ? { total } : {}),
         ...(note.trim() ? { note: note.trim() } : {}),
       });
-      tone("done");
-      props.onDone(total);
     } catch (e) {
       setErr(errorText(e));
       setBusy(false);
+      return;
     }
+    const first = it.student.name.split(" ")[0];
+    if (!online) tone("done");
+    else {
+      // Her marks are saved whatever happens next: a thread that can't open (Us closed on the phones) is only said.
+      try {
+        const r = await mutate(api.help.tcall, { studentId: it.student.id, unitId: it.unit.id, q: it.q });
+        tone("call");
+        toast(`🎧 Q${it.q} saved ${total}/${it.max}. ${first}'s thread is open${r.have || r.again ? "" : " (asked for his photo)"}: explain in Us → Thread.`);
+      } catch (e) {
+        tone("done");
+        toast(`Q${it.q} saved ${total}/${it.max}, but no thread: ${errorText(e)}`);
+      }
+    }
+    props.onDone(total);
   };
   const again = async (w: RetakeWhy) => {
     setBusy(true);
@@ -597,20 +615,41 @@ function HomeCard(props: {
             <button type="button" class="fc-n hl-again hl-ask" disabled={busy || inClass} onClick={() => setAsking(true)}>
               <small>Message</small>
             </button>
+            <button
+              type="button"
+              class="fc-n hl-onl"
+              disabled={!canOnline}
+              aria-label={
+                canOnline
+                  ? `Save ${total}/${it.max} and explain Q${it.q} online to ${it.student.name}: open his thread`
+                  : `Explain Q${it.q} online: only once the marks you tap are below ${it.max}`
+              }
+              onClick={() => void save(true)}
+            >
+              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4.5 14v-2a7.5 7.5 0 0 1 15 0v2" />
+                <rect x="3" y="13.5" width="4.5" height="6.5" rx="1.6" />
+                <rect x="16.5" y="13.5" width="4.5" height="6.5" rx="1.6" />
+              </svg>
+            </button>
             <button type="button" class={`fc-go hl-go${look}`} disabled={!ready} onClick={() => void save()}>
               {busy ? (
                 "…"
               ) : total === null && !inClass ? (
                 <small>{part ? "Tap the marks for each part" : "Tap the marks"}</small>
               ) : (
+                // Two lines since the headphones took room on the pad (12 Nov 2026): the words small, her marks big
+                // under them, so nothing is cut at 320 px.
                 <>
-                  <span>{inClass ? "Close" : "Save"}</span>
+                  <span class="hl-go-l">
+                    {inClass ? "Close" : "Save"}
+                    {props.hasNext && " · next"}
+                  </span>
                   {total !== null && (
                     <b>
                       {total}/{it.max}
                     </b>
                   )}
-                  {props.hasNext && <small>· next</small>}
                 </>
               )}
             </button>

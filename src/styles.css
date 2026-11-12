@@ -10763,12 +10763,23 @@ body.tm-on .toasts {
 /* The pad: Retake small on the left, Save (with the marks) big on the right, in the same place for every question. */
 .hl-acts {
   display: grid;
-  grid-template-columns: 74px 74px minmax(0, 1fr);
-  gap: 8px;
+  grid-template-columns: 66px 74px 50px minmax(0, 1fr);
+  gap: 6px;
 }
 /* No photo to take again (his typed reason, 12 Nov 2026): Message alone on the left. */
 .hl-acts.one {
-  grid-template-columns: 96px minmax(0, 1fr);
+  grid-template-columns: 96px 50px minmax(0, 1fr);
+}
+/* Explain online (12 Nov 2026): Consultation's headphones between Message and Save, always there; pale until the marks
+   she tapped are below the maximum, then in the ink of a call. */
+.fc-n.hl-onl {
+  height: 64px;
+  display: grid;
+  place-items: center;
+}
+.fc-n.hl-onl:not(:disabled) {
+  border-color: var(--ink);
+  color: var(--ink);
 }
 /* Her voice note (12 Nov 2026): Record, then the red dot and the time with Stop, then ▶ and delete. */
 .vn-rec {
@@ -10925,6 +10936,29 @@ body.tm-on .toasts {
 .hl-again small {
   font-size: 15px;
   font-weight: 700;
+}
+/* Save in two lines (12 Nov 2026, the headphones beside it): "Save · next" small, her marks big under it. */
+.fc-go.hl-go {
+  flex-direction: column;
+  gap: 3px;
+  padding: 0 4px;
+}
+.hl-go-l {
+  font-size: 14.5px;
+  line-height: 1;
+  white-space: nowrap;
+}
+.hl-go-l:only-child {
+  font-size: 20px;
+}
+.fc-go.hl-go b {
+  font-size: 28px;
+  line-height: 1;
+}
+.fc-go.hl-go small {
+  font-size: 13.5px;
+  line-height: 1.15;
+  text-align: center;
 }
 .fc-go.hl-go:disabled {
   background: var(--line);

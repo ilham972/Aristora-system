@@ -73,7 +73,8 @@ export type PhotoItem = {
   id: Id<"homePhotos">;
   kind: "part" | "working";
   at: number;
-  student: { id: Id<"students">; name: string; grade: number | null };
+  /** `demo`: a demo or practice student (no phone: no online thread from his card). */
+  student: { id: Id<"students">; name: string; grade: number | null; demo?: true };
   unit: { id: Id<"units">; key: string; en: string; ta: string };
   n: number;
   q: number;
@@ -228,7 +229,7 @@ async function itemOf(
     id: r._id,
     kind: r.kind,
     at: r.at,
-    student: { id: s._id, name: s.name, grade: s.grade ?? null },
+    student: { id: s._id, name: s.name, grade: s.grade ?? null, ...(s.demo || s.test ? { demo: true as const } : {}) },
     unit: { id: u.unit._id, key: u.unit.key, en: u.unit.en, ta: u.unit.ta },
     n: r.n,
     q: r.q,
