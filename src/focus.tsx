@@ -115,6 +115,7 @@ import { bookDocAt,
 } from "./store";
 import { tone } from "./tones";
 import { Empty, GRADES, Sheet } from "./ui";
+import { TriesButton } from "./tries";
 import { HomeButton, HomeNames, LaneBody, laneGrades, setLaneOn, useLaneList, useLaneState } from "./homeLane";
 
 // ---- What the page remembers while the app is open (switching pages and back keeps the open paper) ----
@@ -1617,8 +1618,10 @@ function PaperHead(props: { v: View; later?: () => void; onCard: () => void }) {
   return (
     <>
       <header class="fc-head" aria-label={`${v.s.name}'s paper`}>
-        {/* Empty since 9 Nov 2026 (the book button went): it keeps every button on the right, in its place. */}
-        <div class="fc-head-tools" />
+        {/* His tries (13 Nov 2026): second tries and tries after a lesson, in a fixed place; pale when he brings none. */}
+        <div class="fc-head-tools">
+          <TriesButton v={v.home ?? v} />
+        </div>
         <div class="fc-head-acts">
           {props.later && (
             <button type="button" class="btn ghost small fc-later" aria-label="Handed in: correct later" onClick={props.later}>

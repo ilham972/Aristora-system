@@ -36,6 +36,14 @@ export interface MQ {
   rg?: number;
   /** Right on that second try (10 Nov 2026): the marks it added (half the question's, `secondTry`), in the level's marks. */
   rh?: number;
+  /**
+   * Teaching by skill (13 Nov 2026, convex/lib/path.ts): rp = the parts still wrong at his last try (the key's labels;
+   * none = the whole question); lt = he tried it again after his lesson, at; rb = `rt` as it was before that try was
+   * right (taking the try back puts it back). Wrong after the lesson (lt and no x) = one-to-one.
+   */
+  rp?: string[];
+  lt?: number;
+  rb?: number;
   /** Free marks (out of the syllabus, lib/free.ts): the row as it was before; "none" = there was no row. */
   fr?: Omit<MQ, "fr"> | "none";
 }
@@ -95,9 +103,26 @@ export interface MState {
   lv: Record<string, MLevel>;
   /** Correction or Evaluation asked Theory to teach this unit again. */
   reteach?: { at: number; by?: string };
+  /** The skill lessons he got while this book had a question waiting for them: skill id → when (convex/lib/path.ts). */
+  sk?: Record<string, number>;
 }
 
 export const EMPTY_MASTER: MState = { q: {}, lv: {} };
+
+/**
+ * A workbook state to change: its rows and levels are replaced, never changed in place. Every field goes along (13 Nov
+ * 2026: four files had their own copy, each naming q, lv and reteach; the skill lessons, `sk`, would have been lost at
+ * the next correction).
+ */
+export function copyState(m: MState): MState {
+  return {
+    ...m,
+    q: { ...m.q },
+    lv: Object.fromEntries(Object.entries(m.lv).map(([k, x]) => [k, { ...x }])),
+    ...(m.reteach ? { reteach: { ...m.reteach } } : {}),
+    ...(m.sk ? { sk: { ...m.sk } } : {}),
+  };
+}
 
 export type MNeed = "correction" | "evaluation" | "theory";
 

@@ -61,6 +61,7 @@ export const pageId = v.union(
   v.literal("register"),
   v.literal("fighter"),
   v.literal("master"),
+  v.literal("skills"),
   v.literal("correction"),
   v.literal("fees"),
   v.literal("books"),
@@ -243,6 +244,11 @@ const mqFields = {
   rg: v.optional(v.number()),
   /** Right on that second try (10 Nov 2026, his rule): the marks it added (half the question's, whole), in the level's. */
   rh: v.optional(v.number()),
+  /** Teaching by skill (13 Nov 2026, convex/lib/path.ts): the parts still wrong at his last try; tried again after his
+   *  lesson at; `rt` as it was before that try was right. */
+  rp: v.optional(v.array(v.string())),
+  lt: v.optional(v.number()),
+  rb: v.optional(v.number()),
 };
 export const masterState = v.object({
   q: v.record(
@@ -270,6 +276,8 @@ export const masterState = v.object({
     }),
   ),
   reteach: v.optional(v.object({ at: v.number(), by: v.optional(v.string()) })),
+  /** The skill lessons he got: skill id → when (convex/lib/path.ts). */
+  sk: v.optional(v.record(v.string(), v.number())),
 });
 /** One question of a Focus draft: marks given so far, "?" (dk; dkp = only these parts blank), the part marks (p). */
 export const draftMark = v.object({

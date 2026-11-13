@@ -13550,3 +13550,345 @@ body.locked.mnx-desk .toasts {
 .bq-flat > li {
   list-style: none;
 }
+
+/* ---------------------------------------------------------------- Teaching by skill (13 Nov 2026)
+   Correction's tries (src/tries.tsx: ↻ on his paper, its sheet) and the Skills page (src/skills.tsx): one card, the
+   line, the pad. Every button in a fixed place; nothing wraps (the tries' row scrolls sideways). */
+.fc-tries {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 38px;
+  padding-left: 0;
+  padding-right: 0;
+}
+.fc-tries.has {
+  border-color: var(--evaluation);
+  color: var(--evaluation-ink);
+  background: var(--evaluation-soft);
+}
+.fc-tries b {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: var(--red);
+  color: #fff;
+  font: 700 13px/20px var(--cond);
+  text-align: center;
+}
+@media (max-width: 345px) {
+  .fc-head .fc-tries {
+    width: 36px;
+  }
+}
+.ty-row {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 2px 2px 8px;
+  scrollbar-width: none;
+}
+.ty-row::-webkit-scrollbar {
+  display: none;
+}
+.ty-sq {
+  flex: none;
+  min-width: 46px;
+  height: 46px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--ink);
+  font: 700 17px/1 var(--cond);
+}
+.ty-sq small {
+  font: 600 10px/1 var(--cond);
+  color: var(--ink-3);
+  margin-bottom: 2px;
+}
+.ty-sq.redo {
+  border-color: var(--evaluation);
+}
+.ty-sq.ok {
+  background: var(--green-soft);
+  border-color: var(--green);
+  color: var(--green-ink);
+}
+.ty-sq.no {
+  background: var(--red-soft);
+  border-color: var(--red);
+  color: var(--red-ink);
+}
+.ty-sq.on {
+  box-shadow: 0 0 0 3px var(--ink);
+}
+.ty-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1.5px solid var(--line-2);
+  border-radius: 16px;
+  background: var(--card);
+}
+.ty-head {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.ty-step {
+  padding: 4px 9px;
+  border-radius: 8px;
+  background: var(--amber-soft);
+  color: var(--amber-ink);
+  font: 700 14px/1 var(--cond);
+}
+.ty-step.redo {
+  background: var(--evaluation-soft);
+  color: var(--evaluation-ink);
+}
+.ty-q {
+  font: 700 24px/1 var(--cond);
+}
+.ty-where {
+  margin-left: auto;
+  color: var(--ink-3);
+  font: 600 13px/1 var(--cond);
+}
+.ty-parts {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  white-space: nowrap;
+  font: 600 13px/1 var(--font);
+  color: var(--ink-2);
+}
+.ty-part {
+  flex: none;
+  min-width: 44px;
+  height: 40px;
+  padding: 0 10px;
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--ink);
+  font: 700 15px/1 var(--cond);
+}
+.ty-part.on {
+  border-color: var(--red);
+  background: var(--red-soft);
+  color: var(--red-ink);
+}
+.ty-res {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font: 500 15px/1.35 var(--font);
+}
+.ty-res.ok {
+  background: var(--green-soft);
+  color: var(--green-ink);
+}
+.ty-res.no {
+  background: var(--red-soft);
+  color: var(--red-ink);
+}
+.ty-no-big {
+  display: inline-block;
+  min-width: 34px;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: var(--red);
+  color: #fff;
+  font: 700 22px/1.1 var(--cond);
+  text-align: center;
+}
+.ty-waits {
+  margin-top: 10px;
+  color: var(--ink-2);
+  font: 500 13px/1.4 var(--font);
+}
+.ty-waits p {
+  margin: 2px 0;
+}
+.ty-pad {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.ty-pad .fc-go.ty-no {
+  background: var(--red);
+}
+.ty-pad .ty-back {
+  height: 64px;
+}
+
+.page.sk-page {
+  gap: 10px;
+}
+.sk-modes {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.sk-mode {
+  height: 44px;
+  padding: 0 12px;
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--ink-2);
+  font: 700 15px/1 var(--cond);
+}
+.sk-mode.on {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #fff;
+}
+.sk-mode b,
+.sk-owed b {
+  display: inline-block;
+  min-width: 22px;
+  margin-left: 4px;
+  padding: 2px 6px;
+  border-radius: 9px;
+  background: var(--line-2);
+  color: var(--ink);
+  font: 700 14px/1.1 var(--cond);
+  text-align: center;
+}
+.sk-mode b.hot {
+  background: var(--red);
+  color: #fff;
+}
+.sk-owed {
+  margin-left: auto;
+  color: var(--ink-3);
+  font: 600 12px/1 var(--cond);
+}
+.sk-card {
+  gap: 10px;
+}
+.sk-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sk-no {
+  flex: none;
+  min-width: 56px;
+  height: 56px;
+  padding: 0 8px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: var(--evaluation);
+  color: #fff;
+  font: 700 30px/1 var(--cond);
+}
+.sk-name {
+  margin: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.sk-name b {
+  font: 700 18px/1.25 var(--font);
+}
+.sk-name small {
+  color: var(--ink-2);
+  font: 500 13px/1.3 var(--font);
+}
+.sk-who {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 2px;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.sk-who::-webkit-scrollbar {
+  display: none;
+}
+.sk-who li {
+  flex: none;
+}
+.sk-pill {
+  min-width: 64px;
+  height: 46px;
+  padding: 0 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.sk-pill b {
+  font: 700 15px/1 var(--cond);
+}
+.sk-pill small {
+  font: 600 11px/1 var(--cond);
+}
+.sk-pill.on {
+  border-color: var(--evaluation);
+  background: var(--evaluation-soft);
+  color: var(--evaluation-ink);
+}
+.sk-pill.hold {
+  opacity: 0.55;
+}
+.sk-qs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 2px;
+  scrollbar-width: none;
+}
+.sk-eg {
+  margin: 0;
+  color: var(--ink-2);
+  font: 600 13px/1.3 var(--font);
+}
+.sk-line {
+  margin: 0;
+  color: var(--ink-2);
+  font: 500 14px/1.3 var(--font);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sk-pad {
+  flex-direction: row;
+  box-shadow: 0 24px 0 0 var(--ground);
+}
+.sk-pad .sk-skip {
+  flex: none;
+  width: 96px;
+  height: 64px;
+}
+.sk-pad .sk-done {
+  background: var(--evaluation);
+}
+.sk-none {
+  margin-top: 24px;
+}

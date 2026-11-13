@@ -34,6 +34,7 @@ export type PageId =
   | "register"
   | "fighter"
   | "master"
+  | "skills"
   | "correction"
   | "fees"
   | "books"
@@ -51,6 +52,7 @@ export const PAGE_IDS: readonly PageId[] = [
   "register",
   "fighter",
   "master",
+  "skills",
   "correction",
   "fees",
   "books",
@@ -80,6 +82,7 @@ export const PAGE_LABEL: Record<PageId, string> = {
   register: "Register",
   fighter: "Fighter",
   master: "Master",
+  skills: "Skills",
   correction: "Correction",
   fees: "Fees",
   books: "Books",
@@ -99,6 +102,7 @@ export const PAGE_HELP: Record<PageId, string> = {
   register: "everyone in class, row by row (else the list icon at the top)",
   fighter: "theory books: the lessons and the wrong answers, grade by grade; she walks to them (no Call)",
   master: "workbooks: lost marks and blanks, and the theory they need, grade by grade; she walks to them (no Call)",
+  skills: "teaching by skill: the lesson queue (one skill, its students, only Done) and one-to-one, for workbooks whose questions carry skills",
   correction: "Homework (photos from home) and Class (papers in the hall)",
   fees: "the students' class fees and book money: who paid today, who owes, one sheet to take it (the owner: the business)",
   books: "printed books: what to print, who has which book, who finishes soon, books not paid, the stock",
@@ -119,7 +123,8 @@ export function cleanPages(pages: readonly string[], owner = false): PageId[] {
 /** The pages a department's people start with (the owner can change any of them in Settings → Roles). */
 export function presetPages(dept: Dept | undefined, lead: boolean): PageId[] {
   if (dept === "fighter") return lead ? ["dash", "fighter", "correction", "teach", "consult", "us"] : ["consult", "us"];
-  if (dept === "master") return lead ? ["dash", "master", "correction", "consult", "us"] : ["consult", "us"];
+  // (Skills, 13 Nov 2026: the Master lead teaches by skill; six pages, the most a bar holds.)
+  if (dept === "master") return lead ? ["dash", "master", "skills", "correction", "consult", "us"] : ["consult", "us"];
   if (dept === "management") return ["dash", "class", "correction", "fees", "books", "us"];
   return ["class", "us"];
 }
@@ -143,7 +148,7 @@ export function ownerPreset(dept: Dept | undefined | null, lead: boolean): PageI
  */
 export function jobsFor(pages: readonly PageId[], manager: boolean): Tab[] {
   const t = new Set<Tab>();
-  if (pages.includes("fighter") || pages.includes("master")) {
+  if (pages.includes("fighter") || pages.includes("master") || pages.includes("skills")) {
     t.add("theory");
     t.add("evaluation");
   }
@@ -170,7 +175,7 @@ export function extrasFor(pages: readonly PageId[]): Extra[] {
 export function withNeeds(pages: readonly PageId[], tabs: readonly Tab[], can: readonly Extra[]): { tabs: Tab[]; can: Extra[] } {
   const t = new Set<Tab>(tabs);
   const c = new Set<Extra>(can);
-  if (pages.includes("fighter") || pages.includes("master")) {
+  if (pages.includes("fighter") || pages.includes("master") || pages.includes("skills")) {
     t.add("theory");
     t.add("evaluation");
   }

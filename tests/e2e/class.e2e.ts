@@ -2915,8 +2915,10 @@ test("Simulation: the owner starts it, a teacher joins from the banner, the app 
   if ((await N.locator(".evx-sp.s-sug.on").count()) === 0) await N.locator(".evx-sp.s-sug").first().click();
   await until(async () => /Call [1-9]/.test(await evCall(N).innerText()), "someone to call");
   await evCall(N).click();
-  const called = await backend.t.run(async (ctx) => (await ctx.db.query("calls").collect()).filter((c) => c.status === "requested"));
-  expect(called.length).toBeGreaterThan(0);
+  // Her tap reaches the server a moment later: wait for it, never read the table at once.
+  const asked = () => backend.t.run(async (ctx) => (await ctx.db.query("calls").collect()).filter((c) => c.status === "requested"));
+  await until(async () => (await asked()).length > 0, "her call on the server");
+  const called = await asked();
   expect(called.every((c) => c.test && c.teacher === "Nila")).toBe(true);
   const names = await backend.t.run(async (ctx) => {
     const out: string[] = [];
@@ -4168,7 +4170,7 @@ test("Departments: Settings → Roles gives each teacher her own app; Preview lo
   await sheet.getByRole("button", { name: "Save" }).click();
   await contains(C.locator(".toast"), "Nila's app is saved");
   await setRole("Meera", "Master", true);
-  await until(async () => JSON.stringify(await ticked()) === JSON.stringify(["Dashboard", "Master", "Correction", "Consult", "Us"]), "the Master lead's five");
+  await until(async () => JSON.stringify(await ticked()) === JSON.stringify(["Dashboard", "Master", "Skills", "Correction", "Consult", "Us"]), "the Master lead's six");
   await sheet.getByRole("button", { name: "Save" }).click();
   await contains(C.locator(".toast"), "Meera's app is saved");
   await setRole("Sana", "Master", false);
@@ -4296,7 +4298,7 @@ test("Departments: Settings → Roles gives each teacher her own app; Preview lo
   await R.locator(".role-p", { hasText: "Meera" }).click();
   await sheet.getByRole("button", { name: "Preview" }).click();
   await visible(C.locator(".pv-banner"));
-  await until(async () => JSON.stringify(await bar(C)) === JSON.stringify(["Dashboard", "Master", "Correction", "Consult", "Us"]), "Meera's bar in the preview");
+  await until(async () => JSON.stringify(await bar(C)) === JSON.stringify(["Dashboard", "Master", "Skills", "Correction", "Consult", "Us"]), "Meera's bar in the preview");
   await C.locator(".tabs .tab.master").click();
   await visible(C.locator(".dk-page"));
   await C.locator(".dk-page .fc-go.evx-x").click();
@@ -4733,6 +4735,146 @@ test("Fees and books: one screen each, no pop-up to take money; the owner starts
 
 // Last in this file: it loads a page again (5 Nov 2026, his upload refused by the teachers' app open since the night
 // before). The page online names other code than this copy runs: a newer version went out while it was open.
+test("Skills: Correction marks his second try and the try after his lesson (the number to write beside it); the skill teacher's one card and Done; one-to-one", async () => {
+  const backend = await newClass();
+  await backend.t.mutation(api.setup.ensure, { token: OWNER_TOKEN });
+  const MEERA = "meera-skills-token-0123456789abcdefghijklmnopqrstuvwxyz";
+  await addPerson(backend.t, { name: "Meera", token: MEERA, tabs: ["theory", "evaluation"], pages: ["skills", "us"] });
+  const G7U08 = KNOWN_WORKBOOKS[0].data;
+  const S = (n: number) => `G7-U08-S${n}`;
+  const u08 = await backend.t.run(async (ctx) => {
+    const u = (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G7-U08")).first())!;
+    // Made-up skills: the first level's questions carry skill 1 (shown with question 1), the rest skill 2.
+    await ctx.db.insert("skillTags", {
+      unitId: u._id,
+      stage: "master",
+      skills: [
+        { id: S(1), ta: "ஒரு உருவாக்கப்பட்ட திறன்", en: "A made-up first skill", eg: 1 },
+        { id: S(2), ta: "இன்னொரு திறன்", en: "A made-up second skill" },
+      ],
+      tags: Array.from({ length: 57 }, (_, i) => ({ q: i + 1, s: S(i < 10 ? 1 : 2) })),
+      by: "Owner",
+      updatedAt: Date.now(),
+    });
+    return u._id;
+  });
+  const add = async (name: string, lost: number[]) => {
+    const id = await backend.t.mutation(api.students.add, { token: OWNER_TOKEN, name, grade: 7, term: 1, stage: "master", unitId: u08 });
+    await backend.t.mutation(api.students.setPresent, { token: OWNER_TOKEN, id, present: true });
+    const l1 = G7U08.levels[0];
+    const items = Array.from({ length: l1.to - l1.from + 1 }, (_, i) => ({ q: l1.from + i, got: lost.includes(l1.from + i) ? 0 : 2 }));
+    await backend.t.mutation(api.workbook.correct, { token: OWNER_TOKEN, studentId: id, unitId: u08, level: 1, items, by: "correction" });
+    return id;
+  };
+  const kumar = await add("Kumar", [3, 4]);
+  await add("Nila", [4]);
+  const row = (name: string) =>
+    backend.t.run(async (ctx) => {
+      const st = (await ctx.db.query("students").collect()).find((x) => x.name === name)!;
+      const p = (await ctx.db.query("progress").collect()).find((x) => x.studentId === st._id && x.stage === "master")!;
+      return p.m as { q: Record<string, { x?: number; rt?: number; rh?: number; lt?: number }>; lv: Record<string, { got?: number }>; sk?: Record<string, number> };
+    });
+
+  // Correction: his paper's ↻ (in its place on every paper, pale when he brings nothing) says how many tries wait.
+  const C = await phone(backend, "focus");
+  const open = async (name: string) => {
+    await C.locator(".fc-nm", { hasText: new RegExp(`^${name}`) }).click();
+    await visible(C.locator(".fc-head"));
+  };
+  await open("Kumar");
+  await C.getByRole("button", { name: "Kumar: 2 tries to mark" }).click();
+  const T = C.locator(".ty-sheet");
+  await contains(T, "Kumar: tries");
+  await contains(T, "2 to mark");
+  await count(T.locator(".ty-sq"), 2);
+  await contains(T.locator(".ty-card"), "Second try");
+  await contains(T.locator(".ty-q"), "Q3");
+  expect(await C.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(C, "sk01-second-try");
+  // ✓ Right: half its marks, closed, on to the next one by itself.
+  await T.getByRole("button", { name: "Q3: right now" }).click();
+  await until(async () => (await row("Kumar")).q["3"].x !== undefined, "Q3 closed");
+  expect((await row("Kumar")).q["3"].rh).toBe(1);
+  expect((await row("Kumar")).lv["1"].got).toBe(17);
+  await contains(T.locator(".ty-q"), "Q4");
+  // ✗ Wrong: she is told the number to write beside it.
+  await T.getByRole("button", { name: "Q4: still wrong" }).click();
+  await contains(T.locator(".ty-res.no"), "Write 1 beside Q4");
+  await contains(T.locator(".ty-res.no"), "He waits for that lesson");
+  await visible(T.locator(".ty-sq.ok"));
+  await visible(T.locator(".ty-sq.no.on"));
+  await shot(C, "sk02-write-the-number");
+  // Take back (a ✗ meant as ✓), then ✗ again.
+  await T.getByRole("button", { name: "Take back" }).click();
+  await until(async () => (await row("Kumar")).q["4"].rt === undefined, "Q4's try taken back");
+  await T.getByRole("button", { name: "Q4: still wrong" }).click();
+  await contains(T.locator(".ty-res.no"), "Write 1 beside Q4");
+  await T.getByRole("button", { name: "Done", exact: true }).click();
+  await count(C.locator(".ty-sheet"), 0);
+  await visible(C.getByRole("button", { name: "Kumar: his questions waiting for a lesson" }));
+  await open("Nila");
+  await C.getByRole("button", { name: "Nila: 1 try to mark" }).click();
+  await T.getByRole("button", { name: "Q4: still wrong" }).click();
+  await contains(T.locator(".ty-res.no"), "Write 1 beside Q4");
+  await T.getByRole("button", { name: "Done", exact: true }).click();
+
+  // The skill teacher: one card, the lesson the most students wait for; their names with the questions it is for.
+  const M = await phone(backend, "skills", PHONE, MEERA);
+  const K = M.locator(".sk-page");
+  await visible(K);
+  await until(async () => JSON.stringify(await M.locator(".tabs .tab").evaluateAll((els) => els.map((e) => (e.getAttribute("aria-label") ?? "").split(",")[0]))) === JSON.stringify(["Skills", "Us"]), "her bar");
+  await contains(K.locator(".sk-mode.on"), "Lesson");
+  await until(async () => (await K.locator(".sk-mode.on b").textContent()) === "2", "2 wait for a lesson");
+  await contains(K.locator(".sk-no"), "1");
+  await contains(K.locator(".sk-name"), "ஒரு உருவாக்கப்பட்ட திறன்");
+  await textsAre(K.locator(".sk-pill.on b"), ["Kumar", "Nila"]);
+  await contains(K.locator(".sk-eg"), "Teach it with question 1");
+  await says(K.locator(".sk-line"), "2 waiting in 1 lesson");
+  await contains(K.locator(".sk-done"), "taught 2");
+  expect(await M.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(M, "sk03-lesson-card");
+  // Nila didn't come: a tap on her name leaves her out. Done: saved for Kumar, Undo on the toast.
+  await K.locator(".sk-pill", { hasText: "Nila" }).click();
+  await contains(K.locator(".sk-done"), "taught 1");
+  await K.locator(".sk-done").click();
+  await contains(M.locator(".toast"), "Skill 1 taught for 1. They do their questions again.");
+  await until(async () => (await row("Kumar")).sk?.[S(1)] !== undefined, "Kumar got the lesson");
+  expect((await row("Nila")).sk).toBeUndefined();
+  // Nila still waits: the card stays hers.
+  await textsAre(K.locator(".sk-pill b"), ["Nila"]);
+  const small = await phone(backend, "skills", { ...PHONE, viewport: { width: 320, height: 568 } }, MEERA);
+  await visible(small.locator(".sk-card"));
+  expect(await small.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(small, "sk04-lesson-320");
+  await small.close();
+
+  // Correction: Kumar brings Q4 back after his lesson. ✗ again: one-to-one.
+  await open("Kumar");
+  await C.getByRole("button", { name: "Kumar: 1 try to mark" }).click();
+  await contains(T.locator(".ty-card"), "After lesson");
+  await T.getByRole("button", { name: "Q4: still wrong" }).click();
+  await contains(T.locator(".ty-res.no"), "One-to-one");
+  await shot(C, "sk05-after-lesson");
+  await T.getByRole("button", { name: "Done", exact: true }).click();
+  await until(async () => (await row("Kumar")).q["4"].lt !== undefined, "Q4 tried after the lesson");
+
+  // One-to-one on the same page: the student, his question, Explained closes it.
+  await K.locator(".sk-mode", { hasText: "One-to-one" }).click();
+  await until(async () => (await K.locator(".sk-mode.on b").textContent()) === "1", "1 waits for one-to-one");
+  await contains(K.locator(".sk-name"), "Kumar");
+  await contains(K.locator(".sk-eg"), "Q4");
+  await contains(K.locator(".sk-eg"), "after lesson 1");
+  await shot(M, "sk06-one-to-one");
+  await K.locator(".sk-done", { hasText: "Explained" }).click();
+  await contains(M.locator(".toast"), "Q4 explained to Kumar.");
+  await until(async () => (await row("Kumar")).q["4"].x !== undefined, "Q4 explained");
+  await contains(K, "Nobody here waits for one-to-one.");
+  // The history tells each step in words.
+  const kinds = await backend.t.run(async (ctx) => (await ctx.db.query("events").collect()).filter((e) => e.studentId === kumar && (e.kind.startsWith("try") || e.kind === "skill-lesson")).map((e) => `${e.kind} ${e.value ?? ""}`.trim()));
+  expect(kinds).toEqual(["try second right 1", "try second wrong 0", "try-undo", "try second wrong 0", "skill-lesson 1 A made-up first skill", "try lesson wrong 0"]);
+  expect(problems, problems.join("\n")).toEqual([]);
+});
+
 test("Update: an older copy of the app says so at the upload, and Update opens Settings → Books again", async () => {
   const backend = await newClass();
   const C = await phone(backend, "focus");

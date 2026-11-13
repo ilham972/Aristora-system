@@ -81,7 +81,7 @@ afterEach(() => {
 describe("the departments' rules (convex/lib/dept.ts)", () => {
   test("presets: his lead teacher's six; a consultation teacher's two; Management's six (its dashboard first; Fees and Books since 9 Nov 2026)", () => {
     expect(presetPages("fighter", true)).toEqual(["dash", "fighter", "correction", "teach", "consult", "us"]);
-    expect(presetPages("master", true)).toEqual(["dash", "master", "correction", "consult", "us"]);
+    expect(presetPages("master", true)).toEqual(["dash", "master", "skills", "correction", "consult", "us"]);
     expect(presetPages("fighter", false)).toEqual(["consult", "us"]);
     expect(presetPages("management", false)).toEqual(["dash", "class", "correction", "fees", "books", "us"]);
     expect(presetPages(undefined, false)).toEqual(["class", "us"]);

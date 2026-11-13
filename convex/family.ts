@@ -66,6 +66,7 @@ import {
   redoPool,
   gateOf,
   secondTry,
+  wrongParts,
   retryPool,
   streakOf,
   trophiesOf,
@@ -79,7 +80,7 @@ import {
 } from "./lib/family";
 import { DAY_MS, isBirthday, SL_OFFSET_MS, slDay, slDayNo, slWeekStart } from "./lib/day";
 import { bookOf, homeChecks, phoneKeyFor, type LevelBook } from "./lib/homeWork";
-import { computeMaster, markBefore, type MQ, type MState } from "./lib/master";
+import { computeMaster, copyState, markBefore, type MQ, type MState } from "./lib/master";
 import { boxCount, formOf, INPUT_MAX, markQuestion, onlyReasons, REASON_MAX, teacherMarks, type FormQ, type KeyQ } from "./lib/phone";
 import { keyText, PHOTO_BYTES, PHOTO_MAX, PHOTO_URLS_PER_DAY, type PhotoKind } from "./lib/photos";
 import { inboxOf, type UsInboxItem } from "./lib/usTalk";
@@ -619,11 +620,7 @@ export type FamilyResult = {
 };
 
 function copy(m: MState): MState {
-  return {
-    q: { ...m.q },
-    lv: Object.fromEntries(Object.entries(m.lv).map(([k, x]) => [k, { ...x }])),
-    ...(m.reteach ? { reteach: { ...m.reteach } } : {}),
-  };
+  return copyState(m);
 }
 
 /** What he typed for a question, as kept: each box at most its length (a typed reason `REASON_MAX`, the rest `INPUT_MAX`). */
@@ -762,7 +759,7 @@ export const check = mutation({
       const res = markQuestion(k, (typed.get(r.q) ?? []).slice(0, boxCount(k)));
       const again = res.got ?? 0;
       // Right = half its marks back (10 Nov 2026) and explained; wrong = Evaluation still explains it.
-      bonus += secondTry(m, data, r.q, k.max, again, now);
+      bonus += secondTry(m, data, r.q, k.max, again, now, wrongParts(k, res.parts));
       retry.push({ q: r.q, max: k.max, got: again, from: r.from, ok: res.ok });
     }
     markBefore(m, data, l.n, now);
@@ -829,7 +826,7 @@ async function checkRedo(
     if (!typed.has(r.q) || (shown.get(r.q) !== undefined && shown.get(r.q) !== boxCount(k))) continue;
     const res = markQuestion(k, (typed.get(r.q) ?? []).slice(0, boxCount(k)));
     const again = res.got ?? 0;
-    bonus += secondTry(m, data, r.q, k.max, again, now);
+    bonus += secondTry(m, data, r.q, k.max, again, now, wrongParts(k, res.parts));
     results.push({ q: r.q, max: k.max, ok: res.ok, got: again, phoneGot: again });
     retry.push({ q: r.q, max: k.max, got: again, from: r.from, ok: res.ok });
     got += again;

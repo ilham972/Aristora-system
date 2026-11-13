@@ -173,11 +173,17 @@ export function halfMarks(max: number): number {
   return Math.max(1, Math.floor(max / 2));
 }
 
-export function secondTry(m: MState, book: MasterData, q: number, max: number, again: number, now: number): number {
-  const before = m.q[String(q)];
+/** The parts of a question the phone marked and found wrong (their labels; a short question has none). */
+export function wrongParts(k: KeyQ, parts: (number | null)[]): string[] {
+  return k.parts.filter((p, i) => !!p.p && parts[i] !== null && parts[i]! < p.m).map((p) => p.p);
+}
+
+export function secondTry(m: MState, book: MasterData, q: number, max: number, again: number, now: number, wrong: string[] = []): number {
+  const { rp: _rp, ...before } = m.q[String(q)];
   const right = again >= max;
   const add = right ? Math.max(0, halfMarks(max) - (before.got ?? 0)) : 0;
-  m.q[String(q)] = { ...before, rt: now, rg: again, ...(right && !before.x ? { x: now } : {}), ...(add ? { rh: add } : {}) };
+  // `wrong` (13 Nov 2026, teaching by skill): the parts still wrong, so his lesson is the one those parts need.
+  m.q[String(q)] = { ...before, rt: now, rg: again, ...(right && !before.x ? { x: now } : {}), ...(add ? { rh: add } : {}), ...(!right && wrong.length ? { rp: wrong } : {}) };
   const l = book.levels.find((x) => q >= x.from && q <= x.to);
   const lv = l ? m.lv[String(l.n)] : undefined;
   if (add && lv?.fixed) lv.got = (lv.got ?? 0) + add;

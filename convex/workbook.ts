@@ -28,7 +28,7 @@ import {
   touch,
 } from "./lib/backend";
 import { levelOutOf, type MasterData } from "./lib/book";
-import { computeMaster, markBefore, type MQ, type MState } from "./lib/master";
+import { computeMaster, copyState, markBefore, type MQ, type MState } from "./lib/master";
 import { freeRow, isFree } from "./lib/free";
 import { actor } from "./lib/auth";
 import { closeClassPhotos } from "./lib/homeWork";
@@ -50,11 +50,7 @@ const teachWork = masterWork;
 const TOOK_KEEP_MS = 60 * 60_000;
 
 function copy(m: MState): MState {
-  return {
-    q: { ...m.q },
-    lv: Object.fromEntries(Object.entries(m.lv).map(([k, x]) => [k, { ...x }])),
-    ...(m.reteach ? { reteach: { ...m.reteach } } : {}),
-  };
+  return copyState(m);
 }
 
 function levelOf(book: MasterData, n: number) {

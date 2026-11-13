@@ -1087,6 +1087,17 @@ function describe(e: Doc<"events">): string {
       return `Q${e.q ?? "?"}: free marks for everyone (out of the syllabus), ${v} who did its level got them now`;
     case "free-marks-off":
       return `Q${e.q ?? "?"}: free marks taken back, ${v} who did its level lost them`;
+    case "try": {
+      // "second right 1" / "lesson wrong 0" (convex/tries.ts): the correction teacher's ✓ / ✗ on a try in class.
+      const [which, how, add] = v.split(" ");
+      return `Q${e.q ?? "?"} ${which === "lesson" ? "after his lesson" : "second try"}: ${how}${Number(add) > 0 ? ` (+${add})` : ""}`;
+    }
+    case "try-undo":
+      return `Q${e.q ?? "?"}: its last try taken back`;
+    case "skill-lesson":
+      return `skill lesson: ${v}`;
+    case "skill-lesson-undo":
+      return `skill lesson ${v} taken back`;
     case "retry-home": {
       const [qs, right] = v.split(" ");
       return `old questions back on the phone (${qs.split(",").map((q) => `Q${q}`).join(", ")}): ${right} right`;

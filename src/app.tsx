@@ -17,6 +17,7 @@ import { Progress } from "./progress";
 import { Settings } from "./settings";
 import { WholeClassPage } from "./wholeClass";
 import { DeskPage } from "./desk";
+import { SkillsPage } from "./skills";
 import { deptNow } from "./deskData";
 import { Dashboard } from "./dash";
 import { FeesPage } from "./fees";
@@ -73,7 +74,7 @@ function loadStart(): { tab: TabId | null; page: Page } {
     if (r === "theory" || r === "evaluation") return { tab: r, page: "board" };
     // Her own app's pages (8 Nov 2026), and the owner's own ones ("register" is his Register tab; the Register page of the
     // top bar is kept as "class").
-    if (r === "dash" || r === "fighter" || r === "master" || r === "teach" || r === "consult" || r === "fees" || r === "books") return { tab: r, page: "board" };
+    if (r === "dash" || r === "fighter" || r === "master" || r === "skills" || r === "teach" || r === "consult" || r === "fees" || r === "books") return { tab: r, page: "board" };
     if (r === "boss" || r === "progress" || r === "register") return { tab: r, page: "board" };
     if (r === "focus") return { tab: "correction", page: "board" };
     // ("manager": the Manager tab of 2–3 Nov 2026, now the Class tab.)
@@ -148,6 +149,16 @@ function BoardMark() {
       <rect x="3" y="3.5" width="18" height="12" rx="1.6" />
       <path d="M8.5 21l3.5-5.5 3.5 5.5" />
       <path d="M7 8h7M7 11.2h4.5" />
+    </svg>
+  );
+}
+
+/** The Skills tab's mark: a numbered ring (a skill's number, as written on the papers). */
+function SkillsMark() {
+  return (
+    <svg class="tab-plan" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M10 9.2l2.3-1.4V16.5M9.8 16.5h5" />
     </svg>
   );
 }
@@ -356,7 +367,7 @@ export function App() {
         ? photosOnly
           ? null
           : "correction"
-        : t === "fighter" || t === "master"
+        : t === "fighter" || t === "master" || t === "skills"
           ? "evaluation"
           : t === "teach"
             ? may("theory")
@@ -771,6 +782,8 @@ export function App() {
         <EvaluationPage board={board} views={views} now={now} />
       ) : tab === "fighter" || tab === "master" ? (
         <DeskPage key={tab} board={board} views={views} now={now} dept={tab} />
+      ) : tab === "skills" ? (
+        <SkillsPage views={views} />
       ) : tab === "dash" ? (
         <Dashboard board={board} views={views} now={now} onOpen={openPage} />
       ) : tab === "fees" ? (
@@ -808,7 +821,7 @@ export function App() {
               ? away
                 ? chatNew
                 : 0
-              : !away || r.id === "dash" || r.id === "teach" || r.id === "boss" || r.id === "progress" || r.id === "register" || r.id === "fees"
+              : !away || r.id === "dash" || r.id === "teach" || r.id === "skills" || r.id === "boss" || r.id === "progress" || r.id === "register" || r.id === "fees"
               ? 0
               : r.id === "books"
                 ? booksRed
@@ -839,6 +852,8 @@ export function App() {
                 <DashMark />
               ) : r.id === "teach" ? (
                 <BoardMark />
+              ) : r.id === "skills" ? (
+                <SkillsMark />
               ) : r.id === "consult" ? (
                 <ConsultMark />
               ) : r.id === "boss" ? (

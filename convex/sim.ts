@@ -36,7 +36,7 @@ import {
 import { fighter, type MasterData } from "./lib/book";
 import { claimLive } from "./lib/claims";
 import { slDay } from "./lib/day";
-import { computeMaster, markBefore, type MState } from "./lib/master";
+import { computeMaster, copyState, markBefore, type MState } from "./lib/master";
 import {
   addFighterSample,
   addMasterSample,
@@ -473,11 +473,7 @@ async function kidStep(
 
 /** A workbook state to change (the rows and levels are replaced, never changed in place). */
 function copyM(m: MState): MState {
-  return {
-    q: { ...m.q },
-    lv: Object.fromEntries(Object.entries(m.lv).map(([k, x]) => [k, { ...x }])),
-    ...(m.reteach ? { reteach: { ...m.reteach } } : {}),
-  };
+  return copyState(m);
 }
 
 /** A workbook student: the app corrects his levels handed in; he works on his level, hands it in, starts the next. */

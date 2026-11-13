@@ -2321,17 +2321,60 @@ learning app of our education institute"): one profile, his class times, what he
   question's words, a student or a mark; no marking changes. The history: "Claude link (Owner): 9 skills for 73
   questions". `skillsOf(tags, q, p)` reads a tag (the part's own first, then the whole question's; the main skill
   first), `skillOf` its main skill, `skillCounts(tags, also)` how many questions carry each skill first, or only
-  beside another. **Nothing in the app reads the tags yet** (13 Nov): the lesson queue by skill (the Master page's
-  successor), the second try at once and the proof after a lesson are the next builds. **How they are meant to be
-  read** (agreed in words, not built): a question wrong twice makes *suspects* of its skills that the student has not
-  shown elsewhere (his other questions that need a skill, right, clear it); his lessons come in the skills' order, the
-  lowest first; he does a question again once every suspect on it was taught. In class nobody tells him the numbers
-  (his worry: "who told that question number? skill teacher or the correction teacher?"; no phones in class): the
-  correction teacher writes the skill's number beside a question wrong twice (her card will show it), the lesson
-  teacher says one sentence ("circle every 7 and do those again"). One lesson = one skill, never three in a sitting
-  (his "one student has an extra skill, the others stay without doing anything" can't happen then). First tried on
-  paper (`scripts/skills.ts table`: the skills, question → skill numbers, a queue sheet, each one's rules in Tamil
-  and English), then built. The tagging itself is a chat's work, a unit a chat, made for a
+  beside another. **What reads them (13 Nov 2026, late, his words: "I don't like paper test ... build the page for correction teachers
+  ... and build the page for the skill teacher. Build completely in the app as complete system"): the path of a lost
+  question**, below.
+- **Teaching by skill in class: the path of a lost question** (`convex/lib/path.ts`, pure, shared by the server and the
+  phones; `convex/tries.ts`; no phones in class, so the correction teacher marks every try). Only for a workbook whose
+  questions carry skills; a book with none keeps the way of before. A question of a corrected level that lost marks, not
+  explained (`x`), not with Theory (`th`), is on one of four steps (`pathOf(m, book, tags)`):
+  - **fix**: he does it again by himself. In class the correction teacher marks that second try (her tries sheet); at
+    home his phone does when the question comes back (as before). Right = half its marks, explained (`secondTry`: his
+    rule of 10 Nov). Wrong = `rt` set, and `rp` = the parts still wrong (the phone: `wrongParts`; in class she taps them
+    when the question's parts carry different skills).
+  - **lesson**: wrong twice. Its *suspects* = the skills of the parts still wrong (`questionSkills`) that he hasn't
+    shown: a skill is shown (`provenOf`) with 3 questions of this book that need it right at the first try, and twice
+    as many right as lost. He has shown them all: the question's own first skill all the same (`firstSkills`: wrong
+    twice always gets a lesson before one-to-one). He waits for the lesson of the lowest suspect not taught yet
+    (`bySkill`: grade, unit, number).
+  - **redo**: every suspect was taught (`m.sk`: skill → when): he does it again and she marks it "After lesson". Right
+    = the same half marks (never twice), explained; `rt` moves to that moment (`rb` keeps the old one), so its XP is
+    that day's. Wrong = `lt` set.
+  - **stuck**: wrong after his lesson (`lt`, no `x`), or a question with no skill at all: **one-to-one** (he explains
+    each step, the teacher teaches the step where he stops; Explained = `workbook.explain`, as on every page).
+  A lesson he got counts for every question of the books he had then, also one that goes wrong later (it goes
+  straight to redo): a skill is taught to him once in a group. **Everything is read from one row** (that workbook's
+  marks and its `sk`) with that book's tags: the board sends a phone only his books with something waiting, so a rule
+  that needed all his books would make the phone and the server disagree. So `tries.taught` writes the lesson on every
+  workbook of his that needs the skill (`needsSkill`), and what he showed in another book says nothing here.
+  - **Correction's tries** (`src/tries.tsx`): **↻** on his paper's top line, left, always in its place (pale when he
+    brings nothing; a red number = tries to mark; `.fc-tries`). Its sheet: his tries as squares ("2" = second try, "L" =
+    after his lesson; those after a lesson first), one at a time: the answer big, the parts to tap when a long
+    question's parts carry different skills, **✗ Wrong · ✓ Right** in fixed places, saved at once (`tries.mark`,
+    Correction or Evaluation). ✓ goes on to the next one by itself. ✗ says what to do: "**Write 2 beside Q4.** He waits
+    for that lesson." (the suspects not taught yet, as the numbers of his paper: `paperNo`: this unit's "7", another
+    unit's "4·2"), or "He got this lesson already: he does it once more", or "One-to-one". **Take back** (five minutes,
+    `tries.back`): the question as before. Under the card: what waits for a lesson (with its numbers) and one-to-one's.
+  - **The Skills page** (`src/skills.tsx`, page id `skills`, label Skills, a numbered ring; his words: "remove the
+    decision making for the teacher ... like a task list one by one ... Done button only"; a new page, the old ones
+    untouched). **Lesson**: ONE card, the lesson the most students here wait for (`lessonQueue`: the fullest first, then
+    the longest wait; students with a teacher listed pale, never ticked): the skill's number and names, each student
+    with the questions it is for, its example question as printed with the answer. A tap on a name leaves him out (he
+    didn't come). **Done** = `tries.taught` for everyone ticked (Theory or Evaluation; Undo on the toast, five minutes:
+    `tries.untaught`), then the next card; **Skip** puts a card at the end of the line on this phone. The card holds
+    still while she teaches. Under it: how many wait in how many lessons, and what comes next. No Call: she calls them
+    by mouth, as on the Master page. No limit of students (his rule). **One-to-one**: the students here with a stuck
+    question, the longest wait first; his questions as squares, the question as printed, the answer, the parts still
+    wrong; **✓ Explained**; Next student. The top row: Lesson n · One-to-one n · tries owed n (`pathNow`).
+  - Who gets it: the Master lead's preset has it (six pages); the owner and anyone else: Settings → Roles → tick
+    **Skills** (it needs Theory and Evaluation, `jobsFor`).
+  - The history: "Q4 second try: wrong", "Q4 after his lesson: right (+1)", "Q4: its last try taken back", "skill
+    lesson: 2 Add or subtract …" (`try`, `try-undo`, `skill-lesson`, `skill-lesson-undo`).
+  - **Not built yet** (13 Nov): the phone's side (a second try right after Check, the try after a lesson at home, the
+    number shown to him); the limit of questions wrong twice; the dashboards (the Master dashboard still counts every
+    lost question as "waiting to be explained", and the old Master and Consultation pages still list them; lessons
+    aren't in "Cleared today"); the hall phone calling a lesson's names; the skill numbers printed in the book and the
+    book as a PDF from the app (his ask of the same night: after the pages, once every unit is tagged). The tagging itself is a chat's work, a unit a chat, made for a
   small model: `scripts/skills.ts` (docs/making-changes.md, "Tag a unit's skills") and the **skill-tags** skill.
 - The server marks with the uploaded answer keys (`convex/lib/phone.ts`; a key without kinds, version 1): numbers,
   several numbers, answers in n (same values for n = 1..7), labelled answers (x = 52), "also accepted" notes. Since 4 Nov 2026 (his screenshot: "0.25 as a

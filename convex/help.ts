@@ -27,7 +27,7 @@ import { mutation } from "./lib/fn";
 import { askable, askOf, asksIn, bumpRoom, HELP_LIMIT_KEY, HELP_LIST_DAYS, HELP_PHOTOS, helpKey, helpLimit, isLate, unanswered } from "./lib/help";
 import { phoneKeyFor } from "./lib/homeWork";
 import type { KeyAnswer } from "./lib/key";
-import type { MState } from "./lib/master";
+import { copyState, type MState } from "./lib/master";
 import type { KeyQ } from "./lib/phone";
 import { keyText } from "./lib/photos";
 import { alertStudent } from "./lib/push";
@@ -92,7 +92,7 @@ export type HelpLine = {
 };
 
 function copy(m: MState): MState {
-  return { q: { ...m.q }, lv: Object.fromEntries(Object.entries(m.lv).map(([k, x]) => [k, { ...x }])), ...(m.reteach ? { reteach: { ...m.reteach } } : {}) };
+  return copyState(m);
 }
 
 async function teachersOf(ctx: QueryCtx): Promise<HelpTeacher[]> {

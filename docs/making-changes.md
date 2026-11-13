@@ -216,6 +216,23 @@ node $TSX scripts/skills.ts push $B G8-U05         # check → saved in the app 
 - `scripts/digitize.ts` sets its carrier branch inside `main()` now, not as the file loads: `skills.ts` imports its
   helpers (`load`, `plain`, `blocks`, `partRanges`, `pull`, `bookList`).
 
+## Teaching by skill: what to keep in mind
+
+- **One row, never all his books** (13 Nov 2026): the board sends a phone only a student's book now and his other books
+  with something waiting (`state.his`, `more`), so `pathOf` reads one workbook's row and that book's tags, on the phone
+  and on the server alike. A rule that needs another book of his (a lesson written elsewhere, what he showed in another
+  unit) would make the two disagree: write what it needs onto each row instead (as `tries.taught` does with `sk`).
+- **Copy a workbook's marks with `copyState`** (lib/master.ts). Four files had their own copy naming q, lv and reteach:
+  a new field on `MState` was dropped at the next correction (the first run of tests/tries.test.ts lost a lesson so).
+- **A try's marks reuse the second try's fields** (`rt`, `rg`, `rh`): XP, the gate, the reports and the coins read them
+  already. The try after a lesson moves `rt` to its own moment (its XP is that day's) and keeps the old one in `rb`;
+  `lt` says it was after a lesson. Anything new that reads `rt` as "the second try's time" must think of that.
+- **What he has shown never empties a question's suspects**: with every skill shown, its own first skill is taught all
+  the same (his flow: wrong twice always gets a lesson before one-to-one).
+- A new page id goes in `lib/dept.ts` (`PageId`, `PAGE_IDS` in its fixed place, `PAGE_LABEL`, `PAGE_HELP`, `jobsFor`,
+  `withNeeds`), `schema.ts` (`pageId`), `app.tsx` (`loadStart`, `pageRole`, the page, its mark, its badge), and the
+  run-throughs that list a preset's pages ("Departments: …").
+
 ## Security audit
 
 After adding functions, every function must print GUARD except the open ones on purpose: `auth.me`, `auth.setupOwner`,
@@ -277,6 +294,9 @@ EOF
 - **A reload right after a tab change** (8 Nov 2026): the phone remembers its tab (`aristora.role`) in an effect just
   after the page shows, so a run-through that reloads at once can open the page before (the old "Done 2" flake of the
   Evaluation run-through: it opened the Register). Wait for `localStorage.getItem("aristora.role")` first.
+- **Reading the table right after a tap** (14 Nov 2026): a tap's mutation reaches the test's server a moment later, so
+  `backend.t.run(...)` in the very next line can read the table of before (the Simulation run-through's "expected 0 to
+  be greater than 0" after Call: it failed on the untouched main too). Wait for the row with `until(...)` first.
 - **The run-throughs' owner has the old bar** (8 Nov 2026): his default bar became Dashboard, Class, Fighter, Master,
   Correction, Us, so `newClass()` in `tests/e2e/class.e2e.ts` gives the test owner the pages those run-throughs were
   written for (Class, Correction, the old Theory and Evaluation pages, Us: his own pages) and `newClass({ defaultBar:
