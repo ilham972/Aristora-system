@@ -226,8 +226,11 @@ async function pullAll(dir: string, keys: string[]) {
   writeFileSync(join(dir, "known.json"), JSON.stringify(got, null, 1));
   for (const key of keys) {
     const udir = join(dir, key);
-    const { u, last } = load(udir);
+    if (!existsSync(join(udir, "unit.json"))) throw new Error(`${key}: no workbook in the app under that key ("units <dir> <grade>" lists the grade's units)`);
+    const { u, last, html } = load(udir);
     writeFileSync(join(udir, "sheet.txt"), sheetHead(udir) + sheetOf(udir));
+    const blind = last - firstQuestion(u.data) + 1 - html.size;
+    if (blind > 0) console.log(`${key}: ${blind} questions are NOT PRINTED in the app (their words are missing from the sheet): tell the founder to upload this unit's zip with its questions first; don't tag what you can't read.`);
     // Tagged in the app already and nothing written here: start from what the app has.
     if (u.skills && !existsSync(join(udir, "skills.json"))) {
       const tags: Short["tags"] = {};
