@@ -1922,7 +1922,8 @@ learning app of our education institute"): one profile, his class times, what he
     the chats' own file, never in the first load). A thread **is a room of the chats** (`usRooms` `k: "h"`, `hu` / `hn`
     / `hq` = unit, level, question, `ht` = the teacher it waits on, `key` "h:<unit>:<q>"): `chat.room` / `chat.send`
     read and write its messages; its students are its `helpAsks` rows (one per student and question: `st` open / done /
-    class / skip, `tid`, `ta` since when, `tw` a teacher's last word, `from` s / t, `ph`, `hn` / `hp` hidden).
+    class / skip, `tid`, `ta` since when, `tw` a teacher's last word, `from` s / t, `ph`, `hn` / `hp` hidden; since 13
+    Nov 2026 `pw` a teacher asked for his photo, `su` he said he understood, `tu` / `tub` a teacher said so).
     His decisions the same night (do not reopen without him):
     - **The explanation stays on its question** (he first asked "deleted after one day"; my warning: she would record
       the same question five times): the next student who gets it wrong sends his photo, **joins the same thread and
@@ -1938,11 +1939,19 @@ learning app of our education institute"): one profile, his class times, what he
     - **No limit a day** (my warning: 30 students × 4 wrong × 3 minutes = 6 hours a night; his answer "no limit"): the
       photo he must take first is the brake. Escape hatch: Settings → Community → **Online explanations a day**
       (`help.setLimit`, meta `help.perDay`, 0 = none; counts only what he sent himself).
-    - **Only Explained counts** (his words: "count as explained if the teacher press explained button or closed the
-      thread. Otherwise that's question not consider as explained"): ⋮ → **Explained (close the thread)**, two taps
-      (`help.tdone`), closes every student still waiting in it and sets the question's `x` in his workbook, exactly as
-      Evaluation's tap (Evaluation stops calling him for it; history "Q8 explained online"). A voice note alone changes
-      nothing. **Not now** (a student's ⋮, two taps, `help.tskip`): not explained, it waits for the class, he is told
+    - **Understood on both sides closes it** (13 Nov 2026, his rule, replacing "only Explained": "if the student
+      understand, then that student press the button ... that will highlighted to the explaining teachers, and teacher
+      also need to press the button ... both persons need to press the understand button. Then that thread will be
+      closed"). The student: **✓ எனக்குப் புரிந்தது** in his card (`help.understood`, `su`; always in its place under
+      the card's question, white, lit violet once the teacher tapped, with "…விளக்கி முடித்தார். புரிந்ததா?"); it writes
+      "✓ எனக்குப் புரிந்தது" in the thread (new for the teacher) and **lights his row** on her card (`.h-asks li.und`,
+      "✓ he understood", her button lit). The teacher: **✓ Understood** on each open student's row (`.h-ub`, `help.tdone`
+      with `aid`), or ⋮ → **✓ Understood (everyone waiting)**, two taps (`help.tdone`). Whichever comes second closes
+      that student's row (`explained`: `st` done, `by` = the teacher who tapped, the question's `x` in his workbook,
+      exactly as Evaluation's tap; history "Q8 explained online"). Her tap first: `tu`, the thread says "…புரிந்ததா?",
+      his phone is alerted, her row reads "you tapped: waiting on him", her button pale, and the row leaves **Mine**
+      (still under Open). A voice note alone still changes nothing. Not built: a student who never taps keeps it open
+      (it closes by itself only when explained or taught in class). **Not now** (a student's ⋮, two taps, `help.tskip`): not explained, it waits for the class, he is told
       and can't send it again. **Explained or taught in class first**, or the mark changed: his row closes by itself
       (`class`: `syncHelp`, run by `lib/fn.ts` after any mutation that wrote a progress row). An explanation taken back
       in class lets him send it again (his old row opens again).
@@ -1968,7 +1977,10 @@ learning app of our education institute"): one profile, his class times, what he
       `.h-whose`). **A sub-question only a teacher marks** (a drawing he photographed at home) shows
       **his photo and her marks** under it (`HelpPhoto` on his row, from `homePhotos`: ✍ 1/1 · her name, a small
       photo that opens full screen; "(photo deleted)" once it went), kept until the question is explained (the rule
-      under "Nothing kept"). Such a question counts as lost, and gets its pill, only once its photo is marked.
+      under "Nothing kept"). **A part he typed instead** ("show that", "give a reason": a `say` / `why` box a teacher
+      reads, `homePhotos.said`, no files; `HelpPhoto.said`) shows **his words under each sub-question** (`.h-say`) and
+      her marks once (`.h-amk`), never "photo deleted" or "in the photo above" (13 Nov 2026, his screenshot: Q11(a)
+      showed "4/5 · Ilham (photo deleted)" where the student's sentence should be). Such a question counts as lost, and gets its pill, only once its photo is marked.
       **Nearly as wide as the phone** (his screenshot: "left and right have so much white margin ...
       makes to scroll too much"): the card 6 px from the edge, the paper to the card's edge, a sub-question's label
       only as wide as its words (`PAPER` in `help.tsx`). His photo is the first message (`ask`). A teacher's link
@@ -1982,12 +1994,20 @@ learning app of our education institute"): one profile, his class times, what he
       `usChat.au`; marked in `usFiles`, deleted with its message. A second recorder beside `src/voiceNote.tsx` (the
       home lane's, 60 s) because the Us frame can't load the teachers' store.
     - **Teachers:** the Us tab's number counts the threads waiting on her (`chat.tunread`); Us → Thread → **Online
-      explanations** (`HelpList`, `help.tlist`): Mine (hers and the ⏰ late ones) · Everyone's · Closed (14 days),
-      then Stage and student chips when the list is long (his ask: filters by student and unit). Students: the same
-      list on their Thread tab (Waiting · All; its own count `chat.h`: `helpNew`).
+      explanations** (`HelpList`, `help.tlist`): Mine (hers and the ⏰ late ones, not those waiting only on the student's
+      ✓) · Open · Closed (14 days), then Stage and student chips when the list is long (his ask: filters by student and
+      unit). Students: the same list on their Thread tab, **Open · Closed** (13 Nov 2026, his ask: "make sure both have
+      filters like closed and open"; its own count `chat.h`: `helpNew`). A row says ✓ understood / waiting on him /
+      photo asked. A closed thread is kept a year and the next student with the same wrong question joins it (it opens
+      again): no new thread.
     - **Consultation's icon** (headphones beside the whiteboard on a Master question's card, `OnlineButton`,
       `help.tcall`; none for a demo student): a thread opens for the ticked student with her as its teacher, he is
-      alerted to send his photo, she can explain at once; filled once it is open (`help.topen`).
+      alerted that she explains it there, she can explain at once; filled once it is open (`help.topen`). **Never a
+      photo asked by itself** (13 Nov 2026, his rule: "if photo needed, teacher will ask that ... as a default, don't
+      put the message"): the first words are "…இங்கே விளக்குகிறேன்." (or "உன் விடையைப் பார்த்தேன்…" when his photo or
+      typed words are in the card). **⋮ beside a student → 📷 Ask for his working photo** (`help.tphoto`: `pw`, `ph`
+      false, the old words "உன் வழிமுறையின் படத்தை இங்கே அனுப்பு. நான் விளக்குகிறேன்." and an alert); only then his card
+      shows "உன் வழிமுறையின் படத்தை அனுப்பு" and his list "📷 படம் அனுப்பு".
     - **The same headphones on Correction's Homework card** (12 Nov 2026, his idea: "put the headset icon same like
       in the consult page ... do the correction inside the thread"; my answer, his "you are correct, build as you
       recommended": never the correction inside the thread and never her Message as a thread (a thread belongs to the
@@ -1998,10 +2018,10 @@ learning app of our education institute"): one profile, his class times, what he
       class corrected, or a demo student's: `PhotoItem.student.demo`); one tap = **Save, then his thread** (`save(true)`
       in `HomeCard`: `photos.mark`, then `help.tcall`; her marks stay saved if the thread can't open, e.g. Us closed:
       the toast says why) and the next card as after Save. **He is asked for no photo** when his marked photo of the
-      teacher's part is still kept (`photoHere` in `convex/help.ts`: the last `part` row, `done`, with files): his row
-      starts with `ph: true`, the thread's first words are "உன் படத்தைப் பார்த்தேன். இங்கே விளக்குகிறேன்.", his alert
-      "…விளக்குகிறார்: thread ஐத் திற."; `tcall` returns `have`. The same for Consultation's icon on such a question.
-      A typed reason (no photo) or a photo already deleted: he is asked for one, as before. She explains in Us →
+      teacher's part is still kept, or his typed words for it (`photoHere` in `convex/help.ts`: the last `part` row,
+      `said`, or `done` with files): his row starts with `ph: true`, the thread's first words are "உன் விடையைப்
+      பார்த்தேன். இங்கே விளக்குகிறேன்.", his alert "…விளக்குகிறார்: thread ஐத் திற."; `tcall` returns `have`. The same
+      for Consultation's icon on such a question. Since 13 Nov 2026 nobody is asked for a photo by itself (above). She explains in Us →
       Thread (Mine); Message, her voice note and Retake stay as they are, for before marking. Whoever taps it is the
       thread's teacher (the owner and Photos people: ⋮ → Send to another teacher; 12 hours with no word → everyone's).
       **Save is two lines in the lane since then** ("Save · next" small, her marks big: `.hl-go-l`), so the four

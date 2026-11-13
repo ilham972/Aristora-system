@@ -21,9 +21,11 @@ export type HelpPart = { p: string; ok: boolean | null; typed: string[] };
 /**
  * The photo(s) he sent from home for the part(s) of this question a teacher marks (a drawing, a construction), with
  * her marks (12 Nov 2026, his words: "in the thread we have to show everything that student done"): kept until the
- * question is explained (convex/photos.ts sweep). `urls` empty: deleted since, or his typed reason.
+ * question is explained (convex/photos.ts sweep). `urls` empty: deleted since, or his typed words (`said`: a "show
+ * that" / "give a reason" part he typed in its text box, marked by a teacher; 13 Nov 2026, his report: the thread said
+ * "photo deleted" where his typed sentence should be: the card shows `HelpPart.typed` there instead).
  */
-export type HelpPhoto = { urls: string[]; st: "waiting" | "done" | "retake" | "ask"; got?: number; max: number; by?: string; note?: string };
+export type HelpPhoto = { urls: string[]; st: "waiting" | "done" | "retake" | "ask"; got?: number; max: number; by?: string; note?: string; said?: true };
 
 export type HelpAsk = {
   id: string;
@@ -36,6 +38,11 @@ export type HelpAsk = {
   at: number;
   /** His photo came. */
   ph: boolean;
+  /** A teacher asked for his photo. */
+  pw?: true;
+  /** He said he understood; the teacher said so (both = closed). */
+  su?: true;
+  tu?: true;
   from: "s" | "t";
   mine?: true;
   /** Teachers: what she hid from the other students. */
@@ -118,6 +125,7 @@ async function partsOf(
     ...(sent.state === "done" && sent.got !== undefined ? { got: sent.got } : {}),
     ...(sent.by ? { by: sent.by } : {}),
     ...(sent.note ? { note: sent.note } : {}),
+    ...(sent.said ? { said: true as const } : {}),
   };
   return { parts: out, photo };
 }
@@ -148,6 +156,9 @@ export async function helpHeadOf(ctx: QueryCtx, me: { k: "s"; sid: Id<"students"
       st: a.st,
       at: a.at,
       ph: a.ph,
+      ...(a.pw ? { pw: true as const } : {}),
+      ...(a.su ? { su: true as const } : {}),
+      ...(a.tu ? { tu: true as const } : {}),
       from: a.from,
       ...(mine ? { mine: true as const } : {}),
       ...(me.k === "u" && a.hn ? { hn: true as const } : {}),

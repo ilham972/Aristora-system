@@ -420,9 +420,9 @@ function HomeCard(props: {
     else {
       // Her marks are saved whatever happens next: a thread that can't open (Us closed on the phones) is only said.
       try {
-        const r = await mutate(api.help.tcall, { studentId: it.student.id, unitId: it.unit.id, q: it.q });
+        await mutate(api.help.tcall, { studentId: it.student.id, unitId: it.unit.id, q: it.q });
         tone("call");
-        toast(`🎧 Q${it.q} saved ${total}/${it.max}. ${first}'s thread is open${r.have || r.again ? "" : " (asked for his photo)"}: explain in Us → Thread.`);
+        toast(`🎧 Q${it.q} saved ${total}/${it.max}. ${first}'s thread is open: explain in Us → Thread.`);
       } catch (e) {
         tone("done");
         toast(`Q${it.q} saved ${total}/${it.max}, but no thread: ${errorText(e)}`);

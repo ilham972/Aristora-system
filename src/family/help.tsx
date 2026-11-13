@@ -4,7 +4,7 @@
 // convex/help.ts (a thread = a room of the chats, `k` "h"). Here, in the chats' own file (never in the first load):
 // - AskSheet: the pill's sheet (his photo first, then a teacher; or the thread the question already has).
 // - HelpTop: on top of a thread: the question, what each student typed with the wrong parts in rose, how it stands.
-// - HelpMenu: the teacher's ⋮ (Explained, Not now, Send to another teacher, hide a name or a photo): never a big
+// - HelpMenu: the teacher's ⋮ (Understood, Not now, Send to another teacher, hide a name or a photo): never a big
 //   button, his words: "mistakenly teachers can press that".
 // - VoiceRec / Voice: a voice note (the phone's own recorder: a teacher 2 minutes, a student 1), and its player.
 // - HelpList: his explanations (or the teachers' queue) with its filters, on top of Chats.
@@ -183,10 +183,22 @@ function Answer(props: { label: string; part?: HelpPart; k?: string; staff: bool
   // In its slot the printed label is right above it: only a split part's note ("பெயர்") is said again.
   const label = props.slot ? (props.label.split(" · ")[1] ?? "") : props.label;
   const typed = p?.typed.some((t) => t);
+  // His typed words for a teacher's part ("show that", "give a reason": `said`), not a photo (13 Nov 2026, his report:
+  // the thread said "photo deleted" where his sentence should be). Her marks on the first such part.
+  const words = ph?.said ? p!.typed.filter((t) => t).join(" · ") : "";
+  const marks = marked ? `${ph!.got}/${ph!.max}${props.staff && ph!.by ? ` · ${ph!.by}` : ""}` : props.staff ? "not marked yet" : "இன்னும் திருத்தப்படவில்லை";
   return (
     <div class="h-ans" slot={props.slot}>
       {label && <small class="h-al">{label}</small>}
-      {p && ph ? (
+      {p && ph?.said ? (
+        <>
+          <span class={`h-a h-say ${marked ? (ph.got! >= ph.max ? "ok" : "no") : "tch"}`}>
+            <i class="h-ai" aria-hidden="true">✍</i>
+            {words || (props.staff ? "nothing typed" : "எதுவும் எழுதவில்லை")}
+          </span>
+          {props.first && <small class="h-amk">{marks}</small>}
+        </>
+      ) : p && ph ? (
         <span class={`h-a ${marked ? (ph.got! >= ph.max ? "ok" : "no") : "tch"}`}>
           <i class="h-ai" aria-hidden="true">✍</i>
           {!props.first
@@ -209,7 +221,7 @@ function Answer(props: { label: string; part?: HelpPart; k?: string; staff: bool
           </span>
         )
       )}
-      {ph && props.first && (ph.urls.length ? <div class="h-aph"><Pics ph={ph.urls.map((u) => ({ s: u, b: u, w: 4, h: 3 }))} /></div> : <small class="h-al">{props.staff ? "(photo deleted)" : "(படம் நீக்கப்பட்டது)"}</small>)}
+      {ph && !ph.said && props.first && (ph.urls.length ? <div class="h-aph"><Pics ph={ph.urls.map((u) => ({ s: u, b: u, w: 4, h: 3 }))} /></div> : <small class="h-al">{props.staff ? "(photo deleted)" : "(படம் நீக்கப்பட்டது)"}</small>)}
       {ph && props.first && ph.note && <small class="h-anote">{ph.note}</small>}
       {props.staff && props.k && (
         <span class="h-k">
@@ -297,7 +309,7 @@ export function HelpTop(props: { id: string; help: HelpHead; staff: boolean; onC
       </div>
       <ul class="h-asks">
         {rows.map((a) => (
-          <li key={a.id} class={`${STATE[a.st].cls}${props.staff && rows.length > 1 && a.id === shown?.id ? " sel" : ""}`}>
+          <li key={a.id} class={`${STATE[a.st].cls}${a.st === "open" && a.su ? " und" : ""}${props.staff && rows.length > 1 && a.id === shown?.id ? " sel" : ""}`}>
             <button
               type="button"
               class="h-who"
@@ -314,12 +326,33 @@ export function HelpTop(props: { id: string; help: HelpHead; staff: boolean; onC
                 {a.got}/{a.max}
               </em>
             )}
+            {props.staff && <i class="h-brk" aria-hidden="true" />}
             <span class="h-st">
               {props.staff ? STATE[a.st].en : STATE[a.st].ta}
               {a.st === "done" && a.by ? ` · ${a.by}` : ""}
-              {props.staff && a.st === "open" && !a.ph ? " · no photo yet" : ""}
+              {props.staff && a.st === "open" ? (a.su ? " · ✓ he understood" : a.tu ? " · you tapped: waiting on him" : a.pw && !a.ph ? " · photo asked" : "") : ""}
               {props.staff && (a.hn || a.hp) ? ` · 🙈 ${a.hn && a.hp ? "name, photo" : a.hn ? "name" : "photo"}` : ""}
             </span>
+            {props.staff && a.st === "open" && (
+              <button
+                type="button"
+                class={`h-ub${a.su ? " on" : ""}`}
+                disabled={!!a.tu && !a.su}
+                aria-label={`${a.n} understood`}
+                onClick={() =>
+                  void mutation("help:tdone", { id: props.id, aid: a.id }).then(
+                    (r) => {
+                      sound("send");
+                      toast((r as { n: number }).n ? `Closed ✓ ${a.n} understood: it counts in class too.` : `${a.n} is asked: it closes when he taps ✓ I understood.`);
+                      props.onChange();
+                    },
+                    (e) => toast(problemWords(e), true),
+                  )
+                }
+              >
+                ✓ Understood
+              </button>
+            )}
             {props.staff && (
               <button type="button" class="h-dots" aria-label={`More for ${a.n}`} onClick={() => showSheet((close) => <AskMenu a={a} onClose={close} onChange={props.onChange} />)}>
                 ⋮
@@ -336,24 +369,53 @@ export function HelpTop(props: { id: string; help: HelpHead; staff: boolean; onC
         </>
       )}
       {!props.staff && mine?.st === "open" && (
-        <p class="h-wait">
-          {mine.ph ? (
-            <>
-              <b>{h.tname} ஆசிரியர்</b> பார்த்து விளக்குவார். பதில் வந்ததும் phone சொல்லும்.
-            </>
-          ) : (
-            <button type="button" class="f-btn go" onClick={props.onPhoto}>
+        <div class="h-wait">
+          {mine.pw && !mine.ph && (
+            <button type="button" class="f-btn white" onClick={props.onPhoto}>
               <Icon name="camera" size={18} /> உன் வழிமுறையின் படத்தை அனுப்பு
             </button>
           )}
-        </p>
+          {mine.su ? (
+            <p class="h-und">✓ நீ புரிந்தது என்றாய். ஆசிரியரும் ✓ அழுத்தியதும் thread மூடும்.</p>
+          ) : (
+            <>
+              <p>
+                {mine.tu ? (
+                  <>
+                    <b>{h.tname} ஆசிரியர்</b> விளக்கி முடித்தார். புரிந்ததா?
+                  </>
+                ) : (
+                  <>
+                    <b>{h.tname} ஆசிரியர்</b> விளக்குவார். பதில் வந்ததும் phone சொல்லும்.
+                  </>
+                )}
+              </p>
+              <button
+                type="button"
+                class={`f-btn ${mine.tu ? "go" : "white"}`}
+                onClick={() =>
+                  void mutation("help:understood", { id: props.id }).then(
+                    (r) => {
+                      sound("send");
+                      toast((r as { closed: boolean }).closed ? "✓ முடிந்தது! thread மூடப்பட்டது." : "✓ ஆசிரியருக்குச் சொன்னோம்.");
+                      props.onChange();
+                    },
+                    (e) => toast(problemWords(e), true),
+                  )
+                }
+              >
+                ✓ எனக்குப் புரிந்தது
+              </button>
+            </>
+          )}
+        </div>
       )}
       {props.staff && (
         <p class="h-wait">
           {h.open ? (
             <>
               Waiting on <b>{h.own ? "you" : h.tname}</b>
-              {h.late ? " · ⏰ over 12 hours" : ""}. A voice note alone changes nothing: tap ⋮ → Explained when done.
+              {h.late ? " · ⏰ over 12 hours" : ""}. It closes when he taps ✓ I understood and you tap ✓ Understood.
             </>
           ) : (
             "Closed. It opens again when another student sends this question in."
@@ -379,6 +441,11 @@ function AskMenu(props: { a: HelpAsk; onClose: () => void; onChange: () => void 
     );
   return (
     <Sheet title={a.n} sub="Only the thread's other students stop seeing what you hide. He and the teachers still see it." onClose={props.onClose} class="h-menu">
+      {a.st === "open" && (
+        <button type="button" class="h-mi go" disabled={a.pw && !a.ph} onClick={() => void run("help:tphoto", { aid: a.id }, "Asked: his phone tells him to send the photo.")}>
+          {a.pw && !a.ph ? "📷 Photo asked: waiting for it" : "📷 Ask for his working photo"}
+        </button>
+      )}
       <button type="button" class="h-mi" onClick={() => void run("help:thide", { aid: a.id, name: !a.hn, photo: !!a.hp }, a.hn ? "His name shows again." : "His name is hidden.")}>
         {a.hn ? "👁 Show his name" : "🙈 Hide his name"}
       </button>
@@ -430,8 +497,26 @@ export function HelpMenu(props: { id: string; help: HelpHead; onClose: () => voi
         </ul>
       ) : (
         <>
-          <button type="button" class="h-mi go" disabled={!open.length} onClick={() => (sure ? void run("help:tdone", { id: props.id }, `Explained ✓ ${open.length === 1 ? open[0].n : `${open.length} students`}: it counts in class too.`) : setSure(true))}>
-            {sure ? `Tap again: explained for ${open.length === 1 ? open[0].n : `all ${open.length}`}` : "✓ Explained (close the thread)"}
+          <button
+            type="button"
+            class="h-mi go"
+            disabled={!open.length}
+            onClick={() =>
+              sure
+                ? void mutation("help:tdone", { id: props.id }).then(
+                    (r) => {
+                      const x = r as { n: number; w: number };
+                      sound("send");
+                      toast(`${x.n ? `Closed ✓ ${x.n}: it counts in class too. ` : ""}${x.w ? `${x.w} still to tap ✓ I understood (they are asked).` : ""}`);
+                      props.onClose();
+                      props.onChange();
+                    },
+                    (e) => toast(problemWords(e), true),
+                  )
+                : setSure(true)
+            }
+          >
+            {sure ? `Tap again: understood for ${open.length === 1 ? open[0].n : `all ${open.length}`}` : "✓ Understood (everyone waiting)"}
           </button>
           <button
             type="button"
@@ -446,7 +531,7 @@ export function HelpMenu(props: { id: string; help: HelpHead; onClose: () => voi
           >
             ➡️ Send to another teacher
           </button>
-          <p class="h-note">Not now, and hiding a name or a photo: ⋮ beside each student.</p>
+          <p class="h-note">It closes for a student when he taps ✓ I understood and a teacher taps ✓ Understood. Asking for his photo, Not now, hiding a name or a photo: ⋮ beside each student.</p>
         </>
       )}
     </Sheet>
@@ -666,7 +751,8 @@ export function HelpList(props: { staff: boolean; onRoom: (id: string) => void; 
   if (!d) return null;
   if (!d.length) return props.empty ?? null;
   const open = d.filter((l) => l.st === "open");
-  const mineT = open.filter((l) => l.mine || l.late);
+  // Her part done (she tapped Understood, he hasn't yet): off her own queue, still open.
+  const mineT = open.filter((l) => (l.mine || l.late) && !(l.tu && !l.su));
   const base = f === "closed" ? d.filter((l) => l.st !== "open") : f === "mine" ? mineT : f === "open" ? open : props.staff ? open : d;
   const units = [...new Map(base.map((l) => [l.unitId, l])).values()];
   const kids = [...new Map(base.map((l) => [l.sid ?? "", l])).values()].filter((l) => l.sid);
@@ -674,12 +760,13 @@ export function HelpList(props: { staff: boolean; onRoom: (id: string) => void; 
   const chips: [Filter, string, number][] = props.staff
     ? [
         ["mine", "Mine", mineT.length],
-        ["all", "Everyone's", open.length],
+        ["all", "Open", open.length],
         ["closed", "Closed", d.length - open.length],
       ]
     : [
-        ["open", "Waiting", open.length],
-        ["all", "All", d.length],
+        // 13 Nov 2026, his ask: Open and Closed on the students' side too.
+        ["open", "Open", open.length],
+        ["closed", "Closed", d.length - open.length],
       ];
   return (
     <section class="h-list" aria-label="Online explanations">
@@ -722,7 +809,7 @@ export function HelpList(props: { staff: boolean; onRoom: (id: string) => void; 
         </div>
       )}
       {list.length === 0 ? (
-        <p class="h-none">{props.staff ? (f === "mine" ? "Nothing waits on you." : "Nothing here.") : "எதுவும் காத்திருக்கவில்லை."}</p>
+        <p class="h-none">{props.staff ? (f === "mine" ? "Nothing waits on you." : "Nothing here.") : f === "closed" ? "மூடிய thread இல்லை." : "எதுவும் காத்திருக்கவில்லை."}</p>
       ) : (
         <ul class="c-rows">
           {list.map((l) => (
@@ -738,7 +825,7 @@ export function HelpList(props: { staff: boolean; onRoom: (id: string) => void; 
                   <small>
                     Stage {l.no} · Level {l.n}
                     {l.st === "open" ? (props.staff ? (l.mine ? "" : ` · ${l.tname}`) : ` · ${l.tname}`) : ` · ${props.staff ? STATE[l.st].en : STATE[l.st].ta}`}
-                    {l.st === "open" && !l.ph ? (props.staff ? " · no photo yet" : " · 📷 படம் அனுப்பு") : ""}
+                    {l.st === "open" && (l.su ? (props.staff ? " · ✓ understood" : " · ✓ புரிந்தது") : l.tu ? (props.staff ? " · waiting on him" : " · புரிந்ததா? ✓") : l.pw && !l.ph ? (props.staff ? " · photo asked" : " · 📷 படம் அனுப்பு") : "")}
                   </small>
                 </span>
                 <span class="c-row-r">

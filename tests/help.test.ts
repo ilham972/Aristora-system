@@ -1,6 +1,7 @@
 // Online explanations (12 Nov 2026, his voice note: "explaining in the voice note like a WhatsApp ... that will open the
 // new thread in the community"): the pill's data on a level's book, a thread per question, the photo first, the teacher
-// picked, the next student joining the same thread, a teacher's voice note, Explained (the only thing that counts),
+// picked, the next student joining the same thread, a teacher's voice note, Understood on both sides (13 Nov 2026: the
+// only thing that closes it), a photo asked only by the teacher, a typed "show that" shown as typed,
 // Not now, sent to another teacher, hidden names and photos, a teacher's call from Consultation, explained in class
 // first, the owner's limit, the 12 hours, what is kept. Fake answers only (the repo is public); the book is the U01
 // skeleton.
@@ -187,9 +188,21 @@ describe("online explanations", () => {
     await tn().mutation(api.chat.tsend, { id, text: "https://youtu.be/abc123 இதைப் பார்" });
     await expect(h().mutation(api.chat.send, { id, text: "see https://example.com" })).rejects.toThrow(/Links/);
     await h().mutation(api.chat.send, { id, text: "புரிந்தது, நன்றி" });
-    // Explained: the question is explained in class too, the thread shuts for him, the history says who.
+    // ✓ Understood (13 Nov 2026, his rule: both must tap): her tap first asks him; nothing is explained yet.
     vi.setSystemTime(Date.now() + 60_000);
-    expect(await tn().mutation(api.help.tdone, { id })).toEqual({ n: 1 });
+    expect(await tn().mutation(api.help.tdone, { id })).toEqual({ n: 0, w: 1 });
+    expect(await askRow(hana, 8)).toMatchObject({ st: "open", tu: Date.now(), tub: nila });
+    expect((await mq(hana, 8)).x).toBeUndefined();
+    const asked = await h().query(api.chat.room, { id });
+    expect(asked.head.help!.asks[0]).toMatchObject({ tu: true });
+    expect(asked.head.help!.asks[0].su).toBeUndefined();
+    expect(asked.msgs[asked.msgs.length - 1]).toMatchObject({ tch: true, t: expect.stringContaining("புரிந்ததா") });
+    expect((await tn().query(api.help.tlist, {})).lines[0]).toMatchObject({ st: "open", tu: true });
+    expect((await h().query(api.help.mine, {}))[0]).toMatchObject({ st: "open", tu: true });
+    expect(await tn().mutation(api.help.tdone, { id })).toEqual({ n: 0, w: 1 }); // a second tap: nothing new
+    // His ✓ I understood: closed, explained in class too, by her name; the thread shuts for him, the history says who.
+    vi.setSystemTime(Date.now() + 60_000);
+    expect(await h().mutation(api.help.understood, { id })).toEqual({ closed: true });
     expect((await mq(hana, 8)).x).toBe(Date.now());
     expect(await askRow(hana, 8)).toMatchObject({ st: "done", by: "Nila" });
     const shut = await h().query(api.chat.room, { id });
@@ -199,7 +212,8 @@ describe("online explanations", () => {
     expect((await h().query(api.family.book, { unitId: u01, n: 1 })).qs.find((x) => x.q === 8)!.hp).toEqual({ id, st: "done" });
     const ev = await raw.run(async (ctx) => (await ctx.db.query("events").collect()).filter((e) => e.kind === "help-explained"));
     expect(ev).toMatchObject([{ by: "Nila", name: "Hana K", q: 8, value: "online" }]);
-    expect(await tn().mutation(api.help.tdone, { id })).toEqual({ n: 0 });
+    expect(await tn().mutation(api.help.tdone, { id })).toEqual({ n: 0, w: 0 });
+    expect(await h().mutation(api.help.understood, { id })).toEqual({ closed: true });
     // Explained already: it can't be sent in again.
     await expect(h().mutation(api.help.ask, { unitId: u01, q: 8, tid: raj, ph: [await photo()] })).rejects.toThrow(/தேவையில்லை/);
   });
@@ -208,13 +222,18 @@ describe("online explanations", () => {
     const id = await send(h(), 8, nila);
     await h().mutation(api.chat.send, { id, au: { f: await file("audio/mp4"), d: 9 } });
     await tn().mutation(api.chat.tsend, { id, text: "முதலில் 8 ஐ 3 ஆல் பெருக்கு." });
-    await tn().mutation(api.help.tdone, { id });
+    // He says first this time, then she: closed.
+    vi.setSystemTime(Date.now() + 5000);
+    expect(await h().mutation(api.help.understood, { id })).toEqual({ closed: false });
+    expect((await tn().query(api.chat.troom, { id })).head.help!.asks[0]).toMatchObject({ st: "open", su: true });
+    expect((await tn().query(api.help.tlist, {})).lines[0]).toMatchObject({ su: true, fresh: true });
+    expect(await tn().mutation(api.help.tdone, { id })).toEqual({ n: 1, w: 0 });
     // Mira got the same question wrong: the thread is there, with its teacher; she picks nobody.
     expect((await m().query(api.help.start, { unitId: u01, q: 8 })).thread).toEqual({ id, tname: "Nila", n: 1 });
     expect(await send(m(), 8, raj)).toBe(id);
     expect(await askRow(mira, 8)).toMatchObject({ st: "open", tid: nila });
     const room = await m().query(api.chat.room, { id });
-    expect(room.msgs.map((x) => x.n)).toEqual(["Hana K", "Hana K", "Nila", "Mira J"]);
+    expect(room.msgs.map((x) => x.n)).toEqual(["Hana K", "Hana K", "Nila", "Hana K", "Mira J"]);
     expect(room.msgs[1].au).toMatchObject({ d: 9 }); // Hana's voice note: Mira hears it
     expect(room.msgs[0].ph).toHaveLength(1);
     expect(room.head.help!.asks).toMatchObject([{ n: "Hana K", st: "done" }, { n: "Mira J", st: "open", mine: true }]);
@@ -244,8 +263,10 @@ describe("online explanations", () => {
     expect(half).toMatchObject({ n: "மாணவர்" });
     expect(half.ph).toHaveLength(1);
     expect((await m().query(api.chat.room, { id })).msgs[1].au).toBeUndefined();
-    // One tap covers everyone waiting.
-    expect(await tn().mutation(api.help.tdone, { id })).toEqual({ n: 1 });
+    // Hers: the teacher's one tap, then Mira's.
+    expect(await tn().mutation(api.help.tdone, { id })).toEqual({ n: 0, w: 1 });
+    expect(await m().mutation(api.help.understood, { id })).toEqual({ closed: true });
+    expect(await askRow(mira, 8)).toMatchObject({ st: "done", by: "Nila" });
     expect((await mq(mira, 8)).x).toBeDefined();
   });
 
@@ -274,31 +295,46 @@ describe("online explanations", () => {
     expect((await tn().query(api.help.tlist, {})).lines.find((x) => x.q === 8)!.late).toBeUndefined();
   });
 
-  test("explained in class first: the thread closes by itself; a teacher's call asks for his photo", async () => {
+  test("explained in class first: the thread closes by itself; a teacher's call asks for no photo, her 📷 does", async () => {
     const id = await send(h(), 8, nila);
+    await h().mutation(api.help.understood, { id }); // said, then explained in class: opened again later, it is cleared
     // Evaluation explains Q8 in class.
     await tn().mutation(api.workbook.explain, { studentId: hana, unitId: u01, qs: [8], on: true });
     expect(await askRow(hana, 8)).toMatchObject({ st: "class" });
     expect((await h().query(api.chat.room, { id })).head.can).toMatchObject({ write: false, why: expect.stringContaining("வகுப்பில்") });
     expect((await tn().query(api.help.tlist, {})).lines.filter((x) => x.st === "open")).toEqual([]);
-    // Consultation's icon: Raj asks Mira for Q7. Her photo is still to come; she is in the thread with him.
+    // Consultation's icon: Raj opens Mira's Q7. 13 Nov 2026, his rule: no photo asked by itself ("if photo needed,
+    // teacher will ask that").
     const r = await tr().mutation(api.help.tcall, { studentId: mira, unitId: u01, q: 7 });
     expect(r.again).toBe(false);
     expect(await askRow(mira, 7)).toMatchObject({ st: "open", from: "t", ph: false, tid: raj });
+    expect((await askRow(mira, 7)).pw).toBeUndefined();
+    const first = (await m().query(api.chat.room, { id: r.id })).msgs[0];
+    expect(first).toMatchObject({ tch: true, t: expect.stringContaining("இங்கே விளக்குகிறேன்") });
+    expect(first.t).not.toContain("படத்தை");
     expect(await tr().query(api.help.topen, {})).toEqual([`${mira}:${u01}:7`]);
     expect((await m().query(api.help.mine, {}))[0]).toMatchObject({ q: 7, ph: false, from: "t", fresh: true, tname: "Raj" });
     expect((await m().query(api.help.start, { unitId: u01, q: 7 })).mine).toEqual({ id: r.id, st: "open", ph: false });
     expect(await tr().mutation(api.help.tcall, { studentId: mira, unitId: u01, q: 7 })).toEqual({ id: r.id, again: true });
+    // Raj's 📷 Ask for her photo: the old words, her list says so.
+    await tr().mutation(api.help.tphoto, { aid: (await askRow(mira, 7))._id });
+    expect(await askRow(mira, 7)).toMatchObject({ pw: true, ph: false });
+    expect((await m().query(api.help.mine, {}))[0]).toMatchObject({ pw: true, ph: false });
+    expect((await m().query(api.chat.room, { id: r.id })).msgs[1]).toMatchObject({ tch: true, t: expect.stringContaining("படத்தை இங்கே அனுப்பு") });
     // Her photo: into the same thread (no teacher to pick).
     expect(await send(m(), 7)).toBe(r.id);
     expect(await askRow(mira, 7)).toMatchObject({ ph: true });
-    expect((await tr().query(api.chat.troom, { id: r.id })).msgs.map((x) => !!x.ask)).toEqual([false, true]);
+    expect((await tr().query(api.chat.troom, { id: r.id })).msgs.map((x) => !!x.ask)).toEqual([false, false, true]);
     // A question that isn't wrong can't be called.
     await expect(tr().mutation(api.help.tcall, { studentId: mira, unitId: u01, q: 1 })).rejects.toThrow(/doesn't wait/);
     // Taken back in class (not explained after all): Hana can send it in again; her old row opens again.
     await tn().mutation(api.workbook.explain, { studentId: hana, unitId: u01, qs: [8], on: false });
     expect(await send(h(), 8, raj)).toBe(id);
     expect(await askRow(hana, 8)).toMatchObject({ st: "open", from: "s" });
+    expect((await askRow(hana, 8)).su).toBeUndefined();
+    // Closed: her 📷 is refused.
+    await tn().mutation(api.workbook.explain, { studentId: hana, unitId: u01, qs: [8], on: true });
+    await expect(tn().mutation(api.help.tphoto, { aid: (await askRow(hana, 8))._id })).rejects.toThrow(/isn't waiting/);
   });
 
   test("the owner's limit a day (none unless he sets one); demo students can't send", async () => {
@@ -348,7 +384,8 @@ describe("online explanations", () => {
     await raw.mutation(internal.photos.sweep, {});
     expect(await exists(g)).toBe(false);
     expect(await exists(f)).toBe(true);
-    // Explained online: the next sweep takes it; the card keeps her marks, no photo.
+    // Explained online (both tapped): the next sweep takes it; the card keeps her marks, no photo.
+    await h().mutation(api.help.understood, { id });
     await tn().mutation(api.help.tdone, { id });
     await raw.mutation(internal.photos.sweep, {});
     expect(await exists(f)).toBe(false);
@@ -372,7 +409,7 @@ describe("online explanations", () => {
     expect(await askRow(hana, 10)).toMatchObject({ st: "open", from: "t", ph: true });
     expect((await h().query(api.help.mine, {})).find((x) => x.q === 10)).toMatchObject({ ph: true, from: "t", tname: "Owner" });
     const room = await h().query(api.chat.room, { id: r.id });
-    expect(room.msgs[0]).toMatchObject({ tch: true, t: expect.stringContaining("உன் படத்தைப் பார்த்தேன்") });
+    expect(room.msgs[0]).toMatchObject({ tch: true, t: expect.stringContaining("உன் விடையைப் பார்த்தேன்") });
     expect(room.head.help!.asks[0].photo).toMatchObject({ st: "done", got: 1, max: 2 });
     expect(room.head.help!.asks[0].photo!.urls).toHaveLength(1);
     expect(await t.mutation(api.help.tcall, { studentId: hana, unitId: u01, q: 10 })).toEqual({ id: r.id, again: true });
@@ -380,7 +417,7 @@ describe("online explanations", () => {
     await m().mutation(api.family.photoSend, { unitId: u01, n: 1, q: 10, kind: "part", files: [await file("image/jpeg")] });
     await t.mutation(api.photos.mark, { id: (await t.query(api.photos.queue, {}))[0].id, got: 2 });
     await expect(t.mutation(api.help.tcall, { studentId: mira, unitId: u01, q: 10 })).rejects.toThrow(/doesn't wait/);
-    // Not now, and her photo gone meanwhile (the 30 days): a later call asks for one, as Consultation's always did.
+    // Not now, and her photo gone meanwhile (the 30 days): a later call still asks for nothing (13 Nov 2026).
     await tn().mutation(api.help.tskip, { aid: (await askRow(hana, 10))._id });
     await raw.run(async (ctx) => {
       const row = (await ctx.db.query("homePhotos").collect()).find((x) => x.studentId === hana && x.q === 10)!;
@@ -388,6 +425,54 @@ describe("online explanations", () => {
     });
     expect(await tr().mutation(api.help.tcall, { studentId: hana, unitId: u01, q: 10 })).toMatchObject({ again: false });
     expect(await askRow(hana, 10)).toMatchObject({ st: "open", ph: false, tid: raj });
+    expect((await askRow(hana, 10)).pw).toBeUndefined();
+  });
+
+  test("a typed \"show that\" a teacher marked: the thread shows what he typed under each sub-question, never \"photo deleted\"", async () => {
+    // 13 Nov 2026, his report: "This photo is saying photo is deleted ... student didn't upload the photo ... sometimes
+    // the sentence also corrected by the correction tab. So I want that written sentence on the inside the thread".
+    // A key with kinds; Q10 = two "show that" parts he types (made-up words).
+    const box = (a: string) => ({ k: "box" as const, b: [{ v: [a] }] });
+    const key = fakeKey().map((k): KeyAnswer => {
+      if (k.q === 8) return { q: 8, parts: [{ p: "i", a: "24", m: 1, t: box("24") }, { p: "ii", a: "48", m: 1, t: box("48") }] };
+      if (k.q === 10) return { q: 10, parts: [{ p: "i", a: "his words", m: 1, t: { k: "say" } }, { p: "ii", a: "his words", m: 1, t: { k: "say" } }] };
+      return k.q < 10 ? { ...k, t: box(String(k.q * 3)) } : k;
+    });
+    await t.mutation(api.catalog.saveWorkbook, {
+      unitId: u01,
+      parts: BOOK.data.parts.map((p) => ({ id: p.id, to: p.to, ...(p.each ? { each: p.each } : {}) })),
+      levels: BOOK.data.levels.map((l) => ({ to: l.to, max: l.max })),
+      marks: BOOK.data.marks ?? {},
+      replace: true,
+      key,
+    });
+    const LINA = "lina-phone-token-0123456789abcdefghijklmnopqrstuvwxyz";
+    const lina = await t.mutation(api.students.add, { name: "Lina S", grade: 8, term: 1, stage: "master", unitId: u01 });
+    await t.mutation(api.families.makeLink, { studentId: lina, codeHash: secretHash("family-link", "lina-help-link-01234567") });
+    await raw.mutation(api.family.join, { code: "lina-help-link-01234567", token: LINA, label: "Android" });
+    const l = () => asPhone(raw, LINA);
+    const typed = [1, 2, 3, 4, 5, 6, 7, 9].map((q) => ({ q, a: [String(q * 3)] })).concat([
+      { q: 8, a: ["24", "48"] },
+      { q: 10, a: ["made-up words for part one", "made-up words for part two"] },
+    ]);
+    expect((await l().mutation(api.family.check, { unitId: u01, n: 1, typed })).teacher).toEqual([10]);
+    // Correction marks his words 1 of 2, then opens his thread: his words are there, so nothing is asked of him.
+    const item = (await t.query(api.photos.queue, {})).find((i) => i.q === 10 && i.student.name === "Lina S")!;
+    expect(item).toMatchObject({ said: true, urls: [] });
+    await t.mutation(api.photos.mark, { id: item.id, got: 1 });
+    const r = await t.mutation(api.help.tcall, { studentId: lina, unitId: u01, q: 10 });
+    expect(r).toMatchObject({ have: true });
+    expect(await raw.run(async (ctx) => (await ctx.db.query("helpAsks").withIndex("by_sid", (x) => x.eq("sid", lina)).first())!)).toMatchObject({ ph: true });
+    for (const room of [await l().query(api.chat.room, { id: r.id }), await tn().query(api.chat.troom, { id: r.id })]) {
+      const a = room.head.help!.asks[0];
+      expect(a.parts).toEqual([
+        { p: "i", ok: null, typed: ["made-up words for part one"] },
+        { p: "ii", ok: null, typed: ["made-up words for part two"] },
+      ]);
+      expect(a.photo).toMatchObject({ said: true, urls: [], st: "done", got: 1, max: 2 });
+    }
+    const first = (await l().query(api.chat.room, { id: r.id })).msgs[0];
+    expect(first.t).toContain("உன் விடையைப் பார்த்தேன்");
   });
 
   test("a photo nobody ever explains goes after 30 days", async () => {

@@ -37,6 +37,8 @@ import { staffPics, takePhotos, tidy } from "./us";
 
 const token = v.optional(v.string());
 type Ask = Doc<"helpAsks">;
+/** An ask opened again: nothing understood, no photo asked yet. */
+const FRESH = { pw: undefined, su: undefined, tu: undefined, tub: undefined } as const;
 
 /** A teacher he can pick (everyone still in the class, the owner too: he teaches). */
 export type HelpTeacher = { id: string; n: string; pic?: string };
@@ -68,6 +70,10 @@ export type HelpLine = {
   tname: string;
   /** His photo is there. */
   ph: boolean;
+  /** A teacher asked for his photo; he said he understood; the teacher said so (13 Nov 2026). */
+  pw?: true;
+  su?: true;
+  tu?: true;
   from: "s" | "t";
   /** Something new in it for this phone. */
   fresh?: true;
@@ -230,7 +236,7 @@ export const ask = mutation({
     if (had) {
       // Sent before and closed, and the question waits again (an explanation taken back in class): it opens again.
       aid = had._id;
-      await ctx.db.patch(had._id, { rid: r._id, st: "open", tid: teacher._id, ta: now, tw: undefined, ph: true, at: now, doneAt: undefined, by: undefined, from: "s" });
+      await ctx.db.patch(had._id, { rid: r._id, st: "open", tid: teacher._id, ta: now, tw: undefined, ph: true, at: now, doneAt: undefined, by: undefined, from: "s", ...FRESH });
     } else {
       aid = await ctx.db.insert("helpAsks", { rid: r._id, sid: s._id, unitId: args.unitId, n: mine.n, q: args.q, tid: teacher._id, ta: now, st: "open", from: "s", ph: true, at: now, demo: false });
     }
@@ -268,6 +274,9 @@ async function lineOf(ctx: QueryCtx, a: Ask, memo: Map<string, { no: number; uni
     tid: a.tid,
     tname,
     ph: a.ph,
+    ...(a.pw ? { pw: true as const } : {}),
+    ...(a.su ? { su: true as const } : {}),
+    ...(a.tu ? { tu: true as const } : {}),
     from: a.from,
     la: r.la,
     ...(r.lt ? { lt: r.lt } : {}),
@@ -441,19 +450,85 @@ async function explained(ctx: MutationCtx, a: Ask, u: Doc<"users">, r: Doc<"usRo
 }
 
 /**
- * Explained (= the thread closed): every student still waiting in it. His rule: only this tap makes the question
- * explained, never a voice note alone.
+ * The teacher's ✓ Understood (13 Nov 2026, his rule: "both sides, both persons need to press the understand button.
+ * Then that thread will be closed"): for each student still waiting (or only `aid`), closed and explained if he said
+ * he understood; else it waits on him (`tu`), he is asked and told. Never a voice note alone (his rule of 12 Nov).
  */
 export const tdone = mutation({
-  args: { token, id: v.string() },
-  handler: async (ctx, args): Promise<{ n: number }> => {
+  args: { token, id: v.string(), aid: v.optional(v.string()) },
+  handler: async (ctx, args): Promise<{ n: number; w: number }> => {
     const u = await actor(ctx, args.token, ["any"]);
     const r = await roomOf(ctx, args.id);
     const now = Date.now();
-    const open = (await asksIn(ctx, r._id)).filter((a) => a.st === "open");
-    for (const a of open) await explained(ctx, a, u, r, now);
-    if (open.length) await bumpRoom(ctx, r._id);
-    return { n: open.length };
+    const open = (await asksIn(ctx, r._id)).filter((a) => a.st === "open" && (!args.aid || a._id === args.aid));
+    let n = 0;
+    const waits: Ask[] = [];
+    for (const a of open) {
+      if (a.su) {
+        await explained(ctx, a, u, r, now);
+        n++;
+      } else if (!a.tu) {
+        await ctx.db.patch(a._id, { tu: now, tub: u._id, tw: now });
+        waits.push(a);
+      }
+    }
+    if (waits.length) {
+      const names: string[] = [];
+      for (const a of waits) names.push((await ctx.db.get(a.sid))?.name.split(" ")[0] ?? "");
+      await say(ctx, r, { by: u._id, n: u.name }, now, { t: `${names.filter(Boolean).join(", ")}: புரிந்ததா? புரிந்தால் மேலே ✓ எனக்குப் புரிந்தது ஐ அழுத்து.` });
+      for (const a of waits) await alertStudent(ctx, a.sid, `🎧 ${u.name} ஆசிரியர் Q${r.hq} ஐ விளக்கினார்: புரிந்ததா? ✓ அழுத்து.`, `/f/#chat=${r._id}`);
+    }
+    if (n || waits.length) await bumpRoom(ctx, r._id);
+    return { n, w: open.length - n };
+  },
+});
+
+/**
+ * He tapped ✓ I understood (13 Nov 2026): the teacher's side shows it lit; if she tapped Understood already, it closes
+ * now (explained, by her name).
+ */
+export const understood = mutation({
+  args: { token, id: v.string() },
+  handler: async (ctx, args): Promise<{ closed: boolean }> => {
+    const s = await familyActor(ctx, args.token);
+    const r = await roomOf(ctx, args.id);
+    const a = await askOf(ctx, s._id, r.hu!, r.hq!);
+    if (!a) fail("This thread isn't yours.");
+    if (a.st !== "open") return { closed: true };
+    const now = Date.now();
+    if (!a.su) {
+      await ctx.db.patch(a._id, { su: now });
+      const me = await studentPerson(ctx, s._id);
+      await say(ctx, r, { sid: s._id, n: me?.n ?? s.name, ...(me?.g !== undefined ? { g: me.g } : {}), ...(me?.pic ? { pic: me.pic } : {}) }, now, { t: "✓ எனக்குப் புரிந்தது" });
+    }
+    const t = a.tu ? ((a.tub ? await ctx.db.get(a.tub) : null) ?? (await ctx.db.get(a.tid))) : null;
+    if (t) {
+      await explained(ctx, { ...a, su: now }, t, r, now);
+      await bumpRoom(ctx, r._id);
+      return { closed: true };
+    }
+    await bumpRoom(ctx, r._id);
+    return { closed: false };
+  },
+});
+
+/**
+ * 📷 Ask for his photo (13 Nov 2026: a teacher's own button, never automatic): the words the thread used to say by
+ * itself, and a phone alert.
+ */
+export const tphoto = mutation({
+  args: { token, aid: v.string() },
+  handler: async (ctx, args) => {
+    const u = await actor(ctx, args.token, ["any"]);
+    const a = await askById(ctx, args.aid);
+    if (a.st !== "open") fail("This question isn't waiting any more.");
+    const r = await roomOf(ctx, a.rid);
+    const s = await ctx.db.get(a.sid);
+    const now = Date.now();
+    // `ph` false: waiting on a photo now (his typed words or an old photo in the card were not enough for her).
+    await ctx.db.patch(a._id, { pw: true, ph: false, tw: now });
+    await say(ctx, r, { by: u._id, n: u.name }, now, { t: `${s?.name.split(" ")[0] ?? ""}, Q${a.q}: உன் வழிமுறையின் படத்தை இங்கே அனுப்பு. நான் விளக்குகிறேன்.` });
+    await alertStudent(ctx, a.sid, `📷 ${u.name} ஆசிரியர் Q${a.q} க்கு உன் வழிமுறையின் படத்தைக் கேட்கிறார்.`, `/f/#chat=${r._id}`);
   },
 });
 
@@ -510,7 +585,7 @@ export const thide = mutation({
 
 /**
  * His photo of this question's teacher's part is in the thread's card already (marked from home, its files still
- * kept): a teacher who opens the thread herself needs no photo from him (12 Nov 2026, Correction's Homework card).
+ * kept), or his typed words for it (`said`: a "show that" he typed, 13 Nov 2026): the teacher sees his work there.
  */
 async function photoHere(ctx: QueryCtx, sid: Id<"students">, unitId: Id<"units">, n: number, q: number): Promise<boolean> {
   const rows = await ctx.db
@@ -518,7 +593,7 @@ async function photoHere(ctx: QueryCtx, sid: Id<"students">, unitId: Id<"units">
     .withIndex("by_student", (x) => x.eq("studentId", sid).eq("unitId", unitId).eq("n", n).eq("q", q))
     .collect();
   const last = rows.filter((r) => r.kind === "part" && !r.free && !r.cls).sort((a, b) => b.at - a.at)[0];
-  return !!last && last.state === "done" && last.files.length > 0;
+  return !!last && (!!last.said || (last.state === "done" && last.files.length > 0));
 }
 
 /**
@@ -545,18 +620,15 @@ export const tcall = mutation({
     const r = await threadFor(ctx, args.unitId, his.n, args.q, u._id, now);
     if (r.ht !== u._id) await ctx.db.patch(r._id, { ht: u._id });
     const have = await photoHere(ctx, s._id, args.unitId, his.n, args.q);
-    if (had) await ctx.db.patch(had._id, { rid: r._id, st: "open", tid: u._id, ta: now, tw: now, ph: have, at: now, doneAt: undefined, by: undefined, from: "t" });
+    if (had) await ctx.db.patch(had._id, { rid: r._id, st: "open", tid: u._id, ta: now, tw: now, ph: have, at: now, doneAt: undefined, by: undefined, from: "t", ...FRESH });
     else await ctx.db.insert("helpAsks", { rid: r._id, sid: s._id, unitId: args.unitId, n: his.n, q: args.q, tid: u._id, ta: now, tw: now, st: "open", from: "t", ph: have, at: now, demo: false });
     const first = s.name.split(" ")[0];
+    // 13 Nov 2026, his rule: opening a thread never asks for his photo by itself ("if photo needed, teacher will ask
+    // that"): her 📷 Ask for his photo (`tphoto`) does.
     await say(ctx, r, { by: u._id, n: u.name }, now, {
-      t: have ? `${first}, Q${args.q}: உன் படத்தைப் பார்த்தேன். இங்கே விளக்குகிறேன்.` : `${first}, Q${args.q}: உன் வழிமுறையின் படத்தை இங்கே அனுப்பு. நான் விளக்குகிறேன்.`,
+      t: have ? `${first}, Q${args.q}: உன் விடையைப் பார்த்தேன். இங்கே விளக்குகிறேன்.` : `${first}, Q${args.q}: இங்கே விளக்குகிறேன்.`,
     });
-    await alertStudent(
-      ctx,
-      s._id,
-      have ? `🎧 ${u.name} ஆசிரியர் Q${args.q} ஐ online இல் விளக்குகிறார்: thread ஐத் திற.` : `🎧 ${u.name} ஆசிரியர் Q${args.q} ஐ online இல் விளக்க விரும்புகிறார்: உன் படத்தை அனுப்பு.`,
-      `/f/#chat=${r._id}`,
-    );
+    await alertStudent(ctx, s._id, `🎧 ${u.name} ஆசிரியர் Q${args.q} ஐ online இல் விளக்குகிறார்: thread ஐத் திற.`, `/f/#chat=${r._id}`);
     return { id: r._id, again: false, ...(have ? { have: true as const } : {}) };
   },
 });

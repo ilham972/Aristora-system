@@ -243,17 +243,15 @@ export function ConsultPage(props: { board: Board; views: View[]; now: number })
             const todo = onlineKids.filter((k) => !asked.has(onlineKey(k.id)));
             if (!todo.length) return toast("Its thread is open: Us → Thread → Online explanations.");
             const done: string[] = [];
-            // His photo of a teacher's part, marked from home, is in the thread already: he isn't asked again.
-            let photo = false;
+            // 13 Nov 2026: opening a thread never asks for his photo; she asks in the thread (⋮ → Ask for his photo).
             for (const k of todo) {
               const r = await act(() => mutate(api.help.tcall, { studentId: k.id as Id<"students">, unitId: sq!.v.unit!._id, q: sq!.q }));
               if (r) done.push(k.id);
-              if (r && !r.have && !r.again) photo = true;
             }
             if (!done.length) return;
             setAsked(new Set([...asked, ...done.map(onlineKey)]));
             tone("call");
-            toast(`🎧 Thread open for ${joinNames(todo.filter((k) => done.includes(k.id)).map((k) => k.name))}${photo ? ": asked for a photo" : ""}. Explain in Us → Thread.`);
+            toast(`🎧 Thread open for ${joinNames(todo.filter((k) => done.includes(k.id)).map((k) => k.name))}. Explain in Us → Thread.`);
           },
         }
       : undefined;

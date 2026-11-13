@@ -3854,7 +3854,7 @@ test("online and studying: the green dot and the pencil, Studying now and Online
   expect(problems.slice(before)).toEqual([]);
 });
 
-test("Explain online: the pill on a wrong question after Check; her photo and a teacher; the thread with what she typed; the teacher's voice note and ⋮ Explained; the next student joins; a name hidden; Consultation's icon", async () => {
+test("Explain online: the pill on a wrong question after Check; her photo and a teacher; the thread with what she typed; the teacher's voice note and Understood on both sides; the next student joins; a name hidden; Consultation's icon", async () => {
   // 12 Nov 2026, his voice note: "I don't want to explain everything on my classroom ... explaining in the voice note
   // like a WhatsApp ... small tiny pill like explain online ... that will open the new thread in the community". His
   // answers: the explanation stays on its question (the next student joins and sees everything; a teacher can hide a
@@ -4036,17 +4036,29 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
   await noSideScroll(P);
   await shot(P, "help07b-voice-from-student");
 
-  // ⋮ → Explained (two taps: never by mistake): explained in class too, the thread shuts for her.
+  // ⋮ → Understood (two taps: never by mistake). 13 Nov 2026, his rule: both must tap, so it waits on her.
   await U.locator(".h-more").click();
   const menu = U.locator(".h-menu");
   await contains(menu, "1 waiting: Hana K");
   await shot(C, "help08-menu");
-  await menu.getByRole("button", { name: /Explained/ }).click();
+  await menu.getByRole("button", { name: /Understood/ }).click();
   expect((await askOf(hana, 8))!.st).toBe("open");
   await menu.getByRole("button", { name: /Tap again/ }).click();
+  await until(async () => !!(await askOf(hana, 8))!.tu, "her Understood on the server");
+  expect((await askOf(hana, 8))!.st).toBe("open");
+  expect((await mq(hana, 8))?.x).toBeUndefined();
+  await contains(U.locator(".h-asks li .h-st"), "waiting on him");
+  // Hana's phone asks her; her ✓ I understood closes it: explained in class too, the thread shuts for her.
+  await until(async () => (await P.locator(".h-wait .f-btn.go", { hasText: "எனக்குப் புரிந்தது" }).count()) === 1, "the understood button lit on Hana's phone", 20_000);
+  await contains(P.locator(".h-wait"), "புரிந்ததா");
+  await noSideScroll(P);
+  await P.locator(".h-wait").scrollIntoViewIfNeeded();
+  await shot(P, "help08b-student-understood");
+  await P.locator(".h-wait .f-btn.go", { hasText: "எனக்குப் புரிந்தது" }).click();
   await until(async () => (await askOf(hana, 8))!.st === "done", "Hana's question explained");
+  expect((await askOf(hana, 8))!.by).toBe("Nila");
   expect((await mq(hana, 8))?.x).toBeDefined();
-  await contains(U.locator(".h-wait"), "Closed");
+  await until(async () => (await U.locator(".h-wait", { hasText: "Closed" }).count()) === 1, "closed on the teacher's phone", 20_000);
   await until(async () => (await P.locator(".c-cant").count()) === 1, "her thread shut on her phone", 20_000);
   await contains(P.locator(".c-cant"), "விளக்கம் முடிந்தது");
   // Back: the Level's book she came from; the pill says how it stands.
@@ -4065,7 +4077,7 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
   expect((await t.query(api.help.start, { token: MIRA, unitId: u01, q: 8 })).thread).toMatchObject({ id: tid, tname: "Nila", n: 1 });
   expect((await t.mutation(api.help.ask, { token: MIRA, unitId: u01, q: 8, ph: [{ s: await png(), b: await png(), w: 96, h: 72 }] })).id).toBe(tid);
   const hers = await t.query(api.chat.room, { token: MIRA, id: tid });
-  expect(hers.msgs.map((m) => m.n)).toEqual(["Hana K", "Nila", "Nila", "Hana K", "Mira J"]);
+  expect(hers.msgs.map((m) => m.n)).toEqual(["Hana K", "Nila", "Nila", "Hana K", "Nila", "Hana K", "Mira J"]);
   expect(hers.msgs[1].au).toBeDefined();
   expect((await mq(mira, 8))?.x).toBeUndefined();
   // Nila's open thread: Mira waits; ⋮ on Hana → her name hidden from Mira's phone.
@@ -4085,7 +4097,7 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
   await noSideScroll(C);
   await shot(C, "help10-two-students");
 
-  // Consultation's icon (the owner's phone): Mira's Q8 has its thread (filled); her Q2 gets one, she is asked for a photo.
+  // Consultation's icon (the owner's phone): Mira's Q8 has its thread (filled); her Q2 gets one, no photo asked (13 Nov 2026).
   const O = await open(backend, site.url, size(390, 820), () => {
     if (sessionStorage.getItem("t")) return;
     sessionStorage.setItem("t", "1");
@@ -4206,7 +4218,7 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
   expect(await askOf(omar, 8)).toMatchObject({ st: "open", from: "t", ph: true, rid: tid });
   expect((await t.query(api.help.mine, { token: OMAR })).find((l) => l.q === 8)).toMatchObject({ ph: true, from: "t", tname: "Owner" });
   const his = await t.query(api.chat.room, { token: OMAR, id: tid });
-  expect(his.msgs[his.msgs.length - 1].t).toContain("உன் படத்தைப் பார்த்தேன்");
+  expect(his.msgs[his.msgs.length - 1].t).toContain("உன் விடையைப் பார்த்தேன்");
   expect(his.head.help!.asks.find((a) => a.mine)!.photo).toMatchObject({ st: "done", got: 0, max: 1, by: "Owner" });
   // The lane has nothing left.
   await contains(O.locator(".hl-idle"), "No photos waiting");
@@ -4217,19 +4229,120 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
   await visible(P.locator(".h-top"));
   await noSideScroll(P);
   await shot(P, "help13-thread-320");
-  // Her explanations come first on her Chat tab (12 Nov 2026): this one, closed (Waiting 0 · All 1).
+  // Her explanations come first on her Thread tab: this one, closed (13 Nov 2026, his ask: Open · Closed on her side too).
   for (const scr of [".f-bookscr", ".f-lv", ".f-tabs"]) {
     await P.getByRole("button", { name: "Back" }).first().click();
     await visible(P.locator(scr));
   }
   await tabTo(P, /^Thread$/);
   await contains(P.locator(".h-list-h"), "Explain online");
-  await contains(P.locator(".h-chips button.on"), "Waiting 0");
-  await P.locator(".h-chips").getByRole("tab", { name: /All/ }).click();
+  await contains(P.locator(".h-chips button.on"), "Open 0");
+  await P.locator(".h-chips").getByRole("tab", { name: /Closed/ }).click();
+  await contains(P.locator(".h-chips button.on"), "Closed 1");
   await contains(P.locator(".h-row"), "Q8");
   await contains(P.locator(".h-row"), "விளக்கப்பட்டது");
   await noSideScroll(P);
   await shot(P, "help14-my-list-320");
   for (const p of [P, C, O]) await p.context().close();
+  expect(problems.slice(before)).toEqual([]);
+});
+
+test("Explain online: a typed \"show that\" shows his words under each sub-question (never \"photo deleted\"); no photo asked by itself; her 📷 and ✓ Understood on his row", async () => {
+  // 13 Nov 2026, his report with a screenshot: "This photo is saying photo is deleted ... student didn't upload the
+  // photo ... sometimes the sentence also corrected by the correction tab. So I want that written sentence on the inside
+  // the thread". And: "if the thread is open, that's automatically asking to upload the photo ... remove this ... pre-
+  // filled button for the teachers only", "both persons need to press the understand button". Made-up words.
+  const before = problems.length;
+  const backend = makeBackend(modules);
+  const t = backend.t;
+  await addPerson(t, { name: "Owner", token: OWNER_TOKEN, role: "owner" });
+  const as = { token: OWNER_TOKEN };
+  await t.mutation(api.setup.ensure, as);
+  const u01 = await t.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G8-U01")).first())!._id);
+  const box = (a: string) => ({ k: "box" as const, b: [{ v: [a] }] });
+  await t.mutation(api.catalog.saveWorkbook, {
+    ...as,
+    unitId: u01,
+    parts: BOOK.data.parts.map((p) => ({ id: p.id, to: p.to, ...(p.each ? { each: p.each } : {}) })),
+    levels: BOOK.data.levels.map((l) => ({ to: l.to, max: l.max })),
+    marks: BOOK.data.marks ?? {},
+    replace: true,
+    // A key with kinds: Q1–9 a number each, Q10 two "show that" parts he types (a teacher reads them).
+    key: fakeKey().map((k) =>
+      k.q === 10
+        ? { q: 10, parts: [{ p: "i", a: "his words", m: 1, t: { k: "say" as const } }, { p: "ii", a: "his words", m: 1, t: { k: "say" as const } }] }
+        : k.q < 10
+          ? { q: k.q, a: String(k.q * 3), t: box(String(k.q * 3)) }
+          : k,
+    ),
+  });
+  const mira = await t.mutation(api.students.add, { ...as, name: "Mira J", grade: 8, term: 1, stage: "master", unitId: u01 });
+  const MIRA = "family-phone-mira-say-".padEnd(48, "x");
+  await t.mutation(api.families.makeLink, { ...as, studentId: mira, codeHash: secretHash("family-link", "mira-say-family-link-0123456789") });
+  await t.mutation(api.family.join, { code: "mira-say-family-link-0123456789", token: MIRA, label: "Android" });
+  await t.mutation(api.us.setCfg, { ...as, open: true });
+  const typed = [1, 2, 3, 4, 5, 6, 7, 8, 9].map((q) => ({ q, a: [String(q * 3)] })).concat([{ q: 10, a: ["OP = OQ made-up reason one", "made-up reason two"] }]);
+  await t.mutation(api.family.check, { token: MIRA, unitId: u01, n: 1, typed });
+  // Correction marks her words 4 of 5 style: 1 of 2; then opens her thread (the Homework card's headset).
+  const item = (await t.query(api.photos.queue, as)).find((i) => i.q === 10)!;
+  expect(item).toMatchObject({ said: true });
+  await t.mutation(api.photos.mark, { ...as, id: item.id, got: 1 });
+  const { id } = await t.mutation(api.help.tcall, { ...as, studentId: mira, unitId: u01, q: 10 });
+  const askOf = async () => (await t.run(async (ctx) => await ctx.db.query("helpAsks").withIndex("by_sid", (x) => x.eq("sid", mira).eq("unitId", u01).eq("q", 10)).first()))!;
+  expect(await askOf()).toMatchObject({ st: "open", ph: true });
+  expect((await askOf()).pw).toBeUndefined();
+  const hers = await t.query(api.chat.room, { token: MIRA, id });
+  expect(hers.msgs.map((m) => m.t ?? "").join(" ")).not.toContain("படத்தை");
+
+  // The owner's class app: Us → Thread → Mira · Q10: her words under (i) and (ii), her marks once.
+  const C = await open(backend, site.url, size(360, 780), () => {
+    if (sessionStorage.getItem("t")) return;
+    sessionStorage.setItem("t", "1");
+    localStorage.setItem("aristora.role", "evaluation");
+    localStorage.setItem("aristora.token", "owner-phone-token-0123456789abcdefghijklmnopqrstuv");
+  });
+  await C.locator(".tabs .tab.us").click();
+  const U = C.frameLocator("iframe.us-frame");
+  for (const b of ["அடுத்து", "அடுத்து", "தொடங்கு!"]) await U.locator(".f-us-guide").getByRole("button", { name: b }).click();
+  await U.locator(".t-seg").getByRole("button", { name: "Thread" }).click();
+  await U.locator(".h-row", { hasText: "Mira J · Q10" }).click();
+  await until(async () => (await U.locator(".h-say").count()) === 2, "her two typed answers", 20_000);
+  expect((await U.locator(".h-say").allInnerTexts()).map((x) => x.replace(/\s+/g, " ").trim())).toEqual(["✍ OP = OQ made-up reason one", "✍ made-up reason two"]);
+  await contains(U.locator(".h-amk"), "1/2 · Owner");
+  expect(await U.locator(".h-amk").count()).toBe(1);
+  const card = await U.locator(".h-top").innerText();
+  expect(card).not.toContain("photo deleted");
+  expect(card).not.toContain("in the photo above");
+  expect(card).not.toContain("no photo yet");
+  await noSideScroll(C);
+  await U.locator(".h-asks").scrollIntoViewIfNeeded();
+  await shot(C, "help16-typed-words");
+  // Her 📷 (⋮ on Mira): the old words go out now, only because she asked.
+  await U.locator(".h-asks li", { hasText: "Mira J" }).locator(".h-dots").click();
+  await U.locator(".h-menu").getByRole("button", { name: /Ask for his working photo/ }).click();
+  await until(async () => !!(await askOf()).pw, "the photo asked");
+  expect((await askOf()).ph).toBe(false);
+  await contains(U.locator(".h-asks li .h-st"), "photo asked");
+  expect((await t.query(api.chat.room, { token: MIRA, id })).msgs.some((m) => (m.t ?? "").includes("படத்தை இங்கே அனுப்பு"))).toBe(true);
+  // Mira says she understood (her phone, through the server): her row lights; the owner's ✓ Understood closes it.
+  await t.mutation(api.help.understood, { token: MIRA, id });
+  await until(async () => (await U.locator(".h-asks li.und").count()) === 1, "her row lit", 20_000);
+  await contains(U.locator(".h-asks li.und .h-st"), "he understood");
+  await noSideScroll(C);
+  await U.locator(".h-asks").scrollIntoViewIfNeeded();
+  await shot(C, "help17-understood-row");
+  for (const w of [320, 390]) {
+    await C.setViewportSize({ width: w, height: 780 });
+    await noSideScroll(C);
+    // The row in two fixed lines: name, marks, ⋮ on top; how it stands and ✓ Understood below.
+    const [dots, name, ub] = await Promise.all([".h-dots", ".h-who", ".h-ub"].map(async (c) => (await U.locator(`.h-asks li.und ${c}`).boundingBox())!));
+    expect(Math.abs(dots.y + dots.height / 2 - (name.y + name.height / 2))).toBeLessThan(6);
+    expect(ub.y).toBeGreaterThan(name.y + name.height - 2);
+    await shot(C, `help17-understood-row-${w}`);
+  }
+  await U.locator(".h-asks li.und .h-ub.on").click();
+  await until(async () => (await askOf()).st === "done", "closed");
+  expect((await askOf()).by).toBe("Owner");
+  await C.context().close();
   expect(problems.slice(before)).toEqual([]);
 });

@@ -137,6 +137,11 @@ const CSS = `
 .h-who b{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:140px;font:800 14.5px/1.2 var(--display);color:var(--ink)}
 .h-asks em{font:800 13px/1 var(--display);font-style:normal;color:var(--wrong-ink)}
 .h-asks li.sel{box-shadow:0 0 0 2.5px var(--brand)}
+.h-asks li.und{background:var(--right-soft);box-shadow:0 0 0 2px var(--right)}
+.h-asks .h-who{order:1}.h-asks em{order:2}.h-dots{order:3;margin-left:auto}.h-brk{order:4;flex-basis:100%;height:0}.h-asks .h-st{order:5;min-width:0}.h-ub{order:6}
+.h-ub{flex:none;height:36px;padding:2px 10px 0;border-radius:12px;background:var(--card);box-shadow:0 0 0 1.5px var(--line-2);font:800 13px/1 var(--display);color:var(--brand-2)}
+.h-ub.on{background:var(--brand);box-shadow:none;color:#fff}
+.h-ub:disabled{opacity:.45}
 .h-whose{margin:10px 2px 0;font:800 12.5px/1.2 var(--display);color:var(--brand-2)}
 .h-ans{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:4px 0 12px}
 .h-plist{margin-top:8px;padding:10px 10px 2px;border-radius:12px;background:var(--bg)}
@@ -149,6 +154,8 @@ const CSS = `
 .h-a.ok{background:var(--right-soft);color:var(--right-ink);box-shadow:0 0 0 1.5px var(--right)}
 .h-a.no{background:var(--wrong-soft);color:var(--wrong-ink);box-shadow:0 0 0 1.5px var(--wrong)}
 .h-a.tch{background:var(--lav);color:var(--ink2)}
+.h-say{white-space:pre-wrap;overflow-wrap:anywhere;font-weight:600;max-width:100%}
+.h-amk{flex-basis:100%;font:800 12.5px/1.2 var(--display);color:var(--ink2)}
 .h-k{background:var(--card);box-shadow:0 0 0 1.5px var(--line-2);color:var(--ink)}
 .h-kt{margin-right:2px;color:var(--ink3)}
 .h-st{flex:1;font-size:12.5px;color:var(--ink2)}
@@ -158,6 +165,9 @@ const CSS = `
 .h-others{margin:6px 2px 0;font-size:12.5px;color:var(--ink3)}
 .h-wait{margin:10px 2px 0;font-size:13.5px;line-height:1.5;color:var(--ink2)}
 .h-wait .f-btn{display:inline-flex;align-items:center;gap:6px;width:100%;justify-content:center}
+.h-wait p{margin:0 0 8px}
+.h-wait .f-btn+.f-btn,.h-wait .f-btn+p{margin-top:8px}
+.h-und{padding:8px 10px;border-radius:12px;background:var(--right-soft);color:var(--right-ink);font-weight:700}
 .h-asktag{background:var(--gold-soft)!important;color:var(--gold-ink)!important}
 .h-hid{margin:0;font-size:13px;color:var(--ink3)}
 .h-link{display:block;margin-top:6px;padding:8px 10px;border-radius:12px;background:var(--brand-soft);font:800 13.5px/1.3 var(--display);color:var(--brand-2);text-decoration:none;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}

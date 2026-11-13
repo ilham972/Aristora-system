@@ -1343,6 +1343,15 @@ export default defineSchema({
     st: v.union(v.literal("open"), v.literal("done"), v.literal("class"), v.literal("skip")),
     from: v.union(v.literal("s"), v.literal("t")),
     ph: v.boolean(),
+    /** A teacher asked for his photo (13 Nov 2026: never by default, only her 📷 Ask for his photo). */
+    pw: v.optional(v.boolean()),
+    /**
+     * 13 Nov 2026, his rule "both persons need to press the understand button. Then that thread will be closed": he
+     * tapped "I understood" (`su`), the teacher tapped Understood (`tu`, by `tub`). Both = explained (st "done").
+     */
+    su: v.optional(v.number()),
+    tu: v.optional(v.number()),
+    tub: v.optional(v.id("users")),
     hn: v.optional(v.boolean()),
     hp: v.optional(v.boolean()),
     by: v.optional(v.string()),

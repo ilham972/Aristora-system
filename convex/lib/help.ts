@@ -3,8 +3,8 @@
 // like a WhatsApp ... that will open the new thread in the community". His answers the same night: an explanation is
 // kept on its question (the next student who gets it wrong joins the same thread and sees everything; a teacher can
 // hide a name or a photo); the student picks the teacher and she can send it to another; no limit a day (the owner can
-// set one); a question counts as explained only when the teacher taps Explained (= closes the thread), never by a
-// voice note alone. Explained in class first: the thread closes by itself.
+// set one); a question counts as explained only when the student taps ✓ I understood and a teacher taps ✓ Understood
+// (13 Nov 2026, his rule: both), never by a voice note alone. Explained in class first: the thread closes by itself.
 // The rules here read and write only their own rows (convex/lib/fn.ts runs `syncHelp` after every mutation that wrote a
 // progress row); convex/help.ts has the calls, convex/chat.ts the thread's messages.
 

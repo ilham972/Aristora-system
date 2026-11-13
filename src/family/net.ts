@@ -109,6 +109,8 @@ const STAFF_CHANGES: Record<string, string> = {
   "help:tskip": "help:tskip",
   "help:tpass": "help:tpass",
   "help:thide": "help:thide",
+  // 13 Nov 2026: her 📷 Ask for his photo (never automatic any more).
+  "help:tphoto": "help:tphoto",
 };
 /** The class app's Us tab with this teacher's sign-in. */
 export function staffWith(t: string): void {
