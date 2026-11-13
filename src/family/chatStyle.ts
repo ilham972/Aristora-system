@@ -6,7 +6,7 @@ const CSS = `
 .c-hero{padding-bottom:14px}
 .c-seg{display:grid;grid-template-columns:1fr 1fr;gap:3px;margin:12px 16px 0;padding:4px;border-radius:16px;background:rgba(255,255,255,.18)}
 .c-seg button{position:relative;height:42px;padding-top:2px;border-radius:12px;color:#fff;font:800 15px/1 var(--display)}
-.c-seg button.on{background:#fff;color:var(--brand-2);box-shadow:0 2px 0 rgba(0,0,0,.08)}
+.c-seg button.on{background:var(--card);color:var(--brand-2);box-shadow:0 2px 0 rgba(0,0,0,.08)}
 .c-seg i{position:absolute;top:3px;right:8px;min-width:18px;height:18px;padding:2px 5px 0;border-radius:9px;background:var(--gem);color:#fff;font:800 11px/1.3 var(--display);font-style:normal}
 .c-home{margin-top:14px}
 .c-home .h-list{margin:0}
@@ -46,7 +46,7 @@ const CSS = `
 .c-row.new .c-row-r small{color:var(--gem-2);font-weight:800}
 .c-un{min-width:22px;height:22px;padding:3px 6px 0;border-radius:11px;background:var(--gem);color:#fff;font:800 12px/1.3 var(--display);font-style:normal;text-align:center;animation:f-pop .3s}
 .c-blk,.c-ro{font-style:normal;font-size:13px}
-.c-gface{display:grid;place-items:center;width:46px;height:46px;border-radius:16px;background:linear-gradient(135deg,var(--brand-soft),#fff);box-shadow:0 0 0 1.5px var(--lav);font-size:24px}
+.c-gface{display:grid;place-items:center;width:46px;height:46px;border-radius:16px;background:linear-gradient(135deg,var(--brand-soft),var(--card));box-shadow:0 0 0 1.5px var(--lav);font-size:24px}
 .c-gface.grade{background:linear-gradient(135deg,#7a6bf0,var(--brand));box-shadow:0 3px 0 var(--brand-3);color:#fff;font:800 20px/1 var(--display)}
 .c-dface .f-ava{width:46px;height:46px}
 .c-dface.tch .f-ava{box-shadow:0 0 0 2.5px var(--gold)}
@@ -78,10 +78,10 @@ const CSS = `
 .c-msgs .f-msg.mine .f-rxs{justify-content:flex-end}
 .c-msgs .f-msg.mine.cont>.f-msg-ava{display:none}
 .c-more{display:block;margin:12px auto 0}
-.c-cant{position:fixed;left:50%;bottom:0;width:min(100%,520px);transform:translateX(-50%);padding:14px 16px calc(14px + var(--safe-b));border-radius:22px 22px 0 0;background:#fff;box-shadow:0 -8px 26px -14px rgba(40,30,110,.42);text-align:center;font-size:14px;line-height:1.45;color:var(--ink2)}
+.c-cant{position:fixed;left:50%;bottom:0;width:min(100%,520px);transform:translateX(-50%);padding:14px 16px calc(14px + var(--safe-b));border-radius:22px 22px 0 0;background:var(--card);box-shadow:0 -8px 26px -14px rgba(40,30,110,.42);text-align:center;font-size:14px;line-height:1.45;color:var(--ink2)}
 .c-rule{margin:12px 16px 0;padding:10px 12px;border-radius:14px;background:var(--gold-soft);color:var(--gold-ink);font-size:13.5px;line-height:1.5}
 .c-find{margin:12px 16px 0}
-.c-find input,.c-gname{width:100%;height:46px;padding:2px 14px 0;border-radius:14px;border:1.5px solid var(--line-2);background:#fff;font:600 15px/1 var(--text);color:var(--ink)}
+.c-find input,.c-gname{width:100%;height:46px;padding:2px 14px 0;border-radius:14px;border:1.5px solid var(--line-2);background:var(--card);font:600 15px/1 var(--text);color:var(--ink)}
 .c-chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:10px 16px 0;padding:2px 2px 4px}
 .c-chips::-webkit-scrollbar{display:none}
 .c-chips button{flex:none;min-width:40px;height:36px;padding:2px 12px 0;border-radius:12px;background:var(--card);box-shadow:0 0 0 1.5px var(--line-2);font:800 14px/1 var(--display);color:var(--ink2)}

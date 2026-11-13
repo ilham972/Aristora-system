@@ -144,7 +144,8 @@ export function AskSheet(props: { unitId: string; q: number; onClose: () => void
  * "left and right have so much white margin ... makes to scroll too much"): almost no padding, a sub-question's label
  * only as wide as its words, no extra indent.
  */
-const PAPER = `.qv{border-radius:10px;padding:6px 4px 2px;font:500 15.5px/1.5 "Baloo Thambi 2","Noto Sans Tamil",system-ui,sans-serif;color:#1c1a3a;-webkit-user-select:none;user-select:none}
+const PAPER = `.qv{border-radius:10px;padding:6px 4px 2px;font:500 15.5px/1.5 "Baloo Thambi 2","Noto Sans Tamil",system-ui,sans-serif;color:#1c1a3a;-webkit-user-select:none;user-select:none;background:var(--paper-bg,#fff);filter:var(--paper-f,none)}
+::slotted(*){filter:var(--paper-b,none);color:var(--ink,#1c1a3a)}
 .qv :not(svg):not(svg *):not(.mi):not(.mi *){font-family:"Baloo Thambi 2","Noto Sans Tamil",system-ui,sans-serif!important}
 .qv .qn,.qv .pm,.qv .mk{display:none!important}
 .qv .sq{margin-left:0!important}

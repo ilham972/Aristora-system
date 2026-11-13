@@ -71,6 +71,9 @@
   --pad-h: 254px;
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-t: env(safe-area-inset-top, 0px);
+  /* Only light: a phone's or a browser's own dark never repaints the app (13 Nov 2026, his rule). His Dark, from Me,
+     is ours: dark.css. */
+  color-scheme: only light;
 }
 * {
   box-sizing: border-box;
@@ -677,7 +680,7 @@ p {
   display: flex;
   align-items: center;
   gap: 6px;
-  background: #fff;
+  background: var(--card);
   border-radius: 18px 18px 18px 6px;
   box-shadow: var(--shadow);
   padding: 11px 14px;
@@ -739,7 +742,7 @@ p {
 }
 .f-btn.ghost {
   --edge: var(--line-2);
-  background: #fff;
+  background: var(--card);
   color: var(--brand);
   box-shadow:
     inset 0 0 0 2px var(--line-2),
@@ -778,7 +781,7 @@ p {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--card);
   color: var(--ink2);
   box-shadow: var(--shadow);
 }
@@ -906,7 +909,7 @@ p {
   height: 40px;
   padding: 0 10px 0 5px;
   border-radius: 999px;
-  background: #fff;
+  background: var(--card);
   box-shadow: var(--shadow);
 }
 .f-name {
@@ -940,7 +943,7 @@ p {
   height: 36px;
   padding: 0 11px 0 9px;
   border-radius: 999px;
-  background: #fff;
+  background: var(--card);
   box-shadow: var(--shadow);
   font: 800 15px/1 var(--display);
   color: var(--ink);
@@ -968,7 +971,7 @@ p {
   flex: none;
   height: 36px;
   border-radius: 999px;
-  background: #fff;
+  background: var(--card);
   box-shadow: var(--shadow);
 }
 .f-wallet .f-pill {
@@ -1036,7 +1039,7 @@ p {
   width: 38px;
   height: 38px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--card);
   color: var(--brand);
   box-shadow: var(--shadow);
 }
@@ -1095,7 +1098,7 @@ p {
   gap: 4px;
   padding: 6px;
   border-radius: 999px;
-  background: #fff;
+  background: var(--card);
   box-shadow:
     0 2px 6px rgba(40, 30, 110, 0.08),
     0 14px 34px -10px rgba(40, 30, 110, 0.32);
@@ -1292,7 +1295,7 @@ p {
   gap: 12px;
 }
 .f-goal.lit {
-  background: linear-gradient(120deg, #fff 40%, var(--flame-soft));
+  background: linear-gradient(120deg, var(--card) 40%, var(--flame-soft));
 }
 .f-goal-w {
   flex: 1;
@@ -1542,7 +1545,7 @@ p {
   gap: 12px;
   padding: 10px 12px 10px 10px;
   border-radius: 18px;
-  background: #fff;
+  background: var(--card);
   box-shadow: var(--shadow);
   text-align: left;
   color: var(--ink3);
@@ -1605,7 +1608,7 @@ p {
   margin: 0 16px;
   padding: 10px 12px 10px 10px;
   border-radius: 22px;
-  background: #fff;
+  background: var(--card);
   box-shadow: var(--shadow);
 }
 .f-wno {
@@ -1727,7 +1730,7 @@ p {
   height: 72px;
   border-radius: 50%;
   transform: translate(-50%, -50%);
-  background: #fff;
+  background: var(--card);
   color: var(--ink3);
   box-shadow: 0 6px 0 var(--edge);
   transition:
@@ -1764,7 +1767,7 @@ p {
 .f-node.s-open .f-node-c {
   width: calc(100% - 14px);
   height: calc(100% - 14px);
-  background: #fff;
+  background: var(--card);
 }
 .f-node.s-lock {
   background: #f1eff9;
@@ -1808,7 +1811,7 @@ p {
   z-index: 3;
   padding: 10px 14px 7px;
   border-radius: 12px;
-  background: #fff;
+  background: var(--card);
   color: var(--brand);
   font: 800 15px/1 var(--display);
   letter-spacing: 0.12em;
@@ -1824,7 +1827,7 @@ p {
   bottom: -6px;
   width: 12px;
   height: 12px;
-  background: #fff;
+  background: var(--card);
   border-radius: 2px;
   transform: translateX(-50%) rotate(45deg);
 }
@@ -1887,7 +1890,7 @@ p {
   height: 56px;
   border-radius: 18px;
   transform: translate(-50%, -50%) rotate(45deg);
-  background: #fff;
+  background: var(--card);
   color: var(--ink3);
   box-shadow: 0 5px 0 var(--line-2);
 }
@@ -1936,7 +1939,7 @@ p {
 }
 .f-lv.s-play:not(.play) {
   --edge: var(--brand-mid);
-  background: #fff;
+  background: var(--card);
   color: var(--brand);
   box-shadow:
     inset 0 0 0 3px var(--brand-mid),
@@ -1973,7 +1976,7 @@ p {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--card);
   color: var(--brand);
   box-shadow: 0 2px 6px rgba(40, 30, 110, 0.25);
 }
@@ -1988,7 +1991,7 @@ p {
   transform: translateY(-50%);
   padding: 4px 9px 2px;
   border-radius: 999px;
-  background: #fff;
+  background: var(--card);
   box-shadow: var(--shadow);
   font: 800 12.5px var(--display);
   color: var(--gem-ink);
@@ -2075,7 +2078,7 @@ p {
   transform: translateY(-50%);
   padding: 5px 8px 3px;
   border-radius: 9px;
-  background: #fff;
+  background: var(--card);
   color: var(--brand-2);
   font: 800 12px/1 var(--display);
   box-shadow: 0 2px 6px rgba(40, 30, 110, 0.2);
@@ -2123,7 +2126,7 @@ p {
   height: 34px;
   padding: 2px 8px 0;
   border-radius: 12px;
-  background: #fff;
+  background: var(--card);
   color: var(--ink2);
   font: 800 14.5px/1 var(--display);
   box-shadow: inset 0 0 0 2px var(--line);
@@ -2214,7 +2217,7 @@ p {
   min-width: 128px;
 }
 .f-box.on {
-  background: #fff;
+  background: var(--card);
   box-shadow:
     inset 0 0 0 2.5px var(--brand),
     0 0 0 4px var(--brand-soft);
@@ -2365,7 +2368,7 @@ p {
   height: 50px;
   padding-top: 3px;
   border-radius: 14px;
-  background: #fff;
+  background: var(--card);
   color: var(--ink);
   font: 800 24px/1 var(--display);
   box-shadow: 0 4px 0 var(--edge);
@@ -2467,7 +2470,7 @@ p {
   position: absolute;
   inset: 14px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--card);
   box-shadow: 0 14px 30px -16px rgba(60, 40, 170, 0.55);
 }
 .f-ring svg.f-ring-s {
@@ -2610,7 +2613,7 @@ p {
   margin-top: 16px;
   padding: 14px 16px;
   border-radius: 22px;
-  background: linear-gradient(110deg, var(--flame-soft), #fff 70%);
+  background: linear-gradient(110deg, var(--flame-soft), var(--card) 70%);
   box-shadow: var(--shadow);
 }
 .f-streakup .f-flame {
@@ -2659,7 +2662,7 @@ p {
   margin-top: 14px;
   padding: 16px;
   border-radius: 22px;
-  background: linear-gradient(180deg, var(--gold-soft), #fff 60%);
+  background: linear-gradient(180deg, var(--gold-soft), var(--card) 60%);
   box-shadow: var(--shadow);
   text-align: center;
 }
@@ -2683,7 +2686,7 @@ p {
   gap: 10px;
   padding: 9px 12px;
   border-radius: 14px;
-  background: #fff;
+  background: var(--card);
   box-shadow: inset 4px 0 0 var(--c), var(--shadow);
   opacity: 0;
   transform: translateY(10px) scale(0.97);
@@ -2877,7 +2880,7 @@ p {
   margin: 12px 16px 0;
   padding: 6px;
   border-radius: 22px;
-  background: #fff;
+  background: var(--card);
   box-shadow: var(--shadow);
 }
 .f-board.you {
@@ -2964,7 +2967,7 @@ button.f-pod:active,
   transition: background 0.2s ease, color 0.2s ease;
 }
 .f-rtabs button.on {
-  background: #fff;
+  background: var(--card);
   color: var(--brand);
 }
 /* Last week's champion of this list. */
@@ -3184,7 +3187,7 @@ button.f-pod:active,
   justify-items: center;
   gap: 8px;
   text-align: center;
-  background: linear-gradient(170deg, #fff 40%, var(--gold-soft));
+  background: linear-gradient(170deg, var(--card) 40%, var(--gold-soft));
   box-shadow: inset 0 0 0 2px var(--gold), var(--shadow);
 }
 .f-payc-x {
@@ -3219,7 +3222,7 @@ button.f-pod:active,
 }
 /* He won his grade's weekly coins (11 Nov 2026): the same card, all gold. */
 .f-payc.won {
-  background: linear-gradient(170deg, var(--gold-soft), #fff 75%);
+  background: linear-gradient(170deg, var(--gold-soft), var(--card) 75%);
   box-shadow: inset 0 0 0 2.5px var(--gold-3d), 0 10px 28px rgba(224, 148, 0, 0.22);
 }
 @media (prefers-reduced-motion: reduce) {
@@ -3351,7 +3354,7 @@ button.f-pod:active,
   gap: 3px;
   padding: 12px 6px;
   border-radius: 20px;
-  background: #fff;
+  background: var(--card);
   box-shadow: var(--shadow);
   text-align: center;
 }
@@ -3529,7 +3532,7 @@ button.f-pod:active,
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--card);
   color: var(--ink3);
   box-shadow: 0 1px 4px rgba(40, 30, 110, 0.2);
 }
@@ -3678,7 +3681,7 @@ button.f-pod:active,
   max-height: 92vh;
   overflow-y: auto;
   overscroll-behavior: contain;
-  background: #fff;
+  background: var(--card);
   border-radius: 28px 28px 0 0;
   padding: 8px 18px calc(22px + var(--safe-b));
   animation: f-up 0.34s cubic-bezier(0.2, 0.9, 0.3, 1.08) both;
@@ -3782,7 +3785,7 @@ button.f-pod:active,
 }
 .f-fb-text textarea:focus {
   border-color: var(--brand);
-  background: #fff;
+  background: var(--card);
 }
 .f-fb-text small {
   position: absolute;
@@ -3852,7 +3855,7 @@ button.f-pod:active,
   margin-top: 16px;
   padding: 18px;
   border-radius: 24px;
-  background: #fff;
+  background: var(--card);
   box-shadow: var(--shadow);
   text-align: left;
 }
@@ -3881,7 +3884,7 @@ button.f-pod:active,
 }
 .f-form input:focus {
   border-color: var(--brand);
-  background: #fff;
+  background: var(--card);
   box-shadow: 0 0 0 4px var(--brand-soft);
 }
 .f-form .f-btn {
@@ -4618,7 +4621,7 @@ button.f-pod:active,
   margin-top: 12px;
   padding: 22px 16px 18px;
   border-radius: 18px;
-  background: linear-gradient(160deg, var(--gold-soft), #fff 75%);
+  background: linear-gradient(160deg, var(--gold-soft), var(--card) 75%);
   box-shadow: inset 0 0 0 2px var(--gold-hi);
   text-align: center;
 }
@@ -4702,7 +4705,7 @@ button.f-pod:active,
 }
 .f-ava.pic {
   overflow: hidden;
-  background: #fff;
+  background: var(--card);
 }
 .f-ava.pic img {
   display: block;
@@ -4737,7 +4740,7 @@ button.f-pod:active,
   align-items: center;
   gap: 14px;
   overflow: hidden;
-  background: linear-gradient(160deg, #fff 30%, var(--gold-soft));
+  background: linear-gradient(160deg, var(--card) 30%, var(--gold-soft));
 }
 .f-bday-cake {
   position: relative;
@@ -4747,7 +4750,7 @@ button.f-pod:active,
   width: 64px;
   height: 64px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--card);
   font-size: 34px;
   box-shadow:
     0 0 0 3px var(--gold),
@@ -4806,7 +4809,7 @@ button.f-pod:active,
   min-height: 48px;
   padding: 8px 12px 6px;
   border-radius: 14px;
-  background: #fff;
+  background: var(--card);
   color: var(--ink);
   font: 700 18px/1.2 var(--display);
   text-align: left;
@@ -4877,7 +4880,7 @@ button.f-pod:active,
   padding: 10px 12px;
   border: 0;
   border-radius: 14px;
-  background: #fff;
+  background: var(--card);
   color: var(--ink);
   font: 600 16px/1.4 var(--display);
   box-shadow: inset 0 0 0 2px var(--line-2);
@@ -4925,7 +4928,7 @@ button.f-pod:active,
   height: 58px;
   padding: 4px 12px 0;
   border-radius: 16px;
-  background: #fff;
+  background: var(--card);
   color: var(--ink);
   font: 800 24px/1 var(--display);
   touch-action: none;
@@ -4962,7 +4965,7 @@ button.f-pod:active,
   min-height: 50px;
   padding: 6px 10px 3px;
   border-radius: 14px;
-  background: #fff;
+  background: var(--card);
   color: var(--ink);
   font: 800 21px/1.2 var(--display);
   box-shadow:
@@ -5170,7 +5173,7 @@ button.f-pod:active,
   padding: 6px 12px 6px 6px;
   border: 0;
   border-radius: 999px;
-  background: #fff;
+  background: var(--card);
   box-shadow: inset 0 0 0 2px var(--gold);
   color: var(--gold-ink);
   font: inherit;
@@ -5216,7 +5219,7 @@ button.f-pod:active,
   padding: 10px 12px;
   border: 2px solid var(--line-2);
   border-radius: 14px;
-  background: #fff;
+  background: var(--card);
   font: 600 16px/1.35 var(--display);
   color: var(--ink);
   resize: none;
@@ -5396,7 +5399,7 @@ button.f-pod:active,
   cursor: text;
 }
 .f-box.w:focus-within {
-  background: #fff;
+  background: var(--card);
   box-shadow:
     inset 0 0 0 2.5px var(--brand),
     0 0 0 4px var(--brand-soft);

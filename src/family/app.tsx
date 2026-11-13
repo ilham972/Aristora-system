@@ -55,6 +55,7 @@ import { nextPlay } from "./next";
 import type { Checked, Zoomed } from "./play";
 import { armSound, buzz, sound } from "./sound";
 import { Surprises } from "./surprise";
+import { barColour, darkNews, darkOn, onTheme } from "./theme";
 import { Avatar, Coin, Flame, firstName, Gem, Icon, Owl, problemWords, setRoomHost, setSheetHost, showSheet, toast, Toast, Waiting, type IconName, type SheetRender } from "./ui";
 
 /** Us (7 Nov 2026): the students' community, between Learn and the Race once the owner opens it. */
@@ -184,12 +185,21 @@ export function App() {
   useEffect(() => {
     if (ready) hideSplash();
   }, [ready]);
-  // The phone's bar takes the colour at the top of the screen: purple over a header, light over Home and a Level.
+  // The phone's bar takes the colour at the top of the screen: purple over a header, light over Home and a Level
+  // (in his Dark from Me: the dark page, a deeper violet).
+  const [dark, setDark] = useState(() => darkOn() && document.documentElement.dataset.theme === "dark");
+  useEffect(() => onTheme(setDark), []);
+  // A phone set to dark, once: where Dark is (theme.ts darkNews). On his own screens only, when he can read it.
+  useEffect(() => {
+    if (!ready || screen.k !== "main") return;
+    const news = darkNews();
+    if (news) toast(news, false, 7000);
+  }, [ready, screen.k]);
   useEffect(() => {
     if (!ready) return; // the loading owl's navy until then
     const light = screen.k === "level" || screen.k === "result" || screen.k === "signin" || screen.k === "add" || screen.k === "join" || (screen.k === "main" && tab === "home");
-    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", light ? "#f6f5fd" : "#7767f2");
-  }, [ready, screen.k, tab]);
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", barColour(light, dark));
+  }, [ready, screen.k, tab, dark]);
 
   /** Keeps this child's phone signed in (once a day is enough). */
   const hello = () => {

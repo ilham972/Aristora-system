@@ -10,7 +10,12 @@ import { loadParts, useChatParts, useParts, useUsParts } from "./later";
 import { keep, mutation, query, staffWith } from "./net";
 import { picOf, usePics } from "./pics";
 import { armSound, buzz, sound } from "./sound";
+import { showTheme } from "./theme";
 import { Avatar, Icon, keepOwl, problemWords, setSheetHost, Sheet, toast, Toast, Waiting } from "./ui";
+
+// Light, or his Dark from Me. boot.ts did it before the first paint; this is for a phone whose copy of the page is
+// older than boot.ts, and it changes nothing otherwise.
+void showTheme();
 
 // Two fingers never zoom (his ask, 4 Nov 2026: "students want to feel like a native app"). Chrome obeys the page's
 // user-scalable=no and the CSS touch-action; an iPhone ignores user-scalable=no (since iOS 10), so Safari's own pinch

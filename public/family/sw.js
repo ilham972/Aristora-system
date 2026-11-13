@@ -6,7 +6,9 @@
 // 3 (3 Nov 2026): the light purple look, Home and the whole syllabus. 4 (4 Nov 2026): the new palette and its one
 // font for Tamil and English (preloaded by the page, so it is kept at install too); the old copies go when this starts.
 // 5 (4 Nov 2026): Me's profile; its files come after the first screen, named in the page, so they are kept at install.
-const CACHE = "aristora-family-5";
+// 6 (13 Nov 2026): his Dark from Me. The dark colours (dark-*.css) and the few lines that attach them before the first
+// paint (boot-*.js) are named in the page, so they are kept at install: a phone that chose Dark opens dark with no signal.
+const CACHE = "aristora-family-6";
 const KEEP = (p) => p.startsWith("/f/assets/") || p === "/icon.svg" || p === "/family.webmanifest";
 
 self.addEventListener("install", (e) => {

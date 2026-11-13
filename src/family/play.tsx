@@ -206,7 +206,11 @@ function useQuestions(world: World, n: number, on: boolean): { got: FamilyQuesti
  * (his ask, 4 Nov 2026: "I want beautiful font for the questions"), letters of maths in italics; the printed number
  * hidden (the card says Q9 once); the book's slots as the app's boxes, options, ✓ / ✗ and words to tap.
  */
-const PAPER_CSS = `.qv { border-radius: 14px; padding: 14px 12px 10px; -webkit-user-select: none; user-select: none; color: var(--ink, #1c1a3a);
+const PAPER_CSS = `.qv { border-radius: 14px; padding: 14px 12px 10px; -webkit-user-select: none; user-select: none; color: var(--paper-ink, var(--ink, #1c1a3a));
+  background: var(--paper-bg, #fff); filter: var(--paper-f, none); }
+.qv [data-fill], .qv [data-opt], .qv .fx-tk, .qv [data-mark].fx-on, ::slotted(*) { filter: var(--paper-b, none); }
+.qv [data-opt], ::slotted(*) { color: var(--ink, #1c1a3a); }
+.qv {
   font: 500 17px/1.6 "Baloo Thambi 2", "Noto Sans Tamil", system-ui, sans-serif; }
 .qv :not(svg):not(svg *):not(.mi):not(.mi *) { font-family: "Baloo Thambi 2", "Noto Sans Tamil", system-ui, sans-serif !important; }
 .qv .sit, .qv .qs, .qv .sq, .qv .lead, .qv .lead2, .qv .pq p, .qv .bl, .qv .rp, .qv .mcq, .qv table.gt td { font-size: 17px !important; line-height: 1.6 !important; }
@@ -221,15 +225,15 @@ const PAPER_CSS = `.qv { border-radius: 14px; padding: 14px 12px 10px; -webkit-u
 .qv [data-fill][style*="vertical-align:."], .qv sup [data-fill] { min-width: 1.45em !important; height: 1.3em !important; margin: 0 .05em !important;
   padding: 0 .15em; border-radius: 7px; font-size: .74em !important; vertical-align: .7em !important; }
 .qv [data-fill][style*="border-bottom"]:not([style*="vertical-align:."]) { height: 1.8em !important; vertical-align: middle !important; }
-.qv [data-fill].fx-has { border-style: solid !important; background: #fff; }
-.qv [data-fill].fx-on { border: 2.5px solid var(--brand, #6c5ce7) !important; background: #fff; box-shadow: 0 0 0 4px var(--brand-soft, #efecff); }
+.qv [data-fill].fx-has { border-style: solid !important; background: var(--card, #fff); }
+.qv [data-fill].fx-on { border: 2.5px solid var(--brand, #6c5ce7) !important; background: var(--card, #fff); box-shadow: 0 0 0 4px var(--brand-soft, #efecff); }
 .qv [data-opt] { display: inline-flex; align-items: center; gap: .3em; margin: .15em 0; padding: .2em .7em; border-radius: 12px; cursor: pointer;
-  box-shadow: inset 0 0 0 2px var(--line-2, #ddd9f0); background: #fff; }
+  box-shadow: inset 0 0 0 2px var(--line-2, #ddd9f0); background: var(--card, #fff); }
 .qv [data-opt].fx-on { box-shadow: inset 0 0 0 2.5px var(--brand, #6c5ce7); background: var(--brand-soft, #efecff); color: var(--brand-2, #5a49d6); }
 .qv .mcq { row-gap: 6px !important; column-gap: 10px !important; }
 .qv [data-tick] { display: inline-flex; gap: 6px; margin: 0 .2em; vertical-align: middle; }
 .qv .fx-tk { display: inline-flex; align-items: center; justify-content: center; width: 2.3em; height: 1.85em; border-radius: 10px; cursor: pointer;
-  box-shadow: inset 0 0 0 2px var(--line-2, #ddd9f0); background: #fff; color: var(--ink3, #9d99bf); font: 800 1em/1 "Baloo Thambi 2", sans-serif; }
+  box-shadow: inset 0 0 0 2px var(--line-2, #ddd9f0); background: var(--card, #fff); color: var(--ink3, #9d99bf); font: 800 1em/1 "Baloo Thambi 2", sans-serif; }
 .qv .fx-tk.fx-on { box-shadow: inset 0 0 0 2.5px var(--brand, #6c5ce7); background: var(--brand-soft, #efecff); color: var(--brand-2, #5a49d6); }
 .qv [data-mark] { display: inline-block; min-width: 1.7em; margin: .1em 0; padding: .05em .3em 0; text-align: center; font-size: 1.12em;
   cursor: pointer; border-bottom: 3px solid transparent; border-radius: 2px; }

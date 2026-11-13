@@ -870,3 +870,29 @@ EOF
   a list item's bullet): set those on `.bq-inline > *`. Switching between the plain list (loading) and the host must
   change the element (`key`), or old slots stay. A test of where a row landed: `assignedSlot`, then the labelled block
   before it (`inlineRows` in `tests/e2e/class.e2e.ts`); a one-answer question's slot sits after the whole question.
+
+- **Dark (the family app, 13 Nov 2026): every colour is decided twice from now on.** How it works: `html[data-theme=
+  "dark"]` (set by `boot.ts` before the first paint, or by the switch in Me) and `src/family/dark.css`, which gives the
+  palette's names (`--bg`, `--card`, `--ink`, the `-soft` and `-ink` ones) their dark values; `family.css`,
+  `profile.css`, `usStyle.ts` and `chatStyle.ts` paint with the names, so most things follow by themselves. The rules:
+  - **A white surface is `var(--card)`, never `#fff`** (`tests/theme.test.ts` fails on a new `background: #fff`; a
+    white MARK on violet, a play button on the header or a switch's knob, stays `#fff` and is named in that test).
+  - **A tint typed by hand** (`#efedf8`, a `rgba(255,255,255,…)` wash, a gradient ending in white) has no name, so it
+    needs its dark value in `dark.css` (one selector a rule, under `html[data-theme="dark"]`, lists inside `:is()`;
+    **no nesting**: an iPhone 7 can't read `&`). Prefer a name of the palette to a new hand-typed tint.
+  - **A `-soft` colour is a dark tint and an `-ink` a light one in dark.** So ink on a SOLID colour (START's brown on
+    gold) must not follow: such rules are pinned in `dark.css` ("On a solid colour"). `--brand-2` is light in dark
+    (text); `--brand-3` stays deep (edges).
+  - **A question as printed** is the book's page: turned as one piece inside its shadow root by `filter:
+    var(--paper-f)` on `.qv` (`invert(0.88) hue-rotate(180deg)`: 0.88 so the book's white lands on a grey as deep as a
+    card, not a black slab), and each of the app's own pieces in it (`[data-fill]`, `[data-opt]`, `.fx-tk`, a slotted
+    box) carries `--paper-b`, the exact way back (`hue-rotate(180deg) invert(1) contrast(1.3158)`; change one, change
+    the other: 1 / (2 × 0.88 − 1)). A new piece inside the paper needs that line, or it shows in negative. The names cross the shadow root because CSS names are inherited; `:host-context()` is Chrome only.
+  - **dark.css is its own file** (the first load had 0.5 KB left): never `import` it from a `.tsx` (esbuild would copy
+    it into the first load). `boot.ts` imports nothing and stays a few lines: it blocks the page's first paint.
+  - **To look at every screen in dark**: `DARK=1 SHOTS=<folder> npx vitest run -c vitest.e2e.config.ts
+    tests/e2e/family.e2e.ts -t "<a run-through>"` leaves `<name>-dark.png` and `<name>.audit.txt` beside each
+    screenshot (`tests/e2e/dark.ts`: light surfaces left behind, light stops in gradients, words fainter than 3.2 : 1).
+    Do it for every new screen, and look at the picture: the audit can't see inside a printed question, a `::before`
+    or an SVG, and it lists gold on gold on purpose.
+  - A theme change animates every `transition` on the page: wait ~0.5 s before a screenshot or a colour check.

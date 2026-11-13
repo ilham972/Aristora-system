@@ -34,7 +34,7 @@
   --tabs: 66px;
   --role: var(--ink);
   --role-soft: #e6e9f0;
-  color-scheme: light;
+  color-scheme: only light; /* a browser's own dark never repaints the app (13 Nov 2026) */
 }
 
 *,

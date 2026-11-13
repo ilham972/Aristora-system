@@ -104,10 +104,15 @@ const FAMILY_US_KB = 28;
 // 8 Nov 2026, groups, private chats and the Members page (his voice note: "students want to forget the WhatsApp"; his
 // yes to their own limit): their own file (src/family/chatParts.ts), fetched the first time one opens, never prefetched.
 const FAMILY_CHAT_KB = 20;
+// 13 Nov 2026, his Dark from Me: the dark colours are their own file (src/family/dark.css), outside the first load
+// (which only gained boot.ts and a few lines of the loading page, ~0.3 KB) and the later parts.
+const FAMILY_DARK_KB = 5;
 await mkdir("dist/f/assets", { recursive: true });
 const fam = await build({
   // profile.css: the style of the parts that come after the first screen (src/family/later.ts attaches it).
-  entryPoints: { fam: "src/family/main.tsx", later: "src/family/profile.css" },
+  // dark.css: his Dark from Me (13 Nov 2026), its own file so a light phone's first load carries none of it; boot.ts:
+  // the few lines that put it on the page before the first paint (a page's own script must be a file here).
+  entryPoints: { fam: "src/family/main.tsx", later: "src/family/profile.css", dark: "src/family/dark.css", boot: "src/family/boot.ts" },
   bundle: true,
   minify: true,
   format: "esm",
@@ -149,6 +154,10 @@ const staticOf = (start) => {
 const first = staticOf(famJs);
 const laterCss = Object.keys(famOuts).find((f) => famOuts[f].entryPoint === "src/family/profile.css");
 if (!laterCss) throw new Error("Build did not produce the family app's later style");
+const darkCss = Object.keys(famOuts).find((f) => famOuts[f].entryPoint === "src/family/dark.css");
+const bootJs = Object.keys(famOuts).find((f) => famOuts[f].entryPoint === "src/family/boot.ts");
+if (!darkCss || !bootJs) throw new Error("Build did not produce the family app's dark colours (dark.css) and the script that attaches them (boot.ts)");
+if (famOuts[bootJs].imports.length) throw new Error("boot.ts must import nothing: it runs before the page is read");
 // The teachers' Us (7 Nov 2026): what only staff.tsx reaches is theirs (not prefetched, not in the students' budgets);
 // what it shares with the students' later parts (the Us tab, a profile) stays theirs (students fetch it anyway).
 const staffJs = Object.keys(famOuts).find((f) => famOuts[f].entryPoint === "src/family/staff.tsx");
@@ -159,7 +168,7 @@ const chatJs = Object.keys(famOuts).find((f) => famOuts[f].entryPoint === "src/f
 if (!chatJs) throw new Error("Build did not produce the chats' own file (src/family/chatParts.ts)");
 const studentsLater = new Set(
   Object.keys(famOuts)
-    .filter((f) => f.endsWith(".js") && famOuts[f].entryPoint && f !== staffJs && f !== usJs && f !== chatJs && !first.has(f))
+    .filter((f) => f.endsWith(".js") && famOuts[f].entryPoint && f !== staffJs && f !== usJs && f !== chatJs && f !== bootJs && !first.has(f))
     .flatMap((f) => [...staticOf(f)]),
 );
 // Us's own (8 Nov 2026): what only usParts.ts reaches (what it shares with Me or the level screen stays theirs).
@@ -168,7 +177,7 @@ const usOnly = [...staticOf(usJs)].filter((f) => !first.has(f) && !studentsLater
 const chatOnly = [...staticOf(chatJs)].filter((f) => !first.has(f) && !studentsLater.has(f) && !usOnly.includes(f));
 const staffOnly = [...staticOf(staffJs)].filter((f) => !first.has(f) && !studentsLater.has(f) && !usOnly.includes(f) && !chatOnly.includes(f));
 const later = [
-  ...Object.keys(famOuts).filter((f) => f.endsWith(".js") && !first.has(f) && !staffOnly.includes(f) && !usOnly.includes(f) && !chatOnly.includes(f)),
+  ...Object.keys(famOuts).filter((f) => f.endsWith(".js") && f !== bootJs && !first.has(f) && !staffOnly.includes(f) && !usOnly.includes(f) && !chatOnly.includes(f)),
   laterCss,
 ];
 const asset = (f) => `/f/assets/${basename(f)}`;
@@ -183,12 +192,16 @@ const famHtml = (await readFile("public/family/index.html", "utf8"))
   .replace("%FONT%", asset(famFont))
   .replace("%CSS%", asset(famCss))
   .replace("%PRELOAD%", () => preload)
+  // The dark colours: named so the service worker keeps them (a phone that chose Dark opens dark with no signal),
+  // fetched last by a light phone. Then the script that attaches them before the first paint.
+  .replace("%BOOT%", () => `<link rel="prefetch" href="${asset(darkCss)}" as="style" data-dark>\n<script src="${asset(bootJs)}"></script>`)
   .replace("%JS%", asset(famJs));
 await writeFile("dist/f/index.html", famHtml);
 await cp("public/family/sw.js", "dist/f/sw.js");
 await cp("public/family/family.webmanifest", "dist/family.webmanifest");
 const gz = async (f) => gzipSync(await readFile(f)).length;
-let wire = (await gz(famCss)) + gzipSync(famHtml).length;
+let wire = (await gz(famCss)) + gzipSync(famHtml).length + (await gz(bootJs));
+const darkKb = await gz(darkCss);
 for (const f of first) wire += await gz(f);
 let after = 0;
 for (const f of later) after += await gz(f);
@@ -199,8 +212,12 @@ for (const f of usOnly) usKb += await gz(f);
 let chatKb = 0;
 for (const f of chatOnly) chatKb += await gz(f);
 console.log(
-  `Built the family app: ${basename(famJs)} + ${basename(famCss)}, ${(wire / 1024).toFixed(1)} KB over the wire on the first load (budget ${FAMILY_BUDGET_KB} KB), ${(after / 1024).toFixed(1)} KB right after it (budget ${FAMILY_LATER_KB} KB), Us ${(usKb / 1024).toFixed(1)} KB (budget ${FAMILY_US_KB} KB), the chats ${(chatKb / 1024).toFixed(1)} KB (budget ${FAMILY_CHAT_KB} KB), the teachers' Us ${(staffKb / 1024).toFixed(1)} KB (budget ${FAMILY_STAFF_KB} KB)`,
+  `Built the family app: ${basename(famJs)} + ${basename(famCss)}, ${(wire / 1024).toFixed(1)} KB over the wire on the first load (budget ${FAMILY_BUDGET_KB} KB), ${(after / 1024).toFixed(1)} KB right after it (budget ${FAMILY_LATER_KB} KB), Us ${(usKb / 1024).toFixed(1)} KB (budget ${FAMILY_US_KB} KB), the chats ${(chatKb / 1024).toFixed(1)} KB (budget ${FAMILY_CHAT_KB} KB), dark ${(darkKb / 1024).toFixed(1)} KB (budget ${FAMILY_DARK_KB} KB), the teachers' Us ${(staffKb / 1024).toFixed(1)} KB (budget ${FAMILY_STAFF_KB} KB)`,
 );
+if (darkKb > FAMILY_DARK_KB * 1024) {
+  console.error(`The family app's dark colours are ${(darkKb / 1024).toFixed(1)} KB: over their ${FAMILY_DARK_KB} KB budget.`);
+  process.exit(1);
+}
 if (usKb > FAMILY_US_KB * 1024) {
   console.error(`Us's own file is ${(usKb / 1024).toFixed(1)} KB: over its ${FAMILY_US_KB} KB budget.`);
   process.exit(1);

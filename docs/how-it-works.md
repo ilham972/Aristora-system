@@ -1267,7 +1267,7 @@ learning app of our education institute"): one profile, his class times, what he
   the English words beside them), no client library (Convex's plain HTTP API, `src/family/net.ts`). It lives under
   `/f/` on both addresses; family links are app.aristora.org/f/#join=…, and app.aristora.org/ redirects to /f/
   (`vercel.json`, a redirect: a rewrite of "/" never runs, Vercel serves index.html first). A service worker under /f/
-  only (cache `aristora-family-5`): it opens with no signal after the first visit.
+  only (cache `aristora-family-6`): it opens with no signal after the first visit.
 - **An app, not a web page** (his ask, 4 Nov 2026: "students want to feel like a native app, so don't zoom when we use
   two fingers"): two fingers never zoom, on every screen, by three locks: the page's `maximum-scale=1,
   user-scalable=no` (`public/family/index.html`: Chrome), `html { touch-action: pan-x pan-y }` (Chrome even when a
@@ -1286,6 +1286,26 @@ learning app of our education institute"): one profile, his class times, what he
     on a word either): `user-select: none` on the body and on the printed question; the typing boxes (sign-in,
     feedback) stay `text` (an iPhone can't type into a box that can't be selected); holding a picture or a link opens
     no menu (`-webkit-touch-callout: none`, `contextmenu` stopped in `main.tsx` outside typing boxes).
+- **Light, and Dark only from Me** (13 Nov 2026; he saw students with a dark app "we didn't build": their browser
+  had darkened the page by itself; his rule: "the system's default mode not works here ... if they want to change to
+  dark mode, they can set up in the profile page"). **The app is light on every phone**, whatever the phone's or the
+  browser's own dark setting: both apps' pages say `only light` (`<meta name="color-scheme">` and `color-scheme` on
+  `:root`), which Chrome's "darken websites" obeys (a browser's dark picks its own colours: blue = right and rose =
+  wrong can shift, and nobody tested it). **Me → On this phone → Dark mode** (a switch like Sound, kept on the phone:
+  the children on one phone share it) turns on OUR dark: the same app on a deep violet page (`--bg` #131129) with
+  violet cards (#1f1b42); headers and buttons stay ARISTORA's violet, and every colour keeps its one meaning (gold,
+  flame, gem, blue = right, rose = wrong). No night sky, no stars (his 3 Nov rule holds). The 12 weeks brighten with
+  each Level (on white they deepen). **A question as printed turns dark too** (his answer, against my "white paper,
+  dimmed"): the book's own page, black on white with colours typed by hand, is turned as one piece (a filter inside
+  its shadow root: black ink becomes a soft white, a blue figure stays blue, the book's white (a figure's ground, an
+  answer space) a grey as deep as a card, a shaded cell a step lighter; a photo inside a question would look like a
+  negative), and the app's own boxes inside it are turned back. His own photos (his working, his face) are never
+  turned, and a certificate stays a white card: it is a picture to save. A phone set to dark is told
+  once where the switch is (a 7-second note on Home: "இப்போது Dark mode உண்டு: Me இல் இயக்கு"), since from that day
+  it opens a white app; nothing switches by itself. Dark is there from the first paint (the loading owl too): the page's own few lines
+  (`boot.ts`) attach the dark colours, a file of their own that a light phone's first load never carries. The teachers' app has no dark (a bright classroom), and its frames
+  of the family app (`/f/?staff`, the owner's `#preview=`) are always light. How it is built: "Dark" in
+  `docs/making-changes.md`.
 - **Its look** (his voice notes and the two pictures he liked, 3 Nov 2026; the palette rebuilt 4 Nov 2026 after his
   review: "the yellow behind the purple owl is not beautiful"): for every grade, 6 to 11 (his words: a night sky is
   fine for Grade 7, silly for Grade 11), so light and calm. **Big surfaces are only ARISTORA's violet** (`--brand`

@@ -22,6 +22,7 @@ import { UsageCard } from "./usage";
 import { BdaySheet, ClassCard, DaySheet, HeatMap, NameSheet, ReportCard } from "./profile";
 import { setSoundOn, sound, soundOn } from "./sound";
 import { setSurprisesOn, surprisesOn } from "./surprise";
+import { darkOn, setDark } from "./theme";
 import {
   Avatar,
   firstName,
@@ -125,6 +126,7 @@ export function MeTab(props: {
   const p = useProfile();
   const [on, setOn] = useState(soundOn());
   const [gags, setGags] = useState(surprisesOn());
+  const [dark, setDarkOn] = useState(darkOn());
   const [race, setRace] = useState<boolean | null>(null);
   const [sure, setSure] = useState(false);
   const { b } = useBoard();
@@ -350,6 +352,21 @@ export function MeTab(props: {
         {/* Always the last card (12 Nov 2026, his ask: "put this end of the profile page, below of everything"). */}
         <h2 class="f-h2">On this phone</h2>
         <Kids list={props.list} current={props.current} onSwitch={props.onSwitch} onAdd={props.onAdd} onSignOut={props.onSignOut} />
+        {/* Dark is his own choice, here and nowhere else (13 Nov 2026, his rule): the phone's dark setting changes nothing. */}
+        <button
+          type="button"
+          class="f-row"
+          aria-pressed={dark}
+          onClick={() => {
+            sound("tap");
+            setDark(!dark);
+            setDarkOn(!dark);
+          }}
+        >
+          <Icon name="moon" />
+          <span>Dark mode</span>
+          <span class={`f-switch${dark ? " on" : ""}`} aria-hidden="true" />
+        </button>
         <button
           type="button"
           class="f-row"

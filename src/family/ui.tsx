@@ -70,6 +70,7 @@ const PATHS = {
   lock: "M6.5 11h11v9h-11zM8.5 11V8a3.5 3.5 0 0 1 7 0v3",
   sound: "M4 9.5h4l5-4v13l-5-4H4zM16.5 9a4 4 0 0 1 0 6M19 6.5a7.5 7.5 0 0 1 0 11",
   mute: "M4 9.5h4l5-4v13l-5-4H4zM17 9.5l4 5M21 9.5l-4 5",
+  moon: "M20 14.2A8 8 0 0 1 9.8 4a8 8 0 1 0 10.2 10.2z",
   close: "M6 6l12 12M18 6 6 18",
   back: "M15 5l-7 7 7 7",
   next: "M9 5l7 7-7 7",
@@ -217,10 +218,10 @@ export function Dashes(props: { done: number; of: number }) {
 
 let toastSet: ((t: { text: string; bad?: boolean } | null) => void) | null = null;
 let toastTimer = 0;
-export function toast(text: string, bad = false) {
+export function toast(text: string, bad = false, ms = 3200) {
   toastSet?.({ text, bad });
   clearTimeout(toastTimer);
-  toastTimer = window.setTimeout(() => toastSet?.(null), 3200);
+  toastTimer = window.setTimeout(() => toastSet?.(null), ms);
 }
 export function Toast() {
   const [t, setT] = useState<{ text: string; bad?: boolean } | null>(null);

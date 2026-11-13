@@ -21,6 +21,7 @@ import TUTE_HTML from "../fixtures/tute-skeleton.html?raw";
 import TUTE_JSON from "../fixtures/tute-skeleton.json?raw";
 import U01_BOOK from "../fixtures/workbook-g8-u01.html?raw";
 import { addPerson, OWNER_TOKEN } from "../helpers";
+import { darkShot } from "./dark";
 import { makeBackend, playwright, serveDist } from "./harness";
 
 type Page = import("playwright").Page;
@@ -83,6 +84,7 @@ const contains = (l: L, text: string) => until(async () => (await l.first().inne
 async function shot(p: Page, name: string) {
   await p.waitForTimeout(450); // the rise animation
   await p.screenshot({ path: join(SHOTS, `${name}.png`) });
+  await darkShot(p, SHOTS, name); // only with DARK=1: the same screen in dark and its audit (tests/e2e/dark.ts)
 }
 async function noSideScroll(p: Page) {
   expect(await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -4360,3 +4362,129 @@ test("Explain online: a typed \"show that\" shows his words under each sub-quest
   await C.context().close();
   expect(problems.slice(before)).toEqual([]);
 });
+
+test("Dark is his own switch: a phone set to dark still opens light; Me → Dark mode; it stays, the printed question turns, the teachers' frame never", async () => {
+  const backend = makeBackend(modules);
+  const t = backend.t;
+  await addPerson(t, { name: "Owner", token: OWNER_TOKEN, role: "owner" });
+  const as = { token: OWNER_TOKEN };
+  await t.mutation(api.setup.ensure, as);
+  const u01 = await t.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G8-U01")).first())!._id);
+  await t.mutation(api.catalog.saveWorkbook, {
+    ...as,
+    unitId: u01,
+    parts: BOOK.data.parts.map((p) => ({ id: p.id, to: p.to, ...(p.each ? { each: p.each } : {}) })),
+    levels: BOOK.data.levels.map((l) => ({ to: l.to, max: l.max })),
+    marks: BOOK.data.marks ?? {},
+    replace: true,
+    key: fakeKey(),
+  });
+  // Level 1's questions as printed (made-up text; a table and a figure drawn for white paper).
+  await t.run(async (ctx) => {
+    for (let q = 1; q <= 10; q++) {
+      await ctx.db.insert("questions", {
+        unitId: u01,
+        stage: "master",
+        q,
+        html: `<div class="pq"><span class="qn">${q}</span><div class="qt">A made-up question number ${q}.</div><table class="tb"><tr><th>n</th><td>1</td></tr></table><svg viewBox="0 0 60 30" width="60"><rect x="2" y="2" width="30" height="20" fill="none" stroke="#000"/></svg></div>`,
+      });
+    }
+    await ctx.db.insert("bookCss", { unitId: u01, stage: "master", css: ".qt { display: inline; } .tb td, .tb th { border: 1px solid #000; } .tb th { background: #eee; }", updatedAt: 0 });
+    const book = (await ctx.db.query("books").withIndex("by_unit_stage", (x) => x.eq("unitId", u01).eq("stage", "master")).first())!;
+    await ctx.db.patch(book._id, { qCount: 10 });
+  });
+  const hana = await t.mutation(api.students.add, { ...as, name: "Hana K", grade: 8, term: 1, stage: "master", unitId: u01 });
+  await t.mutation(api.families.setCode, { ...as, studentId: hana, code: "4719" });
+
+  // What is on the page: his look, the page's colour, and whether the dark colours' file is attached.
+  const look = (p: Page) =>
+    p.evaluate(() => ({
+      theme: document.documentElement.dataset.theme ?? "light",
+      page: getComputedStyle(document.body).backgroundColor,
+      scheme: getComputedStyle(document.documentElement).colorScheme,
+      colours: document.querySelectorAll('link[rel="stylesheet"][data-dark-on]').length,
+      bar: document.querySelector('meta[name="theme-color"]')?.getAttribute("content"),
+    }));
+  const LIGHT_PAGE = "rgb(246, 245, 253)";
+  const DARK_PAGE = "rgb(19, 17, 41)";
+
+  // A phone set to dark (the phones that showed him a dark app we never built): the app opens LIGHT, and says so.
+  const darkPhone = { ...size(360, 780), colorScheme: "dark" as const };
+  const P = await open(backend, `${site.url}/f/`, darkPhone);
+  expect(await P.evaluate(() => matchMedia("(prefers-color-scheme: dark)").matches)).toBe(true);
+  await P.getByLabel(/Index/).fill("1001");
+  await P.getByLabel("Code").fill("4719");
+  expect(await look(P)).toMatchObject({ theme: "light", page: LIGHT_PAGE, colours: 0 });
+  expect((await look(P)).scheme).toContain("only"); // "only light": the browser's own dark may not repaint it
+  await P.getByRole("button", { name: "Sign in" }).click();
+  await goalIs(P, "Level 1");
+  expect(await look(P)).toMatchObject({ theme: "light", page: LIGHT_PAGE, colours: 0, bar: "#f6f5fd" });
+  // Once, on such a phone: the owl says where Dark is (nothing switches by itself).
+  await contains(P.locator(".f-toast"), "Dark mode");
+  await shot(P, "fam90-dark-phone-light-app");
+
+  // Me → On this phone → Dark mode: his own choice.
+  await tabTo(P, /Me/);
+  const sw = P.getByRole("button", { name: "Dark mode" });
+  await sw.scrollIntoViewIfNeeded();
+  expect(await sw.getAttribute("aria-pressed")).toBe("false");
+  await sw.click();
+  await until(async () => (await look(P)).theme === "dark", "dark on the page");
+  await until(async () => (await look(P)).page === DARK_PAGE, "the dark page's colour");
+  expect(await look(P)).toMatchObject({ colours: 1, bar: "#7767f2" }); // Me's header is ARISTORA's violet in both looks
+  expect(await sw.getAttribute("aria-pressed")).toBe("true");
+  expect((await look(P)).scheme).toContain("dark");
+  await noSideScroll(P);
+  await shot(P, "fam91-dark-me-switch");
+
+  // Opened again: dark before the first screen (the page's own small script), and the note doesn't come twice.
+  await P.goto(`${site.url}/f/`);
+  expect(await P.evaluate(() => document.documentElement.dataset.theme)).toBe("dark"); // already, with the page itself
+  await visible(P.locator(".f-tabs"));
+  expect(await look(P)).toMatchObject({ theme: "dark", page: DARK_PAGE, colours: 1 });
+  expect(await P.locator(".f-toast").count()).toBe(0);
+  await P.locator(".f-tabs").getByRole("button", { name: /Home/ }).click();
+  await goalIs(P, "Level 1");
+  expect((await look(P)).bar).toBe("#131129");
+  await shot(P, "fam92-dark-home");
+
+  // A Level: the cards are dark; the book's own page (black on white) is turned as one piece, the app's box in it not.
+  await stageNow(P, "Level 1");
+  await shot(P, "fam93-dark-stage");
+  await P.locator(".f-lv.play").click();
+  await contains(P.locator(".f-qn"), "Q1");
+  const paper = () => P.locator(".f-paper").evaluate((el) => getComputedStyle(el.shadowRoot!.querySelector(".qv")!).filter);
+  await until(async () => (await paper()).includes("invert"), "the printed question turned");
+  expect(await P.locator(".f-paper").evaluate((el) => getComputedStyle(el.shadowRoot!.querySelector(".qv")!).backgroundColor)).toBe("rgba(0, 0, 0, 0)");
+  const lum = (c: string) => {
+    const [r, g, b] = c.match(/[\d.]+/g)!.map(Number);
+    return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  };
+  expect(lum(await P.locator(".f-qcard").first().evaluate((el) => getComputedStyle(el).backgroundColor))).toBeLessThan(0.2);
+  expect(lum(await P.locator(".f-padkeys").evaluate((el) => getComputedStyle(el).backgroundColor))).toBeLessThan(0.1);
+  await noSideScroll(P);
+  await shot(P, "fam94-dark-level");
+
+  // Off again in Me: light, as before.
+  await P.goto(`${site.url}/f/`);
+  await visible(P.locator(".f-tabs"));
+  await P.locator(".f-tabs").getByRole("button", { name: /Home/ }).click();
+  await tabTo(P, /Me/);
+  await P.getByRole("button", { name: "Dark mode" }).scrollIntoViewIfNeeded();
+  await P.getByRole("button", { name: "Dark mode" }).click();
+  await until(async () => (await look(P)).theme === "light", "light again");
+  expect((await look(P)).page).toBe(LIGHT_PAGE);
+  await P.getByRole("button", { name: "Dark mode" }).click(); // and on once more, for the teachers' frame below
+  await until(async () => (await look(P)).theme === "dark", "dark again");
+
+  // The teachers' frames on the same address (the class app's Us, the owner's Preview) are the teachers' app: light.
+  const T = await P.context().newPage();
+  await T.goto(`${site.url}/f/?staff`);
+  await T.waitForTimeout(300);
+  expect(await look(T)).toMatchObject({ theme: "light", colours: 0 });
+  // And the class system itself, on a phone set to dark: only light.
+  const C = await P.context().newPage();
+  await C.goto(`${site.url}/`);
+  expect(await C.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toContain("only");
+  expect(await C.evaluate(() => document.querySelector('meta[name="color-scheme"]')?.getAttribute("content"))).toBe("only light");
+}, 120_000);
