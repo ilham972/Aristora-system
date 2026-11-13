@@ -3,7 +3,7 @@
 // public); the book is the U01 skeleton.
 import { describe, expect, test } from "vitest";
 import type { KeyAnswer } from "../convex/lib/key";
-import { skillCounts, skillHome, skillId, skillOf, skillsProblem, SKILLS_MAX, type KnownSkill, type SkillFile, type SkillTag } from "../convex/lib/skills";
+import { skillCounts, skillHome, skillId, skillOf, skillsOf, skillsProblem, SKILLS_MAX, type KnownSkill, type SkillFile, type SkillTag } from "../convex/lib/skills";
 import { readWorkbookHtml } from "../src/workbookFile";
 import U01 from "./fixtures/workbook-g8-u01.html?raw";
 
@@ -63,7 +63,9 @@ describe("a unit's skills", () => {
 
   test("a skill's example is a question of the book that carries it", () => {
     expect(check(change((f) => (f.skills[0].eg = 99)))).toMatch(/its example, question 99, is not in this book \(1 to 73\)/);
-    expect(check(change((f) => (f.skills[0].eg = 1)))).toBe("Skill G8-U01-S1: its example, question 1, carries another skill.");
+    expect(check(change((f) => (f.skills[0].eg = 1)))).toBe("Skill G8-U01-S1: its example, question 1, carries another skill first.");
+    // A question that needs the skill only beside its main one is no example of it.
+    expect(check(change((f) => ((f.tags[0].x = [S(1)]), (f.skills[0].eg = 1))))).toBe("Skill G8-U01-S1: its example, question 1, carries another skill first.");
     // A part's tag counts: Q53 (i) carries S1.
     expect(check(change((f) => (f.skills[0].eg = 53)))).toBe("");
   });
@@ -89,6 +91,39 @@ describe("a unit's skills", () => {
     const f = change((x) => (x.tags[0].s = "G7-U08-S2"));
     expect(check(f)).toBe("Question 1: skill G7-U08-S2 is not in the app (tag G7-U08 first, or give the question a skill of this unit).");
     expect(check(f, new Map([["G7-U08-S2", { unit: "G7-U08", ta: "ஒரு பழைய திறன்", en: "An older made-up skill" }]]))).toBe("");
+  });
+
+  test("a question may need two or three skills: the main one first, none twice, three at most", () => {
+    // Q1 (S2) also needs S1; Q60 (ii) (S2) also needs S3 and an older unit's skill.
+    const known = new Map([["G7-U08-S2", { unit: "G7-U08", ta: "ஒரு பழைய திறன்", en: "An older made-up skill" }]]);
+    const more = change((f) => {
+      f.tags[0].x = [S(1)];
+      f.tags.find((t) => t.q === 60 && t.p === "ii")!.x = [S(3), "G7-U08-S2"];
+    });
+    expect(check(more, known)).toBe("");
+    expect(skillsOf(more.tags, 1)).toEqual([S(2), S(1)]);
+    expect(skillsOf(more.tags, 60, "ii")).toEqual([S(2), S(3), "G7-U08-S2"]);
+    expect(skillOf(more.tags, 60, "ii")).toBe(S(2));
+    expect(skillsOf(more.tags, 60)).toEqual([]);
+    expect(skillsOf(more.tags, 73, "i")).toEqual([S(3)]);
+    expect(check(change((f) => (f.tags[0].x = [S(1), S(3), S(1)])))).toBe("Question 1: 3 skills at most (the main one and two more).");
+    expect(check(change((f) => (f.tags[0].x = [])))).toBe("Question 1: 3 skills at most (the main one and two more).");
+    expect(check(change((f) => (f.tags[0].x = [S(2)])))).toBe("Question 1: a skill comes twice.");
+    expect(check(change((f) => (f.tags[0].x = [S(1), S(1)])))).toBe("Question 1: a skill comes twice.");
+    expect(check(change((f) => (f.tags[0].x = ["S9"])))).toBe('Question 1: skill "S9" is not one of this unit\'s skills.');
+    expect(check(change((f) => (f.tags[0].x = ["G7-U08-S2"])))).toMatch(/skill G7-U08-S2 is not in the app \(tag G7-U08 first/);
+    // A skill no question has as its main one still has its questions; they are counted apart.
+    const beside = change((f) => {
+      f.skills.push({ id: S(4), ta: "நான்காம் திறன்", en: "A made-up skill only beside others" });
+      f.tags[0].x = [S(4)];
+      f.tags[1].x = [S(4), S(1)];
+    });
+    expect(check(beside)).toBe("");
+    expect(skillCounts(beside.tags).get(S(4))).toBeUndefined();
+    expect(skillCounts(beside.tags, true).get(S(4))).toBe(2);
+    expect(skillCounts(beside.tags, true).get(S(1))).toBe(1);
+    // Beside its main skill in one part and the main one in another part of the same question: counted once, as main.
+    expect(skillCounts([{ q: 1, p: "i", s: "a" }, { q: 1, p: "ii", s: "b", x: ["a"] }], true).get("a")).toBeUndefined();
   });
 
   test("reading the tags: a part's own skill first, then the whole question's; how many questions carry each", () => {

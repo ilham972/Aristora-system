@@ -183,14 +183,17 @@ TSX=/opt/npm-tools/node_modules/tsx/dist/cli.mjs; export ARISTORA_LINK_FILE=$SCR
 node $TSX scripts/skills.ts units $B 8             # the grade's units: questions, key, "not tagged" or its skills
 node $TSX scripts/skills.ts pull $B G8-U05         # → $B/G8-U05/sheet.txt (every question in a line or two) + known.json
 node $TSX scripts/skills.ts known $B/G8-U05        # other units' skills to reuse (same grade or earlier)
-#   write $B/G8-U05/skills.json: { "skills": [{ "id": "S1", "en", "ta", "eg": 4 }], "tags": { "1": "S1", "53": { "i": "S1", "ii": "S3" } } }
+#   write $B/G8-U05/skills.json: { "skills": [{ "id": "S1", "en", "ta", "eg": 4 }], "tags": { "1": "S1", "2": ["S3", "S1"], "53": { "i": "S1", "ii": ["S3", "S2"] } } }
 node $TSX scripts/skills.ts check $B/G8-U05        # everything wrong at once, a table of each skill, what to look at again
 node $TSX scripts/skills.ts review $B/G8-U05       # review.html for a teacher (send it to him as a file, never in the repo)
+node $TSX scripts/skills.ts table $B/G8-U05        # table.html to print: question → skill numbers, a queue sheet, each one's rules
 node $TSX scripts/skills.ts push $B G8-U05         # check → saved in the app → read back and compared
 ```
 
-- A skill = one method a teacher explains in about six minutes with one example, named by what the student does. One
-  skill a question (the step that decides it); parts apart only when they need different methods. 6 to 14 skills in
+- A skill = one method a teacher explains in about six minutes with one example, named by what the student does. A
+  question's first skill = the step that decides it; a list (`["S5", "S3", "S2"]`, three at most) when its solution
+  uses other skills of the list too (a subtraction ends in an addition: `["S3", "S2"]`; never "every question needs
+  adding" for a skill the solution doesn't show). Parts apart only when they need different methods. 6 to 14 skills in
   most units; a skill with one question is joined to its nearest, unless no other question needs that method.
 - `check` runs the app's own `skillsProblem` (the judge) after listing every hole and stranger itself; WRONG lines
   stop the push, LOOK AGAIN lines are a teacher's questions (too wide, alone, no example, a twin of another unit's).
@@ -202,7 +205,8 @@ node $TSX scripts/skills.ts push $B G8-U05         # check → saved in the app 
   `review.html` shows a long question's tagged parts only (`partsOnly`; `whole` closes the cut divs) and no working
   space (`.wz`); a short question with (i) (ii) inside one card shows whole, its part named above it.
 - The first unit tagged, the example for the others: **G8-U04 Directed numbers** (13 Nov 2026: 10 skills for 79
-  questions, 105 tags; `known` on any Grade 8 unit lists them). Its calls, for the next tagger: a question that only
+  questions, 105 tags, 66 of them with more than one skill: adding, subtracting and the sign rule sit beside 26, 15
+  and 21 questions of other skills; `known` on any Grade 8 unit lists them). Its calls, for the next tagger: a question that only
   one skill's idea explains (the additive inverse) joined its nearest skill (subtracting); "find each value, then put
   in order" went to ordering, not to powers (the last act is the trap); the same method with fractions or decimals
   stayed in its skill; a chain of three or more numbers is its own skill, apart from adding two.

@@ -36,7 +36,7 @@ export type Unit = {
   questions: { q: number; size: number }[];
   share: Record<string, unknown>;
   /** Its skills as the app has them (scripts/skills.ts), and what is wrong with them now ("" = fine). */
-  skills?: { skills: { id: string; ta: string; en: string; eg?: number }[]; tags: { q: number; p?: string; s: string }[]; updatedAt: number; problem: string } | null;
+  skills?: { skills: { id: string; ta: string; en: string; eg?: number }[]; tags: { q: number; p?: string; s: string; x?: string[] }[]; updatedAt: number; problem: string } | null;
 };
 
 const repo = resolve(import.meta.dirname, "..");

@@ -276,7 +276,8 @@ export const ask = query({
             const r = rows.find((x) => x.unitId === u._id);
             if (!r) return [];
             const n = skillCounts(r.tags);
-            return [{ key: u.key, grade: u.grade, en: u.en, ta: u.ta, updatedAt: r.updatedAt, skills: r.skills.map((s) => ({ ...s, n: n.get(s.id) ?? 0 })) }];
+            const also = skillCounts(r.tags, true);
+            return [{ key: u.key, grade: u.grade, en: u.en, ta: u.ta, updatedAt: r.updatedAt, skills: r.skills.map((s) => ({ ...s, n: n.get(s.id) ?? 0, also: also.get(s.id) ?? 0 })) }];
           }),
       });
     }
@@ -393,12 +394,14 @@ async function saveSkills(ctx: MutationCtx, row: Row, req: Asked, now: number): 
   const ids = new Set(file.skills.map((s) => s.id));
   for (const r of rows) {
     if (r.unitId === m.unit._id) continue;
-    const gone = r.tags.find((t) => skillHome(t.s) === m.unit.key && !ids.has(t.s));
-    if (gone) return { ok: false, error: `${units.find((u) => u._id === r.unitId)?.key} question ${gone.q} carries ${gone.s}: keep that skill, or tag that unit again first.` };
+    for (const t of r.tags) {
+      const gone = [t.s, ...(t.x ?? [])].find((id) => skillHome(id) === m.unit.key && !ids.has(id));
+      if (gone) return { ok: false, error: `${units.find((u) => u._id === r.unitId)?.key} question ${t.q} carries ${gone}: keep that skill, or tag that unit again first.` };
+    }
   }
   const skills: Skill[] = file.skills.map((s) => ({ id: s.id, ta: s.ta.trim(), en: s.en.trim(), ...(s.eg !== undefined ? { eg: s.eg } : {}) }));
   const tags: SkillTag[] = file.tags
-    .map((t) => ({ q: t.q, ...(t.p !== undefined ? { p: t.p } : {}), s: t.s }))
+    .map((t) => ({ q: t.q, ...(t.p !== undefined ? { p: t.p } : {}), s: t.s, ...(t.x?.length ? { x: [...t.x] } : {}) }))
     .sort((a, b) => a.q - b.q || (a.p ?? "").localeCompare(b.p ?? ""));
   const old = rows.find((r) => r.unitId === m.unit._id);
   if (old) await ctx.db.patch(old._id, { skills, tags, by: row.by, updatedAt: now });

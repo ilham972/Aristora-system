@@ -238,9 +238,14 @@ describe("the Claude link", () => {
       marks: BOOK.data.marks ?? {},
       replace: true,
     });
-    const two = { skills: [{ id: "G8-U02-S1", ta: "வேறு திறன்", en: "A made-up skill of the next unit" }], tags: Array.from({ length: 73 }, (_, i) => ({ q: i + 1, s: i === 0 ? S(2) : "G8-U02-S1" })) };
-    expect((await tell({ op: "skills", unitId: u02, skills: two.skills, tags: two.tags.map((x, i) => (i === 0 ? { ...x, s: "G8-U03-S1" } : x)) }))!.error).toMatch(/skill G8-U03-S1 is not in the app \(tag G8-U03 first/);
+    // (Its first question needs this unit's skill and, beside it, one of U01's: a question may carry three.)
+    const two = { skills: [{ id: "G8-U02-S1", ta: "வேறு திறன்", en: "A made-up skill of the next unit" }], tags: Array.from({ length: 73 }, (_, i) => ({ q: i + 1, s: "G8-U02-S1", ...(i === 0 ? { x: [S(2)] } : {}) })) };
+    expect((await tell({ op: "skills", unitId: u02, skills: two.skills, tags: two.tags.map((x, i) => (i === 0 ? { ...x, x: ["G8-U03-S1"] } : x)) }))!.error).toMatch(/skill G8-U03-S1 is not in the app \(tag G8-U03 first/);
+    expect((await tell({ op: "skills", unitId: u02, skills: two.skills, tags: two.tags.map((x, i) => (i === 0 ? { ...x, x: [S(1), S(2), S(1)] } : x)) }))!.error).toBe("Question 1: 3 skills at most (the main one and two more).");
     expect(await tell({ op: "skills", unitId: u02, ...two })).toMatchObject({ ok: true, saved: { skills: 1, questions: 73 } });
+    expect((await ask({ op: "unit", unitId: u02 }))!.skills.tags[0]).toEqual({ q: 1, s: "G8-U02-S1", x: [S(2)] });
+    expect((await ask({ op: "unit", unitId: u02 }))!.skills.tags[1]).toEqual({ q: 2, s: "G8-U02-S1" });
+    expect((await ask({ op: "skills", grade: 8 }))!.units[0].skills[1]).toMatchObject({ id: S(2), n: 47, also: 0 });
     const without = await tell({ op: "skills", unitId: u01, skills: [skills[0]], tags: tags.map((x) => ({ q: x.q, s: S(1) })) });
     expect(without!.error).toBe("G8-U02 question 1 carries G8-U01-S2: keep that skill, or tag that unit again first.");
     expect((await ask({ op: "unit", unitId: u01 }))!.skills.skills).toHaveLength(2);
