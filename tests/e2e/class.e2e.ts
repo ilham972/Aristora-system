@@ -3173,7 +3173,7 @@ test("Topic tute: one zip = the unit's theory book and workbook, both answer key
   expect(await inlineRows(card)).toEqual([{ slot: "", after: null, below: true }]);
   // Q1 (parts i and ii; a ladder's sub-questions): each part's answer right under its own printed sub-question.
   await C.locator(".fc-strip .fc-sq").first().click();
-  await textsAre(card.locator(".bq-inline .fc-pl"), ["i", "ii"]);
+  await count(card.locator(".bq-inline > .fc-part"), 2);
   await until(async () => (await inlineRows(card)).length === 2 && (await inlineRows(card))[0].slot === "p0", "Q1's parts slotted");
   expect(await inlineRows(card)).toEqual([
     { slot: "p0", after: "(i)", below: true },
@@ -3185,7 +3185,10 @@ test("Topic tute: one zip = the unit's theory book and workbook, both answer key
   // still mark (they are the page's own buttons, only drawn inside the question).
   await C.locator(".fc-bk", { has: C.locator("b.st-master") }).click();
   const mcard = C.locator(".fc-card").first();
-  await textsAre(mcard.locator(".bq-inline > .fc-part .fc-pl"), ["i", "ii"]);
+  await count(mcard.locator(".bq-inline > .fc-part"), 2);
+  // No printed number again (the card's pill says it) and no part chips (the printed i. and ii. are right above).
+  expect(await mcard.locator(".bq-inline").evaluate((el) => getComputedStyle(el.shadowRoot!.querySelector(".qn")!).display)).toBe("none");
+  await until(async () => (await mcard.locator(".bq-inline .fc-pl").evaluateAll((l) => l.filter((e) => getComputedStyle(e).display !== "none").length)) === 0, "no part chips");
   await until(async () => (await inlineRows(mcard))[0]?.slot === "p0", "Q6's parts slotted");
   expect(await inlineRows(mcard)).toEqual([
     { slot: "p0", after: "i.", below: true },

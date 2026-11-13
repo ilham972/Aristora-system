@@ -17,6 +17,19 @@ import { bookDocAt } from "./store";
 type Stage = "fighter" | "master";
 
 /**
+ * The question with its answers inside (13 Nov 2026, his second look: "so many boxes ... so many margins ... the
+ * question number again ... like a screenshot"): the thread's paper (src/family/help.tsx `PAPER`) in the class app's
+ * font: no printed number or marks (the card's pill says it), almost no padding, a sub-question's label only as wide
+ * as its words, no indent; readable text, not a page shrunk to the phone.
+ */
+const INLINE_PAPER = `.qv{border-radius:0;padding:2px 2px 0;font:500 15.5px/1.5 var(--font);color:#16213e}
+.qv :not(svg):not(svg *):not(.mi):not(.mi *){font-family:var(--font)!important}
+.qv .qn,.qv .pm,.qv .mk{display:none!important}
+.qv .sq{margin-left:0!important}
+.qv .rp{grid-template-columns:auto minmax(0,1fr)!important;column-gap:6px!important;gap:0 6px}
+.qv .rl{width:auto!important;min-width:0!important;flex:none;padding:0!important;margin:0!important}`;
+
+/**
  * One question drawn as printed; `null` from the server = not in the app. With `parts` (the key's part labels, in its
  * order) the children are the card's answer rows, each with `slot="p<i>"` (its part) or none (after the question):
  * they stay the page's own elements (its styles, its taps). Until the question is there they show as a plain list.
@@ -32,7 +45,15 @@ export function BookQuestion(props: { unitId: string; stage: Stage; q: number; p
   useLayoutEffect(() => {
     const el = host.current;
     if (!el || !qq || !css) return;
-    return drawQuestion(el, qq.html, css.css, "", props.parts, true);
+    const undo = drawQuestion(el, qq.html, css.css, inline ? INLINE_PAPER : "", props.parts, true);
+    // A row whose part found no printed sub-question (its slot at the end) keeps its own label: `data-loose`.
+    const box = el.shadowRoot?.querySelector(".qv");
+    for (const c of Array.from(el.children)) {
+      const n = c.getAttribute("slot");
+      const slot = n ? el.shadowRoot?.querySelector(`slot[name="${n}"]`) : null;
+      c.toggleAttribute("data-loose", !slot || slot.parentElement === box);
+    }
+    return undo;
   }, [qq, css, sig]);
 
   const flat = (words: string) => (

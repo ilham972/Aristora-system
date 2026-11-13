@@ -4137,7 +4137,9 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
   // (i) "24" right = a green box with ✓, never mistaken for the key above it.
   await contains(hw.locator(".hl-typed.ok"), "✓");
   expect(await hw.locator(".hl-typed.ok .hl-tl").textContent()).toBe("He typed");
-  expect(await hw.locator(".hl-typed.ok").evaluate((b) => getComputedStyle(b).borderLeftWidth)).toBe("5px");
+  // A chip with a ring, as in the thread; no box around the line ("so many boxes", his second look).
+  expect(await hw.locator(".hl-typed.ok .hl-ok").evaluate((b) => getComputedStyle(b).boxShadow)).not.toBe("none");
+  expect(await hw.locator(".hl-typed.ok").evaluate((b) => getComputedStyle(b).borderLeftWidth)).toBe("0px");
   // The printed question's icon on: Q8 as printed with each part's row (the key, what he typed, her marks) right under
   // its own sub-question, as in the thread; her taps there mark as before.
   await hw.getByRole("button", { name: "Show Q8 as printed" }).click();
@@ -4156,6 +4158,11 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
     { slot: "p1", after: "(ii)", below: true },
   ]);
   await visible(hw.locator(".bq-inline .hl-typed.ok"));
+  // As in the thread: no printed number again (the card's pill says it), no frame; the part chips gone (the printed
+  // (i) and (ii) are right above their rows).
+  expect(await hw.locator(".bq-inline").evaluate((el) => getComputedStyle(el.shadowRoot!.querySelector(".qn")!).display)).toBe("none");
+  expect(await hw.locator(".bq-inline").evaluate((el) => getComputedStyle(el).borderTopWidth)).toBe("0px");
+  expect(await hw.locator(".bq-inline .fc-pl").evaluateAll((l) => l.filter((e) => getComputedStyle(e).display !== "none").length)).toBe(0);
   await noSideScroll(O);
   await hw.locator(".bq-inline").evaluate((el) => el.scrollIntoView({ block: "start" }));
   await shot(O, "help16-homework-inline");

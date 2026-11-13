@@ -129,7 +129,7 @@ export function KeyView(props: {
     ? parts.map((p, j) => (
         <li key={j} class="fc-part" slot={at ? `p${j}` : undefined}>
           <em class="fc-pl">{p.p}</em>
-          <BigAnswer text={p.a} max={props.max ?? 44} maxH={props.maxH ?? 110} />
+          <BigAnswer text={p.a} max={at ? 30 : (props.max ?? 44)} maxH={at ? 76 : (props.maxH ?? 110)} />
         </li>
       ))
     : null;
@@ -141,7 +141,7 @@ export function KeyView(props: {
     <BookQuestion unitId={at.unitId} stage={at.stage} q={at.q} parts={parts ? parts.map((p) => p.p) : []}>
       {rows ?? (
         <div class="bq-ans">
-          {k ? <BigAnswer text={k.a ?? ""} max={props.oneMax} maxH={props.oneMaxH} /> : <p class="fc-anote">{props.note}</p>}
+          {k ? <BigAnswer text={k.a ?? ""} max={30} maxH={76} /> : <p class="fc-anote">{props.note}</p>}
         </div>
       )}
     </BookQuestion>

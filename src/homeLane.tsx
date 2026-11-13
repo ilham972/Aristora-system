@@ -470,6 +470,7 @@ function HomeCard(props: {
         <PartRow
           key={j}
           slot={slots ? `p${j}` : undefined}
+          inline={slots}
           p={p}
           it={it}
           g={marks[j]}
@@ -490,6 +491,7 @@ function HomeCard(props: {
       // question's phone parts in a row of their own under it (hers to change too). In the printed question: after it.
       <>
         <PartRow
+          inline={slots}
           p={{ p: "", m: part ? it.teach : it.max, key: it.key, phone: null, typed: it.typed ?? [], ok: it.ok?.flatMap((x) => x ?? []) ?? null }}
           it={it}
           g={part ? one : (one ?? it.got)}
@@ -681,6 +683,8 @@ function HomeCard(props: {
  */
 function PartRow(props: {
   slot?: string;
+  /** In the printed question: the key smaller (it sits right under its own words). */
+  inline?: boolean;
   p: HomePart;
   it: PhotoItem;
   g: number | null;
@@ -699,7 +703,7 @@ function PartRow(props: {
       {!props.one && name && <em class="fc-pl">{name}</em>}
       <div class="hl-pans">
         {props.bare ? null : p.key ? (
-          <BigAnswer text={p.key.replace(/\n/g, " / ")} max={44} maxH={110} />
+          <BigAnswer text={p.key.replace(/\n/g, " / ")} max={props.inline ? 30 : 44} maxH={props.inline ? 76 : 110} />
         ) : (
           <p class="fc-anote">{it.key ? "Not in the key for this part: check it yourself." : "No answer key: check his answer yourself."}</p>
         )}

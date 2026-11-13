@@ -2249,7 +2249,7 @@ function QuestionCard(props: {
     return (
       <li key={j} class={`fc-part${isBlank ? " blank" : ""}`} slot={inline ? `p${j}` : undefined}>
         <em class="fc-pl">{p.p}</em>
-        <BigAnswer text={p.a} max={44} maxH={110} />
+        <BigAnswer text={p.a} max={inline ? 30 : 44} maxH={inline ? 76 : 110} />
         <span class="fc-pm" style={{ "--n": String(p.m! + 2) }} role="group" aria-label={`Part ${p.p}, out of ${p.m}`}>
           <button
             type="button"

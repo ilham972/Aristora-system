@@ -10720,51 +10720,33 @@ body.tm-on .toasts {
 .hl-pans .fc-anote {
   margin: 0;
 }
-/* What he typed, in a box of its own (13 Nov 2026, his words: "student answers look like part of the answer key"):
-   outlined green when every box is right, red when any is wrong, purple when it is hers to judge (his reason, no key);
-   each typed box a chip with ✓ / ✗. */
+/* What he typed (13 Nov 2026, his words: "student answers look like part of the answer key"; then "so many boxes"):
+   as in the thread, one line: a small "He typed", then each box as a chip, ✓ green / ✗ red with a ring; no box around
+   it. His reason: a purple chip (ஆம் / இல்லை) and his words. */
 .hl-typed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
   margin: 2px 0 0;
-  padding: 6px 10px 6px;
-  border: 2px solid var(--line);
-  border-left-width: 5px;
-  border-radius: 10px;
-  background: #fff;
   font-size: 15px;
-  line-height: 1.5;
+  line-height: 1.4;
   overflow-wrap: break-word;
 }
-.hl-typed.ok {
-  border-color: var(--green);
-  background: var(--green-soft);
-}
-.hl-typed.no {
-  border-color: var(--red);
-  background: var(--red-soft);
-}
-.hl-typed.tch {
-  border-color: var(--evaluation);
-  background: var(--evaluation-soft);
-}
 .hl-typed > p {
-  margin: 0;
+  display: contents;
 }
 .hl-tl {
-  display: block;
-  margin: 0 0 3px;
-  font: 700 11.5px/1.1 var(--font);
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--ink-2);
+  flex: none;
+  font: 700 12.5px/1 var(--font);
+  color: var(--ink-3);
 }
 .hl-typed b {
   display: inline-flex;
   align-items: baseline;
   gap: 4px;
-  margin: 0 4px 3px 0;
-  padding: 0 8px;
-  border-radius: 7px;
-  background: #fff;
+  padding: 3px 9px 2px;
+  border-radius: 9px;
 }
 .hl-typed b i {
   font-style: normal;
@@ -10772,16 +10754,22 @@ body.tm-on .toasts {
   font-size: 13px;
 }
 .hl-typed .hl-bad {
+  background: var(--red-soft);
   color: var(--red-ink);
   box-shadow: 0 0 0 1.5px var(--red);
 }
 .hl-typed .hl-ok {
+  background: var(--green-soft);
   color: var(--green-ink);
   box-shadow: 0 0 0 1.5px var(--green);
 }
 .hl-typed .hl-tch {
+  background: var(--role-soft);
   color: var(--ink);
-  box-shadow: 0 0 0 1.5px var(--line);
+}
+.hl-typed.tch b {
+  background: var(--evaluation-soft);
+  color: var(--evaluation-ink);
 }
 .hl-said {
   white-space: pre-wrap;
@@ -13499,10 +13487,16 @@ body.locked.mnx-desk .toasts {
 }
 
 /* ---- The printed question's icon on (13 Nov 2026, src/bookQuestion.tsx `parts`; his ask: "the question, then the
-   answer ... same like in the thread"): the card's own answer rows sit inside the printed question, each under its own
-   sub-question (a slot of its shadow root). They are the page's elements: these rules reach them, the book's don't.
-   The question stays the book's black on white; each answer is a grey box with a dark bar on its left; what he typed
-   keeps its own coloured box (.hl-typed) inside it. ---- */
+   answer ... same like in the thread"; his second look: "so many boxes ... so many margins"): the question nearly edge
+   to edge with no frame (its paper: `INLINE_PAPER`), the card's own answer rows inside it, each under its own
+   sub-question, with no box, no bar, no part chip (the printed label is right above). They are the page's elements:
+   these rules reach them, the book's don't. ---- */
+.bq-view.bq-inline {
+  margin: 4px -10px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
 .bq-inline > * {
   font-family: var(--font);
   font-size: 15px;
@@ -13514,27 +13508,41 @@ body.locked.mnx-desk .toasts {
 }
 .bq-inline > .fc-part,
 .bq-inline > .bq-ans {
-  margin: 6px 0 12px;
-  padding: 8px 10px 10px;
-  border: 1.5px solid var(--line);
-  border-left: 5px solid var(--ink);
-  border-radius: 10px;
-  background: #f3f5f9;
-}
-.bq-inline > .fc-part {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: start;
-  gap: 8px 10px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  margin: 2px 0 12px;
+  padding: 0;
+  border: 0;
+  background: none;
 }
 .bq-inline > .fc-part + .fc-part {
-  border-top: 1.5px solid var(--line);
+  border-top: 0;
 }
-.bq-inline > .fc-part.hl-one {
-  grid-template-columns: minmax(0, 1fr);
+.bq-inline > .fc-part:not([data-loose]) > .fc-pl {
+  display: none;
 }
-.bq-inline .fc-pl {
-  background: #fff;
+/* A part the book printed without a label of its own (after the whole question): its name in a small chip beside it. */
+.bq-inline > .fc-part[data-loose]:not(.hl-one) {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+.bq-inline > .fc-part[data-loose] > .fc-pl {
+  min-width: 26px;
+  padding: 3px 5px;
+  font-size: 14px;
+}
+.bq-inline > .fc-part:not([data-loose]) > .ka,
+.bq-inline > .fc-part:not([data-loose]) .hl-pans {
+  grid-column: 1;
+}
+.bq-inline .fc-pb {
+  height: 40px;
+}
+/* No box, so the colour tells them apart: the question black as printed, the key blue, what he typed green / red. */
+.bq-inline .ka,
+.bq-inline .ka-h,
+.bq-inline .ka-w {
+  color: var(--theory-ink);
 }
 .bq-flat {
   margin-top: 6px;

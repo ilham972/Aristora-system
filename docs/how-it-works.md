@@ -294,9 +294,14 @@ with `parts` (the key's part labels) draws the question with `drawQuestion(…, 
 named slot (`p0`, `p1`…) after each sub-question (`.rp`/`.rl` in workbooks; with `ladder` also a theory book's
 `.sq`/`.sl`, teachers' cards only: the family app's Level is unchanged); the rows are the page's own elements with
 `slot="pN"` (its styles, its taps), shown as a plain list while the question loads. `KeyView` (`src/qcard.tsx`) is the
-one key view for Evaluation, Theory, Consultation, the desk, the whiteboard and Correction's theory books. The look:
-the question black on white as printed; each answer a grey box with a dark bar on its left (`.bq-inline > .fc-part`,
-`.bq-ans`). Teaching mode is unchanged (the question big, then the answer).
+one key view for Evaluation, Theory, Consultation, the desk, the whiteboard and Correction's theory books. **The look
+(his second look the same day: "so many boxes ... so many margins ... the question number again ... like a
+screenshot", the thread as his example):** the thread's paper (`INLINE_PAPER` in `src/bookQuestion.tsx`, from
+`PAPER` in `src/family/help.tsx`): no frame, nearly edge to edge (`margin: 4px -10px 0`), the app's font at 15.5 px,
+no printed number or marks (the card's pill says it), no indent; the answer rows with no box, no bar and no part chip
+(the printed (i) is right above; a part the book printed without a label keeps its chip: `data-loose`); colour tells
+them apart: the question black, the key blue and smaller (30 px), what he typed a green / red chip. Teaching mode is
+unchanged (the question big, then the answer).
 
 **Theory page (one screen, 31 Oct 2026, his voice note "rebuild the theory page also same like this": the Evaluation
 page's layout; `src/theoryFocus.tsx` `TheoryTab`, rules in `src/theoryFocusData.ts`).** No Room button, no Lessons
@@ -2567,9 +2572,9 @@ learning app of our education institute"): one profile, his class times, what he
       the same, ↻ and ✕; a tap there = 2×, scroll it).
     - **Each sub-question its own marks** (`PartRow`, `photos.partsOf`): each part with its label, the key's answer big
       (`BigAnswer`), what he typed **in a box of its own** (13 Nov 2026, his words: "student answers look like part of
-      the answer key ... no color code or any boxes or outline": `.hl-typed`, "HE TYPED" over chips with ✓ / ✗; the box
-      outlined green when every box is right, red when any is wrong) or his reason (a purple box: ஆம் / இல்லை + his
-      words), then its marks in
+      the answer key ... no color code or any boxes or outline"; then "so many boxes": `.hl-typed`, one line as in the
+      thread: a small "He typed", then each box a chip with ✓ / ✗, green with a ring when right, red when wrong, no
+      box around the line) or his reason (a purple chip: ஆம் / இல்லை, then his words), then its marks in
       one row (Correction's part row). A part question: the parts the phone left, nothing lit until she taps (never
       "untouched = full"); the phone's own parts lit as the phone gave them and **hers to change** (7 Nov 2026, his report:
       "they by mistake only type the wrong answer, but actually that is correct in their book ... I want to give the
