@@ -38,7 +38,7 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--card);
   color: var(--brand);
   box-shadow:
     0 0 0 3px var(--brand-2),
@@ -249,7 +249,7 @@ button.f-hc {
   gap: 2px;
   padding: 8px 8px 6px 12px;
   border-radius: 12px;
-  background: #fff;
+  background: var(--card);
   color: var(--brand);
   font: 800 14px var(--display);
   box-shadow: 0 3px 0 var(--line-2);
@@ -499,7 +499,7 @@ a.f-btn {
   text-overflow: ellipsis;
 }
 .f-months button.on {
-  background: #fff;
+  background: var(--card);
   color: var(--brand);
 }
 .f-hero + .f-mnum {
@@ -631,7 +631,7 @@ a.f-btn {
 .f-field input:focus,
 .f-field select:focus {
   border-color: var(--brand);
-  background: #fff;
+  background: var(--card);
 }
 .f-sheet .f-field ~ .f-btn.big,
 .f-sheet .f-bday ~ .f-btn.big {
@@ -765,7 +765,7 @@ a.f-btn {
   margin-top: 8px;
   overflow: hidden;
   border-radius: 99px;
-  background: #fff;
+  background: var(--card);
 }
 .f-prog-bar i {
   position: absolute;
@@ -986,7 +986,7 @@ a.f-btn {
 .f-nudge button + button {
   width: 44px;
   padding: 0;
-  background: #fff;
+  background: var(--card);
   color: var(--ink2);
   font-weight: 800;
 }
@@ -1000,7 +1000,7 @@ a.f-btn {
   min-height: 36px;
   padding: 2px 14px 0;
   border-radius: 999px;
-  background: #fff;
+  background: var(--card);
   border: 1.5px solid var(--lav);
   color: var(--brand-2);
   font: 800 13.5px/1 var(--display);
@@ -1116,7 +1116,7 @@ a.f-btn {
   aspect-ratio: 1;
   overflow: hidden;
   border-radius: 13px;
-  background: #fff;
+  background: var(--card);
 }
 .f-shpic img {
   width: 100%;
@@ -1361,7 +1361,7 @@ span.f-rface.goat .f-ava {
   margin: -20px 0 12px;
   padding: 12px 14px 12px 8px;
   border-radius: 22px;
-  background: linear-gradient(160deg, var(--gold-soft), #fff 72%);
+  background: linear-gradient(160deg, var(--gold-soft), var(--card) 72%);
   box-shadow: inset 0 0 0 2px var(--gold);
   text-align: left;
 }
@@ -1732,7 +1732,7 @@ span.f-rface.goat .f-ava {
   font-size: 9px;
   font-style: normal;
   line-height: 1;
-  background: #fff;
+  background: var(--card);
   box-shadow: 0 0 0 2px #22c55e, 0 0 0 4px #fff;
 }
 .f-ava.xl ~ .f-on.lv {

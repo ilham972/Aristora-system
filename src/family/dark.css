@@ -1,0 +1,150 @@
+/* His Dark (13 Nov 2026): the same app after dusk, never another app. On only when HE switches it in Me (theme.ts);
+   the phone's own dark setting changes nothing.
+   - The palette's meanings hold: violet = the app, gold = START and wins, flame = days in a row, pink gem = XP, blue =
+     right, rose = wrong, no green. Big surfaces are a deep violet ink (the page), a violet a step lighter (cards) and
+     ARISTORA's violet (headers, buttons): no night sky, no stars, no space (his 3 Nov rule holds).
+   - How: the palette's names get their dark values here; family.css paints with the names. A "soft" colour is a dark
+     tint, an "ink" a light one. What sits on a solid colour (START's brown on gold, white on violet) keeps its light-
+     mode value: listed below.
+   - A question as printed is the book's own page (black on white, colours typed by hand): turned as one piece
+     (--paper-f, used inside its shadow root: play.tsx PAPER_CSS), the app's own boxes in it turned back. */
+
+html[data-theme="dark"] {
+  color-scheme: only dark;
+  /* Violet */
+  --brand: #7a6cf0;
+  --brand-2: #b6abff;
+  --brand-3: #3b2ea3;
+  --brand-deep: #e1dcff;
+  --brand-soft: #2a2560;
+  --brand-mid: #4d4399;
+  --lav: #312b6b;
+  /* The page and its ink */
+  --bg: #131129;
+  --card: #1f1b42;
+  --ink: #f1eefd;
+  --ink2: #b7b2dc;
+  --ink3: #837eac;
+  --line: #2b2757;
+  --line-2: #3b366d;
+  /* Gold */
+  --gold-soft: #3b2d0c;
+  --gold-ink: #ffd27a;
+  /* The flame */
+  --flame-soft: #40210f;
+  --flame-ink: #ffa26b;
+  /* The gem */
+  --gem-soft: #461a33;
+  --gem-ink: #ff9ccb;
+  /* Right, wrong, part */
+  --right: #2f97f7;
+  --right-soft: #12305c;
+  --right-ink: #86c4ff;
+  --wrong-soft: #4a1929;
+  --wrong-ink: #ff93aa;
+  --part-soft: #40300f;
+  /* The owl on a dark page: its cap a violet you can see */
+  --owl-cap: #5546cf;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 26px -14px rgba(0, 0, 0, 0.7);
+  --shadow-up: 0 2px 6px rgba(0, 0, 0, 0.35), 0 18px 36px -18px rgba(0, 0, 0, 0.8);
+  /* A question as printed: the book's page turned as one piece */
+  --paper-f: invert(1) hue-rotate(180deg);
+  --paper-bg: transparent;
+  --paper-ink: #1c1a3a;
+}
+
+/* On a solid colour, the light look's own ink stays. */
+html[data-theme="dark"] :is(.f-tag.gold, .f-btn.gold, .f-pbar.full .f-ptag, .f-giftc, .f-race-rank.r1, .f-lv-tag.cam, .f-goatchip) {
+  color: #6b4500;
+}
+html[data-theme="dark"] :is(.f-hero .f-caret.many, .f-hero .f-who.on) {
+  color: #5a49d6;
+}
+html[data-theme="dark"] .f-toast.bad {
+  background: #c42c4d;
+}
+
+/* Colours family.css types by hand (a tint that has no name in the palette): their dark values. */
+html[data-theme="dark"] :is(.f-note.lock, .f-tli.k-in .f-tld, .f-tli.k-out .f-tld, .f-node.s-lock, .f-lv.s-later, .f-medal:not(.won) .f-medal-c) {
+  background: var(--line);
+}
+html[data-theme="dark"] .f-flame.out .f-flame-o {
+  fill: #4d4884;
+}
+html[data-theme="dark"] .f-flame.out .f-flame-i {
+  fill: #2b2757;
+}
+html[data-theme="dark"] .f-hero .f-flame.out .f-flame-o {
+  fill: rgba(255, 255, 255, 0.5);
+}
+html[data-theme="dark"] .f-hero .f-flame.out .f-flame-i {
+  fill: rgba(255, 255, 255, 0.28);
+}
+/* The owl's glow: a breath of violet, never a white cloud on a dark page. */
+html[data-theme="dark"] .f-owlbadge::before {
+  background: radial-gradient(closest-side, rgba(122, 108, 240, 0.34) 0%, rgba(122, 108, 240, 0.16) 55%, rgba(122, 108, 240, 0) 100%);
+}
+html[data-theme="dark"] .f-hero .f-owlbadge::before {
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.1) 60%, rgba(255, 255, 255, 0) 100%);
+}
+html[data-theme="dark"] .f-wdone {
+  background: radial-gradient(closest-side, var(--card) 76%, transparent 78%), conic-gradient(var(--brand) calc(var(--p) * 1%), var(--line-2) 0);
+}
+/* Under the keys: a step deeper than the page, so the keys stand up. */
+html[data-theme="dark"] :is(.f-padkeys, .f-nextbar) {
+  background: #0d0b1f;
+  box-shadow: 0 -10px 24px -18px rgba(0, 0, 0, 0.8);
+}
+html[data-theme="dark"] .f-key.del {
+  --edge: #7d2b41;
+}
+html[data-theme="dark"] .f-signin {
+  background: linear-gradient(180deg, #241f52 0%, var(--bg) 46%);
+}
+html[data-theme="dark"] .f-result {
+  background: radial-gradient(130% 55% at 50% 0%, #2d2768 0%, var(--bg) 62%);
+}
+html[data-theme="dark"] :is(.f-qchip.part, .f-sum .warn) {
+  color: #ffbe5e;
+}
+html[data-theme="dark"] :is(.f-newcup h2, .f-fees.owe .f-fees-n b) {
+  color: var(--gold-ink);
+}
+html[data-theme="dark"] :is(.f-box.on .f-bval.empty, .f-box.on .f-fc.on.empty, .f-ustay-t i) {
+  color: #6f66b8;
+}
+html[data-theme="dark"] .f-tab-n {
+  box-shadow: 0 0 0 2px var(--card);
+}
+html[data-theme="dark"] .f-lv-dot {
+  box-shadow: 0 0 0 2.5px var(--card);
+}
+/* The 12 weeks: on a dark page a day BRIGHTENS with each Level (on white it deepens). */
+html[data-theme="dark"] .f-hc.h1 {
+  background: #3a3184;
+}
+html[data-theme="dark"] .f-hc.h2 {
+  background: #5547c6;
+}
+html[data-theme="dark"] .f-hc.h3 {
+  background: var(--brand);
+}
+html[data-theme="dark"] .f-hc.h4 {
+  background: var(--brand-2);
+}
+html[data-theme="dark"] .f-hc.in > i {
+  box-shadow: 0 0 0 1.5px var(--card);
+}
+html[data-theme="dark"] .f-freesw {
+  border-color: var(--line-2);
+}
+html[data-theme="dark"] .f-onl-st {
+  color: #4ade80;
+}
+html[data-theme="dark"] .f-utabs button:not(.on) {
+  color: var(--brand-2);
+}
+/* The loading page before his first screen (owl.css paints it light). */
+html[data-theme="dark"] .splash {
+  background: radial-gradient(60% 40% at 50% 42%, #2d2768 0%, rgba(45, 39, 104, 0) 72%), linear-gradient(180deg, #17142f 0%, #131129 100%);
+}
