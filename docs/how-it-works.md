@@ -1980,7 +1980,12 @@ learning app of our education institute"): one profile, his class times, what he
       under "Nothing kept"). **A part he typed instead** ("show that", "give a reason": a `say` / `why` box a teacher
       reads, `homePhotos.said`, no files; `HelpPhoto.said`) shows **his words under each sub-question** (`.h-say`) and
       her marks once (`.h-amk`), never "photo deleted" or "in the photo above" (13 Nov 2026, his screenshot: Q11(a)
-      showed "4/5 · Ilham (photo deleted)" where the student's sentence should be). Such a question counts as lost, and gets its pill, only once its photo is marked.
+      showed "4/5 · Ilham (photo deleted)" where the student's sentence should be). **Each teacher's part is right or wrong by its own
+      marks** (13 Nov 2026, his report: an essay question with one wrong sub-question turned every sub-question red):
+      the Homework card sends her marks part by part with the total (`photos.mark` `pm`, kept on `homePhotos.pm`, null
+      for the phone's parts; refused unless they add up to `got`), the card shows each part's own "1/1" / "0/1" (`.h-pm`)
+      and colours it alone. Marked before that (no `pm`): right only on full marks, wrong only on 0 or when it is the
+      one teacher's part, else neutral (we can't know which part lost the marks). Such a question counts as lost, and gets its pill, only once its photo is marked.
       **Nearly as wide as the phone** (his screenshot: "left and right have so much white margin ...
       makes to scroll too much"): the card 6 px from the edge, the paper to the card's edge, a sub-question's label
       only as wide as its words (`PAPER` in `help.tsx`). His photo is the first message (`ask`). A teacher's link

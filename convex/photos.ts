@@ -379,6 +379,8 @@ export const mark = mutation({
     id: v.id("homePhotos"),
     got: v.optional(v.number()),
     total: v.optional(v.number()),
+    /** A part question she marked part by part: each key part's marks (null = the phone's part). */
+    pm: v.optional(v.array(v.union(v.number(), v.null()))),
     /** A page opened before 6 Nov 2026 still sends a reason: accepted, ignored. */
     why: v.optional(v.string()),
     note: v.optional(v.string()),
@@ -421,10 +423,21 @@ export const mark = mutation({
       // The phone's parts as she changed them (7 Nov 2026: he typed it wrong, his paper shows it right), or as it gave them.
       const total = args.total ?? phoneGot + got;
       if (!Number.isInteger(total) || total - got < 0 || total - got > k.max - teach) fail(`Give 0 to ${k.max - teach} marks for the phone's parts.`);
+      // Her marks part by part (the thread shows and colours each sub-question by its own): kept only when they add up.
+      let pm: (number | null)[] | undefined;
+      if (args.pm) {
+        const left = markQuestion(k, t?.a ?? []).parts.map((x) => x === null);
+        const ok =
+          args.pm.length === k.parts.length &&
+          args.pm.every((g, j) => (left[j] ? Number.isInteger(g) && g! >= 0 && g! <= k.parts[j].m : true)) &&
+          args.pm.reduce<number>((s, g, j) => s + (left[j] ? (g ?? 0) : 0), 0) === got;
+        // Never block her marking for it: marks that don't add up are dropped (the thread then uses the total).
+        if (ok) pm = args.pm.map((g, j) => (left[j] ? g : null));
+      }
       m.q[String(r.q)] = { got: total, max: k.max, lost: total < k.max, t: now };
       lv.got = (lv.got ?? 0) + total;
       await ctx.db.patch(p._id, { m, updatedAt: now });
-      await ctx.db.patch(r._id, { ...done, got });
+      await ctx.db.patch(r._id, { ...done, got, pm });
       await log(ctx, null, now, { kind: "photo-marked", studentId: s._id, name: s.name, unit: u.unit.key, q: r.q, value: `${r.n} ${total}/${k.max}` });
       await alertStudent(ctx, s._id, `${me.name} Q${r.q} ஐத் திருத்தினார் (${total}/${k.max}).`);
       return { already: false };

@@ -16,7 +16,14 @@ import { slotWords, type KeyQ } from "./phone";
 import { partMarks } from "./photos";
 
 /** One part of a question as he answered it: its label ("i", "ii"; "" = the only one), right or wrong (null = the teacher's). */
-export type HelpPart = { p: string; ok: boolean | null; typed: string[] };
+export type HelpPart = {
+  p: string;
+  ok: boolean | null;
+  typed: string[];
+  /** A teacher's part she marked part by part: her marks for it, of `m` (13 Nov 2026). */
+  got?: number;
+  m?: number;
+};
 
 /**
  * The photo(s) he sent from home for the part(s) of this question a teacher marks (a drawing, a construction), with
@@ -113,6 +120,15 @@ async function partsOf(
     .filter((r) => r.kind === "part" && !r.free && !r.cls)
     .sort((a, b) => b.at - a.at)[0];
   if (!sent) return { parts: out };
+  // Her marks part by part, when she gave them so: each sub-question right or wrong on its own.
+  if (sent.state === "done" && sent.pm) {
+    sent.pm.forEach((g, i) => {
+      if (typeof g === "number" && out[i]?.ok === null) {
+        out[i].got = g;
+        out[i].m = k.parts[i].m;
+      }
+    });
+  }
   const urls: string[] = [];
   for (const f of sent.files) {
     const u = await ctx.storage.getUrl(f);

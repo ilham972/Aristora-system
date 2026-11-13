@@ -406,6 +406,8 @@ function HomeCard(props: {
       await mutate(api.photos.mark, {
         id: it.id,
         ...(part && !inClass && herGot !== null ? { got: herGot } : {}),
+        // Each part's own marks too (13 Nov 2026): the thread shows each sub-question right or wrong by itself.
+        ...(part && !inClass && herGot !== null && it.split ? { pm: marks.map((g, j) => (left[j] ? (g ?? 0) : null)) } : {}),
         ...(part && !inClass && total !== null && phoneNow !== it.phoneGot ? { total } : {}),
         ...(!part && !inClass && total !== null && total !== it.got ? { total } : {}),
         ...(note.trim() ? { note: note.trim() } : {}),

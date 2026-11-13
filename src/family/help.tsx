@@ -175,7 +175,7 @@ const Rich = (props: { s: string }) => (
  * each sub questions. This answer key is only for teachers"): what he typed (✓ blue, ✗ rose, ✍ the teacher's part),
  * then, for a teacher, the key. `slot` = its place in the printed question; without one it is a row of the plain list.
  */
-function Answer(props: { label: string; part?: HelpPart; k?: string; staff: boolean; slot?: string; photo?: HelpPhoto; first?: boolean }) {
+function Answer(props: { label: string; part?: HelpPart; k?: string; staff: boolean; slot?: string; photo?: HelpPhoto; first?: boolean; solo?: boolean }) {
   const p = props.part;
   // A part only a teacher marks, photographed at home: her marks, and the photo itself under the first such part.
   const ph = p?.ok === null ? props.photo : undefined;
@@ -187,21 +187,30 @@ function Answer(props: { label: string; part?: HelpPart; k?: string; staff: bool
   // the thread said "photo deleted" where his sentence should be). Her marks on the first such part.
   const words = ph?.said ? p!.typed.filter((t) => t).join(" · ") : "";
   const marks = marked ? `${ph!.got}/${ph!.max}${props.staff && ph!.by ? ` · ${ph!.by}` : ""}` : props.staff ? "not marked yet" : "இன்னும் திருத்தப்படவில்லை";
+  // Each teacher's part by its own marks (13 Nov 2026, his report: one wrong sub-question turned every one red). Marked
+  // before part-by-part marks were kept: right or wrong only when the total says it for all (full, 0, or one part).
+  const own = p?.got !== undefined && p.m !== undefined;
+  const tone = !marked ? "tch" : own ? (p!.got! >= p!.m! ? "ok" : "no") : ph!.got! >= ph!.max ? "ok" : ph!.got === 0 || props.solo ? "no" : "tch";
   return (
     <div class="h-ans" slot={props.slot}>
       {label && <small class="h-al">{label}</small>}
       {p && ph?.said ? (
         <>
-          <span class={`h-a h-say ${marked ? (ph.got! >= ph.max ? "ok" : "no") : "tch"}`}>
+          <span class={`h-a h-say ${tone}`}>
             <i class="h-ai" aria-hidden="true">✍</i>
             {words || (props.staff ? "nothing typed" : "எதுவும் எழுதவில்லை")}
+            {own && marked && <em class="h-pm">{`${p.got}/${p.m}`}</em>}
           </span>
-          {props.first && <small class="h-amk">{marks}</small>}
+          {/* His ask (13 Nov 2026): each sub-question's own marks in its box, no total; the total only for marks kept
+              before part by part (we can't split them), and for a teacher who marked it. */}
+          {props.first && (own ? props.staff && marked && ph.by && <small class="h-amk">{`✍ ${ph.by}`}</small> : <small class="h-amk">{marks}</small>)}
         </>
       ) : p && ph ? (
-        <span class={`h-a ${marked ? (ph.got! >= ph.max ? "ok" : "no") : "tch"}`}>
+        <span class={`h-a ${tone}`}>
           <i class="h-ai" aria-hidden="true">✍</i>
-          {!props.first
+          {own && marked
+            ? `${p.got}/${p.m}${props.first && props.staff && ph.by ? ` · ${ph.by}` : ""}`
+            : !props.first
             ? props.staff
               ? "in the photo above"
               : "மேலே உள்ள படத்தில்"
@@ -255,8 +264,9 @@ function Printed(props: { id: string; staff: boolean; ask?: HelpAsk }) {
   }, [x, sig]);
   if (!x) return <Waiting />;
   const firstPhoto = parts?.findIndex((p) => p.ok === null) ?? -1;
+  const solo = (parts?.filter((p) => p.ok === null).length ?? 0) === 1;
   const rows = (slots: boolean) =>
-    labels.map((l, i) => <Answer key={i} label={l} part={parts?.[i]} k={x.kp?.[i]?.a} staff={props.staff} slot={slots ? `p${i}` : undefined} photo={props.ask?.photo} first={i === firstPhoto} />);
+    labels.map((l, i) => <Answer key={i} label={l} part={parts?.[i]} k={x.kp?.[i]?.a} staff={props.staff} slot={slots ? `p${i}` : undefined} photo={props.ask?.photo} first={i === firstPhoto} solo={solo} />);
   return (
     <>
       {x.html ? (

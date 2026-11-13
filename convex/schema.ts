@@ -926,6 +926,12 @@ export default defineSchema({
     byId: v.optional(v.id("users")),
     /** A part: her marks for the part(s) the phone left. His working (Correction's ⌂ lane): the new marks she gave. */
     got: v.optional(v.number()),
+    /**
+     * A part, marked part by part (13 Nov 2026, his report: an essay question with one wrong sub-question showed every
+     * sub-question red in the thread): her marks for each part of the phone key (null = the phone's part). Old rows:
+     * missing (only the total is known).
+     */
+    pm: v.optional(v.array(v.union(v.number(), v.null()))),
     /** The cause of a wrong answer, or a remark on a part (`WHY`); her own words (≤ `NOTE_MAX`). */
     why: v.optional(v.string()),
     note: v.optional(v.string()),

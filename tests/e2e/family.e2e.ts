@@ -4216,6 +4216,8 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
   expect(await mq(omar, 8)).toMatchObject({ got: 1, max: 2, lost: true });
   expect((await mq(omar, 8))?.x).toBeUndefined();
   expect(await askOf(omar, 8)).toMatchObject({ st: "open", from: "t", ph: true, rid: tid });
+  // Her marks part by part reach the server (13 Nov 2026): (i) the phone's, (ii) hers.
+  expect((await t.run(async (ctx) => (await ctx.db.query("homePhotos").collect()).find((r) => r.studentId === omar && r.q === 8)))!.pm).toEqual([null, 0]);
   expect((await t.query(api.help.mine, { token: OMAR })).find((l) => l.q === 8)).toMatchObject({ ph: true, from: "t", tname: "Owner" });
   const his = await t.query(api.chat.room, { token: OMAR, id: tid });
   expect(his.msgs[his.msgs.length - 1].t).toContain("உன் விடையைப் பார்த்தேன்");
@@ -4286,7 +4288,8 @@ test("Explain online: a typed \"show that\" shows his words under each sub-quest
   // Correction marks her words 4 of 5 style: 1 of 2; then opens her thread (the Homework card's headset).
   const item = (await t.query(api.photos.queue, as)).find((i) => i.q === 10)!;
   expect(item).toMatchObject({ said: true });
-  await t.mutation(api.photos.mark, { ...as, id: item.id, got: 1 });
+  // Her marks part by part: (i) right, (ii) wrong (13 Nov 2026, his report: one wrong sub-question turned all red).
+  await t.mutation(api.photos.mark, { ...as, id: item.id, got: 1, pm: [1, 0] });
   const { id } = await t.mutation(api.help.tcall, { ...as, studentId: mira, unitId: u01, q: 10 });
   const askOf = async () => (await t.run(async (ctx) => await ctx.db.query("helpAsks").withIndex("by_sid", (x) => x.eq("sid", mira).eq("unitId", u01).eq("q", 10)).first()))!;
   expect(await askOf()).toMatchObject({ st: "open", ph: true });
@@ -4307,9 +4310,13 @@ test("Explain online: a typed \"show that\" shows his words under each sub-quest
   await U.locator(".t-seg").getByRole("button", { name: "Thread" }).click();
   await U.locator(".h-row", { hasText: "Mira J · Q10" }).click();
   await until(async () => (await U.locator(".h-say").count()) === 2, "her two typed answers", 20_000);
-  expect((await U.locator(".h-say").allInnerTexts()).map((x) => x.replace(/\s+/g, " ").trim())).toEqual(["✍ OP = OQ made-up reason one", "✍ made-up reason two"]);
-  await contains(U.locator(".h-amk"), "1/2 · Owner");
+  expect((await U.locator(".h-say").allInnerTexts()).map((x) => x.replace(/\s+/g, " ").trim())).toEqual(["✍ OP = OQ made-up reason one 1/1", "✍ made-up reason two 0/1"]);
+  // Each sub-question by its own marks: (i) right, (ii) wrong; never both wrong.
+  expect(await U.locator(".h-say").evaluateAll((els) => els.map((e) => (e.classList.contains("ok") ? "ok" : e.classList.contains("no") ? "no" : "?")))).toEqual(["ok", "no"]);
+  // His ask (13 Nov 2026): each sub-question's own marks, no "1/2" total; who marked it, for a teacher.
+  await contains(U.locator(".h-amk"), "✍ Owner");
   expect(await U.locator(".h-amk").count()).toBe(1);
+  expect(await U.locator(".h-amk").innerText()).not.toContain("1/2");
   const card = await U.locator(".h-top").innerText();
   expect(card).not.toContain("photo deleted");
   expect(card).not.toContain("in the photo above");

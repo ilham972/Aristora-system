@@ -458,16 +458,32 @@ describe("online explanations", () => {
     expect((await l().mutation(api.family.check, { unitId: u01, n: 1, typed })).teacher).toEqual([10]);
     // Correction marks his words 1 of 2, then opens his thread: his words are there, so nothing is asked of him.
     const item = (await t.query(api.photos.queue, {})).find((i) => i.q === 10 && i.student.name === "Lina S")!;
-    expect(item).toMatchObject({ said: true, urls: [] });
-    await t.mutation(api.photos.mark, { id: item.id, got: 1 });
+    expect(item).toMatchObject({ said: true, urls: [], split: true });
+    // Her marks part by part (13 Nov 2026, his report: one wrong sub-question turned all of them red): (i) right, (ii)
+    // wrong. Marks that don't add up never block her: the total is saved, the parts dropped (checked on a copy).
+    const pmOf = async () => (await raw.run(async (ctx) => await ctx.db.get(item.id as Id<"homePhotos">)))!.pm;
+    const before = await raw.run(async (ctx) => (await ctx.db.get(item.id as Id<"homePhotos">))!);
+    for (const bad of [[1, 1], [1], [2, 0]]) {
+      await t.mutation(api.photos.mark, { id: item.id, got: 1, pm: bad });
+      expect(await pmOf()).toBeUndefined();
+      await raw.run(async (ctx) => await ctx.db.replace(before._id, (({ _id, _creationTime, ...x }) => x)(before)));
+      await raw.run(async (ctx) => {
+        const p = (await ctx.db.query("progress").withIndex("by_student", (x) => x.eq("studentId", lina)).first())!;
+        const m = p.m as { q: Record<string, unknown>; lv: Record<string, { got?: number }> };
+        delete m.q["10"];
+        m.lv["1"].got = (m.lv["1"].got ?? 0) - 1;
+        await ctx.db.patch(p._id, { m: m as never });
+      });
+    }
+    await t.mutation(api.photos.mark, { id: item.id, got: 1, pm: [1, 0] });
     const r = await t.mutation(api.help.tcall, { studentId: lina, unitId: u01, q: 10 });
     expect(r).toMatchObject({ have: true });
     expect(await raw.run(async (ctx) => (await ctx.db.query("helpAsks").withIndex("by_sid", (x) => x.eq("sid", lina)).first())!)).toMatchObject({ ph: true });
     for (const room of [await l().query(api.chat.room, { id: r.id }), await tn().query(api.chat.troom, { id: r.id })]) {
       const a = room.head.help!.asks[0];
       expect(a.parts).toEqual([
-        { p: "i", ok: null, typed: ["made-up words for part one"] },
-        { p: "ii", ok: null, typed: ["made-up words for part two"] },
+        { p: "i", ok: null, typed: ["made-up words for part one"], got: 1, m: 1 },
+        { p: "ii", ok: null, typed: ["made-up words for part two"], got: 0, m: 1 },
       ]);
       expect(a.photo).toMatchObject({ said: true, urls: [], st: "done", got: 1, max: 2 });
     }

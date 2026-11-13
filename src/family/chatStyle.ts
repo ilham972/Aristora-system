@@ -155,6 +155,7 @@ const CSS = `
 .h-a.no{background:var(--wrong-soft);color:var(--wrong-ink);box-shadow:0 0 0 1.5px var(--wrong)}
 .h-a.tch{background:var(--lav);color:var(--ink2)}
 .h-say{white-space:pre-wrap;overflow-wrap:anywhere;font-weight:600;max-width:100%}
+.h-pm{flex:none;margin-left:2px;padding:1px 6px 0;border-radius:8px;background:rgba(255,255,255,.7);font:800 12.5px/1.3 var(--display);font-style:normal}
 .h-amk{flex-basis:100%;font:800 12.5px/1.2 var(--display);color:var(--ink2)}
 .h-k{background:var(--card);box-shadow:0 0 0 1.5px var(--line-2);color:var(--ink)}
 .h-kt{margin-right:2px;color:var(--ink3)}
