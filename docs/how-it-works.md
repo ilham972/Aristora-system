@@ -283,6 +283,20 @@ Theory since 3 Nov), only when the book has its questions (`useQuestionShown` + 
 stays open from question to question); teaching mode shows it big (below). It draws it in a **shadow root** (the book's `.qn .band .sq`
 never meet the app's), cleaned again (`safeFragment`), figures and tables wider than the phone zoomed down, working
 space hidden. Books page **Q** = every book has its questions. Old zips: upload them again once (no new chat).
+**The answer inside the question (13 Nov 2026, his ask: "when we press the document icon ... the question, then the
+answer, the question and the answer ... same like in the thread"; "this same feature consultation and others pages
+also").** Icon off = the card exactly as before (the answer big, no question). Icon on = the printed question **with
+the card's own answer rows inside it**: each part's row (its name chip, the key big, on the Homework card what he
+typed, on Correction its marks) right under its own printed sub-question, a one-answer question's answer after the
+whole question; nothing is shown twice. On every card with the icon: Correction (Class: workbooks and theory books;
+Homework), Evaluation, Theory, Consultation, the desk (Fighter / Master pages) and the whiteboard. How: `BookQuestion`
+with `parts` (the key's part labels) draws the question with `drawQuestion(…, parts, true)`, whose `slotParts` puts a
+named slot (`p0`, `p1`…) after each sub-question (`.rp`/`.rl` in workbooks; with `ladder` also a theory book's
+`.sq`/`.sl`, teachers' cards only: the family app's Level is unchanged); the rows are the page's own elements with
+`slot="pN"` (its styles, its taps), shown as a plain list while the question loads. `KeyView` (`src/qcard.tsx`) is the
+one key view for Evaluation, Theory, Consultation, the desk, the whiteboard and Correction's theory books. The look:
+the question black on white as printed; each answer a grey box with a dark bar on its left (`.bq-inline > .fc-part`,
+`.bq-ans`). Teaching mode is unchanged (the question big, then the answer).
 
 **Theory page (one screen, 31 Oct 2026, his voice note "rebuild the theory page also same like this": the Evaluation
 page's layout; `src/theoryFocus.tsx` `TheoryTab`, rules in `src/theoryFocusData.ts`).** No Room button, no Lessons
@@ -2527,7 +2541,10 @@ learning app of our education institute"): one profile, his class times, what he
       the turned photo's room: `Turned`; remembered while the app is open), a tap = full screen (the whole photo, turned
       the same, ↻ and ✕; a tap there = 2×, scroll it).
     - **Each sub-question its own marks** (`PartRow`, `photos.partsOf`): each part with its label, the key's answer big
-      (`BigAnswer`), what he typed (right green, wrong red) or his reason (ஆம் / இல்லை + his words), then its marks in
+      (`BigAnswer`), what he typed **in a box of its own** (13 Nov 2026, his words: "student answers look like part of
+      the answer key ... no color code or any boxes or outline": `.hl-typed`, "HE TYPED" over chips with ✓ / ✗; the box
+      outlined green when every box is right, red when any is wrong) or his reason (a purple box: ஆம் / இல்லை + his
+      words), then its marks in
       one row (Correction's part row). A part question: the parts the phone left, nothing lit until she taps (never
       "untouched = full"); the phone's own parts lit as the phone gave them and **hers to change** (7 Nov 2026, his report:
       "they by mistake only type the wrong answer, but actually that is correct in their book ... I want to give the

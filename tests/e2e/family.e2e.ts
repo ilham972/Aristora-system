@@ -4121,6 +4121,44 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
   await O.locator(".fc-names .fc-nm", { hasText: "Omar" }).click();
   const hw = O.locator(".hl-card");
   await contains(hw.locator(".fc-qn"), "8");
+  // What he typed in a box of its own (13 Nov 2026, his words: "student answers look like part of the answer key"):
+  // (i) "24" right = a green box with ✓, never mistaken for the key above it.
+  await contains(hw.locator(".hl-typed.ok"), "✓");
+  expect(await hw.locator(".hl-typed.ok .hl-tl").textContent()).toBe("He typed");
+  expect(await hw.locator(".hl-typed.ok").evaluate((b) => getComputedStyle(b).borderLeftWidth)).toBe("5px");
+  // The printed question's icon on: Q8 as printed with each part's row (the key, what he typed, her marks) right under
+  // its own sub-question, as in the thread; her taps there mark as before.
+  await hw.getByRole("button", { name: "Show Q8 as printed" }).click();
+  const rowsAt = () =>
+    hw.locator(".bq-inline").evaluate((host) =>
+      [...host.children].map((c) => {
+        const slot = (c as HTMLElement).assignedSlot;
+        let b = slot?.previousElementSibling ?? null;
+        while (b && !(b.matches(".rp") && b.querySelector(".rl"))) b = b.previousElementSibling;
+        return { slot: slot?.name ?? null, after: b?.querySelector(".rl")?.textContent ?? null, below: !!b && c.getBoundingClientRect().top >= b.getBoundingClientRect().bottom - 1 };
+      }),
+    );
+  await until(async () => (await hw.locator(".bq-inline").count()) === 1 && (await rowsAt())[0]?.slot === "p0", "Q8's rows in the printed question");
+  expect(await rowsAt()).toEqual([
+    { slot: "p0", after: "(i)", below: true },
+    { slot: "p1", after: "(ii)", below: true },
+  ]);
+  await visible(hw.locator(".bq-inline .hl-typed.ok"));
+  await noSideScroll(O);
+  await hw.locator(".bq-inline").evaluate((el) => el.scrollIntoView({ block: "start" }));
+  await shot(O, "help16-homework-inline");
+  await O.setViewportSize({ width: 320, height: 640 });
+  await noSideScroll(O);
+  await hw.locator(".bq-inline").evaluate((el) => el.scrollIntoView({ block: "start" }));
+  await shot(O, "help16-homework-inline-320");
+  await O.setViewportSize({ width: 390, height: 820 });
+  await O.waitForTimeout(400);
+  await hw.getByRole("button", { name: "Part ii: 1 of 1" }).click();
+  await contains(O.locator(".hl-go"), "2/2");
+  // Off again: the card as before (the rows under the photo, no question).
+  await hw.getByRole("button", { name: "Hide Q8 as printed" }).click();
+  await until(async () => (await hw.locator(".bq-view").count()) === 0, "the question closed");
+  expect(await hw.locator(".hl-parts .fc-pl").allInnerTexts()).toEqual(["i", "ii"]);
   // Always in its place between Message and Save; pale until the marks she taps are below the maximum.
   const onl = O.locator(".hl-acts .hl-onl");
   await visible(onl);

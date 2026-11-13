@@ -461,6 +461,55 @@ function HomeCard(props: {
     }
   };
 
+  // Each part's row (or the one row, when the parts can't take their own marks): `slots` = in the printed question.
+  const rows = (slots: boolean) =>
+    it.split ? (
+      it.parts.map((p, j) => (
+        <PartRow
+          key={j}
+          slot={slots ? `p${j}` : undefined}
+          p={p}
+          it={it}
+          g={marks[j]}
+          edit={edit}
+          one={it.parts.length === 1}
+          label={part && p.phone !== null ? `The phone gave ${p.phone}/${p.m}: change it if his paper shows more` : undefined}
+          onMark={(g) =>
+            tap(() => {
+              const next = [...marks];
+              next[j] = g;
+              setMarks(next);
+            })
+          }
+        />
+      ))
+    ) : (
+      // The parts can't take their own marks (the phone read it differently at his Check): one row, as then; a part
+      // question's phone parts in a row of their own under it (hers to change too). In the printed question: after it.
+      <>
+        <PartRow
+          p={{ p: "", m: part ? it.teach : it.max, key: it.key, phone: null, typed: it.typed ?? [], ok: it.ok?.flatMap((x) => x ?? []) ?? null }}
+          it={it}
+          g={part ? one : (one ?? it.got)}
+          edit={!inClass}
+          one
+          label={part && it.teach < it.max ? "Marks for the parts the phone left" : undefined}
+          onMark={(g) => tap(() => setOne(g))}
+        />
+        {part && it.teach < it.max && (
+          <PartRow
+            p={{ p: "", m: it.max - it.teach, key: "", phone: it.phoneGot, typed: [], ok: null }}
+            it={it}
+            g={phoneOne}
+            edit={!inClass}
+            one
+            bare
+            label={`The phone's parts: it gave ${it.phoneGot}/${it.max - it.teach}. Change it if his paper shows more`}
+            onMark={(g) => tap(() => setPhoneOne(g))}
+          />
+        )}
+      </>
+    );
   const kindWords = it.said ? "his reason to read" : part ? "to mark" : "wrong answer";
   const canRetake = !it.said && it.urls.length > 0;
   return (
@@ -507,60 +556,20 @@ function HomeCard(props: {
             Corrected in class already{it.got !== null ? ` (${it.got}/${it.max})` : ""}: Close it.{lost ? " Evaluation explains it in class." : ""}
           </p>
         )}
-        <ul class="fc-parts hl-parts">
-          {it.split ? (
-            it.parts.map((p, j) => (
-              <PartRow
-                key={j}
-                p={p}
-                it={it}
-                g={marks[j]}
-                edit={edit}
-                one={it.parts.length === 1}
-                label={part && p.phone !== null ? `The phone gave ${p.phone}/${p.m}: change it if his paper shows more` : undefined}
-                onMark={(g) =>
-                  tap(() => {
-                    const next = [...marks];
-                    next[j] = g;
-                    setMarks(next);
-                  })
-                }
-              />
-            ))
-          ) : (
-            // The parts can't take their own marks (the phone read it differently at his Check): one row, as then; a part
-            // question's phone parts in a row of their own under it (hers to change too).
-            <>
-              <PartRow
-                p={{ p: "", m: part ? it.teach : it.max, key: it.key, phone: null, typed: it.typed ?? [], ok: it.ok?.flatMap((x) => x ?? []) ?? null }}
-                it={it}
-                g={part ? one : (one ?? it.got)}
-                edit={!inClass}
-                one
-                label={part && it.teach < it.max ? "Marks for the parts the phone left" : undefined}
-                onMark={(g) => tap(() => setOne(g))}
-              />
-              {part && it.teach < it.max && (
-                <PartRow
-                  p={{ p: "", m: it.max - it.teach, key: "", phone: it.phoneGot, typed: [], ok: null }}
-                  it={it}
-                  g={phoneOne}
-                  edit={!inClass}
-                  one
-                  bare
-                  label={`The phone's parts: it gave ${it.phoneGot}/${it.max - it.teach}. Change it if his paper shows more`}
-                  onMark={(g) => tap(() => setPhoneOne(g))}
-                />
-              )}
-            </>
-          )}
-        </ul>
+        {/* The printed question's icon on (13 Nov 2026, his ask: "the question, then the answer ... same like in the
+            thread"): each part's row (the key, what he typed, her marks) under its own sub-question. */}
+        {shown.open ? (
+          <BookQuestion unitId={it.unit.id} stage="master" q={it.q} parts={it.split ? it.parts.map((p) => p.p) : []}>
+            {rows(true)}
+          </BookQuestion>
+        ) : (
+          <ul class="fc-parts hl-parts">{rows(false)}</ul>
+        )}
         <label class="phq-words hl-words">
           <span class="phq-lab">Your words (optional, he reads them)</span>
           <input type="text" maxLength={NOTE_MAX} value={note} onInput={(e) => setNote((e.target as HTMLInputElement).value)} />
         </label>
         {err && <p class="phq-err">{err}</p>}
-        {shown.open && <BookQuestion unitId={it.unit.id} stage="master" q={it.q} />}
       </section>
 
       <div class="fc-pad hl-pad">
@@ -662,11 +671,14 @@ function HomeCard(props: {
 }
 
 /**
- * One part: its label, the key's answer big, what he typed (right in blue, wrong in red), then its marks in one row
- * under it, the same place on every part (Correction's card). A part the phone marked, in a part question: its marks
- * as the phone gave them, not hers to change.
+ * One part: its label, the key's answer big, what he typed (in a box of its own, 13 Nov 2026, his words: "student
+ * answers look like part of the answer key ... no color code or any boxes or outline": outlined green when all right,
+ * red when any is wrong, each box ✓ / ✗), then its marks in one row under it, the same place on every part
+ * (Correction's card). A part the phone marked, in a part question: its marks as the phone gave them, not hers to
+ * change. `slot`: its place in the printed question (the icon on).
  */
 function PartRow(props: {
+  slot?: string;
   p: HomePart;
   it: PhotoItem;
   g: number | null;
@@ -681,7 +693,7 @@ function PartRow(props: {
   const reason = it.reasons.find((r) => r.p === p.p);
   const name = p.p || "";
   return (
-    <li class={`fc-part hl-part${props.one || !name ? " hl-one" : ""}${props.edit ? "" : " hl-ro"}`}>
+    <li class={`fc-part hl-part${props.one || !name ? " hl-one" : ""}${props.edit ? "" : " hl-ro"}`} slot={props.slot}>
       {!props.one && name && <em class="fc-pl">{name}</em>}
       <div class="hl-pans">
         {props.bare ? null : p.key ? (
@@ -690,19 +702,30 @@ function PartRow(props: {
           <p class="fc-anote">{it.key ? "Not in the key for this part: check it yourself." : "No answer key: check his answer yourself."}</p>
         )}
         {reason ? (
-          <p class="hl-typed">
-            <b>{reason.yes}</b> <span class="hl-said">{reason.text || <span class="muted">(no reason written)</span>}</span>
-          </p>
+          <div class="hl-typed tch">
+            <small class="hl-tl">His reason</small>
+            <p>
+              <b>{reason.yes}</b> <span class="hl-said">{reason.text || <span class="muted">(no reason written)</span>}</span>
+            </p>
+          </div>
         ) : (
           p.typed.some((x) => x) && (
-            <p class="hl-typed">
-              <span class="muted">He typed</span>{" "}
-              {p.typed.map((x, i) => (
-                <b key={i} class={p.ok?.[i] ? "hl-ok" : "hl-bad"}>
-                  {x || "(empty)"}
-                </b>
-              ))}
-            </p>
+            <div class={`hl-typed ${typedTone(p)}`}>
+              <small class="hl-tl">He typed</small>
+              <p>
+                {p.typed.map((x, i) => {
+                  const ok = p.ok?.[i];
+                  return (
+                    <b key={i} class={p.ok === null ? "hl-tch" : ok ? "hl-ok" : "hl-bad"}>
+                      {p.ok !== null && (
+                        <i aria-hidden="true">{ok ? "✓" : "✗"}</i>
+                      )}
+                      {x || "(empty)"}
+                    </b>
+                  );
+                })}
+              </p>
+            </div>
           )
         )}
         {props.label && <p class="hl-plab">{props.label}</p>}
@@ -734,6 +757,9 @@ function PartRow(props: {
     </li>
   );
 }
+
+/** His typed answer's box: "ok" every box right, "no" any wrong, "tch" the teacher's to judge (no key marked it). */
+const typedTone = (p: HomePart) => (p.ok === null ? "tch" : p.typed.every((_, i) => p.ok![i]) ? "ok" : "no");
 
 // ---- His photos: big, turned with ↻, full screen with a tap ----
 

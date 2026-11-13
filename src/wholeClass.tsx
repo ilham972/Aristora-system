@@ -15,7 +15,7 @@ import { useEffect, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { mutate } from "./backend";
-import { BookQuestion, useQuestionShown } from "./bookQuestion";
+import { useQuestionShown } from "./bookQuestion";
 import type { View } from "./derive";
 import { unitNo } from "./focusData";
 import { HRow } from "./hrow";
@@ -273,7 +273,7 @@ function Lesson(props: { unit: Unit; kind: Kind; grade: number }) {
   ) : (
     `Level ${lesson.label.slice(1)}`
   );
-  const answer = (big: boolean) => (
+  const answer = (big: boolean, inline = false) => (
     <div class="fc-ans">
       <CardAnswer
         unitId={unit._id}
@@ -283,6 +283,7 @@ function Lesson(props: { unit: Unit; kind: Kind; grade: number }) {
         noKey={big ? "" : "No answer key for this theory book yet."}
         max={big ? 72 : undefined}
         maxH={big ? 210 : undefined}
+        inline={inline}
       />
     </div>
   );
@@ -386,8 +387,7 @@ function Lesson(props: { unit: Unit; kind: Kind; grade: number }) {
               setTeaching(true);
             }}
           />
-          {answer(false)}
-          {printed.open && <BookQuestion unitId={unit._id} stage={kind} q={q} />}
+          {answer(false, printed.open)}
         </section>
       )}
       {!teaching && pad}

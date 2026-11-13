@@ -80,11 +80,15 @@ const samePart = (key: string, printed: string) => {
  * matched by its label: the whole of the key's label or its last word, "a ii" → "ii", in printed order), and one slot at
  * the end for the parts that match none (a Part I question, a part printed without a label). The family app's part
  * rows are the host's children with `slot="pN"`: they stay the app's (its style, its taps). Parts the key cut from one
- * printed sub-question ("ii · பெயர்", "ii · சுற்றளவு") go under it one after the other.
+ * printed sub-question ("ii · பெயர்", "ii · சுற்றளவு") go under it one after the other. `ladder` (13 Nov 2026, the
+ * teachers' cards only): a theory book's ladder sub-questions too (`.sq` with its label `.sl`, "(i)").
  */
-export function slotParts(box: HTMLElement, parts: string[]): void {
-  const blocks = [...box.querySelectorAll<HTMLElement>(".rp")].filter((b) => b.querySelector(".rl"));
-  const labelled = (el: Element) => (el.matches(".rp") ? !!el.querySelector(".rl") : !!el.querySelector(".rp .rl"));
+export function slotParts(box: HTMLElement, parts: string[], ladder = false): void {
+  const B = ladder ? ".rp, .sq" : ".rp";
+  const L = ladder ? ".rl, .sl" : ".rl";
+  const own = (b: Element) => !!b.querySelector(L);
+  const blocks = [...box.querySelectorAll<HTMLElement>(B)].filter(own);
+  const labelled = (el: Element) => (el.matches(B) ? own(el) : [...el.querySelectorAll(B)].some(own));
   let from = 0;
   let waiting: HTMLSlotElement[] = []; // parts printed without a label of their own (in a lead's words, G8 U01 Q70 அ)
   let last: { key: string; slot: HTMLSlotElement } | null = null; // the part before, when it found its sub-question
@@ -98,7 +102,7 @@ export function slotParts(box: HTMLElement, parts: string[]): void {
       return;
     }
     for (let j = from; j < blocks.length; j++) {
-      if (!samePart(p, blocks[j].querySelector(".rl")?.textContent ?? "")) continue;
+      if (!samePart(p, blocks[j].querySelector(L)?.textContent ?? "")) continue;
       // The parts before it that matched no label: just before this sub-question, still in their order.
       for (const w of waiting) blocks[j].parentElement?.insertBefore(w, blocks[j]);
       waiting = [];
@@ -120,16 +124,17 @@ export function slotParts(box: HTMLElement, parts: string[]): void {
 /**
  * Draws one question (its HTML and its book's CSS) into `host`'s shadow root, with `extraCss` after the phone's rules
  * (the family app's paper look), and with `parts` (its parts' labels) a place for each part's answers under its
- * sub-question (`slotParts`). Returns the clean-up (stops fitting figures when the host resizes).
+ * sub-question (`slotParts`; `ladder`: a theory book's sub-questions too). Returns the clean-up (stops fitting figures
+ * when the host resizes).
  */
-export function drawQuestion(host: HTMLElement, html: string, css: string, extraCss = "", parts?: string[]): () => void {
+export function drawQuestion(host: HTMLElement, html: string, css: string, extraCss = "", parts?: string[], ladder = false): () => void {
   const root = host.shadowRoot ?? host.attachShadow({ mode: "open" });
   const style = document.createElement("style");
   style.textContent = `${css}\n${PHONE_CSS}\n${extraCss}`;
   const box = document.createElement("div");
   box.className = "qv";
   box.appendChild(safeFragment(html));
-  if (parts) slotParts(box, parts);
+  if (parts) slotParts(box, parts, ladder);
   root.replaceChildren(style, box);
   const fit = () => {
     const w = box.clientWidth - 16;

@@ -93,7 +93,7 @@ import { HRow } from "./hrow";
 import { useQuery } from "./live";
 import { MasterBook, TheorySheet } from "./master";
 import { BookQuestion, useQuestionShown } from "./bookQuestion";
-import { CardHead } from "./qcard";
+import { CardHead, KeyView } from "./qcard";
 import { BigAnswer } from "./bigAnswer";
 import { MoveSheet } from "./move";
 import { bookDocAt,
@@ -2235,6 +2235,51 @@ function QuestionCard(props: {
   };
   const tone = offer.dk ? "dk" : offer.g === max ? "full" : offer.g === 0 ? "zero" : "part";
   const shown = useQuestionShown(bookId(v), "master");
+  const inline = shown.open;
+  const keyNote = props.keyLoading
+    ? "Loading the answer…"
+    : props.noKey
+      ? "No answer key for this workbook yet: check his answer yourself."
+      : !k
+        ? "This question isn't in the answer key: check his answer yourself."
+        : undefined;
+  // Each part's row: its answer big, then its marks; in the printed question (its icon on) under its own sub-question.
+  const partRows = parts?.map((p, j) => {
+    const isBlank = blanks.includes(p.p);
+    return (
+      <li key={j} class={`fc-part${isBlank ? " blank" : ""}`} slot={inline ? `p${j}` : undefined}>
+        <em class="fc-pl">{p.p}</em>
+        <BigAnswer text={p.a} max={44} maxH={110} />
+        <span class="fc-pm" style={{ "--n": String(p.m! + 2) }} role="group" aria-label={`Part ${p.p}, out of ${p.m}`}>
+          <button
+            type="button"
+            class={`fc-pb dk${isBlank ? " on" : ""}`}
+            aria-pressed={isBlank}
+            aria-label={`Part ${p.p}: ? left blank`}
+            onClick={() => blankPart(j)}
+          >
+            ?
+          </button>
+          {Array.from({ length: p.m! + 1 }, (_, g) => {
+            const on = !isBlank && pm?.[j] === g;
+            return (
+              <button
+                key={g}
+                type="button"
+                class={`fc-pb${on ? " on" : ""}${g === p.m ? " full" : g === 0 ? " zero" : ""}`}
+                aria-pressed={on}
+                aria-label={`Part ${p.p}: ${g} of ${p.m}`}
+                onClick={() => setPart(j, g)}
+              >
+                {g}
+              </button>
+            );
+          })}
+        </span>
+      </li>
+    );
+  });
+
   const back = i > 0 ? { label: `Q${qs[i - 1]}`, short: String(qs[i - 1]), go: () => setPaper({ ...paper, at: i - 1 }) } : null;
   if (isFreeQ(v, q)) {
     // Out of the syllabus (the owner's free marks, 5 Nov 2026): its marks are given; she only goes on.
@@ -2287,69 +2332,22 @@ function QuestionCard(props: {
         />
         <TeachLine v={v} level={paper.level} q={q} />
         {!parts && (
+          // The printed question's icon on (13 Nov 2026): the question, each part's answer under its own sub-question.
           <div class="fc-ans">
-            {props.keyLoading ? (
-              <p class="fc-anote">Loading the answer…</p>
-            ) : props.noKey ? (
-              <p class="fc-anote">No answer key for this workbook yet: check his answer yourself.</p>
-            ) : !k ? (
-              <p class="fc-anote">This question isn't in the answer key: check his answer yourself.</p>
-            ) : k.parts?.length ? (
-              <ul class="fc-parts">
-                {k.parts.map((p, j) => (
-                  <li key={j} class="fc-part">
-                    <em class="fc-pl">{p.p}</em>
-                    <BigAnswer text={p.a} max={44} maxH={110} />
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <BigAnswer text={k.a ?? ""} />
-            )}
+            {keyNote && !inline ? <p class="fc-anote">{keyNote}</p> : <KeyView k={keyNote ? null : (k ?? null)} note={keyNote} at={inline ? { unitId: bookId(v)!, stage: "master", q } : null} />}
           </div>
         )}
-        {parts && (
+        {parts &&
           // Each part: its answer big, then its marks in one row under it (the same place on every part). He taps only
-          // a part that lost marks (or ? when he left it blank); the big button adds up.
-          <ul class="fc-parts">
-            {parts.map((p, j) => {
-              const isBlank = blanks.includes(p.p);
-              return (
-                <li key={j} class={`fc-part${isBlank ? " blank" : ""}`}>
-                  <em class="fc-pl">{p.p}</em>
-                  <BigAnswer text={p.a} max={44} maxH={110} />
-                  <span class="fc-pm" style={{ "--n": String(p.m! + 2) }} role="group" aria-label={`Part ${p.p}, out of ${p.m}`}>
-                    <button
-                      type="button"
-                      class={`fc-pb dk${isBlank ? " on" : ""}`}
-                      aria-pressed={isBlank}
-                      aria-label={`Part ${p.p}: ? left blank`}
-                      onClick={() => blankPart(j)}
-                    >
-                      ?
-                    </button>
-                    {Array.from({ length: p.m! + 1 }, (_, g) => {
-                      const on = !isBlank && pm?.[j] === g;
-                      return (
-                        <button
-                          key={g}
-                          type="button"
-                          class={`fc-pb${on ? " on" : ""}${g === p.m ? " full" : g === 0 ? " zero" : ""}`}
-                          aria-pressed={on}
-                          aria-label={`Part ${p.p}: ${g} of ${p.m}`}
-                          onClick={() => setPart(j, g)}
-                        >
-                          {g}
-                        </button>
-                      );
-                    })}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-        {shown.open && <BookQuestion unitId={bookId(v)!} stage="master" q={q} />}
+          // a part that lost marks (or ? when he left it blank); the big button adds up. Icon on: each row under its own
+          // printed sub-question.
+          (inline ? (
+            <BookQuestion unitId={bookId(v)!} stage="master" q={q} parts={parts.map((p) => p.p)}>
+              {partRows}
+            </BookQuestion>
+          ) : (
+            <ul class="fc-parts">{partRows}</ul>
+          ))}
       </section>
 
       <div class="fc-pad">
@@ -2781,9 +2779,8 @@ function FighterCard(props: { v: View; paper: FighterPaper; i: number; lock: { c
           <p class="fc-anote">{redo}</p>
         ) : null}
         <div class="fc-ans">
-          <FighterAnswer unitId={bookId(v)} q={q} />
+          <FighterAnswer unitId={bookId(v)} q={q} inline={printed.open} />
         </div>
-        {printed.open && <BookQuestion unitId={bookId(v)!} stage="fighter" q={q} />}
       </section>
 
       <div class="fc-pad">
@@ -2826,30 +2823,28 @@ function FighterCard(props: { v: View; paper: FighterPaper; i: number; lock: { c
 }
 
 /** A theory book's answer, big: its key comes with a topic tute; a book without one sends her to his notebook. */
-function FighterAnswer(props: { unitId: string | null | undefined; q: number }) {
+/** A theory book's answer from its key; `inline` (the printed question's icon on, 13 Nov 2026): under its sub-questions. */
+function FighterAnswer(props: { unitId: string | null | undefined; q: number; inline: boolean }) {
   if (!props.unitId || !bookDocAt(props.unitId, "fighter")?.keyCount) {
-    return <p class="fc-anote">No answer key for this book: check his answer in the notebook.</p>;
+    const note = <p class="fc-anote">No answer key for this book: check his answer in the notebook.</p>;
+    return props.inline && props.unitId ? (
+      <>
+        {note}
+        <BookQuestion unitId={props.unitId} stage="fighter" q={props.q} />
+      </>
+    ) : (
+      note
+    );
   }
-  return <FighterKey unitId={props.unitId} q={props.q} />;
+  return <FighterKey unitId={props.unitId} q={props.q} inline={props.inline} />;
 }
 
-function FighterKey(props: { unitId: string; q: number }) {
+function FighterKey(props: { unitId: string; q: number; inline: boolean }) {
   const keyQ = useQuery<{ answers: KeyAnswer[] } | null>(api.catalog.key, { unitId: props.unitId as Id<"units">, stage: "fighter" });
   if (keyQ === undefined) return <p class="fc-anote">Loading the answer…</p>;
-  const k = keyQ?.answers.find((a) => a.q === props.q);
-  if (!k) return <p class="fc-anote">This question isn't in the answer key: check his answer in the notebook.</p>;
-  return k.parts?.length ? (
-    <ul class="fc-parts">
-      {k.parts.map((p, j) => (
-        <li key={j} class="fc-part">
-          <em class="fc-pl">{p.p}</em>
-          <BigAnswer text={p.a} max={44} maxH={110} />
-        </li>
-      ))}
-    </ul>
-  ) : (
-    <BigAnswer text={k.a ?? ""} />
-  );
+  const k = keyQ?.answers.find((a) => a.q === props.q) ?? null;
+  const at = props.inline ? { unitId: props.unitId, stage: "fighter" as const, q: props.q } : null;
+  return <KeyView k={k} note="This question isn't in the answer key: check his answer in the notebook." at={at} />;
 }
 
 /** The next question Correction marks after the i-th (teacher questions are Theory's), or the end of the paper. */

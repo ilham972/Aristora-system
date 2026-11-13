@@ -31,7 +31,7 @@ import { useQuery } from "./live";
 import { MasterStrip } from "./master";
 import { useRoomDecisions } from "./roomDecisions";
 import { BackToRoom, GradeRow, KindBar, LessonName, LockIcon, useHeld, usePinned } from "./roomkit";
-import { BookQuestion, useQuestionShown } from "./bookQuestion";
+import { useQuestionShown } from "./bookQuestion";
 import { CardAnswer, CardHead, PrintedQuestion, QPill, TeachMode } from "./qcard";
 import { scoreOf } from "./score";
 import { act, bookDocAt, clearToasts, currentMe, currentRole, toast, type Board } from "./store";
@@ -445,7 +445,7 @@ export function TheoryTab(props: { board: Board; views: View[]; now: number }) {
     </>
   );
   /** The answer, big (bigger in teaching mode): a workbook's from its key; a theory book's when its key is in the app. */
-  const answer = (big: boolean) =>
+  const answer = (big: boolean, inline = false) =>
     !sq || typeof sq.q !== "number" || !sq.unit ? null : (
       <div class="fc-ans">
         <CardAnswer
@@ -456,6 +456,7 @@ export function TheoryTab(props: { board: Board; views: View[]; now: number }) {
           noKey={big ? "" : "The teacher's question of his book: teach it, then the next."}
           max={big ? 72 : undefined}
           maxH={big ? 210 : undefined}
+          inline={inline}
         />
       </div>
     );
@@ -633,8 +634,7 @@ export function TheoryTab(props: { board: Board; views: View[]; now: number }) {
               onTeach={typeof sq.q === "number" ? openTeach : undefined}
             />
             <p class="evx-who">{who}</p>
-            {answer(false)}
-            {printed.open && typeof sq.q === "number" && sq.unit && <BookQuestion unitId={sq.unit._id} stage={sqStage} q={sq.q} />}
+            {answer(false, printed.open)}
             {note}
           </section>
         )}

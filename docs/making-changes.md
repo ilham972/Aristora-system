@@ -860,3 +860,9 @@ EOF
   written straight on the server (`t.mutation`, not from a page) reach an open page only after `await backend.push()`
   (the lane's names come from the board's views: without it the new student's name never shows). Never call a test
   helper that uses `raw.run` inside another `raw.run`: it waits on itself until the 120 s timeout.
+- **Rows inside a printed question** (13 Nov 2026, the icon on): they are the page's own light-DOM children of the
+  `.bq-view` host, shown through named slots in its shadow root. The app's CSS reaches them (select them as
+  `.bq-inline > …`), but their inherited font, colour and list style come from the shadow tree (the book's 10 pt Tamil,
+  a list item's bullet): set those on `.bq-inline > *`. Switching between the plain list (loading) and the host must
+  change the element (`key`), or old slots stay. A test of where a row landed: `assignedSlot`, then the labelled block
+  before it (`inlineRows` in `tests/e2e/class.e2e.ts`); a one-answer question's slot sits after the whole question.

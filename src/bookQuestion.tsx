@@ -1,8 +1,12 @@
-// One printed question, as the book draws it (teachers only), under Correction's, Evaluation's and Theory's question
-// card (its icon in the card's top line), and big in teaching mode (src/qcard.tsx).
+// One printed question, as the book draws it (teachers only), on Correction's, Evaluation's, Theory's, Consultation's
+// and the desk's question card (its icon in the card's top line), and big in teaching mode (src/qcard.tsx).
 // - Fetched while open: the question (catalog.question) and its book's CSS (catalog.bookCss, once per book).
 // - Drawn by src/questionView.ts (shared with the family app): a shadow root, cleaned again, figures fitted.
+// - Inline (13 Nov 2026, his ask: "the question, then the answer, the question and the answer ... same like in the
+//   thread"): with `parts`, the card's own answer rows (the key, what he typed, the marks) sit right under their own
+//   sub-question (`slotParts`, as the thread does); a row with no part of its own goes after the whole question.
 
+import type { ComponentChildren } from "preact";
 import { useLayoutEffect, useRef, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
@@ -12,22 +16,43 @@ import { bookDocAt } from "./store";
 
 type Stage = "fighter" | "master";
 
-/** One question drawn as printed; `null` from the server = not in the app. */
-export function BookQuestion(props: { unitId: string; stage: Stage; q: number }) {
+/**
+ * One question drawn as printed; `null` from the server = not in the app. With `parts` (the key's part labels, in its
+ * order) the children are the card's answer rows, each with `slot="p<i>"` (its part) or none (after the question):
+ * they stay the page's own elements (its styles, its taps). Until the question is there they show as a plain list.
+ */
+export function BookQuestion(props: { unitId: string; stage: Stage; q: number; parts?: string[]; children?: ComponentChildren }) {
   const unitId = props.unitId as Id<"units">;
   const css = useQuery<{ css: string } | null>(api.catalog.bookCss, { unitId, stage: props.stage });
   const qq = useQuery<{ html: string } | null>(api.catalog.question, { unitId, stage: props.stage, q: props.q });
   const host = useRef<HTMLDivElement>(null);
+  const inline = props.parts !== undefined;
+  const sig = props.parts?.join("\n") ?? "";
 
   useLayoutEffect(() => {
     const el = host.current;
     if (!el || !qq || !css) return;
-    return drawQuestion(el, qq.html, css.css);
-  }, [qq, css]);
+    return drawQuestion(el, qq.html, css.css, "", props.parts, true);
+  }, [qq, css, sig]);
 
-  if (qq === null || css === null) return <p class="muted small bq-none">This question isn't in the app yet: upload the book's zip again.</p>;
-  if (qq === undefined || css === undefined) return <p class="muted small bq-none">Loading the question…</p>;
-  return <div class="bq-view" ref={host} aria-label={`Question ${props.q} as printed`} />;
+  const flat = (words: string) => (
+    // The answers stay usable while the question loads (or when it isn't in the app): a plain list, as when closed.
+    <div class="bq-flat" key="flat">
+      <p class="muted small bq-none">{words}</p>
+      {props.children}
+    </div>
+  );
+  if (qq === null || css === null) {
+    const words = "This question isn't in the app yet: upload the book's zip again.";
+    return inline ? flat(words) : <p class="muted small bq-none">{words}</p>;
+  }
+  if (qq === undefined || css === undefined) return inline ? flat("Loading the question…") : <p class="muted small bq-none">Loading the question…</p>;
+  return (
+    // Keyed by the question: a new question gets a new host (its shadow root drawn fresh, the rows slotted again).
+    <div class={`bq-view${inline ? " bq-inline" : ""}`} key={`${props.unitId}:${props.stage}:${props.q}`} ref={host} aria-label={`Question ${props.q} as printed`}>
+      {inline && props.children}
+    </div>
+  );
 }
 
 let shownHere = false; // stays open from one question to the next on this phone (until the page reloads)

@@ -24,7 +24,7 @@ import { slDayStart } from "../convex/lib/day";
 import { joinNames } from "./announce";
 import { fetchOnce, mutate } from "./backend";
 import { NobodyHere } from "./board";
-import { BookQuestion, useQuestionShown } from "./bookQuestion";
+import { useQuestionShown } from "./bookQuestion";
 import {
   bookLines,
   consultQs,
@@ -549,7 +549,7 @@ export function ConsultPage(props: { board: Board; views: View[]; now: number })
             {!theory && sq.q !== WHOLE && <small> {lostWords(w.v, sq.q)}</small>}
           </span>
         ));
-  const answer = (big: boolean) =>
+  const answer = (big: boolean, inline = false) =>
     !sq ? null : sq.q === WHOLE && sq.v.ms ? (
       <p class="fc-anote">The whole unit was asked for Theory: teach what he needs, then Taught.</p>
     ) : sq.v.unit ? (
@@ -560,6 +560,7 @@ export function ConsultPage(props: { board: Board; views: View[]; now: number })
         noKey={fighterBook && theory ? "The teacher's question of his book: teach it, then the next." : undefined}
         max={big ? 72 : undefined}
         maxH={big ? 210 : undefined}
+        inline={inline}
       />
     ) : (
       <p class="fc-anote">Check his answer in his notebook.</p>
@@ -785,8 +786,7 @@ export function ConsultPage(props: { board: Board; views: View[]; now: number })
               }}
             />
             {section && theory && <p class="tpx-what">{section.id} · {section.tamil || section.title}</p>}
-            <div class="fc-ans">{answer(false)}</div>
-            {printed.open && sq.v.unit && sq.q !== WHOLE && <BookQuestion unitId={sq.v.unit._id} stage={stage} q={sq.q} />}
+            <div class="fc-ans">{answer(false, printed.open && sq.q !== WHOLE)}</div>
             {notes}
           </section>
         )}

@@ -54,7 +54,7 @@ import { MasterStrip } from "./master";
 import { useRoomDecisions } from "./roomDecisions";
 import { callAhead, evalPaceMs, freeIn, noteExplained, noteStart } from "./evalPace";
 import { BackToRoom, GradeRow, KindBar, LockIcon, useHeld, usePinned } from "./roomkit";
-import { BookQuestion, useQuestionShown } from "./bookQuestion";
+import { useQuestionShown } from "./bookQuestion";
 import { CardAnswer, CardHead, PrintedQuestion, QPill, TeachMode } from "./qcard";
 import { scoreOf } from "./score";
 import { act, clearToasts, currentMe, currentRole, toast, type Board } from "./store";
@@ -442,10 +442,10 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
             </span>
           );
         });
-  /** The answer, big (bigger in teaching mode). */
-  const answer = (big: boolean) =>
+  /** The answer, big (bigger in teaching mode); `inline` = under each sub-question of the printed question (its icon). */
+  const answer = (big: boolean, inline = false) =>
     sq?.v.unit ? (
-      <CardAnswer unitId={sq.v.unit._id} q={sq.q} stage={sqStage} max={big ? 72 : undefined} maxH={big ? 210 : undefined} />
+      <CardAnswer unitId={sq.v.unit._id} q={sq.q} stage={sqStage} max={big ? 72 : undefined} maxH={big ? 210 : undefined} inline={inline} />
     ) : (
       <p class="fc-anote">Check his answer in his notebook.</p>
     );
@@ -705,8 +705,7 @@ export function EvaluationPage(props: { board: Board; views: View[]; now: number
               shown={printed}
               onTeach={openTeach}
             />
-            <div class="fc-ans">{answer(false)}</div>
-            {printed.open && sq.v.unit && <BookQuestion unitId={sq.v.unit._id} stage={sqStage} q={sq.q} />}
+            <div class="fc-ans">{answer(false, printed.open)}</div>
             {notes}
           </section>
         )}

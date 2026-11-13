@@ -3,8 +3,8 @@
 // teacher teaches from the whiteboard looking at her phone instead of walking to his book.
 // - CardHead: one top line: the question's number as a dark pill, a short line (marks, who, the section), then the
 //   tools: ‹ back (Correction), teaching mode, the printed question's icon.
-// - CardAnswer: the answer from the key, big (src/bigAnswer.tsx), fetched while it is open; a note in its place when
-//   there is none.
+// - CardAnswer / KeyView: the answer from the key, big (src/bigAnswer.tsx), fetched while it is open; a note in its
+//   place when there is none. The printed question's icon on: the question with each part's answer under it.
 // - TeachButton / TeachMode / PrintedQuestion: the full-screen view and what it shows. The page keeps its state: the
 //   view shows the page's own squares and buttons (Explained / Taught = the next question, as on the page).
 
@@ -72,19 +72,29 @@ export function QPill(props: { label: string }) {
 /**
  * One question's answer, big, from its book's key (teachers only; fetched while the card is open). A theory book
  * without a key: `noKey` (Evaluation: check his notebook; "" = nothing, when a note above already says it), nothing
- * fetched.
+ * fetched. `inline` (the printed question's icon is on, 13 Nov 2026): the question as printed with each part's answer
+ * under its own sub-question (no key: the note, then the question).
  */
-export function CardAnswer(props: { unitId: string; q: number; stage: Stage; noKey?: string; max?: number; maxH?: number; hasKey?: boolean }) {
+export function CardAnswer(props: { unitId: string; q: number; stage: Stage; noKey?: string; max?: number; maxH?: number; hasKey?: boolean; inline?: boolean }) {
   if (props.stage === "fighter" && !(props.hasKey ?? !!bookDocAt(props.unitId, "fighter")?.keyCount)) {
-    return props.noKey === "" ? null : <p class="fc-anote">{props.noKey ?? "Check his answer in his notebook."}</p>;
+    const note = props.noKey === "" ? null : <p class="fc-anote">{props.noKey ?? "Check his answer in his notebook."}</p>;
+    return props.inline ? (
+      <>
+        {note}
+        <BookQuestion unitId={props.unitId} stage={props.stage} q={props.q} />
+      </>
+    ) : (
+      note
+    );
   }
   return <KeyFetch {...props} />;
 }
 
-function KeyFetch(props: { unitId: string; q: number; stage: Stage; noKey?: string; max?: number; maxH?: number; hasKey?: boolean }) {
+function KeyFetch(props: { unitId: string; q: number; stage: Stage; noKey?: string; max?: number; maxH?: number; hasKey?: boolean; inline?: boolean }) {
   const keyQ = useQuery<{ answers: KeyAnswer[] } | null>(api.catalog.key, { unitId: props.unitId as Id<"units">, stage: props.stage });
   if (keyQ === undefined) return <p class="fc-anote">Loading the answer…</p>;
   const k = keyQ?.answers.find((a) => a.q === props.q);
+  const at = props.inline ? { unitId: props.unitId, stage: props.stage, q: props.q } : null;
   if (!k) {
     const words =
       keyQ === null
@@ -92,19 +102,49 @@ function KeyFetch(props: { unitId: string; q: number; stage: Stage; noKey?: stri
           ? (props.noKey ?? "Check his answer in his notebook.")
           : "No answer key for this workbook yet."
         : "This question isn't in the answer key.";
-    return <p class="fc-anote">{words}</p>;
+    return <KeyView k={null} note={words} at={at} />;
   }
-  return k.parts?.length ? (
-    <ul class="fc-parts">
-      {k.parts.map((p, j) => (
-        <li key={j} class="fc-part">
+  return <KeyView k={k} at={at} max={Math.round((props.max ?? 64) * 0.7)} maxH={Math.round((props.maxH ?? 150) * 0.75)} oneMax={props.max} oneMaxH={props.maxH} />;
+}
+
+/**
+ * A key's answer as a card shows it: part by part (each part's name in a chip, its answer big), or one answer big.
+ * With `at` (the printed question's icon on): the question as printed, each part's answer under its own sub-question
+ * and a one-answer question's answer after it, in a box of its own (`.bq-ans`). `k` null: `note` instead of the answer.
+ * Shared by Evaluation, Theory, Consultation, the desk, the whiteboard and Correction's theory books.
+ */
+export function KeyView(props: {
+  k: KeyAnswer | null;
+  note?: string;
+  at: { unitId: string; stage: Stage; q: number } | null;
+  /** A part's answer size; one answer's (undefined = BigAnswer's own). */
+  max?: number;
+  maxH?: number;
+  oneMax?: number;
+  oneMaxH?: number;
+}) {
+  const { k, at } = props;
+  const parts = k?.parts?.length ? k.parts : null;
+  const rows = parts
+    ? parts.map((p, j) => (
+        <li key={j} class="fc-part" slot={at ? `p${j}` : undefined}>
           <em class="fc-pl">{p.p}</em>
-          <BigAnswer text={p.a} max={Math.round((props.max ?? 64) * 0.7)} maxH={Math.round((props.maxH ?? 150) * 0.75)} />
+          <BigAnswer text={p.a} max={props.max ?? 44} maxH={props.maxH ?? 110} />
         </li>
-      ))}
-    </ul>
-  ) : (
-    <BigAnswer text={k.a ?? ""} max={props.max} maxH={props.maxH} />
+      ))
+    : null;
+  if (!at) {
+    if (!k) return <p class="fc-anote">{props.note}</p>;
+    return rows ? <ul class="fc-parts">{rows}</ul> : <BigAnswer text={k.a ?? ""} max={props.oneMax} maxH={props.oneMaxH} />;
+  }
+  return (
+    <BookQuestion unitId={at.unitId} stage={at.stage} q={at.q} parts={parts ? parts.map((p) => p.p) : []}>
+      {rows ?? (
+        <div class="bq-ans">
+          {k ? <BigAnswer text={k.a ?? ""} max={props.oneMax} maxH={props.oneMaxH} /> : <p class="fc-anote">{props.note}</p>}
+        </div>
+      )}
+    </BookQuestion>
   );
 }
 

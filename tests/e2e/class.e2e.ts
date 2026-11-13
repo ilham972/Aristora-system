@@ -170,6 +170,26 @@ const shot = async (p: Page, name: string, full = false) => {
   return p.screenshot({ path: join(SHOTS, `${name}.png`), fullPage: full });
 };
 const said = (p: Page) => p.evaluate(() => (window as unknown as { __said: string[] }).__said);
+/**
+ * The printed question's icon on (13 Nov 2026): each answer row in `.bq-inline`, where it sits: its slot's name, the
+ * printed sub-question it follows (the label of the nearest labelled block before its slot) and whether it is drawn
+ * below that sub-question.
+ */
+const inlineRows = (card: L) =>
+  card.locator(".bq-inline").evaluate((host) =>
+    [...host.children].map((c) => {
+      const slot = (c as HTMLElement).assignedSlot;
+      let b = slot?.previousElementSibling ?? null;
+      while (b && !(b.matches(".rp, .sq") && b.querySelector(".rl, .sl"))) b = b.previousElementSibling;
+      // After the whole question (no sub-question of its own): below the block just before its slot.
+      const above = b ?? slot?.previousElementSibling ?? null;
+      return {
+        slot: slot?.name ?? null,
+        after: b?.querySelector(".rl, .sl")?.textContent?.trim() ?? null,
+        below: !!above && c.getBoundingClientRect().top >= above.getBoundingClientRect().bottom - 1,
+      };
+    }),
+  );
 const hears = async (p: Page, words: string) => {
   try {
     await until(async () => (await said(p)).includes(words), `phone says "${words}"`);
@@ -3147,11 +3167,63 @@ test("Topic tute: one zip = the unit's theory book and workbook, both answer key
   // Class's view of the opened question stays unstyled by the book (its CSS lives only in the shadow root).
   expect(await C.locator(".fc-qn").first().evaluate((el) => getComputedStyle(el).backgroundColor)).not.toBe("rgb(17, 17, 17)");
 
+  // The icon on = the answer inside the question (13 Nov 2026, his ask: "the question, then the answer ... same like
+  // in the thread"): Q2's one answer after the whole question, in its own box.
+  await contains(card.locator(".bq-inline .bq-ans .ka-h"), "A1 B2");
+  expect(await inlineRows(card)).toEqual([{ slot: "", after: null, below: true }]);
+  // Q1 (parts i and ii; a ladder's sub-questions): each part's answer right under its own printed sub-question.
+  await C.locator(".fc-strip .fc-sq").first().click();
+  await textsAre(card.locator(".bq-inline .fc-pl"), ["i", "ii"]);
+  await until(async () => (await inlineRows(card)).length === 2 && (await inlineRows(card))[0].slot === "p0", "Q1's parts slotted");
+  expect(await inlineRows(card)).toEqual([
+    { slot: "p0", after: "(i)", below: true },
+    { slot: "p1", after: "(ii)", below: true },
+  ]);
+  expect(await C.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(C, "t03c-correction-fighter-inline");
+  // The workbook (past papers, Q6 with marks per part): each part's answer and its marks under (i) and (ii); its taps
+  // still mark (they are the page's own buttons, only drawn inside the question).
+  await C.locator(".fc-bk", { has: C.locator("b.st-master") }).click();
+  const mcard = C.locator(".fc-card").first();
+  await textsAre(mcard.locator(".bq-inline > .fc-part .fc-pl"), ["i", "ii"]);
+  await until(async () => (await inlineRows(mcard))[0]?.slot === "p0", "Q6's parts slotted");
+  expect(await inlineRows(mcard)).toEqual([
+    { slot: "p0", after: "i.", below: true },
+    { slot: "p1", after: "ii.", below: true },
+  ]);
+  await mcard.getByRole("button", { name: "Part ii: 3 of 6" }).click();
+  expect(await mcard.getByRole("button", { name: "Part ii: 3 of 6" }).getAttribute("aria-pressed")).toBe("true");
+  for (const [w, h] of [
+    [390, 844],
+    [360, 740],
+    [320, 640],
+  ]) {
+    await C.setViewportSize({ width: w, height: h });
+    expect(await C.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await shot(C, `t03d-correction-master-inline-${w}`, true);
+  }
+  await C.setViewportSize(PHONE.viewport);
+  // Off again: the answers as before, under the card's top line, no question.
+  await mcard.getByRole("button", { name: /^Hide .+ as printed$/ }).click();
+  await count(mcard.locator(".bq-view"), 0);
+  await textsAre(mcard.locator(".fc-parts .fc-pl"), ["i", "ii"]);
+
   // Theory teaches section A from teaching mode (3 Nov 2026): its teacher question as printed, larger than on the card
   // and still inside the phone, then its answer big.
   const T = await phone(backend, "theory");
   await evPick(T, { grade: "OL", stage: "Fighter", unit: "49", group: "A" });
   await contains(T.locator(".evx-card .fc-qn"), "1");
+  // Her card's icon (the same on Evaluation, Consultation and the desk): Q1's answers under (i) and (ii).
+  const tcard = T.locator(".evx-card");
+  await tcard.getByRole("button", { name: /^Show .+ as printed$/ }).click();
+  await until(async () => (await tcard.locator(".bq-inline").count()) === 1 && (await inlineRows(tcard))[0]?.slot === "p0", "Theory's Q1 parts slotted");
+  expect(await inlineRows(tcard)).toEqual([
+    { slot: "p0", after: "(i)", below: true },
+    { slot: "p1", after: "(ii)", below: true },
+  ]);
+  await textsAre(tcard.locator(".bq-inline .ka-h"), ["3", "4"]);
+  expect(await T.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(T, "t10-theory-inline", true);
   await T.locator(".evx-card .fc-tmb").click();
   const tq = T.locator(".tm .tm-q .bq-view");
   await until(
