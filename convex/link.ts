@@ -12,6 +12,8 @@
 //   `tell` (a mutation) saves a unit's key and questions through the same checks as an uploaded zip (`checkKey`, the
 //   safe-HTML rules, `slotProblem`): the book itself (question numbers, levels, marks) is never changed here, so no
 //   student's marks move. Only workbooks (Master). Never a student, a teacher, a mark or a photo.
+// - Skills (13 Nov 2026, convex/lib/skills.ts): `ask` "skills" reads the skills the units have; `tell` "skills" saves one
+//   unit's skills and each question's skill, whole, through `skillsProblem`. Names and numbers only; no mark moves.
 // - The functions are public (the carrier has no sign-in): the seal is the sign-in. An answer says nothing to anyone
 //   without the key, not even whether a link is on.
 
@@ -27,6 +29,7 @@ import { phoneKeyFor } from "./lib/homeWork";
 import { phonePart, phoneShare, readPart } from "./lib/phone";
 import { BOOK_CSS_MAX, QUESTION_HTML_MAX, unsafeCss, unsafeHtml } from "./lib/questions";
 import { answerNonce, fromB64, KEY_BYTES, seal, unseal } from "./lib/seal";
+import { skillCounts, skillHome, skillsProblem, type KnownSkill, type Skill, type SkillFile, type SkillTag } from "./lib/skills";
 
 /** A link works this long, unless the owner turns it off first. */
 export const LINK_DAYS = 7;
@@ -139,6 +142,25 @@ async function questionRows(ctx: QueryCtx, unitId: Id<"units">) {
   return rows.sort((a, b) => a.q - b.q);
 }
 
+/** What one save of a unit's skills takes at most. */
+export const SKILLS_SAVE_MAX = 200_000;
+
+async function skillRows(ctx: QueryCtx) {
+  return (await ctx.db.query("skillTags").collect()).filter((r) => r.stage === "master");
+}
+
+/** The skills a unit's questions may carry besides its own: every other unit's, of its grade or an earlier one. */
+function knownFor(unit: Doc<"units">, rows: Doc<"skillTags">[], units: Doc<"units">[]): Map<string, KnownSkill> {
+  const byId = new Map(units.map((u) => [u._id, u]));
+  const known = new Map<string, KnownSkill>();
+  for (const r of rows) {
+    const u = byId.get(r.unitId);
+    if (!u || u._id === unit._id || u.grade > unit.grade) continue;
+    for (const s of r.skills) known.set(s.id, { unit: u.key, ta: s.ta, en: s.en });
+  }
+  return known;
+}
+
 /** How much of a unit the phone marks by itself, a teacher reads, or asks a photo for (parts and marks). */
 async function shareOf(ctx: QueryCtx, unitId: Id<"units">, data: MasterData, answers: KeyAnswer[] | null) {
   const keys = await phoneKeyFor(ctx, unitId, data, answers);
@@ -170,6 +192,7 @@ export const ask = query({
     if (req.op === "books") {
       const units = await ctx.db.query("units").collect();
       const books = await ctx.db.query("books").collect();
+      const tagged = new Map((await skillRows(ctx)).map((r) => [r.unitId, r.skills.length]));
       return sealed(o, {
         ok: true,
         units: units
@@ -186,6 +209,7 @@ export const ask = query({
               en: u.en,
               ta: u.ta,
               master: m ? { levels: m.levels.length, last: m.parts.length ? m.parts[m.parts.length - 1].to : 0, total: bookTotal(m), keyCount: b!.keyCount ?? 0, qCount: b!.qCount ?? 0, tute: !!b!.tute, updatedAt: b!.updatedAt } : null,
+              skills: tagged.get(u._id) ?? null,
             };
           }),
       });
@@ -203,10 +227,16 @@ export const ask = query({
         .withIndex("by_unit", (x) => x.eq("unitId", m.unit._id))
         .collect();
       const qs = await questionRows(ctx, m.unit._id);
+      const rows = await skillRows(ctx);
+      const mine = rows.find((r) => r.unitId === m.unit._id) ?? null;
       return sealed(o, {
         ok: true,
         unit: { unitId: m.unit._id, key: m.unit.key, grade: m.unit.grade, term: m.unit.term, code: m.unit.code, en: m.unit.en, ta: m.unit.ta },
         data: m.data,
+        // Its skills as saved, and what is wrong with them now ("" = fine: a book or a key replaced since can leave a hole).
+        skills: mine
+          ? { skills: mine.skills, tags: mine.tags, updatedAt: mine.updatedAt, problem: skillsProblem(m.unit.key, m.data, key?.answers ?? null, mine, knownFor(m.unit, rows, await ctx.db.query("units").collect())) }
+          : null,
         answers: key?.answers ?? null,
         keyAt: key?.updatedAt ?? null,
         css: css?.css ?? null,
@@ -232,6 +262,23 @@ export const ask = query({
         size += r.html.length;
       }
       return sealed(o, { ok: true, items, next });
+    }
+    if (req.op === "skills") {
+      // The skills the units have (one grade's, or all): a unit tagged next reuses an id instead of naming a skill twice.
+      const units = await ctx.db.query("units").collect();
+      const rows = await skillRows(ctx);
+      return sealed(o, {
+        ok: true,
+        units: units
+          .filter((u) => typeof req.grade !== "number" || u.grade === req.grade)
+          .sort((a, b) => a.grade - b.grade || a.order - b.order)
+          .flatMap((u) => {
+            const r = rows.find((x) => x.unitId === u._id);
+            if (!r) return [];
+            const n = skillCounts(r.tags);
+            return [{ key: u.key, grade: u.grade, en: u.en, ta: u.ta, updatedAt: r.updatedAt, skills: r.skills.map((s) => ({ ...s, n: n.get(s.id) ?? 0 })) }];
+          }),
+      });
     }
     return sealed(o, { ok: false, error: "The app doesn't know that request." });
   },
@@ -331,9 +378,43 @@ async function saveUnit(ctx: MutationCtx, row: Row, req: Asked, now: number): Pr
   return { ok: true, saved: { answers: s.answers?.length ?? 0, questions: s.items?.length ?? 0, css: s.css !== undefined, fixes }, share };
 }
 
+/** A unit's skills and each question's skill, saved whole (the row before is replaced) once `skillsProblem` finds nothing. */
+async function saveSkills(ctx: MutationCtx, row: Row, req: Asked, now: number): Promise<Record<string, unknown>> {
+  const m = await masterOf(ctx, req.unitId);
+  if (typeof m === "string") return { ok: false, error: m };
+  const file = { skills: req.skills, tags: req.tags } as SkillFile;
+  if (JSON.stringify(file).length > SKILLS_SAVE_MAX) return { ok: false, error: "Too much in one save." };
+  const key = await keyRow(ctx, m.unit._id, "master");
+  const rows = await skillRows(ctx);
+  const units = await ctx.db.query("units").collect();
+  const bad = skillsProblem(m.unit.key, m.data, key?.answers ?? null, file, knownFor(m.unit, rows, units));
+  if (bad) return { ok: false, error: bad };
+  // A skill of this unit that another unit's question carries must stay.
+  const ids = new Set(file.skills.map((s) => s.id));
+  for (const r of rows) {
+    if (r.unitId === m.unit._id) continue;
+    const gone = r.tags.find((t) => skillHome(t.s) === m.unit.key && !ids.has(t.s));
+    if (gone) return { ok: false, error: `${units.find((u) => u._id === r.unitId)?.key} question ${gone.q} carries ${gone.s}: keep that skill, or tag that unit again first.` };
+  }
+  const skills: Skill[] = file.skills.map((s) => ({ id: s.id, ta: s.ta.trim(), en: s.en.trim(), ...(s.eg !== undefined ? { eg: s.eg } : {}) }));
+  const tags: SkillTag[] = file.tags
+    .map((t) => ({ q: t.q, ...(t.p !== undefined ? { p: t.p } : {}), s: t.s }))
+    .sort((a, b) => a.q - b.q || (a.p ?? "").localeCompare(b.p ?? ""));
+  const old = rows.find((r) => r.unitId === m.unit._id);
+  if (old) await ctx.db.patch(old._id, { skills, tags, by: row.by, updatedAt: now });
+  else await ctx.db.insert("skillTags", { unitId: m.unit._id, stage: "master", skills, tags, by: row.by, updatedAt: now });
+  const questions = new Set(tags.map((t) => t.q)).size;
+  const session = await currentSession(ctx, now);
+  await log(ctx, session, now, { kind: "book-save", by: "claude", unit: m.unit.key, value: `Claude link (${row.by}): ${skills.length} skills for ${questions} questions` });
+  await touch(ctx, session, now);
+  const n = skillCounts(tags);
+  return { ok: true, saved: { skills: skills.length, tags: tags.length, questions }, counts: [...n].map(([id, c]) => ({ id, n: c })) };
+}
+
 /**
  * Write (the chat tells): `save` = a unit's key (every question's answer and kind) and the questions whose printed HTML
- * changed, checked like an uploaded zip, all or nothing. Each request once: an older or the same one is refused.
+ * changed, checked like an uploaded zip, all or nothing; `skills` = a unit's skills and each question's skill, whole.
+ * Each request once: an older or the same one is refused.
  */
 export const tell = mutation({
   args: { id: v.string(), box: v.string() },
@@ -343,7 +424,8 @@ export const tell = mutation({
     const o = opened(row, args.box, now);
     if (!o || !row) return NOTHING;
     if (o.t <= (row.last ?? 0)) return sealed(o, { ok: false, error: "That request was already taken (or an older one came after a newer one)." });
-    const answer = o.req.op === "save" ? await saveUnit(ctx, row, o.req, now) : { ok: false, error: "The app doesn't know that request." };
+    const answer =
+      o.req.op === "save" ? await saveUnit(ctx, row, o.req, now) : o.req.op === "skills" ? await saveSkills(ctx, row, o.req, now) : { ok: false, error: "The app doesn't know that request." };
     await ctx.db.patch(row._id, { last: o.t, usedAt: now, uses: (row.uses ?? 0) + 1 });
     return sealed(o, answer);
   },

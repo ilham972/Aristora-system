@@ -485,6 +485,9 @@ export const moveTute = mutation({
       if (keep) await ctx.db.delete(r._id);
       else await ctx.db.patch(r._id, { unitId: to._id });
     }
+    // Its skills are named after the unit it leaves ("G11-U24-S3"): they don't travel; the book is tagged again where
+    // it now lives (convex/lib/skills.ts).
+    for (const r of await ctx.db.query("skillTags").withIndex("by_book", (q) => q.eq("unitId", from._id)).collect()) await ctx.db.delete(r._id);
 
     // The students: their place, their work, the books given, drafts, a paper someone holds, calls.
     const moved = new Set<Id<"students">>();

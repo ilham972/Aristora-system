@@ -197,4 +197,64 @@ describe("the Claude link", () => {
     const lines = await t.query(api.state.history, { limit: 20 });
     expect(lines.some((e: { kind: string; value?: string }) => e.kind === "book-save" && /Claude link \(Owner\): answer kinds for 73 questions, 1 questions as printed/.test(e.value ?? ""))).toBe(true);
   });
+
+  test("skills: a unit's skills and each question's skill, saved whole; another unit carries one; nothing half", async () => {
+    await t.mutation(api.link.open, { id: ID, key: toB64(KEY) });
+    const S = (n: number) => `G8-U01-S${n}`;
+    const skills = [
+      { id: S(1), ta: "முதல் திறன்", en: "A made-up first skill", eg: 1 },
+      { id: S(2), ta: "இரண்டாம் திறன்", en: "A made-up second skill" },
+    ];
+    const tags = Array.from({ length: 73 }, (_, i) => (i + 1 >= 53 ? { q: i + 1, p: "i", s: S(2) } : { q: i + 1, s: S((i % 2) + 1) }));
+    expect((await ask({ op: "unit", unitId: u01 }))!.skills).toBeNull();
+    expect((await ask({ op: "books" }))!.units.find((x: { key: string }) => x.key === "G8-U01").skills).toBeNull();
+    // A question left out, a skill nobody carries, a thing that is no skill: refused, nothing kept.
+    expect((await tell({ op: "skills", unitId: u01, skills, tags: tags.slice(0, 72) }))!.error).toBe("Question 73 has no skill.");
+    expect((await tell({ op: "skills", unitId: u01, skills: [...skills, { id: S(3), ta: "மூன்று", en: "Nobody's" }], tags }))!.error).toMatch(/G8-U01-S3 \(Nobody's\) has no question/);
+    expect((await tell({ op: "skills", unitId: u01, skills: "all", tags }))!.error).toMatch(/needs skills and tags/);
+    expect((await tell({ op: "skills", unitId: "nope", skills, tags }))!.ok).toBe(false);
+    expect((await ask({ op: "unit", unitId: u01 }))!.skills).toBeNull();
+    // Right: saved whole. Words the app doesn't keep (a note) are left out.
+    const saved = await tell({ op: "skills", unitId: u01, skills: skills.map((x) => ({ ...x, note: "not kept" })), tags });
+    expect(saved).toMatchObject({ ok: true, saved: { skills: 2, tags: 73, questions: 73 } });
+    expect(saved!.counts).toEqual(expect.arrayContaining([{ id: S(1), n: 26 }, { id: S(2), n: 47 }]));
+    const unit = await ask({ op: "unit", unitId: u01 });
+    expect(unit!.skills.skills).toEqual(skills);
+    expect(unit!.skills.tags).toHaveLength(73);
+    expect(unit!.skills.problem).toBe("");
+    expect((await ask({ op: "books" }))!.units.find((x: { key: string }) => x.key === "G8-U01").skills).toBe(2);
+    const g8 = await ask({ op: "skills", grade: 8 });
+    expect(g8!.units).toHaveLength(1);
+    expect(g8!.units[0]).toMatchObject({ key: "G8-U01", skills: [{ id: S(1), n: 26, eg: 1 }, { id: S(2), n: 47 }] });
+    expect((await ask({ op: "skills", grade: 7 }))!.units).toEqual([]);
+    // No mark, no key, no question moved.
+    expect((await t.query(api.catalog.key, { unitId: u01 }))!.answers).toHaveLength(73);
+    // Another unit's question carries a skill of this one; then that skill must stay here.
+    const u02 = await raw.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G8-U02")).first())!._id);
+    await t.mutation(api.catalog.saveWorkbook, {
+      unitId: u02,
+      parts: BOOK.data.parts.map((p) => ({ id: p.id, to: p.to, ...(p.each ? { each: p.each } : {}) })),
+      levels: BOOK.data.levels.map((l) => ({ to: l.to, max: l.max })),
+      marks: BOOK.data.marks ?? {},
+      replace: true,
+    });
+    const two = { skills: [{ id: "G8-U02-S1", ta: "வேறு திறன்", en: "A made-up skill of the next unit" }], tags: Array.from({ length: 73 }, (_, i) => ({ q: i + 1, s: i === 0 ? S(2) : "G8-U02-S1" })) };
+    expect((await tell({ op: "skills", unitId: u02, skills: two.skills, tags: two.tags.map((x, i) => (i === 0 ? { ...x, s: "G8-U03-S1" } : x)) }))!.error).toMatch(/skill G8-U03-S1 is not in the app \(tag G8-U03 first/);
+    expect(await tell({ op: "skills", unitId: u02, ...two })).toMatchObject({ ok: true, saved: { skills: 1, questions: 73 } });
+    const without = await tell({ op: "skills", unitId: u01, skills: [skills[0]], tags: tags.map((x) => ({ q: x.q, s: S(1) })) });
+    expect(without!.error).toBe("G8-U02 question 1 carries G8-U01-S2: keep that skill, or tag that unit again first.");
+    expect((await ask({ op: "unit", unitId: u01 }))!.skills.skills).toHaveLength(2);
+    // Saved again, it replaces the row (never a second one); a key that loses a part shows as a problem to fix.
+    expect(await tell({ op: "skills", unitId: u01, skills, tags })).toMatchObject({ ok: true });
+    expect(await raw.run(async (ctx) => (await ctx.db.query("skillTags").collect()).length)).toBe(2);
+    await raw.run(async (ctx) => {
+      const k = (await ctx.db.query("keys").collect()).find((x) => x.unitId === u01)!;
+      await ctx.db.patch(k._id, { answers: k.answers.map((a) => (a.q === 60 ? { q: 60, a: "one answer now" } : a)) });
+    });
+    expect((await ask({ op: "unit", unitId: u01 }))!.skills.problem).toBe('Question 60: the key has no part "i" (tag the whole question).');
+    // Without the key: nothing. The history says who.
+    expect(await tell({ op: "skills", unitId: u01, skills, tags }, OTHER)).toBeNull();
+    const lines = await t.query(api.state.history, { limit: 30 });
+    expect(lines.some((e: { kind: string; value?: string }) => e.kind === "book-save" && /Claude link \(Owner\): 2 skills for 73 questions/.test(e.value ?? ""))).toBe(true);
+  });
 });

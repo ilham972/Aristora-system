@@ -66,6 +66,7 @@ import type * as lib_raceRows from "../lib/raceRows.js";
 import type * as lib_seal from "../lib/seal.js";
 import type * as lib_sha256 from "../lib/sha256.js";
 import type * as lib_sim from "../lib/sim.js";
+import type * as lib_skills from "../lib/skills.js";
 import type * as lib_status from "../lib/status.js";
 import type * as lib_syllabus from "../lib/syllabus.js";
 import type * as lib_timeline from "../lib/timeline.js";
@@ -158,6 +159,7 @@ declare const fullApi: ApiFromModules<{
   "lib/seal": typeof lib_seal;
   "lib/sha256": typeof lib_sha256;
   "lib/sim": typeof lib_sim;
+  "lib/skills": typeof lib_skills;
   "lib/status": typeof lib_status;
   "lib/syllabus": typeof lib_syllabus;
   "lib/timeline": typeof lib_timeline;

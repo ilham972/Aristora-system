@@ -2236,6 +2236,26 @@ learning app of our education institute"): one profile, his class times, what he
   public on purpose (the carrier has no sign-in): the seal is the sign-in. A box the key didn't seal, a link that is
   off or past its 7 days, a request older than 30 minutes: an empty answer, nothing said. A save is taken once (its
   time must be newer than the last one taken).
+- **Skills** (13 Nov 2026, his words after 900 wrong questions waited on 15 Grade 8 students: "instead of find common
+  questions, we have to find the common skills ... if someone getting wrong for same skill again and again, we don't
+  need to teach again and again that question. We just teach the skill"; `convex/lib/skills.ts`). Every question of a
+  workbook carries **one skill**: the method that decides it, something a teacher explains in a few minutes with one
+  example ("Add two negative numbers", never "Directed numbers"); a long question carries one skill for the whole
+  question, or one for each part the key names, when its parts need different methods. A unit's row in `skillTags`
+  (one per book): `skills` = its own, id "<unit key>-S<n>" ("G8-U05-S3"), a Tamil and an English name, `eg` = the
+  question a lesson shows; `tags` = `{q, p?, s}`. A question that needs a skill of another unit of its grade or an
+  earlier one carries that unit's id (his "some skills are common for both units"): one skill, taught once. Saved
+  **whole** through the Claude link (`tell` op "skills", all or nothing, `skillsProblem`: this unit's ids, each once,
+  both names, each carried by a question; every question tagged, never both ways; a part only by the key's label; a
+  skill of another unit must be in the app; an example question must carry its skill), and a skill another unit's
+  question carries can't be taken out. `ask` "unit" gives a unit's row with what is wrong with it **now** (`problem`:
+  a key or a book replaced since can leave a hole), `ask` "skills" the skills the units have (a grade's or all, each
+  with how many questions carry it), `ask` "books" how many skills each unit has. Names and numbers only: never a
+  question's words, a student or a mark; no marking changes. The history: "Claude link (Owner): 9 skills for 73
+  questions". `skillOf(tags, q, p)` reads a tag (the part's own first, then the whole question's). **Nothing in the
+  app reads the tags yet** (13 Nov): the lesson queue by skill (the Master page's successor), the second try at once
+  and the proof after a lesson are the next builds. The tagging itself is a chat's work, a unit a chat, made for a
+  small model: `scripts/skills.ts` (docs/making-changes.md, "Tag a unit's skills") and the **skill-tags** skill.
 - The server marks with the uploaded answer keys (`convex/lib/phone.ts`; a key without kinds, version 1): numbers,
   several numbers, answers in n (same values for n = 1..7), labelled answers (x = 52), "also accepted" notes. Since 4 Nov 2026 (his screenshot: "0.25 as a
   percentage" was the teacher's, so whole Percentages Stages were): a number with its unit (25%, 45°, −3 °C, 12 cm,

@@ -26,7 +26,7 @@ import { unsafeHtml } from "../convex/lib/questions";
 import { exchange, type Req } from "./claude-link";
 import type { Decision, Kinds, Op, Spec, Split } from "./digitize-kinds";
 
-type Unit = {
+export type Unit = {
   ok: true;
   unit: { unitId: string; key: string; grade: number; term: number; code: string; en: string; ta: string };
   data: MasterData;
@@ -35,19 +35,21 @@ type Unit = {
   fixes: { q: number; p: string; a: string }[];
   questions: { q: number; size: number }[];
   share: Record<string, unknown>;
+  /** Its skills as the app has them (scripts/skills.ts), and what is wrong with them now ("" = fine). */
+  skills?: { skills: { id: string; ta: string; en: string; eg?: number }[]; tags: { q: number; p?: string; s: string }[]; updatedAt: number; problem: string } | null;
 };
 
 const repo = resolve(import.meta.dirname, "..");
-const outside = (p: string) => {
+export const outside = (p: string) => {
   if (resolve(p).startsWith(repo + "/")) throw new Error("Keep his books outside the repo (the scratchpad).");
   return resolve(p);
 };
-const readJson = <T>(p: string): T => JSON.parse(readFileSync(p, "utf8")) as T;
+export const readJson = <T>(p: string): T => JSON.parse(readFileSync(p, "utf8")) as T;
 
 // ---------------------------------------------------------------- pull
 
 /** The app's list of units (asked once an hour at most: each ask is a minute on the carrier). */
-async function bookList(dir: string, fresh = false): Promise<Record<string, any>> {
+export async function bookList(dir: string, fresh = false): Promise<Record<string, any>> {
   mkdirSync(dir, { recursive: true });
   const file = join(dir, "books.json");
   if (!fresh && existsSync(file) && Date.now() - statSync(file).mtimeMs < 3_600_000) return readJson(file);
@@ -63,7 +65,7 @@ async function units(dir: string, grade: string) {
   for (const u of ((await bookList(dir)).units as Row[]).filter((x) => x.key.startsWith(`${/^\d+$/.test(grade) ? `G${grade}` : grade.toUpperCase()}-`))) console.log(`${u.key} · term ${u.term} · ${u.en} · ${u.ta} · ${u.master ? `book, ${u.master.qCount ?? "?"} questions` : "no book in the app"}`);
 }
 
-async function pull(dir: string, keys: string[]) {
+export async function pull(dir: string, keys: string[]) {
   let books = await bookList(dir);
   // A book uploaded since the list was asked for: ask again.
   if (keys.some((k) => !(books.units as { key: string; master: unknown }[]).some((u) => u.key === k && u.master))) books = await bookList(dir, true);
@@ -101,7 +103,7 @@ async function pull(dir: string, keys: string[]) {
 
 // ---------------------------------------------------------------- reading a unit
 
-function load(udir: string) {
+export function load(udir: string) {
   const u = readJson<Unit>(join(udir, "unit.json"));
   const html = new Map<number, string>();
   if (existsSync(join(udir, "q"))) for (const f of readdirSync(join(udir, "q"))) html.set(Number(f.slice(0, 3)), readFileSync(join(udir, "q", f), "utf8"));
@@ -145,7 +147,7 @@ const samePart = (key: string, printed: string) => {
 };
 
 /** Each printed sub-question (`.rp` with its label) as a stretch of the card's HTML: [start, end). */
-function blocks(h: string): { label: string; s: number; e: number }[] {
+export function blocks(h: string): { label: string; s: number; e: number }[] {
   const out: { label: string; s: number; e: number }[] = [];
   // Any .rp, as the phone finds them (a style after the class too: G7 U02 Q52's "(i)" … "(iv)" set in by 8 mm).
   const re = /<div class="rp(?: [^"]*)?"[^>]*><span class="rl">([\s\S]*?)<\/span>/g;
@@ -155,7 +157,7 @@ function blocks(h: string): { label: string; s: number; e: number }[] {
 }
 
 /** Where each of a card's key parts is printed (its stretch), in order, as the phone finds them; the card when none. */
-function partRanges(h: string, labels: string[]): [number, number][] {
+export function partRanges(h: string, labels: string[]): [number, number][] {
   const bs = blocks(h);
   let from = 0;
   let last: [number, number] | null = null;
@@ -694,10 +696,11 @@ function help() {
 
 // ---------------------------------------------------------------- the command line
 
-// One carrier branch for the tool (emptied after each exchange), not a new one a run.
-process.env.LINK_BRANCH ??= "link-digitize";
 const [cmd, ...args] = process.argv.slice(2);
 const main = async () => {
+  // One carrier branch for the tool (emptied after each exchange), not a new one a run. Set here, not as the file
+  // loads: scripts/skills.ts reads this file's helpers and carries on its own branch.
+  process.env.LINK_BRANCH ??= "link-digitize";
   if (cmd === "pull") return pull(outside(args[0]), args.slice(1));
   if (cmd === "review") {
     const [f, t] = (args.find((x) => /^\d+-\d+$/.test(x)) ?? "1-9999").split("-").map(Number);

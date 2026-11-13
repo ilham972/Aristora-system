@@ -172,6 +172,38 @@ tsx scripts/digitize.ts ship $B G8-U09            # build (every check) → save
 - Answers a teacher typed in the app (Settings → Books) override the key at their parts: `show` prints them, a save
   keeps them; `ship … drop` replaces them (decide those parts in kinds.ts first).
 
+## Tag a unit's skills (through the Claude link)
+
+13 Nov 2026, his rule: teach the skill, not the question; and "any model can do the tagging ... I am going to use
+small models". One unit a chat, four commands, one sheet to read and one small file to write (the **skill-tags** skill
+is the tagger's whole brief). The link's code in a file outside the repo, `$B` = a folder in the scratchpad:
+
+```bash
+TSX=/opt/npm-tools/node_modules/tsx/dist/cli.mjs; export ARISTORA_LINK_FILE=$SCR/link-code; B=$SCR/skills
+node $TSX scripts/skills.ts units $B 8             # the grade's units: questions, key, "not tagged" or its skills
+node $TSX scripts/skills.ts pull $B G8-U05         # → $B/G8-U05/sheet.txt (every question in a line or two) + known.json
+node $TSX scripts/skills.ts known $B/G8-U05        # other units' skills to reuse (same grade or earlier)
+#   write $B/G8-U05/skills.json: { "skills": [{ "id": "S1", "en", "ta", "eg": 4 }], "tags": { "1": "S1", "53": { "i": "S1", "ii": "S3" } } }
+node $TSX scripts/skills.ts check $B/G8-U05        # everything wrong at once, a table of each skill, what to look at again
+node $TSX scripts/skills.ts review $B/G8-U05       # review.html for a teacher (send it to him as a file, never in the repo)
+node $TSX scripts/skills.ts push $B G8-U05         # check → saved in the app → read back and compared
+```
+
+- A skill = one method a teacher explains in about six minutes with one example, named by what the student does. One
+  skill a question (the step that decides it); parts apart only when they need different methods. 6 to 14 skills in
+  most units; a skill with one question is joined to its nearest, unless no other question needs that method.
+- `check` runs the app's own `skillsProblem` (the judge) after listing every hole and stranger itself; WRONG lines
+  stop the push, LOOK AGAIN lines are a teacher's questions (too wide, alone, no example, a twin of another unit's).
+- A unit tagged already: `pull` writes its skills.json from the app (when none is there), so a fix starts from what
+  the app has; a push replaces the unit's row whole. `ask` "unit" says what is wrong with a row now (`problem`).
+- Each unit carries on its own branch (`link-skills-g8-u05`), so two chats tagging two units never push over each
+  other. "That request was already taken" on a push = another chat's save came between: push again once.
+- The scripts are outside the typecheck (tsconfig includes src and tests): after changing one, run
+  `npx tsc --noEmit --target es2022 --module esnext --moduleResolution bundler --strict --skipLibCheck --types node scripts/skills.ts`
+  and the tool itself on a made-up unit folder (unit.json, q/001.html …, known.json beside it).
+- `scripts/digitize.ts` sets its carrier branch inside `main()` now, not as the file loads: `skills.ts` imports its
+  helpers (`load`, `plain`, `blocks`, `partRanges`, `pull`, `bookList`).
+
 ## Security audit
 
 After adding functions, every function must print GUARD except the open ones on purpose: `auth.me`, `auth.setupOwner`,

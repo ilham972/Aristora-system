@@ -415,6 +415,21 @@ export default defineSchema({
   }).index("by_book", ["unitId", "stage"]),
 
   /**
+   * A workbook's skills and each question's skill (13 Nov 2026, his "instead of find common questions, we have to find
+   * the common skills"; convex/lib/skills.ts): one row per book, saved whole through the Claude link (`tell` "skills").
+   * skills = the unit's own ("G8-U05-S3": Tamil and English names, `eg` = the question a lesson shows); tags = each
+   * question's skill, or each part's (`p`), its own unit's or an earlier unit's. Names only: never a question's words.
+   */
+  skillTags: defineTable({
+    unitId: v.id("units"),
+    stage: bookStage,
+    skills: v.array(v.object({ id: v.string(), ta: v.string(), en: v.string(), eg: v.optional(v.number()) })),
+    tags: v.array(v.object({ q: v.number(), p: v.optional(v.string()), s: v.string() })),
+    by: v.string(),
+    updatedAt: v.number(),
+  }).index("by_book", ["unitId", "stage"]),
+
+  /**
    * The Claude link (10 Nov 2026, his ask: "create the direct pipeline ... directly digitalize from here"): while it is
    * on, a Claude chat holding its code reads the books and saves each question's answer kinds (convex/link.ts). id =
    * its public name (in every request); key = its secret (base64url, 32 bytes), made on the owner's phone, shown to him
