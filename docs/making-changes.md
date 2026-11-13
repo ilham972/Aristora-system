@@ -198,6 +198,14 @@ node $TSX scripts/skills.ts push $B G8-U05         # check → saved in the app 
   the app has; a push replaces the unit's row whole. `ask` "unit" says what is wrong with a row now (`problem`).
 - Each unit carries on its own branch (`link-skills-g8-u05`), so two chats tagging two units never push over each
   other. "That request was already taken" on a push = another chat's save came between: push again once.
+- The sheet leaves out which paper a question came from (`.src`, `.yr`: no help for its skill, fewer words to read).
+  `review.html` shows a long question's tagged parts only (`partsOnly`; `whole` closes the cut divs) and no working
+  space (`.wz`); a short question with (i) (ii) inside one card shows whole, its part named above it.
+- The first unit tagged, the example for the others: **G8-U04 Directed numbers** (13 Nov 2026: 10 skills for 79
+  questions, 105 tags; `known` on any Grade 8 unit lists them). Its calls, for the next tagger: a question that only
+  one skill's idea explains (the additive inverse) joined its nearest skill (subtracting); "find each value, then put
+  in order" went to ordering, not to powers (the last act is the trap); the same method with fractions or decimals
+  stayed in its skill; a chain of three or more numbers is its own skill, apart from adding two.
 - The scripts are outside the typecheck (tsconfig includes src and tests): after changing one, run
   `npx tsc --noEmit --target es2022 --module esnext --moduleResolution bundler --strict --skipLibCheck --types node scripts/skills.ts`
   and the tool itself on a made-up unit folder (unit.json, q/001.html …, known.json beside it).

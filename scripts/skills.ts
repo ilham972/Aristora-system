@@ -38,7 +38,8 @@ export function sheetOf(udir: string, from = 1, to = Infinity): string {
   const first = firstQuestion(u.data);
   const out: string[] = [];
   for (let q = Math.max(first, from); q <= Math.min(last, to); q++) {
-    const h = html.get(q) ?? "";
+    // Which paper a question came from says nothing about its skill: left out of the sheet (fewer words to read).
+    const h = (html.get(q) ?? "").replace(/<div class="src"[^>]*>[\s\S]*?<\/div>|<span class="yr"[^>]*>[\s\S]*?<\/span>/g, "");
     const k = key.get(q);
     const parts = k?.parts ?? [];
     const max = outOf(u.data, q) ?? "?";
@@ -154,7 +155,7 @@ export function check(udir: string): boolean {
   console.log(`${unit} · ${u.unit.en} · ${total} questions · ${file.skills.length} skills`);
   const qsOf = (id: string) => {
     const seen = new Set<string>();
-    for (const t of file.tags) if (t.s === id) seen.add(t.p === undefined ? String(t.q) : `${t.q}${t.p.replace(/\s+/g, "")}`);
+    for (const t of file.tags) if (t.s === id) seen.add(t.p === undefined ? String(t.q) : `${t.q}(${t.p})`);
     return [...seen].join(" ");
   };
   for (const s of file.skills) console.log(`${short(unit, s.id).padEnd(4)} ${String(n.get(s.id) ?? 0).padStart(3)} q · eg ${s.eg ?? "—"} · ${s.en} · ${s.ta}\n       ${qsOf(s.id)}`);
@@ -193,9 +194,36 @@ export function check(udir: string): boolean {
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
+/** A piece of a card with its divs made whole again: a closer with nothing open is dropped, what stays open is closed. */
+function whole(h: string): string {
+  let depth = 0;
+  const out = h.replace(/<div\b[^>]*>|<\/div>/g, (t) => {
+    if (t[1] !== "/") return depth++, t;
+    return depth > 0 ? (depth--, t) : "";
+  });
+  return out + "</div>".repeat(depth);
+}
+
+/** A long question as a skill's teacher sees it: its head and only the parts that carry the skill (the card when a part isn't found). */
+function partsOnly(h: string, labels: string[], want: string[]): string {
+  const bs = blocks(h);
+  if (!bs.length || !want.length) return h;
+  const ranges = partRanges(h, labels);
+  const seen = new Set<number>();
+  let out = h.slice(0, bs[0].s);
+  for (const [i, p] of labels.entries()) {
+    if (!want.includes(p)) continue;
+    const [s, e] = ranges[i];
+    if (s === 0 && e === h.length) return h;
+    if (!seen.has(s)) out += h.slice(s, e);
+    seen.add(s);
+  }
+  return whole(out);
+}
+
 /** One page a teacher reads on a phone or prints: each skill, its names, its example, its questions as printed. */
 function review(udir: string) {
-  const { u, html } = load(udir);
+  const { u, html, key } = load(udir);
   const unit = u.unit.key;
   const { file } = read(udir, u);
   const known = knownFor(udir, u);
@@ -208,9 +236,9 @@ function review(udir: string) {
     body.push(`<h2><b>${esc(short(unit, id))}</b> ${esc(s?.ta ?? k?.ta ?? "")} <span>${esc(s?.en ?? k?.en ?? "")}${k ? ` · ${k.unit}` : ""} · ${n.get(id) ?? 0}${s?.eg !== undefined ? ` · eg Q${s.eg}` : ""}</span></h2>`);
     const qs = new Map<number, string[]>();
     for (const t of file.tags) if (t.s === id) qs.set(t.q, [...(qs.get(t.q) ?? []), ...(t.p === undefined ? [] : [t.p])]);
-    for (const [q, parts] of [...qs].sort((a, b) => a[0] - b[0])) body.push(`<div class="rq${s?.eg === q ? " eg" : ""}"><div class="rn">Q${q}${parts.length ? ` · ${esc(parts.join(", "))}` : ""}</div>${html.get(q) ?? "<i>(not printed in the app)</i>"}</div>`);
+    for (const [q, parts] of [...qs].sort((a, b) => a[0] - b[0])) body.push(`<div class="rq${s?.eg === q ? " eg" : ""}"><div class="rn">Q${q}${parts.length ? ` · ${esc(parts.join(", "))}` : ""}</div>${html.has(q) ? partsOnly(html.get(q)!, (key.get(q)?.parts ?? []).map((x) => x.p), parts) : "<i>(not printed in the app)</i>"}</div>`);
   }
-  const css = `body{font-family:"Noto Sans Tamil","Latha",system-ui,sans-serif;margin:12px;max-width:760px;color:#16213e}h1{font-size:20px}h1 small{font-weight:400;color:#667}p.how{font-size:13px;color:#445;background:#f3f1ff;padding:8px 10px;border-radius:8px}h2{font-size:16px;margin:26px 0 8px;padding:8px 10px;background:#16213e;color:#fff;border-radius:8px}h2 b{background:#f6c443;color:#16213e;border-radius:6px;padding:0 6px;margin-right:6px}h2 span{display:block;font-weight:400;font-size:12px;opacity:.85}.rq{border:1px solid #d8d8e6;border-radius:8px;padding:8px 10px;margin:8px 0;overflow-x:auto}.rq.eg{border:2px solid #f6c443}.rn{font-size:12px;font-weight:700;color:#6c5ce7;margin-bottom:4px}svg{max-width:100%;height:auto}`;
+  const css = `body{font-family:"Noto Sans Tamil","Latha",system-ui,sans-serif;margin:12px;max-width:760px;color:#16213e}h1{font-size:20px}h1 small{font-weight:400;color:#667}p.how{font-size:13px;color:#445;background:#f3f1ff;padding:8px 10px;border-radius:8px}h2{font-size:16px;margin:26px 0 8px;padding:8px 10px;background:#16213e;color:#fff;border-radius:8px}h2 b{background:#f6c443;color:#16213e;border-radius:6px;padding:0 6px;margin-right:6px}h2 span{display:block;font-weight:400;font-size:12px;opacity:.85}.rq{border:1px solid #d8d8e6;border-radius:8px;padding:8px 10px;margin:8px 0;overflow-x:auto}.rq.eg{border:2px solid #f6c443}.rn{font-size:12px;font-weight:700;color:#6c5ce7;margin-bottom:4px}svg{max-width:100%;height:auto}.wz{display:none!important}.src,.yr{font-size:11px!important;font-weight:400!important;opacity:.6}`;
   const page = `<!doctype html><html lang="ta"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${unit} skills</title><style>${u.css ?? ""}\n${css}</style></head><body>${body.join("\n")}</body></html>`;
   writeFileSync(join(udir, "review.html"), page);
   console.log(`${join(udir, "review.html")} · ${ids.length} skills · send it to the founder as a file (his books' content: never in the repo)`);
