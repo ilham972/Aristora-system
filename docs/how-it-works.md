@@ -1007,7 +1007,11 @@ are lost): her marks saved at once (as her Save), and when he lost marks his thr
 AI's explanation is its next message (`ai.post`, by her, named **ARISTORA AI**, his phone rings). From then his text
 messages in that thread are answered there by the AI (`chat.ts` → `ai.heard` → `ai.run` → `ai.say`), within the
 thread's 10 questions and the day's 200; a teacher's message never wakes it. His questions show in the sheet too
-(amber, "…, in his thread:").
+(amber, "…, in his thread:"). **Sonnet 5.5's rules** (15 Nov 2026, his screenshot: "The AI didn't answer (400)"): it
+refuses a forced `tool_choice` with a 400, so the mark tool is `strict` with `tool_choice: auto` (the prompt asks for
+it; JSON in its words is read too); it thinks by itself (adaptive): `output_config.effort` = medium, 16,000 tokens out
+for a check (its thinking counts), 6,000 for a thread answer (`modelSettings`; Haiku keeps 6,000 / 2,000 and no
+effort). An error now shows the API's own words ("400: …") and keeps its reply for "What the AI sent".
 
 **Progress (top bar; owner + Reports).** One grade at a time (`aristora.progressGrade`); stage chips, "Came today".
 **Units** = a race per unit and stage (levels done or solo questions done, then marks, then pace; rank colours,

@@ -6,7 +6,7 @@ import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
-import { AI_ASKS_MAX, AI_KEEP_MS, aiParts, saidWords, verdictWords, checkPrompt, cleanReply, failWords, keyText, questionText, readVerdict } from "../convex/lib/ai";
+import { AI_ASKS_MAX, AI_KEEP_MS, aiParts, modelSettings, saidWords, verdictWords, checkPrompt, cleanReply, failWords, keyText, questionText, readVerdict } from "../convex/lib/ai";
 import type { KeyAnswer } from "../convex/lib/key";
 import schema from "../convex/schema";
 import { readWorkbookHtml } from "../src/workbookFile";
@@ -53,6 +53,12 @@ describe("the rules", () => {
     expect(failWords(401, "")).toMatch(/ANTHROPIC_API_KEY/);
     expect(failWords(400, "credit balance is too low")).toMatch(/credit/);
     expect(failWords(529, "")).toMatch(/busy/);
+    expect(failWords(400, '{"type":"error","error":{"type":"invalid_request_error","message":"tool_choice: type \\"tool\\" is not supported"}}')).toBe(
+      'The AI didn\'t answer (400: tool_choice: type "tool" is not supported). Try again, or send this to the owner.',
+    );
+    expect(modelSettings("claude-haiku-5-5", true)).toMatchObject({ max_tokens: 6000, tool_choice: { type: "auto" } });
+    expect(modelSettings("claude-haiku-5-5", true).output_config).toBeUndefined();
+    expect(modelSettings("claude-sonnet-5-5", false)).toEqual({ max_tokens: 6000, output_config: { effort: "medium" } });
     const k: KeyAnswer = { q: 1, parts: [{ p: "i", a: "1", m: 1 }, { p: "ii", a: "2", m: 2 }] };
     expect(aiParts(k, 3)).toEqual([{ p: "i", m: 1 }, { p: "ii", m: 2 }]);
     expect(aiParts(k, 4)).toBeNull();
@@ -128,7 +134,11 @@ describe("the AI check", () => {
     expect(sent[0].headers["x-api-key"]).toBe("test-key-not-real");
     expect(sent[0].body.model).toBe("claude-sonnet-5-5");
     // The mark tool, forced: its fields in the order of the work (the question, his answer, the reasoning, then marks).
-    expect(sent[0].body.tool_choice).toEqual({ type: "tool", name: "mark" });
+    // Not forced (Sonnet 5.5 refuses a forced tool_choice with a 400): strict, auto, adaptive thinking at medium effort.
+    expect(sent[0].body.tool_choice).toEqual({ type: "auto" });
+    expect((sent[0].body.tools as { strict: boolean }[])[0].strict).toBe(true);
+    expect(sent[0].body.output_config).toEqual({ effort: "medium" });
+    expect(sent[0].body.max_tokens).toBe(16000);
     expect(Object.keys((sent[0].body.tools as { input_schema: { properties: object } }[])[0].input_schema.properties)).toEqual(["asks", "parts", "got", "max", "sure", "ta"]);
     const first = (sent[0].body.messages as { content: { type: string; text?: string }[] }[])[0].content;
     expect(first[0].type).toBe("image");
@@ -181,6 +191,10 @@ describe("the AI check", () => {
     reply = { status: 401, text: "{}" };
     await raw.action(internal.ai.run, { id });
     expect((await tr().query(api.ai.thread, args))!.err).toMatch(/key is wrong/);
+    // The API's own words are kept for "What the AI sent".
+    reply = { status: 400, text: '{"error":{"message":"bad request"}}' };
+    await raw.action(internal.ai.run, { id });
+    expect(await tr().query(api.ai.thread, args)).toMatchObject({ err: expect.stringMatching(/\(400: bad request\)/), bad: '{"error":{"message":"bad request"}}' });
 
     answer("I can't see the answer.");
     await raw.action(internal.ai.run, { id });

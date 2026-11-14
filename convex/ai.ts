@@ -28,7 +28,7 @@ import {
   AI_SYSTEM,
   AI_SAID_MAX,
   AI_TEXT_MAX,
-  MARK_TOOL,
+  modelSettings,
   aiParts,
   base64Of,
   checkPrompt,
@@ -278,19 +278,13 @@ export const run = internalAction({
         else messages.push({ role, content: text });
       }
     }
+    const model = env("AI_MODEL") || AI_MODEL_DEFAULT;
     let res: Response;
     try {
       res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({
-          model: env("AI_MODEL") || AI_MODEL_DEFAULT,
-          // Tamil takes many tokens: room for the reasoning of every part and the explanation.
-          max_tokens: first ? 6000 : 2000,
-          system: AI_SYSTEM,
-          messages,
-          ...(first ? { tools: [MARK_TOOL], tool_choice: { type: "tool", name: "mark" } } : {}),
-        }),
+        body: JSON.stringify({ model, system: AI_SYSTEM, messages, ...modelSettings(model, first) }),
       });
     } catch {
       await ctx.runMutation(internal.ai.save, { id: args.id, ok: false, err: "The AI couldn't be reached. Try again." });
@@ -298,7 +292,7 @@ export const run = internalAction({
     }
     const body = await res.text();
     if (!res.ok) {
-      await ctx.runMutation(internal.ai.save, { id: args.id, ok: false, err: failWords(res.status, body) });
+      await ctx.runMutation(internal.ai.save, { id: args.id, ok: false, err: failWords(res.status, body), bad: body.slice(0, 2000) });
       return;
     }
     let text = "";

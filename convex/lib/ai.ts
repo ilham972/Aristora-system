@@ -65,6 +65,9 @@ Plain text only, no JSON, no markdown. If he asks something that isn't about thi
 /** The tool the model must call: its fields in the order of the work (understand, compare, decide, explain). */
 export const MARK_TOOL = {
   name: "mark",
+  // Strict: every call matches the schema. Not forced (15 Nov 2026: Sonnet 5.5 refuses a forced tool_choice with a 400;
+  // the prompt asks for the tool, and JSON in its words is read too).
+  strict: true,
   description: "Give the marks for the student's answer to this question, part by part, and the Tamil explanation for him.",
   input_schema: {
     type: "object",
@@ -83,6 +86,7 @@ export const MARK_TOOL = {
             max: { type: "integer", description: "This part's marks." },
           },
           required: ["p", "his", "check", "got", "max"],
+          additionalProperties: false,
         },
       },
       got: { type: "integer", description: "His total marks." },
@@ -91,6 +95,7 @@ export const MARK_TOOL = {
       ta: { type: "string", description: "For the student: ONLY Tamil (Tamil script), at most 90 words, intuitive, the shape and rules given." },
     },
     required: ["asks", "parts", "got", "max", "sure", "ta"],
+    additionalProperties: false,
   },
 } as const;
 
@@ -219,7 +224,28 @@ export function failWords(status: number, body: string): string {
   if (status === 401 || status === 403) return "The AI key is wrong or switched off. The owner checks ANTHROPIC_API_KEY in Convex.";
   if (status === 400 && /credit|billing|balance/i.test(body)) return "The AI account has no credit left. The owner adds credit at console.anthropic.com.";
   if (status === 429 || status === 529 || status >= 500) return "The AI is busy right now. Try again in a minute.";
-  return `The AI didn't answer (${status}). Try again.`;
+  return `The AI didn't answer (${status}${apiWords(body) ? `: ${apiWords(body)}` : ""}). Try again, or send this to the owner.`;
+}
+
+/** The API's own words for an error (its error.message), short. */
+export function apiWords(body: string): string {
+  try {
+    const m = (JSON.parse(body) as { error?: { message?: string } }).error?.message;
+    return typeof m === "string" ? m.slice(0, 200) : "";
+  } catch {
+    return "";
+  }
+}
+
+/** The request's settings for a model: Sonnet 5.5 thinks by itself (adaptive): medium effort keeps it quick and cheap. */
+export function modelSettings(model: string, first: boolean): Record<string, unknown> {
+  const thinks = /sonnet-5-5|opus-5/.test(model);
+  return {
+    // Its thinking counts in max_tokens: room for it and for the Tamil words.
+    max_tokens: thinks ? (first ? 16000 : 6000) : first ? 6000 : 2000,
+    ...(thinks ? { output_config: { effort: "medium" } } : {}),
+    ...(first ? { tools: [MARK_TOOL], tool_choice: { type: "auto" } } : {}),
+  };
 }
 
 /** The key's parts that carry marks adding up to the question's (as Correction's card shows them), else null. */

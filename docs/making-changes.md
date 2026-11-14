@@ -291,6 +291,9 @@ WHY=1 npx vitest run -c vitest.perf.config.ts -t "lab" --reporter=verbose # each
   key, so its step fails with the "isn't switched on" words, and the run-through writes the AI's answer with
   `internal.ai.save`). Its key is a Convex environment variable read with `env()` in `convex/ai.ts` (no `process` in
   the convex tsconfig); never put a key in the repo. Changing the model = the Convex variable `AI_MODEL`, no deploy.
+  **Each model has its own request rules**: Sonnet 5.5 returns a 400 for a forced `tool_choice` ("any"/"tool"),
+  `thinking: disabled`, sampling parameters and assistant prefill (its migration guide). A new model goes through
+  `modelSettings` in `convex/lib/ai.ts`; read its "what's new" page before switching.
 - **Two animations of `transform` on one element: neither is the graphics chip's** (13 Nov 2026). The owl's cap had its
   drop-in and its hop in one `animation:` list; Chrome kept both on the main thread for good, and the whole owl was
   drawn again on every frame for as long as an owl was on the screen (a quarter of a slow phone's time; nothing looked
