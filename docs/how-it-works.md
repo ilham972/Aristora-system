@@ -1636,6 +1636,10 @@ learning app of our education institute"): one profile, his class times, what he
     His pick (the same night): the staircase is **a step of its own**, marked (OL-U48: each drawing wrapped as a
     sub-question labelled "படிக்கட்டு", its key part's answers worked out from the question's numbers); its step
     pill shows a little stairs icon, not a number among (i) (ii). Hidden printed boxes stay hidden (`:not([data-paper])`).
+    **A teacher question's boxes before his choice** (15 Nov 2026, his report: "the boxes are selecting but can't
+    type ... student will confuse"; his idea: the owl's message box, not a toast): until he taps ஆம் / இல்லை no box looks
+    chosen; a box tapped then makes the owl point (its "teach" pose) and its bubble turn violet with "👇 முதலில் கீழே
+    உள்ள பொத்தான்களில் ஒன்றை அழுத்து …" (it jumps again on each tap), and the two buttons come into view and jump.
     **Bigger places to tap** (the audit, 14 Nov: options and ✓ / ✗ were 31–34 px high): options 48 px and two a row,
     ✓ / ✗ 44 px, blanks 36 px; each pops when chosen.
     **The screen holds still on →** (his report, 4 Nov 2026: "the whole screen bounces up and comes back"): the slide

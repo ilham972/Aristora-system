@@ -4681,6 +4681,22 @@ button.f-pod:active,
   font-weight: 700;
   color: var(--ink);
 }
+/* A box tapped before he chose (15 Nov 2026): the two buttons jump twice. */
+.f-teachask.nudge .f-btn {
+  animation: f-nudge 0.55s ease 2;
+}
+@keyframes f-nudge {
+  0%,
+  100% {
+    transform: none;
+  }
+  30% {
+    transform: translateY(-5px) scale(1.03);
+  }
+  60% {
+    transform: translateY(1px);
+  }
+}
 .f-learn {
   padding: 12px;
   border-radius: 14px;

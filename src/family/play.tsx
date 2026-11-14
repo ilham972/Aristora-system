@@ -657,6 +657,7 @@ export function Play(props: {
   }, []);
 
   const all = useMemo(() => (form ? boxesOf(form) : []), [form]);
+  const [hey, setHey] = useState<{ q: number; n: number } | null>(null);
   if (err) return <Oops text={err} onBack={props.onBack} />;
   if (!form) return <Waiting />;
 
@@ -669,6 +670,9 @@ export function Play(props: {
   /** This question, checked already: his answers stay as they are. */
   const lock = each ? locks[q.q] : undefined;
   const asking = !review && !!q.t && !how[q.q];
+  // A box tapped before he chose (15 Nov 2026, his report and his idea: "the owl will highlight its message box"):
+  // the owl points him to the buttons below; how many taps (its bubble jumps again each time; `hey` above).
+  const heyNow = asking && hey?.q === q.q ? hey.n : 0;
   const learning = !review && !!q.t && how[q.q] === "learn";
   const flat = all.findIndex((x) => x.qi === at.qi && x.bi === at.bi);
   // The box he types in now: a tap's place (an option, ✓ / ✗, a card) is never typed into.
@@ -900,6 +904,19 @@ export function Play(props: {
   const tap = (run: SlotRun, i: number, v?: string) => {
     if (lock) return;
     act();
+    // A teacher question asks first (15 Nov 2026, his report: "the boxes are selecting but can't type ... student will
+    // confuse"): a box tapped before he chose says so, and the two buttons below come into view and jump.
+    if (asking) {
+      buzz(8);
+      sound("pop");
+      setHey({ q: q.q, n: heyNow + 1 });
+      const ask = document.querySelector<HTMLElement>(".f-teachask");
+      ask?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      ask?.classList.remove("nudge");
+      void ask?.offsetWidth;
+      ask?.classList.add("nudge");
+      return;
+    }
     if (run.attr === "b") {
       buzz(5);
       sound("tap");
@@ -925,7 +942,7 @@ export function Play(props: {
   const tfK = (run: SlotRun) => tfAt[tfKey(run)] ?? Math.max(0, Array.from({ length: run.els }, (_, i) => i).findIndex((i) => !mine[run.at + i]));
   const setTf = (run: SlotRun, k: number) => setTfAt((x) => ({ ...x, [tfKey(run)]: k }));
   const tf = lock ? [] : runs.filter((r) => r.ui.k === "tf" && fit.has("t") && !r.below).map((r) => r.at + tfK(r));
-  const live: Live = { runs, fit, vals: mine, cur: box ? at.bi : null, onSlot: tap, ...(lock ? { marks } : { tf }) };
+  const live: Live = { runs, fit, vals: mine, cur: box && !asking ? at.bi : null, onSlot: tap, ...(lock ? { marks } : { tf }) };
   const runAt = (from: number) => runs.find((r) => r.at === from);
   const pad = !review && !asking && !learning && !lock && typesIn(at.qi);
   // → is Check where the question ends (and its Check answers at once).
@@ -1062,9 +1079,10 @@ export function Play(props: {
   const lv = lock ? verdictOf(lock) : null;
   const half = form.qs.length >= 6 && at.qi === Math.floor(form.qs.length / 2);
   const pose: Pose =
-    idle === 2 ? "sleep" : idle === 1 ? "think" : learning ? "teach" : q.free ? "yes" : lv === "ok" ? "yes" : lv ? "again" : each && run >= 3 ? "combo" : at.qi === 0 && done === 0 ? "hello" : "write";
-  const say =
-    idle === 2
+    heyNow ? "teach" : idle === 2 ? "sleep" : idle === 1 ? "think" : learning ? "teach" : q.free ? "yes" : lv === "ok" ? "yes" : lv ? "again" : each && run >= 3 ? "combo" : at.qi === 0 && done === 0 ? "hello" : "write";
+  const say = heyNow
+    ? "👇 முதலில் கீழே உள்ள பொத்தான்களில் ஒன்றை அழுத்து. பிறகு விடையை இங்கே எழுதலாம்."
+    : idle === 2
       ? "தூக்கம் வருகிறது… என்னைத் தொட்டு எழுப்பு!"
       : idle === 1
         ? "நேரம் எடு. தாளில் செய்து பார்."
@@ -1227,7 +1245,7 @@ export function Play(props: {
             >
               <Buddy pose={pose} key={pose} class="coach" />
             </span>
-            <p class="f-bubble f-lvsay" key={say}>
+            <p class={`f-bubble f-lvsay${heyNow ? " hey" : ""}`} key={heyNow ? `hey${heyNow}` : say}>
               {say}
             </p>
           </div>

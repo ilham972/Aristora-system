@@ -42,6 +42,8 @@ const CSS = `
 .f-lvcoach.hid{visibility:hidden}
 .f-buddy.coach{width:84px}
 .f-lvsay{flex:1;margin:0 0 24px;padding:9px 13px 7px;font-size:13.5px;line-height:1.4;animation:f-rise .3s ease both}
+.f-lvsay.hey{background:var(--brand-soft);color:var(--brand-2);font-weight:800;box-shadow:inset 0 0 0 2.5px var(--brand);animation:f-hey .5s ease both}
+@keyframes f-hey{0%{opacity:0;transform:translateY(6px) scale(.96)}55%{opacity:1;transform:translateY(-3px) scale(1.03)}100%{transform:none}}
 .f-play.v2 .f-qcard{margin:0;padding-top:20px}
 .f-play.v2 .f-qhead{justify-content:flex-start;gap:8px}
 .f-play.v2 .f-qn{flex:none;padding:6px 11px 4px;border-radius:10px;background:var(--brand);color:#fff;font:800 14.5px/1 var(--display);box-shadow:0 3px 0 var(--brand-3)}

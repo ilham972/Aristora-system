@@ -2035,6 +2035,15 @@ test("a tute's ladder on the phone: one road numbered as printed; a teacher ques
   for (const stage of ["fighter", "master"] as const) {
     await t.mutation(api.catalog.saveQuestions, { ...as, unitId: cons, stage, first: true, css: r.css, items: [...r.questions[stage]].map(([q, html]) => ({ q, html })) });
   }
+  // Q1 digitized like a real ladder (15 Nov 2026): its sub-questions (.sq) with a printed blank each, typed in place.
+  await t.run(async (ctx) => {
+    const sub = (l: string, n: number) => `<div class="sq"><span class="sl">(${l})</span><span class="st">A made-up part</span><span class="sa"><span class="ab" data-fill="${n}"></span></span></div>`;
+    const q1 = (await ctx.db.query("questions").withIndex("by_book", (x) => x.eq("unitId", cons).eq("stage", "fighter").eq("q", 1)).first())!;
+    await ctx.db.patch(q1._id, { html: `<div class="qq" data-q="1"><div class="qh"><span class="qn">1</span><div class="qs">A made-up ladder question</div><span class="tb">ஆசிரியர்</span></div>${sub("i", 1)}${sub("ii", 2)}</div>` });
+    const k = (await ctx.db.query("keys").withIndex("by_unit", (x) => x.eq("unitId", cons)).collect()).find((r) => r.stage === "fighter")!;
+    const fill = (v: string) => ({ k: "fill" as const, b: [{ v: [v] }] });
+    await ctx.db.patch(k._id, { answers: k.answers.map((a) => (a.q === 1 ? { q: 1, parts: [{ p: "i", a: "3", t: fill("3") }, { p: "ii", a: "**4**", t: fill("4") }] } : a)) });
+  });
   const nila = await t.mutation(api.students.add, { ...as, name: "Nila S", grade: 11, term: 3 });
   await t.mutation(api.families.setOlMap, { ...as, studentIds: [nila], on: true });
   await t.mutation(api.families.setCode, { ...as, studentId: nila, code: "4719" });
@@ -2057,6 +2066,16 @@ test("a tute's ladder on the phone: one road numbered as printed; a teacher ques
   // Q1 is a teacher question: did you do it with your teacher? Not yet → Learn, a step a tap, then he does it.
   await contains(P.locator(".f-qn"), "Q1");
   await visible(P.locator(".f-teachask"));
+  expect(await P.locator(".f-padkeys").count()).toBe(0);
+  // A printed box tapped before he chose (his report, 15 Nov 2026: "the boxes are selecting but can't type"): the
+  // owl's bubble says to press a button below, the buttons jump, no pad, no box chosen; the teacher tag is hidden.
+  const lad = P.locator(".f-paper");
+  await visible(lad.locator("[data-fill]").first());
+  expect(await lad.locator(".tb").first().isVisible()).toBe(false);
+  await lad.locator("[data-fill]").first().click();
+  await contains(P.locator(".f-lvsay.hey"), "பொத்தான்");
+  expect(await lad.locator("[data-fill].fx-on").count()).toBe(0);
+  await visible(P.locator(".f-teachask.nudge"));
   expect(await P.locator(".f-padkeys").count()).toBe(0);
   await noSideScroll(P);
   await shot(P, "fam29-teacher-question");
