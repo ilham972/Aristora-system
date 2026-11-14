@@ -473,6 +473,48 @@ function AskMenu(props: { a: HelpAsk; onClose: () => void; onChange: () => void 
 }
 
 /**
+ * Her 🤖 in a thread (15 Nov 2026, his ask: "I explain with my voice note but still they can't understand ... put the
+ * AI explanation button ... step by step ... in a funny way with emojis"): the AI explains the question again, in a new
+ * way, to everyone waiting, and then answers their questions in the thread. Her note tells it what to focus on.
+ */
+export function AiExplainSheet(props: { id: string; waiting: number; onClose: () => void }) {
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [last, setLast] = useState<{ state: string; err: string | null; at: number } | null>(null);
+  useEffect(() => {
+    query("ai:teachState", { id: props.id }).then(
+      (r) => setLast(r as typeof last),
+      () => undefined,
+    );
+  }, [props.id]);
+  const go = () => {
+    if (busy) return;
+    setBusy(true);
+    mutation("ai:explain", { id: props.id, ...(note.trim() ? { note: note.trim() } : {}) }).then(
+      () => {
+        sound("send");
+        toast("🤖 The AI is writing: its explanation comes into the thread in about half a minute.");
+        props.onClose();
+      },
+      (e) => {
+        setBusy(false);
+        toast(problemWords(e), true);
+      },
+    );
+  };
+  return (
+    <Sheet title="🤖 AI explain" sub={`Step by step in Tamil, with a little fun and emojis, for ${props.waiting ? `the ${props.waiting} waiting` : "this thread"}. Then it answers their questions here.`} onClose={props.onClose} class="h-menu h-aix">
+      {last?.state === "work" && <p class="h-aix-st">🤖 It is writing now…</p>}
+      {last?.state === "fail" && <p class="h-aix-st no">Last time: {last.err}</p>}
+      <textarea class="h-aix-note" rows={2} maxLength={400} placeholder="What should it focus on? (not needed)" value={note} onInput={(e) => setNote((e.currentTarget as HTMLTextAreaElement).value)} />
+      <button type="button" class="h-mi go" disabled={busy || last?.state === "work"} onClick={go}>
+        {busy ? "…" : "🤖 Explain now"}
+      </button>
+    </Sheet>
+  );
+}
+
+/**
  * The thread's ⋮ (teachers), his words: "just put three dot ... teacher can press like not now or they can press like
  * explain". Explained closes it for everyone waiting and counts in class; Send to another teacher.
  */

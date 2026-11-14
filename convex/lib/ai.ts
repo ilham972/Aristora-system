@@ -31,6 +31,7 @@ const HOW_TO_TALK = `How you talk to the student (these rules matter as much as 
 - Be clear before being complete: the one idea he missed matters more than everything you know.
 - Make it intuitive: help him SEE why, with a picture in words or a small everyday example (a pizza cut in slices, a clock's hands, steps on a ladder, sharing sweets), then the rule.
 - Shape: one line on what he did right; one line on the mistake; then 2 to 4 short numbered steps to the right answer; the answer. At most 90 words. No headings, no stars, no bullet symbols.
+- Light and a little funny, with a few fitting emojis (😊 👉 ✅ 🍕 ⏰ 🎯 💡), never mocking him.
 - Never just repeat the key or the theorem's name: show why it is true in this question.`;
 
 export const AI_SYSTEM = `You are the senior maths examiner and the kindest teacher of ARISTORA, a Tamil-medium maths tuition centre in Sri Lanka (Grades 6-11, building to the O/L exam). You mark ONE workbook question of one student, like a fair, careful Sri Lankan O/L examiner, and you explain his mistake so he understands it.
@@ -60,6 +61,64 @@ export function followWords(from: "t" | "s"): string {
 
 ${HOW_TO_TALK.replace("At most 90 words.", "At most 80 words.")}
 Plain text only, no JSON, no markdown. If he asks something that isn't about this question or maths, gently bring him back to it in one line.`;
+}
+
+/** How many AI messages a thread gets a day (her 🤖 and his questions together). */
+export const AI_TEACH_ROOM_DAY = 12;
+
+/** Her 🤖 Explain now in a thread, or his question there: the AI as the teacher of the thread. */
+export function teachSystem(): string {
+  return `You are the kindest, cleverest maths teacher of ARISTORA, a Tamil-medium maths tuition centre in Sri Lanka (Grades 6-11). You are in a thread on the students' phones about ONE workbook question. Students who got it wrong are waiting in it. A teacher may have explained already (her voice notes can't be heard by you: "[voice note]"), and they may still not understand. You get the question, its answer key, the thread so far, and maybe their photos.
+
+When the teacher asks you to explain: explain the whole question again, in a NEW way, so a Grade 6-11 student really understands it:
+- start with one friendly line (an emoji), then the idea in a picture-in-words or an everyday example (a pizza, a clock, a ladder, sweets, a cricket ground, a bus ride), then the steps;
+- numbered steps (1️⃣ 2️⃣ 3️⃣ ...), one short line each, each step saying WHY, ending with the answer (🎯);
+- if their photos or messages show a mistake, gently name it ("பலர் இங்கே தவறுகிறார்கள் 👀 ...");
+- finish with one line that checks understanding or cheers them on;
+- at most 170 words.
+
+When a student asks: answer his question only, about this question, in at most 80 words, the same style.
+
+${HOW_TO_TALK.replace("Shape: one line on what he did right; one line on the mistake; then 2 to 4 short numbered steps to the right answer; the answer. At most 90 words. ", "")}
+Plain text only: no markdown, no stars, no headings.`;
+}
+
+/** The thread's words for the model: who said what (teacher, student, AI), oldest first. */
+export function threadWords(lines: { who: "t" | "s" | "ai"; n: string; t?: string; voice?: boolean; photos?: number }[]): string {
+  return lines
+    .map((l) => {
+      const said = [l.t?.trim(), l.voice ? "[voice note]" : "", l.photos ? `[${l.photos} photo${l.photos > 1 ? "s" : ""}]` : ""].filter(Boolean).join(" ");
+      const who = l.who === "t" ? `Teacher ${l.n}` : l.who === "ai" ? "You (AI)" : `Student ${l.n}`;
+      return `${who}: ${said || "…"}`;
+    })
+    .join("\n");
+}
+
+/** The first message of a teach call. */
+export function teachPrompt(p: {
+  q: number;
+  html: string | null;
+  k: KeyAnswer | null | undefined;
+  grades: number[];
+  waiting: string[];
+  thread: string;
+  photos: number;
+  note?: string | null;
+  ask?: { n: string; t: string } | null;
+}): string {
+  const g = [...new Set(p.grades)].sort((a, b) => a - b);
+  return [
+    `Question ${p.q}.${g.length ? ` The students are in Grade ${g.map((x) => (x > 11 ? "11 (O/L)" : x)).join(", ")}.` : ""}`,
+    p.html ? `The question (HTML from the book):\n${questionText(p.html)}` : "The question's text isn't in the app.",
+    `The answer key:\n${keyText(p.k)}`,
+    `The thread so far:\n${p.thread || "(nothing yet)"}`,
+    p.photos ? `Their latest ${p.photos > 1 ? `${p.photos} photos` : "photo"} from the thread are above.` : "",
+    p.ask
+      ? `${p.ask.n} asks you now: ${p.ask.t}\nAnswer him.`
+      : `The teacher taps "AI explain" for ${p.waiting.length ? p.waiting.join(", ") : "the students"}.${p.note ? ` She asks you: ${p.note}` : ""}\nExplain the question.`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 /** The tool the model must call: its fields in the order of the work (understand, compare, decide, explain). */

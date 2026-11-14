@@ -1779,6 +1779,24 @@ export default defineSchema({
    * thread: "ai" (the explanation, its answers) and "t" (what the corrector or student asked). Gone after 3 days with
    * its photo (`ai.sweep`).
    */
+  /**
+   * The AI explains in a thread (15 Nov 2026, his ask: "put the AI explanation button inside the thread ... step by step
+   * ... in a funny way with emojis"): one row per AI message there. `ask` = a student's question it answers (none = a
+   * teacher's 🤖 Explain now, `note` = what she asked it to focus on). Gone after 3 days (`ai.sweep`); while a room has
+   * one from the last 3 days, his questions in it are answered by the AI.
+   */
+  aiTeach: defineTable({
+    rid: v.id("usRooms"),
+    by: v.id("users"),
+    note: v.optional(v.string()),
+    sid: v.optional(v.id("students")),
+    ask: v.optional(v.string()),
+    state: v.union(v.literal("work"), v.literal("done"), v.literal("fail")),
+    err: v.optional(v.string()),
+    at: v.number(),
+  })
+    .index("by_room", ["rid", "at"])
+    .index("by_at", ["at"]),
   aiChecks: defineTable({
     sid: v.id("students"),
     u: v.id("units"),

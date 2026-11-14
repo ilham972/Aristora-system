@@ -1012,6 +1012,18 @@ refuses a forced `tool_choice` with a 400, so the mark tool is `strict` with `to
 it; JSON in its words is read too); it thinks by itself (adaptive): `output_config.effort` = medium, 16,000 tokens out
 for a check (its thinking counts), 6,000 for a thread answer (`modelSettings`; Haiku keeps 6,000 / 2,000 and no
 effort). An error now shows the API's own words ("400: …") and keeps its reply for "What the AI sent".
+**Her 🤖 in a thread** (15 Nov 2026, his ask: "sometimes I explain with my voice note but still they can't understand
+... put the AI explanation button inside the thread ... step by step ... in a funny way with emojis"; no pictures: too
+many tokens): a round 🤖 beside the thread's ⋮ (teachers, any) opens a sheet (its last try's state, an optional note "what
+should it focus on", **🤖 Explain now**; a sheet first, so a stray tap costs nothing). The AI (`ai.explain` → `ai.teach`)
+reads the question, the key, the last 24 messages (who said what; a voice note is "[voice note]", which it can't hear),
+the students' latest two photos in the thread and their grades, and writes into the thread as **ARISTORA AI**: a
+friendly line, an everyday picture, numbered steps (1️⃣ 2️⃣ …) each with its why, the answer 🎯, a check line; Tamil
+script only, ≤ 170 words (`teachSystem`, `teachPrompt`, `threadWords`); every student waiting is rung. For 3 days after,
+a student's text message in that thread is answered there by the AI (≤ 80 words; `heard` → `teachHeard`); a teacher's
+message never wakes it. 12 AI messages a thread a day (`AI_TEACH_ROOM_DAY`), inside the centre's 200; one at a time.
+Table `aiTeach` (one row per AI message there; gone after 3 days). Every AI explanation (here and the ⌂ lane's) now
+uses a few fitting emojis, light and never mocking.
 
 **Progress (top bar; owner + Reports).** One grade at a time (`aristora.progressGrade`); stage chips, "Came today".
 **Units** = a race per unit and stage (levels done or solo questions done, then marks, then pace; rank colours,

@@ -187,6 +187,10 @@ const CSS = `
 .h-menu .h-mi.go{background:var(--brand);box-shadow:0 3px 0 var(--brand-3);color:#fff}
 .h-menu .h-mi.warn{color:var(--gold-ink);background:var(--gold-soft);box-shadow:none}
 .h-menu .h-mi:disabled{opacity:.45}
+.h-aib{font-size:20px;line-height:1}
+.h-aix .h-aix-note{display:block;width:100%;margin-top:4px;padding:10px 12px;border-radius:14px;border:0;box-shadow:0 0 0 1.5px var(--line-2);background:var(--bg);font-family:inherit;font-size:15px;line-height:1.4;color:var(--ink);resize:none}
+.h-aix .h-aix-st{margin:0 0 6px;padding:8px 12px;border-radius:12px;background:var(--brand-soft,#efecff);font:700 14px/1.35 var(--display);color:var(--ink)}
+.h-aix .h-aix-st.no{background:var(--gold-soft);color:var(--gold-ink)}
 .h-note{margin:12px 2px 0;font-size:13px;color:var(--ink3)}
 .h-mic{display:inline-flex;align-items:center;gap:6px;height:36px;margin:0 0 8px;padding:2px 14px 0;border-radius:18px;background:var(--brand-soft);font:800 14px/1 var(--display);color:var(--brand-2)}
 .h-rec{display:flex;align-items:center;gap:8px;margin:0 0 8px;padding:8px 10px;border-radius:16px;background:var(--bg)}

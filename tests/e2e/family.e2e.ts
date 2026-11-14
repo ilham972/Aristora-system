@@ -4419,6 +4419,15 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
   await noSideScroll(P);
   await shot(P, "help07b-voice-from-student");
 
+  // Her 🤖 (15 Nov 2026): beside ⋮, a sheet first (a note to focus it, Explain now); here no key, so nothing is sent.
+  await U.getByRole("button", { name: "AI explain" }).click();
+  const aiSheet = U.locator(".h-aix");
+  await contains(aiSheet, "Step by step in Tamil");
+  await visible(aiSheet.getByRole("button", { name: "🤖 Explain now" }));
+  await shot(C, "help07c-ai-explain");
+  await aiSheet.getByRole("button", { name: "Close" }).click();
+  await until(async () => (await U.locator(".h-aix").count()) === 0, "the AI sheet closed");
+
   // ⋮ → Understood (two taps: never by mistake). 13 Nov 2026, his rule: both must tap, so it waits on her.
   await U.locator(".h-more").click();
   const menu = U.locator(".h-menu");

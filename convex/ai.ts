@@ -11,13 +11,13 @@ import { aiWhy } from "./schema";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalAction, internalQuery, query } from "./_generated/server";
-import type { MutationCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { actor, viewer } from "./lib/auth";
 import { fail, keyRow } from "./lib/backend";
 import { slDayStart } from "./lib/day";
 import { internalMutation, mutation } from "./lib/fn";
 import { lastWords, uKey } from "./lib/chat";
-import { askOf } from "./lib/help";
+import { askOf, asksIn } from "./lib/help";
 import { alertStudent } from "./lib/push";
 import {
   AI_ASKS_MAX,
@@ -29,6 +29,10 @@ import {
   AI_SAID_MAX,
   AI_TEXT_MAX,
   modelSettings,
+  teachPrompt,
+  teachSystem,
+  threadWords,
+  AI_TEACH_ROOM_DAY,
   aiParts,
   base64Of,
   checkPrompt,
@@ -50,7 +54,11 @@ async function usedToday(ctx: MutationCtx, now: number): Promise<number> {
     .query("aiChecks")
     .withIndex("by_at", (x) => x.gte("at", slDayStart(now)))
     .collect();
-  return rows.reduce((s, r) => s + 1 + r.asks, 0);
+  const teach = await ctx.db
+    .query("aiTeach")
+    .withIndex("by_at", (x) => x.gte("at", slDayStart(now)))
+    .collect();
+  return rows.reduce((s, r) => s + 1 + r.asks, 0) + teach.length;
 }
 
 async function dropRow(ctx: MutationCtx, r: Doc<"aiChecks">) {
@@ -369,13 +377,13 @@ export const post = mutation({
 export const AI_NAME = "ARISTORA AI";
 
 /** A message of the AI in his thread (by the teacher who used it, under the AI's name), ringing his phone. */
-async function aiMessage(ctx: MutationCtx, room: Doc<"usRooms">, by: Id<"users">, sid: Id<"students">, text: string): Promise<void> {
+async function aiMessage(ctx: MutationCtx, room: Doc<"usRooms">, by: Id<"users">, sids: Id<"students"> | Id<"students">[], text: string): Promise<void> {
   const now = Date.now();
   const t = text.slice(0, 2000);
   await ctx.db.insert("usChat", { rid: room._id, by, n: AI_NAME, t, kp: true, at: now, demo: false });
   const fresh = (await ctx.db.get(room._id))!;
   await ctx.db.patch(room._id, { la: now, lt: lastWords(t, 0), ln: AI_NAME, lw: uKey(by), n: fresh.n + 1, rv: fresh.rv + 1 });
-  await alertStudent(ctx, sid, `🤖 Q${room.hq}: ${t.slice(0, 60)}`, `/f/#chat=${room._id}`);
+  for (const sid of Array.isArray(sids) ? sids : [sids]) await alertStudent(ctx, sid, `🤖 Q${room.hq}: ${t.slice(0, 60)}`, `/f/#chat=${room._id}`);
 }
 
 /** The AI's answer to his question, into his thread. */
@@ -394,12 +402,219 @@ export async function heard(ctx: MutationCtx, sid: Id<"students">, room: Doc<"us
     .query("aiChecks")
     .withIndex("by_q", (x) => x.eq("sid", sid).eq("u", room.hu!).eq("q", room.hq!))
     .first();
-  if (!r || r.rid !== room._id || !r.raw || r.state === "work" || r.asks >= AI_ASKS_MAX) return;
+  // Not his own check's thread: the AI answers when a teacher's 🤖 explained in this thread (the last 3 days).
+  if (!r || r.rid !== room._id) return await teachHeard(ctx, sid, room, text);
+  if (!r.raw || r.state === "work" || r.asks >= AI_ASKS_MAX) return;
   const now = Date.now();
   if ((await usedToday(ctx, now)) >= AI_DAY_MAX) return;
   await ctx.db.patch(r._id, { msgs: [...r.msgs, { r: "s", x: text.trim().slice(0, AI_TEXT_MAX), at: now }], asks: r.asks + 1, state: "work", err: undefined, upd: now });
   await ctx.scheduler.runAfter(0, internal.ai.run, { id: r._id });
 }
+
+/** The students waiting in a thread (open asks): their ids, names and grades. */
+async function waitingIn(ctx: QueryCtx, rid: Id<"usRooms">) {
+  const out: { sid: Id<"students">; n: string; g: number | null }[] = [];
+  for (const a of await asksIn(ctx, rid)) {
+    if (a.st !== "open") continue;
+    const st = await ctx.db.get(a.sid);
+    if (st && !st.archived) out.push({ sid: st._id, n: st.name.split(" ")[0], g: st.grade ?? null });
+  }
+  return out;
+}
+
+/** AI messages in a thread today (her 🤖 and his questions). */
+async function teachToday(ctx: QueryCtx, rid: Id<"usRooms">, now: number) {
+  return (
+    await ctx.db
+      .query("aiTeach")
+      .withIndex("by_room", (x) => x.eq("rid", rid).gte("at", slDayStart(now)))
+      .collect()
+  ).length;
+}
+
+/**
+ * Her 🤖 in a thread (15 Nov 2026, his ask: "sometimes I explain with my voice note but still they can't understand ...
+ * put the AI explanation button ... step by step ... in a funny way with emojis"): the AI explains the question to
+ * everyone waiting in it, in a new way, and then answers their questions there. Any teacher (as the thread's ⋮).
+ */
+export const explain = mutation({
+  args: { token, id: v.string(), note: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const me = await actor(ctx, args.token, ["any"]);
+    const rid = ctx.db.normalizeId("usRooms", args.id);
+    const room = rid ? await ctx.db.get(rid) : null;
+    if (!room || room.k !== "h") fail("This isn't an explanation thread.");
+    const now = Date.now();
+    const busy = await ctx.db
+      .query("aiTeach")
+      .withIndex("by_room", (x) => x.eq("rid", room._id).gte("at", now - AI_STUCK_MS))
+      .collect();
+    if (busy.some((t) => t.state === "work")) fail("The AI is already writing here. Wait a moment.");
+    if ((await teachToday(ctx, room._id, now)) >= AI_TEACH_ROOM_DAY) fail(`The AI wrote ${AI_TEACH_ROOM_DAY} times in this thread today: explain the rest yourself.`);
+    if ((await usedToday(ctx, now)) >= AI_DAY_MAX) fail(`The AI has done ${AI_DAY_MAX} jobs today, the most for a day.`);
+    const note = args.note?.trim().slice(0, AI_TEXT_MAX) || undefined;
+    const id = await ctx.db.insert("aiTeach", { rid: room._id, by: me._id, ...(note ? { note } : {}), state: "work", at: now });
+    await ctx.scheduler.runAfter(0, internal.ai.teach, { id });
+    return { id };
+  },
+});
+
+/** His question in a thread a teacher's 🤖 explained in (the last 3 days): the AI answers it there. */
+async function teachHeard(ctx: MutationCtx, sid: Id<"students">, room: Doc<"usRooms">, text: string): Promise<void> {
+  const now = Date.now();
+  const rows = await ctx.db
+    .query("aiTeach")
+    .withIndex("by_room", (x) => x.eq("rid", room._id).gte("at", now - AI_KEEP_MS))
+    .collect();
+  const asked = rows.find((t) => !t.ask && t.state === "done");
+  if (!asked || rows.some((t) => t.state === "work" && now - t.at < AI_STUCK_MS)) return;
+  if ((await teachToday(ctx, room._id, now)) >= AI_TEACH_ROOM_DAY || (await usedToday(ctx, now)) >= AI_DAY_MAX) return;
+  const id = await ctx.db.insert("aiTeach", { rid: room._id, by: asked.by, sid, ask: text.trim().slice(0, AI_TEXT_MAX), state: "work", at: now });
+  await ctx.scheduler.runAfter(0, internal.ai.teach, { id });
+}
+
+/** What a teach call needs: the thread, its question and key, who waits, their latest photos. */
+export const teachJob = internalQuery({
+  args: { id: v.id("aiTeach") },
+  handler: async (ctx, args) => {
+    const t = await ctx.db.get(args.id);
+    if (!t) return null;
+    const room = await ctx.db.get(t.rid);
+    if (!room || !room.hu || room.hq === undefined) return null;
+    const qq = await ctx.db
+      .query("questions")
+      .withIndex("by_book", (x) => x.eq("unitId", room.hu!).eq("stage", "master").eq("q", room.hq!))
+      .first();
+    const key = await keyRow(ctx, room.hu, "master");
+    const msgs = (
+      await ctx.db
+        .query("usChat")
+        .withIndex("by_room", (x) => x.eq("rid", room._id))
+        .order("desc")
+        .take(24)
+    ).reverse();
+    const lines = msgs.map((m) => ({
+      who: (m.n === AI_NAME ? "ai" : m.sid ? "s" : "t") as "t" | "s" | "ai",
+      n: m.n.split(" ")[0],
+      ...(m.t ? { t: m.t } : {}),
+      ...(m.au ? { voice: true } : {}),
+      ...(m.ph?.length ? { photos: m.ph.length } : {}),
+    }));
+    // Their latest two photos (big), newest last.
+    const files = msgs
+      .filter((m) => m.sid && m.ph?.length)
+      .flatMap((m) => m.ph!.map((p) => p.b))
+      .slice(-2);
+    const waiting = await waitingIn(ctx, room._id);
+    const asker = t.sid ? await ctx.db.get(t.sid) : null;
+    return {
+      t,
+      room,
+      html: qq?.html ?? null,
+      k: key?.answers.find((a) => a.q === room.hq) ?? null,
+      lines,
+      files,
+      waiting,
+      asker: asker ? asker.name.split(" ")[0] : null,
+      askerGrade: asker?.grade ?? null,
+    };
+  },
+});
+
+/** The teach call's end: its words into the thread (ringing who waits), or why not. */
+export const teachSave = internalMutation({
+  args: { id: v.id("aiTeach"), ok: v.boolean(), text: v.optional(v.string()), err: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const t = await ctx.db.get(args.id);
+    if (!t) return;
+    if (!args.ok || !args.text) {
+      // Nothing goes into the thread: her 🤖 sheet says why when she opens it again (`teachState`).
+      await ctx.db.patch(t._id, { state: "fail", err: args.err ?? "The AI didn't answer." });
+      return;
+    }
+    await ctx.db.patch(t._id, { state: "done" });
+    const room = await ctx.db.get(t.rid);
+    if (!room) return;
+    const ring = t.sid ? [t.sid] : (await waitingIn(ctx, room._id)).map((w) => w.sid);
+    await aiMessage(ctx, room, t.by, ring, args.text);
+  },
+});
+
+/** The AI explains in a thread (her 🤖) or answers his question there. */
+export const teach = internalAction({
+  args: { id: v.id("aiTeach") },
+  handler: async (ctx, args) => {
+    const job = await ctx.runQuery(internal.ai.teachJob, { id: args.id });
+    if (!job) return;
+    const key = env("ANTHROPIC_API_KEY");
+    if (!key) {
+      await ctx.runMutation(internal.ai.teachSave, { id: args.id, ok: false, err: "The AI isn't switched on (ANTHROPIC_API_KEY)." });
+      return;
+    }
+    const photos: { type: "image"; source: { type: "base64"; media_type: string; data: string } }[] = [];
+    for (const f of job.files) {
+      const blob = await ctx.storage.get(f);
+      if (blob) photos.push({ type: "image", source: { type: "base64", media_type: blob.type || "image/jpeg", data: base64Of(new Uint8Array(await blob.arrayBuffer())) } });
+    }
+    const grades = [...job.waiting.map((w) => w.g), job.askerGrade].filter((g): g is number => typeof g === "number");
+    const text = teachPrompt({
+      q: job.room.hq!,
+      html: job.html,
+      k: job.k,
+      grades,
+      waiting: job.waiting.map((w) => w.n),
+      thread: threadWords(job.t.ask ? job.lines.slice(0, -1) : job.lines),
+      photos: photos.length,
+      note: job.t.note ?? null,
+      ask: job.t.ask ? { n: job.asker ?? "He", t: job.t.ask } : null,
+    });
+    const model = env("AI_MODEL") || AI_MODEL_DEFAULT;
+    const settings = modelSettings(model, false);
+    let res: Response;
+    try {
+      res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({ model, system: teachSystem(), messages: [{ role: "user", content: [...photos, { type: "text", text }] }], ...settings }),
+      });
+    } catch {
+      await ctx.runMutation(internal.ai.teachSave, { id: args.id, ok: false, err: "The AI couldn't be reached." });
+      return;
+    }
+    const body = await res.text();
+    if (!res.ok) {
+      await ctx.runMutation(internal.ai.teachSave, { id: args.id, ok: false, err: failWords(res.status, body) });
+      return;
+    }
+    let said = "";
+    try {
+      const j = JSON.parse(body) as { content?: { type: string; text?: string }[] };
+      said = (j.content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join("");
+    } catch {
+      said = "";
+    }
+    const x = cleanReply(said);
+    await ctx.runMutation(internal.ai.teachSave, x ? { id: args.id, ok: true, text: x } : { id: args.id, ok: false, err: "The AI gave no answer." });
+  },
+});
+
+/** The last 🤖 of a thread, for her sheet (working, failed and why, or done). */
+export const teachState = query({
+  args: { token, id: v.string() },
+  handler: async (ctx, args) => {
+    await viewer(ctx, args.token, "any");
+    const rid = ctx.db.normalizeId("usRooms", args.id);
+    if (!rid) return null;
+    const t = await ctx.db
+      .query("aiTeach")
+      .withIndex("by_room", (x) => x.eq("rid", rid))
+      .order("desc")
+      .first();
+    if (!t) return null;
+    const stuck = t.state === "work" && Date.now() - t.at > AI_STUCK_MS;
+    return { state: stuck ? ("fail" as const) : t.state, err: stuck ? "The AI didn't answer." : (t.err ?? null), at: t.at, ask: !!t.ask };
+  },
+});
 
 /** Every night: threads older than 3 days go, with their photos. */
 export const sweep = internalMutation({
@@ -410,5 +625,10 @@ export const sweep = internalMutation({
       .withIndex("by_at", (x) => x.lt("at", Date.now() - AI_KEEP_MS))
       .take(200);
     for (const r of old) await dropRow(ctx, r);
+    for (const t of await ctx.db
+      .query("aiTeach")
+      .withIndex("by_at", (x) => x.lt("at", Date.now() - AI_KEEP_MS))
+      .take(200))
+      await ctx.db.delete(t._id);
   },
 });

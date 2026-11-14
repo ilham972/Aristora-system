@@ -382,6 +382,62 @@ describe("online explanations", () => {
     }
   });
 
+  test("her 🤖 in a thread (15 Nov 2026): the AI explains it step by step to everyone waiting, then answers their questions there", async () => {
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout"] });
+    vi.setSystemTime(new Date("2026-11-15T01:00:00+05:30"));
+    const sent: Record<string, unknown>[] = [];
+    let reply = "";
+    vi.stubGlobal("fetch", async (_url: string, init: { body: string }) => {
+      sent.push(JSON.parse(init.body) as Record<string, unknown>);
+      return new Response(JSON.stringify({ stop_reason: "end_turn", content: [{ type: "thinking", thinking: "…" }, { type: "text", text: reply }] }), { status: 200 });
+    });
+    const g = globalThis as { process?: { env?: Record<string, string | undefined> } };
+    g.process ??= {};
+    g.process.env ??= {};
+    g.process.env.ANTHROPIC_API_KEY = "test-key-not-real";
+    const teachRows = async () => await raw.run(async (ctx) => await ctx.db.query("aiTeach").collect());
+    try {
+      const id = await send(h(), 8, nila);
+      await send(m(), 8);
+      await tn().mutation(api.chat.tsend, { id, text: "இதோ விளக்கம்." });
+      // Before her 🤖, his message wakes nothing.
+      await h().mutation(api.chat.send, { id, text: "புரியவில்லை" });
+      expect(await teachRows()).toEqual([]);
+      await expect(h().mutation(api.ai.explain, { token: HANA, id })).rejects.toThrow();
+      await tn().mutation(api.ai.explain, { id, note: "focus on part ii" });
+      await expect(tn().mutation(api.ai.explain, { id })).rejects.toThrow(/already writing/);
+      expect(await tn().query(api.ai.teachState, { id })).toMatchObject({ state: "work", ask: false });
+      reply = "வணக்கம் 😊\n1️⃣ 6 × 7 = 42\n2️⃣ 6 × 8 = 48 🎯";
+      await raw.action(internal.ai.teach, { id: (await teachRows())[0]._id });
+      const body = sent[0] as { system: string; messages: { content: { type: string; text?: string }[] }[]; tools?: unknown };
+      expect(body.tools).toBeUndefined();
+      expect(body.system).toMatch(/emojis/);
+      const prompt = body.messages[0].content.find((c) => c.type === "text")!.text!;
+      expect(prompt).toMatch(/Grade 8/);
+      expect(prompt).toMatch(/Teacher Nila: இதோ விளக்கம்\.\nStudent Hana: புரியவில்லை/);
+      expect(prompt).toMatch(/for Hana, Mira\. She asks you: focus on part ii\nExplain the question\.$/);
+      // His photos from the thread go with it (the latest two).
+      expect(body.messages[0].content.filter((c) => c.type === "image")).toHaveLength(2);
+      const ai = async () => (await m().query(api.chat.room, { id })).msgs.filter((x) => x.n === "ARISTORA AI").map((x) => x.t);
+      expect(await ai()).toEqual(["வணக்கம் 😊\n1️⃣ 6 × 7 = 42\n2️⃣ 6 × 8 = 48 🎯"]);
+      expect(await tn().query(api.ai.teachState, { id })).toMatchObject({ state: "done" });
+      // Mira asks: the AI answers her there.
+      await m().mutation(api.chat.send, { id, text: "ஏன் 48?" });
+      const asked = (await teachRows()).find((t) => t.ask)!;
+      expect(asked).toMatchObject({ ask: "ஏன் 48?", sid: mira, state: "work" });
+      reply = "ஏனென்றால் 6 + 6 + 6 + 6 + 6 + 6 + 6 + 6 = 48 🍕";
+      await raw.action(internal.ai.teach, { id: asked._id });
+      expect(String((sent[1] as { messages: { content: { text?: string }[] }[] }).messages[0].content.at(-1)!.text)).toMatch(/Mira asks you now: ஏன் 48\?\nAnswer him\.$/);
+      expect((await ai()).at(-1)).toBe("ஏனென்றால் 6 + 6 + 6 + 6 + 6 + 6 + 6 + 6 = 48 🍕");
+      // A teacher's message never wakes it.
+      await tn().mutation(api.chat.tsend, { id, text: "சரி" });
+      expect(await teachRows()).toHaveLength(2);
+    } finally {
+      vi.unstubAllGlobals();
+      delete g.process.env.ANTHROPIC_API_KEY;
+    }
+  });
+
   test("the owner's limit a day (none unless he sets one); demo students can't send", async () => {
     await expect(tn().query(api.help.limit, {})).rejects.toThrow();
     expect(await t.query(api.help.limit, {})).toBe(0);

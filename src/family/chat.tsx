@@ -16,7 +16,7 @@ import type { ChatHead, ChatLine, ChatMsg, ChatPeople, ChatPerson, ChatRoom } fr
 import { keep, last, mutation, query, sameOr } from "./net";
 import { picOf, usePics } from "./pics";
 import { buzz, sound } from "./sound";
-import { AskSheet, HelpList, HelpMenu, HelpTop, Voice, VoiceRec } from "./help";
+import { AiExplainSheet, AskSheet, HelpList, HelpMenu, HelpTop, Voice, VoiceRec } from "./help";
 import { agoShort, Bubble, jumpTo, ReactorsSheet, WriteBar, type Sent, type Taggable } from "./talk";
 import { Avatar, Icon, Owl, problemWords, Sheet, showSheet, toast, Waiting } from "./ui";
 import { Pics } from "./usPost";
@@ -467,6 +467,12 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
             </button>
           )}
           <span class="f-sp" />
+          {head?.k === "h" && head.help && props.staff && (
+            // Her 🤖 (15 Nov 2026): the AI explains it again, step by step; a sheet first, so a stray tap costs nothing.
+            <button type="button" class="f-round on-brand h-aib" aria-label="AI explain" onClick={() => showSheet((close) => <AiExplainSheet id={props.id} waiting={head.help!.open} onClose={close} />)}>
+              🤖
+            </button>
+          )}
           {head?.k === "h" && head.help && props.staff && (
             // His words: "not put as big button, because mistakenly teachers can press that. So just put three dot."
             <button type="button" class="f-round on-brand h-more" aria-label="Explained, Not now, Send to another teacher" onClick={() => showSheet((close) => <HelpMenu id={props.id} help={head.help!} onClose={close} onChange={() => void load(true)} />)}>
