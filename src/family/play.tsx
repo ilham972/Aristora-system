@@ -218,6 +218,12 @@ function useQuestions(world: World, n: number, on: boolean): { got: FamilyQuesti
 }
 
 /**
+ * A ladder's sub-question (`.sq`: its label, its words, its printed box at the right) reads like a workbook's on a
+ * phone (14 Nov 2026, his screenshot: "spaces are not managed properly ... learn from master book"): the label and the
+ * words as one paragraph, its box at their end; the black "teacher" tag hidden (the card says it). A staircase's empty
+ * boxes (`.dg` with a blank laid over each box of the drawing: `left`, `top`, `--w`, `--h` in the drawing's mm) are
+ * blanks like any other, the drawing's size.
+ *
  * The app's paper on the book's page (after the book's own rules): rounded, a little air; the app's own font, larger
  * (his ask, 4 Nov 2026: "I want beautiful font for the questions"), letters of maths in italics; the printed number
  * hidden (the card says Q9 once); the book's slots as the app's boxes, options, ✓ / ✗ and words to tap.
@@ -265,7 +271,16 @@ const PAPER_CSS = `.qv { border-radius: 14px; padding: 14px 12px 10px; -webkit-u
 .qv [data-mark].fx-ring.fx-on { border-color: var(--brand, #6c5ce7); }
 .qv [data-mark].mk-l { display: inline; font-size: 1em; text-align: left; padding: 0 .1em; line-height: 1.75;
   -webkit-box-decoration-break: clone; box-decoration-break: clone; }
-.qv .fx-v { font-family: Georgia, "Noto Serif", "Times New Roman", serif; font-style: italic; font-weight: 700; padding: 0 .04em; }`;
+.qv .fx-v { font-family: Georgia, "Noto Serif", "Times New Roman", serif; font-style: italic; font-weight: 700; padding: 0 .04em; }
+.qv .tb { display: none !important; }
+.qv .lead { margin: .9em 0 .2em !important; }
+.qv .sq { display: block !important; margin: .8em 0 .3em !important; min-height: 0 !important; }
+.qv .sq .sl { display: inline !important; width: auto !important; margin-right: .35em; font-weight: 800; color: var(--brand-2, #5a49d6); }
+.qv .sq .st { display: inline !important; }
+.qv .sq .sa { display: inline-block !important; margin: 0 0 0 .3em !important; vertical-align: middle; }
+.qv .qs { min-width: 0; overflow-wrap: break-word; }
+.qv .dg [data-fill] { position: absolute !important; min-width: 0 !important; width: var(--w) !important; height: var(--h) !important; margin: 0 !important;
+  padding: 0 !important; border-width: 1.5px !important; border-radius: 1.4mm !important; font-size: 3.6mm !important; }`;
 
 /**
  * A question as printed, on the level. A tap opens it full screen (`QuestionZoom`): the app itself never zooms. With

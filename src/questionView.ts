@@ -80,12 +80,14 @@ const samePart = (key: string, printed: string) => {
  * matched by its label: the whole of the key's label or its last word, "a ii" → "ii", in printed order), and one slot at
  * the end for the parts that match none (a Part I question, a part printed without a label). The family app's part
  * rows are the host's children with `slot="pN"`: they stay the app's (its style, its taps). Parts the key cut from one
- * printed sub-question ("ii · பெயர்", "ii · சுற்றளவு") go under it one after the other. `ladder` (13 Nov 2026, the
- * teachers' cards only): a theory book's ladder sub-questions too (`.sq` with its label `.sl`, "(i)").
+ * printed sub-question ("ii · பெயர்", "ii · சுற்றளவு") go under it one after the other. A theory book's ladder
+ * prints its sub-questions as `.sq` with the label in `.sl` ("(i)"): found the same (13 Nov 2026 on the teachers' cards;
+ * 14 Nov on the phone too, his screenshot: "the first question don't have answer box ... learn from master book").
+ * A workbook prints only `.rp` / `.rl`, a ladder only `.sq` / `.sl`.
  */
-export function slotParts(box: HTMLElement, parts: string[], ladder = false): number[] {
-  const B = ladder ? ".rp, .sq" : ".rp";
-  const L = ladder ? ".rl, .sl" : ".rl";
+export function slotParts(box: HTMLElement, parts: string[]): number[] {
+  const B = ".rp, .sq";
+  const L = ".rl, .sl";
   const own = (b: Element) => !!b.querySelector(L);
   const blocks = [...box.querySelectorAll<HTMLElement>(B)].filter(own);
   const labelled = (el: Element) => (el.matches(B) ? own(el) : [...el.querySelectorAll(B)].some(own));
@@ -216,20 +218,17 @@ export function showStep(host: HTMLElement, k: number | "story" | null): void {
 /**
  * Draws one question (its HTML and its book's CSS) into `host`'s shadow root, with `extraCss` after the phone's rules
  * (the family app's paper look), and with `parts` (its parts' labels) a place for each part's answers under its
- * sub-question (`slotParts`; `ladder`: a theory book's sub-questions too). Returns the clean-up (stops fitting figures
- * when the host resizes).
+ * sub-question (`slotParts`: a workbook's or a ladder's) and its steps marked (`markSteps`: shown by `showStep`).
+ * Returns the clean-up (stops fitting figures when the host resizes).
  */
-export function drawQuestion(host: HTMLElement, html: string, css: string, extraCss = "", parts?: string[], ladder = false): () => void {
+export function drawQuestion(host: HTMLElement, html: string, css: string, extraCss = "", parts?: string[]): () => void {
   const root = host.shadowRoot ?? host.attachShadow({ mode: "open" });
   const style = document.createElement("style");
   style.textContent = `${css}\n${PHONE_CSS}\n${extraCss}`;
   const box = document.createElement("div");
   box.className = "qv";
   box.appendChild(safeFragment(html));
-  if (parts) {
-    const of = slotParts(box, parts, ladder);
-    if (!ladder) markSteps(box, of);
-  }
+  if (parts) markSteps(box, slotParts(box, parts));
   root.replaceChildren(style, box);
   const fit = () => {
     const w = box.clientWidth - 16;
