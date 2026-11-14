@@ -14369,3 +14369,59 @@ body.sb-on {
   background: var(--green);
   border-color: var(--green);
 }
+/* The AI check: each part's marks and the AI's reasoning (14 Nov 2026, his ask: read the question, the key, his answer, then decide). */
+.ai-why {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ai-why li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 2px 10px;
+  align-items: baseline;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1.5px solid var(--line-2);
+  border-left: 5px solid var(--green);
+}
+.ai-why li.part {
+  border-left-color: var(--amber);
+}
+.ai-why li.zero {
+  border-left-color: var(--red);
+}
+.ai-wp {
+  font-size: 16px;
+}
+.ai-wg {
+  grid-column: 3;
+  font: 800 19px/1 var(--cond);
+}
+.ai-wh,
+.ai-wc {
+  grid-column: 1 / -1;
+  font-size: 14.5px;
+  line-height: 1.45;
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+.ai-wh {
+  font-weight: 700;
+  color: var(--ink);
+}
+.ai-bad {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.ai-bad pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 200px;
+  overflow: auto;
+  font-size: 12px;
+}

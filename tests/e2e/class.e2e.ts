@@ -1909,11 +1909,23 @@ test("AI check: the ✦ on Correction's workbook card, a photo, the AI's marks a
 
   // As if the AI had answered: 1 of 2, its Tamil words; the thread and the box to ask more.
   const r = (await row())!;
-  await backend.t.mutation(internal.ai.save, { id: r._id, ok: true, x: "முதல் படி சரி. இரண்டாவது படியில் பிழை: −3 × 4 = −12.", raw: "{}", g: 1, read: "−3 × 4 = 12", low: false });
+  await backend.t.mutation(internal.ai.save, {
+    id: r._id,
+    ok: true,
+    x: "முதல் படி சரி. இரண்டாவது படியில் பிழை: −3 × 4 = −12.",
+    raw: "{}",
+    g: 1,
+    read: "−3 × 4 = 12",
+    low: false,
+    why: [{ p: "", got: 1, max: 2, his: "−3 × 4 = 12", check: "The first step is right; −3 × 4 is −12, not 12, so the second mark is lost." }],
+  });
   await backend.push();
   await contains(F.locator(".ai-score"), "1");
   await visible(F.locator(".ai-score.lost"));
-  await contains(F.locator(".ai-read"), "He wrote: −3 × 4 = 12");
+  // Each part: what he gave, its marks and the AI's reasoning (so she can trust or change it).
+  await contains(F.locator(".ai-why li.part .ai-wg"), "1/2");
+  await contains(F.locator(".ai-why .ai-wh"), "He gave: −3 × 4 = 12");
+  await contains(F.locator(".ai-why .ai-wc"), "so the second mark is lost");
   await contains(F.locator(".ai-msg.ai"), "இரண்டாவது படியில் பிழை");
   expect(await F.locator(".ai-msg.ai").getAttribute("lang")).toBe("ta");
   await visible(F.getByRole("textbox", { name: "Ask the AI more" }));

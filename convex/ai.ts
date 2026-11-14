@@ -7,6 +7,7 @@
 //   new photo starts it again). The AI's call runs as a scheduled step (`run`), so the phone only watches `thread`.
 
 import { v } from "convex/values";
+import { aiWhy } from "./schema";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalAction, internalQuery, query } from "./_generated/server";
@@ -25,12 +26,14 @@ import {
   AI_SYSTEM,
   AI_SAID_MAX,
   AI_TEXT_MAX,
+  MARK_TOOL,
   aiParts,
   base64Of,
   checkPrompt,
   cleanReply,
   failWords,
   readVerdict,
+  verdictWords,
 } from "./lib/ai";
 
 const token = v.optional(v.string());
@@ -157,6 +160,8 @@ export const thread = query({
       max: r.max,
       read: r.read ?? null,
       low: !!r.low,
+      why: r.why ?? null,
+      bad: r.state === "fail" ? (r.bad ?? null) : null,
       msgs: r.msgs,
       asks: r.asks,
       asksMax: AI_ASKS_MAX,
@@ -193,6 +198,8 @@ export const save = internalMutation({
     pm: v.optional(v.array(v.number())),
     read: v.optional(v.string()),
     low: v.optional(v.boolean()),
+    why: v.optional(aiWhy),
+    bad: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const r = await ctx.db.get(args.id);
@@ -202,7 +209,13 @@ export const save = internalMutation({
       // A question that failed is given back (it doesn't count against the thread's questions).
       const last = r.msgs[r.msgs.length - 1];
       const back = !!r.raw && last?.r === "t";
-      await ctx.db.patch(r._id, { state: "fail", err: args.err ?? "The AI didn't answer. Try again.", upd: now, ...(back ? { asks: Math.max(0, r.asks - 1) } : {}) });
+      await ctx.db.patch(r._id, {
+        state: "fail",
+        err: args.err ?? "The AI didn't answer. Try again.",
+        upd: now,
+        ...(back ? { asks: Math.max(0, r.asks - 1) } : {}),
+        ...(args.bad !== undefined ? { bad: args.bad } : {}),
+      });
       return;
     }
     const msgs = [...r.msgs, { r: "ai" as const, x: args.x ?? "", at: now }];
@@ -211,7 +224,7 @@ export const save = internalMutation({
       err: undefined,
       msgs,
       upd: now,
-      ...(args.raw !== undefined ? { raw: args.raw, g: args.g, pm: args.pm, read: args.read, low: args.low } : {}),
+      ...(args.raw !== undefined ? { raw: args.raw, g: args.g, pm: args.pm, read: args.read, low: args.low, why: args.why, bad: undefined } : {}),
     });
   },
 });
@@ -243,7 +256,9 @@ export const run = internalAction({
     const messages: Msg[] = [{ role: "user", content: [...photos, { type: "text", text: checkPrompt(row.q, html, k, row.max, row.said, photos.length) }] }];
     if (!first) {
       // The thread so far: its first reply as it came, then each question and answer.
-      messages.push({ role: "assistant", content: row.raw! });
+      // Its first answer was the mark tool's: here in words (the thread has no tool).
+      const first0 = readVerdict(row.raw!, row.max, aiParts(k, row.max));
+      messages.push({ role: "assistant", content: first0 ? verdictWords(first0) : row.raw! });
       const rest = row.msgs.slice(1);
       rest.forEach((m, i) => {
         const text = m.r === "t" && i === 0 ? `${AI_FOLLOW}\n\n${m.x}` : m.x;
@@ -259,7 +274,14 @@ export const run = internalAction({
       res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({ model: env("AI_MODEL") || AI_MODEL_DEFAULT, max_tokens: first ? 1500 : 900, system: AI_SYSTEM, messages }),
+        body: JSON.stringify({
+          model: env("AI_MODEL") || AI_MODEL_DEFAULT,
+          // Tamil takes many tokens: room for the reasoning of every part and the explanation.
+          max_tokens: first ? 6000 : 2000,
+          system: AI_SYSTEM,
+          messages,
+          ...(first ? { tools: [MARK_TOOL], tool_choice: { type: "tool", name: "mark" } } : {}),
+        }),
       });
     } catch {
       await ctx.runMutation(internal.ai.save, { id: args.id, ok: false, err: "The AI couldn't be reached. Try again." });
@@ -271,32 +293,43 @@ export const run = internalAction({
       return;
     }
     let text = "";
+    let tool: unknown = null;
+    let stop = "";
     try {
-      const j = JSON.parse(body) as { content?: { type: string; text?: string }[] };
+      const j = JSON.parse(body) as { stop_reason?: string; content?: { type: string; text?: string; name?: string; input?: unknown }[] };
+      stop = j.stop_reason ?? "";
       text = (j.content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join("");
+      tool = (j.content ?? []).find((c) => c.type === "tool_use" && c.name === "mark")?.input ?? null;
     } catch {
       text = "";
     }
     if (!first) {
       const x = cleanReply(text);
-      await ctx.runMutation(internal.ai.save, x ? { id: args.id, ok: true, x } : { id: args.id, ok: false, err: "The AI gave no answer. Ask again." });
+      await ctx.runMutation(internal.ai.save, x ? { id: args.id, ok: true, x } : { id: args.id, ok: false, err: stop === "max_tokens" ? "The AI's answer was too long. Ask again, shorter." : "The AI gave no answer. Ask again." });
       return;
     }
     const parts = aiParts(k, row.max);
-    const vd = readVerdict(text, row.max, parts);
+    const vd = readVerdict(tool ?? text, row.max, parts);
     if (!vd) {
-      await ctx.runMutation(internal.ai.save, { id: args.id, ok: false, err: "The AI couldn't mark this one. Take a clearer photo, or check it yourself." });
+      const why = stop === "max_tokens" ? " (its answer was cut off)" : !tool && !text ? " (it sent nothing)" : "";
+      await ctx.runMutation(internal.ai.save, {
+        id: args.id,
+        ok: false,
+        err: `The AI couldn't mark this one${why}. Check again, or mark it yourself.`,
+        bad: (tool ? JSON.stringify(tool) : text).slice(0, 4000),
+      });
       return;
     }
     await ctx.runMutation(internal.ai.save, {
       id: args.id,
       ok: true,
       x: vd.ta,
-      raw: text.slice(0, 6000),
+      raw: JSON.stringify(tool ?? vd).slice(0, 12000),
       g: vd.got,
-      ...(parts ? { pm: vd.parts.map((p) => p.got) } : {}),
+      ...(parts && vd.partsOk ? { pm: vd.parts.map((p) => p.got) } : {}),
       read: vd.read,
       low: vd.sure === "low",
+      ...(vd.parts.length ? { why: vd.parts.map((p) => ({ p: p.p, got: p.got, max: p.max, his: p.his ?? "", check: p.check ?? "" })) } : {}),
     });
   },
 });

@@ -6,7 +6,7 @@ import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
-import { AI_ASKS_MAX, AI_KEEP_MS, aiParts, saidWords, checkPrompt, cleanReply, failWords, keyText, questionText, readVerdict } from "../convex/lib/ai";
+import { AI_ASKS_MAX, AI_KEEP_MS, aiParts, saidWords, verdictWords, checkPrompt, cleanReply, failWords, keyText, questionText, readVerdict } from "../convex/lib/ai";
 import type { KeyAnswer } from "../convex/lib/key";
 import schema from "../convex/schema";
 import { readWorkbookHtml } from "../src/workbookFile";
@@ -30,7 +30,13 @@ describe("the rules", () => {
     const two = readVerdict('{"parts":[{"p":"(ii)","got":1},{"p":"i","got":"1"}],"got":5,"sure":"low","ta":"பிழை"}', 3, kp);
     expect(two).toMatchObject({ got: 2, parts: [{ p: "i", got: 1, max: 1 }, { p: "ii", got: 1, max: 2 }], sure: "low" });
     // A part it didn't mark, no Tamil, or no JSON = not a verdict.
-    expect(readVerdict('{"parts":[{"p":"i","got":1}],"got":1,"ta":"x"}', 3, kp)).toBeNull();
+    // A part it didn't mark: its total alone (the corrector taps the parts).
+    expect(readVerdict('{"parts":[{"p":"i","got":1}],"got":1,"ta":"x"}', 3, kp)).toMatchObject({ got: 1, parts: [{ p: "i", got: 1, max: 3 }], partsOk: false });
+    // The mark tool's input (an object): its reasoning kept per part; "read" made from what he gave.
+    const tool = readVerdict({ asks: "x", parts: [{ p: "i", his: "70", check: "right", got: 1, max: 1 }, { p: "ii", his: "ADC = 90 (semi)", check: "the reason is right", got: 2, max: 2 }], got: 3, max: 3, sure: "high", ta: "சரி" }, 3, kp)!;
+    expect(tool).toMatchObject({ got: 3, partsOk: true, read: "70 · ADC = 90 (semi)" });
+    expect(tool.parts[1]).toMatchObject({ p: "ii", got: 2, his: "ADC = 90 (semi)", check: "the reason is right" });
+    expect(verdictWords(tool)).toBe("I marked it 3/3.\n(i) 1/1: right\n(ii) 2/2: the reason is right\nMy explanation to him: சரி");
     expect(readVerdict('{"got":1,"ta":""}', 3, null)).toBeNull();
     expect(readVerdict("I can't read this photo.", 3, null)).toBeNull();
     expect(readVerdict('{"got":-3,"ta":"x"}', 3, null)!.got).toBe(0);
@@ -42,7 +48,7 @@ describe("the rules", () => {
     expect(s).toBe('<div class="qq"><span class="qn">5</span> Find <b>x</b> [figure] </div>');
     expect(keyText({ q: 5, parts: [{ p: "i", a: "12", m: 1 }, { p: "ii", a: "**3**", m: 2 }] })).toBe("(i) 12 [1 mark]\n(ii) **3** [2 marks]");
     expect(keyText(null)).toMatch(/work it out/);
-    expect(checkPrompt(5, html, { q: 5, a: "12" }, 1)).toMatch(/^Question 5 \(1 mark\)\.[\s\S]*The answer key:\n12/);
+    expect(checkPrompt(5, html, { q: 5, a: "12" }, 1)).toMatch(/^Question 5 \(1 mark\)\.\n\n1\. The question[\s\S]*2\. The answer key[^\n]*:\n12\n\n3\. His answer:\nThe photo of his paper \(above\)\.\n\nMark it: call the mark tool\.$/);
     expect(cleanReply("## படி 1\n**x** = 4")).toBe("படி 1\nx = 4");
     expect(failWords(401, "")).toMatch(/ANTHROPIC_API_KEY/);
     expect(failWords(400, "credit balance is too low")).toMatch(/credit/);
@@ -70,7 +76,11 @@ describe("the AI check", () => {
   const sent: { body: Record<string, unknown>; headers: Record<string, string> }[] = [];
   let reply: { status: number; text: string } = { status: 200, text: "" };
   const answer = (text: string) => {
-    reply = { status: 200, text: JSON.stringify({ content: [{ type: "text", text }] }) };
+    reply = { status: 200, text: JSON.stringify({ stop_reason: "end_turn", content: [{ type: "text", text }] }) };
+  };
+  /** The model calling the mark tool, as the API sends it. */
+  const marks = (input: Record<string, unknown>) => {
+    reply = { status: 200, text: JSON.stringify({ stop_reason: "tool_use", content: [{ type: "tool_use", id: "toolu_1", name: "mark", input }] }) };
   };
 
   beforeEach(async () => {
@@ -112,15 +122,27 @@ describe("the AI check", () => {
     const args = { studentId: hana, unitId: u01, q: 2 };
     expect(await tr().query(api.ai.thread, args)).toMatchObject({ state: "work", msgs: [] });
 
-    answer('{"read":"24, 46","parts":[{"p":"i","got":1,"max":1},{"p":"ii","got":0,"max":1}],"got":1,"max":2,"sure":"high","ta":"ii இல் பிழை: 24 × 2 = 48."}');
+    marks({ asks: "two products", parts: [{ p: "i", his: "24", check: "matches the key", got: 1, max: 1 }, { p: "ii", his: "46", check: "24 × 2 is 48, not 46", got: 0, max: 1 }], got: 1, max: 2, sure: "high", ta: "ii இல் பிழை: 24 × 2 = 48." });
     await raw.action(internal.ai.run, { id });
     expect(sent).toHaveLength(1);
     expect(sent[0].headers["x-api-key"]).toBe("test-key-not-real");
     expect(sent[0].body.model).toBe("claude-haiku-5-5");
+    // The mark tool, forced: its fields in the order of the work (the question, his answer, the reasoning, then marks).
+    expect(sent[0].body.tool_choice).toEqual({ type: "tool", name: "mark" });
+    expect(Object.keys((sent[0].body.tools as { input_schema: { properties: object } }[])[0].input_schema.properties)).toEqual(["asks", "parts", "got", "max", "sure", "ta"]);
     const first = (sent[0].body.messages as { content: { type: string; text?: string }[] }[])[0].content;
     expect(first[0].type).toBe("image");
     expect(first[1].text).toMatch(/\(i\) 24 \[1 mark\]\n\(ii\) 48 \[1 mark\]/);
-    expect(await tr().query(api.ai.thread, args)).toMatchObject({ state: "done", g: 1, pm: [1, 0], max: 2, read: "24, 46", low: false, msgs: [{ r: "ai", x: "ii இல் பிழை: 24 × 2 = 48." }] });
+    expect(await tr().query(api.ai.thread, args)).toMatchObject({
+      state: "done",
+      g: 1,
+      pm: [1, 0],
+      max: 2,
+      read: "24 · 46",
+      low: false,
+      why: [{ p: "i", got: 1, max: 1, his: "24", check: "matches the key" }, { p: "ii", got: 0, max: 1, his: "46", check: "24 × 2 is 48, not 46" }],
+      msgs: [{ r: "ai", x: "ii இல் பிழை: 24 × 2 = 48." }],
+    });
 
     // Evaluation sees it and asks; the thread goes to the model with the first reply as it came.
     await asPhone(raw, NILA).mutation(api.ai.ask, { id, text: "why 48?" });
@@ -129,6 +151,8 @@ describe("the AI check", () => {
     await raw.action(internal.ai.run, { id });
     const msgs = sent[1].body.messages as { role: string; content: unknown }[];
     expect(msgs.map((m) => m.role)).toEqual(["user", "assistant", "user"]);
+    expect(sent[1].body.tools).toBeUndefined();
+    expect(String(msgs[1].content)).toMatch(/^I marked it 1\/2\.\n\(i\) 1\/1: matches the key\n\(ii\) 0\/1: 24 × 2 is 48, not 46\nMy explanation/);
     expect(String(msgs[2].content)).toMatch(/Tamil[\s\S]*why 48\?$/);
     const th = (await tr().query(api.ai.thread, args))!;
     expect(th.msgs.map((m) => m.r)).toEqual(["ai", "t", "ai"]);
@@ -160,13 +184,17 @@ describe("the AI check", () => {
 
     answer("I can't see the answer.");
     await raw.action(internal.ai.run, { id });
-    expect((await tr().query(api.ai.thread, args))!.err).toMatch(/couldn't mark/);
+    expect(await tr().query(api.ai.thread, args)).toMatchObject({ err: expect.stringMatching(/couldn't mark this one\. Check again/), bad: "I can't see the answer." });
+    // Cut off by the length: it says so.
+    reply = { status: 200, text: JSON.stringify({ stop_reason: "max_tokens", content: [{ type: "tool_use", name: "mark", input: { asks: "x", parts: [] } }] }) };
+    await raw.action(internal.ai.run, { id });
+    expect((await tr().query(api.ai.thread, args))!.err).toMatch(/cut off/);
     // No marks = nothing to ask about.
     await expect(tr().mutation(api.ai.ask, { id, text: "why?" })).rejects.toThrow(/didn't work/);
 
     answer('{"got":1,"max":1,"sure":"low","ta":"சரி"}');
     await raw.action(internal.ai.run, { id });
-    expect(await tr().query(api.ai.thread, args)).toMatchObject({ state: "done", g: 1, pm: null, low: true });
+    expect(await tr().query(api.ai.thread, args)).toMatchObject({ state: "done", g: 1, pm: null, low: true, bad: null });
 
     // A check that never came back reads as failed after 3 minutes.
     await tr().mutation(api.ai.ask, { id, text: "why?" });
@@ -188,18 +216,20 @@ describe("the AI check", () => {
     await expect(pia.mutation(api.ai.check, { studentId: hana, unitId: u01, q: 2, max: 2, home, photo: await photo() })).rejects.toThrow();
     const said = saidWords({
       parts: [
-        { p: "i", typed: ["24"], ok: [true] },
-        { p: "ii", typed: [], ok: null },
+        { p: "i", m: 1, key: "24", phone: 1, typed: ["24"], ok: [true] },
+        { p: "ii", m: 1, key: "48", phone: null, typed: [], ok: null },
       ],
       reasons: [{ p: "ii", yes: "இல்லை", text: "48 is 24 times 2" }],
     });
-    expect(said).toBe("(i) 24 (the phone: right)\n(ii) இல்லை. His reason: 48 is 24 times 2");
+    expect(said).toBe(
+      "(i) 1 mark; key: 24; he typed: 24; the phone gave 1/1\n(ii) 1 mark; key: 48; the phone couldn't mark it: yours to mark\n(ii) he picked இல்லை; his reason, typed: 48 is 24 times 2",
+    );
     const id = await pia.mutation(api.ai.check, { studentId: hana, unitId: u01, q: 2, max: 2, home, said });
-    answer('{"parts":[{"p":"i","got":1},{"p":"ii","got":1}],"got":2,"max":2,"sure":"high","ta":"சரி"}');
+    marks({ asks: "x", parts: [{ p: "i", his: "24", check: "ok", got: 1, max: 1 }, { p: "ii", his: "reason", check: "ok", got: 1, max: 1 }], got: 2, max: 2, sure: "high", ta: "சரி" });
     await raw.action(internal.ai.run, { id });
     const content = (sent[0].body.messages as { content: { type: string; text?: string }[] }[])[0].content;
     expect(content.map((c) => c.type)).toEqual(["image", "image", "text"]);
-    expect(content[2].text).toMatch(/What he typed on his phone at home:\n\(i\) 24[\s\S]*Mark the student's answer in the photos and what he typed/);
+    expect(content[2].text).toMatch(/3\. His answer:\n2 photos of his paper \(above\)\.\nWhat he typed on his phone at home, and what the phone did with it:\n\(i\) 1 mark; key: 24/);
     expect(await pia.query(api.ai.thread, { studentId: hana, unitId: u01, q: 2 })).toMatchObject({ state: "done", g: 2, pm: [1, 1] });
     // Checked again: a new thread; his photos stay (they are his row's).
     await pia.mutation(api.ai.check, { studentId: hana, unitId: u01, q: 2, max: 2, home, said });
@@ -210,7 +240,7 @@ describe("the AI check", () => {
   test("questions in one thread capped; old threads and their photos go at night", async () => {
     const ph = await photo();
     const id = await tr().mutation(api.ai.check, { studentId: hana, unitId: u01, q: 1, max: 1, photo: ph });
-    answer('{"got":0,"max":1,"sure":"high","ta":"பிழை"}');
+    marks({ asks: "x", parts: [{ p: "", his: "5", check: "wrong", got: 0, max: 1 }], got: 0, max: 1, sure: "high", ta: "பிழை" });
     await raw.action(internal.ai.run, { id });
     answer("சரி");
     for (let i = 0; i < AI_ASKS_MAX; i++) {

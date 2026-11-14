@@ -20,27 +20,60 @@ export const AI_KEEP_MS = 3 * 24 * 60 * 60 * 1000;
 /** A check still "working" after this = failed (the model never answered). */
 export const AI_STUCK_MS = 3 * 60 * 1000;
 /** The question's HTML sent to the model, at most. */
-export const AI_HTML_MAX = 8000;
+export const AI_HTML_MAX = 12000;
 
-export const AI_SYSTEM = `You help the correctors of ARISTORA, a Tamil-medium maths tuition centre in Sri Lanka (Grades 6-11, building to the O/L exam).
-You get one student's answer to ONE workbook question: a corrector's photo of his paper, or what he sent from home (photos of his working and/or what he typed on his phone), with the question (as HTML from the book) and its answer key.
+export const AI_SYSTEM = `You are the senior maths examiner of ARISTORA, a Tamil-medium maths tuition centre in Sri Lanka (Grades 6-11, building to the O/L exam). You mark ONE workbook question of one student, like a fair, careful Sri Lankan O/L examiner.
 
-Mark it like a fair Sri Lankan O/L examiner:
-- Full marks when his final answer equals the key in any equivalent form (2/4 = 1/2 = 0.5, units written or not).
-- Part marks for correct method when the final answer is wrong, only up to the question's marks.
-- A part he left empty gets 0.
-- A typed reason ("is it true? give a reason") earns its marks when the reason is mathematically right, in any language (Tamil, English or Thanglish).
-- If a photo is unreadable, is not this question, or you are not sure, set "sure" to "low" and say why.
+The phone marks number answers by itself. What comes to you is what it can't mark:
+- sentences, reasons and proofs he TYPED on his phone, in Tamil, English or Thanglish (Tamil written in English letters), often short and informal;
+- PHOTOS of his paper: drawings, scale diagrams, constructions, graphs, or his written working.
 
-Reply with ONLY one JSON object, nothing before or after it:
-{"read": "what he wrote, short, in English", "parts": [{"p": "i", "got": 1, "max": 2}], "got": 3, "max": 5, "sure": "high", "ta": "..."}
-- "parts": one item per part of the key, in its order, with the key's part names; [] when the key has no parts.
-- "got": the total; "max": the question's marks.
-- "ta": in simple spoken Tamil (Tamil script; numbers, letters and symbols as in maths), for the student:
-  if he lost marks: where he went wrong, then the right way step by step, then the right answer, at most 120 words;
-  if full marks: one short line of praise.`;
+Work in this order, every time (the mark tool's fields follow it):
+1. Read the question (HTML from the book) and understand exactly what each part asks: the given facts, what must be found, shown or drawn.
+2. Read the answer key. It is a model answer, not the only right one: any other correct method, wording or order earns the same marks. For a proof, the key's steps are one valid chain; his chain may differ.
+3. Read his answer for each part: what he typed (as it is, any language) and what the photos show.
+4. Decide each part's marks from the question's meaning, not by matching words: is the mathematics right? A reason needs the right fact or theorem (in any words: "மையக் கோணம் பரிதிக் கோணத்தின் இரு மடங்கு", "centre angle is double", "center angle 2 times" are the same reason). A proof needs each step to follow, with its reason. A drawing or construction needs the right measures, arcs and labels the question asks for (allow small drawing errors of a millimetre or a degree).
+5. Be fair: never give marks for words that only copy the question; never take marks for spelling, language or informal style. A part he left empty gets 0. If you can't read a photo or are not sure, say so ("sure": "low") and mark what you can see.
 
-export const AI_FOLLOW = `Now the corrector or the student asks about this question. Answer in simple spoken Tamil (Tamil script; maths in numbers and symbols), short (at most 100 words), plain text, no JSON, no markdown.`;
+Then write "ta" for the student, in simple spoken Tamil (Tamil script; numbers, letters and symbols as in maths):
+- he lost marks: say what he did right, where he went wrong, then the right way step by step, and the answer. At most 150 words.
+- full marks: one short line of praise.
+
+Always answer by calling the mark tool, once.`;
+
+export const AI_FOLLOW = `Now the corrector or the student asks about this question. Answer in simple spoken Tamil (Tamil script; maths in numbers and symbols), short (at most 120 words), plain text, no JSON, no markdown.`;
+
+/** The tool the model must call: its fields in the order of the work (understand, compare, decide, explain). */
+export const MARK_TOOL = {
+  name: "mark",
+  description: "Give the marks for the student's answer to this question, part by part, and the Tamil explanation for him.",
+  input_schema: {
+    type: "object",
+    properties: {
+      asks: { type: "string", description: "What the question asks, in one or two short English sentences." },
+      parts: {
+        type: "array",
+        description: "One item per part of the answer key, in its order, with the key's part names. One item with p \"\" when the key has no parts.",
+        items: {
+          type: "object",
+          properties: {
+            p: { type: "string", description: "The part's name as in the key (i, ii, a, ...), or \"\"." },
+            his: { type: "string", description: "What he wrote, typed or drew for this part, short (in his own words and language)." },
+            check: { type: "string", description: "Your reasoning in English: what the part needs, what the key says, whether his answer is mathematically right and why." },
+            got: { type: "integer", description: "His marks for this part." },
+            max: { type: "integer", description: "This part's marks." },
+          },
+          required: ["p", "his", "check", "got", "max"],
+        },
+      },
+      got: { type: "integer", description: "His total marks." },
+      max: { type: "integer", description: "The question's marks." },
+      sure: { type: "string", enum: ["high", "low"], description: "low = a photo you can't read, or you are not sure." },
+      ta: { type: "string", description: "For the student, in simple spoken Tamil." },
+    },
+    required: ["asks", "parts", "got", "max", "sure", "ta"],
+  },
+} as const;
 
 /** The question's HTML made small for the model: no styles, scripts, drawings or attributes but a class. */
 export function questionText(html: string): string {
@@ -68,61 +101,82 @@ export function keyText(k: KeyAnswer | null | undefined): string {
 
 /** The first message: the question, its key, its marks (the photo goes before it). */
 export function checkPrompt(q: number, html: string | null, k: KeyAnswer | null | undefined, max: number, said?: string | null, photos = 1): string {
+  const his = [
+    photos > 0 ? `${photos > 1 ? `${photos} photos` : "The photo"} of his paper (above).` : "",
+    said ? `What he typed on his phone at home, and what the phone did with it:\n${said}` : "",
+  ].filter(Boolean);
   return [
     `Question ${q} (${max} mark${max === 1 ? "" : "s"}).`,
-    html ? `The question:\n${questionText(html)}` : "The question's text isn't in the app: read it from the photo if you can.",
-    `The answer key:\n${keyText(k)}`,
-    ...(said ? [`What he typed on his phone at home:\n${said}`] : []),
-    photos > 0
-      ? `Mark the student's answer in the photo${photos > 1 ? "s" : ""}${said ? " and what he typed" : ""}. Reply with the JSON only.`
-      : "Mark what he typed. Reply with the JSON only.",
+    html ? `1. The question (HTML from the book):\n${questionText(html)}` : "1. The question's text isn't in the app: read it from the photo if you can.",
+    `2. The answer key (a model answer; other correct ways earn the same marks):\n${keyText(k)}`,
+    `3. His answer:\n${his.join("\n") || "Nothing."}`,
+    "Mark it: call the mark tool.",
   ].join("\n\n");
 }
 
 /** What he typed, sent with a check from the ⌂ lane, at most. */
-export const AI_SAID_MAX = 1500;
+export const AI_SAID_MAX = 4000;
 
-export type AiPart = { p: string; got: number; max: number };
-export type AiVerdict = { read: string; parts: AiPart[]; got: number; max: number; sure: "high" | "low"; ta: string };
+export type AiPart = { p: string; got: number; max: number; his?: string; check?: string };
+export type AiVerdict = { read: string; parts: AiPart[]; got: number; max: number; sure: "high" | "low"; ta: string; partsOk: boolean };
 
 const num = (x: unknown): number | null => (typeof x === "number" && Number.isFinite(x) ? x : typeof x === "string" && x.trim() !== "" && Number.isFinite(Number(x)) ? Number(x) : null);
 const clamp = (n: number, hi: number) => Math.max(0, Math.min(hi, Math.round(n)));
+const str = (x: unknown, max: number) => (typeof x === "string" ? x.trim().slice(0, max) : "");
 
 /**
- * What the model said, made safe: marks whole numbers between 0 and the question's (never the model's own max), the
- * parts matched to the key's parts by name (a part it didn't give = null: the corrector decides), the total = the
- * parts' sum when there are parts. null = not a verdict (the thread says so).
+ * What the model gave (the mark tool's input, or JSON in its words), made safe: marks whole numbers between 0 and the
+ * question's (never the model's own max), the parts matched to the key's parts by name (else by place); the total =
+ * the parts' sum when they all match. A part it didn't give = `partsOk` false: its total alone (the corrector taps the
+ * parts). null = no marks or no Tamil at all.
  */
-export function readVerdict(text: string, max: number, keyParts: { p: string; m: number }[] | null): AiVerdict | null {
-  const a = text.indexOf("{");
-  const b = text.lastIndexOf("}");
-  if (a < 0 || b <= a) return null;
-  let j: Record<string, unknown>;
-  try {
-    j = JSON.parse(text.slice(a, b + 1)) as Record<string, unknown>;
-  } catch {
-    return null;
+export function readVerdict(said: unknown, max: number, keyParts: { p: string; m: number }[] | null): AiVerdict | null {
+  let j: Record<string, unknown> | null = null;
+  if (said && typeof said === "object") j = said as Record<string, unknown>;
+  else if (typeof said === "string") {
+    const a = said.indexOf("{");
+    const b = said.lastIndexOf("}");
+    if (a >= 0 && b > a) {
+      try {
+        j = JSON.parse(said.slice(a, b + 1)) as Record<string, unknown>;
+      } catch {
+        j = null;
+      }
+    }
   }
-  const ta = typeof j.ta === "string" ? j.ta.trim() : "";
-  const read = typeof j.read === "string" ? j.read.trim().slice(0, 300) : "";
+  if (!j) return null;
+  const ta = str(j.ta, 3000);
   const sure = j.sure === "low" ? "low" : "high";
+  const said2 = Array.isArray(j.parts) ? (j.parts as Record<string, unknown>[]).filter((x) => x && typeof x === "object") : [];
+  const read = str(j.read, 300) || said2.map((x) => str(x.his, 200)).filter(Boolean).join(" · ").slice(0, 400);
   let parts: AiPart[] = [];
-  let got: number | null;
+  let partsOk = false;
+  let got = num(j.got);
   if (keyParts?.length) {
-    const said = Array.isArray(j.parts) ? (j.parts as Record<string, unknown>[]) : [];
-    const norm = (s: unknown) => String(s ?? "").replace(/[()\s.]/g, "").toLowerCase();
+    const norm = (v: unknown) => String(v ?? "").replace(/[()\s.]/g, "").toLowerCase();
     parts = keyParts.map((kp, i) => {
-      const hit = said.find((x) => norm(x?.p) === norm(kp.p)) ?? (said.length === keyParts.length ? said[i] : undefined);
+      const hit = said2.find((x) => norm(x.p) === norm(kp.p)) ?? (said2.length === keyParts.length ? said2[i] : undefined);
       const g = num(hit?.got);
-      return { p: kp.p, got: g === null ? -1 : clamp(g, kp.m), max: kp.m };
+      return { p: kp.p, got: g === null ? -1 : clamp(g, kp.m), max: kp.m, his: str(hit?.his, 300), check: str(hit?.check, 600) };
     });
-    if (parts.some((p) => p.got < 0)) return null;
-    got = parts.reduce((s, p) => s + p.got, 0);
-  } else {
-    got = num(j.got);
+    partsOk = parts.every((p) => p.got >= 0);
+    if (partsOk) got = parts.reduce((a, p) => a + p.got, 0);
+  }
+  if (!partsOk) {
+    // No key parts to match (or one missing): the model's own parts, to read only (the corrector taps the marks).
+    parts = said2.slice(0, 20).map((x) => {
+      const m = clamp(num(x.max) ?? max, max);
+      return { p: str(x.p, 20), got: clamp(num(x.got) ?? 0, m), max: m, his: str(x.his, 300), check: str(x.check, 600) };
+    });
   }
   if (got === null || !ta) return null;
-  return { read, parts, got: clamp(got, max), max, sure, ta: ta.slice(0, 2000) };
+  return { read, parts, got: clamp(got, max), max, sure, ta, partsOk };
+}
+
+/** The verdict in words, standing for the model's first answer when the thread goes on (no tool there). */
+export function verdictWords(v: { got: number; max: number; parts: AiPart[]; ta: string }): string {
+  const parts = v.parts.map((p) => `(${p.p}) ${p.got}/${p.max}${p.check ? `: ${p.check}` : ""}`).join("\n");
+  return `I marked it ${v.got}/${v.max}.${parts ? `\n${parts}` : ""}\nMy explanation to him: ${v.ta}`;
 }
 
 /** The model's words for a question in the thread: plain text, no markdown stars or hashes, not too long. */
@@ -157,17 +211,25 @@ export function aiParts(k: KeyAnswer | null | undefined, max: number): { p: stri
   return parts.reduce((a, p) => a + (p.m ?? 0), 0) === max ? parts.map((p) => ({ p: p.p, m: p.m! })) : null;
 }
 
-/** What he typed at home, for the AI check from the ⌂ lane: each part's boxes (and which the phone took as right), his reasons. */
+/**
+ * What he sent from home, part by part, for the AI check from the ⌂ lane: each part's marks, the key, what he typed,
+ * what the phone did with it (marked it right / wrong, or left it to the teacher), and his reasons and typed words in
+ * full (any language).
+ */
 export function saidWords(it: {
-  parts: { p: string; typed: string[]; ok: boolean[] | null }[];
+  parts: { p: string; m?: number; key?: string; phone?: number | null; typed: string[]; ok: boolean[] | null }[];
   reasons: { p: string; yes: string; text: string }[];
 }): string {
   const lines: string[] = [];
   for (const p of it.parts) {
-    if (!p.typed.length) continue;
-    const marks = p.ok ? ` (the phone: ${p.ok.map((x) => (x ? "right" : "wrong")).join(", ")})` : "";
-    lines.push(`${p.p ? `(${p.p}) ` : ""}${p.typed.join(" | ")}${marks}`);
+    const bits: string[] = [];
+    if (p.m !== undefined) bits.push(`${p.m} mark${p.m === 1 ? "" : "s"}`);
+    if (p.key) bits.push(`key: ${p.key}`);
+    if (p.typed.length) bits.push(`he typed: ${p.typed.join(" | ")}`);
+    if (p.phone !== undefined) bits.push(p.phone === null ? "the phone couldn't mark it: yours to mark" : `the phone gave ${p.phone}${p.m !== undefined ? `/${p.m}` : ""}`);
+    else if (p.ok) bits.push(`the phone: ${p.ok.map((x) => (x ? "right" : "wrong")).join(", ")}`);
+    if (bits.length) lines.push(`${p.p ? `(${p.p}) ` : ""}${bits.join("; ")}`);
   }
-  for (const r of it.reasons) lines.push(`${r.p ? `(${r.p}) ` : ""}${r.yes}. His reason: ${r.text}`);
+  for (const r of it.reasons) lines.push(`${r.p ? `(${r.p}) ` : ""}${r.yes ? `he picked ${r.yes}; his reason, typed: ` : "his words, typed: "}${r.text || "(empty)"}`);
   return lines.join("\n").slice(0, AI_SAID_MAX);
 }

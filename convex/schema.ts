@@ -352,6 +352,9 @@ export const keyAnswer = v.object({
   t: v.optional(ansKind),
 });
 
+/** The AI check's reasoning, part by part (aiChecks.why). */
+export const aiWhy = v.array(v.object({ p: v.string(), got: v.number(), max: v.number(), his: v.string(), check: v.string() }));
+
 export default defineSchema({
   /** The syllabus: Grade 6-11, every unit in term order. Seeded once, then edited in the app. */
   units: defineTable({
@@ -1761,6 +1764,10 @@ export default defineSchema({
     pm: v.optional(v.array(v.number())),
     read: v.optional(v.string()),
     low: v.optional(v.boolean()),
+    /** Each part as the AI saw it: what he gave, its reasoning, its marks (shown under the marks). */
+    why: v.optional(aiWhy),
+    /** What the AI sent when it couldn't be read as marks (the corrector sees it; a chat reads it to fix the prompt). */
+    bad: v.optional(v.string()),
     raw: v.optional(v.string()),
     err: v.optional(v.string()),
     msgs: v.array(v.object({ r: v.union(v.literal("ai"), v.literal("t")), x: v.string(), at: v.number() })),

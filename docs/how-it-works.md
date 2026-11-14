@@ -981,6 +981,18 @@ the photos he sent (that row's, at most 3) and what he typed (each part's boxes 
 reasons: `saidWords`); a typed reason alone (no photo) is checked from the words. Use = its marks lit on the card (each
 part when the parts line up, else a toast to tap them), then she taps Save as before; Check again = a new check of the
 same. Pale on a card corrected in class. Photos people may use it there. His photos never go with the thread.
+**How the AI marks** (14 Nov 2026, his second note: "the AI wants to read the question and understand, then read the
+answer key, then read the student answer, then finalize"; Q71's first check failed): the lane's cards are what the
+phone can't mark: typed reasons, proofs and sentences (Tamil, English or Thanglish) and photos of drawings and
+constructions. The model must call the **mark tool** (forced; `MARK_TOOL`), whose fields follow the work: what the
+question asks, then each key part with what he gave (`his`) and its reasoning against the question and the key
+(`check`, English), then the marks, "sure", and the Tamil words (≤ 150). The key is a model answer: another correct
+method or wording earns the same; a reason in any words or language counts; no marks lost for spelling or style. The
+⌂ lane sends each part's marks, key, what he typed and what the phone did with it (`saidWords`), and his reasons in
+full. Room: 6,000 tokens out (Tamil is long; the first reply had 1,500 and was likely cut off). The sheet shows each
+part (what he gave, its marks, the AI's reasoning: `.ai-why`); a part missing from the AI's answer = its total only
+(the corrector taps the parts). A reply that isn't marks says why ("cut off", "sent nothing") and shows what the AI sent
+(`bad`, "What the AI sent"). The thread's next questions see its first answer in words (`verdictWords`), no tool.
 
 **Progress (top bar; owner + Reports).** One grade at a time (`aristora.progressGrade`); stage chips, "Came today".
 **Units** = a race per unit and stage (levels done or solo questions done, then marks, then pace; rank colours,

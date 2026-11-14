@@ -27,6 +27,10 @@ export type AiThread = {
   max: number;
   read: string | null;
   low: boolean;
+  /** Each part as the AI saw it (what he gave, its reasoning, its marks). */
+  why: { p: string; got: number; max: number; his: string; check: string }[] | null;
+  /** What the AI sent when it couldn't be read as marks. */
+  bad: string | null;
   msgs: { r: "ai" | "t"; x: string; at: number }[];
   asks: number;
   asksMax: number;
@@ -242,10 +246,27 @@ function AiSheet(props: {
           )}
         </div>
       )}
-      {marked && t!.read && (
-        <p class="ai-read">
-          <span>He wrote:</span> {t!.read}
-        </p>
+      {marked && t!.why && t!.why.length > 0 ? (
+        // Each part: what he gave, the AI's marks and why (its reasoning, in English), so she can trust or change it.
+        <ul class="ai-why">
+          {t!.why.map((w, j) => (
+            <li key={j} class={w.got >= w.max ? "full" : w.got === 0 ? "zero" : "part"}>
+              <b class="ai-wp">{w.p || `Q${props.q}`}</b>
+              <b class="ai-wg">
+                {w.got}/{w.max}
+              </b>
+              {w.his && <span class="ai-wh">He gave: {w.his}</span>}
+              {w.check && <span class="ai-wc">{w.check}</span>}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        marked &&
+        t!.read && (
+          <p class="ai-read">
+            <span>He wrote:</span> {t!.read}
+          </p>
+        )
       )}
       {marked && t!.low && <p class="ai-low">The AI isn't sure about this photo: check it yourself.</p>}
       {t && t.msgs.length > 0 && (
@@ -263,6 +284,12 @@ function AiSheet(props: {
         </p>
       )}
       {t && t.state === "fail" && <p class="ai-err">{t.err}</p>}
+      {t && t.state === "fail" && t.bad && (
+        <details class="ai-bad">
+          <summary>What the AI sent</summary>
+          <pre>{t.bad}</pre>
+        </details>
+      )}
       {t && t.state === "fail" && !marked && (
         <button type="button" class="btn primary ai-again" onClick={props.onPhoto}>
           {props.home ? "Check again" : "Take the photo again"}
