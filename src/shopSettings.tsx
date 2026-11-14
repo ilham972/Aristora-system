@@ -228,6 +228,49 @@ function LimitCard(props: { limit: number | null }) {
   );
 }
 
+/**
+ * The chests and the flame shield (14 Nov 2026, the family app's quests): the day's chest (its coins vary by 2 either
+ * way), a chest on a Stage's road after every 3rd Level, the shield's price. 0 = off.
+ */
+function ChestCard(props: { c: ShopAdmin["chests"] }) {
+  const [v, setV] = useState({ d: String(props.c.d), r: String(props.c.r), s: String(props.c.s) });
+  const [busy, setBusy] = useState(false);
+  const want = { d: Number(v.d || 0), r: Number(v.r || 0), s: Number(v.s || 0) };
+  const changed = want.d !== props.c.d || want.r !== props.c.r || want.s !== props.c.s;
+  const field = (k: "d" | "r" | "s", label: string, after: string) => (
+    <label class="phq-req">
+      <span>{label}</span>
+      <input class="sh-limit" value={v[k]} inputMode="numeric" aria-label={label} onInput={(e) => setV({ ...v, [k]: (e.target as HTMLInputElement).value.replace(/\D/g, "") })} />
+      <span>{after}</span>
+    </label>
+  );
+  return (
+    <section class="rc-box">
+      <b>Chests and the flame shield</b>
+      {field("d", "Today's chest (3 quests done)", "coins")}
+      {field("r", "A Stage's chest (every 3rd Level)", "coins")}
+      {field("s", "The flame shield costs", "coins")}
+      <small class="muted">
+        0 = off. The day's chest gives its number ± 2 (5 = 3 to 7), once a day. A student who opens every chest gets about{" "}
+        {want.d * 30 + want.r * 30} coins a month more (one Stage chest a day); the shield costs the centre nothing.
+      </small>
+      <button
+        type="button"
+        class="btn ghost wide"
+        disabled={busy || !changed}
+        onClick={() => {
+          setBusy(true);
+          void act(() => mutate(api.coins.setChests, want))
+            .then((r) => r && toast("Chests and the shield saved."))
+            .finally(() => setBusy(false));
+        }}
+      >
+        Save the chests
+      </button>
+    </section>
+  );
+}
+
 export function ShopSettings() {
   const s = useQuery<ShopAdmin>(api.coins.items, {});
   const [open, setOpen] = useState<ShopAdminItem | "new" | null>(null);
@@ -264,6 +307,7 @@ export function ShopSettings() {
         );
       })}
       <LimitCard key={String(s.limit)} limit={s.limit} />
+      {s.chests && <ChestCard key={`${s.chests.d}.${s.chests.r}.${s.chests.s}`} c={s.chests} />}
       {open && <ItemSheet x={open === "new" ? null : open} onClose={() => setOpen(null)} />}
     </div>
   );

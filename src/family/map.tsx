@@ -8,6 +8,7 @@
 // - Inside a Stage: its Levels on a smaller road. Only the Level he is on can be played (the paper is the truth, level
 //   by level: convex/lib/family.ts); the others say where they are (marked, with the teacher, done before the app).
 
+import type { Parts } from "./later";
 import type { ComponentChildren } from "preact";
 import { useEffect } from "preact/hooks";
 import type { FamilyMe } from "../../convex/family";
@@ -107,7 +108,7 @@ const STAGE_STEP = 132;
 const STAGE_HEAD = 104;
 const stagePos = (i: number, g: number) => ({ x: 50 + 25 * Math.sin(i * 1.6 + g * 1.7), y: STAGE_HEAD + i * STAGE_STEP });
 
-function StageNode(props: { w: World; st: NodeState; at: { x: number; y: number }; shut: boolean; onOpen: () => void }) {
+function StageNode(props: { w: World; st: NodeState; at: { x: number; y: number }; shut: boolean; onOpen: () => void; owl?: ComponentChildren }) {
   const { w, st, at } = props;
   const done = levelsDone(w);
   const pct = w.levels.length ? Math.round((done / w.levels.length) * 100) : 0;
@@ -131,6 +132,7 @@ function StageNode(props: { w: World; st: NodeState; at: { x: number; y: number 
           START
         </span>
       )}
+      {st === "now" && props.owl}
       <button type="button" class={`f-node s-${st}`} style={{ "--p": String(pct) }} aria-label={`Stage ${w.no}: ${w.ta}`} onClick={tap}>
         {st === "now" && <span class="f-node-ring" aria-hidden="true" />}
         <span class="f-node-c">
@@ -156,7 +158,7 @@ function StageNode(props: { w: World; st: NodeState; at: { x: number; y: number 
   );
 }
 
-function WorldMap(props: { g: WorldGroup; focus: World | null; me: FamilyMe; onStage: (unitId: string) => void }) {
+function WorldMap(props: { g: WorldGroup; focus: World | null; me: FamilyMe; onStage: (unitId: string) => void; owl?: ComponentChildren }) {
   const { g, focus } = props;
   const n = g.stages.length;
   const pts = g.stages.map((_, i) => stagePos(i, g.no));
@@ -196,7 +198,7 @@ function WorldMap(props: { g: WorldGroup; focus: World | null; me: FamilyMe; onS
       <div class="f-roadbox" style={{ height: `${height}px` }}>
         <Road pts={[...pts, chest]} height={height} reached={reached} />
         {g.stages.map((w, i) => (
-          <StageNode key={w.unitId} w={w} st={states[i]} at={pts[i]} shut={!!shutBy(props.me, w)} onOpen={() => props.onStage(w.unitId)} />
+          <StageNode key={w.unitId} w={w} st={states[i]} at={pts[i]} shut={!!shutBy(props.me, w)} onOpen={() => props.onStage(w.unitId)} owl={props.owl} />
         ))}
         <span class={`f-chest${allDone ? " won" : ""}`} style={{ left: `${chest.x}%`, top: `${chest.y}px` }} aria-label={allDone ? `World ${g.no}: won` : undefined}>
           <Icon name="trophy" size={26} />
@@ -220,7 +222,7 @@ function coachWords(me: FamilyMe, focus: World | null, n: number | null): { mood
   return { mood: "sleep", text: "இப்போது phone இல் செய்ய Level இல்லை. உன் தாளை வகுப்பில் கொடு." };
 }
 
-export function LearnTab(props: { top: ComponentChildren; me: FamilyMe | null; onStage: (unitId: string) => void; onPlay: () => void }) {
+export function LearnTab(props: { top: ComponentChildren; me: FamilyMe | null; onStage: (unitId: string) => void; onPlay: () => void; parts: Parts | null }) {
   const me = props.me;
   if (!me) {
     return (
@@ -282,7 +284,7 @@ export function LearnTab(props: { top: ComponentChildren; me: FamilyMe | null; o
       </OwlSays>
       <div class="f-map">
         {groups.map((x) => (
-          <WorldMap key={x.key} g={x} focus={focus} me={me} onStage={props.onStage} />
+          <WorldMap key={x.key} g={x} focus={focus} me={me} onStage={props.onStage} owl={props.parts && <props.parts.MapOwl />} />
         ))}
         {me.worlds.length === 0 && <p class="f-none">உன் பாடத்திட்டம் விரைவில் வரும்.</p>}
       </div>
@@ -315,6 +317,10 @@ export function StageScreen(props: {
   onStage: (unitId: string) => void;
   /** Every Level done: the Stage's certificate (4 Nov 2026). */
   onCert?: () => void;
+  /** The parts right after the first screen: the road's owl, classmates and chests come with them (road.tsx). */
+  parts: Parts | null;
+  /** His coins changed (a road chest). */
+  onChange: () => void;
 }) {
   const { me, world: w } = props;
   const groups = worldGroups(me);
@@ -479,6 +485,7 @@ export function StageScreen(props: {
             <span class={`f-chest${w.allDone ? " won" : ""}`} style={{ left: `${cup.x}%`, top: `${cup.y}px` }}>
               <Icon name="trophy" size={24} />
             </span>
+            {props.parts && <props.parts.RoadPlus w={w} pts={pts} cup={cup} playIdx={playIdx} onChange={props.onChange} />}
           </div>
           {w.allDone && props.onCert && (
             <div class="f-pad-x f-stage-cert">

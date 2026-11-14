@@ -1783,3 +1783,519 @@ span.f-rface.goat .f-ava {
 .f-ustay-m small {
   color: var(--brand);
 }
+
+/* ---------- Home's day (14 Nov 2026, quests.tsx): today's quests and the chest, one more?, the flame shield ---------- */
+.f-dq {
+  padding: 14px 14px 12px;
+}
+.f-dq-h {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.f-dq-h small {
+  font: 700 12px var(--display);
+  color: var(--ink3);
+  white-space: nowrap;
+}
+.f-dq-l {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 9px;
+}
+.f-dq-q {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.f-dq-ic {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+.f-dq-q.done .f-dq-ic {
+  background: var(--right);
+  color: #fff;
+}
+.f-dq-w {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+.f-dq-w b {
+  font: 700 14px/1.25 var(--text);
+  color: var(--ink);
+}
+.f-dq-bar {
+  display: block;
+  height: 8px;
+  border-radius: 6px;
+  background: var(--line-2);
+  overflow: hidden;
+}
+.f-dq-bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--gold);
+  transform-origin: left center;
+  transform: scaleX(var(--p));
+  transition: transform 0.5s cubic-bezier(0.3, 0.9, 0.3, 1);
+}
+.f-dq-q.done .f-dq-bar i {
+  background: var(--right);
+}
+.f-dq-n {
+  flex: none;
+  min-width: 34px;
+  text-align: right;
+  font: 800 13px var(--display);
+  color: var(--ink2);
+}
+.f-dq-chest {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 60px;
+  margin-top: 12px;
+  padding: 6px 12px;
+  border-radius: 16px;
+  background: var(--brand-soft);
+  color: var(--ink);
+  text-align: left;
+}
+.f-dq-chest .f-coffer {
+  flex: none;
+  width: 50px;
+}
+.f-dq-chest span {
+  display: grid;
+  gap: 2px;
+}
+.f-dq-chest b {
+  font: 800 14.5px/1.2 var(--text);
+}
+.f-dq-chest small {
+  font: 600 12px var(--text);
+  color: var(--ink2);
+}
+.f-dq-chest.ready {
+  background: linear-gradient(90deg, var(--gold-hi), var(--gold));
+  color: var(--gold-ink);
+  box-shadow: 0 4px 0 var(--gold-3d);
+}
+.f-dq-chest.ready small {
+  color: var(--gold-ink);
+}
+.f-dq-chest.ready .f-coffer,
+.f-rd-chest.ready .f-coffer {
+  animation: f-dq-shake 1.6s ease-in-out infinite;
+}
+@keyframes f-dq-shake {
+  0%,
+  60%,
+  100% {
+    transform: rotate(0);
+  }
+  66% {
+    transform: rotate(-9deg);
+  }
+  72% {
+    transform: rotate(8deg);
+  }
+  78% {
+    transform: rotate(-5deg);
+  }
+  84% {
+    transform: rotate(3deg);
+  }
+}
+.f-dq-chest.opened {
+  opacity: 0.75;
+}
+.f-dq-go {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.f-dq-go:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+.f-dq.lit .f-goal-f {
+  color: var(--flame-ink);
+}
+
+/* The chest (ARISTORA's own drawing): purple and gold; its lid opens. */
+.f-coffer {
+  display: block;
+  overflow: visible;
+}
+.f-coffer-sh {
+  fill: rgba(40, 30, 110, 0.14);
+}
+.f-coffer-b {
+  fill: var(--brand);
+}
+.f-coffer-l {
+  fill: #8a7cf4;
+}
+.f-coffer-g {
+  fill: var(--gold);
+}
+.f-coffer-k {
+  fill: var(--gold-hi);
+  stroke: var(--gold-3d);
+  stroke-width: 1.5;
+}
+.f-coffer-lid {
+  transform-box: fill-box;
+  transform-origin: 0% 100%;
+}
+.f-coffer.open .f-coffer-lid {
+  transform: translate(-3px, -7px) rotate(-26deg);
+}
+
+/* The chest opening */
+.f-dq-open {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: end center;
+  background: rgba(20, 14, 60, 0.45);
+  animation: f-dq-fade 0.25s ease both;
+}
+@keyframes f-dq-fade {
+  from {
+    opacity: 0;
+  }
+}
+.f-dq-sheet {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  width: 100%;
+  max-width: 480px;
+  padding: 18px 20px calc(20px + env(safe-area-inset-bottom));
+  border-radius: 28px 28px 0 0;
+  background: var(--card);
+  text-align: center;
+  animation: f-dq-up 0.45s var(--spring) both;
+}
+@keyframes f-dq-up {
+  from {
+    opacity: 0;
+    transform: translateY(40%);
+  }
+}
+.f-dq-stage {
+  position: relative;
+  width: 230px;
+  height: 160px;
+}
+.f-dq-stage .f-coffer {
+  position: absolute;
+  left: 50%;
+  bottom: 4px;
+  width: 124px;
+  margin-left: -78px;
+}
+.f-dq-stage .f-coffer.open .f-coffer-lid {
+  animation: f-dq-lid 0.6s var(--spring) 0.15s both;
+}
+@keyframes f-dq-lid {
+  from {
+    transform: translate(0, 0) rotate(0);
+  }
+  to {
+    transform: translate(-3px, -7px) rotate(-26deg);
+  }
+}
+.f-dq-fly {
+  position: absolute;
+  left: 34%;
+  bottom: 70px;
+  opacity: 0;
+  animation: f-dq-coin 1s cubic-bezier(0.2, 0.8, 0.3, 1) var(--t) both;
+}
+@keyframes f-dq-coin {
+  0% {
+    opacity: 0;
+    transform: rotate(var(--a)) translateY(0) rotate(calc(var(--a) * -1));
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(var(--a)) translateY(-120px) rotate(calc(var(--a) * -1));
+  }
+}
+.f-dq-owl {
+  position: absolute;
+  right: -18px;
+  bottom: -2px;
+  width: 104px;
+}
+.f-dq-got {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 800 40px/1 var(--display);
+  color: var(--gold-ink);
+  animation: f-pop 0.5s var(--spring) 0.4s both;
+}
+.f-dq-say {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: var(--ink2);
+}
+
+/* One more? */
+.f-om {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: linear-gradient(120deg, var(--card) 35%, var(--brand-soft));
+  box-shadow:
+    var(--shadow),
+    inset 0 0 0 2px var(--brand-soft);
+}
+.f-om-w {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.f-om-t {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 7px 1px;
+  border-radius: 999px;
+  background: var(--brand);
+  color: #fff;
+  font: 800 11.5px var(--display);
+  letter-spacing: 0.04em;
+}
+.f-om-s {
+  font-size: 13px;
+  color: var(--ink2);
+}
+
+/* The flame shield */
+.f-shd {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.f-shd.saved {
+  background: linear-gradient(120deg, var(--card) 40%, var(--flame-soft));
+}
+.f-shd-ic {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: var(--brand-soft);
+  font-size: 24px;
+}
+.f-shd-w {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.f-shd-w b {
+  font: 800 15px/1.2 var(--text);
+}
+.f-shd-w small {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--ink2);
+}
+.f-btn.sm {
+  min-height: 42px;
+  padding: 1px 14px 0;
+  font-size: 15px;
+  border-radius: 14px;
+}
+.f-shd-b {
+  flex: none;
+}
+/* On the top row's flame: he holds a shield. */
+.f-pill.fire.sh {
+  position: relative;
+}
+.f-pill.fire.sh::after {
+  content: "";
+  position: absolute;
+  right: -4px;
+  top: -5px;
+  width: 15px;
+  height: 15px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2.4 4.4 5.3v5.8c0 4.7 3.1 8.6 7.6 10.5 4.5-1.9 7.6-5.8 7.6-10.5V5.3z' fill='%23ffc23d' stroke='%23fff' stroke-width='2.4'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.f-shield {
+  display: block;
+  overflow: visible;
+}
+.f-shield-b {
+  fill: var(--brand);
+  stroke: var(--gold);
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+}
+
+/* The greeting's owl with its body */
+.f-owlbadge.f-bd .f-owl {
+  width: 84%;
+  margin-top: -12%;
+}
+
+/* ---------- A Stage's road (14 Nov 2026, road.tsx): the owl, classmates, the chests, FINAL; the owl on the map ---------- */
+.f-rd-owl {
+  position: absolute;
+  z-index: 3;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.f-rd-owl .f-buddy {
+  position: absolute;
+  bottom: -30px;
+  width: 70px;
+}
+.f-rd-owl.r .f-buddy {
+  left: 29px;
+}
+.f-rd-owl.l .f-buddy {
+  right: 29px;
+}
+.f-rd-faces {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+.f-rd-faces.r {
+  transform: translate(40px, -50%);
+}
+.f-rd-faces.l {
+  transform: translate(calc(-100% - 40px), -50%);
+}
+.f-rd-faces.mine.r {
+  transform: translate(50px, -50%);
+}
+.f-rd-faces.mine.l {
+  transform: translate(calc(-100% - 50px), -50%);
+}
+.f-rd-faces > span + span {
+  margin-left: -9px;
+}
+.f-rd-faces .f-ava {
+  box-shadow: 0 0 0 2px var(--card);
+}
+.f-rd-faces b {
+  padding: 0 6px 0 4px;
+  font: 800 12px var(--display);
+  color: var(--ink2);
+}
+.f-rd-chest {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  background: none;
+  transform: translate(-50%, -50%);
+}
+.f-rd-chest .f-coffer {
+  width: 46px;
+}
+.f-rd-chest.wait .f-coffer,
+.f-rd-chest.old .f-coffer {
+  filter: grayscale(0.85);
+  opacity: 0.55;
+}
+.f-rd-chest.ready::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255, 194, 61, 0.5), rgba(255, 194, 61, 0));
+  animation: f-rd-glow 1.6s ease-in-out infinite;
+}
+@keyframes f-rd-glow {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+}
+.f-rd-chest b {
+  position: absolute;
+  bottom: -9px;
+  padding: 2px 6px 1px;
+  border-radius: 999px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+  font: 800 11px var(--display);
+  color: var(--gold-ink);
+}
+.f-rd-final {
+  position: absolute;
+  z-index: 3;
+  padding: 4px 8px 3px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, var(--gold-hi), var(--gold));
+  box-shadow: 0 3px 0 var(--gold-3d);
+  color: var(--gold-ink);
+  font: 800 11px/1 var(--display);
+  letter-spacing: 0.12em;
+  transform: translate(-50%, 24px);
+  pointer-events: none;
+}
+/* Beside the Stage he is on, on the side its name is not, leaning on the node (it always fits a 320 px phone). */
+.f-mapowl {
+  position: absolute;
+  z-index: 3;
+  bottom: -40px;
+  width: 54px;
+  pointer-events: none;
+}
+.f-nodewrap.r .f-mapowl {
+  right: 22px;
+}
+.f-nodewrap.l .f-mapowl {
+  left: 22px;
+}

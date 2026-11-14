@@ -33,7 +33,7 @@ import { fail, log } from "./lib/backend";
 import { DAY_MS, slDayNo, slMonthBefore, slMonthStart, slWeekStart } from "./lib/day";
 import { championsOf, cupWinners, goatOf, numsAt, weekWinners, type Champ, type Cup, type WeekWin } from "./lib/race";
 import { seenOn } from "./online";
-import { mateMarksOn, numsOfRow, RACE_V, raceList, rebuildStudent, weekCoinsOf } from "./lib/raceRows";
+import { fillSpots, mateMarksOn, numsOfRow, RACE_V, raceList, rebuildStudent, weekCoinsOf } from "./lib/raceRows";
 import { champsMoment, coinsMoment, giftMoment, goatMoment, monthMoment, mostImprovedMonth } from "./lib/us";
 
 const token = v.optional(v.string());
@@ -53,6 +53,8 @@ export const fill = internalMutation({
     await goatWatch(ctx, now);
     // The Shop came (10 Nov 2026): last week's pay at once, not next Monday (once).
     await coinsOnce(ctx, now);
+    // The road's classmates (14 Nov 2026): the parts from before it get their spot (once).
+    await spotsOnce(ctx, now);
     const meta = await ctx.db
       .query("meta")
       .withIndex("by_key", (q) => q.eq("key", "raceV"))
@@ -67,6 +69,39 @@ export const fill = internalMutation({
       else await ctx.db.insert("meta", { key: "raceV", value: RACE_V });
     } else await ctx.scheduler.runAfter(0, internal.race.fill, {});
     return Math.min(want.length, FILL_PER_RUN);
+  },
+});
+
+/** A run of the spots' fill is going (it notes the time on each page); after this long without one, it starts again. */
+const SPOTS_STALL_MS = 10 * 60_000;
+
+/** The road's spots for the race parts from before it (14 Nov 2026): one chain of pages (spots), once. */
+async function spotsOnce(ctx: MutationCtx, now: number): Promise<void> {
+  const m = await ctx.db
+    .query("meta")
+    .withIndex("by_key", (q) => q.eq("key", "roadV"))
+    .first();
+  const v = m?.value as { done?: boolean; c?: string | null; at?: number } | undefined;
+  if (v?.done || (v?.at !== undefined && now - v.at < SPOTS_STALL_MS)) return;
+  const value = { c: v?.c ?? null, at: now };
+  if (m) await ctx.db.patch(m._id, { value });
+  else await ctx.db.insert("meta", { key: "roadV", value });
+  await ctx.scheduler.runAfter(0, internal.race.spots, { c: value.c });
+}
+
+/** A page of the spots' fill (lib/raceRows.ts fillSpots), then the next at once; the last notes it is done. */
+export const spots = internalMutation({
+  args: { c: v.union(v.string(), v.null()) },
+  handler: async (ctx, args) => {
+    const next = await fillSpots(ctx, args.c);
+    const m = await ctx.db
+      .query("meta")
+      .withIndex("by_key", (q) => q.eq("key", "roadV"))
+      .first();
+    const value = next === null ? { done: true } : { c: next, at: Date.now() };
+    if (m) await ctx.db.patch(m._id, { value });
+    else await ctx.db.insert("meta", { key: "roadV", value });
+    if (next !== null) await ctx.scheduler.runAfter(0, internal.race.spots, { c: next });
   },
 });
 

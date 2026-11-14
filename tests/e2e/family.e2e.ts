@@ -12,7 +12,7 @@ import { afterAll, beforeAll, expect, test } from "vitest";
 import { api, internal } from "../../convex/_generated/api";
 import { secretHash } from "../../convex/lib/auth";
 import { outOf } from "../../convex/lib/book";
-import { slDayNo, slWeekStart } from "../../convex/lib/day";
+import { slDayNo, slDayStart, slWeekStart } from "../../convex/lib/day";
 import type { Ans } from "../../convex/lib/key";
 import { fromB64, seal, sha256, unseal } from "../../convex/lib/seal";
 import { strToU8, zipSync } from "fflate";
@@ -688,7 +688,7 @@ test("the O/L map: the owner ticks Grade 11 for the O/L syllabus and gives today
   await P.getByLabel("Code").fill("4719");
   await P.getByRole("button", { name: "Sign in" }).click();
   await goalIs(P, "Level 1");
-  await contains(P.locator(".f-goal"), cons.ta);
+  await contains(P.locator(".f-goal-s"), cons.ta);
   await tabTo(P, /Learn/);
   await contains(P.locator(".f-hero .f-title"), cons.ta);
   await contains(P.locator(".f-hero .f-kicker"), "PART 2B"); // the kicker in English letters; the banner below in Tamil
@@ -1629,25 +1629,37 @@ test("answer kinds: the question's own blanks, an option, ✓ / ✗, words to un
   await visible(paper.locator("[data-opt].fx-on"));
   await shot(P, "fam41-kind-choose");
   await nextBar();
-  // Q3: ✓ and ✗ in each bracket.
+  // Q3: ✓ / ✗ one statement at a time (14 Nov 2026): (a) tapped in its bracket; the deck is then on (b), lifted in the
+  // question, and its big ✗ answers it.
   await paper.locator("[data-tick]").nth(0).locator(".fx-tk").nth(0).click();
-  await paper.locator("[data-tick]").nth(1).locator(".fx-tk").nth(1).click();
+  await until(async () => (await paper.locator("[data-tick]").nth(1).getAttribute("class"))?.includes("fx-cur") ?? false, "(b) on the deck");
+  await visible(paper.locator(".fx-row"));
+  await contains(P.locator(".f-tfd-say"), "2 / 2");
   await shot(P, "fam42-kind-tick");
+  await P.locator(".f-tfd-no").click();
+  await until(async () => (await paper.locator("[data-tick]").nth(1).locator(".fx-tk.fx-on").innerText()) === "✗", "(b) ✗ from the deck");
+  expect(await P.locator(".f-tfd-dot.has").count()).toBe(2);
   await nextBar();
   // Q4: words underlined (one tapped twice is back off).
   for (const i of [1, 0, 0, 2]) await paper.locator("[data-mark]").nth(i).click();
   await until(async () => (await paper.locator("[data-mark].fx-on").count()) === 2, "two words marked"); // painted a frame after the tap
   await nextBar();
-  // Q5: cards in order, by two taps each (−2, 0, 5).
+  // Q5: cards in order on the line (14 Nov 2026): a tap puts a card in the next place, a tap on a placed one takes it
+  // back (−2, 0, 5).
   await contains(P.locator(".f-qn"), "Q5");
-  const cards = P.locator(".f-ordc");
-  await cards.nth(0).click();
-  await cards.nth(1).click();
-  await cards.nth(1).click();
-  await cards.nth(2).click();
-  await until(async () => (await cards.allInnerTexts()).join(" ") === "−2 0 5", "the cards in order");
-  await noSideScroll(P);
+  const card5 = (t: string) => P.locator(".f-oline-c").getByRole("button", { name: t, exact: true }).click();
+  await card5("5");
+  await P.locator(".f-oline-p.on").first().click(); // taken back
+  expect(await P.locator(".f-oline-p.on").count()).toBe(0);
+  await card5("−2");
+  await card5("0");
   await shot(P, "fam43-kind-order");
+  await card5("5");
+  const placed = () => P.locator(".f-oline-p.on").evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")).join(" | "));
+  await until(async () => (await placed()) === "1: −2 | 2: 0 | 3: 5", "the cards in order");
+  expect(await P.locator(".f-oline-c").count()).toBe(0);
+  await noSideScroll(P);
+  await shot(P, "fam43b-kind-order-done");
   await nextBar();
   // Q6: pairs, left then right.
   const side = (k: number) => P.locator(".f-matc").nth(k).locator(".f-mi");
@@ -3927,6 +3939,142 @@ test("the Shop: the owner's things with a photo; last week's pay; the coin on th
   await contains(R.locator(".f-greet"), "Hana");
   await shot(R, "shop12-home-393");
   for (const p of [P, S, C, R]) await p.context().close();
+  expect(problems.slice(before)).toEqual([]);
+});
+
+test("Home's day and the road: today's quests and their chest, the flame shield, one more?; the owl with its body on Home, the map and the road; classmates ahead, a road chest, FINAL", async () => {
+  // 14 Nov 2026, his "build completely" on the idea pictures 08 and 09. Made-up names, marks and coins.
+  const before = problems.length;
+  const backend = makeBackend(modules);
+  const t = backend.t;
+  await addPerson(t, { name: "Owner", token: OWNER_TOKEN, role: "owner" });
+  const as = { token: OWNER_TOKEN };
+  await t.mutation(api.setup.ensure, as);
+  const u01 = await t.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G8-U01")).first())!._id);
+  await t.mutation(api.catalog.saveWorkbook, {
+    ...as,
+    unitId: u01,
+    parts: BOOK.data.parts.map((p) => ({ id: p.id, to: p.to, ...(p.each ? { each: p.each } : {}) })),
+    levels: BOOK.data.levels.map((l) => ({ to: l.to, max: l.max })),
+    marks: BOOK.data.marks ?? {},
+    replace: true,
+    key: fakeKey(),
+  });
+  expect(BOOK.data.levels.length).toBe(12);
+  const add = (name: string) => t.mutation(api.students.add, { ...as, name, grade: 8, term: 1, stage: "master", unitId: u01 });
+  const hana = await add("Hana K");
+  const bilal = await add("Bilal M");
+  const chen = await add("Chen R");
+  const dev = await add("Dev S");
+  await t.mutation(api.families.setCode, { ...as, studentId: hana, code: "4719" });
+  // Hana: Level 1 yesterday, Levels 2 and 3 this morning with 20 answers right (any day's three quests are done); 40
+  // coins. Bilal is on her Level (4), Chen two ahead (6), Dev behind her (on Level 1: never on her phone).
+  const now = Date.now();
+  const DAY = 86_400_000;
+  const lvDone = (n: number, when: number) => Object.fromEntries(Array.from({ length: n }, (_, i) => [String(i + 1), { done: when, fixed: when + 30_000, got: 10, by: "correction" }]));
+  await t.run(async (ctx) => {
+    const write = async (sid: typeof hana, m: { q: Record<string, unknown>; lv: Record<string, unknown> }) => {
+      const p = await ctx.db.query("progress").withIndex("by_student_unit_stage", (q) => q.eq("studentId", sid).eq("unitId", u01).eq("stage", "master")).first();
+      if (p) await ctx.db.patch(p._id, { m: m as never, updatedAt: now });
+      else await ctx.db.insert("progress", { studentId: sid, unitId: u01, stage: "master", marks: {}, m: m as never, startedAt: 0, updatedAt: now });
+    };
+    // "This morning": today in Sri Lanka whatever the hour the run starts (just after midnight too).
+    const morning = Math.max(slDayStart(now) + 60_000, now - 2 * 3_600_000);
+    await write(hana, {
+      q: Object.fromEntries(Array.from({ length: 20 }, (_, i) => [String(i + 11), { lost: false, got: 1, max: 1, t: morning }])),
+      lv: { "1": { done: now - DAY, fixed: now - DAY + 30_000, got: 10, by: "correction" }, "2": { done: morning, fixed: morning, got: 20, by: "correction" }, "3": { done: morning, fixed: morning, got: 20, by: "correction" } },
+    });
+    await write(bilal, { q: {}, lv: lvDone(3, now - 3 * DAY) });
+    await write(chen, { q: {}, lv: lvDone(5, now - 3 * DAY) });
+    await write(dev, { q: {}, lv: {} });
+    await ctx.db.insert("wallets", { sid: hana, n: 40, xp: 0, wk: slWeekStart(now), last: 0, paid: 40, spent: 0 });
+    // The race parts again (with where each is on the road): these raw writes pass no mutation's watch.
+    for (const r of await ctx.db.query("raceRows").collect()) await ctx.db.patch(r._id, { v: 0 });
+  });
+  await t.mutation(internal.race.fill, {});
+
+  const P = await open(backend, `${site.url}/f/`, size(360, 780));
+  await P.getByLabel(/Index/).fill("1001");
+  await P.getByLabel("Code").fill("4719");
+  await P.getByRole("button", { name: "Sign in" }).click();
+  // Home: the quests (all three done), the chest shaking, the goal card's row (Level 4, START), the shield to buy, the
+  // greeting's owl with its body.
+  await visible(P.locator(".f-dq-chest.ready"));
+  expect(await P.locator(".f-dq-q.done").count()).toBe(3);
+  await goalIs(P, "Level 4");
+  await visible(P.locator(".f-owlbadge.f-bd .f-buddy"));
+  await contains(P.locator(".f-shd"), "Flame shield");
+  await noSideScroll(P);
+  await shot(P, "fam70-home-quests");
+  // The chest: coins (3 to 7), the owl with its trophy; then it stays open for today.
+  await P.locator(".f-dq-chest.ready").click();
+  await visible(P.locator(".f-dq-open .f-buddy.pose-champ"));
+  const got = Number((await P.locator(".f-dq-got").innerText()).replace(/\D/g, ""));
+  expect(got).toBeGreaterThanOrEqual(3);
+  expect(got).toBeLessThanOrEqual(7);
+  await P.waitForTimeout(900);
+  await shot(P, "fam71-chest-open");
+  await P.locator(".f-dq-open").click();
+  await visible(P.locator(".f-dq-chest.opened"));
+  await until(async () => ((await P.locator(".f-pill.coin").getAttribute("aria-label")) ?? "").startsWith(`${40 + got} coins`), "the chest's coins on the top row");
+  // The shield: tap, sure?, tap: 30 coins; the flame on the top row wears it.
+  await P.locator(".f-shd-b").click();
+  await contains(P.locator(".f-shd-b"), "வாங்கு?");
+  await P.locator(".f-shd-b").click();
+  await visible(P.locator(".f-toprow .f-pill.fire.sh"));
+  await until(async () => (await P.locator(".f-shd").count()) === 0, "the shield card gone once he holds one");
+  await until(async () => ((await P.locator(".f-pill.coin").getAttribute("aria-label")) ?? "").startsWith(`${10 + got} coins`), "30 coins paid");
+  await shot(P, "fam72-shield");
+  // The map: the owl with its body beside his Stage.
+  await tabTo(P, /Learn/);
+  await visible(P.locator(".f-nodewrap .f-mapowl .f-buddy"));
+  await shot(P, "fam73-map-owl");
+  // The road: the owl on Level 4, Bilal on it with him, Chen at Level 6, never Dev; the chest after Level 3; FINAL.
+  await P.locator(".f-node.s-now").click();
+  await playIs(P, "Level 4");
+  await visible(P.locator(".f-rd-owl .f-buddy"));
+  await until(async () => (await P.locator(".f-rd-faces").count()) === 2, "two classmates' faces");
+  expect(await P.locator(".f-rd-faces.mine").getAttribute("aria-label")).toMatch(/^Bilal: Level 4/);
+  expect(await P.locator(".f-rd-faces:not(.mine)").getAttribute("aria-label")).toMatch(/^Chen: Level 6/);
+  expect(await P.locator(".f-rd-faces").evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")).join())).not.toContain("Dev");
+  await visible(P.locator(".f-rd-final"));
+  expect(await P.locator(".f-rd-chest").count()).toBe(3); // after 3, 6 and 9 (12 is the last)
+  await noSideScroll(P);
+  await shot(P, "fam74-road");
+  await P.locator(".f-rd-chest.ready").click();
+  await contains(P.locator(".f-dq-open .f-dq-got"), "+3");
+  await P.locator(".f-dq-open").click();
+  await visible(P.locator(".f-rd-chest.open"));
+  await contains(P.locator(".f-rd-chest.open b"), "+3");
+  await P.locator(".f-rd-chest.wait").first().click();
+  await contains(P.locator(".f-toast"), "Level 6");
+  await shot(P, "fam75-road-chest");
+  // He finishes Level 4 (in class): back on the road, the owl walks from Level 4 to Level 5.
+  await t.run(async (ctx) => {
+    const p = (await ctx.db.query("progress").withIndex("by_student_unit_stage", (q) => q.eq("studentId", hana).eq("unitId", u01).eq("stage", "master")).first())!;
+    const m = p.m!;
+    await ctx.db.patch(p._id, { m: { ...m, lv: { ...m.lv, "4": { done: Date.now(), fixed: Date.now(), got: 10, by: "correction" } } } });
+  });
+  await P.goBack();
+  await tabTo(P, /Home/);
+  await tabTo(P, /Learn/);
+  await P.locator(".f-node.s-now").click();
+  await playIs(P, "Level 5");
+  await until(async () => await P.locator(".f-rd-owl").evaluate((el) => el.getAnimations().length > 0), "the owl walking");
+  await P.waitForTimeout(500);
+  await shot(P, "fam76-road-walk");
+  // One more? (a Level done on the phone notes it; here written as the reveal writes it): Home asks for 10 minutes.
+  await P.evaluate((u) => {
+    const k = Object.keys(localStorage).find((x) => x.endsWith(`.roadAt.${u}`))!;
+    localStorage.setItem(k.replace(`.roadAt.${u}`, ".onemore"), JSON.stringify({ at: Date.now(), u, n: 4 }));
+  }, u01 as string);
+  await P.goBack();
+  await tabTo(P, /Home/);
+  await visible(P.locator(".f-om"));
+  await contains(P.locator(".f-om .f-om-t"), "9:");
+  await contains(P.locator(".f-om"), "Level 5");
+  expect(await P.locator(".f-dq-go").count()).toBe(0); // one START at a time
+  await shot(P, "fam77-one-more");
   expect(problems.slice(before)).toEqual([]);
 });
 

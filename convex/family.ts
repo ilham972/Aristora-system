@@ -109,7 +109,8 @@ import { mateMarksOn, numsOfRow, raceList, raceReady, raceRowOf, weekCoinsOf } f
 import { homeLevels, homeMoments, stageDone, stageMoment, usCfg } from "./lib/us";
 import { OL } from "./lib/syllabus";
 import { accountOf, feeCfg } from "./lib/feeRows";
-import { walletOf } from "./lib/coins";
+import { chestSet, walletOf } from "./lib/coins";
+import { levelOn, questsOf, roadChestLevels, roadChestState, shieldDays, type Quest, type RoadChest } from "./lib/quests";
 import { seenOf, seenOn, type Seen } from "./online";
 
 const token = v.optional(v.string());
@@ -288,6 +289,17 @@ export type FamilyMe = {
    */
   coins?: { n: number; wk: number; last: number };
   /**
+   * Today's quests (14 Nov 2026, convex/lib/quests.ts): the same three for every student today and how far he is;
+   * `open` = he opened today's chest; `c` = the day's chest's coins (the owner's; 0 = no chest). Missing on a server
+   * from before.
+   */
+  quests?: { q: Quest[]; open: boolean; c: number };
+  /**
+   * His flame shield (14 Nov 2026): `has` = he holds one; `p` = its price in coins (0 = the owner doesn't sell it);
+   * `kept` = the last day a shield kept his flame (a Sri Lanka day number), or null.
+   */
+  shield?: { has: boolean; p: number; kept: number | null };
+  /**
    * What he keeps for good (11 Nov 2026, his voice note: students thought "everything is gone" each Monday): his place
    * in his grade's all-time list (null: no XP ever yet) of how many, and whether he is the GOAT (ARISTORA's all-time #1
    * over every grade). Missing on a server from before, and while the race rows are being built.
@@ -361,6 +373,11 @@ export const me = query({
     const rows = await xpRows(ctx, s._id);
     const worlds = await worldsOf(ctx, s);
     const days = levelDays(rows);
+    // His coins, his shield and today's chest (one small row), and the owner's numbers for them.
+    const wallet = await walletOf(ctx, s._id);
+    const set = await chestSet(ctx);
+    const kept = shieldDays(rows, wallet, now);
+    const flameDays = new Set([...days, ...kept]);
     // Each level's photos still owed (📷 on the Stage) and the teacher's answers he hasn't opened (a dot).
     const home = await homeChecks(ctx, s._id);
     for (const w of worlds) {
@@ -401,13 +418,13 @@ export const me = query({
       index: s.index ?? null,
       xp: weekXp(rows, now) + us.xp,
       total: xpSince(rows, 0) + us.tot,
-      streak: streakOf(rows, now),
-      best: bestStreak(days),
+      streak: streakOf(rows, now, kept),
+      best: bestStreak(flameDays),
       week: weekDays(days, now),
       dayXp: weekDayXp(rows, now).map((x, i) => x + (usDay?.[i] ?? 0)),
       levelsDone: levelsSince(rows, 0),
       levelsWeek: levelsSince(rows, slWeekStart(now)),
-      trophies: trophiesOf(rows, worlds),
+      trophies: trophiesOf(rows, worlds, kept),
       ol: olMapOn(s),
       cheers: cheersWords(await cheersOf(ctx, s._id, now)),
       gifts: (
@@ -425,7 +442,9 @@ export const me = query({
         ...(x.why ? { why: x.why } : {}),
         ...(x.kind === "shop" ? { c: x.c ?? 0 } : {}),
       })),
-      coins: await coinsOf(ctx, s._id),
+      coins: { n: wallet?.n ?? 0, wk: wallet?.wk ?? 0, last: wallet?.last ?? 0 },
+      quests: { q: questsOf(rows, now), open: wallet?.cd === slDayNo(now), c: set.d },
+      shield: { has: (wallet?.sh ?? 0) > 0, p: set.s, kept: wallet?.sd?.length ? Math.max(...wallet.sd) : null },
       ...(await everOf(ctx, s, now)),
       bell: bell.slice(0, BELL_MAX),
       us: usOpen,
@@ -443,12 +462,6 @@ async function feesLine(ctx: QueryCtx, sid: Id<"students">): Promise<{ fees?: No
   const a = await accountOf(ctx, sid);
   if (!a || (a.owe <= 0 && a.cr <= 0) || !(await feeCfg(ctx))) return {};
   return { fees: { o: a.owe, c: a.c, b: a.b + a.o, cr: a.cr } };
-}
-
-/** His coins (family.me's `coins`): one small row; all 0 before his first pay day. */
-async function coinsOf(ctx: QueryCtx, sid: Id<"students">): Promise<NonNullable<FamilyMe["coins"]>> {
-  const w = await walletOf(ctx, sid);
-  return { n: w?.n ?? 0, wk: w?.wk ?? 0, last: w?.last ?? 0 };
 }
 
 /**
@@ -813,16 +826,22 @@ export const check = mutation({
     if (s.present) await refresh(ctx, s._id, now, await currentSession(ctx, now));
     const all = await xpRows(ctx, s._id);
     // Us (7 Nov 2026): his first level from home ever, days in a row, a whole Stage finished: the owl tells everyone.
-    const streak = streakOf(all, now);
+    const { streak, kept: shieldKept } = await flameOf(ctx, s._id, all, now);
     await homeMoments(ctx, s._id, homeLevels(all), streak, now);
     if (stageDone(data.levels, m.lv)) await stageMoment(ctx, s._id, unit, unit.grade === OL ? null : unitNumber(unit.code), now);
     // His trophies now (the phone shows the ones this level just earned).
-    const trophies = trophiesOf(all, await worldsOf(ctx, s));
+    const trophies = trophiesOf(all, await worldsOf(ctx, s), shieldKept);
     // The level's book: the key's working on what he got wrong, and the photos it asks for.
     const book = await bookOf(ctx, s, unit._id, l.n);
     return { results, got, phoneMax, max: l.max, teacher, xp: weekXp(all, now) + (await usNow(ctx, s._id, now)).xp, streak, trophies, book, retry, bonus };
   },
 });
+
+/** His flame with the days his shield kept (14 Nov 2026), and those days (his trophies count them too). */
+async function flameOf(ctx: QueryCtx, sid: Id<"students">, rows: Doc<"progress">[], now: number) {
+  const kept = shieldDays(rows, await walletOf(ctx, sid), now);
+  return { streak: streakOf(rows, now, kept), kept };
+}
 
 /** A live level's rows older than this are made again (a key fixed, a level marked in class meanwhile). */
 const LIVE_FRESH_MS = 6 * 60 * 60_000;
@@ -943,8 +962,8 @@ async function checkRedo(
   const right = retry.filter((r) => r.got >= r.max).length;
   await log(ctx, null, now, { kind: "retry-home", studentId: s._id, name: s.name, unit: unit.key, value: `${retry.map((r) => r.q).join(",")} ${right}/${retry.length}` });
   const all = await xpRows(ctx, s._id);
-  const streak = streakOf(all, now);
-  const trophies = trophiesOf(all, await worldsOf(ctx, s));
+  const { streak, kept: shieldKept } = await flameOf(ctx, s._id, all, now);
+  const trophies = trophiesOf(all, await worldsOf(ctx, s), shieldKept);
   // The reveal's ring = his marks on the redo; its XP line = only the half marks he won back (`bonus`, the phone: n = 0).
   return { results, got, phoneMax: max, max, teacher: [], xp: weekXp(all, now) + (await usNow(ctx, s._id, now)).xp, streak, trophies, book: null, retry: [], bonus, redo: { right, of: retry.length, gate: gateOf(m, data, keys) } };
 }
@@ -1006,9 +1025,9 @@ async function checkLadder(
   await log(ctx, null, now, { kind: "ladder-home", studentId: s._id, name: s.name, unit: unit.key, value: `${sec.id} ${got}/${max}` });
   if (s.present) await refresh(ctx, s._id, now, await currentSession(ctx, now));
   const all = await xpRows(ctx, s._id);
-  const streak = streakOf(all, now);
+  const { streak, kept: shieldKept } = await flameOf(ctx, s._id, all, now);
   await homeMoments(ctx, s._id, homeLevels(all), streak, now);
-  const trophies = trophiesOf(all, await worldsOf(ctx, s));
+  const trophies = trophiesOf(all, await worldsOf(ctx, s), shieldKept);
   return { results, got, phoneMax, max, teacher, xp: weekXp(all, now) + (await usNow(ctx, s._id, now)).xp, streak, trophies, book: null, retry: [], bonus: 0 };
 }
 
@@ -1242,6 +1261,60 @@ async function cheersOf(ctx: QueryCtx, sid: Id<"students">, now: number) {
 }
 
 /**
+ * A Stage's road for him (14 Nov 2026, the idea picture 08): his classmates on the Level he is on and the Levels ahead
+ * (never behind him: nobody is shown as last, and nobody's place behind reaches another phone), by the Level they are
+ * on (`n`; past the last Level = finished); and the road's chests (convex/lib/quests.ts). From the race parts' spots:
+ * small rows, never their progress.
+ */
+export type FamilyRoad = {
+  mates: { n: number; c: number; f: { id: string; n: string; pic?: string }[] }[];
+  chests: RoadChest[];
+  /** A road chest's coins (the owner's; 0 = no road chests). */
+  rc: number;
+};
+
+/** Faces shown on one Level of the road (the rest are a number). */
+const ROAD_FACES = 3;
+
+export const road = query({
+  args: { token, unitId: v.string() },
+  handler: async (ctx, args): Promise<FamilyRoad> => {
+    const s = await familyViewer(ctx, args.token);
+    const unitId = ctx.db.normalizeId("units", args.unitId);
+    if (!unitId) return { mates: [], chests: [], rc: 0 };
+    const m = masterState(await progressFor(ctx, s._id, unitId, "master"));
+    const on = levelOn(m);
+    const set = await chestSet(ctx);
+    // The road's chests: after every 3rd Level of its workbook (never the last), opened or not.
+    const book = await bookFor(ctx, unitId, "master");
+    const levels = book && book.data.kind === "master" ? book.data.levels.map((l) => l.n) : [];
+    const opened = new Map<number, number>();
+    for (const c of await ctx.db
+      .query("chests")
+      .withIndex("by_sid", (q) => q.eq("sid", s._id).eq("u", unitId))
+      .collect())
+      opened.set(c.n, c.c);
+    const chests: RoadChest[] = set.r > 0 || opened.size ? roadChestLevels(levels).map((n) => (opened.has(n) ? { n, s: "open" as const, c: opened.get(n) } : { n, s: roadChestState(m, n) })) : [];
+    // Classmates at his Level and ahead, in his world (a demo student sees demo students).
+    const demo = !!s.demo || !!s.test;
+    const by = new Map<number, FamilyRoad["mates"][number]>();
+    for (const p of await ctx.db
+      .query("raceParts")
+      .withIndex("by_u", (q) => q.eq("u", unitId))
+      .collect()) {
+      if (p.sid === s._id || p.on === undefined || p.on < on) continue;
+      const r = await raceRowOf(ctx, p.sid);
+      if (!r || r.gone || r.demo !== demo) continue;
+      const g = by.get(p.on) ?? { n: p.on, c: 0, f: [] };
+      g.c++;
+      if (g.f.length < ROAD_FACES) g.f.push({ id: p.sid, n: r.n.split(" ")[0], ...(r.pic ? { pic: r.pic } : {}) });
+      by.set(p.on, g);
+    }
+    return { mates: [...by.values()].sort((a, b) => a.n - b.n), chests, rc: set.r };
+  },
+});
+
+/**
  * A classmate's profile: anyone of ARISTORA (the real class; a demo phone sees the demo class), as the race shows him.
  * Everything his own Me shows but his account (his answers: "Everything"); his marks only while the owner's switch is on.
  */
@@ -1277,6 +1350,8 @@ export async function mateOf(ctx: QueryCtx, s: Doc<"students">, from: Id<"studen
   const p = await profileOf(ctx, s, rows, worlds, now);
   const total = xpSince(rows, 0) + (race?.us ? numsAt(race.us, now).tot : 0);
   const ev = await everOf(ctx, s, now);
+  // His flame as on his own phone: the days his shield kept count (14 Nov 2026).
+  const kept = shieldDays(rows, await walletOf(ctx, s._id), now);
   return {
     id: s._id,
     name: s.name,
@@ -1286,11 +1361,11 @@ export async function mateOf(ctx: QueryCtx, s: Doc<"students">, from: Id<"studen
     // XP from Us too (8 Nov 2026): his race row's Us part, as on his own phone.
     xp: weekXp(rows, now) + (race?.us ? numsAt(race.us, now).xp : 0),
     total,
-    streak: streakOf(rows, now),
-    best: bestStreak(days),
+    streak: streakOf(rows, now, kept),
+    best: bestStreak(new Set([...days, ...kept])),
     week: weekDays(days, now),
     levelsDone: levelsSince(rows, 0),
-    trophies: trophiesOf(rows, worlds),
+    trophies: trophiesOf(rows, worlds, kept),
     wins: { g: race?.w ?? 0, a: race?.wa ?? 0 },
     ...(ev.ever ? { ever: ev.ever } : {}),
     cheers: { n: cheers.length, mine: !!from && cheers.some((c) => c.from === from && c.day === slDayNo(now)) },

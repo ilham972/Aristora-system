@@ -9,6 +9,7 @@ import { useEffect, useState } from "preact/hooks";
 import type { CoinLine, FamilyShop, ShopItem } from "../../convex/coins";
 import type { FamilyMe } from "../../convex/family";
 import { BoughtCard } from "./board";
+import { ShieldCard } from "./quests";
 import { keep, mutation, query, sameOr } from "./net";
 import { buzz, sound } from "./sound";
 import { Coin, Icon, OwlBadge, OwlSays, problemWords, Sheet, showSheet, toast, Waiting } from "./ui";
@@ -33,6 +34,8 @@ function lineWords(l: CoinLine): { what: string; when: string } {
   if (l.k === "back") return { what: `Coins back · ${l.w ?? ""}`, when };
   // His grade's weekly #1 (11 Nov 2026): "👑 Grade 8 · #1 · 2–8 Nov".
   if (l.k === "win") return { what: `👑 ${l.w ?? ""}`, when };
+  // A chest (14 Nov 2026): today's quests, or a Stage's road.
+  if (l.k === "chest") return { what: `Chest · ${l.w ?? ""}`, when };
   return { what: l.w ?? "", when };
 }
 
@@ -213,6 +216,8 @@ export function ShopScreen(props: { me: FamilyMe | null; onBack: () => void; onC
               ))}
             </section>
           )}
+          {/* The flame shield (14 Nov 2026): coins, never money; the centre gives nothing by hand. */}
+          {props.me && <ShieldCard me={props.me} shop onChange={changed} />}
           {s.items.length === 0 ? (
             <section class="f-card f-shop-none rise">
               <OwlSays mood="wave">கடை விரைவில் திறக்கும்! அதுவரை உன் coins சேர்த்து வை.</OwlSays>

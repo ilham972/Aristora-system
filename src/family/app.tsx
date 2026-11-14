@@ -25,7 +25,6 @@ import type { CertData } from "./cert";
 import { FeedbackSheet } from "./feedback";
 import { HomeTab } from "./home";
 import { pushOff } from "./bell";
-import { BookScreen } from "./book";
 import { LearnTab, StageScreen } from "./map";
 import { loadParts, pctOf, useChatParts, useParts, useUsParts } from "./later";
 import { picOf, usePics } from "./pics";
@@ -654,6 +653,8 @@ export function App() {
       <StageScreen
         me={me!}
         world={w}
+        parts={parts}
+        onChange={() => void loadMe()}
         onBack={up}
         onPlay={(n) => {
           sound("start");
@@ -674,8 +675,12 @@ export function App() {
     );
   } else if (screen.k === "book") {
     const w = worldOf(screen.unitId);
-    body = w ? (
-      <BookScreen
+    body = !w ? (
+      <Missing onBack={toMain} />
+    ) : !lv ? (
+      <Waiting />
+    ) : (
+      <lv.BookScreen
         key={`${w.unitId}.${screen.n}`}
         unitId={w.unitId}
         n={screen.n}
@@ -686,8 +691,6 @@ export function App() {
           void loadMe();
         }}
       />
-    ) : (
-      <Missing onBack={toMain} />
     );
   } else if (screen.k === "level") {
     const w = worldOf(screen.unitId);
@@ -753,9 +756,9 @@ export function App() {
       <>
         <main class={`f-main t-${tab}`} key={`${acc?.id ?? ""}.${tab}`}>
           {tab === "home" ? (
-            <HomeTab top={top} me={me} onPlay={playNow} onLearn={() => pickTab("learn")} onStage={(unitId) => go({ k: "stage", unitId })} onShop={openShop} />
+            <HomeTab top={top} me={me} parts={parts} onPlay={playNow} onLearn={() => pickTab("learn")} onStage={(unitId) => go({ k: "stage", unitId })} onShop={openShop} onChange={() => void loadMe()} />
           ) : tab === "learn" ? (
-            <LearnTab top={top} me={me} onStage={(unitId) => go({ k: "stage", unitId })} onPlay={playNow} />
+            <LearnTab top={top} me={me} parts={parts} onStage={(unitId) => go({ k: "stage", unitId })} onPlay={playNow} />
           ) : tab === "us" ? (
             usp ? (
               <usp.UsTab
@@ -938,7 +941,7 @@ function TopRow(props: {
         </span>
       )}
       <span class="f-sp" />
-      <button type="button" class={`f-pill fire${me?.streak.today ? " lit" : ""}${fireGrew ? " grew" : ""}`} aria-label={`${me?.streak.days ?? 0} days in a row`} onClick={() => props.onTab("me")}>
+      <button type="button" class={`f-pill fire${me?.streak.today ? " lit" : ""}${fireGrew ? " grew" : ""}${me?.shield?.has ? " sh" : ""}`} aria-label={`${me?.streak.days ?? 0} days in a row`} onClick={() => props.onTab("me")}>
         <Flame lit={!!me?.streak.today} />
         {me?.streak.days ?? 0}
       </button>

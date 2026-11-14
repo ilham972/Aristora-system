@@ -95,7 +95,11 @@ const FAMILY_BUDGET_KB = 67;
 // 14 Nov 2026, the Level rebuilt (his "let's build completely"): the steps bar, a long question one part at a time, the
 // answer after every question, the owl's body with its poses (owlBody.tsx) and all their style (levelStyle.ts: a
 // string in the level screen's own file) are in the later parts only (the first load carries none of it): later 50 → 62.
-const FAMILY_LATER_KB = 62;
+// 14 Nov 2026 (night), the rest of the ideas (his "build remaining also"): a Level's book (book.tsx, photos.ts) left the
+// first load for the level screen's file (66.0 → 61.8: the app opens faster), and today's quests, the chests, the flame
+// shield, the road's owl, classmates and chests, the ✓ / ✗ deck and the order line came (quests.tsx, road.tsx; 8.2 KB):
+// later 60.2 → 72.9, so 62 → 75. The whole app the phone keeps grew by 8 KB, not 13.
+const FAMILY_LATER_KB = 75;
 // 7 Nov 2026, the class app's Us tab: the family app's teachers' screens (src/family/staff.tsx, opened as /f/?staff
 // inside the class app) are their own file: never prefetched by a student's phone, so outside both budgets above,
 // with their own (a teacher's phone fetches them once, the first time she opens Us).

@@ -3,6 +3,7 @@
 // his flame), his class week (the centre's hours from Settings → Class hours, the days he usually comes, the days he
 // came), what he did on a day (in class and at home, hour by hour), and his last classes. Never his waiting time.
 
+import type { Parts } from "./later";
 import type { ComponentChildren } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import type { ClassDay, FamilyClasses, FamilyMe } from "../../convex/family";
@@ -305,6 +306,13 @@ export function HomeTab(props: {
   onStage: (unitId: string) => void;
   /** The Shop (10 Nov 2026): Home's PAYDAY card opens it. */
   onShop: () => void;
+  /** His coins or his day changed (a chest, a shield): his home screen again. */
+  onChange: () => void;
+  /**
+   * The parts right after the first screen (14 Nov 2026): once here, today's quests and the chest take the goal card's
+   * place (quests.tsx keeps all it had) and the greeting's owl has its body.
+   */
+  parts: Parts | null;
 }) {
   const [cls, setCls] = useState<FamilyClasses | null>(() => keep<FamilyClasses>("classes"));
   const [now, setNow] = useState(() => Date.now());
@@ -372,7 +380,11 @@ export function HomeTab(props: {
             </p>
             <h1 class="f-title">வணக்கம்{name ? `, ${firstName(name)}` : ""}!</h1>
           </div>
-          <OwlBadge mood={party ? "party" : flameAtRisk(me?.streak) ? "grumpy" : me?.streak.today ? "happy" : "wave"} class="greet" />
+          {props.parts && !party ? (
+            <props.parts.GreetOwl me={me} />
+          ) : (
+            <OwlBadge mood={party ? "party" : flameAtRisk(me?.streak) ? "grumpy" : me?.streak.today ? "happy" : "wave"} class="greet" />
+          )}
         </div>
       </header>
       {party && <BdayCard name={name} />}
@@ -380,7 +392,11 @@ export function HomeTab(props: {
       <FeesCard f={me?.fees} />
       <PayCard coins={me?.coins} won={me?.won} onShop={props.onShop} />
       <GiftCards gifts={me?.gifts} />
-      <GoalCard me={me} onPlay={props.onPlay} onLearn={props.onLearn} />
+      {props.parts ? (
+        <props.parts.HomePlus me={me} onPlay={props.onPlay} onLearn={props.onLearn} onChange={props.onChange} />
+      ) : (
+        <GoalCard me={me} onPlay={props.onPlay} onLearn={props.onLearn} />
+      )}
       <Cheered c={me?.cheers} />
       <section class="f-sched f-card rise" aria-label="Class week">
         <h2 class="f-h2">

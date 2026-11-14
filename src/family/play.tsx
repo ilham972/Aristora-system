@@ -21,18 +21,24 @@ import type { LevelBook } from "../../convex/lib/homeWork";
 import type { Box, FormPart } from "../../convex/lib/phone";
 import { drawQuestion, showStep, stepsOf, type Steps } from "../questionView";
 import { Book, Taker } from "./book";
-import { fracCells, fracJoin, MatchPairs, OrderCards, paintSlots, PickBelow, SayBelow, slotRuns, slotsFit, tapOf, tapped, typing, WhyBelow, WordBox, type Live, type SlotRun } from "./kinds";
+import { fracCells, fracJoin, MatchPairs, OrderLine, paintSlots, PickBelow, SayBelow, slotRuns, slotsFit, tapOf, tapped, TfDeck, typing, WhyBelow, WordBox, type Live, type SlotRun } from "./kinds";
 import { addLevelStyle } from "./levelStyle";
 import { keep, mutation, NetError, query } from "./net";
 import { Confetti, nextPlay } from "./next";
-import { Buddy, type Pose } from "./owlBody";
+import { Buddy, useBuddyTap, type Pose } from "./owlBody";
+import type { OneMoreMark } from "./quests";
 import { buzz, sound } from "./sound";
-import { Flame, Gem, Icon, Maths, Medal, Owl, OwlBadge, pretty, problemWords, Roll, Tag, toast, useOwlTap, Waiting, type Mood } from "./ui";
+import { Flame, Gem, Icon, Maths, Medal, Owl, OwlBadge, pretty, problemWords, Roll, Tag, toast, Waiting } from "./ui";
 
 addLevelStyle();
 
 /** A level's name on its screens: the redo of a Stage finished below 75 % is n = 0 (10 Nov 2026). */
 const lvName = (f: { n: number; d?: number }) => (f.n === 0 ? "↻ Redo" : `Level ${f.d ?? f.n}`);
+
+// A Level's book (its solutions, photos and the teacher's answers: book.tsx) opens from a Stage, never on the first
+// screen: the app reaches it through this module (level.ts), so book.tsx and photos.ts are not in the first load
+// (14 Nov 2026: 3.9 KB lighter, room for the day's quests and the road).
+export { BookScreen } from "./book";
 
 export type Checked = {
   results: FamilyResult[];
@@ -254,6 +260,8 @@ const PAPER_CSS = `.qv { border-radius: 14px; padding: 14px 12px 10px; -webkit-u
   box-shadow: inset 0 0 0 2px var(--line-2, #ddd9f0), 0 3px 0 var(--line-2, #ddd9f0); background: var(--card, #fff); color: var(--ink3, #9d99bf); font: 800 1.15em/1 "Baloo Thambi 2", sans-serif; }
 .qv .fx-tk.fx-on { box-shadow: inset 0 0 0 2.5px var(--brand, #6c5ce7), 0 3px 0 var(--brand, #6c5ce7); background: var(--brand-soft, #efecff); color: var(--brand-2, #5a49d6); animation: fx-pop .28s ease; }
 @keyframes fx-pop { 0% { transform: scale(.92); } 60% { transform: scale(1.06); } 100% { transform: none; } }
+.qv .fx-row { background: rgba(255, 194, 61, .18); box-shadow: inset 4px 0 0 var(--gold, #ffc23d); border-radius: 8px; }
+.qv [data-tick].fx-cur .fx-tk:not(.fx-on) { box-shadow: inset 0 0 0 2.5px var(--gold, #ffc23d), 0 3px 0 var(--gold-3d, #e09400); }
 .qv [data-fill].fx-ok, .qv [data-opt].fx-ok, .qv .fx-tk.fx-ok { border-color: var(--right, #1e8cf5) !important; border-style: solid !important; box-shadow: inset 0 0 0 2.5px var(--right, #1e8cf5), 0 0 0 4px var(--right-soft, #e3f0ff);
   background: var(--right-soft, #e3f0ff); color: var(--right-ink, #0f63bd); }
 .qv [data-fill].fx-no, .qv [data-opt].fx-no, .qv .fx-tk.fx-no { border-color: var(--wrong, #f24a6c) !important; border-style: solid !important; box-shadow: inset 0 0 0 2.5px var(--wrong, #f24a6c), 0 0 0 4px var(--wrong-soft, #ffe6ec);
@@ -310,7 +318,8 @@ function Paper(props: {
       ref={host}
       aria-label={`Q${props.q}`}
       onClick={(e) => {
-        if (e.target instanceof Element && e.target.closest(".f-part")) return; // his answers under a sub-question
+        // His answers under a sub-question: the path as the tap began (a card he placed has left the page by now).
+        if (e.composedPath().some((n) => n instanceof Element && n.classList.contains("f-part"))) return;
         if (!live) return props.onZoom();
         const t = tapOf(e, live);
         if (t) live.onSlot(t.run, t.i, t.v);
@@ -519,6 +528,8 @@ export function Play(props: {
   const [locks, setLocks] = useState<Record<number, FamilyLock>>(() => keep<Record<number, FamilyLock>>(lockKey) ?? {});
   const [verdict, setVerdict] = useState<{ q: number; run: number } | null>(null);
   const [run, setRunN] = useState(0);
+  // Each ✓ / ✗ deck's statement now (question.part → its index).
+  const [tfAt, setTfAt] = useState<Record<string, number>>({});
   const [checking, setChecking] = useState(false);
   const sure = useRef<number | null>(null);
   // The list of questions (the bar on top opens it), a long question's story open, how long since he did anything.
@@ -894,7 +905,12 @@ export function Play(props: {
       for (let k = 0; k < (p.boxes?.length ?? 0); k++) marks.push(ok === null ? null : whole ? ok.every(Boolean) : (ok[k] ?? false));
     });
   }
-  const live: Live = { runs, fit, vals: mine, cur: box ? at.bi : null, onSlot: tap, ...(lock ? { marks } : {}) };
+  // ✓ / ✗ one statement at a time (kinds.tsx TfDeck): the one each deck is on (the first he hasn't answered at first).
+  const tfKey = (run: SlotRun) => `${q.q}.${run.at}`;
+  const tfK = (run: SlotRun) => tfAt[tfKey(run)] ?? Math.max(0, Array.from({ length: run.els }, (_, i) => i).findIndex((i) => !mine[run.at + i]));
+  const setTf = (run: SlotRun, k: number) => setTfAt((x) => ({ ...x, [tfKey(run)]: k }));
+  const tf = lock ? [] : runs.filter((r) => r.ui.k === "tf" && fit.has("t") && !r.below).map((r) => r.at + tfK(r));
+  const live: Live = { runs, fit, vals: mine, cur: box ? at.bi : null, onSlot: tap, ...(lock ? { marks } : { tf }) };
   const runAt = (from: number) => runs.find((r) => r.at === from);
   const pad = !review && !asking && !learning && !lock && typesIn(at.qi);
   // → is Check where the question ends (and its Check answers at once).
@@ -910,7 +926,25 @@ export function Play(props: {
     if (ui && ui.k !== "fill" && ui.k !== "order" && ui.k !== "match" && ui.k !== "why" && ui.k !== "say") {
       bi += p.boxes?.length ?? 0;
       const run = runAt(from);
-      if (!run || (fit.has(run.attr) && !run.below)) return null;
+      if (!run) return null;
+      const slots = fit.has(run.attr) && !run.below;
+      if (ui.k === "tf") {
+        return (
+          <div class="f-part" key={pi} slot={sl(pi)}>
+            {p.p && <span class="f-plabel">({p.p})</span>}
+            <TfDeck
+              run={run}
+              vals={mine}
+              k={tfK(run)}
+              items={slots ? undefined : ui.items}
+              marks={lock ? marks.slice(run.at, run.at + run.els) : undefined}
+              onK={(k) => setTf(run, k)}
+              onPick={(i, v) => tap(run, i, v)}
+            />
+          </div>
+        );
+      }
+      if (slots) return null;
       return (
         <div class="f-part" key={pi} slot={sl(pi)}>
           {p.p && <span class="f-plabel">({p.p})</span>}
@@ -924,7 +958,7 @@ export function Play(props: {
         <div class="f-part" key={pi} slot={sl(pi)}>
           {p.p && <span class="f-plabel">({p.p})</span>}
           {ui.k === "order" ? (
-            <OrderCards items={ui.items} vals={mine} at={from} onSet={(v) => setRun(at.qi, from, v)} />
+            <OrderLine items={ui.items} vals={mine} at={from} marks={lock ? marks.slice(from, from + ui.items.length) : undefined} onSet={(v) => setRun(at.qi, from, v)} />
           ) : (
             <MatchPairs l={ui.l} r={ui.r} vals={mine} at={from} onSet={(v) => setRun(at.qi, from, v)} />
           )}
@@ -1164,7 +1198,8 @@ export function Play(props: {
         </section>
       ) : (
         <>
-          <div class="f-lvcoach">
+          {/* While the answer's sheet is up its own owl acts: this one waits out of sight (one owl jumping at a time). */}
+          <div class={`f-lvcoach${verdict ? " hid" : ""}`}>
             <span
               class="tap"
               role="button"
@@ -1554,8 +1589,14 @@ export function Result(props: {
     const id = window.setTimeout(() => setMedal(true), instant() ? 0 : 1400);
     return () => window.clearTimeout(id);
   }, [done]);
-  const mood: Mood = !done ? "think" : medal ? "champ" : pct >= 1 ? "star" : pct >= 0.9 ? "party" : pct >= 0.7 ? "cheer" : "strong";
-  const [owlMood, tapOwl] = useOwlTap(mood);
+  // With its body (14 Nov 2026): it thinks, then star eyes for every mark, a jump for 70 % and more, the headband to keep
+  // going below; the trophy when one comes. A tap = another pose.
+  const base: Pose = !done ? "think" : medal ? "champ" : pct >= 1 ? "combo" : pct >= 0.7 ? "yes" : "again";
+  const [pose, poseKey, tapOwl] = useBuddyTap(base);
+  // "One more?" on Home for 10 minutes (quests.tsx): a Level just done on the phone.
+  useEffect(() => {
+    if (form.n !== 0) keep<OneMoreMark>("onemore", { at: Date.now(), u: props.world.unitId, n: form.n });
+  }, []);
   const next = nextPlay(props.me);
   const nextHere = next && next.world.unitId === props.world.unitId && next.n !== form.n && form.n !== 0 ? next : null;
   // The ring round the owl fills as his marks come in.
@@ -1580,7 +1621,7 @@ export function Result(props: {
               tapOwl();
             }}
           >
-            <Owl mood={owlMood} key={owlMood} />
+            <Buddy pose={pose} key={poseKey} class="rv" />
           </span>
         </div>
         <h1 class="f-cheer" key={done ? "done" : "wait"}>
