@@ -45,7 +45,7 @@ export function BookQuestion(props: { unitId: string; stage: Stage; q: number; p
   useLayoutEffect(() => {
     const el = host.current;
     if (!el || !qq || !css) return;
-    const undo = drawQuestion(el, qq.html, css.css, inline ? INLINE_PAPER : "", props.parts, true);
+    const undo = drawQuestion(el, qq.html, css.css, inline ? INLINE_PAPER : "", props.parts);
     // A row whose part found no printed sub-question (its slot at the end) keeps its own label: `data-loose`.
     const box = el.shadowRoot?.querySelector(".qv");
     for (const c of Array.from(el.children)) {

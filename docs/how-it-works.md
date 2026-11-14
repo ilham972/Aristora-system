@@ -1626,6 +1626,13 @@ learning app of our education institute"): one profile, his class times, what he
     question, or → on the pad (after the step's last box) moves; back and forth until its Check. From the second step
     **the story folds to its first words** in a strip: a tap shows the story alone (its table, its figure), a tap
     goes back. A question whose parts don't each have a printed label stays one page, as before.
+    **A tute's ladder the same** (14 Nov 2026, his screenshot of OL-U48's ladder: "boxes are not pressable ... the
+    first question don't have answer box ... learn from master book"): its sub-questions (`.sq` with the label `.sl`)
+    are found like a workbook's (`slotParts`), so each part's answers stand under it and a long ladder question goes a
+    step at a time. On the phone a ladder sub-question reads as one paragraph (the label violet, its printed box at
+    the end of its words; `PAPER_CSS`), the black "ஆசிரியர்" tag is hidden (the card says it). A staircase's boxes
+    become blanks when its book lays one over each box of the drawing (`<span class="ab" style="position:absolute;
+    left;top;width;height;--w;--h">` inside its `.dg`, in the drawing's mm): typed like any blank, the drawing's size.
     **Bigger places to tap** (the audit, 14 Nov: options and ✓ / ✗ were 31–34 px high): options 48 px and two a row,
     ✓ / ✗ 44 px, blanks 36 px; each pops when chosen.
     **The screen holds still on →** (his report, 4 Nov 2026: "the whole screen bounces up and comes back"): the slide
