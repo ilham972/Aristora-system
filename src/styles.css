@@ -14425,3 +14425,15 @@ body.sb-on {
   overflow: auto;
   font-size: 12px;
 }
+/* His question from his thread (the AI answers it there too). */
+.ai-msg.s {
+  align-self: flex-end;
+  border-radius: 14px 14px 4px 14px;
+  background: #fff4dc;
+}
+.ai-who {
+  display: block;
+  font: 700 12.5px/1.3 var(--font);
+  color: var(--amber-ink);
+  margin-bottom: 2px;
+}

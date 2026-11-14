@@ -16,10 +16,12 @@ import { actor, viewer } from "./lib/auth";
 import { fail, keyRow } from "./lib/backend";
 import { slDayStart } from "./lib/day";
 import { internalMutation, mutation } from "./lib/fn";
+import { lastWords, uKey } from "./lib/chat";
+import { askOf } from "./lib/help";
+import { alertStudent } from "./lib/push";
 import {
   AI_ASKS_MAX,
   AI_DAY_MAX,
-  AI_FOLLOW,
   AI_KEEP_MS,
   AI_MODEL_DEFAULT,
   AI_STUCK_MS,
@@ -32,6 +34,7 @@ import {
   checkPrompt,
   cleanReply,
   failWords,
+  followWords,
   readVerdict,
   verdictWords,
 } from "./lib/ai";
@@ -77,6 +80,8 @@ export const check = mutation({
     /** The ⌂ lane: his photos from home (that row's), and what he typed. */
     home: v.optional(v.id("homePhotos")),
     said: v.optional(v.string()),
+    /** The ⌂ lane: each part as the phone marked it (null = left to the teacher): the AI keeps those marks. */
+    fixed: v.optional(v.array(v.union(v.number(), v.null()))),
   },
   handler: async (ctx, args): Promise<Id<"aiChecks">> => {
     const me = await actor(ctx, args.token, [...WHO]);
@@ -109,6 +114,7 @@ export const check = mutation({
       ...(args.photo ? { photo: args.photo } : {}),
       ...(args.home ? { home: args.home } : {}),
       ...(said ? { said } : {}),
+      ...(args.fixed?.length && args.fixed.length <= 20 ? { fixed: args.fixed.map((x) => (x === null ? null : Math.max(0, Math.round(x)))) } : {}),
       state: "work",
       msgs: [],
       asks: 0,
@@ -182,7 +188,8 @@ export const job = internalQuery({
     const key = await keyRow(ctx, r.u, "master");
     // The photos: hers of his paper, or his from home (at most 3).
     const files = r.photo ? [r.photo] : r.home ? ((await ctx.db.get(r.home))?.files ?? []).slice(0, 3) : [];
-    return { row: r, files, html: qq?.html ?? null, k: key?.answers.find((a) => a.q === r.q) ?? null };
+    const st = await ctx.db.get(r.sid);
+    return { row: r, files, html: qq?.html ?? null, k: key?.answers.find((a) => a.q === r.q) ?? null, grade: st?.grade ?? null };
   },
 });
 
@@ -237,37 +244,39 @@ export const run = internalAction({
   handler: async (ctx, args) => {
     const job = await ctx.runQuery(internal.ai.job, { id: args.id });
     if (!job) return;
-    const { row, files, html, k } = job;
+    const { row, files, html, k, grade } = job;
     const key = env("ANTHROPIC_API_KEY");
     if (!key) {
       await ctx.runMutation(internal.ai.save, { id: args.id, ok: false, err: "The AI isn't switched on yet. The owner adds ANTHROPIC_API_KEY in Convex (Settings → Environment Variables)." });
       return;
     }
     const first = !row.raw;
+    // His photos go with the check only: the thread's questions read its answer in words (a third of the cost).
     const photos: { type: "image"; source: { type: "base64"; media_type: string; data: string } }[] = [];
-    for (const f of files) {
+    for (const f of first ? files : []) {
       const blob = await ctx.storage.get(f);
       if (blob) photos.push({ type: "image", source: { type: "base64", media_type: blob.type || "image/jpeg", data: base64Of(new Uint8Array(await blob.arrayBuffer())) } });
     }
-    if (!photos.length && !row.said) {
+    if (first && !photos.length && !row.said) {
       await ctx.runMutation(internal.ai.save, { id: args.id, ok: false, err: row.home ? "His photos are gone." : "The photo is gone. Take it again." });
       return;
     }
-    const messages: Msg[] = [{ role: "user", content: [...photos, { type: "text", text: checkPrompt(row.q, html, k, row.max, row.said, photos.length) }] }];
+    const prompt = checkPrompt(row.q, html, k, row.max, row.said, first ? photos.length : 0, grade);
+    const messages: Msg[] = [{ role: "user", content: [...photos, { type: "text", text: first ? prompt : `${prompt}\n\n(His photos were with your marking; your marking is your answer below.)` }] }];
+    let asker: "t" | "s" = "t";
     if (!first) {
-      // The thread so far: its first reply as it came, then each question and answer.
-      // Its first answer was the mark tool's: here in words (the thread has no tool).
+      // Its first answer was the mark tool's: here in words (the thread has no tool), then each question and answer.
       const first0 = readVerdict(row.raw!, row.max, aiParts(k, row.max));
       messages.push({ role: "assistant", content: first0 ? verdictWords(first0) : row.raw! });
-      const rest = row.msgs.slice(1);
-      rest.forEach((m, i) => {
-        const text = m.r === "t" && i === 0 ? `${AI_FOLLOW}\n\n${m.x}` : m.x;
-        const role = m.r === "t" ? "user" : "assistant";
+      for (const m of row.msgs.slice(1)) {
+        const role = m.r === "ai" ? "assistant" : "user";
+        if (m.r !== "ai") asker = m.r;
+        const text = m.r === "ai" ? m.x : `${followWords(m.r)}\n\n${m.r === "s" ? "He asks" : "She asks"}: ${m.x}`;
         const last = messages[messages.length - 1];
         // A question whose answer failed, then another: one turn (the API wants turns to alternate).
         if (last.role === role && typeof last.content === "string") last.content = `${last.content}\n\n${text}`;
         else messages.push({ role, content: text });
-      });
+      }
     }
     let res: Response;
     try {
@@ -306,10 +315,17 @@ export const run = internalAction({
     if (!first) {
       const x = cleanReply(text);
       await ctx.runMutation(internal.ai.save, x ? { id: args.id, ok: true, x } : { id: args.id, ok: false, err: stop === "max_tokens" ? "The AI's answer was too long. Ask again, shorter." : "The AI gave no answer. Ask again." });
+      // His question came from his thread: the answer goes there too (and rings his phone).
+      if (x && asker === "s" && row.rid) await ctx.runMutation(internal.ai.say, { rid: row.rid, by: row.by, sid: row.sid, text: x });
       return;
     }
     const parts = aiParts(k, row.max);
     const vd = readVerdict(tool ?? text, row.max, parts);
+    // The parts the phone marked keep the phone's marks, whatever the AI said (his rule: it checks only what is left).
+    if (vd && vd.partsOk && row.fixed && row.fixed.length === vd.parts.length) {
+      vd.parts = vd.parts.map((p, j) => (row.fixed![j] === null ? p : { ...p, got: Math.min(row.fixed![j]!, p.max), check: "Marked by the phone." }));
+      vd.got = Math.min(row.max, vd.parts.reduce((a, p) => a + p.got, 0));
+    }
     if (!vd) {
       const why = stop === "max_tokens" ? " (its answer was cut off)" : !tool && !text ? " (it sent nothing)" : "";
       await ctx.runMutation(internal.ai.save, {
@@ -333,6 +349,63 @@ export const run = internalAction({
     });
   },
 });
+
+/**
+ * The AI's explanation into his thread (14 Nov 2026, his ask: "that can open the thread and put the message on the
+ * thread"): after her Save on the ⌂ lane opened it (`help.tcall`), the Tamil explanation is the thread's next message,
+ * and from then his questions there are answered by the AI (`heard`, from chat.ts).
+ */
+export const post = mutation({
+  args: { token, id: v.id("aiChecks") },
+  handler: async (ctx, args) => {
+    const me = await actor(ctx, args.token, [...WHO]);
+    const r = await ctx.db.get(args.id);
+    if (!r || r.g === undefined || !r.msgs.length) fail("The AI has nothing to send yet.");
+    const a = await askOf(ctx, r.sid, r.u, r.q);
+    if (!a || a.st !== "open") fail("His thread isn't open.");
+    const room = await ctx.db.get(a.rid);
+    if (!room) fail("His thread isn't here any more.");
+    if (r.rid === room._id) return;
+    await ctx.db.patch(r._id, { rid: room._id, by: me._id });
+    await aiMessage(ctx, room, me._id, r.sid, r.msgs[0].x);
+  },
+});
+
+/** The AI's name in his thread. */
+export const AI_NAME = "ARISTORA AI";
+
+/** A message of the AI in his thread (by the teacher who used it, under the AI's name), ringing his phone. */
+async function aiMessage(ctx: MutationCtx, room: Doc<"usRooms">, by: Id<"users">, sid: Id<"students">, text: string): Promise<void> {
+  const now = Date.now();
+  const t = text.slice(0, 2000);
+  await ctx.db.insert("usChat", { rid: room._id, by, n: AI_NAME, t, kp: true, at: now, demo: false });
+  const fresh = (await ctx.db.get(room._id))!;
+  await ctx.db.patch(room._id, { la: now, lt: lastWords(t, 0), ln: AI_NAME, lw: uKey(by), n: fresh.n + 1, rv: fresh.rv + 1 });
+  await alertStudent(ctx, sid, `🤖 Q${room.hq}: ${t.slice(0, 60)}`, `/f/#chat=${room._id}`);
+}
+
+/** The AI's answer to his question, into his thread. */
+export const say = internalMutation({
+  args: { rid: v.id("usRooms"), by: v.id("users"), sid: v.id("students"), text: v.string() },
+  handler: async (ctx, args) => {
+    const room = await ctx.db.get(args.rid);
+    if (room) await aiMessage(ctx, room, args.by, args.sid, args.text);
+  },
+});
+
+/** His message in his thread: the AI answers it when it explained this question there (and has questions left). */
+export async function heard(ctx: MutationCtx, sid: Id<"students">, room: Doc<"usRooms">, text: string): Promise<void> {
+  if (room.k !== "h" || !room.hu || room.hq === undefined || !text.trim()) return;
+  const r = await ctx.db
+    .query("aiChecks")
+    .withIndex("by_q", (x) => x.eq("sid", sid).eq("u", room.hu!).eq("q", room.hq!))
+    .first();
+  if (!r || r.rid !== room._id || !r.raw || r.state === "work" || r.asks >= AI_ASKS_MAX) return;
+  const now = Date.now();
+  if ((await usedToday(ctx, now)) >= AI_DAY_MAX) return;
+  await ctx.db.patch(r._id, { msgs: [...r.msgs, { r: "s", x: text.trim().slice(0, AI_TEXT_MAX), at: now }], asks: r.asks + 1, state: "work", err: undefined, upd: now });
+  await ctx.scheduler.runAfter(0, internal.ai.run, { id: r._id });
+}
 
 /** Every night: threads older than 3 days go, with their photos. */
 export const sweep = internalMutation({

@@ -337,6 +337,51 @@ describe("online explanations", () => {
     await expect(tn().mutation(api.help.tphoto, { aid: (await askRow(hana, 8))._id })).rejects.toThrow(/isn't waiting/);
   });
 
+  test("the AI in his thread (14 Nov 2026): its Tamil explanation goes in, his question there gets the AI's answer, no photos again", async () => {
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout"] });
+    vi.setSystemTime(new Date("2026-11-14T23:00:00+05:30"));
+    const sent: Record<string, unknown>[] = [];
+    let reply = "";
+    vi.stubGlobal("fetch", async (_url: string, init: { body: string }) => {
+      sent.push(JSON.parse(init.body) as Record<string, unknown>);
+      return new Response(reply, { status: 200 });
+    });
+    const g = globalThis as { process?: { env?: Record<string, string | undefined> } };
+    g.process ??= {};
+    g.process.env ??= {};
+    g.process.env.ANTHROPIC_API_KEY = "test-key-not-real";
+    try {
+      const r = await tr().mutation(api.help.tcall, { studentId: mira, unitId: u01, q: 7 });
+      const id = await tr().mutation(api.ai.check, { studentId: mira, unitId: u01, q: 7, max: 1, photo: await file("image/jpeg", 3000) });
+      // Before the AI's answer, nothing to send.
+      await expect(tr().mutation(api.ai.post, { id })).rejects.toThrow(/nothing to send/);
+      reply = JSON.stringify({ stop_reason: "tool_use", content: [{ type: "tool_use", name: "mark", input: { asks: "x", parts: [{ p: "", his: "2", check: "wrong", got: 0, max: 1 }], got: 0, max: 1, sure: "high", ta: "1 ஐக் கவனி." } }] });
+      await raw.action(internal.ai.run, { id });
+      expect((sent[0].messages as { content: { type: string }[] }[])[0].content[0].type).toBe("image");
+      await tr().mutation(api.ai.post, { id });
+      await tr().mutation(api.ai.post, { id }); // twice: one message
+      const msgs = (await m().query(api.chat.room, { id: r.id })).msgs;
+      expect(msgs.filter((x) => x.n === "ARISTORA AI").map((x) => x.t)).toEqual(["1 ஐக் கவனி."]);
+      // His question there: the AI answers in the thread (his photos not sent again).
+      await m().mutation(api.chat.send, { id: r.id, text: "ஏன் 1?" });
+      const th = (await tr().query(api.ai.thread, { studentId: mira, unitId: u01, q: 7 }))!;
+      expect(th).toMatchObject({ state: "work", asks: 1 });
+      expect(th.msgs.map((x) => x.r)).toEqual(["ai", "s"]);
+      reply = JSON.stringify({ stop_reason: "end_turn", content: [{ type: "text", text: "ஏனென்றால் 3 ÷ 3 = 1." }] });
+      await raw.action(internal.ai.run, { id });
+      const turns = sent[1].messages as { role: string; content: unknown }[];
+      expect(JSON.stringify(turns[0].content)).not.toContain('"image"');
+      expect(String(turns[2].content)).toMatch(/The student himself asks you[\s\S]*He asks: ஏன் 1\?$/);
+      expect((await m().query(api.chat.room, { id: r.id })).msgs.filter((x) => x.n === "ARISTORA AI").map((x) => x.t)).toEqual(["1 ஐக் கவனி.", "ஏனென்றால் 3 ÷ 3 = 1."]);
+      // A teacher's message, or a thread the AI never explained in: the AI stays quiet.
+      await tr().mutation(api.chat.tsend, { id: r.id, text: "சரியா?" });
+      expect((await tr().query(api.ai.thread, { studentId: mira, unitId: u01, q: 7 }))!.asks).toBe(1);
+    } finally {
+      vi.unstubAllGlobals();
+      delete g.process.env.ANTHROPIC_API_KEY;
+    }
+  });
+
   test("the owner's limit a day (none unless he sets one); demo students can't send", async () => {
     await expect(tn().query(api.help.limit, {})).rejects.toThrow();
     expect(await t.query(api.help.limit, {})).toBe(0);

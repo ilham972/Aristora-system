@@ -1770,7 +1770,12 @@ export default defineSchema({
     bad: v.optional(v.string()),
     raw: v.optional(v.string()),
     err: v.optional(v.string()),
-    msgs: v.array(v.object({ r: v.union(v.literal("ai"), v.literal("t")), x: v.string(), at: v.number() })),
+    /** The thread: "ai" (its explanation, its answers), "t" (the corrector asked), "s" (he asked, in his thread). */
+    msgs: v.array(v.object({ r: v.union(v.literal("ai"), v.literal("t"), v.literal("s")), x: v.string(), at: v.number() })),
+    /** The ⌂ lane: each part as the phone marked it (null = the AI's to mark); those marks stay. */
+    fixed: v.optional(v.array(v.union(v.number(), v.null()))),
+    /** His thread (Us), once the AI's explanation went there: his questions in it are answered by the AI. */
+    rid: v.optional(v.id("usRooms")),
     asks: v.number(),
     at: v.number(),
     upd: v.number(),

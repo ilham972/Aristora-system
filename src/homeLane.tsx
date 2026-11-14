@@ -382,10 +382,16 @@ function HomeCard(props: {
   // phone gave them, hers to change); his working = the whole question's.
   const edit = it.split && !inClass;
   const left = it.parts.map((p) => part && p.phone === null);
-  const herGot = part ? (it.split ? (marks.every((g, j) => !left[j] || g !== null) ? marks.reduce<number>((s, g, j) => s + (left[j] ? (g ?? 0) : 0), 0) : null) : one) : null;
-  // The phone's parts now (as the phone gave them, or as she changed them).
-  const phoneNow = part ? (it.split ? marks.reduce<number>((s, g, j) => s + (left[j] ? 0 : (g ?? 0)), 0) : phoneOne) : 0;
-  const total = inClass ? it.got : part ? (herGot === null ? null : phoneNow + herGot) : it.split ? marks.reduce<number>((s, g) => s + (g ?? 0), 0) : one;
+  // Her marks as numbers to save (from the card's taps, or the AI's when she taps Use: `save` takes them straight).
+  const figs = (m: (number | null)[], o: number | null, po: number) => {
+    const herGot = part ? (it.split ? (m.every((g, j) => !left[j] || g !== null) ? m.reduce<number>((s, g, j) => s + (left[j] ? (g ?? 0) : 0), 0) : null) : o) : null;
+    // The phone's parts now (as the phone gave them, or as she changed them).
+    const phoneNow = part ? (it.split ? m.reduce<number>((s, g, j) => s + (left[j] ? 0 : (g ?? 0)), 0) : po) : 0;
+    const total = inClass ? it.got : part ? (herGot === null ? null : phoneNow + herGot) : it.split ? m.reduce<number>((s, g) => s + (g ?? 0), 0) : o;
+    return { m, herGot, phoneNow, total };
+  };
+  const fig = figs(marks, one, phoneOne);
+  const { herGot, total } = fig;
   const lost = total !== null && total < it.max;
   const ready = !busy && (inClass || total !== null);
   const look = total === null ? "" : total >= it.max ? "" : total === 0 ? " zero" : " part";
@@ -395,8 +401,10 @@ function HomeCard(props: {
     tone("tick");
     fn();
   };
-  // The AI check (14 Nov 2026, his screenshot): no camera here: the AI reads his photos and what he typed. Use = its
-  // marks lit on the card (each part when the parts line up), then she taps Save as before.
+  // The AI check (14 Nov 2026, his screenshot): no camera here: the AI reads his photos and what he typed, and marks
+  // only the parts the phone left (the phone's parts keep their marks: `fixed`). Use (his ask the same night: "the
+  // marks are not saving ... the thread is not opening") = Save with the AI's marks at once; lost marks = his thread
+  // opens (as 🎧 does) and the AI's Tamil explanation is its next message, and the AI answers his questions there.
   const ai = useAiCheck({
     studentId: it.student.id,
     unitId: it.unit.id,
@@ -404,17 +412,30 @@ function HomeCard(props: {
     max: it.max,
     who: it.student.name,
     parts: it.split ? it.parts.map((p) => p.p) : null,
-    home: { id: it.id, said: saidWords(it) },
+    home: { id: it.id, said: saidWords(it), fixed: part && it.split ? it.parts.map((p) => p.phone) : null },
     off: inClass,
     onUse: (g, pm) => {
-      if (inClass) return;
+      if (inClass || busy) return;
+      let f: ReturnType<typeof figs>;
       if (it.split) {
-        if (pm && pm.length === it.parts.length) setMarks(pm.map((x, j) => Math.min(x, it.parts[j].m)));
-        else toast(`The AI gave ${g}/${it.max}: tap each part yourself.`);
+        if (!pm || pm.length !== it.parts.length) {
+          toast(`The AI gave ${g}/${it.max}: tap each part yourself.`);
+          return;
+        }
+        // The AI's marks only where the phone left the part; the rest as on the card.
+        const m = it.parts.map((p, j) => (left[j] || !part ? Math.min(pm[j], p.m) : marks[j]));
+        setMarks(m);
+        f = figs(m, one, phoneOne);
       } else if (part) {
-        const phonePart = it.teach < it.max ? phoneOne : 0;
-        setOne(Math.max(0, Math.min(it.teach, g - phonePart)));
-      } else setOne(g);
+        const o = Math.max(0, Math.min(it.teach, g - (it.teach < it.max ? phoneOne : 0)));
+        setOne(o);
+        f = figs(marks, o, phoneOne);
+      } else {
+        setOne(g);
+        f = figs(marks, g, phoneOne);
+      }
+      const lostNow = f.total !== null && f.total < it.max;
+      void save(lostNow && !it.student.demo, f, true);
     },
   });
   // Explain online (12 Nov 2026, his idea: "put the headset icon same like in the consult page"; built after marking,
@@ -422,18 +443,21 @@ function HomeCard(props: {
   // the pad, pale until the marks she tapped are below the maximum; one tap = Save, then his thread opens with her as
   // its teacher (Consultation's call: `help.tcall`). His photo and her marks are in the thread already.
   const canOnline = ready && lost && !inClass && !it.student.demo;
-  const save = async (online = false) => {
-    if (Date.now() - born.current < TAP_GUARD_MS * 2 || !ready || (online && !canOnline)) return;
+  /** Save her marks (`f`: the card's, or the AI's); `online` opens his thread; `byAi` = Use: the AI's words go there. */
+  const save = async (online = false, f = fig, byAi = false) => {
+    const okNow = !busy && (inClass || f.total !== null);
+    if ((!byAi && Date.now() - born.current < TAP_GUARD_MS * 2) || !okNow || (online && !(f.total !== null && f.total < it.max && !inClass && !it.student.demo))) return;
+    const { herGot: hg, phoneNow: pn, total: tt, m } = f;
     setBusy(true);
     setErr(null);
     try {
       await mutate(api.photos.mark, {
         id: it.id,
-        ...(part && !inClass && herGot !== null ? { got: herGot } : {}),
+        ...(part && !inClass && hg !== null ? { got: hg } : {}),
         // Each part's own marks too (13 Nov 2026): the thread shows each sub-question right or wrong by itself.
-        ...(part && !inClass && herGot !== null && it.split ? { pm: marks.map((g, j) => (left[j] ? (g ?? 0) : null)) } : {}),
-        ...(part && !inClass && total !== null && phoneNow !== it.phoneGot ? { total } : {}),
-        ...(!part && !inClass && total !== null && total !== it.got ? { total } : {}),
+        ...(part && !inClass && hg !== null && it.split ? { pm: m.map((g, j) => (left[j] ? (g ?? 0) : null)) } : {}),
+        ...(part && !inClass && tt !== null && pn !== it.phoneGot ? { total: tt } : {}),
+        ...(!part && !inClass && tt !== null && tt !== it.got ? { total: tt } : {}),
         ...(note.trim() ? { note: note.trim() } : {}),
       });
     } catch (e) {
@@ -442,19 +466,26 @@ function HomeCard(props: {
       return;
     }
     const first = it.student.name.split(" ")[0];
-    if (!online) tone("done");
-    else {
+    if (!online) {
+      tone("done");
+      if (byAi) toast(`🤖 Q${it.q} saved ${tt}/${it.max}.`);
+    } else {
       // Her marks are saved whatever happens next: a thread that can't open (Us closed on the phones) is only said.
       try {
         await mutate(api.help.tcall, { studentId: it.student.id, unitId: it.unit.id, q: it.q });
+        if (byAi && ai.id) await mutate(api.ai.post, { id: ai.id });
         tone("call");
-        toast(`🎧 Q${it.q} saved ${total}/${it.max}. ${first}'s thread is open: explain in Us → Thread.`);
+        toast(
+          byAi
+            ? `🤖 Q${it.q} saved ${tt}/${it.max}. The AI explained it in ${first}'s thread and answers his questions there.`
+            : `🎧 Q${it.q} saved ${tt}/${it.max}. ${first}'s thread is open: explain in Us → Thread.`,
+        );
       } catch (e) {
         tone("done");
-        toast(`Q${it.q} saved ${total}/${it.max}, but no thread: ${errorText(e)}`);
+        toast(`Q${it.q} saved ${tt}/${it.max}, but no thread: ${errorText(e)}`);
       }
     }
-    props.onDone(total);
+    props.onDone(tt);
   };
   const again = async (w: RetakeWhy) => {
     setBusy(true);

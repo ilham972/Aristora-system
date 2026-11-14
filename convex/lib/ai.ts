@@ -1,18 +1,20 @@
 // The AI check (14 Nov 2026, his ask: "put the AI icon near the document icon ... that will correct the question and
 // if the student lost marks then a thread will open to explain, the AI will explain in Tamil"). Pure rules, no
 // database: the prompt, what goes to the model, and reading what comes back. The calls are in convex/ai.ts.
-// - The model: Claude Haiku 5.5 (`claude-haiku-5-5`), the cheapest Claude that reads photos, ≈ $0.10 / $0.50 per
-//   million tokens in / out: one check (a photo ≈ 1,600 tokens, the question and key ≈ 1,500, the reply ≈ 600) costs
-//   about $0.0006, under 0.2 rupees. The Convex variable AI_MODEL changes it without a deploy.
-// - Never the source of truth: the corrector sees the AI's marks and taps "Use these marks" (or her own).
+// - The model (his ask the same night: "a little bit higher model, not very higher ... explaining too much but not
+//   clearly ... sometimes in English"): Claude Sonnet 5.5 (`claude-sonnet-5-5`, $2 / $10 per million tokens in / out,
+//   20 times Haiku 5.5): one check (photos ≈ 1,600 tokens each, the question and key ≈ 2,000–4,000, the reply ≈ 1,500)
+//   ≈ $0.02–0.035, 6–10 rupees; a question in the thread (no photos again) ≈ 2–3 rupees. The Convex variable AI_MODEL
+//   changes it without a deploy (claude-haiku-5-5 = the cheap one).
+// - Never the source of truth: the corrector sees the AI's marks and taps "Use" (or her own).
 
 import type { KeyAnswer } from "./key";
 
-export const AI_MODEL_DEFAULT = "claude-haiku-5-5";
-/** Checks and questions a day for the whole centre (each ≈ 0.2 rupees: the most a day ≈ 100 rupees). */
-export const AI_DAY_MAX = 500;
-/** Questions asked in one thread after the check. */
-export const AI_ASKS_MAX = 8;
+export const AI_MODEL_DEFAULT = "claude-sonnet-5-5";
+/** Checks and questions a day for the whole centre (a check ≈ 6–10 rupees: the most a day ≈ 1,500–2,000 rupees). */
+export const AI_DAY_MAX = 200;
+/** Questions asked in one thread after the check (the corrector's and the student's together). */
+export const AI_ASKS_MAX = 10;
 /** One question typed in the thread. */
 export const AI_TEXT_MAX = 400;
 /** The thread and its photo are kept this long, then go (the nightly sweep). */
@@ -22,7 +24,16 @@ export const AI_STUCK_MS = 3 * 60 * 1000;
 /** The question's HTML sent to the model, at most. */
 export const AI_HTML_MAX = 12000;
 
-export const AI_SYSTEM = `You are the senior maths examiner of ARISTORA, a Tamil-medium maths tuition centre in Sri Lanka (Grades 6-11, building to the O/L exam). You mark ONE workbook question of one student, like a fair, careful Sri Lankan O/L examiner.
+/** How the AI talks to a student (his rules, 14 Nov 2026): Tamil only, short, clear, intuitive, for Grades 6–11. */
+const HOW_TO_TALK = `How you talk to the student (these rules matter as much as the marks):
+- ONLY Tamil, in Tamil script. Never write an English sentence or English words, even if he wrote in English or Thanglish. Use the Tamil maths words of Sri Lankan school books (கோணம், வட்டம், மையம், பரிதி, நாண், ஆரை, முக்கோணம், சமன்பாடு, பின்னம் ...). Numbers, letters (A, B, x, y) and symbols (°, =, +, ×, ∠, △) are fine.
+- He is a school student (his grade is given). Talk like a kind, clever elder brother or sister: simple everyday words, short sentences, no long paragraphs.
+- Be clear before being complete: the one idea he missed matters more than everything you know.
+- Make it intuitive: help him SEE why, with a picture in words or a small everyday example (a pizza cut in slices, a clock's hands, steps on a ladder, sharing sweets), then the rule.
+- Shape: one line on what he did right; one line on the mistake; then 2 to 4 short numbered steps to the right answer; the answer. At most 90 words. No headings, no stars, no bullet symbols.
+- Never just repeat the key or the theorem's name: show why it is true in this question.`;
+
+export const AI_SYSTEM = `You are the senior maths examiner and the kindest teacher of ARISTORA, a Tamil-medium maths tuition centre in Sri Lanka (Grades 6-11, building to the O/L exam). You mark ONE workbook question of one student, like a fair, careful Sri Lankan O/L examiner, and you explain his mistake so he understands it.
 
 The phone marks number answers by itself. What comes to you is what it can't mark:
 - sentences, reasons and proofs he TYPED on his phone, in Tamil, English or Thanglish (Tamil written in English letters), often short and informal;
@@ -35,13 +46,21 @@ Work in this order, every time (the mark tool's fields follow it):
 4. Decide each part's marks from the question's meaning, not by matching words: is the mathematics right? A reason needs the right fact or theorem (in any words: "மையக் கோணம் பரிதிக் கோணத்தின் இரு மடங்கு", "centre angle is double", "center angle 2 times" are the same reason). A proof needs each step to follow, with its reason. A drawing or construction needs the right measures, arcs and labels the question asks for (allow small drawing errors of a millimetre or a degree).
 5. Be fair: never give marks for words that only copy the question; never take marks for spelling, language or informal style. A part he left empty gets 0. If you can't read a photo or are not sure, say so ("sure": "low") and mark what you can see.
 
-Then write "ta" for the student, in simple spoken Tamil (Tamil script; numbers, letters and symbols as in maths):
-- he lost marks: say what he did right, where he went wrong, then the right way step by step, and the answer. At most 150 words.
-- full marks: one short line of praise.
+PARTS THE PHONE MARKED ALREADY: when his answer says a part was marked by the phone, that part is done: give it exactly the phone's marks and don't explain it. Mark and explain ONLY the parts left to you ("yours to mark"). When no part is marked "yours to mark", mark them all.
+
+Then write "ta" for the student: if he lost marks, explain the parts where he lost them; if he got full marks, one short line of praise in Tamil.
+
+${HOW_TO_TALK}
 
 Always answer by calling the mark tool, once.`;
 
-export const AI_FOLLOW = `Now the corrector or the student asks about this question. Answer in simple spoken Tamil (Tamil script; maths in numbers and symbols), short (at most 120 words), plain text, no JSON, no markdown.`;
+/** Before a question in the thread: who asks, and how to answer. */
+export function followWords(from: "t" | "s"): string {
+  return `${from === "s" ? "The student himself asks you, in his thread on his phone" : "The corrector asks you (the student may be beside her)"}. Answer the question he asks, about this question only, as his teacher.
+
+${HOW_TO_TALK.replace("At most 90 words.", "At most 80 words.")}
+Plain text only, no JSON, no markdown. If he asks something that isn't about this question or maths, gently bring him back to it in one line.`;
+}
 
 /** The tool the model must call: its fields in the order of the work (understand, compare, decide, explain). */
 export const MARK_TOOL = {
@@ -69,7 +88,7 @@ export const MARK_TOOL = {
       got: { type: "integer", description: "His total marks." },
       max: { type: "integer", description: "The question's marks." },
       sure: { type: "string", enum: ["high", "low"], description: "low = a photo you can't read, or you are not sure." },
-      ta: { type: "string", description: "For the student, in simple spoken Tamil." },
+      ta: { type: "string", description: "For the student: ONLY Tamil (Tamil script), at most 90 words, intuitive, the shape and rules given." },
     },
     required: ["asks", "parts", "got", "max", "sure", "ta"],
   },
@@ -100,13 +119,13 @@ export function keyText(k: KeyAnswer | null | undefined): string {
 }
 
 /** The first message: the question, its key, its marks (the photo goes before it). */
-export function checkPrompt(q: number, html: string | null, k: KeyAnswer | null | undefined, max: number, said?: string | null, photos = 1): string {
+export function checkPrompt(q: number, html: string | null, k: KeyAnswer | null | undefined, max: number, said?: string | null, photos = 1, grade?: number | null): string {
   const his = [
     photos > 0 ? `${photos > 1 ? `${photos} photos` : "The photo"} of his paper (above).` : "",
     said ? `What he typed on his phone at home, and what the phone did with it:\n${said}` : "",
   ].filter(Boolean);
   return [
-    `Question ${q} (${max} mark${max === 1 ? "" : "s"}).`,
+    `Question ${q} (${max} mark${max === 1 ? "" : "s"}).${grade ? ` He is in Grade ${grade > 11 ? "11 (O/L)" : grade}.` : ""}`,
     html ? `1. The question (HTML from the book):\n${questionText(html)}` : "1. The question's text isn't in the app: read it from the photo if you can.",
     `2. The answer key (a model answer; other correct ways earn the same marks):\n${keyText(k)}`,
     `3. His answer:\n${his.join("\n") || "Nothing."}`,

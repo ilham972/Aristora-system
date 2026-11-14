@@ -993,6 +993,21 @@ full. Room: 6,000 tokens out (Tamil is long; the first reply had 1,500 and was l
 part (what he gave, its marks, the AI's reasoning: `.ai-why`); a part missing from the AI's answer = its total only
 (the corrector taps the parts). A reply that isn't marks says why ("cut off", "sent nothing") and shows what the AI sent
 (`bad`, "What the AI sent"). The thread's next questions see its first answer in words (`verdictWords`), no tool.
+**Sonnet, the phone's parts, his thread** (14–15 Nov 2026, his note at midnight: the AI re-marked parts the phone had
+marked; "use the marks is not saving and the thread is not opening ... give the access"; "a little bit higher model,
+not very higher"; "explaining too much but not clearly ... sometimes in English"; "explain intuitively ... for grade 6
+to 11"): the model is **Claude Sonnet 5.5** (`claude-sonnet-5-5`, $2 / $10 per million tokens: a check ≈ 6–10 rupees,
+a question in the thread ≈ 2–3 rupees, no photos sent again), 200 a day for the centre, 10 questions a thread. The ⌂
+lane sends each part as the phone marked it (`fixed`): the AI marks and explains only the parts left to it, and the
+server keeps the phone's marks on the others ("Marked by the phone."). The words to a student (`HOW_TO_TALK`): only
+Tamil in Tamil script (the school books' maths words; numbers, letters and symbols allowed), his grade given, short
+sentences, intuitive (a picture in words or an everyday example, then the rule), what he did right, the mistake, 2–4
+numbered steps, the answer, ≤ 90 words. On the ⌂ lane, **Use is Save** ("Save 7 / 10", or "Save + thread" when marks
+are lost): her marks saved at once (as her Save), and when he lost marks his thread opens (`help.tcall`, as 🎧) and the
+AI's explanation is its next message (`ai.post`, by her, named **ARISTORA AI**, his phone rings). From then his text
+messages in that thread are answered there by the AI (`chat.ts` → `ai.heard` → `ai.run` → `ai.say`), within the
+thread's 10 questions and the day's 200; a teacher's message never wakes it. His questions show in the sheet too
+(amber, "…, in his thread:").
 
 **Progress (top bar; owner + Reports).** One grade at a time (`aristora.progressGrade`); stage chips, "Came today".
 **Units** = a race per unit and stage (levels done or solo questions done, then marks, then pace; rank colours,

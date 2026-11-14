@@ -13,6 +13,7 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { query, type MutationCtx, type QueryCtx } from "./_generated/server";
+import { heard } from "./ai";
 import { actor, allowed, familyActor, familyViewer, viewer } from "./lib/auth";
 import { fail, log } from "./lib/backend";
 import { DAY_MS, slDayStart } from "./lib/day";
@@ -778,6 +779,8 @@ async function sendIt(
       await ring(sKey(x.sid), `🎧 ${me.n} ஆசிரியர் (Q${r.hq}): ${au && !t ? "🎤 குரல் விளக்கம்" : said}`);
     }
   }
+  // His question in a thread the AI explained (14 Nov 2026): the AI answers it there (convex/ai.ts `heard`).
+  if (r.k === "h" && me.k === "s" && t) await heard(ctx, me.s._id, r, t);
   if (re?.sid) await ring(sKey(re.sid), `↩️ ${me.n} (${r.name ?? "chat"}): ${said}`);
   for (const x of mt) await ring(sKey(x.s), `@ ${me.n} (${r.name ?? "chat"}): ${said}`);
   // A teacher's message in a group rings every student in it (12 Nov 2026, the founder: "whatever the chat we put,

@@ -31,7 +31,7 @@ export type AiThread = {
   why: { p: string; got: number; max: number; his: string; check: string }[] | null;
   /** What the AI sent when it couldn't be read as marks. */
   bad: string | null;
-  msgs: { r: "ai" | "t"; x: string; at: number }[];
+  msgs: { r: "ai" | "t" | "s"; x: string; at: number }[];
   asks: number;
   asksMax: number;
 };
@@ -71,7 +71,7 @@ export function useAiCheck(p: {
   who: string;
   parts: string[] | null;
   /** The ⌂ lane: no camera, the AI reads the photos he sent (that row) and what he typed. */
-  home?: { id: string; said: string } | null;
+  home?: { id: string; said: string; fixed: (number | null)[] | null } | null;
   /** Pale and not tappable (a card corrected in class already). */
   off?: boolean;
   onUse: (g: number, pm: number[] | null) => void;
@@ -95,7 +95,13 @@ export function useAiCheck(p: {
     setSending(true);
     try {
       if (p.home) {
-        await mutate(api.ai.check, { ...args, max: p.max, home: p.home.id as Id<"homePhotos">, ...(p.home.said ? { said: p.home.said } : {}) });
+        await mutate(api.ai.check, {
+          ...args,
+          max: p.max,
+          home: p.home.id as Id<"homePhotos">,
+          ...(p.home.said ? { said: p.home.said } : {}),
+          ...(p.home.fixed ? { fixed: p.home.fixed } : {}),
+        });
       } else {
         const small = await shrinkPhoto(f!);
         const photo = (await upload(api.ai.photoUrl, small)) as Id<"_storage">;
@@ -147,7 +153,7 @@ export function useAiCheck(p: {
       }}
     />
   ) : null;
-  return { button, sheet };
+  return { button, sheet, id: t?.id ?? null };
 }
 
 function AiSheet(props: {
@@ -217,7 +223,9 @@ function AiSheet(props: {
             aria-label={`Use these marks: ${t!.g} / ${t!.max}`}
             onClick={() => props.onUse(t!.g!, t!.pm)}
           >
-            Use <b>{t!.g}</b> / {t!.max}
+            {/* The ⌂ lane: Use = Save at once (and his thread when he lost marks). */}
+            {props.home ? (lost ? "Save + thread " : "Save ") : "Use "}
+            <b>{t!.g}</b> / {t!.max}
           </button>
         </div>
       )}
@@ -273,6 +281,7 @@ function AiSheet(props: {
         <div class="ai-thread" aria-label="The AI's explanation">
           {t.msgs.map((m, i) => (
             <p key={i} class={`ai-msg ${m.r}`} lang={m.r === "ai" ? "ta" : undefined}>
+              {m.r === "s" && <b class="ai-who">{props.who}, in his thread:</b>}
               {m.x}
             </p>
           ))}
@@ -296,6 +305,7 @@ function AiSheet(props: {
         </button>
       )}
       <p class="muted small ai-note">
+        {props.home && lost ? "Save + thread = his marks saved, and the AI explains it in his thread and answers his questions there. " : ""}
         The AI can be wrong: your marks count.{marked ? ` Asked ${t!.asks} of ${t!.asksMax}.` : ""}
       </p>
       <div ref={end} />

@@ -126,7 +126,7 @@ describe("the AI check", () => {
     await raw.action(internal.ai.run, { id });
     expect(sent).toHaveLength(1);
     expect(sent[0].headers["x-api-key"]).toBe("test-key-not-real");
-    expect(sent[0].body.model).toBe("claude-haiku-5-5");
+    expect(sent[0].body.model).toBe("claude-sonnet-5-5");
     // The mark tool, forced: its fields in the order of the work (the question, his answer, the reasoning, then marks).
     expect(sent[0].body.tool_choice).toEqual({ type: "tool", name: "mark" });
     expect(Object.keys((sent[0].body.tools as { input_schema: { properties: object } }[])[0].input_schema.properties)).toEqual(["asks", "parts", "got", "max", "sure", "ta"]);
@@ -224,13 +224,16 @@ describe("the AI check", () => {
     expect(said).toBe(
       "(i) 1 mark; key: 24; he typed: 24; the phone gave 1/1\n(ii) 1 mark; key: 48; the phone couldn't mark it: yours to mark\n(ii) he picked இல்லை; his reason, typed: 48 is 24 times 2",
     );
-    const id = await pia.mutation(api.ai.check, { studentId: hana, unitId: u01, q: 2, max: 2, home, said });
-    marks({ asks: "x", parts: [{ p: "i", his: "24", check: "ok", got: 1, max: 1 }, { p: "ii", his: "reason", check: "ok", got: 1, max: 1 }], got: 2, max: 2, sure: "high", ta: "சரி" });
+    // Part i was marked by the phone (1): the AI marks only part ii; i keeps the phone's mark whatever the AI says.
+    const id = await pia.mutation(api.ai.check, { studentId: hana, unitId: u01, q: 2, max: 2, home, said, fixed: [1, null] });
+    marks({ asks: "x", parts: [{ p: "i", his: "24", check: "ok", got: 0, max: 1 }, { p: "ii", his: "reason", check: "ok", got: 1, max: 1 }], got: 1, max: 2, sure: "high", ta: "சரி" });
     await raw.action(internal.ai.run, { id });
     const content = (sent[0].body.messages as { content: { type: string; text?: string }[] }[])[0].content;
     expect(content.map((c) => c.type)).toEqual(["image", "image", "text"]);
     expect(content[2].text).toMatch(/3\. His answer:\n2 photos of his paper \(above\)\.\nWhat he typed on his phone at home, and what the phone did with it:\n\(i\) 1 mark; key: 24/);
-    expect(await pia.query(api.ai.thread, { studentId: hana, unitId: u01, q: 2 })).toMatchObject({ state: "done", g: 2, pm: [1, 1] });
+    expect(await pia.query(api.ai.thread, { studentId: hana, unitId: u01, q: 2 })).toMatchObject({ state: "done", g: 2, pm: [1, 1], why: [{ p: "i", got: 1, check: "Marked by the phone." }, { p: "ii", got: 1 }] });
+    expect(String((sent[0].body as { system: string }).system)).toMatch(/yours to mark[\s\S]*ONLY Tamil/);
+    expect(content[2].text).toMatch(/^Question 2 \(2 marks\)\. He is in Grade 8\./);
     // Checked again: a new thread; his photos stay (they are his row's).
     await pia.mutation(api.ai.check, { studentId: hana, unitId: u01, q: 2, max: 2, home, said });
     expect(await exists(f1)).toBe(true);

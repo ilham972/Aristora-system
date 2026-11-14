@@ -1938,7 +1938,7 @@ test("AI check: the ✦ on Correction's workbook card, a photo, the AI's marks a
   await until(async () => (await row())?.state === "fail", "the AI's second step ran");
   await backend.push();
   await contains(F.locator(".ai-err"), "ANTHROPIC_API_KEY");
-  await contains(F.locator(".ai-note"), "Asked 0 of 8");
+  await contains(F.locator(".ai-note"), "Asked 0 of 10");
 
   // Use these marks: 1 / 2 is given as her tap would, and the card goes to Q12. The ✦ of Q11 is lit when she goes back.
   await backend.t.run(async (ctx) => await ctx.db.patch(r._id, { state: "done" }));
