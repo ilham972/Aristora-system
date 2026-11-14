@@ -10,6 +10,8 @@
 // (`us.improved`).
 // The Shop (10 Nov 2026): Monday 00:15 in Sri Lanka (Sunday 18:45 UTC) each student's pay day: last week's XP pays coins,
 // 5 XP = 1 coin (`coins.payday`, 20 a run; the first pay ran once when the Shop came, from `race.fill`).
+// The flame shield (14 Nov 2026): every day at 00:01 in Sri Lanka (18:31 UTC) a shield keeps the flame of a student who
+// holds one and had no Level yesterday (`coins.shields`: only the wallets holding one).
 // The AI check (14 Nov 2026): every day at 00:45 in Sri Lanka (19:15 UTC) threads older than 3 days go with their photos
 // (`ai.sweep`).
 
@@ -26,5 +28,6 @@ crons.weekly("the week's most improved in Us", { dayOfWeek: "sunday", hourUTC: 1
 crons.daily("drop app time older than two months", { hourUTC: 19, minuteUTC: 5 }, internal.online.sweep, {});
 crons.daily("drop AI checks older than three days", { hourUTC: 19, minuteUTC: 15 }, internal.ai.sweep, {});
 crons.weekly("pay day: last week's XP pays coins", { dayOfWeek: "sunday", hourUTC: 18, minuteUTC: 45 }, internal.coins.payday, {});
+crons.daily("a flame shield keeps yesterday's flame", { hourUTC: 18, minuteUTC: 31 }, internal.coins.shields, {});
 
 export default crons;

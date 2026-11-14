@@ -1477,6 +1477,40 @@ learning app of our education institute"): one profile, his class times, what he
     `family.day`: signed in, Theory or Evaluation with whom and the questions taught or explained, a Level marked in
     class, handed in, or checked at home (⌂), signed out); **his last classes** (`family.classes.recent`: when, how
     many Levels, with whom; tap = that day). Never his waiting time in the hall.
+    **Home's day** (14 Nov 2026, his "build remaining also" on the idea picture 09; `quests.tsx`, one of the parts
+    right after the first screen: Home draws the goal card until they are here; the server: `convex/lib/quests.ts`,
+    `family.me`'s `quests` and `shield`, `convex/coins.ts`):
+    - **Today's quests** take the goal card's place and keep all it had (the Level he is on, START, his flame's line):
+      three quests, **the same three for every student that day** (they can talk about them in class), each winnable
+      in one sitting and always about learning, never Us: a Level first; then two of 4 right in a row, 8 right
+      answers, 15 XP (in turn, by the day's number); Saturday and Sunday "2 Levels". Each with its bar; worked out
+      from his rows (`questsOf`: a workbook's first tries and second tries, a theory book's circles, a ladder's
+      sections; free marks are not his answers), so there is nothing to keep but the chest. "⏳ 7 h 48 min" = till
+      midnight in Sri Lanka.
+    - **The chest**: the three done = it shakes, a tap opens it (`coins.chest`: the quests worked out again on the
+      server, once a day: `cd` on his wallet): **coins, never XP**, the owner's number ± 2 (default 5 = 3 to 7: the
+      surprise is the point), the owl with its trophy; a "Chest · Today's quests" line in his coins. A student with
+      no wallet yet gets one whose XP before this week counts as paid out (his first Monday still pays only his last
+      week). The chest opens over everything as one of the app's sheets (the phone's Back closes it).
+    - **One more?**: for 10 minutes after a Level done on the phone (the reveal notes it: `onemore`), a card with the
+      minutes counting down and his next Level; it says how many quests are left before the chest. The quests card
+      hides its own START meanwhile (one START at a time). No coins: a nudge to do a second Level now, never all
+      evening.
+    - **The flame shield** (on Home once his flame is 2 days or more and he holds none; in the Shop always): a day
+      without a Level and his flame stays. Bought with coins (default 30, `coins.buyShield`: tap, "வாங்கு?", tap),
+      **one at a time**; it costs the centre nothing. Every night at 00:01 (`coins.shields`, only the wallets holding
+      one) a shield keeps yesterday when he had no Level and his flame was alive the day before (`sh` −1, the day in
+      `sd`); his phone shows it kept before that job runs (`shieldDays`). A kept day counts in his flame, his best run
+      and the 3 / 7 / 30-day trophies, on his phone and on his profile for classmates, never as a Level (the week's
+      dots and XP stay his Levels). The morning after, Home says once "நேற்று உன் shield உன் தீயைக் காத்தது!"; while
+      he holds one, the top row's flame wears a small gold shield.
+    - **The owl in the greeting has its body** (`GreetOwl`): it waves; cheers when his flame is lit today; holds its
+      trophy once today's chest is open; after 6 PM with his flame not lit yet, it taps its foot with a clock ("tick",
+      a new pose). A tap = another pose with its sound; five quick taps = dizzy. On his birthday the party owl as
+      before.
+    - **The owner's numbers**: Settings → Shop → **Chests and the flame shield**: the day's chest, a Stage's chest,
+      the shield's price (0 = off; `coins.setChests`, meta `chests`; History says it). A student who opens every
+      chest gets about 240 coins a month more with the defaults.
   - **Learn** (`map.tsx`, his "put the whole syllabus of his grade; each term a World; press a unit, see its levels"):
     a purple header with his Stage now (World and term, its Tamil and English names, "STAGE 3", dashes for its Levels
     done, **Continue** = his Level now in one tap); the owl's word for today (keep the flame, how close the Stage is);
@@ -1493,6 +1527,19 @@ learning app of our education institute"): one profile, his class times, what he
     the teacher = pale with a clock, done before the app = pale ✓, **his Level now** = the gold one with START, later =
     🔒; a trophy at the end. A Stage the phone can't mark yet, or locked, says so. **Every Level done: Certificate**
     (below the trophy).
+    **The road** (14 Nov 2026, the idea picture 08; `road.tsx` on top of it once the parts are here, `family.road`):
+    - **The owl with its body stands on the Level he is on** (the trophy when all are done); when he finished one
+      since he last looked, it **walks along the road** to the next (the phone remembers where it stood: `roadAt`).
+    - **Classmates' faces on the Level they are on** (up to 3 and +N; a tap says who): **his Level and the ones ahead
+      only**. The server never sends who is behind him (nobody is shown as last, and nobody's place behind reaches
+      another phone); his world only (demo with demo), never a removed student. From each race part's spot (`u`, `on`
+      on `raceParts`: the Level after the last he finished, written with the part), never their progress rows.
+    - **A chest after every 3rd Level** (never after the last: the cup is there): shut and grey until its Level is
+      done (a tap: "Level 6 முடித்தால் …"), then it glows and shakes; a tap opens it (`coins.roadChest`, once, the
+      owner's number, default 3; the `chests` table), "+3" stays on it. A Level finished before the chests came (14
+      Nov 2026, 6 PM) or done before the app shows its chest open and empty.
+    - **FINAL** under the last Level.
+    - **On the syllabus map** the owl with its body leans on his Stage now, on the side its name is not.
   - **A Level** (rebuilt 14 Nov 2026; his words: "every single question looks like a card ... this is feel boring",
     then "let's build completely"): ✕, **the bar: one step a question** (violet = answered, gold ring = now, gold =
     a free one; once checked: blue = right, rose = not right, amber = part of its marks), "Stage 3 · Level 4",
@@ -1568,7 +1615,8 @@ learning app of our education institute"): one profile, his class times, what he
     app) shows the same options, ✓ / ✗ or words under it instead, and the boxes as before. His answers stay one list a
     question (an option's number, "1" / "0" for ✓ / ✗ and marked words, each place's card number, each pair's right
     side), so Check, the drafts and the reveal didn't change; the reveal shows marked words as one ✓ or ✗.
-  - **The reveal** (`Result`): the thinking owl inside a **ring that fills as his marks come in** (gold when every mark is
+  - **The reveal** (`Result`; the owl has its body since 14 Nov 2026: it thinks, then star eyes for every mark, a jump
+    for 70 % and more, the headband to keep going below, the trophy when one comes; a tap = another pose): the thinking owl inside a **ring that fills as his marks come in** (gold when every mark is
     his), then his answers one question at a time (a bell climbing for each right one in a row, a low note for a wrong
     one; each ✓ ✗ pops), the score jumping up with each mark, "5 IN A ROW!", then the owl's mood and its word by the
     score (அருமை!), confetti, +XP, the flame (it lights with its sound if this was today's first Level: a card where
@@ -2359,6 +2407,16 @@ learning app of our education institute"): one profile, his class times, what he
   she reads ஆம் / இல்லை and his words (`reasonsOf`) and gives the part's marks. A reason question never comes back
   (`allPhone` / `phonePart`: the phone can't mark it alone) and its marks count as the teacher's in "See what the
   phone accepts". A drawing and "show that" stay photos (until 10 Nov 2026: below).
+  **✓ / ✗ one statement at a time and cards on a line** (14 Nov 2026, the idea picture 05; `kinds.tsx` `TfDeck`,
+  `OrderLine`): a ✓ / ✗ question has a deck under it: the statement he is on is **lifted in the printed question**
+  (its line pale gold with a gold edge, its bracket ringed: `fx-row`, `fx-cur`; only a line holding just that one
+  bracket), two big buttons **✗ பிழை / ✓ சரி**, a swipe right = ✓ and left = ✗, then the next one he hasn't answered
+  by itself; the dots go to any (✓ or ✗ in them once answered; blue or rose after its Check). The printed brackets still
+  take a tap. A question whose paper prints no brackets shows each statement on a card that flies off to the side he
+  chose. **Cards to order** sit on a line of empty places (numbered, an arrow when the cards are short): a tap on a card
+  puts it in the next empty place (gold dashes), a tap on a placed card takes it back; long cards (steps, words) one
+  under the other. His list is the same as before (each place's printed number; "" = empty, marked wrong like an empty
+  box). Before: a list of statements with ✓ / ✗ each, and cards swapped two taps at a time.
 - **What he writes is typed, a photo only for a drawing** (10 Nov 2026, his voice note and six screenshots: "everywhere
   you can see, upload the photo, teacher will be corrected ... you have to remove completely ... the diagrams only need
   this feature ... if student need to write the answer, then we can put the typing box so they can write in English or

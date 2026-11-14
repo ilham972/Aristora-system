@@ -11,8 +11,12 @@
 // ARISTORA's own owl: inspiration from the apps he likes is for the acting, never their drawings.
 
 import { render } from "preact";
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
+import { addBuddyStyle } from "./buddyStyle";
 import { Owl } from "./owl";
+import { buzz, sound, type Tone } from "./sound";
+
+addBuddyStyle();
 
 let kept = "";
 
@@ -31,7 +35,7 @@ function readOwl(): string {
 }
 readOwl();
 
-export type Pose = "ready" | "hello" | "write" | "think" | "yes" | "combo" | "oops" | "again" | "champ" | "sleep" | "teach";
+export type Pose = "ready" | "hello" | "write" | "think" | "yes" | "combo" | "oops" | "again" | "champ" | "sleep" | "teach" | "tick";
 
 type Wing = { a: number; s?: [number, number]; front?: boolean };
 type Spec = {
@@ -194,6 +198,19 @@ const POSES: Record<Pose, () => Spec> = {
     };
   },
   sleep: () => ({ lean: 5, squash: [1.06, 0.93], eyes: "closed", head: { rot: 12, dy: 14 }, wl: { a: 6 }, wr: { a: -6 }, top: `<g class="ob-zzz">${word(820, 470, 54, "z")}${word(854, 430, 70, "z", 0.8)}${word(898, 380, 88, "Z", 0.6)}</g>` }),
+  // Tick tock (14 Nov 2026, Home after 6 PM with his flame not lit yet): a clock in its wing, a foot tapping.
+  tick: () => {
+    const t = tip("r", -124, 0.95);
+    return {
+      look: [12, -8],
+      head: { rot: 6 },
+      mouth: "sad",
+      wl: { a: 22 },
+      wr: { a: -124, s: [1, 0.95] },
+      feet: "tap",
+      extra: `<g transform="translate(${t[0] + 28} ${t[1] - 36})"><g class="ob-clock"><circle class="ob-sign" r="58"/><path class="ob-turn" d="M0 -32V0L22 14"/><circle class="ob-v" r="8"/></g></g>`,
+    };
+  },
   teach: () => {
     const t = tip("r", -104, 0.9);
     return { look: [12, 2], head: { rot: 5 }, mouth: "open", wl: { a: 30, s: [1, 0.8] }, wr: { a: -104, s: [1, 0.9] }, extra: `<path class="ob-stick" d="M${t[0] - 10} ${t[1] + 6}L${t[0] + 60} ${t[1] - 90}"/>`, top: spark(930, 560, 0.7) };
@@ -235,4 +252,40 @@ export function Buddy(props: { pose: Pose; class?: string }) {
   }, []);
   if (!markup) return <Owl class={props.class} still />;
   return <span class={`f-owl f-buddy pose-${props.pose} ${props.class ?? ""}`} aria-hidden="true" dangerouslySetInnerHTML={{ __html: draw(markup, props.pose) }} />;
+}
+
+// ---- A tap on the owl (14 Nov 2026: Home's greeting, the reveal) ----
+
+const REACT: Pose[] = ["yes", "combo", "hello", "champ", "think"];
+const REACT_SOUND: Partial<Record<Pose, Tone>> = { yes: "boing", combo: "giggle", hello: "tweet", champ: "toot", think: "squeak" };
+let taps: number[] = [];
+
+/**
+ * The owl's pose with its taps: `base` until a tap, then another pose for a moment (five quick taps: it gets dizzy).
+ * Returns the pose, a key that changes with every tap (give the Buddy `key` = it, so it acts again) and the tap.
+ */
+export function useBuddyTap(base: Pose): [Pose, string, () => void] {
+  const [react, setReact] = useState<{ p: Pose; k: number } | null>(null);
+  const timer = useRef(0);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  const tap = () => {
+    const now = Date.now();
+    taps = [...taps.filter((t) => now - t < 2000), now];
+    let p: Pose;
+    if (taps.length >= 5) {
+      p = "oops";
+      taps = [];
+      sound("dizzy");
+    } else {
+      do p = REACT[Math.floor(Math.random() * REACT.length)];
+      while (p === react?.p);
+      sound(REACT_SOUND[p] ?? "giggle");
+    }
+    buzz(12);
+    setReact({ p, k: now });
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setReact(null), 2600);
+  };
+  const pose = react?.p ?? base;
+  return [pose, `${pose}.${react?.k ?? 0}`, tap];
 }

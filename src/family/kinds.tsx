@@ -125,6 +125,8 @@ export type Live = {
   onSlot: (run: SlotRun, i: number, v?: string) => void;
   /** After its Check (14 Nov 2026): each answer right or not, in his list's order (null = the teacher's). */
   marks?: (boolean | null)[];
+  /** The ✓ / ✗ statements on the deck now (TfDeck), in his list's order: lifted in the printed question. */
+  tf?: number[];
 };
 
 /** A slot's colour after its Check: blue = right, rose = not (never on a slot he left alone). */
@@ -179,6 +181,11 @@ export function paintSlots(root: ShadowRoot, live: Live): void {
             t.classList.toggle("fx-on", t.dataset.v === v);
             marked(t, live.marks?.[r.at + i], !!live.marks && t.dataset.v === v);
           });
+          // The statement on the deck (14 Nov 2026): its bracket and its line lifted (a line holding only this one).
+          const cur = !!live.tf?.includes(r.at + i);
+          el.classList.toggle("fx-cur", cur);
+          const row = el.parentElement?.closest("tr, li, p, div");
+          if (row && row.querySelectorAll("[data-tick]").length === 1) row.classList.toggle("fx-row", cur);
         } else {
           el.classList.toggle("fx-on", live.vals[r.at + i] === "1");
           el.classList.toggle("fx-ring", r.ui.k === "mark" && r.ui.how === "ring");
@@ -216,7 +223,7 @@ export function tapped(run: SlotRun, vals: string[], i: number, v?: string): str
   return null;
 }
 
-/** Options, ✓ / ✗ or words under the question, when the printed question has no slots for them. */
+/** Options or words under the question, when the printed question has no slots for them (✓ / ✗: TfDeck). */
 export function PickBelow(props: { run: SlotRun; vals: string[]; onPick: (i: number, v?: string) => void }) {
   const { ui, at } = props.run;
   const v = (k: number) => props.vals[at + k] ?? "";
@@ -227,24 +234,6 @@ export function PickBelow(props: { run: SlotRun; vals: string[]; onPick: (i: num
           <button type="button" key={i} class={`f-pkb${v(0) === String(i + 1) ? " on" : ""}`} onClick={() => props.onPick(i)}>
             <b>({i + 1})</b> {ui.items?.[i] ?? ""}
           </button>
-        ))}
-      </div>
-    );
-  }
-  if (ui.k === "tf") {
-    return (
-      <div class="f-pk tf">
-        {Array.from({ length: ui.n }, (_, i) => (
-          <div class="f-tfrow" key={i}>
-            <span>{ui.items?.[i] ?? `${i + 1})`}</span>
-            <span class="f-tfb">
-              {(["1", "0"] as const).map((x) => (
-                <button type="button" key={x} class={`f-pkb${v(i) === x ? " on" : ""}`} aria-label={x === "1" ? "right" : "wrong"} onClick={() => props.onPick(i, x)}>
-                  {x === "1" ? "✓" : "✗"}
-                </button>
-              ))}
-            </span>
-          </div>
         ))}
       </div>
     );
@@ -353,64 +342,179 @@ export function WordBox(props: { box: Box; v: string; on: boolean; onFocus: () =
 }
 
 /**
- * Cards to put in order: drag one onto another to swap them, or tap two. They start as printed; his list is empty
- * until he moves one (a level checked untouched is ✗, as an empty box is).
+ * Cards to put in order, on a line (14 Nov 2026, the idea picture 05; before, two cards tapped to swap them): the line's
+ * places are empty, a tap on a card puts it in the next empty place, a tap on a placed card takes it back. His list =
+ * each place's card (its printed number; "" = an empty place). Short cards (numbers) sit on one line with an arrow,
+ * longer ones (steps, words) one under the other. After its Check each place is blue or rose.
  */
-export function OrderCards(props: { items: string[]; vals: string[]; at: number; onSet: (order: string[]) => void }) {
+export function OrderLine(props: { items: string[]; vals: string[]; at: number; marks?: (boolean | null)[]; onSet: (order: string[]) => void }) {
   const n = props.items.length;
-  const mine = Array.from({ length: n }, (_, k) => props.vals[props.at + k] ?? "");
-  const order = mine.every((x) => Number(x) >= 1 && Number(x) <= n) && new Set(mine).size === n ? mine.map(Number) : props.items.map((_, k) => k + 1);
-  const [sel, setSel] = useState<number | null>(null);
-  const drag = useRef<{ from: number; moved: boolean } | null>(null);
-  const swap = (a: number, b: number) => {
-    const next = [...order];
-    [next[a], next[b]] = [next[b], next[a]];
-    buzz(8);
+  const places = Array.from({ length: n }, (_, k) => {
+    const x = Number(props.vals[props.at + k] ?? "");
+    return Number.isInteger(x) && x >= 1 && x <= n ? x : 0;
+  });
+  const placed = new Set(places.filter(Boolean));
+  const short = props.items.every((t) => [...t].length <= 7);
+  const locked = !!props.marks;
+  const set = (next: number[]) => props.onSet(next.map((x) => (x ? String(x) : "")));
+  const put = (item: number) => {
+    if (locked) return;
+    const k = places.indexOf(0);
+    if (k < 0) return;
+    buzz(6);
     sound("pop");
-    setSel(null);
-    props.onSet(next.map(String));
+    const next = [...places];
+    next[k] = item;
+    set(next);
   };
-  const placeAt = (e: PointerEvent) => {
-    const el = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>("[data-place]");
-    return el ? Number(el.dataset.place) : null;
+  const back = (k: number) => {
+    if (locked) return;
+    buzz(5);
+    sound("tap");
+    const next = [...places];
+    next[k] = 0;
+    set(next);
   };
   return (
-    <div class="f-ord" role="list" aria-label="Cards to order">
-      {order.map((item, k) => (
-        <button
-          type="button"
-          key={item}
-          role="listitem"
-          data-place={k}
-          class={`f-ordc${sel === k ? " sel" : ""}`}
-          onPointerDown={(e) => {
-            drag.current = { from: k, moved: false };
-            (e.currentTarget as HTMLElement).classList.add("lift");
-          }}
-          onPointerUp={(e) => {
-            (e.currentTarget as HTMLElement).classList.remove("lift");
-            const d = drag.current;
-            const to = placeAt(e);
-            if (d && to !== null && to !== d.from) {
-              d.moved = true;
-              swap(d.from, to);
-            }
-          }}
-          onPointerCancel={(e) => (e.currentTarget as HTMLElement).classList.remove("lift")}
-          onClick={() => {
-            if (drag.current?.moved) return void (drag.current = null);
-            drag.current = null;
-            buzz(5);
-            if (sel === null) {
-              sound("tap");
-              setSel(k);
-            } else if (sel === k) setSel(null);
-            else swap(sel, k);
-          }}
-        >
-          {pretty(props.items[item - 1])}
+    <div class={`f-oline${short ? " row" : " col"}${locked ? " locked" : ""}`}>
+      <div class="f-oline-l" role="list" aria-label="The order">
+        {places.map((item, k) =>
+          item ? (
+            <button
+              type="button"
+              key={`p${k}.${item}`}
+              role="listitem"
+              class={`f-oline-p on${props.marks?.[k] === true ? " ok" : props.marks?.[k] === false ? " no" : ""}`}
+              aria-label={`${k + 1}: ${props.items[item - 1]}`}
+              onClick={() => back(k)}
+            >
+              <small>{k + 1}</small>
+              {pretty(props.items[item - 1])}
+            </button>
+          ) : (
+            <span key={`p${k}`} role="listitem" class={`f-oline-p${k === places.indexOf(0) ? " next" : ""}`} aria-label={`place ${k + 1}`}>
+              <small>{k + 1}</small>
+            </span>
+          ),
+        )}
+        {short && <i class="f-oline-arrow" aria-hidden="true" />}
+      </div>
+      {placed.size < n && (
+        <div class="f-oline-c" role="group" aria-label="Cards">
+          {props.items.map((t, i) =>
+            placed.has(i + 1) ? null : (
+              <button type="button" key={i} class="f-oline-card" onClick={() => put(i + 1)}>
+                {pretty(t)}
+              </button>
+            ),
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * ✓ / ✗ one statement at a time (14 Nov 2026, the idea picture 05): the one he is on is lifted in the printed question
+ * (`items`: the paper prints no brackets, so it is on a card here), two big buttons, a swipe right = ✓ and left = ✗;
+ * then the next one he hasn't answered. The dots go to any; the printed brackets still take a tap. After its Check the
+ * dots are blue or rose and nothing changes.
+ */
+export function TfDeck(props: { run: SlotRun; vals: string[]; k: number; items?: string[]; marks?: (boolean | null)[]; onK: (k: number) => void; onPick: (k: number, v: "1" | "0") => void }) {
+  const { run } = props;
+  const n = run.els;
+  const v = (i: number) => props.vals[run.at + i] ?? "";
+  const k = Math.max(0, Math.min(props.k, n - 1));
+  const locked = !!props.marks;
+  const [gone, setGone] = useState<{ d: "l" | "r"; t: string; key: number } | null>(null);
+  const drag = useRef<{ x: number; dx: number } | null>(null);
+  const card = useRef<HTMLDivElement>(null);
+  const pick = (val: "1" | "0") => {
+    if (locked) return;
+    buzz(6);
+    sound(val === "1" ? "pop" : "tap");
+    if (props.items) setGone({ d: val === "1" ? "r" : "l", t: props.items[k] ?? "", key: Date.now() });
+    props.onPick(k, val);
+    const open = Array.from({ length: n }, (_, i) => i).filter((i) => i !== k && !v(i));
+    const next = open.find((i) => i > k) ?? open[0];
+    if (next !== undefined) props.onK(next);
+  };
+  const follow = (dx: number) => {
+    if (card.current) card.current.style.transform = dx ? `translateX(${dx}px) rotate(${dx / 18}deg)` : "";
+  };
+  return (
+    <div
+      class={`f-tfd${locked ? " locked" : ""}`}
+      onPointerDown={(e) => {
+        if (locked || (e.target as HTMLElement).closest("button")) return;
+        drag.current = { x: e.clientX, dx: 0 };
+      }}
+      onPointerMove={(e) => {
+        const d = drag.current;
+        if (!d) return;
+        d.dx = e.clientX - d.x;
+        follow(d.dx);
+      }}
+      onPointerUp={() => {
+        const d = drag.current;
+        drag.current = null;
+        follow(0);
+        if (d && Math.abs(d.dx) > 56) pick(d.dx > 0 ? "1" : "0");
+      }}
+      onPointerCancel={() => {
+        drag.current = null;
+        follow(0);
+      }}
+    >
+      <div class="f-tfd-dots" role="group" aria-label="Statements">
+        {Array.from({ length: n }, (_, i) => {
+          const m = props.marks?.[i];
+          return (
+            <button
+              type="button"
+              key={i}
+              class={`f-tfd-dot${i === k ? " now" : ""}${v(i) ? " has" : ""}${m === true ? " ok" : m === false ? " no" : ""}`}
+              aria-label={`Statement ${i + 1}${v(i) ? (v(i) === "1" ? ": ✓" : ": ✗") : ""}`}
+              onClick={() => {
+                buzz(4);
+                props.onK(i);
+              }}
+            >
+              {v(i) ? (v(i) === "1" ? "✓" : "✗") : i + 1}
+            </button>
+          );
+        })}
+      </div>
+      {props.items ? (
+        <div class="f-tfd-stack">
+          {gone && (
+            <div class={`f-tfd-card gone ${gone.d}`} key={gone.key} aria-hidden="true">
+              {pretty(gone.t)}
+            </div>
+          )}
+          <div class="f-tfd-card" ref={card} key={k}>
+            <small>
+              {k + 1} / {n}
+            </small>
+            {pretty(props.items[k] ?? "")}
+          </div>
+        </div>
+      ) : (
+        <p class="f-tfd-say">
+          <b>
+            {k + 1} / {n}
+          </b>{" "}
+          மேலே ஒளிரும் கூற்று சரியா, பிழையா?
+        </p>
+      )}
+      <div class="f-tfd-b">
+        <button type="button" class={`f-tfd-no${v(k) === "0" ? " on" : ""}`} disabled={locked} aria-label="✗ wrong" onClick={() => pick("0")}>
+          ✗ பிழை
         </button>
-      ))}
+        <button type="button" class={`f-tfd-yes${v(k) === "1" ? " on" : ""}`} disabled={locked} aria-label="✓ right" onClick={() => pick("1")}>
+          ✓ சரி
+        </button>
+      </div>
     </div>
   );
 }

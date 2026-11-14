@@ -7,6 +7,7 @@ import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { isBirthday } from "./day";
 import { levelDays, xpItems, xpRow } from "./family";
+import { levelOn } from "./quests";
 import { addNums, daysIn, fullNums, numsAt, numsOf, sameNums, WEEK_COINS, type RaceRow, type XpNums } from "./race";
 import { noteToday } from "./usToday";
 
@@ -81,10 +82,35 @@ async function writePart(ctx: MutationCtx, pid: Id<"progress">, now: number, doc
     return part?.sid ?? null;
   }
   const nums = partOf(p, now);
-  if (!part) await ctx.db.insert("raceParts", { pid, sid: p.studentId, ...nums });
-  else if (!sameNums(numsOfRow(part), nums) || part.sid !== p.studentId) await ctx.db.patch(part._id, { sid: p.studentId, ...nums });
+  const spot = spotOf(p);
+  if (!part) await ctx.db.insert("raceParts", { pid, sid: p.studentId, ...nums, ...spot });
+  else if (!sameNums(numsOfRow(part), nums) || part.sid !== p.studentId || part.u !== spot.u || part.on !== spot.on)
+    await ctx.db.patch(part._id, { sid: p.studentId, ...nums, u: spot.u, on: spot.on });
   return p.studentId;
 }
+
+/** Where he is on a Stage's road (14 Nov 2026): a workbook's row only (the road's classmates, family.road). */
+export function spotOf(p: Doc<"progress">): { u?: Id<"units">; on?: number } {
+  return p.stage === "master" && p.m ? { u: p.unitId, on: levelOn(p.m) } : {};
+}
+
+/**
+ * The parts from before the road (14 Nov 2026) get their spot once (meta "roadV"): a page of parts a run, the next at
+ * once, from race.fill. Each part reads its progress row; a part already right is left alone.
+ */
+export async function fillSpots(ctx: MutationCtx, cursor: string | null): Promise<string | null> {
+  const page = await ctx.db.query("raceParts").paginate({ cursor, numItems: SPOTS_PER_RUN });
+  for (const part of page.page) {
+    if (part.u !== undefined) continue;
+    const p = await ctx.db.get(part.pid);
+    if (!p) continue;
+    const spot = spotOf(p);
+    if (spot.u !== undefined) await ctx.db.patch(part._id, spot);
+  }
+  return page.isDone ? null : page.continueCursor;
+}
+/** Parts a run of fillSpots. */
+export const SPOTS_PER_RUN = 100;
 
 /** His race row from his parts (and his student row's copy when asked, or when the row is new). */
 async function writeRow(ctx: MutationCtx, sid: Id<"students">, now: number, copy: boolean): Promise<void> {

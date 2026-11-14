@@ -428,7 +428,7 @@ export const xpRow = (r: Doc<"progress">) => (r.stage === "master" && !!r.m) || 
  * or from the home, whatever, they are progressing"): each circle the class marked, with its state and when. Not the
  * ones a ladder check at home wrote (those count in `lh`: its moment, or a question of a section checked at home).
  */
-function classCircles(r: Doc<"progress">): { s: string; t: number }[] {
+export function classCircles(r: Doc<"progress">): { s: string; t: number }[] {
   if (r.stage !== "fighter") return [];
   const homeT = new Set<number>();
   const homeQ = new Set<number>();
@@ -497,10 +497,12 @@ export function levelDays(rows: Doc<"progress">[]): Set<number> {
 
 /**
  * Days in a row with a level finished (handed in, or marked in class or at home), up to today. Before he finishes one
- * today, yesterday's streak still stands (today = false: he can keep it).
+ * today, yesterday's streak still stands (today = false: he can keep it). `kept` (14 Nov 2026, the flame shield:
+ * convex/lib/quests.ts `shieldDays`) = days a shield kept: they count as days in the row (never as a Level done).
  */
-export function streakOf(rows: Doc<"progress">[], now: number): { days: number; today: boolean } {
+export function streakOf(rows: Doc<"progress">[], now: number, kept: Iterable<number> = []): { days: number; today: boolean } {
   const days = levelDays(rows);
+  for (const d of kept) days.add(d);
   const today = slDayNo(now);
   const has = days.has(today);
   let d = has ? today : today - 1;
@@ -579,8 +581,10 @@ function perfect(l: WorldLevel): boolean {
  * His trophies, from what the teachers see: his first level, 3 / 7 / 30 days in a row (his best run), a level with every
  * mark, five of them, a whole World finished (at least one level of it in the app), 100 and 300 XP in one week.
  */
-export function trophiesOf(rows: Doc<"progress">[], worlds: World[]): Trophy[] {
+export function trophiesOf(rows: Doc<"progress">[], worlds: World[], kept: Iterable<number> = []): Trophy[] {
   const days = levelDays(rows);
+  // The days a flame shield kept (14 Nov 2026) are in his runs, as on his flame.
+  for (const d of kept) days.add(d);
   const best = bestStreak(days);
   const perfects = worlds.reduce((n, w) => n + w.levels.filter(perfect).length, 0);
   const world = worlds.some((w) => w.allDone && w.levels.some((l) => l.s !== "pre"));

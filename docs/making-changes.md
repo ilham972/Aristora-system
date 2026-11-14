@@ -997,3 +997,27 @@ WHY=1 npx vitest run -c vitest.perf.config.ts -t "lab" --reporter=verbose # each
     `f-vfade`). The owl's body is painted by class (`.ob-*`) from the palette's names, so Dark follows.
   - **Here, the build says the first load is over its budget** (66.0x of 66) on main too: this machine's Preact is
     built from source. GitHub's check is the judge (65.7 there).
+- **Home's day, the road, the deck and the line (the family app, 14 Nov 2026, night).**
+  - **The owl's body has its own style** (`buddyStyle.ts`, attached by `owlBody.tsx` as it loads): Home, the road,
+    the map and the reveal draw it, not only a Level. A new pose = its numbers in `POSES` and, if it moves, its rule
+    there (only transform and opacity, one animation of transform per group: `tests/familyMotion.test.ts`).
+  - **A thing over everything goes through the app's sheet** (`showSheet`): a card with `.rise` (a transform) makes
+    `position: fixed` inside it relative to the card, not the phone (the chest's opening first showed inside the
+    quests card). `openChest` in `quests.tsx` is the way.
+  - **A tap that removes what was tapped** (a card he places leaves the cards): by the time the click reaches the
+    printed question, `e.target.closest(…)` finds nothing (the button left the page), and the paper zoomed. `Paper`
+    reads `e.composedPath()` (the path as the tap began): do the same in any handler above a list that redraws.
+  - **Home's quests card takes the goal card's place only once the parts are here** (`parts` from `app.tsx`):
+    `GoalCard` stays the first frame's and keeps its words. Anything added to the goal card goes into both (or into
+    `quests.tsx` only, when it may come a moment later). Run-throughs read `.f-goal-t` / `.f-goal-s` (both cards).
+  - **A chest gives coins, never XP; its wallet must not pay the past**: a student without a wallet gets one from
+    `walletFor` (XP before this week counted as paid out), never `{ xp: 0 }` (his first Monday would pay everything
+    he ever won).
+  - **The road's classmates come from the race parts** (`raceParts.u` / `on`, written with each part by
+    `writePart`): a raw write in a test passes no mutation's watch, so rebuild the parts (race rows `v: 0`, then
+    `race.fill`). Parts from before 14 Nov got their spot once (`race.fill` → `race.spots`, a page at a time, meta
+    `roadV`). Never read classmates' progress rows for the road (the bill).
+  - **The flame's days**: anything new that shows his flame or his best run takes the shield's days
+    (`shieldDays(rows, wallet, now)` into `streakOf` / `trophiesOf`); his week's dots and XP never do.
+  - **The first load got lighter** (66.0 → 61.8 here): a Level's book is reached through the level screen's file
+    (`lv.BookScreen`). Never import `book.tsx` or `photos.ts` from a first-load file again.

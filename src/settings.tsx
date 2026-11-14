@@ -1287,6 +1287,8 @@ function describe(e: Doc<"events">): string {
       return `the Shop: ${v}`;
     case "shop-limit":
       return v === "none" ? "the Shop: no limit on a week's pay" : `the Shop: the pay stops at ${v} coins a week`;
+    case "shop-chests":
+      return `the Shop's chests and shield: ${v} coins (0 = off)`;
     case "keep":
       return `kept in Evaluation for ${v} (his next book)`;
     case "book-given-off":

@@ -23,3 +23,7 @@ export { AlertNudge, pushSync } from "./alerts";
 export { PhotoSheet } from "./photo";
 // The Shop (10 Nov 2026): the top row's coin or Home's PAYDAY card opens it (its style in profile.css).
 export { ShopScreen } from "./shop";
+// Home's day (14 Nov 2026): today's quests and the chest, one more?, the flame shield, the greeting's owl with its body.
+export { GreetOwl, HomePlus } from "./quests";
+// A Stage's road (14 Nov 2026): the owl on his Level, classmates ahead, the road's chests, FINAL; the owl on the map.
+export { MapOwl, RoadPlus } from "./road";

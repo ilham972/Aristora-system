@@ -16,6 +16,7 @@ import type { Doc, Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
 import { DAY_MS, slMonthStart } from "./day";
 import { xpItems } from "./family";
+import { chestSetOf, type ChestSet } from "./quests";
 
 /** His rate (10 Nov 2026): 5 XP pay 1 coin. */
 export const XP_PER_COIN = 5;
@@ -102,6 +103,15 @@ export async function payLimit(ctx: QueryCtx): Promise<number | null> {
   return typeof v === "number" && v > 0 ? v : null;
 }
 
+/** The owner's chests and flame shield (Settings → Shop, 14 Nov 2026; convex/lib/quests.ts): the defaults until he sets them. */
+export async function chestSet(ctx: QueryCtx): Promise<ChestSet> {
+  const m = await ctx.db
+    .query("meta")
+    .withIndex("by_key", (q) => q.eq("key", "chests"))
+    .first();
+  return chestSetOf(m?.value);
+}
+
 /** The Shop's coins this month (Sri Lanka): paid on Mondays, spent, given back; coins in students' hands now. */
 export async function shopMonth(ctx: QueryCtx, now: number): Promise<{ paid: number; spent: number; back: number; held: number; wallets: number }> {
   const out = { paid: 0, spent: 0, back: 0, held: 0, wallets: 0 };
@@ -109,7 +119,7 @@ export async function shopMonth(ctx: QueryCtx, now: number): Promise<{ paid: num
     .query("coinLog")
     .withIndex("by_at", (q) => q.gte("at", slMonthStart(now)))
     .collect()) {
-    if (l.k === "pay") out.paid += l.n;
+    if (l.k === "pay" || l.k === "chest") out.paid += l.n;
     else if (l.k === "buy") out.spent -= l.n;
     else out.back += l.n;
   }

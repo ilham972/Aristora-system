@@ -1498,9 +1498,16 @@ export default defineSchema({
     pid: v.id("progress"),
     sid: v.id("students"),
     ...xpFields,
+    /**
+     * Where he is on a Stage's road (14 Nov 2026, the road's classmates): a workbook's unit `u` and the Level he is on
+     * `on` (convex/lib/quests.ts levelOn). Only on a workbook's row; written with the rest of the part.
+     */
+    u: v.optional(v.id("units")),
+    on: v.optional(v.number()),
   })
     .index("by_pid", ["pid"])
-    .index("by_sid", ["sid"]),
+    .index("by_sid", ["sid"])
+    .index("by_u", ["u"]),
 
   /**
    * A finished week's champions (Monday 00:05 in Sri Lanka, `race.week`): each grade's top 3 (k "g") and ARISTORA's (k
@@ -1581,7 +1588,18 @@ export default defineSchema({
     last: v.number(),
     paid: v.number(),
     spent: v.number(),
-  }).index("by_sid", ["sid"]),
+    /**
+     * The flame shield (14 Nov 2026, convex/lib/quests.ts): `sh` = shields he holds (one at a time), `sd` = the Sri Lanka
+     * day numbers a shield kept his flame (they count as days in the row, never as a Level). `cd` = the day he opened
+     * the day's chest (once a day).
+     */
+    sh: v.optional(v.number()),
+    sd: v.optional(v.array(v.number())),
+    cd: v.optional(v.number()),
+  })
+    .index("by_sid", ["sid"])
+    // The night's shield job reads only the wallets holding one (14 Nov 2026).
+    .index("by_sh", ["sh"]),
 
   /** Each change to a student's coins: a Monday's pay, a thing bought, coins given back (`w` = what, in words). */
   coinLog: defineTable({
@@ -1589,11 +1607,23 @@ export default defineSchema({
     at: v.number(),
     n: v.number(),
     /** `win` (11 Nov 2026): his grade's weekly coins (`w` = the grade and the week). */
-    k: v.union(v.literal("pay"), v.literal("buy"), v.literal("back"), v.literal("win")),
+    k: v.union(v.literal("pay"), v.literal("buy"), v.literal("back"), v.literal("win"), v.literal("chest")),
     w: v.optional(v.string()),
   })
     .index("by_sid", ["sid", "at"])
     .index("by_at", ["at"]),
+
+  /**
+   * A Stage's road chest he opened (14 Nov 2026, convex/lib/quests.ts): after Level `n` of the unit's workbook, once,
+   * its coins `c`. The day's chest is on his wallet (`cd`).
+   */
+  chests: defineTable({
+    sid: v.id("students"),
+    u: v.id("units"),
+    n: v.number(),
+    at: v.number(),
+    c: v.number(),
+  }).index("by_sid", ["sid", "u"]),
 
   /** A cheer (👏, 7 Nov 2026): one tap on a classmate's profile, no words; one a day per classmate. */
   cheers: defineTable({

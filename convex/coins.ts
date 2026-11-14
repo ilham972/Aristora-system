@@ -18,6 +18,7 @@ import { query, type MutationCtx } from "./_generated/server";
 import { actor, familyActor, familyViewer, viewer } from "./lib/auth";
 import { fail, log } from "./lib/backend";
 import {
+  chestSet,
   firstPay,
   ITEM_PHOTO_BYTES,
   itemName,
@@ -27,14 +28,29 @@ import {
   OPEN_ORDERS_MAX,
   PAY_PER_RUN,
   payLimit,
+  payXpBefore,
   shopMonth,
   walletOf,
   weekPay,
   type Shelf,
 } from "./lib/coins";
-import { DAY_MS, slWeekStart } from "./lib/day";
-import { xpRows } from "./lib/family";
+import { bookFor, masterState, progressFor } from "./lib/backend";
+import { DAY_MS, slDayNo, slWeekStart } from "./lib/day";
+import { unitNumber, xpRows } from "./lib/family";
 import { internalMutation, mutation } from "./lib/fn";
+import {
+  CHEST_MAX,
+  chestCoins,
+  KEPT_MAX,
+  questsDone,
+  questsOf,
+  roadChestLevels,
+  roadChestState,
+  shieldNeeded,
+  SHIELD_MAX,
+  type ChestSet,
+} from "./lib/quests";
+import { OL } from "./lib/syllabus";
 
 const token = v.optional(v.string());
 const shelf = v.union(v.literal("owl"), v.literal("treat"));
@@ -265,6 +281,8 @@ export type ShopAdmin = {
   wallets: number;
   /** Things bought and not yet given, by name ("🍦 Ice cream" × 6): what to buy. */
   toBuy: { n: string; c: number }[];
+  /** The chests and the flame shield (14 Nov 2026): the day's chest, a road chest, the shield's price (0 = off). */
+  chests: ChestSet;
 };
 
 /** Settings → Shop (the owner): every thing, the month's coins, the coins in students' hands, what to buy. */
@@ -297,6 +315,7 @@ export const items = query({
       held: m.held,
       wallets: m.wallets,
       toBuy: [...byName].map(([n, c]) => ({ n, c })).sort((a, b) => b.c - a.c || a.n.localeCompare(b.n)),
+      chests: await chestSet(ctx),
     };
   },
 });
@@ -382,6 +401,134 @@ export const setLimit = mutation({
     if (m) await ctx.db.patch(m._id, { value: { n: args.n } });
     else await ctx.db.insert("meta", { key: "coinLimit", value: { n: args.n } });
     await log(ctx, null, Date.now(), { kind: "shop-limit", by: me.name, value: args.n === null ? "none" : String(args.n) });
+    return true;
+  },
+});
+
+// ---- The chests and the flame shield (14 Nov 2026, convex/lib/quests.ts) ----
+
+/** Shields he may hold at once. */
+export const SHIELDS_MAX = 1;
+
+/**
+ * His wallet; a new one for a student who has none yet (a chest before his first pay day): the XP from before this week
+ * counts as paid out, so his first Monday still pays only his last week (firstPay's rule), never everything before.
+ */
+async function walletFor(ctx: MutationCtx, sid: Id<"students">, now: number): Promise<Doc<"wallets">> {
+  const w = await walletOf(ctx, sid);
+  if (w) return w;
+  const xp = payXpBefore(await xpRows(ctx, sid), slWeekStart(now));
+  const id = await ctx.db.insert("wallets", { sid, n: 0, xp, wk: 0, last: 0, paid: 0, spent: 0 });
+  return (await ctx.db.get(id))!;
+}
+
+/** Today's chest: his three quests done (worked out here again), once a day; a few coins, not always the same. */
+export const chest = mutation({
+  args: { token },
+  handler: async (ctx, args): Promise<{ c: number; n: number }> => {
+    const s = await familyActor(ctx, args.token);
+    const now = Date.now();
+    const set = await chestSet(ctx);
+    if (set.d <= 0) fail("இன்றைய பெட்டி இப்போது இல்லை.");
+    const day = slDayNo(now);
+    if ((await walletOf(ctx, s._id))?.cd === day) fail("இன்றைய பெட்டியை ஏற்கனவே திறந்தாய். நாளை மீண்டும்!");
+    if (!questsDone(questsOf(await xpRows(ctx, s._id), now))) fail("முதலில் இன்றைய மூன்று சவால்களையும் முடி.");
+    const w = await walletFor(ctx, s._id, now);
+    const c = chestCoins(set.d, Math.random());
+    await ctx.db.patch(w._id, { n: w.n + c, paid: w.paid + c, cd: day });
+    await ctx.db.insert("coinLog", { sid: s._id, at: now, n: c, k: "chest", w: "Today's quests" });
+    return { c, n: w.n + c };
+  },
+});
+
+/** A road chest: after Level n of a Stage's workbook (every 3rd, never the last), once, that Level finished since the chests came. */
+export const roadChest = mutation({
+  args: { token, unitId: v.string(), n: v.number() },
+  handler: async (ctx, args): Promise<{ c: number; n: number }> => {
+    const s = await familyActor(ctx, args.token);
+    const now = Date.now();
+    const set = await chestSet(ctx);
+    if (set.r <= 0) fail("பெட்டிகள் இப்போது இல்லை.");
+    const unitId = ctx.db.normalizeId("units", args.unitId);
+    const unit = unitId ? await ctx.db.get(unitId) : null;
+    if (!unitId || !unit) fail("That Stage is not here.");
+    const had = await ctx.db
+      .query("chests")
+      .withIndex("by_sid", (q) => q.eq("sid", s._id).eq("u", unitId))
+      .collect();
+    if (had.some((c) => c.n === args.n)) fail("இந்தப் பெட்டியை ஏற்கனவே திறந்தாய்.");
+    const book = await bookFor(ctx, unitId, "master");
+    const levels = book && book.data.kind === "master" ? book.data.levels.map((l) => l.n) : [];
+    if (!roadChestLevels(levels).includes(args.n)) fail("இங்கே பெட்டி இல்லை.");
+    if (roadChestState(masterState(await progressFor(ctx, s._id, unitId, "master")), args.n) !== "ready") fail(`முதலில் Level ${args.n} ஐ முடி.`);
+    const w = await walletFor(ctx, s._id, now);
+    const c = set.r;
+    await ctx.db.patch(w._id, { n: w.n + c, paid: w.paid + c });
+    await ctx.db.insert("chests", { sid: s._id, u: unitId, n: args.n, at: now, c });
+    const where = unit.grade === OL ? unit.ta : `Stage ${unitNumber(unit.code)}`;
+    await ctx.db.insert("coinLog", { sid: s._id, at: now, n: c, k: "chest", w: `${where} · Level ${args.n}` });
+    return { c, n: w.n + c };
+  },
+});
+
+/** He buys a flame shield (`p` = the price his phone showed): one at a time; it costs the centre nothing. */
+export const buyShield = mutation({
+  args: { token, p: v.number() },
+  handler: async (ctx, args): Promise<{ n: number }> => {
+    const s = await familyActor(ctx, args.token);
+    const set = await chestSet(ctx);
+    if (set.s <= 0) fail("Shield இப்போது கடையில் இல்லை.");
+    if (set.s !== args.p) fail(`இதன் விலை இப்போது ${set.s} coins. மீண்டும் பார்.`);
+    const w = await walletOf(ctx, s._id);
+    if ((w?.sh ?? 0) >= SHIELDS_MAX) fail("உன்னிடம் ஏற்கனவே ஒரு shield உள்ளது.");
+    const have = w?.n ?? 0;
+    if (!w || have < set.s) fail(`இன்னும் ${set.s - have} coins வேண்டும்.`);
+    const now = Date.now();
+    await ctx.db.patch(w._id, { n: w.n - set.s, spent: w.spent + set.s, sh: (w.sh ?? 0) + 1 });
+    await ctx.db.insert("coinLog", { sid: s._id, at: now, n: -set.s, k: "buy", w: "🛡 Flame shield" });
+    await log(ctx, null, now, { kind: "shop-buy", studentId: s._id, name: s.name, value: `🛡 Flame shield · ${set.s} coins` });
+    return { n: w.n - set.s };
+  },
+});
+
+/**
+ * Every night (00:01 in Sri Lanka): a shield keeps the flame of each student who holds one and had no Level yesterday
+ * while his flame was alive the day before (convex/lib/quests.ts shieldNeeded). Only the wallets holding a shield.
+ */
+export const shields = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const today = slDayNo(Date.now());
+    let used = 0;
+    for (const w of await ctx.db
+      .query("wallets")
+      .withIndex("by_sh", (q) => q.gt("sh", 0))
+      .collect()) {
+      const kept = w.sd ?? [];
+      if (!shieldNeeded(await xpRows(ctx, w.sid), kept, today)) continue;
+      await ctx.db.patch(w._id, { sh: (w.sh ?? 1) - 1, sd: [...kept, today - 1].slice(-KEPT_MAX) });
+      used++;
+    }
+    return used;
+  },
+});
+
+/** The owner's chests and shield (Settings → Shop): the day's chest, a road chest (coins), the shield's price; 0 = off. */
+export const setChests = mutation({
+  args: { token, d: v.number(), r: v.number(), s: v.number() },
+  handler: async (ctx, args) => {
+    const me = await actor(ctx, args.token, ["owner"]);
+    const whole = (x: number, max: number) => Number.isInteger(x) && x >= 0 && x <= max;
+    if (!whole(args.d, CHEST_MAX) || !whole(args.r, CHEST_MAX)) fail(`A chest: a whole number of coins, 0 to ${CHEST_MAX}.`);
+    if (!whole(args.s, SHIELD_MAX)) fail(`The shield: a whole number of coins, 0 to ${SHIELD_MAX}.`);
+    const value: ChestSet = { d: args.d, r: args.r, s: args.s };
+    const m = await ctx.db
+      .query("meta")
+      .withIndex("by_key", (q) => q.eq("key", "chests"))
+      .first();
+    if (m) await ctx.db.patch(m._id, { value });
+    else await ctx.db.insert("meta", { key: "chests", value });
+    await log(ctx, null, Date.now(), { kind: "shop-chests", by: me.name, value: `day ${args.d} · road ${args.r} · shield ${args.s}` });
     return true;
   },
 });
