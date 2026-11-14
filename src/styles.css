@@ -13892,3 +13892,307 @@ body.locked.mnx-desk .toasts {
 .sk-none {
   margin-top: 24px;
 }
+
+/* ---- A unit's book by skill (14 Nov 2026): Settings → Books → T, src/skillBook.tsx ---- */
+.unit-list li.ul-row {
+  display: flex;
+  gap: 4px;
+}
+.unit-list li.ul-row > button:first-child {
+  flex: 1;
+  min-width: 0;
+}
+.unit-list button.ul-t {
+  flex: none;
+  width: 44px;
+  justify-content: center;
+  padding: 0;
+  background: var(--line-2);
+  border-color: var(--line-2);
+  color: var(--ink-3);
+  font-weight: 800;
+  font-size: 15px;
+}
+.unit-list button.ul-t.has {
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
+}
+body.sb-on {
+  overflow: hidden;
+}
+.sb {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 45;
+  max-width: 560px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  padding-top: env(safe-area-inset-top);
+  background: var(--ground);
+}
+.sb-top {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 8px 6px;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+}
+.sb-back {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--ink);
+}
+.sb-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+.sb-title b {
+  font-size: 15px;
+}
+.sb-title b i {
+  display: inline-block;
+  min-width: 20px;
+  padding: 0 5px;
+  border-radius: 6px;
+  background: var(--ink);
+  color: #fff;
+  font-style: normal;
+  font-size: 12.5px;
+  text-align: center;
+}
+.sb-title span {
+  font-size: 13px;
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sb-dl {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 40px;
+  padding: 0 14px 0 10px;
+  border: 0;
+  border-radius: 20px;
+  background: var(--ink);
+  color: #fff;
+  font-weight: 800;
+  font-size: 14px;
+}
+.sb-dl:disabled {
+  opacity: 0.4;
+}
+.sb .hrow {
+  flex: none;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+}
+.sb-pills {
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+}
+.sb-pill {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 6px 0 12px;
+  border: 1.5px solid var(--line);
+  border-radius: 18px;
+  background: var(--card);
+  color: var(--ink);
+  font-weight: 800;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.sb-pill.many {
+  border-style: dashed;
+}
+.sb-pill small {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: var(--line-2);
+  color: var(--ink-2);
+  font-size: 12px;
+}
+.sb-pill.on {
+  border-color: var(--ink);
+  border-style: solid;
+  background: var(--ink);
+  color: #fff;
+}
+.sb-pill.on small {
+  background: #fff;
+  color: var(--ink);
+}
+.sb-body {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 10px 8px 40px;
+}
+.sb-note {
+  padding: 16px 12px;
+}
+.sb-head {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--card);
+}
+.sb-head p {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 6px;
+  font-size: 14.5px;
+  line-height: 1.3;
+}
+.sb-head p span:not(.sb-sk) {
+  display: flex;
+  flex-direction: column;
+}
+.sb-head small {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.sb-head .sb-sum {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+.sb-sk {
+  flex: none;
+  padding: 1px 7px;
+  border: 1.5px solid var(--ink);
+  border-radius: 6px;
+  font-weight: 800;
+  font-size: 13px;
+}
+.sb-q {
+  margin: 0 0 12px;
+}
+.sb-qh {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 2px 4px;
+}
+.sb-qn {
+  font-size: 15px;
+}
+.sb-qk {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.sb-rate {
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: var(--green-soft);
+  color: var(--green-ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+.sb-rate.low {
+  background: var(--red-soft);
+  color: var(--red-ink);
+}
+.sb-rate.few {
+  background: var(--line-2);
+  color: var(--ink-3);
+}
+.sb-move {
+  margin-left: auto;
+  height: 32px;
+  padding: 0 14px;
+  border: 1.5px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 13.5px;
+}
+.sb-parts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 0 2px 4px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+.sb-paper {
+  display: block;
+}
+.sb-mv,
+.sb-ticks {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+.sb-mv button,
+.sb-ticks button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 6px 10px;
+  border: 1.5px solid var(--line-2);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--ink);
+  text-align: left;
+  font-size: 14px;
+}
+.sb-mv b,
+.sb-ticks b {
+  flex: none;
+  min-width: 44px;
+  font-weight: 800;
+}
+.sb-mv span,
+.sb-ticks span {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+.sb-ticks small {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.sb-mv small {
+  flex: none;
+  font-weight: 700;
+  color: var(--ink-3);
+}
+.sb-ticks button.on {
+  border-color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink);
+  background: var(--role-soft);
+}

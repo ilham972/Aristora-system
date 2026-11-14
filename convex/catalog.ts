@@ -41,6 +41,8 @@ export const books = query({
   handler: async (ctx, args) => {
     await viewer(ctx, args.token);
     const list = await ctx.db.query("books").collect();
+    // Units whose workbook questions carry skills (Settings → Books → T, 14 Nov 2026).
+    const tagged = new Set((await ctx.db.query("skillTags").collect()).filter((r) => r.stage === "master").map((r) => r.unitId as string));
     return list.map((b) => ({
       _id: b._id,
       unitId: b.unitId,
@@ -60,6 +62,8 @@ export const books = query({
       qCount: b.qCount ?? null,
       /** One of a topic tute's two books (the Books page offers to move a school unit's tute to OL). */
       tute: b.tute ?? false,
+      /** Its questions carry skills (the workbook only). */
+      tagged: b.stage === "master" && tagged.has(b.unitId),
       updatedAt: b.updatedAt,
     }));
   },

@@ -45,6 +45,7 @@ import { RETAKE, WHY } from "../convex/lib/photos";
 import { SHOUT_WHY } from "../convex/lib/us";
 import { ClassHours } from "./classHours";
 import { ClaudeLink } from "./claudeLink";
+import { SkillBookPage } from "./skillBook";
 import { RaceSettings } from "./raceSettings";
 import { ShopSettings } from "./shopSettings";
 import { UsSettings } from "./usSettings";
@@ -493,6 +494,8 @@ type BookRow = {
   qCount: number | null;
   /** One of a topic tute's two books. */
   tute: boolean;
+  /** Its questions carry skills (the workbook only). */
+  tagged?: boolean;
 };
 
 /** The syllabus by grade, which units have their books in the app, and setting up a workbook. */
@@ -501,6 +504,7 @@ function Books() {
   const books = useQuery<BookRow[]>(api.catalog.books, {}) ?? [];
   const [grade, setGrade] = useGrade("aristora.booksGrade", () => 8, BOOK_GRADES);
   const [open, setOpen] = useState<Unit | null>(null);
+  const [skillsOf, setSkillsOf] = useState<Unit | null>(null);
   const list = units.filter((u) => u.grade === grade);
   const bookOf = (u: Unit, st: "fighter" | "master") => books.find((b) => b.unitId === u._id && b.stage === st);
   const done = (st: "fighter" | "master") => list.filter((u) => bookOf(u, st)).length;
@@ -526,7 +530,7 @@ function Books() {
       <p class="muted">
         {grade === OL ? `${list.length} O/L topics by paper part, as on the O/L exam (any student can be given them).` : `${list.length} units.`} In
         the app: theory books (F) {done("fighter")} · workbooks (M) {done("master")} · answer keys (K) {keys} · questions
-        as printed (Q) {texts}.
+        as printed (Q) {texts} · tagged with skills (T) {list.filter((u) => bookOf(u, "master")?.tagged).length}.
       </p>
       {(grade === OL ? [1, 2, 3, 4] : [1, 2, 3, 0]).map((t) => {
         const us = list.filter((u) => u.term === t);
@@ -548,8 +552,9 @@ function Books() {
                       .map((b) => `${b.stage === "fighter" ? "theory book" : "workbook"}: ${b.qCount ? `${b.qCount} questions as printed` : "no question text"}`)
                       .join(" · ")
                   : "No question text yet";
+                const tagged = !!m?.tagged;
                 return (
-                  <li key={u._id}>
+                  <li key={u._id} class="ul-row">
                     <button type="button" onClick={() => setOpen(u)}>
                       <b>{grade === OL ? String(olNumber(u, units)).padStart(2, "0") : u.code}</b>
                       <span>
@@ -569,6 +574,15 @@ function Books() {
                         Q
                       </i>
                     </button>
+                    {/* T = its questions carry skills (14 Nov 2026): the unit's book by skill, its pills and its PDF. */}
+                    <button
+                      type="button"
+                      class={`ul-t${tagged ? " has" : ""}`}
+                      aria-label={tagged ? `${u.code}: skills of its questions` : `${u.code}: not tagged yet`}
+                      onClick={() => (tagged ? setSkillsOf(u) : toast(`${u.code} isn't tagged yet: tag it with Claude first ("tag unit ${u.key}").`))}
+                    >
+                      T
+                    </button>
                   </li>
                 );
               })}
@@ -576,6 +590,7 @@ function Books() {
           </div>
         );
       })}
+      {skillsOf && <SkillBookPage unit={skillsOf} onClose={() => setSkillsOf(null)} />}
       {open && (
         <UnitSheet unit={open} units={units} book={bookOf(open, "master")} fighter={bookOf(open, "fighter")} onClose={() => setOpen(null)} onMoved={setGrade} />
       )}
@@ -1249,6 +1264,8 @@ function describe(e: Doc<"events">): string {
       return `book taken back: ${v}`;
     case "unit-rename":
       return `unit renamed: ${v}`;
+    case "skill-move":
+      return `Q${e.q ?? "?"} moved to another skill: ${v}`;
     case "session-start":
       return "Session started";
     case "session-end":

@@ -11,6 +11,7 @@ import { KNOWN_WORKBOOKS, outOf } from "../../convex/lib/book";
 import { slDayNo } from "../../convex/lib/day";
 import { digestOf, type DCall, type DEvent } from "../../convex/lib/boss";
 import { readWorkbookFiles, readWorkbookHtml, type ReadTute } from "../../src/workbookFile";
+import { bookCssOf } from "../../src/bookQuestions";
 import U01_BOOK from "../fixtures/workbook-g8-u01.html?raw";
 import TUTE_BOOK from "../fixtures/tute-skeleton.html?raw";
 import TUTE_JSON from "../fixtures/tute-skeleton.json?raw";
@@ -3403,7 +3404,7 @@ test("OL: a tute an older upload left on Grade 11 goes to OL with its students: 
   await N.getByRole("button", { name: "Settings" }).click();
   await N.getByRole("button", { name: "Books", exact: true }).click();
   await N.getByRole("button", { name: /^Grade 11\b/ }).click();
-  await N.locator(".unit-list li", { hasText: "U24" }).getByRole("button").click();
+  await N.locator(".unit-list li", { hasText: "U24" }).getByRole("button").first().click();
   const sheet = N.locator(".sheet");
   await says(sheet.locator(".ol-move .block-title"), "This is an O/L tute: move it to OL");
   await textsAre(sheet.locator(".ol-pick.on"), ["12 Sets and probability"]);
@@ -3415,7 +3416,7 @@ test("OL: a tute an older upload left on Grade 11 goes to OL with its students: 
   const sets = N.locator(".unit-list li", { hasText: "Sets and probability" }); // the page went to OL
   await textsAre(sets.locator("i.has"), ["F", "M", "K", "Q"]);
   // On OL, a wrong topic is never for good: its sheet offers to move it on.
-  await sets.getByRole("button").click();
+  await sets.getByRole("button").first().click();
   await visible(N.locator(".sheet").getByRole("button", { name: "Wrong topic? Move this tute" }));
   await shot(N, "o13-ol-sheet-wrong-topic-320");
   await N.locator(".sheet").getByRole("button", { name: "Close" }).click();
@@ -4873,6 +4874,129 @@ test("Skills: Correction marks his second try and the try after his lesson (the 
   const kinds = await backend.t.run(async (ctx) => (await ctx.db.query("events").collect()).filter((e) => e.studentId === kumar && (e.kind.startsWith("try") || e.kind === "skill-lesson")).map((e) => `${e.kind} ${e.value ?? ""}`.trim()));
   expect(kinds).toEqual(["try second right 1", "try second wrong 0", "try-undo", "try second wrong 0", "skill-lesson 1 A made-up first skill", "try lesson wrong 0"]);
   expect(problems, problems.join("\n")).toEqual([]);
+});
+
+test("Skill book: Books → T on a tagged unit; its groups as pills (a question needing two skills has its own); move a question; the PDF by skill", async () => {
+  const backend = await newClass();
+  await backend.t.mutation(api.setup.ensure, { token: OWNER_TOKEN });
+  const G7U08 = KNOWN_WORKBOOKS[0].data;
+  const S = (n: number) => `G7-U08-S${n}`;
+  const short = (q: number) => q <= 37;
+  // Made-up questions in the book's own markup (Part I items and Part II cards), drawn with the engine's CSS.
+  const html = (q: number) =>
+    short(q)
+      ? `<div class="si" data-q="${q}"><div class="sih"><span class="qn">${q}</span><div class="sib"><div class="src">Paper 2020 T1 · Q${q}</div><div class="sit">A made-up question ${q}: (−3) + (+${q}) = ?</div><div class="wz" style="height:8mm"></div></div></div></div>`
+      : `<div class="pq pqc" data-q="${q}"><div class="bk"><div class="pqh"><span class="qn">${q}</span><span class="yr">Paper 2021 T2 · Q${q - 30}</span></div><div class="rp"><span class="rl">i)</span><span>A made-up part of question ${q}.</span><span class="pm">(2 புள்ளிகள்)</span></div><div class="wz" style="height:12mm"></div></div></div>`;
+  const u08 = await backend.t.run(async (ctx) => {
+    const u = (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G7-U08")).first())!;
+    // 1–10 S1, 11–14 S2 + S1, 15–37 S2, 38–50 S3, 51–57 S3 + S2.
+    const tag = (q: number) => (q <= 10 ? { q, s: S(1) } : q <= 14 ? { q, s: S(2), x: [S(1)] } : q <= 37 ? { q, s: S(2) } : q <= 50 ? { q, s: S(3) } : { q, s: S(3), x: [S(2)] });
+    await ctx.db.insert("skillTags", {
+      unitId: u._id,
+      stage: "master",
+      skills: [
+        { id: S(1), ta: "முதல் திறன்", en: "A made-up first skill", eg: 1 },
+        { id: S(2), ta: "இரண்டாம் திறன்", en: "A made-up second skill", eg: 15 },
+        { id: S(3), ta: "மூன்றாம் திறன்", en: "A made-up third skill", eg: 38 },
+      ],
+      tags: Array.from({ length: 57 }, (_, i) => tag(i + 1)),
+      by: "Owner",
+      updatedAt: Date.now(),
+    });
+    for (let q = 1; q <= 57; q++) await ctx.db.insert("questions", { unitId: u._id, stage: "master", q, html: html(q) });
+    await ctx.db.insert("bookCss", { unitId: u._id, stage: "master", css: bookCssOf(TUTE_BOOK), updatedAt: Date.now() });
+    return u._id;
+  });
+  const tagsOf = (q: number) => backend.t.run(async (ctx) => (await ctx.db.query("skillTags").collect()).find((r) => r.unitId === u08)!.tags.filter((t) => t.q === q));
+
+  const C = await phone(backend, "focus");
+  await C.getByRole("button", { name: "Settings" }).click();
+  await C.getByRole("button", { name: "Books", exact: true }).click();
+  await C.locator(".grade-row").getByRole("button", { name: /^Grade 7\b/ }).click();
+  const row = C.locator(".unit-list li", { hasText: "U08" });
+  await visible(row.locator(".ul-t.has"));
+  // A unit not tagged: T is pale and says so.
+  await C.locator(".unit-list li", { hasText: "U07" }).getByRole("button", { name: "U07: not tagged yet" }).click();
+  await contains(C.locator(".toast"), "U07 isn't tagged yet");
+  expect(await C.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(C, "sb00-books-t");
+
+  await row.getByRole("button", { name: "U08: skills of its questions" }).click();
+  const P = C.locator(".sb");
+  await visible(P);
+  // The groups in teaching order: each after the last skill it needs; a question needing two skills has its own pill.
+  await count(P.locator(".sb-pill"), 5);
+  expect(await P.locator(".sb-pill").evaluateAll((els) => els.map((e) => e.firstChild?.textContent))).toEqual(["S1", "S2", "S1+S2", "S3", "S2+S3"]);
+  await textsAre(P.locator(".sb-pill small"), ["10", "23", "4", "13", "7"]);
+  await textsAre(P.locator(".sb-q .sb-qn"), Array.from({ length: 10 }, (_, i) => `Q${i + 1}`));
+  // Each question drawn from the app's copy (text, not a picture).
+  await until(async () => (await P.locator(".sb-paper").first().evaluate((h) => h.shadowRoot?.textContent ?? "")).includes("A made-up question 1:"), "Q1 drawn");
+  expect(await C.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(C, "sb01-skill-pills");
+
+  await P.locator(".sb-pill", { hasText: "S1+S2" }).click();
+  await textsAre(P.locator(".sb-q .sb-qn"), ["Q11", "Q12", "Q13", "Q14"]);
+  await contains(P.locator(".sb-head"), "முதல் திறன்");
+  await contains(P.locator(".sb-head"), "இரண்டாம் திறன்");
+  await shot(C, "sb02-two-skills");
+
+  // Move Q11 to the pill S1: it needs S1 alone now.
+  await P.locator(".sb-q", { hasText: "Q11" }).getByRole("button", { name: "Move" }).click();
+  const M = C.locator(".sheet");
+  await contains(M, "Now in S1+S2");
+  await shot(C, "sb03-move-sheet");
+  await M.locator(".sb-mv button", { has: C.locator("b", { hasText: /^S1$/ }) }).click();
+  await contains(C.locator(".toast"), "Q11 moved: S1+S2 → S1.");
+  expect(await tagsOf(11)).toEqual([{ q: 11, s: S(1) }]);
+  await textsAre(P.locator(".sb-pill small"), ["11", "23", "3", "13", "7"]);
+  // Q12 to a new group: S1 and S3 ticked.
+  await P.locator(".sb-q", { hasText: "Q12" }).getByRole("button", { name: "Move" }).click();
+  await M.locator(".sb-ticks button", { hasText: "S1" }).click();
+  await M.locator(".sb-ticks button", { hasText: "S3" }).click();
+  await M.getByRole("button", { name: "Move to S1+S3" }).click();
+  await contains(C.locator(".toast"), "Q12 moved: S1+S2 → S1+S3.");
+  expect(await tagsOf(12)).toEqual([{ q: 12, s: S(3), x: [S(1)] }]);
+  await count(P.locator(".sb-pill"), 6);
+  expect(await P.locator(".sb-pill").evaluateAll((els) => els.map((e) => e.firstChild?.textContent))).toEqual(["S1", "S2", "S1+S2", "S3", "S1+S3", "S2+S3"]);
+
+  // Download: the book goes into the page for Chrome's print (Save as PDF): one level a pill, numbered 1, 2, 3 ….
+  await C.evaluate(() => {
+    (window as unknown as { __printed: number }).__printed = 0;
+    window.print = () => {
+      (window as unknown as { __printed: number }).__printed++;
+    };
+  });
+  await P.getByRole("button", { name: "Download the book as a PDF" }).click();
+  await until(async () => (await C.evaluate(() => (window as unknown as { __printed: number }).__printed)) === 1, "the print window");
+  const book = await C.evaluate(() => {
+    const root = document.getElementById("sb-print")!.shadowRoot!;
+    return {
+      levels: root.querySelectorAll(".sbk-lv").length,
+      first: [...root.querySelectorAll(".sbk-lv .qn")].slice(0, 3).map((x) => x.textContent),
+      strips: [...root.querySelectorAll(".lvq")].map((x) => x.textContent),
+      chips: root.querySelector(".sbk-lv .si .sbk-sk")?.textContent,
+      twelve: [...root.querySelectorAll(".sbk-lv")][4].querySelector(".sbk-sks")?.textContent,
+      title: document.title,
+      printing: document.body.classList.contains("sb-printing"),
+    };
+  });
+  expect(book.levels).toBe(6);
+  expect(book.first).toEqual(["1", "2", "3"]);
+  expect(book.strips).toEqual(["வினாக்கள் 1 – 11", "வினாக்கள் 12 – 34", "வினாக்கள் 35 – 36", "வினாக்கள் 37 – 49", "வினா 50", "வினாக்கள் 51 – 57"]);
+  expect(book.chips).toBe("S1");
+  expect(book.twelve).toBe("S1S3");
+  expect(book.title).toBe("G7_U08_Skills_Book");
+  expect(book.printing).toBe(true);
+  // What Chrome prints (A4, the print rules): kept as a file to look at.
+  await C.emulateMedia({ media: "print" });
+  await C.pdf({ path: join(SHOTS, "sb04-book.pdf"), preferCSSPageSize: true, printBackground: true });
+  await C.emulateMedia({ media: "screen" });
+  // Back closes the page and takes the book off it.
+  await P.getByRole("button", { name: "Back to Books" }).click();
+  await count(C.locator(".sb"), 0);
+  await count(C.locator("#sb-print"), 0);
+  expect(await C.evaluate(() => document.title)).not.toBe("G7_U08_Skills_Book");
+  expect(problems).toEqual([]);
 });
 
 test("Update: an older copy of the app says so at the upload, and Update opens Settings → Books again", async () => {

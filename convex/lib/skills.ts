@@ -24,6 +24,22 @@ export type SkillFile = { skills: Skill[]; tags: SkillTag[] };
 /** A skill another unit owns, as a question here may carry it. */
 export type KnownSkill = { unit: string; ta: string; en: string };
 
+/** The skills a unit's questions may carry besides its own: every other unit's, of its grade or an earlier one. */
+export function knownFor(
+  unit: { _id: string; grade: number },
+  rows: readonly { unitId: string; skills: readonly { id: string; ta: string; en: string }[] }[],
+  units: readonly { _id: string; key: string; grade: number }[],
+): Map<string, KnownSkill> {
+  const byId = new Map(units.map((u) => [u._id, u]));
+  const known = new Map<string, KnownSkill>();
+  for (const r of rows) {
+    const u = byId.get(r.unitId);
+    if (!u || u._id === unit._id || u.grade > unit.grade) continue;
+    for (const s of r.skills) known.set(s.id, { unit: u.key, ta: s.ta, en: s.en });
+  }
+  return known;
+}
+
 /** A unit's own skills, at most. */
 export const SKILLS_MAX = 40;
 export const SKILL_NAME_MAX = 80;

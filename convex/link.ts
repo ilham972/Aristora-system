@@ -29,7 +29,7 @@ import { phoneKeyFor } from "./lib/homeWork";
 import { phonePart, phoneShare, readPart } from "./lib/phone";
 import { BOOK_CSS_MAX, QUESTION_HTML_MAX, unsafeCss, unsafeHtml } from "./lib/questions";
 import { answerNonce, fromB64, KEY_BYTES, seal, unseal } from "./lib/seal";
-import { skillCounts, skillHome, skillsProblem, type KnownSkill, type Skill, type SkillFile, type SkillTag } from "./lib/skills";
+import { knownFor, skillCounts, skillHome, skillsProblem, type Skill, type SkillFile, type SkillTag } from "./lib/skills";
 
 /** A link works this long, unless the owner turns it off first. */
 export const LINK_DAYS = 7;
@@ -147,18 +147,6 @@ export const SKILLS_SAVE_MAX = 200_000;
 
 async function skillRows(ctx: QueryCtx) {
   return (await ctx.db.query("skillTags").collect()).filter((r) => r.stage === "master");
-}
-
-/** The skills a unit's questions may carry besides its own: every other unit's, of its grade or an earlier one. */
-function knownFor(unit: Doc<"units">, rows: Doc<"skillTags">[], units: Doc<"units">[]): Map<string, KnownSkill> {
-  const byId = new Map(units.map((u) => [u._id, u]));
-  const known = new Map<string, KnownSkill>();
-  for (const r of rows) {
-    const u = byId.get(r.unitId);
-    if (!u || u._id === unit._id || u.grade > unit.grade) continue;
-    for (const s of r.skills) known.set(s.id, { unit: u.key, ta: s.ta, en: s.en });
-  }
-  return known;
 }
 
 /** How much of a unit the phone marks by itself, a teacher reads, or asks a photo for (parts and marks). */
