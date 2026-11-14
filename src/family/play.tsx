@@ -277,7 +277,7 @@ const PAPER_CSS = `.qv { border-radius: 14px; padding: 14px 12px 10px; -webkit-u
 .qv .sq { display: block !important; margin: .8em 0 .3em !important; min-height: 0 !important; }
 .qv .sq .sl { display: inline !important; width: auto !important; margin-right: .35em; font-weight: 800; color: var(--brand-2, #5a49d6); }
 .qv .sq .st { display: inline !important; }
-.qv .sq .sa { display: inline-block !important; margin: 0 0 0 .3em !important; vertical-align: middle; }
+.qv .sq .sa:not([data-paper]) { display: inline-block !important; margin: 0 0 0 .3em !important; vertical-align: middle; }
 .qv .qs { min-width: 0; overflow-wrap: break-word; }
 .qv .dg [data-fill] { position: absolute !important; min-width: 0 !important; width: var(--w) !important; height: var(--h) !important; margin: 0 !important;
   padding: 0 !important; border-width: 1.5px !important; border-radius: 1.4mm !important; font-size: 3.6mm !important; }`;
@@ -1237,7 +1237,18 @@ export function Play(props: {
                   const name = (labels[steps.of.indexOf(k)] ?? "").split(" · ")[0].trim();
                   return (
                     <button type="button" role="tab" key={k} aria-selected={k === stepNow} aria-label={`Part ${name || k + 1}`} class={`f-stp ${stepState(k)}${k === stepNow ? " now" : ""}`} onClick={() => goStep(k)}>
-                      <b>{name && name.length <= 5 ? name : k + 1}</b>
+                      <b>
+                        {/^படிக்கட்டு/.test(name) ? (
+                          // A ladder's staircase (14 Nov 2026): its own little stairs, not a number among (i) (ii).
+                          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                            <path d="M2 14h4v-4h4V6h4V2" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+                          </svg>
+                        ) : name && name.length <= 5 ? (
+                          name
+                        ) : (
+                          k + 1
+                        )}
+                      </b>
                     </button>
                   );
                 })}

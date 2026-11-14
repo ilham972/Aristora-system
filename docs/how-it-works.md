@@ -1539,6 +1539,9 @@ learning app of our education institute"): one profile, his class times, what he
     the end of its words; `PAPER_CSS`), the black "ஆசிரியர்" tag is hidden (the card says it). A staircase's boxes
     become blanks when its book lays one over each box of the drawing (`<span class="ab" style="position:absolute;
     left;top;width;height;--w;--h">` inside its `.dg`, in the drawing's mm): typed like any blank, the drawing's size.
+    His pick (the same night): the staircase is **a step of its own**, marked (OL-U48: each drawing wrapped as a
+    sub-question labelled "படிக்கட்டு", its key part's answers worked out from the question's numbers); its step
+    pill shows a little stairs icon, not a number among (i) (ii). Hidden printed boxes stay hidden (`:not([data-paper])`).
     **Bigger places to tap** (the audit, 14 Nov: options and ✓ / ✗ were 31–34 px high): options 48 px and two a row,
     ✓ / ✗ 44 px, blanks 36 px; each pops when chosen.
     **The screen holds still on →** (his report, 4 Nov 2026: "the whole screen bounces up and comes back"): the slide
