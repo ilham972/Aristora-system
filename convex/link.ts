@@ -11,7 +11,11 @@
 // - `ask` (a query) reads: the books' list, a unit (its book, key and the phone's fixes), its printed questions.
 //   `tell` (a mutation) saves a unit's key and questions through the same checks as an uploaded zip (`checkKey`, the
 //   safe-HTML rules, `slotProblem`): the book itself (question numbers, levels, marks) is never changed here, so no
-//   student's marks move. Only workbooks (Master). Never a student, a teacher, a mark or a photo.
+//   student's marks move. Never a student, a teacher, a mark or a photo.
+// - The theory book too (14 Nov 2026, his ask: "you digitalized only the master book, not the fighter book ... from
+//   question number 1"): a request with `stage: "fighter"` reads and saves a topic tute's ladder (its key, questions and
+//   style), shown in a workbook's shape (`ladderShape`: 1 mark a part) so the same tool digitizes it. The key's
+//   answers off the ladder, and every part's own marks, stay as they were; the workbook's typed fixes are never touched.
 // - Skills (13 Nov 2026, convex/lib/skills.ts): `ask` "skills" reads the skills the units have; `tell` "skills" saves one
 //   unit's skills and each question's skill, whole, through `skillsProblem`. Names and numbers only; no mark moves.
 // - The functions are public (the carrier has no sign-in): the seal is the sign-in. An answer says nothing to anyone
@@ -23,10 +27,11 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { mutation } from "./lib/fn";
 import { actor, viewer } from "./lib/auth";
 import { bookFor, cleanBy, currentSession, fail, keyRow, log, touch } from "./lib/backend";
-import { bookTotal, type MasterData } from "./lib/book";
-import { checkKey, slotProblem, type KeyAnswer } from "./lib/key";
+import { bookTotal, fighter, type FighterData, type MasterData, type SectionData } from "./lib/book";
+import { checkFighterKey, checkKey, slotProblem, type KeyAnswer } from "./lib/key";
+import { ladderKeys, ladderShape, secQs } from "./lib/ladder";
 import { phoneKeyFor } from "./lib/homeWork";
-import { phonePart, phoneShare, readPart } from "./lib/phone";
+import { phonePart, phoneShare, readPart, type KeyQ } from "./lib/phone";
 import { BOOK_CSS_MAX, QUESTION_HTML_MAX, unsafeCss, unsafeHtml } from "./lib/questions";
 import { answerNonce, fromB64, KEY_BYTES, seal, unseal } from "./lib/seal";
 import { knownFor, skillCounts, skillHome, skillsProblem, type Skill, type SkillFile, type SkillTag } from "./lib/skills";
@@ -125,19 +130,51 @@ const sealed = (o: { key: Uint8Array; nonce: Uint8Array }, answer: unknown) => (
 /** What anyone without the key gets, whatever they sent. */
 const NOTHING = { box: "" };
 
-async function masterOf(ctx: QueryCtx, unitId: unknown): Promise<{ unit: Doc<"units">; book: Doc<"books">; data: MasterData } | string> {
+type Stage = "fighter" | "master";
+/** The book a request means: the workbook, unless it says the theory book. */
+const stageOf = (s: unknown): Stage => (s === "fighter" ? "fighter" : "master");
+
+/** A unit's book as the link shows it: a workbook as it is; a theory book's ladder in a workbook's shape (`ladderShape`). */
+type Opened = {
+  unit: Doc<"units">;
+  book: Doc<"books">;
+  stage: Stage;
+  data: MasterData;
+  /** The theory book and its ladder's sections (a workbook: null and none). */
+  fdata: FighterData | null;
+  secs: SectionData[];
+  key: Doc<"keys"> | null;
+  /** The key as the chat sees it (a ladder's: its questions only, 1 mark a part). */
+  answers: KeyAnswer[] | null;
+};
+
+async function bookOf(ctx: QueryCtx, unitId: unknown, stage: Stage): Promise<Opened | string> {
   const id = typeof unitId === "string" ? ctx.db.normalizeId("units", unitId) : null;
   const unit = id ? await ctx.db.get(id) : null;
   if (!unit) return "No such unit.";
-  const book = await bookFor(ctx, unit._id, "master");
-  if (!book || book.data.kind !== "master") return `${unit.key} has no workbook in the app.`;
-  return { unit, book, data: book.data };
+  const book = await bookFor(ctx, unit._id, stage);
+  const key = await keyRow(ctx, unit._id, stage);
+  if (stage === "master") {
+    if (!book || book.data.kind !== "master") return `${unit.key} has no workbook in the app.`;
+    return { unit, book, stage, data: book.data, fdata: null, secs: [], key, answers: key?.answers ?? null };
+  }
+  if (!book || book.data.kind !== "fighter") return `${unit.key} has no theory book (Fighter) in the app.`;
+  const secs = ladderSecs(book.data);
+  if (!secs.length) return `${unit.key}'s theory book has no ladder questions.`;
+  const shape = ladderShape(secs, key?.answers ?? []);
+  return { unit, book, stage, data: shape.data, fdata: book.data, secs, key, answers: key ? shape.answers : null };
 }
 
-async function questionRows(ctx: QueryCtx, unitId: Id<"units">) {
+const ladderSecs = (d: FighterData) => d.sections.filter((s) => s.kind === "ladder" && secQs(s).length > 0);
+
+async function masterOf(ctx: QueryCtx, unitId: unknown) {
+  return bookOf(ctx, unitId, "master");
+}
+
+async function questionRows(ctx: QueryCtx, unitId: Id<"units">, stage: Stage = "master") {
   const rows = await ctx.db
     .query("questions")
-    .withIndex("by_book", (x) => x.eq("unitId", unitId).eq("stage", "master"))
+    .withIndex("by_book", (x) => x.eq("unitId", unitId).eq("stage", stage))
     .collect();
   return rows.sort((a, b) => a.q - b.q);
 }
@@ -150,8 +187,9 @@ async function skillRows(ctx: QueryCtx) {
 }
 
 /** How much of a unit the phone marks by itself, a teacher reads, or asks a photo for (parts and marks). */
-async function shareOf(ctx: QueryCtx, unitId: Id<"units">, data: MasterData, answers: KeyAnswer[] | null) {
-  const keys = await phoneKeyFor(ctx, unitId, data, answers);
+async function shareOf(ctx: QueryCtx, b: Opened, answers: KeyAnswer[] | null) {
+  // A ladder: as the phone marks it (`ladderKeys`; no typed fixes there).
+  const keys: Map<number, KeyQ> = b.stage === "fighter" ? ladderKeys(b.secs, answers ?? []) : await phoneKeyFor(ctx, b.unit._id, b.data, answers);
   const count = { phone: 0, read: 0, photo: 0 };
   const marks = { phone: 0, read: 0, photo: 0 };
   const photos: string[] = [];
@@ -188,6 +226,8 @@ export const ask = query({
           .map((u) => {
             const b = books.find((x) => x.unitId === u._id && x.stage === "master");
             const m = b && b.data.kind === "master" ? b.data : null;
+            const f = books.find((x) => x.unitId === u._id && x.stage === "fighter");
+            const lad = f && f.data.kind === "fighter" ? ladderSecs(f.data) : [];
             return {
               unitId: u._id,
               key: u.key,
@@ -198,49 +238,56 @@ export const ask = query({
               ta: u.ta,
               master: m ? { levels: m.levels.length, last: m.parts.length ? m.parts[m.parts.length - 1].to : 0, total: bookTotal(m), keyCount: b!.keyCount ?? 0, qCount: b!.qCount ?? 0, tute: !!b!.tute, updatedAt: b!.updatedAt } : null,
               skills: tagged.get(u._id) ?? null,
+              // Its theory book's ladder (`stage: "fighter"` in a request): its questions, from and to.
+              fighter: lad.length ? { questions: lad.flatMap(secQs).length, from: Math.min(...lad.flatMap(secQs)), to: Math.max(...lad.flatMap(secQs)), keyCount: f!.keyCount ?? 0, qCount: f!.qCount ?? 0, tute: !!f!.tute, updatedAt: f!.updatedAt } : null,
             };
           }),
       });
     }
     if (req.op === "unit") {
-      const m = await masterOf(ctx, req.unitId);
+      const m = await bookOf(ctx, req.unitId, stageOf(req.stage));
       if (typeof m === "string") return sealed(o, { ok: false, error: m });
-      const key = await keyRow(ctx, m.unit._id, "master");
+      const key = m.key;
       const css = await ctx.db
         .query("bookCss")
-        .withIndex("by_book", (x) => x.eq("unitId", m.unit._id).eq("stage", "master"))
+        .withIndex("by_book", (x) => x.eq("unitId", m.unit._id).eq("stage", m.stage))
         .first();
-      const fixes = await ctx.db
-        .query("phoneFixes")
-        .withIndex("by_unit", (x) => x.eq("unitId", m.unit._id))
-        .collect();
-      const qs = await questionRows(ctx, m.unit._id);
+      // The teachers' typed fixes are the workbook's (Settings → Books); a ladder has none.
+      const fixes =
+        m.stage === "master"
+          ? await ctx.db
+              .query("phoneFixes")
+              .withIndex("by_unit", (x) => x.eq("unitId", m.unit._id))
+              .collect()
+          : [];
+      const qs = await questionRows(ctx, m.unit._id, m.stage);
       const rows = await skillRows(ctx);
-      const mine = rows.find((r) => r.unitId === m.unit._id) ?? null;
+      const mine = m.stage === "master" ? (rows.find((r) => r.unitId === m.unit._id) ?? null) : null;
       return sealed(o, {
         ok: true,
         unit: { unitId: m.unit._id, key: m.unit.key, grade: m.unit.grade, term: m.unit.term, code: m.unit.code, en: m.unit.en, ta: m.unit.ta },
+        stage: m.stage,
         data: m.data,
         // Its skills as saved, and what is wrong with them now ("" = fine: a book or a key replaced since can leave a hole).
         skills: mine
           ? { skills: mine.skills, tags: mine.tags, updatedAt: mine.updatedAt, problem: skillsProblem(m.unit.key, m.data, key?.answers ?? null, mine, knownFor(m.unit, rows, await ctx.db.query("units").collect())) }
           : null,
-        answers: key?.answers ?? null,
+        answers: m.answers,
         keyAt: key?.updatedAt ?? null,
         css: css?.css ?? null,
         fixes: fixes.map((f) => ({ q: f.q, p: f.p, a: f.a })),
         questions: qs.map((r) => ({ q: r.q, size: r.html.length })),
-        share: await shareOf(ctx, m.unit._id, m.data, key?.answers ?? null),
+        share: await shareOf(ctx, m, key?.answers ?? null),
       });
     }
     if (req.op === "questions") {
-      const m = await masterOf(ctx, req.unitId);
+      const m = await bookOf(ctx, req.unitId, stageOf(req.stage));
       if (typeof m === "string") return sealed(o, { ok: false, error: m });
       const from = typeof req.from === "number" ? req.from : 1;
       const items: { q: number; html: string }[] = [];
       let size = 0;
       let next: number | null = null;
-      for (const r of await questionRows(ctx, m.unit._id)) {
+      for (const r of await questionRows(ctx, m.unit._id, m.stage)) {
         if (r.q < from) continue;
         if (items.length && size + r.html.length > LINK_CHUNK) {
           next = r.q;
@@ -276,17 +323,29 @@ export const ask = query({
 type Save = { answers?: KeyAnswer[]; items?: { q: number; html: string }[]; css?: string; dropFixes?: boolean; note?: string };
 
 /** What is wrong with a save ("" = fine): every check of an uploaded zip, before anything is written. */
-function saveProblem(data: MasterData, s: Save): string {
-  const last = data.parts.length ? data.parts[data.parts.length - 1].to : 0;
+function saveProblem(b: Opened, s: Save): string {
+  const last = b.data.parts.length ? b.data.parts[b.data.parts.length - 1].to : 0;
+  const f = b.fdata ? fighter(b.fdata) : null;
+  const inBook = (q: number) => (f ? f.isQuestion(q) : q >= 1 && q <= last);
   if (s.answers !== undefined) {
     if (!Array.isArray(s.answers) || s.answers.length === 0) return "No answers in the key.";
-    const bad = checkKey(s.answers, data);
+    if (b.fdata) {
+      // The theory book's own check, then the ladder's shape (only its questions; 1 mark a part).
+      const bad = checkFighterKey(s.answers, b.fdata);
+      if (bad.length) return bad[0];
+      const on = new Set(b.secs.flatMap(secQs));
+      const off = s.answers.find((k) => !on.has(k.q));
+      if (off) return `Question ${off.q} is not on the theory book's ladder.`;
+      const parts = s.answers.flatMap((k) => k.parts ?? []);
+      if (parts.some((p) => p.m !== 1)) return "Each part of a ladder question is 1 mark.";
+    }
+    const bad = checkKey(s.answers, b.fdata ? ladderShape(b.secs, s.answers).data : b.data);
     if (bad.length) return bad[0];
   }
   let size = 0;
   const seen = new Set<number>();
   for (const it of s.items ?? []) {
-    if (!it || !Number.isInteger(it.q) || it.q < 1 || it.q > last || typeof it.html !== "string") return `Question ${it?.q} is not in this book.`;
+    if (!it || !Number.isInteger(it.q) || !inBook(it.q) || typeof it.html !== "string") return `Question ${it?.q} is not in this book.`;
     if (seen.has(it.q)) return `Question ${it.q} comes twice.`;
     seen.add(it.q);
     if (!it.html.trim() || it.html.length > QUESTION_HTML_MAX) return `Question ${it.q} is empty or too big to keep.`;
@@ -313,40 +372,67 @@ function slotsProblem(answers: KeyAnswer[], html: Map<number, string>): string {
   return "";
 }
 
+/**
+ * A ladder's key as it is kept: the chat's answers for the ladder's questions, the key's other answers as they were, and
+ * each part's marks as the key had them (the chat sees 1 a part; the theory book prints none).
+ */
+export function ladderKept(chat: KeyAnswer[], old: KeyAnswer[] | null): KeyAnswer[] {
+  const before = new Map((old ?? []).map((k) => [k.q, k]));
+  const mine = new Set(chat.map((k) => k.q));
+  const out = chat.map((k): KeyAnswer => {
+    if (!k.parts?.length) return k;
+    const was = before.get(k.q)?.parts ?? [];
+    return {
+      ...k,
+      parts: k.parts.map((p) => {
+        const { m: _m, ...rest } = p;
+        const w = was.find((x) => x.p === p.p);
+        return w && w.m !== undefined ? { ...rest, m: w.m } : rest;
+      }),
+    };
+  });
+  return [...out, ...(old ?? []).filter((k) => !mine.has(k.q))].sort((a, b) => a.q - b.q);
+}
+
 async function saveUnit(ctx: MutationCtx, row: Row, req: Asked, now: number): Promise<Record<string, unknown>> {
-  const m = await masterOf(ctx, req.unitId);
+  const m = await bookOf(ctx, req.unitId, stageOf(req.stage));
   if (typeof m === "string") return { ok: false, error: m };
   const s = req as unknown as Save;
-  const old = await questionRows(ctx, m.unit._id);
+  const old = await questionRows(ctx, m.unit._id, m.stage);
   const html = new Map(old.map((r) => [r.q, r.html]));
-  const bad = saveProblem(m.data, s);
+  const bad = saveProblem(m, s);
   if (bad) return { ok: false, error: bad };
   for (const it of s.items ?? []) html.set(it.q, it.html);
-  const oldKey = await keyRow(ctx, m.unit._id, "master");
-  const answers = s.answers ? [...s.answers].sort((a, b) => a.q - b.q) : (oldKey?.answers ?? null);
+  const oldKey = m.key;
+  const answers = s.answers
+    ? m.stage === "fighter"
+      ? ladderKept(s.answers, oldKey?.answers ?? null)
+      : [...s.answers].sort((a, b) => a.q - b.q)
+    : (oldKey?.answers ?? null);
   const wrong = answers ? slotsProblem(answers, html) : "";
   if (wrong) return { ok: false, error: wrong };
 
   // Everything is right: now it is written (the book itself stays as it is: no student's marks move).
   if (s.answers && answers) {
     if (oldKey) await ctx.db.patch(oldKey._id, { answers, updatedAt: now });
-    else await ctx.db.insert("keys", { unitId: m.unit._id, stage: "master", answers, updatedAt: now });
+    else await ctx.db.insert("keys", { unitId: m.unit._id, stage: m.stage, answers, updatedAt: now });
   }
   for (const it of s.items ?? []) {
     const r = old.find((x) => x.q === it.q);
     if (r) await ctx.db.patch(r._id, { html: it.html });
-    else await ctx.db.insert("questions", { unitId: m.unit._id, stage: "master", q: it.q, html: it.html });
+    else await ctx.db.insert("questions", { unitId: m.unit._id, stage: m.stage, q: it.q, html: it.html });
   }
   if (s.css !== undefined) {
     const css = await ctx.db
       .query("bookCss")
-      .withIndex("by_book", (x) => x.eq("unitId", m.unit._id).eq("stage", "master"))
+      .withIndex("by_book", (x) => x.eq("unitId", m.unit._id).eq("stage", m.stage))
       .first();
     if (css) await ctx.db.patch(css._id, { css: s.css, updatedAt: now });
-    else await ctx.db.insert("bookCss", { unitId: m.unit._id, stage: "master", css: s.css, updatedAt: now });
+    else await ctx.db.insert("bookCss", { unitId: m.unit._id, stage: m.stage, css: s.css, updatedAt: now });
   }
   let fixes = 0;
-  if (s.dropFixes) {
+  // The typed fixes are the workbook's: a theory book's save never removes them.
+  if (s.dropFixes && m.stage === "master") {
     // The answers a teacher typed for the phone (Settings → Books) were for the old key: the new kinds replace them.
     for (const f of await ctx.db.query("phoneFixes").withIndex("by_unit", (x) => x.eq("unitId", m.unit._id)).collect()) {
       await ctx.db.delete(f._id);
@@ -354,9 +440,9 @@ async function saveUnit(ctx: MutationCtx, row: Row, req: Asked, now: number): Pr
     }
   }
   await ctx.db.patch(m.book._id, { updatedAt: now, ...(answers ? { keyCount: answers.length } : {}), qCount: html.size });
-  const share = await shareOf(ctx, m.unit._id, m.data, answers);
+  const share = await shareOf(ctx, m, answers);
   const session = await currentSession(ctx, now);
-  const what = [s.answers ? `answer kinds for ${s.answers.length} questions` : "", s.items?.length ? `${s.items.length} questions as printed` : "", s.css !== undefined ? "the book's style" : "", fixes ? `${fixes} typed fixes removed` : ""].filter(Boolean).join(", ");
+  const what = [m.stage === "fighter" ? "the theory book" : "", s.answers ? `answer kinds for ${s.answers.length} questions` : "", s.items?.length ? `${s.items.length} questions as printed` : "", s.css !== undefined ? "the book's style" : "", fixes ? `${fixes} typed fixes removed` : ""].filter(Boolean).join(", ");
   await log(ctx, session, now, {
     kind: "book-save",
     by: "claude",

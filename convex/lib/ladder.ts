@@ -66,6 +66,33 @@ export function ladderKeys(secs: SectionData[], answers: KeyAnswer[]): Map<numbe
   return keys;
 }
 
+/**
+ * The ladder as the Claude link shows it to the digitizing chat (14 Nov 2026, his ask: "digitalize the fighter book also,
+ * from question number 1"): the shape of a workbook, so the same tool reads it. A question whose key has parts is a
+ * card (1 mark a part), one without is a short question (1 mark); a level per section. Its key with those marks.
+ * Questions not on the ladder (a gap in the numbers) belong to no part: nothing asks for them.
+ */
+export function ladderShape(secs: SectionData[], answers: KeyAnswer[]): { data: MasterData; answers: KeyAnswer[] } {
+  const qs = [...new Set(secs.flatMap(secQs))].sort((a, b) => a - b);
+  const byQ = new Map(answers.map((k) => [k.q, k]));
+  const cards = (q: number) => !!byQ.get(q)?.parts?.length;
+  const marks: Record<string, number> = {};
+  for (const q of qs) marks[String(q)] = byQ.get(q)?.parts?.length || 1;
+  const parts: MasterData["parts"] = [];
+  for (const q of qs) {
+    const last = parts[parts.length - 1];
+    const kind = cards(q) ? "cards" : "short";
+    if (last && last.to === q - 1 && last.kind === kind) last.to = q;
+    else parts.push(kind === "cards" ? { id: "II", from: q, to: q, kind } : { id: "I", from: q, to: q, kind, each: 1 });
+  }
+  const levels = secs.map((s, i) => {
+    const sq = secQs(s);
+    return { n: i + 1, from: Math.min(...sq), to: Math.max(...sq), max: sq.reduce((a, q) => a + (marks[String(q)] ?? 1), 0) };
+  });
+  const keyed = answers.filter((k) => qs.includes(k.q)).map((k) => (k.parts?.length ? { ...k, parts: k.parts.map((p) => ({ ...p, m: 1 })) } : k));
+  return { data: { kind: "master", parts, levels, marks }, answers: keyed };
+}
+
 /** A section is done: checked at home, or every circle of it marked in class. */
 export function secDone(s: SectionData, p: Doc<"progress"> | undefined): boolean {
   if (p?.lh?.[s.id]) return true;

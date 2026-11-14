@@ -2416,6 +2416,16 @@ learning app of our education institute"): one profile, his class times, what he
   public on purpose (the carrier has no sign-in): the seal is the sign-in. A box the key didn't seal, a link that is
   off or past its 7 days, a request older than 30 minutes: an empty answer, nothing said. A save is taken once (its
   time must be newer than the last one taken).
+  **The theory book too** (14 Nov 2026, his screenshot of an O/L tute's ladder question asking on the phone: "you
+  digitalized only the master book, not the fighter book ... from question number 1"). A request with `stage:
+  "fighter"` reads and saves a topic tute's ladder (the unit's Fighter book: its key, printed questions and style;
+  `books` lists each unit's `fighter` ladder). The chat sees it in a workbook's shape (`ladderShape` in
+  `convex/lib/ladder.ts`): a question whose key has parts is a card, 1 mark a part (as the phone marks a ladder:
+  `ladderKeys`), one without is a short question of 1 mark, a level per section. A save is checked by
+  `checkFighterKey` and that shape (only ladder questions, each part 1 mark, the slots against the HTML); kept by
+  `ladderKept`: the key's answers off the ladder (its past papers') stay, and each part keeps its own marks as the key
+  had them. The workbook's typed fixes (Settings → Books) are never read or removed by a theory book's save. The
+  tool names it `<KEY>-F` ("OL-U48-F": `scripts/digitize.ts`, every command the same).
 - **Skills** (13 Nov 2026, his words after 900 wrong questions waited on 15 Grade 8 students: "instead of find common
   questions, we have to find the common skills ... if someone getting wrong for same skill again and again, we don't
   need to teach again and again that question. We just teach the skill"; `convex/lib/skills.ts`). Every question of a

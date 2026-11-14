@@ -11,6 +11,9 @@
 //   tsx scripts/digitize.ts ship   <dir> <KEY …>       build → push → read back and compare (one question put right)
 //   tsx scripts/digitize.ts help                       the kinds' words (scripts/digitize-kinds.ts)
 //
+// A topic tute's theory book (Fighter, its ladder: questions 1 on) is the unit's key with "-F" ("OL-U48-F"): the link
+// shows it in a workbook's shape (1 mark a part), so every command works on it the same (14 Nov 2026).
+//
 // The checks are the app's: the key as the upload checks it (`checkKey`), safe HTML (`unsafeHtml`), the printed slots
 // against the key (`slotProblem`), and every answer typed as the key gives it is marked right by the phone's own
 // marking (`phoneKey` → `markQuestion`). Nothing is sent before they all pass.
@@ -29,6 +32,8 @@ import type { Decision, Kinds, Op, Spec, Split } from "./digitize-kinds";
 export type Unit = {
   ok: true;
   unit: { unitId: string; key: string; grade: number; term: number; code: string; en: string; ta: string };
+  /** "fighter" = the theory book's ladder (the unit's key with "-F"); else the workbook. */
+  stage?: "fighter" | "master";
   data: MasterData;
   answers: KeyAnswer[] | null;
   css: string | null;
@@ -46,6 +51,13 @@ export const outside = (p: string) => {
 };
 export const readJson = <T>(p: string): T => JSON.parse(readFileSync(p, "utf8")) as T;
 
+/** "OL-U48-F" → the unit "OL-U48", its theory book; "OL-U48" → its workbook. */
+export const bookKey = (key: string): { unit: string; stage: "fighter" | "master" } => (/-F$/i.test(key) ? { unit: key.slice(0, -2), stage: "fighter" } : { unit: key, stage: "master" });
+/** A unit's name in what the tool prints: its theory book with "-F". */
+const uname = (u: { unit: { key: string }; stage?: string }) => `${u.unit.key}${u.stage === "fighter" ? "-F" : ""}`;
+/** What a request adds to say which book (nothing for a workbook: the link's default). */
+const stageReq = (stage: string | undefined) => (stage === "fighter" ? { stage: "fighter" } : {});
+
 // ---------------------------------------------------------------- pull
 
 /** The app's list of units (asked once an hour at most: each ask is a minute on the carrier). */
@@ -61,20 +73,34 @@ export async function bookList(dir: string, fresh = false): Promise<Record<strin
 
 /** A grade's units, a line each: its key (what every other command takes), its names, whether its book is in the app. */
 async function units(dir: string, grade: string) {
-  type Row = { key: string; grade: number; term: number; en: string; ta: string; master: null | { qCount?: number } };
-  for (const u of ((await bookList(dir)).units as Row[]).filter((x) => x.key.startsWith(`${/^\d+$/.test(grade) ? `G${grade}` : grade.toUpperCase()}-`))) console.log(`${u.key} · term ${u.term} · ${u.en} · ${u.ta} · ${u.master ? `book, ${u.master.qCount ?? "?"} questions` : "no book in the app"}`);
+  type Row = { key: string; grade: number; term: number; en: string; ta: string; master: null | { qCount?: number }; fighter?: null | { questions: number; from: number; to: number } };
+  for (const u of ((await bookList(dir)).units as Row[]).filter((x) => x.key.startsWith(`${/^\d+$/.test(grade) ? `G${grade}` : grade.toUpperCase()}-`))) {
+    console.log(`${u.key} · term ${u.term} · ${u.en} · ${u.ta} · ${u.master ? `book, ${u.master.qCount ?? "?"} questions` : "no book in the app"}`);
+    if (u.fighter) console.log(`${u.key}-F · its theory book (Fighter): ladder questions ${u.fighter.from}–${u.fighter.to} (${u.fighter.questions})`);
+  }
 }
 
 export async function pull(dir: string, keys: string[]) {
+  type Row = { unitId: string; key: string; grade: number; term: number; master: null | Record<string, unknown>; fighter?: null | Record<string, unknown> };
+  const has = (rows: Row[], k: string) => {
+    const b = bookKey(k);
+    const u = rows.find((x) => x.key === b.unit);
+    return u && (b.stage === "fighter" ? u.fighter : u.master) ? u : null;
+  };
   let books = await bookList(dir);
   // A book uploaded since the list was asked for: ask again.
-  if (keys.some((k) => !(books.units as { key: string; master: unknown }[]).some((u) => u.key === k && u.master))) books = await bookList(dir, true);
-  type Row = { unitId: string; key: string; grade: number; term: number; master: null | Record<string, unknown> };
-  const units = (books.units as Row[]).filter((u) => (keys.length ? keys.includes(u.key) : u.grade === 8 && u.term === 1) && u.master);
-  console.log(`${units.length} units: ${units.map((u) => `${u.key} (${JSON.stringify(u.master)})`).join("\n  ")}`);
-  let reqs: Req[] = units.flatMap((u) => [
-    { name: u.key, fn: "ask" as const, req: { op: "unit", unitId: u.unitId } },
-    { name: `${u.key}@1`, fn: "ask" as const, req: { op: "questions", unitId: u.unitId, from: 1 } },
+  if (keys.some((k) => !has(books.units as Row[], k))) books = await bookList(dir, true);
+  const rows = books.units as Row[];
+  const units = keys.length
+    ? keys.flatMap((k) => {
+        const u = has(rows, k);
+        return u ? [{ name: k, u, stage: bookKey(k).stage }] : [];
+      })
+    : rows.filter((u) => u.grade === 8 && u.term === 1 && u.master).map((u) => ({ name: u.key, u, stage: "master" as const }));
+  console.log(`${units.length} units: ${units.map(({ name, u, stage }) => `${name} (${JSON.stringify(stage === "fighter" ? u.fighter : u.master)})`).join("\n  ")}`);
+  let reqs: Req[] = units.flatMap(({ name, u, stage }) => [
+    { name, fn: "ask" as const, req: { op: "unit", unitId: u.unitId, ...stageReq(stage) } },
+    { name: `${name}@1`, fn: "ask" as const, req: { op: "questions", unitId: u.unitId, from: 1, ...stageReq(stage) } },
   ]);
   const html = new Map<string, { q: number; html: string }[]>();
   while (reqs.length) {
@@ -239,7 +265,7 @@ function boldOdd(a: string, t: Ans | null): boolean {
 function review(udir: string, all: boolean, from = 1, to = Infinity) {
   const { u, html, last, key } = load(udir);
   const v2 = (u.answers ?? []).some((k) => k.t || k.parts?.some((p) => p.t));
-  console.log(`${u.unit.key} ${u.unit.en} · ${u.unit.ta} · ${last} questions · key: ${u.answers ? (v2 ? "kinds" : "words") : "NONE"} · fixes ${u.fixes.length}`);
+  console.log(`${uname(u)} ${u.unit.en} · ${u.unit.ta} · ${last} questions · key: ${u.answers ? (v2 ? "kinds" : "words") : "NONE"} · fixes ${u.fixes.length}`);
   const quick: string[] = [];
   for (let q = Math.max(1, from); q <= Math.min(last, to); q++) {
     const h = html.get(q) ?? "";
@@ -562,7 +588,7 @@ async function build(udir: string) {
   const outDir = join(udir, "out");
   mkdirSync(outDir, { recursive: true });
   if (problems.length) {
-    console.log(`${u.unit.key}: ${problems.length} to fix\n  ${problems.join("\n  ")}`);
+    console.log(`${uname(u)}: ${problems.length} to fix\n  ${problems.join("\n  ")}`);
     return false;
   }
   // The app's own checks.
@@ -605,9 +631,9 @@ async function build(udir: string) {
       if (kind === "phone" && p.m > 0 && none.parts[i] !== 0) problems.push(`Q${a.q}${p.p ? ` ${p.p}` : ""}: nothing typed gets ${none.parts[i]}`);
     });
   }
-  const report = `${u.unit.key}: ${answers.length} questions · the phone marks ${marks.phone} marks (${count.phone} parts) · a teacher reads ${marks.read} (${count.read}) · photos ${marks.photo} marks (${count.photo})${photos.length ? `: ${photos.join(", ")}` : ""} · ${changed.size} printed questions changed`;
+  const report = `${uname(u)}: ${answers.length} questions · the phone marks ${marks.phone} marks (${count.phone} parts) · a teacher reads ${marks.read} (${count.read}) · photos ${marks.photo} marks (${count.photo})${photos.length ? `: ${photos.join(", ")}` : ""} · ${changed.size} printed questions changed`;
   if (problems.length) {
-    console.log(`${u.unit.key}: ${problems.length} to fix\n  ${problems.join("\n  ")}`);
+    console.log(`${uname(u)}: ${problems.length} to fix\n  ${problems.join("\n  ")}`);
     return false;
   }
   writeFileSync(join(outDir, "answers.json"), JSON.stringify(answers, null, 1));
@@ -631,7 +657,7 @@ async function push(dir: string, keys: string[], drop = false) {
     // The answers a teacher typed in the app (Settings → Books) override the key at their parts: kept, unless `drop`
     // (they were decided again in kinds.ts).
     if (u.fixes.length) console.log(`${key}: ${u.fixes.length} answers typed in the app ${drop ? "are dropped" : `still override the key (${u.fixes.map((f) => `Q${f.q}${f.p ? ` ${f.p}` : ""}`).join(", ")}): decide them in kinds.ts and add "drop" to replace them`}`);
-    reqs.push({ name: key, fn: "tell", req: { op: "save", unitId: u.unit.unitId, answers, items, dropFixes: drop } });
+    reqs.push({ name: key, fn: "tell", req: { op: "save", unitId: u.unit.unitId, answers, items, dropFixes: drop, ...stageReq(u.stage) } });
   }
   const got = await exchange(reqs);
   for (const key of keys) {
@@ -649,7 +675,7 @@ function show(udir: string, qs: number[]) {
     const h = html.get(q) ?? "";
     const k = key.get(q);
     const part = partOf(u.data, q);
-    console.log(`${u.unit.key} Q${q} [${part?.kind === "short" ? "short: one answer, or { name: kind } for two" : "parts: { label: kind }"} · ${outOf(u.data, q)} marks]${h ? "" : " (not printed in the app)"}`);
+    console.log(`${uname(u)} Q${q} [${part?.kind === "short" ? "short: one answer, or { name: kind } for two" : "parts: { label: kind }"} · ${outOf(u.data, q)} marks]${h ? "" : " (not printed in the app)"}`);
     const bs = part?.kind === "cards" ? blocks(h) : [];
     if (bs.length) {
       const lead = plain(h.slice(0, bs[0].s));
@@ -672,7 +698,10 @@ async function ship(dir: string, keys: string[], drop = false) {
   for (const key of keys) if (!(await build(join(dir, key)))) throw new Error(`${key}: not sent (fix kinds.ts, then ship again)`);
   await push(dir, keys, drop);
   const got = await exchange(
-    keys.map((key) => ({ name: key, fn: "ask" as const, req: { op: "unit", unitId: readJson<Unit>(join(dir, key, "unit.json")).unit.unitId } })),
+    keys.map((key) => {
+      const u = readJson<Unit>(join(dir, key, "unit.json"));
+      return { name: key, fn: "ask" as const, req: { op: "unit", unitId: u.unit.unitId, ...stageReq(u.stage) } };
+    }),
     () => {},
   );
   let ok = true;

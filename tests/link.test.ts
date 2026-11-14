@@ -198,6 +198,66 @@ describe("the Claude link", () => {
     expect(lines.some((e: { kind: string; value?: string }) => e.kind === "book-save" && /Claude link \(Owner\): answer kinds for 73 questions, 1 questions as printed/.test(e.value ?? ""))).toBe(true);
   });
 
+  test("the theory book: its ladder read in a workbook's shape and saved, the rest of its key and the workbook's fixes kept", async () => {
+    await t.mutation(api.link.open, { id: ID, key: toB64(KEY) });
+    const u13 = await raw.run(async (ctx) => {
+      const u = (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G11-U13")).first())!;
+      await ctx.db.insert("keys", {
+        unitId: u._id,
+        stage: "fighter",
+        answers: [
+          { q: 1, parts: [{ p: "i", a: "**5**" }, { p: "ii", a: "**7**", m: 2 }] },
+          { q: 2, a: "3" },
+          { q: 55, a: "a past paper's answer" },
+        ],
+        updatedAt: 1,
+      });
+      for (const q of [1, 2]) await ctx.db.insert("questions", { unitId: u._id, stage: "fighter", q, html: card(q, `A made-up ladder question ${q}`) });
+      await ctx.db.insert("phoneFixes", { unitId: u._id, q: 60, p: "", a: "9", by: "Owner", at: 1 });
+      return u._id;
+    });
+    const books = await ask({ op: "books" });
+    expect(books!.units.find((x: { key: string }) => x.key === "G11-U13").fighter).toMatchObject({ questions: 50, from: 1, to: 50 });
+    expect(books!.units.find((x: { key: string }) => x.key === "G8-U01").fighter).toBeNull();
+    const unit = await ask({ op: "unit", unitId: u13, stage: "fighter" });
+    expect(unit).toMatchObject({ ok: true, stage: "fighter", fixes: [] });
+    // Q1 has parts: a card, 1 mark a part; the rest short, 1 mark; a level a section; Q55 (a past paper) is not shown.
+    expect(unit!.data.parts[0]).toEqual({ id: "II", from: 1, to: 1, kind: "cards" });
+    expect(unit!.data.parts[1]).toMatchObject({ id: "I", from: 2, to: 50, kind: "short", each: 1 });
+    expect(unit!.data.levels).toHaveLength(6);
+    expect(unit!.data.marks["1"]).toBe(2);
+    expect(unit!.answers.map((k: KeyAnswer) => k.q)).toEqual([1, 2]);
+    expect(unit!.answers[0].parts.map((p: { m: number }) => p.m)).toEqual([1, 1]);
+    expect(unit!.questions.map((x: { q: number }) => x.q)).toEqual([1, 2]);
+    expect((await ask({ op: "questions", unitId: u13, stage: "fighter", from: 1 }))!.items[1].html).toContain("ladder question 2");
+    const key: KeyAnswer[] = [
+      { q: 1, parts: [{ p: "i", a: "**5**", m: 1, t: { k: "box", b: [{ v: ["5"] }] } }, { p: "ii", a: "**7**", m: 1, t: { k: "box", b: [{ v: ["7"] }] } }] },
+      { q: 2, a: "3", t: { k: "fill", b: [{ v: ["3"] }] } },
+    ];
+    const blank = `<div class="si" data-q="2" data-b="2.0"><span class="qn">2</span><div class="sit">A made-up question <span class="ab" data-fill="1"></span></div></div>`;
+    // Refused: an answer off the ladder, a part of 2 marks, a theory book the unit doesn't have.
+    expect((await tell({ op: "save", stage: "fighter", unitId: u13, answers: [...key, { q: 55, a: "1", t: { k: "say" } }], items: [{ q: 2, html: blank }] }))!.error).toMatch(/55 is not on the theory book's ladder/);
+    expect((await tell({ op: "save", stage: "fighter", unitId: u13, answers: [{ q: 2, parts: [{ p: "i", a: "3", m: 2, t: { k: "say" } }] }] }))!.error).toMatch(/1 mark/);
+    expect((await tell({ op: "save", stage: "fighter", unitId: u01, answers: key }))!.error).toMatch(/no theory book/);
+    const saved = await tell({ op: "save", stage: "fighter", unitId: u13, answers: key, items: [{ q: 2, html: blank }], dropFixes: true });
+    expect(saved).toMatchObject({ ok: true, saved: { answers: 2, questions: 1, fixes: 0 } });
+    expect(saved!.share).toMatchObject({ marks: 3, parts: { phone: 3 } });
+    const kept = await raw.run(async (ctx) => {
+      const k = (await ctx.db.query("keys").withIndex("by_unit", (q) => q.eq("unitId", u13)).collect()).find((r) => r.stage === "fighter")!;
+      const q2 = await ctx.db.query("questions").withIndex("by_book", (x) => x.eq("unitId", u13).eq("stage", "fighter").eq("q", 2)).first();
+      const fixes = await ctx.db.query("phoneFixes").withIndex("by_unit", (x) => x.eq("unitId", u13)).collect();
+      return { answers: k.answers, html: q2!.html, fixes: fixes.length };
+    });
+    // Its own marks as they were (none, and Q1 ii's 2), Q55 kept, the new kinds and blank in, the workbook's fix still there.
+    expect(kept.answers.map((k) => k.q)).toEqual([1, 2, 55]);
+    expect(kept.answers[0].parts!.map((p) => p.m)).toEqual([undefined, 2]);
+    expect(kept.answers[0].parts![0].t).toEqual({ k: "box", b: [{ v: ["5"] }] });
+    expect(kept.html).toContain('data-fill="1"');
+    expect(kept.fixes).toBe(1);
+    // Read back, it is what the chat built.
+    expect((await ask({ op: "unit", unitId: u13, stage: "fighter" }))!.answers).toEqual(key);
+  });
+
   test("skills: a unit's skills and each question's skill, saved whole; another unit carries one; nothing half", async () => {
     await t.mutation(api.link.open, { id: ID, key: toB64(KEY) });
     const S = (n: number) => `G8-U01-S${n}`;
