@@ -175,8 +175,9 @@ const samePart = (key: string, printed: string) => {
 /** Each printed sub-question (`.rp` with its label) as a stretch of the card's HTML: [start, end). */
 export function blocks(h: string): { label: string; s: number; e: number }[] {
   const out: { label: string; s: number; e: number }[] = [];
-  // Any .rp, as the phone finds them (a style after the class too: G7 U02 Q52's "(i)" … "(iv)" set in by 8 mm).
-  const re = /<div class="rp(?: [^"]*)?"[^>]*><span class="rl">([\s\S]*?)<\/span>/g;
+  // Any .rp, as the phone finds them (a style after the class too: G7 U02 Q52's "(i)" … "(iv)" set in by 8 mm); a
+  // theory book's ladder prints its sub-questions as .sq with their label in .sl (14 Nov 2026).
+  const re = /<div class="(?:rp|sq)(?: [^"]*)?"[^>]*><span class="(?:rl|sl)">([\s\S]*?)<\/span>/g;
   for (let m = re.exec(h); m; m = re.exec(h)) out.push({ label: m[1].replace(/<[^>]+>/g, ""), s: m.index, e: h.length });
   out.forEach((b, i) => (b.e = i + 1 < out.length ? out[i + 1].s : h.length));
   return out;

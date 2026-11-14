@@ -120,7 +120,8 @@ scratchpad (his answers and questions never go in the repo):
 cd /home/claude/aristora-system
 TSX=/opt/npm-tools/node_modules/tsx/dist/cli.mjs; export ARISTORA_LINK_FILE=$SCR/link-code; D=$SCR/units
 node $TSX scripts/digitize.ts pull $D                 # Grade 8 Term 1 (or name units: G8-U03 G8-U04): books, keys, questions
-#   a topic tute's theory book (its ladder, questions 1 on): the unit's key with -F (OL-U48-F), every command the same
+#   a topic tute's theory book (its ladder, questions 1 on): the unit's key with -F (OL-U48-F), every command the same;
+#   its sub-questions are .sq / .sl (found like .rp / .rl); a list into one printed blank: both(nums([...]), paper(".sa"))
 node $TSX scripts/digitize.ts review $D/G8-U03        # what needs a decision: photo parts, gaps, words-only keys, matchings
 #   write $D/G8-U03/kinds.ts with scripts/digitize-kinds.ts (its head says how): num, nums, eq, word, pick, why, say,
 #   fill, choose, tf, mark, order, match, photo, split (two answers under one sub-question), paper (hide a printed block)
