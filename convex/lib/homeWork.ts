@@ -34,6 +34,20 @@ export async function photosRequired(ctx: QueryCtx): Promise<boolean> {
   return row ? row.value !== false : true;
 }
 
+/**
+ * Settings → Books (the owner, 14 Nov 2026): Check after every question on the phone (a win after each one). On unless
+ * he turned it off: then a level is checked once, at its end, as before.
+ */
+export const CHECK_EACH_KEY = "family.checkEach";
+
+export async function checkEach(ctx: QueryCtx): Promise<boolean> {
+  const row = await ctx.db
+    .query("meta")
+    .withIndex("by_key", (q) => q.eq("key", CHECK_EACH_KEY))
+    .first();
+  return row ? row.value !== false : true;
+}
+
 const levelKey = (unitId: string, n: number) => `${unitId}:${n}`;
 
 export type HomeChecks = {

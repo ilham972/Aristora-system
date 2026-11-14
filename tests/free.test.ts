@@ -103,7 +103,7 @@ describe("free marks", () => {
     expect((await bookFree()).free).toEqual([8]);
     const lv = await fam().query(api.family.level, { unitId: u01, n: 1 });
     expect(lv.qs.find((q) => q.q === 8)).toEqual({ q: 8, max: 2, parts: [], part: lv.qs[0].part, free: true });
-    expect(await t.query(api.preview.level, { unitId: u01, n: 1 })).toEqual(lv); // his Preview shows the same
+    expect({ ...(await t.query(api.preview.level, { unitId: u01, n: 1 })), each: true }).toEqual(lv); // his Preview shows the same (it never checks: no `each`)
     expect((await t.query(api.preview.unit, { unitId: u01 })).levels[0]).toMatchObject({ n: 1, free: 1, qs: 10 });
     const r = await fam().mutation(api.family.check, { unitId: u01, n: 1, typed: LEVEL1 }); // Q8 still typed wrong
     expect(r.results.find((x) => x.q === 8)).toEqual({ q: 8, max: 2, ok: [], got: 2, phoneGot: 2, free: true });

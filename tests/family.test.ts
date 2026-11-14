@@ -444,6 +444,57 @@ describe("the family app on the server", () => {
     await expect(fam().query(api.family.level, { unitId: u02, n: 1 })).rejects.toThrow(/locked/);
   });
 
+  test("Check after every question: each once, kept on the server, the level's Check marks from them; the owner's switch", async () => {
+    await joinAs(hana, FAM);
+    // The level says it is on (the default) and has nothing checked yet.
+    const lv = await fam().query(api.family.level, { unitId: u01, n: 1 });
+    expect(lv.each).toBe(true);
+    expect(lv.locks).toBeUndefined();
+    // Q1 right, Q8 wrong, Q9 the other way round (right): each tells him at once, never the answer.
+    const one = await fam().mutation(api.family.checkOne, { unitId: u01, n: 1, q: 1, a: ["3"], b: 1 });
+    expect(one).toEqual({ q: 1, a: ["3"], ok: [[true]], got: 2, phoneGot: 2, max: 2 });
+    expect(JSON.stringify(one)).not.toMatch(/"(vals|want|t|words|cont|keys)":/);
+    expect(await fam().mutation(api.family.checkOne, { unitId: u01, n: 1, q: 8, a: ["99"], b: 1 })).toMatchObject({ ok: [[false]], got: 0 });
+    expect(await fam().mutation(api.family.checkOne, { unitId: u01, n: 1, q: 9, a: ["10", "9"], b: 2 })).toMatchObject({ ok: [[true, true]], got: 2 });
+    // Once: asked again with another answer, what he typed first comes back (he saw ✗ for it).
+    expect(await fam().mutation(api.family.checkOne, { unitId: u01, n: 1, q: 8, a: ["24"], b: 1 })).toMatchObject({ a: ["99"], got: 0 });
+    // A question of another level, or too long an answer: refused.
+    await expect(fam().mutation(api.family.checkOne, { unitId: u01, n: 1, q: 11, a: ["33"] })).rejects.toThrow(/not in this level/);
+    await expect(fam().mutation(api.family.checkOne, { unitId: u01, n: 2, q: 11, a: ["33"] })).rejects.toThrow(/in order/);
+    await expect(fam().mutation(api.family.checkOne, { unitId: u01, n: 1, q: 2, a: ["x".repeat(301)] })).rejects.toThrow(/too long/);
+    // Nothing is his marks yet: no XP, the level still to play; another phone of his gets what he checked back.
+    expect((await hanaM())?.lv["1"]).toBeUndefined();
+    expect((await fam().query(api.family.me, {})).worlds[0].levels[0].s).toBe("play");
+    expect((await fam().query(api.family.level, { unitId: u01, n: 1 })).locks?.map((l) => [l.q, l.got])).toEqual([[1, 2], [8, 0], [9, 2]]);
+    // The level's Check: Q8 and Q1 as he typed them THEN (the phone now sends other answers for them: ignored), the
+    // rest from this Check. The row of the level goes with it.
+    const cheat = LEVEL1.map((x) => (x.q === 8 ? { q: 8, a: ["24"] } : x.q === 1 ? { q: 1, a: ["0"] } : x));
+    const r = await fam().mutation(api.family.check, { unitId: u01, n: 1, typed: cheat });
+    expect(r.got).toBe(16);
+    expect(r.results.find((x) => x.q === 8)).toMatchObject({ ok: [[false]], got: 0 });
+    expect(r.results.find((x) => x.q === 1)).toMatchObject({ ok: [[true]], got: 2 });
+    expect(await raw.run(async (ctx) => (await ctx.db.query("familyLive").collect()).length)).toBe(0);
+    await expect(fam().mutation(api.family.checkOne, { unitId: u01, n: 1, q: 2, a: ["6"] })).rejects.toThrow(/already marked/);
+
+    // A question whose boxes the phone showed differently goes to the teacher whole, now and at the level's Check.
+    expect(await fam().mutation(api.family.checkOne, { unitId: u01, n: 2, q: 11, a: ["33", "1"], b: 2 })).toMatchObject({ ok: [null], got: null, phoneGot: 0 });
+    // The owner turns it off: the level says so, a question alone is refused, the level's Check works as before
+    // (and still honours what he checked while it was on).
+    await t.mutation(api.families.setCheckEach, { on: false });
+    expect(await t.query(api.families.checkEach, {})).toBe(false);
+    expect((await fam().query(api.family.level, { unitId: u01, n: 2 })).each).toBeUndefined();
+    await expect(fam().mutation(api.family.checkOne, { unitId: u01, n: 2, q: 12, a: ["36"] })).rejects.toThrow(/at its end/);
+    const two = await fam().mutation(api.family.check, { unitId: u01, n: 2, typed: [{ q: 11, a: ["33"] }, { q: 12, a: ["36"] }] });
+    expect(two.teacher).toContain(11);
+    expect(two.results.find((x) => x.q === 12)).toMatchObject({ got: 2 });
+    // A student removed takes his open level's row with him.
+    await t.mutation(api.families.setCheckEach, { on: true });
+    await fam().mutation(api.family.checkOne, { unitId: u01, n: 3, q: 21, a: ["63"] });
+    expect(await raw.run(async (ctx) => (await ctx.db.query("familyLive").collect()).length)).toBe(1);
+    await raw.run(async (ctx) => wipeStudent(ctx, (await ctx.db.get(hana))!));
+    expect(await raw.run(async (ctx) => (await ctx.db.query("familyLive").collect()).length)).toBe(0);
+  });
+
   test("Check: marked at home (⌂), lost marks go to Evaluation at once, the teacher's questions wait for her", async () => {
     await joinAs(hana, FAM);
     const r = await fam().mutation(api.family.check, { unitId: u01, n: 1, typed: LEVEL1 });

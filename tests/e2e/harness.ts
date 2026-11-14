@@ -17,8 +17,14 @@ export const playwright = require("playwright") as typeof import("playwright");
 type Page = import("playwright").Page;
 type Context = import("playwright").BrowserContext;
 
-export function makeBackend(modules: Record<string, () => Promise<unknown>>) {
+/**
+ * `each` (14 Nov 2026): the family app's Check after every question stays on (the app's default). Without it the
+ * run-throughs' class has it off (the owner's switch, written before the first phone opens), so the ones written
+ * before it still check a level once, at its end.
+ */
+export function makeBackend(modules: Record<string, () => Promise<unknown>>, opts: { each?: boolean } = {}) {
   const t = convexTest(schema, modules);
+  let once: Promise<unknown> | null = null;
   const subs = new Map<string, { page: Page; name: string; args: Record<string, unknown> }>();
   let chain: Promise<unknown> = Promise.resolve();
   const serial = <T>(fn: () => Promise<T>): Promise<T> => {
@@ -55,6 +61,7 @@ export function makeBackend(modules: Record<string, () => Promise<unknown>>) {
   }
 
   async function attach(context: Context) {
+    if (!opts.each) await (once ??= serial(() => t.run(async (ctx) => void (await ctx.db.insert("meta", { key: "family.checkEach", value: false })))));
     await context.exposeBinding("__abMutation", ({ page: _page }, name: string, args: Record<string, unknown>) =>
       serial(async () => {
         try {

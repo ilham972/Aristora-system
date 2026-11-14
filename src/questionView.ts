@@ -83,7 +83,7 @@ const samePart = (key: string, printed: string) => {
  * printed sub-question ("ii · பெயர்", "ii · சுற்றளவு") go under it one after the other. `ladder` (13 Nov 2026, the
  * teachers' cards only): a theory book's ladder sub-questions too (`.sq` with its label `.sl`, "(i)").
  */
-export function slotParts(box: HTMLElement, parts: string[], ladder = false): void {
+export function slotParts(box: HTMLElement, parts: string[], ladder = false): number[] {
   const B = ladder ? ".rp, .sq" : ".rp";
   const L = ladder ? ".rl, .sl" : ".rl";
   const own = (b: Element) => !!b.querySelector(L);
@@ -92,12 +92,17 @@ export function slotParts(box: HTMLElement, parts: string[], ladder = false): vo
   let from = 0;
   let waiting: HTMLSlotElement[] = []; // parts printed without a label of their own (in a lead's words, G8 U01 Q70 அ)
   let last: { key: string; slot: HTMLSlotElement } | null = null; // the part before, when it found its sub-question
+  // Each part's printed sub-question, counted from 0 in printed order (-1 = none of its own): the family app's steps.
+  const steps: number[] = [];
+  let step = -1;
   parts.forEach((p, i) => {
     const slot = document.createElement("slot");
     slot.name = `p${i}`;
     // The next piece of the same printed sub-question: right after the piece before it.
     if (last && p.includes(" · ") && base(p) === base(last.key)) {
       last.slot.after(slot);
+      slot.dataset.rg = String(step);
+      steps.push(step);
       last = { key: p, slot };
       return;
     }
@@ -111,14 +116,101 @@ export function slotParts(box: HTMLElement, parts: string[], ladder = false): vo
       let next = blocks[j].nextElementSibling;
       while (next && !labelled(next)) next = next.nextElementSibling;
       blocks[j].parentElement?.insertBefore(slot, next);
+      // Its region: the sub-question, what belongs to it (a figure, the rest of its words) and its answers.
+      step++;
+      for (let el: Element | null = blocks[j]; el; el = el === slot ? null : el.nextElementSibling) (el as HTMLElement).dataset.rg = String(step);
+      steps.push(step);
       from = j + 1;
       last = { key: p, slot };
       return;
     }
     last = null;
+    steps.push(-1);
     waiting.push(slot); // every part has its slot: a row whose slot is missing would not show at all
   });
   box.append(...waiting, document.createElement("slot"));
+  return steps;
+}
+
+// ---- A long question, one sub-question at a time (the family app, 14 Nov 2026: his idea, "essay questions have more
+// sub questions, so student need to scroll below again and again ... put above like onboarding steps, one, two, three
+// ... they can go back and forth") ----
+// Only when every part of the key found its own printed sub-question (`slotParts`) and there are two or more: else the
+// question stays one page, as before. What is marked in the drawing:
+// - `data-rg="k"`: a sub-question's region (above); `data-st="0 2"`: the steps a block holds (its regions' and its
+//   ancestors', up to the question), so a block of other steps hides whole;
+// - at the regions' common home: what stands before the first one is the story (`data-stem`: shown with step 0, then
+//   folded away: the app shows its first words and opens it over the page); what stands between two of them is a lead
+//   for the steps after it, up to the next lead.
+
+/** What a long question's steps need: each part's step, how many, the story's first words and whether it has a figure. */
+export type Steps = { of: number[]; n: number; story: string; fig: boolean };
+
+function markSteps(box: HTMLElement, of: number[]): number {
+  const n = of.length ? Math.max(...of) + 1 : 0;
+  if (n < 2 || of.includes(-1)) return 0;
+  for (const el of box.querySelectorAll<HTMLElement>("[data-rg]")) {
+    const k = el.dataset.rg!;
+    el.dataset.st = k;
+    for (let a = el.parentElement; a && a !== box; a = a.parentElement) {
+      const have = (a.dataset.st ?? "").split(" ").filter(Boolean);
+      if (!have.includes(k)) a.dataset.st = [...have, k].join(" ");
+    }
+  }
+  // The regions' common home: down while one child holds every step.
+  let home: HTMLElement = box;
+  for (;;) {
+    const kids = [...home.children].filter((c): c is HTMLElement => c instanceof HTMLElement && !!c.dataset.st);
+    if (kids.length !== 1 || kids[0].dataset.rg !== undefined) break;
+    home = kids[0];
+  }
+  const kids = [...home.children].filter((c): c is HTMLElement => c instanceof HTMLElement && c.tagName !== "SLOT");
+  const first = kids.findIndex((c) => !!c.dataset.st);
+  kids.forEach((c, i) => {
+    if (c.dataset.st) return;
+    if (i < first) return void c.setAttribute("data-stem", "");
+    // A lead: for the steps after it up to the next lead; the last words of all: for the step before them.
+    const after: string[] = [];
+    for (let j = i + 1; j < kids.length && kids[j].dataset.st && kids[j].dataset.lead === undefined; j++) after.push(...kids[j].dataset.st!.split(" "));
+    let back = i - 1;
+    while (back >= 0 && kids[back].dataset.lead !== undefined) back--;
+    c.dataset.lead = "";
+    c.dataset.st = [...new Set(after.length ? after : (kids[back]?.dataset.st ?? "0").split(" "))].join(" ");
+  });
+  return n;
+}
+
+/** The steps of a printed question (drawn nowhere: read from its HTML), or null when it stays one page. */
+export function stepsOf(html: string, parts: string[]): Steps | null {
+  const box = document.createElement("div");
+  box.appendChild(safeFragment(html));
+  const of = slotParts(box, parts);
+  const n = markSteps(box, of);
+  if (!n) return null;
+  // The story: what step 0's block holds besides the sub-questions (never the print furniture).
+  box.querySelectorAll("[data-rg], [data-st]:not([data-st~='0']), slot, .qn, .pm, .mk, .src, .yr, .wz, .zone, [data-paper]").forEach((el) => el.remove());
+  return { of, n, story: (box.textContent ?? "").replace(/\s+/g, " ").trim(), fig: !!box.querySelector("svg, table, .dg, .qfig") };
+}
+
+const fits = new WeakMap<HTMLElement, () => void>();
+
+/**
+ * Shows one step of a question drawn with its parts (`drawQuestion`): k = that sub-question (0 with the story),
+ * "story" = only the story, null = the whole question. Figures are fitted again (a hidden one has no size).
+ */
+export function showStep(host: HTMLElement, k: number | "story" | null): void {
+  const root = host.shadowRoot;
+  if (!root) return;
+  let style = root.querySelector<HTMLStyleElement>("style[data-step]");
+  if (!style) {
+    style = document.createElement("style");
+    style.setAttribute("data-step", "");
+    root.appendChild(style);
+  }
+  const off = "{ display: none !important; }";
+  style.textContent =
+    k === null ? "" : k === "story" ? `.qv [data-rg], .qv [data-st]:not([data-st~="0"]) ${off}` : `.qv [data-st]:not([data-st~="${k}"])${k > 0 ? ", .qv [data-stem]" : ""} ${off}`;
+  fits.get(host)?.();
 }
 
 /**
@@ -134,7 +226,10 @@ export function drawQuestion(host: HTMLElement, html: string, css: string, extra
   const box = document.createElement("div");
   box.className = "qv";
   box.appendChild(safeFragment(html));
-  if (parts) slotParts(box, parts, ladder);
+  if (parts) {
+    const of = slotParts(box, parts, ladder);
+    if (!ladder) markSteps(box, of);
+  }
   root.replaceChildren(style, box);
   const fit = () => {
     const w = box.clientWidth - 16;
@@ -165,6 +260,7 @@ export function drawQuestion(host: HTMLElement, html: string, css: string, extra
     });
   };
   fit();
+  fits.set(host, fit);
   const ro = typeof ResizeObserver === "function" ? new ResizeObserver(fit) : null;
   ro?.observe(host);
   return () => ro?.disconnect();

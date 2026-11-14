@@ -131,6 +131,17 @@ async function type(p: Page, keys: string[]) {
   await p.locator(".f-padkeys .f-key.next").click();
 }
 
+/** The list of a level's questions: the bar on top opens it (14 Nov 2026: before, a strip of numbers always there). */
+async function list(p: Page) {
+  if (!(await p.locator(".f-strip.open").count())) await p.locator(".f-qcount").click();
+  await visible(p.locator(".f-strip.open"));
+}
+/** To another question of the level: the list, then its number. */
+async function jump(p: Page, chip: L) {
+  await list(p);
+  await chip.click();
+}
+
 /** A teachers' page signed in with this token (once per tab: a reload keeps what the page did since). */
 const signedIn = (token: string) =>
   new Function(`return () => { if (sessionStorage.getItem("t")) return; sessionStorage.setItem("t", "1"); localStorage.setItem("aristora.token", ${JSON.stringify(token)}); }`)() as () => void;
@@ -218,8 +229,11 @@ test("the family app: join, a level on the pad, Check once, the reveal, XP and t
   await playIs(F, "Level 2");
   await F.locator(".f-lv.play").click();
   await contains(F.locator(".f-qn"), "Q14");
+  await list(F);
   await visible(F.locator(".f-qchip.on", { hasText: "14" }));
   expect(await F.locator(".f-qchip.full").count()).toBe(3); // Q11–13 still typed
+  await F.locator(".f-qcount").click(); // the list closes again
+  expect(await F.locator(".f-strip.open").count()).toBe(0);
   for (const a of [["4", "2"], ["4", "5"], ["4", "8"]]) await type(F, a);
   for (const k of ["1", "7", "n", "-", "1"]) await F.locator(".f-padkeys").getByRole("button", { name: k, exact: true }).click();
   await F.locator(".f-padkeys .f-key.next").click();
@@ -284,18 +298,18 @@ test("the family app: join, a level on the pad, Check once, the reveal, XP and t
   await noSideScroll(S);
   await shot(S, "fam07-level-320");
   // A ratio: two boxes with ":" between them; a time: hours and minutes.
-  await S.locator(".f-qchip", { hasText: "22" }).click();
+  await jump(S, S.locator(".f-qchip", { hasText: "22" }));
   await contains(S.locator(".f-bjoin"), ":");
   expect(await S.locator(".f-qcard .f-box").count()).toBe(2);
   await noSideScroll(S);
   await shot(S, "fam07c-ratio-320");
-  await S.locator(".f-qchip", { hasText: "24" }).click();
+  await jump(S, S.locator(".f-qchip", { hasText: "24" }));
   await contains(S.locator(".f-qcard .f-box").nth(1).locator(".f-bunit"), "min");
   await noSideScroll(S);
   await shot(S, "fam07d-time-320");
   // Q8, wrong in Level 1, comes back at the end of Level 3 (his idea, 4 Nov 2026): right now = half its marks (10 Nov 2026:
   // 2 marks → 1).
-  await S.locator(".f-qchip.re", { hasText: "8" }).click();
+  await jump(S, S.locator(".f-qchip.re", { hasText: "8" }));
   await contains(S.locator(".f-again"), "Level 1");
   await contains(S.locator(".f-xpchip.re"), "+1 XP");
   await noSideScroll(S);
@@ -801,7 +815,8 @@ test("a level holds still: → never makes the page wider than the phone or move
   expect(new Set(b.frames.map((f) => f.pad))).toEqual(new Set([640]));
   expect(b.ys.length).toBe(2); // where he was, then the top: never up and back down again
   expect(b.ys[1]).toBe(0);
-  await visible(P.locator(".f-qchip.on", { hasText: "3" }));
+  expect(await P.locator(".f-qchip.on", { hasText: "3" }).count()).toBe(1);
+  expect(await P.locator(".f-pips i.on").count()).toBe(1);
   await noSideScroll(P);
   await shot(P, "fam28-next-question-top-360");
 
@@ -860,6 +875,137 @@ async function fingersOn(p: Page) {
 }
 const zoomOf = (p: Page) => p.evaluate(() => window.visualViewport!.scale);
 
+test("Check after every question: the answer at once, the level's XP on top, a wrong one stays as he typed it; his other phone; the level ends by itself", async () => {
+  // His words (14 Nov 2026): "every single question looks like a card ... this is feel boring ... they want to be
+  // addicted to learning", then "let's build completely". A win after each question instead of one reward at the end.
+  const backend = makeBackend(modules, { each: true });
+  const t = backend.t;
+  await addPerson(t, { name: "Owner", token: OWNER_TOKEN, role: "owner" });
+  const as = { token: OWNER_TOKEN };
+  await t.mutation(api.setup.ensure, as);
+  const u01 = await t.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G8-U01")).first())!._id);
+  await t.mutation(api.catalog.saveWorkbook, {
+    ...as,
+    unitId: u01,
+    parts: BOOK.data.parts.map((p) => ({ id: p.id, to: p.to, ...(p.each ? { each: p.each } : {}) })),
+    levels: BOOK.data.levels.map((l) => ({ to: l.to, max: l.max })),
+    marks: BOOK.data.marks ?? {},
+    replace: true,
+    key: fakeKey(),
+  });
+  const hana = await t.mutation(api.students.add, { ...as, name: "Hana K", grade: 8, term: 1, stage: "master", unitId: u01 });
+  await t.mutation(api.families.setCode, { ...as, studentId: hana, code: "4719" });
+  const signIn = async (h: number, q: string) => {
+    const p = await open(backend, `${site.url}/f/`, size(360, h));
+    await p.getByLabel(/Index/).fill("1001");
+    await p.getByLabel("Code").fill("4719");
+    await p.getByRole("button", { name: "Sign in" }).click();
+    await stageNow(p, "Level 1");
+    await p.locator(".f-lv.play").click();
+    await contains(p.locator(".f-qn"), q);
+    return p;
+  };
+  const P = await signIn(740, "Q1");
+  const key = (k: string) => P.locator(".f-padkeys").getByRole("button", { name: k, exact: true }).click();
+  const go = P.locator(".f-padkeys .f-key.next");
+  /** A question's keys, its Check, the answer it should get, Continue. */
+  const one = async (keys: string[], verdict: "ok" | "no") => {
+    for (const k of keys) await key(k);
+    await visible(P.locator(".f-padkeys .f-key.chk"));
+    await go.click();
+    await visible(P.locator(`.f-verdict.${verdict}`));
+  };
+  const on = () => P.getByRole("button", { name: "Continue" }).click();
+
+  // Q1: the owl beside him, one step a question on the bar, the level's XP at 0. Nothing typed: → only passes.
+  await visible(P.locator(".f-lvcoach .f-buddy svg"));
+  expect(await P.locator(".f-pips i").count()).toBe(10);
+  await contains(P.locator(".f-bank"), "0");
+  expect(await P.locator(".f-prow .f-checkpill").count()).toBe(0); // no Check for the whole level: each question has its own
+  expect(await go.getAttribute("aria-label")).toBe("Next");
+  await key("3");
+  expect(await go.getAttribute("aria-label")).toBe("Check");
+  await noSideScroll(P);
+  await shot(P, "fam60-each-check-key");
+  // Check: right at once. The sheet, +2 XP on it and on top, its step blue, the box as he typed it.
+  await go.click();
+  await contains(P.locator(".f-verdict.ok"), "சரியான விடை!");
+  await contains(P.locator(".f-verdict .f-vchip.xp"), "+2 XP");
+  await contains(P.locator(".f-bank"), "2");
+  expect(await P.locator(".f-pips i.ok").count()).toBe(1);
+  await visible(P.locator(".f-verdict .f-buddy svg"));
+  await noSideScroll(P);
+  await shot(P, "fam61-each-right");
+  await on();
+  await contains(P.locator(".f-qn"), "Q2");
+  // Q2 right: two in a row. Q3 wrong: kind words, never the answer; it comes back; no XP.
+  await one(["6"], "ok");
+  await contains(P.locator(".f-verdict .f-vchip.row"), "2 IN A ROW");
+  await on();
+  await one(["1", "1"], "no");
+  await contains(P.locator(".f-verdict.no"), "பரவாயில்லை!");
+  await contains(P.locator(".f-verdict .f-vchip.back"), "மீண்டும் வரும்");
+  expect(await P.locator(".f-verdict").innerText()).not.toMatch(/\b10\b/); // Q3's answer is never said
+  expect(await P.locator(".f-verdict .f-vchip.xp").count()).toBe(0);
+  await contains(P.locator(".f-bank"), "4");
+  await shot(P, "fam62-each-wrong");
+  await on();
+  await contains(P.locator(".f-qn"), "Q4");
+  // Back on Q3 from the list: as he typed it, rose, no pad to change it; → passes on to the next one still open.
+  await jump(P, P.locator(".f-qchip.no", { hasText: "3" }));
+  await contains(P.locator(".f-qn"), "Q3");
+  await visible(P.locator(".f-qcard.locked .f-box.no"));
+  await contains(P.locator(".f-box.no .f-bval"), "11");
+  expect(await P.locator(".f-padkeys").count()).toBe(0);
+  await shot(P, "fam63-each-locked");
+  await P.locator(".f-nextbar .f-key.next").click();
+  await contains(P.locator(".f-qn"), "Q4");
+
+  // His other phone: what he checked is there (the server's word), and Q3 still can't be changed.
+  const B = await signIn(640, "Q4"); // it opens on the first one still open
+  await until(async () => (await B.locator(".f-pips i.ok").count()) === 2 && (await B.locator(".f-pips i.no").count()) === 1, "his three checked questions on the other phone");
+  await contains(B.locator(".f-bank"), "4");
+  await B.close();
+
+  // Q4 to Q7, Q8 left alone (→ with nothing typed passes), Q9's two boxes (→ then Check), Q10.
+  await one(["1", "2"], "ok");
+  await on();
+  await one(["1", "5"], "ok");
+  await on();
+  await one(["1", "8"], "ok");
+  await on();
+  await one(["n", "+", "6", "n", "-", "1"], "ok");
+  await on();
+  await contains(P.locator(".f-qn"), "Q8");
+  await go.click();
+  await contains(P.locator(".f-qn"), "Q9");
+  await key("1");
+  await key("0");
+  expect(await go.getAttribute("aria-label")).toBe("Next"); // its second box first
+  await go.click();
+  await one(["9"], "ok");
+  await on();
+  await one(["3", "0"], "ok");
+  await on();
+  // Q8 is still open: the level asks before it ends, and says what he checked.
+  await contains(P.locator(".f-review"), "9 கேள்விகளை ஏற்கனவே சரிபார்த்தாய்");
+  await contains(P.locator(".f-review .warn"), "1");
+  await shot(P, "fam64-each-review");
+  await P.getByRole("button", { name: "Look again" }).click();
+  await jump(P, P.locator(".f-qchip", { hasText: /^8$/ }));
+  await one(["2", "4"], "ok");
+  // The last one checked: the level ends by itself, straight to the score (he saw every answer already).
+  await on();
+  await contains(P.locator(".f-big"), "18");
+  await contains(P.locator(".f-big"), "/ 20");
+  await until(async () => (await P.locator(".f-rrow.bad").allInnerTexts()).join().includes("Q3"), "Q3 wrong in the reveal");
+  await contains(P.locator(".f-gain"), "+18 XP");
+  expect(await t.run(async (ctx) => (await ctx.db.query("familyLive").collect()).length)).toBe(0);
+  await noSideScroll(P);
+  await shot(P, "fam65-each-result");
+  expect(problems).toEqual([]);
+});
+
 test("an app, not a web page: two fingers never zoom (Home, the map, a Level's pad and question); one finger still scrolls", async () => {
   // His ask (4 Nov 2026): "students want to feel like a native app, so don't zoom when we use two fingers". Before,
   // two thumbs on the pad zoomed the page to 1.5x and pushed the bottom bar off the screen.
@@ -899,7 +1045,8 @@ test("an app, not a web page: two fingers never zoom (Home, the map, a Level's p
   expect(await zoomOf(P)).toBe(1);
   await P.evaluate(() => window.scrollTo(0, 0));
 
-  // A Level: two thumbs on the pad, two fingers on the question: no zoom. The question strip still slides sideways.
+  // A Level: two thumbs on the pad, two fingers on the question: no zoom. The list of questions opens whole (no row
+  // to slide sideways since 14 Nov 2026).
   await P.locator(".f-node.s-now").click();
   await playIs(P, "Level 1");
   await P.locator(".f-lv.play").click();
@@ -908,10 +1055,12 @@ test("an app, not a web page: two fingers never zoom (Home, the map, a Level's p
   expect(await zoomOf(P)).toBe(1);
   await f.pinch(180, 250);
   expect(await zoomOf(P)).toBe(1);
+  await list(P);
   const strip = (await P.locator(".f-strip").boundingBox())!;
   const mid = strip.y + strip.height / 2;
   await f.swipe({ x: strip.x + strip.width - 20, y: mid }, { x: strip.x + 20, y: mid });
-  expect(await P.locator(".f-strip").evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
+  expect(await P.locator(".f-strip").evaluate((el) => el.scrollLeft)).toBe(0);
+  await noSideScroll(P);
   await contains(P.locator(".f-qn"), "Q1"); // the fingers typed nothing and moved nothing
   expect(problems).toEqual([]);
 });
@@ -3337,7 +3486,7 @@ test("the owner's Preview: Settings → Books → a unit → every level open on
   await says(O.locator(".f-checkpill"), "Preview");
   expect(await O.getByRole("button", { name: "Check" }).count()).toBe(0);
   await shot(O, "fam50-preview-level5");
-  await O.locator(".f-qchip", { hasText: "42" }).first().click();
+  await jump(O, O.locator(".f-qchip", { hasText: "42" }).first());
   await until(async () => (await O.locator(".f-pk.yn .f-pkb").count()) === 2, "Q42's ஆம் / இல்லை");
   await visible(O.locator(".f-whyt"));
   await noSideScroll(O);
@@ -3347,13 +3496,42 @@ test("the owner's Preview: Settings → Books → a unit → every level open on
   await O.locator(".f-look-levels button", { hasText: "Level 6" }).first().click();
   await contains(O.locator(".f-qn"), "Q53");
   await until(async () => (await O.locator(".f-paper > .f-part").count()) === 2, "Q53's two parts inside the question");
+  // A long question shows one sub-question at a time (14 Nov 2026, his idea): its steps on top, (i) first with the
+  // story above it and its boxes right under it; (ii) is a step away.
   const box = async (l: L) => (await l.first().boundingBox())!;
-  const [one, two] = [await box(O.locator(".f-paper .rp .rl", { hasText: "(i)" })), await box(O.locator(".f-paper .rp .rl", { hasText: "(ii)" }))];
-  const [r1, r2] = [await box(O.locator(".f-paper > .f-part").nth(0)), await box(O.locator(".f-paper > .f-part").nth(1))];
-  expect(r1.y > one.y && r1.y + r1.height <= two.y && r2.y > two.y).toBe(true);
+  const on = async (l: L) => (await l.first().boundingBox()) !== null;
+  const [li, lii] = [O.locator(".f-paper .rp .rl", { hasText: "(i)" }), O.locator(".f-paper .rp .rl", { hasText: "(ii)" })];
+  const [p1, p2] = [O.locator(".f-paper > .f-part").nth(0), O.locator(".f-paper > .f-part").nth(1)];
+  expect(await O.locator(".f-stepper .f-stp").count()).toBe(2);
+  await until(async () => (await on(li)) && !(await on(lii)) && !(await on(p2)), "only (i) on the page");
+  await visible(O.locator(".f-paper .lead2"));
+  expect(await O.locator(".f-story").count()).toBe(0); // the story is on the page with the first step
+  expect((await box(p1)).y > (await box(li)).y).toBe(true);
   await shot(O, "fam51-preview-parts");
+  await O.locator(".f-stepper .f-stp").nth(1).click();
+  await until(async () => (await on(lii)) && !(await on(li)) && !(await on(p1)), "only (ii) on the page");
+  expect(await O.locator(".f-stepper .f-stp.now").getAttribute("aria-label")).toBe("Part ii");
+  expect(await on(O.locator(".f-paper .lead2"))).toBe(false);
+  expect((await box(p2)).y > (await box(lii)).y).toBe(true);
+  // The story folded to its first words: a tap opens it alone, another goes back to the step.
+  await contains(O.locator(".f-story"), "A made-up pattern question number 53");
+  await shot(O, "fam51b-preview-step2");
+  await O.locator(".f-story").click();
+  await until(async () => (await on(O.locator(".f-paper .lead2"))) && !(await on(lii)) && !(await on(li)), "the story alone");
+  await shot(O, "fam51c-preview-story");
+  await O.locator(".f-story").click();
+  await until(async () => (await on(lii)) && !(await on(O.locator(".f-paper .lead2"))), "back on (ii)");
+  // → on the pad walks the steps: from (i)'s box to (ii), never past the question before its last step.
+  await O.locator(".f-stepper .f-stp").nth(0).click();
+  await until(async () => on(li), "(i) again");
+  await O.getByRole("button", { name: "5", exact: true }).click();
+  await O.locator(".f-padkeys .f-key.next").click();
+  await until(async () => (await on(lii)) && !(await on(li)), "→ went to (ii)");
+  await contains(O.locator(".f-qn"), "Q53");
+  expect(await O.locator(".f-stepper .f-stp.full").count()).toBe(1);
+  await noSideScroll(O);
   // A fraction: the numerator over a line over the denominator, typed a cell at a time (never a slash).
-  await O.locator(".f-qchip", { hasText: "55" }).first().click();
+  await jump(O, O.locator(".f-qchip", { hasText: "55" }).first());
   await until(async () => (await O.locator(".f-box.frac .f-fc").count()) === 3, "Q55's whole number and fraction");
   const key = (name: string) => O.getByRole("button", { name, exact: true }).click();
   await key("1");
@@ -3363,7 +3541,7 @@ test("the owner's Preview: Settings → Books → a unit → every level open on
   await key("4");
   await until(async () => (await O.locator(".f-box.frac .f-fc").allTextContents()).join(" ") === "1 3 4", "1 3/4 in its cells");
   await shot(O, "fam52-preview-fraction");
-  await O.locator(".f-qchip", { hasText: "54" }).first().click();
+  await jump(O, O.locator(".f-qchip", { hasText: "54" }).first());
   await until(async () => (await O.locator(".f-box.frac .f-fc").count()) === 2, "Q54's numerator and denominator");
   for (const k of ["n", "(", "n", "+", "1", ")", "Denominator", "2"]) await key(k);
   await until(async () => (await O.locator(".f-box.frac .f-fc").allTextContents()).join(" ") === "n(n+1) 2", "n(n+1) over 2");
@@ -3429,7 +3607,7 @@ test("free marks: the owner gives a question's marks from his Preview; a student
   });
   await O.locator(".f-look-levels button", { hasText: "Level 1" }).first().click();
   await contains(O.locator(".f-qn"), "Q1");
-  await O.locator(".f-qchip", { hasText: /^3$/ }).click();
+  await jump(O, O.locator(".f-qchip", { hasText: /^3$/ }));
   await contains(O.locator(".f-qn"), "Q3");
   await O.getByRole("button", { name: /Free marks for everyone/ }).click();
   await contains(O.locator(".f-freesw"), "also the ones who did this level already");
@@ -3437,7 +3615,7 @@ test("free marks: the owner gives a question's marks from his Preview; a student
   await contains(O.locator(".f-toast"), "Q3: free marks for everyone (2). 1 student who did this level got them now.");
   await contains(O.locator(".f-free-h"), "இலவசப் புள்ளிகள்");
   await visible(O.getByRole("button", { name: "Take back the free marks" }));
-  await visible(O.locator(".f-qchip.free", { hasText: /^3$/ }));
+  expect(await O.locator(".f-qchip.free", { hasText: /^3$/ }).count()).toBe(1);
   await noSideScroll(O);
   await shot(O, "fam53-preview-free");
   await O.setViewportSize({ width: 320, height: 640 }); // the smallest phone: the switch fits

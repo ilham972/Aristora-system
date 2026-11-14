@@ -14,6 +14,8 @@
 //   asks, askCount, answer -> what students asked for in the family app (4 Nov 2026): a photo for the race, a new name;
 //                  Settings → Students → Waiting for your OK, its count on the gear. OK or No.
 //   profileOf, dropPhoto, clearBday -> his Family sheet: his photo (and one waiting), his birthday, a name he asked for.
+//   checkEach, setCheckEach -> Check after every question on the phone (Settings → Books, the owner's switch, 14 Nov
+//                  2026): on = a win after each question; off = a level is checked once, at its end, as before.
 // Owner, or a teacher with Students (Feedback: the owner, or a teacher with Feedback). Family phones can't call any of
 // these (viewer / actor).
 
@@ -27,7 +29,7 @@ import { picUrl } from "./lib/profile";
 import { OL, olNumber } from "./lib/syllabus";
 import { asMaster, bookFor, cleanBy, cleanName, currentSession, fail, getStudent, keyRow, log } from "./lib/backend";
 import { outOf } from "./lib/book";
-import { phoneKeyFor } from "./lib/homeWork";
+import { CHECK_EACH_KEY, checkEach as checkEachOn, phoneKeyFor } from "./lib/homeWork";
 import { allPhone, FIX_TEACHER, phonePart, phoneShare, wantsOf, wantWords } from "./lib/phone";
 
 const token = v.optional(v.string());
@@ -359,6 +361,31 @@ export const feedbackSeen = mutation({
     const me = await actor(ctx, args.token, ["feedback"]);
     const at = Math.min(args.at, Date.now());
     if (at > (me.feedbackSeenAt ?? 0)) await ctx.db.patch(me._id, { feedbackSeenAt: at });
+    return true;
+  },
+});
+
+/** Check after every question on the phone: on or off (Settings → Books shows the switch to the owner). */
+export const checkEach = query({
+  args: { token },
+  handler: async (ctx, args): Promise<boolean> => {
+    await viewer(ctx, args.token, "books");
+    return await checkEachOn(ctx);
+  },
+});
+
+/** The owner turns Check after every question on or off (off: a level is checked once, at its end). */
+export const setCheckEach = mutation({
+  args: { token, on: v.boolean() },
+  handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["owner"]);
+    const row = await ctx.db
+      .query("meta")
+      .withIndex("by_key", (q) => q.eq("key", CHECK_EACH_KEY))
+      .first();
+    if (row) await ctx.db.patch(row._id, { value: args.on });
+    else await ctx.db.insert("meta", { key: CHECK_EACH_KEY, value: args.on });
+    await log(ctx, null, Date.now(), { kind: "check-each", value: args.on ? "on" : "off" });
     return true;
   },
 });

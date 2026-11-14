@@ -499,6 +499,32 @@ type BookRow = {
 };
 
 /** The syllabus by grade, which units have their books in the app, and setting up a workbook. */
+/**
+ * The owner's switch (14 Nov 2026): on the phone, Check after every question (a win after each one), or once at the
+ * level's end as before.
+ */
+function CheckEach() {
+  const on = useQuery<boolean>(api.families.checkEach, {});
+  const [busy, setBusy] = useState(false);
+  if (on === undefined) return null;
+  return (
+    <label class="phq-req">
+      <input
+        type="checkbox"
+        checked={on}
+        disabled={busy}
+        onChange={() => {
+          setBusy(true);
+          void mutate(api.families.setCheckEach, { on: !on }).finally(() => setBusy(false));
+        }}
+      />
+      <span>
+        On the phone: Check after every question <small class="muted">(off = once, at the end of the Level)</small>
+      </span>
+    </label>
+  );
+}
+
 function Books() {
   const units = allUnits();
   const books = useQuery<BookRow[]>(api.catalog.books, {}) ?? [];
@@ -516,6 +542,7 @@ function Books() {
     <div class="settings-body">
       <UploadBooks units={units} books={books} onSaved={setGrade} />
       {may("owner") && <ClaudeLink />}
+      {may("owner") && <CheckEach />}
       <GradeRow
         value={grade}
         onPick={setGrade}
@@ -1119,6 +1146,8 @@ function describe(e: Doc<"events">): string {
     }
     case "photos-required":
       return v === "on" ? "drawing photos from home asked for again" : "drawing photos from home no longer asked for";
+    case "check-each":
+      return v === "on" ? "the phone checks after every question again" : "the phone checks a level once, at its end";
     case "family-photo":
       return v === "sent"
         ? "sent a photo from the family app (waits for an OK)"

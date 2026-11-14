@@ -1,5 +1,9 @@
-// A Level: one question at a time, his own pad, Check once; then the reveal.
-// - The phone never has the answers: the server marks (convex/family.ts check).
+// A Level: one question at a time, his own pad, Check after every question (14 Nov 2026; or once at the end when the
+// owner turned that off); then the reveal.
+// - The phone never has the answers: the server marks (convex/family.ts checkOne, check).
+// - The owl is with him (owlBody.tsx: its whole body acts), the bar on top has one step a question (blue = right, rose
+//   = not right, gold = now), a long question shows one sub-question at a time with its steps on top (questionView.ts
+//   stepsOf). Its newer style is levelStyle.ts (this file's own; the older rules are in family.css).
 // - The question is always on the screen when the Stage's questions are in the app (his answer, 4 Nov 2026: "always
 //   show the question"; the eye switch is gone), in the app's own font, its printed number hidden (Q9 once). His
 //   answer goes inside it where the book marks the place (kinds.tsx): the blanks are his boxes, options and ✓ / ✗ are
@@ -11,17 +15,21 @@
 
 import { Fragment, type ComponentChildren } from "preact";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
-import type { FamilyLevel, FamilyMe, FamilyQuestions, FamilyResult } from "../../convex/family";
+import type { FamilyLevel, FamilyLock, FamilyMe, FamilyQuestions, FamilyResult } from "../../convex/family";
 import type { Trophy, World } from "../../convex/lib/family";
 import type { LevelBook } from "../../convex/lib/homeWork";
-import type { Box } from "../../convex/lib/phone";
-import { drawQuestion } from "../questionView";
+import type { Box, FormPart } from "../../convex/lib/phone";
+import { drawQuestion, showStep, stepsOf, type Steps } from "../questionView";
 import { Book, Taker } from "./book";
 import { fracCells, fracJoin, MatchPairs, OrderCards, paintSlots, PickBelow, SayBelow, slotRuns, slotsFit, tapOf, tapped, typing, WhyBelow, WordBox, type Live, type SlotRun } from "./kinds";
+import { addLevelStyle } from "./levelStyle";
 import { keep, mutation, NetError, query } from "./net";
 import { Confetti, nextPlay } from "./next";
+import { Buddy, type Pose } from "./owlBody";
 import { buzz, sound } from "./sound";
 import { Flame, Gem, Icon, Maths, Medal, Owl, OwlBadge, pretty, problemWords, Roll, Tag, toast, useOwlTap, Waiting, type Mood } from "./ui";
+
+addLevelStyle();
 
 /** A level's name on its screens: the redo of a Stage finished below 75 % is n = 0 (10 Nov 2026). */
 const lvName = (f: { n: number; d?: number }) => (f.n === 0 ? "↻ Redo" : `Level ${f.d ?? f.n}`);
@@ -40,10 +48,12 @@ export type Checked = {
   /** The old questions that came back (his idea, 4 Nov 2026) and the marks he won back with them. */
   retry: { q: number; max: number; got: number; from: number }[];
   bonus: number;
+  /** He saw every answer as he went (Check after every question): the reveal goes straight to the score. */
+  seen?: true;
 };
 
 /** Where he types: the question, its box, and in a fraction box its cell (whole, numerator, denominator). */
-type Spot = { qi: number; bi: number; ci?: number };
+type Spot = { qi: number; bi: number; ci?: number; si?: number };
 
 /** Every box of the level in order: question index, box index within its question, the box. */
 function boxesOf(form: FamilyLevel): { qi: number; bi: number; box: Box }[] {
@@ -88,7 +98,7 @@ const exprKeys = (v: string, eq = false, power = false) => {
 const KEY_LABEL: Record<string, string> = { "-": "−", "*": "×", "^2": "x²", "^": "□ⁿ", " ": "␣", "⌫": "⌫", "→": "→" };
 
 /** His pad. On a question with no box (the teacher's) only → works: the other keys are pale. */
-function Pad(props: { box: Box | null; onKey: (k: string) => void; last: boolean }) {
+function Pad(props: { box: Box | null; onKey: (k: string) => void; last: boolean; go?: "check" | "busy" }) {
   const eq = props.box?.k === "expr" && !!props.box.eq;
   const power = props.box?.k === "expr" && !!props.box.p;
   const keys = props.box?.k === "expr" ? exprKeys(props.box.v, eq, power) : NUM_KEYS;
@@ -101,11 +111,17 @@ function Pad(props: { box: Box | null; onKey: (k: string) => void; last: boolean
           type="button"
           key={k}
           aria-disabled={!props.box && k !== "→" ? "true" : undefined}
-          class={`f-key${k === "→" ? ` next${wide ? " wide" : ""}` : ""}${k === "⌫" ? " del" : ""}${/^\d$/.test(k) ? "" : " op"}${!props.box && k !== "→" ? " f-keyoff" : ""}`}
-          aria-label={k === "→" ? (props.last ? "Done" : "Next") : k === "⌫" ? "Delete" : k === " " ? "Space" : k === "^2" ? "squared" : k === "^" ? "power" : fr && k === "/" ? "Denominator" : k}
+          class={`f-key${k === "→" ? ` next${wide ? " wide" : ""}${props.go ? " chk" : ""}` : ""}${k === "⌫" ? " del" : ""}${/^\d$/.test(k) ? "" : " op"}${!props.box && k !== "→" ? " f-keyoff" : ""}`}
+          aria-label={k === "→" ? (props.go ? "Check" : props.last ? "Done" : "Next") : k === "⌫" ? "Delete" : k === " " ? "Space" : k === "^2" ? "squared" : k === "^" ? "power" : fr && k === "/" ? "Denominator" : k}
           onClick={() => props.onKey(k)}
         >
-          {fr && k === "/" ? (
+          {k === "→" && props.go ? (
+            props.go === "busy" ? (
+              "…"
+            ) : (
+              "Check"
+            )
+          ) : fr && k === "/" ? (
             <span class="f-kfrac" aria-hidden="true">
               <i />
               <b />
@@ -157,11 +173,11 @@ function FracCells(props: { f: "f" | "m"; v: string; on: number; onCell: (c: num
 }
 
 /** A question with nothing to type (taps, cards, pairs, a photo): only → under it, where the pad's → always is. */
-function NextBar(props: { onNext: () => void; last: boolean }) {
+function NextBar(props: { onNext: () => void; last: boolean; go?: "check" | "busy" }) {
   return (
     <div class="f-nextbar">
-      <button type="button" class="f-key next" aria-label={props.last ? "Done" : "Next"} onClick={props.onNext}>
-        →
+      <button type="button" class={`f-key next${props.go ? " chk" : ""}`} aria-label={props.go ? "Check" : props.last ? "Done" : "Next"} onClick={props.onNext}>
+        {props.go ? (props.go === "busy" ? "…" : "Check") : "→"}
       </button>
     </div>
   );
@@ -219,22 +235,29 @@ const PAPER_CSS = `.qv { border-radius: 14px; padding: 14px 12px 10px; -webkit-u
 .qv .frc { font-size: .9em; }
 .qv .qn, .qv .pm, .qv .mk { display: none !important; }
 .qv [data-fill] { display: inline-flex !important; align-items: center; justify-content: center; vertical-align: middle; box-sizing: border-box;
-  min-width: 2.3em !important; width: auto !important; height: 1.8em; margin: 0 .1em; padding: 0 .3em; border: 2px dashed var(--brand-mid, #cbc3ff) !important;
+  min-width: 2.6em !important; width: auto !important; height: 2.15em; margin: .1em .12em; padding: 0 .3em; border: 2px dashed var(--brand-mid, #cbc3ff) !important;
   border-radius: 10px; background: var(--brand-soft, #efecff); color: var(--brand-2, #5a49d6); font: 800 1.05em/1 "Baloo Thambi 2", sans-serif !important; cursor: pointer; }
 .qv .frc [data-fill] { min-width: 1.75em !important; height: 1.45em; margin: 0 0 .12em; border-radius: 8px; }
 .qv [data-fill][style*="vertical-align:."], .qv sup [data-fill] { min-width: 1.45em !important; height: 1.3em !important; margin: 0 .05em !important;
   padding: 0 .15em; border-radius: 7px; font-size: .74em !important; vertical-align: .7em !important; }
-.qv [data-fill][style*="border-bottom"]:not([style*="vertical-align:."]) { height: 1.8em !important; vertical-align: middle !important; }
+.qv [data-fill][style*="border-bottom"]:not([style*="vertical-align:."]) { height: 2.15em !important; vertical-align: middle !important; }
 .qv [data-fill].fx-has { border-style: solid !important; background: var(--card, #fff); }
 .qv [data-fill].fx-on { border: 2.5px solid var(--brand, #6c5ce7) !important; background: var(--card, #fff); box-shadow: 0 0 0 4px var(--brand-soft, #efecff); }
-.qv [data-opt] { display: inline-flex; align-items: center; gap: .3em; margin: .15em 0; padding: .2em .7em; border-radius: 12px; cursor: pointer;
-  box-shadow: inset 0 0 0 2px var(--line-2, #ddd9f0); background: var(--card, #fff); }
-.qv [data-opt].fx-on { box-shadow: inset 0 0 0 2.5px var(--brand, #6c5ce7); background: var(--brand-soft, #efecff); color: var(--brand-2, #5a49d6); }
-.qv .mcq { row-gap: 6px !important; column-gap: 10px !important; }
-.qv [data-tick] { display: inline-flex; gap: 6px; margin: 0 .2em; vertical-align: middle; }
-.qv .fx-tk { display: inline-flex; align-items: center; justify-content: center; width: 2.3em; height: 1.85em; border-radius: 10px; cursor: pointer;
-  box-shadow: inset 0 0 0 2px var(--line-2, #ddd9f0); background: var(--card, #fff); color: var(--ink3, #9d99bf); font: 800 1em/1 "Baloo Thambi 2", sans-serif; }
-.qv .fx-tk.fx-on { box-shadow: inset 0 0 0 2.5px var(--brand, #6c5ce7); background: var(--brand-soft, #efecff); color: var(--brand-2, #5a49d6); }
+.qv [data-opt] { display: inline-flex; align-items: center; gap: .35em; min-height: 48px; box-sizing: border-box; margin: .2em 0; padding: .3em .9em .2em; border-radius: 15px; cursor: pointer;
+  box-shadow: inset 0 0 0 2px var(--line-2, #ddd9f0), 0 3px 0 var(--line-2, #ddd9f0); background: var(--card, #fff); font-weight: 700; transition: transform .12s ease; }
+.qv [data-opt].fx-on { box-shadow: inset 0 0 0 2.5px var(--brand, #6c5ce7), 0 3px 0 var(--brand, #6c5ce7); background: var(--brand-soft, #efecff); color: var(--brand-2, #5a49d6);
+  transform: translateY(-2px); animation: fx-pop .28s ease; }
+.qv .mcq { display: grid !important; grid-template-columns: 1fr 1fr; gap: 10px !important; margin-top: 10px !important; }
+.qv .mcq [data-opt] { display: flex; margin: 0; }
+.qv [data-tick] { display: inline-flex; gap: 8px; margin: .15em .25em; vertical-align: middle; }
+.qv .fx-tk { display: inline-flex; align-items: center; justify-content: center; width: 3em; height: 2.6em; border-radius: 13px; cursor: pointer;
+  box-shadow: inset 0 0 0 2px var(--line-2, #ddd9f0), 0 3px 0 var(--line-2, #ddd9f0); background: var(--card, #fff); color: var(--ink3, #9d99bf); font: 800 1.15em/1 "Baloo Thambi 2", sans-serif; }
+.qv .fx-tk.fx-on { box-shadow: inset 0 0 0 2.5px var(--brand, #6c5ce7), 0 3px 0 var(--brand, #6c5ce7); background: var(--brand-soft, #efecff); color: var(--brand-2, #5a49d6); animation: fx-pop .28s ease; }
+@keyframes fx-pop { 0% { transform: scale(.92); } 60% { transform: scale(1.06); } 100% { transform: none; } }
+.qv [data-fill].fx-ok, .qv [data-opt].fx-ok, .qv .fx-tk.fx-ok { border-color: var(--right, #1e8cf5) !important; border-style: solid !important; box-shadow: inset 0 0 0 2.5px var(--right, #1e8cf5), 0 0 0 4px var(--right-soft, #e3f0ff);
+  background: var(--right-soft, #e3f0ff); color: var(--right-ink, #0f63bd); }
+.qv [data-fill].fx-no, .qv [data-opt].fx-no, .qv .fx-tk.fx-no { border-color: var(--wrong, #f24a6c) !important; border-style: solid !important; box-shadow: inset 0 0 0 2.5px var(--wrong, #f24a6c), 0 0 0 4px var(--wrong-soft, #ffe6ec);
+  background: var(--wrong-soft, #ffe6ec); color: var(--wrong-ink, #c42c4d); }
 .qv [data-mark] { display: inline-block; min-width: 1.7em; margin: .1em 0; padding: .05em .3em 0; text-align: center; font-size: 1.12em;
   cursor: pointer; border-bottom: 3px solid transparent; border-radius: 2px; }
 .qv [data-mark].fx-on { border-bottom-color: var(--brand, #6c5ce7); color: var(--brand-2, #5a49d6); }
@@ -248,13 +271,33 @@ const PAPER_CSS = `.qv { border-radius: 14px; padding: 14px 12px 10px; -webkit-u
  * A question as printed, on the level. A tap opens it full screen (`QuestionZoom`): the app itself never zooms. With
  * its slots live (his answers go in it), a tap answers instead and only 🔍 zooms.
  */
-function Paper(props: { html: string; css: string; q: number; onZoom: () => void; live?: Live; parts?: string[]; children?: ComponentChildren }) {
+function Paper(props: {
+  html: string;
+  css: string;
+  q: number;
+  onZoom: () => void;
+  live?: Live;
+  parts?: string[];
+  /** A long question, one sub-question at a time: this one, "story" = only its story; undefined = all of it. */
+  step?: number | "story";
+  /** The step before was a later one: this one slides in from the left. */
+  back?: boolean;
+  children?: ComponentChildren;
+}) {
   const host = useRef<HTMLDivElement>(null);
   const labels = props.parts?.join("\n");
+  const shown = useRef<number | "story" | undefined | null>(null);
   useEffect(() => {
     if (!host.current) return;
+    shown.current = null;
     return drawQuestion(host.current, props.html, props.css, PAPER_CSS, props.parts);
   }, [props.html, props.css, labels]);
+  // Its step (after the drawing above, and again when he moves to another one).
+  useEffect(() => {
+    if (!host.current || shown.current === props.step) return;
+    shown.current = props.step;
+    showStep(host.current, props.step ?? null);
+  });
   // After every change: his answers in the slots (the drawing above runs first).
   useEffect(() => {
     const root = host.current?.shadowRoot;
@@ -263,7 +306,7 @@ function Paper(props: { html: string; css: string; q: number; onZoom: () => void
   const live = props.live && props.live.fit.size > 0 ? props.live : null;
   return (
     <div
-      class={`f-paper rise${live ? " live" : ""}`}
+      class={`f-paper ${props.step === undefined ? "rise" : `step${props.back ? " back" : ""}`}${live ? " live" : ""}`}
       ref={host}
       aria-label={`Q${props.q}`}
       onClick={(e) => {
@@ -421,6 +464,32 @@ export function QuestionZoom(props: Zoomed & { onClose: () => void }) {
 
 // ---- A level ----
 
+/** What a question asks of him, said beside its number (the owl's voice: Tamil). */
+const ASK = {
+  type: "விடையை எழுது",
+  choose: "சரியானதைத் தொடு",
+  tf: "சரியா, பிழையா?",
+  mark: "தொட்டுக் குறி",
+  order: "வரிசைப்படுத்து",
+  match: "பொருத்து",
+  why: "ஆம் / இல்லை, காரணம்",
+  say: "உன் சொற்களில் எழுது",
+  paper: "தாளில் செய்",
+} as const;
+function askOf(parts: FormPart[]): keyof typeof ASK {
+  for (const p of parts) {
+    if (!p.boxes?.length) continue;
+    const k = p.ui?.k;
+    if (k && k !== "fill") return k;
+    return p.boxes.some((b) => b.k === "text") ? "say" : "type";
+  }
+  return "paper";
+}
+
+/** A question checked on its own (14 Nov 2026): how it went. pt = part of its marks, teach = a part waits for the teacher. */
+type Verdict = "ok" | "pt" | "no" | "teach";
+const verdictOf = (l: FamilyLock): Verdict => (l.got === null ? "teach" : l.got >= l.max ? "ok" : l.got > 0 ? "pt" : "no");
+
 export function Play(props: {
   world: World;
   n: number;
@@ -435,6 +504,7 @@ export function Play(props: {
   const formKey = `form.${props.world.unitId}.${props.n}`;
   const draftKey = `draft.${props.world.unitId}.${props.n}`;
   const spotKey = `spot.${props.world.unitId}.${props.n}`;
+  const lockKey = `lock.${props.world.unitId}.${props.n}`;
   const [form, setForm] = useState<FamilyLevel | null>(() => keep<FamilyLevel>(formKey));
   const [typed, setTyped] = useState<Record<number, string[]>>(() => keep<Record<number, string[]>>(draftKey) ?? {});
   // The question he left (his ask, 4 Nov 2026: "exactly that question want to focus and continue from that").
@@ -444,6 +514,21 @@ export function Play(props: {
   const [review, setReview] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Check after every question (14 Nov 2026): the ones he checked (kept on the phone too; the server's word wins), the
+  // answer on screen now, his run of right ones.
+  const [locks, setLocks] = useState<Record<number, FamilyLock>>(() => keep<Record<number, FamilyLock>>(lockKey) ?? {});
+  const [verdict, setVerdict] = useState<{ q: number; run: number } | null>(null);
+  const [run, setRunN] = useState(0);
+  const [checking, setChecking] = useState(false);
+  const sure = useRef<number | null>(null);
+  // The list of questions (the bar on top opens it), a long question's story open, how long since he did anything.
+  const [list, setList] = useState(false);
+  const [story, setStory] = useState(false);
+  const [idle, setIdle] = useState(0);
+  const acted = useRef(Date.now());
+  const swipe = useRef<{ x: number; y: number } | null>(null);
+  const stepWas = useRef(0);
+  const stepCache = useRef<{ key: string; v: Steps | null }>({ key: "", v: null });
   // The question is always shown when the Stage's questions are in the app (his answer, 4 Nov 2026).
   const showQ = props.world.q;
   const qs = useQuestions(props.world, props.n, showQ);
@@ -467,12 +552,16 @@ export function Play(props: {
   // the phone (the signal dropped), or a teacher marked it in class. What the phone kept for it is no use any more:
   // a level marked at home opens its book (the marks, the solutions, the photos it asks for).
   const marked = (e: unknown) => e instanceof NetError && !e.offline && /already marked|already has this level/.test(e.message);
-  const gone = () => {
+  const forget = () => {
     keep(draftKey, null);
     keep(formKey, null);
     keep(spotKey, null);
     keep(howKey, null);
+    keep(lockKey, null);
     keep(`qs.${props.world.unitId}.${props.n}`, null);
+  };
+  const gone = () => {
+    forget();
     query("family:book", { unitId: props.world.unitId, n: props.n })
       .then(() => props.onMarked())
       .catch(() => setErr(`Level ${props.n} ஐ உன் ஆசிரியர் ஏற்கனவே திருத்திவிட்டார்.`));
@@ -480,8 +569,24 @@ export function Play(props: {
   useEffect(() => {
     query("family:level", { unitId: props.world.unitId, n: props.n })
       .then((f) => {
-        keep(formKey, f as FamilyLevel);
-        setForm(f as FamilyLevel);
+        const lv = f as FamilyLevel;
+        keep(formKey, lv);
+        setForm(lv);
+        // What he checked from any of his phones: the server's word, with what he typed then.
+        const got = lv.locks;
+        if (!got?.length) return;
+        setLocks((old) => {
+          const next = { ...old };
+          for (const l of got) next[l.q] = l;
+          keep(lockKey, next);
+          return next;
+        });
+        setTyped((old) => {
+          const next = { ...old };
+          for (const l of got) next[l.q] = l.a;
+          keep(draftKey, next);
+          return next;
+        });
       })
       .catch((e) => {
         if (marked(e)) return gone();
@@ -489,21 +594,17 @@ export function Play(props: {
         if (!form || (e instanceof NetError && !e.offline)) setErr(problemWords(e));
       });
   }, [props.world.unitId, props.n, ver]);
-  // A new question (his report, 4 Nov 2026: after → the screen jumped up and came back down). Only the strip moves,
-  // sideways, to his chip: scrollIntoView moved the page too (up to the strip, then the card's smooth scroll back
-  // down). A new question is a new page: if he had scrolled down (a tall printed question), it starts at the top,
-  // set before the screen is drawn, so the only motion is the page sliding in from the side. (Its printed question
-  // is drawn a frame later: for that frame the page is shorter and the browser had already moved it part-way.)
+  // A new question (his report, 4 Nov 2026: after → the screen jumped up and came back down). A new question is a new
+  // page: if he had scrolled down (a tall printed question), it starts at the top, set before the screen is drawn, so
+  // the only motion is the page sliding in from the side. (Its printed question is drawn a frame later: for that frame
+  // the page is shorter and the browser had already moved it part-way.) The list of questions closes.
   const placedRow = useRef(false);
   useLayoutEffect(() => {
-    const row = strip.current;
-    const chip = row?.querySelector<HTMLElement>(".f-qchip.on");
-    if (!row || !chip) return;
-    const r = chip.getBoundingClientRect();
-    const s = row.getBoundingClientRect();
-    row.scrollTo({ left: row.scrollLeft + r.left - s.left - (s.width - r.width) / 2, behavior: placedRow.current && !instant() ? "smooth" : "auto" });
+    if (!form) return;
     if (placedRow.current && window.scrollY > 0) window.scrollTo(0, 0);
     placedRow.current = true;
+    setList(false);
+    setStory(false);
   }, [at.qi, !!form]);
   // The review after his last → is a new page too.
   useLayoutEffect(() => {
@@ -519,21 +620,39 @@ export function Play(props: {
   useEffect(() => {
     if (form) keep(spotKey, at);
   }, [at.qi, at.bi, !!form]);
+  // The owl notices when he stops: it thinks with him after 25 s, falls asleep after 70 s (never in tests).
+  useEffect(() => {
+    if (instant()) return;
+    const id = window.setInterval(() => {
+      const ms = Date.now() - acted.current;
+      setIdle(ms > 70_000 ? 2 : ms > 25_000 ? 1 : 0);
+    }, 5000);
+    return () => window.clearInterval(id);
+  }, []);
 
   const all = useMemo(() => (form ? boxesOf(form) : []), [form]);
   if (err) return <Oops text={err} onBack={props.onBack} />;
   if (!form) return <Waiting />;
 
+  const act = () => {
+    acted.current = Date.now();
+    if (idle) setIdle(0);
+  };
+  const each = !!form.each && !props.look;
   const q = form.qs[at.qi];
+  /** This question, checked already: his answers stay as they are. */
+  const lock = each ? locks[q.q] : undefined;
   const asking = !review && !!q.t && !how[q.q];
   const learning = !review && !!q.t && how[q.q] === "learn";
   const flat = all.findIndex((x) => x.qi === at.qi && x.bi === at.bi);
   // The box he types in now: a tap's place (an option, ✓ / ✗, a card) is never typed into.
-  const box = flat >= 0 && typing(all[flat].box) ? all[flat].box : null;
+  const box = flat >= 0 && typing(all[flat].box) && !lock ? all[flat].box : null;
   const val = (qi: number, bi: number) => typed[form.qs[qi].q]?.[bi] ?? "";
   /** Several of a question's answers at once (a tap changes a whole part: ✓ / ✗, the words marked, the cards). */
   const setRun = (qi: number, from: number, vals: string[]) => {
     const qn = form.qs[qi].q;
+    if (each && locks[qn]) return;
+    act();
     const arr = [...(typed[qn] ?? [])];
     vals.forEach((v, k) => (arr[from + k] = v));
     const next = { ...typed, [qn]: arr };
@@ -552,19 +671,141 @@ export function Play(props: {
     for (let i = 0; i < n; i++) if (val(qi, i).trim()) f++;
     return n === 0 ? "teacher" : f === n ? "full" : f > 0 ? "part" : "empty";
   };
-  const goNext = () => {
-    // The next box to type in this question, else the next question.
-    const next = flat >= 0 ? all.findIndex((x, i) => i > flat && x.qi === at.qi && typing(x.box)) : -1;
-    if (next >= 0) return setAt({ qi: at.qi, bi: all[next].bi });
-    if (at.qi + 1 < form.qs.length) return setAt({ qi: at.qi + 1, bi: startOf(at.qi + 1) });
+  /** A question's state on the bar and in the list: checked (how it went), else how much of it he answered. */
+  const stateOf = (qi: number) => {
+    const l = each ? locks[form.qs[qi].q] : undefined;
+    return l ? `${filled(qi)} ${verdictOf(l)}` : filled(qi);
+  };
+
+  const printed = showQ ? qs.got?.qs.find((x) => x.q === q.q) : undefined;
+  const css = qs.got?.css ?? null;
+  // Each part's answers right under its own sub-question, inside the printed question (5 Nov 2026, his ask: "after each
+  // sub question, I want to put the answer box"; Paper → slotParts), else under the question as before.
+  const inPaper = !!printed && css !== null && !asking && !learning;
+  // A long question, one sub-question at a time (14 Nov 2026, his idea): its steps, when every part found its own.
+  const labels = q.parts.map((x) => x.p ?? "");
+  const stepKey = inPaper && printed && (!q.free || props.look) ? `${q.q}|${printed.html.length}|${labels.join("\n")}` : "";
+  if (stepCache.current.key !== stepKey) stepCache.current = { key: stepKey, v: stepKey && printed ? stepsOf(printed.html, labels) : null };
+  const steps = stepCache.current.v;
+  const inQ = all.filter((x) => x.qi === at.qi);
+  const partAt: number[] = [];
+  q.parts.forEach((p, pi) => {
+    for (let k = 0; k < (p.boxes?.length ?? 0); k++) partAt.push(pi);
+  });
+  const stepOfBi = (bi: number) => (steps ? Math.max(0, steps.of[partAt[bi] ?? 0] ?? 0) : 0);
+  const stepNow = steps ? Math.min(steps.n - 1, Math.max(0, at.si ?? stepOfBi(at.bi))) : 0;
+  const stepBack = stepNow < stepWas.current;
+  stepWas.current = stepNow;
+  const stepParts = (k: number) => q.parts.filter((_, pi) => steps?.of[pi] === k);
+  const goStep = (k: number) => {
+    if (!steps || k < 0 || k >= steps.n) return;
+    act();
+    setStory(false);
+    if (k === stepNow) return;
+    buzz(5);
+    sound("tap");
+    const bs = inQ.filter((x) => stepOfBi(x.bi) === k);
+    const t = bs.find((x) => typing(x.box)) ?? bs[0];
+    setAt({ qi: at.qi, bi: t ? t.bi : at.bi, si: k });
+  };
+  /** How much of a step he answered (the steps on top), or how it went once checked. */
+  const stepState = (k: number) => {
+    let n = 0;
+    let f = 0;
+    let right = true;
+    q.parts.forEach((p, pi) => {
+      if (steps?.of[pi] !== k) return;
+      const from = partAt.indexOf(pi);
+      for (let i = 0; i < (p.boxes?.length ?? 0); i++, n++) if (val(at.qi, from + i).trim()) f++;
+      const ok = lock?.ok[pi];
+      if (lock && ok && !ok.every(Boolean)) right = false;
+    });
+    if (lock) return lock.got === null && stepParts(k).some((p) => !p.boxes) ? "full" : right ? "ok" : "no";
+    return n === 0 ? "" : f === n ? "full" : f > 0 ? "part" : "";
+  };
+
+  /** What → does next: his fraction's next cell, the next box of this step, the next step, or the question's end. */
+  const fr = box?.f ? box.f : null;
+  const ahead = (): { k: "cell" | "step" | "end" } | { k: "box"; bi: number } => {
+    if (lock) return { k: steps && stepNow + 1 < steps.n ? "step" : "end" };
+    if (fr && (at.ci ?? 0) < fracCells(fr, val(at.qi, at.bi)).length - 1) return { k: "cell" };
+    const nb = flat >= 0 ? inQ.find((x) => x.bi > at.bi && typing(x.box) && (!steps || stepOfBi(x.bi) === stepNow)) : undefined;
+    if (nb) return { k: "box", bi: nb.bi };
+    return { k: steps && stepNow + 1 < steps.n ? "step" : "end" };
+  };
+  /** This question can be checked now: something of his in it, and not checked yet. */
+  const canCheck = each && !lock && !q.free && !asking && !learning && inQ.length > 0 && filled(at.qi) !== "empty";
+  const settled = (qi: number, now: Record<number, FamilyLock>) => !!form.qs[qi].free || !!now[form.qs[qi].q] || boxesIn(qi) === 0;
+  const nextQ = (now = locks) => {
+    // A question he checked is done: → passes over it to the next one still open.
+    let to = at.qi + 1;
+    if (each) while (to < form.qs.length && now[form.qs[to].q]) to++;
+    if (to < form.qs.length) return setAt({ qi: to, bi: startOf(to) });
     setReview(true);
+    // Every question checked one by one: the level is done, nothing more to ask him.
+    if (each && form.qs.every((_, qi) => settled(qi, now))) void check();
+  };
+  const checkNow = async () => {
+    if (checking) return;
+    const a = Array.from({ length: inQ.length }, (_, i) => val(at.qi, i).trim());
+    const gaps = a.filter((x) => !x).length;
+    if (gaps > 0 && sure.current !== q.q) {
+      sure.current = q.q;
+      return toast(`${gaps} காலியாக உள்ளன (அவை ✗). சரி என்றால் மீண்டும் Check அழுத்து.`);
+    }
+    sure.current = null;
+    setChecking(true);
+    try {
+      const l = (await mutation("family:checkOne", { unitId: form.unitId, n: form.n, q: q.q, a, b: inQ.length })) as FamilyLock;
+      const next = { ...locks, [q.q]: l };
+      setLocks(next);
+      keep(lockKey, next);
+      // What the server kept is what he sees (asked twice, his first answers come back).
+      const mine = { ...typed, [q.q]: l.a };
+      setTyped(mine);
+      keep(draftKey, mine);
+      const v = verdictOf(l);
+      const r = v === "ok" ? run + 1 : v === "teach" ? run : 0;
+      setRunN(r);
+      if (v === "ok") {
+        sound("right", Math.max(0, r - 1));
+        buzz(6);
+      } else if (v === "no") {
+        sound("wrong");
+        buzz(18);
+      } else sound("pop");
+      setVerdict({ q: q.q, run: r });
+    } catch (e) {
+      if (marked(e)) return gone();
+      if (e instanceof NetError && e.offline) {
+        toast("இணையம் இல்லை: உன் விடை இங்கே உள்ளது. Level முடிவில் சரிபார்க்கப்படும்.");
+        return nextQ();
+      }
+      // The owner turned it off meanwhile: this level is checked once, at its end.
+      if (e instanceof NetError && /at its end/.test(e.message)) {
+        setForm({ ...form, each: undefined });
+        return nextQ();
+      }
+      toast(problemWords(e), true);
+    } finally {
+      setChecking(false);
+    }
+  };
+  const goNext = () => {
+    act();
+    const a = ahead();
+    if (a.k === "box") return setAt({ qi: at.qi, bi: a.bi });
+    if (a.k === "step") return goStep(stepNow + 1);
+    if (canCheck) return void checkNow();
+    nextQ();
   };
   const onKey = (k: string) => {
+    act();
+    if (lock) return k === "→" ? goNext() : undefined;
     buzz(6);
     sound("key");
     // A fraction box: → (and ␣) to its next cell, then on; the fraction key down to the denominator; ⌫ on an empty
     // cell back to the one before.
-    const fr = box?.f ? box.f : null;
     const ci = at.ci ?? 0;
     const cells = fr ? fracCells(fr, val(at.qi, at.bi)) : [];
     if (fr && (k === "→" || k === " ") && ci < cells.length - 1) return setAt({ ...at, ci: ci + 1 });
@@ -577,9 +818,10 @@ export function Play(props: {
       cells[ci] = k === "⌫" ? (cells[ci].endsWith("^2") ? cells[ci].slice(0, -2) : cells[ci].slice(0, -1)) : cells[ci] + k;
       return set(at.qi, at.bi, fracJoin(fr, cells));
     }
-    // A key while a tap's place is chosen: it goes to the question's first box.
-    const here = box ? at.bi : typesIn(at.qi) ? startOf(at.qi) : -1;
-    if (here < 0) return toast("இதைத் தாளில் செய்து படம் எடு (📷). → அடுத்த கேள்வி.");
+    // A key while a tap's place is chosen: it goes to the first box of what he sees (the question, or its step).
+    const first = inQ.find((x) => typing(x.box) && (!steps || stepOfBi(x.bi) === stepNow));
+    const here = box ? at.bi : first ? first.bi : -1;
+    if (here < 0) return toast(typesIn(at.qi) ? "இங்கே எழுத எதுவும் இல்லை. → அடுத்தது." : "இதைத் தாளில் செய்து படம் எடு (📷). → அடுத்த கேள்வி.");
     if (here !== at.bi) setAt({ qi: at.qi, bi: here });
     const cur = val(at.qi, here);
     if (k === "⌫") return set(at.qi, here, cur.endsWith("^2") ? cur.slice(0, -2) : cur.slice(0, -1));
@@ -591,6 +833,14 @@ export function Play(props: {
   const teacherQs = form.qs.filter((x) => x.parts.some((p) => !p.boxes)).length;
   const backQs = form.qs.filter((x) => x.re).length;
   const freeQs = form.qs.filter((x) => x.free);
+  const lockedQs = each ? form.qs.filter((x) => locks[x.q]).length : 0;
+  // The XP of this level so far (it becomes his when the level is done): his marks, and old questions won back.
+  const bank = each
+    ? form.qs.reduce((s, x) => {
+        const l = locks[x.q];
+        return s + (!l ? 0 : x.re ? (l.got !== null && l.got >= l.max ? (x.rb ?? 0) : 0) : (l.got ?? l.phoneGot));
+      }, 0)
+    : 0;
 
   const check = async () => {
     setBusy(true);
@@ -602,12 +852,10 @@ export function Play(props: {
         // b = the boxes this screen showed: a question the server reads differently now is never marked against it.
         typed: form.qs.map((x) => ({ q: x.q, a: Array.from(typed[x.q] ?? [], (s) => (s ?? "").trim()), b: x.parts.reduce((n, p) => n + (p.boxes?.length ?? 0), 0) })),
       })) as Checked;
-      keep(draftKey, null);
-      keep(formKey, null);
-      keep(spotKey, null);
-      keep(howKey, null);
-      keep(`qs.${form.unitId}.${form.n}`, null);
-      props.onChecked(form, res, typed);
+      forget();
+      // He saw each answer as he went: the reveal goes straight to the score.
+      const seen = each && res.results.every((r) => r.free || !!locks[r.q] || r.ok.every((o) => o === null));
+      props.onChecked(form, seen ? { ...res, seen: true } : res, typed);
     } catch (e) {
       if (marked(e)) return gone();
       toast(e instanceof NetError && e.offline ? "இணையம் இல்லை. உன் விடைகள் இந்த phone இல் உள்ளன: இணையம் வந்ததும் மீண்டும் அழுத்து." : problemWords(e), true);
@@ -616,8 +864,6 @@ export function Play(props: {
     }
   };
 
-  const printed = showQ ? qs.got?.qs.find((x) => x.q === q.q) : undefined;
-  const css = qs.got?.css ?? null;
   const zoom = () => {
     if (printed && css !== null) props.onZoom({ q: q.q, html: printed.html, css });
   };
@@ -626,6 +872,8 @@ export function Play(props: {
   const fit = printed && css !== null ? slotsFit(runs, printed.html) : new Set<SlotRun["attr"]>();
   const mine = typed[q.q] ?? [];
   const tap = (run: SlotRun, i: number, v?: string) => {
+    if (lock) return;
+    act();
     if (run.attr === "b") {
       buzz(5);
       sound("tap");
@@ -637,13 +885,21 @@ export function Play(props: {
     sound(run.ui.k === "choose" ? "pop" : "tap");
     setRun(at.qi, run.at, vals);
   };
-  const live: Live = { runs, fit, vals: mine, cur: box ? at.bi : null, onSlot: tap };
+  // After its Check: each answer right or not, in his list's order (words to mark and a reason: the part as a whole).
+  const marks: (boolean | null)[] = [];
+  if (lock) {
+    q.parts.forEach((p, pi) => {
+      const ok = lock.ok[pi] ?? null;
+      const whole = p.ui?.k === "mark" || p.ui?.k === "why";
+      for (let k = 0; k < (p.boxes?.length ?? 0); k++) marks.push(ok === null ? null : whole ? ok.every(Boolean) : (ok[k] ?? false));
+    });
+  }
+  const live: Live = { runs, fit, vals: mine, cur: box ? at.bi : null, onSlot: tap, ...(lock ? { marks } : {}) };
   const runAt = (from: number) => runs.find((r) => r.at === from);
-  const pad = !review && !asking && !learning && typesIn(at.qi);
+  const pad = !review && !asking && !learning && !lock && typesIn(at.qi);
+  // → is Check where the question ends (and its Check answers at once).
+  const go = canCheck && ahead().k === "end" ? (checking ? ("busy" as const) : ("check" as const)) : undefined;
   let bi = 0;
-  // Each part's answers right under its own sub-question, inside the printed question (5 Nov 2026, his ask: "after each
-  // sub question, I want to put the answer box"; Paper → slotParts), else under the question as before.
-  const inPaper = !!printed && css !== null && !asking && !learning;
   const sl = (pi: number) => (inPaper ? `p${pi}` : undefined);
   const rows = asking || learning ? [] : q.parts.map((p, pi) => {
     if (p.boxes && p.boxes.length === 0) return null;
@@ -707,6 +963,7 @@ export function Play(props: {
               const v = val(at.qi, i);
               // A word or a name: his phone's own keyboard, in the box itself.
               if (b.k === "text") return <WordBox key={i} box={b} v={v} on={at.bi === i} onFocus={() => setAt({ qi: at.qi, bi: i })} onSet={(x) => set(at.qi, i, x)} />;
+              const on = at.bi === i && !lock;
               return (
                 <Fragment key={i}>
                   {b.j && (
@@ -716,8 +973,8 @@ export function Play(props: {
                   )}
                   <button
                     type="button"
-                    class={`f-box${at.bi === i ? " on" : ""}${b.k === "expr" ? " x" : ""}${v ? " has" : ""}${b.f ? " frac" : ""}`}
-                    onClick={() => setAt({ qi: at.qi, bi: i })}
+                    class={`f-box${on ? " on" : ""}${b.k === "expr" ? " x" : ""}${v ? " has" : ""}${b.f ? " frac" : ""}${lock && marks[i] !== null ? (marks[i] ? " ok" : " no") : ""}`}
+                    onClick={() => !lock && setAt({ qi: at.qi, bi: i })}
                     aria-label={`${b.l ?? ""} answer ${i + 1}${b.u ? ` (${b.u})` : ""}`}
                   >
                     {b.l && (
@@ -727,9 +984,9 @@ export function Play(props: {
                     )}
                     <span class="f-bline">
                       {b.f ? (
-                        <FracCells f={b.f} v={v} on={at.bi === i ? (at.ci ?? 0) : -1} onCell={(c) => setAt({ qi: at.qi, bi: i, ci: c })} />
+                        <FracCells f={b.f} v={v} on={on ? (at.ci ?? 0) : -1} onCell={(c) => !lock && setAt({ qi: at.qi, bi: i, ci: c })} />
                       ) : (
-                        <span key={at.bi === i ? v.length : 0} class={v ? `f-bval${at.bi === i ? " typed" : ""}` : "f-bval empty"}>
+                        <span key={on ? v.length : 0} class={v ? `f-bval${on ? " typed" : ""}` : "f-bval empty"}>
                           {v ? <Maths s={v} /> : "?"}
                         </span>
                       )}
@@ -751,47 +1008,110 @@ export function Play(props: {
       </div>
     );
   });
+
+  // The owl beside him: what it does and says now (Tamil: its voice).
+  const lv = lock ? verdictOf(lock) : null;
+  const half = form.qs.length >= 6 && at.qi === Math.floor(form.qs.length / 2);
+  const pose: Pose =
+    idle === 2 ? "sleep" : idle === 1 ? "think" : learning ? "teach" : q.free ? "yes" : lv === "ok" ? "yes" : lv ? "again" : each && run >= 3 ? "combo" : at.qi === 0 && done === 0 ? "hello" : "write";
+  const say =
+    idle === 2
+      ? "தூக்கம் வருகிறது… என்னைத் தொட்டு எழுப்பு!"
+      : idle === 1
+        ? "நேரம் எடு. தாளில் செய்து பார்."
+        : learning
+          ? "படிப்படியாகப் பார்: பிறகு நீயே செய்."
+          : asking
+            ? "இது ஆசிரியர் கேள்வி."
+            : q.free
+              ? "இது உனக்கு இலவசம்!"
+              : lv === "ok"
+                ? "இதைச் சரியாகச் செய்தாய்!"
+                : lv
+                  ? "இது முடிந்தது. அடுத்ததைப் பார்."
+                  : q.re
+                    ? "இது மீண்டும் வந்தது: இப்போது வெல்!"
+                    : at.qi === 0 && done === 0
+                      ? "தொடங்குவோம்! தாளில் செய்து, விடையை இங்கே போடு."
+                      : each && run >= 2
+                        ? `${run} சரி தொடர்ச்சியாக! அப்படியே தொடர்.`
+                        : at.qi === form.qs.length - 1 && form.qs.length > 1
+                          ? "கடைசிக் கேள்வி! முடித்துவிடு."
+                          : half
+                            ? each && bank > 0
+                              ? `பாதி முடிந்தது! இதுவரை ${bank} XP.`
+                              : "பாதி முடிந்தது! அப்படியே தொடர்."
+                            : "தாளில் செய்து, விடையை இங்கே போடு.";
+  // The answer he just got (the sheet over the pad).
+  const vl = verdict ? locks[verdict.q] : undefined;
+  const vq = verdict ? form.qs.find((x) => x.q === verdict.q) : undefined;
+  const vk = vl ? verdictOf(vl) : null;
+  // A wrong one comes back two levels on, when the Stage has such a level (convex/lib/family.ts retryPool).
+  const later = !!vq && !vq.re && form.n > 0 && props.world.levels.some((l) => l.n >= form.n + 2);
+  const vxp = !vl || !vq ? 0 : vq.re ? (vk === "ok" ? (vq.rb ?? 0) : 0) : (vl.got ?? vl.phoneGot);
+  const step = steps ? (story ? ("story" as const) : stepNow) : undefined;
   return (
-    <div class={`f-play${showQ ? " withq" : ""}${review ? " rev" : ""}${box?.k === "expr" ? ` xpad${box.eq || (box.p && box.v) ? " eqpad" : ""}` : ""}${!review && !pad ? " nopad" : ""}`}>
+    <div class={`f-play v2${showQ ? " withq" : ""}${review ? " rev" : ""}${box?.k === "expr" ? ` xpad${box.eq || (box.p && box.v) ? " eqpad" : ""}` : ""}${!review && !pad ? " nopad" : ""}`}>
       <header class="f-ptop">
         <button type="button" class="f-round" aria-label="Back" onClick={props.onBack}>
           <Icon name="close" size={20} />
         </button>
-        <div class={`f-pbar${all.length > 0 && done === all.length ? " full" : ""}`} aria-label={`${done} of ${all.length} answered`}>
-          <i style={{ width: `${Math.round((done / Math.max(1, all.length)) * 100)}%` }}>{done > 0 && <b key={done} />}</i>
-          <span class="f-ptag">
-            {done}/{all.length}
+        <button type="button" class="f-pips" aria-label={`${done} of ${all.length} answered`} onClick={() => setList(!list)}>
+          {form.qs.map((x, qi) => (
+            <i key={x.q} class={`${stateOf(qi)}${qi === at.qi && !review ? " on" : ""}`} />
+          ))}
+        </button>
+        {each && (
+          <span class="f-bank up" key={bank} aria-label={`${bank} XP in this level`}>
+            <Gem size={16} /> {bank}
           </span>
-        </div>
+        )}
       </header>
       <div class="f-prow">
         <p class="f-kicker">
           Stage {form.no} · {lvName(form)}
         </p>
+        <button type="button" class={`f-qcount${list ? " on" : ""}`} aria-label="Questions" aria-expanded={list} onClick={() => setList(!list)}>
+          {Math.min(at.qi + 1, form.qs.length)} / {form.qs.length} <Icon name="next" size={12} />
+        </button>
         {props.look ? (
           <span class="f-checkpill">Preview</span>
-        ) : (
+        ) : each ? null : (
           <button type="button" class="f-checkpill" onClick={() => setReview(true)}>
             Check
           </button>
         )}
       </div>
-      <div class="f-strip" ref={strip}>
+      <div class={`f-strip${list ? " open" : ""}`} ref={strip}>
         {form.qs.map((x, qi) => (
           <button
             type="button"
             key={x.q}
-            class={`f-qchip ${filled(qi)}${qi === at.qi && !review ? " on" : ""}${x.re ? " re" : ""}${x.t ? " tq" : ""}`}
+            class={`f-qchip ${stateOf(qi)}${qi === at.qi && !review ? " on" : ""}${x.re ? " re" : ""}${x.t ? " tq" : ""}`}
             aria-label={x.re ? `Q${x.q} again` : undefined}
             onClick={() => {
               buzz();
+              act();
               setReview(false);
+              setList(false);
               setAt({ qi, bi: startOf(qi) });
             }}
           >
             {x.re ? `↻${x.q}` : x.q}
           </button>
         ))}
+        {each && !review && (
+          <button
+            type="button"
+            class="f-checkpill"
+            onClick={() => {
+              setList(false);
+              setReview(true);
+            }}
+          >
+            Finish
+          </button>
+        )}
       </div>
 
       {review ? (
@@ -802,6 +1122,11 @@ export function Play(props: {
             <li>
               <b>{done}</b> விடைகள் போட்டாய்
             </li>
+            {lockedQs > 0 && (
+              <li>
+                <b>{lockedQs}</b> கேள்விகளை ஏற்கனவே சரிபார்த்தாய் ✓
+              </li>
+            )}
             {empty > 0 && (
               <li class="warn">
                 <b>{empty}</b> காலியாக உள்ளன (அவை ✗)
@@ -833,64 +1158,165 @@ export function Play(props: {
               </button>
             </>
           )}
-          <button type="button" class="f-btn ghost" onClick={() => setReview(false)}>
+          <button type="button" class="f-btn ghost" disabled={busy} onClick={() => setReview(false)}>
             Look again
           </button>
         </section>
       ) : (
-        <section class="f-card f-qcard slide" key={q.q}>
-          <div class="f-qhead">
-            <b class="f-qn">Q{q.q}</b>
-            <span class="f-qtools">
-              {printed && css !== null && (
-                <button type="button" class="f-zoombtn" aria-label={`Zoom Q${q.q}`} onClick={zoom}>
-                  <Icon name="zoom" size={19} />
-                </button>
-              )}
-              {q.re ? (
-                <span class="f-xpchip re">↻ +{q.rb} XP</span>
-              ) : (
-                <span class="f-xpchip">
-                  <Gem size={15} /> {q.max} XP
-                </span>
-              )}
+        <>
+          <div class="f-lvcoach">
+            <span
+              class="tap"
+              role="button"
+              aria-label="The owl"
+              onClick={() => {
+                act();
+                buzz(8);
+                sound("pop");
+              }}
+            >
+              <Buddy pose={pose} key={pose} class="coach" />
             </span>
+            <p class="f-bubble f-lvsay" key={say}>
+              {say}
+            </p>
           </div>
-          {q.re && <p class="f-again">Level {q.re} இல் தவறியது: மீண்டும் முயற்சி!</p>}
-          {q.t && <p class="f-tqtag">ஆசிரியர் கேள்வி · with your teacher</p>}
-          {q.free && <FreeCard max={q.max} />}
-          {/* A free question isn't his to do: only the owner's Preview still shows it (to see what he made free). */}
-          {showQ &&
-            (!q.free || props.look) &&
-            (printed && css !== null ? (
-              <Paper html={printed.html} css={css} q={q.q} onZoom={zoom} live={live} parts={inPaper ? q.parts.map((x) => x.p ?? "") : undefined}>
-                {inPaper && rows}
-              </Paper>
-            ) : (
-              <p class="f-paper-note">
-                {qs.failed ? "இணையம் இல்லை: கேள்வியைக் கொண்டுவர முடியவில்லை." : qs.got ? "இந்தக் கேள்வி இன்னும் phone இல் இல்லை." : "கேள்வி வருகிறது…"}
-              </p>
-            ))}
-          {asking ? (
-            <div class="f-teachask rise">
-              <p>இந்தக் கேள்வியை உன் ஆசிரியருடன் செய்தாயா?</p>
-              <button type="button" class="f-btn go" onClick={() => pick(q.q, "do")}>
-                ஆம்: விடை எழுதுகிறேன்
-              </button>
-              <button type="button" class="f-btn gold" onClick={() => pick(q.q, "learn")}>
-                <Icon name="bulb" size={17} /> இல்லை: கற்றுக்கொள்
-              </button>
+          <section
+            class={`f-card f-qcard slide${lock ? " locked" : ""}`}
+            key={q.q}
+            onTouchStart={(e) => {
+              const t = e.touches[0];
+              // A swipe across the question moves between its steps (never from his cards, boxes or buttons).
+              swipe.current = steps && t && !(e.target instanceof Element && e.target.closest(".f-part, button, input, textarea")) ? { x: t.clientX, y: t.clientY } : null;
+            }}
+            onTouchEnd={(e) => {
+              const from = swipe.current;
+              const t = e.changedTouches[0];
+              swipe.current = null;
+              if (!from || !t) return;
+              const dx = t.clientX - from.x;
+              if (Math.abs(dx) > 70 && Math.abs(t.clientY - from.y) < 40) goStep(stepNow + (dx < 0 ? 1 : -1));
+            }}
+          >
+            <div class="f-qhead">
+              <b class="f-qn">Q{q.q}</b>
+              <span class="f-kind">{ASK[askOf(steps ? stepParts(stepNow) : q.parts)]}</span>
+              <span class="f-qtools">
+                {printed && css !== null && (
+                  <button type="button" class="f-zoombtn" aria-label={`Zoom Q${q.q}`} onClick={zoom}>
+                    <Icon name="zoom" size={19} />
+                  </button>
+                )}
+                {q.re ? (
+                  <span class="f-xpchip re">↻ +{q.rb} XP</span>
+                ) : (
+                  <span class="f-xpchip">
+                    <Gem size={15} /> {q.max} XP
+                  </span>
+                )}
+              </span>
             </div>
-          ) : learning ? (
-            <Learn unitId={props.world.unitId} n={props.n} q={q.q} onDone={() => pick(q.q, "do")} />
-          ) : null}
-          {!inPaper && rows}
-          {props.look && <FreeSwitch key={q.q} unitId={form.unitId} q={q.q} max={q.max} free={!!q.free} onDone={() => setVer((x) => x + 1)} />}
-        </section>
+            {steps && (
+              <div class="f-stepper" role="tablist" aria-label="Parts">
+                {Array.from({ length: steps.n }, (_, k) => {
+                  const name = (labels[steps.of.indexOf(k)] ?? "").split(" · ")[0].trim();
+                  return (
+                    <button type="button" role="tab" key={k} aria-selected={k === stepNow} aria-label={`Part ${name || k + 1}`} class={`f-stp ${stepState(k)}${k === stepNow ? " now" : ""}`} onClick={() => goStep(k)}>
+                      <b>{name && name.length <= 5 ? name : k + 1}</b>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {steps && (stepNow > 0 || story) && (steps.story || steps.fig) && (
+              <button type="button" class={`f-story${story ? " open" : ""}`} aria-expanded={story} onClick={() => (act(), setStory(!story))}>
+                <Icon name="eye" size={17} />
+                <span>{story ? "மூடு: கேள்விக்குத் திரும்பு" : steps.story || "படத்தைப் பார்"}</span>
+                <Icon name="next" size={14} class="dn" />
+              </button>
+            )}
+            {q.re && <p class="f-again">Level {q.re} இல் தவறியது: மீண்டும் முயற்சி!</p>}
+            {q.t && <p class="f-tqtag">ஆசிரியர் கேள்வி · with your teacher</p>}
+            {q.free && <FreeCard max={q.max} />}
+            {/* A free question isn't his to do: only the owner's Preview still shows it (to see what he made free). */}
+            {showQ &&
+              (!q.free || props.look) &&
+              (printed && css !== null ? (
+                <Paper key={step ?? "all"} html={printed.html} css={css} q={q.q} onZoom={zoom} live={live} parts={inPaper ? labels : undefined} step={step} back={stepBack}>
+                  {inPaper && rows}
+                </Paper>
+              ) : (
+                <p class="f-paper-note">
+                  {qs.failed ? "இணையம் இல்லை: கேள்வியைக் கொண்டுவர முடியவில்லை." : qs.got ? "இந்தக் கேள்வி இன்னும் phone இல் இல்லை." : "கேள்வி வருகிறது…"}
+                </p>
+              ))}
+            {asking ? (
+              <div class="f-teachask rise">
+                <p>இந்தக் கேள்வியை உன் ஆசிரியருடன் செய்தாயா?</p>
+                <button type="button" class="f-btn go" onClick={() => pick(q.q, "do")}>
+                  ஆம்: விடை எழுதுகிறேன்
+                </button>
+                <button type="button" class="f-btn gold" onClick={() => pick(q.q, "learn")}>
+                  <Icon name="bulb" size={17} /> இல்லை: கற்றுக்கொள்
+                </button>
+              </div>
+            ) : learning ? (
+              <Learn unitId={props.world.unitId} n={props.n} q={q.q} onDone={() => pick(q.q, "do")} />
+            ) : null}
+            {!inPaper && rows}
+            {props.look && <FreeSwitch key={q.q} unitId={form.unitId} q={q.q} max={q.max} free={!!q.free} onDone={() => setVer((x) => x + 1)} />}
+          </section>
+        </>
       )}
 
-      {pad && <Pad box={box ?? all.find((x) => x.qi === at.qi && typing(x.box))?.box ?? null} onKey={onKey} last={flat === all.length - 1} />}
-      {!review && !asking && !learning && !pad && <NextBar onNext={goNext} last={at.qi === form.qs.length - 1} />}
+      {pad && <Pad box={box ?? all.find((x) => x.qi === at.qi && typing(x.box))?.box ?? null} onKey={onKey} last={flat === all.length - 1} go={go} />}
+      {!review && !asking && !learning && !pad && <NextBar onNext={goNext} last={at.qi === form.qs.length - 1} go={go} />}
+      {verdict && vl && vk && (
+        <>
+          <div class="f-vdim" />
+          <section class={`f-verdict ${vk}`} role="status" aria-label={vk === "ok" ? "Right" : vk === "no" ? "Not right" : vk === "pt" ? "Partly right" : "Your teacher marks it"}>
+            <Buddy pose={vk === "ok" ? (verdict.run >= 3 ? "combo" : "yes") : vk === "teach" ? "write" : vk === "pt" ? "again" : "oops"} class="fbowl" />
+            <h2>
+              <span class="f-vmark">{vk === "ok" ? <Icon name="check" size={20} /> : vk === "no" ? "✗" : vk === "pt" ? "½" : <Icon name="pen" size={18} />}</span>
+              {vk === "ok" ? (vq?.re ? "வென்றுவிட்டாய்!" : "சரியான விடை!") : vk === "no" ? "பரவாயில்லை!" : vk === "pt" ? "பாதி சரி!" : "ஆசிரியர் திருத்துவார்"}
+            </h2>
+            <p>
+              {vk === "ok"
+                ? vq?.re
+                  ? "பழைய கேள்வியை இப்போது சரியாகச் செய்தாய்."
+                  : verdict.run >= 2
+                    ? `${verdict.run} சரி தொடர்ச்சியாக. அப்படியே தொடர்!`
+                    : "அருமை! அப்படியே தொடர்."
+                : vk === "teach"
+                  ? vl.phoneGot > 0
+                    ? `இப்போது ${vl.phoneGot} XP. மீதியை உன் ஆசிரியர் திருத்துவார்.`
+                    : "இதை உன் ஆசிரியர் திருத்துவார்."
+                  : `${vk === "pt" ? `${vl.got} / ${vl.max}. ` : "இந்த விடை சரியில்லை. "}${later ? "இது பின்னர் மீண்டும் வரும்: அப்போது வெல்!" : "வகுப்பில் ஆசிரியர் விளக்குவார்."}`}
+            </p>
+            <div class="f-vchips">
+              {vxp > 0 && (
+                <span class="f-vchip xp">
+                  <Gem size={15} /> +{vxp} XP
+                </span>
+              )}
+              {vk === "ok" && verdict.run >= 2 && <span class="f-vchip row">{verdict.run} IN A ROW</span>}
+              {(vk === "no" || vk === "pt") && later && <span class="f-vchip back">↻ மீண்டும் வரும்</span>}
+            </div>
+            <button
+              type="button"
+              class="f-btn big go"
+              onClick={() => {
+                act();
+                buzz();
+                setVerdict(null);
+                nextQ();
+              }}
+            >
+              Continue
+            </button>
+          </section>
+        </>
+      )}
     </div>
   );
 }
@@ -1066,7 +1492,7 @@ export function Result(props: {
 }) {
   const { res, form, before } = props;
   const rows = res.results;
-  const [shown, setShown] = useState(() => (instant() ? rows.length : 0));
+  const [shown, setShown] = useState(() => (instant() || res.seen ? rows.length : 0));
   const done = shown >= rows.length;
   const pct = res.phoneMax ? res.got / res.phoneMax : 0;
   const fresh = (res.trophies ?? []).filter((t) => !before.trophies.includes(t));

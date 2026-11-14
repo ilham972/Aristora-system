@@ -71,7 +71,8 @@ describe("the owner's Preview", () => {
     const fam = asPhone(raw, FAM);
     for (const n of [1, 2]) {
       const mine = await t.query(api.preview.level, { unitId: u01, n });
-      if (n === 1) expect(mine).toEqual(await fam.query(api.family.level, { unitId: u01, n }));
+      // The same level but for the phone's own Check after every question (`each`): his Preview never checks.
+      if (n === 1) expect({ ...mine, each: true }).toEqual(await fam.query(api.family.level, { unitId: u01, n }));
       expect(mine.qs.length).toBeGreaterThan(0);
     }
     const one = await t.query(api.preview.level, { unitId: u01, n: 1 });

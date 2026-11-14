@@ -1421,14 +1421,58 @@ learning app of our education institute"): one profile, his class times, what he
     the teacher = pale with a clock, done before the app = pale ✓, **his Level now** = the gold one with START, later =
     🔒; a trophy at the end. A Stage the phone can't mark yet, or locked, says so. **Every Level done: Certificate**
     (below the trophy).
-  - **A Level**: ✕, a progress bar (answers typed, "3/9"; a light runs along it at each answer; gold when every box has
-    one), "Stage 3 · Level 4", Check; the next question slides in, each key gives the answer a small push;
-    the question strip, one question at a time, his own pad (numbers, or the n pad), Check once (review first).
+  - **A Level** (rebuilt 14 Nov 2026; his words: "every single question looks like a card ... this is feel boring",
+    then "let's build completely"): ✕, **the bar: one step a question** (violet = answered, gold ring = now, gold =
+    a free one; once checked: blue = right, rose = not right, amber = part of its marks), "Stage 3 · Level 4",
+    "5 / 11" (a tap on it or on the bar opens **the list of questions**: every number as a big chip, ↻ and free ones
+    marked; a tap goes there; it closes by itself), **the owl beside him** (its whole body, below: it watches his
+    paper, waves at the first question, thinks with him after 25 s without a tap, falls asleep after 70 s, wears its
+    headband on a question he got wrong; one line in its bubble: the start, his run, halfway, the last question),
+    then the question: its number as a pill, **what it asks** beside it ("விடையை எழுது", "சரியானதைத் தொடு", "சரியா,
+    பிழையா?", "வரிசைப்படுத்து" …), 🔍, its XP. One question at a time, his own pad (numbers, or the n pad); the next
+    question slides in, each key gives the answer a small push.
+    **Check after every question** (the owner's switch: Settings → Books → "On the phone: Check after every question",
+    on by default; off = Check once at the level's end, as before, with the Check pill beside "5 / 11"):
+    - Where a question ends (its last box, its last step), the pad's → turns into a gold **Check** once something of
+      his is in it (nothing typed: → only passes on, the question stays open). Some boxes empty: "N காலியாக உள்ளன
+      (அவை ✗)" once, a second Check sends it.
+    - The server marks that one question (`family.checkOne`) and **a sheet slides up over the pad at once**: blue
+      "சரியான விடை!" with +XP and "3 IN A ROW" (the bell a step higher for each right one in a row, the owl jumps;
+      star eyes from 3), rose "பரவாயில்லை!" (a low note, the owl feels it; **never the answer**; "இது பின்னர் மீண்டும்
+      வரும்: அப்போது வெல்!" when the Stage has a level two on, else "வகுப்பில் ஆசிரியர் விளக்குவார்."), amber "பாதி சரி!"
+      (3 / 5), or "ஆசிரியர் திருத்துவார்" when a part waits for the teacher. Continue → the next question still open.
+    - **Once checked, a question can't be changed**: its boxes turn blue or rose as he typed them, no pad, → passes on.
+      The server keeps what he typed (`familyLive`), so another phone of his shows the same, and the level's own Check
+      marks the level from it, never from what a phone sends again.
+    - **The level's XP so far** sits on top (the pink gem): it becomes his when the level is done. Nothing is saved as
+      his marks before that: XP, the flame, ⌂ for the class and the questions that come back all happen at the level's
+      end, exactly as before.
+    - The last question checked = **the level ends by itself** and the reveal goes straight to the score (he saw every
+      answer already). Questions still open (skipped, or no signal): the review card says so ("9 கேள்விகளை ஏற்கனவே
+      சரிபார்த்தாய்", "1 காலியாக உள்ளன") with Check ✓ and Look again; the list also has **Finish**.
+    - No signal at a Check: "இணையம் இல்லை: … Level முடிவில் சரிபார்க்கப்படும்", on to the next; the level's Check at
+      the end marks it. The owner's Preview never checks.
+    **A long question, one sub-question at a time** (his idea: "essay questions have more sub questions, so student
+    need to scroll below again and again ... put above like onboarding steps ... they can go back and forth"): when
+    every part of the key has its own printed sub-question and there are two or more, **its steps stand on top** (i,
+    ii, iii …: violet = answered, gold ring = now, blue / rose once checked); the page shows the story with the first
+    sub-question, then one sub-question a page with its boxes right under it. A tap on a step, a swipe across the
+    question, or → on the pad (after the step's last box) moves; back and forth until its Check. From the second step
+    **the story folds to its first words** in a strip: a tap shows the story alone (its table, its figure), a tap
+    goes back. A question whose parts don't each have a printed label stays one page, as before.
+    **Bigger places to tap** (the audit, 14 Nov: options and ✓ / ✗ were 31–34 px high): options 48 px and two a row,
+    ✓ / ✗ 44 px, blanks 36 px; each pops when chosen.
     **The screen holds still on →** (his report, 4 Nov 2026: "the whole screen bounces up and comes back"): the slide
     is clipped at the phone's edge (`.f-play`), so the page never gets wider than the phone and the pad never moves;
-    the strip glides sideways to his chip by itself (never the page); a new question, and the review after his last
-    →, is a new page: if he had scrolled down (a tall printed question), it starts at the top, set before the screen
-    is drawn. → to another box of the same question keeps his place.
+    a new question, and the review after his last →, is a new page: if he had scrolled down (a tall printed
+    question), it starts at the top, set before the screen is drawn. → to another box of the same question keeps his
+    place.
+    **The owl with a body** (his ask: "the body movement changes like a real bird ... in our app that's a little bit
+    movement"): the owl was the logo, a head and two wings; in a Level it now stands on a body of ARISTORA's own (a
+    belly, two wing-arms that point and hold, feet, a tail) under the logo's own head and cap, exactly as they are.
+    Eleven poses (ready, hello, write, think, yes, combo, oops, again, champ, sleep, teach), each moved by the level's
+    style: it squashes before a jump and on landing, waves, scribbles, sways, snores. Only in a Level so far; the rest
+    of the app keeps the owl of before.
     A box shows a unit after his number when the answer has one ("63 %", "? cm²", "? h" "? min": printed, never typed)
     and a ratio's ":" between its boxes. **A question only the teacher marks** (no box): "இதைத் தாளில் செய்: உன் ஆசிரியர்
     வகுப்பில் திருத்துவார்" and **no pad**: only → in its place (`NextBar`; 4 Nov 2026: before, a pale pad that did

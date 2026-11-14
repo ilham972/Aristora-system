@@ -123,7 +123,15 @@ export type Live = {
   /** The box he is typing in (its place in his list), if any. */
   cur: number | null;
   onSlot: (run: SlotRun, i: number, v?: string) => void;
+  /** After its Check (14 Nov 2026): each answer right or not, in his list's order (null = the teacher's). */
+  marks?: (boolean | null)[];
 };
+
+/** A slot's colour after its Check: blue = right, rose = not (never on a slot he left alone). */
+function marked(el: Element, m: boolean | null | undefined, on: boolean): void {
+  el.classList.toggle("fx-ok", on && m === true);
+  el.classList.toggle("fx-no", on && m === false);
+}
 
 const SLOT = "[data-fill],[data-opt],[data-tick],[data-mark]";
 
@@ -155,9 +163,11 @@ export function paintSlots(root: ShadowRoot, live: Live): void {
           );
           el.classList.toggle("fx-on", live.cur === r.at + i);
           el.classList.toggle("fx-has", !!v);
+          marked(el, live.marks?.[r.at + i], !!live.marks);
           el.setAttribute("aria-label", `answer ${i + 1}${v ? `: ${pretty(v)}` : ""}`);
         } else if (a === "o") {
           el.classList.toggle("fx-on", live.vals[r.at] === String(i + 1));
+          marked(el, live.marks?.[r.at], !!live.marks && live.vals[r.at] === String(i + 1));
         } else if (a === "t") {
           // The printed bracket becomes ✓ and ✗ to tap.
           if (!el.dataset.fxt) {
@@ -165,7 +175,10 @@ export function paintSlots(root: ShadowRoot, live: Live): void {
             el.innerHTML = '<span class="fx-tk" data-v="1">✓</span><span class="fx-tk" data-v="0">✗</span>';
           }
           const v = live.vals[r.at + i] ?? "";
-          el.querySelectorAll<HTMLElement>(".fx-tk").forEach((t) => t.classList.toggle("fx-on", t.dataset.v === v));
+          el.querySelectorAll<HTMLElement>(".fx-tk").forEach((t) => {
+            t.classList.toggle("fx-on", t.dataset.v === v);
+            marked(t, live.marks?.[r.at + i], !!live.marks && t.dataset.v === v);
+          });
         } else {
           el.classList.toggle("fx-on", live.vals[r.at + i] === "1");
           el.classList.toggle("fx-ring", r.ui.k === "mark" && r.ui.how === "ring");

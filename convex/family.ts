@@ -79,7 +79,7 @@ import {
   type World,
 } from "./lib/family";
 import { DAY_MS, isBirthday, SL_OFFSET_MS, slDay, slDayNo, slWeekStart } from "./lib/day";
-import { bookOf, homeChecks, phoneKeyFor, type LevelBook } from "./lib/homeWork";
+import { bookOf, checkEach, homeChecks, phoneKeyFor, type LevelBook } from "./lib/homeWork";
 import { computeMaster, copyState, markBefore, type MQ, type MState } from "./lib/master";
 import { boxCount, formOf, INPUT_MAX, markQuestion, onlyReasons, REASON_MAX, teacherMarks, type FormQ, type KeyQ } from "./lib/phone";
 import { keyText, PHOTO_BYTES, PHOTO_MAX, PHOTO_URLS_PER_DAY, type PhotoKind } from "./lib/photos";
@@ -524,7 +524,29 @@ export type FamilyLevel = {
    * `t` = a ladder's teacher question: done with the teacher, or Learn first (4 Nov 2026).
    */
   qs: (FormQ & { part: string; re?: number; rb?: number; t?: true; free?: true })[];
+  /** Check after every question (14 Nov 2026; the owner's switch, Settings → Books). Missing = once, at the end. */
+  each?: true;
+  /** The questions he already checked in this level, each once (`checkOne`): what he typed and what it got. */
+  locks?: FamilyLock[];
 };
+
+/** One question checked on its own (14 Nov 2026): what he typed (he can't change it) and what the phone gave. */
+export type FamilyLock = { q: number; a: string[]; ok: (boolean[] | null)[]; got: number | null; phoneGot: number; max: number };
+type LiveDone = Doc<"familyLive">["done"][number];
+const lockOf = (d: LiveDone): FamilyLock => ({ q: d.q, a: d.a, ok: d.ok, got: d.got, phoneGot: d.phoneGot, max: d.max });
+
+const liveRow = (ctx: QueryCtx, studentId: Id<"students">, unitId: Id<"units">, n: number) =>
+  ctx.db
+    .query("familyLive")
+    .withIndex("by_student", (q) => q.eq("studentId", studentId).eq("unitId", unitId).eq("n", n))
+    .first();
+
+/** What a level adds for Check after every question: the switch, and what he checked so far. */
+async function liveOf(ctx: QueryCtx, s: Doc<"students">, unitId: Id<"units">, n: number): Promise<{ each?: true; locks?: FamilyLock[] }> {
+  if (!(await checkEach(ctx))) return {};
+  const row = await liveRow(ctx, s._id, unitId, n);
+  return { each: true, ...(row?.done.length ? { locks: row.done.map(lockOf) } : {}) };
+}
 
 // ---- A topic tute's ladder on the phone (4 Nov 2026): n < 0 = its sections (-1 = A), before the past papers ----
 
@@ -573,12 +595,12 @@ export const level = query({
         const k = lad.keys.get(q);
         if (k) qs.push({ ...formOf(k), part: sec.id, ...(sec.teach.includes(q) ? { t: true as const } : {}) });
       }
-      return { unitId: world.unitId, no: world.no, ta: world.ta, n: args.n, d: -args.n, max: qs.reduce((a, q) => a + q.max, 0), qs };
+      return { unitId: world.unitId, no: world.no, ta: world.ta, n: args.n, d: -args.n, max: qs.reduce((a, q) => a + q.max, 0), qs, ...(await liveOf(ctx, s, world.unitId, args.n)) };
     }
     if (args.n === 0) {
       const { world, data, keys, pool } = await redoPlayable(ctx, s, args.unitId);
       const qs: FamilyLevel["qs"] = pool.map((r) => ({ ...formOf(keys.get(r.q)!), part: partOf(data, r.q)?.id ?? "", re: r.from, rb: r.lost }));
-      return { unitId: world.unitId, no: world.no, ta: world.ta, n: 0, max: qs.reduce((a, q) => a + q.max, 0), qs };
+      return { unitId: world.unitId, no: world.no, ta: world.ta, n: 0, max: qs.reduce((a, q) => a + q.max, 0), qs, ...(await liveOf(ctx, s, world.unitId, 0)) };
     }
     const { world, data, level: l, keys } = await playable(ctx, s, args.unitId, args.n);
     const qs = levelForm(data, keys, l); // the owner's Preview shows the same (convex/preview.ts)
@@ -587,7 +609,7 @@ export const level = query({
     for (const r of p ? retryPool(masterState(p), data, keys, l.n) : []) {
       qs.push({ ...formOf(keys.get(r.q)!), part: partOf(data, r.q)?.id ?? "", re: r.from, rb: r.lost });
     }
-    return { unitId: world.unitId, no: world.no, ta: world.ta, n: l.n, max: l.max, qs };
+    return { unitId: world.unitId, no: world.no, ta: world.ta, n: l.n, max: l.max, qs, ...(await liveOf(ctx, s, world.unitId, l.n)) };
   },
 });
 
@@ -679,6 +701,14 @@ export const check = mutation({
   handler: async (ctx, args) => {
     const s = await familyActor(ctx, args.token);
     const now = Date.now();
+    // The questions he checked one by one (`checkOne`): marked from what he typed then, never from what the phone sends
+    // now (he saw ✓ or ✗ for them). Their row goes with this Check (a Check that fails writes nothing: it stays).
+    const live = await liveRow(ctx, s._id, args.unitId, args.n);
+    if (live) {
+      const locked = new Map(live.done.map((d) => [d.q, d]));
+      args = { ...args, typed: [...args.typed.filter((t) => !locked.has(t.q)), ...live.done.map((d) => ({ q: d.q, a: d.a, b: d.b }))] };
+      await ctx.db.delete(live._id);
+    }
     if (args.n < 0) return await checkLadder(ctx, s, args, now);
     if (args.n === 0) return await checkRedo(ctx, s, args, now);
     const { data, level: l, keys } = await playable(ctx, s, args.unitId, args.n);
@@ -791,6 +821,82 @@ export const check = mutation({
     // The level's book: the key's working on what he got wrong, and the photos it asks for.
     const book = await bookOf(ctx, s, unit._id, l.n);
     return { results, got, phoneMax, max: l.max, teacher, xp: weekXp(all, now) + (await usNow(ctx, s._id, now)).xp, streak, trophies, book, retry, bonus };
+  },
+});
+
+/** A live level's rows older than this are made again (a key fixed, a level marked in class meanwhile). */
+const LIVE_FRESH_MS = 6 * 60 * 60_000;
+/** His other levels' rows go once they are this old (a level he never finished). */
+const LIVE_KEEP_MS = 7 * DAY_MS;
+
+/** The questions of a level he may check now, with their answers (server only): its own, and the ones that came back. */
+async function liveKeys(ctx: QueryCtx, s: Doc<"students">, unitId: Id<"units">, n: number): Promise<Record<string, KeyQ>> {
+  const out: Record<string, KeyQ> = {};
+  if (n < 0) {
+    const { lad, sec } = await ladderPlayable(ctx, s, unitId, n);
+    for (const q of secQs(sec)) {
+      const k = lad.keys.get(q);
+      if (k) out[String(q)] = k;
+    }
+    return out;
+  }
+  if (n === 0) {
+    const { keys, pool } = await redoPlayable(ctx, s, unitId);
+    for (const r of pool) out[String(r.q)] = keys.get(r.q)!;
+    return out;
+  }
+  const { data, level: l, keys } = await playable(ctx, s, unitId, n);
+  for (let q = l.from; q <= l.to; q++) {
+    const k = keys.get(q);
+    if (k && !isFree(data, q)) out[String(q)] = k;
+  }
+  const p = await progressFor(ctx, s._id, unitId, "master");
+  for (const r of p ? retryPool(masterState(p), data, keys, l.n) : []) out[String(r.q)] = keys.get(r.q)!;
+  return out;
+}
+
+/**
+ * One question checked on its own (14 Nov 2026, his "let's build": a win after every question). Marked here with the
+ * answer key, once: what he typed is kept and can't be changed (asked again, the same answer comes back), and the
+ * level's own Check at the end marks the level from it (`check`), so nothing is saved as his marks before that: XP, the
+ * flame and the class's ⌂ come when the level is done, as always.
+ * - The level's questions and answers are read once into his row (`familyLive`); each Check after reads that row only.
+ * - A question the phone showed with other boxes than the key has (`b`) goes to the teacher whole, as in `check`.
+ */
+export const checkOne = mutation({
+  args: { token, unitId: v.id("units"), n: v.number(), q: v.number(), a: v.array(v.string()), b: v.optional(v.number()) },
+  handler: async (ctx, args): Promise<FamilyLock> => {
+    const s = await familyActor(ctx, args.token);
+    if (!(await checkEach(ctx))) fail("Check this level at its end.");
+    if (args.a.length > 30 || args.a.some((x) => x.length > REASON_MAX)) fail("Those answers are too long.");
+    const now = Date.now();
+    let row = await liveRow(ctx, s._id, args.unitId, args.n);
+    const was = row?.done.find((d) => d.q === args.q);
+    if (was) return lockOf(was);
+    if (!row || now - row.at > LIVE_FRESH_MS) {
+      // May he play it now? (The same doors as the level itself; a refusal says why.)
+      const keys = await liveKeys(ctx, s, args.unitId, args.n);
+      if (row) await ctx.db.patch(row._id, { keys, at: now });
+      else {
+        // A level he left for good: its row goes when he starts another one a week later.
+        const mine = await ctx.db
+          .query("familyLive")
+          .withIndex("by_student", (x) => x.eq("studentId", s._id))
+          .collect();
+        for (const old of mine) if (now - old.at > LIVE_KEEP_MS) await ctx.db.delete(old._id);
+        await ctx.db.insert("familyLive", { studentId: s._id, unitId: args.unitId, n: args.n, at: now, keys, done: [] });
+      }
+      row = (await liveRow(ctx, s._id, args.unitId, args.n))!;
+    }
+    const k = (row.keys as Record<string, KeyQ>)[String(args.q)];
+    if (!k) fail("That question is not in this level.");
+    const n = boxCount(k);
+    const a = Array.from({ length: Math.min(n, args.a.length) }, (_, i) => args.a[i] ?? "");
+    const stale = args.b !== undefined && args.b !== n;
+    const r = stale ? { ok: k.parts.map(() => null), got: null, phoneGot: 0 } : markQuestion(k, a);
+    const done: LiveDone = { q: args.q, a, b: args.b ?? n, ok: r.ok, got: r.got, phoneGot: r.phoneGot, max: k.max };
+    await ctx.db.patch(row._id, { done: [...row.done, done] });
+    return lockOf(done);
   },
 });
 

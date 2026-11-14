@@ -916,3 +916,34 @@ EOF
     Do it for every new screen, and look at the picture: the audit can't see inside a printed question, a `::before`
     or an SVG, and it lists gold on gold on purpose.
   - A theme change animates every `transition` on the page: wait ~0.5 s before a screenshot or a colour check.
+
+
+- **The Level rebuilt (the family app, 14 Nov 2026).**
+  - **Two ways to check, both alive.** `each` (the default) = Check after every question; the owner's switch off =
+    once at the end. The run-throughs written before it run with it off (`makeBackend(modules)` writes the switch
+    before the first phone opens); a run-through of the new way asks for it: `makeBackend(modules, { each: true })`.
+    Anything new on the level screen must work in both.
+  - **A question checked is kept on the server, not only on the phone** (`familyLive.done`): the level's `check`
+    marks from that row and ignores what the phone sends again for those questions. Anything new that marks a level
+    from the phone's answers must go through `check` (or read the row the same way), or a student could change an
+    answer after seeing ✗. Nothing is saved as his marks by `checkOne`: XP, the flame, ⌂ and the race rows all still
+    come from `check`.
+  - **`checkOne` reads the level's keys once** into his row (the Convex bill): a Check after that reads the row only.
+    Never call `playable` (the book, the key, his worlds) on every question. The row is made again after 6 hours.
+  - **The list of questions is closed** until he taps the bar or "5 / 11": a run-through that clicks a `.f-qchip`
+    opens it first (`jump(p, chip)`, `list(p)`); `count()` still sees the chips while closed, `visible()` doesn't.
+  - **A long question's steps come from the key's labels** (`slotParts` → `stepsOf`): every part must find its own
+    printed `.rp .rl`, or the question stays one page. The story is whatever the first step's block holds besides the
+    sub-questions; a block between two sub-questions is a lead for the steps after it. `Paper` is drawn again for
+    each step (`key`), and `showStep` runs after every drawing (`drawQuestion` replaces the shadow root's children,
+    its step style too). A hidden figure has no size: `showStep` fits figures again.
+  - **Never draw inside a drawing**: `owlBody.tsx` reads the logo's head from an owl rendered off screen
+    (`render(<Owl/>, el)`); done inside a component's render (a `useState` initialiser) it broke Preact's hooks
+    ("Cannot read properties of null (reading '_hasScuFromHooks')" and a blank level). It runs as the file loads and
+    again from an effect.
+  - **The level's newer style is a string** (`levelStyle.ts`, in the level's own file): the first load is full, so
+    nothing for the Level goes into `family.css` any more. Its class names were checked against every CSS file and
+    style string (`.f-coach`, `.f-fb-*`, `f-pop`, `f-fade` were taken: hence `.f-lvcoach`, `.f-verdict`, `f-vpop`,
+    `f-vfade`). The owl's body is painted by class (`.ob-*`) from the palette's names, so Dark follows.
+  - **Here, the build says the first load is over its budget** (66.0x of 66) on main too: this machine's Preact is
+    built from source. GitHub's check is the judge (65.7 there).

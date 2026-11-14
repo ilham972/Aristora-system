@@ -905,6 +905,32 @@ export default defineSchema({
     .index("by_unit", ["unitId", "at"])
     .index("by_student", ["studentId", "at"]),
   /**
+   * A level he is doing on the phone with Check after every question (14 Nov 2026, his "let's build": a win after each
+   * question, not one reward at the end). One row per student and level while it is open: `keys` = that level's
+   * questions with their answers (server only, never sent: made once, so a Check reads this small row and not the whole
+   * book and key again: the Convex bill), `done` = the questions he checked, each once, with what he typed (he can't
+   * change it: his last Check marks the level from these, never from what the phone sends again). Deleted by the
+   * level's Check, with the student (`wipeStudent`), and when he opens another level a week later.
+   */
+  familyLive: defineTable({
+    studentId: v.id("students"),
+    unitId: v.id("units"),
+    n: v.number(),
+    at: v.number(),
+    keys: v.any(),
+    done: v.array(
+      v.object({
+        q: v.number(),
+        a: v.array(v.string()),
+        b: v.number(),
+        ok: v.array(v.union(v.array(v.boolean()), v.null())),
+        got: v.union(v.number(), v.null()),
+        phoneGot: v.number(),
+        max: v.number(),
+      }),
+    ),
+  }).index("by_student", ["studentId", "unitId", "n"]),
+  /**
    * Photos from home (4 Nov 2026, his voice notes: "everything corrected at home"). One row per question and kind of a
    * level checked at home: `part` = the part(s) the phone can't mark, marked from the photo by a person he picks (the
    * Photos permission); `working` = his working on a wrong answer, answered with its cause (`why`). His rule: both are
