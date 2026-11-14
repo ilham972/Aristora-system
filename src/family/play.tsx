@@ -280,7 +280,7 @@ const PAPER_CSS = `.qv { border-radius: 14px; padding: 14px 12px 10px; -webkit-u
 .qv [data-mark].mk-l { display: inline; font-size: 1em; text-align: left; padding: 0 .1em; line-height: 1.75;
   -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .qv .fx-v { font-family: Georgia, "Noto Serif", "Times New Roman", serif; font-style: italic; font-weight: 700; padding: 0 .04em; }
-.qv .tb { display: none !important; }
+.qv .qh > span.tb { display: none !important; }
 .qv .lead { margin: .9em 0 .2em !important; }
 .qv .sq { display: block !important; margin: .8em 0 .3em !important; min-height: 0 !important; }
 .qv .sq .sl { display: inline !important; width: auto !important; margin-right: .35em; font-weight: 800; color: var(--brand-2, #5a49d6); }
