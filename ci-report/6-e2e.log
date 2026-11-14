@@ -1,0 +1,76 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90m/home/runner/work/Aristora-system/Aristora-system[39m
+
+[90mstdout[2m | tests/e2e/class.e2e.ts[2m > [22m[2mTeacher card: a real day (working, free, free while students waited, the others, her week) on one screen; her own only
+[22m[39mCARD [33m390[39m [33m473[39m [33m473[39m [33m556.9375[39m [33m844[39m
+
+[90mstdout[2m | tests/e2e/class.e2e.ts[2m > [22m[2mTeacher card: a real day (working, free, free while students waited, the others, her week) on one screen; her own only
+[22m[39mCARD [33m360[39m [33m423[39m [33m423[39m [33m506.328125[39m [33m640[39m
+
+[90mstdout[2m | tests/e2e/class.e2e.ts[2m > [22m[2mTeacher card: a real day (working, free, free while students waited, the others, her week) on one screen; her own only
+[22m[39mCARD [33m320[39m [33m468[39m [33m468[39m [33m551.734375[39m [33m640[39m
+
+ [32m✓[39m tests/e2e/class.e2e.ts [2m([22m[2m26 tests[22m[2m)[22m[33m 399177[2mms[22m[39m
+   [33m[2m✓[22m[39m the register: a whole class on three phones[33m 49681[2mms[22m[39m
+   [33m[2m✓[22m[39m Master: workbook levels corrected, lost marks explained, re-teach, Exam Sprint and back[33m 31073[2mms[22m[39m
+   [33m[2m✓[22m[39m Progress: one grade's race per unit, who finished what, and the poster for the parents[33m 8565[2mms[22m[39m
+   [33m[2m✓[22m[39m accounts: the owner sets up, adds a teacher, her phone signs in with the link and is signed out again[33m 6111[2mms[22m[39m
+   [33m[2m✓[22m[39m Correction: one page (one grade's names in one line, attendance from the count, the level bar, his unit), one question at a time, ? on a part, Take back[33m 77455[2mms[22m[39m
+   [33m[2m✓[22m[39m Attendance: sign in all / sign out all for one grade, everyone for the whole class (the count), Undo, attendance mode[33m 5426[2mms[22m[39m
+   [33m[2m✓[22m[39m Theory: one screen like Evaluation: grade, stage, unit and lesson rows; her room box with Call, Arrived and Done; Taught for everyone with her; Correction's 3 minutes; the owl[33m 26123[2mms[22m[39m
+   [33m[2m✓[22m[39m Evaluation: one screen: grade, stage, unit and questions the most urgent first; her room box with Call, Arrived and Done; one question for everyone with her[33m 16525[2mms[22m[39m
+   [33m[2m✓[22m[39m Several books at once: every book stays on Evaluation and Theory, one book per call, keep him for the next, given books mean work[33m 13205[2mms[22m[39m
+   [33m[2m✓[22m[39m Owner page: now, today, team, business, money; one student's sheet for his parents[33m 16898[2mms[22m[39m
+   [33m[2m✓[22m[39m Simulation: the owner starts it, a teacher joins from the banner, the app sends whom she calls, the Owner page shows her numbers[33m 8719[2mms[22m[39m
+   [33m[2m✓[22m[39m Theory and Evaluation in every situation (the old test class's students, a fixture); only a phone showing the simulation sees them[33m 10115[2mms[22m[39m
+   [33m[2m✓[22m[39m Topic tute: one zip = the unit's theory book and workbook, both answer keys, every question as printed[33m 7913[2mms[22m[39m
+   [33m[2m✓[22m[39m OL: the O/L books by paper part; a tute filed under its topic; a Grade 11 student given one, or the whole OL[33m 5025[2mms[22m[39m
+   [33m[2m✓[22m[39m OL: a tute an older upload left on Grade 11 goes to OL with its students: by uploading it again, or Move on its sheet[33m 4171[2mms[22m[39m
+   [33m[2m✓[22m[39m Class tab: everyone's, the manager acts (arrived / went, send any student: one tap, tap-tap, drag); her phone calls her until Arrived; his day; check-ins; each teacher's card[33m 35954[2mms[22m[39m
+   [33m[2m✓[22m[39m Teacher card: a real day (working, free, free while students waited, the others, her week) on one screen; her own only[33m 2563[2mms[22m[39m
+   [33m[2m✓[22m[39m Whole class: the top bar's whiteboard; any grade, book, section or level; ticked = saved for them; Taught for all at once, Undo; teaching mode; a corrector doesn't see it[33m 10629[2mms[22m[39m
+   [33m[2m✓[22m[39m Consultation: the top bar's icon left of the whiteboard (the owner, the Consultation tick); his order with counts; Today and All; Call to herself (Correction says her name); Arrived; each tap saved at once; Theory in the same sitting; Done; a check-in[33m 11869[2mms[22m[39m
+   [33m[2m✓[22m[39m Departments: Settings → Roles gives each teacher her own app; Preview looks only; Fighter and Master save each tap at once with no Call; her dashboard; Homework | Class; a Master consultation rings on the Master lead's phone, not Correction's[33m 14897[2mms[22m[39m
+   [33m[2m✓[22m[39m Owner's own app: Fighter and Master on his bar, not Theory and Evaluation; he works in a department (Management: the Correction dashboard; Fighter as its lead: its consultation rings on his phone); his own pages leave the top bar[33m 12757[2mms[22m[39m
+   [33m[2m✓[22m[39m Fees and books: one screen each, no pop-up to take money; the owner starts the fees; a name then Paid; Give his next book and take its money with today's class; Didn't come; free students; one book given to many; what to print, the stock and its price; the Business tab is his[33m 11431[2mms[22m[39m
+   [33m[2m✓[22m[39m Skills: Correction marks his second try and the try after his lesson (the number to write beside it); the skill teacher's one card and Done; one-to-one[33m 5703[2mms[22m[39m
+   [33m[2m✓[22m[39m Skill book: Books → T on a tagged unit; its groups as pills (a question needing two skills has its own); move a question; the PDF by skill[33m 3374[2mms[22m[39m
+   [33m[2m✓[22m[39m Update: an older copy of the app says so at the upload, and Update opens Settings → Books again[33m 996[2mms[22m[39m
+[90mstdout[2m | tests/e2e/family.e2e.ts[2m > [22m[2mMe, his profile: a camera photo made small with its bar, the OK, the race; a name asked; his birthday; the map of 12 weeks; the report; a certificate
+[22m[39m[profile] a 6.1 MB photo was sent as 2 KB (image/webp)
+
+ [32m✓[39m tests/e2e/family.e2e.ts [2m([22m[2m28 tests[22m[2m)[22m[33m 385068[2mms[22m[39m
+   [33m[2m✓[22m[39m the family app: join, a level on the pad, Check once, the reveal, XP and the board; Correction's ⌂ and Checked[33m 19759[2mms[22m[39m
+   [33m[2m✓[22m[39m index and code: the Family sheet shows them (the code made on the phone); a family phone signs in with them[33m 2408[2mms[22m[39m
+   [33m[2m✓[22m[39m the new look: class hours and Home, the map, the questions as printed, feedback the owner reads, two children on one phone, the race and Me[33m 19342[2mms[22m[39m
+   [33m[2m✓[22m[39m the O/L map: the owner ticks Grade 11 for the O/L syllabus and gives today's topic; the phone shows the paper parts and goes to it[33m 4138[2mms[22m[39m
+   [33m[2m✓[22m[39m a level holds still: → never makes the page wider than the phone or moves the pad; a new question starts at the top[33m 4524[2mms[22m[39m
+   [33m[2m✓[22m[39m Check after every question: the answer at once, the level's XP on top, a wrong one stays as he typed it; his other phone; the level ends by itself[33m 9830[2mms[22m[39m
+   [33m[2m✓[22m[39m an app, not a web page: two fingers never zoom (Home, the map, a Level's pad and question); one finger still scrolls[33m 5938[2mms[22m[39m
+   [33m[2m✓[22m[39m photos from home: a drawing photographed in the level, marked by a person he picks (never his working on a wrong answer); her answer on his phone; the unit gate and its redo[33m 25162[2mms[22m[39m
+   [33m[2m✓[22m[39m a printed question opens full screen: two fingers zoom only it, one finger moves it, ✕ and Back close it; words can't be selected[33m 3970[2mms[22m[39m
+   [33m[2m✓[22m[39m answer kinds: the question's own blanks, an option, ✓ / ✗, words to underline, cards to order, pairs; Check marks them exactly[33m 12685[2mms[22m[39m
+   [33m[2m✓[22m[39m names and reasons: names to tap under the question; ஆம் / இல்லை and his own words; a wrong pick is 0, a right one waits for the teacher[33m 13849[2mms[22m[39m
+   [33m[2m✓[22m[39m typed words and equations: an equation on the pad with =, a name in letters, his own words for a teacher, two answers under one sub-question; no photo anywhere[33m 7650[2mms[22m[39m
+   [33m[2m✓[22m[39m the Claude link: the owner turns it on in Settings → Books, the code is shown once; a request sealed with it is answered; Turn off ends it[33m 2192[2mms[22m[39m
+   [33m[2m✓[22m[39m a tute's ladder on the phone: one road numbered as printed; a teacher question asks, Learn shows it a step a tap; Check sets the circles[33m 6133[2mms[22m[39m
+   [33m[2m✓[22m[39m Me, his profile: a camera photo made small with its bar, the OK, the race; a name asked; his birthday; the map of 12 weeks; the report; a certificate[33m 29256[2mms[22m[39m
+   [33m[2m✓[22m[39m the race for everyone: this week, all time and the GOAT, not started yet, the grade cup, 👑, a profile, a cheer, the weekly coins[33m 15870[2mms[22m[39m
+   [33m[2m✓[22m[39m Us: closed until the owner opens it; the owl's guide; his welcome; the owl's lines, a shout-out and a post; one tap each; a teacher's 👏[33m 16514[2mms[22m[39m
+   [33m[2m✓[22m[39m Us posts and doubts: a teacher's question with a photo for Grade 8; her answer hidden until marked; ✓ shows it; her doubt to seniors; a teacher's reply[33m 15364[2mms[22m[39m
+   [33m[2m✓[22m[39m Us talk: a birthday opened; one-tap words and her own (+1 XP); a reply and a 👏 in her bell; her 💡 post shown by a teacher[33m 30311[2mms[22m[39m
+   [33m[2m✓[22m[39m Us people: her photo on her lines; the owl writes the automatic lines; a face opens the profile; a wrong answer saved, shared and asked again without the name[33m 9738[2mms[22m[39m
+   [33m[2m✓[22m[39m Us groups and chats: his grade's group with a reply, a tag and a reaction; two boys message, a girl can't; Members; a teacher's chat and her number; a group she makes; the owner reads every chat[33m 20508[2mms[22m[39m
+   [33m[2m✓[22m[39m the owner's Preview: Settings → Books → a unit → every level open on the phone's own screen, look only; nobody else[33m 10688[2mms[22m[39m
+   [33m[2m✓[22m[39m free marks: the owner gives a question's marks from his Preview; a student meets a gift and gets them; Correction too[33m 10363[2mms[22m[39m
+   [33m[2m✓[22m[39m the Shop: the owner's things with a photo; last week's pay; the coin on the top row; PAYDAY; buying, the gold card, Cancel; Coins back and Given; 320 px[33m 17802[2mms[22m[39m
+   [33m[2m✓[22m[39m online and studying: the green dot and the pencil, Studying now and Online, a classmate's state, his study bars and day totals; his own day with its times; the owner's switch[33m 12915[2mms[22m[39m
+   [33m[2m✓[22m[39m Explain online: the pill on a wrong question after Check; her photo and a teacher; the thread with what she typed; the teacher's voice note and Understood on both sides; the next student joins; a name hidden; Consultation's icon[33m 41570[2mms[22m[39m
+   [33m[2m✓[22m[39m Explain online: a typed "show that" shows his words under each sub-question (never "photo deleted"); no photo asked by itself; her 📷 and ✓ Understood on his row[33m 8259[2mms[22m[39m
+   [33m[2m✓[22m[39m Dark is his own switch: a phone set to dark still opens light; Me → Dark mode; it stays, the printed question turns, the teachers' frame never[33m 7820[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m2 passed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[32m54 passed[39m[22m[90m (54)[39m
+[2m   Start at [22m 16:04:08
+[2m   Duration [22m 785.90s[2m (tests 100%)[22m
+
