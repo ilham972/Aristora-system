@@ -18,7 +18,7 @@
 import type { ComponentChildren, VNode } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import type { UsCheer, UsItem, UsPic, UsReply, UsThread, UsVeil } from "../../convex/lib/us";
-import { keep, last, mutation, NetError, query, sameOr } from "./net";
+import { current, keep, last, mutation, NetError, query, sameOr } from "./net";
 import { picOf, usePics } from "./pics";
 import { buzz, sound } from "./sound";
 import { Bubble, jumpTo, ReactorsSheet, seedUrl, sendPicked, usePicker, WriteBar, type Sent, type Taggable } from "./talk";
@@ -432,6 +432,14 @@ function viewOnce(id: string) {
  * A line opened (a tap on its card, or on a phone alert: #us=id). `staff` = a teacher (her calls go to the teachers'
  * functions: net.ts); the server decides what each one sees.
  */
+/**
+ * His words in a line's talk, shown the moment he sends them (15 Nov 2026, his yes, as in the chats: chat.tsx): pale
+ * until the server has them, then as sent until the talk's next read brings the server's message, which takes their
+ * place. `had`: the messages the talk had when he sent (the new one with his words is the server's). Refused or no
+ * signal: they go and the box has his words again. Only words: a photo uploads first, as before.
+ */
+type Waiting = UsReply & { wait?: true; had: Set<string> };
+
 export function ThreadScreen(props: { id: string; staff?: boolean; me?: string; onBack: () => void; onMate: (id: string) => void }) {
   // A line opened again shows at once as he left it (net.ts last); its talk comes again with the first read.
   const [d, setD] = useState<UsThread | null>(() => last<UsThread>(`post.${props.id}`));
@@ -440,6 +448,7 @@ export function ThreadScreen(props: { id: string; staff?: boolean; me?: string; 
   const [told, setTold] = useState<string[]>([]);
   const [re, setRe] = useState<{ id: string; n: string; t?: string } | null>(null);
   const [clapped, setClapped] = useState(() => !!d?.clapped);
+  const [waits, setWaits] = useState<Waiting[]>([]);
   useEffect(() => {
     if (d) last(`post.${props.id}`, d);
   }, [d]);
@@ -453,8 +462,12 @@ export function ThreadScreen(props: { id: string; staff?: boolean; me?: string; 
         setD((shown) => sameOr(shown, t));
         if (t.clapped) setClapped(true);
         setErr(null);
+        return true;
       },
-      (e) => setErr(problemWords(e)),
+      (e) => {
+        setErr(problemWords(e));
+        return false;
+      },
     );
   useEffect(() => {
     void load();
@@ -599,15 +612,56 @@ export function ThreadScreen(props: { id: string; staff?: boolean; me?: string; 
       </>
     );
   };
+  const toEnd = () => window.setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }), 60);
   const send = (text: string, ph: Sent[], mt: string[]) => {
-    const args = { text, ...(ph.length ? { ph } : {}), ...(re ? { re: re.id } : {}), ...(mt.length ? { mt } : {}) };
-    return mutation(ask ? "us:reply" : "us:comment", { id: props.id, ...args }).then(async (r) => {
+    const to = re;
+    const args = { text, ...(ph.length ? { ph } : {}), ...(to ? { re: to.id } : {}), ...(mt.length ? { mt } : {}) };
+    // Words alone show at once, as the server will give them back (lib/us.ts replyOf): his name, grade and face, a
+    // teacher's tag, what it answers, whoever it tags.
+    const tmp = text && !ph.length ? `~${Date.now()}.${Math.random()}` : "";
+    if (tmp) {
+      const acc = current();
+      const own = [...talk].reverse().find((r) => (st ? r.tch && r.n === props.me : r.mine));
+      const tagged = mt.map((id) => ({ id, n: people.find((p) => p.id === id)?.n ?? "" })).filter((x) => x.n);
+      const w: Waiting = {
+        id: tmp,
+        at: Date.now(),
+        t: text,
+        ...(props.me ? { n: props.me } : {}),
+        ...(st ? { tch: true } : { mine: true, ...(ask && m?.mine ? { ask: true } : {}), ...(own?.g !== undefined ? { g: own.g } : typeof acc?.grade === "number" ? { g: acc.grade } : {}) }),
+        ...(own?.pic ? { pic: own.pic } : !st && acc?.pic ? { pic: acc.pic } : {}),
+        ...(ask ? {} : { c: true }),
+        ...(to ? { re: to.id, rt: to.id } : {}),
+        ...(tagged.length ? { mt: tagged } : {}),
+        wait: true,
+        had: new Set(talk.map((r) => r.id)),
+      };
+      setWaits((l) => [...l, w]);
       setRe(null);
-      await after();
-      window.setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }), 60);
-      return r;
-    });
+      toEnd();
+    }
+    const gone = () => setWaits((l) => l.filter((x) => x.id !== tmp));
+    return mutation(ask ? "us:reply" : "us:comment", { id: props.id, ...args }).then(
+      async (r) => {
+        // The server has it: no longer pale; the talk's read brings the server's message and this one goes.
+        if (tmp) setWaits((l) => l.map((x) => (x.id === tmp ? { ...x, wait: undefined } : x)));
+        setRe(null);
+        // (No read just now, a weak signal: his sent words stay until a later read shows the server's.)
+        if ((await after()) && tmp) gone();
+        toEnd();
+        return r;
+      },
+      (e) => {
+        if (tmp) {
+          gone();
+          setRe((now) => now ?? to);
+        }
+        throw e;
+      },
+    );
   };
+  // His words still on their way (or sent, and the talk's read not here yet): never beside the server's own copy.
+  const waiting = waits.filter((w) => !talk.some((r) => !w.had.has(r.id) && r.t === w.t));
   // Each message by id: a reply shows what it answers (the message exactly; before 8 Nov 2026 the chain's first).
   const byId = new Map<string, UsReply>([...(d?.list ?? []), ...(d?.talk ?? [])].map((r) => [r.id, r]));
   const quoteOf = (r: UsReply) => {
@@ -806,7 +860,7 @@ export function ThreadScreen(props: { id: string; staff?: boolean; me?: string; 
           {q && !st && d.hidden > 0 && <Veil n={d.hidden} sent={!!mine} v={d.veil} onGo={toAnswer} />}
           <section class="f-talk" aria-label="Talk">
             <h2 class="f-h2">
-              💬 {ask ? "பதில்கள்" : "பேச்சு"} <small>{talk.length + (d.talkHidden ?? 0) || ""}</small>
+              💬 {ask ? "பதில்கள்" : "பேச்சு"} <small>{talk.length + waiting.length + (d.talkHidden ?? 0) || ""}</small>
             </h2>
             {d.talkHidden ? (
               <div class="f-talk-lock">
@@ -825,7 +879,7 @@ export function ThreadScreen(props: { id: string; staff?: boolean; me?: string; 
                   </span>
                 </p>
               </div>
-            ) : talk.length === 0 ? (
+            ) : talk.length + waiting.length === 0 ? (
               <div class="f-talk-none">
                 <Owl mood="wave" class="tiny" still />
                 <p>
@@ -843,6 +897,9 @@ export function ThreadScreen(props: { id: string; staff?: boolean; me?: string; 
             ) : (
               <ol class="f-msgs">
                 {talk.flatMap((r, i) => [...(i === firstNew ? [<li key="new" class="f-new-div">புதியவை</li>] : []), msgIn(r)])}
+                {waiting.map((w) => (
+                  <Msg key={w.id} r={w} staff={st} onMate={props.onMate} me={props.me} quote={quoteOf(w)} cls={w.wait ? "wait" : "sent"} />
+                ))}
               </ol>
             )}
           </section>
@@ -856,6 +913,7 @@ export function ThreadScreen(props: { id: string; staff?: boolean; me?: string; 
               onUnRe={() => setRe(null)}
               people={people}
               onSend={send}
+              fast
             />
           )}
         </>

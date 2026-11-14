@@ -2965,6 +2965,31 @@ test("Us posts and doubts: a teacher's question with a photo for Grade 8; her an
   expect(problems.slice(before)).toEqual([]);
 });
 
+/** Holds one of the server's calls back in the page until `letGo(P)`; `refuse`: it fails then, as with no signal. */
+const holdBack = (P: Page, name: string, refuse = false) =>
+  P.evaluate(
+    ([call, fail]) => {
+      const w = window as unknown as { __ARISTORA_TEST_BACKEND__: { mutation: (n: string, a: unknown) => Promise<unknown> }; __go?: () => void; __real?: (n: string, a: unknown) => Promise<unknown> };
+      const b = w.__ARISTORA_TEST_BACKEND__;
+      w.__real ??= b.mutation.bind(b);
+      const gate = new Promise<void>((r) => (w.__go = r));
+      b.mutation = async (n, a) => {
+        if (n !== call) return w.__real!(n, a);
+        await gate;
+        if (fail) throw new Error("The server said no.");
+        return w.__real!(n, a);
+      };
+    },
+    [name, refuse] as const,
+  );
+/** Lets the held call through, and the next ones go straight to the server again. */
+const letGo = (P: Page) =>
+  P.evaluate(() => {
+    const w = window as unknown as { __ARISTORA_TEST_BACKEND__: { mutation: unknown }; __go?: () => void; __real?: unknown };
+    w.__go?.();
+    if (w.__real) w.__ARISTORA_TEST_BACKEND__.mutation = w.__real;
+  });
+
 test("Us talk: a birthday opened; one-tap words and her own (+1 XP); a reply and a 👏 in her bell; her 💡 post shown by a teacher", async () => {
   // 8 Nov 2026, his voice note: "if I go to inside any thread, that feel like boring ... who appreciating, who correcting
   // ... student can chat inside each thread"; his answers: comments "like the hall", XP for comments (not claps), 💡 posts
@@ -3006,10 +3031,31 @@ test("Us talk: a birthday opened; one-tap words and her own (+1 XP); a reply and
   // One tap: a one-tap word (no XP); then her own words (+1 XP).
   await P.locator(".f-tb-q").getByRole("button", { name: "🎂 பிறந்தநாள் வாழ்த்துகள்!" }).click();
   await contains(P.locator(".f-msg.mine"), "பிறந்தநாள் வாழ்த்துகள்");
+  // Her words are on the screen the moment she sends them (15 Nov 2026, as in the chats), pale until the server has
+  // them: here the server's answer is held back to see the time in between. The box is empty at once.
+  await holdBack(P, "us:comment");
   await P.locator(".f-tb-in").pressSequentially("இனிய பிறந்தநாள் Bilal, சூப்பர் நாளாகட்டும்");
   await P.locator(".f-tb").getByRole("button", { name: "Send" }).click();
+  await contains(P.locator(".f-msg.mine.wait"), "இனிய பிறந்தநாள் Bilal");
+  expect(await P.locator(".f-tb-in").inputValue()).toBe("");
+  expect((await t.query(api.us.thread, { token: FAM_B, id: bday })).talk!.length).toBe(1);
+  expect(await P.locator(".f-msg.wait").getByRole("button").count()).toBe(0); // nothing to tap on it yet
+  expect(await P.locator(".f-msg.wait .f-gchip").innerText()).toBe("8"); // as the server will give it back
+  await shot(P, "fam90b-us-comment-at-once");
+  await letGo(P);
   await contains(P.locator(".f-toast"), "+1 XP");
-  await until(async () => (await P.locator(".f-msg.mine").count()) === 2, "her two comments");
+  await until(async () => (await P.locator(".f-msg.mine").count()) === 2 && (await P.locator(".f-msg.wait, .f-msg.sent").count()) === 0, "her two comments, each once");
+  // Refused (or no signal): the pale words go and are back in the box.
+  await holdBack(P, "us:comment", true);
+  await P.locator(".f-tb-in").pressSequentially("போகாத வார்த்தை");
+  await P.locator(".f-tb").getByRole("button", { name: "Send" }).click();
+  await contains(P.locator(".f-msg.mine.wait"), "போகாத வார்த்தை");
+  await letGo(P);
+  await until(async () => (await P.locator(".f-msg.mine").count()) === 2, "the refused words gone from the talk");
+  expect(await P.locator(".f-tb-in").inputValue()).toBe("போகாத வார்த்தை");
+  await P.locator(".f-tb-in").fill("");
+  await P.locator(".f-tb-in").dispatchEvent("input");
+  await until(async () => (await P.locator(".f-toast").count()) === 0, "the line that said why, gone", 8000);
   expect((await t.query(api.family.me, { token: (await hanaToken(P))! })).xp).toBe(1);
 
   // Bilal (through the server): a reply under her words, and a 👏 on them.

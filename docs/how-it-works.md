@@ -1363,8 +1363,13 @@ learning app of our education institute"): one profile, his class times, what he
     words (and the reply he was answering) come back into the box, the usual line says why. A waiting bubble has no
     reply, reaction or remove yet, is never kept in memory, and the chat's short reads ask the server from its own
     newest message (the waiting one carries the phone's clock). Only words: a photo and a voice note upload first, as
-    before. Before: two trips to the server (the send, then a read), 0.4 to 1.5 s on mobile data. Us's comments and a
-    post's talk still wait for the server.
+    before. Before: two trips to the server (the send, then a read), 0.4 to 1.5 s on mobile data.
+  - **The same in a line's talk on Us** (15 Nov, his yes; `ThreadScreen` in `usPost.tsx`, `Waiting`): a comment, a
+    reply on a doubt and a one-tap word show at once as the server will give them back (his name, grade and face, a
+    teacher's tag, what it answers, whoever it tags), pale; solid once the server has them; the talk's read then
+    brings the server's own message and his copy goes (never both: a new message with his words is the server's). No
+    read just then (a weak signal): his sent words stay until a later read. Refused: they go, and are back in the box.
+    The pale bubble's style is the talk's own (`usStyle.ts`: `.f-msg.wait`, `f-sent`), shared with the chats.
   - **The loading owl gives way once it has landed** (14 Nov, his yes; `hideSplash(850)`, `src/splash.ts`): 0.85 s
     from the page's start in the family app (its fall and landing take 0.8 s; a slow phone has Home ready at about
     0.6 s and waited until 1.2 s on every open). The teachers' owl keeps its 1.2 s.

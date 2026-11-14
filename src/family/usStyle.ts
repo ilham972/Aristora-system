@@ -220,6 +220,10 @@ const CSS = `
 .f-rxbar button:active{transform:scale(1.3)}
 @keyframes f-rxin{from{opacity:0;transform:translateY(12px) scale(.4)}}
 @keyframes f-pop{from{transform:scale(.6)}}
+.f-msg-b{transition:opacity .2s}
+.f-msg.wait{animation:f-sent .24s var(--spring)}
+.f-msg.wait .f-msg-b{opacity:.55}
+@keyframes f-sent{from{opacity:0;transform:translateY(10px) scale(.96)}}
 .f-new-div{display:flex;align-items:center;gap:8px;margin:16px 0 -4px;font:800 12px/1 var(--display);color:var(--gem-2)}
 .f-new-div:before,.f-new-div:after{content:"";flex:1;height:1.5px;background:var(--gem)}
 .f-tb-emo{flex:none;display:grid;place-items:center;width:36px;height:44px;border-radius:50%;font-size:22px}
