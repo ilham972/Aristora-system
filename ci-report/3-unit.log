@@ -1,0 +1,116 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90m/home/runner/work/Aristora-system/Aristora-system[39m
+
+ [32m✓[39m tests/tute.test.ts [2m([22m[2m25 tests[22m[2m)[22m[33m 1251[2mms[22m[39m
+ [32m✓[39m tests/family.test.ts [2m([22m[2m26 tests[22m[2m)[22m[33m 2015[2mms[22m[39m
+   [32m✓[39m the family app on the server [2m(14)[22m
+     [33m[2m✓[22m[39m a family link: made by the owner or a Students teacher, opened once, sees only its child[33m 477[2mms[22m[39m
+ [32m✓[39m tests/master.test.ts [2m([22m[2m29 tests[22m[2m)[22m[33m 1753[2mms[22m[39m
+ [32m✓[39m tests/photos.test.ts [2m([22m[2m29 tests[22m[2m)[22m[33m 3706[2mms[22m[39m
+   [32m✓[39m photos from home [2m(26)[22m
+     [33m[2m✓[22m[39m Check: the book shows the key's working only where he lost marks, and the photos it asks for[33m 532[2mms[22m[39m
+     [33m[2m✓[22m[39m the unit gate (10 Nov 2026): finished below 75 %, the next Stage waits; the redo (half marks, explained) or the class opens it[33m 586[2mms[22m[39m
+ [32m✓[39m tests/money.test.ts [2m([22m[2m23 tests[22m[2m)[22m[33m 1041[2mms[22m[39m
+ [32m✓[39m tests/backend.test.ts [2m([22m[2m37 tests[22m[2m)[22m[33m 2706[2mms[22m[39m
+   [32m✓[39m test students (the simulation's class; the old test class's cases as a fixture): only phones showing the simulation see them [2m(3)[22m
+     [33m[2m✓[22m[39m the extra test students: one for each situation; their calls never count; deleting them leaves the class[33m 357[2mms[22m[39m
+ [32m✓[39m tests/help.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 2279[2mms[22m[39m
+   [32m✓[39m online explanations [2m(11)[22m
+     [33m[2m✓[22m[39m the pill: only on a question he lost marks on; a photo and a teacher first; the thread shows the question and what he typed[33m 620[2mms[22m[39m
+     [33m[2m✓[22m[39m the teacher: her list, a voice note (hers only, 2 minutes), and only Explained makes it explained[32m 300[2mms[22m[39m
+ [32m✓[39m tests/desk.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 976[2mms[22m[39m
+ [32m✓[39m tests/theoryFocus.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 44[2mms[22m[39m
+ [32m✓[39m tests/chat.test.ts [2m([22m[2m16 tests[22m[2m)[22m[33m 1582[2mms[22m[39m
+ [32m✓[39m tests/answerKinds.test.ts [2m([22m[2m30 tests[22m[2m)[22m[32m 85[2mms[22m[39m
+ [32m✓[39m tests/consult.test.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 980[2mms[22m[39m
+   [32m✓[39m who may hold a consultation [2m(2)[22m
+     [33m[2m✓[22m[39m the Consultation tick alone: call anyone here to herself, Arrived, Done; nothing else of the rooms[33m 331[2mms[22m[39m
+ [32m✓[39m tests/evalFocus.test.ts [2m([22m[2m23 tests[22m[2m)[22m[32m 32[2mms[22m[39m
+ [32m✓[39m tests/profile.test.ts [2m([22m[2m14 tests[22m[2m)[22m[33m 941[2mms[22m[39m
+   [32m✓[39m the profile on the server [2m(7)[22m
+     [33m[2m✓[22m[39m a photo: his phone shows it at once; his classmates only after the OK; No tells him once[33m 359[2mms[22m[39m
+ [32m✓[39m tests/boss.test.ts [2m([22m[2m31 tests[22m[2m)[22m[33m 447[2mms[22m[39m
+ [32m✓[39m tests/goat.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 821[2mms[22m[39m
+ [32m✓[39m tests/usPosts.test.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 1011[2mms[22m[39m
+   [32m✓[39m posts and doubts on Us [2m(7)[22m
+     [33m[2m✓[22m[39m a teacher's post: photos, the grades she chose (one, several, everyone); a question tells those students' phones[33m 378[2mms[22m[39m
+ [32m✓[39m tests/usTalk.test.ts [2m([22m[2m13 tests[22m[2m)[22m[33m 1396[2mms[22m[39m
+   [32m✓[39m the talk on Us [2m(9)[22m
+     [33m[2m✓[22m[39m every line opens: comments with names, a reply under one, 👏 on a message; who cheered; the line's student is told[33m 342[2mms[22m[39m
+     [33m[2m✓[22m[39m XP from Us: +1 a comment in his words (20 a day; never one-tap words, one word or the same words), +5 an answer ✓, +10 help ✓[33m 382[2mms[22m[39m
+ [32m✓[39m tests/link.test.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 924[2mms[22m[39m
+   [32m✓[39m the Claude link [2m(6)[22m
+     [33m[2m✓[22m[39m skills: a unit's skills and each question's skill, saved whole; another unit carries one; nothing half[33m 318[2mms[22m[39m
+ [32m✓[39m tests/sim.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 2335[2mms[22m[39m
+   [32m✓[39m the simulation on the server (convex/sim.ts) [2m(6)[22m
+     [33m[2m✓[22m[39m the steps: students hand levels in, the app corrects them (as Correction, named Simulation), answers are marked[33m 776[2mms[22m[39m
+     [33m[2m✓[22m[39m +5 students, the level from now on; time up ends it; everyone goes home, the scoreboard is kept[33m 501[2mms[22m[39m
+ [32m✓[39m tests/us.test.ts [2m([22m[2m14 tests[22m[2m)[22m[33m 1236[2mms[22m[39m
+ [32m✓[39m tests/race.test.ts [2m([22m[2m15 tests[22m[2m)[22m[33m 757[2mms[22m[39m
+ [32m✓[39m tests/focus.test.ts [2m([22m[2m25 tests[22m[2m)[22m[32m 65[2mms[22m[39m
+ [32m✓[39m tests/manager.test.ts [2m([22m[2m17 tests[22m[2m)[22m[32m 51[2mms[22m[39m
+ [32m✓[39m tests/quests.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 685[2mms[22m[39m
+   [32m✓[39m the quests, the chests and the shield on the server [2m(5)[22m
+     [33m[2m✓[22m[39m today's chest: once a day after the three quests, a few coins (never XP); a new wallet still pays only his last week[33m 329[2mms[22m[39m
+ [32m✓[39m tests/coins.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 682[2mms[22m[39m
+ [32m✓[39m tests/ai.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 458[2mms[22m[39m
+ [32m✓[39m tests/deskData.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 26[2mms[22m[39m
+ [32m✓[39m tests/tries.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 486[2mms[22m[39m
+   [32m✓[39m in class (convex/tries.ts) [2m(2)[22m
+     [33m[2m✓[22m[39m second try, the lesson, the try after it, one-to-one; the marks; who may[33m 343[2mms[22m[39m
+ [32m✓[39m tests/attendance.test.ts [2m([22m[2m11 tests[22m[2m)[22m[33m 800[2mms[22m[39m
+ [32m✓[39m tests/auth.test.ts [2m([22m[2m11 tests[22m[2m)[22m[33m 615[2mms[22m[39m
+ [32m✓[39m tests/teach.test.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 510[2mms[22m[39m
+   [32m✓[39m the whole-class lesson on a theory book [2m(2)[22m
+     [33m[2m✓[22m[39m everyone here in the grade; Taught for those who have the book and need it; Undo; the history; seen today[33m 345[2mms[22m[39m
+ [32m✓[39m tests/consultData.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 47[2mms[22m[39m
+ [32m✓[39m tests/managerServer.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 944[2mms[22m[39m
+ [32m✓[39m tests/moneyData.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 49[2mms[22m[39m
+ [32m✓[39m tests/uncorrect.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 844[2mms[22m[39m
+ [32m✓[39m tests/duty.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 729[2mms[22m[39m
+ [32m✓[39m tests/free.test.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 767[2mms[22m[39m
+ [32m✓[39m tests/online.test.ts [2m([22m[2m11 tests[22m[2m)[22m[33m 444[2mms[22m[39m
+ [32m✓[39m tests/skills.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 21[2mms[22m[39m
+ [32m✓[39m tests/usPeople.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 557[2mms[22m[39m
+ [32m✓[39m tests/answerKey.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 590[2mms[22m[39m
+ [32m✓[39m tests/workbookFile.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 167[2mms[22m[39m
+ [32m✓[39m tests/skillBook.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 43[2mms[22m[39m
+ [32m✓[39m tests/status.test.ts [2m([22m[2m17 tests[22m[2m)[22m[32m 24[2mms[22m[39m
+ [32m✓[39m tests/ladder.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 881[2mms[22m[39m
+   [32m✓[39m a topic tute's ladder on the phone [2m(4)[22m
+     [33m[2m✓[22m[39m one road numbered as printed: the ladder's sections first (A = Level 1), then each paper; the papers wait[33m 400[2mms[22m[39m
+ [32m✓[39m tests/drafts.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 443[2mms[22m[39m
+ [32m✓[39m tests/roomRows.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m tests/pathData.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+ [32m✓[39m tests/progress.test.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 541[2mms[22m[39m
+ [32m✓[39m tests/preview.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 509[2mms[22m[39m
+ [32m✓[39m tests/hosting.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m tests/appVersion.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 26[2mms[22m[39m
+ [32m✓[39m tests/familyMotion.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 23[2mms[22m[39m
+ [32m✓[39m tests/answerText.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m tests/derive.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 44[2mms[22m[39m
+ [32m✓[39m tests/fractions.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+ [32m✓[39m tests/announce.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m tests/cropFrame.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m tests/stats.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m tests/timeline.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m tests/boardSplit.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 563[2mms[22m[39m
+   [32m✓[39m the board in two parts [2m(2)[22m
+     [33m[2m✓[22m[39m live + each student's his = get (the demo class: in class, at home, a book given)[33m 442[2mms[22m[39m
+ [32m✓[39m tests/taps.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m tests/theme.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 25[2mms[22m[39m
+ [32m✓[39m tests/roomDecisions.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m tests/evalPace.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m tests/chime.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 184[2mms[22m[39m
+ [32m✓[39m tests/hrow.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m tests/usStaff.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m tests/sha256.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 102[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m70 passed[39m[22m[90m (70)[39m
+[2m      Tests [22m [1m[32m766 passed[39m[22m[90m (766)[39m
+[2m   Start at [22m 00:06:39
+[2m   Duration [22m 24.57s[2m (tests 67%, import 13%, transform 10%, environment 9%, worker 1%)[22m
+
+[2m    Isolate [22m [33m70 workers spawned[39m[2m · ~230ms startup each (spawn + environment, per file)[22m
+[2m            [22m [2mat least ~5.14s faster with [22m[33misolate: false[39m[2m — reuses workers across files instead of one per file[22m
+
