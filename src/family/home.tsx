@@ -10,7 +10,7 @@ import { isBirthday } from "../../convex/lib/day";
 import type { DayItem } from "../../convex/lib/family";
 import { Cheered, GiftCards, PayCard } from "./board";
 import { levelsDone } from "./map";
-import { keep, query } from "./net";
+import { keep, query, sameOr } from "./net";
 import { Confetti, nextPlay } from "./next";
 import { buzz, sound } from "./sound";
 import { Dashes, firstName, Flame, flameAtRisk, Icon, Owl, OwlBadge, problemWords, Tag, type IconName } from "./ui";
@@ -319,7 +319,7 @@ export function HomeTab(props: {
     query("family:classes")
       .then((x) => {
         keep("classes", x);
-        setCls(x as FamilyClasses);
+        setCls((shown) => sameOr(shown, x as FamilyClasses));
       })
       .catch(() => {});
     const id = window.setInterval(() => setNow(Date.now()), 30_000);

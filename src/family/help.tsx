@@ -15,7 +15,7 @@ import type { ChatMsg } from "../../convex/chat";
 import type { HelpLine, HelpStart, HelpTeacher } from "../../convex/help";
 import type { HelpAsk, HelpHead, HelpPart, HelpPhoto } from "../../convex/lib/helpView";
 import { drawQuestion } from "../questionView";
-import { keep, mutation, NetError, query, uploadPhoto } from "./net";
+import { keep, mutation, NetError, query, sameOr, uploadPhoto } from "./net";
 import { picOf, usePics } from "./pics";
 import { buzz, sound } from "./sound";
 import { agoShort, sendPicked, usePicker } from "./talk";
@@ -750,7 +750,7 @@ export function HelpList(props: { staff: boolean; onRoom: (id: string) => void; 
         (x) => {
           const lines = props.staff ? (x as { lines: HelpLine[] }).lines : (x as HelpLine[]);
           keep(key, lines);
-          setD(lines);
+          setD((shown) => sameOr(shown, lines));
         },
         () => {},
       );

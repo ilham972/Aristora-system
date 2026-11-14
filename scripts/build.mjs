@@ -84,7 +84,10 @@ console.log(`Built dist/ for ${url}: ${basename(js)} ${kb(js)} KB, ${basename(cs
 // 12 Nov 2026, online and app time (his voice note: "which student is online ... the bar graph"): the beat is in the
 // first load (0.5 KB: 64.2 / 66); the dots, the bars and the day's sheet in the later parts (46.4 with them): later 47 → 49
 // so the next change has room.
-const FAMILY_BUDGET_KB = 66;
+// 14 Nov 2026, fast like a native app (his ask): 0.3 KB of the first load buys the open that never waits for a weak
+// signal (the server's address and the names of Us's and the chats' files in the page), the same answer drawing nothing
+// again and screens that open again at once (net.ts sameOr, last): 66.0 with them, so 66 → 67 for the next change.
+const FAMILY_BUDGET_KB = 67;
 // 12 Nov 2026: phone alerts that reach (the founder: "the most important feature on this app is notification"): turning
 // them on, the address given again at every open, the reminder above the bottom bar and the bell's test alert with its
 // "make it loud" steps moved to the later parts (src/family/alerts.tsx): the first load got lighter (64.9 → 64.6), the
@@ -189,8 +192,15 @@ const preload = [
   ...later.map((f) =>
     f === laterCss ? `<link rel="prefetch" href="${asset(f)}" as="style" data-later>` : `<link rel="prefetch" href="${asset(f)}" as="script" crossorigin>`,
   ),
+  // Us and the chats (13 Nov 2026): the page fetches them only when they open, so they stay out of the first screen's
+  // way; these lines only name them for the service worker (public/family/sw.js keepPage), which fetches them behind
+  // the scenes with each new version. A browser does nothing with a meta it doesn't know. Never the teachers' file.
+  `<meta name="f-keep" content="${[...usOnly, ...chatOnly].map(asset).join(" ")}">`,
 ].join("\n");
 const famHtml = (await readFile("public/family/index.html", "utf8"))
+  // The server's address is known before the code arrives (13 Nov 2026): the phone opens its line to it (the name,
+  // the handshake) while the code downloads, so the first answer comes a round trip or three sooner on mobile data.
+  .replace("%SERVER%", url.replace(/\/$/, ""))
   .replace("%SPLASH%", () => splashSaying("இன்னும் வருகிறது… இந்த phone இல் data அல்லது Wi-Fi உள்ளதா பார்."))
   .replace("%FONT%", asset(famFont))
   .replace("%CSS%", asset(famCss))

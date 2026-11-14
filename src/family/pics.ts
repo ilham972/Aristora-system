@@ -29,10 +29,15 @@ export function picOf(key: string | null | undefined): string | null {
   return key ? (all()[key]?.u ?? null) : null;
 }
 
-/** Keeps a picture (the oldest go past 40) and tells the screens. */
-export function keepPic(key: string, url: string) {
+/**
+ * Keeps pictures (the oldest go past 40) and tells the screens: once for all of them (13 Nov 2026). The race's first
+ * open brought 14 at a time, and each one wrote the whole list to the phone again and drew every screen again,
+ * one after the other, under the rows as they came in.
+ */
+function keepPics(got: [string, string][]) {
+  if (!got.length) return;
   const k = all();
-  k[key] = { u: url, t: Date.now() };
+  for (const [key, url] of got) k[key] = { u: url, t: Date.now() };
   const keys = Object.keys(k);
   if (keys.length > MAX) {
     for (const x of keys.sort((a, b) => k[a].t - k[b].t).slice(0, keys.length - MAX)) delete k[x];
@@ -45,6 +50,9 @@ export function keepPic(key: string, url: string) {
   for (const f of listeners) f();
 }
 
+/** Keeps one picture (his own, just taken). */
+export const keepPic = (key: string, url: string) => keepPics([[key, url]]);
+
 /** Asks the server once for the pictures this phone doesn't have yet. */
 async function want(keys: (string | null | undefined)[]) {
   const k = all();
@@ -53,7 +61,7 @@ async function want(keys: (string | null | undefined)[]) {
   for (const x of need) asking.add(x);
   try {
     const got = (await query("family:photos", { keys: need })) as Record<string, string>;
-    for (const [key, url] of Object.entries(got)) if (url.startsWith("data:image/")) keepPic(key, url);
+    keepPics(Object.entries(got).filter(([, url]) => url.startsWith("data:image/")));
   } catch {
     /* no signal: the letters stay until next time */
   } finally {

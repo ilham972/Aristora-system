@@ -94,10 +94,16 @@
 .owl .owl-wing-r {
   animation-name: owl-wing-r;
 }
+/* The cap's two moves sit on two groups, one inside the other (13 Nov 2026): its drop onto the head (once) on the inner
+   one, its hop (for ever) on the outer one. Both on one element, Chrome refused to give either to the graphics chip
+   ("incompatible animations"), and the hop then redrew the whole owl on the main thread 60 times a second for as long
+   as an owl was on the screen: a quarter of a slow phone's time on Home, the map, the race and Me, measured. Never two
+   animations of `transform` on one element. */
 .owl .owl-cap {
-  animation:
-    owl-cap-drop 0.65s 0.12s cubic-bezier(0.3, 0.6, 0.3, 1.3) backwards,
-    owl-cap 5.6s 0.7s cubic-bezier(0.35, 0, 0.2, 1) infinite;
+  animation: owl-cap 5.6s 0.7s cubic-bezier(0.35, 0, 0.2, 1) infinite;
+}
+.owl .owl-cap-in {
+  animation: owl-cap-drop 0.65s 0.12s cubic-bezier(0.3, 0.6, 0.3, 1.3) backwards;
 }
 .owl .owl-body {
   animation: owl-breathe 2.8s 0.7s ease-in-out infinite alternate;

@@ -254,12 +254,55 @@ for f in sorted(glob.glob('convex/*.ts')):
 EOF
 ```
 
+## Is the family app fast? Measure it (the slow-phone lab)
+
+`tests/e2e/family.perf.ts` (13 Nov 2026): the built family app in Chromium with the processor slowed six times (about
+a cheap Redmi; `RATE=4` for less), a class of 29 with a race and Us open. It prints numbers; it is never part of the
+checks. Build first, then one of:
+
+```
+npx vitest run -c vitest.perf.config.ts -t "audit" --reporter=verbose    # every screen at rest: main-thread ms per second (0 is right)
+npx vitest run -c vitest.perf.config.ts -t "perf:" --reporter=verbose    # every tap: finger to paint, long frames; PERF_OUT=file.json
+npx vitest run -c vitest.perf.config.ts -t "seq:" --reporter=verbose     # a tap's work in order (script, style, layout, paint)
+npx vitest run -c vitest.perf.config.ts -t "open:" --reporter=verbose    # a returning phone: page start to Home drawn
+npx vitest run -c vitest.perf.config.ts -t "layout:" --reporter=verbose  # what each section of a screen costs to lay out
+npx vitest run -c vitest.perf.config.ts -t "level:" --reporter=verbose   # the Level: at rest, on a right answer's sheet, on the next question
+SHOTS=dir AT=3000 npx vitest run -c vitest.perf.config.ts -t "shots:"    # whole-page pictures, every animation frozen at AT ms
+WHY=1 npx vitest run -c vitest.perf.config.ts -t "lab" --reporter=verbose # each animation, and Chrome's reason when it is not the chip's
+```
+
+- **A screen at rest must cost 0.** If "audit" shows work, "lab" with `WHY=1` lists each animation with Chrome's
+  `compositeFailed` code (64 = two animations of one property on one element; an animation of anything but `transform`
+  and `opacity` is never the chip's), and `TRIES='{"name":"css"}'` measures the screen again with that CSS added
+  (`PRECSS=css` adds it before the page loads: an animation already running keeps the way it started).
+- **Did the look change?** "shots" before and after (stash, build, run; pop, build, run), then compare the pictures
+  pixel by pixel (PIL `ImageChops.difference`). Only the clock on Home may differ.
+- **The service worker** has its own run-through (`tests/e2e/familyOpen.e2e.ts`: a slow server, no server, new
+  versions, a file that won't come). The other run-throughs never register it. A mistake in `public/family/sw.js`
+  reaches every phone and stays until the next good one: change it only with that test.
+- What it can't see: the network (round trips on mobile data), the graphics chip's own work, an iPhone (Safari animates
+  a drawing's parts on the main thread whatever we do).
+
 ## Gotchas learned the hard way
 
 - **The AI check calls a paid API** (14 Nov 2026): tests never call it (`tests/ai.test.ts` stubs `fetch`; the e2e has no
   key, so its step fails with the "isn't switched on" words, and the run-through writes the AI's answer with
   `internal.ai.save`). Its key is a Convex environment variable read with `env()` in `convex/ai.ts` (no `process` in
   the convex tsconfig); never put a key in the repo. Changing the model = the Convex variable `AI_MODEL`, no deploy.
+- **Two animations of `transform` on one element: neither is the graphics chip's** (13 Nov 2026). The owl's cap had its
+  drop-in and its hop in one `animation:` list; Chrome kept both on the main thread for good, and the whole owl was
+  drawn again on every frame for as long as an owl was on the screen (a quarter of a slow phone's time; nothing looked
+  wrong). One of the two goes on an element inside. `tests/familyMotion.test.ts` refuses the pair and any animation of
+  another property; `tests/e2e/familyOpen.e2e.ts` measures the owl at rest. It caught the Level's owl a day later
+  (`ob-land` then `ob-breathe` on `.ob-sq`): a landing, then a loop, on one element is the same mistake.
+- **A finished animation can't be frozen for a picture** (`getAnimations()` no longer lists it once it ends without a
+  fill): to compare a one-shot move before and after a change, sample `getComputedStyle(el).transform` on every frame
+  while it plays (the lab's `LIVE=1`), not `currentTime = t` after the fact.
+- **The owl's cap is two groups** (`public/splash.html`: `.owl-cap` hops, `.owl-cap-in` inside it drops in). A mood
+  that gives the cap its own animation (`.mood-shock`, `.mood-sneeze`) or none (`.still`, `.mood-sleep`) must also
+  stop `.owl-cap-in`, or the cap drops in under it.
+- **A screen's state set to an equal answer still draws everything again** (Preact compares the object, not what it
+  says): set it through `sameOr` (`src/family/net.ts`) wherever the server is asked again for what is on the screen.
 
 - **A refused live query looks like "Loading…" for ever** (11 Nov 2026): `useQuery` (`src/live.ts`) gives `undefined`
   on an error, the same as "not here yet". A page's reads must allow every permission that opens the page: the

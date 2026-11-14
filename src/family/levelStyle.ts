@@ -130,7 +130,8 @@ const CSS = `
 .f-buddy .ob-sq{animation:ob-breathe 2.8s ease-in-out infinite}
 @keyframes ob-breathe{0%,100%{transform:scale(1,1)}50%{transform:scale(1.012,.985)}}
 .f-buddy.pose-yes .ob-hop,.f-buddy.pose-champ .ob-hop,.f-buddy.pose-combo .ob-hop{animation:ob-hop .62s cubic-bezier(.3,.7,.4,1) 2 both}
-.f-buddy.pose-yes .ob-sq,.f-buddy.pose-champ .ob-sq,.f-buddy.pose-combo .ob-sq{animation:ob-land .62s ease 2 both,ob-breathe 2.8s ease-in-out 1.3s infinite}
+.f-buddy.pose-yes .ob-land,.f-buddy.pose-champ .ob-land,.f-buddy.pose-combo .ob-land{animation:ob-land .62s ease 2}
+.f-buddy.pose-yes .ob-sq,.f-buddy.pose-champ .ob-sq,.f-buddy.pose-combo .ob-sq{animation-delay:1.24s}
 @keyframes ob-hop{0%{transform:translateY(0)}18%{transform:translateY(26px)}55%{transform:translateY(-78px)}100%{transform:translateY(0)}}
 @keyframes ob-land{0%{transform:scale(1,1)}18%{transform:scale(1.1,.86)}45%{transform:scale(.93,1.09)}88%{transform:scale(.96,1.05)}100%{transform:scale(1.07,.9)}}
 .f-buddy.pose-yes .ob-shadow{animation:ob-shade .62s ease 2 both}

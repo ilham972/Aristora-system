@@ -234,6 +234,10 @@
 .f-owl .mood-shock .owl-cap {
   animation: ow-cappop 0.7s ease-out both;
 }
+/* The cap's own move takes the place of its drop-in (the drop is on the cap's inner group: splash.css). */
+.f-owl :is(.mood-shock, .mood-sneeze) .owl-cap-in {
+  animation: none;
+}
 .f-owl .om-o,
 .f-owl .om-bang {
   animation: ow-in 0.3s 0.08s cubic-bezier(0.3, 1.6, 0.5, 1) both;

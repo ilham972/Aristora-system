@@ -9,7 +9,7 @@ import { useEffect, useState } from "preact/hooks";
 import type { CoinLine, FamilyShop, ShopItem } from "../../convex/coins";
 import type { FamilyMe } from "../../convex/family";
 import { BoughtCard } from "./board";
-import { keep, mutation, query } from "./net";
+import { keep, mutation, query, sameOr } from "./net";
 import { buzz, sound } from "./sound";
 import { Coin, Icon, OwlBadge, OwlSays, problemWords, Sheet, showSheet, toast, Waiting } from "./ui";
 
@@ -130,7 +130,7 @@ export function ShopScreen(props: { me: FamilyMe | null; onBack: () => void; onC
     query("coins:shop").then(
       (x) => {
         keep("shop", x);
-        setS(x as FamilyShop);
+        setS((shown) => sameOr(shown, x as FamilyShop));
         setErr(null);
       },
       (e) => setErr(problemWords(e)),

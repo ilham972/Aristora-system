@@ -367,6 +367,28 @@ export const signInIndex = (index: number, code: string, t: string) =>
     { ok: true; name: string } | { ok: false; why: "wrong" | "locked"; minutes: number }
   >;
 
+/**
+ * What a screen should show when the server answers: the very thing it shows already if the answer says the same, so
+ * nothing is drawn again (13 Nov 2026). Every open, every tab and every few seconds of an open chat, the same answer
+ * came back and the whole screen was worked out again under his finger, in the middle of its own entrance.
+ */
+export const sameOr = <T>(shown: T | null, x: T): T => (shown !== null && JSON.stringify(shown) === JSON.stringify(x) ? shown : x);
+
+// What a screen showed the last time it was open, for as long as the app stays open (13 Nov 2026): a chat, a post or a
+// Level's answers opened again show at once, as he left them, and what is new comes a moment later (before, each open
+// waited for the server behind the owl, even a second after he left it). In memory only: nothing of a chat is kept on
+// the phone, and each child on the phone has his own.
+const lastShown = new Map<string, unknown>();
+export function last<T>(key: string, value?: T): T | null {
+  const k = `${childId()}.${key}`;
+  if (value !== undefined) {
+    lastShown.delete(k);
+    lastShown.set(k, value);
+    if (lastShown.size > 24) lastShown.delete(lastShown.keys().next().value as string);
+  }
+  return (lastShown.get(k) as T | undefined) ?? null;
+}
+
 /** Small things kept on this phone for the child on screen (his home screen, typed answers): never needed, only faster. */
 export function keep<T>(key: string, value?: T | null): T | null {
   const k = `aristora.family.${look !== null ? "look" : staff !== null ? "staff" : (currentId ?? "_")}.${key}`;

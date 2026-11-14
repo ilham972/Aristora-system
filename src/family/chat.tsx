@@ -11,9 +11,9 @@
 // Its own file (chatParts.ts, later.ts useChatParts): never in the first load.
 
 import type { ComponentChildren } from "preact";
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { ChatHead, ChatLine, ChatMsg, ChatPeople, ChatPerson, ChatRoom } from "../../convex/chat";
-import { keep, mutation, query } from "./net";
+import { keep, last, mutation, query, sameOr } from "./net";
 import { picOf, usePics } from "./pics";
 import { buzz, sound } from "./sound";
 import { AskSheet, HelpList, HelpMenu, HelpTop, Voice, VoiceRec } from "./help";
@@ -165,7 +165,7 @@ function ChatsPart(props: { staff: boolean; onRoom: (id: string) => void; onAll?
     query("chat:rooms").then(
       (x) => {
         keep("chatRooms", x);
-        setD(x as Rooms);
+        setD((shown) => sameOr(shown, x as Rooms));
       },
       () => {},
     );
@@ -267,9 +267,17 @@ function dayWords(t: number): string {
 
 /** A group or a private chat, open. */
 export function RoomScreen(props: { id: string; staff: boolean; me?: string; onBack: () => void; onMate: (id: string) => void }) {
-  const [head, setHead] = useState<ChatHead | null>(null);
-  const [msgs, setMsgs] = useState<ChatMsg[]>([]);
-  const [more, setMore] = useState(false);
+  // A chat opened again shows at once as he left it, at its end (net.ts last); what is new comes with the first read.
+  const [was] = useState(() => last<{ head: ChatHead; msgs: ChatMsg[]; more: boolean }>(`room.${props.id}`));
+  const [head, setHead] = useState<ChatHead | null>(was?.head ?? null);
+  const [msgs, setMsgs] = useState<ChatMsg[]>(was?.msgs ?? []);
+  const [more, setMore] = useState(was?.more ?? false);
+  useLayoutEffect(() => {
+    if (was) window.scrollTo(0, document.body.scrollHeight);
+  }, []);
+  useEffect(() => {
+    if (head) last(`room.${props.id}`, { head, msgs, more });
+  }, [head, msgs, more]);
   const [err, setErr] = useState<string | null>(null);
   const [re, setRe] = useState<{ id: string; n: string; t?: string } | null>(null);
   const [sure, setSure] = useState<string | null>(null);
@@ -297,7 +305,8 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
       const end = nearEnd();
       // A short read (only what is new) doesn't count the group again: the count from before stays.
       // An explanation's question card comes on a full read only: the one from before stays too.
-      setHead({ ...x.head, ...(x.head.members === undefined && r.head?.members ? { members: r.head.members } : {}), ...(x.head.help === undefined && r.head?.help ? { help: r.head.help } : {}) });
+      // The same head as before (every 4 s while the chat is open, nothing new): nothing is drawn again.
+      setHead((shown) => sameOr(shown, { ...x.head, ...(x.head.members === undefined && r.head?.members ? { members: r.head.members } : {}), ...(x.head.help === undefined && r.head?.help ? { help: r.head.help } : {}) }));
       setErr(null);
       if (x.full) {
         setMsgs(x.msgs);
@@ -597,7 +606,7 @@ export function PeopleScreen(props: { staff: boolean; /** Inside the Chat tab (1
     query("chat:people").then(
       (x) => {
         keep("chatPeople", x);
-        setD(x as ChatPeople);
+        setD((shown) => sameOr(shown, x as ChatPeople));
       },
       (e) => toast(problemWords(e), true),
     );

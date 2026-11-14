@@ -8,7 +8,7 @@ import { useEffect, useState } from "preact/hooks";
 import type { FamilyProfile } from "../../convex/family";
 import type { StageLine } from "../../convex/lib/profile";
 import { MONTH } from "./home";
-import { keep, query } from "./net";
+import { keep, query, sameOr } from "./net";
 
 export type Parts = typeof import("./parts");
 
@@ -118,7 +118,7 @@ export function useProfile(): FamilyProfile | null {
     query("family:profile")
       .then((x) => {
         keep("profile", x);
-        setP(x as FamilyProfile);
+        setP((shown) => sameOr(shown, x as FamilyProfile));
       })
       .catch(() => {});
   }, []);

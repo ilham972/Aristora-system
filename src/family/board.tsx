@@ -4,7 +4,7 @@
 
 import { useEffect, useState } from "preact/hooks";
 import type { FamilyBoard, FamilyMe } from "../../convex/family";
-import { keep, mutation, query } from "./net";
+import { keep, mutation, query, sameOr } from "./net";
 import { BRAND, Coin, problemWords, toast } from "./ui";
 
 export type Board = FamilyBoard;
@@ -33,7 +33,7 @@ export function useBoard(): { b: Board | null; err: string | null } {
     query("family:board")
       .then((x) => {
         keep("board", x);
-        setB(x as Board);
+        setB((shown) => sameOr(shown, x as Board));
       })
       .catch((e) => setErr(problemWords(e)));
   }, []);

@@ -44,6 +44,7 @@ import {
   peek,
   query,
   randomKey,
+  sameOr,
   removeAccount,
   sendingNow,
   signInIndex,
@@ -232,7 +233,7 @@ export function App() {
         sound("unlock");
         toast(`Stage ${opened[0].no} unlocked! ${opened[0].ta}`);
       }
-      setMe(m);
+      setMe((shown) => sameOr(shown, m));
       setAcc(current());
       setOffline(false);
     } catch (e) {

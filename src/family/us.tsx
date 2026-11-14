@@ -19,7 +19,7 @@ import type { FamilyMe } from "../../convex/family";
 import type { UsFeed } from "../../convex/us";
 import type { UsItem } from "../../convex/lib/us";
 import { DAY_EN, MONTH } from "./home";
-import { keep, mutation, query } from "./net";
+import { keep, mutation, query, sameOr } from "./net";
 import { picOf, usePics } from "./pics";
 import { buzz, sound } from "./sound";
 import { Avatar, Icon, Owl, OwlBadge, problemWords, showSheet, toast, useOwlTap, Waiting, type Mood } from "./ui";
@@ -116,7 +116,7 @@ function useUs(on: boolean): { f: UsFeed | null; err: string | null; set: (f: Us
   const [err, setErr] = useState<string | null>(null);
   const set = (x: UsFeed) => {
     keep("us", x);
-    setF(x);
+    setF((shown) => sameOr(shown, x));
   };
   const read = () =>
     query("us:feed")

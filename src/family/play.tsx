@@ -1402,7 +1402,7 @@ function FreeCard(props: { max: number }) {
     <div class="f-free rise" role="status">
       <Confetti n={14} />
       <span class="f-free-gift" aria-hidden="true">
-        🎁
+        <i>🎁</i>
       </span>
       <b class="f-free-h">இலவசப் புள்ளிகள்!</b>
       <p>

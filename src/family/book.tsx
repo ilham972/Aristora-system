@@ -6,7 +6,7 @@ import { Fragment } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { BookQ, LevelBook } from "../../convex/lib/homeWork";
 import { loadChat, loadParts } from "./later";
-import { mutation, NetError, query } from "./net";
+import { last, mutation, NetError, query } from "./net";
 import { keepPhotos, keptPhotos, photoKey, PHOTO_MAX, sendKept, sendPhotos, shrink, type Kind } from "./photos";
 import { buzz, sound } from "./sound";
 import { Icon, Maths, Owl, openRoom, problemWords, showSheet, toast } from "./ui";
@@ -321,11 +321,12 @@ function Question(props: { b: BookQ; unitId: string; n: number; onSent: () => vo
  * right ones need nothing). `score` = the level's marks on top (its own screen).
  */
 export function Book(props: { unitId: string; n: number; initial?: LevelBook | null; score?: boolean }) {
-  const [book, setBook] = useState<LevelBook | null>(props.initial ?? null);
+  // A Level's answers opened again show at once as he left them (net.ts last); the teacher's new words come after.
+  const [book, setBook] = useState<LevelBook | null>(() => props.initial ?? last<LevelBook>(`book.${props.unitId}.${props.n}`));
   const [err, setErr] = useState<string | null>(null);
   const load = () =>
     query("family:book", { unitId: props.unitId, n: props.n })
-      .then((b) => setBook(b as LevelBook))
+      .then((b) => setBook(last(`book.${props.unitId}.${props.n}`, b as LevelBook)))
       .catch((e) => setErr(problemWords(e)));
   useEffect(() => {
     let gone = false;

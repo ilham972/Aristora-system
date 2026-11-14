@@ -209,9 +209,11 @@ function draw(markup: string, pose: Pose): string {
     p.feet === "air" ? foot(590, FY - 2, -24) + foot(672, FY - 2, 24) : p.feet === "tap" ? foot(583, FY) + `<g class="ob-tap">${foot(686, FY - 10, -26)}</g>` : foot(583, FY) + foot(679, FY);
   const sq = p.squash ?? [1, 1];
   const shadow = `<ellipse class="ob-shadow" cx="631" cy="979" rx="${p.lift ? 110 : 160}" ry="${p.lift ? 10 : 15}"/>`;
-  // .ob-hop moves it up and down, .ob-sq squashes it from its feet: the level's style animates both.
+  // .ob-hop moves it up and down, .ob-sq squashes it from its feet: the level's style animates both. .ob-land inside
+  // .ob-sq is the squash of a landing: its own group, because two animations of transform on one element (the landing,
+  // then the breathing) are never the graphics chip's (src/splash.css, the owl's cap; tests/familyMotion.test.ts).
   const body =
-    `<g class="ob-hop"><g transform="translate(631 ${FY})"><g class="ob-sq"><g transform="translate(0 ${-(p.lift ?? 0)}) rotate(${p.lean ?? 0}) scale(${sq.join(" ")}) translate(-631 ${-FY})">` +
+    `<g class="ob-hop"><g transform="translate(631 ${FY})"><g class="ob-sq"><g class="ob-land"><g transform="translate(0 ${-(p.lift ?? 0)}) rotate(${p.lean ?? 0}) scale(${sq.join(" ")}) translate(-631 ${-FY})">` +
     TAIL +
     TORSO +
     feet +
@@ -221,7 +223,7 @@ function draw(markup: string, pose: Pose): string {
     (wl.front ? wing("l", wl) : "") +
     (wr.front ? wing("r", wr) : "") +
     (p.extra ?? "") +
-    "</g></g></g></g>";
+    "</g></g></g></g></g>";
   return `<svg class="owl ob" viewBox="${p.vb ?? "250 230 760 760"}" xmlns="http://www.w3.org/2000/svg">${shadow}${p.back ?? ""}${body}<g class="ob-top">${p.top ?? ""}</g></svg>`;
 }
 

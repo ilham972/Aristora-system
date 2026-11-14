@@ -504,7 +504,8 @@ p {
 .f-owl.still .owl-tassel,
 .f-owl.still .owl-wing-l,
 .f-owl.still .owl-wing-r,
-.f-owl.still .owl-cap {
+.f-owl.still .owl-cap,
+.f-owl.still .owl-cap-in {
   animation: none;
 }
 .f-owl .om {
@@ -607,7 +608,8 @@ p {
 .f-owl .mood-sleep .owl-wing-l,
 .f-owl .mood-sleep .owl-wing-r,
 .f-owl .mood-sleep .owl-tassel,
-.f-owl .mood-sleep .owl-cap {
+.f-owl .mood-sleep .owl-cap,
+.f-owl .mood-sleep .owl-cap-in {
   animation: none;
 }
 /* Hello: one wing waves */
@@ -4631,7 +4633,14 @@ button.f-pod:active,
 .f-free-gift {
   font-size: 54px;
   line-height: 1;
-  animation: f-pop 0.5s var(--spring) both, f-bob 2.4s 0.5s ease-in-out infinite;
+  animation: f-pop 0.5s var(--spring) both;
+}
+/* Its bob is on the gift inside (13 Nov 2026): two animations of `transform` on one element never reach the graphics
+   chip (splash.css, the owl's cap). */
+.f-free-gift i {
+  display: inline-block;
+  font-style: normal;
+  animation: f-bob 2.4s 0.5s ease-in-out infinite;
 }
 .f-free-h {
   font: 800 22px/1.2 var(--display);

@@ -18,7 +18,7 @@
 import type { ComponentChildren, VNode } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import type { UsCheer, UsItem, UsPic, UsReply, UsThread, UsVeil } from "../../convex/lib/us";
-import { keep, mutation, NetError, query } from "./net";
+import { keep, last, mutation, NetError, query, sameOr } from "./net";
 import { picOf, usePics } from "./pics";
 import { buzz, sound } from "./sound";
 import { Bubble, jumpTo, ReactorsSheet, seedUrl, sendPicked, usePicker, WriteBar, type Sent, type Taggable } from "./talk";
@@ -433,12 +433,16 @@ function viewOnce(id: string) {
  * functions: net.ts); the server decides what each one sees.
  */
 export function ThreadScreen(props: { id: string; staff?: boolean; me?: string; onBack: () => void; onMate: (id: string) => void }) {
-  const [d, setD] = useState<UsThread | null>(null);
+  // A line opened again shows at once as he left it (net.ts last); its talk comes again with the first read.
+  const [d, setD] = useState<UsThread | null>(() => last<UsThread>(`post.${props.id}`));
   const [err, setErr] = useState<string | null>(null);
   const [sure, setSure] = useState<string | null>(null);
   const [told, setTold] = useState<string[]>([]);
   const [re, setRe] = useState<{ id: string; n: string; t?: string } | null>(null);
-  const [clapped, setClapped] = useState(false);
+  const [clapped, setClapped] = useState(() => !!d?.clapped);
+  useEffect(() => {
+    if (d) last(`post.${props.id}`, d);
+  }, [d]);
   // When he last opened it (before this time): the talk's "new" line goes above what came after.
   const [since] = useState(() => seenAt(props.id));
   const st = !!props.staff;
@@ -446,7 +450,7 @@ export function ThreadScreen(props: { id: string; staff?: boolean; me?: string; 
     query("us:thread", { id: props.id }).then(
       (x) => {
         const t = x as UsThread;
-        setD(t);
+        setD((shown) => sameOr(shown, t));
         if (t.clapped) setClapped(true);
         setErr(null);
       },

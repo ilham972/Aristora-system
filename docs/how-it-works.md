@@ -1304,6 +1304,42 @@ learning app of our education institute"): one profile, his class times, what he
   `/f/` on both addresses; family links are app.aristora.org/f/#join=…, and app.aristora.org/ redirects to /f/
   (`vercel.json`, a redirect: a rewrite of "/" never runs, Vercel serves index.html first). A service worker under /f/
   only (cache `aristora-family-6`): it opens with no signal after the first visit.
+- **Fast like an app on the phone** (13 Nov 2026, his ask: "like a native mobile app ... very fast ... like WhatsApp",
+  "don't reduce the animations: improve the performance"). Measured on a phone slowed six times
+  (`tests/e2e/family.perf.ts`), then fixed where the time went; the look is the same to the pixel:
+  - **The open never waits for a weak signal** (`public/family/sw.js`): the network's page when it answers within
+    0.7 s (a new version shows at once, as before), else the copy kept on the phone, and the network's page is kept for
+    the next open. Before, a phone with any signal waited for the network however long it took: a white screen. A page
+    is kept only after every file it names is kept (`keepPage`: files first, the page last), so the kept copy always
+    opens whole, also after a newer version went online (Vercel no longer has an old version's files); the old
+    version's files go once the new page is the one on the screen. **Us and the chats are on the phone before they are
+    opened**: the page names their files (`<meta name="f-keep">`, `scripts/build.mjs`; a browser ignores it) and
+    the worker fetches them behind the scenes, so the first tap on Us or Thread waits for no download. `/f/?staff`
+    (the class app's Us tab, whose file is never kept) always gets the network's page. The page also opens its line
+    to the server while the code downloads (`<link rel="preconnect">`, the address from the build).
+  - **A living owl costs the phone nothing while it lives** (`src/splash.css`, the cap): every owl animation is the
+    graphics chip's. Its cap had two animations of `transform` on one element (the drop-in and the hop); Chrome then
+    keeps both on the main thread, and the hop redrew the whole owl 60 times a second: 220 to 430 ms of every second
+    on Home, the map, a Stage, the race, Us and Me. The drop-in is now on a group inside the cap (`.owl-cap-in`); the
+    race's online dot pulses a disc that scales and fades instead of a shadow that changes (the same picture); the
+    free-marks gift's bob is on the gift inside its pop. After: 0 ms on every screen at rest. The same in the Level
+    rebuilt on 14 Nov (its owl's landing squash and its breathing were on one group: 270 to 420 ms a second for as
+    long as a right answer's sheet was up, and 310 under his typing on a streak): the landing is on a group inside
+    (`.ob-land`, `owlBody.tsx`, `levelStyle.ts`), 0 to 3 ms now; the hop is the same frame for frame, its last squash
+    lets go 60 ms sooner. The rules, with tests:
+    an animation moves only `transform` and `opacity`, and one element never has two animations of `transform`
+    (`tests/familyMotion.test.ts` names the line; `tests/e2e/familyOpen.e2e.ts` measures the owl).
+  - **The same answer draws nothing again** (`sameOr` in `net.ts`): his home data, the race, his profile, Us, the
+    class hours, the Shop, the chat lists, and an open chat's head every 4 s. Each came back from the server the same
+    as the copy on the screen and the whole screen was worked out again, in the middle of its own entrance.
+  - **A chat, a post and a Level's answers open again at once** (`last` in `net.ts`): as he left them, from memory
+    (only while the app is open; nothing of a chat is kept on the phone; each child his own), and what is new comes
+    with the first read. Before, each open waited for the server behind the owl.
+  - **Photos arrive in one go** (`pics.ts` `keepPics`): one write to the phone and one redraw for all the faces of an
+    answer, not one each.
+  Not done, on purpose: skipping far cards on Me (`content-visibility`) saved two thirds of its layout but can show
+  an empty card for a frame on a fast scroll. Next, his call: the loading owl's 1.2 s (the app is ready at about
+  0.6 s on a slow phone and waits for it), and his own message in a chat showing before the server has it.
 - **An app, not a web page** (his ask, 4 Nov 2026: "students want to feel like a native app, so don't zoom when we use
   two fingers"): two fingers never zoom, on every screen, by three locks: the page's `maximum-scale=1,
   user-scalable=no` (`public/family/index.html`: Chrome), `html { touch-action: pan-x pan-y }` (Chrome even when a
