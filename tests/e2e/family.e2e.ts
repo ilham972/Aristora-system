@@ -4675,3 +4675,122 @@ test("Dark is his own switch: a phone set to dark still opens light; Me → Dark
   expect(await C.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toContain("only");
   expect(await C.evaluate(() => document.querySelector('meta[name="color-scheme"]')?.getAttribute("content"))).toBe("only light");
 }, 120_000);
+
+test("A chat shows his words at once: pale until the server has them, several in a row, a refusal gives them back to the box", async () => {
+  // 14 Nov 2026, his yes ("like WhatsApp"): his message showed only after two trips to the server (0.4 to 1.5 s on
+  // mobile data). Now it is on the screen the moment he sends it, and the box is empty for the next one. Made-up
+  // students and words; the server's send is held back here to see the time in between.
+  const before = problems.length;
+  const backend = makeBackend(modules);
+  const t = backend.t;
+  await addPerson(t, { name: "Owner", token: OWNER_TOKEN, role: "owner" });
+  const as = { token: OWNER_TOKEN };
+  await t.mutation(api.setup.ensure, as);
+  const u01 = await t.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G8-U01")).first())!._id);
+  const add = async (name: string) => await t.mutation(api.students.add, { ...as, name, grade: 8, term: 1, stage: "master", unitId: u01 });
+  const arun = await add("Arun K");
+  const bilal = await add("Bilal M");
+  await t.mutation(api.students.setSex, { ...as, ids: [arun, bilal], sex: "b" });
+  await t.mutation(api.families.setCode, { ...as, studentId: arun, code: "4719" });
+  const FAM_B = "family-phone-bilal-fast-".padEnd(48, "x");
+  await t.mutation(api.families.makeLink, { ...as, studentId: bilal, codeHash: secretHash("family-link", "bilal-fast-family-link-0123456789") });
+  await t.mutation(api.family.join, { code: "bilal-fast-family-link-0123456789", token: FAM_B, label: "Android" });
+  await t.mutation(api.us.setCfg, { ...as, open: true });
+
+  const P = await open(backend, `${site.url}/f/`, size(360, 780));
+  await P.getByLabel(/Index/).fill("1001");
+  await P.getByLabel("Code").fill("4719");
+  await P.getByRole("button", { name: "Sign in" }).click();
+  await until(async () => (await P.locator(".f-tabs .f-tab").count()) === 5, "the Us tab");
+  await tabTo(P, /^Thread$/);
+  await P.locator(".c-seg").getByRole("tab", { name: /Members/ }).click();
+  await P.locator(".c-gpill", { hasText: "Grade 8" }).click();
+  await contains(P.locator(".c-head-w"), "Grade 8");
+  const gid = (await t.query(api.chat.rooms, { token: FAM_B })).groups[0].id;
+  const say = async (words: string) => {
+    await P.locator(".f-tb-in").pressSequentially(words);
+    await P.locator(".f-tb").getByRole("button", { name: "Send" }).click();
+  };
+  const onServer = async () => (await t.query(api.chat.room, { token: FAM_B, id: gid })).msgs.map((m) => m.t);
+  const mine = () => P.locator(".f-msg.mine").evaluateAll((l) => l.map((e) => `${e.classList.contains("wait") ? "(wait) " : ""}${(e.querySelector(".f-msg-t, .f-msg-b") as HTMLElement).innerText.trim()}`));
+  /** Holds the server's send back until `go()`; `fail` refuses it instead. */
+  const hold = (fail = false) =>
+    P.evaluate((refuse) => {
+      const w = window as unknown as { __ARISTORA_TEST_BACKEND__: { mutation: (n: string, a: unknown) => Promise<unknown> }; __go?: () => void; __real?: (n: string, a: unknown) => Promise<unknown> };
+      const b = w.__ARISTORA_TEST_BACKEND__;
+      w.__real ??= b.mutation.bind(b);
+      const gate = new Promise<void>((r) => (w.__go = r));
+      b.mutation = async (n, a) => {
+        if (n !== "chat:send") return w.__real!(n, a);
+        await gate;
+        if (refuse) throw new Error("The server said no.");
+        return w.__real!(n, a);
+      };
+    }, fail);
+  const go = () => P.evaluate(() => (window as unknown as { __go?: () => void }).__go?.());
+
+  // The server holds his send: his words are on the screen already, pale, last; the box is empty.
+  await hold();
+  await say("முதல் செய்தி");
+  await until(async () => (await mine()).join("|") === "(wait) முதல் செய்தி", "his words at once, pale");
+  expect(await P.locator(".f-tb-in").inputValue()).toBe("");
+  expect(await onServer()).toEqual([]);
+  // A waiting bubble has no reply, reaction or report of its own yet.
+  expect(await P.locator(".f-msg.wait .f-msg-rep, .f-msg.wait .f-msg-swipe").count()).toBe(0);
+  // He writes the next one without waiting; a classmate's message arrives meanwhile (the chat's own read, 4 s): his
+  // waiting words stay, after it.
+  await say("இரண்டாவது");
+  await t.mutation(api.chat.send, { token: FAM_B, id: gid, text: "நான் இங்கே" });
+  await contains(P.locator(".f-msg:not(.mine)"), "நான் இங்கே");
+  expect(await mine()).toEqual(["(wait) முதல் செய்தி", "(wait) இரண்டாவது"]);
+  expect(await P.locator(".c-msgs .f-msg").evaluateAll((l) => l.map((e) => e.classList.contains("wait")))).toEqual([false, true, true]);
+  await shot(P, "fam130-chat-sent-at-once");
+  // The server answers: the same bubbles, no longer pale, each once, in his order; the server has both.
+  await go();
+  await until(async () => (await mine()).join("|") === "முதல் செய்தி|இரண்டாவது", "both sent, each once");
+  expect(await onServer()).toEqual(["நான் இங்கே", "முதல் செய்தி", "இரண்டாவது"]);
+  await P.waitForTimeout(4500); // the chat's next read changes nothing
+  expect(await mine()).toEqual(["முதல் செய்தி", "இரண்டாவது"]);
+
+  // Refused (or no signal): the pale bubble goes, the box has his words again, a line says why.
+  await hold(true);
+  await say("போகாத செய்தி");
+  await until(async () => (await mine()).includes("(wait) போகாத செய்தி"), "his words at once");
+  await go();
+  await until(async () => !(await mine()).some((x) => x.includes("போகாத")), "the refused words gone from the chat");
+  expect(await P.locator(".f-tb-in").inputValue()).toBe("போகாத செய்தி");
+  await visible(P.locator(".f-toast"));
+  expect((await onServer()).length).toBe(3);
+  // The same words sent again, the server free: once on the screen, once on the server.
+  await P.evaluate(() => {
+    const w = window as unknown as { __ARISTORA_TEST_BACKEND__: { mutation: unknown }; __real?: unknown };
+    w.__ARISTORA_TEST_BACKEND__.mutation = w.__real;
+  });
+  await P.locator(".f-tb").getByRole("button", { name: "Send" }).click();
+  await until(async () => (await mine()).join("|") === "முதல் செய்தி|இரண்டாவது|போகாத செய்தி", "sent the second time");
+  expect((await onServer()).slice(-1)).toEqual(["போகாத செய்தி"]);
+  // He leaves and comes back: the chat opens at once as he left it (from memory), nothing pale, nothing twice.
+  // (The group got its own id with its first message: one open by that id first.)
+  await P.getByRole("button", { name: "Back" }).click();
+  await P.locator(".c-gpill", { hasText: "Grade 8" }).click();
+  await until(async () => (await mine()).length === 3, "the chat again");
+  // The server's read of the chat is held back here: what shows is what the phone remembers.
+  await P.getByRole("button", { name: "Back" }).click();
+  await P.evaluate(() => {
+    const w = window as unknown as { __ARISTORA_TEST_BACKEND__: { query: (n: string, a: unknown) => Promise<unknown> }; __q?: (n: string, a: unknown) => Promise<unknown>; __read?: () => void };
+    const b = w.__ARISTORA_TEST_BACKEND__;
+    w.__q = b.query.bind(b);
+    const gate = new Promise<void>((r) => (w.__read = r));
+    b.query = async (n, a) => {
+      if (n === "chat:room") await gate;
+      return w.__q!(n, a);
+    };
+  });
+  await P.locator(".c-gpill", { hasText: "Grade 8" }).click();
+  await until(async () => (await mine()).join("|") === "முதல் செய்தி|இரண்டாவது|போகாத செய்தி", "the chat as he left it, before the server answers", 1500);
+  expect(await P.locator(".c-room .f-owl").count()).toBe(0); // no waiting owl
+  await P.evaluate(() => (window as unknown as { __read?: () => void }).__read?.());
+  await P.waitForTimeout(600);
+  expect(await mine()).toEqual(["முதல் செய்தி", "இரண்டாவது", "போகாத செய்தி"]);
+  expect(problems.slice(before)).toEqual([]);
+}, 120_000);

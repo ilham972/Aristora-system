@@ -1337,9 +1337,20 @@ learning app of our education institute"): one profile, his class times, what he
     with the first read. Before, each open waited for the server behind the owl.
   - **Photos arrive in one go** (`pics.ts` `keepPics`): one write to the phone and one redraw for all the faces of an
     answer, not one each.
+  - **His chat message is on the screen the moment he sends it** (14 Nov, his yes; `RoomScreen` in `chat.tsx`, the
+    `fast` write bar in `talk.tsx`): pale (`.f-msg.wait`, a small pop-in) until the server has it, the box empty for the
+    next one at once, several in a row in his order. The server's answer turns the same bubble into the message
+    (same key: `k`); a read that brings it first takes the pale one away; refused or no signal: the bubble goes, his
+    words (and the reply he was answering) come back into the box, the usual line says why. A waiting bubble has no
+    reply, reaction or remove yet, is never kept in memory, and the chat's short reads ask the server from its own
+    newest message (the waiting one carries the phone's clock). Only words: a photo and a voice note upload first, as
+    before. Before: two trips to the server (the send, then a read), 0.4 to 1.5 s on mobile data. Us's comments and a
+    post's talk still wait for the server.
+  - **The loading owl gives way once it has landed** (14 Nov, his yes; `hideSplash(850)`, `src/splash.ts`): 0.85 s
+    from the page's start in the family app (its fall and landing take 0.8 s; a slow phone has Home ready at about
+    0.6 s and waited until 1.2 s on every open). The teachers' owl keeps its 1.2 s.
   Not done, on purpose: skipping far cards on Me (`content-visibility`) saved two thirds of its layout but can show
-  an empty card for a frame on a fast scroll. Next, his call: the loading owl's 1.2 s (the app is ready at about
-  0.6 s on a slow phone and waits for it), and his own message in a chat showing before the server has it.
+  an empty card for a frame on a fast scroll.
 - **An app, not a web page** (his ask, 4 Nov 2026: "students want to feel like a native app, so don't zoom when we use
   two fingers"): two fingers never zoom, on every screen, by three locks: the page's `maximum-scale=1,
   user-scalable=no` (`public/family/index.html`: Chrome), `html { touch-action: pan-x pan-y }` (Chrome even when a
@@ -1430,7 +1441,7 @@ learning app of our education institute"): one profile, his class times, what he
   the build at `%SPLASH%` (each its own "still loading" words; Tamil here), styles `src/splash.css` (the teachers'
   navy) and, for this app, `owl.css` (**our light lavender, the light violet owl falling in from above the screen,
   squashing as it lands, bouncing, then waving**; the bar colour `#ece7ff`), gone with `hideSplash()` once there is
-  something real to show (at least 1.2 s from the start so it doesn't flash). No spinner anywhere: while something
+  something real to show (at least 0.85 s from the start here, the owl landed; 1.2 s in the teachers' app). No spinner anywhere: while something
   loads, the thinking owl.
 - **Sounds** (`sound.ts`, made on the phone, no files): a tap, a key click, a bell for each right answer that climbs a
   step with each one in a row, a soft low note for a wrong one, a fanfare for a Level (a brighter one for every mark),

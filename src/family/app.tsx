@@ -184,7 +184,7 @@ export function App() {
 
   // The living owl stays until there is something real to show (and at least a moment: src/splash.ts).
   useEffect(() => {
-    if (ready) hideSplash();
+    if (ready) hideSplash(850); // the owl has landed (src/splash.ts)
   }, [ready]);
   // The phone's bar takes the colour at the top of the screen: purple over a header, light over Home and a Level
   // (in his Dark from Me: the dark page, a deeper violet).

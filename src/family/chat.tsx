@@ -266,24 +266,32 @@ function dayWords(t: number): string {
 }
 
 /** A group or a private chat, open. */
+/**
+ * A message on the screen. `wait`: his own words, shown the moment he sent them (14 Nov 2026, his yes: "like
+ * WhatsApp"), pale until the server has them (before, they showed two trips to the server later: 0.4 to 1.5 s on
+ * mobile data). The server's message takes its place; refused or no signal: it goes and the box has his words again.
+ * Only words: a photo and a voice note upload first, as before.
+ */
+type Msg = ChatMsg & { wait?: true; /** The bubble's key from when it waited: it stays the same bubble once sent. */ k?: string };
+
 export function RoomScreen(props: { id: string; staff: boolean; me?: string; onBack: () => void; onMate: (id: string) => void }) {
   // A chat opened again shows at once as he left it, at its end (net.ts last); what is new comes with the first read.
-  const [was] = useState(() => last<{ head: ChatHead; msgs: ChatMsg[]; more: boolean }>(`room.${props.id}`));
+  const [was] = useState(() => last<{ head: ChatHead; msgs: Msg[]; more: boolean }>(`room.${props.id}`));
   const [head, setHead] = useState<ChatHead | null>(was?.head ?? null);
-  const [msgs, setMsgs] = useState<ChatMsg[]>(was?.msgs ?? []);
+  const [msgs, setMsgs] = useState<Msg[]>(was?.msgs ?? []);
   const [more, setMore] = useState(was?.more ?? false);
   useLayoutEffect(() => {
     if (was) window.scrollTo(0, document.body.scrollHeight);
   }, []);
   useEffect(() => {
-    if (head) last(`room.${props.id}`, { head, msgs, more });
+    if (head) last(`room.${props.id}`, { head, msgs: msgs.filter((m) => !m.wait), more });
   }, [head, msgs, more]);
   const [err, setErr] = useState<string | null>(null);
   const [re, setRe] = useState<{ id: string; n: string; t?: string } | null>(null);
   const [sure, setSure] = useState<string | null>(null);
   const [told, setTold] = useState<string[]>([]);
   const [blk, setBlk] = useState(false);
-  const ref = useRef({ head: null as ChatHead | null, msgs: [] as ChatMsg[], read: 0, busy: false });
+  const ref = useRef({ head: null as ChatHead | null, msgs: [] as Msg[], read: 0, busy: false });
   ref.current.head = head;
   ref.current.msgs = msgs;
   const nearEnd = () => window.innerHeight + window.scrollY > document.body.scrollHeight - 160;
@@ -300,7 +308,8 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
     if (r.busy) return;
     r.busy = true;
     try {
-      const last = r.msgs[r.msgs.length - 1];
+      // The newest the server gave (his waiting words carry the phone's clock, not the server's).
+      const last = r.msgs.filter((m) => !m.wait).pop();
       const x = (await query("chat:room", { id: props.id, ...(last && r.head && !first ? { since: last.at, rv: r.head.rv } : {}) })) as ChatRoom;
       const end = nearEnd();
       // A short read (only what is new) doesn't count the group again: the count from before stays.
@@ -308,8 +317,10 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
       // The same head as before (every 4 s while the chat is open, nothing new): nothing is drawn again.
       setHead((shown) => sameOr(shown, { ...x.head, ...(x.head.members === undefined && r.head?.members ? { members: r.head.members } : {}), ...(x.head.help === undefined && r.head?.help ? { help: r.head.help } : {}) }));
       setErr(null);
+      // His waiting words stay, but one the server gives back in this very read (it came before the send's own answer) goes.
+      const waits = (l: Msg[], got: ChatMsg[]) => l.filter((m) => m.wait && !got.some((g) => g.mine && g.t === m.t && !l.some((y) => y.id === g.id)));
       if (x.full) {
-        setMsgs(x.msgs);
+        setMsgs((l) => [...x.msgs.map((g) => { const k = l.find((y) => y.id === g.id)?.k; return k ? { ...g, k } : g; }), ...waits(l, x.msgs)]);
         setMore(x.more);
         markRead(x.msgs);
         if (first) toEnd(false);
@@ -317,9 +328,9 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
         const have = new Set(r.msgs.map((m) => m.id));
         const add = x.msgs.filter((m) => !have.has(m.id));
         if (add.length) {
-          const next = [...r.msgs, ...add];
-          setMsgs(next);
-          markRead(next);
+          // His waiting words stay last.
+          setMsgs((l) => [...l.filter((m) => !m.wait), ...add.filter((m) => !l.some((y) => y.id === m.id)), ...waits(l, add)]);
+          markRead([...r.msgs.filter((m) => !m.wait), ...add]);
           if (add.some((m) => !m.mine)) sound("tweet");
           if (end) toEnd();
         }
@@ -360,9 +371,33 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
     );
   };
   const send = async (text: string, ph: Sent[], mt: string[], au?: { f: string; d: number }) => {
-    const r = (await mutation("chat:send", { id: props.id, ...(text ? { text } : {}), ...(ph.length ? { ph } : {}), ...(re ? { re: re.id } : {}), ...(mt.length ? { mt } : {}), ...(au ? { au } : {}) })) as { id: string; at: number };
+    const to = re;
+    // Words alone show at once, like his last message here (same writer: the bubbles sit together).
+    const tmp = text && !ph.length && !au ? `~${Date.now()}.${Math.random()}` : "";
+    const own = [...ref.current.msgs].reverse().find((m) => m.mine && !m.wait);
+    if (tmp) {
+      // Whoever he tagged, by name (the bubble colours an @name it knows), as the server will say it.
+      const tagged = mt.map((id) => ({ id, n: people.find((p) => p.id === id)?.n ?? "" })).filter((x) => x.n);
+      const mine: Msg = { ...(own ? { w: own.w, n: own.n, ...(own.pic ? { pic: own.pic } : {}), ...(own.tch ? { tch: true } : {}), ...(own.g !== undefined ? { g: own.g } : {}) } : { w: "", n: "" }), id: tmp, at: Date.now(), mine: true, t: text, ...(to ? { re: to.id } : {}), ...(tagged.length ? { mt: tagged } : {}), wait: true };
+      setMsgs((l) => [...l, mine]);
+      setRe(null);
+      toEnd();
+    }
+    let r: { id: string; at: number };
+    try {
+      r = (await mutation("chat:send", { id: props.id, ...(text ? { text } : {}), ...(ph.length ? { ph } : {}), ...(to ? { re: to.id } : {}), ...(mt.length ? { mt } : {}), ...(au ? { au } : {}) })) as { id: string; at: number };
+    } catch (e) {
+      if (tmp) {
+        setMsgs((l) => l.filter((m) => m.id !== tmp));
+        setRe((now) => now ?? to);
+      }
+      throw e;
+    }
+    // The server has it: the pale bubble becomes the message (or goes, if a read already brought it).
+    if (tmp) setMsgs((l) => (l.some((m) => m.id === r.id) ? l.filter((m) => m.id !== tmp) : l.map((m) => (m.id === tmp ? { ...m, id: r.id, at: r.at, wait: undefined, k: tmp } : m))));
     setRe(null);
-    await load();
+    // His first words here: a whole read (who he is to this chat); else only what is new.
+    await load(!!tmp && !own);
     toEnd();
     return r;
   };
@@ -504,9 +539,9 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
                 if (!prev || dayNo(prev.at) !== dayNo(m.at)) out.push(<li key={`d${m.at}`} class="c-day"><span>{dayWords(m.at)}</span></li>);
                 out.push(
                   <Bubble
-                    key={m.id}
+                    key={m.k ?? m.id}
                     x={{ id: m.id, at: m.at, n: m.mine ? "நீ" : m.n, ...(m.w.startsWith("s:") ? { sid: m.w.slice(2) } : {}), ...(m.pic ? { pic: m.pic } : {}), ...(m.tch ? { tch: true } : {}), ...(m.mine ? { mine: true } : {}), ...(m.t ? { t: m.t } : {}), ...(m.mt ? { mt: m.mt } : {}), ...(m.rx ? { rx: m.rx } : {}), ...(m.my ? { my: m.my } : {}) }}
-                    cls={`${m.re ? "re" : ""}${prev && prev.w === m.w && m.at - prev.at < 5 * 60_000 && dayNo(prev.at) === dayNo(m.at) ? " cont" : ""}`}
+                    cls={`${m.wait ? "wait " : ""}${m.re ? "re" : ""}${prev && prev.w === m.w && m.at - prev.at < 5 * 60_000 && dayNo(prev.at) === dayNo(m.at) ? " cont" : ""}`}
                     tags={
                       <>
                         {m.tch && <i class="f-msg-tag">ஆசிரியர்</i>}
@@ -531,11 +566,11 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
                     }
                     me={props.me}
                     onMate={props.onMate}
-                    onReply={head.can.write ? () => setRe({ id: m.id, n: m.mine ? "நீ" : m.n, ...(m.t ? { t: m.t } : {}) }) : undefined}
-                    onReact={head.look ? undefined : (e) => react(m, e)}
+                    onReply={head.can.write && !m.wait ? () => setRe({ id: m.id, n: m.mine ? "நீ" : m.n, ...(m.t ? { t: m.t } : {}) }) : undefined}
+                    onReact={head.look || m.wait ? undefined : (e) => react(m, e)}
                     onWho={() => showSheet((close) => <ReactorsSheet load={() => query("chat:reactors", { cid: m.id }) as Promise<never>} onClose={close} />)}
                     acts={
-                      props.staff ? (
+                      m.wait ? undefined : props.staff ? (
                         <>
                           <span class="f-sp" />
                           {m.rp ? (
@@ -585,6 +620,7 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
               people={head.k === "g" ? people : undefined}
               onAt={head.k === "g" ? askMembers : undefined}
               onSend={send}
+              fast
               extra={head.k === "h" ? <VoiceRec staff={props.staff} max={props.staff ? 120 : 60} onSend={(au) => send("", [], [], au)} /> : undefined}
             />
           ) : (

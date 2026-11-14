@@ -538,6 +538,11 @@ export function WriteBar(props: {
   onSend: (text: string, ph: Sent[], mt: string[]) => Promise<unknown>;
   /** Above the words (12 Nov 2026: a teacher's voice-note recorder in an explanation's thread). */
   extra?: ComponentChildren;
+  /**
+   * The talk shows his words itself the moment he sends them (a chat, 14 Nov 2026): the box empties at once and he can
+   * write the next ones; refused, or no signal: his words come back into the box. Never with photos (they upload first).
+   */
+  fast?: boolean;
 }) {
   const [t, setT] = useState("");
   const [busy, setBusy] = useState(false);
@@ -590,6 +595,36 @@ export function WriteBar(props: {
   const send = async (words: string) => {
     const w = words.trim();
     if (busy || (!w && !pk.list.length)) return;
+    const mtOf = () => [...new Set(tags.filter((x) => w.includes(`@${x.n}`)).map((x) => x.id))];
+    if (props.fast && !pk.list.length) {
+      const mt = mtOf();
+      const kept = tags;
+      sound("send");
+      buzz(8);
+      setT("");
+      setTags([]);
+      setEmo(false);
+      setAt(null);
+      if (box.current) {
+        box.current.value = "";
+        box.current.style.height = "";
+      }
+      props.onSend(w, [], mt).then(
+        (r) => {
+          const xp = (r as { xp?: number } | undefined)?.xp;
+          if (xp) toast(`💎 +${xp} XP: உன் சொந்த வார்த்தைகளுக்கு!`);
+        },
+        (e) => {
+          toast(e instanceof NetError && e.offline ? "இணையம் இல்லை. பிறகு அனுப்பு." : problemWords(e), true);
+          // His words back, before anything he wrote since.
+          const now = box.current?.value ?? "";
+          const v = (now ? `${w} ${now}` : w).slice(0, props.max);
+          put(v, v.length);
+          setTags((x) => [...kept.filter((k) => !x.some((y) => y.id === k.id)), ...x]);
+        },
+      );
+      return;
+    }
     setBusy(true);
     try {
       const ph = props.photos ? await sendPicked(pk.list) : [];

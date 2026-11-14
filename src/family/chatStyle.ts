@@ -68,6 +68,10 @@ const CSS = `
 .c-msgs .f-msg.cont>.f-msg-ava{visibility:hidden;height:0}
 .c-msgs .f-msg.cont .f-msg-h{display:none}
 .c-msgs .f-msg.mine{grid-template-columns:1fr;margin-left:44px}
+.c-msgs .f-msg-b{transition:opacity .2s}
+.c-msgs .f-msg.wait{animation:c-sent .24s var(--spring)}
+.c-msgs .f-msg.wait .f-msg-b{opacity:.55}
+@keyframes c-sent{from{opacity:0;transform:translateY(10px) scale(.96)}}
 .c-msgs .f-msg.mine>.f-msg-ava,.c-msgs .f-msg.mine .f-msg-h b{display:none}
 .c-msgs .f-msg.mine .f-msg-w{display:flex;flex-direction:column;align-items:flex-end}
 .c-msgs .f-msg.mine .f-msg-h{justify-content:flex-end}
