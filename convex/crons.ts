@@ -10,6 +10,8 @@
 // (`us.improved`).
 // The Shop (10 Nov 2026): Monday 00:15 in Sri Lanka (Sunday 18:45 UTC) each student's pay day: last week's XP pays coins,
 // 5 XP = 1 coin (`coins.payday`, 20 a run; the first pay ran once when the Shop came, from `race.fill`).
+// The AI check (14 Nov 2026): every day at 00:45 in Sri Lanka (19:15 UTC) threads older than 3 days go with their photos
+// (`ai.sweep`).
 
 import { cronJobs } from "convex/server";
 import { internal } from "./_generated/api";
@@ -22,6 +24,7 @@ crons.weekly("keep last week's race champions", { dayOfWeek: "sunday", hourUTC: 
 crons.daily("the owl's birthdays and yesterday's count in Us", { hourUTC: 18, minuteUTC: 40 }, internal.us.daily, {});
 crons.weekly("the week's most improved in Us", { dayOfWeek: "sunday", hourUTC: 18, minuteUTC: 20 }, internal.us.improved, {});
 crons.daily("drop app time older than two months", { hourUTC: 19, minuteUTC: 5 }, internal.online.sweep, {});
+crons.daily("drop AI checks older than three days", { hourUTC: 19, minuteUTC: 15 }, internal.ai.sweep, {});
 crons.weekly("pay day: last week's XP pays coins", { dayOfWeek: "sunday", hourUTC: 18, minuteUTC: 45 }, internal.coins.payday, {});
 
 export default crons;

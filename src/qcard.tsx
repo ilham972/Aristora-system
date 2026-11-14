@@ -2,7 +2,7 @@
 // Theory's cards like Correction's), and teaching mode: the question as printed and its answer, full screen, so a
 // teacher teaches from the whiteboard looking at her phone instead of walking to his book.
 // - CardHead: one top line: the question's number as a dark pill, a short line (marks, who, the section), then the
-//   tools: ‹ back (Correction), teaching mode, the printed question's icon.
+//   tools: ‹ back (Correction), teaching mode, the AI check (Correction's workbook card), the printed question's icon.
 // - CardAnswer / KeyView: the answer from the key, big (src/bigAnswer.tsx), fetched while it is open; a note in its
 //   place when there is none. The printed question's icon on: the question with each part's answer under it.
 // - TeachButton / TeachMode / PrintedQuestion: the full-screen view and what it shows. The page keeps its state: the
@@ -35,6 +35,8 @@ export function CardHead(props: {
   onTeach?: () => void;
   /** Explain this question online (12 Nov 2026, Consultation): `on` = its thread is open already. */
   online?: { on: boolean; names: string; go: () => void };
+  /** The AI check's button (14 Nov 2026, Correction's workbook card): just before the printed question's icon. */
+  ai?: ComponentChildren;
 }) {
   return (
     <div class="fc-qhead">
@@ -50,6 +52,7 @@ export function CardHead(props: {
         )}
         {props.online && <OnlineButton q={props.label} {...props.online} />}
         {props.onTeach && <TeachButton q={props.label} onOpen={props.onTeach} />}
+        {props.ai}
         {props.shown && <QuestionIcon q={props.label} shown={props.shown} />}
       </span>
     </div>

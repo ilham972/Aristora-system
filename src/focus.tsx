@@ -95,6 +95,7 @@ import { MasterBook, TheorySheet } from "./master";
 import { BookQuestion, useQuestionShown } from "./bookQuestion";
 import { CardHead, KeyView } from "./qcard";
 import { BigAnswer } from "./bigAnswer";
+import { useAiCheck } from "./aiCheck";
 import { MoveSheet } from "./move";
 import { bookDocAt,
   act,
@@ -2283,6 +2284,26 @@ function QuestionCard(props: {
     );
   });
 
+  // The AI check (14 Nov 2026): the AI's marks given as her own taps would (parts: each part's marks), then the next question.
+  const ai = useAiCheck({
+    studentId: paper.studentId,
+    unitId: paper.unitId,
+    q,
+    max,
+    who: v.s.name,
+    parts: parts?.map((p) => p.p) ?? null,
+    onUse: (g, aiPm) => {
+      if (!parts || !aiPm || aiPm.length !== parts.length) return give({ g });
+      if (Date.now() < lock.current) return;
+      const sum = aiPm.reduce((a, b) => a + b, 0);
+      const given = { ...paper.given, [q]: { g: sum } };
+      const next = nextIndex(qs, given, i);
+      lock.current = Date.now() + (next === qs.length ? TAP_GUARD_MS * 2 : TAP_GUARD_MS);
+      if (!paper.remark) queueDraft(paper.studentId, paper.unitId, paper.level, q, { g: sum }, aiPm);
+      setPaper({ ...paper, parts: { ...paper.parts, [q]: aiPm }, blanks: { ...paper.blanks, [q]: [] }, given, at: next });
+    },
+  });
+
   const back = i > 0 ? { label: `Q${qs[i - 1]}`, short: String(qs[i - 1]), go: () => setPaper({ ...paper, at: i - 1 }) } : null;
   if (isFreeQ(v, q)) {
     // Out of the syllabus (the owner's free marks, 5 Nov 2026): its marks are given; she only goes on.
@@ -2332,7 +2353,9 @@ function QuestionCard(props: {
           meta={`${max} mark${max === 1 ? "" : "s"}${parts ? ` · ${parts.length} parts` : ""}`}
           back={back}
           shown={shown}
+          ai={ai.button}
         />
+        {ai.sheet}
         <TeachLine v={v} level={paper.level} q={q} />
         {!parts && (
           // The printed question's icon on (13 Nov 2026): the question, each part's answer under its own sub-question.

@@ -958,6 +958,25 @@ two errors: marks on the wrong question and on the wrong student. Meant for the 
 - Toasts take no taps; while a paper is open they sit just under the pinned rows (`--fc-stick-h`), at the bottom
   when a sheet is open. Switching pages keeps the open paper.
 
+**The AI check (14 Nov 2026, his ask: "put the AI icon near the document icon ... that will correct the question and
+if the student lost marks then a thread will open to explain ... in Tamil"; "cheap and best model").** Correction's
+workbook card has a ✦ (purple, `.fc-ai`) in its top line, just before the printed question's icon. No thread yet = the
+camera opens; her photo of his answer (made 1600 px, ≈ 200 KB) goes up (`ai.photoUrl`), `ai.check` starts the thread
+(an older one of the same student, unit and question goes, with its photo) and the sheet opens at once ("Checking his
+answer…"; the ✦ pulses). A scheduled step (`ai.run`) sends the photo, the question as printed (styles and drawings
+taken out) and the key's answer (each part with its marks) to **Claude Haiku 5.5** (`claude-haiku-5-5`, ≈ $0.10 / $0.50
+per million tokens: a check ≈ 0.2 rupees; the Convex variable `AI_MODEL` changes it with no deploy). It answers with
+the marks (total and each key part, kept between 0 and the question's own marks: `readVerdict`), what it read, "not
+sure", and Tamil words: where he went wrong, the right way, the answer (≤ 120 words), or one line of praise. The sheet:
+the marks (red = lost, green = full), "He wrote: …", amber "The AI isn't sure" when it isn't, the Tamil thread
+(`lang="ta"`), a box to ask more (Tamil, English or Thanglish; it answers in Tamil, ≤ 100 words; 8 a thread), **New
+photo**, and **Use 1 / 2** = her tap of those marks (a part question: each part's marks) and the card goes to the next
+question. The AI never marks by itself: her tap counts. A failed step says why in the thread (no key: "The owner adds
+ANTHROPIC_API_KEY in Convex"; a wrong key, no credit, busy, a photo it can't mark); a question that failed isn't counted;
+a step with no answer after 3 minutes reads as failed. Correction or Evaluation only. At most 500 checks and questions a
+day for the whole centre (`AI_DAY_MAX`). Threads and photos go after 3 days (`ai.sweep`, every night 00:45 Sri Lanka).
+The key lives only in Convex (Settings → Environment Variables), never in the repo.
+
 **Progress (top bar; owner + Reports).** One grade at a time (`aristora.progressGrade`); stage chips, "Came today".
 **Units** = a race per unit and stage (levels done or solo questions done, then marks, then pace; rank colours,
 green dot = came today, "3/8", marks %, level blocks or a fill bar, "+3 today", "3/day"). **Term** = students × the

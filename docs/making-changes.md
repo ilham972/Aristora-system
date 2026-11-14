@@ -256,6 +256,11 @@ EOF
 
 ## Gotchas learned the hard way
 
+- **The AI check calls a paid API** (14 Nov 2026): tests never call it (`tests/ai.test.ts` stubs `fetch`; the e2e has no
+  key, so its step fails with the "isn't switched on" words, and the run-through writes the AI's answer with
+  `internal.ai.save`). Its key is a Convex environment variable read with `env()` in `convex/ai.ts` (no `process` in
+  the convex tsconfig); never put a key in the repo. Changing the model = the Convex variable `AI_MODEL`, no deploy.
+
 - **A refused live query looks like "Loading…" for ever** (11 Nov 2026): `useQuery` (`src/live.ts`) gives `undefined`
   on an error, the same as "not here yet". A page's reads must allow every permission that opens the page: the
   Consultation tick alone was refused `catalog.key`, `question` and `bookCss`, so a consultation teacher's card said

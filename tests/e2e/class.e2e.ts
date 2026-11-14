@@ -1855,6 +1855,99 @@ test("Correction: one page (one grade's names in one line, attendance from the c
   expect(problems, problems.join("\n")).toEqual([]);
 });
 
+test("AI check: the ✦ on Correction's workbook card, a photo, the AI's marks and its Tamil words in a thread, Use these marks", async () => {
+  const backend = await newClass();
+  const F = await phone(backend, "focus");
+  await F.getByRole("button", { name: "Settings" }).click();
+  await F.getByRole("button", { name: "Load demo students (three grades)" }).click();
+  await visible(F.getByText(/^14 demo students loaded/));
+  await F.getByRole("button", { name: "Back to the class" }).click();
+  // G7 U08 gets a FAKE key: Q11 one answer (2 marks).
+  const u08 = await backend.t.run(async (ctx) => {
+    const u = (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G7-U08")).first())!;
+    const answers = Array.from({ length: 57 }, (_, i) => ({ q: i + 1, a: `A${i + 1}` }));
+    await ctx.db.insert("keys", { unitId: u._id, answers, updatedAt: Date.now() });
+    const b = (await ctx.db.query("books").withIndex("by_unit_stage", (q) => q.eq("unitId", u._id).eq("stage", "master")).first())!;
+    await ctx.db.patch(b._id, { keyCount: answers.length });
+    return u._id;
+  });
+  await backend.push();
+  const tap = async (l: L) => {
+    await F.waitForTimeout(420);
+    await l.click();
+  };
+  await tap(F.getByRole("button", { name: /^Grade 7\b/ }));
+  await tap(F.locator(".fc-nm", { hasText: /^Priya/ }));
+  await contains(F.locator(".fc-qn"), "11");
+  // The ✦ sits in the card's top line (just before the printed question's icon, when the book's questions are in the app).
+  const star = F.getByRole("button", { name: "Q11: AI check: photograph his answer" });
+  await visible(star);
+  await count(F.locator(".fc-qtools .fc-ai"), 1);
+
+  // Her photo: the sheet opens at once; with no key in Convex the thread says so (the owner's step).
+  const chooser = F.waitForEvent("filechooser");
+  await tap(star);
+  const jpeg = await F.evaluate(async () => {
+    const c = document.createElement("canvas");
+    c.width = 64;
+    c.height = 48;
+    const g = c.getContext("2d")!;
+    g.fillStyle = "#fff";
+    g.fillRect(0, 0, 64, 48);
+    const b = await new Promise<Blob | null>((ok) => c.toBlob(ok, "image/jpeg", 0.8));
+    return Array.from(new Uint8Array(await b!.arrayBuffer()));
+  });
+  await (await chooser).setFiles({ name: "answer.jpg", mimeType: "image/jpeg", buffer: Buffer.from(jpeg) });
+  await contains(F.locator(".sheet h2"), "AI check · Q11");
+  const row = async () =>
+    await backend.t.run(async (ctx) => (await ctx.db.query("aiChecks").collect()).find((r) => r.u === u08 && r.q === 11) ?? null);
+  await until(async () => (await row())?.state === "fail", "the AI's step ran (no key here)");
+  await backend.push();
+  await contains(F.locator(".ai-err"), "ANTHROPIC_API_KEY");
+  await visible(F.getByRole("button", { name: "Take the photo again" }));
+  await shot(F, "ai01-no-key");
+
+  // As if the AI had answered: 1 of 2, its Tamil words; the thread and the box to ask more.
+  const r = (await row())!;
+  await backend.t.mutation(internal.ai.save, { id: r._id, ok: true, x: "முதல் படி சரி. இரண்டாவது படியில் பிழை: −3 × 4 = −12.", raw: "{}", g: 1, read: "−3 × 4 = 12", low: false });
+  await backend.push();
+  await contains(F.locator(".ai-score"), "1");
+  await visible(F.locator(".ai-score.lost"));
+  await contains(F.locator(".ai-read"), "He wrote: −3 × 4 = 12");
+  await contains(F.locator(".ai-msg.ai"), "இரண்டாவது படியில் பிழை");
+  expect(await F.locator(".ai-msg.ai").getAttribute("lang")).toBe("ta");
+  await visible(F.getByRole("textbox", { name: "Ask the AI more" }));
+  expect(await F.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(F, "ai02-thread");
+  await F.getByRole("textbox", { name: "Ask the AI more" }).fill("ஏன் −12?");
+  await tap(F.getByRole("button", { name: "Ask", exact: true }));
+  await contains(F.locator(".ai-msg.t"), "ஏன் −12?");
+  // Here the AI's step fails again (no key): the question stays, the reason under it, and it isn't counted.
+  await until(async () => (await row())?.state === "fail", "the AI's second step ran");
+  await backend.push();
+  await contains(F.locator(".ai-err"), "ANTHROPIC_API_KEY");
+  await contains(F.locator(".ai-note"), "Asked 0 of 8");
+
+  // Use these marks: 1 / 2 is given as her tap would, and the card goes to Q12. The ✦ of Q11 is lit when she goes back.
+  await backend.t.run(async (ctx) => await ctx.db.patch(r._id, { state: "done" }));
+  await backend.push();
+  await tap(F.getByRole("button", { name: /^Use these marks: 1 \/ 2/ }));
+  await count(F.locator(".sheet"), 0);
+  await contains(F.locator(".fc-qn"), "12");
+  await visible(F.getByRole("button", { name: "Q12: AI check: photograph his answer" }));
+  await tap(F.getByRole("button", { name: "Back to Q11" }));
+  await visible(F.locator(".fc-ai.on"));
+  await visible(F.locator(".fc-n.on", { hasText: "1" }));
+  for (const w of [360, 320]) {
+    await F.setViewportSize({ width: w, height: 700 });
+    await tap(F.locator(".fc-ai.on"));
+    await contains(F.locator(".sheet h2"), "AI check · Q11");
+    expect(await F.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await shot(F, `ai03-thread-${w}`);
+    await tap(F.getByRole("button", { name: "Close" }));
+  }
+});
+
 test("Attendance: sign in all / sign out all for one grade, everyone for the whole class (the count), Undo, attendance mode", async () => {
   const backend = await newClass();
   const F = await phone(backend, "focus");

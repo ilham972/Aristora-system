@@ -14196,3 +14196,176 @@ body.sb-on {
   box-shadow: inset 0 0 0 1px var(--ink);
   background: var(--role-soft);
 }
+
+/* The AI check (14 Nov 2026): its ✦ on Correction's workbook card, before the printed question's icon (src/aiCheck.tsx). */
+.fc-ai {
+  border-color: #6c5ce7;
+  color: #6c5ce7;
+}
+.fc-ai.on {
+  background: #6c5ce7;
+  color: #fff;
+}
+.fc-ai.work svg {
+  animation: ai-pulse 1s ease-in-out infinite;
+}
+@keyframes ai-pulse {
+  50% {
+    opacity: 0.35;
+    transform: scale(0.82);
+  }
+}
+.ai-file {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.ai-wait {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+.ai-spin {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  border-radius: 50%;
+  border: 3px solid #d9d4fb;
+  border-top-color: #6c5ce7;
+  animation: ai-turn 0.8s linear infinite;
+}
+@keyframes ai-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.ai-score {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--green-soft);
+  color: var(--green-ink);
+}
+.ai-score.lost {
+  background: var(--red-soft);
+  color: var(--red-ink);
+}
+.ai-score > b {
+  font: 800 34px/1 var(--cond);
+}
+.ai-score > b small {
+  font-size: 20px;
+  font-weight: 700;
+}
+.ai-parts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-weight: 700;
+  font-size: 15px;
+}
+.ai-parts b {
+  font-size: 18px;
+}
+.ai-read {
+  margin: 8px 0 0;
+  font-size: 15px;
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+.ai-read span {
+  font-weight: 700;
+}
+.ai-low {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--amber-soft);
+  color: var(--amber-ink);
+  font-weight: 700;
+  font-size: 15px;
+}
+.ai-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+.ai-msg {
+  margin: 0;
+  max-width: 92%;
+  padding: 10px 13px;
+  border-radius: 14px 14px 14px 4px;
+  background: #f0eefe;
+  color: var(--ink);
+  font: 500 16.5px/1.6 "Noto Sans Tamil", var(--font);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.ai-msg.t {
+  align-self: flex-end;
+  border-radius: 14px 14px 4px 14px;
+  background: var(--ink);
+  color: #fff;
+}
+.ai-err {
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--red-soft);
+  color: var(--red-ink);
+  font-weight: 700;
+}
+.ai-again {
+  width: 100%;
+  margin-top: 10px;
+}
+.ai-note {
+  margin: 12px 0 0;
+}
+.ai-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+.ai-ask {
+  display: flex;
+  gap: 8px;
+}
+.ai-ask input {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1.5px solid var(--line);
+  font: 500 16px var(--font);
+}
+.ai-row {
+  display: flex;
+  gap: 8px;
+}
+.ai-row .btn {
+  flex: none;
+}
+.ai-row .ai-use {
+  flex: 1 1 0;
+  min-width: 0;
+  white-space: nowrap;
+}
+.ai-use b {
+  font-size: 20px;
+}
+.ai-use.full {
+  background: var(--green);
+  border-color: var(--green);
+}

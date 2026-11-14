@@ -1739,4 +1739,32 @@ export default defineSchema({
     baseAt: v.optional(v.number()),
     at: v.number(),
   }).index("by_book", ["u", "st"]),
+  /**
+   * The AI check (14 Nov 2026): one question of one student, checked by the AI from the corrector's photo of his
+   * answer, then a thread in Tamil. `state`: work (the AI is on it) / done / fail (`err` says why). `g`, `pm` = the AI's
+   * marks (total, each part); `raw` = its first reply (sent again with each question in the thread); `msgs` = the
+   * thread: "ai" (the explanation, its answers) and "t" (what the corrector or student asked). Gone after 3 days with
+   * its photo (`ai.sweep`).
+   */
+  aiChecks: defineTable({
+    sid: v.id("students"),
+    u: v.id("units"),
+    q: v.number(),
+    max: v.number(),
+    by: v.id("users"),
+    photo: v.optional(v.id("_storage")),
+    state: v.union(v.literal("work"), v.literal("done"), v.literal("fail")),
+    g: v.optional(v.number()),
+    pm: v.optional(v.array(v.number())),
+    read: v.optional(v.string()),
+    low: v.optional(v.boolean()),
+    raw: v.optional(v.string()),
+    err: v.optional(v.string()),
+    msgs: v.array(v.object({ r: v.union(v.literal("ai"), v.literal("t")), x: v.string(), at: v.number() })),
+    asks: v.number(),
+    at: v.number(),
+    upd: v.number(),
+  })
+    .index("by_q", ["sid", "u", "q"])
+    .index("by_at", ["at"]),
 });

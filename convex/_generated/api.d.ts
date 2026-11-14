@@ -13,6 +13,7 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
+import type * as ai from "../ai.js";
 import type * as attendance from "../attendance.js";
 import type * as auth from "../auth.js";
 import type * as boss from "../boss.js";
@@ -30,6 +31,7 @@ import type * as families from "../families.js";
 import type * as family from "../family.js";
 import type * as focus from "../focus.js";
 import type * as help from "../help.js";
+import type * as lib_ai from "../lib/ai.js";
 import type * as lib_appTime from "../lib/appTime.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_backend from "../lib/backend.js";
@@ -110,6 +112,7 @@ import type * as workbook from "../workbook.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  ai: typeof ai;
   attendance: typeof attendance;
   auth: typeof auth;
   boss: typeof boss;
@@ -127,6 +130,7 @@ declare const fullApi: ApiFromModules<{
   family: typeof family;
   focus: typeof focus;
   help: typeof help;
+  "lib/ai": typeof lib_ai;
   "lib/appTime": typeof lib_appTime;
   "lib/auth": typeof lib_auth;
   "lib/backend": typeof lib_backend;
