@@ -2,7 +2,8 @@
 // question and the key, and when he lost marks explains in Tamil; the corrector (or the student beside her) asks more
 // in the same thread. Rules and the prompt: convex/lib/ai.ts. The key ANTHROPIC_API_KEY lives only in Convex (the
 // owner sets it on the dashboard), never in the repo; without it the thread says so.
-// - photoUrl / check / ask: Correction or Evaluation; thread: the same. One thread per student, unit and question (a
+// - photoUrl / check / ask: Correction, Evaluation or Photos (the ⌂ lane: his own photos and typed words, no camera);
+//   thread: the same. One thread per student, unit and question (a
 //   new photo starts it again). The AI's call runs as a scheduled step (`run`), so the phone only watches `thread`.
 
 import { v } from "convex/values";
@@ -22,6 +23,7 @@ import {
   AI_MODEL_DEFAULT,
   AI_STUCK_MS,
   AI_SYSTEM,
+  AI_SAID_MAX,
   AI_TEXT_MAX,
   aiParts,
   base64Of,
@@ -34,7 +36,7 @@ import {
 const token = v.optional(v.string());
 /** A Convex environment variable (set on the dashboard; never in the repo). */
 const env = (name: string): string | undefined => (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.[name];
-const WHO = ["correction", "evaluation"] as const;
+const WHO = ["correction", "evaluation", "photos"] as const;
 
 /** Checks and questions asked today, the whole centre. */
 async function usedToday(ctx: MutationCtx, now: number): Promise<number> {
@@ -61,15 +63,32 @@ export const photoUrl = mutation({
 
 /** Check one question from the photo: the thread starts (an older one of the same question goes). */
 export const check = mutation({
-  args: { token, studentId: v.id("students"), unitId: v.id("units"), q: v.number(), max: v.number(), photo: v.id("_storage") },
+  args: {
+    token,
+    studentId: v.id("students"),
+    unitId: v.id("units"),
+    q: v.number(),
+    max: v.number(),
+    /** Correction's card: her photo of his paper. */
+    photo: v.optional(v.id("_storage")),
+    /** The ⌂ lane: his photos from home (that row's), and what he typed. */
+    home: v.optional(v.id("homePhotos")),
+    said: v.optional(v.string()),
+  },
   handler: async (ctx, args): Promise<Id<"aiChecks">> => {
     const me = await actor(ctx, args.token, [...WHO]);
     const now = Date.now();
+    if (!args.photo === !args.home) fail("A photo of his answer, or his photos from home.");
+    if (args.home) {
+      const h = await ctx.db.get(args.home);
+      if (!h || h.studentId !== args.studentId || h.unitId !== args.unitId || h.q !== args.q) fail("His photos aren't here any more.");
+    }
+    const said = args.said?.trim().slice(0, AI_SAID_MAX) || undefined;
     if (!(await ctx.db.get(args.studentId)) || !(await ctx.db.get(args.unitId))) fail("This student or book isn't here any more.");
     if (!Number.isInteger(args.q) || args.q < 1 || args.q > 999) fail("No such question.");
     if (!Number.isInteger(args.max) || args.max < 1 || args.max > 50) fail("No such marks.");
     if ((await usedToday(ctx, now)) >= AI_DAY_MAX) {
-      await ctx.storage.delete(args.photo).catch(() => undefined);
+      if (args.photo) await ctx.storage.delete(args.photo).catch(() => undefined);
       fail(`The AI has done ${AI_DAY_MAX} checks today, the most for a day. Check this one yourself.`);
     }
     for (const r of await ctx.db
@@ -84,7 +103,9 @@ export const check = mutation({
       q: args.q,
       max: args.max,
       by: me._id,
-      photo: args.photo,
+      ...(args.photo ? { photo: args.photo } : {}),
+      ...(args.home ? { home: args.home } : {}),
+      ...(said ? { said } : {}),
       state: "work",
       msgs: [],
       asks: 0,
@@ -154,7 +175,9 @@ export const job = internalQuery({
       .withIndex("by_book", (x) => x.eq("unitId", r.u).eq("stage", "master").eq("q", r.q))
       .first();
     const key = await keyRow(ctx, r.u, "master");
-    return { row: r, html: qq?.html ?? null, k: key?.answers.find((a) => a.q === r.q) ?? null };
+    // The photos: hers of his paper, or his from home (at most 3).
+    const files = r.photo ? [r.photo] : r.home ? ((await ctx.db.get(r.home))?.files ?? []).slice(0, 3) : [];
+    return { row: r, files, html: qq?.html ?? null, k: key?.answers.find((a) => a.q === r.q) ?? null };
   },
 });
 
@@ -201,23 +224,23 @@ export const run = internalAction({
   handler: async (ctx, args) => {
     const job = await ctx.runQuery(internal.ai.job, { id: args.id });
     if (!job) return;
-    const { row, html, k } = job;
+    const { row, files, html, k } = job;
     const key = env("ANTHROPIC_API_KEY");
     if (!key) {
       await ctx.runMutation(internal.ai.save, { id: args.id, ok: false, err: "The AI isn't switched on yet. The owner adds ANTHROPIC_API_KEY in Convex (Settings → Environment Variables)." });
       return;
     }
     const first = !row.raw;
-    let photo: { type: "image"; source: { type: "base64"; media_type: string; data: string } } | null = null;
-    if (row.photo) {
-      const blob = await ctx.storage.get(row.photo);
-      if (blob) photo = { type: "image", source: { type: "base64", media_type: blob.type || "image/jpeg", data: base64Of(new Uint8Array(await blob.arrayBuffer())) } };
+    const photos: { type: "image"; source: { type: "base64"; media_type: string; data: string } }[] = [];
+    for (const f of files) {
+      const blob = await ctx.storage.get(f);
+      if (blob) photos.push({ type: "image", source: { type: "base64", media_type: blob.type || "image/jpeg", data: base64Of(new Uint8Array(await blob.arrayBuffer())) } });
     }
-    if (!photo) {
-      await ctx.runMutation(internal.ai.save, { id: args.id, ok: false, err: "The photo is gone. Take it again." });
+    if (!photos.length && !row.said) {
+      await ctx.runMutation(internal.ai.save, { id: args.id, ok: false, err: row.home ? "His photos are gone." : "The photo is gone. Take it again." });
       return;
     }
-    const messages: Msg[] = [{ role: "user", content: [photo, { type: "text", text: checkPrompt(row.q, html, k, row.max) }] }];
+    const messages: Msg[] = [{ role: "user", content: [...photos, { type: "text", text: checkPrompt(row.q, html, k, row.max, row.said, photos.length) }] }];
     if (!first) {
       // The thread so far: its first reply as it came, then each question and answer.
       messages.push({ role: "assistant", content: row.raw! });

@@ -23,13 +23,14 @@ export const AI_STUCK_MS = 3 * 60 * 1000;
 export const AI_HTML_MAX = 8000;
 
 export const AI_SYSTEM = `You help the correctors of ARISTORA, a Tamil-medium maths tuition centre in Sri Lanka (Grades 6-11, building to the O/L exam).
-A corrector photographed one student's written answer to ONE workbook question. You get the question (as HTML from the book), its answer key and the photo.
+You get one student's answer to ONE workbook question: a corrector's photo of his paper, or what he sent from home (photos of his working and/or what he typed on his phone), with the question (as HTML from the book) and its answer key.
 
 Mark it like a fair Sri Lankan O/L examiner:
 - Full marks when his final answer equals the key in any equivalent form (2/4 = 1/2 = 0.5, units written or not).
 - Part marks for correct method when the final answer is wrong, only up to the question's marks.
 - A part he left empty gets 0.
-- If the photo is unreadable, is not this question, or you are not sure, set "sure" to "low" and say why.
+- A typed reason ("is it true? give a reason") earns its marks when the reason is mathematically right, in any language (Tamil, English or Thanglish).
+- If a photo is unreadable, is not this question, or you are not sure, set "sure" to "low" and say why.
 
 Reply with ONLY one JSON object, nothing before or after it:
 {"read": "what he wrote, short, in English", "parts": [{"p": "i", "got": 1, "max": 2}], "got": 3, "max": 5, "sure": "high", "ta": "..."}
@@ -66,14 +67,20 @@ export function keyText(k: KeyAnswer | null | undefined): string {
 }
 
 /** The first message: the question, its key, its marks (the photo goes before it). */
-export function checkPrompt(q: number, html: string | null, k: KeyAnswer | null | undefined, max: number): string {
+export function checkPrompt(q: number, html: string | null, k: KeyAnswer | null | undefined, max: number, said?: string | null, photos = 1): string {
   return [
     `Question ${q} (${max} mark${max === 1 ? "" : "s"}).`,
     html ? `The question:\n${questionText(html)}` : "The question's text isn't in the app: read it from the photo if you can.",
     `The answer key:\n${keyText(k)}`,
-    "Mark the student's answer in the photo. Reply with the JSON only.",
+    ...(said ? [`What he typed on his phone at home:\n${said}`] : []),
+    photos > 0
+      ? `Mark the student's answer in the photo${photos > 1 ? "s" : ""}${said ? " and what he typed" : ""}. Reply with the JSON only.`
+      : "Mark what he typed. Reply with the JSON only.",
   ].join("\n\n");
 }
+
+/** What he typed, sent with a check from the ⌂ lane, at most. */
+export const AI_SAID_MAX = 1500;
 
 export type AiPart = { p: string; got: number; max: number };
 export type AiVerdict = { read: string; parts: AiPart[]; got: number; max: number; sure: "high" | "low"; ta: string };
@@ -148,4 +155,19 @@ export function aiParts(k: KeyAnswer | null | undefined, max: number): { p: stri
   if (!parts || parts.length < 2) return null;
   if (!parts.every((p) => typeof p.m === "number" && Number.isInteger(p.m) && p.m >= 0)) return null;
   return parts.reduce((a, p) => a + (p.m ?? 0), 0) === max ? parts.map((p) => ({ p: p.p, m: p.m! })) : null;
+}
+
+/** What he typed at home, for the AI check from the ⌂ lane: each part's boxes (and which the phone took as right), his reasons. */
+export function saidWords(it: {
+  parts: { p: string; typed: string[]; ok: boolean[] | null }[];
+  reasons: { p: string; yes: string; text: string }[];
+}): string {
+  const lines: string[] = [];
+  for (const p of it.parts) {
+    if (!p.typed.length) continue;
+    const marks = p.ok ? ` (the phone: ${p.ok.map((x) => (x ? "right" : "wrong")).join(", ")})` : "";
+    lines.push(`${p.p ? `(${p.p}) ` : ""}${p.typed.join(" | ")}${marks}`);
+  }
+  for (const r of it.reasons) lines.push(`${r.p ? `(${r.p}) ` : ""}${r.yes}. His reason: ${r.text}`);
+  return lines.join("\n").slice(0, AI_SAID_MAX);
 }

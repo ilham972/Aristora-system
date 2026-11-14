@@ -6,7 +6,7 @@ import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
-import { AI_ASKS_MAX, AI_KEEP_MS, aiParts, checkPrompt, cleanReply, failWords, keyText, questionText, readVerdict } from "../convex/lib/ai";
+import { AI_ASKS_MAX, AI_KEEP_MS, aiParts, saidWords, checkPrompt, cleanReply, failWords, keyText, questionText, readVerdict } from "../convex/lib/ai";
 import type { KeyAnswer } from "../convex/lib/key";
 import schema from "../convex/schema";
 import { readWorkbookHtml } from "../src/workbookFile";
@@ -172,6 +172,39 @@ describe("the AI check", () => {
     await tr().mutation(api.ai.ask, { id, text: "why?" });
     vi.setSystemTime(Date.now() + 4 * 60_000);
     expect(await tr().query(api.ai.thread, args)).toMatchObject({ state: "fail", err: expect.stringMatching(/didn't answer/) });
+  });
+
+  test("the ⌂ lane: no camera, his own photos and what he typed; Photos people too; his photos never go with the thread", async () => {
+    const f1 = await photo();
+    const f2 = await photo();
+    const home = await raw.run(
+      async (ctx) =>
+        await ctx.db.insert("homePhotos", { studentId: hana, unitId: u01, n: 1, q: 2, kind: "part", files: [f1, f2], at: Date.now(), state: "waiting" }),
+    );
+    await addPerson(raw, { name: "Pia", token: "pia-photos-token-0123456789abcdefghijklmnopq", tabs: [], can: ["photos"] });
+    const pia = asPhone(raw, "pia-photos-token-0123456789abcdefghijklmnopq");
+    // Another question's row, or both a photo and his row: refused.
+    await expect(pia.mutation(api.ai.check, { studentId: hana, unitId: u01, q: 1, max: 1, home })).rejects.toThrow(/aren't here/);
+    await expect(pia.mutation(api.ai.check, { studentId: hana, unitId: u01, q: 2, max: 2, home, photo: await photo() })).rejects.toThrow();
+    const said = saidWords({
+      parts: [
+        { p: "i", typed: ["24"], ok: [true] },
+        { p: "ii", typed: [], ok: null },
+      ],
+      reasons: [{ p: "ii", yes: "இல்லை", text: "48 is 24 times 2" }],
+    });
+    expect(said).toBe("(i) 24 (the phone: right)\n(ii) இல்லை. His reason: 48 is 24 times 2");
+    const id = await pia.mutation(api.ai.check, { studentId: hana, unitId: u01, q: 2, max: 2, home, said });
+    answer('{"parts":[{"p":"i","got":1},{"p":"ii","got":1}],"got":2,"max":2,"sure":"high","ta":"சரி"}');
+    await raw.action(internal.ai.run, { id });
+    const content = (sent[0].body.messages as { content: { type: string; text?: string }[] }[])[0].content;
+    expect(content.map((c) => c.type)).toEqual(["image", "image", "text"]);
+    expect(content[2].text).toMatch(/What he typed on his phone at home:\n\(i\) 24[\s\S]*Mark the student's answer in the photos and what he typed/);
+    expect(await pia.query(api.ai.thread, { studentId: hana, unitId: u01, q: 2 })).toMatchObject({ state: "done", g: 2, pm: [1, 1] });
+    // Checked again: a new thread; his photos stay (they are his row's).
+    await pia.mutation(api.ai.check, { studentId: hana, unitId: u01, q: 2, max: 2, home, said });
+    expect(await exists(f1)).toBe(true);
+    expect(await exists(f2)).toBe(true);
   });
 
   test("questions in one thread capped; old threads and their photos go at night", async () => {

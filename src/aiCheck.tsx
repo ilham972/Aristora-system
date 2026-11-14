@@ -5,6 +5,9 @@
 // - The sheet: the AI's marks (total, each part), what it read, "Not sure" when it isn't, "Use these marks" (gives
 //   them as her own taps would, and the card goes to the next question); when he lost marks, the explanation in Tamil
 //   as a thread, and a box to ask more (Tamil, English or Thanglish: it answers in Tamil). New photo = start again.
+// - The ⌂ lane's card (14 Nov 2026, his screenshot: "I can't see the AI icon in the homework correction tab"): the
+//   same ✦, no camera: the AI reads the photos he sent and what he typed (his boxes, his reasons); Use = her marks lit
+//   on the card, and she taps Save as before.
 // - The server: convex/ai.ts (the key only in Convex; checks a day capped), its rules convex/lib/ai.ts.
 
 import { useEffect, useRef, useState } from "preact/hooks";
@@ -56,7 +59,19 @@ export async function shrinkPhoto(file: Blob): Promise<Blob> {
 }
 
 /** The AI check of one question: its button, its sheet. `onUse` gives the AI's marks (total, each part). */
-export function useAiCheck(p: { studentId: string; unitId: string; q: number; max: number; who: string; parts: string[] | null; onUse: (g: number, pm: number[] | null) => void }) {
+export function useAiCheck(p: {
+  studentId: string;
+  unitId: string;
+  q: number;
+  max: number;
+  who: string;
+  parts: string[] | null;
+  /** The ⌂ lane: no camera, the AI reads the photos he sent (that row) and what he typed. */
+  home?: { id: string; said: string } | null;
+  /** Pale and not tappable (a card corrected in class already). */
+  off?: boolean;
+  onUse: (g: number, pm: number[] | null) => void;
+}) {
   const args = { studentId: p.studentId as Id<"students">, unitId: p.unitId as Id<"units">, q: p.q };
   const t = useQuery<AiThread | null>(api.ai.thread, args);
   const [open, setOpen] = useState(false);
@@ -71,15 +86,17 @@ export function useAiCheck(p: { studentId: string; unitId: string; q: number; ma
       file.current.click();
     }
   };
-  const took = async (e: Event) => {
-    const f = (e.currentTarget as HTMLInputElement).files?.[0];
-    if (!f) return;
+  const start = async (f: Blob | null) => {
     setOpen(true);
     setSending(true);
     try {
-      const small = await shrinkPhoto(f);
-      const photo = (await upload(api.ai.photoUrl, small)) as Id<"_storage">;
-      await mutate(api.ai.check, { ...args, max: p.max, photo });
+      if (p.home) {
+        await mutate(api.ai.check, { ...args, max: p.max, home: p.home.id as Id<"homePhotos">, ...(p.home.said ? { said: p.home.said } : {}) });
+      } else {
+        const small = await shrinkPhoto(f!);
+        const photo = (await upload(api.ai.photoUrl, small)) as Id<"_storage">;
+        await mutate(api.ai.check, { ...args, max: p.max, photo });
+      }
     } catch (err) {
       toast(errorText(err), "error");
       if (!t) setOpen(false);
@@ -87,21 +104,28 @@ export function useAiCheck(p: { studentId: string; unitId: string; q: number; ma
       setSending(false);
     }
   };
+  const took = (e: Event) => {
+    const f = (e.currentTarget as HTMLInputElement).files?.[0];
+    if (f) void start(f);
+  };
+  // Again: the camera on Correction's card; the ⌂ lane checks his photos again.
+  const again = () => (p.home ? void start(null) : camera());
   const working = sending || t?.state === "work";
   const button = (
     <>
       <button
         type="button"
         class={`fc-tmb fc-ai${t ? " on" : ""}${working ? " work" : ""}`}
-        aria-label={t ? `Q${p.q}: the AI's check and its Tamil explanation` : `Q${p.q}: AI check: photograph his answer`}
-        onClick={() => (t || sending ? setOpen(true) : camera())}
+        disabled={p.off && !t}
+        aria-label={t ? `Q${p.q}: the AI's check and its Tamil explanation` : p.home ? `Q${p.q}: AI check of what he sent` : `Q${p.q}: AI check: photograph his answer`}
+        onClick={() => (t || sending ? setOpen(true) : again())}
       >
         <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="currentColor">
           <path d="M10 2.5l1.9 5.6 5.6 1.9-5.6 1.9L10 17.5l-1.9-5.6L2.5 10l5.6-1.9z" />
           <path d="M18.5 13l.95 2.55 2.55.95-2.55.95-.95 2.55-.95-2.55-2.55-.95 2.55-.95z" />
         </svg>
       </button>
-      <input ref={file} type="file" accept="image/*" capture="environment" class="ai-file" aria-hidden="true" tabIndex={-1} onChange={(e) => void took(e)} />
+      {!p.home && <input ref={file} type="file" accept="image/*" capture="environment" class="ai-file" aria-hidden="true" tabIndex={-1} onChange={took} />}
     </>
   );
   const sheet = open ? (
@@ -110,8 +134,9 @@ export function useAiCheck(p: { studentId: string; unitId: string; q: number; ma
       who={p.who}
       parts={p.parts}
       t={sending ? null : (t ?? null)}
+      home={!!p.home}
       onClose={() => setOpen(false)}
-      onPhoto={camera}
+      onPhoto={again}
       onUse={(g, pm) => {
         setOpen(false);
         p.onUse(g, pm);
@@ -126,6 +151,7 @@ function AiSheet(props: {
   who: string;
   parts: string[] | null;
   t: AiThread | null;
+  home: boolean;
   onClose: () => void;
   onPhoto: () => void;
   onUse: (g: number, pm: number[] | null) => void;
@@ -179,7 +205,7 @@ function AiSheet(props: {
       {marked && (
         <div class="ai-row">
           <button type="button" class="btn ghost" onClick={props.onPhoto}>
-            New photo
+            {props.home ? "Check again" : "New photo"}
           </button>
           <button
             type="button"
@@ -205,7 +231,7 @@ function AiSheet(props: {
           <b>
             {t!.g} <small>/ {t!.max}</small>
           </b>
-          {t!.pm && props.parts && (
+          {t!.pm && props.parts && t!.pm.length === props.parts.length && (
             <span class="ai-parts">
               {t!.pm.map((g, j) => (
                 <span key={j}>
@@ -239,7 +265,7 @@ function AiSheet(props: {
       {t && t.state === "fail" && <p class="ai-err">{t.err}</p>}
       {t && t.state === "fail" && !marked && (
         <button type="button" class="btn primary ai-again" onClick={props.onPhoto}>
-          Take the photo again
+          {props.home ? "Check again" : "Take the photo again"}
         </button>
       )}
       <p class="muted small ai-note">

@@ -1219,6 +1219,15 @@ test("photos from home: a drawing photographed in the level, marked by a person 
   expect(await card.locator(".phq-chip").count()).toBe(0);
   await noSideScroll(N);
   await shot(N, "fam-ph04-lane-part");
+  // The AI check (14 Nov 2026): the ✦ in the card's top line, no camera: it reads his photo and what he typed.
+  const star = N.getByRole("button", { name: "Q10: AI check of what he sent" });
+  await visible(star);
+  expect(await N.locator(".hl-card input.ai-file").count()).toBe(0);
+  await star.click();
+  await contains(N.locator(".sheet h2"), "AI check · Q10");
+  await shot(N, "fam-ph04a-ai-sheet");
+  await N.getByRole("button", { name: "Close" }).click();
+  await until(async () => (await N.locator(".sheet").count()) === 0, "the AI sheet closed");
   // The headphones (12 Nov 2026) wait in their place, pale: nothing is marked yet, so nothing to explain online.
   expect(await N.locator(".hl-acts .hl-onl").isDisabled()).toBe(true);
   await N.setViewportSize({ width: 320, height: 640 });

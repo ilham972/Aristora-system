@@ -975,7 +975,12 @@ question. The AI never marks by itself: her tap counts. A failed step says why i
 ANTHROPIC_API_KEY in Convex"; a wrong key, no credit, busy, a photo it can't mark); a question that failed isn't counted;
 a step with no answer after 3 minutes reads as failed. Correction or Evaluation only. At most 500 checks and questions a
 day for the whole centre (`AI_DAY_MAX`). Threads and photos go after 3 days (`ai.sweep`, every night 00:45 Sri Lanka).
-The key lives only in Convex (Settings → Environment Variables), never in the repo.
+The key lives only in Convex (Settings → Environment Variables), never in the repo. **The ⌂ lane's card too** (14 Nov
+2026, his screenshot: "I can't see the AI icon in the homework correction tab"): the same ✦, no camera: the AI reads
+the photos he sent (that row's, at most 3) and what he typed (each part's boxes and which the phone took as right, his
+reasons: `saidWords`); a typed reason alone (no photo) is checked from the words. Use = its marks lit on the card (each
+part when the parts line up, else a toast to tap them), then she taps Save as before; Check again = a new check of the
+same. Pale on a card corrected in class. Photos people may use it there. His photos never go with the thread.
 
 **Progress (top bar; owner + Reports).** One grade at a time (`aristora.progressGrade`); stage chips, "Came today".
 **Units** = a race per unit and stage (levels done or solo questions done, then marks, then pace; rank colours,

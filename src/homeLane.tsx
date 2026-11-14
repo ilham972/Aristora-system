@@ -29,6 +29,8 @@ import { TAP_GUARD_MS } from "./focusData";
 import { HRow } from "./hrow";
 import { useQuery } from "./live";
 import type { View } from "./derive";
+import { useAiCheck } from "./aiCheck";
+import { saidWords } from "../convex/lib/ai";
 import { CardHead } from "./qcard";
 import { now as serverNow, toast } from "./store";
 import { tone } from "./tones";
@@ -393,6 +395,28 @@ function HomeCard(props: {
     tone("tick");
     fn();
   };
+  // The AI check (14 Nov 2026, his screenshot): no camera here: the AI reads his photos and what he typed. Use = its
+  // marks lit on the card (each part when the parts line up), then she taps Save as before.
+  const ai = useAiCheck({
+    studentId: it.student.id,
+    unitId: it.unit.id,
+    q: it.q,
+    max: it.max,
+    who: it.student.name,
+    parts: it.split ? it.parts.map((p) => p.p) : null,
+    home: { id: it.id, said: saidWords(it) },
+    off: inClass,
+    onUse: (g, pm) => {
+      if (inClass) return;
+      if (it.split) {
+        if (pm && pm.length === it.parts.length) setMarks(pm.map((x, j) => Math.min(x, it.parts[j].m)));
+        else toast(`The AI gave ${g}/${it.max}: tap each part yourself.`);
+      } else if (part) {
+        const phonePart = it.teach < it.max ? phoneOne : 0;
+        setOne(Math.max(0, Math.min(it.teach, g - phonePart)));
+      } else setOne(g);
+    },
+  });
   // Explain online (12 Nov 2026, his idea: "put the headset icon same like in the consult page"; built after marking,
   // his yes: before her marks a photo question isn't lost, so there is nothing to explain yet). Always in its place on
   // the pad, pale until the marks she tapped are below the maximum; one tap = Save, then his thread opens with her as
@@ -530,7 +554,9 @@ function HomeCard(props: {
           meta={`${it.max} mark${it.max === 1 ? "" : "s"} · ${kindWords} · ${sentWords(it.at)}`}
           back={props.back}
           shown={shown}
+          ai={ai.button}
         />
+        {ai.sheet}
         {/* Her message and his answer first: what she reads before the photo. */}
         {it.ask && (
           <div class="hl-asked">

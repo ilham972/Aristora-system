@@ -1741,7 +1741,7 @@ export default defineSchema({
   }).index("by_book", ["u", "st"]),
   /**
    * The AI check (14 Nov 2026): one question of one student, checked by the AI from the corrector's photo of his
-   * answer, then a thread in Tamil. `state`: work (the AI is on it) / done / fail (`err` says why). `g`, `pm` = the AI's
+   * answer (or, from the ⌂ lane, the photos and words he sent from home), then a thread in Tamil. `state`: work (the AI is on it) / done / fail (`err` says why). `g`, `pm` = the AI's
    * marks (total, each part); `raw` = its first reply (sent again with each question in the thread); `msgs` = the
    * thread: "ai" (the explanation, its answers) and "t" (what the corrector or student asked). Gone after 3 days with
    * its photo (`ai.sweep`).
@@ -1753,6 +1753,9 @@ export default defineSchema({
     max: v.number(),
     by: v.id("users"),
     photo: v.optional(v.id("_storage")),
+    /** From Correction's ⌂ lane: his own photos from home (never deleted with the thread) and what he typed. */
+    home: v.optional(v.id("homePhotos")),
+    said: v.optional(v.string()),
     state: v.union(v.literal("work"), v.literal("done"), v.literal("fail")),
     g: v.optional(v.number()),
     pm: v.optional(v.array(v.number())),
