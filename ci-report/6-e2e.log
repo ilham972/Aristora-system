@@ -1,0 +1,18 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90m/home/runner/work/Aristora-system/Aristora-system[39m
+
+ [32m✓[39m tests/e2e/class.e2e.ts [2m([22m[2m27 tests[22m[2m | [22m[33m25 skipped[39m[2m)[22m[33m 89532[2mms[22m[39m
+   [33m[2m✓[22m[39m Correction: one page (one grade's names in one line, attendance from the count, the level bar, his unit), one question at a time, ? on a part, Take back[33m 81554[2mms[22m[39m
+   [33m[2m✓[22m[39m AI check: the ✦ on Correction's workbook card, a photo, the AI's marks and its Tamil words in a thread, Use these marks[33m 7680[2mms[22m[39m
+ [32m✓[39m tests/e2e/family.e2e.ts [2m([22m[2m30 tests[22m[2m | [22m[33m26 skipped[39m[2m)[22m[33m 90096[2mms[22m[39m
+   [33m[2m✓[22m[39m photos from home: a drawing photographed in the level, marked by a person he picks (never his working on a wrong answer); her answer on his phone; the unit gate and its redo[33m 25730[2mms[22m[39m
+   [33m[2m✓[22m[39m Us groups and chats: his grade's group with a reply, a tag and a reaction; two boys message, a girl can't; Members; a teacher's chat and her number; a group she makes; the owner reads every chat[33m 18353[2mms[22m[39m
+   [33m[2m✓[22m[39m Explain online: the pill on a wrong question after Check; her photo and a teacher; the thread with what she typed; the teacher's voice note and Understood on both sides; the next student joins; a name hidden; Consultation's icon[33m 38192[2mms[22m[39m
+   [33m[2m✓[22m[39m Explain online: a typed "show that" shows his words under each sub-question (never "photo deleted"); no photo asked by itself; her 📷 and ✓ Understood on his row[33m 7666[2mms[22m[39m
+ [2m[90m↓[39m[22m tests/e2e/familyOpen.e2e.ts [2m([22m[2m2 tests[22m[2m | [22m[33m2 skipped[39m[2m)[22m
+
+[2m Test Files [22m [1m[32m2 passed[39m[22m[2m | [22m[33m1 skipped[39m[90m (3)[39m
+[2m      Tests [22m [1m[32m6 passed[39m[22m[2m | [22m[33m53 skipped[39m[90m (59)[39m
+[2m   Start at [22m 01:12:46
+[2m   Duration [22m 182.20s[2m (tests 99%, import 1%, transform 1%)[22m
+
