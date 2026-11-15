@@ -1,0 +1,4 @@
+
+> aristora-system@1.0.0 typecheck
+> tsc -p convex --noEmit && tsc -p . --noEmit
+
