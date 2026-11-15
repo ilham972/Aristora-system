@@ -728,6 +728,11 @@ WHY=1 npx vitest run -c vitest.perf.config.ts -t "lab" --reporter=verbose # each
 - **Our own gestures** (`QuestionZoom`): the element gets `touch-action: none` (the browser then sends every finger as
   pointer events and does nothing itself), the fingers move a child by `transform` only, its layout size
   (`offsetWidth`) is unchanged by the transform, and a `ResizeObserver` keeps it in bounds when the drawing grows.
+- **A `position: fixed` screen inside a box with a `transform` fills that box, not the screen** (15 Nov 2026: the crop
+  opened from a chat's write bar `.f-tb`, centred with `translateX(-50%)`, showed only its title at the bottom; a sheet
+  sliding up with `f-up` does the same while it moves). `filter`, `backdrop-filter`, `will-change: transform` and
+  `contain` do it too. A full-screen thing opened from deep inside goes on the body: `showSheet`, or render it into
+  its own `div` on `document.body` as `CropSheet` does (`src/family/crop.tsx`).
 - **`scrollIntoView` scrolls every scroller up the chain, the page too**: a chip centred in its row also pulled the
   page up to the row, and the card's own smooth scroll took it back down (the same bounce, with the questions as
   printed). To move a row sideways, scroll the row (`row.scrollTo`); move the page only on purpose, in a layout effect

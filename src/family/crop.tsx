@@ -8,6 +8,7 @@
 // the whole page did, in fewer bytes. One of the parts after the first screen (parts.ts): the camera (`Taker` in
 // book.tsx) opens it; with no parts on the phone, the whole photo goes as before.
 
+import { render } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { moved, pixelsOf, turnedFrame, WHOLE, type Frame, type Grip } from "./frame";
 import { jpegOf, PHOTO_SIDE } from "./photos";
@@ -64,7 +65,31 @@ function cut(s: HTMLCanvasElement, f: Frame): HTMLCanvasElement {
 
 const GRIPS: Grip[] = ["tl", "tr", "bl", "br", "t", "b", "l", "r"];
 
-export function CropSheet(props: { file: Blob; onClose: () => void; onDone: (b: Blob) => void; say?: string }) {
+type CropProps = { file: Blob; onClose: () => void; onDone: (b: Blob) => void; say?: string };
+
+/** The crop, drawn straight on the page's body (15 Nov 2026, his screenshot from a teacher's private chat: only the
+ *  title showed, squeezed into the write bar at the bottom, the photo hidden below the screen). A `position: fixed`
+ *  screen inside a box with a `transform` (the write bar `.f-tb` is centred with one; a sheet slides up with one) fills
+ *  that box, not the screen. On the body it always fills the screen, wherever it is opened from. */
+export function CropSheet(props: CropProps) {
+  const host = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    host.current = el;
+    return () => {
+      render(null, el);
+      el.remove();
+      host.current = null;
+    };
+  }, []);
+  useLayoutEffect(() => {
+    if (host.current) render(<Cropper {...props} />, host.current);
+  });
+  return null;
+}
+
+function Cropper(props: CropProps) {
   const [src, setSrc] = useState<HTMLCanvasElement | null>(null);
   const [f, setF] = useState<Frame>(WHOLE);
   const [busy, setBusy] = useState(false);

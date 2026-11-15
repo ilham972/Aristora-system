@@ -2879,7 +2879,10 @@ learning app of our education institute"): one profile, his class times, what he
     then made small as before (`jpegOf`: long side 1280, JPEG): a cropped part reaches the teacher sharper and smaller.
     Its script is one of the parts after the first screen (`parts.ts`, opened by `Taker` through `loadParts` and
     `showSheet`); its style is in `family.css` (the later budget was full). No parts on the phone, or no app to show it
-    (`showSheet` false): the whole photo, as before.
+    (`showSheet` false): the whole photo, as before. **It draws itself on the page's body** (15 Nov 2026, his screenshot
+    from a teacher's private chat under Members: only the title showed, in the write bar, the photo hidden below the
+    screen): `CropSheet` renders `Cropper` into its own `div` on `document.body`, so it fills the screen from anywhere:
+    the write bar (`.f-tb`, centred with a `transform`) of a chat or a thread, a sheet, the camera.
   - **No limit inside a unit** (10 Nov 2026, his rule; before, "2 levels at most" while photos were owed: `blockedBy`,
     `me.blocked`, gone): he plays on whatever is owed or unexplained. Settings → Photos (the owner) still turns
     "required" off (`photos.setRequired`, meta `photos.required`): then no drawing's photo is asked for (no 📷 on the

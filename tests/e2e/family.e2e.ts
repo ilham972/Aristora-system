@@ -3449,6 +3449,27 @@ test("Us groups and chats: his grade's group with a reply, a tag and a reaction;
   await contains(U.locator(".f-msg.mine"), "4 மணிக்கு");
   await until(async () => (await t.query(api.chat.room, { token: (await hanaToken(P))!, id: (await t.query(api.chat.rooms, { token: (await hanaToken(P))! })).dms.find((x) => x.tch)!.id })).msgs.length === 2, "her answer on his side");
   await shot(C, "fam104-class-us-chat");
+  // Her photo in the private chat (15 Nov 2026, his screenshot from a teacher: the crop squeezed into the write bar at
+  // the bottom, the photo hidden below the screen): the crop fills the screen, the photo and சரி in view; it goes.
+  const paper = { name: "paper.png", mimeType: "image/png", buffer: Buffer.from(PAPER_PNG, "base64") };
+  await U.locator(".f-tb .f-file").setInputFiles(paper);
+  const cut = U.locator(".f-cut");
+  await visible(cut.locator(".f-cut-img canvas"));
+  const frame = (await C.locator("iframe.us-frame").boundingBox())!;
+  const whole = (await cut.boundingBox())!;
+  expect(Math.round(whole.y)).toBe(Math.round(frame.y));
+  expect(Math.round(whole.height)).toBe(Math.round(frame.height));
+  const pic = (await cut.locator(".f-cut-pic").boundingBox())!;
+  expect(pic.height).toBeGreaterThan(100);
+  expect(pic.y + pic.height).toBeLessThanOrEqual(frame.y + frame.height);
+  const ok = cut.getByRole("button", { name: "Use this photo" });
+  const okBox = (await ok.boundingBox())!;
+  expect(okBox.y + okBox.height).toBeLessThanOrEqual(frame.y + frame.height + 1);
+  await shot(C, "fam104b-class-chat-crop");
+  await ok.click();
+  await until(async () => (await cut.count()) === 0, "the crop closes");
+  await U.locator(".f-tb").getByRole("button", { name: "Send" }).click();
+  await until(async () => (await U.locator(".f-msg.mine img").count()) >= 1, "her photo in the chat");
   // A group she makes: O/L doubts for Grade 11 (Kumar sees it; Arun doesn't).
   await U.getByRole("button", { name: "Back" }).click();
   await contains(U.locator(".c-gpill").first(), "Everyone");
