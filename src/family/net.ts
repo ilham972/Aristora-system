@@ -148,6 +148,9 @@ export async function call(kind: "query" | "mutation", path: string, args: Recor
   }
 }
 
+/** How long a read waits for the server's answer to start before it is asked again. */
+export const QUERY_WAIT_MS = 12_000;
+
 async function ask(kind: "query" | "mutation", path: string, args: Record<string, unknown>): Promise<unknown> {
   if (testBackend) {
     try {
@@ -157,14 +160,22 @@ async function ask(kind: "query" | "mutation", path: string, args: Record<string
     }
   }
   let res: Response;
+  // A read that gets no answer at all gives up and is asked again by its screen (15 Nov 2026, his screenshot: a thread
+  // left on the thinking owl on weak mobile data; a stuck request is held by the phone for minutes). Only until the
+  // answer starts: a slow but moving answer is never cut. A change is never cut (it may have happened).
+  const stop = kind === "query" && typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timer = stop ? window.setTimeout(() => stop.abort(), QUERY_WAIT_MS) : 0;
   try {
     res = await fetch(`${__CONVEX_URL__}/api/${kind}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path, args, format: "json" }),
+      ...(stop ? { signal: stop.signal } : {}),
     });
   } catch {
     throw new NetError("offline", true);
+  } finally {
+    if (timer) window.clearTimeout(timer);
   }
   const j = (await res.json().catch(() => null)) as { status?: string; value?: unknown; errorMessage?: string; errorData?: unknown } | null;
   if (!j) throw new NetError("offline", true);

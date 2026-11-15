@@ -143,6 +143,19 @@ describe("online explanations", () => {
     expect(await h().query(api.help.question, { id })).toEqual({ html: null, css: null });
   });
 
+  test("the thread reads only his latest Check of that level (15 Nov 2026: a slow thread read every Check he made)", async () => {
+    const id = await send(h(), 8, nila);
+    // An older Check of the same level and a newer one of another level: neither is what he typed for this question.
+    const at = Date.now();
+    await raw.run(async (ctx) => {
+      const owe = { part: [], working: [], pm: [], pg: [] };
+      await ctx.db.insert("familyAnswers", { studentId: hana, unitId: u01, n: 1, at: at - 86_400_000, qs: [{ q: 8, a: ["7", "7"], ok: [[false], [false]] }], owe });
+      await ctx.db.insert("familyAnswers", { studentId: hana, unitId: u01, n: 2, at: at + 1000, qs: [{ q: 8, a: ["9", "9"], ok: [[true], [true]] }], owe });
+    });
+    const room = await tn().query(api.chat.troom, { id });
+    expect(room.head.help!.asks[0].parts).toMatchObject([{ p: "i", ok: false, typed: ["42"] }, { p: "ii", ok: true, typed: ["48"] }]);
+  });
+
   test("the teacher: her list, a voice note (hers only, 2 minutes), and only Explained makes it explained", async () => {
     const id = await send(h(), 8, nila);
     const list = await tn().query(api.help.tlist, {});

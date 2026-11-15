@@ -906,7 +906,9 @@ export default defineSchema({
     ),
   })
     .index("by_unit", ["unitId", "at"])
-    .index("by_student", ["studentId", "at"]),
+    .index("by_student", ["studentId", "at"])
+    // His latest Check of one level, read straight (15 Nov 2026: a thread opened slowly, reading every Check he made).
+    .index("by_level", ["studentId", "unitId", "n", "at"]),
   /**
    * A level he is doing on the phone with Check after every question (14 Nov 2026, his "let's build": a win after each
    * question, not one reward at the end). One row per student and level while it is open: `keys` = that level's

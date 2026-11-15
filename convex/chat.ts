@@ -609,7 +609,7 @@ async function roomOf(ctx: QueryCtx, me: Me, ref: string, since: number | undefi
   if (r.k === "g" && since === undefined) head.members = await membersOf(ctx, r);
   // An explanation's thread: its question and its students, on a full read only (the short reads keep the phone's).
   if (r.k === "h") {
-    const help = await helpHeadOf(ctx, me.k === "s" ? { k: "s", sid: me.s._id } : { k: "u", uid: me.u._id }, r, Date.now());
+    const help = await helpHeadOf(ctx, me.k === "s" ? { k: "s", sid: me.s._id } : { k: "u", uid: me.u._id }, r, Date.now(), a.asks);
     if (help) head.help = help;
   }
   const rows = await ctx.db

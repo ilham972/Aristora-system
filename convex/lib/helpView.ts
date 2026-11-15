@@ -93,11 +93,12 @@ async function partsOf(
   k: KeyQ | undefined,
 ): Promise<{ parts: HelpPart[]; photo?: HelpPhoto } | undefined> {
   if (!k) return undefined;
-  const rows = await ctx.db
+  // His latest Check of that level only (15 Nov 2026: before, every Check he ever made was read, for each student).
+  const row = await ctx.db
     .query("familyAnswers")
-    .withIndex("by_student", (x) => x.eq("studentId", sid))
-    .collect();
-  const row = rows.filter((r) => r.unitId === unitId && r.n === n).sort((a, b) => b.at - a.at)[0];
+    .withIndex("by_level", (x) => x.eq("studentId", sid).eq("unitId", unitId).eq("n", n))
+    .order("desc")
+    .first();
   if (!row) return undefined;
   // Nothing typed for it in that Check (a question that is all the teacher's, or left blank): every box empty.
   const typed = row.qs.find((x) => x.q === k.q) ?? { q: k.q, a: [] as string[], ok: k.parts.map((p) => (p.want ? p.want.map(() => false) : null)) };
@@ -149,10 +150,17 @@ async function partsOf(
 const PARTS_FOR = 12;
 
 /** `me`: the student or the teacher looking. */
-export async function helpHeadOf(ctx: QueryCtx, me: { k: "s"; sid: Id<"students"> } | { k: "u"; uid: Id<"users"> }, r: Doc<"usRooms">, now: number): Promise<HelpHead | null> {
+export async function helpHeadOf(
+  ctx: QueryCtx,
+  me: { k: "s"; sid: Id<"students"> } | { k: "u"; uid: Id<"users"> },
+  r: Doc<"usRooms">,
+  now: number,
+  /** The thread's asks when the caller already read them (chat.ts roomOf: its access check did). */
+  had?: Doc<"helpAsks">[],
+): Promise<HelpHead | null> {
   if (r.k !== "h" || !r.hu || r.hq === undefined) return null;
   const unit = await ctx.db.get(r.hu);
-  const asks = await asksIn(ctx, r._id);
+  const asks = had ?? (await asksIn(ctx, r._id));
   const book = await bookFor(ctx, r.hu, "master");
   const key = book ? await keyRow(ctx, r.hu, "master") : null;
   const k = book && key ? (await phoneKeyFor(ctx, r.hu, asMaster(book), key.answers)).get(r.hq) : undefined;

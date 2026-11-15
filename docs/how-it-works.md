@@ -2139,7 +2139,11 @@ learning app of our education institute"): one profile, his class times, what he
       - **A chat open** (`RoomScreen`): messages by day ("இன்று", "நேற்று", "8 Nov"), his own on the right (violet), the
         others' with face, name, grade chip or "ஆசிரியர்"; read again every 4 s while open and on screen (`ROOM_MS`:
         `since` = only new messages; `rv` changed = the page again, for a reaction, a report or a removal), the lists
-        every 15 s (`LIST_MS`); a sound when something new arrives; **↑ Earlier** for older messages (`CHAT_PAGE` 60 at
+        every 15 s (`LIST_MS`); a sound when something new arrives; nothing yet after 5 s (`SLOW_MS`, 15 Nov 2026: his
+        screenshot, a thread on the thinking owl on weak mobile data) = "Slow connection… still trying." under the owl
+        (Tamil on a student's phone), and a read with no answer after 12 s gives up and is asked again (`QUERY_WAIT_MS`
+        in `net.ts`: reads only, until the answer starts); a thread's first read reads each student's latest Check of
+        that level straight (`familyAnswers` `by_level`), never all his Checks; **↑ Earlier** for older messages (`CHAT_PAGE` 60 at
         a time). ⚑ (a student, not on a teacher's): two reports hide a message from students until a teacher keeps
         (`chat.tkeep`) or removes it (`chat.tdrop`: any teacher in groups, her own private chats, the owner anywhere).
         Alerts on the phone (`/f/#chat=<room>`): a private message, a reply to him, a tag; never every hello in a group.

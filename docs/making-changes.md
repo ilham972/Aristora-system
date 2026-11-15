@@ -910,6 +910,12 @@ WHY=1 npx vitest run -c vitest.perf.config.ts -t "lab" --reporter=verbose # each
 - **Chats poll, they don't subscribe** (the family app has no websocket client): an open chat asks every 4 s with
   `since` (only new messages) and `rv` (bumped by `chat.react`, `report`, `tkeep`, `tdrop`, `block`, `roomAfter`: then
   the whole page). Anything that changes an old message must bump the room's `rv`, or open phones never see it.
+- **A family read never hangs** (15 Nov 2026): `ask` in `src/family/net.ts` aborts a query whose answer hasn't started
+  after `QUERY_WAIT_MS` (12 s) → "offline", and the screen's own poll asks again (a phone on weak data held a stuck
+  request for minutes, the thread stayed on the owl). Mutations are never cut (they may have happened). A screen that
+  shows nothing until its first read must treat a later success as its first (`fresh` in `RoomScreen`: scroll to the
+  end). A server read for one level's Check: `familyAnswers` `by_level` [studentId, unitId, n, at], `.order("desc")
+  .first()`, never `by_student` + `.collect()` + filter.
 - **Kept 30 days**: `chat.sweep` (from `us.daily`) deletes old messages with their photos (`usFiles` marks too) and
   reactions; `wipeStudent` calls `wipeChats`. A new table holding a student's chat things must be cleaned in both.
 - **Run-throughs on a machine without the class app's fonts**: seven class run-throughs that measure the top bar at

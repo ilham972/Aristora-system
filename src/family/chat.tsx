@@ -23,6 +23,8 @@ import { Pics } from "./usPost";
 
 /** An open chat reads again this often (only what is new); the lists less often. */
 const ROOM_MS = 4000;
+/** No thread yet after this long: a line under the owl says the connection is slow (it keeps trying). */
+const SLOW_MS = 5000;
 const LIST_MS = 15_000;
 /** A message's letters (convex/lib/chat.ts CHAT_MAX). */
 const CHAT_MAX = 500;
@@ -310,6 +312,8 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
     try {
       // The newest the server gave (his waiting words carry the phone's clock, not the server's).
       const last = r.msgs.filter((m) => !m.wait).pop();
+      // Nothing shown yet (the first read failed or never answered): this one is the first.
+      const fresh = first || !r.head;
       const x = (await query("chat:room", { id: props.id, ...(last && r.head && !first ? { since: last.at, rv: r.head.rv } : {}) })) as ChatRoom;
       const end = nearEnd();
       // A short read (only what is new) doesn't count the group again: the count from before stays.
@@ -323,7 +327,7 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
         setMsgs((l) => [...x.msgs.map((g) => { const k = l.find((y) => y.id === g.id)?.k; return k ? { ...g, k } : g; }), ...waits(l, x.msgs)]);
         setMore(x.more);
         markRead(x.msgs);
-        if (first) toEnd(false);
+        if (fresh) toEnd(false);
       } else if (x.msgs.length) {
         const have = new Set(r.msgs.map((m) => m.id));
         const add = x.msgs.filter((m) => !have.has(m.id));
@@ -346,6 +350,13 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
     const t = window.setInterval(() => document.visibilityState === "visible" && void load(), ROOM_MS);
     return () => window.clearInterval(t);
   }, [props.id]);
+  // Still nothing after a few seconds (weak mobile data): say so under the owl; the reads above keep trying.
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    if (head) return;
+    const t = window.setTimeout(() => setSlow(true), SLOW_MS);
+    return () => window.clearTimeout(t);
+  }, [!head]);
   const earlier = async () => {
     const first = msgs[0];
     if (!first) return;
@@ -511,8 +522,12 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
           )}
         </div>
       </header>
-      {!head && !err && <Waiting />}
-      {err && !head && <p class="f-lead f-center-t">{err}</p>}
+      {!head && <Waiting />}
+      {!head && (err || slow) && (
+        <p class="f-lead f-center-t c-slow">
+          {err ?? (props.staff ? "Slow connection… still trying." : "இணையம் மெதுவாக உள்ளது… மீண்டும் முயல்கிறது.")}
+        </p>
+      )}
       {head && (
         <>
           {head.k === "h" && head.help && (

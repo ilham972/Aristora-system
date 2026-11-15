@@ -161,7 +161,14 @@ async function typedOf(
   r: Doc<"homePhotos">,
   checks?: Map<string, Doc<"familyAnswers">>,
 ): Promise<{ a: string[]; ok: (boolean[] | null)[]; owe: Doc<"familyAnswers">["owe"] } | null> {
-  const row = (checks ?? (await latestChecks(ctx, r.studentId))).get(`${r.unitId}:${r.n}`);
+  // One photo alone: that level's latest Check straight from its index, not every Check he made.
+  const row = checks
+    ? checks.get(`${r.unitId}:${r.n}`)
+    : await ctx.db
+        .query("familyAnswers")
+        .withIndex("by_level", (x) => x.eq("studentId", r.studentId).eq("unitId", r.unitId).eq("n", r.n))
+        .order("desc")
+        .first();
   if (!row) return null;
   const e = row.qs.find((x) => x.q === r.q);
   return { a: e?.a ?? [], ok: e?.ok ?? [], owe: row.owe };
