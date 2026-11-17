@@ -83,6 +83,7 @@ import { DAY_MS, isBirthday, SL_OFFSET_MS, slDay, slDayNo, slWeekStart } from ".
 import { bookOf, checkEach, homeChecks, phoneKeyFor, type LevelBook } from "./lib/homeWork";
 import { computeMaster, copyState, markBefore, type MQ, type MState } from "./lib/master";
 import { boxCount, formOf, INPUT_MAX, markQuestion, onlyReasons, REASON_MAX, teacherMarks, type FormQ, type KeyQ } from "./lib/phone";
+import { LEVEL_TYPED_MAX, TYPED_MAX } from "./lib/key";
 import { keyText, PHOTO_BYTES, PHOTO_MAX, PHOTO_URLS_PER_DAY, type PhotoKind } from "./lib/photos";
 import { inboxOf, type UsInboxItem } from "./lib/usTalk";
 import { chatNew, mayMessage } from "./lib/chat";
@@ -666,6 +667,19 @@ function kept(k: KeyQ, a: string[]): string[] {
 }
 
 /**
+ * More than any level can hold: questions, boxes in one question (`TYPED_MAX`, all its key can ask for), boxes in one
+ * Check, or letters in one box (a typed reason `REASON_MAX`; every other box is marked only up to INPUT_MAX).
+ */
+function typedTooLong(typed: { a: string[] }[]): boolean {
+  let boxes = 0;
+  for (const t of typed) {
+    boxes += t.a.length;
+    if (t.a.length > TYPED_MAX || t.a.some((x) => x.length > REASON_MAX)) return true;
+  }
+  return typed.length > 200 || boxes > LEVEL_TYPED_MAX;
+}
+
+/**
  * His typed reason for a question a teacher marks (his rule, 4 Nov 2026: "is it true? give a reason" never asks for a
  * photo): its part row waits in her queue at once, with nothing for him to send (`said`; she reads what he typed at his
  * Check). A level taken back in class and checked again starts its row again.
@@ -726,8 +740,7 @@ export const check = mutation({
     if (args.n < 0) return await checkLadder(ctx, s, args, now);
     if (args.n === 0) return await checkRedo(ctx, s, args, now);
     const { data, level: l, keys } = await playable(ctx, s, args.unitId, args.n);
-    // A reason he types may be a few sentences; every other box is marked only up to INPUT_MAX (`right`).
-    if (args.typed.length > 200 || args.typed.some((t) => t.a.length > 30 || t.a.some((x) => x.length > REASON_MAX))) {
+    if (typedTooLong(args.typed)) {
       fail("Those answers are too long.");
     }
     const typed = new Map(args.typed.map((t) => [t.q, t.a]));
@@ -888,7 +901,7 @@ export const checkOne = mutation({
   handler: async (ctx, args): Promise<FamilyLock> => {
     const s = await familyActor(ctx, args.token);
     if (!(await checkEach(ctx))) fail("Check this level at its end.");
-    if (args.a.length > 30 || args.a.some((x) => x.length > REASON_MAX)) fail("Those answers are too long.");
+    if (typedTooLong([{ a: args.a }])) fail("Those answers are too long.");
     const now = Date.now();
     let row = await liveRow(ctx, s._id, args.unitId, args.n);
     const was = row?.done.find((d) => d.q === args.q);
@@ -933,7 +946,7 @@ async function checkRedo(
   now: number,
 ) {
   const { data, keys, pool } = await redoPlayable(ctx, s, args.unitId);
-  if (args.typed.length > 200 || args.typed.some((t) => t.a.length > 30 || t.a.some((x) => x.length > REASON_MAX))) {
+  if (typedTooLong(args.typed)) {
     fail("Those answers are too long.");
   }
   const typed = new Map(args.typed.map((t) => [t.q, t.a]));
@@ -982,7 +995,7 @@ async function checkLadder(
   now: number,
 ) {
   const { lad, sec } = await ladderPlayable(ctx, s, args.unitId, args.n);
-  if (args.typed.length > 200 || args.typed.some((t) => t.a.length > 30 || t.a.some((x) => x.length > REASON_MAX))) {
+  if (typedTooLong(args.typed)) {
     fail("Those answers are too long.");
   }
   const typed = new Map(args.typed.map((t) => [t.q, t.a]));

@@ -10,7 +10,7 @@ import type { Id } from "../convex/_generated/dataModel";
 import { FAMILY_SIGNED_OUT, secretHash, SIGNED_OUT } from "../convex/lib/auth";
 import { outOf } from "../convex/lib/book";
 import { slWeekStart } from "../convex/lib/day";
-import type { KeyAnswer } from "../convex/lib/key";
+import { LEVEL_TYPED_MAX, TYPED_MAX, type KeyAnswer } from "../convex/lib/key";
 import { computeMaster } from "../convex/lib/master";
 import { wipeStudent } from "../convex/lib/backend";
 import { markPart, markQuestion, parseExpr, parseNum, phoneKey, phoneShare, wantsOf, wantWords, type KeyPart } from "../convex/lib/phone";
@@ -493,6 +493,21 @@ describe("the family app on the server", () => {
     expect(await raw.run(async (ctx) => (await ctx.db.query("familyLive").collect()).length)).toBe(1);
     await raw.run(async (ctx) => wipeStudent(ctx, (await ctx.db.get(hana))!));
     expect(await raw.run(async (ctx) => (await ctx.db.query("familyLive").collect()).length)).toBe(0);
+  });
+
+  test("a question as big as its key allows is checked; more answers than any key asks for are refused", async () => {
+    await joinAs(hana, FAM);
+    const blanks = (n: number, first?: string) => Array.from({ length: n }, (_, i) => (i === 0 && first !== undefined ? first : ""));
+    // 17 Nov 2026: a question of 7 parts sent 37 boxes and the old cap (30) refused it: its level could never be checked.
+    expect(await fam().mutation(api.family.checkOne, { unitId: u01, n: 1, q: 2, a: blanks(37, "6"), b: 1 })).toMatchObject({ got: 2 });
+    // The level's Check takes one question with every box a key can ask for.
+    const r = await fam().mutation(api.family.check, { unitId: u01, n: 1, typed: LEVEL1.map((x) => (x.q === 4 ? { q: 4, a: blanks(TYPED_MAX, "12") } : x)) });
+    expect([r.got, r.results.find((x) => x.q === 4)?.got]).toEqual([16, 2]);
+    // More than any key asks for: in one question, in one Check, or in one box.
+    await expect(fam().mutation(api.family.checkOne, { unitId: u01, n: 2, q: 11, a: blanks(TYPED_MAX + 1) })).rejects.toThrow(/too long/);
+    const many = Array.from({ length: LEVEL_TYPED_MAX / TYPED_MAX + 1 }, (_, i) => ({ q: 11 + i, a: blanks(TYPED_MAX) }));
+    await expect(fam().mutation(api.family.check, { unitId: u01, n: 2, typed: many })).rejects.toThrow(/too long/);
+    await expect(fam().mutation(api.family.check, { unitId: u01, n: 2, typed: [{ q: 11, a: ["x".repeat(301)] }] })).rejects.toThrow(/too long/);
   });
 
   test("Check: marked at home (⌂), lost marks go to Evaluation at once, the teacher's questions wait for her", async () => {

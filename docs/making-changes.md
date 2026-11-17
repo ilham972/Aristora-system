@@ -315,6 +315,13 @@ WHY=1 npx vitest run -c vitest.perf.config.ts -t "lab" --reporter=verbose # each
 
 ## Gotchas learned the hard way
 
+- **A limit on what a phone sends must hold everything a key can ask for** (17 Nov 2026): Check refused more than 30
+  boxes in one question while a key may give 20 parts of 12 boxes, so a Sakarath set question (7 parts, 37 boxes)
+  could never be checked ("Those answers are too long.", the whole level stuck). The caps are `TYPED_MAX` (one
+  question: `KEY_PARTS_MAX × ANS_ITEMS_MAX`) and `LEVEL_TYPED_MAX` (one Check) in `convex/lib/key.ts`, checked by
+  `typedTooLong` in `family.ts` for `check`, `checkOne`, `checkRedo` and `checkLadder`. A new key limit: raise these
+  with it.
+
 - **A Sakarath unit is a unit of grade 100 + its grade** (17 Nov 2026): never list `query("units").collect()` to people
   without leaving out `isSkGrade` (the class app's `allUnits()` does; `unitOf` still names them for the Homework card);
   a new loop over every book skips `b.sk` where the class's books are meant (the board, Consultation, the simulation);

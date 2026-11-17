@@ -1602,6 +1602,9 @@ learning app of our education institute"): one profile, his class times, what he
     - Where a question ends (its last box, its last step), the pad's → turns into a gold **Check** once something of
       his is in it (nothing typed: → only passes on, the question stays open). Some boxes empty: "N காலியாக உள்ளன
       (அவை ✗)" once, a second Check sends it.
+    - What a Check takes: any question as big as its key allows (`TYPED_MAX`: 20 parts of 12 boxes; a Sakarath set
+      question has 37), at most `LEVEL_TYPED_MAX` boxes a Check, a box ≤ 300 letters; more = "Those answers are too
+      long." (`typedTooLong`; until 17 Nov 2026 a cap of 30 boxes a question left such a level unfinishable).
     - The server marks that one question (`family.checkOne`) and **a sheet slides up over the pad at once**: blue
       "சரியான விடை!" with +XP and "3 IN A ROW" (the bell a step higher for each right one in a row, the owl jumps;
       star eyes from 3), rose "பரவாயில்லை!" (a low note, the owl feels it; **never the answer**; "இது பின்னர் மீண்டும்

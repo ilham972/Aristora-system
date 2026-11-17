@@ -60,6 +60,14 @@ export const KEY_TEXT_MAX = 400;
 export const KEY_PARTS_MAX = 20;
 /** The most boxes, options, statements, words or cards one part may have. */
 export const ANS_ITEMS_MAX = 12;
+/**
+ * The most answers one question can send back to a Check: every box its key can ask for. A Check never refuses fewer
+ * (17 Nov 2026: a cap of 30 refused a Sakarath set question of 7 parts and 37 boxes, so its level could never be
+ * checked: "Those answers are too long.").
+ */
+export const TYPED_MAX = KEY_PARTS_MAX * ANS_ITEMS_MAX;
+/** The most answers one Check sends, every question together (ten questions as big as a key allows). */
+export const LEVEL_TYPED_MAX = 10 * TYPED_MAX;
 /** One box's accepted answers, and one item's words, at most. */
 const ANS_V_MAX = 6;
 const ANS_WORD_MAX = 60;
