@@ -383,6 +383,8 @@ export default defineSchema({
     qCount: v.optional(v.number()),
     /** One of a topic tute's two books (one printed book: the ladder + the past papers): the other stage is its twin. */
     tute: v.optional(v.boolean()),
+    /** A Sakarath book (17 Nov 2026, convex/lib/sakarath.ts): the phone's, on its own unit; the class board leaves it out. */
+    sk: v.optional(v.boolean()),
   }).index("by_unit_stage", ["unitId", "stage"]),
 
   /** A book's answer key, read only when a teacher opens a question. Teachers only, never in the code.

@@ -14437,3 +14437,101 @@ body.sb-on {
   color: var(--amber-ink);
   margin-bottom: 2px;
 }
+
+/* ---- Exam mode and the Sakarath books (17 Nov 2026): Settings → Books, src/sakarathBooks.tsx ---- */
+.exam-mode {
+  margin: 14px 0 10px;
+}
+/* As .block-title looks (its own class: run-throughs read the Books page's block titles as its terms). */
+.exam-mode .exam-h {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink-2);
+  margin: 6px 0 8px;
+}
+.exam-mode .muted.small {
+  margin: 2px 0 8px;
+}
+/* The grades in one row on every phone (his rule), as .grade-row looks (its own class: the Books page's run-throughs
+   find "the" grade row). */
+.exam-row {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+}
+.exam-row button {
+  min-width: 0;
+  min-height: 52px;
+  padding: 4px 2px;
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  line-height: 1;
+}
+.exam-row b {
+  font-family: var(--cond);
+  font-size: 22px;
+  font-weight: 700;
+}
+.exam-row small {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.exam-row button.some small {
+  color: var(--amber-ink);
+}
+.exam-row button.on {
+  background: var(--amber);
+  border-color: var(--amber);
+  color: #1d1300;
+}
+.exam-row button.on small,
+.exam-row button.on.some small {
+  color: #3d2800;
+}
+.exam-row button.armed {
+  border-color: var(--amber);
+  box-shadow: 0 0 0 3px var(--amber-soft);
+}
+.exam-row button:disabled {
+  opacity: 0.45;
+}
+.unit-list button.ul-t.ul-s {
+  width: 40px;
+}
+.unit-list button.ul-t.ul-s.has {
+  background: var(--amber);
+  border-color: var(--amber);
+  color: #1d1300;
+}
+/* With S beside T the name has less room: it never runs under the letters; on the narrowest phones (one line each,
+   cut with …) the letters and the two buttons are a little smaller. */
+.unit-list li.ul-row span {
+  overflow: hidden;
+}
+@media (max-width: 359px) {
+  .unit-list li.ul-row span,
+  .unit-list li.ul-row span small {
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .unit-list li.ul-row > button:first-child {
+    gap: 6px;
+    padding: 6px 8px;
+  }
+  .unit-list li.ul-row i {
+    width: 20px;
+  }
+  .unit-list button.ul-t,
+  .unit-list button.ul-t.ul-s {
+    width: 34px;
+  }
+}

@@ -18,6 +18,7 @@ import { PinSheet } from "./signin";
 import {
   act,
   allUnits,
+  skUnitOf,
   currentMe,
   currentRole,
   may,
@@ -46,6 +47,7 @@ import { SHOUT_WHY } from "../convex/lib/us";
 import { ClassHours } from "./classHours";
 import { ClaudeLink } from "./claudeLink";
 import { SkillBookPage } from "./skillBook";
+import { ExamMode, SakarathSheet } from "./sakarathBooks";
 import { RaceSettings } from "./raceSettings";
 import { ShopSettings } from "./shopSettings";
 import { UsSettings } from "./usSettings";
@@ -531,8 +533,15 @@ function Books() {
   const [grade, setGrade] = useGrade("aristora.booksGrade", () => 8, BOOK_GRADES);
   const [open, setOpen] = useState<Unit | null>(null);
   const [skillsOf, setSkillsOf] = useState<Unit | null>(null);
+  const [skOf, setSkOf] = useState<Unit | null>(null);
   const list = units.filter((u) => u.grade === grade);
   const bookOf = (u: Unit, st: "fighter" | "master") => books.find((b) => b.unitId === u._id && b.stage === st);
+  // Its Sakarath book (17 Nov 2026): on a unit of its own (src/store.ts skUnitOf).
+  const skBookOf = (u: Unit) => {
+    const sk = skUnitOf(u);
+    const b = sk ? books.find((x) => x.unitId === sk._id && x.stage === "master") : undefined;
+    return b?.master && (b.keyCount ?? 0) > 0 ? { levels: b.master.levels.length, questions: b.master.parts[0]?.to ?? 0, marks: b.master.total, keyCount: b.keyCount ?? 0 } : null;
+  };
   const done = (st: "fighter" | "master") => list.filter((u) => bookOf(u, st)).length;
   const both = (u: Unit) => [bookOf(u, "fighter"), bookOf(u, "master")].filter((b): b is BookRow => !!b);
   const allHave = (u: Unit, f: (b: BookRow) => number | null) => both(u).length > 0 && both(u).every((b) => (f(b) ?? 0) > 0);
@@ -543,6 +552,7 @@ function Books() {
       <UploadBooks units={units} books={books} onSaved={setGrade} />
       {may("owner") && <ClaudeLink />}
       {may("owner") && <CheckEach />}
+      {may("owner") && <ExamMode />}
       <GradeRow
         value={grade}
         onPick={setGrade}
@@ -557,7 +567,8 @@ function Books() {
       <p class="muted">
         {grade === OL ? `${list.length} O/L topics by paper part, as on the O/L exam (any student can be given them).` : `${list.length} units.`} In
         the app: theory books (F) {done("fighter")} · workbooks (M) {done("master")} · answer keys (K) {keys} · questions
-        as printed (Q) {texts} · tagged with skills (T) {list.filter((u) => bookOf(u, "master")?.tagged).length}.
+        as printed (Q) {texts} · tagged with skills (T) {list.filter((u) => bookOf(u, "master")?.tagged).length} · Sakarath books (S){" "}
+        {list.filter((u) => skBookOf(u)).length}.
       </p>
       {(grade === OL ? [1, 2, 3, 4] : [1, 2, 3, 0]).map((t) => {
         const us = list.filter((u) => u.term === t);
@@ -580,6 +591,7 @@ function Books() {
                       .join(" · ")
                   : "No question text yet";
                 const tagged = !!m?.tagged;
+                const skb = skBookOf(u);
                 return (
                   <li key={u._id} class="ul-row">
                     <button type="button" onClick={() => setOpen(u)}>
@@ -610,6 +622,15 @@ function Books() {
                     >
                       T
                     </button>
+                    {/* S = its Sakarath book is in the app (17 Nov 2026): what it has, Preview on the phone. */}
+                    <button
+                      type="button"
+                      class={`ul-t ul-s${skb ? " has" : ""}`}
+                      aria-label={skb ? `${u.code}: its Sakarath book, ${skb.questions} questions` : `${u.code}: no Sakarath book yet`}
+                      onClick={() => setSkOf(u)}
+                    >
+                      S
+                    </button>
                   </li>
                 );
               })}
@@ -618,6 +639,7 @@ function Books() {
         );
       })}
       {skillsOf && <SkillBookPage unit={skillsOf} onClose={() => setSkillsOf(null)} />}
+      {skOf && <SakarathSheet unit={skOf} sk={skUnitOf(skOf)} book={skBookOf(skOf)} onClose={() => setSkOf(null)} />}
       {open && (
         <UnitSheet unit={open} units={units} book={bookOf(open, "master")} fighter={bookOf(open, "fighter")} onClose={() => setOpen(null)} onMoved={setGrade} />
       )}
@@ -1146,6 +1168,10 @@ function describe(e: Doc<"events">): string {
     }
     case "photos-required":
       return v === "on" ? "drawing photos from home asked for again" : "drawing photos from home no longer asked for";
+    case "exam-mode": {
+      const [g, on] = v.split(" ");
+      return on === "on" ? `Grade ${g}: exam mode on (each Stage opens its Sakarath book)` : `Grade ${g}: exam mode off (the past papers again)`;
+    }
     case "check-each":
       return v === "on" ? "the phone checks after every question again" : "the phone checks a level once, at its end";
     case "family-photo":

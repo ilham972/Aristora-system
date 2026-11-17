@@ -18,6 +18,7 @@ import { isFree, setFreeIn } from "./lib/free";
 import { phoneKeyFor } from "./lib/homeWork";
 import type { MState } from "./lib/master";
 import { OL, olNumber } from "./lib/syllabus";
+import { realGrade } from "./lib/sakarath";
 
 const token = v.optional(v.string());
 
@@ -67,7 +68,8 @@ export const unit = query({
       return { n: l.n, from: l.from, to: l.to, max: l.max, qs, free };
     });
     return {
-      grade: unit.grade,
+      // A Sakarath book's unit (17 Nov 2026): its unit's grade.
+      grade: realGrade(unit.grade),
       code: unit.code,
       world: {
         unitId: unit._id,

@@ -18,6 +18,10 @@
 //   answers off the ladder, and every part's own marks, stay as they were; the workbook's typed fixes are never touched.
 // - Skills (13 Nov 2026, convex/lib/skills.ts): `ask` "skills" reads the skills the units have; `tell` "skills" saves one
 //   unit's skills and each question's skill, whole, through `skillsProblem`. Names and numbers only; no mark moves.
+// - The Sakarath book (17 Nov 2026, convex/lib/sakarath.ts; his ask: "you will upload from here ... one time upload"):
+//   `tell` "sakarath" saves one unit's whole Sakarath book (its levels and marks, key with every part's kind, printed
+//   questions, style) on its own unit, made the first time; checked like the rest, all or nothing; its levels can't
+//   change once a student has started it. `ask` "sakarath" lists a grade's.
 // - The functions are public (the carrier has no sign-in): the seal is the sign-in. An answer says nothing to anyone
 //   without the key, not even whether a link is on.
 
@@ -35,6 +39,8 @@ import { phonePart, phoneShare, readPart, type KeyQ } from "./lib/phone";
 import { BOOK_CSS_MAX, QUESTION_HTML_MAX, unsafeCss, unsafeHtml } from "./lib/questions";
 import { answerNonce, fromB64, KEY_BYTES, seal, unseal } from "./lib/seal";
 import { knownFor, skillCounts, skillHome, skillsProblem, type Skill, type SkillFile, type SkillTag } from "./lib/skills";
+import { EXAM_GRADES, sakarathProblem, sameLevels, skGrade, skKey, SK_TITLE } from "./lib/sakarath";
+import { unitKey } from "./lib/syllabus";
 
 /** A link works this long, unless the owner turns it off first. */
 export const LINK_DAYS = 7;
@@ -316,6 +322,29 @@ export const ask = query({
           }),
       });
     }
+    if (req.op === "sakarath") {
+      // A grade's units and their Sakarath books (17 Nov 2026): what each has, and how much of it the phone marks.
+      if (typeof req.grade !== "number" || !(EXAM_GRADES as readonly number[]).includes(req.grade)) return sealed(o, { ok: false, error: "Which grade?" });
+      const g = req.grade;
+      const real = (await ctx.db.query("units").withIndex("by_grade", (x) => x.eq("grade", g)).collect()).sort((a, b) => a.order - b.order);
+      const sks = await ctx.db.query("units").withIndex("by_grade", (x) => x.eq("grade", skGrade(g))).collect();
+      const units = [];
+      for (const u of real) {
+        const sk = sks.find((x) => x.key === skKey(u.key));
+        const b = sk ? await bookFor(ctx, sk._id, "master") : null;
+        const data = b && b.data.kind === "master" ? b.data : null;
+        const key = sk ? await keyRow(ctx, sk._id, "master") : null;
+        const share = sk && b && data ? await shareOf(ctx, { unit: sk, book: b, stage: "master", data, fdata: null, secs: [], key, answers: key?.answers ?? null }, key?.answers ?? null) : null;
+        units.push({
+          key: u.key,
+          code: u.code,
+          en: u.en,
+          ta: u.ta,
+          sk: sk && b && data ? { unitId: sk._id, levels: data.levels.length, questions: data.parts[0]?.to ?? 0, total: bookTotal(data), keyCount: b.keyCount ?? 0, qCount: b.qCount ?? 0, updatedAt: b.updatedAt, share } : null,
+        });
+      }
+      return sealed(o, { ok: true, grade: g, units });
+    }
     return sealed(o, { ok: false, error: "The app doesn't know that request." });
   },
 });
@@ -323,7 +352,7 @@ export const ask = query({
 type Save = { answers?: KeyAnswer[]; items?: { q: number; html: string }[]; css?: string; dropFixes?: boolean; note?: string };
 
 /** What is wrong with a save ("" = fine): every check of an uploaded zip, before anything is written. */
-function saveProblem(b: Opened, s: Save): string {
+function saveProblem(b: Pick<Opened, "data" | "fdata"> & Partial<Pick<Opened, "secs">>, s: Save): string {
   const last = b.data.parts.length ? b.data.parts[b.data.parts.length - 1].to : 0;
   const f = b.fdata ? fighter(b.fdata) : null;
   const inBook = (q: number) => (f ? f.isQuestion(q) : q >= 1 && q <= last);
@@ -333,13 +362,13 @@ function saveProblem(b: Opened, s: Save): string {
       // The theory book's own check, then the ladder's shape (only its questions; 1 mark a part).
       const bad = checkFighterKey(s.answers, b.fdata);
       if (bad.length) return bad[0];
-      const on = new Set(b.secs.flatMap(secQs));
+      const on = new Set((b.secs ?? []).flatMap(secQs));
       const off = s.answers.find((k) => !on.has(k.q));
       if (off) return `Question ${off.q} is not on the theory book's ladder.`;
       const parts = s.answers.flatMap((k) => k.parts ?? []);
       if (parts.some((p) => p.m !== 1)) return "Each part of a ladder question is 1 mark.";
     }
-    const bad = checkKey(s.answers, b.fdata ? ladderShape(b.secs, s.answers).data : b.data);
+    const bad = checkKey(s.answers, b.fdata ? ladderShape(b.secs ?? [], s.answers).data : b.data);
     if (bad.length) return bad[0];
   }
   let size = 0;
@@ -488,6 +517,102 @@ async function saveSkills(ctx: MutationCtx, row: Row, req: Asked, now: number): 
   return { ok: true, saved: { skills: skills.length, tags: tags.length, questions }, counts: [...n].map(([id, c]) => ({ id, n: c })) };
 }
 
+type SkSave = { grade?: unknown; code?: unknown; data?: MasterData; answers?: KeyAnswer[]; items?: { q: number; html: string }[]; css?: string };
+
+/**
+ * One unit's Sakarath book, whole (17 Nov 2026): its own unit (made the first time), the book, its key, every printed
+ * question and the book's style, once all of it passes the checks of an uploaded zip. A book students have started keeps
+ * its levels (a save that moves them is refused); its questions and kinds may change.
+ */
+async function saveSakarath(ctx: MutationCtx, row: Row, req: Asked, now: number): Promise<Record<string, unknown>> {
+  const s = req as unknown as SkSave;
+  const grade = s.grade;
+  if (typeof grade !== "number" || !(EXAM_GRADES as readonly number[]).includes(grade) || typeof s.code !== "string" || !/^U\d{2}$/.test(s.code)) {
+    return { ok: false, error: "A Sakarath book needs its grade (6–11) and its unit's code (U05)." };
+  }
+  const code = s.code;
+  const unit = await ctx.db
+    .query("units")
+    .withIndex("by_key", (x) => x.eq("key", unitKey(grade, code)))
+    .first();
+  if (!unit) return { ok: false, error: `Grade ${grade} has no unit ${code}.` };
+  const sent = s.data as MasterData;
+  const shape = sent && typeof sent === "object" ? sakarathProblem(sent) : "No book.";
+  if (shape) return { ok: false, error: shape };
+  // Only the book's own fields are kept (the table takes nothing else).
+  const data: MasterData = {
+    kind: "master",
+    parts: [{ id: "II", from: 1, to: sent.parts[0].to, kind: "cards" }],
+    levels: sent.levels.map((l) => ({ n: l.n, from: l.from, to: l.to, max: l.max })),
+    marks: Object.fromEntries(Object.entries(sent.marks ?? {}).map(([q, m]) => [q, m])),
+  };
+  const answers = Array.isArray(s.answers) ? [...s.answers].sort((a, b) => a.q - b.q) : [];
+  const n = data.parts[0].to;
+  if (answers.length !== n || answers.some((k, i) => k.q !== i + 1)) return { ok: false, error: `The key must answer every question, 1 to ${n}.` };
+  const badKey = checkKey(answers, data);
+  if (badKey.length) return { ok: false, error: badKey[0] };
+  // Every part marked by its kind (a key without kinds would be read for words: never for a Sakarath book).
+  const noKind = answers.find((k) => !k.parts?.length || k.parts.some((p) => !p.t || p.m !== 1));
+  if (noKind) return { ok: false, error: `Question ${noKind.q}: every part needs its answer kind and 1 mark.` };
+  const items = Array.isArray(s.items) ? s.items : [];
+  if (items.length !== n) return { ok: false, error: `Every question as printed, 1 to ${n}.` };
+  // The same checks as a workbook's save: questions 1 to n, safe HTML, the style.
+  const bad = saveProblem({ data, fdata: null }, { items, css: s.css });
+  if (bad) return { ok: false, error: bad };
+  if (typeof s.css !== "string") return { ok: false, error: "The book's style." };
+  const html = new Map(items.map((it) => [it.q, it.html]));
+  if (html.size !== n) return { ok: false, error: "A question comes twice." };
+  const wrong = slotsProblem(answers, html);
+  if (wrong) return { ok: false, error: wrong };
+
+  // Its own unit: made the first time, its names kept as its unit's now.
+  const key = skKey(unit.key);
+  const names = { term: unit.term, order: unit.order, en: `Sakarath · ${unit.en}`, ta: `${unit.ta} · ஸகராத்` };
+  let sk = await ctx.db
+    .query("units")
+    .withIndex("by_key", (x) => x.eq("key", key))
+    .first();
+  if (sk) await ctx.db.patch(sk._id, names);
+  else sk = (await ctx.db.get(await ctx.db.insert("units", { grade: skGrade(grade), code, key, ...names })))!;
+  const old = await bookFor(ctx, sk._id, "master");
+  if (old && old.data.kind === "master" && !sameLevels(old.data, data)) {
+    const started = await ctx.db
+      .query("progress")
+      .withIndex("by_unit_stage", (x) => x.eq("unitId", sk!._id).eq("stage", "master"))
+      .first();
+    if (started) return { ok: false, error: `${unit.key}'s Sakarath book has students in it: its levels can't change now.` };
+  }
+  if (old) await ctx.db.patch(old._id, { data, title: SK_TITLE, sk: true, keyCount: n, qCount: n, updatedAt: now });
+  else await ctx.db.insert("books", { unitId: sk._id, stage: "master", title: SK_TITLE, sk: true, data, keyCount: n, qCount: n, updatedAt: now });
+  const oldKey = await keyRow(ctx, sk._id, "master");
+  if (oldKey) await ctx.db.patch(oldKey._id, { answers, updatedAt: now });
+  else await ctx.db.insert("keys", { unitId: sk._id, stage: "master", answers, updatedAt: now });
+  const was = await questionRows(ctx, sk._id, "master");
+  for (const r of was) {
+    const h = html.get(r.q);
+    if (h === undefined) await ctx.db.delete(r._id);
+    else if (h !== r.html) await ctx.db.patch(r._id, { html: h });
+  }
+  for (const it of items) if (!was.some((r) => r.q === it.q)) await ctx.db.insert("questions", { unitId: sk._id, stage: "master", q: it.q, html: it.html });
+  const css = await ctx.db
+    .query("bookCss")
+    .withIndex("by_book", (x) => x.eq("unitId", sk!._id).eq("stage", "master"))
+    .first();
+  if (css) await ctx.db.patch(css._id, { css: s.css, updatedAt: now });
+  else await ctx.db.insert("bookCss", { unitId: sk._id, stage: "master", css: s.css, updatedAt: now });
+  const book = (await bookFor(ctx, sk._id, "master"))!;
+  const share = await shareOf(ctx, { unit: sk, book, stage: "master", data, fdata: null, secs: [], key: null, answers }, answers);
+  const session = await currentSession(ctx, now);
+  await log(ctx, session, now, {
+    kind: "book-save",
+    by: "claude",
+    unit: key,
+    value: `Claude link (${row.by}): the Sakarath book, ${data.levels.length} levels, ${n} questions; the phone marks ${share.marks}/${share.max} marks, ${share.parts.read} typed, ${share.parts.photo} photos`,
+  });
+  await touch(ctx, session, now);
+  return { ok: true, unitId: sk._id, made: !old, share };
+}
+
 /**
  * Write (the chat tells): `save` = a unit's key (every question's answer and kind) and the questions whose printed HTML
  * changed, checked like an uploaded zip, all or nothing; `skills` = a unit's skills and each question's skill, whole.
@@ -502,7 +627,13 @@ export const tell = mutation({
     if (!o || !row) return NOTHING;
     if (o.t <= (row.last ?? 0)) return sealed(o, { ok: false, error: "That request was already taken (or an older one came after a newer one)." });
     const answer =
-      o.req.op === "save" ? await saveUnit(ctx, row, o.req, now) : o.req.op === "skills" ? await saveSkills(ctx, row, o.req, now) : { ok: false, error: "The app doesn't know that request." };
+      o.req.op === "save"
+        ? await saveUnit(ctx, row, o.req, now)
+        : o.req.op === "skills"
+          ? await saveSkills(ctx, row, o.req, now)
+          : o.req.op === "sakarath"
+            ? await saveSakarath(ctx, row, o.req, now)
+            : { ok: false, error: "The app doesn't know that request." };
     await ctx.db.patch(row._id, { last: o.t, usedAt: now, uses: (row.uses ?? 0) + 1 });
     return sealed(o, answer);
   },

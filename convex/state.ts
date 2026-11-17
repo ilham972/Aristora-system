@@ -152,7 +152,8 @@ async function hisBoard(
       const inRoom = called.has(`${p.unitId}:${p.stage}`) || (since !== undefined && p.updatedAt >= since);
       if (!twin && !inRoom && !mayBeOpen(p)) continue;
       const b = await bookOf(p.unitId, p.stage);
-      if (!b || (!twin && !inRoom && !openWork(b, p))) continue;
+      // A Sakarath book (17 Nov 2026) is the phone's: its work reaches the teachers in Homework, never the hall's pages.
+      if (!b || b.sk || (!twin && !inRoom && !openWork(b, p))) continue;
       (more ??= []).push(p);
       books[`${p.unitId}:${p.stage}`] = b;
     }

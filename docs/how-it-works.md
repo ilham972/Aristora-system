@@ -3052,6 +3052,53 @@ learning app of our education institute"): one profile, his class times, what he
   ARISTORA's own students (a sign-in comes from the class). The centre's name sits in one place (`BRAND`) and the
   colours in `:root` of `family.css`. Gifts for winners: his idea, not built.
 
+**The Sakarath book and exam mode** (17 Nov 2026, his voice note two days before the maths exam: "doing the unit wise
+past paper question is not good idea because they can't finish everything ... every unit have one book ... a very tiny
+book ... every single question represent one skill ... let's call it as Sakarath book ... if I on the exam mode ...
+instead of showing the past paper question, that will show up the Sakarath book question"; his answers: the same Level,
+marking, XP and Homework as the workbooks, "We are just changing the mood"; one switch per grade; uploaded from the
+chat; `convex/lib/sakarath.ts`, `convex/sakarath.ts`).
+- **The book.** One master question per unit (two or three for the heavily examined units), every skill the term tests
+  once, easy to hard (ஸகராத்: the last moments). The book engine (the exam-master skill) writes a source zip per grade
+  with `sakarath.json` (kind "aristora-sakarath-book": answers and skills, never answer-key.json or fighter.json).
+- **In the app it is a workbook on a unit of its own** (a "Sakarath unit": grade 100 + the unit's grade, 106 / 107 /
+  108; key "<unit key>-SK", "G8-U05-SK"; the same code, term and order; en "Sakarath · …", ta "… · ஸகராத்"; its book row
+  `sk: true`, title "ஸகராத் புத்தகம்"). Each section (a), (b) … of a master question is one question of the app (its
+  parts (i), (ii) … 1 mark each, under the section's lead, drawn from the book's own HTML with no working spaces), and
+  each master question one level (a long one cut in two at a section: 16 parts at most). So the phone's Level, Check
+  after every question, the server's marking, XP, the race, the flame, questions that come back, Explain online, the
+  photos and typed words in Correction → Homework and the AI's check all work as for a workbook, untouched, and never
+  meet the unit's own workbook (homePhotos, familyLive, helpAsks … are kept by unit). No list of grades 6–11
+  (`by_grade`) ever sees a Sakarath unit; the class app's syllabus leaves them out (`src/store.ts`: `allUnits()` without
+  them, `unitOf` still names them, `skUnitOf(unit)` finds one).
+- **Each part's kind** (`scripts/sakarath/kinds.ts`, from the key's words with the app's own reader): a number, several
+  numbers, a labelled answer, a unit, a ratio, a point, a set = boxes the phone marks (kept only when the app's v2 reading
+  of that kind gives exactly the boxes and values its own reading of the words gave); an answer in 1–3 letters a box
+  too (written the book's way when the question says simplify, expand, factorise, index form, remove the brackets); a
+  name in capitals (AOB, PQ) a word box (both ways for 2–3 letters); a drawing (வரைக, நிழற்றுக, mark on a figure or a
+  number line, compass / straight edge / protractor) a photo; everything else (sentences, Tamil words, times with மு.ப.
+  / பி.ப., estimates, "any two …", answers with அல்லது or ±, tables read as long lists) his own words typed (`say`),
+  read by a teacher or the AI in Homework. G6: 302 of 532 parts on the phone, 199 typed, 31 photos; G7: 344 / 145 /
+  41 of 530; G8: 520 / 181 / 36 of 737.
+- **Exam mode** (Settings → Books → Exam mode, the owner; `sakarath.exam`, `sakarath.setExam`; meta `exam.grades`): one
+  button per grade in one row (6–11; pale = no Sakarath book with its key in the app; amber ON); two taps within 4
+  seconds (one tap changes every phone of a grade); history "Grade 8: exam mode on". On for his grade (never the O/L
+  map): `worldsOf` gives the same syllabus map (his words: "the syllabus map never change"), each Stage its unit's
+  Sakarath book (unitId = the Sakarath unit; `no`, `ta`, `term` its unit's; `en` "ஸகராத் புத்தகம் · Perimeter", the
+  hero's line under the name: the only sign on the phone, no new code there), **every Stage open** ("they want to do
+  all the questions from all the units"), `now` = his unit now's; a unit without one is "soon". Off: the past papers
+  again. Nothing done in either is lost: XP counts every workbook row; trophies count both maps (`trophyWorlds`).
+- **The class leaves it out**: the class board (`state.ts` `hisBoard`), Consultation (`consult.totals`) and the
+  simulation skip a book with `sk`; its typed words and photos reach the teachers in Correction → Homework, its wrong
+  answers Explain online. The Owner page's learning numbers and the race count its levels like any.
+- **Settings → Books → S** on each unit's row (beside T): gold = its Sakarath book is in the app with its key; a tap
+  shows its levels, questions and parts, how much the phone marks (`PhoneAnswers`: See what the phone accepts) and the
+  owner's Preview on the phone. The line under the grade row counts "Sakarath books (S)". On a phone under 360 px the
+  row's letters and buttons are a little smaller and the names one line each.
+- **How it gets in**: only through the Claude link (`tell` "sakarath": grade, code, data, answers, items, css; checked
+  like an upload, all or nothing; the Sakarath unit made the first time; its levels can't change once a student
+  started it; `ask` "sakarath" lists a grade's). docs/making-changes.md, "A Sakarath book into the app".
+
 ## Accounts and security (built 2026-10-28)
 
 **Who.**

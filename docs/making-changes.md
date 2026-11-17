@@ -110,6 +110,34 @@ node $TSX scripts/claude-link.ts $SCR/req.json $SCR/link-out        # → $SCR/l
   megabyte, and a Convex function has one second).
 - The functions `link.ask` and `link.tell` print OPEN in the audit below on purpose: the seal is their sign-in.
 
+## A Sakarath book into the app (through the Claude link)
+
+A grade's Sakarath source zip (the exam-master skill's: `sakarath.json`, `plan.py`, `mk.py`, `figs.py`, `uNN.py` …)
+becomes one request per unit (17 Nov 2026; docs/how-it-works.md, "The Sakarath book and exam mode"). Everything stays
+in the scratchpad (his books' content); only the scripts are in the repo.
+
+```bash
+cd /home/claude/aristora-system
+mkdir -p $SCR/g8 && unzip -oq <the zip> -d $SCR/g8                     # its own empty folder
+python3 -I scripts/sakarath/build.py $SCR/g8 $SCR/sk8.json              # sections → questions, master questions → levels
+/opt/npm-tools/node_modules/.bin/esbuild scripts/sakarath/kinds.ts --bundle --platform=node --format=esm --outfile=$SCR/kinds.mjs
+node $SCR/kinds.mjs $SCR/sk8.json $SCR/req8.json $SCR/report8.txt        # each part's kind; the requests; a report to read
+export ARISTORA_LINK="ARISTORA-LINK name.key"                            # his code, in the shell only
+node /opt/npm-tools/node_modules/tsx/dist/cli.mjs scripts/claude-link.ts $SCR/req8.json $SCR/out8
+echo '[{"name":"g8","fn":"ask","req":{"op":"sakarath","grade":8}}]' > $SCR/ask.json   # what the app has now
+```
+
+- `build.py` imports the source's own engine (it checks its fonts with fc-list: build.py answers that check itself,
+  nothing is printed). It needs nothing installed. A unit changed in the source: run both again and send that unit's
+  request only (its levels can't change once a student started it: the save says so).
+- Read `report8.txt` before sending: each part's kind (`box`, `alg`, `word`, `say`, `photo`) beside its answer and
+  question. A wrong ✗ on a right answer is worse than a part for the teacher: when in doubt, `say`.
+- How it looks on a phone: `scripts/phone-look.ts` reads a folder `<KEY>/unit.json` ({css}) + `q/NNN.html`; write the
+  requests' items there and photograph them (anything cut off is listed). The book's CSS gets phone rules at the end
+  (`build.py`): figures shrink to the card, a figure beside the text goes under it, the square root's class is `sqr`
+  (the app's `.sq` is a ladder's sub-question), a lead reads at the phone's size (`lead2`).
+- Then tell him: Settings → Books → Grade N → S is gold on each unit; Exam mode → tap N twice.
+
 ## Digitize a unit in the app (through the Claude link)
 
 His rule (10 Nov 2026): every answer is given on the phone (a box, a tap, the pad with =, a word, his own words typed);
@@ -286,6 +314,12 @@ WHY=1 npx vitest run -c vitest.perf.config.ts -t "lab" --reporter=verbose # each
   a drawing's parts on the main thread whatever we do).
 
 ## Gotchas learned the hard way
+
+- **A Sakarath unit is a unit of grade 100 + its grade** (17 Nov 2026): never list `query("units").collect()` to people
+  without leaving out `isSkGrade` (the class app's `allUnits()` does; `unitOf` still names them for the Homework card);
+  a new loop over every book skips `b.sk` where the class's books are meant (the board, Consultation, the simulation);
+  `preview.unit` gives its unit's grade (`realGrade`). A run-through on Settings → Books that finds "the" grade row by
+  `.grade-row` still finds one: the Exam mode row is `.exam-row` and its buttons are named "Exam mode for Grade 8: …".
 
 - **The AI check calls a paid API** (14 Nov 2026): tests never call it (`tests/ai.test.ts` stubs `fetch`; the e2e has no
   key, so its step fails with the "isn't switched on" words, and the run-through writes the AI's answer with

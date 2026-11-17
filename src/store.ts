@@ -10,6 +10,7 @@ import { computeStatus, type Mark, type Marks, type Status } from "../convex/lib
 import { SIGNED_OUT } from "../convex/lib/auth";
 import type { Dept, PageId } from "../convex/lib/dept";
 import type { SimInfo } from "../convex/sim";
+import { isSkGrade } from "../convex/lib/sakarath";
 import { errorText, mutate, phoneToken, savePhoneToken, setLookOnly, subscribe, watchLink, type Link } from "./backend";
 
 export type Student = Doc<"students">;
@@ -88,6 +89,8 @@ function emit() {
 
 let units: Unit[] | null = null;
 const unitById = new Map<string, Unit>();
+/** Each unit's Sakarath book's own unit, by its unit's key (17 Nov 2026, convex/lib/sakarath.ts). */
+const skByKey = new Map<string, Unit>();
 let ensuring = false;
 /** Undefined until the server answers who this phone is. */
 let me: MeState | undefined;
@@ -292,9 +295,14 @@ function startBoard(): () => void {
       api.catalog.units,
       {},
       (value) => {
-        units = value;
+        // A Sakarath book's unit (grade 106, 107 …) is never a unit of the syllabus: only its name is looked up.
+        units = value.filter((u) => !isSkGrade(u.grade));
         unitById.clear();
-        for (const u of value) unitById.set(u._id, u);
+        skByKey.clear();
+        for (const u of value) {
+          unitById.set(u._id, u);
+          if (isSkGrade(u.grade)) skByKey.set(u.key.replace(/-SK$/, ""), u);
+        }
         emit();
       },
       () => {},
@@ -385,6 +393,10 @@ export function unitOf(id: string | undefined | null): Unit | null {
 }
 export function allUnits(): Unit[] {
   return units ?? [];
+}
+/** A unit's Sakarath book's own unit (Settings → Books → S), or null. */
+export function skUnitOf(u: Unit): Unit | null {
+  return skByKey.get(u.key) ?? null;
 }
 
 // ---- A student's book and his work in it ----

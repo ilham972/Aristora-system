@@ -151,7 +151,8 @@ export const totals = query({
         .withIndex("by_student", (q) => q.eq("studentId", s._id))
         .collect()) {
         const b = await bookOf(p.unitId, p.stage);
-        if (!b) continue;
+        // A Sakarath book (17 Nov 2026) is the phone's: never a consultation's (Explain online and Homework have it).
+        if (!b || b.sk) continue;
         const bookNow = p.unitId === s.unitId && p.stage === s.stage;
         if (b.data.kind === "fighter" && p.stage === "fighter") {
           const f = fighter(b.data);

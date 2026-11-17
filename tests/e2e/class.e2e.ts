@@ -5104,6 +5104,75 @@ test("Skill book: Books → T on a tagged unit; its groups as pills (a question 
   expect(problems).toEqual([]);
 });
 
+test("Sakarath: Books → S shows a unit's Sakarath book (gold when it is in the app); exam mode per grade, two taps, only a grade with a book", async () => {
+  const backend = await newClass();
+  await backend.t.mutation(api.setup.ensure, { token: OWNER_TOKEN });
+  // A made-up Sakarath book for G8 U02 on its own unit (as the Claude link saves it: convex/link.ts "sakarath").
+  await backend.t.run(async (ctx) => {
+    const u = (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G8-U02")).first())!;
+    const sk = await ctx.db.insert("units", { grade: 108, code: "U02", key: "G8-U02-SK", term: u.term, order: u.order, en: `Sakarath · ${u.en}`, ta: `${u.ta} · ஸகராத்` });
+    const data = { kind: "master" as const, parts: [{ id: "II" as const, from: 1, to: 2, kind: "cards" as const }], levels: [{ n: 1, from: 1, to: 2, max: 3 }], marks: { "1": 2, "2": 1 } };
+    await ctx.db.insert("books", { unitId: sk, stage: "master", title: "ஸகராத் புத்தகம்", sk: true, data, keyCount: 2, qCount: 2, updatedAt: Date.now() });
+    const box = (v: string) => ({ k: "box" as const, b: [{ v: [v] }] });
+    await ctx.db.insert("keys", {
+      unitId: sk,
+      stage: "master",
+      answers: [
+        { q: 1, parts: [{ p: "i", a: "**12**", m: 1, t: box("12") }, { p: "ii", a: "a made-up sentence", m: 1, t: { k: "say" as const } }] },
+        { q: 2, parts: [{ p: "i", a: "**7**", m: 1, t: box("7") }] },
+      ],
+      updatedAt: Date.now(),
+    });
+    for (const q of [1, 2]) {
+      await ctx.db.insert("questions", { unitId: sk, stage: "master", q, html: `<div class="sec first bk"><div class="sh"><span class="sn">a</span><div class="st lead2">A made-up lead ${q}</div></div><div class="pt"><div class="rp"><span class="rl">(i)</span><span class="rt">A made-up part</span></div></div></div>` });
+    }
+  });
+  const examOn = () => backend.t.run(async (ctx) => (await ctx.db.query("meta").withIndex("by_key", (q) => q.eq("key", "exam.grades")).first())?.value ?? []);
+
+  const C = await phone(backend, "focus", { viewport: { width: 320, height: 640 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
+  await C.getByRole("button", { name: "Settings" }).click();
+  await C.getByRole("button", { name: "Books", exact: true }).click();
+  await C.locator(".grade-row").getByRole("button", { name: /^Grade 8\b/ }).click();
+  // The syllabus of Grade 8 never lists the Sakarath unit itself: U02 once, with a gold S.
+  await count(C.locator(".unit-list li", { hasText: "U02" }), 1);
+  await visible(C.locator(".unit-list li", { hasText: "U02" }).locator(".ul-s.has"));
+  await count(C.locator(".unit-list li", { hasText: "U01" }).locator(".ul-s.has"), 0);
+  await contains(C.locator(".settings-body p.muted", { hasText: "Sakarath books (S)" }), "Sakarath books (S) 1");
+  expect(await C.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(C, "sk00-books-s");
+  // Exam mode: Grade 8 has a book, Grade 7 none (pale).
+  const E = C.locator(".exam-row");
+  await visible(E);
+  expect(await E.getByRole("button", { name: /^Exam mode for Grade 7:/ }).isDisabled()).toBe(true);
+  await E.getByRole("button", { name: /^Exam mode for Grade 8:/ }).click();
+  await contains(C.locator(".toast"), "Tap 8 again");
+  expect(await examOn()).toEqual([]);
+  await E.getByRole("button", { name: /^Exam mode for Grade 8:/ }).click();
+  await contains(C.locator(".toast"), "Grade 8: exam mode on");
+  await until(async () => JSON.stringify(await examOn()) === "[8]", "exam mode on for Grade 8");
+  await visible(E.locator("button.on", { hasText: "ON" }));
+  await shot(C, "sk01-exam-on");
+  // S on U02: its book, how much the phone marks, the owner's Preview.
+  await C.locator(".unit-list li", { hasText: "U02" }).locator(".ul-s").click();
+  const S = C.locator(".sheet");
+  await contains(S, "U02 · Sakarath book");
+  await contains(S, "1 level, 2 questions, 3 parts");
+  await contains(S, "At home the phone marks");
+  await visible(S.locator("a.phone-look"));
+  await shot(C, "sk02-s-sheet");
+  await S.getByRole("button", { name: /close/i }).first().click();
+  // S on U01 (none yet): it says so.
+  await C.locator(".unit-list li", { hasText: "U01" }).locator(".ul-s").click();
+  await contains(C.locator(".sheet"), "Not in the app yet");
+  await C.locator(".sheet").getByRole("button", { name: /close/i }).first().click();
+  // Off again: two taps.
+  await E.getByRole("button", { name: /^Exam mode for Grade 8:/ }).click();
+  await E.getByRole("button", { name: /^Exam mode for Grade 8:/ }).click();
+  await until(async () => JSON.stringify(await examOn()) === "[]", "exam mode off");
+  await contains(C.locator(".toast"), "Grade 8: exam mode off");
+  expect(problems).toEqual([]);
+});
+
 test("Update: an older copy of the app says so at the upload, and Update opens Settings → Books again", async () => {
   const backend = await newClass();
   const C = await phone(backend, "focus");

@@ -74,6 +74,7 @@ import {
   weekDays,
   weekXp,
   worldsOf,
+  trophyWorlds,
   xpSince,
   type Trophy,
   type World,
@@ -424,7 +425,7 @@ export const me = query({
       dayXp: weekDayXp(rows, now).map((x, i) => x + (usDay?.[i] ?? 0)),
       levelsDone: levelsSince(rows, 0),
       levelsWeek: levelsSince(rows, slWeekStart(now)),
-      trophies: trophiesOf(rows, worlds, kept),
+      trophies: trophiesOf(rows, await trophyWorlds(ctx, s, worlds), kept),
       ol: olMapOn(s),
       cheers: cheersWords(await cheersOf(ctx, s._id, now)),
       gifts: (
@@ -830,7 +831,7 @@ export const check = mutation({
     await homeMoments(ctx, s._id, homeLevels(all), streak, now);
     if (stageDone(data.levels, m.lv)) await stageMoment(ctx, s._id, unit, unit.grade === OL ? null : unitNumber(unit.code), now);
     // His trophies now (the phone shows the ones this level just earned).
-    const trophies = trophiesOf(all, await worldsOf(ctx, s), shieldKept);
+    const trophies = trophiesOf(all, await trophyWorlds(ctx, s), shieldKept);
     // The level's book: the key's working on what he got wrong, and the photos it asks for.
     const book = await bookOf(ctx, s, unit._id, l.n);
     return { results, got, phoneMax, max: l.max, teacher, xp: weekXp(all, now) + (await usNow(ctx, s._id, now)).xp, streak, trophies, book, retry, bonus };
@@ -963,7 +964,7 @@ async function checkRedo(
   await log(ctx, null, now, { kind: "retry-home", studentId: s._id, name: s.name, unit: unit.key, value: `${retry.map((r) => r.q).join(",")} ${right}/${retry.length}` });
   const all = await xpRows(ctx, s._id);
   const { streak, kept: shieldKept } = await flameOf(ctx, s._id, all, now);
-  const trophies = trophiesOf(all, await worldsOf(ctx, s), shieldKept);
+  const trophies = trophiesOf(all, await trophyWorlds(ctx, s), shieldKept);
   // The reveal's ring = his marks on the redo; its XP line = only the half marks he won back (`bonus`, the phone: n = 0).
   return { results, got, phoneMax: max, max, teacher: [], xp: weekXp(all, now) + (await usNow(ctx, s._id, now)).xp, streak, trophies, book: null, retry: [], bonus, redo: { right, of: retry.length, gate: gateOf(m, data, keys) } };
 }
@@ -1027,7 +1028,7 @@ async function checkLadder(
   const all = await xpRows(ctx, s._id);
   const { streak, kept: shieldKept } = await flameOf(ctx, s._id, all, now);
   await homeMoments(ctx, s._id, homeLevels(all), streak, now);
-  const trophies = trophiesOf(all, await worldsOf(ctx, s), shieldKept);
+  const trophies = trophiesOf(all, await trophyWorlds(ctx, s), shieldKept);
   return { results, got, phoneMax, max, teacher, xp: weekXp(all, now) + (await usNow(ctx, s._id, now)).xp, streak, trophies, book: null, retry: [], bonus: 0 };
 }
 
@@ -1365,7 +1366,7 @@ export async function mateOf(ctx: QueryCtx, s: Doc<"students">, from: Id<"studen
     best: bestStreak(new Set([...days, ...kept])),
     week: weekDays(days, now),
     levelsDone: levelsSince(rows, 0),
-    trophies: trophiesOf(rows, worlds, kept),
+    trophies: trophiesOf(rows, await trophyWorlds(ctx, s, worlds), kept),
     wins: { g: race?.w ?? 0, a: race?.wa ?? 0 },
     ...(ev.ever ? { ever: ev.ever } : {}),
     cheers: { n: cheers.length, mine: !!from && cheers.some((c) => c.from === from && c.day === slDayNo(now)) },

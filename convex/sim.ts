@@ -130,6 +130,8 @@ async function simBooks(ctx: QueryCtx): Promise<SimBook[]> {
   const out: SimBook[] = [];
   const units = new Map<string, Doc<"units"> | null>();
   for (const b of await ctx.db.query("books").collect()) {
+    // A Sakarath book (17 Nov 2026) is the phone's, never the hall's: made-up students never get one.
+    if (b.sk) continue;
     let u = units.get(b.unitId);
     if (u === undefined) {
       u = await ctx.db.get(b.unitId);
