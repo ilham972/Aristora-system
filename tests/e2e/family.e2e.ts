@@ -3814,6 +3814,97 @@ async function topRowFits(p: Page) {
   expect(r[0].w).toBeGreaterThanOrEqual(38);
 }
 
+test("Sakarath on the phone: the app's own question, never the printed page (no section letter or black pill, the story clean, tables, pairs and side-by-side parts inside the card)", async () => {
+  // 18 Nov 2026, his words: "sometimes it feels like the book is a screenshot ... I want to feel like this is part of
+  // the app". Made-up questions in the Sakarath engine's own markup (its section letter .sn, its "வினா 2A" divider
+  // .qsep, a figure's labels, a statement table printed 88 mm wide, two parts printed side by side).
+  const before = problems.length;
+  const backend = makeBackend(modules);
+  const t = backend.t;
+  await addPerson(t, { name: "Owner", token: OWNER_TOKEN, role: "owner" });
+  await t.mutation(api.setup.ensure, { token: OWNER_TOKEN });
+  const sec = (letter: string, lead: string, parts: string, more = "") =>
+    `<div class="sec first bk"><div class="sh"><span class="sn">${letter}</span><div class="st lead2">${lead}</div></div>${parts}</div>${more}`;
+  const pt = (label: string, words: string, style = "") => `<div class="pt"${style}><div class="rp"><span class="rl">(${label})</span><span class="rt">${words}</span></div></div>`;
+  const row = (words: string, n: number) =>
+    `<tr><td style="padding:.5mm 2mm .5mm 0;width:88mm;vertical-align:top">${words}</td><td style="white-space:nowrap"><span data-tick="${n}">(&nbsp;&nbsp;&nbsp;)</span></td></tr>`;
+  const side = ' style="display:inline-block;vertical-align:top;width:calc(50% - 9.2mm)"';
+  const html = [
+    `<div class="qsep"><span>வினா 2A</span><i></i></div>` +
+      sec("a", "A made-up lead with a figure.", pt("i", "A made-up first part"), `<div class="bk">${pt("ii", "A made-up second part")}<div class="fgb"><div class="fg"><svg viewBox="0 0 40 20" width="40mm" height="20mm"><text x="5" y="10">PQR</text></svg></div></div></div>`),
+    sec("b", "Made-up statements, each to tick.", pt("i", `<table style="border-collapse:collapse">${row("A made-up statement long enough to need the whole width of the card", 1)}${row("Another made-up statement, also long enough to wrap twice", 2)}</table>`)),
+    sec("c", "Made-up pairs to match.", pt("i", "Match each made-up count to its made-up name.")),
+    sec("d", "Two made-up sums.", pt("i", "The first made-up sum", side) + pt("ii", "The second made-up sum", side)),
+  ];
+  const box = (v: string) => ({ k: "box" as const, b: [{ v: [v] }] });
+  const sk = await t.run(async (ctx) => {
+    const u = (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G8-U02")).first())!;
+    const id = await ctx.db.insert("units", { grade: 108, code: "U02", key: "G8-U02-SK", term: u.term, order: u.order, en: `Sakarath · ${u.en}`, ta: `${u.ta} · ஸகராத்` });
+    const data = { kind: "master" as const, parts: [{ id: "II" as const, from: 1, to: 4, kind: "cards" as const }], levels: [{ n: 1, from: 1, to: 4, max: 6 }], marks: { "1": 2, "2": 1, "3": 1, "4": 2 } };
+    await ctx.db.insert("books", { unitId: id, stage: "master", title: "ஸகராத் புத்தகம்", sk: true, data, keyCount: 4, qCount: 4, updatedAt: Date.now() });
+    const answers = [
+      { q: 1, parts: [{ p: "i", a: "**12**", m: 1, t: box("12") }, { p: "ii", a: "**7**", m: 1, t: box("7") }] },
+      { q: 2, parts: [{ p: "i", a: "✓ ✗", m: 1, t: { k: "tf" as const, a: [true, false] } }] },
+      { q: 3, parts: [{ p: "i", a: "pairs", m: 1, t: { k: "match" as const, l: ["5 made-up sides", "6 made-up sides"], r: ["நீளமானபெயரொன்று", "இன்னொருநீளமானபெயர்"], a: [1, 2] } }] },
+      { q: 4, parts: [{ p: "i", a: "**3**", m: 1, t: box("3") }, { p: "ii", a: "**4**", m: 1, t: box("4") }] },
+    ];
+    await ctx.db.insert("keys", { unitId: id, stage: "master", answers, updatedAt: Date.now() });
+    for (const [i, h] of html.entries()) await ctx.db.insert("questions", { unitId: id, stage: "master", q: i + 1, html: h });
+    await ctx.db.insert("bookCss", {
+      unitId: id,
+      stage: "master",
+      css: ".sh { display: flex; } .sn { background: #111; color: #fff; width: 6.4mm; } .qsep { display: flex; } .qsep span { background: #111; color: #fff; } .qsep i { flex: 1; border-top: 1pt solid #111; } .rp { display: flex; } .rl { width: 8.6mm; }",
+      updatedAt: 0,
+    });
+    return id;
+  });
+
+  const O = await open(backend, `${site.url}/f/#preview=${sk}`, size(360, 780), () => {
+    if (sessionStorage.getItem("t")) return;
+    sessionStorage.setItem("t", "1");
+    localStorage.setItem("aristora.token", "owner-phone-token-0123456789abcdefghijklmnopqrstuv");
+  });
+  await O.locator(".f-look-levels button", { hasText: "Level 1" }).first().click();
+  await contains(O.locator(".f-qn"), "Q1");
+  const paper = async () => (await O.locator(".f-paper .qv").first().boundingBox())!;
+  const inside = async (l: L, what: string) => {
+    const p = await paper();
+    for (const b of await l.all()) {
+      const r = (await b.boundingBox())!;
+      if (!(r.x >= p.x - 1 && r.x + r.width <= p.x + p.width + 1)) throw new Error(`${what} runs off the card: ${JSON.stringify(r)} in ${JSON.stringify(p)}`);
+    }
+  };
+  // No black letter square; "வினா 2A" a grey line (no pill); the lead uses the card's width.
+  await until(async () => (await O.locator(".f-paper .lead2").count()) === 1, "Q1's lead");
+  expect(await O.locator(".f-paper .sn").first().isVisible()).toBe(false);
+  expect(await O.locator(".f-paper .qsep > span").first().evaluate((e) => getComputedStyle(e).backgroundColor)).toBe("rgba(0, 0, 0, 0)");
+  expect(await O.locator(".f-paper .qsep > i").first().isVisible()).toBe(false);
+  expect((await O.locator(".f-paper .lead2").first().boundingBox())!.x - (await paper()).x < 20).toBe(true);
+  await shot(O, "fam53c-sakarath-q1");
+  // The story on the second step: its words only (never "a", "வினா 2A" or the figure's "PQR").
+  await O.locator(".f-stepper .f-stp").nth(1).click();
+  await until(async () => ((await O.locator(".f-story").first().textContent()) ?? "").includes("A made-up lead with a figure."), "the story");
+  expect(((await O.locator(".f-story").first().textContent()) ?? "").replace(/\s+/g, " ").trim()).toBe("A made-up lead with a figure.");
+  await shot(O, "fam53d-sakarath-story");
+  // Q2: the statements printed 88 mm wide wrap inside the card.
+  await jump(O, O.locator(".f-qchip", { hasText: /^2$/ }).first());
+  await until(async () => (await O.locator(".f-paper .fx-tk").count()) === 4, "Q2's ✓ / ✗");
+  await inside(O.locator(".f-paper td"), "a statement");
+  // Q3: long names in their pairs' cards, inside the card.
+  await jump(O, O.locator(".f-qchip", { hasText: /^3$/ }).first());
+  await until(async () => (await O.locator(".f-mi").count()) === 4, "Q3's pairs");
+  await inside(O.locator(".f-mi"), "a pair's card");
+  await shot(O, "fam53e-sakarath-pairs");
+  // Q4: two parts the book prints side by side, one under the other at the card's width.
+  await jump(O, O.locator(".f-qchip", { hasText: /^4$/ }).first());
+  await until(async () => (await O.locator(".f-paper .rl", { hasText: "(i)" }).count()) === 1, "Q4");
+  const w = (await O.locator(".f-paper .pt").first().boundingBox())!.width;
+  expect(w > (await paper()).width * 0.8).toBe(true);
+  await noSideScroll(O);
+  expect(problems.slice(before)).toEqual([]);
+  await O.context().close();
+});
+
 test("the Shop: the owner's things with a photo; last week's pay; the coin on the top row; PAYDAY; buying, the gold card, Cancel; Coins back and Given; 320 px", async () => {
   const before = problems.length;
   const backend = makeBackend(modules);

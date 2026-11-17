@@ -233,6 +233,11 @@ function useQuestions(world: World, n: number, on: boolean): { got: FamilyQuesti
  * The app's paper on the book's page (after the book's own rules): rounded, a little air; the app's own font, larger
  * (his ask, 4 Nov 2026: "I want beautiful font for the questions"), letters of maths in italics; the printed number
  * hidden (the card says Q9 once); the book's slots as the app's boxes, options, ✓ / ✗ and words to tap.
+ *
+ * A Sakarath book's question (18 Nov 2026, his "it feels like the book is a screenshot ... I want to feel like this is
+ * part of the app", the workbooks as the model): the printed page's furniture goes. Its section letter's black square
+ * (`.sn`: the card says Q2), the black "வினா 4A" pill and its rule (`.qsep`: a grey line like a workbook's source), and
+ * the half-width columns its parts print in side by side (`.pt` inline-block: one under the other, the card's width).
  */
 const PAPER_CSS = `.qv { border-radius: 14px; padding: 14px 12px 10px; -webkit-user-select: none; user-select: none; color: var(--paper-ink, var(--ink, #1c1a3a));
   background: var(--paper-bg, #fff); filter: var(--paper-f, none); }
@@ -288,7 +293,11 @@ const PAPER_CSS = `.qv { border-radius: 14px; padding: 14px 12px 10px; -webkit-u
 .qv .sq .sa:not([data-paper]) { display: inline-block !important; margin: 0 0 0 .3em !important; vertical-align: middle; }
 .qv .qs { min-width: 0; overflow-wrap: break-word; }
 .qv .dg [data-fill] { position: absolute !important; min-width: 0 !important; width: var(--w) !important; height: var(--h) !important; margin: 0 !important;
-  padding: 0 !important; border-width: 1.5px !important; border-radius: 1.4mm !important; font-size: 3.6mm !important; }`;
+  padding: 0 !important; border-width: 1.5px !important; border-radius: 1.4mm !important; font-size: 3.6mm !important; }
+.qv .sh > .sn, .qv .qsep > i { display: none !important; }
+.qv .sh, .qv .qsep, .qv .pt[style*="inline-block"] { display: block !important; width: auto !important; }
+.qv .qsep { margin: 0 0 .3em !important; }
+.qv .qsep > span { padding: 0 !important; background: none !important; color: var(--ink3, #9d99bf) !important; font-size: 12.5px !important; font-weight: 600 !important; }`;
 
 /**
  * A question as printed, on the level. A tap opens it full screen (`QuestionZoom`): the app itself never zooms. With

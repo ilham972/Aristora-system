@@ -315,6 +315,12 @@ WHY=1 npx vitest run -c vitest.perf.config.ts -t "lab" --reporter=verbose # each
 
 ## Gotchas learned the hard way
 
+- **A new book engine's print furniture must leave the phone** (18 Nov 2026, the Sakarath books): the family paper
+  hides each engine's own numbering and decoration (`.qn`, `.pm`, `.mk` for workbooks; `.sn`, `.qsep` and half-width
+  `.pt` for Sakarath books) and `stepsOf` drops the same from the story, with a figure's labels (`svg`, `.dg`, `.fg`).
+  Look at a new engine's real questions on a phone first (a scratch run-through in Preview, never committed: the books
+  stay in the scratchpad) and list its classes (`grep -o 'class="[^"]*"' q/*.html | sort | uniq -c`).
+
 - **A limit on what a phone sends must hold everything a key can ask for** (17 Nov 2026): Check refused more than 30
   boxes in one question while a key may give 20 parts of 12 boxes, so a Sakarath set question (7 parts, 37 boxes)
   could never be checked ("Those answers are too long.", the whole level stuck). The caps are `TYPED_MAX` (one

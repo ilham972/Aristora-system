@@ -50,6 +50,7 @@ export const PHONE_CSS = `
 .qv [style*="display:flex"], .qv [style*="display: flex"], .qv .figrow { flex-wrap: wrap; row-gap: 6px; }
 .qv table[data-fx-stack] { display: block; margin-left: 0 !important; }
 .qv table[data-fx-stack] > tbody, .qv table[data-fx-stack] tr, .qv table[data-fx-stack] td { display: block; }
+.qv table[data-fx-stack] td { width: auto !important; max-width: 100%; }
 .qv table[data-fx-stack] td:empty { display: none; }
 `;
 
@@ -189,9 +190,13 @@ export function stepsOf(html: string, parts: string[]): Steps | null {
   const of = slotParts(box, parts);
   const n = markSteps(box, of);
   if (!n) return null;
-  // The story: what step 0's block holds besides the sub-questions (never the print furniture).
-  box.querySelectorAll("[data-rg], [data-st]:not([data-st~='0']), slot, .qn, .pm, .mk, .src, .yr, .wz, .zone, [data-paper]").forEach((el) => el.remove());
-  return { of, n, story: (box.textContent ?? "").replace(/\s+/g, " ").trim(), fig: !!box.querySelector("svg, table, .dg, .qfig") };
+  // The story: what step 0's block holds besides the sub-questions (never the print furniture: a Sakarath book's
+  // section letter `.sn` and its "வினா 4A" `.qsep` too, 18 Nov 2026: "bபின்வரும் …" on his screen).
+  box.querySelectorAll("[data-rg], [data-st]:not([data-st~='0']), slot, .qn, .pm, .mk, .src, .yr, .wz, .zone, [data-paper], .sn, .qsep").forEach((el) => el.remove());
+  const fig = !!box.querySelector("svg, table, .dg, .qfig");
+  // A figure's labels are not its words ("… கீழே தரப்பட்டுள்ளன.PQR").
+  box.querySelectorAll("svg, .dg, .fg").forEach((el) => el.remove());
+  return { of, n, story: (box.textContent ?? "").replace(/\s+/g, " ").trim(), fig };
 }
 
 const fits = new WeakMap<HTMLElement, () => void>();

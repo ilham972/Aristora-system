@@ -3074,6 +3074,15 @@ chat; `convex/lib/sakarath.ts`, `convex/sakarath.ts`).
   meet the unit's own workbook (homePhotos, familyLive, helpAsks … are kept by unit). No list of grades 6–11
   (`by_grade`) ever sees a Sakarath unit; the class app's syllabus leaves them out (`src/store.ts`: `allUnits()` without
   them, `unitOf` still names them, `skUnitOf(unit)` finds one).
+- **On the phone it reads like a workbook's question** (18 Nov 2026, his "it feels like the book is a screenshot ... I
+  want to feel like this is part of the app"): the family app's paper (`PAPER_CSS` in `src/family/play.tsx`) hides the
+  printed page's furniture: the section letter's black square (`.sn`; the card's Q2 numbers it), the black "வினா 4A"
+  pill and its rule (`.qsep`, now a grey line like a workbook's source), and parts the book prints side by side in
+  half-width columns (`.pt` inline-block) go one under the other at the card's width. The folded story on a step
+  (`stepsOf`) leaves out `.sn`, `.qsep` and a figure's labels. A table printed wider than the phone stacks its cells
+  at the card's width (`[data-fx-stack] td`, every book); pairs to match keep their cards inside the card (18 px, whole
+  words first). Teachers' pages show the book as printed. A question that names a section ("(b) above") is put right
+  in its own words (`retype`).
 - **Each part's kind** (`scripts/sakarath/kinds.ts`, from the key's words with the app's own reader): a number, several
   numbers, a labelled answer, a unit, a ratio, a point, a set = boxes the phone marks (kept only when the app's v2 reading
   of that kind gives exactly the boxes and values its own reading of the words gave); an answer in 1–3 letters a box
