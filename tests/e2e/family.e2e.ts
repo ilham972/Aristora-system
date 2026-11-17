@@ -3833,7 +3833,13 @@ test("Sakarath on the phone: the app's own question, never the printed page (no 
     `<div class="qsep"><span>வினா 2A</span><i></i></div>` +
       sec("a", "A made-up lead with a figure.", pt("i", "A made-up first part"), `<div class="bk">${pt("ii", "A made-up second part")}<div class="fgb"><div class="fg"><svg viewBox="0 0 40 20" width="40mm" height="20mm"><text x="5" y="10">PQR</text></svg></div></div></div>`),
     sec("b", "Made-up statements, each to tick.", pt("i", `<table style="border-collapse:collapse">${row("A made-up statement long enough to need the whole width of the card", 1)}${row("Another made-up statement, also long enough to wrap twice", 2)}</table>`)),
-    sec("c", "Made-up pairs to match.", pt("i", "Match each made-up count to its made-up name.")),
+    // A grid printed 119 mm wide in an indented, clipped figure row (the book's .fgb): it must shrink to the card.
+    sec(
+      "c",
+      "Made-up pairs to match.",
+      `<div class="fgb"><table class="gt sm"><tr><th style="width:24mm">Day</th>${["Mon", "Tue", "Wed", "Thu", "Fri"].map((d) => `<th style="width:19mm">${d}</th>`).join("")}</tr><tr><td style="width:24mm">Made-up</td>${[8, 6, 5, 4, 2].map((n) => `<td style="width:19mm">${n}</td>`).join("")}</tr></table></div>` +
+        pt("i", "Match each made-up count to its made-up name."),
+    ),
     sec("d", "Two made-up sums.", pt("i", "The first made-up sum", side) + pt("ii", "The second made-up sum", side)),
   ];
   const box = (v: string) => ({ k: "box" as const, b: [{ v: [v] }] });
@@ -3853,7 +3859,9 @@ test("Sakarath on the phone: the app's own question, never the printed page (no 
     await ctx.db.insert("bookCss", {
       unitId: id,
       stage: "master",
-      css: ".sh { display: flex; } .sn { background: #111; color: #fff; width: 6.4mm; } .qsep { display: flex; } .qsep span { background: #111; color: #fff; } .qsep i { flex: 1; border-top: 1pt solid #111; } .rp { display: flex; } .rl { width: 8.6mm; }",
+      css:
+        ".sh { display: flex; } .sn { background: #111; color: #fff; width: 6.4mm; } .qsep { display: flex; } .qsep span { background: #111; color: #fff; } .qsep i { flex: 1; border-top: 1pt solid #111; } .rp { display: flex; } .rl { width: 8.6mm; }" +
+        " .fgb { display: flex; justify-content: center; max-width: 100%; overflow: hidden; } .sec > .fgb { margin-left: 8.8mm; } table.gt { max-width: 100%; border-collapse: collapse; } table.gt td, table.gt th { border: .9pt solid #000; padding: .3mm 2.4mm; }",
       updatedAt: 0,
     });
     return id;
@@ -3867,19 +3875,22 @@ test("Sakarath on the phone: the app's own question, never the printed page (no 
   await O.locator(".f-look-levels button", { hasText: "Level 1" }).first().click();
   await contains(O.locator(".f-qn"), "Q1");
   const paper = async () => (await O.locator(".f-paper .qv").first().boundingBox())!;
-  const inside = async (l: L, what: string) => {
-    const p = await paper();
-    for (const b of await l.all()) {
-      const r = (await b.boundingBox())!;
-      if (!(r.x >= p.x - 1 && r.x + r.width <= p.x + p.width + 1)) throw new Error(`${what} runs off the card: ${JSON.stringify(r)} in ${JSON.stringify(p)}`);
-    }
-  };
+  // Measured once the question has slid in (its paper and its pieces move together until then).
+  const inside = (l: L, what: string) =>
+    until(async () => {
+      const p = await paper();
+      for (const b of await l.all()) {
+        const r = (await b.boundingBox())!;
+        if (!(r.x >= p.x - 1 && r.x + r.width <= p.x + p.width + 1)) return false;
+      }
+      return true;
+    }, `${what} inside the card`);
   // No black letter square; "வினா 2A" a grey line (no pill); the lead uses the card's width.
   await until(async () => (await O.locator(".f-paper .lead2").count()) === 1, "Q1's lead");
   expect(await O.locator(".f-paper .sn").first().isVisible()).toBe(false);
   expect(await O.locator(".f-paper .qsep > span").first().evaluate((e) => getComputedStyle(e).backgroundColor)).toBe("rgba(0, 0, 0, 0)");
   expect(await O.locator(".f-paper .qsep > i").first().isVisible()).toBe(false);
-  expect((await O.locator(".f-paper .lead2").first().boundingBox())!.x - (await paper()).x < 20).toBe(true);
+  await until(async () => (await O.locator(".f-paper .lead2").first().boundingBox())!.x - (await paper()).x < 20, "the lead at the card's left");
   await shot(O, "fam53c-sakarath-q1");
   // The story on the second step: its words only (never "a", "வினா 2A" or the figure's "PQR").
   await O.locator(".f-stepper .f-stp").nth(1).click();
@@ -3894,12 +3905,12 @@ test("Sakarath on the phone: the app's own question, never the printed page (no 
   await jump(O, O.locator(".f-qchip", { hasText: /^3$/ }).first());
   await until(async () => (await O.locator(".f-mi").count()) === 4, "Q3's pairs");
   await inside(O.locator(".f-mi"), "a pair's card");
+  await inside(O.locator(".f-paper table.gt"), "the grid"); // shrunk to the card, never clipped by its row
   await shot(O, "fam53e-sakarath-pairs");
   // Q4: two parts the book prints side by side, one under the other at the card's width.
   await jump(O, O.locator(".f-qchip", { hasText: /^4$/ }).first());
   await until(async () => (await O.locator(".f-paper .rl", { hasText: "(i)" }).count()) === 1, "Q4");
-  const w = (await O.locator(".f-paper .pt").first().boundingBox())!.width;
-  expect(w > (await paper()).width * 0.8).toBe(true);
+  await until(async () => (await O.locator(".f-paper .pt").first().boundingBox())!.width > (await paper()).width * 0.8, "Q4's parts at the card's width");
   await noSideScroll(O);
   expect(problems.slice(before)).toEqual([]);
   await O.context().close();

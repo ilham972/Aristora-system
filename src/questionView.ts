@@ -236,8 +236,12 @@ export function drawQuestion(host: HTMLElement, html: string, css: string, extra
   if (parts) markSteps(box, slotParts(box, parts));
   root.replaceChildren(style, box);
   const fit = () => {
-    const w = box.clientWidth - 16;
-    const right = box.getBoundingClientRect().right - 8;
+    // The paper's own sides (8 px here, 12 px on the family app's paper: 18 Nov 2026, a fitted table still ran 4 px
+    // past each side there).
+    const cs = getComputedStyle(box);
+    const [pl, pr] = [parseFloat(cs.paddingLeft) || 0, parseFloat(cs.paddingRight) || 0];
+    const w = box.clientWidth - pl - pr;
+    const right = box.getBoundingClientRect().right - pr;
     const all = box.querySelectorAll<HTMLElement>(".nb, .rl, .dg, table");
     all.forEach((el) => {
       el.style.whiteSpace = "";
@@ -257,8 +261,11 @@ export function drawQuestion(host: HTMLElement, html: string, css: string, extra
       if (past(el)) el.style.whiteSpace = "normal";
     });
     // Figures and grids: shrunk to what is left of the card from where they start (an indented table fitted by width
-    // and still ran off).
+    // and still ran off). A table is measured at its cells' own width: held to 100% by its book or squeezed as a flex
+    // item, its box is narrower than its grid, so it was shrunk too little (18 Nov 2026: a Sakarath table of five days
+    // ran off both sides of the card).
     box.querySelectorAll<HTMLElement>(".dg, table").forEach((f) => {
+      if (f.tagName === "TABLE") Object.assign(f.style, { maxWidth: "none", flexShrink: "0" });
       const room = Math.min(w, right - f.getBoundingClientRect().left);
       if (f.offsetWidth > room && room > 0) f.style.zoom = String(Math.max(0.35, room / f.offsetWidth));
     });

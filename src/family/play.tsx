@@ -296,6 +296,7 @@ const PAPER_CSS = `.qv { border-radius: 14px; padding: 14px 12px 10px; -webkit-u
   padding: 0 !important; border-width: 1.5px !important; border-radius: 1.4mm !important; font-size: 3.6mm !important; }
 .qv .sh > .sn, .qv .qsep > i { display: none !important; }
 .qv .sh, .qv .qsep, .qv .pt[style*="inline-block"] { display: block !important; width: auto !important; }
+.qv .sec > .fgb { margin-left: 0 !important; }
 .qv .qsep { margin: 0 0 .3em !important; }
 .qv .qsep > span { padding: 0 !important; background: none !important; color: var(--ink3, #9d99bf) !important; font-size: 12.5px !important; font-weight: 600 !important; }`;
 
