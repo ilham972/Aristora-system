@@ -1189,6 +1189,9 @@ test("photos from home: a drawing photographed in the level, marked by a person 
   await contains(N.locator(".gear-n"), "1");
   await N.getByRole("button", { name: /Settings/ }).click();
   await contains(N.locator(".phq-sum"), "1 to mark from 1 student");
+  // The AI marking by itself (16 Nov 2026): she sees it, only the owner switches it.
+  await contains(N.locator(".phq-ai"), "The AI marks them by itself: off");
+  expect(await N.locator(".phq-ai input").count()).toBe(0);
   await N.getByRole("button", { name: /Mark them in Correction/ }).click();
   await visible(N.locator(".hl-btn.on"));
   expect(await N.locator(".hl-btn").isDisabled()).toBe(true);
@@ -1228,6 +1231,52 @@ test("photos from home: a drawing photographed in the level, marked by a person 
   await shot(N, "fam-ph04a-ai-sheet");
   await N.getByRole("button", { name: "Close" }).click();
   await until(async () => (await N.locator(".sheet").count()) === 0, "the AI sheet closed");
+  // The AI marking by itself (16 Nov 2026): a card it left (not sure) says so on its ✦; Use stays hers ("Save + thread").
+  const autoRow = await t.run(async (ctx) => {
+    const owner = (await ctx.db.query("users").collect()).find((u) => u.role === "owner")!;
+    const home = (await ctx.db.query("homePhotos").collect()).find((r) => r.q === 10)!;
+    // The ✦ above started a check (it failed: no key here): the automatic one stands in its place.
+    for (const r of await ctx.db.query("aiChecks").collect()) await ctx.db.delete(r._id);
+    const now = Date.now();
+    return await ctx.db.insert("aiChecks", {
+      sid: hana,
+      u: u01,
+      q: 10,
+      max: 2,
+      by: owner._id,
+      home: home._id,
+      auto: true,
+      out: "left",
+      outWhy: "The AI isn't sure: check it yourself.",
+      state: "done",
+      g: 1,
+      pm: [1, 0],
+      low: true,
+      raw: "{}",
+      why: [
+        { p: "a", got: 1, max: 1, his: "a name", check: "The key's name." },
+        { p: "b", got: 0, max: 1, his: "(blurry)", check: "Can't read it." },
+      ],
+      msgs: [],
+      asks: 0,
+      at: now,
+      upd: now,
+    });
+  });
+  await backend.push();
+  await visible(N.locator(".hl-card .fc-ai.on"));
+  await N.locator(".hl-card .fc-ai.on").click();
+  await contains(N.locator(".ai-auto.left"), "Checked by itself as he sent it. Not saved: The AI isn't sure");
+  await visible(N.getByRole("button", { name: "Use these marks: 1 / 2" }));
+  await contains(N.locator(".ai-use"), "Save + thread");
+  await noSideScroll(N);
+  await shot(N, "fam-ph04c-ai-auto-left");
+  await N.getByRole("button", { name: "Close" }).click();
+  await until(async () => (await N.locator(".sheet").count()) === 0, "the AI sheet closed");
+  await t.run(async (ctx) => await ctx.db.delete(autoRow));
+  await backend.push();
+  await until(async () => (await N.locator(".hl-card .fc-ai.on").count()) === 0, "the AI's row gone");
+  // (The ✦'s own check above is gone too: the next steps start from a card with no AI check.)
   // The headphones (12 Nov 2026) wait in their place, pale: nothing is marked yet, so nothing to explain online.
   expect(await N.locator(".hl-acts .hl-onl").isDisabled()).toBe(true);
   await N.setViewportSize({ width: 320, height: 640 });

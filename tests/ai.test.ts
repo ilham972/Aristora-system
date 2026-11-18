@@ -1,5 +1,5 @@
-// The AI check (14 Nov 2026): Correction's ✦ → a photo of his answer → the AI's marks and a Tamil explanation, then a
-// thread. The model is never called here: `fetch` is a stand-in that answers as the API would. Fake answers only (the
+// The AI check (14 Nov 2026): Correction's ✦ → a photo of his answer → the AI's marks (marks only since 16 Nov 2026),
+// then questions in its sheet. The automatic mode and Use on the ⌂ lane: tests/aiAuto.test.ts. The model is never called here: `fetch` is a stand-in that answers as the API would. Fake answers only (the
 // repo is public); the book is the U01 skeleton.
 
 import { convexTest } from "convex-test";
@@ -37,7 +37,9 @@ describe("the rules", () => {
     expect(tool).toMatchObject({ got: 3, partsOk: true, read: "70 · ADC = 90 (semi)" });
     expect(tool.parts[1]).toMatchObject({ p: "ii", got: 2, his: "ADC = 90 (semi)", check: "the reason is right" });
     expect(verdictWords(tool)).toBe("I marked it 3/3.\n(i) 1/1: right\n(ii) 2/2: the reason is right\nMy explanation to him: சரி");
-    expect(readVerdict('{"got":1,"ta":""}', 3, null)).toBeNull();
+    // Marks only (16 Nov 2026): no Tamil is still a verdict; its words leave out the explanation.
+    expect(readVerdict('{"got":1,"ta":""}', 3, null)).toMatchObject({ got: 1, ta: "" });
+    expect(verdictWords({ ...tool, ta: "" })).toBe("I marked it 3/3.\n(i) 1/1: right\n(ii) 2/2: the reason is right");
     expect(readVerdict("I can't read this photo.", 3, null)).toBeNull();
     expect(readVerdict('{"got":-3,"ta":"x"}', 3, null)!.got).toBe(0);
   });
@@ -122,13 +124,13 @@ describe("the AI check", () => {
     delete env().ANTHROPIC_API_KEY;
   });
 
-  test("a photo → the AI's marks and its Tamil words; a question in the thread → its answer in Tamil", async () => {
+  test("a photo → the AI's marks only (16 Nov 2026: no Tamil words); a question in the sheet → its answer in Tamil", async () => {
     const ph = await photo();
     const id = await tr().mutation(api.ai.check, { studentId: hana, unitId: u01, q: 2, max: 2, photo: ph });
     const args = { studentId: hana, unitId: u01, q: 2 };
     expect(await tr().query(api.ai.thread, args)).toMatchObject({ state: "work", msgs: [] });
 
-    marks({ asks: "two products", parts: [{ p: "i", his: "24", check: "matches the key", got: 1, max: 1 }, { p: "ii", his: "46", check: "24 × 2 is 48, not 46", got: 0, max: 1 }], got: 1, max: 2, sure: "high", ta: "ii இல் பிழை: 24 × 2 = 48." });
+    marks({ asks: "two products", parts: [{ p: "i", his: "24", check: "matches the key", got: 1, max: 1 }, { p: "ii", his: "46", check: "24 × 2 is 48, not 46", got: 0, max: 1 }], got: 1, max: 2, sure: "high" });
     await raw.action(internal.ai.run, { id });
     expect(sent).toHaveLength(1);
     expect(sent[0].headers["x-api-key"]).toBe("test-key-not-real");
@@ -139,7 +141,9 @@ describe("the AI check", () => {
     expect((sent[0].body.tools as { strict: boolean }[])[0].strict).toBe(true);
     expect(sent[0].body.output_config).toEqual({ effort: "medium" });
     expect(sent[0].body.max_tokens).toBe(16000);
-    expect(Object.keys((sent[0].body.tools as { input_schema: { properties: object } }[])[0].input_schema.properties)).toEqual(["asks", "parts", "got", "max", "sure", "ta"]);
+    expect(Object.keys((sent[0].body.tools as { input_schema: { properties: object } }[])[0].input_schema.properties)).toEqual(["asks", "parts", "got", "max", "sure"]);
+    expect(String(sent[0].body.system)).toMatch(/You only mark/);
+    expect(String(sent[0].body.system)).not.toMatch(/ONLY Tamil/);
     const first = (sent[0].body.messages as { content: { type: string; text?: string }[] }[])[0].content;
     expect(first[0].type).toBe("image");
     expect(first[1].text).toMatch(/\(i\) 24 \[1 mark\]\n\(ii\) 48 \[1 mark\]/);
@@ -151,7 +155,9 @@ describe("the AI check", () => {
       read: "24 · 46",
       low: false,
       why: [{ p: "i", got: 1, max: 1, his: "24", check: "matches the key" }, { p: "ii", got: 0, max: 1, his: "46", check: "24 × 2 is 48, not 46" }],
-      msgs: [{ r: "ai", x: "ii இல் பிழை: 24 × 2 = 48." }],
+      msgs: [],
+      auto: false,
+      out: null,
     });
 
     // Evaluation sees it and asks; the thread goes to the model with the first reply as it came.
@@ -162,11 +168,12 @@ describe("the AI check", () => {
     const msgs = sent[1].body.messages as { role: string; content: unknown }[];
     expect(msgs.map((m) => m.role)).toEqual(["user", "assistant", "user"]);
     expect(sent[1].body.tools).toBeUndefined();
-    expect(String(msgs[1].content)).toMatch(/^I marked it 1\/2\.\n\(i\) 1\/1: matches the key\n\(ii\) 0\/1: 24 × 2 is 48, not 46\nMy explanation/);
+    expect(String(msgs[1].content)).toBe("I marked it 1/2.\n(i) 1/1: matches the key\n(ii) 0/1: 24 × 2 is 48, not 46");
+    // Her first question is the thread's first message now (nothing before it to skip).
     expect(String(msgs[2].content)).toMatch(/Tamil[\s\S]*why 48\?$/);
     const th = (await tr().query(api.ai.thread, args))!;
-    expect(th.msgs.map((m) => m.r)).toEqual(["ai", "t", "ai"]);
-    expect(th.msgs[2].x).toBe("24 ஐ 2 ஆல் பெருக்கவும்.");
+    expect(th.msgs.map((m) => m.r)).toEqual(["t", "ai"]);
+    expect(th.msgs[1].x).toBe("24 ஐ 2 ஆல் பெருக்கவும்.");
     expect(th.asks).toBe(1);
 
     // A new photo starts again: the old thread and its photo go.
@@ -246,7 +253,7 @@ describe("the AI check", () => {
     expect(content.map((c) => c.type)).toEqual(["image", "image", "text"]);
     expect(content[2].text).toMatch(/3\. His answer:\n2 photos of his paper \(above\)\.\nWhat he typed on his phone at home, and what the phone did with it:\n\(i\) 1 mark; key: 24/);
     expect(await pia.query(api.ai.thread, { studentId: hana, unitId: u01, q: 2 })).toMatchObject({ state: "done", g: 2, pm: [1, 1], why: [{ p: "i", got: 1, check: "Marked by the phone." }, { p: "ii", got: 1 }] });
-    expect(String((sent[0].body as { system: string }).system)).toMatch(/yours to mark[\s\S]*ONLY Tamil/);
+    expect(String((sent[0].body as { system: string }).system)).toMatch(/yours to mark[\s\S]*"sure": "low"/);
     expect(content[2].text).toMatch(/^Question 2 \(2 marks\)\. He is in Grade 8\./);
     // Checked again: a new thread; his photos stay (they are his row's).
     await pia.mutation(api.ai.check, { studentId: hana, unitId: u01, q: 2, max: 2, home, said });

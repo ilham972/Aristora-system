@@ -10569,6 +10569,41 @@ body.tm-on .toasts {
 .phq-open {
   justify-self: start;
 }
+/* Settings → Photos: the AI marks by itself (16 Nov 2026, src/photoQueue.tsx AiAuto). */
+.phq-ai {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+}
+.phq-ai.on {
+  border-color: #6c5ce7;
+}
+.phq-ai-sw {
+  margin-top: 0;
+  font-weight: 700;
+  font-size: 15px;
+}
+.phq-tch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 14px;
+}
+.phq-tch select {
+  min-height: 40px;
+  max-width: 100%;
+  font: inherit;
+}
+.phq-today {
+  margin: 0;
+  font-size: 14px;
+}
+.phq-today b.left {
+  color: var(--amber-ink);
+}
 
 /* ---- Correction's ⌂ lane (5 Nov 2026, src/homeLane.tsx): photos from home, marked on Correction's card ---- */
 /* ⌂ after + on the names row, always in the same place: the questions waiting (amber, red after a day); dark = on. */
@@ -14283,6 +14318,19 @@ body.sb-on {
 }
 .ai-read span {
   font-weight: 700;
+}
+.ai-auto {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #efecfd;
+  color: #4b3fb8;
+  font-weight: 700;
+  font-size: 15px;
+}
+.ai-auto.left {
+  background: var(--amber-soft);
+  color: var(--amber-ink);
 }
 .ai-low {
   margin: 8px 0 0;

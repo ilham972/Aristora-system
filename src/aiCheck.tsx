@@ -2,12 +2,13 @@
 // will correct the question and if the student lost marks then a thread will open to explain ... in Tamil").
 // - The icon (✦, just before the printed question's icon): no thread yet = the camera opens; she photographs his
 //   answer, the sheet opens at once ("Checking…") and the AI's marks come in a few seconds.
-// - The sheet: the AI's marks (total, each part), what it read, "Not sure" when it isn't, "Use these marks" (gives
-//   them as her own taps would, and the card goes to the next question); when he lost marks, the explanation in Tamil
-//   as a thread, and a box to ask more (Tamil, English or Thanglish: it answers in Tamil). New photo = start again.
+// - The sheet: the AI's marks (total, each part, its reasoning), what it read, "Not sure" when it isn't, "Use these
+//   marks" (gives them as her own taps would, and the card goes to the next question), and a box to ask the AI more
+//   (Tamil, English or Thanglish: it answers in Tamil). New photo = start again. Marks only since 16 Nov 2026: no
+//   Tamil explanation (her 🤖 in his thread explains when she wants).
 // - The ⌂ lane's card (14 Nov 2026, his screenshot: "I can't see the AI icon in the homework correction tab"): the
-//   same ✦, no camera: the AI reads the photos he sent and what he typed (his boxes, his reasons); Use = her marks lit
-//   on the card, and she taps Save as before.
+//   same ✦, no camera: the AI reads the photos he sent and what he typed (his boxes, his reasons); Use = Save on the
+//   server (`ai.use`), his thread opening when he lost marks. A card the automatic mode left (unsure, …) says why.
 // - The server: convex/ai.ts (the key only in Convex; checks a day capped), its rules convex/lib/ai.ts.
 
 import { useEffect, useRef, useState } from "preact/hooks";
@@ -31,6 +32,10 @@ export type AiThread = {
   why: { p: string; got: number; max: number; his: string; check: string }[] | null;
   /** What the AI sent when it couldn't be read as marks. */
   bad: string | null;
+  /** The automatic mode checked it by itself; what it did (full / lost = saved, left = for her) and why. */
+  auto: boolean;
+  out: "full" | "lost" | "left" | null;
+  outWhy: string | null;
   msgs: { r: "ai" | "t" | "s"; x: string; at: number }[];
   asks: number;
   asksMax: number;
@@ -127,7 +132,7 @@ export function useAiCheck(p: {
         type="button"
         class={`fc-tmb fc-ai${t ? " on" : ""}${working ? " work" : ""}`}
         disabled={p.off && !t}
-        aria-label={t ? `Q${p.q}: the AI's check and its Tamil explanation` : p.home ? `Q${p.q}: AI check of what he sent` : `Q${p.q}: AI check: photograph his answer`}
+        aria-label={t ? `Q${p.q}: the AI's check` : p.home ? `Q${p.q}: AI check of what he sent` : `Q${p.q}: AI check: photograph his answer`}
         onClick={() => (t || sending ? setOpen(true) : again())}
       >
         <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="currentColor">
@@ -276,9 +281,16 @@ function AiSheet(props: {
           </p>
         )
       )}
-      {marked && t!.low && <p class="ai-low">The AI isn't sure about this photo: check it yourself.</p>}
+      {t?.auto && (
+        // The automatic mode (16 Nov 2026): it checked this by itself as he sent it; left here = not saved, and why.
+        <p class={`ai-auto${t.out === "left" || t.state === "fail" ? " left" : ""}`}>
+          🤖 Checked by itself as he sent it.
+          {t.out === "left" ? ` Not saved: ${t.outWhy ?? "check it yourself."}` : t.state === "fail" ? " It didn't work: check it yourself." : ""}
+        </p>
+      )}
+      {marked && t!.low && !(t!.auto && t!.out === "left") && <p class="ai-low">The AI isn't sure about this photo: check it yourself.</p>}
       {t && t.msgs.length > 0 && (
-        <div class="ai-thread" aria-label="The AI's explanation">
+        <div class="ai-thread" aria-label="Your questions and the AI's answers">
           {t.msgs.map((m, i) => (
             <p key={i} class={`ai-msg ${m.r}`} lang={m.r === "ai" ? "ta" : undefined}>
               {m.r === "s" && <b class="ai-who">{props.who}, in his thread:</b>}
@@ -305,7 +317,7 @@ function AiSheet(props: {
         </button>
       )}
       <p class="muted small ai-note">
-        {props.home && lost ? "Save + thread = his marks saved, and the AI explains it in his thread and answers his questions there. " : ""}
+        {props.home && lost ? "Save + thread = his marks saved and his thread opens: explain there, or tap 🤖 in it. " : ""}
         The AI can be wrong: your marks count.{marked ? ` Asked ${t!.asks} of ${t!.asksMax}.` : ""}
       </p>
       <div ref={end} />

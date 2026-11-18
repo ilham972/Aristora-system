@@ -32,6 +32,7 @@ import type * as family from "../family.js";
 import type * as focus from "../focus.js";
 import type * as help from "../help.js";
 import type * as lib_ai from "../lib/ai.js";
+import type * as lib_aiAuto from "../lib/aiAuto.js";
 import type * as lib_appTime from "../lib/appTime.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_backend from "../lib/backend.js";
@@ -133,6 +134,7 @@ declare const fullApi: ApiFromModules<{
   focus: typeof focus;
   help: typeof help;
   "lib/ai": typeof lib_ai;
+  "lib/aiAuto": typeof lib_aiAuto;
   "lib/appTime": typeof lib_appTime;
   "lib/auth": typeof lib_auth;
   "lib/backend": typeof lib_backend;

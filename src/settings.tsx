@@ -1172,6 +1172,8 @@ function describe(e: Doc<"events">): string {
       const [g, on] = v.split(" ");
       return on === "on" ? `Grade ${g}: exam mode on (each Stage opens its Sakarath book)` : `Grade ${g}: exam mode off (the past papers again)`;
     }
+    case "ai-auto":
+      return v === "on" ? "the AI marks photos from home by itself" : v === "off" ? "the AI no longer marks photos from home by itself" : `the AI's threads go to ${v.replace(/^threads /, "")}`;
     case "check-each":
       return v === "on" ? "the phone checks after every question again" : "the phone checks a level once, at its end";
     case "family-photo":

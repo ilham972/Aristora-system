@@ -5173,6 +5173,40 @@ test("Sakarath: Books → S shows a unit's Sakarath book (gold when it is in the
   expect(problems).toEqual([]);
 });
 
+test("the AI marks by itself: the owner's switch in Settings → Photos, the teacher of its threads, today's numbers (16 Nov 2026)", async () => {
+  const backend = await newClass();
+  await addPerson(backend.t, { name: "Nila", token: "nila-photos-token-0123456789abcdefghijklmnopq", tabs: [], can: ["photos"] });
+  const F = await phone(backend, "focus");
+  await F.getByRole("button", { name: "Settings" }).click();
+  await F.getByRole("button", { name: "Photos", exact: true }).click();
+  const card = F.locator(".phq-ai");
+  await contains(card, "The AI marks them by itself");
+  await count(F.locator(".phq-tch"), 0);
+  // The box follows the server (it ticks once saved).
+  await F.getByRole("checkbox", { name: /The AI marks them by itself/ }).click();
+  await visible(F.locator(".phq-ai.on .phq-tch select"));
+  // Its threads go to the owner until he picks someone.
+  await contains(card, "lost marks open his thread for Owner");
+  await F.locator(".phq-tch select").selectOption({ label: "Nila" });
+  const cfg = async () => await backend.t.run(async (ctx) => (await ctx.db.query("meta").withIndex("by_key", (q) => q.eq("key", "ai.auto")).first())?.value as { on: boolean; t: string } | undefined);
+  const nila = await backend.t.run(async (ctx) => (await ctx.db.query("users").collect()).find((u) => u.name === "Nila")!._id);
+  await until(async () => (await cfg())?.t === nila, "the teacher saved");
+  await contains(card, "for Nila");
+  await contains(F.locator(".phq-today"), "Today: 0 marked by the AI");
+  // No key in Convex here: it says everything waits in ⌂ until the owner adds it.
+  await contains(card.locator(".ai-low"), "ANTHROPIC_API_KEY");
+  for (const w of [390, 360, 320]) {
+    await F.setViewportSize({ width: w, height: 760 });
+    expect(await F.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await card.evaluate((el) => el.scrollIntoView({ block: "end" }));
+    await shot(F, `ai04-auto-${w}`);
+  }
+  await F.getByRole("checkbox", { name: /The AI marks them by itself/ }).click();
+  await until(async () => (await cfg())?.on === false, "switched off");
+  await count(F.locator(".phq-tch"), 0);
+  await F.context().close();
+});
+
 test("Update: an older copy of the app says so at the upload, and Update opens Settings → Books again", async () => {
   const backend = await newClass();
   const C = await phone(backend, "focus");

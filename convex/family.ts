@@ -114,6 +114,7 @@ import { accountOf, feeCfg } from "./lib/feeRows";
 import { chestSet, walletOf } from "./lib/coins";
 import { levelOn, questsOf, roadChestLevels, roadChestState, shieldDays, type Quest, type RoadChest } from "./lib/quests";
 import { seenOf, seenOn, type Seen } from "./online";
+import { queueAuto } from "./lib/aiAuto";
 
 const token = v.optional(v.string());
 
@@ -691,7 +692,7 @@ async function sayReason(ctx: MutationCtx, studentId: Id<"students">, unitId: Id
     .filter((x) => x.eq(x.field("kind"), "part"))
     .first();
   if (!row) {
-    await ctx.db.insert("homePhotos", { studentId, unitId, n, q, kind: "part", files: [], said: true, at: now, state: "waiting" });
+    await queueAuto(ctx, await ctx.db.insert("homePhotos", { studentId, unitId, n, q, kind: "part", files: [], said: true, at: now, state: "waiting" }));
     return;
   }
   for (const f of row.askVoice ? [...row.files, row.askVoice] : row.files) await ctx.storage.delete(f);
@@ -711,6 +712,7 @@ async function sayReason(ctx: MutationCtx, studentId: Id<"students">, unitId: Id
     byId: undefined,
     gone: undefined,
   });
+  await queueAuto(ctx, row._id);
 }
 
 /**
@@ -1129,8 +1131,10 @@ export const photoSend = mutation({
     } else if (row) {
       for (const old of row.files) if (!args.files.includes(old)) await ctx.storage.delete(old);
       await ctx.db.patch(row._id, { files: args.files, at: now, state: "waiting", why: undefined, note: undefined, seen: undefined, gone: undefined });
+      // The AI's automatic mode (16 Nov 2026): checked as it arrives (never his answer to a teacher's message: hers).
+      await queueAuto(ctx, row._id);
     } else {
-      await ctx.db.insert("homePhotos", { studentId: s._id, unitId: args.unitId, n: args.n, q: args.q, kind, files: args.files, at: now, state: "waiting" });
+      await queueAuto(ctx, await ctx.db.insert("homePhotos", { studentId: s._id, unitId: args.unitId, n: args.n, q: args.q, kind, files: args.files, at: now, state: "waiting" }));
     }
     return true;
   },

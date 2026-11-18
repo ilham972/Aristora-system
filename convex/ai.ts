@@ -5,22 +5,40 @@
 // - photoUrl / check / ask: Correction, Evaluation or Photos (the ⌂ lane: his own photos and typed words, no camera);
 //   thread: the same. One thread per student, unit and question (a
 //   new photo starts it again). The AI's call runs as a scheduled step (`run`), so the phone only watches `thread`.
+// - Marks only since 16 Nov 2026 (his words: "AI will consume too much token ... just do the correction only"): no
+//   Tamil words; a teacher's 🤖 in his thread explains (`explain`).
+// - use (16 Nov 2026, his report: "if the AI do the correction, most of the time that not save"): the ⌂ lane's Use
+//   saves the AI's marks on the server (`settle`), and opens his thread when he lost marks.
+// - The automatic mode (16 Nov 2026, his ask: "if the automatic mode is on in the setting, then correction will happen
+//   automatically. If it is full marks, then don't need to create the thread"): what he sends from home for a teacher
+//   (a drawing's photos, a typed reason) is checked as it arrives (`auto`, queued by family.ts through
+//   lib/aiAuto.ts); sure = saved by itself as ARISTORA AI (`settle`), lost marks = his thread opens with the teacher
+//   picked (Settings → Photos); unsure, failed, parts it can't place or the day's most reached = left in the ⌂ lane.
 
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { aiWhy } from "./schema";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalAction, internalQuery, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { actor, viewer } from "./lib/auth";
-import { fail, keyRow } from "./lib/backend";
+import { fail, keyRow, log } from "./lib/backend";
+import { autoCfg } from "./lib/aiAuto";
 import { slDayStart } from "./lib/day";
 import { internalMutation, mutation } from "./lib/fn";
 import { lastWords, uKey } from "./lib/chat";
 import { askOf, asksIn } from "./lib/help";
 import { alertStudent } from "./lib/push";
+import { usCfg } from "./lib/us";
+import { openThread } from "./help";
+import { markPhoto, photoItem } from "./photos";
 import {
   AI_ASKS_MAX,
+  AI_AUTO_DAY_MAX,
+  AI_AUTO_KEY,
+  autoLine,
+  laneMarks,
+  saidWords,
   AI_DAY_MAX,
   AI_KEEP_MS,
   AI_MODEL_DEFAULT,
@@ -176,6 +194,10 @@ export const thread = query({
       low: !!r.low,
       why: r.why ?? null,
       bad: r.state === "fail" ? (r.bad ?? null) : null,
+      /** The automatic mode: it checked by itself; what it did (full, lost = saved; left = for her, and why). */
+      auto: !!r.auto,
+      out: r.out ?? null,
+      outWhy: r.outWhy ?? null,
       msgs: r.msgs,
       asks: r.asks,
       asksMax: AI_ASKS_MAX,
@@ -230,10 +252,13 @@ export const save = internalMutation({
         upd: now,
         ...(back ? { asks: Math.max(0, r.asks - 1) } : {}),
         ...(args.bad !== undefined ? { bad: args.bad } : {}),
+        // The automatic mode's first check failed: the card stays in the lane for a teacher.
+        ...(r.auto && !r.raw && !r.out ? { out: "left" as const, outWhy: args.err ?? "The AI didn't answer." } : {}),
       });
       return;
     }
-    const msgs = [...r.msgs, { r: "ai" as const, x: args.x ?? "", at: now }];
+    // Marks only (16 Nov 2026): a check brings no words; an answer to a question in the sheet does.
+    const msgs = args.x ? [...r.msgs, { r: "ai" as const, x: args.x, at: now }] : r.msgs;
     await ctx.db.patch(r._id, {
       state: "done",
       err: undefined,
@@ -241,6 +266,7 @@ export const save = internalMutation({
       upd: now,
       ...(args.raw !== undefined ? { raw: args.raw, g: args.g, pm: args.pm, read: args.read, low: args.low, why: args.why, bad: undefined } : {}),
     });
+    if (args.raw !== undefined && r.auto) await autoSettle(ctx, r._id);
   },
 });
 
@@ -276,7 +302,8 @@ export const run = internalAction({
       // Its first answer was the mark tool's: here in words (the thread has no tool), then each question and answer.
       const first0 = readVerdict(row.raw!, row.max, aiParts(k, row.max));
       messages.push({ role: "assistant", content: first0 ? verdictWords(first0) : row.raw! });
-      for (const m of row.msgs.slice(1)) {
+      // A check before 16 Nov 2026 began the thread with its Tamil words (in verdictWords above); marks only since.
+      for (const m of row.msgs.slice(first0 && !first0.ta ? 0 : 1)) {
         const role = m.r === "ai" ? "assistant" : "user";
         if (m.r !== "ai") asker = m.r;
         const text = m.r === "ai" ? m.x : `${followWords(m.r)}\n\n${m.r === "s" ? "He asks" : "She asks"}: ${m.x}`;
@@ -362,7 +389,12 @@ export const post = mutation({
   handler: async (ctx, args) => {
     const me = await actor(ctx, args.token, [...WHO]);
     const r = await ctx.db.get(args.id);
-    if (!r || r.g === undefined || !r.msgs.length) fail("The AI has nothing to send yet.");
+    if (!r || r.g === undefined || !r.msgs.length) {
+      // Marks only (16 Nov 2026): a done check has no words to send (a page from before still calls this).
+      if (r && r.g !== undefined) return;
+      fail("The AI has nothing to send yet.");
+    }
+    if (!readVerdict(r.raw ?? "", r.max, null)?.ta || r.msgs[0].r !== "ai") return;
     const a = await askOf(ctx, r.sid, r.u, r.q);
     if (!a || a.st !== "open") fail("His thread isn't open.");
     const room = await ctx.db.get(a.rid);
@@ -613,6 +645,202 @@ export const teachState = query({
     if (!t) return null;
     const stuck = t.state === "work" && Date.now() - t.at > AI_STUCK_MS;
     return { state: stuck ? ("fail" as const) : t.state, err: stuck ? "The AI didn't answer." : (t.err ?? null), at: t.at, ask: !!t.ask };
+  },
+});
+
+/** A thrown `fail` as words (it threw before writing anything). */
+const failText = (e: unknown) => (e instanceof ConvexError ? String(e.data) : e instanceof Error ? e.message : String(e));
+
+/** The teacher of the threads the AI opens by itself: the one picked (still in the class), else the owner. */
+async function autoTeacher(ctx: QueryCtx, t: string | null): Promise<Doc<"users"> | null> {
+  const id = t ? ctx.db.normalizeId("users", t) : null;
+  const u = id ? await ctx.db.get(id) : null;
+  if (u?.active) return u;
+  return (await ctx.db.query("users").collect()).find((x) => x.role === "owner" && x.active) ?? null;
+}
+
+/** The automatic checks of today (the whole centre). */
+async function autoRows(ctx: QueryCtx, now: number): Promise<Doc<"aiChecks">[]> {
+  return (
+    await ctx.db
+      .query("aiChecks")
+      .withIndex("by_at", (x) => x.gte("at", slDayStart(now)))
+      .collect()
+  ).filter((r) => r.auto);
+}
+
+type Settled = { out: "full" | "lost" | "left"; why?: string; total?: number; max?: number; thread?: "open" | "again" | "none" };
+
+/**
+ * The AI's marks saved on his ⌂ card (her Use, or the AI by itself: `who.ai`): the photo marked, and when he lost marks
+ * his thread opens (Us open, a real student) with `teacher` as its teacher. Nothing saved = `left` and why (the
+ * automatic mode leaves the card in the lane; her Use shows why). Never throws: a refusal is said, nothing half-written.
+ */
+async function settle(ctx: MutationCtx, r: Doc<"aiChecks">, who: { name: string; id?: Id<"users">; ai?: true }, teacher: Doc<"users">, note?: string): Promise<Settled> {
+  if (!r.home) return { out: "left", why: "Not a card from home." };
+  if (r.g === undefined) return { out: "left", why: "The AI has no marks yet." };
+  const h = await ctx.db.get(r.home);
+  if (!h) return { out: "left", why: "His photos are gone." };
+  if (h.state !== "waiting") return { out: "left", why: h.cls ? "Corrected in class." : "Someone already marked it." };
+  const s = await ctx.db.get(h.studentId);
+  if (!s || s.archived) return { out: "left", why: "This student isn't in the class." };
+  const it = await photoItem(ctx, h, s);
+  if (!it) return { out: "left", why: "His book or its key is gone." };
+  let done: Awaited<ReturnType<typeof markPhoto>>;
+  try {
+    if (it.hc || it.got !== null) {
+      // Corrected in class meanwhile (his paper): the card only closes.
+      await markPhoto(ctx, h, who, {});
+      return { out: "left", why: "Corrected in class." };
+    }
+    const lm = laneMarks(it, r.g, r.pm ?? null);
+    if ("no" in lm) return { out: "left", why: lm.no };
+    done = await markPhoto(ctx, h, who, { got: lm.got, ...(lm.pm ? { pm: lm.pm } : {}), ...(note ? { note } : {}) });
+  } catch (e) {
+    return { out: "left", why: failText(e) };
+  }
+  if (done.total === null) return { out: "left", why: "Corrected in class." };
+  const { total, max } = done;
+  if (total >= max) return { out: "full", total, max };
+  if (s.demo || s.test) return { out: "lost", total, max, thread: "none", why: "Demo and practice students have no phone." };
+  if (!(await usCfg(ctx)).open) return { out: "lost", total, max, thread: "none", why: "Us isn't open on the students' phones (Settings → Community)." };
+  try {
+    const line = who.ai ? { n: AI_NAME, ...autoLine(s.name.split(" ")[0], h.q, total, max, teacher.name) } : undefined;
+    const th = await openThread(ctx, teacher, s, h.unitId, h.q, line);
+    return { out: "lost", total, max, thread: th.again ? "again" : "open" };
+  } catch (e) {
+    return { out: "lost", total, max, thread: "none", why: failText(e) };
+  }
+}
+
+/**
+ * Use on the ⌂ lane (her tap on the AI's marks): saved here on the server as hers, and his thread opens with her as its
+ * teacher when he lost marks (16 Nov 2026: the phone's own arithmetic left most cards unsaved). Her words go with it.
+ */
+export const use = mutation({
+  args: { token, id: v.id("aiChecks"), note: v.optional(v.string()) },
+  handler: async (ctx, args): Promise<{ total: number; max: number; thread: "open" | "again" | "none"; why: string | null }> => {
+    const me = await actor(ctx, args.token, ["photos"]);
+    const r = await ctx.db.get(args.id);
+    if (!r || !r.home) fail("This AI check is gone. Check again.");
+    if (r.state === "work" && r.g === undefined) fail("The AI is still checking.");
+    if (r.g === undefined) fail("The AI gave no marks: check again, or mark it yourself.");
+    const res = await settle(ctx, r, { name: me.name, id: me._id }, me, args.note?.trim() || undefined);
+    if (res.out === "left") fail(res.why ?? "Not saved: mark it yourself.");
+    await ctx.db.patch(r._id, { out: res.out, outWhy: undefined });
+    return { total: res.total!, max: res.max!, thread: res.thread ?? "none", why: res.why ?? null };
+  },
+});
+
+/**
+ * The automatic mode (16 Nov 2026): one thing he sent from home for a teacher (a drawing's photos, a typed reason) is
+ * checked as it arrives. Queued by family.ts (lib/aiAuto.ts) when the owner's switch is on. A demo or practice student,
+ * a teacher's message on it, a level corrected in class, or the day's most reached: left to the teachers (no call).
+ */
+export const auto = internalMutation({
+  args: { home: v.id("homePhotos") },
+  handler: async (ctx, args) => {
+    const cfg = await autoCfg(ctx);
+    if (!cfg.on) return;
+    const h = await ctx.db.get(args.home);
+    if (!h || h.state !== "waiting" || h.kind !== "part" || h.cls || h.free || h.ask) return;
+    const s = await ctx.db.get(h.studentId);
+    if (!s || s.archived || s.demo || s.test) return;
+    const teacher = await autoTeacher(ctx, cfg.t);
+    if (!teacher) return;
+    const now = Date.now();
+    if ((await autoRows(ctx, now)).length >= AI_AUTO_DAY_MAX || (await usedToday(ctx, now)) >= AI_DAY_MAX) return;
+    const it = await photoItem(ctx, h, s);
+    if (!it || it.hc || it.got !== null) return;
+    for (const r of await ctx.db
+      .query("aiChecks")
+      .withIndex("by_q", (x) => x.eq("sid", h.studentId).eq("u", h.unitId).eq("q", h.q))
+      .collect()) {
+      await dropRow(ctx, r);
+    }
+    const said = saidWords(it).trim().slice(0, AI_SAID_MAX);
+    const fixed = it.split && it.parts.length <= 20 ? it.parts.map((p) => p.phone) : null;
+    const id = await ctx.db.insert("aiChecks", {
+      sid: h.studentId,
+      u: h.unitId,
+      q: h.q,
+      max: it.max,
+      by: teacher._id,
+      home: h._id,
+      ...(said ? { said } : {}),
+      ...(fixed ? { fixed } : {}),
+      auto: true,
+      state: "work",
+      msgs: [],
+      asks: 0,
+      at: now,
+      upd: now,
+    });
+    await ctx.scheduler.runAfter(0, internal.ai.run, { id });
+  },
+});
+
+/** After an automatic check's marks came: saved by itself when it is sure, else left in the lane (and why). */
+async function autoSettle(ctx: MutationCtx, id: Id<"aiChecks">): Promise<void> {
+  const r = await ctx.db.get(id);
+  if (!r || !r.auto || r.out) return;
+  const leave = async (why: string) => await ctx.db.patch(r._id, { out: "left", outWhy: why });
+  if (r.low) return await leave("The AI isn't sure: check it yourself.");
+  if (!(await autoCfg(ctx)).on) return await leave("The automatic mode was switched off.");
+  const teacher = await ctx.db.get(r.by);
+  if (!teacher?.active) return await leave("The teacher of its threads isn't in the class.");
+  const res = await settle(ctx, r, { name: AI_NAME, ai: true }, teacher);
+  await ctx.db.patch(r._id, { out: res.out, outWhy: res.out === "left" ? res.why : res.thread === "none" ? res.why : undefined });
+}
+
+/** Settings → Photos: the automatic mode (on, the teacher of its threads) and what it did today. */
+export const autoState = query({
+  args: { token },
+  handler: async (ctx, args) => {
+    const me = await viewer(ctx, args.token, "photos");
+    const cfg = await autoCfg(ctx);
+    const t = await autoTeacher(ctx, cfg.t);
+    const rows = await autoRows(ctx, Date.now());
+    const owner = me.role === "owner";
+    return {
+      on: cfg.on,
+      tid: t?._id ?? null,
+      tname: t?.name ?? null,
+      key: !!env("ANTHROPIC_API_KEY"),
+      today: {
+        n: rows.length,
+        full: rows.filter((r) => r.out === "full").length,
+        lost: rows.filter((r) => r.out === "lost").length,
+        left: rows.filter((r) => r.out === "left" || (!r.out && (r.state === "fail" || (r.state === "work" && Date.now() - r.upd > AI_STUCK_MS)))).length,
+        most: AI_AUTO_DAY_MAX,
+      },
+      teachers: owner
+        ? (await ctx.db.query("users").collect())
+            .filter((u) => u.active)
+            .map((u) => ({ id: u._id, n: u.name }))
+            .sort((a, b) => a.n.localeCompare(b.n))
+        : [],
+    };
+  },
+});
+
+/** The owner's switch, and the teacher of the AI's threads. */
+export const setAuto = mutation({
+  args: { token, on: v.boolean(), tid: v.optional(v.id("users")) },
+  handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["owner"]);
+    const t = args.tid ? await ctx.db.get(args.tid) : null;
+    if (args.tid && !t?.active) fail("That teacher isn't in the class.");
+    const cfg = await autoCfg(ctx);
+    const value = { on: args.on, t: args.tid ?? cfg.t };
+    const row = await ctx.db
+      .query("meta")
+      .withIndex("by_key", (q) => q.eq("key", AI_AUTO_KEY))
+      .first();
+    if (row) await ctx.db.patch(row._id, { value });
+    else await ctx.db.insert("meta", { key: AI_AUTO_KEY, value });
+    if (cfg.on !== args.on) await log(ctx, null, Date.now(), { kind: "ai-auto", value: args.on ? "on" : "off" });
+    if (t && String(cfg.t) !== String(args.tid)) await log(ctx, null, Date.now(), { kind: "ai-auto", value: `threads ${t.name}` });
   },
 });
 

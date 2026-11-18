@@ -1828,6 +1828,14 @@ export default defineSchema({
     fixed: v.optional(v.array(v.union(v.number(), v.null()))),
     /** His thread (Us), once the AI's explanation went there: his questions in it are answered by the AI. */
     rid: v.optional(v.id("usRooms")),
+    /**
+     * The automatic mode (16 Nov 2026): checked by itself as he sent it (`by` = the teacher of its threads). What it did:
+     * full / lost = his marks saved (lost: his thread opened), left = for a teacher in the ⌂ lane, `outWhy` says why.
+     * Her Use sets `out` too.
+     */
+    auto: v.optional(v.boolean()),
+    out: v.optional(v.union(v.literal("full"), v.literal("lost"), v.literal("left"))),
+    outWhy: v.optional(v.string()),
     asks: v.number(),
     at: v.number(),
     upd: v.number(),

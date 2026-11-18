@@ -341,6 +341,16 @@ WHY=1 npx vitest run -c vitest.perf.config.ts -t "lab" --reporter=verbose # each
   **Each model has its own request rules**: Sonnet 5.5 returns a 400 for a forced `tool_choice` ("any"/"tool"),
   `thinking: disabled`, sampling parameters and assistant prefill (its migration guide). A new model goes through
   `modelSettings` in `convex/lib/ai.ts`; read its "what's new" page before switching.
+- **A photo from home is marked in ONE place: `markPhoto` in `convex/photos.ts`** (16 Nov 2026), and a thread for a
+  lost question opens in one: `openThread` in `convex/help.ts`. `photos.mark`, `ai.use` and the AI's automatic mode
+  all go through them; anything new that marks a ⌂ card uses them too (never a copy: the phone's own copy of the sums
+  is why Use left one-part cards unsaved). `settle` in `convex/ai.ts` catches their `fail` (both throw before writing),
+  so an automatic check never rolls back or sticks in "work". The AI marking by itself sets `rememberActor` to its name:
+  the history and the dashboards count it apart from the teachers.
+- **convex-test: never call `raw.run` (or anything that does, like a test's `photoRow()`) inside another `raw.run`**
+  (16 Nov 2026): the inner one waits for the outer to end, and the test hangs until its timeout with no error. Read the
+  id first, then write. And a scheduled step's job stays "pending" in `_scheduled_functions` when the test runs it by
+  hand (fake `setTimeout`): `tests/aiAuto.test.ts` runs `ai:auto` from the pending list and then the AI's `run`.
 - **Two animations of `transform` on one element: neither is the graphics chip's** (13 Nov 2026). The owl's cap had its
   drop-in and its hop in one `animation:` list; Chrome kept both on the main thread for good, and the whole owl was
   drawn again on every frame for as long as an owl was on the screen (a quarter of a slow phone's time; nothing looked

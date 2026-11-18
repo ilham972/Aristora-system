@@ -382,7 +382,7 @@ function HomeCard(props: {
   // phone gave them, hers to change); his working = the whole question's.
   const edit = it.split && !inClass;
   const left = it.parts.map((p) => part && p.phone === null);
-  // Her marks as numbers to save (from the card's taps, or the AI's when she taps Use: `save` takes them straight).
+  // Her marks as numbers to save (the card's taps; the AI's Use is saved on the server: `useAi`).
   const figs = (m: (number | null)[], o: number | null, po: number) => {
     const herGot = part ? (it.split ? (m.every((g, j) => !left[j] || g !== null) ? m.reduce<number>((s, g, j) => s + (left[j] ? (g ?? 0) : 0), 0) : null) : o) : null;
     // The phone's parts now (as the phone gave them, or as she changed them).
@@ -402,9 +402,10 @@ function HomeCard(props: {
     fn();
   };
   // The AI check (14 Nov 2026, his screenshot): no camera here: the AI reads his photos and what he typed, and marks
-  // only the parts the phone left (the phone's parts keep their marks: `fixed`). Use (his ask the same night: "the
-  // marks are not saving ... the thread is not opening") = Save with the AI's marks at once; lost marks = his thread
-  // opens (as 🎧 does) and the AI's Tamil explanation is its next message, and the AI answers his questions there.
+  // only the parts the phone left (the phone's parts keep their marks: `fixed`). Use = Save with the AI's marks, done
+  // on the server since 16 Nov 2026 (`ai.use`; his report: "most of the time that not save": the phone's own sums left
+  // a one-part card unsaved); lost marks = his thread opens with her as its teacher, no AI words (marks only: her 🤖 in
+  // the thread explains). The automatic mode (Settings → Photos) does the same by itself; what it left shows here.
   const ai = useAiCheck({
     studentId: it.student.id,
     unitId: it.unit.id,
@@ -414,39 +415,42 @@ function HomeCard(props: {
     parts: it.split ? it.parts.map((p) => p.p) : null,
     home: { id: it.id, said: saidWords(it), fixed: part && it.split ? it.parts.map((p) => p.phone) : null },
     off: inClass,
-    onUse: (g, pm) => {
-      if (inClass || busy) return;
-      let f: ReturnType<typeof figs>;
-      if (it.split) {
-        if (!pm || pm.length !== it.parts.length) {
-          toast(`The AI gave ${g}/${it.max}: tap each part yourself.`);
-          return;
-        }
-        // The AI's marks only where the phone left the part; the rest as on the card.
-        const m = it.parts.map((p, j) => (left[j] || !part ? Math.min(pm[j], p.m) : marks[j]));
-        setMarks(m);
-        f = figs(m, one, phoneOne);
-      } else if (part) {
-        const o = Math.max(0, Math.min(it.teach, g - (it.teach < it.max ? phoneOne : 0)));
-        setOne(o);
-        f = figs(marks, o, phoneOne);
-      } else {
-        setOne(g);
-        f = figs(marks, g, phoneOne);
-      }
-      const lostNow = f.total !== null && f.total < it.max;
-      void save(lostNow && !it.student.demo, f, true);
-    },
+    onUse: () => void useAi(),
   });
+  const useAi = async () => {
+    if (inClass || busy || !ai.id) return;
+    setBusy(true);
+    setErr(null);
+    let res: { total: number; max: number; thread: "open" | "again" | "none"; why: string | null };
+    try {
+      res = await mutate(api.ai.use, { id: ai.id, ...(note.trim() ? { note: note.trim() } : {}) });
+    } catch (e) {
+      setErr(errorText(e));
+      setBusy(false);
+      return;
+    }
+    const first = it.student.name.split(" ")[0];
+    const lostNow = res.total < res.max;
+    if (lostNow && res.thread !== "none") tone("call");
+    else tone("done");
+    toast(
+      !lostNow
+        ? `🤖 Q${it.q} saved ${res.total}/${res.max}.`
+        : res.thread === "none"
+          ? `🤖 Q${it.q} saved ${res.total}/${res.max}, but no thread${res.why ? `: ${res.why}` : "."}`
+          : `🤖 Q${it.q} saved ${res.total}/${res.max}. ${first}'s thread is open: explain there, or tap 🤖 in it.`,
+    );
+    props.onDone(res.total);
+  };
   // Explain online (12 Nov 2026, his idea: "put the headset icon same like in the consult page"; built after marking,
   // his yes: before her marks a photo question isn't lost, so there is nothing to explain yet). Always in its place on
   // the pad, pale until the marks she tapped are below the maximum; one tap = Save, then his thread opens with her as
   // its teacher (Consultation's call: `help.tcall`). His photo and her marks are in the thread already.
   const canOnline = ready && lost && !inClass && !it.student.demo;
-  /** Save her marks (`f`: the card's, or the AI's); `online` opens his thread; `byAi` = Use: the AI's words go there. */
-  const save = async (online = false, f = fig, byAi = false) => {
+  /** Save her marks; `online` opens his thread. */
+  const save = async (online = false, f = fig) => {
     const okNow = !busy && (inClass || f.total !== null);
-    if ((!byAi && Date.now() - born.current < TAP_GUARD_MS * 2) || !okNow || (online && !(f.total !== null && f.total < it.max && !inClass && !it.student.demo))) return;
+    if (Date.now() - born.current < TAP_GUARD_MS * 2 || !okNow || (online && !(f.total !== null && f.total < it.max && !inClass && !it.student.demo))) return;
     const { herGot: hg, phoneNow: pn, total: tt, m } = f;
     setBusy(true);
     setErr(null);
@@ -468,18 +472,12 @@ function HomeCard(props: {
     const first = it.student.name.split(" ")[0];
     if (!online) {
       tone("done");
-      if (byAi) toast(`🤖 Q${it.q} saved ${tt}/${it.max}.`);
     } else {
       // Her marks are saved whatever happens next: a thread that can't open (Us closed on the phones) is only said.
       try {
         await mutate(api.help.tcall, { studentId: it.student.id, unitId: it.unit.id, q: it.q });
-        if (byAi && ai.id) await mutate(api.ai.post, { id: ai.id });
         tone("call");
-        toast(
-          byAi
-            ? `🤖 Q${it.q} saved ${tt}/${it.max}. The AI explained it in ${first}'s thread and answers his questions there.`
-            : `🎧 Q${it.q} saved ${tt}/${it.max}. ${first}'s thread is open: explain in Us → Thread.`,
-        );
+        toast(`🎧 Q${it.q} saved ${tt}/${it.max}. ${first}'s thread is open: explain in Us → Thread.`);
       } catch (e) {
         tone("done");
         toast(`Q${it.q} saved ${tt}/${it.max}, but no thread: ${errorText(e)}`);

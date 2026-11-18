@@ -29,7 +29,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { query, type MutationCtx } from "./_generated/server";
 import { internalMutation, mutation } from "./lib/fn";
 import { actor, viewer } from "./lib/auth";
-import { asMaster, bookFor, fail, keyRow, log, masterState, progressFor } from "./lib/backend";
+import { asMaster, bookFor, fail, keyRow, log, masterState, progressFor, rememberActor } from "./lib/backend";
 import { classClosed, phoneKeyFor, photosRequired, REQUIRED_KEY } from "./lib/homeWork";
 import { alertStudent } from "./lib/push";
 import type { MState } from "./lib/master";
@@ -394,11 +394,32 @@ export const mark = mutation({
   },
   handler: async (ctx, args): Promise<{ already: boolean }> => {
     const me = await actor(ctx, args.token, ["photos"]);
-    const now = Date.now();
     const r = await ctx.db.get(args.id);
     if (!r) fail("That photo is gone.");
+    const { already } = await markPhoto(ctx, r, { name: me.name, id: me._id }, args);
+    return { already };
+  },
+});
+
+/** One waiting photo as the ⌂ lane shows it (the AI's marks are read against it: `ai.use`, `ai.auto`). */
+export async function photoItem(ctx: MutationCtx, r: Doc<"homePhotos">, s: Doc<"students">): Promise<PhotoItem | null> {
+  return await itemOf(ctx, r, s, new Map());
+}
+
+/**
+ * A photo's marks saved (her Save, her Use of the AI's marks, or the AI by itself: `who.ai`). Throws before writing
+ * anything when the marks don't fit. `total` = the question's marks after (null: nothing marked, it only closed).
+ */
+export async function markPhoto(
+  ctx: MutationCtx,
+  r: Doc<"homePhotos">,
+  me: { name: string; id?: Id<"users">; ai?: true },
+  args: { got?: number; total?: number; pm?: (number | null)[]; note?: string },
+): Promise<{ already: boolean; total: number | null; max: number }> {
+  {
+    const now = Date.now();
     // Closed by the class meanwhile (a card still open on her phone): it just closes.
-    if (r.state !== "waiting" && r.cls) return { already: true };
+    if (r.state !== "waiting" && r.cls) return { already: true, total: null, max: 0 };
     if (r.state !== "waiting") fail(answered(r));
     const note = (args.note ?? "").trim();
     if (note.length > NOTE_MAX) fail(`Keep the words under ${NOTE_MAX} letters.`);
@@ -414,14 +435,17 @@ export const mark = mutation({
     // Corrected in class (his paper): nothing to mark; his wrong answers wait for Evaluation in class.
     if (lv.hc) {
       await ctx.db.patch(r._id, classClosed(now, me.name));
-      return { already: true };
+      return { already: true, total: null, max: k.max };
     }
-    const done = { state: "done" as const, doneAt: now, by: me.name, byId: me._id, ...(note ? { note } : {}) };
+    const done = { state: "done" as const, doneAt: now, by: me.name, ...(me.id ? { byId: me.id } : {}), ...(note ? { note } : {}) };
+    // The AI by itself: the history and the dashboards name it (never the teacher of its threads).
+    if (me.ai) rememberActor(ctx, me.name);
+    const said = (total: number) => (me.ai ? `🤖 ${me.name} Q${r.q} ஐத் திருத்தியது (${total}/${k.max}).` : `${me.name} Q${r.q} ஐத் திருத்தினார் (${total}/${k.max}).`);
     if (r.kind === "part") {
       if (mq) {
         // Marked in class already (the corrector had his paper): the photo just closes.
         await ctx.db.patch(r._id, done);
-        return { already: true };
+        return { already: true, total: null, max: k.max };
       }
       const t = await typedOf(ctx, r);
       const { teach, phoneGot } = partMarks(t?.owe, r.q, k, t?.a ?? null);
@@ -446,8 +470,8 @@ export const mark = mutation({
       await ctx.db.patch(p._id, { m, updatedAt: now });
       await ctx.db.patch(r._id, { ...done, got, pm });
       await log(ctx, null, now, { kind: "photo-marked", studentId: s._id, name: s.name, unit: u.unit.key, q: r.q, value: `${r.n} ${total}/${k.max}` });
-      await alertStudent(ctx, s._id, `${me.name} Q${r.q} ஐத் திருத்தினார் (${total}/${k.max}).`);
-      return { already: false };
+      await alertStudent(ctx, s._id, said(total));
+      return { already: false, total, max: k.max };
     }
     // His working may earn more than the phone gave (or less): the question's new marks.
     const before = mq?.got ?? 0;
@@ -464,10 +488,10 @@ export const mark = mutation({
       await log(ctx, null, now, { kind: "photo-marked", studentId: s._id, name: s.name, unit: u.unit.key, q: r.q, value: `${r.n} ${total}/${k.max}` });
     }
     await ctx.db.patch(r._id, { ...done, ...(total !== before ? { got: total } : {}) });
-    await alertStudent(ctx, s._id, `${me.name} Q${r.q} ஐத் திருத்தினார் (${total}/${k.max}).`);
-    return { already: false };
-  },
-});
+    await alertStudent(ctx, s._id, said(total));
+    return { already: false, total, max: k.max };
+  }
+}
 
 async function dropFiles(ctx: MutationCtx, files: Id<"_storage">[]) {
   for (const f of files) {

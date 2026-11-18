@@ -165,6 +165,8 @@ async function say(
   who: { sid: Id<"students">; n: string; g?: number; pic?: string } | { by: Id<"users">; n: string },
   now: number,
   m: { t?: string; ph?: Doc<"usChat">["ph"]; ak?: Id<"helpAsks"> },
+  /** Not read by the writer's seat (the AI's line under her id: the thread stays new for her). */
+  unread = false,
 ): Promise<void> {
   await ctx.db.insert("usChat", {
     rid: r._id,
@@ -180,6 +182,7 @@ async function say(
   const key = "sid" in who ? sKey(who.sid) : uKey(who.by);
   const fresh = (await ctx.db.get(r._id))!;
   await ctx.db.patch(r._id, { la: now, lt: lastWords(m.t, m.ph?.length ?? 0), ln: who.n, lw: key, n: fresh.n + 1, rv: fresh.rv + 1 });
+  if (unread) return;
   const seat = await ctx.db
     .query("usSeats")
     .withIndex("by_room", (x) => x.eq("rid", r._id).eq("who", key))
@@ -612,26 +615,44 @@ export const tcall = mutation({
     if (!s || s.archived) fail("This student isn't in the class.");
     if (s.demo || s.test) fail("Demo and practice students have no phone.");
     if (!(await usCfg(ctx)).open) fail("Us isn't open on the students' phones yet (Settings → Community).");
-    const now = Date.now();
-    const had = await askOf(ctx, s._id, args.unitId, args.q);
-    if (had?.st === "open") return { id: had.rid, again: true };
-    const his = await hisQuestion(ctx, s, args.unitId, args.q);
-    if (!his.ok) fail("This question doesn't wait for an explanation any more.");
-    const r = await threadFor(ctx, args.unitId, his.n, args.q, u._id, now);
-    if (r.ht !== u._id) await ctx.db.patch(r._id, { ht: u._id });
-    const have = await photoHere(ctx, s._id, args.unitId, his.n, args.q);
-    if (had) await ctx.db.patch(had._id, { rid: r._id, st: "open", tid: u._id, ta: now, tw: now, ph: have, at: now, doneAt: undefined, by: undefined, from: "t", ...FRESH });
-    else await ctx.db.insert("helpAsks", { rid: r._id, sid: s._id, unitId: args.unitId, n: his.n, q: args.q, tid: u._id, ta: now, tw: now, st: "open", from: "t", ph: have, at: now, demo: false });
-    const first = s.name.split(" ")[0];
-    // 13 Nov 2026, his rule: opening a thread never asks for his photo by itself ("if photo needed, teacher will ask
-    // that"): her 📷 Ask for his photo (`tphoto`) does.
-    await say(ctx, r, { by: u._id, n: u.name }, now, {
-      t: have ? `${first}, Q${args.q}: உன் விடையைப் பார்த்தேன். இங்கே விளக்குகிறேன்.` : `${first}, Q${args.q}: இங்கே விளக்குகிறேன்.`,
-    });
-    await alertStudent(ctx, s._id, `🎧 ${u.name} ஆசிரியர் Q${args.q} ஐ online இல் விளக்குகிறார்: thread ஐத் திற.`, `/f/#chat=${r._id}`);
-    return { id: r._id, again: false, ...(have ? { have: true as const } : {}) };
+    return await openThread(ctx, u, s, args.unitId, args.q);
   },
 });
+
+/**
+ * His thread for a lost question opened, with `u` as its teacher (her 🎧; her Use of the AI's marks; or the AI by
+ * itself, 16 Nov 2026: then `ai` = its first line under its own name, and the thread waits on her as if nobody wrote:
+ * she explains, or taps 🤖). The caller checked that Us is open and he is a real student.
+ */
+export async function openThread(
+  ctx: MutationCtx,
+  u: Doc<"users">,
+  s: Doc<"students">,
+  unitId: Id<"units">,
+  q: number,
+  ai?: { n: string; t: string; alert: string },
+): Promise<{ id: string; again: boolean; have?: true }> {
+  const now = Date.now();
+  const had = await askOf(ctx, s._id, unitId, q);
+  if (had?.st === "open") return { id: had.rid, again: true };
+  const his = await hisQuestion(ctx, s, unitId, q);
+  if (!his.ok) fail("This question doesn't wait for an explanation any more.");
+  const r = await threadFor(ctx, unitId, his.n, q, u._id, now);
+  if (r.ht !== u._id) await ctx.db.patch(r._id, { ht: u._id });
+  const have = await photoHere(ctx, s._id, unitId, his.n, q);
+  // `tw` = a teacher's last word: hers when she opened it; none when the AI did (it waits on her).
+  const tw = ai ? undefined : now;
+  if (had) await ctx.db.patch(had._id, { rid: r._id, st: "open", tid: u._id, ta: now, tw, ph: have, at: now, doneAt: undefined, by: undefined, from: "t", ...FRESH });
+  else await ctx.db.insert("helpAsks", { rid: r._id, sid: s._id, unitId, n: his.n, q, tid: u._id, ta: now, ...(tw ? { tw } : {}), st: "open", from: "t", ph: have, at: now, demo: false });
+  const first = s.name.split(" ")[0];
+  // 13 Nov 2026, his rule: opening a thread never asks for his photo by itself ("if photo needed, teacher will ask
+  // that"): her 📷 Ask for his photo (`tphoto`) does.
+  await say(ctx, r, { by: u._id, n: ai ? ai.n : u.name }, now, {
+    t: ai ? ai.t : have ? `${first}, Q${q}: உன் விடையைப் பார்த்தேன். இங்கே விளக்குகிறேன்.` : `${first}, Q${q}: இங்கே விளக்குகிறேன்.`,
+  }, !!ai);
+  await alertStudent(ctx, s._id, ai ? ai.alert : `🎧 ${u.name} ஆசிரியர் Q${q} ஐ online இல் விளக்குகிறார்: thread ஐத் திற.`, `/f/#chat=${r._id}`);
+  return { id: r._id, again: false, ...(have ? { have: true as const } : {}) };
+}
 
 /** Consultation's icons: the questions of these students that already have an open thread ("<student>:<unit>:<q>"). */
 export const topen = query({

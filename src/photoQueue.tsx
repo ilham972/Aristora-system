@@ -3,14 +3,18 @@
 // photos big and turned with ↻, each sub-question its own marks, Save → the next by itself); here stay how many wait
 // and since when, the owner's "Photos required" switch, and one button to the lane. The count is on the Settings gear
 // (red when one waited over a day), for the owner and the people he ticks for Photos.
+// The AI's automatic mode (16 Nov 2026, his ask: "if the automatic mode is on in the setting, then correction will
+// happen automatically"): the owner's switch, the teacher of the threads it opens, and what it did today (`AiAuto`).
 
 import { useEffect, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import { mutate, subscribe } from "./backend";
+import type { Id } from "../convex/_generated/dataModel";
 import type { View } from "./derive";
 import { ago, isLate, useLaneList } from "./homeLane";
+import { errorText } from "./backend";
 import { useQuery } from "./live";
-import { may } from "./store";
+import { may, toast } from "./store";
 
 /** Photos waiting for a teacher (the gear's count); late = one waited over a day. */
 export function usePhotosWaiting(allowed: boolean): { n: number; late: boolean } {
@@ -65,6 +69,70 @@ export function PhotoQueue(props: { views: View[]; onOpen?: () => void }) {
           ⌂ Mark them in Correction{n ? ` (${n})` : ""}
         </button>
       )}
+      <AiAuto />
     </div>
+  );
+}
+
+type AutoState = {
+  on: boolean;
+  tid: string | null;
+  tname: string | null;
+  key: boolean;
+  today: { n: number; full: number; lost: number; left: number; most: number };
+  teachers: { id: string; n: string }[];
+};
+
+/**
+ * The AI marks by itself (16 Nov 2026): what he sends from home for a teacher is marked as it arrives. Sure = saved
+ * (full marks: done; lost: his thread opens with the teacher picked here, no AI words); unsure = it waits in ⌂.
+ */
+function AiAuto() {
+  const st = useQuery<AutoState>(api.ai.autoState, {});
+  const owner = may("owner");
+  const [busy, setBusy] = useState(false);
+  if (!st) return null;
+  const set = (on: boolean, tid?: string) => {
+    setBusy(true);
+    void mutate(api.ai.setAuto, { on, ...(tid ? { tid: tid as Id<"users"> } : {}) })
+      .catch((e: unknown) => toast(errorText(e), "error"))
+      .finally(() => setBusy(false));
+  };
+  const d = st.today;
+  return (
+    <section class={`phq-ai${st.on ? " on" : ""}`} aria-label="The AI marks by itself">
+      {owner ? (
+        <label class="phq-req phq-ai-sw">
+          <input type="checkbox" checked={st.on} disabled={busy} onChange={() => set(!st.on)} />
+          <span>🤖 The AI marks them by itself</span>
+        </label>
+      ) : (
+        <b class="phq-ai-sw">🤖 The AI marks them by itself: {st.on ? "on" : "off"}</b>
+      )}
+      <small class="muted">
+        Each drawing or reason he sends is marked as it arrives. Sure = saved: full marks are done; lost marks open his thread
+        for {st.tname ?? "the teacher picked"}. Not sure = it waits in ⌂ for you. The AI only marks: to explain, tap 🤖 in his
+        thread.
+      </small>
+      {owner && st.on && st.teachers.length > 0 && (
+        <label class="phq-tch">
+          <span>Its threads go to</span>
+          <select value={st.tid ?? ""} disabled={busy} onChange={(e) => set(true, (e.currentTarget as HTMLSelectElement).value)}>
+            {st.teachers.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.n}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {(st.on || d.n > 0) && (
+        <p class="phq-today">
+          Today: <b>{d.n}</b> marked by the AI · {d.full} full · {d.lost} with a thread · <b class={d.left ? "left" : ""}>{d.left}</b> left to you
+          <small class="muted"> ({d.most} a day at most)</small>
+        </p>
+      )}
+      {st.on && !st.key && <p class="ai-low">The AI isn't switched on: the owner adds ANTHROPIC_API_KEY in Convex. Until then everything waits in ⌂.</p>}
+    </section>
   );
 }

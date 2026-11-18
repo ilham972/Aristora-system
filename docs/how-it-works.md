@@ -1002,9 +1002,9 @@ lane sends each part as the phone marked it (`fixed`): the AI marks and explains
 server keeps the phone's marks on the others ("Marked by the phone."). The words to a student (`HOW_TO_TALK`): only
 Tamil in Tamil script (the school books' maths words; numbers, letters and symbols allowed), his grade given, short
 sentences, intuitive (a picture in words or an everyday example, then the rule), what he did right, the mistake, 2–4
-numbered steps, the answer, ≤ 90 words. On the ⌂ lane, **Use is Save** ("Save 7 / 10", or "Save + thread" when marks
+numbered steps, the answer, ≤ 90 words (now only for "Ask the AI more" and her 🤖: a check is marks only since 16 Nov 2026). On the ⌂ lane, **Use is Save** ("Save 7 / 10", or "Save + thread" when marks
 are lost): her marks saved at once (as her Save), and when he lost marks his thread opens (`help.tcall`, as 🎧) and the
-AI's explanation is its next message (`ai.post`, by her, named **ARISTORA AI**, his phone rings). From then his text
+AI's explanation was its next message until 16 Nov 2026 (marks only since: below) (`ai.post`, by her, named **ARISTORA AI**, his phone rings). From then his text
 messages in that thread are answered there by the AI (`chat.ts` → `ai.heard` → `ai.run` → `ai.say`), within the
 thread's 10 questions and the day's 200; a teacher's message never wakes it. His questions show in the sheet too
 (amber, "…, in his thread:"). **Sonnet 5.5's rules** (15 Nov 2026, his screenshot: "The AI didn't answer (400)"): it
@@ -1024,6 +1024,42 @@ a student's text message in that thread is answered there by the AI (≤ 80 word
 message never wakes it. 12 AI messages a thread a day (`AI_TEACH_ROOM_DAY`), inside the centre's 200; one at a time.
 Table `aiTeach` (one row per AI message there; gone after 3 days). Every AI explanation (here and the ⌂ lane's) now
 uses a few fitting emojis, light and never mocking.
+**Marks only, Use saved on the server, and the AI marking by itself** (16 Nov 2026, his voice note: "I want automatic
+correction ... if the automatic mode is on in the setting, then correction will happen automatically. If it is full
+marks, then don't need to create the thread. But if it is lower than full marks then that thread also automatically
+created ... AI never explained the question ... inside the thread we have AI icon ... if needed, teacher will press
+that ... AI will consume too much token ... just do the correction only ... if the AI do the correction, most of the
+time that not save on the system").
+- **Marks only.** A check (✦ on Correction's card or on the ⌂ lane, or the automatic one) writes no Tamil: the mark tool
+  has no `ta`, the system prompt says "You only mark", and asks for `sure: low` whenever a mark is doubtful (its marks
+  may be saved with nobody looking). The sheet shows the marks and each part's reasoning; "Ask the AI more" still
+  answers in Tamil, on demand. Explaining is her 🤖 in his thread (above). A check of before (with Tamil) still reads.
+- **Use on the ⌂ lane = saved on the server** (`ai.use`). Why it didn't save before: for a one-part question (most
+  drawings and reasons) the AI gives a total and no parts, and the card's own sums wanted each part, so Use said "tap
+  each part yourself" and saved nothing. Now `laneMarks` (convex/lib/ai.ts) reads the AI's marks against the card the
+  server builds (`photoItem`): one part = the total is its marks; several parts = the AI's each (the phone's parts keep
+  the phone's marks); several parts and no each = refused with that reason (she taps them). Then `markPhoto` (the one
+  path of `photos.mark`) saves them as hers, and when he lost marks `openThread` (the one path of `help.tcall`) opens his
+  thread with her as its teacher and her usual first line. No AI words go in (`ai.post` is a no-op for a marks-only
+  check; a page from before still calls it).
+- **The automatic mode** (Settings → Photos, the owner's switch "🤖 The AI marks them by itself", off at first; meta
+  `ai.auto` = on + the teacher of its threads, the owner until he picks one in "Its threads go to"; Photos people see
+  it, not the switch). With it on, `family.photoSend` (a drawing's photos, not his answer to a teacher's message) and
+  his Check's typed reasons (`sayReason`) queue `ai.auto` (convex/lib/aiAuto.ts `queueAuto`). `ai.auto` skips a demo or
+  practice student, a card with her message on it, a level corrected in class, a free question, and starts nothing past
+  150 automatic checks a day (`AI_AUTO_DAY_MAX`, inside the centre's 200: the rest stay for the teachers' ✦ and 🤖);
+  otherwise it builds the card as the lane would (what he typed, the phone's parts: `saidWords`, `fixed`) and runs the
+  check. When the marks come (`save` → `autoSettle`): **sure** = saved as **ARISTORA AI** (`markPhoto` with `ai`: the
+  photo's "by", his phone's "திருத்தியவர்", his alert "🤖 ARISTORA AI Q5 ஐத் திருத்தியது (3/4)", and the history line's
+  `who`, so the dashboards count the AI, never a teacher); **full marks** = done, no thread; **lost** = his thread opens
+  with the teacher picked, its first line under the AI's name ("Hana, Q10: உன் விடையைத் திருத்தினேன் 🤖 1/2. Nila ஆசிரியர்
+  இங்கே விளக்குவார்.", `autoLine`), and it **waits on her** as if nobody wrote (`tw` unset, new on her list, every teacher
+  after 12 hours); she explains or taps 🤖. **Left** (the card stays in ⌂ for a teacher, `out: "left"` and `outWhy`):
+  the AI not sure, a failed call, several parts with no marks for each, marked or corrected in class meanwhile, the switch
+  turned off, the thread's teacher gone. Her ✦ on that card says "🤖 Checked by itself as he sent it. Not saved: …" and
+  she can still Use the marks or mark it herself. Settings → Photos shows today's numbers (marked, full, with a thread,
+  left to you) and, with no key in Convex, that everything waits in ⌂. Cost: Sonnet ≈ 6–10 rupees a check, at most 150
+  a day ≈ 1,500 rupees a day.
 
 **Progress (top bar; owner + Reports).** One grade at a time (`aristora.progressGrade`); stage chips, "Came today".
 **Units** = a race per unit and stage (levels done or solo questions done, then marks, then pace; rank colours,
