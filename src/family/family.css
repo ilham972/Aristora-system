@@ -2193,6 +2193,17 @@ p {
   font-weight: 700;
   color: var(--ink3);
 }
+/* Pairs to match take the card's whole width, their label above (18 Nov 2026: beside "(i)" a seven-letter name broke
+   in two). */
+.f-part.f-wide {
+  flex-wrap: wrap;
+}
+.f-part.f-wide > .f-mat {
+  flex: 1 1 100%;
+}
+.f-part.f-wide > .f-plabel {
+  padding-top: 0;
+}
 .f-boxes {
   display: flex;
   flex-wrap: wrap;
@@ -4926,7 +4937,7 @@ button.f-pod:active,
   min-width: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 12px;
+  gap: 10px;
   padding-top: 4px;
 }
 .f-matc {
@@ -4934,16 +4945,16 @@ button.f-pod:active,
   flex-direction: column;
   gap: 10px;
 }
-/* A long name fits its card, whole words first (18 Nov 2026: "ஐங்கோணி" ran off the card's right at 21 px). */
+/* A long name fits its card, whole words first (18 Nov 2026: "ஐங்கோணி" ran off the card's right at 21 px; 17 px, the question's size, holds a seven-letter name). */
 .f-mi {
   overflow-wrap: break-word;
   position: relative;
   min-height: 50px;
-  padding: 6px 10px 3px;
+  padding: 6px 8px 3px;
   border-radius: 14px;
   background: var(--card);
   color: var(--ink);
-  font: 800 18px/1.25 var(--display);
+  font: 800 17px/1.25 var(--display);
   box-shadow:
     inset 0 0 0 2px var(--line-2),
     0 3px 0 var(--line-2);

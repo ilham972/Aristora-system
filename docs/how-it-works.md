@@ -3082,9 +3082,11 @@ chat; `convex/lib/sakarath.ts`, `convex/sakarath.ts`).
   (`stepsOf`) leaves out `.sn`, `.qsep` and a figure's labels. A borderless table printed wider than the phone stacks
   its cells at the card's width (`[data-fx-stack] td`, every book); a grid (`.gt`) shrinks to the card, measured at its
   cells' own width (no max-width, no flex squeeze) inside the paper's real sides (`drawQuestion` `fit`: 12 px on the
-  family paper, 8 px on teachers' pages), and a figure row (`.sec > .fgb`) loses its print indent; pairs to match keep
-  their cards inside the card (18 px, whole words first). Teachers' pages show the book as printed. A question that
-  names a section ("(b) above") is put right in its own words (`retype`).
+  family paper, 8 px on teachers' pages), and a figure row (`.sec > .fgb`) loses its print indent; pairs to match take
+  the card's whole width with their label above (`.f-part.f-wide`), 17 px, and a long name shrinks (to 13 px) until
+  it fits whole (`MatchPairs` measures each card's longest word with its own font), never broken mid-word. Teachers'
+  pages show the book as printed. A question that names a section ("(b) above") is put right in its own words
+  (`retype`).
 - **Each part's kind** (`scripts/sakarath/kinds.ts`, from the key's words with the app's own reader): a number, several
   numbers, a labelled answer, a unit, a ratio, a point, a set = boxes the phone marks (kept only when the app's v2 reading
   of that kind gives exactly the boxes and values its own reading of the words gave); an answer in 1–3 letters a box

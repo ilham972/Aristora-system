@@ -13,7 +13,7 @@
 //   student need to write the answer, then we can put the typing box"): his own words for a teacher (say, `SayBelow`),
 //   a word or a name the phone marks (a text box with `w`, `WordBox`). A photo is only for a drawing.
 
-import { useRef, useState } from "preact/hooks";
+import { useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { Box, FormQ, Ui } from "../../convex/lib/phone";
 import { buzz, sound } from "./sound";
 import { mathRuns, pretty } from "./ui";
@@ -525,8 +525,36 @@ export function MatchPairs(props: { l: string[]; r: string[]; vals: string[]; at
   const mine = props.l.map((_, i) => props.vals[props.at + i] ?? "");
   const leftOf = (j: number) => mine.findIndex((x) => x === String(j + 1));
   const without = (i: number) => mine.map((x, k) => (k === i ? "" : x));
+  // A long name keeps its letters together: its card's words shrink (to 13 px) until the longest fits (18 Nov 2026:
+  // "கூர்ங்கோணம்" broke in two at 17 px on a 360 px phone). Measured with the card's own font, never its number badge;
+  // again when the card first shows (a step) and when the font lands.
+  const box = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = box.current;
+    const pen = document.createElement("canvas").getContext("2d");
+    if (!el || !pen) return;
+    let w = -1;
+    const fit = () => {
+      if (!el.clientWidth) return;
+      w = el.clientWidth;
+      el.querySelectorAll<HTMLElement>(".f-mi").forEach((b) => {
+        b.style.fontSize = "";
+        const cs = getComputedStyle(b);
+        const room = b.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 2;
+        pen.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+        const words = [...b.childNodes].filter((n) => !(n instanceof Element && n.classList.contains("f-min"))).map((n) => n.textContent ?? "");
+        const widest = Math.max(0, ...words.join("").split(/\s+/).map((x) => pen.measureText(x).width));
+        if (widest > room && room > 0) b.style.fontSize = `${Math.max(13, Math.floor((parseFloat(cs.fontSize) * room) / widest))}px`;
+      });
+    };
+    fit();
+    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(() => el.clientWidth !== w && fit()) : null;
+    ro?.observe(el);
+    void document.fonts?.ready.then(fit);
+    return () => ro?.disconnect();
+  }, [props.l.join("\n"), props.r.join("\n")]);
   return (
-    <div class="f-mat">
+    <div class="f-mat" ref={box}>
       <div class="f-matc">
         {props.l.map((x, i) => (
           <button

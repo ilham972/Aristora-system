@@ -997,7 +997,7 @@ export function Play(props: {
     if (ui?.k === "order" || ui?.k === "match") {
       bi += p.boxes?.length ?? 0;
       return (
-        <div class="f-part" key={pi} slot={sl(pi)}>
+        <div class={ui.k === "match" ? "f-part f-wide" : "f-part"} key={pi} slot={sl(pi)}>
           {p.p && <span class="f-plabel">({p.p})</span>}
           {ui.k === "order" ? (
             <OrderLine items={ui.items} vals={mine} at={from} marks={lock ? marks.slice(from, from + ui.items.length) : undefined} onSet={(v) => setRun(at.qi, from, v)} />

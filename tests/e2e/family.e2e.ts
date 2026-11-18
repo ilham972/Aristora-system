@@ -3851,7 +3851,7 @@ test("Sakarath on the phone: the app's own question, never the printed page (no 
     const answers = [
       { q: 1, parts: [{ p: "i", a: "**12**", m: 1, t: box("12") }, { p: "ii", a: "**7**", m: 1, t: box("7") }] },
       { q: 2, parts: [{ p: "i", a: "✓ ✗", m: 1, t: { k: "tf" as const, a: [true, false] } }] },
-      { q: 3, parts: [{ p: "i", a: "pairs", m: 1, t: { k: "match" as const, l: ["5 made-up sides", "6 made-up sides"], r: ["நீளமானபெயரொன்று", "இன்னொருநீளமானபெயர்"], a: [1, 2] } }] },
+      { q: 3, parts: [{ p: "i", a: "pairs", m: 1, t: { k: "match" as const, l: ["5 made-up sides", "6 made-up sides"], r: ["நெடும்பெயர்", "குறும்பெயர்"], a: [1, 2] } }] },
       { q: 4, parts: [{ p: "i", a: "**3**", m: 1, t: box("3") }, { p: "ii", a: "**4**", m: 1, t: box("4") }] },
     ];
     await ctx.db.insert("keys", { unitId: id, stage: "master", answers, updatedAt: Date.now() });
@@ -3905,6 +3905,14 @@ test("Sakarath on the phone: the app's own question, never the printed page (no 
   await jump(O, O.locator(".f-qchip", { hasText: /^3$/ }).first());
   await until(async () => (await O.locator(".f-mi").count()) === 4, "Q3's pairs");
   await inside(O.locator(".f-mi"), "a pair's card");
+  // A long name stays whole on one line: its card's words shrink instead of breaking mid-word.
+  const oneLine = (bs: Element[]) =>
+    bs.every((b) => {
+      const r = document.createRange();
+      r.selectNodeContents(b);
+      return new Set([...r.getClientRects()].map((x) => Math.round(x.top))).size === 1;
+    });
+  await until(async () => await O.locator(".f-matc").nth(1).locator(".f-mi").evaluateAll(oneLine), "every name on one line");
   await inside(O.locator(".f-paper table.gt"), "the grid"); // shrunk to the card, never clipped by its row
   await shot(O, "fam53e-sakarath-pairs");
   // Q4: two parts the book prints side by side, one under the other at the card's width.
