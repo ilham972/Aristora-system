@@ -9,7 +9,8 @@ import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import type { MasterData } from "../convex/lib/book";
 import type { KeyAnswer } from "../convex/lib/key";
-import { isSkGrade, realGrade, sakarathProblem, SK_TITLE } from "../convex/lib/sakarath";
+import { isSkbGrade, isSkGrade, realGrade, sakarathProblem, skbFits, skbFor, skbKey, SK_TITLE } from "../convex/lib/sakarath";
+import { OL } from "../convex/lib/syllabus";
 import { worldsOf } from "../convex/lib/family";
 import { secretHash } from "../convex/lib/auth";
 import { seal, sha256, toB64, unseal } from "../convex/lib/seal";
@@ -63,6 +64,14 @@ describe("the Sakarath book's shape", () => {
     expect(isSkGrade(8)).toBe(false);
     expect(realGrade(108)).toBe(8);
     expect(realGrade(12)).toBe(12);
+    // The printed book (19 Nov 2026): grade 200 + its grade, never a Sakarath unit's grade.
+    expect(isSkbGrade(208)).toBe(true);
+    expect(isSkbGrade(108)).toBe(false);
+    expect(isSkGrade(208)).toBe(true); // never a grade of the syllabus either
+    expect(realGrade(208)).toBe(8);
+    expect(skbFor(212)).toBe(OL);
+    expect([skbKey(8), skbKey(OL)]).toEqual(["G8-SKB", "OLS-SKB"]);
+    expect([skbFits(8, 8), skbFits(8, 7), skbFits(OL, 10), skbFits(OL, 11), skbFits(OL, 9), skbFits(8, undefined)]).toEqual([true, false, true, true, false, false]);
   });
 });
 
@@ -276,5 +285,112 @@ describe("the Sakarath book and exam mode", () => {
     // Its Sakarath book goes on it like any unit's.
     expect(await sakarath({ grade: 10, code: "U00" })).toMatchObject({ ok: true, made: true });
     expect((await unitByKey("G10-U00-SK"))?.grade).toBe(110);
+  });
+
+  // The printed Sakarath book (19 Nov 2026, his ask: "the book is don't have unit by unit. This is whole big book ...
+  // some students give, some students I didn't give" on the Books page's Stock, then "visible to correct" on
+  // Correction): one stock item per grade, a unit of its own (grade 200 + its grade), given whole; a holder's Sakarath
+  // rows come with him to Correction only.
+  const rowsOf = (sid: Id<"students">) => raw.run(async (ctx) => await ctx.db.query("fees").withIndex("by_sid", (q) => q.eq("sid", sid)).collect());
+
+  test("printed book: one stock item per grade, made with its first book (the link) and by ensure for an app from before", async () => {
+    expect(await unitByKey("G8-SKB")).toBeNull(); // no Sakarath book of Grade 8 yet
+    await sakarath();
+    const skb = (await unitByKey("G8-SKB"))!;
+    expect(skb).toMatchObject({ grade: 208, code: "SK", term: 0, order: 0, en: "Sakarath book", ta: SK_TITLE });
+    await sakarath({ code: "U01" });
+    expect((await raw.run(async (ctx) => await ctx.db.query("units").withIndex("by_grade", (q) => q.eq("grade", 208)).collect())).length).toBe(1);
+    // It has no book row, never sits among the book's units (108) nor in Grade 8's syllabus, nor in the link's list.
+    expect(await raw.run(async (ctx) => await ctx.db.query("books").withIndex("by_unit_stage", (q) => q.eq("unitId", skb._id).eq("stage", "master")).first())).toBeNull();
+    expect((await raw.run(async (ctx) => await ctx.db.query("units").withIndex("by_grade", (q) => q.eq("grade", 108)).collect())).map((u) => u.key).sort()).toEqual(["G8-U01-SK", "G8-U02-SK"]);
+    expect((await ask({ op: "sakarath", grade: 8 }))?.units.some((u: { key: string }) => u.key.includes("SKB"))).toBe(false);
+    expect((await t.query(api.catalog.units, {})).some((u) => u.key === "G8-SKB")).toBe(true);
+    // An app from before (data version 5, books already in): ensure makes it once; a grade with no book gets none.
+    await raw.run(async (ctx) => {
+      await ctx.db.delete(skb._id);
+      const meta = (await ctx.db.query("meta").withIndex("by_key", (q) => q.eq("key", "data")).first())!;
+      await ctx.db.patch(meta._id, { value: 5 });
+    });
+    await t.mutation(api.setup.ensure, {});
+    await t.mutation(api.setup.ensure, {});
+    expect((await raw.run(async (ctx) => await ctx.db.query("units").withIndex("by_grade", (q) => q.eq("grade", 208)).collect())).map((u) => u.key)).toEqual(["G8-SKB"]);
+    expect(await unitByKey("G7-SKB")).toBeNull();
+    // The O/L book's: its own key.
+    await tell({ op: "sakarath", grade: 12, code: "U02", en: "Made-up fractions", ta: "பின்னங்கள்", term: 1, data: DATA, answers: key(), items: items(), css: "" });
+    expect(await unitByKey("OLS-SKB")).toMatchObject({ grade: 212, code: "SK" });
+  });
+
+  test("printed book: given whole from Stock to its grade's students, once a book is in the app; charged once, like any printed book", async () => {
+    // Its unit with no book in the app yet: refused (a book given with nothing to open would hide him from "out of work").
+    const early = await raw.run(async (ctx) => await ctx.db.insert("units", { grade: 208, code: "SK", key: "G8-SKB", term: 0, order: 0, en: "Sakarath book", ta: SK_TITLE }));
+    await expect(t.mutation(api.students.giveMany, { ids: [hana], unitId: early, stage: "master", given: true, by: "money" })).rejects.toThrow(/Grade 8 has no Sakarath book in the app yet/);
+    await sakarath();
+    const skb = (await unitByKey("G8-SKB"))!;
+    expect(skb._id).toBe(early); // the save found it: one item
+    // Another grade's student: nobody gets it (all or nothing); never as a theory book.
+    const g7 = (await unitByKey("G7-U01"))!._id;
+    const ravi = await t.mutation(api.students.add, { name: "Ravi P", grade: 7, term: 1, stage: "master", unitId: g7 });
+    await expect(t.mutation(api.students.giveMany, { ids: [hana, ravi], unitId: skb._id, stage: "master", given: true, by: "money" })).rejects.toThrow(/Grade 8 Sakarath book is not for Ravi P \(Grade 7\)/);
+    await expect(t.mutation(api.students.giveMany, { ids: [hana], unitId: skb._id, stage: "fighter", given: true, by: "money" })).rejects.toThrow(/given whole/);
+    await expect(t.mutation(api.students.setGiven, { id: ravi, unitId: skb._id, stage: "master", given: true, by: "money" })).rejects.toThrow(/not for Ravi P/);
+    // The fees on, its price set (the owner, ⋯ on its line): given = one book row at its price; taken back = gone.
+    await t.mutation(api.money.setup, { fee: 350, paper: 7, start: "today" });
+    await t.mutation(api.money.setBook, { u: skb._id, st: "master", price: 300 });
+    expect(await t.mutation(api.students.giveMany, { ids: [hana], unitId: skb._id, stage: "master", given: true, by: "money" })).toBe(1);
+    expect(await t.mutation(api.students.giveMany, { ids: [hana], unitId: skb._id, stage: "master", given: true, by: "money" })).toBe(0);
+    expect((await rowsOf(hana)).filter((r) => r.k === "book").map((r) => [r.u, r.a])).toEqual([[skb._id, 300]]);
+    const shop = await t.query(api.money.shop, {});
+    expect(shop.hand[hana]).toEqual([`${skb._id}:master`]);
+    expect(shop.items.find((i) => i.u === skb._id)).toMatchObject({ price: 300, given: 1 });
+    const hist = await t.query(api.state.history, {});
+    expect(hist.find((e) => e.kind === "book-given")?.value).toBe("G8-SKB Sakarath book");
+    expect(await t.mutation(api.students.giveMany, { ids: [hana], unitId: skb._id, stage: "master", given: false, by: "money" })).toBe(1);
+    expect((await rowsOf(hana)).filter((r) => r.k === "book")).toEqual([]);
+    expect((await t.query(api.money.shop, {})).items.find((i) => i.u === skb._id)).toMatchObject({ given: 0 });
+  });
+
+  test("printed book on Correction: a holder's Sakarath rows come with him (whatever they wait for), a unit opens for him, the same marks save", async () => {
+    await sakarath();
+    await sakarath({ code: "U01" });
+    const sk2 = (await unitByKey("G8-U02-SK"))!;
+    const sk1 = (await unitByKey("G8-U01-SK"))!;
+    const skb = (await unitByKey("G8-SKB"))!;
+    await t.mutation(api.sakarath.setExam, { grade: 8, on: true });
+    // He did U02's first level on his phone; he is in the hall.
+    await fam().mutation(api.family.check, { unitId: sk2._id, n: 1, typed: [{ q: 1, a: ["10", "11"] }, { q: 2, a: ["20", "21", "a made-up reason"] }] });
+    await t.mutation(api.students.setPresent, { id: hana, present: true });
+    let his = await t.query(api.state.his, { id: hana });
+    expect(his.sk).toBeNull(); // no printed book: the phone's, as before
+    expect((his.more ?? []).some((p) => p.unitId === sk2._id)).toBe(false);
+    // A unit opens only for a student who holds the book.
+    await expect(t.mutation(api.sakarath.open, { id: hana, unitId: sk1._id })).rejects.toThrow(/doesn't have this Sakarath book/);
+    await t.mutation(api.students.giveMany, { ids: [hana], unitId: skb._id, stage: "master", given: true, by: "money" });
+    his = await t.query(api.state.his, { id: hana });
+    expect(his.sk?.map((p) => p.unitId)).toEqual([sk2._id]);
+    expect(Object.keys(his.books)).toContain(`${sk2._id}:master`);
+    expect((his.more ?? []).some((p) => p.unitId === sk2._id)).toBe(false); // the other pages still leave it out
+    // The book in his hands is work (never "out of work" while he has it), never finished.
+    expect(his.given?.find((g) => g.unitId === skb._id)).toMatchObject({ stage: "master", work: true, done: false });
+    // U01 he never opened: Correction makes his row (nothing else changes; he stays on his book now).
+    await expect(t.mutation(api.sakarath.open, { id: hana, unitId: skb._id })).rejects.toThrow(/not a unit of a Sakarath book/);
+    await expect(t.mutation(api.sakarath.open, { id: hana, unitId: u01 })).rejects.toThrow(/not a unit of a Sakarath book/);
+    expect(await t.mutation(api.sakarath.open, { id: hana, unitId: sk1._id })).toBe(true);
+    expect(await t.mutation(api.sakarath.open, { id: hana, unitId: sk1._id })).toBe(true);
+    his = await t.query(api.state.his, { id: hana });
+    expect(his.sk?.map((p) => p.unitId).sort()).toEqual([sk1._id, sk2._id].sort());
+    expect((await raw.run(async (ctx) => await ctx.db.get(hana)))?.unitId).toBe(u02);
+    // Correction marks it like any workbook level (a draft, then Save).
+    await t.mutation(api.focus.mark, { studentId: hana, unitId: sk1._id, level: 1, set: [{ q: 1, g: 2 }], by: "correction" });
+    const r = await t.mutation(api.workbook.correct, { studentId: hana, unitId: sk1._id, level: 1, items: [{ q: 1, got: 2 }, { q: 2, got: 1 }], by: "correction" });
+    expect(r).toMatchObject({ got: 3, max: 5 });
+    his = await t.query(api.state.his, { id: hana });
+    const row = his.sk!.find((p) => p.unitId === sk1._id)!;
+    expect((row.m as { lv: Record<string, { fixed?: number }> }).lv["1"]?.fixed).toBeTypeOf("number");
+    // Taken back: the phone's again.
+    await t.mutation(api.students.setGiven, { id: hana, unitId: skb._id, stage: "master", given: false, by: "money" });
+    his = await t.query(api.state.his, { id: hana });
+    expect(his.sk).toBeNull();
+    expect(his.given ?? []).toEqual([]);
+    await expect(t.mutation(api.sakarath.open, { id: hana, unitId: sk1._id })).rejects.toThrow(/doesn't have/);
   });
 });

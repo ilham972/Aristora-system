@@ -32,6 +32,7 @@ import { claimLive, CLAIM_PING_MS, type Claim } from "../convex/lib/claims";
 import type { KeyAnswer } from "../convex/lib/key";
 import type { Mark, MarkState } from "../convex/lib/status";
 import { OL, OL_PARTS, olNumber, termOf } from "../convex/lib/syllabus";
+import { isSkbGrade, realGrade, skbFor, skGrade } from "../convex/lib/sakarath";
 import { errorText, mutate } from "./backend";
 import { Book } from "./board";
 import { CallsBand } from "./correction";
@@ -85,6 +86,11 @@ import {
   type LevelLook,
   type Pill,
   booksOf,
+  booksIn,
+  isSkView,
+  skLook,
+  skNext,
+  skPick,
 } from "./focusData";
 import { BookRaceSheet } from "./bookRace";
 import { dropDraft, flushFocus, queueDraft, setFighterMark } from "./focusSave";
@@ -104,8 +110,11 @@ import { bookDocAt,
   currentMe,
   previewing,
   currentRole,
+  isSkb,
   may,
   now as serverNow,
+  skUnitOf,
+  skUnitsIn,
   stageName,
   STAGES,
   toast,
@@ -263,7 +272,8 @@ const ids = (h: { studentId: string; unitId: string }) => ({
 const bookWords = (studentId: string, unitId: string) => {
   const v = viewOfPaper(latestViews, { studentId, unitId });
   const u = unitOf(unitId);
-  return { name: v?.s.name ?? "his", tag: u ? `Unit ${unitNo(u.code)}` : "book" };
+  // A unit of his printed Sakarath book (19 Nov 2026) has its unit's number: said as "Sakarath 5".
+  return { name: v?.s.name ?? "his", tag: u ? `${u.grade > 100 ? "Sakarath" : "Unit"} ${unitNo(u.code)}` : "book" };
 };
 
 /** The book this phone works on is claimed; the one it left is free again. */
@@ -549,9 +559,11 @@ async function saveLevel(v: View, p: MasterPaper, l: MasterLevel, auto: boolean)
   });
   const go = (who: string, list: number[]) => (list.length ? ` ${who}: ${list.map((q) => `Q${q}`).join(" ")}.` : "");
   const pre = res.pre.length ? ` Level${res.pre.length === 1 ? "" : "s"} ${runs(res.pre)}: done before the app.` : "";
-  toast(
-    `${p.remark ? "Changed" : "Saved"}: ${v.s.name}, Level ${l.n}, ${res.got} / ${res.max}.${go("Theory", res.theory)}${go("Evaluation", res.evaluation)}${pre}${auto ? " (saved as you moved on)" : ""}`,
-  );
+  // A Sakarath book (19 Nov 2026): no room takes it, so its lost marks are only said, kept on his book.
+  const sk = isSkView(v);
+  const where = sk ? `Sakarath ${unitNo(v.unit!.code)} · ` : "";
+  const sent = sk ? go("Lost marks", [...res.theory, ...res.evaluation].sort((a, b) => a - b)) : `${go("Theory", res.theory)}${go("Evaluation", res.evaluation)}`;
+  toast(`${p.remark ? "Changed" : "Saved"}: ${v.s.name}, ${where}Level ${l.n}, ${res.got} / ${res.max}.${sent}${pre}${auto ? " (saved as you moved on)" : ""}`);
   return res;
 }
 
@@ -619,12 +631,40 @@ function openLevel(v: View, n: number) {
 /** From the question sheet's "To correct": open that student's level of this workbook (his book now or another of his). */
 function openWaiting(studentId: string, unitId: string, n: number) {
   const me = latestViews.find((x) => x.s._id === studentId);
-  const tv = me && [me, ...me.others].find((x) => bookId(x) === unitId && x.stage === "master");
+  const tv = me && booksIn(me).find((x) => bookId(x) === unitId && x.stage === "master");
   if (!tv) {
     toast("His paper isn't open here: tap his name.");
     return;
   }
   openLevel(tv, n);
+}
+
+/**
+ * Open one unit of the printed Sakarath book he holds (19 Nov 2026, his ask: "after give that to my student ... visible
+ * to correct"): his row there, made the first time (sakarath.open), then its paper, as soon as the board brings it. He
+ * is never moved: his book now stays. Another name tapped meanwhile wins.
+ */
+async function openSk(home: View, unitId: string): Promise<void> {
+  const had = (home.sk ?? []).find((b) => bookId(b) === unitId);
+  if (had) return openBook(had, serverNow());
+  const ok = await act(() => mutate(api.sakarath.open, { id: home.s._id as Id<"students">, unitId: unitId as Id<"units">, by: currentRole() }));
+  if (!ok) return;
+  for (let k = 0; k < 50; k++) {
+    if (openPaper && openPaper.studentId !== home.s._id) return;
+    const me = latestViews.find((x) => x.s._id === home.s._id);
+    const tv = me?.sk.find((x) => bookId(x) === unitId);
+    if (tv) return openBook(tv, serverNow());
+    await new Promise((r) => setTimeout(r, 100));
+  }
+}
+
+/** The S on his books row: the unit of that Sakarath book that waits (src/focusData.ts `skPick`), opened. */
+function openSakarath(home: View, grade: number) {
+  const units = skUnitsIn(grade);
+  const now = home.unit && grade !== OL ? (skUnitOf(home.unit)?._id ?? null) : null;
+  const pick = skPick(home, units, now);
+  if (pick) void openSk(home, pick);
+  else toast("This Sakarath book has no unit in the app yet.");
 }
 
 /** Move him to another stage or unit (his paper is from there): the page opens it as soon as the board shows it. */
@@ -1665,6 +1705,7 @@ function PaperHead(props: { v: View; later?: () => void; onCard: () => void }) {
         </div>
       </header>
       <BookRow v={v.home ?? v} open={bookId(v)} openStage={v.stage} />
+      {isSkView(v) && <SkRow home={v.home ?? v} open={bookId(v)!} />}
       {v.where === "absent" && <SignedOut v={v} />}
       {race && raceBook && raceStage && (
         <BookRaceSheet
@@ -1686,17 +1727,51 @@ function PaperHead(props: { v: View; later?: () => void; onCard: () => void }) {
  */
 function BookRow(props: { v: View; open: string | undefined; openStage: string | null }) {
   const { v } = props;
+  // The printed Sakarath book (19 Nov 2026): one S per book he holds, first; its units in the row under this one.
   const books = booksOf(
     v,
     (id) => unitNo(unitOf(id)?.code ?? ""),
     (id, st) => !!bookDocAt(id, st)?.tute,
-  );
+  ).filter((b) => !isSkb(b.unitId));
+  const skbs = v.given.filter((g) => isSkb(g.unitId)).map((g) => skbFor(unitOf(g.unitId)!.grade));
+  const openUnit = unitOf(props.open);
+  const openSkGrade = openUnit && openUnit.grade > 100 && !isSkbGrade(openUnit.grade) ? realGrade(openUnit.grade) : null;
   return (
     <div class="fc-bookrow">
-      {books.length === 0 ? (
+      {books.length === 0 && skbs.length === 0 ? (
         <p class="fc-none">No book yet: choose his stage and unit below, or give him one on the Books page.</p>
       ) : (
-        <HRow as="nav" class="fc-books" label={`${v.s.name}'s books: tap one to correct it`} list={v.s._id} at={props.open}>
+        <HRow
+          as="nav"
+          class="fc-books"
+          label={`${v.s.name}'s books: tap one to correct it`}
+          list={v.s._id}
+          at={openSkGrade !== null ? `sk${openSkGrade}` : props.open}
+        >
+          {skbs.map((g) => {
+            const mine = (v.sk ?? []).filter((b) => b.unit?.grade === skGrade(g));
+            const waiting = mine.reduce((a, b) => a + (b.ms?.waiting.length ?? 0), 0);
+            const on = openSkGrade === g;
+            const ol = g === OL;
+            return (
+              <button
+                key={`sk${g}`}
+                type="button"
+                class={`fc-bk fc-skb${on ? " on" : ""}`}
+                data-u={waiting ? "amber" : undefined}
+                aria-pressed={on}
+                aria-label={`The Sakarath book${ol ? " (OL)" : ""}${on && openUnit ? `, unit ${unitNo(openUnit.code)} on this paper` : ": tap to correct it"}${waiting ? `, ${waiting} level${waiting === 1 ? "" : "s"} handed in` : ""}`}
+                onClick={() => {
+                  if (!on) openSakarath(v, g);
+                }}
+              >
+                <b class="st-sk">S</b>
+                {on && openUnit ? <i>{unitNo(openUnit.code)}</i> : ol ? <i>OL</i> : null}
+                <span lang="ta">{on && openUnit ? (openUnit.ta || openUnit.en).replace(/ · ஸகராத்$/, "") : "ஸகராத்"}</span>
+                {waiting > 0 && <em class="fc-bk-n">{waiting}</em>}
+              </button>
+            );
+          })}
           {books.map((b) => {
             const u = unitOf(b.unitId);
             if (!u) return null;
@@ -1704,7 +1779,7 @@ function BookRow(props: { v: View; open: string | undefined; openStage: string |
             const on = b.unitId === props.open && b.stage === props.openStage;
             // One of his books with a view (his book now, or one with something waiting): opens it here, he stays
             // where he is. A book he hasn't started (given, nothing waiting): he moves to it, as before.
-            const bv = [v, ...v.others].find((x) => bookId(x) === b.unitId && x.stage === b.stage);
+            const bv = booksIn(v).find((x) => bookId(x) === b.unitId && x.stage === b.stage);
             return (
               <button
                 key={`${b.unitId}:${b.stage}`}
@@ -1729,6 +1804,61 @@ function BookRow(props: { v: View; open: string | undefined; openStage: string |
           })}
         </HRow>
       )}
+    </div>
+  );
+}
+
+const SK_WORDS: Record<ReturnType<typeof skLook>["look"], string> = {
+  none: "not started",
+  later: "not started",
+  current: "part of the way",
+  waiting: "handed in, to correct",
+  home: "marked at home, to check",
+  fixed: "finished",
+};
+
+/**
+ * The units of the printed Sakarath book he holds (19 Nov 2026), in ONE row under his books, like a workbook's level
+ * bar: finished by their marks (green, amber, red), handed in striped amber, part of the way outlined, not started pale;
+ * the open one ringed. A gold S before them says whose numbers these are. A tap opens that unit (his row there made
+ * the first time): its levels in the bar below.
+ */
+function SkRow(props: { home: View; open: string }) {
+  const { home } = props;
+  const u = unitOf(props.open);
+  if (!u) return null;
+  const units = skUnitsIn(realGrade(u.grade));
+  const mine = new Map((home.sk ?? []).map((b) => [bookId(b), b]));
+  return (
+    <div class="fc-skrow">
+      <b class="fc-skl" aria-hidden="true">
+        S
+      </b>
+      <HRow class="fc-lvbar fc-skbar" label="The Sakarath book's units" list={`${home.s._id}:sk${u.grade}`} at={props.open}>
+        {units.map((x, i) => {
+          const k = skLook(mine.get(x._id));
+          const pct = k.pct;
+          const cls = k.look === "fixed" ? `fixed${pct === null || pct >= 80 ? " good" : pct >= 50 ? " mid" : " low"}` : k.look === "none" ? "later" : k.look;
+          const on = x._id === props.open;
+          const gap = i > 0 && units[i - 1].term !== x.term ? " gap" : "";
+          const name = (x.ta || x.en).replace(/ · ஸகராத்$/, "");
+          return (
+            <button
+              key={x._id}
+              type="button"
+              class={`fc-lb ${cls}${on ? " on" : ""}${gap}`}
+              data-u={k.look === "waiting" ? "amber" : undefined}
+              aria-pressed={on}
+              aria-label={`Sakarath ${unitNo(x.code)} ${name}: ${SK_WORDS[k.look]}${k.look === "fixed" && pct !== null ? `, ${pct}%` : ""}`}
+              onClick={() => {
+                if (!on) void openSk(home, x._id);
+              }}
+            >
+              {unitNo(x.code)}
+            </button>
+          );
+        })}
+      </HRow>
     </div>
   );
 }
@@ -1786,8 +1916,9 @@ function LevelBar(props: { v: View; open: number | null; drafts: Draft[] | undef
         const mark = look === "fixed" ? (pct === null || pct >= 80 ? " good" : pct >= 50 ? " mid" : " low") : "";
         const on = props.open === l.n;
         const got = v.mm.lv[String(l.n)]?.got;
-        // Corrected, and lost marks still wait: a dot (violet = Evaluation, blue = Theory).
-        const w = look === "fixed" ? levelWaits(v.mm, l) : { evaluation: 0, theory: 0 };
+        // Corrected, and lost marks still wait: a dot (violet = Evaluation, blue = Theory). A Sakarath book goes to no
+        // room (19 Nov 2026): no dots.
+        const w = look === "fixed" && !isSkView(v) ? levelWaits(v.mm, l) : { evaluation: 0, theory: 0 };
         const wait = w.evaluation ? " w-eval" : w.theory ? " w-theory" : "";
         const waitWords = w.evaluation ? `, ${w.evaluation} waiting for Evaluation` : w.theory ? `, ${w.theory} waiting for Theory` : "";
         const home = homeToCheck(v.mm.lv[String(l.n)]);
@@ -1940,13 +2071,18 @@ function OverView(props: { v: View; drafts: Draft[] | undefined; head: Component
   const ms = v.ms!;
   const [busy, setBusy] = useState(false);
   // The usual next step, the same as Class → Move: the next workbook of the term, else Legend (whole papers).
-  const step = nextBook(allUnits(), v.unit);
+  const sk = isSkView(v);
+  const step = sk ? null : nextBook(allUnits(), v.unit);
+  // A unit of his printed Sakarath book (19 Nov 2026): the next unit of that book he hasn't finished (he is not moved).
+  const home = v.home ?? v;
+  const skUnits = sk && v.unit ? skUnitsIn(realGrade(v.unit.grade)) : [];
+  const skTo = sk && v.unit ? unitOf(skNext(home, skUnits, v.unit._id)) : null;
   return (
     <div class="fc-paper">
       {props.head}
       <LevelBar v={v} open={null} drafts={props.drafts} onPick={(n) => openLevel(v, n)} />
       <section class="fc-over" aria-label="The unit's marks">
-        <p class="fc-over-k">{v.unit ? `Unit ${unitNo(v.unit.code)} finished` : "Workbook finished"}</p>
+        <p class="fc-over-k">{v.unit ? `${sk ? "Sakarath" : "Unit"} ${unitNo(v.unit.code)} finished` : "Workbook finished"}</p>
         <p class="fc-total">
           <b>{ms.unit.got}</b> / {ms.unit.max}
           <span>{ms.unit.pct ?? 0}%</span>
@@ -1959,6 +2095,13 @@ function OverView(props: { v: View; drafts: Draft[] | undefined; head: Component
         <p class="muted small">Write these on the marks sheet at the back of his book. Tap a level to check it.</p>
         <MasterBook role="correction" v={v} onCorrect={(n) => openLevel(v, n)} />
       </section>
+      {skTo && (
+        <div class="fc-pad">
+          <button type="button" class="btn big wide fc-next" onClick={() => void openSk(home, skTo._id)}>
+            Next: Sakarath · {unitNo(skTo.code)} <span lang="ta">{(skTo.ta || skTo.en).replace(/ · ஸகராத்$/, "")}</span>
+          </button>
+        </div>
+      )}
       {step && (
         <div class="fc-pad">
           <button
@@ -2064,7 +2207,7 @@ function Marking(props: {
         at={at}
         onGo={go}
         free={(q) => isFreeQ(v, q)}
-        teach={fixedLevel ? (q) => teachState(v.mm.q[String(q)]) : undefined}
+        teach={fixedLevel && !isSkView(v) ? (q) => teachState(v.mm.q[String(q)]) : undefined}
       />
       {paper.resumed && !paper.carriedFrom && !paper.remark && (
         // One short line (2 Nov 2026: notes took the answer's room): the boxes above show which.
@@ -2356,7 +2499,7 @@ function QuestionCard(props: {
           ai={ai.button}
         />
         {ai.sheet}
-        <TeachLine v={v} level={paper.level} q={q} />
+        {!isSkView(v) && <TeachLine v={v} level={paper.level} q={q} />}
         {!parts && (
           // The printed question's icon on (13 Nov 2026): the question, each part's answer under its own sub-question.
           <div class="fc-ans">
@@ -2545,8 +2688,12 @@ function Summary(props: { v: View; paper: MasterPaper; level: MasterLevel; each:
             <b>?</b> {blanks}: blank, it goes with the lost marks.
           </p>
         )}
+        {/* A Sakarath book (19 Nov 2026) goes to no room: its lost marks stay on his book, said in one line. */}
+        {isSkView(v) && (lostQs.length > 0 || !!blanks) && (
+          <p class="muted small fc-skroute">Lost marks stay on his Sakarath book: the Evaluation and Theory rooms don't show Sakarath books.</p>
+        )}
         {/* A blank is a lost mark (8 Nov 2026): it goes where the lost marks go. */}
-        {(lostQs.length > 0 || !!blanks) && (
+        {!isSkView(v) && (lostQs.length > 0 || !!blanks) && (
           <div class="fc-route">
             <span class="ct-route-l">Lost marks go to</span>
             <span class="segc" role="group" aria-label="Lost marks go to">

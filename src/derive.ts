@@ -5,6 +5,7 @@
 import { fighter, type Fighter, type MasterData, type SectionData } from "../convex/lib/book";
 import { slDay } from "../convex/lib/day";
 import { computeMaster, EMPTY_MASTER, masterEvalUrgency, type MState, type MStatus } from "../convex/lib/master";
+import { isSkbGrade } from "../convex/lib/sakarath";
 import {
   computeStatus,
   evalUrgency,
@@ -85,6 +86,11 @@ export type View = {
   given: { unitId: string; stage: "fighter" | "master"; work: boolean; done: boolean }[];
   /** His other books with something waiting (a level handed in, marks to explain, questions for Theory). */
   others: View[];
+  /**
+   * The printed Sakarath book he holds (19 Nov 2026, given on the Books page): each of its units he has a row in, as a
+   * book of his, whatever it waits for. Correction's only (its units row and papers); no other page reads it.
+   */
+  sk: View[];
   /** On one of his other books: his main view (his book now, where he is). */
   home?: View;
 };
@@ -94,9 +100,10 @@ export function withBooks(views: View[]): View[] {
   return views.flatMap((v) => (v.others.length ? [v, ...v.others] : [v]));
 }
 
-/** Workbook levels handed in and waiting for Correction, in all his books. */
+/** Workbook levels handed in and waiting for Correction, in all his books (his printed Sakarath book's too). */
 export function waitingAll(v: View): number {
-  return (v.ms?.waiting.length ?? 0) + v.others.reduce((a, b) => a + (b.ms?.waiting.length ?? 0), 0);
+  const n = (list: readonly View[]) => list.reduce((a, b) => a + (b.ms?.waiting.length ?? 0), 0);
+  return (v.ms?.waiting.length ?? 0) + n(v.others) + n(v.sk ?? []);
 }
 
 /** Did this room finish with him today? Those not seen today go first (fair turns). */
@@ -110,7 +117,7 @@ function bookView(home: View, p: Progress): View | null {
   const unit = unitOf(p.unitId);
   const doc = bookDocAt(p.unitId, p.stage);
   if (!unit || !doc) return null;
-  const base = { ...home, unit, stage: p.stage as Stage, home, others: [], tag: tagOf(home.s, unit), key: `${home.s._id}:${p.unitId}:${p.stage}` };
+  const base = { ...home, unit, stage: p.stage as Stage, home, others: [], sk: [], tag: tagOf(home.s, unit), key: `${home.s._id}:${p.unitId}:${p.stage}` };
   if (doc.data.kind === "fighter" && p.stage === "fighter") {
     const f = fighter(doc.data);
     const saved = (p.marks ?? {}) as Marks;
@@ -202,7 +209,11 @@ export function buildViews(board: Board, now: number): View[] {
     const given = (board.given?.[s._id] ?? [])
       .filter((g) => !(g.unitId === s.unitId && g.stage === stage))
       .map((g) => ({ unitId: g.unitId as string, stage: g.stage, work: g.work, done: !!g.done }));
-    const otherWork = given.filter((g) => g.work).map((g) => unitOf(g.unitId)?.code ?? "?");
+    // The printed Sakarath book (19 Nov 2026) is said by its name: it has no unit number.
+    const otherWork = given.filter((g) => g.work).map((g) => {
+      const u = unitOf(g.unitId);
+      return u && isSkbGrade(u.grade) ? "Sakarath" : (u?.code ?? "?");
+    });
     const dryHere = st ? st.dry : ms ? ms.dry : false;
     const noWork = dryHere && otherWork.length === 0;
     const onOther = `on ${otherWork.join(", ")}`;
@@ -303,10 +314,15 @@ export function buildViews(board: Board, now: number): View[] {
       otherWork,
       given,
       others: [],
+      sk: [],
     };
     for (const p of board.more?.[s._id] ?? []) {
       const b = bookView(view, p);
       if (b) view.others.push(b);
+    }
+    for (const p of board.sk?.[s._id] ?? []) {
+      const b = bookView(view, p);
+      if (b) view.sk.push(b);
     }
     return view;
   });

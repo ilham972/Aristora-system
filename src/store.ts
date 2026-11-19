@@ -10,7 +10,7 @@ import { computeStatus, type Mark, type Marks, type Status } from "../convex/lib
 import { SIGNED_OUT } from "../convex/lib/auth";
 import type { Dept, PageId } from "../convex/lib/dept";
 import type { SimInfo } from "../convex/sim";
-import { isSkGrade, skGrade } from "../convex/lib/sakarath";
+import { isSkbGrade, isSkGrade, skbGrade, skGrade } from "../convex/lib/sakarath";
 import { OL } from "../convex/lib/syllabus";
 import { errorText, mutate, phoneToken, savePhoneToken, setLookOnly, subscribe, watchLink, type Link } from "./backend";
 
@@ -28,6 +28,8 @@ export type Board = {
   more?: Record<string, Progress[]>;
   /** Books given to them (not their book now): does each still have work? */
   given?: Record<string, { unitId: Id<"units">; stage: "fighter" | "master"; work: boolean; done?: boolean }[]>;
+  /** Students in class holding the printed Sakarath book (19 Nov 2026): their rows in its units, for Correction. */
+  sk?: Record<string, Progress[]>;
   calls: Call[];
   /** stats[room][key]: each room's score for this class (src/score.ts); missing on an old server. */
   session: { _id: Id<"sessions">; startedAt: number; lastActivityAt: number; stats?: Record<string, Record<string, number>> } | null;
@@ -220,10 +222,10 @@ export async function signOutHere(): Promise<void> {
  * own rows change. Put together here into the same board `state.get` gives. Shown once every student's part came (or
  * after 4 s), so a page never opens half-filled.
  */
-type His = { progress: Progress | null; books: Record<string, BookDoc>; more: Progress[] | null; given: NonNullable<Board["given"]>[string] | null };
+type His = { progress: Progress | null; books: Record<string, BookDoc>; more: Progress[] | null; given: NonNullable<Board["given"]>[string] | null; sk?: Progress[] | null };
 function startBoard(): () => void {
   void ensureData();
-  let light: Omit<Board, "progress" | "books" | "more" | "given"> | null = null;
+  let light: Omit<Board, "progress" | "books" | "more" | "given" | "sk"> | null = null;
   const his = new Map<string, His>();
   const hisStops = new Map<string, () => void>();
   let ready = false;
@@ -239,6 +241,7 @@ function startBoard(): () => void {
     const books: Board["books"] = {};
     const more: NonNullable<Board["more"]> = {};
     const given: NonNullable<Board["given"]> = {};
+    const sk: NonNullable<Board["sk"]> = {};
     for (const s of light.students) {
       const h = his.get(s._id);
       if (!h) continue;
@@ -246,8 +249,9 @@ function startBoard(): () => void {
       Object.assign(books, h.books);
       if (h.more) more[s._id] = h.more;
       if (h.given) given[s._id] = h.given;
+      if (h.sk) sk[s._id] = h.sk;
     }
-    board = { ...light, progress, books, more, given };
+    board = { ...light, progress, books, more, given, sk };
     boardError = null;
     emit();
   }
@@ -296,13 +300,14 @@ function startBoard(): () => void {
       api.catalog.units,
       {},
       (value) => {
-        // A Sakarath book's unit (grade 106, 107 …) is never a unit of the syllabus: only its name is looked up.
+        // A Sakarath book's unit (grade 106, 107 …) is never a unit of the syllabus: only its name is looked up. Nor
+        // is the printed Sakarath book's own unit (206, 207 …: one stock item per grade, 19 Nov 2026).
         units = value.filter((u) => !isSkGrade(u.grade));
         unitById.clear();
         skByKey.clear();
         for (const u of value) {
           unitById.set(u._id, u);
-          if (isSkGrade(u.grade)) skByKey.set(u.key.replace(/-SK$/, ""), u);
+          if (isSkGrade(u.grade) && !isSkbGrade(u.grade)) skByKey.set(u.key.replace(/-SK$/, ""), u);
         }
         emit();
       },
@@ -401,7 +406,21 @@ export function skUnitOf(u: Unit): Unit | null {
 }
 /** The O/L Sakarath book's own units (19 Nov 2026: none of them is an O/L topic), in the book's order. */
 export function olSkUnits(): Unit[] {
-  return [...unitById.values()].filter((u) => u.grade === skGrade(OL)).sort((a, b) => a.order - b.order);
+  return skUnitsIn(OL);
+}
+/** A grade's Sakarath units (the O/L book's own for OL), in the book's order: Correction's units row. */
+export function skUnitsIn(grade: number): Unit[] {
+  return [...unitById.values()].filter((u) => u.grade === skGrade(grade)).sort((a, b) => a.order - b.order || a.code.localeCompare(b.code));
+}
+/** The printed Sakarath book of a grade (19 Nov 2026: one stock item, a unit of its own), or null. */
+export function skbUnitIn(grade: number): Unit | null {
+  for (const u of unitById.values()) if (u.grade === skbGrade(grade)) return u;
+  return null;
+}
+/** Is this the printed Sakarath book's own unit? */
+export function isSkb(id: string | null | undefined): boolean {
+  const u = unitOf(id);
+  return !!u && isSkbGrade(u.grade);
 }
 
 // ---- A student's book and his work in it ----

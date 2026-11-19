@@ -346,6 +346,18 @@ export function stockPeople(
     .sort((x, y) => x.name.localeCompare(y.name));
 }
 
+/**
+ * The printed Sakarath book of a grade (19 Nov 2026: one book, every unit) and the students it can go to (its grade's;
+ * the O/L book's: Grades 10 and 11), A–Z: who has it. It is no one's "next book", so the page ticks nobody: she ticks.
+ */
+export function skbPeople(views: readonly View[], grade: number, key: string, holds: (sid: string) => ReadonlySet<string>): StockPerson[] {
+  const mine = (g: number | undefined) => (grade === OL_GRADE ? g === 10 || g === 11 : g === grade);
+  return views
+    .filter((v) => !v.s.demo && !v.s.test && !v.s.archived && mine(v.s.grade))
+    .map((v) => ({ sid: v.s._id as string, name: v.s.name, has: holds(v.s._id).has(key), cur: false, need: null, here: !!v.s.present }))
+    .sort((x, y) => x.name.localeCompare(y.name));
+}
+
 /** Who the page ticks for a book by itself: at the end of his book, here now, and without a copy. */
 export function stockTicks(people: readonly StockPerson[]): string[] {
   return people.filter((p) => p.need === "now" && p.here && !p.has).map((p) => p.sid);

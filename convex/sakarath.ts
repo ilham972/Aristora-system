@@ -1,14 +1,15 @@
 // Exam mode (17 Nov 2026, his voice note; convex/lib/sakarath.ts): Settings → Books → Exam mode, one switch per grade
 // (his answer: "One per grade"). On, that grade's family app opens each unit's Sakarath book instead of its past
 // papers (lib/family.ts `worldsOf`); off, the past papers again. OL (19 Nov 2026): the students ticked for the O/L map
-// get the O/L book's own map. The owner only.
+// get the O/L book's own map. The owner only. `open` (19 Nov 2026): Correction opens a unit of the printed Sakarath
+// book a student holds (given on the Books page: lib/sakarath.ts, "The printed Sakarath book").
 
 import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { mutation } from "./lib/fn";
 import { actor, viewer } from "./lib/auth";
-import { cleanBy, fail, log } from "./lib/backend";
-import { EXAM_GRADES, EXAM_KEY, examGrades, skGrade } from "./lib/sakarath";
+import { bookFor, cleanBy, ensureProgress, fail, getStudent, log } from "./lib/backend";
+import { EXAM_GRADES, EXAM_KEY, examGrades, isSkbGrade, isSkGrade, skGrade, skHeld } from "./lib/sakarath";
 import { gradeWords } from "./lib/syllabus";
 
 const token = v.optional(v.string());
@@ -61,5 +62,24 @@ export const setExam = mutation({
     else await ctx.db.insert("meta", { key: EXAM_KEY, value: next });
     await log(ctx, null, Date.now(), { kind: "exam-mode", by: cleanBy(args.by), value: `${args.grade} ${args.on ? "on" : "off"}` });
     return next;
+  },
+});
+
+/**
+ * Correction opens a unit of the printed Sakarath book he holds (19 Nov 2026, his ask: "after give that to my student
+ * ... visible to correct"): his row in it, made the first time; nothing else changes (he is never moved, his book now
+ * stays). The board then brings it (state.ts `sk`). Correction or Evaluation, as for a workbook's marks.
+ */
+export const open = mutation({
+  args: { token, id: v.id("students"), unitId: v.id("units"), by: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["correction", "evaluation"], args.by);
+    const s = await getStudent(ctx, args.id);
+    const unit = await ctx.db.get(args.unitId);
+    if (!unit || !isSkGrade(unit.grade) || isSkbGrade(unit.grade)) fail("That is not a unit of a Sakarath book.");
+    if (!(await bookFor(ctx, unit._id, "master"))?.sk) fail(`${unit.code} has no Sakarath book in the app.`);
+    if (!(await skHeld(ctx, s._id)).has(unit.grade)) fail(`${s.name} doesn't have this Sakarath book: give it on the Books page (Stock → S).`);
+    await ensureProgress(ctx, s._id, unit._id, "master", Date.now());
+    return true;
   },
 });

@@ -8,6 +8,7 @@ import { fighter, type Fighter, type MasterData } from "./book";
 import { DAY_MS, SL_OFFSET_MS, slDay } from "./day";
 import { computeMaster, EMPTY_MASTER, homeToCheck, type MState } from "./master";
 import { computeStatus } from "./status";
+import { isSkGrade } from "./sakarath";
 import { digestOf, type Digest } from "./boss";
 import { wipeChats } from "./chat";
 import { backMoment } from "./us";
@@ -213,7 +214,8 @@ export async function mustHoldBook(ctx: MutationCtx, me: Doc<"users">, student: 
     .withIndex("by_paper", (q) => q.eq("studentId", student._id).eq("unitId", unit._id))
     .first();
   if (c && c.userId !== me._id && claimLive(c, now)) {
-    fail(`${c.name} is correcting ${student.name}'s Unit ${Number(unit.code.replace(/\D/g, "")) || unit.code} now. Ask her for it.`);
+    // A Sakarath book's unit (19 Nov 2026) has the same number as its unit: said as "Sakarath 5".
+    fail(`${c.name} is correcting ${student.name}'s ${isSkGrade(unit.grade) ? "Sakarath" : "Unit"} ${Number(unit.code.replace(/\D/g, "")) || unit.code} now. Ask her for it.`);
   }
 }
 

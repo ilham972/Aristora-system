@@ -17,6 +17,7 @@ import { levelOutOf, type Fighter, type MasterLevel, type SectionData } from "..
 import { heldBy, type Claim } from "../convex/lib/claims";
 import type { KeyAnswer, KeyPart } from "../convex/lib/key";
 import { homeToCheck, type MLevel, type MQ, type MState } from "../convex/lib/master";
+import { isSkGrade } from "../convex/lib/sakarath";
 import { waitingAll, type View } from "./derive";
 
 /** How long after the screen moves on a tap is ignored (a double tap must not mark the next question). */
@@ -48,9 +49,9 @@ export type Pill = { v: View; tone: PillTone; waiting: number; home: number };
 export function homeLevels(v: View): MasterLevel[] {
   return v.mb ? v.mb.levels.filter((l) => homeToCheck(v.mm.lv[String(l.n)])) : [];
 }
-/** ⌂ in all his books (he works on several at once). */
+/** ⌂ in all his books (he works on several at once; his printed Sakarath book's too). */
 export function homeAll(v: View): number {
-  return homeLevels(v).length + v.others.reduce((a, b) => a + homeLevels(b).length, 0);
+  return homeLevels(v).length + [...v.others, ...(v.sk ?? [])].reduce((a, b) => a + homeLevels(b).length, 0);
 }
 
 /**
@@ -463,6 +464,55 @@ export function bookId(v: View): string | undefined {
   return (v.unit?._id ?? v.s.unitId) as string | undefined;
 }
 
+/** Every book of his with a view: his book now, his other books with work, his printed Sakarath book's units. */
+export function booksIn(v: View): View[] {
+  return [v, ...v.others, ...(v.sk ?? [])];
+}
+
+// ---- The printed Sakarath book on Correction (19 Nov 2026) ----
+
+/** A view of one unit of a Sakarath book (grade 106 …: never his book now, never a room's). */
+export const isSkView = (v: View): boolean => !!v.unit && isSkGrade(v.unit.grade);
+
+/** How a unit of his printed Sakarath book looks on its units row (`none`: he has no row in it yet). */
+export type SkLook = "none" | "later" | "current" | "waiting" | "home" | "fixed";
+export function skLook(b: View | null | undefined): { look: SkLook; pct: number | null } {
+  if (!b?.ms || !b.mb) return { look: "none", pct: null };
+  if (b.ms.finished) return { look: "fixed", pct: b.ms.unit.pct };
+  if (b.ms.waiting.length) return { look: "waiting", pct: null };
+  if (b.where !== "absent" && homeLevels(b).length) return { look: "home", pct: null };
+  if (Object.values(b.mm.lv).some((l) => l?.fixed || l?.done)) return { look: "current", pct: null };
+  return { look: "later", pct: null };
+}
+
+/** The last moment a level of this book was handed in or corrected (0: never). */
+const touched = (b: View) => Object.values(b.mm.lv).reduce((a, l) => Math.max(a, l?.fixed ?? 0, l?.done ?? 0), 0);
+
+/**
+ * The unit of his printed Sakarath book that opens from the S on his books row: one with a level handed in, else one
+ * marked at home, else the one he was last corrected in and hasn't finished, else his unit now's, else the first he
+ * hasn't finished, else the first. `units` = the book's units in its order; `now` = his unit now's Sakarath unit.
+ */
+export function skPick(v: View, units: readonly { _id: string }[], now: string | null): string | null {
+  const mine = new Map((v.sk ?? []).map((b) => [bookId(b), b]));
+  const list = units.map((u) => mine.get(u._id)).filter((b): b is View => !!b);
+  const pick =
+    list.find((b) => !!b.ms?.waiting.length) ??
+    list.find((b) => b.where !== "absent" && homeLevels(b).length > 0) ??
+    list.filter((b) => !b.ms?.finished && touched(b) > 0).sort((a, b) => touched(b) - touched(a))[0];
+  if (pick) return bookId(pick) ?? null;
+  if (now && units.some((u) => u._id === now) && !mine.get(now)?.ms?.finished) return now;
+  return (units.find((u) => !mine.get(u._id)?.ms?.finished) ?? units[0])?._id ?? null;
+}
+
+/** The next unit of the book after this one that he hasn't finished (the unit's marks screen offers it), or null. */
+export function skNext(v: View, units: readonly { _id: string }[], at: string): string | null {
+  const mine = new Map((v.sk ?? []).map((b) => [bookId(b), b]));
+  const i = units.findIndex((u) => u._id === at);
+  if (i < 0) return null;
+  return units.slice(i + 1).find((u) => !mine.get(u._id)?.ms?.finished)?._id ?? null;
+}
+
 /** The view a paper is on: his book now, or one of his other books (null: he left, or that book has nothing now). */
 export function viewOfPaper(views: readonly View[], p: { studentId: string; unitId: string | null; kind?: string }): View | null {
   const v = views.find((x) => x.s._id === p.studentId);
@@ -470,7 +520,7 @@ export function viewOfPaper(views: readonly View[], p: { studentId: string; unit
   if (!p.unitId) return v;
   // A topic tute's two books share their unit: a paper of one never lands on the other (its kind says which).
   const stage = p.kind === "fighter" ? "fighter" : p.kind === "master" || p.kind === "over" || p.kind === "level" ? "master" : null;
-  return [v, ...v.others].find((b) => bookId(b) === p.unitId && (!stage || b.stage === stage)) ?? null;
+  return booksIn(v).find((b) => bookId(b) === p.unitId && (!stage || b.stage === stage)) ?? null;
 }
 
 /**
@@ -488,11 +538,8 @@ export function bookToOpen(
   const here = v.where !== "absent";
   const handedIn = (b: View) => !!b.ms?.waiting.length;
   const atHome = (b: View) => here && homeLevels(b).length > 0;
-  const work = [
-    ...(handedIn(v) || atHome(v) ? [v] : []),
-    ...v.others.filter(handedIn),
-    ...v.others.filter((b) => !handedIn(b) && atHome(b)),
-  ];
+  const more = [...v.others, ...(v.sk ?? [])];
+  const work = [...(handedIn(v) || atHome(v) ? [v] : []), ...more.filter(handedIn), ...more.filter((b) => !handedIn(b) && atHome(b))];
   const holder = (b: View) => heldBy(claims, me, v.s._id, bookId(b), now);
   const free = work.find((b) => !holder(b));
   if (free) return { view: free, held: null, skipped: work[0] !== free ? holder(work[0]) : null };
@@ -502,7 +549,7 @@ export function bookToOpen(
 
 /** Someone else has one of his books open: her claim (the names row shows her first letter). */
 export function heldOne(v: View, claims: readonly Claim[] | null | undefined, me: string | null | undefined, now: number): Claim | null {
-  for (const b of [v, ...v.others]) {
+  for (const b of booksIn(v)) {
     const c = heldBy(claims, me, v.s._id, bookId(b), now);
     if (c) return c;
   }

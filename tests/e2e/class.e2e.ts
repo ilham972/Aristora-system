@@ -5219,6 +5219,168 @@ test("Sakarath: Books → S shows a unit's Sakarath book (gold when it is in the
   expect(problems).toEqual([]);
 });
 
+test("Sakarath book in class: Books → Stock → S gives the whole book to the ticked; on Correction its units in a row, a unit he never opened, marked and saved; Take back", async () => {
+  // 19 Nov 2026, his ask: "the book is don't have unit by unit. This is whole big book ... some students give, some
+  // students I didn't give ... add the feature to give the Sakarath book" (Books → Stock) and "after give that to my
+  // student ... visible to correct" (Correction). Grade 7: U08's workbook (in the code); made-up Sakarath books for
+  // U08 and U09 on their own units, and the printed book's own unit, as the Claude link saves them.
+  const backend = await newClass();
+  const as = { token: OWNER_TOKEN };
+  await backend.t.mutation(api.setup.ensure, as);
+  const box = (v: string) => ({ k: "box" as const, b: [{ v: [v] }] });
+  const ids = await backend.t.run(async (ctx) => {
+    const unit = async (key: string) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", key)).first())!;
+    const data = { kind: "master" as const, parts: [{ id: "II" as const, from: 1, to: 2, kind: "cards" as const }], levels: [{ n: 1, from: 1, to: 2, max: 3 }], marks: { "1": 2, "2": 1 } };
+    const sk = async (key: string) => {
+      const u = await unit(key);
+      const id = await ctx.db.insert("units", { grade: 107, code: u.code, key: `${u.key}-SK`, term: u.term, order: u.order, en: `Sakarath · ${u.en}`, ta: `${u.ta} · ஸகராத்` });
+      await ctx.db.insert("books", { unitId: id, stage: "master", title: "ஸகராத் புத்தகம்", sk: true, data, keyCount: 2, qCount: 2, updatedAt: Date.now() });
+      await ctx.db.insert("keys", {
+        unitId: id,
+        stage: "master",
+        answers: [
+          { q: 1, parts: [{ p: "i", a: "**12**", m: 1, t: box("12") }, { p: "ii", a: "**3**", m: 1, t: box("3") }] },
+          { q: 2, parts: [{ p: "i", a: "**7**", m: 1, t: box("7") }] },
+        ],
+        updatedAt: Date.now(),
+      });
+      for (const q of [1, 2]) {
+        await ctx.db.insert("questions", { unitId: id, stage: "master", q, html: `<div class="sec first bk"><div class="sh"><span class="sn">a</span><div class="st lead2">A made-up lead ${q}</div></div><div class="pt"><div class="rp"><span class="rl">(i)</span><span class="rt">A made-up part</span></div></div></div>` });
+      }
+      return id;
+    };
+    const s08 = await sk("G7-U08");
+    const s09 = await sk("G7-U09");
+    const skb = await ctx.db.insert("units", { grade: 207, code: "SK", key: "G7-SKB", term: 0, order: 0, en: "Sakarath book", ta: "ஸகராத் புத்தகம்" });
+    return { u08: (await unit("G7-U08"))._id, s08, s09, skb };
+  });
+  const add = (name: string) => backend.t.mutation(api.students.add, { ...as, name, grade: 7, term: 1, stage: "master", unitId: ids.u08 });
+  const hana = await add("Hana K");
+  const ravi = await add("Ravi P");
+  const kumar = await add("Kumar S");
+  for (const id of [hana, ravi, kumar]) await backend.t.mutation(api.students.setPresent, { ...as, id, present: true });
+  const MALA = "mala-sakarath-token-0123456789abcdefghijklmnopqrstuvwx";
+  const mala = await addPerson(backend.t, { name: "Mala", token: MALA, tabs: ["correction"] });
+  await backend.t.mutation(api.people.setRole, { ...as, id: mala, dept: "management", lead: false, pages: ["dash", "class", "correction", "fees", "books", "us"], tabs: ["correction"], can: [] });
+  await backend.push();
+  const fits = async (p: Page) => expect(await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  const skRow = (sid: typeof hana, unitId: string) =>
+    backend.t.run(async (ctx) => (await ctx.db.query("progress").withIndex("by_student", (q) => q.eq("studentId", sid)).collect()).find((p) => p.unitId === unitId) ?? null);
+
+  // Books → Stock → Grade 7: S first (gold: the whole book), then Unit 8; the page picks Unit 8 as before.
+  const M = await phone(backend, "fees", PHONE, MALA);
+  await M.locator(".tabs .tab.books").click();
+  await M.locator(".mn-seg").getByRole("button", { name: "Stock" }).click();
+  await M.locator(".mnx-grades").getByRole("button", { name: /^Grade 7\b/ }).click();
+  await textsAre(M.locator(".mnx-books .mnx-bk > b"), ["S", "8"]);
+  await textsAre(M.locator(".mnx-books .mnx-bk.on > b"), ["8"]);
+  await M.locator(".mnx-books .mnx-bk.mnx-skb").click();
+  await textsAre(M.locator(".mnx-books .mnx-bk.on > b"), ["S"]);
+  const gp = M.locator(".mnx-givepad");
+  await contains(gp.locator(".mnx-who"), "ஸகராத் புத்தகம்");
+  await contains(gp.locator(".mnx-bookline"), "the whole book · not counted · no price yet");
+  await contains(gp.locator(".mnx-bookline small"), "every unit opens on Correction");
+  // His grade's students, A–Z; nobody ticked by the page (it is no one's next book): she ticks.
+  await until(async () => JSON.stringify(await namesOf(M.locator(".mnx-names .mnx-p"))) === JSON.stringify(["Hana K", "Kumar S", "Ravi P"]), "Grade 7's names");
+  await count(M.locator(".mnx-names .mnx-p.on"), 0);
+  expect(await gp.locator(".mnx-paid").isDisabled()).toBe(true);
+  await M.locator('.mnx-names .mnx-p[data-name="Hana K"]').click();
+  await M.locator('.mnx-names .mnx-p[data-name="Ravi P"]').click();
+  await gp.getByRole("button", { name: "Give to 2" }).click();
+  await contains(M.locator(".toast"), "Sakarath book given to 2: Hana K, Ravi P.");
+  await count(M.locator(".mnx-names .mnx-p.mnx-b-has"), 2);
+  await fits(M);
+  await shot(M, "skb01-stock-s-given");
+  const held = await backend.t.run(async (ctx) => (await ctx.db.query("handouts").collect()).filter((h) => h.unitId === ids.skb).map((h) => h.studentId).sort());
+  expect(held).toEqual([hana, ravi].sort());
+
+  // Correction: Hana's paper opens on her workbook; her books row starts with S. A tap: her unit now's Sakarath unit
+  // (8), its units in a row under her books, its level and questions below; nothing was there before (her row made).
+  await M.locator(".tabs .tab.correction").click();
+  const tap = async (l: L) => {
+    await M.waitForTimeout(420);
+    await l.click();
+  };
+  const nm = (n: string) => M.locator(".fc-nm", { hasText: new RegExp(`^${n}`) });
+  await tap(M.getByRole("button", { name: /^Grade 7\b/ }));
+  await tap(nm("Hana"));
+  await textsAre(M.locator(".fc-bk.on i"), ["8"]);
+  await visible(M.locator(".fc-bk.fc-skb", { hasText: "ஸகராத்" }));
+  await count(M.locator(".fc-skrow"), 0);
+  expect(await skRow(hana, ids.s08)).toBeNull();
+  await shot(M, "skb02-correction-s");
+  await tap(M.locator(".fc-bk.fc-skb"));
+  await visible(M.locator(".fc-skrow"));
+  await textsAre(M.locator(".fc-skbar .fc-lb"), ["8", "9"]);
+  await textsAre(M.locator(".fc-skbar .fc-lb.on"), ["8"]);
+  await textsAre(M.locator(".fc-bk.fc-skb.on i"), ["8"]);
+  await textsAre(M.locator(".fc-lvbar:not(.fc-skbar) .fc-lb"), ["1"]);
+  await contains(M.locator(".fc-qn"), "1");
+  await textsAre(M.locator(".fc-part .fc-pl"), ["i", "ii"]);
+  expect(await skRow(hana, ids.s08)).not.toBeNull();
+  expect((await backend.t.run(async (ctx) => await ctx.db.get(hana)))?.unitId).toBe(ids.u08); // never moved
+  await fits(M);
+  await shot(M, "skb03-correction-units-row");
+  // Full marks on both questions: Save; the unit's marks; Next: Sakarath · 9 (he never opened it: made at once).
+  await tap(M.locator(".fc-go"));
+  await contains(M.locator(".fc-qn"), "2");
+  await tap(M.locator(".fc-go"));
+  await tap(M.getByRole("button", { name: /^Save Hana K · 3 \/ 3/ }));
+  await contains(M.locator(".toast"), "Saved: Hana K, Sakarath 8 · Level 1, 3 / 3.");
+  await until(async () => ((await M.locator(".fc-over-k").textContent()) ?? "") === "Sakarath 8 finished", "Sakarath 8 finished");
+  await textsAre(M.locator(".fc-skbar .fc-lb.fixed"), ["8"]);
+  await contains(M.locator(".fc-next"), "Next: Sakarath · 9");
+  expect((await skRow(hana, ids.s08))?.m?.lv["1"]).toMatchObject({ got: 3 });
+  await tap(M.locator(".fc-next"));
+  await until(async () => JSON.stringify(await M.locator(".fc-skbar .fc-lb.on").allInnerTexts()) === JSON.stringify(["9"]), "Sakarath 9 open");
+  // A part left blank: the lost marks stay on his Sakarath book (no room takes it), said in one line; no room switch.
+  await tap(M.getByRole("button", { name: "Part ii: ? left blank" }));
+  await tap(M.locator(".fc-go"));
+  await tap(M.locator(".fc-go"));
+  await visible(M.locator(".fc-skroute"));
+  await count(M.locator(".fc-route"), 0);
+  await shot(M, "skb04-sakarath-summary");
+  await tap(M.getByRole("button", { name: /^Save Hana K · 2 \/ 3/ }));
+  await contains(M.locator(".toast"), "Saved: Hana K, Sakarath 9 · Level 1, 2 / 3. Lost marks: Q1.");
+  expect((await skRow(hana, ids.s09))?.m?.q["1"]).toMatchObject({ got: 1, lost: true });
+
+  // Kumar was not given it: no S on his books row. Ravi has it until it is taken back on the Stock.
+  await tap(nm("Kumar"));
+  await textsAre(M.locator(".fc-bk.on i"), ["8"]);
+  await count(M.locator(".fc-bk.fc-skb"), 0);
+  await tap(nm("Ravi"));
+  await visible(M.locator(".fc-bk.fc-skb"));
+  await M.locator(".tabs .tab.books").click();
+  await M.locator(".mnx-books .mnx-bk.mnx-skb").click();
+  await M.locator('.mnx-names .mnx-p[data-name="Ravi P"]').click();
+  await gp.locator(".mnx-take").click();
+  await contains(M.locator(".toast"), "Sakarath book taken back from 1: Ravi P.");
+  await M.locator(".tabs .tab.correction").click();
+  await tap(nm("Ravi"));
+  await count(M.locator(".fc-bk.fc-skb"), 0);
+
+  // The smallest phone: the Stock row with S, and Hana's paper on a Sakarath unit; nothing goes sideways.
+  const N = await phone(backend, "fees", { ...PHONE, viewport: { width: 320, height: 640 } }, MALA);
+  await N.locator(".tabs .tab.books").click();
+  await N.locator(".mn-seg").getByRole("button", { name: "Stock" }).click();
+  await N.locator(".mnx-grades").getByRole("button", { name: /^Grade 7\b/ }).click();
+  await N.locator(".mnx-books .mnx-bk.mnx-skb").click();
+  await count(N.locator(".mnx-names .mnx-p.mnx-b-has"), 1);
+  await fits(N);
+  await shot(N, "skb05-stock-320");
+  await N.locator(".tabs .tab.correction").click();
+  await N.waitForTimeout(420);
+  await N.getByRole("button", { name: /^Grade 7\b/ }).click();
+  await N.waitForTimeout(420);
+  await N.locator(".fc-nm", { hasText: /^Hana/ }).click();
+  await N.waitForTimeout(420);
+  await N.locator(".fc-bk.fc-skb").click();
+  await visible(N.locator(".fc-skrow"));
+  await fits(N);
+  await shot(N, "skb06-correction-320");
+  expect(problems, problems.join("\n")).toEqual([]);
+});
+
 test("the AI marks by itself: the owner's switch in Settings → Photos, the teacher of its threads, today's numbers (16 Nov 2026)", async () => {
   const backend = await newClass();
   await addPerson(backend.t, { name: "Nila", token: "nila-photos-token-0123456789abcdefghijklmnopq", tabs: [], can: ["photos"] });

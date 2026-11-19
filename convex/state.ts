@@ -3,6 +3,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { query, type QueryCtx } from "./_generated/server";
 import { viewer } from "./lib/auth";
 import { attendanceOff, givenWork, hereNow, mayBeOpen, openWork } from "./lib/backend";
+import { skHeld } from "./lib/sakarath";
 import { recentSim, simInfo } from "./sim";
 
 /**
@@ -11,7 +12,8 @@ import { recentSim, simInfo } from "./sim";
  * A student in class works on several books at once: `more` = his other books with something waiting (a level handed
  * in, marks to explain, questions for Theory), so Evaluation, Theory and Correction see every book; `given` = the
  * books given to him (not his book now): whether each still has work (then he is not "out of work") and whether it is
- * finished (Correction's row of his books leaves it out).
+ * finished (Correction's row of his books leaves it out); `sk` = his rows in the printed Sakarath book he holds (19 Nov
+ * 2026: given on the Books page), every unit he has a row in whatever it waits for, for Correction only.
  * Two classes share the server (31 Oct 2026): the real class, and the simulation's made-up students (test students,
  * 1 Nov 2026) that only a phone showing the simulation sees (`test`). Each phone gets its own class's students and their
  * calls; `tests` = how many test students there are (so a real-class phone can offer the switch); `sim` = the
@@ -27,6 +29,7 @@ export const get = query({
     const books: Record<string, Doc<"books">> = {};
     const more: Record<string, Doc<"progress">[]> = {};
     const given: Record<string, Given[]> = {};
+    const sk: Record<string, Doc<"progress">[]> = {};
     const cache = new Map<string, Doc<"books"> | null>();
     for (const s of light.students) {
       const h = await hisBoard(ctx, s, light.calls, cache, light.attOff);
@@ -34,8 +37,9 @@ export const get = query({
       Object.assign(books, h.books);
       if (h.more) more[s._id] = h.more;
       if (h.given) given[s._id] = h.given;
+      if (h.sk) sk[s._id] = h.sk;
     }
-    return { ...light, progress, books, more, given };
+    return { ...light, progress, books, more, given, sk };
   },
 });
 
@@ -60,7 +64,7 @@ export const his = query({
   handler: async (ctx, args) => {
     await viewer(ctx, args.token);
     const s = await ctx.db.get(args.id);
-    if (!s || s.archived) return { progress: null, books: {}, more: null, given: null };
+    if (!s || s.archived) return { progress: null, books: {}, more: null, given: null, sk: null };
     const calls = [
       ...(await ctx.db
         .query("calls")
@@ -124,6 +128,7 @@ async function hisBoard(
   const books: Record<string, Doc<"books">> = {};
   let more: Doc<"progress">[] | null = null;
   let given: Given[] | null = null;
+  let sk: Doc<"progress">[] | null = null;
   let progress: Doc<"progress"> | null = null;
   const bookOf = async (unitId: Id<"units">, stage: "fighter" | "master") => {
     const key = `${unitId}:${stage}`;
@@ -145,8 +150,28 @@ async function hisBoard(
     // A consultation (5 Nov 2026): every book of his changed since it began travels too, so what she explained in it
     // stays on her screen as ✓ even once nothing waits there.
     const since = mine.find((c) => c.consult)?.createdAt;
+    // The printed Sakarath book he holds (19 Nov 2026, given on the Books page): that grade's Sakarath units.
+    const skUnits = new Set<string>();
+    for (const g of await skHeld(ctx, s._id)) {
+      for (const u of await ctx.db
+        .query("units")
+        .withIndex("by_grade", (q) => q.eq("grade", g))
+        .collect()) {
+        skUnits.add(u._id);
+      }
+    }
     for (const p of await ctx.db.query("progress").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) {
       if (p.unitId === s.unitId && p.stage === s.stage) continue;
+      // Every row of his in that book comes along, whatever waits there: Correction's units row and its papers (the
+      // other pages' `more` still leaves Sakarath books to the phone).
+      if (p.stage === "master" && skUnits.has(p.unitId)) {
+        const b = await bookOf(p.unitId, "master");
+        if (b?.sk) {
+          (sk ??= []).push(p);
+          books[`${p.unitId}:master`] = b;
+        }
+        continue;
+      }
       // The other book of his topic tute (one printed book: the ladder + the past papers) always comes along.
       const twin = p.unitId === s.unitId && !!(await bookOf(p.unitId, p.stage))?.tute;
       const inRoom = called.has(`${p.unitId}:${p.stage}`) || (since !== undefined && p.updatedAt >= since);
@@ -171,7 +196,7 @@ async function hisBoard(
     const b = await bookOf(unitId, stage);
     if (b) books[`${unitId}:${stage}`] = b;
   }
-  return { progress, books, more, given };
+  return { progress, books, more, given, sk };
 }
 
 export const archived = query({

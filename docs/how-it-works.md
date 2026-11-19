@@ -3143,7 +3143,8 @@ chat; `convex/lib/sakarath.ts`, `convex/sakarath.ts`).
   again. Nothing done in either is lost: XP counts every workbook row; trophies count both maps (`trophyWorlds`).
 - **The class leaves it out**: the class board (`state.ts` `hisBoard`), Consultation (`consult.totals`) and the
   simulation skip a book with `sk`; its typed words and photos reach the teachers in Correction → Homework, its wrong
-  answers Explain online. The Owner page's learning numbers and the race count its levels like any.
+  answers Explain online. The Owner page's learning numbers and the race count its levels like any. **Except on
+  Correction for a student holding the printed book** (19 Nov 2026, below).
 - **Settings → Books → S** on each unit's row (beside T): gold = its Sakarath book is in the app with its key; a tap
   shows its levels, questions and parts, how much the phone marks (`PhoneAnswers`: See what the phone accepts) and the
   owner's Preview on the phone. The line under the grade row counts "Sakarath books (S)". On a phone under 360 px the
@@ -3168,6 +3169,43 @@ chat; `convex/lib/sakarath.ts`, `convex/sakarath.ts`).
 - **Grade 10's revision unit** (19 Nov 2026: its Sakarath book has a U00, earlier grades, like Grade 9's): G10-U00
   "Revision of earlier grades", term 0, in the syllabus and added to a live app by `setup.ensure` (data version 5).
   Like Grade 9's U00 it has no past-paper book (a "soon" Stage in the Extra World) until exam mode.
+- **The printed Sakarath book: given from the Stock, corrected on Correction** (19 Nov 2026, his voice note: "the book
+  is don't have unit by unit. This is whole big book ... some students give, some students I didn't give ... please add
+  the feature to give the Sakarath book" on Books → Stock, and "after give that to my student ... visible to correct"
+  on Correction; `convex/lib/sakarath.ts`, "The printed Sakarath book").
+  - **One stock item per grade**: the printed book is a unit of its own (grade 200 + the grade, 206 … 211, the O/L
+    book's 212; key "G8-SKB", "OLS-SKB"; code "SK", term 0; names "Sakarath book" / "ஸகராத் புத்தகம்"; no book row),
+    so its copies in hand, papers, price, Printed, the charge when given (a book row at its price, `np` until priced,
+    free for Books-free students) and Take back are the Books page's own, untouched. Made by `setup.ensure` step 8
+    (data version 6) for every grade with a Sakarath book in the app, and with a grade's first book saved through the
+    Claude link (`ensureSkb`). `isSkGrade` is true for it too (never a syllabus unit); `isSkbGrade` tells it apart; no
+    list of the book's units (grade 100 + the grade) sees it.
+  - **Books → Stock → a grade**: **S** first in the row (gold; the copies in hand under it), once one of that grade's
+    Sakarath books is in the app; the page still picks the units' book it picked before. S picked: its grade's students
+    A–Z (the O/L book's: Grades 10 and 11), ✓ = has it, nobody ticked by the page (it is no one's "next book"); she
+    ticks, **Give to N** (`students.giveMany` on its unit, `by: "money"`), ✓ ticked + **Take back**; the line "the whole
+    book · N in hand · price"; ⋯ = its papers, price, count, Printed. Refused: another grade's student (all or nothing),
+    a grade with no Sakarath book in the app, as a theory book. The history: "G8-SKB Sakarath book".
+  - **Correction, a student who holds it** (`state.his` `sk`: every row of his in that book's units, whatever it waits
+    for; `View.sk`): his books row starts with **S** (gold "S ஸகராத்"; dark with the open unit's number and name while
+    one is open; an amber count = levels of it handed in). A tap opens the unit that waits (`skPick`: a level handed in,
+    else marked at home, else the one last corrected and not finished, else his unit now's, else the first not
+    finished). Under his books then: **the book's units in one row** (`SkRow`: a gold S, then each unit's number like
+    the level bar: finished by its marks, handed in striped amber, part of the way outlined, not started pale, the open
+    one ringed; a gap between terms). A tap opens that unit; one he never opened gets his row first
+    (`sakarath.open`, Correction or Evaluation; refused when he doesn't hold the book). The level bar, the questions with
+    the key, drafts, Later, Save, one corrector per book and Take back are a workbook's, untouched; he is **never
+    moved** (his book now stays). A unit finished: "Sakarath 5 finished", **Next: Sakarath · 6** (the next he hasn't
+    finished). His name opens a Sakarath unit with a level handed in like any book of his (`bookToOpen`), and its
+    handed-in levels count on the names and grades rows (`waitingAll`, `homeAll`).
+  - **No room takes it** (the other pages' `more` still leaves Sakarath books out: Evaluation, Theory, the Manager,
+    Consultation unchanged): on a Sakarath paper the "Lost marks go to Evaluation / Theory" switch is a line instead
+    ("Lost marks stay on his Sakarath book …"), the level bar and the marks table show no E / T dots, and Save says
+    "Saved: Hana K, Sakarath 8 · Level 1, 2 / 3. Lost marks: Q1." (the marks are kept as a workbook's: a room can take
+    them later). A level corrected in class is not a phone level (no 🎧 Explain online for it: `homeWork.ts` shows
+    only levels marked at home).
+  - Holding it is work: a given book with nothing of its own in the app (`bookState(null)`), so he is never "out of
+    work" while he has it; the Class lines say "on Sakarath". Taken back: the phone's again (the S and its row go).
 
 ## Accounts and security (built 2026-10-28)
 

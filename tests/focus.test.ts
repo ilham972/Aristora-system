@@ -44,7 +44,16 @@ import {
   sectionMark,
   sectionQs,
   sectionStart,
+  bookToOpen,
+  booksIn,
+  homeAll,
+  isSkView,
+  skLook,
+  skNext,
+  skPick,
+  viewOfPaper,
 } from "../src/focusData";
+import { waitingAll } from "../src/derive";
 import { asView } from "./views";
 
 const G7U08 = KNOWN_WORKBOOKS[0].data;
@@ -408,5 +417,53 @@ describe("a theory book in two rows: sections, then the open section's questions
     expect(sectionStart(f, C, f.all, { 18: { s: "right" } }, [])).toBe(at(19));
     expect(sectionStart(f, C, f.all, {}, [])).toBe(at(18));
     expect(sectionStart(f, C, [1, 2, 3], {}, [])).toBe(-1);
+  });
+});
+
+// The printed Sakarath book on Correction (19 Nov 2026, his ask: "after give that to my student ... visible to
+// correct"): a holder's units of it are views of their own (`sk`), whatever they wait for; the S opens the right one.
+describe("the printed Sakarath book on Correction", () => {
+  const SK = { kind: "master" as const, parts: [{ id: "II" as const, from: 1, to: 3, kind: "cards" as const }], levels: [{ n: 1, from: 1, to: 2, max: 5 }, { n: 2, from: 3, to: 3, max: 2 }], marks: { "1": 2, "2": 3, "3": 2 } };
+  const skUnit = (no: number) => ({ _id: `sk${no}`, code: `U${String(no).padStart(2, "0")}`, grade: 107, term: no < 3 ? 1 : 2, order: no });
+  const units = [1, 2, 3, 4].map(skUnit);
+  /** One unit of his Sakarath book: `lv` = its levels. */
+  const skv = (home: View, no: number, lv: MState["lv"] = {}) => {
+    const m: MState = { q: {}, lv };
+    return asView({ ...home, s: home.s, unit: skUnit(no), stage: "master", kind: "master", mb: SK, ms: computeMaster(m, SK), mm: m, home, key: `${home.s._id}:sk${no}` });
+  };
+  const holder = (lvs: Record<number, MState["lv"]>) => {
+    const home = wb("Hana", { "1": { fixed: 1 } });
+    const sk = Object.entries(lvs).map(([no, lv]) => skv(home, Number(no), lv));
+    return { ...home, sk } as View;
+  };
+
+  test("how a unit looks on its row: not started, part of the way, handed in, finished (by its marks)", () => {
+    const h = holder({ 1: {}, 2: { "1": { fixed: 5, got: 4 } }, 3: { "1": { done: 9 } }, 4: { "1": { fixed: 5, got: 5 }, "2": { fixed: 6, got: 2 } } });
+    expect(skLook(undefined).look).toBe("none");
+    expect(h.sk.map((b) => skLook(b).look)).toEqual(["later", "current", "waiting", "fixed"]);
+    expect(isSkView(h.sk[0])).toBe(true);
+    expect(isSkView(h)).toBe(false);
+  });
+
+  test("the S opens: a unit handed in, else the one he was last corrected in (not finished), else his unit now's, else the first not finished", () => {
+    expect(skPick(holder({ 2: { "1": { fixed: 5 } }, 3: { "1": { done: 9 } } }), units, "sk1")).toBe("sk3");
+    expect(skPick(holder({ 1: { "1": { fixed: 5 } }, 2: { "1": { fixed: 8 } } }), units, "sk4")).toBe("sk2");
+    expect(skPick(holder({}), units, "sk3")).toBe("sk3");
+    const done = { "1": { fixed: 5, got: 5 }, "2": { fixed: 6, got: 2 } };
+    expect(skPick(holder({ 1: done, 2: {} }), units, null)).toBe("sk2");
+    expect(skPick(holder({ 1: done, 2: done, 3: done, 4: done }), units, null)).toBe("sk1");
+    expect(skPick(holder({}), [], null)).toBeNull();
+    // After a unit's marks: the next one of the book he hasn't finished.
+    expect(skNext(holder({ 2: done }), units, "sk1")).toBe("sk3");
+    expect(skNext(holder({}), units, "sk4")).toBeNull();
+  });
+
+  test("its units are his books on Correction: the paper finds them, his name opens one handed in, its counts join his", () => {
+    const h = holder({ 2: { "1": { done: 9 } } });
+    expect(booksIn(h).map((b) => b.unit?._id)).toEqual(["u08", "sk2"]);
+    expect(viewOfPaper([h], { studentId: "Hana", unitId: "sk2", kind: "master" })?.unit?._id).toBe("sk2");
+    expect(bookToOpen(h, [], null, 0).view.unit?._id).toBe("sk2");
+    expect(waitingAll(h)).toBe(1);
+    expect(homeAll(h)).toBe(0);
   });
 });

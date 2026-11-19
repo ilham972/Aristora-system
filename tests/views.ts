@@ -7,6 +7,7 @@ export function asView(o: Record<string, unknown>): View {
   const v = o as { s: { _id: string }; st?: { dry?: boolean } | null; ms?: { dry?: boolean } | null; noWork?: boolean };
   return {
     others: [],
+    sk: [],
     otherWork: [],
     given: [],
     key: v.s._id,

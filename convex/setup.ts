@@ -5,9 +5,10 @@ import { KNOWN_WORKBOOKS, PILOT_FIGHTER, PILOT_UNIT } from "./lib/book";
 import { OL, OL_TOPICS, SYLLABUS, unitKey, unitOrder } from "./lib/syllabus";
 import { actor } from "./lib/auth";
 import { giveIndex } from "./lib/family";
+import { EXAM_GRADES, ensureSkb, hasSkBook } from "./lib/sakarath";
 
 /** Bump when ensure() has new one-time work to do. */
-export const DATA_VERSION = 5;
+export const DATA_VERSION = 6;
 
 /**
  * One-time data updates, safe to run any number of times (every phone calls it when the app opens):
@@ -110,6 +111,10 @@ export const ensure = mutation({
       if (await unit(u.grade, u.code)) continue;
       await ctx.db.insert("units", { grade: u.grade, code: u.code, key: unitKey(u.grade, u.code), term: u.term, en: u.en, ta: u.ta, order: unitOrder(u.code) });
     }
+
+    // 8. The printed Sakarath book (version 6, 19 Nov 2026): one stock item per grade whose Sakarath books are in the
+    //    app (lib/sakarath.ts `ensureSkb`); a grade's first book saved through the link makes its own after this.
+    for (const g of EXAM_GRADES) if (await hasSkBook(ctx, g)) await ensureSkb(ctx, g);
 
     if (meta) await ctx.db.patch(meta._id, { value: DATA_VERSION });
     else await ctx.db.insert("meta", { key: "data", value: DATA_VERSION });

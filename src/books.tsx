@@ -14,6 +14,10 @@
 // - Stock: the grades (OL too), that grade's printed books in one row (its number, the copies in hand), then the
 //   students it can go to: the page ticks who needs it now and is here, she ticks anyone; Give to N at the bottom
 //   (Take back for the ticked who have it). The book's papers, price and count: ⋯ on its line.
+// - The printed Sakarath book (19 Nov 2026, his ask: "the book is don't have unit by unit. This is whole big book ...
+//   some students give, some students I didn't give"): S, gold, first in a grade's row once its Sakarath books are in
+//   the app; one book (convex/lib/sakarath.ts, its own unit), given whole like any book (its price, stock, charge).
+//   Given, his Sakarath books open on Correction (src/focus.tsx `SkRow`).
 
 import type { ComponentChildren } from "preact";
 import { useEffect, useState } from "preact/hooks";
@@ -28,8 +32,9 @@ import { HRow } from "./hrow";
 import { useQuery } from "./live";
 import { DeskGrades, DeskPad, MoneyDesk, NamePills, useDeskPage, type DeskPick, type NamePill } from "./moneyDesk";
 import { bookWords, dayWords, KIND_WORD, unitNum, unitShort, unitWords, type CatalogBook, type ShopData } from "./moneySheet";
-import { bookNeedOf, costOf, keyOf, printNeeds, rs, stockPeople, stockTicks, type Acc, type BookStage, type PrintNeed } from "./moneyData";
-import { act, allUnits, now as serverNow, toast, unitOf, type Board } from "./store";
+import { bookNeedOf, costOf, keyOf, printNeeds, rs, skbPeople, stockPeople, stockTicks, type Acc, type BookStage, type PrintNeed } from "./moneyData";
+import { act, allUnits, now as serverNow, skbUnitIn, toast, unitOf, type Board } from "./store";
+import { skGrade } from "../convex/lib/sakarath";
 import { slDay } from "../convex/lib/day";
 import { tone } from "./tones";
 import { GRADES, Sheet } from "./ui";
@@ -48,6 +53,12 @@ function loadTab(): BookTab {
 
 /** The real students' main views (never demo, test or removed ones). */
 const realViews = (views: readonly View[]) => views.filter((v) => !v.s.demo && !v.s.test && !v.s.archived);
+
+/** The grade's printed Sakarath book (19 Nov 2026), once one of its Sakarath books is in the app; else null. */
+function skbIn(grade: number, cat: readonly CatalogBook[]) {
+  const skb = skbUnitIn(grade);
+  return skb && cat.some((b) => b.stage === "master" && unitOf(b.unitId)?.grade === skGrade(grade)) ? skb : null;
+}
 
 /** What to print, from the board, the books in the app and the stock (the Books tab's count uses it too). */
 export function needsOf(views: readonly View[], cat: CatalogBook[] | undefined, shop: ShopData | undefined): PrintNeed[] {
@@ -151,7 +162,7 @@ export function BooksPage(props: { board: Board; views: View[]; now: number }) {
     const list = real.filter((v) => v.s.grade === g).map((v) => bookNeedOf(v, allUnits(), inApp, holds(v.s._id)).st);
     return { now: list.filter((x) => x === "now").length, soon: list.filter((x) => x === "soon").length };
   };
-  const booksIn = (g: number) => cat.filter((b) => unitOf(b.unitId)?.grade === g && !(b.tute && b.stage === "master")).length;
+  const booksIn = (g: number) => cat.filter((b) => unitOf(b.unitId)?.grade === g && !(b.tute && b.stage === "master")).length + (skbIn(g, cat) ? 1 : 0);
 
   return (
     <main class="page mn-page mnx-page" data-mode={tab}>
@@ -344,14 +355,18 @@ function StockTab(props: {
 }) {
   const { shop } = props;
   // A topic tute is one printed book: shown once, as its theory book.
-  const books = props.cat
+  const units = props.cat
     .filter((b) => !(b.tute && b.stage === "master"))
-    .map((b) => ({ u: b.unitId, st: b.stage, unit: unitOf(b.unitId), key: keyOf(b.unitId, b.stage) }))
+    .map((b) => ({ u: b.unitId, st: b.stage, unit: unitOf(b.unitId), key: keyOf(b.unitId, b.stage), sk: false }))
     .filter((b) => b.unit && b.unit.grade === props.grade)
     .sort((a, b) => (a.unit!.term || 99) - (b.unit!.term || 99) || a.unit!.order - b.unit!.order || unitNo(a.unit!.code) - unitNo(b.unit!.code) || (a.st === "fighter" ? -1 : 1));
+  // The printed Sakarath book (19 Nov 2026): one book for the whole grade, first in the row (S, gold).
+  const skb = skbIn(props.grade, props.cat);
+  const books = skb ? [{ u: skb._id, st: "master" as BookStage, unit: skb, key: keyOf(skb._id, "master"), sk: true }, ...units] : units;
   const need = (key: string) => props.needs.find((n) => n.key === key);
-  // The page's pick: the book someone needs now with none in hand, else one to print, else the first. It holds once shown.
-  const first = books.find((b) => (need(b.key)?.red ?? 0) > 0) ?? books.find((b) => need(b.key)) ?? books[0];
+  // The page's pick: the book someone needs now with none in hand, else one to print, else the first unit's (the
+  // Sakarath book is never anyone's next book: picked by her). It holds once shown.
+  const first = books.find((b) => (need(b.key)?.red ?? 0) > 0) ?? books.find((b) => need(b.key)) ?? units[0] ?? books[0];
   const [bookKey, setBookKey] = useState<string | null>(null);
   useEffect(() => {
     if (bookKey === null && first) setBookKey(first.key);
@@ -362,7 +377,7 @@ function StockTab(props: {
   const [ticks, setTicks] = useState<Set<string> | null>(null);
   const [auto, setAuto] = useState(true);
   const [busy, setBusy] = useState(false);
-  const people = cur ? stockPeople(props.views, { u: cur.u, st: cur.st }, allUnits(), props.inApp, props.holds) : [];
+  const people = !cur ? [] : cur.sk ? skbPeople(props.views, props.grade, cur.key, props.holds) : stockPeople(props.views, { u: cur.u, st: cur.st }, allUnits(), props.inApp, props.holds);
   useEffect(() => {
     if (cur && ticks === null) setTicks(new Set(stockTicks(people)));
   }, [cur?.key, ticks === null]);
@@ -424,10 +439,10 @@ function StockTab(props: {
               <button
                 key={b.key}
                 type="button"
-                class={`mnx-bk${on ? " on" : ""}${n?.red ? " bk-red" : n?.print ? " bk-amber" : ""}${it?.price === undefined ? " bk-noprice" : ""}`}
+                class={`mnx-bk${b.sk ? " mnx-skb" : ""}${on ? " on" : ""}${n?.red ? " bk-red" : n?.print ? " bk-amber" : ""}${it?.price === undefined ? " bk-noprice" : ""}`}
                 data-u={n?.red ? "red" : n?.print ? "amber" : undefined}
                 aria-pressed={on}
-                aria-label={`${bookWords(b.u, b.st)}: ${hand === "–" ? "not counted" : hand === "?" ? "count it" : `${hand} in hand`}${n?.red ? `, ${n.red} needed now` : ""}${it?.price === undefined ? ", no price yet" : ""}`}
+                aria-label={`${b.sk ? "The Sakarath book, every unit in one book" : bookWords(b.u, b.st)}: ${hand === "–" ? "not counted" : hand === "?" ? "count it" : `${hand} in hand`}${n?.red ? `, ${n.red} needed now` : ""}${it?.price === undefined ? ", no price yet" : ""}`}
                 onClick={() => pickBook(b.key)}
               >
                 <b>{unitNum(b.u)}</b>
@@ -450,7 +465,7 @@ function StockTab(props: {
           <span>
             {cur
               ? [
-                  KIND_WORD[cur.st],
+                  cur.sk ? "the whole book" : KIND_WORD[cur.st],
                   item?.inHand === null || item?.inHand === undefined ? "not counted" : item.inHand < 0 ? "count it" : `${item.inHand} in hand`,
                   item?.price !== undefined ? `${rs(item.price)}${each !== null && shop.owner ? ` (cost ${rs(each)})` : ""}` : "no price yet",
                 ].join(" · ")
@@ -463,7 +478,9 @@ function StockTab(props: {
                 ? `${toGive.length} ticked, ${Math.max(0, item!.inHand!)} in hand: count the shelf or print.`
                 : auto && toGive.length > 0
                   ? "Ticked by the page: at the end of his book, here now."
-                  : "Tick who gets it. ✓ has it: tick him to take it back."}
+                  : cur.sk
+                    ? "Tick who gets it: every unit opens on Correction. ✓ has it: tick him to take it back."
+                    : "Tick who gets it. ✓ has it: tick him to take it back."}
           </small>
         </p>
         <div class="mnx-payrow mnx-giverow">

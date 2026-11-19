@@ -25,8 +25,17 @@
 //   "OLS-U05-SK", its names and part from the book), and exam mode OL turns the O/L map of the students ticked for it
 //   into the book's own map: its 3 parts, its 30 units, all open (lib/family.ts `worldsOf`).
 
-import type { Doc } from "../_generated/dataModel";
-import type { QueryCtx } from "../_generated/server";
+// - The printed Sakarath book (19 Nov 2026, his words: "the book is don't have unit by unit. This is whole big book ...
+//   some students give, some students I didn't give ... give the Sakarath book to my students" from the Books page's
+//   Stock, and "after give that to my student ... visible to correct" on Correction): ONE printed book per grade (every
+//   unit's master question), so ONE stock item. It is kept as a unit of its own, so its copies in hand, papers, price,
+//   Printed, the charge when given and Take back are the Books page's own, untouched: grade 200 + the grade (206 …
+//   211, the O/L book's 212), key "G8-SKB" ("OLS-SKB"), code "SK", no book row. Given (a handout on it), the student's
+//   Sakarath books of that grade come with him to Correction (state.ts `sk`), every unit of it open there; nobody
+//   else's class pages change (Evaluation, Theory, the Manager still leave Sakarath books to the phone).
+
+import type { Doc, Id } from "../_generated/dataModel";
+import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { KEY_PARTS_MAX } from "./key";
 import type { MasterData } from "./book";
 import { OL } from "./syllabus";
@@ -60,9 +69,68 @@ export const SK_QUESTIONS_MAX = 120;
 export const SK_LEVELS_MAX = 12;
 
 export const skGrade = (g: number) => SK_BASE + g;
+/** A Sakarath unit's grade (106 … 112), or the printed book's (206 … 212): never a grade of the syllabus. */
 export const isSkGrade = (g: number) => g > SK_BASE;
+
+/** The printed Sakarath book's unit: this + the grade (206 … 211; the O/L book's 212). */
+export const SKB_BASE = 200;
+/** Its unit's code (no number: it is the whole book). */
+export const SKB_CODE = "SK";
+export const skbGrade = (g: number) => SKB_BASE + g;
+/** The printed Sakarath book's own unit (one per grade), never a unit with questions. */
+export const isSkbGrade = (g: number) => g > SKB_BASE;
+/** The students' grade of a printed Sakarath book (208 → 8; the O/L book's 212 → OL = 12). */
+export const skbFor = (unitGrade: number) => unitGrade - SKB_BASE;
+/** Its key: "G8-SKB"; the O/L book's "OLS-SKB" (never "OL-…": those are the O/L topics). */
+export const skbKey = (g: number) => (g === OL ? "OLS-SKB" : `G${g}-SKB`);
+/** Its names (the Books page, his money sheet). */
+export const SKB_NAMES = { en: "Sakarath book", ta: SK_TITLE } as const;
+/** Who the printed book of this grade can go to: its grade's students; the O/L book's, Grade 10 and 11. */
+export const skbFits = (g: number, studentGrade: number | undefined): boolean => (g === OL ? studentGrade === 10 || studentGrade === 11 : studentGrade === g);
+
+/** The printed book's unit of a grade, made the first time (setup.ensure; a Sakarath book saved through the link). */
+export async function ensureSkb(ctx: MutationCtx, grade: number): Promise<Doc<"units">> {
+  const key = skbKey(grade);
+  const had = await ctx.db
+    .query("units")
+    .withIndex("by_key", (q) => q.eq("key", key))
+    .first();
+  if (had) return had;
+  const id = await ctx.db.insert("units", { grade: skbGrade(grade), code: SKB_CODE, key, term: 0, order: 0, ...SKB_NAMES });
+  return (await ctx.db.get(id))!;
+}
+
+/** Does this grade have a Sakarath book in the app (one unit's, at least)? */
+export async function hasSkBook(ctx: QueryCtx, grade: number): Promise<boolean> {
+  const units = await ctx.db
+    .query("units")
+    .withIndex("by_grade", (q) => q.eq("grade", skGrade(grade)))
+    .collect();
+  for (const u of units) {
+    const b = await ctx.db
+      .query("books")
+      .withIndex("by_unit_stage", (q) => q.eq("unitId", u._id).eq("stage", "master"))
+      .first();
+    if (b?.sk) return true;
+  }
+  return false;
+}
+
+/** The Sakarath units' grades (108 for Grade 8's, 112 for the O/L book's) of the printed books he holds. */
+export async function skHeld(ctx: QueryCtx, studentId: Id<"students">): Promise<Set<number>> {
+  const out = new Set<number>();
+  for (const h of await ctx.db
+    .query("handouts")
+    .withIndex("by_student", (q) => q.eq("studentId", studentId))
+    .collect()) {
+    if (h.stage !== "master") continue;
+    const u = await ctx.db.get(h.unitId);
+    if (u && isSkbGrade(u.grade)) out.add(skGrade(skbFor(u.grade)));
+  }
+  return out;
+}
 /** A unit's grade as people say it: a Sakarath unit's is its unit's. */
-export const realGrade = (g: number) => (g > SK_BASE ? g - SK_BASE : g);
+export const realGrade = (g: number) => (g > SKB_BASE ? g - SKB_BASE : g > SK_BASE ? g - SK_BASE : g);
 /** "G8-U05" → "G8-U05-SK". */
 export const skKey = (unitKey: string) => `${unitKey}-SK`;
 export const isSkUnit = (u: { grade: number }) => isSkGrade(u.grade);

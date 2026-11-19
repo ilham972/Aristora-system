@@ -137,6 +137,8 @@ echo '[{"name":"g8","fn":"ask","req":{"op":"sakarath","grade":8}}]' > $SCR/ask.j
   (`build.py`): figures shrink to the card, a figure beside the text goes under it, the square root's class is `sqr`
   (the app's `.sq` is a ladder's sub-question), a lead reads at the phone's size (`lead2`).
 - Then tell him: Settings → Books → Grade N → S is gold on each unit; Exam mode → tap N twice.
+- The grade's first save also makes its **printed book** (19 Nov 2026: `ensureSkb`, key "G8-SKB"): Books → Stock →
+  Grade N → S gives it whole; those students' units then open on Correction. Nothing to send for it.
 - **The O/L book** (19 Nov 2026): its plan.py says `GRADE = "OL"`; `build.py` writes grade 12, and `kinds.ts` sends each
   unit's names and part (`en`, `ta`, `term`) with it (the server keeps them only for OL: its units are its own, keys
   "OLS-U05-SK"; Grades 6–11 take their unit's names). Requests are named "OL-U05-SK". Tell him: Settings → Books →
@@ -461,7 +463,18 @@ WHY=1 npx vitest run -c vitest.perf.config.ts -t "lab" --reporter=verbose # each
   Us): adding one of the owner's own pages to it means unticking another (the "Owner's own app" run-through unticks
   Class for the Owner page).
 - **Running the checks here with no npm**: `scripts/here/check.sh` (step 3 above; since 11 Nov 2026 the runner is in
-  the repo, nothing to rebuild in a new chat).
+  the repo, nothing to rebuild in a new chat). Since 19 Nov 2026 `setup` clones convex-js and convex-test at the
+  versions `package.json` names (`npm/1.48.0`, `v0.0.65`): convex-test's newest imports `"convex"` itself, and every
+  unit test failed with 'Could not resolve "convex"'. A runner set up before: `rm -rf /home/claude/runner/src/convex-*`,
+  then `setup` again. `tests/photos.test.ts`'s "voice-only words" reads `src/family/book.tsx` beside the bundled test:
+  it fails here (ENOENT) and passes on GitHub.
+- **The printed Sakarath book is a unit with no questions** (19 Nov 2026): grade 200 + its grade (`isSkbGrade`), one
+  per grade, so the Books page's stock, price and charges work for it untouched. `isSkGrade` is true for it too (it is
+  never a syllabus unit), but it is not one of the book's units: a list of a grade's Sakarath units reads grade 100 +
+  the grade (`skUnitsIn`, `skUnitsOf`) and never meets it; a new list of ALL units that names them must leave it out
+  (`isSkbGrade`) or name it as the book (`src/moneySheet.tsx` `skbOf`). A holder's Sakarath rows ride on the board as
+  `sk`, never in `more`: the Evaluation, Theory, Manager and Consultation pages group books by `unit.grade` (a
+  Sakarath unit's is 106 …): bringing Sakarath books to the rooms means `realGrade` in each of them first.
 - **A pad that stays on the page needs its own guards** (11 Nov 2026, the Fees and Books pages; before, the money sheet
   closed after Paid). (1) After Paid the ticks are cleared and Paid waits for the student's lines to come back
   (`paidOn === d`), and the server refuses a payment whose ticked charges are all paid (`money.pay`): a second tap or a

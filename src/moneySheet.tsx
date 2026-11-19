@@ -14,6 +14,7 @@ import { useRef, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { addDay, isCharge, type FeeKind } from "../convex/lib/money";
+import { isSkbGrade, skbFor, SK_TITLE } from "../convex/lib/sakarath";
 import { OL, olNumber } from "../convex/lib/syllabus";
 import { mutate } from "./backend";
 import type { View } from "./derive";
@@ -75,27 +76,42 @@ export const KIND_WORD: Record<BookStage, string> = { fighter: "theory book", ma
 /** A take-back window the server keeps too (convex/money.ts TAKE_BACK_MS). */
 const TAKE_BACK_MS = 12 * 60 * 60_000;
 
-/** A unit's number ("6"; an O/L topic "OL 4"). */
+/**
+ * The printed Sakarath book's grade (19 Nov 2026: one stock item per grade, a unit of its own, convex/lib/sakarath.ts),
+ * or null: it is named as the book, never by a unit number.
+ */
+export function skbOf(u: string): number | null {
+  const unit = unitOf(u);
+  return unit && isSkbGrade(unit.grade) ? skbFor(unit.grade) : null;
+}
+const gradeName = (g: number) => (g === OL ? "OL" : `Grade ${g}`);
+/** A unit's number ("6"; an O/L topic "OL 4"; the printed Sakarath book "S"). */
 export function unitNum(u: string): string {
   const unit = unitOf(u);
   if (!unit) return "?";
+  if (isSkbGrade(unit.grade)) return "S";
   return unit.grade === OL ? `OL ${olNumber(unit, allUnits())}` : String(unitNo(unit.code));
 }
-/** A unit's number and Tamil name ("6 பின்னங்கள்"; an O/L topic "OL 4 …"). */
+/** A unit's number and Tamil name ("6 பின்னங்கள்"; an O/L topic "OL 4 …"; the printed Sakarath book by its name). */
 export function unitWords(u: string): string {
   const unit = unitOf(u);
   if (!unit) return "?";
+  if (isSkbGrade(unit.grade)) return SK_TITLE;
   return `${unitNum(u)} ${unit.ta || unit.en}`;
 }
-/** "Unit 6" (an O/L topic "OL 4"), with its grade when asked ("Grade 8 Unit 6"). */
+/** "Unit 6" (an O/L topic "OL 4"), with its grade when asked ("Grade 8 Unit 6"); "Sakarath book". */
 export function unitShort(u: string, grade = false): string {
   const unit = unitOf(u);
   if (!unit) return "?";
+  const skb = skbOf(u);
+  if (skb !== null) return grade ? `${gradeName(skb)} Sakarath book` : "Sakarath book";
   if (unit.grade === OL) return unitNum(u);
   return `${grade ? `Grade ${unit.grade} ` : ""}Unit ${unitNum(u)}`;
 }
-/** "6 பின்னங்கள் · workbook". */
+/** "6 பின்னங்கள் · workbook"; "ஸகராத் புத்தகம் · Grade 8". */
 export function bookWords(u: string, st: BookStage): string {
+  const skb = skbOf(u);
+  if (skb !== null) return `${SK_TITLE} · ${gradeName(skb)}`;
   return `${unitWords(u)} · ${KIND_WORD[st]}`;
 }
 /** "Tue 10 Nov". */
@@ -119,7 +135,7 @@ export function chargeWords(r: { k: FeeKind; day: string; u?: string; st?: BookS
 /** The same on a chip of the pad (one line that scrolls sideways: as short as it can be). */
 export function chipWords(r: { k: FeeKind; day: string; u?: string; st?: BookStage }, today: string): string {
   if (r.k === "class") return r.day === today ? "Today" : dateWords(r.day);
-  if (r.k === "book") return r.u ? `Book ${unitNum(r.u)}${r.st === "fighter" ? " theory" : ""}` : "Book";
+  if (r.k === "book") return r.u ? (skbOf(r.u) !== null ? "Sakarath" : `Book ${unitNum(r.u)}${r.st === "fighter" ? " theory" : ""}`) : "Book";
   return "Old debt";
 }
 

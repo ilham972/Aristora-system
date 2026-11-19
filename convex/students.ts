@@ -25,6 +25,7 @@ import { OL, termOf } from "./lib/syllabus";
 import { bookStage, stage } from "./schema";
 import { actor } from "./lib/auth";
 import { giveIndex } from "./lib/family";
+import { hasSkBook, isSkbGrade, skbFits, skbFor } from "./lib/sakarath";
 
 const STAGE_WORD: Record<Stage, string> = { fighter: "Fighter", master: "Master", legend: "Legend", sprint: "Exam Sprint" };
 
@@ -59,6 +60,25 @@ async function checkPlace(
 function checkOl(grade: number | undefined): void {
   if (grade !== 10 && grade !== 11) fail("OL books are for Grade 10 and 11 students.");
 }
+
+/**
+ * The printed Sakarath book of a grade (19 Nov 2026, convex/lib/sakarath.ts): given whole, as one book, to its grade's
+ * students (the O/L book's: Grade 10 and 11), once the app has a Sakarath book of that grade.
+ */
+async function checkSkb(ctx: QueryCtx, unit: Doc<"units">, stage: string, list: Doc<"students">[]): Promise<void> {
+  const g = skbFor(unit.grade);
+  if (stage !== "master") fail("The Sakarath book is given whole, as one book.");
+  for (const s of list) {
+    if (!skbFits(g, s.grade)) {
+      fail(g === OL ? `${s.name} is in Grade ${s.grade ?? "?"}: the O/L Sakarath book is for Grade 10 and 11 students.` : `The Grade ${g} Sakarath book is not for ${s.name} (Grade ${s.grade ?? "?"}).`);
+    }
+  }
+  if (!(await hasSkBook(ctx, g))) fail(`${g === OL ? "OL" : `Grade ${g}`} has no Sakarath book in the app yet.`);
+}
+
+/** The history's words for a book given or taken back. */
+const bookLog = (unit: Doc<"units">, stage: string) =>
+  `${unit.key} ${isSkbGrade(unit.grade) ? "Sakarath book" : stage === "fighter" ? "theory book" : "workbook"}`;
 
 export const add = mutation({
   args: {
@@ -183,7 +203,9 @@ export const setGiven = mutation({
     const s = await getStudent(ctx, args.id);
     const unit = await ctx.db.get(args.unitId);
     if (!unit) fail("That unit no longer exists.");
-    if (unit.grade === OL) {
+    if (isSkbGrade(unit.grade)) {
+      if (args.given) await checkSkb(ctx, unit, args.stage, [s]);
+    } else if (unit.grade === OL) {
       if (args.given) checkOl(s.grade);
     } else if (s.grade !== undefined && unit.grade !== s.grade) fail(`${unit.code} is a Grade ${unit.grade} unit, not Grade ${s.grade}.`);
     const rows = (await ctx.db.query("handouts").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()).filter(
@@ -200,7 +222,7 @@ export const setGiven = mutation({
       studentId: s._id,
       name: s.name,
       unit: unit.key,
-      value: `${unit.key} ${args.stage === "fighter" ? "theory book" : "workbook"}`,
+      value: bookLog(unit, args.stage),
     });
     return true;
   },
@@ -212,6 +234,8 @@ export const setGiven = mutation({
  * Correction, so it opens on their phones and the class sees they have it. Only a book that is in the app (a given book
  * with nothing in the app would count as work for good). Returns how many changed. Since 11 Nov 2026 the Books page's
  * Stock too (Money people: tick the students, Give): each printed copy is charged by itself (convex/lib/feeRows.ts).
+ * Since 19 Nov 2026 the printed Sakarath book too (Stock → S): its grade's own unit, one copy for the whole book; its
+ * units' books come with him to Correction (state.ts `sk`).
  */
 export const giveMany = mutation({
   args: {
@@ -228,18 +252,21 @@ export const giveMany = mutation({
     const now = Date.now();
     const unit = await ctx.db.get(args.unitId);
     if (!unit) fail("That unit no longer exists.");
-    if (args.given && !(await bookFor(ctx, unit._id, args.stage))) fail(`${unit.code} has no ${args.stage === "fighter" ? "theory book" : "workbook"} in the app yet.`);
+    // The printed Sakarath book (19 Nov 2026): one book for the grade, its units' books in the app (checkSkb below).
+    const skb = isSkbGrade(unit.grade);
+    if (args.given && !skb && !(await bookFor(ctx, unit._id, args.stage))) fail(`${unit.code} has no ${args.stage === "fighter" ? "theory book" : "workbook"} in the app yet.`);
     // Every student checked first: one wrong grade and nobody gets it.
     const list: Doc<"students">[] = [];
     for (const id of new Set(args.ids)) {
       const s = await getStudent(ctx, id);
-      if (args.given) {
+      if (args.given && !skb) {
         if (unit.grade === OL) {
           if (s.grade !== 10 && s.grade !== 11) fail(`${s.name} is in Grade ${s.grade ?? "?"}: OL books are for Grade 10 and 11 students.`);
         } else if (s.grade !== unit.grade) fail(`${unit.code} is a Grade ${unit.grade} unit, not for ${s.name} (Grade ${s.grade ?? "?"}).`);
       }
       list.push(s);
     }
+    if (args.given && skb) await checkSkb(ctx, unit, args.stage, list);
     const session = await currentSession(ctx, now);
     let n = 0;
     for (const s of list) {
@@ -256,7 +283,7 @@ export const giveMany = mutation({
         studentId: s._id,
         name: s.name,
         unit: unit.key,
-        value: `${unit.key} ${args.stage === "fighter" ? "theory book" : "workbook"}`,
+        value: bookLog(unit, args.stage),
       });
       n++;
     }

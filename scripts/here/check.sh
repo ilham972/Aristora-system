@@ -21,8 +21,11 @@ case "$1" in
   setup)
     mkdir -p "$S" "$HERE/types"
     cd "$S"
-    [ -d convex-js ] || git clone -q --depth 1 https://github.com/get-convex/convex-js
-    [ -d convex-test ] || git clone -q --depth 1 https://github.com/get-convex/convex-test
+    # The versions package.json names (19 Nov 2026: convex-test's newest imports "convex" itself, which the aliases lack).
+    CV=$(node -p "require('$REPO/package.json').dependencies.convex")
+    CT=$(node -p "require('$REPO/package.json').devDependencies['convex-test']")
+    [ -d convex-js ] || git clone -q --depth 1 --branch "npm/$CV" https://github.com/get-convex/convex-js
+    [ -d convex-test ] || git clone -q --depth 1 --branch "v$CT" https://github.com/get-convex/convex-test
     [ -d preact ] || git clone -q --depth 1 --branch 10.29.8 https://github.com/preactjs/preact
     [ -d fflate ] || git clone -q --depth 1 https://github.com/101arrowz/fflate
     cat > "$HERE/types/stubs.d.ts" <<'TYPES'

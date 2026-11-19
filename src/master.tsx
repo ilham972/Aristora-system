@@ -6,6 +6,7 @@ import { api } from "../convex/_generated/api";
 import { levelOutOf, PART_NAME } from "../convex/lib/book";
 import { boldRuns, type KeyAnswer } from "../convex/lib/key";
 import { levelWaits, partTotals } from "../convex/lib/master";
+import { isSkGrade } from "../convex/lib/sakarath";
 import { mutate } from "./backend";
 import type { View } from "./derive";
 import { useQuery } from "./live";
@@ -234,8 +235,9 @@ export function MasterBook(props: { role: Role; v: View; onCorrect: (level: numb
               {levels.map((l) => {
                 const lv = v.mm.lv[String(l.n)];
                 const state = lv?.fixed ? "fixed" : lv?.done ? "waiting" : lv?.pre ? "before" : ms.current?.n === l.n ? "current" : "later";
-                // Corrected, and lost marks still wait for a teacher: "E 2" (Evaluation) or "T 1" (Theory).
-                const w = lv?.fixed ? levelWaits(v.mm, l) : null;
+                // Corrected, and lost marks still wait for a teacher: "E 2" (Evaluation) or "T 1" (Theory). A Sakarath book
+                // (19 Nov 2026) goes to no room: no badge.
+                const w = lv?.fixed && !(v.unit && isSkGrade(v.unit.grade)) ? levelWaits(v.mm, l) : null;
                 const wait = w?.evaluation ? `E ${w.evaluation}` : w?.theory ? `T ${w.theory}` : "";
                 return (
                   <button

@@ -40,7 +40,7 @@ import { phonePart, phoneShare, readPart, type KeyQ } from "./lib/phone";
 import { BOOK_CSS_MAX, QUESTION_HTML_MAX, unsafeCss, unsafeHtml } from "./lib/questions";
 import { answerNonce, fromB64, KEY_BYTES, seal, unseal } from "./lib/seal";
 import { knownFor, skillCounts, skillHome, skillsProblem, type Skill, type SkillFile, type SkillTag } from "./lib/skills";
-import { EXAM_GRADES, olSkKey, sakarathProblem, sameLevels, skGrade, skKey, skNames, SK_TITLE } from "./lib/sakarath";
+import { ensureSkb, EXAM_GRADES, olSkKey, sakarathProblem, sameLevels, skGrade, skKey, skNames, SK_TITLE } from "./lib/sakarath";
 import { OL, unitKey } from "./lib/syllabus";
 
 /** A link works this long, unless the owner turns it off first. */
@@ -591,6 +591,8 @@ async function saveSakarath(ctx: MutationCtx, row: Row, req: Asked, now: number)
     .first();
   if (sk) await ctx.db.patch(sk._id, names);
   else sk = (await ctx.db.get(await ctx.db.insert("units", { grade: skGrade(grade), code, key, ...names })))!;
+  // The grade's printed Sakarath book, one stock item on the Books page (19 Nov 2026): made with its first unit's book.
+  await ensureSkb(ctx, grade);
   const old = await bookFor(ctx, sk._id, "master");
   if (old && old.data.kind === "master" && !sameLevels(old.data, data)) {
     const started = await ctx.db
