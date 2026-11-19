@@ -1,6 +1,7 @@
 // The Sakarath book and exam mode (17 Nov 2026; convex/lib/sakarath.ts, convex/sakarath.ts, convex/link.ts "sakarath",
 // lib/family.ts `worldsOf`): a unit's Sakarath book is saved through the Claude link on a unit of its own; exam mode
 // per grade turns that grade's Learn map to the Sakarath books; the same Level marks it; the class board leaves it out.
+// OL (19 Nov 2026): the O/L book's own units, on no O/L topic; exam mode OL for the students ticked for the O/L map.
 // Made-up questions and answers only (the repo is public).
 import { convexTest } from "convex-test";
 import { beforeEach, describe, expect, test } from "vitest";
@@ -9,6 +10,7 @@ import type { Id } from "../convex/_generated/dataModel";
 import type { MasterData } from "../convex/lib/book";
 import type { KeyAnswer } from "../convex/lib/key";
 import { isSkGrade, realGrade, sakarathProblem, SK_TITLE } from "../convex/lib/sakarath";
+import { worldsOf } from "../convex/lib/family";
 import { secretHash } from "../convex/lib/auth";
 import { seal, sha256, toB64, unseal } from "../convex/lib/seal";
 import schema from "../convex/schema";
@@ -190,5 +192,89 @@ describe("the Sakarath book and exam mode", () => {
     // Its levels can't move now that he started it; its words can.
     expect((await sakarath({ data: { ...DATA, levels: [{ n: 1, from: 1, to: 1, max: 2 }, { n: 2, from: 2, to: 3, max: 5 }] } }))?.error).toMatch(/students in it/);
     expect((await sakarath({ items: items().map((it) => ({ ...it, html: it.html.replace("lead", "opening") })) }))?.ok).toBe(true);
+  });
+
+  // The O/L book (19 Nov 2026): units of its own (the 53 topics merged), on no O/L topic; exam mode OL gives the students
+  // ticked for the O/L map the book's own map: its parts, its units, all open.
+  const olBook = (extra: Record<string, unknown> = {}) =>
+    tell({ op: "sakarath", grade: 12, code: "U02", en: "Made-up fractions", ta: "பின்னங்கள்", term: 1, data: DATA, answers: key(), items: items(), css: ".rl { font-weight: 700; }", ...extra });
+
+  test("OL: the link saves the O/L book's own unit, never on an O/L topic, with its names and part", async () => {
+    expect((await olBook({ en: "" }))?.error).toMatch(/names/);
+    expect((await olBook({ term: 0 }))?.error).toMatch(/part/);
+    expect((await tell({ op: "sakarath", grade: 13, code: "U02", data: DATA, answers: key(), items: items(), css: "" }))?.error).toMatch(/grade/);
+    const r = await olBook();
+    expect(r).toMatchObject({ ok: true, made: true });
+    const sk = (await unitByKey("OLS-U02-SK"))!;
+    expect(sk).toMatchObject({ grade: 112, code: "U02", term: 1, order: 2, en: "Sakarath · Made-up fractions", ta: "பின்னங்கள் · ஸகராத்" });
+    // The O/L topic 2 is another thing (Inverse proportion): untouched, no Sakarath unit of its own.
+    expect(await unitByKey("OL-U02-SK")).toBeNull();
+    expect((await unitByKey("OL-U02"))?.grade).toBe(12);
+    // Saved again with a new name: the same unit, renamed.
+    expect(await olBook({ en: "Made-up fractions II" })).toMatchObject({ ok: true, made: false });
+    expect((await unitByKey("OLS-U02-SK"))?.en).toBe("Sakarath · Made-up fractions II");
+    const list = await ask({ op: "sakarath", grade: 12 });
+    expect(list?.units).toHaveLength(1);
+    expect(list?.units[0]).toMatchObject({ key: "OLS-U02-SK", code: "U02" });
+    expect(list?.units[0].sk).toMatchObject({ levels: 2, questions: 3, total: 7 });
+    expect(await t.query(api.sakarath.exam, {})).toMatchObject({ on: [], books: { "12": 1, "11": 0 } });
+  });
+
+  test("OL: exam mode OL turns the O/L map of the ticked students into the book's own map; nobody else's", async () => {
+    await expect(t.mutation(api.sakarath.setExam, { grade: 12, on: true })).rejects.toThrow(/OL has no Sakarath book/);
+    await olBook();
+    await olBook({ code: "U12", en: "Made-up algebra", ta: "அட்சரகணிதம்", term: 2 });
+    const sk2 = (await unitByKey("OLS-U02-SK"))!;
+    const sk12 = (await unitByKey("OLS-U12-SK"))!;
+    // Hana moves to Grade 11 and is ticked for the O/L map: the 53 topics, by paper part.
+    const g11 = (await unitByKey("G11-U01"))!._id;
+    await t.mutation(api.students.move, { id: hana, grade: 11, term: 1, stage: "master", unitId: g11 });
+    await t.mutation(api.families.setOlMap, { studentIds: [hana], on: true });
+    let me = await fam().query(api.family.me, {});
+    expect(me.ol).toBe(true);
+    expect(me.worlds.filter((w) => !w.other)).toHaveLength(53);
+    expect(me.worlds.some((w) => w.sk)).toBe(false);
+    // Grade 11's own switch never touches the O/L map; OL's does.
+    expect(await t.mutation(api.sakarath.setExam, { grade: 12, on: true })).toEqual([12]);
+    me = await fam().query(api.family.me, {});
+    const main = me.worlds.filter((w) => !w.other);
+    expect(main.map((w) => [w.unitId, w.no, w.term, w.ta, w.sk, w.open, w.book, w.now])).toEqual([
+      [sk2._id, 2, 1, "பின்னங்கள்", true, true, true, false],
+      [sk12._id, 12, 2, "அட்சரகணிதம்", true, true, true, false],
+    ]);
+    expect(main[0].en).toBe(`${SK_TITLE} · Made-up fractions`);
+    // The same Level marks it.
+    const lv = await fam().query(api.family.level, { unitId: sk2._id, n: 1 });
+    expect(lv.qs.map((q) => q.q)).toEqual([1, 2]);
+    // A Grade 11 student not ticked keeps his grade's map (no Grade 11 Sakarath book; Grade 11's switch is off).
+    const ravi = await t.mutation(api.students.add, { name: "Ravi K", grade: 11, term: 1, stage: "master", unitId: g11 });
+    const worlds = await raw.run(async (ctx) => await worldsOf(ctx, (await ctx.db.get(ravi))!));
+    expect(worlds.some((w) => w.sk)).toBe(false);
+    // His trophies count both maps while it is on; off again = the 53 topics.
+    expect(await t.mutation(api.sakarath.setExam, { grade: 12, on: false })).toEqual([]);
+    me = await fam().query(api.family.me, {});
+    expect(me.worlds.filter((w) => !w.other)).toHaveLength(53);
+    expect(me.worlds.some((w) => w.sk)).toBe(false);
+  });
+
+  test("Grade 10's revision unit (U00): in the syllabus, and added once to an app from before", async () => {
+    const u00 = (await unitByKey("G10-U00"))!;
+    expect(u00).toMatchObject({ grade: 10, code: "U00", term: 0 });
+    // An app from before (data version 4, no G10-U00): the next ensure adds it, once.
+    await raw.run(async (ctx) => {
+      await ctx.db.delete(u00._id);
+      const meta = (await ctx.db.query("meta").withIndex("by_key", (q) => q.eq("key", "data")).first())!;
+      await ctx.db.patch(meta._id, { value: 4 });
+    });
+    expect(await unitByKey("G10-U00")).toBeNull();
+    await t.mutation(api.setup.ensure, {});
+    await t.mutation(api.setup.ensure, {});
+    const back = await raw.run(async (ctx) => (await ctx.db.query("units").withIndex("by_grade", (q) => q.eq("grade", 10)).collect()).filter((u) => u.code === "U00"));
+    expect(back).toHaveLength(1);
+    expect(back[0]).toMatchObject({ key: "G10-U00", term: 0, en: "Revision of earlier grades" });
+    expect((await raw.run(async (ctx) => await ctx.db.query("units").withIndex("by_grade", (q) => q.eq("grade", 9)).collect())).filter((u) => u.code === "U00")).toHaveLength(1);
+    // Its Sakarath book goes on it like any unit's.
+    expect(await sakarath({ grade: 10, code: "U00" })).toMatchObject({ ok: true, made: true });
+    expect((await unitByKey("G10-U00-SK"))?.grade).toBe(110);
   });
 });

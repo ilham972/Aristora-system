@@ -7,7 +7,7 @@ import { actor } from "./lib/auth";
 import { giveIndex } from "./lib/family";
 
 /** Bump when ensure() has new one-time work to do. */
-export const DATA_VERSION = 4;
+export const DATA_VERSION = 5;
 
 /**
  * One-time data updates, safe to run any number of times (every phone calls it when the app opens):
@@ -102,6 +102,13 @@ export const ensure = mutation({
       if (!f) continue;
       await ctx.db.patch(b._id, { tute: true });
       if (!f.tute) await ctx.db.patch(f._id, { tute: true });
+    }
+
+    // 7. Grade 10's revision unit (version 5, 19 Nov 2026): its Sakarath book has a U00 (earlier grades), like Grade 9's.
+    //    The syllabus above goes only into an empty table, so a live app gets it here, once.
+    for (const u of SYLLABUS.filter((x) => x.code === "U00")) {
+      if (await unit(u.grade, u.code)) continue;
+      await ctx.db.insert("units", { grade: u.grade, code: u.code, key: unitKey(u.grade, u.code), term: u.term, en: u.en, ta: u.ta, order: unitOrder(u.code) });
     }
 
     if (meta) await ctx.db.patch(meta._id, { value: DATA_VERSION });

@@ -14504,7 +14504,8 @@ body.sb-on {
    find "the" grade row). */
 .exam-row {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  /* 6–11 and OL (19 Nov 2026): seven in one row down to 320 px */
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 6px;
 }
 .exam-row button {

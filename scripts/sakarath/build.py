@@ -134,7 +134,7 @@ for row in plan.PLAN:
     levels = []
     q_no = 0
     for mq in qs:
-        tag = f"{u.no}{'ABCDE'[mq['n'] - 1]}" if u.nq > 1 else f"{u.no}"
+        tag = f"{u.no}{'ABCDEFGHIJKLMNOP'[mq['n'] - 1]}" if u.nq > 1 else f"{u.no}"  # O/L U26: nine (A–I)
         first = q_no + 1
         run = 0
         for si, s in enumerate(mq["secs"]):
@@ -156,8 +156,17 @@ for row in plan.PLAN:
 css = mk.CSS
 css = re.sub(r"@page\s*\{[^}]*\}", "", css)
 css = css.replace(".sq {", ".sqr {")
+# The angle's hat (A B̂ C: one letter in <span class="hat">): Grade 9's book draws it with an SVG picture in its style,
+# and a book's style in the app may hold no url(…) (convex/lib/questions.ts unsafeCss); the same chevron, drawn with two
+# borders instead. Only that rule: Grade 10's and the O/L book's hat is a "^" of their own (.hat::after), kept as it is.
+css = re.sub(r"\.hat\s*\{[^}]*url\([^}]*\}",
+             ".hat { display: inline-block; position: relative; line-height: 1; padding-top: .3em; }\n"
+             ".hat::before { content: \"\"; position: absolute; left: 50%; top: .1em; width: .26em; height: .26em;"
+             " box-sizing: border-box; border-top: .065em solid currentColor; border-left: .065em solid currentColor;"
+             " transform: translateX(-50%) rotate(45deg); }", css)
 # On a phone (the app draws it in a card ~300 px wide): figures shrink to the card, a figure beside the text goes under
-# it when there is no room, a long label ("(viii)") keeps its space.
+# it when there is no room, a long label ("(viii)") keeps its space, calculator keys wrap (19 Nov 2026: Grade 9 U11's
+# ON → 2 → 4 → + → 9 → ÷ → 3 → = ran 97 px past the card).
 css += """
 .fg { max-width: 100% !important; height: auto !important; }
 .fg svg { display: block; max-width: 100%; width: 100%; height: auto; }
@@ -172,9 +181,13 @@ table.gt td, table.gt th { padding: .3mm 1.2mm; }
 .fgb > div { min-width: 0; max-width: 100%; }
 .fgb > div[style*="flex-direction:column"] { width: 100%; }
 .tf, .m { white-space: normal; }
+.keys { white-space: normal; display: inline-flex; flex-wrap: wrap; align-items: center; row-gap: 1.2mm; max-width: 100%; vertical-align: middle; }
 .qv table.gt.sm td, .qv table.gt.sm th { font-size: 14px !important; padding: .2mm 1mm; }
 """
-json.dump(dict(grade=plan.GRADE, ver=plan.VER, css=css.strip(), units=units), open(out, "w"), ensure_ascii=False)
-print(plan.GRADE, len(units), "units", sum(len(x["questions"]) for x in units), "questions",
+# The O/L book (19 Nov 2026): GRADE "OL" is the app's grade 12; its units are its own (their names and part go with
+# each request: convex/link.ts saveSakarath).
+GRADE = 12 if plan.GRADE == "OL" else plan.GRADE
+json.dump(dict(grade=GRADE, ver=plan.VER, css=css.strip(), units=units), open(out, "w"), ensure_ascii=False)
+print(GRADE, len(units), "units", sum(len(x["questions"]) for x in units), "questions",
       sum(len(q["parts"]) for x in units for q in x["questions"]), "parts",
       sum(len(x["levels"]) for x in units), "levels")

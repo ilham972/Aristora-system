@@ -3973,6 +3973,61 @@ test("Sakarath on the phone: the app's own question, never the printed page (no 
   await O.context().close();
 });
 
+test("Exam mode OL: a student ticked for the O/L map sees the O/L Sakarath book's own map (its parts as Worlds, its units, all open)", async () => {
+  // 19 Nov 2026: the O/L book's 30 units are its own (the 53 topics merged), so its map is its own (lib/sakarath.ts).
+  const before = problems.length;
+  const backend = makeBackend(modules);
+  const t = backend.t;
+  await addPerson(t, { name: "Owner", token: OWNER_TOKEN, role: "owner" });
+  const as = { token: OWNER_TOKEN };
+  await t.mutation(api.setup.ensure, as);
+  const made: [string, number, string, string][] = [
+    ["U01", 1, "Made-up roots", "வர்க்கமூலம்"],
+    ["U02", 1, "Made-up fractions", "பின்னங்கள்"],
+    ["U11", 2, "Made-up expansions", "விரிவுகள்"],
+    ["U20", 3, "Made-up triangles", "முக்கோணிகள்"],
+  ];
+  await t.run(async (ctx) => {
+    for (const [code, term, en, ta] of made) {
+      const id = await ctx.db.insert("units", { grade: 112, code, key: `OLS-${code}-SK`, term, order: Number(code.slice(1)), en: `Sakarath · ${en}`, ta: `${ta} · ஸகராத்` });
+      const data = { kind: "master" as const, parts: [{ id: "II" as const, from: 1, to: 1, kind: "cards" as const }], levels: [{ n: 1, from: 1, to: 1, max: 1 }], marks: { "1": 1 } };
+      await ctx.db.insert("books", { unitId: id, stage: "master", title: "ஸகராத் புத்தகம்", sk: true, data, keyCount: 1, qCount: 1, updatedAt: Date.now() });
+      await ctx.db.insert("keys", { unitId: id, stage: "master", answers: [{ q: 1, parts: [{ p: "i", a: "**4**", m: 1, t: { k: "box" as const, b: [{ v: ["4"] }] } }] }], updatedAt: Date.now() });
+      await ctx.db.insert("questions", { unitId: id, stage: "master", q: 1, html: `<div class="sec first bk"><div class="pt"><div class="rp"><span class="rl">(i)</span><span class="rt">A made-up part</span></div></div></div>` });
+    }
+  });
+  const nila = await t.mutation(api.students.add, { ...as, name: "Nila S", grade: 11, term: 3 });
+  await t.mutation(api.families.setCode, { ...as, studentId: nila, code: "4719" });
+  await t.mutation(api.families.setOlMap, { ...as, studentIds: [nila], on: true });
+  expect(await t.mutation(api.sakarath.setExam, { ...as, grade: 12, on: true })).toEqual([12]);
+
+  const P = await open(backend, `${site.url}/f/`, size(320, 640));
+  await P.getByLabel(/Index/).fill("1001");
+  await P.getByLabel("Code").fill("4719");
+  await P.getByRole("button", { name: "Sign in" }).click();
+  await tabTo(P, /Learn/);
+  // Three Worlds, the book's parts (not பகுதி 1A … 2B); every Stage open (none locked, none "soon").
+  await until(async () => (await P.locator(".f-wbanner").count()) === 3, "three Worlds: the book's parts");
+  await contains(P.locator(".f-wbanner").nth(0), "எண்களும் அளவீடும்");
+  await contains(P.locator(".f-wbanner").nth(1), "அட்சரகணிதம்");
+  await contains(P.locator(".f-wbanner").nth(2), "நிகழ்தகவு");
+  expect(await P.locator(".f-wbanner", { hasText: "பகுதி" }).count()).toBe(0);
+  await until(async () => (await P.locator(".f-node").count()) === 4, "its four Stages");
+  expect(await P.locator(".f-node.s-lock, .f-node.s-soon").count()).toBe(0);
+  await visible(P.getByRole("button", { name: "Stage 20: முக்கோணிகள்" }));
+  await contains(P.locator(".f-hero .f-kicker").first(), "NUMBERS");
+  await noSideScroll(P);
+  await shot(P, "fam54-ol-sakarath-map-320");
+  // A Stage opens its Level like any book.
+  await P.getByRole("button", { name: "Stage 11: விரிவுகள்" }).click();
+  await contains(P.locator(".f-hero .f-hsub"), "ஸகராத் புத்தகம் · Made-up expansions");
+  await noSideScroll(P);
+  await shot(P, "fam55-ol-sakarath-stage-320");
+  // (Off = the 53 topics again: tests/sakarath.test.ts.)
+  expect(problems.slice(before)).toEqual([]);
+  await P.context().close();
+});
+
 test("the Shop: the owner's things with a photo; last week's pay; the coin on the top row; PAYDAY; buying, the gold card, Cancel; Coins back and Given; 320 px", async () => {
   const before = problems.length;
   const backend = makeBackend(modules);

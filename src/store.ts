@@ -10,7 +10,8 @@ import { computeStatus, type Mark, type Marks, type Status } from "../convex/lib
 import { SIGNED_OUT } from "../convex/lib/auth";
 import type { Dept, PageId } from "../convex/lib/dept";
 import type { SimInfo } from "../convex/sim";
-import { isSkGrade } from "../convex/lib/sakarath";
+import { isSkGrade, skGrade } from "../convex/lib/sakarath";
+import { OL } from "../convex/lib/syllabus";
 import { errorText, mutate, phoneToken, savePhoneToken, setLookOnly, subscribe, watchLink, type Link } from "./backend";
 
 export type Student = Doc<"students">;
@@ -397,6 +398,10 @@ export function allUnits(): Unit[] {
 /** A unit's Sakarath book's own unit (Settings → Books → S), or null. */
 export function skUnitOf(u: Unit): Unit | null {
   return skByKey.get(u.key) ?? null;
+}
+/** The O/L Sakarath book's own units (19 Nov 2026: none of them is an O/L topic), in the book's order. */
+export function olSkUnits(): Unit[] {
+  return [...unitById.values()].filter((u) => u.grade === skGrade(OL)).sort((a, b) => a.order - b.order);
 }
 
 // ---- A student's book and his work in it ----

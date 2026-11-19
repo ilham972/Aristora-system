@@ -3131,7 +3131,8 @@ chat; `convex/lib/sakarath.ts`, `convex/sakarath.ts`).
   number line, compass / straight edge / protractor) a photo; everything else (sentences, Tamil words, times with மு.ப.
   / பி.ப., estimates, "any two …", answers with அல்லது or ±, tables read as long lists) his own words typed (`say`),
   read by a teacher or the AI in Homework. G6: 302 of 532 parts on the phone, 199 typed, 31 photos; G7: 344 / 145 /
-  41 of 530; G8: 520 / 181 / 36 of 737.
+  41 of 530; G8: 520 / 181 / 36 of 737; G9 (19 Nov 2026, 29 units with U00): 507 / 176 / 38 of 721; G10 (33 units with
+  U00): 492 / 181 / 49 of 722; OL (30 units of its own): 376 / 210 / 52 of 638.
 - **Exam mode** (Settings → Books → Exam mode, the owner; `sakarath.exam`, `sakarath.setExam`; meta `exam.grades`): one
   button per grade in one row (6–11; pale = no Sakarath book with its key in the app; amber ON); two taps within 4
   seconds (one tap changes every phone of a grade); history "Grade 8: exam mode on". On for his grade (never the O/L
@@ -3150,6 +3151,23 @@ chat; `convex/lib/sakarath.ts`, `convex/sakarath.ts`).
 - **How it gets in**: only through the Claude link (`tell` "sakarath": grade, code, data, answers, items, css; checked
   like an upload, all or nothing; the Sakarath unit made the first time; its levels can't change once a student
   started it; `ask` "sakarath" lists a grade's). docs/making-changes.md, "A Sakarath book into the app".
+- **The O/L Sakarath book** (19 Nov 2026; his check: "is this 30 units align with grade 11 ... if aligned we can upload
+  in the grade 11 instead OL": it isn't: 9 of its units are Grade 10 topics, 6 pairs of Grade 11 units share one, and
+  Grade 11's Equations needs two). Its 30 units are its own: the 53 O/L topics and the Grade 10 + 11 syllabus merged
+  so that no skill comes twice, in 3 parts (1 numbers and measurement, 2 algebra, 3 geometry, statistics, probability:
+  `SK_OL_PARTS`). So each is a Sakarath unit with **no unit of the syllabus under it**: grade 112, key "OLS-U05-SK"
+  (never "OL-U05-…": that is the O/L topic 5), its names (with the book's mark, `skNames`) and part (`term`) from the
+  request, `order` = its number. **Exam mode OL** (the seventh button, after 11): the students ticked for the O/L map
+  (`olMapOn`; Grade 10 and 11) see the book's own map instead of the 53 topics: its parts as Worlds (the phone names
+  them `SK_PART_TA`, the kicker "WORLD 1 · NUMBERS"), its units as Stages (their own numbers and names, `en`
+  "ஸகராத் புத்தகம் · …"), every one open, none "now"; the other syllabus's books he has stay one more World. Off: the
+  53 topics again. Grade 11's own switch never touches the O/L map, and OL's never touches a student not ticked.
+  **Settings → Books → OL** lists the book's units at its end (`OlSakarath`: by part, S gold when in the app with its
+  key, a tap = the S sheet); the 53 topics' S stays pale (a tap says where the book is), and the line under the grade
+  row counts "N of its own 30 units".
+- **Grade 10's revision unit** (19 Nov 2026: its Sakarath book has a U00, earlier grades, like Grade 9's): G10-U00
+  "Revision of earlier grades", term 0, in the syllabus and added to a live app by `setup.ensure` (data version 5).
+  Like Grade 9's U00 it has no past-paper book (a "soon" Stage in the Extra World) until exam mode.
 
 ## Accounts and security (built 2026-10-28)
 

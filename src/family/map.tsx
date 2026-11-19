@@ -15,7 +15,7 @@ import type { FamilyMe } from "../../convex/family";
 import type { World, WorldLevel } from "../../convex/lib/family";
 import { nextPlay } from "./next";
 import { buzz, sound } from "./sound";
-import { Dashes, Flame, flameAtRisk, Gem, Icon, Owl, OwlBadge, OwlSays, PART_TA, Tag, TERM_TA, titleSize, toast, Waiting, type Mood } from "./ui";
+import { Dashes, Flame, flameAtRisk, Gem, Icon, Owl, OwlBadge, OwlSays, PART_TA, SK_PART_TA, Tag, TERM_TA, titleSize, toast, Waiting, type Mood } from "./ui";
 
 // ---- The road: a smooth line through the stops (x in % of the width, y in px) ----
 
@@ -51,6 +51,7 @@ export type WorldGroup = { key: string; no: number; name: string; en: string; st
 
 /** The O/L map's paper parts in English letters (a kicker): its `term` 1–4. */
 const PART_EN: Record<number, string> = { 1: "Part 1A", 2: "Part 1B", 3: "Part 2A", 4: "Part 2B" };
+const SK_PART_EN: Record<number, string> = { 1: "Numbers", 2: "Algebra", 3: "Geometry & data" };
 
 /**
  * The Worlds: his map's units grouped by term (terms 1–3 in order, then any extra book), or by paper part on the O/L
@@ -59,11 +60,13 @@ const PART_EN: Record<number, string> = { 1: "Part 1A", 2: "Part 1B", 3: "Part 2
 export function worldGroups(me: FamilyMe): WorldGroup[] {
   const main = me.worlds.filter((w) => !w.other);
   const terms = [...new Set(main.map((w) => w.term ?? 0))].sort((a, b) => (a || 9) - (b || 9));
+  // Exam mode OL (19 Nov 2026): the O/L map is the O/L Sakarath book's own, its Worlds the book's parts.
+  const skOl = me.ol && main.length > 0 && main.every((w) => w.sk);
   const out: WorldGroup[] = terms.map((term, i) => ({
     key: `t${term}`,
     no: i + 1,
-    name: (me.ol ? PART_TA[term] : TERM_TA[term]) ?? `World ${i + 1}`,
-    en: (me.ol ? PART_EN[term] : term ? `Term ${term}` : "Extra") ?? "",
+    name: (skOl ? SK_PART_TA[term] : me.ol ? PART_TA[term] : TERM_TA[term]) ?? `World ${i + 1}`,
+    en: (skOl ? SK_PART_EN[term] : me.ol ? PART_EN[term] : term ? `Term ${term}` : "Extra") ?? "",
     stages: main.filter((w) => (w.term ?? 0) === term),
   }));
   const other = me.worlds.filter((w) => w.other);

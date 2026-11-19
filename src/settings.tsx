@@ -19,6 +19,7 @@ import {
   act,
   allUnits,
   skUnitOf,
+  olSkUnits,
   currentMe,
   currentRole,
   may,
@@ -47,7 +48,7 @@ import { SHOUT_WHY } from "../convex/lib/us";
 import { ClassHours } from "./classHours";
 import { ClaudeLink } from "./claudeLink";
 import { SkillBookPage } from "./skillBook";
-import { ExamMode, SakarathSheet } from "./sakarathBooks";
+import { ExamMode, OlSakarath, SakarathSheet } from "./sakarathBooks";
 import { RaceSettings } from "./raceSettings";
 import { ShopSettings } from "./shopSettings";
 import { UsSettings } from "./usSettings";
@@ -547,6 +548,9 @@ function Books() {
   const allHave = (u: Unit, f: (b: BookRow) => number | null) => both(u).length > 0 && both(u).every((b) => (f(b) ?? 0) > 0);
   const keys = list.filter((u) => allHave(u, (b) => b.keyCount)).length;
   const texts = list.filter((u) => allHave(u, (b) => b.qCount)).length;
+  // OL's Sakarath book has units of its own (19 Nov 2026, lib/sakarath.ts): listed at the end, counted here.
+  const olSk = grade === OL ? olSkUnits() : [];
+  const olSkIn = olSk.filter((u) => books.some((b) => b.unitId === u._id && b.stage === "master" && (b.keyCount ?? 0) > 0)).length;
   return (
     <div class="settings-body">
       <UploadBooks units={units} books={books} onSaved={setGrade} />
@@ -568,7 +572,7 @@ function Books() {
         {grade === OL ? `${list.length} O/L topics by paper part, as on the O/L exam (any student can be given them).` : `${list.length} units.`} In
         the app: theory books (F) {done("fighter")} · workbooks (M) {done("master")} · answer keys (K) {keys} · questions
         as printed (Q) {texts} · tagged with skills (T) {list.filter((u) => bookOf(u, "master")?.tagged).length} · Sakarath books (S){" "}
-        {list.filter((u) => skBookOf(u)).length}.
+        {grade === OL ? `${olSkIn} of its own ${olSk.length} units (at the end)` : list.filter((u) => skBookOf(u)).length}.
       </p>
       {(grade === OL ? [1, 2, 3, 4] : [1, 2, 3, 0]).map((t) => {
         const us = list.filter((u) => u.term === t);
@@ -627,7 +631,7 @@ function Books() {
                       type="button"
                       class={`ul-t ul-s${skb ? " has" : ""}`}
                       aria-label={skb ? `${u.code}: its Sakarath book, ${skb.questions} questions` : `${u.code}: no Sakarath book yet`}
-                      onClick={() => setSkOf(u)}
+                      onClick={() => (grade === OL ? toast("The O/L Sakarath book has units of its own: they are at the end of this page.") : setSkOf(u))}
                     >
                       S
                     </button>
@@ -638,6 +642,7 @@ function Books() {
           </div>
         );
       })}
+      {grade === OL && <OlSakarath units={olSk} books={books} />}
       {skillsOf && <SkillBookPage unit={skillsOf} onClose={() => setSkillsOf(null)} />}
       {skOf && <SakarathSheet unit={skOf} sk={skUnitOf(skOf)} book={skBookOf(skOf)} onClose={() => setSkOf(null)} />}
       {open && (
@@ -1170,7 +1175,8 @@ function describe(e: Doc<"events">): string {
       return v === "on" ? "drawing photos from home asked for again" : "drawing photos from home no longer asked for";
     case "exam-mode": {
       const [g, on] = v.split(" ");
-      return on === "on" ? `Grade ${g}: exam mode on (each Stage opens its Sakarath book)` : `Grade ${g}: exam mode off (the past papers again)`;
+      const who = gradeWords(Number(g));
+      return on === "on" ? `${who}: exam mode on (each Stage opens its Sakarath book)` : `${who}: exam mode off (the past papers again)`;
     }
     case "ai-auto":
       return v === "on" ? "the AI marks photos from home by itself" : v === "off" ? "the AI no longer marks photos from home by itself" : `the AI's threads go to ${v.replace(/^threads /, "")}`;

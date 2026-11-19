@@ -22,7 +22,7 @@ import { computeMaster, EMPTY_MASTER, type MState } from "./master";
 import { keyRow } from "./backend";
 import { OL, olNumber } from "./syllabus";
 import { ladderOf, secDone } from "./ladder";
-import { examOn, SK_TITLE, skUnitsOf } from "./sakarath";
+import { examOn, plainNames, skGrade, SK_TITLE, skUnitsOf } from "./sakarath";
 
 export type LevelState =
   /** Marked (in class, or at home and checked). */
@@ -89,7 +89,8 @@ export type World = {
   given?: number;
   /**
    * Exam mode (17 Nov 2026, lib/sakarath.ts): this Stage is its unit's Sakarath book (unitId = the Sakarath unit; no,
-   * ta and term are its unit's, so the map stays the syllabus map).
+   * ta and term are its unit's, so the map stays the syllabus map). On the O/L map with exam mode OL (19 Nov 2026): the
+   * O/L book's own unit (its own number and names; term = its part, 1–3).
    */
   sk?: true;
 };
@@ -296,13 +297,15 @@ async function unitsOf(ctx: QueryCtx, grade: number): Promise<Doc<"units">[]> {
  * The whole syllabus of his map, with what is open (3 Nov 2026, his ask: "put the whole syllabus"): his grade's, or the
  * O/L syllabus when he is ticked for it (olMapOn). A unit without a workbook is listed with no levels and never open;
  * the "next opens when this one is done" chain passes over it. Then the other syllabus's books he has (`other`).
- * Exam mode on for his grade (17 Nov 2026, lib/sakarath.ts; never on the O/L map): the same map, each Stage its unit's
- * Sakarath book, every one open; a unit without one is "soon". `exam` forces it either way (his trophies count both).
+ * Exam mode on for his grade (17 Nov 2026, lib/sakarath.ts): the same map, each Stage its unit's Sakarath book, every one
+ * open; a unit without one is "soon". On the O/L map the switch is OL's (19 Nov 2026), and the map is the O/L book's own:
+ * its units in its parts, every one open (none of them lines up with one of the 53 topics). `exam` forces it either way
+ * (his trophies count both).
  */
 export async function worldsOf(ctx: QueryCtx, student: Doc<"students">, opts: { exam?: boolean } = {}): Promise<World[]> {
   if (typeof student.grade !== "number") return [];
   const ol = olMapOn(student);
-  const exam = !ol && (opts.exam ?? (await examOn(ctx, student.grade)));
+  const exam = opts.exam ?? (await examOn(ctx, ol ? OL : student.grade));
   // O/L books are for Grade 10 and 11 students only (students.checkOl): no one else has an O/L side.
   const olUnits = student.grade === 10 || student.grade === 11 ? await unitsOf(ctx, OL) : [];
   const gradeUnits = await unitsOf(ctx, student.grade);
@@ -375,8 +378,17 @@ export async function worldsOf(ctx: QueryCtx, student: Doc<"students">, opts: { 
   // The chain: a Stage opens when the one before it is done. The O/L map opens its first topic in the app by itself
   // (his answer, 4 Nov 2026: "one by one"): the class may not have put him on any O/L book yet.
   let prevDone = ol;
-  const sks = exam ? await skUnitsOf(ctx, student.grade) : null;
-  for (const unit of ol ? olUnits : gradeUnits) {
+  if (ol && exam) {
+    // The O/L Sakarath book's own map (19 Nov 2026): each of its units a Stage of its part, open, in the book's order.
+    for (const sk of await unitsOf(ctx, skGrade(OL))) {
+      const skBook = await workbook(sk);
+      if (!skBook) continue;
+      const name = plainNames(sk);
+      out.push({ ...(await stage(sk, skBook, true)), no: unitNumber(sk.code), ta: name.ta, en: `${SK_TITLE} · ${name.en}`, term: sk.term, now: false, sk: true });
+    }
+  }
+  const sks = exam && !ol ? await skUnitsOf(ctx, student.grade) : null;
+  for (const unit of ol && exam ? [] : ol ? olUnits : gradeUnits) {
     if (sks) {
       // Exam mode: its Sakarath book, open; its own number, name and term (the syllabus map stays as it is).
       const sk = sks.get(unit.key);

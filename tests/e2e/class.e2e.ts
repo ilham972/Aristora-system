@@ -5170,6 +5170,52 @@ test("Sakarath: Books → S shows a unit's Sakarath book (gold when it is in the
   await E.getByRole("button", { name: /^Exam mode for Grade 8:/ }).click();
   await until(async () => JSON.stringify(await examOn()) === "[]", "exam mode off");
   await contains(C.locator(".toast"), "Grade 8: exam mode off");
+
+  // OL (19 Nov 2026): the O/L book's own units (no O/L topic under them), listed at the end of Books → OL with their S;
+  // the seventh switch, OL, still in one row at 320 px.
+  expect(await E.getByRole("button", { name: /^Exam mode for OL:/ }).isDisabled()).toBe(true);
+  await backend.t.run(async (ctx) => {
+    for (const [code, term, en, ta] of [
+      ["U02", 1, "Made-up fractions", "பின்னங்கள்"],
+      ["U11", 2, "Made-up expansions", "விரிவுகள்"],
+    ] as const) {
+      const sk = await ctx.db.insert("units", { grade: 112, code, key: `OLS-${code}-SK`, term, order: Number(code.slice(1)), en: `Sakarath · ${en}`, ta: `${ta} · ஸகராத்` });
+      const data = { kind: "master" as const, parts: [{ id: "II" as const, from: 1, to: 1, kind: "cards" as const }], levels: [{ n: 1, from: 1, to: 1, max: 1 }], marks: { "1": 1 } };
+      await ctx.db.insert("books", { unitId: sk, stage: "master", title: "ஸகராத் புத்தகம்", sk: true, data, keyCount: code === "U02" ? 1 : 0, qCount: 1, updatedAt: Date.now() });
+      if (code === "U02") await ctx.db.insert("keys", { unitId: sk, stage: "master", answers: [{ q: 1, parts: [{ p: "i", a: "**4**", m: 1, t: { k: "box" as const, b: [{ v: ["4"] }] } }] }], updatedAt: Date.now() });
+    }
+  });
+  await backend.push(); // the phone sees what changed outside it
+  await C.locator(".grade-row").getByRole("button", { name: /^OL\b/ }).click();
+  const L = C.locator(".ol-sk");
+  await visible(L);
+  await count(L.locator(".unit-list li"), 2);
+  await visible(L.locator(".unit-list li", { hasText: "Made-up fractions" }).locator(".ul-s.has"));
+  await count(L.locator(".unit-list li", { hasText: "Made-up expansions" }).locator(".ul-s.has"), 0); // no key yet
+  await contains(L, "எண்களும் அளவீடும்");
+  await contains(C.locator(".settings-body p.muted", { hasText: "Sakarath books (S)" }), "1 of its own 2 units");
+  // The 53 topics never carry it: their S says where it is.
+  await count(C.locator(".unit-list li .ul-s.has"), 1);
+  await C.locator(".unit-list li", { hasText: "Inverse proportion" }).locator(".ul-s").click();
+  await contains(C.locator(".toast"), "units of its own");
+  await L.locator(".unit-list li", { hasText: "Made-up fractions" }).locator(".ul-s").click();
+  await contains(C.locator(".sheet"), "OL U02 · Sakarath book");
+  await contains(C.locator(".sheet"), "ticked for the O/L map");
+  await C.locator(".sheet").getByRole("button", { name: /close/i }).first().click();
+  await E.getByRole("button", { name: /^Exam mode for OL:/ }).click();
+  await contains(C.locator(".toast"), "Tap OL again");
+  await E.getByRole("button", { name: /^Exam mode for OL:/ }).click();
+  await until(async () => JSON.stringify(await examOn()) === "[12]", "exam mode on for OL");
+  await contains(C.locator(".toast"), "OL: exam mode on");
+  await visible(E.locator("button.on", { hasText: "OL" }));
+  expect(await C.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  expect(await E.locator("button").evaluateAll((bs) => new Set(bs.map((b) => Math.round(b.getBoundingClientRect().top))).size)).toBe(1);
+  await shot(C, "sk03-exam-ol-320");
+  await L.scrollIntoViewIfNeeded();
+  await shot(C, "sk04-ol-book-320");
+  await C.setViewportSize({ width: 390, height: 844 });
+  await E.scrollIntoViewIfNeeded();
+  await shot(C, "sk05-exam-ol-390");
   expect(problems).toEqual([]);
 });
 

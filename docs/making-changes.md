@@ -137,6 +137,15 @@ echo '[{"name":"g8","fn":"ask","req":{"op":"sakarath","grade":8}}]' > $SCR/ask.j
   (`build.py`): figures shrink to the card, a figure beside the text goes under it, the square root's class is `sqr`
   (the app's `.sq` is a ladder's sub-question), a lead reads at the phone's size (`lead2`).
 - Then tell him: Settings → Books → Grade N → S is gold on each unit; Exam mode → tap N twice.
+- **The O/L book** (19 Nov 2026): its plan.py says `GRADE = "OL"`; `build.py` writes grade 12, and `kinds.ts` sends each
+  unit's names and part (`en`, `ta`, `term`) with it (the server keeps them only for OL: its units are its own, keys
+  "OLS-U05-SK"; Grades 6–11 take their unit's names). Requests are named "OL-U05-SK". Tell him: Settings → Books →
+  OL → its units at the end, S gold; Exam mode → tap OL twice (only the students ticked for the O/L map see it).
+- **What `build.py` changes in a book's style for the phone** (the printed book is untouched): Grade 9's angle hat was an
+  SVG picture (`url(...)` in the style, refused by the app): the same chevron in two borders; Grade 10's and the O/L
+  book's hat is a "^" of their own and stays. Calculator keys (`.keys`, nowrap in print) wrap. A unit may have up to 16
+  master questions (O/L U26 has nine, A–I). Measure every unit with `scripts/phone-look.ts` before sending: Grade 10
+  U05's pairs table runs 5 px past (accepted).
 
 ## Digitize a unit in the app (through the Claude link)
 
@@ -327,6 +336,11 @@ WHY=1 npx vitest run -c vitest.perf.config.ts -t "lab" --reporter=verbose # each
   question: `KEY_PARTS_MAX × ANS_ITEMS_MAX`) and `LEVEL_TYPED_MAX` (one Check) in `convex/lib/key.ts`, checked by
   `typedTooLong` in `family.ts` for `check`, `checkOne`, `checkRedo` and `checkLadder`. A new key limit: raise these
   with it.
+
+- **The O/L Sakarath units have no unit under them** (19 Nov 2026): grade 112, key "OLS-U05-SK". Never find "the" unit of
+  a Sakarath unit by `unitKey(realGrade(g), code)` (for OL that is an O/L topic, another thing); `skUnitsOf(ctx, 12)`
+  maps them to keys no topic has. A run-through that writes units with `t.run` after the page is open calls
+  `backend.push()` (only the page's own mutations push its subscriptions).
 
 - **A Sakarath unit is a unit of grade 100 + its grade** (17 Nov 2026): never list `query("units").collect()` to people
   without leaving out `isSkGrade` (the class app's `allUnits()` does; `unitOf` still names them for the Homework card);

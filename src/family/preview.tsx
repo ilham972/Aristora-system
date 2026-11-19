@@ -83,7 +83,7 @@ function Preview(props: { unitId: string }) {
         <p class="f-kicker">Preview · only you</p>
         <h2 class="f-h2">{unit ? `Stage ${unit.world.no} · ${unit.world.ta}` : "Preview"}</h2>
         <p class="f-muted small">
-          {unit ? `Grade ${unit.grade} · ${unit.code} ${unit.world.en}. ` : ""}Every level open, as a student sees it. Check is off:
+          {unit ? `${unit.grade === 12 ? "OL" : `Grade ${unit.grade}`} · ${unit.code} ${unit.world.en}. ` : ""}Every level open, as a student sees it. Check is off:
           nothing is sent or saved. Under each question: free marks for everyone, for a question out of the syllabus.
         </p>
         <button type="button" class="f-btn ghost" onClick={back}>

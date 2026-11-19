@@ -1,6 +1,7 @@
 // Exam mode (17 Nov 2026, his voice note; convex/lib/sakarath.ts): Settings → Books → Exam mode, one switch per grade
 // (his answer: "One per grade"). On, that grade's family app opens each unit's Sakarath book instead of its past
-// papers (lib/family.ts `worldsOf`); off, the past papers again. The owner only.
+// papers (lib/family.ts `worldsOf`); off, the past papers again. OL (19 Nov 2026): the students ticked for the O/L map
+// get the O/L book's own map. The owner only.
 
 import { v } from "convex/values";
 import { query } from "./_generated/server";
@@ -8,6 +9,7 @@ import { mutation } from "./lib/fn";
 import { actor, viewer } from "./lib/auth";
 import { cleanBy, fail, log } from "./lib/backend";
 import { EXAM_GRADES, EXAM_KEY, examGrades, skGrade } from "./lib/sakarath";
+import { gradeWords } from "./lib/syllabus";
 
 const token = v.optional(v.string());
 
@@ -44,10 +46,10 @@ export const setExam = mutation({
   args: { token, grade: v.number(), on: v.boolean(), by: v.optional(v.string()) },
   handler: async (ctx, args) => {
     await actor(ctx, args.token, ["owner"], args.by);
-    if (!(EXAM_GRADES as readonly number[]).includes(args.grade)) fail("Exam mode is for Grades 6 to 11.");
+    if (!(EXAM_GRADES as readonly number[]).includes(args.grade)) fail("Exam mode is for Grades 6 to 11 and OL.");
     const was = await examGrades(ctx);
     if (args.on && !was.includes(args.grade) && (await booksIn(ctx, args.grade)) === 0) {
-      fail(`Grade ${args.grade} has no Sakarath book in the app yet.`);
+      fail(`${gradeWords(args.grade)} has no Sakarath book in the app yet.`);
     }
     const next = args.on ? [...new Set([...was, args.grade])].sort((a, b) => a - b) : was.filter((g) => g !== args.grade);
     if (next.length === was.length && next.every((g, i) => g === was[i])) return next;

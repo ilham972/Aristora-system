@@ -18,20 +18,42 @@
 // - It reaches the app through the Claude link (convex/link.ts `tell` "sakarath", his ask: "you will upload from here
 //   ... this is one time upload"): the book engine's source zip carries sakarath.json (answers and skills only), so a
 //   chat builds each unit's printed questions, levels and answer kinds from the source and saves them here, checked.
+// - The O/L Sakarath book (19 Nov 2026) has units of its OWN: the 53 O/L topics and the Grade 10 + 11 syllabus merged
+//   into 30 units in 3 parts so that no skill comes twice (his check: "is this 30 units align with grade 11 ... if
+//   aligned we can upload in the grade 11 instead OL": it isn't: 9 of its units are Grade 10 topics, and 6 pairs of
+//   Grade 11 units share one). So each is a Sakarath unit with no unit of the syllabus under it (grade 112, key
+//   "OLS-U05-SK", its names and part from the book), and exam mode OL turns the O/L map of the students ticked for it
+//   into the book's own map: its 3 parts, its 30 units, all open (lib/family.ts `worldsOf`).
 
 import type { Doc } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
 import { KEY_PARTS_MAX } from "./key";
 import type { MasterData } from "./book";
+import { OL } from "./syllabus";
 
-/** A Sakarath unit's grade: this + the unit's own (106, 107, 108 …). */
+/** A Sakarath unit's grade: this + the unit's own (106, 107, 108 …; the O/L book's 112). */
 export const SK_BASE = 100;
 /** The book's name, as printed on its cover. */
 export const SK_TITLE = "ஸகராத் புத்தகம்";
-/** The meta row of exam mode: the grades on (6–11). */
+/** The meta row of exam mode: the grades on (6–11, OL = 12). */
 export const EXAM_KEY = "exam.grades";
-/** The grades exam mode can be turned on for. */
-export const EXAM_GRADES = [6, 7, 8, 9, 10, 11] as const;
+/** The grades exam mode can be turned on for (OL: the students ticked for the O/L map). */
+export const EXAM_GRADES = [6, 7, 8, 9, 10, 11, OL] as const;
+/**
+ * The O/L Sakarath book's parts (its units' `term`), as its plan.py names them; the family app keeps a copy
+ * (src/family/ui.tsx SK_PART_TA: this file would bring the syllabus into that small bundle).
+ */
+export const SK_OL_PARTS: Record<number, { ta: string; en: string }> = {
+  1: { ta: "எண்களும் அளவீடும்", en: "Numbers & measurement" },
+  2: { ta: "அட்சரகணிதம்", en: "Algebra" },
+  3: { ta: "கேத்திரகணிதம் · புள்ளிவிபரவியல் · நிகழ்தகவு", en: "Geometry · statistics · probability" },
+};
+/** An O/L Sakarath unit's key: "U05" → "OLS-U05-SK" (never "OL-U05-…": that is the O/L topic 5). */
+export const olSkKey = (code: string) => `OLS-${code}-SK`;
+/** A Sakarath unit's names: its unit's (or, on the O/L book, its own) with the book's mark. */
+export const skNames = (en: string, ta: string) => ({ en: `Sakarath · ${en}`, ta: `${ta} · ஸகராத்` });
+/** The names without the book's mark (the map says it once, in its own way). */
+export const plainNames = (u: { en: string; ta: string }) => ({ en: u.en.replace(/^Sakarath · /, ""), ta: u.ta.replace(/ · ஸகராத்$/, "") });
 /** The most questions a Sakarath book may have (a section of a master question is one question in the app). */
 export const SK_QUESTIONS_MAX = 120;
 /** The most levels. */

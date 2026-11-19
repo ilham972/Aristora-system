@@ -21,7 +21,8 @@
 // - The Sakarath book (17 Nov 2026, convex/lib/sakarath.ts; his ask: "you will upload from here ... one time upload"):
 //   `tell` "sakarath" saves one unit's whole Sakarath book (its levels and marks, key with every part's kind, printed
 //   questions, style) on its own unit, made the first time; checked like the rest, all or nothing; its levels can't
-//   change once a student has started it. `ask` "sakarath" lists a grade's.
+//   change once a student has started it. `ask` "sakarath" lists a grade's. OL (19 Nov 2026): the O/L book's own units
+//   (grade 12, its names and part in the request), each a Sakarath unit with no topic under it (lib/sakarath.ts).
 // - The functions are public (the carrier has no sign-in): the seal is the sign-in. An answer says nothing to anyone
 //   without the key, not even whether a link is on.
 
@@ -39,8 +40,8 @@ import { phonePart, phoneShare, readPart, type KeyQ } from "./lib/phone";
 import { BOOK_CSS_MAX, QUESTION_HTML_MAX, unsafeCss, unsafeHtml } from "./lib/questions";
 import { answerNonce, fromB64, KEY_BYTES, seal, unseal } from "./lib/seal";
 import { knownFor, skillCounts, skillHome, skillsProblem, type Skill, type SkillFile, type SkillTag } from "./lib/skills";
-import { EXAM_GRADES, sakarathProblem, sameLevels, skGrade, skKey, SK_TITLE } from "./lib/sakarath";
-import { unitKey } from "./lib/syllabus";
+import { EXAM_GRADES, olSkKey, sakarathProblem, sameLevels, skGrade, skKey, skNames, SK_TITLE } from "./lib/sakarath";
+import { OL, unitKey } from "./lib/syllabus";
 
 /** A link works this long, unless the owner turns it off first. */
 export const LINK_DAYS = 7;
@@ -326,11 +327,12 @@ export const ask = query({
       // A grade's units and their Sakarath books (17 Nov 2026): what each has, and how much of it the phone marks.
       if (typeof req.grade !== "number" || !(EXAM_GRADES as readonly number[]).includes(req.grade)) return sealed(o, { ok: false, error: "Which grade?" });
       const g = req.grade;
-      const real = (await ctx.db.query("units").withIndex("by_grade", (x) => x.eq("grade", g)).collect()).sort((a, b) => a.order - b.order);
       const sks = await ctx.db.query("units").withIndex("by_grade", (x) => x.eq("grade", skGrade(g))).collect();
+      // OL (19 Nov 2026): the O/L book's own units, each its own Sakarath unit (no topic under it).
+      const real = g === OL ? sks.sort((a, b) => a.order - b.order) : (await ctx.db.query("units").withIndex("by_grade", (x) => x.eq("grade", g)).collect()).sort((a, b) => a.order - b.order);
       const units = [];
       for (const u of real) {
-        const sk = sks.find((x) => x.key === skKey(u.key));
+        const sk = g === OL ? u : sks.find((x) => x.key === skKey(u.key));
         const b = sk ? await bookFor(ctx, sk._id, "master") : null;
         const data = b && b.data.kind === "master" ? b.data : null;
         const key = sk ? await keyRow(ctx, sk._id, "master") : null;
@@ -517,7 +519,9 @@ async function saveSkills(ctx: MutationCtx, row: Row, req: Asked, now: number): 
   return { ok: true, saved: { skills: skills.length, tags: tags.length, questions }, counts: [...n].map(([id, c]) => ({ id, n: c })) };
 }
 
-type SkSave = { grade?: unknown; code?: unknown; data?: MasterData; answers?: KeyAnswer[]; items?: { q: number; html: string }[]; css?: string };
+type SkSave = { grade?: unknown; code?: unknown; en?: unknown; ta?: unknown; term?: unknown; data?: MasterData; answers?: KeyAnswer[]; items?: { q: number; html: string }[]; css?: string };
+/** The longest name an O/L Sakarath unit may bring (its book's own). */
+const SK_NAME_MAX = 120;
 
 /**
  * One unit's Sakarath book, whole (17 Nov 2026): its own unit (made the first time), the book, its key, every printed
@@ -528,13 +532,26 @@ async function saveSakarath(ctx: MutationCtx, row: Row, req: Asked, now: number)
   const s = req as unknown as SkSave;
   const grade = s.grade;
   if (typeof grade !== "number" || !(EXAM_GRADES as readonly number[]).includes(grade) || typeof s.code !== "string" || !/^U\d{2}$/.test(s.code)) {
-    return { ok: false, error: "A Sakarath book needs its grade (6–11) and its unit's code (U05)." };
+    return { ok: false, error: "A Sakarath book needs its grade (6–11 or OL = 12) and its unit's code (U05)." };
   }
   const code = s.code;
-  const unit = await ctx.db
-    .query("units")
-    .withIndex("by_key", (x) => x.eq("key", unitKey(grade, code)))
-    .first();
+  // Grades 6–11: on a unit of the syllabus. OL (19 Nov 2026): the O/L book's own unit, its names and part from the book.
+  let unit: { key: string; term: number; order: number; en: string; ta: string } | null;
+  if (grade === OL) {
+    const own = (x: unknown) => (typeof x === "string" && x.trim() && x.length <= SK_NAME_MAX ? x.trim() : null);
+    const en = own(s.en);
+    const ta = own(s.ta);
+    const no = Number(code.slice(1));
+    if (!en || !ta || !Number.isInteger(s.term) || (s.term as number) < 1 || (s.term as number) > 9 || no < 1) {
+      return { ok: false, error: `OL ${code}: the O/L book's unit needs its names (en, ta) and its part (term 1–9).` };
+    }
+    unit = { key: "", term: s.term as number, order: no, en, ta };
+  } else {
+    unit = await ctx.db
+      .query("units")
+      .withIndex("by_key", (x) => x.eq("key", unitKey(grade, code)))
+      .first();
+  }
   if (!unit) return { ok: false, error: `Grade ${grade} has no unit ${code}.` };
   const sent = s.data as MasterData;
   const shape = sent && typeof sent === "object" ? sakarathProblem(sent) : "No book.";
@@ -565,9 +582,9 @@ async function saveSakarath(ctx: MutationCtx, row: Row, req: Asked, now: number)
   const wrong = slotsProblem(answers, html);
   if (wrong) return { ok: false, error: wrong };
 
-  // Its own unit: made the first time, its names kept as its unit's now.
-  const key = skKey(unit.key);
-  const names = { term: unit.term, order: unit.order, en: `Sakarath · ${unit.en}`, ta: `${unit.ta} · ஸகராத்` };
+  // Its own unit: made the first time, its names kept as its unit's now (OL: as the book names it now).
+  const key = grade === OL ? olSkKey(code) : skKey(unit.key);
+  const names = { term: unit.term, order: unit.order, ...skNames(unit.en, unit.ta) };
   let sk = await ctx.db
     .query("units")
     .withIndex("by_key", (x) => x.eq("key", key))
@@ -580,7 +597,7 @@ async function saveSakarath(ctx: MutationCtx, row: Row, req: Asked, now: number)
       .query("progress")
       .withIndex("by_unit_stage", (x) => x.eq("unitId", sk!._id).eq("stage", "master"))
       .first();
-    if (started) return { ok: false, error: `${unit.key}'s Sakarath book has students in it: its levels can't change now.` };
+    if (started) return { ok: false, error: `${grade === OL ? `OL ${code}` : unit.key}'s Sakarath book has students in it: its levels can't change now.` };
   }
   if (old) await ctx.db.patch(old._id, { data, title: SK_TITLE, sk: true, keyCount: n, qCount: n, updatedAt: now });
   else await ctx.db.insert("books", { unitId: sk._id, stage: "master", title: SK_TITLE, sk: true, data, keyCount: n, qCount: n, updatedAt: now });

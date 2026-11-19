@@ -56,6 +56,8 @@ export const TERM_TA: Record<number, string> = { 0: "கூடுதல்", 1: 
 /** The O/L map's Worlds: its paper parts (an O/L topic's `term`), as OL_PARTS in convex/lib/syllabus.ts names them
  *  (copied: that file would bring the whole syllabus into this small bundle). */
 export const PART_TA: Record<number, string> = { 1: "பகுதி 1A", 2: "பகுதி 1B", 3: "பகுதி 2A", 4: "பகுதி 2B" };
+/** The O/L Sakarath book's own parts (19 Nov 2026: exam mode OL's map), as SK_OL_PARTS in convex/lib/sakarath.ts. */
+export const SK_PART_TA: Record<number, string> = { 1: "எண்களும் அளவீடும்", 2: "அட்சரகணிதம்", 3: "கேத்திரகணிதம் · புள்ளிவிபரவியல் · நிகழ்தகவு" };
 
 // ---- Icons: one rounded stroke style, 24 × 24 ----
 

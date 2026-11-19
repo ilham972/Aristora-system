@@ -214,7 +214,12 @@ for (const u of g.units) {
     if (s) throw new Error(`G${g.grade} ${u.code} Q${q.q}: ${s}`);
   }
   if (unsafeCss(g.css)) throw new Error("css");
-  payloads.push({ name: `G${g.grade}-${u.code}-SK`, fn: "tell", req: { op: "sakarath", grade: g.grade, code: u.code, data, answers, items: u.questions.map((q) => ({ q: q.q, html: q.html })), css: g.css } });
+  // Its names and term go too: the O/L book's units are its own (19 Nov 2026; grades 6–11 take their unit's names).
+  payloads.push({
+    name: `${g.grade === 12 ? "OL" : `G${g.grade}`}-${u.code}-SK`,
+    fn: "tell",
+    req: { op: "sakarath", grade: g.grade, code: u.code, en: u.en, ta: u.ta, term: u.term, data, answers, items: u.questions.map((q) => ({ q: q.q, html: q.html })), css: g.css },
+  });
 }
 writeFileSync(outFile, JSON.stringify(payloads));
 writeFileSync(reportFile, report.join("\n") + "\n");
