@@ -3,6 +3,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { query, type QueryCtx } from "./_generated/server";
 import { viewer } from "./lib/auth";
 import { attendanceOff, givenWork, hereNow, mayBeOpen, openWork } from "./lib/backend";
+import { classList } from "./lib/roster";
 import { skHeld } from "./lib/sakarath";
 import { recentSim, simInfo } from "./sim";
 
@@ -45,10 +46,9 @@ export const get = query({
 
 /**
  * The board without anyone's books (10 Nov 2026, the Convex limit hit on his first month: every tap re-read every
- * student's marks on every phone): the students, the calls, the session, the simulation. It changes when a student,
- * a call or the session does; each student's books come from `his`, which changes only when HIS do. The phones put the
- * two together (src/store.ts) into the same board as `get` (kept for old phones and the tests; a test proves the two
- * add up to the same board).
+ * student's marks on every phone): the students, the calls, the session, the simulation. Since 20 Nov 2026 the phones
+ * read `light` instead (no student's row: each comes with his `his`); `live` stays for a phone still on an older
+ * version until it reloads (and for the tests). `light` + each `his` add up to the same board as `get` (a test).
  */
 export const live = query({
   args: { token: v.optional(v.string()), test: v.optional(v.boolean()) },
@@ -58,13 +58,63 @@ export const live = query({
   },
 });
 
-/** One student's part of the board: his book now's progress, his other books with work (in class), the books given. */
+/**
+ * The class list (20 Nov 2026, 200 students): the ids of the students on the board, oldest first (one kept row,
+ * convex/lib/roster.ts). It changes only when a student joins or leaves; each student's row comes with his `his`.
+ */
+export const list = query({
+  args: { token: v.optional(v.string()), test: v.optional(v.boolean()) },
+  handler: async (ctx, args) => {
+    await viewer(ctx, args.token);
+    const r = await classList(ctx);
+    return { ids: args.test ? r.tests : r.ids, tests: r.tests.length };
+  },
+});
+
+/**
+ * The board without any student (20 Nov 2026, 200 students): the open calls, the session, the simulation. With `list`
+ * (the ids: the phone keeps the calls of its students) and each student's `his` (his row and books) it is the board
+ * `get` gives; a tap on one student re-reads only his part on each phone, never the whole class (`live` read every
+ * row, and each changes with nearly every tap). It changes when a call or the session does (the session's "last
+ * active" at most once a minute).
+ */
+export const light = query({
+  args: { token: v.optional(v.string()), test: v.optional(v.boolean()) },
+  handler: async (ctx, args) => {
+    await viewer(ctx, args.token);
+    const test = !!args.test;
+    // Every open call, both classes' (the real one's and the simulation's): the phone keeps those of its list's
+    // students (src/store.ts), so this never reads the list or a student's row.
+    const requested = await ctx.db.query("calls").withIndex("by_status", (q) => q.eq("status", "requested")).collect();
+    const sent = await ctx.db.query("calls").withIndex("by_status", (q) => q.eq("status", "sent")).collect();
+    const session = await ctx.db.query("sessions").withIndex("by_open", (q) => q.eq("open", true)).first();
+    const sim = await recentSim(ctx, Date.now());
+    return {
+      calls: [...requested, ...sent],
+      session: session
+        ? {
+            _id: session._id,
+            startedAt: session.startedAt,
+            lastActivityAt: session.lastActivityAt,
+            stats: (test ? sim?.stats : session.stats) ?? {},
+          }
+        : null,
+      sim: sim ? simInfo(sim) : null,
+      attOff: !test && (await attendanceOff(ctx)),
+    };
+  },
+});
+
+/**
+ * One student's part of the board: his row (`s`, 20 Nov 2026: `light` no longer carries it), his book now's progress,
+ * his other books with work (in class), the books given.
+ */
 export const his = query({
   args: { token: v.optional(v.string()), id: v.id("students") },
   handler: async (ctx, args) => {
     await viewer(ctx, args.token);
     const s = await ctx.db.get(args.id);
-    if (!s || s.archived) return { progress: null, books: {}, more: null, given: null, sk: null };
+    if (!s || s.archived) return { s: null, progress: null, books: {}, more: null, given: null, sk: null };
     const calls = [
       ...(await ctx.db
         .query("calls")
@@ -75,7 +125,7 @@ export const his = query({
         .withIndex("by_student_status", (q) => q.eq("studentId", s._id).eq("status", "sent"))
         .collect()),
     ];
-    return await hisBoard(ctx, s, calls, new Map(), !s.test && (await attendanceOff(ctx)));
+    return { s, ...(await hisBoard(ctx, s, calls, new Map(), !s.test && (await attendanceOff(ctx)))) };
   },
 });
 

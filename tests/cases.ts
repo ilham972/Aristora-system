@@ -7,6 +7,7 @@ import type { Doc, Id } from "../convex/_generated/dataModel";
 import type { MutationCtx } from "../convex/_generated/server";
 import { fighterMarks, unitByKey } from "../convex/demo";
 import { bookFor, ensureSession, fail, log, refresh, startVisit, touch, wipeStudent } from "../convex/lib/backend";
+import { rebuildRoster } from "../convex/lib/roster";
 import { fighter, KNOWN_WORKBOOKS, levelOutOf, PILOT_UNIT, type Fighter, type MasterData } from "../convex/lib/book";
 import type { MState } from "../convex/lib/master";
 
@@ -283,5 +284,7 @@ export async function makeCases(ctx: MutationCtx, me: { _id: Id<"users">; name: 
   }
   await log(ctx, session, now, { kind: "test-cases", by, value: String(n) });
   await touch(ctx, session, now);
+  // Students put straight in (not through a mutation): the class list the board reads follows by hand.
+  await rebuildRoster(ctx);
   return n;
 }

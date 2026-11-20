@@ -106,8 +106,8 @@ import {
   type PhotoType,
   type StageLine,
 } from "./lib/profile";
-import { everPlace, goatOf, numsAt, type RaceRow } from "./lib/race";
-import { mateMarksOn, numsOfRow, raceList, raceReady, raceRowOf, weekCoinsOf } from "./lib/raceRows";
+import { numsAt, type RaceRow } from "./lib/race";
+import { everPlaceOf, goatRow, mateMarksOn, numsOfRow, raceList, raceReady, raceRowOf, weekCoinsOf } from "./lib/raceRows";
 import { homeLevels, homeMoments, stageDone, stageMoment, usCfg } from "./lib/us";
 import { OL } from "./lib/syllabus";
 import { accountOf, feeCfg } from "./lib/feeRows";
@@ -480,9 +480,11 @@ async function everOf(ctx: QueryCtx, s: Doc<"students">, now: number): Promise<P
   const w = (kept?.cw ?? []).find((x) => x.sid === s._id);
   const won = w ? { g: w.g, c: w.c, wk } : null;
   if (!(await raceReady(ctx))) return { won };
-  const rows = await raceList(ctx, !!s.demo, now);
+  // The rows ahead of him in his grade and the GOAT's (20 Nov 2026): never the whole ARISTORA's rows at every open of Me.
   const grade = typeof s.grade === "number" ? s.grade : null;
-  return { ever: { ...everPlace(rows, s._id, grade), goat: goatOf(rows)?.id === s._id }, won };
+  const place = grade === null ? { place: null, of: 0 } : await everPlaceOf(ctx, s._id, !!s.demo, grade);
+  const goat = await goatRow(ctx, !!s.demo, now);
+  return { ever: { ...place, goat: goat?.id === s._id }, won };
 }
 
 /** The World, its workbook and his level, when he may play it now (else a reason, in plain words). */

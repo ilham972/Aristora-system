@@ -4,7 +4,7 @@
 // every request. The database keeps only the token's SHA-256, so a copy of the database can't sign anyone in.
 // Every query and mutation checks the token and the permission it needs, here.
 
-import type { Doc } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { fail, rememberActor } from "./backend";
 import { sha256Hex } from "./sha256";
@@ -26,6 +26,11 @@ export const DEVICE_IDLE_MS = 120 * 24 * 60 * 60_000;
 export const LINK_MS = 24 * 60 * 60_000;
 /** Keep a phone's "last used" within this much (saves writes). */
 const SEEN_EVERY_MS = 10 * 60_000;
+/**
+ * A teacher's phone's own row (read by every query of it) keeps its "last used" to a day (20 Nov 2026): each write to it
+ * runs every live query of that phone again. The 10-minute time is in `deviceSeen`.
+ */
+export const DEVICE_SEEN_DAY_MS = 24 * 60 * 60_000;
 
 const PERM_WORDS: Record<Exclude<Perm, "any">, string> = {
   correction: "the Correction tab",
@@ -132,9 +137,29 @@ export async function actor(
     fail(`You don't have ${PERM_WORDS[by as Tab]}. Ask the owner.`);
   }
   const now = Date.now();
-  if (now - s.device.lastSeenAt > SEEN_EVERY_MS) await ctx.db.patch(s.device._id, { lastSeenAt: now });
+  if (now - s.device.lastSeenAt > DEVICE_SEEN_DAY_MS) await ctx.db.patch(s.device._id, { lastSeenAt: now });
+  await noteSeen(ctx, s.device._id, now);
   rememberActor(ctx, s.user.name);
   return s.user;
+}
+
+/** The phone's "last used" to 10 minutes, in its own row (Settings → People), never in the row its queries read. */
+async function noteSeen(ctx: MutationCtx, deviceId: Id<"devices">, now: number): Promise<void> {
+  const row = await ctx.db
+    .query("deviceSeen")
+    .withIndex("by_device", (q) => q.eq("deviceId", deviceId))
+    .first();
+  if (!row) await ctx.db.insert("deviceSeen", { deviceId, at: now });
+  else if (now - row.at > SEEN_EVERY_MS) await ctx.db.patch(row._id, { at: now });
+}
+
+/** When a teacher's phone was last used (to 10 minutes): its `deviceSeen` row, or its own row's day. */
+export async function usedAt(ctx: QueryCtx, d: Doc<"devices">): Promise<number> {
+  const row = await ctx.db
+    .query("deviceSeen")
+    .withIndex("by_device", (q) => q.eq("deviceId", d._id))
+    .first();
+  return Math.max(d.lastSeenAt, row?.at ?? 0);
 }
 
 /** What a phone may know about its own person. */

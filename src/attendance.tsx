@@ -31,8 +31,21 @@ const WHERE: Record<View["where"], string> = { hall: "in the hall", theory: "in 
 
 const setPresent = (id: Id<"students">, present: boolean, undo = false) =>
   act(() => mutate(api.students.setPresent, { id, present, by: "attendance", ...(undo ? { undo: true } : {}) }));
-const setMany = (ids: Id<"students">[], present: boolean, undo = false) =>
-  act(() => mutate(api.students.setPresentMany, { ids, present, by: "attendance", ...(undo ? { undo: true } : {}) }));
+/**
+ * One call takes at most this many (20 Nov 2026, 300 students: a whole class in one call nears Convex's limit of 4,096
+ * reads of the index in one call, ~12 a student): a bigger tap goes in parts, in order.
+ */
+const MANY_CHUNK = 80;
+const setMany = async (ids: Id<"students">[], present: boolean, undo = false): Promise<{ changed: number } | undefined> => {
+  let changed = 0;
+  for (let i = 0; i < ids.length; i += MANY_CHUNK) {
+    const part = ids.slice(i, i + MANY_CHUNK);
+    const r = await act(() => mutate(api.students.setPresentMany, { ids: part, present, by: "attendance", ...(undo ? { undo: true } : {}) }));
+    if (!r) return undefined;
+    changed += r.changed;
+  }
+  return { changed };
+};
 const people = (n: number) => `${n} student${n === 1 ? "" : "s"}`;
 
 /**

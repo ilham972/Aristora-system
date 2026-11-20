@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { type QueryCtx } from "./_generated/server";
-import { mutation } from "./lib/fn";
+import { internalMutation, mutation } from "./lib/fn";
 import {
   activeCalls,
   bookFor,
@@ -25,7 +25,14 @@ import { OL, termOf } from "./lib/syllabus";
 import { bookStage, stage } from "./schema";
 import { actor } from "./lib/auth";
 import { giveIndex } from "./lib/family";
+import { checkRoster } from "./lib/roster";
 import { hasSkBook, isSkbGrade, skbFits, skbFor } from "./lib/sakarath";
+
+/**
+ * The most students on the class list (16 Nov 2026: it was 120, his plan is 100 to 200). Not a wish: what
+ * `tests/scale.test.ts` proves the phones' reads stay small for. Raise it only together with that test's class size.
+ */
+export const STUDENTS_MAX = 300;
 
 const STAGE_WORD: Record<Stage, string> = { fighter: "Fighter", master: "Master", legend: "Legend", sprint: "Exam Sprint" };
 
@@ -99,7 +106,7 @@ export const add = mutation({
     if (all.some((s) => s.name.toLowerCase() === name.toLowerCase())) {
       fail(`"${name}" is already on the list. Add an initial, like "${name} R".`);
     }
-    if (all.filter((s) => !s.demo).length >= 120) fail("120 students is the limit for one class list.");
+    if (all.filter((s) => !s.demo).length >= STUDENTS_MAX) fail(`${STUDENTS_MAX} students is the limit for one class list.`);
     const grade = args.grade ?? 11;
     const term = args.term ?? termOf(now);
     const st: Stage = args.stage ?? "fighter";
@@ -519,7 +526,10 @@ export const setPresent = mutation({
   },
 });
 
-/** At most this many in one tap (the class is capped at 120 students). */
+/**
+ * At most this many in one call. Attendance sends a bigger tap in parts of `MANY_CHUNK` (src/attendance.tsx): 300
+ * students signed in again in one call read ~3,800 index ranges, near Convex's 4,096 a call (the scale lab, 20 Nov 2026).
+ */
 export const MANY_MAX = 200;
 
 /**
@@ -556,4 +566,10 @@ export const setPresentMany = mutation({
     await touch(ctx, session, now);
     return { changed };
   },
+});
+
+/** The class list the teachers' board reads (convex/lib/roster.ts): there, and in step with the students (hourly cron). */
+export const checkList = internalMutation({
+  args: {},
+  handler: async (ctx) => await checkRoster(ctx, Date.now()),
 });

@@ -324,6 +324,48 @@ WHY=1 npx vitest run -c vitest.perf.config.ts -t "lab" --reporter=verbose # each
 - What it can't see: the network (round trips on mobile data), the graphics chip's own work, an iPhone (Safari animates
   a drawing's parts on the main thread whatever we do).
 
+## Is the server ready for 200 students? Measure it (the scale lab)
+
+`tests/scale/` (20 Nov 2026, his plan of 100 to 200 students): the real Convex functions on a seeded institute of N
+students (`seed.ts`: Grades 6–9, a family phone each, home Levels, class days behind, two in five in class, Us, chats,
+alerts; through the real mutations, so every follower is live). It prints numbers; never part of the checks
+(`vitest.scale.config.ts`). The budgets that must hold are `tests/scale.test.ts`.
+
+```
+SIZES=40,100,200 npx vitest run -c vitest.scale.config.ts tests/scale/scale.lab.ts   # every public query: docs, KB read, KB sent
+SIZES=40,200 npx vitest run -c vitest.scale.config.ts tests/scale/day.lab.ts         # a class day: MB and calls a day and a month
+WHY=1 SIZES=40 npx vitest run -c vitest.scale.config.ts tests/scale/day.lab.ts       # + each write's tables and what it woke
+SIZE=200 DAYS=12,60,150 npx vitest run -c vitest.scale.config.ts tests/scale/history.lab.ts   # what grows with the months
+SIZE=200 NAMES=family:me,chat:room npx vitest run -c vitest.scale.config.ts tests/scale/tables.lab.ts   # one call, by table
+```
+
+- **What Convex counts**: every call, and every byte a call reads (free plan: 1,000,000 calls and 1 GB a month; past
+  that the deployment may refuse calls). A live query (a teacher's phone: `subscribe`) runs again, whole, on every
+  phone that watches it, whenever a write lands in a row or an index range it read (`meter.ts` `wakes` models it). A
+  family phone reads with plain fetches (`query` in `src/family/net.ts`): each open, Back, poll is a call.
+- **The day lab is a model**: its counts a day (marks per student in class, beats per student at home, chats read every
+  4 s…) are stated guesses at the top of each line; compare before and after on the same model, never read it as the
+  bill. "Teacher phones waking" is the worst case (Convex answers from its cache when nothing a query read changed: the
+  call counts, the bytes don't).
+- **The rules it found** (`docs/how-it-works.md`, "Ready for 200 students"): a live query never reads every student's
+  row (`state.list` reads one kept row; each student's row comes with his `his`); never write a row that every query of
+  a phone reads (the sign-in's `devices` row: once a day); a family read that every phone makes often never reads the
+  whole ARISTORA (Me: his grade's rows ahead of him and the GOAT's; a group's members: the grades' counts); a poll asks
+  only for what a screen shows (the beat's `w`).
+- **Measured 20 Nov 2026** (the day lab's model, before → after the change; a month = 26 class days):
+
+  | | 40 students | 200 students |
+  |---|---|---|
+  | reading a day | 145 MB → 69 MB | 976 MB → 288 MB |
+  | calls a day | 26.0k → 18.2k | 89.9k → 64.4k |
+  | a month | 3.8 GB, 0.68M calls → 1.8 GB, 0.47M | 25.4 GB, 2.34M → 7.5 GB, 1.67M |
+
+  At 200 the biggest went: a mark on Correction 263 → 42 MB a day (`state.live` re-read on 6 phones), Me 110 → 34
+  (every race row), a level handed in 102 → 13, a phone's own row 89 → 5, the beat 63 → 2, signing in 31 → 9; left on
+  top: phones waking (70, the worst case: mostly Convex's cache), a mark (42), Me (34), a home Check (19), the Race tab
+  (14, every race row: its GOAT list shows everyone). Even after it, 200 students are past the free plan (1 GB, 1M
+  calls): Convex's pay-as-you-go (Starter: $2.20 per million calls, $0.22 a GB beyond them) is ~$3 a month there.
+
 ## Gotchas learned the hard way
 
 - **A new book engine's print furniture must leave the phone** (18 Nov 2026, the Sakarath books): the family paper
@@ -441,12 +483,13 @@ WHY=1 npx vitest run -c vitest.perf.config.ts -t "lab" --reporter=verbose # each
   `focus.claims`, `focus.drafts`, `catalog.key`, `focus.claim`). A live query runs again, whole, on every phone that has
   it open whenever ANY row it read changes, and every run counts all the bytes it reads. `state.get` read every
   student's marks in every book, and a draft tap on Correction rewrote the student's `lastActivityAt` and the class's
-  `lastActivityAt`, so each tap re-read the whole class on every phone. Now: phones read `state.live` (students, calls,
-  session) and one `state.his` per student (his books; only his own changes wake it), put together in `src/store.ts`
-  (`state.get` stays for old phones and the tests; `tests/boardSplit.test.ts` proves the parts add up to it); `touch`
-  and the draft tap's student write at most once a minute; "still here" every 45 s (a book free after 2 minutes, not
-  1). Before adding a live query, ask: what does it read, and what writes to that on every tap? Never write to
-  `students`, `sessions` or `users` on every tap.
+  `lastActivityAt`, so each tap re-read the whole class on every phone. Then: `state.live` + one `state.his` per
+  student; since 20 Nov 2026 `state.list` (one kept row of ids) + `state.light` (calls, session) + `his` (his row too),
+  because `live` still read every student's row and nearly every tap changes one (the scale lab, above). `touch` and
+  the draft tap's student write at most once a minute; "still here" every 45 s (a book free after 2 minutes, not 1).
+  Before adding a live query, ask: what does it read, and what writes to that on every tap? Never read every student's
+  row in a live query; never write to `students`, `sessions` or `users` on every tap, nor to a phone's `devices` row
+  (every query of that phone reads it: `deviceSeen` keeps the 10-minute time).
 - **Every mutation keeps the fees too** (9 Nov 2026, `convex/lib/fn.ts`): `watched` notes the students whose
   `attendance` or `handouts` rows were inserted or deleted (a delete reads the row first), and as the handler ends
   `syncFees` (`convex/lib/feeRows.ts`) adds or removes their class and book charges and rebuilds their `accounts` row.

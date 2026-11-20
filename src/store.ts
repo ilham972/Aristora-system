@@ -217,15 +217,28 @@ export async function signOutHere(): Promise<void> {
 }
 
 /**
- * The board in two parts (10 Nov 2026, the Convex limit: every tap re-read every student's marks on every phone):
- * `state.live` (the students, calls, session) and one `state.his` per student (his books), each re-read only when its
- * own rows change. Put together here into the same board `state.get` gives. Shown once every student's part came (or
- * after 4 s), so a page never opens half-filled.
+ * The board in parts (10 Nov 2026, the Convex limit: every tap re-read every student's marks on every phone; 20 Nov 2026,
+ * 200 students: every tap still re-read every student's row): `state.list` (the class list's ids: changes only when a
+ * student joins or leaves), `state.light` (the open calls, the session) and one `state.his` per student (his row and his
+ * books), each re-read only when its own rows change. Put together here into the same board `state.get` gives, the
+ * students in the list's order (tests/boardSplit.test.ts). Shown once every student's part came (or after 4 s), so a page
+ * never opens half-filled.
  */
-type His = { progress: Progress | null; books: Record<string, BookDoc>; more: Progress[] | null; given: NonNullable<Board["given"]>[string] | null; sk?: Progress[] | null };
+type His = {
+  /** His row (null: removed since the list came). */
+  s?: Student | null;
+  progress: Progress | null;
+  books: Record<string, BookDoc>;
+  more: Progress[] | null;
+  given: NonNullable<Board["given"]>[string] | null;
+  sk?: Progress[] | null;
+};
+type Light = Omit<Board, "students" | "legacy" | "progress" | "books" | "more" | "given" | "sk" | "tests">;
+type List = { ids: string[]; tests: number };
 function startBoard(): () => void {
   void ensureData();
-  let light: Omit<Board, "progress" | "books" | "more" | "given" | "sk"> | null = null;
+  let light: Light | null = null;
+  let list: List | null = null;
   const his = new Map<string, His>();
   const hisStops = new Map<string, () => void>();
   let ready = false;
@@ -234,24 +247,32 @@ function startBoard(): () => void {
     build();
   }, 4000);
   function build() {
-    if (!light) return;
-    if (!ready && light.students.some((s) => !his.has(s._id))) return;
+    if (!light || !list) return;
+    if (!ready && list.ids.some((id) => !his.has(id))) return;
     ready = true;
+    const students: Student[] = [];
     const progress: Board["progress"] = {};
     const books: Board["books"] = {};
     const more: NonNullable<Board["more"]> = {};
     const given: NonNullable<Board["given"]> = {};
     const sk: NonNullable<Board["sk"]> = {};
-    for (const s of light.students) {
-      const h = his.get(s._id);
-      if (!h) continue;
-      if (h.progress) progress[s._id] = h.progress;
+    for (const id of list.ids) {
+      const h = his.get(id);
+      // His part not here yet (a slow phone, after 4 s): he joins the board when it comes.
+      if (!h?.s) continue;
+      students.push(h.s);
+      if (h.progress) progress[id] = h.progress;
       Object.assign(books, h.books);
-      if (h.more) more[s._id] = h.more;
-      if (h.given) given[s._id] = h.given;
-      if (h.sk) sk[s._id] = h.sk;
+      if (h.more) more[id] = h.more;
+      if (h.given) given[id] = h.given;
+      if (h.sk) sk[id] = h.sk;
     }
-    board = { ...light, progress, books, more, given, sk };
+    // Students from before grades and stages: the phone runs setup.ensure first (it used to be the server's `legacy`).
+    const legacy = students.some((s) => !s.stage);
+    if (legacy) void ensureData();
+    // The open calls of this board's class only (the server sends both classes': the real one's and the simulation's).
+    const ours = new Set(list.ids);
+    board = { ...light, calls: light.calls.filter((c) => ours.has(c.studentId)), tests: list.tests, students, legacy, progress, books, more, given, sk };
     boardError = null;
     emit();
   }
@@ -281,12 +302,25 @@ function startBoard(): () => void {
   };
   const stops = [
     subscribe(
-      api.state.live,
+      api.state.list,
       test ? { test: true } : {},
       (value) => {
-        light = value;
-        follow(value.students.map((s) => s._id as string));
-        if (value.legacy) void ensureData();
+        list = value as List;
+        follow(list.ids);
+        build();
+      },
+      (e) => {
+        const text = errorText(e);
+        if (text === SIGNED_OUT) return; // the sign-in screen takes over
+        boardError = text;
+        emit();
+      },
+    ),
+    subscribe(
+      api.state.light,
+      test ? { test: true } : {},
+      (value) => {
+        light = value as Light;
         build();
       },
       (e) => {

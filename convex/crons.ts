@@ -21,6 +21,8 @@ import { internal } from "./_generated/api";
 const crons = cronJobs();
 crons.hourly("delete photos marked a day ago", { minuteUTC: 17 }, internal.photos.sweep, {});
 crons.interval("build the race rows still missing", { minutes: 5 }, internal.race.fill, {});
+// The class list the teachers' board reads (20 Nov 2026, convex/lib/roster.ts): built if missing, checked once a day.
+crons.hourly("keep the class list ready", { minuteUTC: 23 }, internal.students.checkList, {});
 crons.interval("keep each day's work", { minutes: 10 }, internal.work.fill, {});
 crons.weekly("keep last week's race champions", { dayOfWeek: "sunday", hourUTC: 18, minuteUTC: 35 }, internal.race.week, {});
 crons.daily("the owl's birthdays and yesterday's count in Us", { hourUTC: 18, minuteUTC: 40 }, internal.us.daily, {});

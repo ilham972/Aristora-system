@@ -5,7 +5,7 @@ import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { query, type QueryCtx } from "./_generated/server";
 import { mutation } from "./lib/fn";
-import { actor, LINK_MS, nameKey, viewer } from "./lib/auth";
+import { actor, LINK_MS, nameKey, usedAt, viewer } from "./lib/auth";
 import { cleanName, fail, log } from "./lib/backend";
 import { slDay } from "./lib/day";
 import { cleanPages, isTeachDept, withNeeds } from "./lib/dept";
@@ -23,15 +23,15 @@ export const list = query({
     const out = [];
     for (const u of users) {
       if (!u.active) continue;
-      const devices = (
-        await ctx.db
-          .query("devices")
-          .withIndex("by_user", (q) => q.eq("userId", u._id))
-          .collect()
-      )
-        .filter((d) => d.revokedAt === undefined)
-        .map((d) => ({ _id: d._id, label: d.label, createdAt: d.createdAt, lastSeenAt: d.lastSeenAt }))
-        .sort((a, b) => b.lastSeenAt - a.lastSeenAt);
+      const devices = [];
+      for (const d of await ctx.db
+        .query("devices")
+        .withIndex("by_user", (q) => q.eq("userId", u._id))
+        .collect()) {
+        // "Used 5 minutes ago": its deviceSeen row (20 Nov 2026; its own row keeps only the day).
+        if (d.revokedAt === undefined) devices.push({ _id: d._id, label: d.label, createdAt: d.createdAt, lastSeenAt: await usedAt(ctx, d) });
+      }
+      devices.sort((a, b) => b.lastSeenAt - a.lastSeenAt);
       const links = await ctx.db
         .query("links")
         .withIndex("by_user", (q) => q.eq("userId", u._id))

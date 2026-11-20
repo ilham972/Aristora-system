@@ -8,16 +8,22 @@
 // - Online explanations (12 Nov 2026): the progress rows written are checked against the open asks (convex/lib/help.ts).
 // - Fees (9 Nov 2026): the students it signed in or out (attendance) or gave or took a book from (handouts) are noted
 //   too; as it ends their fees follow (convex/lib/feeRows.ts: a day he came = a class, a printed book = its price).
+// - The class list (20 Nov 2026, convex/lib/roster.ts): a student added or deleted, or his `archived` / `test` written,
+//   builds the list the teachers' board reads again as it ends.
 
 import { internalMutation as rawInternalMutation, mutation as rawMutation, type MutationCtx } from "../_generated/server";
 import { syncFees } from "./feeRows";
 import { syncHelp } from "./help";
 import { afterWrites, noWrites, RACE_IDENTITY, type RaceWrites } from "./raceRows";
+import { rebuildRoster, ROSTER_FIELDS } from "./roster";
 
 type Writer = (...a: unknown[]) => Promise<unknown>;
 
-/** The ctx with its db watched (writes noted in `w`; the students whose fees may change in `money`). */
-export function watched(ctx: MutationCtx, w: RaceWrites, money?: Set<string>): MutationCtx {
+/**
+ * The ctx with its db watched (writes noted in `w`; the students whose fees may change in `money`; `list.dirty` once the
+ * class list may have changed).
+ */
+export function watched(ctx: MutationCtx, w: RaceWrites, money?: Set<string>, list?: { dirty: boolean }): MutationCtx {
   const db = ctx.db;
   const isProgress = (id: string) => db.normalizeId("progress", id) !== null;
   const isStudent = (id: string) => db.normalizeId("students", id) !== null;
@@ -28,7 +34,10 @@ export function watched(ctx: MutationCtx, w: RaceWrites, money?: Set<string>): M
         return async (table: string, value: unknown) => {
           const id = (await (target.insert as unknown as Writer)(table, value)) as string;
           if (table === "progress") w.progress.add(id);
-          else if (table === "students") w.students.add(id);
+          else if (table === "students") {
+            w.students.add(id);
+            if (list) list.dirty = true;
+          }
           else if (money && (table === "attendance" || table === "handouts")) money.add((value as { studentId: string }).studentId);
           return id;
         };
@@ -40,6 +49,7 @@ export function watched(ctx: MutationCtx, w: RaceWrites, money?: Set<string>): M
           const [id, value] = (a.length >= 3 ? [a[1], a[2]] : [a[0], a[1]]) as [string, Record<string, unknown> | null];
           if (isProgress(id)) w.progress.add(id);
           else if (isStudent(id) && (prop === "replace" || !value || RACE_IDENTITY.some((k) => k in value))) w.students.add(id);
+          if (list && isStudent(id) && (prop === "replace" || !value || ROSTER_FIELDS.some((k) => k in value))) list.dirty = true;
           // His name, grade or removal reach his account row (the Fees lists never read the students' rows).
           if (money && isStudent(id) && (prop === "replace" || !value || "name" in value || "grade" in value || "archived" in value)) money.add(id);
         };
@@ -53,7 +63,10 @@ export function watched(ctx: MutationCtx, w: RaceWrites, money?: Set<string>): M
           }
           await (target.delete as unknown as Writer)(...a);
           if (isProgress(id)) w.progressGone.add(id);
-          else if (isStudent(id)) w.studentsGone.add(id);
+          else if (isStudent(id)) {
+            w.studentsGone.add(id);
+            if (list) list.dirty = true;
+          }
         };
       }
       const v = Reflect.get(target, prop, receiver) as unknown;
@@ -71,8 +84,10 @@ function wrap<B>(builder: B): B {
     const run = async (ctx: MutationCtx, args: unknown) => {
       const w = noWrites();
       const money = new Set<string>();
-      const res = await handler(watched(ctx, w, money), args);
+      const list = { dirty: false };
+      const res = await handler(watched(ctx, w, money, list), args);
       await afterWrites(ctx, w, Date.now());
+      if (list.dirty) await rebuildRoster(ctx);
       // Online explanations (12 Nov 2026): a question explained in class closes its thread for him by itself.
       if (w.progress.size) await syncHelp(ctx, w.progress, Date.now());
       if (money.size) await syncFees(ctx, money, Date.now());

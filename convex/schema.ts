@@ -808,6 +808,17 @@ export default defineSchema({
     .index("by_token", ["tokenHash"])
     .index("by_user", ["userId"]),
 
+  /**
+   * When each teacher's phone was last used, to 10 minutes (20 Nov 2026): Settings → People's "used 5 minutes ago". Kept
+   * apart from its `devices` row because every live query of that phone reads that row (the sign-in check): a write to
+   * it every 10 minutes ran every query of the phone again (all its students' parts at 200 students). `devices.lastSeenAt`
+   * moves at most once a day now (enough for signing out a phone unused for 120 days).
+   */
+  deviceSeen: defineTable({
+    deviceId: v.id("devices"),
+    at: v.number(),
+  }).index("by_device", ["deviceId"]),
+
   /** One-tap sign-in links (sent on WhatsApp): one use, 24 hours. Only the code's SHA-256 is stored. */
   links: defineTable({
     userId: v.id("users"),
@@ -1500,7 +1511,12 @@ export default defineSchema({
     rk: v.optional(v.number()),
   })
     .index("by_sid", ["sid"])
-    .index("by_list", ["demo", "gone"]),
+    .index("by_list", ["demo", "gone"])
+    // One grade's rows by XP ever (his all-time place on Me and a profile: only the rows ahead of him) and the most XP
+    // ever (the GOAT), without reading every student's row (20 Nov 2026, 200 students: Me read the whole ARISTORA's rows
+    // at every open).
+    .index("by_grade_tot", ["demo", "gone", "g", "tot"])
+    .index("by_tot", ["demo", "gone", "tot"]),
 
   /** One progress row's XP numbers (the race row adds them up; a write works out only the row it touched). */
   raceParts: defineTable({

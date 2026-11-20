@@ -1,7 +1,8 @@
-// The board in two parts (10 Nov 2026, the Convex limit on his first month): `state.live` (students, calls, session)
-// plus one `state.his` per student must add up to exactly the board `state.get` gives, so the phones see the same class
-// while each student's books are re-read only when his change. And the writes that woke every phone on every tap are
-// at most once a minute now.
+// The board in parts (10 Nov 2026, the Convex limit on his first month; 20 Nov 2026, 200 students): `state.list` (the
+// ids), `state.light` (calls, session) and one `state.his` per student (his row and books) must add up to exactly the
+// board `state.get` gives, so the phones see the same class while each student's part is re-read only when his rows
+// change. `state.live` + `his` stays the same board for a phone on an older version. And the writes that woke every
+// phone on every tap are at most once a minute now.
 
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
@@ -40,25 +41,49 @@ describe("the board in two parts", () => {
     });
     await t.mutation(api.students.giveMany, { ids: [first._id], unitId: skb, stage: "master", given: true });
     await t.mutation(api.sakarath.open, { id: first._id, unitId: sk });
+    // A call open (the board carries it), and the simulation's students on the server too (the real board leaves them out).
+    await t.mutation(api.calls.create, { studentIds: [first._id], room: "evaluation", kind: "evaluation", consult: true });
+    await t.mutation(api.sim.start, { level: "easy", count: 5, minutes: 20 });
     const get = await t.query(api.state.get, {});
-    const live = await t.query(api.state.live, {});
+    // The phones since 20 Nov 2026 (src/store.ts): the list, the light part, and each student's his (with his row).
+    const list = await t.query(api.state.list, {});
+    const light = await t.query(api.state.light, {});
+    const ours = new Set<string>(list.ids);
+    const students: unknown[] = [];
     const progress: Record<string, unknown> = {};
     const books: Record<string, unknown> = {};
     const more: Record<string, unknown> = {};
     const given: Record<string, unknown> = {};
     const skRows: Record<string, unknown> = {};
-    for (const s of live.students) {
-      const h = await t.query(api.state.his, { id: s._id as Id<"students"> });
-      if (h.progress) progress[s._id] = h.progress;
+    for (const id of list.ids) {
+      const h = await t.query(api.state.his, { id: id as Id<"students"> });
+      students.push(h.s);
+      if (h.progress) progress[id] = h.progress;
       Object.assign(books, h.books);
-      if (h.more) more[s._id] = h.more;
-      if (h.given) given[s._id] = h.given;
-      if (h.sk) skRows[s._id] = h.sk;
+      if (h.more) more[id] = h.more;
+      if (h.given) given[id] = h.given;
+      if (h.sk) skRows[id] = h.sk;
     }
     expect(Object.keys(get.progress).length).toBeGreaterThan(3);
     expect(Object.keys(get.given).length).toBeGreaterThan(0);
     expect(Object.keys(get.sk)).toEqual([first._id]);
-    expect({ ...live, progress, books, more, given, sk: skRows }).toEqual(get);
+    expect(get.calls.length).toBe(1);
+    expect(get.tests).toBe(5);
+    const { legacy, ...rest } = get;
+    expect(legacy).toBe(false);
+    expect({ ...light, calls: light.calls.filter((c) => ours.has(c.studentId)), tests: list.tests, students, progress, books, more, given, sk: skRows }).toEqual(rest);
+    // A phone still on an older version: `live` + each his (its row aside) is the same board.
+    const live = await t.query(api.state.live, {});
+    for (const s of live.students) {
+      const { s: row, ...h } = await t.query(api.state.his, { id: s._id as Id<"students"> });
+      expect(row).toEqual(s);
+      if (h.progress) expect(get.progress[s._id]).toEqual(h.progress);
+    }
+    expect(live.students).toEqual(get.students);
+    // The simulation's board: its own list (the test students), its calls only.
+    const simList = await t.query(api.state.list, { test: true });
+    const simGet = await t.query(api.state.get, { test: true });
+    expect(simList.ids).toEqual(simGet.students.map((s) => s._id));
   });
 
   test("the class's last-active time is written at most once a minute", async () => {
@@ -66,8 +91,8 @@ describe("the board in two parts", () => {
     const t = await asOwner(raw);
     await t.mutation(api.setup.ensure, {});
     await t.mutation(api.demo.load, {});
-    const at = async () => (await t.query(api.state.live, {})).session!.lastActivityAt;
-    const ids = (await t.query(api.state.live, {})).students.map((s) => s._id);
+    const at = async () => (await t.query(api.state.light, {})).session!.lastActivityAt;
+    const ids = (await t.query(api.state.list, {})).ids;
     const before = await at();
     vi.setSystemTime(Date.now() + 70_000);
     await t.mutation(api.students.setPresent, { id: ids[0], present: false });

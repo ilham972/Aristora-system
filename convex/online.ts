@@ -74,7 +74,19 @@ async function onlineNow(ctx: QueryCtx, me: Doc<"students">, now: number): Promi
  * (their Stage; 0 = not known), only while the owner's switch is on; himself always counts.
  */
 export const beat = mutation({
-  args: { token, lv: v.optional(v.boolean()), bye: v.optional(v.boolean()), inLv: v.optional(v.boolean()), st: v.optional(v.number()) },
+  args: {
+    token,
+    lv: v.optional(v.boolean()),
+    bye: v.optional(v.boolean()),
+    inLv: v.optional(v.boolean()),
+    st: v.optional(v.number()),
+    /**
+     * Who is online is wanted (20 Nov 2026, 200 students): the phone sends false while no screen shows the green dots
+     * (the race, a profile). Every beat of every phone read every online classmate's rows: at 60 online, 60 beats a
+     * minute × 60 of them. Missing (an older phone) = wanted.
+     */
+    w: v.optional(v.boolean()),
+  },
   handler: async (ctx, args): Promise<{ show: boolean; on: string[]; study: Record<string, number> }> => {
     const me = await familyActor(ctx, args.token);
     const now = Date.now();
@@ -84,7 +96,7 @@ export const beat = mutation({
     if ("add" in r) await ctx.db.insert("appTime", { sid: me._id, ...r.add });
     else if (last) await ctx.db.patch(last._id, r.patch);
     const show = await seenOn(ctx);
-    if (args.bye || !show) return { show, on: [], study: {} };
+    if (args.bye || !show || args.w === false) return { show, on: [], study: {} };
     return { show, ...(await onlineNow(ctx, me, now)) };
   },
 });

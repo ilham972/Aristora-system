@@ -54,6 +54,7 @@ import { asksIn, HELP_KEEP_MS, isLate, unanswered, VOICE_BYTES, VOICE_MAX_S, VOI
 import { helpHeadOf, type HelpHead } from "./lib/helpView";
 import { alertStudent } from "./lib/push";
 import { RACE_GRADES } from "./lib/race";
+import { raceCounts } from "./lib/raceRows";
 import { unsafeWords, type UsPic } from "./lib/us";
 import { clip, dropPhotos } from "./lib/usTalk";
 import { usPhoto } from "./schema";
@@ -528,13 +529,32 @@ async function msgOf(ctx: QueryCtx, c: Doc<"usChat">, me: Me, tp: ReturnType<typ
 /** Two reports hide a message from students (its writer still sees it) until a teacher keeps or removes it. */
 const hidden = (c: Doc<"usChat">, me: Me) => me.k === "s" && (c.rpBy?.length ?? 0) >= CHAT_REPORTS_HIDE && c.sid !== me.s._id;
 
-/** A group's students (every teacher is in it too). */
-async function membersOf(ctx: QueryCtx, r: Doc<"usRooms">): Promise<number> {
-  const rows = await ctx.db
-    .query("raceRows")
-    .withIndex("by_list", (q) => q.eq("demo", r.demo).eq("gone", false))
-    .collect();
-  return rows.filter((x) => inGroup(r, { id: x.sid, grade: x.g ?? null, demo: r.demo })).length;
+/**
+ * A group's students (every teacher is in it too). From the grades' counts (20 Nov 2026, convex/lib/raceRows.ts: one
+ * row, not every student's race row at each open), plus the students picked by name from other grades; before the
+ * counts exist, from every race row.
+ */
+async function membersOf(ctx: QueryCtx, r: Pick<Doc<"usRooms">, "k" | "gg" | "gs" | "sids" | "demo">): Promise<number> {
+  const c = await raceCounts(ctx);
+  if (!c) {
+    const rows = await ctx.db
+      .query("raceRows")
+      .withIndex("by_list", (q) => q.eq("demo", r.demo).eq("gone", false))
+      .collect();
+    return rows.filter((x) => inGroup(r, { id: x.sid, grade: x.g ?? null, demo: r.demo })).length;
+  }
+  const per = r.demo ? c.d : c.r;
+  const grades = new Set(Object.keys(per).map(Number).filter((g) => inGroup(r, { id: "", grade: g, demo: r.demo })));
+  let n = 0;
+  for (const g of grades) n += per[g] ?? 0;
+  for (const sid of new Set(r.sids ?? [])) {
+    const x = await ctx.db
+      .query("raceRows")
+      .withIndex("by_sid", (q) => q.eq("sid", sid))
+      .first();
+    if (x && !x.gone && x.demo === r.demo && !(x.g !== undefined && grades.has(x.g))) n++;
+  }
+  return n;
 }
 
 async function roomOf(ctx: QueryCtx, me: Me, ref: string, since: number | undefined, rv: number | undefined, before: number | undefined): Promise<ChatRoom> {
@@ -575,13 +595,7 @@ async function roomOf(ctx: QueryCtx, me: Me, ref: string, since: number | undefi
   }
   if (!r) {
     // A grade's own group nobody wrote in yet: its students all the same.
-    if (a.gg !== undefined && since === undefined) {
-      const rows = await ctx.db
-        .query("raceRows")
-        .withIndex("by_list", (q) => q.eq("demo", me.demo).eq("gone", false))
-        .collect();
-      head.members = rows.filter((x) => (a.gg === EVERYONE_GG ? x.g !== undefined : x.g === a.gg)).length;
-    }
+    if (a.gg !== undefined && since === undefined) head.members = await membersOf(ctx, { k: "g", gg: a.gg, demo: me.demo });
     return { head, msgs: [], more: false, full: true };
   }
   const tp = staffPics(ctx);

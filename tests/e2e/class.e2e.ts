@@ -510,6 +510,9 @@ test("the register: a whole class on three phones", async () => {
         .collect();
     });
   expect(await visitsOf("Keerthi")).toHaveLength(0);
+  // The screen shows her out again before the next tap (the board comes in parts since 20 Nov 2026: her part follows
+  // the Undo's other updates; a tap before it would sign her out).
+  await until(async () => !(await A.locator(".att-list .ap.in .ap-n").allInnerTexts()).includes("Keerthi"), "Keerthi shown out");
   await keerthi.click();
   await until(async () => (await marksOf(backend, "Keerthi")).present, "Keerthi signed in again");
   await contains(keerthi, "✓");

@@ -11,7 +11,7 @@ import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { DAY_MS, SL_OFFSET_MS, slDayNo, slMonthBefore, slWeekStart } from "./day";
 import { numsAt, zeroNums, type XpNums } from "./race";
-import { numsOfRow, RACE_V, raceRowOf, rebuildStudent } from "./raceRows";
+import { noteCounts, numsOfRow, RACE_V, raceRowOf, rebuildStudent } from "./raceRows";
 
 /** His answer to a teacher's question, marked right. */
 export const XP_ANSWER = 5;
@@ -53,7 +53,7 @@ export function shifted(n: XpNums, xp: number, t: number, now: number): XpNums {
 async function moveRow(ctx: MutationCtx, sid: Id<"students">, xp: number, t: number, now: number): Promise<void> {
   let row = await raceRowOf(ctx, sid);
   if (!row || row.v !== RACE_V) {
-    await rebuildStudent(ctx, sid, now);
+    if (await rebuildStudent(ctx, sid, now)) await noteCounts(ctx);
     row = await raceRowOf(ctx, sid);
   }
   if (!row) return;

@@ -8,7 +8,7 @@ import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { isBirthday } from "./day";
 import { levelDays, xpItems, xpRow } from "./family";
 import { levelOn } from "./quests";
-import { addNums, daysIn, fullNums, numsAt, numsOf, sameNums, WEEK_COINS, type RaceRow, type XpNums } from "./race";
+import { addNums, daysIn, fullNums, goatOf, numsAt, numsOf, sameNums, WEEK_COINS, type RaceRow, type XpNums } from "./race";
 import { noteToday } from "./usToday";
 
 /**
@@ -112,8 +112,49 @@ export async function fillSpots(ctx: MutationCtx, cursor: string | null): Promis
 /** Parts a run of fillSpots. */
 export const SPOTS_PER_RUN = 100;
 
-/** His race row from his parts (and his student row's copy when asked, or when the row is new). */
-async function writeRow(ctx: MutationCtx, sid: Id<"students">, now: number, copy: boolean): Promise<void> {
+/**
+ * How many students each grade has in the race (20 Nov 2026, 200 students): a chat group's member count read one row,
+ * never every student's race row at each open. `r` the real class, `d` the demo class (test students too): grade →
+ * students (a student with no grade is in no count). Built again whenever a race row comes, goes, or changes grade.
+ */
+export const COUNTS_KEY = "raceCounts";
+export type RaceCounts = { r: Record<string, number>; d: Record<string, number> };
+
+export async function raceCounts(ctx: QueryCtx): Promise<RaceCounts | null> {
+  const m = await ctx.db
+    .query("meta")
+    .withIndex("by_key", (q) => q.eq("key", COUNTS_KEY))
+    .first();
+  const v = m?.value as Partial<RaceCounts> | undefined;
+  return v && v.r && v.d ? { r: v.r, d: v.d } : null;
+}
+
+/** Counts every grade's race rows again; written only if a number changed. */
+export async function noteCounts(ctx: MutationCtx): Promise<void> {
+  const c: RaceCounts = { r: {}, d: {} };
+  for (const demo of [false, true]) {
+    const to = demo ? c.d : c.r;
+    for (const r of await ctx.db
+      .query("raceRows")
+      .withIndex("by_list", (q) => q.eq("demo", demo).eq("gone", false))
+      .collect()) {
+      if (r.g !== undefined) to[r.g] = (to[r.g] ?? 0) + 1;
+    }
+  }
+  const m = await ctx.db
+    .query("meta")
+    .withIndex("by_key", (q) => q.eq("key", COUNTS_KEY))
+    .first();
+  if (m && JSON.stringify(m.value) === JSON.stringify(c)) return;
+  if (m) await ctx.db.patch(m._id, { value: c });
+  else await ctx.db.insert("meta", { key: COUNTS_KEY, value: c });
+}
+
+/**
+ * His race row from his parts (and his student row's copy when asked, or when the row is new). True when the row came,
+ * went, or changed grade or class (the grades' counts follow).
+ */
+async function writeRow(ctx: MutationCtx, sid: Id<"students">, now: number, copy: boolean): Promise<boolean> {
   const row = await raceRowOf(ctx, sid);
   const parts = (await partsOf(ctx, sid)).map(numsOfRow);
   // Levels and class work; then with Us's part (8 Nov 2026: lib/usXp.ts keeps it on the row itself).
@@ -131,21 +172,28 @@ async function writeRow(ctx: MutationCtx, sid: Id<"students">, now: number, copy
     const s = await ctx.db.get(sid);
     if (!s) {
       if (row) await ctx.db.delete(row._id);
-      return;
+      return !!row;
     }
     const who = identityOf(s);
     await today(!who.demo && !who.gone);
-    if (!row) await ctx.db.insert("raceRows", { sid, ...who, ...nums, v: RACE_V });
+    if (!row) {
+      await ctx.db.insert("raceRows", { sid, ...who, ...nums, v: RACE_V });
+      return true;
+    }
     // A field he no longer has (no grade, his photo removed or hidden, his birthday cleared) goes from the copy too.
-    else await ctx.db.patch(row._id, { g: undefined, pic: undefined, bd: undefined, sx: undefined, ...who, ...nums });
-    return;
+    await ctx.db.patch(row._id, { g: undefined, pic: undefined, bd: undefined, sx: undefined, ...who, ...nums });
+    return row.g !== who.g || row.gone !== who.gone || row.demo !== who.demo;
   }
   await today(!row.demo && !row.gone);
   if (!sameNums(numsOfRow(row), nums)) await ctx.db.patch(row._id, nums);
+  return false;
 }
 
-/** Builds his parts and his race row again from all his rows (a missing row, older rules, the first fill). */
-export async function rebuildStudent(ctx: MutationCtx, sid: Id<"students">, now: number): Promise<void> {
+/**
+ * Builds his parts and his race row again from all his rows (a missing row, older rules, the first fill). True when
+ * his row came, went or changed grade: the caller counts the grades again (`noteCounts`), once for all its students.
+ */
+export async function rebuildStudent(ctx: MutationCtx, sid: Id<"students">, now: number): Promise<boolean> {
   const rows = await ctx.db
     .query("progress")
     .withIndex("by_student", (q) => q.eq("studentId", sid))
@@ -155,18 +203,22 @@ export async function rebuildStudent(ctx: MutationCtx, sid: Id<"students">, now:
   for (const r of rows) await writePart(ctx, r._id, now, r);
   const row = await raceRowOf(ctx, sid);
   if (row && row.v !== RACE_V) await ctx.db.patch(row._id, { v: RACE_V });
-  await writeRow(ctx, sid, now, true);
+  return await writeRow(ctx, sid, now, true);
 }
 
 /** After a mutation: its writes reach the race rows (convex/lib/fn.ts calls this as the mutation ends). */
 export async function afterWrites(ctx: MutationCtx, w: RaceWrites, now: number): Promise<void> {
   if (!w.progress.size && !w.progressGone.size && !w.students.size && !w.studentsGone.size) return;
   const touched = new Set<Id<"students">>();
+  let counts = false;
   for (const sid of w.studentsGone) {
     const id = ctx.db.normalizeId("students", sid);
     if (!id) continue;
     const row = await raceRowOf(ctx, id);
-    if (row) await ctx.db.delete(row._id);
+    if (row) {
+      await ctx.db.delete(row._id);
+      counts = true;
+    }
     for (const part of await partsOf(ctx, id)) await ctx.db.delete(part._id);
   }
   for (const pid of [...w.progress, ...w.progressGone]) {
@@ -185,9 +237,11 @@ export async function afterWrites(ctx: MutationCtx, w: RaceWrites, now: number):
   for (const sid of touched) {
     const row = await raceRowOf(ctx, sid);
     // No row yet, or built with older rules: all his rows (else his total would miss the rows written before).
-    if (!row || row.v !== RACE_V) await rebuildStudent(ctx, sid, now);
-    else await writeRow(ctx, sid, now, copy.has(sid));
+    if (!row || row.v !== RACE_V) {
+      if (await rebuildStudent(ctx, sid, now)) counts = true;
+    } else if (await writeRow(ctx, sid, now, copy.has(sid))) counts = true;
   }
+  if (counts) await noteCounts(ctx);
 }
 
 /** Is every student's race row built with today's rules? (meta "raceV": the fill sets it once none is left) */
@@ -266,6 +320,46 @@ export async function raceList(ctx: QueryCtx, demo: boolean, now: number): Promi
     });
   }
   return out;
+}
+
+/**
+ * His place in his grade's all-time list and how many are in it (the same as `everPlace` over his grade's rows: equal
+ * XP share a place, nobody on 0 XP ever has one), reading only the rows ahead of him and the grades' counts (ready race
+ * rows only: `raceReady` first).
+ */
+export async function everPlaceOf(ctx: QueryCtx, sid: Id<"students">, demo: boolean, grade: number): Promise<{ place: number | null; of: number }> {
+  const counts = await raceCounts(ctx);
+  const of =
+    counts?.[demo ? "d" : "r"][grade] ??
+    (
+      await ctx.db
+        .query("raceRows")
+        .withIndex("by_grade_tot", (q) => q.eq("demo", demo).eq("gone", false).eq("g", grade))
+        .collect()
+    ).length;
+  const mine = await raceRowOf(ctx, sid);
+  if (!mine || mine.gone || mine.demo !== demo || mine.g !== grade || mine.tot <= 0) return { place: null, of };
+  const ahead = await ctx.db
+    .query("raceRows")
+    .withIndex("by_grade_tot", (q) => q.eq("demo", demo).eq("gone", false).eq("g", grade).gt("tot", mine.tot))
+    .collect();
+  return { place: ahead.length + 1, of };
+}
+
+/**
+ * The GOAT's row (the most XP ever; equal XP: the name, as `goatOf`), from the top of the `by_tot` index: the few rows
+ * with the highest XP ever, never every student's (ready race rows only: `raceReady` first).
+ */
+export async function goatRow(ctx: QueryCtx, demo: boolean, now: number): Promise<RaceRow | null> {
+  const top: Doc<"raceRows">[] = [];
+  for await (const r of ctx.db
+    .query("raceRows")
+    .withIndex("by_tot", (q) => q.eq("demo", demo).eq("gone", false))
+    .order("desc")) {
+    if (r.tot <= 0 || (top.length && r.tot !== top[0].tot)) break;
+    top.push(r);
+  }
+  return goatOf(top.map((r) => raceRowOut(r, now)));
 }
 
 /** Do classmates see a student's marks on his profile? (meta "mateMarks", Settings → Race; unset = yes) */

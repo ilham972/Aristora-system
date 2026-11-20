@@ -31,9 +31,10 @@ import { actor, viewer } from "./lib/auth";
 import { coinsOnce, winNow } from "./coins";
 import { fail, log } from "./lib/backend";
 import { DAY_MS, slDayNo, slMonthBefore, slMonthStart, slWeekStart } from "./lib/day";
-import { championsOf, cupWinners, goatOf, numsAt, weekWinners, type Champ, type Cup, type WeekWin } from "./lib/race";
+import { championsOf, cupWinners, numsAt, weekWinners, type Champ, type Cup, type WeekWin } from "./lib/race";
 import { seenOn } from "./online";
-import { fillSpots, mateMarksOn, numsOfRow, RACE_V, raceList, rebuildStudent, weekCoinsOf } from "./lib/raceRows";
+import { ensureRoster } from "./lib/roster";
+import { fillSpots, goatRow, mateMarksOn, noteCounts, numsOfRow, RACE_V, raceCounts, raceList, rebuildStudent, weekCoinsOf } from "./lib/raceRows";
 import { champsMoment, coinsMoment, giftMoment, goatMoment, monthMoment, mostImprovedMonth } from "./lib/us";
 
 const token = v.optional(v.string());
@@ -59,11 +60,16 @@ export const fill = internalMutation({
       .query("meta")
       .withIndex("by_key", (q) => q.eq("key", "raceV"))
       .first();
+    // The grades' counts (20 Nov 2026, a chat group's members) and the teachers' class list: made once if missing.
+    if (!(await raceCounts(ctx))) await noteCounts(ctx);
+    await ensureRoster(ctx);
     if (meta?.value === RACE_V) return 0;
     const ready = new Set<string>();
     for (const r of await ctx.db.query("raceRows").collect()) if (r.v === RACE_V) ready.add(r.sid);
     const want = (await ctx.db.query("students").collect()).filter((s) => !ready.has(s._id));
-    for (const s of want.slice(0, FILL_PER_RUN)) await rebuildStudent(ctx, s._id, now);
+    let moved = false;
+    for (const s of want.slice(0, FILL_PER_RUN)) if (await rebuildStudent(ctx, s._id, now)) moved = true;
+    if (moved) await noteCounts(ctx);
     if (want.length <= FILL_PER_RUN) {
       if (meta) await ctx.db.patch(meta._id, { value: RACE_V });
       else await ctx.db.insert("meta", { key: "raceV", value: RACE_V });
@@ -116,7 +122,8 @@ async function goatWatch(ctx: MutationCtx, now: number): Promise<void> {
     .withIndex("by_key", (q) => q.eq("key", "raceV"))
     .first();
   if (ready?.value !== RACE_V) return;
-  const goat = goatOf(await raceList(ctx, false, now));
+  // The top of the race rows by XP ever (20 Nov 2026): a few rows every 5 minutes, never every student's.
+  const goat = await goatRow(ctx, false, now);
   if (!goat) return;
   const m = await ctx.db
     .query("meta")

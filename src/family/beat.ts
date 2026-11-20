@@ -10,6 +10,12 @@ let on = new Set<string>();
 /** Studying now (inside a Level): id → his Stage (0 = not known). */
 let study: Record<string, number> = {};
 let show = false;
+/** When `on` last came (0: never). A screen with the dots that opens on an older one beats at once. */
+let onAt = 0;
+/** When a screen last asked for a fresh one (two screens opening together ask once). */
+let askedAt = 0;
+const ON_FRESH_MS = 50_000;
+/** The screens showing the dots now (20 Nov 2026: the beat asks who is online only while there is one). */
 const subs = new Set<() => void>();
 /** Inside a Level since the last beat (the bar's sheet shows that time apart). */
 let lvNow = false;
@@ -32,14 +38,19 @@ async function beat(): Promise<void> {
   const lv = lvSince || lvNow;
   lvSince = lvNow;
   try {
-    const r = (await mutation("online:beat", { lv, inLv: lvNow, ...(lvNow && stNow ? { st: stNow } : {}) })) as {
+    const want = subs.size > 0;
+    const r = (await mutation("online:beat", { lv, inLv: lvNow, ...(lvNow && stNow ? { st: stNow } : {}), w: want })) as {
       show: boolean;
       on: string[];
       study?: Record<string, number>;
     };
-    on = new Set(r.on);
-    study = r.study ?? {};
     show = r.show;
+    // Not asked (no screen with the dots): the last list stays; the next screen that shows them beats for a fresh one.
+    if (want) {
+      on = new Set(r.on);
+      study = r.study ?? {};
+      onAt = Date.now();
+    }
     subs.forEach((f) => f());
   } catch {
     // Offline or signed out: the next beat tries again (the app shows its own message).
@@ -69,6 +80,11 @@ export function useOnline(): { on: Set<string>; study: Record<string, number>; s
   useEffect(() => {
     const f = () => set((n) => n + 1);
     subs.add(f);
+    // The dots on screen and the list is old (the beats didn't ask while no screen showed them): ask now.
+    if (Date.now() - Math.max(onAt, askedAt) > ON_FRESH_MS) {
+      askedAt = Date.now();
+      void beat();
+    }
     return () => void subs.delete(f);
   }, []);
   return { on, study, show };

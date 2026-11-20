@@ -1765,9 +1765,11 @@ learning app of our education institute"): one profile, his class times, what he
     across it every 4 s and the big one floats (transform only; none for reduce motion). On the GOAT's card (104 px), under
     his name on **Me and his profile** (`EverLine`, 46 px: "GOAT · Greatest of all time · every grade"); everyone else's
     line there is his all-time place in his grade ("All time #3 · of 24 · Grade 8"; `family.me` / `family.mate` `ever`:
-    `{ place, of, goat }`, from the race rows, nothing while they are being built). **The owl in Us** says "புதிய GOAT!"
-    when a new one takes it (`race.fill` every 5 min, `goatWatch`: meta `goat` = who; the line at most once a day,
-    `goatMoment`; the owner can turn it off in Settings → Community).
+    `{ place, of, goat }`, from the race rows, nothing while they are being built; since 20 Nov 2026 from the rows ahead
+    of him in his grade (`everPlaceOf`: place = 1 + how many have more XP ever) and the grades' counts (`of`), the GOAT
+    from the top of the rows by XP ever (`goatRow`): never every student's row at each open of Me). **The owl in Us**
+    says "புதிய GOAT!" when a new one takes it (`race.fill` every 5 min, `goatWatch`: meta `goat` = who, a few rows read
+    (`goatRow`); the line at most once a day, `goatMoment`; the owner can turn it off in Settings → Community).
   - **Gone on 11 Nov 2026** (his answers; built 8 Nov): the five leagues (🥉 … 🏆, top 3 up and bottom 3 down each
     Monday, 🛡️ for 4 days learned), the leagues' road and Monday's card, and the ten rank badges by XP ever (🌱 📘 ✏️ 🧠 …
     on every face, on Me and a profile). Their data stays on old rows (`raceRows.lg`, `lr`, `rk`; `raceWeeks.lw`,
@@ -1834,7 +1836,10 @@ learning app of our education institute"): one profile, his class times, what he
       and `inLv`. Never from the owner's Preview or a teacher's Us.
     - **Faces**: the green dot = online; a white disc with ✏️ ringed green = studying (race podium, rows, not started, a
       profile's photo). The Race tab under the podium: **✏️ Studying now** (faces with "Stage 8") and **● Online**
-      (the rest), himself first, then his grade; tap = profile. The beat's answer is the list (`on`, `study`).
+      (the rest), himself first, then his grade; tap = profile. The beat's answer is the list (`on`, `study`), **only
+      while a screen shows the dots** (20 Nov 2026, `w`: the Race tab, a profile; every beat of every phone read every
+      online classmate's rows, 60 online = 3,600 rows a minute): a screen with the dots that opens on a list older than
+      50 s beats at once.
     - **Under a classmate's name**: "✏️ Studying · Stage 8", "● Online", else **last seen by day only** ("Seen today",
       "Seen yesterday", "Seen Mon", "Seen 2 Nov": `seenDayWords`; the server sends no time, only `d`). His own phone gets
       the time (`at`).
@@ -3330,7 +3335,10 @@ chat; `convex/lib/sakarath.ts`, `convex/sakarath.ts`).
   that phone stays signed in; then a 6-digit PIN, the backup for signing in on another phone.
 - 5 wrong PINs lock the PIN for 15 minutes, doubling up to 24 hours. Weak PINs (123456, 111111) are refused.
 - The owner can sign out any phone (it drops to the sign-in screen at once), clear a PIN, or remove a teacher.
-- A phone unused for 120 days signs out by itself.
+- A phone unused for 120 days signs out by itself. Settings → People says when each phone was last used, to 10
+  minutes: its `deviceSeen` row (20 Nov 2026). The phone's own `devices` row keeps the day only (`lastSeenAt`, written
+  at most once a day): every query of that phone reads that row to check the sign-in, and a write to it every 10
+  minutes ran every live query of the phone again (all 200 students' parts).
 
 **Mechanics.**
 - The browser makes the keys with `crypto.getRandomValues`: a 32-byte token per phone, a 16-byte link code.
@@ -3346,3 +3354,31 @@ chat; `convex/lib/sakarath.ts`, `convex/sakarath.ts`).
   `auth.signInPin`, `auth.signOut`, `clock.ping`.
 - The CSP (`vercel.json`): `img-src 'self' data:` (no `blob:`): show generated images as canvases, not
   `<img src=blob:>`.
+
+## Ready for 200 students (20 Nov 2026)
+
+His plan: from 40 students in the family app to 100 or 200. Convex counts two things a month, every function call
+and every byte a call reads (the free plan: 1,000,000 calls and 1 GB of reading), and a live query on a teacher's
+phone runs again, whole, whenever a write lands in anything it read. So what grows with the class must never be read
+by something every phone or every tap runs. The rules as built (the numbers: `docs/making-changes.md`, "Is the
+server ready for 200 students?"):
+
+- **The teachers' board in three parts** (`state.list`, `state.light`, one `state.his` per student; `src/store.ts`
+  `startBoard`). `list` = the class list's ids: one kept row (meta `roster`, `convex/lib/roster.ts`), changed only
+  when a student joins or leaves (every mutation that inserts or deletes a student or writes his `archived` / `test`
+  builds it again as it ends, `convex/lib/fn.ts`; the hourly `students.checkList` builds it if missing and compares it
+  with the students' rows once a day). `light` = every open call (both classes': the phone keeps its own students'),
+  the session and the simulation, no student's row. `his` = his row and his books. So a tap on one student re-reads
+  his part on each phone (≈6 KB), never the whole class: `live` read every student's row (≈45 KB at 200 students) and
+  ran again at nearly every tap (each tap moves his `lastActivityAt`, `room`, idle or `present`). `live` stays for a
+  phone on an older version until it reloads; `tests/boardSplit.test.ts` proves list + light + his = `get`.
+- **A phone's own sign-in row moves once a day** (Accounts and security): the 10-minute "last used" is `deviceSeen`.
+- **The race's lookups read the few rows they need**: Me's and a profile's all-time place (the rows ahead of him in
+  his grade, `by_grade_tot`) and the GOAT (the top of `by_tot`); the 5-minute `goatWatch` the same; a chat group's
+  member count from each grade's count (meta `raceCounts`, kept when a race row comes, goes or changes grade). The
+  Race tab itself still reads every race row (its GOAT list and grade cup show everyone: ≈58 KB at 200, once per open).
+- **The beat asks who is online only while a screen shows it** (above, Online).
+- **The class list takes 300 students** (`STUDENTS_MAX`, 120 before). Attendance's "everyone" tap goes in parts of 80
+  (`MANY_CHUNK`; one call takes at most `MANY_MAX` 200): 300 students signed in again in one call read ~3,800 index
+  ranges, near Convex's 4,096 for one call. Beyond 300, measure first (the scale lab): the board's `his` per student
+  is 300 live queries on each teacher's phone.
