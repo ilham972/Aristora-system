@@ -76,6 +76,8 @@ export function PhotoQueue(props: { views: View[]; onOpen?: () => void }) {
 
 type AutoState = {
   on: boolean;
+  /** Cards waiting that the AI hasn't marked (sent before the switch, or its check failed). */
+  waiting: number;
   tid: string | null;
   tname: string | null;
   key: boolean;
@@ -92,9 +94,27 @@ function AiAuto() {
   const owner = may("owner");
   const [busy, setBusy] = useState(false);
   if (!st) return null;
+  /** What went to the AI from the cards already waiting: how many, how long, and what waits for tomorrow. */
+  const told = (r: { queued: number; more: number }) => {
+    if (!r.queued && !r.more) return;
+    const min = Math.max(1, Math.ceil((r.queued * 20) / 60));
+    toast(
+      r.queued
+        ? `🤖 The AI is marking the ${r.queued} waiting, one every 20 seconds (about ${min} min).${r.more ? ` ${r.more} more tomorrow (150 a day).` : ""}`
+        : `🤖 Today's 150 are used: the ${r.more} waiting go to the AI tomorrow.`,
+    );
+  };
   const set = (on: boolean, tid?: string) => {
     setBusy(true);
     void mutate(api.ai.setAuto, { on, ...(tid ? { tid: tid as Id<"users"> } : {}) })
+      .then(told)
+      .catch((e: unknown) => toast(errorText(e), "error"))
+      .finally(() => setBusy(false));
+  };
+  const backlog = () => {
+    setBusy(true);
+    void mutate(api.ai.backlog, {})
+      .then(told)
       .catch((e: unknown) => toast(errorText(e), "error"))
       .finally(() => setBusy(false));
   };
@@ -110,9 +130,9 @@ function AiAuto() {
         <b class="phq-ai-sw">🤖 The AI marks them by itself: {st.on ? "on" : "off"}</b>
       )}
       <small class="muted">
-        Each drawing or reason he sends is marked as it arrives. Sure = saved: full marks are done; lost marks open his thread
-        for {st.tname ?? "the teacher picked"}. Not sure = it waits in ⌂ for you. The AI only marks: to explain, tap 🤖 in his
-        thread.
+        Each drawing or reason he sends is marked as it arrives, and the ones already waiting too. Sure = saved: full marks are
+        done; lost marks open his thread for {st.tname ?? "the teacher picked"}. Not sure = it waits in ⌂ for you. The AI only
+        marks: to explain, tap 🤖 in his thread.
       </small>
       {owner && st.on && st.teachers.length > 0 && (
         <label class="phq-tch">
@@ -126,9 +146,15 @@ function AiAuto() {
           </select>
         </label>
       )}
+      {owner && st.on && st.waiting > 0 && (
+        // The cards from before the switch (20 Nov 2026, his report): the AI takes them on this tap, or within half an hour.
+        <button type="button" class="btn primary phq-ai-go" disabled={busy} onClick={backlog}>
+          🤖 Mark the {st.waiting} waiting now
+        </button>
+      )}
       {(st.on || d.n > 0) && (
         <p class="phq-today">
-          Today: <b>{d.n}</b> marked by the AI · {d.full} full · {d.lost} with a thread · <b class={d.left ? "left" : ""}>{d.left}</b> left to you
+          Today: <b>{d.n}</b> checked by the AI · {d.full} full · {d.lost} with a thread · <b class={d.left ? "left" : ""}>{d.left}</b> left to you
           <small class="muted"> ({d.most} a day at most)</small>
         </p>
       )}

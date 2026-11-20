@@ -252,6 +252,57 @@ describe("the AI on the ⌂ lane", () => {
     expect((await autos()).length).toBe(before);
   });
 
+  test("the cards from before (20 Nov 2026): switching on takes them; the half-hour sweep takes what it never checked; queued twice = marked once", async () => {
+    // Sent while the switch was off: nothing queued; the owner's card counts it.
+    await sendQ10();
+    expect(await autos()).toEqual([]);
+    expect((await t.query(api.ai.autoState, {})).waiting).toBe(1);
+    expect((await tn().query(api.ai.autoState, {})).waiting).toBe(0); // the count is the owner's (his button)
+    vi.setSystemTime(Date.now() + 60_000);
+    expect(await t.mutation(api.ai.setAuto, { on: true })).toEqual({ queued: 1, more: 0 });
+    // The sweep queues it again before it ran: the second one finds the first working and does nothing.
+    await raw.mutation(internal.ai.autoSweep, {});
+    const jobs = await autos();
+    expect(jobs).toHaveLength(2);
+    for (const j of jobs) await raw.mutation(internal.ai.auto, { home: j.args.home as Id<"homePhotos"> });
+    expect(await checks()).toHaveLength(1);
+    marks({ asks: "a name", parts: [{ p: "", his: "the right name", check: "the key's name", got: 2, max: 2 }], got: 2, max: 2, sure: "high" });
+    await raw.action(internal.ai.run, { id: (await checks())[0]._id });
+    expect(await photoRow()).toMatchObject({ state: "done", by: "ARISTORA AI", got: 2 });
+    expect(sent).toHaveLength(1);
+    expect((await t.query(api.ai.autoState, {})).waiting).toBe(0);
+    // Nothing left: the sweep and switching on again queue nothing.
+    await raw.mutation(internal.ai.autoSweep, {});
+    expect(await autos()).toHaveLength(2);
+  });
+
+  test("a failed automatic check: the sweep never retries it (no burning the day's 150); the owner's button does", async () => {
+    await t.mutation(api.ai.setAuto, { on: true });
+    await sendQ10();
+    const first = await autos();
+    expect(first).toHaveLength(1);
+    await raw.mutation(internal.ai.auto, { home: first[0].args.home as Id<"homePhotos"> });
+    reply = JSON.stringify({ type: "error", error: { message: "overloaded" } });
+    await raw.action(internal.ai.run, { id: (await checks())[0]._id });
+    expect((await checks())[0]).toMatchObject({ state: "fail", out: "left" });
+    await raw.mutation(internal.ai.autoSweep, {});
+    expect(await autos()).toHaveLength(1);
+    expect((await t.query(api.ai.autoState, {})).waiting).toBe(1);
+    // Only the owner, and only with the switch on.
+    await expect(tn().mutation(api.ai.backlog, {})).rejects.toThrow(/owner/);
+    vi.setSystemTime(Date.now() + 60_000);
+    expect(await t.mutation(api.ai.backlog, {})).toEqual({ queued: 1, more: 0 });
+    const again = (await autos()).slice(1);
+    expect(again).toHaveLength(1);
+    await raw.mutation(internal.ai.auto, { home: again[0].args.home as Id<"homePhotos"> });
+    marks({ asks: "a name", parts: [{ p: "", his: "a wrong name", check: "not the key's", got: 0, max: 2 }], got: 0, max: 2, sure: "high" });
+    await raw.action(internal.ai.run, { id: (await checks())[0]._id });
+    expect(await photoRow()).toMatchObject({ state: "done", by: "ARISTORA AI", got: 0 });
+    expect(await asks()).toHaveLength(1);
+    await t.mutation(api.ai.setAuto, { on: false });
+    await expect(t.mutation(api.ai.backlog, {})).rejects.toThrow(/Switch on/);
+  });
+
   test("a typed reason (no photo) is checked from his words as his Check makes it; marked meanwhile = nothing written twice", async () => {
     await t.mutation(api.catalog.saveWorkbook, {
       unitId: u01,

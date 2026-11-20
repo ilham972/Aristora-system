@@ -10597,6 +10597,11 @@ body.tm-on .toasts {
   max-width: 100%;
   font: inherit;
 }
+.phq-ai .btn.phq-ai-go {
+  justify-self: start;
+  background: #6c5ce7;
+  border-color: #6c5ce7;
+}
 .phq-today {
   margin: 0;
   font-size: 14px;

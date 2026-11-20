@@ -1060,6 +1060,16 @@ time that not save on the system").
   she can still Use the marks or mark it herself. Settings → Photos shows today's numbers (marked, full, with a thread,
   left to you) and, with no key in Convex, that everything waits in ⌂. Cost: Sonnet ≈ 6–10 rupees a check, at most 150
   a day ≈ 1,500 rupees a day.
+- **The cards from before** (20 Nov 2026, his report: "already existing pending correction, still not corrected"): the
+  switch first reacted only to what was sent after it. Now the cards already waiting go to the AI too (`queueBacklog`:
+  a real student's drawing or reason, no teacher's message on it, not marked or corrected in class, the AI never
+  checked it, or its own automatic check failed), oldest first, **one every 20 seconds** (`AI_AUTO_GAP_MS`: never a burst
+  at the API), at most what is left of today's 150 (the rest tomorrow). Three ways: switching it on; the owner's
+  **🤖 Mark the N waiting now** in Settings → Photos (shown while the AI hasn't marked some: never checked, or its check
+  failed, e.g. before the key was set); and every half hour by itself (`ai.autoSweep`, crons.ts), which takes only the
+  cards it never checked (a failed one again only on his tap, so failures never use up the day's 150). A card queued
+  twice is checked once (`auto` skips it when a check of what he sent now is working or done). The day line says
+  "checked by the AI" (a failed check counts, and shows in "left to you").
 
 **Progress (top bar; owner + Reports).** One grade at a time (`aristora.progressGrade`); stage chips, "Came today".
 **Units** = a race per unit and stage (levels done or solo questions done, then marks, then pace; rank colours,

@@ -5384,15 +5384,28 @@ test("Sakarath book in class: Books → Stock → S gives the whole book to the 
 test("the AI marks by itself: the owner's switch in Settings → Photos, the teacher of its threads, today's numbers (16 Nov 2026)", async () => {
   const backend = await newClass();
   await addPerson(backend.t, { name: "Nila", token: "nila-photos-token-0123456789abcdefghijklmnopq", tabs: [], can: ["photos"] });
+  // A reason Ravi typed at home before the switch (20 Nov 2026, his report: "already existing pending correction, still
+  // not corrected"): switching on gives it to the AI too, and the button stays for what the AI hasn't marked.
+  await backend.t.mutation(api.setup.ensure, { token: OWNER_TOKEN });
+  const u08 = await backend.t.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G7-U08")).first())!._id);
+  const ravi = await backend.t.mutation(api.students.add, { token: OWNER_TOKEN, name: "Ravi S", grade: 7, term: 1, stage: "master", unitId: u08 });
+  await backend.t.run(async (ctx) => await ctx.db.insert("homePhotos", { studentId: ravi, unitId: u08, n: 1, q: 3, kind: "part", files: [], said: true, at: Date.now(), state: "waiting" }));
   const F = await phone(backend, "focus");
   await F.getByRole("button", { name: "Settings" }).click();
-  await F.getByRole("button", { name: "Photos", exact: true }).click();
+  // "Photos 1": Ravi's reason waits.
+  await F.getByRole("button", { name: /^Photos\b/ }).click();
   const card = F.locator(".phq-ai");
   await contains(card, "The AI marks them by itself");
   await count(F.locator(".phq-tch"), 0);
+  await count(F.locator(".phq-ai-go"), 0);
   // The box follows the server (it ticks once saved).
   await F.getByRole("checkbox", { name: /The AI marks them by itself/ }).click();
   await visible(F.locator(".phq-ai.on .phq-tch select"));
+  await contains(F.locator(".toast"), "The AI is marking the 1 waiting, one every 20 seconds");
+  // No key in Convex here, so the AI hasn't marked it: the button is there to give it again.
+  await contains(F.locator(".phq-ai-go"), "Mark the 1 waiting now");
+  await F.locator(".phq-ai-go").click();
+  await contains(F.locator(".toast").last(), "The AI is marking the 1 waiting");
   // Its threads go to the owner until he picks someone.
   await contains(card, "lost marks open his thread for Owner");
   await F.locator(".phq-tch select").selectOption({ label: "Nila" });
@@ -5400,7 +5413,8 @@ test("the AI marks by itself: the owner's switch in Settings → Photos, the tea
   const nila = await backend.t.run(async (ctx) => (await ctx.db.query("users").collect()).find((u) => u.name === "Nila")!._id);
   await until(async () => (await cfg())?.t === nila, "the teacher saved");
   await contains(card, "for Nila");
-  await contains(F.locator(".phq-today"), "Today: 0 marked by the AI");
+  // Its check ran here and failed (no key): checked 1, saved nothing, left to you.
+  await contains(F.locator(".phq-today"), "Today: 1 checked by the AI · 0 full · 0 with a thread · 1 left to you");
   // No key in Convex here: it says everything waits in ⌂ until the owner adds it.
   await contains(card.locator(".ai-low"), "ANTHROPIC_API_KEY");
   for (const w of [390, 360, 320]) {

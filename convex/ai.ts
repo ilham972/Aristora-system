@@ -22,7 +22,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { internalAction, internalQuery, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { actor, viewer } from "./lib/auth";
-import { fail, keyRow, log } from "./lib/backend";
+import { fail, keyRow, log, masterState, progressFor } from "./lib/backend";
 import { autoCfg } from "./lib/aiAuto";
 import { slDayStart } from "./lib/day";
 import { internalMutation, mutation } from "./lib/fn";
@@ -35,6 +35,7 @@ import { markPhoto, photoItem } from "./photos";
 import {
   AI_ASKS_MAX,
   AI_AUTO_DAY_MAX,
+  AI_AUTO_GAP_MS,
   AI_AUTO_KEY,
   autoLine,
   laneMarks,
@@ -752,12 +753,13 @@ export const auto = internalMutation({
     if ((await autoRows(ctx, now)).length >= AI_AUTO_DAY_MAX || (await usedToday(ctx, now)) >= AI_DAY_MAX) return;
     const it = await photoItem(ctx, h, s);
     if (!it || it.hc || it.got !== null) return;
-    for (const r of await ctx.db
+    const had = await ctx.db
       .query("aiChecks")
       .withIndex("by_q", (x) => x.eq("sid", h.studentId).eq("u", h.unitId).eq("q", h.q))
-      .collect()) {
-      await dropRow(ctx, r);
-    }
+      .collect();
+    // Queued twice (what he sent, then the cards from before): a check of what he sent now is running or done already.
+    if (had.some((r) => r.at > h.at && (r.state === "done" || (r.state === "work" && now - r.upd <= AI_STUCK_MS)))) return;
+    for (const r of had) await dropRow(ctx, r);
     const said = saidWords(it).trim().slice(0, AI_SAID_MAX);
     const fixed = it.split && it.parts.length <= 20 ? it.parts.map((p) => p.phone) : null;
     const id = await ctx.db.insert("aiChecks", {
@@ -804,6 +806,8 @@ export const autoState = query({
     const owner = me.role === "owner";
     return {
       on: cfg.on,
+      /** Cards waiting that the AI hasn't marked (never checked, or its own check failed): the owner's button. */
+      waiting: owner ? (await backlogOf(ctx, Date.now(), true)).length : 0,
       tid: t?._id ?? null,
       tname: t?.name ?? null,
       key: !!env("ANTHROPIC_API_KEY"),
@@ -827,7 +831,7 @@ export const autoState = query({
 /** The owner's switch, and the teacher of the AI's threads. */
 export const setAuto = mutation({
   args: { token, on: v.boolean(), tid: v.optional(v.id("users")) },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{ queued: number; more: number }> => {
     await actor(ctx, args.token, ["owner"]);
     const t = args.tid ? await ctx.db.get(args.tid) : null;
     if (args.tid && !t?.active) fail("That teacher isn't in the class.");
@@ -841,6 +845,77 @@ export const setAuto = mutation({
     else await ctx.db.insert("meta", { key: AI_AUTO_KEY, value });
     if (cfg.on !== args.on) await log(ctx, null, Date.now(), { kind: "ai-auto", value: args.on ? "on" : "off" });
     if (t && String(cfg.t) !== String(args.tid)) await log(ctx, null, Date.now(), { kind: "ai-auto", value: `threads ${t.name}` });
+    // Switched on: the cards already waiting go to the AI too (not only what is sent from now on).
+    return !cfg.on && args.on ? await queueBacklog(ctx, true) : { queued: 0, more: 0 };
+  },
+});
+
+/**
+ * A waiting ⌂ card the AI may take by itself: a drawing's part or a typed reason of a real student, no teacher's
+ * message on it, not marked or corrected in class, and the AI never checked it (`retry`: or its own automatic check
+ * failed: no key then, busy, cut off). A teacher's own ✦ check, or one the AI wasn't sure of, stays hers.
+ */
+async function autoTakes(ctx: QueryCtx, h: Doc<"homePhotos">, now: number, retry: boolean): Promise<boolean> {
+  if (h.state !== "waiting" || h.kind !== "part" || h.cls || h.free || h.ask) return false;
+  const s = await ctx.db.get(h.studentId);
+  if (!s || s.archived || s.demo || s.test) return false;
+  const p = await progressFor(ctx, h.studentId, h.unitId, "master");
+  const m = p ? masterState(p) : null;
+  if (!m || m.lv[String(h.n)]?.hc || m.q[String(h.q)]) return false;
+  const rows = await ctx.db
+    .query("aiChecks")
+    .withIndex("by_q", (x) => x.eq("sid", h.studentId).eq("u", h.unitId).eq("q", h.q))
+    .collect();
+  if (!rows.length) return true;
+  return retry && rows.every((r) => r.auto && (r.state === "fail" || (r.state === "work" && now - r.upd > AI_STUCK_MS)));
+}
+
+/** The cards waiting from before that the AI may take, oldest first. */
+async function backlogOf(ctx: QueryCtx, now: number, retry: boolean): Promise<Doc<"homePhotos">[]> {
+  const out: Doc<"homePhotos">[] = [];
+  for (const h of await ctx.db
+    .query("homePhotos")
+    .withIndex("by_state", (q) => q.eq("state", "waiting"))
+    .collect()) {
+    if (await autoTakes(ctx, h, now, retry)) out.push(h);
+  }
+  return out.sort((a, b) => a.at - b.at);
+}
+
+/**
+ * The cards waiting from before go to the AI (20 Nov 2026, his report: "already existing pending correction, still not
+ * corrected"): one every 20 seconds (never a burst at the API), at most what is left of today's 150; `more` = for
+ * tomorrow (the half-hourly sweep takes them then).
+ */
+async function queueBacklog(ctx: MutationCtx, retry: boolean): Promise<{ queued: number; more: number }> {
+  const now = Date.now();
+  const all = await backlogOf(ctx, now, retry);
+  const room = Math.max(0, Math.min(AI_AUTO_DAY_MAX - (await autoRows(ctx, now)).length, AI_DAY_MAX - (await usedToday(ctx, now))));
+  const take = all.slice(0, room);
+  for (const [i, h] of take.entries()) await ctx.scheduler.runAfter(i * AI_AUTO_GAP_MS, internal.ai.auto, { home: h._id });
+  return { queued: take.length, more: all.length - take.length };
+}
+
+/** The owner's "Mark the N waiting now" (Settings → Photos): also the ones whose automatic check failed. */
+export const backlog = mutation({
+  args: { token },
+  handler: async (ctx, args): Promise<{ queued: number; more: number }> => {
+    await actor(ctx, args.token, ["owner"]);
+    if (!(await autoCfg(ctx)).on) fail("Switch on \"The AI marks them by itself\" first.");
+    const res = await queueBacklog(ctx, true);
+    if (res.queued) await log(ctx, null, Date.now(), { kind: "ai-auto", value: `backlog ${res.queued}` });
+    return res;
+  },
+});
+
+/**
+ * Every half hour, while the switch is on: a card the AI never checked (sent before the switch, or past a full day's
+ * 150) is queued, so nothing waits forever. Never a failed one again by itself (the owner's button retries those).
+ */
+export const autoSweep = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    if ((await autoCfg(ctx)).on) await queueBacklog(ctx, false);
   },
 });
 

@@ -27,6 +27,7 @@ crons.daily("the owl's birthdays and yesterday's count in Us", { hourUTC: 18, mi
 crons.weekly("the week's most improved in Us", { dayOfWeek: "sunday", hourUTC: 18, minuteUTC: 20 }, internal.us.improved, {});
 crons.daily("drop app time older than two months", { hourUTC: 19, minuteUTC: 5 }, internal.online.sweep, {});
 crons.daily("drop AI checks older than three days", { hourUTC: 19, minuteUTC: 15 }, internal.ai.sweep, {});
+crons.interval("the AI takes the cards it never checked (its switch on)", { minutes: 30 }, internal.ai.autoSweep, {});
 crons.weekly("pay day: last week's XP pays coins", { dayOfWeek: "sunday", hourUTC: 18, minuteUTC: 45 }, internal.coins.payday, {});
 crons.daily("a flame shield keeps yesterday's flame", { hourUTC: 18, minuteUTC: 31 }, internal.coins.shields, {});
 

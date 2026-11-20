@@ -266,6 +266,8 @@ export function verdictWords(v: { got: number; max: number; parts: AiPart[]; ta:
 export const AI_AUTO_KEY = "ai.auto";
 /** Automatic checks a day, inside the centre's `AI_DAY_MAX`: the rest stay for the teachers' ✦ and 🤖. */
 export const AI_AUTO_DAY_MAX = 150;
+/** The cards waiting from before (his "already existing pending ... not corrected"), one every this long. */
+export const AI_AUTO_GAP_MS = 20_000;
 
 /** One ⌂ lane card as the AI's marks need it (the server's PhotoItem has these). */
 export type LaneCard = {
