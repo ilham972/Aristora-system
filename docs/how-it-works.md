@@ -2361,6 +2361,9 @@ learning app of our education institute"): one profile, his class times, what he
         violet, a teacher's on the soft violet; 😊 and the 📷 tag are line icons.
       A closed thread is kept a year and the next student with the same wrong question joins it (it opens again): no
       new thread.
+      - **His Claude chat answers them** (20 Nov 2026): the threads link (Settings → Community; "The threads link"
+        under the Claude link below) reads every open thread and replies as ARISTORA AI; a reply counts as his answer
+        (Pending → Follow-up) and can carry his ✓ Understood.
     - **Consultation's icon** (headphones beside the whiteboard on a Master question's card, `OnlineButton`,
       `help.tcall`; none for a demo student): a thread opens for the ticked student with her as its teacher, he is
       alerted that she explains it there, she can explain at once; filled once it is open (`help.topen`). **Never a
@@ -2651,6 +2654,33 @@ learning app of our education institute"): one profile, his class times, what he
   `ladderKept`: the key's answers off the ladder (its past papers') stay, and each part keeps its own marks as the key
   had them. The workbook's typed fixes (Settings → Books) are never read or removed by a theory book's save. The
   tool names it `<KEY>-F` ("OL-U48-F": `scripts/digitize.ts`, every command the same).
+- **The threads link** (20 Nov 2026, his ask: "so many pendings and so many follow-ups and I don't have time to put
+  the message to them ... previously I used Sonnet ... not very good ... create the link feature ... same like that
+  [the books link] ... access the thread tabs chats also ... so you can clear everything"). Settings → Community, at
+  the bottom: **Claude link for threads** (the owner only; the same card as Books' with its own words, `ClaudeLink
+  scope="threads"`): **Turn on the threads link (7 days)** → a code "ARISTORA-THREADS name.key", shown once with Copy;
+  New code, Turn off; "last reply … · N replies". **A link of its own** (`claudeLinks.scope` "threads", `uid` = the
+  owner who turned it on): its code reads and answers threads only (a book request: "This is the threads link's
+  code…"), and the books code never reads a thread ("…threads need the threads link"); a new code of one kind stops
+  only that kind. The same carrier and seal as the books link (`link.ask` / `link.tell`; `convex/linkThreads.ts`):
+  - `ask` "threads": every open thread of real students (demo, test and archived left out), the ones waiting on a
+    teacher first (Pending, then a reply waiting, then Follow-up, then Understood; the oldest first): its unit, level,
+    question, teacher, message count, and each student's stage (`helpStage`), ✓ taps, photo asked, since when, late;
+  - `ask` "thread" (one id; `css: true` adds the book's style): the question as printed (HTML), the key whole and part
+    by part with each part's marks, each student's marks and what he typed part by part (right / wrong / the teacher's,
+    `helpHeadOf` as a teacher sees it), his photo of a teacher's part named only (never sent: the chat can't see
+    photos or hear voice notes; they show as "📷×1" and "🎤 voice 45s"), the last 60 messages (who: student, teacher or
+    AI);
+  - `tell` "reply" (`id`, `text` ≤ 1,500 letters, three or more line breaks squeezed to one blank line; `seen` = the
+    thread's message count when read; `done`): a message into the thread under **ARISTORA AI** from the owner's account
+    (as her 🤖's: the bubble is a teacher's, the AI's name), every student still waiting rung ("🤖 Q8: …" and its first
+    60 letters). **It counts as the owner's answer** (`tw` on every open row: Pending → Follow-up, his red counts and the
+    12 hours stop), which the AI by itself never does. `done` = his **✓ Understood** with it: a student who tapped ✓ I
+    understood is closed (explained, by the owner's name, as `tdone`), the rest get the teacher's ✓ (`tu`), so their
+    own ✓ tap closes it at once. Refused, nothing written: someone wrote since `seen` ("read it again": nobody is
+    answered twice or out of date), nobody waits any more, too long, empty, the owner no longer active.
+  The chat's side: `scripts/threads.ts` (`pull` → list, each thread whole and a digest to read; `send` → the replies,
+  one sealed request each). Never a mark, a key, a book or a student's row: only messages and the thread's two ✓.
 - **Skills** (13 Nov 2026, his words after 900 wrong questions waited on 15 Grade 8 students: "instead of find common
   questions, we have to find the common skills ... if someone getting wrong for same skill again and again, we don't
   need to teach again and again that question. We just teach the skill"; `convex/lib/skills.ts`). Every question of a

@@ -5,6 +5,9 @@
 //   once, here, with Copy. He pastes it into his chat. It is never shown again (New code makes another one).
 // - It stops by itself after 7 days, or with Turn off. The chat can read and save workbooks only: no student, no
 //   teacher, no mark.
+// - Settings → Community → the threads link (20 Nov 2026, `scope="threads"`, his ask: "I don't have time to put the
+//   message to them ... create the link feature ... same like that"): a code of its own, with which his chat reads the
+//   open threads and answers them as ARISTORA AI (convex/linkThreads.ts). Never a book; the books code never a thread.
 
 import { useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
@@ -13,6 +16,7 @@ import { useQuery } from "./live";
 import { act, currentRole, toast } from "./store";
 
 type Status = { on: false } | { on: true; id: string; at: number; until: number; usedAt: number | null; uses: number };
+type Scope = "books" | "threads";
 
 const when = (ms: number) => new Date(ms).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
@@ -23,11 +27,33 @@ function newName(): string {
   return s.slice(0, 12);
 }
 
-/** The code he pastes into the chat: "ARISTORA-LINK name.key". */
-export const linkCode = (id: string, key: string) => `ARISTORA-LINK ${id}.${key}`;
+/** The code he pastes into the chat: "ARISTORA-LINK name.key" (the threads link: "ARISTORA-THREADS name.key"). */
+export const linkCode = (id: string, key: string, scope: Scope = "books") => `${scope === "threads" ? "ARISTORA-THREADS" : "ARISTORA-LINK"} ${id}.${key}`;
 
-export function ClaudeLink() {
-  const st = useQuery<Status>(api.link.status, {});
+/** Each link's words. */
+const WORDS: Record<Scope, { title: string; off: string; on: string; done: string; used: (n: number) => string; none: string }> = {
+  books: {
+    title: "Claude link",
+    off: "Off. Turn it on and paste its code into your Claude chat: Claude then reads the workbooks here and saves every question's answer kind straight into the app (no zip to send or upload). It can read and save workbooks only: no student, no teacher, no mark.",
+    on: "Turn on the Claude link (7 days)",
+    done: "The Claude link is off. Its code is worth nothing now.",
+    used: (n) => `last saved {at} · ${n} save${n === 1 ? "" : "s"}`,
+    none: "nothing saved yet",
+  },
+  threads: {
+    title: "Claude link for threads",
+    off: "Off. Turn it on and paste its code into your Claude chat: Claude then reads every open thread (the question, the key, what each student typed, the messages) and answers them as ARISTORA AI. Threads only: no book, no marks.",
+    on: "Turn on the threads link (7 days)",
+    done: "The threads link is off. Its code is worth nothing now.",
+    used: (n) => `last reply {at} · ${n} repl${n === 1 ? "y" : "ies"}`,
+    none: "no reply yet",
+  },
+};
+
+export function ClaudeLink(props: { scope?: Scope }) {
+  const scope: Scope = props.scope ?? "books";
+  const w = WORDS[scope];
+  const st = useQuery<Status>(api.link.status, { scope });
   const [code, setCode] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [sure, setSure] = useState(false);
@@ -36,18 +62,18 @@ export function ClaudeLink() {
     const id = newName();
     const key = randomKey(32);
     setBusy(true);
-    const r = await act(() => mutate(api.link.open, { id, key, by: currentRole() }));
+    const r = await act(() => mutate(api.link.open, { id, key, by: currentRole(), scope }));
     setBusy(false);
-    if (r) setCode(linkCode(id, key));
+    if (r) setCode(linkCode(id, key, scope));
   };
   const turnOff = async () => {
     setBusy(true);
-    const r = await act(() => mutate(api.link.close, { by: currentRole() }));
+    const r = await act(() => mutate(api.link.close, { by: currentRole(), scope }));
     setBusy(false);
     setSure(false);
     if (r) {
       setCode(null);
-      toast("The Claude link is off. Its code is worth nothing now.");
+      toast(w.done);
     }
   };
   const copy = async () => {
@@ -62,23 +88,20 @@ export function ClaudeLink() {
 
   if (!st) return null;
   return (
-    <section class="cl-card" aria-label="Claude link">
-      <h3 class="cl-title">Claude link</h3>
+    <section class={`cl-card${scope === "threads" ? " cl-threads" : ""}`} aria-label={w.title}>
+      <h3 class="cl-title">{w.title}</h3>
       {!st.on ? (
         <>
-          <p class="muted">
-            Off. Turn it on and paste its code into your Claude chat: Claude then reads the workbooks here and saves every question's answer
-            kind straight into the app (no zip to send or upload). It can read and save workbooks only: no student, no teacher, no mark.
-          </p>
+          <p class="muted">{w.off}</p>
           <button type="button" class="btn primary wide" disabled={busy} onClick={() => void turnOn()}>
-            {busy ? "…" : "Turn on the Claude link (7 days)"}
+            {busy ? "…" : w.on}
           </button>
         </>
       ) : (
         <>
           <p class="cl-on">
             <b>On</b> until {when(st.until)}
-            {st.usedAt ? ` · last saved ${when(st.usedAt)} · ${st.uses} save${st.uses === 1 ? "" : "s"}` : " · nothing saved yet"}
+            {st.usedAt ? ` · ${w.used(st.uses).replace("{at}", when(st.usedAt))}` : ` · ${w.none}`}
           </p>
           {code ? (
             <>

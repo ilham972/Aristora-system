@@ -84,6 +84,7 @@ import type * as lib_usToday from "../lib/usToday.js";
 import type * as lib_usXp from "../lib/usXp.js";
 import type * as lib_work from "../lib/work.js";
 import type * as link from "../link.js";
+import type * as linkThreads from "../linkThreads.js";
 import type * as manager from "../manager.js";
 import type * as marks from "../marks.js";
 import type * as money from "../money.js";
@@ -188,6 +189,7 @@ declare const fullApi: ApiFromModules<{
   "lib/usXp": typeof lib_usXp;
   "lib/work": typeof lib_work;
   link: typeof link;
+  linkThreads: typeof linkThreads;
   manager: typeof manager;
   marks: typeof marks;
   money: typeof money;

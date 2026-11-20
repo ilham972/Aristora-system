@@ -10,6 +10,7 @@ import type { PushWho } from "../convex/pushSubs";
 import type { UsBoard } from "../convex/us";
 import { OWL_KINDS, WELCOME_MAX, type UsKind } from "../convex/lib/us";
 import { mutate } from "./backend";
+import { ClaudeLink } from "./claudeLink";
 import { useQuery } from "./live";
 import { act, toast } from "./store";
 
@@ -242,6 +243,8 @@ export function UsSettings() {
       <WhyCard owner={!!b?.owner} />
       <AlertsCard />
       {!b ? <p class="muted">Loading…</p> : <OwnerCard b={b} />}
+      {/* The threads link (20 Nov 2026): his Claude chat reads the open threads and answers them (src/claudeLink.tsx). */}
+      {b?.owner && <ClaudeLink scope="threads" />}
     </div>
   );
 }

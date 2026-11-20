@@ -459,6 +459,13 @@ export default defineSchema({
     last: v.optional(v.number()),
     usedAt: v.optional(v.number()),
     uses: v.optional(v.number()),
+    /**
+     * 20 Nov 2026, the threads link (Settings → Community; convex/linkThreads.ts): it reads and answers the open threads
+     * only, never a book. Missing = the books link (Settings → Books). One link of each kind at a time. `uid` = the
+     * owner who turned it on: its replies are his (under ARISTORA AI, as his 🤖's would be).
+     */
+    scope: v.optional(v.literal("threads")),
+    uid: v.optional(v.id("users")),
   }).index("by_link", ["id"]),
 
   students: defineTable({

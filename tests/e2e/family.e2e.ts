@@ -2061,6 +2061,23 @@ test("the Claude link: the owner turns it on in Settings → Books, the code is 
   await M.getByRole("button", { name: "Books", exact: true }).click();
   await visible(M.locator(".upload-btn"));
   expect(await cardOf(M).count()).toBe(0);
+  // The threads link (20 Nov 2026): its own card in Settings → Community, its own code; the books link stays on.
+  await O.getByRole("button", { name: "Community", exact: true }).click();
+  const th = O.locator(".cl-threads");
+  await contains(th, "Off.");
+  await th.getByRole("button", { name: /^Turn on the threads link/ }).click();
+  await contains(th, "On until");
+  const tcode = await th.locator(".cl-code").inputValue();
+  expect(tcode).toMatch(/^ARISTORA-THREADS [A-Za-z0-9]{12}\.[A-Za-z0-9_-]{43}$/);
+  await noSideScroll(O);
+  await shot(O, "famtw7-threads-link");
+  const [, tid, tsecret] = /^ARISTORA-THREADS (\w+)\.(.+)$/.exec(tcode)!;
+  const tkey = fromB64(tsecret)!;
+  const list = await t.query(api.link.ask, { id: tid, box: seal(tkey, nonce, JSON.stringify({ op: "threads", t: Date.now() })) });
+  expect(JSON.parse(unseal(tkey, list.box)!.words)).toMatchObject({ ok: true, threads: [] });
+  const books = await t.query(api.link.ask, { id, box: seal(linkKey, nonce, JSON.stringify({ op: "books", t: Date.now() })) });
+  expect(JSON.parse(unseal(linkKey, books.box)!.words).ok).toBe(true);
+  await O.getByRole("button", { name: "Books", exact: true }).click();
   // Turn off (asked once more): the code is worth nothing.
   await cardOf(O).getByRole("button", { name: "Turn off" }).click();
   await cardOf(O).getByRole("button", { name: "Yes, turn it off" }).click();

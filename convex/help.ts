@@ -163,8 +163,8 @@ export const start = query({
   },
 });
 
-/** A message in a thread, written straight (the entry photo, a teacher's call, "sent to …"). */
-async function say(
+/** A message in a thread, written straight (the entry photo, a teacher's call, "sent to …"; the threads link's replies). */
+export async function say(
   ctx: MutationCtx,
   r: Doc<"usRooms">,
   who: { sid: Id<"students">; n: string; g?: number; pic?: string } | { by: Id<"users">; n: string },
@@ -381,7 +381,7 @@ async function roomOf(ctx: QueryCtx, id: string): Promise<Doc<"usRooms">> {
   return r;
 }
 
-async function printed(ctx: QueryCtx, r: Doc<"usRooms">): Promise<{ html: string | null; css: string | null }> {
+export async function printed(ctx: QueryCtx, r: Doc<"usRooms">): Promise<{ html: string | null; css: string | null }> {
   const row = await ctx.db
     .query("questions")
     .withIndex("by_book", (x) => x.eq("unitId", r.hu!).eq("stage", "master").eq("q", r.hq!))
@@ -412,7 +412,7 @@ export const question = query({
  * that for each sub questions. This answer key is only for teachers"). A printed part the key cut in two for the phone
  * ("ii · பெயர்", "ii · சுற்றளவு") says its words once, on the first.
  */
-function keyParts(raw: KeyAnswer | undefined, k: KeyQ | undefined): { p: string; a: string }[] {
+export function keyParts(raw: KeyAnswer | undefined, k: KeyQ | undefined): { p: string; a: string }[] {
   if (!raw || !k) return [];
   const said = new Set<string>();
   return k.parts.map((p, i) => {
@@ -440,7 +440,7 @@ export const tquestion = query({
 });
 
 /** One student's question explained online: explained in class too (`x`, as Evaluation's tap), his row closed, he is told. */
-async function explained(ctx: MutationCtx, a: Ask, u: Doc<"users">, r: Doc<"usRooms">, now: number): Promise<void> {
+export async function explained(ctx: MutationCtx, a: Ask, u: Doc<"users">, r: Doc<"usRooms">, now: number): Promise<void> {
   await ctx.db.patch(a._id, { st: "done", doneAt: now, by: u.name });
   const s = await ctx.db.get(a.sid);
   const p = await progressFor(ctx, a.sid, a.unitId, "master");

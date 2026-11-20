@@ -23,6 +23,10 @@
 //   questions, style) on its own unit, made the first time; checked like the rest, all or nothing; its levels can't
 //   change once a student has started it. `ask` "sakarath" lists a grade's. OL (19 Nov 2026): the O/L book's own units
 //   (grade 12, its names and part in the request), each a Sakarath unit with no topic under it (lib/sakarath.ts).
+// - The threads link (20 Nov 2026, convex/linkThreads.ts; his ask: "so many pendings and so many follow-ups ... create
+//   the link feature ... same like that"): a link of its own (`scope` "threads", Settings → Community), whose code reads
+//   the open threads and answers them (`ask` "threads" / "thread", `tell` "reply") and nothing else; the books link's
+//   code never reads a thread. One link of each kind at a time.
 // - The functions are public (the carrier has no sign-in): the seal is the sign-in. An answer says nothing to anyone
 //   without the key, not even whether a link is on.
 
@@ -42,6 +46,7 @@ import { answerNonce, fromB64, KEY_BYTES, seal, unseal } from "./lib/seal";
 import { knownFor, skillCounts, skillHome, skillsProblem, type Skill, type SkillFile, type SkillTag } from "./lib/skills";
 import { ensureSkb, EXAM_GRADES, olSkKey, sakarathProblem, sameLevels, skGrade, skKey, skNames, SK_TITLE } from "./lib/sakarath";
 import { OL, unitKey } from "./lib/syllabus";
+import { linkReply, linkThread, linkThreads } from "./linkThreads";
 
 /** A link works this long, unless the owner turns it off first. */
 export const LINK_DAYS = 7;
@@ -57,6 +62,10 @@ const NAME = /^[A-Za-z0-9]{8,24}$/;
 const SECRET = /^[A-Za-z0-9_-]{43}$/;
 
 type Row = Doc<"claudeLinks">;
+/** Which link: the books' (Settings → Books) or the threads' (Settings → Community). */
+type Scope = "books" | "threads";
+const scopeOf = (r: Pick<Row, "scope">): Scope => (r.scope === "threads" ? "threads" : "books");
+const scopeArg = v.optional(v.union(v.literal("books"), v.literal("threads")));
 
 async function rowOf(ctx: QueryCtx, id: string): Promise<Row | null> {
   if (!NAME.test(id)) return null;
@@ -66,48 +75,51 @@ async function rowOf(ctx: QueryCtx, id: string): Promise<Row | null> {
     .first();
 }
 
-/** The owner's view: is it on, until when, when it was last used. Never the key. */
+/** The owner's view of one link: is it on, until when, when it was last used. Never the key. */
 export const status = query({
-  args: { token: v.optional(v.string()) },
+  args: { token: v.optional(v.string()), scope: scopeArg },
   handler: async (ctx, args) => {
     await viewer(ctx, args.token, "owner");
     const now = Date.now();
+    const want: Scope = args.scope ?? "books";
     const rows = await ctx.db.query("claudeLinks").collect();
-    const r = rows.find((x) => x.until > now) ?? null;
+    const r = rows.find((x) => x.until > now && scopeOf(x) === want) ?? null;
     return r ? { on: true as const, id: r.id, at: r.at, until: r.until, usedAt: r.usedAt ?? null, uses: r.uses ?? 0 } : { on: false as const };
   },
 });
 
 /**
- * Turn the link on (the owner only). His phone made the name and the key (a mutation's random numbers are not secret
- * enough: convex/lib/auth.ts says the same of sign-in codes). Any link before it stops working.
+ * Turn a link on (the owner only). His phone made the name and the key (a mutation's random numbers are not secret
+ * enough: convex/lib/auth.ts says the same of sign-in codes). Any link of the same kind before it stops working.
  */
 export const open = mutation({
-  args: { token: v.optional(v.string()), id: v.string(), key: v.string(), by: v.optional(v.string()) },
+  args: { token: v.optional(v.string()), id: v.string(), key: v.string(), by: v.optional(v.string()), scope: scopeArg },
   handler: async (ctx, args) => {
     const me = await actor(ctx, args.token, ["owner"]);
     if (!NAME.test(args.id) || !SECRET.test(args.key) || fromB64(args.key)?.length !== KEY_BYTES) fail("That code can't be used. Tap Turn on again.");
     const now = Date.now();
-    for (const r of await ctx.db.query("claudeLinks").collect()) await ctx.db.delete(r._id);
-    await ctx.db.insert("claudeLinks", { id: args.id, key: args.key, by: me.name, at: now, until: now + LINK_DAYS * DAY });
+    const want: Scope = args.scope ?? "books";
+    for (const r of await ctx.db.query("claudeLinks").collect()) if (scopeOf(r) === want || r.id === args.id) await ctx.db.delete(r._id);
+    await ctx.db.insert("claudeLinks", { id: args.id, key: args.key, by: me.name, at: now, until: now + LINK_DAYS * DAY, ...(want === "threads" ? { scope: "threads" as const, uid: me._id } : {}) });
     const session = await currentSession(ctx, now);
-    await log(ctx, session, now, { kind: "claude-link", by: cleanBy(args.by), value: `on for ${LINK_DAYS} days` });
+    await log(ctx, session, now, { kind: "claude-link", by: cleanBy(args.by), value: `${want === "threads" ? "threads link " : ""}on for ${LINK_DAYS} days` });
     await touch(ctx, session, now);
     return { until: now + LINK_DAYS * DAY };
   },
 });
 
-/** Turn the link off (the owner only): its code is worth nothing from now. */
+/** Turn a link off (the owner only): its code is worth nothing from now. */
 export const close = mutation({
-  args: { token: v.optional(v.string()), by: v.optional(v.string()) },
+  args: { token: v.optional(v.string()), by: v.optional(v.string()), scope: scopeArg },
   handler: async (ctx, args) => {
     await actor(ctx, args.token, ["owner"]);
     const now = Date.now();
-    const rows = await ctx.db.query("claudeLinks").collect();
+    const want: Scope = args.scope ?? "books";
+    const rows = (await ctx.db.query("claudeLinks").collect()).filter((r) => scopeOf(r) === want);
     for (const r of rows) await ctx.db.delete(r._id);
     if (rows.length) {
       const session = await currentSession(ctx, now);
-      await log(ctx, session, now, { kind: "claude-link", by: cleanBy(args.by), value: "off" });
+      await log(ctx, session, now, { kind: "claude-link", by: cleanBy(args.by), value: want === "threads" ? "threads link off" : "off" });
       await touch(ctx, session, now);
     }
     return true;
@@ -215,13 +227,23 @@ async function shareOf(ctx: QueryCtx, b: Opened, answers: KeyAnswer[] | null) {
 /**
  * Read (the chat asks): `books` = every unit and what it has; `unit` = one workbook's shape, key, style, the phone's
  * fixes and how much the phone marks; `questions` = its printed questions from `from` on, as many as one answer holds.
+ * The threads link's code: `threads` = every open thread, `thread` = one whole (convex/linkThreads.ts).
  */
 export const ask = query({
   args: { id: v.string(), box: v.string() },
   handler: async (ctx, args) => {
-    const o = opened(await rowOf(ctx, args.id), args.box, Date.now());
-    if (!o) return NOTHING;
+    const now = Date.now();
+    const row = await rowOf(ctx, args.id);
+    const o = opened(row, args.box, now);
+    if (!o || !row) return NOTHING;
     const { req } = o;
+    // The threads link reads threads only; the books link never reads one (convex/linkThreads.ts).
+    if (scopeOf(row) === "threads") {
+      if (req.op === "threads") return sealed(o, { ok: true, now, threads: await linkThreads(ctx, now) });
+      if (req.op === "thread") return sealed(o, await linkThread(ctx, req.id, row.uid!, now, req.css === true));
+      return sealed(o, { ok: false, error: "This is the threads link's code: it reads and answers threads only (Settings → Books has the books link)." });
+    }
+    if (req.op === "threads" || req.op === "thread") return sealed(o, { ok: false, error: "This is the books link's code: threads need the threads link (Settings → Community)." });
     if (req.op === "books") {
       const units = await ctx.db.query("units").collect();
       const books = await ctx.db.query("books").collect();
@@ -635,6 +657,7 @@ async function saveSakarath(ctx: MutationCtx, row: Row, req: Asked, now: number)
 /**
  * Write (the chat tells): `save` = a unit's key (every question's answer and kind) and the questions whose printed HTML
  * changed, checked like an uploaded zip, all or nothing; `skills` = a unit's skills and each question's skill, whole.
+ * The threads link's code: `reply` = a message into a thread (convex/linkThreads.ts).
  * Each request once: an older or the same one is refused.
  */
 export const tell = mutation({
@@ -645,14 +668,20 @@ export const tell = mutation({
     const o = opened(row, args.box, now);
     if (!o || !row) return NOTHING;
     if (o.t <= (row.last ?? 0)) return sealed(o, { ok: false, error: "That request was already taken (or an older one came after a newer one)." });
-    const answer =
-      o.req.op === "save"
-        ? await saveUnit(ctx, row, o.req, now)
-        : o.req.op === "skills"
-          ? await saveSkills(ctx, row, o.req, now)
-          : o.req.op === "sakarath"
-            ? await saveSakarath(ctx, row, o.req, now)
-            : { ok: false, error: "The app doesn't know that request." };
+    const threads = scopeOf(row) === "threads";
+    const answer = threads
+      ? o.req.op === "reply"
+        ? await linkReply(ctx, row.uid, o.req, now)
+        : { ok: false, error: "This is the threads link's code: it reads and answers threads only (Settings → Books has the books link)." }
+      : o.req.op === "reply"
+        ? { ok: false, error: "This is the books link's code: threads need the threads link (Settings → Community)." }
+        : o.req.op === "save"
+          ? await saveUnit(ctx, row, o.req, now)
+          : o.req.op === "skills"
+            ? await saveSkills(ctx, row, o.req, now)
+            : o.req.op === "sakarath"
+              ? await saveSakarath(ctx, row, o.req, now)
+              : { ok: false, error: "The app doesn't know that request." };
     await ctx.db.patch(row._id, { last: o.t, usedAt: now, uses: (row.uses ?? 0) + 1 });
     return sealed(o, answer);
   },

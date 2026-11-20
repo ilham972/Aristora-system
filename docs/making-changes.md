@@ -257,6 +257,49 @@ node $TSX scripts/skills.ts push $B G8-U05         # check → saved in the app 
 - `scripts/digitize.ts` sets its carrier branch inside `main()` now, not as the file loads: `skills.ts` imports its
   helpers (`load`, `plain`, `blocks`, `partRanges`, `pull`, `bookList`).
 
+## Answer the threads (through the threads link)
+
+20 Nov 2026, his ask: "so many pendings and so many follow-ups ... I don't have time ... you are the one need to clear
+everything ... in Tamil ... intuitively ... funny ... short ... small spacing ... they never read big phrases". He
+turns on **Settings → Community → Claude link for threads** (at the bottom) and pastes its code ("ARISTORA-THREADS
+name.key"). Keep it in a file outside the repo; keep what comes back (students' words, his questions) in the
+scratchpad, never in the repo (`convex/linkThreads.ts` says what each request does).
+
+```bash
+cd /home/claude/aristora-system
+TSX=/opt/npm-tools/node_modules/tsx/dist/cli.mjs
+printf '%s' "ARISTORA-THREADS name.key" > $SCR/threads.code        # the code he pasted
+export ARISTORA_LINK_FILE=$SCR/threads.code LINK_BRANCH=link-threads
+node $TSX scripts/threads.ts pull $SCR/th          # two exchanges (~2 min): list.json, t/<id>.json, digest.txt
+# read digest.txt; write $SCR/replies.json = [{ "id": "…", "text": "…", "done": true, "seen": 5 }, …]
+node $TSX scripts/threads.ts send $SCR/replies.json $SCR/th   # one sealed reply each, in order; sent.json
+```
+
+What each stage gets (his words, 20 Nov 2026):
+- **Pending** (nobody explained): explain it. **Follow-up, he replied** (`HE REPLIED`): answer what he wrote (a "புரியவில்லை"
+  = explain again another way, shorter). **Follow-up, waiting on him**: a 2–3 line nudge: tap ✓ if he understood,
+  write "புரியவில்லை" if not. **Understood** (he tapped ✓): a one-line cheer with `done` (it closes).
+- `done: true` on every reply that ends with the ✓ ask (it is the owner's ✓ Understood: his own tap then closes it).
+  Leave it out only when the reply asks him something (his photo, which part).
+- `seen` = the digest's `seen=`. Refused because someone wrote since: `pull` again, read, answer that thread again.
+
+How to write (they are Grade 6–11 students who skip everything):
+- **Tamil script only** for the sentences (the school books' maths words: பின்னம், கோணம், ஆரை …); numbers, letters and
+  symbols are fine; the button by its own words: ✓ எனக்குப் புரிந்தது.
+- **The first line is the hook** (the phone's alert shows its first 60 letters): his name, an emoji, a funny line
+  about this question. Then **the one mistake** he made (from what he typed against the key), **one everyday picture**
+  (cricket, a bus, pizza, sweets, a phone's battery, Free Fire), **2–4 steps** 1️⃣ 2️⃣ 3️⃣ with this question's own
+  numbers, the answer 🎯, then the ✓ ask.
+- **One idea a line, a single line break between lines, no blank lines**, at most about 8 lines (a nudge 2–3). No
+  markdown, no stars, no headings. A few emojis, never mocking. Several students in one thread: every name, each one's
+  own slip in a few words.
+- **Work every number out yourself** and check it against the key before writing; a figure is only its labels in the
+  digest (draw the question's HTML with its `css: true` when the figure matters). Never more than the key says.
+- A voice note or a photo can't be read here: say "ஆசிரியர் விளக்கியதைக் கேட்டாயா?" rather than guess what it said.
+
+When the work is done, tell him to tap **Turn off** on the card (the code is in the chat), or leave it on for the next
+chat within its 7 days.
+
 ## Teaching by skill: what to keep in mind
 
 - **One row, never all his books** (13 Nov 2026): the board sends a phone only a student's book now and his other books
@@ -279,7 +322,8 @@ node $TSX scripts/skills.ts push $B G8-U05         # check → saved in the app 
 After adding functions, every function must print GUARD except the open ones on purpose: `auth.me`, `auth.setupOwner`,
 `auth.peekLink`, `auth.useLink`, `auth.signInPin`, `auth.signOut`, `clock.ping`, and the family app's `family.*` (`peek`
 and `join` check the family link; the rest call `familyViewer` / `familyActor`: the family phone only). Also `link.ask`
-and `link.tell` (10 Nov 2026, the Claude link): they answer only a request sealed with the link's key (`opened`).
+and `link.tell` (10 Nov 2026, the Claude link): they answer only a request sealed with the link's key (`opened`); the
+threads link (20 Nov 2026) is inside them (`scope`), never a function of its own.
 And `coins.shop`, `coins.buy`, `coins.cancel` (10 Nov 2026, the Shop: `familyViewer` / `familyActor`, which the
 script's lower-case match misses); `coins.payday` is internal. And `online.beat` (`familyActor`), `online.usage`
 and `online.usageDay` (`whose` → `familyViewer`) (12 Nov 2026); `online.sweep` is internal.
