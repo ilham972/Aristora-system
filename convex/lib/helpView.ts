@@ -10,7 +10,7 @@ import type { QueryCtx } from "../_generated/server";
 import { asMaster, bookFor, keyRow, masterState, progressFor } from "./backend";
 import { studentPerson } from "./chat";
 import { unitNumber } from "./family";
-import { asksIn, isLate } from "./help";
+import { asksIn, helpStage, type HelpStage, isLate } from "./help";
 import { phoneKeyFor } from "./homeWork";
 import { slotWords, type KeyQ } from "./phone";
 import { partMarks } from "./photos";
@@ -58,11 +58,14 @@ export type HelpAsk = {
   /** His marks on it. */
   got?: number | null;
   max?: number;
-  /** What he typed, part by part (his own on his phone; everyone's for a teacher). */
+  /** What he typed, part by part (everyone's in the thread, since 16 Nov 2026 on a student's phone too; never a classmate's marks). */
   parts?: HelpPart[];
   photo?: HelpPhoto;
   /** Who explained it. */
   by?: string;
+  /** Where it stands, as on the thread list (16 Nov 2026: the card's colour and words). */
+  sg: HelpStage;
+  rp?: true;
 };
 
 export type HelpHead = {
@@ -188,18 +191,23 @@ export async function helpHeadOf(
       ...(me.k === "u" && a.hn ? { hn: true as const } : {}),
       ...(me.k === "u" && a.hp ? { hp: true as const } : {}),
       ...(a.by ? { by: a.by } : {}),
+      ...helpStage(a),
     };
-    if ((mine || me.k === "u") && withParts < PARTS_FOR) {
+    // A classmate's answers too (16 Nov 2026, his yes: "answers only"): what he typed, part by part, never his marks;
+    // his photo only when the teacher didn't hide it (🙈 `hp`). His own and a teacher's: everything, as before.
+    if (withParts < PARTS_FOR) {
       withParts++;
-      const mq = masterState(await progressFor(ctx, a.sid, a.unitId, "master")).q[String(a.q)];
-      if (mq) {
-        row.got = mq.got ?? (mq.lost ? 0 : (k?.max ?? null));
-        if (k) row.max = k.max;
+      if (mine || me.k === "u") {
+        const mq = masterState(await progressFor(ctx, a.sid, a.unitId, "master")).q[String(a.q)];
+        if (mq) {
+          row.got = mq.got ?? (mq.lost ? 0 : (k?.max ?? null));
+          if (k) row.max = k.max;
+        }
       }
       const typed = await partsOf(ctx, a.sid, a.unitId, a.n, k);
       if (typed) {
         row.parts = typed.parts;
-        if (typed.photo) row.photo = typed.photo;
+        if (typed.photo && (mine || me.k === "u" || !a.hp)) row.photo = typed.photo;
       }
     }
     out.push(row);

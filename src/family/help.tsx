@@ -289,21 +289,71 @@ function Printed(props: { id: string; staff: boolean; ask?: HelpAsk }) {
   );
 }
 
+/** A card's short words: where his question stands (a teacher's English, a student's Tamil). */
+const cardWords = (a: HelpAsk, staff: boolean) =>
+  a.sg === "closed"
+    ? staff
+      ? STATE[a.st].en
+      : STATE[a.st].ta
+    : a.sg === "und"
+      ? staff
+        ? "✓ Understood"
+        : "✓ புரிந்தது"
+      : a.sg === "pend"
+        ? staff
+          ? "Pending"
+          : "⏳ காத்திருக்கிறது"
+        : a.rp
+          ? staff
+            ? "💬 Replied"
+            : "💬 பதில் அனுப்பினார்"
+          : staff
+            ? "Follow-up"
+            : "🎧 விளக்கம் வந்தது";
+
 /**
- * On top of a thread: which question (Stage, Level, Q), each student (how it stands, his marks; a teacher taps one to
- * see his answers, ⋮ on each), and the question with the picked student's answer under each sub-question (the key
- * beside it for a teacher). A student sees only his own answers.
+ * On top of a thread: which question (Stage, Level, Q), each student's card, and the question with the picked student's
+ * answer under each sub-question (the key beside it for a teacher). 16 Nov 2026, his words: "the student card ... is
+ * not clickable ... I want to click who I want. So I can see the previous student how answered, next student how
+ * answered": the cards are one row (any number of students; it scrolls sideways and keeps the picked one in view), a
+ * whole card is the tap, ‹ › step to the previous and next; under them the picked one's state, ✓ Understood and ⋮. A
+ * student sees his classmates' cards too, and their answers (his yes: "answers only": never their marks; a name or
+ * photo the teacher hid stays hidden).
  */
 export function HelpTop(props: { id: string; help: HelpHead; staff: boolean; onChange: () => void; onMate: (id: string) => void; onPhoto: () => void }) {
   const h = props.help;
+  const staff = props.staff;
   const [show, setShow] = useState(true);
+  // The card shown: the one she tapped; else the row the list opened (pickAid) while he still waits (or nobody does);
+  // else his own (a student), else the first still waiting.
   const [sel, setSel] = useState<string | null>(null);
+  const [pref] = useState(() => {
+    const p = pickAid;
+    pickAid = null;
+    return p;
+  });
+  const strip = useRef<HTMLUListElement>(null);
   usePics(h.asks.map((a) => a.pic));
-  const mine = h.asks.find((a) => a.mine);
-  const rows = props.staff ? h.asks : h.asks.filter((a) => a.mine);
-  const others = h.asks.length - rows.length;
-  // Whose answers the question shows: his own; for a teacher the one she tapped, else the first still waiting.
-  const shown = props.staff ? (h.asks.find((a) => a.id === sel) ?? h.asks.find((a) => a.st === "open") ?? h.asks[0]) : mine;
+  const rows = h.asks;
+  const mine = rows.find((a) => a.mine);
+  const first = rows.find((a) => a.st === "open");
+  const pa = rows.find((a) => a.id === pref && (a.st === "open" || !first));
+  const shown = rows.find((a) => a.id === sel) ?? pa ?? (staff ? (first ?? rows[0]) : mine) ?? rows[0];
+  const at = shown ? rows.indexOf(shown) : -1;
+  const go = (i: number) => {
+    const a = rows[(i + rows.length) % rows.length];
+    if (!a) return;
+    buzz();
+    sound("tap");
+    setSel(a.id);
+  };
+  // The picked card in view (the row scrolls by itself, never the page).
+  useEffect(() => {
+    const el = strip.current;
+    const c = el?.querySelector<HTMLElement>("li.sel");
+    if (el && c && el.scrollWidth > el.clientWidth) el.scrollTo({ left: c.offsetLeft - (el.clientWidth - c.offsetWidth) / 2, behavior: "smooth" });
+  }, [shown?.id, rows.length]);
+  const whose = (a: HelpAsk) => (staff ? `${a.n}'s answers` : a.mine ? "உன் விடைகள்" : `${a.n} இன் விடைகள்`);
   return (
     <section class="h-top" aria-label={`Q${h.q}`}>
       <div class="h-top-h">
@@ -315,71 +365,73 @@ export function HelpTop(props: { id: string; help: HelpHead; staff: boolean; onC
           <small>{h.unit}</small>
         </p>
         <button type="button" class={`h-showq${show ? " on" : ""}`} aria-pressed={show} onClick={() => setShow(!show)}>
-          {props.staff ? (show ? "Hide" : "Question") : show ? "மூடு" : "கேள்வி"}
+          {staff ? (show ? "Hide" : "Question") : show ? "மூடு" : "கேள்வி"}
         </button>
       </div>
-      <ul class="h-asks">
+      <ul class={`h-asks${rows.length > 1 ? "" : " one"}`} ref={strip} role="tablist" aria-label={staff ? "Students" : "மாணவர்கள்"}>
         {rows.map((a) => (
-          <li key={a.id} class={`${STATE[a.st].cls}${a.st === "open" && a.su ? " und" : ""}${props.staff && rows.length > 1 && a.id === shown?.id ? " sel" : ""}`}>
-            <button
-              type="button"
-              class="h-who"
-              disabled={!props.staff || rows.length < 2}
-              aria-pressed={props.staff && rows.length > 1 ? a.id === shown?.id : undefined}
-              aria-label={props.staff && rows.length > 1 ? `Show ${a.n}'s answers` : undefined}
-              onClick={() => setSel(a.id)}
-            >
+          <li key={a.id} class={`${STATE[a.st].cls} ${a.sg}${a.rp ? " rp" : ""}${a.st === "open" && a.su ? " und" : ""}${a.id === shown?.id ? " sel" : ""}`}>
+            <button type="button" role="tab" class="h-who" aria-selected={a.id === shown?.id} aria-label={whose(a)} onClick={() => a.id !== shown?.id && go(rows.indexOf(a))}>
               <Avatar name={a.n} size="s" pic={picOf(a.pic)} />
               <b>{a.mine ? "நீ" : a.n}</b>
+              <small class="h-cw">{cardWords(a, staff)}</small>
+              {a.max !== undefined && a.got !== null && a.got !== undefined && (
+                <em>
+                  {a.got}/{a.max}
+                </em>
+              )}
             </button>
-            {a.max !== undefined && a.got !== null && a.got !== undefined && (
-              <em>
-                {a.got}/{a.max}
-              </em>
-            )}
-            {props.staff && <i class="h-brk" aria-hidden="true" />}
-            <span class="h-st">
-              {props.staff ? STATE[a.st].en : STATE[a.st].ta}
-              {a.st === "done" && a.by ? ` · ${a.by}` : ""}
-              {props.staff && a.st === "open" ? (a.su ? " · ✓ he understood" : a.tu ? " · you tapped: waiting on him" : a.pw && !a.ph ? " · photo asked" : "") : ""}
-              {props.staff && (a.hn || a.hp) ? ` · 🙈 ${a.hn && a.hp ? "name, photo" : a.hn ? "name" : "photo"}` : ""}
-            </span>
-            {props.staff && a.st === "open" && (
-              <button
-                type="button"
-                class={`h-ub${a.su ? " on" : ""}`}
-                disabled={!!a.tu && !a.su}
-                aria-label={`${a.n} understood`}
-                onClick={() =>
-                  void mutation("help:tdone", { id: props.id, aid: a.id }).then(
-                    (r) => {
-                      sound("send");
-                      toast((r as { n: number }).n ? `Closed ✓ ${a.n} understood: it counts in class too.` : `${a.n} is asked: it closes when he taps ✓ I understood.`);
-                      props.onChange();
-                    },
-                    (e) => toast(problemWords(e), true),
-                  )
-                }
-              >
-                ✓ Understood
-              </button>
-            )}
-            {props.staff && (
-              <button type="button" class="h-dots" aria-label={`More for ${a.n}`} onClick={() => showSheet((close) => <AskMenu a={a} onClose={close} onChange={props.onChange} />)}>
-                ⋮
-              </button>
-            )}
           </li>
         ))}
       </ul>
-      {!props.staff && others > 0 && <p class="h-others">+ இதே கேள்வியில் இன்னும் {others} பேர்</p>}
-      {show && (
-        <>
-          {props.staff && rows.length > 1 && shown && <p class="h-whose">{shown.n}'s answers · tap a name for another's</p>}
-          <Printed id={props.id} staff={props.staff} ask={shown} />
-        </>
+      {shown && rows.length > 1 && (
+        <div class="h-nav">
+          <button type="button" class="h-pn" aria-label="Previous student" onClick={() => go(at - 1)}>
+            ‹
+          </button>
+          <p class="h-whose">
+            {whose(shown)} <small>· {at + 1} / {rows.length}</small>
+          </p>
+          <button type="button" class="h-pn" aria-label="Next student" onClick={() => go(at + 1)}>
+            ›
+          </button>
+        </div>
       )}
-      {!props.staff && mine?.st === "open" && (
+      {staff && shown && (
+        <div class={`h-sel ${STATE[shown.st].cls}${shown.st === "open" && shown.su ? " und" : ""}`}>
+          <span class="h-st">
+            {shown.st !== "open" ? STATE[shown.st].en : shown.su ? "✓ He understood · your ✓ closes it" : STAGES.find(([k]) => k === shown.sg)?.[1]}
+            {shown.st === "done" && shown.by ? ` · ${shown.by}` : ""}
+            {shown.st === "open" && !shown.su ? (shown.tu ? " · you tapped: waiting on him" : shown.pw && !shown.ph ? " · photo asked" : shown.rp ? " · 💬 he replied" : "") : ""}
+            {shown.hn || shown.hp ? ` · 🙈 ${shown.hn && shown.hp ? "name, photo" : shown.hn ? "name" : "photo"}` : ""}
+          </span>
+          {shown.st === "open" && (
+            <button
+              type="button"
+              class={`h-ub${shown.su ? " on" : ""}`}
+              disabled={!!shown.tu && !shown.su}
+              aria-label={`${shown.n} understood`}
+              onClick={() =>
+                void mutation("help:tdone", { id: props.id, aid: shown.id }).then(
+                  (r) => {
+                    sound("send");
+                    toast((r as { n: number }).n ? `Closed ✓ ${shown.n} understood: it counts in class too.` : `${shown.n} is asked: it closes when he taps ✓ I understood.`);
+                    props.onChange();
+                  },
+                  (e) => toast(problemWords(e), true),
+                )
+              }
+            >
+              ✓ Understood
+            </button>
+          )}
+          <button type="button" class="h-dots" aria-label={`More for ${shown.n}`} onClick={() => showSheet((close) => <AskMenu a={shown} onClose={close} onChange={props.onChange} />)}>
+            ⋮
+          </button>
+        </div>
+      )}
+      {show && <Printed id={props.id} staff={staff} ask={shown} />}
+      {!staff && mine?.st === "open" && (
         <div class="h-wait">
           {mine.pw && !mine.ph && (
             <button type="button" class="f-btn white" onClick={props.onPhoto}>
@@ -421,7 +473,7 @@ export function HelpTop(props: { id: string; help: HelpHead; staff: boolean; onC
           )}
         </div>
       )}
-      {props.staff && (
+      {staff && (
         <p class="h-wait">
           {h.open ? (
             <>
@@ -773,24 +825,54 @@ export function Voice(props: { au: NonNullable<ChatMsg["au"]> }) {
 
 // ---------------------------------------------------------------- the lists
 
-type Filter = "open" | "mine" | "all" | "closed";
+type Stage = HelpLine["sg"];
+/** The pipeline (16 Nov 2026, his words: "pending ... follow-up ... understood ... closed"): the boxes' order and names. */
+const STAGES: [Stage, string][] = [
+  ["pend", "Pending"],
+  ["fol", "Follow-up"],
+  ["und", "Understood"],
+  ["closed", "Closed"],
+];
+
+/** A row opened from the list: whose card the thread's top picks first (HelpTop). */
+let pickAid: string | null = null;
+
+/** Waits on this phone: a teacher's every stage but Closed when he wrote last; a student's when the teacher did. */
+const needs = (l: HelpLine, staff: boolean) => (staff ? l.sg === "pend" || l.sg === "und" || (l.sg === "fol" && !!l.rp) : l.sg === "fol" && !l.rp);
+
+/** The words under a row (a teacher's English, a student's Tamil), from where it stands. */
+function said(l: HelpLine, staff: boolean, who: string): string {
+  if (l.sg === "closed") return staff ? `${STATE[l.st].en}${l.by ? ` · ${l.by}` : ""}` : STATE[l.st].ta;
+  if (l.sg === "und") return staff ? `✓ ${who} understood: your ✓ closes it` : "✓ நீ புரிந்தது என்றாய்";
+  if (l.sg === "pend") return staff ? (l.late ? "⏰ nobody answered for 12 hours" : "not explained yet") : `⏳ ${l.tname} ஆசிரியர் விளக்குவார்`;
+  if (l.rp) return staff ? `💬 ${who} replied` : "💬 ஆசிரியரின் பதிலுக்காக";
+  if (l.pw && !l.ph) return staff ? "📷 photo asked" : "📷 படம் அனுப்பு";
+  if (l.tu) return staff ? "✓ tapped · waiting on him" : "புரிந்ததா? ✓ அழுத்து";
+  return staff ? "⏳ waiting on him" : "🎧 ஆசிரியர் பதில் அனுப்பினார்";
+}
 
 /**
- * His explanations on top of Chats (the open ones first); for a teacher the queue: Mine (waiting on her, and the
- * ones nobody answered for 12 hours) · Everyone's · Closed, then a student or a unit to narrow it (his words: "we have
- * to put the filters ... for the students or the unit").
+ * The Thread page (16 Nov 2026, his voice note: "I forget to check the message from the students ... everything in one
+ * list ... I'm going to scale this up to 100 students, 200 students ... add filters like CRMs ... group the thread by
+ * the student's name ... like in the Discord ... the students' profiles in the left side, tiny bar ... the count of each
+ * student ... some threads have two or three students: show the three profiles"):
+ * - the pipeline: Pending · Follow-up · Understood · Closed, each with its count (a teacher: Mine | All); Follow-up's
+ *   red dot = the ones waiting on this phone (her: he replied; him: the teacher answered), first in its list;
+ * - the rail on the left: a teacher's students (a student's: his Stages), each with its count in the stage picked;
+ * - one row per thread: its students' faces (a group thread: up to three), the question, where it stands.
  */
 export function HelpList(props: { staff: boolean; onRoom: (id: string) => void; /** Shown when he has no thread yet (the Chat tab's first section). */ empty?: ComponentChildren }) {
-  const key = props.staff ? "helpT" : "helpMine";
+  const staff = props.staff;
+  const key = staff ? "helpT" : "helpMine";
   const [d, setD] = useState<HelpLine[] | null>(() => keep<HelpLine[]>(key));
-  const [f, setF] = useState<Filter>(props.staff ? "mine" : "open");
-  const [who, setWho] = useState("");
-  const [unit, setUnit] = useState("");
+  const [all, setAll] = useState(() => staff && keep<boolean>("helpAll") === true);
+  const [sg, setSg] = useState<Stage | null>(null);
+  const [pick, setPick] = useState("");
   useEffect(() => {
     const load = () =>
-      query(props.staff ? "help:tlist" : "help:mine").then(
+      query(staff ? "help:tlist" : "help:mine").then(
         (x) => {
-          const lines = props.staff ? (x as { lines: HelpLine[] }).lines : (x as HelpLine[]);
+          const lines = staff ? (x as { lines: HelpLine[] }).lines : (x as HelpLine[]);
           keep(key, lines);
           setD((shown) => sameOr(shown, lines));
         },
@@ -802,94 +884,139 @@ export function HelpList(props: { staff: boolean; onRoom: (id: string) => void; 
   }, []);
   usePics((d ?? []).map((l) => l.pic));
   if (!d) return null;
-  if (!d.length) return props.empty ?? null;
-  const open = d.filter((l) => l.st === "open");
-  // Her part done (she tapped Understood, he hasn't yet): off her own queue, still open.
-  const mineT = open.filter((l) => (l.mine || l.late) && !(l.tu && !l.su));
-  const base = f === "closed" ? d.filter((l) => l.st !== "open") : f === "mine" ? mineT : f === "open" ? open : props.staff ? open : d;
-  const units = [...new Map(base.map((l) => [l.unitId, l])).values()];
-  const kids = [...new Map(base.map((l) => [l.sid ?? "", l])).values()].filter((l) => l.sid);
-  const list = base.filter((l) => (!who || l.sid === who) && (!unit || l.unitId === unit));
-  const chips: [Filter, string, number][] = props.staff
-    ? [
-        ["mine", "Mine", mineT.length],
-        ["all", "Open", open.length],
-        ["closed", "Closed", d.length - open.length],
-      ]
-    : [
-        // 13 Nov 2026, his ask: Open and Closed on the students' side too.
-        ["open", "Open", open.length],
-        ["closed", "Closed", d.length - open.length],
-      ];
+  // A line from before this version (kept on the phone) has no stage: it waits for the first read.
+  if (!d.length || !d[0].sg) return d.length ? <Waiting /> : (props.empty ?? null);
+  const tap = (f: () => void) => {
+    buzz();
+    sound("tap");
+    f();
+  };
+  // Mine: hers, and any nobody answered for 12 hours; All: every teacher's.
+  const scope = staff && !all ? d.filter((l) => l.mine || l.late) : d;
+  // The rail groups by student (a teacher) or by Stage (a student).
+  const grp = (l: HelpLine) => (staff ? (l.sid ?? "") : l.unitId);
+  const of = (s: Stage) => scope.filter((l) => l.sg === s && (!pick || grp(l) === pick));
+  // The stage on screen: hers, else the first with something waiting on this phone, else the first not empty.
+  const at = sg ?? STAGES.find(([s]) => of(s).some((l) => needs(l, staff)))?.[0] ?? STAGES.find(([s]) => of(s).length)?.[0] ?? "pend";
+  // A queue for a teacher (the oldest first); the newest first for a student; what waits on this phone first.
+  const sorted = (ls: HelpLine[]) =>
+    [...ls].sort((a, b) => Number(needs(b, staff)) - Number(needs(a, staff)) || (at === "closed" || !staff ? b.la - a.la : at === "pend" ? a.at - b.at : a.la - b.la));
+  const inStage = sorted(scope.filter((l) => l.sg === at));
+  const list = inStage.filter((l) => !pick || grp(l) === pick);
+  // One row per thread: the lines of its students in this stage, in order.
+  const rows = [...list.reduce((m, l) => m.set(l.id, [...(m.get(l.id) ?? []), l]), new Map<string, HelpLine[]>()).values()];
+  // The rail: everyone with something in this stage (in the list's order), and the one picked even at 0.
+  const rail = [...new Map(inStage.map((l) => [grp(l), l])).values()];
+  if (pick && !rail.some((l) => grp(l) === pick)) {
+    const was = scope.find((l) => grp(l) === pick);
+    if (was) rail.unshift(was);
+  }
+  const size = (id: string) => (staff ? new Set(d.filter((l) => l.id === id).map((l) => l.sid)).size : (d.find((l) => l.id === id)?.k ?? 1));
+  const urgent = (ls: HelpLine[]) => ls.filter((l) => needs(l, staff)).length;
+  const open = (ls: HelpLine[]) => {
+    pickAid = ls[0].aid;
+    props.onRoom(ls[0].id);
+  };
   return (
     <section class="h-list" aria-label="Online explanations">
-      <p class="h-list-h">
-        🎧 <b>{props.staff ? "Online explanations" : "Explain online"}</b>
-      </p>
-      <div class="h-chips" role="tablist">
-        {chips.map(([k, w, n]) => (
-          <button
-            key={k}
-            type="button"
-            role="tab"
-            aria-selected={f === k}
-            class={f === k ? "on" : ""}
-            onClick={() => {
-              setF(k);
-              setWho("");
-              setUnit("");
-            }}
-          >
-            {w} <i>{n}</i>
-          </button>
-        ))}
+      <div class="h-list-h">
+        <span>
+          🎧 <b>{staff ? "Online explanations" : "Explain online"}</b>
+        </span>
+        {staff && (
+          <span class="h-scope" role="group" aria-label="Whose">
+            {(["Mine", "All"] as const).map((w, i) => (
+              <button key={w} type="button" aria-pressed={all === !!i} class={all === !!i ? "on" : ""} onClick={() => tap(() => (setAll(!!i), keep("helpAll", !!i), setPick("")))}>
+                {w}
+              </button>
+            ))}
+          </span>
+        )}
       </div>
-      {(units.length > 1 || kids.length > 1) && base.length > 4 && (
-        <div class="h-chips sub">
-          {units.length > 1 &&
-            units.map((l) => (
-              <button key={l.unitId} type="button" aria-pressed={unit === l.unitId} class={unit === l.unitId ? "on" : ""} onClick={() => setUnit(unit === l.unitId ? "" : l.unitId)}>
-                Stage {l.no}
+      <div class="h-pipe" role="tablist" aria-label="Where it stands">
+        {STAGES.map(([s, w]) => {
+          const ls = of(s);
+          const n = new Set(ls.map((l) => l.id)).size;
+          const u = urgent(ls);
+          return (
+            <button key={s} type="button" role="tab" aria-selected={at === s} class={`${s}${at === s ? " on" : ""}${n ? "" : " zero"}`} onClick={() => tap(() => setSg(s))}>
+              <b>{n}</b>
+              <small>{w}</small>
+              {s === "fol" && u > 0 && <i aria-label={`${u} waiting on you`}>{u}</i>}
+            </button>
+          );
+        })}
+      </div>
+      <div class="h-body">
+        <nav class="h-rail" aria-label={staff ? "Students" : "Stages"}>
+          <button type="button" aria-pressed={!pick} class={`h-ri all${pick ? "" : " on"}`} onClick={() => tap(() => setPick(""))}>
+            <span class="h-rf">🎧</span>
+            <small>All</small>
+          </button>
+          {rail.map((l) => {
+            const g = grp(l);
+            const mine = inStage.filter((x) => grp(x) === g);
+            const n = new Set(mine.map((x) => x.id)).size;
+            return (
+              <button key={g} type="button" aria-pressed={pick === g} class={`h-ri${pick === g ? " on" : ""}${n ? "" : " zero"}`} aria-label={staff ? l.sn : `Stage ${l.no}`} onClick={() => tap(() => setPick(pick === g ? "" : g))}>
+                {staff ? <Avatar name={l.sn ?? "?"} pic={picOf(l.pic)} /> : <span class="h-rf st">{l.no}</span>}
+                <small>{staff ? (l.sn ?? "").split(" ")[0] : `Stage ${l.no}`}</small>
+                {n > 0 && <i class={urgent(mine) ? "hot" : ""}>{n}</i>}
               </button>
-            ))}
-          {props.staff &&
-            kids.length > 1 &&
-            kids.map((l) => (
-              <button key={l.sid} type="button" aria-pressed={who === l.sid} class={who === l.sid ? "on" : ""} onClick={() => setWho(who === l.sid ? "" : l.sid!)}>
-                {l.sn}
-              </button>
-            ))}
+            );
+          })}
+        </nav>
+        <div class="h-main">
+          {rows.length === 0 ? (
+            <p class="h-none">{staff ? (at === "pend" ? "Nothing pending." : "Nothing here.") : at === "closed" ? "மூடிய thread இல்லை." : "எதுவும் இல்லை."}</p>
+          ) : (
+            <ul class="c-rows">
+              {rows.map((ls, i) => {
+                const l = ls[0];
+                const prev = rows[i - 1]?.[0];
+                const many = size(l.id);
+                // Follow-up in two parts: what waits on this phone, then the rest under a line.
+                const cut = at === "fol" && prev && needs(prev, staff) && !needs(l, staff);
+                const fresh = ls.some((x) => x.fresh);
+                const who = ls.length > 1 ? `${ls[0].sn?.split(" ")[0]} +${ls.length - 1}` : (l.sn ?? "");
+                return (
+                  <li key={l.id} class={cut ? "cut" : ""}>
+                    {cut && <p class="h-cut">{staff ? "⏳ Waiting on him" : "⏳ ஆசிரியருக்காக"}</p>}
+                    <button type="button" class={`c-row h-row ${at}${fresh ? " new" : ""}${needs(l, staff) ? " hot" : ""}`} onClick={() => open(ls)}>
+                      {staff ? (
+                        <span class={`h-faces n${Math.min(ls.length, 3)}`}>
+                          {ls.slice(0, 3).map((x) => (
+                            <Avatar key={x.aid} name={x.sn ?? "?"} pic={picOf(x.pic)} />
+                          ))}
+                        </span>
+                      ) : (
+                        <span class="c-gface">🎧</span>
+                      )}
+                      <span class="c-row-w">
+                        <b>
+                          {staff && `${who} · `}Q{l.q}
+                          {staff && ls.length === 1 && l.g !== undefined && <i class="f-gchip">{l.g}</i>}
+                          {many > ls.length && <i class="h-many">👥 {many}</i>}
+                          {l.late && <i class="h-late">⏰</i>}
+                        </b>
+                        <small>
+                          Stage {l.no} · Level {l.n}
+                          {!staff && l.sg !== "closed" ? ` · ${l.tname}` : ""}
+                        </small>
+                        <small class="h-say1">{said(l, staff, ls.find((x) => x.rp)?.sn?.split(" ")[0] ?? who.split(" ")[0])}</small>
+                      </span>
+                      <span class="c-row-r">
+                        <small>{agoShort(at === "pend" ? l.at : l.la)}</small>
+                        {fresh && <i class="c-un">{staff ? "new" : "1"}</i>}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
-      )}
-      {list.length === 0 ? (
-        <p class="h-none">{props.staff ? (f === "mine" ? "Nothing waits on you." : "Nothing here.") : f === "closed" ? "மூடிய thread இல்லை." : "எதுவும் காத்திருக்கவில்லை."}</p>
-      ) : (
-        <ul class="c-rows">
-          {list.map((l) => (
-            <li key={l.aid}>
-              <button type="button" class={`c-row h-row${l.fresh ? " new" : ""}`} onClick={() => props.onRoom(l.id)}>
-                {props.staff ? <span class="c-dface"><Avatar name={l.sn ?? "?"} pic={picOf(l.pic)} /></span> : <span class="c-gface">🎧</span>}
-                <span class="c-row-w">
-                  <b>
-                    {props.staff && `${l.sn} · `}Q{l.q}
-                    {props.staff && l.g !== undefined && <i class="f-gchip">{l.g}</i>}
-                    {l.late && <i class="h-late">⏰</i>}
-                  </b>
-                  <small>
-                    Stage {l.no} · Level {l.n}
-                    {l.st === "open" ? (props.staff ? (l.mine ? "" : ` · ${l.tname}`) : ` · ${l.tname}`) : ` · ${props.staff ? STATE[l.st].en : STATE[l.st].ta}`}
-                    {l.st === "open" && (l.su ? (props.staff ? " · ✓ understood" : " · ✓ புரிந்தது") : l.tu ? (props.staff ? " · waiting on him" : " · புரிந்ததா? ✓") : l.pw && !l.ph ? (props.staff ? " · photo asked" : " · 📷 படம் அனுப்பு") : "")}
-                  </small>
-                </span>
-                <span class="c-row-r">
-                  <small>{agoShort(l.st === "open" ? l.at : l.la)}</small>
-                  {l.fresh && <i class="c-un">{props.staff ? "new" : "1"}</i>}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      </div>
     </section>
   );
 }

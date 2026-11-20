@@ -24,7 +24,7 @@ import { isStudentKey, lastWords, sKey, studentPerson, uKey } from "./lib/chat";
 import { DAY_MS, slDayStart } from "./lib/day";
 import { unitNumber } from "./lib/family";
 import { mutation } from "./lib/fn";
-import { askable, askOf, asksIn, bumpRoom, HELP_LIMIT_KEY, HELP_LIST_DAYS, HELP_PHOTOS, helpKey, helpLimit, isLate, unanswered } from "./lib/help";
+import { askable, askOf, asksIn, bumpRoom, HELP_LIMIT_KEY, HELP_LIST_DAYS, HELP_PHOTOS, helpKey, helpLimit, helpStage, type HelpStage, isLate, unanswered } from "./lib/help";
 import { phoneKeyFor } from "./lib/homeWork";
 import type { KeyAnswer } from "./lib/key";
 import { copyState, type MState } from "./lib/master";
@@ -38,7 +38,7 @@ import { staffPics, takePhotos, tidy } from "./us";
 const token = v.optional(v.string());
 type Ask = Doc<"helpAsks">;
 /** An ask opened again: nothing understood, no photo asked yet. */
-const FRESH = { pw: undefined, su: undefined, tu: undefined, tub: undefined } as const;
+const FRESH = { pw: undefined, su: undefined, tu: undefined, tub: undefined, sw: undefined } as const;
 
 /** A teacher he can pick (everyone still in the class, the owner too: he teaches). */
 export type HelpTeacher = { id: string; n: string; pic?: string };
@@ -89,6 +89,11 @@ export type HelpLine = {
   mine?: true;
   late?: true;
   by?: string;
+  /** Where it stands (16 Nov 2026: Pending, Follow-up, Understood, Closed) and, in Follow-up, his reply waits (lib/help.ts). */
+  sg: HelpStage;
+  rp?: true;
+  /** Students: how many students the thread has (a group thread: several got the same question wrong). */
+  k?: number;
 };
 
 function copy(m: MState): MState {
@@ -220,7 +225,7 @@ export const ask = mutation({
       const r = await ctx.db.get(had.rid);
       if (!r) fail("This thread isn't here any more.");
       const ph = await takePhotos(ctx, args.ph, HELP_PHOTOS);
-      await ctx.db.patch(had._id, { ph: true });
+      await ctx.db.patch(had._id, { ph: true, sw: now });
       await say(ctx, r, who, now, { ...(t ? { t } : {}), ph, ak: had._id });
       return { id: r._id };
     }
@@ -285,6 +290,7 @@ async function lineOf(ctx: QueryCtx, a: Ask, memo: Map<string, { no: number; uni
     ...(r.lt ? { lt: r.lt } : {}),
     ...(r.ln ? { ln: r.ln } : {}),
     ...(a.by ? { by: a.by } : {}),
+    ...helpStage(a),
   };
 }
 
@@ -309,7 +315,8 @@ export const mine = query({
         .query("usSeats")
         .withIndex("by_room", (x) => x.eq("rid", a.rid).eq("who", who))
         .first();
-      out.push({ ...l, ...(r.n > 0 && r.lw !== who && r.la > (seat?.rd ?? 0) ? { fresh: true as const } : {}) });
+      const k = (await asksIn(ctx, a.rid)).length;
+      out.push({ ...l, ...(r.n > 0 && r.lw !== who && r.la > (seat?.rd ?? 0) ? { fresh: true as const } : {}), ...(k > 1 ? { k } : {}) });
     }
     return out.sort((a, b) => Number(b.st === "open") - Number(a.st === "open") || b.la - a.la);
   },

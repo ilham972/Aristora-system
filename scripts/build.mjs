@@ -113,7 +113,8 @@ const FAMILY_STAFF_KB = 8;
 const FAMILY_US_KB = 28;
 // 8 Nov 2026, groups, private chats and the Members page (his voice note: "students want to forget the WhatsApp"; his
 // yes to their own limit): their own file (src/family/chatParts.ts), fetched the first time one opens, never prefetched.
-const FAMILY_CHAT_KB = 20;
+// 16 Nov 2026 (his yes: "raise to 22 KB"): 20 → 22 for the Thread page's stages, the students' rail and the cards.
+const FAMILY_CHAT_KB = 22;
 // 13 Nov 2026, his Dark from Me: the dark colours are their own file (src/family/dark.css), outside the first load
 // (which only gained boot.ts and a few lines of the loading page, ~0.3 KB) and the later parts.
 const FAMILY_DARK_KB = 5;

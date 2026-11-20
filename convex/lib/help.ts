@@ -44,6 +44,25 @@ export function askable(r: MQ | undefined): boolean {
 /** No teacher wrote in the thread since it came to its teacher (`ta` = waiting on her since; `tw` = a teacher's last word). */
 export const unanswered = (a: Pick<Doc<"helpAsks">, "ta" | "tw">) => !(a.tw !== undefined && a.tw >= a.ta);
 
+/**
+ * Where a student's question stands, like a sales pipeline (16 Nov 2026, his voice note: "first is pending ... still not
+ * explained anything ... second is the follow-up stage ... explaining again, again ... third is understood: student
+ * understand but teacher not press understand button ... fourth is going to be the closed"):
+ * - `pend`: no teacher wrote since it came to her (Pending);
+ * - `fol`: she explained, he hasn't said he understood (Follow-up); `rp` = he wrote after her last word (his reply
+ *   waits on her: the 💬 he asked never to forget), else it waits on him (her ✓ tapped, a photo asked, or just quiet);
+ * - `und`: he tapped ✓ I understood, she hasn't (Understood: one tap closes it);
+ * - `closed`: explained (both ✓), explained or taught in class, or Not now (for the class).
+ */
+export type HelpStage = "pend" | "fol" | "und" | "closed";
+
+export function helpStage(a: Pick<Doc<"helpAsks">, "st" | "ta" | "tw" | "sw" | "su" | "tu">): { sg: HelpStage; rp?: true } {
+  if (a.st !== "open") return { sg: "closed" };
+  if (a.su && !a.tu) return { sg: "und" };
+  if (unanswered(a)) return { sg: "pend" };
+  return (a.sw ?? 0) > (a.tw ?? 0) ? { sg: "fol", rp: true } : { sg: "fol" };
+}
+
 /** An open one nobody answered for 12 hours. */
 export function isLate(a: Pick<Doc<"helpAsks">, "st" | "ta" | "tw">, now: number): boolean {
   return a.st === "open" && now - a.ta > HELP_LATE_MS && unanswered(a);

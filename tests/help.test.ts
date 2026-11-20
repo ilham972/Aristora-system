@@ -250,7 +250,11 @@ describe("online explanations", () => {
     expect(room.msgs[1].au).toMatchObject({ d: 9 }); // Hana's voice note: Mira hears it
     expect(room.msgs[0].ph).toHaveLength(1);
     expect(room.head.help!.asks).toMatchObject([{ n: "Hana K", st: "done" }, { n: "Mira J", st: "open", mine: true }]);
-    expect(room.head.help!.asks[0].parts).toBeUndefined(); // another student's typed answer isn't hers to read
+    // A classmate's typed answers (16 Nov 2026, his yes: "answers only"): never his marks.
+    expect(room.head.help!.asks[0].parts).toMatchObject([{ p: "i", ok: false, typed: ["42"] }, { p: "ii", ok: true, typed: ["48"] }]);
+    expect(room.head.help!.asks[0].got).toBeUndefined();
+    expect(room.head.help!.asks[0].max).toBeUndefined();
+    expect(room.head.help!.asks[1]).toMatchObject({ mine: true, got: 1, max: 2 });
     // Hana's is closed, Mira's waits: the teacher sees one open, new for her; Mira is not explained yet (his rule).
     expect((await tn().query(api.help.tlist, {})).lines.filter((x) => x.st === "open")).toMatchObject([{ sn: "Mira J", fresh: true }]);
     expect(await tn().query(api.chat.tunread, {})).toBe(1);
@@ -281,6 +285,52 @@ describe("online explanations", () => {
     expect(await m().mutation(api.help.understood, { id })).toEqual({ closed: true });
     expect(await askRow(mira, 8)).toMatchObject({ st: "done", by: "Nila" });
     expect((await mq(mira, 8)).x).toBeDefined();
+  });
+
+  test("the stages (16 Nov 2026): Pending, Follow-up with his reply or waiting on him, Understood, Closed; a group thread's size", async () => {
+    const id = await send(h(), 8, nila);
+    const line = async () => (await tn().query(api.help.tlist, {})).lines.find((x) => x.q === 8 && x.sn === "Hana K")!;
+    const his = async () => (await h().query(api.help.mine, {})).find((x) => x.q === 8)!;
+    // Nobody explained yet: Pending on both phones (his photo is his first word, not a reply).
+    expect(await line()).toMatchObject({ sg: "pend" });
+    expect((await line()).rp).toBeUndefined();
+    expect(await his()).toMatchObject({ sg: "pend" });
+    // Her voice note or words: Follow-up, waiting on him.
+    vi.setSystemTime(Date.now() + 1000);
+    await tn().mutation(api.chat.tsend, { id, text: "முதலில் 8 ஐ 3 ஆல் பெருக்கு." });
+    expect(await line()).toMatchObject({ sg: "fol" });
+    expect((await line()).rp).toBeUndefined();
+    // He answers: his reply waits on her (💬), never forgotten.
+    vi.setSystemTime(Date.now() + 1000);
+    await h().mutation(api.chat.send, { id, text: "ஏன் 3?" });
+    expect((await askRow(hana, 8)).sw).toBe(Date.now());
+    expect(await line()).toMatchObject({ sg: "fol", rp: true });
+    expect(await his()).toMatchObject({ sg: "fol", rp: true });
+    // She answers again: his turn.
+    vi.setSystemTime(Date.now() + 1000);
+    await tn().mutation(api.chat.tsend, { id, text: "8 × 3 = 24" });
+    expect((await line()).rp).toBeUndefined();
+    // Her ✓ first: still Follow-up (waiting on him); his words after it: her turn again.
+    vi.setSystemTime(Date.now() + 1000);
+    expect(await tn().mutation(api.help.tdone, { id })).toEqual({ n: 0, w: 1 });
+    expect(await line()).toMatchObject({ sg: "fol", tu: true });
+    expect((await line()).rp).toBeUndefined();
+    vi.setSystemTime(Date.now() + 1000);
+    await h().mutation(api.chat.send, { id, text: "இன்னும் புரியவில்லை" });
+    expect(await line()).toMatchObject({ sg: "fol", rp: true });
+    // Mira joins: a group thread of 2 on his list; her row is Pending (no teacher word since she came).
+    vi.setSystemTime(Date.now() + 1000);
+    expect(await send(m(), 8, raj)).toBe(id);
+    expect(await his()).toMatchObject({ k: 2 });
+    expect((await tn().query(api.help.tlist, {})).lines.find((x) => x.sn === "Mira J")).toMatchObject({ sg: "pend" });
+    // His ✓ I understood (her ✓ stays through his reply): both = Closed.
+    vi.setSystemTime(Date.now() + 1000);
+    expect(await h().mutation(api.help.understood, { id })).toEqual({ closed: true });
+    expect(await line()).toMatchObject({ sg: "closed" });
+    // Mira says she understood first: Understood (her teacher's one tap closes it).
+    vi.setSystemTime(Date.now() + 1000);
+    expect(await m().mutation(api.help.understood, { id })).toEqual({ closed: false });
+    expect((await tn().query(api.help.tlist, {})).lines.find((x) => x.sn === "Mira J")).toMatchObject({ sg: "und" });
   });
 
   test("Not now leaves it for the class; sent to another teacher; nobody answered for 12 hours: everyone's", async () => {

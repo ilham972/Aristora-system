@@ -1388,6 +1388,11 @@ export default defineSchema({
     tid: v.id("users"),
     ta: v.number(),
     tw: v.optional(v.number()),
+    /**
+     * His last word in the thread (16 Nov 2026, the thread page's stages: his words "sometime I forget to check the
+     * message from the students"): after `tw` = he answered her, so it waits on a teacher again (Follow-up, 💬).
+     */
+    sw: v.optional(v.number()),
     st: v.union(v.literal("open"), v.literal("done"), v.literal("class"), v.literal("skip")),
     from: v.union(v.literal("s"), v.literal("t")),
     ph: v.boolean(),

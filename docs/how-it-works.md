@@ -2275,9 +2275,18 @@ learning app of our education institute"): one profile, his class times, what he
       (as a Level does) and puts an `Answer` in each: what he typed (✓ blue `.h-a.ok`, ✗ rose `.h-a.no`, ✍ the
       teacher's part; `partsOf` from `familyAnswers`) and, for a teacher, **Key** (`.h-k`: `help.tquestion` `kp`,
       the key part by part in the phone key's order: `keyParts`; never sent to a student, `help.question`). A book
-      whose questions aren't in the app: the same rows as a plain list (`.h-plist`). A student sees only his own
-      answers; a teacher sees the first student still waiting and **taps a name for another's** (`.h-asks li.sel`,
-      `.h-whose`). **A sub-question only a teacher marks** (a drawing he photographed at home) shows
+      whose questions aren't in the app: the same rows as a plain list (`.h-plist`). **The student cards** (16 Nov
+      2026, his words: "the student card ... is not clickable ... I want to click who I want ... previous student,
+      next student"): one row of cards (`.h-asks`, any number of students: it scrolls sideways and keeps the picked one
+      in view, never the page), each card = his face, name, where it stands in the stage's colour (`cardWords`; red
+      Pending or 💬 Replied, gold Follow-up, blue Understood, grey closed) and his marks (his own on his phone, every one
+      for a teacher); **a tap anywhere on a card** shows his answers; **‹ ›** (`.h-nav`, wraps round) step to the
+      previous / next, "Mira J's answers · 2 / 3" (`.h-whose`). A teacher's line under the cards is the picked one's
+      (`.h-sel`): where it stands, ✓ Understood, ⋮. Shown first: her tap, else the row the list opened (`pickAid`)
+      while he still waits (or nobody does), else his own (a student), else the first still waiting. **A student sees
+      his classmates' cards and their answers too** (his yes the same morning: "answers only"): what they typed, part by
+      part, never their marks, a name or photo the teacher hid (🙈) stays hidden, never the key (`helpHeadOf`: parts for
+      every ask, `got` / `max` only for his own and teachers', `photo` not when `hp`). **A sub-question only a teacher marks** (a drawing he photographed at home) shows
       **his photo and her marks** under it (`HelpPhoto` on his row, from `homePhotos`: ✍ 1/1 · her name, a small
       photo that opens full screen; "(photo deleted)" once it went), kept until the question is explained (the rule
       under "Nothing kept"). **A part he typed instead** ("show that", "give a reason": a `say` / `why` box a teacher
@@ -2301,13 +2310,34 @@ learning app of our education institute"): one profile, his class times, what he
       hidden from the thread's other students with his name or his photos (a voice names him: `hid`). `takeVoice`;
       `usChat.au`; marked in `usFiles`, deleted with its message. A second recorder beside `src/voiceNote.tsx` (the
       home lane's, 60 s) because the Us frame can't load the teachers' store.
-    - **Teachers:** the Us tab's number counts the threads waiting on her (`chat.tunread`); Us → Thread → **Online
-      explanations** (`HelpList`, `help.tlist`): Mine (hers and the ⏰ late ones, not those waiting only on the student's
-      ✓) · Open · Closed (14 days), then Stage and student chips when the list is long (his ask: filters by student and
-      unit). Students: the same list on their Thread tab, **Open · Closed** (13 Nov 2026, his ask: "make sure both have
-      filters like closed and open"; its own count `chat.h`: `helpNew`). A row says ✓ understood / waiting on him /
-      photo asked. A closed thread is kept a year and the next student with the same wrong question joins it (it opens
-      again): no new thread.
+    - **The Thread page** (`HelpList`; 16 Nov 2026, his voice note: "I forget to check the message from the students
+      ... everything in one list ... 100 students, 200 students ... filters like CRMs ... group the thread by the
+      student's name ... like in the Discord ... a tiny bar ... the count of each student ... a group thread: show the
+      three profiles"). Teachers: the Us tab's number counts the threads waiting on her (`chat.tunread`); Us → Thread
+      (`help.tlist`, every open one and the closed of 14 days). Students: their Thread tab (`help.mine`; its count
+      `chat.h`: `helpNew`).
+      - **Where each one stands** (`helpStage` in `convex/lib/help.ts`, sent as `sg` / `rp` on every line and card):
+        **Pending** = no teacher wrote since it came to her (`unanswered`); **Follow-up** = she explained, he hasn't
+        said he understood: `rp` when **he wrote after her last word** (`helpAsks.sw`, his last word: `chat.send` in
+        his thread, his photo after her 📷; reset with `FRESH`) = it waits on her again, else it waits on him (her ✓
+        tapped, a photo asked, or quiet); **Understood** = he tapped ✓ I understood, she hasn't (her ✓ closes it);
+        **Closed** = explained (both ✓), in class, or Not now.
+      - **The pipeline** (`.h-pipe`): four boxes in one row on every phone, each its count of threads and its colour
+        (red, gold, blue, grey); the red dot on Follow-up = the ones waiting on this phone (a teacher's: he replied; a
+        student's: the teacher answered). It opens on the first box with something waiting on this phone, else the
+        first not empty; her tap keeps it. A teacher's **Mine | All** (`.h-scope`, kept on the phone `helpAll`): Mine
+        = hers and the ⏰ late ones (nobody answered for 12 hours), All = every teacher's.
+      - **The rail** on the left (`.h-rail`, sticky, flush with the screen's edge): **All**, then a teacher's students
+        (a student's: his Stages), each with its count in the box picked (red when one waits on this phone), in the
+        list's order; a tap = only his (his counts in every box), again or All = everyone; the one picked stays even
+        at 0.
+      - **One row per thread** (`.h-row`): its students in that box as faces (`.h-faces`, up to three), "Hana +2 ·
+        Q8", Stage · Level, where it stands in words (`said`; red when it waits on her: "💬 Mira replied", "not
+        explained yet"), 👥 N when the thread has more students than shown, ⏰, new. A teacher's queue is the oldest
+        first; a student's the newest. Follow-up: what waits on this phone first, then a line "⏳ Waiting on him" and
+        the rest. Opening a row shows that student's card first.
+      A closed thread is kept a year and the next student with the same wrong question joins it (it opens again): no
+      new thread.
     - **Consultation's icon** (headphones beside the whiteboard on a Master question's card, `OnlineButton`,
       `help.tcall`; none for a demo student): a thread opens for the ticked student with her as its teacher, he is
       alerted that she explains it there, she can explain at once; filled once it is open (`help.topen`). **Never a

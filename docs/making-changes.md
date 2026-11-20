@@ -980,7 +980,7 @@ WHY=1 npx vitest run -c vitest.perf.config.ts -t "lab" --reporter=verbose # each
   `tests/usTalk.test.ts` reads the phone's file and fails if they differ. So are the reactions (`RX` in
   `convex/lib/chat.ts` and `talk.tsx`: `tests/chat.test.ts`).
 - **The chats are their own file** (8 Nov 2026, groups and private chats): `src/family/chatParts.ts` (`chat.tsx`, its
-  style `chatStyle.ts`), budget `FAMILY_CHAT_KB` 20 = what only it reaches; what it shares with Us (`talk.tsx`: the
+  style `chatStyle.ts`), budget `FAMILY_CHAT_KB` 22 (20 until 16 Nov 2026) = what only it reaches; what it shares with Us (`talk.tsx`: the
   bubble, reactions, tags, the write bar, the photo picker) is counted in Us's file. Import the chats only through
   `later.ts` `loadChat` / `useChatParts` (the teachers' Us: `K.useChatParts`, handed over by `main.tsx`). The teachers'
   Us file is near its 8 KB (7.8): put new teacher screens in Us's or the chats' file, not in `staff.tsx`. Budgets after

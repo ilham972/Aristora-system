@@ -4621,7 +4621,11 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
   for (const b of ["அடுத்து", "அடுத்து", "தொடங்கு!"]) await U.locator(".f-us-guide").getByRole("button", { name: b }).click();
   await U.locator(".t-seg").getByRole("button", { name: "Thread" }).click();
   await contains(U.locator(".h-list-h"), "Online explanations");
-  await contains(U.locator(".h-chips button.on"), "Mine 1");
+  // The Thread page (16 Nov 2026): Mine, the pipeline on Pending (1), Hana on the rail.
+  await contains(U.locator(".h-scope button.on"), "Mine");
+  await contains(U.locator(".h-pipe button.on"), "Pending");
+  await contains(U.locator(".h-pipe button.on b"), "1");
+  await contains(U.locator(".h-rail .h-ri:not(.all)"), "Hana");
   const line = U.locator(".h-row", { hasText: "Hana K · Q8" });
   await contains(line, "Stage 1 · Level 1");
   await shot(C, "help04-teacher-queue");
@@ -4693,7 +4697,7 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
   await until(async () => !!(await askOf(hana, 8))!.tu, "her Understood on the server");
   expect((await askOf(hana, 8))!.st).toBe("open");
   expect((await mq(hana, 8))?.x).toBeUndefined();
-  await contains(U.locator(".h-asks li .h-st"), "waiting on him");
+  await contains(U.locator(".h-sel .h-st"), "waiting on him");
   // Hana's phone asks her; her ✓ I understood closes it: explained in class too, the thread shuts for her.
   await until(async () => (await P.locator(".h-wait .f-btn.go", { hasText: "எனக்குப் புரிந்தது" }).count()) === 1, "the understood button lit on Hana's phone", 20_000);
   await contains(P.locator(".h-wait"), "புரிந்ததா");
@@ -4736,10 +4740,11 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
   await contains(U.locator(".h-whose"), "Hana K's answers");
   await contains(U.locator(".h-paper .h-a.no"), "99");
   await shot(C, "help09b-teacher-two");
-  await U.locator(".h-asks li", { hasText: "Hana K" }).locator(".h-dots").click();
+  // ⋮ under the cards is the picked one's (Hana's).
+  await U.locator(".h-sel .h-dots").click();
   await U.locator(".h-menu").getByRole("button", { name: /Hide his name/ }).click();
   await until(async () => (await t.query(api.chat.room, { token: MIRA, id: tid })).msgs[0].n === "மாணவர்", "Hana's name hidden from Mira");
-  await contains(U.locator(".h-asks li", { hasText: "Hana K" }).locator(".h-st"), "🙈 name");
+  await contains(U.locator(".h-sel .h-st"), "🙈 name");
   await noSideScroll(C);
   await shot(C, "help10-two-students");
 
@@ -4891,9 +4896,11 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
   }
   await tabTo(P, /^Thread$/);
   await contains(P.locator(".h-list-h"), "Explain online");
-  await contains(P.locator(".h-chips button.on"), "Open 0");
-  await P.locator(".h-chips").getByRole("tab", { name: /Closed/ }).click();
-  await contains(P.locator(".h-chips button.on"), "Closed 1");
+  // Nothing open: the pipeline opens on Closed by itself (1).
+  await contains(P.locator(".h-pipe button.pend b"), "0");
+  await P.locator(".h-pipe").getByRole("tab", { name: /Closed/ }).click();
+  await contains(P.locator(".h-pipe button.on"), "Closed");
+  await contains(P.locator(".h-pipe button.on b"), "1");
   await contains(P.locator(".h-row"), "Q8");
   await contains(P.locator(".h-row"), "விளக்கப்பட்டது");
   await noSideScroll(P);
@@ -4978,32 +4985,258 @@ test("Explain online: a typed \"show that\" shows his words under each sub-quest
   await U.locator(".h-asks").scrollIntoViewIfNeeded();
   await shot(C, "help16-typed-words");
   // Her 📷 (⋮ on Mira): the old words go out now, only because she asked.
-  await U.locator(".h-asks li", { hasText: "Mira J" }).locator(".h-dots").click();
+  await U.locator(".h-sel .h-dots").click();
   await U.locator(".h-menu").getByRole("button", { name: /Ask for his working photo/ }).click();
   await until(async () => !!(await askOf()).pw, "the photo asked");
   expect((await askOf()).ph).toBe(false);
-  await contains(U.locator(".h-asks li .h-st"), "photo asked");
+  await contains(U.locator(".h-sel .h-st"), "photo asked");
   expect((await t.query(api.chat.room, { token: MIRA, id })).msgs.some((m) => (m.t ?? "").includes("படத்தை இங்கே அனுப்பு"))).toBe(true);
   // Mira says she understood (her phone, through the server): her row lights; the owner's ✓ Understood closes it.
   await t.mutation(api.help.understood, { token: MIRA, id });
   await until(async () => (await U.locator(".h-asks li.und").count()) === 1, "her row lit", 20_000);
-  await contains(U.locator(".h-asks li.und .h-st"), "he understood");
+  await contains(U.locator(".h-sel.und .h-st"), "He understood");
   await noSideScroll(C);
   await U.locator(".h-asks").scrollIntoViewIfNeeded();
   await shot(C, "help17-understood-row");
   for (const w of [320, 390]) {
     await C.setViewportSize({ width: w, height: 780 });
     await noSideScroll(C);
-    // The row in two fixed lines: name, marks, ⋮ on top; how it stands and ✓ Understood below.
-    const [dots, name, ub] = await Promise.all([".h-dots", ".h-who", ".h-ub"].map(async (c) => (await U.locator(`.h-asks li.und ${c}`).boundingBox())!));
-    expect(Math.abs(dots.y + dots.height / 2 - (name.y + name.height / 2))).toBeLessThan(6);
-    expect(ub.y).toBeGreaterThan(name.y + name.height - 2);
+    // Her card lit in the row; under it one line: how it stands, ✓ Understood and ⋮ side by side.
+    const [st, ub, dots] = await Promise.all([".h-st", ".h-ub", ".h-dots"].map(async (c) => (await U.locator(`.h-sel.und ${c}`).boundingBox())!));
+    expect(Math.abs(dots.y + dots.height / 2 - (ub.y + ub.height / 2))).toBeLessThan(6);
+    expect(st.x + st.width).toBeLessThanOrEqual(ub.x + 1);
+    expect(ub.x + ub.width).toBeLessThanOrEqual(dots.x + 1);
+    expect((await U.locator(".h-asks li.und").boundingBox())!.x).toBeGreaterThanOrEqual(0);
     await shot(C, `help17-understood-row-${w}`);
   }
-  await U.locator(".h-asks li.und .h-ub.on").click();
+  await U.locator(".h-sel.und .h-ub.on").click();
   await until(async () => (await askOf()).st === "done", "closed");
   expect((await askOf()).by).toBe("Owner");
   await C.context().close();
+  expect(problems.slice(before)).toEqual([]);
+});
+
+test("The Thread page at scale: Pending · Follow-up · Understood · Closed, Mine | All, the students' rail, one row per thread with its faces; the cards tap and step ‹ ›; a student sees his classmates' answers, never their marks", async () => {
+  // 16 Nov 2026, his voice note: "I forget to check the message from the students ... everything in one list ... 100
+  // students, 200 students ... filters like CRMs: pending, follow-up, understood, closed ... group the thread by the
+  // student's name ... like in the Discord ... a tiny bar ... the count of each student ... a group thread: show the
+  // three profiles ... the student card ... I want to click who I want ... previous student, next student". His yes the
+  // same morning: a student taps a classmate's card and sees his answers only. Made-up students, answers and questions.
+  const before = problems.length;
+  const backend = makeBackend(modules);
+  const t = backend.t;
+  await addPerson(t, { name: "Owner", token: OWNER_TOKEN, role: "owner" });
+  const as = { token: OWNER_TOKEN };
+  await t.mutation(api.setup.ensure, as);
+  const u01 = await t.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G8-U01")).first())!._id);
+  await t.mutation(api.catalog.saveWorkbook, {
+    ...as,
+    unitId: u01,
+    parts: BOOK.data.parts.map((p) => ({ id: p.id, to: p.to, ...(p.each ? { each: p.each } : {}) })),
+    levels: BOOK.data.levels.map((l) => ({ to: l.to, max: l.max })),
+    marks: BOOK.data.marks ?? {},
+    replace: true,
+    key: fakeKey(),
+  });
+  await t.run(async (ctx) => {
+    for (let q = 1; q <= 10; q++) await ctx.db.insert("questions", { unitId: u01, stage: "master", q, html: `<div class="qq"><span class="qn">${q}</span><div class="qt">A made-up question number ${q}</div></div>` });
+  });
+  await t.mutation(api.us.setCfg, { ...as, open: true });
+  const NILA = "nila-phone-token-0123456789abcdefghijklmnopqrstuvwx";
+  const nila = await addPerson(t, { name: "Nila", token: NILA, tabs: ["evaluation"] });
+  const owner = await t.run(async (ctx) => (await ctx.db.query("users").collect()).find((u) => u.role === "owner")!._id);
+  // Five students; each checks Level 1 with Q8 wrong in his own way (and Q2, Q4, Q5, Q6, Q10 wrong or blank).
+  const kids: Record<string, { id: any; tok: string }> = {};
+  for (const [i, n] of ["Hana K", "Mira J", "Omar S", "Ravi P", "Sara T"].entries()) {
+    const id = await t.mutation(api.students.add, { ...as, name: n, grade: 8, term: 1, stage: "master", unitId: u01 });
+    const tok = `family-phone-scale-${i}-`.padEnd(48, "x");
+    const link = `scale-family-link-${i}-0123456789abcdef`;
+    await t.mutation(api.families.makeLink, { ...as, studentId: id, codeHash: secretHash("family-link", link) });
+    await t.mutation(api.family.join, { code: link, token: tok, label: "Android" });
+    await t.mutation(api.family.check, { token: tok, unitId: u01, n: 1, typed: [{ q: 1, a: ["3"] }, { q: 2, a: ["5"] }, { q: 4, a: ["11"] }, { q: 8, a: [String(40 + i * 11)] }] });
+    kids[n.split(" ")[0]] = { id, tok };
+  }
+  const png = async () => await t.run(async (ctx) => await ctx.storage.store(new Blob([Buffer.from(PAPER_PNG, "base64")], { type: "image/png" })));
+  const ask = async (who: string, q: number, tid?: string) => (await t.mutation(api.help.ask, { token: kids[who].tok, unitId: u01, q, ...(tid ? { tid } : {}), ph: [{ s: await png(), b: await png(), w: 96, h: 72 }] })).id;
+  const tick = () => new Promise((r) => setTimeout(r, 15));
+  // Q8: Hana, Mira and Omar in one thread, nobody explained yet (Pending).
+  const q8 = await ask("Hana", 8, nila);
+  await tick();
+  await ask("Mira", 8);
+  await tick();
+  await ask("Omar", 8);
+  // Q2: Hana and Mira; Nila explained; Mira wrote back (Follow-up 💬, waits on Nila).
+  const q2 = await ask("Hana", 2, nila);
+  await ask("Mira", 2);
+  await t.mutation(api.chat.tsend, { token: NILA, id: q2, text: "முதலில் 2 ஐ 3 ஆல் பெருக்கு." });
+  await tick();
+  await t.mutation(api.chat.send, { token: kids.Mira.tok, id: q2, text: "ஏன் 3 ஆல்?" });
+  // Q4: Hana; explained; she tapped ✓ I understood (Understood: Nila's ✓ closes it).
+  const q4 = await ask("Hana", 4, nila);
+  await t.mutation(api.chat.tsend, { token: NILA, id: q4, text: "4 × 3 = 12" });
+  await tick();
+  await t.mutation(api.help.understood, { token: kids.Hana.tok, id: q4 });
+  // Q5: Ravi; explained, her ✓ tapped (Follow-up, waiting on him).
+  const q5 = await ask("Ravi", 5, nila);
+  await t.mutation(api.chat.tsend, { token: NILA, id: q5, text: "5 × 3" });
+  await tick();
+  await t.mutation(api.help.tdone, { token: NILA, id: q5 });
+  // Q10: Omar; explained and both ✓ (Closed).
+  const q10 = await ask("Omar", 10, nila);
+  await t.mutation(api.chat.tsend, { token: NILA, id: q10, text: "10 × 3 = 30" });
+  await t.mutation(api.help.understood, { token: kids.Omar.tok, id: q10 });
+  await t.mutation(api.help.tdone, { token: NILA, id: q10 });
+  // Q6: Sara asked the owner (only under All on Nila's phone).
+  await ask("Sara", 6, owner);
+
+  // Nila's class app: Us → Thread.
+  const C = await open(backend, site.url, size(390, 840), () => {
+    if (sessionStorage.getItem("t")) return;
+    sessionStorage.setItem("t", "1");
+    localStorage.setItem("aristora.role", "evaluation");
+    localStorage.setItem("aristora.token", "nila-phone-token-0123456789abcdefghijklmnopqrstuvwx");
+  });
+  await C.locator(".tabs .tab.us").click();
+  const U = C.frameLocator("iframe.us-frame");
+  for (const b of ["அடுத்து", "அடுத்து", "தொடங்கு!"]) await U.locator(".f-us-guide").getByRole("button", { name: b }).click();
+  await U.locator(".t-seg").getByRole("button", { name: "Thread" }).click();
+  const frameFlat = async () => {
+    const f = C.frames().find((x) => x.url().includes("/f/"))!;
+    expect(await f.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  };
+  // Mine: Pending 1 · Follow-up 2 (1 waits on her) · Understood 1 · Closed 1; it opens on Pending (it waits on her).
+  const box = (k: string) => U.locator(`.h-pipe button.${k}`);
+  await until(async () => (await box("pend").locator("b").innerText()) === "1", "Pending 1", 20_000);
+  expect(await Promise.all(["pend", "fol", "und", "closed"].map(async (k) => await box(k).locator("b").innerText()))).toEqual(["1", "2", "1", "1"]);
+  await contains(box("fol").locator("i"), "1");
+  await contains(U.locator(".h-pipe button.on"), "Pending");
+  // One row for the Q8 thread with its three faces; the rail: All, then Hana, Mira, Omar with 1 each.
+  const r8 = U.locator(".h-row", { hasText: "Q8" });
+  await contains(r8, "Hana +2 · Q8");
+  expect(await r8.locator(".h-faces .f-ava").count()).toBe(3);
+  expect(await U.locator(".h-row").count()).toBe(1);
+  expect(await U.locator(".h-rail .h-ri:not(.all) small").allInnerTexts()).toEqual(["Hana", "Mira", "Omar"]);
+  await C.locator("body").evaluate(() => window.scrollTo(0, 0));
+  await frameFlat();
+  await shot(C, "thr01-pending-390");
+  // Follow-up: Mira's reply first (💬, a red line), then a line, then Ravi waiting on him.
+  await box("fol").click();
+  await contains(U.locator(".h-row").first(), "Mira +1 · Q2");
+  await contains(U.locator(".h-row.hot .h-say1"), "💬 Mira replied");
+  await contains(U.locator(".h-cut"), "Waiting on him");
+  await contains(U.locator(".h-row").nth(1), "Ravi P · Q5");
+  await contains(U.locator(".h-row").nth(1).locator(".h-say1"), "waiting on him");
+  await shot(C, "thr02-follow-up-390");
+  // Understood: Hana's Q4; Closed: Omar's Q10.
+  await box("und").click();
+  await contains(U.locator(".h-row"), "Hana K · Q4");
+  await contains(U.locator(".h-say1"), "Hana understood");
+  await box("closed").click();
+  await contains(U.locator(".h-row"), "Omar S · Q10");
+  // The rail: Hana picked: her own counts in every box; Follow-up = her Q2 (the thread has 2: 👥 2).
+  await box("pend").click();
+  await U.locator(".h-rail .h-ri", { hasText: "Hana" }).click();
+  expect(await Promise.all(["pend", "fol", "und", "closed"].map(async (k) => await box(k).locator("b").innerText()))).toEqual(["1", "1", "1", "0"]);
+  await box("fol").click();
+  await contains(U.locator(".h-row"), "Hana K · Q2");
+  await contains(U.locator(".h-row .h-many"), "👥 2");
+  await shot(C, "thr03-rail-hana-390");
+  await U.locator(".h-rail .h-ri.all").click();
+  // All: Sara's Q6 (the owner's) too.
+  await U.locator(".h-scope").getByRole("button", { name: "All" }).click();
+  await until(async () => (await box("pend").locator("b").innerText()) === "2", "Pending 2 with All");
+  await U.locator(".h-scope").getByRole("button", { name: "Mine" }).click();
+  await until(async () => (await box("pend").locator("b").innerText()) === "1", "Pending 1 with Mine");
+  for (const w of [360, 320]) {
+    await C.setViewportSize({ width: w, height: 760 });
+    await box("pend").click();
+    await frameFlat();
+    // The four boxes in one row, every word whole.
+    const ys = await Promise.all(["pend", "fol", "und", "closed"].map(async (k) => (await box(k).boundingBox())!.y));
+    expect(new Set(ys.map(Math.round)).size).toBe(1);
+    expect(await U.locator(".h-pipe small").evaluateAll((els) => els.every((e) => e.scrollWidth <= e.clientWidth + 1))).toBe(true);
+    await shot(C, `thr04-pending-${w}`);
+  }
+  await C.setViewportSize({ width: 390, height: 840 });
+
+  // The Q8 thread from its row: three cards in one row; the first one picked (Hana: her answer 40).
+  await r8.click();
+  await until(async () => (await U.locator(".h-asks li").count()) === 3, "three cards", 20_000);
+  await contains(U.locator(".h-asks li.sel"), "Hana K");
+  await contains(U.locator(".h-whose"), "Hana K's answers");
+  await contains(U.locator(".h-whose"), "1 / 3");
+  await contains(U.locator(".h-plist .h-a.no, .h-paper .h-a.no").first(), "40");
+  // A tap anywhere on Omar's card: his answers (62); › wraps to Hana; ‹ back to Omar.
+  await U.locator(".h-asks li", { hasText: "Omar S" }).locator(".h-cw").click();
+  await contains(U.locator(".h-whose"), "Omar S's answers");
+  await contains(U.locator(".h-whose"), "3 / 3");
+  await contains(U.locator(".h-a.no").first(), "62");
+  await contains(U.locator(".h-sel .h-st"), "Pending");
+  await U.getByRole("button", { name: "Next student" }).click();
+  await contains(U.locator(".h-whose"), "Hana K's answers");
+  await U.getByRole("button", { name: "Previous student" }).click();
+  await contains(U.locator(".h-whose"), "Omar S's answers");
+  await U.getByRole("button", { name: "Previous student" }).click();
+  await contains(U.locator(".h-whose"), "Mira J's answers");
+  await contains(U.locator(".h-a.no").first(), "51");
+  await C.locator("body").evaluate(() => window.scrollTo(0, 0));
+  await U.locator(".h-top").scrollIntoViewIfNeeded();
+  for (const w of [390, 320]) {
+    await C.setViewportSize({ width: w, height: 760 });
+    await frameFlat();
+    await shot(C, `thr05-cards-${w}`);
+  }
+  // From the rail: Mira's Follow-up row opens Q2 on her card (his reply waits: 💬 on it).
+  await C.setViewportSize({ width: 390, height: 840 });
+  await U.getByRole("button", { name: "Back" }).click();
+  await U.locator(".h-rail .h-ri", { hasText: "Mira" }).click();
+  await box("fol").click();
+  await U.locator(".h-row", { hasText: "Q2" }).click();
+  await until(async () => (await U.locator(".h-asks li").count()) === 2, "two cards", 20_000);
+  await contains(U.locator(".h-asks li.sel"), "Mira J");
+  await contains(U.locator(".h-asks li.sel .h-cw"), "Replied");
+  await contains(U.locator(".h-sel .h-st"), "he replied");
+  await C.context().close();
+
+  // Mira's phone: Thread → Pending (Q8, a group of 3) and Follow-up (Q2, waiting on Nila); the rail = her Stages.
+  await t.mutation(api.families.setCode, { ...as, studentId: kids.Mira.id, code: "5820" });
+  const P = await open(backend, `${site.url}/f/`, size(360, 780));
+  await P.getByLabel(/Index/).fill("1002");
+  await P.getByLabel("Code").fill("5820");
+  await P.getByRole("button", { name: "Sign in" }).click();
+  await until(async () => (await P.locator(".f-tabs .f-tab").count()) === 5, "the tabs");
+  await tabTo(P, /^Thread$/);
+  const pb = (k: string) => P.locator(`.h-pipe button.${k}`);
+  await until(async () => (await pb("pend").locator("b").innerText()) === "1", "her Pending 1", 20_000);
+  expect(await Promise.all(["pend", "fol", "und", "closed"].map(async (k) => await pb(k).locator("b").innerText()))).toEqual(["1", "1", "0", "0"]);
+  await contains(P.locator(".h-rail .h-ri:not(.all)"), "Stage 1");
+  await pb("pend").click();
+  await contains(P.locator(".h-row"), "Q8");
+  await contains(P.locator(".h-row .h-many"), "👥 3");
+  await pb("fol").click();
+  await contains(P.locator(".h-row .h-say1"), "ஆசிரியரின் பதிலுக்காக");
+  await noSideScroll(P);
+  await shot(P, "thr06-student-list-360");
+  // Q8: her own card first picked (நீ, her marks); Hana's card: Hana's answer, no marks, never the key.
+  await pb("pend").click();
+  await P.locator(".h-row", { hasText: "Q8" }).click();
+  await until(async () => (await P.locator(".h-asks li").count()) === 3, "three cards on her phone", 20_000);
+  await contains(P.locator(".h-asks li.sel"), "நீ");
+  await contains(P.locator(".h-whose"), "உன் விடைகள்");
+  await contains(P.locator(".h-a.no").first(), "51");
+  await P.locator(".h-asks li", { hasText: "Hana K" }).click();
+  await contains(P.locator(".h-whose"), "Hana K இன் விடைகள்");
+  await contains(P.locator(".h-a.no").first(), "40");
+  expect(await P.locator(".h-asks li", { hasText: "Hana K" }).locator("em").count()).toBe(0);
+  expect(await P.locator(".h-k").count()).toBe(0);
+  expect(await P.locator(".h-sel").count()).toBe(0);
+  await noSideScroll(P);
+  await P.locator(".h-top").scrollIntoViewIfNeeded();
+  await shot(P, "thr07-student-cards-360");
+  await P.setViewportSize({ width: 320, height: 700 });
+  await noSideScroll(P);
+  await shot(P, "thr08-student-cards-320");
+  await P.context().close();
   expect(problems.slice(before)).toEqual([]);
 });
 

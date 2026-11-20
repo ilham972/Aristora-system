@@ -779,6 +779,12 @@ async function sendIt(
       await ring(sKey(x.sid), `🎧 ${me.n} ஆசிரியர் (Q${r.hq}): ${au && !t ? "🎤 குரல் விளக்கம்" : said}`);
     }
   }
+  // His words in an explanation's thread (16 Nov 2026): his answer to her, so his row waits on a teacher again (`sw`:
+  // the thread list's Follow-up, 💬).
+  if (r.k === "h" && me.k === "s") {
+    const his = a.asks?.find((x) => x.sid === me.s._id && x.st === "open");
+    if (his) await ctx.db.patch(his._id, { sw: now });
+  }
   // His question in a thread the AI explained (14 Nov 2026): the AI answers it there (convex/ai.ts `heard`).
   if (r.k === "h" && me.k === "s" && t) await heard(ctx, me.s._id, r, t);
   if (re?.sid) await ring(sKey(re.sid), `↩️ ${me.n} (${r.name ?? "chat"}): ${said}`);
