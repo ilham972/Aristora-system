@@ -51,6 +51,7 @@ import {
   writerOf,
 } from "./lib/chat";
 import { asksIn, HELP_KEEP_MS, isLate, unanswered, VOICE_BYTES, VOICE_MAX_S, VOICE_STUDENT_DAY, VOICE_STUDENT_S } from "./lib/help";
+import { PART_MAX } from "./lib/helpParts";
 import { helpHeadOf, type HelpHead } from "./lib/helpView";
 import { alertStudent } from "./lib/push";
 import { RACE_GRADES } from "./lib/race";
@@ -118,6 +119,8 @@ export type ChatMsg = {
   ask?: true;
   /** His photos are hidden from this phone (a teacher hid them from the thread's other students). */
   hid?: true;
+  /** An explanation's thread (21 Nov 2026): the printed sub-question it is about ("ii"), shown under it. */
+  pt?: string;
 };
 
 export type ChatHead = {
@@ -491,6 +494,7 @@ async function msgOf(ctx: QueryCtx, c: Doc<"usChat">, me: Me, tp: ReturnType<typ
       ...(c.ak ? { ask: true as const } : {}),
       ...(c.re ? { re: c.re } : {}),
       ...(c.rx ? { rx: c.rx } : {}),
+      ...(c.pt ? { pt: c.pt } : {}),
     };
   }
   const w = writerOf(c);
@@ -517,12 +521,14 @@ async function msgOf(ctx: QueryCtx, c: Doc<"usChat">, me: Me, tp: ReturnType<typ
     ...(c.t ? { t: c.t } : {}),
     ...(pics ? { ph: pics } : {}),
     ...(c.re ? { re: c.re } : {}),
-    ...(c.mt?.length ? { mt: c.mt.map((x) => ({ id: x.s as string, n: x.n })) } : {}),
+    // Whom it is for: a student whose name a teacher hid from the others stays hidden here too (21 Nov 2026: tags).
+    ...(c.mt?.length ? { mt: c.mt.map((x) => (mask?.get(x.s)?.n ? { id: `x:${x.s.slice(-4)}`, n: "மாணவர்" } : { id: x.s as string, n: x.n })) } : {}),
     ...(c.rx ? { rx: c.rx } : {}),
     ...(my ? { my } : {}),
     ...(me.k === "u" && c.rpBy?.length ? { rp: c.rpBy.length } : {}),
     ...(c.au && voice ? { au: { u: voice, d: c.au.d } } : {}),
     ...(c.ak ? { ask: true as const } : {}),
+    ...(c.pt ? { pt: c.pt } : {}),
   };
 }
 
@@ -670,6 +676,19 @@ async function writtenToday(ctx: QueryCtx, sid: Id<"students">, now: number): Pr
 /** The students a message tags: members of this room he can see, each once, never himself. */
 async function tagsIn(ctx: QueryCtx, me: Me, a: Access, ids: string[] | undefined): Promise<{ s: Id<"students">; n: string }[]> {
   if (!ids?.length || !a.r) return [];
+  // An explanation's thread (21 Nov 2026): a teacher says whom her words are for (the students of this thread); a
+  // student's own words are for the teachers (a tag from an older copy of the app is dropped).
+  if (a.r.k === "h") {
+    if (me.k === "s") return [];
+    const out: { s: Id<"students">; n: string }[] = [];
+    for (const raw of new Set(ids)) {
+      const x = (a.asks ?? []).find((y) => y.sid === raw);
+      if (!x) fail("Pick students of this thread.");
+      const p = await studentPerson(ctx, x.sid);
+      out.push({ s: x.sid, n: p?.n ?? "?" });
+    }
+    return out;
+  }
   if (ids.length > MENTIONS_MAX) fail(me.k === "s" ? `ஒரே நேரத்தில் ${MENTIONS_MAX} பேரை மட்டும் tag செய்.` : `Tag at most ${MENTIONS_MAX} students.`);
   const out: { s: Id<"students">; n: string }[] = [];
   for (const raw of new Set(ids)) {
@@ -692,6 +711,8 @@ const sendArgs = {
   mt: v.optional(v.array(v.string())),
   /** A voice note (a teacher, in an explanation's thread): its uploaded file and its seconds. */
   au: v.optional(v.object({ f: v.id("_storage"), d: v.number() })),
+  /** An explanation's thread: the printed sub-question it is about ("ii", 21 Nov 2026). */
+  pt: v.optional(v.string()),
 };
 
 /**
@@ -729,7 +750,7 @@ async function takeVoice(ctx: MutationCtx, me: Me, r: Doc<"usRooms">, au: { f: I
 async function sendIt(
   ctx: MutationCtx,
   me: Me,
-  args: { id: string; text?: string; ph?: Photos; re?: string; mt?: string[]; au?: { f: Id<"_storage">; d: number } },
+  args: { id: string; text?: string; ph?: Photos; re?: string; mt?: string[]; au?: { f: Id<"_storage">; d: number }; pt?: string },
 ): Promise<{ id: string; rid: string; at: number }> {
   const a = await access(ctx, me, args.id);
   if (!a.write) fail(a.why ?? "You can't write here.");
@@ -753,6 +774,10 @@ async function sendIt(
     if (!re || re.rid !== r._id || hidden(re, me)) fail(student ? "அந்த message இப்போது இல்லை." : "That message isn't here any more.");
   }
   const mt = await tagsIn(ctx, me, acc, args.mt);
+  // The sub-question it is about: only in an explanation's thread, a label of a few letters (an unknown one shows under
+  // the whole question).
+  const pt = r.k === "h" ? (args.pt ?? "").trim() : "";
+  if (pt.length > PART_MAX || /[\n\r]/.test(pt)) fail(student ? "அந்தக் கேள்விப் பகுதி இல்லை." : "That sub-question isn't here.");
   const ph = await takePhotos(ctx, args.ph, CHAT_PHOTOS);
   const au = args.au ? await takeVoice(ctx, me, r, args.au, now) : undefined;
   const id = await ctx.db.insert("usChat", {
@@ -767,6 +792,7 @@ async function sendIt(
     ...(mt.length ? { mt } : {}),
     ...(au ? { au } : {}),
     ...(r.k === "h" ? { kp: true } : {}),
+    ...(pt ? { pt } : {}),
     at: now,
     demo: me.demo,
   });
@@ -785,12 +811,14 @@ async function sendIt(
   };
   if (r.k === "d") await ring(otherOf(r, me.key), `💬 ${me.n}${me.k === "u" ? " ஆசிரியர்" : ""}: ${said}`);
   // An explanation's thread: a teacher's message rings every student still waiting in it, and counts as her answer
-  // (`tw`: it is no longer "nobody answered for 12 hours").
+  // (`tw`: it is no longer "nobody answered for 12 hours"). Tagged (21 Nov 2026: the students she picked under a
+  // sub-question): only them.
   if (r.k === "h" && me.k === "u") {
+    const forThem = mt.length ? new Set<string>(mt.map((x) => x.s)) : null;
     for (const x of a.asks ?? []) {
-      if (x.st !== "open") continue;
+      if (x.st !== "open" || (forThem && !forThem.has(x.sid))) continue;
       await ctx.db.patch(x._id, { tw: now });
-      await ring(sKey(x.sid), `🎧 ${me.n} ஆசிரியர் (Q${r.hq}): ${au && !t ? "🎤 குரல் விளக்கம்" : said}`);
+      await ring(sKey(x.sid), `🎧 ${me.n} ஆசிரியர் (Q${r.hq}${pt ? ` ${pt}` : ""}): ${au && !t ? "🎤 குரல் விளக்கம்" : said}`);
     }
   }
   // His words in an explanation's thread (16 Nov 2026): his answer to her, so his row waits on a teacher again (`sw`:
@@ -800,7 +828,7 @@ async function sendIt(
     if (his) await ctx.db.patch(his._id, { sw: now });
   }
   // His question in a thread the AI explained (14 Nov 2026): the AI answers it there (convex/ai.ts `heard`).
-  if (r.k === "h" && me.k === "s" && t) await heard(ctx, me.s._id, r, t);
+  if (r.k === "h" && me.k === "s" && t) await heard(ctx, me.s._id, r, t, pt || undefined);
   if (re?.sid) await ring(sKey(re.sid), `↩️ ${me.n} (${r.name ?? "chat"}): ${said}`);
   for (const x of mt) await ring(sKey(x.s), `@ ${me.n} (${r.name ?? "chat"}): ${said}`);
   // A teacher's message in a group rings every student in it (12 Nov 2026, the founder: "whatever the chat we put,

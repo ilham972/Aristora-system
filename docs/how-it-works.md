@@ -1019,8 +1019,15 @@ should it focus on", **🤖 Explain now**; a sheet first, so a stray tap costs n
 reads the question, the key, the last 24 messages (who said what; a voice note is "[voice note]", which it can't hear),
 the students' latest two photos in the thread and their grades, and writes into the thread as **ARISTORA AI**: a
 friendly line, an everyday picture, numbered steps (1️⃣ 2️⃣ …) each with its why, the answer 🎯, a check line; Tamil
-script only, ≤ 170 words (`teachSystem`, `teachPrompt`, `threadWords`); every student waiting is rung. For 3 days after,
-a student's text message in that thread is answered there by the AI (≤ 80 words; `heard` → `teachHeard`); a teacher's
+script only, ≤ 170 words (`teachSystem`, `teachPrompt`, `threadWords`); every student waiting is rung. **A question
+with sub-questions** (21 Nov 2026): the prompt says who got which one wrong ("(i) Hana; (ii) Mira": `teachJob`
+`wrong`, from `wrongOf`) and asks for one block per wrong sub-question, each starting on its own line with its label
+("[ii] …", ≤ 110 words a block); the blocks go each under its own sub-question for who got it wrong (`aiMessage` →
+`piecesOf` / `splitByPart` in `convex/lib/helpParts.ts`; words before the first label open the first block; no label:
+all of it under the first sub-question one of them got wrong), and each student is rung once with his first block
+("🤖 Q8 ii: …"). The thread's lines tell the AI which sub-question each was under ("Teacher Nila on (i): …"). For 3 days after,
+a student's text message in that thread is answered there by the AI (≤ 80 words; `heard` → `teachHeard`), under the
+sub-question he asked under ("Mira asks you now, about sub-question (ii): …"); a teacher's
 message never wakes it. 12 AI messages a thread a day (`AI_TEACH_ROOM_DAY`), inside the centre's 200; one at a time.
 Table `aiTeach` (one row per AI message there; gone after 3 days). Every AI explanation (here and the ⌂ lane's) now
 uses a few fitting emojis, light and never mocking.
@@ -2313,7 +2320,8 @@ learning app of our education institute"): one profile, his class times, what he
       shows as a ▶ button (students still can't send links).
     - **Voice notes** (`useVoiceRec` / `Voice` in `help.tsx`): 🎤 **in the write row, in the send button's place
       while the box is empty** (20 Nov 2026, his yes: "in the write row"; ➤ comes back when he types or picks a photo;
-      `WriteBar` `voice`) → the phone's own recorder, which takes the write row's place while it records (time, ✕, ■
+      `WriteBar` `voice`), and a teacher's 🎤 **under each sub-question** (21 Nov 2026: `start`, for the students she
+      picked there; below) → the phone's own recorder, which takes the write row's place while it records (time, ✕, ■
       Stop) and until it is sent (hear it, 🗑, Send) (MP4/AAC first, else WebM/Opus, mono 24 kbps). A teacher's up to **2 minutes**
       (`VOICE_MAX_S`). **Students too** (his ask the same day, "please give the voice note feature for students
       also"; my limits, since a thread is kept a year and classmates join it): **1 minute**, **5 a day in one
@@ -2355,7 +2363,7 @@ learning app of our education institute"): one profile, his class times, what he
       - **Inside a thread** (20 Nov 2026, the unslop pass): the violet header **stays on screen** (‹ Back one tap from
         anywhere in the chat; `.f-hero.us.c-head` sticky) with Q, Stage · Level and how many wait (or the teacher), her
         AI (a robot line icon, `h-aib`) and ⋮; no 🎧 tile. The card under it names the unit (Q, Stage and Level are not
-        written twice) with Hide / Question; each student's card is one compact chip (face, name, his state after its
+        written twice; Hide / Question went on 21 Nov 2026: the question holds the talk now); each student's card is one compact chip (face, name, his state after its
         dot, his marks); ‹ name's answers · n / N ›; her state line with ✓ Understood and ⋮; one line "Waiting on you"
         (the sentence on how it closes is gone: the ✓ Understood toast says it). Messages sit on hairlines, hers in flat
         violet, a teacher's on the soft violet; 😊 and the 📷 tag are line icons.
@@ -2369,6 +2377,35 @@ learning app of our education institute"): one profile, his class times, what he
         top-right corner opens it **full screen** (`ReadFull` in `talk.tsx`, through `showSheet`): the same navy, 19 px
         letters, the page behind it still; ✕, Close / மூடு at the end and the phone's Back close it, back in the
         thread. A tap on the card still shows 😊 ↩ (the ⤢ never does).
+      - **The talk under each sub-question; no long chat** (21 Nov 2026, his voice note with two screenshots: "student
+        read this after few hours or few days ... why we can't explain below the wrong question? ... why we can't put the
+        mic button below the wrong sub-question? And why we can't select the student before put the explanation? ...
+        select the both students ... the voice note going to be below the wrong answer, below the question ...
+        everything structured way"; his yeses: the talk inside the sub-question on the same page, ✓ I understood stays
+        one for the whole question, the long chat goes, a student sees only his own wrong ones). Every message of a
+        thread may belong to one printed sub-question (`usChat.pt`, its label "ii"; `chat.send` `pt`) and say whom it is
+        for (`usChat.mt`, a teacher's picks: only students of this thread, a student's tags are dropped; `tagsIn`).
+        The page (`useParts` in `talk.tsx`, wired in `RoomScreen`; `Printed` puts each part's talk after its last key
+        part's answer, in its slot, `.h-tks`):
+        - **Under each sub-question someone didn't get right** (`wrongIn` = the server's `wrongOf`: a typed part wrong
+          or blank, a teacher's part below its marks or not marked yet; not known = every one), a talk (`.h-talk`):
+          a teacher's row = the faces of who got it wrong and still waits (`.h-tk-p`, all picked first; a tap unpicks)
+          with **🎤** (records at once, for the ones picked) and **✍** (the write bar writes there) on its right;
+          then its messages, the newest 3 ("N earlier" opens the rest). A sub-question they all got right has none.
+        - **The write bar says where the words go** (`.h-to` above it: "To (ii) · Hana, Mira", ✕ = back to the whole
+          question for everyone; "pick who it's for" and a refusal when nobody is picked). Her words and voice notes
+          go there with `pt` and, when not everyone is picked, `mt`: only they are rung and only theirs count as
+          answered (`tw`: Pending → Follow-up); the others still wait on her. A reply goes under the message it
+          answers.
+        - **The whole question** (`aria-label` "Whole question" / முழுக் கேள்வி, after the question): messages with no
+          sub-question (his photo that came with it, everything from before 21 Nov 2026, a teacher's words with no
+          sub-question picked: "Write to everyone…"). A question of one part: one talk under it; of none: one talk
+          under the question, with the faces.
+        - **A student sees the talk only under the sub-questions he got wrong** (and the whole question's), with the
+          classmates who got it wrong too (faces, when more than him); his words and voice notes go under his first
+          wrong one ("(ii) பற்றி" above the bar), or under the one whose **✍ கேள்** he tapped (two or more wrong). The
+          AI answers him there (above: her 🤖). The thread opens at his first wrong one.
+        - The page never jumps to the end any more: a message sent scrolls its own talk into view.
       A closed thread is kept a year and the next student with the same wrong question joins it (it opens again): no
       new thread.
       - **His Claude chat answers them** (20 Nov 2026): the threads link (Settings → Community; "The threads link"
@@ -2684,7 +2721,10 @@ learning app of our education institute"): one profile, his class times, what he
   - `tell` "reply" (`id`, `text` ≤ 1,500 letters, three or more line breaks squeezed to one blank line; `seen` = the
     thread's message count when read; `done`): a message into the thread under **ARISTORA AI** from the owner's account
     (as her 🤖's: the bubble is a teacher's, the AI's name), every student still waiting rung ("🤖 Q8: …" and its first
-    60 letters). **It counts as the owner's answer** (`tw` on every open row: Pending → Follow-up, his red counts and the
+    60 letters). **Under its sub-questions** (21 Nov 2026): "[i] … [ii] …" in the text = each block under its own
+    sub-question, for who got it wrong (as her 🤖's); `pt` = all of it under one ("Q8 has no sub-question (v): (i)
+    (ii)" when it has none such). A student none of its blocks is for isn't answered (`notFor`: he still waits). The
+    "thread" read says each message's sub-question and whom it was for (`pt`, `to`). **It counts as the owner's answer** (`tw` on every open row: Pending → Follow-up, his red counts and the
     12 hours stop), which the AI by itself never does. `done` = his **✓ Understood** with it: a student who tapped ✓ I
     understood is closed (explained, by the owner's name, as `tdone`), the rest get the teacher's ✓ (`tu`), so their
     own ✓ tap closes it at once. Refused, nothing written: someone wrote since `seen` ("read it again": nobody is

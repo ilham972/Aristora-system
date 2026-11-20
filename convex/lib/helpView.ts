@@ -88,7 +88,7 @@ export type HelpHead = {
 };
 
 /** A student's answer to one question, part by part, from his last Check of that level at home (null: none kept). */
-async function partsOf(
+export async function partsOf(
   ctx: QueryCtx,
   sid: Id<"students">,
   unitId: Id<"units">,

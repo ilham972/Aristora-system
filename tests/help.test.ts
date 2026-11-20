@@ -14,7 +14,9 @@ import { secretHash } from "../convex/lib/auth";
 import { wipeStudent } from "../convex/lib/backend";
 import { outOf } from "../convex/lib/book";
 import { askable, HELP_LATE_MS, helpKey, isLate, VOICE_BYTES } from "../convex/lib/help";
+import { basesOf, labelIn, splitByPart } from "../convex/lib/helpParts";
 import type { KeyAnswer } from "../convex/lib/key";
+import { linkReply } from "../convex/linkThreads";
 import schema from "../convex/schema";
 import { readWorkbookHtml } from "../src/workbookFile";
 import { addPerson, asOwner, asPhone } from "./helpers";
@@ -55,6 +57,20 @@ describe("the rules", () => {
     expect(isLate({ ...a, tw: 500 }, 1001 + HELP_LATE_MS)).toBe(true); // before it came to her
     expect(isLate({ ...a, st: "done" }, 1001 + HELP_LATE_MS)).toBe(false);
     expect(helpKey("u1", 8, false)).not.toBe(helpKey("u1", 8, true));
+  });
+});
+
+describe("a thread's sub-questions (convex/lib/helpParts.ts)", () => {
+  test("the printed ones once (a part cut in two for the phone is its printed one); a label however written; the AI's blocks", () => {
+    expect(basesOf({ q: 3, max: 3, parts: [{ p: "i", m: 1 }, { p: "ii · பெயர்", m: 1 }, { p: "ii", m: 1 }] } as never)).toEqual(["i", "ii"]);
+    expect(basesOf(undefined)).toEqual([]);
+    expect([labelIn("(II)", ["i", "ii"]), labelIn(" ii. ", ["i", "ii"]), labelIn("iii", ["i", "ii"]), labelIn("", ["i"])]).toEqual(["ii", "ii", null, null]);
+    // A hello opens the first block; a label written twice joins; an unknown label stays in the words.
+    expect(splitByPart("வணக்கம் 😊\n[i] 24\n[ii] 48 [i] here\n [x] y\n[I] again", ["i", "ii"])).toEqual([
+      { pt: "i", t: "வணக்கம் 😊\n\n24\n\nagain" },
+      { pt: "ii", t: "48 [i] here\n [x] y" },
+    ]);
+    expect(splitByPart("no labels", ["i", "ii"])).toEqual([{ pt: null, t: "no labels" }]);
   });
 });
 
@@ -495,6 +511,84 @@ describe("online explanations", () => {
       // A teacher's message never wakes it.
       await tn().mutation(api.chat.tsend, { id, text: "சரி" });
       expect(await teachRows()).toHaveLength(2);
+    } finally {
+      vi.unstubAllGlobals();
+      delete g.process.env.ANTHROPIC_API_KEY;
+    }
+  });
+
+  test("the talk under each sub-question (21 Nov 2026): her words for the students she picks, the AI one block per wrong one, his question under his", async () => {
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout"] });
+    vi.setSystemTime(new Date("2026-11-15T19:00:00+05:30"));
+    const sent: Record<string, unknown>[] = [];
+    let reply = "";
+    vi.stubGlobal("fetch", async (_url: string, init: { body: string }) => {
+      sent.push(JSON.parse(init.body) as Record<string, unknown>);
+      return new Response(JSON.stringify({ stop_reason: "end_turn", content: [{ type: "text", text: reply }] }), { status: 200 });
+    });
+    const g = globalThis as { process?: { env?: Record<string, string | undefined> } };
+    g.process ??= {};
+    g.process.env ??= {};
+    g.process.env.ANTHROPIC_API_KEY = "test-key-not-real";
+    const teachRows = async () => await raw.run(async (ctx) => await ctx.db.query("aiTeach").collect());
+    try {
+      // Mira's latest Check: (i) right, (ii) wrong; Hana's: (i) wrong, (ii) right.
+      await raw.run(async (ctx) => {
+        const row = (await ctx.db.query("familyAnswers").withIndex("by_level", (x) => x.eq("studentId", mira).eq("unitId", u01).eq("n", 1)).first())!;
+        await ctx.db.patch(row._id, { qs: row.qs.map((x) => (x.q === 8 ? { ...x, a: ["24", "47"], ok: [[true], [false]] } : x)) });
+      });
+      const id = await send(h(), 8, nila);
+      await send(m(), 8);
+      const asks = (await tn().query(api.chat.troom, { id })).head.help!.asks;
+      expect(asks.map((a) => [a.n, a.parts!.map((p) => p.ok)])).toEqual([["Hana K", [false, true]], ["Mira J", [true, false]]]);
+      const sidOf = (n: string) => asks.find((a) => a.n === n)!.sid!;
+      // Her voice under (i) for Hana only: only Hana is answered (and rung); Mira still waits on a teacher.
+      await tn().mutation(api.chat.tsend, { id, text: "(i) 6 × 4.", pt: "i", mt: [sidOf("Hana K")] });
+      expect((await askRow(hana, 8)).tw).toBeDefined();
+      expect((await askRow(mira, 8)).tw).toBeUndefined();
+      const last = async () => (await tn().query(api.chat.troom, { id })).msgs.at(-1)!;
+      expect(await last()).toMatchObject({ t: "(i) 6 × 4.", pt: "i", mt: [{ n: "Hana K" }] });
+      // Only students of this thread; a student's tags are dropped; a label of a few letters.
+      await expect(tn().mutation(api.chat.tsend, { id, text: "x", pt: "i", mt: [hana, "jd7aaaaaaaaaaaaaaaaaaaaaaaaaaaaa"] })).rejects.toThrow(/students of this thread/);
+      await expect(tn().mutation(api.chat.tsend, { id, text: "x", pt: "a very long label" })).rejects.toThrow(/sub-question/);
+      await m().mutation(api.chat.send, { id, text: "புரியவில்லை", pt: "ii", mt: [hana] });
+      expect(await last()).toMatchObject({ t: "புரியவில்லை", pt: "ii" });
+      expect((await last()).mt).toBeUndefined();
+      // Her 🤖: the AI is told who got which wrong and writes one block each; each block goes under its sub-question,
+      // for who got it wrong.
+      await tn().mutation(api.ai.explain, { id });
+      reply = "வணக்கம் 😊\n[i] 6 × 4 = 24 🎯\n[ii] 6 × 8 = 48 🍕";
+      await raw.action(internal.ai.teach, { id: (await teachRows())[0]._id });
+      const prompt = (sent[0] as { messages: { content: { type: string; text?: string }[] }[] }).messages[0].content.find((c) => c.type === "text")!.text!;
+      expect(prompt).toContain("The question has 2 sub-questions: (i) (ii). Who got which wrong: (i) Hana; (ii) Mira.");
+      expect(prompt).toMatch(/its label in square brackets, like \[i\]/);
+      expect(prompt).toMatch(/Teacher Nila on \(i\): \(i\) 6 × 4\.\nStudent Mira on \(ii\): புரியவில்லை/);
+      const ai = async () => (await m().query(api.chat.room, { id })).msgs.filter((x) => x.n === "ARISTORA AI").map((x) => [x.pt, x.t, x.mt?.map((y) => y.n)]);
+      expect(await ai()).toEqual([
+        ["i", "வணக்கம் 😊\n\n6 × 4 = 24 🎯", ["Hana K"]],
+        ["ii", "6 × 8 = 48 🍕", ["Mira J"]],
+      ]);
+      // Mira asks under (ii): the AI knows which, and answers her there.
+      vi.setSystemTime(Date.now() + 60_000);
+      await m().mutation(api.chat.send, { id, text: "ஏன் 48?", pt: "ii" });
+      const asked = (await teachRows()).find((t) => t.ask)!;
+      expect(asked).toMatchObject({ pt: "ii", sid: mira });
+      reply = "ஏனென்றால் 8 ஆறுகள் 🍕";
+      await raw.action(internal.ai.teach, { id: asked._id });
+      expect(String((sent[1] as { messages: { content: { text?: string }[] }[] }).messages[0].content.at(-1)!.text)).toMatch(/Mira asks you now, about sub-question \(ii\): ஏன் 48\?\nAnswer him\.$/);
+      expect((await ai()).at(-1)).toEqual(["ii", "ஏனென்றால் 8 ஆறுகள் 🍕", ["Mira J"]]);
+      // The threads link: a reply for (ii) only reaches who got (ii) wrong; an unknown sub-question is refused.
+      const owner = await raw.run(async (ctx) => (await ctx.db.query("users").collect()).find((u) => u.role === "owner")!._id);
+      for (const sid of [hana, mira]) {
+        const row = await askRow(sid, 8);
+        await raw.run(async (ctx) => await ctx.db.patch(row._id, { tw: undefined }));
+      }
+      expect(await raw.run(async (ctx) => await linkReply(ctx, owner, { id, text: "x", pt: "v" }, Date.now()))).toMatchObject({ ok: false, error: expect.stringMatching(/no sub-question \(v\): \(i\) \(ii\)/) });
+      vi.setSystemTime(Date.now() + 60_000);
+      expect(await raw.run(async (ctx) => await linkReply(ctx, owner, { id, text: "[ii] 8 ஆறுகள் = 48 ✅" }, Date.now()))).toMatchObject({ ok: true, waiting: 1, notFor: 1 });
+      expect((await ai()).at(-1)).toEqual(["ii", "8 ஆறுகள் = 48 ✅", ["Mira J"]]);
+      expect((await askRow(mira, 8)).tw).toBeDefined();
+      expect((await askRow(hana, 8)).tw).toBeUndefined();
     } finally {
       vi.unstubAllGlobals();
       delete g.process.env.ANTHROPIC_API_KEY;

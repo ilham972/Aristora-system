@@ -11,6 +11,7 @@
 
 import type { ComponentChildren } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
+import type { HelpAsk } from "../../convex/lib/helpView";
 import type { UsPic } from "../../convex/lib/us";
 import { CropSheet } from "./crop";
 import { NetError, uploadPhoto } from "./net";
@@ -647,6 +648,8 @@ export function WriteBar(props: {
    * write the next ones; refused, or no signal: his words come back into the box. Never with photos (they upload first).
    */
   fast?: boolean;
+  /** Above the row: where the words go (an explanation's thread: "To (ii) · Hana"). */
+  top?: ComponentChildren;
 }) {
   const [t, setT] = useState("");
   const [busy, setBusy] = useState(false);
@@ -788,6 +791,7 @@ export function WriteBar(props: {
         </div>
       )}
       {pk.list.length > 0 && <div class="f-tb-ph">{pk.thumbs}</div>}
+      {props.top}
       {props.voice?.strip ?? (
         <div class="f-tb-row">
           <button
@@ -848,4 +852,204 @@ export function WriteBar(props: {
       {pk.picker}
     </div>
   );
+}
+
+// ---------------------------------------------------------------- an explanation's sub-questions
+
+/** A printed sub-question's own label: a key part cut in two for the phone ("ii · பெயர்") is its printed "ii". */
+export const baseOf = (p: string): string => p.split(" · ")[0].trim();
+const norm = (s: string) => s.toLowerCase().replace(/[()[\]\s.:]/g, "");
+/** Where a part's talk is on the page (a tap on 🎤 ✍ or a send scrolls there). */
+const idOf = (b: string) => `h-tk-${norm(b) || "all"}`;
+
+/**
+ * The printed sub-questions he didn't get right: a typed part wrong or blank, a teacher's part below its marks or not
+ * marked yet (convex/lib/helpParts.ts wrongOf, the same rule). null: not known, every one is his.
+ */
+export function wrongIn(a: HelpAsk): string[] | null {
+  if (!a.parts?.length) return null;
+  const full = a.photo?.st === "done" && a.photo.got !== undefined && a.photo.got >= a.photo.max;
+  const out: string[] = [];
+  for (const x of a.parts) {
+    const right = x.ok === true || (x.got !== undefined && x.m !== undefined ? x.got >= x.m : x.ok === null && full);
+    if (!right && !out.includes(baseOf(x.p))) out.push(baseOf(x.p));
+  }
+  return out.length ? out : null;
+}
+
+/** A thread's message, as far as its place goes. */
+type Line = { id: string; pt?: string };
+/** The newest messages a part shows (the rest: one tap). */
+const PART_SHOW = 3;
+
+/**
+ * An explanation's thread, its talk under each sub-question (21 Nov 2026, his voice note: "why we can't put the mic
+ * button below the wrong sub-question? And why we can't select the student before put the explanation? ... the voice
+ * note going to be below the wrong answer, below the question ... everything structured way"; his yeses: the talk
+ * inside the sub-question on the same page, a student sees only his own wrong ones).
+ * - Each message goes under its sub-question (`pt`); none, or one this question doesn't have: under the whole question.
+ *   A question of one part: one talk, under it; of none: one talk under the question.
+ * - Under each: who didn't get it right and still waits (a teacher's chips: whom her words are for, all of them
+ *   first), its newest messages (the rest one tap away), her 🎤 and ✍ for them right there. A student sees his own
+ *   wrong ones' talk (and the whole question's), and asks under one of them (his first wrong one unless he picks).
+ * - The write bar says where the words go ("To (ii) · Hana, Mira"; ✕: the whole question, everyone).
+ */
+export function useParts<M extends Line>(p: { staff: boolean; asks: HelpAsk[]; msgs: M[]; bubble: (m: M, prev?: M) => ComponentChildren; voice: () => void }) {
+  const [labels, setLabels] = useState<string[] | null>(null);
+  // Where her words go: a sub-question, or "" the whole question. A student's: his pick of his wrong ones.
+  const [target, setTarget] = useState("");
+  const [picks, setPicks] = useState<Record<string, string[]>>({});
+  const [all, setAll] = useState<string[]>([]);
+  const [went, setWent] = useState(false);
+  const bases: string[] = [];
+  for (const l of labels ?? []) {
+    const b = baseOf(l);
+    if (b && !bases.includes(b)) bases.push(b);
+  }
+  const many = bases.length > 1;
+  const partOf = (m: M) => (bases.length === 1 ? bases[0] : (bases.find((b) => norm(b) === norm(m.pt ?? "")) ?? ""));
+  const wrong = new Map(p.asks.map((a) => [a.id, wrongIn(a)]));
+  const hasIt = (a: HelpAsk, b: string) => !b || !wrong.get(a.id) || wrong.get(a.id)!.includes(b);
+  const mine = p.asks.find((a) => a.mine);
+  const his = mine ? bases.filter((b) => hasIt(mine, b)) : bases;
+  // Whom a talk is for: who didn't get it right and still waits.
+  const who = (b: string) => p.asks.filter((a) => a.st === "open" && a.sid && hasIt(a, b));
+  const picked = (b: string) => {
+    const ids = who(b).map((a) => a.sid!);
+    return picks[b]?.filter((x) => ids.includes(x)) ?? ids;
+  };
+  const chips = (b: string) => !!b || !bases.length;
+  const at = p.staff ? target : his.includes(target) ? target : (his[0] ?? "");
+  const pt = at || (bases.length === 1 ? bases[0] : "");
+  const go = (b: string) =>
+    window.setTimeout(() => {
+      const el = document.getElementById(idOf(b));
+      (el?.querySelector("li:last-child") ?? el)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }, 80);
+  // A student lands on his first wrong sub-question (a long question: it is below the fold).
+  useEffect(() => {
+    if (went || !labels || p.staff || !his.length) return;
+    setWent(true);
+    go(his[0]);
+  }, [labels]);
+  const write = (b: string) => {
+    buzz();
+    setTarget(b);
+    document.querySelector<HTMLTextAreaElement>(".c-room .f-tb-in")?.focus();
+  };
+  const block = (b: string) => {
+    const list = p.msgs.filter((m) => partOf(m) === b);
+    if (!p.staff && b && !his.includes(b)) return null;
+    const ws = chips(b) ? who(b) : [];
+    const on = picked(b);
+    const title = !b && many;
+    const faces = p.staff ? ws.length > 0 : ws.length > 1;
+    // A student asks under one of his wrong ones (two or more: else his words go there by themselves).
+    const ask = !p.staff && !!b && his.length > 1;
+    // Nothing said under it and nobody waits on it (a sub-question they all got right): nothing under it.
+    if (!list.length && !(p.staff ? ws.length : faces || ask)) return null;
+    const show = all.includes(b) ? list : list.slice(-PART_SHOW);
+    const toggle = (id: string) => {
+      buzz();
+      setPicks({ ...picks, [b]: on.includes(id) ? on.filter((x) => x !== id) : [...on, id] });
+    };
+    return (
+      <section id={idOf(b)} class={`h-talk${b === at && (p.staff ? ws.length > 0 : many) ? " here" : ""}`} aria-label={b ? `(${b})` : p.staff ? "Whole question" : "முழுக் கேள்வி"}>
+        {(title || faces || ask || p.staff) && (
+          <div class="h-tk-h">
+            {title && <b class="h-tk-t">{p.staff ? "Whole question" : "முழுக் கேள்வி"}</b>}
+            {faces && (
+              <ul class="h-tk-who" aria-label={p.staff ? "Who it is for" : "இதில் தவறியவர்கள்"}>
+                {ws.map((a) => {
+                  const face = (
+                    <>
+                      <Avatar name={a.n} size="s" pic={picOf(a.pic)} />
+                      <span>{a.mine ? "நீ" : a.n.split(" ")[0]}</span>
+                    </>
+                  );
+                  return (
+                    <li key={a.id}>
+                      {p.staff ? (
+                        <button type="button" class={`h-tk-p${on.includes(a.sid!) ? " on" : ""}`} aria-pressed={on.includes(a.sid!)} onClick={() => toggle(a.sid!)}>
+                          {face}
+                        </button>
+                      ) : (
+                        <span class="h-tk-p">{face}</span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            <span class="f-sp" />
+            {p.staff ? (
+              <>
+                {ws.length > 0 && (
+                  <button type="button" class="h-tk-i" aria-label="Voice note" disabled={!on.length} onClick={() => (setTarget(b), p.voice())}>
+                    <Icon name="mic" size={19} />
+                  </button>
+                )}
+                <button type="button" class={`h-tk-i${b === at ? " on" : ""}`} aria-label={b || ws.length ? "Write" : "Write to everyone"} aria-pressed={b === at} disabled={ws.length > 0 && !on.length} onClick={() => write(b)}>
+                  <Icon name="pen" size={17} />
+                </button>
+              </>
+            ) : (
+              ask && (
+                <button type="button" class={`h-tk-ask${b === at ? " on" : ""}`} aria-pressed={b === at} onClick={() => write(b)}>
+                  <Icon name="pen" size={14} /> கேள்
+                </button>
+              )
+            )}
+          </div>
+        )}
+        {list.length > show.length && (
+          <button type="button" class="h-tk-more" onClick={() => setAll([...all, b])}>
+            {p.staff ? `${list.length - show.length} earlier` : `முந்தைய ${list.length - show.length}`}
+          </button>
+        )}
+        {show.length > 0 && <ol class="f-msgs c-msgs h-tk-m">{show.map((m, i) => p.bubble(m, show[i - 1]))}</ol>}
+      </section>
+    );
+  };
+  const names = (b: string) =>
+    picked(b)
+      .map((id) => p.asks.find((a) => a.sid === id)?.n.split(" ")[0])
+      .join(", ");
+  const everyone = !chips(at) || picked(at).length === who(at).length;
+  return {
+    ready: labels !== null,
+    onParts: (l: string[]) => setLabels((x) => (x && x.join("\n") === l.join("\n") ? x : l)),
+    /** The talk under a sub-question (its last key part's slot). */
+    talk: (b: string) => (bases.length ? block(b) : null),
+    /** The whole question's talk, under the question. */
+    after: labels === null || bases.length === 1 ? null : block(""),
+    /** Where the words go, above the write row. */
+    top: p.staff
+      ? (at || !everyone) && (
+          <p class="h-to">
+            <b>{at ? `To (${at})` : "To"}</b>
+            <span>{picked(at).length ? names(at) : "pick who it's for"}</span>
+            {at && (
+              <button type="button" aria-label="To the whole question" onClick={() => setTarget("")}>
+                <Icon name="close" size={14} />
+              </button>
+            )}
+          </p>
+        )
+      : many &&
+        at && (
+          <p class="h-to">
+            <b>({at}) பற்றி</b>
+          </p>
+        ),
+    hint: p.staff && many && !at ? "Write to everyone…" : undefined,
+    /** What a message carries: its sub-question, and whom it is for (her picks, when not everyone). */
+    aim: (): { pt?: string; mt?: string[] } => {
+      if (p.staff && chips(at) && !picked(at).length) throw new Error(`Pick who it's for: tap their faces${at ? ` under (${at})` : ""}.`);
+      return { ...(pt ? { pt } : {}), ...(p.staff && !everyone ? { mt: picked(at) } : {}) };
+    },
+    go,
+    /** A reply goes under the message it answers (a student's: if it is one of his). */
+    follow: (m: M) => setTarget(partOf(m)),
+  };
 }

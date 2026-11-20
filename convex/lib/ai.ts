@@ -85,12 +85,12 @@ Plain text only: no markdown, no stars, no headings.`;
 }
 
 /** The thread's words for the model: who said what (teacher, student, AI), oldest first. */
-export function threadWords(lines: { who: "t" | "s" | "ai"; n: string; t?: string; voice?: boolean; photos?: number }[]): string {
+export function threadWords(lines: { who: "t" | "s" | "ai"; n: string; t?: string; voice?: boolean; photos?: number; pt?: string }[]): string {
   return lines
     .map((l) => {
       const said = [l.t?.trim(), l.voice ? "[voice note]" : "", l.photos ? `[${l.photos} photo${l.photos > 1 ? "s" : ""}]` : ""].filter(Boolean).join(" ");
       const who = l.who === "t" ? `Teacher ${l.n}` : l.who === "ai" ? "You (AI)" : `Student ${l.n}`;
-      return `${who}: ${said || "…"}`;
+      return `${who}${l.pt ? ` on (${l.pt})` : ""}: ${said || "…"}`;
     })
     .join("\n");
 }
@@ -105,17 +105,29 @@ export function teachPrompt(p: {
   thread: string;
   photos: number;
   note?: string | null;
-  ask?: { n: string; t: string } | null;
+  ask?: { n: string; t: string; pt?: string } | null;
+  /** The printed sub-questions (2 or more: the AI writes one block per wrong one, "[ii] …"). */
+  bases?: string[];
+  /** Who waiting got which sub-question wrong, in the question's order (only the wrong ones). */
+  wrong?: { pt: string; who: string[] }[];
 }): string {
   const g = [...new Set(p.grades)].sort((a, b) => a - b);
+  const many = (p.bases?.length ?? 0) > 1;
+  const first = p.wrong?.[0]?.pt ?? p.bases?.[0] ?? "ii";
   return [
     `Question ${p.q}.${g.length ? ` The students are in Grade ${g.map((x) => (x > 11 ? "11 (O/L)" : x)).join(", ")}.` : ""}`,
     p.html ? `The question (HTML from the book):\n${questionText(p.html)}` : "The question's text isn't in the app.",
     `The answer key:\n${keyText(p.k)}`,
     `The thread so far:\n${p.thread || "(nothing yet)"}`,
     p.photos ? `Their latest ${p.photos > 1 ? `${p.photos} photos` : "photo"} from the thread are above.` : "",
+    many && !p.ask
+      ? [
+          `The question has ${p.bases!.length} sub-questions: ${p.bases!.map((b) => `(${b})`).join(" ")}.${p.wrong?.length ? ` Who got which wrong: ${p.wrong.map((w) => `(${w.pt}) ${w.who.join(", ")}`).join("; ")}.` : ""}`,
+          `They read your words under each sub-question on their phones, maybe days later. So write one block for each sub-question ${p.wrong?.length ? "someone got wrong" : "that needs it"}, in the question's order, each block starting on its own line with only its label in square brackets, like [${first}]. Never two sub-questions in one block; ${p.wrong?.length ? "leave out the ones nobody got wrong; " : ""}each block stands alone, at most 110 words.`,
+        ].join("\n")
+      : "",
     p.ask
-      ? `${p.ask.n} asks you now: ${p.ask.t}\nAnswer him.`
+      ? `${p.ask.n} asks you now${p.ask.pt && many ? `, about sub-question (${p.ask.pt})` : ""}: ${p.ask.t}\nAnswer him.`
       : `The teacher taps "AI explain" for ${p.waiting.length ? p.waiting.join(", ") : "the students"}.${p.note ? ` She asks you: ${p.note}` : ""}\nExplain the question.`,
   ]
     .filter(Boolean)

@@ -19,7 +19,7 @@ import { drawQuestion } from "../questionView";
 import { keep, mutation, NetError, query, sameOr, uploadPhoto } from "./net";
 import { picOf, usePics } from "./pics";
 import { buzz, sound } from "./sound";
-import { agoShort, sendPicked, usePicker } from "./talk";
+import { agoShort, baseOf, sendPicked, usePicker } from "./talk";
 import { Pics } from "./usPost";
 import { Avatar, Icon, Maths, problemWords, Sheet, showSheet, toast, Waiting } from "./ui";
 
@@ -248,7 +248,7 @@ function Answer(props: { label: string; part?: HelpPart; k?: string; staff: bool
  * Level). A book whose questions aren't in the app: the same answers as a plain list, part by part. `ask` = whose
  * answers (his own on his phone; the student the teacher picked).
  */
-function Printed(props: { id: string; staff: boolean; ask?: HelpAsk }) {
+function Printed(props: { id: string; staff: boolean; ask?: HelpAsk; talk?: (b: string) => ComponentChildren; onParts?: (labels: string[]) => void }) {
   const host = useRef<HTMLDivElement>(null);
   const [x, setX] = useState<Printed | null>(null);
   useEffect(() => {
@@ -264,11 +264,26 @@ function Printed(props: { id: string; staff: boolean; ask?: HelpAsk }) {
   useEffect(() => {
     if (host.current && x?.html) return drawQuestion(host.current, x.html, x.css ?? "", PAPER, labels);
   }, [x, sig]);
+  useEffect(() => {
+    if (x) props.onParts?.(labels);
+  }, [x, sig]);
   if (!x) return <Waiting />;
   const firstPhoto = parts?.findIndex((p) => p.ok === null) ?? -1;
   const solo = (parts?.filter((p) => p.ok === null).length ?? 0) === 1;
+  // Each sub-question's talk after its last key part (a part cut in two for the phone is one printed sub-question).
+  const last = new Map(labels.map((l, i) => [baseOf(l), i]));
   const rows = (slots: boolean) =>
-    labels.map((l, i) => <Answer key={i} label={l} part={parts?.[i]} k={x.kp?.[i]?.a} staff={props.staff} slot={slots ? `p${i}` : undefined} photo={props.ask?.photo} first={i === firstPhoto} solo={solo} />);
+    labels.flatMap((l, i) => {
+      const t = last.get(baseOf(l)) === i && props.talk?.(baseOf(l));
+      return [
+        <Answer key={i} label={l} part={parts?.[i]} k={x.kp?.[i]?.a} staff={props.staff} slot={slots ? `p${i}` : undefined} photo={props.ask?.photo} first={i === firstPhoto} solo={solo} />,
+        t && (
+          <div key={`t${i}`} class="h-tks" slot={slots ? `p${i}` : undefined}>
+            {t}
+          </div>
+        ),
+      ];
+    });
   return (
     <>
       {x.html ? (
@@ -321,10 +336,20 @@ const cardWords = (a: HelpAsk, staff: boolean) =>
  * student sees his classmates' cards too, and their answers (his yes: "answers only": never their marks; a name or
  * photo the teacher hid stays hidden).
  */
-export function HelpTop(props: { id: string; help: HelpHead; staff: boolean; onChange: () => void; onMate: (id: string) => void; onPhoto: () => void }) {
+export function HelpTop(props: {
+  id: string;
+  help: HelpHead;
+  staff: boolean;
+  onChange: () => void;
+  onMate: (id: string) => void;
+  onPhoto: () => void;
+  /** The talk under each sub-question (talk.tsx useParts), the whole question's under the question. */
+  talk?: (b: string) => ComponentChildren;
+  onParts?: (labels: string[]) => void;
+  after?: ComponentChildren;
+}) {
   const h = props.help;
   const staff = props.staff;
-  const [show, setShow] = useState(true);
   // The card shown: the one she tapped; else the row the list opened (pickAid) while he still waits (or nobody does);
   // else his own (a student), else the first still waiting.
   const [sel, setSel] = useState<string | null>(null);
@@ -357,14 +382,9 @@ export function HelpTop(props: { id: string; help: HelpHead; staff: boolean; onC
   const whose = (a: HelpAsk) => (staff ? `${a.n}'s answers` : a.mine ? "உன் விடைகள்" : `${a.n} இன் விடைகள்`);
   return (
     <section class="h-top" aria-label={`Q${h.q}`}>
-      {/* Q, Stage and Level are in the thread's header (20 Nov 2026, unslop: said once); here the unit and the question's switch. */}
-      <div class="h-top-h">
-        <p>{h.unit}</p>
-        <button type="button" class={`h-showq${show ? " on" : ""}`} aria-pressed={show} onClick={() => setShow(!show)}>
-          <Icon name="eye" size={16} />
-          {staff ? (show ? "Hide" : "Question") : show ? "மூடு" : "கேள்வி"}
-        </button>
-      </div>
+      {/* Q, Stage and Level are in the thread's header (20 Nov 2026, unslop: said once); here the unit. The question
+          always shows (21 Nov 2026: its talk is under its sub-questions; the Hide switch went). */}
+      <p class="h-top-h">{h.unit}</p>
       <ul class={`h-asks${rows.length > 1 ? "" : " one"}`} ref={strip} role="tablist" aria-label={staff ? "Students" : "மாணவர்கள்"}>
         {rows.map((a) => (
           <li key={a.id} class={`${STATE[a.st].cls} ${a.sg}${a.rp ? " rp" : ""}${a.st === "open" && a.su ? " und" : ""}${a.id === shown?.id ? " sel" : ""}`}>
@@ -429,7 +449,8 @@ export function HelpTop(props: { id: string; help: HelpHead; staff: boolean; onC
           </button>
         </div>
       )}
-      {show && <Printed id={props.id} staff={staff} ask={shown} />}
+      <Printed id={props.id} staff={staff} ask={shown} talk={props.talk} onParts={props.onParts} />
+      {props.after}
       {!staff && mine?.st === "open" && (
         <div class="h-wait">
           {mine.pw && !mine.ph && (
@@ -661,7 +682,7 @@ function voiceType(): string | undefined {
  * the write row") two pieces for the write bar (talk.tsx WriteBar `voice`): `mic`, in the send button's place while
  * the box is empty, and `strip`, the recorder that takes the write row's place while it records or waits to be sent.
  */
-export function useVoiceRec(props: { onSend: (au: { f: string; d: number }) => Promise<unknown>; max: number; staff: boolean }): { mic: ComponentChildren; strip: ComponentChildren | null } {
+export function useVoiceRec(props: { onSend: (au: { f: string; d: number }) => Promise<unknown>; max: number; staff: boolean }): { mic: ComponentChildren; strip: ComponentChildren | null; start: () => void } {
   const MAX = props.max;
   const say = (en: string, ta: string) => toast(props.staff ? en : ta, true);
   const [st, setSt] = useState<"idle" | "rec" | "ready" | "busy">("idle");
@@ -750,7 +771,9 @@ export function useVoiceRec(props: { onSend: (au: { f: string; d: number }) => P
       <Icon name="mic" size={22} />
     </button>
   );
-  if (st === "idle") return { mic, strip: null };
+  // 🎤 under a sub-question (21 Nov 2026) starts it too; a second tap while it records does nothing.
+  const go = () => void (st === "idle" && start());
+  if (st === "idle") return { mic, strip: null, start: go };
   const strip = (
     <div class={`h-rec ${st}`} role="group" aria-label="Voice note">
       {st === "rec" ? (
@@ -780,7 +803,7 @@ export function useVoiceRec(props: { onSend: (au: { f: string; d: number }) => P
       )}
     </div>
   );
-  return { mic, strip };
+  return { mic, strip, start: go };
 }
 
 /** A voice note in a message: play / pause, a bar, its length. One plays at a time. */

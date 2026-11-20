@@ -4673,42 +4673,63 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
   await noSideScroll(C);
   await shot(C, "help04b-teacher-card");
   await contains(U.locator(".h-wait"), "Waiting on you");
-  // Her voice note: Record (the fake microphone), the time, Stop, listen, Send.
-  await U.locator(".h-mic").click();
+  // The talk under each sub-question (21 Nov 2026, his voice note: "why we can't put the mic button below the wrong
+  // sub-question? And why we can't select the student before put the explanation?"): under (i), which Hana got wrong,
+  // her face (picked), 🎤 and ✍; nothing under (ii) (she got it right); her photo with the whole question.
+  const ti = U.locator('section.h-talk[aria-label="(i)"]');
+  await contains(ti.locator(".h-tk-p.on"), "Hana");
+  expect(await U.locator('section.h-talk[aria-label="(ii)"]').count()).toBe(0);
+  await visible(U.locator('section.h-talk[aria-label="Whole question"] .h-asktag'));
+  // Never the long chat at the end any more.
+  expect(await U.locator(".c-room > .c-msgs").count()).toBe(0);
+  // Her voice note: 🎤 under (i) records at once (the fake microphone); the write bar says where it goes.
+  await ti.getByRole("button", { name: "Voice note" }).click();
   await visible(U.locator(".h-rec.rec .h-dot"));
+  await contains(U.locator(".f-tb .h-to"), "To (i)");
+  await contains(U.locator(".f-tb .h-to"), "Hana");
   await C.waitForTimeout(1600);
   await U.locator(".h-rec").getByRole("button", { name: "Stop recording" }).click();
   await visible(U.locator(".h-rec.ready audio"));
   await shot(C, "help05-voice-ready");
   await U.locator(".h-rec").getByRole("button", { name: /^Send/ }).click();
-  await visible(U.locator(".f-msg.mine .h-voice"));
+  await visible(ti.locator(".f-msg.mine .h-voice"));
   const voice = await t.run(async (ctx) => (await ctx.db.query("usChat").collect()).find((c) => c.au));
   expect(voice!.au!.d).toBeGreaterThanOrEqual(1);
+  // Under (i); for everyone who got it wrong (all picked: no tags).
+  expect(voice).toMatchObject({ pt: "i" });
+  expect(voice!.mt).toBeUndefined();
   expect((await t.run(async (ctx) => await ctx.db.system.get(voice!.au!.f)))!.contentType).toMatch(/^audio\//);
+  // Her words go there too while the bar says so.
   await U.locator(".f-tb-in").pressSequentially("முதலில் 8 ஐ 3 ஆல் பெருக்கு.");
   await U.locator(".f-tb").getByRole("button", { name: "Send" }).click();
-  await contains(U.locator(".f-msg.mine").last(), "8 ஐ 3 ஆல்");
+  await contains(ti.locator(".f-msg.mine").last(), "8 ஐ 3 ஆல்");
+  expect(await t.run(async (ctx) => (await ctx.db.query("usChat").collect()).find((c) => c.t?.startsWith("முதலில்"))?.pt)).toBe("i");
   // A voice note alone explains nothing (his rule).
   expect((await mq(hana, 8))?.x).toBeUndefined();
   await noSideScroll(C);
+  await ti.scrollIntoViewIfNeeded();
   await shot(C, "help06-thread-teacher");
 
-  // Hana's open thread shows it in seconds; ▶ plays it.
-  await until(async () => (await P.locator(".f-msg:not(.mine) .h-voice").count()) === 1, "her voice note on Hana's phone", 20_000);
+  // Hana's open thread shows it in seconds under her (i); ▶ plays it.
+  const hi = P.locator('section.h-talk[aria-label="(i)"]');
+  await until(async () => (await hi.locator(".f-msg:not(.mine) .h-voice").count()) === 1, "her voice note on Hana's phone", 20_000);
   await P.locator(".h-voice .h-play").click();
   await until(async () => (await P.locator(".h-voice.on").count()) === 1 || (await P.locator(".h-voice small").innerText()) !== "0:00", "the voice note playing");
   expect(await P.locator(".h-bad").count()).toBe(0);
   await shot(P, "help07-voice-student");
 
-  // Hana answers with a voice note of her own (his ask, 12 Nov 2026: students too; 1 minute at most).
+  // Hana answers with a voice note of her own (his ask, 12 Nov 2026: students too; 1 minute at most): under her (i),
+  // the one she got wrong (the bar says so).
+  await contains(P.locator(".f-tb .h-to"), "(i) பற்றி");
   await P.locator(".h-mic").click();
   await visible(P.locator(".h-rec.rec .h-dot"));
   await contains(P.locator(".h-rec.rec small"), "1:00");
   await P.waitForTimeout(1300);
   await P.locator(".h-rec").getByRole("button", { name: "Stop recording" }).click();
   await P.locator(".h-rec").getByRole("button", { name: /^Send/ }).click();
-  await visible(P.locator(".f-msg.mine .h-voice"));
+  await visible(hi.locator(".f-msg.mine .h-voice"));
   await until(async () => (await t.run(async (ctx) => (await ctx.db.query("usChat").collect()).filter((c) => c.au).length)) === 2, "her voice note on the server");
+  expect((await t.run(async (ctx) => (await ctx.db.query("usChat").collect()).filter((c) => c.au)))[1].pt).toBe("i");
   await noSideScroll(P);
   await shot(P, "help07b-voice-from-student");
 
@@ -4731,11 +4752,12 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
     "3⃣ பெருக்கல் = மீண்டும் மீண்டும் கூட்டல்: 8 + 8 + 8 = 24.\n\n🎯 விடை: 24\n\n✅ சரிபார்: 24 ÷ 3 = 8. இப்போது (ii) ஐயும் முயற்சி செய்!";
   await t.mutation(internal.ai.say, { rid: voice!.rid, by: nilaId, sid: hana, text: AI_WORDS });
   const wide = async (who: L, page: Page) => {
-    const card = who.locator(".f-msg.ai .f-msg-card");
+    // Under (i) (21 Nov 2026: the sub-question Hana got wrong), as wide as its talk.
+    const card = who.locator('section.h-talk[aria-label="(i)"] .f-msg.ai .f-msg-card');
     await until(async () => (await card.count()) === 1, "the AI's card", 20_000);
     const box = (await card.boundingBox())!;
     const vw = page.viewportSize()!.width;
-    // The chat's width (the same margin on both sides), on her phone too where it was "hers" (pushed right, 44 px off).
+    // The same margin on both sides, on her phone too where it was "hers" (pushed right, 44 px off).
     expect(box.x).toBeLessThan(30);
     expect(Math.abs(vw - (box.x + box.width) - box.x)).toBeLessThan(3);
     expect(await card.evaluate((e) => getComputedStyle(e).backgroundColor)).toBe("rgb(22, 33, 62)");
@@ -5285,6 +5307,37 @@ test("The Thread page at scale: Pending · Follow-up · Understood · Closed, Mi
     await frameFlat();
     await shot(C, `thr05-cards-${w}`);
   }
+  // Whom her words are for (21 Nov 2026, his words: "why we can't select the student before put the explanation?"):
+  // a question of one part has one talk under it, the three faces all picked. A tap unpicks one (the bar says who is
+  // left), again picks him back; only Omar picked: her words answer only him (Hana and Mira still wait on her).
+  await C.setViewportSize({ width: 390, height: 840 });
+  const talk = U.locator("section.h-talk");
+  expect(await talk.count()).toBe(1);
+  expect(await talk.locator(".h-tk-p.on").count()).toBe(3);
+  expect(await U.locator(".f-tb .h-to").count()).toBe(0);
+  await talk.locator(".h-tk-p", { hasText: "Omar" }).click();
+  await contains(U.locator(".f-tb .h-to"), "Hana, Mira");
+  await talk.locator(".h-tk-p", { hasText: "Omar" }).click();
+  expect(await U.locator(".f-tb .h-to").count()).toBe(0);
+  for (const n of ["Hana", "Mira"]) await talk.locator(".h-tk-p", { hasText: n }).click();
+  expect(await talk.locator(".h-tk-p.on > span:not(.f-ava)").allInnerTexts()).toEqual(["Omar"]);
+  await contains(U.locator(".f-tb .h-to span"), "Omar");
+  await U.locator(".f-tb-in").pressSequentially("Omar: 8 × 3 = 24.");
+  await U.locator(".f-tb").getByRole("button", { name: "Send" }).click();
+  await contains(talk.locator(".f-msg.mine").last(), "8 × 3 = 24");
+  await contains(talk.locator(".f-msg.mine").last().locator(".f-msg-tag").last(), "→ Omar");
+  const one = await t.run(async (ctx) => (await ctx.db.query("usChat").collect()).find((c) => c.t?.startsWith("Omar: 8")));
+  expect(one!.mt!.map((x) => x.n)).toEqual(["Omar S"]);
+  const q8rows = await t.run(async (ctx) => (await ctx.db.query("helpAsks").collect()).filter((a) => a.rid === one!.rid));
+  expect(q8rows.filter((a) => a.tw).map((a) => a.sid)).toEqual([kids.Omar.id]);
+  // Nobody picked: 🎤 and ✍ pale, and the bar says to pick.
+  await talk.locator(".h-tk-p", { hasText: "Omar" }).click();
+  await contains(U.locator(".f-tb .h-to"), "pick who it's for");
+  expect(await talk.getByRole("button", { name: "Voice note" }).isDisabled()).toBe(true);
+  await talk.locator(".h-tk-p", { hasText: "Omar" }).click();
+  await noSideScroll(C);
+  await talk.scrollIntoViewIfNeeded();
+  await shot(C, "thr05b-picked-one");
   // From the rail: Mira's Follow-up row opens Q2 on her card (his reply waits: Replied on it).
   await C.setViewportSize({ width: 390, height: 840 });
   await U.getByRole("button", { name: "Back" }).click();

@@ -17,7 +17,7 @@ import { keep, last, mutation, query, sameOr } from "./net";
 import { picOf, usePics } from "./pics";
 import { buzz, sound } from "./sound";
 import { AiExplainSheet, AskSheet, HelpList, HelpMenu, HelpTop, useVoiceRec, Voice } from "./help";
-import { agoShort, Bubble, jumpTo, ReactorsSheet, ReadFull, WriteBar, type Sent, type Taggable } from "./talk";
+import { agoShort, Bubble, jumpTo, ReactorsSheet, ReadFull, useParts, WriteBar, type Sent, type Taggable } from "./talk";
 import { Avatar, Icon, Owl, problemWords, Sheet, showSheet, toast, Waiting } from "./ui";
 import { Pics } from "./usPost";
 
@@ -324,7 +324,8 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
   const [msgs, setMsgs] = useState<Msg[]>(was?.msgs ?? []);
   const [more, setMore] = useState(was?.more ?? false);
   useLayoutEffect(() => {
-    if (was) window.scrollTo(0, document.body.scrollHeight);
+    // An explanation's thread opens at its question (its talk is under the sub-questions, 21 Nov 2026).
+    if (was && was.head.k !== "h") window.scrollTo(0, document.body.scrollHeight);
   }, []);
   useEffect(() => {
     if (head) last(`room.${props.id}`, { head, msgs: msgs.filter((m) => !m.wait), more });
@@ -368,7 +369,7 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
         setMsgs((l) => [...x.msgs.map((g) => { const k = l.find((y) => y.id === g.id)?.k; return k ? { ...g, k } : g; }), ...waits(l, x.msgs)]);
         setMore(x.more);
         markRead(x.msgs);
-        if (fresh) toEnd(false);
+        if (fresh && x.head.k !== "h") toEnd(false);
       } else if (x.msgs.length) {
         const have = new Set(r.msgs.map((m) => m.id));
         const add = x.msgs.filter((m) => !have.has(m.id));
@@ -377,7 +378,7 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
           setMsgs((l) => [...l.filter((m) => !m.wait), ...add.filter((m) => !l.some((y) => y.id === m.id)), ...waits(l, add)]);
           markRead([...r.msgs.filter((m) => !m.wait), ...add]);
           if (add.some((m) => !m.mine)) sound("tweet");
-          if (end) toEnd();
+          if (end && x.head.k !== "h") toEnd();
         }
       }
     } catch (e) {
@@ -425,20 +426,24 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
   };
   const send = async (text: string, ph: Sent[], mt: string[], au?: { f: string; d: number }) => {
     const to = re;
+    // An explanation's thread: under which sub-question, for whom (nobody picked: refused here, the words stay).
+    const thread = ref.current.head?.k === "h";
+    const aim = thread ? parts.aim() : {};
+    const end = () => (thread ? parts.go(aim.pt ?? "") : toEnd());
     // Words alone show at once, like his last message here (same writer: the bubbles sit together).
     const tmp = text && !ph.length && !au ? `~${Date.now()}.${Math.random()}` : "";
     const own = [...ref.current.msgs].reverse().find((m) => m.mine && !m.wait);
     if (tmp) {
       // Whoever he tagged, by name (the bubble colours an @name it knows), as the server will say it.
       const tagged = mt.map((id) => ({ id, n: people.find((p) => p.id === id)?.n ?? "" })).filter((x) => x.n);
-      const mine: Msg = { ...(own ? { w: own.w, n: own.n, ...(own.pic ? { pic: own.pic } : {}), ...(own.tch ? { tch: true } : {}), ...(own.g !== undefined ? { g: own.g } : {}) } : { w: "", n: "" }), id: tmp, at: Date.now(), mine: true, t: text, ...(to ? { re: to.id } : {}), ...(tagged.length ? { mt: tagged } : {}), wait: true };
+      const mine: Msg = { ...(own ? { w: own.w, n: own.n, ...(own.pic ? { pic: own.pic } : {}), ...(own.tch ? { tch: true } : {}), ...(own.g !== undefined ? { g: own.g } : {}) } : { w: "", n: "" }), id: tmp, at: Date.now(), mine: true, t: text, ...(to ? { re: to.id } : {}), ...(tagged.length ? { mt: tagged } : {}), ...(aim.pt ? { pt: aim.pt } : {}), wait: true };
       setMsgs((l) => [...l, mine]);
       setRe(null);
-      toEnd();
+      end();
     }
     let r: { id: string; at: number };
     try {
-      r = (await mutation("chat:send", { id: props.id, ...(text ? { text } : {}), ...(ph.length ? { ph } : {}), ...(to ? { re: to.id } : {}), ...(mt.length ? { mt } : {}), ...(au ? { au } : {}) })) as { id: string; at: number };
+      r = (await mutation("chat:send", { id: props.id, ...(text ? { text } : {}), ...(ph.length ? { ph } : {}), ...(to ? { re: to.id } : {}), ...(mt.length ? { mt } : aim.mt ? { mt: aim.mt } : {}), ...(au ? { au } : {}), ...(aim.pt ? { pt: aim.pt } : {}) })) as { id: string; at: number };
     } catch (e) {
       if (tmp) {
         setMsgs((l) => l.filter((m) => m.id !== tmp));
@@ -451,7 +456,7 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
     setRe(null);
     // His first words here: a whole read (who he is to this chat); else only what is new.
     await load(!!tmp && !own);
-    toEnd();
+    end();
     return r;
   };
   // The message whose 😊 ↩ row is open (20 Nov 2026, his yes: shown on a tap; one at a time).
@@ -507,6 +512,91 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
             ? `Grade ${head.g}`
             : "";
   const sid = head?.w?.startsWith("s:") ? head.w.slice(2) : undefined;
+  /** One message (in the chat's list; an explanation's thread: under its sub-question). */
+  const bubble = (m: Msg, prev?: Msg) => {
+    const h = head!;
+    const q = m.re ? byId.get(m.re) : undefined;
+    const ai = isAi(m);
+    return (
+      <Bubble
+        key={m.k ?? m.id}
+        x={{ id: m.id, at: m.at, n: m.mine && !ai ? "நீ" : m.n, ...(m.w.startsWith("s:") ? { sid: m.w.slice(2) } : {}), ...(m.pic ? { pic: m.pic } : {}), ...(m.tch ? { tch: true } : {}), ...(m.mine ? { mine: true } : {}), ...(m.t ? { t: m.t } : {}), ...(m.mt ? { mt: m.mt } : {}), ...(m.rx ? { rx: m.rx } : {}), ...(m.my ? { my: m.my } : {}) }}
+        cls={`${m.wait ? "wait " : ""}${m.re ? "re" : ""}${prev && prev.w === m.w && !ai && !isAi(prev) && m.at - prev.at < 5 * 60_000 && dayNo(prev.at) === dayNo(m.at) ? " cont" : ""}`}
+        tags={
+          <>
+            {m.tch && !ai && <i class="f-msg-tag">ஆசிரியர்</i>}
+            {/* A teacher's words for the students she picked under a sub-question (21 Nov 2026): for whom. */}
+            {m.tch && !ai && h.k === "h" && !!m.mt?.length && <i class="f-msg-tag">→ {m.mt.slice(0, 3).map((x) => x.n.split(" ")[0]).join(", ") + (m.mt.length > 3 ? ` +${m.mt.length - 3}` : "")}</i>}
+            {m.ask && (
+              <i class="f-msg-tag h-asktag">
+                <Icon name="camera" size={12} /> {props.staff ? "his working" : "வழிமுறை"}
+              </i>
+            )}
+            {!m.tch && h.k === "g" && m.g !== undefined && <i class="f-gchip">{m.g}</i>}
+          </>
+        }
+        quote={m.re ? (q ? { n: q.mine ? "நீ" : q.n, ...(q.t ? { t: q.t } : {}), ph: !!q.ph?.length } : null) : undefined}
+        onQuote={() => m.re && jumpTo(m.re)}
+        pics={
+          <>
+            {m.ph && <Pics ph={m.ph} />}
+            {m.hid && <p class="h-hid">🙈 படம் மறைக்கப்பட்டுள்ளது</p>}
+            {m.au && <Voice au={m.au} />}
+            {/* A teacher's link (a video she made or found, his words: "they can record the video and put the YouTube ... link"). */}
+            {m.tch && h.k === "h" && (m.t?.match(/https?:\/\/[^\s]+/g) ?? []).slice(0, 3).map((u) => (
+              <a key={u} class="h-link" href={u} target="_blank" rel="noopener noreferrer">
+                ▶ {u.replace(/^https?:\/\/(www\.)?/, "").slice(0, 38)}
+              </a>
+            ))}
+          </>
+        }
+        me={props.me}
+        onMate={props.onMate}
+        onReply={h.can.write && !m.wait ? () => (setTapped(null), setRe({ id: m.id, n: m.mine ? "நீ" : m.n, ...(m.t ? { t: m.t } : {}) }), h.k === "h" && parts.follow(m)) : undefined}
+        tap={m.wait ? undefined : { open: tapped === m.id, onTap: () => setTapped(tapped === m.id ? null : m.id) }}
+        full={ai && m.t ? () => showSheet((close) => <ReadFull n={m.n} sub={h.k === "h" ? h.name : undefined} t={m.t!} mt={m.mt} onMate={props.onMate} staff={props.staff} onClose={close} />) : undefined}
+        onReact={h.look || m.wait ? undefined : (e) => react(m, e)}
+        onWho={() => showSheet((close) => <ReactorsSheet load={() => query("chat:reactors", { cid: m.id }) as Promise<never>} onClose={close} />)}
+        acts={
+          m.wait ? undefined : props.staff ? (
+            <>
+              <span class="f-sp" />
+              {m.rp ? (
+                <button type="button" class="f-ur-b flag" onClick={() => void mutation("chat:tkeep", { cid: m.id }).then(() => load(true), (e) => toast(problemWords(e), true))}>
+                  ⚑ {m.rp} · Keep
+                </button>
+              ) : null}
+              {(h.k === "g" || m.mine || h.look) && (
+                <button type="button" class="f-ur-b" aria-label="Remove" onClick={() => drop(m)}>
+                  {sure === m.id ? "Remove?" : <Icon name="bin" size={18} />}
+                </button>
+              )}
+            </>
+          ) : !m.mine && !m.tch && !told.includes(m.id) ? (
+            <>
+              <span class="f-sp" />
+              <button
+                type="button"
+                class="f-msg-rep"
+                aria-label="Report"
+                onClick={() => {
+                  setTold([...told, m.id]);
+                  mutation("chat:report", { cid: m.id }).then(
+                    () => toast("⚑ நன்றி. ஆசிரியர்கள் பார்ப்பார்கள்."),
+                    (e) => toast(problemWords(e), true),
+                  );
+                }}
+              >
+                ⚑
+              </button>
+            </>
+          ) : undefined
+        }
+      />
+    );
+  };
+  // An explanation's thread (21 Nov 2026): its talk under each sub-question (talk.tsx useParts).
+  const parts = useParts({ staff: props.staff, asks: head?.help?.asks ?? [], msgs, bubble, voice: () => voice.start() });
   return (
     <div class="c-scr c-room">
       <header class="f-hero us c-head">
@@ -584,6 +674,9 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
               onChange={() => void load(true)}
               onMate={props.onMate}
               onPhoto={() => showSheet((close) => <AskSheet unitId={head.help!.unitId} q={head.help!.q} onClose={close} onDone={() => (close(), void load(true))} />)}
+              talk={parts.talk}
+              onParts={parts.onParts}
+              after={parts.after}
             />
           )}
           {head.k === "d" && !head.look && <p class="c-safe">🛡️ {props.staff ? "The owner can read private chats (the students are told)." : "ARISTORA பாதுகாப்புக்காக chats ஐப் பார்க்கலாம். நல்ல வார்த்தைகள் மட்டும்."}</p>}
@@ -592,102 +685,28 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
               ↑ Earlier
             </button>
           )}
-          {!msgs.length ? (
-            <div class="f-talk-none">
-              <Owl mood="wave" class="tiny" still />
-              <p>{head.k === "h" ? (props.staff ? "Nothing here yet." : "இன்னும் எதுவும் இல்லை.") : head.k === "g" ? (props.staff ? "Nobody has written yet: say hello." : "இன்னும் யாரும் எழுதவில்லை. முதலில் நீ: வணக்கம் சொல்! 👋") : props.staff ? "Say hello." : "வணக்கம் சொல் 👋"}</p>
-            </div>
-          ) : (
-            <ol class="f-msgs c-msgs">
-              {msgs.flatMap((m, i) => {
-                const prev = msgs[i - 1];
-                const q = m.re ? byId.get(m.re) : undefined;
-                const ai = isAi(m);
-                const out = [];
-                if (!prev || dayNo(prev.at) !== dayNo(m.at)) out.push(<li key={`d${m.at}`} class="c-day"><span>{dayWords(m.at)}</span></li>);
-                out.push(
-                  <Bubble
-                    key={m.k ?? m.id}
-                    x={{ id: m.id, at: m.at, n: m.mine && !ai ? "நீ" : m.n, ...(m.w.startsWith("s:") ? { sid: m.w.slice(2) } : {}), ...(m.pic ? { pic: m.pic } : {}), ...(m.tch ? { tch: true } : {}), ...(m.mine ? { mine: true } : {}), ...(m.t ? { t: m.t } : {}), ...(m.mt ? { mt: m.mt } : {}), ...(m.rx ? { rx: m.rx } : {}), ...(m.my ? { my: m.my } : {}) }}
-                    cls={`${m.wait ? "wait " : ""}${m.re ? "re" : ""}${prev && prev.w === m.w && !ai && !isAi(prev) && m.at - prev.at < 5 * 60_000 && dayNo(prev.at) === dayNo(m.at) ? " cont" : ""}`}
-                    tags={
-                      <>
-                        {m.tch && !ai && <i class="f-msg-tag">ஆசிரியர்</i>}
-                        {m.ask && (
-                          <i class="f-msg-tag h-asktag">
-                            <Icon name="camera" size={12} /> {props.staff ? "his working" : "வழிமுறை"}
-                          </i>
-                        )}
-                        {!m.tch && head.k === "g" && m.g !== undefined && <i class="f-gchip">{m.g}</i>}
-                      </>
-                    }
-                    quote={m.re ? (q ? { n: q.mine ? "நீ" : q.n, ...(q.t ? { t: q.t } : {}), ph: !!q.ph?.length } : null) : undefined}
-                    onQuote={() => m.re && jumpTo(m.re)}
-                    pics={
-                      <>
-                        {m.ph && <Pics ph={m.ph} />}
-                        {m.hid && <p class="h-hid">🙈 படம் மறைக்கப்பட்டுள்ளது</p>}
-                        {m.au && <Voice au={m.au} />}
-                        {/* A teacher's link (a video she made or found, his words: "they can record the video and put the YouTube ... link"). */}
-                        {m.tch && head.k === "h" && (m.t?.match(/https?:\/\/[^\s]+/g) ?? []).slice(0, 3).map((u) => (
-                          <a key={u} class="h-link" href={u} target="_blank" rel="noopener noreferrer">
-                            ▶ {u.replace(/^https?:\/\/(www\.)?/, "").slice(0, 38)}
-                          </a>
-                        ))}
-                      </>
-                    }
-                    me={props.me}
-                    onMate={props.onMate}
-                    onReply={head.can.write && !m.wait ? () => (setTapped(null), setRe({ id: m.id, n: m.mine ? "நீ" : m.n, ...(m.t ? { t: m.t } : {}) })) : undefined}
-                    tap={m.wait ? undefined : { open: tapped === m.id, onTap: () => setTapped(tapped === m.id ? null : m.id) }}
-                    full={ai && m.t ? () => showSheet((close) => <ReadFull n={m.n} sub={head.k === "h" ? head.name : undefined} t={m.t!} mt={m.mt} onMate={props.onMate} staff={props.staff} onClose={close} />) : undefined}
-                    onReact={head.look || m.wait ? undefined : (e) => react(m, e)}
-                    onWho={() => showSheet((close) => <ReactorsSheet load={() => query("chat:reactors", { cid: m.id }) as Promise<never>} onClose={close} />)}
-                    acts={
-                      m.wait ? undefined : props.staff ? (
-                        <>
-                          <span class="f-sp" />
-                          {m.rp ? (
-                            <button type="button" class="f-ur-b flag" onClick={() => void mutation("chat:tkeep", { cid: m.id }).then(() => load(true), (e) => toast(problemWords(e), true))}>
-                              ⚑ {m.rp} · Keep
-                            </button>
-                          ) : null}
-                          {(head.k === "g" || m.mine || head.look) && (
-                            <button type="button" class="f-ur-b" aria-label="Remove" onClick={() => drop(m)}>
-                              {sure === m.id ? "Remove?" : <Icon name="bin" size={18} />}
-                            </button>
-                          )}
-                        </>
-                      ) : !m.mine && !m.tch && !told.includes(m.id) ? (
-                        <>
-                          <span class="f-sp" />
-                          <button
-                            type="button"
-                            class="f-msg-rep"
-                            aria-label="Report"
-                            onClick={() => {
-                              setTold([...told, m.id]);
-                              mutation("chat:report", { cid: m.id }).then(
-                                () => toast("⚑ நன்றி. ஆசிரியர்கள் பார்ப்பார்கள்."),
-                                (e) => toast(problemWords(e), true),
-                              );
-                            }}
-                          >
-                            ⚑
-                          </button>
-                        </>
-                      ) : undefined
-                    }
-                  />,
-                );
-                return out;
-              })}
-            </ol>
-          )}
+          {head.k !== "h" &&
+            (!msgs.length ? (
+              <div class="f-talk-none">
+                <Owl mood="wave" class="tiny" still />
+                <p>{head.k === "g" ? (props.staff ? "Nobody has written yet: say hello." : "இன்னும் யாரும் எழுதவில்லை. முதலில் நீ: வணக்கம் சொல்! 👋") : props.staff ? "Say hello." : "வணக்கம் சொல் 👋"}</p>
+              </div>
+            ) : (
+              <ol class="f-msgs c-msgs">
+                {msgs.flatMap((m, i) => {
+                  const prev = msgs[i - 1];
+                  const out = [];
+                  if (!prev || dayNo(prev.at) !== dayNo(m.at)) out.push(<li key={`d${m.at}`} class="c-day"><span>{dayWords(m.at)}</span></li>);
+                  out.push(bubble(m, prev));
+                  return out;
+                })}
+              </ol>
+            ))}
           {head.can.write ? (
             <WriteBar
               max={CHAT_MAX}
-              hint={props.staff ? "Write…" : "எழுது…"}
+              hint={(head.k === "h" && parts.hint) || (props.staff ? "Write…" : "எழுது…")}
+              top={head.k === "h" ? parts.top : undefined}
               photos={head.can.photos}
               re={re}
               onUnRe={() => setRe(null)}

@@ -1375,6 +1375,11 @@ export default defineSchema({
     au: v.optional(v.object({ f: v.id("_storage"), d: v.number() })),
     ak: v.optional(v.id("helpAsks")),
     kp: v.optional(v.boolean()),
+    /**
+     * 21 Nov 2026, an explanation's thread: the printed sub-question it is about ("ii": convex/lib/helpParts.ts), shown
+     * right under that sub-question; with `mt` = the students it is for (a teacher's tags: only they are rung).
+     */
+    pt: v.optional(v.string()),
     at: v.number(),
     demo: v.boolean(),
   })
@@ -1823,6 +1828,8 @@ export default defineSchema({
     note: v.optional(v.string()),
     sid: v.optional(v.id("students")),
     ask: v.optional(v.string()),
+    /** His question's sub-question (21 Nov 2026): the AI's answer goes under it. */
+    pt: v.optional(v.string()),
     state: v.union(v.literal("work"), v.literal("done"), v.literal("fail")),
     err: v.optional(v.string()),
     at: v.number(),
@@ -1865,6 +1872,8 @@ export default defineSchema({
     out: v.optional(v.union(v.literal("full"), v.literal("lost"), v.literal("left"))),
     outWhy: v.optional(v.string()),
     asks: v.number(),
+    /** The sub-question of his last question in his thread (21 Nov 2026): the AI's answer goes under it. */
+    pt: v.optional(v.string()),
     at: v.number(),
     upd: v.number(),
   })

@@ -28,6 +28,7 @@ import { slDayStart } from "./lib/day";
 import { internalMutation, mutation } from "./lib/fn";
 import { lastWords, uKey } from "./lib/chat";
 import { askOf, asksIn } from "./lib/help";
+import { basesOf, keyQOf, piecesOf, wrongOf } from "./lib/helpParts";
 import { alertStudent } from "./lib/push";
 import { usCfg } from "./lib/us";
 import { openThread } from "./help";
@@ -346,7 +347,7 @@ export const run = internalAction({
       const x = cleanReply(text);
       await ctx.runMutation(internal.ai.save, x ? { id: args.id, ok: true, x } : { id: args.id, ok: false, err: stop === "max_tokens" ? "The AI's answer was too long. Ask again, shorter." : "The AI gave no answer. Ask again." });
       // His question came from his thread: the answer goes there too (and rings his phone).
-      if (x && asker === "s" && row.rid) await ctx.runMutation(internal.ai.say, { rid: row.rid, by: row.by, sid: row.sid, text: x });
+      if (x && asker === "s" && row.rid) await ctx.runMutation(internal.ai.say, { rid: row.rid, by: row.by, sid: row.sid, text: x, ...(row.pt ? { pt: row.pt } : {}) });
       return;
     }
     const parts = aiParts(k, row.max);
@@ -409,38 +410,57 @@ export const post = mutation({
 /** The AI's name in his thread. */
 export const AI_NAME = "ARISTORA AI";
 
-/** A message of the AI in his thread (by the teacher who used it, under the AI's name), ringing his phone. */
-async function aiMessage(ctx: MutationCtx, room: Doc<"usRooms">, by: Id<"users">, sids: Id<"students"> | Id<"students">[], text: string): Promise<void> {
+/**
+ * A message of the AI in his thread (by the teacher who used it, under the AI's name), ringing his phone. Since 21 Nov
+ * 2026 (his voice note: "the voice note going to be below the wrong answer, below the question ... everything
+ * structured way") each piece goes under its own sub-question for the students who got that one wrong: `pt` given (his
+ * question's sub-question) = one piece there for him; else the AI's "[ii] … [iv] …" cut by `splitByPart`, and words
+ * with no label under the first sub-question one of them got wrong (never lost at the end of the page).
+ */
+async function aiMessage(ctx: MutationCtx, room: Doc<"usRooms">, by: Id<"users">, sids: Id<"students"> | Id<"students">[], text: string, pt?: string): Promise<void> {
   const now = Date.now();
-  const t = text.slice(0, 2000);
-  await ctx.db.insert("usChat", { rid: room._id, by, n: AI_NAME, t, kp: true, at: now, demo: false });
+  const list = Array.isArray(sids) ? sids : [sids];
+  const { bases, pieces } = await piecesOf(ctx, room, list, text, pt);
+  const names = new Map<Id<"students">, string>();
+  for (const sid of list) names.set(sid, (await ctx.db.get(sid))?.name ?? "?");
+  let at = now;
+  for (const p of pieces) {
+    const t = p.t.slice(0, 2000);
+    const mt = p.to.map((s) => ({ s, n: names.get(s) ?? "?" }));
+    await ctx.db.insert("usChat", { rid: room._id, by, n: AI_NAME, t, kp: true, ...(p.pt ? { pt: p.pt } : {}), ...(mt.length && bases.length > 1 ? { mt } : {}), at, demo: false });
+    at++;
+  }
   const fresh = (await ctx.db.get(room._id))!;
-  await ctx.db.patch(room._id, { la: now, lt: lastWords(t, 0), ln: AI_NAME, lw: uKey(by), n: fresh.n + 1, rv: fresh.rv + 1 });
-  for (const sid of Array.isArray(sids) ? sids : [sids]) await alertStudent(ctx, sid, `🤖 Q${room.hq}: ${t.slice(0, 60)}`, `/f/#chat=${room._id}`);
+  await ctx.db.patch(room._id, { la: at - 1, lt: lastWords(pieces[pieces.length - 1].t, 0), ln: AI_NAME, lw: uKey(by), n: fresh.n + pieces.length, rv: fresh.rv + 1 });
+  for (const sid of list) {
+    const mine = pieces.find((p) => p.to.includes(sid)) ?? pieces[0];
+    await alertStudent(ctx, sid, `🤖 Q${room.hq}${mine.pt && bases.length > 1 ? ` ${mine.pt}` : ""}: ${mine.t.slice(0, 60)}`, `/f/#chat=${room._id}`);
+  }
 }
 
 /** The AI's answer to his question, into his thread. */
 export const say = internalMutation({
-  args: { rid: v.id("usRooms"), by: v.id("users"), sid: v.id("students"), text: v.string() },
+  args: { rid: v.id("usRooms"), by: v.id("users"), sid: v.id("students"), text: v.string(), pt: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const room = await ctx.db.get(args.rid);
-    if (room) await aiMessage(ctx, room, args.by, args.sid, args.text);
+    if (room) await aiMessage(ctx, room, args.by, args.sid, args.text, args.pt);
   },
 });
 
 /** His message in his thread: the AI answers it when it explained this question there (and has questions left). */
-export async function heard(ctx: MutationCtx, sid: Id<"students">, room: Doc<"usRooms">, text: string): Promise<void> {
+export async function heard(ctx: MutationCtx, sid: Id<"students">, room: Doc<"usRooms">, text: string, pt?: string): Promise<void> {
   if (room.k !== "h" || !room.hu || room.hq === undefined || !text.trim()) return;
   const r = await ctx.db
     .query("aiChecks")
     .withIndex("by_q", (x) => x.eq("sid", sid).eq("u", room.hu!).eq("q", room.hq!))
     .first();
   // Not his own check's thread: the AI answers when a teacher's 🤖 explained in this thread (the last 3 days).
-  if (!r || r.rid !== room._id) return await teachHeard(ctx, sid, room, text);
+  if (!r || r.rid !== room._id) return await teachHeard(ctx, sid, room, text, pt);
   if (!r.raw || r.state === "work" || r.asks >= AI_ASKS_MAX) return;
   const now = Date.now();
   if ((await usedToday(ctx, now)) >= AI_DAY_MAX) return;
-  await ctx.db.patch(r._id, { msgs: [...r.msgs, { r: "s", x: text.trim().slice(0, AI_TEXT_MAX), at: now }], asks: r.asks + 1, state: "work", err: undefined, upd: now });
+  const x = `${pt ? `(${pt}) ` : ""}${text.trim()}`.slice(0, AI_TEXT_MAX);
+  await ctx.db.patch(r._id, { msgs: [...r.msgs, { r: "s", x, at: now }], asks: r.asks + 1, state: "work", err: undefined, upd: now, pt });
   await ctx.scheduler.runAfter(0, internal.ai.run, { id: r._id });
 }
 
@@ -493,7 +513,7 @@ export const explain = mutation({
 });
 
 /** His question in a thread a teacher's 🤖 explained in (the last 3 days): the AI answers it there. */
-async function teachHeard(ctx: MutationCtx, sid: Id<"students">, room: Doc<"usRooms">, text: string): Promise<void> {
+async function teachHeard(ctx: MutationCtx, sid: Id<"students">, room: Doc<"usRooms">, text: string, pt?: string): Promise<void> {
   const now = Date.now();
   const rows = await ctx.db
     .query("aiTeach")
@@ -502,7 +522,7 @@ async function teachHeard(ctx: MutationCtx, sid: Id<"students">, room: Doc<"usRo
   const asked = rows.find((t) => !t.ask && t.state === "done");
   if (!asked || rows.some((t) => t.state === "work" && now - t.at < AI_STUCK_MS)) return;
   if ((await teachToday(ctx, room._id, now)) >= AI_TEACH_ROOM_DAY || (await usedToday(ctx, now)) >= AI_DAY_MAX) return;
-  const id = await ctx.db.insert("aiTeach", { rid: room._id, by: asked.by, sid, ask: text.trim().slice(0, AI_TEXT_MAX), state: "work", at: now });
+  const id = await ctx.db.insert("aiTeach", { rid: room._id, by: asked.by, sid, ask: text.trim().slice(0, AI_TEXT_MAX), ...(pt ? { pt } : {}), state: "work", at: now });
   await ctx.scheduler.runAfter(0, internal.ai.teach, { id });
 }
 
@@ -532,6 +552,7 @@ export const teachJob = internalQuery({
       ...(m.t ? { t: m.t } : {}),
       ...(m.au ? { voice: true } : {}),
       ...(m.ph?.length ? { photos: m.ph.length } : {}),
+      ...(m.pt ? { pt: m.pt } : {}),
     }));
     // Their latest two photos (big), newest last.
     const files = msgs
@@ -540,7 +561,21 @@ export const teachJob = internalQuery({
       .slice(-2);
     const waiting = await waitingIn(ctx, room._id);
     const asker = t.sid ? await ctx.db.get(t.sid) : null;
+    // The sub-questions, and who waiting got which wrong (the AI writes one block per wrong one).
+    const kq = await keyQOf(ctx, room);
+    const bases = basesOf(kq);
+    const wrong: { pt: string; who: string[] }[] = [];
+    if (bases.length > 1 && !t.ask) {
+      const of = new Map<string, string[] | null>();
+      for (const w of waiting) of.set(w.sid, await wrongOf(ctx, w.sid, room, kq));
+      for (const b of bases) {
+        const who = waiting.filter((w) => of.get(w.sid)?.includes(b)).map((w) => w.n);
+        if (who.length) wrong.push({ pt: b, who });
+      }
+    }
     return {
+      bases,
+      wrong,
       t,
       room,
       html: qq?.html ?? null,
@@ -569,7 +604,7 @@ export const teachSave = internalMutation({
     const room = await ctx.db.get(t.rid);
     if (!room) return;
     const ring = t.sid ? [t.sid] : (await waitingIn(ctx, room._id)).map((w) => w.sid);
-    await aiMessage(ctx, room, t.by, ring, args.text);
+    await aiMessage(ctx, room, t.by, ring, args.text, t.ask ? t.pt : undefined);
   },
 });
 
@@ -599,7 +634,9 @@ export const teach = internalAction({
       thread: threadWords(job.t.ask ? job.lines.slice(0, -1) : job.lines),
       photos: photos.length,
       note: job.t.note ?? null,
-      ask: job.t.ask ? { n: job.asker ?? "He", t: job.t.ask } : null,
+      ask: job.t.ask ? { n: job.asker ?? "He", t: job.t.ask, ...(job.t.pt ? { pt: job.t.pt } : {}) } : null,
+      bases: job.bases,
+      wrong: job.wrong,
     });
     const model = env("AI_MODEL") || AI_MODEL_DEFAULT;
     const settings = modelSettings(model, false);

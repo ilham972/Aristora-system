@@ -282,6 +282,11 @@ What each stage gets (his words, 20 Nov 2026):
 - `done: true` on every reply that ends with the ✓ ask (it is the owner's ✓ Understood: his own tap then closes it).
   Leave it out only when the reply asks him something (his photo, which part).
 - `seen` = the digest's `seen=`. Refused because someone wrote since: `pull` again, read, answer that thread again.
+- **A question with sub-questions** (21 Nov 2026: each talk lives under its own sub-question): one block per
+  sub-question someone got wrong (the digest's `typed:` line, ✗), each starting on its own line with its label in
+  square brackets: `"[i] …\n[ii] …"`. Each block goes under its sub-question for who got it wrong; words before the
+  first label open the first block. One sub-question only: `"pt": "ii"` beside `text`. `notFor` in the answer = students
+  no block reached (they still wait). The digest's TALK lines say where each message is (`on (ii)`) and for whom (`→`).
 
 How to write (they are Grade 6–11 students who skip everything):
 - **Tamil script only** for the sentences (the school books' maths words: பின்னம், கோணம், ஆரை …); numbers, letters and
@@ -913,6 +918,15 @@ SIZE=200 NAMES=family:me,chat:room npx vitest run -c vitest.scale.config.ts test
 - **Chrome taps through a rounded corner** (20 Nov 2026, `tapBubble` in `family.e2e.ts`): a click in a bubble's
   corner lands on its parent (the corner is outside the `border-radius`), and Playwright refuses it ("… intercepts
   pointer events"). Click inside the padding, halfway down the side.
+- **The talk inside a printed question is drawn twice through the dark paper** (21 Nov 2026, `.h-tks` in a
+  sub-question's slot): `--paper-b` then the paper's `--paper-f` give each colour back only between about 30 and 224
+  a channel, so the app's darkest dark colours (`--bg` #131129) come out a flat grey there, and a deep navy a slate.
+  Give such a box a see-through tint (`.h-talk`: `rgba(108,92,231,.07)`), not a dark colour; its bubbles and the AI's
+  card still read (checked in `help07-voice-student-dark`). Anything `position: fixed` inside it (a reaction bar's
+  backdrop) is held to the box in dark (a `filter` makes a containing block): open sheets and full screens with
+  `showSheet`, never inline.
+- **`check.sh e2e` runs the last build**: build first (`check.sh build`) after changing the phone's code, or a
+  run-through checks the old page (21 Nov 2026: a "Voice note" button "missing" was the old build).
 - **`scrollIntoView` scrolls every scroller up the chain, the page too**: a chip centred in its row also pulled the
   page up to the row, and the card's own smooth scroll took it back down (the same bounce, with the questions as
   printed). To move a row sideways, scroll the row (`row.scrollTo`); move the page only on purpose, in a layout effect

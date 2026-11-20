@@ -183,10 +183,7 @@ const CSS = `
 .h-late{display:inline-flex;font-style:normal;color:var(--wrong-ink)}
 .h-none{margin:8px 2px;font-size:13.5px;color:var(--ink3)}
 .h-top{margin:8px 6px 0;padding:10px 8px;border-radius:16px;background:var(--card);box-shadow:0 0 0 1px var(--line)}
-.h-top-h{display:flex;align-items:center;gap:10px;padding-left:2px}
-.h-top-h p{flex:1;min-width:0;margin:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font:600 13.5px/1.3 var(--display);color:var(--ink2)}
-.h-showq{flex:none;display:inline-flex;align-items:center;gap:5px;height:30px;padding:2px 10px 0;border-radius:9px;background:var(--bg);font:600 13px/1 var(--display);color:var(--ink2)}
-.h-showq.on{background:var(--brand-soft);color:var(--brand-2)}
+.h-top-h{margin:0;padding-left:2px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font:600 13.5px/1.3 var(--display);color:var(--ink2)}
 .h-paper{margin:8px -6px 0;border-radius:10px;overflow:hidden}
 .h-key{margin:8px 0 0;padding:8px 10px;border-radius:12px;background:var(--right-soft);font-size:14px;line-height:1.5;color:var(--right-ink)}
 .h-asks{list-style:none;display:flex;gap:6px;margin:10px -8px 0;padding:3px 8px 4px;overflow-x:auto;scrollbar-width:none;scroll-snap-type:x proximity}

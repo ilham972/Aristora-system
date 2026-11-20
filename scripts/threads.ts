@@ -6,6 +6,8 @@
 //     → each reply into its thread (one sealed request each, in the file's order); <out-dir>/sent.json
 //
 // replies.json = [{ "id": "<thread id>", "text": "…", "done": true, "seen": <its msgs, from the digest> }, …]
+//   text = one block per wrong sub-question, each starting on its own line with its label: "[i] …\n[ii] …" (each goes
+//     under its sub-question, for who got it wrong); or "pt": "ii" = the whole text under (ii).
 //   done = the owner's ✓ Understood with it (who said he understood closes; the rest close with their own ✓ tap).
 //   seen = the thread's message count when it was read: anyone wrote since, the app refuses that reply (pull again).
 // The code is the threads link's (Settings → Community → Claude link for threads: "ARISTORA-THREADS name.key"), kept
@@ -19,7 +21,7 @@ const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 type Ask = { aid: string; n: string; g?: number; sg: string; rp?: true; su?: true; tu?: true; pw?: true; ph: boolean; ta: number; tw?: number; sw?: number; late?: true; st?: string; got?: number | null; max?: number; parts?: { p: string; ok: boolean | null; typed: string[]; got?: number; m?: number }[]; photo?: { st: string; max: number; photos: number; got?: number; said?: true }; by?: string };
 type Line = { id: string; unit: { key: string; grade: number; code: string; en: string; ta: string }; lvl: number; q: number; tname: string; la: number; msgs: number; lt?: string; ln?: string; asks: Ask[] };
-type Thread = Line & { ok: boolean; error?: string; html: string | null; key: string | null; max: number | null; kp: { p: string; a: string; m: number | null }[]; talk: { at: number; who: "s" | "t" | "ai"; n: string; t?: string; voice?: number; photos?: number; ask?: true }[] };
+type Thread = Line & { ok: boolean; error?: string; html: string | null; key: string | null; max: number | null; kp: { p: string; a: string; m: number | null }[]; talk: { at: number; who: "s" | "t" | "ai"; n: string; t?: string; voice?: number; photos?: number; ask?: true; pt?: string; to?: string[] }[] };
 
 /** A printed question in words: sub-questions on their own lines, figures' labels kept, fractions, powers, blanks. */
 export function questionWords(h: string): string {
@@ -78,7 +80,7 @@ export function threadDigest(i: number, t: Thread): string {
   out.push("  TALK:");
   for (const m of t.talk) {
     const said = [m.t ? m.t.replace(/\n/g, " ⏎ ") : "", m.voice ? `🎤 voice ${m.voice}s` : "", m.photos ? `📷×${m.photos}` : "", m.ask ? "(came in with this)" : ""].filter(Boolean).join(" ");
-    out.push(`    [${m.who}] ${m.n} ${time(m.at)}: ${said || "…"}`);
+    out.push(`    [${m.who}] ${m.n}${m.pt ? ` on (${m.pt})` : ""}${m.to?.length ? ` → ${m.to.join(", ")}` : ""} ${time(m.at)}: ${said || "…"}`);
   }
   return out.join("\n");
 }
@@ -113,13 +115,13 @@ async function pull(outDir: string) {
   console.log(`digest: ${join(outDir, "digest.txt")}`);
 }
 
-type Reply = { id: string; text: string; done?: boolean; seen?: number };
+type Reply = { id: string; text: string; done?: boolean; seen?: number; pt?: string };
 
 async function send(file: string, outDir: string) {
   outside(outDir);
   const replies = JSON.parse(readFileSync(file, "utf8")) as Reply[];
   if (!replies.length) return;
-  const reqs: Req[] = replies.map((r, i) => ({ name: `r${i + 1}`, fn: "tell", req: { op: "reply", id: r.id, text: r.text, done: r.done === true, ...(typeof r.seen === "number" ? { seen: r.seen } : {}) } }));
+  const reqs: Req[] = replies.map((r, i) => ({ name: `r${i + 1}`, fn: "tell", req: { op: "reply", id: r.id, text: r.text, done: r.done === true, ...(typeof r.seen === "number" ? { seen: r.seen } : {}), ...(r.pt ? { pt: r.pt } : {}) } }));
   const got = await exchange(reqs);
   mkdirSync(outDir, { recursive: true });
   const rows = replies.map((r, i) => ({ id: r.id, ...got[`r${i + 1}`] }));
@@ -127,7 +129,7 @@ async function send(file: string, outDir: string) {
   let bad = 0;
   for (const r of rows) {
     if (!r.ok) bad++;
-    console.log(r.ok ? `Q${r.q} ${r.id}: sent · closed ${r.closed} · waiting ${r.waiting}` : `${r.id}: NO: ${r.error}`);
+    console.log(r.ok ? `Q${r.q} ${r.id}: sent · closed ${r.closed} · waiting ${r.waiting}${r.notFor ? ` · ${r.notFor} not reached (no block for their wrong sub-question)` : ""}` : `${r.id}: NO: ${r.error}`);
   }
   console.log(`${rows.length - bad} sent, ${bad} refused`);
   if (bad) process.exitCode = 1;

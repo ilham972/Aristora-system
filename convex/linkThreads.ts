@@ -23,6 +23,7 @@ import { explained, keyParts, printed, say } from "./help";
 import { asMaster, bookFor, keyRow } from "./lib/backend";
 import { studentPerson } from "./lib/chat";
 import { asksIn, helpStage, type HelpStage, isLate } from "./lib/help";
+import { basesOf, keyQOf, labelIn, piecesOf } from "./lib/helpParts";
 import { helpHeadOf } from "./lib/helpView";
 import { phoneKeyFor } from "./lib/homeWork";
 import { keyText } from "./lib/photos";
@@ -143,7 +144,7 @@ export async function linkThreads(ctx: QueryCtx, now: number): Promise<LinkThrea
 }
 
 /** A message as the chat reads it: who (a student, a teacher, the AI), the words, a voice note's seconds, photos. */
-type LinkMsg = { at: number; who: "s" | "t" | "ai"; n: string; t?: string; voice?: number; photos?: number; ask?: true };
+type LinkMsg = { at: number; who: "s" | "t" | "ai"; n: string; t?: string; voice?: number; photos?: number; ask?: true; pt?: string; to?: string[] };
 
 /** One thread whole (`css`: the book's style too, to draw the question). */
 export async function linkThread(ctx: QueryCtx, id: unknown, uid: Id<"users">, now: number, css: boolean) {
@@ -206,6 +207,8 @@ export async function linkThread(ctx: QueryCtx, id: unknown, uid: Id<"users">, n
         ...(m.au ? { voice: m.au.d } : {}),
         ...(m.ph?.length ? { photos: m.ph.length } : {}),
         ...(m.ak ? { ask: true as const } : {}),
+        ...(m.pt ? { pt: m.pt } : {}),
+        ...(m.mt?.length ? { to: m.mt.map((x) => x.n) } : {}),
       }),
     ),
   };
@@ -229,11 +232,24 @@ export async function linkReply(ctx: MutationCtx, uid: Id<"users"> | undefined, 
     if (s && !s.archived && !s.demo && !s.test) open.push(a);
   }
   if (!open.length) return { ok: false as const, error: `Q${r.hq}: nobody waits in this thread any more.` };
-  await say(ctx, r, { by: u._id, n: AI_NAME }, now, { t });
+  // Under its sub-question (21 Nov 2026): `pt` = all of it under that one; else its "[ii] …" labels cut it, each piece
+  // for those who got that one wrong. Who no piece is for isn't answered (still waiting).
+  const want = typeof req.pt === "string" && req.pt.trim() ? req.pt.trim() : undefined;
+  const bases = basesOf(await keyQOf(ctx, r));
+  const pt = want ? labelIn(want, bases) : undefined;
+  if (want && bases.length > 1 && !pt) return { ok: false as const, error: `Q${r.hq} has no sub-question (${want}): ${bases.map((b) => `(${b})`).join(" ")}.` };
+  const { pieces } = await piecesOf(ctx, r, open.map((a) => a.sid), t, pt ?? undefined);
+  let at = now;
+  for (const p of pieces) {
+    const mt = bases.length > 1 ? await Promise.all(p.to.map(async (s) => ({ s, n: (await ctx.db.get(s))?.name ?? "?" }))) : [];
+    await say(ctx, r, { by: u._id, n: AI_NAME }, at++, { t: p.t, ...(p.pt ? { pt: p.pt } : {}), ...(mt.length ? { mt } : {}) });
+  }
+  const reached = new Set<string>(pieces.flatMap((p) => p.to));
   const room = (await ctx.db.get(r._id))!;
   let closed = 0;
   const ring: Id<"students">[] = [];
   for (const a of open) {
+    if (!reached.has(a.sid)) continue;
     if (req.done === true && a.su) {
       await ctx.db.patch(a._id, { tw: now });
       await explained(ctx, a, u, room, now);
@@ -243,7 +259,9 @@ export async function linkReply(ctx: MutationCtx, uid: Id<"users"> | undefined, 
     await ctx.db.patch(a._id, { tw: now, ...(req.done === true && !a.tu ? { tu: now, tub: u._id } : {}) });
     ring.push(a.sid);
   }
-  const said = clip(t.replace(/\s+/g, " "), 60);
-  for (const sid of ring) await alertStudent(ctx, sid, `🤖 Q${r.hq}: ${said}`, `/f/#chat=${r._id}`);
-  return { ok: true as const, id: r._id, q: r.hq, msgs: room.n, closed, waiting: ring.length };
+  for (const sid of ring) {
+    const p = pieces.find((x) => x.to.includes(sid)) ?? pieces[0];
+    await alertStudent(ctx, sid, `🤖 Q${r.hq}${p.pt && bases.length > 1 ? ` ${p.pt}` : ""}: ${clip(p.t.replace(/\s+/g, " "), 60)}`, `/f/#chat=${r._id}`);
+  }
+  return { ok: true as const, id: r._id, q: r.hq, msgs: room.n, closed, waiting: ring.length, ...(open.length > reached.size ? { notFor: open.length - reached.size } : {}) };
 }

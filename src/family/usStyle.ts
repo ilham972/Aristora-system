@@ -338,6 +338,31 @@ const CSS = `
 .f-read-b{flex:1;overflow-y:auto;overscroll-behavior:contain;padding:18px 20px calc(var(--safe-b) + 28px)}
 .f-read-b .f-msg-t{max-width:40em;margin:0 auto;font-size:19px;line-height:1.75;color:#eef1fb}
 .f-read-done{display:block;width:100%;max-width:40em;height:50px;margin:28px auto 0;border-radius:14px;background:rgba(255,255,255,.12);color:#fff;font:700 16px/1 var(--display)}
+.h-tks{display:block;font:400 15px/1.45 var(--text);-webkit-user-select:text;user-select:text}
+.h-talk{margin:2px 0 14px;padding:8px;border-radius:14px;background:rgba(108,92,231,.07);scroll-margin:84px 0 120px}
+.h-talk li{scroll-margin:84px 0 120px}
+.h-top>.h-talk{margin:10px 0 0}
+.h-talk.here{box-shadow:inset 0 0 0 1.5px var(--brand)}
+.h-tk-h{display:flex;align-items:center;gap:6px;min-height:36px}
+.h-tk-t{flex:none;margin-left:2px;font:700 12.5px/1.3 var(--display);color:var(--ink2)}
+.h-tk-who{list-style:none;flex:0 1 auto;min-width:0;display:flex;gap:6px;margin:0 0 0 -8px;padding:2px 2px 2px 8px;overflow-x:auto;scrollbar-width:none}
+.h-tk-who::-webkit-scrollbar{display:none}
+.h-tk-p{flex:none;display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 11px 0 3px;border-radius:16px;background:var(--card);box-shadow:0 0 0 1px var(--line);font:600 13px/1 var(--display);color:var(--ink2);white-space:nowrap}
+.h-tk-p .f-ava{width:26px;height:26px}
+button.h-tk-p.on{background:var(--brand-soft);box-shadow:0 0 0 1.5px var(--brand);color:var(--brand-2)}
+.h-tk-i,.h-tk-ask{flex:none;display:inline-flex;align-items:center;justify-content:center;gap:5px;height:36px;border-radius:11px;background:var(--card);box-shadow:0 0 0 1px var(--line-2);font:700 13px/1 var(--display);color:var(--brand-2)}
+.h-tk-i{width:36px}
+.h-tk-ask{height:32px;padding:2px 12px 0}
+.h-tk-i.on,.h-tk-ask.on{background:var(--brand);box-shadow:none;color:#fff}
+.h-tk-i:disabled{opacity:.45}
+.h-tk-i:active,.h-tk-ask:active{transform:scale(.95)}
+.h-tk-more{display:block;margin:6px auto 0;padding:5px 10px;border-radius:8px;font:600 12.5px/1.2 var(--display);color:var(--brand-2)}
+.c-room .f-msgs.h-tk-m{margin:6px 0 0}
+.c-msgs.h-tk-m .f-msg.ai{margin-left:0}
+.h-to{display:flex;align-items:center;gap:6px;min-height:30px;margin:0 0 6px;padding:2px 2px 2px 10px;border-radius:10px;background:var(--brand-soft);font:600 13px/1.2 var(--display);color:var(--brand-2)}
+.h-to b{flex:none}
+.h-to span{flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:var(--ink2)}
+.h-to button{flex:none;display:grid;place-items:center;width:28px;height:28px;border-radius:8px;color:var(--ink2)}
 `;
 
 let added = false;

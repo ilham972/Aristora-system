@@ -169,7 +169,7 @@ export async function say(
   r: Doc<"usRooms">,
   who: { sid: Id<"students">; n: string; g?: number; pic?: string } | { by: Id<"users">; n: string },
   now: number,
-  m: { t?: string; ph?: Doc<"usChat">["ph"]; ak?: Id<"helpAsks"> },
+  m: { t?: string; ph?: Doc<"usChat">["ph"]; ak?: Id<"helpAsks">; pt?: string; mt?: Doc<"usChat">["mt"] },
   /** Not read by the writer's seat (the AI's line under her id: the thread stays new for her). */
   unread = false,
 ): Promise<void> {
@@ -180,6 +180,8 @@ export async function say(
     ...(m.t ? { t: m.t } : {}),
     ...(m.ph ? { ph: m.ph } : {}),
     ...(m.ak ? { ak: m.ak } : {}),
+    ...(m.pt ? { pt: m.pt } : {}),
+    ...(m.mt?.length ? { mt: m.mt } : {}),
     kp: true,
     at: now,
     demo: false,
