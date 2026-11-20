@@ -4495,7 +4495,9 @@ test("online and studying: the green dot and the pencil, Studying now and Online
   await P.locator(".f-brow, .f-pod, .f-nyc").filter({ hasText: "Bilal" }).first().click();
   await contains(P.locator(".f-mate .f-me-name"), "Bilal M");
   await visible(P.locator(".f-mate .f-heatbox"));
-  expect(await P.locator(".f-mate .f-seen, .f-mate .f-usage").count()).toBe(0);
+  // The profile seen before shows at once, then the server's fresh answer (mate.tsx `seen`): wait for that one, never
+  // count the kept copy (20 Nov 2026: on the GitHub machine the kept copy, with his last seen, was what got counted).
+  await until(async () => (await P.locator(".f-mate .f-seen, .f-mate .f-usage").count()) === 0, "no last seen and no bars once the switch is off");
   await P.getByRole("button", { name: "Back" }).click();
   await tabTo(P, /Me/);
   await visible(P.locator(".f-usage"));
