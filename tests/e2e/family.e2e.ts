@@ -89,6 +89,13 @@ async function shot(p: Page, name: string) {
 async function noSideScroll(p: Page) {
   expect(await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 }
+/** A tap on a chat message itself (its bubble's right padding: never a name, a tag or a photo in it): its 😊 ↩ row opens. */
+async function tapBubble(m: L) {
+  const b = m.locator(".f-msg-b").first();
+  const box = (await b.boundingBox())!;
+  await b.click({ position: { x: box.width - 5, y: box.height / 2 } });
+  await m.locator(".f-msg-a").first().waitFor({ state: "visible", timeout: 6000 });
+}
 
 async function open(backend: ReturnType<typeof makeBackend>, url: string, sz = size(360, 740), init?: () => void) {
   const ctx = await browser.newContext(sz);
@@ -3429,6 +3436,11 @@ test("Us groups and chats: his grade's group with a reply, a tag and a reaction;
   await until(async () => (await P.locator(".f-msg.re").count()) === 1, "Bilal's reply in the open group", 15_000);
   await contains(P.locator(".f-msg.re .f-msg-q"), "எல்லோருக்கும் வணக்கம்");
   await contains(P.locator(".f-msg.re .f-at"), "@Arun K");
+  // 😊 and ↩ show once the message is tapped (20 Nov 2026, his yes: "show it on tap"), never under every message.
+  expect(await P.locator(".f-msg.re .f-msg-a").count()).toBe(0);
+  await tapBubble(P.locator(".f-msg.re"));
+  expect(await P.locator(".f-msg .f-msg-a").count()).toBe(1);
+  await shot(P, "fam101a-tapped-message");
   await P.locator(".f-msg.re").getByRole("button", { name: "React", exact: true }).click();
   await P.locator(".f-rxbar").getByRole("button", { name: "React 😂" }).click();
   await contains(P.locator(".f-msg.re .f-rx.on"), "😂");
@@ -4588,8 +4600,10 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
   await go.click();
 
   // Her thread: Q8 on top, what she typed in rose, waiting on Nila; her photo as its first message.
-  await contains(P.locator(".h-top-h"), "Q8");
-  await contains(P.locator(".h-top-h"), "Stage 1 · Level 1");
+  // Q, Stage and Level once, in the thread's header (20 Nov 2026, unslop); the card names the unit.
+  await contains(P.locator(".c-head-w"), "Q8");
+  await contains(P.locator(".c-head-w"), "Stage 1 · Level 1");
+  expect(await P.locator(".h-top-h").innerText()).not.toContain("Q8");
   // The question as printed, open, nearly as wide as the phone; her answer under each sub-question: (i) wrong in rose,
   // (ii) her photo with the teacher's mark in blue (kept until the question is explained). Never the key on her phone.
   const yOf = async (l: L) => (await l.first().boundingBox())!.y;
@@ -4620,7 +4634,9 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
   const U = C.frameLocator("iframe.us-frame");
   for (const b of ["அடுத்து", "அடுத்து", "தொடங்கு!"]) await U.locator(".f-us-guide").getByRole("button", { name: b }).click();
   await U.locator(".t-seg").getByRole("button", { name: "Thread" }).click();
-  await contains(U.locator(".h-list-h"), "Online explanations");
+  // No heading row of its own (20 Nov 2026): Mine | All sits beside Thread | Members.
+  await visible(U.locator('section.h-list[aria-label="Online explanations"]'));
+  expect(await U.locator(".h-list-h").count()).toBe(0);
   // The Thread page (16 Nov 2026): Mine, the pipeline on Pending (1), Hana on the rail.
   await contains(U.locator(".h-scope button.on"), "Mine");
   await contains(U.locator(".h-pipe button.on"), "Pending");
@@ -4744,7 +4760,7 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
   await U.locator(".h-sel .h-dots").click();
   await U.locator(".h-menu").getByRole("button", { name: /Hide his name/ }).click();
   await until(async () => (await t.query(api.chat.room, { token: MIRA, id: tid })).msgs[0].n === "மாணவர்", "Hana's name hidden from Mira");
-  await contains(U.locator(".h-sel .h-st"), "🙈 name");
+  await contains(U.locator(".h-sel .h-st"), "name hidden");
   await noSideScroll(C);
   await shot(C, "help10-two-students");
 
@@ -4895,7 +4911,7 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
     await visible(P.locator(scr));
   }
   await tabTo(P, /^Thread$/);
-  await contains(P.locator(".h-list-h"), "Explain online");
+  await visible(P.locator('section.h-list[aria-label="Explain online"]'));
   // Nothing open: the pipeline opens on Closed by itself (1).
   await contains(P.locator(".h-pipe button.pend b"), "0");
   await P.locator(".h-pipe").getByRole("tab", { name: /Closed/ }).click();
@@ -5119,10 +5135,10 @@ test("The Thread page at scale: Pending · Follow-up · Understood · Closed, Mi
   await C.locator("body").evaluate(() => window.scrollTo(0, 0));
   await frameFlat();
   await shot(C, "thr01-pending-390");
-  // Follow-up: Mira's reply first (💬, a red line), then a line, then Ravi waiting on him.
+  // Follow-up: Mira's reply first (in red), then a line, then Ravi waiting on him.
   await box("fol").click();
   await contains(U.locator(".h-row").first(), "Mira +1 · Q2");
-  await contains(U.locator(".h-row.hot .h-say1"), "💬 Mira replied");
+  await contains(U.locator(".h-row.hot .h-say1"), "Mira replied");
   await contains(U.locator(".h-cut"), "Waiting on him");
   await contains(U.locator(".h-row").nth(1), "Ravi P · Q5");
   await contains(U.locator(".h-row").nth(1).locator(".h-say1"), "waiting on him");
@@ -5133,13 +5149,13 @@ test("The Thread page at scale: Pending · Follow-up · Understood · Closed, Mi
   await contains(U.locator(".h-say1"), "Hana understood");
   await box("closed").click();
   await contains(U.locator(".h-row"), "Omar S · Q10");
-  // The rail: Hana picked: her own counts in every box; Follow-up = her Q2 (the thread has 2: 👥 2).
+  // The rail: Hana picked: her own counts in every box; Follow-up = her Q2 (the thread has 2 students).
   await box("pend").click();
   await U.locator(".h-rail .h-ri", { hasText: "Hana" }).click();
   expect(await Promise.all(["pend", "fol", "und", "closed"].map(async (k) => await box(k).locator("b").innerText()))).toEqual(["1", "1", "1", "0"]);
   await box("fol").click();
   await contains(U.locator(".h-row"), "Hana K · Q2");
-  await contains(U.locator(".h-row .h-many"), "👥 2");
+  await contains(U.locator(".h-row .h-many"), "2");
   await shot(C, "thr03-rail-hana-390");
   await U.locator(".h-rail .h-ri.all").click();
   // All: Sara's Q6 (the owner's) too.
@@ -5186,7 +5202,7 @@ test("The Thread page at scale: Pending · Follow-up · Understood · Closed, Mi
     await frameFlat();
     await shot(C, `thr05-cards-${w}`);
   }
-  // From the rail: Mira's Follow-up row opens Q2 on her card (his reply waits: 💬 on it).
+  // From the rail: Mira's Follow-up row opens Q2 on her card (his reply waits: Replied on it).
   await C.setViewportSize({ width: 390, height: 840 });
   await U.getByRole("button", { name: "Back" }).click();
   await U.locator(".h-rail .h-ri", { hasText: "Mira" }).click();
@@ -5212,7 +5228,7 @@ test("The Thread page at scale: Pending · Follow-up · Understood · Closed, Mi
   await contains(P.locator(".h-rail .h-ri:not(.all)"), "Stage 1");
   await pb("pend").click();
   await contains(P.locator(".h-row"), "Q8");
-  await contains(P.locator(".h-row .h-many"), "👥 3");
+  await contains(P.locator(".h-row .h-many"), "3");
   await pb("fol").click();
   await contains(P.locator(".h-row .h-say1"), "ஆசிரியரின் பதிலுக்காக");
   await noSideScroll(P);

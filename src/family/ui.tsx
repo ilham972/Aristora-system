@@ -100,6 +100,10 @@ const PATHS = {
   bin: "M5 7h14M9.5 7V4.5h5V7M7 7l1 13h8l1-13",
   // Us (7 Nov 2026): two friends side by side.
   people: "M9 11.2a3.4 3.4 0 1 0 0-6.8 3.4 3.4 0 0 0 0 6.8zM2.8 19.5c.7-3.3 3.2-5.2 6.2-5.2s5.5 1.9 6.2 5.2M15.6 4.8a3.2 3.2 0 0 1 0 6.2M17.4 14.6c2 .6 3.4 2.3 3.9 4.9",
+  // A thread (20 Nov 2026, unslop): the voice note's mic, an explanation's headset, her AI.
+  mic: "M12 3.5a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0v-5a3 3 0 0 0-3-3zM6 11.5a6 6 0 0 0 12 0M12 17.5v3",
+  headset: "M4.5 15v-3a7.5 7.5 0 0 1 15 0v3M4.5 14.5h3v5h-1.5a1.5 1.5 0 0 1-1.5-1.5zM19.5 14.5h-3v5h1.5a1.5 1.5 0 0 0 1.5-1.5z",
+  robot: "M7 9h10a2.5 2.5 0 0 1 2.5 2.5v5A2.5 2.5 0 0 1 17 19H7a2.5 2.5 0 0 1-2.5-2.5v-5A2.5 2.5 0 0 1 7 9zM12 9V5.5M9.5 13.5v.5M14.5 13.5v.5M10 16.5h4",
 } as const;
 export type IconName = keyof typeof PATHS;
 

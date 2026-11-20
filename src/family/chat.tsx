@@ -16,7 +16,7 @@ import type { ChatHead, ChatLine, ChatMsg, ChatPeople, ChatPerson, ChatRoom } fr
 import { keep, last, mutation, query, sameOr } from "./net";
 import { picOf, usePics } from "./pics";
 import { buzz, sound } from "./sound";
-import { AiExplainSheet, AskSheet, HelpList, HelpMenu, HelpTop, Voice, VoiceRec } from "./help";
+import { AiExplainSheet, AskSheet, HelpList, HelpMenu, HelpTop, useVoiceRec, Voice } from "./help";
 import { agoShort, Bubble, jumpTo, ReactorsSheet, WriteBar, type Sent, type Taggable } from "./talk";
 import { Avatar, Icon, Owl, problemWords, Sheet, showSheet, toast, Waiting } from "./ui";
 import { Pics } from "./usPost";
@@ -39,8 +39,13 @@ type Rooms = { groups: ChatLine[]; dms: ChatLine[]; edit?: boolean; owner?: bool
 /** A chat's picture: a group's emoji (a grade's group: its number), or the other person's face. */
 function RoomFace(props: { r: Pick<ChatLine, "emo" | "gg" | "name" | "pic" | "tch"> & { k: "g" | "d" | "h" }; big?: boolean }) {
   const r = props.r;
-  // An online explanation's thread (12 Nov 2026).
-  if (r.k === "h") return <span class="c-gface" aria-hidden="true">🎧</span>;
+  // An online explanation's thread (12 Nov 2026; a line icon since 20 Nov 2026, never the 🎧 on every row).
+  if (r.k === "h")
+    return (
+      <span class="c-gface" aria-hidden="true">
+        <Icon name="headset" size={22} />
+      </span>
+    );
   // The Everyone group (12 Nov 2026): ARISTORA's own owl, not the phone's owl emoji (unless a teacher picked another).
   if (r.k === "g" && r.gg === 0 && (!r.emo || r.emo === "🦉"))
     return (
@@ -114,6 +119,8 @@ export function ChatTab(props: {
     keep("chatSeg", k);
     window.scrollTo(0, 0);
   };
+  // A teacher's Mine | All (20 Nov 2026: beside Thread | Members, not a row of its own above the list).
+  const [all, setAll] = useState(() => props.staff && keep<boolean>("helpAll") === true);
   const count = (n?: number) => (n ? <i>{n > 20 ? "20+" : n}</i> : null);
   const open = (id: string) => {
     buzz();
@@ -124,19 +131,45 @@ export function ChatTab(props: {
     <>
       <header class="f-hero us c-hero">
         {props.top}
-        <div class="c-seg" role="tablist" aria-label="Thread">
-          <button type="button" role="tab" aria-selected={seg === "thread"} class={seg === "thread" ? "on" : ""} onClick={() => pick("thread")}>
-            🎧 Thread{count(props.nh)}
-          </button>
-          <button type="button" role="tab" aria-selected={seg === "people"} class={seg === "people" ? "on" : ""} onClick={() => pick("people")}>
-            👥 Members{count(props.nm)}
-          </button>
+        <div class="c-segs">
+          <div class="c-seg" role="tablist" aria-label="Thread">
+            <button type="button" role="tab" aria-selected={seg === "thread"} class={seg === "thread" ? "on" : ""} onClick={() => pick("thread")}>
+              Thread{count(props.nh)}
+            </button>
+            <button type="button" role="tab" aria-selected={seg === "people"} class={seg === "people" ? "on" : ""} onClick={() => pick("people")}>
+              Members{count(props.nm)}
+            </button>
+          </div>
+          {/* In its place on Members too, pale (his rule: a pale button beats one that comes and goes and moves the rest). */}
+          {props.staff && (
+            <span class="h-scope" role="group" aria-label="Whose">
+              {(["Mine", "All"] as const).map((w, i) => (
+                <button
+                  key={w}
+                  type="button"
+                  aria-pressed={all === !!i}
+                  class={all === !!i ? "on" : ""}
+                  disabled={seg !== "thread"}
+                  onClick={() => {
+                    if (all === !!i) return;
+                    buzz();
+                    sound("tap");
+                    setAll(!!i);
+                    keep("helpAll", !!i);
+                  }}
+                >
+                  {w}
+                </button>
+              ))}
+            </span>
+          )}
         </div>
       </header>
       {seg === "thread" ? (
         <section class="c-list c-home" aria-label="Threads">
           <HelpList
             staff={props.staff}
+            all={all}
             onRoom={open}
             empty={
               <div class="c-tempty">
@@ -375,6 +408,7 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
     if (m.my) rx[m.my] = Math.max(0, (rx[m.my] ?? 1) - 1);
     if (e) rx[e] = (rx[e] ?? 0) + 1;
     for (const k of Object.keys(rx)) if (!rx[k]) delete rx[k];
+    setTapped(null);
     setMsgs(msgs.map((x) => (x.id === m.id ? { ...x, rx, my: e ?? undefined } : x)));
     mutation("chat:react", { cid: m.id, e }).then(
       () => void load(),
@@ -412,6 +446,10 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
     toEnd();
     return r;
   };
+  // The message whose 😊 ↩ row is open (20 Nov 2026, his yes: shown on a tap; one at a time).
+  const [tapped, setTapped] = useState<string | null>(null);
+  // An explanation's voice note: 🎤 in the write row, the recorder in its place (help.tsx useVoiceRec).
+  const voice = useVoiceRec({ staff: props.staff, max: props.staff ? 120 : 60, onSend: (au) => send("", [], [], au) });
   const drop = (m: ChatMsg) => {
     if (sure !== m.id) return setSure(m.id);
     setSure(null);
@@ -470,7 +508,7 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
           </button>
           {head && (
             <button type="button" class="c-head-w" disabled={!sid && !(head.k === "g" && head.can.edit)} onClick={() => (sid ? props.onMate(sid) : head.can.edit ? showSheet((close) => <GroupSheet id={props.id} onClose={close} onDone={() => void load(true)} />) : undefined)}>
-              <RoomFace r={head} />
+              {head.k !== "h" && <RoomFace r={head} />}
               <span>
                 <b>{head.name}</b>
                 <small>{sub}</small>
@@ -481,7 +519,7 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
           {head?.k === "h" && head.help && props.staff && (
             // Her 🤖 (15 Nov 2026): the AI explains it again, step by step; a sheet first, so a stray tap costs nothing.
             <button type="button" class="f-round on-brand h-aib" aria-label="AI explain" onClick={() => showSheet((close) => <AiExplainSheet id={props.id} waiting={head.help!.open} onClose={close} />)}>
-              🤖
+              <Icon name="robot" size={22} />
             </button>
           )}
           {head?.k === "h" && head.help && props.staff && (
@@ -566,7 +604,11 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
                     tags={
                       <>
                         {m.tch && <i class="f-msg-tag">ஆசிரியர்</i>}
-                        {m.ask && <i class="f-msg-tag h-asktag">📷 {props.staff ? "his working" : "வழிமுறை"}</i>}
+                        {m.ask && (
+                          <i class="f-msg-tag h-asktag">
+                            <Icon name="camera" size={12} /> {props.staff ? "his working" : "வழிமுறை"}
+                          </i>
+                        )}
                         {!m.tch && head.k === "g" && m.g !== undefined && <i class="f-gchip">{m.g}</i>}
                       </>
                     }
@@ -587,7 +629,8 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
                     }
                     me={props.me}
                     onMate={props.onMate}
-                    onReply={head.can.write && !m.wait ? () => setRe({ id: m.id, n: m.mine ? "நீ" : m.n, ...(m.t ? { t: m.t } : {}) }) : undefined}
+                    onReply={head.can.write && !m.wait ? () => (setTapped(null), setRe({ id: m.id, n: m.mine ? "நீ" : m.n, ...(m.t ? { t: m.t } : {}) })) : undefined}
+                    tap={m.wait ? undefined : { open: tapped === m.id, onTap: () => setTapped(tapped === m.id ? null : m.id) }}
                     onReact={head.look || m.wait ? undefined : (e) => react(m, e)}
                     onWho={() => showSheet((close) => <ReactorsSheet load={() => query("chat:reactors", { cid: m.id }) as Promise<never>} onClose={close} />)}
                     acts={
@@ -642,7 +685,7 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
               onAt={head.k === "g" ? askMembers : undefined}
               onSend={send}
               fast
-              extra={head.k === "h" ? <VoiceRec staff={props.staff} max={props.staff ? 120 : 60} onSend={(au) => send("", [], [], au)} /> : undefined}
+              voice={head.k === "h" ? voice : undefined}
             />
           ) : (
             <p class="c-cant">{head.look ? "👁 Only the two of them write here." : (head.can.why ?? "இங்கே இப்போது எழுத முடியாது.")}</p>

@@ -244,6 +244,8 @@ export function Words(props: { t: string; mt?: { id: string; n: string }[]; onMa
 function useTouch(onReply?: () => void, onHold?: () => void) {
   const st = useRef<{ x: number; y: number; t: number; dx: number; id: number } | null>(null);
   const el = useRef<HTMLLIElement>(null);
+  // The last touch swiped or held: the click that follows it is not a tap (Bubble `tap`).
+  const did = useRef(false);
   const reset = () => {
     const s = st.current;
     if (s) window.clearTimeout(s.t);
@@ -256,10 +258,17 @@ function useTouch(onReply?: () => void, onHold?: () => void) {
   };
   return {
     ref: el,
+    used: () => {
+      const u = did.current;
+      did.current = false;
+      return u;
+    },
     onPointerDown: (e: PointerEvent) => {
+      did.current = false;
       if (e.button > 0 || (e.target as HTMLElement).closest("button, img, a, .f-rxbar")) return;
       const t = window.setTimeout(() => {
         if (st.current && Math.abs(st.current.dx) < 8 && onHold) {
+          did.current = true;
           buzz(14);
           sound("pop");
           onHold();
@@ -274,7 +283,10 @@ function useTouch(onReply?: () => void, onHold?: () => void) {
       const dy = e.clientY - s.y;
       if (Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) return reset();
       s.dx = dx;
-      if (Math.abs(dx) > 8) window.clearTimeout(s.t);
+      if (Math.abs(dx) > 8) {
+        window.clearTimeout(s.t);
+        did.current = true;
+      }
       if (onReply && dx > 10 && el.current) {
         el.current.classList.add("swiping");
         el.current.style.transform = `translateX(${Math.min(dx, 84)}px)`;
@@ -314,7 +326,9 @@ function RxBar(props: { my?: string; onPick: (e: string) => void; onClose: () =>
 
 /**
  * One message. `quote`: what it answers (undefined: not a reply). `pics`: its photos (the caller's Pics). `acts`: a
- * teacher's buttons and ⚑, after 😊 and ↩. `children`: under it (her ✓, her correction, her words to him).
+ * teacher's buttons and ⚑, after 😊 and ↩. `children`: under it (her ✓, her correction, her words to him). `tap`: the
+ * 😊 ↩ row shows only once the message is tapped (a chat, 20 Nov 2026, his yes: "show it on tap"; a swipe still
+ * replies, a hold still reacts).
  */
 export function Bubble(props: {
   x: Talk;
@@ -331,11 +345,14 @@ export function Bubble(props: {
   onWho?: () => void;
   acts?: ComponentChildren;
   children?: ComponentChildren;
+  tap?: { open: boolean; onTap: () => void };
 }) {
   const x = props.x;
   const [bar, setBar] = useState(false);
   const canReact = !!props.onReact && !x.mine;
   const touch = useTouch(props.onReply, canReact ? () => setBar(true) : undefined);
+  const tap = props.tap;
+  const showActs = !tap || tap.open;
   const pick = (e: string) => {
     setBar(false);
     sound(e === x.my ? "tap" : "pop");
@@ -347,13 +364,23 @@ export function Bubble(props: {
   return (
     <li
       id={`m-${x.id}`}
-      class={`f-msg${x.tch ? " tch" : ""}${x.mine ? " mine" : ""}${props.cls ? ` ${props.cls}` : ""}`}
+      class={`f-msg${x.tch ? " tch" : ""}${x.mine ? " mine" : ""}${tap?.open ? " acts" : ""}${props.cls ? ` ${props.cls}` : ""}`}
       ref={touch.ref}
       onPointerDown={touch.onPointerDown}
       onPointerMove={touch.onPointerMove}
       onPointerUp={touch.onPointerUp}
       onPointerCancel={touch.onPointerCancel}
       onContextMenu={touch.onContextMenu}
+      onClick={
+        tap
+          ? (e) => {
+              // A tap on the message itself; never one on a face, a name, a tag, a photo, a voice note or a button.
+              if (touch.used() || (e.target as HTMLElement).closest("button, img, a, audio, .tap, .f-at, .f-rxbar-bg")) return;
+              buzz();
+              tap.onTap();
+            }
+          : undefined
+      }
     >
       {props.onReply && <i class="f-msg-swipe" aria-hidden="true">↩</i>}
       <span class="f-msg-ava">
@@ -424,7 +451,7 @@ export function Bubble(props: {
           </div>
         )}
         {props.children}
-        {(canReact || props.onReply || props.acts) && (
+        {showActs && (canReact || props.onReply || props.acts) && (
           <div class="f-msg-a">
             {canReact && (
               <button
@@ -436,7 +463,8 @@ export function Bubble(props: {
                   setBar(!bar);
                 }}
               >
-                😊<i>+</i>
+                <Icon name="smile" size={18} />
+                <i>+</i>
               </button>
             )}
             {props.onReply && (
@@ -536,8 +564,11 @@ export function WriteBar(props: {
   /** He started a tag (@): a chat fetches its group's members then (once), so anyone in it can be tagged. */
   onAt?: () => void;
   onSend: (text: string, ph: Sent[], mt: string[]) => Promise<unknown>;
-  /** Above the words (12 Nov 2026: a teacher's voice-note recorder in an explanation's thread). */
-  extra?: ComponentChildren;
+  /**
+   * A voice note in the write row (20 Nov 2026, an explanation's thread: help.tsx useVoiceRec): `mic` takes the send
+   * button's place while the box is empty, `strip` (recording, or a note to hear and send) takes the whole row's.
+   */
+  voice?: { mic: ComponentChildren; strip: ComponentChildren | null };
   /**
    * The talk shows his words itself the moment he sends them (a chat, 14 Nov 2026): the box empties at once and he can
    * write the next ones; refused, or no signal: his words come back into the box. Never with photos (they upload first).
@@ -684,44 +715,49 @@ export function WriteBar(props: {
         </div>
       )}
       {pk.list.length > 0 && <div class="f-tb-ph">{pk.thumbs}</div>}
-      {props.extra}
-      <div class="f-tb-row">
-        <button
-          type="button"
-          class={`f-tb-emo${emo ? " on" : ""}`}
-          aria-label="Emoji"
-          aria-pressed={emo}
-          onClick={() => {
-            buzz();
-            setEmo(!emo);
-          }}
-        >
-          😊
-        </button>
-        {props.photos && !pk.full && (
-          <button type="button" class="f-tb-cam" aria-label="Add a photo" onClick={pk.pick}>
-            <Icon name="camera" size={22} />
+      {props.voice?.strip ?? (
+        <div class="f-tb-row">
+          <button
+            type="button"
+            class={`f-tb-emo${emo ? " on" : ""}`}
+            aria-label="Emoji"
+            aria-pressed={emo}
+            onClick={() => {
+              buzz();
+              setEmo(!emo);
+            }}
+          >
+            <Icon name="smile" size={24} />
           </button>
-        )}
-        <textarea
-          ref={box}
-          class="f-tb-in"
-          rows={1}
-          maxLength={props.max}
-          placeholder={props.hint}
-          aria-label="Your words"
-          value={t}
-          onInput={(e) => {
-            const el = e.target as HTMLTextAreaElement;
-            setT(el.value);
-            grow(el);
-            look(el.value, el.selectionStart ?? el.value.length);
-          }}
-        />
-        <button type="button" class="f-tb-go" aria-label="Send" disabled={busy || (!t.trim() && !pk.list.length)} onClick={() => void send(t)}>
-          {busy ? "…" : <Icon name="next" size={22} />}
-        </button>
-      </div>
+          {props.photos && !pk.full && (
+            <button type="button" class="f-tb-cam" aria-label="Add a photo" onClick={pk.pick}>
+              <Icon name="camera" size={22} />
+            </button>
+          )}
+          <textarea
+            ref={box}
+            class="f-tb-in"
+            rows={1}
+            maxLength={props.max}
+            placeholder={props.hint}
+            aria-label="Your words"
+            value={t}
+            onInput={(e) => {
+              const el = e.target as HTMLTextAreaElement;
+              setT(el.value);
+              grow(el);
+              look(el.value, el.selectionStart ?? el.value.length);
+            }}
+          />
+          {props.voice && !busy && !t.trim() && !pk.list.length ? (
+            props.voice.mic
+          ) : (
+            <button type="button" class="f-tb-go" aria-label="Send" disabled={busy || (!t.trim() && !pk.list.length)} onClick={() => void send(t)}>
+              {busy ? "…" : <Icon name="next" size={22} />}
+            </button>
+          )}
+        </div>
+      )}
       {emo && (
         <div class="f-tb-ep" role="group" aria-label="Emoji">
           {((props.people && props.people.length > 0) || props.onAt) && (

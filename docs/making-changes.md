@@ -817,6 +817,12 @@ WHY=1 npx vitest run -c vitest.perf.config.ts -t "lab" --reporter=verbose # each
   sliding up with `f-up` does the same while it moves). `filter`, `backdrop-filter`, `will-change: transform` and
   `contain` do it too. A full-screen thing opened from deep inside goes on the body: `showSheet`, or render it into
   its own `div` on `document.body` as `CropSheet` does (`src/family/crop.tsx`).
+- **A header of the Us look needs `.f-hero.us.<yours>` to change its padding** (20 Nov 2026, the Thread tab's
+  unslop pass): `usStyle.ts` sets `.f-hero.us{padding-bottom:24px}`, so a lone `.c-hero` or `.c-head` rule (one
+  class) never won and the header kept its 24 px. Same for anything else that `.f-hero.us` sets.
+- **Chrome taps through a rounded corner** (20 Nov 2026, `tapBubble` in `family.e2e.ts`): a click in a bubble's
+  corner lands on its parent (the corner is outside the `border-radius`), and Playwright refuses it ("… intercepts
+  pointer events"). Click inside the padding, halfway down the side.
 - **`scrollIntoView` scrolls every scroller up the chain, the page too**: a chip centred in its row also pulled the
   page up to the row, and the card's own smooth scroll took it back down (the same bounce, with the questions as
   printed). To move a row sideways, scroll the row (`row.scrollTo`); move the page only on purpose, in a layout effect
@@ -1012,7 +1018,7 @@ WHY=1 npx vitest run -c vitest.perf.config.ts -t "lab" --reporter=verbose # each
   the web push library must return real-looking keys (a 65-byte P-256 public key, base64url), or the photos
   run-through's "alerts on" waits forever (the phone decodes the key before it subscribes).
 - **Two voice recorders, on purpose** (12 Nov 2026, two chats the same night): `src/voiceNote.tsx` (the class app's home
-  lane, 60 s) and `src/family/help.tsx` `VoiceRec` (an explanation's thread in the Us frame, 2 minutes). The Us frame is
+  lane, 60 s) and `src/family/help.tsx` `useVoiceRec` (an explanation's thread in the Us frame, 2 minutes). The Us frame is
   the family app's page (`/f/?staff`): it can't import the teachers' store, so it has its own. Recording there needs
   three things at once: `Permissions-Policy: microphone=(self)` on `/f/` (vercel.json; students record too since the same day,
   only in an explanation's thread: the server refuses a voice note anywhere else), `allow="microphone"` on the iframe (`usFrame.tsx`), and

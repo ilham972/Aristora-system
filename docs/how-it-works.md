@@ -2207,7 +2207,11 @@ learning app of our education institute"): one profile, his class times, what he
         message (or 😊+) for 👏 ❤️ 😂 🔥 💯 💡 🤔 🙏 (`RX`, one per person, tap again to take it back, never on one's own,
         never XP), the counts under it, who reacted on a tap (`ReactorsSheet`); 😊 opens an emoji panel; the box grows;
         in a line's talk a "புதியவை" line where his unread start. A line's 👏 is now a reaction (`usLikes` `e`, `us.react`;
-        the bell says which).
+        the bell says which). **In a chat (a thread, a group, a private chat) the 😊+ ↩ Reply row shows only on a tap on
+        the message** (20 Nov 2026, his yes after the unslop audit: half the chat was these rows): one message at a time
+        (`RoomScreen` `tapped`, `Bubble` `tap`; the tapped one ringed, `.f-msg.acts`), a tap on a face, a name, an @tag, a
+        photo, a voice note or a button never counts (`useTouch` `used()` drops the click after a swipe or a hold); a
+        swipe still replies and a hold still reacts; a line's talk in Us keeps the row under every message.
       - **The blur** (his ask; his rule unchanged: an answer shows only when a teacher marked it right AND he sent his
         own): before his own answer he sees each classmate's answer as a **blurred card** (`Veil`): a face blur, lines of
         blurred words about as long as the answer and, for a photo, its colours blurred. The phone makes each photo's
@@ -2302,8 +2306,10 @@ learning app of our education institute"): one profile, his class times, what he
       makes to scroll too much"): the card 6 px from the edge, the paper to the card's edge, a sub-question's label
       only as wide as its words (`PAPER` in `help.tsx`). His photo is the first message (`ask`). A teacher's link
       shows as a ▶ button (students still can't send links).
-    - **Voice notes** (`VoiceRec` / `Voice` in `help.tsx`): 🎤 above the typing box → the phone's own recorder
-      (MP4/AAC first, else WebM/Opus, mono 24 kbps), heard, then Send. A teacher's up to **2 minutes**
+    - **Voice notes** (`useVoiceRec` / `Voice` in `help.tsx`): 🎤 **in the write row, in the send button's place
+      while the box is empty** (20 Nov 2026, his yes: "in the write row"; ➤ comes back when he types or picks a photo;
+      `WriteBar` `voice`) → the phone's own recorder, which takes the write row's place while it records (time, ✕, ■
+      Stop) and until it is sent (hear it, 🗑, Send) (MP4/AAC first, else WebM/Opus, mono 24 kbps). A teacher's up to **2 minutes**
       (`VOICE_MAX_S`). **Students too** (his ask the same day, "please give the voice note feature for students
       also"; my limits, since a thread is kept a year and classmates join it): **1 minute**, **5 a day in one
       thread** (`VOICE_STUDENT_S`, `VOICE_STUDENT_DAY`), only in a thread and only while his own question is open;
@@ -2322,20 +2328,32 @@ learning app of our education institute"): one profile, his class times, what he
         his thread, his photo after her 📷; reset with `FRESH`) = it waits on her again, else it waits on him (her ✓
         tapped, a photo asked, or quiet); **Understood** = he tapped ✓ I understood, she hasn't (her ✓ closes it);
         **Closed** = explained (both ✓), in class, or Not now.
-      - **The pipeline** (`.h-pipe`): four boxes in one row on every phone, each its count of threads and its colour
-        (red, gold, blue, grey); the red dot on Follow-up = the ones waiting on this phone (a teacher's: he replied; a
-        student's: the teacher answered). It opens on the first box with something waiting on this phone, else the
-        first not empty; her tap keeps it. A teacher's **Mine | All** (`.h-scope`, kept on the phone `helpAll`): Mine
-        = hers and the ⏰ late ones (nobody answered for 12 hours), All = every teacher's.
+      - **The pipeline** (`.h-pipe`): one quiet control of four parts in one row on every phone (20 Nov 2026, his
+        words: "filler buttons are very big": 44 px, was 110 with its heading), each a **stage dot** in its colour (red,
+        gold, blue, grey: the screen's one mark of its own, also on each row, each student's card and her state line),
+        its count of threads and its name; the one picked violet. The red number on Follow-up = the ones waiting on this
+        phone (a teacher's: he replied; a student's: the teacher answered). It opens on the first part with something
+        waiting on this phone, else the first not empty; her tap keeps it. A teacher's **Mine | All** (`.h-scope`, kept
+        on the phone `helpAll`) sits in the tab's violet header beside Thread | Members (`ChatTab`; pale on Members, in
+        its place): Mine = hers and the late ones (nobody answered for 12 hours), All = every teacher's. No heading row
+        and no 🎧 on the page (20 Nov 2026, his words: "same logo again and again").
       - **The rail** on the left (`.h-rail`, sticky, flush with the screen's edge): **All**, then a teacher's students
         (a student's: his Stages), each with its count in the box picked (red when one waits on this phone), in the
         list's order; a tap = only his (his counts in every box), again or All = everyone; the one picked stays even
         at 0.
-      - **One row per thread** (`.h-row`): its students in that box as faces (`.h-faces`, up to three), "Hana +2 ·
-        Q8", Stage · Level, where it stands in words (`said`; red when it waits on her: "💬 Mira replied", "not
-        explained yet"), 👥 N when the thread has more students than shown, ⏰, new. A teacher's queue is the oldest
-        first; a student's the newest. Follow-up: what waits on this phone first, then a line "⏳ Waiting on him" and
-        the rest. Opening a row shows that student's card first.
+      - **One row per thread** (`.h-row`): its students in that box as faces (`.h-faces`, up to three; a student's
+        row: the teacher who explains, never one icon on every row), "Hana +2 · Q8", Stage · Level, where it stands in
+        plain words after its stage dot (`said`; red when it waits on her: "Mira replied", "Not explained yet"), the
+        people icon and N when the thread has more students than shown, a clock when late, a violet dot when new (one
+        mark, not a pill). A teacher's queue is the oldest first; a student's the newest. Follow-up: what waits on this
+        phone first, then a line "Waiting on him" and the rest. Opening a row shows that student's card first.
+      - **Inside a thread** (20 Nov 2026, the unslop pass): the violet header **stays on screen** (‹ Back one tap from
+        anywhere in the chat; `.f-hero.us.c-head` sticky) with Q, Stage · Level and how many wait (or the teacher), her
+        AI (a robot line icon, `h-aib`) and ⋮; no 🎧 tile. The card under it names the unit (Q, Stage and Level are not
+        written twice) with Hide / Question; each student's card is one compact chip (face, name, his state after its
+        dot, his marks); ‹ name's answers · n / N ›; her state line with ✓ Understood and ⋮; one line "Waiting on you"
+        (the sentence on how it closes is gone: the ✓ Understood toast says it). Messages sit on hairlines, hers in flat
+        violet, a teacher's on the soft violet; 😊 and the 📷 tag are line icons.
       A closed thread is kept a year and the next student with the same wrong question joins it (it opens again): no
       new thread.
     - **Consultation's icon** (headphones beside the whiteboard on a Master question's card, `OnlineButton`,

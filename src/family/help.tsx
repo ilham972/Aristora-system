@@ -6,7 +6,8 @@
 // - HelpTop: on top of a thread: the question, what each student typed with the wrong parts in rose, how it stands.
 // - HelpMenu: the teacher's ⋮ (Understood, Not now, Send to another teacher, hide a name or a photo): never a big
 //   button, his words: "mistakenly teachers can press that".
-// - VoiceRec / Voice: a voice note (the phone's own recorder: a teacher 2 minutes, a student 1), and its player.
+// - useVoiceRec / Voice: a voice note (the phone's own recorder: a teacher 2 minutes, a student 1; its 🎤 in the write
+//   row), and its player.
 // - HelpList: his explanations (or the teachers' queue) with its filters, on top of Chats.
 
 import type { ComponentChildren } from "preact";
@@ -25,10 +26,10 @@ import { Avatar, Icon, Maths, problemWords, Sheet, showSheet, toast, Waiting } f
 const LIST_MS = 20_000;
 
 const STATE: Record<HelpAsk["st"], { ta: string; en: string; cls: string }> = {
-  open: { ta: "⏳ காத்திருக்கிறது", en: "Waiting", cls: "open" },
+  open: { ta: "காத்திருக்கிறது", en: "Waiting", cls: "open" },
   done: { ta: "✓ விளக்கப்பட்டது", en: "Explained", cls: "done" },
   class: { ta: "✓ வகுப்பில் விளக்கப்பட்டது", en: "Explained in class", cls: "done" },
-  skip: { ta: "📚 வகுப்பில் விளக்கம்", en: "In class", cls: "skip" },
+  skip: { ta: "வகுப்பில் விளக்கம்", en: "In class", cls: "skip" },
 };
 
 // ---------------------------------------------------------------- the pill's sheet
@@ -302,14 +303,14 @@ const cardWords = (a: HelpAsk, staff: boolean) =>
       : a.sg === "pend"
         ? staff
           ? "Pending"
-          : "⏳ காத்திருக்கிறது"
+          : "காத்திருக்கிறது"
         : a.rp
           ? staff
-            ? "💬 Replied"
-            : "💬 பதில் அனுப்பினார்"
+            ? "Replied"
+            : "பதில் அனுப்பினார்"
           : staff
             ? "Follow-up"
-            : "🎧 விளக்கம் வந்தது";
+            : "விளக்கம் வந்தது";
 
 /**
  * On top of a thread: which question (Stage, Level, Q), each student's card, and the question with the picked student's
@@ -356,15 +357,11 @@ export function HelpTop(props: { id: string; help: HelpHead; staff: boolean; onC
   const whose = (a: HelpAsk) => (staff ? `${a.n}'s answers` : a.mine ? "உன் விடைகள்" : `${a.n} இன் விடைகள்`);
   return (
     <section class="h-top" aria-label={`Q${h.q}`}>
+      {/* Q, Stage and Level are in the thread's header (20 Nov 2026, unslop: said once); here the unit and the question's switch. */}
       <div class="h-top-h">
-        <p>
-          <b>Q{h.q}</b>
-          <span>
-            Stage {h.no} · Level {h.n}
-          </span>
-          <small>{h.unit}</small>
-        </p>
+        <p>{h.unit}</p>
         <button type="button" class={`h-showq${show ? " on" : ""}`} aria-pressed={show} onClick={() => setShow(!show)}>
+          <Icon name="eye" size={16} />
           {staff ? (show ? "Hide" : "Question") : show ? "மூடு" : "கேள்வி"}
         </button>
       </div>
@@ -373,8 +370,10 @@ export function HelpTop(props: { id: string; help: HelpHead; staff: boolean; onC
           <li key={a.id} class={`${STATE[a.st].cls} ${a.sg}${a.rp ? " rp" : ""}${a.st === "open" && a.su ? " und" : ""}${a.id === shown?.id ? " sel" : ""}`}>
             <button type="button" role="tab" class="h-who" aria-selected={a.id === shown?.id} aria-label={whose(a)} onClick={() => a.id !== shown?.id && go(rows.indexOf(a))}>
               <Avatar name={a.n} size="s" pic={picOf(a.pic)} />
-              <b>{a.mine ? "நீ" : a.n}</b>
-              <small class="h-cw">{cardWords(a, staff)}</small>
+              <span class="h-wt">
+                <b>{a.mine ? "நீ" : a.n}</b>
+                <small class="h-cw">{cardWords(a, staff)}</small>
+              </span>
               {a.max !== undefined && a.got !== null && a.got !== undefined && (
                 <em>
                   {a.got}/{a.max}
@@ -398,12 +397,12 @@ export function HelpTop(props: { id: string; help: HelpHead; staff: boolean; onC
         </div>
       )}
       {staff && shown && (
-        <div class={`h-sel ${STATE[shown.st].cls}${shown.st === "open" && shown.su ? " und" : ""}`}>
+        <div class={`h-sel ${STATE[shown.st].cls} ${shown.sg}${shown.st === "open" && shown.su ? " und" : ""}`}>
           <span class="h-st">
             {shown.st !== "open" ? STATE[shown.st].en : shown.su ? "✓ He understood · your ✓ closes it" : STAGES.find(([k]) => k === shown.sg)?.[1]}
             {shown.st === "done" && shown.by ? ` · ${shown.by}` : ""}
-            {shown.st === "open" && !shown.su ? (shown.tu ? " · you tapped: waiting on him" : shown.pw && !shown.ph ? " · photo asked" : shown.rp ? " · 💬 he replied" : "") : ""}
-            {shown.hn || shown.hp ? ` · 🙈 ${shown.hn && shown.hp ? "name, photo" : shown.hn ? "name" : "photo"}` : ""}
+            {shown.st === "open" && !shown.su ? (shown.tu ? " · you tapped: waiting on him" : shown.pw && !shown.ph ? " · photo asked" : shown.rp ? " · he replied" : "") : ""}
+            {shown.hn || shown.hp ? ` · ${shown.hn && shown.hp ? "name, photo" : shown.hn ? "name" : "photo"} hidden` : ""}
           </span>
           {shown.st === "open" && (
             <button
@@ -473,12 +472,13 @@ export function HelpTop(props: { id: string; help: HelpHead; staff: boolean; onC
           )}
         </div>
       )}
+      {/* One line (20 Nov 2026): who it waits on. How it closes is the ✓ Understood toast's, not a sentence on every thread. */}
       {staff && (
-        <p class="h-wait">
+        <p class={`h-wait${h.late ? " late" : ""}`}>
           {h.open ? (
             <>
               Waiting on <b>{h.own ? "you" : h.tname}</b>
-              {h.late ? " · ⏰ over 12 hours" : ""}. It closes when he taps ✓ I understood and you tap ✓ Understood.
+              {h.late ? " · over 12 hours" : ""}
             </>
           ) : (
             "Closed. It opens again when another student sends this question in."
@@ -657,9 +657,11 @@ function voiceType(): string | undefined {
 /**
  * A voice note (his words: "explaining in the voice note like a WhatsApp"; students too since his ask of 12 Nov 2026,
  * "please give the voice note feature for students also"): 🎤 starts the phone's own recorder (nothing added to the
- * app), ■ stops (by itself at `max` seconds), then it is heard and sent or dropped.
+ * app), ■ stops (by itself at `max` seconds), then it is heard and sent or dropped. Since 20 Nov 2026 (his yes: "in
+ * the write row") two pieces for the write bar (talk.tsx WriteBar `voice`): `mic`, in the send button's place while
+ * the box is empty, and `strip`, the recorder that takes the write row's place while it records or waits to be sent.
  */
-export function VoiceRec(props: { onSend: (au: { f: string; d: number }) => Promise<unknown>; max: number; staff: boolean }) {
+export function useVoiceRec(props: { onSend: (au: { f: string; d: number }) => Promise<unknown>; max: number; staff: boolean }): { mic: ComponentChildren; strip: ComponentChildren | null } {
   const MAX = props.max;
   const say = (en: string, ta: string) => toast(props.staff ? en : ta, true);
   const [st, setSt] = useState<"idle" | "rec" | "ready" | "busy">("idle");
@@ -743,13 +745,13 @@ export function VoiceRec(props: { onSend: (au: { f: string; d: number }) => Prom
       setSt("ready");
     }
   };
-  if (st === "idle")
-    return (
-      <button type="button" class="h-mic" aria-label="Record a voice note" onClick={() => void start()}>
-        🎤 <span>Voice note</span>
-      </button>
-    );
-  return (
+  const mic = (
+    <button type="button" class="f-tb-go h-mic" aria-label="Record a voice note" onClick={() => void start()}>
+      <Icon name="mic" size={22} />
+    </button>
+  );
+  if (st === "idle") return { mic, strip: null };
+  const strip = (
     <div class={`h-rec ${st}`} role="group" aria-label="Voice note">
       {st === "rec" ? (
         <>
@@ -778,6 +780,7 @@ export function VoiceRec(props: { onSend: (au: { f: string; d: number }) => Prom
       )}
     </div>
   );
+  return { mic, strip };
 }
 
 /** A voice note in a message: play / pause, a bar, its length. One plays at a time. */
@@ -840,15 +843,16 @@ let pickAid: string | null = null;
 /** Waits on this phone: a teacher's every stage but Closed when he wrote last; a student's when the teacher did. */
 const needs = (l: HelpLine, staff: boolean) => (staff ? l.sg === "pend" || l.sg === "und" || (l.sg === "fol" && !!l.rp) : l.sg === "fol" && !l.rp);
 
-/** The words under a row (a teacher's English, a student's Tamil), from where it stands. */
+/** The words under a row (a teacher's English, a student's Tamil), from where it stands. Plain words: the row's stage
+ *  dot says the rest (20 Nov 2026, unslop: no emoji in front of every line). */
 function said(l: HelpLine, staff: boolean, who: string): string {
   if (l.sg === "closed") return staff ? `${STATE[l.st].en}${l.by ? ` · ${l.by}` : ""}` : STATE[l.st].ta;
   if (l.sg === "und") return staff ? `✓ ${who} understood: your ✓ closes it` : "✓ நீ புரிந்தது என்றாய்";
-  if (l.sg === "pend") return staff ? (l.late ? "⏰ nobody answered for 12 hours" : "not explained yet") : `⏳ ${l.tname} ஆசிரியர் விளக்குவார்`;
-  if (l.rp) return staff ? `💬 ${who} replied` : "💬 ஆசிரியரின் பதிலுக்காக";
-  if (l.pw && !l.ph) return staff ? "📷 photo asked" : "📷 படம் அனுப்பு";
-  if (l.tu) return staff ? "✓ tapped · waiting on him" : "புரிந்ததா? ✓ அழுத்து";
-  return staff ? "⏳ waiting on him" : "🎧 ஆசிரியர் பதில் அனுப்பினார்";
+  if (l.sg === "pend") return staff ? (l.late ? "Nobody answered for 12 hours" : "Not explained yet") : `${l.tname} ஆசிரியர் விளக்குவார்`;
+  if (l.rp) return staff ? `${who} replied` : "ஆசிரியரின் பதிலுக்காக";
+  if (l.pw && !l.ph) return staff ? "Photo asked" : "படம் அனுப்பு";
+  if (l.tu) return staff ? "You tapped ✓ · waiting on him" : "புரிந்ததா? ✓ அழுத்து";
+  return staff ? "Waiting on him" : "ஆசிரியர் பதில் அனுப்பினார்";
 }
 
 /**
@@ -861,13 +865,22 @@ function said(l: HelpLine, staff: boolean, who: string): string {
  * - the rail on the left: a teacher's students (a student's: his Stages), each with its count in the stage picked;
  * - one row per thread: its students' faces (a group thread: up to three), the question, where it stands.
  */
-export function HelpList(props: { staff: boolean; onRoom: (id: string) => void; /** Shown when he has no thread yet (the Chat tab's first section). */ empty?: ComponentChildren }) {
+export function HelpList(props: {
+  staff: boolean;
+  onRoom: (id: string) => void;
+  /** Shown when he has no thread yet (the Chat tab's first section). */
+  empty?: ComponentChildren;
+  /** A teacher's Mine | All (20 Nov 2026: its switch sits in the tab's header, ChatTab; kept as helpAll). */
+  all?: boolean;
+}) {
   const staff = props.staff;
   const key = staff ? "helpT" : "helpMine";
   const [d, setD] = useState<HelpLine[] | null>(() => keep<HelpLine[]>(key));
-  const [all, setAll] = useState(() => staff && keep<boolean>("helpAll") === true);
+  const all = staff && !!props.all;
   const [sg, setSg] = useState<Stage | null>(null);
   const [pick, setPick] = useState("");
+  // Mine ↔ All: the student picked on the rail may not be in the other list.
+  useEffect(() => setPick(""), [all]);
   useEffect(() => {
     const load = () =>
       query(staff ? "help:tlist" : "help:mine").then(
@@ -918,21 +931,7 @@ export function HelpList(props: { staff: boolean; onRoom: (id: string) => void; 
     props.onRoom(ls[0].id);
   };
   return (
-    <section class="h-list" aria-label="Online explanations">
-      <div class="h-list-h">
-        <span>
-          🎧 <b>{staff ? "Online explanations" : "Explain online"}</b>
-        </span>
-        {staff && (
-          <span class="h-scope" role="group" aria-label="Whose">
-            {(["Mine", "All"] as const).map((w, i) => (
-              <button key={w} type="button" aria-pressed={all === !!i} class={all === !!i ? "on" : ""} onClick={() => tap(() => (setAll(!!i), keep("helpAll", !!i), setPick("")))}>
-                {w}
-              </button>
-            ))}
-          </span>
-        )}
-      </div>
+    <section class="h-list" aria-label={staff ? "Online explanations" : "Explain online"}>
       <div class="h-pipe" role="tablist" aria-label="Where it stands">
         {STAGES.map(([s, w]) => {
           const ls = of(s);
@@ -950,7 +949,9 @@ export function HelpList(props: { staff: boolean; onRoom: (id: string) => void; 
       <div class="h-body">
         <nav class="h-rail" aria-label={staff ? "Students" : "Stages"}>
           <button type="button" aria-pressed={!pick} class={`h-ri all${pick ? "" : " on"}`} onClick={() => tap(() => setPick(""))}>
-            <span class="h-rf">🎧</span>
+            <span class="h-rf">
+              <Icon name={staff ? "people" : "map"} size={18} />
+            </span>
             <small>All</small>
           </button>
           {rail.map((l) => {
@@ -981,23 +982,27 @@ export function HelpList(props: { staff: boolean; onRoom: (id: string) => void; 
                 const who = ls.length > 1 ? `${ls[0].sn?.split(" ")[0]} +${ls.length - 1}` : (l.sn ?? "");
                 return (
                   <li key={l.id} class={cut ? "cut" : ""}>
-                    {cut && <p class="h-cut">{staff ? "⏳ Waiting on him" : "⏳ ஆசிரியருக்காக"}</p>}
+                    {cut && <p class="h-cut">{staff ? "Waiting on him" : "ஆசிரியருக்காக"}</p>}
                     <button type="button" class={`c-row h-row ${at}${fresh ? " new" : ""}${needs(l, staff) ? " hot" : ""}`} onClick={() => open(ls)}>
-                      {staff ? (
-                        <span class={`h-faces n${Math.min(ls.length, 3)}`}>
-                          {ls.slice(0, 3).map((x) => (
-                            <Avatar key={x.aid} name={x.sn ?? "?"} pic={picOf(x.pic)} />
-                          ))}
-                        </span>
-                      ) : (
-                        <span class="c-gface">🎧</span>
-                      )}
+                      {/* A teacher's row: its students' faces; a student's: the teacher who explains (never one icon on every row). */}
+                      <span class={`h-faces n${staff ? Math.min(ls.length, 3) : 1}`}>
+                        {staff ? ls.slice(0, 3).map((x) => <Avatar key={x.aid} name={x.sn ?? "?"} pic={picOf(x.pic)} />) : <Avatar name={l.tname} />}
+                      </span>
                       <span class="c-row-w">
                         <b>
                           {staff && `${who} · `}Q{l.q}
                           {staff && ls.length === 1 && l.g !== undefined && <i class="f-gchip">{l.g}</i>}
-                          {many > ls.length && <i class="h-many">👥 {many}</i>}
-                          {l.late && <i class="h-late">⏰</i>}
+                          {many > ls.length && (
+                            <i class="h-many" aria-label={`${many} students`}>
+                              <Icon name="people" size={13} />
+                              {many}
+                            </i>
+                          )}
+                          {l.late && (
+                            <i class="h-late" aria-label="Over 12 hours">
+                              <Icon name="clock" size={14} />
+                            </i>
+                          )}
                         </b>
                         <small>
                           Stage {l.no} · Level {l.n}
@@ -1007,7 +1012,7 @@ export function HelpList(props: { staff: boolean; onRoom: (id: string) => void; 
                       </span>
                       <span class="c-row-r">
                         <small>{agoShort(at === "pend" ? l.at : l.la)}</small>
-                        {fresh && <i class="c-un">{staff ? "new" : "1"}</i>}
+                        {fresh && <i class="h-new" aria-label="New" />}
                       </span>
                     </button>
                   </li>
