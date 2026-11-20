@@ -1,0 +1,13 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90m/home/runner/work/Aristora-system/Aristora-system[39m
+
+ [2m[90m↓[39m[22m tests/e2e/class.e2e.ts [2m([22m[2m30 tests[22m[2m | [22m[33m30 skipped[39m[2m)[22m
+ [32m✓[39m tests/e2e/family.e2e.ts [2m([22m[2m33 tests[22m[2m | [22m[33m32 skipped[39m[2m)[22m[33m 12528[2mms[22m[39m
+   [33m[2m✓[22m[39m online and studying: the green dot and the pencil, Studying now and Online, a classmate's state, his study bars and day totals; his own day with its times; the owner's switch[33m 12189[2mms[22m[39m
+ [2m[90m↓[39m[22m tests/e2e/familyOpen.e2e.ts [2m([22m[2m2 tests[22m[2m | [22m[33m2 skipped[39m[2m)[22m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[2m | [22m[33m2 skipped[39m[90m (3)[39m
+[2m      Tests [22m [1m[32m1 passed[39m[22m[2m | [22m[33m64 skipped[39m[90m (65)[39m
+[2m   Start at [22m 23:41:44
+[2m   Duration [22m 15.09s[2m (tests 85%, import 8%, transform 7%)[22m
+

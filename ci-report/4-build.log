@@ -1,0 +1,24 @@
+
+> aristora-system@1.0.0 build
+> node scripts/build.mjs
+
+
+  dist/assets/app-XFTLKXI2.js                                        906.2kb
+  dist/assets/app-6P6IVFIU.css                                       199.5kb
+  dist/assets/baloo-thambi-2-KKSJQ6SX.woff2                           56.5kb
+  dist/assets/barlow-semi-condensed-latin-700-normal-DVQBTNQV.woff2   22.7kb
+  dist/assets/barlow-semi-condensed-latin-600-normal-YSX2SY2B.woff2   22.4kb
+  dist/assets/barlow-latin-700-normal-5OFOGNFS.woff2                  22.3kb
+  dist/assets/barlow-latin-600-normal-APFZWJSU.woff2                  22.2kb
+  dist/assets/barlow-latin-400-normal-NENW7MY5.woff2                  21.7kb
+  dist/assets/barlow-latin-500-normal-XG5KS5C2.woff2                  21.5kb
+  dist/assets/barlow-semi-condensed-latin-600-normal-PUSKTFKN.woff    19.6kb
+  dist/assets/barlow-semi-condensed-latin-700-normal-RQTTCVLQ.woff    19.5kb
+  dist/assets/barlow-latin-600-normal-IMDL24A2.woff                   19.4kb
+  dist/assets/barlow-latin-700-normal-WICR22MF.woff                   19.3kb
+  dist/assets/barlow-latin-400-normal-NP6ENZ2E.woff                   19.1kb
+  dist/assets/barlow-latin-500-normal-HZFCIMMG.woff                   19.1kb
+
+⚡ Done in 152ms
+Built dist/ for https://qualified-fish-602.convex.cloud: app-XFTLKXI2.js 906 KB, app-6P6IVFIU.css 199 KB
+Built the family app: fam-44GESZFG.js + fam-ERJLWIPQ.css, 62.1 KB over the wire on the first load (budget 67 KB), 74.2 KB right after it (budget 75 KB), Us 24.7 KB (budget 28 KB), the chats 21.0 KB (budget 22 KB), dark 1.3 KB (budget 5 KB), the teachers' Us 7.8 KB (budget 8 KB)
