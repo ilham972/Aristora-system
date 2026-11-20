@@ -55,10 +55,17 @@ html[data-theme="dark"] {
   --paper-b: hue-rotate(180deg) invert(1) contrast(1.3158);
   --paper-bg: transparent;
   --paper-ink: #1c1a3a;
+  /* The paper's OWN colours (a sub-question's label, a source line), not a box he taps: their LIGHT values, because
+     the paper is turned once (an app colour's dark value would be turned a second time: a light violet label became
+     dark violet on the dark card). */
+  --paper-label: #5a49d6;
+  --paper-faint: #9d99bf;
 }
 
-/* On a solid colour, the light look's own ink stays. */
-html[data-theme="dark"] :is(.f-tag.gold, .f-btn.gold, .f-pbar.full .f-ptag, .f-giftc, .f-race-rank.r1, .f-lv-tag.cam, .f-goatchip, .f-us-open.go, .f-us-askb small, .f-learn-s button.on) {
+/* On a solid colour, the light look's own ink stays (tests/theme.test.ts fails when a rule paints var(--gold-ink) on
+   solid gold and is not listed here: 20 Nov 2026, the quests' chest, the road's last tag and the Level's Check key had
+   come in with words that vanished in dark). */
+html[data-theme="dark"] :is(.f-tag.gold, .f-btn.gold, .f-pbar.full .f-ptag, .f-giftc, .f-race-rank.r1, .f-lv-tag.cam, .f-goatchip, .f-us-open.go, .f-us-askb small, .f-learn-s button.on, .f-dq-chest.ready, .f-dq-chest.ready small, .f-rd-final, .f-key.chk) {
   color: #6b4500;
 }
 html[data-theme="dark"] :is(.f-hero .f-caret.many, .f-hero .f-who.on) {

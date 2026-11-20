@@ -247,7 +247,7 @@ const PAPER_CSS = `.qv { border-radius: 14px; padding: 14px 12px 10px; -webkit-u
   font: 500 17px/1.6 "Baloo Thambi 2", "Noto Sans Tamil", system-ui, sans-serif; }
 .qv :not(svg):not(svg *):not(.mi):not(.mi *) { font-family: "Baloo Thambi 2", "Noto Sans Tamil", system-ui, sans-serif !important; }
 .qv .sit, .qv .qs, .qv .sq, .qv .lead, .qv .lead2, .qv .pq p, .qv .bl, .qv .rp, .qv .mcq, .qv table.gt td { font-size: 17px !important; line-height: 1.6 !important; }
-.qv .src { font-size: 12.5px !important; letter-spacing: 0 !important; color: var(--ink3, #9d99bf) !important; font-weight: 600 !important; }
+.qv .src { font-size: 12.5px !important; letter-spacing: 0 !important; color: var(--paper-faint, var(--ink3, #9d99bf)) !important; font-weight: 600 !important; }
 .qv .mi { font-family: "STIX Two Text", "Cambria Math", Georgia, serif; }
 .qv .frc { font-size: .9em; }
 .qv .qn, .qv .pm, .qv .mk { display: none !important; }
@@ -288,7 +288,7 @@ const PAPER_CSS = `.qv { border-radius: 14px; padding: 14px 12px 10px; -webkit-u
 .qv .qh > span.tb { display: none !important; }
 .qv .lead { margin: .9em 0 .2em !important; }
 .qv .sq { display: block !important; margin: .8em 0 .3em !important; min-height: 0 !important; }
-.qv .sq .sl { display: inline !important; width: auto !important; margin-right: .35em; font-weight: 800; color: var(--brand-2, #5a49d6); }
+.qv .sq .sl { display: inline !important; width: auto !important; margin-right: .35em; font-weight: 800; color: var(--paper-label, var(--brand-2, #5a49d6)); }
 .qv .sq .st { display: inline !important; }
 .qv .sq .sa:not([data-paper]) { display: inline-block !important; margin: 0 0 0 .3em !important; vertical-align: middle; }
 .qv .qs { min-width: 0; overflow-wrap: break-word; }
@@ -298,7 +298,7 @@ const PAPER_CSS = `.qv { border-radius: 14px; padding: 14px 12px 10px; -webkit-u
 .qv .sh, .qv .qsep, .qv .pt[style*="inline-block"] { display: block !important; width: auto !important; }
 .qv .sec > .fgb { margin-left: 0 !important; }
 .qv .qsep { margin: 0 0 .3em !important; }
-.qv .qsep > span { padding: 0 !important; background: none !important; color: var(--ink3, #9d99bf) !important; font-size: 12.5px !important; font-weight: 600 !important; }`;
+.qv .qsep > span { padding: 0 !important; background: none !important; color: var(--paper-faint, var(--ink3, #9d99bf)) !important; font-size: 12.5px !important; font-weight: 600 !important; }`;
 
 /**
  * A question as printed, on the level. A tap opens it full screen (`QuestionZoom`): the app itself never zooms. With

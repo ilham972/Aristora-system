@@ -1042,20 +1042,29 @@ WHY=1 npx vitest run -c vitest.perf.config.ts -t "lab" --reporter=verbose # each
 - **Dark (the family app, 13 Nov 2026): every colour is decided twice from now on.** How it works: `html[data-theme=
   "dark"]` (set by `boot.ts` before the first paint, or by the switch in Me) and `src/family/dark.css`, which gives the
   palette's names (`--bg`, `--card`, `--ink`, the `-soft` and `-ink` ones) their dark values; `family.css`,
-  `profile.css`, `usStyle.ts` and `chatStyle.ts` paint with the names, so most things follow by themselves. The rules:
+  `profile.css`, `usStyle.ts`, `chatStyle.ts`, `levelStyle.ts` and `buddyStyle.ts` paint with the names, so most things
+  follow by themselves (a new style file joins `STYLES` in `tests/theme.test.ts`: the test fails until it does). The
+  rules:
   - **A white surface is `var(--card)`, never `#fff`** (`tests/theme.test.ts` fails on a new `background: #fff`; a
     white MARK on violet, a play button on the header or a switch's knob, stays `#fff` and is named in that test).
   - **A tint typed by hand** (`#efedf8`, a `rgba(255,255,255,…)` wash, a gradient ending in white) has no name, so it
     needs its dark value in `dark.css` (one selector a rule, under `html[data-theme="dark"]`, lists inside `:is()`;
     **no nesting**: an iPhone 7 can't read `&`). Prefer a name of the palette to a new hand-typed tint.
   - **A `-soft` colour is a dark tint and an `-ink` a light one in dark.** So ink on a SOLID colour (START's brown on
-    gold) must not follow: such rules are pinned in `dark.css` ("On a solid colour"). `--brand-2` is light in dark
+    gold) must not follow: such rules are pinned in `dark.css` ("On a solid colour"), and `tests/theme.test.ts`
+    fails when a rule paints `var(--gold-ink)` (or another `-ink`) on its own solid colour, as the first colour its
+    background names, and is not in that list (20 Nov 2026: the quests' chest, the road's last tag and the Level's
+    Check key had come in with words that vanished in dark). `--brand-2` is light in dark
     (text); `--brand-3` stays deep (edges).
   - **A question as printed** is the book's page: turned as one piece inside its shadow root by `filter:
     var(--paper-f)` on `.qv` (`invert(0.88) hue-rotate(180deg)`: 0.88 so the book's white lands on a grey as deep as a
     card, not a black slab), and each of the app's own pieces in it (`[data-fill]`, `[data-opt]`, `.fx-tk`, a slotted
     box) carries `--paper-b`, the exact way back (`hue-rotate(180deg) invert(1) contrast(1.3158)`; change one, change
-    the other: 1 / (2 × 0.88 − 1)). A new piece inside the paper needs that line, or it shows in negative. The names cross the shadow root because CSS names are inherited; `:host-context()` is Chrome only.
+    the other: 1 / (2 × 0.88 − 1)). A new piece inside the paper needs that line, or it shows in negative. **A colour of the paper's own** (a
+    sub-question's label, a source line), not a box he taps, is turned once with the paper, so it needs its LIGHT
+    value in dark: give it through a name that `dark.css` sets to the light value (`--paper-label`, `--paper-faint`:
+    `color: var(--paper-label, var(--brand-2, #5a49d6))`). An app name alone there (`var(--brand-2)`) is turned a
+    second time and comes out dark on dark (20 Nov 2026: the "(i)" labels of a ladder). The names cross the shadow root because CSS names are inherited; `:host-context()` is Chrome only.
   - **dark.css is its own file** (the first load had 0.5 KB left): never `import` it from a `.tsx` (esbuild would copy
     it into the first load). `boot.ts` imports nothing and stays a few lines: it blocks the page's first paint.
   - **To look at every screen in dark**: `DARK=1 SHOTS=<folder> npx vitest run -c vitest.e2e.config.ts
