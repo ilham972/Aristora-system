@@ -17,7 +17,7 @@ import { keep, last, mutation, query, sameOr } from "./net";
 import { picOf, usePics } from "./pics";
 import { buzz, sound } from "./sound";
 import { AiExplainSheet, AskSheet, HelpList, HelpMenu, HelpTop, useVoiceRec, Voice } from "./help";
-import { agoShort, Bubble, jumpTo, ReactorsSheet, WriteBar, type Sent, type Taggable } from "./talk";
+import { agoShort, Bubble, jumpTo, ReactorsSheet, ReadFull, WriteBar, type Sent, type Taggable } from "./talk";
 import { Avatar, Icon, Owl, problemWords, Sheet, showSheet, toast, Waiting } from "./ui";
 import { Pics } from "./usPost";
 
@@ -309,6 +309,14 @@ function dayWords(t: number): string {
  */
 type Msg = ChatMsg & { wait?: true; /** The bubble's key from when it waited: it stays the same bubble once sent. */ k?: string };
 
+/**
+ * The AI's messages (her 🤖, the AI's answers, the threads link's replies): a teacher's account under this name
+ * (convex/ai.ts AI_NAME; the run-through "Explain online: the pill …" proves the two match). Shown as one card the
+ * chat's width with its ⤢ (20 Nov 2026), never on a side: on her phone they were "hers" (right), on his "theirs" (left).
+ */
+const AI_NAME = "ARISTORA AI";
+const isAi = (m: ChatMsg) => !!m.tch && m.n === AI_NAME;
+
 export function RoomScreen(props: { id: string; staff: boolean; me?: string; onBack: () => void; onMate: (id: string) => void }) {
   // A chat opened again shows at once as he left it, at its end (net.ts last); what is new comes with the first read.
   const [was] = useState(() => last<{ head: ChatHead; msgs: Msg[]; more: boolean }>(`room.${props.id}`));
@@ -594,16 +602,17 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
               {msgs.flatMap((m, i) => {
                 const prev = msgs[i - 1];
                 const q = m.re ? byId.get(m.re) : undefined;
+                const ai = isAi(m);
                 const out = [];
                 if (!prev || dayNo(prev.at) !== dayNo(m.at)) out.push(<li key={`d${m.at}`} class="c-day"><span>{dayWords(m.at)}</span></li>);
                 out.push(
                   <Bubble
                     key={m.k ?? m.id}
-                    x={{ id: m.id, at: m.at, n: m.mine ? "நீ" : m.n, ...(m.w.startsWith("s:") ? { sid: m.w.slice(2) } : {}), ...(m.pic ? { pic: m.pic } : {}), ...(m.tch ? { tch: true } : {}), ...(m.mine ? { mine: true } : {}), ...(m.t ? { t: m.t } : {}), ...(m.mt ? { mt: m.mt } : {}), ...(m.rx ? { rx: m.rx } : {}), ...(m.my ? { my: m.my } : {}) }}
-                    cls={`${m.wait ? "wait " : ""}${m.re ? "re" : ""}${prev && prev.w === m.w && m.at - prev.at < 5 * 60_000 && dayNo(prev.at) === dayNo(m.at) ? " cont" : ""}`}
+                    x={{ id: m.id, at: m.at, n: m.mine && !ai ? "நீ" : m.n, ...(m.w.startsWith("s:") ? { sid: m.w.slice(2) } : {}), ...(m.pic ? { pic: m.pic } : {}), ...(m.tch ? { tch: true } : {}), ...(m.mine ? { mine: true } : {}), ...(m.t ? { t: m.t } : {}), ...(m.mt ? { mt: m.mt } : {}), ...(m.rx ? { rx: m.rx } : {}), ...(m.my ? { my: m.my } : {}) }}
+                    cls={`${m.wait ? "wait " : ""}${m.re ? "re" : ""}${prev && prev.w === m.w && !ai && !isAi(prev) && m.at - prev.at < 5 * 60_000 && dayNo(prev.at) === dayNo(m.at) ? " cont" : ""}`}
                     tags={
                       <>
-                        {m.tch && <i class="f-msg-tag">ஆசிரியர்</i>}
+                        {m.tch && !ai && <i class="f-msg-tag">ஆசிரியர்</i>}
                         {m.ask && (
                           <i class="f-msg-tag h-asktag">
                             <Icon name="camera" size={12} /> {props.staff ? "his working" : "வழிமுறை"}
@@ -631,6 +640,7 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
                     onMate={props.onMate}
                     onReply={head.can.write && !m.wait ? () => (setTapped(null), setRe({ id: m.id, n: m.mine ? "நீ" : m.n, ...(m.t ? { t: m.t } : {}) })) : undefined}
                     tap={m.wait ? undefined : { open: tapped === m.id, onTap: () => setTapped(tapped === m.id ? null : m.id) }}
+                    full={ai && m.t ? () => showSheet((close) => <ReadFull n={m.n} sub={head.k === "h" ? head.name : undefined} t={m.t!} mt={m.mt} onMate={props.onMate} staff={props.staff} onClose={close} />) : undefined}
                     onReact={head.look || m.wait ? undefined : (e) => react(m, e)}
                     onWho={() => showSheet((close) => <ReactorsSheet load={() => query("chat:reactors", { cid: m.id }) as Promise<never>} onClose={close} />)}
                     acts={

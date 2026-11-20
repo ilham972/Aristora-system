@@ -240,6 +240,40 @@ export function Words(props: { t: string; mt?: { id: string; n: string }[]; onMa
   return <p class="f-msg-t">{parts}</p>;
 }
 
+/**
+ * A message full screen (20 Nov 2026, the AI's explanations, his words: "put the full screen icon ... so they can read
+ * that ... easily read and close"): ARISTORA's navy, big letters, the page behind it still. ✕, Close at the end and the
+ * phone's Back close it (opened with showSheet).
+ */
+export function ReadFull(props: { n: string; sub?: string; t: string; mt?: { id: string; n: string }[]; onMate: (id: string) => void; staff?: boolean; onClose: () => void }) {
+  useEffect(() => {
+    document.body.classList.add("f-noscroll");
+    return () => document.body.classList.remove("f-noscroll");
+  }, []);
+  return (
+    <div class="f-read" role="dialog" aria-modal="true" aria-label={props.n}>
+      <header class="f-read-h">
+        <i class="f-msg-ai" aria-hidden="true">
+          <Icon name="robot" size={18} />
+        </i>
+        <span>
+          <b>{props.n}</b>
+          {props.sub && <small>{props.sub}</small>}
+        </span>
+        <button type="button" class="f-read-x" aria-label="Close" onClick={props.onClose}>
+          <Icon name="close" size={22} />
+        </button>
+      </header>
+      <div class="f-read-b">
+        <Words t={props.t} mt={props.mt} onMate={props.onMate} />
+        <button type="button" class="f-read-done" onClick={props.onClose}>
+          {props.staff ? "Close" : "மூடு"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** A swipe to the right replies; a hold reacts (a phone's long press; the page still scrolls up and down). */
 function useTouch(onReply?: () => void, onHold?: () => void) {
   const st = useRef<{ x: number; y: number; t: number; dx: number; id: number } | null>(null);
@@ -328,7 +362,9 @@ function RxBar(props: { my?: string; onPick: (e: string) => void; onClose: () =>
  * One message. `quote`: what it answers (undefined: not a reply). `pics`: its photos (the caller's Pics). `acts`: a
  * teacher's buttons and ⚑, after 😊 and ↩. `children`: under it (her ✓, her correction, her words to him). `tap`: the
  * 😊 ↩ row shows only once the message is tapped (a chat, 20 Nov 2026, his yes: "show it on tap"; a swipe still
- * replies, a hold still reacts).
+ * replies, a hold still reacts). `full`: the AI's message (20 Nov 2026, his words: "if the AI send the message, use the
+ * full width ... black background ... put the full screen icon"): one card the chat's width, never a side, and its ⤢
+ * opens it full screen (`full` is what the ⤢ does: ReadFull).
  */
 export function Bubble(props: {
   x: Talk;
@@ -346,6 +382,7 @@ export function Bubble(props: {
   acts?: ComponentChildren;
   children?: ComponentChildren;
   tap?: { open: boolean; onTap: () => void };
+  full?: () => void;
 }) {
   const x = props.x;
   const [bar, setBar] = useState(false);
@@ -361,10 +398,60 @@ export function Bubble(props: {
   };
   const rx = RX_KEYS.filter((k) => (x.rx?.[k] ?? 0) > 0);
   const total = rx.reduce((a, k) => a + (x.rx?.[k] ?? 0), 0);
+  const full = props.full;
+  const head = (
+    <p class="f-msg-h">
+      {full && (
+        <i class="f-msg-ai" aria-hidden="true">
+          <Icon name="robot" size={15} />
+        </i>
+      )}
+      <b
+        class={x.sid ? "tap" : ""}
+        onClick={
+          x.sid
+            ? () => {
+                buzz();
+                props.onMate(x.sid!);
+              }
+            : undefined
+        }
+      >
+        {x.n}
+      </b>
+      {props.tags}
+      <small>{agoShort(x.at)}</small>
+      {full && (
+        <button
+          type="button"
+          class="f-msg-full"
+          aria-label="Full screen"
+          onClick={() => {
+            buzz();
+            full();
+          }}
+        >
+          <Icon name="expand" size={18} />
+        </button>
+      )}
+    </p>
+  );
+  const quote = props.quote !== undefined && (
+    <button type="button" class={`f-msg-q${props.quote ? "" : " gone"}`} onClick={props.onQuote ?? undefined} disabled={!props.quote}>
+      <b>↩ {props.quote ? props.quote.n : "…"}</b>
+      <span>{props.quote ? clipWords(props.quote.t) || (props.quote.ph ? "📷 படம்" : "") : "இந்த message இப்போது இல்லை"}</span>
+    </button>
+  );
+  const body = (
+    <div class="f-msg-b">
+      {x.t && <Words t={x.t} mt={x.mt} onMate={props.onMate} />}
+      {props.pics}
+    </div>
+  );
   return (
     <li
       id={`m-${x.id}`}
-      class={`f-msg${x.tch ? " tch" : ""}${x.mine ? " mine" : ""}${tap?.open ? " acts" : ""}${props.cls ? ` ${props.cls}` : ""}`}
+      class={`f-msg${x.tch ? " tch" : ""}${x.mine ? " mine" : ""}${full ? " ai" : ""}${tap?.open ? " acts" : ""}${props.cls ? ` ${props.cls}` : ""}`}
       ref={touch.ref}
       onPointerDown={touch.onPointerDown}
       onPointerMove={touch.onPointerMove}
@@ -401,33 +488,19 @@ export function Bubble(props: {
         )}
       </span>
       <div class="f-msg-w">
-        <p class="f-msg-h">
-          <b
-            class={x.sid ? "tap" : ""}
-            onClick={
-              x.sid
-                ? () => {
-                    buzz();
-                    props.onMate(x.sid!);
-                  }
-                : undefined
-            }
-          >
-            {x.n}
-          </b>
-          {props.tags}
-          <small>{agoShort(x.at)}</small>
-        </p>
-        {props.quote !== undefined && (
-          <button type="button" class={`f-msg-q${props.quote ? "" : " gone"}`} onClick={props.onQuote ?? undefined} disabled={!props.quote}>
-            <b>↩ {props.quote ? props.quote.n : "…"}</b>
-            <span>{props.quote ? clipWords(props.quote.t) || (props.quote.ph ? "📷 படம்" : "") : "இந்த message இப்போது இல்லை"}</span>
-          </button>
+        {full ? (
+          <div class="f-msg-card">
+            {head}
+            {quote}
+            {body}
+          </div>
+        ) : (
+          <>
+            {head}
+            {quote}
+            {body}
+          </>
         )}
-        <div class="f-msg-b">
-          {x.t && <Words t={x.t} mt={x.mt} onMate={props.onMate} />}
-          {props.pics}
-        </div>
         {rx.length > 0 && (
           <div class="f-rxs">
             {rx.map((k) => (

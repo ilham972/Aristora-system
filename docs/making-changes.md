@@ -907,6 +907,9 @@ SIZE=200 NAMES=family:me,chat:room npx vitest run -c vitest.scale.config.ts test
 - **A header of the Us look needs `.f-hero.us.<yours>` to change its padding** (20 Nov 2026, the Thread tab's
   unslop pass): `usStyle.ts` sets `.f-hero.us{padding-bottom:24px}`, so a lone `.c-hero` or `.c-head` rule (one
   class) never won and the header kept its 24 px. Same for anything else that `.f-hero.us` sets.
+- **A chat's own bubble wins with four classes** (20 Nov 2026, the AI's card): `.c-msgs .f-msg.mine .f-msg-h b`
+  (hidden name) and `.c-msgs .f-msg.mine .f-msg-h` (right-aligned) beat a three-class `.c-msgs .f-msg-card …`, so the
+  AI's card on the teacher's phone lost its name until its rules said `.c-msgs .f-msg.ai …` (four, and later).
 - **Chrome taps through a rounded corner** (20 Nov 2026, `tapBubble` in `family.e2e.ts`): a click in a bubble's
   corner lands on its parent (the corner is outside the `border-radius`), and Playwright refuses it ("… intercepts
   pointer events"). Click inside the padding, halfway down the side.

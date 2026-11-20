@@ -4719,6 +4719,70 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
   await aiSheet.getByRole("button", { name: "Close" }).click();
   await until(async () => (await U.locator(".h-aix").count()) === 0, "the AI sheet closed");
 
+  // The AI's message (20 Nov 2026, his words: "if the AI send the message, use the full width ... black background ...
+  // put the full screen icon"): through the server's own ai.say (as her 🤖's explanation arrives), one navy card the
+  // chat's width on both phones, never a side (on hers it was "hers", on Hana's "theirs"); ⤢ opens it full screen.
+  const nilaId = await t.run(async (ctx) => (await ctx.db.query("users").collect()).find((u) => u.name === "Nila")!._id);
+  const AI_WORDS =
+    "வணக்கம் Hana! 👋 இதை ஒன்றாகப் பார்ப்போம்.\n\n🍎 ஒரு பெட்டியில் 8 ஆப்பிள்கள், அப்படி 3 பெட்டிகள் என்று நினை.\n\n" +
+    "1⃣ முதலில் 8 ஐ 3 ஆல் பெருக்கு: 8 × 3 = 24.\n2⃣ நீ 51 என்று எழுதினாய்: 5 உம் 1 உம் சேர்த்து எழுதியது போல.\n" +
+    "3⃣ பெருக்கல் = மீண்டும் மீண்டும் கூட்டல்: 8 + 8 + 8 = 24.\n\n🎯 விடை: 24\n\n✅ சரிபார்: 24 ÷ 3 = 8. இப்போது (ii) ஐயும் முயற்சி செய்!";
+  await t.mutation(internal.ai.say, { rid: voice!.rid, by: nilaId, sid: hana, text: AI_WORDS });
+  const wide = async (who: L, page: Page) => {
+    const card = who.locator(".f-msg.ai .f-msg-card");
+    await until(async () => (await card.count()) === 1, "the AI's card", 20_000);
+    const box = (await card.boundingBox())!;
+    const vw = page.viewportSize()!.width;
+    // The chat's width (the same margin on both sides), on her phone too where it was "hers" (pushed right, 44 px off).
+    expect(box.x).toBeLessThan(30);
+    expect(Math.abs(vw - (box.x + box.width) - box.x)).toBeLessThan(3);
+    expect(await card.evaluate((e) => getComputedStyle(e).backgroundColor)).toBe("rgb(22, 33, 62)");
+    expect(await card.evaluate((e) => getComputedStyle(e.querySelector(".f-msg-t")!).color)).toBe("rgb(238, 241, 251)");
+    await contains(card.locator(".f-msg-h"), "ARISTORA AI");
+    expect(await card.locator(".f-msg-tag").count()).toBe(0);
+    await visible(card.getByRole("button", { name: "Full screen" }));
+    return card;
+  };
+  const tcard = await wide(U, C);
+  expect(await U.locator(".f-msg.ai").getAttribute("class")).toContain("mine");
+  await tcard.scrollIntoViewIfNeeded();
+  await noSideScroll(C);
+  await shot(C, "help07d-ai-card-teacher");
+  const scard = await wide(P, P);
+  // His message right after it is his own bubble again (never folded under the AI's card).
+  await scard.scrollIntoViewIfNeeded();
+  await noSideScroll(P);
+  await shot(P, "help07e-ai-card-student");
+  // ⤢: full screen, big letters; the button never opens the message's 😊 ↩ row.
+  await scard.getByRole("button", { name: "Full screen" }).click();
+  const read = P.locator(".f-read");
+  await visible(read);
+  expect(await P.locator(".f-msg.ai.acts").count()).toBe(0);
+  await contains(read.locator(".f-read-h"), "ARISTORA AI");
+  await contains(read.locator(".f-read-h"), "Q8");
+  await contains(read.locator(".f-msg-t"), "8 × 3 = 24");
+  expect(await read.locator(".f-msg-t").evaluate((e) => getComputedStyle(e).fontSize)).toBe("19px");
+  const rb = (await read.boundingBox())!;
+  expect(Math.round(rb.width)).toBe(P.viewportSize()!.width);
+  expect(Math.round(rb.height)).toBe(P.viewportSize()!.height);
+  await noSideScroll(P);
+  await shot(P, "help07f-ai-full-screen");
+  // மூடு at the end closes it; the phone's Back closes it too, and stays in the thread.
+  await read.getByRole("button", { name: "மூடு" }).click();
+  await until(async () => (await P.locator(".f-read").count()) === 0, "the full screen closed");
+  await visible(P.locator(".c-head"));
+  await scard.getByRole("button", { name: "Full screen" }).click();
+  await visible(P.locator(".f-read"));
+  await P.goBack();
+  await until(async () => (await P.locator(".f-read").count()) === 0, "Back closed the full screen");
+  await visible(P.locator(".f-msg.ai .f-msg-card"));
+  // On her phone ✕ closes it.
+  await tcard.getByRole("button", { name: "Full screen" }).click();
+  await visible(U.locator(".f-read"));
+  await contains(U.locator(".f-read .f-read-done"), "Close");
+  await U.locator(".f-read").getByRole("button", { name: "Close" }).first().click();
+  await until(async () => (await U.locator(".f-read").count()) === 0, "her full screen closed");
+
   // ⋮ → Understood (two taps: never by mistake). 13 Nov 2026, his rule: both must tap, so it waits on her.
   await U.locator(".h-more").click();
   const menu = U.locator(".h-menu");
@@ -4760,7 +4824,7 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
   expect((await t.query(api.help.start, { token: MIRA, unitId: u01, q: 8 })).thread).toMatchObject({ id: tid, tname: "Nila", n: 1 });
   expect((await t.mutation(api.help.ask, { token: MIRA, unitId: u01, q: 8, ph: [{ s: await png(), b: await png(), w: 96, h: 72 }] })).id).toBe(tid);
   const hers = await t.query(api.chat.room, { token: MIRA, id: tid });
-  expect(hers.msgs.map((m) => m.n)).toEqual(["Hana K", "Nila", "Nila", "Hana K", "Nila", "Hana K", "Mira J"]);
+  expect(hers.msgs.map((m) => m.n)).toEqual(["Hana K", "Nila", "Nila", "Hana K", "ARISTORA AI", "Nila", "Hana K", "Mira J"]);
   expect(hers.msgs[1].au).toBeDefined();
   expect((await mq(mira, 8))?.x).toBeUndefined();
   // Nila's open thread: Mira waits; ⋮ on Hana → her name hidden from Mira's phone.

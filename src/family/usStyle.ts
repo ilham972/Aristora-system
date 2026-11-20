@@ -322,6 +322,22 @@ const CSS = `
 .f-spot-a>b{color:var(--gold-ink)}
 .f-spot-q p,.f-spot-a p{font-size:14.5px;line-height:1.5;color:var(--ink);white-space:pre-wrap;overflow-wrap:anywhere}
 .f-spot-q .f-pics,.f-spot-a .f-pics{margin-top:2px}
+.f-msg-card,.f-read{--ai:#16213e}
+.f-msg-card{padding:10px 10px 14px 14px;border-radius:16px;background:var(--ai);color:#eef1fb}
+.f-msg-ai{flex:none;display:grid;place-items:center;width:26px;height:26px;border-radius:8px;background:rgba(255,255,255,.12);color:#fff;font-style:normal}
+.f-msg-full{flex:none;display:grid;place-items:center;width:38px;height:38px;margin:-6px 0 -6px auto;border-radius:11px;background:rgba(255,255,255,.12);color:#fff}
+.f-msg-full:active,.f-read-x:active,.f-read-done:active{transform:scale(.95)}
+.f-read{position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;background:var(--ai);color:#eef1fb;animation:f-read-in .2s ease-out}
+@keyframes f-read-in{from{opacity:0;transform:translateY(14px)}}
+.f-read-h{flex:none;display:flex;align-items:center;gap:10px;padding:calc(var(--safe-t) + 10px) 10px 10px 16px;border-bottom:1px solid rgba(255,255,255,.1)}
+.f-read-h span{flex:1;min-width:0;display:grid;gap:1px}
+.f-read-h b{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font:700 16px/1.25 var(--display);color:#fff}
+.f-read-h small{font:600 12.5px/1.3 var(--display);color:rgba(238,241,251,.65)}
+.f-read-h .f-msg-ai{width:34px;height:34px;border-radius:11px}
+.f-read-x{flex:none;display:grid;place-items:center;width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,.12);color:#fff}
+.f-read-b{flex:1;overflow-y:auto;overscroll-behavior:contain;padding:18px 20px calc(var(--safe-b) + 28px)}
+.f-read-b .f-msg-t{max-width:40em;margin:0 auto;font-size:19px;line-height:1.75;color:#eef1fb}
+.f-read-done{display:block;width:100%;max-width:40em;height:50px;margin:28px auto 0;border-radius:14px;background:rgba(255,255,255,.12);color:#fff;font:700 16px/1 var(--display)}
 `;
 
 let added = false;

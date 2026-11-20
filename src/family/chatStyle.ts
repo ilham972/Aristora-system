@@ -90,6 +90,16 @@ const CSS = `
 .c-msgs .f-msg.mine .f-msg-q{border-left:0;border-right:3px solid var(--brand);border-radius:12px 4px 4px 12px;text-align:right;align-items:flex-end}
 .c-msgs .f-msg.mine .f-rxs{justify-content:flex-end}
 .c-msgs .f-msg.mine.cont>.f-msg-ava{display:none}
+.c-msgs .f-msg.ai{grid-template-columns:1fr;margin-left:-6px}
+.c-msgs .f-msg.ai>.f-msg-ava{display:none}
+.c-msgs .f-msg.ai .f-msg-w{display:block}
+.c-msgs .f-msg.ai .f-rxs{justify-content:flex-start}
+.c-msgs .f-msg.ai .f-msg-h{display:flex;justify-content:flex-start;gap:7px;margin-bottom:6px;font:600 12.5px/1.2 var(--display);color:rgba(238,241,251,.7)}
+.c-msgs .f-msg.ai .f-msg-h b{display:inline;color:#fff;font-weight:700}
+.c-msgs .f-msg.ai .f-msg-h small{color:rgba(238,241,251,.6)}
+.c-msgs .f-msg.ai .f-msg-b{display:block;margin:0;padding:0;border-radius:0;background:none!important;box-shadow:none!important}
+.c-msgs .f-msg.ai .f-msg-t{font-size:16px;line-height:1.65;color:#eef1fb}
+.c-msgs .f-msg.ai.acts .f-msg-card{box-shadow:0 0 0 3px var(--brand-mid)}
 .c-more{display:block;margin:12px auto 0}
 .c-cant{position:fixed;left:50%;bottom:0;width:min(100%,520px);transform:translateX(-50%);padding:14px 16px calc(14px + var(--safe-b));border-radius:22px 22px 0 0;background:var(--card);box-shadow:0 -8px 26px -14px rgba(40,30,110,.42);text-align:center;font-size:14px;line-height:1.45;color:var(--ink2)}
 .c-rule{margin:12px 16px 0;padding:10px 12px;border-radius:14px;background:var(--gold-soft);color:var(--gold-ink);font-size:13.5px;line-height:1.5}

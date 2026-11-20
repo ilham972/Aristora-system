@@ -2359,6 +2359,16 @@ learning app of our education institute"): one profile, his class times, what he
         dot, his marks); ‹ name's answers · n / N ›; her state line with ✓ Understood and ⋮; one line "Waiting on you"
         (the sentence on how it closes is gone: the ✓ Understood toast says it). Messages sit on hairlines, hers in flat
         violet, a teacher's on the soft violet; 😊 and the 📷 tag are line icons.
+      - **The AI's messages: one navy card the chat's width, and full screen** (20 Nov 2026, his words: "students
+        don't reading that ... it's not using full width ... if the AI send the message, use the full width ... black
+        background ... the full screen icon ... easily read and close"). A message under ARISTORA AI (her 🤖, the AI's
+        answers, the threads link's replies: a teacher's account under that name, `isAi` in `chat.tsx`) is never on a
+        side (on the teacher's phone it was "hers", on the right; on the student's "theirs", on the left): one card
+        from margin to margin in ARISTORA's navy `#16213e` (a step lighter in dark mode), white letters at 16 px, the
+        robot mark, "ARISTORA AI" and the time, no teacher tag, never folded under the message before it. Its ⤢ in the
+        top-right corner opens it **full screen** (`ReadFull` in `talk.tsx`, through `showSheet`): the same navy, 19 px
+        letters, the page behind it still; ✕, Close / மூடு at the end and the phone's Back close it, back in the
+        thread. A tap on the card still shows 😊 ↩ (the ⤢ never does).
       A closed thread is kept a year and the next student with the same wrong question joins it (it opens again): no
       new thread.
       - **His Claude chat answers them** (20 Nov 2026): the threads link (Settings → Community; "The threads link"

@@ -104,6 +104,8 @@ const PATHS = {
   mic: "M12 3.5a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0v-5a3 3 0 0 0-3-3zM6 11.5a6 6 0 0 0 12 0M12 17.5v3",
   headset: "M4.5 15v-3a7.5 7.5 0 0 1 15 0v3M4.5 14.5h3v5h-1.5a1.5 1.5 0 0 1-1.5-1.5zM19.5 14.5h-3v5h1.5a1.5 1.5 0 0 0 1.5-1.5z",
   robot: "M7 9h10a2.5 2.5 0 0 1 2.5 2.5v5A2.5 2.5 0 0 1 17 19H7a2.5 2.5 0 0 1-2.5-2.5v-5A2.5 2.5 0 0 1 7 9zM12 9V5.5M9.5 13.5v.5M14.5 13.5v.5M10 16.5h4",
+  // The AI's message full screen (20 Nov 2026): four corners out.
+  expand: "M4.5 9.5v-5h5M14.5 4.5h5v5M19.5 14.5v5h-5M9.5 19.5h-5v-5",
 } as const;
 export type IconName = keyof typeof PATHS;
 
