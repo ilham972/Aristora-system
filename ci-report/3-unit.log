@@ -1,0 +1,110 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90m/home/runner/work/Aristora-system/Aristora-system[39m
+
+ [32m✓[39m tests/family.test.ts [2m([22m[2m27 tests[22m[2m)[22m[33m 1608[2mms[22m[39m
+   [32m✓[39m the family app on the server [2m(15)[22m
+     [33m[2m✓[22m[39m a family link: made by the owner or a Students teacher, opened once, sees only its child[33m 370[2mms[22m[39m
+ [32m✓[39m tests/help.test.ts [2m([22m[2m19 tests[22m[2m)[22m[33m 2112[2mms[22m[39m
+   [32m✓[39m online explanations [2m(17)[22m
+     [33m[2m✓[22m[39m the pill: only on a question he lost marks on; a photo and a teacher first; the thread shows the question and what he typed[33m 329[2mms[22m[39m
+ [32m✓[39m tests/photos.test.ts [2m([22m[2m29 tests[22m[2m)[22m[33m 2777[2mms[22m[39m
+   [32m✓[39m photos from home [2m(26)[22m
+     [33m[2m✓[22m[39m Check: the book shows the key's working only where he lost marks, and the photos it asks for[33m 349[2mms[22m[39m
+     [33m[2m✓[22m[39m the unit gate (10 Nov 2026): finished below 75 %, the next Stage waits; the redo (half marks, explained) or the class opens it[33m 527[2mms[22m[39m
+ [32m✓[39m tests/tute.test.ts [2m([22m[2m25 tests[22m[2m)[22m[33m 853[2mms[22m[39m
+ [32m✓[39m tests/money.test.ts [2m([22m[2m23 tests[22m[2m)[22m[33m 871[2mms[22m[39m
+ [32m✓[39m tests/master.test.ts [2m([22m[2m29 tests[22m[2m)[22m[33m 1389[2mms[22m[39m
+ [32m✓[39m tests/backend.test.ts [2m([22m[2m37 tests[22m[2m)[22m[33m 1940[2mms[22m[39m
+ [32m✓[39m tests/desk.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 749[2mms[22m[39m
+ [32m✓[39m tests/theoryFocus.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 43[2mms[22m[39m
+ [32m✓[39m tests/chat.test.ts [2m([22m[2m16 tests[22m[2m)[22m[33m 1127[2mms[22m[39m
+ [32m✓[39m tests/consult.test.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 749[2mms[22m[39m
+ [32m✓[39m tests/profile.test.ts [2m([22m[2m14 tests[22m[2m)[22m[33m 713[2mms[22m[39m
+ [32m✓[39m tests/sakarath.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 963[2mms[22m[39m
+   [32m✓[39m the Sakarath book and exam mode [2m(9)[22m
+     [33m[2m✓[22m[39m the link saves a unit's whole book on a unit of its own, checked, all or nothing[33m 342[2mms[22m[39m
+ [32m✓[39m tests/answerKinds.test.ts [2m([22m[2m30 tests[22m[2m)[22m[32m 93[2mms[22m[39m
+ [32m✓[39m tests/focus.test.ts [2m([22m[2m28 tests[22m[2m)[22m[32m 43[2mms[22m[39m
+ [32m✓[39m tests/evalFocus.test.ts [2m([22m[2m23 tests[22m[2m)[22m[32m 35[2mms[22m[39m
+ [32m✓[39m tests/boss.test.ts [2m([22m[2m31 tests[22m[2m)[22m[33m 334[2mms[22m[39m
+ [32m✓[39m tests/goat.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 627[2mms[22m[39m
+ [32m✓[39m tests/usPosts.test.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 715[2mms[22m[39m
+ [32m✓[39m tests/usTalk.test.ts [2m([22m[2m13 tests[22m[2m)[22m[33m 925[2mms[22m[39m
+ [32m✓[39m tests/link.test.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 738[2mms[22m[39m
+ [32m✓[39m tests/us.test.ts [2m([22m[2m14 tests[22m[2m)[22m[33m 878[2mms[22m[39m
+ [32m✓[39m tests/sim.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 1831[2mms[22m[39m
+   [32m✓[39m the simulation on the server (convex/sim.ts) [2m(6)[22m
+     [33m[2m✓[22m[39m the steps: students hand levels in, the app corrects them (as Correction, named Simulation), answers are marked[33m 610[2mms[22m[39m
+     [33m[2m✓[22m[39m +5 students, the level from now on; time up ends it; everyone goes home, the scoreboard is kept[33m 370[2mms[22m[39m
+ [32m✓[39m tests/aiAuto.test.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 829[2mms[22m[39m
+ [32m✓[39m tests/quests.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 528[2mms[22m[39m
+ [32m✓[39m tests/coins.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 425[2mms[22m[39m
+ [32m✓[39m tests/race.test.ts [2m([22m[2m15 tests[22m[2m)[22m[33m 655[2mms[22m[39m
+ [32m✓[39m tests/manager.test.ts [2m([22m[2m17 tests[22m[2m)[22m[32m 33[2mms[22m[39m
+ [32m✓[39m tests/ai.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 394[2mms[22m[39m
+ [32m✓[39m tests/tries.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 294[2mms[22m[39m
+ [32m✓[39m tests/attendance.test.ts [2m([22m[2m11 tests[22m[2m)[22m[33m 620[2mms[22m[39m
+ [32m✓[39m tests/deskData.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 25[2mms[22m[39m
+ [32m✓[39m tests/auth.test.ts [2m([22m[2m11 tests[22m[2m)[22m[33m 438[2mms[22m[39m
+ [32m✓[39m tests/teach.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 288[2mms[22m[39m
+ [32m✓[39m tests/linkThreads.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 707[2mms[22m[39m
+   [32m✓[39m the threads link [2m(4)[22m
+     [33m[2m✓[22m[39m its own code: the books code never reads a thread, the threads code never a book; one of each at a time[33m 319[2mms[22m[39m
+ [32m✓[39m tests/consultData.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 24[2mms[22m[39m
+ [32m✓[39m tests/managerServer.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 655[2mms[22m[39m
+ [32m✓[39m tests/moneyData.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 38[2mms[22m[39m
+ [32m✓[39m tests/uncorrect.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 513[2mms[22m[39m
+ [32m✓[39m tests/duty.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 515[2mms[22m[39m
+ [32m✓[39m tests/free.test.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 535[2mms[22m[39m
+ [32m✓[39m tests/online.test.ts [2m([22m[2m11 tests[22m[2m)[22m[33m 322[2mms[22m[39m
+ [32m✓[39m tests/usPeople.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 366[2mms[22m[39m
+ [32m✓[39m tests/skills.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m tests/answerKey.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 402[2mms[22m[39m
+ [32m✓[39m tests/workbookFile.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 105[2mms[22m[39m
+ [32m✓[39m tests/skillBook.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 28[2mms[22m[39m
+ [32m✓[39m tests/ladder.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 602[2mms[22m[39m
+ [32m✓[39m tests/drafts.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 283[2mms[22m[39m
+ [32m✓[39m tests/status.test.ts [2m([22m[2m17 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+ [32m✓[39m tests/progress.test.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 369[2mms[22m[39m
+ [32m✓[39m tests/boardSplit.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 488[2mms[22m[39m
+   [32m✓[39m the board in two parts [2m(2)[22m
+     [33m[2m✓[22m[39m live + each student's his = get (the demo class: in class, at home, a book given)[33m 398[2mms[22m[39m
+ [32m✓[39m tests/roomRows.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m tests/preview.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 316[2mms[22m[39m
+ [32m✓[39m tests/pathData.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m tests/theme.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 33[2mms[22m[39m
+ [32m✓[39m tests/hosting.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m tests/appVersion.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 21[2mms[22m[39m
+ [32m✓[39m tests/familyMotion.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+ [32m✓[39m tests/derive.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m tests/answerText.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m tests/announce.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m tests/fractions.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+ [32m✓[39m tests/cropFrame.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m tests/stats.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m tests/timeline.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m tests/taps.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m tests/roomDecisions.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m tests/chime.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 106[2mms[22m[39m
+ [32m✓[39m tests/evalPace.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m tests/hrow.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m tests/sha256.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 108[2mms[22m[39m
+ [32m✓[39m tests/usStaff.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m tests/scale.test.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 11957[2mms[22m[39m
+   [32m✓[39m ready for 200 students [2m(8)[22m
+     [33m[2m✓[22m[39m a tap on one student re-reads only his part on a teacher's phone[33m 2128[2mms[22m[39m
+     [33m[2m✓[22m[39m the class list follows a new student, a removal, the simulation, and a write that skipped fn.ts[33m 447[2mms[22m[39m
+     [33m[2m✓[22m[39m a phone's own row (every query of it reads it) moves once a day; Settings → People shows the 10-minute time[33m 350[2mms[22m[39m
+     [33m[2m✓[22m[39m Me reads his grade's race rows and the GOAT's, never the whole ARISTORA's; the GOAT is the same[33m 2281[2mms[22m[39m
+     [33m[2m✓[22m[39m the beat reads who is online only when a screen shows the dots[33m 1897[2mms[22m[39m
+     [33m[2m✓[22m[39m a group's member count comes from the grades' counts, and follows a new student, a move and a removal[33m 1465[2mms[22m[39m
+     [33m[2m✓[22m[39m the phones' busiest reads stay as small at 3× the students[33m 3263[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m74 passed[39m[22m[90m (74)[39m
+[2m      Tests [22m [1m[32m809 passed[39m[22m[90m (809)[39m
+[2m   Start at [22m 19:12:20
+[2m   Duration [22m 24.82s[2m (tests 74%, import 11%, transform 8%, environment 7%, worker 1%)[22m
+
+[2m    Isolate [22m [33m74 workers spawned[39m[2m · ~170ms startup each (spawn + environment, per file)[22m
+[2m            [22m [2mat least ~4.02s faster with [22m[33misolate: false[39m[2m — reuses workers across files instead of one per file[22m
+
