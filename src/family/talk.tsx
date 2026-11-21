@@ -9,8 +9,8 @@
 // - The photos picked for a message: cropped first, two copies, and the blurred squares a classmate sees (seedOf).
 // Words a student reads are Tamil; buttons English.
 
-import type { ComponentChildren } from "preact";
-import { useEffect, useRef, useState } from "preact/hooks";
+import { type ComponentChildren, render } from "preact";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { HelpAsk } from "../../convex/lib/helpView";
 import type { UsPic } from "../../convex/lib/us";
 import { CropSheet } from "./crop";
@@ -108,11 +108,51 @@ export async function sendPicked(list: Picked[]): Promise<Sent[]> {
   return ph;
 }
 
-/** Photos picked for a message: thumbnails with ✕, the camera button, the crop first. */
+/**
+ * Camera or Gallery (21 Nov 2026, his report: "when I press that, that asking to select the photo from the gallery
+ * ... we want two options ... take the photo ... or select from the gallery"): a new Android phone's photo button opens
+ * only its gallery, and `capture` only its camera. So a choice of the two, on the page's body (a write bar is a moving
+ * box: anything fixed inside it is held to it, as the crop was: crop.tsx).
+ */
+function Choose(props: { onPick: (camera: boolean) => void; onClose: () => void }) {
+  const host = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    host.current = el;
+    return () => {
+      render(null, el);
+      el.remove();
+    };
+  }, []);
+  useLayoutEffect(() => {
+    if (host.current)
+      render(
+        <div class="f-choose" onClick={props.onClose}>
+          <div class="f-choose-in" role="dialog" aria-label="Add a photo" onClick={(e) => e.stopPropagation()}>
+            <button type="button" onClick={() => props.onPick(true)}>
+              <Icon name="camera" size={28} />
+              Camera
+            </button>
+            <button type="button" onClick={() => props.onPick(false)}>
+              <Icon name="image" size={28} />
+              Gallery
+            </button>
+          </div>
+        </div>,
+        host.current,
+      );
+  });
+  return null;
+}
+
+/** Photos picked for a message: thumbnails with ✕, the camera button (Camera or Gallery), the crop first. */
 export function usePicker(max: number, crop?: string) {
   const [list, setList] = useState<Picked[]>([]);
   const [file, setFile] = useState<Blob | null>(null);
+  const [choose, setChoose] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  const cam = useRef<HTMLInputElement>(null);
   const cropped = async (b: Blob) => {
     setFile(null);
     try {
@@ -148,24 +188,29 @@ export function usePicker(max: number, crop?: string) {
       ))}
     </>
   );
+  const took = (e: Event) => {
+    const el = e.target as HTMLInputElement;
+    const f = el.files?.[0];
+    el.value = "";
+    if (f) setFile(f);
+  };
   const picker = (
     <>
-      <input
-        ref={input}
-        type="file"
-        accept="image/*"
-        class="f-file"
-        onChange={(e) => {
-          const el = e.target as HTMLInputElement;
-          const f = el.files?.[0];
-          el.value = "";
-          if (f) setFile(f);
-        }}
-      />
+      <input ref={input} type="file" accept="image/*" class="f-file" onChange={took} />
+      <input ref={cam} type="file" accept="image/*" capture="environment" class="f-file-cam" hidden onChange={took} />
+      {choose && (
+        <Choose
+          onClose={() => setChoose(false)}
+          onPick={(c) => {
+            setChoose(false);
+            (c ? cam : input).current?.click();
+          }}
+        />
+      )}
       {file && <CropSheet file={file} say={crop ?? "மஞ்சள் புள்ளிகளை இழு: தேவையான பகுதி மட்டும் பெட்டிக்குள்."} onClose={() => setFile(null)} onDone={(b) => void cropped(b)} />}
     </>
   );
-  return { list, thumbs, picker, pick: () => input.current?.click(), clear, full: list.length >= max };
+  return { list, thumbs, picker, pick: () => (buzz(), setChoose(true)), clear, full: list.length >= max };
 }
 
 // ---------------------------------------------------------------- one message
@@ -650,6 +695,8 @@ export function WriteBar(props: {
   fast?: boolean;
   /** Above the row: where the words go (an explanation's thread: "To (ii) · Hana"). */
   top?: ComponentChildren;
+  /** Its photo button from elsewhere (a teacher's 📷 under a sub-question, 21 Nov 2026). */
+  pickRef?: { current?: () => void };
 }) {
   const [t, setT] = useState("");
   const [busy, setBusy] = useState(false);
@@ -657,6 +704,7 @@ export function WriteBar(props: {
   const [at, setAt] = useState<{ q: string; from: number; to: number } | null>(null);
   const [tags, setTags] = useState<Taggable[]>([]);
   const pk = usePicker(2);
+  if (props.pickRef) props.pickRef.current = props.photos && !pk.full ? pk.pick : undefined;
   const box = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     if (props.re) box.current?.focus();
@@ -894,7 +942,7 @@ const PART_SHOW = 3;
  *   wrong ones' talk (and the whole question's), and asks under one of them (his first wrong one unless he picks).
  * - The write bar says where the words go ("To (ii) · Hana, Mira"; ✕: the whole question, everyone).
  */
-export function useParts<M extends Line>(p: { staff: boolean; asks: HelpAsk[]; msgs: M[]; bubble: (m: M, prev?: M) => ComponentChildren; voice: () => void }) {
+export function useParts<M extends Line>(p: { staff: boolean; asks: HelpAsk[]; msgs: M[]; bubble: (m: M, prev?: M) => ComponentChildren; voice: () => void; photo: () => void }) {
   const [labels, setLabels] = useState<string[] | null>(null);
   // Where her words go: a sub-question, or "" the whole question. A student's: his pick of his wrong ones.
   const [target, setTarget] = useState("");
@@ -985,9 +1033,14 @@ export function useParts<M extends Line>(p: { staff: boolean; asks: HelpAsk[]; m
             {p.staff ? (
               <>
                 {ws.length > 0 && (
-                  <button type="button" class="h-tk-i" aria-label="Voice note" disabled={!on.length} onClick={() => (setTarget(b), p.voice())}>
-                    <Icon name="mic" size={19} />
-                  </button>
+                  <>
+                    <button type="button" class="h-tk-i" aria-label="Voice note" disabled={!on.length} onClick={() => (setTarget(b), p.voice())}>
+                      <Icon name="mic" size={19} />
+                    </button>
+                    <button type="button" class="h-tk-i" aria-label="Photo" disabled={!on.length} onClick={() => (setTarget(b), p.photo())}>
+                      <Icon name="camera" size={19} />
+                    </button>
+                  </>
                 )}
                 <button type="button" class={`h-tk-i${b === at ? " on" : ""}`} aria-label={b || ws.length ? "Write" : "Write to everyone"} aria-pressed={b === at} disabled={ws.length > 0 && !on.length} onClick={() => write(b)}>
                   <Icon name="pen" size={17} />

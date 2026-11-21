@@ -4619,10 +4619,15 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
   await go.click();
 
   // Her thread: Q8 on top, what she typed in rose, waiting on Nila; her photo as its first message.
-  // Q, Stage and Level once, in the thread's header (20 Nov 2026, unslop); the card names the unit.
-  await contains(P.locator(".c-head-w"), "Q8");
+  // Q, the unit's Tamil name, Stage and Level once, in the thread's header (20 Nov 2026, unslop; the unit there since
+  // 21 Nov 2026, his ask), with her face and + (who is in it; she can add a classmate) and the moon.
+  await contains(P.locator(".c-head-w b"), "Q8 · ");
+  expect((await P.locator(".c-head-w b").innerText()).length).toBeGreaterThan(6);
   await contains(P.locator(".c-head-w"), "Stage 1 · Level 1");
-  expect(await P.locator(".h-top-h").innerText()).not.toContain("Q8");
+  expect(await P.locator(".h-top-h").count()).toBe(0);
+  expect(await P.locator(".c-who .c-faces .f-ava").count()).toBe(1);
+  await visible(P.getByRole("button", { name: "நண்பரைச் சேர்" }));
+  await visible(P.locator(".c-head").getByRole("button", { name: "Dark mode" }));
   // The question as printed, open, nearly as wide as the phone; her answer under each sub-question: (i) wrong in rose,
   // (ii) her photo with the teacher's mark in blue (kept until the question is explained). Never the key on her phone.
   const yOf = async (l: L) => (await l.first().boundingBox())!.y;
@@ -4706,6 +4711,25 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
   expect(await t.run(async (ctx) => (await ctx.db.query("usChat").collect()).find((c) => c.t?.startsWith("முதலில்"))?.pt)).toBe("i");
   // A voice note alone explains nothing (his rule).
   expect((await mq(hana, 8))?.x).toBeUndefined();
+  // Her photo under (i) (21 Nov 2026, his report: the photo button opened only the gallery): 📷 there asks Camera or
+  // Gallery (the camera's own input, the gallery's without it), then the crop; it goes under (i) like her voice.
+  await ti.getByRole("button", { name: "Photo" }).click();
+  const choose = C.frameLocator("iframe.us-frame").locator(".f-choose");
+  await visible(choose.getByRole("button", { name: "Camera" }));
+  await visible(choose.getByRole("button", { name: "Gallery" }));
+  expect(await U.locator(".f-tb .f-file-cam").getAttribute("capture")).toBe("environment");
+  expect(await U.locator(".f-tb .f-file").getAttribute("capture")).toBeNull();
+  await noSideScroll(C);
+  await shot(C, "help06b-camera-or-gallery");
+  await choose.click({ position: { x: 20, y: 20 } });
+  await until(async () => (await U.locator(".f-choose").count()) === 0, "the choice closed");
+  await U.locator(".f-tb .f-file-cam").setInputFiles(paper);
+  await U.locator(".f-cut").getByRole("button", { name: /Use this photo|சரி/ }).click();
+  await visible(U.locator(".f-tb .f-thumb img"));
+  await contains(U.locator(".f-tb .h-to"), "To (i)");
+  await U.locator(".f-tb").getByRole("button", { name: "Send" }).click();
+  await visible(ti.locator(".f-msg.mine .f-pics img, .f-msg.mine img").last());
+  await until(async () => (await t.run(async (ctx) => (await ctx.db.query("usChat").collect()).filter((c) => c.ph?.length && c.pt === "i").length)) === 1, "her photo under (i)");
   await noSideScroll(C);
   await ti.scrollIntoViewIfNeeded();
   await shot(C, "help06-thread-teacher");
@@ -4848,7 +4872,7 @@ test("Explain online: the pill on a wrong question after Check; her photo and a 
   expect((await t.query(api.help.start, { token: MIRA, unitId: u01, q: 8 })).thread).toMatchObject({ id: tid, tname: "Nila", n: 1 });
   expect((await t.mutation(api.help.ask, { token: MIRA, unitId: u01, q: 8, ph: [{ s: await png(), b: await png(), w: 96, h: 72 }] })).id).toBe(tid);
   const hers = await t.query(api.chat.room, { token: MIRA, id: tid });
-  expect(hers.msgs.map((m) => m.n)).toEqual(["Hana K", "Nila", "Nila", "Hana K", "ARISTORA AI", "Nila", "Hana K", "Mira J"]);
+  expect(hers.msgs.map((m) => m.n)).toEqual(["Hana K", "Nila", "Nila", "Nila", "Hana K", "ARISTORA AI", "Nila", "Hana K", "Mira J"]);
   expect(hers.msgs[1].au).toBeDefined();
   expect((await mq(mira, 8))?.x).toBeUndefined();
   // Nila's open thread: Mira waits; ⋮ on Hana → her name hidden from Mira's phone.
@@ -5338,6 +5362,34 @@ test("The Thread page at scale: Pending · Follow-up · Understood · Closed, Mi
   await noSideScroll(C);
   await talk.scrollIntoViewIfNeeded();
   await shot(C, "thr05b-picked-one");
+  // The header (21 Nov 2026, his ask): the unit's name, the three faces and +. The faces: who is in it (Nila its
+  // teacher, Change; each student, Remove asks a second tap); + the students who lost marks on Q8 too (Ravi, Sara).
+  await contains(U.locator(".c-head-w b"), "Q8 · ");
+  expect(await U.locator(".c-who .c-faces .f-ava").count()).toBe(3);
+  await U.locator(".c-who .c-faces").click();
+  const ppl = U.locator(".h-ppl");
+  await contains(ppl.locator(".h-pl li").first(), "Nila");
+  await visible(ppl.getByRole("button", { name: "Change" }));
+  expect(await ppl.getByRole("button", { name: "Remove", exact: true }).count()).toBe(3);
+  await ppl.getByRole("button", { name: "Remove", exact: true }).first().click();
+  await visible(ppl.getByRole("button", { name: "Remove?" }));
+  await noSideScroll(C);
+  await shot(C, "thr05c-people");
+  await ppl.getByRole("button", { name: "Add a student" }).click();
+  await until(async () => (await U.locator(".h-ppl .h-pl li").count()) === 2, "Ravi and Sara to add");
+  expect(await U.locator(".h-ppl .h-pl li b").allInnerTexts()).toEqual(["Ravi P", "Sara T"]);
+  await shot(C, "thr05d-add");
+  await U.locator(".h-ppl").getByRole("button", { name: "Close" }).click();
+  await until(async () => (await U.locator(".h-ppl").count()) === 0, "the people sheet closed");
+  expect((await t.run(async (ctx) => (await ctx.db.query("helpAsks").collect()).filter((a) => a.rid === one!.rid && a.st === "open"))).length).toBe(3);
+  // The moon (his yes: one switch): her Us goes dark, the class app around it stays light; again: light.
+  await U.locator(".c-head").getByRole("button", { name: "Dark mode" }).click();
+  await until(async () => (await U.locator("html[data-theme=dark]").count()) === 1, "her Us dark");
+  expect(await C.evaluate(() => [localStorage.getItem("aristora.family.theme.staff"), localStorage.getItem("aristora.family.theme"), document.documentElement.dataset.theme ?? null])).toEqual(["dark", null, null]);
+  await noSideScroll(C);
+  await shot(C, "thr05e-thread-dark");
+  await U.locator(".c-head").getByRole("button", { name: "Light mode" }).click();
+  await until(async () => (await U.locator("html[data-theme=dark]").count()) === 0, "her Us light again");
   // From the rail: Mira's Follow-up row opens Q2 on her card (his reply waits: Replied on it).
   await C.setViewportSize({ width: 390, height: 840 });
   await U.getByRole("button", { name: "Back" }).click();
@@ -5388,6 +5440,19 @@ test("The Thread page at scale: Pending · Follow-up · Understood · Closed, Mi
   await P.setViewportSize({ width: 320, height: 700 });
   await noSideScroll(P);
   await shot(P, "thr08-student-cards-320");
+  // Mira adds a classmate (21 Nov 2026, his yes: students add too): + → who lost marks on Q8 too (Ravi, Sara); Sara
+  // comes in, waiting on Nila, and the faces say 4.
+  await P.setViewportSize({ width: 360, height: 780 });
+  await P.locator(".c-who").getByRole("button", { name: "நண்பரைச் சேர்" }).click();
+  const add = P.locator(".h-ppl");
+  await until(async () => (await add.locator(".h-pl li").count()) === 2, "Ravi and Sara on her phone");
+  await noSideScroll(P);
+  await shot(P, "thr09-student-add");
+  await add.locator("li", { hasText: "Sara T" }).getByRole("button", { name: "சேர்", exact: true }).click();
+  await until(async () => (await t.run(async (ctx) => (await ctx.db.query("helpAsks").collect()).some((a) => a.sid === kids.Sara.id && a.q === 8 && a.st === "open" && a.tid === nila))), "Sara in the Q8 thread");
+  await until(async () => (await add.locator(".h-pl li").count()) === 1, "only Ravi left");
+  await add.getByRole("button", { name: "Close" }).click();
+  await until(async () => (await P.locator(".c-who .c-faces .f-ava").count()) === 4, "four faces", 20_000);
   await P.context().close();
   expect(problems.slice(before)).toEqual([]);
 });

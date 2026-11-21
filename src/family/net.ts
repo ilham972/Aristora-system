@@ -73,6 +73,8 @@ const STAFF: Record<string, string> = {
   // 12 Nov 2026, online explanations: the teachers' queue, a thread's question with its key.
   "help:tlist": "help:tlist",
   "help:question": "help:tquestion",
+  // 21 Nov 2026: the + in a thread's header (who can come in).
+  "help:addableFor": "help:taddable",
   "ai:teachState": "ai:teachState",
 };
 const STAFF_CHANGES: Record<string, string> = {
@@ -114,6 +116,8 @@ const STAFF_CHANGES: Record<string, string> = {
   "help:tphoto": "help:tphoto",
   // 15 Nov 2026: her 🤖 AI explain in a thread.
   "ai:explain": "ai:explain",
+  // 21 Nov 2026: a student added to a thread from its header's +.
+  "help:add": "help:tadd",
 };
 /** The class app's Us tab with this teacher's sign-in. */
 export function staffWith(t: string): void {

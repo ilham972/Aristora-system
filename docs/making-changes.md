@@ -927,6 +927,12 @@ SIZE=200 NAMES=family:me,chat:room npx vitest run -c vitest.scale.config.ts test
   `showSheet`, never inline.
 - **`check.sh e2e` runs the last build**: build first (`check.sh build`) after changing the phone's code, or a
   run-through checks the old page (21 Nov 2026: a "Voice note" button "missing" was the old build).
+- **Grep a new class name before you style it** (21 Nov 2026): the thread header's row was first `.c-ppl`, which the
+  Members page already used (`PeopleScreen` bare): its flex and margin pushed Members half off the screen ("Us groups
+  and chats" failed on `noSideScroll`). `grep -rn "\.<name>\|\"<name>" src/` first.
+- **A new server call from the teachers' Us needs its line in `src/family/net.ts`** (`STAFF` for a query,
+  `STAFF_CHANGES` for a change: the student's path → the teacher's function, e.g. "help:add" → "help:tadd"); without
+  it the frame refuses it ("This is the students' side: teachers can't do it here.").
 - **`scrollIntoView` scrolls every scroller up the chain, the page too**: a chip centred in its row also pulled the
   page up to the row, and the card's own smooth scroll took it back down (the same bounce, with the questions as
   printed). To move a row sideways, scroll the row (`row.scrollTo`); move the page only on purpose, in a layout effect
