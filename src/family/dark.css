@@ -115,7 +115,7 @@ html[data-theme="dark"] .f-result {
 html[data-theme="dark"] :is(.f-qchip.part, .f-sum .warn) {
   color: #ffbe5e;
 }
-html[data-theme="dark"] :is(.f-newcup h2, .f-fees.owe .f-fees-n b) {
+html[data-theme="dark"] .f-newcup h2 {
   color: var(--gold-ink);
 }
 html[data-theme="dark"] :is(.f-box.on .f-bval.empty, .f-box.on .f-fc.on.empty, .f-ustay-t i) {

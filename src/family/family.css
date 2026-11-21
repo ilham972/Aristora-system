@@ -5362,21 +5362,7 @@ button.f-pod:active,
 
 /* Us (7 Nov 2026) has its own style since 8 Nov 2026: src/family/usStyle.ts, with Us's own file (usParts.ts). */
 
-/* His fees on Home (9 Nov 2026): gentle, never red. */
-.f-fees-n {
-  margin: 0;
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  font-weight: 700;
-}
-.f-fees-n b {
-  font-size: 22px;
-}
-.f-fees.owe .f-fees-n b {
-  color: #8a5600;
-}
+/* His fees left Home on 21 Nov 2026: one quiet line in Me → Your details (`FeesRow` in me.tsx, `.f-row`'s own look). */
 
 /* ---- Typed words and equations (10 Nov 2026, his rule: what he writes is typed, a photo only for a drawing) ---- */
 /* A word or a name the phone marks: one line, his phone's own keyboard, inside the answer box. */

@@ -5701,3 +5701,70 @@ test("A chat shows his words at once: pale until the server has them, several in
   expect(await mine()).toEqual(["முதல் செய்தி", "இரண்டாவது", "போகாத செய்தி"]);
   expect(problems.slice(before)).toEqual([]);
 }, 120_000);
+
+test("his fees: never on Home; one quiet line in Me → Your details (what he owes, or paid ahead); nothing once paid", async () => {
+  const before = problems.length;
+  const backend = makeBackend(modules);
+  const t = backend.t;
+  await addPerson(t, { name: "Owner", token: OWNER_TOKEN, role: "owner" });
+  const as = { token: OWNER_TOKEN };
+  await t.mutation(api.setup.ensure, as);
+  const u01 = await t.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G8-U01")).first())!._id);
+  await t.mutation(api.catalog.saveWorkbook, {
+    ...as,
+    unitId: u01,
+    parts: BOOK.data.parts.map((p) => ({ id: p.id, to: p.to, ...(p.each ? { each: p.each } : {}) })),
+    levels: BOOK.data.levels.map((l) => ({ to: l.to, max: l.max })),
+    marks: BOOK.data.marks ?? {},
+    replace: true,
+    key: fakeKey(),
+  });
+  const hana = await t.mutation(api.students.add, { ...as, name: "Hana K", grade: 8, term: 1, stage: "master", unitId: u01 });
+  await t.mutation(api.families.setCode, { ...as, studentId: hana, code: "4719" });
+  // In class today, then the fees begin: today's class is Rs 350 to pay.
+  await t.mutation(api.students.setPresent, { ...as, id: hana, present: true });
+  await t.mutation(api.money.setup, { ...as, fee: 350, paper: 7, start: "today" });
+
+  const P = await open(backend, `${site.url}/f/`, size(360, 780));
+  await P.getByLabel(/Index/).fill("1001");
+  await P.getByLabel("Code").fill("4719");
+  await P.getByRole("button", { name: "Sign in" }).click();
+  await goalIs(P, "Level 1");
+  // Home: not a word of money (until 21 Nov 2026 a card under today's class said it).
+  await P.waitForTimeout(500);
+  const home = await P.locator("body").innerText();
+  expect(home).not.toContain("Rs 350");
+  expect(home).not.toContain("செலுத்த வேண்டியது");
+  await shot(P, "fee01-home-no-fees");
+
+  // Me → Your details: Name, Birthday, then Fees, a line like the others (nothing to tap, their colour, never red).
+  await tabTo(P, /Me$/);
+  const details = P.locator(".f-set", { hasText: "Your details" });
+  const fees = details.locator(".f-feerow");
+  await contains(fees, "Rs 350 செலுத்த வேண்டியது (1 வகுப்பு)");
+  const rows = () => details.locator(".f-row > span:not(.f-switch)").evaluateAll((s) => s.map((x) => x.firstChild?.textContent?.trim() ?? ""));
+  expect(await rows()).toEqual(["Name", "Birthday", "Fees"]);
+  expect(await fees.evaluate((el) => el.tagName)).toBe("DIV");
+  const ink = (l: L) => l.evaluate((el) => getComputedStyle(el).color);
+  expect(await ink(fees.locator("small"))).toBe(await ink(details.locator(".f-drow", { hasText: "Name" }).locator("small")));
+  await details.scrollIntoViewIfNeeded();
+  await noSideScroll(P);
+  await shot(P, "fee02-me-owes");
+
+  // Paid: the line goes. Paid ahead: it says so.
+  await t.mutation(api.money.pay, { ...as, sid: hana, a: 350 });
+  await tabTo(P, /Home/);
+  await tabTo(P, /Me$/);
+  await until(async () => (await fees.count()) === 0, "no fees line once all is paid");
+  expect(await rows()).toEqual(["Name", "Birthday"]);
+  await t.mutation(api.money.pay, { ...as, sid: hana, a: 150 });
+  await tabTo(P, /Home/);
+  expect(await P.locator("body").innerText()).not.toContain("முன்பணம்");
+  await tabTo(P, /Me$/);
+  await contains(fees, "Rs 150 முன்பணம்");
+  await P.setViewportSize({ width: 320, height: 640 });
+  await details.scrollIntoViewIfNeeded();
+  await noSideScroll(P);
+  await shot(P, "fee03-me-paid-ahead-320");
+  expect(problems.slice(before)).toEqual([]);
+}, 120_000);

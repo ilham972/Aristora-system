@@ -108,6 +108,8 @@ const PATHS = {
   robot: "M7 9h10a2.5 2.5 0 0 1 2.5 2.5v5A2.5 2.5 0 0 1 17 19H7a2.5 2.5 0 0 1-2.5-2.5v-5A2.5 2.5 0 0 1 7 9zM12 9V5.5M9.5 13.5v.5M14.5 13.5v.5M10 16.5h4",
   // The AI's message full screen (20 Nov 2026): four corners out.
   expand: "M4.5 9.5v-5h5M14.5 4.5h5v5M19.5 14.5v5h-5M9.5 19.5h-5v-5",
+  // His fees on Me (21 Nov 2026): a note, never the Shop's coin.
+  cash: "M3.5 7h17v10h-17zM12 9.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8zM6.8 12h.01M17.2 12h.01",
 } as const;
 export type IconName = keyof typeof PATHS;
 

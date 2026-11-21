@@ -3,7 +3,8 @@
 // made small on the phone, sent with a progress bar; his classmates see it after the teachers' OK), his name and grade,
 // his flame (days in a row) as the big number and this week; his XP, best run and Levels; his 12 weeks at home and in
 // class (one map); his class days and hours; his report (each Stage; on WhatsApp for his parents); XP this week; his
-// place in the race; his trophies; his details (a new name, asked; his birthday; his photo in the race or not); and
+// place in the race; his trophies; his details (a new name, asked; his birthday; his fees, one quiet line; his photo
+// in the race or not); and
 // this phone: the children on it (switch, add another, sign out), the sound, the owl's surprises.
 
 import type { ComponentChildren } from "preact";
@@ -94,6 +95,29 @@ function XpBars(props: { xp: number[]; total: number; today: number }) {
         })}
       </div>
     </section>
+  );
+}
+
+/**
+ * His fees, quietly (21 Nov 2026, his ask: "don't show that in the home page ... inside the profile page below in a
+ * subtle way"; a card on Home from 9 Nov until then): one line of his details, what he owes for how many classes and
+ * books, or what he paid ahead. The colour of the other lines, never red; nothing when all is paid or before the fees
+ * began.
+ */
+function FeesRow(props: { f: NonNullable<FamilyMe["fees"]> }) {
+  const f = props.f;
+  const owe = f.o > 0;
+  const what = [f.c ? `${f.c} வகுப்பு` : "", f.b ? `${f.b} புத்தகம்` : ""].filter(Boolean).join(" · ");
+  return (
+    <div class="f-row f-feerow">
+      <Icon name="cash" />
+      <span>
+        Fees
+        <small>
+          Rs {(owe ? f.o : f.cr).toLocaleString("en-US")} {owe ? `செலுத்த வேண்டியது${what ? ` (${what})` : ""}` : "முன்பணம்"}
+        </small>
+      </span>
+    </div>
   );
 }
 
@@ -304,6 +328,7 @@ export function MeTab(props: {
           </span>
           <Icon name={me.bday ? "lock" : "plus"} size={18} />
         </button>
+        {me.fees && <FeesRow f={me.fees} />}
         {me.photo && (
           <button
             type="button"

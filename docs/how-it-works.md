@@ -792,9 +792,12 @@ server `convex/money.ts`; phones `src/fees.tsx`, `src/books.tsx`, `src/moneyDesk
   left; a tap: Pay her now, her pay), other spending (Add: what for and how much; Take back), fees and prices (Change).
 - **The Management dashboard's Money and books card** (Money people and the owner): today's money, who came and
   hasn't paid, what to print; Fees › and Books › (her tabs, or the pages opened over the owner's bar).
-- **His family phone** (`family.me` `fees`, Home's card after today's class): what he owes (classes, books), gently
-  ("செலுத்த வேண்டியது (2 வகுப்பு · 1 புத்தகம்). அடுத்த வகுப்பில் கொடுக்கலாம்."), or what he paid ahead; nothing when all
-  is paid or before the fees are set up. Never red, never WhatsApp (his answer).
+- **His family phone** (`family.me` `fees`): **never on Home** (21 Nov 2026, his ask: "Don't show that in the home
+  page. Instead show that inside the profile page below in a subtle way"; a card under today's class from 9 Nov). One
+  quiet line in **Me → Your details**, after Birthday (`FeesRow`): "Fees", then "Rs 350 செலுத்த வேண்டியது (1 வகுப்பு)"
+  (classes and books: "(2 வகுப்பு · 1 புத்தகம்)") or "Rs 150 முன்பணம்" (paid ahead), in the colour of the other lines, nothing to tap; no line when all is
+  paid or before the fees are set up. Never red, never WhatsApp (his answer). Classmates never see it (a classmate's
+  profile is `family.mate`, which has no fees).
 - **Correction's book button went** (his ask): the paper's top row keeps Later, the question sheet, went home and Marks
   in their places (an empty `.fc-head-tools` holds them right). Moving him to any unit: Marks → Move → **All his units at
   a glance ›** (the same grid, Move only; its OL books for Grade 10 and 11), and "Choose his stage and unit" when he has
@@ -2496,7 +2499,8 @@ learning app of our education institute"): one profile, his class times, what he
     (`trophiesOf`, server; names in English, how to win in Tamil: First Level, 3- / 7- / 30-day streak (his best run),
     Perfect (a Level with every mark), 5 × Perfect, Stage clear (one Level of it in the app at least), 100 and 300 XP
     week; won ones gold, the rest pale with a lock and how to win them); **Your details**: Name (asked: below),
-    Birthday (once: below), Photo in the race (on/off), Remove photo; **On this phone**: the children, Sound, Owl
+    Birthday (once: below), **Fees** (only when he owes or paid ahead: one line, nothing to tap; the fees, below in
+    "His family phone"), Photo in the race (on/off), Remove photo; **On this phone**: the children, Sound, Owl
     surprises. Opening Me asks the server again (what the teachers just said OK to shows at once).
   - **The report** (Me → Report → See all; `ReportScreen`, a screen of its own, Back = Me): his name, grade, index and
     photo; **This month / last month / the one before** (`family.profile.months`): class days, hours in class, Levels
