@@ -2,6 +2,7 @@
 // - Units: a race per unit. Everyone on the same unit and stage, ranked: how far (levels or questions), marks,
 //   how many he finished today, and his pace per class day.
 // - Term: every student against every unit of the term: finished, partway (how far), or not started.
+// - Sakarath: the grade's Sakarath book, the whole book or a term's units (src/progressSk.tsx, 21 Nov 2026).
 // - Share poster: the board as images for the parents' WhatsApp group (src/poster.ts).
 // - Tap a name: his whole sheet, to share with his parents (src/studentSheet.tsx).
 
@@ -21,6 +22,7 @@ import {
   type StageFilter,
 } from "./progressData";
 import { stageName, STAGES, testMode, toast, type Board } from "./store";
+import { SakarathView } from "./progressSk";
 import { StudentSheet } from "./studentSheet";
 import { Empty, GradeRow, Sheet, useGrade } from "./ui";
 
@@ -54,8 +56,9 @@ export function Progress(props: { board: Board; now: number }) {
     const here = active.filter((s) => s.present && s.grade);
     return here.length ? here[0].grade! : 8;
   });
-  const data = useQuery<PBoard>(api.progress.board, testMode() ? { grade, test: true } : { grade });
-  const [view, setView] = remembered("aristora.progressView", ["units", "term"] as const, "units");
+  const [view, setView] = remembered("aristora.progressView", ["units", "term", "sk"] as const, "units");
+  const sk = view === "sk";
+  const data = useQuery<PBoard>(api.progress.board, testMode() ? { grade, test: true } : { grade }, sk);
   const [stage, setStage] = useState<StageFilter>("all");
   const [todayOnly, setTodayOnly] = useState(false);
   const [poster, setPoster] = useState(false);
@@ -84,16 +87,29 @@ export function Progress(props: { board: Board; now: number }) {
           <button type="button" class={`segc-b${view === "term" ? " on" : ""}`} aria-pressed={view === "term"} onClick={() => setView("term")}>
             Term
           </button>
+          <button type="button" class={`segc-b pg-sk${sk ? " on" : ""}`} aria-pressed={sk} onClick={() => setView("sk")}>
+            Sakarath
+          </button>
         </span>
-        <button type="button" class="btn primary small share-btn" disabled={!data || data.students.length === 0} onClick={() => setPoster(true)}>
-          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5M5 12v7.5c0 .8.7 1.5 1.5 1.5h11c.8 0 1.5-.7 1.5-1.5V12" />
-          </svg>
-          Share poster
-        </button>
+        {!sk && (
+          <button
+            type="button"
+            class="btn primary small share-btn"
+            aria-label="Share poster"
+            disabled={!data || data.students.length === 0}
+            onClick={() => setPoster(true)}
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5M5 12v7.5c0 .8.7 1.5 1.5 1.5h11c.8 0 1.5-.7 1.5-1.5V12" />
+            </svg>
+            <span class="share-w">Share poster</span>
+          </button>
+        )}
       </div>
 
-      {!data ? (
+      {sk ? (
+        <SakarathView grade={grade} onOpen={setStudent} />
+      ) : !data ? (
         <p class="muted center">Loading Grade {grade}…</p>
       ) : data.students.length === 0 ? (
         <Empty title={`No students in Grade ${grade}`}>Add them in Settings → Students.</Empty>

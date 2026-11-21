@@ -6,10 +6,12 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { query } from "./_generated/server";
 import { viewer } from "./lib/auth";
 import { masterState } from "./lib/backend";
-import { bookTotal, fighter } from "./lib/book";
+import { bookTotal, fighter, type MasterData } from "./lib/book";
 import { computeMaster, homeToCheck } from "./lib/master";
 import { slDay } from "./lib/day";
-import { daysBetween, summarizeFighter, summarizeMaster, type Cell } from "./lib/progress";
+import { daysBetween, summarizeFighter, summarizeMaster, type Cell, type MCell } from "./lib/progress";
+import { isSkbGrade, plainNames, skbFor, skGrade } from "./lib/sakarath";
+import { OL } from "./lib/syllabus";
 import { computeStatus, type Marks } from "./lib/status";
 
 export const board = query({
@@ -168,6 +170,68 @@ export const book = query({
       parts: doc.data.kind === "master" ? doc.data.parts.map((x) => ({ id: x.id, from: x.from, to: x.to })) : [],
       students: rows,
     };
+  },
+});
+
+/**
+ * The Sakarath book's progress (21 Nov 2026, his ask: "I can see all the students progress of Fighter book and Master
+ * book ... for each term also. But I can't see the progress of the Sakarath book ... recently I gave the Sakarath book.
+ * I want to see the progress of that"): one grade's students in its Sakarath book, unit by unit (levels done, marks,
+ * today), whether done on the phone (exam mode) or on paper and corrected in class (the printed book: the same rows).
+ * Grades 10 and 11 also get the O/L book (its 30 units of its own). Owner and Reports, read only while the view is open.
+ */
+export const sakarath = query({
+  args: { token: v.optional(v.string()), grade: v.number(), test: v.optional(v.boolean()) },
+  handler: async (ctx, args) => {
+    await viewer(ctx, args.token, "reports");
+    const today = slDay(Date.now());
+    // The books: the grade's own, and for Grades 10 and 11 the O/L book.
+    const bookGrades = [args.grade, ...(args.grade === 10 || args.grade === 11 ? [OL] : [])];
+    const books = [];
+    const docs = new Map<string, MasterData>();
+    for (const g of bookGrades) {
+      const units = (await ctx.db.query("units").withIndex("by_grade", (q) => q.eq("grade", skGrade(g))).collect()).sort(
+        (a, b) => a.term - b.term || a.order - b.order,
+      );
+      const list = [];
+      for (const u of units) {
+        const b = await ctx.db
+          .query("books")
+          .withIndex("by_unit_stage", (q) => q.eq("unitId", u._id).eq("stage", "master"))
+          .first();
+        if (!b?.sk || b.data.kind !== "master") continue;
+        docs.set(u._id, b.data);
+        const names = plainNames(u);
+        list.push({ _id: u._id, code: u.code, en: names.en, ta: names.ta, term: u.term, order: u.order, levels: b.data.levels.length });
+      }
+      if (list.length) books.push({ g, units: list });
+    }
+
+    const students = (await ctx.db.query("students").withIndex("by_archived", (q) => q.eq("archived", false)).collect())
+      .filter((s) => s.grade === args.grade && !!s.test === !!args.test)
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const came = new Set(
+      (await ctx.db.query("attendance").withIndex("by_day", (q) => q.eq("day", today)).collect()).map((x) => x.studentId),
+    );
+    const rows = [];
+    for (const s of students) {
+      const cells: Record<string, MCell> = {};
+      if (docs.size) {
+        for (const p of await ctx.db.query("progress").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) {
+          const data = docs.get(p.unitId);
+          if (!data || p.stage !== "master") continue;
+          cells[p.unitId] = summarizeMaster(masterState(p), data, today, new Set());
+        }
+      }
+      // The printed books he holds (a handout on the grade's printed-book unit, 200 + the grade).
+      const holds: number[] = [];
+      for (const h of await ctx.db.query("handouts").withIndex("by_student", (q) => q.eq("studentId", s._id)).collect()) {
+        const u = h.stage === "master" ? await ctx.db.get(h.unitId) : null;
+        if (u && isSkbGrade(u.grade) && bookGrades.includes(skbFor(u.grade))) holds.push(skbFor(u.grade));
+      }
+      rows.push({ _id: s._id, name: s.name, cameToday: came.has(s._id), holds, cells });
+    }
+    return { today, grade: args.grade, books, students: rows };
   },
 });
 

@@ -5384,6 +5384,102 @@ test("Sakarath book in class: Books → Stock → S gives the whole book to the 
   expect(problems, problems.join("\n")).toEqual([]);
 });
 
+test("Progress → Sakarath: the grade's Sakarath book as one race and by term; who holds the printed book; fits 320 px", async () => {
+  // 21 Nov 2026, his ask: "I can see all the students progress of Fighter book and Master book ... for each term also.
+  // But I can't see the progress of the Sakarath book ... I want to see the progress of that". Grade 7: made-up
+  // Sakarath books for U08 and U09 (one level of 3 marks each), the printed book's own unit.
+  const backend = await newClass();
+  const as = { token: OWNER_TOKEN };
+  await backend.t.mutation(api.setup.ensure, as);
+  const ids = await backend.t.run(async (ctx) => {
+    const unit = async (key: string) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", key)).first())!;
+    const data = { kind: "master" as const, parts: [{ id: "II" as const, from: 1, to: 2, kind: "cards" as const }], levels: [{ n: 1, from: 1, to: 2, max: 3 }], marks: { "1": 2, "2": 1 } };
+    const sk = async (key: string) => {
+      const u = await unit(key);
+      const id = await ctx.db.insert("units", { grade: 107, code: u.code, key: `${u.key}-SK`, term: u.term, order: u.order, en: `Sakarath · ${u.en}`, ta: `${u.ta} · ஸகராத்` });
+      await ctx.db.insert("books", { unitId: id, stage: "master", title: "ஸகராத் புத்தகம்", sk: true, data, keyCount: 2, qCount: 2, updatedAt: Date.now() });
+      return id;
+    };
+    const s08 = await sk("G7-U08");
+    const s09 = await sk("G7-U09");
+    const skb = await ctx.db.insert("units", { grade: 207, code: "SK", key: "G7-SKB", term: 0, order: 0, en: "Sakarath book", ta: "ஸகராத் புத்தகம்" });
+    return { u08: (await unit("G7-U08"))._id, s08, s09, skb };
+  });
+  const add = (name: string) => backend.t.mutation(api.students.add, { ...as, name, grade: 7, term: 1, stage: "master", unitId: ids.u08 });
+  const hana = await add("Hana K");
+  const ravi = await add("Ravi P");
+  await add("Kumar S");
+  await backend.t.mutation(api.students.giveMany, { ...as, ids: [hana], unitId: ids.skb, stage: "master", given: true, by: "money" });
+  await backend.t.run(async (ctx) => {
+    const at = Date.now();
+    const row = (studentId: typeof hana, unitId: typeof ids.s08, got: number) =>
+      ctx.db.insert("progress", { studentId, unitId, stage: "master", marks: {}, m: { q: {}, lv: { "1": { done: at, fixed: at, got } } }, startedAt: at, updatedAt: at });
+    await row(hana, ids.s08, 3); // in class, the printed book
+    await row(hana, ids.s09, 2);
+    await row(ravi, ids.s08, 1); // on his phone
+  });
+  await backend.push();
+  const fits = async (p: Page, what: string) => expect(await p.evaluate(() => document.documentElement.scrollWidth), what).toBeLessThanOrEqual(await p.evaluate(() => window.innerWidth));
+
+  const O = await phone(backend, "correction");
+  await O.getByRole("button", { name: "Progress", exact: true }).click();
+  await O.getByRole("button", { name: /^Grade 7:/ }).click();
+  await O.getByRole("button", { name: "Sakarath", exact: true }).click();
+  // All: the whole book, one race. Hana 2 of 2 units (83%), Ravi 1 (33%), Kumar not started (no place). No poster here.
+  const lane = O.locator(".sk-lane");
+  await contains(lane.locator(".lane-t small"), "2 units · 2 started");
+  await textsAre(lane.locator(".lr-name .pg-nm"), ["Hana K", "Ravi P", "Kumar S"]);
+  await textsAre(lane.locator(".rk"), ["1", "2", "–"]);
+  const h = lane.locator(".lr", { hasText: "Hana K" });
+  await contains(h.locator(".lr-nums"), "2/2");
+  await contains(h.locator(".lr-pct"), "83%");
+  await count(h.locator(".sk-has"), 1);
+  await count(h.locator(".rbar i"), 2);
+  await count(h.locator(".rbar i.lv.good"), 1);
+  await count(lane.locator(".lr", { hasText: "Ravi P" }).locator(".sk-has"), 0);
+  await count(O.locator(".share-btn"), 0);
+  await shot(O, "psk01-progress-sakarath-all", true);
+  // Book given: only who holds the printed book.
+  await O.locator(".pf-chip.sk-given").click();
+  await textsAre(lane.locator(".lr-name .pg-nm"), ["Hana K"]);
+  await O.locator(".pf-chip.sk-given").click();
+  // Term 1: the term's units as squares; % = the term's Sakarath levels.
+  await O.getByRole("button", { name: "Term 1", exact: true }).click();
+  await visible(O.locator(".tg"));
+  await textsAre(O.locator(".tg-head b"), ["8", "9"]);
+  const first = O.locator(".tg-row:not(.tg-head)").first();
+  await contains(first.locator(".tg-name"), "Hana K");
+  await contains(first.locator(".tg-pct"), "100");
+  await count(first.locator(".tc-sk.done"), 2);
+  await first.locator(".tc").first().click();
+  await contains(O.locator(".toast"), "Hana K · Unit 8");
+  await shot(O, "psk02-progress-sakarath-term", true);
+  // A name: his whole sheet, as on the other views.
+  await first.locator(".pg-open").click();
+  await visible(O.getByText("Share with parents"));
+
+  // Small phones: the three views and the poster button in one row; nothing sideways.
+  for (const width of [360, 320]) {
+    const small = await phone(backend, "correction", { ...PHONE, viewport: { width, height: 700 } });
+    await small.getByRole("button", { name: "Progress", exact: true }).click();
+    await small.getByRole("button", { name: /^Grade 7:/ }).click();
+    await small.getByRole("button", { name: "Units", exact: true }).click();
+    await visible(small.locator(".lane"));
+    const bar = await small.locator(".pg-bar").boundingBox();
+    expect(bar!.height, `one row at ${width} px`).toBeLessThan(50);
+    await fits(small, `units at ${width} px`);
+    await small.getByRole("button", { name: "Sakarath", exact: true }).click();
+    await visible(small.locator(".sk-lane"));
+    await fits(small, `sakarath at ${width} px`);
+    await shot(small, `psk03-sakarath-${width}px`, true);
+    await small.getByRole("button", { name: "Term 1", exact: true }).click();
+    await visible(small.locator(".tg"));
+    await fits(small, `sakarath term at ${width} px`);
+    await small.context().close();
+  }
+  expect(problems, problems.join("\n")).toEqual([]);
+});
+
 test("the AI marks by itself: the owner's switch in Settings → Photos, the teacher of its threads, today's numbers (16 Nov 2026)", async () => {
   const backend = await newClass();
   await addPerson(backend.t, { name: "Nila", token: "nila-photos-token-0123456789abcdefghijklmnopq", tabs: [], can: ["photos"] });

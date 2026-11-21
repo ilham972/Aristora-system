@@ -16,6 +16,7 @@ import { secretHash } from "../convex/lib/auth";
 import { seal, sha256, toB64, unseal } from "../convex/lib/seal";
 import schema from "../convex/schema";
 import { asOwner, asPhone } from "./helpers";
+import { skRace, skTerm, skTerms } from "../src/progressData";
 
 const fresh = () => convexTest(schema, import.meta.glob("../convex/**/*.ts"));
 const bytes = (s: string) => new TextEncoder().encode(s);
@@ -392,5 +393,62 @@ describe("the Sakarath book and exam mode", () => {
     expect(his.sk).toBeNull();
     expect(his.given ?? []).toEqual([]);
     await expect(t.mutation(api.sakarath.open, { id: hana, unitId: sk1._id })).rejects.toThrow(/doesn't have/);
+  });
+  test("Progress → Sakarath: the grade's book unit by unit, done on the phone or corrected in class; who holds the printed book; Reports only", async () => {
+    await sakarath({ code: "U01" });
+    await sakarath();
+    const sk1 = (await unitByKey("G8-U01-SK"))!;
+    const sk2 = (await unitByKey("G8-U02-SK"))!;
+    const skb = (await unitByKey("G8-SKB"))!;
+    await t.mutation(api.sakarath.setExam, { grade: 8, on: true });
+    // Hana: U02's first level on her phone (4 of 5). Ravi: holds the printed book, U01 corrected in class (full).
+    await fam().mutation(api.family.check, { unitId: sk2._id, n: 1, typed: [{ q: 1, a: ["10", "11"] }, { q: 2, a: ["20", "21", "a made-up reason"] }] });
+    const ravi = await t.mutation(api.students.add, { name: "Ravi P", grade: 8, term: 1, stage: "master", unitId: u01 });
+    await t.mutation(api.students.add, { name: "Kumar S", grade: 7, term: 1, stage: "master", unitId: (await unitByKey("G7-U01"))!._id });
+    await t.mutation(api.students.giveMany, { ids: [ravi], unitId: skb._id, stage: "master", given: true, by: "money" });
+    await raw.run(async (ctx) => {
+      const at = Date.now();
+      await ctx.db.insert("progress", { studentId: ravi, unitId: sk1._id, stage: "master", marks: {}, m: { q: {}, lv: { "1": { done: at, fixed: at, got: 5 }, "2": { done: at, fixed: at, got: 2 } } }, startedAt: at, updatedAt: at });
+      // A row of his own workbook never counts here.
+      await ctx.db.insert("progress", { studentId: ravi, unitId: u01, stage: "master", marks: {}, m: { q: {}, lv: {} }, startedAt: at, updatedAt: at });
+    });
+    const b = await t.query(api.progress.sakarath, { grade: 8 });
+    expect(b.books.map((x) => x.g)).toEqual([8]);
+    expect(b.books[0].units.map((u) => [u.code, u.levels, u.term])).toEqual([["U01", 2, 1], ["U02", 2, 1]]);
+    expect(b.books[0].units[0].en).not.toMatch(/^Sakarath/);
+    expect(b.students.map((s) => s.name)).toEqual(["Hana K", "Ravi P"]); // Grade 8 only
+    const hs = b.students.find((s) => s.name === "Hana K")!;
+    const rs = b.students.find((s) => s.name === "Ravi P")!;
+    expect(hs.holds).toEqual([]);
+    expect(rs.holds).toEqual([8]);
+    expect(hs.cells[sk2._id]).toMatchObject({ done: 1, levels: 2, finished: false });
+    expect(rs.cells[sk1._id]).toMatchObject({ done: 2, levels: 2, finished: true, pct: 100 });
+    expect(rs.cells[u01]).toBeUndefined();
+
+    // The whole book: Ravi first (2 of 4 levels), Hana second (1 of 4); only the printed book's holders: Ravi.
+    const book = b.books[0];
+    const race = skRace(b, book, { given: false, todayOnly: false });
+    expect(race.map((r) => [r.s.name, r.rank, r.done, r.of, r.finished, r.holds])).toEqual([
+      ["Ravi P", 1, 2, 4, 1, true],
+      ["Hana K", 2, 1, 4, 0, false],
+    ]);
+    expect(race[1].today).toBe(1);
+    expect(skRace(b, book, { given: true, todayOnly: false }).map((r) => r.s.name)).toEqual(["Ravi P"]);
+    // A term: its units as squares; % = the term's levels done.
+    expect(skTerms(book)).toEqual([1]);
+    const tm = skTerm(b, book, 1, { given: false, todayOnly: false });
+    expect(tm.rows.map((r) => [r.s.name, r.pct, r.cells.map((c) => (c.finished ? "✓" : c.started ? "~" : "-"))])).toEqual([
+      ["Ravi P", 50, ["✓", "-"]],
+      ["Hana K", 25, ["-", "~"]],
+    ]);
+    expect(tm.rows[0].cells[0].words).toMatch(/^Unit 1 .* · finished, 100%$/);
+
+    // Grade 10: the O/L book too; Grade 7: none yet. A teacher without Reports: refused.
+    await tell({ op: "sakarath", grade: 12, code: "U02", en: "Made-up fractions", ta: "பின்னங்கள்", term: 2, data: DATA, answers: key(), items: items(), css: "" });
+    const g10 = await t.query(api.progress.sakarath, { grade: 10 });
+    expect(g10.books.map((x) => [x.g, x.units.map((u) => u.code)])).toEqual([[OL, ["U02"]]]);
+    expect(skTerms(g10.books[0])).toEqual([2]);
+    expect((await t.query(api.progress.sakarath, { grade: 7 })).books).toEqual([]);
+    await expect(raw.query(api.progress.sakarath, { grade: 8 })).rejects.toThrow();
   });
 });

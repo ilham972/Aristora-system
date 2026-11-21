@@ -1088,6 +1088,18 @@ the column names sit once in each unit's header ("Levels" "Marks" / "வின�
 row; a theory book's blue "76%" (how far, read as a score) is gone: its second column is +N today; a workbook's is
 its marks; zero day-totals are left out; the foot is the level colours' key (80%+, 50–79%, < 50%, Handed in, On it now)
 instead of the header's name and date again.
+**Progress → Sakarath** (21 Nov 2026, his ask: "I can see all the students progress of Fighter book and Master book
+... for each term also. But I can't see the progress of the Sakarath book ... recently I gave the Sakarath book"): the
+third view (gold, `src/progressSk.tsx`, server `progress.sakarath`, read only while it is open; the units' board is not
+read then). One grade's students in its Sakarath book: the rows of the Sakarath units (grade 100 + the grade), so work on
+the phone (exam mode) and on paper corrected on Correction (the printed book) are the same numbers. Grades 10 and 11 also
+get the O/L book (its own 30 units): a 10 / OL switch when both are in the app. Chips: All, **Book given** (holding the
+printed book: a handout on its unit, 200 + the grade), Came today. **All** = the whole book as one race: levels done of
+all its levels, marks % of the corrected levels, +N today, a block per unit (finished by its marks, partway gold, not
+started grey), a gold S beside a name = has the printed book; nobody who hasn't started gets a place. **Term 1, 2, 3**
+(the O/L book: Part 1, 2, 3; a revision unit, term 0, goes with Term 1) = the Term view's grid over the term's
+Sakarath units (gold fill = how far, green ✓ = finished), % = the term's Sakarath levels done; a tap says "Unit 8
+Directed numbers · 1 of 2 levels, 83%". A name opens his sheet. No poster on this view (the poster is the units').
 
 **One student's sheet (31 Oct 2026, his ask: "the individual progress sheet I share on WhatsApp to the parents").**
 Progress → tap any name (Units race or Term grid; also the names on the Owner page) → `StudentSheet`

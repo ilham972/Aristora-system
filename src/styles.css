@@ -14645,3 +14645,66 @@ body.sb-on {
 .fc-skroute {
   margin: 6px 0 0;
 }
+
+/* Progress → Sakarath (21 Nov 2026): the third view, gold like the book's S everywhere else; the whole book as one race
+   (a block per unit), a term's units as the Term grid's squares in gold. The poster button is an icon on phones so the
+   three views and it stay in one row at 320 px. */
+.pg-bar .segc-b {
+  padding: 0 10px;
+}
+.segc.plain .segc-b.pg-sk.on {
+  background: #e0a83a;
+  color: #1d1300;
+}
+@media (max-width: 400px) {
+  .pg-bar .share-btn {
+    width: 40px;
+    padding: 0;
+    justify-content: center;
+  }
+  .pg-bar .share-w {
+    display: none;
+  }
+}
+.sk-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.sk-top .segc-b {
+  padding: 0 10px;
+}
+.strip-tag.st-sk b {
+  background: #e0a83a;
+  color: #1d1300;
+}
+.sk-has {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  background: #e0a83a;
+  color: #1d1300;
+  font: 800 10px/1 var(--font);
+  font-style: normal;
+}
+.pf-chip.sk-given.on {
+  border-color: #b7791f;
+  background: #e0a83a;
+  color: #1d1300;
+}
+.pf-chip.sk-given.on b {
+  color: #1d1300;
+}
+.tc-sk {
+  --fill: #e0a83a;
+  --empty: #fbeed3;
+}
+/* A unit partway (started, not finished). */
+.sk-lane .mstrip i.lv.part {
+  background: #f3d9a5;
+  box-shadow: inset 0 -3px 0 #e0a83a;
+}

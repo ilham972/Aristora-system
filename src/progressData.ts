@@ -427,3 +427,94 @@ export function lostMost(sh: QSheet, min = 3, max = 5): HardQ[] {
   });
   return out.sort((a, b) => b.lost / b.of - a.lost / a.of || b.lost - a.lost || a.q - b.q).slice(0, max);
 }
+
+// ---- The Sakarath book (21 Nov 2026, his ask: "I can't see the progress of the Sakarath book ... I want to see the
+// progress of that"): the whole book as one race, and a term's units as a grid (the Term view's squares). ----
+
+export type SkBoard = FunctionReturnType<typeof api.progress.sakarath>;
+export type SkBook = SkBoard["books"][number];
+export type SkUnit = SkBook["units"][number];
+export type SkStudent = SkBoard["students"][number];
+/** All = everyone in the grade; given = those holding the printed book; today = who came today. */
+export type SkFilter = { given: boolean; todayOnly: boolean };
+
+export function skStudents(b: SkBoard, book: SkBook, f: SkFilter): SkStudent[] {
+  return b.students.filter((s) => (!f.given || s.holds.includes(book.g)) && (!f.todayOnly || s.cameToday));
+}
+
+export type SkRow = {
+  s: SkStudent;
+  rank: number | null;
+  /** Levels done (handed in, corrected or marked on the phone) of the whole book, out of `of`. */
+  done: number;
+  of: number;
+  /** Marks of the corrected levels, %, null before any. */
+  pct: number | null;
+  today: number;
+  /** Units finished. */
+  finished: number;
+  holds: boolean;
+};
+
+/** The whole book: everyone ranked by levels done, then marks; nobody who hasn't started gets a place. */
+export function skRace(b: SkBoard, book: SkBook, f: SkFilter): SkRow[] {
+  const of = book.units.reduce((a, u) => a + u.levels, 0);
+  const rows: SkRow[] = skStudents(b, book, f).map((s) => {
+    let done = 0;
+    let got = 0;
+    let max = 0;
+    let today = 0;
+    let finished = 0;
+    for (const u of book.units) {
+      const c = s.cells[u._id];
+      if (!c) continue;
+      done += c.done;
+      got += c.got;
+      max += c.max;
+      today += c.today;
+      if (c.finished) finished++;
+    }
+    return { s, rank: null, done, of, pct: max ? Math.round((got / max) * 100) : null, today, finished, holds: s.holds.includes(book.g) };
+  });
+  const started = rows.filter((r) => r.done > 0);
+  const rk = ranks(started.map((r) => [r.done, r.pct ?? -1, r.today]));
+  started.forEach((r, i) => (r.rank = rk[i]));
+  return rows.sort((a, c) => (a.rank ?? 1e9) - (c.rank ?? 1e9) || a.s.name.localeCompare(c.s.name));
+}
+
+/** The book's terms (the O/L book's parts); a revision unit (term 0) goes with Term 1. */
+export const skTermOf = (u: { term: number }) => Math.max(1, u.term);
+export function skTerms(book: SkBook): number[] {
+  return [...new Set(book.units.map(skTermOf))].sort((a, c) => a - c);
+}
+
+export type SkCell = { unit: SkUnit; frac: number; finished: boolean; started: boolean; pct: number | null; words: string };
+export type SkTermRow = { s: SkStudent; cells: SkCell[]; /** This term's levels done ÷ its levels. */ pct: number };
+
+/** One term of the book: every student × its units, furthest first. */
+export function skTerm(b: SkBoard, book: SkBook, term: number, f: SkFilter): { units: SkUnit[]; rows: SkTermRow[] } {
+  const units = book.units.filter((u) => skTermOf(u) === term);
+  const total = units.reduce((a, u) => a + u.levels, 0);
+  const rows = skStudents(b, book, f).map((s): SkTermRow => {
+    let done = 0;
+    const cells = units.map((u): SkCell => {
+      const c = s.cells[u._id];
+      const n = Number(u.code.slice(1));
+      const name = `${Number.isFinite(n) ? `Unit ${n}` : u.code} ${u.en}`;
+      if (!c || c.done === 0) return { unit: u, frac: 0, finished: false, started: false, pct: null, words: `${name} · not started` };
+      done += c.done;
+      const marks = c.pct !== null ? `, ${c.pct}%` : "";
+      return {
+        unit: u,
+        frac: c.levels ? c.done / c.levels : 0,
+        finished: c.finished,
+        started: true,
+        pct: c.pct,
+        words: `${name} · ${c.finished ? "finished" : `${c.done} of ${c.levels} levels`}${marks}`,
+      };
+    });
+    return { s, cells, pct: total ? Math.round((done / total) * 100) : 0 };
+  });
+  rows.sort((a, c) => c.pct - a.pct || a.s.name.localeCompare(c.s.name));
+  return { units, rows };
+}
