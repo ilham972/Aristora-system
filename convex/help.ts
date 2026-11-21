@@ -663,6 +663,108 @@ export async function openThread(
   return { id: r._id, again: false, ...(have ? { have: true as const } : {}) };
 }
 
+/** A classmate a thread can take: his name (first name and initial), grade and face. */
+export type HelpAddable = { sid: string; n: string; g?: number; pic?: string };
+
+/**
+ * Who can be added to a thread (21 Nov 2026, his ask: "the plus button ... if anyone want to add by student, they can
+ * add"; his yes: teachers and students add, only teachers remove): every real student who lost marks on this question
+ * and hasn't had it explained, not waiting in it already. Never his marks: only that it is his question too.
+ */
+async function addable(ctx: QueryCtx, r: Doc<"usRooms">, me?: Id<"students">): Promise<HelpAddable[]> {
+  const rows = await ctx.db
+    .query("progress")
+    .withIndex("by_unit_stage", (x) => x.eq("unitId", r.hu!).eq("stage", "master"))
+    .collect();
+  const waiting = new Set<string>((await asksIn(ctx, r._id)).filter((a) => a.st === "open").map((a) => a.sid));
+  const out: HelpAddable[] = [];
+  for (const p of rows) {
+    if (p.studentId === me || waiting.has(p.studentId) || !askable(masterState(p).q[String(r.hq)])) continue;
+    const s = await ctx.db.get(p.studentId);
+    if (!s || s.archived || s.demo || s.test) continue;
+    const who = await studentPerson(ctx, s._id);
+    out.push({ sid: s._id, n: who?.n ?? s.name, ...(who?.g !== undefined ? { g: who.g } : {}), ...(who?.pic ? { pic: who.pic } : {}) });
+  }
+  return out.sort((a, b) => a.n.localeCompare(b.n));
+}
+
+/** A student's own thread (he has his question in it, open or closed): he may add a classmate. */
+async function hisThread(ctx: QueryCtx, s: Doc<"students">, r: Doc<"usRooms">): Promise<void> {
+  const a = await askOf(ctx, s._id, r.hu!, r.hq!);
+  if (!a || a.rid !== r._id) fail("இந்த thread உன்னுடையது அல்ல.");
+}
+
+/** The "+" in a thread's header: whom a teacher can add. */
+export const taddable = query({
+  args: { token, id: v.string() },
+  handler: async (ctx, args): Promise<HelpAddable[]> => {
+    await viewer(ctx, args.token, "any");
+    return await addable(ctx, await roomOf(ctx, args.id));
+  },
+});
+
+/** The "+" in a thread's header: the classmates a student in it can add. */
+export const addableFor = query({
+  args: { token, id: v.string() },
+  handler: async (ctx, args): Promise<HelpAddable[]> => {
+    const s = await familyViewer(ctx, args.token);
+    const r = await roomOf(ctx, args.id);
+    await hisThread(ctx, s, r);
+    return await addable(ctx, r, s._id);
+  },
+});
+
+/**
+ * One classmate into this thread (from its header's +): his question waits here on the thread's own teacher (Pending),
+ * he is rung, and the thread says who added him. A teacher, or a student whose thread it is.
+ */
+async function addHim(ctx: MutationCtx, r: Doc<"usRooms">, sid: string, by: { sid: Id<"students">; n: string; g?: number; pic?: string } | { by: Id<"users">; n: string }): Promise<{ n: string }> {
+  if (!(await usCfg(ctx)).open) fail("Us isn't open on the students' phones yet (Settings → Community).");
+  const id = ctx.db.normalizeId("students", sid);
+  const s = id ? await ctx.db.get(id) : null;
+  if (!s || s.archived || s.demo || s.test) fail("This student isn't in the class.");
+  const had = await askOf(ctx, s._id, r.hu!, r.hq!);
+  const who = (await studentPerson(ctx, s._id))?.n ?? s.name;
+  if (had?.st === "open" && had.rid === r._id) return { n: who };
+  if (had?.st === "open") fail(`${who} waits in another thread for this question.`);
+  const his = await hisQuestion(ctx, s, r.hu!, r.hq!);
+  if (!his.ok) fail(`${who}: this question doesn't wait for an explanation.`);
+  const now = Date.now();
+  const tid = r.ht ?? ("by" in by ? by.by : undefined);
+  if (!tid) fail("This thread has no teacher.");
+  const have = await photoHere(ctx, s._id, r.hu!, his.n, r.hq!);
+  // It waits on the thread's teacher as if nobody wrote (Pending): no `tw`.
+  if (had) await ctx.db.patch(had._id, { rid: r._id, st: "open", tid, ta: now, tw: undefined, ph: have, at: now, doneAt: undefined, by: undefined, from: "t", ...FRESH });
+  else await ctx.db.insert("helpAsks", { rid: r._id, sid: s._id, unitId: r.hu!, n: his.n, q: r.hq!, tid, ta: now, st: "open", from: "t", ph: have, at: now, demo: false });
+  const first = who.split(" ")[0];
+  await say(ctx, r, by, now, { t: `➕ ${first} ஐ இந்த thread இல் சேர்த்தேன்.` });
+  const t = await ctx.db.get(tid);
+  await alertStudent(ctx, s._id, `🎧 Q${r.hq}: ${by.n.split(" ")[0]} உன்னை இந்த thread இல் சேர்த்தார்${t ? `: ${t.name} ஆசிரியர் விளக்குவார்` : ""}.`, `/f/#chat=${r._id}`);
+  return { n: who };
+}
+
+/** A teacher adds a student to this thread. */
+export const tadd = mutation({
+  args: { token, id: v.string(), sid: v.string() },
+  handler: async (ctx, args) => {
+    const u = await actor(ctx, args.token, ["any"]);
+    return await addHim(ctx, await roomOf(ctx, args.id), args.sid, { by: u._id, n: u.name });
+  },
+});
+
+/** A student adds a classmate to his own thread. */
+export const add = mutation({
+  args: { token, id: v.string(), sid: v.string() },
+  handler: async (ctx, args) => {
+    const s = await familyActor(ctx, args.token);
+    const r = await roomOf(ctx, args.id);
+    await hisThread(ctx, s, r);
+    if (args.sid === s._id) fail("நீ ஏற்கனவே இதில் இருக்கிறாய்.");
+    const me = await studentPerson(ctx, s._id);
+    return await addHim(ctx, r, args.sid, { sid: s._id, n: me?.n ?? s.name, ...(me?.g !== undefined ? { g: me.g } : {}), ...(me?.pic ? { pic: me.pic } : {}) });
+  },
+});
+
 /** Consultation's icons: the questions of these students that already have an open thread ("<student>:<unit>:<q>"). */
 export const topen = query({
   args: { token },

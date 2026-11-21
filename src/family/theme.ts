@@ -8,12 +8,18 @@
 
 const KEY = "aristora.family.theme";
 
-/** The teachers' frames (the class app's Us, the owner's Preview) are the teachers' app: always light. */
-const teachers = () => /[?&]staff\b/.test(location.search) || location.hash.indexOf("#preview=") === 0;
+/** The owner's Preview shows a student's screen inside the teachers' app: always light. */
+const preview = () => location.hash.indexOf("#preview=") === 0;
+/**
+ * The class app's Us (/f/?staff) has the teachers' own Dark (21 Nov 2026, his ask: the moon in a thread "for the
+ * teacher also"; his yes: one switch, the whole of her Us), kept apart from a student's on the same phone.
+ */
+const staff = () => /[?&]staff\b/.test(location.search);
+const key = () => (staff() ? `${KEY}.staff` : KEY);
 
 export function darkOn(): boolean {
   try {
-    return localStorage.getItem(KEY) === "dark" && !teachers();
+    return !preview() && localStorage.getItem(key()) === "dark";
   } catch {
     return false; // private mode: light
   }
@@ -57,7 +63,7 @@ export function showTheme(dark = darkOn()): Promise<void> {
  */
 export function darkNews(): string | null {
   try {
-    if (teachers() || localStorage.getItem(KEY + ".told") || localStorage.getItem(KEY) === "dark") return null;
+    if (staff() || preview() || localStorage.getItem(KEY + ".told") || localStorage.getItem(KEY) === "dark") return null;
     if (!matchMedia("(prefers-color-scheme: dark)").matches) return null;
     localStorage.setItem(KEY + ".told", "1");
     return "இப்போது Dark mode உண்டு: Me இல் இயக்கு 🌙";
@@ -75,8 +81,8 @@ export function onTheme(fn: (dark: boolean) => void) {
 
 export function setDark(on: boolean) {
   try {
-    if (on) localStorage.setItem(KEY, "dark");
-    else localStorage.removeItem(KEY);
+    if (on) localStorage.setItem(key(), "dark");
+    else localStorage.removeItem(key());
   } catch {
     /* private mode: it lasts until the app closes */
   }

@@ -595,6 +595,33 @@ describe("online explanations", () => {
     }
   });
 
+  test("the + in a thread's header (21 Nov 2026): a teacher or a student in it adds a classmate who lost marks on it; it stays the thread's teacher's", async () => {
+    const id = await send(h(), 8, nila);
+    // Who can come in: Mira lost marks on Q8 too; never Hana (already waiting), never someone with nothing lost.
+    const ravi = await t.mutation(api.students.add, { name: "Ravi P", grade: 8, term: 1, stage: "master", unitId: u01 });
+    expect((await tr().query(api.help.taddable, { id })).map((x) => x.n)).toEqual(["Mira J"]);
+    expect((await h().query(api.help.addableFor, { id })).map((x) => x.n)).toEqual(["Mira J"]);
+    // Only a student whose thread it is.
+    await expect(m().query(api.help.addableFor, { id })).rejects.toThrow(/உன்னுடையது அல்ல/);
+    await expect(m().mutation(api.help.add, { id, sid: mira })).rejects.toThrow(/உன்னுடையது அல்ல/);
+    await expect(tr().mutation(api.help.tadd, { id, sid: ravi })).rejects.toThrow(/doesn't wait for an explanation/);
+    // Hana adds Mira: hers waits here on Nila (Pending), the thread says who added her, Mira can open it.
+    expect(await h().mutation(api.help.add, { id, sid: mira })).toEqual({ n: "Mira J" });
+    expect(await askRow(mira, 8)).toMatchObject({ rid: id, st: "open", tid: nila, from: "t" });
+    expect((await askRow(mira, 8)).tw).toBeUndefined();
+    const room = await m().query(api.chat.room, { id });
+    expect(room.msgs.at(-1)).toMatchObject({ n: "Hana K", t: "➕ Mira ஐ இந்த thread இல் சேர்த்தேன்." });
+    expect(room.head.help!.asks.map((a) => a.n)).toEqual(["Hana K", "Mira J"]);
+    expect(await h().query(api.help.addableFor, { id })).toEqual([]);
+    // Again: nothing new. Raj adding keeps it Nila's.
+    expect(await tr().mutation(api.help.tadd, { id, sid: mira })).toEqual({ n: "Mira J" });
+    expect((await m().query(api.chat.room, { id })).msgs.filter((x) => x.t?.startsWith("➕"))).toHaveLength(1);
+    await tr().mutation(api.help.tskip, { aid: (await askRow(mira, 8))._id });
+    expect((await askRow(mira, 8)).st).toBe("skip");
+    await tr().mutation(api.help.tadd, { id, sid: mira });
+    expect(await askRow(mira, 8)).toMatchObject({ st: "open", tid: nila });
+  });
+
   test("the owner's limit a day (none unless he sets one); demo students can't send", async () => {
     await expect(tn().query(api.help.limit, {})).rejects.toThrow();
     expect(await t.query(api.help.limit, {})).toBe(0);

@@ -13,7 +13,7 @@
 import type { ComponentChildren } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { ChatMsg } from "../../convex/chat";
-import type { HelpLine, HelpStart, HelpTeacher } from "../../convex/help";
+import type { HelpAddable, HelpLine, HelpStart, HelpTeacher } from "../../convex/help";
 import type { HelpAsk, HelpHead, HelpPart, HelpPhoto } from "../../convex/lib/helpView";
 import { drawQuestion } from "../questionView";
 import { keep, mutation, NetError, query, sameOr, uploadPhoto } from "./net";
@@ -382,9 +382,8 @@ export function HelpTop(props: {
   const whose = (a: HelpAsk) => (staff ? `${a.n}'s answers` : a.mine ? "உன் விடைகள்" : `${a.n} இன் விடைகள்`);
   return (
     <section class="h-top" aria-label={`Q${h.q}`}>
-      {/* Q, Stage and Level are in the thread's header (20 Nov 2026, unslop: said once); here the unit. The question
-          always shows (21 Nov 2026: its talk is under its sub-questions; the Hide switch went). */}
-      <p class="h-top-h">{h.unit}</p>
+      {/* Q, the unit, Stage and Level are in the thread's header (21 Nov 2026: the unit too, his ask; said once). The
+          question always shows (its talk is under its sub-questions; the Hide switch went). */}
       <ul class={`h-asks${rows.length > 1 ? "" : " one"}`} ref={strip} role="tablist" aria-label={staff ? "Students" : "மாணவர்கள்"}>
         {rows.map((a) => (
           <li key={a.id} class={`${STATE[a.st].cls} ${a.sg}${a.rp ? " rp" : ""}${a.st === "open" && a.su ? " und" : ""}${a.id === shown?.id ? " sel" : ""}`}>
@@ -660,6 +659,114 @@ export function HelpMenu(props: { id: string; help: HelpHead; onClose: () => voi
           <p class="h-note">It closes for a student when he taps ✓ I understood and a teacher taps ✓ Understood. Asking for his photo, Not now, hiding a name or a photo: ⋮ beside each student.</p>
         </>
       )}
+    </Sheet>
+  );
+}
+
+/**
+ * Who is in a thread (21 Nov 2026, his ask: the students' faces in its header and "+ ... add by student ... remove any
+ * teachers or students"; his yes: teachers and students add, only teachers remove): its teacher (a teacher changes
+ * her: the thread goes to another), each student (a teacher removes one: his question waits for the class; a tap: his
+ * profile), and + a classmate who lost marks on this question too (`add`: opened on that list).
+ */
+export function PeopleSheet(props: { id: string; help: HelpHead; staff: boolean; add?: boolean; onClose: () => void; onChange: () => void; onMate: (id: string) => void }) {
+  const h = props.help;
+  const staff = props.staff;
+  const [list, setList] = useState<HelpAddable[] | null>(null);
+  const [tch, setTch] = useState<HelpTeacher[] | null>(null);
+  const [sure, setSure] = useState<string | null>(null);
+  const run = (path: string, args: Record<string, unknown>, said: string) =>
+    mutation(path, args).then(
+      () => {
+        sound("send");
+        toast(said);
+        props.onChange();
+      },
+      (e) => toast(problemWords(e), true),
+    );
+  const adding = () =>
+    void query("help:addableFor", { id: props.id }).then(
+      (x) => setList(x as HelpAddable[]),
+      (e) => toast(problemWords(e), true),
+    );
+  useEffect(() => {
+    if (props.add) adding();
+  }, []);
+  const asks = [...h.asks].sort((a, b) => +(a.st !== "open") - +(b.st !== "open"));
+  usePics([...asks.map((a) => a.pic), ...(list ?? []).map((p) => p.pic)]);
+  if (list)
+    return (
+      <Sheet title={staff ? "Add a student" : "நண்பரைச் சேர்"} sub={staff ? `They lost marks on Q${h.q} too` : `இவர்களும் Q${h.q} இல் மதிப்பெண் இழந்தனர்`} onClose={props.onClose} class="h-ppl">
+        {list.length ? (
+          <ul class="h-pl">
+            {list.map((p) => (
+              <li key={p.sid}>
+                <span class="h-pw">
+                  <Avatar name={p.n} size="s" pic={picOf(p.pic)} />
+                  <b>{p.n}</b>
+                  {p.g !== undefined && <i class="f-gchip">{p.g}</i>}
+                </span>
+                <button type="button" class="h-pa" onClick={() => void run("help:add", { id: props.id, sid: p.sid }, staff ? `${p.n} is in the thread.` : `${p.n} சேர்க்கப்பட்டார்.`).then(() => setList((l) => l && l.filter((x) => x.sid !== p.sid)))}>
+                  {staff ? "Add" : "சேர்"}
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p class="h-note">{staff ? `Nobody else is waiting to have Q${h.q} explained.` : "வேறு யாரும் இல்லை."}</p>
+        )}
+      </Sheet>
+    );
+  return (
+    <Sheet title={`Q${h.q} · ${h.unit}`} sub={`Stage ${h.no} · Level ${h.n}`} onClose={props.onClose} class="h-ppl">
+      <ul class="h-pl">
+        <li>
+          <span class="h-pw">
+            <Avatar name={h.tname} size="s" />
+            <b>{h.tname}</b>
+            <small>{staff ? "Teacher" : "ஆசிரியர்"}</small>
+          </span>
+          {staff && !tch && (
+            <button
+              type="button"
+              class="h-pa"
+              onClick={() =>
+                void query("help:tlist").then(
+                  (x) => setTch((x as { teachers: HelpTeacher[] }).teachers.filter((t) => t.id !== h.tid)),
+                  (e) => toast(problemWords(e), true),
+                )
+              }
+            >
+              Change
+            </button>
+          )}
+        </li>
+        {tch?.map((t) => (
+          <li key={t.id} class="to">
+            <button type="button" class="h-pw" onClick={() => void run("help:tpass", { id: props.id, to: t.id }, `Sent to ${t.n}.`).then(props.onClose)}>
+              <Avatar name={t.n} size="s" pic={picOf(t.pic)} />
+              <b>→ {t.n}</b>
+            </button>
+          </li>
+        ))}
+        {asks.map((a) => (
+          <li key={a.id} class={a.st === "open" ? "" : "off"}>
+            <button type="button" class="h-pw" disabled={!a.sid} onClick={() => a.sid && (props.onClose(), props.onMate(a.sid))}>
+              <Avatar name={a.n} size="s" pic={picOf(a.pic)} />
+              <b>{a.mine ? "நீ" : a.n}</b>
+              <small>{cardWords(a, staff)}</small>
+            </button>
+            {staff && a.st === "open" && (
+              <button type="button" class="h-pa no" onClick={() => (sure === a.id ? (setSure(null), void run("help:tskip", { aid: a.id }, `${a.n}: removed. The question waits for the class.`)) : setSure(a.id))}>
+                {sure === a.id ? "Remove?" : "Remove"}
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+      <button type="button" class="f-btn white h-padd" onClick={adding}>
+        <Icon name="plus" size={18} /> {staff ? "Add a student" : "நண்பரைச் சேர்"}
+      </button>
     </Sheet>
   );
 }

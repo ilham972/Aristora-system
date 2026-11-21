@@ -1463,7 +1463,8 @@ learning app of our education institute"): one profile, his class times, what he
   dark mode, they can set up in the profile page"). **The app is light on every phone**, whatever the phone's or the
   browser's own dark setting: both apps' pages say `only light` (`<meta name="color-scheme">` and `color-scheme` on
   `:root`), which Chrome's "darken websites" obeys (a browser's dark picks its own colours: blue = right and rose =
-  wrong can shift, and nobody tested it). **Me → On this phone → Dark mode** (a switch like Sound, kept on the phone:
+  wrong can shift, and nobody tested it). **Me → On this phone → Dark mode** (and the moon in a thread's header since
+  21 Nov 2026: the same switch; a teacher's Us has its own, below "Inside a thread") (a switch like Sound, kept on the phone:
   the children on one phone share it) turns on OUR dark: the same app on a deep violet page (`--bg` #131129) with
   violet cards (#1f1b42); headers and buttons stay ARISTORA's violet, and every colour keeps its one meaning (gold,
   flame, gem, blue = right, rose = wrong). No night sky, no stars (his 3 Nov rule holds). The 12 weeks brighten with
@@ -2363,7 +2364,7 @@ learning app of our education institute"): one profile, his class times, what he
       - **Inside a thread** (20 Nov 2026, the unslop pass): the violet header **stays on screen** (‹ Back one tap from
         anywhere in the chat; `.f-hero.us.c-head` sticky) with Q, Stage · Level and how many wait (or the teacher), her
         AI (a robot line icon, `h-aib`) and ⋮; no 🎧 tile. The card under it names the unit (Q, Stage and Level are not
-        written twice; Hide / Question went on 21 Nov 2026: the question holds the talk now); each student's card is one compact chip (face, name, his state after its
+        written twice; Hide / Question went on 21 Nov 2026: the question holds the talk now; the unit's name moved to the header the same night); each student's card is one compact chip (face, name, his state after its
         dot, his marks); ‹ name's answers · n / N ›; her state line with ✓ Understood and ⋮; one line "Waiting on you"
         (the sentence on how it closes is gone: the ✓ Understood toast says it). Messages sit on hairlines, hers in flat
         violet, a teacher's on the soft violet; 😊 and the 📷 tag are line icons.
@@ -2377,6 +2378,28 @@ learning app of our education institute"): one profile, his class times, what he
         top-right corner opens it **full screen** (`ReadFull` in `talk.tsx`, through `showSheet`): the same navy, 19 px
         letters, the page behind it still; ✕, Close / மூடு at the end and the phone's Back close it, back in the
         thread. A tap on the card still shows 😊 ↩ (the ⤢ never does).
+      - **The header: the unit, who is in it, +, the moon** (21 Nov 2026, his ask: "we are not putting the name of the
+        unit ... always in Tamil ... the profiles of the students ... the plus button ... add ... remove any teachers or
+        students ... the dark mode icon ... like WhatsApp"; his yeses: students add too, only teachers remove; one Dark
+        switch, not threads only). The violet header says **Q8 · its unit's Tamil name** (ellipsis when long) over
+        Stage · Level · how many wait (or the teacher), and a second row: **the students' faces** (`.c-who .c-faces`, the
+        waiting first, up to 5 and +N), **+** (`.c-add`) and on the right **the moon** (`.c-moon`; the sun when dark).
+        - The faces (or a tap on the title) open **who is in it** (`PeopleSheet` in `help.tsx`, `.h-ppl`): its teacher
+          (a teacher's **Change**: the other teachers; one tap sends it there, `help.tpass`, as ⋮ → Send to another
+          teacher), each student with where he stands (a tap: his profile; a teacher's **Remove**, a second tap
+          "Remove?" = Not now, `help.tskip`: his question waits for the class, he is told), and **+ Add a student** /
+          **+ நண்பரைச் சேர்**.
+        - **+** lists every real student who lost marks on this question and hasn't had it explained, not waiting in it
+          already (`help.taddable` for a teacher, `help.addableFor` for a student whose thread it is: names, grade,
+          face, never marks: `addable` reads the unit's progress rows, `by_unit_stage`). **Add** / **சேர்** = his
+          question waits here on the thread's own teacher (Pending, `from` "t", whoever added him; `help.tadd`,
+          `help.add` → `addHim`), the thread says "➕ Sara ஐ இந்த thread இல் சேர்த்தேன்." under the adder's name, and he
+          is rung ("🎧 Q8: Mira உன்னை இந்த thread இல் சேர்த்தார்: Nila ஆசிரியர் விளக்குவார்."). Refused: Us closed, a
+          demo or practice student, nothing lost on it (or explained), waiting in another thread for it.
+        - **The moon = Dark mode for the whole app** (his yes: "one switch"): a student's is Me → Dark mode's own switch
+          (it stays after Back, like WhatsApp). **A teacher's Us has its own Dark** (`aristora.family.theme.staff`,
+          `theme.ts` / `boot.ts`): the moon in a thread turns her whole Us frame dark, kept on her phone; the class
+          app around it stays light, and the owner's Preview stays light.
       - **The talk under each sub-question; no long chat** (21 Nov 2026, his voice note with two screenshots: "student
         read this after few hours or few days ... why we can't explain below the wrong question? ... why we can't put the
         mic button below the wrong sub-question? And why we can't select the student before put the explanation? ...
@@ -2390,7 +2413,8 @@ learning app of our education institute"): one profile, his class times, what he
         - **Under each sub-question someone didn't get right** (`wrongIn` = the server's `wrongOf`: a typed part wrong
           or blank, a teacher's part below its marks or not marked yet; not known = every one), a talk (`.h-talk`):
           a teacher's row = the faces of who got it wrong and still waits (`.h-tk-p`, all picked first; a tap unpicks)
-          with **🎤** (records at once, for the ones picked) and **✍** (the write bar writes there) on its right;
+          with **🎤** (records at once, for the ones picked), **📷** (Camera or Gallery, the crop, then Send: his ask the
+          same night, "upload below the wrong question"; `WriteBar` `pickRef`) and **✍** (the write bar writes there) on its right;
           then its messages, the newest 3 ("N earlier" opens the rest). A sub-question they all got right has none.
         - **The write bar says where the words go** (`.h-to` above it: "To (ii) · Hana, Mira", ✕ = back to the whole
           question for everyone; "pick who it's for" and a refusal when nobody is picked). Her words and voice notes
@@ -3065,6 +3089,13 @@ learning app of our education institute"): one profile, his class times, what he
     from a teacher's private chat under Members: only the title showed, in the write bar, the photo hidden below the
     screen): `CropSheet` renders `Cropper` into its own `div` on `document.body`, so it fills the screen from anywhere:
     the write bar (`.f-tb`, centred with a `transform`) of a chat or a thread, a sheet, the camera.
+  - **Camera or Gallery** (21 Nov 2026, his report from a thread: "when I press that, that asking to select the photo
+    from the gallery ... we want two options ... take the photo ... or select from the gallery", no documents): a new
+    Android phone's photo button (`accept="image/*"`) opens only its gallery, and `capture` opens only its camera. So
+    every 📷 that picks photos for a message (a chat's or thread's write bar, a post, his question's photo: `usePicker`
+    in `talk.tsx`) first asks **Camera** or **Gallery** (`Choose`: a bottom sheet on the page's body, `.f-choose`; a
+    tap outside closes it), then the crop as before. Two inputs: `.f-file` (the gallery) and `.f-file-cam`
+    (`capture="environment"`, hidden). A Level's photos (`Taker`) stay the camera only.
   - **No limit inside a unit** (10 Nov 2026, his rule; before, "2 levels at most" while photos were owed: `blockedBy`,
     `me.blocked`, gone): he plays on whatever is owed or unexplained. Settings → Photos (the owner) still turns
     "required" off (`photos.setRequired`, meta `photos.required`): then no drawing's photo is asked for (no 📷 on the

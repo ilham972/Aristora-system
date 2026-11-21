@@ -67,6 +67,27 @@ const CSS = `
 .c-head-w small{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:12.5px;opacity:.88}
 .c-head-w .c-gface{width:40px;height:40px;border-radius:12px;font-size:20px}
 .c-head-w .f-ava{width:40px;height:40px}
+.c-head-w.two b{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;white-space:normal;font-size:16px;line-height:1.25}
+.c-who{display:flex;align-items:center;gap:8px;margin:4px 0 0 48px}
+.c-who .c-moon{width:34px;height:34px}
+.c-faces{display:flex;align-items:center;min-height:30px;padding:0 2px}
+.c-faces .f-ava{width:28px;height:28px;margin-left:-7px;box-shadow:0 0 0 2px #5f4fe0;font-size:12px}
+.c-faces .f-ava:first-child{margin-left:0}
+.c-faces i{margin-left:5px;font:700 12.5px/1 var(--display);font-style:normal;color:#fff}
+.c-add{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.2);color:#fff}
+.c-add:active,.c-faces:active{transform:scale(.95)}
+.h-pl{list-style:none;margin:4px 0 0;padding:0}
+.h-pl li{display:flex;align-items:center;gap:10px;min-height:54px;border-bottom:1px solid var(--line)}
+.h-pl li:last-child{border-bottom:0}
+.h-pl li.off{opacity:.6}
+.h-pl li.to b{color:var(--brand-2)}
+.h-pw{flex:1;min-width:0;display:flex;align-items:center;gap:10px;padding:6px 0;text-align:left}
+.h-pw .f-ava{flex:none;width:36px;height:36px}
+.h-pw b{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font:700 15px/1.2 var(--display);color:var(--ink)}
+.h-pw small{flex:none;margin-left:auto;padding-left:6px;font:600 12.5px/1.2 var(--display);color:var(--ink3)}
+.h-pa{flex:none;height:34px;padding:2px 14px 0;border-radius:10px;background:var(--bg);font:700 13.5px/1 var(--display);color:var(--brand-2)}
+.h-pa.no{color:var(--wrong-ink)}
+.h-padd{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:12px}
 .c-day{display:flex;justify-content:center;margin:16px 0 2px}
 .c-day span{padding:4px 12px 2px;border-radius:999px;background:var(--lav);font:800 12px/1.2 var(--display);color:var(--ink2)}
 .c-msgs .f-msg.cont{margin-top:3px}

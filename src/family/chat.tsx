@@ -16,8 +16,9 @@ import type { ChatHead, ChatLine, ChatMsg, ChatPeople, ChatPerson, ChatRoom } fr
 import { keep, last, mutation, query, sameOr } from "./net";
 import { picOf, usePics } from "./pics";
 import { buzz, sound } from "./sound";
-import { AiExplainSheet, AskSheet, HelpList, HelpMenu, HelpTop, useVoiceRec, Voice } from "./help";
+import { AiExplainSheet, AskSheet, HelpList, HelpMenu, HelpTop, PeopleSheet, useVoiceRec, Voice } from "./help";
 import { agoShort, Bubble, jumpTo, ReactorsSheet, ReadFull, useParts, WriteBar, type Sent, type Taggable } from "./talk";
+import { darkOn, onTheme, setDark } from "./theme";
 import { Avatar, Icon, Owl, problemWords, Sheet, showSheet, toast, Waiting } from "./ui";
 import { Pics } from "./usPost";
 
@@ -596,7 +597,16 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
     );
   };
   // An explanation's thread (21 Nov 2026): its talk under each sub-question (talk.tsx useParts).
-  const parts = useParts({ staff: props.staff, asks: head?.help?.asks ?? [], msgs, bubble, voice: () => voice.start() });
+  const photo = useRef<() => void>();
+  const parts = useParts({ staff: props.staff, asks: head?.help?.asks ?? [], msgs, bubble, voice: () => voice.start(), photo: () => photo.current?.() });
+  // Who is in it (its header's faces and +, 21 Nov 2026): PeopleSheet in help.tsx.
+  const crowd = (add?: boolean) => head?.help && showSheet((close) => <PeopleSheet id={props.id} help={head.help!} staff={props.staff} add={add} onClose={close} onChange={() => void load(true)} onMate={props.onMate} />);
+  // The moon (21 Nov 2026, his ask: dark "inside the thread ... like WhatsApp ... for the teacher also"; his yes: one
+  // switch, the same as Me → Dark mode; a teacher's is her Us's own: theme.ts).
+  const [dark, setDk] = useState(darkOn);
+  useEffect(() => onTheme(setDk), []);
+  const faces = head?.help ? [...head.help.asks].sort((a, b) => +(a.st !== "open") - +(b.st !== "open")) : [];
+  usePics(faces.map((a) => a.pic));
   return (
     <div class="c-scr c-room">
       <header class="f-hero us c-head">
@@ -605,10 +615,11 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
             <Icon name="back" size={20} />
           </button>
           {head && (
-            <button type="button" class="c-head-w" disabled={!sid && !(head.k === "g" && head.can.edit)} onClick={() => (sid ? props.onMate(sid) : head.can.edit ? showSheet((close) => <GroupSheet id={props.id} onClose={close} onDone={() => void load(true)} />) : undefined)}>
+            <button type="button" class={`c-head-w${head.help ? " two" : ""}`} disabled={!sid && !(head.k === "g" && head.can.edit) && !head.help} onClick={() => (sid ? props.onMate(sid) : head.help ? crowd() : head.can.edit ? showSheet((close) => <GroupSheet id={props.id} onClose={close} onDone={() => void load(true)} />) : undefined)}>
               {head.k !== "h" && <RoomFace r={head} />}
               <span>
-                <b>{head.name}</b>
+                {/* A thread: its question and its unit's Tamil name (21 Nov 2026, his ask: "the name of the unit also"). */}
+                <b>{head.help ? `${head.name} · ${head.help.unit}` : head.name}</b>
                 <small>{sub}</small>
               </span>
             </button>
@@ -657,6 +668,25 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
             </button>
           )}
         </div>
+        {/* Who is in the thread (21 Nov 2026, his ask: "the profiles of the students ... the plus button"): their faces
+            (a tap: who they are, a teacher removes one) and + to add a classmate who lost marks on it too. */}
+        {head?.help && (
+          <div class="c-who">
+            <button type="button" class="c-faces" aria-label={props.staff ? "Who is in this thread" : "இதில் உள்ளவர்கள்"} onClick={() => crowd()}>
+              {faces.slice(0, 5).map((a) => (
+                <Avatar key={a.id} name={a.n} size="s" pic={picOf(a.pic)} />
+              ))}
+              {faces.length > 5 && <i>+{faces.length - 5}</i>}
+            </button>
+            <button type="button" class="c-add" aria-label={props.staff ? "Add a student" : "நண்பரைச் சேர்"} onClick={() => crowd(true)}>
+              <Icon name="plus" size={16} />
+            </button>
+            <span class="f-sp" />
+            <button type="button" class="c-add c-moon" aria-label={dark ? "Light mode" : "Dark mode"} aria-pressed={dark} onClick={() => (buzz(), setDark(!dark))}>
+              <Icon name={dark ? "sun" : "moon"} size={17} />
+            </button>
+          </div>
+        )}
       </header>
       {!head && <Waiting />}
       {!head && (err || slow) && (
@@ -715,6 +745,7 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
               onSend={send}
               fast
               voice={head.k === "h" ? voice : undefined}
+              pickRef={photo}
             />
           ) : (
             <p class="c-cant">{head.look ? "👁 Only the two of them write here." : (head.can.why ?? "இங்கே இப்போது எழுத முடியாது.")}</p>

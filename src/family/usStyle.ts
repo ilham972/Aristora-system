@@ -359,6 +359,10 @@ button.h-tk-p.on{background:var(--brand-soft);box-shadow:0 0 0 1.5px var(--brand
 .h-tk-more{display:block;margin:6px auto 0;padding:5px 10px;border-radius:8px;font:600 12.5px/1.2 var(--display);color:var(--brand-2)}
 .c-room .f-msgs.h-tk-m{margin:6px 0 0}
 .c-msgs.h-tk-m .f-msg.ai{margin-left:0}
+.f-choose{position:fixed;inset:0;z-index:80;display:flex;align-items:flex-end;justify-content:center;background:rgba(16,12,40,.45);animation:f-read-in .16s ease-out}
+.f-choose-in{display:flex;gap:10px;width:min(100%,520px);padding:14px 14px calc(16px + var(--safe-b));border-radius:22px 22px 0 0;background:var(--card)}
+.f-choose-in button{flex:1;display:grid;justify-items:center;gap:6px;padding:18px 8px 14px;border-radius:16px;background:var(--bg);font:700 15px/1.2 var(--display);color:var(--ink)}
+.f-choose-in button:active{transform:scale(.97)}
 .h-to{display:flex;align-items:center;gap:6px;min-height:30px;margin:0 0 6px;padding:2px 2px 2px 10px;border-radius:10px;background:var(--brand-soft);font:600 13px/1.2 var(--display);color:var(--brand-2)}
 .h-to b{flex:none}
 .h-to span{flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:var(--ink2)}
