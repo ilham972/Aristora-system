@@ -444,6 +444,36 @@ export default defineSchema({
   }).index("by_book", ["unitId", "stage"]),
 
   /**
+   * The government's own textbook for a unit (23 Nov 2026, convex/lib/gov.ts): the row says a unit HAS one and how
+   * big it is. This is all the app ever reads of it (Settings → Books colours the unit's number); the pages
+   * themselves are in `govParts` and are read only by the Claude link, for the AI.
+   */
+  govBooks: defineTable({
+    unitId: v.id("units"),
+    pages: v.number(),
+    bytes: v.number(),
+    parts: v.number(),
+    /** The head of its sha256: a re-upload of the same pages is recognised. */
+    sha: v.string(),
+    /** Where the pages came from: "Grade 8 maths, Part I, unit 6, pages 79-92". */
+    from: v.string(),
+    by: v.string(),
+    updatedAt: v.number(),
+  }).index("by_unit", ["unitId"]),
+
+  /**
+   * One slice of a government book's PDF, base64 (23 Nov 2026). Never read by a phone, the board, a class page or the
+   * family app: only the Claude link reads it, one part at a time, and the owner when he opens the book himself.
+   */
+  govParts: defineTable({
+    unitId: v.id("units"),
+    i: v.number(),
+    /** The raw bytes this part carries. */
+    n: v.number(),
+    b64: v.string(),
+  }).index("by_unit", ["unitId", "i"]),
+
+  /**
    * The Claude link (10 Nov 2026, his ask: "create the direct pipeline ... directly digitalize from here"): while it is
    * on, a Claude chat holding its code reads the books and saves each question's answer kinds (convex/link.ts). id =
    * its public name (in every request); key = its secret (base64url, 32 bytes), made on the owner's phone, shown to him

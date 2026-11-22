@@ -23,6 +23,10 @@
 //   questions, style) on its own unit, made the first time; checked like the rest, all or nothing; its levels can't
 //   change once a student has started it. `ask` "sakarath" lists a grade's. OL (19 Nov 2026): the O/L book's own units
 //   (grade 12, its names and part in the request), each a Sakarath unit with no topic under it (lib/sakarath.ts).
+// - The government's book (23 Nov 2026, convex/lib/gov.ts; his ask: "for the extra context, I have to put the
+//   government book syllabus here ... so the AI can read this"): `tell` "gov" saves one unit's chapter of the free
+//   textbook as a PDF, in parts (part 0 clears what was there, the last part makes it count); `ask` "gov" says what a
+//   unit has and hands back one part. The pages are in a table of their own that no phone ever reads.
 // - The threads link (20 Nov 2026, convex/linkThreads.ts; his ask: "so many pendings and so many follow-ups ... create
 //   the link feature ... same like that"): a link of its own (`scope` "threads", Settings → Community), whose code reads
 //   the open threads and answers them (`ask` "threads" / "thread", `tell` "reply") and nothing else; the books link's
@@ -43,6 +47,8 @@ import { phoneKeyFor } from "./lib/homeWork";
 import { phonePart, phoneShare, readPart, type KeyQ } from "./lib/phone";
 import { BOOK_CSS_MAX, QUESTION_HTML_MAX, unsafeCss, unsafeHtml } from "./lib/questions";
 import { answerNonce, fromB64, KEY_BYTES, seal, unseal } from "./lib/seal";
+import { govWords, partProblem, wholeProblem, type GovPart } from "./lib/gov";
+import { dropGov } from "./gov";
 import { knownFor, skillCounts, skillHome, skillsProblem, type Skill, type SkillFile, type SkillTag } from "./lib/skills";
 import { ensureSkb, EXAM_GRADES, olSkKey, sakarathProblem, sameLevels, skGrade, skKey, skNames, SK_TITLE } from "./lib/sakarath";
 import { OL, unitKey } from "./lib/syllabus";
@@ -248,6 +254,8 @@ export const ask = query({
       const units = await ctx.db.query("units").collect();
       const books = await ctx.db.query("books").collect();
       const tagged = new Map((await skillRows(ctx)).map((r) => [r.unitId, r.skills.length]));
+      // The government's book, if that unit has one (23 Nov 2026): numbers only, never its pages.
+      const govs = new Map((await ctx.db.query("govBooks").collect()).map((r) => [r.unitId as string, r]));
       return sealed(o, {
         ok: true,
         units: units
@@ -267,6 +275,7 @@ export const ask = query({
               ta: u.ta,
               master: m ? { levels: m.levels.length, last: m.parts.length ? m.parts[m.parts.length - 1].to : 0, total: bookTotal(m), keyCount: b!.keyCount ?? 0, qCount: b!.qCount ?? 0, tute: !!b!.tute, updatedAt: b!.updatedAt } : null,
               skills: tagged.get(u._id) ?? null,
+              gov: ((g) => (g ? { pages: g.pages, bytes: g.bytes, parts: g.parts, sha: g.sha, from: g.from, updatedAt: g.updatedAt } : null))(govs.get(u._id as string)),
               // Its theory book's ladder (`stage: "fighter"` in a request): its questions, from and to.
               fighter: lad.length ? { questions: lad.flatMap(secQs).length, from: Math.min(...lad.flatMap(secQs)), to: Math.max(...lad.flatMap(secQs)), keyCount: f!.keyCount ?? 0, qCount: f!.qCount ?? 0, tute: !!f!.tute, updatedAt: f!.updatedAt } : null,
             };
@@ -368,6 +377,25 @@ export const ask = query({
         });
       }
       return sealed(o, { ok: true, grade: g, units });
+    }
+    if (req.op === "gov") {
+      // The government's book for one unit (23 Nov 2026): what it is, and one part of its PDF when a part is asked
+      // for. A chat building that unit's videos reads it part by part; nothing else in the app ever does.
+      const unit = typeof req.unitId === "string" ? await ctx.db.get(req.unitId as Id<"units">) : null;
+      if (!unit) return sealed(o, { ok: false, error: "Which unit?" });
+      const g = await ctx.db
+        .query("govBooks")
+        .withIndex("by_unit", (x) => x.eq("unitId", unit._id))
+        .first();
+      if (!g) return sealed(o, { ok: false, error: `${unit.key} has no government book yet.` });
+      const book = { pages: g.pages, bytes: g.bytes, parts: g.parts, sha: g.sha, from: g.from, words: govWords(g.pages, g.bytes), updatedAt: g.updatedAt };
+      if (typeof req.part !== "number") return sealed(o, { ok: true, unit: unit.key, book });
+      const p = await ctx.db
+        .query("govParts")
+        .withIndex("by_unit", (x) => x.eq("unitId", unit._id).eq("i", req.part as number))
+        .first();
+      if (!p) return sealed(o, { ok: false, error: `${unit.key}: its book has no part ${req.part} (it has ${g.parts}).` });
+      return sealed(o, { ok: true, unit: unit.key, book, part: p.i, n: p.n, b64: p.b64 });
     }
     return sealed(o, { ok: false, error: "The app doesn't know that request." });
   },
@@ -541,6 +569,47 @@ async function saveSkills(ctx: MutationCtx, row: Row, req: Asked, now: number): 
   return { ok: true, saved: { skills: skills.length, tags: tags.length, questions }, counts: [...n].map(([id, c]) => ({ id, n: c })) };
 }
 
+/**
+ * One part of one unit's government textbook (23 Nov 2026, convex/lib/gov.ts). Part 0 throws away whatever was there,
+ * so while a book is going up the unit shows none; the last part checks that every part arrived and carries the bytes
+ * it promised, and only then writes the row that makes the book count as there. All or nothing.
+ */
+async function saveGov(ctx: MutationCtx, row: Row, req: Asked, now: number): Promise<Record<string, unknown>> {
+  const unit = typeof req.unitId === "string" ? await ctx.db.get(req.unitId as Id<"units">) : null;
+  if (!unit) return { ok: false, error: "Which unit?" };
+  const p = req as unknown as GovPart;
+  const bad = partProblem(p);
+  if (bad) return { ok: false, error: `${unit.key}: ${bad}` };
+  if (p.part === 0) await dropGov(ctx, unit._id);
+  const old = await ctx.db
+    .query("govParts")
+    .withIndex("by_unit", (x) => x.eq("unitId", unit._id).eq("i", p.part))
+    .first();
+  if (old) await ctx.db.patch(old._id, { n: p.n, b64: p.b64 });
+  else await ctx.db.insert("govParts", { unitId: unit._id, i: p.part, n: p.n, b64: p.b64 });
+  const parts = await ctx.db
+    .query("govParts")
+    .withIndex("by_unit", (x) => x.eq("unitId", unit._id))
+    .collect();
+  if (p.part < p.parts - 1) return { ok: true, saved: { unit: unit.key, part: p.part, of: p.parts, here: parts.length } };
+  const hole = wholeProblem(
+    parts.map((x) => ({ i: x.i, n: x.n })),
+    { parts: p.parts, bytes: p.bytes },
+  );
+  if (hole) return { ok: false, error: `${unit.key}: ${hole}` };
+  const was = await ctx.db
+    .query("govBooks")
+    .withIndex("by_unit", (x) => x.eq("unitId", unit._id))
+    .first();
+  const fields = { unitId: unit._id, pages: p.pages, bytes: p.bytes, parts: p.parts, sha: p.sha, from: p.from.trim(), by: row.by, updatedAt: now };
+  if (was) await ctx.db.patch(was._id, fields);
+  else await ctx.db.insert("govBooks", fields);
+  const session = await currentSession(ctx, now);
+  await log(ctx, session, now, { kind: "book-save", by: "claude", unit: unit.key, value: `Claude link (${row.by}): the government book, ${govWords(p.pages, p.bytes)}` });
+  await touch(ctx, session, now);
+  return { ok: true, saved: { unit: unit.key, pages: p.pages, bytes: p.bytes, parts: p.parts, words: govWords(p.pages, p.bytes) } };
+}
+
 type SkSave = { grade?: unknown; code?: unknown; en?: unknown; ta?: unknown; term?: unknown; data?: MasterData; answers?: KeyAnswer[]; items?: { q: number; html: string }[]; css?: string };
 /** The longest name an O/L Sakarath unit may bring (its book's own). */
 const SK_NAME_MAX = 120;
@@ -681,7 +750,9 @@ export const tell = mutation({
             ? await saveSkills(ctx, row, o.req, now)
             : o.req.op === "sakarath"
               ? await saveSakarath(ctx, row, o.req, now)
-              : { ok: false, error: "The app doesn't know that request." };
+              : o.req.op === "gov"
+                ? await saveGov(ctx, row, o.req, now)
+                : { ok: false, error: "The app doesn't know that request." };
     await ctx.db.patch(row._id, { last: o.t, usedAt: now, uses: (row.uses ?? 0) + 1 });
     return sealed(o, answer);
   },

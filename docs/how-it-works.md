@@ -3397,6 +3397,31 @@ chat; `convex/lib/sakarath.ts`, `convex/sakarath.ts`).
   - Holding it is work: a given book with nothing of its own in the app (`bookState(null)`), so he is never "out of
     work" while he has it; the Class lines say "on Sakarath". Taken back: the phone's again (the S and its row go).
 
+**The government's book for a unit** (23 Nov 2026, his ask at 2 AM: "I have to put the government book syllabus here
+... AI will come here and read the skills and build the videos for that ... you have to split that book based on the
+unit ... so the AI can read this and read that easily"; `convex/lib/gov.ts`, `convex/gov.ts`, `src/govBook.tsx`).
+- **What it is.** The free Grade 6–11 textbook, cut into one PDF per ARISTORA unit, kept beside that unit so a Claude
+  chat building its videos reads the government's own pages as well as the unit's skills (Settings → Books → T).
+- **It must not make the app heavier** (his rule the same night: "make sure this is not effect the app speed or
+  performance, and don't make app heavy"). So: the pages live in `govParts`, a table **no phone, board, class page or
+  family screen ever reads**;
+  nothing is added to `units` or `books`, so no live query a phone keeps open is woken when a book goes up; the app
+  itself reads only `govBooks` (a row of numbers per unit: pages, bytes, parts, sha, where the pages came from), and
+  only on Settings → Books. The bytes move twice: the upload, and a chat asking for that one unit.
+- **Where he sees it.** On Settings → Books the unit's **number** turns violet when its book is there (his ask: the
+  row has no space for one more icon beside F M K Q T S, "just highlight the unit number in a different color").
+  Tapping the row, and the unit's T page, show one line: "Government book · 14 pages · 626 KB · Grade 8 maths, Part I,
+  unit 6, pages 79-92", with **Save** (the PDF to his phone, fetched once, never a live query) and, for the owner,
+  **✕** to take it off (`gov.drop`).
+- **How it gets in.** Only through the Claude link (`tell` "gov"), in parts of 300 KB: part 0 throws away whatever was
+  there, so while a book is going up that unit shows none; the last part checks that every part arrived and that they
+  carry the bytes the book promised, and only then writes the `govBooks` row. All or nothing, so a chat that dies
+  halfway leaves the unit empty, not half a book. A part whose base64 does not carry exactly the bytes it claims is
+  refused. `ask` "gov" gives a chat the book's numbers, and one part at a time; `ask` "books" says which units have one.
+- **Grade 8, 23 Nov 2026**: 29 of its 31 units. **U07 காரணிகள்** has none (printed pages 93–104 are missing from the
+  volume he uploaded) and **U29 சமனிலிகள்** has none (the Grade 8 textbook has no Inequalities chapter: its unit 29 is
+  Probability and its 30 Tessellation, which are the app's U30 and U31).
+
 ## Accounts and security (built 2026-10-28)
 
 **Who.**

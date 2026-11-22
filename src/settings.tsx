@@ -4,11 +4,13 @@ import { api } from "../convex/_generated/api";
 import type { Doc, Id } from "../convex/_generated/dataModel";
 import { secretHash } from "../convex/lib/auth";
 import { PART_NAME, partsForGrade, type PartId } from "../convex/lib/book";
+import { govWords } from "../convex/lib/gov";
 import type { MarkState } from "../convex/lib/status";
 import { isBirthday, slDate } from "../convex/lib/day";
 import { termOf } from "../convex/lib/syllabus";
 import { mutate, randomKey } from "./backend";
 import { fmtMin, type View } from "./derive";
+import { GovBook, type GovRow } from "./govBook";
 import { useQuery } from "./live";
 import { MoveSheet } from "./move";
 import { ReportView, type Report } from "./report";
@@ -536,6 +538,9 @@ function Books() {
   const [skillsOf, setSkillsOf] = useState<Unit | null>(null);
   const [skOf, setSkOf] = useState<Unit | null>(null);
   const list = units.filter((u) => u.grade === grade);
+  // The government's own book for a unit (23 Nov 2026): numbers only, no pages, so the list stays as fast as it was.
+  const govs = useQuery<GovRow[]>(api.gov.has, {}) ?? [];
+  const govOf = (u: Unit) => govs.find((g) => g.unitId === u._id) ?? null;
   const bookOf = (u: Unit, st: "fighter" | "master") => books.find((b) => b.unitId === u._id && b.stage === st);
   // Its Sakarath book (17 Nov 2026): on a unit of its own (src/store.ts skUnitOf).
   const skBookOf = (u: Unit) => {
@@ -596,10 +601,15 @@ function Books() {
                   : "No question text yet";
                 const tagged = !!m?.tagged;
                 const skb = skBookOf(u);
+                // Its number in another colour = the government's own book is in the app for it (his ask: no room
+                // for one more icon). The row reads nothing of that book but this.
+                const gov = govOf(u);
                 return (
                   <li key={u._id} class="ul-row">
                     <button type="button" onClick={() => setOpen(u)}>
-                      <b>{grade === OL ? String(olNumber(u, units)).padStart(2, "0") : u.code}</b>
+                      <b class={gov ? "ul-g" : ""} title={gov ? `Government book: ${govWords(gov.pages, gov.bytes)}` : undefined}>
+                        {grade === OL ? String(olNumber(u, units)).padStart(2, "0") : u.code}
+                      </b>
                       <span>
                         {u.en}
                         <small>{u.ta}</small>
@@ -643,10 +653,10 @@ function Books() {
         );
       })}
       {grade === OL && <OlSakarath units={olSk} books={books} />}
-      {skillsOf && <SkillBookPage unit={skillsOf} onClose={() => setSkillsOf(null)} />}
+      {skillsOf && <SkillBookPage unit={skillsOf} gov={govOf(skillsOf)} onClose={() => setSkillsOf(null)} />}
       {skOf && <SakarathSheet unit={skOf} sk={skUnitOf(skOf)} book={skBookOf(skOf)} onClose={() => setSkOf(null)} />}
       {open && (
-        <UnitSheet unit={open} units={units} book={bookOf(open, "master")} fighter={bookOf(open, "fighter")} onClose={() => setOpen(null)} onMoved={setGrade} />
+        <UnitSheet unit={open} units={units} book={bookOf(open, "master")} fighter={bookOf(open, "fighter")} gov={govOf(open)} onClose={() => setOpen(null)} onMoved={setGrade} />
       )}
     </div>
   );
@@ -717,7 +727,7 @@ function MoveTute(props: { unit: Unit; units: Unit[]; book: BookRow; fighter?: B
 }
 
 /** One unit: its names, and its workbook copied from the contents page and the marks table. */
-function UnitSheet(props: { unit: Unit; units: Unit[]; book?: BookRow; fighter?: BookRow; onClose: () => void; onMoved: (grade: number) => void }) {
+function UnitSheet(props: { unit: Unit; units: Unit[]; book?: BookRow; fighter?: BookRow; gov: GovRow | null; onClose: () => void; onMoved: (grade: number) => void }) {
   const { unit } = props;
   const plan = partsForGrade(unit.grade);
   const m = props.book?.master;
@@ -795,6 +805,9 @@ function UnitSheet(props: { unit: Unit; units: Unit[]; book?: BookRow; fighter?:
           Save names
         </button>
       </div>
+
+      {/* The government's own book for this unit (23 Nov 2026): what the AI reads for extra context. */}
+      <GovBook unit={unit} gov={props.gov} />
 
       <h3 class="block-title">Theory book (Fighter)</h3>
       <p class="muted">

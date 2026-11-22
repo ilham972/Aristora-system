@@ -16,6 +16,7 @@ import { groupKey, groupLabel, needs, skillLabel, skillGroups, skillLevels, STAT
 import { SKILLS_A_TAG } from "../convex/lib/skills";
 import type { SkillBookUnit } from "../convex/skillBook";
 import { fetchOnce, mutate } from "./backend";
+import { GovBook, type GovRow } from "./govBook";
 import { HRow } from "./hrow";
 import { useQuery } from "./live";
 import { drawQuestion } from "./questionView";
@@ -65,7 +66,7 @@ function Printed(props: { html: string; css: string | null }) {
 
 const pct = (s: QStat | undefined) => (s && s.n > 0 ? Math.round((s.right / s.n) * 100) : null);
 
-export function SkillBookPage(props: { unit: Unit; onClose: () => void }) {
+export function SkillBookPage(props: { unit: Unit; gov: GovRow | null; onClose: () => void }) {
   const unitId = props.unit._id as Id<"units">;
   useBackClose(props.onClose);
   const u = useQuery<SkillBookUnit | null>(api.skillBook.unit, { unitId });
@@ -142,6 +143,9 @@ export function SkillBookPage(props: { unit: Unit; onClose: () => void }) {
           {busy ? "Making…" : "PDF"}
         </button>
       </div>
+      {/* The government's own book for this unit (23 Nov 2026): the extra context a chat reads when it builds
+          this unit's videos from the skills below. The pages come only when he taps Save. */}
+      <GovBook unit={props.unit} gov={props.gov} />
       {u === undefined ? (
         <p class="muted sb-note">Loading…</p>
       ) : u === null ? (

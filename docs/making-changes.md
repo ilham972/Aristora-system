@@ -149,6 +149,40 @@ echo '[{"name":"g8","fn":"ask","req":{"op":"sakarath","grade":8}}]' > $SCR/ask.j
   master questions (O/L U26 has nine, A–I). Measure every unit with `scripts/phone-look.ts` before sending: Grade 10
   U05's pairs table runs 5 px past (accepted).
 
+## A grade's government books into the app (through the Claude link)
+
+The free government textbook, cut into one PDF per unit, so a chat building a unit's videos reads the government's
+own pages too (23 Nov 2026; docs/how-it-works.md, "The government's book for a unit"). The volumes and the cut books
+stay in the scratchpad (keep them out of the repo); only the scripts and the page lists are here.
+
+```bash
+cd /home/claude/aristora-system
+python3 scripts/gov/split.py <volume-I.pdf> scripts/gov/g8-i.json  $SCR/gov    # one <unit key>.pdf each + manifest.json
+python3 scripts/gov/split.py <volume-II.pdf> scripts/gov/g8-ii.json $SCR/gov   # the second volume into the same folder
+export ARISTORA_LINK="ARISTORA-LINK name.key"                                   # his code, in the shell only
+node /opt/npm-tools/node_modules/tsx/dist/cli.mjs scripts/gov/upload.ts $SCR/gov        # every unit that is new
+node /opt/npm-tools/node_modules/tsx/dist/cli.mjs scripts/gov/upload.ts $SCR/gov G8-U07 # or named units only
+```
+
+- **Cut by the PRINTED page number, never the pdf page.** A volume he uploads is often not whole: Grade 8 Part I is
+  missing printed 93–104 (unit 7 காரணிகள்) and keeps printed 136–139 at the end of the file, out of order. `split.py`
+  reads the number off every page's footer, fills a page whose footer has none from its neighbour, and skips a unit
+  whose pages the volume does not hold (it says which) instead of cutting the wrong ones.
+- **Where a unit ends** comes from the contents page (`பொருளடக்கம்`), with two traps: a term's **revision exercise**
+  (`மீட்டற் பயிற்சி`) sits between units and belongs to neither, and the **glossary** (`கலைச் சொற்கள்`) starts a page
+  earlier than the contents page says. Look at the last page of a cut unit before sending.
+- **Match the chapters to the app's units by TITLE, not by number.** The app's unit list is the syllabus's; a textbook
+  can differ. Grade 8: the app's U29 Inequalities has no chapter at all, so the book's 29 (Probability) and 30
+  (Tessellation) are the app's U30 and U31 — split by number and 16 units would have been wrong.
+- `split.py` squeezes each unit on the way out (the repeated XMP metadata dropped, repeated objects merged, photos
+  recompressed; the text and drawings stay vector). A Grade 8 unit lands around 500 KB. **Adobe writes CMYK JPEGs
+  inverted and marks them**: without `ImageChops.invert` a yellow figure comes out black — look at a photo-heavy unit
+  (Solids, Mass) after a change to the image code.
+- `upload.ts` sends whole units in runs of about 5 MB (one run = one GitHub Actions run), skips a unit whose sha is
+  already in the app, and reports each one. Running it again sends only what is missing or new.
+- Then tell him: Settings → Books → Grade N — the unit numbers of the units that have the book are violet; tapping a
+  unit (or its T page) shows the line, with Save to read the PDF himself.
+
 ## Digitize a unit in the app (through the Claude link)
 
 His rule (10 Nov 2026): every answer is given on the phone (a box, a tap, the pad with =, a word, his own words typed);
