@@ -5013,6 +5013,9 @@ test("Skill book: Books → T on a tagged unit; its groups as pills (a question 
     });
     for (let q = 1; q <= 57; q++) await ctx.db.insert("questions", { unitId: u._id, stage: "master", q, html: html(q) });
     await ctx.db.insert("bookCss", { unitId: u._id, stage: "master", css: bookCssOf(TUTE_BOOK), updatedAt: Date.now() });
+    // Its government book (23 Nov 2026): the unit's number goes violet, and its line sits on the sheet and the T page.
+    await ctx.db.insert("govBooks", { unitId: u._id, pages: 14, bytes: 641451, parts: 3, sha: "7e773e7e9ae412f3", from: "Grade 7 maths, Part I, unit 8, pages 79-92", by: "Owner", updatedAt: Date.now() });
+    await ctx.db.insert("govParts", { unitId: u._id, i: 0, n: 3, b64: "JVBE" });
     return u._id;
   });
   const tagsOf = (q: number) => backend.t.run(async (ctx) => (await ctx.db.query("skillTags").collect()).find((r) => r.unitId === u08)!.tags.filter((t) => t.q === q));
@@ -5026,12 +5029,28 @@ test("Skill book: Books → T on a tagged unit; its groups as pills (a question 
   // A unit not tagged: T is pale and says so.
   await C.locator(".unit-list li", { hasText: "U07" }).getByRole("button", { name: "U07: not tagged yet" }).click();
   await contains(C.locator(".toast"), "U07 isn't tagged yet");
+  // The government book: this unit's number in another colour, and no second icon on the row (his ask, 23 Nov 2026).
+  await visible(row.locator("b.ul-g"));
+  expect(await C.locator(".unit-list li", { hasText: "U07" }).locator("b.ul-g").count()).toBe(0);
   expect(await C.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await shot(C, "sb00-books-t");
+  // Nothing wraps or scrolls sideways on the smallest phone either.
+  await C.setViewportSize({ width: 320, height: 720 });
+  expect(await C.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(C, "sb00b-books-t-320");
+  await C.setViewportSize({ width: 390, height: 844 });
+  // Its sheet says what the book is, where its pages came from, and offers it.
+  await row.locator("button").first().click();
+  await contains(C.locator(".gov-line"), "14 pages");
+  await contains(C.locator(".gov-line"), "Grade 7 maths, Part I, unit 8, pages 79-92");
+  await shot(C, "sb00c-books-gov-sheet");
+  await C.getByRole("button", { name: "Close" }).click();
 
   await row.getByRole("button", { name: "U08: skills of its questions" }).click();
   const P = C.locator(".sb");
   await visible(P);
+  // The AI's page carries the government book too (23 Nov 2026).
+  await contains(P.locator(".gov-line"), "Government book");
   // The groups in teaching order: each after the last skill it needs; a question needing two skills has its own pill.
   await count(P.locator(".sb-pill"), 5);
   expect(await P.locator(".sb-pill").evaluateAll((els) => els.map((e) => e.firstChild?.textContent))).toEqual(["S1", "S2", "S1+S2", "S3", "S2+S3"]);

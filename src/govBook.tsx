@@ -20,8 +20,10 @@ export function GovBook(props: { unit: Unit; gov: GovRow | null }) {
   if (!g) {
     return (
       <p class="gov-line gov-no">
-        <b>Government book</b>
-        <span>Not in the app yet — Claude uploads it through the link.</span>
+        <span class="gov-t">
+          <b>Government book</b>
+          <small>Not in the app yet — Claude uploads it through the link.</small>
+        </span>
       </p>
     );
   }
@@ -50,10 +52,11 @@ export function GovBook(props: { unit: Unit; gov: GovRow | null }) {
   };
   return (
     <p class="gov-line">
-      <b>Government book</b>
-      <span>
-        {govWords(g.pages, g.bytes)}
-        <small>{g.from}</small>
+      <span class="gov-t">
+        <b>Government book</b>
+        <small>
+          {govWords(g.pages, g.bytes)} · {g.from}
+        </small>
       </span>
       <button type="button" class="gov-get" disabled={busy} onClick={() => void save()}>
         {busy ? "…" : "Save"}
