@@ -4,7 +4,7 @@
 // PDF he downloads or sends to the printing shop has the same levels, numbers and pages. Then Chrome's own PDF.
 // Nothing else of the app is in this page.
 
-import { needs, skillLevels, type QStat } from "../convex/lib/skillBook";
+import { needs, bookLevels, type QStat } from "../convex/lib/skillBook";
 import type { SkillBookUnit } from "../convex/skillBook";
 import { bookFileName, layoutSkillBook, skillBookPlan } from "./skillPrint";
 
@@ -19,7 +19,7 @@ declare global {
 
 window.aristoraBook = async ({ u, css, qs, only, year }) => {
   const stats = new Map<number, QStat>(u.stats.map(([q, n, right]) => [q, { n, right }]));
-  const { levels, number } = skillLevels(u.key, u.data, u.tags, u.skills.map((s) => s.id), stats);
+  const { levels, number } = bookLevels(u.key, u.data, u.tags, u.skills.map((s) => s.id), stats);
   const { plan, missing } = skillBookPlan(u, levels, number, (q) => needs(u.tags, q), new Map(qs), year);
   const r = await layoutSkillBook(plan, css, only);
   document.body.classList.add("sb-printing");

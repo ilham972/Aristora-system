@@ -25,7 +25,8 @@ import type { ComponentChildren } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
-import { type Fighter, PART_NAME, partOf, type MasterLevel } from "../convex/lib/book";
+import { type Fighter, lvLabel, PART_NAME, partOf, type MasterLevel } from "../convex/lib/book";
+import { skillLabel } from "../convex/lib/skillBook";
 import { homeToCheck, levelWaits, teachState, type TeachState } from "../convex/lib/master";
 import { isBirthday, slClock, slDate, slDay } from "../convex/lib/day";
 import { claimLive, CLAIM_PING_MS, type Claim } from "../convex/lib/claims";
@@ -563,7 +564,7 @@ async function saveLevel(v: View, p: MasterPaper, l: MasterLevel, auto: boolean)
   const sk = isSkView(v);
   const where = sk ? `Sakarath ${unitNo(v.unit!.code)} · ` : "";
   const sent = sk ? go("Lost marks", [...res.theory, ...res.evaluation].sort((a, b) => a - b)) : `${go("Theory", res.theory)}${go("Evaluation", res.evaluation)}`;
-  toast(`${p.remark ? "Changed" : "Saved"}: ${v.s.name}, ${where}Level ${l.n}, ${res.got} / ${res.max}.${sent}${pre}${auto ? " (saved as you moved on)" : ""}`);
+  toast(`${p.remark ? "Changed" : "Saved"}: ${v.s.name}, ${where}Level ${lvLabel(l)}, ${res.got} / ${res.max}.${sent}${pre}${auto ? " (saved as you moved on)" : ""}`);
   return res;
 }
 
@@ -1906,7 +1907,8 @@ function LevelBar(props: { v: View; open: number | null; drafts: Draft[] | undef
   const { v } = props;
   const mb = v.mb!;
   const ms = v.ms!;
-  const newPart = (i: number) => i > 0 && mb.parts.some((p) => p.from === mb.levels[i].from);
+  // A gap where Part II starts; a skill workbook (23 Nov 2026) has a gap where the next skill starts instead.
+  const newPart = (i: number) => i > 0 && (mb.skills ? mb.levels[i].skill !== mb.levels[i - 1].skill : mb.parts.some((p) => p.from === mb.levels[i].from));
   // One line that scrolls sideways: the open level stays in the middle (the ones after it in view).
   return (
     <HRow class="fc-lvbar" label="Levels" list={`${v.s._id}:${bookId(v)}`} at={props.open} idle="end">
@@ -1928,10 +1930,10 @@ function LevelBar(props: { v: View; open: number | null; drafts: Draft[] | undef
             type="button"
             class={`fc-lb ${look}${mark}${wait}${home ? " home" : ""}${on ? " on" : ""}${newPart(i) ? " gap" : ""}`}
             aria-pressed={on}
-            aria-label={`Level ${l.n}, Q${l.from}–${l.to}: ${home ? "marked at home, to check" : LOOK_WORDS[look]}${look === "fixed" ? `, ${got ?? 0} of ${l.max}${waitWords}` : ""}`}
+            aria-label={`Level ${lvLabel(l)}, Q${l.from}–${l.to}: ${home ? "marked at home, to check" : LOOK_WORDS[look]}${look === "fixed" ? `, ${got ?? 0} of ${l.max}${waitWords}` : ""}`}
             onClick={() => props.onPick(l.n)}
           >
-            {l.n}
+            {lvLabel(l)}
           </button>
         );
       })}
@@ -1943,7 +1945,9 @@ function LevelBar(props: { v: View; open: number | null; drafts: Draft[] | undef
 function LevelLine(props: { v: View; l: MasterLevel; look: LevelLook; now: number; remark: boolean; onClear?: () => void }) {
   const { v, l, look, now } = props;
   const lv = v.mm.lv[String(l.n)];
-  const part = partOf(v.mb!, l.from)?.id;
+  // A skill workbook's level says its skill ("S3"), a workbook's its part ("Part II").
+  const part = v.mb!.skills ? null : partOf(v.mb!, l.from)?.id;
+  const skill = v.mb!.skills && l.skill ? ` · ${skillLabel(v.unit?.key ?? "", l.skill)}` : "";
   const state =
     (props.remark || look === "fixed") && lv?.home
       ? `⌂ marked at home ${lv.got ?? 0} / ${l.max}${lv.hc ? " · checked" : " · to check"}`
@@ -1960,8 +1964,8 @@ function LevelLine(props: { v: View; l: MasterLevel; look: LevelLook; now: numbe
               : `/ ${l.max}`;
   return (
     <p class={`fc-lvline ${props.remark ? "fixed" : look}`}>
-      <b>Level {l.n}</b> · Q{l.from}–{l.to}
-      {part ? ` · ${PART_NAME[part]}` : ""} · {state}
+      <b>Level {lvLabel(l)}</b> · Q{l.from}–{l.to}
+      {part ? ` · ${PART_NAME[part]}` : skill} · {state}
       {/* Marks on the wrong student or level: here, out of the card's way (2 Nov 2026). */}
       {props.onClear && (
         <>
@@ -2035,7 +2039,7 @@ function MasterPaperView(props: {
 
       {clearing && (
         <Sheet
-          title={`Clear ${v.s.name}'s marks on Level ${level.n}?`}
+          title={`Clear ${v.s.name}'s marks on Level ${lvLabel(level)}?`}
           sub={`${marks} question${marks === 1 ? " is" : "s are"} marked. Clearing forgets them; nothing else changes.`}
           onClose={() => setClearing(false)}
           foot={
@@ -2618,7 +2622,7 @@ function Summary(props: { v: View; paper: MasterPaper; level: MasterLevel; each:
     const r = await act(() => mutate(api.workbook.homeChecked, { studentId: v.s._id, unitId: bookId(v) as Id<"units"> | undefined, level: level.n, by: currentRole() }));
     setBusy(false);
     if (!r) return;
-    toast(`Checked: ${v.s.name}, Level ${level.n} (marked at home), ${sum} / ${level.max}.`);
+    toast(`Checked: ${v.s.name}, Level ${lvLabel(level)} (marked at home), ${sum} / ${level.max}.`);
     const still = openPaper?.kind === "master" && openPaper.studentId === paper.studentId && openPaper.level === level.n;
     if (!still) return;
     const next = autoLevel(v, latestDrafts, level.n);

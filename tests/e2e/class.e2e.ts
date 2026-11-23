@@ -7,7 +7,7 @@ import { strToU8, zipSync } from "fflate";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { api, internal } from "../../convex/_generated/api";
 import { normalizeCode, secretHash } from "../../convex/lib/auth";
-import { KNOWN_WORKBOOKS, outOf } from "../../convex/lib/book";
+import { KNOWN_WORKBOOKS, lvLabel, outOf, type MasterData } from "../../convex/lib/book";
 import { slDayNo } from "../../convex/lib/day";
 import { digestOf, type DCall, type DEvent } from "../../convex/lib/boss";
 import { readWorkbookFiles, readWorkbookHtml, type ReadTute } from "../../src/workbookFile";
@@ -5312,11 +5312,57 @@ test("Skill book: Books → T on a tagged unit; Level n = skill n (S1+S2 inside 
   expect((await C.evaluate(() => (window as unknown as { __copied: string[] }).__copied)).at(-1)).toContain("Please print 12 copies");
   await Sh.getByRole("button", { name: "Close" }).click();
 
+  // The skill book becomes the unit's workbook (23 Nov 2026, his answers: "skill book is the workbook ... we can delete
+  // old data"; the whole unit at once). Asha has Level 1 of the old workbook corrected: it goes, her XP stays.
+  const asha = await backend.t.mutation(api.students.add, { token: OWNER_TOKEN, name: "Asha", grade: 7, term: 1, stage: "master", unitId: u08 });
+  const old1 = G7U08.levels[0];
+  await backend.t.mutation(api.workbook.correct, {
+    token: OWNER_TOKEN,
+    studentId: asha,
+    level: 1,
+    items: Array.from({ length: old1.to - old1.from + 1 }, (_, i) => ({ q: old1.from + i, got: outOf(G7U08, old1.from + i)! })),
+    by: "correction",
+  });
+  await backend.t.mutation(api.students.setPresent, { token: OWNER_TOKEN, id: asha, present: true });
+  await backend.push();
+  await P.getByRole("button", { name: "Use as the workbook" }).click();
+  const Wb = C.locator(".sheet");
+  await contains(Wb, "Use the skill book as the workbook?");
+  await contains(Wb, "57 questions numbered 1–57 as printed, 3 levels by skill, 8 strips");
+  await contains(Wb, "Their XP stays");
+  await shot(C, "sb08-workbook-switch");
+  await Wb.getByRole("button", { name: "Use as the workbook" }).click();
+  await visible(C.locator(".toast", { hasText: "the skill book is the workbook now (8 levels, 57 questions). 1 student's old marks cleared; XP stays." }));
+  await visible(P.locator(".sb-wb.on", { hasText: "This skill book is the unit's workbook" }));
+  await count(P.locator(".sb-move"), 0);
+  await count(P.getByRole("button", { name: "Use as the workbook" }), 0);
+  const stored = await backend.t.run(async (ctx) => {
+    const b = (await ctx.db.query("books").collect()).find((x) => x.unitId === u08 && x.stage === "master")!.data as MasterData;
+    const row = (await ctx.db.query("progress").collect()).find((x) => x.studentId === asha && x.unitId === u08)!;
+    return { names: b.levels.map(lvLabel), skills: b.skills, was: b.was?.slice(0, 11), lv: Object.keys(row.m!.lv), x0: row.m!.x0?.length ?? 0 };
+  });
+  expect(stored.names).toEqual(["1", "2·1", "2·2", "2·3", "3·1", "3·2", "3·3", "3·4"]);
+  expect(stored.skills).toBe(true);
+  expect(stored.was).toEqual(Array.from({ length: 11 }, (_, i) => i + 1)); // each question's old number, kept inside
+  expect([stored.lv, stored.x0]).toEqual([[], 1]);
+  // The PDF prints the workbook as it is now: the same strips.
+  await P.locator(".sb-pill", { hasText: "S2" }).click();
+  await visible(P.locator(".sb-strips", { hasText: "2·3" }));
+  await shot(C, "sb09-is-the-workbook");
+
   // Back closes the page and takes the book off it.
   await P.getByRole("button", { name: "Back to Books" }).click();
   await count(C.locator(".sb"), 0);
   await count(C.locator("#sb-print"), 0);
   expect(await C.evaluate(() => document.title)).not.toBe("G7_U08_Skills_Level2");
+
+  // Correction names the levels as the book prints them: "2·1" on the bar, its skill on the line.
+  await tab(C, "Correction").click();
+  await C.getByRole("button", { name: /^Grade 7\b/ }).click();
+  await C.locator(".fc-nm", { hasText: "Asha" }).click();
+  await textsAre(C.locator(".fc-lvbar .fc-lb"), ["1", "2·1", "2·2", "2·3", "3·1", "3·2", "3·3", "3·4"]);
+  await contains(C.locator(".fc-lvline"), "Level 1 · Q1–11 · S1");
+  await shot(C, "sb10-correction-skill-levels");
   expect(problems).toEqual([]);
 });
 

@@ -105,6 +105,8 @@ export interface MState {
   reteach?: { at: number; by?: string };
   /** The skill lessons he got while this book had a question waiting for them: skill id → when (convex/lib/path.ts). */
   sk?: Record<string, number>;
+  /** XP from the book before the skill workbook (23 Nov 2026): kept when its levels and marks went (lib/family.ts xpItems). */
+  x0?: { t: number; xp: number; d?: boolean; np?: boolean }[];
 }
 
 export const EMPTY_MASTER: MState = { q: {}, lv: {} };

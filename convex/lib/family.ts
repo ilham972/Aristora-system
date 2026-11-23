@@ -54,6 +54,8 @@ export type WorldLevel = {
   /** A ladder Level (n < 0): its section's letter and Tamil title. */
   lb?: string;
   lt?: string;
+  /** A skill workbook's level name (23 Nov 2026): "3", "3·2", as its book prints it. */
+  nm?: string;
 };
 
 /** One unit of his grade (the phone shows it as a Stage of its term's World). */
@@ -109,7 +111,7 @@ export function levelStates(m: MState, book: MasterData): WorldLevel[] {
   const play = computeMaster(m, book).current?.n;
   return book.levels.map((l): WorldLevel => {
     const lv = m.lv[String(l.n)];
-    const base = { n: l.n, max: l.max };
+    const base = { n: l.n, max: l.max, ...(l.name ? { nm: l.name } : {}) };
     if (lv?.fixed) return { ...base, got: lv.got ?? 0, s: lv.home && !lv.hc ? "check" : "done", ...(lv.home ? { hm: true as const } : {}) };
     if (lv?.done) return { ...base, s: "class" };
     if (lv?.pre) return { ...base, s: "pre" };
@@ -496,6 +498,8 @@ export function xpItems(rows: Doc<"progress">[], pay = false): { t: number; xp: 
   const out: { t: number; xp: number }[] = [];
   for (const r of rows) {
     for (const lv of Object.values(r.m?.lv ?? {})) if (lv.fixed && !(pay && lv.home && !lv.hc)) out.push({ t: lv.done ?? lv.fixed, xp: lv.got ?? 0 });
+    // The book before the skill workbook (23 Nov 2026): his XP from it stays.
+    for (const x of r.m?.x0 ?? []) if (!(pay && x.np)) out.push({ t: x.t, xp: x.xp });
     // A tute's ladder section checked at home (4 Nov 2026): its parts right.
     for (const x of Object.values(r.lh ?? {})) out.push({ t: x.t, xp: x.got });
     for (const x of Object.values(r.m?.q ?? {})) {
@@ -506,6 +510,26 @@ export function xpItems(rows: Doc<"progress">[], pay = false): { t: number; xp: 
       } else if ((x.rg ?? 0) > (x.got ?? 0) && x.rt < HALF_FROM) out.push({ t: x.rt, xp: (x.rg ?? 0) - (x.got ?? 0) });
     }
     for (const c of classCircles(r)) if (c.s === "right") out.push({ t: c.t, xp: 1 });
+  }
+  return out;
+}
+
+/**
+ * A workbook row's XP and learning days, kept as plain items when its book becomes the skill workbook (23 Nov 2026: the
+ * levels and marks go with the old numbers; his XP, days in a row and the race stay). The same items `xpItems` and
+ * `levelDays` read from the levels and marks.
+ */
+export function xpBefore(m: NonNullable<Doc<"progress">["m"]>): { t: number; xp: number; d?: boolean; np?: boolean }[] {
+  const out = [...(m.x0 ?? [])];
+  for (const lv of Object.values(m.lv)) {
+    const t = lv.done ?? lv.fixed;
+    if (t === undefined || (!lv.fixed && lv.pre)) continue;
+    out.push({ t, xp: lv.fixed ? (lv.got ?? 0) : 0, ...(lv.pre ? {} : { d: true }), ...(lv.fixed && lv.home && !lv.hc ? { np: true } : {}) });
+  }
+  for (const x of Object.values(m.q)) {
+    if (x.rt === undefined) continue;
+    if (x.rh !== undefined) out.push({ t: x.rt, xp: x.rh }, { t: x.t, xp: -x.rh });
+    else if ((x.rg ?? 0) > (x.got ?? 0) && x.rt < HALF_FROM) out.push({ t: x.rt, xp: (x.rg ?? 0) - (x.got ?? 0) });
   }
   return out;
 }
@@ -532,6 +556,7 @@ export function levelDays(rows: Doc<"progress">[]): Set<number> {
       const t = lv.done ?? lv.fixed;
       if (t !== undefined && !lv.pre) days.add(slDayNo(t));
     }
+    for (const x of r.m?.x0 ?? []) if (x.d) days.add(slDayNo(x.t));
     for (const c of classCircles(r)) if (c.s === "right" || c.s === "wrong" || c.s === "slip") days.add(slDayNo(c.t));
   }
   return days;

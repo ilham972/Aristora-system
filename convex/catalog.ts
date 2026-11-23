@@ -111,6 +111,10 @@ export const bookCss = query({
   },
 });
 
+/** Why an upload can't replace a skill workbook (23 Nov 2026). */
+const SKILL_WORKBOOK_UPLOAD =
+  "This unit's workbook is its skill book now (Settings → Books → T): an upload of the old book would bring back the old numbers. Ask a Claude chat to change it.";
+
 /** Question numbers, levels and marks in one line: the same line = the same questions, so a key or a question's
  *  text still fits the book. */
 function bookShape(d: BookData): string {
@@ -186,6 +190,9 @@ export const saveWorkbook = mutation({
       start = l.to + 1;
     });
     const old = await bookFor(ctx, unit._id, "master");
+    // A unit whose workbook is its skill book (the owner's switch, 23 Nov 2026): the old book's numbers would come back
+    // under the new tags and the class's marks.
+    if (old?.data.kind === "master" && old.data.skills) fail(SKILL_WORKBOOK_UPLOAD);
     const last = parts.length ? parts[parts.length - 1].to : 0;
     const marks: Record<string, number> = {};
     const oldMarks = !args.replace && old?.data.kind === "master" ? (old.data.marks ?? {}) : {};
@@ -557,6 +564,7 @@ export const saveQuestions = mutation({
     const now = Date.now();
     const book = await bookFor(ctx, args.unitId, args.stage);
     if (!book) fail("Save the book first.");
+    if (book.data.kind === "master" && book.data.skills) fail(SKILL_WORKBOOK_UPLOAD);
     const nums = new Set<number>();
     if (book.data.kind === "fighter") for (const q of fighter(book.data).all) nums.add(q);
     else for (const l of book.data.levels) for (let q = l.from; q <= l.to; q++) nums.add(q);

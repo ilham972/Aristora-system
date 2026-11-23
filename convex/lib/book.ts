@@ -40,6 +40,10 @@ export interface MasterLevel {
   from: number;
   to: number;
   max: number;
+  /** A skill workbook's level (23 Nov 2026): "3" (its skill whole) or "3·2" (a big skill's second part). */
+  name?: string;
+  /** A skill workbook's level: its skill ("G8-U05-S3"). */
+  skill?: string;
 }
 
 export interface MasterData {
@@ -50,6 +54,13 @@ export interface MasterData {
   marks?: Record<string, number>;
   /** Out of the syllabus: everyone gets these questions' marks without doing them (lib/free.ts, 5 Nov 2026). */
   free?: number[];
+  /**
+   * The skill book is the workbook (23 Nov 2026, the founder: "skill book is the workbook"; lib/skillBook.ts
+   * skillWorkbook): levels by skill, named; Part I and Part II as runs where they fall inside a level.
+   */
+  skills?: true;
+  /** Each question's number in the book before (index = question − first): the hidden permanent number. */
+  was?: number[];
 }
 
 export type BookData = FighterData | MasterData;
@@ -203,9 +214,14 @@ export function bookTotal(data: MasterData): number {
   return data.levels.reduce((a, l) => a + l.max, 0);
 }
 
-/** "Level 5 · 38–48". */
+/** A level's number as people say it: "5", or a skill workbook's name ("3·2"). */
+export function lvLabel(l: Pick<MasterLevel, "n" | "name">): string {
+  return l.name ?? String(l.n);
+}
+
+/** "Level 5 · 38–48" ("Level 3·2 · 41–50" in a skill workbook). */
 export function levelName(l: MasterLevel): string {
-  return `Level ${l.n} · ${l.from === l.to ? l.from : `${l.from}–${l.to}`}`;
+  return `Level ${lvLabel(l)} · ${l.from === l.to ? l.from : `${l.from}–${l.to}`}`;
 }
 
 /** Problems that make a workbook unusable (empty list = fine). */
@@ -219,7 +235,8 @@ export function checkMaster(data: MasterData): string[] {
   if (!Number.isInteger(first) || first < 1 || first > 999) out.push("The first question number is wrong.");
   let next = first;
   for (const p of data.parts) {
-    if (ids.has(p.id)) out.push(`${PART_NAME[p.id]} is listed twice.`);
+    // A skill workbook's parts are runs where they fall inside its levels (Part I, Part II, Part I …).
+    if (ids.has(p.id) && !data.skills) out.push(`${PART_NAME[p.id]} is listed twice.`);
     ids.add(p.id);
     if (p.from !== next) out.push(`${PART_NAME[p.id]} should start at question ${next}.`);
     if (!Number.isInteger(p.to) || p.to < p.from || p.to > 999) out.push(`${PART_NAME[p.id]}: the last question is wrong.`);
@@ -235,7 +252,8 @@ export function checkMaster(data: MasterData): string[] {
     if (!Number.isInteger(l.max) || l.max < 1 || l.max > 500) out.push(`Level ${l.n}: marks must be 1 to 500.`);
     const pa = partOf(data, l.from);
     const pb = partOf(data, l.to);
-    if (pa && pb && pa.id !== pb.id) out.push(`Level ${l.n} runs over two parts.`);
+    if (pa && pb && pa.id !== pb.id && !data.skills) out.push(`Level ${l.n} runs over two parts.`);
+    if (data.skills && !l.name) out.push(`Level ${l.n} has no name.`);
     const each = levelOutOf(data, l);
     if (each && each.reduce((a, b) => a + b, 0) !== l.max) {
       out.push(`Level ${l.n}: its questions add up to ${each.reduce((a, b) => a + b, 0)}, not ${l.max}.`);

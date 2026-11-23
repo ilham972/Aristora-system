@@ -528,6 +528,13 @@ SIZE=200 NAMES=family:me,chat:room npx vitest run -c vitest.scale.config.ts test
     phone's share list does. In a run-through, type into a number box as a phone does (`click`, `press("Backspace")`,
     `pressSequentially`): Playwright's `fill("")` on it sometimes left the old number.
 
+- **A skill workbook** (23 Nov 2026, `MasterData.skills`, the owner's switch on the T page): its levels have names ("1",
+  "2·1"): show `lvLabel(l)` to people, never `l.n` (the number is the level's place: "2·3" is n = 4). Its parts are runs
+  (Part I can come back after Part II, a level can hold both): find a question's part with `partOf` (by range), never
+  `parts[0]` or "Part II starts at this level" (Correction's bar puts its gap where a skill starts). A new table that
+  keeps rows by a workbook's question or level number (`q`, `n`) must be renumbered or cleared in
+  `skillBook.useAsWorkbook`, and a new XP source read from `m.lv` must also read `m.x0` (the XP kept from the old book).
+
 - **A new book engine's print furniture must leave the phone** (18 Nov 2026, the Sakarath books): the family paper
   hides each engine's own numbering and decoration (`.qn`, `.pm`, `.mk` for workbooks; `.sn`, `.qsep` and half-width
   `.pt` for Sakarath books) and `stepsOf` drops the same from the story, with a figure's labels (`svg`, `.dg`, `.fg`).

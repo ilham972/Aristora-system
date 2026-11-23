@@ -27,7 +27,7 @@ import {
   refresh,
   touch,
 } from "./lib/backend";
-import { levelOutOf, type MasterData } from "./lib/book";
+import { levelOutOf, lvLabel, type MasterData } from "./lib/book";
 import { computeMaster, copyState, markBefore, type MQ, type MState } from "./lib/master";
 import { freeRow, isFree } from "./lib/free";
 import { actor } from "./lib/auth";
@@ -170,13 +170,13 @@ export const correct = mutation({
     const count = l.to - l.from + 1;
     const qs = new Set(args.items.map((x) => x.q));
     if (args.items.length !== count || qs.size !== count) {
-      fail(`Give marks for all ${count} question${count === 1 ? "" : "s"} of Level ${l.n}.`);
+      fail(`Give marks for all ${count} question${count === 1 ? "" : "s"} of Level ${lvLabel(l)}.`);
     }
     const each = levelOutOf(book, l);
     const rows: Record<string, MQ> = {};
     let got = 0;
     for (const it of args.items) {
-      if (it.q < l.from || it.q > l.to) fail(`Question ${it.q} is not in Level ${l.n}.`);
+      if (it.q < l.from || it.q > l.to) fail(`Question ${it.q} is not in Level ${lvLabel(l)}.`);
       if (each && isFree(book, it.q)) {
         // Out of the syllabus (the owner's free marks, 5 Nov 2026, his answer "Correction too"): its full marks,
         // whatever was tapped (the page gives them already).
@@ -223,7 +223,7 @@ export const correct = mutation({
     if (!each) {
       const total = args.total;
       if (total === undefined || !Number.isInteger(total) || total < 0 || total > l.max) {
-        fail(`Level ${l.n}: type the marks, 0 to ${l.max}.`);
+        fail(`Level ${lvLabel(l)}: type the marks, 0 to ${l.max}.`);
       }
       got = total;
       if (got < l.max && !Object.values(rows).some((r) => r.lost)) fail("Which questions lost marks? Tap them.");
@@ -315,15 +315,15 @@ export const uncorrect = mutation({
     const l = levelOf(book, args.level);
     const key = String(l.n);
     const lv = m.lv[key];
-    if (!lv?.fixed) fail(`Level ${l.n} isn't corrected: nothing to take back.`);
-    if (lv.fixed !== args.fixed) fail(`Level ${l.n} was corrected again since. Open it on the Correction tab.`);
-    if (now - lv.fixed > UNCORRECT_MS) fail(`Too late to take back (over 30 minutes). Correct Level ${l.n} again on the Correction tab.`);
+    if (!lv?.fixed) fail(`Level ${lvLabel(l)} isn't corrected: nothing to take back.`);
+    if (lv.fixed !== args.fixed) fail(`Level ${lvLabel(l)} was corrected again since. Open it on the Correction tab.`);
+    if (now - lv.fixed > UNCORRECT_MS) fail(`Too late to take back (over 30 minutes). Correct Level ${lvLabel(l)} again on the Correction tab.`);
     const since = (t: number | undefined) => t !== undefined && t > lv.fixed!;
     for (let q = l.from; q <= l.to; q++) {
       const r = m.q[String(q)];
       if (!r) continue;
-      if (since(r.x)) fail(`Evaluation already explained Q${q}. Correct Level ${l.n} again on the Correction tab instead.`);
-      if (since(r.th) || since(r.tt)) fail(`Q${q} already went to Theory. Correct Level ${l.n} again on the Correction tab instead.`);
+      if (since(r.x)) fail(`Evaluation already explained Q${q}. Correct Level ${lvLabel(l)} again on the Correction tab instead.`);
+      if (since(r.th) || since(r.tt)) fail(`Q${q} already went to Theory. Correct Level ${lvLabel(l)} again on the Correction tab instead.`);
     }
     // Only this level's questions come back; anything else in `before` is ignored.
     const rows = args.before.q ?? {};
@@ -525,7 +525,7 @@ export const homeChecked = mutation({
     const { unit, book, progress, m } = await teachWork(ctx, student, args.unitId, now);
     const l = levelOf(book, args.level);
     const lv = m.lv[String(l.n)];
-    if (!lv?.home || !lv.fixed) fail(`Level ${l.n} was not marked at home.`);
+    if (!lv?.home || !lv.fixed) fail(`Level ${lvLabel(l)} was not marked at home.`);
     if (lv.hc) return true;
     const left: number[] = [];
     for (let q = l.from; q <= l.to; q++) if (!m.q[String(q)]) left.push(q);

@@ -14832,6 +14832,54 @@ body.sb-on {
   margin: 8px 12px 2px;
 }
 
+/* The skill book as the workbook (23 Nov 2026): the owner's switch and its line (`.sb-wb*`). */
+.sb-wb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 12px 0;
+  padding: 8px 10px;
+  border: 1.5px dashed var(--line);
+  border-radius: 12px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.sb-wb span {
+  flex: 1;
+  min-width: 0;
+}
+.sb-wb.on {
+  border: 0;
+  background: var(--green-soft);
+  color: var(--green-ink);
+  font-weight: 700;
+}
+.sb-wb-go {
+  flex: none;
+  height: 34px;
+  padding: 0 12px;
+  border: 1.5px solid var(--ink);
+  border-radius: 17px;
+  background: var(--card);
+  color: var(--ink);
+  font-weight: 800;
+  font-size: 13px;
+}
+.sb-wb-list {
+  margin: 0 0 12px;
+  padding-left: 18px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+.sb-wb-list li + li {
+  margin-top: 6px;
+}
+.sb-wb-acts {
+  display: flex;
+  gap: 8px;
+}
+
 /* A big skill's strips on the T page (23 Nov 2026): one chip a part (`.sb-parts` is a question's parts' skills). */
 .sb-strips {
   display: flex;

@@ -33,7 +33,7 @@ import { Flame, Gem, Icon, Maths, Medal, Owl, OwlBadge, pretty, problemWords, Ro
 addLevelStyle();
 
 /** A level's name on its screens: the redo of a Stage finished below 75 % is n = 0 (10 Nov 2026). */
-const lvName = (f: { n: number; d?: number }) => (f.n === 0 ? "↻ Redo" : `Level ${f.d ?? f.n}`);
+const lvName = (f: { n: number; d?: number; nm?: string }) => (f.n === 0 ? "↻ Redo" : `Level ${f.nm ?? f.d ?? f.n}`);
 
 // A Level's book (its solutions, photos and the teacher's answers: book.tsx) opens from a Stage, never on the first
 // screen: the app reaches it through this module (level.ts), so book.tsx and photos.ts are not in the first load

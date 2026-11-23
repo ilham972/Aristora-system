@@ -14,7 +14,7 @@ import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { partOf } from "../convex/lib/book";
 import { bySkill, paperNo } from "../convex/lib/path";
-import { groupKey, groupLabel, levelSkillOf, needs, partName, skillLabel, skillGroups, skillLevels, STAT_MIN, type QStat, type SkillGroup, type SkillLevel } from "../convex/lib/skillBook";
+import { bookLevels, groupKey, groupLabel, levelSkillOf, needs, partName, skillLabel, skillGroups, STAT_MIN, type QStat, type SkillGroup, type SkillLevel } from "../convex/lib/skillBook";
 import { SKILLS_A_TAG } from "../convex/lib/skills";
 import type { SkillBookUnit } from "../convex/skillBook";
 import { fetchOnce, mutate, phoneToken } from "./backend";
@@ -24,7 +24,7 @@ import { useQuery } from "./live";
 import { drawQuestion } from "./questionView";
 import { saveFile, ShareSheet, type MadePdf } from "./printShare";
 import { bookFileName, clearPrint, printSkillBook, skillBookPlan } from "./skillPrint";
-import { act, currentRole, toast, type Unit } from "./store";
+import { act, currentRole, may, toast, type Unit } from "./store";
 import { Sheet } from "./ui";
 import { VideoShelf, type VideoList } from "./videoShelf";
 
@@ -101,7 +101,10 @@ export function SkillBookPage(props: { unit: Unit; gov: GovRow | null; onClose: 
 
   const stats = useMemo(() => new Map<number, QStat>((u?.stats ?? []).map(([q, n, right]) => [q, { n, right }])), [u]);
   const groups = useMemo(() => (u ? skillGroups(u.data, u.tags, stats) : []), [u, stats]);
-  const book = useMemo(() => (u ? skillLevels(u.key, u.data, u.tags, u.skills.map((s) => s.id), stats) : null), [u, stats]);
+  // Once the skill book is the workbook (23 Nov 2026) its levels are the stored ones: nothing moves a printed question.
+  const book = useMemo(() => (u ? bookLevels(u.key, u.data, u.tags, u.skills.map((s) => s.id), stats) : null), [u, stats]);
+  const asWorkbook = !!u?.data.skills;
+  const [switching, setSwitching] = useState(false);
   const levels = book?.levels ?? [];
   const open: SkillLevel | undefined = levels.find((l) => l.n === pick) ?? levels.find((l) => l.qs.length > 0) ?? levels[0];
   useEffect(() => {
@@ -227,6 +230,20 @@ export function SkillBookPage(props: { unit: Unit; gov: GovRow | null; onClose: 
         </p>
       ) : (
         <>
+          {/* The skill book as the workbook (23 Nov 2026, the founder: "skill book is the workbook"): the owner's switch;
+              once done, a line says so and Move is gone (the printed books' numbers are fixed). */}
+          {asWorkbook ? (
+            <p class="sb-wb on">✓ This skill book is the unit's workbook: Correction, Evaluation and the family app use its levels and numbers.</p>
+          ) : (
+            may("owner") && (
+              <p class="sb-wb">
+                <span>The workbook still has its old levels.</span>
+                <button type="button" class="sb-wb-go" disabled={!book} onClick={() => setSwitching(true)}>
+                  Use as the workbook
+                </button>
+              </p>
+            )
+          )}
           <HRow class="sb-pills" label="Levels" list={u.key} at={open ? String(open.n) : undefined}>
             {levels.map((l) => (
               <button
@@ -314,9 +331,11 @@ export function SkillBookPage(props: { unit: Unit; gov: GovRow | null; onClose: 
                               {p}% right · {s.n}
                             </span>
                           )}
-                          <button type="button" class="sb-move" onClick={() => setMoving(q)}>
-                            Move
-                          </button>
+                          {!asWorkbook && (
+                            <button type="button" class="sb-move" onClick={() => setMoving(q)}>
+                              Move
+                            </button>
+                          )}
                         </div>
                         {parts.length > 0 && (
                           <p class="sb-parts">
@@ -335,6 +354,13 @@ export function SkillBookPage(props: { unit: Unit; gov: GovRow | null; onClose: 
               );
             })}
           </div>
+          {switching && book && (
+            <WorkbookSheet
+              unit={u}
+              levels={book.levels.filter((l) => l.qs.length)}
+              onClose={() => setSwitching(false)}
+            />
+          )}
           {sharing !== null && (
             <ShareSheet grade={u.grade} code={u.code} level={sharing === 0 ? null : sharing} make={() => serverPdf(sharing === 0 ? null : sharing)} onClose={() => setSharing(null)} />
           )}
@@ -418,6 +444,52 @@ function MoveQSheet(props: {
       <button type="button" class="btn primary wide" disabled={busy || !picked.length || same} onClick={() => void go(picked)}>
         {!picked.length ? "Tick its skills first" : same ? `It is in ${words(picked)} already` : `Move to ${words(picked)}`}
       </button>
+    </Sheet>
+  );
+}
+
+/**
+ * The owner's switch (23 Nov 2026, the founder: "For the new year our work book is turning into skill book, skill book
+ * is the workbook, we can delete old data, because now students going to new grade"; his pick: the whole unit at once):
+ * what changes, what goes, and one button. The server checks the order he sees is still the book's.
+ */
+function WorkbookSheet(props: { unit: SkillBookUnit; levels: SkillLevel[]; onClose: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const qs = props.levels.reduce((a, l) => a + l.qs.length, 0);
+  const strips = props.levels.reduce((a, l) => a + l.parts.length, 0);
+  const go = async () => {
+    setBusy(true);
+    const r = await act(() =>
+      mutate(api.skillBook.useAsWorkbook, { unitId: props.unit.unitId, order: props.levels.flatMap((l) => l.qs), by: currentRole() }),
+    );
+    setBusy(false);
+    if (!r) return;
+    const who = r.students === 1 ? "1 student's" : `${r.students} students'`;
+    toast(`G${props.unit.grade} ${props.unit.code}: the skill book is the workbook now (${r.levels} levels, ${r.questions} questions). ${who} old marks cleared; XP stays.`);
+    props.onClose();
+  };
+  return (
+    <Sheet title="Use the skill book as the workbook?" sub={`G${props.unit.grade} ${props.unit.code} · ${props.unit.ta}`} onClose={props.onClose} cls="sb-wb-sheet">
+      <ul class="sb-wb-list">
+        <li>
+          The unit's workbook becomes this skill book for <b>every student</b>: {qs} questions numbered 1–{qs} as printed, {props.levels.length} levels by skill
+          {strips > props.levels.length ? `, ${strips} strips (a big skill's parts: 2·1, 2·2 …)` : ""}.
+        </li>
+        <li>Correction, Evaluation and the family app use its levels and numbers at once. The theory book stays as it is.</li>
+        <li>
+          <b>Deleted:</b> every student's marks and levels in this unit's workbook, with their drafts, home answers and photos. Their XP stays. Online
+          explanations stay with their questions.
+        </li>
+        <li>Moving a question is off afterwards (the printed books' numbers are fixed). This can't be undone.</li>
+      </ul>
+      <div class="sb-wb-acts">
+        <button type="button" class="btn danger" disabled={busy} onClick={() => void go()}>
+          {busy ? "Switching…" : "Use as the workbook"}
+        </button>
+        <button type="button" class="btn" disabled={busy} onClick={props.onClose}>
+          Cancel
+        </button>
+      </div>
     </Sheet>
   );
 }

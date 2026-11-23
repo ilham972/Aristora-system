@@ -2848,9 +2848,9 @@ learning app of our education institute"): one profile, his class times, what he
   small model: `scripts/skills.ts` (docs/making-changes.md, "Tag a unit's skills") and the **skill-tags** skill.
 - **A unit's book by skill** (14 Nov 2026, his voice note: "each skill considered as each level ... some level have one
   question, sometimes twenty ... the levels are going to be based on skills"; `convex/lib/skillBook.ts` pure,
-  `convex/skillBook.ts`, `src/skillBook.tsx`, `src/skillPrint.ts`). Its levels are **not connected** yet to the family
-  app or the workbook's levels (his words: "not synced"; part 2 of 23 Nov 2026): the app keeps its question numbers and
-  levels everywhere. Its skills' **videos** are (part 1, below: "A skill's videos").
+  `convex/skillBook.ts`, `src/skillBook.tsx`, `src/skillPrint.ts`). Until the owner's switch (**Use as the workbook**,
+  below; 23 Nov 2026) a unit's book by skill is only shown and downloaded: the app keeps the workbook's numbers and
+  levels. After it, the skill book IS the unit's workbook everywhere. Its skills' **videos**: part 1, below.
   - **Settings → Books → T** beside F M K Q on every unit row: green = its workbook's questions carry skills
     (`catalog.books` `tagged`); pale = not tagged (a tap says "tag it with Claude first").
   - **Level n = skill n** (22 Nov 2026, his voice note: "we can put skill three plus skill four inside the level four
@@ -2946,6 +2946,27 @@ learning app of our education institute"): one profile, his class times, what he
       (Android's print window may still read it after `print()` returns). Files: "G8_U04_Skills_Book",
       "G8_U04_Skills_Level3". The toast also says how many questions aren't in the app as printed (a dash in their
       place).
+  - **Use as the workbook** (23 Nov 2026, his answers: "For the new year our work book is turning into skill book,
+    skill book is the workbook, we can delete old data, because now students going to new grade" and "whole unit at
+    once"; his "otherwise correction teacher will confuse"; `skillBook.useAsWorkbook`, `skillWorkbook`, `storedLevels`,
+    `bookLevels`): the owner's button on the T page ("The workbook still has its old levels. · Use as the workbook"),
+    a sheet saying what changes and what goes, then one tap. The server makes the book again from what the page shows
+    (refused when the order changed since: new marks or a move): questions numbered 1, 2, 3 … as printed; a level for
+    each strip, in order, named as printed ("1", "2·1", "2·2" …; `MasterLevel.name`, its skill `skill`); Part I and
+    Part II as runs where they fall (a level may hold both: `MasterData.skills`); marks and free marks renumbered; each
+    question's old number kept inside (`was`, the hidden permanent number). Refused while a question has no skill or
+    unknown marks. The key, the phone's own readings (`phoneFixes`), the printed questions, the tags and the lessons'
+    examples, and the online explanations' threads (`usRooms` "h": the teachers' voice notes stay with their
+    question) follow the new numbers. **Deleted** (his OK): every student's marks and levels in that workbook, drafts,
+    the paper being corrected (claims), levels open on the phone (`familyLive`), answers typed at home, photos from
+    home (their files), AI checks, online asks. **Kept**: each row's XP and learning days (`m.x0`, `xpBefore`: the race,
+    the flame and the coins don't move), the theory book, the history. Afterwards: a green line on the T page, no
+    Move (the printed books' numbers are fixed), the T page and the PDF read the stored levels (`storedLevels`: a tag
+    or new marks never move a printed question); Correction's level bar says "1 · 2·1 2·2 2·3 · 3·1 …" (a gap where a
+    skill starts) and the level line its skill ("Level 2·1 · Q12–21 · S2"); its toasts and the server's messages say
+    the name (`lvLabel`); the family app's road, Continue and the Level's header say "Level 2·1" (`nm`). Still the
+    sequential number (to do): the family app's history lines, online threads' headers, the bell, the road's chests
+    and the video's START, the ⌂ lane's labels.
   - **Share to the printing shop** (23 Nov 2026, his words: "put the share button near the download button ... I will
     put the copy number"; the same evening: "when I press the send button ... copy the clipboard also ... how many
     copies ... the cost of the printing ... one paper is cost seven rupees ... I don't want any shop. Just send
@@ -3022,9 +3043,9 @@ learning app of our education institute"): one profile, his class times, what he
     (uploads), img `https://image.mux.com`, `worker-src 'self' blob:` (hls.js's worker); scripts stay the site's only.
   - Budgets (`scripts/build.mjs`): the player 6 KB, hls.js 125 KB (115.6 today); the first load +1.8 KB (64.0 / 67).
     The teachers' build is split since (`splitting`): hls.js is fetched only when a teacher plays a video.
-  - **Not built yet** (his plan, in order): part 2, **levels by skill in both apps** (Level n = skill n everywhere, the
-    numbers of the downloaded skill book 1, 2, 3 on the phone and in Correction, the book and the app always the same,
-    a question's hidden permanent number inside); part 3, the **mistake video** (the second kind: after a lost
+  - Part 2, **levels by skill in both apps**, was built by the skill book's chat (23 Nov 2026, his pick): the owner's
+    switch "Use as the workbook" per unit (above, "A unit's book by skill"); a question's old number stays inside
+    (`MasterData.was`). **Not built yet** (his plan, in order): part 3, the **mistake video** (the second kind: after a lost
     question); "does it help?" (first-try marks of watchers vs not, per video); the chat that makes a video sending it
     straight in (today he uploads the file).
 - The server marks with the uploaded answer keys (`convex/lib/phone.ts`; a key without kinds, version 1): numbers,

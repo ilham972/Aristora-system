@@ -461,7 +461,7 @@ export function StageScreen(props: {
     }
     if (l.s === "play") return toast("இந்த Stage ஐ இன்னும் phone இல் சரிபார்க்க முடியாது. தாளை வகுப்பில் கொடு.");
     sound("tap");
-    toast(`Level ${l.d ?? l.n}: ${l.got !== undefined ? `${l.got} / ${l.max} XP · ` : ""}${STATE_WORDS[l.s]}`);
+    toast(`Level ${l.nm ?? l.d ?? l.n}: ${l.got !== undefined ? `${l.got} / ${l.max} XP · ` : ""}${STATE_WORDS[l.s]}`);
   };
   return (
     <div class={`f-stage${shut ? " stopped" : ""}`}>
@@ -579,12 +579,12 @@ export function StageScreen(props: {
                   <button
                     type="button"
                     class={`f-lv s-${l.s}${live ? " play" : ""}${w.open ? "" : " shut"}${pct >= 1 ? " full" : ""}`}
-                    aria-label={`Level ${l.d ?? l.n}: ${live ? "START" : STATE_WORDS[l.s]}${l.ph ? `, ${l.ph} photos to send` : ""}`}
+                    aria-label={`Level ${l.nm ?? l.d ?? l.n}: ${live ? "START" : STATE_WORDS[l.s]}${l.ph ? `, ${l.ph} photos to send` : ""}`}
                     onClick={() => tap(l)}
                   >
                     {live && <span class="f-node-ring" aria-hidden="true" />}
                     <span class="f-node-c">
-                      {l.s === "later" ? <Icon name="lock" size={20} /> : l.s === "pre" ? <Icon name="check" size={24} /> : <b>{l.d ?? l.n}</b>}
+                      {l.s === "later" ? <Icon name="lock" size={20} /> : l.s === "pre" ? <Icon name="check" size={24} /> : <b>{l.nm ?? l.d ?? l.n}</b>}
                     </span>
                     {l.s === "check" && !l.ph && (
                       <i class="f-lv-tag home" title="phone இல் சரிபார்த்தது">

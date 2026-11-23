@@ -536,6 +536,8 @@ export type FamilyLevel = {
   n: number;
   /** Its number on the road when it differs from n (a topic tute: the ladder's Levels come first). */
   d?: number;
+  /** A skill workbook's level name (23 Nov 2026): "3", "3·2" (the printed strip's). */
+  nm?: string;
   max: number;
   /**
    * Its questions, then the ones that came back (`re` = the level he got it wrong in, `rb` = marks to win back);
@@ -627,7 +629,7 @@ export const level = query({
     for (const r of p ? retryPool(masterState(p), data, keys, l.n) : []) {
       qs.push({ ...formOf(keys.get(r.q)!), part: partOf(data, r.q)?.id ?? "", re: r.from, rb: r.lost });
     }
-    return { unitId: world.unitId, no: world.no, ta: world.ta, n: l.n, max: l.max, qs, ...(await liveOf(ctx, s, world.unitId, l.n)) };
+    return { unitId: world.unitId, no: world.no, ta: world.ta, n: l.n, ...(l.name ? { nm: l.name } : {}), max: l.max, qs, ...(await liveOf(ctx, s, world.unitId, l.n)) };
   },
 });
 

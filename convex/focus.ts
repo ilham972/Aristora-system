@@ -12,7 +12,7 @@ import { mutation } from "./lib/fn";
 import { actor, viewer } from "./lib/auth";
 import { asMaster, cleanBy, currentSession, fail, getStudent, masterPlace, masterState, mustHoldBook, touch } from "./lib/backend";
 import { claimLive } from "./lib/claims";
-import { levelOutOf } from "./lib/book";
+import { levelOutOf, lvLabel } from "./lib/book";
 import { draftMark } from "./schema";
 
 const base = {
@@ -70,7 +70,7 @@ export const mark = mutation({
     const l = book.levels.find((x) => x.n === args.level);
     if (!l) fail("That level is not in this workbook.");
     const m = masterState(progress);
-    if (m.lv[String(l.n)]?.fixed) fail(`Level ${l.n} is already corrected. Change it on the Correction tab.`);
+    if (m.lv[String(l.n)]?.fixed) fail(`Level ${lvLabel(l)} is already corrected. Change it on the Correction tab.`);
     const each = levelOutOf(book, l);
     if (!each) fail("This workbook doesn't list each question's marks: correct this level on the Correction tab.");
     const inLevel = (q: number) => Number.isInteger(q) && q >= l.from && q <= l.to;
@@ -85,7 +85,7 @@ export const mark = mutation({
     const mine = all.find((d) => d.unitId === unit._id && d.level === l.n && !m.lv[String(d.level)]?.fixed) ?? null;
     const q: Record<string, Infer<typeof draftMark>> = { ...(mine?.q ?? {}) };
     for (const it of args.set) {
-      if (!inLevel(it.q)) fail(`Question ${it.q} is not in Level ${l.n}.`);
+      if (!inLevel(it.q)) fail(`Question ${it.q} is not in Level ${lvLabel(l)}.`);
       const max = each[it.q - l.from];
       const dkp = it.dkp && it.dkp.length ? [...new Set(it.dkp)] : undefined;
       if (dkp && (!it.dk || dkp.length > 20 || dkp.some((p) => p.length === 0 || p.length > 12))) {
@@ -103,7 +103,7 @@ export const mark = mutation({
       q[String(it.q)] = row;
     }
     for (const n of clear) {
-      if (!inLevel(n)) fail(`Question ${n} is not in Level ${l.n}.`);
+      if (!inLevel(n)) fail(`Question ${n} is not in Level ${lvLabel(l)}.`);
       delete q[String(n)];
     }
     const by = cleanBy(args.by);

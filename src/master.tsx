@@ -3,7 +3,7 @@
 
 import { useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
-import { levelOutOf, PART_NAME } from "../convex/lib/book";
+import { levelOutOf, lvLabel, PART_NAME } from "../convex/lib/book";
 import { boldRuns, type KeyAnswer } from "../convex/lib/key";
 import { levelWaits, partTotals } from "../convex/lib/master";
 import { isSkGrade } from "../convex/lib/sakarath";
@@ -63,7 +63,7 @@ export function MasterStrip(props: { v: View }) {
   const cur = ms.current?.n ?? -1;
   const runs = markerRuns(mb.levels.map((l) => l.n).filter((n) => waiting.has(n) || n === cur));
   const maxOf = new Map(mb.levels.map((l) => [l.n, l.max]));
-  const newPart = (i: number) => i > 0 && mb.parts.some((p) => p.from === mb.levels[i].from);
+  const newPart = (i: number) => i > 0 && (mb.skills ? mb.levels[i].skill !== mb.levels[i - 1].skill : mb.parts.some((p) => p.from === mb.levels[i].from));
   const total = mb.levels.reduce((a, l) => a + l.max, 0) || 1;
   const before = mb.levels.map((_, i) => mb.levels.slice(0, i).reduce((a, l) => a + l.max, 0));
   return (
@@ -246,14 +246,14 @@ export function MasterBook(props: { role: Role; v: View; onCorrect: (level: numb
                     class={`mt-lv ${state}`}
                     disabled={role === "theory"}
                     onClick={() => props.onCorrect(l.n)}
-                    aria-label={`Level ${l.n}, questions ${l.from} to ${l.to}: ${lv?.fixed ? `${lv.got} out of ${l.max}` : state === "waiting" ? "waiting for correction" : state === "before" ? "done before the app" : "not corrected"}${w?.evaluation ? `, ${w.evaluation} waiting for Evaluation` : w?.theory ? `, ${w.theory} waiting for Theory` : ""}`}
+                    aria-label={`Level ${lvLabel(l)}, questions ${l.from} to ${l.to}: ${lv?.fixed ? `${lv.got} out of ${l.max}` : state === "waiting" ? "waiting for correction" : state === "before" ? "done before the app" : "not corrected"}${w?.evaluation ? `, ${w.evaluation} waiting for Evaluation` : w?.theory ? `, ${w.theory} waiting for Theory` : ""}`}
                   >
                     {wait && (
                       <i class={`mt-w ${w?.evaluation ? "e" : "t"}`} aria-hidden="true">
                         {wait}
                       </i>
                     )}
-                    <span>Level {l.n}</span>
+                    <span>Level {lvLabel(l)}</span>
                     <small>
                       {l.from}–{l.to}
                     </small>
@@ -346,7 +346,7 @@ export function CorrectSheet(props: { v: View; level: number; now: number; onClo
     if (res) {
       const go = (who: string, list: number[]) => (list.length ? ` ${who}: ${list.map((q) => `Q${q}`).join(" ")}.` : "");
       toast(
-        `${v.s.name}: Level ${l.n} ${res.got} / ${res.max}. Unit ${res.unitPct}% so far.${go("Theory", res.theory)}${go("Evaluation", res.evaluation)}`,
+        `${v.s.name}: Level ${lvLabel(l)} ${res.got} / ${res.max}. Unit ${res.unitPct}% so far.${go("Theory", res.theory)}${go("Evaluation", res.evaluation)}`,
       );
       props.onClose();
     }
@@ -354,7 +354,7 @@ export function CorrectSheet(props: { v: View; level: number; now: number; onClo
   const handedIn = async () => {
     const r = await act(() => mutate(api.workbook.levelDone, { studentId: v.s._id, unitId: v.s.unitId, level: l.n, by: currentRole() }));
     if (r) {
-      toast(`${v.s.name}: Level ${l.n} handed in, waiting for correction. Next level now.`);
+      toast(`${v.s.name}: Level ${lvLabel(l)} handed in, waiting for correction. Next level now.`);
       props.onClose();
     }
   };
@@ -374,7 +374,7 @@ export function CorrectSheet(props: { v: View; level: number; now: number; onClo
 
   return (
     <Sheet
-      title={`${v.s.name} · Level ${l.n}`}
+      title={`${v.s.name} · Level ${lvLabel(l)}`}
       sub={`Questions ${l.from}–${l.to} · out of ${l.max}${lv?.fixed ? " · already corrected: change the marks" : lv?.done ? " · waiting for correction" : ""}`}
       onClose={props.onClose}
       foot={

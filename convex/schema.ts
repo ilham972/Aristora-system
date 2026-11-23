@@ -217,10 +217,24 @@ export const masterData = v.object({
       each: v.optional(v.number()),
     }),
   ),
-  levels: v.array(v.object({ n: v.number(), from: v.number(), to: v.number(), max: v.number() })),
+  levels: v.array(
+    v.object({
+      n: v.number(),
+      from: v.number(),
+      to: v.number(),
+      max: v.number(),
+      /** A skill workbook's level (23 Nov 2026): its name ("3", or "3·2" for a big skill's part) and its skill. */
+      name: v.optional(v.string()),
+      skill: v.optional(v.string()),
+    }),
+  ),
   marks: v.optional(v.record(v.string(), v.number())),
   /** Out of the syllabus: everyone gets these questions' marks without doing them (the owner's Preview, 5 Nov 2026). */
   free: v.optional(v.array(v.number())),
+  /** The skill book is the workbook (23 Nov 2026, lib/skillBook.ts skillWorkbook): levels by skill. */
+  skills: v.optional(v.literal(true)),
+  /** Each question's number in the book before it (index = question − first): the hidden permanent number. */
+  was: v.optional(v.array(v.number())),
 });
 /** One corrected question (lib/master.ts `MQ`), without `fr`. */
 const mqFields = {
@@ -278,6 +292,12 @@ export const masterState = v.object({
   reteach: v.optional(v.object({ at: v.number(), by: v.optional(v.string()) })),
   /** The skill lessons he got: skill id → when (convex/lib/path.ts). */
   sk: v.optional(v.record(v.string(), v.number())),
+  /**
+   * XP from the unit's book before it became the skill workbook (23 Nov 2026, lib/skillBook.ts `xpBefore`): each level
+   * he finished (its marks, when; `d` = a learning day; `np` = marked at home, never checked: no coins) and each mark
+   * won back. Its levels and marks went with the old numbers; his XP, days and the race stay.
+   */
+  x0: v.optional(v.array(v.object({ t: v.number(), xp: v.number(), d: v.optional(v.boolean()), np: v.optional(v.boolean()) }))),
 });
 /** One question of a Focus draft: marks given so far, "?" (dk; dkp = only these parts blank), the part marks (p). */
 export const draftMark = v.object({

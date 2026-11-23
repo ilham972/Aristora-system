@@ -1344,6 +1344,8 @@ function describe(e: Doc<"events">): string {
       return `unit renamed: ${v}`;
     case "skill-move":
       return `Q${e.q ?? "?"} moved to another skill: ${v}`;
+    case "book-skills":
+      return `the skill book is the workbook now: ${v}`;
     case "session-start":
       return "Session started";
     case "session-end":

@@ -13,7 +13,7 @@
 //   (the workbook is built easy → hard) pulled by how many students got it right, once STAT_MIN students did it.
 // - The app keeps its question numbers; only the downloaded book numbers its questions 1, 2, 3 … in this order.
 
-import { outOf, partOf, type MasterData } from "./book";
+import { firstQuestion, outOf, partOf, type MasterData, type MasterLevel, type MasterPart } from "./book";
 import type { MState } from "./master";
 import { bySkill, paperNo } from "./path";
 import { SKILLS_A_TAG, skillHome, type Skill, type SkillTag } from "./skills";
@@ -295,4 +295,103 @@ export function statsOf(data: MasterData, states: readonly MState[]): Map<number
     }
   }
   return out;
+}
+
+/**
+ * The levels of a skill workbook as stored (23 Nov 2026): a level a skill, its parts the stored levels, the groups the
+ * runs of questions that need the same skills. The T page and the PDF read these once the skill book is the workbook,
+ * so a later tag or new marks never move a printed question.
+ */
+export function storedLevels(unitKey: string, data: MasterData, tags: readonly SkillTag[]): { levels: SkillLevel[]; number: Map<number, number> } {
+  const number = new Map<number, number>();
+  const levels: SkillLevel[] = [];
+  for (const lv of data.levels) {
+    const skill = lv.skill ?? "";
+    let l = levels[levels.length - 1];
+    if (!l || l.skill !== skill) {
+      l = { n: Number(paperNo(unitKey, skill)) || lv.n, skill, groups: [], qs: [], from: lv.from, to: lv.to, max: 0, parts: [] };
+      levels.push(l);
+    }
+    const qs: number[] = [];
+    for (let q = lv.from; q <= lv.to; q++) {
+      qs.push(q);
+      number.set(q, q);
+      const want = needs(tags, q);
+      const key = groupKey(want);
+      const g = l.groups[l.groups.length - 1];
+      if (g && g.key === key) g.qs.push(q);
+      else l.groups.push({ key, skills: want, qs: [q] });
+    }
+    l.parts.push({ i: l.parts.length + 1, qs, from: lv.from, to: lv.to, max: lv.max });
+    l.qs.push(...qs);
+    l.to = lv.to;
+    l.max = l.max === null ? null : l.max + lv.max;
+  }
+  return { levels, number };
+}
+
+/** The book by skill: as stored once it is the workbook, else made from the tags (the order they give). */
+export function bookLevels(
+  unitKey: string,
+  data: MasterData,
+  tags: readonly SkillTag[],
+  own: readonly string[] = [],
+  stats?: ReadonlyMap<number, QStat>,
+): { levels: SkillLevel[]; number: Map<number, number> } {
+  return data.skills ? storedLevels(unitKey, data, tags) : skillLevels(unitKey, data, tags, own, stats);
+}
+
+/**
+ * The skill book as the unit's workbook (23 Nov 2026, the founder: "For the new year our work book is turning into
+ * skill book, skill book is the workbook, we can delete old data"): the same questions numbered 1, 2, 3 … as the book
+ * prints them; a level for each strip (a skill's level whole, or each part of a big one) named "3" or "3·2", its skill
+ * kept; Part I and Part II runs where they fall; every question's marks, the free ones, and `was` (each question's old
+ * number: the hidden permanent number). `map` = old number → new. Words when it can't be.
+ */
+export function skillWorkbook(
+  data: MasterData,
+  levels: readonly SkillLevel[],
+  number: ReadonlyMap<number, number>,
+): { data: MasterData; map: Map<number, number> } | string {
+  if (data.skills) return "This unit's workbook is the skill book already.";
+  const first = firstQuestion(data);
+  // A topic tute's past papers go on from its ladder's numbers (Sets: 56–66): they keep the book's own levels.
+  if (first !== 1) return "A topic tute's past papers go on from its ladder: they keep their own levels.";
+  const last = data.parts.length ? data.parts[data.parts.length - 1].to : first - 1;
+  const untagged: number[] = [];
+  for (let q = first; q <= last; q++) if (!number.has(q)) untagged.push(q);
+  if (untagged.length) {
+    const some = untagged.slice(0, 6).map((q) => `Q${q}`).join(", ");
+    return `${untagged.length === 1 ? `${some} has` : `${some}${untagged.length > 6 ? " …" : ""} have`} no skill yet: tag ${untagged.length === 1 ? "it" : "them"} first (every question must be in the skill book).`;
+  }
+  for (let q = first; q <= last; q++) if (outOf(data, q) === null) return `Q${q}'s marks aren't in the app: upload the workbook with its marks first.`;
+  const map = new Map<number, number>(number);
+  const was: number[] = [];
+  for (const [q, n] of map) was[n - 1] = q;
+  if (was.length !== last - first + 1 || was.some((q) => q === undefined)) return "The skill book's numbers don't cover the workbook: open the T page again.";
+  const parts: MasterPart[] = [];
+  was.forEach((q, i) => {
+    const p = partOf(data, q)!;
+    const n = i + 1;
+    const run = parts[parts.length - 1];
+    if (run && run.id === p.id) run.to = n;
+    else parts.push(p.kind === "short" ? { id: p.id, from: n, to: n, kind: p.kind, each: p.each ?? 2 } : { id: p.id, from: n, to: n, kind: p.kind });
+  });
+  const out: MasterLevel[] = [];
+  for (const l of levels) {
+    for (const p of l.parts) {
+      if (p.max === null) return `Level ${l.n}: a question's marks aren't in the app.`;
+      out.push({ n: out.length + 1, from: p.from, to: p.to, max: p.max, name: partName(l.n, p.i, l.parts.length), skill: l.skill });
+    }
+  }
+  const marks: Record<string, number> = {};
+  for (const [q, m] of Object.entries(data.marks ?? {})) {
+    const n = map.get(Number(q));
+    if (n !== undefined) marks[String(n)] = m;
+  }
+  const free = (data.free ?? []).map((q) => map.get(q)).filter((n): n is number => n !== undefined).sort((a, b) => a - b);
+  return {
+    data: { kind: "master", parts, levels: out, ...(Object.keys(marks).length ? { marks } : {}), ...(free.length ? { free } : {}), skills: true, was },
+    map,
+  };
 }

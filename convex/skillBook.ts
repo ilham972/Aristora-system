@@ -8,16 +8,20 @@
 //   each question (for easy → hard).
 // - `questions`: every printed question and the book's CSS, read once when the page opens (they change only on upload).
 // - `move` (Books or the owner): one question to another group of skills, checked like a Claude link save.
+// - `useAsWorkbook` (the owner, 23 Nov 2026: "skill book is the workbook"): the unit's workbook becomes the skill book
+//   it shows, the whole unit at once: renumbered as printed, levels by skill, its students' old marks gone (XP kept).
 
 import { v } from "convex/values";
 import { query, type QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { mutation } from "./lib/fn";
 import { actor, viewer } from "./lib/auth";
-import { asMaster, bookFor, cleanBy, currentSession, fail, keyRow, log, touch } from "./lib/backend";
-import type { MasterData } from "./lib/book";
+import { asMaster, bookFor, cleanBy, currentSession, fail, keyRow, log, refresh, touch } from "./lib/backend";
+import { checkMaster, type MasterData } from "./lib/book";
+import { xpBefore } from "./lib/family";
+import { checkKey } from "./lib/key";
 import type { MState } from "./lib/master";
-import { groupLabel, keepExamples, moveTo, needs, statsOf } from "./lib/skillBook";
+import { groupLabel, keepExamples, moveTo, needs, skillLevels, skillWorkbook, statsOf } from "./lib/skillBook";
 import { knownFor, skillsProblem, type Skill, type SkillTag } from "./lib/skills";
 
 const token = v.optional(v.string());
@@ -46,6 +50,21 @@ export type SkillBookUnit = {
   updatedAt: number;
 };
 
+/** How the real students did on each question of a workbook (the T page's easy → hard). */
+async function statsFor(ctx: QueryCtx, unitId: Id<"units">, data: MasterData) {
+  const real = new Set(
+    (await ctx.db.query("students").collect()).filter((s) => !s.test && !s.demo).map((s) => s._id as string),
+  );
+  const states = (await ctx.db
+    .query("progress")
+    .withIndex("by_unit_stage", (q) => q.eq("unitId", unitId).eq("stage", "master"))
+    .collect())
+    .filter((p) => p.m && real.has(p.studentId))
+    .map((p) => p.m as MState);
+  // Rounded as the T page gets them, so the order it shows and the order the switch checks are the same.
+  return new Map([...statsOf(data, states)].map(([q, x]) => [q, { n: x.n, right: Math.round(x.right * 100) / 100 }]));
+}
+
 /** A tagged unit's book by skill (null: not tagged, or no workbook). */
 export const unit = query({
   args: { token, unitId: v.id("units") },
@@ -63,16 +82,7 @@ export const unit = query({
       if (r.unitId === unit._id || r.stage !== "master") continue;
       for (const s of r.skills) if (used.has(s.id)) names[s.id] = { ta: s.ta, en: s.en };
     }
-    const real = new Set(
-      (await ctx.db.query("students").collect()).filter((s) => !s.test && !s.demo).map((s) => s._id as string),
-    );
-    const states = (await ctx.db
-      .query("progress")
-      .withIndex("by_unit_stage", (q) => q.eq("unitId", args.unitId).eq("stage", "master"))
-      .collect())
-      .filter((p) => p.m && real.has(p.studentId))
-      .map((p) => p.m as MState);
-    const stats = [...statsOf(data, states)].map(([q, s]): [number, number, number] => [q, s.n, Math.round(s.right * 100) / 100]);
+    const stats = [...(await statsFor(ctx, args.unitId, data))].map(([q, s]): [number, number, number] => [q, s.n, s.right]);
     return {
       unitId: unit._id,
       key: unit.key,
@@ -138,5 +148,135 @@ export const move = mutation({
     });
     await touch(ctx, session, now);
     return { from: groupLabel(unit.key, before), to: groupLabel(unit.key, after) };
+  },
+});
+
+/**
+ * The skill book becomes the unit's workbook (23 Nov 2026, the founder: "For the new year our work book is turning into
+ * skill book, skill book is the workbook, we can delete old data, because now students going to new grade"; his pick:
+ * the whole unit at once). The owner only: it can't be undone. `order` = the questions in the order the T page showed
+ * him (its order uses the students' marks): refused when the book changed since.
+ * - The book: renumbered 1, 2, 3 … as printed, a level a strip named "3" / "3·2" (lib/skillBook.ts skillWorkbook),
+ *   each question's old number kept in it (`was`). Its key, the phone's own readings, the printed questions, the tags
+ *   and the lessons' examples, and the online explanations' threads follow the new numbers.
+ * - His students' work in the old numbers goes: their marks and levels (each row keeps its XP and learning days, `x0`),
+ *   drafts, the paper being corrected, levels open on the phone, answers typed at home, photos from home, AI checks,
+ *   online asks. The theory book is untouched.
+ */
+export const useAsWorkbook = mutation({
+  args: { token, unitId: v.id("units"), order: v.array(v.number()), by: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    await actor(ctx, args.token, ["owner"]);
+    const now = Date.now();
+    const unit = await ctx.db.get(args.unitId);
+    const book = unit ? await bookFor(ctx, args.unitId, "master") : null;
+    const row = book ? await tagsOf(ctx, args.unitId) : null;
+    if (!unit || !book || !row || book.data.kind !== "master") fail("This unit has no skills in the app.");
+    const data = asMaster(book);
+    if (data.skills) fail("This unit's workbook is the skill book already.");
+    const { levels, number } = skillLevels(unit.key, data, row.tags, row.skills.map((x) => x.id), await statsFor(ctx, unit._id, data));
+    const printed = levels.filter((l) => l.qs.length);
+    if (printed.flatMap((l) => l.qs).join(",") !== args.order.join(",")) {
+      fail("The skill book changed since this page opened (new marks or a move): close it, open it again, look, then switch.");
+    }
+    const made = skillWorkbook(data, printed, number);
+    if (typeof made === "string") fail(made);
+    const bad = checkMaster(made.data);
+    if (bad.length) fail(bad[0]);
+    const map = made.map;
+    const re = (q: number) => map.get(q) ?? q;
+
+    // The book's own things follow the new numbers.
+    const key = await keyRow(ctx, unit._id, "master");
+    if (key) {
+      const answers = key.answers.filter((a) => map.has(a.q)).map((a) => ({ ...a, q: re(a.q) })).sort((a, b) => a.q - b.q);
+      const wrong = checkKey(answers, made.data);
+      if (wrong.length) fail(wrong[0]);
+      await ctx.db.patch(key._id, { answers, updatedAt: now });
+    }
+    for (const f of await ctx.db.query("phoneFixes").withIndex("by_unit", (q) => q.eq("unitId", unit._id)).collect()) {
+      await ctx.db.patch(f._id, { q: re(f.q) });
+    }
+    for (const r of await ctx.db
+      .query("questions")
+      .withIndex("by_book", (x) => x.eq("unitId", unit._id).eq("stage", "master"))
+      .collect()) {
+      if (map.has(r.q)) await ctx.db.patch(r._id, { q: re(r.q) });
+      else await ctx.db.delete(r._id);
+    }
+    const tags = row.tags.map((t) => ({ ...t, q: re(t.q) })).sort((a, b) => a.q - b.q || (a.p ?? "").localeCompare(b.p ?? ""));
+    const skills = row.skills.map((x) => (x.eg === undefined ? x : { ...x, eg: re(x.eg) }));
+    await ctx.db.patch(row._id, { tags, skills, by: "app", updatedAt: now });
+    // An online explanation's thread stays with its question (the teachers' voice notes in it).
+    const prefix = `h:${unit._id}:`;
+    for (const r of await ctx.db
+      .query("usRooms")
+      .withIndex("by_key", (q) => q.gte("key", prefix).lt("key", `${prefix}\uffff`))
+      .collect()) {
+      if (r.hq === undefined || !map.has(r.hq)) continue;
+      const n = re(r.hq);
+      await ctx.db.patch(r._id, { hq: n, hn: made.data.levels.find((l) => n >= l.from && n <= l.to)?.n, key: `${prefix}${n}` });
+    }
+
+    // The students' work in the old numbers goes (his OK); each row keeps its XP.
+    const rows = await ctx.db
+      .query("progress")
+      .withIndex("by_unit_stage", (q) => q.eq("unitId", unit._id).eq("stage", "master"))
+      .collect();
+    const sids = new Set<Id<"students">>();
+    let marked = 0;
+    for (const p of rows) {
+      sids.add(p.studentId);
+      if (!p.m) continue;
+      if (Object.keys(p.m.lv).length || Object.keys(p.m.q).length) marked++;
+      const x0 = xpBefore(p.m);
+      await ctx.db.patch(p._id, { m: { q: {}, lv: {}, ...(p.m.sk ? { sk: p.m.sk } : {}), ...(x0.length ? { x0 } : {}) }, updatedAt: now });
+    }
+    const gone = async <T extends { _id: Id<any> }>(list: T[], also?: (r: T) => Promise<void>) => {
+      for (const r of list) {
+        if (also) await also(r);
+        await ctx.db.delete(r._id);
+      }
+      return list.length;
+    };
+    const mine = <T extends { unitId: Id<"units"> }>(list: T[]) => list.filter((r) => r.unitId === unit._id);
+    await gone(mine(await ctx.db.query("drafts").collect()));
+    await gone(mine(await ctx.db.query("claims").collect()));
+    await gone(mine(await ctx.db.query("familyLive").collect()));
+    await gone(await ctx.db.query("familyAnswers").withIndex("by_unit", (q) => q.eq("unitId", unit._id)).collect());
+    const photos = await ctx.db.query("homePhotos").withIndex("by_unit", (q) => q.eq("unitId", unit._id)).collect();
+    for (const ph of photos) sids.add(ph.studentId);
+    await gone(photos, async (ph) => {
+      for (const f of ph.files) await ctx.storage.delete(f).catch(() => {});
+    });
+    for (const sid of sids) {
+      await gone(
+        await ctx.db
+          .query("aiChecks")
+          .withIndex("by_q", (q) => q.eq("sid", sid).eq("u", unit._id))
+          .collect(),
+        async (c) => {
+          if (c.photo) await ctx.storage.delete(c.photo).catch(() => {});
+        },
+      );
+      await gone(
+        await ctx.db
+          .query("helpAsks")
+          .withIndex("by_sid", (q) => q.eq("sid", sid).eq("unitId", unit._id))
+          .collect(),
+      );
+    }
+
+    await ctx.db.patch(book._id, { data: made.data, updatedAt: now });
+    const session = await currentSession(ctx, now);
+    for (const sid of sids) await refresh(ctx, sid, now, session);
+    await log(ctx, session, now, {
+      kind: "book-skills",
+      by: cleanBy(args.by),
+      unit: unit.key,
+      value: `${made.data.levels.length} levels by skill, ${made.map.size} questions; ${marked} students' old marks cleared`,
+    });
+    await touch(ctx, session, now);
+    return { levels: made.data.levels.length, questions: made.map.size, students: marked };
   },
 });
