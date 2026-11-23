@@ -66,7 +66,6 @@ import type * as lib_owner from "../lib/owner.js";
 import type * as lib_path from "../lib/path.js";
 import type * as lib_phone from "../lib/phone.js";
 import type * as lib_photos from "../lib/photos.js";
-import type * as lib_printShops from "../lib/printShops.js";
 import type * as lib_profile from "../lib/profile.js";
 import type * as lib_progress from "../lib/progress.js";
 import type * as lib_push from "../lib/push.js";
@@ -182,7 +181,6 @@ declare const fullApi: ApiFromModules<{
   "lib/path": typeof lib_path;
   "lib/phone": typeof lib_phone;
   "lib/photos": typeof lib_photos;
-  "lib/printShops": typeof lib_printShops;
   "lib/profile": typeof lib_profile;
   "lib/progress": typeof lib_progress;
   "lib/push": typeof lib_push;

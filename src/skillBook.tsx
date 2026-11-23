@@ -14,7 +14,7 @@ import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { partOf } from "../convex/lib/book";
 import { bySkill, paperNo } from "../convex/lib/path";
-import { groupKey, groupLabel, levelSkillOf, needs, skillLabel, skillGroups, skillLevels, STAT_MIN, type QStat, type SkillGroup, type SkillLevel } from "../convex/lib/skillBook";
+import { groupKey, groupLabel, levelSkillOf, needs, partName, skillLabel, skillGroups, skillLevels, STAT_MIN, type QStat, type SkillGroup, type SkillLevel } from "../convex/lib/skillBook";
 import { SKILLS_A_TAG } from "../convex/lib/skills";
 import type { SkillBookUnit } from "../convex/skillBook";
 import { fetchOnce, mutate, phoneToken } from "./backend";
@@ -263,6 +263,17 @@ export function SkillBookPage(props: { unit: Unit; gov: GovRow | null; onClose: 
                     {busy === open.n ? "Making…" : `Level ${open.n} PDF`}
                   </button>
                 </div>
+                {/* A big skill's strips (23 Nov 2026): each part is corrected on its own, about 20 marks. */}
+                {open.parts.length > 1 && (
+                  <p class="sb-strips" aria-label={`Level ${open.n} in ${open.parts.length} parts`}>
+                    {open.parts.map((p) => (
+                      <span key={p.i}>
+                        <b>{partName(open.n, p.i, open.parts.length)}</b> {p.from === p.to ? `Q${p.from}` : `Q${p.from}–${p.to}`}
+                        {p.max !== null ? ` · ${p.max}` : ""}
+                      </span>
+                    ))}
+                  </p>
+                )}
               </div>
             )}
             {open && u.skills.some((x) => x.id === open.skill) && (
@@ -325,7 +336,7 @@ export function SkillBookPage(props: { unit: Unit; gov: GovRow | null; onClose: 
             })}
           </div>
           {sharing !== null && (
-            <ShareSheet grade={u.grade} code={u.code} ta={u.ta} level={sharing === 0 ? null : sharing} make={() => serverPdf(sharing === 0 ? null : sharing)} onClose={() => setSharing(null)} />
+            <ShareSheet grade={u.grade} code={u.code} level={sharing === 0 ? null : sharing} make={() => serverPdf(sharing === 0 ? null : sharing)} onClose={() => setSharing(null)} />
           )}
           {moving !== null && (
             <MoveQSheet

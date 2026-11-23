@@ -8,8 +8,6 @@
 //   each question (for easy → hard).
 // - `questions`: every printed question and the book's CSS, read once when the page opens (they change only on upload).
 // - `move` (Books or the owner): one question to another group of skills, checked like a Claude link save.
-// - `shops` / `setShops` (Books or the owner, 23 Nov 2026): the printing shops a book is sent to from the Share sheet
-//   (their names and WhatsApp numbers, one the default), kept in `meta` (convex/lib/printShops.ts).
 
 import { v } from "convex/values";
 import { query, type QueryCtx } from "./_generated/server";
@@ -21,7 +19,6 @@ import type { MasterData } from "./lib/book";
 import type { MState } from "./lib/master";
 import { groupLabel, keepExamples, moveTo, needs, statsOf } from "./lib/skillBook";
 import { knownFor, skillsProblem, type Skill, type SkillTag } from "./lib/skills";
-import { SHOPS_KEY, shopsOf, shopsProblem, type PrintShops } from "./lib/printShops";
 
 const token = v.optional(v.string());
 
@@ -141,40 +138,5 @@ export const move = mutation({
     });
     await touch(ctx, session, now);
     return { from: groupLabel(unit.key, before), to: groupLabel(unit.key, after) };
-  },
-});
-
-/** The printing shops (the Share sheet): names, WhatsApp numbers, the default one. */
-export const shops = query({
-  args: { token },
-  handler: async (ctx, args): Promise<PrintShops> => {
-    await viewer(ctx, args.token, "books");
-    const row = await ctx.db
-      .query("meta")
-      .withIndex("by_key", (q) => q.eq("key", SHOPS_KEY))
-      .first();
-    return shopsOf(row?.value);
-  },
-});
-
-/** The whole list again (add, change, remove, the default), checked. */
-export const setShops = mutation({
-  args: {
-    token,
-    shops: v.array(v.object({ id: v.string(), name: v.string(), phone: v.string() })),
-    def: v.union(v.string(), v.null()),
-  },
-  handler: async (ctx, args) => {
-    await actor(ctx, args.token, ["books"]);
-    const value: PrintShops = { shops: args.shops.map((x) => ({ id: x.id, name: x.name.trim(), phone: x.phone })), def: args.def };
-    const bad = shopsProblem(value);
-    if (bad) fail(bad);
-    const row = await ctx.db
-      .query("meta")
-      .withIndex("by_key", (q) => q.eq("key", SHOPS_KEY))
-      .first();
-    if (row) await ctx.db.patch(row._id, { value });
-    else await ctx.db.insert("meta", { key: SHOPS_KEY, value });
-    return shopsOf(value);
   },
 });

@@ -18,7 +18,7 @@
 // dotted frame are the engine's (`seal`, `frame_svg`), drawn the same way here.
 
 import { outOf, partOf, type MasterData } from "../convex/lib/book";
-import { skillLabel, type SkillGroup, type SkillLevel } from "../convex/lib/skillBook";
+import { partName, skillLabel, type SkillGroup, type SkillLevel, type SkillPart } from "../convex/lib/skillBook";
 import { printFontCss, printFontsReady } from "./printFonts";
 import { safeFragment } from "./questionView";
 import { ENGINE_CSS } from "./skillPrintCss";
@@ -420,20 +420,23 @@ function groupHtml(u: PrintUnit, g: SkillGroup): string {
   return `<div class="grp sbx-grp"><span class="gb">${esc(g.skills.map((id) => skillLabel(u.key, id)).join(" + "))}</span></div>`;
 }
 
-function stripHtml(l: SkillLevel): string {
-  const words = l.from === l.to ? `வினா ${l.from}` : `வினாக்கள் ${l.from} – ${l.to}`;
-  return `<div class="lvl"><div class="lvr"><span class="lvn">Level ${l.n}</span><span class="lvq">${words}</span><span class="lvs">புள்ளிகள்</span><span class="lvb"></span><span class="lvo">${l.max === null ? "" : `/ ${l.max}`}</span></div></div>`;
+/** A part's marks strip: "Level 3·2 · பகுதி 2 / 4 · வினாக்கள் 41 – 50 · புள்ளிகள் [ ] / 20" ("Level 3" for a level whole). */
+function stripHtml(l: SkillLevel, p: SkillPart): string {
+  const qs = p.from === p.to ? `வினா ${p.from}` : `வினாக்கள் ${p.from} – ${p.to}`;
+  const words = l.parts.length > 1 ? `பகுதி ${p.i} / ${l.parts.length} · ${qs}` : qs;
+  return `<div class="lvl"><div class="lvr"><span class="lvn">Level ${partName(l.n, p.i, l.parts.length)}</span><span class="lvq">${words}</span><span class="lvs">புள்ளிகள்</span><span class="lvb"></span><span class="lvo">${p.max === null ? "" : `/ ${p.max}`}</span></div></div>`;
 }
 
 const frac = (a: string, b: string | number) => `<span class="frc"><span class="nu">${a}</span><span class="de">${b}</span></span>`;
 
-/** The marks sheet: every level (six a row), the unit's total and its percentage. */
+/** The marks sheet: every strip's box (a level, or each part of a big one; six a row), the unit's total and percentage. */
 function sheetHtml(u: PrintUnit, levels: SkillLevel[]): string {
   const total = levels.every((l) => l.max !== null) ? levels.reduce((a, l) => a + (l.max ?? 0), 0) : null;
+  const boxes = levels.flatMap((l) => l.parts.map((p) => ({ name: partName(l.n, p.i, l.parts.length), p })));
   const rows: string[] = [];
-  for (let i = 0; i < levels.length; i += 6) {
-    const part = levels.slice(i, i + 6);
-    const cells = part.map((l) => `<td><em>Level ${l.n}</em><i>${range(l.from, l.to)}</i><b>${l.max === null ? "" : `/ ${l.max}`}</b></td>`).join("");
+  for (let i = 0; i < boxes.length; i += 6) {
+    const part = boxes.slice(i, i + 6);
+    const cells = part.map(({ name, p }) => `<td><em>Level ${name}</em><i>${range(p.from, p.to)}</i><b>${p.max === null ? "" : `/ ${p.max}`}</b></td>`).join("");
     rows.push(`<tr>${cells}${'<td class="nx"></td>'.repeat(6 - part.length)}</tr>`);
   }
   return `<div class="msh"><div class="msk"><div class="mhd">புள்ளி அட்டவணை<small> · அலகு ${unitNo(u)} · ${esc(u.ta)}</small></div><table class="mtb">${rows.join("")}</table><div class="msx">அலகின் மொத்தம்<span class="msb"></span><span class="mso">${total === null ? "" : `/ ${total}`}</span><span class="msf">சதவீதம் = ${frac("மொத்தம் × 100", total ?? "")} =</span><span class="msb"></span><span class="mso">%</span></div></div></div>`;
@@ -617,18 +620,19 @@ function levelItems(u: PrintUnit, l: SkillLevel, number: (q: number) => number, 
   const out: Item[] = [{ t: "el", el: mark(el(bandHtml(u, l))), next: true }];
   const short = l.qs.find((q) => partOf(u.data, q)?.kind === "short");
   if (short !== undefined) out.push({ t: "el", el: mark(el(`<div class="pmn">ஒவ்வொரு குறு வினாவுக்கும் ${marksWord(outOf(u.data, short) ?? 2)}</div>`)), next: true });
-  const strip = mark(el(stripHtml(l)));
+  // Each part's strip goes after its last question (a level whole: one strip at its end).
+  const strips = new Map<number, HTMLElement>(l.parts.map((p) => [p.qs[p.qs.length - 1], mark(el(stripHtml(l, p)))]));
   l.groups.forEach((g, gi) => {
     const pure = g.skills.length === 1 && g.skills[0] === l.skill;
     if (!pure || gi > 0) out.push({ t: "el", el: mark(el(groupHtml(u, g))), next: true });
     for (const q of g.qs) {
-      const last = q === l.qs[l.qs.length - 1];
+      const strip = strips.get(q);
       const html = card(q) ?? `<div class="si"><div class="sih"><span class="qn">${number(q)}</span><div class="sib"><div class="sit">—</div></div></div></div>`;
       const e = mark(el(html));
       // A card built in blocks (the engine since 25 Oct 2026) may continue between them; an older one stays whole.
       const parts = e.matches(".pq") && e.querySelector(":scope > .bk") ? ([...e.children] as HTMLElement[]).map(mark) : [];
-      if (parts.length) out.push({ t: "card", wrap: e, parts, q: number(q), ...(last ? { strip } : {}) });
-      else out.push({ t: "el", el: e, q: number(q), ...(last ? { strip } : {}) });
+      if (parts.length) out.push({ t: "card", wrap: e, parts, q: number(q), ...(strip ? { strip } : {}) });
+      else out.push({ t: "el", el: e, q: number(q), ...(strip ? { strip } : {}) });
     }
   });
   return out;

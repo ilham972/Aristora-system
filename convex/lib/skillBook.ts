@@ -134,7 +134,69 @@ export type SkillLevel = {
   to: number;
   /** Its marks; null when the workbook doesn't know a question's marks. */
   max: number | null;
+  /** Its parts, each ending in its own marks strip: one, or about 20 marks each in a big level (`levelParts`). */
+  parts: SkillPart[];
 };
+
+/** One marks strip's questions (23 Nov 2026): a level of a big skill is corrected part by part. */
+export type SkillPart = {
+  /** 1, 2, 3 … inside its level. */
+  i: number;
+  /** The app's numbers, in the book's order. */
+  qs: number[];
+  /** The book's numbers: from … to. */
+  from: number;
+  to: number;
+  max: number | null;
+};
+
+/** A level up to this many marks stays one part (his yes, 23 Nov 2026: "add marks strip if the skill is big"). */
+export const PART_WHOLE_MAX = 25;
+/** A last part under this many marks joins the part before it (no strip for one or two questions). */
+export const PART_MIN = 10;
+
+/**
+ * A level's questions cut into parts of about 20 marks, the workbook's own rule: a part closes at 20 (more when its
+ * last question passes 20), or at 18–19 when the next question would take it past 20; never a question cut, the
+ * book's order kept. One part when the level has up to 25 marks or a question's marks aren't known.
+ */
+export function levelParts(data: MasterData, qs: readonly number[]): { qs: number[]; max: number | null }[] {
+  const marks = qs.map((q) => outOf(data, q));
+  if (marks.some((m) => m === null)) return [{ qs: [...qs], max: null }];
+  const total = (marks as number[]).reduce((a, m) => a + m, 0);
+  if (total <= PART_WHOLE_MAX) return [{ qs: [...qs], max: total }];
+  const out: { qs: number[]; max: number }[] = [];
+  let cur: number[] = [];
+  let sum = 0;
+  qs.forEach((q, i) => {
+    const m = marks[i] as number;
+    if (cur.length && sum >= 18 && sum + m > 20) {
+      out.push({ qs: cur, max: sum });
+      cur = [];
+      sum = 0;
+    }
+    cur.push(q);
+    sum += m;
+    if (sum >= 20) {
+      out.push({ qs: cur, max: sum });
+      cur = [];
+      sum = 0;
+    }
+  });
+  if (cur.length) {
+    const last = out[out.length - 1];
+    if (last && sum < PART_MIN) {
+      last.qs.push(...cur);
+      last.max += sum;
+    } else out.push({ qs: cur, max: sum });
+  }
+  return out;
+}
+
+/** A part's name, as its strip and the Correction page say it: "3" (the level whole) or "3·2" (its second part). */
+export function partName(n: number, i: number, parts: number): string {
+  return parts > 1 ? `${n}·${i}` : String(n);
+}
 
 /** Where a group sits inside its level: its skill alone, then groups with it, then (Level 1) other units' skills only. */
 function inLevel(skill: string, g: SkillGroup): number {
@@ -177,7 +239,8 @@ export function skillLevels(
       const m = outOf(data, q);
       max = m === null || max === null ? null : max + m;
     }
-    return { n: Number(paperNo(unitKey, skill)) || 0, skill, groups: mine, qs, from, to: qs.length ? next - 1 : -1, max };
+    const parts = levelParts(data, qs).map((p, i) => ({ i: i + 1, qs: p.qs, from: number.get(p.qs[0]) ?? 0, to: number.get(p.qs[p.qs.length - 1]) ?? -1, max: p.max }));
+    return { n: Number(paperNo(unitKey, skill)) || 0, skill, groups: mine, qs, from, to: qs.length ? next - 1 : -1, max, parts: qs.length ? parts : [] };
   });
   return { levels, number };
 }

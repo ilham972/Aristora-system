@@ -14832,6 +14832,27 @@ body.sb-on {
   margin: 8px 12px 2px;
 }
 
+/* A big skill's strips on the T page (23 Nov 2026): one chip a part (`.sb-parts` is a question's parts' skills). */
+.sb-strips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+.sb-strips span {
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  white-space: nowrap;
+}
+.sb-strips b {
+  color: var(--ink);
+  font-weight: 800;
+}
+
 /* ---- Share a unit's book to the printing shop (23 Nov 2026; src/printShare.tsx, the T page's Share button) ---- */
 .sb-share {
   flex: none;
@@ -14873,149 +14894,6 @@ body.sb-on {
   font-weight: 800;
   text-decoration: underline;
 }
-.prs-shops {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.prs-shop {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 6px 4px 4px;
-  border: 1.5px solid var(--line);
-  border-radius: 12px;
-  background: var(--card);
-}
-.prs-shop.on {
-  border-color: var(--ink);
-}
-.prs-pick {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 44px;
-  padding: 2px 4px;
-  border: 0;
-  background: none;
-  text-align: left;
-  color: var(--ink);
-}
-.prs-pick i {
-  flex: none;
-  width: 18px;
-  height: 18px;
-  border: 2px solid var(--ink-3);
-  border-radius: 50%;
-}
-.prs-shop.on .prs-pick i {
-  border-color: var(--ink);
-  box-shadow: inset 0 0 0 4px var(--card);
-  background: var(--ink);
-}
-.prs-pick span {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  line-height: 1.2;
-}
-.prs-pick b {
-  font-weight: 800;
-  font-size: 15px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.prs-pick small {
-  font-size: 13px;
-  color: var(--ink-3);
-}
-.prs-def {
-  flex: none;
-  padding: 2px 8px;
-  border-radius: 8px;
-  background: var(--ink);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 800;
-}
-.prs-mk {
-  flex: none;
-  height: 30px;
-  padding: 0 8px;
-  border: 1.5px solid var(--line);
-  border-radius: 15px;
-  background: var(--card);
-  color: var(--ink-2);
-  font-size: 12px;
-  font-weight: 700;
-}
-.prs-ed {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  border: 0;
-  border-radius: 17px;
-  background: var(--ground);
-  color: var(--ink-2);
-}
-.prs-add {
-  height: 44px;
-  border: 1.5px dashed var(--ink-3);
-  border-radius: 12px;
-  background: none;
-  color: var(--ink);
-  font-weight: 800;
-  font-size: 14px;
-}
-.prs-form {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px;
-  border: 1.5px solid var(--ink);
-  border-radius: 12px;
-  background: var(--card);
-}
-.prs-form-t {
-  margin: 0;
-  font-weight: 800;
-}
-.prs-form label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ink-2);
-}
-.prs-form input {
-  height: 44px;
-  padding: 0 10px;
-  border: 1.5px solid var(--line);
-  border-radius: 10px;
-  font-size: 16px;
-  color: var(--ink);
-  background: var(--card);
-}
-.prs-bad {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 700;
-  color: #b42318;
-}
-.prs-form-b {
-  display: flex;
-  gap: 8px;
-}
-.prs-rm {
-  margin-left: auto;
-  color: #b42318;
-}
 .prs-copies {
   display: flex;
   align-items: center;
@@ -15056,29 +14934,11 @@ body.sb-on {
   -webkit-appearance: none;
   margin: 0;
 }
-.prs-sides {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  margin-left: 4px;
-  border: 1.5px solid var(--line);
-  border-radius: 22px;
-  overflow: hidden;
-}
-.prs-sides button {
-  flex: 1;
-  min-width: 0;
-  height: 40px;
-  border: 0;
-  background: var(--card);
-  color: var(--ink-2);
+.prs-bad {
+  margin: 6px 0 0;
   font-size: 13px;
   font-weight: 700;
-  white-space: nowrap;
-}
-.prs-sides button.on {
-  background: var(--ink);
-  color: #fff;
+  color: #b42318;
 }
 .prs-msg {
   margin: 0;
@@ -15103,12 +14963,6 @@ body.sb-on {
 .prs-send {
   height: 50px;
   font-size: 16px;
-}
-.prs-chat {
-  align-self: center;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ink-2);
 }
 
 /* ---- A skill's videos on its T page (23 Nov 2026, src/videoShelf.tsx): under the open level's head ---- */

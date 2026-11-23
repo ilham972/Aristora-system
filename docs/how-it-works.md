@@ -2915,6 +2915,13 @@ learning app of our education institute"): one profile, his class times, what he
     - **The whole book runs on** (23 Nov 2026, his rule above): a level starts under the last one's strip, on the same
       page, never on a page of its own (the made-up unit of the run-through: 8 pages, not 10). The contents give the
       page where each level's band is.
+    - **A big skill in parts** (23 Nov 2026, his yes: "add marks strip if the skill is big"; `levelParts`): a level of
+      more than 25 marks is cut into parts of about 20 (the workbook's rule: a part closes at 20, or at 18–19 when the
+      next question would pass 20; never a question cut; a last part under 10 marks joins the one before), each with
+      its own strip: "Level 3·2 · பகுதி 2 / 4 · வினாக்கள் 41 – 50 · புள்ளிகள் [ ] / 20". The marks sheet has a box per
+      part; the T page shows the parts under the open level ("3·1 Q37–47 · 20"). A level up to 25 marks, or one whose
+      marks aren't all known, stays whole ("Level 3"). The level is still the skill; the part is what one correction
+      takes.
     - **One level alone** (23 Nov 2026): laid out on its own pages, numbered from 1, its questions keeping the whole
       book's numbers (Level 2 = Q12–36), no cover, contents or marks sheet. Until 23 Nov its pages were cut out of the
       whole book's (each level began a page then).
@@ -2939,25 +2946,21 @@ learning app of our education institute"): one profile, his class times, what he
       (Android's print window may still read it after `print()` returns). Files: "G8_U04_Skills_Book",
       "G8_U04_Skills_Level3". The toast also says how many questions aren't in the app as printed (a dash in their
       place).
-  - **Share to the printing shop** (23 Nov 2026, his words: "put the share button near the download button ...
-    automatically go inside the WhatsApp and automatically pick the printing center WhatsApp number ... I will put the
-    copy number, for example four ... as a caption ... sometime I have to change the printing shop ... set up the
-    default shop ... if the shop is closed, I can select another printing shop"; `src/printShare.tsx` `ShareSheet`,
-    `convex/lib/printShops.ts`, `skillBook.shops` / `skillBook.setShops`): the round Share button beside PDF (the
-    whole book). Its sheet makes the PDF as it opens ("✓ PDF ready · 32 pages"; Try again on an error). The
-    **printing shops**: a name and a WhatsApp number each, up to 10, one of them the **default** (picked when the
-    sheet opens; "Make default" on another), ✎ changes or removes one, "+ Add a printing shop" (the first one added is
-    the default); kept on the server (`meta` "printShops"; Books or the owner change them, every such phone sees the
-    same shops); a local number is read as Sri Lankan (077 123 4567 → +94 77 123 4567). **Copies** (− [4] +, 1–99)
-    and Both sides / One side, both remembered on this phone; the message as it will go: "Please print 4 copies — A4,
-    both sides." and "G8 U04 <the unit's Tamil name> · skill book · 32 pages". **Send to Rathna Print**: the phone's
-    share list with the PDF and the message; he taps WhatsApp, then the shop (WhatsApp keeps recent chats at the top),
-    then Send. The message is copied too (WhatsApp sometimes drops a shared file's text: he pastes it). A phone or
-    computer that can't share files: the PDF downloads and the shop's chat opens (`wa.me`) with the message, for him
-    to attach it. "Only open Rathna Print's chat" opens the chat alone. **What a website can't do**: choose the
-    WhatsApp chat itself and attach a file in one go (WhatsApp lets a site open a chat with text, or take a file from
-    the phone's share list, never both); sending with no taps at all would need WhatsApp's Business API (a Meta
-    business account, a number of its own, an approved message, a cost per message): not built.
+  - **Share to the printing shop** (23 Nov 2026, his words: "put the share button near the download button ... I will
+    put the copy number"; the same evening: "when I press the send button ... copy the clipboard also ... how many
+    copies ... the cost of the printing ... one paper is cost seven rupees ... I don't want any shop. Just send
+    button"; `src/printShare.tsx` `ShareSheet`, `src/printCost.ts`): the round Share button beside PDF (the whole
+    book). Its sheet makes the PDF as it opens ("✓ PDF ready · 32 pages"; Try again on an error); **copies** (− [4] +,
+    1–99, remembered on this phone; a tap on the box selects the number to type over it, an empty box sends nothing);
+    the message as it will go: "Please print 4 copies — A4, both sides." and the price worked out on the second line,
+    "32 pages → 16 papers × Rs. 7 × 4 copies = Rs. 448" (a paper = a sheet printed on both sides; an odd page count
+    takes one more page: 17 → 9 papers; `PAPER_RS` = 7, his shop's price). **Send · the message is copied**: the
+    message goes to the clipboard and the phone's share list opens with the PDF (and the message, which WhatsApp may
+    keep or drop); he taps WhatsApp, picks the shop, pastes the message as the caption and sends. A phone or computer
+    that can't share files: the PDF downloads and the message is copied. **What a website can't do**: choose the
+    WhatsApp chat itself and attach a file in one go; sending with no taps at all would need WhatsApp's Business API (a
+    Meta business account, a number of its own, an approved message, a cost per message): not built. The first version
+    (that afternoon) kept a list of shops with a default and a "chat only" link: he asked for them to go.
 - **A skill's videos** (23 Nov 2026, part 1 of his "big change": "each skill need to have the video ... before do the
   skill questions, they have to watch the video ... if we didn't put any video for the skill, then the map don't show
   ... around 2,000 videos ... it need to be easy [to migrate], not depend on Mux ... very fast and smooth like YouTube";

@@ -5124,6 +5124,8 @@ test("Skill book: Books → T on a tagged unit; Level n = skill n (S1+S2 inside 
     toc: { lv: string; pg: string }[];
     strips: string[];
     heads: string[];
+    pillsOf: string[];
+    sheet: string[];
     chips1: string | undefined;
     chips50: string | undefined;
     title: string;
@@ -5155,6 +5157,8 @@ test("Skill book: Books → T on a tagged unit; Level n = skill n (S1+S2 inside 
         toc: [...root.querySelectorAll<HTMLElement>(".sbx-inside .toc-r[data-lv]")].map((r) => ({ lv: r.dataset.lv!, pg: r.querySelector(".pg")?.textContent ?? "" })),
         strips: [...root.querySelectorAll(".lvq")].map((x) => x.textContent ?? ""),
         heads: [...root.querySelectorAll(".sbx-grp")].map((x) => x.textContent ?? ""),
+        pillsOf: [...root.querySelectorAll(".lvl .lvn")].map((x) => x.textContent ?? ""),
+        sheet: [...root.querySelectorAll(".msh td em")].map((x) => x.textContent ?? ""),
         chips1: root.querySelector(".si .sbk-sks")?.textContent ?? undefined,
         chips50: [...root.querySelectorAll(".sbx-col > *")].find((e) => e.querySelector(".qn")?.textContent === "50")?.querySelector(".sbk-sks")?.textContent ?? undefined,
         title: document.title,
@@ -5177,7 +5181,20 @@ test("Skill book: Books → T on a tagged unit; Level n = skill n (S1+S2 inside 
   expect(body.flatMap((p) => p.bands)).toContain("mid");
   // The side tab says the level a page starts with.
   for (const p of body) expect(p.tab).toBe(p.level ?? "");
-  expect(book.strips).toEqual(["வினாக்கள் 1 – 11", "வினாக்கள் 12 – 36", "வினாக்கள் 37 – 57"]);
+  // A big skill is corrected part by part (23 Nov 2026, his yes): a strip every ~20 marks, named "2·1" as Correction says.
+  // Level 2 = 25 short questions (50 marks): 20 + 20 + 10. Level 3 = 74 marks of cards: 20-ish parts, never a card cut.
+  expect(book.strips).toEqual([
+    "வினாக்கள் 1 – 11",
+    "பகுதி 1 / 3 · வினாக்கள் 12 – 21",
+    "பகுதி 2 / 3 · வினாக்கள் 22 – 31",
+    "பகுதி 3 / 3 · வினாக்கள் 32 – 36",
+    "பகுதி 1 / 4 · வினாக்கள் 37 – 47",
+    "பகுதி 2 / 4 · வினாக்கள் 48 – 52",
+    "பகுதி 3 / 4 · வினாக்கள் 53 – 55",
+    "பகுதி 4 / 4 · வினாக்கள் 56 – 57",
+  ]);
+  expect(book.pillsOf).toEqual(["Level 1", "Level 2·1", "Level 2·2", "Level 2·3", "Level 3·1", "Level 3·2", "Level 3·3", "Level 3·4"]);
+  expect(book.sheet).toEqual(book.pillsOf);
   // A joined group's heading: its skills as a badge, no names (the cover has them).
   expect(book.heads).toEqual(["S1 + S2", "S1 + S3", "S2 + S3"]);
   // The contents give the page of each level's band and the marks sheet's.
@@ -5241,84 +5258,58 @@ test("Skill book: Books → T on a tagged unit; Level n = skill n (S1+S2 inside 
   await visible(C.locator(".toast", { hasText: `G7_U08_Skills_Book.pdf · ${made.pages} pages: in your downloads.` }));
   expect(await C.evaluate(() => (window as unknown as { __printed: number }).__printed)).toBe(2);
 
-  // Share: to the printing shop's WhatsApp, the copies as the message (his ask, 23 Nov 2026).
+  // Share (23 Nov 2026, his second ask): Send copies the copies and the price, then the phone's share list (WhatsApp →
+  // the shop he picks there). No shop list, no chat link.
   await C.evaluate(() => {
-    const w = window as unknown as { __shared: unknown[]; __opened: string[] };
+    const w = window as unknown as { __shared: unknown[]; __copied: string[] };
     w.__shared = [];
-    w.__opened = [];
+    w.__copied = [];
     Object.assign(navigator, {
       canShare: () => true,
       share: async (d: { files: File[]; text: string }) => {
         w.__shared.push({ files: d.files.map((f) => [f.name, f.type, f.size > 0]), text: d.text });
       },
     });
-    window.open = ((url: string) => {
-      w.__opened.push(url);
-      return null;
-    }) as typeof window.open;
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (t: string) => void w.__copied.push(t) } });
   });
   await P.getByRole("button", { name: "Send the whole book to the printing shop" }).click();
   const Sh = C.locator(".sheet");
   await contains(Sh, "Send to the printing shop");
   await contains(Sh.locator(".prs-state"), `✓ PDF ready · ${made.pages} pages`);
-  // No shop yet: its form is open.
-  await contains(Sh.locator(".prs-form"), "Your printing shop");
-  expect(await Sh.getByRole("button", { name: "Add a shop first" }).isDisabled()).toBe(true);
-  await Sh.getByLabel("Shop name").fill("Rathna Print");
-  await Sh.getByLabel("WhatsApp number").fill("077 123");
-  await contains(Sh.locator(".prs-bad"), "Type the number like 077 123 4567");
-  await Sh.getByLabel("WhatsApp number").fill("077 123 4567");
-  await Sh.getByRole("button", { name: "Save" }).click();
-  await contains(Sh.locator(".prs-shop"), "+94 77 123 4567");
-  await contains(Sh.locator(".prs-shop"), "Default");
-  await Sh.getByRole("button", { name: "+ Add a printing shop" }).click();
-  await Sh.getByLabel("Shop name").fill("Lanka Copy");
-  await Sh.getByLabel("WhatsApp number").fill("+94 71 987 6543");
-  await Sh.getByRole("button", { name: "Save" }).click();
-  await count(Sh.locator(".prs-shop"), 2);
-  const saved = await backend.t.query(api.skillBook.shops, { token: OWNER_TOKEN });
-  expect(saved.shops.map((x) => [x.name, x.phone])).toEqual([
-    ["Rathna Print", "94771234567"],
-    ["Lanka Copy", "94719876543"],
-  ]);
-  expect(saved.def).toBe(saved.shops[0].id);
-  // Four copies, both sides, to the default shop.
+  await count(Sh.locator(".prs-shop, .prs-form, .prs-chat, .prs-sides"), 0);
   for (let i = 0; i < 3; i++) await Sh.getByRole("button", { name: "One copy more" }).click();
-  await Sh.getByRole("radio", { name: /Rathna Print/ }).click();
-  const caption = `Please print 4 copies — A4, both sides.\nG7 U08 ${await P.locator(".sb-title span").innerText()} · skill book · ${made.pages} pages`;
+  const papers = Math.ceil(made.pages / 2);
+  const caption = `Please print 4 copies — A4, both sides.\n${made.pages} pages → ${papers} papers × Rs. 7 × 4 copies = Rs. ${papers * 7 * 4}`;
   expect(await Sh.locator(".prs-msg").innerText()).toBe(caption);
   await shot(C, "sb07-share-sheet");
   await C.setViewportSize({ width: 320, height: 640 });
   expect(await C.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await shot(C, "sb07b-share-sheet-320");
   await C.setViewportSize({ width: 390, height: 844 });
-  await Sh.getByRole("button", { name: "Send to Rathna Print" }).click();
-  await visible(C.locator(".toast", { hasText: "Sent to the share list: pick WhatsApp → Rathna Print." }));
+  await Sh.getByRole("button", { name: "Send · the message is copied" }).click();
+  await visible(C.locator(".toast", { hasText: "The message is copied: in WhatsApp pick the shop, then paste it as the caption." }));
   await count(C.locator(".sheet"), 0);
   expect(await C.evaluate(() => (window as unknown as { __shared: unknown[] }).__shared)).toEqual([{ files: [["G7_U08_Skills_Book.pdf", "application/pdf", true]], text: caption }]);
-  // Another shop as the default; the copies remembered; a computer (no sharing of files): the file downloaded and the
-  // default shop's chat opened with the message.
+  expect(await C.evaluate(() => (window as unknown as { __copied: string[] }).__copied)).toEqual([caption]);
+  // Again: the copies remembered; the box can be cleared to type a number (it never jumps back to 1), nothing goes
+  // without one; a computer (no sharing of files) gets the file, the message copied.
   await P.getByRole("button", { name: "Send the whole book to the printing shop" }).click();
-  await Sh.locator(".prs-shop", { hasText: "Lanka Copy" }).getByRole("button", { name: "Make default" }).click();
-  await until(async () => (await backend.t.query(api.skillBook.shops, { token: OWNER_TOKEN })).def === saved.shops[1].id, "Lanka Copy the default");
   expect(await Sh.getByLabel("Copies").inputValue()).toBe("4");
+  // As on a phone: a tap selects the number, Backspace empties the box (it stays empty), then the keys type 12.
+  await Sh.getByLabel("Copies").click();
+  await Sh.getByLabel("Copies").press("Backspace");
+  await visible(Sh.locator(".prs-bad", { hasText: "Copies: a number from 1 to 99." }));
+  expect(await Sh.getByLabel("Copies").inputValue()).toBe("");
+  expect(await Sh.getByRole("button", { name: "Send · the message is copied" }).isDisabled()).toBe(true);
+  await Sh.getByLabel("Copies").pressSequentially("12");
+  expect(await Sh.getByLabel("Copies").inputValue()).toBe("12");
+  await contains(Sh.locator(".prs-msg"), `Please print 12 copies — A4, both sides.\n${made.pages} pages → ${papers} papers × Rs. 7 × 12 copies = Rs. ${papers * 7 * 12}`);
   await C.evaluate(() => Object.assign(navigator, { canShare: () => false }));
   const dl2 = C.waitForEvent("download");
-  await Sh.getByRole("button", { name: "Send to Lanka Copy" }).click();
+  await Sh.getByRole("button", { name: "Send · the message is copied" }).click();
   expect((await dl2).suggestedFilename()).toBe("G7_U08_Skills_Book.pdf");
-  expect(await C.evaluate(() => (window as unknown as { __opened: string[] }).__opened)).toEqual([`https://wa.me/94719876543?text=${encodeURIComponent(caption)}`]);
-  // The copies box can be cleared to type a number (it never jumps back to 1); nothing goes without a number.
-  await Sh.getByLabel("Copies").fill("");
-  await visible(Sh.locator(".prs-bad", { hasText: "Copies: a number from 1 to 99." }));
-  expect(await Sh.getByRole("button", { name: "Send to Lanka Copy" }).isDisabled()).toBe(true);
-  await Sh.getByLabel("Copies").fill("12");
-  await contains(Sh.locator(".prs-msg"), "Please print 12 copies — A4, both sides.");
-  expect(await Sh.getByRole("button", { name: "Send to Lanka Copy" }).isDisabled()).toBe(false);
-  // A shop removed: the other one is the default again.
-  await Sh.getByRole("button", { name: "Change Lanka Copy" }).click();
-  await Sh.getByRole("button", { name: "Remove" }).click();
-  await count(Sh.locator(".prs-shop"), 1);
-  expect((await backend.t.query(api.skillBook.shops, { token: OWNER_TOKEN })).def).toBe(saved.shops[0].id);
+  await visible(C.locator(".toast", { hasText: "The PDF is in your downloads and the message is copied" }));
+  expect((await C.evaluate(() => (window as unknown as { __copied: string[] }).__copied)).at(-1)).toContain("Please print 12 copies");
   await Sh.getByRole("button", { name: "Close" }).click();
 
   // Back closes the page and takes the book off it.

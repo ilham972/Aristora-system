@@ -1,42 +1,20 @@
-// Send a unit's book to the printing shop (23 Nov 2026, the founder: "put the share button near the download button
-// ... that will show the dialog ... I will put the copy number ... four copies as a caption ... automatically pick the
-// printing center WhatsApp number ... sometime if the shop is closed, I can select another printing shop"). The sheet
-// from the T page's Share button: the PDF is made by the server as the sheet opens (api/pdf.mjs; a web page never gets
-// the bytes of Chrome's own "Save as PDF"), he picks the shop (the default one already picked), the copies and one or
-// both sides, and Send hands the file and the message to the phone's share list: WhatsApp → the shop → Send. A website
-// can give WhatsApp a file only through that list (no website can choose the chat as well): the shop's chat is usually
-// at the top of the list after the first time. The message is also copied, for when WhatsApp drops a file's caption.
-// Shops (names and WhatsApp numbers, one the default) are kept for everyone with Books (convex/lib/printShops.ts).
+// Send a unit's book to the printing shop (23 Nov 2026, the founder: "when I press the send button, not only open the
+// WhatsApp, at the same time copy the clipboard ... how many copies I want ... the cost of the printing ... I will pick
+// the shop owner in the WhatsApp ... I don't want any shop. Just send button"). The sheet from the T page's Share
+// button: the PDF is made by the server as the sheet opens (api/pdf.mjs; a web page never gets the bytes of Chrome's
+// own "Save as PDF"), he sets the copies, and Send copies the message (the copies and the price, src/printCost.ts) and
+// hands the PDF to the phone's share list: WhatsApp → the shop → paste the message as the caption → Send. No website
+// can choose a WhatsApp chat and attach a file at once, so the shop is his tap in WhatsApp.
 
 import { useEffect, useState } from "preact/hooks";
-import { api } from "../convex/_generated/api";
-import { COPIES_MAX, phoneDigits, phoneShown, SHOP_NAME_MAX, SHOPS_MAX, shareCaption, waLink, type PrintShop, type PrintShops } from "../convex/lib/printShops";
-import { mutate } from "./backend";
-import { useQuery } from "./live";
-import { act, toast } from "./store";
+import { COPIES_MAX, shareCaption } from "./printCost";
+import { toast } from "./store";
 import { Sheet } from "./ui";
 
 /** A PDF the server made: the file, its pages, whether the book's fonts came, questions not in the app as printed. */
 export type MadePdf = { blob: Blob; pages: number; fonts: boolean; missing: number; file: string };
 
 const COPIES_KEY = "aristora.printCopies";
-const BOTH_KEY = "aristora.printBoth";
-
-function remembered(key: string): string | null {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function remember(key: string, value: string) {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    /* private mode */
-  }
-}
 
 /** Gives the phone a file to save (the PDF), as a download. */
 export function saveFile(blob: Blob, name: string) {
@@ -51,23 +29,55 @@ export function saveFile(blob: Blob, name: string) {
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
-export function ShareSheet(props: { grade: number; code: string; ta: string; level: number | null; make: () => Promise<MadePdf>; onClose: () => void }) {
-  const list = useQuery<PrintShops>(api.skillBook.shops, {});
+/**
+ * Copies text inside the tap itself: the old way first (it finishes before the share list takes the screen, where an
+ * async clipboard write can be refused as "not focused"), then the clipboard API as well. False = neither could.
+ */
+function copyNow(text: string): boolean {
+  let ok = false;
+  try {
+    const t = document.createElement("textarea");
+    t.value = text;
+    t.readOnly = true;
+    t.style.cssText = "position:fixed;top:0;left:-9999px;font-size:16px;opacity:0";
+    document.body.appendChild(t);
+    t.select();
+    t.setSelectionRange(0, text.length);
+    ok = document.execCommand("copy");
+    t.remove();
+  } catch {
+    ok = false;
+  }
+  try {
+    void navigator.clipboard?.writeText(text).catch(() => {});
+    ok = ok || !!navigator.clipboard;
+  } catch {
+    /* no clipboard API */
+  }
+  return ok;
+}
+
+export function ShareSheet(props: { grade: number; code: string; level: number | null; make: () => Promise<MadePdf>; onClose: () => void }) {
   const [made, setMade] = useState<MadePdf | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
-  const [pick, setPick] = useState<string | null>(null);
-  const [copies, setCopies] = useState(() => Math.min(Math.max(Number(remembered(COPIES_KEY)) || 1, 1), COPIES_MAX));
-  const [both, setBoth] = useState(() => remembered(BOTH_KEY) !== "0");
-  const [edit, setEdit] = useState<PrintShop | "new" | null>(null);
-  const [sending, setSending] = useState(false);
+  const [copies, setCopies] = useState(() => {
+    let n = 1;
+    try {
+      n = Number(localStorage.getItem(COPIES_KEY)) || 1;
+    } catch {
+      /* private mode */
+    }
+    return Math.min(Math.max(n, 1), COPIES_MAX);
+  });
   /** What he is typing in the copies box, until he leaves it (so clearing it to type 4 doesn't jump back to 1). */
   const [typed, setTyped] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
   const typedN = typed === null ? copies : Number(typed);
-  const typedOk = Number.isInteger(typedN) && typedN >= 1 && typedN <= COPIES_MAX;
+  const copiesOk = Number.isInteger(typedN) && typedN >= 1 && typedN <= COPIES_MAX;
 
-  // The PDF starts as the sheet opens: by the time the shop and the copies are picked it is usually ready, and Send
-  // must share at once (a phone allows sharing only right after a tap).
+  // The PDF starts as the sheet opens: by the time the copies are set it is usually ready, and Send must share at once
+  // (a phone allows sharing only inside the tap).
   useEffect(() => {
     let live = true;
     setErr(null);
@@ -80,35 +90,29 @@ export function ShareSheet(props: { grade: number; code: string; ta: string; lev
     };
   }, [attempt]);
 
-  const shops = list?.shops ?? [];
-  const chosen = shops.find((s) => s.id === (pick ?? list?.def)) ?? shops[0];
-  const caption = shareCaption({ copies, both, grade: props.grade, code: props.code, ta: props.ta, level: props.level, pages: made?.pages ?? 0 });
+  const caption = made ? shareCaption(copies, made.pages) : "";
   const what = props.level === null ? "the whole book" : `Level ${props.level}`;
-
-  const save = async (next: PrintShops) => {
-    const r = await act(() => mutate(api.skillBook.setShops, { shops: next.shops, def: next.def }));
-    return r !== undefined;
+  const step = (d: number) => {
+    setTyped(null);
+    setCopies((c) => Math.min(COPIES_MAX, Math.max(1, c + d)));
   };
 
-  // Nothing is awaited before the share: a phone allows sharing (and the chat's window) only inside the tap itself
-  // (Safari strictly; an await before it gave "NotAllowedError").
+  // Nothing is awaited before the share: a phone allows sharing only inside the tap itself.
   const send = () => {
-    if (!made || !chosen || sending || !typedOk) return;
-    remember(COPIES_KEY, String(copies));
-    remember(BOTH_KEY, both ? "1" : "0");
+    if (!made || sending || !copiesOk) return;
     try {
-      // The message to the clipboard too, for when WhatsApp leaves out a shared file's text.
-      void navigator.clipboard?.writeText(caption).catch(() => {});
+      localStorage.setItem(COPIES_KEY, String(copies));
     } catch {
-      /* no clipboard: the message still goes with the file */
+      /* private mode */
     }
+    const copied = copyNow(caption);
     const file = new File([made.blob], `${made.file}.pdf`, { type: "application/pdf" });
     if (navigator.canShare?.({ files: [file] })) {
       setSending(true);
       navigator
         .share({ files: [file], text: caption, title: made.file })
         .then(() => {
-          toast(`Sent to the share list: pick WhatsApp → ${chosen.name}. The message is copied too.`, "info");
+          toast(copied ? "The message is copied: in WhatsApp pick the shop, then paste it as the caption." : "In WhatsApp pick the shop, then type the copies as the caption.", "info");
           props.onClose();
         })
         .catch((e: unknown) => {
@@ -116,10 +120,9 @@ export function ShareSheet(props: { grade: number; code: string; ta: string; lev
         })
         .finally(() => setSending(false));
     } else {
-      // A computer: the file to its downloads, and the shop's chat with the message typed (attach the file there).
+      // A computer: the file to its downloads, the message copied (attach the file in WhatsApp and paste).
       saveFile(made.blob, `${made.file}.pdf`);
-      window.open(waLink(chosen.phone, caption), "_blank", "noopener");
-      toast(`The PDF is in your downloads: attach it in ${chosen.name}'s chat.`, "info");
+      toast(`The PDF is in your downloads${copied ? " and the message is copied" : ""}: attach it in the shop's WhatsApp chat.`, "info");
     }
   };
 
@@ -131,14 +134,9 @@ export function ShareSheet(props: { grade: number; code: string; ta: string; lev
       cls="prs-sheet"
       foot={
         <div class="prs-foot">
-          <button type="button" class="btn primary prs-send" disabled={!made || !chosen || sending || !typedOk} onClick={send}>
-            {!made ? (err ? "No PDF" : "Making the PDF…") : chosen ? `Send to ${chosen.name}` : "Add a shop first"}
+          <button type="button" class="btn primary prs-send" disabled={!made || sending || !copiesOk} onClick={send}>
+            {made ? "Send · the message is copied" : err ? "No PDF" : "Making the PDF…"}
           </button>
-          {chosen && (
-            <a class="prs-chat" href={waLink(chosen.phone, caption)} target="_blank" rel="noopener">
-              Only open {chosen.name}'s chat
-            </a>
-          )}
         </div>
       }
     >
@@ -157,80 +155,9 @@ export function ShareSheet(props: { grade: number; code: string; ta: string; lev
         )}
       </p>
 
-      <h3 class="block-title">Printing shop</h3>
-      {list === undefined ? (
-        <p class="muted small">Loading…</p>
-      ) : (
-        <div class="prs-shops" role="radiogroup" aria-label="Printing shop">
-          {shops.map((s) => (
-            <div key={s.id} class={`prs-shop${chosen?.id === s.id ? " on" : ""}`}>
-              <button type="button" role="radio" aria-checked={chosen?.id === s.id} class="prs-pick" onClick={() => setPick(s.id)}>
-                <i aria-hidden="true" />
-                <span>
-                  <b>{s.name}</b>
-                  <small>{phoneShown(s.phone)}</small>
-                </span>
-              </button>
-              {list.def === s.id ? (
-                <span class="prs-def">Default</span>
-              ) : (
-                <button type="button" class="prs-mk" onClick={() => void save({ shops, def: s.id })}>
-                  Make default
-                </button>
-              )}
-              <button type="button" class="prs-ed" aria-label={`Change ${s.name}`} onClick={() => setEdit(s)}>
-                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-                  <path d="M4 20h4L19 9l-4-4L4 16v4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
-                </svg>
-              </button>
-            </div>
-          ))}
-          {edit === null && shops.length < SHOPS_MAX && (
-            <button type="button" class="prs-add" onClick={() => setEdit("new")}>
-              + Add a printing shop
-            </button>
-          )}
-          {(edit !== null || shops.length === 0) && (
-            <ShopForm
-              shop={edit === "new" || edit === null ? null : edit}
-              onCancel={shops.length ? () => setEdit(null) : undefined}
-              onSave={async (name, phone) => {
-                const id = edit && edit !== "new" ? edit.id : `s${Date.now().toString(36)}`;
-                const next = edit && edit !== "new" ? shops.map((x) => (x.id === id ? { id, name, phone } : x)) : [...shops, { id, name, phone }];
-                const ok = await save({ shops: next, def: list.def ?? id });
-                if (ok) {
-                  setEdit(null);
-                  setPick(id);
-                }
-              }}
-              onRemove={
-                edit && edit !== "new"
-                  ? async () => {
-                      const next = shops.filter((x) => x.id !== edit.id);
-                      if (await save({ shops: next, def: list.def === edit.id ? (next[0]?.id ?? null) : list.def })) {
-                        setEdit(null);
-                        setPick(null);
-                      }
-                    }
-                  : undefined
-              }
-            />
-          )}
-        </div>
-      )}
-
       <h3 class="block-title">Copies</h3>
       <div class="prs-copies">
-        <button
-          type="button"
-          class="prs-step"
-          aria-label="One copy less"
-          disabled={copies <= 1}
-          onClick={() => {
-            setTyped(null);
-            setCopies((c) => Math.max(1, c - 1));
-          }}
-        >
+        <button type="button" class="prs-step" aria-label="One copy less" disabled={copies <= 1} onClick={() => step(-1)}>
           −
         </button>
         <input
@@ -240,7 +167,7 @@ export function ShareSheet(props: { grade: number; code: string; ta: string; lev
           max={COPIES_MAX}
           value={typed ?? String(copies)}
           aria-label="Copies"
-          class={typedOk ? "" : "bad"}
+          class={copiesOk ? "" : "bad"}
           onFocus={(e) => (e.target as HTMLInputElement).select()}
           onInput={(e) => {
             const v = (e.target as HTMLInputElement).value;
@@ -250,84 +177,15 @@ export function ShareSheet(props: { grade: number; code: string; ta: string; lev
           }}
           onBlur={() => setTyped(null)}
         />
-        <button
-          type="button"
-          class="prs-step"
-          aria-label="One copy more"
-          disabled={copies >= COPIES_MAX}
-          onClick={() => {
-            setTyped(null);
-            setCopies((c) => Math.min(COPIES_MAX, c + 1));
-          }}
-        >
+        <button type="button" class="prs-step" aria-label="One copy more" disabled={copies >= COPIES_MAX} onClick={() => step(1)}>
           +
         </button>
-        <div class="prs-sides" role="group" aria-label="Sides">
-          <button type="button" class={both ? "on" : ""} aria-pressed={both} onClick={() => setBoth(true)}>
-            Both sides
-          </button>
-          <button type="button" class={both ? "" : "on"} aria-pressed={!both} onClick={() => setBoth(false)}>
-            One side
-          </button>
-        </div>
       </div>
+      {!copiesOk && <p class="prs-bad">Copies: a number from 1 to {COPIES_MAX}.</p>}
 
-      {!typedOk && <p class="prs-bad">Copies: a number from 1 to {COPIES_MAX}.</p>}
-      <h3 class="block-title">The message with the PDF</h3>
-      <p class="prs-msg">{caption}</p>
-      <p class="muted small prs-hint">Send opens the phone's share list: tap WhatsApp, then {chosen ? chosen.name : "the shop"}. The message is copied too, in case WhatsApp leaves it out.</p>
+      <h3 class="block-title">The message (copied when you tap Send)</h3>
+      {made ? <p class="prs-msg">{caption}</p> : <p class="muted small">It shows the price once the PDF is ready.</p>}
+      <p class="muted small prs-hint">Send opens the phone's share list: tap WhatsApp, pick the shop, paste the message as the caption, then send.</p>
     </Sheet>
-  );
-}
-
-function ShopForm(props: { shop: PrintShop | null; onSave: (name: string, phone: string) => Promise<void>; onCancel?: () => void; onRemove?: () => Promise<void> }) {
-  const [name, setName] = useState(props.shop?.name ?? "");
-  const [phone, setPhone] = useState(props.shop ? `+${props.shop.phone}` : "");
-  const [busy, setBusy] = useState(false);
-  const digits = phoneDigits(phone);
-  const ok = name.trim().length > 0 && name.trim().length <= SHOP_NAME_MAX && digits !== null;
-  return (
-    <form
-      class="prs-form"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (!ok || busy || !digits) return;
-        setBusy(true);
-        void props.onSave(name.trim(), digits).finally(() => setBusy(false));
-      }}
-    >
-      <p class="prs-form-t">{props.shop ? `Change ${props.shop.name}` : "Your printing shop"}</p>
-      <label>
-        Shop name
-        <input type="text" value={name} maxLength={SHOP_NAME_MAX} placeholder="e.g. Rathna Communication" onInput={(e) => setName((e.target as HTMLInputElement).value)} />
-      </label>
-      <label>
-        WhatsApp number
-        <input type="tel" inputMode="tel" value={phone} placeholder="077 123 4567" onInput={(e) => setPhone((e.target as HTMLInputElement).value)} />
-      </label>
-      {phone.trim() !== "" && digits === null && <p class="prs-bad">Type the number like 077 123 4567, or with the country: +94 77 123 4567.</p>}
-      <div class="prs-form-b">
-        <button type="submit" class="btn primary" disabled={!ok || busy}>
-          Save
-        </button>
-        {props.onCancel && (
-          <button type="button" class="btn" onClick={props.onCancel}>
-            Cancel
-          </button>
-        )}
-        {props.onRemove && (
-          <button
-            type="button"
-            class="btn prs-rm"
-            onClick={() => {
-              setBusy(true);
-              void props.onRemove?.().finally(() => setBusy(false));
-            }}
-          >
-            Remove
-          </button>
-        )}
-      </div>
-    </form>
   );
 }

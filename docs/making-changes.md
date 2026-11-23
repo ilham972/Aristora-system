@@ -522,7 +522,11 @@ SIZE=200 NAMES=family:me,chat:room npx vitest run -c vitest.scale.config.ts test
     that expects one takes exactly that line off `problems` (`took503` in "Skill book").
   - Sharing a file (`navigator.share({ files })`) needs his tap a moment before: the Share sheet makes the PDF when
     it opens, so Send shares at once (a file fetched after the tap loses it: Android refuses with NotAllowedError).
-    The Web Share API never picks the app or the chat: the phone's share list does.
+    Nothing is awaited before `share()`. The message is copied in the same tap with `document.execCommand("copy")`
+    first (it finishes before the share list takes the screen; an async `clipboard.writeText` can then be refused as
+    "Document is not focused"), the clipboard API after it. The Web Share API never picks the app or the chat: the
+    phone's share list does. In a run-through, type into a number box as a phone does (`click`, `press("Backspace")`,
+    `pressSequentially`): Playwright's `fill("")` on it sometimes left the old number.
 
 - **A new book engine's print furniture must leave the phone** (18 Nov 2026, the Sakarath books): the family paper
   hides each engine's own numbering and decoration (`.qn`, `.pm`, `.mk` for workbooks; `.sn`, `.qsep` and half-width

@@ -5,7 +5,8 @@
 import { describe, expect, test } from "vitest";
 import { outOf } from "../convex/lib/book";
 import type { MState } from "../convex/lib/master";
-import { byGroup, groupLabel, hardness, keepExamples, levelSkillOf, moveTo, needs, ownSkills, skillGroups, skillLabel, skillLevels, STAT_MIN, statsOf, type QStat } from "../convex/lib/skillBook";
+import { byGroup, groupLabel, hardness, keepExamples, levelParts, levelSkillOf, moveTo, needs, ownSkills, partName, PART_WHOLE_MAX, skillGroups, skillLabel, skillLevels, STAT_MIN, statsOf, type QStat } from "../convex/lib/skillBook";
+import type { MasterData } from "../convex/lib/book";
 import { skillId, skillsProblem, type KnownSkill, type Skill, type SkillTag } from "../convex/lib/skills";
 import { readWorkbookHtml } from "../src/workbookFile";
 import U01 from "./fixtures/workbook-g8-u01.html?raw";
@@ -168,5 +169,54 @@ describe("a unit's book by skill", () => {
     expect(st.get(lv1.to + 1)).toBeUndefined();
     const free = statsOf({ ...BOOK, free: [1] }, [m({})]);
     expect(free.get(1)).toBeUndefined();
+  });
+});
+
+describe("a big skill's parts (23 Nov 2026: a strip every ~20 marks)", () => {
+  // Part I 1–30 (2 marks each), Part II 31–40 with their marks.
+  const data: MasterData = {
+    kind: "master",
+    parts: [
+      { id: "I", from: 1, to: 30, kind: "short", each: 2 },
+      { id: "II", from: 31, to: 40, kind: "cards" },
+    ],
+    levels: [{ n: 1, from: 1, to: 40, max: 120 }],
+    marks: { "31": 5, "32": 6, "33": 7, "34": 4, "35": 8, "36": 6, "37": 3, "38": 3, "39": 2, "40": 16 },
+  };
+  const qs = (a: number, b: number) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
+  const sizes = (ps: { qs: number[]; max: number | null }[]) => ps.map((p) => [p.qs.length, p.max]);
+
+  test("a level of up to 25 marks stays whole", () => {
+    expect(PART_WHOLE_MAX).toBe(25);
+    expect(sizes(levelParts(data, qs(1, 12)))).toEqual([[12, 24]]);
+  });
+
+  test("25 short questions (50 marks): 20 + 20 + 10; a last part under 10 joins the one before", () => {
+    expect(sizes(levelParts(data, qs(1, 25)))).toEqual([[10, 20], [10, 20], [5, 10]]);
+    expect(sizes(levelParts(data, qs(1, 14)))).toEqual([[14, 28]]); // 20 + 8: the 8 joins
+  });
+
+  test("cards: closes at 18–19 when the next would pass 20, at 20 or more when one does; never cuts a question", () => {
+    // 5 6 7 | 4 8 6 | 3 3 2 16: 18, then 18, then 24 (16 takes it past 20)
+    expect(sizes(levelParts(data, qs(31, 40)))).toEqual([[3, 18], [3, 18], [4, 24]]);
+  });
+
+  test("a question's marks unknown: one part, its marks unknown", () => {
+    const blind: MasterData = { ...data, marks: {} };
+    expect(sizes(levelParts(blind, qs(31, 40)))).toEqual([[10, null]]);
+  });
+
+  test("names: the level alone, or level·part", () => {
+    expect([partName(3, 1, 1), partName(3, 2, 4)]).toEqual(["3", "3·2"]);
+  });
+
+  test("skillLevels gives each level its parts in the book's numbers", () => {
+    const { levels } = skillLevels(UNIT, BOOK, tags(), SKILLS.map((x) => x.id));
+    for (const l of levels.filter((x) => x.qs.length)) {
+      expect(l.parts.flatMap((p) => p.qs)).toEqual(l.qs);
+      expect(l.parts[0].from).toBe(l.from);
+      expect(l.parts[l.parts.length - 1].to).toBe(l.to);
+      if (l.max !== null) expect(l.parts.reduce((a, p) => a + (p.max ?? 0), 0)).toBe(l.max);
+    }
   });
 });
