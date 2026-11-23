@@ -32,12 +32,22 @@ def printed_pages(pdf: str, n: int, footer: str) -> dict[int, int]:
     for p in range(1, n + 1):
         text = subprocess.run(["pdftotext", "-layout", "-f", str(p), "-l", str(p), pdf, "-"], capture_output=True, text=True).stdout
         lines = [l for l in text.splitlines() if l.strip()]
+        if not lines:
+            continue
+        num = None
         for line in reversed(lines[-3:]):
             if footer in line:
                 nums = re.findall(r"\b(\d{1,3})\b", line)
                 if nums:
-                    out[p] = int(nums[-1] if line.strip().endswith(nums[-1]) else nums[0])
+                    num = int(nums[-1] if line.strip().endswith(nums[-1]) else nums[0])
                 break
+        if num is None:
+            # Some volumes print the number alone, with no words beside it (Grade 9 Part I).
+            last = lines[-1].strip()
+            if re.fullmatch(r"\d{1,3}", last):
+                num = int(last)
+        if num is not None:
+            out[p] = num
     return out
 
 

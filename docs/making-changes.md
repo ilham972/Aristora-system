@@ -158,12 +158,16 @@ stay in the scratchpad (keep them out of the repo); only the scripts and the pag
 ```bash
 cd /home/claude/aristora-system
 python3 scripts/gov/split.py <volume-I.pdf> scripts/gov/g8-i.json  $SCR/gov    # one <unit key>.pdf each + manifest.json
-python3 scripts/gov/split.py <volume-II.pdf> scripts/gov/g8-ii.json $SCR/gov   # the second volume into the same folder
+python3 scripts/gov/split.py <volume-II.pdf> scripts/gov/g8-ii.json $SCR/gov   # every volume of a grade into the same folder
+# Grade 9 is three volumes: scripts/gov/g9-i.json, g9-ii.json, g9-iii.json
 export ARISTORA_LINK="ARISTORA-LINK name.key"                                   # his code, in the shell only
 node /opt/npm-tools/node_modules/tsx/dist/cli.mjs scripts/gov/upload.ts $SCR/gov        # every unit that is new
 node /opt/npm-tools/node_modules/tsx/dist/cli.mjs scripts/gov/upload.ts $SCR/gov G8-U07 # or named units only
 ```
 
+- **The footer is read two ways** (`printed_pages`): the words beside the number ("இலவசப் பாடநூல் 17", Grade 8), or,
+  when a volume prints the number alone on the last line (Grade 9 Part I), that number. A page whose footer has
+  neither takes its neighbour's number plus one.
 - **Cut by the PRINTED page number, never the pdf page.** A volume he uploads is often not whole: Grade 8 Part I is
   missing printed 93–104 (unit 7 காரணிகள்) and keeps printed 136–139 at the end of the file, out of order. `split.py`
   reads the number off every page's footer, fills a page whose footer has none from its neighbour, and skips a unit
