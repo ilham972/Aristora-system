@@ -1,0 +1,74 @@
+[
+ {
+  "key": "G7-U01",
+  "first": 1,
+  "last": 13,
+  "source": "Grade 7 maths, Part I, unit 1"
+ },
+ {
+  "key": "G7-U02",
+  "first": 14,
+  "last": 22,
+  "source": "Grade 7 maths, Part I, unit 2"
+ },
+ {
+  "key": "G7-U03",
+  "first": 23,
+  "last": 32,
+  "source": "Grade 7 maths, Part I, unit 3"
+ },
+ {
+  "key": "G7-U04",
+  "first": 33,
+  "last": 58,
+  "source": "Grade 7 maths, Part I, unit 4"
+ },
+ {
+  "key": "G7-U05",
+  "first": 59,
+  "last": 66,
+  "source": "Grade 7 maths, Part I, unit 5"
+ },
+ {
+  "key": "G7-U06",
+  "first": 67,
+  "last": 80,
+  "source": "Grade 7 maths, Part I, unit 6"
+ },
+ {
+  "key": "G7-U07",
+  "first": 81,
+  "last": 94,
+  "source": "Grade 7 maths, Part I, unit 7"
+ },
+ {
+  "key": "G7-U08",
+  "first": 95,
+  "last": 105,
+  "source": "Grade 7 maths, Part I, unit 8"
+ },
+ {
+  "key": "G7-U09",
+  "first": 106,
+  "last": 129,
+  "source": "Grade 7 maths, Part I, unit 9"
+ },
+ {
+  "key": "G7-U10",
+  "first": 130,
+  "last": 156,
+  "source": "Grade 7 maths, Part I, unit 10"
+ },
+ {
+  "key": "G7-U11",
+  "first": 157,
+  "last": 169,
+  "source": "Grade 7 maths, Part I, unit 11"
+ },
+ {
+  "key": "G7-U12",
+  "first": 170,
+  "last": 185,
+  "source": "Grade 7 maths, Part I, unit 12"
+ }
+]
