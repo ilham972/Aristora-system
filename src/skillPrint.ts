@@ -46,19 +46,30 @@ export function logo(h: number): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${f2((h * 100) / 115)}mm" height="${f2(h)}mm" viewBox="0 0 100 115"><path fill-rule="evenodd" d="${LOGO_PATH}"/></svg>`;
 }
 
-/** The ARISTORA seal (the page watermark): line art only, so no grey patch sits under the text. */
-export function seal(d = 185): string {
+type SealShapes = {
+  circles: { r: number; sw: number }[];
+  letters: { ch: string; x: number; y: number; rot: number; size: number }[];
+  sparkles: string[];
+  owl: { x: number; y: number; sc: number };
+};
+
+/** The seal's drawing (mm), the engine's `seal`: three rings, the name and tagline around them, two sparkles, the owl. */
+function sealShapes(d: number): SealShapes {
   const k = d / 140;
   const c = d / 2;
   const ro = c - 1.2 * k;
   const ri = c - 13.6 * k;
   const rm = (ro + ri) / 2;
-  const line = 'fill="none" stroke="#000" stroke-linejoin="round"';
-  const s = [
-    `<circle cx="${c}" cy="${c}" r="${f2(ro)}" ${line} stroke-width="1.1"/>`,
-    `<circle cx="${c}" cy="${c}" r="${f2(ro - 1.6)}" ${line} stroke-width=".35"/>`,
-    `<circle cx="${c}" cy="${c}" r="${f2(ri)}" ${line} stroke-width=".55"/>`,
-  ];
+  const out: SealShapes = {
+    circles: [
+      { r: ro, sw: 1.1 },
+      { r: ro - 1.6, sw: 0.35 },
+      { r: ri, sw: 0.55 },
+    ],
+    letters: [],
+    sparkles: [],
+    owl: { x: 0, y: 0, sc: 1 },
+  };
   const spans: [number, number][] = [];
   const ring = (text: string, size0: number, track0: number, top: boolean) => {
     const size = size0 * k;
@@ -73,10 +84,7 @@ export function seal(d = 185): string {
       const w = widths[i];
       const t = (pos + (w - track) / 2) / rm;
       const a = top ? centre - half + t : centre + half - t;
-      const x = c + rb * Math.cos(a);
-      const y = c + rb * Math.sin(a);
-      const rot = (a * 180) / Math.PI + (top ? 90 : -90);
-      s.push(`<text x="0" y="0" transform="translate(${f2(x)},${f2(y)}) rotate(${f2(rot)})" ${line} stroke-width=".4" font-family="Baloo Thambi 2" font-weight="800" font-size="${f2(size)}" text-anchor="middle">${ch}</text>`);
+      out.letters.push({ ch, x: c + rb * Math.cos(a), y: c + rb * Math.sin(a), rot: (a * 180) / Math.PI + (top ? 90 : -90), size });
       pos += w;
     });
     spans.push([centre - half, centre + half]);
@@ -89,29 +97,80 @@ export function seal(d = 185): string {
     const y = c + rm * Math.sin(a);
     const r = 2.6 * k;
     const q = 0.75 * k;
-    s.push(`<path d="M${f2(x)},${f2(y - r)} Q${f2(x + q)},${f2(y - q)} ${f2(x + r)},${f2(y)} Q${f2(x + q)},${f2(y + q)} ${f2(x)},${f2(y + r)} Q${f2(x - q)},${f2(y + q)} ${f2(x - r)},${f2(y)} Q${f2(x - q)},${f2(y - q)} ${f2(x)},${f2(y - r)} Z" ${line} stroke-width=".45"/>`);
+    out.sparkles.push(`M${f2(x)},${f2(y - r)} Q${f2(x + q)},${f2(y - q)} ${f2(x + r)},${f2(y)} Q${f2(x + q)},${f2(y + q)} ${f2(x)},${f2(y + r)} Q${f2(x - q)},${f2(y + q)} ${f2(x - r)},${f2(y)} Q${f2(x - q)},${f2(y - q)} ${f2(x)},${f2(y - r)} Z`);
   }
   const oh = 74 * k;
-  const sc = oh / 115;
-  s.push(`<g transform="translate(${f2(c - (oh * 50) / 115)},${f2(c - oh / 2 - 1.5 * k)}) scale(${sc.toFixed(4)})"><path ${line} stroke-width="${(0.55 / sc).toFixed(3)}" d="${LOGO_PATH}"/></g>`);
+  out.owl = { x: c - (oh * 50) / 115, y: c - oh / 2 - 1.5 * k, sc: oh / 115 };
+  return out;
+}
+
+/** The ARISTORA seal (the page watermark) as SVG: line art only, so no grey patch sits under the text. */
+function seal(d = 185): string {
+  const c = d / 2;
+  const sh = sealShapes(d);
+  const line = 'fill="none" stroke="#000" stroke-linejoin="round"';
+  const s = sh.circles.map((x) => `<circle cx="${c}" cy="${c}" r="${f2(x.r)}" ${line} stroke-width="${x.sw}"/>`);
+  for (const l of sh.letters) {
+    s.push(`<text x="0" y="0" transform="translate(${f2(l.x)},${f2(l.y)}) rotate(${f2(l.rot)})" ${line} stroke-width=".4" font-family="Baloo Thambi 2" font-weight="800" font-size="${f2(l.size)}" text-anchor="middle">${l.ch}</text>`);
+  }
+  for (const p of sh.sparkles) s.push(`<path d="${p}" ${line} stroke-width=".45"/>`);
+  s.push(`<g transform="translate(${f2(sh.owl.x)},${f2(sh.owl.y)}) scale(${sh.owl.sc.toFixed(4)})"><path ${line} stroke-width="${(0.55 / sh.owl.sc).toFixed(3)}" d="${LOGO_PATH}"/></g>`);
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${d}mm" height="${d}mm" viewBox="0 0 ${d} ${d}">${s.join("")}</svg>`;
 }
 
-/** The page frame: four dotted lines, each starting with a dot exactly on its corner. */
-export function frameSvg(w = 192.6, h = 279.3, pitch = 1.65): string {
-  const [x0, y0, x1, y1] = [0.6, 0.6, w - 0.6, h - 0.6];
-  const out = [
-    [x0, y0, x1, y0],
-    [x1, y0, x1, y1],
-    [x1, y1, x0, y1],
-    [x0, y1, x0, y0],
-  ].map(([xa, ya, xb, yb]) => {
-    const L = Math.abs(xb - xa) + Math.abs(yb - ya);
-    const gap = L / Math.max(Math.round(L / pitch), 1);
-    return `<line x1="${f2(xa)}" y1="${f2(ya)}" x2="${f2(xb)}" y2="${f2(yb)}" stroke="#000" stroke-width=".6" stroke-linecap="round" stroke-dasharray=".01 ${(gap - 0.01).toFixed(4)}"/>`;
-  });
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}mm" height="${h}mm" viewBox="0 0 ${w} ${h}">${out.join("")}</svg>`;
+/**
+ * The seal as one picture (23 Nov 2026): drawn as SVG on every page, Chrome's PDF repeated its ~6,000 curves page after
+ * page (~90 KB a page); one PNG, the same on every page, is stored once in the PDF. At 7% it needs no more than 150 dpi.
+ * Drawn after the book's fonts came (Baloo Thambi 2 ExtraBold, its letters). Falls back to the SVG without a canvas.
+ */
+function sealImage(d = 185, dpi = 150): string {
+  const k = dpi / 25.4;
+  const c = document.createElement("canvas");
+  c.width = c.height = Math.round(d * k);
+  const g = c.getContext("2d");
+  if (!g) return seal(d);
+  const sh = sealShapes(d);
+  g.scale(k, k);
+  g.strokeStyle = "#000";
+  g.lineJoin = "round";
+  for (const x of sh.circles) {
+    g.lineWidth = x.sw;
+    g.beginPath();
+    g.arc(d / 2, d / 2, x.r, 0, Math.PI * 2);
+    g.stroke();
+  }
+  g.lineWidth = 0.4;
+  g.textAlign = "center";
+  g.textBaseline = "alphabetic";
+  for (const l of sh.letters) {
+    g.save();
+    g.translate(l.x, l.y);
+    g.rotate((l.rot * Math.PI) / 180);
+    g.font = `800 ${l.size}px "Baloo Thambi 2", sans-serif`;
+    g.strokeText(l.ch, 0, 0);
+    g.restore();
+  }
+  g.lineWidth = 0.45;
+  for (const p of sh.sparkles) g.stroke(new Path2D(p));
+  g.save();
+  g.translate(sh.owl.x, sh.owl.y);
+  g.scale(sh.owl.sc, sh.owl.sc);
+  g.lineWidth = 0.55 / sh.owl.sc;
+  g.stroke(new Path2D(LOGO_PATH));
+  g.restore();
+  return `<img src="${c.toDataURL("image/png")}" width="${Math.round(d * 3.7795)}" height="${Math.round(d * 3.7795)}" style="width:${d}mm;height:${d}mm" alt="">`;
 }
+
+/** The frame's sides (mm): its box 192.6 × 279.3, the lines 0.6 inside, 0.6 mm dots, the pitch near 1.65 fitted. */
+function frameGeometry(w = 192.6, h = 279.3, pitch = 1.65) {
+  const inset = 0.6;
+  const lh = w - 2 * inset;
+  const lv = h - 2 * inset;
+  return { in: inset, lh, lv, dot: 0.6, ph: lh / Math.max(Math.round(lh / pitch), 1), pv: lv / Math.max(Math.round(lv / pitch), 1) };
+}
+
+/** The page frame as four strips of tiled dots (their tiles in `dotCss`). */
+const FRAME_HTML = `<i class="ft"></i><i class="fb"></i><i class="fl"></i><i class="fr"></i>`;
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const marksWord = (m: number) => (m === 1 ? `${m} புள்ளி` : `${m} புள்ளிகள்`);
@@ -206,10 +265,10 @@ const PAGE_CSS = `
 .band.sbx-band > div:nth-child(2) { flex: 1; min-width: 0; padding-right: 3mm; }
 .band.sbx-band .step { white-space: nowrap; }
 /* inside a level: the questions that join this skill with others, under their own small heading */
-.grp.sbx-grp { display: flex; align-items: flex-end; justify-content: space-between; text-align: left; margin: 3.2mm 0 1.4mm 10.3mm; }
-.sbx-gn { font-weight: 700; font-size: 9pt; line-height: 1.25; padding: 0 3mm .9mm 0; min-width: 0; }
-.sbx-gn small { font-weight: 600; color: #4d4d4d; font-size: 7.8pt; margin-left: 1.4mm; }
+.grp.sbx-grp { display: flex; justify-content: flex-end; margin: 3.2mm 0 1.4mm 10.3mm; }
 .grp.sbx-grp .gb { flex: none; white-space: nowrap; }
+/* the whole book runs on: a level's band in the middle of a page keeps some room from the level before it */
+.sbx-col > .band.sbx-band:not(:first-child) { margin-top: 6mm; }
 .band + .si, .pmn + .si, .sbx-grp + .si { border-top: none; padding-top: .8mm; }
 .lvl { margin-top: 1.4mm; }
 .msh { margin-top: 5mm; }
@@ -240,6 +299,78 @@ const PAGE_CSS = `
 .sbx-tm { flex: none; width: 13mm; text-align: right; font-family: "Baloo Thambi 2", "TMuktaLat", sans-serif; font-weight: 800; font-size: 9.6pt; }
 .sbx-inside .icr { position: absolute; left: 0; right: 0; bottom: 0; }
 `;
+
+/**
+ * The engine's dotted lines as tiled dots (23 Nov 2026). Chrome's PDF draws a CSS dotted border dot by dot (a 35-page
+ * book came to ~11 MB, too big to send to the printing shop or for the server to return); the same dots as a small
+ * tile repeated along each edge are one pattern in the PDF (~20× smaller), and look the same: the answer spaces'
+ * 0.8 pt grey dots with their rounded 2 mm corners (`.wz`, `.zone`), the 1.2 pt dark dots between Part I questions
+ * (`.si`). The borders keep their width (transparent), so nothing moves. Made once, in the page, by a canvas.
+ */
+function dotCss(): string {
+  if (DOTS) return DOTS;
+  const PX = 32; // tile pixels a mm (~810 dpi)
+  const tile = (wmm: number, hmm: number, draw: (g: CanvasRenderingContext2D, k: number) => void) => {
+    const c = document.createElement("canvas");
+    c.width = Math.round(wmm * PX);
+    c.height = Math.round(hmm * PX);
+    const g = c.getContext("2d");
+    if (!g) return "none";
+    draw(g, PX);
+    return `url("${c.toDataURL("image/png")}")`;
+  };
+  const dot = (g: CanvasRenderingContext2D, x: number, y: number, r: number, color: string) => {
+    g.fillStyle = color;
+    g.beginPath();
+    g.arc(x, y, r, 0, Math.PI * 2);
+    g.fill();
+  };
+  const W = 0.8 * (25.4 / 72); // the answer space's border: 0.8 pt in mm
+  const R = 2; // its corners
+  const grey = "#777";
+  const h = tile(2 * W, W, (g, k) => dot(g, (W / 2) * k, (W / 2) * k, (W / 2) * k, grey));
+  const v = tile(W, 2 * W, (g, k) => dot(g, (W / 2) * k, (W / 2) * k, (W / 2) * k, grey));
+  // A corner: dots on the quarter circle between the two edges (top-left; the others are its mirrors).
+  const corner = (fx: boolean, fy: boolean) =>
+    tile(R, R, (g, k) => {
+      g.translate(fx ? R * k : 0, fy ? R * k : 0);
+      g.scale(fx ? -1 : 1, fy ? -1 : 1);
+      const rr = (R - W / 2) * k;
+      for (const f of [0.14, 0.38, 0.62, 0.86]) {
+        const a = Math.PI + (f * Math.PI) / 2;
+        dot(g, R * k + rr * Math.cos(a), R * k + rr * Math.sin(a), (W / 2) * k, grey);
+      }
+    });
+  const S = 1.2 * (25.4 / 72); // between Part I questions: 1.2 pt
+  const sep = tile(2 * S, S, (g, k) => dot(g, (S / 2) * k, (S / 2) * k, (S / 2) * k, "#2a2a2a"));
+  const w = `${W.toFixed(3)}mm`;
+  // The page frame (the engine's frame_svg): 0.6 mm black dots, a dot exactly on each corner, the pitch near 1.65 mm
+  // fitted to each side; drawn as SVG it was ~575 little circles a page in the PDF.
+  const F = frameGeometry();
+  const fdot = (pitch: number) => tile(pitch, F.dot, (g, k) => dot(g, (pitch / 2) * k, (F.dot / 2) * k, (F.dot / 2) * k, "#000"));
+  const fdotV = (pitch: number) => tile(F.dot, pitch, (g, k) => dot(g, (F.dot / 2) * k, (pitch / 2) * k, (F.dot / 2) * k, "#000"));
+  const fh = fdot(F.ph);
+  const fv = fdotV(F.pv);
+  const mm = (n: number) => `${n.toFixed(4)}mm`;
+  DOTS = `
+.sbx-frame i { position: absolute; display: block; }
+.sbx-frame .ft, .sbx-frame .fb { left: ${mm(F.in - F.ph / 2)}; width: ${mm(F.lh + F.ph)}; height: ${mm(F.dot)}; background: ${fh} repeat-x left top / ${mm(F.ph)} ${mm(F.dot)}; }
+.sbx-frame .ft { top: ${mm(F.in - F.dot / 2)}; } .sbx-frame .fb { top: ${mm(F.in + F.lv - F.dot / 2)}; }
+.sbx-frame .fl, .sbx-frame .fr { top: ${mm(F.in - F.pv / 2)}; height: ${mm(F.lv + F.pv)}; width: ${mm(F.dot)}; background: ${fv} repeat-y left top / ${mm(F.dot)} ${mm(F.pv)}; }
+.sbx-frame .fl { left: ${mm(F.in - F.dot / 2)}; } .sbx-frame .fr { left: ${mm(F.in + F.lh - F.dot / 2)}; }
+.sbx .wz, .sbx .zone { position: relative; border-style: solid !important; border-color: transparent !important; border-radius: 0 !important; background-origin: border-box;
+  background: ${corner(false, false)} no-repeat left top / ${R}mm ${R}mm, ${corner(true, false)} no-repeat right top / ${R}mm ${R}mm,
+    ${corner(false, true)} no-repeat left bottom / ${R}mm ${R}mm, ${corner(true, true)} no-repeat right bottom / ${R}mm ${R}mm; }
+.sbx .wz::before, .sbx .zone::before { content: ""; position: absolute; top: -${w}; bottom: -${w}; left: calc(${R}mm - ${w}); right: calc(${R}mm - ${w});
+  background: ${h} repeat-x left top / ${(2 * W).toFixed(3)}mm ${w}, ${h} repeat-x left bottom / ${(2 * W).toFixed(3)}mm ${w}; }
+.sbx .wz::after, .sbx .zone::after { content: ""; position: absolute; left: -${w}; right: -${w}; top: calc(${R}mm - ${w}); bottom: calc(${R}mm - ${w});
+  background: ${v} repeat-y left top / ${w} ${(2 * W).toFixed(3)}mm, ${v} repeat-y right top / ${w} ${(2 * W).toFixed(3)}mm; }
+.sbx .si { border-top-color: transparent !important; background: ${sep} repeat-x left top / ${(2 * S).toFixed(3)}mm ${S.toFixed(3)}mm; background-origin: border-box; }
+.sbx .si.pt, .sbx .band + .si, .sbx .pmn + .si, .sbx .sbx-grp + .si, .sbx .gl + .si, .sbx .lvl + .si { background: none; }
+`;
+  return DOTS;
+}
+let DOTS = "";
 
 /** What the document needs around the book (a shadow root's rules are not read for fonts or pages). */
 function docCss(): string {
@@ -280,11 +411,13 @@ function bandHtml(u: PrintUnit, l: SkillLevel): string {
   return `<div class="band sbx-band"><div class="let" style="font-size:${fitPt(n, [22, 17, 13])}pt">${n}</div><div><div class="tt">${esc(names(u, [l.skill], "ta"))}</div><div class="sub">LEVEL ${n} · ${esc(names(u, [l.skill], "en"))}</div></div><div class="step">${esc(skillLabel(u.key, l.skill))}</div></div>`;
 }
 
-/** The small heading over a group that joins this level's skill with others ("S2 + S4"), or another unit's skill. */
+/**
+ * The small heading over a group that joins this level's skill with others: its skills as one badge ("S2 + S4"), no
+ * names (23 Nov 2026, the founder: "we don't need to tell what is S3, S4 ... we already have that in the cover page";
+ * a phrase of names over every group was too much for the students).
+ */
 function groupHtml(u: PrintUnit, g: SkillGroup): string {
-  const label = g.skills.map((id) => skillLabel(u.key, id)).join(" + ");
-  const n = g.qs.length;
-  return `<div class="grp sbx-grp"><span class="sbx-gn">${esc(names(u, g.skills, "ta"))}<small>${n} ${n === 1 ? "வினா" : "வினாக்கள்"}</small></span><span class="gb">${esc(label)}</span></div>`;
+  return `<div class="grp sbx-grp"><span class="gb">${esc(g.skills.map((id) => skillLabel(u.key, id)).join(" + "))}</span></div>`;
 }
 
 function stripHtml(l: SkillLevel): string {
@@ -332,15 +465,15 @@ function tocSheetRow(): string {
 
 // ------------------------------------------------------------------ pages
 
-type Page = { box: HTMLElement; col: HTMLElement; level: number | null; last: number };
+type Page = { box: HTMLElement; col: HTMLElement; last: number };
 
 type Item =
   /** A block that may not be cut: a Part I question, a band, a heading, the marks sheet. */
   | { t: "el"; el: HTMLElement; next?: boolean; q?: number; strip?: HTMLElement }
   /** A Part II card: its blocks (a part with its space); it may continue on the next page between them. */
   | { t: "card"; wrap: HTMLElement; parts: HTMLElement[]; q: number; strip?: HTMLElement }
-  /** Every level starts on a new page. */
-  | { t: "page"; level: number };
+  /** A new page (one level printed alone starts on one). */
+  | { t: "page" };
 
 /** One element from HTML that is safe already (the book's own pieces, or a card through `bookCard`). */
 function el(html: string): HTMLElement {
@@ -385,10 +518,10 @@ class Pager {
     private make: () => HTMLElement,
   ) {}
 
-  page(level: number | null) {
+  page() {
     const box = this.make();
     this.root.appendChild(box);
-    this.cur = { box, col: box.querySelector(".sbx-col") as HTMLElement, level, last: 0 };
+    this.cur = { box, col: box.querySelector(".sbx-col") as HTMLElement, last: 0 };
     this.pages.push(this.cur);
   }
 
@@ -405,14 +538,13 @@ class Pager {
   private turn() {
     const held = this.held;
     for (const h of held) h.remove();
-    this.page(this.cur.level);
+    this.page();
     for (const h of held) this.cur.col.appendChild(h);
   }
 
   add(it: Item) {
     if (it.t === "page") {
-      if (!this.pages.length || !this.empty()) this.page(it.level);
-      else this.cur.level = it.level;
+      if (!this.pages.length || !this.empty()) this.page();
       return;
     }
     const col = () => this.cur.col;
@@ -455,7 +587,7 @@ class Pager {
           }
         } else {
           wrap.classList.add("sbx-open");
-          this.page(this.cur.level);
+          this.page();
           wrap = it.wrap.cloneNode(false) as HTMLElement;
           wrap.classList.add("sbx-cont");
           col().appendChild(wrap);
@@ -475,25 +607,40 @@ class Pager {
   }
 }
 
-/** Every block of one level, in the book's order: its band, the Part I note, each group (headed when it joins others), its strip. */
-function levelItems(u: PrintUnit, l: SkillLevel, number: (q: number) => number, card: (q: number) => string | undefined): Item[] {
-  const out: Item[] = [{ t: "page", level: l.n }, { t: "el", el: el(bandHtml(u, l)), next: true }];
+/**
+ * Every block of one level, in the book's order: its band, the Part I note, each group (headed when it joins others),
+ * its strip. The whole book runs on from level to level (23 Nov 2026, the founder: "don't start the new skill in new
+ * page ... too much pages"); `lv` remembers each block's level (the side tab, the contents' pages).
+ */
+function levelItems(u: PrintUnit, l: SkillLevel, number: (q: number) => number, card: (q: number) => string | undefined, lv: Map<Element, number>): Item[] {
+  const mark = <T extends Element>(e: T): T => (lv.set(e, l.n), e);
+  const out: Item[] = [{ t: "el", el: mark(el(bandHtml(u, l))), next: true }];
   const short = l.qs.find((q) => partOf(u.data, q)?.kind === "short");
-  if (short !== undefined) out.push({ t: "el", el: el(`<div class="pmn">ஒவ்வொரு குறு வினாவுக்கும் ${marksWord(outOf(u.data, short) ?? 2)}</div>`), next: true });
-  const strip = el(stripHtml(l));
+  if (short !== undefined) out.push({ t: "el", el: mark(el(`<div class="pmn">ஒவ்வொரு குறு வினாவுக்கும் ${marksWord(outOf(u.data, short) ?? 2)}</div>`)), next: true });
+  const strip = mark(el(stripHtml(l)));
   l.groups.forEach((g, gi) => {
     const pure = g.skills.length === 1 && g.skills[0] === l.skill;
-    if (!pure || gi > 0) out.push({ t: "el", el: el(groupHtml(u, g)), next: true });
+    if (!pure || gi > 0) out.push({ t: "el", el: mark(el(groupHtml(u, g))), next: true });
     for (const q of g.qs) {
       const last = q === l.qs[l.qs.length - 1];
       const html = card(q) ?? `<div class="si"><div class="sih"><span class="qn">${number(q)}</span><div class="sib"><div class="sit">—</div></div></div></div>`;
-      const e = el(html);
+      const e = mark(el(html));
       // A card built in blocks (the engine since 25 Oct 2026) may continue between them; an older one stays whole.
-      const parts = e.matches(".pq") && e.querySelector(":scope > .bk") ? ([...e.children] as HTMLElement[]) : [];
+      const parts = e.matches(".pq") && e.querySelector(":scope > .bk") ? ([...e.children] as HTMLElement[]).map(mark) : [];
       if (parts.length) out.push({ t: "card", wrap: e, parts, q: number(q), ...(last ? { strip } : {}) });
       else out.push({ t: "el", el: e, q: number(q), ...(last ? { strip } : {}) });
     }
   });
+  return out;
+}
+
+/** The levels a page holds, in order (a card's piece counts by its first block). */
+function levelsOn(col: HTMLElement, lv: Map<Element, number>): number[] {
+  const out: number[] = [];
+  for (const c of col.children) {
+    const n = lv.get(c) ?? (c.firstElementChild ? lv.get(c.firstElementChild) : undefined);
+    if (n !== undefined && out[out.length - 1] !== n) out.push(n);
+  }
   return out;
 }
 
@@ -588,16 +735,17 @@ function fitIndex(root: ShadowRoot, n: number) {
 }
 
 /**
- * Makes the book's pages and opens Chrome's print window (Save as PDF). The whole book, or (`only`) one level's pages
- * numbered as in the whole book. The book stays in the page (hidden) until the next download or until the page closes:
- * on Android the print window may still be reading it after print() has returned.
+ * Lays the book out in the page (hidden, `#sb-print`), ready for Chrome's print: the whole book (cover, contents, the
+ * levels running on, the marks sheet) or (`only`) one level alone, from its own first page, numbered from 1. Shared by
+ * the phone's print (`printSkillBook`) and the PDF server's page (src/printEntry.ts, api/pdf.mjs), so both give the
+ * same pages. The book stays until the next one or until the page closes (`clearPrint`).
  */
-export async function printSkillBook(plan: PrintPlan, css: string | null, fileName: string, only: number | null = null): Promise<BookResult> {
+export async function layoutSkillBook(plan: PrintPlan, css: string | null, only: number | null = null): Promise<BookResult> {
   clearPrint();
   const u = plan.unit;
   const levels = printedLevels(plan.levels);
-  FRAME ||= frameSvg();
-  SEAL ||= seal();
+  const shown = only === null ? levels : levels.filter((l) => l.n === only);
+  FRAME = FRAME_HTML;
   const style = document.createElement("style");
   style.id = "sb-print-page";
   style.textContent = docCss();
@@ -605,7 +753,7 @@ export async function printSkillBook(plan: PrintPlan, css: string | null, fileNa
   const host = document.createElement("div");
   host.id = "sb-print";
   const root = host.attachShadow({ mode: "open" });
-  root.innerHTML = `<style>${bookCss(css)}</style><div class="sbx"></div>`;
+  root.innerHTML = `<style>${bookCss(css)}\n${dotCss()}</style><div class="sbx"></div>`;
   document.body.appendChild(host);
   const title = document.title;
   cleanup = () => {
@@ -624,7 +772,8 @@ export async function printSkillBook(plan: PrintPlan, css: string | null, fileNa
   };
 
   // Every block first, in one hidden column: the browser fetches the fonts their text needs; nothing is measured before.
-  const items = levels.flatMap((l) => levelItems(u, l, numberOf, (q) => plan.cards.get(q)));
+  const lv = new Map<Element, number>();
+  const items = shown.flatMap((l) => levelItems(u, l, numberOf, (q) => plan.cards.get(q), lv));
   const sheet = only === null ? el(sheetHtml(u, levels)) : null;
   const flow = document.createElement("div");
   flow.className = "sbx-flow";
@@ -638,49 +787,56 @@ export async function printSkillBook(plan: PrintPlan, css: string | null, fileNa
   }
   if (sheet) flow.appendChild(sheet);
   book.appendChild(flow);
-  const cover = document.createElement("div");
-  cover.className = "sbx-page sbx-cover";
-  cover.innerHTML = coverHtml(u, levels);
-  book.appendChild(cover);
+  if (only === null) {
+    const cover = document.createElement("div");
+    cover.className = "sbx-page sbx-cover";
+    cover.innerHTML = coverHtml(u, levels);
+    book.appendChild(cover);
+  }
   void flow.offsetHeight;
   const fonts = await printFontsReady();
-  fitTitle(root);
-  fitIndex(root, levels.length);
-
-  // The contents: as many pages as its rows need (each with room for the copyright at its foot), then a blank page
-  // when needed so that page 1 is a right-hand page.
-  const insideMake = () => {
-    const box = document.createElement("div");
-    box.className = "sbx-page sbx-l sbx-inside";
-    box.innerHTML = `<div class="sbx-frame">${FRAME}</div><div class="sbx-col"></div><div class="sbx-wm">${SEAL}</div>`;
-    (box.querySelector(".sbx-col") as HTMLElement).style.height = `${COL_H - 14}mm`;
-    return box;
-  };
-  const toc = new Pager(book, insideMake);
-  toc.page(null);
-  toc.add({ t: "el", el: el(tocHead()), next: true });
-  for (const l of levels) toc.add({ t: "el", el: el(tocRow(u, l)) });
-  toc.add({ t: "el", el: el(tocSheetRow()) });
-  for (const p of toc.pages) {
-    p.col.style.height = `${COL_H}mm`;
-    p.col.insertAdjacentHTML("beforeend", `<div class="icr">${esc(COPY(plan.year))}</div>`);
+  SEAL = sealImage();
+  let front = 0;
+  if (only === null) {
+    fitTitle(root);
+    fitIndex(root, levels.length);
+    // The contents: as many pages as its rows need (each with room for the copyright at its foot), then a blank page
+    // when needed so that page 1 is a right-hand page.
+    const insideMake = () => {
+      const box = document.createElement("div");
+      box.className = "sbx-page sbx-l sbx-inside";
+      box.innerHTML = `<div class="sbx-frame">${FRAME}</div><div class="sbx-col"></div><div class="sbx-wm">${SEAL}</div>`;
+      (box.querySelector(".sbx-col") as HTMLElement).style.height = `${COL_H - 14}mm`;
+      return box;
+    };
+    const toc = new Pager(book, insideMake);
+    toc.page();
+    toc.add({ t: "el", el: el(tocHead()), next: true });
+    for (const l of levels) toc.add({ t: "el", el: el(tocRow(u, l)) });
+    toc.add({ t: "el", el: el(tocSheetRow()) });
+    for (const p of toc.pages) {
+      p.col.style.height = `${COL_H}mm`;
+      p.col.insertAdjacentHTML("beforeend", `<div class="icr">${esc(COPY(plan.year))}</div>`);
+    }
+    front = 1 + toc.pages.length;
+    if (front % 2) {
+      const blank = document.createElement("div");
+      blank.className = "sbx-page sbx-blank";
+      book.appendChild(blank);
+      front++;
+    }
   }
-  let front = 1 + toc.pages.length;
-  if (front % 2) {
-    const blank = document.createElement("div");
-    blank.className = "sbx-page sbx-blank";
-    book.appendChild(blank);
-    front++;
-  }
 
-  // The body: page after page; a right-hand page is an odd page of the whole book.
+  // The body: page after page, the levels running on; a right-hand page is an odd page of the whole book.
   let physical = front;
   const pager = new Pager(book, () => bodyPage(++physical % 2 === 1));
+  pager.page();
   for (const it of items) pager.add(it);
   if (sheet) pager.add({ t: "el", el: sheet });
   flow.remove();
 
-  // Footers, side tabs, the contents' page numbers.
+  // Footers, side tabs (the level the page starts with, as the engine's tab follows its first question), the
+  // contents' page numbers (each level's band).
   const step = Math.min(37.5, (TAB_LAST - TAB_TOP) / Math.max(levels.length - 1, 1));
   const levelPages = new Map<number, [number, number]>();
   let last = 0;
@@ -689,44 +845,81 @@ export async function printSkillBook(plan: PrintPlan, css: string | null, fileNa
     const right = (front + n) % 2 === 1;
     last = Math.max(last, p.last);
     p.box.dataset.n = String(n);
-    if (p.level !== null) p.box.dataset.level = String(p.level);
+    const on = levelsOn(p.col, lv);
+    for (const l of on) {
+      const had = levelPages.get(l);
+      levelPages.set(l, [had ? had[0] : n, n]);
+    }
+    p.box.dataset.levels = on.join(" ");
     const foot = document.createElement("div");
     foot.className = "sbx-foot";
     foot.innerHTML = footHtml(u, levels, n, right, last, plan.year);
     p.box.appendChild(foot);
-    const k = levels.findIndex((l) => l.n === p.level);
+    const k = levels.findIndex((l) => l.n === on[0]);
     if (k >= 0) {
+      p.box.dataset.level = String(levels[k].n);
       const tab = document.createElement("div");
       tab.className = "sbx-tab";
       tab.style.top = `${f2(TAB_TOP + k * step - 1.5)}mm`;
       tab.innerHTML = `<i style="font-size:${fitPt(levels[k].n, [8, 7, 5.6])}pt">${levels[k].n}</i>`;
       p.box.appendChild(tab);
-      const had = levelPages.get(levels[k].n);
-      levelPages.set(levels[k].n, [had ? had[0] : n, n]);
     }
     for (const c of p.col.children) if (c.matches(".si")) c.classList.toggle("pt", c === p.col.firstElementChild);
   });
   const sheetPage = sheet ? pager.pages.findIndex((p) => p.col.contains(sheet)) + 1 : 0;
-  if (sheetPage && pager.pages[sheetPage - 1].col.firstElementChild === sheet) {
-    // The marks sheet on a page of its own belongs to no level: no side tab.
-    const p = pager.pages[sheetPage - 1];
-    p.box.querySelector(".sbx-tab")?.remove();
-    delete p.box.dataset.level;
-  }
+  // A level's first page is where its band is.
+  const bandPage = new Map<number, number>();
+  pager.pages.forEach((p, i) => {
+    for (const c of p.col.querySelectorAll(":scope > .band")) {
+      const n = lv.get(c);
+      if (n !== undefined && !bandPage.has(n)) bandPage.set(n, i + 1);
+    }
+  });
   for (const row of book.querySelectorAll<HTMLElement>(".sbx-inside .toc-r[data-lv]")) {
-    const lv = row.dataset.lv;
+    const key = row.dataset.lv;
     const pg = row.querySelector(".pg");
     if (!pg) continue;
-    pg.textContent = lv === "sheet" ? (sheetPage ? String(sheetPage) : "") : String(levelPages.get(Number(lv))?.[0] ?? "");
+    pg.textContent = key === "sheet" ? (sheetPage ? String(sheetPage) : "") : String(bandPage.get(Number(key)) ?? "");
   }
+  for (const [n, pg] of bandPage) {
+    const had = levelPages.get(n);
+    if (had) levelPages.set(n, [pg, had[1]]);
+  }
+  return { pages: book.children.length, levelPages, fonts };
+}
 
-  // One level alone: its pages only, as numbered in the whole book.
-  if (only !== null) {
-    for (const page of [...book.children] as HTMLElement[]) if (page.dataset.level !== String(only)) page.remove();
-  }
-  const pages = book.children.length;
+/**
+ * The book on this phone through Chrome's print window (Save as PDF): the fallback when the PDF server can't make it.
+ * On Android the print window may still be reading the page after print() has returned: the book stays until the next.
+ */
+export async function printSkillBook(plan: PrintPlan, css: string | null, fileName: string, only: number | null = null): Promise<BookResult> {
+  const r = await layoutSkillBook(plan, css, only);
   document.body.classList.add("sb-printing");
   document.title = fileName;
   window.print();
-  return { pages, levelPages, fonts };
+  return r;
+}
+
+/** The printed numbers and chips of every question: the plan both the phone and the PDF server lay out. */
+export function skillBookPlan(
+  u: { key: string; grade: number; code: string; ta: string; en: string; data: MasterData; names: PrintUnit["names"] },
+  levels: SkillLevel[],
+  number: ReadonlyMap<number, number>,
+  needsOf: (q: number) => string[],
+  printed: ReadonlyMap<number, string>,
+  year: number,
+): { plan: PrintPlan; missing: number } {
+  const cards = new Map<number, string>();
+  let missing = 0;
+  for (const [q, no] of number) {
+    const html = printed.get(q);
+    if (html) cards.set(q, bookCard(html, no, needsOf(q).map((id) => skillLabel(u.key, id))));
+    else missing++;
+  }
+  return { plan: { unit: { key: u.key, grade: u.grade, code: u.code, ta: u.ta, en: u.en, data: u.data, names: u.names }, levels, cards, year }, missing };
+}
+
+/** The file's name: "G8_U04_Skills_Book", or "G8_U04_Skills_Level3" for one level. */
+export function bookFileName(grade: number, code: string, only: number | null): string {
+  return only === null ? `G${grade}_${code}_Skills_Book` : `G${grade}_${code}_Skills_Level${only}`;
 }

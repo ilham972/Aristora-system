@@ -4,6 +4,12 @@
   "installCommand": "npm ci --omit=dev",
   "buildCommand": "sh scripts/vercel-build.sh",
   "outputDirectory": "dist",
+  "functions": {
+    "api/pdf.mjs": {
+      "maxDuration": 60,
+      "includeFiles": "node_modules/@sparticuz/chromium/bin/**"
+    }
+  },
   "git": {
     "deploymentEnabled": {
       "ci-check": false,

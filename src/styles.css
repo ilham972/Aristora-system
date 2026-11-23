@@ -14831,3 +14831,282 @@ body.sb-on {
 .sb > .gov-line {
   margin: 8px 12px 2px;
 }
+
+/* ---- Share a unit's book to the printing shop (23 Nov 2026; src/printShare.tsx, the T page's Share button) ---- */
+.sb-share {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin-left: 6px;
+  border: 1.5px solid var(--ink);
+  border-radius: 20px;
+  background: var(--card);
+  color: var(--ink);
+}
+.sb-share:disabled {
+  opacity: 0.4;
+}
+.prs-state {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--ground);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+.prs-state.ok {
+  color: #1d7a46;
+  background: #e6f6ec;
+}
+.prs-state.bad {
+  color: #b42318;
+  background: #fdecea;
+}
+.prs-retry {
+  margin-left: 4px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-weight: 800;
+  text-decoration: underline;
+}
+.prs-shops {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.prs-shop {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 4px;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+}
+.prs-shop.on {
+  border-color: var(--ink);
+}
+.prs-pick {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 2px 4px;
+  border: 0;
+  background: none;
+  text-align: left;
+  color: var(--ink);
+}
+.prs-pick i {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--ink-3);
+  border-radius: 50%;
+}
+.prs-shop.on .prs-pick i {
+  border-color: var(--ink);
+  box-shadow: inset 0 0 0 4px var(--card);
+  background: var(--ink);
+}
+.prs-pick span {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+.prs-pick b {
+  font-weight: 800;
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.prs-pick small {
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.prs-def {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+}
+.prs-mk {
+  flex: none;
+  height: 30px;
+  padding: 0 8px;
+  border: 1.5px solid var(--line);
+  border-radius: 15px;
+  background: var(--card);
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 700;
+}
+.prs-ed {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 17px;
+  background: var(--ground);
+  color: var(--ink-2);
+}
+.prs-add {
+  height: 44px;
+  border: 1.5px dashed var(--ink-3);
+  border-radius: 12px;
+  background: none;
+  color: var(--ink);
+  font-weight: 800;
+  font-size: 14px;
+}
+.prs-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1.5px solid var(--ink);
+  border-radius: 12px;
+  background: var(--card);
+}
+.prs-form-t {
+  margin: 0;
+  font-weight: 800;
+}
+.prs-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+.prs-form input {
+  height: 44px;
+  padding: 0 10px;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  font-size: 16px;
+  color: var(--ink);
+  background: var(--card);
+}
+.prs-bad {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #b42318;
+}
+.prs-form-b {
+  display: flex;
+  gap: 8px;
+}
+.prs-rm {
+  margin-left: auto;
+  color: #b42318;
+}
+.prs-copies {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.prs-step {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: 1.5px solid var(--ink);
+  border-radius: 22px;
+  background: var(--card);
+  color: var(--ink);
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+}
+.prs-step:disabled {
+  opacity: 0.35;
+}
+.prs-copies input {
+  width: 56px;
+  height: 44px;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--ink);
+  background: var(--card);
+  -moz-appearance: textfield;
+}
+.prs-copies input.bad {
+  border-color: #b42318;
+}
+.prs-copies input::-webkit-outer-spin-button,
+.prs-copies input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.prs-sides {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  margin-left: 4px;
+  border: 1.5px solid var(--line);
+  border-radius: 22px;
+  overflow: hidden;
+}
+.prs-sides button {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  border: 0;
+  background: var(--card);
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.prs-sides button.on {
+  background: var(--ink);
+  color: #fff;
+}
+.prs-msg {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--ground);
+  font-size: 14px;
+  line-height: 1.4;
+  white-space: pre-line;
+  color: var(--ink);
+}
+.prs-hint {
+  margin: 6px 0 0;
+}
+.prs-foot {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: 100%;
+}
+.prs-send {
+  height: 50px;
+  font-size: 16px;
+}
+.prs-chat {
+  align-self: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-2);
+}

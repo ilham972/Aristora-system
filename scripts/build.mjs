@@ -53,6 +53,31 @@ await cp("public/static", "dist", { recursive: true });
 const kb = (f) => Math.round(result.metafile.outputs[f].bytes / 1024);
 console.log(`Built dist/ for ${url}: ${basename(js)} ${kb(js)} KB, ${basename(css)} ${kb(css)} KB`);
 
+// The printed books' page (23 Nov 2026): what the PDF server opens (api/pdf.mjs) to lay out a unit's book by skill
+// with the phone's own code (src/printEntry.ts), then Chrome's PDF. Its own small file; nothing of the app around it.
+// Its fonts are the same files as the app's (the same names and hashes in dist/assets).
+const pr = await build({
+  entryPoints: { print: "src/printEntry.ts" },
+  bundle: true,
+  minify: true,
+  format: "esm",
+  target: ["es2020"],
+  outdir: "dist/assets",
+  entryNames: "[name]-[hash]",
+  assetNames: "[name]-[hash]",
+  loader: { ".woff2": "file", ".woff": "file" },
+  legalComments: "none",
+  metafile: true,
+  logLevel: "warning",
+});
+const prJs = Object.keys(pr.metafile.outputs).find((f) => f.endsWith(".js"));
+if (!prJs) throw new Error("Build did not produce the print page's JS");
+await writeFile(
+  "dist/print.html",
+  `<!doctype html><html lang="ta"><head><meta charset="utf-8"><meta name="robots" content="noindex"><title>ARISTORA</title></head><body><script type="module" src="/assets/${basename(prJs)}"></script></body></html>\n`,
+);
+console.log(`Built dist/print.html: ${basename(prJs)} ${Math.round(pr.metafile.outputs[prJs].bytes / 1024)} KB`);
+
 // ---- The family app (app.aristora.org; also /f/ here): its own small bundle, nothing of the teachers' app. ----
 // Students open it on any phone and any signal: its first load must stay light. Over the budget, the build stops.
 // 4 Nov 2026: 50 → 56 KB for the owl's acting (its whole-body moods, tap reactions and surprise visits, ~6 KB); 56 → 58

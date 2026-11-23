@@ -476,6 +476,22 @@ SIZE=200 NAMES=family:me,chat:room npx vitest run -c vitest.scale.config.ts test
     `book.html` through `workbookQuestions` + `printSkillBook` in a scratch page with Playwright (`page.pdf`, print
     media, `preferCSSPageSize`), and put both PDFs' pages side by side (`pdftoppm`). A phone without the fonts:
     `FONTCONFIG_FILE` pointing at DejaVu + Noto Sans Tamil only.
+  - Chrome's PDF draws every dot of a dotted or dashed border, and of an SVG dash pattern, as a shape of its own, a
+    rounded box as many curves, and an SVG repeated on every page again on every page: the made-up 8-page book
+    weighed 2.2 MB, and the server's answer is capped at 4.5 MB (Vercel). A new dotted line is a tile (`dotCss`: a
+    canvas PNG, stored once as a PDF pattern), a figure on every page one picture (`sealImage`), an answer space's
+    corners square under its tiled dots. The run-through checks the server's file stays under 120 KB a page.
+  - The server's PDF (`api/pdf.mjs`): `@sparticuz/chromium` and `puppeteer-core` pinned exact (the Chrome must match
+    the library; upgrade both together, then the run-through). Its page loads only `/print.html` and `/assets/` of the
+    same site (every other request is aborted), and the site comes from the request's host only when it is
+    system.aristora.org or localhost. Try it here: `PDF_CHROME=<a Chrome>` and `makePdf({ site, load })` (the
+    run-through does it with Playwright's Chromium on its own site and backend). After a deploy:
+    `/api/pdf?health=1`.
+  - Chrome logs a failed fetch (the server's 503) in the console by itself; no page can silence it. A run-through
+    that expects one takes exactly that line off `problems` (`took503` in "Skill book").
+  - Sharing a file (`navigator.share({ files })`) needs his tap a moment before: the Share sheet makes the PDF when
+    it opens, so Send shares at once (a file fetched after the tap loses it: Android refuses with NotAllowedError).
+    The Web Share API never picks the app or the chat: the phone's share list does.
 
 - **A new book engine's print furniture must leave the phone** (18 Nov 2026, the Sakarath books): the family paper
   hides each engine's own numbering and decoration (`.qn`, `.pm`, `.mk` for workbooks; `.sn`, `.qsep` and half-width

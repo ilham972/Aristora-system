@@ -2880,13 +2880,22 @@ learning app of our education institute"): one profile, his class times, what he
     by skill follow it. History: "Q12 moved to another skill: S1+S2 → S1+S3" (`skill-move`).
   - **PDF** (22 Nov 2026 rebuilt, his words: "if I preview the PDF, that's not look good ... some texts are
     overlapped ... use the past paper workbook skill ... I can download any PDF from this page with high quality";
-    `src/skillPrint.ts` `printSkillBook`): the **whole book** (top right: cover, contents, every level, the marks
-    sheet) or **one level** (its button: that level's pages only, cut out of the whole book's, so the same question and
-    page numbers). The past-paper workbook's own pages, made in the phone:
+    23 Nov: "don't start each skill in new page because that's get too much pages ... my priority is right now whole
+    book ... I am going to print whole book in the communication"): the **whole book** (top right: cover, contents,
+    every level, the marks sheet) or **one level** (its button). The past-paper workbook's own pages:
+    - **A file, made by the server** (23 Nov 2026, `api/pdf.mjs`: a Vercel function with its own Chrome,
+      `@sparticuz/chromium` + `puppeteer-core`): PDF posts the phone's sign-in and the unit; the function reads the
+      unit and its printed questions from Convex with that sign-in (`skillBook.unit`, `skillBook.questions`: Books or
+      the owner, as the page), opens the site's own `/print.html` (its own small bundle, `src/printEntry.ts`, the
+      same layout code as the phone's), lets the book lay itself out and has Chrome print it, A4. The phone gets
+      "G8_U04_Skills_Book.pdf" in its downloads ("… · 32 pages: in your downloads."): the same file on every phone, no
+      print window, and the shop prints it as it is. When the server can't (no signal, an error, 75 s), this phone's
+      own print window instead (Chrome's Save as PDF, paper A4), and a toast says why. `GET /api/pdf?health=1` says
+      whether the server's Chrome starts.
     - **The engine's fonts** (`src/printFonts.ts`, the files in `src/printFonts/` from `scripts/print-fonts.py`):
       TMuktaLat (Latin and digits at 115%), Mukta Malar, Baloo Thambi 2, STIX Two Text italic and Math, DejaVu for
       ✓ ✗, static weights cut to what a book prints (~700 KB in all, a book fetches the faces its text uses, about
-      250 KB, only when he prints). The upload keeps a book's CSS but drops its fonts (`bookCssOf`; the CSP allows
+      250 KB, only when it is made). The upload keeps a book's CSS but drops its fonts (`bookCssOf`; the CSP allows
       fonts from the app only), so before 22 Nov the phone printed in its own Tamil font, wider and taller, and the
       engine's measured figures and labels collided. Every face is in before anything is measured
       (`printFontsReady`; if not within 12 s the book prints in what came and a toast says so).
@@ -2895,26 +2904,59 @@ learning app of our education institute"): one profile, his class times, what he
       and left-hand pages for double-sided printing; page 1 is a right-hand page: the front pages are always even, a
       blank page added when the contents take two), the dotted frame, the seal watermark, the footer (copyright on the
       binding side, the owl and ARISTORA in the centre, a pill a level filling as the book goes and the page number on
-      the outer side), the side tab on the outer edge with the level's number, stepping down level by level. Blocks:
-      a Part I question, a Part II card's block (a part with its answer space: the engine's `.bk`), a band, a group
-      heading, a strip, the marks sheet. A block is never cut; a band and a heading stay with the block after them; a
-      level's strip with its last block; a card continues on the next page between two of its blocks, its outline open
-      where it breaks (`sbx-open`, `sbx-cont`; a card from before the engine's blocks stays whole); a block taller than
-      a page is drawn smaller to fit. Chrome's own page breaking (before 22 Nov) cut a level's band in two and ran a long
-      contents page over the next page.
+      the outer side), the side tab on the outer edge with the number of the level the page starts with, stepping down
+      level by level. Blocks: a Part I question, a Part II card's block (a part with its answer space: the engine's
+      `.bk`), a band, a group heading, a strip, the marks sheet. A block is never cut; a band, the Part I note and a
+      heading stay with the block after them; a level's strip with its last block; a card continues on the next page
+      between two of its blocks, its outline open where it breaks (`sbx-open`, `sbx-cont`; a card from before the
+      engine's blocks stays whole); a block taller than a page is drawn smaller to fit. Chrome's own page breaking
+      (before 22 Nov) cut a level's band in two and ran a long contents page over the next page.
+    - **The whole book runs on** (23 Nov 2026, his rule above): a level starts under the last one's strip, on the same
+      page, never on a page of its own (the made-up unit of the run-through: 8 pages, not 10). The contents give the
+      page where each level's band is.
+    - **One level alone** (23 Nov 2026): laid out on its own pages, numbered from 1, its questions keeping the whole
+      book's numbers (Level 2 = Q12–36), no cover, contents or marks sheet. Until 23 Nov its pages were cut out of the
+      whole book's (each level began a page then).
     - **The pieces**: the cover (the unit's Tamil name as the title, on one line: 54 pt or smaller, measured;
       "திறன் வழிப் பயிற்சி"; grade · unit · levels · questions · marks; every level = its skill with its Tamil and
       English names and its questions, one column up to 10 levels, two up to 22, then three), the contents on the
-      back (each level: its skill, Tamil and English names, its questions, its marks, its first page; the marks
-      sheet's page; the copyright), each level **from a new page** under its black band (its number, its skill's
-      names, "S3"), the Part I note, its questions renumbered 1, 2, 3 … through the book with their skill chips
-      (`bookCard`), its group headings, its strip ("Level 3 · வினாக்கள் 21 – 32 · புள்ளிகள் [ ] / 24"); the marks
-      sheet after the last level (six levels a row, the unit's total and percentage). The engine's CSS
-      (`src/skillPrintCss.ts`), then the unit's own stored CSS, then the pages' rules (`PAGE_CSS`).
-    - Made by Chrome's own print (Save as PDF, paper A4): the book is built in the page in a shadow root (off the
-      screen, `#sb-print`), printed with `body.sb-printing`, and kept until the next download or until the page closes
+      back (each level: its skill, Tamil and English names, its questions, its marks, its page; the marks sheet's
+      page; the copyright), each level under its black band (its number, its skill's names, "S3"), the Part I note,
+      its questions renumbered 1, 2, 3 … through the book with their skill chips (`bookCard`), its group headings,
+      its strip ("Level 3 · வினாக்கள் 21 – 32 · புள்ளிகள் [ ] / 24"); the marks sheet after the last level (six levels
+      a row, the unit's total and percentage). A **group heading is its badge only** ("S2 + S3", on the right; 23 Nov
+      2026, his words: "we don't need to tell what is S3, S4, S5 ... we already have ... in the front page ... S1, S2,
+      S3, S4 as like a badge, that's cool, that's beautiful": the skills' Tamil names made a long phrase over every
+      joined group). The engine's CSS (`src/skillPrintCss.ts`), then the unit's own stored CSS, then the pages' rules
+      (`PAGE_CSS`).
+    - **Light enough to send** (23 Nov 2026): Chrome's PDF draws every dot of a dotted line and of the frame as a shape
+      of its own, and the seal's curves again on every page: the made-up 8-page book weighed 2.2 MB (the server may
+      answer with 4.5 MB at most, and the shop gets it over WhatsApp). The dotted answer spaces, separators and frame
+      are small pictures repeated (`dotCss`), the seal one picture (`sealImage`): 450 KB for 8 pages.
+    - This phone's own print (when the server can't): the book is built in the page in a shadow root (off the screen,
+      `#sb-print`), printed with `body.sb-printing`, and kept until the next download or until the page closes
       (Android's print window may still read it after `print()` returns). Files: "G8_U04_Skills_Book",
-      "G8_U04_Skills_Level3". A toast says which questions aren't in the app as printed (their places show a dash).
+      "G8_U04_Skills_Level3". The toast also says how many questions aren't in the app as printed (a dash in their
+      place).
+  - **Share to the printing shop** (23 Nov 2026, his words: "put the share button near the download button ...
+    automatically go inside the WhatsApp and automatically pick the printing center WhatsApp number ... I will put the
+    copy number, for example four ... as a caption ... sometime I have to change the printing shop ... set up the
+    default shop ... if the shop is closed, I can select another printing shop"; `src/printShare.tsx` `ShareSheet`,
+    `convex/lib/printShops.ts`, `skillBook.shops` / `skillBook.setShops`): the round Share button beside PDF (the
+    whole book). Its sheet makes the PDF as it opens ("✓ PDF ready · 32 pages"; Try again on an error). The
+    **printing shops**: a name and a WhatsApp number each, up to 10, one of them the **default** (picked when the
+    sheet opens; "Make default" on another), ✎ changes or removes one, "+ Add a printing shop" (the first one added is
+    the default); kept on the server (`meta` "printShops"; Books or the owner change them, every such phone sees the
+    same shops); a local number is read as Sri Lankan (077 123 4567 → +94 77 123 4567). **Copies** (− [4] +, 1–99)
+    and Both sides / One side, both remembered on this phone; the message as it will go: "Please print 4 copies — A4,
+    both sides." and "G8 U04 <the unit's Tamil name> · skill book · 32 pages". **Send to Rathna Print**: the phone's
+    share list with the PDF and the message; he taps WhatsApp, then the shop (WhatsApp keeps recent chats at the top),
+    then Send. The message is copied too (WhatsApp sometimes drops a shared file's text: he pastes it). A phone or
+    computer that can't share files: the PDF downloads and the shop's chat opens (`wa.me`) with the message, for him
+    to attach it. "Only open Rathna Print's chat" opens the chat alone. **What a website can't do**: choose the
+    WhatsApp chat itself and attach a file in one go (WhatsApp lets a site open a chat with text, or take a file from
+    the phone's share list, never both); sending with no taps at all would need WhatsApp's Business API (a Meta
+    business account, a number of its own, an approved message, a cost per message): not built.
 - The server marks with the uploaded answer keys (`convex/lib/phone.ts`; a key without kinds, version 1): numbers,
   several numbers, answers in n (same values for n = 1..7), labelled answers (x = 52), "also accepted" notes. Since 4 Nov 2026 (his screenshot: "0.25 as a
   percentage" was the teacher's, so whole Percentages Stages were): a number with its unit (25%, 45°, −3 °C, 12 cm,

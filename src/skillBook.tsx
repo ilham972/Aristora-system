@@ -17,12 +17,13 @@ import { bySkill, paperNo } from "../convex/lib/path";
 import { groupKey, groupLabel, levelSkillOf, needs, skillLabel, skillGroups, skillLevels, STAT_MIN, type QStat, type SkillGroup, type SkillLevel } from "../convex/lib/skillBook";
 import { SKILLS_A_TAG } from "../convex/lib/skills";
 import type { SkillBookUnit } from "../convex/skillBook";
-import { fetchOnce, mutate } from "./backend";
+import { fetchOnce, mutate, phoneToken } from "./backend";
 import { GovBook, type GovRow } from "./govBook";
 import { HRow } from "./hrow";
 import { useQuery } from "./live";
 import { drawQuestion } from "./questionView";
-import { bookCard, clearPrint, printSkillBook } from "./skillPrint";
+import { saveFile, ShareSheet, type MadePdf } from "./printShare";
+import { bookFileName, clearPrint, printSkillBook, skillBookPlan } from "./skillPrint";
 import { act, currentRole, toast, type Unit } from "./store";
 import { Sheet } from "./ui";
 
@@ -77,7 +78,11 @@ export function SkillBookPage(props: { unit: Unit; gov: GovRow | null; onClose: 
   const [moving, setMoving] = useState<number | null>(null);
   /** Which PDF is being made: 0 = the whole book, n = level n. */
   const [busy, setBusy] = useState<number | null>(null);
+  /** The Share sheet: for the whole book (0) or one level (n). */
+  const [sharing, setSharing] = useState<number | null>(null);
   const top = useRef<HTMLDivElement>(null);
+  /** The PDFs the server made for this page, kept while the unit's tags stay the same (Download then Share: one PDF). */
+  const pdfs = useRef<{ u: SkillBookUnit | null | undefined; made: Map<number, Promise<MadePdf>> }>({ u: undefined, made: new Map() });
 
   useEffect(() => {
     let live = true;
@@ -107,31 +112,72 @@ export function SkillBookPage(props: { unit: Unit; gov: GovRow | null; onClose: 
     return s && u ? Number(paperNo(u.key, s)) : (levels[0]?.n ?? 1);
   };
 
+  /**
+   * The PDF from the server (api/pdf.mjs): a real file, laid out by the same code as this phone's print, A4. Made once
+   * per book and level while the tags stay the same.
+   */
+  const serverPdf = (only: number | null): Promise<MadePdf> => {
+    if (pdfs.current.u !== u) pdfs.current = { u, made: new Map() };
+    const key = only ?? 0;
+    const had = pdfs.current.made.get(key);
+    if (had) return had;
+    const made = (async (): Promise<MadePdf> => {
+      if (!u) throw new Error("The unit hasn't loaded.");
+      const res = await fetch("/api/pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: phoneToken(), unitId, only }),
+        signal: AbortSignal.timeout?.(75000),
+      });
+      if (!res.ok || !(res.headers.get("Content-Type") ?? "").includes("pdf")) {
+        let why = "";
+        try {
+          why = ((await res.json()) as { error?: string }).error ?? "";
+        } catch {
+          /* not JSON */
+        }
+        throw new Error(why || `the server answered ${res.status}`);
+      }
+      return {
+        blob: await res.blob(),
+        pages: Number(res.headers.get("X-Pages")) || 0,
+        fonts: res.headers.get("X-Fonts") !== "0",
+        missing: Number(res.headers.get("X-Missing")) || 0,
+        file: bookFileName(u.grade, u.code, only),
+      };
+    })();
+    pdfs.current.made.set(key, made);
+    made.catch(() => pdfs.current.made.get(key) === made && pdfs.current.made.delete(key));
+    return made;
+  };
+
+  /** This phone's own print window (Save as PDF): when the server can't make the file (`why`). One toast says it all. */
+  const printHere = async (only: number | null, why: string) => {
+    if (!u || !book || !printed || printed === "failed") return;
+    const { plan, missing } = skillBookPlan(u, book.levels, book.number, (q) => needs(u.tags, q), printed.qs, new Date().getFullYear());
+    toast(
+      `The server couldn't make the PDF (${why}): printing on this phone instead. In the print window: Save as PDF, paper A4.${missing ? ` ${missing} questions aren't in the app as printed (a dash in their place).` : ""}`,
+      "error",
+    );
+    const r = await printSkillBook(plan, printed.css, bookFileName(u.grade, u.code, only), only);
+    if (!r.fonts) toast("The book's fonts didn't all come (weak signal?): the PDF may use this phone's fonts. Try again on a better signal.", "error");
+  };
+
   const download = async (only: number | null) => {
     if (!u || !book || !printed || printed === "failed" || busy !== null) return;
     setBusy(only ?? 0);
-    const cards = new Map<number, string>();
-    let missing = 0;
-    // Every card, even for one level: its pages are cut out of the whole book's, so they carry the same numbers.
-    for (const [q, no] of book.number) {
-      const html = printed.qs.get(q);
-      if (html) cards.set(q, bookCard(html, no, needs(u.tags, q).map(label)));
-      else missing++;
-    }
-    const year = new Date().getFullYear();
-    toast(
-      missing
-        ? `${missing} questions aren't in the app as printed: their places show a dash. In the print window: Save as PDF, paper A4.`
-        : "In the print window: choose Save as PDF, paper size A4.",
-      missing ? "error" : "info",
-    );
     try {
-      const file = only === null ? `G${u.grade}_${u.code}_Skills_Book` : `G${u.grade}_${u.code}_Skills_Level${only}`;
-      const r = await printSkillBook({ unit: { key: u.key, grade: u.grade, code: u.code, ta: u.ta, en: u.en, data: u.data, names: u.names }, levels: book.levels, cards, year }, printed.css, file, only);
-      if (!r.fonts) toast("The book's fonts didn't all come (weak signal?): the PDF may use this phone's fonts. Try again on a better signal.", "error");
+      const made = await serverPdf(only);
+      saveFile(made.blob, `${made.file}.pdf`);
+      toast(`${made.file}.pdf · ${made.pages} pages: in your downloads.${made.missing ? ` ${made.missing} questions aren't in the app as printed (a dash in their place).` : ""}`, made.missing ? "error" : "info");
     } catch (e) {
-      clearPrint();
-      toast(`The PDF couldn't be made: ${e instanceof Error ? e.message : String(e)}`, "error");
+      // The server couldn't: this phone's own print window instead.
+      try {
+        await printHere(only, e instanceof Error ? e.message : String(e));
+      } catch (e2) {
+        clearPrint();
+        toast(`The PDF couldn't be made: ${e2 instanceof Error ? e2.message : String(e2)}`, "error");
+      }
     } finally {
       setBusy(null);
     }
@@ -158,6 +204,12 @@ export function SkillBookPage(props: { unit: Unit; gov: GovRow | null; onClose: 
             <path d="M12 4v11M7 10l5 5 5-5M5 20h14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
           </svg>
           {busy === 0 ? "Making…" : "PDF"}
+        </button>
+        {/* Share (23 Nov 2026): the whole book to the printing shop's WhatsApp, the copies as its message. */}
+        <button type="button" class="sb-share" disabled={!ready} onClick={() => setSharing(0)} aria-label="Send the whole book to the printing shop">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+            <path d="M12 15V4M7.5 8.5L12 4l4.5 4.5M5 13v6h14v-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
         </button>
       </div>
       {/* The government's own book for this unit (23 Nov 2026): the extra context a chat reads when it builds
@@ -264,6 +316,9 @@ export function SkillBookPage(props: { unit: Unit; gov: GovRow | null; onClose: 
               );
             })}
           </div>
+          {sharing !== null && (
+            <ShareSheet grade={u.grade} code={u.code} ta={u.ta} level={sharing === 0 ? null : sharing} make={() => serverPdf(sharing === 0 ? null : sharing)} onClose={() => setSharing(null)} />
+          )}
           {moving !== null && (
             <MoveQSheet
               unitId={unitId}

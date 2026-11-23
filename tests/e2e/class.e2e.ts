@@ -5094,7 +5094,14 @@ test("Skill book: Books → T on a tagged unit; Level n = skill n (S1+S2 inside 
   await P.locator(".sb-pill", { hasText: "S3" }).click();
   await textsAre(P.locator(".sb-grp b"), ["S1+S3", "S2+S3"]);
 
-  // Download the whole book: the engine's pages, made in the page for Chrome's print (Save as PDF).
+  // The PDF server (api/pdf.mjs) isn't in this run's site: first the fallback, this phone's own print window.
+  let served: { status: number; body?: Buffer; pages?: number } = { status: 503 };
+  const posted: Record<string, unknown>[] = [];
+  await C.route("**/api/pdf", async (route) => {
+    posted.push(JSON.parse(route.request().postData() ?? "{}") as Record<string, unknown>);
+    if (served.status !== 200 || !served.body) await route.fulfill({ status: served.status, contentType: "application/json", body: JSON.stringify({ error: "no server here" }) });
+    else await route.fulfill({ status: 200, contentType: "application/pdf", headers: { "X-Pages": String(served.pages), "X-Fonts": "1", "X-Missing": "0" }, body: served.body });
+  });
   await C.evaluate(() => {
     (window as unknown as { __printed: number }).__printed = 0;
     window.print = () => {
@@ -5102,11 +5109,21 @@ test("Skill book: Books → T on a tagged unit; Level n = skill n (S1+S2 inside 
     };
   });
   await P.getByRole("button", { name: "Download the whole book as a PDF" }).click();
+  await visible(C.locator(".toast", { hasText: "The server couldn't make the PDF (no server here): printing on this phone instead." }));
   await until(async () => (await C.evaluate(() => (window as unknown as { __printed: number }).__printed)) === 1, "the print window");
+  expect(posted[0]).toMatchObject({ token: OWNER_TOKEN, unitId: u08, only: null });
+  // Chrome itself logs the server's 503 (no page can silence it): that one line, taken off, and nothing else.
+  const took503 = async () => {
+    const is503 = (x: string) => x.includes("Failed to load resource: the server responded with a status of 503");
+    await until(async () => problems.some(is503), "Chrome's line for the server's 503");
+    problems.splice(problems.findIndex(is503), 1);
+  };
+  await took503();
   type Book = {
-    pages: { kind: string; level: string | null; n: string | null; first: string; qn: string[]; foot: string; tab: string; over: number }[];
+    pages: { kind: string; level: string | null; n: string | null; first: string; qn: string[]; foot: string; tab: string; over: number; bands: string[] }[];
     toc: { lv: string; pg: string }[];
     strips: string[];
+    heads: string[];
     chips1: string | undefined;
     chips50: string | undefined;
     title: string;
@@ -5129,12 +5146,15 @@ test("Skill book: Books → T on a tagged unit; Level n = skill n (S1+S2 inside 
           tab: p.querySelector(".sbx-tab i")?.textContent ?? "",
           // how far the last block runs past the bottom of its column (px; ≤ 0 = inside)
           over: col && last ? last.getBoundingClientRect().bottom - col.getBoundingClientRect().bottom : 0,
+          // each band on the page: "first" when it opens the page, "mid" when a level starts in the middle of it
+          bands: col ? [...col.querySelectorAll(":scope > .band")].map((b) => (b === col.firstElementChild ? "first" : "mid")) : [],
         };
       });
       return {
         pages,
         toc: [...root.querySelectorAll<HTMLElement>(".sbx-inside .toc-r[data-lv]")].map((r) => ({ lv: r.dataset.lv!, pg: r.querySelector(".pg")?.textContent ?? "" })),
         strips: [...root.querySelectorAll(".lvq")].map((x) => x.textContent ?? ""),
+        heads: [...root.querySelectorAll(".sbx-grp")].map((x) => x.textContent ?? ""),
         chips1: root.querySelector(".si .sbk-sks")?.textContent ?? undefined,
         chips50: [...root.querySelectorAll(".sbx-col > *")].find((e) => e.querySelector(".qn")?.textContent === "50")?.querySelector(".sbk-sks")?.textContent ?? undefined,
         title: document.title,
@@ -5151,16 +5171,19 @@ test("Skill book: Books → T on a tagged unit; Level n = skill n (S1+S2 inside 
   expect(body.flatMap((p) => p.qn)).toEqual(Array.from({ length: 57 }, (_, i) => String(i + 1)));
   expect(body.map((p) => p.foot)).toEqual(body.map((_, i) => String(i + 1)));
   for (const p of body) expect(p.over).toBeLessThanOrEqual(1);
-  // Each level from a new page, its band first; the side tab says its level.
-  for (const lv of ["1", "2", "3"]) {
-    const first = body.find((p) => p.level === lv)!;
-    expect(first.first).toContain("band");
-    expect(body.filter((p) => p.level === lv).every((p) => p.tab === lv)).toBe(true);
-  }
+  // His rule (23 Nov 2026): the whole book runs on, a level starting where the last one ended, never a page per level.
+  expect(body[0].first).toContain("band");
+  expect(body.flatMap((p) => p.bands).length).toBe(3);
+  expect(body.flatMap((p) => p.bands)).toContain("mid");
+  // The side tab says the level a page starts with.
+  for (const p of body) expect(p.tab).toBe(p.level ?? "");
   expect(book.strips).toEqual(["வினாக்கள் 1 – 11", "வினாக்கள் 12 – 36", "வினாக்கள் 37 – 57"]);
-  // The contents give each level's first page and the marks sheet's.
+  // A joined group's heading: its skills as a badge, no names (the cover has them).
+  expect(book.heads).toEqual(["S1 + S2", "S1 + S3", "S2 + S3"]);
+  // The contents give the page of each level's band and the marks sheet's.
   expect(book.toc.map((r) => r.lv)).toEqual(["1", "2", "3", "sheet"]);
-  for (const r of book.toc.slice(0, 3)) expect(r.pg).toBe(body.find((p) => p.level === r.lv)!.foot);
+  const bandPage = (i: number) => body.findIndex((p) => p.bands.length > 0 && body.slice(0, body.indexOf(p) + 1).flatMap((x) => x.bands).length > i) + 1;
+  expect(book.toc.slice(0, 3).map((r) => Number(r.pg))).toEqual([bandPage(0), bandPage(1), bandPage(2)]);
   expect(Number(book.toc[3].pg)).toBe(body.length);
   expect(book.chips1).toBe("S1");
   expect(book.chips50).toBe("S1S3");
@@ -5173,19 +5196,131 @@ test("Skill book: Books → T on a tagged unit; Level n = skill n (S1+S2 inside 
   await C.pdf({ path: join(SHOTS, "sb04-book.pdf"), preferCSSPageSize: true, printBackground: true });
   await C.emulateMedia({ media: "screen" });
 
-  // One level alone: Level 2's pages only, numbered as in the whole book.
+  // One level alone: laid out on its own pages, numbered from 1, its questions keeping the book's numbers.
   await P.locator(".sb-pill", { hasText: "S2" }).click();
   await P.getByRole("button", { name: "Download Level 2 alone as a PDF" }).click();
   await until(async () => (await C.evaluate(() => (window as unknown as { __printed: number }).__printed)) === 2, "the print window again");
+  await took503();
+  expect(posted[1]).toMatchObject({ only: 2 });
   const one = await read();
-  expect(one.pages.length).toBe(body.filter((p) => p.level === "2").length);
   expect(one.pages.every((p) => p.kind === "body" && p.level === "2")).toBe(true);
-  expect(one.pages.map((p) => p.foot)).toEqual(body.filter((p) => p.level === "2").map((p) => p.foot));
+  expect(one.pages.map((p) => p.foot)).toEqual(one.pages.map((_, i) => String(i + 1)));
+  expect(one.pages[0].first).toContain("band");
   expect(one.pages.flatMap((p) => p.qn)).toEqual(Array.from({ length: 25 }, (_, i) => String(i + 12)));
   expect(one.title).toBe("G7_U08_Skills_Level2");
   await C.emulateMedia({ media: "print" });
   await C.pdf({ path: join(SHOTS, "sb05-level2.pdf"), preferCSSPageSize: true, printBackground: true });
   await C.emulateMedia({ media: "screen" });
+
+  // The PDF server's own code (api/pdf.mjs makePdf), on this run's site and backend, with this machine's Chrome: the
+  // print page lays the book out from the T page's data and Chrome prints it, A4.
+  process.env.PDF_CHROME = playwright.chromium.executablePath();
+  const { makePdf } = (await import("../../api/pdf.mjs")) as {
+    makePdf: (o: { site: string; load: () => Promise<unknown>; only?: number | null }) => Promise<{ pdf: Buffer; pages: number; fonts: boolean; missing: number; file: string }>;
+  };
+  const load = async () => ({
+    u: await backend.t.query(api.skillBook.unit, { token: OWNER_TOKEN, unitId: u08 }),
+    printed: await backend.t.query(api.skillBook.questions, { token: OWNER_TOKEN, unitId: u08 }),
+  });
+  const made = await makePdf({ site: site.url, load });
+  expect(made.pdf.subarray(0, 5).toString()).toBe("%PDF-");
+  expect(made.pages).toBe(book.pages.length);
+  expect(made.pdf.toString("latin1").match(/\/Type\s*\/Page[^s]/g)?.length).toBe(made.pages);
+  expect([made.fonts, made.missing, made.file]).toEqual([true, 0, "G7_U08_Skills_Book"]);
+  // Light enough to send: the dotted lines and the seal are tiles and one picture, not dots drawn one by one.
+  expect(made.pdf.length / made.pages).toBeLessThan(120_000);
+  const level2 = await makePdf({ site: site.url, load, only: 2 });
+  expect([level2.pages, level2.file]).toEqual([one.pages.length, "G7_U08_Skills_Level2"]);
+  await (await import("node:fs/promises")).writeFile(join(SHOTS, "sb06-server.pdf"), made.pdf);
+
+  // Download with the server: the file itself, no print window.
+  served = { status: 200, body: made.pdf, pages: made.pages };
+  const dl = C.waitForEvent("download");
+  await P.getByRole("button", { name: "Download the whole book as a PDF" }).click();
+  expect((await dl).suggestedFilename()).toBe("G7_U08_Skills_Book.pdf");
+  await visible(C.locator(".toast", { hasText: `G7_U08_Skills_Book.pdf · ${made.pages} pages: in your downloads.` }));
+  expect(await C.evaluate(() => (window as unknown as { __printed: number }).__printed)).toBe(2);
+
+  // Share: to the printing shop's WhatsApp, the copies as the message (his ask, 23 Nov 2026).
+  await C.evaluate(() => {
+    const w = window as unknown as { __shared: unknown[]; __opened: string[] };
+    w.__shared = [];
+    w.__opened = [];
+    Object.assign(navigator, {
+      canShare: () => true,
+      share: async (d: { files: File[]; text: string }) => {
+        w.__shared.push({ files: d.files.map((f) => [f.name, f.type, f.size > 0]), text: d.text });
+      },
+    });
+    window.open = ((url: string) => {
+      w.__opened.push(url);
+      return null;
+    }) as typeof window.open;
+  });
+  await P.getByRole("button", { name: "Send the whole book to the printing shop" }).click();
+  const Sh = C.locator(".sheet");
+  await contains(Sh, "Send to the printing shop");
+  await contains(Sh.locator(".prs-state"), `✓ PDF ready · ${made.pages} pages`);
+  // No shop yet: its form is open.
+  await contains(Sh.locator(".prs-form"), "Your printing shop");
+  expect(await Sh.getByRole("button", { name: "Add a shop first" }).isDisabled()).toBe(true);
+  await Sh.getByLabel("Shop name").fill("Rathna Print");
+  await Sh.getByLabel("WhatsApp number").fill("077 123");
+  await contains(Sh.locator(".prs-bad"), "Type the number like 077 123 4567");
+  await Sh.getByLabel("WhatsApp number").fill("077 123 4567");
+  await Sh.getByRole("button", { name: "Save" }).click();
+  await contains(Sh.locator(".prs-shop"), "+94 77 123 4567");
+  await contains(Sh.locator(".prs-shop"), "Default");
+  await Sh.getByRole("button", { name: "+ Add a printing shop" }).click();
+  await Sh.getByLabel("Shop name").fill("Lanka Copy");
+  await Sh.getByLabel("WhatsApp number").fill("+94 71 987 6543");
+  await Sh.getByRole("button", { name: "Save" }).click();
+  await count(Sh.locator(".prs-shop"), 2);
+  const saved = await backend.t.query(api.skillBook.shops, { token: OWNER_TOKEN });
+  expect(saved.shops.map((x) => [x.name, x.phone])).toEqual([
+    ["Rathna Print", "94771234567"],
+    ["Lanka Copy", "94719876543"],
+  ]);
+  expect(saved.def).toBe(saved.shops[0].id);
+  // Four copies, both sides, to the default shop.
+  for (let i = 0; i < 3; i++) await Sh.getByRole("button", { name: "One copy more" }).click();
+  await Sh.getByRole("radio", { name: /Rathna Print/ }).click();
+  const caption = `Please print 4 copies — A4, both sides.\nG7 U08 ${await P.locator(".sb-title span").innerText()} · skill book · ${made.pages} pages`;
+  expect(await Sh.locator(".prs-msg").innerText()).toBe(caption);
+  await shot(C, "sb07-share-sheet");
+  await C.setViewportSize({ width: 320, height: 640 });
+  expect(await C.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await shot(C, "sb07b-share-sheet-320");
+  await C.setViewportSize({ width: 390, height: 844 });
+  await Sh.getByRole("button", { name: "Send to Rathna Print" }).click();
+  await visible(C.locator(".toast", { hasText: "Sent to the share list: pick WhatsApp → Rathna Print." }));
+  await count(C.locator(".sheet"), 0);
+  expect(await C.evaluate(() => (window as unknown as { __shared: unknown[] }).__shared)).toEqual([{ files: [["G7_U08_Skills_Book.pdf", "application/pdf", true]], text: caption }]);
+  // Another shop as the default; the copies remembered; a computer (no sharing of files): the file downloaded and the
+  // default shop's chat opened with the message.
+  await P.getByRole("button", { name: "Send the whole book to the printing shop" }).click();
+  await Sh.locator(".prs-shop", { hasText: "Lanka Copy" }).getByRole("button", { name: "Make default" }).click();
+  await until(async () => (await backend.t.query(api.skillBook.shops, { token: OWNER_TOKEN })).def === saved.shops[1].id, "Lanka Copy the default");
+  expect(await Sh.getByLabel("Copies").inputValue()).toBe("4");
+  await C.evaluate(() => Object.assign(navigator, { canShare: () => false }));
+  const dl2 = C.waitForEvent("download");
+  await Sh.getByRole("button", { name: "Send to Lanka Copy" }).click();
+  expect((await dl2).suggestedFilename()).toBe("G7_U08_Skills_Book.pdf");
+  expect(await C.evaluate(() => (window as unknown as { __opened: string[] }).__opened)).toEqual([`https://wa.me/94719876543?text=${encodeURIComponent(caption)}`]);
+  // The copies box can be cleared to type a number (it never jumps back to 1); nothing goes without a number.
+  await Sh.getByLabel("Copies").fill("");
+  await visible(Sh.locator(".prs-bad", { hasText: "Copies: a number from 1 to 99." }));
+  expect(await Sh.getByRole("button", { name: "Send to Lanka Copy" }).isDisabled()).toBe(true);
+  await Sh.getByLabel("Copies").fill("12");
+  await contains(Sh.locator(".prs-msg"), "Please print 12 copies — A4, both sides.");
+  expect(await Sh.getByRole("button", { name: "Send to Lanka Copy" }).isDisabled()).toBe(false);
+  // A shop removed: the other one is the default again.
+  await Sh.getByRole("button", { name: "Change Lanka Copy" }).click();
+  await Sh.getByRole("button", { name: "Remove" }).click();
+  await count(Sh.locator(".prs-shop"), 1);
+  expect((await backend.t.query(api.skillBook.shops, { token: OWNER_TOKEN })).def).toBe(saved.shops[0].id);
+  await Sh.getByRole("button", { name: "Close" }).click();
+
   // Back closes the page and takes the book off it.
   await P.getByRole("button", { name: "Back to Books" }).click();
   await count(C.locator(".sb"), 0);
