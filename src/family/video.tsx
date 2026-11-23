@@ -41,8 +41,9 @@ function linksOf(id: string): Promise<Links> {
 
 export function VideoScreen(props: {
   list: StageVideo[];
-  /** The Level after this stop, and whether he can START it now. */
+  /** The Level after this stop (and its name: "2·1" in a skill workbook), and whether he can START it now. */
   level: number;
+  label?: string;
   canStart: boolean;
   onStart: () => void;
   /** He tapped back (the phone's Back closes it as one of the app's sheets). */
@@ -306,7 +307,7 @@ export function VideoScreen(props: {
                 props.onStart();
               }}
             >
-              START · Level {props.level}
+              START · Level {props.label ?? props.level}
             </button>
           ) : null}
           <button type="button" class="f-btn ghost" onClick={close}>

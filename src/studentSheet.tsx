@@ -11,6 +11,7 @@ import { buildLanes, type PBoard } from "./progressData";
 import { buildModel, drawReport, lastWords, nth, reportFile, type ImageOpts, type Model, type RankLine, type SR, type UnitLine } from "./studentReport";
 import { now as serverNow, stageName, testMode, toast } from "./store";
 import { Sheet } from "./ui";
+import { lvText } from "./levelNames";
 
 const tone = (p: number | null) => (p === null ? "" : p >= 80 ? " good" : p >= 50 ? " mid" : " low");
 const unitNo = (code: string) => Number(code.slice(1));
@@ -59,7 +60,7 @@ function Body(props: { m: Model }) {
           <h3>Now</h3>
           <UnitRow x={m.now} big />
           <p class="sr-line">
-            {m.now.kind === "m" && m.now.level !== null ? `On Level ${m.now.level} of ${m.now.of}` : m.now.finished ? "Finished" : `${m.now.done} of ${m.now.of} done`}
+            {m.now.kind === "m" && m.now.level !== null ? `On Level ${lvText(m.now.unit._id, m.now.level)} of ${m.now.of}` : m.now.finished ? "Finished" : `${m.now.done} of ${m.now.of} done`}
             {m.pace !== null && ` · ${m.pace} ${m.now.kind === "m" ? "levels" : "questions"} a class day`}
           </p>
         </section>

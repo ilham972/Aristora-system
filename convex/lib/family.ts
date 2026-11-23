@@ -749,7 +749,7 @@ export function usualDays(days: string[], now: number): number[] {
 /** One thing in his day, for the timeline (class and home). */
 export type DayItem =
   | { k: "in" | "out"; at: number }
-  | { k: "level"; at: number; no: number; ta: string; n: number; how: "handed" | "marked" | "home"; got: number | null; max: number }
+  | { k: "level"; at: number; unitId: Id<"units">; no: number; ta: string; n: number; how: "handed" | "marked" | "home"; got: number | null; max: number }
   | {
       k: "room";
       at: number;

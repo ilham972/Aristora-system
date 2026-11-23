@@ -2,7 +2,7 @@
 // Every student has his own book: a theory book (Fighter), a workbook (Master), or none in the app
 // (Legend, Exam Sprint, or a unit whose book isn't loaded yet).
 
-import { fighter, type Fighter, type MasterData, type SectionData } from "../convex/lib/book";
+import { fighter, type Fighter, lvLabel, type MasterData, type SectionData } from "../convex/lib/book";
 import { slDay } from "../convex/lib/day";
 import { computeMaster, EMPTY_MASTER, masterEvalUrgency, type MState, type MStatus } from "../convex/lib/master";
 import { isSkbGrade } from "../convex/lib/sakarath";
@@ -261,20 +261,20 @@ export function buildViews(board: Board, now: number): View[] {
       } else if (noWork) {
         tone = "red";
         line = `Out of work${forMin(idleMs)}: ${
-          ms.needs.includes("correction") ? `Level ${w.n} to correct` : ms.needs.includes("evaluation") ? "waiting for evaluation" : "waiting for Theory"
+          ms.needs.includes("correction") ? `Level ${lvLabel(w)} to correct` : ms.needs.includes("evaluation") ? "waiting for evaluation" : "waiting for Theory"
         }`;
       } else if (ms.dry) {
         tone = w ? "amber" : "green";
-        line = `${w ? `Level ${w.n} to correct` : `${unit?.code ?? "This book"} waits for ${ms.needs.includes("evaluation") ? "Evaluation" : "Theory"}`} · ${onOther}`;
+        line = `${w ? `Level ${lvLabel(w)} to correct` : `${unit?.code ?? "This book"} waits for ${ms.needs.includes("evaluation") ? "Evaluation" : "Theory"}`} · ${onOther}`;
       } else if (quiet) {
         tone = "yellow";
         line = `Quiet for ${fmtMin(quietMs!)}. Go and check`;
       } else if (w) {
         tone = "amber";
-        line = `Level ${w.n} to correct${forMin(ms.waitingSince === null ? undefined : now - ms.waitingSince)}`;
+        line = `Level ${lvLabel(w)} to correct${forMin(ms.waitingSince === null ? undefined : now - ms.waitingSince)}`;
       } else {
         tone = "green";
-        line = `On Level ${ms.current!.n}${ms.sofar.pct !== null ? `, ${ms.sofar.pct}% so far` : ""}`;
+        line = `On Level ${lvLabel(ms.current!)}${ms.sofar.pct !== null ? `, ${ms.sofar.pct}% so far` : ""}`;
       }
     } else {
       tone = "none";

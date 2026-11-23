@@ -13,6 +13,7 @@ import type { SimInfo } from "../convex/sim";
 import { isSkbGrade, isSkGrade, skbGrade, skGrade } from "../convex/lib/sakarath";
 import { OL } from "../convex/lib/syllabus";
 import { errorText, mutate, phoneToken, savePhoneToken, setLookOnly, subscribe, watchLink, type Link } from "./backend";
+import { levelSource, lvText } from "./levelNames";
 
 export type Student = Doc<"students">;
 export type Call = Doc<"calls">;
@@ -431,6 +432,27 @@ export const previewing = (): Me | null => preview;
 export function unitOf(id: string | undefined | null): Unit | null {
   return id ? (unitById.get(id) ?? null) : null;
 }
+
+/**
+ * A history line's level (an event keeps the number it had then): its name (src/levelNames.ts) only for an event since
+ * the unit's workbook became its skill book; an older line keeps its old number ("Level 3" of the old book).
+ */
+export function historyLevel(unit: string | undefined, n: string | number, at: number): string {
+  if (!unit || !board) return String(n);
+  const id = unitById.has(unit) ? unit : (units ?? []).find((u) => u.key === unit)?._id;
+  const b = id ? board.books[`${id}:master`] : undefined;
+  const since = b && b.data.kind === "master" ? b.data.since : undefined;
+  return since !== undefined && at >= since ? lvText(unit, n) : String(n);
+}
+
+// The class app's levels for the one names pipeline (src/levelNames.ts): each unit's workbook on the board, found by
+// the unit's id or its key ("G8-U04", as the history writes it).
+levelSource("board", (ref) => {
+  if (!board) return null;
+  const id = unitById.has(ref) ? ref : (units ?? []).find((u) => u.key === ref)?._id;
+  const b = id ? board.books[`${id}:master`] : undefined;
+  return b && b.data.kind === "master" ? b.data.levels : null;
+});
 export function allUnits(): Unit[] {
   return units ?? [];
 }

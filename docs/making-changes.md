@@ -529,7 +529,10 @@ SIZE=200 NAMES=family:me,chat:room npx vitest run -c vitest.scale.config.ts test
     `pressSequentially`): Playwright's `fill("")` on it sometimes left the old number.
 
 - **A skill workbook** (23 Nov 2026, `MasterData.skills`, the owner's switch on the T page): its levels have names ("1",
-  "2·1"): show `lvLabel(l)` to people, never `l.n` (the number is the level's place: "2·3" is n = 4). Its parts are runs
+  "2·1"): never write `Level ${n}` for a workbook level, anywhere. Holding the level: `lvLabel(l)` (server and apps);
+  holding the unit and a number: `lvText(unit, n)` (`src/levelNames.ts`, the one pipeline: it reads the books the app
+  holds now); a history line: `historyLevel(e.unit, n, e.at)` (an old line keeps its old number). A new app screen with
+  its own books adds a `levelSource`. The number is only the level's place ("2·3" is n = 4). Its parts are runs
   (Part I can come back after Part II, a level can hold both): find a question's part with `partOf` (by range), never
   `parts[0]` or "Part II starts at this level" (Correction's bar puts its gap where a skill starts). A new table that
   keeps rows by a workbook's question or level number (`q`, `n`) must be renumbered or cleared in

@@ -18,6 +18,7 @@ import { keep, query, sameOr } from "./net";
 import { nextPlay } from "./next";
 import { buzz, sound } from "./sound";
 import { Dashes, Flame, flameAtRisk, Gem, Icon, Owl, OwlBadge, OwlSays, PART_TA, showSheet, SK_PART_TA, Tag, TERM_TA, titleSize, toast, Waiting, type Mood } from "./ui";
+import { lvText } from "../levelNames";
 
 // ---- The road: a smooth line through the stops (x in % of the width, y in px) ----
 
@@ -424,6 +425,7 @@ export function StageScreen(props: {
         <m.VideoScreen
           list={x.v}
           level={x.n}
+          label={lvText(w.unitId, x.n)}
           canStart={canPlay && w.levels.some((l) => l.n === x.n && l.s === "play")}
           onStart={() => {
             const go = () => props.onPlay(x.n);
@@ -556,7 +558,7 @@ export function StageScreen(props: {
                   type="button"
                   class={`f-vd ${p.x < 50 ? "r" : "l"}${all ? " done" : ""}${again ? " again" : ""}`}
                   style={{ left: `${p.x}%`, top: `${p.y}px`, "--w": String(w0) }}
-                  aria-label={`Video before Level ${x.n}: ${x.v.map((v) => v.t).join(", ")} (${mmss(sec)})${all ? ", watched" : ""}`}
+                  aria-label={`Video before Level ${lvText(w.unitId, x.n)}: ${x.v.map((v) => v.t).join(", ")} (${mmss(sec)})${all ? ", watched" : ""}`}
                   onClick={() => openVideo(x)}
                 >
                   <span class="f-vd-c">

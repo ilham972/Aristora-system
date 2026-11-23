@@ -267,14 +267,14 @@ export const useAsWorkbook = mutation({
       );
     }
 
-    await ctx.db.patch(book._id, { data: made.data, updatedAt: now });
+    await ctx.db.patch(book._id, { data: { ...made.data, since: now }, updatedAt: now });
     const session = await currentSession(ctx, now);
     for (const sid of sids) await refresh(ctx, sid, now, session);
     await log(ctx, session, now, {
       kind: "book-skills",
       by: cleanBy(args.by),
       unit: unit.key,
-      value: `${made.data.levels.length} levels by skill, ${made.map.size} questions; ${marked} students' old marks cleared`,
+      value: `${made.data.levels.length} levels by skill, ${made.map.size} questions; ${marked === 1 ? "1 student's" : `${marked} students'`} old marks cleared`,
     });
     await touch(ctx, session, now);
     return { levels: made.data.levels.length, questions: made.map.size, students: marked };

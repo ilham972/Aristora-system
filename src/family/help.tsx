@@ -22,6 +22,7 @@ import { buzz, sound } from "./sound";
 import { agoShort, baseOf, sendPicked, usePicker } from "./talk";
 import { Pics } from "./usPost";
 import { Avatar, Icon, Maths, problemWords, Sheet, showSheet, toast, Waiting } from "./ui";
+import { lvText } from "../levelNames";
 
 const LIST_MS = 20_000;
 
@@ -606,7 +607,7 @@ export function HelpMenu(props: { id: string; help: HelpHead; onClose: () => voi
       (e) => toast(problemWords(e), true),
     );
   return (
-    <Sheet title={`Q${h.q} · Stage ${h.no} · Level ${h.n}`} sub={open.length ? `${open.length} waiting: ${open.map((a) => a.n).join(", ")}` : "Nobody is waiting in this thread."} onClose={props.onClose} class="h-menu">
+    <Sheet title={`Q${h.q} · Stage ${h.no} · Level ${lvText(h.unitId, h.n)}`} sub={open.length ? `${open.length} waiting: ${open.map((a) => a.n).join(", ")}` : "Nobody is waiting in this thread."} onClose={props.onClose} class="h-menu">
       {pass ? (
         <ul class="h-tch">
           {pass
@@ -718,7 +719,7 @@ export function PeopleSheet(props: { id: string; help: HelpHead; staff: boolean;
       </Sheet>
     );
   return (
-    <Sheet title={`Q${h.q} · ${h.unit}`} sub={`Stage ${h.no} · Level ${h.n}`} onClose={props.onClose} class="h-ppl">
+    <Sheet title={`Q${h.q} · ${h.unit}`} sub={`Stage ${h.no} · Level ${lvText(h.unitId, h.n)}`} onClose={props.onClose} class="h-ppl">
       <ul class="h-pl">
         <li>
           <span class="h-pw">
@@ -1135,7 +1136,7 @@ export function HelpList(props: {
                           )}
                         </b>
                         <small>
-                          Stage {l.no} · Level {l.n}
+                          Stage {l.no} · Level {lvText(l.unitId, l.n)}
                           {!staff && l.sg !== "closed" ? ` · ${l.tname}` : ""}
                         </small>
                         <small class="h-say1">{said(l, staff, ls.find((x) => x.rp)?.sn?.split(" ")[0] ?? who.split(" ")[0])}</small>

@@ -21,6 +21,7 @@ import { agoShort, Bubble, jumpTo, ReactorsSheet, ReadFull, useParts, WriteBar, 
 import { darkOn, onTheme, setDark } from "./theme";
 import { Avatar, Icon, Owl, problemWords, Sheet, showSheet, toast, Waiting } from "./ui";
 import { Pics } from "./usPost";
+import { lvText } from "../levelNames";
 
 /** An open chat reads again this often (only what is new); the lists less often. */
 const ROOM_MS = 4000;
@@ -503,7 +504,7 @@ export function RoomScreen(props: { id: string; staff: boolean; me?: string; onB
       ? "👁 Reading as the owner"
       : head.k === "h"
         ? head.help
-          ? `Stage ${head.help.no} · Level ${head.help.n}${props.staff ? ` · ${head.help.open} waiting` : ` · ${head.help.tname}`}`
+          ? `Stage ${head.help.no} · Level ${lvText(head.help.unitId, head.help.n)}${props.staff ? ` · ${head.help.open} waiting` : ` · ${head.help.tname}`}`
           : ""
         : head.k === "g"
         ? `${head.members ? `${head.members} மாணவர்கள் + ஆசிரியர்கள்` : "மாணவர்கள் + ஆசிரியர்கள்"}${head.ro ? " · 📣 ஆசிரியர்கள் மட்டும் எழுதுவார்கள்" : ""}`

@@ -13,6 +13,7 @@ import { hideSplash } from "../splash";
 import { lookWith, query, words } from "./net";
 import { Play, QuestionZoom, type Zoomed } from "./play";
 import { Toast } from "./ui";
+import { levelSource, lvText } from "../levelNames";
 
 /** Back to the class system, on Settings → Books (its `takeReopen`). */
 function back(): void {
@@ -43,6 +44,8 @@ export function startPreview(unitId: string, el: HTMLElement): void {
 
 function Preview(props: { unitId: string }) {
   const [unit, setUnit] = useState<PreviewUnit | null>(null);
+  // The owner's Preview feeds the one names pipeline (src/levelNames.ts) with the unit it shows.
+  levelSource("preview", (id) => (unit && id === props.unitId ? unit.levels : null));
   const [err, setErr] = useState<string | null>(null);
   const [n, setN] = useState<number | null>(null);
   const [zoomed, setZoomed] = useState<Zoomed | null>(null);
@@ -99,7 +102,7 @@ function Preview(props: { unitId: string }) {
         <section class="f-look-levels" aria-label="Levels" style={{ display: "grid", gap: "12px", marginTop: "16px" }}>
           {unit.levels.map((l) => (
             <button type="button" key={l.n} class="f-btn white big" style={{ justifyContent: "space-between" }} onClick={() => setN(l.n)}>
-              <span>Level {l.n}</span>
+              <span>Level {lvText(props.unitId, l.n)}</span>
               <small style={{ font: "inherit", fontWeight: 600, fontSize: "14px", opacity: 0.8 }}>
                 Q{l.from}–{l.to} · {l.max} marks{l.qs < l.to - l.from + 1 ? ` · ${l.qs} on the phone` : ""}
                 {l.free ? ` · 🎁 ${l.free} free` : ""}

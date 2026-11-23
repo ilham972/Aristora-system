@@ -1657,7 +1657,7 @@ export const day = query({
         const m = levelMoment(lv, from, to);
         if (!m) continue;
         const u = await unitInfo(r.unitId);
-        items.push({ k: "level", at: m.at, no: u.no, ta: u.ta, n: Number(n), how: m.how, got: m.got, max: u.max.get(Number(n)) ?? 0 });
+        items.push({ k: "level", at: m.at, unitId: r.unitId, no: u.no, ta: u.ta, n: Number(n), how: m.how, got: m.got, max: u.max.get(Number(n)) ?? 0 });
       }
     }
     const calls = (await ctx.db

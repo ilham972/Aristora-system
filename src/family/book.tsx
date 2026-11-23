@@ -11,6 +11,7 @@ import { keepPhotos, keptPhotos, photoKey, PHOTO_MAX, sendKept, sendPhotos, shri
 import { buzz, sound } from "./sound";
 import { Icon, Maths, Owl, openRoom, problemWords, showSheet, toast } from "./ui";
 import { stamp } from "./bell";
+import { lvText } from "../levelNames";
 
 /** The key's working: `**` = the final answer (bold), one line per part. */
 export function Solution(props: { text: string }) {
@@ -409,7 +410,7 @@ export function BookScreen(props: { unitId: string; n: number; no: number; title
         </button>
         <div class="f-bookt">
           <p class="f-kicker">
-            Stage {props.no} · Level {props.n}
+            Stage {props.no} · Level {lvText(props.unitId, props.n)}
           </p>
           <b>{props.title}</b>
         </div>

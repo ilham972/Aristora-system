@@ -18,6 +18,7 @@ import { picOf, usePics } from "./pics";
 import { Coffer, openChest } from "./quests";
 import { buzz, sound } from "./sound";
 import { Avatar, toast } from "./ui";
+import { lvText } from "../levelNames";
 
 type Pt = { x: number; y: number };
 
@@ -144,7 +145,7 @@ export function RoadPlus(props: {
     buzz();
     if (c.s === "wait") {
       sound("wrong");
-      return toast(`Level ${c.n} முடித்தால் இந்தப் பெட்டி திறக்கும்!`);
+      return toast(`Level ${lvText(w.unitId, c.n)} முடித்தால் இந்தப் பெட்டி திறக்கும்!`);
     }
     if (c.s === "old") return toast("இந்த Level ஐ பெட்டிகள் வரும் முன் முடித்தாய்.");
     if (c.s === "open") return toast(`திறந்தாய்: +${c.c ?? 0} coins.`);
@@ -152,7 +153,7 @@ export function RoadPlus(props: {
     setBusy(true);
     mutation("coins:roadChest", { unitId: w.unitId, n: c.n })
       .then((r) => {
-        openChest((r as { c: number }).c, `Level ${c.n} · பெட்டி`);
+        openChest((r as { c: number }).c, `Level ${lvText(w.unitId, c.n)} · பெட்டி`);
         void load();
         props.onChange();
       })
@@ -179,7 +180,7 @@ export function RoadPlus(props: {
             type="button"
             class={`f-rd-chest ${c.s}`}
             style={{ left: `${x}%`, top: `${mid.y}px` }}
-            aria-label={c.s === "ready" ? `Open the chest after Level ${c.n}` : `The chest after Level ${c.n}`}
+            aria-label={c.s === "ready" ? `Open the chest after Level ${lvText(w.unitId, c.n)}` : `The chest after Level ${lvText(w.unitId, c.n)}`}
             onClick={() => tapChest(c)}
           >
             <Coffer class={c.s === "open" || c.s === "old" ? "open" : ""} />
@@ -197,7 +198,7 @@ export function RoadPlus(props: {
         // His own Level: the faces on the side the owl is not; ahead: the roomier side.
         const roomy = p.x < 50 ? "r" : "l";
         const side = mine ? (roomy === "r" ? "l" : "r") : roomy;
-        return <Faces key={g.n} g={g} at={p} mine={mine} side={side} label={finished ? "Stage முடிந்தது" : `Level ${w.levels[i].d ?? g.n}`} />;
+        return <Faces key={g.n} g={g} at={p} mine={mine} side={side} label={finished ? "Stage முடிந்தது" : `Level ${w.levels[i].nm ?? w.levels[i].d ?? g.n}`} />;
       })}
       {w.book && n > 0 && <RoadOwl stops={stops} at={on(at)} from={from === null ? null : on(from)} />}
     </>

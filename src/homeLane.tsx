@@ -35,6 +35,7 @@ import { CardHead } from "./qcard";
 import { now as serverNow, toast } from "./store";
 import { tone } from "./tones";
 import { VoicePlay, VoiceRec, type Voice } from "./voiceNote";
+import { lvText } from "./levelNames";
 
 // ---- What the lane remembers while the app is open (a reload starts in the hall) ----
 
@@ -294,7 +295,7 @@ function HomePaper(props: { studentId: string; name: string; onEmpty: () => void
               type="button"
               class={`fc-lb hl-lb${on ? " on" : ""}`}
               aria-pressed={on}
-              aria-label={`${l.it.unit.key.replace(/^G\d+-/, "")} Level ${l.it.n}: ${l.waiting} to mark`}
+              aria-label={`${l.it.unit.key.replace(/^G\d+-/, "")} Level ${lvText(l.it.unit.key, l.it.n)}: ${l.waiting} to mark`}
               onClick={() => go(l.rows.find((r) => r.it)!.it!)}
             >
               {many ? `${unitShort(l.it.unit.key)}·${l.it.n}` : l.it.n}
@@ -303,7 +304,7 @@ function HomePaper(props: { studentId: string; name: string; onEmpty: () => void
         })}
       </HRow>
       <p class="fc-lvline hl-lvline">
-        <b>Level {lvl.it.n}</b> · {lvl.it.unit.key.replace(/^G\d+-/, "")} {lvl.it.unit.ta} · {waiting.length} to mark
+        <b>Level {lvText(lvl.it.unit.key, lvl.it.n)}</b> · {lvl.it.unit.key.replace(/^G\d+-/, "")} {lvl.it.unit.ta} · {waiting.length} to mark
         {hc ? " · checked in class" : ""}
       </p>
       <HRow as="ol" class="fc-strip" label="His questions with photos in this level" list={lvl.key} at={open.id}>

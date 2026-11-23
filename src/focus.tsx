@@ -128,6 +128,7 @@ import { tone } from "./tones";
 import { Empty, GRADES, Sheet } from "./ui";
 import { TriesButton } from "./tries";
 import { HomeButton, HomeNames, LaneBody, laneGrades, setLaneOn, useLaneList, useLaneState } from "./homeLane";
+import { lvText } from "./levelNames";
 
 // ---- What the page remembers while the app is open (switching pages and back keeps the open paper) ----
 
@@ -717,7 +718,7 @@ async function takeBackLevel(s: SavedLevel): Promise<boolean> {
     return false;
   }
   if (Math.abs(fixed - s.at) > 2 * 60_000) {
-    toast(`${s.name}'s Level ${s.level} was corrected again since. Open it on Class at the top (tap his name).`, "error");
+    toast(`${s.name}'s Level ${lvText(s.unitId, s.level)} was corrected again since. Open it on Class at the top (tap his name).`, "error");
     return false;
   }
   const ok = await act(() =>
@@ -737,7 +738,7 @@ async function takeBackLevel(s: SavedLevel): Promise<boolean> {
   // His paper (if open) goes back to how it is now.
   if (openPaper?.studentId === s.studentId) setPaper(null);
   emit();
-  toast(`Taken back: ${s.name}'s Level ${s.level} is as it was. Tap the right student: these marks go to him.`);
+  toast(`Taken back: ${s.name}'s Level ${lvText(s.unitId, s.level)} is as it was. Tap the right student: these marks go to him.`);
   return true;
 }
 
@@ -1551,7 +1552,7 @@ function SavedSheet(props: { now: number; onClose: () => void }) {
   if (asking) {
     return (
       <Sheet
-        title={asking.kind === "level" ? `Take back ${asking.name}'s Level ${asking.level}?` : `Take back ${asking.name}'s marks?`}
+        title={asking.kind === "level" ? `Take back ${asking.name}'s Level ${lvText(asking.unitId, asking.level)}?` : `Take back ${asking.name}'s marks?`}
         sub={
           asking.kind === "level"
             ? `Saved ${asking.got} / ${asking.max} on the wrong student or the wrong level? It goes back to how it was before.`
@@ -2013,7 +2014,7 @@ function MasterPaperView(props: {
     if (r) {
       void flushFocus();
       if (openPaper === paper || (openPaper?.kind === "master" && openPaper.studentId === v.s._id)) setPaper(null);
-      toast(`${v.s.name}: Level ${n} handed in. It waits as an amber level on his bar.`);
+      toast(`${v.s.name}: Level ${lvText(bookId(v), n)} handed in. It waits as an amber level on his bar.`);
     }
   };
   const look = levelLook(v, level, props.drafts);
@@ -2032,7 +2033,7 @@ function MasterPaperView(props: {
       />
       {fixedNow !== undefined && (
         <p class="fc-warn" role="alert">
-          Level {level.n} was corrected meanwhile ({v.mm.lv[String(level.n)]?.got ?? 0} / {level.max}). Saving replaces those marks.
+          Level {lvLabel(level)} was corrected meanwhile ({v.mm.lv[String(level.n)]?.got ?? 0} / {level.max}). Saving replaces those marks.
         </p>
       )}
       <Marking v={v} paper={paper} level={level} keyQ={keyQ} lock={lock} onClear={() => setClearing(true)} />
@@ -2195,7 +2196,7 @@ function Marking(props: {
   if (!each) {
     return (
       <Empty title="This workbook doesn't list each question's marks">
-        Correct Level {level.n} on Class (at the top): tap his name, then Level {level.n} in his marks table (the level's total and
+        Correct Level {lvLabel(level)} on Class (at the top): tap his name, then Level {lvLabel(level)} in his marks table (the level's total and
         which questions lost marks).
       </Empty>
     );
@@ -2676,7 +2677,7 @@ function Summary(props: { v: View; paper: MasterPaper; level: MasterLevel; each:
               <>
                 {" "}
                 <button type="button" class="link-btn" onClick={() => openLevel(v, back.n)}>
-                  Back to Level {back.n}
+                  Back to Level {lvLabel(back)}
                 </button>
               </>
             )}

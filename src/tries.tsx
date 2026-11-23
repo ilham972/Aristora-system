@@ -17,6 +17,7 @@ import { skillWords, tagMap, triesOf, type TagBook, type TagMap, type TryItem } 
 import { CardAnswer } from "./qcard";
 import { act, currentRole } from "./store";
 import { Sheet } from "./ui";
+import { lvText } from "./levelNames";
 
 /** Every tagged workbook's skills and tags, once on this phone (they change only when a unit is tagged again). */
 export function useTags(): TagMap {
@@ -25,7 +26,7 @@ export function useTags(): TagMap {
 }
 
 const stepWords = (x: TryItem) => (x.it.step === "redo" ? "After lesson" : "Second try");
-const place = (x: TryItem) => `${x.tb.key.split("-")[1] ?? x.tb.key} · L${x.it.n}`;
+const place = (x: TryItem) => `${x.tb.key.split("-")[1] ?? x.tb.key} · L${lvText(x.tb.key, x.it.n)}`;
 
 /** ↻ on his paper's top line, always in its place: pale when he brings nothing back; a number = tries to mark. */
 export function TriesButton(props: { v: View }) {

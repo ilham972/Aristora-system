@@ -61,6 +61,8 @@ export interface MasterData {
   skills?: true;
   /** Each question's number in the book before (index = question − first): the hidden permanent number. */
   was?: number[];
+  /** When it became the skill workbook (the history's older lines keep their old level numbers). */
+  since?: number;
 }
 
 export type BookData = FighterData | MasterData;

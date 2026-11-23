@@ -5323,6 +5323,8 @@ test("Skill book: Books → T on a tagged unit; Level n = skill n (S1+S2 inside 
     items: Array.from({ length: old1.to - old1.from + 1 }, (_, i) => ({ q: old1.from + i, got: outOf(G7U08, old1.from + i)! })),
     by: "correction",
   });
+  // She also handed in the old Level 3: its history line must keep "Level 3" after the switch.
+  await backend.t.mutation(api.workbook.levelDone, { token: OWNER_TOKEN, studentId: asha, unitId: u08, level: 3, by: "correction" });
   await backend.t.mutation(api.students.setPresent, { token: OWNER_TOKEN, id: asha, present: true });
   await backend.push();
   await P.getByRole("button", { name: "Use as the workbook" }).click();
@@ -5344,7 +5346,7 @@ test("Skill book: Books → T on a tagged unit; Level n = skill n (S1+S2 inside 
   expect(stored.names).toEqual(["1", "2·1", "2·2", "2·3", "3·1", "3·2", "3·3", "3·4"]);
   expect(stored.skills).toBe(true);
   expect(stored.was).toEqual(Array.from({ length: 11 }, (_, i) => i + 1)); // each question's old number, kept inside
-  expect([stored.lv, stored.x0]).toEqual([[], 1]);
+  expect([stored.lv, stored.x0]).toEqual([[], 2]); // her XP and learning days from the old Level 1 and Level 3
   // The PDF prints the workbook as it is now: the same strips.
   await P.locator(".sb-pill", { hasText: "S2" }).click();
   await visible(P.locator(".sb-strips", { hasText: "2·3" }));
@@ -5363,6 +5365,19 @@ test("Skill book: Books → T on a tagged unit; Level n = skill n (S1+S2 inside 
   await textsAre(C.locator(".fc-lvbar .fc-lb"), ["1", "2·1", "2·2", "2·3", "3·1", "3·2", "3·3", "3·4"]);
   await contains(C.locator(".fc-lvline"), "Level 1 · Q1–11 · S1");
   await shot(C, "sb10-correction-skill-levels");
+
+  // One pipeline for the names (his words: "make everything synced pipeline, so changing something will showup
+  // everywhere"): she hands in the new Level 3 ("2·2"); her bar, the board and the history say 2·2, while the line
+  // written before the switch keeps its old "Level 3".
+  await backend.t.mutation(api.workbook.levelDone, { token: OWNER_TOKEN, studentId: asha, unitId: u08, level: 3, by: "correction" });
+  await backend.push();
+  await visible(C.locator(".fc-lvbar .fc-lb", { hasText: "2·2" }));
+  await C.getByRole("button", { name: /^Settings/ }).click();
+  await C.getByRole("button", { name: "History", exact: true }).click();
+  await visible(C.getByText("Level 2·2 handed in, waiting for correction").first());
+  await visible(C.getByText("Level 3 handed in, waiting for correction").first());
+  await visible(C.getByText(/the skill book is the workbook now: 8 levels by skill, 57 questions; 1 student's old marks cleared/).first());
+  await shot(C, "sb11-history-names");
   expect(problems).toEqual([]);
 });
 

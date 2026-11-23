@@ -51,6 +51,7 @@ import {
   type ChestSet,
 } from "./lib/quests";
 import { OL } from "./lib/syllabus";
+import { lvLabel } from "./lib/book";
 
 const token = v.optional(v.string());
 const shelf = v.union(v.literal("owl"), v.literal("treat"));
@@ -459,14 +460,17 @@ export const roadChest = mutation({
     if (had.some((c) => c.n === args.n)) fail("இந்தப் பெட்டியை ஏற்கனவே திறந்தாய்.");
     const book = await bookFor(ctx, unitId, "master");
     const levels = book && book.data.kind === "master" ? book.data.levels.map((l) => l.n) : [];
+    // The level as its book names it ("2·1" in a skill workbook: lib/book.ts lvLabel).
+    const named = book && book.data.kind === "master" ? book.data.levels.find((l) => l.n === args.n) : undefined;
+    const lv = named ? lvLabel(named) : String(args.n);
     if (!roadChestLevels(levels).includes(args.n)) fail("இங்கே பெட்டி இல்லை.");
-    if (roadChestState(masterState(await progressFor(ctx, s._id, unitId, "master")), args.n) !== "ready") fail(`முதலில் Level ${args.n} ஐ முடி.`);
+    if (roadChestState(masterState(await progressFor(ctx, s._id, unitId, "master")), args.n) !== "ready") fail(`முதலில் Level ${lv} ஐ முடி.`);
     const w = await walletFor(ctx, s._id, now);
     const c = set.r;
     await ctx.db.patch(w._id, { n: w.n + c, paid: w.paid + c });
     await ctx.db.insert("chests", { sid: s._id, u: unitId, n: args.n, at: now, c });
     const where = unit.grade === OL ? unit.ta : `Stage ${unitNumber(unit.code)}`;
-    await ctx.db.insert("coinLog", { sid: s._id, at: now, n: c, k: "chest", w: `${where} · Level ${args.n}` });
+    await ctx.db.insert("coinLog", { sid: s._id, at: now, n: c, k: "chest", w: `${where} · Level ${lv}` });
     return { c, n: w.n + c };
   },
 });

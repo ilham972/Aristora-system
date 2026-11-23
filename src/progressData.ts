@@ -8,6 +8,7 @@ import type { FunctionReturnType } from "convex/server";
 import type { api } from "../convex/_generated/api";
 import { pace, ranks, type FCell, type MCell } from "../convex/lib/progress";
 import { STAGES, type Stage } from "./store";
+import { lvLabel } from "../convex/lib/book";
 
 export type PBoard = FunctionReturnType<typeof api.progress.board>;
 export type PUnit = PBoard["units"][number];
@@ -348,7 +349,7 @@ export function sheetOf(b: BookBoard): QSheet {
     }
   } else {
     for (const l of b.levels) {
-      groups.push({ id: String(l.n), label: String(l.n), cols: l.to - l.from + 1 });
+      groups.push({ id: String(l.n), label: lvLabel(l), cols: l.to - l.from + 1 });
       for (let q = l.from; q <= l.to; q++) cols.push({ q, label: String(q), group: String(l.n), teach: false, first: q === l.from });
     }
   }

@@ -150,6 +150,7 @@ describe("skillBook.useAsWorkbook", () => {
     const map = new Map(order.map((q, i) => [q, i + 1]));
     const d = after.book.data as MasterData;
     expect(d.skills).toBe(true);
+    expect(d.since).toBeGreaterThan(T0); // the history's older lines keep their old numbers
     expect(d.levels.map(lvLabel)).toEqual(["1", "2·1", "2·2", "3"]);
     // The key and the printed questions moved with their questions.
     for (const a of after.key.answers) expect(a.a ?? a.parts?.[0].a).toMatch(new RegExp(`^[AB]${order[a.q - 1]}$`));

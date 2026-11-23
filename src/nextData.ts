@@ -8,6 +8,7 @@
 import { evalUrgencyOf, isWalking, pendingSince, WALK_MS, type Tone, type View } from "./derive";
 import { stageName } from "./store";
 import { mShort, outInOf } from "./theoryFocusData";
+import { lvLabel } from "../convex/lib/book";
 
 /** A next need pulses when it is this close (or now). */
 export const SOON_MS = 5 * 60_000;
@@ -77,7 +78,7 @@ export function nowOf(v: View, now: number): { tone: Tone; text: string } {
     if (v.noWork) return { tone: "red", text: `No work${idle}` };
     if (v.ms.dry) return onOther;
     if (v.quiet) return { tone: "yellow", text: `Quiet${mins(v.quietMs)}` };
-    return { tone: "green", text: `On Level ${v.ms.current!.n}` };
+    return { tone: "green", text: `On Level ${lvLabel(v.ms.current!)}` };
   }
   return { tone: "none", text: v.stage === "legend" || v.stage === "sprint" ? stageName(v.stage) : "No book yet" };
 }

@@ -63,6 +63,7 @@ export function MasterStrip(props: { v: View }) {
   const cur = ms.current?.n ?? -1;
   const runs = markerRuns(mb.levels.map((l) => l.n).filter((n) => waiting.has(n) || n === cur));
   const maxOf = new Map(mb.levels.map((l) => [l.n, l.max]));
+  const nm = (n: number) => lvLabel(mb.levels.find((x) => x.n === n) ?? { n });
   const newPart = (i: number) => i > 0 && (mb.skills ? mb.levels[i].skill !== mb.levels[i - 1].skill : mb.parts.some((p) => p.from === mb.levels[i].from));
   const total = mb.levels.reduce((a, l) => a + l.max, 0) || 1;
   const before = mb.levels.map((_, i) => mb.levels.slice(0, i).reduce((a, l) => a + l.max, 0));
@@ -82,7 +83,7 @@ export function MasterStrip(props: { v: View }) {
                 <span class={`mk ${run.includes(cur) ? "c" : "w"}${lean}`} style={{ left: `${((span / l.max) * 50).toFixed(1)}%` }}>
                   {run.map((n, k) => (
                     <b key={n} class={waiting.has(n) ? "w" : "c"}>
-                      {k === 0 ? `L${n}` : n}
+                      {k === 0 ? `L${nm(n)}` : nm(n)}
                     </b>
                   ))}
                 </span>

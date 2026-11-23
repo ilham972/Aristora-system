@@ -11,6 +11,7 @@
 // teacher minutes, and hers are free now.
 
 import type { MasterLevel } from "../convex/lib/book";
+import { lvLabel } from "../convex/lib/book";
 import { slClock, slDay } from "../convex/lib/day";
 import { roomCalls, seenToday, theoryGroups, theoryMembers, withBooks, type RoomCall, type View } from "./derive";
 import { bookKey, candidates, EVAL_CAP, qLabel, type Cand } from "./evalFocusData";
@@ -268,7 +269,7 @@ export function followersOf(v: View, q: number, views: readonly View[], now: num
       if (lv?.fixed || lv?.pre) continue; // done already: he has it or he doesn't
       if (lv?.done) {
         eta = 0;
-        words = `L${l.n} to correct`;
+        words = `L${lvLabel(l)} to correct`;
       } else if (o.ms.current && o.ms.current.n <= l.n) {
         const lp = levelPaceOf(o, now);
         const prev = o.mm.lv[String(o.ms.current.n - 1)]?.done;

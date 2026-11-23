@@ -57,6 +57,7 @@ import { armSound, buzz, sound } from "./sound";
 import { Surprises } from "./surprise";
 import { barColour, darkNews, darkOn, onTheme } from "./theme";
 import { Avatar, Coin, Flame, firstName, Gem, Icon, Owl, problemWords, setRoomHost, setSheetHost, showSheet, toast, Toast, Waiting, type IconName, type SheetRender } from "./ui";
+import { levelSource, lvText } from "../levelNames";
 
 /** Us (7 Nov 2026): the students' community, between Learn and the Race once the owner opens it. */
 // "me" (his profile) has no bottom-bar button since 12 Nov 2026: his face in the top row opens it; "chat" took its corner.
@@ -147,6 +148,8 @@ export function App() {
   const [screen, setScreen] = useState<Screen>(firstScreen);
   const [acc, setAcc] = useState<Account | null>(current);
   const [me, setMe] = useState<FamilyMe | null>(() => fixWorlds(keep<FamilyMe>("me")));
+  // The family app's levels for the one names pipeline (src/levelNames.ts): the road it loaded, as it is now.
+  levelSource("road", (id) => me?.worlds.find((w) => w.unitId === id)?.levels);
   const [tabNow, setTab] = useState<Tab>(() => keep<Tab>("tab") ?? "home");
   // Us and Chat show once the owner opened Us (a phone that kept the tab from before falls back to Home).
   const tab: Tab = (tabNow === "us" || tabNow === "chat") && !me?.us ? "home" : tabNow;
@@ -718,7 +721,7 @@ export function App() {
           void loadMe();
         }}
         onMarked={() => {
-          toast(`Level ${lvN} ஏற்கனவே சரிபார்க்கப்பட்டது: இதோ உன் விடைகள்.`);
+          toast(`Level ${lvText(w.unitId, lvN)} ஏற்கனவே சரிபார்க்கப்பட்டது: இதோ உன் விடைகள்.`);
           setScreen({ k: "book", unitId: w.unitId, n: lvN });
           window.scrollTo(0, 0);
           void loadMe();

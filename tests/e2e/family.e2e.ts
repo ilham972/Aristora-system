@@ -11,7 +11,9 @@ import { join, resolve } from "node:path";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { api, internal } from "../../convex/_generated/api";
 import { secretHash } from "../../convex/lib/auth";
-import { outOf } from "../../convex/lib/book";
+import { lvLabel, outOf, type MasterData } from "../../convex/lib/book";
+import { skillLevels } from "../../convex/lib/skillBook";
+import { skillId } from "../../convex/lib/skills";
 import { slDayNo, slDayStart, slWeekStart } from "../../convex/lib/day";
 import type { Ans } from "../../convex/lib/key";
 import { fromB64, seal, sha256, unseal } from "../../convex/lib/seal";
@@ -5848,9 +5850,12 @@ test("Videos on the road (23 Nov 2026): a skill's video right before its Level, 
   await shot(F, "vd03-end");
   await F.getByRole("button", { name: "START · Level 1" }).click();
   await contains(F.locator(".f-qn"), "Q1");
-  const seen = await t.run(async (ctx) => await ctx.db.query("videoViews").withIndex("by_video", (q) => q.eq("videoId", v1)).first());
-  expect(seen?.done).toBeTypeOf("number");
-  expect((await t.run(async (ctx) => await ctx.db.get(v1)))?.ended).toBe(1);
+  // The phone saves "watched to the end" on its own: wait for it to land (a full run is slower than one test).
+  await until(
+    async () => typeof (await t.run(async (ctx) => await ctx.db.query("videoViews").withIndex("by_video", (q) => q.eq("videoId", v1)).first()))?.done === "number",
+    "his view saved as watched to the end",
+  );
+  await until(async () => (await t.run(async (ctx) => await ctx.db.get(v1)))?.ended === 1, "the video's ended count");
   // Back on the Stage: the first stop is ✓, the second still to watch.
   await F.goBack();
   await until(async () => (await F.locator(".f-vd.done").count()) === 1, "the watched stop ✓");
@@ -5862,3 +5867,55 @@ test("Videos on the road (23 Nov 2026): a skill's video right before its Level, 
   await shot(F, "vd04-stage-320");
   expect(problems.slice(before).filter((p) => !/mux\.com|ERR_FAILED|Failed to load resource/.test(p))).toEqual([]);
 }, 120_000);
+
+test("a skill workbook on the phone (23 Nov 2026, \"make everything synced pipeline\"): Home, the Stage and the Level say the printed names", async () => {
+  const backend = makeBackend(modules);
+  const t = backend.t;
+  await addPerson(t, { name: "Owner", token: OWNER_TOKEN, role: "owner" });
+  const as = { token: OWNER_TOKEN };
+  await t.mutation(api.setup.ensure, as);
+  const u01 = await t.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G8-U01")).first())!._id);
+  await t.mutation(api.catalog.saveWorkbook, {
+    ...as,
+    unitId: u01,
+    parts: BOOK.data.parts.map((p) => ({ id: p.id, to: p.to, ...(p.each ? { each: p.each } : {}) })),
+    levels: BOOK.data.levels.map((l) => ({ to: l.to, max: l.max })),
+    marks: BOOK.data.marks ?? {},
+    replace: true,
+    key: fakeKey(),
+  });
+  const hana = await t.mutation(api.students.add, { ...as, name: "Hana K", grade: 8, term: 1, stage: "master", unitId: u01 });
+  const code = "hana-skill-names-link-0123456789";
+  await t.mutation(api.families.makeLink, { ...as, studentId: hana, codeHash: secretHash("family-link", code) });
+  // Every question with one of three made-up skills, then the owner's switch: the skill book is the workbook.
+  const data = BOOK.data as MasterData;
+  const last = data.parts[data.parts.length - 1].to;
+  const S = (n: number) => skillId("G8-U01", n);
+  const tags = Array.from({ length: last }, (_, i) => ({ q: i + 1, s: S(i < last / 3 ? 1 : i < (2 * last) / 3 ? 2 : 3) }));
+  await t.run(async (ctx) => {
+    await ctx.db.insert("skillTags", { unitId: u01, stage: "master", skills: [1, 2, 3].map((n) => ({ id: S(n), ta: `திறன் ${n}`, en: `Skill ${n}` })), tags, by: "chat", updatedAt: Date.now() });
+  });
+  const order = skillLevels("G8-U01", data, tags, [S(1), S(2), S(3)]).levels.filter((l) => l.qs.length).flatMap((l) => l.qs);
+  await t.mutation(api.skillBook.useAsWorkbook, { ...as, unitId: u01, order });
+  const names = await t.run(async (ctx) => {
+    const b = (await ctx.db.query("books").collect()).find((x) => x.unitId === u01 && x.stage === "master")!;
+    return (b.data as MasterData).levels.map(lvLabel);
+  });
+  expect(names.some((n) => n.includes("·"))).toBe(true); // a big skill's parts: "1·1", "1·2" …
+
+  // Her phone: Home's goal, the Stage's levels and the one to play, the Level's own header: the printed names.
+  const F = await open(backend, `${site.url}/f/#join=${code}`);
+  await F.getByRole("button", { name: "START" }).click();
+  await goalIs(F, `Level ${names[0]}`);
+  await tabTo(F, /Learn/);
+  await contains(F.locator(".f-hero .f-cont"), `Level ${names[0]}`);
+  await F.locator(".f-node.s-now").click();
+  await playIs(F, `Level ${names[0]}`);
+  const shown = (await F.locator(".f-lv").evaluateAll((els) => els.map((e) => e.getAttribute("aria-label") ?? ""))).filter((x) => x.startsWith("Level ")).map((x) => x.split(":")[0]);
+  expect(shown).toEqual(names.map((n) => `Level ${n}`));
+  await noSideScroll(F);
+  await shot(F, "fam-skill-names-stage");
+  await F.locator(".f-lv.play").click();
+  await contains(F.locator(".f-qn"), "Q1");
+  await shot(F, "fam-skill-names-play");
+});

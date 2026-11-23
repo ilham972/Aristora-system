@@ -29,6 +29,7 @@ import { Buddy, useBuddyTap, type Pose } from "./owlBody";
 import type { OneMoreMark } from "./quests";
 import { buzz, sound } from "./sound";
 import { Flame, Gem, Icon, Maths, Medal, Owl, OwlBadge, pretty, problemWords, Roll, Tag, toast, Waiting } from "./ui";
+import { lvText } from "../levelNames";
 
 addLevelStyle();
 
@@ -600,7 +601,7 @@ export function Play(props: {
     forget();
     query("family:book", { unitId: props.world.unitId, n: props.n })
       .then(() => props.onMarked())
-      .catch(() => setErr(`Level ${props.n} ஐ உன் ஆசிரியர் ஏற்கனவே திருத்திவிட்டார்.`));
+      .catch(() => setErr(`Level ${lvText(props.world.unitId, props.n)} ஐ உன் ஆசிரியர் ஏற்கனவே திருத்திவிட்டார்.`));
   };
   useEffect(() => {
     query("family:level", { unitId: props.world.unitId, n: props.n })
@@ -1324,7 +1325,7 @@ export function Play(props: {
                 <Icon name="next" size={14} class="dn" />
               </button>
             )}
-            {q.re && <p class="f-again">Level {q.re} இல் தவறியது: மீண்டும் முயற்சி!</p>}
+            {q.re && <p class="f-again">Level {lvText(props.world.unitId, q.re)} இல் தவறியது: மீண்டும் முயற்சி!</p>}
             {q.t && <p class="f-tqtag">ஆசிரியர் கேள்வி · with your teacher</p>}
             {q.free && <FreeCard max={q.max} />}
             {/* A free question isn't his to do: only the owner's Preview still shows it (to see what he made free). */}

@@ -235,6 +235,8 @@ export const masterData = v.object({
   skills: v.optional(v.literal(true)),
   /** Each question's number in the book before it (index = question − first): the hidden permanent number. */
   was: v.optional(v.array(v.number())),
+  /** When it became the skill workbook: the history's older lines keep their old level numbers. */
+  since: v.optional(v.number()),
 });
 /** One corrected question (lib/master.ts `MQ`), without `fr`. */
 const mqFields = {

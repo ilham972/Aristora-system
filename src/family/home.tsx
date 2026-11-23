@@ -15,6 +15,7 @@ import { keep, query, sameOr } from "./net";
 import { Confetti, nextPlay } from "./next";
 import { buzz, sound } from "./sound";
 import { Dashes, firstName, Flame, flameAtRisk, Icon, Owl, OwlBadge, problemWords, Tag, type IconName } from "./ui";
+import { lvText } from "../levelNames";
 
 const SL = 330 * 60_000;
 const DAY = 86_400_000;
@@ -206,11 +207,11 @@ function itemLook(x: DayItem): { icon: IconName; b: string; s: string } {
     };
   }
   if (x.k === "level") {
-    if (x.how === "handed") return { icon: "clock", b: `Level ${x.n}: கொடுத்தாய்`, s: `Stage ${x.no} · ஆசிரியரிடம்` };
+    if (x.how === "handed") return { icon: "clock", b: `Level ${lvText(x.unitId, x.n)}: கொடுத்தாய்`, s: `Stage ${x.no} · ஆசிரியரிடம்` };
     const xp = x.got !== null ? ` · ${x.got}/${x.max} XP` : "";
     return x.how === "home"
-      ? { icon: "home", b: `Level ${x.n}${xp}`, s: `Stage ${x.no} · வீட்டில், phone இல்` }
-      : { icon: "check", b: `Level ${x.n}${xp}`, s: `Stage ${x.no} · வகுப்பில் திருத்தப்பட்டது` };
+      ? { icon: "home", b: `Level ${lvText(x.unitId, x.n)}${xp}`, s: `Stage ${x.no} · வீட்டில், phone இல்` }
+      : { icon: "check", b: `Level ${lvText(x.unitId, x.n)}${xp}`, s: `Stage ${x.no} · வகுப்பில் திருத்தப்பட்டது` };
   }
   return x.k === "in" ? { icon: "in", b: "வகுப்புக்கு வந்தாய்", s: "" } : { icon: "out", b: "வகுப்பிலிருந்து சென்றாய்", s: "" };
 }

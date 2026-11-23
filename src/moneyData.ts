@@ -12,6 +12,7 @@
 
 import type { View } from "./derive";
 import type { Unit } from "./store";
+import { lvLabel } from "../convex/lib/book";
 
 export const SOON_LEVELS = 2;
 export const SOON_SHARE = 0.2;
@@ -34,7 +35,7 @@ export function finishOf(v: View): Finish | null {
     if (!cur || v.ms.finished) return { state: "now", done: total, total, words: v.ms.finished ? "finished" : `all ${total} levels handed in` };
     const at = Math.max(0, levels.findIndex((l) => l.n === cur.n));
     const left = total - at;
-    return { state: left <= SOON_LEVELS ? "soon" : "ok", done: at, total, words: `Level ${cur.n} of ${total}` };
+    return { state: left <= SOON_LEVELS ? "soon" : "ok", done: at, total, words: `Level ${lvLabel(cur)} of ${total}` };
   }
   if (v.kind === "fighter" && v.f && v.st) {
     const qs = v.f.sections.flatMap((s) => s.solo);

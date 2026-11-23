@@ -14,6 +14,7 @@ import { picOf, usePics } from "./pics";
 import { pushNow, pushOn, type Push } from "./alerts";
 import { pushOff, stamp } from "./bell";
 import { Avatar, Icon, Owl, OwlBadge, type IconName } from "./ui";
+import { lvText } from "../levelNames";
 
 const LOOK: Record<BellItem["what"], { icon: IconName; words: (b: BellItem) => string }> = {
   done: { icon: "teach", words: (b) => `திருத்தியவர்: ${b.by}` },
@@ -231,7 +232,7 @@ export function BellScreen(props: {
                         <span>
                           <b>{LOOK[x.b.what].words(x.b)}</b>
                           <small>
-                            Stage {x.b.no} · Level {x.b.n} · Q{x.b.q} · {time(x.b.at)}
+                            Stage {x.b.no} · Level {lvText(x.b.unitId, x.b.n)} · Q{x.b.q} · {time(x.b.at)}
                           </small>
                         </span>
                       </button>

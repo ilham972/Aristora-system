@@ -20,6 +20,7 @@ import { blurPick, lostMost, mayBlur, QSTATE_WORDS, raceTotals, sheetOf, waitsOf
 import { bookTitle, drawSheet, sheetFile } from "./racePoster";
 import { now as serverNow, testMode, toast } from "./store";
 import { Sheet } from "./ui";
+import { lvText } from "./levelNames";
 
 export function BookRaceSheet(props: {
   unitId: string;
@@ -109,7 +110,7 @@ export function BookRaceSheet(props: {
     setBlurred(next);
   };
   const pick = (how: "last3" | "allButTop3" | "none") => setBlurred(blurPick(sh.rows, how));
-  const groupName = (id: string) => (master ? `Level ${id}` : `Section ${sh.groups.find((g) => g.id === id)?.label ?? id}`);
+  const groupName = (id: string) => `${master ? "Level" : "Section"} ${sh.groups.find((g) => g.id === id)?.label ?? id}`;
 
   // The columns shown: the whole book, or one section / level.
   const idx = sh.cols.map((c, i) => i).filter((i) => !zoom || sh.cols[i].group === zoom);
@@ -145,14 +146,14 @@ export function BookRaceSheet(props: {
                   key={`${w.s._id}:${w.n}`}
                   type="button"
                   class={`br-ck${w.home ? " home" : ""}`}
-                  aria-label={`${w.s.name}, Level ${w.n}: ${w.home ? "marked at home, to check" : `handed in ${fmtMin(now - w.at)} ago`}. Open it.`}
+                  aria-label={`${w.s.name}, Level ${lvText(props.unitId, w.n)}: ${w.home ? "marked at home, to check" : `handed in ${fmtMin(now - w.at)} ago`}. Open it.`}
                   disabled={!props.onOpen}
                   onClick={() => {
                     props.onOpen?.(w.s._id, w.n);
                     props.onClose();
                   }}
                 >
-                  <b>{w.s.name}</b> L{w.n}
+                  <b>{w.s.name}</b> L{lvText(props.unitId, w.n)}
                   <small>{w.home ? "⌂ check" : fmtMin(now - w.at)}</small>
                 </button>
               ))}

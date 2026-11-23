@@ -8,6 +8,7 @@
 //   Evaluation: explained). Ticked at first and tickable: something of that level waits for him.
 
 import type { BookData, SectionData } from "../convex/lib/book";
+import { lvLabel } from "../convex/lib/book";
 import type { MarkState } from "../convex/lib/status";
 import { OL } from "../convex/lib/syllabus";
 import type { View } from "./derive";
@@ -47,7 +48,7 @@ export function lessonsOf(data: BookData): Lesson[] {
   return data.levels.map((l) => ({
     key: `L${l.n}`,
     kind: "level" as const,
-    label: `L${l.n}`,
+    label: `L${lvLabel(l)}`,
     ta: "",
     qs: Array.from({ length: l.to - l.from + 1 }, (_, i) => l.from + i),
     section: null,

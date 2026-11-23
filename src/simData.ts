@@ -5,6 +5,7 @@ import type { Digest } from "../convex/lib/boss";
 import { PLANS, roomLoad, ROBOT, type SimLevel, type SimSample, type TeacherLine } from "../convex/lib/sim";
 import type { FeedEvent } from "../convex/sim";
 import { minWords, ROOM_NAME, type Tone } from "./bossData";
+import { historyLevel } from "./store";
 
 export const LEVEL_NAME: Record<SimLevel, string> = { easy: PLANS.easy.name, medium: PLANS.medium.name, hard: PLANS.hard.name };
 
@@ -39,10 +40,10 @@ export function feedText(e: FeedEvent): { text: string; tone: Tone | "plain" } {
     case "out":
       return { text: v === "finished" ? `${n} finished his books and went home` : `${n} went home`, tone: "plain" };
     case "level-done":
-      return { text: `${n} handed in Level ${v}`, tone: "plain" };
+      return { text: `${n} handed in Level ${historyLevel(e.unit, v, e.at)}`, tone: "plain" };
     case "level-marks": {
       const [lvl, marks] = v.split(" ");
-      return { text: `${whoOf(e)} corrected ${n}'s Level ${lvl}: ${marks ?? ""}`.trim(), tone: "plain" };
+      return { text: `${whoOf(e)} corrected ${n}'s Level ${historyLevel(e.unit, lvl, e.at)}: ${marks ?? ""}`.trim(), tone: "plain" };
     }
     case "mark":
       return v === "wrong"

@@ -12,7 +12,7 @@ import { mutation } from "./lib/fn";
 import { levelForm, type FamilyLevel, type FamilyQuestions } from "./family";
 import { actor, viewer } from "./lib/auth";
 import { asMaster, bookFor, currentSession, fail, keyRow, log, masterState, refresh } from "./lib/backend";
-import { levelOutOf, type MasterData } from "./lib/book";
+import { levelOutOf, lvLabel, type MasterData } from "./lib/book";
 import { unitNumber, type World } from "./lib/family";
 import { isFree, setFreeIn } from "./lib/free";
 import { phoneKeyFor } from "./lib/homeWork";
@@ -65,7 +65,7 @@ export const unit = query({
       let qs = 0;
       for (let q = l.from; q <= l.to; q++) if (keys.has(q) || isFree(data, q)) qs++;
       const free = (data.free ?? []).filter((q) => q >= l.from && q <= l.to).length;
-      return { n: l.n, from: l.from, to: l.to, max: l.max, qs, free };
+      return { n: l.n, ...(l.name ? { name: l.name } : {}), from: l.from, to: l.to, max: l.max, qs, free };
     });
     return {
       // A Sakarath book's unit (17 Nov 2026): its unit's grade.
@@ -145,7 +145,7 @@ export const setFree = mutation({
     const l = data.levels.find((x) => args.q >= x.from && args.q <= x.to);
     if (!l) fail(`Question ${args.q} is not in this workbook.`);
     // Every question's marks of its level: the phone and Correction then give exactly those marks.
-    if (!levelOutOf(data, l)) fail(`This workbook doesn't list every question's marks in Level ${l.n}: free marks need them.`);
+    if (!levelOutOf(data, l)) fail(`This workbook doesn't list every question's marks in Level ${lvLabel(l)}: free marks need them.`);
     const free = new Set(data.free ?? []);
     if (free.has(args.q) === args.free) return { students: 0 };
     if (args.free) free.add(args.q);

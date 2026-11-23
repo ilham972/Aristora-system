@@ -2964,9 +2964,17 @@ learning app of our education institute"): one profile, his class times, what he
     Move (the printed books' numbers are fixed), the T page and the PDF read the stored levels (`storedLevels`: a tag
     or new marks never move a printed question); Correction's level bar says "1 · 2·1 2·2 2·3 · 3·1 …" (a gap where a
     skill starts) and the level line its skill ("Level 2·1 · Q12–21 · S2"); its toasts and the server's messages say
-    the name (`lvLabel`); the family app's road, Continue and the Level's header say "Level 2·1" (`nm`). Still the
-    sequential number (to do): the family app's history lines, online threads' headers, the bell, the road's chests
-    and the video's START, the ⌂ lane's labels.
+    the name. **One pipeline for a level's name** (23 Nov 2026, his words: "Let's make everything synced pipeline, so
+    changing something will showup everywhere"; `src/levelNames.ts`): the book's stored levels are the only source
+    (`MasterLevel.name`); a line holding the level says `lvLabel(l)` (the server too: its messages, the chest's words
+    and coin log), a line holding the unit and a number says `lvText(unit, n)`, which reads the books the app holds
+    right now (the class app: its board, by the unit's id or key; the family app: the road it loaded; the owner's
+    Preview: its unit). So every screen says "2·1": Correction's bar, line, toasts and take-back sheet, the board's
+    lines ("Level 2·1 to correct"), the Class tab's cards, the student sheet, the race sheet, the Manager's "L2·1 to
+    correct", the whiteboard, second tries, the ⌂ lane; the family app's Home goal and day lines, the road, Continue,
+    the Level's header and its "lost in Level 2·1" line, chests, the video's START, the bell, online threads, Preview.
+    The history keeps what was true then: a line written before the unit's switch keeps its old number, a line since
+    says the name (`historyLevel`; `MasterData.since` = the switch time).
   - **Share to the printing shop** (23 Nov 2026, his words: "put the share button near the download button ... I will
     put the copy number"; the same evening: "when I press the send button ... copy the clipboard also ... how many
     copies ... the cost of the printing ... one paper is cost seven rupees ... I don't want any shop. Just send

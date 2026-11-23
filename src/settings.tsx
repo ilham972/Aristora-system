@@ -36,6 +36,7 @@ import {
   type Role,
   type Stage,
   type Unit,
+  historyLevel,
 } from "./store";
 import { ATTENDANCE_SINCE, AWAY_DAYS, daysAway, studentStats } from "./stats";
 import { OlPicks, olChoices, olMatch, olNo, studentsWork, UploadBooks } from "./upload";
@@ -1057,6 +1058,8 @@ const qName = (q: number) => `Q${q}`;
 /** One history line in plain words. */
 function describe(e: Doc<"events">): string {
   const v = e.value ?? "";
+  // A workbook level as the book named it then (src/levelNames.ts; old lines keep their old numbers).
+  const lv = (n: string | number) => historyLevel(e.unit, n, e.at);
   switch (e.kind) {
     case "mark":
       return v === "clear" ? `${qName(e.q ?? 0)} mark cleared` : `${qName(e.q ?? 0)} marked ${STATE_WORDS[v as MarkState] ?? v}`;
@@ -1118,18 +1121,18 @@ function describe(e: Doc<"events">): string {
     case "idle":
       return `was out of work for ${fmtMin(e.ms ?? 0)}, waiting for ${v.split("+").join(" and ")}`;
     case "level-done":
-      return `Level ${v} handed in, waiting for correction`;
+      return `Level ${lv(v)} handed in, waiting for correction`;
     case "ladder-home": {
       const [sec, marks] = v.split(" ");
       return `Ladder ${sec} done at home on the phone: ${marks} (its circles set)`;
     }
     case "level-home": {
       const [n, marks] = v.split(" ");
-      return `Level ${n} marked at home on the phone: ${marks} (⌂ to check)`;
+      return `Level ${lv(n)} marked at home on the phone: ${marks} (⌂ to check)`;
     }
     case "level-checked": {
       const [n, marks] = v.split(" ");
-      return `Level ${n} (marked at home) checked: ${marks}`;
+      return `Level ${lv(n)} (marked at home) checked: ${marks}`;
     }
     case "family-link":
       return "family link made";
@@ -1151,15 +1154,15 @@ function describe(e: Doc<"events">): string {
       return `Us group ${e.name ?? ""}: ${v}`;
     case "photo-marked": {
       const [n, marks] = v.split(" ");
-      return `Level ${n}${e.q ? ` Q${e.q}` : ""} marked from his photo: ${marks}`;
+      return `Level ${lv(n)}${e.q ? ` Q${e.q}` : ""} marked from his photo: ${marks}`;
     }
     case "photo-why": {
       const [n, why] = v.split(" ");
-      return `Level ${n}${e.q ? ` Q${e.q}` : ""}: his working seen (${(WHY as Record<string, { en: string }>)[why]?.en ?? why})`;
+      return `Level ${lv(n)}${e.q ? ` Q${e.q}` : ""}: his working seen (${(WHY as Record<string, { en: string }>)[why]?.en ?? why})`;
     }
     case "photo-retake": {
       const [n, why] = v.split(" ");
-      return `Level ${n}${e.q ? ` Q${e.q}` : ""}: photo to take again (${(RETAKE as Record<string, { en: string }>)[why]?.en ?? why})`;
+      return `Level ${lv(n)}${e.q ? ` Q${e.q}` : ""}: photo to take again (${(RETAKE as Record<string, { en: string }>)[why]?.en ?? why})`;
     }
     case "phone-fix": {
       const [part, ...rest] = v.split(" ");
@@ -1211,15 +1214,15 @@ function describe(e: Doc<"events">): string {
     case "family-bday":
       return v ? `birthday added: ${Number(v.slice(3))} ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][Number(v.slice(0, 2)) - 1]}` : "birthday cleared";
     case "level-undo":
-      return `Level ${v}: "handed in" undone`;
+      return `Level ${lv(v)}: "handed in" undone`;
     case "level-marks":
     case "level-remarks": {
       const [n, marks] = v.split(" ");
-      return `Level ${n} ${e.kind === "level-remarks" ? "re-marked" : "corrected"}: ${marks}${e.ms ? ` (waited ${fmtMin(e.ms)})` : ""}`;
+      return `Level ${lv(n)} ${e.kind === "level-remarks" ? "re-marked" : "corrected"}: ${marks}${e.ms ? ` (waited ${fmtMin(e.ms)})` : ""}`;
     }
     case "level-unmarked": {
       const [n, marks] = v.split(" ");
-      return `Level ${n}: correction (${marks}) taken back`;
+      return `Level ${lv(n)}: correction (${marks}) taken back`;
     }
     case "explained":
       return `${v} explained`;
