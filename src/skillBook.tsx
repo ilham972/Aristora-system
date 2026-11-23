@@ -26,6 +26,7 @@ import { saveFile, ShareSheet, type MadePdf } from "./printShare";
 import { bookFileName, clearPrint, printSkillBook, skillBookPlan } from "./skillPrint";
 import { act, currentRole, toast, type Unit } from "./store";
 import { Sheet } from "./ui";
+import { VideoShelf, type VideoList } from "./videoShelf";
 
 type Printed = { css: string | null; qs: Map<number, string> };
 
@@ -73,6 +74,9 @@ export function SkillBookPage(props: { unit: Unit; gov: GovRow | null; onClose: 
   const unitId = props.unit._id as Id<"units">;
   useBackClose(props.onClose);
   const u = useQuery<SkillBookUnit | null>(api.skillBook.unit, { unitId });
+  // The skills' videos (23 Nov 2026): the open level's under its head; a dot on a level whose skill has one ready.
+  const vids = useQuery<VideoList>(api.videos.list, { unitId });
+
   const [printed, setPrinted] = useState<Printed | null | "failed">(null);
   const [pick, setPick] = useState<number | null>(null);
   const [moving, setMoving] = useState<number | null>(null);
@@ -235,6 +239,7 @@ export function SkillBookPage(props: { unit: Unit; gov: GovRow | null; onClose: 
               >
                 {label(l.skill)}
                 <small>{l.qs.length}</small>
+                {vids?.videos.some((x) => x.state === "ready" && x.kind === "skill" && x.sk === u.skills.find((sk) => sk.id === l.skill)?.k) && <i class="vs-dot" aria-label="has a video" />}
               </button>
             ))}
           </HRow>
@@ -259,6 +264,9 @@ export function SkillBookPage(props: { unit: Unit; gov: GovRow | null; onClose: 
                   </button>
                 </div>
               </div>
+            )}
+            {open && u.skills.some((x) => x.id === open.skill) && (
+              <VideoShelf unitId={unitId} skill={u.skills.find((x) => x.id === open.skill)!} skills={u.skills} label={label} list={vids} />
             )}
             {printed === "failed" && <p class="muted sb-note">The questions didn't load. Close this page and open it again.</p>}
             {open && !open.qs.length && (

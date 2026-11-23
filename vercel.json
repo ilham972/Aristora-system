@@ -70,7 +70,7 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://*.convex.cloud; media-src 'self' data: blob: https://*.convex.cloud; connect-src 'self' https://*.convex.cloud wss://*.convex.cloud; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://*.convex.cloud https://image.mux.com; media-src 'self' data: blob: https://*.convex.cloud https://*.mux.com; connect-src 'self' https://*.convex.cloud wss://*.convex.cloud https://*.mux.com https://storage.googleapis.com; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
         }
       ]
     },
@@ -95,7 +95,7 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://*.convex.cloud; media-src 'self' data: blob: https://*.convex.cloud; connect-src 'self' https://*.convex.cloud wss://*.convex.cloud; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://*.convex.cloud https://image.mux.com; media-src 'self' data: blob: https://*.convex.cloud https://*.mux.com; connect-src 'self' https://*.convex.cloud wss://*.convex.cloud https://*.mux.com https://storage.googleapis.com; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
         }
       ]
     }

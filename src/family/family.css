@@ -5414,3 +5414,77 @@ button.f-pod:active,
   }
 }
 
+
+/* A skill's video on a Stage's road (23 Nov 2026, map.tsx): a stop right before the Level its skill first comes in.
+   White with the app's violet ▶, its ring filling as he watches; watched = violet with a ✓; "again" (he lost marks in
+   that Level) = a small rose ↻. Its length beside it, on the roomier side. Tappable: it presses down. */
+.f-vd {
+  position: absolute;
+  z-index: 2;
+  width: 54px;
+  height: 54px;
+  margin: -27px 0 0 -27px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.f-vd-c {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: conic-gradient(var(--brand) calc(var(--w, 0) * 1%), var(--lav) 0);
+  box-shadow: var(--shadow);
+  transition: transform 0.12s ease;
+}
+.f-vd-c::before {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  background: var(--card);
+}
+.f-vd-c .f-ic {
+  position: relative;
+  color: var(--brand);
+}
+.f-vd:active .f-vd-c {
+  transform: scale(0.92);
+}
+.f-vd.done .f-vd-c::before {
+  background: var(--brand);
+}
+.f-vd.done .f-vd-c .f-ic {
+  color: #fff;
+}
+.f-vd.again .f-vd-c::after {
+  content: "↻";
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--wrong);
+  color: #fff;
+  font: 800 13px/22px var(--display);
+  text-align: center;
+}
+.f-vd small {
+  position: absolute;
+  top: 15px;
+  padding: 2px 8px 0;
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--brand-2);
+  font: 800 12px/20px var(--display);
+  white-space: nowrap;
+  box-shadow: var(--shadow);
+}
+.f-vd.r small {
+  left: 61px;
+}
+.f-vd.l small {
+  right: 61px;
+}

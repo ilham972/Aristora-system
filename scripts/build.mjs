@@ -25,9 +25,13 @@ const result = await build({
   bundle: true,
   minify: true,
   format: "esm",
+  // 23 Nov 2026: split, so what a page fetches only when it needs it (hls.js, for watching a skill's video on the T
+  // page: src/videoPlay.ts) is its own file, not in every teacher's first load.
+  splitting: true,
   target: ["es2020"],
   outdir: "dist/assets",
   entryNames: "[name]-[hash]",
+  chunkNames: "[name]-[hash]",
   assetNames: "[name]-[hash]",
   loader: { ".woff2": "file", ".woff": "file" },
   jsx: "automatic",
@@ -38,9 +42,9 @@ const result = await build({
   logLevel: "info",
 });
 
-const outputs = Object.keys(result.metafile.outputs);
-const js = outputs.find((f) => f.endsWith(".js"));
-const css = outputs.find((f) => f.endsWith(".css"));
+const outs = result.metafile.outputs;
+const js = Object.keys(outs).find((f) => outs[f].entryPoint === "src/main.tsx");
+const css = js && outs[js].cssBundle;
 if (!js || !css) throw new Error("Build did not produce app JS and CSS");
 
 const html = (await readFile("public/index.html", "utf8"))
@@ -144,6 +148,11 @@ const FAMILY_CHAT_KB = 24;
 // 13 Nov 2026, his Dark from Me: the dark colours are their own file (src/family/dark.css), outside the first load
 // (which only gained boot.ts and a few lines of the loading page, ~0.3 KB) and the later parts.
 const FAMILY_DARK_KB = 5;
+// 23 Nov 2026, the skills' videos: the player (its screen, its style) is a file of its own, fetched when a Stage with
+// videos opens; hls.js (the light build) another (none on an iPhone: Safari plays the stream itself). Neither is in the
+// first load or the later parts.
+const FAMILY_VIDEO_KB = 6;
+const FAMILY_HLS_KB = 125;
 await mkdir("dist/f/assets", { recursive: true });
 const fam = await build({
   // profile.css: the style of the parts that come after the first screen (src/family/later.ts attaches it).
@@ -203,18 +212,26 @@ const usJs = Object.keys(famOuts).find((f) => famOuts[f].entryPoint === "src/fam
 if (!usJs) throw new Error("Build did not produce Us's own file (src/family/usParts.ts)");
 const chatJs = Object.keys(famOuts).find((f) => famOuts[f].entryPoint === "src/family/chatParts.ts");
 if (!chatJs) throw new Error("Build did not produce the chats' own file (src/family/chatParts.ts)");
+// The video player (23 Nov 2026, videoParts.ts) and hls.js (its own file after it): fetched only by a Stage with videos,
+// never prefetched with the later parts; named for the service worker like Us's, so a phone keeps them.
+const videoJs = Object.keys(famOuts).find((f) => famOuts[f].entryPoint === "src/family/videoParts.ts");
+if (!videoJs) throw new Error("Build did not produce the video player's own file (src/family/videoParts.ts)");
+const hlsJs = Object.keys(famOuts).find((f) => famOuts[f].entryPoint?.includes("hls.js"));
+if (!hlsJs) throw new Error("Build did not produce hls.js as a file of its own (src/videoPlay.ts imports it when a video plays)");
 const studentsLater = new Set(
   Object.keys(famOuts)
-    .filter((f) => f.endsWith(".js") && famOuts[f].entryPoint && f !== staffJs && f !== usJs && f !== chatJs && f !== bootJs && !first.has(f))
+    .filter((f) => f.endsWith(".js") && famOuts[f].entryPoint && f !== staffJs && f !== usJs && f !== chatJs && f !== videoJs && f !== hlsJs && f !== bootJs && !first.has(f))
     .flatMap((f) => [...staticOf(f)]),
 );
 // Us's own (8 Nov 2026): what only usParts.ts reaches (what it shares with Me or the level screen stays theirs).
 const usOnly = [...staticOf(usJs)].filter((f) => !first.has(f) && !studentsLater.has(f));
 // The chats' own (8 Nov 2026): what only chatParts.ts reaches (what it shares with Us, the talk's pieces, is Us's).
 const chatOnly = [...staticOf(chatJs)].filter((f) => !first.has(f) && !studentsLater.has(f) && !usOnly.includes(f));
-const staffOnly = [...staticOf(staffJs)].filter((f) => !first.has(f) && !studentsLater.has(f) && !usOnly.includes(f) && !chatOnly.includes(f));
+// The video player's own (what only videoParts.ts reaches), and hls.js.
+const videoOnly = [...staticOf(videoJs), hlsJs].filter((f) => !first.has(f) && !studentsLater.has(f) && !usOnly.includes(f) && !chatOnly.includes(f));
+const staffOnly = [...staticOf(staffJs)].filter((f) => !first.has(f) && !studentsLater.has(f) && !usOnly.includes(f) && !chatOnly.includes(f) && !videoOnly.includes(f));
 const later = [
-  ...Object.keys(famOuts).filter((f) => f.endsWith(".js") && f !== bootJs && !first.has(f) && !staffOnly.includes(f) && !usOnly.includes(f) && !chatOnly.includes(f)),
+  ...Object.keys(famOuts).filter((f) => f.endsWith(".js") && f !== bootJs && !first.has(f) && !staffOnly.includes(f) && !usOnly.includes(f) && !chatOnly.includes(f) && !videoOnly.includes(f)),
   laterCss,
 ];
 const asset = (f) => `/f/assets/${basename(f)}`;
@@ -226,7 +243,7 @@ const preload = [
   // Us and the chats (13 Nov 2026): the page fetches them only when they open, so they stay out of the first screen's
   // way; these lines only name them for the service worker (public/family/sw.js keepPage), which fetches them behind
   // the scenes with each new version. A browser does nothing with a meta it doesn't know. Never the teachers' file.
-  `<meta name="f-keep" content="${[...usOnly, ...chatOnly].map(asset).join(" ")}">`,
+  `<meta name="f-keep" content="${[...usOnly, ...chatOnly, ...videoOnly].map(asset).join(" ")}">`,
 ].join("\n");
 const famHtml = (await readFile("public/family/index.html", "utf8"))
   // The server's address is known before the code arrives (13 Nov 2026): the phone opens its line to it (the name,
@@ -255,9 +272,20 @@ let usKb = 0;
 for (const f of usOnly) usKb += await gz(f);
 let chatKb = 0;
 for (const f of chatOnly) chatKb += await gz(f);
+let videoKb = 0;
+for (const f of videoOnly) if (f !== hlsJs) videoKb += await gz(f);
+const hlsKb = await gz(hlsJs);
 console.log(
-  `Built the family app: ${basename(famJs)} + ${basename(famCss)}, ${(wire / 1024).toFixed(1)} KB over the wire on the first load (budget ${FAMILY_BUDGET_KB} KB), ${(after / 1024).toFixed(1)} KB right after it (budget ${FAMILY_LATER_KB} KB), Us ${(usKb / 1024).toFixed(1)} KB (budget ${FAMILY_US_KB} KB), the chats ${(chatKb / 1024).toFixed(1)} KB (budget ${FAMILY_CHAT_KB} KB), dark ${(darkKb / 1024).toFixed(1)} KB (budget ${FAMILY_DARK_KB} KB), the teachers' Us ${(staffKb / 1024).toFixed(1)} KB (budget ${FAMILY_STAFF_KB} KB)`,
+  `Built the family app: ${basename(famJs)} + ${basename(famCss)}, ${(wire / 1024).toFixed(1)} KB over the wire on the first load (budget ${FAMILY_BUDGET_KB} KB), ${(after / 1024).toFixed(1)} KB right after it (budget ${FAMILY_LATER_KB} KB), Us ${(usKb / 1024).toFixed(1)} KB (budget ${FAMILY_US_KB} KB), the chats ${(chatKb / 1024).toFixed(1)} KB (budget ${FAMILY_CHAT_KB} KB), dark ${(darkKb / 1024).toFixed(1)} KB (budget ${FAMILY_DARK_KB} KB), the teachers' Us ${(staffKb / 1024).toFixed(1)} KB (budget ${FAMILY_STAFF_KB} KB), the video player ${(videoKb / 1024).toFixed(1)} KB (budget ${FAMILY_VIDEO_KB} KB) + hls.js ${(hlsKb / 1024).toFixed(1)} KB (budget ${FAMILY_HLS_KB} KB)`,
 );
+if (videoKb > FAMILY_VIDEO_KB * 1024) {
+  console.error(`The video player's own file is ${(videoKb / 1024).toFixed(1)} KB: over its ${FAMILY_VIDEO_KB} KB budget.`);
+  process.exit(1);
+}
+if (hlsKb > FAMILY_HLS_KB * 1024) {
+  console.error(`hls.js is ${(hlsKb / 1024).toFixed(1)} KB: over its ${FAMILY_HLS_KB} KB budget (the light build only: src/videoPlay.ts).`);
+  process.exit(1);
+}
 if (darkKb > FAMILY_DARK_KB * 1024) {
   console.error(`The family app's dark colours are ${(darkKb / 1024).toFixed(1)} KB: over their ${FAMILY_DARK_KB} KB budget.`);
   process.exit(1);

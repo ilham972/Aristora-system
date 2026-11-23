@@ -258,6 +258,37 @@ describe("the Claude link", () => {
     expect((await ask({ op: "unit", unitId: u13, stage: "fighter" }))!.answers).toEqual(key);
   });
 
+  test("skill keys (23 Nov 2026): skill 2 becomes skill 3 and its video follows; nothing moves a video by its number alone", async () => {
+    await t.mutation(api.link.open, { id: ID, key: toB64(KEY) });
+    const S = (n: number) => `G8-U01-S${n}`;
+    const tags = (two: string, three?: string) => Array.from({ length: 73 }, (_, i) => ({ q: i + 1, s: i < 20 ? S(1) : i < 40 || !three ? two : three }));
+    const first = [
+      { id: S(1), ta: "முதல்", en: "Add" },
+      { id: S(2), ta: "இரண்டாம்", en: "Take away" },
+    ];
+    expect(await tell({ op: "skills", unitId: u01, skills: first, tags: tags(S(2)) })).toMatchObject({ ok: true });
+    // A video on S2 ("Take away"), by its key.
+    await raw.run(async (ctx) => {
+      await ctx.db.insert("videos", { unitId: u01, sk: "k2", kind: "skill", order: 1, host: { p: "mux" }, state: "ready", live: true, by: "Owner", at: 1, updatedAt: 1 });
+    });
+    // A chat renumbers without keys: S2 is now another skill and the old one is S3. Refused: the video would move.
+    const renumbered = [first[0], { id: S(2), ta: "பெருக்கல்", en: "Times" }, { id: S(3), ta: "இரண்டாம்", en: "Take away" }];
+    expect((await tell({ op: "skills", unitId: u01, skills: renumbered, tags: tags(S(2), S(3)) }))!.error).toMatch(/G8-U01-S2 had the video for "Take away"; now G8-U01-S2 is "Times"/);
+    // The skill's own key sent with it: the video follows it to S3, the new S2 gets a key of its own.
+    const keyed = [first[0], { id: S(2), ta: "பெருக்கல்", en: "Times" }, { id: S(3), ta: "இரண்டாம்", en: "Take away", k: "k2" }];
+    expect(await tell({ op: "skills", unitId: u01, skills: keyed, tags: tags(S(2), S(3)) })).toMatchObject({ ok: true });
+    const now = (await ask({ op: "unit", unitId: u01 }))!.skills.skills;
+    expect(now.map((x: { id: string; k: string }) => [x.id, x.k])).toEqual([
+      [S(1), "k1"],
+      [S(2), "k3"],
+      [S(3), "k2"],
+    ]);
+    // Dropping the skill that has a video: refused until its video comes off.
+    expect((await tell({ op: "skills", unitId: u01, skills: [first[0], { id: S(2), ta: "பெருக்கல்", en: "Times", k: "k3" }], tags: tags(S(2)) }))!.error).toMatch(/G8-U01-S3 \(Take away\) has 1 video/);
+    // A key that isn't this unit's: refused.
+    expect((await tell({ op: "skills", unitId: u01, skills: [{ ...first[0], k: "k99" }, ...keyed.slice(1)], tags: tags(S(2), S(3)) }))!.error).toMatch(/key "k99" is not one of this unit's/);
+  });
+
   test("skills: a unit's skills and each question's skill, saved whole; another unit carries one; nothing half", async () => {
     await t.mutation(api.link.open, { id: ID, key: toB64(KEY) });
     const S = (n: number) => `G8-U01-S${n}`;
@@ -279,7 +310,8 @@ describe("the Claude link", () => {
     expect(saved).toMatchObject({ ok: true, saved: { skills: 2, tags: 73, questions: 73 } });
     expect(saved!.counts).toEqual(expect.arrayContaining([{ id: S(1), n: 26 }, { id: S(2), n: 47 }]));
     const unit = await ask({ op: "unit", unitId: u01 });
-    expect(unit!.skills.skills).toEqual(skills);
+    // Each skill got its permanent key (23 Nov 2026): what the chat reads it back with.
+    expect(unit!.skills.skills).toEqual([{ ...skills[0], k: "k1" }, { ...skills[1], k: "k2" }]);
     expect(unit!.skills.tags).toHaveLength(73);
     expect(unit!.skills.problem).toBe("");
     expect((await ask({ op: "books" }))!.units.find((x: { key: string }) => x.key === "G8-U01").skills).toBe(2);

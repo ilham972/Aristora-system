@@ -491,6 +491,8 @@ export const moveTute = mutation({
     }
     // Its skills are named after the unit it leaves ("G11-U24-S3"): they don't travel; the book is tagged again where
     // it now lives (convex/lib/skills.ts).
+    // Its skills' videos would lose their skill (23 Nov 2026): they come off first.
+    if (await ctx.db.query("videos").withIndex("by_unit", (q) => q.eq("unitId", from._id)).first()) fail("This tute's skills have videos: take them off first (Settings → Books → T), then move it.");
     for (const r of await ctx.db.query("skillTags").withIndex("by_book", (q) => q.eq("unitId", from._id)).collect()) await ctx.db.delete(r._id);
 
     // The students: their place, their work, the books given, drafts, a paper someone holds, calls.

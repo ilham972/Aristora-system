@@ -437,11 +437,80 @@ export default defineSchema({
   skillTags: defineTable({
     unitId: v.id("units"),
     stage: bookStage,
-    skills: v.array(v.object({ id: v.string(), ta: v.string(), en: v.string(), eg: v.optional(v.number()) })),
+    /** k = the skill's permanent key (23 Nov 2026, lib/skills.ts carryKeys): its videos follow it, whatever its number. */
+    skills: v.array(v.object({ id: v.string(), ta: v.string(), en: v.string(), eg: v.optional(v.number()), k: v.optional(v.string()) })),
     tags: v.array(v.object({ q: v.number(), p: v.optional(v.string()), s: v.string(), x: v.optional(v.array(v.string())) })),
     by: v.string(),
     updatedAt: v.number(),
   }).index("by_book", ["unitId", "stage"]),
+
+  /**
+   * A skill's video (23 Nov 2026, convex/videos.ts; his words: "each skill need to have the video ... in future around
+   * 2,000 videos ... we have to be ready for the migration"). Convex is the record: the skill it belongs to (its
+   * permanent key `sk`, never its number), what kind, its title, length and shape, who sees it. The host (Mux now) only
+   * keeps the picture: its ids sit in `host` alone, and no link is ever kept (the server signs a fresh one at each play),
+   * so moving to another host changes `host`, never the rest (lib/videos.ts says how).
+   * state: new (asking the host for an upload address) → upload (the teacher's phone sends the file to `put`) → work
+   * (the host makes its streams) → ready; failed (`err` says why).
+   */
+  videos: defineTable({
+    unitId: v.id("units"),
+    sk: v.string(),
+    /** skill = the skill's own lesson, before its Level; mistake = the common mistakes (later: the schema has it now). */
+    kind: v.union(v.literal("skill"), v.literal("mistake")),
+    /** Its place among this skill's videos of its kind (1 first). */
+    order: v.number(),
+    /** Its title on the phone (Tamil); missing = the skill's Tamil name. */
+    title: v.optional(v.string()),
+    /** The file's name on the teacher's phone, and its size. */
+    file: v.optional(v.string()),
+    bytes: v.optional(v.number()),
+    host: v.object({
+      p: v.literal("mux"),
+      upload: v.optional(v.string()),
+      asset: v.optional(v.string()),
+      play: v.optional(v.string()),
+    }),
+    /** The one-time address the file goes to, while it uploads (gone once it arrived). */
+    put: v.optional(v.string()),
+    state: v.union(v.literal("new"), v.literal("upload"), v.literal("work"), v.literal("ready"), v.literal("failed")),
+    err: v.optional(v.string()),
+    /** Seconds long; the picture's shape ("16:9"). */
+    sec: v.optional(v.number()),
+    ratio: v.optional(v.string()),
+    /** Students see it (a hidden one stays, ready, for teachers). */
+    live: v.boolean(),
+    /** Students who opened it, and who watched it to the end (each counted once). */
+    seen: v.optional(v.number()),
+    ended: v.optional(v.number()),
+    /** The host asked how it is going, so many times (it stops after VIDEO_POLLS_MAX). */
+    polls: v.optional(v.number()),
+    by: v.string(),
+    at: v.number(),
+    updatedAt: v.number(),
+  }).index("by_unit", ["unitId", "sk"]),
+
+  /**
+   * One student and one video (23 Nov 2026): where he stopped (he goes on from there), the furthest he reached, its
+   * length, when he watched it to the end, how often he opened it. Ours, not the host's: it survives a move of host.
+   */
+  videoViews: defineTable({
+    videoId: v.id("videos"),
+    studentId: v.id("students"),
+    unitId: v.id("units"),
+    pos: v.number(),
+    max: v.number(),
+    dur: v.number(),
+    done: v.optional(v.number()),
+    n: v.number(),
+    first: v.number(),
+    last: v.number(),
+  })
+    .index("by_student", ["studentId", "unitId"])
+    .index("by_video", ["videoId", "studentId"]),
+
+  /** The host's key for signing play links (made through the host's API by the server; never sent to any phone). */
+  videoKeys: defineTable({ p: v.literal("mux"), kid: v.string(), pem: v.string(), at: v.number() }).index("by_p", ["p"]),
 
   /**
    * The government's own textbook for a unit (23 Nov 2026, convex/lib/gov.ts): the row says a unit HAS one and how

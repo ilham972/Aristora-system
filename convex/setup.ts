@@ -6,9 +6,10 @@ import { OL, OL_TOPICS, SYLLABUS, unitKey, unitOrder } from "./lib/syllabus";
 import { actor } from "./lib/auth";
 import { giveIndex } from "./lib/family";
 import { EXAM_GRADES, ensureSkb, hasSkBook } from "./lib/sakarath";
+import { keyMaker } from "./lib/skillKeys";
 
 /** Bump when ensure() has new one-time work to do. */
-export const DATA_VERSION = 6;
+export const DATA_VERSION = 7;
 
 /**
  * One-time data updates, safe to run any number of times (every phone calls it when the app opens):
@@ -115,6 +116,15 @@ export const ensure = mutation({
     // 8. The printed Sakarath book (version 6, 19 Nov 2026): one stock item per grade whose Sakarath books are in the
     //    app (lib/sakarath.ts `ensureSkb`); a grade's first book saved through the link makes its own after this.
     for (const g of EXAM_GRADES) if (await hasSkBook(ctx, g)) await ensureSkb(ctx, g);
+
+    // 9. A permanent key on every skill (version 7, 23 Nov 2026: videos follow a skill's key, never its number;
+    //    lib/skills.ts carryKeys). Every save after this keeps them.
+    const keys = await keyMaker(ctx);
+    for (const r of await ctx.db.query("skillTags").collect()) {
+      if (r.skills.every((x) => x.k)) continue;
+      await ctx.db.patch(r._id, { skills: r.skills.map((x) => (x.k ? x : { ...x, k: keys.fresh() })) });
+    }
+    await keys.save();
 
     if (meta) await ctx.db.patch(meta._id, { value: DATA_VERSION });
     else await ctx.db.insert("meta", { key: "data", value: DATA_VERSION });

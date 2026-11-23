@@ -2848,8 +2848,9 @@ learning app of our education institute"): one profile, his class times, what he
   small model: `scripts/skills.ts` (docs/making-changes.md, "Tag a unit's skills") and the **skill-tags** skill.
 - **A unit's book by skill** (14 Nov 2026, his voice note: "each skill considered as each level ... some level have one
   question, sometimes twenty ... the levels are going to be based on skills"; `convex/lib/skillBook.ts` pure,
-  `convex/skillBook.ts`, `src/skillBook.tsx`, `src/skillPrint.ts`). **Not connected** to the family app or to the
-  workbook's levels (his words: "not synced"): the app keeps its question numbers and levels everywhere.
+  `convex/skillBook.ts`, `src/skillBook.tsx`, `src/skillPrint.ts`). Its levels are **not connected** yet to the family
+  app or the workbook's levels (his words: "not synced"; part 2 of 23 Nov 2026): the app keeps its question numbers and
+  levels everywhere. Its skills' **videos** are (part 1, below: "A skill's videos").
   - **Settings → Books → T** beside F M K Q on every unit row: green = its workbook's questions carry skills
     (`catalog.books` `tagged`); pale = not tagged (a tap says "tag it with Claude first").
   - **Level n = skill n** (22 Nov 2026, his voice note: "we can put skill three plus skill four inside the level four
@@ -2957,6 +2958,72 @@ learning app of our education institute"): one profile, his class times, what he
     WhatsApp chat itself and attach a file in one go (WhatsApp lets a site open a chat with text, or take a file from
     the phone's share list, never both); sending with no taps at all would need WhatsApp's Business API (a Meta
     business account, a number of its own, an approved message, a cost per message): not built.
+- **A skill's videos** (23 Nov 2026, part 1 of his "big change": "each skill need to have the video ... before do the
+  skill questions, they have to watch the video ... if we didn't put any video for the skill, then the map don't show
+  ... around 2,000 videos ... it need to be easy [to migrate], not depend on Mux ... very fast and smooth like YouTube";
+  his picks: **Mux**, **no lock**; `convex/lib/videos.ts` the rules, `convex/videos.ts` teachers, `convex/familyVideos.ts`
+  students, `convex/lib/mux.ts` + `convex/videoHost.ts` the host, `convex/lib/rsa.ts` signing).
+  - **A skill's permanent key** (`Skill.k`, "k1", "k2" … from the counter meta `skillSeq`, never given twice; data step
+    9, version 7, gave every skill one): a skill's id carries its number ("G8-U05-S3"), which may change ("skill 2 will
+    become skill 3"); the key never does, and a video belongs to the key. A Claude link save keeps each key (`carryKeys`):
+    a key sent with the skill wins (the chat read it with `ask` "unit"/"skills", which now return `k`), else the same
+    id's, else a new one. Refused, nothing saved: a key that isn't this unit's or comes twice; a skill with a video left
+    out ("keep it, or take its video off first"); a skill keeping its key by its id while its English name changed and it
+    has a video ("send its key if it is the same skill"); another unit's question carrying an id that now means another
+    skill. Move keeps keys (the skills don't change). A tute moved to OL with videos on its skills is refused.
+  - **Convex is the record, the host only keeps the picture** (his rule): `videos` = the skill's key, kind (`skill` now;
+    `mistake` is in the schema for later), order, title (missing = the skill's Tamil name), file name, size, state
+    (new → upload → work → ready, or failed with `err`), length, shape, `live`, counts `seen` / `ended`; the host's ids
+    only in `host` ({p: "mux", upload, asset, play}); **no link is ever kept**. `videoViews` = one student and one
+    video: where he stopped, the furthest, its length, done (90 %, `DONE_SHARE`), how many times. `videoKeys` = the
+    host's signing key (made through its API, never sent to a phone).
+  - **Upload** (Settings → Books → T, the open level's skill's **Videos** card: **+ Video**; or **Many**: many files at
+    once, each to the skill its name says, "G8-U05-S3 …" or the key, shown for a yes first, `skillOfFile`): `videos.start`
+    (Books; the Mux keys must be on the Convex dashboard, else the page says so) makes the row and schedules
+    `videoHost.upload`, which makes the signing key the first time and asks Mux for a **direct upload** (signed playback
+    only, basic quality = free encoding, up to 1080p, loudness evened, `passthrough` = our id). The teacher's phone sends
+    the file **straight to Mux** in 8 MB pieces, each retried after a weak moment (`src/videoUpload.ts`), then
+    `videos.sent`; `videoHost.poll` asks Mux every 8 s (300 times at most) until the asset is ready (its signed playback
+    id, length, shape). Ready + live = on the students' road at once. Shown / Hidden (`setLive`, Books); ✕ (`remove`, the
+    owner) takes the video, everyone's watching of it and Mux's copy (`videoHost.drop`). ▶ on the T page plays it
+    (`preview`). The pills show a violet dot on a level whose skill has a ready video.
+  - **On the road** (`src/family/map.tsx`): a stop right before the first Level that has a question needing the skill
+    (`firstLevels` / `placeVideos`: with levels by skill that is Level n = Sn; with the book's own levels, where the
+    skill first comes), only this unit's own skills, only ready + live videos; **nothing at all without one** (no grey
+    "soon"). Several videos before one Level are one stop ("2 videos"). The stop: white with a violet ▶, its ring filling
+    as he watches, violet with ✓ when watched, a rose ↻ ("again") when he lost marks in that Level and hasn't watched it
+    to the end since; its length on the roomier side. The road's geometry counts the stops (`VD_STEP` 122 px from a stop
+    to its Level keeps START clear; the run-through measures it); the road's owl and chests follow the whole road
+    (`RoadPlus` `road`, `stopOf`). **No lock** (his pick): START never waits for a video.
+  - **The player** (`src/family/video.tsx`, its own file `videoParts.ts` with its style `videoStyle.ts`; hls.js light
+    its own file after it; neither in the first load nor the later parts; the service worker keeps both): opened as one
+    of the app's sheets (the phone's Back closes it). As the Stage opens (idle), the player, hls.js and **the next
+    video's links** come (`familyVideos.links`, a mutation that writes nothing: signed now, kept an hour at most), so ▶
+    starts at once. `src/videoPlay.ts` (both apps): Safari's own HLS on Apple phones (no script), hls.js elsewhere,
+    starting low (600 kbit/s first guess) and sharpening, never bigger than the screen, network drops retried 3 times.
+    Poster at once; a tap = play / pause; ±10 s; the bar to jump; 1× / 1.25× / 1.5×; full screen sideways; the wait ring
+    only after 0.4 s; resume where he stopped (`resumeAt`). The end: the owl cheers; the stop's next video, or **START ·
+    Level n** (when he can play it), or later; ↻ again. His watching (`familyVideos.seen`): as it starts (`start`: the
+    first time makes his row and counts him), every 15 s while it plays, on pause, when the screen closes (a beacon if the
+    page hides), at the end (`end`: `ended` counted once).
+  - **Play links** are signed by the server for 6 hours (`PLAY_HOURS`) with Mux's RS256 key: RSASSA-PKCS1-v1_5 in plain
+    TypeScript (`lib/rsa.ts`, the same bytes as Node's own, tested), the poster's options inside its token (Mux's rule).
+    A leaked link dies the same day; the referrer can't protect anything here (both apps send no referrer).
+  - **Moving host one day** (his rule: "we can move any platform anytime"): every row names its own host, so two can run
+    side by side; `hostLinks` (lib/videos.ts) and `videoHost.ts` are the only places that know Mux. The phones play
+    plain HLS (every host serves it): they never change. The way to move (docs/making-changes.md, "Move the videos to
+    another host"): the new host's file beside lib/mux.ts, a branch in `hostLinks` and `videoHost`, then each video
+    copied server to server: Mux's original (`videoHost.original`, master access, a 24-hour link) fetched by the new host
+    by itself (Bunny: `POST /library/{id}/videos/fetch`), its row switched when the copy is ready.
+  - CSP (`vercel.json`, both apps): media `https://*.mux.com`, connect `https://*.mux.com https://storage.googleapis.com`
+    (uploads), img `https://image.mux.com`, `worker-src 'self' blob:` (hls.js's worker); scripts stay the site's only.
+  - Budgets (`scripts/build.mjs`): the player 6 KB, hls.js 125 KB (115.6 today); the first load +1.8 KB (64.0 / 67).
+    The teachers' build is split since (`splitting`): hls.js is fetched only when a teacher plays a video.
+  - **Not built yet** (his plan, in order): part 2, **levels by skill in both apps** (Level n = skill n everywhere, the
+    numbers of the downloaded skill book 1, 2, 3 on the phone and in Correction, the book and the app always the same,
+    a question's hidden permanent number inside); part 3, the **mistake video** (the second kind: after a lost
+    question); "does it help?" (first-try marks of watchers vs not, per video); the chat that makes a video sending it
+    straight in (today he uploads the file).
 - The server marks with the uploaded answer keys (`convex/lib/phone.ts`; a key without kinds, version 1): numbers,
   several numbers, answers in n (same values for n = 1..7), labelled answers (x = 52), "also accepted" notes. Since 4 Nov 2026 (his screenshot: "0.25 as a
   percentage" was the teacher's, so whole Percentages Stages were): a number with its unit (25%, 45°, −3 °C, 12 cm,

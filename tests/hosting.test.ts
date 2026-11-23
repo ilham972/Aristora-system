@@ -27,7 +27,7 @@ describe("the two addresses", () => {
     const csp = rules.find((r) => r.source === "/((?!f/).*)")!.headers.find((h) => h.key === "Content-Security-Policy")!.value;
     const img = /img-src ([^;]+);/.exec(csp)![1].split(" ");
     expect(img).toEqual(expect.arrayContaining(["'self'", "data:", "blob:"]));
-    expect(img.every((x) => ["'self'", "data:", "blob:", "https://*.convex.cloud"].includes(x))).toBe(true);
+    expect(img.every((x) => ["'self'", "data:", "blob:", "https://*.convex.cloud", "https://image.mux.com"].includes(x))).toBe(true);
     expect(csp).toContain("script-src 'self';");
     expect(csp).toContain("object-src 'none'");
   });
@@ -59,5 +59,18 @@ describe("the two addresses", () => {
     // the same day), nowhere else: the server refuses a voice note outside a thread (tests/help.test.ts).
     expect(head("/f/(.*)", "Permissions-Policy")).toContain("microphone=(self)");
     for (const src of ["/((?!f/).*)", "/f/(.*)"]) expect(head(src, "Content-Security-Policy")).toMatch(/media-src [^;]*https:\/\/\*\.convex\.cloud/);
+  });
+
+  test("the skills' videos (23 Nov 2026): the host's streams, posters and uploads, and hls.js's worker; scripts still only the site's", () => {
+    const rules = config.headers as { source: string; headers: { key: string; value: string }[] }[];
+    for (const src of ["/((?!f/).*)", "/f/(.*)"]) {
+      const csp = rules.find((r) => r.source === src)!.headers.find((h) => h.key === "Content-Security-Policy")!.value;
+      const dir = (name: string) => (new RegExp(`${name} ([^;]+);`).exec(csp)?.[1] ?? "").split(" ");
+      expect(dir("media-src")).toEqual(expect.arrayContaining(["blob:", "https://*.mux.com"]));
+      expect(dir("connect-src")).toEqual(expect.arrayContaining(["https://*.mux.com", "https://storage.googleapis.com"]));
+      expect(dir("img-src")).toContain("https://image.mux.com");
+      expect(dir("worker-src")).toEqual(["'self'", "blob:"]);
+      expect(dir("script-src")).toEqual(["'self'"]);
+    }
   });
 });

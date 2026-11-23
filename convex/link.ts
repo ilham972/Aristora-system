@@ -49,7 +49,8 @@ import { BOOK_CSS_MAX, QUESTION_HTML_MAX, unsafeCss, unsafeHtml } from "./lib/qu
 import { answerNonce, fromB64, KEY_BYTES, seal, unseal } from "./lib/seal";
 import { govWords, partProblem, wholeProblem, type GovPart } from "./lib/gov";
 import { dropGov } from "./gov";
-import { knownFor, skillCounts, skillHome, skillsProblem, type Skill, type SkillFile, type SkillTag } from "./lib/skills";
+import { carryKeys, knownFor, sameName, skillCounts, skillHome, skillsProblem, type Skill, type SkillFile, type SkillTag } from "./lib/skills";
+import { keyMaker, videosByKey } from "./lib/skillKeys";
 import { ensureSkb, EXAM_GRADES, olSkKey, sakarathProblem, sameLevels, skGrade, skKey, skNames, SK_TITLE } from "./lib/sakarath";
 import { OL, unitKey } from "./lib/syllabus";
 import { linkReply, linkThread, linkThreads } from "./linkThreads";
@@ -554,11 +555,42 @@ async function saveSkills(ctx: MutationCtx, row: Row, req: Asked, now: number): 
       if (gone) return { ok: false, error: `${units.find((u) => u._id === r.unitId)?.key} question ${t.q} carries ${gone}: keep that skill, or tag that unit again first.` };
     }
   }
-  const skills: Skill[] = file.skills.map((s) => ({ id: s.id, ta: s.ta.trim(), en: s.en.trim(), ...(s.eg !== undefined ? { eg: s.eg } : {}) }));
+  const old = rows.find((r) => r.unitId === m.unit._id);
+  // Every skill keeps its permanent key (23 Nov 2026: its videos follow the skill, never its number; lib/skills.ts).
+  const keys = await keyMaker(ctx);
+  const carry = carryKeys(
+    old?.skills ?? [],
+    file.skills.map((s) => ({ id: s.id, ta: s.ta.trim(), en: s.en.trim(), ...(s.eg !== undefined ? { eg: s.eg } : {}), ...(s.k !== undefined ? { k: s.k } : {}) })),
+    keys.fresh,
+  );
+  if (typeof carry === "string") return { ok: false, error: carry };
+  const vids = await videosByKey(ctx, m.unit._id);
+  const before = new Map((old?.skills ?? []).filter((s) => s.k).map((s) => [s.k as string, s]));
+  for (const k of carry.gone) {
+    const n = vids.get(k);
+    const was = before.get(k);
+    if (n && was) return { ok: false, error: `Skill ${was.id} (${was.en}) has ${n} video${n > 1 ? "s" : ""}: keep it (send it with "k": "${k}"), or take its video off first (Settings → Books → T).` };
+  }
+  for (const s of carry.skills) {
+    const was = s.k ? before.get(s.k) : undefined;
+    if (!was || !carry.byId.has(s.id) || !vids.get(s.k!) || sameName(was.en, s.en)) continue;
+    return { ok: false, error: `${s.id} had the video for "${was.en}"; now ${s.id} is "${s.en}". The same skill in new words: send it with "k": "${s.k}". Another skill: give it a number of its own.` };
+  }
+  // Another unit's question that carries one of this unit's skills must still mean the same skill (its number moved).
+  const keyNow = new Map(carry.skills.map((s) => [s.id, s.k]));
+  const keyWas = new Map((old?.skills ?? []).map((s) => [s.id, s.k]));
+  for (const r of rows) {
+    if (r.unitId === m.unit._id) continue;
+    for (const t of r.tags) {
+      const moved = [t.s, ...(t.x ?? [])].find((id) => skillHome(id) === m.unit.key && keyWas.get(id) && keyNow.get(id) !== keyWas.get(id));
+      if (moved) return { ok: false, error: `${units.find((u) => u._id === r.unitId)?.key} question ${t.q} carries ${moved}, which is now another skill: keep ${moved}'s number for it, or tag that unit again first.` };
+    }
+  }
+  const skills: Skill[] = carry.skills;
   const tags: SkillTag[] = file.tags
     .map((t) => ({ q: t.q, ...(t.p !== undefined ? { p: t.p } : {}), s: t.s, ...(t.x?.length ? { x: [...t.x] } : {}) }))
     .sort((a, b) => a.q - b.q || (a.p ?? "").localeCompare(b.p ?? ""));
-  const old = rows.find((r) => r.unitId === m.unit._id);
+  await keys.save();
   if (old) await ctx.db.patch(old._id, { skills, tags, by: row.by, updatedAt: now });
   else await ctx.db.insert("skillTags", { unitId: m.unit._id, stage: "master", skills, tags, by: row.by, updatedAt: now });
   const questions = new Set(tags.map((t) => t.q)).size;

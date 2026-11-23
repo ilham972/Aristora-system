@@ -103,8 +103,18 @@ function Faces(props: { g: FamilyRoad["mates"][number]; at: Pt; mine: boolean; s
  * On top of a Stage's road (map.tsx StageScreen): the owl, classmates, the chests, FINAL. `pts` = its Levels' stops,
  * `cup` = the trophy's; `playIdx` = the Level he is on (−1: none to play).
  */
-export function RoadPlus(props: { w: World; pts: Pt[]; cup: Pt; playIdx: number; onChange: () => void }) {
+export function RoadPlus(props: {
+  w: World;
+  pts: Pt[];
+  cup: Pt;
+  playIdx: number;
+  onChange: () => void;
+  /** The whole road when it has video stops between Levels (23 Nov 2026): every stop and the cup, and each Level's place in it. */
+  road?: Pt[];
+  stopOf?: number[];
+}) {
   const { w, pts, cup } = props;
+  const on = (i: number) => props.stopOf?.[i] ?? i;
   const n = w.levels.length;
   const key = `road.${w.unitId}`;
   const [road, setRoad] = useState<FamilyRoad | null>(() => keep<FamilyRoad>(key));
@@ -120,7 +130,7 @@ export function RoadPlus(props: { w: World; pts: Pt[]; cup: Pt; playIdx: number;
     void load();
   }, [w.unitId]);
   // Where the owl stands: his Level, or the cup when every Level is done; and where it stood when he last looked.
-  const stops = [...pts, cup];
+  const stops = props.road ?? [...pts, cup];
   const doneIdx = w.levels.reduce((a, l, i) => (l.s === "done" || l.s === "check" || l.s === "class" || l.s === "pre" ? i : a), -1);
   const at = w.allDone ? n : props.playIdx >= 0 ? props.playIdx : Math.min(n, doneIdx + 1);
   const [from] = useState(() => keep<number>(`roadAt.${w.unitId}`));
@@ -159,8 +169,8 @@ export function RoadPlus(props: { w: World; pts: Pt[]; cup: Pt; playIdx: number;
       {(road?.chests ?? []).map((c) => {
         const i = idxOf(c.n);
         if (i < 0 || i >= n - 1) return null;
-        const a = pts[i];
-        const b = pts[i + 1];
+        const a = stops[on(i)];
+        const b = stops[on(i) + 1];
         const mid = along(a, b, 0.5);
         const x = mid.x + (mid.x < 50 ? 19 : -19);
         return (
@@ -189,7 +199,7 @@ export function RoadPlus(props: { w: World; pts: Pt[]; cup: Pt; playIdx: number;
         const side = mine ? (roomy === "r" ? "l" : "r") : roomy;
         return <Faces key={g.n} g={g} at={p} mine={mine} side={side} label={finished ? "Stage முடிந்தது" : `Level ${w.levels[i].d ?? g.n}`} />;
       })}
-      {w.book && n > 0 && <RoadOwl stops={stops} at={at} from={from} />}
+      {w.book && n > 0 && <RoadOwl stops={stops} at={on(at)} from={from === null ? null : on(from)} />}
     </>
   );
 }

@@ -28,7 +28,7 @@ test("the dark colours: plain rules under his switch, nothing else", () => {
 });
 
 /** Every file that paints the family app (the Level's and the owl's style are strings in their own files). */
-const STYLES = ["src/family/family.css", "src/family/profile.css", "src/family/usStyle.ts", "src/family/chatStyle.ts", "src/family/levelStyle.ts", "src/family/buddyStyle.ts"];
+const STYLES = ["src/family/family.css", "src/family/profile.css", "src/family/usStyle.ts", "src/family/chatStyle.ts", "src/family/levelStyle.ts", "src/family/buddyStyle.ts", "src/family/videoStyle.ts"];
 
 test("every file that paints the family app is checked here (a new style file joins STYLES)", () => {
   const painters = readdirSync("src/family").filter((f) => f.endsWith(".css") || /Style\.ts$/.test(f));

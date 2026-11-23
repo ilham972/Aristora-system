@@ -5768,3 +5768,97 @@ test("his fees: never on Home; one quiet line in Me → Your details (what he ow
   await shot(P, "fee03-me-paid-ahead-320");
   expect(problems.slice(before)).toEqual([]);
 }, 120_000);
+
+test("Videos on the road (23 Nov 2026): a skill's video right before its Level, nothing without one; the player as a sheet; START after it", async () => {
+  const before = problems.length;
+  const backend = makeBackend(modules);
+  const t = backend.t;
+  await addPerson(t, { name: "Owner", token: OWNER_TOKEN, role: "owner" });
+  const as = { token: OWNER_TOKEN };
+  await t.mutation(api.setup.ensure, as);
+  const u01 = await t.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G8-U01")).first())!._id);
+  await t.mutation(api.catalog.saveWorkbook, {
+    ...as,
+    unitId: u01,
+    parts: BOOK.data.parts.map((p) => ({ id: p.id, to: p.to, ...(p.each ? { each: p.each } : {}) })),
+    levels: BOOK.data.levels.map((l) => ({ to: l.to, max: l.max })),
+    marks: BOOK.data.marks ?? {},
+    replace: true,
+    key: fakeKey(),
+  });
+  const hana = await t.mutation(api.students.add, { ...as, name: "Hana K", grade: 8, term: 1, stage: "master", unitId: u01 });
+  const code = "hana-video-link-0123456789abcd";
+  await t.mutation(api.families.makeLink, { ...as, studentId: hana, codeHash: secretHash("family-link", code) });
+  // Three made-up skills (Q1–20, Q21–40, Q41–73), a ready video for the first two (the third has none: no stop at all).
+  const { generateKeyPairSync } = await import("node:crypto");
+  const pem = generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey.export({ type: "pkcs1", format: "pem" }).toString();
+  const [v1, v2] = await t.run(async (ctx) => {
+    await ctx.db.insert("skillTags", {
+      unitId: u01,
+      stage: "master",
+      skills: [1, 2, 3].map((n) => ({ id: `G8-U01-S${n}`, ta: ["முதல் திறன்", "இரண்டாம் திறன்", "மூன்றாம் திறன்"][n - 1], en: `Skill ${n}`, k: `k${n}` })),
+      tags: Array.from({ length: 73 }, (_, i) => ({ q: i + 1, s: `G8-U01-S${i < 20 ? 1 : i < 40 ? 2 : 3}` })),
+      by: "test",
+      updatedAt: 1,
+    });
+    await ctx.db.insert("videoKeys", { p: "mux", kid: "KID1", pem, at: 1 });
+    const make = (sk: string, sec: number) =>
+      ctx.db.insert("videos", { unitId: u01, sk, kind: "skill", order: 1, host: { p: "mux", asset: `a-${sk}`, play: `P-${sk}` }, state: "ready", sec, ratio: "16:9", live: true, by: "Owner", at: 1, updatedAt: 1 });
+    return [await make("k1", 183), await make("k2", 95)];
+  });
+  const level3 = BOOK.data.levels.find((l) => l.from <= 21 && l.to >= 21)!.n;
+
+  const F = await open(backend, `${site.url}/f/#join=${code}`);
+  // No network to the host here: its streams and posters fail at once.
+  await F.route(/mux\.com/, (r) => r.abort());
+  await F.getByRole("button", { name: "START" }).click();
+  await tabTo(F, /Learn/);
+  await F.locator(".f-node.s-now").click();
+  await playIs(F, "Level 1");
+  // Two stops: before Level 1 (S1 first comes there) and before the Level where S2 first comes; S3 has none.
+  await until(async () => (await F.locator(".f-vd").count()) === 2, "two video stops");
+  const labels = await F.locator(".f-vd").evaluateAll((els) => els.map((e) => e.getAttribute("aria-label") ?? ""));
+  expect(labels[0]).toMatch(/^Video before Level 1: முதல் திறன் \(3:03\)$/);
+  expect(labels[1]).toMatch(new RegExp(`^Video before Level ${level3}: இரண்டாம் திறன் \\(1:35\\)$`));
+  // Each stop sits above its Level, clear of START and of the Level's node.
+  const box = async (l: L) => (await l.boundingBox())!;
+  const stop = await box(F.locator(".f-vd .f-vd-c").first());
+  const lv1 = await box(F.locator(".f-lv.play"));
+  const start = await box(F.locator(".f-start").first());
+  expect(stop.y + stop.height).toBeLessThan(start.y);
+  expect(start.y + start.height).toBeLessThanOrEqual(lv1.y + 4);
+  await noSideScroll(F);
+  await shot(F, "vd01-stage");
+  // The player: one of the app's sheets, its title, the length, the controls; the phone's Back closes it alone.
+  await F.locator(".f-vd").first().click();
+  await visible(F.locator(".f-vp"));
+  await contains(F.locator(".f-vp-t"), "முதல் திறன்");
+  await contains(F.locator(".f-vp-time"), "3:03");
+  await shot(F, "vd02-player");
+  await F.goBack();
+  await until(async () => (await F.locator(".f-vp").count()) === 0, "the player closed");
+  await visible(F.locator(".f-lv.play"));
+  // Watched to the end (the stream itself can't play here: its events stand in): counted, then START this Level.
+  await F.locator(".f-vd").first().click();
+  await visible(F.locator(".f-vp"));
+  await F.locator(".f-vp-v").evaluate((v) => v.dispatchEvent(new Event("playing")));
+  await until(async () => !!(await t.run(async (ctx) => await ctx.db.query("videoViews").withIndex("by_video", (q) => q.eq("videoId", v1)).first())), "his watching counted");
+  await F.locator(".f-vp-v").evaluate((v) => v.dispatchEvent(new Event("ended")));
+  await visible(F.getByRole("button", { name: "START · Level 1" }));
+  await shot(F, "vd03-end");
+  await F.getByRole("button", { name: "START · Level 1" }).click();
+  await contains(F.locator(".f-qn"), "Q1");
+  const seen = await t.run(async (ctx) => await ctx.db.query("videoViews").withIndex("by_video", (q) => q.eq("videoId", v1)).first());
+  expect(seen?.done).toBeTypeOf("number");
+  expect((await t.run(async (ctx) => await ctx.db.get(v1)))?.ended).toBe(1);
+  // Back on the Stage: the first stop is ✓, the second still to watch.
+  await F.goBack();
+  await until(async () => (await F.locator(".f-vd.done").count()) === 1, "the watched stop ✓");
+  expect(await F.locator(".f-vd").nth(1).getAttribute("class")).not.toContain("done");
+  expect(v2).toBeTruthy();
+  // The narrowest phone: still one column, no side scroll.
+  await F.setViewportSize({ width: 320, height: 640 });
+  await noSideScroll(F);
+  await shot(F, "vd04-stage-320");
+  expect(problems.slice(before).filter((p) => !/mux\.com|ERR_FAILED|Failed to load resource/.test(p))).toEqual([]);
+}, 120_000);

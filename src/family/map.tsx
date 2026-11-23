@@ -10,12 +10,14 @@
 
 import type { Parts } from "./later";
 import type { ComponentChildren } from "preact";
-import { useEffect } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import type { FamilyMe } from "../../convex/family";
+import type { StageVideo, StageVideos } from "../../convex/familyVideos";
 import type { World, WorldLevel } from "../../convex/lib/family";
+import { keep, query, sameOr } from "./net";
 import { nextPlay } from "./next";
 import { buzz, sound } from "./sound";
-import { Dashes, Flame, flameAtRisk, Gem, Icon, Owl, OwlBadge, OwlSays, PART_TA, SK_PART_TA, Tag, TERM_TA, titleSize, toast, Waiting, type Mood } from "./ui";
+import { Dashes, Flame, flameAtRisk, Gem, Icon, Owl, OwlBadge, OwlSays, PART_TA, showSheet, SK_PART_TA, Tag, TERM_TA, titleSize, toast, Waiting, type Mood } from "./ui";
 
 // ---- The road: a smooth line through the stops (x in % of the width, y in px) ----
 
@@ -308,7 +310,41 @@ const STATE_WORDS: Record<WorldLevel["s"], string> = {
 
 const LV_STEP = 124;
 const LV_HEAD = 86;
-const lvPos = (i: number) => ({ x: 50 + 24 * Math.sin(i * 1.6), y: LV_HEAD + i * LV_STEP });
+/** A video stop's Level comes this far after it (a Level's own step is LV_STEP): START above the Level stays clear. */
+const VD_STEP = 122;
+const xAt = (i: number) => 50 + 24 * Math.sin(i * 1.6);
+
+// ---- A skill's videos on the road (23 Nov 2026, his voice note: "before do the skill questions, they have to watch
+// the video ... if we didn't put any video for the skill, then the map don't show"): a stop right before the Level its
+// skill first comes in; nothing when the Stage has none. The player is its own file (videoParts.ts), fetched with
+// hls.js and the next video's links as the Stage opens, so ▶ starts at once. No lock (his pick). ----
+
+type VideoMod = typeof import("./videoParts");
+let videoMod: Promise<VideoMod> | null = null;
+const loadVideo = (): Promise<VideoMod> =>
+  (videoMod ??= import("./videoParts").catch((e: unknown) => {
+    videoMod = null;
+    throw e;
+  }));
+
+/** The Stage's video stops: the phone's copy at once, the server's when it answers. */
+function useStageVideos(unitId: string, on: boolean): [StageVideos | null, () => void] {
+  const key = `vids.${unitId}`;
+  const [v, setV] = useState<StageVideos | null>(() => keep<StageVideos>(key));
+  const load = () => {
+    if (!on) return;
+    query("familyVideos:stage", { unitId })
+      .then((x) => {
+        keep(key, x);
+        setV((shown) => sameOr(shown, x as StageVideos));
+      })
+      .catch(() => {});
+  };
+  useEffect(load, [unitId, on]);
+  return [v, load];
+}
+
+const mmss = (s: number) => `${Math.floor(Math.round(s) / 60)}:${String(Math.round(s) % 60).padStart(2, "0")}`;
 
 export function StageScreen(props: {
   me: FamilyMe;
@@ -330,12 +366,81 @@ export function StageScreen(props: {
   const g = groups.find((x) => x.stages.some((s) => s.unitId === w.unitId));
   const n = w.levels.length;
   const done = levelsDone(w);
-  const pts = w.levels.map((_, i) => lvPos(i));
-  const cup = { x: lvPos(n).x, y: (pts[n - 1]?.y ?? LV_HEAD) + LV_STEP - 6 };
+  const [vids, reloadVids] = useStageVideos(w.unitId, w.book);
+  const [vm, setVm] = useState<VideoMod | null>(null);
+  // The road's stops in order: a Level's videos (one stop) right before it, then the Level; the cup last.
+  const before = new Map((vids?.at ?? []).map((x) => [x.n, x.v]));
+  const stops: { x: number; y: number }[] = [];
+  const lvAt: number[] = [];
+  const vdAt: { k: number; n: number; v: StageVideo[] }[] = [];
+  let y = LV_HEAD;
+  for (const l of w.levels) {
+    const v = l.n > 0 ? before.get(l.n) : undefined;
+    if (v?.length) {
+      vdAt.push({ k: stops.length, n: l.n, v });
+      stops.push({ x: xAt(stops.length), y });
+      y += VD_STEP;
+    }
+    lvAt.push(stops.length);
+    stops.push({ x: xAt(stops.length), y });
+    y += LV_STEP;
+  }
+  const pts = lvAt.map((k) => stops[k]);
+  const cup = { x: xAt(stops.length), y: (stops[stops.length - 1]?.y ?? LV_HEAD) + LV_STEP - 6 };
   const height = cup.y + 60;
   const playIdx = w.levels.findIndex((l) => l.s === "play");
   const reached = w.allDone ? n : playIdx >= 0 ? playIdx : done - 1;
+  const reachedStop = reached < 0 ? reached : reached >= n ? stops.length : lvAt[reached];
   const canPlay = w.book && w.open && w.phone;
+  // With videos here: the player, hls.js and the next video's links come while he looks at the road.
+  const nextVideo = (vdAt.find((x) => x.n === w.levels[playIdx]?.n) ?? vdAt.find((x) => x.v.some((v) => !v.done)))?.v.find((v) => !v.done);
+  useEffect(() => {
+    if (!vdAt.length) return;
+    let gone = false;
+    const go = () =>
+      loadVideo()
+        .then((m) => {
+          if (gone) return;
+          m.addVideoStyle();
+          setVm(m);
+          void m.loadHls().catch(() => {});
+          if (nextVideo) m.prepare(nextVideo.id);
+        })
+        .catch(() => {});
+    const idle = (window as { requestIdleCallback?: (f: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+    const h = idle ? idle(go, { timeout: 1200 }) : window.setTimeout(go, 300);
+    return () => {
+      gone = true;
+      if (!idle) clearTimeout(h);
+    };
+  }, [vdAt.length, nextVideo?.id]);
+  /** The player, as one of the app's sheets (the phone's Back closes it); START goes on to the Level once it has. */
+  const openVideo = (x: { n: number; v: StageVideo[] }) => {
+    buzz();
+    const show = (m: VideoMod) => {
+      m.addVideoStyle();
+      setVm(m);
+      showSheet((close) => (
+        <m.VideoScreen
+          list={x.v}
+          level={x.n}
+          canStart={canPlay && w.levels.some((l) => l.n === x.n && l.s === "play")}
+          onStart={() => {
+            const go = () => props.onPlay(x.n);
+            if ((history.state as { sheet?: number } | null)?.sheet) window.addEventListener("popstate", () => setTimeout(go, 0), { once: true });
+            else setTimeout(go, 0);
+            close();
+          }}
+          onClose={close}
+          onGone={reloadVids}
+        />
+      ));
+    };
+    if (vm) return show(vm);
+    loadVideo()
+      .then(show)
+      .catch(() => toast("இப்போது video திறக்க முடியவில்லை: data அல்லது Wi-Fi பார்."));
+  };
   useEffect(() => {
     const el = document.querySelector(".f-lv.play");
     if (el && el.getBoundingClientRect().top > window.innerHeight - 160) el.scrollIntoView({ block: "center" });
@@ -438,7 +543,29 @@ export function StageScreen(props: {
             </section>
           )}
           <div class="f-roadbox lv" style={{ height: `${height}px` }}>
-            <Road pts={[...pts, cup]} height={height} reached={reached} />
+            <Road pts={[...stops, cup]} height={height} reached={reachedStop} />
+            {vdAt.map((x) => {
+              const p = stops[x.k];
+              const all = x.v.every((v) => v.done);
+              const again = x.v.some((v) => v.again);
+              const w0 = Math.round(x.v.reduce((a, v) => a + (v.done ? 100 : v.w), 0) / x.v.length);
+              const sec = x.v.reduce((a, v) => a + v.sec, 0);
+              return (
+                <button
+                  key={`v${x.n}`}
+                  type="button"
+                  class={`f-vd ${p.x < 50 ? "r" : "l"}${all ? " done" : ""}${again ? " again" : ""}`}
+                  style={{ left: `${p.x}%`, top: `${p.y}px`, "--w": String(w0) }}
+                  aria-label={`Video before Level ${x.n}: ${x.v.map((v) => v.t).join(", ")} (${mmss(sec)})${all ? ", watched" : ""}`}
+                  onClick={() => openVideo(x)}
+                >
+                  <span class="f-vd-c">
+                    <Icon name={all ? "check" : "play"} size={all ? 24 : 22} />
+                  </span>
+                  <small>{x.v.length > 1 ? `${x.v.length} videos` : mmss(sec)}</small>
+                </button>
+              );
+            })}
             {w.levels.map((l, i) => {
               const live = l.s === "play" && canPlay;
               const pct = l.got !== undefined && l.max ? l.got / l.max : 0;
@@ -488,7 +615,7 @@ export function StageScreen(props: {
             <span class={`f-chest${w.allDone ? " won" : ""}`} style={{ left: `${cup.x}%`, top: `${cup.y}px` }}>
               <Icon name="trophy" size={24} />
             </span>
-            {props.parts && <props.parts.RoadPlus w={w} pts={pts} cup={cup} playIdx={playIdx} onChange={props.onChange} />}
+            {props.parts && <props.parts.RoadPlus w={w} pts={pts} cup={cup} playIdx={playIdx} onChange={props.onChange} road={vdAt.length ? [...stops, cup] : undefined} stopOf={vdAt.length ? [...lvAt, stops.length] : undefined} />}
           </div>
           {w.allDone && props.onCert && (
             <div class="f-pad-x f-stage-cert">

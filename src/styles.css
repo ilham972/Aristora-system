@@ -15110,3 +15110,190 @@ body.sb-on {
   font-weight: 700;
   color: var(--ink-2);
 }
+
+/* ---- A skill's videos on its T page (23 Nov 2026, src/videoShelf.tsx): under the open level's head ---- */
+.vs-many-b {
+  flex: none;
+  height: 34px;
+  padding: 0 12px;
+  border: 1.5px solid var(--ink);
+  border-radius: 17px;
+  background: var(--card);
+  color: var(--ink);
+  font-weight: 800;
+  font-size: 13px;
+}
+.vs-many-b:disabled {
+  opacity: 0.4;
+}
+.sb-pill .vs-dot {
+  width: 7px;
+  height: 7px;
+  margin-left: -2px;
+  border-radius: 50%;
+  background: var(--evaluation);
+}
+.sb-pill.on .vs-dot {
+  background: #fff;
+}
+.vs {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--card);
+}
+.vs-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.vs-head b {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 14px;
+}
+.vs-head span {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vs-add {
+  flex: none;
+  height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 17px;
+  background: var(--ink);
+  color: #fff;
+  font-weight: 800;
+  font-size: 13px;
+}
+.vs-add:disabled {
+  opacity: 0.4;
+}
+.vs-note {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--ink-2);
+}
+.vs-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+.vs-play {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 12px;
+  background: var(--evaluation);
+  color: #fff;
+}
+.vs-play:disabled,
+span.vs-play {
+  background: var(--line-2);
+  color: var(--ink-3);
+}
+.vs-t {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.vs-t b {
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vs-t small {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.vs-row.s-failed .vs-t small {
+  color: var(--amber-ink);
+}
+.vs-row.off .vs-t b {
+  color: var(--ink-3);
+}
+.vs-bar {
+  display: block;
+  height: 5px;
+  margin-top: 3px;
+  border-radius: 3px;
+  background: var(--line-2);
+  overflow: hidden;
+}
+.vs-bar i {
+  display: block;
+  height: 100%;
+  background: var(--evaluation);
+  transition: width 0.3s;
+}
+.vs-live {
+  flex: none;
+  height: 30px;
+  padding: 0 10px;
+  border: 1.5px solid var(--line);
+  border-radius: 15px;
+  background: var(--card);
+  color: var(--ink-3);
+  font-weight: 800;
+  font-size: 12px;
+}
+.vs-live.on {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.vs-x {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 15px;
+  background: transparent;
+  color: var(--ink-3);
+  font-size: 15px;
+}
+.vs-video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
+  background: #000;
+}
+.vs-many p {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+.vs-many p.no {
+  opacity: 0.5;
+}
+.vs-many b {
+  flex: none;
+  min-width: 48px;
+}
+.vs-many span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  word-break: break-all;
+}
+.vs-many small {
+  color: var(--ink-3);
+  word-break: normal;
+}

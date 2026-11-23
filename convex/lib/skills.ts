@@ -13,8 +13,12 @@ import type { MasterData } from "./book";
 import { firstQuestion } from "./book";
 import { lastQuestion, type KeyAnswer } from "./key";
 
-/** A skill: its id ("G8-U05-S3"), its name in Tamil and in English, and the question that shows it best (a lesson's example). */
-export type Skill = { id: string; ta: string; en: string; eg?: number };
+/**
+ * A skill: its id ("G8-U05-S3"), its name in Tamil and in English, and the question that shows it best (a lesson's
+ * example). `k` = its permanent key (23 Nov 2026, the videos: "skill 2 will become skill 3"): the id carries the skill's
+ * number, which may change; the key never does, so a video (and anything else attached to a skill) follows the skill.
+ */
+export type Skill = { id: string; ta: string; en: string; eg?: number; k?: string };
 /**
  * A question's skills: `s` = the main one (the step that decides it), `x` = the others its solution uses (two at most);
  * `p` = one part of a long question (the key's label), when its parts need different skills.
@@ -47,6 +51,55 @@ export const SKILL_NAME_MAX = 80;
 export const SKILLS_A_TAG = 3;
 
 export const skillId = (unitKey: string, n: number) => `${unitKey}-S${n}`;
+
+// ---- Permanent keys (23 Nov 2026) ----
+
+/** The meta row counting the keys given so far: a key is "k" + the next number in base 36, never given twice. */
+export const SKILL_SEQ_KEY = "skillSeq";
+export const skillKeyOf = (n: number) => `k${n.toString(36)}`;
+export const isSkillKey = (k: unknown): k is string => typeof k === "string" && /^k[0-9a-z]{1,10}$/.test(k);
+
+export type KeyCarry = {
+  skills: Skill[];
+  /** Keys the unit had that no skill carries now (their skills are gone, or were merged). */
+  gone: string[];
+  /** Skills that took the key of the same id without saying so (a chat that didn't send the keys). */
+  byId: Set<string>;
+};
+
+/**
+ * Every skill keeps its permanent key across a save (23 Nov 2026): a key sent with the skill wins (the chat read it with
+ * the skills: a skill that moved to another number keeps its key, so its videos follow it); else the key of the same id
+ * before; else a new key (`fresh`). A key must be one of this unit's, once. Plain words when one is wrong.
+ */
+export function carryKeys(before: readonly Skill[], next: readonly Skill[], fresh: () => string): KeyCarry | string {
+  const had = new Map(before.filter((s) => s.k).map((s) => [s.k as string, s]));
+  const claimed = new Set<string>();
+  for (const s of next) {
+    if (s.k === undefined) continue;
+    if (!isSkillKey(s.k) || !had.has(s.k)) return `Skill ${s.id}: key "${s.k}" is not one of this unit's skills (read the unit again, or send the skill without a key).`;
+    if (claimed.has(s.k)) return `Key ${s.k} is on two skills: one skill, one key.`;
+    claimed.add(s.k);
+  }
+  const byId = new Set<string>();
+  const skills = next.map((s): Skill => {
+    if (s.k !== undefined) return s;
+    const same = before.find((b) => b.id === s.id && b.k && !claimed.has(b.k));
+    if (same?.k) {
+      claimed.add(same.k);
+      byId.add(s.id);
+      return { ...s, k: same.k };
+    }
+    return { ...s, k: fresh() };
+  });
+  return { skills, gone: [...had.keys()].filter((k) => !claimed.has(k)), byId };
+}
+
+/** The same skill in other words? (a skill keeping its key by its id: its English name may change only a little). */
+export function sameName(a: string, b: string): boolean {
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return norm(a) === norm(b);
+}
 /** The unit that owns a skill id ("G8-U05-S3" → "G8-U05"); null when it is not an id. */
 export function skillHome(id: string): string | null {
   const m = /^((?:G\d{1,2}|OL)-[A-Za-z0-9]{1,8})-S([1-9]\d?)$/.exec(id);

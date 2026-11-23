@@ -360,6 +360,35 @@ chat within its 7 days.
   `withNeeds`), `schema.ts` (`pageId`), `app.tsx` (`loadStart`, `pageRole`, the page, its mark, its badge), and the
   run-throughs that list a preset's pages ("Departments: …").
 
+## Videos: connect the host, and move to another one day
+
+**Connect Mux (once, the owner; nothing in the repo).** Mux → sign up (a card for pay-as-you-go: the free plan holds 10
+videos) → Settings → Access Tokens → Generate new token, environment Production, permissions **Mux Video: Read and
+Write** and **System: Read and Write** (the server makes its own signing key through it) → copy the token ID and secret →
+Convex dashboard (qualified-fish-602) → Settings → Environment Variables → `MUX_TOKEN_ID`, `MUX_TOKEN_SECRET`. The T page
+then shows + Video; the first upload makes the signing key (`videoKeys`). Never a webhook to set: the server asks Mux
+(`videoHost.poll`). If uploads fail with "Mux refused the keys", the token is wrong or lacks a permission.
+
+**A video file for him** (a chat making one with the video-making skill): MP4 (H.264 + AAC), 720p or 1080p, 30 fps;
+name it after its skill, `G8-U05-S3 <words>.mp4` or with the skill's key (`ask` "unit" gives `k`), so "Many" on the T page's
+Videos card puts it on its skill by itself. A still-heavy lesson (slides, writing) streams light: Mux's ladder
+spends bits where the picture moves.
+
+**Move the videos to another host** (when Mux's price turns): (1) the new host's pure file beside `convex/lib/mux.ts`
+(its upload, its play link: Bunny signs a link with a SHA-256 token, Cloudflare with its own JWT), its `p` in the
+`videos.host` union (schema) and a branch in `hostLinks` (lib/videos.ts) and in `videoHost.ts` (`upload`, `poll`,
+`drop`); new uploads go there (`videos.start`'s `host`). (2) A move job (an internal action over the `ready` rows, a few
+at a time): `videoHost.original` gives Mux's original as a 24-hour link (ask again until it is ready), the new host
+fetches it by itself (Bunny: `POST https://video.bunnycdn.com/library/{libraryId}/videos/fetch` with `{ url }`), poll the
+new host, then patch the row's `host` (the old ids kept for a week) and `videoHost.drop` the Mux asset after. (3) CSP:
+the new host's stream, poster and upload domains in both apps (`tests/hosting.test.ts`). The phones change nothing: both
+hosts serve HLS, and `videoViews` (who watched what) is ours.
+
+**Look at it here.** `tests/videos.test.ts` simulates Mux (internal mutations stand in for its answers; a real RSA key
+from Node signs the links); the run-through "Videos on the road" plays nothing (Playwright's Chromium has no H.264, and
+mux.com is aborted): it dispatches the video's `playing` and `ended` events and checks the stops' places, the sheet, the
+counts and START. On a real phone, open a Stage with a ready video: ▶ should start in about a second on 4G.
+
 ## Security audit
 
 After adding functions, every function must print GUARD except the open ones on purpose: `auth.me`, `auth.setupOwner`,
@@ -368,7 +397,9 @@ and `join` check the family link; the rest call `familyViewer` / `familyActor`: 
 and `link.tell` (10 Nov 2026, the Claude link): they answer only a request sealed with the link's key (`opened`); the
 threads link (20 Nov 2026) is inside them (`scope`), never a function of its own.
 And `coins.shop`, `coins.buy`, `coins.cancel` (10 Nov 2026, the Shop: `familyViewer` / `familyActor`, which the
-script's lower-case match misses); `coins.payday` is internal. And `online.beat` (`familyActor`), `online.usage`
+script's lower-case match misses); `coins.payday` is internal. And `familyVideos.stage`, `links`, `seen` (23 Nov 2026,
+the videos: `familyViewer` / `familyActor`, tested signed out in `tests/videos.test.ts`); `videoHost.*` and the `host*`,
+`hasKey`, `saveKey` of `videos.ts` are internal. And `online.beat` (`familyActor`), `online.usage`
 and `online.usageDay` (`whose` → `familyViewer`) (12 Nov 2026); `online.sweep` is internal.
 
 ```bash
