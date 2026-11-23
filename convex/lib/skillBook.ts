@@ -2,8 +2,13 @@
 // Pure rules shared by the server (convex/skillBook.ts) and the page (src/skillBook.tsx); nothing here is saved.
 // - A group = the exact set of skills a question needs (his words: "skill two is only for purely skill two only ...
 //   create another pill like skill two and three"). A question tagged part by part needs every part's skills.
-// - The groups in teaching order: after the last skill it needs ("after learning the skill three and after learning
-//   the skill five"), the single skill first, then the bigger groups. Each group is one level of the downloaded book.
+// - **Level n = skill n** of the unit (22 Nov 2026, his voice note: "we can put skill three plus skill four inside the
+//   level four ... the student already learned level three ... otherwise the levels are going to be very high list and
+//   some levels have only one question or two"): a question goes into the level of the LAST of this unit's skills it
+//   needs, so S3+S4 is in Level 4 and S2+S5 in Level 5. Inside a level: the questions of that skill alone first, then
+//   the combined groups (two skills before three); a question that needs only other units' skills (already taught
+//   there) goes into the first level, at its end. A level whose skill no question ends on is empty (left out of the PDF;
+//   its number is never given to another skill, so Level n stays skill n).
 // - Inside a group, easy → hard: Part I questions first, then the structured ones; inside each, the book's own order
 //   (the workbook is built easy → hard) pulled by how many students got it right, once STAT_MIN students did it.
 // - The app keeps its question numbers; only the downloaded book numbers its questions 1, 2, 3 … in this order.
@@ -11,7 +16,7 @@
 import { outOf, partOf, type MasterData } from "./book";
 import type { MState } from "./master";
 import { bySkill, paperNo } from "./path";
-import { SKILLS_A_TAG, type Skill, type SkillTag } from "./skills";
+import { SKILLS_A_TAG, skillHome, type Skill, type SkillTag } from "./skills";
 
 /** How students did on a question: n = students whose level of it was corrected, right = their marks summed (0 to 1 each). */
 export type QStat = { n: number; right: number };
@@ -104,28 +109,75 @@ export function skillGroups(data: MasterData, tags: readonly SkillTag[], stats: 
   return out;
 }
 
-export type SkillLevel = SkillGroup & {
+/** This unit's own skills among these ids, each once, in number order (S1, S2 …). */
+export function ownSkills(unitKey: string, ids: readonly string[]): string[] {
+  return [...new Set(ids.filter((id) => skillHome(id) === unitKey))].sort(bySkill);
+}
+
+/** The level a group of skills belongs to: its last skill of this unit; none of this unit's = the first level (null). */
+export function levelSkillOf(unitKey: string, skills: readonly string[]): string | null {
+  const own = ownSkills(unitKey, skills);
+  return own.length ? own[own.length - 1] : null;
+}
+
+export type SkillLevel = {
+  /** The skill's own number: Level 3 = S3. */
   n: number;
-  /** The book's numbers of its questions: from … to. */
+  /** "G8-U05-S3" */
+  skill: string;
+  /** Its groups in order: the skill alone first, then the combined ones, then (Level 1 only) other units' skills. */
+  groups: SkillGroup[];
+  /** Every question of the level in the book's order (the app's numbers). */
+  qs: number[];
+  /** The book's numbers of its questions: from … to (0 and -1 when the level is empty). */
   from: number;
   to: number;
   /** Its marks; null when the workbook doesn't know a question's marks. */
   max: number | null;
 };
 
-/** The downloaded book's levels (one a group) and each question's new number (the app's number → the book's). */
-export function skillLevels(data: MasterData, tags: readonly SkillTag[], stats?: ReadonlyMap<number, QStat>): { levels: SkillLevel[]; number: Map<number, number> } {
+/** Where a group sits inside its level: its skill alone, then groups with it, then (Level 1) other units' skills only. */
+function inLevel(skill: string, g: SkillGroup): number {
+  if (g.skills.length === 1 && g.skills[0] === skill) return 0;
+  return g.skills.includes(skill) ? 1 : 2;
+}
+
+function byInLevel(skill: string) {
+  return (a: SkillGroup, b: SkillGroup) => inLevel(skill, a) - inLevel(skill, b) || a.skills.length - b.skills.length || byGroup(a.skills, b.skills);
+}
+
+/**
+ * The downloaded book's levels, one a skill of this unit (Level n = Sn, his rule of 22 Nov 2026), and each question's
+ * new number (the app's number → the book's), 1, 2, 3 … through the book. `own` = the unit's skills (its skills row);
+ * a skill that only other questions' tags name counts too. Empty levels stay in the list (the page shows them pale).
+ */
+export function skillLevels(
+  unitKey: string,
+  data: MasterData,
+  tags: readonly SkillTag[],
+  own: readonly string[] = [],
+  stats?: ReadonlyMap<number, QStat>,
+): { levels: SkillLevel[]; number: Map<number, number> } {
+  const groups = skillGroups(data, tags, stats);
+  const skills = ownSkills(unitKey, [...own, ...groups.flatMap((g) => g.skills)]);
+  const byLevel = new Map<string, SkillGroup[]>(skills.map((s) => [s, []]));
+  for (const g of groups) {
+    const s = levelSkillOf(unitKey, g.skills) ?? skills[0];
+    if (s !== undefined) byLevel.get(s)?.push(g);
+  }
   const number = new Map<number, number>();
   let next = 1;
-  const levels = skillGroups(data, tags, stats).map((g, i) => {
-    const from = next;
+  const levels = skills.map((skill): SkillLevel => {
+    const mine = (byLevel.get(skill) ?? []).sort(byInLevel(skill));
+    const qs = mine.flatMap((g) => g.qs);
+    const from = qs.length ? next : 0;
     let max: number | null = 0;
-    for (const q of g.qs) {
+    for (const q of qs) {
       number.set(q, next++);
       const m = outOf(data, q);
       max = m === null || max === null ? null : max + m;
     }
-    return { ...g, n: i + 1, from, to: next - 1, max };
+    return { n: Number(paperNo(unitKey, skill)) || 0, skill, groups: mine, qs, from, to: qs.length ? next - 1 : -1, max };
   });
   return { levels, number };
 }

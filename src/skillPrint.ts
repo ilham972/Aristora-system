@@ -1,14 +1,25 @@
-// The book by skill as a printed book (14 Nov 2026, the founder: "Pdf book, directly I can send to print shop ... use
-// the design system ... the outline box ... watermark"): the past-paper workbook's own look, from the CSS the unit's
-// upload brought (bookCss) and its printed questions, put in the order of src/skillBook.tsx: one level a group of
-// skills, the questions easy → hard, numbered 1, 2, 3 … with no old number, each with its skill numbers. Chrome's own
-// print makes the PDF (Save as PDF, or straight to a printer): its text stays sharp and the Tamil letters right, which
-// a picture of a page would not give. The seal and the dotted page frame are the book engine's (ol-essay
-// aristora_book.py: `seal`, `frame_svg`), drawn the same way here.
+// The book by skill as a printed book (14 Nov 2026; rebuilt 22 Nov 2026 after the founder's "if I preview the PDF,
+// that's not look good ... some texts are overlapped ... use the past paper workbook skill ... I can download any PDF
+// from this page with high quality"). The past-paper workbook's own pages, made in the phone:
+// - The engine's fonts (src/printFonts.ts): without them the phone set the questions in its own Tamil font, wider and
+//   taller than the one the engine measured every figure, fraction and space with.
+// - The engine's pages, laid out here block by block as the engine does (ol-essay aristora_book.py and
+//   past-paper-workbook collection_book.py: two passes, footers after the layout): a Part I question, a block of a
+//   Part II card (a part with its space), a band, a level strip are never cut; a band stays with its first question,
+//   a strip with its last; a card may continue on the next page between its parts, its outline open where it breaks.
+//   Chrome's own page breaking cut a level's band in two and ran a long contents page over the next one.
+// - Every page is drawn whole (A4, `@page { margin: 0 }`): the dotted frame, the seal watermark, the footer (copyright
+//   on the binding side, the owl and ARISTORA in the centre, a pill a level and the page number on the outer side),
+//   the side tab with the level's number stepping down, right- and left-hand pages for double-sided printing.
+// - The cover (the unit's Tamil name; every level = its skill, with its questions), the contents (each level: its
+//   skill, questions, marks and first page), the levels (each from a new page, Level n = skill n:
+//   convex/lib/skillBook.ts), the marks sheet. Or one level alone: its pages, numbered as in the whole book.
+// Chrome's own print makes the PDF (Save as PDF): its text stays sharp and the Tamil letters right. The seal and the
+// dotted frame are the engine's (`seal`, `frame_svg`), drawn the same way here.
 
-import fontUrl from "./family/fonts/baloo-thambi-2.woff2";
 import { outOf, partOf, type MasterData } from "../convex/lib/book";
-import { skillLabel, type SkillLevel } from "../convex/lib/skillBook";
+import { skillLabel, type SkillGroup, type SkillLevel } from "../convex/lib/skillBook";
+import { printFontCss, printFontsReady } from "./printFonts";
 import { safeFragment } from "./questionView";
 import { ENGINE_CSS } from "./skillPrintCss";
 
@@ -18,6 +29,18 @@ const LOGO_PATH = "M47.4 113c-1.2-.6-2.1-1.3-2.1-1.4c0-.2 1-2.3 2.1-4.7c3.8-7.6 
 // Baloo Thambi 2 ExtraBold capital widths (em), to set the seal's ring text (the engine's CAPS_W).
 const CAPS_W: Record<string, number> = { A: 0.627, B: 0.619, C: 0.571, D: 0.666, E: 0.548, F: 0.531, G: 0.664, H: 0.672, I: 0.305, J: 0.412, K: 0.615, L: 0.513, M: 0.797, N: 0.679, O: 0.703, P: 0.581, Q: 0.705, R: 0.609, S: 0.551, T: 0.556, U: 0.664, V: 0.634, W: 0.863, X: 0.601, Y: 0.574, Z: 0.56, " ": 0.2 };
 const f2 = (n: number) => n.toFixed(2);
+
+// The engine's page (mm): A4; the text column 185 × 273.5 from 8.5 down, 15 from the binding edge and 10 from the outer
+// one (a right-hand page binds on its left); the dotted frame 3.8 outside the column at the sides, 2.6 above; the
+// footer 4.2 under the column's bottom margin; the side tab's badge 20 down for the first level, lower for each next.
+const TOP = 8.5;
+const COL_H = 273.5;
+const TAB_TOP = 20;
+const TAB_LAST = 245;
+const TITLE_PT = 54;
+const TITLE_W = 183;
+/** Pages before page 1 (the cover and the back of the cover = contents): always even, so page 1 is a right-hand page. */
+const COPY = (y: number) => `© ${y} ARISTORA — The Maths Learning Center. அனைத்து உரிமைகளும் பாதுகாக்கப்பட்டவை. எழுத்துமூல அனுமதியின்றி இந்நூலின் எப்பகுதியையும் நகலெடுத்தல், மறுபதிப்புச் செய்தல், விற்றல் தடை.`;
 
 export function logo(h: number): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${f2((h * 100) / 115)}mm" height="${f2(h)}mm" viewBox="0 0 100 115"><path fill-rule="evenodd" d="${LOGO_PATH}"/></svg>`;
@@ -92,6 +115,12 @@ export function frameSvg(w = 192.6, h = 279.3, pitch = 1.65): string {
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const marksWord = (m: number) => (m === 1 ? `${m} புள்ளி` : `${m} புள்ளிகள்`);
+/** A badge's font size by how many characters it holds (the engine's `_fit`). */
+const fitPt = (s: string | number, sizes: [number, number, number]) => {
+  const n = String(s).length;
+  return n <= 1 ? sizes[0] : n === 2 ? sizes[1] : sizes[2];
+};
+const range = (a: number, b: number) => (b > a ? `${a} – ${b}` : `${a}`);
 
 export type PrintUnit = {
   key: string;
@@ -101,6 +130,15 @@ export type PrintUnit = {
   en: string;
   data: MasterData;
   names: Record<string, { ta: string; en: string }>;
+};
+
+export type PrintPlan = {
+  unit: PrintUnit;
+  /** Every level (convex/lib/skillBook.ts `skillLevels`); the empty ones are left out of the book. */
+  levels: SkillLevel[];
+  /** The app's question number → its printed card (`bookCard`: the book's number and its skill chips). */
+  cards: Map<number, string>;
+  year: number;
 };
 
 /** A question's printed card with the book's new number and its skill numbers (the app's number never shows). */
@@ -125,130 +163,385 @@ export function bookCard(html: string, no: number, chips: string[]): string {
 }
 
 /**
- * The page: Chrome paints nothing in a page's margins but the footer, so the page's printable area is the engine's
- * dotted frame itself (192.6 × 279.3 mm, A4 less 8.7 mm a side, 5.9 mm at the top, 11.8 mm at the bottom) and the
- * text keeps the engine's 3.8 mm inside it (2.6 mm at the top, 2 mm at the bottom, on every page). The engine's text
- * column is therefore the same 185 mm, and the watermark sits where the engine puts it.
+ * The pages' own rules, after the engine's CSS and the unit's (inside the book's shadow root). Every page is a fixed
+ * A4 box: nothing inside it may ask Chrome for a page break (`break-*`, a named `page`), or Chrome would cut the box.
  */
-const PRINT_CSS = `
-:host { display: block; }
+const PAGE_CSS = `
+/* nothing of the app's page reaches the book: its body's weight 500 would set every question a step heavier */
+:host { all: initial; display: block; }
 * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-.sbk { font-family: "TMuktaLat", "Mukta Malar", "Noto Sans Tamil", sans-serif; font-size: 10pt; line-height: 1.45; color: #000;
-  padding: 2.6mm 3.8mm 2mm; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
-.frame { position: fixed; left: 0; top: 0; width: 192.6mm; height: 279.3mm; z-index: 4; line-height: 0; }
-.wm { position: fixed; left: 3.8mm; top: 46.8mm; width: 185mm; height: 185mm; z-index: 5; opacity: .07; line-height: 0; pointer-events: none; }
-.sbk-page { break-after: page; position: relative; height: 270mm; }
-.cover.sbk-page { page: auto; width: auto; height: 270mm; padding: 2mm 1mm 0; background: transparent; z-index: auto; overflow: hidden; }
-.sbk-cv-title { margin-top: 9mm; font-family: "Baloo Thambi 2", sans-serif; }
-.sbk-cv-title .a { font-weight: 800; font-size: 34pt; line-height: 1.15; }
-.sbk-cv-title .b { font-weight: 800; font-size: 20pt; line-height: 1.2; margin-top: 1mm; }
-.sbk-cv-title .cc { font-family: "TMuktaLat", "Mukta Malar", sans-serif; font-size: 11pt; margin-top: 2.4mm; }
-.sbk-legend { margin-top: 9mm; border: 1.3pt solid #111; border-radius: 2.5mm; overflow: hidden; }
-.sbk-legend h3 { margin: 0; background: #111; color: #fff; font-family: "Baloo Thambi 2", sans-serif; font-weight: 800; font-size: 12pt; padding: 1.4mm 4mm .8mm; }
-.sbk-lg { display: flex; align-items: center; padding: 1.5mm 4mm; border-top: .8pt solid #111; font-size: 9.6pt; line-height: 1.3; }
-.sbk-lg:first-of-type { border-top: none; }
-.sbk-lg .sbk-sk { margin-right: 3mm; }
-.sbk-lg small { display: block; font-size: 7.8pt; color: #4d4d4d; font-weight: 600; }
-.sbk-me { position: absolute; left: 3mm; right: 3mm; bottom: 6mm; display: flex; font-size: 10pt; }
-.sbk-me div { flex: 1; border-bottom: 1pt solid #111; margin-right: 6mm; padding-bottom: 6mm; }
-.sbk-me div:last-child { margin-right: 0; }
-.sbk-sks { display: inline-flex; flex-wrap: wrap; gap: 1mm; vertical-align: middle; margin-right: 2mm; }
-.pqh .sbk-sks { margin: 0 0 0 2mm; }
-.sbk-sk { display: inline-block; border: 1.1pt solid #111; border-radius: 1.2mm; padding: .35mm 1.6mm 0; font-family: "Baloo Thambi 2", sans-serif;
-  font-weight: 800; font-size: 8.4pt; line-height: 1.35; letter-spacing: .2pt; background: #fff; color: #000; white-space: nowrap; }
-.sbk-toc-h { display: flex; align-items: center; height: 11mm; border-bottom: 2pt solid #111; }
-.sbk-toc-h b { font-family: "Baloo Thambi 2", sans-serif; font-weight: 800; font-size: 15pt; }
-.sbk-toc-h span { margin-left: auto; font-size: 8.6pt; }
-.sbk-toc-r { display: flex; align-items: center; min-height: 9.6mm; border-bottom: 1pt solid #111; padding: 1mm 0; break-inside: avoid; }
-.sbk-toc-r .lvn { flex: none; width: 21mm; text-align: center; }
-.sbk-toc-r .sbk-tn { flex: 1; min-width: 0; margin-left: 3mm; font-size: 9.4pt; line-height: 1.3; }
-.sbk-toc-r .sbk-tn .sbk-sks { margin-right: 1.6mm; }
-.sbk-toc-r .sbk-tq { flex: none; width: 24mm; text-align: center; font-weight: 700; font-size: 9pt; border: .9pt solid #111; border-radius: 3.2mm; padding: .4mm 0 0; }
-.sbk-toc-r .sbk-tm { flex: none; width: 15mm; text-align: right; font-family: "Baloo Thambi 2", sans-serif; font-weight: 800; font-size: 10pt; }
-.sbk-icr { position: absolute; left: 0; right: 0; bottom: 2mm; font-size: 7.2pt; color: #333; text-align: center; line-height: 1.35; }
-.sbk-lv { break-before: auto; }
-.sbk-lv + .sbk-lv { margin-top: 5mm; }
-.band { break-after: avoid; }
-.band .let.sbk-let { font-size: 17pt; }
-.band .tt { font-size: 15pt; }
-.sbk-band-tt { display: flex; flex-wrap: wrap; column-gap: 2.4mm; }
-.band .step.sbk-step { white-space: nowrap; }
+.sbx { font-family: "TMuktaLat", "Mukta Malar", "STIX Two Math", "DejaVu Sans", sans-serif; font-size: 10pt; font-weight: 400; line-height: 1.45;
+  color: #000; width: 210mm; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+.sbx-page { position: relative; width: 210mm; height: 296.8mm; overflow: hidden; background: #fff; break-after: page; page-break-after: always; break-inside: avoid; }
+.sbx-page:last-child { break-after: auto; page-break-after: auto; }
+.sbx-page *, .sbx-flow * { break-before: auto !important; break-after: auto !important; break-inside: auto !important; page: auto !important; }
+.sbx-flow { position: absolute; left: 0; top: 0; width: 185mm; visibility: hidden; }
+.sbx-col { position: absolute; top: ${TOP}mm; width: 185mm; height: ${COL_H}mm; }
+.sbx-r .sbx-col { left: 15mm; } .sbx-l .sbx-col { left: 10mm; }
+.sbx-frame { position: absolute; top: ${TOP - 2.6}mm; width: 192.6mm; height: 279.3mm; z-index: 4; line-height: 0; pointer-events: none; }
+.sbx-r .sbx-frame { left: 11.2mm; } .sbx-l .sbx-frame { left: 6.2mm; }
+.sbx-wm { position: absolute; top: ${TOP + 44.2}mm; width: 185mm; height: 185mm; z-index: 5; opacity: .07; line-height: 0; pointer-events: none; }
+.sbx-r .sbx-wm { left: 15mm; } .sbx-l .sbx-wm { left: 10mm; }
+.sbx-foot { position: absolute; top: ${297 - 15 + 4.2}mm; width: 185mm; height: 5.8mm; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; white-space: nowrap; }
+.sbx-r .sbx-foot { left: 15mm; } .sbx-l .sbx-foot { left: 10mm; }
+.sbx-foot > span { display: flex; align-items: center; min-width: 0; }
+.sbx-foot > span:last-child { justify-content: flex-end; }
+.sbx-tab { position: absolute; z-index: 6; width: 5.6mm; height: 25mm; padding: 1.5mm 1mm; background: #fff; }
+.sbx-tab i { display: block; width: 3.6mm; height: 22mm; background: #111; color: #fff; border-radius: 1.4mm; font-style: normal;
+  font-family: "Baloo Thambi 2", "TMuktaLat", sans-serif; font-weight: 800; text-align: center; line-height: 22.6mm; letter-spacing: -.2pt; }
+.sbx-r .sbx-tab { left: 200.4mm; } .sbx-l .sbx-tab { left: 4mm; }
+/* a Part II card cut between two pages: its outline stays open where it breaks */
+.pq.pqc.sbx-open { border-bottom: none; border-bottom-left-radius: 0; border-bottom-right-radius: 0; padding-bottom: 0; margin-bottom: 0; }
+.pq.pqc.sbx-cont { border-top: none; border-top-left-radius: 0; border-top-right-radius: 0; padding-top: 1.4mm; }
 .si .sih { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; }
-.band + .pmn + .si { border-top: none; }
-.lvl { break-before: avoid; }
-.msh { margin-top: 6mm; }
+/* skill chips on each question */
+.sbk-sks { display: inline-flex; flex-wrap: wrap; gap: 1mm; vertical-align: middle; margin-right: 2mm; }
+.pqh .sbk-sks { margin: 0 0 0 2mm; flex: none; }
+.sbk-sk { display: inline-block; border: 1.1pt solid #111; border-radius: 1.2mm; padding: .35mm 1.6mm 0; font-family: "Baloo Thambi 2", "TMuktaLat", sans-serif;
+  font-weight: 800; font-size: 8.4pt; line-height: 1.35; letter-spacing: .2pt; background: #fff; color: #000; white-space: nowrap; }
+/* a level's band: its number, its skill's names, its chip */
+.band.sbx-band { margin-bottom: 1.6mm; }
+.band.sbx-band .tt { font-size: 16pt; line-height: 1.22; }
+.band.sbx-band .sub { margin-top: .4mm; }
+.band.sbx-band > div:nth-child(2) { flex: 1; min-width: 0; padding-right: 3mm; }
+.band.sbx-band .step { white-space: nowrap; }
+/* inside a level: the questions that join this skill with others, under their own small heading */
+.grp.sbx-grp { display: flex; align-items: flex-end; justify-content: space-between; text-align: left; margin: 3.2mm 0 1.4mm 10.3mm; }
+.sbx-gn { font-weight: 700; font-size: 9pt; line-height: 1.25; padding: 0 3mm .9mm 0; min-width: 0; }
+.sbx-gn small { font-weight: 600; color: #4d4d4d; font-size: 7.8pt; margin-left: 1.4mm; }
+.grp.sbx-grp .gb { flex: none; white-space: nowrap; }
+.band + .si, .pmn + .si, .sbx-grp + .si { border-top: none; padding-top: .8mm; }
+.lvl { margin-top: 1.4mm; }
+.msh { margin-top: 5mm; }
+/* the cover */
+.sbx-cover .cover { position: absolute; left: 0; top: 0; z-index: auto; }
+.sbx-cover .cv-title .a { white-space: nowrap; letter-spacing: -.2pt; line-height: 1.12; }
+.sbx-cover .cv-fig { display: block; top: 90mm; bottom: 40mm; }
+.sbx-ix { height: 100%; display: flex; flex-direction: column; }
+.sbx-ixh { display: flex; align-items: flex-end; border-bottom: 2pt solid #111; padding-bottom: 1.2mm; margin-bottom: 1mm; }
+.sbx-ixh b { font-family: "Baloo Thambi 2", "TMuktaLat", sans-serif; font-weight: 800; font-size: 13pt; line-height: 1.1; }
+.sbx-ixh span { margin-left: auto; font-size: 8.6pt; font-weight: 600; }
+.sbx-ixl { flex: 1; display: grid; grid-auto-flow: column; column-gap: 6mm; align-content: start; }
+.sbx-ixr { display: flex; align-items: center; border-bottom: 1pt solid #111; padding: 1.1mm 0; min-height: 0; }
+.sbx-ixn { flex: none; width: 1.95em; height: 1.95em; margin-right: 2.6mm; background: #111; color: #fff; border-radius: 1.6mm; text-align: center;
+  font-family: "Baloo Thambi 2", "TMuktaLat", sans-serif; font-weight: 800; line-height: 2.05em; }
+.sbx-ixt { flex: 1; min-width: 0; line-height: 1.22; }
+.sbx-ixt b { display: block; font-weight: 700; }
+.sbx-ixt small { display: block; font-size: .8em; font-weight: 600; color: #4d4d4d; }
+.sbx-ixc { flex: none; margin-left: 2mm; font-family: "Baloo Thambi 2", "TMuktaLat", sans-serif; font-weight: 800; font-size: .9em; border: 1pt solid #111;
+  border-radius: 10mm; padding: .2mm 2mm 0; white-space: nowrap; }
+/* the contents (the back of the cover), a row a level */
+.sbx-inside .toc-r { height: auto; min-height: 10.4mm; padding: .9mm 0; }
+.sbx-inside .toc-r .lvn { flex: none; width: 20mm; text-align: center; margin-right: 2.4mm; }
+.sbx-inside .toc-r .tn { min-width: 0; font-size: 9.8pt; line-height: 1.25; }
+.sbx-inside .toc-r .tn small { display: block; font-size: 7.8pt; font-weight: 600; color: #4d4d4d; }
+.sbx-inside .toc-r .sbk-sk { margin-right: 2.4mm; }
+.sbx-inside .toc-r .tk.g { flex: none; width: auto; min-width: 15.6mm; padding: 0 1.6mm; margin-left: 2mm; }
+.sbx-tm { flex: none; width: 13mm; text-align: right; font-family: "Baloo Thambi 2", "TMuktaLat", sans-serif; font-weight: 800; font-size: 9.6pt; }
+.sbx-inside .icr { position: absolute; left: 0; right: 0; bottom: 0; }
 `;
 
-/** What the margin boxes and fonts need (the document's own rules: a shadow root's are not read for pages or fonts). */
-export function pageCss(foot: string): string {
-  const q = (s: string) => `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
-  // The file loader gives "./baloo-….woff2", next to this script (/assets/): the page's own address would miss it.
-  const font = new URL(fontUrl, import.meta.url).href;
-  return `@font-face { font-family: "Baloo Thambi 2"; src: url("${font}") format("woff2"); font-weight: 500 800; font-display: block; }
-@page { size: A4; margin: 5.9mm 8.7mm 11.8mm;
-  @bottom-left { content: ${q(foot)}; font-family: "Mukta Malar", "Noto Sans Tamil", sans-serif; font-size: 6pt; color: #4d4d4d; vertical-align: top; padding: 2.2mm 0 0 3.8mm; }
-  @bottom-center { content: ${q(BRAND)}; font-family: "Baloo Thambi 2", sans-serif; font-weight: 800; font-size: 7.4pt; letter-spacing: 1.2pt; vertical-align: top; padding-top: 2.2mm; }
-  @bottom-right { content: counter(page); font-family: "Baloo Thambi 2", sans-serif; font-weight: 800; font-size: 12pt; vertical-align: top; padding: 1.4mm 3.8mm 0 0; }
-}
-@media screen { #sb-print { display: none !important; } }
+/** What the document needs around the book (a shadow root's rules are not read for fonts or pages). */
+function docCss(): string {
+  return `${printFontCss()}
+@page { size: A4; margin: 0; }
+#sb-print { position: absolute; left: -12000px; top: 0; width: 210mm; pointer-events: none; }
 @media print {
-  html, body { height: auto !important; min-height: 0 !important; overflow: visible !important; background: #fff !important; position: static !important; }
+  html, body { height: auto !important; min-height: 0 !important; overflow: visible !important; background: #fff !important; position: static !important; margin: 0 !important; padding: 0 !important; }
   body.sb-printing > :not(#sb-print) { display: none !important; }
-  #sb-print { display: block !important; }
+  #sb-print { position: static !important; left: auto !important; width: auto !important; }
 }`;
 }
 
-/** The whole book: cover (title and every skill's name), contents (the levels), then the levels and the marks sheet. */
-export function bookBody(u: PrintUnit, levels: SkillLevel[], cards: Map<number, string>, year: number): string {
-  const label = (id: string) => skillLabel(u.key, id);
-  const chips = (ids: string[]) => `<span class="sbk-sks">${ids.map((id) => `<span class="sbk-sk">${esc(label(id))}</span>`).join("")}</span>`;
-  const qsN = levels.reduce((a, l) => a + l.qs.length, 0);
-  const used = [...new Set(levels.flatMap((l) => l.skills))];
-  const own = used.filter((id) => id.startsWith(`${u.key}-`)).length;
-  const no = Number(u.code.replace(/\D/g, "")) || u.code;
-  const cover = `<div class="cover sbk-page"><div class="cv-top"><span class="cv-logo">${logo(17)}</span><div class="cv-brand">${BRAND}<small>${TAGLINE}</small></div><div class="cv-pill">பயிற்சி நூல்</div></div>
-<div class="sbk-cv-title"><div class="a">${esc(u.ta)}</div><div class="b">திறன் வழிப் பயிற்சி</div>
-<div class="cc">தரம் ${u.grade} · அலகு ${no} · ${own} திறன்கள் · ${levels.length} Levels · ${qsN} வினாக்கள்</div></div>
-<div class="sbk-legend"><h3>திறன்கள் · Skills</h3>${used
-    .map((id) => `<div class="sbk-lg">${chips([id])}<div>${esc(u.names[id]?.ta ?? id)}<small>${esc(u.names[id]?.en ?? "")}</small></div></div>`)
-    .join("")}</div>
-<div class="sbk-me"><div>பெயர்</div><div>தொடங்கிய திகதி</div><div>முடித்த திகதி</div></div></div>`;
-  const toc = `<div class="sbk-page"><div class="sbk-toc-h"><b>உள்ளடக்கம்</b><span>முடித்ததும் நிழற்றுக</span></div>${levels
-    .map(
-      (l) =>
-        `<div class="sbk-toc-r"><span class="lvn">Level ${l.n}</span><span class="sbk-tn">${chips(l.skills)}${esc(l.skills.map((id) => u.names[id]?.ta ?? id).join(" + "))}</span><span class="sbk-tq">${l.from === l.to ? l.from : `${l.from} – ${l.to}`}</span><span class="sbk-tm">${l.max === null ? "" : `/ ${l.max}`}</span></div>`,
-    )
-    .join("")}<div class="sbk-icr">© ${year} ARISTORA — The Maths Learning Center. அனைத்து உரிமைகளும் பாதுகாக்கப்பட்டவை. எழுத்துமூல அனுமதியின்றி இந்நூலின் எப்பகுதியையும் நகலெடுத்தல், மறுபதிப்புச் செய்தல், விற்றல் தடை.</div></div>`;
-  const body = levels
-    .map((l) => {
-      const sq = l.qs.find((q) => partOf(u.data, q)?.kind === "short");
-      const band = `<div class="band"><div class="let sbk-let">${l.n}</div><div><div class="tt sbk-band-tt">${l.skills
-        .map((id) => `<span>${esc(u.names[id]?.ta ?? id)}</span>`)
-        .join("<span>+</span>")}</div><div class="sub">LEVEL ${l.n} · ${esc(l.skills.map((id) => u.names[id]?.en ?? id).join(" + "))}</div></div><div class="step sbk-step">${esc(l.skills.map(label).join(" + "))}</div></div>`;
-      const note = sq !== undefined ? `<div class="pmn">ஒவ்வொரு குறு வினாவுக்கும் ${marksWord(outOf(u.data, sq) ?? 2)}</div>` : "";
-      const qs = l.qs.map((q, i) => cards.get(q) ?? `<div class="si"><div class="sih"><span class="qn">${l.from + i}</span><div class="sib">—</div></div></div>`).join("");
-      const words = l.from === l.to ? `வினா ${l.from}` : `வினாக்கள் ${l.from} – ${l.to}`;
-      const strip = `<div class="lvl"><div class="lvr"><span class="lvn">Level ${l.n}</span><span class="lvq">${words}</span><span class="lvs">புள்ளிகள்</span><span class="lvb"></span><span class="lvo">${l.max === null ? "" : `/ ${l.max}`}</span></div></div>`;
-      return `<div class="sbk-lv">${band}${note}${qs}${strip}</div>`;
-    })
-    .join("");
-  // The marks sheet: six levels a row, then the unit's total and its percentage.
+/** The style inside the book's shadow root: the engine's CSS, the unit's own (when its upload brought it), the pages'. */
+export function bookCss(css: string | null): string {
+  return `${ENGINE_CSS}\n${css ?? ""}\n${PAGE_CSS}`;
+}
+
+// ------------------------------------------------------------------ the book's pieces (HTML)
+
+const chip = (s: string) => `<span class="sbk-sk">${esc(s)}</span>`;
+
+function names(u: PrintUnit, ids: readonly string[], lang: "ta" | "en"): string {
+  return ids.map((id) => u.names[id]?.[lang] || skillLabel(u.key, id)).join(" + ");
+}
+
+function unitNo(u: PrintUnit): string | number {
+  return Number(u.code.replace(/\D/g, "")) || u.code;
+}
+
+/** The levels the book prints: those with questions. */
+export function printedLevels(levels: readonly SkillLevel[]): SkillLevel[] {
+  return levels.filter((l) => l.qs.length > 0);
+}
+
+function bandHtml(u: PrintUnit, l: SkillLevel): string {
+  const n = String(l.n);
+  return `<div class="band sbx-band"><div class="let" style="font-size:${fitPt(n, [22, 17, 13])}pt">${n}</div><div><div class="tt">${esc(names(u, [l.skill], "ta"))}</div><div class="sub">LEVEL ${n} · ${esc(names(u, [l.skill], "en"))}</div></div><div class="step">${esc(skillLabel(u.key, l.skill))}</div></div>`;
+}
+
+/** The small heading over a group that joins this level's skill with others ("S2 + S4"), or another unit's skill. */
+function groupHtml(u: PrintUnit, g: SkillGroup): string {
+  const label = g.skills.map((id) => skillLabel(u.key, id)).join(" + ");
+  const n = g.qs.length;
+  return `<div class="grp sbx-grp"><span class="sbx-gn">${esc(names(u, g.skills, "ta"))}<small>${n} ${n === 1 ? "வினா" : "வினாக்கள்"}</small></span><span class="gb">${esc(label)}</span></div>`;
+}
+
+function stripHtml(l: SkillLevel): string {
+  const words = l.from === l.to ? `வினா ${l.from}` : `வினாக்கள் ${l.from} – ${l.to}`;
+  return `<div class="lvl"><div class="lvr"><span class="lvn">Level ${l.n}</span><span class="lvq">${words}</span><span class="lvs">புள்ளிகள்</span><span class="lvb"></span><span class="lvo">${l.max === null ? "" : `/ ${l.max}`}</span></div></div>`;
+}
+
+const frac = (a: string, b: string | number) => `<span class="frc"><span class="nu">${a}</span><span class="de">${b}</span></span>`;
+
+/** The marks sheet: every level (six a row), the unit's total and its percentage. */
+function sheetHtml(u: PrintUnit, levels: SkillLevel[]): string {
   const total = levels.every((l) => l.max !== null) ? levels.reduce((a, l) => a + (l.max ?? 0), 0) : null;
   const rows: string[] = [];
   for (let i = 0; i < levels.length; i += 6) {
     const part = levels.slice(i, i + 6);
-    const cells = part.map((l) => `<td><em>Level ${l.n}</em><i>${l.from}${l.to > l.from ? ` – ${l.to}` : ""}</i><b>${l.max === null ? "" : `/ ${l.max}`}</b></td>`).join("");
+    const cells = part.map((l) => `<td><em>Level ${l.n}</em><i>${range(l.from, l.to)}</i><b>${l.max === null ? "" : `/ ${l.max}`}</b></td>`).join("");
     rows.push(`<tr>${cells}${'<td class="nx"></td>'.repeat(6 - part.length)}</tr>`);
   }
-  const frac = (a: string, b: string | number) => `<span class="frc"><span class="nu">${a}</span><span class="de">${b}</span></span>`;
-  const sheet = `<div class="msh"><div class="msk"><div class="mhd">புள்ளி அட்டவணை<small> · அலகு ${no} · ${esc(u.ta)}</small></div><table class="mtb">${rows.join("")}</table><div class="msx">மொத்தம்<span class="msb"></span><span class="mso">${total === null ? "" : `/ ${total}`}</span><span class="msf">சதவீதம் = ${frac("மொத்தம் × 100", total ?? "")} =</span><span class="msb"></span><span class="mso">%</span></div></div></div>`;
-  return `<div class="sbk"><div class="frame">${frameSvg()}</div><div class="wm">${seal()}</div>${cover}${toc}${body}${sheet}</div>`;
+  return `<div class="msh"><div class="msk"><div class="mhd">புள்ளி அட்டவணை<small> · அலகு ${unitNo(u)} · ${esc(u.ta)}</small></div><table class="mtb">${rows.join("")}</table><div class="msx">அலகின் மொத்தம்<span class="msb"></span><span class="mso">${total === null ? "" : `/ ${total}`}</span><span class="msf">சதவீதம் = ${frac("மொத்தம் × 100", total ?? "")} =</span><span class="msb"></span><span class="mso">%</span></div></div></div>`;
 }
 
-/** The style inside the book's shadow root: the book's own CSS (when the upload brought it), then the print rules. */
-export function bookCss(css: string | null): string {
-  return `${ENGINE_CSS}\n${css ?? ""}\n${PRINT_CSS}`;
+function coverHtml(u: PrintUnit, levels: SkillLevel[]): string {
+  const qs = levels.reduce((a, l) => a + l.qs.length, 0);
+  const marks = levels.every((l) => l.max !== null) ? levels.reduce((a, l) => a + (l.max ?? 0), 0) : null;
+  const rows = levels
+    .map((l) => `<div class="sbx-ixr"><span class="sbx-ixn">${l.n}</span><span class="sbx-ixt"><b>${esc(names(u, [l.skill], "ta"))}</b><small>${esc(names(u, [l.skill], "en"))}</small></span><span class="sbx-ixc">${l.qs.length}</span></div>`)
+    .join("");
+  return `<div class="cover"><div class="cv-top"><span class="cv-logo">${logo(17)}</span><div class="cv-brand">${BRAND}<small>${TAGLINE}</small></div><div class="cv-pill">பயிற்சி நூல்</div></div>
+<div class="cv-title"><div class="a">${esc(u.ta)}</div><div class="b">திறன் வழிப் பயிற்சி</div><div class="cc">தரம் ${u.grade} · அலகு ${unitNo(u)} · ${levels.length} Levels · ${qs} வினாக்கள்${marks === null ? "" : ` · ${marks} புள்ளிகள்`}</div></div>
+<div class="cv-fig"><div class="sbx-ix"><div class="sbx-ixh"><b>ஒவ்வொரு Level உம் ஒரு திறன்</b><span>வினாக்கள்</span></div><div class="sbx-ixl">${rows}</div></div></div>
+<div class="cv-me"><div>பெயர்</div><div>தொடங்கிய திகதி</div><div>முடித்த திகதி</div></div></div>`;
 }
+
+function tocHead(): string {
+  return `<div class="toc-h"><b>உள்ளடக்கம்</b><span>முடித்ததும் நிழற்றுக</span><span class="ph">பக்கம்</span></div>`;
+}
+
+function tocRow(u: PrintUnit, l: SkillLevel): string {
+  return `<div class="toc-r" data-lv="${l.n}"><span class="lvn">Level ${l.n}</span>${chip(skillLabel(u.key, l.skill))}<span class="tn">${esc(names(u, [l.skill], "ta"))}<small>${esc(names(u, [l.skill], "en"))}</small></span><span class="tk g">${range(l.from, l.to).replace(" – ", "–")}</span><span class="sbx-tm">${l.max === null ? "" : `/ ${l.max}`}</span><span class="pg"></span></div>`;
+}
+
+function tocSheetRow(): string {
+  return `<div class="toc-r" data-lv="sheet"><span class="cv-l">★</span><span class="tn">புள்ளி அட்டவணை<small>மொத்தமும் சதவீதமும்</small></span><span class="pg"></span></div>`;
+}
+
+// ------------------------------------------------------------------ pages
+
+type Page = { box: HTMLElement; col: HTMLElement; level: number | null; last: number };
+
+type Item =
+  /** A block that may not be cut: a Part I question, a band, a heading, the marks sheet. */
+  | { t: "el"; el: HTMLElement; next?: boolean; q?: number; strip?: HTMLElement }
+  /** A Part II card: its blocks (a part with its space); it may continue on the next page between them. */
+  | { t: "card"; wrap: HTMLElement; parts: HTMLElement[]; q: number; strip?: HTMLElement }
+  /** Every level starts on a new page. */
+  | { t: "page"; level: number };
+
+/** One element from HTML that is safe already (the book's own pieces, or a card through `bookCard`). */
+function el(html: string): HTMLElement {
+  const t = document.createElement("template");
+  t.innerHTML = html.trim();
+  return t.content.firstElementChild as HTMLElement;
+}
+
+/** The bottom of an element's box, from the top of its page's column (px). */
+function bottomOf(e: Element, col: HTMLElement): number {
+  return e.getBoundingClientRect().bottom - col.getBoundingClientRect().top;
+}
+
+/** Does the column's content end inside it? (absolutely placed pieces, like the copyright, don't count) */
+function fits(col: HTMLElement): boolean {
+  const room = col.getBoundingClientRect().height + 0.5;
+  for (let e = col.lastElementChild; e; e = e.previousElementSibling) {
+    if (getComputedStyle(e).position === "absolute") continue;
+    return bottomOf(e, col) <= room;
+  }
+  return true;
+}
+
+/** A block taller than a whole page is drawn smaller, to fit (rare: a part with a very big figure). */
+function shrink(col: HTMLElement, e: HTMLElement) {
+  const room = col.getBoundingClientRect().height;
+  const top = e.getBoundingClientRect().top - col.getBoundingClientRect().top;
+  const h = e.getBoundingClientRect().height;
+  if (h <= 0 || top + h <= room) return;
+  const k = Math.max(0.5, (room - top - 2) / h);
+  e.style.setProperty("zoom", k.toFixed(3));
+}
+
+class Pager {
+  pages: Page[] = [];
+  cur!: Page;
+  /** A band, a note or a heading waiting for the block it must stay with. */
+  held: HTMLElement[] = [];
+
+  constructor(
+    private root: HTMLElement,
+    private make: () => HTMLElement,
+  ) {}
+
+  page(level: number | null) {
+    const box = this.make();
+    this.root.appendChild(box);
+    this.cur = { box, col: box.querySelector(".sbx-col") as HTMLElement, level, last: 0 };
+    this.pages.push(this.cur);
+  }
+
+  private empty() {
+    return !this.cur.col.firstElementChild;
+  }
+
+  /** Nothing on this page but blocks waiting for the next one. */
+  private onlyHeld() {
+    return [...this.cur.col.children].every((c) => this.held.includes(c as HTMLElement));
+  }
+
+  /** Starts a new page carrying the blocks that wait for the next one. */
+  private turn() {
+    const held = this.held;
+    for (const h of held) h.remove();
+    this.page(this.cur.level);
+    for (const h of held) this.cur.col.appendChild(h);
+  }
+
+  add(it: Item) {
+    if (it.t === "page") {
+      if (!this.pages.length || !this.empty()) this.page(it.level);
+      else this.cur.level = it.level;
+      return;
+    }
+    const col = () => this.cur.col;
+    if (it.t === "el") {
+      col().appendChild(it.el);
+      if (it.next) {
+        this.held.push(it.el);
+        return;
+      }
+      if (it.strip) col().appendChild(it.strip);
+      if (!fits(col()) && !this.onlyHeldBut(it.el, it.strip)) {
+        it.el.remove();
+        it.strip?.remove();
+        this.turn();
+        col().appendChild(it.el);
+        if (it.strip) col().appendChild(it.strip);
+      }
+      if (!fits(col())) shrink(col(), it.el);
+      if (it.q) this.cur.last = Math.max(this.cur.last, it.q);
+      this.held = [];
+      return;
+    }
+    // A card: its blocks one by one; it continues on the next page between two of them.
+    let wrap = it.wrap.cloneNode(false) as HTMLElement;
+    col().appendChild(wrap);
+    it.parts.forEach((part, k) => {
+      const lastPart = k === it.parts.length - 1;
+      wrap.appendChild(part);
+      if (lastPart && it.strip) col().appendChild(it.strip);
+      if (!fits(col())) {
+        part.remove();
+        it.strip?.remove();
+        if (!wrap.firstElementChild) {
+          // Its first block doesn't fit: the whole card (and what waits for it) to the next page, unless the page
+          // holds nothing else.
+          if (!this.onlyHeldBut(wrap)) {
+            wrap.remove();
+            this.turn();
+            col().appendChild(wrap);
+          }
+        } else {
+          wrap.classList.add("sbx-open");
+          this.page(this.cur.level);
+          wrap = it.wrap.cloneNode(false) as HTMLElement;
+          wrap.classList.add("sbx-cont");
+          col().appendChild(wrap);
+        }
+        wrap.appendChild(part);
+        if (lastPart && it.strip) col().appendChild(it.strip);
+        if (!fits(col())) shrink(col(), part);
+      }
+      this.cur.last = Math.max(this.cur.last, it.q);
+      if (k === 0) this.held = [];
+    });
+  }
+
+  /** True when the page holds nothing but the waiting blocks and these: moving them would leave it empty. */
+  private onlyHeldBut(...own: (HTMLElement | undefined)[]) {
+    return [...this.cur.col.children].every((c) => this.held.includes(c as HTMLElement) || own.includes(c as HTMLElement));
+  }
+}
+
+/** Every block of one level, in the book's order: its band, the Part I note, each group (headed when it joins others), its strip. */
+function levelItems(u: PrintUnit, l: SkillLevel, number: (q: number) => number, card: (q: number) => string | undefined): Item[] {
+  const out: Item[] = [{ t: "page", level: l.n }, { t: "el", el: el(bandHtml(u, l)), next: true }];
+  const short = l.qs.find((q) => partOf(u.data, q)?.kind === "short");
+  if (short !== undefined) out.push({ t: "el", el: el(`<div class="pmn">ஒவ்வொரு குறு வினாவுக்கும் ${marksWord(outOf(u.data, short) ?? 2)}</div>`), next: true });
+  const strip = el(stripHtml(l));
+  l.groups.forEach((g, gi) => {
+    const pure = g.skills.length === 1 && g.skills[0] === l.skill;
+    if (!pure || gi > 0) out.push({ t: "el", el: el(groupHtml(u, g)), next: true });
+    for (const q of g.qs) {
+      const last = q === l.qs[l.qs.length - 1];
+      const html = card(q) ?? `<div class="si"><div class="sih"><span class="qn">${number(q)}</span><div class="sib"><div class="sit">—</div></div></div></div>`;
+      const e = el(html);
+      // A card built in blocks (the engine since 25 Oct 2026) may continue between them; an older one stays whole.
+      const parts = e.matches(".pq") && e.querySelector(":scope > .bk") ? ([...e.children] as HTMLElement[]) : [];
+      if (parts.length) out.push({ t: "card", wrap: e, parts, q: number(q), ...(last ? { strip } : {}) });
+      else out.push({ t: "el", el: e, q: number(q), ...(last ? { strip } : {}) });
+    }
+  });
+  return out;
+}
+
+/** The furniture of a body page: the frame, the watermark, the footer, the side tab (filled once the pages are known). */
+function bodyPage(right: boolean): HTMLElement {
+  const box = document.createElement("div");
+  box.className = `sbx-page ${right ? "sbx-r" : "sbx-l"}`;
+  box.innerHTML = `<div class="sbx-frame">${FRAME}</div><div class="sbx-col"></div><div class="sbx-wm">${SEAL}</div>`;
+  return box;
+}
+
+let FRAME = "";
+let SEAL = "";
+
+/** The progress pills of a footer: a pill a level, black = done, the current one filled up to this page. */
+function pills(levels: SkillLevel[], last: number): string {
+  const s: string[] = [];
+  let x = 0.2;
+  const w = 3.6;
+  const h = 2.0;
+  const gap = levels.length > 16 ? 0.5 : 0.9;
+  const ww = levels.length > 16 ? 2.2 : w;
+  for (const l of levels) {
+    s.push(`<rect x="${f2(x)}" y=".2" width="${ww}" height="${h}" rx=".55" fill="#fff" stroke="#000" stroke-width=".3"/>`);
+    const f = Math.min(Math.max((last - l.from + 1) / Math.max(l.to - l.from + 1, 1), 0), 1);
+    if (f > 0) s.push(`<rect x="${f2(x)}" y=".2" width="${f2(ww * f)}" height="${h}" rx=".55" fill="#000"/>`);
+    x += ww + gap;
+  }
+  const W = x - gap + 0.2;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${f2(W)}mm" height="${h + 0.4}mm" viewBox="0 0 ${f2(W)} ${h + 0.4}">${s.join("")}</svg>`;
+}
+
+function footHtml(u: PrintUnit, levels: SkillLevel[], n: number, right: boolean, last: number, year: number): string {
+  const cp = `<span class="fcp">© ${year} ${BRAND} · ${esc(u.ta)} · தரம் ${u.grade}</span>`;
+  const brand = `<span class="fbx">${logo(4.4)}<b>${BRAND}</b></span>`;
+  const pill = `<span class="fpill">${pills(levels, last)}</span>`;
+  const outer = right ? `${pill}<span class="fsp"></span><span class="fn">${n}</span>` : `<span class="fn">${n}</span><span class="fsp"></span>${pill}`;
+  return right ? `<span>${cp}</span><span>${brand}</span><span>${outer}</span>` : `<span>${outer}</span><span>${brand}</span><span>${cp}</span>`;
+}
+
+export type BookResult = {
+  /** Pages printed. */
+  pages: number;
+  /** Each printed level's pages, as numbered in the book: level n → [first, last]. */
+  levelPages: Map<number, [number, number]>;
+  /** The fonts came in time (false: printed in what had come). */
+  fonts: boolean;
+};
 
 let cleanup: (() => void) | null = null;
 
@@ -258,35 +551,182 @@ export function clearPrint(): void {
   cleanup = null;
 }
 
+/** Fits the cover's title on one line (the engine's rule: 54 pt, smaller for a long name), its subtitle with it. */
+function fitTitle(root: ShadowRoot) {
+  const a = root.querySelector(".sbx-cover .cv-title .a") as HTMLElement | null;
+  const b = root.querySelector(".sbx-cover .cv-title .b") as HTMLElement | null;
+  if (!a) return;
+  a.style.fontSize = `${TITLE_PT}pt`;
+  const mm = 96 / 25.4;
+  const span = document.createElement("span");
+  span.append(...a.childNodes);
+  a.appendChild(span);
+  const w = span.getBoundingClientRect().width / mm;
+  const pt = w <= TITLE_W ? TITLE_PT : Math.max(20, Math.floor((2 * TITLE_PT * TITLE_W) / w) / 2);
+  a.style.fontSize = `${pt}pt`;
+  if (b) b.style.fontSize = `${Math.min(28, Math.round(0.62 * pt * 10) / 10)}pt`;
+}
+
+/** Fits the cover's list of levels in its box: one column up to 10 levels, two up to 22, then three; smaller type last. */
+function fitIndex(root: ShadowRoot, n: number) {
+  const ix = root.querySelector(".sbx-ix") as HTMLElement | null;
+  const list = root.querySelector(".sbx-ixl") as HTMLElement | null;
+  if (!ix || !list) return;
+  const cols = n <= 10 ? 1 : n <= 22 ? 2 : 3;
+  const perCol = Math.max(1, Math.ceil(n / cols));
+  const mm = 96 / 25.4;
+  const room = (ix.getBoundingClientRect().bottom - list.getBoundingClientRect().top) / mm;
+  // A row as tall as the box allows, never more than 16 mm (a few levels must not look stretched).
+  const row = Math.min(16, room / perCol);
+  list.style.gridTemplateRows = `repeat(${perCol}, minmax(${row.toFixed(2)}mm, auto))`;
+  list.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
+  const bottom = ix.getBoundingClientRect().bottom + 0.5;
+  for (let pt = cols === 1 ? 12.5 : cols === 2 ? 10 : 8.6; pt >= 6.4; pt -= 0.3) {
+    list.style.fontSize = `${pt.toFixed(1)}pt`;
+    if (list.getBoundingClientRect().bottom <= bottom) break;
+  }
+}
+
 /**
- * Prints the book: it goes into the page (hidden on the screen), everything else hides for the print, and Chrome's
- * print window opens (Save as PDF). It stays until the next download or until the page closes: on Android the print
- * window may still be reading it after print() has returned.
+ * Makes the book's pages and opens Chrome's print window (Save as PDF). The whole book, or (`only`) one level's pages
+ * numbered as in the whole book. The book stays in the page (hidden) until the next download or until the page closes:
+ * on Android the print window may still be reading it after print() has returned.
  */
-export async function printBook(fileName: string, foot: string, css: string, body: string): Promise<void> {
+export async function printSkillBook(plan: PrintPlan, css: string | null, fileName: string, only: number | null = null): Promise<BookResult> {
   clearPrint();
+  const u = plan.unit;
+  const levels = printedLevels(plan.levels);
+  FRAME ||= frameSvg();
+  SEAL ||= seal();
   const style = document.createElement("style");
   style.id = "sb-print-page";
-  style.textContent = pageCss(foot);
+  style.textContent = docCss();
   document.head.appendChild(style);
   const host = document.createElement("div");
   host.id = "sb-print";
   const root = host.attachShadow({ mode: "open" });
-  root.innerHTML = `<style>${css}</style>${body}`;
+  root.innerHTML = `<style>${bookCss(css)}</style><div class="sbx"></div>`;
   document.body.appendChild(host);
-  document.body.classList.add("sb-printing");
   const title = document.title;
-  document.title = fileName;
   cleanup = () => {
     host.remove();
     style.remove();
     document.body.classList.remove("sb-printing");
     document.title = title;
   };
-  try {
-    await Promise.race([document.fonts.load('800 12pt "Baloo Thambi 2"'), new Promise((r) => setTimeout(r, 4000))]);
-  } catch {
-    /* the book prints in the phone's own font */
+  const book = root.querySelector(".sbx") as HTMLElement;
+  const numberOf = (q: number) => {
+    for (const l of levels) {
+      const i = l.qs.indexOf(q);
+      if (i >= 0) return l.from + i;
+    }
+    return 0;
+  };
+
+  // Every block first, in one hidden column: the browser fetches the fonts their text needs; nothing is measured before.
+  const items = levels.flatMap((l) => levelItems(u, l, numberOf, (q) => plan.cards.get(q)));
+  const sheet = only === null ? el(sheetHtml(u, levels)) : null;
+  const flow = document.createElement("div");
+  flow.className = "sbx-flow";
+  for (const it of items) {
+    if (it.t === "el") flow.append(it.el, ...(it.strip ? [it.strip] : []));
+    else if (it.t === "card") {
+      const w = it.wrap.cloneNode(false) as HTMLElement;
+      w.append(...it.parts);
+      flow.append(w, ...(it.strip ? [it.strip] : []));
+    }
   }
+  if (sheet) flow.appendChild(sheet);
+  book.appendChild(flow);
+  const cover = document.createElement("div");
+  cover.className = "sbx-page sbx-cover";
+  cover.innerHTML = coverHtml(u, levels);
+  book.appendChild(cover);
+  void flow.offsetHeight;
+  const fonts = await printFontsReady();
+  fitTitle(root);
+  fitIndex(root, levels.length);
+
+  // The contents: as many pages as its rows need (each with room for the copyright at its foot), then a blank page
+  // when needed so that page 1 is a right-hand page.
+  const insideMake = () => {
+    const box = document.createElement("div");
+    box.className = "sbx-page sbx-l sbx-inside";
+    box.innerHTML = `<div class="sbx-frame">${FRAME}</div><div class="sbx-col"></div><div class="sbx-wm">${SEAL}</div>`;
+    (box.querySelector(".sbx-col") as HTMLElement).style.height = `${COL_H - 14}mm`;
+    return box;
+  };
+  const toc = new Pager(book, insideMake);
+  toc.page(null);
+  toc.add({ t: "el", el: el(tocHead()), next: true });
+  for (const l of levels) toc.add({ t: "el", el: el(tocRow(u, l)) });
+  toc.add({ t: "el", el: el(tocSheetRow()) });
+  for (const p of toc.pages) {
+    p.col.style.height = `${COL_H}mm`;
+    p.col.insertAdjacentHTML("beforeend", `<div class="icr">${esc(COPY(plan.year))}</div>`);
+  }
+  let front = 1 + toc.pages.length;
+  if (front % 2) {
+    const blank = document.createElement("div");
+    blank.className = "sbx-page sbx-blank";
+    book.appendChild(blank);
+    front++;
+  }
+
+  // The body: page after page; a right-hand page is an odd page of the whole book.
+  let physical = front;
+  const pager = new Pager(book, () => bodyPage(++physical % 2 === 1));
+  for (const it of items) pager.add(it);
+  if (sheet) pager.add({ t: "el", el: sheet });
+  flow.remove();
+
+  // Footers, side tabs, the contents' page numbers.
+  const step = Math.min(37.5, (TAB_LAST - TAB_TOP) / Math.max(levels.length - 1, 1));
+  const levelPages = new Map<number, [number, number]>();
+  let last = 0;
+  pager.pages.forEach((p, i) => {
+    const n = i + 1;
+    const right = (front + n) % 2 === 1;
+    last = Math.max(last, p.last);
+    p.box.dataset.n = String(n);
+    if (p.level !== null) p.box.dataset.level = String(p.level);
+    const foot = document.createElement("div");
+    foot.className = "sbx-foot";
+    foot.innerHTML = footHtml(u, levels, n, right, last, plan.year);
+    p.box.appendChild(foot);
+    const k = levels.findIndex((l) => l.n === p.level);
+    if (k >= 0) {
+      const tab = document.createElement("div");
+      tab.className = "sbx-tab";
+      tab.style.top = `${f2(TAB_TOP + k * step - 1.5)}mm`;
+      tab.innerHTML = `<i style="font-size:${fitPt(levels[k].n, [8, 7, 5.6])}pt">${levels[k].n}</i>`;
+      p.box.appendChild(tab);
+      const had = levelPages.get(levels[k].n);
+      levelPages.set(levels[k].n, [had ? had[0] : n, n]);
+    }
+    for (const c of p.col.children) if (c.matches(".si")) c.classList.toggle("pt", c === p.col.firstElementChild);
+  });
+  const sheetPage = sheet ? pager.pages.findIndex((p) => p.col.contains(sheet)) + 1 : 0;
+  if (sheetPage && pager.pages[sheetPage - 1].col.firstElementChild === sheet) {
+    // The marks sheet on a page of its own belongs to no level: no side tab.
+    const p = pager.pages[sheetPage - 1];
+    p.box.querySelector(".sbx-tab")?.remove();
+    delete p.box.dataset.level;
+  }
+  for (const row of book.querySelectorAll<HTMLElement>(".sbx-inside .toc-r[data-lv]")) {
+    const lv = row.dataset.lv;
+    const pg = row.querySelector(".pg");
+    if (!pg) continue;
+    pg.textContent = lv === "sheet" ? (sheetPage ? String(sheetPage) : "") : String(levelPages.get(Number(lv))?.[0] ?? "");
+  }
+
+  // One level alone: its pages only, as numbered in the whole book.
+  if (only !== null) {
+    for (const page of [...book.children] as HTMLElement[]) if (page.dataset.level !== String(only)) page.remove();
+  }
+  const pages = book.children.length;
+  document.body.classList.add("sb-printing");
+  document.title = fileName;
   window.print();
+  return { pages, levelPages, fonts };
 }

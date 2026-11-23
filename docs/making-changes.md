@@ -455,6 +455,28 @@ SIZE=200 NAMES=family:me,chat:room npx vitest run -c vitest.scale.config.ts test
 
 ## Gotchas learned the hard way
 
+- **Printing a book from the app (Chrome's Save as PDF)** (22 Nov 2026, the skill book's PDF, `src/skillPrint.ts`):
+  - The engine's fonts must come with the app (`src/printFonts.ts`): an upload's CSS has none (`bookCssOf` drops
+    `@font-face`; the CSP allows fonts from the app only), and the phone's own Tamil font is wider and taller than the
+    one the engine measured every figure label and fraction with. New weights or glyphs: `scripts/print-fonts.py`
+    (after the ol-essay skill's `setup_fonts.py`), static weights only: Chrome prints a variable font as a Type 3 font
+    (thin and blurry in some viewers).
+  - `font-display: swap`, never `block`: with `block`, Chrome's print left out every 12 pt line of Baloo Thambi 2
+    ExtraBold (the question numbers, the page numbers, the strips' "/ 20") although the face was loaded and the
+    screen showed them. Check a print with `pymupdf` text (`page.get_text("dict")`), not only a screenshot.
+  - A shadow root inherits the host's inherited properties: the app's `body { font-weight: 500 }` set every question
+    a step heavier. The book's `:host { all: initial }` stops it; keep it when changing `PAGE_CSS`.
+  - Pages are laid out by the app (`Pager`), not by Chrome: every page is a fixed A4 box, so nothing inside may ask
+    Chrome for a break (`break-*`, a named `page` like the engine's `.cover`): `PAGE_CSS` resets them, and the boxes
+    are 296.8 mm tall so rounding never spills a blank page. Measure only after `printFontsReady()` (a block measured
+    in a fallback font moves when the real one comes), and only in the page's column (margins collapse as they print).
+  - Headless Chrome on Linux sets text about 0.5% wider than WeasyPrint (hinted advances), so a line at the very edge
+    may wrap where the engine's didn't: the layout flows, nothing overlaps; don't chase it with letter-spacing.
+  - To compare with the engine: build a made-up unit with the past-paper-workbook skill (never his books), run its
+    `book.html` through `workbookQuestions` + `printSkillBook` in a scratch page with Playwright (`page.pdf`, print
+    media, `preferCSSPageSize`), and put both PDFs' pages side by side (`pdftoppm`). A phone without the fonts:
+    `FONTCONFIG_FILE` pointing at DejaVu + Noto Sans Tamil only.
+
 - **A new book engine's print furniture must leave the phone** (18 Nov 2026, the Sakarath books): the family paper
   hides each engine's own numbering and decoration (`.qn`, `.pm`, `.mk` for workbooks; `.sn`, `.qsep` and half-width
   `.pt` for Sakarath books) and `stepsOf` drops the same from the story, with a figure's labels (`svg`, `.dg`, `.fg`).

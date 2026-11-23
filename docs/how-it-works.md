@@ -2852,34 +2852,69 @@ learning app of our education institute"): one profile, his class times, what he
   workbook's levels (his words: "not synced"): the app keeps its question numbers and levels everywhere.
   - **Settings → Books → T** beside F M K Q on every unit row: green = its workbook's questions carry skills
     (`catalog.books` `tagged`); pale = not tagged (a tap says "tag it with Claude first").
-  - The page (full screen, Back closes it): its **groups** as pills in one row (`HRow`), each with its count. A group =
-    the exact skills a question needs, all its parts' together (`needs`): "S2" holds only the questions that need S2
-    alone; a question that needs S2 and S3 sits in "S2+S3" (dashed pill), never in S2 (his rule: "skill two is only for
-    purely skill two"). Groups in teaching order (`byGroup`): after the last skill they need, the single skill first,
-    then the bigger groups. Another unit's skill shows as "S4·2". Under the pills: the open group's skills (Tamil and
-    English), its questions and marks, which Level it is in the PDF; then **its questions as printed** (the app's
-    copy drawn with the book's CSS, the printed number hidden: "Q37" above it is the app's number), **easy → hard**
-    (`skillGroups`): Part I first, then Part II; inside each, the book's own order (built easy → hard) averaged with
-    the students' marks once 5 students had its level corrected (`hardness`, `statsOf`: real students only, free
-    marks out); each card says "% right · students" (red under half, grey with fewer than 5), and the parts' own skills
-    when tagged part by part.
-  - **Move** (Books or the owner, `skillBook.move`): to another pill in one tap, or to a new group (tick one to three
-    skills). The question then needs exactly those, for the whole question (part tags go: `moveTo`); its main skill
-    stays when it is still there, else the last one. A skill's lesson example is chosen again when it moves
-    (`keepExamples`). Checked like a Claude link save (`skillsProblem`): a skill left with no question is refused ("Move
-    another question into it first"). It changes the unit's tags, so the class's lessons by skill follow it. History:
-    "Q12 moved to another skill: S1+S2 → S1+S3" (`skill-move`).
-  - **PDF** (top right): the book for the print shop (`skillLevels`: one level a group, in that order; the questions
-    numbered 1, 2, 3 … through the book, no old number), in the workbook's design: the engine's CSS
-    (`src/skillPrintCss.ts`, then the unit's own stored CSS, then the print rules), the dotted frame and the seal
-    watermark (`frameSvg`, `seal`: the engine's, redrawn the same way), a cover (the unit's Tamil name, every skill
-    with its names), the contents (each level: its skills, questions, marks), each level under a black band (its
-    number, its skills' names, "S2 + S3"), each question with its skill numbers (`bookCard`), Part II in its outline
-    box, the level strip, and the marks sheet at the end (six levels a row, total and percentage). Footer: copyright,
-    ARISTORA, the page number (`@page` margin boxes). Made by Chrome's own print (Save as PDF, or a printer): the
-    book goes into the page in a shadow root, hidden on screen (`#sb-print`, `body.sb-printing`), until the next
-    download or until the page closes (Android's print window may still read it after `print()` returns). The file is
-    named "G8_U04_Skills_Book".
+  - **Level n = skill n** (22 Nov 2026, his voice note: "we can put skill three plus skill four inside the level four
+    ... if the student go to level four, the student already learned level three ... otherwise the levels are going
+    to be very high list and some levels have only one question or two"; `skillLevels`): a level for each of the
+    unit's own skills, numbered by the skill (S3 = Level 3). A **group** = the exact skills a question needs, all its
+    parts' together (`needs`); a group goes into the level of its **last skill of this unit** (`levelSkillOf`): S3+S4
+    in Level 4, S2+S5 in Level 5. Inside a level: that skill alone first, then the groups that join it with others
+    (two skills before three, then skill by skill: `byGroup`); a group of other units' skills only (taught there)
+    goes into the first level, at its end; another unit's skill shows as "S4·2" and never makes a level. A skill no
+    question ends on (every question using it needs a later one too) keeps an empty level: its pill is pale (dashed)
+    and says why; the PDF leaves it out, and no other skill takes its number. Until 22 Nov each group was a level of
+    its own (S1, S2, S1+S2, S3, S2+S3 …): many levels of one or two questions.
+  - The page (full screen, Back closes it): the **levels** as pills in one row (`HRow`: "S3" and its count). Under
+    them: the open level's skill (Tamil and English), "Level 3 · 12 questions · 24 marks · PDF Q21–32" and its own
+    **Level 3 PDF** button; then its questions, each group after the first under a small heading ("S2+S3", the
+    skills' Tamil names, its count); each question **as printed** (the app's copy drawn with the book's CSS, the
+    printed number hidden: "Q37" above it is the app's number, "PDF 12" its number in the downloaded book), **easy →
+    hard** inside its group (`skillGroups`): Part I first, then Part II; inside each, the book's own order (built easy
+    → hard) averaged with the students' marks once 5 students had its level corrected (`hardness`, `statsOf`: real
+    students only, free marks out); each card says "% right · students" (red under half, grey with fewer than 5), and
+    the parts' own skills when tagged part by part.
+  - **Move** (Books or the owner, `skillBook.move`): to another group in one tap (each says the Level it is in), or
+    to a new group (tick one to three skills). The question then needs exactly those, for the whole question (part
+    tags go: `moveTo`); its main skill stays when it is still there, else the last one. A skill's lesson example is
+    chosen again when it moves (`keepExamples`). Checked like a Claude link save (`skillsProblem`): a skill left with
+    no question is refused ("Move another question into it first"). It changes the unit's tags, so the class's lessons
+    by skill follow it. History: "Q12 moved to another skill: S1+S2 → S1+S3" (`skill-move`).
+  - **PDF** (22 Nov 2026 rebuilt, his words: "if I preview the PDF, that's not look good ... some texts are
+    overlapped ... use the past paper workbook skill ... I can download any PDF from this page with high quality";
+    `src/skillPrint.ts` `printSkillBook`): the **whole book** (top right: cover, contents, every level, the marks
+    sheet) or **one level** (its button: that level's pages only, cut out of the whole book's, so the same question and
+    page numbers). The past-paper workbook's own pages, made in the phone:
+    - **The engine's fonts** (`src/printFonts.ts`, the files in `src/printFonts/` from `scripts/print-fonts.py`):
+      TMuktaLat (Latin and digits at 115%), Mukta Malar, Baloo Thambi 2, STIX Two Text italic and Math, DejaVu for
+      ✓ ✗, static weights cut to what a book prints (~700 KB in all, a book fetches the faces its text uses, about
+      250 KB, only when he prints). The upload keeps a book's CSS but drops its fonts (`bookCssOf`; the CSP allows
+      fonts from the app only), so before 22 Nov the phone printed in its own Tamil font, wider and taller, and the
+      engine's measured figures and labels collided. Every face is in before anything is measured
+      (`printFontsReady`; if not within 12 s the book prints in what came and a toast says so).
+    - **Pages laid out block by block like the engine** (`Pager`): every page is a fixed A4 box (`@page { size: A4;
+      margin: 0 }`): the text column 185 × 273.5 mm, 15 mm from the binding edge and 10 from the outer one (right-
+      and left-hand pages for double-sided printing; page 1 is a right-hand page: the front pages are always even, a
+      blank page added when the contents take two), the dotted frame, the seal watermark, the footer (copyright on the
+      binding side, the owl and ARISTORA in the centre, a pill a level filling as the book goes and the page number on
+      the outer side), the side tab on the outer edge with the level's number, stepping down level by level. Blocks:
+      a Part I question, a Part II card's block (a part with its answer space: the engine's `.bk`), a band, a group
+      heading, a strip, the marks sheet. A block is never cut; a band and a heading stay with the block after them; a
+      level's strip with its last block; a card continues on the next page between two of its blocks, its outline open
+      where it breaks (`sbx-open`, `sbx-cont`; a card from before the engine's blocks stays whole); a block taller than
+      a page is drawn smaller to fit. Chrome's own page breaking (before 22 Nov) cut a level's band in two and ran a long
+      contents page over the next page.
+    - **The pieces**: the cover (the unit's Tamil name as the title, on one line: 54 pt or smaller, measured;
+      "திறன் வழிப் பயிற்சி"; grade · unit · levels · questions · marks; every level = its skill with its Tamil and
+      English names and its questions, one column up to 10 levels, two up to 22, then three), the contents on the
+      back (each level: its skill, Tamil and English names, its questions, its marks, its first page; the marks
+      sheet's page; the copyright), each level **from a new page** under its black band (its number, its skill's
+      names, "S3"), the Part I note, its questions renumbered 1, 2, 3 … through the book with their skill chips
+      (`bookCard`), its group headings, its strip ("Level 3 · வினாக்கள் 21 – 32 · புள்ளிகள் [ ] / 24"); the marks
+      sheet after the last level (six levels a row, the unit's total and percentage). The engine's CSS
+      (`src/skillPrintCss.ts`), then the unit's own stored CSS, then the pages' rules (`PAGE_CSS`).
+    - Made by Chrome's own print (Save as PDF, paper A4): the book is built in the page in a shadow root (off the
+      screen, `#sb-print`), printed with `body.sb-printing`, and kept until the next download or until the page closes
+      (Android's print window may still read it after `print()` returns). Files: "G8_U04_Skills_Book",
+      "G8_U04_Skills_Level3". A toast says which questions aren't in the app as printed (their places show a dash).
 - The server marks with the uploaded answer keys (`convex/lib/phone.ts`; a key without kinds, version 1): numbers,
   several numbers, answers in n (same values for n = 1..7), labelled answers (x = 52), "also accepted" notes. Since 4 Nov 2026 (his screenshot: "0.25 as a
   percentage" was the teacher's, so whole Percentages Stages were): a number with its unit (25%, 45°, −3 °C, 12 cm,

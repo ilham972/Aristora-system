@@ -1,18 +1,20 @@
 // A unit's book by skill (14 Nov 2026, the founder's voice note): Settings → Books → T on a tagged unit. One page:
-// - the groups as pills, one row, each with its count: a single skill ("S2") holds only the questions that need that
-//   skill alone; a question that needs two or three ("S2+S3") has its own pill, after the last skill it needs;
-// - the open pill's questions as printed (drawn from the app's copy, not a photo), easy → hard, each with its skills,
-//   how many students got it right, and Move (to another pill, or to a new group of skills);
-// - Download: the PDF book (src/skillPrint.ts), one level a pill, numbered 1, 2, 3 … in this order.
+// - the levels as pills, one row, each with its count: **Level n = skill n** (22 Nov 2026, his rule: "skill three plus
+//   skill four inside the level four"): a level holds the questions whose last skill of this unit is its skill, those
+//   of that skill alone first, then each group that joins it with others under its own small heading ("S3+S4");
+// - the open level's questions as printed (drawn from the app's copy, not a photo), easy → hard, each with its skills,
+//   how many students got it right, its number in the PDF, and Move (to another group, or to a new group of skills);
+// - the PDF: the whole book (top right) or the open level alone (src/skillPrint.ts), numbered 1, 2, 3 … in this order.
 // The app keeps its own question numbers here (the family app and the class use them); only the PDF numbers again.
 // Nothing here is connected to the family app or to the workbook's levels (his words: "not synced").
 
+import { Fragment } from "preact";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
-import { outOf, partOf } from "../convex/lib/book";
-import { bySkill } from "../convex/lib/path";
-import { groupKey, groupLabel, needs, skillLabel, skillGroups, skillLevels, STAT_MIN, type QStat, type SkillGroup } from "../convex/lib/skillBook";
+import { partOf } from "../convex/lib/book";
+import { bySkill, paperNo } from "../convex/lib/path";
+import { groupKey, groupLabel, levelSkillOf, needs, skillLabel, skillGroups, skillLevels, STAT_MIN, type QStat, type SkillGroup, type SkillLevel } from "../convex/lib/skillBook";
 import { SKILLS_A_TAG } from "../convex/lib/skills";
 import type { SkillBookUnit } from "../convex/skillBook";
 import { fetchOnce, mutate } from "./backend";
@@ -20,7 +22,7 @@ import { GovBook, type GovRow } from "./govBook";
 import { HRow } from "./hrow";
 import { useQuery } from "./live";
 import { drawQuestion } from "./questionView";
-import { bookBody, bookCard, bookCss, clearPrint, printBook } from "./skillPrint";
+import { bookCard, clearPrint, printSkillBook } from "./skillPrint";
 import { act, currentRole, toast, type Unit } from "./store";
 import { Sheet } from "./ui";
 
@@ -71,9 +73,10 @@ export function SkillBookPage(props: { unit: Unit; gov: GovRow | null; onClose: 
   useBackClose(props.onClose);
   const u = useQuery<SkillBookUnit | null>(api.skillBook.unit, { unitId });
   const [printed, setPrinted] = useState<Printed | null | "failed">(null);
-  const [pick, setPick] = useState<string | null>(null);
+  const [pick, setPick] = useState<number | null>(null);
   const [moving, setMoving] = useState<number | null>(null);
-  const [busy, setBusy] = useState(false);
+  /** Which PDF is being made: 0 = the whole book, n = level n. */
+  const [busy, setBusy] = useState<number | null>(null);
   const top = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -89,39 +92,53 @@ export function SkillBookPage(props: { unit: Unit; gov: GovRow | null; onClose: 
 
   const stats = useMemo(() => new Map<number, QStat>((u?.stats ?? []).map(([q, n, right]) => [q, { n, right }])), [u]);
   const groups = useMemo(() => (u ? skillGroups(u.data, u.tags, stats) : []), [u, stats]);
-  const open: SkillGroup | undefined = groups.find((g) => g.key === pick) ?? groups[0];
+  const book = useMemo(() => (u ? skillLevels(u.key, u.data, u.tags, u.skills.map((s) => s.id), stats) : null), [u, stats]);
+  const levels = book?.levels ?? [];
+  const open: SkillLevel | undefined = levels.find((l) => l.n === pick) ?? levels.find((l) => l.qs.length > 0) ?? levels[0];
   useEffect(() => {
     top.current?.scrollTo?.(0, 0);
-  }, [open?.key]);
+  }, [open?.n]);
 
   const name = (id: string) => u?.names[id] ?? { ta: id, en: "" };
   const label = (id: string) => (u ? skillLabel(u.key, id) : id);
-  const marksOf = (qs: number[]) => (u ? qs.reduce<number | null>((a, q) => (a === null || outOf(u.data, q) === null ? null : a + (outOf(u.data, q) ?? 0)), 0) : null);
+  /** The level a group sits in: its last skill of this unit (another unit's skills only: the first level). */
+  const levelOf = (g: SkillGroup) => {
+    const s = u ? levelSkillOf(u.key, g.skills) : null;
+    return s && u ? Number(paperNo(u.key, s)) : (levels[0]?.n ?? 1);
+  };
 
-  const download = async () => {
-    if (!u || !printed || printed === "failed" || busy) return;
-    setBusy(true);
-    const { levels, number } = skillLevels(u.data, u.tags, stats);
+  const download = async (only: number | null) => {
+    if (!u || !book || !printed || printed === "failed" || busy !== null) return;
+    setBusy(only ?? 0);
     const cards = new Map<number, string>();
     let missing = 0;
-    for (const [q, no] of number) {
+    // Every card, even for one level: its pages are cut out of the whole book's, so they carry the same numbers.
+    for (const [q, no] of book.number) {
       const html = printed.qs.get(q);
       if (html) cards.set(q, bookCard(html, no, needs(u.tags, q).map(label)));
       else missing++;
     }
     const year = new Date().getFullYear();
-    const body = bookBody({ key: u.key, grade: u.grade, code: u.code, ta: u.ta, en: u.en, data: u.data, names: u.names }, levels, cards, year);
     toast(
       missing
-        ? `${missing} questions aren't in the app as printed: their places show a dash. In the print window: Save as PDF.`
-        : "In the print window: choose Save as PDF (or a printer).",
+        ? `${missing} questions aren't in the app as printed: their places show a dash. In the print window: Save as PDF, paper A4.`
+        : "In the print window: choose Save as PDF, paper size A4.",
       missing ? "error" : "info",
     );
-    await printBook(`G${u.grade}_${u.code}_Skills_Book`, `© ${year} ${"ARISTORA"} · ${u.ta} · தரம் ${u.grade}`, bookCss(printed.css), body);
-    setBusy(false);
+    try {
+      const file = only === null ? `G${u.grade}_${u.code}_Skills_Book` : `G${u.grade}_${u.code}_Skills_Level${only}`;
+      const r = await printSkillBook({ unit: { key: u.key, grade: u.grade, code: u.code, ta: u.ta, en: u.en, data: u.data, names: u.names }, levels: book.levels, cards, year }, printed.css, file, only);
+      if (!r.fonts) toast("The book's fonts didn't all come (weak signal?): the PDF may use this phone's fonts. Try again on a better signal.", "error");
+    } catch (e) {
+      clearPrint();
+      toast(`The PDF couldn't be made: ${e instanceof Error ? e.message : String(e)}`, "error");
+    } finally {
+      setBusy(null);
+    }
   };
 
   const ready = !!u && !!printed && printed !== "failed" && printed.qs.size > 0;
+  const marks = open?.max;
   return (
     <div class="sb" role="dialog" aria-modal="true" aria-label="Skills of this unit">
       <div class="sb-top">
@@ -136,11 +153,11 @@ export function SkillBookPage(props: { unit: Unit; gov: GovRow | null; onClose: 
           </b>
           <span>{props.unit.ta}</span>
         </div>
-        <button type="button" class="sb-dl" disabled={!ready || busy} onClick={() => void download()} aria-label="Download the book as a PDF">
+        <button type="button" class="sb-dl" disabled={!ready || busy !== null} onClick={() => void download(null)} aria-label="Download the whole book as a PDF">
           <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
             <path d="M12 4v11M7 10l5 5 5-5M5 20h14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
           </svg>
-          {busy ? "Making…" : "PDF"}
+          {busy === 0 ? "Making…" : "PDF"}
         </button>
       </div>
       {/* The government's own book for this unit (23 Nov 2026): the extra context a chat reads when it builds
@@ -154,63 +171,96 @@ export function SkillBookPage(props: { unit: Unit; gov: GovRow | null; onClose: 
         </p>
       ) : (
         <>
-          <HRow class="sb-pills" label="Skills" list={u.key} at={open?.key}>
-            {groups.map((g) => (
-              <button key={g.key} type="button" class={`sb-pill${g.key === open?.key ? " on" : ""}${g.skills.length > 1 ? " many" : ""}`} data-u="" onClick={() => setPick(g.key)}>
-                {groupLabel(u.key, g.skills)}
-                <small>{g.qs.length}</small>
+          <HRow class="sb-pills" label="Levels" list={u.key} at={open ? String(open.n) : undefined}>
+            {levels.map((l) => (
+              <button
+                key={l.n}
+                type="button"
+                class={`sb-pill${l.n === open?.n ? " on" : ""}${l.qs.length ? "" : " empty"}`}
+                data-u=""
+                aria-label={`Level ${l.n}: ${label(l.skill)}, ${l.qs.length} ${l.qs.length === 1 ? "question" : "questions"}`}
+                onClick={() => setPick(l.n)}
+              >
+                {label(l.skill)}
+                <small>{l.qs.length}</small>
               </button>
             ))}
           </HRow>
           <div class="sb-body" ref={top}>
             {open && (
               <div class="sb-head">
-                {open.skills.map((id) => (
-                  <p key={id}>
-                    <span class="sb-sk">{label(id)}</span>
-                    <span>
-                      {name(id).ta}
-                      <small>{name(id).en}</small>
-                    </span>
-                  </p>
-                ))}
-                <p class="sb-sum">
-                  {open.qs.length} {open.qs.length === 1 ? "question" : "questions"}
-                  {marksOf(open.qs) !== null ? ` · ${marksOf(open.qs)} marks` : ""} · easy → hard · Level {groups.indexOf(open) + 1} of {groups.length} in the PDF
+                <p>
+                  <span class="sb-sk">{label(open.skill)}</span>
+                  <span>
+                    {name(open.skill).ta}
+                    <small>{name(open.skill).en}</small>
+                  </span>
                 </p>
+                <div class="sb-sumrow">
+                  <p class="sb-sum">
+                    Level {open.n} · {open.qs.length} {open.qs.length === 1 ? "question" : "questions"}
+                    {marks !== null && open.qs.length ? ` · ${marks} marks` : ""}
+                    {open.qs.length ? ` · PDF ${open.from === open.to ? `Q${open.from}` : `Q${open.from}–${open.to}`}` : ""}
+                  </p>
+                  <button type="button" class="sb-lvdl" disabled={!ready || busy !== null || !open.qs.length} onClick={() => void download(open.n)} aria-label={`Download Level ${open.n} alone as a PDF`}>
+                    {busy === open.n ? "Making…" : `Level ${open.n} PDF`}
+                  </button>
+                </div>
               </div>
             )}
             {printed === "failed" && <p class="muted sb-note">The questions didn't load. Close this page and open it again.</p>}
-            {open?.qs.map((q) => {
-              const parts = u.tags.filter((t) => t.q === q && t.p !== undefined);
-              const s = stats.get(q);
-              const p = pct(s);
-              const html = printed && printed !== "failed" ? printed.qs.get(q) : undefined;
+            {open && !open.qs.length && (
+              <p class="muted sb-note">
+                No question ends on {label(open.skill)}: every question that uses it needs a later skill too, so it sits in that later level. Move a question here (Move → tick {label(open.skill)}
+                alone) if Level {open.n} should have its own.
+              </p>
+            )}
+            {open?.groups.map((g, gi) => {
+              const pure = g.skills.length === 1 && g.skills[0] === open.skill;
               return (
-                <div class="sb-q" key={q}>
-                  <div class="sb-qh">
-                    <b class="sb-qn">Q{q}</b>
-                    <span class="sb-qk">{partOf(u.data, q)?.kind === "short" ? "Part I" : "Part II"}</span>
-                    {s && s.n > 0 && p !== null && (
-                      <span class={`sb-rate${s.n < STAT_MIN ? " few" : p < 50 ? " low" : ""}`} title={`${s.n} students did it`}>
-                        {p}% right · {s.n}
-                      </span>
-                    )}
-                    <button type="button" class="sb-move" onClick={() => setMoving(q)}>
-                      Move
-                    </button>
-                  </div>
-                  {parts.length > 0 && (
-                    <p class="sb-parts">
-                      {parts.map((t) => (
-                        <span key={t.p}>
-                          ({t.p}) {[t.s, ...(t.x ?? [])].map(label).join("+")}
-                        </span>
-                      ))}
+                <Fragment key={g.key}>
+                  {(!pure || gi > 0) && (
+                    <p class="sb-grp">
+                      <b>{groupLabel(u.key, g.skills)}</b>
+                      <span>{g.skills.map((id) => name(id).ta).join(" + ")}</span>
+                      <small>{g.qs.length}</small>
                     </p>
                   )}
-                  {html ? <Printed html={html} css={printed && printed !== "failed" ? printed.css : null} /> : <p class="muted small sb-note">{printed ? "This question isn't in the app as printed." : "Loading the question…"}</p>}
-                </div>
+                  {g.qs.map((q) => {
+                    const parts = u.tags.filter((t) => t.q === q && t.p !== undefined);
+                    const s = stats.get(q);
+                    const p = pct(s);
+                    const html = printed && printed !== "failed" ? printed.qs.get(q) : undefined;
+                    return (
+                      <div class="sb-q" key={q}>
+                        <div class="sb-qh">
+                          <b class="sb-qn">Q{q}</b>
+                          <span class="sb-qk">
+                            {partOf(u.data, q)?.kind === "short" ? "Part I" : "Part II"} · PDF {book?.number.get(q)}
+                          </span>
+                          {s && s.n > 0 && p !== null && (
+                            <span class={`sb-rate${s.n < STAT_MIN ? " few" : p < 50 ? " low" : ""}`} title={`${s.n} students did it`}>
+                              {p}% right · {s.n}
+                            </span>
+                          )}
+                          <button type="button" class="sb-move" onClick={() => setMoving(q)}>
+                            Move
+                          </button>
+                        </div>
+                        {parts.length > 0 && (
+                          <p class="sb-parts">
+                            {parts.map((t) => (
+                              <span key={t.p}>
+                                ({t.p}) {[t.s, ...(t.x ?? [])].map(label).join("+")}
+                              </span>
+                            ))}
+                          </p>
+                        )}
+                        {html ? <Printed html={html} css={printed && printed !== "failed" ? printed.css : null} /> : <p class="muted small sb-note">{printed ? "This question isn't in the app as printed." : "Loading the question…"}</p>}
+                      </div>
+                    );
+                  })}
+                </Fragment>
               );
             })}
           </div>
@@ -220,6 +270,7 @@ export function SkillBookPage(props: { unit: Unit; gov: GovRow | null; onClose: 
               q={moving}
               now={needs(u.tags, moving)}
               groups={groups}
+              levelOf={levelOf}
               all={[...new Set([...u.skills.map((s) => s.id), ...u.tags.flatMap((t) => [t.s, ...(t.x ?? [])])])].sort(bySkill)}
               label={label}
               name={name}
@@ -232,12 +283,13 @@ export function SkillBookPage(props: { unit: Unit; gov: GovRow | null; onClose: 
   );
 }
 
-/** Move one question: to another pill (one tap), or to a new group of skills (tick one to three, then Move). */
+/** Move one question: to another group (one tap), or to a new group of skills (tick one to three, then Move). */
 function MoveQSheet(props: {
   unitId: Id<"units">;
   q: number;
   now: string[];
   groups: SkillGroup[];
+  levelOf: (g: SkillGroup) => number;
   all: string[];
   label: (id: string) => string;
   name: (id: string) => { ta: string; en: string };
@@ -262,14 +314,17 @@ function MoveQSheet(props: {
   const same = groupKey(picked) === here;
   return (
     <Sheet title={`Move Q${props.q}`} sub={`Now in ${words(props.now)}`} onClose={props.onClose}>
-      <h3 class="block-title">To a pill</h3>
+      <h3 class="block-title">To a group (it goes into the level of its last skill)</h3>
       <div class="sb-mv">
         {props.groups
           .filter((g) => g.key !== here)
           .map((g) => (
             <button key={g.key} type="button" disabled={busy} onClick={() => void go(g.skills)}>
               <b>{words(g.skills)}</b>
-              <span>{g.skills.map((id) => props.name(id).ta).join(" + ")}</span>
+              <span>
+                {g.skills.map((id) => props.name(id).ta).join(" + ")}
+                <small>Level {props.levelOf(g)}</small>
+              </span>
               <small>{g.qs.length}</small>
             </button>
           ))}

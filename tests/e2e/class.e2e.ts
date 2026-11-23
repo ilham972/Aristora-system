@@ -4984,7 +4984,7 @@ test("Skills: Correction marks his second try and the try after his lesson (the 
   expect(problems, problems.join("\n")).toEqual([]);
 });
 
-test("Skill book: Books → T on a tagged unit; its groups as pills (a question needing two skills has its own); move a question; the PDF by skill", async () => {
+test("Skill book: Books → T on a tagged unit; Level n = skill n (S1+S2 inside Level 2); move a question; the PDF as the engine's pages, whole or one level", async () => {
   const backend = await newClass();
   await backend.t.mutation(api.setup.ensure, { token: OWNER_TOKEN });
   const G7U08 = KNOWN_WORKBOOKS[0].data;
@@ -5051,78 +5051,146 @@ test("Skill book: Books → T on a tagged unit; its groups as pills (a question 
   await visible(P);
   // The AI's page carries the government book too (23 Nov 2026).
   await contains(P.locator(".gov-line"), "Government book");
-  // The groups in teaching order: each after the last skill it needs; a question needing two skills has its own pill.
-  await count(P.locator(".sb-pill"), 5);
-  expect(await P.locator(".sb-pill").evaluateAll((els) => els.map((e) => e.firstChild?.textContent))).toEqual(["S1", "S2", "S1+S2", "S3", "S2+S3"]);
-  await textsAre(P.locator(".sb-pill small"), ["10", "23", "4", "13", "7"]);
+  // His rule (22 Nov 2026): a level a skill; a question needing two skills sits in the level of the later one.
+  await count(P.locator(".sb-pill"), 3);
+  expect(await P.locator(".sb-pill").evaluateAll((els) => els.map((e) => e.firstChild?.textContent))).toEqual(["S1", "S2", "S3"]);
+  await textsAre(P.locator(".sb-pill small"), ["10", "27", "20"]);
   await textsAre(P.locator(".sb-q .sb-qn"), Array.from({ length: 10 }, (_, i) => `Q${i + 1}`));
+  await contains(P.locator(".sb-sum"), "Level 1 · 10 questions · 20 marks · PDF Q1–10");
   // Each question drawn from the app's copy (text, not a picture).
   await until(async () => (await P.locator(".sb-paper").first().evaluate((h) => h.shadowRoot?.textContent ?? "")).includes("A made-up question 1:"), "Q1 drawn");
   expect(await C.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await shot(C, "sb01-skill-pills");
 
-  await P.locator(".sb-pill", { hasText: "S1+S2" }).click();
-  await textsAre(P.locator(".sb-q .sb-qn"), ["Q11", "Q12", "Q13", "Q14"]);
-  await contains(P.locator(".sb-head"), "முதல் திறன்");
+  // Level 2: S2 alone first, then S1+S2 under its own heading.
+  await P.locator(".sb-pill", { hasText: "S2" }).click();
+  await textsAre(P.locator(".sb-q .sb-qn"), [...Array.from({ length: 23 }, (_, i) => `Q${i + 15}`), "Q11", "Q12", "Q13", "Q14"]);
+  await count(P.locator(".sb-grp"), 1);
+  await contains(P.locator(".sb-grp"), "S1+S2");
+  await contains(P.locator(".sb-grp"), "முதல் திறன் + இரண்டாம் திறன்");
   await contains(P.locator(".sb-head"), "இரண்டாம் திறன்");
+  await contains(P.locator(".sb-q", { hasText: "Q11" }).locator(".sb-qk"), "PDF 34");
+  await P.locator(".sb-grp").scrollIntoViewIfNeeded();
   await shot(C, "sb02-two-skills");
 
-  // Move Q11 to the pill S1: it needs S1 alone now.
+  // Move Q11 to the group S1: it needs S1 alone now, so it goes to Level 1.
   await P.locator(".sb-q", { hasText: "Q11" }).getByRole("button", { name: "Move" }).click();
   const M = C.locator(".sheet");
   await contains(M, "Now in S1+S2");
+  await contains(M.locator(".sb-mv button", { has: C.locator("b", { hasText: /^S2\+S3$/ }) }), "Level 3");
   await shot(C, "sb03-move-sheet");
   await M.locator(".sb-mv button", { has: C.locator("b", { hasText: /^S1$/ }) }).click();
   await contains(C.locator(".toast"), "Q11 moved: S1+S2 → S1.");
   expect(await tagsOf(11)).toEqual([{ q: 11, s: S(1) }]);
-  await textsAre(P.locator(".sb-pill small"), ["11", "23", "3", "13", "7"]);
-  // Q12 to a new group: S1 and S3 ticked.
+  await textsAre(P.locator(".sb-pill small"), ["11", "26", "20"]);
+  // Q12 to a new group: S1 and S3 ticked → Level 3, after S3 alone, before S2+S3.
   await P.locator(".sb-q", { hasText: "Q12" }).getByRole("button", { name: "Move" }).click();
   await M.locator(".sb-ticks button", { hasText: "S1" }).click();
   await M.locator(".sb-ticks button", { hasText: "S3" }).click();
   await M.getByRole("button", { name: "Move to S1+S3" }).click();
   await contains(C.locator(".toast"), "Q12 moved: S1+S2 → S1+S3.");
   expect(await tagsOf(12)).toEqual([{ q: 12, s: S(3), x: [S(1)] }]);
-  await count(P.locator(".sb-pill"), 6);
-  expect(await P.locator(".sb-pill").evaluateAll((els) => els.map((e) => e.firstChild?.textContent))).toEqual(["S1", "S2", "S1+S2", "S3", "S1+S3", "S2+S3"]);
+  await textsAre(P.locator(".sb-pill small"), ["11", "25", "21"]);
+  await P.locator(".sb-pill", { hasText: "S3" }).click();
+  await textsAre(P.locator(".sb-grp b"), ["S1+S3", "S2+S3"]);
 
-  // Download: the book goes into the page for Chrome's print (Save as PDF): one level a pill, numbered 1, 2, 3 ….
+  // Download the whole book: the engine's pages, made in the page for Chrome's print (Save as PDF).
   await C.evaluate(() => {
     (window as unknown as { __printed: number }).__printed = 0;
     window.print = () => {
       (window as unknown as { __printed: number }).__printed++;
     };
   });
-  await P.getByRole("button", { name: "Download the book as a PDF" }).click();
+  await P.getByRole("button", { name: "Download the whole book as a PDF" }).click();
   await until(async () => (await C.evaluate(() => (window as unknown as { __printed: number }).__printed)) === 1, "the print window");
-  const book = await C.evaluate(() => {
-    const root = document.getElementById("sb-print")!.shadowRoot!;
-    return {
-      levels: root.querySelectorAll(".sbk-lv").length,
-      first: [...root.querySelectorAll(".sbk-lv .qn")].slice(0, 3).map((x) => x.textContent),
-      strips: [...root.querySelectorAll(".lvq")].map((x) => x.textContent),
-      chips: root.querySelector(".sbk-lv .si .sbk-sk")?.textContent,
-      twelve: [...root.querySelectorAll(".sbk-lv")][4].querySelector(".sbk-sks")?.textContent,
-      title: document.title,
-      printing: document.body.classList.contains("sb-printing"),
-    };
-  });
-  expect(book.levels).toBe(6);
-  expect(book.first).toEqual(["1", "2", "3"]);
-  expect(book.strips).toEqual(["வினாக்கள் 1 – 11", "வினாக்கள் 12 – 34", "வினாக்கள் 35 – 36", "வினாக்கள் 37 – 49", "வினா 50", "வினாக்கள் 51 – 57"]);
-  expect(book.chips).toBe("S1");
-  expect(book.twelve).toBe("S1S3");
+  type Book = {
+    pages: { kind: string; level: string | null; n: string | null; first: string; qn: string[]; foot: string; tab: string; over: number }[];
+    toc: { lv: string; pg: string }[];
+    strips: string[];
+    chips1: string | undefined;
+    chips50: string | undefined;
+    title: string;
+    printing: boolean;
+    fonts: string[];
+  };
+  const read = () =>
+    C.evaluate((): Book => {
+      const root = document.getElementById("sb-print")!.shadowRoot!;
+      const pages = [...root.querySelectorAll<HTMLElement>(".sbx-page")].map((p) => {
+        const col = p.querySelector<HTMLElement>(".sbx-col");
+        const last = col ? [...col.children].filter((c) => getComputedStyle(c).position !== "absolute").pop() : null;
+        return {
+          kind: p.classList.contains("sbx-cover") ? "cover" : p.classList.contains("sbx-inside") ? "contents" : p.classList.contains("sbx-blank") ? "blank" : "body",
+          level: p.dataset.level ?? null,
+          n: p.dataset.n ?? null,
+          first: col?.firstElementChild?.className ?? "",
+          qn: [...p.querySelectorAll(".sbx-col .qn")].map((x) => x.textContent ?? ""),
+          foot: p.querySelector(".sbx-foot .fn")?.textContent ?? "",
+          tab: p.querySelector(".sbx-tab i")?.textContent ?? "",
+          // how far the last block runs past the bottom of its column (px; ≤ 0 = inside)
+          over: col && last ? last.getBoundingClientRect().bottom - col.getBoundingClientRect().bottom : 0,
+        };
+      });
+      return {
+        pages,
+        toc: [...root.querySelectorAll<HTMLElement>(".sbx-inside .toc-r[data-lv]")].map((r) => ({ lv: r.dataset.lv!, pg: r.querySelector(".pg")?.textContent ?? "" })),
+        strips: [...root.querySelectorAll(".lvq")].map((x) => x.textContent ?? ""),
+        chips1: root.querySelector(".si .sbk-sks")?.textContent ?? undefined,
+        chips50: [...root.querySelectorAll(".sbx-col > *")].find((e) => e.querySelector(".qn")?.textContent === "50")?.querySelector(".sbk-sks")?.textContent ?? undefined,
+        title: document.title,
+        printing: document.body.classList.contains("sb-printing"),
+        fonts: [...document.fonts].filter((f) => f.status === "loaded").map((f) => `${f.family} ${f.weight}`),
+      };
+    });
+  const book = await read();
+  const body = book.pages.filter((p) => p.kind === "body");
+  expect(book.pages[0].kind).toBe("cover");
+  expect(book.pages[1].kind).toBe("contents");
+  expect(book.pages.filter((p) => p.kind !== "body").length % 2).toBe(0); // page 1 is a right-hand page
+  // Numbered 1 … 57 through the book; every page numbered in order; every block inside its page.
+  expect(body.flatMap((p) => p.qn)).toEqual(Array.from({ length: 57 }, (_, i) => String(i + 1)));
+  expect(body.map((p) => p.foot)).toEqual(body.map((_, i) => String(i + 1)));
+  for (const p of body) expect(p.over).toBeLessThanOrEqual(1);
+  // Each level from a new page, its band first; the side tab says its level.
+  for (const lv of ["1", "2", "3"]) {
+    const first = body.find((p) => p.level === lv)!;
+    expect(first.first).toContain("band");
+    expect(body.filter((p) => p.level === lv).every((p) => p.tab === lv)).toBe(true);
+  }
+  expect(book.strips).toEqual(["வினாக்கள் 1 – 11", "வினாக்கள் 12 – 36", "வினாக்கள் 37 – 57"]);
+  // The contents give each level's first page and the marks sheet's.
+  expect(book.toc.map((r) => r.lv)).toEqual(["1", "2", "3", "sheet"]);
+  for (const r of book.toc.slice(0, 3)) expect(r.pg).toBe(body.find((p) => p.level === r.lv)!.foot);
+  expect(Number(book.toc[3].pg)).toBe(body.length);
+  expect(book.chips1).toBe("S1");
+  expect(book.chips50).toBe("S1S3");
   expect(book.title).toBe("G7_U08_Skills_Book");
   expect(book.printing).toBe(true);
+  // The engine's own fonts, not the phone's.
+  for (const f of ["TMuktaLat 400", "Mukta Malar 400", "Baloo Thambi 2 800"]) expect(book.fonts).toContain(f);
   // What Chrome prints (A4, the print rules): kept as a file to look at.
   await C.emulateMedia({ media: "print" });
   await C.pdf({ path: join(SHOTS, "sb04-book.pdf"), preferCSSPageSize: true, printBackground: true });
+  await C.emulateMedia({ media: "screen" });
+
+  // One level alone: Level 2's pages only, numbered as in the whole book.
+  await P.locator(".sb-pill", { hasText: "S2" }).click();
+  await P.getByRole("button", { name: "Download Level 2 alone as a PDF" }).click();
+  await until(async () => (await C.evaluate(() => (window as unknown as { __printed: number }).__printed)) === 2, "the print window again");
+  const one = await read();
+  expect(one.pages.length).toBe(body.filter((p) => p.level === "2").length);
+  expect(one.pages.every((p) => p.kind === "body" && p.level === "2")).toBe(true);
+  expect(one.pages.map((p) => p.foot)).toEqual(body.filter((p) => p.level === "2").map((p) => p.foot));
+  expect(one.pages.flatMap((p) => p.qn)).toEqual(Array.from({ length: 25 }, (_, i) => String(i + 12)));
+  expect(one.title).toBe("G7_U08_Skills_Level2");
+  await C.emulateMedia({ media: "print" });
+  await C.pdf({ path: join(SHOTS, "sb05-level2.pdf"), preferCSSPageSize: true, printBackground: true });
   await C.emulateMedia({ media: "screen" });
   // Back closes the page and takes the book off it.
   await P.getByRole("button", { name: "Back to Books" }).click();
   await count(C.locator(".sb"), 0);
   await count(C.locator("#sb-print"), 0);
-  expect(await C.evaluate(() => document.title)).not.toBe("G7_U08_Skills_Book");
+  expect(await C.evaluate(() => document.title)).not.toBe("G7_U08_Skills_Level2");
   expect(problems).toEqual([]);
 });
 

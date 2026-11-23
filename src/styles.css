@@ -14089,6 +14089,11 @@ body.sb-on {
   background: #fff;
   color: var(--ink);
 }
+/* a level no question ends on (22 Nov 2026: Level n = skill n): pale, still tappable to see why */
+.sb-pill.empty:not(.on) {
+  border-style: dashed;
+  color: var(--ink-3);
+}
 .sb-body {
   flex: 1;
   overflow-y: auto;
@@ -14124,6 +14129,61 @@ body.sb-on {
   margin: 4px 0 0;
   font-size: 12.5px;
   color: var(--ink-2);
+}
+.sb-sumrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+.sb-sumrow .sb-sum {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+.sb-lvdl {
+  flex: none;
+  height: 34px;
+  padding: 0 12px;
+  border: 1.5px solid var(--ink);
+  border-radius: 17px;
+  background: var(--card);
+  color: var(--ink);
+  font-weight: 800;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.sb-lvdl:disabled {
+  opacity: 0.4;
+}
+/* inside a level: the group that joins its skill with others ("S3+S4"), above its questions */
+.sb-grp {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 18px 2px 8px;
+  padding-bottom: 5px;
+  border-bottom: 2px solid var(--ink);
+  font-size: 13px;
+  line-height: 1.25;
+}
+.sb-grp b {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--ink);
+  color: #fff;
+  font-weight: 800;
+}
+.sb-grp span {
+  flex: 1;
+  min-width: 0;
+  color: var(--ink-2);
+}
+.sb-grp small {
+  flex: none;
+  font-weight: 800;
+  color: var(--ink-3);
 }
 .sb-sk {
   flex: none;

@@ -1,11 +1,11 @@
 // A unit's book by skill (14 Nov 2026, convex/lib/skillBook.ts): its groups (the exact set of skills a question needs),
-// their teaching order, easy → hard inside each, the downloaded book's levels and numbers, a question moved to another
+// their teaching order, easy → hard inside each, the downloaded book's levels (Level n = skill n) and numbers, a question moved to another
 // group, and how students did (convex/skillBook.ts `statsOf`). Made-up skills only; the book is the U01 skeleton
 // (Part I 1–52, Part II 53–73).
 import { describe, expect, test } from "vitest";
 import { outOf } from "../convex/lib/book";
 import type { MState } from "../convex/lib/master";
-import { byGroup, groupLabel, hardness, keepExamples, moveTo, needs, skillGroups, skillLabel, skillLevels, STAT_MIN, statsOf, type QStat } from "../convex/lib/skillBook";
+import { byGroup, groupLabel, hardness, keepExamples, levelSkillOf, moveTo, needs, ownSkills, skillGroups, skillLabel, skillLevels, STAT_MIN, statsOf, type QStat } from "../convex/lib/skillBook";
 import { skillId, skillsProblem, type KnownSkill, type Skill, type SkillTag } from "../convex/lib/skills";
 import { readWorkbookHtml } from "../src/workbookFile";
 import U01 from "./fixtures/workbook-g8-u01.html?raw";
@@ -77,22 +77,53 @@ describe("a unit's book by skill", () => {
     expect([h.get(1), h.get(2), h.get(3)]).toEqual([0, 0.5, 1]);
   });
 
-  test("the downloaded book: one level a group, numbered 1, 2, 3 … in that order, each level's marks", () => {
-    const { levels, number } = skillLevels(BOOK, tags());
+  test("the downloaded book: Level n = skill n; a combined question sits in the level of its last skill, after that skill alone", () => {
+    const { levels, number } = skillLevels(UNIT, BOOK, tags(), SKILLS.map((s) => s.id));
+    // His rule (22 Nov 2026): S1+S2 is learned at Level 2, S1+S3 at Level 3: three levels, not six.
     expect(levels.map((l) => [l.n, l.from, l.to])).toEqual([
       [1, 1, 20],
-      [2, 21, 40],
-      [3, 41, 46],
-      [4, 47, 58],
-      [5, 59, 67],
-      [6, 68, 73],
+      [2, 21, 58],
+      [3, 59, 73],
     ]);
+    expect(levels.map((l) => l.groups.map((g) => groupLabel(UNIT, g.skills)))).toEqual([["S1"], ["S2", "S0·2+S2", "S1+S2"], ["S3", "S1+S3"]]);
     expect(number.get(21)).toBe(21);
-    expect(number.get(67)).toBe(41); // the earlier unit's skill: its group comes first among those ending in S2
+    expect(number.get(67)).toBe(41); // S2 alone first (21–40), then the groups that end in S2: two skills, in skill order
+    expect(number.get(41)).toBe(47);
+    expect(number.get(61)).toBe(68); // S1+S3 after S3 alone (53–60 and 73)
     expect(new Set(number.values()).size).toBe(73);
     expect(levels[0].max).toBe(40);
     const sum = (qs: number[]) => qs.reduce((a, q) => a + (outOf(BOOK, q) ?? 0), 0);
     for (const l of levels) expect(l.max).toBe(sum(l.qs));
+    // Inside a level the book's order is its groups' order.
+    expect(levels[1].qs).toEqual(levels[1].groups.flatMap((g) => g.qs));
+  });
+
+  test("levels: other units' skills only → the first level; a skill no question ends on → an empty level, numbers kept", () => {
+    // Q1–20 need only the earlier unit's skill; S2 is only ever used with S3 (Q21–52), Q67–72 end on S3 too.
+    const t = tags().map((x): SkillTag => (x.q <= 20 ? { q: x.q, s: OTHER } : x.q <= 52 ? { q: x.q, s: S(3), x: [S(2)] } : x.q >= 67 && x.q <= 72 ? { q: x.q, s: S(3), x: [OTHER] } : x));
+    const { levels, number } = skillLevels(UNIT, BOOK, t, SKILLS.map((s) => s.id));
+    expect(levels.map((l) => [l.n, l.qs.length, l.from, l.to])).toEqual([
+      [1, 20, 1, 20],
+      [2, 0, 0, -1],
+      [3, 53, 21, 73],
+    ]);
+    expect(levels[0].groups.map((g) => groupLabel(UNIT, g.skills))).toEqual(["S0·2"]);
+    expect(levels[1].groups).toEqual([]);
+    expect(levels[1].max).toBe(0);
+    // Level 3: S3 alone, then the two-skill groups in skill order (the earlier unit's first).
+    expect(levels[2].groups.map((g) => groupLabel(UNIT, g.skills))).toEqual(["S3", "S0·2+S3", "S1+S3", "S2+S3"]);
+    expect([number.get(1), number.get(53), number.get(67), number.get(61), number.get(21)]).toEqual([1, 21, 30, 36, 42]);
+    // A unit whose skills row names a skill no tag uses yet: its level is there, empty.
+    expect(skillLevels(UNIT, BOOK, tags(), [...SKILLS.map((s) => s.id), S(4)]).levels.map((l) => [l.n, l.qs.length])).toEqual([
+      [1, 20],
+      [2, 38],
+      [3, 15],
+      [4, 0],
+    ]);
+    // Another unit's skills never make a level of their own.
+    expect(levelSkillOf(UNIT, [OTHER])).toBeNull();
+    expect(levelSkillOf(UNIT, [OTHER, S(2), S(1)])).toBe(S(2));
+    expect(ownSkills(UNIT, [S(3), OTHER, S(1), S(3)])).toEqual([S(1), S(3)]);
   });
 
   test("move: the question needs exactly the skills picked, its parts' tags go, the main skill stays when it can", () => {
