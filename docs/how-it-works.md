@@ -2937,10 +2937,21 @@ learning app of our education institute"): one profile, his class times, what he
       S3, S4 as like a badge, that's cool, that's beautiful": the skills' Tamil names made a long phrase over every
       joined group). The engine's CSS (`src/skillPrintCss.ts`), then the unit's own stored CSS, then the pages' rules
       (`PAGE_CSS`).
-    - **Light enough to send** (23 Nov 2026): Chrome's PDF draws every dot of a dotted line and of the frame as a shape
-      of its own, and the seal's curves again on every page: the made-up 8-page book weighed 2.2 MB (the server may
-      answer with 4.5 MB at most, and the shop gets it over WhatsApp). The dotted answer spaces, separators and frame
-      are small pictures repeated (`dotCss`), the seal one picture (`sealImage`): 450 KB for 8 pages.
+    - **The lines as the engine draws them** (24 Nov 2026, his words: the download is "almost perfect, 90% perfect ...
+      dotted lines, glitch"; `inkPage`, `src/printLines.ts`): once the pages are laid out, each page gets one SVG over
+      it (`.sbx-ink`, under the watermark and the side tab) with (1) every dotted border dot by dot where WeasyPrint
+      puts its dots (the answer spaces' grey dots round their 2 mm corners, the dark dots between Part I questions flush
+      at both ends), (2) every solid border at the width its CSS writes (Chrome rounds a border down to a whole pixel:
+      a card's 1.3 pt outline, the strips, chips and contents' rules printed 0.25 mm, not 0.46; `keepWidths` keeps the
+      written width), stroked along its middle (a card cut between pages stays open), (3) the page frame (the engine's
+      `frame_svg`: 570 dots, one on each corner). The element's own line is made transparent, its width kept, so
+      nothing moves. Table cells keep Chrome's lines. The seal is one 300 dpi picture (at 150 its curves went to steps
+      when zoomed). Checked side by side with the engine's PDF of a made-up unit: the same dots, widths and frame.
+    - **Light enough to send** (23 Nov 2026; 24 Nov): Chrome's PDF draws every dot of a CSS dotted line or an SVG dash
+      pattern as a shape of its own (~90 bytes), and the seal's curves again on every page: the made-up 8-page book
+      weighed 2.2 MB (the server may answer with 4.5 MB at most, and the shop gets it over WhatsApp). A dot drawn as a
+      stroke 0.01 mm long with round ends, all of a page's in one path, costs ~5 bytes; the seal is one picture stored
+      once: the made-up book is ~80 KB a page (23 Nov's picture tiles: ~55, but soft, half dots, bunched corners).
     - This phone's own print (when the server can't): the book is built in the page in a shadow root (off the screen,
       `#sb-print`), printed with `body.sb-printing`, and kept until the next download or until the page closes
       (Android's print window may still read it after `print()` returns). Files: "G8_U04_Skills_Book",

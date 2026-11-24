@@ -5208,6 +5208,33 @@ test("Skill book: Books → T on a tagged unit; Level n = skill n (S1+S2 inside 
   expect(book.printing).toBe(true);
   // The engine's own fonts, not the phone's.
   for (const f of ["TMuktaLat 400", "Mukta Malar 400", "Baloo Thambi 2 800"]) expect(book.fonts).toContain(f);
+  // The lines as the engine draws them (24 Nov 2026, his "dotted lines ... glitch"): every framed page has its frame's
+  // 570 dots; the answer spaces' and the separators' dots are drawn (their own CSS lines made transparent, widths kept);
+  // a card's outline is a 1.3 pt line (0.46 mm), not Chrome's whole pixel. The dots: src/printLines.ts, checked there
+  // against WeasyPrint's own.
+  const ink = await C.evaluate(() => {
+    const root = document.getElementById("sb-print")!.shadowRoot!;
+    const dots = (svg: Element | null, sel: string) => [...(svg?.querySelectorAll(sel) ?? [])].reduce((n, p) => n + (p.getAttribute("d")?.match(/h1/g)?.length ?? 0), 0);
+    const pages = [...root.querySelectorAll<HTMLElement>(".sbx-page")].filter((p) => p.matches(".sbx-r, .sbx-l"));
+    const wz = root.querySelector(".sbx-col .wz");
+    const card = root.querySelector<HTMLElement>(".sbx-col .pq");
+    return {
+      frames: pages.map((p) => dots(p.querySelector(".sbx-ink"), 'path[stroke="#000"][stroke-width="60"]')),
+      grey: dots(pages.find((p) => p.querySelector(".sbx-col .wz"))!.querySelector(".sbx-ink"), 'path[stroke="rgb(119, 119, 119)"]'),
+      dark: dots(pages.find((p) => p.querySelector(".sbx-col .si + .si"))!.querySelector(".sbx-ink"), 'path[stroke="rgb(42, 42, 42)"]'),
+      wzLine: wz ? getComputedStyle(wz).borderTopColor : "",
+      wzWidth: wz ? getComputedStyle(wz).borderTopWidth : "",
+      cardLine: card ? getComputedStyle(card).borderLeftColor : "",
+      outlines: [...root.querySelectorAll('.sbx-ink path[stroke="rgb(17, 17, 17)"]')].map((p) => p.getAttribute("stroke-width")),
+      tiles: root.querySelectorAll(".sbx-frame").length,
+    };
+  });
+  expect(ink.frames.length).toBe(book.pages.filter((p) => p.kind !== "cover" && p.kind !== "blank").length);
+  for (const n of ink.frames) expect(n).toBe(570);
+  expect(ink.grey).toBeGreaterThan(500);
+  expect(ink.dark).toBeGreaterThan(200);
+  expect([ink.wzLine, ink.wzWidth, ink.cardLine, ink.tiles]).toEqual(["rgba(0, 0, 0, 0)", "1px", "rgba(0, 0, 0, 0)", 0]);
+  expect(ink.outlines).toContain("46");
   // What Chrome prints (A4, the print rules): kept as a file to look at.
   await C.emulateMedia({ media: "print" });
   await C.pdf({ path: join(SHOTS, "sb04-book.pdf"), preferCSSPageSize: true, printBackground: true });
@@ -5244,8 +5271,10 @@ test("Skill book: Books → T on a tagged unit; Level n = skill n (S1+S2 inside 
   expect(made.pages).toBe(book.pages.length);
   expect(made.pdf.toString("latin1").match(/\/Type\s*\/Page[^s]/g)?.length).toBe(made.pages);
   expect([made.fonts, made.missing, made.file]).toEqual([true, 0, "G7_U08_Skills_Book"]);
-  // Light enough to send: the dotted lines and the seal are tiles and one picture, not dots drawn one by one.
+  // Light enough to send: the dots are strokes of one path a page (~5 bytes a dot, not a shape each), the seal one
+  // picture stored once; no picture tiles (23 Nov's dotted lines were PNG tiles: soft, half dots, bunched corners).
   expect(made.pdf.length / made.pages).toBeLessThan(120_000);
+  expect(made.pdf.toString("latin1").match(/\/Subtype\s*\/Image/g)?.length).toBe(2); // the seal and its transparency
   const level2 = await makePdf({ site: site.url, load, only: 2 });
   expect([level2.pages, level2.file]).toEqual([one.pages.length, "G7_U08_Skills_Level2"]);
   await (await import("node:fs/promises")).writeFile(join(SHOTS, "sb06-server.pdf"), made.pdf);

@@ -14,11 +14,14 @@
 // - The cover (the unit's Tamil name; every level = its skill, with its questions), the contents (each level: its
 //   skill, questions, marks and first page), the levels (each from a new page, Level n = skill n:
 //   convex/lib/skillBook.ts), the marks sheet. Or one level alone: its pages, numbered as in the whole book.
-// Chrome's own print makes the PDF (Save as PDF): its text stays sharp and the Tamil letters right. The seal and the
-// dotted frame are the engine's (`seal`, `frame_svg`), drawn the same way here.
+// Chrome's own print makes the PDF (Save as PDF): its text stays sharp and the Tamil letters right. The seal is the
+// engine's (`seal`); the lines are drawn as the engine draws them, after the layout (`inkPage`, 24 Nov 2026): every
+// dotted line and the frame dot by dot where WeasyPrint puts its dots (src/printLines.ts), every solid border at the
+// width its CSS gives (Chrome rounds a border down to a whole pixel: a 1.3 pt card outline printed 0.25 mm, not 0.46).
 
 import { outOf, partOf, type MasterData } from "../convex/lib/book";
 import { partName, skillLabel, type SkillGroup, type SkillLevel, type SkillPart } from "../convex/lib/skillBook";
+import { alphaOf, borderDots, borderStroke, cssPx, dotKey, dotsPath, fitRadii, frameDots, MM, n100, radiusPx, SIDES, type Dot, type DotBox, type Four } from "./printLines";
 import { printFontCss, printFontsReady } from "./printFonts";
 import { safeFragment } from "./questionView";
 import { ENGINE_CSS } from "./skillPrintCss";
@@ -120,10 +123,11 @@ function seal(d = 185): string {
 
 /**
  * The seal as one picture (23 Nov 2026): drawn as SVG on every page, Chrome's PDF repeated its ~6,000 curves page after
- * page (~90 KB a page); one PNG, the same on every page, is stored once in the PDF. At 7% it needs no more than 150 dpi.
- * Drawn after the book's fonts came (Baloo Thambi 2 ExtraBold, its letters). Falls back to the SVG without a canvas.
+ * page (~90 KB a page); one PNG, the same on every page, is stored once in the PDF. 300 dpi (24 Nov 2026: at 150 its
+ * curves went to steps when the PDF was zoomed, where the engine's are smooth). Drawn after the book's fonts came
+ * (Baloo Thambi 2 ExtraBold, its letters). Falls back to the SVG without a canvas.
  */
-function sealImage(d = 185, dpi = 150): string {
+function sealImage(d = 185, dpi = 300): string {
   const k = dpi / 25.4;
   const c = document.createElement("canvas");
   c.width = c.height = Math.round(d * k);
@@ -161,16 +165,9 @@ function sealImage(d = 185, dpi = 150): string {
   return `<img src="${c.toDataURL("image/png")}" width="${Math.round(d * 3.7795)}" height="${Math.round(d * 3.7795)}" style="width:${d}mm;height:${d}mm" alt="">`;
 }
 
-/** The frame's sides (mm): its box 192.6 × 279.3, the lines 0.6 inside, 0.6 mm dots, the pitch near 1.65 fitted. */
-function frameGeometry(w = 192.6, h = 279.3, pitch = 1.65) {
-  const inset = 0.6;
-  const lh = w - 2 * inset;
-  const lv = h - 2 * inset;
-  return { in: inset, lh, lv, dot: 0.6, ph: lh / Math.max(Math.round(lh / pitch), 1), pv: lv / Math.max(Math.round(lv / pitch), 1) };
-}
-
-/** The page frame as four strips of tiled dots (their tiles in `dotCss`). */
-const FRAME_HTML = `<i class="ft"></i><i class="fb"></i><i class="fl"></i><i class="fr"></i>`;
+/** The page frame's box (mm, the engine's `.frame`): 3.8 outside the text column at the sides, 2.6 above it. */
+const FRAME_TOP = TOP - 2.6;
+const frameLeft = (right: boolean) => (right ? 15 : 10) - 3.8;
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const marksWord = (m: number) => (m === 1 ? `${m} புள்ளி` : `${m} புள்ளிகள்`);
@@ -237,8 +234,9 @@ const PAGE_CSS = `
 .sbx-flow { position: absolute; left: 0; top: 0; width: 185mm; visibility: hidden; }
 .sbx-col { position: absolute; top: ${TOP}mm; width: 185mm; height: ${COL_H}mm; }
 .sbx-r .sbx-col { left: 15mm; } .sbx-l .sbx-col { left: 10mm; }
-.sbx-frame { position: absolute; top: ${TOP - 2.6}mm; width: 192.6mm; height: 279.3mm; z-index: 4; line-height: 0; pointer-events: none; }
-.sbx-r .sbx-frame { left: 11.2mm; } .sbx-l .sbx-frame { left: 6.2mm; }
+/* the page's lines, drawn after the layout as the engine draws them (inkPage): above the content like the engine's
+   frame, under the watermark and the side tab (whose white halo stops the frame's dots short of it) */
+.sbx-ink { position: absolute; left: 0; top: 0; z-index: 4; pointer-events: none; }
 .sbx-wm { position: absolute; top: ${TOP + 44.2}mm; width: 185mm; height: 185mm; z-index: 5; opacity: .07; line-height: 0; pointer-events: none; }
 .sbx-r .sbx-wm { left: 15mm; } .sbx-l .sbx-wm { left: 10mm; }
 .sbx-foot { position: absolute; top: ${297 - 15 + 4.2}mm; width: 185mm; height: 5.8mm; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; white-space: nowrap; }
@@ -300,77 +298,124 @@ const PAGE_CSS = `
 .sbx-inside .icr { position: absolute; left: 0; right: 0; bottom: 0; }
 `;
 
+// ------------------------------------------------------------------ the lines, drawn as the engine draws them
+
+const CORNERS = ["top-left", "top-right", "bottom-right", "bottom-left"] as const;
+
 /**
- * The engine's dotted lines as tiled dots (23 Nov 2026). Chrome's PDF draws a CSS dotted border dot by dot (a 35-page
- * book came to ~11 MB, too big to send to the printing shop or for the server to return); the same dots as a small
- * tile repeated along each edge are one pattern in the PDF (~20× smaller), and look the same: the answer spaces'
- * 0.8 pt grey dots with their rounded 2 mm corners (`.wz`, `.zone`), the 1.2 pt dark dots between Part I questions
- * (`.si`). The borders keep their width (transparent), so nothing moves. Made once, in the page, by a canvas.
+ * Each border's width as its CSS writes it, kept beside it: Chrome rounds a border's width down to a whole pixel (in
+ * print too, whatever the screen), so a 1.3 pt card outline (1.73 px) printed 1 px and a 1.2 pt dotted line 1 px. Every
+ * rule that sets a border width gets custom properties with the same words (`--sbx-bt` … `--sbx-bl`): they cascade as
+ * the width does (same rule, same weight, same order) but are never rounded. `*` gives every other element 0, so none
+ * inherits its parent's.
  */
-function dotCss(): string {
-  if (DOTS) return DOTS;
-  const PX = 32; // tile pixels a mm (~810 dpi)
-  const tile = (wmm: number, hmm: number, draw: (g: CanvasRenderingContext2D, k: number) => void) => {
-    const c = document.createElement("canvas");
-    c.width = Math.round(wmm * PX);
-    c.height = Math.round(hmm * PX);
-    const g = c.getContext("2d");
-    if (!g) return "none";
-    draw(g, PX);
-    return `url("${c.toDataURL("image/png")}")`;
+function keepWidths(root: ShadowRoot) {
+  const walk = (rules: CSSRuleList) => {
+    for (const r of rules) {
+      if (r instanceof CSSStyleRule) {
+        for (const side of SIDES) {
+          const v = r.style.getPropertyValue(`border-${side}-width`);
+          if (v) r.style.setProperty(`--sbx-b${side[0]}`, v, r.style.getPropertyPriority(`border-${side}-width`));
+        }
+      } else if ("cssRules" in r) walk((r as CSSGroupingRule).cssRules);
+    }
   };
-  const dot = (g: CanvasRenderingContext2D, x: number, y: number, r: number, color: string) => {
-    g.fillStyle = color;
-    g.beginPath();
-    g.arc(x, y, r, 0, Math.PI * 2);
-    g.fill();
-  };
-  const W = 0.8 * (25.4 / 72); // the answer space's border: 0.8 pt in mm
-  const R = 2; // its corners
-  const grey = "#777";
-  const h = tile(2 * W, W, (g, k) => dot(g, (W / 2) * k, (W / 2) * k, (W / 2) * k, grey));
-  const v = tile(W, 2 * W, (g, k) => dot(g, (W / 2) * k, (W / 2) * k, (W / 2) * k, grey));
-  // A corner: dots on the quarter circle between the two edges (top-left; the others are its mirrors).
-  const corner = (fx: boolean, fy: boolean) =>
-    tile(R, R, (g, k) => {
-      g.translate(fx ? R * k : 0, fy ? R * k : 0);
-      g.scale(fx ? -1 : 1, fy ? -1 : 1);
-      const rr = (R - W / 2) * k;
-      for (const f of [0.14, 0.38, 0.62, 0.86]) {
-        const a = Math.PI + (f * Math.PI) / 2;
-        dot(g, R * k + rr * Math.cos(a), R * k + rr * Math.sin(a), (W / 2) * k, grey);
-      }
-    });
-  const S = 1.2 * (25.4 / 72); // between Part I questions: 1.2 pt
-  const sep = tile(2 * S, S, (g, k) => dot(g, (S / 2) * k, (S / 2) * k, (S / 2) * k, "#2a2a2a"));
-  const w = `${W.toFixed(3)}mm`;
-  // The page frame (the engine's frame_svg): 0.6 mm black dots, a dot exactly on each corner, the pitch near 1.65 mm
-  // fitted to each side; drawn as SVG it was ~575 little circles a page in the PDF.
-  const F = frameGeometry();
-  const fdot = (pitch: number) => tile(pitch, F.dot, (g, k) => dot(g, (pitch / 2) * k, (F.dot / 2) * k, (F.dot / 2) * k, "#000"));
-  const fdotV = (pitch: number) => tile(F.dot, pitch, (g, k) => dot(g, (F.dot / 2) * k, (pitch / 2) * k, (F.dot / 2) * k, "#000"));
-  const fh = fdot(F.ph);
-  const fv = fdotV(F.pv);
-  const mm = (n: number) => `${n.toFixed(4)}mm`;
-  DOTS = `
-.sbx-frame i { position: absolute; display: block; }
-.sbx-frame .ft, .sbx-frame .fb { left: ${mm(F.in - F.ph / 2)}; width: ${mm(F.lh + F.ph)}; height: ${mm(F.dot)}; background: ${fh} repeat-x left top / ${mm(F.ph)} ${mm(F.dot)}; }
-.sbx-frame .ft { top: ${mm(F.in - F.dot / 2)}; } .sbx-frame .fb { top: ${mm(F.in + F.lv - F.dot / 2)}; }
-.sbx-frame .fl, .sbx-frame .fr { top: ${mm(F.in - F.pv / 2)}; height: ${mm(F.lv + F.pv)}; width: ${mm(F.dot)}; background: ${fv} repeat-y left top / ${mm(F.dot)} ${mm(F.pv)}; }
-.sbx-frame .fl { left: ${mm(F.in - F.dot / 2)}; } .sbx-frame .fr { left: ${mm(F.in + F.lh - F.dot / 2)}; }
-.sbx .wz, .sbx .zone { position: relative; border-style: solid !important; border-color: transparent !important; border-radius: 0 !important; background-origin: border-box;
-  background: ${corner(false, false)} no-repeat left top / ${R}mm ${R}mm, ${corner(true, false)} no-repeat right top / ${R}mm ${R}mm,
-    ${corner(false, true)} no-repeat left bottom / ${R}mm ${R}mm, ${corner(true, true)} no-repeat right bottom / ${R}mm ${R}mm; }
-.sbx .wz::before, .sbx .zone::before { content: ""; position: absolute; top: -${w}; bottom: -${w}; left: calc(${R}mm - ${w}); right: calc(${R}mm - ${w});
-  background: ${h} repeat-x left top / ${(2 * W).toFixed(3)}mm ${w}, ${h} repeat-x left bottom / ${(2 * W).toFixed(3)}mm ${w}; }
-.sbx .wz::after, .sbx .zone::after { content: ""; position: absolute; left: -${w}; right: -${w}; top: calc(${R}mm - ${w}); bottom: calc(${R}mm - ${w});
-  background: ${v} repeat-y left top / ${w} ${(2 * W).toFixed(3)}mm, ${v} repeat-y right top / ${w} ${(2 * W).toFixed(3)}mm; }
-.sbx .si { border-top-color: transparent !important; background: ${sep} repeat-x left top / ${(2 * S).toFixed(3)}mm ${S.toFixed(3)}mm; background-origin: border-box; }
-.sbx .si.pt, .sbx .band + .si, .sbx .pmn + .si, .sbx .sbx-grp + .si, .sbx .gl + .si, .sbx .lvl + .si { background: none; }
-`;
-  return DOTS;
+  for (const sheet of root.styleSheets) {
+    walk(sheet.cssRules);
+    sheet.insertRule("* { --sbx-bt: 0px; --sbx-br: 0px; --sbx-bb: 0px; --sbx-bl: 0px; }", 0);
+  }
 }
-let DOTS = "";
+
+/** How much an element is drawn smaller to fit its page (`shrink`): computed sizes are before that zoom. */
+function zoomOf(el: Element, page: Element): number {
+  let z = 1;
+  for (let e: Element | null = el; e && e !== page; e = e.parentElement) z *= parseFloat(getComputedStyle(e).zoom) || 1;
+  return z;
+}
+
+/**
+ * A page's lines drawn as the engine draws them (24 Nov 2026, the founder: the downloaded PDF "90% perfect ... the
+ * dotted lines ... glitch"), once the layout is done, in one SVG over the page (`.sbx-ink`):
+ * - every dotted border, dot by dot where WeasyPrint puts its dots (src/printLines.ts: the answer spaces' rounded grey
+ *   dots, the dark dots between Part I questions), as tiny round-ended strokes: sharp in any viewer, about 5 bytes a
+ *   dot (Chrome's own dotted border is ~90 a dot: an 8-page book weighed 2.2 MB; the picture tiles used 23 Nov were
+ *   soft, ended in half dots and bunched at the corners);
+ * - every solid border at the width its CSS writes (`keepWidths`), stroked along its middle (`borderStroke`);
+ * - the page frame (`frame`: its left edge, mm), the engine's `frame_svg`.
+ * The element's own line is made transparent: its width stays, so nothing moves. Table cells keep Chrome's lines.
+ */
+function inkPage(page: HTMLElement, frame: number | null) {
+  const o = page.getBoundingClientRect();
+  const dots = new Map<string, Dot[]>();
+  const strokes = new Map<string, string[]>();
+  const dot = (color: string, d: Dot) => {
+    const k = dotKey(color, d.r);
+    const list = dots.get(k);
+    if (list) list.push(d);
+    else dots.set(k, [d]);
+  };
+  if (frame !== null) for (const d of frameDots(frame, FRAME_TOP)) dot("#000", d);
+  for (const el of page.querySelectorAll("*")) {
+    if (!(el instanceof HTMLElement) || el.classList.contains("sbx-ink")) continue;
+    const cs = getComputedStyle(el);
+    if (cs.display.includes("table")) continue;
+    const used = SIDES.map((s) => parseFloat(cs.getPropertyValue(`border-${s}-width`)) || 0) as Four<number>;
+    if (used.every((w) => w === 0)) continue;
+    const style = SIDES.map((s) => cs.getPropertyValue(`border-${s}-style`));
+    const color = SIDES.map((s) => cs.getPropertyValue(`border-${s}-color`));
+    const shown = SIDES.map((_, i) => used[i] > 0 && style[i] !== "none" && style[i] !== "hidden");
+    const inked = SIDES.map((_, i) => shown[i] && alphaOf(color[i]) > 0);
+    if (!inked.some(Boolean)) continue;
+    // A line of text with a border broken over two lines has no one box to draw: Chrome's own line stays.
+    if (cs.visibility !== "visible" || el.getClientRects().length !== 1) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width <= 0 || r.height <= 0) continue;
+    const z = zoomOf(el, page);
+    const font = parseFloat(cs.fontSize) || 16;
+    // Widths in mm as the CSS writes them (an inline style first), at the element's zoom.
+    const width = SIDES.map((s, i) => {
+      if (!shown[i]) return 0;
+      const px = cssPx(el.style.getPropertyValue(`border-${s}-width`) || cs.getPropertyValue(`--sbx-b${s[0]}`), font);
+      return ((px !== null && px > 0 ? px : used[i]) * z) / MM;
+    }) as Four<number>;
+    const box: DotBox = { x: (r.left - o.left) / MM, y: (r.top - o.top) / MM, w: r.width / MM, h: r.height / MM };
+    const radii = fitRadii(box, CORNERS.map((c) => radiusPx(cs.getPropertyValue(`border-${c}-radius`), r.width / z, r.height / z).map((v) => (v * z) / MM)) as Four<[number, number]>);
+    const done = [false, false, false, false];
+    const dotted = SIDES.map((_, i) => inked[i] && style[i] === "dotted") as Four<boolean>;
+    if (dotted.some(Boolean)) {
+      const sides = borderDots(box, width, radii, dotted, new Set(color).size === 1);
+      sides.forEach((list, i) => {
+        if (!dotted[i]) return;
+        for (const d of list) dot(color[i], d);
+        done[i] = true;
+      });
+    }
+    const solid = SIDES.map((_, i) => inked[i] && style[i] === "solid");
+    const colours = new Set(color.filter((_, i) => solid[i]));
+    const line = colours.size === 1 ? borderStroke(box, radii, width.map((w, i) => (solid[i] ? w : 0)) as Four<number>) : null;
+    if (line) {
+      const key = `${[...colours][0]}|${Math.max(1, n100(line.w))}`;
+      const list = strokes.get(key) ?? [];
+      list.push(line.d);
+      strokes.set(key, list);
+      solid.forEach((on, i) => on && (done[i] = true));
+    }
+    SIDES.forEach((s, i) => done[i] && el.style.setProperty(`border-${s}-color`, "transparent", "important"));
+  }
+  if (!dots.size && !strokes.size) return;
+  const W = 210;
+  const H = 296.8;
+  const paths: string[] = [];
+  for (const [key, list] of strokes) {
+    const [c, size] = key.split("|");
+    paths.push(`<path d="${list.join("")}" fill="none" stroke="${c}" stroke-width="${size}"/>`);
+  }
+  for (const [key, list] of dots) {
+    const [c, size] = key.split("|");
+    paths.push(`<path d="${dotsPath(list)}" fill="none" stroke="${c}" stroke-width="${size}" stroke-linecap="round"/>`);
+  }
+  page.insertAdjacentHTML("beforeend", `<svg class="sbx-ink" xmlns="http://www.w3.org/2000/svg" width="${W}mm" height="${H}mm" viewBox="0 0 ${n100(W)} ${n100(H)}" aria-hidden="true">${paths.join("")}</svg>`);
+}
 
 /** What the document needs around the book (a shadow root's rules are not read for fonts or pages). */
 function docCss(): string {
@@ -652,11 +697,10 @@ function levelsOn(col: HTMLElement, lv: Map<Element, number>): number[] {
 function bodyPage(right: boolean): HTMLElement {
   const box = document.createElement("div");
   box.className = `sbx-page ${right ? "sbx-r" : "sbx-l"}`;
-  box.innerHTML = `<div class="sbx-frame">${FRAME}</div><div class="sbx-col"></div><div class="sbx-wm">${SEAL}</div>`;
+  box.innerHTML = `<div class="sbx-col"></div><div class="sbx-wm">${SEAL}</div>`;
   return box;
 }
 
-let FRAME = "";
 let SEAL = "";
 
 /** The progress pills of a footer: a pill a level, black = done, the current one filled up to this page. */
@@ -749,7 +793,6 @@ export async function layoutSkillBook(plan: PrintPlan, css: string | null, only:
   const u = plan.unit;
   const levels = printedLevels(plan.levels);
   const shown = only === null ? levels : levels.filter((l) => l.n === only);
-  FRAME = FRAME_HTML;
   const style = document.createElement("style");
   style.id = "sb-print-page";
   style.textContent = docCss();
@@ -757,8 +800,9 @@ export async function layoutSkillBook(plan: PrintPlan, css: string | null, only:
   const host = document.createElement("div");
   host.id = "sb-print";
   const root = host.attachShadow({ mode: "open" });
-  root.innerHTML = `<style>${bookCss(css)}\n${dotCss()}</style><div class="sbx"></div>`;
+  root.innerHTML = `<style>${bookCss(css)}</style><div class="sbx"></div>`;
   document.body.appendChild(host);
+  keepWidths(root); // its style sheet exists once the book is in the page
   const title = document.title;
   cleanup = () => {
     host.remove();
@@ -809,7 +853,7 @@ export async function layoutSkillBook(plan: PrintPlan, css: string | null, only:
     const insideMake = () => {
       const box = document.createElement("div");
       box.className = "sbx-page sbx-l sbx-inside";
-      box.innerHTML = `<div class="sbx-frame">${FRAME}</div><div class="sbx-col"></div><div class="sbx-wm">${SEAL}</div>`;
+      box.innerHTML = `<div class="sbx-col"></div><div class="sbx-wm">${SEAL}</div>`;
       (box.querySelector(".sbx-col") as HTMLElement).style.height = `${COL_H - 14}mm`;
       return box;
     };
@@ -888,6 +932,11 @@ export async function layoutSkillBook(plan: PrintPlan, css: string | null, only:
   for (const [n, pg] of bandPage) {
     const had = levelPages.get(n);
     if (had) levelPages.set(n, [pg, had[1]]);
+  }
+  // Last, the lines: every page's dotted and solid lines and its frame, as the engine draws them (nothing moves now).
+  for (const p of book.querySelectorAll<HTMLElement>(":scope > .sbx-page")) {
+    const framed = p.classList.contains("sbx-r") || p.classList.contains("sbx-l");
+    inkPage(p, framed ? frameLeft(p.classList.contains("sbx-r")) : null);
   }
   return { pages: book.children.length, levelPages, fonts };
 }

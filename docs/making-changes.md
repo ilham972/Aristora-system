@@ -501,17 +501,35 @@ SIZE=200 NAMES=family:me,chat:room npx vitest run -c vitest.scale.config.ts test
     Chrome for a break (`break-*`, a named `page` like the engine's `.cover`): `PAGE_CSS` resets them, and the boxes
     are 296.8 mm tall so rounding never spills a blank page. Measure only after `printFontsReady()` (a block measured
     in a fallback font moves when the real one comes), and only in the page's column (margins collapse as they print).
-  - Headless Chrome on Linux sets text about 0.5% wider than WeasyPrint (hinted advances), so a line at the very edge
-    may wrap where the engine's didn't: the layout flows, nothing overlaps; don't chase it with letter-spacing.
-  - To compare with the engine: build a made-up unit with the past-paper-workbook skill (never his books), run its
-    `book.html` through `workbookQuestions` + `printSkillBook` in a scratch page with Playwright (`page.pdf`, print
-    media, `preferCSSPageSize`), and put both PDFs' pages side by side (`pdftoppm`). A phone without the fonts:
-    `FONTCONFIG_FILE` pointing at DejaVu + Noto Sans Tamil only.
-  - Chrome's PDF draws every dot of a dotted or dashed border, and of an SVG dash pattern, as a shape of its own, a
-    rounded box as many curves, and an SVG repeated on every page again on every page: the made-up 8-page book
-    weighed 2.2 MB, and the server's answer is capped at 4.5 MB (Vercel). A new dotted line is a tile (`dotCss`: a
-    canvas PNG, stored once as a PDF pattern), a figure on every page one picture (`sealImage`), an answer space's
-    corners square under its tiled dots. The run-through checks the server's file stays under 120 KB a page.
+  - Headless Chrome on Linux sets text about 0.5% wider than WeasyPrint (not the hinting: `--font-render-hinting=none`,
+    which the server's Chrome has, changes nothing; 24 Nov 2026), so a line at the very edge may wrap where the
+    engine's didn't: the layout flows, nothing overlaps; don't chase it with letter-spacing.
+  - Chrome's PDF draws every dot of a dotted or dashed border, and of an SVG dash pattern, as a shape of its own (~90
+    bytes a dot; Skia turns a dash pattern into shapes), a rounded box as many curves, and an SVG repeated on every page
+    again on every page: the made-up 8-page book weighed 2.2 MB, and the server's answer is capped at 4.5 MB (Vercel).
+    A plain stroke stays a stroke: a dot is `M x y h1` (whole hundredths of a mm) with `stroke-linecap: round`, all of
+    a page's dots in one path, ~5 bytes a dot (`inkPage`, `src/printLines.ts`). Not `h0` or `M x y Z` (lighter, but a
+    zero-length path in the PDF: its rules say draw a round dot, not every viewer does). Picture tiles (23 Nov) were
+    light but soft in a phone's viewer, ended in half dots and
+    bunched at rounded corners: don't go back to them. A figure on every page is one picture (`sealImage`). The
+    run-through checks the server's file stays under 120 KB a page and holds no picture but the seal.
+  - Chrome rounds every border's width down to a whole CSS pixel, in print too, whatever the device scale factor (24
+    Nov 2026: a 1.3 pt card outline = 1.73 px printed 1 px; `--force-device-scale-factor` changes the computed value but
+    not the printed line). `getComputedStyle` gives the rounded width: the written one is in `--sbx-bt/br/bb/bl`
+    (`keepWidths` copies it beside every rule that sets a width, so it cascades the same way), and `inkPage` draws the
+    lines at that width. A new bordered piece of the book needs nothing more; a table cell keeps Chrome's line.
+  - A `<style>` inside a shadow root has no `sheet` (and `root.styleSheets` is empty) until the host is in the document:
+    change its rules (CSSOM) after `document.body.appendChild(host)`.
+  - Filling a ring (outer path + inner path) leaves a hairline in viewers wherever the two coincide (a side without a
+    line): stroke along the middle instead (`borderStroke`); never a zero-length segment at a square corner (its join
+    is left to the viewer).
+  - To compare with the engine: build a made-up unit with the past-paper-workbook skill (never his books), read its zip
+    with `readWorkbookFiles`, give it to `window.aristoraBook` on `dist/print.html` with this machine's Chrome
+    (`page.pdf`, print media, `preferCSSPageSize`), and put both PDFs side by side (`pdftoppm`, 1200 dpi for dots and
+    lines). No pip here: WeasyPrint runs from source (git-clone WeasyPrint, pydyf (CourtBouillon), tinycss2, cssselect2,
+    tinyhtml5, python-webencodings, Pyphen on `PYTHONPATH`; Pango is on the machine), the fonts from a sparse clone of
+    google/fonts through the ol-essay skill's `setup_fonts.py`, and a scratch copy of aristora_book.py saving WOFF, not
+    WOFF2 (no brotli). A phone without the fonts: `FONTCONFIG_FILE` pointing at DejaVu + Noto Sans Tamil only.
   - The server's PDF (`api/pdf.mjs`): `@sparticuz/chromium` and `puppeteer-core` pinned exact (the Chrome must match
     the library; upgrade both together, then the run-through). Its page loads only `/print.html` and `/assets/` of the
     same site (every other request is aborted), and the site comes from the request's host only when it is
