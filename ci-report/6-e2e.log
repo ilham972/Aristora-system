@@ -1,0 +1,66 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90m/home/runner/work/Aristora-system/Aristora-system[39m
+
+ [2m[90m↓[39m[22m tests/e2e/class.e2e.ts [2m([22m[2m31 tests[22m[2m | [22m[33m31 skipped[39m[2m)[22m
+ [31m❯[39m tests/e2e/family.e2e.ts [2m([22m[2m36 tests[22m[2m | [22m[31m1 failed[39m[2m | [22m[33m35 skipped[39m[2m)[22m[33m 10395[2mms[22m[39m
+   [2m[90m↓[39m[22m the family app: join, a level on the pad, Check once, the reveal, XP and the board; Correction's ⌂ and Checked
+   [2m[90m↓[39m[22m index and code: the Family sheet shows them (the code made on the phone); a family phone signs in with them
+   [2m[90m↓[39m[22m the new look: class hours and Home, the map, the questions as printed, feedback the owner reads, two children on one phone, the race and Me
+   [2m[90m↓[39m[22m the O/L map: the owner ticks Grade 11 for the O/L syllabus and gives today's topic; the phone shows the paper parts and goes to it
+   [2m[90m↓[39m[22m a level holds still: → never makes the page wider than the phone or moves the pad; a new question starts at the top
+   [2m[90m↓[39m[22m Check after every question: the answer at once, the level's XP on top, a wrong one stays as he typed it; his other phone; the level ends by itself
+   [2m[90m↓[39m[22m an app, not a web page: two fingers never zoom (Home, the map, a Level's pad and question); one finger still scrolls
+   [2m[90m↓[39m[22m photos from home: a drawing photographed in the level, marked by a person he picks (never his working on a wrong answer); her answer on his phone; the unit gate and its redo
+   [2m[90m↓[39m[22m a printed question opens full screen: two fingers zoom only it, one finger moves it, ✕ and Back close it; words can't be selected
+   [2m[90m↓[39m[22m answer kinds: the question's own blanks, an option, ✓ / ✗, words to underline, cards to order, pairs; Check marks them exactly
+   [2m[90m↓[39m[22m names and reasons: names to tap under the question; ஆம் / இல்லை and his own words; a wrong pick is 0, a right one waits for the teacher
+   [2m[90m↓[39m[22m typed words and equations: an equation on the pad with =, a name in letters, his own words for a teacher, two answers under one sub-question; no photo anywhere
+   [2m[90m↓[39m[22m the Claude link: the owner turns it on in Settings → Books, the code is shown once; a request sealed with it is answered; Turn off ends it
+   [2m[90m↓[39m[22m a tute's ladder on the phone: one road numbered as printed; a teacher question asks, Learn shows it a step a tap; Check sets the circles
+   [2m[90m↓[39m[22m Me, his profile: a camera photo made small with its bar, the OK, the race; a name asked; his birthday; the map of 12 weeks; the report; a certificate
+   [2m[90m↓[39m[22m the race for everyone: this week, all time and the GOAT, not started yet, the grade cup, 👑, a profile, a cheer, the weekly coins
+   [2m[90m↓[39m[22m Us: closed until the owner opens it; the owl's guide; his welcome; the owl's lines, a shout-out and a post; one tap each; a teacher's 👏
+   [2m[90m↓[39m[22m Us posts and doubts: a teacher's question with a photo for Grade 8; her answer hidden until marked; ✓ shows it; her doubt to seniors; a teacher's reply
+   [2m[90m↓[39m[22m Us talk: a birthday opened; one-tap words and her own (+1 XP); a reply and a 👏 in her bell; her 💡 post shown by a teacher
+   [2m[90m↓[39m[22m Us people: her photo on her lines; the owl writes the automatic lines; a face opens the profile; a wrong answer saved, shared and asked again without the name
+   [2m[90m↓[39m[22m Us groups and chats: his grade's group with a reply, a tag and a reaction; two boys message, a girl can't; Members; a teacher's chat and her number; a group she makes; the owner reads every chat
+   [2m[90m↓[39m[22m the owner's Preview: Settings → Books → a unit → every level open on the phone's own screen, look only; nobody else
+   [2m[90m↓[39m[22m free marks: the owner gives a question's marks from his Preview; a student meets a gift and gets them; Correction too
+   [2m[90m↓[39m[22m Sakarath on the phone: the app's own question, never the printed page (no section letter or black pill, the story clean, tables, pairs and side-by-side parts inside the card)
+   [2m[90m↓[39m[22m Exam mode OL: a student ticked for the O/L map sees the O/L Sakarath book's own map (its parts as Worlds, its units, all open)
+   [2m[90m↓[39m[22m the Shop: the owner's things with a photo; last week's pay; the coin on the top row; PAYDAY; buying, the gold card, Cancel; Coins back and Given; 320 px
+   [2m[90m↓[39m[22m Home's day and the road: today's quests and their chest, the flame shield, one more?; the owl with its body on Home, the map and the road; classmates ahead, a road chest, FINAL
+   [2m[90m↓[39m[22m online and studying: the green dot and the pencil, Studying now and Online, a classmate's state, his study bars and day totals; his own day with its times; the owner's switch
+   [2m[90m↓[39m[22m Explain online: the pill on a wrong question after Check; her photo and a teacher; the thread with what she typed; the teacher's voice note and Understood on both sides; the next student joins; a name hidden; Consultation's icon
+   [2m[90m↓[39m[22m Explain online: a typed "show that" shows his words under each sub-question (never "photo deleted"); no photo asked by itself; her 📷 and ✓ Understood on his row
+   [2m[90m↓[39m[22m The Thread page at scale: Pending · Follow-up · Understood · Closed, Mine | All, the students' rail, one row per thread with its faces; the cards tap and step ‹ ›; a student sees his classmates' answers, never their marks
+   [2m[90m↓[39m[22m Dark is his own switch: a phone set to dark still opens light; Me → Dark mode; it stays, the printed question turns, the teachers' frame never
+   [2m[90m↓[39m[22m A chat shows his words at once: pale until the server has them, several in a row, a refusal gives them back to the box
+   [2m[90m↓[39m[22m his fees: never on Home; one quiet line in Me → Your details (what he owes, or paid ahead); nothing once paid
+[31m   [31m×[31m Videos on the road (23 Nov 2026): a skill's video right before its Level, nothing without one; the player as a sheet; START after it[39m[33m 8802[2mms[22m[39m
+   [2m[90m↓[39m[22m a skill workbook on the phone (23 Nov 2026, "make everything synced pipeline"): Home, the Stage and the Level say the printed names
+ [2m[90m↓[39m[22m tests/e2e/familyOpen.e2e.ts [2m([22m[2m2 tests[22m[2m | [22m[33m2 skipped[39m[2m)[22m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m tests/e2e/family.e2e.ts[2m > [22mVideos on the road (23 Nov 2026): a skill's video right before its Level, nothing without one; the player as a sheet; START after it
+[31m[1mError[22m: Timed out waiting for: his view saved as watched to the end[39m
+[36m [2m❯[22m until tests/e2e/family.e2e.ts:[2m82:9[22m[39m
+    [90m 80|[39m     await new Promise((r) => setTimeout(r, 40));
+    [90m 81|[39m   }
+    [90m 82|[39m   throw new Error(`Timed out waiting for: ${what}${last ? ` (${String(…
+    [90m   |[39m         [31m^[39m
+    [90m 83|[39m }
+    [90m 84|[39m const visible = (l: L) => l.first().waitFor({ state: "visible", timeou…
+[90m [2m❯[22m tests/e2e/family.e2e.ts:[2m5854:3[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[33m2 skipped[39m[90m (3)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[33m68 skipped[39m[90m (69)[39m
+[2m   Start at [22m 14:12:12
+[2m   Duration [22m 13.05s[2m (tests 82%, import 9%, transform 9%)[22m
+
+
+::error file=/home/runner/work/Aristora-system/Aristora-system/tests/e2e/family.e2e.ts,title=tests/e2e/family.e2e.ts > Videos on the road (23 Nov 2026)%3A a skill's video right before its Level%2C nothing without one; the player as a sheet; START after it,line=82,column=9::Error: Timed out waiting for: his view saved as watched to the end%0A ❯ until tests/e2e/family.e2e.ts:82:9%0A ❯ tests/e2e/family.e2e.ts:5854:3%0A%0A

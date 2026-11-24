@@ -1,0 +1,31 @@
+
+> aristora-system@1.0.0 build
+> node scripts/build.mjs
+
+
+  dist/assets/app-GWJWJSY5.js                                        951.7kb
+  dist/assets/hls.light-FEBYK6SK.js                                  361.4kb
+  dist/assets/app-OO3CGWG7.css                                       206.6kb
+  dist/assets/stixtwomath-400-C4VT4PI2.woff2                         104.6kb
+  dist/assets/muktamalar-700-JOAV7CJ5.woff2                           39.4kb
+  dist/assets/muktamalar-500-5LUZAOZY.woff2                           39.3kb
+  dist/assets/muktamalar-600-SSS4M3YU.woff2                           39.2kb
+  dist/assets/baloothambi2-600-YTV2524V.woff2                         38.0kb
+  dist/assets/baloothambi2-500-BQPEN2LX.woff2                         37.9kb
+  dist/assets/baloothambi2-700-Q5HBEK5C.woff2                         37.6kb
+  dist/assets/muktamalar-800-GPNKK2NA.woff2                           37.4kb
+  dist/assets/muktamalar-400-VHPGGTXJ.woff2                           37.1kb
+  dist/assets/stixtwotext-400i-AAXIY4AR.woff2                         36.5kb
+  dist/assets/stixtwotext-700i-6ONY2SJ2.woff2                         36.4kb
+  dist/assets/baloothambi2-800-ITT5SPK3.woff2                         35.3kb
+  dist/assets/dejavusans-700-5IAFAVOU.woff2                           30.2kb
+  dist/assets/dejavusans-400-TXZZY4BI.woff2                           30.0kb
+  dist/assets/barlow-semi-condensed-latin-700-normal-DVQBTNQV.woff2   22.7kb
+  dist/assets/barlow-semi-condensed-latin-600-normal-YSX2SY2B.woff2   22.4kb
+  dist/assets/barlow-latin-700-normal-5OFOGNFS.woff2                  22.3kb
+  ...and 15 more output files...
+
+⚡ Done in 237ms
+Built dist/ for https://qualified-fish-602.convex.cloud: app-GWJWJSY5.js 952 KB, app-OO3CGWG7.css 207 KB
+Built dist/print.html: print-AB2IPPKD.js 61 KB
+Built the family app: fam-NNJ4LTIA.js + fam-25LI7UG7.css, 64.1 KB over the wire on the first load (budget 67 KB), 74.5 KB right after it (budget 75 KB), Us 27.6 KB (budget 28 KB), the chats 22.7 KB (budget 24 KB), dark 1.3 KB (budget 5 KB), the teachers' Us 7.8 KB (budget 8 KB), the video player 4.2 KB (budget 6 KB) + hls.js 115.6 KB (budget 125 KB)
