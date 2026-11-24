@@ -290,6 +290,23 @@ node $TSX scripts/workbook.ts ship $B G9-U05             # saved whole + read ba
 - The tool is typechecked through its test (`tests/workbookTool.test.ts` imports it); the command in "Tag a unit's
   skills" also checks it alone.
 
+## A skill update from a chat that has no save card
+
+A cloud session (claude.ai/code) has no `propose_skills`, and his rule is that skills come only on the save card. So a
+skill change made there is a script in `scripts/skill-updates/`: exact pieces of text, each found once (else nothing is
+written and it says which), and a proof that nothing else moved (past-paper-workbook: the engine's files byte for byte
+but the change named; aristora-system: every line of the brief still in it, in order). A claude.ai chat runs it on its
+own copy and gives him the card:
+
+```bash
+python3 -I scripts/skill-updates/past-paper-workbook-skill-book.py /mnt/skills/<…>/past-paper-workbook/SKILL.md $SCR/ppw.md
+python3 -I scripts/skill-updates/aristora-system-2026-11-24.py /mnt/skills/<…>/aristora-system/SKILL.md $SCR/as.md
+```
+
+The scripts hold no engine code and none of his books (the repo is public). The 24 Nov 2026 ones: the skill-book flow
+(the workbook skill: steps 0b, 5 Skills, 6 Into the app, 7 Tell him, the Edit rule; book.py: the engine's levels any
+size, nothing to draw) and that night's decisions (the brief).
+
 ## Tag a unit's skills (through the Claude link)
 
 13 Nov 2026, his rule: teach the skill, not the question; and "any model can do the tagging ... I am going to use

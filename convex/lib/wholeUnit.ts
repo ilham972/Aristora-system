@@ -146,6 +146,6 @@ export function levelLines(levels: readonly SkillLevel[], names: ReadonlyMap<str
     const name = names.get(l.skill) ?? l.skill;
     if (!l.qs.length) return `Level ${l.n} · ${name} · no question of its own (each one also needs a later skill): its number is skipped in print`;
     const parts = l.parts.length > 1 ? ` · strips ${l.parts.map((p) => `${l.n}·${p.i} (${p.max})`).join(" ")}` : "";
-    return `Level ${l.n} · ${name} · Q${l.from}–${l.to} · ${l.qs.length} question${l.qs.length === 1 ? "" : "s"} · ${l.max ?? "?"} marks${parts}`;
+    return `Level ${l.n} · ${name} · Q${l.from === l.to ? l.from : `${l.from}–${l.to}`} · ${l.qs.length} question${l.qs.length === 1 ? "" : "s"} · ${l.max ?? "?"} marks${parts}`;
   });
 }
