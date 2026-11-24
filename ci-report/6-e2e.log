@@ -1,0 +1,14 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90m/home/runner/work/Aristora-system/Aristora-system[39m
+
+ [32m✓[39m tests/e2e/class.e2e.ts [2m([22m[2m31 tests[22m[2m | [22m[33m29 skipped[39m[2m)[22m[33m 22422[2mms[22m[39m
+   [33m[2m✓[22m[39m Skills: Correction marks his second try and the try after his lesson (the number to write beside it); the skill teacher's one card and Done; one-to-one[33m 6179[2mms[22m[39m
+   [33m[2m✓[22m[39m Skill book: Books → T on a tagged unit; Level n = skill n (S1+S2 inside Level 2); move a question; the PDF as the engine's pages, whole or one level[33m 13393[2mms[22m[39m
+ [2m[90m↓[39m[22m tests/e2e/family.e2e.ts [2m([22m[2m36 tests[22m[2m | [22m[33m36 skipped[39m[2m)[22m
+ [2m[90m↓[39m[22m tests/e2e/familyOpen.e2e.ts [2m([22m[2m2 tests[22m[2m | [22m[33m2 skipped[39m[2m)[22m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[2m | [22m[33m2 skipped[39m[90m (3)[39m
+[2m      Tests [22m [1m[32m2 passed[39m[22m[2m | [22m[33m67 skipped[39m[90m (69)[39m
+[2m   Start at [22m 18:43:54
+[2m   Duration [22m 24.38s[2m (tests 93%, transform 4%, import 4%)[22m
+
