@@ -14040,6 +14040,21 @@ body.sb-on {
 .sb-dl:disabled {
   opacity: 0.4;
 }
+/* Preview (24 Nov 2026; src/bookPreview.tsx): the whole book on the screen, beside the PDF button */
+.sb-pv {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1.5px solid var(--ink);
+  border-radius: 20px;
+  background: var(--card);
+  color: var(--ink);
+}
+.sb-pv:disabled {
+  opacity: 0.4;
+}
 .sb .hrow {
   flex: none;
   background: var(--card);
@@ -15198,4 +15213,129 @@ span.vs-play {
 .vs-many small {
   color: var(--ink-3);
   word-break: normal;
+}
+
+/* ---- The book's Preview (24 Nov 2026; src/bookPreview.tsx, the T page's eye button): the PDF's pages on the screen ---- */
+.bpv {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 47;
+  display: flex;
+  flex-direction: column;
+  padding-top: env(safe-area-inset-top);
+  background: #202124;
+}
+.bpv-top {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  color: #fff;
+}
+.bpv-x {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: #fff;
+}
+.bpv-t {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+.bpv-t b,
+.bpv-t span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bpv-t b {
+  font-size: 15px;
+}
+.bpv-t span {
+  font-size: 12.5px;
+  color: #bdc1c6;
+}
+.bpv-pdf {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 40px;
+  padding: 0 14px 0 10px;
+  border: 0;
+  border-radius: 20px;
+  background: #fff;
+  color: #202124;
+  font-weight: 800;
+  font-size: 14px;
+}
+.bpv-pdf:disabled {
+  opacity: 0.4;
+}
+.bpv-s {
+  flex: 1;
+  position: relative;
+  overflow: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-x pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+  background: #5f6368;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.bpv-z {
+  position: relative;
+  margin: 8px;
+  overflow: hidden;
+}
+.bpv-msg {
+  margin: 0;
+  padding: 48px 24px;
+  color: #e8eaed;
+  font-weight: 700;
+  text-align: center;
+}
+.bpv-hint {
+  position: absolute;
+  left: 50%;
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: 18px;
+  background: rgba(32, 33, 36, 0.92);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: bpv-hint 3.2s ease forwards;
+}
+@keyframes bpv-hint {
+  0%,
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bpv-hint {
+    animation-duration: 0.01s;
+    animation-delay: 3s;
+  }
 }

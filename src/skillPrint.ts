@@ -192,13 +192,17 @@ export type PrintPlan = {
   unit: PrintUnit;
   /** Every level (convex/lib/skillBook.ts `skillLevels`); the empty ones are left out of the book. */
   levels: SkillLevel[];
-  /** The app's question number → its printed card (`bookCard`: the book's number and its skill chips). */
+  /** The app's question number → its printed card (`bookCard`: the book's number). */
   cards: Map<number, string>;
   year: number;
 };
 
-/** A question's printed card with the book's new number and its skill numbers (the app's number never shows). */
-export function bookCard(html: string, no: number, chips: string[]): string {
+/**
+ * A question's printed card with the book's new number (the app's number never shows). Its skills are not on it: the
+ * level's band and its group's black tab say them once (24 Nov 2026, the founder: "some places you build skill numbers
+ * two places": every question of a group carried the same chips as the tab over it).
+ */
+export function bookCard(html: string, no: number): string {
   const box = document.createElement("div");
   box.appendChild(safeFragment(html));
   const qn = box.querySelector(".qn");
@@ -206,15 +210,6 @@ export function bookCard(html: string, no: number, chips: string[]): string {
     qn.textContent = String(no);
     qn.classList.toggle("q3", no >= 100);
   }
-  const tag = chips.map((c) => `<span class="sbk-sk">${esc(c)}</span>`).join("");
-  const holder = document.createElement("span");
-  holder.className = "sbk-sks";
-  holder.innerHTML = tag;
-  const head = box.querySelector(".pqh");
-  const src = box.querySelector(".src");
-  if (head) head.appendChild(holder);
-  else if (src) src.prepend(holder);
-  else box.firstElementChild?.prepend(holder);
   return box.innerHTML;
 }
 
@@ -230,6 +225,8 @@ const PAGE_CSS = `
   color: #000; width: 210mm; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 .sbx-page { position: relative; width: 210mm; height: 296.8mm; overflow: hidden; background: #fff; break-after: page; page-break-after: always; break-inside: avoid; }
 .sbx-page:last-child { break-after: auto; page-break-after: auto; }
+/* the Preview (the T page, on the screen only): the same pages as sheets on a grey table */
+@media screen { .sbx-show > .sbx-page { margin: 0 0 6mm; box-shadow: 0 .5mm 2.6mm rgba(0, 0, 0, .3); } .sbx-show > .sbx-page:last-child { margin-bottom: 0; } }
 .sbx-page *, .sbx-flow * { break-before: auto !important; break-after: auto !important; break-inside: auto !important; page: auto !important; }
 .sbx-flow { position: absolute; left: 0; top: 0; width: 185mm; visibility: hidden; }
 .sbx-col { position: absolute; top: ${TOP}mm; width: 185mm; height: ${COL_H}mm; }
@@ -251,19 +248,27 @@ const PAGE_CSS = `
 .pq.pqc.sbx-open { border-bottom: none; border-bottom-left-radius: 0; border-bottom-right-radius: 0; padding-bottom: 0; margin-bottom: 0; }
 .pq.pqc.sbx-cont { border-top: none; border-top-left-radius: 0; border-top-right-radius: 0; padding-top: 1.4mm; }
 .si .sih { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; }
-/* skill chips on each question */
-.sbk-sks { display: inline-flex; flex-wrap: wrap; gap: 1mm; vertical-align: middle; margin-right: 2mm; }
-.pqh .sbk-sks { margin: 0 0 0 2mm; flex: none; }
+/* One column for every question's number (24 Nov 2026, the founder: "question number not aligned some time"): the
+   book runs Part I questions and Part II cards together, so a Part I question stands as far in as a card's inside
+   (--sbx-inl / --sbx-inr: a card's border and padding, measured by layoutSkillBook), and the band's number, the strips'
+   "Level", the Part I note and the right ends line up with them. The dotted rule between Part I questions, the group
+   tabs' line, the cards, the band and the strips all run the column's whole width. */
+.sbx { --sbx-inl: calc(1px + 3.6mm); --sbx-inr: calc(1px + 3.6mm); --sbx-lvl: 3.6mm; --sbx-lvr: 3.6mm; }
+.si { padding-left: var(--sbx-inl); padding-right: var(--sbx-inr); }
+.pmn { padding-right: var(--sbx-inr); }
+.lvr { padding-left: var(--sbx-lvl); padding-right: var(--sbx-lvr); }
+/* the skills on the contents page */
 .sbk-sk { display: inline-block; border: 1.1pt solid #111; border-radius: 1.2mm; padding: .35mm 1.6mm 0; font-family: "Baloo Thambi 2", "TMuktaLat", sans-serif;
   font-weight: 800; font-size: 8.4pt; line-height: 1.35; letter-spacing: .2pt; background: #fff; color: #000; white-space: nowrap; }
 /* a level's band: its number, its skill's names, its chip */
-.band.sbx-band { margin-bottom: 1.6mm; }
+.band.sbx-band { margin-bottom: 1.6mm; padding-left: var(--sbx-inl); padding-right: var(--sbx-inr); }
 .band.sbx-band .tt { font-size: 16pt; line-height: 1.22; }
 .band.sbx-band .sub { margin-top: .4mm; }
 .band.sbx-band > div:nth-child(2) { flex: 1; min-width: 0; padding-right: 3mm; }
 .band.sbx-band .step { white-space: nowrap; }
-/* inside a level: the questions that join this skill with others, under their own small heading */
-.grp.sbx-grp { display: flex; justify-content: flex-end; margin: 3.2mm 0 1.4mm 10.3mm; }
+/* inside a level: the questions that join this skill with others, under their own small heading (its line as wide as
+   the cards under it) */
+.grp.sbx-grp { display: flex; justify-content: flex-end; margin: 3.2mm 0 1.4mm 0; }
 .grp.sbx-grp .gb { flex: none; white-space: nowrap; }
 /* the whole book runs on: a level's band in the middle of a page keeps some room from the level before it */
 .sbx-col > .band.sbx-band:not(:first-child) { margin-top: 6mm; }
@@ -422,6 +427,7 @@ function docCss(): string {
   return `${printFontCss()}
 @page { size: A4; margin: 0; }
 #sb-print { position: absolute; left: -12000px; top: 0; width: 210mm; pointer-events: none; }
+#sb-print.sb-shown { left: 0; transform-origin: 0 0; }
 @media print {
   html, body { height: auto !important; min-height: 0 !important; overflow: visible !important; background: #fff !important; position: static !important; margin: 0 !important; padding: 0 !important; }
   body.sb-printing > :not(#sb-print) { display: none !important; }
@@ -683,6 +689,83 @@ function levelItems(u: PrintUnit, l: SkillLevel, number: (q: number) => number, 
   return out;
 }
 
+/**
+ * A card's inside as Chrome lays it out (its border, rounded to a whole pixel, and its padding), measured on a bare card
+ * of this book's CSS (a unit's own stored CSS may differ from the engine's): the Part I questions, the band and the
+ * strips stand as far in (`--sbx-inl` …, PAGE_CSS), so every question's number is in one column.
+ */
+function alignColumns(book: HTMLElement) {
+  const probe = document.createElement("div");
+  probe.className = "sbx-flow";
+  probe.innerHTML = `<div class="pq pqc"></div><div class="lvl"><div class="lvr"></div></div>`;
+  book.appendChild(probe);
+  const px = (v: string) => parseFloat(v) || 0;
+  // (a computed style is live: read before the probe goes)
+  const card = getComputedStyle(probe.firstElementChild as Element);
+  const strip = getComputedStyle(probe.querySelector(".lvr") as Element);
+  const inl = px(card.borderLeftWidth) + px(card.paddingLeft);
+  const inr = px(card.borderRightWidth) + px(card.paddingRight);
+  const sl = px(strip.borderLeftWidth);
+  const sr = px(strip.borderRightWidth);
+  probe.remove();
+  if (!(inl > 0 && inr > 0)) return;
+  book.style.setProperty("--sbx-inl", `${inl}px`);
+  book.style.setProperty("--sbx-inr", `${inr}px`);
+  book.style.setProperty("--sbx-lvl", `${Math.max(0, inl - sl)}px`);
+  book.style.setProperty("--sbx-lvr", `${Math.max(0, inr - sr)}px`);
+}
+
+/**
+ * The y of the baseline an element's first line of words sits on (a zero-size probe placed where its words begin), or
+ * null when it doesn't begin with a line of words (a figure, a table, a row of its own): nothing to line a label up with.
+ */
+function firstBaseline(host: Element): number | null {
+  let at: Element = host;
+  for (;;) {
+    let first: ChildNode | null = at.firstChild;
+    while (first && first.nodeType === Node.TEXT_NODE && !first.textContent?.trim()) first = first.nextSibling;
+    if (!first) return null;
+    if (first.nodeType === Node.TEXT_NODE) break;
+    if (!(first instanceof HTMLElement)) return null;
+    const d = getComputedStyle(first).display;
+    if (d.startsWith("inline")) break;
+    // Words inside a plain block (a div of the part's words): the probe goes in there, not on a line of its own.
+    if (d !== "block" && d !== "flow-root" && d !== "list-item") return null;
+    at = first;
+  }
+  const probe = document.createElement("span");
+  probe.style.cssText = "display:inline-block;width:0;height:0;vertical-align:baseline";
+  at.insertBefore(probe, at.firstChild);
+  const y = probe.getBoundingClientRect().top;
+  probe.remove();
+  return y;
+}
+
+/**
+ * Every part's label on the line where its words begin (24 Nov 2026, the founder's screenshot: "a)" sat between the two
+ * lines of its part). The engine centres a Part I part's label on its words, which a part of two lines puts between
+ * them, and tops a Part II part's label on its row, which a first line with a fraction or a power (set lower) leaves
+ * reading high. Each label is moved onto its words' first baseline, measured; a label already on it is left alone.
+ */
+function alignLabels(root: HTMLElement) {
+  for (const row of root.querySelectorAll<HTMLElement>(".sq, .rp")) {
+    const label = row.querySelector<HTMLElement>(":scope > .sl, :scope > .rl");
+    const words = label?.nextElementSibling;
+    if (!label || !words || !label.textContent?.trim()) continue;
+    const a = firstBaseline(words);
+    const b = firstBaseline(label);
+    if (a === null || b === null || Math.abs(a - b) < 0.5) continue;
+    label.style.alignSelf = "flex-start";
+    const d = (firstBaseline(words) ?? 0) - (firstBaseline(label) ?? 0);
+    // Never more than a line: anything bigger is a measurement gone wrong, and the engine's place is better than that.
+    if (Math.abs(d) > 2 * (parseFloat(getComputedStyle(label).fontSize) || 13)) {
+      label.style.alignSelf = "";
+      continue;
+    }
+    label.style.marginTop = `${(parseFloat(getComputedStyle(label).marginTop) || 0) + d}px`;
+  }
+}
+
 /** The levels a page holds, in order (a card's piece counts by its first block). */
 function levelsOn(col: HTMLElement, lv: Map<Element, number>): number[] {
   const out: number[] = [];
@@ -835,6 +918,7 @@ export async function layoutSkillBook(plan: PrintPlan, css: string | null, only:
   }
   if (sheet) flow.appendChild(sheet);
   book.appendChild(flow);
+  alignColumns(book);
   if (only === null) {
     const cover = document.createElement("div");
     cover.className = "sbx-page sbx-cover";
@@ -843,6 +927,7 @@ export async function layoutSkillBook(plan: PrintPlan, css: string | null, only:
   }
   void flow.offsetHeight;
   const fonts = await printFontsReady();
+  alignLabels(flow);
   SEAL = sealImage();
   let front = 0;
   if (only === null) {
@@ -953,12 +1038,27 @@ export async function printSkillBook(plan: PrintPlan, css: string | null, fileNa
   return r;
 }
 
-/** The printed numbers and chips of every question: the plan both the phone and the PDF server lay out. */
+/**
+ * The book on the screen (the T page's Preview, 24 Nov 2026, the founder: "put preview button near download button"):
+ * laid out exactly as for the PDF (`layoutSkillBook`: the same pages, lines and page numbers), then moved into `into`
+ * as sheets with a gap between them, for the viewer to scale (a CSS scale: nothing is laid out again, every word and
+ * dot stays where the PDF has it). Gone with `clearPrint` (the viewer's close, or the next book laid out).
+ */
+export async function previewSkillBook(plan: PrintPlan, css: string | null, into: HTMLElement): Promise<BookResult & { host: HTMLElement }> {
+  const r = await layoutSkillBook(plan, css, null);
+  const host = document.getElementById("sb-print");
+  if (!host) throw new Error("the book wasn't laid out");
+  host.shadowRoot?.querySelector(".sbx")?.classList.add("sbx-show");
+  host.classList.add("sb-shown");
+  into.appendChild(host);
+  return { ...r, host };
+}
+
+/** The printed number of every question: the plan both the phone and the PDF server lay out. */
 export function skillBookPlan(
   u: { key: string; grade: number; code: string; ta: string; en: string; data: MasterData; names: PrintUnit["names"] },
   levels: SkillLevel[],
   number: ReadonlyMap<number, number>,
-  needsOf: (q: number) => string[],
   printed: ReadonlyMap<number, string>,
   year: number,
 ): { plan: PrintPlan; missing: number } {
@@ -966,7 +1066,7 @@ export function skillBookPlan(
   let missing = 0;
   for (const [q, no] of number) {
     const html = printed.get(q);
-    if (html) cards.set(q, bookCard(html, no, needsOf(q).map((id) => skillLabel(u.key, id))));
+    if (html) cards.set(q, bookCard(html, no));
     else missing++;
   }
   return { plan: { unit: { key: u.key, grade: u.grade, code: u.code, ta: u.ta, en: u.en, data: u.data, names: u.names }, levels, cards, year }, missing };

@@ -3,7 +3,7 @@
 // `draw_dotted_dashed_border` with a stream that records the circles), numbers copied here to 4 places. Made-up boxes
 // only: no book.
 import { describe, expect, test } from "vitest";
-import { alphaOf, borderDots, borderStroke, cssPx, dotKey, dotsPath, fitRadii, frameDots, radiusPx, type Dot } from "../src/printLines";
+import { alphaOf, borderDots, borderStroke, cssPx, dotKey, dotsPath, fitRadii, frameDots, loopDots, radiusPx, sideDots, SIDES, type Dot } from "../src/printLines";
 
 const PT = 25.4 / 72;
 const sq: [[number, number], [number, number], [number, number], [number, number]] = [
@@ -20,10 +20,14 @@ const r2: typeof sq = [
 ];
 const sorted = (ds: Dot[]) => [...ds].sort((a, b) => a.x - b.x || a.y - b.y).map((d) => [d.x, d.y, d.r].map((v) => Math.round(v * 1e4) / 1e4));
 
+/** Each dotted side as WeasyPrint lays it out on its own (`sideDots`: what a box with mixed sides still gets). */
+const bySide = (box: { x: number; y: number; w: number; h: number }, w: number) =>
+  SIDES.map((s) => sideDots(s, box, [w, w, w, w], r2)) as [Dot[], Dot[], Dot[], Dot[]];
+
 describe("dotted lines, as WeasyPrint places its dots", () => {
-  test("an answer space (.wz: .8 pt grey, 2 mm corners) 12 × 4.5 mm: every dot", () => {
+  test("an answer space (.wz: .8 pt grey, 2 mm corners) 12 × 4.5 mm, side by side: every dot", () => {
     const w = 0.8 * PT;
-    const [top, right, bottom, left] = borderDots({ x: 0, y: 0, w: 12, h: 4.5 }, [w, w, w, w], r2, [true, true, true, true]);
+    const [top, right, bottom, left] = bySide({ x: 0, y: 0, w: 12, h: 4.5 }, w);
     // WeasyPrint 70, the same box: corners half on each side, the rest evenly spaced, an even count on each side.
     expect(sorted(top)).toEqual([
       [0.8893, 0.5037, 0.1365], [1.3701, 0.2462, 0.1365], [2.1276, 0.1411, 0.1411], [2.6736, 0.1411, 0.1411], [3.2196, 0.1411, 0.1411],
@@ -45,9 +49,9 @@ describe("dotted lines, as WeasyPrint places its dots", () => {
     ]);
   });
 
-  test("a full-width answer space 175 × 8 mm: its counts and its corners", () => {
+  test("a full-width answer space 175 × 8 mm, side by side: its counts and its corners", () => {
     const w = 0.8 * PT;
-    const [top, right, bottom, left] = borderDots({ x: 0, y: 0, w: 175, h: 8 }, [w, w, w, w], r2, [true, true, true, true]);
+    const [top, right, bottom, left] = bySide({ x: 0, y: 0, w: 175, h: 8 }, w);
     expect([top.length, right.length, bottom.length, left.length]).toEqual([308, 13, 308, 13]);
     expect(sorted(top).slice(0, 4)).toEqual([[0.8996, 0.5019, 0.1412], [1.3981, 0.2413, 0.1412], [2.1365, 0.1411, 0.1411], [2.7012, 0.1411, 0.1411]]);
     expect(sorted(left).slice(0, 3)).toEqual([[0.1411, 2.1449, 0.1411], [0.1411, 2.6772, 0.1411], [0.1411, 3.2095, 0.1411]]);
@@ -77,6 +81,52 @@ describe("dotted lines, as WeasyPrint places its dots", () => {
     expect(sorted(sides[0]).slice(0, 3)).toEqual([[0.1411, 0.1411, 0.1411], [0.7018, 0.1411, 0.1411], [1.2625, 0.1411, 0.1411]]);
     // Two colours: side by side instead (no quick way).
     expect(borderDots({ x: 0, y: 0, w: 30, h: 6 }, [w, w, w, w], sq, [true, true, true, true], false).flat().length).not.toBe(130);
+  });
+  test("four rounded dotted sides (an answer space): one even loop, a dot on each corner's middle, nothing bunched", () => {
+    const w = 0.8 * PT;
+    for (const box of [{ x: 3, y: 7, w: 175, h: 11 }, { x: 0, y: 0, w: 12, h: 4.5 }, { x: 20, y: 40, w: 61.3, h: 30 }]) {
+      const sides = borderDots(box, [w, w, w, w], r2, [true, true, true, true]);
+      expect(sides.slice(1).every((l) => l.length === 0)).toBe(true);
+      const loop = sides[0];
+      expect(loop).toEqual(loopDots(box, w, r2));
+      // On the border's middle line, every dot the width's size.
+      const rc = 2 - w / 2;
+      for (const d of loop) {
+        expect(d.r).toBeCloseTo(w / 2, 9);
+        const inX = Math.min(d.x - (box.x + w / 2), box.x + box.w - w / 2 - d.x);
+        const inY = Math.min(d.y - (box.y + w / 2), box.y + box.h - w / 2 - d.y);
+        expect(Math.min(inX, inY)).toBeGreaterThan(-1e-9);
+        if (inX < rc && inY < rc) expect(Math.hypot(rc - inX, rc - inY)).toBeCloseTo(rc, 3);
+        else expect(Math.min(inX, inY)).toBeLessThan(1e-9);
+      }
+      // A dot on each corner's 45° point.
+      const c45 = rc * (1 - Math.SQRT1_2);
+      for (const [cx, cy] of [
+        [box.x + w / 2 + c45, box.y + w / 2 + c45],
+        [box.x + box.w - w / 2 - c45, box.y + w / 2 + c45],
+        [box.x + box.w - w / 2 - c45, box.y + box.h - w / 2 - c45],
+        [box.x + w / 2 + c45, box.y + box.h - w / 2 - c45],
+      ])
+        expect(loop.some((d) => Math.hypot(d.x - cx, d.y - cy) < 1e-6)).toBe(true);
+      // Neighbours (round the loop) all about two widths apart: never touching (the founder's screenshot), never a gap.
+      const gaps = loop.map((d, i) => Math.hypot(loop[(i + 1) % loop.length].x - d.x, loop[(i + 1) % loop.length].y - d.y));
+      expect(Math.min(...gaps)).toBeGreaterThan(1.8 * w);
+      expect(Math.max(...gaps)).toBeLessThan(2.25 * w);
+    }
+  });
+
+  test("the loop mirrors itself: the left side's dots are the right side's, the top's the bottom's", () => {
+    const w = 0.8 * PT;
+    const box = { x: 0, y: 0, w: 175, h: 11 };
+    const loop = loopDots(box, w, r2);
+    const has = (x: number, y: number) => loop.some((d) => Math.abs(d.x - x) < 1e-6 && Math.abs(d.y - y) < 1e-6);
+    for (const d of loop) {
+      expect(has(box.w - d.x, d.y)).toBe(true);
+      expect(has(d.x, box.h - d.y)).toBe(true);
+    }
+    // Square corners in the loop's terms: the corner itself carries the dot.
+    const sharp = loopDots({ x: 0, y: 0, w: 10, h: 5 }, w, [[2, 2], [0, 0], [2, 2], [0, 0]]);
+    expect(sharp.some((d) => Math.abs(d.x - (10 - w / 2)) < 1e-9 && Math.abs(d.y - w / 2) < 1e-9)).toBe(true);
   });
 
   test("the page frame: the engine's frame_svg, a dot on each corner once, ~1.65 mm apart", () => {

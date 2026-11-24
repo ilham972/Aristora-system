@@ -18,6 +18,8 @@ import { bookLevels, groupKey, groupLabel, levelSkillOf, needs, partName, skillL
 import { SKILLS_A_TAG } from "../convex/lib/skills";
 import type { SkillBookUnit } from "../convex/skillBook";
 import { fetchOnce, mutate, phoneToken } from "./backend";
+import { useBackClose } from "./backClose";
+import { BookPreview } from "./bookPreview";
 import { GovBook, type GovRow } from "./govBook";
 import { HRow } from "./hrow";
 import { useQuery } from "./live";
@@ -29,32 +31,6 @@ import { Sheet } from "./ui";
 import { VideoShelf, type VideoList } from "./videoShelf";
 
 type Printed = { css: string | null; qs: Map<number, string> };
-
-/** The phone's Back button closes the page: one history step while it is open (as teaching mode does). */
-function useBackClose(onClose: () => void) {
-  const close = useRef(onClose);
-  close.current = onClose;
-  useEffect(() => {
-    const mark = `sb${Date.now()}`;
-    let popped = false;
-    try {
-      history.pushState({ ...(history.state ?? {}), sb: mark }, "");
-    } catch {
-      /* no history here */
-    }
-    const onPop = () => {
-      popped = true;
-      close.current();
-    };
-    window.addEventListener("popstate", onPop);
-    document.body.classList.add("sb-on");
-    return () => {
-      window.removeEventListener("popstate", onPop);
-      document.body.classList.remove("sb-on");
-      if (!popped && (history.state as { sb?: string } | null)?.sb === mark) history.back();
-    };
-  }, []);
-}
 
 /** The printed question, readable on the phone: the book's look, its working space and print furniture left out. */
 const READ_CSS = `.qv{font-size:10.5pt;border-radius:12px;padding:12px 10px 8px}.qv .qn{display:none!important}`;
@@ -84,6 +60,8 @@ export function SkillBookPage(props: { unit: Unit; gov: GovRow | null; onClose: 
   const [busy, setBusy] = useState<number | null>(null);
   /** The Share sheet: for the whole book (0) or one level (n). */
   const [sharing, setSharing] = useState<number | null>(null);
+  /** The whole book on the screen (24 Nov 2026), laid out as the PDF will be. */
+  const [previewing, setPreviewing] = useState(false);
   const top = useRef<HTMLDivElement>(null);
   /** The PDFs the server made for this page, kept while the unit's tags stay the same (Download then Share: one PDF). */
   const pdfs = useRef<{ u: SkillBookUnit | null | undefined; made: Map<number, Promise<MadePdf>> }>({ u: undefined, made: new Map() });
@@ -161,7 +139,7 @@ export function SkillBookPage(props: { unit: Unit; gov: GovRow | null; onClose: 
   /** This phone's own print window (Save as PDF): when the server can't make the file (`why`). One toast says it all. */
   const printHere = async (only: number | null, why: string) => {
     if (!u || !book || !printed || printed === "failed") return;
-    const { plan, missing } = skillBookPlan(u, book.levels, book.number, (q) => needs(u.tags, q), printed.qs, new Date().getFullYear());
+    const { plan, missing } = skillBookPlan(u, book.levels, book.number, printed.qs, new Date().getFullYear());
     toast(
       `The server couldn't make the PDF (${why}): printing on this phone instead. In the print window: Save as PDF, paper A4.${missing ? ` ${missing} questions aren't in the app as printed (a dash in their place).` : ""}`,
       "error",
@@ -191,6 +169,11 @@ export function SkillBookPage(props: { unit: Unit; gov: GovRow | null; onClose: 
   };
 
   const ready = !!u && !!printed && printed !== "failed" && printed.qs.size > 0;
+  // The Preview's book: planned once as it opens (a snapshot: a question tagged meanwhile shows on the next open).
+  const previewPlan = useMemo(
+    () => (previewing && u && book && printed && printed !== "failed" ? skillBookPlan(u, book.levels, book.number, printed.qs, new Date().getFullYear()).plan : null),
+    [previewing],
+  );
   const marks = open?.max;
   return (
     <div class="sb" role="dialog" aria-modal="true" aria-label="Skills of this unit">
@@ -206,6 +189,13 @@ export function SkillBookPage(props: { unit: Unit; gov: GovRow | null; onClose: 
           </b>
           <span>{props.unit.ta}</span>
         </div>
+        {/* Preview (24 Nov 2026, the founder: "put preview button near download button"): the book on this screen. */}
+        <button type="button" class="sb-pv" disabled={!ready || busy !== null} onClick={() => setPreviewing(true)} aria-label="Preview the whole book">
+          <svg viewBox="0 0 24 24" width="21" height="21" aria-hidden="true">
+            <path d="M2.5 12S6 5.8 12 5.8 21.5 12 21.5 12 18 18.2 12 18.2 2.5 12 2.5 12z" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linejoin="round" />
+            <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2.1" />
+          </svg>
+        </button>
         <button type="button" class="sb-dl" disabled={!ready || busy !== null} onClick={() => void download(null)} aria-label="Download the whole book as a PDF">
           <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
             <path d="M12 4v11M7 10l5 5 5-5M5 20h14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
@@ -363,6 +353,18 @@ export function SkillBookPage(props: { unit: Unit; gov: GovRow | null; onClose: 
           )}
           {sharing !== null && (
             <ShareSheet grade={u.grade} code={u.code} level={sharing === 0 ? null : sharing} make={() => serverPdf(sharing === 0 ? null : sharing)} onClose={() => setSharing(null)} />
+          )}
+          {previewPlan && printed && printed !== "failed" && (
+            <BookPreview
+              plan={previewPlan}
+              css={printed.css}
+              title={`${u.grade} ${u.code} · ${u.ta}`}
+              onPdf={() => {
+                setPreviewing(false);
+                void download(null);
+              }}
+              onClose={() => setPreviewing(false)}
+            />
           )}
           {moving !== null && (
             <MoveQSheet

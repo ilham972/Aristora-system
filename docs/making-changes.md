@@ -523,6 +523,25 @@ SIZE=200 NAMES=family:me,chat:room npx vitest run -c vitest.scale.config.ts test
   - Filling a ring (outer path + inner path) leaves a hairline in viewers wherever the two coincide (a side without a
     line): stroke along the middle instead (`borderStroke`); never a zero-length segment at a square corner (its join
     is left to the viewer).
+  - WeasyPrint's dotted rounded box bunches: each side is laid out on its own, so where a side meets its second corner
+    two dots touch (and leave a gap at the first): the engine's own books have it. Four rounded dotted sides of one
+    width go round as one even loop (`loopDots`); keep `sideDots` (the exact port) for boxes with mixed sides. The
+    run-through checks no two grey dots are nearer than 1.8 widths.
+  - Measuring in the book (24 Nov 2026): `getComputedStyle` is live: read every value before the probe element goes
+    (a removed element's style reads empty: `alignColumns` once set the strips' padding from a 0 border). A baseline
+    is a zero-size inline-block probe's top; never put one inside an `<svg>` (it isn't laid out: top 0), so
+    `firstBaseline` gives up on words that begin with anything but text or an inline (a figure, a table, a flex row).
+    The real books are the test: lay every tagged unit out through the Claude link (`skillBook`'s data from `unit` +
+    `skills` + `questions`, never in the repo) and measure every page (numbers' x, labels against first lines,
+    anything past the column), as `docs` can't list every markup the engine writes.
+  - A page over a page (the Preview over the T page): `popstate` reaches every listener, so `useBackClose` (src/
+    backClose.ts) marks each page's history step and closes a page only when the step now showing isn't its own;
+    `body.sb-on` is counted. A new full-screen sheet over the T page uses the same hook.
+  - The Preview's zoom: a CSS `scale` on the laid-out book (never CSS `zoom`, which lays text out again and can break
+    lines differently from the PDF), its size held by `.bpv-z`; the scroller is `touch-action: pan-x pan-y` (the
+    browser scrolls with one finger, never zooms the app) and two fingers are touch events (`touchmove` not passive,
+    `preventDefault` while two are down; pointer events lose the first finger once Chrome starts scrolling). The
+    run-through pinches with Chrome's own touch (`Input.dispatchTouchEvent`).
   - To compare with the engine: build a made-up unit with the past-paper-workbook skill (never his books), read its zip
     with `readWorkbookFiles`, give it to `window.aristoraBook` on `dist/print.html` with this machine's Chrome
     (`page.pdf`, print media, `preferCSSPageSize`), and put both PDFs side by side (`pdftoppm`, 1200 dpi for dots and

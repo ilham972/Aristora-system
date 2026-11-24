@@ -4990,10 +4990,12 @@ test("Skill book: Books → T on a tagged unit; Level n = skill n (S1+S2 inside 
   const G7U08 = KNOWN_WORKBOOKS[0].data;
   const S = (n: number) => `G7-U08-S${n}`;
   const short = (q: number) => q <= 37;
-  // Made-up questions in the book's own markup (Part I items and Part II cards), drawn with the engine's CSS.
+  // Made-up questions in the book's own markup (Part I items and Part II cards), drawn with the engine's CSS. Question 5
+  // has parts as the engine sets them (.sq rows), the first one two lines long (24 Nov 2026: its "a)" sat between them).
+  const parts = `A made-up question in parts.<div class="sq" style="margin:.6mm 0 .4mm"><span class="sl" style="width:7mm">a)</span><span class="st">A made-up first part, long enough to run on past the end of the question's first line and onto a second one, then its sum:<br>(−3) + (+5) =</span></div><div class="sq" style="margin:.6mm 0 .4mm"><span class="sl" style="width:7mm">b)</span><span class="st">A short part: 2 + 2 =</span></div>`;
   const html = (q: number) =>
     short(q)
-      ? `<div class="si" data-q="${q}"><div class="sih"><span class="qn">${q}</span><div class="sib"><div class="src">Paper 2020 T1 · Q${q}</div><div class="sit">A made-up question ${q}: (−3) + (+${q}) = ?</div><div class="wz" style="height:8mm"></div></div></div></div>`
+      ? `<div class="si" data-q="${q}"><div class="sih"><span class="qn">${q}</span><div class="sib"><div class="src">Paper 2020 T1 · Q${q}</div><div class="sit">${q === 5 ? parts : `A made-up question ${q}: (−3) + (+${q}) = ?`}</div><div class="wz" style="height:8mm"></div></div></div></div>`
       : `<div class="pq pqc" data-q="${q}"><div class="bk"><div class="pqh"><span class="qn">${q}</span><span class="yr">Paper 2021 T2 · Q${q - 30}</span></div><div class="rp"><span class="rl">i)</span><span>A made-up part of question ${q}.</span><span class="pm">(2 புள்ளிகள்)</span></div><div class="wz" style="height:12mm"></div></div></div>`;
   const u08 = await backend.t.run(async (ctx) => {
     const u = (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G7-U08")).first())!;
@@ -5126,8 +5128,7 @@ test("Skill book: Books → T on a tagged unit; Level n = skill n (S1+S2 inside 
     heads: string[];
     pillsOf: string[];
     sheet: string[];
-    chips1: string | undefined;
-    chips50: string | undefined;
+    chips: number;
     title: string;
     printing: boolean;
     fonts: string[];
@@ -5159,8 +5160,7 @@ test("Skill book: Books → T on a tagged unit; Level n = skill n (S1+S2 inside 
         heads: [...root.querySelectorAll(".sbx-grp")].map((x) => x.textContent ?? ""),
         pillsOf: [...root.querySelectorAll(".lvl .lvn")].map((x) => x.textContent ?? ""),
         sheet: [...root.querySelectorAll(".msh td em")].map((x) => x.textContent ?? ""),
-        chips1: root.querySelector(".si .sbk-sks")?.textContent ?? undefined,
-        chips50: [...root.querySelectorAll(".sbx-col > *")].find((e) => e.querySelector(".qn")?.textContent === "50")?.querySelector(".sbk-sks")?.textContent ?? undefined,
+        chips: root.querySelectorAll(".sbx-page[data-n] .sbx-col .sbk-sk").length,
         title: document.title,
         printing: document.body.classList.contains("sb-printing"),
         fonts: [...document.fonts].filter((f) => f.status === "loaded").map((f) => `${f.family} ${f.weight}`),
@@ -5202,8 +5202,45 @@ test("Skill book: Books → T on a tagged unit; Level n = skill n (S1+S2 inside 
   const bandPage = (i: number) => body.findIndex((p) => p.bands.length > 0 && body.slice(0, body.indexOf(p) + 1).flatMap((x) => x.bands).length > i) + 1;
   expect(book.toc.slice(0, 3).map((r) => Number(r.pg))).toEqual([bandPage(0), bandPage(1), bandPage(2)]);
   expect(Number(book.toc[3].pg)).toBe(body.length);
-  expect(book.chips1).toBe("S1");
-  expect(book.chips50).toBe("S1S3");
+  // The skills once (24 Nov 2026, his "skill numbers two places"): the band's and the group tabs', none on a question.
+  expect(book.chips).toBe(0);
+  // One column for every number (24 Nov 2026, his "question number not aligned"): the Part I questions' and the cards'
+  // numbers, the bands' and the strips' "Level" start at one x in their column; a group's line runs the column's whole
+  // width; a part's label sits on its words' first line (question 5's "a)" on the first of its two, not between them).
+  const cols = await C.evaluate(() => {
+    const root = document.getElementById("sb-print")!.shadowRoot!;
+    const xs: number[] = [];
+    const heads: number[] = [];
+    for (const col of root.querySelectorAll<HTMLElement>(".sbx-page[data-n] .sbx-col")) {
+      const left = col.getBoundingClientRect().left;
+      for (const e of col.querySelectorAll(".si .qn, .pq .qn, .band .let, .lvr .lvn")) xs.push(e.getBoundingClientRect().left - left);
+      for (const g of col.querySelectorAll(".grp")) heads.push(g.getBoundingClientRect().left - left);
+    }
+    const base = (host: Element) => {
+      const p = document.createElement("span");
+      p.style.cssText = "display:inline-block;width:0;height:0";
+      host.insertBefore(p, host.firstChild);
+      const y = p.getBoundingClientRect().top;
+      p.remove();
+      return y;
+    };
+    const rows = [...root.querySelectorAll(".sbx-col .sq")];
+    return {
+      spread: Math.max(...xs) - Math.min(...xs),
+      at: Math.min(...xs),
+      heads,
+      labels: rows.map((r) => base(r.querySelector(".st")!) - base(r.querySelector(".sl")!)),
+      lines: rows.map((r) => Math.round(r.querySelector(".st")!.getBoundingClientRect().height / parseFloat(getComputedStyle(r).lineHeight))),
+    };
+  });
+  expect(cols.spread).toBeLessThan(0.3);
+  expect(cols.at).toBeGreaterThan(10); // in from the column's edge, as far as a card's inside
+  expect(cols.heads.length).toBe(3);
+  for (const x of cols.heads) expect(Math.abs(x)).toBeLessThan(0.3);
+  expect(cols.lines.length).toBe(2);
+  expect(cols.lines[0]).toBeGreaterThan(1);
+  expect(cols.lines[1]).toBe(1);
+  for (const d of cols.labels) expect(Math.abs(d)).toBeLessThan(0.5);
   expect(book.title).toBe("G7_U08_Skills_Book");
   expect(book.printing).toBe(true);
   // The engine's own fonts, not the phone's.
@@ -5227,6 +5264,15 @@ test("Skill book: Books → T on a tagged unit; Level n = skill n (S1+S2 inside 
       cardLine: card ? getComputedStyle(card).borderLeftColor : "",
       outlines: [...root.querySelectorAll('.sbx-ink path[stroke="rgb(17, 17, 17)"]')].map((p) => p.getAttribute("stroke-width")),
       tiles: root.querySelectorAll(".sbx-frame").length,
+      // The answer spaces' dots, evenly round their corners (24 Nov 2026, his screenshot of two dots touching).
+      closest: (() => {
+        const page = pages.find((p) => p.querySelector(".sbx-col .wz"))!;
+        const d = [...page.querySelectorAll('.sbx-ink path[stroke="rgb(119, 119, 119)"]')].map((p) => p.getAttribute("d") ?? "").join("");
+        const pts = [...d.matchAll(/M(\d+) (\d+)h1/g)].map((m) => [Number(m[1]), Number(m[2])]);
+        let min = Infinity;
+        for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) min = Math.min(min, Math.hypot(pts[i][0] - pts[j][0], pts[i][1] - pts[j][1]));
+        return min;
+      })(),
     };
   });
   expect(ink.frames.length).toBe(book.pages.filter((p) => p.kind !== "cover" && p.kind !== "blank").length);
@@ -5235,6 +5281,7 @@ test("Skill book: Books → T on a tagged unit; Level n = skill n (S1+S2 inside 
   expect(ink.dark).toBeGreaterThan(200);
   expect([ink.wzLine, ink.wzWidth, ink.cardLine, ink.tiles]).toEqual(["rgba(0, 0, 0, 0)", "1px", "rgba(0, 0, 0, 0)", 0]);
   expect(ink.outlines).toContain("46");
+  expect(ink.closest).toBeGreaterThan(1.8 * 28.2); // a dot is .8 pt (28.2 hundredths of a mm) wide: never touching
   // What Chrome prints (A4, the print rules): kept as a file to look at.
   await C.emulateMedia({ media: "print" });
   await C.pdf({ path: join(SHOTS, "sb04-book.pdf"), preferCSSPageSize: true, printBackground: true });
@@ -5286,6 +5333,95 @@ test("Skill book: Books → T on a tagged unit; Level n = skill n (S1+S2 inside 
   expect((await dl).suggestedFilename()).toBe("G7_U08_Skills_Book.pdf");
   await visible(C.locator(".toast", { hasText: `G7_U08_Skills_Book.pdf · ${made.pages} pages: in your downloads.` }));
   expect(await C.evaluate(() => (window as unknown as { __printed: number }).__printed)).toBe(2);
+
+  // Preview (24 Nov 2026, his ask: "put preview button near download button"): the eye beside PDF lays the same book
+  // out on this screen (the PDF's own code: its pages, lines and numbers), page under page, fitted to the width. A double
+  // tap zooms in there and back out; ✕ or Back closes only the preview (the T page stays), leaving nothing behind.
+  await P.getByRole("button", { name: "Preview the whole book" }).click();
+  const V = C.locator(".bpv");
+  await contains(V, `Page 1 of ${made.pages}`);
+  const view = () =>
+    C.evaluate(() => {
+      const host = document.querySelector<HTMLElement>(".bpv-z > #sb-print")!;
+      const s = document.querySelector<HTMLElement>(".bpv-s")!;
+      const root = host.shadowRoot!;
+      return {
+        pages: root.querySelectorAll(".sbx > .sbx-page").length,
+        ink: root.querySelectorAll(".sbx-page .sbx-ink path").length,
+        numbers: [...root.querySelectorAll(".sbx-page[data-n] .sbx-col .qn")].map((e) => e.textContent),
+        k: Number(/scale\(([\d.]+)\)/.exec(host.style.transform)?.[1] ?? 0),
+        width: s.clientWidth,
+        wide: s.scrollWidth,
+      };
+    });
+  const fit = await view();
+  expect(fit.pages).toBe(made.pages);
+  expect(fit.ink).toBeGreaterThan(fit.pages);
+  expect(fit.numbers).toEqual(Array.from({ length: 57 }, (_, i) => String(i + 1)));
+  expect(fit.k).toBeCloseTo((fit.width - 16) / ((210 * 96) / 25.4), 3);
+  expect(fit.wide).toBeLessThanOrEqual(fit.width);
+  await shot(C, "sb08-preview");
+  await V.locator(".bpv-s").dblclick({ position: { x: 120, y: 160 } });
+  const zoomed = await view();
+  expect(zoomed.k).toBeCloseTo(fit.k * 2.5, 3);
+  expect(zoomed.wide).toBeGreaterThan(zoomed.width * 2);
+  await shot(C, "sb08b-preview-zoomed");
+  await V.locator(".bpv-s").dblclick({ position: { x: 120, y: 160 } });
+  expect((await view()).k).toBeCloseTo(fit.k, 3);
+  // Real fingers (Chrome's own touch handling): two spread apart zoom the pages, not the app (the screen's own zoom
+  // stays 1); one finger moves round the page; a double tap goes back to the page's width.
+  const cdp = await C.context().newCDPSession(C);
+  await cdp.send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
+  const touch = (type: string, pts: { x: number; y: number }[]) =>
+    cdp.send("Input.dispatchTouchEvent", { type, touchPoints: pts.map((q, id) => ({ x: q.x, y: q.y, id, radiusX: 4, radiusY: 4, force: 1 })) });
+  const drag = async (from: { x: number; y: number }[], to: { x: number; y: number }[]) => {
+    await touch("touchStart", from);
+    for (let i = 1; i <= 12; i++) {
+      await touch("touchMove", from.map((f, j) => ({ x: f.x + ((to[j].x - f.x) * i) / 12, y: f.y + ((to[j].y - f.y) * i) / 12 })));
+      await C.waitForTimeout(16);
+    }
+    await touch("touchEnd", []);
+    await C.waitForTimeout(300);
+  };
+  await drag([{ x: 165, y: 420 }, { x: 225, y: 420 }], [{ x: 105, y: 420 }, { x: 285, y: 420 }]);
+  const pinched = await view();
+  expect(pinched.k / fit.k).toBeGreaterThan(2.5);
+  expect(pinched.k / fit.k).toBeLessThan(3.5);
+  expect(await C.evaluate(() => window.visualViewport!.scale)).toBe(1);
+  const before = await V.locator(".bpv-s").evaluate((s) => s.scrollTop);
+  await drag([{ x: 200, y: 600 }], [{ x: 200, y: 300 }]);
+  expect(await V.locator(".bpv-s").evaluate((s) => s.scrollTop)).toBeGreaterThan(before + 100);
+  for (let i = 0; i < 2; i++) {
+    await touch("touchStart", [{ x: 200, y: 400 }]);
+    await touch("touchEnd", []);
+    await C.waitForTimeout(80);
+  }
+  await C.waitForTimeout(200);
+  expect((await view()).k).toBeCloseTo(fit.k, 3);
+  await cdp.send("Emulation.setTouchEmulationEnabled", { enabled: false });
+  await cdp.detach();
+  await V.locator(".bpv-s").evaluate((s) => s.scrollTo(0, s.scrollHeight));
+  await contains(V, `Page ${made.pages} of ${made.pages}`);
+  await C.goBack();
+  await count(C.locator(".bpv"), 0);
+  await visible(P.getByRole("button", { name: "Preview the whole book" }));
+  expect(await C.evaluate(() => document.getElementById("sb-print"))).toBeNull();
+  await P.getByRole("button", { name: "Preview the whole book" }).click();
+  await contains(V, `Page 1 of ${made.pages}`);
+  await V.getByRole("button", { name: "Close the preview" }).click();
+  await count(C.locator(".bpv"), 0);
+  await visible(P.getByRole("button", { name: "Preview the whole book" }));
+  // Its PDF button: the preview closes and the same file downloads.
+  await P.getByRole("button", { name: "Preview the whole book" }).click();
+  await contains(V, `Page 1 of ${made.pages}`);
+  const fromPreview = C.waitForEvent("download");
+  await V.getByRole("button", { name: "Download this book as a PDF" }).click();
+  expect((await fromPreview).suggestedFilename()).toBe("G7_U08_Skills_Book.pdf");
+  await count(C.locator(".bpv"), 0);
+  // The top bar on the narrowest phone: back, the unit, Preview, PDF and Share all on the screen.
+  await C.setViewportSize({ width: 320, height: 640 });
+  expect(await P.locator(".sb-top button").evaluateAll((bs) => bs.every((b) => b.getBoundingClientRect().right <= window.innerWidth))).toBe(true);
+  await C.setViewportSize({ width: 390, height: 844 });
 
   // Share (23 Nov 2026, his second ask): Send copies the copies and the price, then the phone's share list (WhatsApp →
   // the shop he picks there). No shop list, no chat link.

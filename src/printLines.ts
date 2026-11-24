@@ -171,13 +171,70 @@ export function sideDots(side: Side, box: DotBox, widths: Four<number>, radii: F
 }
 
 /**
- * Every dotted side of a box, as WeasyPrint draws it. Four dotted sides of one width and one colour with square corners
- * take its quick way (`draw_dotted_dashed_border`: a dot on every corner, each side's dots spaced to land on both);
- * anything else goes side by side. `dotted`: which sides are dotted (and visible).
+ * Four dotted sides of one width round a box with rounded corners, dots evenly all the way round (24 Nov 2026, the
+ * founder's screenshot: two dots touching where an answer space's side met its corner, a gap at the other end).
+ * WeasyPrint lays each side out on its own: a corner's dots from its diagonal, the side's from the first corner's last
+ * dot, so where the side meets its second corner the two runs collide or leave a gap (the engine's own books have it
+ * too). Here the border's middle line is one loop: a dot on the middle of each corner (its 45° point; the corner itself
+ * when square), and from one corner's dot to the next the dots at one spacing, as near the engine's (a dot and a gap,
+ * twice the width) as a whole number of steps allows. Every side mirrors itself, every corner looks the same.
+ */
+export function loopDots(box: DotBox, w: number, radii: Four<[number, number]>): Dot[] {
+  const half = w / 2;
+  const [x0, y0, x1, y1] = [box.x + half, box.y + half, box.x + box.w - half, box.y + box.h - half];
+  // Each corner on the middle line: its centre, its radii (none unless both), where the loop enters it (clockwise).
+  const corners = radii.map(([h, v], i) => {
+    const rx = Math.max(0, h - half);
+    const ry = Math.max(0, v - half);
+    const [a, b] = rx > 0 && ry > 0 ? [rx, ry] : [0, 0];
+    const cx = i === 0 || i === 3 ? x0 + a : x1 - a;
+    const cy = i < 2 ? y0 + b : y1 - b;
+    return { cx, cy, a, b, from: [180, 270, 0, 90][i] };
+  });
+  const at = (k: number, deg: number): [number, number] => {
+    const c = corners[k];
+    const t = (deg * Math.PI) / 180;
+    return [c.cx + c.a * Math.cos(t), c.cy + c.b * Math.sin(t)];
+  };
+  const arc = (k: number, d0: number, d1: number): [number, number][] => {
+    const n = corners[k].a > 0 ? 24 : 1;
+    return Array.from({ length: n + 1 }, (_, j) => at(k, d0 + ((d1 - d0) * j) / n));
+  };
+  const out: Dot[] = [];
+  const step = 2 * w;
+  for (let k = 0; k < 4; k++) {
+    const next = (k + 1) % 4;
+    const from = corners[k].from;
+    const to = corners[next].from;
+    // From this corner's middle to the next one's: the rest of this corner, the straight side, half the next corner.
+    const pts = [...arc(k, from + 45, from + 90), ...arc(next, to, to + 45)];
+    const len = [0];
+    for (let j = 1; j < pts.length; j++) len.push(len[j - 1] + Math.hypot(pts[j][0] - pts[j - 1][0], pts[j][1] - pts[j - 1][1]));
+    const total = len[len.length - 1];
+    const n = Math.max(1, Math.round(total / step));
+    let j = 1;
+    for (let i = 0; i < n; i++) {
+      const s = (total * i) / n;
+      while (j < pts.length - 1 && len[j] < s) j++;
+      const span = len[j] - len[j - 1];
+      const f = span > 0 ? (s - len[j - 1]) / span : 0;
+      out.push({ x: pts[j - 1][0] + (pts[j][0] - pts[j - 1][0]) * f, y: pts[j - 1][1] + (pts[j][1] - pts[j - 1][1]) * f, r: half });
+    }
+  }
+  return out;
+}
+
+/**
+ * Every dotted side of a box. Four dotted sides of one width and one colour: with square corners WeasyPrint's quick way
+ * (`draw_dotted_dashed_border`: a dot on every corner, each side's dots spaced to land on both), with rounded ones the
+ * even loop (`loopDots`, all in the first list); anything else side by side as WeasyPrint draws it. `dotted`: which
+ * sides are dotted (and visible).
  */
 export function borderDots(box: DotBox, widths: Four<number>, radii: Four<[number, number]>, dotted: Four<boolean>, oneColour = true): Four<Dot[]> {
   const square = radii.every(([h, v]) => h === 0 && v === 0);
-  if (square && oneColour && dotted.every(Boolean) && widths.every((w) => w > 0 && w === widths[0])) {
+  const ring = oneColour && dotted.every(Boolean) && widths.every((w) => w > 0 && w === widths[0]);
+  if (ring && !square) return [loopDots(box, widths[0], radii), [], [], []];
+  if (square && ring) {
     const w = widths[0];
     const half = w / 2;
     const run = (x1: number, y1: number, x2: number, y2: number, outer: number): Dot[] => {

@@ -2930,18 +2930,37 @@ learning app of our education institute"): one profile, his class times, what he
       English names and its questions, one column up to 10 levels, two up to 22, then three), the contents on the
       back (each level: its skill, Tamil and English names, its questions, its marks, its page; the marks sheet's
       page; the copyright), each level under its black band (its number, its skill's names, "S3"), the Part I note,
-      its questions renumbered 1, 2, 3 … through the book with their skill chips (`bookCard`), its group headings,
-      its strip ("Level 3 · வினாக்கள் 21 – 32 · புள்ளிகள் [ ] / 24"); the marks sheet after the last level (six levels
+      its questions renumbered 1, 2, 3 … through the book (`bookCard`), its group headings, its strip ("Level 3 ·
+      வினாக்கள் 21 – 32 · புள்ளிகள் [ ] / 24"); the marks sheet after the last level (six levels
       a row, the unit's total and percentage). A **group heading is its badge only** ("S2 + S3", on the right; 23 Nov
       2026, his words: "we don't need to tell what is S3, S4, S5 ... we already have ... in the front page ... S1, S2,
       S3, S4 as like a badge, that's cool, that's beautiful": the skills' Tamil names made a long phrase over every
       joined group). The engine's CSS (`src/skillPrintCss.ts`), then the unit's own stored CSS, then the pages' rules
       (`PAGE_CSS`).
+    - **The skills said once** (24 Nov 2026, his words: "some places you build skill numbers two places" and "I want
+      to put skill numbers right side"; his pick: "Black tab over each group"): a level's skill is on its band, a
+      joined group's skills on its black tab (on the right, its line the column's whole width, like the cards under
+      it). A question carries no skill chips: every question of a group has exactly the group's skills, so its chips
+      only repeated the tab (and on a Part I question they sat on the left, between the number and the paper's name).
+    - **One column for every number** (24 Nov 2026, his words: "question number not aligned some time"; screenshots of
+      Q37 against Q38 and Q48–49 against Q50): the book runs Part I questions and Part II cards together (the engine's
+      books never put them side by side), and a card's number sat inside its outline, 3.9 mm in from a Part I number.
+      Now a Part I question stands as far in as a card's inside on both sides (`alignColumns` measures a card's border
+      and padding from the book's own CSS), so every question's number, the band's white number and the strips'
+      "Level" start at one x, and the answer spaces and the right-hand marks end at one x. The dotted rule between
+      Part I questions, the group tabs' line, the cards, the bands and the strips all run the column's whole width.
+    - **A part's label on its first line** (24 Nov 2026, the same screenshot: "a)" sat between its part's two lines;
+      `alignLabels`): the engine centres a Part I part's label on its words (fine for one line) and tops a Part II
+      part's on its row (a first line with a fraction or a power sits lower, so "2)" read high). Each label is moved
+      onto the baseline of its words' first line, measured with a zero-size probe; one already on it is left alone,
+      and words that begin with a figure, a table or a row of their own keep the engine's place.
     - **The lines as the engine draws them** (24 Nov 2026, his words: the download is "almost perfect, 90% perfect ...
       dotted lines, glitch"; `inkPage`, `src/printLines.ts`): once the pages are laid out, each page gets one SVG over
       it (`.sbx-ink`, under the watermark and the side tab) with (1) every dotted border dot by dot where WeasyPrint
-      puts its dots (the answer spaces' grey dots round their 2 mm corners, the dark dots between Part I questions flush
-      at both ends), (2) every solid border at the width its CSS writes (Chrome rounds a border down to a whole pixel:
+      puts its dots (the dark dots between Part I questions flush at both ends), except four rounded dotted sides (the
+      answer spaces' grey boxes): those go evenly round as one loop, a dot on each corner's middle (`loopDots`; 24 Nov
+      2026, his screenshot of two dots touching where a box's side met its corner, a gap at the other end: WeasyPrint
+      lays each side out on its own and the engine's own books have the same bunching), (2) every solid border at the width its CSS writes (Chrome rounds a border down to a whole pixel:
       a card's 1.3 pt outline, the strips, chips and contents' rules printed 0.25 mm, not 0.46; `keepWidths` keeps the
       written width), stroked along its middle (a card cut between pages stays open), (3) the page frame (the engine's
       `frame_svg`: 570 dots, one on each corner). The element's own line is made transparent, its width kept, so
@@ -2952,6 +2971,14 @@ learning app of our education institute"): one profile, his class times, what he
       weighed 2.2 MB (the server may answer with 4.5 MB at most, and the shop gets it over WhatsApp). A dot drawn as a
       stroke 0.01 mm long with round ends, all of a page's in one path, costs ~5 bytes; the seal is one picture stored
       once: the made-up book is ~80 KB a page (23 Nov's picture tiles: ~55, but soft, half dots, bunched corners).
+    - **Preview** (24 Nov 2026, his words: "put preview button near download button"; `src/bookPreview.tsx`): the eye
+      beside PDF on the T page's top bar lays the whole book out on the phone with the PDF's own code
+      (`previewSkillBook`: the same pages, lines and page numbers) and shows it page under page on a grey table, fitted
+      to the screen's width, "Page 3 of 19" as it scrolls. Two fingers pinch it bigger (up to 5×) or smaller, a double
+      tap zooms 2.5× where it lands and back, one finger moves round the page; ✕ or the phone's Back closes only the
+      Preview (the T page stays: `useBackClose`, a history step a page); its PDF button closes it and downloads the
+      same book. It is a snapshot, laid out again each time it opens; nothing stays behind (`clearPrint`). Words on
+      the screen come from this phone's Chrome, the PDF's from the server's, with the same fonts and layout.
     - This phone's own print (when the server can't): the book is built in the page in a shadow root (off the screen,
       `#sb-print`), printed with `body.sb-printing`, and kept until the next download or until the page closes
       (Android's print window may still read it after `print()` returns). Files: "G8_U04_Skills_Book",
