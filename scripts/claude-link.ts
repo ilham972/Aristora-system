@@ -54,27 +54,38 @@ export async function exchange(reqs: Req[], log = (s: string) => console.log(s))
   cpSync(join(repo, "scripts/link-relay.mjs"), join(work, "scripts/link-relay.mjs"));
   writeFileSync(join(work, "vercel.json"), JSON.stringify({ git: { deploymentEnabled: false } }));
   const nonces = new Map<string, string>();
-  const t0 = Date.now();
-  reqs.forEach((r, i) => {
-    const nonce = randomBytes(16);
-    // Each request its own time, in order: the app takes a save only when it is newer than the last one it took.
-    const box = seal(key, nonce, JSON.stringify({ ...r.req, t: t0 + i }));
-    const name = `${String(i + 1).padStart(3, "0")}-${r.name}.json`;
-    nonces.set(name, r.name);
-    writeFileSync(join(work, "link/ask", name), JSON.stringify({ fn: r.fn, id, box }));
-  });
+  /** Seal every request afresh and make the branch's one commit. Sealing again gives completely different letters. */
+  const build = (again: boolean) => {
+    nonces.clear();
+    const t0 = Date.now();
+    reqs.forEach((r, i) => {
+      const nonce = randomBytes(16);
+      // Each request its own time, in order: the app takes a save only when it is newer than the last one it took.
+      const box = seal(key, nonce, JSON.stringify({ ...r.req, t: t0 + i }));
+      const name = `${String(i + 1).padStart(3, "0")}-${r.name}.json`;
+      nonces.set(name, r.name);
+      writeFileSync(join(work, "link/ask", name), JSON.stringify({ fn: r.fn, id, box }));
+    });
+    git(work, "add", "-A");
+    const who = ["-c", "user.name=claude", "-c", "user.email=noreply@anthropic.com"];
+    const msg = `${reqs.length} sealed request${reqs.length === 1 ? "" : "s"}`;
+    git(work, ...who, "commit", "-q", "-m", msg, ...(again ? ["--amend"] : []));
+    return git(work, "rev-parse", "HEAD").trim();
+  };
   git(work, "init", "-q", "-b", branch);
-  git(work, "add", "-A");
-  git(work, "-c", "user.name=claude", "-c", "user.email=noreply@anthropic.com", "commit", "-q", "-m", `${reqs.length} sealed request${reqs.length === 1 ? "" : "s"}`);
-  const sent = git(work, "rev-parse", "HEAD").trim();
+  let sent = build(false);
   const remote = git(repo, "remote", "get-url", "origin").trim();
   for (let tries = 0; ; tries++) {
     try {
       git(work, "push", "-q", "--force", remote, `HEAD:refs/heads/${branch}`);
       break;
     } catch (e) {
-      if (tries >= 2) throw e;
-      await sleep(4000);
+      if (tries >= 3) throw e;
+      // A sealed box is random base64, and GitHub's secret scanning now and then reads a stretch of it as a cloud
+      // key and refuses the push (GH013). The same bytes would be refused for ever, so seal it all again (a new
+      // commit, amended over the refused one so its letters leave the branch) instead of pushing the same thing.
+      if (/GH013|push protection|cannot contain secrets/i.test(String((e as Error).message ?? e))) sent = build(true);
+      else await sleep(4000);
     }
   }
   log(`sent ${reqs.length} request${reqs.length === 1 ? "" : "s"} on ${branch} (${sent.slice(0, 7)}); waiting for the answers…`);

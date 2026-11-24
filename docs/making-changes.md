@@ -186,6 +186,9 @@ node /opt/npm-tools/node_modules/tsx/dist/cli.mjs scripts/gov/upload.ts $SCR/gov
   recompressed; the text and drawings stay vector). A Grade 8 unit lands around 500 KB. **Adobe writes CMYK JPEGs
   inverted and marks them**: without `ImageChops.invert` a yellow figure comes out black — look at a photo-heavy unit
   (Solids, Mass) after a change to the image code.
+- **A refused push with "GH013 … cannot contain secrets" is a false alarm**: a sealed box is random base64 and
+  GitHub's secret scanning now and then reads a stretch of it as a cloud key. `exchange` seals everything again and
+  amends the commit, so the letters it objected to leave the branch; nothing needs unblocking on GitHub.
 - `upload.ts` sends whole units in runs of about 5 MB (one run = one GitHub Actions run), skips a unit whose sha is
   already in the app, and reports each one. Running it again sends only what is missing or new.
 - Then tell him: Settings → Books → Grade N — the unit numbers of the units that have the book are violet; tapping a
