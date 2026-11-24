@@ -5068,7 +5068,7 @@ test("Skill book: Books → T on a tagged unit; Level n = skill n (S1+S2 inside 
   await P.locator(".sb-pill", { hasText: "S2" }).click();
   await textsAre(P.locator(".sb-q .sb-qn"), [...Array.from({ length: 23 }, (_, i) => `Q${i + 15}`), "Q11", "Q12", "Q13", "Q14"]);
   await count(P.locator(".sb-grp"), 1);
-  await contains(P.locator(".sb-grp"), "S1+S2");
+  await contains(P.locator(".sb-grp"), "S1 + S2");
   await contains(P.locator(".sb-grp"), "முதல் திறன் + இரண்டாம் திறன்");
   await contains(P.locator(".sb-head"), "இரண்டாம் திறன்");
   await contains(P.locator(".sb-q", { hasText: "Q11" }).locator(".sb-qk"), "PDF 34");
@@ -5078,23 +5078,23 @@ test("Skill book: Books → T on a tagged unit; Level n = skill n (S1+S2 inside 
   // Move Q11 to the group S1: it needs S1 alone now, so it goes to Level 1.
   await P.locator(".sb-q", { hasText: "Q11" }).getByRole("button", { name: "Move" }).click();
   const M = C.locator(".sheet");
-  await contains(M, "Now in S1+S2");
-  await contains(M.locator(".sb-mv button", { has: C.locator("b", { hasText: /^S2\+S3$/ }) }), "Level 3");
+  await contains(M, "Now in S1 + S2");
+  await contains(M.locator(".sb-mv button", { has: C.locator("b", { hasText: /^S2 \+ S3$/ }) }), "Level 3");
   await shot(C, "sb03-move-sheet");
   await M.locator(".sb-mv button", { has: C.locator("b", { hasText: /^S1$/ }) }).click();
-  await contains(C.locator(".toast"), "Q11 moved: S1+S2 → S1.");
+  await contains(C.locator(".toast"), "Q11 moved: S1 + S2 → S1.");
   expect(await tagsOf(11)).toEqual([{ q: 11, s: S(1) }]);
   await textsAre(P.locator(".sb-pill small"), ["11", "26", "20"]);
   // Q12 to a new group: S1 and S3 ticked → Level 3, after S3 alone, before S2+S3.
   await P.locator(".sb-q", { hasText: "Q12" }).getByRole("button", { name: "Move" }).click();
   await M.locator(".sb-ticks button", { hasText: "S1" }).click();
   await M.locator(".sb-ticks button", { hasText: "S3" }).click();
-  await M.getByRole("button", { name: "Move to S1+S3" }).click();
-  await contains(C.locator(".toast"), "Q12 moved: S1+S2 → S1+S3.");
+  await M.getByRole("button", { name: "Move to S1 + S3" }).click();
+  await contains(C.locator(".toast"), "Q12 moved: S1 + S2 → S1 + S3.");
   expect(await tagsOf(12)).toEqual([{ q: 12, s: S(3), x: [S(1)] }]);
   await textsAre(P.locator(".sb-pill small"), ["11", "25", "21"]);
   await P.locator(".sb-pill", { hasText: "S3" }).click();
-  await textsAre(P.locator(".sb-grp b"), ["S1+S3", "S2+S3"]);
+  await textsAre(P.locator(".sb-grp b"), ["S1 + S3", "S2 + S3"]);
 
   // The PDF server (api/pdf.mjs) isn't in this run's site: first the fallback, this phone's own print window.
   let served: { status: number; body?: Buffer; pages?: number } = { status: 503 };

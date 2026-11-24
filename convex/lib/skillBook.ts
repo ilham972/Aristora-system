@@ -32,14 +32,21 @@ export function needs(tags: readonly SkillTag[], q: number): string[] {
 
 export const groupKey = (skills: readonly string[]) => [...skills].sort(bySkill).join("+");
 
-/** A skill as the book prints it: "S3" (this unit's), "S4·2" (unit 4's skill 2). */
+/**
+ * A skill as the book and the T page say it: this unit's "S3"; another unit's with its grade and unit, "G7 U10·S1"
+ * (24 Nov 2026, the founder on G9 U03's tabs: "Why you telling S10? ... What is 10?": "S10·1" was Grade 7's Unit 10,
+ * skill 1, and said nothing of the grade; his pick: say grade and unit). The number written by hand beside a question
+ * stays `paperNo`'s ("10·1").
+ */
 export function skillLabel(unitKey: string, id: string): string {
-  return `S${paperNo(unitKey, id)}`;
+  const home = skillHome(id);
+  if (!home || home === unitKey) return `S${paperNo(unitKey, id)}`;
+  return `${home.replace("-", " ")}·S${id.slice(home.length + 2)}`;
 }
 
-/** A group's pill: "S3", "S2+S3". */
+/** A group's pill: "S3", "S2 + S3", "G7 U10·S1 + S2". */
 export function groupLabel(unitKey: string, skills: readonly string[]): string {
-  return skills.map((id) => skillLabel(unitKey, id)).join("+");
+  return skills.map((id) => skillLabel(unitKey, id)).join(" + ");
 }
 
 /** Teaching order of two groups: by the last skill each needs, then the smaller first, then skill by skill. */

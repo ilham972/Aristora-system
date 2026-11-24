@@ -14183,7 +14183,8 @@ body.sb-on {
   line-height: 1.25;
 }
 .sb-grp b {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
   padding: 2px 8px;
   border-radius: 6px;
   background: var(--ink);

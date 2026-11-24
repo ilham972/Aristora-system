@@ -43,13 +43,16 @@ describe("a unit's book by skill", () => {
     expect(needs(tags(), 70)).toEqual([OTHER, S(2)]);
     expect(needs(tags(), 99)).toEqual([]);
     expect(skillLabel(UNIT, S(3))).toBe("S3");
-    expect(skillLabel(UNIT, OTHER)).toBe("S0·2");
-    expect(groupLabel(UNIT, [S(2), S(3)])).toBe("S2+S3");
+    expect(skillLabel(UNIT, OTHER)).toBe("G8 U00·S2");
+    expect(skillLabel(UNIT, "G7-U10-S1")).toBe("G7 U10·S1"); // another grade's: its grade and unit (24 Nov 2026)
+    expect(skillLabel("G11-U04", "OL-U03-S12")).toBe("OL U03·S12");
+    expect(groupLabel(UNIT, [S(2), S(3)])).toBe("S2 + S3");
+    expect(groupLabel("G9-U03", ["G7-U10-S3", "G9-U03-S2"])).toBe("G7 U10·S3 + S2");
   });
 
   test("groups come after the last skill they need: S1, S2, then the bigger groups ending in S2, S3, S1+S3", () => {
     const g = skillGroups(BOOK, tags());
-    expect(g.map((x) => groupLabel(UNIT, x.skills))).toEqual(["S1", "S2", "S0·2+S2", "S1+S2", "S3", "S1+S3"]);
+    expect(g.map((x) => groupLabel(UNIT, x.skills))).toEqual(["S1", "S2", "G8 U00·S2 + S2", "S1 + S2", "S3", "S1 + S3"]);
     expect(g.map((x) => x.qs.length)).toEqual([20, 20, 6, 12, 9, 6]);
     // Every question once.
     expect(g.flatMap((x) => x.qs).sort((a, b) => a - b)).toEqual(Array.from({ length: 73 }, (_, i) => i + 1));
@@ -86,7 +89,7 @@ describe("a unit's book by skill", () => {
       [2, 21, 58],
       [3, 59, 73],
     ]);
-    expect(levels.map((l) => l.groups.map((g) => groupLabel(UNIT, g.skills)))).toEqual([["S1"], ["S2", "S0·2+S2", "S1+S2"], ["S3", "S1+S3"]]);
+    expect(levels.map((l) => l.groups.map((g) => groupLabel(UNIT, g.skills)))).toEqual([["S1"], ["S2", "G8 U00·S2 + S2", "S1 + S2"], ["S3", "S1 + S3"]]);
     expect(number.get(21)).toBe(21);
     expect(number.get(67)).toBe(41); // S2 alone first (21–40), then the groups that end in S2: two skills, in skill order
     expect(number.get(41)).toBe(47);
@@ -108,11 +111,11 @@ describe("a unit's book by skill", () => {
       [2, 0, 0, -1],
       [3, 53, 21, 73],
     ]);
-    expect(levels[0].groups.map((g) => groupLabel(UNIT, g.skills))).toEqual(["S0·2"]);
+    expect(levels[0].groups.map((g) => groupLabel(UNIT, g.skills))).toEqual(["G8 U00·S2"]);
     expect(levels[1].groups).toEqual([]);
     expect(levels[1].max).toBe(0);
     // Level 3: S3 alone, then the two-skill groups in skill order (the earlier unit's first).
-    expect(levels[2].groups.map((g) => groupLabel(UNIT, g.skills))).toEqual(["S3", "S0·2+S3", "S1+S3", "S2+S3"]);
+    expect(levels[2].groups.map((g) => groupLabel(UNIT, g.skills))).toEqual(["S3", "G8 U00·S2 + S3", "S1 + S3", "S2 + S3"]);
     expect([number.get(1), number.get(53), number.get(67), number.get(61), number.get(21)]).toEqual([1, 21, 30, 36, 42]);
     // A unit whose skills row names a skill no tag uses yet: its level is there, empty.
     expect(skillLevels(UNIT, BOOK, tags(), [...SKILLS.map((s) => s.id), S(4)]).levels.map((l) => [l.n, l.qs.length])).toEqual([

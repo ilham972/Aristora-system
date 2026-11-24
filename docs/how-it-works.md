@@ -2942,6 +2942,10 @@ learning app of our education institute"): one profile, his class times, what he
       joined group's skills on its black tab (on the right, its line the column's whole width, like the cards under
       it). A question carries no skill chips: every question of a group has exactly the group's skills, so its chips
       only repeated the tab (and on a Part I question they sat on the left, between the number and the paper's name).
+      A skill of another unit says its grade and unit: "G7 U10·S1" (Grade 7's Unit 10, skill 1), "G8 U04·S9 + S5"; this
+      unit's own stay "S1", "S2" (24 Nov 2026, his question on G9 U03's tabs: "Why you telling S10? ... What is 10?":
+      "S10·1" left out the grade; his pick: say grade and unit). The T page says the same (`skillLabel`, groups joined
+      " + "); the number written by hand beside a question for a lesson stays short ("10·1", `paperNo`).
     - **One column for every number** (24 Nov 2026, his words: "question number not aligned some time"; screenshots of
       Q37 against Q38 and Q48–49 against Q50): the book runs Part I questions and Part II cards together (the engine's
       books never put them side by side), and a card's number sat inside its outline, 3.9 mm in from a Part I number.

@@ -331,7 +331,7 @@ export function SkillBookPage(props: { unit: Unit; gov: GovRow | null; onClose: 
                           <p class="sb-parts">
                             {parts.map((t) => (
                               <span key={t.p}>
-                                ({t.p}) {[t.s, ...(t.x ?? [])].map(label).join("+")}
+                                ({t.p}) {[t.s, ...(t.x ?? [])].map(label).join(" + ")}
                               </span>
                             ))}
                           </p>
@@ -400,7 +400,7 @@ function MoveQSheet(props: {
   const [ticks, setTicks] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const here = groupKey(props.now);
-  const words = (ids: string[]) => ids.map(props.label).join("+");
+  const words = (ids: string[]) => ids.map(props.label).join(" + ");
   const go = async (skills: string[]) => {
     if (busy) return;
     setBusy(true);
