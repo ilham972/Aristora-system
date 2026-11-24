@@ -180,6 +180,37 @@ export function partsForGrade(grade: number): { id: PartId; kind: "short" | "car
       ];
 }
 
+/**
+ * A workbook's parts and levels from what its book prints: each part's last question (a short part's marks a question),
+ * each level's last question and its marks, in order. The upload (catalog.saveWorkbook) and the Claude link's whole-unit
+ * save (lib/wholeUnit.ts) make a book this one way. Plain words when a part isn't one of the grade's.
+ */
+export function shapeFrom(
+  grade: number,
+  parts: readonly { id: PartId; to: number; each?: number }[],
+  levels: readonly { to: number; max: number }[],
+): { parts: MasterPart[]; levels: MasterLevel[] } | string {
+  const plan = partsForGrade(grade);
+  for (const p of parts) {
+    if (!plan.some((x) => x.id === p.id)) return `Grade ${grade} workbooks have no ${PART_NAME[p.id] ?? String(p.id)}.`;
+  }
+  const out: MasterPart[] = [];
+  let from = 1;
+  for (const x of plan) {
+    const p = parts.find((y) => y.id === x.id);
+    if (!p) continue;
+    out.push(x.kind === "short" ? { id: x.id, from, to: p.to, kind: x.kind, each: p.each ?? 2 } : { id: x.id, from, to: p.to, kind: x.kind });
+    from = p.to + 1;
+  }
+  const lv: MasterLevel[] = [];
+  let start = 1;
+  levels.forEach((l, i) => {
+    lv.push({ n: i + 1, from: start, to: l.to, max: l.max });
+    start = l.to + 1;
+  });
+  return { parts: out, levels: lv };
+}
+
 export function partOf(data: MasterData, q: number): MasterPart | undefined {
   return data.parts.find((p) => q >= p.from && q <= p.to);
 }

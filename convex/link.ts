@@ -18,6 +18,9 @@
 //   answers off the ladder, and every part's own marks, stay as they were; the workbook's typed fixes are never touched.
 // - Skills (13 Nov 2026, convex/lib/skills.ts): `ask` "skills" reads the skills the units have; `tell` "skills" saves one
 //   unit's skills and each question's skill, whole, through `skillsProblem`. Names and numbers only; no mark moves.
+// - A whole unit (24 Nov 2026, convex/lib/wholeUnit.ts; his pick: "one chat ... saves it straight into the app ... no
+//   PDF"): `tell` "workbook" saves a unit's book, key with every kind, printed questions, style and skills in one go, and
+//   the unit's workbook is its skill book at once (the owner's switch's own code). Never over a book students used.
 // - The Sakarath book (17 Nov 2026, convex/lib/sakarath.ts; his ask: "you will upload from here ... one time upload"):
 //   `tell` "sakarath" saves one unit's whole Sakarath book (its levels and marks, key with every part's kind, printed
 //   questions, style) on its own unit, made the first time; checked like the rest, all or nothing; its levels can't
@@ -39,7 +42,7 @@ import { query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation } from "./lib/fn";
 import { actor, viewer } from "./lib/auth";
-import { bookFor, cleanBy, currentSession, fail, keyRow, log, touch } from "./lib/backend";
+import { bookFor, cleanBy, currentSession, fail, keyRow, log, refresh, touch } from "./lib/backend";
 import { bookTotal, fighter, type FighterData, type MasterData, type SectionData } from "./lib/book";
 import { checkFighterKey, checkKey, slotProblem, type KeyAnswer } from "./lib/key";
 import { ladderKeys, ladderShape, secQs } from "./lib/ladder";
@@ -54,6 +57,8 @@ import { keyMaker, videosByKey } from "./lib/skillKeys";
 import { ensureSkb, EXAM_GRADES, olSkKey, sakarathProblem, sameLevels, skGrade, skKey, skNames, SK_TITLE } from "./lib/sakarath";
 import { OL, unitKey } from "./lib/syllabus";
 import { linkReply, linkThread, linkThreads } from "./linkThreads";
+import { hasWork } from "./catalog";
+import { levelLines, makeWholeUnit, type WholeUnit } from "./lib/wholeUnit";
 
 /** A link works this long, unless the owner turns it off first. */
 export const LINK_DAYS = 7;
@@ -274,7 +279,7 @@ export const ask = query({
               code: u.code,
               en: u.en,
               ta: u.ta,
-              master: m ? { levels: m.levels.length, last: m.parts.length ? m.parts[m.parts.length - 1].to : 0, total: bookTotal(m), keyCount: b!.keyCount ?? 0, qCount: b!.qCount ?? 0, tute: !!b!.tute, updatedAt: b!.updatedAt } : null,
+              master: m ? { levels: m.levels.length, last: m.parts.length ? m.parts[m.parts.length - 1].to : 0, total: bookTotal(m), keyCount: b!.keyCount ?? 0, qCount: b!.qCount ?? 0, tute: !!b!.tute, skillBook: !!m.skills, updatedAt: b!.updatedAt } : null,
               skills: tagged.get(u._id) ?? null,
               gov: ((g) => (g ? { pages: g.pages, bytes: g.bytes, parts: g.parts, sha: g.sha, from: g.from, updatedAt: g.updatedAt } : null))(govs.get(u._id as string)),
               // Its theory book's ladder (`stage: "fighter"` in a request): its questions, from and to.
@@ -535,6 +540,58 @@ async function saveUnit(ctx: MutationCtx, row: Row, req: Asked, now: number): Pr
   return { ok: true, saved: { answers: s.answers?.length ?? 0, questions: s.items?.length ?? 0, css: s.css !== undefined, fixes }, share };
 }
 
+/**
+ * A unit's skills about to be saved (a skills save, or a whole unit's): another unit's question that carries one of them
+ * must find it still here and still the same skill; every skill keeps its permanent key (23 Nov 2026: its videos follow
+ * the skill, never its number; lib/skills.ts carryKeys), and a skill with a video can't go, or quietly become another
+ * skill. The skills with their keys, the unit's row before, and `save` (the key counter, written once with the rest), or
+ * plain words. Nothing is written here.
+ */
+async function skillsKept(
+  ctx: MutationCtx,
+  unit: Doc<"units">,
+  next: readonly Skill[],
+  rows: readonly Doc<"skillTags">[],
+  units: readonly Doc<"units">[],
+): Promise<{ skills: Skill[]; old: Doc<"skillTags"> | undefined; save: () => Promise<void> } | string> {
+  // A skill of this unit that another unit's question carries must stay.
+  const ids = new Set(next.map((s) => s.id));
+  for (const r of rows) {
+    if (r.unitId === unit._id) continue;
+    for (const t of r.tags) {
+      const gone = [t.s, ...(t.x ?? [])].find((id) => skillHome(id) === unit.key && !ids.has(id));
+      if (gone) return `${units.find((u) => u._id === r.unitId)?.key} question ${t.q} carries ${gone}: keep that skill, or tag that unit again first.`;
+    }
+  }
+  const old = rows.find((r) => r.unitId === unit._id);
+  const keys = await keyMaker(ctx);
+  const carry = carryKeys(old?.skills ?? [], next, keys.fresh);
+  if (typeof carry === "string") return carry;
+  const vids = await videosByKey(ctx, unit._id);
+  const before = new Map((old?.skills ?? []).filter((s) => s.k).map((s) => [s.k as string, s]));
+  for (const k of carry.gone) {
+    const n = vids.get(k);
+    const was = before.get(k);
+    if (n && was) return `Skill ${was.id} (${was.en}) has ${n} video${n > 1 ? "s" : ""}: keep it (send it with "k": "${k}"), or take its video off first (Settings → Books → T).`;
+  }
+  for (const s of carry.skills) {
+    const was = s.k ? before.get(s.k) : undefined;
+    if (!was || !carry.byId.has(s.id) || !vids.get(s.k!) || sameName(was.en, s.en)) continue;
+    return `${s.id} had the video for "${was.en}"; now ${s.id} is "${s.en}". The same skill in new words: send it with "k": "${s.k}". Another skill: give it a number of its own.`;
+  }
+  // Another unit's question that carries one of this unit's skills must still mean the same skill (its number moved).
+  const keyNow = new Map(carry.skills.map((s) => [s.id, s.k]));
+  const keyWas = new Map((old?.skills ?? []).map((s) => [s.id, s.k]));
+  for (const r of rows) {
+    if (r.unitId === unit._id) continue;
+    for (const t of r.tags) {
+      const moved = [t.s, ...(t.x ?? [])].find((id) => skillHome(id) === unit.key && keyWas.get(id) && keyNow.get(id) !== keyWas.get(id));
+      if (moved) return `${units.find((u) => u._id === r.unitId)?.key} question ${t.q} carries ${moved}, which is now another skill: keep ${moved}'s number for it, or tag that unit again first.`;
+    }
+  }
+  return { skills: carry.skills, old, save: keys.save };
+}
+
 /** A unit's skills and each question's skill, saved whole (the row before is replaced) once `skillsProblem` finds nothing. */
 async function saveSkills(ctx: MutationCtx, row: Row, req: Asked, now: number): Promise<Record<string, unknown>> {
   const m = await masterOf(ctx, req.unitId);
@@ -546,51 +603,20 @@ async function saveSkills(ctx: MutationCtx, row: Row, req: Asked, now: number): 
   const units = await ctx.db.query("units").collect();
   const bad = skillsProblem(m.unit.key, m.data, key?.answers ?? null, file, knownFor(m.unit, rows, units));
   if (bad) return { ok: false, error: bad };
-  // A skill of this unit that another unit's question carries must stay.
-  const ids = new Set(file.skills.map((s) => s.id));
-  for (const r of rows) {
-    if (r.unitId === m.unit._id) continue;
-    for (const t of r.tags) {
-      const gone = [t.s, ...(t.x ?? [])].find((id) => skillHome(id) === m.unit.key && !ids.has(id));
-      if (gone) return { ok: false, error: `${units.find((u) => u._id === r.unitId)?.key} question ${t.q} carries ${gone}: keep that skill, or tag that unit again first.` };
-    }
-  }
-  const old = rows.find((r) => r.unitId === m.unit._id);
-  // Every skill keeps its permanent key (23 Nov 2026: its videos follow the skill, never its number; lib/skills.ts).
-  const keys = await keyMaker(ctx);
-  const carry = carryKeys(
-    old?.skills ?? [],
+  const kept = await skillsKept(
+    ctx,
+    m.unit,
     file.skills.map((s) => ({ id: s.id, ta: s.ta.trim(), en: s.en.trim(), ...(s.eg !== undefined ? { eg: s.eg } : {}), ...(s.k !== undefined ? { k: s.k } : {}) })),
-    keys.fresh,
+    rows,
+    units,
   );
-  if (typeof carry === "string") return { ok: false, error: carry };
-  const vids = await videosByKey(ctx, m.unit._id);
-  const before = new Map((old?.skills ?? []).filter((s) => s.k).map((s) => [s.k as string, s]));
-  for (const k of carry.gone) {
-    const n = vids.get(k);
-    const was = before.get(k);
-    if (n && was) return { ok: false, error: `Skill ${was.id} (${was.en}) has ${n} video${n > 1 ? "s" : ""}: keep it (send it with "k": "${k}"), or take its video off first (Settings → Books → T).` };
-  }
-  for (const s of carry.skills) {
-    const was = s.k ? before.get(s.k) : undefined;
-    if (!was || !carry.byId.has(s.id) || !vids.get(s.k!) || sameName(was.en, s.en)) continue;
-    return { ok: false, error: `${s.id} had the video for "${was.en}"; now ${s.id} is "${s.en}". The same skill in new words: send it with "k": "${s.k}". Another skill: give it a number of its own.` };
-  }
-  // Another unit's question that carries one of this unit's skills must still mean the same skill (its number moved).
-  const keyNow = new Map(carry.skills.map((s) => [s.id, s.k]));
-  const keyWas = new Map((old?.skills ?? []).map((s) => [s.id, s.k]));
-  for (const r of rows) {
-    if (r.unitId === m.unit._id) continue;
-    for (const t of r.tags) {
-      const moved = [t.s, ...(t.x ?? [])].find((id) => skillHome(id) === m.unit.key && keyWas.get(id) && keyNow.get(id) !== keyWas.get(id));
-      if (moved) return { ok: false, error: `${units.find((u) => u._id === r.unitId)?.key} question ${t.q} carries ${moved}, which is now another skill: keep ${moved}'s number for it, or tag that unit again first.` };
-    }
-  }
-  const skills: Skill[] = carry.skills;
+  if (typeof kept === "string") return { ok: false, error: kept };
+  const { old } = kept;
+  const skills: Skill[] = kept.skills;
   const tags: SkillTag[] = file.tags
     .map((t) => ({ q: t.q, ...(t.p !== undefined ? { p: t.p } : {}), s: t.s, ...(t.x?.length ? { x: [...t.x] } : {}) }))
     .sort((a, b) => a.q - b.q || (a.p ?? "").localeCompare(b.p ?? ""));
-  await keys.save();
+  await kept.save();
   if (old) await ctx.db.patch(old._id, { skills, tags, by: row.by, updatedAt: now });
   else await ctx.db.insert("skillTags", { unitId: m.unit._id, stage: "master", skills, tags, by: row.by, updatedAt: now });
   const questions = new Set(tags.map((t) => t.q)).size;
@@ -599,6 +625,109 @@ async function saveSkills(ctx: MutationCtx, row: Row, req: Asked, now: number): 
   await touch(ctx, session, now);
   const n = skillCounts(tags);
   return { ok: true, saved: { skills: skills.length, tags: tags.length, questions }, counts: [...n].map(([id, c]) => ({ id, n: c })) };
+}
+
+/**
+ * What students did in a unit's workbook, in plain words ("" = nothing): marks, answers or photos from home, a level being
+ * corrected or open on a phone, online explanations on its questions. A used book's numbers are on paper and in their
+ * marks: fixed for the year (the founder, 24 Nov 2026: "one edition a year").
+ */
+async function workIn(ctx: QueryCtx, unitId: Id<"units">): Promise<string> {
+  const progress = await ctx.db
+    .query("progress")
+    .withIndex("by_unit_stage", (x) => x.eq("unitId", unitId).eq("stage", "master"))
+    .collect();
+  const marked = progress.filter(hasWork).length;
+  if (marked) return `${marked === 1 ? "a student has" : `${marked} students have`} marks in it`;
+  if (await ctx.db.query("familyAnswers").withIndex("by_unit", (x) => x.eq("unitId", unitId)).first()) return "students answered it at home";
+  if (await ctx.db.query("homePhotos").withIndex("by_unit", (x) => x.eq("unitId", unitId)).first()) return "students sent photos of it from home";
+  if ((await ctx.db.query("drafts").collect()).some((r) => r.unitId === unitId)) return "a level of it is being corrected";
+  if ((await ctx.db.query("claims").collect()).some((r) => r.unitId === unitId)) return "a level of it is being corrected";
+  if ((await ctx.db.query("familyLive").collect()).some((r) => r.unitId === unitId)) return "a level of it is open on a phone";
+  const prefix = `h:${unitId}:`;
+  if (await ctx.db.query("usRooms").withIndex("by_key", (x) => x.gte("key", prefix).lt("key", `${prefix}\uffff`)).first()) return "its questions have online explanations";
+  return "";
+}
+
+/**
+ * A whole unit, saved as its skill book (24 Nov 2026, the founder: "you just say done ... I can download that directly
+ * from the skill page"; lib/wholeUnit.ts makes it): the book, its key with every kind, every question as printed, the
+ * style and the skills in one save, all or nothing. The unit's workbook IS its skill book at once: no "Use as the
+ * workbook" for it (there is nothing of a student's to clear), so no student ever sees it by the engine's levels.
+ * - A school unit only (Grades 6–11); a topic tute keeps its own upload.
+ * - Never over a book a student has used (`workIn`): its numbers are fixed for the year; a fix goes through `save`.
+ * - A unit with a workbook already is replaced only with `again`: its book may be printed, so the chat asks the founder
+ *   first. The old book's typed answers go (they were for its numbers); its skills keep their keys and their videos.
+ */
+async function saveWhole(ctx: MutationCtx, row: Row, req: Asked, now: number): Promise<Record<string, unknown>> {
+  const id = typeof req.unitId === "string" ? ctx.db.normalizeId("units", req.unitId) : null;
+  const unit = id ? await ctx.db.get(id) : null;
+  if (!unit) return { ok: false, error: "No such unit." };
+  if (unit.grade < 6 || unit.grade > 11) return { ok: false, error: `${unit.key}: only a school unit (Grades 6–11) is saved whole; an O/L topic is a topic tute, with its own upload.` };
+  const old = await bookFor(ctx, unit._id, "master");
+  if (old?.tute) return { ok: false, error: `${unit.key} holds a topic tute: it keeps its own upload.` };
+  const used = await workIn(ctx, unit._id);
+  if (used) {
+    return { ok: false, error: `${unit.key}: ${used}, so its numbers are fixed for this year. Fix a question, a key or a kind with a save of its questions; adding, removing or moving questions waits for its next edition.` };
+  }
+  if (old && req.again !== true) {
+    const now2 = old.data.kind === "master" && old.data.skills ? "its skill book" : "a book by levels";
+    return { ok: false, error: `${unit.key} has a workbook in the app already (${now2}), and its book may be printed: ask the founder, and only when he says so, send it again with "again".` };
+  }
+  const rows = await skillRows(ctx);
+  const units = await ctx.db.query("units").collect();
+  const made = makeWholeUnit(unit, req as unknown as WholeUnit, knownFor(unit, rows, units));
+  if (typeof made === "string") return { ok: false, error: `${unit.key}: ${made}` };
+  const kept = await skillsKept(ctx, unit, made.skills, rows, units);
+  if (typeof kept === "string") return { ok: false, error: kept };
+
+  // Everything is right: now it is written.
+  await kept.save();
+  const data: MasterData = { ...made.data, since: now };
+  const n = made.items.length;
+  if (old) await ctx.db.patch(old._id, { data, keyCount: made.answers.length, qCount: n, updatedAt: now });
+  else await ctx.db.insert("books", { unitId: unit._id, stage: "master", data, keyCount: made.answers.length, qCount: n, updatedAt: now });
+  const key = await keyRow(ctx, unit._id, "master");
+  if (key) await ctx.db.patch(key._id, { answers: made.answers, updatedAt: now });
+  else await ctx.db.insert("keys", { unitId: unit._id, stage: "master", answers: made.answers, updatedAt: now });
+  for (const r of await questionRows(ctx, unit._id, "master")) await ctx.db.delete(r._id);
+  for (const it of made.items) await ctx.db.insert("questions", { unitId: unit._id, stage: "master", q: it.q, html: it.html });
+  const css = await ctx.db
+    .query("bookCss")
+    .withIndex("by_book", (x) => x.eq("unitId", unit._id).eq("stage", "master"))
+    .first();
+  if (css) await ctx.db.patch(css._id, { css: made.css, updatedAt: now });
+  else await ctx.db.insert("bookCss", { unitId: unit._id, stage: "master", css: made.css, updatedAt: now });
+  if (kept.old) await ctx.db.patch(kept.old._id, { skills: kept.skills, tags: made.tags, by: row.by, updatedAt: now });
+  else await ctx.db.insert("skillTags", { unitId: unit._id, stage: "master", skills: kept.skills, tags: made.tags, by: row.by, updatedAt: now });
+  // A teacher's typed answers were for the old book's numbers.
+  for (const f of await ctx.db
+    .query("phoneFixes")
+    .withIndex("by_unit", (x) => x.eq("unitId", unit._id))
+    .collect()) {
+    await ctx.db.delete(f._id);
+  }
+  const book = (await bookFor(ctx, unit._id, "master"))!;
+  const share = await shareOf(ctx, { unit, book, stage: "master", data, fdata: null, secs: [], key: null, answers: made.answers }, made.answers);
+  const session = await currentSession(ctx, now);
+  // A student with a row in this unit (a book given) sees the new book at once.
+  for (const p of await ctx.db
+    .query("progress")
+    .withIndex("by_unit_stage", (x) => x.eq("unitId", unit._id).eq("stage", "master"))
+    .collect()) {
+    await refresh(ctx, p.studentId, now, session);
+  }
+  const strips = data.levels.length;
+  const own = made.levels.filter((l) => l.qs.length).length;
+  await log(ctx, session, now, {
+    kind: "book-save",
+    by: "claude",
+    unit: unit.key,
+    value: `Claude link (${row.by}): the skill book, ${own} levels (${strips} strips), ${n} questions, ${kept.skills.length} skills; the phone marks ${share.marks}/${share.max} marks, ${share.parts.read} typed, ${share.parts.photo} photos`,
+  });
+  await touch(ctx, session, now);
+  const names = new Map(kept.skills.map((s) => [s.id, s.en]));
+  return { ok: true, unitId: unit._id, made: !old, questions: n, strips, skills: kept.skills.length, levels: levelLines(made.levels, names), share };
 }
 
 /**
@@ -757,7 +886,8 @@ async function saveSakarath(ctx: MutationCtx, row: Row, req: Asked, now: number)
 
 /**
  * Write (the chat tells): `save` = a unit's key (every question's answer and kind) and the questions whose printed HTML
- * changed, checked like an uploaded zip, all or nothing; `skills` = a unit's skills and each question's skill, whole.
+ * changed, checked like an uploaded zip, all or nothing; `skills` = a unit's skills and each question's skill, whole;
+ * `workbook` = a whole unit as its skill book (`saveWhole`).
  * The threads link's code: `reply` = a message into a thread (convex/linkThreads.ts).
  * Each request once: an older or the same one is refused.
  */
@@ -780,6 +910,8 @@ export const tell = mutation({
           ? await saveUnit(ctx, row, o.req, now)
           : o.req.op === "skills"
             ? await saveSkills(ctx, row, o.req, now)
+            : o.req.op === "workbook"
+            ? await saveWhole(ctx, row, o.req, now)
             : o.req.op === "sakarath"
               ? await saveSakarath(ctx, row, o.req, now)
               : o.req.op === "gov"

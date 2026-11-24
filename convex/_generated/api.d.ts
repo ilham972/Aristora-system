@@ -90,6 +90,7 @@ import type * as lib_usTalk from "../lib/usTalk.js";
 import type * as lib_usToday from "../lib/usToday.js";
 import type * as lib_usXp from "../lib/usXp.js";
 import type * as lib_videos from "../lib/videos.js";
+import type * as lib_wholeUnit from "../lib/wholeUnit.js";
 import type * as lib_work from "../lib/work.js";
 import type * as link from "../link.js";
 import type * as linkThreads from "../linkThreads.js";
@@ -205,6 +206,7 @@ declare const fullApi: ApiFromModules<{
   "lib/usToday": typeof lib_usToday;
   "lib/usXp": typeof lib_usXp;
   "lib/videos": typeof lib_videos;
+  "lib/wholeUnit": typeof lib_wholeUnit;
   "lib/work": typeof lib_work;
   link: typeof link;
   linkThreads: typeof linkThreads;

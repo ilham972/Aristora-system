@@ -64,7 +64,7 @@ export function sheetOf(udir: string, from = 1, to = Infinity): string {
   return out.join("\n") + "\n";
 }
 
-function sheetHead(udir: string): string {
+export function sheetHead(udir: string): string {
   const { u, last } = load(udir);
   const first = firstQuestion(u.data);
   return [
@@ -83,7 +83,7 @@ function knownOf(dir: string): KnownUnit[] {
 }
 
 /** The skills this unit's questions may carry besides its own: every other unit's, of its grade or an earlier one. */
-function knownFor(udir: string, u: Unit): Map<string, KnownSkill & { n: number }> {
+export function knownFor(udir: string, u: Unit): Map<string, KnownSkill & { n: number }> {
   const out = new Map<string, KnownSkill & { n: number }>();
   for (const k of knownOf(join(udir, ".."))) {
     if (k.key === u.unit.key || k.grade > u.unit.grade) continue;
@@ -93,7 +93,7 @@ function knownFor(udir: string, u: Unit): Map<string, KnownSkill & { n: number }
 }
 
 /** skills.json → what the app takes, and everything wrong with the file's own shape. */
-function read(udir: string, u: Unit): { file: SkillFile; wrong: string[] } {
+export function read(udir: string, u: Unit): { file: SkillFile; wrong: string[] } {
   const wrong: string[] = [];
   const path = join(udir, "skills.json");
   if (!existsSync(path)) return { file: { skills: [], tags: [] }, wrong: [`No ${path}: write it first.`] };
@@ -139,7 +139,7 @@ function read(udir: string, u: Unit): { file: SkillFile; wrong: string[] } {
 // ---------------------------------------------------------------- check
 
 /** Everything wrong at once (the app's own check names only the first), a table of each skill, and what to look at again. */
-export function check(udir: string): boolean {
+export function check(udir: string, verdict = true): boolean {
   const { u, last, key } = load(udir);
   const unit = u.unit.key;
   const first = firstQuestion(u.data);
@@ -213,7 +213,8 @@ export function check(udir: string): boolean {
   }
   for (const w of look) console.log(`LOOK AGAIN: ${w}`);
   for (const w of wrong) console.log(`WRONG: ${w}`);
-  console.log(wrong.length ? `${unit}: NOT READY (${wrong.length} wrong). Fix skills.json, check again.` : `${unit}: READY to push${look.length ? ` (${look.length} to look at again first)` : ""}.`);
+  // scripts/workbook.ts says its own verdict (it ships the whole unit; nothing is pushed from here).
+  if (verdict) console.log(wrong.length ? `${unit}: NOT READY (${wrong.length} wrong). Fix skills.json, check again.` : `${unit}: READY to push${look.length ? ` (${look.length} to look at again first)` : ""}.`);
   return wrong.length === 0;
 }
 

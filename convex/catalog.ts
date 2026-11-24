@@ -11,11 +11,11 @@ import {
   fighter,
   partsForGrade,
   PART_NAME,
+  shapeFrom,
   type BookData,
   type FighterData,
   type MasterData,
   type MasterLevel,
-  type MasterPart,
 } from "./lib/book";
 import { bookStage, keyAnswer, partId } from "./schema";
 import { actor, viewer } from "./lib/auth";
@@ -167,28 +167,9 @@ export const saveWorkbook = mutation({
     const now = Date.now();
     const unit = await ctx.db.get(args.unitId);
     if (!unit) fail("That unit no longer exists.");
-    const plan = partsForGrade(unit.grade);
-    for (const p of args.parts) {
-      if (!plan.some((x) => x.id === p.id)) fail(`Grade ${unit.grade} workbooks have no ${PART_NAME[p.id]}.`);
-    }
-    const parts: MasterPart[] = [];
-    let from = 1;
-    for (const x of plan) {
-      const p = args.parts.find((y) => y.id === x.id);
-      if (!p) continue;
-      parts.push(
-        x.kind === "short"
-          ? { id: x.id, from, to: p.to, kind: x.kind, each: p.each ?? 2 }
-          : { id: x.id, from, to: p.to, kind: x.kind },
-      );
-      from = p.to + 1;
-    }
-    const levels: MasterLevel[] = [];
-    let start = 1;
-    args.levels.forEach((l, i) => {
-      levels.push({ n: i + 1, from: start, to: l.to, max: l.max });
-      start = l.to + 1;
-    });
+    const shaped = shapeFrom(unit.grade, args.parts, args.levels);
+    if (typeof shaped === "string") fail(shaped);
+    const { parts, levels } = shaped;
     const old = await bookFor(ctx, unit._id, "master");
     // A unit whose workbook is its skill book (the owner's switch, 23 Nov 2026): the old book's numbers would come back
     // under the new tags and the class's marks.
@@ -397,7 +378,7 @@ export const saveTheory = mutation({
 });
 
 /** Anything a student did in a book: circles, levels, marks, a whole-unit re-teach. */
-function hasWork(p: Doc<"progress">): boolean {
+export function hasWork(p: Doc<"progress">): boolean {
   if (Object.keys(p.marks ?? {}).length) return true;
   const m = p.m;
   return !!m && (Object.keys(m.q ?? {}).length > 0 || Object.keys(m.lv ?? {}).length > 0 || !!m.reteach);

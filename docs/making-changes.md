@@ -255,6 +255,38 @@ tsx scripts/digitize.ts ship $B G8-U09            # build (every check) → save
 - Answers a teacher typed in the app (Settings → Books) override the key at their parts: `show` prints them, a save
   keeps them; `ship … drop` replaces them (decide those parts in kinds.ts first).
 
+## A new unit straight into the app as its skill book (through the Claude link)
+
+24 Nov 2026, his words: "I don't want direct PDF from you ... you just say done ... I can download that directly from
+the skill page". The chat that builds a unit with the past-paper-workbook engine (its `book.py` makes book.html and
+answer-key.json, kinds included) tags it in the same chat and saves the whole unit; no zip, no PDF to him. Everything
+of his books in the scratchpad, the link's code in a file outside the repo:
+
+```bash
+TSX=/opt/npm-tools/node_modules/tsx/dist/cli.mjs; export ARISTORA_LINK_FILE=$SCR/link-code; B=$SCR/units
+node $TSX scripts/workbook.ts known $B G9-U05            # books.json, known.json, known.txt; does G9-U05 have a book already?
+node $TSX scripts/workbook.ts lay $B G9-U05 ~/work/U     # the engine's book.html + answer-key.json → $B/G9-U05 (unit.json, q/, sheet.txt)
+#   write $B/G9-U05/skills.json (the skill-tags file, in the engine's question numbers)
+node $TSX scripts/workbook.ts check $B G9-U05            # skills (everything at once) + the app's whole-unit check + the skill book, a line a level
+node $TSX scripts/workbook.ts ship $B G9-U05             # saved whole + read back, one trip; "IN THE APP, read back the same"
+```
+
+- `lay` reads the book with the phone's own reader (`src/workbookRead.ts` `readWorkbookPages`: the upload's reading
+  without the zip), so a book the upload would refuse is refused here, in the same words. The unit folder is the shape
+  `scripts/skills.ts pull` makes: `skills.ts check` and `review` work on it before anything is in the app.
+- `check` runs `convex/lib/wholeUnit.ts` `makeWholeUnit`, the server's own function: READY here = the app takes it
+  (except what only the app knows: students' work, videos, a skill another unit carries). Its LOOK AGAIN lines are a
+  teacher's questions about the printed book: a skill with no level of its own (every question needing it also needs a
+  later skill: its number is skipped in print), a level of one question, a level over 80 marks.
+- `ship` refuses a unit that has a workbook already unless it ends with `again`: ask him first (its book may be
+  printed). The app refuses any unit students used, `again` or not ("one edition a year"); fixes after that go through
+  `scripts/digitize.ts` (a key, a kind, a question's HTML). A save is all or nothing; its answer lists the levels, the
+  strips and what the phone marks (`share`).
+- The tool's branch is `link-workbook-<key>` (two chats, two units, never one branch). Under 2 MB a save
+  (`SEND_MAX_BYTES`; the link's box takes 3 MB of letters); G10-U31, the biggest unit so far, is 452 KB.
+- The tool is typechecked through its test (`tests/workbookTool.test.ts` imports it); the command in "Tag a unit's
+  skills" also checks it alone.
+
 ## Tag a unit's skills (through the Claude link)
 
 13 Nov 2026, his rule: teach the skill, not the question; and "any model can do the tagging ... I am going to use

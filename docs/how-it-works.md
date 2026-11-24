@@ -2861,7 +2861,8 @@ learning app of our education institute"): one profile, his class times, what he
   question, sometimes twenty ... the levels are going to be based on skills"; `convex/lib/skillBook.ts` pure,
   `convex/skillBook.ts`, `src/skillBook.tsx`, `src/skillPrint.ts`). Until the owner's switch (**Use as the workbook**,
   below; 23 Nov 2026) a unit's book by skill is only shown and downloaded: the app keeps the workbook's numbers and
-  levels. After it, the skill book IS the unit's workbook everywhere. Its skills' **videos**: part 1, below.
+  levels. After it, the skill book IS the unit's workbook everywhere. A unit a chat saves whole through the Claude link
+  (24 Nov 2026, **A whole unit**, below) is its skill book from its first moment. Its skills' **videos**: part 1, below.
   - **Settings → Books → T** beside F M K Q on every unit row: green = its workbook's questions carry skills
     (`catalog.books` `tagged`); pale = not tagged (a tap says "tag it with Claude first").
   - **Level n = skill n** (22 Nov 2026, his voice note: "we can put skill three plus skill four inside the level four
@@ -3028,6 +3029,25 @@ learning app of our education institute"): one profile, his class times, what he
     the Level's header and its "lost in Level 2·1" line, chests, the video's START, the bell, online threads, Preview.
     The history keeps what was true then: a line written before the unit's switch keeps its old number, a line since
     says the name (`historyLevel`; `MasterData.since` = the switch time).
+  - **A whole unit, straight into the app** (24 Nov 2026, his voice note: "I don't want direct PDF from you ... you just
+    say done ... I can download that directly from the skill page", and his picks the same night: one chat builds,
+    digitizes and tags a unit and saves it straight in; switch every tagged unit now; **one edition a year**). The chat
+    that types a unit with the past-paper-workbook engine also gives every answer its kind and every question its skills
+    (the skill-tags rules), and saves the whole unit through the Claude link (`tell` op "workbook", `saveWhole`;
+    `convex/lib/wholeUnit.ts` `makeWholeUnit`): the engine's book, the key with every kind, every question as printed, the
+    style and the skills, in one save, all or nothing. Checked like an uploaded zip and like a skills save, plus a skill
+    book's own needs (every question answered, printed and tagged); then made into the skill book with the switch's own
+    code (`skillLevels` + `skillWorkbook`, no students' marks yet: the engine's easy → hard order inside each group),
+    everything renumbered, a lesson example for every skill (`keepExamples`), `since` stamped. So a new unit is never
+    seen by its engine levels on a phone, and he never presses "Use as the workbook" for it: he opens T → Preview → PDF
+    or Share. The same function runs in the chat first (`scripts/workbook.ts check`), so the chat knows the app's answer
+    and the skill book's levels before it sends. Refused, nothing written: a unit students used (marks, answers or
+    photos from home, a level being corrected or open, online explanations: `workIn`; "its numbers are fixed for this
+    year": a fix goes through `save`, adding, removing or moving questions waits for its next edition); a unit with a
+    workbook already, unless the request says `again` (the chat asks him first: its book may be printed); a topic tute;
+    an O/L or Sakarath unit (Grades 6–11 only). Its skills keep their permanent keys and videos (`skillsKept`, shared
+    with the skills save). Checked on three real units read through the link (G8-U04, G9-U27, G10-U31): every check
+    passes and the book is exactly the one the switch makes; the biggest save, 452 KB (2 MB at most from the tool).
   - **Share to the printing shop** (23 Nov 2026, his words: "put the share button near the download button ... I will
     put the copy number"; the same evening: "when I press the send button ... copy the clipboard also ... how many
     copies ... the cost of the printing ... one paper is cost seven rupees ... I don't want any shop. Just send

@@ -1,0 +1,563 @@
+// Reading a workbook from the text its builder made (the past-paper-workbook engine's book.html and answer-key.json):
+// everything but opening a zip, so it runs anywhere with no package (24 Nov 2026: the Claude link's whole-unit save,
+// scripts/workbook.ts, reads a chat's book exactly as the phone's upload reads a zip; src/workbookFile.ts opens zips).
+// The engine prints everything the app needs in a fixed form, so no AI is needed:
+// - after each unit, its marks sheet: a row per part (பகுதி I, பகுதி II …), a cell per level "Level 6 · 53 – 57 · / 18";
+// - every question with its printed number (<span class="qn">), short items (si: 2 marks each) and Part II cards (pq)
+//   with the marks of each part (<span class="pm">(3 புள்ளிகள்)</span>, or the paper's own <div class="mk">);
+// - a level strip after each level (<span class="lvo">/ 18</span>).
+// This is the same reading as the engine's own marks_check (collection_book.py), plus the app's checkMaster.
+// If a future engine renames these classes, uploads say "No marks sheet": fix this file, not the books.
+// The zip may also carry answer-key.json (the engine's answers, by printed question number): it is checked against
+// the book (numbers, and each question's marks, so a key from another version of the book is refused).
+
+import {
+  checkFighter,
+  checkMaster,
+  outOf,
+  partsForGrade,
+  type FighterData,
+  type MasterData,
+  type MasterLevel,
+  type MasterPart,
+  type PartId,
+} from "../convex/lib/book";
+import { checkFighterKey, checkKey, slotProblem, type Ans, type BoxAns, type KeyAnswer } from "../convex/lib/key";
+import { OL } from "../convex/lib/syllabus";
+import { tuteQuestions, workbookQuestions } from "./bookQuestions";
+
+export type ReadWorkbook = {
+  /** Where it came from ("G8_U01_Workbook_source_v3.zip"). */
+  file: string;
+  grade: number | null;
+  unitNo: number;
+  /** "U01" */
+  code: string;
+  en: string | null;
+  ta: string | null;
+  data: MasterData;
+  total: number;
+  /** Its answer key from answer-key.json in the same zip, or null (none in the file). */
+  key: KeyAnswer[] | null;
+  /** Its printed questions (cut from the same book.html) and the book's CSS to draw them. */
+  questions?: Map<number, string>;
+  css?: string;
+  /** Empty when the book is right; otherwise plain words for the owner. */
+  problems: string[];
+};
+
+/** A topic tute (ol-essay zip with tute.json): its ladder = the unit's Fighter book, its papers = its Master book. */
+export type ReadTute = {
+  kind: "tute";
+  file: string;
+  grade: number | null;
+  unitNo: number;
+  code: string;
+  en: string | null;
+  ta: string | null;
+  title: string | null;
+  fighter: FighterData;
+  master: MasterData;
+  /** The Paper II part of its essays and the master levels as tute.json gives them. */
+  part: PartId;
+  fighterKey: KeyAnswer[] | null;
+  masterKey: KeyAnswer[] | null;
+  questions: { fighter: Map<number, string>; master: Map<number, string> };
+  css: string;
+  problems: string[];
+};
+
+/** A unit's theory book alone (a Fighter zip with fighter.json, 11 Nov 2026): a school unit's ladder, printed as its
+ *  own book. It becomes the unit's theory book; the unit's workbook (another printed book, its own numbers) stays. */
+export type ReadTheory = {
+  kind: "theory";
+  file: string;
+  grade: number | null;
+  unitNo: number;
+  code: string;
+  en: string | null;
+  ta: string | null;
+  title: string | null;
+  fighter: FighterData;
+  fighterKey: KeyAnswer[] | null;
+  questions: Map<number, string>;
+  css: string;
+  problems: string[];
+};
+
+export const TUTE_FILE = /(^|\/)tute\.json$/i;
+export const THEORY_FILE = /(^|\/)fighter\.json$/i;
+type J = Record<string, unknown>;
+
+/** A tute's answers; each keeps its kind (tute.json version 2, 5 Nov 2026: the ol-essay engine digitizes every tute). */
+function answersOf(list: unknown): KeyAnswer[] | null {
+  if (!Array.isArray(list)) return null;
+  const out: KeyAnswer[] = [];
+  for (const x of list as J[]) {
+    if (typeof x?.q !== "number") return null;
+    if (typeof x.a === "string") out.push({ q: x.q, a: x.a, ...kindOf(x.t) });
+    else if (Array.isArray(x.parts)) {
+      out.push({
+        q: x.q,
+        parts: (x.parts as J[]).map((r) => ({
+          p: String(r?.p ?? ""),
+          a: String(r?.a ?? ""),
+          ...(typeof r?.m === "number" ? { m: r.m } : {}),
+          ...kindOf(r?.t),
+        })),
+      });
+    } else return null;
+  }
+  return out.sort((a, b) => a.q - b.q);
+}
+
+/** A ladder's sections as the engines write them (tute.json and fighter.json: `fighter.sections`). */
+function ladderData(sections: J[]): FighterData {
+  return {
+    kind: "fighter",
+    sections: sections.map((x) => ({
+      id: String(x?.id ?? ""),
+      badge: String(x?.id ?? ""),
+      title: String(x?.title ?? ""),
+      tamil: String(x?.tamil ?? ""),
+      kind: "ladder" as const,
+      teach: Array.isArray(x?.teach) ? (x.teach as number[]) : [],
+      solo: Array.isArray(x?.solo) ? (x.solo as number[]) : [],
+    })),
+  };
+}
+
+/** Read fighter.json (a unit's theory book alone) and its questions from the book.html beside it. */
+export function readTheoryFile(text: string, html: string | null, file: string): ReadTheory | { file: string; problem: string } {
+  const bad = { file, problem: "The theory book file (fighter.json) isn't one the app knows: make it again in its book chat." };
+  let j: J;
+  try {
+    j = JSON.parse(text) as J;
+  } catch {
+    return { file, problem: "The theory book file (fighter.json) can't be read." };
+  }
+  const unit = j?.unit as J | undefined;
+  const f = j?.fighter as J | undefined;
+  if (j?.kind !== "aristora-fighter" || (j.version !== 1 && j.version !== 2) || typeof unit?.no !== "number" || !Array.isArray(f?.sections)) return bad;
+  const fighter = ladderData(f!.sections as J[]);
+  const problems: string[] = [...checkFighter(fighter)];
+  const fighterKey = answersOf(f!.answers);
+  if (f!.answers !== undefined && !fighterKey) problems.push("The theory book's answers can't be read.");
+  if (!problems.length && fighterKey) problems.push(...checkFighterKey(fighterKey, fighter));
+  const qs = html ? tuteQuestions(html) : { css: "", fighter: new Map<number, string>() };
+  // The slots its kinds use are in the printed question (the book and its key from the same build), as for a tute.
+  for (const k of problems.length ? [] : (fighterKey ?? [])) {
+    const card = qs.fighter.get(k.q);
+    const wrong = card ? slotProblem(k, card) : "";
+    if (wrong) {
+      problems.push(`Question ${k.q}: ${wrong}`);
+      break;
+    }
+  }
+  return {
+    kind: "theory",
+    file,
+    grade: typeof j.grade === "number" ? j.grade : null,
+    unitNo: unit!.no as number,
+    code: `U${String(unit!.no).padStart(2, "0")}`,
+    en: typeof unit!.en === "string" ? unit!.en : null,
+    ta: typeof unit!.ta === "string" ? unit!.ta : null,
+    title: typeof j.title === "string" ? j.title : null,
+    fighter,
+    fighterKey: fighterKey?.length ? fighterKey : null,
+    questions: qs.fighter,
+    css: qs.css,
+    problems: [...new Set(problems)],
+  };
+}
+
+/** Read tute.json (and the questions from the book.html beside it); problems in plain words, nothing silently dropped. */
+export function readTuteFile(text: string, html: string | null, file: string): ReadTute | { file: string; problem: string } {
+  const bad = { file, problem: "The tute file (tute.json) isn't one the app knows: make it again in an ol-essay chat." };
+  let j: J;
+  try {
+    j = JSON.parse(text) as J;
+  } catch {
+    return { file, problem: "The tute file (tute.json) can't be read." };
+  }
+  const unit = j?.unit as J | undefined;
+  const f = j?.fighter as J | undefined;
+  const m = j?.master as J | undefined;
+  // Version 2 (5 Nov 2026): each answer carries its kind (`t`), as answer-key.json version 2 does for the workbooks.
+  if (j?.kind !== "aristora-tute" || (j.version !== 1 && j.version !== 2) || typeof unit?.no !== "number" || !Array.isArray(f?.sections) || !Array.isArray(m?.levels)) return bad;
+  const part = String(m!.part ?? "") as PartId;
+  // "OL" = the O/L books (grade 12 in the app); a school grade is a number.
+  const grade = typeof j.grade === "number" ? j.grade : j.grade === "OL" ? OL : null;
+  const problems: string[] = [];
+  const fighter = ladderData(f!.sections as J[]);
+  const levels: MasterLevel[] = (m!.levels as J[]).map((l, i) => ({ n: i + 1, from: Number(l?.from), to: Number(l?.to), max: Number(l?.max) }));
+  const marks: Record<string, number> = {};
+  for (const x of (Array.isArray(m!.questions) ? m!.questions : []) as J[]) if (typeof x?.q === "number" && typeof x.marks === "number") marks[String(x.q)] = x.marks;
+  const first = levels[0]?.from ?? 1;
+  const last = levels.length ? levels[levels.length - 1].to : 0;
+  const master: MasterData = { kind: "master", parts: [{ id: part, from: first, to: last, kind: "cards" }], levels, marks };
+  if (grade !== null && !partsForGrade(grade).some((p) => p.id === part && p.kind === "cards")) problems.push(`Grade ${grade} has no ${part || "?"} for its essays.`);
+  problems.push(...checkFighter(fighter), ...checkMaster(master));
+  for (let q = first; q <= last; q++) if (!marks[String(q)]) problems.push(`Past paper question ${q}: its marks are missing.`);
+  const fighterKey = answersOf(f!.answers);
+  const masterKey = answersOf(m!.answers);
+  if (f!.answers !== undefined && !fighterKey) problems.push("The ladder's answers can't be read.");
+  if (m!.answers !== undefined && !masterKey) problems.push("The past papers' answers can't be read.");
+  if (!problems.length && fighterKey) problems.push(...checkFighterKey(fighterKey, fighter));
+  if (!problems.length && masterKey) problems.push(...checkKey(masterKey, master));
+  const qs = html ? tuteQuestions(html) : { css: "", fighter: new Map<number, string>(), master: new Map<number, string>() };
+  // The blanks, options, brackets and words the kinds use are in the printed question, as many as they need (the book
+  // and its key from the same build; else the phone would put his answers in the wrong places).
+  for (const [key, cards] of [[fighterKey, qs.fighter], [masterKey, qs.master]] as const) {
+    if (problems.length) break;
+    for (const k of key ?? []) {
+      const card = cards.get(k.q);
+      const wrong = card ? slotProblem(k, card) : "";
+      if (wrong) {
+        problems.push(`Question ${k.q}: ${wrong}`);
+        break;
+      }
+    }
+  }
+  return {
+    kind: "tute",
+    file,
+    grade,
+    unitNo: unit!.no as number,
+    code: `U${String(unit!.no).padStart(2, "0")}`,
+    en: typeof unit!.en === "string" ? unit!.en : null,
+    ta: typeof unit!.ta === "string" ? unit!.ta : null,
+    title: typeof j.title === "string" ? j.title : null,
+    fighter,
+    master,
+    part,
+    fighterKey: fighterKey?.length ? fighterKey : null,
+    masterKey: masterKey?.length ? masterKey : null,
+    questions: { fighter: qs.fighter, master: qs.master },
+    css: qs.css,
+    problems: [...new Set(problems)],
+  };
+}
+
+const SHORT_MARKS = 2; // a Part I question (as printed: the engine's P1_MARK)
+
+// A block that starts a page gets " pt" and its page footer inside (class="msh pt", "si pt", "bk pt", "lvl pt").
+const SHEET = /<div class="msh(?: [^"]*)?"[^>]*>([\s\S]*?)<\/table>/g;
+const HAS_SHEET = /<div class="msh[ "]/;
+/** The answer key inside a unit's source zip. */
+export const KEY_FILE = /(^|\/)answer-key\.json$/i;
+const TOKEN =
+  /<div class="(si|pq)(?: [^"]*)?" data-q="\d+"|<span class="qn(?: q3)?">(\d+)<\/span>|<span class="pm">\((\d+)\s|<div class="mk">\((\d+)\s|<span class="lvo">\/ (\d+)<\/span>/g;
+// A row per part; a part with many levels wraps onto more rows (its name and total span them: rowspan), and the
+// continuation rows have no name cell (G8 U03 v4: Part II Levels 10-17, then 18-24).
+const ROW = /<tr[^>]*>([\s\S]*?)<\/tr>/g;
+const ROW_NAME = /^\s*<td class="c0"[^>]*>([^<]*)<\/td>/;
+const CELL = /<td(?: [^>]*)?><em>Level (\d+)<\/em><i>\s*(\d+)(?:\s*[–-]\s*(\d+))?\s*<\/i><b>\/\s*(\d+)<\/b><\/td>/g;
+const ROW_TOTAL = /<td class="cz"[^>]*>[\s\S]*?<b>\/\s*(\d+)<\/b><\/td>/;
+
+/** "பகுதி II" → "II"; Grades 10–11 "பகுதி IA" / "பகுதி I A" → "IA", and as the workbook engine prints them on the
+ *  marks sheet: "வினாத்தாள் I · பகுதி A" → "IA", "வினாத்தாள் II · பகுதி B" → "IIB" (11 Nov 2026: the first Grade 10 books). */
+export function partIdOf(label: string): PartId | null {
+  const m = /(II|I)\s*(?:·\s*பகுதி\s*)?([AB])?(?![A-Za-z])/.exec(label);
+  if (!m) return null;
+  return `${m[1]}${m[2] ?? ""}` as PartId;
+}
+
+/** The grade printed most often ("தரம் 8" in every footer), or null. */
+function gradeOf(html: string): number | null {
+  const count = new Map<number, number>();
+  for (const m of html.matchAll(/தரம்\s*(\d{1,2})/g)) {
+    const g = Number(m[1]);
+    if (g >= 6 && g <= 11) count.set(g, (count.get(g) ?? 0) + 1);
+  }
+  let best: number | null = null;
+  for (const [g, n] of count) if (best === null || n > (count.get(best) ?? 0)) best = g;
+  return best;
+}
+
+/** Grade and unit from a file name: "G8_U01_Workbook_source_v3.zip" → { grade: 8, unitNo: 1 }. */
+export function nameHint(file: string): { grade: number | null; unitNo: number | null } {
+  const m = /G(\d{1,2})[ _-]*U(\d{1,2})/i.exec(file);
+  return m ? { grade: Number(m[1]), unitNo: Number(m[2]) } : { grade: null, unitNo: null };
+}
+
+/** Every unit in one book.html (a unit's own file, or a merged volume). [] when it has no marks sheet. */
+export function readWorkbookHtml(html: string, file = "book.html"): ReadWorkbook[] {
+  const out: ReadWorkbook[] = [];
+  const hint = nameHint(file);
+  const printedGrade = gradeOf(html);
+  const grade = printedGrade ?? hint.grade;
+  let from = 0;
+  for (const sheet of html.matchAll(SHEET)) {
+    const start = sheet.index ?? 0;
+    const region = html.slice(from, start);
+    from = start + sheet[0].length;
+    const after = html.slice(from, from + 600);
+    out.push(readUnit(region, sheet[1], after, html, grade, file, hint, printedGrade));
+  }
+  return out;
+}
+
+function readUnit(
+  region: string,
+  sheet: string,
+  after: string,
+  html: string,
+  grade: number | null,
+  file: string,
+  hint: { grade: number | null; unitNo: number | null },
+  printedGrade: number | null,
+): ReadWorkbook {
+  const problems: string[] = [];
+  const head = /அலகு\s*(\d+)\s*·\s*([^<]*)<\/small>/.exec(sheet);
+  const unitNo = head ? Number(head[1]) : (hint.unitNo ?? 0);
+  if (!head) problems.push("The marks sheet has no unit number.");
+  const ta = head ? head[2].trim() || null : null;
+  const en = new RegExp(`UNIT ${unitNo} · ([^·<]+?) · PART`).exec(html)?.[1].trim() ?? null;
+  const code = `U${String(unitNo).padStart(2, "0")}`;
+  if (grade === null) problems.push("Can't find the grade (தரம்) in the book or the file name.");
+  if (printedGrade !== null && hint.grade !== null && printedGrade !== hint.grade) {
+    problems.push(`The book says Grade ${printedGrade} but the file name says Grade ${hint.grade}.`);
+  }
+
+  // The questions, in printed order: short items (2 marks) and cards (the marks of their parts).
+  const items: { kind: "short" | "card"; n: number | null; marks: number }[] = [];
+  const strips: number[] = [];
+  for (const t of region.matchAll(TOKEN)) {
+    if (t[1]) items.push({ kind: t[1] === "si" ? "short" : "card", n: null, marks: 0 });
+    else if (t[2]) {
+      const cur = items[items.length - 1];
+      if (cur && cur.n === null) cur.n = Number(t[2]);
+    } else if (t[3] || t[4]) {
+      const cur = items[items.length - 1];
+      if (cur) cur.marks += Number(t[3] ?? t[4]);
+    } else if (t[5]) strips.push(Number(t[5]));
+  }
+  const n = items.length;
+  if (n === 0) problems.push("No questions found before the marks sheet.");
+  if (items.some((it, i) => it.n !== i + 1)) problems.push(`The question numbers don't run 1 to ${n}.`);
+  const marksOf = (q: number) => {
+    const it = items[q - 1];
+    return !it ? 0 : it.kind === "short" ? SHORT_MARKS : it.marks;
+  };
+  items.forEach((it, i) => {
+    if (it.kind === "card" && it.marks === 0) problems.push(`Question ${i + 1} prints no marks.`);
+  });
+
+  // The sheet: a row per part, a cell per level.
+  const plan = grade !== null ? partsForGrade(grade) : [];
+  const parts: MasterPart[] = [];
+  const levels: MasterLevel[] = [];
+  const rows: { name: string; total: number; levels: MasterLevel[] }[] = [];
+  for (const row of sheet.matchAll(ROW)) {
+    const cells: MasterLevel[] = [];
+    for (const c of row[1].matchAll(CELL)) {
+      const a = Number(c[2]);
+      cells.push({ n: Number(c[1]), from: a, to: c[3] ? Number(c[3]) : a, max: Number(c[4]) });
+    }
+    const name = ROW_NAME.exec(row[1]);
+    if (name) rows.push({ name: name[1], total: Number(ROW_TOTAL.exec(row[1])?.[1] ?? NaN), levels: cells });
+    else if (rows.length) rows[rows.length - 1].levels.push(...cells); // the same part, wrapped onto another row
+    else if (cells.length) problems.push("The marks sheet has levels before any part name.");
+  }
+  for (const row of rows) {
+    const id = partIdOf(row.name);
+    if (!id) {
+      problems.push(`Can't read the part name "${row.name.trim()}".`);
+      continue;
+    }
+    const kind = plan.find((p) => p.id === id)?.kind;
+    if (grade !== null && !kind) problems.push(`Grade ${grade} workbooks have no part ${id}.`);
+    const mine = row.levels;
+    if (mine.length === 0) {
+      problems.push(`Part ${id} has no levels on the marks sheet.`);
+      continue;
+    }
+    const total = row.total;
+    const sum = mine.reduce((s, l) => s + l.max, 0);
+    if (total !== sum) problems.push(`Part ${id}: its levels add up to ${sum}, but its total says ${total}.`);
+    const p0 = mine[0].from;
+    const p1 = mine[mine.length - 1].to;
+    for (let q = p0; q <= p1 && q <= n; q++) {
+      if (kind === "short" && items[q - 1].kind !== "short") problems.push(`Question ${q} is a long question inside part ${id}.`);
+      if (kind === "cards" && items[q - 1].kind !== "card") problems.push(`Question ${q} is a short question inside part ${id}.`);
+    }
+    parts.push(kind === "short" ? { id, from: p0, to: p1, kind, each: SHORT_MARKS } : { id, from: p0, to: p1, kind: "cards" });
+    levels.push(...mine);
+  }
+  if (levels.length === 0) problems.push("The marks sheet has no levels.");
+
+  // Every level adds up, and the strips printed in the book say the same.
+  for (const l of levels) {
+    let sum = 0;
+    for (let q = l.from; q <= l.to; q++) sum += marksOf(q);
+    if (sum !== l.max) problems.push(`Level ${l.n} prints / ${l.max}, but its questions add up to ${sum}.`);
+  }
+  if (strips.length !== levels.length || strips.some((m, i) => m !== levels[i]?.max)) {
+    problems.push("The level strips in the book don't match its marks sheet.");
+  }
+  const last = levels.length ? levels[levels.length - 1].to : 0;
+  if (n && last !== n) problems.push(`The levels stop at question ${last}; the book has ${n}.`);
+  const total = levels.reduce((s, l) => s + l.max, 0);
+  const printedTotal = /<span class="mso">\/\s*(\d+)<\/span>/.exec(after)?.[1];
+  if (printedTotal !== undefined && Number(printedTotal) !== total) {
+    problems.push(`The unit's total says ${printedTotal}, but its levels add up to ${total}.`);
+  }
+
+  const marks: Record<string, number> = {};
+  items.forEach((it, i) => {
+    if (it.kind === "card" && it.marks > 0) marks[String(i + 1)] = it.marks;
+  });
+  const data: MasterData = { kind: "master", parts, levels, marks };
+  if (problems.length === 0) problems.push(...checkMaster(data));
+  return { file, grade, unitNo, code, en, ta, data, total, key: null, problems: [...new Set(problems)] };
+}
+
+/** answer-key.json as the workbook engine writes it. */
+export type KeyFile = {
+  grade: number | null;
+  units: { no: number; answers: KeyAnswer[]; marks: Map<number, number> }[];
+};
+
+/** Read answer-key.json; a string = what's wrong with it, in plain words. */
+export function readKeyFile(text: string): KeyFile | string {
+  const bad = "The answer key file isn't one the app knows.";
+  let j: unknown;
+  try {
+    j = JSON.parse(text);
+  } catch {
+    return "The answer key file can't be read.";
+  }
+  const o = j as { kind?: unknown; version?: unknown; grade?: unknown; units?: unknown };
+  // Version 2 (4 Nov 2026): each answer may carry its kind (`t`: boxes in the blanks, an option, ✓ / ✗, cards …).
+  if (!o || typeof o !== "object" || o.kind !== "aristora-answer-key" || (o.version !== 1 && o.version !== 2) || !Array.isArray(o.units)) return bad;
+  const units: KeyFile["units"] = [];
+  for (const u of o.units as { no?: unknown; questions?: unknown }[]) {
+    if (typeof u?.no !== "number" || !Array.isArray(u.questions)) return bad;
+    const answers: KeyAnswer[] = [];
+    const marks = new Map<number, number>();
+    for (const x of u.questions as { q?: unknown; marks?: unknown; a?: unknown; t?: unknown }[]) {
+      if (typeof x?.q !== "number") return bad;
+      if (typeof x.marks === "number") marks.set(x.q, x.marks);
+      if (typeof x.a === "string") answers.push({ q: x.q, a: x.a, ...kindOf(x.t) });
+      else if (Array.isArray(x.a)) {
+        const parts = (x.a as { p?: unknown; a?: unknown; m?: unknown; t?: unknown }[]).map((r) => ({
+          p: String(r?.p ?? ""),
+          a: String(r?.a ?? ""),
+          ...(typeof r?.m === "number" ? { m: r.m } : {}),
+          ...kindOf(r?.t),
+        }));
+        answers.push({ q: x.q, parts });
+      } else return bad;
+    }
+    units.push({ no: u.no, answers, marks });
+  }
+  return { grade: typeof o.grade === "number" ? o.grade : null, units };
+}
+
+/** An answer's kind, copied field by field (the server takes nothing else); checked with the key (`checkKey`). */
+function kindOf(t: unknown): { t?: Ans } {
+  if (!t || typeof t !== "object") return {};
+  const x = t as Record<string, unknown>;
+  const pick = (...names: string[]) => Object.fromEntries(names.filter((n) => x[n] !== undefined).map((n) => [n, x[n]]));
+  const boxes = (b: unknown) =>
+    Array.isArray(b) ? b.map((bx) => (bx && typeof bx === "object" ? (Object.fromEntries(["v", "same", "l", "u", "j", "w"].filter((n) => (bx as Record<string, unknown>)[n] !== undefined).map((n) => [n, (bx as Record<string, unknown>)[n]])) as BoxAns) : (bx as BoxAns))) : b;
+  const fields: Record<string, string[]> = {
+    box: ["k", "any"],
+    fill: ["k", "any"],
+    choose: ["k", "n", "a", "items", "below"],
+    tf: ["k", "a", "items"],
+    mark: ["k", "n", "a", "how", "items"],
+    order: ["k", "items", "a"],
+    match: ["k", "l", "r", "a"],
+    why: ["k", "a"],
+    say: ["k"],
+    photo: ["k"],
+  };
+  const names = fields[String(x.k)];
+  if (!names) return { t: { k: String(x.k) } as unknown as Ans }; // refused by checkKey, in plain words
+  const out = pick(...names);
+  if (x.k === "box" || x.k === "fill") out.b = boxes(x.b);
+  return { t: out as Ans };
+}
+
+/** Put a unit's answers on the workbook read from the same zip, or say why they don't fit it. */
+function attachKey(w: ReadWorkbook, file: KeyFile, cards?: Map<number, string>): void {
+  const mine = file.units.find((u) => u.no === w.unitNo);
+  if (!mine || mine.answers.length === 0) return;
+  if (file.grade !== null && w.grade !== null && file.grade !== w.grade) {
+    w.problems.push(`The answer key is for Grade ${file.grade}, the book is Grade ${w.grade}.`);
+    return;
+  }
+  for (const [q, m] of mine.marks) {
+    const inBook = outOf(w.data, q);
+    if (inBook !== null && inBook !== m) {
+      w.problems.push(`The answer key is for another version of this book: question ${q} is ${inBook} marks in the book, ${m} in the key.`);
+      return;
+    }
+  }
+  const bad = checkKey(mine.answers, w.data);
+  if (bad.length) {
+    w.problems.push(...bad);
+    return;
+  }
+  // The blanks, options, brackets and words the key's kinds use are in the printed question, as many as it needs.
+  for (const k of mine.answers) {
+    const html = cards?.get(k.q);
+    const wrong = html ? slotProblem(k, html) : "";
+    if (wrong) {
+      w.problems.push(`Question ${k.q}: ${wrong}`);
+      return;
+    }
+  }
+  w.key = [...mine.answers].sort((a, b) => a.q - b.q);
+}
+
+/**
+ * One file's workbooks, once its text is out: its pages (book.html, and the HTML copy a zip may hold) and the JSON
+ * files beside them (answer-key.json; tute.json for a topic tute; fighter.json for a theory book alone). This is all of
+ * the upload's reading but opening the zip (src/workbookFile.ts `readWorkbookFiles`), so the Claude link's whole-unit
+ * save (scripts/workbook.ts) reads a chat's book.html with exactly the phone's code.
+ */
+export function readWorkbookPages(
+  pages: readonly string[],
+  json: { key?: string | null; tute?: string | null; theory?: string | null },
+  file: string,
+): (ReadWorkbook | ReadTute | ReadTheory | { file: string; problem: string })[] {
+  if (json.tute != null) {
+    // A topic tute: its book.html is the one with question cards (the zip may hold its HTML copy too).
+    const html = pages.find((h) => /<div class="qq(?: [^"]*)?" data-q=/.test(h)) ?? null;
+    return [readTuteFile(json.tute, html, file)];
+  }
+  if (json.theory != null) {
+    // A unit's theory book alone: the same engine's question cards, no papers after them.
+    const html = pages.find((h) => /<div class="qq(?: [^"]*)?" data-q=/.test(h)) ?? null;
+    return [readTheoryFile(json.theory, html, file)];
+  }
+  const out: (ReadWorkbook | { file: string; problem: string })[] = [];
+  // Each book's printed cards, to check its key's blanks and options against (even when its style is missing).
+  const cardsOf = new Map<ReadWorkbook, Map<number, string>>();
+  const found = pages.flatMap((h) => {
+    if (!HAS_SHEET.test(h)) return [];
+    const books = readWorkbookHtml(h, file);
+    const qs = workbookQuestions(h);
+    books.forEach((w, i) => {
+      if (qs.units[i]?.size) cardsOf.set(w, qs.units[i]);
+      if (qs.units[i]?.size && qs.css) {
+        w.questions = qs.units[i];
+        w.css = qs.css;
+      }
+    });
+    return books;
+  });
+  if (found.length === 0) out.push({ file, problem: "No marks sheet inside: is this a workbook (level edition)?" });
+  if (json.key != null && found.length) {
+    const key = readKeyFile(json.key);
+    for (const w of found) {
+      if (typeof key === "string") w.problems.push(key);
+      else if (w.problems.length === 0) attachKey(w, key, cardsOf.get(w));
+    }
+  }
+  out.push(...found);
+  return out;
+}
