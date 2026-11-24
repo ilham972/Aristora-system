@@ -82,7 +82,7 @@ import {
 import { DAY_MS, isBirthday, SL_OFFSET_MS, slDay, slDayNo, slWeekStart } from "./lib/day";
 import { bookOf, checkEach, homeChecks, phoneKeyFor, type LevelBook } from "./lib/homeWork";
 import { computeMaster, copyState, markBefore, type MQ, type MState } from "./lib/master";
-import { boxCount, formOf, INPUT_MAX, markQuestion, onlyReasons, REASON_MAX, teacherMarks, type FormQ, type KeyQ } from "./lib/phone";
+import { boxCount, formOf, INPUT_MAX, markPart, markQuestion, onlyReasons, REASON_MAX, teacherMarks, type FormQ, type KeyQ } from "./lib/phone";
 import { LEVEL_TYPED_MAX, TYPED_MAX } from "./lib/key";
 import { keyText, PHOTO_BYTES, PHOTO_MAX, PHOTO_URLS_PER_DAY, type PhotoKind } from "./lib/photos";
 import { inboxOf, type UsInboxItem } from "./lib/usTalk";
@@ -550,10 +550,23 @@ export type FamilyLevel = {
   locks?: FamilyLock[];
 };
 
-/** One question checked on its own (14 Nov 2026): what he typed (he can't change it) and what the phone gave. */
-export type FamilyLock = { q: number; a: string[]; ok: (boolean[] | null)[]; got: number | null; phoneGot: number; max: number };
+/**
+ * One question checked on its own (14 Nov 2026): what he typed (he can't change it) and what the phone gave. `ps` =
+ * the parts marked so far when he checks one sub-question at a time (24 Nov 2026): `got` / `max` / `ok` are those
+ * parts' (missing = the whole question, as before). `now` = the parts this Check marked, for the sheet that answers him.
+ */
+export type FamilyLock = {
+  q: number;
+  a: string[];
+  ok: (boolean[] | null)[];
+  got: number | null;
+  phoneGot: number;
+  max: number;
+  ps?: number[];
+  now?: { ps: number[]; ok: (boolean[] | null)[]; got: number | null; phoneGot: number; max: number };
+};
 type LiveDone = Doc<"familyLive">["done"][number];
-const lockOf = (d: LiveDone): FamilyLock => ({ q: d.q, a: d.a, ok: d.ok, got: d.got, phoneGot: d.phoneGot, max: d.max });
+const lockOf = (d: LiveDone): FamilyLock => ({ q: d.q, a: d.a, ok: d.ok, got: d.got, phoneGot: d.phoneGot, max: d.max, ...(d.ps ? { ps: d.ps } : {}) });
 
 const liveRow = (ctx: QueryCtx, studentId: Id<"students">, unitId: Id<"units">, n: number) =>
   ctx.db
@@ -740,7 +753,24 @@ export const check = mutation({
     const live = await liveRow(ctx, s._id, args.unitId, args.n);
     if (live) {
       const locked = new Map(live.done.map((d) => [d.q, d]));
-      args = { ...args, typed: [...args.typed.filter((t) => !locked.has(t.q)), ...live.done.map((d) => ({ q: d.q, a: d.a, b: d.b }))] };
+      const keys = live.keys as Record<string, KeyQ>;
+      const sent = new Map(args.typed.map((t) => [t.q, t]));
+      args = {
+        ...args,
+        typed: [
+          ...args.typed.filter((t) => !locked.has(t.q)),
+          ...live.done.map((d) => {
+            // A question checked one sub-question at a time (24 Nov 2026): those parts' boxes as he typed them then,
+            // the rest as his phone sends them now (he never saw a mark for those).
+            const mine = d.ps ? sent.get(d.q) : undefined;
+            const k = d.ps ? keys[String(d.q)] : undefined;
+            if (!d.ps || !mine || !k || mine.b !== d.b) return { q: d.q, a: d.a, b: d.b };
+            const a = Array.from({ length: Math.max(mine.a.length, d.a.length) }, (_, i) => mine.a[i] ?? "");
+            for (const i of boxesOfParts(k, d.ps)) a[i] = d.a[i] ?? "";
+            return { q: d.q, a, b: mine.b };
+          }),
+        ],
+      };
       await ctx.db.delete(live._id);
     }
     if (args.n < 0) return await checkLadder(ctx, s, args, now);
@@ -894,6 +924,56 @@ async function liveKeys(ctx: QueryCtx, s: Doc<"students">, unitId: Id<"units">, 
   return out;
 }
 
+/** Where each part's boxes start in a question's typed answers (part after part, as the phone sends them). */
+function boxAt(k: KeyQ): number[] {
+  const out: number[] = [];
+  let at = 0;
+  for (const p of k.parts) {
+    out.push(at);
+    at += p.want?.length ?? 0;
+  }
+  return out;
+}
+
+/** The box numbers of these parts (a sub-question's own Check, 24 Nov 2026: only its boxes are frozen). */
+function boxesOfParts(k: KeyQ, ps: number[]): number[] {
+  const from = boxAt(k);
+  const out: number[] = [];
+  for (const pi of ps) {
+    const n = k.parts[pi]?.want?.length ?? 0;
+    for (let i = 0; i < n; i++) out.push(from[pi] + i);
+  }
+  return out;
+}
+
+/** These parts' marks (a sub-question's Check gives its own marks, never the whole question's). */
+const maxOfParts = (k: KeyQ, ps: number[]) => ps.reduce((s, pi) => s + (k.parts[pi]?.m ?? 0), 0);
+
+/**
+ * Mark some parts of a question (24 Nov 2026, his "I want immediate feedback ... like other places in the app": a
+ * Check at the end of every sub-question, not after the whole question with all its sub-questions). `ok` is per part
+ * of the whole question (null where the phone marks nothing, and where the part is not in `ps`: the lock's `ps` says
+ * which are marked); `whole` = the phone marked every one of them (else a teacher gives their marks).
+ */
+function markParts(k: KeyQ, a: string[], ps: number[]): { ok: (boolean[] | null)[]; got: number; whole: boolean } {
+  const from = boxAt(k);
+  const ok: (boolean[] | null)[] = k.parts.map(() => null);
+  let got = 0;
+  let whole = true;
+  for (const pi of ps) {
+    const p = k.parts[pi];
+    if (!p) continue;
+    const r = p.want ? markPart(p, a.slice(from[pi], from[pi] + p.want.length)) : null;
+    if (!r) {
+      whole = false;
+      continue;
+    }
+    got += r.got;
+    ok[pi] = r.ok;
+  }
+  return { ok, got, whole };
+}
+
 /**
  * One question checked on its own (14 Nov 2026, his "let's build": a win after every question). Marked here with the
  * answer key, once: what he typed is kept and can't be changed (asked again, the same answer comes back), and the
@@ -901,9 +981,12 @@ async function liveKeys(ctx: QueryCtx, s: Doc<"students">, unitId: Id<"units">, 
  * flame and the class's ⌂ come when the level is done, as always.
  * - The level's questions and answers are read once into his row (`familyLive`); each Check after reads that row only.
  * - A question the phone showed with other boxes than the key has (`b`) goes to the teacher whole, as in `check`.
+ * - `ps` = one sub-question's parts (24 Nov 2026, his report on the Sakarath books: "they are getting feedback after
+ *   the whole question with sub questions ... I want immediate feedback"): only those parts are marked and frozen, the
+ *   rest of the question stays his to answer and to check after it. No `ps` = the whole question, as before.
  */
 export const checkOne = mutation({
-  args: { token, unitId: v.id("units"), n: v.number(), q: v.number(), a: v.array(v.string()), b: v.optional(v.number()) },
+  args: { token, unitId: v.id("units"), n: v.number(), q: v.number(), a: v.array(v.string()), b: v.optional(v.number()), ps: v.optional(v.array(v.number())) },
   handler: async (ctx, args): Promise<FamilyLock> => {
     const s = await familyActor(ctx, args.token);
     if (!(await checkEach(ctx))) fail("Check this level at its end.");
@@ -911,7 +994,8 @@ export const checkOne = mutation({
     const now = Date.now();
     let row = await liveRow(ctx, s._id, args.unitId, args.n);
     const was = row?.done.find((d) => d.q === args.q);
-    if (was) return lockOf(was);
+    // The whole question, once: asked again, what he typed then comes back (he saw ✓ or ✗ for it).
+    if (was && !args.ps && !was.ps) return lockOf(was);
     if (!row || now - row.at > LIVE_FRESH_MS) {
       // May he play it now? (The same doors as the level itself; a refusal says why.)
       const keys = await liveKeys(ctx, s, args.unitId, args.n);
@@ -932,10 +1016,48 @@ export const checkOne = mutation({
     const n = boxCount(k);
     const a = Array.from({ length: Math.min(n, args.a.length) }, (_, i) => args.a[i] ?? "");
     const stale = args.b !== undefined && args.b !== n;
-    const r = stale ? { ok: k.parts.map(() => null), got: null, phoneGot: 0 } : markQuestion(k, a);
-    const done: LiveDone = { q: args.q, a, b: args.b ?? n, ok: r.ok, got: r.got, phoneGot: r.phoneGot, max: k.max };
-    await ctx.db.patch(row._id, { done: [...row.done, done] });
-    return lockOf(done);
+    if (!args.ps && !was?.ps) {
+      const r = stale ? { ok: k.parts.map(() => null), got: null, phoneGot: 0 } : markQuestion(k, a);
+      const done: LiveDone = { q: args.q, a, b: args.b ?? n, ok: r.ok, got: r.got, phoneGot: r.phoneGot, max: k.max };
+      await ctx.db.patch(row._id, { done: [...row.done, done] });
+      return lockOf(done);
+    }
+    // One sub-question of it (24 Nov 2026): its parts are marked and frozen now, the rest wait for their own Check.
+    // No `ps` on a question he checked sub-question by sub-question (another phone, with no printed question yet to cut
+    // it into steps): the parts still open are marked now, so the whole question is answered.
+    const ps = [...new Set(args.ps ?? k.parts.map((_, i) => i))].filter((pi) => Number.isInteger(pi) && pi >= 0 && pi < k.parts.length).sort((x, y) => x - y);
+    if (!ps.length) fail("That sub-question is not in this question.");
+    const had = was ? (was.ps ?? k.parts.map((_, i) => i)) : [];
+    const fresh = ps.filter((pi) => !had.includes(pi));
+    // What he has typed now, with the parts he checked before frozen as they were.
+    const mine = Array.from({ length: n }, (_, i) => a[i] ?? "");
+    for (const i of boxesOfParts(k, had)) mine[i] = was?.a[i] ?? "";
+    const covered = [...new Set([...had, ...fresh])].sort((x, y) => x - y);
+    const full = covered.length >= k.parts.length;
+    const all = stale ? null : markParts(k, mine, covered);
+    const one = stale ? null : markParts(k, mine, fresh.length ? fresh : ps);
+    const done: LiveDone = {
+      q: args.q,
+      a: mine,
+      b: args.b ?? n,
+      ok: all ? all.ok : k.parts.map(() => null),
+      got: all && all.whole ? all.got : null,
+      phoneGot: all ? all.got : 0,
+      max: full ? k.max : maxOfParts(k, covered),
+      ...(full ? {} : { ps: covered }),
+    };
+    if (fresh.length) await ctx.db.patch(row._id, { done: [...row.done.filter((d) => d.q !== args.q), done] });
+    return {
+      ...lockOf(done),
+      // What this Check marked: the sheet answers him for this sub-question alone, never the whole question so far.
+      now: {
+        ps: fresh.length ? fresh : ps,
+        ok: one ? one.ok : k.parts.map(() => null),
+        got: one && one.whole ? one.got : null,
+        phoneGot: one ? one.got : 0,
+        max: maxOfParts(k, fresh.length ? fresh : ps),
+      },
+    };
   },
 });
 

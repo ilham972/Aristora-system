@@ -43,11 +43,15 @@ npx convex codegen --system-udfs --typecheck disable
    `vitest` = the stand-in beside it (`vitest-standin.mjs`: add a matcher there when a test needs one), the libraries
    from source, `import.meta.glob` of the convex files replaced by a generated map, `?raw` as text, Playwright from
    `/opt/npm-tools` with `/usr/bin/google-chrome`; `scripts/here/build.mjs` runs the repo's own `scripts/build.mjs`
-   with the same aliases (fonts and the silent video stubbed). **What only GitHub can judge** (they fail here on main
+   with the same aliases (fonts, the silent video and **hls.js** stubbed: its stand-in is named `hls.js-light.mjs`, so
+   the real script still finds the player's own file; its KB here mean nothing, GitHub measures the real one). **What only GitHub can judge** (they fail here on main
    too, 11 Nov 2026: run them on a stash before blaming a change): the checks that measure the top bar at 320 px or a
    text's width (no Barlow font here: "the register", "Correction: one page", "Theory: one screen", "Evaluation: one
    screen", "Owner page", "Whole class", "Consultation"), the family "photos from home" (web-push is a stub), and the
    family app's size budgets. So: iterate here, then one `ci-<topic>` round before main.
+   **A Level's size budget is tight** (24 Nov 2026: the later parts were 74.5 of 75 KB before the sub-question Check
+   and 74.9 after): measure with `… build` before and after a change to `play.tsx`, and trim your own code before
+   asking him to raise `FAMILY_LATER_KB`.
 4. **For UI changes, look at the screenshots** at 390, 360 and 320 px, cropped with PIL first. No page scrolls
    sideways (the tests check `scrollWidth`); rows that scroll inside themselves are fine. Also look at one screen
    you did NOT change (Settings) when you add CSS: a class name clash shows there.

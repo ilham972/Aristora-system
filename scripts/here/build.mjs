@@ -22,6 +22,9 @@ const __alias = {
   "convex/values": __S + "/convex-js/src/values/index.ts",
   fflate: __S + "/fflate/src/index.ts",
   "nosleep.js/src/media.js": ${JSON.stringify(HERE)} + "/stubs/nosleep-media.mjs",
+  // hls.js is not here (it has no source build): a stand-in with "hls.js" in its name, so the real script still finds
+  // the player's own file (24 Nov 2026). No run-through plays a video; GitHub's check measures the real one.
+  "hls.js/light": ${JSON.stringify(HERE)} + "/stubs/hls.js-light.mjs",
 };
 const __plugin = {
   name: "from-source",
@@ -39,6 +42,10 @@ if (!src.includes('import { build } from "esbuild";')) throw new Error("build.mj
 await mkdir(`${HERE}/stubs`, { recursive: true });
 await writeFile(`${HERE}/stubs/nosleep-media.mjs`, 'const media = { webm: "data:video/webm;base64,", mp4: "data:video/mp4;base64," };\nexport default media;\n');
 await writeFile(`${HERE}/stubs/empty.css`, "/* the fonts are not installed here */\n");
+await writeFile(
+  `${HERE}/stubs/hls.js-light.mjs`,
+  'export default class Hls {\n  static isSupported() {\n    return false;\n  }\n  static Events = { ERROR: "hlsError", MANIFEST_PARSED: "hlsManifestParsed", LEVEL_SWITCHED: "hlsLevelSwitched" };\n  static ErrorTypes = { NETWORK_ERROR: "networkError", MEDIA_ERROR: "mediaError" };\n  loadSource() {}\n  attachMedia() {}\n  startLoad() {}\n  recoverMediaError() {}\n  on() {}\n  off() {}\n  destroy() {}\n}\n',
+);
 // The real script reads and writes from the repo's folder (src/, public/, dist/): run its copy from there.
 const copy = `${HERE}/build-here.mjs`;
 await writeFile(copy, src.replace('import { build } from "esbuild";', head));

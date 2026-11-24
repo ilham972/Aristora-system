@@ -523,7 +523,8 @@ function askOf(parts: FormPart[]): keyof typeof ASK {
 
 /** A question checked on its own (14 Nov 2026): how it went. pt = part of its marks, teach = a part waits for the teacher. */
 type Verdict = "ok" | "pt" | "no" | "teach";
-const verdictOf = (l: FamilyLock): Verdict => (l.got === null ? "teach" : l.got >= l.max ? "ok" : l.got > 0 ? "pt" : "no");
+/** Of a question, or of the one sub-question he just checked (24 Nov 2026: `FamilyLock.now`). */
+const verdictOf = (l: { got: number | null; max: number }): Verdict => (l.got === null ? "teach" : l.got >= l.max ? "ok" : l.got > 0 ? "pt" : "no");
 
 export function Play(props: {
   world: World;
@@ -552,12 +553,13 @@ export function Play(props: {
   // Check after every question (14 Nov 2026): the ones he checked (kept on the phone too; the server's word wins), the
   // answer on screen now, his run of right ones.
   const [locks, setLocks] = useState<Record<number, FamilyLock>>(() => keep<Record<number, FamilyLock>>(lockKey) ?? {});
-  const [verdict, setVerdict] = useState<{ q: number; run: number } | null>(null);
+  // si = the sub-question it answered (null = the whole question), now = the marks of that sub-question alone.
+  const [verdict, setVerdict] = useState<{ q: number; run: number; si: number | null; now?: FamilyLock["now"] } | null>(null);
   const [run, setRunN] = useState(0);
   // Each ✓ / ✗ deck's statement now (question.part → its index).
   const [tfAt, setTfAt] = useState<Record<string, number>>({});
   const [checking, setChecking] = useState(false);
-  const sure = useRef<number | null>(null);
+  const sure = useRef<string | null>(null);
   // The list of questions (the bar on top opens it), a long question's story open, how long since he did anything.
   const [list, setList] = useState(false);
   const [story, setStory] = useState(false);
@@ -620,7 +622,9 @@ export function Play(props: {
         });
         setTyped((old) => {
           const next = { ...old };
-          for (const l of got) next[l.q] = l.a;
+          // Checked one sub-question at a time (24 Nov 2026): the server's answers, and his own in a box it has none
+          // for (he typed in a part he has not checked yet, on this phone, since his last Check).
+          for (const l of got) next[l.q] = l.ps ? l.a.map((v, i) => v || (old[l.q]?.[i] ?? "")) : l.a;
           keep(draftKey, next);
           return next;
         });
@@ -678,8 +682,25 @@ export function Play(props: {
   };
   const each = !!form.each && !props.look;
   const q = form.qs[at.qi];
-  /** This question, checked already: his answers stay as they are. */
+  /** This question, checked already: whole, or one sub-question at a time (its `ps`). */
   const lock = each ? locks[q.q] : undefined;
+  // Which part each of its boxes belongs to (his answers come part after part, as the server reads them).
+  const partAt: number[] = [];
+  q.parts.forEach((p, pi) => {
+    for (let k = 0; k < (p.boxes?.length ?? 0); k++) partAt.push(pi);
+  });
+  type Qn = (typeof form.qs)[number];
+  /** The parts of a question he has checked (`ps` = one sub-question at a time; no `ps` = the whole question). */
+  const psOf = (x: Qn, now: Record<number, FamilyLock> = locks) => {
+    const l = each ? now[x.q] : undefined;
+    return l ? (l.ps ?? x.parts.map((_, i) => i)) : null;
+  };
+  /** Checked whole: nothing of it is his to change any more, → passes over it, the bar says how it went. */
+  const shut = (x: Qn, now: Record<number, FamilyLock> = locks) => (psOf(x, now)?.length ?? -1) >= x.parts.length;
+  /** This part of the question he is on is checked (its answers stay as they are), and this box's part. */
+  const pdone = (pi: number) => !!psOf(q)?.includes(pi);
+  const bdone = (bi: number) => pdone(partAt[bi] ?? -1);
+  const full = shut(q);
   const asking = !review && !!q.t && !how[q.q];
   // A box tapped before he chose (15 Nov 2026, his report and his idea: "the owl will highlight its message box"):
   // the owl points him to the buttons below; how many taps (its bubble jumps again each time; `hey` above).
@@ -687,12 +708,13 @@ export function Play(props: {
   const learning = !review && !!q.t && how[q.q] === "learn";
   const flat = all.findIndex((x) => x.qi === at.qi && x.bi === at.bi);
   // The box he types in now: a tap's place (an option, ✓ / ✗, a card) is never typed into.
-  const box = flat >= 0 && typing(all[flat].box) && !lock ? all[flat].box : null;
+  const box = flat >= 0 && typing(all[flat].box) && !bdone(at.bi) ? all[flat].box : null;
   const val = (qi: number, bi: number) => typed[form.qs[qi].q]?.[bi] ?? "";
   /** Several of a question's answers at once (a tap changes a whole part: ✓ / ✗, the words marked, the cards). */
   const setRun = (qi: number, from: number, vals: string[]) => {
     const qn = form.qs[qi].q;
-    if (each && locks[qn]) return;
+    // A part he checked can't be changed; the rest of its question still can (24 Nov 2026).
+    if (each && locks[qn] && (qi !== at.qi || pdone(partAt[from] ?? -1))) return;
     act();
     const arr = [...(typed[qn] ?? [])];
     vals.forEach((v, k) => (arr[from + k] = v));
@@ -714,7 +736,7 @@ export function Play(props: {
   };
   /** A question's state on the bar and in the list: checked (how it went), else how much of it he answered. */
   const stateOf = (qi: number) => {
-    const l = each ? locks[form.qs[qi].q] : undefined;
+    const l = shut(form.qs[qi]) ? locks[form.qs[qi].q] : undefined;
     return l ? `${filled(qi)} ${verdictOf(l)}` : filled(qi);
   };
 
@@ -729,15 +751,12 @@ export function Play(props: {
   if (stepCache.current.key !== stepKey) stepCache.current = { key: stepKey, v: stepKey && printed ? stepsOf(printed.html, labels) : null };
   const steps = stepCache.current.v;
   const inQ = all.filter((x) => x.qi === at.qi);
-  const partAt: number[] = [];
-  q.parts.forEach((p, pi) => {
-    for (let k = 0; k < (p.boxes?.length ?? 0); k++) partAt.push(pi);
-  });
   const stepOfBi = (bi: number) => (steps ? Math.max(0, steps.of[partAt[bi] ?? 0] ?? 0) : 0);
   const stepNow = steps ? Math.min(steps.n - 1, Math.max(0, at.si ?? stepOfBi(at.bi))) : 0;
   const stepBack = stepNow < stepWas.current;
   stepWas.current = stepNow;
-  const stepParts = (k: number) => q.parts.filter((_, pi) => steps?.of[pi] === k);
+  /** The parts of one sub-question (every part when the question has no steps). */
+  const stepIdx = (k: number) => q.parts.map((_, pi) => pi).filter((pi) => !steps || steps.of[pi] === k);
   const goStep = (k: number) => {
     if (!steps || k < 0 || k >= steps.n) return;
     act();
@@ -754,33 +773,42 @@ export function Play(props: {
     let n = 0;
     let f = 0;
     let right = true;
+    let teach = false;
+    let checked = true;
     q.parts.forEach((p, pi) => {
       if (steps?.of[pi] !== k) return;
       const from = partAt.indexOf(pi);
       for (let i = 0; i < (p.boxes?.length ?? 0); i++, n++) if (val(at.qi, from + i).trim()) f++;
+      // Checked one sub-question at a time (24 Nov 2026): only the parts of this one say how it went.
+      if (!pdone(pi)) return void (checked = false);
       const ok = lock?.ok[pi];
-      if (lock && ok && !ok.every(Boolean)) right = false;
+      if (!ok) teach = true;
+      else if (!ok.every(Boolean)) right = false;
     });
-    if (lock) return lock.got === null && stepParts(k).some((p) => !p.boxes) ? "full" : right ? "ok" : "no";
+    if (lock && checked && stepIdx(k).length > 0) return teach ? "full" : right ? "ok" : "no";
     return n === 0 ? "" : f === n ? "full" : f > 0 ? "part" : "";
   };
+  /** What he sees now is checked: this sub-question, or the whole question when it has no steps. */
+  const stepShut = !!lock && (full || stepIdx(steps ? stepNow : 0).every((pi) => pdone(pi)));
 
   /** What → does next: his fraction's next cell, the next box of this step, the next step, or the question's end. */
   const fr = box?.f ? box.f : null;
   const ahead = (): { k: "cell" | "step" | "end" } | { k: "box"; bi: number } => {
-    if (lock) return { k: steps && stepNow + 1 < steps.n ? "step" : "end" };
+    if (stepShut) return { k: steps && stepNow + 1 < steps.n ? "step" : "end" };
     if (fr && (at.ci ?? 0) < fracCells(fr, val(at.qi, at.bi)).length - 1) return { k: "cell" };
-    const nb = flat >= 0 ? inQ.find((x) => x.bi > at.bi && typing(x.box) && (!steps || stepOfBi(x.bi) === stepNow)) : undefined;
+    const nb = flat >= 0 ? inQ.find((x) => x.bi > at.bi && typing(x.box) && !bdone(x.bi) && (!steps || stepOfBi(x.bi) === stepNow)) : undefined;
     if (nb) return { k: "box", bi: nb.bi };
     return { k: steps && stepNow + 1 < steps.n ? "step" : "end" };
   };
-  /** This question can be checked now: something of his in it, and not checked yet. */
-  const canCheck = each && !lock && !q.free && !asking && !learning && inQ.length > 0 && filled(at.qi) !== "empty";
-  const settled = (qi: number, now: Record<number, FamilyLock>) => !!form.qs[qi].free || !!now[form.qs[qi].q] || boxesIn(qi) === 0;
+  /** The boxes of what he sees now: this sub-question's, or the whole question's when it has no steps. */
+  const hereBoxes = inQ.filter((x) => (!steps || stepOfBi(x.bi) === stepNow) && !bdone(x.bi));
+  /** What he sees now can be checked: something of his in it, and not checked yet. */
+  const canCheck = each && !stepShut && !q.free && !asking && !learning && hereBoxes.length > 0 && hereBoxes.some((x) => val(at.qi, x.bi).trim());
+  const settled = (qi: number, now: Record<number, FamilyLock>) => !!form.qs[qi].free || shut(form.qs[qi], now) || boxesIn(qi) === 0;
   const nextQ = (now = locks) => {
     // A question he checked is done: → passes over it to the next one still open.
     let to = at.qi + 1;
-    if (each) while (to < form.qs.length && now[form.qs[to].q]) to++;
+    if (each) while (to < form.qs.length && shut(form.qs[to], now)) to++;
     if (to < form.qs.length) return setAt({ qi: to, bi: startOf(to) });
     setReview(true);
     // Every question checked one by one: the level is done, nothing more to ask him.
@@ -789,15 +817,18 @@ export function Play(props: {
   const checkNow = async () => {
     if (checking) return;
     const a = Array.from({ length: inQ.length }, (_, i) => val(at.qi, i).trim());
-    const gaps = a.filter((x) => !x).length;
-    if (gaps > 0 && sure.current !== q.q) {
-      sure.current = q.q;
+    // One sub-question at a time (24 Nov 2026): its parts alone are marked and frozen, the rest stay his.
+    const ps = steps && !full ? stepIdx(stepNow) : null;
+    const gaps = hereBoxes.filter((x) => !a[x.bi]).length;
+    const asked = `${q.q}.${ps ? stepNow : ""}`;
+    if (gaps > 0 && sure.current !== asked) {
+      sure.current = asked;
       return toast(`${gaps} காலியாக உள்ளன (அவை ✗). சரி என்றால் மீண்டும் Check அழுத்து.`);
     }
     sure.current = null;
     setChecking(true);
     try {
-      const l = (await mutation("family:checkOne", { unitId: form.unitId, n: form.n, q: q.q, a, b: inQ.length })) as FamilyLock;
+      const l = (await mutation("family:checkOne", { unitId: form.unitId, n: form.n, q: q.q, a, b: inQ.length, ...(ps ? { ps } : {}) })) as FamilyLock;
       const next = { ...locks, [q.q]: l };
       setLocks(next);
       keep(lockKey, next);
@@ -805,7 +836,8 @@ export function Play(props: {
       const mine = { ...typed, [q.q]: l.a };
       setTyped(mine);
       keep(draftKey, mine);
-      const v = verdictOf(l);
+      // The sheet answers him for the sub-question he just checked, never for the whole question so far.
+      const v = verdictOf(l.now ?? l);
       const r = v === "ok" ? run + 1 : v === "teach" ? run : 0;
       setRunN(r);
       if (v === "ok") {
@@ -815,7 +847,7 @@ export function Play(props: {
         sound("wrong");
         buzz(18);
       } else sound("pop");
-      setVerdict({ q: q.q, run: r });
+      setVerdict({ q: q.q, run: r, si: ps ? stepNow : null, now: l.now });
     } catch (e) {
       if (marked(e)) return gone();
       if (e instanceof NetError && e.offline) {
@@ -836,13 +868,14 @@ export function Play(props: {
     act();
     const a = ahead();
     if (a.k === "box") return setAt({ qi: at.qi, bi: a.bi });
-    if (a.k === "step") return goStep(stepNow + 1);
+    // Where a sub-question ends, → is its Check (24 Nov 2026, his "I want immediate feedback"); then the next one.
     if (canCheck) return void checkNow();
+    if (a.k === "step") return goStep(stepNow + 1);
     nextQ();
   };
   const onKey = (k: string) => {
     act();
-    if (lock) return k === "→" ? goNext() : undefined;
+    if (stepShut) return k === "→" ? goNext() : undefined;
     buzz(6);
     sound("key");
     // A fraction box: → (and ␣) to its next cell, then on; the fraction key down to the denominator; ⌫ on an empty
@@ -860,7 +893,7 @@ export function Play(props: {
       return set(at.qi, at.bi, fracJoin(fr, cells));
     }
     // A key while a tap's place is chosen: it goes to the first box of what he sees (the question, or its step).
-    const first = inQ.find((x) => typing(x.box) && (!steps || stepOfBi(x.bi) === stepNow));
+    const first = inQ.find((x) => typing(x.box) && !bdone(x.bi) && (!steps || stepOfBi(x.bi) === stepNow));
     const here = box ? at.bi : first ? first.bi : -1;
     if (here < 0) return toast(typesIn(at.qi) ? "இங்கே எழுத எதுவும் இல்லை. → அடுத்தது." : "இதைத் தாளில் செய்து படம் எடு (📷). → அடுத்த கேள்வி.");
     if (here !== at.bi) setAt({ qi: at.qi, bi: here });
@@ -874,12 +907,13 @@ export function Play(props: {
   const teacherQs = form.qs.filter((x) => x.parts.some((p) => !p.boxes)).length;
   const backQs = form.qs.filter((x) => x.re).length;
   const freeQs = form.qs.filter((x) => x.free);
-  const lockedQs = each ? form.qs.filter((x) => locks[x.q]).length : 0;
+  const lockedQs = each ? form.qs.filter((x) => shut(x)).length : 0;
   // The XP of this level so far (it becomes his when the level is done): his marks, and old questions won back.
   const bank = each
     ? form.qs.reduce((s, x) => {
         const l = locks[x.q];
-        return s + (!l ? 0 : x.re ? (l.got !== null && l.got >= l.max ? (x.rb ?? 0) : 0) : (l.got ?? l.phoneGot));
+        // A question that came back wins its marks back whole: only once every sub-question of it is checked.
+        return s + (!l ? 0 : x.re ? (shut(x) && l.got !== null && l.got >= l.max ? (x.rb ?? 0) : 0) : (l.got ?? l.phoneGot));
       }, 0)
     : 0;
 
@@ -895,7 +929,7 @@ export function Play(props: {
       })) as Checked;
       forget();
       // He saw each answer as he went: the reveal goes straight to the score.
-      const seen = each && res.results.every((r) => r.free || !!locks[r.q] || r.ok.every((o) => o === null));
+      const seen = each && res.results.every((r) => r.free || form.qs.some((x) => x.q === r.q && shut(x)) || r.ok.every((o) => o === null));
       props.onChecked(form, seen ? { ...res, seen: true } : res, typed);
     } catch (e) {
       if (marked(e)) return gone();
@@ -913,7 +947,7 @@ export function Play(props: {
   const fit = printed && css !== null ? slotsFit(runs, printed.html) : new Set<SlotRun["attr"]>();
   const mine = typed[q.q] ?? [];
   const tap = (run: SlotRun, i: number, v?: string) => {
-    if (lock) return;
+    if (pdone(partAt[run.at] ?? -1)) return;
     act();
     // A teacher question asks first (15 Nov 2026, his report: "the boxes are selecting but can't type ... student will
     // confuse"): a box tapped before he chose says so, and the two buttons below come into view and jump.
@@ -943,7 +977,7 @@ export function Play(props: {
   const marks: (boolean | null)[] = [];
   if (lock) {
     q.parts.forEach((p, pi) => {
-      const ok = lock.ok[pi] ?? null;
+      const ok = pdone(pi) ? (lock.ok[pi] ?? null) : null;
       const whole = p.ui?.k === "mark" || p.ui?.k === "why";
       for (let k = 0; k < (p.boxes?.length ?? 0); k++) marks.push(ok === null ? null : whole ? ok.every(Boolean) : (ok[k] ?? false));
     });
@@ -952,12 +986,13 @@ export function Play(props: {
   const tfKey = (run: SlotRun) => `${q.q}.${run.at}`;
   const tfK = (run: SlotRun) => tfAt[tfKey(run)] ?? Math.max(0, Array.from({ length: run.els }, (_, i) => i).findIndex((i) => !mine[run.at + i]));
   const setTf = (run: SlotRun, k: number) => setTfAt((x) => ({ ...x, [tfKey(run)]: k }));
-  const tf = lock ? [] : runs.filter((r) => r.ui.k === "tf" && fit.has("t") && !r.below).map((r) => r.at + tfK(r));
-  const live: Live = { runs, fit, vals: mine, cur: box && !asking ? at.bi : null, onSlot: tap, ...(lock ? { marks } : { tf }) };
+  const tf = runs.filter((r) => r.ui.k === "tf" && fit.has("t") && !r.below && !pdone(partAt[r.at] ?? -1)).map((r) => r.at + tfK(r));
+  const live: Live = { runs, fit, vals: mine, cur: box && !asking ? at.bi : null, onSlot: tap, ...(lock ? { marks } : {}), ...(tf.length ? { tf } : {}) };
   const runAt = (from: number) => runs.find((r) => r.at === from);
-  const pad = !review && !asking && !learning && !lock && typesIn(at.qi);
-  // → is Check where the question ends (and its Check answers at once).
-  const go = canCheck && ahead().k === "end" ? (checking ? ("busy" as const) : ("check" as const)) : undefined;
+  const pad = !review && !asking && !learning && !stepShut && hereBoxes.some((x) => typing(x.box));
+  // → is Check where a sub-question ends, and where the question ends (its Check answers at once).
+  const goK = ahead().k;
+  const go = canCheck && goK !== "box" && goK !== "cell" ? (checking ? ("busy" as const) : ("check" as const)) : undefined;
   let bi = 0;
   const sl = (pi: number) => (inPaper ? `p${pi}` : undefined);
   const rows = asking || learning ? [] : q.parts.map((p, pi) => {
@@ -980,7 +1015,7 @@ export function Play(props: {
               vals={mine}
               k={tfK(run)}
               items={slots ? undefined : ui.items}
-              marks={lock ? marks.slice(run.at, run.at + run.els) : undefined}
+              marks={pdone(pi) ? marks.slice(run.at, run.at + run.els) : undefined}
               onK={(k) => setTf(run, k)}
               onPick={(i, v) => tap(run, i, v)}
             />
@@ -1001,7 +1036,7 @@ export function Play(props: {
         <div class={ui.k === "match" ? "f-part f-wide" : "f-part"} key={pi} slot={sl(pi)}>
           {p.p && <span class="f-plabel">({p.p})</span>}
           {ui.k === "order" ? (
-            <OrderLine items={ui.items} vals={mine} at={from} marks={lock ? marks.slice(from, from + ui.items.length) : undefined} onSet={(v) => setRun(at.qi, from, v)} />
+            <OrderLine items={ui.items} vals={mine} at={from} marks={pdone(pi) ? marks.slice(from, from + ui.items.length) : undefined} onSet={(v) => setRun(at.qi, from, v)} />
           ) : (
             <MatchPairs l={ui.l} r={ui.r} vals={mine} at={from} onSet={(v) => setRun(at.qi, from, v)} />
           )}
@@ -1040,7 +1075,7 @@ export function Play(props: {
               const v = val(at.qi, i);
               // A word or a name: his phone's own keyboard, in the box itself.
               if (b.k === "text") return <WordBox key={i} box={b} v={v} on={at.bi === i} onFocus={() => setAt({ qi: at.qi, bi: i })} onSet={(x) => set(at.qi, i, x)} />;
-              const on = at.bi === i && !lock;
+              const on = at.bi === i && !bdone(i);
               return (
                 <Fragment key={i}>
                   {b.j && (
@@ -1050,8 +1085,8 @@ export function Play(props: {
                   )}
                   <button
                     type="button"
-                    class={`f-box${on ? " on" : ""}${b.k === "expr" ? " x" : ""}${v ? " has" : ""}${b.f ? " frac" : ""}${lock && marks[i] !== null ? (marks[i] ? " ok" : " no") : ""}`}
-                    onClick={() => !lock && setAt({ qi: at.qi, bi: i })}
+                    class={`f-box${on ? " on" : ""}${b.k === "expr" ? " x" : ""}${v ? " has" : ""}${b.f ? " frac" : ""}${marks[i] === true ? " ok" : marks[i] === false ? " no" : ""}`}
+                    onClick={() => !bdone(i) && setAt({ qi: at.qi, bi: i })}
                     aria-label={`${b.l ?? ""} answer ${i + 1}${b.u ? ` (${b.u})` : ""}`}
                   >
                     {b.l && (
@@ -1061,7 +1096,7 @@ export function Play(props: {
                     )}
                     <span class="f-bline">
                       {b.f ? (
-                        <FracCells f={b.f} v={v} on={on ? (at.ci ?? 0) : -1} onCell={(c) => !lock && setAt({ qi: at.qi, bi: i, ci: c })} />
+                        <FracCells f={b.f} v={v} on={on ? (at.ci ?? 0) : -1} onCell={(c) => !bdone(i) && setAt({ qi: at.qi, bi: i, ci: c })} />
                       ) : (
                         <span key={on ? v.length : 0} class={v ? `f-bval${on ? " typed" : ""}` : "f-bval empty"}>
                           {v ? <Maths s={v} /> : "?"}
@@ -1087,7 +1122,8 @@ export function Play(props: {
   });
 
   // The owl beside him: what it does and says now (Tamil: its voice).
-  const lv = lock ? verdictOf(lock) : null;
+  const sv = stepShut ? stepState(steps ? stepNow : 0) : "";
+  const lv = !stepShut || !lock ? null : steps ? (sv === "ok" ? "ok" : sv === "no" ? "no" : null) : verdictOf(lock);
   const half = form.qs.length >= 6 && at.qi === Math.floor(form.qs.length / 2);
   const pose: Pose =
     heyNow ? "teach" : idle === 2 ? "sleep" : idle === 1 ? "think" : learning ? "teach" : q.free ? "yes" : lv === "ok" ? "yes" : lv ? "again" : each && run >= 3 ? "combo" : at.qi === 0 && done === 0 ? "hello" : "write";
@@ -1121,12 +1157,14 @@ export function Play(props: {
                               : "பாதி முடிந்தது! அப்படியே தொடர்."
                             : "தாளில் செய்து, விடையை இங்கே போடு.";
   // The answer he just got (the sheet over the pad).
-  const vl = verdict ? locks[verdict.q] : undefined;
+  const vl = verdict ? (verdict.now ?? locks[verdict.q]) : undefined;
   const vq = verdict ? form.qs.find((x) => x.q === verdict.q) : undefined;
   const vk = vl ? verdictOf(vl) : null;
   // A wrong one comes back two levels on, when the Stage has such a level (convex/lib/family.ts retryPool).
   const later = !!vq && !vq.re && form.n > 0 && props.world.levels.some((l) => l.n >= form.n + 2);
-  const vxp = !vl || !vq ? 0 : vq.re ? (vk === "ok" ? (vq.rb ?? 0) : 0) : (vl.got ?? vl.phoneGot);
+  const vw = verdict ? locks[verdict.q] : undefined;
+  // A question that came back: its marks won back come when the whole of it is checked and right.
+  const vxp = !vl || !vq ? 0 : vq.re ? (shut(vq) && vw && vw.got !== null && vw.got >= vw.max ? (vq.rb ?? 0) : 0) : (vl.got ?? vl.phoneGot);
   const step = steps ? (story ? ("story" as const) : stepNow) : undefined;
   return (
     <div class={`f-play v2${showQ ? " withq" : ""}${review ? " rev" : ""}${box?.k === "expr" ? ` xpad${box.eq || (box.p && box.v) ? " eqpad" : ""}` : ""}${!review && !pad ? " nopad" : ""}`}>
@@ -1261,7 +1299,7 @@ export function Play(props: {
             </p>
           </div>
           <section
-            class={`f-card f-qcard slide${lock ? " locked" : ""}`}
+            class={`f-card f-qcard slide${full ? " locked" : ""}`}
             key={q.q}
             onTouchStart={(e) => {
               const t = e.touches[0];
@@ -1279,7 +1317,7 @@ export function Play(props: {
           >
             <div class="f-qhead">
               <b class="f-qn">Q{q.q}</b>
-              <span class="f-kind">{ASK[askOf(steps ? stepParts(stepNow) : q.parts)]}</span>
+              <span class="f-kind">{ASK[askOf(steps ? stepIdx(stepNow).map((pi) => q.parts[pi]) : q.parts)]}</span>
               <span class="f-qtools">
                 {printed && css !== null && (
                   <button type="button" class="f-zoombtn" aria-label={`Zoom Q${q.q}`} onClick={zoom}>
@@ -1398,7 +1436,10 @@ export function Play(props: {
               onClick={() => {
                 act();
                 buzz();
+                const si = verdict?.si ?? null;
                 setVerdict(null);
+                // On to the next sub-question of this question (24 Nov 2026), else the next question.
+                if (si !== null && steps && si + 1 < steps.n && !full) return goStep(si + 1);
                 nextQ();
               }}
             >

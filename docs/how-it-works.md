@@ -1668,9 +1668,9 @@ learning app of our education institute"): one profile, his class times, what he
     question slides in, each key gives the answer a small push.
     **Check after every question** (the owner's switch: Settings → Books → "On the phone: Check after every question",
     on by default; off = Check once at the level's end, as before, with the Check pill beside "5 / 11"):
-    - Where a question ends (its last box, its last step), the pad's → turns into a gold **Check** once something of
-      his is in it (nothing typed: → only passes on, the question stays open). Some boxes empty: "N காலியாக உள்ளன
-      (அவை ✗)" once, a second Check sends it.
+    - Where a question ends, and **where each of its sub-questions ends** (24 Nov 2026, below), the pad's → turns into
+      a gold **Check** once something of his is in it (nothing typed: → only passes on, the question stays open). Some
+      boxes empty: "N காலியாக உள்ளன (அவை ✗)" once, a second Check sends it.
     - What a Check takes: any question as big as its key allows (`TYPED_MAX`: 20 parts of 12 boxes; a Sakarath set
       question has 37), at most `LEVEL_TYPED_MAX` boxes a Check, a box ≤ 300 letters; more = "Those answers are too
       long." (`typedTooLong`; until 17 Nov 2026 a cap of 30 boxes a question left such a level unfinishable).
@@ -1682,6 +1682,17 @@ learning app of our education institute"): one profile, his class times, what he
     - **Once checked, a question can't be changed**: its boxes turn blue or rose as he typed them, no pad, → passes on.
       The server keeps what he typed (`familyLive`), so another phone of his shows the same, and the level's own Check
       marks the level from it, never from what a phone sends again.
+    - **A sub-question at a time** (24 Nov 2026, his report on the Sakarath books: "the Sakarath book have so many sub
+      questions inside each questions ... they are getting feedback after then the whole question with sub questions
+      ... I want immediate feedback like other places in the app"): a question cut into steps is checked **step by
+      step**. The → at the end of (i) is its own gold Check; the sheet gives that sub-question's own marks (+XP out of
+      its own marks, its own ✓ or ✗, never the answer) and **Continue goes to (ii)**, still his to answer, with (i)
+      frozen blue or rose on the steps and in the paper. Only when every sub-question of it is checked does the
+      question count as checked (the bar's colour, "N கேள்விகளை ஏற்கனவே சரிபார்த்தாய்", → passing over it, and a
+      question that came back winning its marks back). The server marks and freezes those parts alone (`checkOne`'s
+      `ps`, the lock's `ps`): the rest of the question stays his, and the level's own Check marks it from what he
+      typed then for the parts he checked and from his phone for the parts he never did. A question that stays one
+      page (its parts have no printed labels of their own) is checked whole, as before.
     - **The level's XP so far** sits on top (the pink gem): it becomes his when the level is done. Nothing is saved as
       his marks before that: XP, the flame, ⌂ for the class and the questions that come back all happen at the level's
       end, exactly as before.

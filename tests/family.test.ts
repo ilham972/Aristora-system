@@ -495,6 +495,38 @@ describe("the family app on the server", () => {
     expect(await raw.run(async (ctx) => (await ctx.db.query("familyLive").collect()).length)).toBe(0);
   });
 
+  test("a sub-question's own Check: its parts marked and frozen, the rest still his; the level's Check takes both", async () => {
+    // 24 Nov 2026, his report on the Sakarath books: "they are getting feedback after then the whole question with sub
+    // questions ... I want immediate feedback like other places in the app". Q1 and Q5 of level 1 in two parts here.
+    const two = (q: number, a: string, b: string) => ({ q, parts: [{ p: "i", a: `**${a}**`, m: 1 }, { p: "ii", a: `**${b}**`, m: 1 }] });
+    await save(u01, fakeKey().map((x) => (x.q === 1 ? two(1, "3", "4") : x.q === 5 ? two(5, "15", "16") : x)));
+    await joinAs(hana, FAM);
+    // (i) alone: marked out of its own 1 mark and frozen; (ii) is still his to answer.
+    const i = await fam().mutation(api.family.checkOne, { unitId: u01, n: 1, q: 1, a: ["3", ""], b: 2, ps: [0] });
+    expect(i).toMatchObject({ q: 1, a: ["3", ""], ps: [0], ok: [[true], null], got: 1, max: 1, now: { ps: [0], got: 1, max: 1 } });
+    expect(JSON.stringify(i)).not.toMatch(/"(vals|want|t|words|cont|keys)":/);
+    // Asked again with another answer: what he typed then comes back, and the sheet answers him again.
+    expect(await fam().mutation(api.family.checkOne, { unitId: u01, n: 1, q: 1, a: ["9", ""], b: 2, ps: [0] })).toMatchObject({ a: ["3", ""], got: 1, now: { ps: [0], got: 1 } });
+    // Another phone of his: the level says which parts are checked, and only those.
+    expect((await fam().query(api.family.level, { unitId: u01, n: 1 })).locks).toMatchObject([{ q: 1, ps: [0], got: 1, max: 1 }]);
+    // (ii) wrong: its own sheet (0 of its 1 mark), the question 1 of 2, and now the whole question is checked.
+    const ii = await fam().mutation(api.family.checkOne, { unitId: u01, n: 1, q: 1, a: ["3", "99"], b: 2, ps: [1] });
+    expect(ii).toMatchObject({ a: ["3", "99"], ok: [[true], [false]], got: 1, max: 2, now: { ps: [1], ok: [null, [false]], got: 0, max: 1 } });
+    expect(ii.ps).toBeUndefined();
+    // A sub-question that is not in the question: refused. Nothing of his marks is saved yet.
+    await expect(fam().mutation(api.family.checkOne, { unitId: u01, n: 1, q: 1, a: ["3"], b: 2, ps: [7] })).rejects.toThrow(/not in this question/);
+    expect((await hanaM())?.lv["1"]).toBeUndefined();
+    // Q5: only (i) checked, then the level's Check. Q1 and Q5's (i) are marked as he typed them THEN (the phone now
+    // sends 0 for them: ignored); Q5's (ii), which he never checked, from this Check.
+    await fam().mutation(api.family.checkOne, { unitId: u01, n: 1, q: 5, a: ["15", ""], b: 2, ps: [0] });
+    const typed = LEVEL1.map((x) => (x.q === 1 ? { q: 1, a: ["0", "0"], b: 2 } : x.q === 5 ? { q: 5, a: ["0", "16"], b: 2 } : x));
+    const r = await fam().mutation(api.family.check, { unitId: u01, n: 1, typed });
+    expect(r.results.find((x) => x.q === 1)).toMatchObject({ ok: [[true], [false]], got: 1 });
+    expect(r.results.find((x) => x.q === 5)).toMatchObject({ ok: [[true], [true]], got: 2 });
+    expect(r.got).toBe(15);
+    expect(await raw.run(async (ctx) => (await ctx.db.query("familyLive").collect()).length)).toBe(0);
+  });
+
   test("a question as big as its key allows is checked; more answers than any key asks for are refused", async () => {
     await joinAs(hana, FAM);
     const blanks = (n: number, first?: string) => Array.from({ length: n }, (_, i) => (i === 0 && first !== undefined ? first : ""));

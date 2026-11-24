@@ -1057,6 +1057,8 @@ export default defineSchema({
    * book and key again: the Convex bill), `done` = the questions he checked, each once, with what he typed (he can't
    * change it: his last Check marks the level from these, never from what the phone sends again). Deleted by the
    * level's Check, with the student (`wipeStudent`), and when he opens another level a week later.
+   * `ps` = the parts of it marked so far, when he checked one sub-question at a time (24 Nov 2026): the other parts
+   * are still his to answer, and only these boxes are frozen (missing = the whole question, as before).
    */
   familyLive: defineTable({
     studentId: v.id("students"),
@@ -1073,6 +1075,7 @@ export default defineSchema({
         got: v.union(v.number(), v.null()),
         phoneGot: v.number(),
         max: v.number(),
+        ps: v.optional(v.array(v.number())),
       }),
     ),
   }).index("by_student", ["studentId", "unitId", "n"]),

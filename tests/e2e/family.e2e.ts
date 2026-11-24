@@ -1015,6 +1015,113 @@ test("Check after every question: the answer at once, the level's XP on top, a w
   expect(problems).toEqual([]);
 });
 
+test("a sub-question's own Check: a long question answers him at each sub-question, and the rest of it stays his", async () => {
+  // His report (24 Nov 2026) on the Sakarath books: "the Sakarath book have so many sub questions inside each
+  // questions ... they are getting feedback after then the whole question with sub questions ... I want immediate
+  // feedback like other places in the app". Q53 here is printed in two sub-questions: a step each, a Check each.
+  const backend = makeBackend(modules, { each: true });
+  const t = backend.t;
+  await addPerson(t, { name: "Owner", token: OWNER_TOKEN, role: "owner" });
+  const as = { token: OWNER_TOKEN };
+  await t.mutation(api.setup.ensure, as);
+  const u01 = await t.run(async (ctx) => (await ctx.db.query("units").withIndex("by_key", (q) => q.eq("key", "G8-U01")).first())!._id);
+  const m53 = outOf(BOOK.data, 53)!;
+  await t.mutation(api.catalog.saveWorkbook, {
+    ...as,
+    unitId: u01,
+    parts: BOOK.data.parts.map((p) => ({ id: p.id, to: p.to, ...(p.each ? { each: p.each } : {}) })),
+    levels: BOOK.data.levels.map((l) => ({ to: l.to, max: l.max })),
+    marks: BOOK.data.marks ?? {},
+    replace: true,
+    key: fakeKey().map((k) =>
+      k.q === 53
+        ? {
+            q: 53,
+            parts: [
+              { p: "i", a: "**5**", m: Math.floor(m53 / 2), t: { k: "box", b: [{ v: ["5"] }] } as Ans },
+              { p: "ii", a: "**6**", m: m53 - Math.floor(m53 / 2), t: { k: "box", b: [{ v: ["6"] }] } as Ans },
+            ],
+          }
+        : k,
+    ),
+  });
+  // Its printed question, made up here (never his books' own): a lead, then (i) and (ii), each with its own box.
+  const sub = (q: number, subs: string[]) =>
+    `<div class="pq pqc" data-q="${q}"><div class="bk" data-b="${q}.0"><div class="pqh"><span class="qn">${q}</span></div><p class="lead2">A made-up question number ${q}</p></div>` +
+    subs.map((x, i) => `<div class="bk" data-b="${q}.${i + 1}"><div class="rp in"><span class="rl">(${"i".repeat(i + 1)})</span><span>${x}</span></div><div class="wz" style="height:8mm"></div></div>`).join("") +
+    "</div>";
+  await t.mutation(api.catalog.saveQuestions, {
+    ...as,
+    unitId: u01,
+    stage: "master",
+    first: true,
+    css: ".qn { font-weight: 700; }",
+    items: [
+      { q: 53, html: sub(53, ["The first made-up sub-question", "The second made-up sub-question"]) },
+      { q: 54, html: sub(54, ["Its only made-up sub-question"]) },
+    ],
+  });
+  const hana = await t.mutation(api.students.add, { ...as, name: "Hana K", grade: 8, term: 1, stage: "master", unitId: u01 });
+  await t.mutation(api.families.setCode, { ...as, studentId: hana, code: "4719" });
+  // Levels 1–5 corrected in class with full marks: Level 6 is the one he plays, and it opens on Q53.
+  await t.run(async (ctx) => {
+    const now = Date.now();
+    const lv: Record<string, { done: number; fixed: number; got: number; by: "correction" }> = {};
+    BOOK.data.levels.slice(0, 5).forEach((l, i) => (lv[String(i + 1)] = { done: now - 86_400_000, fixed: now - 86_000_000, got: l.max, by: "correction" }));
+    const p = await ctx.db
+      .query("progress")
+      .withIndex("by_student_unit_stage", (q) => q.eq("studentId", hana).eq("unitId", u01).eq("stage", "master"))
+      .first();
+    if (p) await ctx.db.patch(p._id, { m: { q: {}, lv }, updatedAt: now });
+    else await ctx.db.insert("progress", { studentId: hana, unitId: u01, stage: "master", marks: {}, m: { q: {}, lv }, startedAt: 0, updatedAt: now });
+  });
+
+  const P = await open(backend, `${site.url}/f/`, size(360, 760));
+  await P.getByLabel(/Index/).fill("1001");
+  await P.getByLabel("Code").fill("4719");
+  await P.getByRole("button", { name: "Sign in" }).click();
+  await stageNow(P, "Level 6");
+  await P.locator(".f-lv.play").click();
+  await contains(P.locator(".f-qn"), "Q53");
+  await until(async () => (await P.locator(".f-stepper .f-stp").count()) === 2, "Q53's two sub-questions on top");
+  const go = P.locator(".f-key.next");
+  const key = (k: string) => P.locator(".f-padkeys").getByRole("button", { name: k, exact: true }).click();
+
+  // (i): its own box answered turns → into the gold Check (before 24 Nov it waited for (ii) too).
+  expect(await go.getAttribute("aria-label")).toBe("Next");
+  await key("5");
+  expect(await go.getAttribute("aria-label")).toBe("Check");
+  await noSideScroll(P);
+  await shot(P, "fam66-step-check");
+  await go.click();
+  // Its own marks, at once: the sheet, +XP on it and in the level's bank, the step blue.
+  await contains(P.locator(".f-verdict.ok"), "சரியான விடை!");
+  expect(await P.locator(".f-verdict .f-vchip.xp").count()).toBe(1);
+  await until(async () => ((await P.locator(".f-bank").innerText()) ?? "").trim() !== "0", "the level's XP on top");
+  await until(async () => (await P.locator(".f-stepper .f-stp.ok").count()) === 1, "(i) blue on the steps");
+  await shot(P, "fam67-step-right");
+
+  // Continue stays in the question and opens (ii), still his to answer; (i) can't be changed any more.
+  await P.getByRole("button", { name: "Continue" }).click();
+  await contains(P.locator(".f-qn"), "Q53");
+  await until(async () => (await P.locator(".f-stepper .f-stp.now").first().getAttribute("aria-label")) === "Part ii", "(ii) is the step now");
+  await key("9");
+  expect(await go.getAttribute("aria-label")).toBe("Check");
+  await go.click();
+  // (ii) wrong: its own kind words, never the answer, and no XP for it.
+  await contains(P.locator(".f-verdict.no"), "பரவாயில்லை!");
+  expect(await P.locator(".f-verdict .f-vchip.xp").count()).toBe(0);
+  expect(await P.locator(".f-verdict").innerText()).not.toMatch(/\b6\b/);
+  await shot(P, "fam68-step-wrong");
+  await P.getByRole("button", { name: "Continue" }).click();
+  // On to the next question; Q53 is checked whole now, and back on it both steps keep their colours, with no pad.
+  await contains(P.locator(".f-qn"), "Q54");
+  await jump(P, P.locator(".f-qchip", { hasText: /^53$/ }));
+  await until(async () => (await P.locator(".f-stepper .f-stp.ok").count()) === 1 && (await P.locator(".f-stepper .f-stp.no").count()) === 1, "(i) blue and (ii) rose");
+  expect(await P.locator(".f-padkeys").count()).toBe(0);
+  expect(problems).toEqual([]);
+});
+
 test("an app, not a web page: two fingers never zoom (Home, the map, a Level's pad and question); one finger still scrolls", async () => {
   // His ask (4 Nov 2026): "students want to feel like a native app, so don't zoom when we use two fingers". Before,
   // two thumbs on the pad zoomed the page to 1.5x and pushed the bottom bar off the screen.
