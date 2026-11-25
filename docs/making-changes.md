@@ -309,8 +309,8 @@ python3 -I scripts/skill-updates/aristora-system-2026-11-24.py /mnt/skills/<…>
 ```
 
 The scripts hold no engine code and none of his books (the repo is public). The 24 Nov 2026 ones: the skill-book flow
-(the workbook skill: steps 0b, 5 Skills, 6 Into the app, 7 Tell him, the Edit rule; book.py: the engine's levels any
-size, nothing to draw) and that night's decisions (the brief).
+(the workbook skill: steps 0b, 5 Skills, 6 Into the app with the cover drawing, 7 Tell him, the Edit rule; the cover
+step kept word for word, 25 Nov 2026; book.py: the engine's levels any size) and those nights' decisions (the brief).
 
 ## Tag a unit's skills (through the Claude link)
 

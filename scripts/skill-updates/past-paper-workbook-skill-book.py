@@ -7,13 +7,16 @@ for the quality output"). Run on the skill's own SKILL.md:
 
 - Every change is an exact piece of text, found exactly once, or nothing is written (the skill was changed elsewhere:
   read the message, and change this script, never the skill by hand).
-- Only what the app now does goes: the PDF and zip delivered for an upload, the cover drawing, levels fitted by moves
-  (fit.py), the term book, the answer key alone (old §4b), the marks upgrade. Every rule of the questions, the answer
+- Only what the app now does goes: the PDF and zip delivered for an upload, levels fitted by moves (fit.py), the term
+  book, the answer key alone (old §4b), the marks upgrade. The cover drawing STAYS a step of every unit chat (25 Nov
+  2026, his words: "the past paper workbook skill can build beautiful cover page. So we have to use those thing"): it
+  goes into the app with the unit and prints on page 1 of the skill book, beside the term's units. Every rule of the questions, the answer
   space, the marks, the figures, the keys, the design and the token budget stays word for word.
 - Added: the Claude link's side (step 0b), the skills (step 5: the skill-tags skill's rules, word for word where they
-  apply), the save (step 6), what to tell him (step 7), the new-edition rule (Edit).
+  apply), the save (step 6, with the drawing; `cover` for a unit already in the app), what to tell him (step 7), the
+  new-edition rule (Edit).
 - The engine's files stay byte for byte, but book.py's one override (the engine's own levels may be any size): the
-  script proves it.
+  script proves it. Its "art: STAND-IN — … draw the unit's illustration" message stays: the stand-in is a cover to draw.
 A claude.ai chat runs this on its own copy (/mnt/skills/…/past-paper-workbook/SKILL.md) and gives the founder the result
 on the save card (his rule: skills only on the save card). The script holds no engine code and none of his books."""
 import re
@@ -54,8 +57,8 @@ def span(start, end, b):
 span('description: "Build an ARISTORA Tamil-medium past-paper workbook', 'without rebuilding it."',
      'description: "Build an ARISTORA Tamil-medium past-paper unit straight into the ARISTORA app as its skill book: one '
      'unit per chat from its scanned compilation PDF — every Part I/II question retyped with its answer space and marks, '
-     'every figure redrawn, every answer computed with its kind for the phone (load answer-kinds with it), every question '
-     'given its skills (the skill-tags rules) — saved whole through the Claude link. The founder downloads the PDF from '
+     'every figure redrawn, its own cover drawing, every answer computed with its kind for the phone (load answer-kinds '
+     'with it), every question given its skills (the skill-tags rules) — saved whole through the Claude link. The founder downloads the PDF from '
      'the app (Settings → Books → T): no PDF and no zip to upload. Also a new edition of a unit from its source zip."')
 
 rep("# Past-paper workbook — ARISTORA unit books and term books\n",
@@ -66,8 +69,9 @@ span("For each unit: **every past term-test question** of its scanned compilatio
 from you ... you just say done ... I can download that directly from the skill page"). One chat builds the unit, gives
 every answer its kind (answer-kinds), gives every question its skills (§4 step 5: the skill-tags rules) and saves the
 whole unit through the Claude link (§4 step 6). The app makes the book from it: the questions in skill order (Level n =
-skill n; a big skill cut into strips of about 20 marks), numbered, with its cover, contents, marks sheet and pages, the
-PDF and the printing (Settings → Books → T: Preview, PDF, Share to the shop). **No PDF and no zip to upload go to the
+skill n; a big skill cut into strips of about 20 marks), numbered, with its cover (the unit's own drawing beside the
+term's units, as this skill draws it: 25 November 2026, his words: "each unit need to have cover page when I download"),
+contents, marks sheet and pages, the PDF and the printing (Settings → Books → T: Preview, PDF, Share to the shop). **No PDF and no zip to upload go to the
 founder**; the source zip is his backup only.
 
 For each unit: **every past term-test question** of its scanned compilation PDF, retyped in the ARISTORA design (the
@@ -77,7 +81,7 @@ sized working space under each part, every exam figure redrawn, and the **paper-
 marks (a Part I question is 2), from which the app makes the levels' strips and the unit's marks sheet (total and
 percentage). **No ladder, no teacher questions, no answers printed** — the answers go to the teachers and the phones
 instead: every build writes `answer-key.json`, the ARISTORA app's answer key with every answer's kind (§1), saved into
-the app with the unit. Units are built one per chat (`uNN.py`); the engine's own unit book (`book.py`) is this chat's
+the app with the unit. Units are built one per chat (`uNN.py` and its cover illustration `uNN_cover.py`); the engine's own unit book (`book.py`) is this chat's
 check of the questions' HTML — the app prints that same HTML with the engine's CSS and fonts (22–24 November 2026) —
 and is never delivered. This is the workbook; the theory book (the ladder) is the `grade-unit-book` skill — never mix
 them, never edit that skill. Build directly: the engine is proven (a 10-unit 162-page volume, both paper structures,
@@ -91,8 +95,9 @@ answer's kind); it tags the unit too (§4 step 5), so no skill-tags chat follows
 units of Grades 6–10 by 24 November 2026, every one with its key, kinds and skills): a wrong key, kind or word in one
 question = **aristora-digitize** (job A, no rebuild); a wrong skill on a question = **skill-tags** (its §7, a fix: the
 lessons follow it; a printed book keeps its levels); adding, removing or moving questions = a new edition (§4 **Edit**,
-only on its rules). `workbook-marks-upgrade` and the answer key alone for an old zip (old §4b) have no work left: every
-unit in the app has its marks and its key.
+only on its rules); a unit in the app without its cover drawing = this skill's step 3b, then `cover` (§4 step 6), no
+rebuild. `workbook-marks-upgrade` and the answer key alone for an old zip (old §4b) have no work left: every unit in the
+app has its marks and its key.
 """)
 
 # ---------------------------------------------------------------- §1 rules: what the app does now
@@ -126,11 +131,10 @@ span("- **Two books from the same files**", 'never "page 12".\n',
   engine's unit book: this chat's check of the questions' HTML, never delivered. No term book from here (the app prints
   a unit at a time; a term book would be an app change: ask him).
 """)
-span("- **Every unit has its own cover illustration**", "unless the user says not now.\n",
-     """- **No cover illustration** (24 November 2026): the app's skill book makes its own cover (the unit's name, its
-  skills, its levels). The build prints `art: STAND-IN`: right now. (`cover_model.py`, `cover.py` and §6's cover notes
-  stay for the day he asks for pictures again.)
-""")
+rep("  that chat, unless the user says not now.\n",
+    "  that chat, unless the user says not now. It goes into the app with the unit and prints on page 1 of the skill book\n"
+    "  beside the term's units (25 November 2026, his words: \"each unit need to have cover page when I download ... the\n"
+    "  past paper workbook skill can build beautiful cover page\"); never the stand-in.\n")
 
 # ---------------------------------------------------------------- §2 inputs
 span("- **Unit chat**: the unit's compilation PDF and the grade", "the next edit here draws the illustration).\n",
@@ -164,14 +168,15 @@ rep("""by the marking rules in §1, whole questions making levels of 18–22 (`p
     """by the marking rules in §1 (`python3 digest.py uNN` prints every question with its marks: read it once to see
   that the same kind of part got the same marks everywhere; its LEVELS block is the old books': nothing to do there);""")
 
-span("**3b. Cover** (§6): write `uNN_cover.py`", "at most one fix round.\n",
-     "**3b. No cover** (24 November 2026): the app makes the skill book's cover. No `uNN_cover.py`; the build's\n"
-     "`art: STAND-IN` is right.\n")
+rep("`view/uNN_cover.png` and `view/uNN_art.png` once, `cover: []`; at most one fix round.\n",
+    "`view/uNN_cover.png` and `view/uNN_art.png` once, `cover: []`; at most one fix round. The drawing goes into the app\n"
+    "with the unit (step 5 `lay` takes it from the build, step 6 `ship` sends it) and prints on page 1 of the skill book\n"
+    "beside the term's units, the engine's own cover (25 November 2026).\n")
 
 rep("→ `art: uNN_cover.py`, overflow [], portable ok, gaps [],\nmarks [], cover [], the levels line as planned,",
-    "→ `art: STAND-IN`, overflow [], portable ok, gaps [],\nmarks [], cover [], the levels line (the engine's own: any size),")
+    "→ `art: uNN_cover.py`, overflow [], portable ok, gaps [],\nmarks [], cover [], the levels line (the engine's own: any size),")
 rep("contact sheet once (55 dpi: the back of the cover lists the\nlevels, the side tab steps down from Part I to Part II);",
-    "contact sheet once (55 dpi: the questions' HTML, as the app will print it);")
+    "contact sheet once (55 dpi: the cover's drawing and the questions' HTML, as the app will print them);")
 
 span("**5. Deliver** (versioned names, `VER` in book.py):", "at most one question.\n",
      """Then `python3 kinds.py verify` → `every slot matches its key` (answer-kinds).
@@ -253,11 +258,16 @@ as the workbook" for it: nothing of a student's to clear). Its answer lists the 
   lines.
 - Attach the source zip (`book.py` printed its name: `out/GN_UNN_Workbook_source_vK.zip`) as his backup, one line: he
   keeps it and never uploads it; a new edition starts from it.
+- **A unit already in the app without its cover drawing** (none had one on 25 November 2026): its source zip (Edit's
+  block: it often has its `uNN_cover.py` already) or a new drawing (step 3b), `python3 cover.py uNN` (seconds), then
+  `$W cover $A G8-U05 ~/work/U`: the drawing alone, checked and saved; no question, number or mark moves, so it is
+  right even for a unit students use. It must end with "its cover drawing is IN THE APP".
 
 **7. Tell the founder** (≤ two screens, plain words, numbered):
 1. "Done: G9-U05 is in the app as its skill book: N questions, M skills, L levels (S strips)."
 2. The skills: id · Tamil name · English name · how many questions.
-3. "Check it: Settings → Books → Grade 9 → G9-U05 → T (green) → the eye (Preview). Then PDF, or Share to the shop."
+3. "Check it: Settings → Books → Grade 9 → G9-U05 → T (green) → the eye (Preview): page 1 is its drawing. Then PDF,
+   or Share to the shop."
 4. What the phone marks by itself, the photo questions (drawings only), merges, dropped sub-parts, typo fixes,
    anything doubtful; at most one question.
 5. When he is done for the day: "Settings → Books → Claude link → Turn off."
@@ -271,7 +281,10 @@ student has used it (the app refuses a used unit, whatever you send). Then: the 
 engine refreshed from this skill, the zip's grade, term, version and plan kept), change only the lines asked (find
 them with grep), bump `VER`, build (step 4), `lay` again (it replaces the unit's folder; keep `skills.json`: give the
 new questions their skills and check every tag, the engine's numbers moved), `check`, ask the founder whether its book
-is printed, and only on "no" `ship … again`. A crop (PNG) of each changed spot in the reply.
+is printed, and only on "no" `ship … again`. A crop (PNG) of each changed spot in the reply. A build printing `art:
+STAND-IN` (a unit built before 27 October 2026) gets its illustration in the same chat (step 3b; G8 U04: `cp
+cover_model.py u04_cover.py`; G8 U01: its grade-unit-book kolam `cover_art.py` scaled in with `fit_art()` when the user
+attaches it, else a new drawing), saved with `ship` or, alone, with `cover` (step 6).
 """)
 span("Edit the source `uNN.py`, never the delivered HTML", "with the `workbook-marks-upgrade` skill (source zip only).\n",
      "Edit the source `uNN.py`, never the generated HTML (the next build would overwrite a hand edit, and page numbers,\n"
@@ -290,20 +303,23 @@ one level). If the founder asks for a term book, it is an app change (the aristo
 ## 6. Design""")
 rep("## 6. Design (built into the engine — readable, never cramped, but every mm of space earned by an answer)\n",
     "## 6. Design (built into the engine — readable, never cramped, but every mm of space earned by an answer)\n"
-    "The engine's pages below are this chat's check; the founder's PDF is the app's: the same HTML and CSS, the app's own\n"
-    "cover, contents, strips and pages (the T page).\n")
+    "The engine's pages below are this chat's check; the founder's PDF is the app's: the same HTML and CSS, the unit\n"
+    "cover with the unit's drawing beside the term's units as the engine draws it, then the app's contents, strips and\n"
+    "pages (the T page).\n")
 span("## 8. Token budget\n", "read once; no build, no scans.\n",
      """## 8. Token budget
 Two image reads per compilation page; questions only when needed; `uNN.py` in 1–3 writes; one build with QA; every
-contact sheet once; zooms only on redrawn figures. Marking: one `digest.py` printout, not the unit file again. No
-cover, no level fitting. Skills: from what you typed (`sheet.txt` only when the questions aren't fresh), `skills.json`
-in one write, `check` until READY, one `ship`. The app's commands: `known` once, `ship` once (1–2 minutes each).
+contact sheet once; zooms only on redrawn figures. Marking: one `digest.py` printout, not the unit file again. Cover:
+`uNN_cover.py` in one write, one `cover.py` look (two images), at most one fix. No level fitting. Skills: from what you typed (`sheet.txt` only when the questions aren't fresh), `skills.json`
+in one write, `check` until READY, one `ship` (the drawing goes with it). The app's commands: `known` once, `ship`
+once (1–2 minutes each).
 """)
 rep("without a build: write, check against book.html, review, pack — §4b).\n",
     "without a build: write, check against book.html, review, pack — §4b).\n\n"
     "The app's side is in the repo, not here: `scripts/workbook.ts` (`known`, `lay`, `check`, `ship`) and\n"
-    "`scripts/skills.ts`, cloned in step 0b; the rules they share with the app are `convex/lib/wholeUnit.ts`.\n"
-    "`cover_model.py`, `cover.py`, `fit.py` and `answer_key.py` wait unused (no cover, levels by skill, every key in the app).\n")
+    "`scripts/skills.ts`, cloned in step 0b; the rules they share with the app are `convex/lib/wholeUnit.ts` and\n"
+    "`convex/lib/cover.ts`. `fit.py` and `answer_key.py` wait unused (levels by skill, every key in the app); `cover_model.py`\n"
+    "and `cover.py` draw the cover, as before.\n")
 
 # ---------------------------------------------------------------- the engine: book.py's one override
 rep("""                             pack_source, page_fill, phantom_gaps, portable_check)
@@ -316,9 +332,6 @@ import collection_book
 collection_book.LEVEL_MAX = 999
 
 GRADE, VOL, VER, YEARS = """)
-
-rep('''              f"art: STAND-IN — no {mods[0]}_cover.py yet: draw the unit's illustration (past-paper-workbook §6)")''',
-    '''              "art: STAND-IN (right: the app makes the skill book's cover; nothing to draw)")''')
 
 if problems:
     print("NOT WRITTEN: the skill isn't the one this script was made for:\n  " + "\n  ".join(problems))

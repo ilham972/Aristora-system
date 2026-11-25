@@ -40,10 +40,11 @@ if n != 1:
     problems.append(f"found {n} times (want 1): {FIRST!r}")
 else:
     # The brief's own habit: one "Last updated" line; the commit before it goes behind "Before it".
-    s = s.replace(FIRST, "Last updated 2026-11-24, at commit `6314eb2` (a new unit goes straight into the app as its skill book: one chat\n"
-                  "builds, digitizes and tags it and saves it whole through the Claude link, `tell` \"workbook\"; no PDF, no zip; his\n"
-                  "rule \"one edition a year\"; the past-paper-workbook skill moved to that flow by an exact patch, scripts/skill-updates/).\n"
-                  "Before it: `8dfaf93` (")
+    s = s.replace(FIRST, "Last updated 2026-11-25, at commit `bfe4f2d` (each unit's own cover drawing on its skill book's page 1, beside the\n"
+                  "term's units, as the workbook skill draws it). Before it: `6314eb2` (a new unit goes straight into the app as its\n"
+                  "skill book: one chat builds, digitizes and tags it and saves it whole through the Claude link, `tell` \"workbook\"; no\n"
+                  "PDF, no zip; his rule \"one edition a year\"; the past-paper-workbook skill moved to that flow by an exact patch,\n"
+                  "scripts/skill-updates/). Before it: `8dfaf93` (")
 
 before("- **The students' rules are his psychology** (5 Nov):",
        "- **One edition a year** (24 Nov 2026, his pick): a printed book's numbers never change while students hold it. A\n"
@@ -52,7 +53,9 @@ before("- **The students' rules are his psychology** (5 Nov):",
        "  marks. The app refuses a whole-unit save over a unit students used.\n"
        "- **Claude makes the questions, the app makes the book** (24 Nov 2026, his words: \"I don't want direct PDF from\n"
        "  you ... you just say done ... I can download that directly from the skill page\"): a unit chat's last line is\n"
-       "  \"Done\"; he opens Settings → Books → T → Preview → PDF or Share.\n")
+       "  \"Done\"; he opens Settings → Books → T → Preview → PDF or Share. **The cover drawing stays the skill's** (25 Nov\n"
+       "  2026, his words: \"the past paper workbook skill can build beautiful cover page. So we have to use those thing\"):\n"
+       "  every unit chat draws it; the app prints it on page 1 beside the term's units.\n")
 
 before("**Not built yet:** the rest of the Master redesign (section 8);",
        "**Built 24 Nov (`6314eb2`): a whole unit straight into the app as its skill book.** His voice note: \"I don't want\n"
@@ -68,7 +71,15 @@ before("**Not built yet:** the rest of the Master redesign (section 8);",
        "[again]`). Checked on three real units (G8-U04, G9-U27, G10-U31): the book equals the switch's; the biggest save\n"
        "452 KB. The state that night: 24 workbooks in the app (G6 2, G7 7, G8 Term 1 10, G9 3, G10 2), 23 tagged (not\n"
        "G7-U27), none switched yet; the switch's own code passed on all 23 (284 levels → 339 strips; 33 strips of one\n"
-       "question; empty levels in G7-U12 S3, S8 and G10-U31 S11). Still to build: 148 of 172 units, 40 of them Term 1.\n\n")
+       "question; empty levels in G7-U12 S3, S8 and G10-U31 S11). Still to build: 148 of 172 units, 40 of them Term 1.\n\n"
+       "**Built 25 Nov (`bfe4f2d`): each unit's cover drawing.** His words: \"each unit need to have cover page when I\n"
+       "download ... the past paper workbook skill can build beautiful cover page\"; his pick: the drawing beside the term's\n"
+       "units. Built: `convex/lib/cover.ts` (the engine's own figure, 127 × 163 mm at most, checked), table `bookCovers`\n"
+       "(only the T page and its PDF read it), the link's `tell` \"cover\" (alone, any time: nothing else moves) and the\n"
+       "whole save's `cover`; page 1 = the engine's unit cover (`src/skillPrint.ts` `coverHtml`, `termIndex` ported from the\n"
+       "engine, `fitTermIndex`); no drawing = the cover before (its levels listed). The tool: `lay` takes it (only from\n"
+       "uNN_cover.py), `ship` sends it, `cover <dir> <KEY> <build>`. Checked on G8-U04's real book with the model harbour:\n"
+       "the same cover as the skill's. On 25 Nov no unit in the app had its drawing yet.\n\n")
 
 after("## 8. Open questions and next ideas (ask him; don't decide alone)\n",
       "\n**The skill-book flow** (24 Nov 2026, `6314eb2`): (1) the pilot: the first new unit built by the patched\n"
@@ -78,11 +89,18 @@ after("## 8. Open questions and next ideas (ask him; don't decide alone)\n",
       "rebuilt from its tags after the year (`skillWorkbook` over a skill workbook, `was` composed), its marks archived; (4)\n"
       "the source zip kept in the app (a table like `govParts`), so an edition needs no backup zip on his phone; (5)\n"
       "one-question levels (33 of 339 strips) and empty skill levels: does he want small skills joined into one strip?;\n"
-      "(6) Grade 11: O/L topic tutes or unit books?; term books from the app?; a picture on the cover?; \"everyone up a grade\"\n"
-      "in one tap for January.\n")
+      "(6) Grade 11: O/L topic tutes or unit books?; term books from the app?; \"everyone up a grade\" in one tap for\n"
+      "January; (7) the 24 units in the app need their cover drawings: from their source zips (uNN_cover.py, units drawn\n"
+      "after 27 Oct) or new ones, a chat with `scripts/workbook.ts cover` (a few units a chat).\n")
 
 after("## 12. Decision log (newest first; the details are in each commit message and `docs/`)\n",
-      "\n- 2026-11-24 (`6314eb2`): **a unit straight into the app as its skill book.** His voice note: the skill book is the\n"
+      "\n- 2026-11-25 (`bfe4f2d`): **each unit's cover drawing on its skill book.** His words: the workbook skill's \"one\n"
+      "  powerful thing\" is its cover, and the skill book's PDF has none (\"not look attractive\"); \"if you not remove\n"
+      "  the part in past paper workbook skill ... first please confirm\". Mine: I had taken the drawing step out of the\n"
+      "  skill's patch (the app had its own text cover): told him not to save the cards yet, put the step back word for\n"
+      "  word, and built the app's side. His pick: the drawing beside the term's units, this unit pulled out (as the skill\n"
+      "  draws it), the levels and skills on the back of the cover.\n"
+      "- 2026-11-24 (`6314eb2`): **a unit straight into the app as its skill book.** His voice note: the skill book is the\n"
       "  book (\"each skill considered as each level\"), \"I don't want direct PDF from you ... you just say done\", his fear of\n"
       "  \"Use as the workbook\" (\"everything will be changed\"), and \"what is your job?\". Mine: Claude makes the questions,\n"
       "  the app makes the book; one chat per unit (type, solve, kinds, marks, skills, save) instead of three plus an\n"
