@@ -503,11 +503,14 @@ function sheetHtml(u: PrintUnit, levels: SkillLevel[]): string {
  * "2011 – 2024", or null when the questions carry no years (not a past-paper unit). 25 Nov 2026, the founder:
  * the cover must say கடந்தகால வினாக்கள் with its range, as the workbook engine's own cover does.
  */
+/** The unit's past-paper year range, read off the source label every printed question carries
+ * (Part I a `div.src`, Part II a `span.yr`: "Western 2018 T3 · Q2"). A year inside a question's own
+ * words never counts. null = not a past-paper unit, and the cover keeps its திறன் வழிப் பயிற்சி line. */
 export function paperYears(cards: Iterable<string>): string | null {
   let lo = 9999;
   let hi = 0;
   for (const html of cards) {
-    for (const m of html.matchAll(/<span class="(?:src|yr)">([^<]*)<\/span>/g)) {
+    for (const m of html.matchAll(/class="(?:src|yr)">([^<]*)</g)) {
       for (const y of m[1].matchAll(/\b(19|20)\d{2}\b/g)) {
         const n = Number(y[0]);
         if (n < lo) lo = n;

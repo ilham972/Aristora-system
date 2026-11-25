@@ -8,6 +8,7 @@ import type { MState } from "../convex/lib/master";
 import { byGroup, groupLabel, hardness, keepExamples, levelParts, levelSkillOf, moveTo, needs, ownSkills, partName, PART_WHOLE_MAX, skillGroups, skillLabel, skillLevels, STAT_MIN, statsOf, type QStat } from "../convex/lib/skillBook";
 import type { MasterData } from "../convex/lib/book";
 import { skillId, skillsProblem, type KnownSkill, type Skill, type SkillTag } from "../convex/lib/skills";
+import { paperYears } from "../src/skillPrint";
 import { readWorkbookHtml } from "../src/workbookFile";
 import U01 from "./fixtures/workbook-g8-u01.html?raw";
 
@@ -221,5 +222,26 @@ describe("a big skill's parts (23 Nov 2026: a strip every ~20 marks)", () => {
       expect(l.parts[l.parts.length - 1].to).toBe(l.to);
       if (l.max !== null) expect(l.parts.reduce((a, p) => a + (p.max ?? 0), 0)).toBe(l.max);
     }
+  });
+});
+
+describe("the printed cover's years", () => {
+  // 25 Nov 2026, the founder comparing two downloaded covers: a past-paper unit must say கடந்தகால வினாக்கள் and its
+  // range. Nothing new is stored: the years are read off the source label every printed question already carries —
+  // Part I in a div, Part II in a span. A year inside a question's own words is not a paper's year.
+  const partI = '<div class="sih"><span class="qn">1</span><div class="sib"><div class="src">Western 2018 T3 · Q2</div><div class="sit">x</div></div></div>';
+  const partII = (p: string, y: number) => `<div class="pq"><span class="yr">${p} ${y} T1 · Q6(a)</span><div class="pqb">x</div></div>`;
+
+  test("the lowest and the highest year of all the cards", () => {
+    expect(paperYears([partI, partII("Southern", 2011), partII("Central", 2024)])).toBe("2011 – 2024");
+  });
+
+  test("one year alone is not a range", () => {
+    expect(paperYears([partI])).toBe("2018");
+  });
+
+  test("a year in a question's own words is not a paper's year", () => {
+    expect(paperYears(['<div class="sit">1998 ஆம் ஆண்டு</div>'])).toBe(null);
+    expect(paperYears([])).toBe(null);
   });
 });
