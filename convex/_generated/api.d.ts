@@ -44,6 +44,7 @@ import type * as lib_chat from "../lib/chat.js";
 import type * as lib_claims from "../lib/claims.js";
 import type * as lib_coins from "../lib/coins.js";
 import type * as lib_consult from "../lib/consult.js";
+import type * as lib_cover from "../lib/cover.js";
 import type * as lib_day from "../lib/day.js";
 import type * as lib_dept from "../lib/dept.js";
 import type * as lib_family from "../lib/family.js";
@@ -160,6 +161,7 @@ declare const fullApi: ApiFromModules<{
   "lib/claims": typeof lib_claims;
   "lib/coins": typeof lib_coins;
   "lib/consult": typeof lib_consult;
+  "lib/cover": typeof lib_cover;
   "lib/day": typeof lib_day;
   "lib/dept": typeof lib_dept;
   "lib/family": typeof lib_family;

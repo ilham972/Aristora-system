@@ -5015,6 +5015,11 @@ test("Skill book: Books → T on a tagged unit; Level n = skill n (S1+S2 inside 
     });
     for (let q = 1; q <= 57; q++) await ctx.db.insert("questions", { unitId: u._id, stage: "master", q, html: html(q) });
     await ctx.db.insert("bookCss", { unitId: u._id, stage: "master", css: bookCssOf(TUTE_BOOK), updatedAt: Date.now() });
+    // Its cover drawing (25 Nov 2026, his pick: the unit's own drawing beside the term's units): a made-up figure as the
+    // engine's fig() writes one, an SVG and a Tamil label over it.
+    const art =
+      '<div class="dg" style="width:100.00mm;height:120.00mm"><svg xmlns="http://www.w3.org/2000/svg" width="100.00mm" height="120.00mm" viewBox="0 0 100 120" style="position:absolute;left:0;top:0"><g transform="translate(0,0)"><rect x="10" y="20" width="80" height="90" rx="4" fill="#fff" stroke="#000" stroke-width="1.2"/><text x="50" y="75" font-family="Baloo Thambi 2, TMuktaLat" font-weight="800" font-size="30" text-anchor="middle">−3</text></g></svg><div class="vl" style="left:10.00mm;top:5.00mm;width:60mm;text-align:left;font-size:12pt;line-height:1.25"><b>ஒரு படம்</b></div></div>';
+    await ctx.db.insert("bookCovers", { unitId: u._id, art, w: 100, h: 120, by: "Owner", updatedAt: Date.now() });
     // Its government book (23 Nov 2026): the unit's number goes violet, and its line sits on the sheet and the T page.
     await ctx.db.insert("govBooks", { unitId: u._id, pages: 14, bytes: 641451, parts: 3, sha: "7e773e7e9ae412f3", from: "Grade 7 maths, Part I, unit 8, pages 79-92", by: "Owner", updatedAt: Date.now() });
     await ctx.db.insert("govParts", { unitId: u._id, i: 0, n: 3, b64: "JVBE" });
@@ -5169,6 +5174,20 @@ test("Skill book: Books → T on a tagged unit; Level n = skill n (S1+S2 inside 
   const book = await read();
   const body = book.pages.filter((p) => p.kind === "body");
   expect(book.pages[0].kind).toBe("cover");
+  // Page 1 (25 Nov 2026, his pick): the unit's own drawing beside the term's units, this one pulled out (a black tab);
+  // the levels and their skills are on the back of the cover. Every unit's name inside its row.
+  const cover = await C.evaluate(() => {
+    const c = document.getElementById("sb-print")!.shadowRoot!.querySelector(".sbx-cover")!;
+    return {
+      art: !!c.querySelector(".cva .dg svg rect"),
+      label: c.querySelector(".cva .vl")?.textContent ?? "",
+      units: [...c.querySelectorAll(".cvx svg text")].map((t) => t.textContent ?? ""),
+      pulled: c.querySelectorAll('.cvx svg rect[fill="#000"][width="10"]').length,
+      list: !!c.querySelector(".sbx-ix"),
+      over: [...c.querySelectorAll<HTMLElement>(".cvx .ixc")].some((b) => b.firstElementChild!.getBoundingClientRect().height > b.getBoundingClientRect().height + 0.5),
+    };
+  });
+  expect(cover).toEqual({ art: true, label: "ஒரு படம்", units: ["1", "2", "3", "4", "5", "6", "7", "8", "9"], pulled: 1, list: false, over: false });
   expect(book.pages[1].kind).toBe("contents");
   expect(book.pages.filter((p) => p.kind !== "body").length % 2).toBe(0); // page 1 is a right-hand page
   // Numbered 1 … 57 through the book; every page numbered in order; every block inside its page.

@@ -12,6 +12,7 @@ import { seal, toB64, unseal, sha256 } from "../convex/lib/seal";
 import { skillLevels, skillWorkbook } from "../convex/lib/skillBook";
 import { skillId, type KnownSkill } from "../convex/lib/skills";
 import { levelLines, makeWholeUnit, type WholeUnit } from "../convex/lib/wholeUnit";
+import { ART_H, ART_W, COVER_MAX, coverProblem, coverSize } from "../convex/lib/cover";
 import schema from "../convex/schema";
 import { asOwner } from "./helpers";
 
@@ -61,6 +62,9 @@ function request(): WholeUnit {
     ],
   };
 }
+// A made-up cover drawing as the engine's fig() writes one: an SVG and a Tamil label over it.
+const ART = (w = 100, h = 120, inner = '<rect x="10" y="10" width="80" height="100" fill="#000"/>') =>
+  `<div class="dg" style="width:${w.toFixed(2)}mm;height:${h.toFixed(2)}mm"><svg xmlns="http://www.w3.org/2000/svg" width="${w.toFixed(2)}mm" height="${h.toFixed(2)}mm" viewBox="0 0 ${w} ${h}" style="position:absolute;left:0;top:0"><g transform="translate(0,0)">${inner}</g></svg><div class="vl" style="left:10.00mm;top:5.00mm;width:40mm;text-align:left;font-size:9.2pt;line-height:1.25">ஒரு படம்</div></div>`;
 const NONE = new Map<string, KnownSkill>();
 const fresh = () => convexTest(schema, import.meta.glob("../convex/**/*.ts"));
 const G7 = { key: UNIT, grade: 7 };
@@ -165,6 +169,31 @@ describe("a whole unit (pure)", () => {
   });
 });
 
+describe("a unit's cover drawing (pure, 25 Nov 2026)", () => {
+  test("one figure of the engine, within its art box, nothing that runs or loads", () => {
+    expect(coverProblem(ART())).toBe("");
+    expect(coverSize(ART(124, 158))).toEqual({ w: 124, h: 158 });
+    expect(coverProblem(ART(ART_W, ART_H))).toBe("");
+    expect(coverProblem(ART(130, 120))).toBe(`The cover drawing is 130 × 120 mm: draw it within ${ART_W} × ${ART_H} mm (the engine's art box).`);
+    expect(coverProblem("")).toBe("No cover drawing.");
+    expect(coverProblem('<svg xmlns="http://www.w3.org/2000/svg"></svg>')).toMatch(/must be one figure of the engine/);
+    expect(coverProblem(ART() + "<div>more</div>")).toBe("The cover drawing must be one figure, nothing after it.");
+    expect(coverProblem(ART(100, 120, "<style>.cover { display: none }</style>"))).toBe("The cover drawing can't carry a style of its own.");
+    expect(coverProblem(ART(100, 120, '<image href="https://example.com/x.png"/>'))).toBe("The cover drawing: it holds a tag the app never shows.");
+    expect(coverProblem(ART(100, 120, '<rect onclick="x()"/>'))).toBe("The cover drawing: it holds an event handler.");
+    expect(coverProblem(ART(100, 120, `<!--${"x".repeat(COVER_MAX)}-->`))).toBe("The cover drawing is too big to keep.");
+  });
+
+  test("a whole unit may carry its drawing: checked with the rest, kept as sent", () => {
+    const with_ = makeWholeUnit(G7, { ...request(), cover: ` ${ART()} ` }, NONE);
+    if (typeof with_ === "string") throw new Error(with_);
+    expect(with_.cover).toBe(ART());
+    const none = makeWholeUnit(G7, request(), NONE);
+    expect(typeof none === "string" ? none : none.cover).toBeNull();
+    expect(makeWholeUnit(G7, { ...request(), cover: ART(200, 120) }, NONE)).toMatch(/The cover drawing is 200 × 120 mm/);
+  });
+});
+
 describe("a whole unit through the Claude link", () => {
   const ID = "TestLink0007";
   const KEY = new Uint8Array(32).map((_, i) => (i * 11 + 5) & 255);
@@ -248,6 +277,40 @@ describe("a whole unit through the Claude link", () => {
     const ol = await keyOf("OL-U01");
     expect((await tell({ op: "workbook", unitId: ol, ...request() }))!.error).toMatch(/only a school unit \(Grades 6–11\)/);
     expect((await tell({ op: "workbook", unitId: "nope", ...request() }))!.error).toBe("No such unit.");
+  });
+
+  test("the cover drawing: with the unit or alone, read by the T page and the PDF with the term's units", async () => {
+    expect(await tell({ op: "workbook", unitId, ...request(), cover: ART() })).toMatchObject({ ok: true, cover: true });
+    expect((await t.query(api.skillBook.questions, { unitId })).cover).toBe(ART());
+    expect((await ask({ op: "books" }))!.units.find((x: { key: string }) => x.key === UNIT).cover).toBe(true);
+    // The index beside it: the unit's term and the term's units in order (Grade 7 Term 1: U01 to U09).
+    const sb = await t.query(api.skillBook.unit, { unitId });
+    expect(sb!.term.n).toBe(1);
+    expect(sb!.term.units.map((x: { no: number }) => x.no)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(sb!.term.units[2].ta).toBeTruthy();
+    // Alone: a new drawing for a unit students already use (no number moves, so nothing stops it).
+    await raw.run(async (ctx) => {
+      const sid = await ctx.db.insert("students", { name: "Kumar S.", archived: false, present: false, idleMs: 0, grade: 7, unitId });
+      await ctx.db.insert("progress", { studentId: sid, unitId, stage: "master", marks: {}, m: { q: { "1": { lost: false, t: 1 } }, lv: {} }, startedAt: 1, updatedAt: 1 });
+    });
+    const second = ART(110, 150, '<circle cx="50" cy="50" r="30" fill="#000"/>');
+    expect(await tell({ op: "cover", unitId, cover: second })).toMatchObject({ ok: true, saved: { unit: UNIT, w: 110, h: 150 } });
+    expect((await t.query(api.skillBook.questions, { unitId })).cover).toBe(second);
+    expect(await raw.run(async (ctx) => (await ctx.db.query("bookCovers").collect()).length)).toBe(1);
+    // Refused, nothing written: a drawing that isn't one, a unit with no workbook, an O/L topic.
+    expect((await tell({ op: "cover", unitId, cover: "<b>no</b>" }))!.error).toMatch(/^G7-U03: The cover drawing must be one figure/);
+    expect((await t.query(api.skillBook.questions, { unitId })).cover).toBe(second);
+    const bare = await keyOf("G7-U05");
+    expect((await tell({ op: "cover", unitId: bare, cover: ART() }))!.error).toBe("G7-U05 has no workbook in the app: save the unit first.");
+    expect((await tell({ op: "cover", unitId: await keyOf("OL-U01"), cover: ART() }))!.error).toMatch(/Grades 6–11/);
+    // A whole save without a drawing keeps the one there (the chat may not have redrawn it).
+    await raw.run(async (ctx) => {
+      for (const p of await ctx.db.query("progress").collect()) await ctx.db.delete(p._id);
+    });
+    expect(await tell({ op: "workbook", unitId, again: true, ...request() })).toMatchObject({ ok: true, cover: true });
+    expect((await t.query(api.skillBook.questions, { unitId })).cover).toBe(second);
+    const lines = await t.query(api.state.history, { limit: 20 });
+    expect(lines.some((e: { kind: string; value?: string }) => e.kind === "book-save" && /its cover drawing \(110 × 150 mm\)/.test(e.value ?? ""))).toBe(true);
   });
 
   test("a skill with a video can't be dropped by a whole save", async () => {

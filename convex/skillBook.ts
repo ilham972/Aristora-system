@@ -6,7 +6,8 @@
 // the same row the Claude link saves (lessons by skill in class read it too).
 // - `unit`: the workbook's shape, its skills and tags, every skill's names (other units' too) and how students did on
 //   each question (for easy → hard).
-// - `questions`: every printed question and the book's CSS, read once when the page opens (they change only on upload).
+// - `questions`: every printed question and the book's CSS, read once when the page opens (they change only on upload);
+//   and the unit's cover drawing (25 Nov 2026).
 // - `move` (Books or the owner): one question to another group of skills, checked like a Claude link save.
 // - `useAsWorkbook` (the owner, 23 Nov 2026: "skill book is the workbook"): the unit's workbook becomes the skill book
 //   it shows, the whole unit at once: renumbered as printed, levels by skill, its students' old marks gone (XP kept).
@@ -48,6 +49,8 @@ export type SkillBookUnit = {
   /** q → [students, marks summed]. */
   stats: [number, number, number][];
   updatedAt: number;
+  /** Its term and the term's units in order (its number and Tamil name): the cover's index beside its drawing (25 Nov 2026). */
+  term: { n: number; units: { no: number; ta: string }[] };
 };
 
 /** How the real students did on each question of a workbook (the T page's easy → hard). */
@@ -83,6 +86,14 @@ export const unit = query({
       for (const s of r.skills) if (used.has(s.id)) names[s.id] = { ta: s.ta, en: s.en };
     }
     const stats = [...(await statsFor(ctx, args.unitId, data))].map(([q, s]): [number, number, number] => [q, s.n, s.right]);
+    // The term's units, as the workbook engine's cover lists them (its term index, this unit pulled out).
+    const termUnits = (await ctx.db
+      .query("units")
+      .withIndex("by_grade", (x) => x.eq("grade", unit.grade))
+      .collect())
+      .filter((x) => x.term === unit.term)
+      .sort((a, b) => a.order - b.order)
+      .map((x) => ({ no: Number(x.code.replace(/\D/g, "")) || x.order, ta: x.ta }));
     return {
       unitId: unit._id,
       key: unit.key,
@@ -96,6 +107,7 @@ export const unit = query({
       names,
       stats,
       updatedAt: row.updatedAt,
+      term: { n: unit.term, units: termUnits },
     };
   },
 });
@@ -113,7 +125,12 @@ export const questions = query({
       .query("bookCss")
       .withIndex("by_book", (x) => x.eq("unitId", args.unitId).eq("stage", "master"))
       .first();
-    return { css: css?.css ?? null, qs: rows.map((r) => ({ q: r.q, html: r.html })) };
+    // Its cover drawing (25 Nov 2026, lib/cover.ts): read here, once, with the questions it is printed with.
+    const cover = await ctx.db
+      .query("bookCovers")
+      .withIndex("by_unit", (x) => x.eq("unitId", args.unitId))
+      .first();
+    return { css: css?.css ?? null, qs: rows.map((r) => ({ q: r.q, html: r.html })), cover: cover?.art ?? null };
   },
 });
 

@@ -450,6 +450,22 @@ export default defineSchema({
   }).index("by_book", ["unitId", "stage"]),
 
   /**
+   * A unit's cover drawing (25 Nov 2026, the founder: "each unit need to have cover page when I download ... the past
+   * paper workbook skill can build beautiful cover page"): the engine's illustration (`cover_art()`: one `.dg` figure,
+   * SVG with Tamil labels, at most 127 × 163 mm; convex/lib/cover.ts), printed on the skill book's cover beside the
+   * term's units. Read only by the T page and its PDF: never a phone or the board. Saved through the Claude link.
+   */
+  bookCovers: defineTable({
+    unitId: v.id("units"),
+    art: v.string(),
+    /** Its size in mm (from the figure). */
+    w: v.number(),
+    h: v.number(),
+    by: v.string(),
+    updatedAt: v.number(),
+  }).index("by_unit", ["unitId"]),
+
+  /**
    * A workbook's skills and each question's skill (13 Nov 2026, his "instead of find common questions, we have to find
    * the common skills"; convex/lib/skills.ts): one row per book, saved whole through the Claude link (`tell` "skills").
    * skills = the unit's own ("G8-U05-S3": Tamil and English names, `eg` = the question a lesson shows); tags = each

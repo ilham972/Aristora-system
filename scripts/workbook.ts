@@ -16,17 +16,25 @@
 //   tsx scripts/workbook.ts ship  <dir> <KEY> [again]   check, then saved whole and read back, in one trip (1–2 minutes).
 //                                                        `again` = replace the unit's workbook: only after the founder says
 //                                                        its book isn't printed (the app never replaces a used one)
+//   tsx scripts/workbook.ts cover <dir> <KEY> <build>   a unit in the app gets its cover drawing (25 Nov 2026): the drawing of
+//                                                        <build>/uNN_cover.py as the engine drew it (view/uNN_cover.html from
+//                                                        `python3 cover.py uNN`, or book.html), saved alone: no number moves
+//
+// The cover drawing (25 Nov 2026, convex/lib/cover.ts): `lay` takes it from book.html when <build>/uNN_cover.py made it
+// (the stand-in is never sent), `ship` sends it with the unit; the app prints it on the skill book's cover beside the
+// term's units (src/skillPrint.ts coverHtml).
 //
 // <dir>/<KEY>/skills.json is the skill-tags skill's file (short ids, "S1" = this unit's skill 1; another unit's in full):
 //   { "skills": [{ "id": "S1", "en": "…", "ta": "…", "eg": 4 }], "tags": { "1": "S1", "2": ["S3", "S1"], "53": { "i": "S1" } } }
 // in the engine's question numbers (the book.html's): the app renumbers everything by skill when it saves.
 
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import type { MasterData } from "../convex/lib/book";
 import { skillHome, type KnownSkill } from "../convex/lib/skills";
 import { levelLines, makeWholeUnit, type MadeUnit, type WholeUnit } from "../convex/lib/wholeUnit";
+import { coverProblem, coverSize, divEnd } from "../convex/lib/cover";
 import { readWorkbookPages, type ReadWorkbook } from "../src/workbookRead";
 import { exchange } from "./claude-link";
 import { load, outside, readJson, type Unit } from "./digitize";
@@ -81,6 +89,37 @@ async function known(dir: string, key: string) {
   console.log(`${rows.reduce((a, k) => a + k.skills.length, 0)} skills of ${rows.length} other units (this grade and earlier) in ${join(dir, "known.txt")}: grep it for this unit's methods (e.g. grep -i "fraction" known.txt) and reuse an id rather than naming a skill twice.`);
 }
 
+// ---------------------------------------------------------------- the cover drawing
+
+/** The engine's unit-file name of a unit's key: "G9-U05" → "u05". */
+const unitFile = (key: string) => `u${gradeOf(key).code.slice(1)}`;
+
+/** The drawing inside a page of the engine's (its unit cover's art box, `<div class="cva">`), or null. */
+export function coverArt(html: string): string | null {
+  const open = '<div class="cva">';
+  const at = html.indexOf(open);
+  if (at < 0) return null;
+  const end = divEnd(html, at);
+  if (end < 0) return null;
+  const art = html.slice(at + open.length, end - "</div>".length).trim();
+  return art || null;
+}
+
+/** The unit's own drawing from a build folder (only when its uNN_cover.py made it: never the engine's stand-in). */
+function buildCover(key: string, build: string): { art: string | null; why: string } {
+  const file = `${unitFile(key)}_cover.py`;
+  if (!existsSync(join(build, file))) return { art: null, why: `no ${file} in ${build}: draw the unit's cover (past-paper-workbook step 3b)` };
+  // The newest page first: a drawing changed after the last full build is in cover.py's page, and the other way round.
+  const pages = [join(build, "view", `${unitFile(key)}_cover.html`), join(build, "book.html")]
+    .filter((p) => existsSync(p))
+    .sort((x, y) => statSync(y).mtimeMs - statSync(x).mtimeMs);
+  for (const page of pages) {
+    const art = coverArt(readFileSync(page, "utf8"));
+    if (art) return { art, why: "" };
+  }
+  return { art: null, why: `${file} is there but no page shows its drawing: run "python3 cover.py ${unitFile(key)}" (or build the unit)` };
+}
+
 // ---------------------------------------------------------------- lay
 
 /** The engine's book, read as the phone's upload reads it; one unit, no problems, with its key and every question. */
@@ -125,10 +164,16 @@ export function lay(dir: string, key: string, build: string) {
   };
   writeFileSync(join(udir, "unit.json"), JSON.stringify(unit));
   writeFileSync(join(udir, "sheet.txt"), sheetHead(udir) + sheetOf(udir));
+  // The cover drawing goes with the unit (25 Nov 2026): the one its uNN_cover.py made, as the engine drew it.
+  const cover = buildCover(key, build);
+  rmSync(join(udir, "cover.html"), { force: true });
+  if (cover.art) writeFileSync(join(udir, "cover.html"), cover.art);
   const parts = w.data.parts.map((p) => `${p.id} ${p.to - p.from + 1}`).join(", ");
   const kinds = w.key!.filter((k) => (k.parts ?? [k]).some((p) => p.t?.k === "photo")).map((k) => k.q);
   console.log(`${key}: ${w.questions!.size} questions (${parts}), ${w.total} marks, the key with ${w.key!.length} answers${kinds.length ? ` (photos: Q${kinds.join(", Q")})` : " (no photo)"}.`);
-  console.log(`Laid out in ${udir}: unit.json, q/, sheet.txt. Next: write ${join(udir, "skills.json")} (engine numbers), then "check ${dir} ${key}".`);
+  const size = cover.art ? coverSize(cover.art) : null;
+  console.log(cover.art ? `The cover drawing: ${size?.w} × ${size?.h} mm (cover.html).` : `NO COVER DRAWING: ${cover.why}.`);
+  console.log(`Laid out in ${udir}: unit.json, q/, sheet.txt${cover.art ? ", cover.html" : ""}. Next: write ${join(udir, "skills.json")} (engine numbers), then "check ${dir} ${key}".`);
 }
 
 // ---------------------------------------------------------------- check
@@ -147,6 +192,7 @@ function request(udir: string): { unit: Unit; req: WholeUnit; wrong: string[] } 
     css: u.css ?? "",
     skills: file.skills,
     tags: file.tags,
+    ...(existsSync(join(udir, "cover.html")) ? { cover: readFileSync(join(udir, "cover.html"), "utf8") } : {}),
   };
   return { unit: u, req, wrong };
 }
@@ -180,6 +226,7 @@ export function checkUnit(dir: string, key: string): { unit: Unit; req: WholeUni
     else if (l.qs.length === 1) look.push(`Level ${l.n} has one question (${l.max ?? "?"} marks): right when ${s} is a lesson of its own; if it is only a step of the next skill, join them.`);
     else if ((l.max ?? 0) > 80) look.push(`Level ${l.n} is ${l.max} marks (${l.parts.length} strips): would ONE short lesson put all of it right? If ${s} is two methods, split it.`);
   }
+  if (!made.cover) look.push(`No cover drawing: the book prints a plain cover until one is saved. Draw it (past-paper-workbook step 3b), build, "lay" again.`);
   const other = made.tags.filter((t) => [t.s, ...(t.x ?? [])].every((id) => skillHome(id) !== key));
   if (other.length) look.push(`${other.length} question${other.length === 1 ? " needs" : "s need"} only other units' skills (they go at the end of Level 1): right, if this unit teaches nothing new in ${other.length === 1 ? "it" : "them"}.`);
   for (const w of look) console.log(`LOOK AGAIN: ${w}`);
@@ -209,7 +256,7 @@ async function ship(dir: string, key: string, again: boolean) {
     return;
   }
   writeFileSync(join(dir, key, "shipped.json"), JSON.stringify(a, null, 1));
-  console.log(`${key}: SAVED${a.made ? " (a new unit)" : " (replaced)"}: ${a.questions} questions, ${a.strips} strips, ${a.skills} skills.`);
+  console.log(`${key}: SAVED${a.made ? " (a new unit)" : " (replaced)"}: ${a.questions} questions, ${a.strips} strips, ${a.skills} skills${a.cover ? ", its cover drawing" : ", NO cover drawing yet"}.`);
   for (const line of a.levels as string[]) console.log(`  ${line}`);
   const sh = a.share as { marks: number; max: number; parts: { phone: number; read: number; photo: number }; photos: string[] };
   console.log(`The phone marks ${sh.marks} of ${sh.max} marks by itself; ${sh.parts.read} parts typed for a teacher to read; ${sh.parts.photo} photo${sh.parts.photo === 1 ? "" : "s"}${sh.photos.length ? ` (Q${sh.photos.join(", Q")})` : ""}.`);
@@ -232,6 +279,29 @@ async function ship(dir: string, key: string, again: boolean) {
   if (!same) process.exitCode = 1;
 }
 
+// ---------------------------------------------------------------- cover (a unit in the app gets its drawing)
+
+async function cover(dir: string, key: string, build: string) {
+  const u = bookRow(dir, key);
+  if (!u.master) throw new Error(`${key} has no workbook in the app: build and ship the unit; its drawing goes with it.`);
+  const got = buildCover(key, build);
+  if (!got.art) throw new Error(got.why);
+  const bad = coverProblem(got.art);
+  if (bad) throw new Error(`${key}: ${bad}`);
+  const r = await exchange([
+    { name: "save", fn: "tell", req: { op: "cover", unitId: u.unitId, cover: got.art } },
+    { name: "books", fn: "ask", req: { op: "books" } },
+  ]);
+  if (!r.save?.ok) {
+    console.log(`${key}: NOT SAVED: ${r.save?.error}`);
+    process.exitCode = 1;
+    return;
+  }
+  const back = (r.books?.units as { key: string; cover?: boolean }[] | undefined)?.find((x) => x.key === key);
+  console.log(back?.cover ? `${key}: its cover drawing is IN THE APP (${r.save.saved.w} × ${r.save.saved.h} mm): Settings → Books → T → the eye shows it on page 1.` : `${key}: saved, but the app's list doesn't show it yet: run "known" and look.`);
+  if (!back?.cover) process.exitCode = 1;
+}
+
 // ---------------------------------------------------------------- the command line
 
 const [cmd, ...args] = process.argv.slice(2);
@@ -243,7 +313,8 @@ const main = async () => {
   if (cmd === "lay" && d && key && build) return lay(outside(d), key, outside(build));
   if (cmd === "check" && d && key) return void (checkUnit(outside(d), key) || (process.exitCode = 1));
   if (cmd === "ship" && d && key) return ship(outside(d), key, args.includes("again"));
-  console.log("usage: workbook.ts known <dir> <KEY> | lay <dir> <KEY> <build> | check <dir> <KEY> | ship <dir> <KEY> [again]");
+  if (cmd === "cover" && d && key && build) return cover(outside(d), key, outside(build));
+  console.log("usage: workbook.ts known <dir> <KEY> | lay <dir> <KEY> <build> | check <dir> <KEY> | ship <dir> <KEY> [again] | cover <dir> <KEY> <build>");
 };
 if (process.argv[1] && basename(process.argv[1]).startsWith("workbook")) {
   main().catch((e) => {

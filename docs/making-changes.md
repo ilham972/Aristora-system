@@ -285,6 +285,11 @@ node $TSX scripts/workbook.ts ship $B G9-U05             # saved whole + read ba
   printed). The app refuses any unit students used, `again` or not ("one edition a year"); fixes after that go through
   `scripts/digitize.ts` (a key, a kind, a question's HTML). A save is all or nothing; its answer lists the levels, the
   strips and what the phone marks (`share`).
+- **The cover drawing** (25 Nov 2026): `lay` takes the unit's drawing from book.html only when the build folder has its
+  `uNN_cover.py` (the engine's stand-in is never sent) and writes `cover.html`; `ship` sends it with the unit; `check`
+  says LOOK AGAIN when there is none. A unit already in the app gets its drawing alone, its numbers untouched:
+  `python3 cover.py uNN` (seconds), then `node $TSX scripts/workbook.ts cover $B G8-U05 ~/work/U` (the newest of
+  `view/uNN_cover.html` and `book.html`). The app checks it (`convex/lib/cover.ts`) and prints it on page 1.
 - The tool's branch is `link-workbook-<key>` (two chats, two units, never one branch). Under 2 MB a save
   (`SEND_MAX_BYTES`; the link's box takes 3 MB of letters); G10-U31, the biggest unit so far, is 452 KB.
 - The tool is typechecked through its test (`tests/workbookTool.test.ts` imports it); the command in "Tag a unit's

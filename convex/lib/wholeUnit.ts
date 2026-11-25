@@ -14,6 +14,7 @@
 //   lessons' examples in the new numbers.
 
 import { checkMaster, firstQuestion, shapeFrom, type MasterData, type PartId } from "./book";
+import { coverProblem } from "./cover";
 import { checkKey, slotProblem, type KeyAnswer } from "./key";
 import { BOOK_CSS_MAX, QUESTION_HTML_MAX, unsafeCss, unsafeHtml } from "./questions";
 import { keepExamples, skillLevels, skillWorkbook, type SkillLevel } from "./skillBook";
@@ -30,6 +31,8 @@ export type WholeUnit = {
   css: string;
   skills: Skill[];
   tags: SkillTag[];
+  /** Its cover drawing (25 Nov 2026, lib/cover.ts): the engine's `cover_art()` figure; missing = none sent. */
+  cover?: string;
 };
 
 /** The skill book a whole unit becomes (what the server writes; `since` is stamped there). */
@@ -44,6 +47,8 @@ export type MadeUnit = {
   map: Map<number, number>;
   /** The levels by skill as the T page shows them (a skill with no level of its own too). */
   levels: SkillLevel[];
+  /** Its cover drawing, checked (null: none sent; a unit's drawing in the app stays then). */
+  cover: string | null;
 };
 
 /** Every question's printed HTML together, at most (the link's own save cap: lib's twin of link.ts LINK_SAVE_MAX). */
@@ -102,6 +107,11 @@ export function makeWholeUnit(unit: { key: string; grade: number }, req: WholeUn
   if (!css.trim() || css.length > BOOK_CSS_MAX) return "The book's style is missing or too big to keep.";
   const badCss = unsafeCss(css);
   if (badCss) return badCss;
+  // The cover drawing, when it comes with the unit (25 Nov 2026).
+  if (req.cover !== undefined) {
+    const badCover = coverProblem(req.cover);
+    if (badCover) return badCover;
+  }
   // The blanks, options, brackets and words each kind uses are printed in its question, as many as it needs.
   for (const k of answers) {
     const wrong = slotProblem(k, html.get(k.q) as string);
@@ -134,7 +144,7 @@ export function makeWholeUnit(unit: { key: string; grade: number }, req: WholeUn
     tagsN,
   );
   const itemsN = [...html].map(([q, h]) => ({ q: re(q), html: h })).sort((a, b) => a.q - b.q);
-  return { data: made.data, answers: answersN, items: itemsN, css, skills: skillsN, tags: tagsN, map: made.map, levels: byLevel };
+  return { data: made.data, answers: answersN, items: itemsN, css, skills: skillsN, tags: tagsN, map: made.map, levels: byLevel, cover: req.cover === undefined ? null : req.cover.trim() };
 }
 
 /**

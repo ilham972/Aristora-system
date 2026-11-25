@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { outOf } from "../convex/lib/book";
-import { checkUnit, lay, readBuild } from "../scripts/workbook";
+import { checkUnit, coverArt, lay, readBuild } from "../scripts/workbook";
 import { readWorkbookHtml } from "../src/workbookFile";
 import U01 from "./fixtures/workbook-g8-u01.html?raw";
 
@@ -90,5 +90,32 @@ describe("scripts/workbook.ts: lay and check, offline", () => {
     expect(out).toMatch(/G8-U01: READY to ship/);
     // The skill-tags check said its piece, without telling the chat to push.
     expect(out).not.toMatch(/READY to push/);
+    // No drawing in the build (no u01_cover.py): it says so, and the book would print a plain cover.
+    expect(out).toMatch(/LOOK AGAIN: No cover drawing/);
+    expect(got!.req.cover).toBeUndefined();
+  });
+
+  test("the cover drawing (25 Nov 2026): taken from the engine's page only when u01_cover.py made it, and sent with the unit", () => {
+    const art = '<div class="dg" style="width:120.00mm;height:150.00mm"><svg xmlns="http://www.w3.org/2000/svg" width="120.00mm" height="150.00mm" viewBox="0 0 120 150"><rect x="1" y="1" width="9" height="9"/></svg><div class="vl" style="left:1mm;top:1mm;width:30mm">படம் <div>உள்ளே</div></div></div>';
+    const page = `<style>.qn { font-weight: 700; }</style>\n<div class="cover"><div class="cvu"><div class="cva">${art}</div><div class="cvx"><div class="dg">index</div></div></div></div>\n${U01}`;
+    expect(coverArt(page)).toBe(art);
+    expect(coverArt(U01)).toBeNull();
+    writeFileSync(join(build, "book.html"), page);
+    // The engine's stand-in is never sent: without u01_cover.py nothing is taken.
+    lay(dir, "G8-U01", build);
+    expect(said.join("\n")).toMatch(/NO COVER DRAWING: no u01_cover.py/);
+    writeFileSync(join(build, "u01_cover.py"), "# the unit's own drawing (cover_art)\n");
+    said.length = 0;
+    lay(dir, "G8-U01", build);
+    expect(said.join("\n")).toMatch(/The cover drawing: 120 × 150 mm \(cover.html\)/);
+    expect(readFileSync(join(dir, "G8-U01", "cover.html"), "utf8")).toBe(art);
+    const tags: Record<string, string> = {};
+    for (let q = 1; q <= 73; q++) tags[String(q)] = "S1";
+    writeFileSync(join(dir, "G8-U01", "skills.json"), JSON.stringify({ skills: [{ id: "S1", en: "A made-up skill", ta: "ஒரு திறன்", eg: 1 }], tags }));
+    said.length = 0;
+    const got = checkUnit(dir, "G8-U01");
+    expect(got!.req.cover).toBe(art);
+    expect(got!.made.cover).toBe(art);
+    expect(said.join("\n")).not.toMatch(/No cover drawing/);
   });
 });

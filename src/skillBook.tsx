@@ -30,7 +30,7 @@ import { act, currentRole, may, toast, type Unit } from "./store";
 import { Sheet } from "./ui";
 import { VideoShelf, type VideoList } from "./videoShelf";
 
-type Printed = { css: string | null; qs: Map<number, string> };
+type Printed = { css: string | null; qs: Map<number, string>; cover: string | null };
 
 /** The printed question, readable on the phone: the book's look, its working space and print furniture left out. */
 const READ_CSS = `.qv{font-size:10.5pt;border-radius:12px;padding:12px 10px 8px}.qv .qn{display:none!important}`;
@@ -69,7 +69,7 @@ export function SkillBookPage(props: { unit: Unit; gov: GovRow | null; onClose: 
   useEffect(() => {
     let live = true;
     fetchOnce(api.skillBook.questions, { unitId })
-      .then((r) => live && setPrinted({ css: r.css, qs: new Map(r.qs.map((x) => [x.q, x.html])) }))
+      .then((r) => live && setPrinted({ css: r.css, qs: new Map(r.qs.map((x) => [x.q, x.html])), cover: r.cover ?? null }))
       .catch(() => live && setPrinted("failed"));
     return () => {
       live = false;
@@ -139,7 +139,7 @@ export function SkillBookPage(props: { unit: Unit; gov: GovRow | null; onClose: 
   /** This phone's own print window (Save as PDF): when the server can't make the file (`why`). One toast says it all. */
   const printHere = async (only: number | null, why: string) => {
     if (!u || !book || !printed || printed === "failed") return;
-    const { plan, missing } = skillBookPlan(u, book.levels, book.number, printed.qs, new Date().getFullYear());
+    const { plan, missing } = skillBookPlan(u, book.levels, book.number, printed.qs, new Date().getFullYear(), printed.cover);
     toast(
       `The server couldn't make the PDF (${why}): printing on this phone instead. In the print window: Save as PDF, paper A4.${missing ? ` ${missing} questions aren't in the app as printed (a dash in their place).` : ""}`,
       "error",
@@ -171,7 +171,7 @@ export function SkillBookPage(props: { unit: Unit; gov: GovRow | null; onClose: 
   const ready = !!u && !!printed && printed !== "failed" && printed.qs.size > 0;
   // The Preview's book: planned once as it opens (a snapshot: a question tagged meanwhile shows on the next open).
   const previewPlan = useMemo(
-    () => (previewing && u && book && printed && printed !== "failed" ? skillBookPlan(u, book.levels, book.number, printed.qs, new Date().getFullYear()).plan : null),
+    () => (previewing && u && book && printed && printed !== "failed" ? skillBookPlan(u, book.levels, book.number, printed.qs, new Date().getFullYear(), printed.cover).plan : null),
     [previewing],
   );
   const marks = open?.max;

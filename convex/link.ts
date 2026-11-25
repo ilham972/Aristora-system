@@ -21,6 +21,8 @@
 // - A whole unit (24 Nov 2026, convex/lib/wholeUnit.ts; his pick: "one chat ... saves it straight into the app ... no
 //   PDF"): `tell` "workbook" saves a unit's book, key with every kind, printed questions, style and skills in one go, and
 //   the unit's workbook is its skill book at once (the owner's switch's own code). Never over a book students used.
+// - A unit's cover drawing (25 Nov 2026, convex/lib/cover.ts; his ask: "each unit need to have cover page when I
+//   download"): `tell` "cover" saves the engine's illustration for a unit's skill book cover (also inside "workbook").
 // - The Sakarath book (17 Nov 2026, convex/lib/sakarath.ts; his ask: "you will upload from here ... one time upload"):
 //   `tell` "sakarath" saves one unit's whole Sakarath book (its levels and marks, key with every part's kind, printed
 //   questions, style) on its own unit, made the first time; checked like the rest, all or nothing; its levels can't
@@ -59,6 +61,7 @@ import { OL, unitKey } from "./lib/syllabus";
 import { linkReply, linkThread, linkThreads } from "./linkThreads";
 import { hasWork } from "./catalog";
 import { levelLines, makeWholeUnit, type WholeUnit } from "./lib/wholeUnit";
+import { coverProblem, coverSize } from "./lib/cover";
 
 /** A link works this long, unless the owner turns it off first. */
 export const LINK_DAYS = 7;
@@ -262,6 +265,8 @@ export const ask = query({
       const tagged = new Map((await skillRows(ctx)).map((r) => [r.unitId, r.skills.length]));
       // The government's book, if that unit has one (23 Nov 2026): numbers only, never its pages.
       const govs = new Map((await ctx.db.query("govBooks").collect()).map((r) => [r.unitId as string, r]));
+      // Which units' skill books have their cover drawing (25 Nov 2026): yes or no, never the drawing.
+      const covers = new Set((await ctx.db.query("bookCovers").collect()).map((r) => r.unitId as string));
       return sealed(o, {
         ok: true,
         units: units
@@ -281,6 +286,7 @@ export const ask = query({
               ta: u.ta,
               master: m ? { levels: m.levels.length, last: m.parts.length ? m.parts[m.parts.length - 1].to : 0, total: bookTotal(m), keyCount: b!.keyCount ?? 0, qCount: b!.qCount ?? 0, tute: !!b!.tute, skillBook: !!m.skills, updatedAt: b!.updatedAt } : null,
               skills: tagged.get(u._id) ?? null,
+              cover: covers.has(u._id as string),
               gov: ((g) => (g ? { pages: g.pages, bytes: g.bytes, parts: g.parts, sha: g.sha, from: g.from, updatedAt: g.updatedAt } : null))(govs.get(u._id as string)),
               // Its theory book's ladder (`stage: "fighter"` in a request): its questions, from and to.
               fighter: lad.length ? { questions: lad.flatMap(secQs).length, from: Math.min(...lad.flatMap(secQs)), to: Math.max(...lad.flatMap(secQs)), keyCount: f!.keyCount ?? 0, qCount: f!.qCount ?? 0, tute: !!f!.tute, updatedAt: f!.updatedAt } : null,
@@ -707,6 +713,8 @@ async function saveWhole(ctx: MutationCtx, row: Row, req: Asked, now: number): P
     .collect()) {
     await ctx.db.delete(f._id);
   }
+  // Its cover drawing, when it came with the unit (25 Nov 2026); else a drawing it had stays.
+  if (made.cover) await putCover(ctx, unit._id, made.cover, row.by, now);
   const book = (await bookFor(ctx, unit._id, "master"))!;
   const share = await shareOf(ctx, { unit, book, stage: "master", data, fdata: null, secs: [], key: null, answers: made.answers }, made.answers);
   const session = await currentSession(ctx, now);
@@ -723,11 +731,52 @@ async function saveWhole(ctx: MutationCtx, row: Row, req: Asked, now: number): P
     kind: "book-save",
     by: "claude",
     unit: unit.key,
-    value: `Claude link (${row.by}): the skill book, ${own} levels (${strips} strips), ${n} questions, ${kept.skills.length} skills; the phone marks ${share.marks}/${share.max} marks, ${share.parts.read} typed, ${share.parts.photo} photos`,
+    value: `Claude link (${row.by}): the skill book, ${own} levels (${strips} strips), ${n} questions, ${kept.skills.length} skills${made.cover ? ", its cover drawing" : ""}; the phone marks ${share.marks}/${share.max} marks, ${share.parts.read} typed, ${share.parts.photo} photos`,
   });
   await touch(ctx, session, now);
   const names = new Map(kept.skills.map((s) => [s.id, s.en]));
-  return { ok: true, unitId: unit._id, made: !old, questions: n, strips, skills: kept.skills.length, levels: levelLines(made.levels, names), share };
+  const cover = !!(await coverRow(ctx, unit._id));
+  return { ok: true, unitId: unit._id, made: !old, questions: n, strips, skills: kept.skills.length, cover, levels: levelLines(made.levels, names), share };
+}
+
+async function coverRow(ctx: QueryCtx, unitId: Id<"units">) {
+  return await ctx.db
+    .query("bookCovers")
+    .withIndex("by_unit", (x) => x.eq("unitId", unitId))
+    .first();
+}
+
+/** A unit's cover drawing, written (checked before: lib/cover.ts `coverProblem`). */
+async function putCover(ctx: MutationCtx, unitId: Id<"units">, art: string, by: string, now: number) {
+  const size = coverSize(art) ?? { w: 0, h: 0 };
+  const old = await coverRow(ctx, unitId);
+  const fields = { art, w: size.w, h: size.h, by, updatedAt: now };
+  if (old) await ctx.db.patch(old._id, fields);
+  else await ctx.db.insert("bookCovers", { unitId, ...fields });
+}
+
+/**
+ * A unit's cover drawing alone (25 Nov 2026, the founder: "each unit need to have cover page when I download"): the
+ * engine's `cover_art()` figure, checked (lib/cover.ts), printed on its skill book's cover beside the term's units. Any
+ * time, on any school unit with a workbook: it changes no question, number or mark (a printed book only gets a better
+ * cover at its next printing).
+ */
+async function saveCover(ctx: MutationCtx, row: Row, req: Asked, now: number): Promise<Record<string, unknown>> {
+  const id = typeof req.unitId === "string" ? ctx.db.normalizeId("units", req.unitId) : null;
+  const unit = id ? await ctx.db.get(id) : null;
+  if (!unit) return { ok: false, error: "No such unit." };
+  if (unit.grade < 6 || unit.grade > 11) return { ok: false, error: `${unit.key}: a cover drawing is for a school unit's skill book (Grades 6–11).` };
+  const book = await bookFor(ctx, unit._id, "master");
+  if (!book || book.data.kind !== "master" || book.tute) return { ok: false, error: `${unit.key} has no workbook in the app: save the unit first.` };
+  const bad = coverProblem(req.cover);
+  if (bad) return { ok: false, error: `${unit.key}: ${bad}` };
+  const art = (req.cover as string).trim();
+  await putCover(ctx, unit._id, art, row.by, now);
+  const size = coverSize(art)!;
+  const session = await currentSession(ctx, now);
+  await log(ctx, session, now, { kind: "book-save", by: "claude", unit: unit.key, value: `Claude link (${row.by}): its cover drawing (${size.w} × ${size.h} mm)` });
+  await touch(ctx, session, now);
+  return { ok: true, saved: { unit: unit.key, w: size.w, h: size.h, letters: art.length } };
 }
 
 /**
@@ -887,7 +936,7 @@ async function saveSakarath(ctx: MutationCtx, row: Row, req: Asked, now: number)
 /**
  * Write (the chat tells): `save` = a unit's key (every question's answer and kind) and the questions whose printed HTML
  * changed, checked like an uploaded zip, all or nothing; `skills` = a unit's skills and each question's skill, whole;
- * `workbook` = a whole unit as its skill book (`saveWhole`).
+ * `workbook` = a whole unit as its skill book (`saveWhole`); `cover` = a unit's cover drawing (`saveCover`).
  * The threads link's code: `reply` = a message into a thread (convex/linkThreads.ts).
  * Each request once: an older or the same one is refused.
  */
@@ -912,6 +961,8 @@ export const tell = mutation({
             ? await saveSkills(ctx, row, o.req, now)
             : o.req.op === "workbook"
             ? await saveWhole(ctx, row, o.req, now)
+            : o.req.op === "cover"
+            ? await saveCover(ctx, row, o.req, now)
             : o.req.op === "sakarath"
               ? await saveSakarath(ctx, row, o.req, now)
               : o.req.op === "gov"

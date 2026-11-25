@@ -3048,6 +3048,22 @@ learning app of our education institute"): one profile, his class times, what he
     an O/L or Sakarath unit (Grades 6–11 only). Its skills keep their permanent keys and videos (`skillsKept`, shared
     with the skills save). Checked on three real units read through the link (G8-U04, G9-U27, G10-U31): every check
     passes and the book is exactly the one the switch makes; the biggest save, 452 KB (2 MB at most from the tool).
+  - **The cover drawing** (25 Nov 2026, his words: "each unit need to have cover page when I download ... the past
+    paper workbook skill can build beautiful cover page. So we have to use those thing"; his pick: the drawing beside
+    the term's units, as the workbook skill draws its covers). A unit's own illustration, drawn by its unit chat with the
+    engine (`uNN_cover.py` → `cover_art()`: one `.dg` figure, an SVG and its Tamil labels, within 127 × 163 mm), is
+    saved through the Claude link (with the whole unit, or alone: `tell` "cover", any time, nothing else moves; checked
+    by `convex/lib/cover.ts` `coverProblem`: one figure, within the art box, no style, nothing that runs or loads) into
+    the table `bookCovers`, which only the T page and its PDF read (`skillBook.questions` `cover`). Page 1 of the book
+    (the PDF, the server's PDF, the Preview, this phone's print) is then the engine's unit cover: the brand bar, the
+    unit's name, "திறன் வழிப் பயிற்சி", grade · unit · levels · questions · marks, the drawing (127 × 163 mm box, the
+    engine's place: `.cv-fig.sbx-art`) beside the term's units as index tabs on a spine, this unit pulled out (a taller
+    white card with a slab shadow, its tab black, its questions by part "I 61 · II 18 வினாக்கள்"; `termIndex`, the
+    engine's `term_index` ported to the same sizes; the units from `skillBook.unit` `term`), a long name set smaller
+    until it fits its row (`fitTermIndex`, never under 6.5 pt), then the name and date lines. The levels and their
+    skills are on the back of the cover (the contents). A unit without a drawing keeps the cover before it (its levels
+    listed). Checked on G8-U04's real book with the model drawing (the harbour): the same cover as the skill's; Grade 9
+    and Grade 10 Term 3's long names fit their rows.
   - **Share to the printing shop** (23 Nov 2026, his words: "put the share button near the download button ... I will
     put the copy number"; the same evening: "when I press the send button ... copy the clipboard also ... how many
     copies ... the cost of the printing ... one paper is cost seven rupees ... I don't want any shop. Just send

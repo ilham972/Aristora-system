@@ -8,7 +8,7 @@ import { bookLevels, type QStat } from "../convex/lib/skillBook";
 import type { SkillBookUnit } from "../convex/skillBook";
 import { bookFileName, layoutSkillBook, skillBookPlan } from "./skillPrint";
 
-export type PrintArgs = { u: SkillBookUnit; css: string | null; qs: [number, string][]; only: number | null; year: number };
+export type PrintArgs = { u: SkillBookUnit; css: string | null; qs: [number, string][]; only: number | null; year: number; cover?: string | null };
 export type PrintDone = { pages: number; fonts: boolean; missing: number; file: string };
 
 declare global {
@@ -17,10 +17,10 @@ declare global {
   }
 }
 
-window.aristoraBook = async ({ u, css, qs, only, year }) => {
+window.aristoraBook = async ({ u, css, qs, only, year, cover }) => {
   const stats = new Map<number, QStat>(u.stats.map(([q, n, right]) => [q, { n, right }]));
   const { levels, number } = bookLevels(u.key, u.data, u.tags, u.skills.map((s) => s.id), stats);
-  const { plan, missing } = skillBookPlan(u, levels, number, new Map(qs), year);
+  const { plan, missing } = skillBookPlan(u, levels, number, new Map(qs), year, cover ?? null);
   const r = await layoutSkillBook(plan, css, only);
   document.body.classList.add("sb-printing");
   const file = bookFileName(u.grade, u.code, only);

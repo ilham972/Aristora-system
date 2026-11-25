@@ -186,6 +186,10 @@ export type PrintUnit = {
   en: string;
   data: MasterData;
   names: Record<string, { ta: string; en: string }>;
+  /** Its cover drawing, made safe (25 Nov 2026: the engine's `cover_art()`; null = none yet: the cover lists the levels). */
+  cover?: string | null;
+  /** Its term and the term's units, for the index beside the drawing. */
+  term?: { n: number; units: { no: number; ta: string }[] };
 };
 
 export type PrintPlan = {
@@ -279,6 +283,7 @@ const PAGE_CSS = `
 .sbx-cover .cover { position: absolute; left: 0; top: 0; z-index: auto; }
 .sbx-cover .cv-title .a { white-space: nowrap; letter-spacing: -.2pt; line-height: 1.12; }
 .sbx-cover .cv-fig { display: block; top: 90mm; bottom: 40mm; }
+.sbx-cover .cv-fig.sbx-art { display: flex; top: 92mm; bottom: 42mm; }
 .sbx-ix { height: 100%; display: flex; flex-direction: column; }
 .sbx-ixh { display: flex; align-items: flex-end; border-bottom: 2pt solid #111; padding-bottom: 1.2mm; margin-bottom: 1mm; }
 .sbx-ixh b { font-family: "Baloo Thambi 2", "TMuktaLat", sans-serif; font-weight: 800; font-size: 13pt; line-height: 1.1; }
@@ -496,6 +501,14 @@ function sheetHtml(u: PrintUnit, levels: SkillLevel[]): string {
 function coverHtml(u: PrintUnit, levels: SkillLevel[]): string {
   const qs = levels.reduce((a, l) => a + l.qs.length, 0);
   const marks = levels.every((l) => l.max !== null) ? levels.reduce((a, l) => a + (l.max ?? 0), 0) : null;
+  // The unit's own drawing (25 Nov 2026, his pick): the engine's unit cover, the drawing beside the term's units with
+  // this one pulled out; the levels and their skills are on the back of the cover (the contents).
+  if (u.cover && u.term?.units.length) {
+    return `<div class="cover"><div class="cv-top"><span class="cv-logo">${logo(17)}</span><div class="cv-brand">${BRAND}<small>${TAGLINE}</small></div><div class="cv-pill">பயிற்சி நூல்</div></div>
+<div class="cv-title"><div class="a">${esc(u.ta)}</div><div class="b">திறன் வழிப் பயிற்சி</div><div class="cc">தரம் ${u.grade} · அலகு ${unitNo(u)} · ${levels.length} Levels · ${qs} வினாக்கள்${marks === null ? "" : ` · ${marks} புள்ளிகள்`}</div></div>
+<div class="cv-fig sbx-art"><div class="cvu"><div class="cva">${u.cover}</div><div class="cvx">${termIndex(u)}</div></div></div>
+<div class="cv-me"><div>பெயர்</div><div>தொடங்கிய திகதி</div><div>முடித்த திகதி</div></div></div>`;
+  }
   const rows = levels
     .map((l) => `<div class="sbx-ixr"><span class="sbx-ixn">${l.n}</span><span class="sbx-ixt"><b>${esc(names(u, [l.skill], "ta"))}</b><small>${esc(names(u, [l.skill], "en"))}</small></span><span class="sbx-ixc">${l.qs.length}</span></div>`)
     .join("");
@@ -503,6 +516,92 @@ function coverHtml(u: PrintUnit, levels: SkillLevel[]): string {
 <div class="cv-title"><div class="a">${esc(u.ta)}</div><div class="b">திறன் வழிப் பயிற்சி</div><div class="cc">தரம் ${u.grade} · அலகு ${unitNo(u)} · ${levels.length} Levels · ${qs} வினாக்கள்${marks === null ? "" : ` · ${marks} புள்ளிகள்`}</div></div>
 <div class="cv-fig"><div class="sbx-ix"><div class="sbx-ixh"><b>ஒவ்வொரு Level உம் ஒரு திறன்</b><span>வினாக்கள்</span></div><div class="sbx-ixl">${rows}</div></div></div>
 <div class="cv-me"><div>பெயர்</div><div>தொடங்கிய திகதி</div><div>முடித்த திகதி</div></div></div>`;
+}
+
+// ------------------------------------------------------------------ the term index beside a cover's drawing
+
+/** The engine's art box and index column (collection_book.py ART_H, IDX_W; mm). */
+const ART_H = 163;
+const IDX_W = 54;
+const TERM_TA: Record<number, string> = { 1: "முதலாம் தவணை", 2: "இரண்டாம் தவணை", 3: "மூன்றாம் தவணை" };
+
+/** The engine's `svg_figure`: an SVG in mm and its labels (Tamil goes in labels: HTML over the drawing). */
+function engineFigure(w: number, h: number, inner: string, labels: { text: string; x: number; y: number; w: number; fs: number }[]): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${f2(w)}mm" height="${f2(h)}mm" viewBox="0 0 ${f2(w)} ${f2(h)}" style="position:absolute;left:0;top:0"><g transform="translate(0,0)">${inner}</g></svg>`;
+  const labs = labels
+    .map((l) => {
+      const top = l.y - l.fs * 0.3528 * 0.62 * ((l.text.match(/<br>/g)?.length ?? 0) + 1);
+      return `<div class="vl" style="left:${f2(l.x)}mm;top:${f2(top)}mm;width:${l.w}mm;text-align:left;font-size:${l.fs}pt;line-height:1.25">${l.text}</div>`;
+    })
+    .join("");
+  return `<div class="dg" style="width:${f2(w)}mm;height:${f2(h)}mm">${svg}${labs}</div>`;
+}
+
+/** The engine's `slab`: a black copy offset under a shape (its shadow). */
+const slab = (x: number, y: number, w: number, h: number, off: number, r: number, sw: number) =>
+  `<rect x="${f2(x + off)}" y="${f2(y + off)}" width="${f2(w)}" height="${f2(h)}" rx="${r}" fill="#000"/><rect x="${f2(x)}" y="${f2(y)}" width="${f2(w)}" height="${f2(h)}" rx="${r}" fill="#fff" stroke="#000" stroke-width="${sw}"/>`;
+
+/** The engine's `sparkle`: a four-pointed star. */
+function sparkle(x: number, y: number, r: number): string {
+  const q = r * 0.28;
+  return `<path d="M${f2(x)},${f2(y - r)} Q${f2(x + q)},${f2(y - q)} ${f2(x + r)},${f2(y)} Q${f2(x + q)},${f2(y + q)} ${f2(x)},${f2(y + r)} Q${f2(x - q)},${f2(y + q)} ${f2(x - r)},${f2(y)} Q${f2(x - q)},${f2(y - q)} ${f2(x)},${f2(y - r)} Z" fill="#000"/>`;
+}
+
+/** This unit's questions by part, as the engine's index says them: "I 52 · II 21". */
+function partCounts(data: MasterData): string {
+  const n = new Map<string, number>();
+  for (const p of data.parts) n.set(p.id, (n.get(p.id) ?? 0) + p.to - p.from + 1);
+  return [...n].map(([id, c]) => `${id} ${c}`).join(" · ");
+}
+
+/**
+ * The term's units as index tabs on a spine, this one pulled out: a taller white card with a slab shadow, its tab black,
+ * its name bold, its questions by part (collection_book.py `term_index`, the same sizes; 25 Nov 2026).
+ */
+function termIndex(u: PrintUnit): string {
+  const units = u.term?.units ?? [];
+  const mine = unitNo(u);
+  const W = IDX_W;
+  const n = units.length;
+  const top = 12;
+  const room = ART_H - top - 1.5;
+  const base = Math.min(15, room / n);
+  const big = n > 1 ? Math.min(1.5 * base, 22) : base;
+  const small = Math.min(15, (room - big) / Math.max(n - 1, 1));
+  const sx = 3.4;
+  const tw = 10;
+  let s = `<line x1="0.00" y1="8.60" x2="${f2(W - 1.6)}" y2="8.60" stroke="#000" stroke-width="0.8" stroke-linecap="round"/>`;
+  s += `<rect x="${f2(sx)}" y="${f2(top - 0.6)}" width="2.2" height="${f2(big + small * (n - 1) + 1.2)}" rx="1.1" fill="#000"/>`;
+  const term = TERM_TA[u.term?.n ?? 0] ?? `தவணை ${u.term?.n ?? ""}`;
+  const labels = [{ text: `<b>${esc(term)}</b>`, x: 0, y: 5.6, w: W, fs: 11.5 }];
+  let y = top;
+  for (const x of units) {
+    const on = String(x.no) === String(mine);
+    const h = on ? big : small;
+    const tx = sx + 2.2;
+    const ty = y + 1.6;
+    const th = h - 3.2;
+    let name: string;
+    let fs: number;
+    let lw: number;
+    if (on) {
+      s += slab(0, y + 0.2, W - 1.8, h - 0.4, 1.6, 2.4, 1.2);
+      s += `<rect x="${f2(tx)}" y="${f2(ty)}" width="${tw}" height="${f2(th)}" rx="1.6" fill="#000"/>`;
+      s += sparkle(W - 1.2, y - 0.6, 1.9) + sparkle(W - 5.4, y - 2.4, 1.0);
+      name = `<b>${esc(x.ta)}</b><div style="font-size:7.4pt;font-weight:600;line-height:1.2;margin-top:.4mm">${esc(partCounts(u.data))} வினாக்கள்</div>`;
+      fs = 10.2;
+      lw = W - 1.8 - (tx + tw + 2.4) - 1.2;
+    } else {
+      s += `<rect x="${f2(tx)}" y="${f2(ty)}" width="${tw}" height="${f2(th)}" rx="1.6" fill="#fff" stroke="#000" stroke-width=".6"/>`;
+      name = `<span style="color:#333;font-weight:600">${esc(x.ta)}</span>`;
+      fs = 9.2;
+      lw = W - (tx + tw + 2.4);
+    }
+    s += `<text x="${f2(tx + tw / 2)}" y="${f2(ty + th / 2 + 2.0)}" font-family="Baloo Thambi 2, TMuktaLat" font-weight="800" font-size="${on ? 6.4 : 5.6}" text-anchor="middle" fill="${on ? "#fff" : "#000"}">${x.no}</text>`;
+    labels.push({ text: `<div class="ixc" style="height:${f2(h - 0.6)}mm"><div>${name}</div></div>`, x: tx + tw + 2.4, y: y + 0.3 + fs * 0.3528 * 0.62, w: Math.round(lw * 100) / 100, fs });
+    y += h;
+  }
+  return engineFigure(W, ART_H, s, labels);
 }
 
 function tocHead(): string {
@@ -845,6 +944,23 @@ function fitTitle(root: ShadowRoot) {
   if (b) b.style.fontSize = `${Math.min(28, Math.round(0.62 * pt * 10) / 10)}pt`;
 }
 
+/**
+ * Fits each name of the term index in its row (the engine's cover_check: "every index name inside its row"): a long
+ * Tamil name is set smaller, 0.3 pt at a time, never under 6.5 pt (G9 U08's name took 8.2 pt in the engine's plan).
+ */
+function fitTermIndex(root: ShadowRoot) {
+  for (const box of Array.from(root.querySelectorAll(".sbx-cover .cvx .ixc")) as HTMLElement[]) {
+    const label = box.parentElement as HTMLElement | null;
+    const inner = box.firstElementChild as HTMLElement | null;
+    if (!label || !inner) continue;
+    let pt = parseFloat(label.style.fontSize) || 9.2;
+    while (inner.getBoundingClientRect().height > box.getBoundingClientRect().height + 0.5 && pt > 6.5) {
+      pt = Math.round((pt - 0.3) * 10) / 10;
+      label.style.fontSize = `${pt}pt`;
+    }
+  }
+}
+
 /** Fits the cover's list of levels in its box: one column up to 10 levels, two up to 22, then three; smaller type last. */
 function fitIndex(root: ShadowRoot, n: number) {
   const ix = root.querySelector(".sbx-ix") as HTMLElement | null;
@@ -933,6 +1049,7 @@ export async function layoutSkillBook(plan: PrintPlan, css: string | null, only:
   if (only === null) {
     fitTitle(root);
     fitIndex(root, levels.length);
+    fitTermIndex(root);
     // The contents: as many pages as its rows need (each with room for the copyright at its foot), then a blank page
     // when needed so that page 1 is a right-hand page.
     const insideMake = () => {
@@ -1056,11 +1173,12 @@ export async function previewSkillBook(plan: PrintPlan, css: string | null, into
 
 /** The printed number of every question: the plan both the phone and the PDF server lay out. */
 export function skillBookPlan(
-  u: { key: string; grade: number; code: string; ta: string; en: string; data: MasterData; names: PrintUnit["names"] },
+  u: { key: string; grade: number; code: string; ta: string; en: string; data: MasterData; names: PrintUnit["names"]; term?: PrintUnit["term"] },
   levels: SkillLevel[],
   number: ReadonlyMap<number, number>,
   printed: ReadonlyMap<number, string>,
   year: number,
+  cover: string | null = null,
 ): { plan: PrintPlan; missing: number } {
   const cards = new Map<number, string>();
   let missing = 0;
@@ -1069,7 +1187,14 @@ export function skillBookPlan(
     if (html) cards.set(q, bookCard(html, no));
     else missing++;
   }
-  return { plan: { unit: { key: u.key, grade: u.grade, code: u.code, ta: u.ta, en: u.en, data: u.data, names: u.names }, levels, cards, year }, missing };
+  // The drawing passes the same cleaning as every printed question (nothing that can run, load or post).
+  let art: string | null = null;
+  if (cover) {
+    const box = document.createElement("div");
+    box.appendChild(safeFragment(cover));
+    art = box.innerHTML;
+  }
+  return { plan: { unit: { key: u.key, grade: u.grade, code: u.code, ta: u.ta, en: u.en, data: u.data, names: u.names, cover: art, term: u.term }, levels, cards, year }, missing };
 }
 
 /** The file's name: "G8_U04_Skills_Book", or "G8_U04_Skills_Level3" for one level. */

@@ -45,7 +45,7 @@ export async function makePdf({ site, load, only = null, year = new Date().getFu
     });
     await page.goto(`${site}/print.html`, { waitUntil: "load", timeout: 25000 });
     await page.waitForFunction(() => typeof window.aristoraBook === "function", { timeout: 15000 });
-    const done = await page.evaluate((a) => window.aristoraBook(a), { u, css: printed.css, qs: printed.qs.map((x) => [x.q, x.html]), only, year });
+    const done = await page.evaluate((a) => window.aristoraBook(a), { u, css: printed.css, qs: printed.qs.map((x) => [x.q, x.html]), only, year, cover: printed.cover ?? null });
     await page.emulateMediaType("print");
     const pdf = Buffer.from(await page.pdf({ preferCSSPageSize: true, printBackground: true, timeout: 45000 }));
     return { pdf, ...done };
