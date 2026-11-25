@@ -464,7 +464,7 @@ export function printedLevels(levels: readonly SkillLevel[]): SkillLevel[] {
 
 function bandHtml(u: PrintUnit, l: SkillLevel): string {
   const n = String(l.n);
-  return `<div class="band sbx-band"><div class="let" style="font-size:${fitPt(n, [22, 17, 13])}pt">${n}</div><div><div class="tt">${esc(names(u, [l.skill], "ta"))}</div><div class="sub">LEVEL ${n} · ${esc(names(u, [l.skill], "en"))}</div></div><div class="step">${esc(skillLabel(u.key, l.skill))}</div></div>`;
+  return `<div class="band sbx-band"><div class="let" style="font-size:${fitPt(n, [22, 17, 13])}pt">${n}</div><div><div class="tt sbx-bandt">${esc(names(u, [l.skill], "ta"))}</div><div class="sub">LEVEL ${n} · ${esc(names(u, [l.skill], "en"))}</div></div><div class="step">${esc(skillLabel(u.key, l.skill))}</div></div>`;
 }
 
 /**
@@ -498,14 +498,38 @@ function sheetHtml(u: PrintUnit, levels: SkillLevel[]): string {
   return `<div class="msh"><div class="msk"><div class="mhd">புள்ளி அட்டவணை<small> · அலகு ${unitNo(u)} · ${esc(u.ta)}</small></div><table class="mtb">${rows.join("")}</table><div class="msx">அலகின் மொத்தம்<span class="msb"></span><span class="mso">${total === null ? "" : `/ ${total}`}</span><span class="msf">சதவீதம் = ${frac("மொத்தம் × 100", total ?? "")} =</span><span class="msb"></span><span class="mso">%</span></div></div></div>`;
 }
 
-function coverHtml(u: PrintUnit, levels: SkillLevel[]): string {
+/**
+ * The years a unit's past papers come from, read off its printed source labels ("Sabaragamuwa 2017 T1 · Q2"):
+ * "2011 – 2024", or null when the questions carry no years (not a past-paper unit). 25 Nov 2026, the founder:
+ * the cover must say கடந்தகால வினாக்கள் with its range, as the workbook engine's own cover does.
+ */
+export function paperYears(cards: Iterable<string>): string | null {
+  let lo = 9999;
+  let hi = 0;
+  for (const html of cards) {
+    for (const m of html.matchAll(/<span class="(?:src|yr)">([^<]*)<\/span>/g)) {
+      for (const y of m[1].matchAll(/\b(19|20)\d{2}\b/g)) {
+        const n = Number(y[0]);
+        if (n < lo) lo = n;
+        if (n > hi) hi = n;
+      }
+    }
+  }
+  return hi ? (lo === hi ? `${lo}` : `${lo} – ${hi}`) : null;
+}
+
+function coverHtml(u: PrintUnit, levels: SkillLevel[], years: string | null = null): string {
   const qs = levels.reduce((a, l) => a + l.qs.length, 0);
   const marks = levels.every((l) => l.max !== null) ? levels.reduce((a, l) => a + (l.max ?? 0), 0) : null;
+  const sub = years ? "கடந்தகால வினாக்கள்" : "திறன் வழிப் பயிற்சி";
+  const meta = years
+    ? `தரம் ${u.grade} · அலகு ${unitNo(u)} · தவணைப் பரீட்சை வினாக்கள் ${years}`
+    : `தரம் ${u.grade} · அலகு ${unitNo(u)} · ${levels.length} Levels · ${qs} வினாக்கள்${marks === null ? "" : ` · ${marks} புள்ளிகள்`}`;
   // The unit's own drawing (25 Nov 2026, his pick): the engine's unit cover, the drawing beside the term's units with
   // this one pulled out; the levels and their skills are on the back of the cover (the contents).
   if (u.cover && u.term?.units.length) {
     return `<div class="cover"><div class="cv-top"><span class="cv-logo">${logo(17)}</span><div class="cv-brand">${BRAND}<small>${TAGLINE}</small></div><div class="cv-pill">பயிற்சி நூல்</div></div>
-<div class="cv-title"><div class="a">${esc(u.ta)}</div><div class="b">திறன் வழிப் பயிற்சி</div><div class="cc">தரம் ${u.grade} · அலகு ${unitNo(u)} · ${levels.length} Levels · ${qs} வினாக்கள்${marks === null ? "" : ` · ${marks} புள்ளிகள்`}</div></div>
+<div class="cv-title"><div class="a">${esc(u.ta)}</div><div class="b">${sub}</div><div class="cc">${meta}</div></div>
 <div class="cv-fig sbx-art"><div class="cvu"><div class="cva">${u.cover}</div><div class="cvx">${termIndex(u)}</div></div></div>
 <div class="cv-me"><div>பெயர்</div><div>தொடங்கிய திகதி</div><div>முடித்த திகதி</div></div></div>`;
   }
@@ -513,7 +537,7 @@ function coverHtml(u: PrintUnit, levels: SkillLevel[]): string {
     .map((l) => `<div class="sbx-ixr"><span class="sbx-ixn">${l.n}</span><span class="sbx-ixt"><b>${esc(names(u, [l.skill], "ta"))}</b><small>${esc(names(u, [l.skill], "en"))}</small></span><span class="sbx-ixc">${l.qs.length}</span></div>`)
     .join("");
   return `<div class="cover"><div class="cv-top"><span class="cv-logo">${logo(17)}</span><div class="cv-brand">${BRAND}<small>${TAGLINE}</small></div><div class="cv-pill">பயிற்சி நூல்</div></div>
-<div class="cv-title"><div class="a">${esc(u.ta)}</div><div class="b">திறன் வழிப் பயிற்சி</div><div class="cc">தரம் ${u.grade} · அலகு ${unitNo(u)} · ${levels.length} Levels · ${qs} வினாக்கள்${marks === null ? "" : ` · ${marks} புள்ளிகள்`}</div></div>
+<div class="cv-title"><div class="a">${esc(u.ta)}</div><div class="b">${sub}</div><div class="cc">${meta}</div></div>
 <div class="cv-fig"><div class="sbx-ix"><div class="sbx-ixh"><b>ஒவ்வொரு Level உம் ஒரு திறன்</b><span>வினாக்கள்</span></div><div class="sbx-ixl">${rows}</div></div></div>
 <div class="cv-me"><div>பெயர்</div><div>தொடங்கிய திகதி</div><div>முடித்த திகதி</div></div></div>`;
 }
@@ -945,6 +969,19 @@ function fitTitle(root: ShadowRoot) {
 }
 
 /**
+ * A level band's Tamil name on one line where it can be (the founder, 25 Nov 2026: "if the skill title have two
+ * lines ... we have to reduce the title size little bit, because two lines with big font looks ugly"): step it
+ * down 0.5 pt at a time from 16 pt, never under 12 pt — a name too long for one line at 12 pt keeps two, smaller.
+ */
+function fitBands(root: ShadowRoot) {
+  for (const tt of Array.from(root.querySelectorAll(".sbx-band .sbx-bandt")) as HTMLElement[]) {
+    tt.style.fontSize = "";
+    const one = parseFloat(getComputedStyle(tt).lineHeight) * 1.4;
+    for (let pt = 16; tt.scrollHeight > one && pt > 12; pt -= 0.5) tt.style.fontSize = `${pt - 0.5}pt`;
+  }
+}
+
+/**
  * Fits each name of the term index in its row (the engine's cover_check: "every index name inside its row"): a long
  * Tamil name is set smaller, 0.3 pt at a time, never under 6.5 pt (G9 U08's name took 8.2 pt in the engine's plan).
  */
@@ -1038,12 +1075,13 @@ export async function layoutSkillBook(plan: PrintPlan, css: string | null, only:
   if (only === null) {
     const cover = document.createElement("div");
     cover.className = "sbx-page sbx-cover";
-    cover.innerHTML = coverHtml(u, levels);
+    cover.innerHTML = coverHtml(u, levels, paperYears(plan.cards.values()));
     book.appendChild(cover);
   }
   void flow.offsetHeight;
   const fonts = await printFontsReady();
   alignLabels(flow);
+  fitBands(root);
   SEAL = sealImage();
   let front = 0;
   if (only === null) {

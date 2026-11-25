@@ -2862,6 +2862,7 @@ learning app of our education institute"): one profile, his class times, what he
   `convex/skillBook.ts`, `src/skillBook.tsx`, `src/skillPrint.ts`). Until the owner's switch (**Use as the workbook**,
   below; 23 Nov 2026) a unit's book by skill is only shown and downloaded: the app keeps the workbook's numbers and
   levels. After it, the skill book IS the unit's workbook everywhere. A unit a chat saves whole through the Claude link
+- **The printed cover's words** (25 Nov 2026): a unit whose printed questions carry years in their source labels (a past-paper unit) gets `கடந்தகால வினாக்கள்` under its name and `தரம் N · அலகு n · தவணைப் பரீட்சை வினாக்கள் 2011 – 2024`; any other unit keeps `திறன் வழிப் பயிற்சி` and the Levels · questions · marks line. The drawing itself is always the unit chat's (`lib/cover.ts`). A level band's Tamil name is stepped down while it runs to two lines (16 → 12 pt): the founder, "two lines with big font looks ugly".
   (24 Nov 2026, **A whole unit**, below) is its skill book from its first moment. Its skills' **videos**: part 1, below.
   - **Settings → Books → T** beside F M K Q on every unit row: green = its workbook's questions carry skills
     (`catalog.books` `tagged`); pale = not tagged (a tap says "tag it with Claude first").
