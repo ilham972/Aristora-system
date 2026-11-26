@@ -933,6 +933,8 @@ export default defineSchema({
     createdAt: v.number(),
     /** Settings → Feedback: the newest feedback this person has seen (the count on the gear is what came after). */
     feedbackSeenAt: v.optional(v.number()),
+    /** Settings → Bookings (the owner, 26 Nov 2026): the newest booking he has seen (the gear's count is what came after). */
+    bookingsSeenAt: v.optional(v.number()),
     /**
      * Her photo (8 Nov 2026, his ask: "we don't have any features to edit the profile photo for the teachers"): on her
      * posts, shout-outs and replies in Us; set in the class app's Us tab (her picture at the top). A staffPhotos row.
@@ -2019,4 +2021,22 @@ export default defineSchema({
   })
     .index("by_q", ["sid", "u", "q"])
     .index("by_at", ["at"]),
+  /**
+   * Bookings from the website (26 Nov 2026): the O/L Prediction Paper 2026 on aristora.org/ol-prediction-2026, until
+   * 30 November ("temporary"). Added by bookings.add (open: the website has no sign-in), read and ticked only by the
+   * owner (Settings → Bookings). `item` = the offer ("ol-2026"); `phone` = 0771234567; `ref` = who told them (an
+   * ARISTORA student, for his commission); `code` = what the student saw (OL26-XXXX); `ok` = when he confirmed it on
+   * his WhatsApp call.
+   */
+  bookings: defineTable({
+    item: v.string(),
+    name: v.string(),
+    phone: v.string(),
+    ref: v.string(),
+    code: v.string(),
+    at: v.number(),
+    ok: v.optional(v.number()),
+  })
+    .index("by_at", ["at"])
+    .index("by_phone", ["phone"]),
 });

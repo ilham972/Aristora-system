@@ -25,6 +25,7 @@ import { BooksPage, redCopies, useBooksData } from "./books";
 import { barPages, isTeachDept, PAGE_LABEL, type PageId } from "../convex/lib/dept";
 import { correctionSends, leadSends } from "./callRoute";
 import { useFeedbackNew } from "./feedbackList";
+import { useBookingsNew } from "./bookingsList";
 import { usePhotosWaiting } from "./photoQueue";
 import { openLane } from "./homeLane";
 import { useAskCount } from "./familyAsks";
@@ -454,7 +455,9 @@ export function App() {
   const asks = useAskCount(!!me?.user && may("students"));
   // Gifts from the centre waiting to be given (7 Nov 2026; the owner and the Manager): Settings → Race.
   const gifts = useGiftsWaiting(!!me?.user && may("manager"));
-  const gearN = photos.n + fbNew + asks + gifts;
+  // Bookings from the website (26 Nov 2026, temporary; the owner): on the same gear, and a chime when one comes in.
+  const bkNew = useBookingsNew(!!me?.user && may("owner"));
+  const gearN = photos.n + fbNew + asks + gifts + bkNew;
   // Her private chats in Us with a message she hasn't read (8 Nov 2026): a number on the Us tab while she is elsewhere.
   const chatNew = useChatNew(!!me?.user);
   // The Books tab's red count (9 Nov 2026): copies someone needs now and nobody has in hand. Read only with the tab.
@@ -695,7 +698,7 @@ export function App() {
               class={`icon-btn has-n${shown === "settings" ? " on" : ""}`}
               aria-label={
                 gearN > 0
-                  ? `Settings${photos.n > 0 ? `, ${photos.n} photos to mark` : ""}${asks > 0 ? `, ${asks} waiting for your OK` : ""}${fbNew > 0 ? `, ${fbNew} new feedback` : ""}${gifts > 0 ? `, ${gifts} gifts to give` : ""}`
+                  ? `Settings${photos.n > 0 ? `, ${photos.n} photos to mark` : ""}${asks > 0 ? `, ${asks} waiting for your OK` : ""}${fbNew > 0 ? `, ${fbNew} new feedback` : ""}${gifts > 0 ? `, ${gifts} gifts to give` : ""}${bkNew > 0 ? `, ${bkNew} new bookings` : ""}`
                   : "Settings"
               }
               onClick={() => toggle("settings")}
@@ -746,8 +749,9 @@ export function App() {
             setReopen(null);
             setPage(backTo);
           }}
-          start={reopen ?? (photos.n > 0 ? "photos" : asks > 0 ? "students" : fbNew > 0 ? "feedback" : gifts > 0 ? "race" : undefined)}
+          start={reopen ?? (bkNew > 0 ? "bookings" : photos.n > 0 ? "photos" : asks > 0 ? "students" : fbNew > 0 ? "feedback" : gifts > 0 ? "race" : undefined)}
           fbNew={fbNew}
+          bkNew={bkNew}
           gifts={gifts}
           phN={photos.n}
           phLate={photos.late}

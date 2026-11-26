@@ -462,6 +462,11 @@ script's lower-case match misses); `coins.payday` is internal. And `familyVideos
 the videos: `familyViewer` / `familyActor`, tested signed out in `tests/videos.test.ts`); `videoHost.*` and the `host*`,
 `hasKey`, `saveKey` of `videos.ts` are internal. And `online.beat` (`familyActor`), `online.usage`
 and `online.usageDay` (`whose` → `familyViewer`) (12 Nov 2026); `online.sweep` is internal.
+And `bookings.add` (26 Nov 2026, the website's O/L Prediction Paper bookings): open on purpose, the website has no
+sign-in. It can only add one checked booking (`lib/bookings.ts`), the same number and name once, nothing from a robot
+(the hidden `hp`), at most `BOOK_DAY_CAP` a day, and it answers only with that booking's code. `bookings.list`,
+`newCount`, `seen`, `confirm` and `remove` are the owner's (`tests/bookings.test.ts` tries them as a teacher and
+signed out).
 
 ```bash
 python3 - <<'EOF'

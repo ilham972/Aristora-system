@@ -53,6 +53,7 @@ import { ClaudeLink } from "./claudeLink";
 import { SkillBookPage } from "./skillBook";
 import { ExamMode, OlSakarath, SakarathSheet } from "./sakarathBooks";
 import { RaceSettings } from "./raceSettings";
+import { BookingsList } from "./bookingsList";
 import { ShopSettings } from "./shopSettings";
 import { UsSettings } from "./usSettings";
 import { SimPanel, SimSwitch } from "./sim";
@@ -60,7 +61,7 @@ import { roleWords, Roles } from "./roles";
 import { DEPT_NAMES, extrasFor, isTeachDept, jobsFor, presetPages, type Dept, type PageId } from "../convex/lib/dept";
 import { GRADES, GradeRow, Sheet, STATE_WORDS, useGrade } from "./ui";
 
-export type SettingsTab = "students" | "books" | "people" | "roles" | "hours" | "race" | "shop" | "community" | "alerts" | "reports" | "history" | "feedback" | "photos" | "account";
+export type SettingsTab = "students" | "books" | "people" | "roles" | "hours" | "race" | "shop" | "community" | "alerts" | "reports" | "history" | "feedback" | "photos" | "bookings" | "account";
 type Tab = SettingsTab;
 
 const SETTINGS_TABS: [Tab, string, () => boolean][] = [
@@ -85,6 +86,8 @@ const SETTINGS_TABS: [Tab, string, () => boolean][] = [
   ["feedback", "Feedback", () => may("feedback")],
   // Photos from the family app (4 Nov 2026): the owner and people with Photos mark them from home.
   ["photos", "Photos", () => may("photos")],
+  // Bookings from the website (26 Nov 2026, temporary: the O/L Prediction Paper 2026 until 30 November): the owner.
+  ["bookings", "Bookings", () => may("owner")],
   ["account", "Account", () => true],
 ];
 
@@ -103,6 +106,8 @@ export function Settings(props: {
   asks?: number;
   /** Gifts waiting to be given (Settings → Race; owner and Manager). */
   gifts?: number;
+  /** New bookings from the website (Settings → Bookings; the owner). */
+  bkNew?: number;
   onPhotos?: () => void;
 }) {
   const shown = SETTINGS_TABS.filter(([, , ok]) => ok());
@@ -118,6 +123,7 @@ export function Settings(props: {
             {id === "photos" && (props.phN ?? 0) > 0 && <b class={`seg-n${props.phLate ? " late" : ""}`}>{props.phN}</b>}
             {id === "students" && (props.asks ?? 0) > 0 && <b class="seg-n">{props.asks}</b>}
             {id === "race" && (props.gifts ?? 0) > 0 && <b class="seg-n">{props.gifts}</b>}
+            {id === "bookings" && (props.bkNew ?? 0) > 0 && <b class="seg-n">{props.bkNew}</b>}
           </button>
         ))}
       </nav>
@@ -128,6 +134,7 @@ export function Settings(props: {
       {tab === "history" && <History />}
       {tab === "feedback" && <FeedbackList />}
       {tab === "photos" && <PhotoQueue views={props.views} onOpen={props.onPhotos} />}
+      {tab === "bookings" && <BookingsList />}
       {tab === "hours" && <ClassHours />}
       {tab === "race" && <RaceSettings views={props.views} />}
       {tab === "shop" && <ShopSettings />}

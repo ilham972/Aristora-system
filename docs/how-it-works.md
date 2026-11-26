@@ -3688,6 +3688,29 @@ unit ... so the AI can read this and read that easily"; `convex/lib/gov.ts`, `co
   volume he uploaded) and **U29 சமனிலிகள்** has none (the Grade 8 textbook has no Inequalities chapter: its unit 29 is
   Probability and its 30 Tessellation, which are the app's U30 and U31).
 
+## Bookings from the website (Settings → Bookings; 26 Nov 2026, temporary)
+
+The founder's ask: students book the O/L Prediction Paper 2026 on **aristora.org/ol-prediction-2026** (the posters say
+`/Ol-Prediction-2026`; the website redirects every spelling) until 30 November, with their name, WhatsApp number and
+who told them (his students earn a commission once he confirms the sale on a WhatsApp call). "Instead of Google Form ...
+in our Aristora system app ... this is just for temporary."
+
+- **The website** (no sign-in) calls `bookings.add` through Convex's HTTP API: item `ol-2026`, name, phone, ref, code
+  (`OL26-XXXX`, made on the student's phone), and a hidden field `hp` that only robots fill. The server checks every
+  field (`lib/bookings.ts`: a Sri Lankan mobile number in any usual form becomes `0771234567`; names single-spaced, 60
+  letters at most), keeps the same number and name once (the first code comes back, `again: true`; a sister on the same
+  phone is her own booking), takes at most `BOOK_DAY_CAP` (1500) in 24 hours, and answers only with the code. A robot
+  is told all went well and nothing is kept.
+- **The owner** (only him): Settings → Bookings. Each booking (name, code, number with Call and WhatsApp, who told
+  them, when), **Confirm** after his call (and back), **Remove** a test or a mistake. "Who brought them": one chip per
+  referrer, spellings that differ only in case or spaces counted together, the confirmed ones as ✓ (the commission),
+  "Nobody" apart. All / To call / Confirmed.
+- **Telling him**: a new booking adds to the count on the Settings gear (Settings opens on Bookings first), and while
+  the app is open it chimes (`ring("coming")`) with "📚 New booking: name · from referrer". No phone alerts: the class
+  app has no service worker (on purpose); the student can also send the booking to his WhatsApp from the website.
+- **Temporary**: when the campaign is over, the tab can go (`settings.tsx`, `app.tsx`, `bookingsList.tsx`); the table
+  keeps the bookings for his records until he says remove them.
+
 ## Accounts and security (built 2026-10-28)
 
 **Who.**

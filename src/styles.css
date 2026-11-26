@@ -10094,6 +10094,64 @@ body.mg2-on .app {
   overflow-wrap: anywhere;
 }
 
+/* ---- Settings → Bookings (26 Nov 2026, temporary: the website's O/L Prediction Paper 2026; src/bookingsList.tsx): the
+   Feedback page's pieces, plus who brought how many and each booking's buttons. ---- */
+.bkg-refs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--card);
+  border: 1px solid var(--line);
+}
+.bkg-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.bkg-chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--ground);
+  font-size: 14px;
+  font-weight: 600;
+}
+.bkg-chip em {
+  font-style: normal;
+  font-weight: 800;
+}
+.bkg-chip small {
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.bkg-chip.none {
+  opacity: 0.7;
+}
+.bkg-line {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.bkg-line a {
+  font-weight: 700;
+  color: inherit;
+}
+.bkg-item.ok .fbk-face {
+  background: var(--theory-soft);
+}
+.bkg-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.bkg-acts .btn {
+  text-decoration: none;
+}
+.bkg-acts .bkg-x {
+  margin-left: auto;
+}
+
 /* ---- Evaluation's and Theory's question card like Correction's (3 Nov 2026, his ask; src/qcard.tsx): the number as
    a dark pill in one top line with who has it (Evaluation) or the lesson (Theory), then the answer big. ---- */
 .fc-qhead .fc-qmeta.evx-who {

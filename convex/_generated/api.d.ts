@@ -16,6 +16,7 @@ import type {
 import type * as ai from "../ai.js";
 import type * as attendance from "../attendance.js";
 import type * as auth from "../auth.js";
+import type * as bookings from "../bookings.js";
 import type * as boss from "../boss.js";
 import type * as calls from "../calls.js";
 import type * as catalog from "../catalog.js";
@@ -39,6 +40,7 @@ import type * as lib_appTime from "../lib/appTime.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_backend from "../lib/backend.js";
 import type * as lib_book from "../lib/book.js";
+import type * as lib_bookings from "../lib/bookings.js";
 import type * as lib_boss from "../lib/boss.js";
 import type * as lib_chat from "../lib/chat.js";
 import type * as lib_claims from "../lib/claims.js";
@@ -133,6 +135,7 @@ declare const fullApi: ApiFromModules<{
   ai: typeof ai;
   attendance: typeof attendance;
   auth: typeof auth;
+  bookings: typeof bookings;
   boss: typeof boss;
   calls: typeof calls;
   catalog: typeof catalog;
@@ -156,6 +159,7 @@ declare const fullApi: ApiFromModules<{
   "lib/auth": typeof lib_auth;
   "lib/backend": typeof lib_backend;
   "lib/book": typeof lib_book;
+  "lib/bookings": typeof lib_bookings;
   "lib/boss": typeof lib_boss;
   "lib/chat": typeof lib_chat;
   "lib/claims": typeof lib_claims;

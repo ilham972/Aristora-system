@@ -16,6 +16,7 @@ import U01_BOOK from "../fixtures/workbook-g8-u01.html?raw";
 import TUTE_BOOK from "../fixtures/tute-skeleton.html?raw";
 import TUTE_JSON from "../fixtures/tute-skeleton.json?raw";
 import { makeCases } from "../cases";
+import { NOBODY } from "../../convex/lib/bookings";
 import { addPerson, OWNER_TOKEN } from "../helpers";
 import { makeBackend, playwright, serveDist } from "./harness";
 
@@ -5983,6 +5984,42 @@ test("the AI marks by itself: the owner's switch in Settings → Photos, the tea
   await F.getByRole("checkbox", { name: /The AI marks them by itself/ }).click();
   await until(async () => (await cfg())?.on === false, "switched off");
   await count(F.locator(".phq-tch"), 0);
+  await F.context().close();
+});
+
+test("Settings → Bookings (26 Nov 2026, temporary): website bookings on the owner's gear; he confirms one after his call; a new one says who; who brought them; 390/360/320 px", async () => {
+  const backend = await newClass();
+  const t = backend.t;
+  await t.mutation(api.setup.ensure, { token: OWNER_TOKEN });
+  // Two bookings from the website (no sign-in): one a friend told, one nobody. Made-up names and numbers.
+  await t.mutation(api.bookings.add, { item: "ol-2026", name: "Test Student", phone: "077 000 0001", ref: "Test Friend", code: "OL26-AB2C" });
+  await t.mutation(api.bookings.add, { item: "ol-2026", name: "Other Student", phone: "+94 77 000 0002", ref: NOBODY, code: "OL26-CD3E" });
+  const F = await phone(backend, "focus");
+  await contains(F.locator(".gear-n"), "2");
+  await F.getByRole("button", { name: /Settings/ }).click();
+  // Settings opens on Bookings (new ones first); the newest at the top; the count goes once read.
+  await count(F.locator(".bkg-item"), 2);
+  await contains(F.locator(".bkg-item").first(), "Other Student");
+  await contains(F.locator(".bkg-item").first(), "nobody told them");
+  await contains(F.locator(".bkg-item").nth(1), "077 000 0001");
+  await contains(F.locator(".bkg-item").nth(1), "from Test Friend");
+  await contains(F.locator(".bkg-refs"), "Test Friend 1");
+  await until(async () => (await F.locator(".gear-n").count()) === 0, "the count goes once read");
+  // After his WhatsApp call: Confirm; the friend's line counts it.
+  await F.locator(".bkg-item").nth(1).getByRole("button", { name: "Confirm" }).click();
+  await contains(F.locator(".bkg-item").nth(1), "✓ Confirmed");
+  await contains(F.locator(".bkg-refs"), "1 ✓");
+  // A booking while the page is open: a note says who and from whom.
+  await t.mutation(api.bookings.add, { item: "ol-2026", name: "Third Student", phone: "0770000003", ref: "Test Friend", code: "OL26-EF4G" });
+  await backend.push(); // the phone sees what came from the website
+  await contains(F.locator(".toasts"), "New booking: Third Student · from Test Friend");
+  await count(F.locator(".bkg-item"), 3);
+  await contains(F.locator(".bkg-refs"), "Test Friend 2");
+  for (const w of [390, 360, 320]) {
+    await F.setViewportSize({ width: w, height: 760 });
+    expect(await F.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await shot(F, `bkg01-bookings-${w}`);
+  }
   await F.context().close();
 });
 
